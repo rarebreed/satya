@@ -4,16 +4,16 @@ Combat is a highly detailed affair, and in general there are two forms of combat
 common elements which is what will be discussed in this document:
 
 - Action economy
-    - Observe, Orient, Decide, Act
     - Effect of fatigue, wounds, experience and psychological factors on OODA
-    - Detemine action count
+    - Create list of Time Cost for common actions
+    - Determine Time Factor (TF * TC = Action Count Cost)
 - Status tracking
     - Fatigue
     - Wounds including pain
     - Physical Effects
         - Blood loss and hemorraghing
             - Shock
-        - Structual (by location)
+        - Structural (by location)
             - Amputation
             - Broken or crushed
             - Sprains, tears, dislocations (if applicable)

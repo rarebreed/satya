@@ -4,5 +4,8 @@ Whenever a character performs an action with some degree of uncertainty that can
 resolution needs to be made.  Skills provide common tasks for which they can be applied, or even as a prerequisite to 
 be attempted.
 
-The attribute determines how many d20 to roll, and the skill determines the TN (Target Number).  Tasks have a difficulty
+The skill determines how many d20 to roll, and the attribute determines the TN (Target Number).  Tasks have a difficulty
 rating which determines the number of successes required to achieve the task.
+
+> Example lockpicking task
+Sarah is playing a thief and needs to pick the lock on a bike lock.  She has a Dexterity of 13 and a skill 

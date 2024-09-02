@@ -12,9 +12,11 @@ import daft as dft
 app = FastAPI()
 
 # Paths for databases
-ares_dir =Path(__file__).parent.parent
+ares_dir = Path(__file__).parent.parent
 
 # Create or open the database our service will use
+
+
 def init_db(test=True):
     conn = dft.read_delta_lake(f"{init_char_pq_path}")
     print(conn.collect())
@@ -36,7 +38,7 @@ def init_db(test=True):
 #     return FileResponse(pq_path)
 
 
-# # Create 
+# # Create
 # @app.post(char_ept)
 # async def post_character(char: Character) -> Character:
 #     model = char.model_dump()
