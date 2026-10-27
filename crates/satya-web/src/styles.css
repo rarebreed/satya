@@ -253,6 +253,17 @@ input:focus, select:focus {
     color: #fff;
 }
 
+.btn-danger {
+    background: rgba(244, 63, 94, 0.18);
+    color: #fda4af;
+    border: 1px solid rgba(244, 63, 94, 0.45);
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .feedback-box {
     margin-top: 8px;
     font-size: 0.78rem;

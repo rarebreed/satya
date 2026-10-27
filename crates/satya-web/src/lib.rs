@@ -1,13 +1,26 @@
+//! Full-stack Rust + Leptos + WebAssembly frontend for the Satya WebRTC, TTRPG,
+//! and Apache Iggy Event Streaming Platform.
+#![deny(missing_docs)]
+
+pub mod wasm_client;
+
 use leptos::prelude::*;
+
+/// Minimal 4-line ES module loader that boots the compiled `satya-web` Rust/Wasm module
+/// (`/pkg/satya_web.js` + `/pkg/satya_web_bg.wasm`), invoking `#[wasm_bindgen(start)]`.
+const WASM_BOOTSTRAP_LOADER: &str = r#"
+import init from "/pkg/satya_web.js";
+init().catch((err) => console.warn("Satya Wasm module init:", err));
+"#;
 
 /// Renders the full-stack Leptos application shell for Satya WebRTC, Chat & Avro Telemetry.
 pub fn render_satya_app_html() -> String {
     SatyaApp().to_html()
 }
 
+/// Root Leptos component rendering the Satya WebRTC, Chat, TTRPG Mechanics, and Avro Inspector UI.
 #[component]
 pub fn SatyaApp() -> impl IntoView {
-    let client_script = include_str!("client_runtime.js");
     let app_styles = include_str!("styles.css");
 
     view! {
@@ -27,7 +40,7 @@ pub fn SatyaApp() -> impl IntoView {
                         <ActiveSessionWorkspace/>
                     </main>
                 </div>
-                <script inner_html=client_script></script>
+                <script type="module" inner_html=WASM_BOOTSTRAP_LOADER></script>
             </body>
         </html>
     }
@@ -38,7 +51,7 @@ fn HeaderBar() -> impl IntoView {
     view! {
         <header class="top-bar">
             <div class="brand">
-                <span class="brand-badge">"SATYA // ENGINE"</span>
+                <span class="brand-badge">"SATYA // ENGINE (RUST + WASM)"</span>
                 <h1>"WebRTC + Durable Avro Event Stream"</h1>
             </div>
             <div class="status-pills">
@@ -61,10 +74,54 @@ fn AuthAndSessionGate() -> impl IntoView {
                 </div>
                 <div class="preset-users">
                     <span class="preset-label">"Quick Fill Demo Accounts:"</span>
-                    <button type="button" class="btn-chip" onclick="window.satyaFillDemo('gm_sean', 'satya-truth-2026', 'Sean (GM)')">"GM: gm_sean"</button>
-                    <button type="button" class="btn-chip" onclick="window.satyaFillDemo('sara_valkyrie', 'satya-truth-2026', 'Sara (Valkyrie)')">"Player: sara_valkyrie"</button>
-                    <button type="button" class="btn-chip" onclick="window.satyaFillDemo('marcus_recon', 'satya-truth-2026', 'Marcus (Recon)')">"Player: marcus_recon"</button>
-                    <button type="button" class="btn-chip" onclick="window.satyaFillDemo('host_elena', 'satya-truth-2026', 'Elena (Meeting Host)')">"Host: host_elena"</button>
+                    <button
+                        type="button"
+                        class="btn-chip"
+                        onclick="window.satyaFillDemo('gm_sean', 'satya-truth-2026', 'Sean (GM)')"
+                        on:click=move |_| wasm_client::satya_fill_demo(
+                            "gm_sean".to_string(),
+                            "satya-truth-2026".to_string(),
+                            "Sean (GM)".to_string(),
+                        )
+                    >
+                        "GM: gm_sean"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-chip"
+                        onclick="window.satyaFillDemo('sara_valkyrie', 'satya-truth-2026', 'Sara (Valkyrie)')"
+                        on:click=move |_| wasm_client::satya_fill_demo(
+                            "sara_valkyrie".to_string(),
+                            "satya-truth-2026".to_string(),
+                            "Sara (Valkyrie)".to_string(),
+                        )
+                    >
+                        "Player: sara_valkyrie"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-chip"
+                        onclick="window.satyaFillDemo('marcus_recon', 'satya-truth-2026', 'Marcus (Recon)')"
+                        on:click=move |_| wasm_client::satya_fill_demo(
+                            "marcus_recon".to_string(),
+                            "satya-truth-2026".to_string(),
+                            "Marcus (Recon)".to_string(),
+                        )
+                    >
+                        "Player: marcus_recon"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-chip"
+                        onclick="window.satyaFillDemo('host_elena', 'satya-truth-2026', 'Elena (Meeting Host)')"
+                        on:click=move |_| wasm_client::satya_fill_demo(
+                            "host_elena".to_string(),
+                            "satya-truth-2026".to_string(),
+                            "Elena (Meeting Host)".to_string(),
+                        )
+                    >
+                        "Host: host_elena"
+                    </button>
                 </div>
                 <div class="form-grid">
                     <label>
@@ -81,8 +138,32 @@ fn AuthAndSessionGate() -> impl IntoView {
                     </label>
                 </div>
                 <div class="btn-row">
-                    <button type="button" class="btn btn-primary" onclick="window.satyaLogin()">"Login"</button>
-                    <button type="button" class="btn btn-secondary" onclick="window.satyaRegister()">"Register New Account"</button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        onclick="window.satyaLogin()"
+                        on:click=move |_| wasm_client::satya_login()
+                    >
+                        "Login"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        onclick="window.satyaRegister()"
+                        on:click=move |_| wasm_client::satya_register()
+                    >
+                        "Register New Account"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-logout"
+                        class="btn btn-danger"
+                        onclick="window.satyaLogout()"
+                        on:click=move |_| wasm_client::satya_logout()
+                        disabled
+                    >
+                        "Logout"
+                    </button>
                 </div>
                 <div id="auth-feedback" class="feedback-box"></div>
             </div>
@@ -103,7 +184,11 @@ fn AuthAndSessionGate() -> impl IntoView {
                     </label>
                     <label>
                         <span>"Business Mode"</span>
-                        <select id="session-mode-select" onchange="window.satyaModeChanged()">
+                        <select
+                            id="session-mode-select"
+                            onchange="window.satyaModeChanged()"
+                            on:change=move |_| wasm_client::satya_mode_changed()
+                        >
                             <option value="TTRPG">"TTRPG Mode (GM + Players + AI GM)"</option>
                             <option value="MEETING">"Meeting Mode (Host + 2+ Attendees)"</option>
                         </select>
@@ -124,8 +209,32 @@ fn AuthAndSessionGate() -> impl IntoView {
                     </label>
                 </div>
                 <div class="btn-row">
-                    <button type="button" class="btn btn-accent" onclick="window.satyaCreateSession()">"Host: Create Session"</button>
-                    <button type="button" class="btn btn-primary" onclick="window.satyaJoinSession()">"Join Existing Session"</button>
+                    <button
+                        type="button"
+                        class="btn btn-accent"
+                        onclick="window.satyaCreateSession()"
+                        on:click=move |_| wasm_client::satya_create_session()
+                    >
+                        "Host: Create Session"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-primary"
+                        onclick="window.satyaJoinSession()"
+                        on:click=move |_| wasm_client::satya_join_session()
+                    >
+                        "Join Existing Session"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-leave-session"
+                        class="btn btn-danger"
+                        onclick="window.satyaLeaveSession()"
+                        on:click=move |_| wasm_client::satya_leave_session()
+                        disabled
+                    >
+                        "Disconnect Session"
+                    </button>
                 </div>
                 <div id="session-feedback" class="feedback-box"></div>
             </div>
@@ -145,10 +254,50 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             <span class="subtitle">"P2P Media + DataChannel + VAD InteractionDynamicsEvent"</span>
                         </div>
                         <div class="media-controls">
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="window.satyaStartCamera()">"Enable Cam/Mic"</button>
-                            <button type="button" id="btn-mute-audio" class="btn btn-sm btn-secondary" onclick="window.satyaToggleAudio()">"Mute Mic"</button>
-                            <button type="button" id="btn-mute-video" class="btn btn-sm btn-secondary" onclick="window.satyaToggleVideo()">"Mute Video"</button>
-                            <button type="button" class="btn btn-sm btn-accent" onclick="window.satyaEmitProsodySample()">"Log VAD Turn"</button>
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-secondary"
+                                onclick="window.satyaStartCamera()"
+                                on:click=move |_| wasm_client::satya_start_camera()
+                            >
+                                "Enable Cam/Mic"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-mute-audio"
+                                class="btn btn-sm btn-secondary"
+                                onclick="window.satyaToggleAudio()"
+                                on:click=move |_| wasm_client::satya_toggle_audio()
+                            >
+                                "Mute Mic"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-mute-video"
+                                class="btn btn-sm btn-secondary"
+                                onclick="window.satyaToggleVideo()"
+                                on:click=move |_| wasm_client::satya_toggle_video()
+                            >
+                                "Mute Video"
+                            </button>
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-accent"
+                                onclick="window.satyaEmitProsodySample()"
+                                on:click=move |_| wasm_client::satya_emit_prosody_sample()
+                            >
+                                "Log VAD Turn"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-workspace-disconnect"
+                                class="btn btn-sm btn-danger"
+                                onclick="window.satyaLeaveSession()"
+                                on:click=move |_| wasm_client::satya_leave_session()
+                                disabled
+                            >
+                                "Disconnect"
+                            </button>
                         </div>
                     </div>
                     <div id="video-grid" class="video-grid">
@@ -207,7 +356,14 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                         </label>
                     </div>
                     <div class="btn-row">
-                        <button type="button" class="btn btn-accent" onclick="window.satyaRollTask()">"Roll Satya Task & Emit Avro Event"</button>
+                        <button
+                            type="button"
+                            class="btn btn-accent"
+                            onclick="window.satyaRollTask()"
+                            on:click=move |_| wasm_client::satya_roll_task()
+                        >
+                            "Roll Satya Task & Emit Avro Event"
+                        </button>
                     </div>
                 </div>
             </div>
@@ -225,7 +381,11 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                         <div class="vis-row">
                             <label>
                                 <span>"Visibility"</span>
-                                <select id="chat-visibility" onchange="window.satyaVisibilityChanged()">
+                                <select
+                                    id="chat-visibility"
+                                    onchange="window.satyaVisibilityChanged()"
+                                    on:change=move |_| wasm_client::satya_visibility_changed()
+                                >
                                     <option value="PUBLIC">"PUBLIC (Broadcast to All)"</option>
                                     <option value="PRIVATE">"PRIVATE (Selected Recipients Only)"</option>
                                     <option value="GM_ONLY">"GM_ONLY (Secret to GM / AI-GM)"</option>
@@ -257,8 +417,16 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             type="text"
                             placeholder="Type message (composition duration tracked for ML)..."
                             onkeydown="window.satyaChatKeydown(event)"
+                            on:keydown=wasm_client::satya_chat_keydown
                         />
-                        <button type="button" class="btn btn-primary" onclick="window.satyaSendChat()">"Send"</button>
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            onclick="window.satyaSendChat()"
+                            on:click=move |_| wasm_client::satya_send_chat()
+                        >
+                            "Send"
+                        </button>
                     </div>
                 </div>
 
@@ -269,13 +437,79 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             <span class="subtitle">"CRC-64-AVRO Fingerprints + Offset-Tracked .avro Container Batches"</span>
                         </div>
                         <div class="btn-row-compact">
-                            <button type="button" class="btn btn-sm btn-secondary" onclick="window.satyaRefreshMetrics()">"Refresh"</button>
-                            <button type="button" class="btn btn-sm btn-accent" onclick="window.satyaFlushBatches()">"Flush Avro Batches Now"</button>
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-secondary"
+                                onclick="window.satyaRefreshMetrics()"
+                                on:click=move |_| wasm_client::satya_refresh_metrics()
+                            >
+                                "Refresh"
+                            </button>
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-accent"
+                                onclick="window.satyaFlushBatches()"
+                                on:click=move |_| wasm_client::satya_flush_batches()
+                            >
+                                "Flush Avro Batches Now"
+                            </button>
                         </div>
                     </div>
                     <div id="topic-metrics-table" class="metrics-table-wrap"></div>
                 </div>
             </div>
         </section>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use satya_schema::{
+        CombatStance, MessageVisibility, SessionMode, SessionRole, TopicMetricsView,
+    };
+
+    #[test]
+    fn test_wasm_client_enum_parsers_and_metrics_table_render() {
+        assert_eq!(
+            wasm_client::parse_session_mode("MEETING"),
+            SessionMode::Meeting
+        );
+        assert_eq!(wasm_client::parse_session_mode("TTRPG"), SessionMode::Ttrpg);
+        assert_eq!(wasm_client::parse_session_role("GM"), SessionRole::Gm);
+        assert_eq!(wasm_client::parse_session_role("HOST"), SessionRole::Host);
+        assert_eq!(
+            wasm_client::parse_visibility("PRIVATE"),
+            MessageVisibility::Private
+        );
+        assert_eq!(
+            wasm_client::parse_combat_stance("MANEUVER"),
+            Some(CombatStance::Maneuver)
+        );
+        assert_eq!(wasm_client::parse_combat_stance(""), None);
+
+        let table_html = wasm_client::format_metrics_table_html(&[TopicMetricsView {
+            topic: "session-lifecycle".to_string(),
+            topic_id: 2,
+            storage_backend: "local".to_string(),
+            destination_uri: "data/topics/session-lifecycle".to_string(),
+            total_messages_ingested: 4,
+            buffered_messages: 0,
+            flushed_batches_count: 4,
+            last_flushed_offset: Some(3),
+            active_schema_version: 1,
+            active_schema_fingerprint_hex: "0123456789abcdef".to_string(),
+        }]);
+        assert!(table_html.contains("session-lifecycle"));
+        assert!(table_html.contains("last offset: 3"));
+    }
+
+    #[test]
+    fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
+        let html = render_satya_app_html();
+        assert!(html.contains("/pkg/satya_web.js"));
+        assert!(html.contains("btn-logout"));
+        assert!(html.contains("btn-leave-session"));
+        assert!(html.contains("btn-workspace-disconnect"));
     }
 }

@@ -1,6 +1,10 @@
+//! Axum HTTP + WebSocket signaling server, session lifecycle orchestration,
+//! targeted chat routing, and Apache Iggy Avro event ingestion for Satya.
+#![deny(missing_docs)]
+
 pub mod auth;
 
-use crate::auth::{AuthAndSessionManager, JoinTokenClaims};
+use crate::auth::{AuthAndSessionManager, JoinTokenClaims, SessionDisconnectSummary};
 use axum::{
     Json, Router,
     extract::{
@@ -14,10 +18,11 @@ use axum::{
 use futures::{SinkExt, StreamExt};
 use rand::Rng;
 use satya_schema::{
-    ChannelContext, ChatMessageEvent, CombatStance, IceCandidateType, InteractionDynamicsEvent,
-    InteractionTurnType, LifecycleEventType, MessageVisibility, Participant, ParticipantKind,
-    SessionLifecycleEvent, SessionMode, SessionRole, TtrpgMechanicsEvent, WebRtcEventKind,
-    WebRtcTelemetryEvent, subjects,
+    ChannelContext, ChatMessageEvent, ClientWsPacket, CreateSessionRequest, IceCandidateType,
+    InteractionDynamicsEvent, JoinSessionRequest, LeaveSessionRequest, LifecycleEventType,
+    LoginRequest, LogoutRequest, MessageVisibility, Participant, ParticipantKind, RegisterRequest,
+    ServerWsPacket, SessionEnterResponse, SessionLifecycleEvent, SessionMode, SessionRole,
+    TtrpgMechanicsEvent, WebRtcEventKind, WebRtcTelemetryEvent, subjects,
 };
 use satya_storage::{EventLogRouter, StorageConfig, TopicMetricsSnapshot};
 use satya_web::render_satya_app_html;
@@ -32,15 +37,20 @@ use std::sync::{
 use tokio::sync::{RwLock, mpsc};
 use uuid::Uuid;
 
+/// Shared application state for the Satya HTTP and WebSocket signaling server.
 pub struct SignalingAppState {
+    /// Persistent Argon2id user authentication and password-protected session manager.
     pub auth: AuthAndSessionManager,
+    /// Multi-topic Apache Iggy and Avro container batch storage router.
     pub storage: Arc<EventLogRouter>,
+    /// Monotonically increasing sequence counter for emitted Avro event envelopes.
     pub sequence_counter: AtomicI64,
-    /// Active WebSocket connections per `session_id -> (user_id -> tx)`
+    /// Active WebSocket connections per `session_id -> (user_id -> tx)`.
     pub active_sockets: RwLock<HashMap<String, HashMap<String, mpsc::UnboundedSender<String>>>>,
 }
 
 impl SignalingAppState {
+    /// Initializes a new [`SignalingAppState`] with persistent user accounts and topic storage sinks.
     pub async fn new(
         config: StorageConfig,
         base_dir: impl Into<PathBuf>,
@@ -57,6 +67,7 @@ impl SignalingAppState {
         }))
     }
 
+    /// Returns the next monotonically increasing sequence number for event metadata.
     pub fn next_seq(&self) -> i64 {
         self.sequence_counter.fetch_add(1, Ordering::SeqCst)
     }
@@ -116,6 +127,7 @@ impl SignalingAppState {
         (recipient_records, delivery_user_ids)
     }
 
+    /// Sends a serialized JSON WebSocket packet to a targeted subset of `user_id`s in `session_id`.
     pub async fn send_to_users(
         &self,
         session_id: &str,
@@ -132,6 +144,7 @@ impl SignalingAppState {
         }
     }
 
+    /// Broadcasts a serialized JSON WebSocket packet to every connected socket in `session_id`.
     pub async fn broadcast_to_session(&self, session_id: &str, payload_json: &str) {
         let guard = self.active_sockets.read().await;
         if let Some(room_map) = guard.get(session_id) {
@@ -140,15 +153,119 @@ impl SignalingAppState {
             }
         }
     }
+
+    /// Cleans up active WebSocket state, logs `WebRtcTelemetryEvent` (`PEER_DISCONNECTED`) and
+    /// `SessionLifecycleEvent` (`PARTICIPANT_LEFT` / `PARTICIPANT_DISCONNECTED`, plus `SESSION_ENDED`
+    /// if no human participants remain), and broadcasts `PEER_DISCONNECTED` + `ROSTER_SYNC` to peers.
+    pub async fn process_session_disconnect(
+        &self,
+        summary: &SessionDisconnectSummary,
+        lifecycle_type: LifecycleEventType,
+        reason: &str,
+    ) {
+        {
+            let mut guard = self.active_sockets.write().await;
+            if let Some(room_map) = guard.get_mut(&summary.session_id) {
+                room_map.remove(&summary.departed_participant.user_id);
+            }
+        }
+
+        // 1. Log WebRTC peer disconnect telemetry event
+        if let Ok(meta) = self.storage.registry().build_metadata(
+            self.next_seq(),
+            subjects::WEBRTC_TELEMETRY,
+            1,
+            &summary.session_id,
+            summary.session_mode,
+        ) {
+            let tel_ev = WebRtcTelemetryEvent {
+                metadata: meta,
+                local_participant: summary.departed_participant.clone(),
+                remote_participant: None,
+                event_kind: WebRtcEventKind::PeerDisconnected,
+                ice_candidate_type: None,
+                rtt_ms: None,
+                jitter_ms: None,
+                packet_loss_rate: None,
+                available_outgoing_bitrate_bps: None,
+                audio_muted: true,
+                video_muted: true,
+            };
+            let _ = self.storage.log_webrtc_telemetry(&tel_ev).await;
+        }
+
+        // 2. Log SessionLifecycleEvent (PARTICIPANT_LEFT or PARTICIPANT_DISCONNECTED)
+        if let Ok(meta) = self.storage.registry().build_metadata(
+            self.next_seq(),
+            subjects::SESSION_LIFECYCLE,
+            1,
+            &summary.session_id,
+            summary.session_mode,
+        ) {
+            let ev = SessionLifecycleEvent {
+                metadata: meta,
+                lifecycle_type,
+                actor: summary.departed_participant.clone(),
+                target_participant: None,
+                password_protected: true,
+                roster_snapshot: summary.remaining_roster.clone(),
+                reason: Some(reason.to_string()),
+            };
+            let _ = self.storage.log_session_lifecycle(&ev).await;
+        }
+
+        // 3. If no human participants remain in the session, also log SESSION_ENDED
+        if summary.remaining_human_count == 0
+            && let Ok(meta) = self.storage.registry().build_metadata(
+                self.next_seq(),
+                subjects::SESSION_LIFECYCLE,
+                1,
+                &summary.session_id,
+                summary.session_mode,
+            )
+        {
+            let ended_ev = SessionLifecycleEvent {
+                metadata: meta,
+                lifecycle_type: LifecycleEventType::SessionEnded,
+                actor: summary.departed_participant.clone(),
+                target_participant: None,
+                password_protected: true,
+                roster_snapshot: summary.remaining_roster.clone(),
+                reason: Some("Last human participant disconnected from session".to_string()),
+            };
+            let _ = self.storage.log_session_lifecycle(&ended_ev).await;
+        }
+
+        // 4. Broadcast PEER_DISCONNECTED and updated ROSTER_SYNC to remaining connected peers
+        if let Ok(peer_disc_msg) = serde_json::to_string(&ServerWsPacket::PeerDisconnected {
+            participant: summary.departed_participant.clone(),
+            reason: Some(reason.to_string()),
+        }) {
+            self.broadcast_to_session(&summary.session_id, &peer_disc_msg)
+                .await;
+        }
+
+        if let Ok(sync_msg) = serde_json::to_string(&ServerWsPacket::RosterSync {
+            roster: summary.remaining_roster.clone(),
+        }) {
+            self.broadcast_to_session(&summary.session_id, &sync_msg)
+                .await;
+        }
+    }
 }
 
+/// Constructs the Axum [`Router`] with all HTTP REST endpoints, static `/pkg` Wasm asset serving,
+/// and the `/ws/session` WebSocket upgrade route.
 pub fn build_router(state: Arc<SignalingAppState>) -> Router {
     Router::new()
         .route("/", get(index_handler))
+        .nest_service("/pkg", tower_http::services::ServeDir::new("pkg"))
         .route("/api/auth/register", post(register_handler))
         .route("/api/auth/login", post(login_handler))
+        .route("/api/auth/logout", post(logout_handler))
         .route("/api/sessions/create", post(create_session_handler))
         .route("/api/sessions/join", post(join_session_handler))
+        .route("/api/sessions/leave", post(leave_session_handler))
         .route("/api/storage/metrics", get(storage_metrics_handler))
         .route("/api/storage/flush", post(storage_flush_handler))
         .route("/ws/session", get(ws_session_handler))
@@ -157,13 +274,6 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
 
 async fn index_handler() -> Html<String> {
     Html(render_satya_app_html())
-}
-
-#[derive(Debug, Deserialize)]
-pub struct RegisterRequest {
-    pub username: String,
-    pub password: String,
-    pub display_name: String,
 }
 
 async fn register_handler(
@@ -184,12 +294,6 @@ async fn register_handler(
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct LoginRequest {
-    pub username: String,
-    pub password: String,
-}
-
 async fn login_handler(
     State(state): State<Arc<SignalingAppState>>,
     Json(req): Json<LoginRequest>,
@@ -208,23 +312,82 @@ async fn login_handler(
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct CreateSessionRequest {
-    pub session_id: String,
-    pub session_password: String,
-    pub session_mode: SessionMode,
-    pub role: SessionRole,
-    pub display_name: Option<String>,
-    pub enable_ai_gm: bool,
-}
+async fn logout_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    headers: HeaderMap,
+    body: Option<Json<LogoutRequest>>,
+) -> impl IntoResponse {
+    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Missing Authorization header" })),
+        )
+            .into_response();
+    };
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SessionEnterResponse {
-    pub session_id: String,
-    pub session_mode: SessionMode,
-    pub join_token: String,
-    pub self_participant: Participant,
-    pub roster: Vec<Participant>,
+    let req = body.map(|Json(r)| r).unwrap_or_default();
+    let reason = req
+        .reason
+        .unwrap_or_else(|| "User logged out of session".to_string());
+
+    let Some((user, disconnected_sessions)) = state.auth.logout_user(auth_hdr).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or already revoked auth token" })),
+        )
+            .into_response();
+    };
+
+    let mut disconnected_ids = Vec::new();
+    let mut last_mode = SessionMode::Ttrpg;
+    for summary in &disconnected_sessions {
+        disconnected_ids.push(summary.session_id.clone());
+        last_mode = summary.session_mode;
+        state
+            .process_session_disconnect(summary, LifecycleEventType::ParticipantLeft, &reason)
+            .await;
+    }
+
+    let lifecycle_session_id = req
+        .session_id
+        .or_else(|| disconnected_ids.first().cloned())
+        .unwrap_or_else(|| "auth-session".to_string());
+
+    if let Ok(meta) = state.storage.registry().build_metadata(
+        state.next_seq(),
+        subjects::SESSION_LIFECYCLE,
+        1,
+        &lifecycle_session_id,
+        last_mode,
+    ) {
+        let actor = Participant::human(
+            &user.user_id,
+            &user.username,
+            &user.display_name,
+            SessionRole::Participant,
+        );
+        let ev = SessionLifecycleEvent {
+            metadata: meta,
+            lifecycle_type: LifecycleEventType::UserLoggedOut,
+            actor,
+            target_participant: None,
+            password_protected: true,
+            roster_snapshot: Vec::new(),
+            reason: Some(reason),
+        };
+        let _ = state.storage.log_session_lifecycle(&ev).await;
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "status": "logged_out",
+            "user_id": user.user_id,
+            "username": user.username,
+            "disconnected_sessions": disconnected_ids,
+        })),
+    )
+        .into_response()
 }
 
 async fn create_session_handler(
@@ -300,14 +463,6 @@ async fn create_session_handler(
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct JoinSessionRequest {
-    pub session_id: String,
-    pub session_password: String,
-    pub role: SessionRole,
-    pub display_name: Option<String>,
-}
-
 async fn join_session_handler(
     State(state): State<Arc<SignalingAppState>>,
     headers: HeaderMap,
@@ -381,8 +536,67 @@ async fn join_session_handler(
     }
 }
 
+async fn leave_session_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    headers: HeaderMap,
+    Json(req): Json<LeaveSessionRequest>,
+) -> impl IntoResponse {
+    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Missing Authorization header" })),
+        )
+            .into_response();
+    };
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or expired auth token" })),
+        )
+            .into_response();
+    };
+
+    let reason = req
+        .reason
+        .unwrap_or_else(|| "User disconnected from session".to_string());
+
+    if let Some(summary) = state
+        .auth
+        .leave_session(&req.session_id, &user.user_id)
+        .await
+    {
+        state
+            .process_session_disconnect(&summary, LifecycleEventType::ParticipantLeft, &reason)
+            .await;
+
+        (
+            StatusCode::OK,
+            Json(json!({
+                "status": "disconnected",
+                "session_id": summary.session_id,
+                "user_id": user.user_id,
+                "remaining_roster": summary.remaining_roster,
+            })),
+        )
+            .into_response()
+    } else {
+        (
+            StatusCode::OK,
+            Json(json!({
+                "status": "already_disconnected",
+                "session_id": req.session_id,
+                "user_id": user.user_id,
+                "remaining_roster": state.auth.get_session_roster(&req.session_id).await,
+            })),
+        )
+            .into_response()
+    }
+}
+
+/// JSON response returned by `GET /api/storage/metrics` containing per-topic telemetry.
 #[derive(Debug, Serialize)]
 pub struct StorageMetricsResponse {
+    /// Metrics snapshots for all 6 Apache Iggy topics.
     pub topics: Vec<TopicMetricsSnapshot>,
 }
 
@@ -398,8 +612,10 @@ async fn storage_flush_handler(State(state): State<Arc<SignalingAppState>>) -> i
     Json(json!({ "flushed_files": flushed }))
 }
 
+/// Query string parameters required when upgrading `/ws/session?join_token=...`.
 #[derive(Debug, Deserialize)]
 pub struct WsConnectQuery {
+    /// Single-session join token returned by `/api/sessions/create` or `/api/sessions/join`.
     pub join_token: String,
 }
 
@@ -412,47 +628,6 @@ async fn ws_session_handler(
         return (StatusCode::UNAUTHORIZED, "Invalid join_token").into_response();
     };
     ws.on_upgrade(move |socket| handle_ws_client(socket, claims, state))
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "SCREAMING_SNAKE_CASE")]
-enum ClientWsPacket {
-    SendChat {
-        visibility: MessageVisibility,
-        #[serde(default)]
-        recipient_user_ids: Vec<String>,
-        channel_context: ChannelContext,
-        body: String,
-        #[serde(default)]
-        composition_time_ms: i64,
-    },
-    WebrtcSignal {
-        target_user_id: String,
-        signal_kind: WebRtcEventKind,
-        payload: String,
-    },
-    WebrtcTelemetry {
-        target_user_id: Option<String>,
-        event_kind: WebRtcEventKind,
-        audio_muted: bool,
-        video_muted: bool,
-    },
-    InteractionDynamics {
-        turn_type: InteractionTurnType,
-        duration_ms: i64,
-        rms_energy_mean: f32,
-        rms_energy_peak: f32,
-        pitch_hz_estimate: Option<f32>,
-        preceding_silence_ms: i64,
-    },
-    RollTtrpgTask {
-        skill_name: String,
-        attribute_tn: i32,
-        pool_size: usize,
-        difficulty_rating: i32,
-        combat_stance: Option<CombatStance>,
-        fatigue_level: i32,
-    },
 }
 
 async fn handle_ws_client(
@@ -754,11 +929,33 @@ async fn handle_ws_client(
                     }
                 }
             }
+            ClientWsPacket::LeaveSession { reason } => {
+                let disc_reason =
+                    reason.unwrap_or_else(|| "User disconnected from session".to_string());
+                if let Some(summary) = state.auth.leave_session(&session_id, &user_id).await {
+                    state
+                        .process_session_disconnect(
+                            &summary,
+                            LifecycleEventType::ParticipantLeft,
+                            &disc_reason,
+                        )
+                        .await;
+                }
+                break;
+            }
         }
     }
 
     forward_task.abort();
-    {
+    if let Some(summary) = state.auth.leave_session(&session_id, &user_id).await {
+        state
+            .process_session_disconnect(
+                &summary,
+                LifecycleEventType::ParticipantDisconnected,
+                "WebSocket connection closed",
+            )
+            .await;
+    } else {
         let mut guard = state.active_sockets.write().await;
         if let Some(room_map) = guard.get_mut(&session_id) {
             room_map.remove(&user_id);
@@ -993,6 +1190,136 @@ mod tests {
             .unwrap();
         assert_eq!(schema_reg_topic.total_messages_ingested, 7);
         assert_eq!(schema_reg_topic.flushed_batches_count, 1);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_session_leave_and_user_logout_emit_disconnect_events() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("satya_disconnect_test_{}", Uuid::new_v4()));
+        let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+            .await
+            .unwrap();
+        let app = build_router(state.clone());
+
+        let gm_auth = state
+            .auth
+            .register_user("gm_disc", "strong-pass-1", "GM Sean")
+            .await
+            .unwrap();
+        let p1_auth = state
+            .auth
+            .register_user("p1_disc", "strong-pass-2", "Player Sara")
+            .await
+            .unwrap();
+
+        let gm_user = state
+            .auth
+            .verify_auth_token(&gm_auth.auth_token)
+            .await
+            .unwrap();
+        let p1_user = state
+            .auth
+            .verify_auth_token(&p1_auth.auth_token)
+            .await
+            .unwrap();
+
+        let (gm_join_tok, _, _) = state
+            .auth
+            .create_session(
+                &gm_user,
+                "ep-disconnect",
+                "room-secret",
+                SessionMode::Ttrpg,
+                SessionRole::Gm,
+                None,
+                true,
+            )
+            .await
+            .unwrap();
+        let (p1_join_tok, _, _, roster_before) = state
+            .auth
+            .join_session(
+                &p1_user,
+                "ep-disconnect",
+                "room-secret",
+                SessionRole::Player,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(roster_before.len(), 3); // GM + Player 1 + AI GM
+
+        // 1. Player 1 disconnects from the session via POST /api/sessions/leave
+        let leave_req = Request::builder()
+            .method("POST")
+            .uri("/api/sessions/leave")
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+            .body(Body::from(
+                serde_json::to_string(&json!({
+                    "session_id": "ep-disconnect",
+                    "reason": "Player Sara clicked Disconnect"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let leave_res = app.clone().oneshot(leave_req).await.unwrap();
+        assert_eq!(leave_res.status(), StatusCode::OK);
+
+        // Player 1's join token is invalidated and roster now has 2 participants (GM + AI GM)
+        assert!(state.auth.verify_join_token(&p1_join_tok).await.is_none());
+        assert!(state.auth.verify_join_token(&gm_join_tok).await.is_some());
+        let roster_after_leave = state.auth.get_session_roster("ep-disconnect").await;
+        assert_eq!(roster_after_leave.len(), 2);
+
+        // 2. GM logs out completely via POST /api/auth/logout while still in the session
+        let logout_req = Request::builder()
+            .method("POST")
+            .uri("/api/auth/logout")
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+            .body(Body::from(
+                serde_json::to_string(&json!({
+                    "session_id": "ep-disconnect",
+                    "reason": "GM logged out"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let logout_res = app.oneshot(logout_req).await.unwrap();
+        assert_eq!(logout_res.status(), StatusCode::OK);
+
+        // GM's auth token and join token are both revoked
+        assert!(
+            state
+                .auth
+                .verify_auth_token(&gm_auth.auth_token)
+                .await
+                .is_none()
+        );
+        assert!(state.auth.verify_join_token(&gm_join_tok).await.is_none());
+
+        // Verify disconnect & logout events were logged to `session-lifecycle` and `webrtc-telemetry`
+        let metrics = state.storage.metrics_snapshot().await;
+        let lifecycle_metrics = metrics
+            .iter()
+            .find(|m| m.topic == "session-lifecycle")
+            .unwrap();
+        // Events: P1 ParticipantLeft (1) + GM ParticipantLeft (2) + SessionEnded (3, since 0 humans left) + GM UserLoggedOut (4)
+        assert_eq!(lifecycle_metrics.total_messages_ingested, 4);
+
+        let webrtc_metrics = metrics
+            .iter()
+            .find(|m| m.topic == "webrtc-telemetry")
+            .unwrap();
+        // Events: P1 PeerDisconnected (1) + GM PeerDisconnected (2)
+        assert_eq!(webrtc_metrics.total_messages_ingested, 2);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

@@ -36,3 +36,47 @@ tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
 leptos = { version = "0.7", features = ["csr", "ssr"] }
 object_store = { version = "0.11", features = ["aws"] }
 hex = "0.4"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "AnalyserNode",
+    "AudioContext",
+    "Document",
+    "Element",
+    "Event",
+    "EventTarget",
+    "Headers",
+    "HtmlButtonElement",
+    "HtmlElement",
+    "HtmlInputElement",
+    "HtmlMediaElement",
+    "HtmlSelectElement",
+    "HtmlVideoElement",
+    "KeyboardEvent",
+    "Location",
+    "MediaDevices",
+    "MediaStream",
+    "MediaStreamAudioSourceNode",
+    "MediaStreamConstraints",
+    "MediaStreamTrack",
+    "MessageEvent",
+    "Navigator",
+    "Node",
+    "Request",
+    "RequestInit",
+    "Response",
+    "RtcConfiguration",
+    "RtcDataChannel",
+    "RtcDataChannelEvent",
+    "RtcIceCandidate",
+    "RtcIceCandidateInit",
+    "RtcPeerConnection",
+    "RtcPeerConnectionIceEvent",
+    "RtcRtpSender",
+    "RtcSdpType",
+    "RtcSessionDescriptionInit",
+    "RtcTrackEvent",
+    "WebSocket",
+    "Window",
+] }

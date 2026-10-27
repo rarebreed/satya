@@ -22,6 +22,7 @@ fmt = { cmd = "cargo fmt --all", description = "Format all Rust code in the work
 lint = { cmd = "cargo clippy --workspace --all-targets", description = "Run Clippy lints across all Rust crates" }
 build = { cmd = "cargo build --workspace", description = "Build debug binaries for the workspace" }
 build-release = { cmd = "cargo build --workspace --release", description = "Build optimized release binaries" }
+build-wasm = { cmd = "wasm-pack build crates/satya-web --target web --out-dir ../../pkg", description = "Compile satya-web Rust/Leptos frontend to WebAssembly in pkg/" }
 
 # --- Granular & Unified Test Suites ---
 test-schema = { cmd = "cargo test -p satya-schema", description = "Run Avro schema, CRC-64 fingerprint, and v1->v2 evolution tests" }

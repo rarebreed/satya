@@ -40,10 +40,12 @@
         "symbols": [
           "USER_REGISTERED",
           "USER_AUTHENTICATED",
+          "USER_LOGGED_OUT",
           "AUTH_FAILED",
           "SESSION_CREATED",
           "PARTICIPANT_JOINED",
           "PARTICIPANT_LEFT",
+          "PARTICIPANT_DISCONNECTED",
           "ROLE_CHANGED",
           "SESSION_ENDED"
         ]

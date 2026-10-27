@@ -1,3 +1,6 @@
+//! Binary entrypoint for the Satya WebRTC Signaling & Apache Iggy Event Streaming Server.
+#![deny(missing_docs)]
+
 use satya_signaling::{SignalingAppState, build_router};
 use satya_storage::StorageConfig;
 use std::net::SocketAddr;

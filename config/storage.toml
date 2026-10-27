@@ -1,5 +1,8 @@
 [iggy]
 enabled = true
+# "embedded" uses the built-in local WAL (data/iggy_streams/) + Avro batch sink without needing an external daemon.
+# Set to "external" to connect to a standalone iggy-server process at `address`.
+mode = "embedded"
 address = "127.0.0.1:8090"
 username = "iggy"
 password = "iggy"

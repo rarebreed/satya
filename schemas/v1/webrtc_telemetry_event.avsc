@@ -94,6 +94,7 @@
           "ICE_STATE_CHANGE",
           "DATA_CHANNEL_OPEN",
           "DATA_CHANNEL_CLOSED",
+          "PEER_DISCONNECTED",
           "STATS_SNAPSHOT",
           "TRACK_MUTE_CHANGE"
         ]

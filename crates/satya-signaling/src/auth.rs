@@ -1,49 +1,84 @@
+//! Persistent Argon2id user authentication and password-protected session roster management.
+//!
+//! Provides [`AuthAndSessionManager`] along with persistent user identity records
+//! ([`UserAccount`]), active password-protected session state ([`ProtectedSession`]),
+//! WebSocket join claims ([`JoinTokenClaims`]), and disconnect summaries
+//! ([`SessionDisconnectSummary`]).
+
 use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use chrono::Utc;
-use satya_schema::{Participant, SessionMode, SessionRole};
+pub use satya_schema::AuthSuccessResponse;
+use satya_schema::{Participant, ParticipantKind, SessionMode, SessionRole};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+/// Persistent user account record stored in `data/auth/users.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserAccount {
+    /// Persistent UUID (or preset demo ID) identifying this user across sessions.
     pub user_id: String,
+    /// Normalized lowercase login username.
     pub username: String,
+    /// Default display or character name for this user.
     pub display_name: String,
+    /// Argon2id encoded password hash string.
     pub password_hash: String,
+    /// Account creation timestamp in UTC microseconds since Unix epoch.
     pub created_at_us: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthSuccessResponse {
-    pub auth_token: String,
-    pub user_id: String,
-    pub username: String,
-    pub display_name: String,
-}
-
+/// Active password-protected session room and its current participant roster.
 #[derive(Debug, Clone)]
 pub struct ProtectedSession {
+    /// Unique identifier for the session room.
     pub session_id: String,
+    /// Argon2id encoded hash of the session password.
     pub password_hash: String,
+    /// Business mode (`TTRPG` or `MEETING`) for this session.
     pub session_mode: SessionMode,
+    /// Persistent `user_id` of the user who created/hosted the session.
     pub host_user_id: String,
+    /// Map of active participants in the session keyed by `user_id`.
     pub roster: HashMap<String, Participant>,
+    /// Session creation timestamp in UTC microseconds since Unix epoch.
     pub created_at_us: i64,
 }
 
+/// Verified claims bound to a WebSocket session join token (`join_<uuid>`).
 #[derive(Debug, Clone)]
 pub struct JoinTokenClaims {
+    /// Session ID that the join token grants access to.
     pub session_id: String,
+    /// Business mode (`TTRPG` or `MEETING`) of the session.
     pub session_mode: SessionMode,
+    /// Authenticated [`Participant`] identity associated with the join token.
     pub participant: Participant,
 }
 
+/// Summary of a participant's departure from an active session, used to emit
+/// durable lifecycle and WebRTC disconnect events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionDisconnectSummary {
+    /// Session ID from which the participant disconnected.
+    pub session_id: String,
+    /// Business mode (`TTRPG` or `MEETING`) of the session.
+    pub session_mode: SessionMode,
+    /// Full [`Participant`] record of the departing user.
+    pub departed_participant: Participant,
+    /// Snapshot of all remaining participants still in the session roster.
+    pub remaining_roster: Vec<Participant>,
+    /// Count of human participants remaining in the session (`0` triggers `SESSION_ENDED`).
+    pub remaining_human_count: usize,
+}
+
+/// Manages Argon2id user registration/login, bearer authentication tokens,
+/// password-protected session creation/joining, and participant disconnect/logout flows.
 pub struct AuthAndSessionManager {
     users_file: PathBuf,
     users_by_username: RwLock<HashMap<String, UserAccount>>,
@@ -53,6 +88,8 @@ pub struct AuthAndSessionManager {
 }
 
 impl AuthAndSessionManager {
+    /// Initializes the authentication and session manager rooted at `base_dir`,
+    /// seeding default demo accounts into `data/auth/users.json` if none exist yet.
     pub fn new(base_dir: impl AsRef<Path>) -> anyhow::Result<Self> {
         let auth_dir = base_dir.as_ref().join("data").join("auth");
         std::fs::create_dir_all(&auth_dir)?;
@@ -98,6 +135,7 @@ impl AuthAndSessionManager {
         })
     }
 
+    /// Hashes a plaintext secret (user password or session password) using Argon2id and a CSPRNG salt.
     pub fn hash_secret(secret: &str) -> anyhow::Result<String> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
@@ -108,6 +146,7 @@ impl AuthAndSessionManager {
         Ok(hash)
     }
 
+    /// Verifies a plaintext secret against an Argon2id PHC string hash.
     pub fn verify_secret(secret: &str, encoded_hash: &str) -> bool {
         let Ok(parsed_hash) = PasswordHash::new(encoded_hash) else {
             return false;
@@ -117,6 +156,7 @@ impl AuthAndSessionManager {
             .is_ok()
     }
 
+    /// Registers a new user account, persists it to `users.json`, and returns a bearer token response.
     pub async fn register_user(
         &self,
         username: &str,
@@ -155,6 +195,7 @@ impl AuthAndSessionManager {
         self.issue_auth_token(account).await
     }
 
+    /// Authenticates an existing user with `username` and `password`, issuing a new bearer token.
     pub async fn authenticate_user(
         &self,
         username: &str,
@@ -191,6 +232,7 @@ impl AuthAndSessionManager {
         })
     }
 
+    /// Verifies a bearer token (with or without a `"Bearer "` prefix) and returns the associated [`UserAccount`].
     pub async fn verify_auth_token(&self, token: &str) -> Option<UserAccount> {
         let clean = token.strip_prefix("Bearer ").unwrap_or(token).trim();
         self.auth_tokens.read().await.get(clean).cloned()
@@ -323,15 +365,84 @@ impl AuthAndSessionManager {
         Ok((join_token, mode, self_participant, roster_vec))
     }
 
+    /// Verifies a WebSocket `join_token` and returns its [`JoinTokenClaims`] if valid.
     pub async fn verify_join_token(&self, join_token: &str) -> Option<JoinTokenClaims> {
         self.join_tokens.read().await.get(join_token).cloned()
     }
 
+    /// Returns a snapshot of all current [`Participant`]s in `session_id`.
     pub async fn get_session_roster(&self, session_id: &str) -> Vec<Participant> {
         let guard = self.sessions.read().await;
         guard
             .get(session_id)
             .map(|s| s.roster.values().cloned().collect())
             .unwrap_or_default()
+    }
+
+    /// Removes a user from a session's active roster and invalidates their join token(s) for that session.
+    /// Returns `Some(SessionDisconnectSummary)` if the user was present in the roster, or `None` if already removed.
+    pub async fn leave_session(
+        &self,
+        session_id: &str,
+        user_id: &str,
+    ) -> Option<SessionDisconnectSummary> {
+        let sid = session_id.trim();
+        let summary = {
+            let mut sessions = self.sessions.write().await;
+            let session = sessions.get_mut(sid)?;
+            let departed_participant = session.roster.remove(user_id)?;
+            let remaining_roster: Vec<Participant> = session.roster.values().cloned().collect();
+            let remaining_human_count = remaining_roster
+                .iter()
+                .filter(|p| p.participant_kind == ParticipantKind::Human)
+                .count();
+            SessionDisconnectSummary {
+                session_id: sid.to_string(),
+                session_mode: session.session_mode,
+                departed_participant,
+                remaining_roster,
+                remaining_human_count,
+            }
+        };
+
+        self.join_tokens.write().await.retain(|_, claims| {
+            !(claims.session_id == sid && claims.participant.user_id == user_id)
+        });
+
+        Some(summary)
+    }
+
+    /// Revokes an authentication token and disconnects the user from any active sessions they are participating in.
+    pub async fn logout_user(
+        &self,
+        token: &str,
+    ) -> Option<(UserAccount, Vec<SessionDisconnectSummary>)> {
+        let clean = token.strip_prefix("Bearer ").unwrap_or(token).trim();
+        let account = self.auth_tokens.write().await.remove(clean)?;
+
+        let session_ids: Vec<String> = {
+            let sessions = self.sessions.read().await;
+            sessions
+                .values()
+                .filter(|s| s.roster.contains_key(&account.user_id))
+                .map(|s| s.session_id.clone())
+                .collect()
+        };
+
+        let mut disconnected = Vec::new();
+        for sid in session_ids {
+            if let Some(summary) = self.leave_session(&sid, &account.user_id).await {
+                disconnected.push(summary);
+            }
+        }
+
+        Some((account, disconnected))
+    }
+
+    /// Drains all active sessions for graceful shutdown lifecycle logging.
+    pub async fn drain_active_sessions(&self) -> Vec<ProtectedSession> {
+        let mut sessions = self.sessions.write().await;
+        self.join_tokens.write().await.clear();
+        sessions.drain().map(|(_, s)| s).collect()
     }
 }

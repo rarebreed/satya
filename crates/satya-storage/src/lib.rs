@@ -1,3 +1,8 @@
+//! Durable Apache Iggy stream WAL and offset-tracked Apache Avro Object Container
+//! micro-batch storage engine (supporting per-topic Local FS and Amazon S3 sinks).
+
+#![deny(missing_docs)]
+
 use apache_avro::{Codec, Writer, from_avro_datum};
 use bytes::Bytes;
 use object_store::aws::AmazonS3Builder;
@@ -18,13 +23,34 @@ use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
+/// Operating mode for the Apache Iggy event stream broker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum IggyBrokerMode {
+    /// Embedded in-process local WAL stream broker (`data/iggy_streams/`).
+    #[default]
+    Embedded,
+    /// External TCP Apache Iggy server (e.g. `127.0.0.1:8090`).
+    External,
+}
+
+/// Connection and stream configuration for Apache Iggy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IggyConfig {
+    /// Whether Apache Iggy stream publishing is enabled.
     pub enabled: bool,
+    /// Broker connection mode (`embedded` or `external`).
+    #[serde(default)]
+    pub mode: IggyBrokerMode,
+    /// TCP socket address of the external Apache Iggy server.
     pub address: String,
+    /// Username for authenticating with an external Apache Iggy server.
     pub username: String,
+    /// Password for authenticating with an external Apache Iggy server.
     pub password: String,
+    /// Top-level Apache Iggy stream name (e.g. `"satya"`).
     pub stream: String,
+    /// Whether to fall back automatically to [`IggyBrokerMode::Embedded`] if the external server is offline.
     pub fallback_if_offline: bool,
 }
 
@@ -32,6 +58,7 @@ impl Default for IggyConfig {
     fn default() -> Self {
         Self {
             enabled: true,
+            mode: IggyBrokerMode::Embedded,
             address: "127.0.0.1:8090".to_string(),
             username: "iggy".to_string(),
             password: "iggy".to_string(),
@@ -41,9 +68,12 @@ impl Default for IggyConfig {
     }
 }
 
+/// Threshold configuration controlling when buffered topic events are flushed into `.avro` container batches.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchingConfig {
+    /// Maximum number of buffered messages in a topic before an automatic `.avro` batch flush is triggered.
     pub batch_max_messages: usize,
+    /// Maximum interval in milliseconds between periodic topic batch flushes.
     pub batch_max_interval_ms: u64,
 }
 
@@ -56,31 +86,47 @@ impl Default for BatchingConfig {
     }
 }
 
+/// Target object storage backend for flushed `.avro` topic batches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StorageBackendKind {
+    /// Local filesystem directory sink.
     Local,
+    /// Amazon S3 or S3-compatible object storage sink.
     S3,
 }
 
+/// Per-topic partitioning and storage destination configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopicStorageConfig {
+    /// Numeric Apache Iggy topic identifier.
     pub topic_id: u32,
+    /// Number of partitions configured for the topic.
     pub partitions: u32,
+    /// Storage backend (`local` or `s3`) where `.avro` batches are written.
     pub storage_backend: StorageBackendKind,
+    /// Relative or absolute directory path used when `storage_backend` is [`StorageBackendKind::Local`].
     pub local_path: String,
+    /// Optional S3 bucket name used when `storage_backend` is [`StorageBackendKind::S3`].
     pub s3_bucket: Option<String>,
+    /// Optional AWS region for S3 storage.
     pub s3_region: Option<String>,
+    /// Optional custom S3 endpoint URL (for MinIO, LocalStack, or R2).
     pub s3_endpoint: Option<String>,
+    /// Optional key prefix inside the S3 bucket.
     pub s3_prefix: Option<String>,
 }
 
+/// Root storage configuration loaded from `config/storage.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
+    /// Apache Iggy broker configuration.
     #[serde(default)]
     pub iggy: IggyConfig,
+    /// Micro-batching threshold configuration.
     #[serde(default)]
     pub batching: BatchingConfig,
+    /// Map of topic name to its [`TopicStorageConfig`].
     pub topics: HashMap<String, TopicStorageConfig>,
 }
 
@@ -119,6 +165,7 @@ impl Default for StorageConfig {
 }
 
 impl StorageConfig {
+    /// Loads and parses a [`StorageConfig`] from a TOML file on disk.
     pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)?;
         let cfg: StorageConfig = toml::from_str(&content)?;
@@ -129,17 +176,30 @@ impl StorageConfig {
 /// Summary statistics for a single topic displayed in the UI inspector and metrics API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopicMetricsSnapshot {
+    /// Apache Iggy topic name.
     pub topic: String,
+    /// Numeric topic identifier.
     pub topic_id: u32,
+    /// Configured storage sink backend (`local` or `s3`).
     pub storage_backend: StorageBackendKind,
+    /// Target filesystem path or `s3://` destination URI.
     pub destination_uri: String,
+    /// Total number of messages ingested into this topic since server startup.
     pub total_messages_ingested: u64,
+    /// Number of messages currently buffered in memory awaiting `.avro` batch flush.
     pub buffered_messages: usize,
+    /// Total number of `.avro` Object Container files flushed for this topic.
     pub flushed_batches_count: u64,
+    /// Highest Apache Iggy offset flushed to an `.avro` batch file, if any.
     pub last_flushed_offset: Option<u64>,
+    /// Active Avro schema version number for this topic.
     pub active_schema_version: u16,
+    /// Hex-encoded 64-bit `CRC-64-AVRO` fingerprint of the active schema.
     pub active_schema_fingerprint_hex: String,
+    /// Whether the Apache Iggy stream broker is currently online.
     pub iggy_connected: bool,
+    /// Active broker mode (`embedded` or `external`).
+    pub iggy_mode: IggyBrokerMode,
 }
 
 #[derive(Debug, Clone)]
@@ -164,46 +224,59 @@ pub struct EventLogRouter {
     base_dir: PathBuf,
     registry: Arc<SchemaRegistry>,
     iggy_online: RwLock<bool>,
+    iggy_mode: RwLock<IggyBrokerMode>,
     topic_states: RwLock<HashMap<String, TopicPartitionState>>,
 }
 
 impl EventLogRouter {
+    /// Initializes a new [`EventLogRouter`], connects to or starts the Apache Iggy broker,
+    /// and bootstraps the `schema-registry` topic with all built-in schemas.
     pub async fn new(config: StorageConfig, base_dir: impl Into<PathBuf>) -> anyhow::Result<Self> {
         let base_dir = base_dir.into();
         let registry = Arc::new(SchemaRegistry::new_with_builtin_schemas()?);
 
-        // Probe Apache Iggy TCP port if enabled
-        let iggy_online = if config.iggy.enabled {
-            match tokio::time::timeout(
-                std::time::Duration::from_millis(250),
-                TcpStream::connect(&config.iggy.address),
-            )
-            .await
-            {
-                Ok(Ok(_stream)) => {
+        let (iggy_online, active_mode) = if !config.iggy.enabled {
+            (false, config.iggy.mode)
+        } else {
+            match config.iggy.mode {
+                IggyBrokerMode::Embedded => {
                     info!(
-                        "Connected to Apache Iggy server at {} (stream '{}')",
-                        config.iggy.address, config.iggy.stream
+                        "Apache Iggy embedded local stream broker initialized for stream '{}' (WAL: data/iggy_streams/{})",
+                        config.iggy.stream, config.iggy.stream
                     );
-                    true
+                    (true, IggyBrokerMode::Embedded)
                 }
-                _ => {
-                    if config.iggy.fallback_if_offline {
-                        warn!(
-                            "Apache Iggy server at {} is unreachable; using embedded local stream broker for '{}'",
-                            config.iggy.address, config.iggy.stream
-                        );
-                        false
-                    } else {
-                        anyhow::bail!(
-                            "Apache Iggy server at {} is unreachable and fallback_if_offline=false",
-                            config.iggy.address
-                        );
+                IggyBrokerMode::External => {
+                    match tokio::time::timeout(
+                        std::time::Duration::from_millis(250),
+                        TcpStream::connect(&config.iggy.address),
+                    )
+                    .await
+                    {
+                        Ok(Ok(_stream)) => {
+                            info!(
+                                "Connected to external Apache Iggy server at {} (stream '{}')",
+                                config.iggy.address, config.iggy.stream
+                            );
+                            (true, IggyBrokerMode::External)
+                        }
+                        _ => {
+                            if config.iggy.fallback_if_offline {
+                                warn!(
+                                    "External Apache Iggy server at {} is unreachable; falling back to embedded local stream broker for '{}'",
+                                    config.iggy.address, config.iggy.stream
+                                );
+                                (true, IggyBrokerMode::Embedded)
+                            } else {
+                                anyhow::bail!(
+                                    "Apache Iggy server at {} is unreachable and fallback_if_offline=false",
+                                    config.iggy.address
+                                );
+                            }
+                        }
                     }
                 }
             }
-        } else {
-            false
         };
 
         let mut states = HashMap::new();
@@ -224,6 +297,7 @@ impl EventLogRouter {
             base_dir,
             registry,
             iggy_online: RwLock::new(iggy_online),
+            iggy_mode: RwLock::new(active_mode),
             topic_states: RwLock::new(states),
         };
 
@@ -233,6 +307,7 @@ impl EventLogRouter {
         Ok(router)
     }
 
+    /// Returns a shared reference to the underlying [`SchemaRegistry`].
     pub fn registry(&self) -> &Arc<SchemaRegistry> {
         &self.registry
     }
@@ -420,14 +495,28 @@ impl EventLogRouter {
         Ok(Some(written_uri))
     }
 
+    /// Flushes all topics that currently have buffered events into `.avro` Object Container files.
     pub async fn flush_all_topics(&self) -> anyhow::Result<Vec<String>> {
-        let topic_names: Vec<String> = self.config.topics.keys().cloned().collect();
+        let mut topic_names: Vec<String> = self.config.topics.keys().cloned().collect();
+        topic_names.sort();
         let mut flushed = Vec::new();
         for name in topic_names {
             if let Some(uri) = self.flush_topic(&name).await? {
                 flushed.push(uri);
             }
         }
+        Ok(flushed)
+    }
+
+    /// Gracefully flushes all pending topic buffers to `.avro` container files and marks the
+    /// stream broker offline.
+    pub async fn shutdown(&self) -> anyhow::Result<Vec<String>> {
+        let flushed = self.flush_all_topics().await?;
+        *self.iggy_online.write().await = false;
+        info!(
+            "EventLogRouter shutdown complete: flushed {} pending Avro container batch(es)",
+            flushed.len()
+        );
         Ok(flushed)
     }
 
@@ -483,7 +572,7 @@ impl EventLogRouter {
         }
     }
 
-    // Convenience typed publishers
+    /// Publishes a [`SessionLifecycleEvent`] to the `session-lifecycle` topic and immediately flushes it.
     pub async fn log_session_lifecycle(
         &self,
         event: &SessionLifecycleEvent,
@@ -500,6 +589,7 @@ impl EventLogRouter {
         Ok(offset)
     }
 
+    /// Publishes a [`WebRtcTelemetryEvent`] to the `webrtc-telemetry` topic.
     pub async fn log_webrtc_telemetry(&self, event: &WebRtcTelemetryEvent) -> anyhow::Result<u64> {
         self.publish_event(
             topics::WEBRTC_TELEMETRY,
@@ -510,11 +600,13 @@ impl EventLogRouter {
         .await
     }
 
+    /// Publishes a [`ChatMessageEvent`] to the `chat-messages` topic.
     pub async fn log_chat_message(&self, event: &ChatMessageEvent) -> anyhow::Result<u64> {
         self.publish_event(topics::CHAT_MESSAGE, subjects::CHAT_MESSAGE, 1, event)
             .await
     }
 
+    /// Publishes an [`InteractionDynamicsEvent`] to the `interaction-dynamics` topic.
     pub async fn log_interaction_dynamics(
         &self,
         event: &InteractionDynamicsEvent,
@@ -528,6 +620,7 @@ impl EventLogRouter {
         .await
     }
 
+    /// Publishes a [`TtrpgMechanicsEvent`] to the `ttrpg-mechanics` topic and immediately flushes it.
     pub async fn log_ttrpg_mechanics(&self, event: &TtrpgMechanicsEvent) -> anyhow::Result<u64> {
         let offset = self
             .publish_event(topics::TTRPG_MECHANICS, subjects::TTRPG_MECHANICS, 1, event)
@@ -536,9 +629,11 @@ impl EventLogRouter {
         Ok(offset)
     }
 
+    /// Returns a snapshot of ingestion, buffering, and `.avro` batch flush metrics for all topics.
     pub async fn metrics_snapshot(&self) -> Vec<TopicMetricsSnapshot> {
         let guard = self.topic_states.read().await;
         let iggy_connected = *self.iggy_online.read().await;
+        let iggy_mode = *self.iggy_mode.read().await;
         let mut out = Vec::new();
 
         for (topic_name, cfg) in &self.config.topics {
@@ -578,6 +673,7 @@ impl EventLogRouter {
                 active_schema_version: reg.version,
                 active_schema_fingerprint_hex: reg.fingerprint_hex(),
                 iggy_connected,
+                iggy_mode,
             });
         }
 
