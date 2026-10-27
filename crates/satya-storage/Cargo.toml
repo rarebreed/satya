@@ -1,0 +1,22 @@
+[package]
+name = "satya-storage"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+satya-schema = { path = "../satya-schema" }
+apache-avro.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+bytes.workspace = true
+object_store.workspace = true
+hex.workspace = true
+chrono.workspace = true
+uuid.workspace = true

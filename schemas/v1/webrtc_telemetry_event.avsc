@@ -1,0 +1,121 @@
+{
+  "type": "record",
+  "name": "WebRtcTelemetryEvent",
+  "namespace": "com.satya.events",
+  "doc": "Tracks WebRTC signaling, ICE negotiation, track mute states, and QoE network metrics.",
+  "fields": [
+    {
+      "name": "metadata",
+      "type": {
+        "type": "record",
+        "name": "EventMetadata",
+        "namespace": "com.satya.types",
+        "fields": [
+          { "name": "event_id", "type": "string" },
+          { "name": "sequence_num", "type": "long" },
+          { "name": "schema_subject", "type": "string" },
+          { "name": "schema_version", "type": "int" },
+          { "name": "schema_fingerprint_crc64", "type": "bytes" },
+          { "name": "session_id", "type": "string" },
+          {
+            "name": "session_mode",
+            "type": {
+              "type": "enum",
+              "name": "SessionMode",
+              "namespace": "com.satya.types",
+              "symbols": ["TTRPG", "MEETING"]
+            }
+          },
+          { "name": "client_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
+          { "name": "ingest_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
+          { "name": "timezone_offset_min", "type": "int" }
+        ]
+      }
+    },
+    {
+      "name": "local_participant",
+      "type": {
+        "type": "record",
+        "name": "Participant",
+        "namespace": "com.satya.types",
+        "fields": [
+          { "name": "user_id", "type": "string" },
+          { "name": "username", "type": "string" },
+          { "name": "display_name", "type": "string" },
+          {
+            "name": "participant_kind",
+            "type": {
+              "type": "enum",
+              "name": "ParticipantKind",
+              "namespace": "com.satya.types",
+              "symbols": ["HUMAN", "AI_AGENT"]
+            }
+          },
+          {
+            "name": "role",
+            "type": {
+              "type": "enum",
+              "name": "SessionRole",
+              "namespace": "com.satya.types",
+              "symbols": ["GM", "AI_GM", "PLAYER", "HOST", "PARTICIPANT", "OBSERVER"]
+            }
+          },
+          { "name": "character_id", "type": ["null", "string"], "default": null },
+          {
+            "name": "ai_agent_info",
+            "type": [
+              "null",
+              {
+                "type": "record",
+                "name": "AiAgentInfo",
+                "namespace": "com.satya.types",
+                "fields": [
+                  { "name": "model_id", "type": "string" },
+                  { "name": "persona_id", "type": "string" },
+                  { "name": "temperature", "type": "float" }
+                ]
+              }
+            ],
+            "default": null
+          }
+        ]
+      }
+    },
+    { "name": "remote_participant", "type": ["null", "com.satya.types.Participant"], "default": null },
+    {
+      "name": "event_kind",
+      "type": {
+        "type": "enum",
+        "name": "WebRtcEventKind",
+        "symbols": [
+          "SIGNALING_OFFER",
+          "SIGNALING_ANSWER",
+          "ICE_CANDIDATE",
+          "ICE_STATE_CHANGE",
+          "DATA_CHANNEL_OPEN",
+          "DATA_CHANNEL_CLOSED",
+          "STATS_SNAPSHOT",
+          "TRACK_MUTE_CHANGE"
+        ]
+      }
+    },
+    {
+      "name": "ice_candidate_type",
+      "type": [
+        "null",
+        {
+          "type": "enum",
+          "name": "IceCandidateType",
+          "symbols": ["HOST", "SRFLX", "PRFLX", "RELAY", "UNKNOWN"]
+        }
+      ],
+      "default": null
+    },
+    { "name": "rtt_ms", "type": ["null", "float"], "default": null },
+    { "name": "jitter_ms", "type": ["null", "float"], "default": null },
+    { "name": "packet_loss_rate", "type": ["null", "float"], "default": null },
+    { "name": "available_outgoing_bitrate_bps", "type": ["null", "long"], "default": null },
+    { "name": "audio_muted", "type": "boolean" },
+    { "name": "video_muted", "type": "boolean" }
+  ]
+}

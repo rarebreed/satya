@@ -1,0 +1,65 @@
+[iggy]
+enabled = true
+address = "127.0.0.1:8090"
+username = "iggy"
+password = "iggy"
+stream = "satya"
+fallback_if_offline = true
+
+[batching]
+batch_max_messages = 50
+batch_max_interval_ms = 5000
+
+[topics.schema-registry]
+topic_id = 1
+partitions = 1
+storage_backend = "local"
+local_path = "data/topics/schema-registry"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/schema-registry"
+
+[topics.session-lifecycle]
+topic_id = 2
+partitions = 2
+storage_backend = "local"
+local_path = "data/topics/session-lifecycle"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/session-lifecycle"
+
+[topics.webrtc-telemetry]
+topic_id = 3
+partitions = 2
+storage_backend = "local"
+local_path = "data/topics/webrtc-telemetry"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/webrtc-telemetry"
+
+[topics.chat-messages]
+topic_id = 4
+partitions = 4
+storage_backend = "local"
+local_path = "data/topics/chat-messages"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/chat-messages"
+
+[topics.interaction-dynamics]
+topic_id = 5
+partitions = 4
+storage_backend = "local"
+local_path = "data/topics/interaction-dynamics"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/interaction-dynamics"
+
+[topics.ttrpg-mechanics]
+topic_id = 6
+partitions = 2
+storage_backend = "local"
+local_path = "data/topics/ttrpg-mechanics"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/ttrpg-mechanics"

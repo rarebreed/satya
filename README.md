@@ -28,16 +28,16 @@ _Harsh Reality_ pulls no punches.  There are no tropes here.  The simulation dri
 ## Constraints of the system 
 
 The game engine is meant for realistic simulation of near future humanity.  This means there is no magic, and no tech
-that is currently not possible, though it may exist as a prototype.  For example, quantum computers are possible, but
-Faster Than Light starships are not.  Androids are possible, but saving consciousness is not.  AI will be a mystery.
-Is it truly intelligent, or just seem like it?
+that is currently not possible, though it may currently exist only as a prototype.  For example, quantum computers are
+possible, but Faster Than Light starships are not.  Androids are possible, but saving consciousness is not.  AI will be
+a mystery. Is it truly intelligent, or just seem like it?
 
 So this means that:
 
 - Combat is brutal and deadly.  Experience does not make you bullet proof
 - Healing is slow, even with advanced care
-- You don't get to cheat death by downloading your conscious
-- Nanites don't get to turn you into goo any fast than a bacteria or virus can
+- You don't get to cheat death by downloading your consciousness
+- Nanites don't get to turn you into goo any faster than a bacteria or virus can
 - Power and heat limit everything; from AI computers, to vehicles, to humans
 
 ## Constraints of the game style
@@ -49,8 +49,8 @@ eggshells not to offend some other players.  It could be that entire genres, top
 dropped due to X-card disagreements by one or more players.  Even if you are in a lucky gaming group now, at some point
 in the future, it is likely that a new player will join and it could become an issue.
 
-And to be frank, philosophically, I disagree with where I see TTRPG's becoming a totally escapist world where there is 
-no challenge to a player's comfort zone.
+And to be frank, philosophically, I disagree with TTRPG's becoming a totally escapist world where there is no challenge
+to a player's comfort zone.
 
 I have seen many role playing rules go to great lengths to provide players with a safe space.  I will take a
 controversial stand and say this is the wrong approach.  Traditional TTRPG Gaming is a social affair, which means it has
@@ -71,7 +71,7 @@ great way to confront fears and to challenge preconceptions.
 A bigger problem is settings that might be offensive to some players.  The problem is that what one player finds
 offensive, other players might be interested in considering.  Take for example a game set during a Colonial Period of a
 foreign country.  Some players who come from a country that has been a former colony might find it offensive, but
-another player might be interested in the roleplaying opportunities to "live it out".
+another player might be interested in the roleplaying opportunities to "live it out" to try to understand.
 
 I believe we have gone too far in creating safe spaces and escapist entertainment and thus, Harsh Reality was designed
 first and foremost as a solo simulation.  That does not mean it can't be used in a group.  In fact, it is more than
@@ -80,7 +80,7 @@ capable.
 ## Computer Assisted RPG
 
 Today's RPG's are either: traditional Table Top RPG's (TTRPG) or Personal Computer RPGs (PCRPGs).  While TTRPG's can be
-played on Virtual Table Top softeware (eg Roll20 or Foundry), the rules are still in books, and the VTT just makes it
+played on Virtual Table Top software (eg Roll20 or Foundry), the rules are still in books, and the VTT just makes it
 easier to look things up or gives some nice die rollers and maps to visualize things.
 
 In satya, the rules are complex enough that it requires a computer to keep track of data and the "physics" of the game
@@ -100,6 +100,21 @@ may feel at home.
 
 Satya has detailed rules for
 
+- Characters
+    - Many attributes so that less special rules are needed
+        - eg hand-eye coordination (think surgeon) is separate from whole body coordination (think gymnast)
+    - All attribute and skill values make a game difference 
+        - no groupings or categories (reduces min-maxing)
+    - No classes, but there are skill trees and a life path
+    - No levels, only skills
+    - Skills are differentiated by at least two attributes
+    - Some skills are harder to learn than others
+    - Ability to learn skills is constrained by career and background
+- Task resolution
+    - Very little variance in die rolls (minimizes the whiff factor)
+    - Open ended rolls does allow for extraordinary success (or failures)
+    - Difficulty factors change the probability distribution itself
+    - n
 - Combat
     - No turn based initiative
     - Count up action economy

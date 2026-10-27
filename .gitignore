@@ -2,3 +2,7 @@
 .pixi
 
 .venv/
+target/
+data/
+
+**/__pycache__/

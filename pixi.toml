@@ -1,42 +1,42 @@
-[project]
-name = "satya"
-version = "0.1.0"
-description = "Add a short description here"
+[workspace]
 authors = ["Sean Toner <placeoftheway@gmail.com>"]
 channels = ["conda-forge"]
-platforms = ["win-64", "linux-64"]
-
-[tasks]
+name = "satya"
+platforms = ["win-64"]
+version = "0.1.0"
 
 [dependencies]
-python = ">=3.12"
-polars = ">=1.6.0,<2"
-pyarrow = ">=17.0.0,<18"
-pydantic = ">=2.8.2,<3"
-fastapi = ">=0.112.2,<0.113"
-hypercorn = ">=0.17.3,<0.18"
-trio = ">=0.26.2,<0.27"
+python = ">=3.14.7,<3.15"
+rust = ">=1.85"
 
 [pypi-dependencies]
-getdaft = ">=0.3.1, <0.4"
+pylance = ">=12.0.0, <13"
+fastavro = ">=1.9.0"
+pyarrow = ">=18.0.0"
+pytest = ">=9.0.0"
 
-[environments]
-dev = ["dev"]
+[tasks]
+# --- Build & Quality ---
+check = { cmd = "cargo check --workspace", description = "Type-check all Rust crates in the workspace" }
+fmt = { cmd = "cargo fmt --all", description = "Format all Rust code in the workspace" }
+lint = { cmd = "cargo clippy --workspace --all-targets", description = "Run Clippy lints across all Rust crates" }
+build = { cmd = "cargo build --workspace", description = "Build debug binaries for the workspace" }
+build-release = { cmd = "cargo build --workspace --release", description = "Build optimized release binaries" }
 
-[feature.dev.dependencies]
-ruff = ">=0.6.2,<0.7"
-autopep8 = ">=2.3.1,<3"
-pytest = ">=8.3.2,<9"
-pytest-asyncio = ">=0.24.0,<0.25"
+# --- Granular & Unified Test Suites ---
+test-schema = { cmd = "cargo test -p satya-schema", description = "Run Avro schema, CRC-64 fingerprint, and v1->v2 evolution tests" }
+test-storage = { cmd = "cargo test -p satya-storage", description = "Run Apache Iggy & offset-tracked Avro micro-batching tests" }
+test-signaling = { cmd = "cargo test -p satya-signaling", description = "Run Argon2 auth, session password, and private routing tests" }
+test-rust = { cmd = "cargo test --workspace", description = "Run all Rust unit and integration tests" }
+test-py = { cmd = "pytest tests/test-prob.py", description = "Run Python probability & ML unit tests" }
+test = { depends-on = ["test-rust", "test-py"], description = "Run the full polyglot (Rust + Python) test suite" }
 
-[feature.dev.pypi-dependencies]
-mypy = { version = ">=1.11.2, <2", extras = ["mypyc"] }
+# --- Server & Runtime ---
+serve = { cmd = "cargo run -p satya-signaling --bin satya-server", env = { RUST_LOG = "info,satya_signaling=debug,satya_storage=debug" }, description = "Start the Satya WebRTC, Chat & Apache Iggy Event Server on port 3000" }
+serve-release = { cmd = "cargo run --release -p satya-signaling --bin satya-server", env = { RUST_LOG = "info" }, description = "Start the optimized release server on port 3000" }
 
-[feature.dev.tasks]
-fmt = "autopep8 -i -r ."
-lint = "ruff check --fix ."
-test = "pytest tests"
-check = {depends-on = ["fmt", "lint", "test"]}
-git-add = "git add ."
-commit = {cmd = "git commit -m ", depends-on = ["git-add"]}
-push = "git push origin "
+# --- Avro, Apache Iggy & PyLance Data Pipeline ---
+compact-to-lance = { cmd = "python -m satya_ml.lance_ingest", env = { PYTHONPATH = "src" }, description = "Compact flushed .avro topic batches into .lance AI datasets" }
+inspect-schemas = { cmd = "python -m satya_ml.inspect_avro --schemas", env = { PYTHONPATH = "src" }, description = "Validate and display all versioned .avsc schemas in schemas/" }
+inspect-topics = { cmd = "python -m satya_ml.inspect_avro --topics", env = { PYTHONPATH = "src" }, description = "Inspect flushed .avro batch watermarks and .lance table row counts" }
+ml-pipeline = { depends-on = ["compact-to-lance", "inspect-topics"], description = "Run incremental Avro-to-PyLance compaction and print dataset summary" }

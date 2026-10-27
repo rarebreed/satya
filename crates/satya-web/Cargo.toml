@@ -1,0 +1,13 @@
+[package]
+name = "satya-web"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+satya-schema = { path = "../satya-schema" }
+leptos.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true

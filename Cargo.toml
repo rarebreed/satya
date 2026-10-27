@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/satya-schema",
+    "crates/satya-storage",
+    "crates/satya-signaling",
+    "crates/satya-web",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Sean Toner <placeoftheway@gmail.com>"]
+license = "MIT"
+
+[workspace.dependencies]
+apache-avro = { version = "0.17", features = ["snappy"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.11", features = ["v4", "v7", "serde", "js"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0"
+anyhow = "1.0"
+tokio = { version = "1.42", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+toml = "0.8"
+bytes = "1.9"
+futures = "0.3"
+async-trait = "0.1"
+argon2 = "0.5"
+rand = "0.8"
+axum = { version = "0.7", features = ["ws", "macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+leptos = { version = "0.7", features = ["csr", "ssr"] }
+object_store = { version = "0.11", features = ["aws"] }
+hex = "0.4"

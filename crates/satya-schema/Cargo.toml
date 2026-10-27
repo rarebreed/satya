@@ -1,0 +1,16 @@
+[package]
+name = "satya-schema"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+apache-avro.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+hex.workspace = true
+bytes.workspace = true

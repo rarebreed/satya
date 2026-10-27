@@ -1,0 +1,102 @@
+{
+  "type": "record",
+  "name": "SchemaRegistryEvent",
+  "namespace": "com.satya.events",
+  "doc": "Tracks registration and evolution of Avro schemas across Satya topics.",
+  "fields": [
+    {
+      "name": "metadata",
+      "type": {
+        "type": "record",
+        "name": "EventMetadata",
+        "namespace": "com.satya.types",
+        "fields": [
+          { "name": "event_id", "type": "string", "doc": "UUIDv7 unique event identifier" },
+          { "name": "sequence_num", "type": "long", "doc": "Monotonic causal sequence number" },
+          { "name": "schema_subject", "type": "string" },
+          { "name": "schema_version", "type": "int" },
+          { "name": "schema_fingerprint_crc64", "type": "bytes", "doc": "8-byte CRC-64-AVRO fingerprint" },
+          { "name": "session_id", "type": "string" },
+          {
+            "name": "session_mode",
+            "type": {
+              "type": "enum",
+              "name": "SessionMode",
+              "namespace": "com.satya.types",
+              "symbols": ["TTRPG", "MEETING"]
+            }
+          },
+          { "name": "client_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
+          { "name": "ingest_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
+          { "name": "timezone_offset_min", "type": "int" }
+        ]
+      }
+    },
+    { "name": "schema_id", "type": "int" },
+    { "name": "subject", "type": "string" },
+    { "name": "version", "type": "int" },
+    {
+      "name": "compatibility_mode",
+      "type": {
+        "type": "enum",
+        "name": "CompatibilityMode",
+        "symbols": ["BACKWARD", "FORWARD", "FULL", "NONE"]
+      }
+    },
+    { "name": "fingerprint_crc64_hex", "type": "string" },
+    { "name": "avro_schema_json", "type": "string" },
+    {
+      "name": "registered_by",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "Participant",
+          "namespace": "com.satya.types",
+          "fields": [
+            { "name": "user_id", "type": "string" },
+            { "name": "username", "type": "string" },
+            { "name": "display_name", "type": "string" },
+            {
+              "name": "participant_kind",
+              "type": {
+                "type": "enum",
+                "name": "ParticipantKind",
+                "namespace": "com.satya.types",
+                "symbols": ["HUMAN", "AI_AGENT"]
+              }
+            },
+            {
+              "name": "role",
+              "type": {
+                "type": "enum",
+                "name": "SessionRole",
+                "namespace": "com.satya.types",
+                "symbols": ["GM", "AI_GM", "PLAYER", "HOST", "PARTICIPANT", "OBSERVER"]
+              }
+            },
+            { "name": "character_id", "type": ["null", "string"], "default": null },
+            {
+              "name": "ai_agent_info",
+              "type": [
+                "null",
+                {
+                  "type": "record",
+                  "name": "AiAgentInfo",
+                  "namespace": "com.satya.types",
+                  "fields": [
+                    { "name": "model_id", "type": "string" },
+                    { "name": "persona_id", "type": "string" },
+                    { "name": "temperature", "type": "float" }
+                  ]
+                }
+              ],
+              "default": null
+            }
+          ]
+        }
+      ],
+      "default": null
+    }
+  ]
+}
