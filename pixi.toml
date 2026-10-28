@@ -20,6 +20,7 @@ pytest = ">=9.0.0"
 check = { cmd = "cargo check --workspace", description = "Type-check all Rust crates in the workspace" }
 fmt = { cmd = "cargo fmt --all", description = "Format all Rust code in the workspace" }
 lint = { cmd = "cargo clippy --workspace --all-targets", description = "Run Clippy lints across all Rust crates" }
+prep = { cmd = "git commit -m ",  depends-on = ["check", "fmt", "lint"] }
 build = { cmd = "cargo build --workspace", description = "Build debug binaries for the workspace" }
 build-release = { cmd = "cargo build --workspace --release", description = "Build optimized release binaries" }
 build-wasm = { cmd = "wasm-pack build crates/satya-web --target web --out-dir ../../pkg", description = "Compile satya-web Rust/Leptos frontend to WebAssembly in pkg/" }
@@ -27,14 +28,15 @@ build-wasm = { cmd = "wasm-pack build crates/satya-web --target web --out-dir ..
 # --- Granular & Unified Test Suites ---
 test-schema = { cmd = "cargo test -p satya-schema", description = "Run Avro schema, CRC-64 fingerprint, and v1->v2 evolution tests" }
 test-storage = { cmd = "cargo test -p satya-storage", description = "Run Apache Iggy & offset-tracked Avro micro-batching tests" }
-test-signaling = { cmd = "cargo test -p satya-signaling", description = "Run Argon2 auth, session password, and private routing tests" }
-test-rust = { cmd = "cargo test --workspace", description = "Run all Rust unit and integration tests" }
-test-py = { cmd = "pytest tests/test-prob.py", description = "Run Python probability & ML unit tests" }
+test-signaling = { cmd = "cargo test -p satya-signaling", description = "Run Argon2 auth, session password, disconnect, and private routing tests" }
+test-web = { cmd = "cargo test -p satya-web", description = "Run Leptos SSR and Rust/Wasm client unit tests" }
+test-rust = { cmd = "cargo test --workspace", description = "Run all Rust unit, integration, and doc tests" }
+test-py = { cmd = "pytest tests", env = { PYTHONPATH = "src" }, description = "Run Python Avro & PyLance ML pipeline unit tests" }
 test = { depends-on = ["test-rust", "test-py"], description = "Run the full polyglot (Rust + Python) test suite" }
 
 # --- Server & Runtime ---
-serve = { cmd = "cargo run -p satya-signaling --bin satya-server", env = { RUST_LOG = "info,satya_signaling=debug,satya_storage=debug" }, description = "Start the Satya WebRTC, Chat & Apache Iggy Event Server on port 3000" }
-serve-release = { cmd = "cargo run --release -p satya-signaling --bin satya-server", env = { RUST_LOG = "info" }, description = "Start the optimized release server on port 3000" }
+serve = { cmd = "cargo run -p satya-signaling --bin satya-server", depends-on = ["build-wasm"], env = { RUST_LOG = "info,satya_signaling=debug,satya_storage=debug" }, description = "Build Wasm frontend and start the Satya WebRTC, Chat & Apache Iggy Event Server on port 3000" }
+serve-release = { cmd = "cargo run --release -p satya-signaling --bin satya-server", depends-on = ["build-wasm"], env = { RUST_LOG = "info" }, description = "Build Wasm frontend and start the optimized release server on port 3000" }
 
 # --- Avro, Apache Iggy & PyLance Data Pipeline ---
 compact-to-lance = { cmd = "python -m satya_ml.lance_ingest", env = { PYTHONPATH = "src" }, description = "Compact flushed .avro topic batches into .lance AI datasets" }

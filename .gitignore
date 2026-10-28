@@ -3,6 +3,7 @@
 
 .venv/
 target/
+pkg/
 data/
 
 **/__pycache__/

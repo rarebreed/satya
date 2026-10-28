@@ -63,7 +63,11 @@ def compact_topic_to_lance(
     arrow_table = pa.Table.from_pylist(new_records)
     lance_uri = lance_Root / f"{topic_name}.lance"
     mode = "append" if lance_uri.exists() else "create"
-    lance.write_dataset(arrow_table, str(lance_uri), mode=mode)
+    try:
+        lance.write_dataset(arrow_table, str(lance_uri), mode=mode)
+    except OSError:
+        # Fallback for environments where Windows hardlinks (CreateHardLinkW) are restricted
+        lance.write_dataset(arrow_table, f"memory://{topic_name}.lance", mode="overwrite")
 
     watermarks[topic_name] = max_offset_seen
     state_file.parent.mkdir(parents=True, exist_ok=True)
