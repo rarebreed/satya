@@ -274,6 +274,9 @@ pub const EYE_OPEN_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width=
 /// SVG icon markup for the "hide password" (slashed eye) toggle state.
 pub const EYE_OFF_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>"#;
 
+/// SVG icon markup for the top-bar hamburger menu button.
+pub const HAMBURGER_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>"#;
+
 /// Parses a `<select>` option string (`"TTRPG"`, `"TTRPG_GM"`, `"TTRPG_AI_GM"`, or `"MEETING"`) into a [`SessionMode`].
 pub fn parse_session_mode(raw: &str) -> SessionMode {
     match raw {
@@ -330,6 +333,47 @@ pub fn parse_combat_stance(raw: &str) -> Option<CombatStance> {
         "RANGED_AIMED" => Some(CombatStance::RangedAimed),
         "RANGED_SNAP" => Some(CombatStance::RangedSnap),
         _ => None,
+    }
+}
+
+/// Returns the valid `(value, label)` option pairs for `#session-role-select`
+/// scoped to a given business mode option string (`"TTRPG"`, `"TTRPG_AI_GM"`, or `"MEETING"`).
+pub fn role_options_for_mode(mode_raw: &str) -> &'static [(&'static str, &'static str)] {
+    match mode_raw {
+        "MEETING" => &[
+            ("HOST", "Meeting Host"),
+            ("PARTICIPANT", "Meeting Participant"),
+            ("OBSERVER", "Observer"),
+        ],
+        "TTRPG_AI_GM" => &[("PLAYER", "Player"), ("OBSERVER", "Observer")],
+        _ => &[
+            ("GM", "Game Master (GM)"),
+            ("PLAYER", "Player"),
+            ("OBSERVER", "Observer"),
+        ],
+    }
+}
+
+fn sync_role_options_for_mode(mode_raw: &str, default_role: Option<&str>) {
+    let opts = role_options_for_mode(mode_raw);
+    if let Some(role_sel) =
+        get_element("session-role-select").and_then(|el| el.dyn_into::<HtmlSelectElement>().ok())
+    {
+        let prev = role_sel.value();
+        let html: String = opts
+            .iter()
+            .map(|(val, label)| format!(r#"<option value="{val}">{label}</option>"#))
+            .collect();
+        role_sel.set_inner_html(&html);
+        if let Some(def) = default_role
+            && opts.iter().any(|(val, _)| *val == def)
+        {
+            role_sel.set_value(def);
+        } else if opts.iter().any(|(val, _)| *val == prev) {
+            role_sel.set_value(&prev);
+        } else {
+            role_sel.set_value(opts[0].0);
+        }
     }
 }
 
@@ -414,7 +458,9 @@ fn sync_chat_options_for_mode(mode: SessionMode) {
 #[wasm_bindgen(start)]
 pub fn start_satya_wasm_client() {
     register_window_bindings();
-    let mode = parse_session_mode(&select_value("session-mode-select"));
+    let mode_raw = select_value("session-mode-select");
+    let mode = parse_session_mode(&mode_raw);
+    sync_role_options_for_mode(&mode_raw, None);
     sync_chat_options_for_mode(mode);
     satya_visibility_changed();
     set_display("admin-inspector-card", "none");
@@ -509,6 +555,85 @@ pub fn register_window_bindings() {
     let c_filter = Closure::<dyn Fn()>::new(satya_filter_chat);
     bind("satyaFilterChat", c_filter.as_ref());
     c_filter.forget();
+
+    let c_menu = Closure::<dyn Fn()>::new(satya_toggle_hamburger_menu);
+    bind("satyaToggleHamburgerMenu", c_menu.as_ref());
+    c_menu.forget();
+
+    let c_auth_pane = Closure::<dyn Fn()>::new(satya_toggle_auth_pane);
+    bind("satyaToggleAuthPane", c_auth_pane.as_ref());
+    c_auth_pane.forget();
+
+    let c_session_pane = Closure::<dyn Fn()>::new(satya_toggle_session_pane);
+    bind("satyaToggleSessionPane", c_session_pane.as_ref());
+    c_session_pane.forget();
+}
+
+/// Toggles the top-bar hamburger menu dropdown (`#hamburger-menu-dropdown`) open or closed.
+#[wasm_bindgen]
+pub fn satya_toggle_hamburger_menu() {
+    let Some(menu) =
+        get_element("hamburger-menu-dropdown").and_then(|el| el.dyn_into::<HtmlElement>().ok())
+    else {
+        return;
+    };
+    let is_hidden = menu.style().get_property_value("display").unwrap_or_default() == "none";
+    let _ = menu
+        .style()
+        .set_property("display", if is_hidden { "flex" } else { "none" });
+    if let Some(btn) = get_element("btn-hamburger-menu") {
+        let _ = btn.set_attribute("aria-expanded", if is_hidden { "true" } else { "false" });
+    }
+}
+
+/// Toggles the `1. User Authentication` pane (`#auth-card`) visible or hidden.
+#[wasm_bindgen]
+pub fn satya_toggle_auth_pane() {
+    let Some(card) = get_element("auth-card").and_then(|el| el.dyn_into::<HtmlElement>().ok())
+    else {
+        return;
+    };
+    let is_hidden = card.style().get_property_value("display").unwrap_or_default() == "none";
+    let _ = card
+        .style()
+        .set_property("display", if is_hidden { "block" } else { "none" });
+    set_text(
+        "btn-menu-toggle-auth-pane",
+        if is_hidden {
+            "Hide Auth Pane"
+        } else {
+            "Show Auth Pane"
+        },
+    );
+    set_display("hamburger-menu-dropdown", "none");
+    if let Some(btn) = get_element("btn-hamburger-menu") {
+        let _ = btn.set_attribute("aria-expanded", "false");
+    }
+}
+
+/// Toggles the `2. Create or Join Password-Protected Session` pane (`#session-card`) visible or hidden.
+#[wasm_bindgen]
+pub fn satya_toggle_session_pane() {
+    let Some(card) = get_element("session-card").and_then(|el| el.dyn_into::<HtmlElement>().ok())
+    else {
+        return;
+    };
+    let is_hidden = card.style().get_property_value("display").unwrap_or_default() == "none";
+    let _ = card
+        .style()
+        .set_property("display", if is_hidden { "block" } else { "none" });
+    set_text(
+        "btn-menu-toggle-session-pane",
+        if is_hidden {
+            "Hide Session Pane"
+        } else {
+            "Show Session Pane"
+        },
+    );
+    set_display("hamburger-menu-dropdown", "none");
+    if let Some(btn) = get_element("btn-hamburger-menu") {
+        let _ = btn.set_attribute("aria-expanded", "false");
+    }
 }
 
 /// Toggles a password `<input>` element between `"password"` (masked) and `"text"` (visible characters),
@@ -543,18 +668,28 @@ pub fn satya_fill_demo(username: String, password: String, display_name: String)
     set_input_value("auth-display-name", &display_name);
     if username.starts_with("gm_") {
         set_select_value("session-mode-select", "TTRPG");
-        set_select_value("session-role-select", "GM");
+        sync_role_options_for_mode("TTRPG", Some("GM"));
         set_input_checked("enable-ai-gm", false);
         set_display("ttrpg-drawer", "block");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else if username.starts_with("host_") {
         set_select_value("session-mode-select", "MEETING");
-        set_select_value("session-role-select", "HOST");
+        sync_role_options_for_mode("MEETING", Some("HOST"));
         set_input_checked("enable-ai-gm", false);
         set_display("ttrpg-drawer", "none");
         sync_chat_options_for_mode(SessionMode::Meeting);
     } else {
-        set_select_value("session-role-select", "PLAYER");
+        let cur_mode = select_value("session-mode-select");
+        let target_mode = if cur_mode == "MEETING" {
+            set_select_value("session-mode-select", "TTRPG");
+            set_input_checked("enable-ai-gm", false);
+            set_display("ttrpg-drawer", "block");
+            sync_chat_options_for_mode(SessionMode::Ttrpg);
+            "TTRPG".to_string()
+        } else {
+            cur_mode
+        };
+        sync_role_options_for_mode(&target_mode, Some("PLAYER"));
     }
 }
 
@@ -563,17 +698,17 @@ pub fn satya_fill_demo(username: String, password: String, display_name: String)
 pub fn satya_mode_changed() {
     let mode = select_value("session-mode-select");
     if mode == "MEETING" {
-        set_select_value("session-role-select", "HOST");
+        sync_role_options_for_mode("MEETING", Some("HOST"));
         set_input_checked("enable-ai-gm", false);
         set_display("ttrpg-drawer", "none");
         sync_chat_options_for_mode(SessionMode::Meeting);
     } else if mode == "TTRPG_AI_GM" {
-        set_select_value("session-role-select", "PLAYER");
+        sync_role_options_for_mode("TTRPG_AI_GM", Some("PLAYER"));
         set_input_checked("enable-ai-gm", true);
         set_display("ttrpg-drawer", "block");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else {
-        set_select_value("session-role-select", "GM");
+        sync_role_options_for_mode("TTRPG", Some("GM"));
         set_input_checked("enable-ai-gm", false);
         set_display("ttrpg-drawer", "block");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
@@ -656,6 +791,26 @@ fn apply_auth_success(data: AuthSuccessResponse) {
     );
     set_class("auth-status-pill", "pill pill-active");
     set_button_disabled("btn-logout", false);
+    set_button_disabled("btn-menu-logout", false);
+
+    // Hide the Authentication pane once logged in and reveal the Session & Workspace panes
+    set_display("auth-card", "none");
+    set_display("session-card", "block");
+    set_display("workspace-panel", "grid");
+    set_display("hamburger-menu-dropdown", "none");
+    set_text("btn-menu-toggle-auth-pane", "Show Auth Pane");
+    set_text("btn-menu-toggle-session-pane", "Hide Session Pane");
+
+    if let Some(details) = get_element("menu-user-details") {
+        details.set_inner_html(&format!(
+            r#"<div><strong>{}</strong> (@{})</div>
+            <div>Role: <span class="mono">{role_badge}</span></div>
+            <div>ID: <span class="mono">{}</span></div>"#,
+            escape_html(&data.display_name),
+            escape_html(&data.username),
+            escape_html(&data.user_id)
+        ));
+    }
 
     with_state_mut(|st| {
         st.auth_token = Some(data.auth_token.clone());
@@ -816,6 +971,9 @@ fn enter_session(data: SessionEnterResponse) {
     });
 
     sync_chat_options_for_mode(session_mode);
+    set_display("session-card", "none");
+    set_display("hamburger-menu-dropdown", "none");
+    set_text("btn-menu-toggle-session-pane", "Show Session Pane");
     set_display(
         "ttrpg-drawer",
         if session_mode == SessionMode::Meeting {
@@ -928,6 +1086,8 @@ pub fn satya_leave_session() {
         }
 
         cleanup_client_session_state();
+        set_display("session-card", "block");
+        set_text("btn-menu-toggle-session-pane", "Hide Session Pane");
         set_feedback(
             "session-feedback",
             &format!("Disconnected from session '{departing_sid}'"),
@@ -991,6 +1151,14 @@ pub fn satya_logout() {
         set_text("auth-status-pill", "Not Logged In");
         set_class("auth-status-pill", "pill pill-muted");
         set_button_disabled("btn-logout", true);
+        set_button_disabled("btn-menu-logout", true);
+        set_display("auth-card", "block");
+        set_display("session-card", "none");
+        set_display("workspace-panel", "none");
+        set_display("hamburger-menu-dropdown", "none");
+        set_text("btn-menu-toggle-auth-pane", "Hide Auth Pane");
+        set_text("btn-menu-toggle-session-pane", "Show Session Pane");
+        set_text("menu-user-details", "Not Logged In");
         set_display("admin-inspector-card", "none");
         if let Some(wrap) = get_element("topic-metrics-table") {
             wrap.set_inner_html("");
@@ -1654,7 +1822,8 @@ pub fn satya_chat_keydown(ev: KeyboardEvent) {
     }
 }
 
-/// Sends a public, private, `GM_ONLY`, or `HOST_ONLY` chat message over the signaling WebSocket.
+/// Sends a public, private, `GM_ONLY`, or `HOST_ONLY` chat message (or executes a `/msg` or `/roll` command)
+/// over the signaling WebSocket.
 #[wasm_bindgen]
 pub fn satya_send_chat() {
     let body = input_value("chat-input").trim().to_string();
@@ -1662,7 +1831,7 @@ pub fn satya_send_chat() {
         return;
     }
 
-    let visibility = parse_visibility(&select_value("chat-visibility"));
+    let mut visibility = parse_visibility(&select_value("chat-visibility"));
     let channel_context = parse_channel_context(&select_value("chat-context"));
     let composition_time_ms = with_state_mut(|st| {
         let elapsed = st
@@ -1689,11 +1858,68 @@ pub fn satya_send_chat() {
         }
     }
 
+    let final_body = match crate::chat_cmd::parse_chat_command(&body) {
+        Err(err) => {
+            append_system_notice(&format!("Command error: {err}"));
+            return;
+        }
+        Ok(Some(crate::chat_cmd::ChatCommand::MsgBroadcast { body: msg_body })) => {
+            visibility = MessageVisibility::Public;
+            recipient_user_ids.clear();
+            msg_body
+        }
+        Ok(Some(crate::chat_cmd::ChatCommand::MsgPrivate {
+            targets,
+            body: msg_body,
+        })) => {
+            let (roster, self_uid) = with_state(|st| {
+                (
+                    st.roster.clone(),
+                    st.self_participant.as_ref().map(|p| p.user_id.clone()),
+                )
+            });
+            let (matched_ids, unresolved) =
+                crate::chat_cmd::resolve_msg_recipients(&targets, &roster, self_uid.as_deref());
+            if !unresolved.is_empty() {
+                let names: Vec<String> = unresolved.iter().map(|u| format!("@{u}")).collect();
+                append_system_notice(&format!(
+                    "Unresolved recipient(s): {}. Check active session roster.",
+                    names.join(", ")
+                ));
+            }
+            if matched_ids.is_empty() {
+                return;
+            }
+            visibility = MessageVisibility::Private;
+            recipient_user_ids = matched_ids;
+            msg_body
+        }
+        Ok(Some(crate::chat_cmd::ChatCommand::Roll { expr_raw, pipeline })) => {
+            let outcome = match pipeline.evaluate_with_roller(&expr_raw, |sides| {
+                ((js_sys::Math::random() * (sides as f64)).floor() as i64 + 1).clamp(1, sides)
+            }) {
+                Ok(out) => out,
+                Err(err) => {
+                    append_system_notice(&format!("Roll error: {err}"));
+                    return;
+                }
+            };
+            let has_ws = with_state(|st| st.ws.is_some());
+            if !has_ws {
+                append_system_notice(&outcome.summary);
+                set_input_value("chat-input", "");
+                return;
+            }
+            outcome.summary
+        }
+        Ok(None) => body,
+    };
+
     send_ws_packet(&ClientWsPacket::SendChat {
         visibility,
         recipient_user_ids,
         channel_context,
-        body,
+        body: final_body,
         composition_time_ms,
     });
     set_input_value("chat-input", "");

@@ -255,6 +255,7 @@ Additionally, if a user closes their browser tab without clicking Disconnect, th
 
 | Scope | Enum & Variants | Enforcement Point | Protected Capabilities |
 | :--- | :--- | :--- | :--- |
+| **Platform Authentication Gate** | Authenticated vs. Unauthenticated | `apply_auth_success()`, `satya_logout()`, & `satya_toggle_auth_pane()` in `crates/satya-web/src/wasm_client.rs` | `#auth-card` is the only visible pane before login; upon login, `#auth-card` hides and `#session-card` + `#workspace-panel` become active. The top-level Hamburger Menu (`#btn-hamburger-menu` / `#hamburger-menu-dropdown`) displays logged-in user details (`#menu-user-details`) and allows toggling `#auth-card` or logging out at any time. |
 | **Platform Account Level** | `AccountRole::{User, Admin}` | `verify_admin_header()` in `crates/satya-signaling/src/lib.rs` & `apply_auth_success()` in `crates/satya-web/src/wasm_client.rs` | `GET /api/storage/metrics`, `POST /api/storage/flush`, and client-side `#admin-inspector-card` visibility. |
 | **Session Room Level** | `SessionRole::{Gm, AiGm, Player, Host, Participant, Observer}` | `AuthAndSessionManager::create_session()` & `SignalingAppState::resolve_message_targets()` | Valid roles when creating a TTRPG or Meeting room; `GM_ONLY` and `HOST_ONLY` message delivery filtering; AI GM response triggers. |
 

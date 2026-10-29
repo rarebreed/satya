@@ -2,6 +2,7 @@
 //! and Apache Iggy Event Streaming Platform.
 #![deny(missing_docs)]
 
+pub mod chat_cmd;
 pub mod wasm_client;
 
 use leptos::prelude::*;
@@ -54,9 +55,64 @@ fn HeaderBar() -> impl IntoView {
                 <span class="brand-badge">"Satya // Engine"</span>
                 <h1>"Satsang"</h1>
             </div>
-            <div class="status-pills">
-                <span id="auth-status-pill" class="pill pill-muted">"Not Logged In"</span>
-                <span id="session-status-pill" class="pill pill-muted">"No Active Session"</span>
+            <div class="top-bar-right">
+                <div class="status-pills">
+                    <span id="auth-status-pill" class="pill pill-muted">"Not Logged In"</span>
+                    <span id="session-status-pill" class="pill pill-muted">"No Active Session"</span>
+                </div>
+                <div class="hamburger-menu-wrap">
+                    <button
+                        type="button"
+                        id="btn-hamburger-menu"
+                        class="btn-hamburger"
+                        title="User & Pane Menu"
+                        aria-label="User & Pane Menu"
+                        aria-expanded="false"
+                        onclick="window.satyaToggleHamburgerMenu()"
+                        on:click=move |_| wasm_client::satya_toggle_hamburger_menu()
+                        inner_html=wasm_client::HAMBURGER_SVG
+                    ></button>
+                    <div
+                        id="hamburger-menu-dropdown"
+                        class="hamburger-dropdown"
+                        style="display: none;"
+                    >
+                        <div class="menu-section-title">"User Details"</div>
+                        <div id="menu-user-details" class="menu-user-details">
+                            "Not Logged In"
+                        </div>
+                        <div class="menu-actions">
+                            <button
+                                type="button"
+                                id="btn-menu-toggle-auth-pane"
+                                class="btn btn-sm btn-secondary"
+                                onclick="window.satyaToggleAuthPane()"
+                                on:click=move |_| wasm_client::satya_toggle_auth_pane()
+                            >
+                                "Hide Auth Pane"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-menu-toggle-session-pane"
+                                class="btn btn-sm btn-secondary"
+                                onclick="window.satyaToggleSessionPane()"
+                                on:click=move |_| wasm_client::satya_toggle_session_pane()
+                            >
+                                "Show Session Pane"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-menu-logout"
+                                class="btn btn-sm btn-danger"
+                                onclick="window.satyaLogout()"
+                                on:click=move |_| wasm_client::satya_logout()
+                                disabled
+                            >
+                                "Logout"
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </header>
     }
@@ -66,7 +122,7 @@ fn HeaderBar() -> impl IntoView {
 fn AuthAndSessionGate() -> impl IntoView {
     view! {
         <section id="gate-panel" class="gate-container">
-            <div class="card auth-card">
+            <div id="auth-card" class="card auth-card">
                 <div class="card-header">
                     <h2>"1. User Authentication"</h2>
                     <span class="subtitle">"Persistent user_id across sessions for ML & analytics"</span>
@@ -183,7 +239,7 @@ fn AuthAndSessionGate() -> impl IntoView {
                 <div id="auth-feedback" class="feedback-box"></div>
             </div>
 
-            <div class="card session-card">
+            <div id="session-card" class="card session-card" style="display: none;">
                 <div class="card-header">
                     <h2>"2. Create or Join Password-Protected Session"</h2>
                     <span class="subtitle">"TTRPG (GM / AI-GM / Players) or Meeting (Host / Participants)"</span>
@@ -230,8 +286,6 @@ fn AuthAndSessionGate() -> impl IntoView {
                         <select id="session-role-select">
                             <option value="GM">"Game Master (GM)"</option>
                             <option value="PLAYER">"Player"</option>
-                            <option value="HOST">"Meeting Host"</option>
-                            <option value="PARTICIPANT">"Meeting Participant"</option>
                             <option value="OBSERVER">"Observer"</option>
                         </select>
                     </label>
@@ -274,7 +328,7 @@ fn AuthAndSessionGate() -> impl IntoView {
 #[component]
 fn ActiveSessionWorkspace() -> impl IntoView {
     view! {
-        <section id="workspace-panel" class="workspace-columns">
+        <section id="workspace-panel" class="workspace-columns" style="display: none;">
             <div class="col-left">
                 <div class="card webrtc-card">
                     <div class="card-header-inline">
@@ -449,7 +503,7 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                         <input
                             id="chat-input"
                             type="text"
-                            placeholder="Type message (composition duration tracked for ML)..."
+                            placeholder="Type message, /msg @user ..., or /roll 4d10|>hi(3)..."
                             onkeydown="window.satyaChatKeydown(event)"
                             on:keydown=wasm_client::satya_chat_keydown
                         />
@@ -516,7 +570,7 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                     </div>
                 </div>
 
-                <div id="admin-inspector-card" class="card inspector-card" style:display="none">
+                <div id="admin-inspector-card" class="card inspector-card" style="display: none;">
                     <div class="card-header-inline">
                         <div>
                             <h2>"Apache Iggy Topics, Avro Schemas & PyLance Batch Sink"</h2>
@@ -597,6 +651,23 @@ mod tests {
         assert!(meet_ctx.iter().any(|(v, _)| *v == "MEETING_PUBLIC"));
         assert!(!meet_ctx.iter().any(|(v, _)| *v == "IN_CHARACTER"));
 
+        let ttrpg_roles = wasm_client::role_options_for_mode("TTRPG");
+        assert!(ttrpg_roles.iter().any(|(v, _)| *v == "GM"));
+        assert!(ttrpg_roles.iter().any(|(v, _)| *v == "PLAYER"));
+        assert!(!ttrpg_roles.iter().any(|(v, _)| *v == "HOST"));
+        assert!(!ttrpg_roles.iter().any(|(v, _)| *v == "PARTICIPANT"));
+
+        let ai_gm_roles = wasm_client::role_options_for_mode("TTRPG_AI_GM");
+        assert!(ai_gm_roles.iter().any(|(v, _)| *v == "PLAYER"));
+        assert!(!ai_gm_roles.iter().any(|(v, _)| *v == "GM"));
+        assert!(!ai_gm_roles.iter().any(|(v, _)| *v == "HOST"));
+
+        let meet_roles = wasm_client::role_options_for_mode("MEETING");
+        assert!(meet_roles.iter().any(|(v, _)| *v == "HOST"));
+        assert!(meet_roles.iter().any(|(v, _)| *v == "PARTICIPANT"));
+        assert!(!meet_roles.iter().any(|(v, _)| *v == "GM"));
+        assert!(!meet_roles.iter().any(|(v, _)| *v == "PLAYER"));
+
         let table_html = wasm_client::format_metrics_table_html(&[TopicMetricsView {
             topic: "session-lifecycle".to_string(),
             topic_id: 2,
@@ -626,12 +697,25 @@ mod tests {
         assert!(html.contains("TTRPG Mode (AI GM + Players)"));
         assert!(html.contains("btn-toggle-auth-password"));
         assert!(html.contains("btn-toggle-session-password"));
+        assert!(html.contains("btn-hamburger-menu"));
+        assert!(html.contains("hamburger-menu-dropdown"));
+        assert!(html.contains("btn-menu-toggle-auth-pane"));
+        assert!(html.contains("btn-menu-toggle-session-pane"));
+        assert!(html.contains(r#"id="auth-card""#));
+        assert!(html.contains(r#"id="session-card""#));
+        assert!(html.contains(r#"id="workspace-panel""#));
+        let session_card_idx = html.find(r#"id="session-card""#).unwrap();
+        assert!(html[session_card_idx.saturating_sub(40)..session_card_idx + 80].contains("display: none"));
+        let workspace_idx = html.find(r#"id="workspace-panel""#).unwrap();
+        assert!(html[workspace_idx.saturating_sub(40)..workspace_idx + 80].contains("display: none"));
         assert!(html.contains("<h2>Session Chat</h2>"));
         assert!(!html.contains("Public &amp; Private Targeted Session Chat"));
         assert!(html.contains("Roll Satya Task"));
         assert!(!html.contains("Roll Satya Task &amp; Emit Avro Event"));
         assert!(html.contains("filter-msg-system"));
         assert!(!html.contains("MEETING_PUBLIC"));
+        assert!(!html.contains(r#"<option value="HOST">Meeting Host</option>"#));
+        assert!(!html.contains(r#"<option value="PARTICIPANT">Meeting Participant</option>"#));
         let chat_idx = html.find(r#"class="card chat-card""#).unwrap();
         let ttrpg_idx = html.find(r#"id="ttrpg-drawer""#).unwrap();
         assert!(
