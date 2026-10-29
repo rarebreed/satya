@@ -51,13 +51,12 @@ fn HeaderBar() -> impl IntoView {
     view! {
         <header class="top-bar">
             <div class="brand">
-                <span class="brand-badge">"SATYA // ENGINE (RUST + WASM)"</span>
-                <h1>"WebRTC + Durable Avro Event Stream"</h1>
+                <span class="brand-badge">"Satya // Engine"</span>
+                <h1>"Satsang"</h1>
             </div>
             <div class="status-pills">
                 <span id="auth-status-pill" class="pill pill-muted">"Not Logged In"</span>
                 <span id="session-status-pill" class="pill pill-muted">"No Active Session"</span>
-                <span id="iggy-status-pill" class="pill pill-iggy">"Apache Iggy + Avro v1/v2 Ready"</span>
             </div>
         </header>
     }
@@ -130,7 +129,23 @@ fn AuthAndSessionGate() -> impl IntoView {
                     </label>
                     <label>
                         <span>"Password"</span>
-                        <input id="auth-password" type="password" placeholder="Password" value="satya-truth-2026"/>
+                        <div class="password-field">
+                            <input id="auth-password" type="password" placeholder="Password" value="satya-truth-2026"/>
+                            <button
+                                type="button"
+                                id="btn-toggle-auth-password"
+                                class="btn-password-toggle"
+                                title="Show password"
+                                aria-label="Show password"
+                                aria-pressed="false"
+                                onclick="window.satyaTogglePassword('auth-password', 'btn-toggle-auth-password')"
+                                on:click=move |_| wasm_client::satya_toggle_password(
+                                    "auth-password".to_string(),
+                                    "btn-toggle-auth-password".to_string(),
+                                )
+                                inner_html=wasm_client::EYE_OPEN_SVG
+                            ></button>
+                        </div>
                     </label>
                     <label>
                         <span>"Display / Character Name"</span>
@@ -180,7 +195,23 @@ fn AuthAndSessionGate() -> impl IntoView {
                     </label>
                     <label>
                         <span>"Session Password"</span>
-                        <input id="session-password-input" type="password" placeholder="Session password" value="orbital-drop-7"/>
+                        <div class="password-field">
+                            <input id="session-password-input" type="password" placeholder="Session password" value="orbital-drop-7"/>
+                            <button
+                                type="button"
+                                id="btn-toggle-session-password"
+                                class="btn-password-toggle"
+                                title="Show password"
+                                aria-label="Show password"
+                                aria-pressed="false"
+                                onclick="window.satyaTogglePassword('session-password-input', 'btn-toggle-session-password')"
+                                on:click=move |_| wasm_client::satya_toggle_password(
+                                    "session-password-input".to_string(),
+                                    "btn-toggle-session-password".to_string(),
+                                )
+                                inner_html=wasm_client::EYE_OPEN_SVG
+                            ></button>
+                        </div>
                     </label>
                     <label>
                         <span>"Business Mode"</span>
@@ -189,7 +220,8 @@ fn AuthAndSessionGate() -> impl IntoView {
                             onchange="window.satyaModeChanged()"
                             on:change=move |_| wasm_client::satya_mode_changed()
                         >
-                            <option value="TTRPG">"TTRPG Mode (GM + Players + AI GM)"</option>
+                            <option value="TTRPG">"TTRPG Mode (GM + Players)"</option>
+                            <option value="TTRPG_AI_GM">"TTRPG Mode (AI GM + Players)"</option>
                             <option value="MEETING">"Meeting Mode (Host + 2+ Attendees)"</option>
                         </select>
                     </label>
@@ -203,10 +235,7 @@ fn AuthAndSessionGate() -> impl IntoView {
                             <option value="OBSERVER">"Observer"</option>
                         </select>
                     </label>
-                    <label class="checkbox-label">
-                        <input id="enable-ai-gm" type="checkbox" checked/>
-                        <span>"Include Autonomous AI Agent GM Participant in Session"</span>
-                    </label>
+                    <input id="enable-ai-gm" type="checkbox" style="display: none"/>
                 </div>
                 <div class="btn-row">
                     <button
@@ -314,6 +343,126 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                         <div id="roster-list" class="roster-chips"></div>
                     </div>
                 </div>
+            </div>
+
+            <div class="col-right">
+                <div class="card chat-card">
+                    <div class="card-header-inline">
+                        <div>
+                            <h2>"Session Chat"</h2>
+                            <span class="subtitle">"Broadcast publicly or whisper privately to selected Participant(s)"</span>
+                        </div>
+                    </div>
+
+                    <div class="recipient-selector-bar">
+                        <div class="vis-row">
+                            <label>
+                                <span>"Visibility"</span>
+                                <select
+                                    id="chat-visibility"
+                                    onchange="window.satyaVisibilityChanged()"
+                                    on:change=move |_| wasm_client::satya_visibility_changed()
+                                >
+                                    <option value="PUBLIC">"PUBLIC (Broadcast to All)"</option>
+                                    <option value="PRIVATE">"PRIVATE (Selected Recipients Only)"</option>
+                                    <option value="GM_ONLY">"GM_ONLY (Secret to GM / AI-GM)"</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>"Channel Context"</span>
+                                <select id="chat-context">
+                                    <option value="IN_CHARACTER">"IN_CHARACTER"</option>
+                                    <option value="OUT_OF_CHARACTER">"OUT_OF_CHARACTER"</option>
+                                    <option value="GM_NARRATION">"GM_NARRATION"</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div id="private-recipient-picker" class="private-picker">
+                            <span class="picker-label">"Select Private Recipients (user_id):"</span>
+                            <div id="recipient-checkboxes" class="recipient-checkboxes"></div>
+                        </div>
+                        <div class="chat-filter-bar">
+                            <span class="filter-label">"Show Message Types:"</span>
+                            <div class="filter-checkboxes">
+                                <label class="recip-option">
+                                    <input
+                                        id="filter-msg-public"
+                                        type="checkbox"
+                                        value="PUBLIC"
+                                        checked
+                                        onchange="window.satyaFilterChat()"
+                                        on:change=move |_| wasm_client::satya_filter_chat()
+                                    />
+                                    <span>"Public"</span>
+                                </label>
+                                <label class="recip-option">
+                                    <input
+                                        id="filter-msg-private"
+                                        type="checkbox"
+                                        value="PRIVATE"
+                                        checked
+                                        onchange="window.satyaFilterChat()"
+                                        on:change=move |_| wasm_client::satya_filter_chat()
+                                    />
+                                    <span>"Private / Whisper"</span>
+                                </label>
+                                <label class="recip-option">
+                                    <input
+                                        id="filter-msg-ai-gm"
+                                        type="checkbox"
+                                        value="AI_GM"
+                                        checked
+                                        onchange="window.satyaFilterChat()"
+                                        on:change=move |_| wasm_client::satya_filter_chat()
+                                    />
+                                    <span>"AI GM"</span>
+                                </label>
+                                <label class="recip-option">
+                                    <input
+                                        id="filter-msg-mechanics"
+                                        type="checkbox"
+                                        value="MECHANICS"
+                                        checked
+                                        onchange="window.satyaFilterChat()"
+                                        on:change=move |_| wasm_client::satya_filter_chat()
+                                    />
+                                    <span>"Mechanics"</span>
+                                </label>
+                                <label class="recip-option">
+                                    <input
+                                        id="filter-msg-system"
+                                        type="checkbox"
+                                        value="SYSTEM"
+                                        checked
+                                        onchange="window.satyaFilterChat()"
+                                        on:change=move |_| wasm_client::satya_filter_chat()
+                                    />
+                                    <span>"System (RUST/WASM)"</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="chat-log" class="chat-log"></div>
+
+                    <div class="chat-composer">
+                        <input
+                            id="chat-input"
+                            type="text"
+                            placeholder="Type message (composition duration tracked for ML)..."
+                            onkeydown="window.satyaChatKeydown(event)"
+                            on:keydown=wasm_client::satya_chat_keydown
+                        />
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            onclick="window.satyaSendChat()"
+                            on:click=move |_| wasm_client::satya_send_chat()
+                        >
+                            "Send"
+                        </button>
+                    </div>
+                </div>
 
                 <div id="ttrpg-drawer" class="card ttrpg-card">
                     <div class="card-header-inline">
@@ -362,70 +511,7 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             onclick="window.satyaRollTask()"
                             on:click=move |_| wasm_client::satya_roll_task()
                         >
-                            "Roll Satya Task & Emit Avro Event"
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-right">
-                <div class="card chat-card">
-                    <div class="card-header-inline">
-                        <div>
-                            <h2>"Public & Private Targeted Session Chat"</h2>
-                            <span class="subtitle">"Broadcast publicly or whisper privately to selected Participant(s)"</span>
-                        </div>
-                    </div>
-
-                    <div class="recipient-selector-bar">
-                        <div class="vis-row">
-                            <label>
-                                <span>"Visibility"</span>
-                                <select
-                                    id="chat-visibility"
-                                    onchange="window.satyaVisibilityChanged()"
-                                    on:change=move |_| wasm_client::satya_visibility_changed()
-                                >
-                                    <option value="PUBLIC">"PUBLIC (Broadcast to All)"</option>
-                                    <option value="PRIVATE">"PRIVATE (Selected Recipients Only)"</option>
-                                    <option value="GM_ONLY">"GM_ONLY (Secret to GM / AI-GM)"</option>
-                                    <option value="HOST_ONLY">"HOST_ONLY (Meeting Host Only)"</option>
-                                </select>
-                            </label>
-                            <label>
-                                <span>"Channel Context"</span>
-                                <select id="chat-context">
-                                    <option value="IN_CHARACTER">"IN_CHARACTER"</option>
-                                    <option value="OUT_OF_CHARACTER">"OUT_OF_CHARACTER"</option>
-                                    <option value="GM_NARRATION">"GM_NARRATION"</option>
-                                    <option value="MEETING_PUBLIC">"MEETING_PUBLIC"</option>
-                                    <option value="MEETING_BACKCHANNEL">"MEETING_BACKCHANNEL"</option>
-                                </select>
-                            </label>
-                        </div>
-                        <div id="private-recipient-picker" class="private-picker">
-                            <span class="picker-label">"Select Private Recipients (user_id):"</span>
-                            <div id="recipient-checkboxes" class="recipient-checkboxes"></div>
-                        </div>
-                    </div>
-
-                    <div id="chat-log" class="chat-log"></div>
-
-                    <div class="chat-composer">
-                        <input
-                            id="chat-input"
-                            type="text"
-                            placeholder="Type message (composition duration tracked for ML)..."
-                            onkeydown="window.satyaChatKeydown(event)"
-                            on:keydown=wasm_client::satya_chat_keydown
-                        />
-                        <button
-                            type="button"
-                            class="btn btn-primary"
-                            onclick="window.satyaSendChat()"
-                            on:click=move |_| wasm_client::satya_send_chat()
-                        >
-                            "Send"
+                            "Roll Satya Task"
                         </button>
                     </div>
                 </div>
@@ -476,6 +562,17 @@ mod tests {
             SessionMode::Meeting
         );
         assert_eq!(wasm_client::parse_session_mode("TTRPG"), SessionMode::Ttrpg);
+        assert_eq!(
+            wasm_client::parse_session_mode("TTRPG_GM"),
+            SessionMode::Ttrpg
+        );
+        assert_eq!(
+            wasm_client::parse_session_mode("TTRPG_AI_GM"),
+            SessionMode::Ttrpg
+        );
+        assert!(!wasm_client::is_ai_gm_mode("TTRPG_GM"));
+        assert!(wasm_client::is_ai_gm_mode("TTRPG_AI_GM"));
+        assert!(!wasm_client::is_ai_gm_mode("MEETING"));
         assert_eq!(wasm_client::parse_session_role("GM"), SessionRole::Gm);
         assert_eq!(wasm_client::parse_session_role("HOST"), SessionRole::Host);
         assert_eq!(
@@ -487,6 +584,18 @@ mod tests {
             Some(CombatStance::Maneuver)
         );
         assert_eq!(wasm_client::parse_combat_stance(""), None);
+
+        let (ttrpg_vis, ttrpg_ctx) = wasm_client::chat_options_for_mode(SessionMode::Ttrpg);
+        assert!(ttrpg_vis.iter().any(|(v, _)| *v == "GM_ONLY"));
+        assert!(!ttrpg_vis.iter().any(|(v, _)| *v == "HOST_ONLY"));
+        assert!(ttrpg_ctx.iter().any(|(v, _)| *v == "IN_CHARACTER"));
+        assert!(!ttrpg_ctx.iter().any(|(v, _)| *v == "MEETING_PUBLIC"));
+
+        let (meet_vis, meet_ctx) = wasm_client::chat_options_for_mode(SessionMode::Meeting);
+        assert!(meet_vis.iter().any(|(v, _)| *v == "HOST_ONLY"));
+        assert!(!meet_vis.iter().any(|(v, _)| *v == "GM_ONLY"));
+        assert!(meet_ctx.iter().any(|(v, _)| *v == "MEETING_PUBLIC"));
+        assert!(!meet_ctx.iter().any(|(v, _)| *v == "IN_CHARACTER"));
 
         let table_html = wasm_client::format_metrics_table_html(&[TopicMetricsView {
             topic: "session-lifecycle".to_string(),
@@ -508,6 +617,27 @@ mod tests {
     fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
         let html = render_satya_app_html();
         assert!(html.contains("/pkg/satya_web.js"));
+        assert!(html.contains("Satya // Engine"));
+        assert!(html.contains("<h1>Satsang</h1>"));
+        assert!(!html.contains("SATYA // ENGINE (RUST + WASM)"));
+        assert!(!html.contains("Apache Iggy + Avro v1/v2 Ready"));
+        assert!(!html.contains("WebRTC + Durable Avro Event Stream"));
+        assert!(html.contains("TTRPG Mode (GM + Players)"));
+        assert!(html.contains("TTRPG Mode (AI GM + Players)"));
+        assert!(html.contains("btn-toggle-auth-password"));
+        assert!(html.contains("btn-toggle-session-password"));
+        assert!(html.contains("<h2>Session Chat</h2>"));
+        assert!(!html.contains("Public &amp; Private Targeted Session Chat"));
+        assert!(html.contains("Roll Satya Task"));
+        assert!(!html.contains("Roll Satya Task &amp; Emit Avro Event"));
+        assert!(html.contains("filter-msg-system"));
+        assert!(!html.contains("MEETING_PUBLIC"));
+        let chat_idx = html.find(r#"class="card chat-card""#).unwrap();
+        let ttrpg_idx = html.find(r#"id="ttrpg-drawer""#).unwrap();
+        assert!(
+            ttrpg_idx > chat_idx,
+            "ttrpg-drawer should be rendered beneath chat-card"
+        );
         assert!(html.contains("btn-logout"));
         assert!(html.contains("btn-leave-session"));
         assert!(html.contains("btn-workspace-disconnect"));

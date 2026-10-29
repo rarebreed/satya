@@ -143,6 +143,12 @@ fn set_input_value(id: &str, val: &str) {
     }
 }
 
+fn set_input_checked(id: &str, checked: bool) {
+    if let Some(inp) = get_element(id).and_then(|el| el.dyn_into::<HtmlInputElement>().ok()) {
+        inp.set_checked(checked);
+    }
+}
+
 fn input_checked(id: &str) -> bool {
     get_element(id)
         .and_then(|el| el.dyn_into::<HtmlInputElement>().ok())
@@ -262,12 +268,23 @@ async fn fetch_json<Req: Serialize, Resp: DeserializeOwned>(
 // Pure Rust Role / Enum Parsing Helpers
 // ============================================================================
 
-/// Parses a `<select>` option string (`"TTRPG"` or `"MEETING"`) into a [`SessionMode`].
+/// SVG icon markup for the "show password" (open eye) toggle state.
+pub const EYE_OPEN_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>"#;
+
+/// SVG icon markup for the "hide password" (slashed eye) toggle state.
+pub const EYE_OFF_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>"#;
+
+/// Parses a `<select>` option string (`"TTRPG"`, `"TTRPG_GM"`, `"TTRPG_AI_GM"`, or `"MEETING"`) into a [`SessionMode`].
 pub fn parse_session_mode(raw: &str) -> SessionMode {
     match raw {
         "MEETING" => SessionMode::Meeting,
         _ => SessionMode::Ttrpg,
     }
+}
+
+/// Returns `true` when the selected business mode option is the AI GM + Players TTRPG variant (`"TTRPG_AI_GM"`).
+pub fn is_ai_gm_mode(raw: &str) -> bool {
+    raw == "TTRPG_AI_GM"
 }
 
 /// Parses a `<select>` option string into a [`SessionRole`].
@@ -316,6 +333,79 @@ pub fn parse_combat_stance(raw: &str) -> Option<CombatStance> {
     }
 }
 
+/// Returns the valid `(value, label)` option pairs for `(visibility_options, context_options)`
+/// scoped to a given [`SessionMode`].
+pub fn chat_options_for_mode(
+    mode: SessionMode,
+) -> (
+    &'static [(&'static str, &'static str)],
+    &'static [(&'static str, &'static str)],
+) {
+    match mode {
+        SessionMode::Ttrpg => (
+            &[
+                ("PUBLIC", "PUBLIC (Broadcast to All)"),
+                ("PRIVATE", "PRIVATE (Selected Recipients Only)"),
+                ("GM_ONLY", "GM_ONLY (Secret to GM / AI-GM)"),
+            ],
+            &[
+                ("IN_CHARACTER", "IN_CHARACTER"),
+                ("OUT_OF_CHARACTER", "OUT_OF_CHARACTER"),
+                ("GM_NARRATION", "GM_NARRATION"),
+            ],
+        ),
+        SessionMode::Meeting => (
+            &[
+                ("PUBLIC", "PUBLIC (Broadcast to All)"),
+                ("PRIVATE", "PRIVATE (Selected Recipients Only)"),
+                ("HOST_ONLY", "HOST_ONLY (Meeting Host Only)"),
+            ],
+            &[
+                ("MEETING_PUBLIC", "MEETING_PUBLIC"),
+                ("MEETING_BACKCHANNEL", "MEETING_BACKCHANNEL"),
+            ],
+        ),
+    }
+}
+
+fn sync_chat_options_for_mode(mode: SessionMode) {
+    let (vis_opts, ctx_opts) = chat_options_for_mode(mode);
+
+    if let Some(vis_sel) =
+        get_element("chat-visibility").and_then(|el| el.dyn_into::<HtmlSelectElement>().ok())
+    {
+        let prev = vis_sel.value();
+        let html: String = vis_opts
+            .iter()
+            .map(|(val, label)| format!(r#"<option value="{val}">{label}</option>"#))
+            .collect();
+        vis_sel.set_inner_html(&html);
+        if vis_opts.iter().any(|(val, _)| *val == prev) {
+            vis_sel.set_value(&prev);
+        } else {
+            vis_sel.set_value(vis_opts[0].0);
+        }
+    }
+
+    if let Some(ctx_sel) =
+        get_element("chat-context").and_then(|el| el.dyn_into::<HtmlSelectElement>().ok())
+    {
+        let prev = ctx_sel.value();
+        let html: String = ctx_opts
+            .iter()
+            .map(|(val, label)| format!(r#"<option value="{val}">{label}</option>"#))
+            .collect();
+        ctx_sel.set_inner_html(&html);
+        if ctx_opts.iter().any(|(val, _)| *val == prev) {
+            ctx_sel.set_value(&prev);
+        } else {
+            ctx_sel.set_value(ctx_opts[0].0);
+        }
+    }
+
+    satya_visibility_changed();
+}
+
 // ============================================================================
 // Exported Wasm Entrypoints & Event Handlers (`#[wasm_bindgen]`)
 // ============================================================================
@@ -324,6 +414,8 @@ pub fn parse_combat_stance(raw: &str) -> Option<CombatStance> {
 #[wasm_bindgen(start)]
 pub fn start_satya_wasm_client() {
     register_window_bindings();
+    let mode = parse_session_mode(&select_value("session-mode-select"));
+    sync_chat_options_for_mode(mode);
     satya_visibility_changed();
     set_display("admin-inspector-card", "none");
 }
@@ -409,6 +501,38 @@ pub fn register_window_bindings() {
     let c_flush = Closure::<dyn Fn()>::new(satya_flush_batches);
     bind("satyaFlushBatches", c_flush.as_ref());
     c_flush.forget();
+
+    let c_pw = Closure::<dyn Fn(String, String)>::new(satya_toggle_password);
+    bind("satyaTogglePassword", c_pw.as_ref());
+    c_pw.forget();
+
+    let c_filter = Closure::<dyn Fn()>::new(satya_filter_chat);
+    bind("satyaFilterChat", c_filter.as_ref());
+    c_filter.forget();
+}
+
+/// Toggles a password `<input>` element between `"password"` (masked) and `"text"` (visible characters),
+/// updating the associated eye toggle button's icon and accessibility attributes.
+#[wasm_bindgen]
+pub fn satya_toggle_password(input_id: String, button_id: String) {
+    let Some(inp) = get_element(&input_id).and_then(|el| el.dyn_into::<HtmlInputElement>().ok())
+    else {
+        return;
+    };
+    let showing = inp.type_() == "password";
+    inp.set_type(if showing { "text" } else { "password" });
+
+    if let Some(btn) = get_element(&button_id) {
+        let label = if showing {
+            "Hide password"
+        } else {
+            "Show password"
+        };
+        let _ = btn.set_attribute("title", label);
+        let _ = btn.set_attribute("aria-label", label);
+        let _ = btn.set_attribute("aria-pressed", if showing { "true" } else { "false" });
+        btn.set_inner_html(if showing { EYE_OFF_SVG } else { EYE_OPEN_SVG });
+    }
 }
 
 /// Populates the login form inputs and default session mode/role for a preset demo account.
@@ -420,24 +544,39 @@ pub fn satya_fill_demo(username: String, password: String, display_name: String)
     if username.starts_with("gm_") {
         set_select_value("session-mode-select", "TTRPG");
         set_select_value("session-role-select", "GM");
+        set_input_checked("enable-ai-gm", false);
+        set_display("ttrpg-drawer", "block");
+        sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else if username.starts_with("host_") {
         set_select_value("session-mode-select", "MEETING");
         set_select_value("session-role-select", "HOST");
+        set_input_checked("enable-ai-gm", false);
+        set_display("ttrpg-drawer", "none");
+        sync_chat_options_for_mode(SessionMode::Meeting);
     } else {
         set_select_value("session-role-select", "PLAYER");
     }
 }
 
-/// Updates the default session role and toggles the TTRPG task resolution drawer when business mode changes.
+/// Updates the default session role, chat dropdown options, and TTRPG task resolution drawer when business mode changes.
 #[wasm_bindgen]
 pub fn satya_mode_changed() {
     let mode = select_value("session-mode-select");
     if mode == "MEETING" {
         set_select_value("session-role-select", "HOST");
+        set_input_checked("enable-ai-gm", false);
         set_display("ttrpg-drawer", "none");
+        sync_chat_options_for_mode(SessionMode::Meeting);
+    } else if mode == "TTRPG_AI_GM" {
+        set_select_value("session-role-select", "PLAYER");
+        set_input_checked("enable-ai-gm", true);
+        set_display("ttrpg-drawer", "block");
+        sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else {
         set_select_value("session-role-select", "GM");
+        set_input_checked("enable-ai-gm", false);
         set_display("ttrpg-drawer", "block");
+        sync_chat_options_for_mode(SessionMode::Ttrpg);
     }
 }
 
@@ -553,9 +692,10 @@ pub fn satya_create_session() {
 
         let session_id = input_value("session-id-input").trim().to_string();
         let session_password = input_value("session-password-input");
-        let session_mode = parse_session_mode(&select_value("session-mode-select"));
+        let mode_raw = select_value("session-mode-select");
+        let session_mode = parse_session_mode(&mode_raw);
         let role = parse_session_role(&select_value("session-role-select"));
-        let enable_ai_gm = input_checked("enable-ai-gm");
+        let enable_ai_gm = is_ai_gm_mode(&mode_raw) || input_checked("enable-ai-gm");
         let display_raw = input_value("auth-display-name").trim().to_string();
         let display_name = if display_raw.is_empty() {
             None
@@ -666,14 +806,24 @@ fn enter_session(data: SessionEnterResponse) {
         ),
     );
 
+    let session_mode = data.session_mode;
     with_state_mut(|st| {
         st.session_id = Some(data.session_id);
-        st.session_mode = data.session_mode;
+        st.session_mode = session_mode;
         st.join_token = Some(data.join_token);
         st.self_participant = Some(data.self_participant);
         st.roster = data.roster;
     });
 
+    sync_chat_options_for_mode(session_mode);
+    set_display(
+        "ttrpg-drawer",
+        if session_mode == SessionMode::Meeting {
+            "none"
+        } else {
+            "block"
+        },
+    );
     render_roster();
     set_session_buttons_enabled(true);
     connect_signaling_websocket();
@@ -1574,6 +1724,43 @@ pub fn satya_roll_task() {
     });
 }
 
+fn is_msg_kind_enabled(kind: &str) -> bool {
+    let cb_id = match kind {
+        "PUBLIC" => "filter-msg-public",
+        "PRIVATE" => "filter-msg-private",
+        "AI_GM" => "filter-msg-ai-gm",
+        "MECHANICS" => "filter-msg-mechanics",
+        "SYSTEM" => "filter-msg-system",
+        _ => return true,
+    };
+    get_element(cb_id)
+        .and_then(|el| el.dyn_into::<HtmlInputElement>().ok())
+        .map(|cb| cb.checked())
+        .unwrap_or(true)
+}
+
+fn apply_msg_filter_to_element(el: &Element, kind: &str) {
+    if let Ok(html_el) = el.clone().dyn_into::<HtmlElement>() {
+        let display = if is_msg_kind_enabled(kind) { "" } else { "none" };
+        let _ = html_el.style().set_property("display", display);
+    }
+}
+
+/// Applies the active message-type filter checkboxes (`#filter-msg-*`) to all messages in `#chat-log`.
+#[wasm_bindgen]
+pub fn satya_filter_chat() {
+    let Some(log) = get_element("chat-log") else {
+        return;
+    };
+    let children = log.children();
+    for i in 0..children.length() {
+        if let Some(child) = children.item(i) {
+            let kind = child.get_attribute("data-msg-kind").unwrap_or_default();
+            apply_msg_filter_to_element(&child, &kind);
+        }
+    }
+}
+
 fn render_chat_event(ev: &ChatMessageEvent) {
     let (Some(doc), Some(log)) = (document(), get_element("chat-log")) else {
         return;
@@ -1590,6 +1777,18 @@ fn render_chat_event(ev: &ChatMessageEvent) {
         cls.push_str(" ai-gm");
     }
     div.set_class_name(&cls);
+
+    let msg_kind = if ev.channel_context == ChannelContext::SystemNotice {
+        "SYSTEM"
+    } else if ev.sender.participant_kind == ParticipantKind::AiAgent {
+        "AI_GM"
+    } else if ev.visibility != MessageVisibility::Public {
+        "PRIVATE"
+    } else {
+        "PUBLIC"
+    };
+    let _ = div.set_attribute("data-msg-kind", msg_kind);
+    apply_msg_filter_to_element(&div, msg_kind);
 
     let recip_names: Vec<String> = ev
         .recipients
@@ -1627,6 +1826,8 @@ fn render_mechanics_event(ev: &TtrpgMechanicsEvent) {
         return;
     };
     div.set_class_name("chat-msg mechanics");
+    let _ = div.set_attribute("data-msg-kind", "MECHANICS");
+    apply_msg_filter_to_element(&div, "MECHANICS");
 
     let rolls: Vec<String> = ev.dice_rolled_d20.iter().map(|r| r.to_string()).collect();
     let stance_info = match ev.combat_stance {
@@ -1665,6 +1866,8 @@ pub fn append_system_notice(text: &str) {
         return;
     };
     div.set_class_name("chat-msg");
+    let _ = div.set_attribute("data-msg-kind", "SYSTEM");
+    apply_msg_filter_to_element(&div, "SYSTEM");
     div.set_inner_html(&format!(
         r#"<div class="chat-meta"><span>SYSTEM</span><span>RUST/WASM</span></div><div>{}</div>"#,
         escape_html(text)

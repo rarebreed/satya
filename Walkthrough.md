@@ -38,6 +38,11 @@ We have built the full-stack **WebRTC Audio/Video, Chat & Event Streaming applic
   - WebSocket signaling & message router (`/ws/session`) enforcing public broadcast vs. private recipient isolation (`PUBLIC`, `PRIVATE`, `GM_ONLY`, `HOST_ONLY`), WebRTC SDP/ICE relay, Satya d20 task resolution & combat action economy, autonomous AI GM narration, and disconnect event logging (`process_session_disconnect`).
 - [crates/satya-web/src/lib.rs](crates/satya-web/src/lib.rs) & [crates/satya-web/src/wasm_client.rs](crates/satya-web/src/wasm_client.rs):
   - Pure Rust + Leptos + WebAssembly (`wasm-bindgen` / `web-sys`) frontend (`cdylib` + `rlib`).
+  - Renders the top `HeaderBar` branding (`"Satya // Engine"` badge and `"Satsang"` title alongside live auth and session status pills).
+  - Provides inline eye/eye-off password visibility toggles (`satya_toggle_password`) on both the account password (`#auth-password`) and session password (`#session-password-input`) fields.
+  - Supports three selectable business modes in `#session-mode-select`: **TTRPG Mode (GM + Players)** (`enable_ai_gm = false`, defaults role to `GM`), **TTRPG Mode (AI GM + Players)** (`enable_ai_gm = true`, defaults role to `PLAYER`), and **Meeting Mode (Host + 2+ Attendees)** (defaults role to `HOST` and hides the TTRPG task drawer).
+  - Renders the **Session Chat** pane with mode-scoped **Visibility** (`#chat-visibility`) and **Channel Context** (`#chat-context`) dropdowns (`chat_options_for_mode`: `PUBLIC`/`PRIVATE`/`GM_ONLY` and `IN_CHARACTER`/`OUT_OF_CHARACTER`/`GM_NARRATION` for `TTRPG`; `PUBLIC`/`PRIVATE`/`HOST_ONLY` and `MEETING_PUBLIC`/`MEETING_BACKCHANNEL` for `MEETING`), plus live message-type filter checkboxes (`satya_filter_chat`) to toggle `Public`, `Private / Whisper`, `AI GM`, `Mechanics`, and `System (RUST/WASM)` messages.
+  - Places the **Satya TTRPG Task Resolution & Combat Economy** pane (`#ttrpg-drawer`) directly beneath the **Session Chat** pane in the right column with the **Roll Satya Task** action button.
   - Handles user login/registration/logout, password-protected session creation/join/disconnect, WebRTC `RTCPeerConnection` audio/video + `RTCDataChannel` mesh, Web Audio API `AnalyserNode` RMS prosody telemetry, targeted private/public chat, and role-gated visibility for the **Apache Iggy Topics, Avro Schemas & PyLance Batch Sink** inspector pane (`#admin-inspector-card` is hidden for `AccountRole::User` and revealed only when an `AccountRole::Admin` user logs in).
 
 ---
@@ -58,8 +63,8 @@ All workspace unit, integration, and doc tests were executed via `pixi run test-
   - `test_axum_http_endpoints_and_leptos_render`: Verified the Leptos UI renders at `GET /` and `/api/storage/metrics` reports all 6 topics and their registered schema fingerprints.
   - `test_session_leave_and_user_logout_emit_disconnect_events`: Verified `POST /api/sessions/leave` and `POST /api/auth/logout` revoke tokens, update the active roster, and log `PARTICIPANT_LEFT`, `PEER_DISCONNECTED`, `SESSION_ENDED`, and `USER_LOGGED_OUT` Avro events.
 - **`satya-web` (2 passed)**:
-  - `test_wasm_client_enum_parsers_and_metrics_table_render`: Verified the Rust/Wasm enum parsers and Apache Iggy metrics table renderer.
-  - `test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls`: Verified `render_satya_app_html()` outputs the `/pkg/satya_web.js` Wasm module bootstrap and the session disconnect/logout controls.
+  - `test_wasm_client_enum_parsers_and_metrics_table_render`: Verified the Rust/Wasm enum parsers (including `TTRPG`, `TTRPG_GM`, `TTRPG_AI_GM`, `MEETING`, `is_ai_gm_mode`, and mode-scoped `chat_options_for_mode`) and Apache Iggy metrics table renderer.
+  - `test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls`: Verified `render_satya_app_html()` outputs the `"Satya // Engine"` / `"Satsang"` header bar, both TTRPG mode options (`GM + Players` and `AI GM + Players`), the password visibility toggle buttons, the `"Session Chat"` header and message-type filter checkboxes, the `"Roll Satya Task"` button and `#ttrpg-drawer` positioned beneath `.chat-card`, the `/pkg/satya_web.js` Wasm module bootstrap, and the session disconnect/logout controls.
 
 ---
 
@@ -117,7 +122,7 @@ cargo run -p satya-signaling --bin satya-server
 ### Connecting Browser Clients & Testing the Pipeline
 1. **Connect Browser Clients**:
    - Open two or more browser tabs at `http://127.0.0.1:3000`.
-   - Use the **Quick Fill Demo Accounts** (or register new accounts) to log in as `gm_sean` in Tab 1 (click **Host: Create Session** with Session ID `harsh-reality-ep1` and password `orbital-drop-7`) and `sara_valkyrie` in Tab 2 (click **Join Existing Session** with the same Session ID and password).
+   - Use the **Quick Fill Demo Accounts** (or register new accounts) to log in as `gm_sean` in Tab 1 (choose **TTRPG Mode (GM + Players)** or **TTRPG Mode (AI GM + Players)**, then click **Host: Create Session** with Session ID `harsh-reality-ep1` and password `orbital-drop-7`) and `sara_valkyrie` in Tab 2 (click **Join Existing Session** with the same Session ID and password). Use the eye icon inside either password field to toggle password visibility at any time.
    - Enable Camera/Mic, send Public or Private targeted messages, roll Satya d20 tasks, test **Disconnect Session** / **Logout**, and click **Flush Avro Batches Now** in the inspector panel to write `.avro` segments under `data/topics/`.
 2. **Compact Avro Batches into PyLance Tables**:
    ```powershell

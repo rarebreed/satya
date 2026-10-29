@@ -212,6 +212,47 @@ input:focus, select:focus {
     border-color: var(--accent);
 }
 
+.password-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.password-field input {
+    width: 100%;
+    padding-right: 36px;
+}
+
+.password-field input::-ms-reveal,
+.password-field input::-ms-clear {
+    display: none;
+}
+
+.btn-password-toggle {
+    position: absolute;
+    right: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    line-height: 0;
+}
+
+.btn-password-toggle:hover {
+    color: var(--text-primary);
+    background: var(--bg-2);
+}
+
+.btn-password-toggle[aria-pressed="true"] {
+    color: var(--accent);
+}
+
 .btn-row, .btn-row-compact, .media-controls {
     display: flex;
     gap: 8px;
@@ -396,6 +437,25 @@ input:focus, select:focus {
     gap: 5px;
     font-size: 0.76rem;
     color: var(--text-primary);
+}
+
+.chat-filter-bar {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+}
+
+.filter-label {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.filter-checkboxes {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .chat-log {
