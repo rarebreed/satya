@@ -477,3 +477,7 @@ table.metrics-table th {
     font-family: monospace;
     color: var(--accent);
 }
+
+#admin-inspector-card {
+    display: none;
+}

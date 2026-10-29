@@ -1,3 +1,9 @@
+[auth]
+# SQLx SQLite connection URL (relative paths are resolved against the workspace root).
+database_url = "sqlite://data/auth/users.db?mode=rwc"
+# Usernames automatically granted the platform-wide `ADMIN` role on startup or registration.
+bootstrap_admins = ["gm_sean"]
+
 [iggy]
 enabled = true
 # "embedded" uses the built-in local WAL (data/iggy_streams/) + Avro batch sink without needing an external daemon.

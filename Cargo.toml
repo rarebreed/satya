@@ -35,6 +35,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
 leptos = { version = "0.7", features = ["csr", "ssr"] }
 object_store = { version = "0.11", features = ["aws"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 hex = "0.4"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"

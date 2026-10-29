@@ -1,4 +1,5 @@
-//! Persistent Argon2id user authentication and password-protected session roster management.
+//! Persistent SQLx (SQLite WAL) + Argon2id user authentication, account-level RBAC
+//! ([`AccountRole`]), and password-protected session roster management.
 //!
 //! Provides [`AuthAndSessionManager`] along with persistent user identity records
 //! ([`UserAccount`]), active password-protected session state ([`ProtectedSession`]),
@@ -10,15 +11,21 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use chrono::Utc;
-pub use satya_schema::AuthSuccessResponse;
+pub use satya_schema::{AccountRole, AuthSuccessResponse};
 use satya_schema::{Participant, ParticipantKind, SessionMode, SessionRole};
+use satya_storage::AuthConfig;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use sqlx::{
+    Row, SqlitePool,
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-/// Persistent user account record stored in `data/auth/users.json`.
+/// Persistent user account record stored in the SQLite `users` table (`data/auth/users.db`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserAccount {
     /// Persistent UUID (or preset demo ID) identifying this user across sessions.
@@ -29,6 +36,9 @@ pub struct UserAccount {
     pub display_name: String,
     /// Argon2id encoded password hash string.
     pub password_hash: String,
+    /// Platform-level account role (`USER` or `ADMIN`).
+    #[serde(default)]
+    pub account_role: AccountRole,
     /// Account creation timestamp in UTC microseconds since Unix epoch.
     pub created_at_us: i64,
 }
@@ -77,10 +87,11 @@ pub struct SessionDisconnectSummary {
     pub remaining_human_count: usize,
 }
 
-/// Manages Argon2id user registration/login, bearer authentication tokens,
-/// password-protected session creation/joining, and participant disconnect/logout flows.
+/// Manages SQLx-backed Argon2id user registration/login, account-level RBAC (`USER` vs. `ADMIN`),
+/// bearer authentication tokens, password-protected session creation/joining, and disconnect/logout flows.
 pub struct AuthAndSessionManager {
-    users_file: PathBuf,
+    db_pool: SqlitePool,
+    bootstrap_admins: HashSet<String>,
     users_by_username: RwLock<HashMap<String, UserAccount>>,
     auth_tokens: RwLock<HashMap<String, UserAccount>>,
     sessions: RwLock<HashMap<String, ProtectedSession>>,
@@ -88,21 +99,44 @@ pub struct AuthAndSessionManager {
 }
 
 impl AuthAndSessionManager {
-    /// Initializes the authentication and session manager rooted at `base_dir`,
-    /// seeding default demo accounts into `data/auth/users.json` if none exist yet.
-    pub fn new(base_dir: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let auth_dir = base_dir.as_ref().join("data").join("auth");
-        std::fs::create_dir_all(&auth_dir)?;
-        let users_file = auth_dir.join("users.json");
+    /// Initializes the SQLx SQLite authentication and session manager rooted at `base_dir`,
+    /// running schema migrations, seeding default demo accounts if the `users` table is empty,
+    /// and promoting any configured `bootstrap_admins` to [`AccountRole::Admin`].
+    pub async fn new(base_dir: impl AsRef<Path>, auth_config: &AuthConfig) -> anyhow::Result<Self> {
+        let connect_opts =
+            Self::resolve_sqlite_options(base_dir.as_ref(), &auth_config.database_url)?;
+        let db_pool = SqlitePoolOptions::new()
+            .max_connections(8)
+            .connect_with(connect_opts)
+            .await?;
 
-        let mut initial_users: HashMap<String, UserAccount> = if users_file.exists() {
-            let content = std::fs::read_to_string(&users_file)?;
-            serde_json::from_str(&content).unwrap_or_default()
-        } else {
-            HashMap::new()
-        };
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS users (
+                user_id       TEXT PRIMARY KEY NOT NULL,
+                username      TEXT UNIQUE NOT NULL,
+                display_name  TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                account_role  TEXT NOT NULL DEFAULT 'USER',
+                created_at_us INTEGER NOT NULL
+            );
+            "#,
+        )
+        .execute(&db_pool)
+        .await?;
 
-        if initial_users.is_empty() {
+        let bootstrap_admins: HashSet<String> = auth_config
+            .bootstrap_admins
+            .iter()
+            .map(|u| u.trim().to_lowercase())
+            .filter(|u| !u.is_empty())
+            .collect();
+
+        let existing_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+            .fetch_one(&db_pool)
+            .await?;
+
+        if existing_count == 0 {
             let defaults = [
                 ("u-demo-gm-sean", "gm_sean", "Sean (GM)"),
                 ("u-demo-sara", "sara_valkyrie", "Sara (Valkyrie)"),
@@ -111,28 +145,98 @@ impl AuthAndSessionManager {
             ];
             for (uid, uname, dname) in defaults {
                 let hash = Self::hash_secret("satya-truth-2026")?;
-                initial_users.insert(
-                    uname.to_string(),
-                    UserAccount {
-                        user_id: uid.to_string(),
-                        username: uname.to_string(),
-                        display_name: dname.to_string(),
-                        password_hash: hash,
-                        created_at_us: Utc::now().timestamp_micros(),
-                    },
-                );
+                let role = if bootstrap_admins.contains(uname) {
+                    AccountRole::Admin
+                } else {
+                    AccountRole::User
+                };
+                let now_us = Utc::now().timestamp_micros();
+                sqlx::query(
+                    r#"
+                    INSERT INTO users (user_id, username, display_name, password_hash, account_role, created_at_us)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                    "#,
+                )
+                .bind(uid)
+                .bind(uname)
+                .bind(dname)
+                .bind(&hash)
+                .bind(role.as_db_str())
+                .bind(now_us)
+                .execute(&db_pool)
+                .await?;
             }
-            let serialized = serde_json::to_string_pretty(&initial_users)?;
-            std::fs::write(&users_file, serialized)?;
+        } else {
+            for admin_uname in &bootstrap_admins {
+                sqlx::query("UPDATE users SET account_role = 'ADMIN' WHERE username = ?1")
+                    .bind(admin_uname)
+                    .execute(&db_pool)
+                    .await?;
+            }
+        }
+
+        let rows = sqlx::query(
+            "SELECT user_id, username, display_name, password_hash, account_role, created_at_us FROM users",
+        )
+        .fetch_all(&db_pool)
+        .await?;
+
+        let mut initial_users = HashMap::with_capacity(rows.len());
+        for row in rows {
+            let uname: String = row.try_get("username")?;
+            let role_str: String = row.try_get("account_role")?;
+            initial_users.insert(
+                uname.clone(),
+                UserAccount {
+                    user_id: row.try_get("user_id")?,
+                    username: uname,
+                    display_name: row.try_get("display_name")?,
+                    password_hash: row.try_get("password_hash")?,
+                    account_role: AccountRole::from_db_str(&role_str),
+                    created_at_us: row.try_get("created_at_us")?,
+                },
+            );
         }
 
         Ok(Self {
-            users_file,
+            db_pool,
+            bootstrap_admins,
             users_by_username: RwLock::new(initial_users),
             auth_tokens: RwLock::new(HashMap::new()),
             sessions: RwLock::new(HashMap::new()),
             join_tokens: RwLock::new(HashMap::new()),
         })
+    }
+
+    fn resolve_sqlite_options(
+        base_dir: &Path,
+        database_url: &str,
+    ) -> anyhow::Result<SqliteConnectOptions> {
+        let trimmed = database_url.trim();
+        if trimmed.contains(":memory:") {
+            return Ok(SqliteConnectOptions::from_str("sqlite::memory:")?.create_if_missing(true));
+        }
+
+        let path_part = trimmed
+            .strip_prefix("sqlite://")
+            .or_else(|| trimmed.strip_prefix("sqlite:"))
+            .unwrap_or(trimmed);
+        let file_rel = path_part.split('?').next().unwrap_or("data/auth/users.db");
+        let candidate = PathBuf::from(file_rel);
+        let full_path = if candidate.is_absolute() {
+            candidate
+        } else {
+            base_dir.join(candidate)
+        };
+
+        if let Some(parent) = full_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        Ok(SqliteConnectOptions::new()
+            .filename(full_path)
+            .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Wal))
     }
 
     /// Hashes a plaintext secret (user password or session password) using Argon2id and a CSPRNG salt.
@@ -156,7 +260,8 @@ impl AuthAndSessionManager {
             .is_ok()
     }
 
-    /// Registers a new user account, persists it to `users.json`, and returns a bearer token response.
+    /// Registers a new user account, persists it to the SQLx SQLite `users` table, and returns a bearer token response.
+    /// Self-registered users receive [`AccountRole::User`] unless their username is listed in `bootstrap_admins`.
     pub async fn register_user(
         &self,
         username: &str,
@@ -174,6 +279,11 @@ impl AuthAndSessionManager {
                 anyhow::bail!("Username '{uname}' is already registered");
             }
             let password_hash = Self::hash_secret(password)?;
+            let account_role = if self.bootstrap_admins.contains(&uname) {
+                AccountRole::Admin
+            } else {
+                AccountRole::User
+            };
             let acct = UserAccount {
                 user_id: Uuid::now_v7().to_string(),
                 username: uname.clone(),
@@ -183,16 +293,61 @@ impl AuthAndSessionManager {
                     display_name.trim().to_string()
                 },
                 password_hash,
+                account_role,
                 created_at_us: Utc::now().timestamp_micros(),
             };
+
+            sqlx::query(
+                r#"
+                INSERT INTO users (user_id, username, display_name, password_hash, account_role, created_at_us)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "#,
+            )
+            .bind(&acct.user_id)
+            .bind(&acct.username)
+            .bind(&acct.display_name)
+            .bind(&acct.password_hash)
+            .bind(acct.account_role.as_db_str())
+            .bind(acct.created_at_us)
+            .execute(&self.db_pool)
+            .await?;
+
             guard.insert(uname, acct.clone());
-            if let Ok(json) = serde_json::to_string_pretty(&*guard) {
-                let _ = std::fs::write(&self.users_file, json);
-            }
             acct
         };
 
         self.issue_auth_token(account).await
+    }
+
+    /// Updates a user's [`AccountRole`] in both the SQLite `users` table and in-memory token/account caches.
+    pub async fn set_user_account_role(
+        &self,
+        username: &str,
+        role: AccountRole,
+    ) -> anyhow::Result<UserAccount> {
+        let uname = username.trim().to_lowercase();
+        let updated = {
+            let mut guard = self.users_by_username.write().await;
+            let acct = guard
+                .get_mut(&uname)
+                .ok_or_else(|| anyhow::anyhow!("Unknown username '{uname}'"))?;
+            sqlx::query("UPDATE users SET account_role = ?1 WHERE username = ?2")
+                .bind(role.as_db_str())
+                .bind(&uname)
+                .execute(&self.db_pool)
+                .await?;
+            acct.account_role = role;
+            acct.clone()
+        };
+
+        let mut tokens = self.auth_tokens.write().await;
+        for acct in tokens.values_mut() {
+            if acct.username == uname {
+                acct.account_role = role;
+            }
+        }
+
+        Ok(updated)
     }
 
     /// Authenticates an existing user with `username` and `password`, issuing a new bearer token.
@@ -229,6 +384,7 @@ impl AuthAndSessionManager {
             user_id: account.user_id,
             username: account.username,
             display_name: account.display_name,
+            account_role: account.account_role,
         })
     }
 

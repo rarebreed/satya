@@ -1,0 +1,24 @@
+- General
+    - any password fields should have an option to display the actual typed in characters
+    - for the TTRPG mode, there should be two kinds: one for GM + Players, and another for AI GM + Players
+- `Public & Private Targeted Session Chat` pane
+    - add a filter to display only the desired message types (ie don't show System)
+    - rename the pane
+    - the Visibility and Channel Context dropdown should only havee options possible for the session type
+- Title bar: 
+    - replace "Satya // Engine (RUST + WASM)" with just "Satya: Harsh Reality"
+    - replace "WebRTC + Durable Avro Event Stream" with "Multimedia Engine"
+- `Satya TTRPG Task Resolution & Combat Economy` pane
+    - place it under the `Public & Private Targeted Session Chat` pane
+- The `Roll Satya Task & Emit Avro Event`
+    - rename it to just `Roll Satya Task`
+
+- The `1. User Authentication` pane
+    - This should be the only pane active until logged in
+    - Once logged in, this pane should go away
+    - There should be a top-level or "Hamburger Icon" the user can click on with user details or to show this pane again
+- The `2. Create or Join Password-Protected Session` pane
+    - This should normally only be visible before a user has joined a Session
+    - With the top-level or Hamburger Icon, there should be an option to view this pane again
+- The `Apache iggy topics, avro schemas & pylance batch sink` pane
+    - This should only be visible to an administrator or a local user

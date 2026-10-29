@@ -18,11 +18,11 @@ use axum::{
 use futures::{SinkExt, StreamExt};
 use rand::Rng;
 use satya_schema::{
-    ChannelContext, ChatMessageEvent, ClientWsPacket, CreateSessionRequest, IceCandidateType,
-    InteractionDynamicsEvent, JoinSessionRequest, LeaveSessionRequest, LifecycleEventType,
-    LoginRequest, LogoutRequest, MessageVisibility, Participant, ParticipantKind, RegisterRequest,
-    ServerWsPacket, SessionEnterResponse, SessionLifecycleEvent, SessionMode, SessionRole,
-    TtrpgMechanicsEvent, WebRtcEventKind, WebRtcTelemetryEvent, subjects,
+    AccountRole, ChannelContext, ChatMessageEvent, ClientWsPacket, CreateSessionRequest,
+    IceCandidateType, InteractionDynamicsEvent, JoinSessionRequest, LeaveSessionRequest,
+    LifecycleEventType, LoginRequest, LogoutRequest, MessageVisibility, Participant,
+    ParticipantKind, RegisterRequest, ServerWsPacket, SessionEnterResponse, SessionLifecycleEvent,
+    SessionMode, SessionRole, TtrpgMechanicsEvent, WebRtcEventKind, WebRtcTelemetryEvent, subjects,
 };
 use satya_storage::{EventLogRouter, StorageConfig, TopicMetricsSnapshot};
 use satya_web::render_satya_app_html;
@@ -56,7 +56,7 @@ impl SignalingAppState {
         base_dir: impl Into<PathBuf>,
     ) -> anyhow::Result<Arc<Self>> {
         let base_dir = base_dir.into();
-        let auth = AuthAndSessionManager::new(&base_dir)?;
+        let auth = AuthAndSessionManager::new(&base_dir, &config.auth).await?;
         let storage = Arc::new(EventLogRouter::new(config, &base_dir).await?);
 
         Ok(Arc::new(Self {
@@ -600,16 +600,53 @@ pub struct StorageMetricsResponse {
     pub topics: Vec<TopicMetricsSnapshot>,
 }
 
-async fn storage_metrics_handler(
-    State(state): State<Arc<SignalingAppState>>,
-) -> Json<StorageMetricsResponse> {
-    let topics = state.storage.metrics_snapshot().await;
-    Json(StorageMetricsResponse { topics })
+async fn verify_admin_header(
+    state: &SignalingAppState,
+    headers: &HeaderMap,
+) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
+    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Missing Authorization header" })),
+        ));
+    };
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or expired auth token" })),
+        ));
+    };
+    if user.account_role != AccountRole::Admin {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(
+                json!({ "error": "Admin account role required to access storage telemetry and batch sinks" }),
+            ),
+        ));
+    }
+    Ok(())
 }
 
-async fn storage_flush_handler(State(state): State<Arc<SignalingAppState>>) -> impl IntoResponse {
+async fn storage_metrics_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Err(err_resp) = verify_admin_header(&state, &headers).await {
+        return err_resp.into_response();
+    }
+    let topics = state.storage.metrics_snapshot().await;
+    (StatusCode::OK, Json(StorageMetricsResponse { topics })).into_response()
+}
+
+async fn storage_flush_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Err(err_resp) = verify_admin_header(&state, &headers).await {
+        return err_resp.into_response();
+    }
     let flushed = state.storage.flush_all_topics().await.unwrap_or_default();
-    Json(json!({ "flushed_files": flushed }))
+    (StatusCode::OK, Json(json!({ "flushed_files": flushed }))).into_response()
 }
 
 /// Query string parameters required when upgrading `/ws/session?join_token=...`.
@@ -1170,11 +1207,51 @@ mod tests {
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
 
-        // 2. Verify /api/storage/metrics returns all 6 topics with CRC-64-AVRO fingerprints
+        // 2. Verify /api/storage/metrics requires ADMIN role (401 unauthenticated, 403 for USER, 200 for ADMIN)
+        let res_unauth = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/storage/metrics")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res_unauth.status(), StatusCode::UNAUTHORIZED);
+
+        // Regular user (sara_valkyrie) is seeded with AccountRole::User -> 403 FORBIDDEN
+        let sara_auth = state
+            .auth
+            .authenticate_user("sara_valkyrie", "satya-truth-2026")
+            .await
+            .unwrap();
+        assert_eq!(sara_auth.account_role, AccountRole::User);
+        let res_forbidden = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/storage/metrics")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res_forbidden.status(), StatusCode::FORBIDDEN);
+
+        // Bootstrap admin (gm_sean) is seeded with AccountRole::Admin -> 200 OK
+        let admin_auth = state
+            .auth
+            .authenticate_user("gm_sean", "satya-truth-2026")
+            .await
+            .unwrap();
+        assert_eq!(admin_auth.account_role, AccountRole::Admin);
         let res_metrics = app
             .oneshot(
                 Request::builder()
                     .uri("/api/storage/metrics")
+                    .header("Authorization", format!("Bearer {}", admin_auth.auth_token))
                     .body(Body::empty())
                     .unwrap(),
             )

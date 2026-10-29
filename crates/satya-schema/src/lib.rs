@@ -783,6 +783,35 @@ pub struct LogoutRequest {
     pub reason: Option<String>,
 }
 
+/// Platform-wide account role controlling access to administrative UI panes and storage APIs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AccountRole {
+    /// Standard platform user with access to sessions, WebRTC, chat, and TTRPG mechanics.
+    #[default]
+    User,
+    /// Platform administrator with access to the Apache Iggy / Avro Inspector UI and storage flush/metrics APIs.
+    Admin,
+}
+
+impl AccountRole {
+    /// Returns the uppercase database string representation (`"USER"` or `"ADMIN"`).
+    pub fn as_db_str(self) -> &'static str {
+        match self {
+            Self::User => "USER",
+            Self::Admin => "ADMIN",
+        }
+    }
+
+    /// Parses a database role string (`"ADMIN"` or `"USER"`) into an [`AccountRole`].
+    pub fn from_db_str(raw: &str) -> Self {
+        match raw.trim().to_uppercase().as_str() {
+            "ADMIN" => Self::Admin,
+            _ => Self::User,
+        }
+    }
+}
+
 /// HTTP response body returned upon successful user registration or login.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AuthSuccessResponse {
@@ -794,6 +823,9 @@ pub struct AuthSuccessResponse {
     pub username: String,
     /// Default display name associated with the user account.
     pub display_name: String,
+    /// Platform-level account role (`USER` or `ADMIN`).
+    #[serde(default)]
+    pub account_role: AccountRole,
 }
 
 /// HTTP request body for `POST /api/sessions/create`.

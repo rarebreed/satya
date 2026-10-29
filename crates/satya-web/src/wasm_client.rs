@@ -3,11 +3,12 @@
 
 use js_sys::{Array, Float32Array, Reflect};
 use satya_schema::{
-    AuthSuccessResponse, ChannelContext, ChatMessageEvent, ClientWsPacket, CombatStance,
-    CreateSessionRequest, InteractionTurnType, JoinSessionRequest, LeaveSessionRequest,
-    LoginRequest, LogoutRequest, MessageVisibility, Participant, ParticipantKind, RegisterRequest,
-    ServerWsPacket, SessionEnterResponse, SessionMode, SessionRole, StorageMetricsViewResponse,
-    TopicMetricsView, TtrpgMechanicsEvent, WebRtcEventKind,
+    AccountRole, AuthSuccessResponse, ChannelContext, ChatMessageEvent, ClientWsPacket,
+    CombatStance, CreateSessionRequest, InteractionTurnType, JoinSessionRequest,
+    LeaveSessionRequest, LoginRequest, LogoutRequest, MessageVisibility, Participant,
+    ParticipantKind, RegisterRequest, ServerWsPacket, SessionEnterResponse, SessionMode,
+    SessionRole, StorageMetricsViewResponse, TopicMetricsView, TtrpgMechanicsEvent,
+    WebRtcEventKind,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -324,7 +325,7 @@ pub fn parse_combat_stance(raw: &str) -> Option<CombatStance> {
 pub fn start_satya_wasm_client() {
     register_window_bindings();
     satya_visibility_changed();
-    satya_refresh_metrics();
+    set_display("admin-inspector-card", "none");
 }
 
 /// Binds the Rust Wasm handlers onto `window` so both SSR HTML attributes and CSR/hydrated
@@ -508,9 +509,11 @@ async fn perform_login() -> bool {
 
 fn apply_auth_success(data: AuthSuccessResponse) {
     let short_id: String = data.user_id.chars().take(8).collect();
+    let is_admin = data.account_role == AccountRole::Admin;
+    let role_badge = data.account_role.as_db_str();
     set_text(
         "auth-status-pill",
-        &format!("User: {} ({short_id}...)", data.username),
+        &format!("User: {} [{role_badge}] ({short_id}...)", data.username),
     );
     set_class("auth-status-pill", "pill pill-active");
     set_button_disabled("btn-logout", false);
@@ -519,6 +522,16 @@ fn apply_auth_success(data: AuthSuccessResponse) {
         st.auth_token = Some(data.auth_token.clone());
         st.user = Some(data);
     });
+
+    if is_admin {
+        set_display("admin-inspector-card", "block");
+        satya_refresh_metrics();
+    } else {
+        set_display("admin-inspector-card", "none");
+        if let Some(wrap) = get_element("topic-metrics-table") {
+            wrap.set_inner_html("");
+        }
+    }
 }
 
 fn set_session_buttons_enabled(in_session: bool) {
@@ -828,6 +841,10 @@ pub fn satya_logout() {
         set_text("auth-status-pill", "Not Logged In");
         set_class("auth-status-pill", "pill pill-muted");
         set_button_disabled("btn-logout", true);
+        set_display("admin-inspector-card", "none");
+        if let Some(wrap) = get_element("topic-metrics-table") {
+            wrap.set_inner_html("");
+        }
 
         set_feedback(
             "auth-feedback",
@@ -838,7 +855,6 @@ pub fn satya_logout() {
         append_system_notice(&format!(
             "User '{username}' logged out. Logged USER_LOGGED_OUT lifecycle event."
         ));
-        satya_refresh_metrics();
     });
 }
 
@@ -1661,25 +1677,52 @@ pub fn append_system_notice(text: &str) {
 // Apache Iggy Topic & Avro Schema Inspector
 // ============================================================================
 
-/// Fetches live Apache Iggy topic metrics from `GET /api/storage/metrics` and updates `#topic-metrics-table`.
+/// Fetches live Apache Iggy topic metrics from `GET /api/storage/metrics` and updates `#topic-metrics-table`
+/// (only executed when the currently authenticated user has [`AccountRole::Admin`]).
 #[wasm_bindgen]
 pub fn satya_refresh_metrics() {
     spawn_local(async move {
-        if let Ok(resp) =
-            fetch_json::<(), StorageMetricsViewResponse>("GET", "/api/storage/metrics", None, None)
-                .await
+        let admin_token = with_state(|st| {
+            if st.user.as_ref().map(|u| u.account_role) == Some(AccountRole::Admin) {
+                st.auth_token.clone()
+            } else {
+                None
+            }
+        });
+        let Some(tok) = admin_token else {
+            return;
+        };
+        if let Ok(resp) = fetch_json::<(), StorageMetricsViewResponse>(
+            "GET",
+            "/api/storage/metrics",
+            Some(&tok),
+            None,
+        )
+        .await
         {
             render_metrics_table(&resp.topics);
         }
     });
 }
 
-/// Triggers an immediate flush of all buffered topic events into `.avro` container batches via `POST /api/storage/flush`.
+/// Triggers an immediate flush of all buffered topic events into `.avro` container batches via `POST /api/storage/flush`
+/// (requires an authenticated [`AccountRole::Admin`] session).
 #[wasm_bindgen]
 pub fn satya_flush_batches() {
     spawn_local(async move {
+        let admin_token = with_state(|st| {
+            if st.user.as_ref().map(|u| u.account_role) == Some(AccountRole::Admin) {
+                st.auth_token.clone()
+            } else {
+                None
+            }
+        });
+        let Some(tok) = admin_token else {
+            return;
+        };
         if let Ok(val) =
-            fetch_json::<(), serde_json::Value>("POST", "/api/storage/flush", None, None).await
+            fetch_json::<(), serde_json::Value>("POST", "/api/storage/flush", Some(&tok), None)
+                .await
         {
             let count = val
                 .get("flushed_files")

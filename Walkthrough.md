@@ -6,8 +6,8 @@ We have built the full-stack **WebRTC Audio/Video, Chat & Event Streaming applic
 
 ### 1. Project & Workspace Configuration
 - [Cargo.toml](Cargo.toml): Root Cargo workspace organizing four specialized crates (`satya-schema`, `satya-storage`, `satya-signaling`, `satya-web`), sharing dependencies including `leptos`, `wasm-bindgen`, `wasm-bindgen-futures`, `js-sys`, and `web-sys`.
-- [pixi.toml](pixi.toml): Manages both the `rust` (`>=1.85`) and `python` (`>=3.14.7`) toolchains plus `pylance`, `fastavro`, `pyarrow`, and `pytest`, with tasks for building the Wasm frontend (`build-wasm`), testing, serving (`serve` / `serve-release`), and running the Avro-to-PyLance ML compaction pipeline.
-- [config/storage.toml](config/storage.toml): Declarative configuration for Apache Iggy stream connection (`127.0.0.1:8090` with automatic local broker fallback), micro-batch thresholds (`batch_max_messages`, `batch_max_interval_ms`), and per-topic `local` vs. `s3` storage sinks.
+- [pixi.toml](pixi.toml): Manages the `rust` (`>=1.85`), `rust-std-wasm32-unknown-unknown`, `wasm-pack`, and `python` (`>=3.14.7`) toolchains plus `pylance`, `fastavro`, `pyarrow`, and `pytest`, with tasks for building the Wasm frontend (`build-wasm`), testing, serving (`serve` / `serve-release`), and running the Avro-to-PyLance ML compaction pipeline.
+- [config/storage.toml](config/storage.toml): Declarative configuration for `[auth]` (`database_url = "sqlite://data/auth/users.db?mode=rwc"` and `bootstrap_admins = ["gm_sean"]`), Apache Iggy stream connection (`127.0.0.1:8090` with automatic local broker fallback), micro-batch thresholds (`batch_max_messages`, `batch_max_interval_ms`), and per-topic `local` vs. `s3` storage sinks.
 
 ### 2. Versioned Nested Avro Schemas, Protocol DTOs & Evolution Engine (`satya-schema`)
 - **Avro Schema Files**:
@@ -29,16 +29,16 @@ We have built the full-stack **WebRTC Audio/Video, Chat & Event Streaming applic
 - [src/satya_ml/lance_ingest.py](src/satya_ml/lance_ingest.py) & [src/satya_ml/inspect_avro.py](src/satya_ml/inspect_avro.py):
   - Incremental compaction script (`pixi run compact-to-lance`) that reads flushed `.avro` batches, checks the high-water offset in `_watermarks.json`, converts nested records into a `pyarrow.Table`, and appends to `data/lance/<topic>.lance`.
 
-### 4. Authentication, Session Disconnect & WebRTC Signaling Server (`satya-signaling` & `satya-web`)
+### 4. SQLx User Management, `AccountRole` RBAC, Session Disconnect & WebRTC Signaling (`satya-signaling` & `satya-web`)
 - [crates/satya-signaling/src/auth.rs](crates/satya-signaling/src/auth.rs):
-  - Argon2id-backed `AuthAndSessionManager` managing persistent user accounts (`user_id`, `username`, `password_hash`), password-protected sessions (`session_id` + `session_password`), explicit session disconnect (`leave_session`), and token-revoking user logout (`logout_user`).
+  - `sqlx::SqlitePool` (`WAL` mode) + Argon2id-backed `AuthAndSessionManager` managing persistent user accounts (`user_id`, `username`, `password_hash`, `account_role` in `data/auth/users.db`), `bootstrap_admins` promotion from `config/storage.toml`, password-protected sessions (`session_id` + `session_password`), explicit session disconnect (`leave_session`), and token-revoking user logout (`logout_user`).
 - [crates/satya-signaling/src/lib.rs](crates/satya-signaling/src/lib.rs):
   - Serves the Leptos HTML shell at `GET /` and static compiled WebAssembly assets at `/pkg` (`ServeDir::new("pkg")`).
-  - Provides REST endpoints for `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/sessions/create`, `/api/sessions/join`, `/api/sessions/leave`, `/api/storage/metrics`, and `/api/storage/flush`.
+  - Provides REST endpoints for `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `/api/sessions/create`, `/api/sessions/join`, `/api/sessions/leave`, and Admin-protected `/api/storage/metrics` and `/api/storage/flush` (`401 Unauthorized` if unauthenticated, `403 Forbidden` for `AccountRole::User`, `200 OK` for `AccountRole::Admin`).
   - WebSocket signaling & message router (`/ws/session`) enforcing public broadcast vs. private recipient isolation (`PUBLIC`, `PRIVATE`, `GM_ONLY`, `HOST_ONLY`), WebRTC SDP/ICE relay, Satya d20 task resolution & combat action economy, autonomous AI GM narration, and disconnect event logging (`process_session_disconnect`).
 - [crates/satya-web/src/lib.rs](crates/satya-web/src/lib.rs) & [crates/satya-web/src/wasm_client.rs](crates/satya-web/src/wasm_client.rs):
   - Pure Rust + Leptos + WebAssembly (`wasm-bindgen` / `web-sys`) frontend (`cdylib` + `rlib`).
-  - Handles user login/registration/logout, password-protected session creation/join/disconnect, WebRTC `RTCPeerConnection` audio/video + `RTCDataChannel` mesh, Web Audio API `AnalyserNode` RMS prosody telemetry, targeted private/public chat, and live Apache Iggy topic/schema inspection without custom JavaScript runtime files.
+  - Handles user login/registration/logout, password-protected session creation/join/disconnect, WebRTC `RTCPeerConnection` audio/video + `RTCDataChannel` mesh, Web Audio API `AnalyserNode` RMS prosody telemetry, targeted private/public chat, and role-gated visibility for the **Apache Iggy Topics, Avro Schemas & PyLance Batch Sink** inspector pane (`#admin-inspector-card` is hidden for `AccountRole::User` and revealed only when an `AccountRole::Admin` user logs in).
 
 ---
 

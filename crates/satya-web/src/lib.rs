@@ -430,11 +430,11 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                     </div>
                 </div>
 
-                <div class="card inspector-card">
+                <div id="admin-inspector-card" class="card inspector-card" style:display="none">
                     <div class="card-header-inline">
                         <div>
                             <h2>"Apache Iggy Topics, Avro Schemas & PyLance Batch Sink"</h2>
-                            <span class="subtitle">"CRC-64-AVRO Fingerprints + Offset-Tracked .avro Container Batches"</span>
+                            <span class="subtitle">"Admin Only · CRC-64-AVRO Fingerprints + Offset-Tracked .avro Container Batches"</span>
                         </div>
                         <div class="btn-row-compact">
                             <button
@@ -511,5 +511,7 @@ mod tests {
         assert!(html.contains("btn-logout"));
         assert!(html.contains("btn-leave-session"));
         assert!(html.contains("btn-workspace-disconnect"));
+        assert!(html.contains(r#"id="admin-inspector-card""#));
+        assert!(html.contains("display: none"));
     }
 }

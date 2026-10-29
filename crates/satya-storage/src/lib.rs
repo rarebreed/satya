@@ -117,9 +117,31 @@ pub struct TopicStorageConfig {
     pub s3_prefix: Option<String>,
 }
 
+/// User authentication database and bootstrap administrator configuration (`[auth]` in `config/storage.toml`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    /// SQLx database URL or SQLite path for storing persistent user accounts.
+    pub database_url: String,
+    /// List of usernames automatically assigned [`satya_schema::AccountRole::Admin`].
+    #[serde(default)]
+    pub bootstrap_admins: Vec<String>,
+}
+
+impl Default for AuthConfig {
+    fn default() -> Self {
+        Self {
+            database_url: "sqlite://data/auth/users.db?mode=rwc".to_string(),
+            bootstrap_admins: vec!["gm_sean".to_string()],
+        }
+    }
+}
+
 /// Root storage configuration loaded from `config/storage.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
+    /// Persistent SQLx user authentication and bootstrap administrator configuration.
+    #[serde(default)]
+    pub auth: AuthConfig,
     /// Apache Iggy broker configuration.
     #[serde(default)]
     pub iggy: IggyConfig,
@@ -157,6 +179,7 @@ impl Default for StorageConfig {
             );
         }
         Self {
+            auth: AuthConfig::default(),
             iggy: IggyConfig::default(),
             batching: BatchingConfig::default(),
             topics: topic_map,
