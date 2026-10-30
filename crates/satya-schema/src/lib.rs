@@ -174,7 +174,7 @@ mod tests {
     fn test_all_builtin_schemas_register_and_fingerprint() {
         let registry = SchemaRegistry::new_with_builtin_schemas().unwrap();
         let all = registry.all_schemas();
-        assert_eq!(all.len(), 7);
+        assert_eq!(all.len(), 10);
 
         let chat_v1 = registry
             .get_by_subject_version(subjects::CHAT_MESSAGE, 1)
@@ -185,6 +185,137 @@ mod tests {
 
         assert_ne!(chat_v1.fingerprint_crc64, chat_v2.fingerprint_crc64);
         assert_eq!(chat_v1.fingerprint_hex().len(), 16);
+    }
+
+    #[test]
+    fn test_topics_7_to_9_canvas_trajectory_and_session_log_serialization_and_gdpr() {
+        let registry = SchemaRegistry::default();
+        let sara = Participant::human("u-sara", "sara_v", "Sara (Valkyrie)", SessionRole::Player);
+        let ai_gm = Participant::ai_gm("sector-4", "ollama/qwen2.5:14b", "harsh-reality-arbiter");
+
+        // Topic 7: TabletopCanvasEvent (schema_id = 8)
+        let canvas_meta = registry
+            .build_metadata(
+                30,
+                subjects::TABLETOP_CANVAS,
+                1,
+                "sector-4",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let canvas_ev = TabletopCanvasEvent {
+            metadata: canvas_meta,
+            canvas_event_type: CanvasEventType::WgpuDiceSpawned,
+            actor: sara.clone(),
+            map_id: Some("sector-4-airlock".to_string()),
+            map_title: Some("Sector 4 Cargo Airlock".to_string()),
+            image_url: Some("/maps/sector-4/airlock.svg".to_string()),
+            grid_width: Some(20),
+            grid_height: Some(15),
+            token_placements: vec![TokenPlacement {
+                entity_id: "u-sara".to_string(),
+                label: "Sara (Valkyrie)".to_string(),
+                x: 4,
+                y: 8,
+                visibility: MessageVisibility::Public,
+            }],
+            wgpu_dice_roll: Some(WgpuDiceSpec {
+                dice_notation: "3d20".to_string(),
+                physics_seed: 987654321,
+                outcomes: vec![1, 11, 18],
+                visibility: MessageVisibility::Public,
+            }),
+            terrain_notes: Some("Low-gravity cargo bay".to_string()),
+        };
+        let framed_canvas = registry
+            .encode_framed(subjects::TABLETOP_CANVAS, 1, &canvas_ev)
+            .unwrap();
+        let (hdr_canvas, dec_canvas): (_, TabletopCanvasEvent) =
+            registry.decode_framed(&framed_canvas, None).unwrap();
+        assert_eq!(hdr_canvas.schema_id, 8);
+        assert_eq!(dec_canvas.wgpu_dice_roll.unwrap().outcomes, vec![1, 11, 18]);
+
+        // Topic 8: AiGmTrajectoryEvent (schema_id = 9)
+        let traj_meta = registry
+            .build_metadata(
+                31,
+                subjects::AI_GM_TRAJECTORY,
+                1,
+                "sector-4",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let traj_ev = AiGmTrajectoryEvent {
+            metadata: traj_meta,
+            turn_id: "turn-001".to_string(),
+            trace_id: "4bf92f3577b34da6a3ce929d0e0e4736".to_string(),
+            operating_mode: AiGmOperatingMode::Autonomous,
+            ai_participant: ai_gm,
+            trigger_actor: sara.clone(),
+            trigger_event_id: "msg-42".to_string(),
+            trigger_summary: "Sara peeks through the airlock viewport".to_string(),
+            llm_provider: "ollama".to_string(),
+            reasoning_model_id: "qwen2.5:14b".to_string(),
+            vision_model_id: Some("llama3.2-vision".to_string()),
+            ruleset_engine_id: "satya-d20".to_string(),
+            tool_invocations: vec![McpToolInvocationRecord {
+                step_index: 0,
+                span_id: "00f067aa0ba902b7".to_string(),
+                mcp_tier: McpServerTier::Tier2RulesetEngine,
+                server_id: "satya-d20-rules".to_string(),
+                tool_name: "roll_satya_d20_check".to_string(),
+                arguments_json: r#"{"skill_name":"Perception","attribute_tn":12}"#.to_string(),
+                result_summary_json: r#"{"outcome_tier":"PARTIAL_SUCCESS"}"#.to_string(),
+                is_error: false,
+                duration_ms: 42,
+            }],
+            rag_sources_used: vec!["file://docs/ttrpg/tasks.md".to_string()],
+            emitted_event_ids: vec!["ev-43".to_string()],
+            prompt_tokens: 850,
+            completion_tokens: 120,
+            cached_tokens: 0,
+            total_turn_latency_ms: 640,
+            turn_status: AiGmTurnStatus::Completed,
+        };
+        let framed_traj = registry
+            .encode_framed(subjects::AI_GM_TRAJECTORY, 1, &traj_ev)
+            .unwrap();
+        let (hdr_traj, dec_traj): (_, AiGmTrajectoryEvent) =
+            registry.decode_framed(&framed_traj, None).unwrap();
+        assert_eq!(hdr_traj.schema_id, 9);
+        assert_eq!(dec_traj.tool_invocations.len(), 1);
+
+        // Topic 9: SessionLogEvent (schema_id = 10) + GDPR REGEX_SCRUB_SUBJECT test
+        let log_meta = registry
+            .build_metadata(32, subjects::SESSION_LOG, 1, "sector-4", SessionMode::Ttrpg)
+            .unwrap();
+        let log_ev = SessionLogEvent {
+            metadata: log_meta,
+            log_id: "log-001".to_string(),
+            level: LogLevel::Info,
+            service_name: "satya-signaling".to_string(),
+            actor: Some(sara),
+            trace_id: Some("4bf92f3577b34da6a3ce929d0e0e4736".to_string()),
+            span_id: Some("a1b2c3d4e5f60001".to_string()),
+            parent_span_id: None,
+            lineage_id: Some("L1".to_string()),
+            parent_lineage_ids: vec![],
+            log_line: "[INFO] [session=sector-4] User u-sara (sara_v) triggered AI GM turn"
+                .to_string(),
+        };
+        let framed_log = registry
+            .encode_framed(subjects::SESSION_LOG, 1, &log_ev)
+            .unwrap();
+        let (match_log, anon_log_bytes) = registry
+            .anonymize_framed_for_subject(&framed_log, "u-sara", "anon-sara777")
+            .unwrap();
+        assert_eq!(match_log, GdprSubjectMatchKind::PrimaryActor);
+        let (_, dec_log): (_, SessionLogEvent) =
+            registry.decode_framed(&anon_log_bytes, None).unwrap();
+        assert_eq!(dec_log.actor.unwrap().user_id, "anon-sara777");
+        assert!(dec_log.log_line.contains("anon-sara777"));
+        assert!(!dec_log.log_line.contains("u-sara"));
+        assert!(!dec_log.log_line.contains("sara_v"));
     }
 
     #[test]

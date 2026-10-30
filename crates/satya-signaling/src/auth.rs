@@ -12,7 +12,10 @@ use argon2::{
 };
 use chrono::Utc;
 pub use satya_schema::{AccountRole, AuthSuccessResponse};
-use satya_schema::{Participant, ParticipantKind, SessionMode, SessionRole};
+use satya_schema::{
+    AiGmOperatingMode, AiGmProviderConfig, GmContextResponse, GmMapUpdateRequest, Participant,
+    ParticipantKind, SessionMode, SessionRole,
+};
 use satya_storage::AuthConfig;
 use serde::{Deserialize, Serialize};
 use sqlx::{
@@ -43,6 +46,31 @@ pub struct UserAccount {
     pub created_at_us: i64,
 }
 
+/// Ephemeral in-memory AI GM model and BYOK credential vault for an active session.
+///
+/// The `api_key` field is held strictly in memory for the duration of the session, is never
+/// persisted to SQLite/Avro/PyLance or exposed in `ROSTER_SYNC` / `GmContextResponse`, and is
+/// immediately scrubbed when the sponsoring user disconnects or the session ends.
+#[derive(Debug, Clone)]
+pub struct SessionAiGmVault {
+    /// `user_id` of the authenticated participant who supplied the configuration/API key.
+    pub sponsor_user_id: String,
+    /// Model provider identifier (`"ollama"`, `"google_genai"`, `"openai"`, or `"anthropic"`).
+    pub provider: String,
+    /// Reasoning and tool-calling model identifier.
+    pub model_id: String,
+    /// Optional multimodal vision model identifier.
+    pub vision_model_id: Option<String>,
+    /// Sampling temperature.
+    pub temperature: f32,
+    /// Persona profile identifier.
+    pub persona_id: String,
+    /// Optional custom base URL.
+    pub base_url: Option<String>,
+    /// Ephemeral player-supplied API key (never serialized to logs or broadcast to peers).
+    pub api_key: Option<String>,
+}
+
 /// Active password-protected session room and its current participant roster.
 #[derive(Debug, Clone)]
 pub struct ProtectedSession {
@@ -56,6 +84,10 @@ pub struct ProtectedSession {
     pub host_user_id: String,
     /// Map of active participants in the session keyed by `user_id`.
     pub roster: HashMap<String, Participant>,
+    /// Optional in-memory AI GM provider & ephemeral BYOK credential vault.
+    pub ai_gm_vault: Option<SessionAiGmVault>,
+    /// Optional currently active tactical map in the session.
+    pub active_map: Option<GmMapUpdateRequest>,
     /// Session creation timestamp in UTC microseconds since Unix epoch.
     pub created_at_us: i64,
 }
@@ -456,6 +488,8 @@ impl AuthAndSessionManager {
                     session_mode,
                     host_user_id: user.user_id.clone(),
                     roster,
+                    ai_gm_vault: None,
+                    active_map: None,
                     created_at_us: Utc::now().timestamp_micros(),
                 },
             );
@@ -535,7 +569,118 @@ impl AuthAndSessionManager {
             .unwrap_or_default()
     }
 
+    /// Configures or updates the in-memory AI GM provider, model, and ephemeral BYOK API key for `session_id`,
+    /// updating the `Participant::ai_gm` entry in the session roster (without exposing `api_key`).
+    pub async fn configure_session_ai_gm(
+        &self,
+        session_id: &str,
+        sponsor_user_id: &str,
+        cfg: AiGmProviderConfig,
+    ) -> anyhow::Result<(Participant, Vec<Participant>)> {
+        let sid = session_id.trim();
+        let mut sessions = self.sessions.write().await;
+        let session = sessions
+            .get_mut(sid)
+            .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+
+        if session.session_mode != SessionMode::Ttrpg {
+            anyhow::bail!("AI GM configuration is only supported for TTRPG sessions");
+        }
+
+        let clean_provider = if cfg.provider.trim().is_empty() {
+            "ollama".to_string()
+        } else {
+            cfg.provider.trim().to_lowercase()
+        };
+        let clean_model = if cfg.model_id.trim().is_empty() {
+            "qwen2.5:14b".to_string()
+        } else {
+            cfg.model_id.trim().to_string()
+        };
+        let clean_persona = if cfg.persona_id.trim().is_empty() {
+            "harsh-reality-arbiter".to_string()
+        } else {
+            cfg.persona_id.trim().to_string()
+        };
+        let composite_model_id = if clean_model.contains('/') {
+            clean_model.clone()
+        } else {
+            format!("{clean_provider}/{clean_model}")
+        };
+
+        session.ai_gm_vault = Some(SessionAiGmVault {
+            sponsor_user_id: sponsor_user_id.to_string(),
+            provider: clean_provider,
+            model_id: clean_model,
+            vision_model_id: cfg.vision_model_id.filter(|s| !s.trim().is_empty()),
+            temperature: cfg.temperature,
+            persona_id: clean_persona.clone(),
+            base_url: cfg.base_url.filter(|s| !s.trim().is_empty()),
+            api_key: cfg.api_key.filter(|s| !s.trim().is_empty()),
+        });
+
+        let ai_uid = format!("ai-gm-{sid}");
+        let mut ai_participant = Participant::ai_gm(sid, &composite_model_id, &clean_persona);
+        if let Some(info) = ai_participant.ai_agent_info.as_mut() {
+            info.temperature = cfg.temperature;
+        }
+        session.roster.insert(ai_uid, ai_participant.clone());
+        let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
+
+        Ok((ai_participant, roster_vec))
+    }
+
+    /// Retrieves the authoritative [`GmContextResponse`] and in-memory [`SessionAiGmVault`] for `session_id`.
+    pub async fn get_session_gm_context(
+        &self,
+        session_id: &str,
+    ) -> Option<(GmContextResponse, Option<SessionAiGmVault>)> {
+        let sid = session_id.trim();
+        let guard = self.sessions.read().await;
+        let session = guard.get(sid)?;
+
+        let roster: Vec<Participant> = session.roster.values().cloned().collect();
+        let human_gm_user_id = roster
+            .iter()
+            .find(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm)
+            .map(|p| p.user_id.clone());
+        let operating_mode = if human_gm_user_id.is_some() {
+            AiGmOperatingMode::CoPilot
+        } else {
+            AiGmOperatingMode::Autonomous
+        };
+        let ai_gm_participant = roster.iter().find(|p| p.role == SessionRole::AiGm).cloned();
+
+        let ctx = GmContextResponse {
+            session_id: session.session_id.clone(),
+            session_mode: session.session_mode,
+            operating_mode,
+            ai_gm_participant,
+            human_gm_user_id,
+            roster,
+            active_map: session.active_map.clone(),
+        };
+
+        Some((ctx, session.ai_gm_vault.clone()))
+    }
+
+    /// Updates the active tactical map stored in `session_id`.
+    pub async fn set_session_active_map(
+        &self,
+        session_id: &str,
+        map: GmMapUpdateRequest,
+    ) -> anyhow::Result<()> {
+        let sid = session_id.trim();
+        let mut guard = self.sessions.write().await;
+        let session = guard
+            .get_mut(sid)
+            .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+        session.active_map = Some(map);
+        Ok(())
+    }
+
     /// Removes a user from a session's active roster and invalidates their join token(s) for that session.
+    /// Also immediately scrubs any ephemeral BYOK API key sponsored by `user_id` or when `remaining_human_count == 0`.
     /// Returns `Some(SessionDisconnectSummary)` if the user was present in the roster, or `None` if already removed.
     pub async fn leave_session(
         &self,
@@ -552,6 +697,16 @@ impl AuthAndSessionManager {
                 .iter()
                 .filter(|p| p.participant_kind == ParticipantKind::Human)
                 .count();
+
+            // Scrub ephemeral BYOK credentials when the sponsoring user leaves or no humans remain
+            if remaining_human_count == 0 {
+                session.ai_gm_vault = None;
+            } else if let Some(vault) = session.ai_gm_vault.as_mut()
+                && vault.sponsor_user_id == user_id
+            {
+                vault.api_key = None;
+            }
+
             SessionDisconnectSummary {
                 session_id: sid.to_string(),
                 session_mode: session.session_mode,

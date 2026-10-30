@@ -4,6 +4,20 @@ database_url = "sqlite://data/auth/users.db?mode=rwc"
 # Usernames automatically granted the platform-wide `ADMIN` role on startup or registration.
 bootstrap_admins = ["gm_sean"]
 
+[ai_gm]
+enabled = true
+service_url = "http://127.0.0.1:8090"
+service_token = "satya_gm_secret_dev_token"
+default_provider = "ollama"
+ollama_base_url = "http://127.0.0.1:11434"
+reasoning_model = "qwen2.5:14b"
+vision_model = "llama3.2-vision"
+persona_id = "harsh-reality-arbiter"
+temperature = 0.35
+# In end-to-end runtime (`config/storage.toml`), fail fast if the Python FastAPI AI GM service is unreachable.
+# Unit and integration tests using `StorageConfig::default()` set `fail_fast_when_offline = false` for deterministic fallback.
+fail_fast_when_offline = true
+
 [iggy]
 enabled = true
 # "embedded" uses the built-in local WAL (data/iggy_streams/) + Avro batch sink without needing an external daemon.
@@ -72,3 +86,30 @@ local_path = "data/topics/ttrpg-mechanics"
 s3_bucket = "satya-analytics-lake"
 s3_region = "us-east-1"
 s3_prefix = "raw/ttrpg-mechanics"
+
+[topics.tabletop-canvas]
+topic_id = 7
+partitions = 2
+storage_backend = "local"
+local_path = "data/topics/tabletop-canvas"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/tabletop-canvas"
+
+[topics.ai-gm-trajectories]
+topic_id = 8
+partitions = 2
+storage_backend = "local"
+local_path = "data/topics/ai-gm-trajectories"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/ai-gm-trajectories"
+
+[topics.system-logs]
+topic_id = 9
+partitions = 4
+storage_backend = "local"
+local_path = "data/topics/system-logs"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/system-logs"

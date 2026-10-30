@@ -33,6 +33,14 @@ pub const TTRPG_MECHANICS_V1_AVSC: &str =
     include_str!("../../../schemas/v1/ttrpg_mechanics_event.avsc");
 /// Evolved raw JSON schema definition (`v2`) for [`crate::events::ChatMessageEventV2`].
 pub const CHAT_MESSAGE_V2_AVSC: &str = include_str!("../../../schemas/v2/chat_message_event.avsc");
+/// Raw JSON schema definition (`v1`) for [`crate::events::TabletopCanvasEvent`].
+pub const TABLETOP_CANVAS_V1_AVSC: &str =
+    include_str!("../../../schemas/v1/tabletop_canvas_event.avsc");
+/// Raw JSON schema definition (`v1`) for [`crate::events::AiGmTrajectoryEvent`].
+pub const AI_GM_TRAJECTORY_V1_AVSC: &str =
+    include_str!("../../../schemas/v1/ai_gm_trajectory_event.avsc");
+/// Raw JSON schema definition (`v1`) for [`crate::events::SessionLogEvent`].
+pub const SESSION_LOG_V1_AVSC: &str = include_str!("../../../schemas/v1/session_log_event.avsc");
 
 /// Errors returned during Avro schema registration, wire header parsing, or payload serialization/deserialization.
 #[derive(Debug, Error)]
@@ -236,6 +244,27 @@ impl SchemaRegistry {
             topics::CHAT_MESSAGE,
             2,
             CHAT_MESSAGE_V2_AVSC,
+        )?;
+        registry.register(
+            8,
+            subjects::TABLETOP_CANVAS,
+            topics::TABLETOP_CANVAS,
+            1,
+            TABLETOP_CANVAS_V1_AVSC,
+        )?;
+        registry.register(
+            9,
+            subjects::AI_GM_TRAJECTORY,
+            topics::AI_GM_TRAJECTORY,
+            1,
+            AI_GM_TRAJECTORY_V1_AVSC,
+        )?;
+        registry.register(
+            10,
+            subjects::SESSION_LOG,
+            topics::SYSTEM_LOGS,
+            1,
+            SESSION_LOG_V1_AVSC,
         )?;
 
         Ok(registry)

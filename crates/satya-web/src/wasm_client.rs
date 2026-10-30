@@ -967,6 +967,7 @@ pub fn satya_create_session() {
             role,
             display_name,
             enable_ai_gm,
+            ai_gm_config: None,
         };
 
         match fetch_json::<_, SessionEnterResponse>(
@@ -1493,6 +1494,23 @@ fn handle_server_packet(pkt: ServerWsPacket) {
         }
         ServerWsPacket::TtrpgMechanicsEvent { event } => {
             render_mechanics_event(&event);
+            satya_refresh_metrics();
+        }
+        ServerWsPacket::MapUpdated { map } => {
+            append_system_notice(&format!(
+                "Tactical map updated: {} ({}x{}, {} tokens)",
+                map.map_id,
+                map.grid_width,
+                map.grid_height,
+                map.tokens.len()
+            ));
+            satya_refresh_metrics();
+        }
+        ServerWsPacket::WgpuDiceRoll { actor, spec } => {
+            append_system_notice(&format!(
+                "{} triggered 3D dice roll ({} -> {:?})",
+                actor.display_name, spec.dice_notation, spec.outcomes
+            ));
             satya_refresh_metrics();
         }
         ServerWsPacket::WebrtcSignal {

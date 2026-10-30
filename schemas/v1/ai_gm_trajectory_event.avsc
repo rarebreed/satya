@@ -1,0 +1,203 @@
+{
+  "type": "record",
+  "name": "AiGmTrajectoryEvent",
+  "namespace": "com.satya.events",
+  "doc": "Captures a complete multi-step LangGraph AI GM turn, including ordered Tier 1/2/3 MCP tool calls, RAG/Context Cache grounding sources, token usage, and W3C trace_id correlation.",
+  "fields": [
+    {
+      "name": "metadata",
+      "type": {
+        "type": "record",
+        "name": "EventMetadata",
+        "namespace": "com.satya.types",
+        "fields": [
+          { "name": "event_id", "type": "string" },
+          { "name": "sequence_num", "type": "long" },
+          { "name": "schema_subject", "type": "string" },
+          { "name": "schema_version", "type": "int" },
+          { "name": "schema_fingerprint_crc64", "type": "bytes" },
+          { "name": "session_id", "type": "string" },
+          {
+            "name": "session_mode",
+            "type": {
+              "type": "enum",
+              "name": "SessionMode",
+              "namespace": "com.satya.types",
+              "symbols": ["TTRPG", "MEETING"]
+            }
+          },
+          { "name": "client_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
+          { "name": "ingest_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
+          {
+            "name": "timezone_offset_min",
+            "type": "int",
+            "satya.pii_category": "QUASI_IDENTIFIER",
+            "satya.pii_owner": "PRIMARY_ACTOR",
+            "satya.erasure_action": "SET_ZERO"
+          }
+        ]
+      }
+    },
+    { "name": "turn_id", "type": "string" },
+    { "name": "trace_id", "type": "string" },
+    {
+      "name": "operating_mode",
+      "type": {
+        "type": "enum",
+        "name": "AiGmOperatingMode",
+        "symbols": ["AUTONOMOUS", "CO_PILOT"]
+      }
+    },
+    {
+      "name": "ai_participant",
+      "satya.subject_role": "SECONDARY_PARTICIPANT",
+      "type": {
+        "type": "record",
+        "name": "Participant",
+        "namespace": "com.satya.types",
+        "fields": [
+          {
+            "name": "user_id",
+            "type": "string",
+            "satya.gdpr_subject_key": true,
+            "satya.pii_category": "DIRECT_IDENTIFIER",
+            "satya.erasure_action": "HMAC_TOMBSTONE",
+            "satya.dsar_third_party_mask": true,
+            "satya.dsar_mask_value": "redacted-peer"
+          },
+          {
+            "name": "username",
+            "type": "string",
+            "satya.pii_category": "DIRECT_IDENTIFIER",
+            "satya.erasure_action": "REPLACE_STATIC",
+            "satya.erasure_replacement": "deleted_user",
+            "satya.dsar_third_party_mask": true,
+            "satya.dsar_mask_value": "redacted_user"
+          },
+          {
+            "name": "display_name",
+            "type": "string",
+            "satya.pii_category": "DIRECT_IDENTIFIER",
+            "satya.erasure_action": "REPLACE_STATIC",
+            "satya.erasure_replacement": "Deleted Participant",
+            "satya.dsar_third_party_mask": false
+          },
+          {
+            "name": "participant_kind",
+            "type": {
+              "type": "enum",
+              "name": "ParticipantKind",
+              "namespace": "com.satya.types",
+              "symbols": ["HUMAN", "AI_AGENT"]
+            }
+          },
+          {
+            "name": "role",
+            "type": {
+              "type": "enum",
+              "name": "SessionRole",
+              "namespace": "com.satya.types",
+              "symbols": ["GM", "AI_GM", "PLAYER", "HOST", "PARTICIPANT", "OBSERVER"]
+            }
+          },
+          {
+            "name": "character_id",
+            "type": ["null", "string"],
+            "default": null,
+            "satya.pii_category": "PSEUDONYMOUS_ID",
+            "satya.erasure_action": "SET_NULL",
+            "satya.dsar_third_party_mask": false
+          },
+          {
+            "name": "ai_agent_info",
+            "type": [
+              "null",
+              {
+                "type": "record",
+                "name": "AiAgentInfo",
+                "namespace": "com.satya.types",
+                "fields": [
+                  { "name": "model_id", "type": "string" },
+                  { "name": "persona_id", "type": "string" },
+                  { "name": "temperature", "type": "float" }
+                ]
+              }
+            ],
+            "default": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "trigger_actor",
+      "satya.subject_role": "PRIMARY_ACTOR",
+      "type": "com.satya.types.Participant"
+    },
+    { "name": "trigger_event_id", "type": "string" },
+    {
+      "name": "trigger_summary",
+      "type": "string",
+      "satya.pii_category": "USER_CONTENT",
+      "satya.pii_owner": "PRIMARY_ACTOR",
+      "satya.erasure_action": "REDACT_TEXT",
+      "satya.erasure_replacement": "[Redacted per user erasure request]"
+    },
+    { "name": "llm_provider", "type": "string" },
+    { "name": "reasoning_model_id", "type": "string" },
+    { "name": "vision_model_id", "type": ["null", "string"], "default": null },
+    { "name": "ruleset_engine_id", "type": "string" },
+    {
+      "name": "tool_invocations",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "McpToolInvocationRecord",
+          "namespace": "com.satya.types",
+          "fields": [
+            { "name": "step_index", "type": "int" },
+            { "name": "span_id", "type": "string" },
+            {
+              "name": "mcp_tier",
+              "type": {
+                "type": "enum",
+                "name": "McpServerTier",
+                "namespace": "com.satya.types",
+                "symbols": ["TIER_1_SATYA_CORE", "TIER_2_RULESET_ENGINE", "TIER_3_LORE_PROVIDER"]
+              }
+            },
+            { "name": "server_id", "type": "string" },
+            { "name": "tool_name", "type": "string" },
+            { "name": "arguments_json", "type": "string" },
+            { "name": "result_summary_json", "type": "string" },
+            { "name": "is_error", "type": "boolean" },
+            { "name": "duration_ms", "type": "long" }
+          ]
+        }
+      },
+      "default": []
+    },
+    {
+      "name": "rag_sources_used",
+      "type": { "type": "array", "items": "string" },
+      "default": []
+    },
+    {
+      "name": "emitted_event_ids",
+      "type": { "type": "array", "items": "string" },
+      "default": []
+    },
+    { "name": "prompt_tokens", "type": "int" },
+    { "name": "completion_tokens", "type": "int" },
+    { "name": "cached_tokens", "type": "int", "default": 0 },
+    { "name": "total_turn_latency_ms", "type": "long" },
+    {
+      "name": "turn_status",
+      "type": {
+        "type": "enum",
+        "name": "AiGmTurnStatus",
+        "symbols": ["COMPLETED", "PARTIAL_ERROR", "ABORTED_BY_GM", "PROVIDER_ERROR"]
+      }
+    }
+  ]
+}

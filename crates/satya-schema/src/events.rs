@@ -17,6 +17,12 @@ pub mod subjects {
     pub const INTERACTION_DYNAMICS: &str = "com.satya.events.InteractionDynamicsEvent";
     /// Subject name for [`super::TtrpgMechanicsEvent`].
     pub const TTRPG_MECHANICS: &str = "com.satya.events.TtrpgMechanicsEvent";
+    /// Subject name for [`super::TabletopCanvasEvent`].
+    pub const TABLETOP_CANVAS: &str = "com.satya.events.TabletopCanvasEvent";
+    /// Subject name for [`super::AiGmTrajectoryEvent`].
+    pub const AI_GM_TRAJECTORY: &str = "com.satya.events.AiGmTrajectoryEvent";
+    /// Subject name for [`super::SessionLogEvent`].
+    pub const SESSION_LOG: &str = "com.satya.events.SessionLogEvent";
 }
 
 /// Canonical Apache Iggy topic names corresponding to each Satya event stream.
@@ -33,6 +39,12 @@ pub mod topics {
     pub const INTERACTION_DYNAMICS: &str = "interaction-dynamics";
     /// Topic storing [`super::TtrpgMechanicsEvent`] records.
     pub const TTRPG_MECHANICS: &str = "ttrpg-mechanics";
+    /// Topic storing [`super::TabletopCanvasEvent`] records.
+    pub const TABLETOP_CANVAS: &str = "tabletop-canvas";
+    /// Topic storing [`super::AiGmTrajectoryEvent`] records.
+    pub const AI_GM_TRAJECTORY: &str = "ai-gm-trajectories";
+    /// Topic storing [`super::SessionLogEvent`] records.
+    pub const SYSTEM_LOGS: &str = "system-logs";
 }
 
 /// Schema evolution compatibility policy enforced for a registered subject.
@@ -481,4 +493,240 @@ impl TtrpgMechanicsEvent {
             notes: None,
         }
     }
+}
+
+/// Type of visual mutation recorded in a [`TabletopCanvasEvent`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CanvasEventType {
+    /// A new tactical map grid was generated.
+    MapGenerated,
+    /// An existing tactical map grid or image was updated.
+    MapUpdated,
+    /// A participant or NPC token moved to new grid coordinates.
+    TokenMoved,
+    /// A new token was placed on the tactical map.
+    TokenAdded,
+    /// A token was removed from the tactical map.
+    TokenRemoved,
+    /// Fog-of-war visibility masks were updated.
+    FogOfWarUpdated,
+    /// A synchronized 3D `wgpu` physics dice roll was spawned on the tabletop canvas.
+    WgpuDiceSpawned,
+}
+
+/// Grid coordinates and visibility of a character or NPC token on a tactical map.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenPlacement {
+    /// Unique identifier for the token entity (e.g. `user_id` or `npc_id`).
+    pub entity_id: String,
+    /// Human-readable label rendered on or below the token.
+    pub label: String,
+    /// Horizontal grid coordinate (`0..grid_width`).
+    pub x: i32,
+    /// Vertical grid coordinate (`0..grid_height`).
+    pub y: i32,
+    /// Visibility scope of the token (`PUBLIC` or `GM_ONLY` for hidden enemies).
+    pub visibility: MessageVisibility,
+}
+
+/// Deterministic 3D `wgpu` dice physics specification and outcomes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WgpuDiceSpec {
+    /// Standard dice expression (e.g. `"3d20"`, `"2d6+3"`).
+    pub dice_notation: String,
+    /// Deterministic PRNG seed so all connected browsers render identical 3D dice trajectories.
+    pub physics_seed: i64,
+    /// Individual die face outcomes rolled.
+    pub outcomes: Vec<i32>,
+    /// Visibility scope of the 3D dice roll (`PUBLIC` or `GM_ONLY` / `PRIVATE`).
+    pub visibility: MessageVisibility,
+}
+
+/// Event (`v1`, `schema_id = 8`) emitted to the `tabletop-canvas` topic capturing tactical map updates,
+/// token movements, and synchronized 3D `wgpu` dice physics rolls.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TabletopCanvasEvent {
+    /// Common event metadata envelope.
+    pub metadata: EventMetadata,
+    /// Specific tabletop canvas mutation type.
+    pub canvas_event_type: CanvasEventType,
+    /// Participant (human GM, player, or AI GM) who triggered the canvas mutation.
+    pub actor: Participant,
+    /// Optional identifier of the active tactical map.
+    pub map_id: Option<String>,
+    /// Optional human-readable title of the tactical map.
+    pub map_title: Option<String>,
+    /// Optional URL or relative path to the rendered SVG/PNG map asset.
+    pub image_url: Option<String>,
+    /// Optional tactical grid width in cells.
+    pub grid_width: Option<i32>,
+    /// Optional tactical grid height in cells.
+    pub grid_height: Option<i32>,
+    /// Active token coordinate placements on the map.
+    #[serde(default)]
+    pub token_placements: Vec<TokenPlacement>,
+    /// Optional 3D `wgpu` dice roll specification when `canvas_event_type` is [`CanvasEventType::WgpuDiceSpawned`].
+    pub wgpu_dice_roll: Option<WgpuDiceSpec>,
+    /// Optional terrain, cover, or environmental hazard notes.
+    pub terrain_notes: Option<String>,
+}
+
+/// Operating mode of the AI Game Master within a TTRPG session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AiGmOperatingMode {
+    /// Solo AI Game Master mode (`TTRPG_AI_GM`: AI GM + Players, no human GM).
+    #[default]
+    Autonomous,
+    /// Co-Pilot Assistant mode (`TTRPG_GM_AI`: Human GM + AI Assistant + Players).
+    CoPilot,
+}
+
+/// Architectural tier of an MCP tool server invoked by the AI Game Master.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum McpServerTier {
+    /// Tier 1: Core Satya tabletop primitives (chat, whispers, map grid, 3D `wgpu` dice, session history).
+    #[serde(rename = "TIER_1_SATYA_CORE")]
+    Tier1SatyaCore,
+    /// Tier 2: Pluggable game engine ruleset (e.g. `satya-d20`, `dnd5e`, `fitd`).
+    #[serde(rename = "TIER_2_RULESET_ENGINE")]
+    Tier2RulesetEngine,
+    /// Tier 3: Campaign lore, NPC sheets, and world state (local Markdown/PyLance or Google Workspace).
+    #[serde(rename = "TIER_3_LORE_PROVIDER")]
+    Tier3LoreProvider,
+}
+
+/// Audit record of a single MCP `@tool` invocation within an [`AiGmTrajectoryEvent`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpToolInvocationRecord {
+    /// Zero-based sequential index of this tool call within the LangGraph turn.
+    pub step_index: i32,
+    /// 16-character hex OpenTelemetry `span_id` for this tool call.
+    pub span_id: String,
+    /// MCP server tier classification.
+    pub mcp_tier: McpServerTier,
+    /// Identifier of the MCP server (e.g. `"satya-core-table"`, `"satya-d20-rules"`).
+    pub server_id: String,
+    /// Name of the invoked tool (e.g. `"lookup_npc_profile"`, `"roll_satya_d20_check"`).
+    pub tool_name: String,
+    /// Redacted JSON string of tool arguments (guaranteed free of API keys or tokens).
+    pub arguments_json: String,
+    /// Structured JSON or text summary returned by the tool.
+    pub result_summary_json: String,
+    /// Whether the tool invocation resulted in an error.
+    pub is_error: bool,
+    /// Execution latency of the tool call in milliseconds.
+    pub duration_ms: i64,
+}
+
+/// Completion status of a LangGraph AI Game Master turn recorded in [`AiGmTrajectoryEvent`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AiGmTurnStatus {
+    /// Turn completed normally and emitted its response.
+    Completed,
+    /// Turn completed with one or more recoverable tool errors.
+    PartialError,
+    /// Turn was cancelled or overridden by a human GM.
+    AbortedByGm,
+    /// Turn failed due to an upstream LLM provider error or unreachable endpoint.
+    ProviderError,
+}
+
+/// Event (`v1`, `schema_id = 9`) emitted to the `ai-gm-trajectories` topic once per completed
+/// LangGraph AI GM turn, capturing tool calls, RAG sources, token counts, and W3C `trace_id`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiGmTrajectoryEvent {
+    /// Common event metadata envelope.
+    pub metadata: EventMetadata,
+    /// Unique UUIDv7 identifier for this LangGraph turn execution.
+    pub turn_id: String,
+    /// 32-character lowercase hex W3C OpenTelemetry `trace_id`.
+    pub trace_id: String,
+    /// Operating mode (`AUTONOMOUS` vs. `CO_PILOT`).
+    pub operating_mode: AiGmOperatingMode,
+    /// [`Participant`] record of the AI GM agent.
+    pub ai_participant: Participant,
+    /// Human [`Participant`] whose chat, whisper, or dice roll triggered this turn.
+    pub trigger_actor: Participant,
+    /// `event_id` or `message_id` of the triggering event.
+    pub trigger_event_id: String,
+    /// Text summary of the player/GM action that triggered the turn.
+    pub trigger_summary: String,
+    /// LLM provider identifier (e.g. `"ollama"`, `"google_genai"`, `"openai"`, `"anthropic"`).
+    pub llm_provider: String,
+    /// Reasoning model identifier (e.g. `"qwen2.5:14b"`, `"gemini-2.5-flash"`).
+    pub reasoning_model_id: String,
+    /// Optional multimodal vision model identifier used for map inspection.
+    pub vision_model_id: Option<String>,
+    /// Active game ruleset identifier (e.g. `"satya-d20"`).
+    pub ruleset_engine_id: String,
+    /// Ordered list of MCP/LangChain tool invocations executed during the turn.
+    #[serde(default)]
+    pub tool_invocations: Vec<McpToolInvocationRecord>,
+    /// URIs or document IDs of lore/rules sources consulted during the turn.
+    #[serde(default)]
+    pub rag_sources_used: Vec<String>,
+    /// `event_id`s of domain events (`ChatMessageEvent`, `TtrpgMechanicsEvent`, `TabletopCanvasEvent`) emitted during the turn.
+    #[serde(default)]
+    pub emitted_event_ids: Vec<String>,
+    /// Total input/prompt tokens consumed across LLM calls in this turn.
+    pub prompt_tokens: i32,
+    /// Total output/completion tokens generated across LLM calls in this turn.
+    pub completion_tokens: i32,
+    /// Tokens served from a provider context cache (e.g. Gemini `CachedContent`).
+    #[serde(default)]
+    pub cached_tokens: i32,
+    /// End-to-end turn execution latency in milliseconds.
+    pub total_turn_latency_ms: i64,
+    /// Final completion status of the turn.
+    pub turn_status: AiGmTurnStatus,
+}
+
+/// Severity level for a [`SessionLogEvent`] in the `system-logs` topic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LogLevel {
+    /// Fine-grained trace diagnostics.
+    Trace,
+    /// Debug diagnostics.
+    Debug,
+    /// Informational operational milestone.
+    Info,
+    /// Non-fatal warning condition.
+    Warn,
+    /// Operational or request error.
+    Error,
+    /// Critical unrecoverable failure.
+    Fatal,
+}
+
+/// Event (`v1`, `schema_id = 10`) emitted to the `system-logs` topic storing embedding-ready
+/// plain-text log lines prefixed with `[session=...] [trace=... span=...<-...] [lineage=...<-...]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionLogEvent {
+    /// Common event metadata envelope.
+    pub metadata: EventMetadata,
+    /// Unique UUIDv7 identifier for this log entry.
+    pub log_id: String,
+    /// Log severity level.
+    pub level: LogLevel,
+    /// Emitting service name (e.g. `"satya-signaling"`, `"satya-ml-ai-gm"`).
+    pub service_name: String,
+    /// Optional [`Participant`] associated with this log entry for GDPR subject matching.
+    pub actor: Option<Participant>,
+    /// Optional 32-character hex W3C `trace_id`.
+    pub trace_id: Option<String>,
+    /// Optional 16-character hex W3C `span_id`.
+    pub span_id: Option<String>,
+    /// Optional 16-character hex caller `parent_span_id`.
+    pub parent_span_id: Option<String>,
+    /// Optional data artifact lineage ID produced or inspected at this step.
+    pub lineage_id: Option<String>,
+    /// Upstream data artifact lineage IDs consumed at this step.
+    #[serde(default)]
+    pub parent_lineage_ids: Vec<String>,
+    /// Complete formatted plain-text log line ready for direct text embedding.
+    pub log_line: String,
 }

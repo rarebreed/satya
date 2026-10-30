@@ -16,6 +16,16 @@ pylance = ">=12.0.0, <13"
 fastavro = ">=1.9.0"
 pyarrow = ">=18.0.0"
 pytest = ">=9.0.0"
+langgraph = ">=0.4.0"
+langchain-core = ">=0.3.0"
+langchain-ollama = ">=0.3.0"
+langchain-google-genai = ">=2.1.0"
+langchain-openai = ">=0.3.0"
+langchain-anthropic = ">=0.3.0"
+langchain-mcp-adapters = ">=0.1.0"
+fastapi = ">=0.115.0"
+uvicorn = ">=0.34.0"
+httpx = ">=0.28.0"
 
 [tasks]
 # --- Build & Quality ---
@@ -40,6 +50,7 @@ test = { depends-on = ["test-rust", "test-py"], description = "Run the full poly
 # --- Server & Runtime ---
 serve = { cmd = "cargo run -p satya-signaling --bin satya-server", depends-on = ["build-wasm"], env = { RUST_LOG = "info,satya_signaling=debug,satya_storage=debug" }, description = "Build Wasm frontend and start the Satya WebRTC, Chat & Apache Iggy Event Server on port 3000" }
 serve-release = { cmd = "cargo run --release -p satya-signaling --bin satya-server", depends-on = ["build-wasm"], env = { RUST_LOG = "info" }, description = "Build Wasm frontend and start the optimized release server on port 3000" }
+serve-ai-gm = { cmd = "python -m satya_ml.ai_gm.server", env = { PYTHONPATH = "src" }, description = "Start the Satya AI GM LangGraph + FastAPI service on 127.0.0.1:8090" }
 
 # --- Avro, Apache Iggy & PyLance Data Pipeline ---
 compact-to-lance = { cmd = "python -m satya_ml.lance_ingest", env = { PYTHONPATH = "src" }, description = "Compact flushed .avro topic batches into .lance AI datasets" }

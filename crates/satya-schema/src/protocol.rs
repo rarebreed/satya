@@ -1,8 +1,8 @@
 //! Shared client-to-server and server-to-client HTTP REST & WebSocket protocol DTOs.
 
 use crate::events::{
-    ChannelContext, ChatMessageEvent, CombatStance, InteractionTurnType, MessageVisibility,
-    TtrpgMechanicsEvent, WebRtcEventKind,
+    AiGmOperatingMode, ChannelContext, ChatMessageEvent, CombatStance, InteractionTurnType,
+    MessageVisibility, TokenPlacement, TtrpgMechanicsEvent, WebRtcEventKind, WgpuDiceSpec,
 };
 use crate::types::{Participant, SessionMode, SessionRole};
 use serde::{Deserialize, Serialize};
@@ -81,6 +81,38 @@ pub struct AuthSuccessResponse {
     pub account_role: AccountRole,
 }
 
+/// Per-session AI Game Master model provider and ephemeral BYOK credential configuration.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiGmProviderConfig {
+    /// Model provider identifier (`"ollama"`, `"google_genai"`, `"openai"`, or `"anthropic"`).
+    pub provider: String,
+    /// Primary reasoning and tool-calling model identifier (e.g. `"qwen2.5:14b"`, `"gemini-2.5-flash"`).
+    pub model_id: String,
+    /// Optional multimodal vision model identifier for tactical map inspection.
+    #[serde(default)]
+    pub vision_model_id: Option<String>,
+    /// Sampling temperature for the AI GM (`0.0..=1.5`).
+    #[serde(default = "default_gm_temperature")]
+    pub temperature: f32,
+    /// Persona/prompt identifier (e.g. `"harsh-reality-arbiter"`).
+    #[serde(default = "default_gm_persona")]
+    pub persona_id: String,
+    /// Optional ephemeral player-supplied API key (held exclusively in memory for the session; never logged to Avro).
+    #[serde(default)]
+    pub api_key: Option<String>,
+    /// Optional custom base URL (e.g. for local Ollama or custom OpenAI-compatible gateway).
+    #[serde(default)]
+    pub base_url: Option<String>,
+}
+
+fn default_gm_temperature() -> f32 {
+    0.35
+}
+
+fn default_gm_persona() -> String {
+    "harsh-reality-arbiter".to_string()
+}
+
 /// HTTP request body for `POST /api/sessions/create`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CreateSessionRequest {
@@ -96,6 +128,9 @@ pub struct CreateSessionRequest {
     pub display_name: Option<String>,
     /// Whether to include an autonomous AI Game Master participant in a TTRPG session.
     pub enable_ai_gm: bool,
+    /// Optional initial AI GM provider, model, and ephemeral BYOK credential configuration.
+    #[serde(default)]
+    pub ai_gm_config: Option<AiGmProviderConfig>,
 }
 
 /// HTTP request body for `POST /api/sessions/join`.
@@ -248,6 +283,151 @@ pub enum ServerWsPacket {
         /// JSON-serialized SDP or ICE candidate payload.
         payload: String,
     },
+    /// Broadcasts a new or updated tactical map to all participants in the session.
+    MapUpdated {
+        /// Updated tactical map state and token placements.
+        map: Box<GmMapUpdateRequest>,
+    },
+    /// Broadcasts a deterministic 3D `wgpu` physics dice roll seed and outcome.
+    WgpuDiceRoll {
+        /// Participant who rolled the dice.
+        actor: Participant,
+        /// Deterministic 3D physics seed, dice expression, and outcomes.
+        spec: WgpuDiceSpec,
+    },
+}
+
+/// HTTP response body for `GET /api/gm/sessions/:session_id/context`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GmContextResponse {
+    /// Active session room identifier.
+    pub session_id: String,
+    /// Business operating mode (`TTRPG` or `MEETING`).
+    pub session_mode: SessionMode,
+    /// Active AI GM operating topology (`AUTONOMOUS` for `TTRPG_AI_GM`, `CO_PILOT` for `TTRPG_GM_AI`).
+    pub operating_mode: AiGmOperatingMode,
+    /// [`Participant`] record of the AI GM in this session, if enabled.
+    pub ai_gm_participant: Option<Participant>,
+    /// `user_id` of the human Game Master in the session (`Some(...)` in `TTRPG_GM_AI` Co-Pilot mode).
+    pub human_gm_user_id: Option<String>,
+    /// Current session participant roster.
+    pub roster: Vec<Participant>,
+    /// Currently active tactical map in the session, if any.
+    pub active_map: Option<GmMapUpdateRequest>,
+}
+
+/// HTTP request body for `POST /api/gm/sessions/:session_id/chat`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GmChatRequest {
+    /// Delivery visibility scope (`PUBLIC`, `PRIVATE`, `GM_ONLY`).
+    pub visibility: MessageVisibility,
+    /// Target recipient `user_id`s when `visibility` is [`MessageVisibility::Private`].
+    #[serde(default)]
+    pub recipient_user_ids: Vec<String>,
+    /// Channel context (`GM_NARRATION` or `IN_CHARACTER`).
+    #[serde(default = "default_gm_channel_context")]
+    pub channel_context: ChannelContext,
+    /// UTF-8 narration or NPC dialogue text.
+    pub body: String,
+    /// Optional model identifier override for `AiAgentInfo`.
+    #[serde(default)]
+    pub model_id: Option<String>,
+    /// Optional NPC display name override when speaking `IN_CHARACTER`.
+    #[serde(default)]
+    pub speaker_override: Option<String>,
+}
+
+fn default_gm_channel_context() -> ChannelContext {
+    ChannelContext::GmNarration
+}
+
+/// HTTP request body for `POST /api/gm/sessions/:session_id/roll`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GmRollRequest {
+    /// Display name of the NPC or environmental hazard performing the check.
+    pub actor_display_name: String,
+    /// Optional target participant `user_id`s affected by the roll.
+    #[serde(default)]
+    pub target_user_ids: Vec<String>,
+    /// Name of the Satya skill being tested.
+    pub skill_name: String,
+    /// Controlling attribute Target Number (`1..=20`).
+    pub attribute_tn: i32,
+    /// Number of `d20`s in the dice pool.
+    pub pool_size: usize,
+    /// Required number of successes.
+    pub difficulty_rating: i32,
+    /// Optional Satya combat stance.
+    #[serde(default)]
+    pub combat_stance: Option<CombatStance>,
+    /// Accumulated fatigue level of the acting NPC.
+    #[serde(default)]
+    pub fatigue_level: i32,
+    /// Accumulated wound shock index of the acting NPC.
+    #[serde(default)]
+    pub wound_shock_index: f32,
+    /// Optional adjudication notes.
+    #[serde(default)]
+    pub notes: Option<String>,
+}
+
+/// HTTP request body for `POST /api/gm/sessions/:session_id/map`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GmMapUpdateRequest {
+    /// Unique identifier for the tactical map.
+    pub map_id: String,
+    /// Human-readable map title.
+    pub title: String,
+    /// URL or relative path to the rendered SVG/PNG map image.
+    pub image_url: String,
+    /// Tactical grid width in cells.
+    pub grid_width: i32,
+    /// Tactical grid height in cells.
+    pub grid_height: i32,
+    /// Active character and NPC token coordinates on the grid.
+    #[serde(default)]
+    pub tokens: Vec<TokenPlacement>,
+    /// Optional terrain, cover, or environmental hazard notes.
+    #[serde(default)]
+    pub notes: Option<String>,
+}
+
+/// Webhook payload dispatched from `satya-signaling` to the Python LangGraph service
+/// at `POST /internal/ai-gm/events`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiGmTurnTriggerRequest {
+    /// Active session room identifier.
+    pub session_id: String,
+    /// Session business mode (`TTRPG`).
+    pub session_mode: SessionMode,
+    /// Operating mode (`AUTONOMOUS` for `TTRPG_AI_GM`, `CO_PILOT` for `TTRPG_GM_AI`).
+    pub operating_mode: AiGmOperatingMode,
+    /// `user_id` of the human GM if operating in `CO_PILOT` mode.
+    pub human_gm_user_id: Option<String>,
+    /// `event_id` or `message_id` of the triggering chat message or mechanics roll.
+    pub trigger_event_id: String,
+    /// Triggering event category (`"CHAT"` or `"MECHANICS"`).
+    pub trigger_kind: String,
+    /// Human [`Participant`] who triggered the AI GM turn.
+    pub trigger_actor: Participant,
+    /// Visibility of the triggering message (`PUBLIC`, `PRIVATE`, `GM_ONLY`).
+    pub visibility: MessageVisibility,
+    /// Formatted text of the player's or GM's action/roll.
+    pub context_text: String,
+    /// Current session roster snapshot.
+    pub roster: Vec<Participant>,
+    /// Configured LLM provider (`"ollama"`, `"google_genai"`, `"openai"`, `"anthropic"`).
+    pub provider: String,
+    /// Configured reasoning model ID.
+    pub model_id: String,
+    /// Optional multimodal vision model ID.
+    pub vision_model_id: Option<String>,
+    /// Sampling temperature.
+    pub temperature: f32,
+    /// Persona identifier.
+    pub persona_id: String,
+    /// Optional custom LLM base URL.
+    pub base_url: Option<String>,
 }
 
 /// Client-side view model of per-topic Apache Iggy & Avro storage metrics.

@@ -493,6 +493,7 @@ fn anonymize_participant_value_if_matches(
 fn apply_primary_actor_owned_erasure(
     schema: &AvroSchema,
     val: &mut apache_avro::types::Value,
+    scrub_terms: &[String],
     tombstone_id: &str,
     named_records: &HashMap<String, &apache_avro::schema::RecordSchema>,
 ) {
@@ -511,14 +512,30 @@ fn apply_primary_actor_owned_erasure(
         if attr_str(&f_def.custom_attributes, "satya.pii_owner").as_deref() == Some("PRIMARY_ACTOR")
             && let Some(action) = attr_str(&f_def.custom_attributes, "satya.erasure_action")
         {
-            apply_field_erasure_action(
-                f_val,
-                &action,
-                attr_str(&f_def.custom_attributes, "satya.erasure_replacement").as_deref(),
-                tombstone_id,
-            );
+            if action == "REGEX_SCRUB_SUBJECT" {
+                if let Value::String(s) = f_val {
+                    for term in scrub_terms {
+                        if !term.is_empty() && s.contains(term) {
+                            *s = s.replace(term, tombstone_id);
+                        }
+                    }
+                }
+            } else {
+                apply_field_erasure_action(
+                    f_val,
+                    &action,
+                    attr_str(&f_def.custom_attributes, "satya.erasure_replacement").as_deref(),
+                    tombstone_id,
+                );
+            }
         } else if matches!(f_def.schema, AvroSchema::Record(_) | AvroSchema::Ref { .. }) {
-            apply_primary_actor_owned_erasure(&f_def.schema, f_val, tombstone_id, named_records);
+            apply_primary_actor_owned_erasure(
+                &f_def.schema,
+                f_val,
+                scrub_terms,
+                tombstone_id,
+                named_records,
+            );
         }
     }
 }
@@ -615,7 +632,7 @@ fn anonymize_record_value(
     }
 
     if primary_matched {
-        apply_primary_actor_owned_erasure(schema, value, tombstone_id, named_records);
+        apply_primary_actor_owned_erasure(schema, value, &scrub_terms, tombstone_id, named_records);
         GdprSubjectMatchKind::PrimaryActor
     } else if secondary_matched {
         scrub_secondary_mentions_in_text_fields(

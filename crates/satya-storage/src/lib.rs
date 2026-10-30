@@ -10,9 +10,9 @@ use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, PutPayload};
 use satya_schema::{
-    ChatMessageEvent, InteractionDynamicsEvent, SchemaRegistry, SchemaRegistryEvent,
-    SessionLifecycleEvent, TtrpgMechanicsEvent, WIRE_HEADER_LEN, WebRtcTelemetryEvent,
-    WireFrameHeader, subjects, topics,
+    AiGmTrajectoryEvent, ChatMessageEvent, InteractionDynamicsEvent, SchemaRegistry,
+    SchemaRegistryEvent, SessionLifecycleEvent, SessionLogEvent, TabletopCanvasEvent,
+    TtrpgMechanicsEvent, WIRE_HEADER_LEN, WebRtcTelemetryEvent, WireFrameHeader, subjects, topics,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -136,12 +136,65 @@ impl Default for AuthConfig {
     }
 }
 
+/// Configuration for the Python LangGraph + Ollama / BYOK AI Game Master service (`[ai_gm]` in `config/storage.toml`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiGmConfig {
+    /// Whether AI Game Master dispatch is enabled.
+    pub enabled: bool,
+    /// HTTP base URL of the Python LangGraph FastAPI service (e.g. `"http://127.0.0.1:8090"`).
+    pub service_url: String,
+    /// Shared bearer secret authenticating requests between `satya-signaling` and the Python AI GM service.
+    pub service_token: String,
+    /// Default LLM provider (`"ollama"`, `"google_genai"`, `"openai"`, or `"anthropic"`).
+    pub default_provider: String,
+    /// Base URL for local Ollama inference (`"http://127.0.0.1:11434"`).
+    pub ollama_base_url: String,
+    /// Default reasoning and tool-calling model ID (e.g. `"qwen2.5:14b"`).
+    pub reasoning_model: String,
+    /// Default multimodal vision model ID for tactical map inspection (e.g. `"llama3.2-vision"`).
+    pub vision_model: String,
+    /// Default persona profile ID (e.g. `"harsh-reality-arbiter"`).
+    pub persona_id: String,
+    /// Default sampling temperature (`0.35`).
+    #[serde(default = "default_ai_gm_temp")]
+    pub temperature: f32,
+    /// When `true` (configured in `config/storage.toml` for end-to-end runtime), `satya-signaling` fails fast
+    /// if the Python FastAPI service at `service_url` is unreachable. When `false` (`Default::default()` used by
+    /// unit/integration tests), falls back to deterministic in-process replies when `service_url` is offline.
+    #[serde(default)]
+    pub fail_fast_when_offline: bool,
+}
+
+fn default_ai_gm_temp() -> f32 {
+    0.35
+}
+
+impl Default for AiGmConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            service_url: "http://127.0.0.1:8090".to_string(),
+            service_token: "satya_gm_secret_dev_token".to_string(),
+            default_provider: "ollama".to_string(),
+            ollama_base_url: "http://127.0.0.1:11434".to_string(),
+            reasoning_model: "qwen2.5:14b".to_string(),
+            vision_model: "llama3.2-vision".to_string(),
+            persona_id: "harsh-reality-arbiter".to_string(),
+            temperature: 0.35,
+            fail_fast_when_offline: false,
+        }
+    }
+}
+
 /// Root storage configuration loaded from `config/storage.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
     /// Persistent SQLx user authentication and bootstrap administrator configuration.
     #[serde(default)]
     pub auth: AuthConfig,
+    /// Python LangGraph AI Game Master service configuration.
+    #[serde(default)]
+    pub ai_gm: AiGmConfig,
     /// Apache Iggy broker configuration.
     #[serde(default)]
     pub iggy: IggyConfig,
@@ -162,6 +215,9 @@ impl Default for StorageConfig {
             (topics::CHAT_MESSAGE, 4, 4),
             (topics::INTERACTION_DYNAMICS, 5, 4),
             (topics::TTRPG_MECHANICS, 6, 2),
+            (topics::TABLETOP_CANVAS, 7, 2),
+            (topics::AI_GM_TRAJECTORY, 8, 2),
+            (topics::SYSTEM_LOGS, 9, 4),
         ];
         for (name, id, parts) in defaults {
             topic_map.insert(
@@ -180,6 +236,7 @@ impl Default for StorageConfig {
         }
         Self {
             auth: AuthConfig::default(),
+            ai_gm: AiGmConfig::default(),
             iggy: IggyConfig::default(),
             batching: BatchingConfig::default(),
             topics: topic_map,
@@ -333,6 +390,11 @@ impl EventLogRouter {
     /// Returns a shared reference to the underlying [`SchemaRegistry`].
     pub fn registry(&self) -> &Arc<SchemaRegistry> {
         &self.registry
+    }
+
+    /// Returns a reference to the loaded [`StorageConfig`].
+    pub fn config(&self) -> &StorageConfig {
+        &self.config
     }
 
     async fn bootstrap_schema_registry_topic(&self) -> anyhow::Result<()> {
@@ -652,6 +714,35 @@ impl EventLogRouter {
         Ok(offset)
     }
 
+    /// Publishes a [`TabletopCanvasEvent`] to the `tabletop-canvas` topic and immediately flushes it.
+    pub async fn log_tabletop_canvas(&self, event: &TabletopCanvasEvent) -> anyhow::Result<u64> {
+        let offset = self
+            .publish_event(topics::TABLETOP_CANVAS, subjects::TABLETOP_CANVAS, 1, event)
+            .await?;
+        self.flush_topic(topics::TABLETOP_CANVAS).await?;
+        Ok(offset)
+    }
+
+    /// Publishes an [`AiGmTrajectoryEvent`] to the `ai-gm-trajectories` topic and immediately flushes it.
+    pub async fn log_ai_gm_trajectory(&self, event: &AiGmTrajectoryEvent) -> anyhow::Result<u64> {
+        let offset = self
+            .publish_event(
+                topics::AI_GM_TRAJECTORY,
+                subjects::AI_GM_TRAJECTORY,
+                1,
+                event,
+            )
+            .await?;
+        self.flush_topic(topics::AI_GM_TRAJECTORY).await?;
+        Ok(offset)
+    }
+
+    /// Publishes a [`SessionLogEvent`] to the `system-logs` topic.
+    pub async fn log_session_log(&self, event: &SessionLogEvent) -> anyhow::Result<u64> {
+        self.publish_event(topics::SYSTEM_LOGS, subjects::SESSION_LOG, 1, event)
+            .await
+    }
+
     /// Returns a snapshot of ingestion, buffering, and `.avro` batch flush metrics for all topics.
     pub async fn metrics_snapshot(&self) -> Vec<TopicMetricsSnapshot> {
         let guard = self.topic_states.read().await;
@@ -668,6 +759,9 @@ impl EventLogRouter {
                 topics::CHAT_MESSAGE => subjects::CHAT_MESSAGE,
                 topics::INTERACTION_DYNAMICS => subjects::INTERACTION_DYNAMICS,
                 topics::TTRPG_MECHANICS => subjects::TTRPG_MECHANICS,
+                topics::TABLETOP_CANVAS => subjects::TABLETOP_CANVAS,
+                topics::AI_GM_TRAJECTORY => subjects::AI_GM_TRAJECTORY,
+                topics::SYSTEM_LOGS => subjects::SESSION_LOG,
                 _ => subjects::CHAT_MESSAGE,
             };
             let reg = self
