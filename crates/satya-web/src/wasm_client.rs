@@ -22,9 +22,9 @@ use web_sys::{
     AnalyserNode, AudioContext, Document, Element, Headers, HtmlButtonElement, HtmlElement,
     HtmlInputElement, HtmlSelectElement, HtmlVideoElement, KeyboardEvent, MediaStream,
     MediaStreamConstraints, MessageEvent, Request, RequestInit, Response, RtcConfiguration,
-    RtcDataChannel, RtcDataChannelEvent, RtcIceCandidate, RtcIceCandidateInit, RtcPeerConnection,
-    RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, RtcTrackEvent, WebSocket,
-    Window,
+    RtcDataChannel, RtcDataChannelEvent, RtcIceCandidate, RtcIceCandidateInit, RtcOfferOptions,
+    RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit,
+    RtcTrackEvent, WebSocket, Window,
 };
 
 /// Active WebRTC peer connection and optional `satya-chat-dc` DataChannel for a remote participant.
@@ -33,6 +33,10 @@ pub struct PeerEntry {
     pub pc: RtcPeerConnection,
     /// Optional `RTCDataChannel` opened with this remote peer.
     pub dc: Option<RtcDataChannel>,
+    /// Whether `setRemoteDescription` has completed on `pc`.
+    pub remote_desc_set: bool,
+    /// Remote ICE candidate JSON payloads received before `setRemoteDescription` completed.
+    pub pending_ice_candidates: Vec<String>,
 }
 
 /// Client-side state managed in Rust/Wasm across the session lifecycle.
@@ -69,6 +73,12 @@ pub struct SatyaWasmState {
     pub rms_sum: f32,
     /// Number of WebAudio RMS energy samples collected during the current window.
     pub rms_samples: u32,
+    /// Up/Down arrow history buffer for the Session Chat input box (`#chat-input`).
+    pub chat_history: crate::chat_cmd::ChatInputHistory,
+    /// Selected private recipient `user_id`s in the vertical chat user list (empty = `BROADCAST` selected).
+    pub selected_recipients: Vec<String>,
+    /// Currently selected mutually exclusive [`ChannelContext`] toggle in the chat input bar.
+    pub active_channel_context: ChannelContext,
 }
 
 impl Default for SatyaWasmState {
@@ -90,6 +100,9 @@ impl Default for SatyaWasmState {
             rms_peak: 0.0,
             rms_sum: 0.0,
             rms_samples: 0,
+            chat_history: crate::chat_cmd::ChatInputHistory::new(),
+            selected_recipients: Vec::new(),
+            active_channel_context: ChannelContext::InCharacter,
         }
     }
 }
@@ -276,6 +289,15 @@ pub const EYE_OFF_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="
 
 /// SVG icon markup for the top-bar hamburger menu button.
 pub const HAMBURGER_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>"#;
+
+/// SVG icon markup for the `IN_CHARACTER` chat input toggle button (character speech bubble).
+pub const CTX_IC_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>"#;
+
+/// SVG icon markup for the `OUT_OF_CHARACTER` chat input toggle button (brackets / OOC talk).
+pub const CTX_OOC_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>"#;
+
+/// SVG icon markup for the `GM_NARRATION` chat input toggle button (open book / tome).
+pub const CTX_GM_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>"#;
 
 /// Parses a `<select>` option string (`"TTRPG"`, `"TTRPG_GM"`, `"TTRPG_AI_GM"`, or `"MEETING"`) into a [`SessionMode`].
 pub fn parse_session_mode(raw: &str) -> SessionMode {
@@ -567,6 +589,26 @@ pub fn register_window_bindings() {
     let c_session_pane = Closure::<dyn Fn()>::new(satya_toggle_session_pane);
     bind("satyaToggleSessionPane", c_session_pane.as_ref());
     c_session_pane.forget();
+
+    let c_settings = Closure::<dyn Fn()>::new(satya_toggle_settings_menu);
+    bind("satyaToggleSettingsMenu", c_settings.as_ref());
+    c_settings.forget();
+
+    let c_chat_settings = Closure::<dyn Fn()>::new(satya_toggle_chat_settings);
+    bind("satyaToggleChatSettings", c_chat_settings.as_ref());
+    c_chat_settings.forget();
+
+    let c_bcast = Closure::<dyn Fn()>::new(satya_select_broadcast);
+    bind("satyaSelectBroadcast", c_bcast.as_ref());
+    c_bcast.forget();
+
+    let c_recip = Closure::<dyn Fn(String)>::new(satya_toggle_recipient);
+    bind("satyaToggleRecipient", c_recip.as_ref());
+    c_recip.forget();
+
+    let c_ctx = Closure::<dyn Fn(String)>::new(satya_select_chat_context);
+    bind("satyaSelectChatContext", c_ctx.as_ref());
+    c_ctx.forget();
 }
 
 /// Toggles the top-bar hamburger menu dropdown (`#hamburger-menu-dropdown`) open or closed.
@@ -577,7 +619,11 @@ pub fn satya_toggle_hamburger_menu() {
     else {
         return;
     };
-    let is_hidden = menu.style().get_property_value("display").unwrap_or_default() == "none";
+    let is_hidden = menu
+        .style()
+        .get_property_value("display")
+        .unwrap_or_default()
+        == "none";
     let _ = menu
         .style()
         .set_property("display", if is_hidden { "flex" } else { "none" });
@@ -593,7 +639,11 @@ pub fn satya_toggle_auth_pane() {
     else {
         return;
     };
-    let is_hidden = card.style().get_property_value("display").unwrap_or_default() == "none";
+    let is_hidden = card
+        .style()
+        .get_property_value("display")
+        .unwrap_or_default()
+        == "none";
     let _ = card
         .style()
         .set_property("display", if is_hidden { "block" } else { "none" });
@@ -618,7 +668,11 @@ pub fn satya_toggle_session_pane() {
     else {
         return;
     };
-    let is_hidden = card.style().get_property_value("display").unwrap_or_default() == "none";
+    let is_hidden = card
+        .style()
+        .get_property_value("display")
+        .unwrap_or_default()
+        == "none";
     let _ = card
         .style()
         .set_property("display", if is_hidden { "block" } else { "none" });
@@ -634,6 +688,42 @@ pub fn satya_toggle_session_pane() {
     if let Some(btn) = get_element("btn-hamburger-menu") {
         let _ = btn.set_attribute("aria-expanded", "false");
     }
+}
+
+/// Toggles the `Settings` sub-panel (`#menu-settings-panel`) inside the top-bar Hamburger Menu.
+#[wasm_bindgen]
+pub fn satya_toggle_settings_menu() {
+    let Some(panel) =
+        get_element("menu-settings-panel").and_then(|el| el.dyn_into::<HtmlElement>().ok())
+    else {
+        return;
+    };
+    let is_hidden = panel
+        .style()
+        .get_property_value("display")
+        .unwrap_or_default()
+        == "none";
+    let _ = panel
+        .style()
+        .set_property("display", if is_hidden { "flex" } else { "none" });
+}
+
+/// Toggles the `Settings -> Chat` sub-panel (`#menu-chat-settings-panel`) inside the top-bar Hamburger Menu.
+#[wasm_bindgen]
+pub fn satya_toggle_chat_settings() {
+    let Some(panel) =
+        get_element("menu-chat-settings-panel").and_then(|el| el.dyn_into::<HtmlElement>().ok())
+    else {
+        return;
+    };
+    let is_hidden = panel
+        .style()
+        .get_property_value("display")
+        .unwrap_or_default()
+        == "none";
+    let _ = panel
+        .style()
+        .set_property("display", if is_hidden { "flex" } else { "none" });
 }
 
 /// Toggles a password `<input>` element between `"password"` (masked) and `"text"` (visible characters),
@@ -962,14 +1052,17 @@ fn enter_session(data: SessionEnterResponse) {
     );
 
     let session_mode = data.session_mode;
+    let is_gm = data.self_participant.role == SessionRole::Gm;
     with_state_mut(|st| {
         st.session_id = Some(data.session_id);
         st.session_mode = session_mode;
         st.join_token = Some(data.join_token);
         st.self_participant = Some(data.self_participant);
         st.roster = data.roster;
+        st.selected_recipients.clear();
     });
 
+    sync_gm_context_button_visibility(is_gm);
     sync_chat_options_for_mode(session_mode);
     set_display("session-card", "none");
     set_display("hamburger-menu-dropdown", "none");
@@ -1014,6 +1107,7 @@ pub fn cleanup_client_session_state() {
         st.join_token = None;
         st.self_participant = None;
         st.roster.clear();
+        st.selected_recipients.clear();
         ids
     });
 
@@ -1029,6 +1123,7 @@ pub fn cleanup_client_session_state() {
         video.set_src_object(None);
     }
     set_text("local-participant-label", "Local Preview");
+    sync_gm_context_button_visibility(false);
     render_roster();
     set_session_buttons_enabled(false);
     set_text("session-status-pill", "No Active Session");
@@ -1190,12 +1285,44 @@ fn render_roster() {
     list_el.set_inner_html("");
     recip_el.set_inner_html("");
 
-    let (roster, self_uid) = with_state(|st| {
-        (
-            st.roster.clone(),
-            st.self_participant.as_ref().map(|p| p.user_id.clone()),
-        )
+    let (roster, self_uid, selected_recips) = with_state_mut(|st| {
+        let self_id = st.self_participant.as_ref().map(|p| p.user_id.clone());
+        st.selected_recipients.retain(|uid| {
+            self_id.as_deref() != Some(uid.as_str()) && st.roster.iter().any(|p| &p.user_id == uid)
+        });
+        (st.roster.clone(), self_id, st.selected_recipients.clone())
     });
+
+    let broadcast_checked = selected_recips.is_empty();
+    if let Ok(b_label) = doc.create_element("label") {
+        b_label.set_id("recipient-row-broadcast");
+        b_label.set_class_name(if broadcast_checked {
+            "recip-row broadcast-row selected"
+        } else {
+            "recip-row broadcast-row"
+        });
+        if let Ok(cb_el) = doc.create_element("input")
+            && let Ok(cb) = cb_el.dyn_into::<HtmlInputElement>()
+        {
+            cb.set_id("recipient-cb-broadcast");
+            cb.set_type("checkbox");
+            cb.set_value("BROADCAST");
+            cb.set_checked(broadcast_checked);
+            let _ = cb.set_attribute("onchange", "window.satyaSelectBroadcast()");
+            let on_chg = Closure::<dyn FnMut()>::new(move || {
+                satya_select_broadcast();
+            });
+            cb.set_onchange(Some(on_chg.as_ref().unchecked_ref()));
+            on_chg.forget();
+            let _ = b_label.append_child(&cb);
+        }
+        if let Ok(span) = doc.create_element("span") {
+            span.set_class_name("recip-name broadcast-tag");
+            span.set_text_content(Some("BROADCAST (All Participants)"));
+            let _ = b_label.append_child(&span);
+        }
+        let _ = recip_el.append_child(&b_label);
+    }
 
     for p in roster {
         if let Ok(chip) = doc.create_element("span") {
@@ -1216,16 +1343,36 @@ fn render_roster() {
         if self_uid.as_deref() != Some(p.user_id.as_str())
             && let Ok(label) = doc.create_element("label")
         {
-            label.set_class_name("recip-option");
+            let is_checked = selected_recips.contains(&p.user_id);
+            label.set_class_name(if is_checked {
+                "recip-row selected"
+            } else {
+                "recip-row"
+            });
+            let _ = label.set_attribute("data-recipient-row-uid", &p.user_id);
             if let Ok(cb_el) = doc.create_element("input")
                 && let Ok(cb) = cb_el.dyn_into::<HtmlInputElement>()
             {
+                let uid_for_attr = p.user_id.clone();
+                let uid_for_cb = p.user_id.clone();
                 cb.set_type("checkbox");
+                cb.set_class_name("recipient-user-cb");
                 cb.set_value(&p.user_id);
-                cb.set_checked(true);
+                cb.set_checked(is_checked);
+                let _ = cb.set_attribute("data-recipient-uid", &p.user_id);
+                let _ = cb.set_attribute(
+                    "onchange",
+                    &format!("window.satyaToggleRecipient('{uid_for_attr}')"),
+                );
+                let on_chg = Closure::<dyn FnMut()>::new(move || {
+                    satya_toggle_recipient(uid_for_cb.clone());
+                });
+                cb.set_onchange(Some(on_chg.as_ref().unchecked_ref()));
+                on_chg.forget();
                 let _ = label.append_child(&cb);
             }
             if let Ok(span) = doc.create_element("span") {
+                span.set_class_name("recip-name");
                 span.set_text_content(Some(&format!("{} ({:?})", p.display_name, p.role)));
                 let _ = label.append_child(&span);
             }
@@ -1385,18 +1532,28 @@ pub fn satya_start_camera() {
         constraints.set_audio(&JsValue::TRUE);
         constraints.set_video(&JsValue::TRUE);
 
-        let Ok(promise) = media_devices.get_user_media_with_constraints(&constraints) else {
-            append_system_notice("Camera/Mic access unavailable; continuing in DataChannel mode.");
-            return;
+        let mut stream_res = match media_devices.get_user_media_with_constraints(&constraints) {
+            Ok(promise) => JsFuture::from(promise).await,
+            Err(e) => Err(e),
         };
 
-        match JsFuture::from(promise).await {
+        if stream_res.is_err() {
+            let video_only = MediaStreamConstraints::new();
+            video_only.set_audio(&JsValue::FALSE);
+            video_only.set_video(&JsValue::TRUE);
+            if let Ok(promise) = media_devices.get_user_media_with_constraints(&video_only) {
+                stream_res = JsFuture::from(promise).await;
+            }
+        }
+
+        match stream_res {
             Ok(stream_val) => {
                 if let Ok(stream) = stream_val.dyn_into::<MediaStream>() {
                     if let Some(video_el) = get_element("local-video")
                         .and_then(|e| e.dyn_into::<HtmlVideoElement>().ok())
                     {
                         video_el.set_src_object(Some(&stream));
+                        let _ = video_el.play();
                     }
                     start_audio_prosody_monitor(&stream);
                     with_state_mut(|st| {
@@ -1553,6 +1710,37 @@ pub fn satya_emit_prosody_sample() {
     satya_refresh_metrics();
 }
 
+/// Determines whether the local participant (`self_user_id`) should act as the WebRTC SDP offer
+/// initiator for `remote_user_id`.
+///
+/// During initial mesh formation (`renegotiate == false`), lexicographical ordering breaks ties so
+/// only one side sends an offer. During renegotiation (`renegotiate == true`, such as when the
+/// local user enables their camera/microphone), the local peer always initiates a new offer.
+pub fn should_initiate_peer_connection(
+    self_user_id: &str,
+    remote_user_id: &str,
+    renegotiate: bool,
+) -> bool {
+    if self_user_id == remote_user_id {
+        return false;
+    }
+    renegotiate || (self_user_id < remote_user_id)
+}
+
+fn close_peer_connection(remote_user_id: &str) {
+    with_state_mut(|st| {
+        if let Some(old) = st.peers.remove(remote_user_id) {
+            if let Some(dc) = old.dc {
+                dc.close();
+            }
+            old.pc.set_onicecandidate(None);
+            old.pc.set_ontrack(None);
+            old.pc.set_ondatachannel(None);
+            old.pc.close();
+        }
+    });
+}
+
 fn initiate_webrtc_mesh(renegotiate: bool) {
     let (Some(self_part), roster) =
         with_state(|st| (st.self_participant.clone(), st.roster.clone()))
@@ -1563,14 +1751,11 @@ fn initiate_webrtc_mesh(renegotiate: bool) {
     for p in roster {
         if p.user_id != self_part.user_id && p.participant_kind == ParticipantKind::Human {
             if renegotiate {
-                with_state_mut(|st| {
-                    if let Some(old) = st.peers.remove(&p.user_id) {
-                        old.pc.close();
-                    }
-                });
+                close_peer_connection(&p.user_id);
             }
-            let should_initiate = self_part.user_id < p.user_id;
-            let _ = ensure_peer_connection(&p.user_id, &p.display_name, should_initiate);
+            if should_initiate_peer_connection(&self_part.user_id, &p.user_id, renegotiate) {
+                let _ = ensure_peer_connection(&p.user_id, &p.display_name, true);
+            }
         }
     }
 }
@@ -1654,6 +1839,20 @@ fn ensure_peer_connection(
                 && let Ok(stream) = streams.get(0).dyn_into::<MediaStream>()
             {
                 vid.set_src_object(Some(&stream));
+            } else if let Some(fallback_stream) =
+                vid.src_object().or_else(|| MediaStream::new().ok())
+            {
+                fallback_stream.add_track(&ev.track());
+                vid.set_src_object(Some(&fallback_stream));
+            }
+            if let Ok(play_promise) = vid.play() {
+                let vid_fallback = vid.clone();
+                spawn_local(async move {
+                    if JsFuture::from(play_promise).await.is_err() {
+                        vid_fallback.set_muted(true);
+                        let _ = vid_fallback.play();
+                    }
+                });
             }
         }
     });
@@ -1669,14 +1868,27 @@ fn ensure_peer_connection(
         let pc_offer = pc.clone();
         let uid_offer = remote_user_id.to_string();
         spawn_local(async move {
-            if let Ok(offer_val) = JsFuture::from(pc_offer.create_offer()).await {
+            let offer_opts = RtcOfferOptions::new();
+            let _ = Reflect::set(
+                &offer_opts,
+                &JsValue::from_str("offerToReceiveAudio"),
+                &JsValue::TRUE,
+            );
+            let _ = Reflect::set(
+                &offer_opts,
+                &JsValue::from_str("offerToReceiveVideo"),
+                &JsValue::TRUE,
+            );
+            if let Ok(offer_val) =
+                JsFuture::from(pc_offer.create_offer_with_rtc_offer_options(&offer_opts)).await
+            {
                 let sdp = Reflect::get(&offer_val, &JsValue::from_str("sdp"))
                     .ok()
                     .and_then(|v| v.as_string())
                     .unwrap_or_default();
                 let desc = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
                 desc.set_sdp(&sdp);
-                let _ = JsFuture::from(pc_offer.set_local_description(&desc)).await;
+                let set_local_promise = pc_offer.set_local_description(&desc);
                 if let Ok(json_str) = js_sys::JSON::stringify(&offer_val)
                     && let Some(payload) = json_str.as_string()
                 {
@@ -1686,6 +1898,7 @@ fn ensure_peer_connection(
                         payload,
                     });
                 }
+                let _ = JsFuture::from(set_local_promise).await;
             }
         });
     } else {
@@ -1705,6 +1918,8 @@ fn ensure_peer_connection(
             PeerEntry {
                 pc: pc.clone(),
                 dc: dc_opt,
+                remote_desc_set: false,
+                pending_ice_candidates: Vec::new(),
             },
         );
     });
@@ -1727,32 +1942,59 @@ fn setup_data_channel(dc: &RtcDataChannel, remote_user_id: &str) {
     onopen.forget();
 }
 
+async fn flush_pending_ice_candidates(remote_user_id: &str, pc: &RtcPeerConnection) {
+    let pending = with_state_mut(|st| {
+        if let Some(entry) = st.peers.get_mut(remote_user_id) {
+            entry.remote_desc_set = true;
+            std::mem::take(&mut entry.pending_ice_candidates)
+        } else {
+            Vec::new()
+        }
+    });
+    for cand_payload in pending {
+        if let Ok(parsed_js) = js_sys::JSON::parse(&cand_payload) {
+            let cand_init: RtcIceCandidateInit = parsed_js.unchecked_into();
+            if let Ok(cand) = RtcIceCandidate::new(&cand_init) {
+                let _ =
+                    JsFuture::from(pc.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&cand)))
+                        .await;
+            }
+        }
+    }
+}
+
 async fn handle_webrtc_signal(
     from_participant: Participant,
     signal_kind: WebRtcEventKind,
     payload: String,
 ) {
-    let Some(pc) = ensure_peer_connection(
-        &from_participant.user_id,
-        &from_participant.display_name,
-        false,
-    ) else {
-        return;
-    };
-
+    let remote_uid = from_participant.user_id.clone();
     let Ok(parsed_js) = js_sys::JSON::parse(&payload) else {
         return;
     };
 
     match signal_kind {
         WebRtcEventKind::SignalingOffer => {
+            close_peer_connection(&remote_uid);
+            let Some(pc) =
+                ensure_peer_connection(&remote_uid, &from_participant.display_name, false)
+            else {
+                return;
+            };
+
             let sdp = Reflect::get(&parsed_js, &JsValue::from_str("sdp"))
                 .ok()
                 .and_then(|v| v.as_string())
                 .unwrap_or_default();
             let remote_desc = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
             remote_desc.set_sdp(&sdp);
-            let _ = JsFuture::from(pc.set_remote_description(&remote_desc)).await;
+            if JsFuture::from(pc.set_remote_description(&remote_desc))
+                .await
+                .is_err()
+            {
+                return;
+            }
+            flush_pending_ice_candidates(&remote_uid, &pc).await;
 
             if let Ok(ans_val) = JsFuture::from(pc.create_answer()).await {
                 let ans_sdp = Reflect::get(&ans_val, &JsValue::from_str("sdp"))
@@ -1761,34 +2003,60 @@ async fn handle_webrtc_signal(
                     .unwrap_or_default();
                 let local_desc = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
                 local_desc.set_sdp(&ans_sdp);
-                let _ = JsFuture::from(pc.set_local_description(&local_desc)).await;
+                let set_local_promise = pc.set_local_description(&local_desc);
 
                 if let Ok(json_str) = js_sys::JSON::stringify(&ans_val)
                     && let Some(ans_payload) = json_str.as_string()
                 {
                     send_ws_packet(&ClientWsPacket::WebrtcSignal {
-                        target_user_id: from_participant.user_id,
+                        target_user_id: remote_uid,
                         signal_kind: WebRtcEventKind::SignalingAnswer,
                         payload: ans_payload,
                     });
                 }
+                let _ = JsFuture::from(set_local_promise).await;
             }
         }
         WebRtcEventKind::SignalingAnswer => {
+            let Some(pc) =
+                ensure_peer_connection(&remote_uid, &from_participant.display_name, false)
+            else {
+                return;
+            };
             let sdp = Reflect::get(&parsed_js, &JsValue::from_str("sdp"))
                 .ok()
                 .and_then(|v| v.as_string())
                 .unwrap_or_default();
             let remote_desc = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
             remote_desc.set_sdp(&sdp);
-            let _ = JsFuture::from(pc.set_remote_description(&remote_desc)).await;
+            if JsFuture::from(pc.set_remote_description(&remote_desc))
+                .await
+                .is_ok()
+            {
+                flush_pending_ice_candidates(&remote_uid, &pc).await;
+            }
         }
         WebRtcEventKind::IceCandidate => {
-            let cand_init: RtcIceCandidateInit = parsed_js.unchecked_into();
-            if let Ok(cand) = RtcIceCandidate::new(&cand_init) {
-                let _ =
-                    JsFuture::from(pc.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&cand)))
-                        .await;
+            let (pc_opt, should_add_now) = with_state_mut(|st| {
+                if let Some(entry) = st.peers.get_mut(&remote_uid) {
+                    if entry.remote_desc_set {
+                        (Some(entry.pc.clone()), true)
+                    } else {
+                        entry.pending_ice_candidates.push(payload.clone());
+                        (None, false)
+                    }
+                } else {
+                    (None, false)
+                }
+            });
+            if should_add_now && let Some(pc) = pc_opt {
+                let cand_init: RtcIceCandidateInit = parsed_js.unchecked_into();
+                if let Ok(cand) = RtcIceCandidate::new(&cand_init) {
+                    let _ = JsFuture::from(
+                        pc.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&cand)),
+                    )
+                    .await;
+                }
             }
         }
         _ => {}
@@ -1799,31 +2067,165 @@ async fn handle_webrtc_signal(
 // Targeted Chat & Satya TTRPG d20 Task Resolution
 // ============================================================================
 
-/// Shows or hides the private recipient checkbox picker based on `#chat-visibility`.
+/// Legacy no-op handler retained for compatibility; recipient selection is now managed via
+/// [`satya_select_broadcast`] and [`satya_toggle_recipient`].
 #[wasm_bindgen]
-pub fn satya_visibility_changed() {
-    let vis = select_value("chat-visibility");
-    set_display(
-        "private-recipient-picker",
-        if vis == "PRIVATE" { "block" } else { "none" },
+pub fn satya_visibility_changed() {}
+
+/// Selects `BROADCAST` in the vertical chat recipient list and deselects all individual users.
+#[wasm_bindgen]
+pub fn satya_select_broadcast() {
+    with_state_mut(|st| {
+        st.selected_recipients.clear();
+    });
+    set_input_checked("recipient-cb-broadcast", true);
+    set_class(
+        "recipient-row-broadcast",
+        "recip-row broadcast-row selected",
+    );
+
+    if let Some(recip_box) = get_element("recipient-checkboxes") {
+        let children = recip_box.children();
+        for i in 0..children.length() {
+            if let Some(label) = children.item(i) {
+                if label.id() == "recipient-row-broadcast" {
+                    continue;
+                }
+                label.set_class_name("recip-row");
+                if let Some(first) = label.first_element_child()
+                    && let Ok(cb) = first.dyn_into::<HtmlInputElement>()
+                {
+                    cb.set_checked(false);
+                }
+            }
+        }
+    }
+}
+
+/// Toggles selection of a specific user in the vertical chat recipient list.
+///
+/// Selecting one or more users automatically deselects `BROADCAST`; deselecting all users
+/// automatically re-selects `BROADCAST`.
+#[wasm_bindgen]
+pub fn satya_toggle_recipient(user_id: String) {
+    let mut checked_ids = Vec::new();
+    if let Some(recip_box) = get_element("recipient-checkboxes") {
+        let children = recip_box.children();
+        for i in 0..children.length() {
+            if let Some(label) = children.item(i) {
+                if label.id() == "recipient-row-broadcast" {
+                    continue;
+                }
+                if let Some(first) = label.first_element_child()
+                    && let Ok(cb) = first.dyn_into::<HtmlInputElement>()
+                {
+                    if cb.checked() {
+                        checked_ids.push(cb.value());
+                        label.set_class_name("recip-row selected");
+                    } else {
+                        label.set_class_name("recip-row");
+                    }
+                }
+            }
+        }
+    } else {
+        with_state_mut(|st| {
+            if let Some(pos) = st.selected_recipients.iter().position(|id| id == &user_id) {
+                st.selected_recipients.remove(pos);
+            } else if !user_id.is_empty() {
+                st.selected_recipients.push(user_id);
+            }
+            checked_ids = st.selected_recipients.clone();
+        });
+    }
+
+    let broadcast_active = checked_ids.is_empty();
+    with_state_mut(|st| {
+        st.selected_recipients = checked_ids;
+    });
+    set_input_checked("recipient-cb-broadcast", broadcast_active);
+    set_class(
+        "recipient-row-broadcast",
+        if broadcast_active {
+            "recip-row broadcast-row selected"
+        } else {
+            "recip-row broadcast-row"
+        },
     );
 }
 
-/// Tracks chat composition start time on keydown and sends the message when `Enter` is pressed.
+/// Selects one of the mutually exclusive [`ChannelContext`] toggle buttons inside the chat input field
+/// (`"IN_CHARACTER"`, `"OUT_OF_CHARACTER"`, or `"GM_NARRATION"`).
+#[wasm_bindgen]
+pub fn satya_select_chat_context(ctx: String) {
+    let parsed = parse_channel_context(&ctx);
+    with_state_mut(|st| {
+        st.active_channel_context = parsed;
+    });
+
+    let buttons = [
+        ("btn-ctx-ic", ChannelContext::InCharacter),
+        ("btn-ctx-ooc", ChannelContext::OutOfCharacter),
+        ("btn-ctx-gm", ChannelContext::GmNarration),
+    ];
+    for (btn_id, target_ctx) in buttons {
+        let is_active = parsed == target_ctx;
+        set_class(
+            btn_id,
+            if is_active {
+                "btn-ctx-toggle active"
+            } else {
+                "btn-ctx-toggle"
+            },
+        );
+        if let Some(btn) = get_element(btn_id) {
+            let _ = btn.set_attribute("aria-pressed", if is_active { "true" } else { "false" });
+        }
+    }
+}
+
+fn sync_gm_context_button_visibility(is_gm: bool) {
+    set_display("btn-ctx-gm", if is_gm { "inline-flex" } else { "none" });
+    if !is_gm {
+        let was_gm = with_state(|st| st.active_channel_context == ChannelContext::GmNarration);
+        if was_gm {
+            satya_select_chat_context("IN_CHARACTER".to_string());
+        }
+    }
+}
+
+/// Tracks chat composition start time on keydown, navigates input history on `ArrowUp` / `ArrowDown`,
+/// and sends the message when `Enter` is pressed.
 #[wasm_bindgen]
 pub fn satya_chat_keydown(ev: KeyboardEvent) {
+    let key = ev.key();
+    if key == "ArrowUp" {
+        ev.prevent_default();
+        let current = input_value("chat-input");
+        if let Some(prev) = with_state_mut(|st| st.chat_history.navigate_up(&current)) {
+            set_input_value("chat-input", &prev);
+        }
+        return;
+    }
+    if key == "ArrowDown" {
+        ev.prevent_default();
+        if let Some(next) = with_state_mut(|st| st.chat_history.navigate_down()) {
+            set_input_value("chat-input", &next);
+        }
+        return;
+    }
     with_state_mut(|st| {
         if st.typing_started_at_ms.is_none() {
             st.typing_started_at_ms = Some(js_sys::Date::now());
         }
     });
-    if ev.key() == "Enter" {
+    if key == "Enter" {
         satya_send_chat();
     }
 }
 
-/// Sends a public, private, `GM_ONLY`, or `HOST_ONLY` chat message (or executes a `/msg` or `/roll` command)
-/// over the signaling WebSocket.
+/// Sends a public or private chat message (or executes a `/msg`, `/roll`, or `--help` command)
+/// over the signaling WebSocket based on the selected recipient(s) and active context icon toggle.
 #[wasm_bindgen]
 pub fn satya_send_chat() {
     let body = input_value("chat-input").trim().to_string();
@@ -1831,36 +2233,54 @@ pub fn satya_send_chat() {
         return;
     }
 
-    let mut visibility = parse_visibility(&select_value("chat-visibility"));
-    let channel_context = parse_channel_context(&select_value("chat-context"));
-    let composition_time_ms = with_state_mut(|st| {
+    with_state_mut(|st| st.chat_history.record_sent(&body));
+
+    let (mut recipient_user_ids, channel_context, composition_time_ms) = with_state_mut(|st| {
         let elapsed = st
             .typing_started_at_ms
             .map(|t0| (js_sys::Date::now() - t0).max(1.0) as i64)
             .unwrap_or(450);
         st.typing_started_at_ms = None;
-        elapsed
+        (
+            st.selected_recipients.clone(),
+            st.active_channel_context,
+            elapsed,
+        )
     });
 
-    let mut recipient_user_ids = Vec::new();
-    if visibility == MessageVisibility::Private
+    if recipient_user_ids.is_empty()
         && let Some(recip_box) = get_element("recipient-checkboxes")
     {
         let children = recip_box.children();
         for i in 0..children.length() {
-            if let Some(label) = children.item(i)
-                && let Some(first) = label.first_element_child()
-                && let Ok(cb) = first.dyn_into::<HtmlInputElement>()
-                && cb.checked()
-            {
-                recipient_user_ids.push(cb.value());
+            if let Some(label) = children.item(i) {
+                if label.id() == "recipient-row-broadcast" {
+                    continue;
+                }
+                if let Some(first) = label.first_element_child()
+                    && let Ok(cb) = first.dyn_into::<HtmlInputElement>()
+                    && cb.checked()
+                {
+                    recipient_user_ids.push(cb.value());
+                }
             }
         }
     }
 
+    let mut visibility = if recipient_user_ids.is_empty() {
+        MessageVisibility::Public
+    } else {
+        MessageVisibility::Private
+    };
+
     let final_body = match crate::chat_cmd::parse_chat_command(&body) {
         Err(err) => {
             append_system_notice(&format!("Command error: {err}"));
+            return;
+        }
+        Ok(Some(crate::chat_cmd::ChatCommand::Help { help_text, .. })) => {
+            append_system_notice(&help_text);
+            set_input_value("chat-input", "");
             return;
         }
         Ok(Some(crate::chat_cmd::ChatCommand::MsgBroadcast { body: msg_body })) => {
@@ -1967,7 +2387,11 @@ fn is_msg_kind_enabled(kind: &str) -> bool {
 
 fn apply_msg_filter_to_element(el: &Element, kind: &str) {
     if let Ok(html_el) = el.clone().dyn_into::<HtmlElement>() {
-        let display = if is_msg_kind_enabled(kind) { "" } else { "none" };
+        let display = if is_msg_kind_enabled(kind) {
+            ""
+        } else {
+            "none"
+        };
         let _ = html_el.style().set_property("display", display);
     }
 }

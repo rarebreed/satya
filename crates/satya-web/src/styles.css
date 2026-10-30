@@ -139,6 +139,30 @@ body {
     gap: 6px;
 }
 
+.menu-settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.menu-chat-settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 4px 2px 8px;
+    border-left: 2px solid var(--accent);
+}
+
+.filter-checkboxes-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
 .pill {
     font-size: 0.76rem;
     padding: 4px 10px;
@@ -494,18 +518,64 @@ input:focus, select:focus {
     margin-bottom: 4px;
 }
 
-.recipient-checkboxes {
+.chat-recipient-list {
+    max-height: 118px;
+    overflow-y: auto;
     display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 4px;
+    padding-right: 4px;
+}
+
+.recip-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.recip-row:hover {
+    border-color: var(--accent);
+}
+
+.recip-row.selected {
+    background: rgba(56, 189, 248, 0.14);
+    border-color: var(--accent);
+}
+
+.recip-row .recip-name {
+    order: 1;
+}
+
+.recip-row input[type="checkbox"] {
+    order: 2;
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+}
+
+.broadcast-tag {
+    font-weight: 600;
+    color: var(--accent);
 }
 
 .recip-option {
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     font-size: 0.76rem;
     color: var(--text-primary);
+    cursor: pointer;
 }
 
 .chat-filter-bar {
@@ -574,10 +644,53 @@ input:focus, select:focus {
 .chat-composer {
     display: flex;
     gap: 8px;
+    align-items: center;
 }
 
-.chat-composer input {
+.chat-input-wrap {
+    position: relative;
     flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.chat-input-wrap input {
+    width: 100%;
+    padding-right: 92px;
+}
+
+.chat-ctx-toggles {
+    position: absolute;
+    right: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-ctx-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--bg-2);
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 0;
+}
+
+.btn-ctx-toggle:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.btn-ctx-toggle.active {
+    background: var(--accent-strong);
+    border-color: var(--accent);
+    color: #fff;
 }
 
 .metrics-table-wrap {

@@ -41,6 +41,13 @@ pub enum ChatCommand {
         /// Parsed dice generator and `|>` pipeline stages.
         pipeline: RollPipeline,
     },
+    /// Command documentation and usage output (`/help`, `--help`, `/msg --help`, or `/roll --help`).
+    Help {
+        /// Optional topic (`"msg"` or `"roll"`) requested.
+        topic: Option<String>,
+        /// Formatted help text to display in the Session Chat log.
+        help_text: String,
+    },
 }
 
 /// Dice generator specification at the head of a `/roll` pipeline (`<count>d<sides>[e[(<threshold>)]]`).
@@ -122,12 +129,15 @@ pub struct RollOutcome {
     pub summary: String,
 }
 
-/// Parses a chat input string starting with `/` into a [`ChatCommand`].
+/// Parses a chat input string starting with `/` (or `--help`) into a [`ChatCommand`].
 ///
-/// Returns `Ok(None)` if `input` does not start with `/`.
+/// Returns `Ok(None)` if `input` is a regular chat message.
 /// Returns `Err(String)` with a user-facing syntax hint if `input` starts with `/` but is malformed.
 pub fn parse_chat_command(input: &str) -> Result<Option<ChatCommand>, String> {
     let trimmed = input.trim();
+    if trimmed.eq_ignore_ascii_case("--help") || trimmed.eq_ignore_ascii_case("-h") {
+        return Ok(Some(build_help_command(None)));
+    }
     if !trimmed.starts_with('/') {
         return Ok(None);
     }
@@ -138,12 +148,27 @@ pub fn parse_chat_command(input: &str) -> Result<Option<ChatCommand>, String> {
     };
 
     match cmd.to_ascii_lowercase().as_str() {
-        "/msg" => parse_msg_command(rest).map(Some),
+        "/help" | "/?" | "/--help" => {
+            let topic = if rest.is_empty() {
+                None
+            } else {
+                Some(rest.trim_start_matches('/').to_ascii_lowercase())
+            };
+            Ok(Some(build_help_command(topic.as_deref())))
+        }
+        "/msg" => {
+            if is_help_flag(rest) {
+                return Ok(Some(build_help_command(Some("msg"))));
+            }
+            parse_msg_command(rest).map(Some)
+        }
         "/roll" => {
+            if is_help_flag(rest) {
+                return Ok(Some(build_help_command(Some("roll"))));
+            }
             if rest.is_empty() {
                 return Err(
-                    "Usage: /roll <dice>[|>stage...] (e.g. /roll 2d10, /roll 4d10|>hi(3), /roll 3d6|>sum|>gte(11))"
-                        .to_string(),
+                    "Usage: /roll <dice>[|>stage...] (try '/roll --help' for examples)".to_string(),
                 );
             }
             let pipeline = parse_roll_pipeline(rest)?;
@@ -153,8 +178,45 @@ pub fn parse_chat_command(input: &str) -> Result<Option<ChatCommand>, String> {
             }))
         }
         other => Err(format!(
-            "Unknown command '{other}'. Supported commands: /msg @user {{message}}, /msg @broadcast {{message}}, /roll <expr>"
+            "Unknown command '{other}'. Type '/help' or '--help' to see supported commands (/msg, /roll)."
         )),
+    }
+}
+
+fn is_help_flag(rest: &str) -> bool {
+    matches!(
+        rest.trim().to_ascii_lowercase().as_str(),
+        "--help" | "-h" | "help" | "?"
+    )
+}
+
+/// Builds a [`ChatCommand::Help`] response for the requested topic (`None`, `Some("msg")`, or `Some("roll")`).
+pub fn build_help_command(topic: Option<&str>) -> ChatCommand {
+    let msg_help = "/msg @recipient1 [@recipient2 ...] <message> — Send a private message to specific session participants.\n\
+                    /msg @broadcast <message> — Broadcast a public message to all participants.";
+    let roll_help = "/roll <count>d<sides>[e[(<thresh>)]][|>stage...] — Roll dice through a pipe (|>) mini-DSL:\n\
+                     • /roll 2d10 or /roll 2d10|>sum (sum dice; default when no pipe is given)\n\
+                     • /roll 4d10|>hi(3) or /roll 5d20|>3 (keep 3 highest rolls)\n\
+                     • /roll 6d6|>lo(3) (keep 3 lowest rolls)\n\
+                     • /roll 4d10|>gte(8) (keep rolls >= 8) | /roll 5d6|>lte(3) (keep rolls <= 3)\n\
+                     • /roll 3d6|>sum|>gte(11) or |>lte(11) (pass/fail check on scalar sum)\n\
+                     • /roll 4d10e|>gte(8) (explode on max face) | /roll 4d10e(9) (explode on >= 9)";
+
+    match topic {
+        Some("msg") => ChatCommand::Help {
+            topic: Some("msg".to_string()),
+            help_text: format!("[HELP: /msg]\n{msg_help}"),
+        },
+        Some("roll") => ChatCommand::Help {
+            topic: Some("roll".to_string()),
+            help_text: format!("[HELP: /roll]\n{roll_help}"),
+        },
+        _ => ChatCommand::Help {
+            topic: None,
+            help_text: format!(
+                "[HELP: Session Chat Commands]\n{msg_help}\n{roll_help}\nTip: Use Up/Down arrows in the chat box to cycle command history."
+            ),
+        },
     }
 }
 
@@ -205,10 +267,12 @@ fn parse_msg_command(rest: &str) -> Result<ChatCommand, String> {
     }
 
     // If @broadcast was mixed with other targets, treat @broadcast as broadcasting to all
-    if targets
-        .iter()
-        .any(|t| matches!(t.to_ascii_lowercase().as_str(), "broadcast" | "all" | "public"))
-    {
+    if targets.iter().any(|t| {
+        matches!(
+            t.to_ascii_lowercase().as_str(),
+            "broadcast" | "all" | "public"
+        )
+    }) {
         return Ok(ChatCommand::MsgBroadcast {
             body: remainder.to_string(),
         });
@@ -280,7 +344,9 @@ pub fn resolve_msg_recipients(
 pub fn parse_roll_pipeline(expr: &str) -> Result<RollPipeline, String> {
     let parts: Vec<&str> = expr.split("|>").map(str::trim).collect();
     if parts.is_empty() || parts[0].is_empty() {
-        return Err("Missing dice specification in /roll command (e.g. 2d10 or 4d10|>hi(3)).".to_string());
+        return Err(
+            "Missing dice specification in /roll command (e.g. 2d10 or 4d10|>hi(3)).".to_string(),
+        );
     }
 
     let dice = parse_dice_spec(parts[0])?;
@@ -316,7 +382,9 @@ fn parse_dice_spec(raw: &str) -> Result<DiceSpec, String> {
         1
     } else {
         count_str.parse::<usize>().map_err(|_| {
-            format!("Invalid dice count '{count_str}' in '{raw}'. Must be an integer between 1 and 100.")
+            format!(
+                "Invalid dice count '{count_str}' in '{raw}'. Must be an integer between 1 and 100."
+            )
         })?
     };
 
@@ -406,16 +474,18 @@ fn parse_pipe_stage(raw: &str) -> Result<PipeStage, String> {
     }
 
     if let Some(arg) = s.strip_prefix("gte(").and_then(|v| v.strip_suffix(')')) {
-        let target = arg.trim().parse::<i64>().map_err(|_| {
-            format!("Invalid argument '{arg}' in 'gte({arg})'. Expected integer.")
-        })?;
+        let target = arg
+            .trim()
+            .parse::<i64>()
+            .map_err(|_| format!("Invalid argument '{arg}' in 'gte({arg})'. Expected integer."))?;
         return Ok(PipeStage::Gte(target));
     }
 
     if let Some(arg) = s.strip_prefix("lte(").and_then(|v| v.strip_suffix(')')) {
-        let target = arg.trim().parse::<i64>().map_err(|_| {
-            format!("Invalid argument '{arg}' in 'lte({arg})'. Expected integer.")
-        })?;
+        let target = arg
+            .trim()
+            .parse::<i64>()
+            .map_err(|_| format!("Invalid argument '{arg}' in 'lte({arg})'. Expected integer."))?;
         return Ok(PipeStage::Lte(target));
     }
 
@@ -543,8 +613,7 @@ impl RollPipeline {
                 }
                 (RollValue::Check { .. }, _) => {
                     return Err(
-                        "Cannot pipe additional stages after a scalar pass/fail check."
-                            .to_string(),
+                        "Cannot pipe additional stages after a scalar pass/fail check.".to_string(),
                     );
                 }
             }
@@ -579,6 +648,77 @@ fn join_nums(nums: &[i64]) -> String {
         .map(i64::to_string)
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// Maximum number of submitted chat messages/commands retained in [`ChatInputHistory`].
+pub const MAX_CHAT_HISTORY: usize = 100;
+
+/// Up/Down arrow history buffer for the Session Chat input box (`#chat-input`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChatInputHistory {
+    /// Chronological list of submitted non-empty messages/commands (oldest first, newest last).
+    entries: Vec<String>,
+    /// Current navigation index into `entries` (`None` when editing the live bottom draft).
+    cursor: Option<usize>,
+    /// Unsent input draft saved when the user begins pressing `ArrowUp`.
+    draft: String,
+}
+
+impl ChatInputHistory {
+    /// Creates an empty [`ChatInputHistory`] buffer.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Records a newly submitted chat message or slash command and resets the navigation cursor.
+    pub fn record_sent(&mut self, text: &str) {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            self.cursor = None;
+            self.draft.clear();
+            return;
+        }
+        if self.entries.last().map(String::as_str) != Some(trimmed) {
+            if self.entries.len() >= MAX_CHAT_HISTORY {
+                self.entries.remove(0);
+            }
+            self.entries.push(trimmed.to_string());
+        }
+        self.cursor = None;
+        self.draft.clear();
+    }
+
+    /// Moves backward (`ArrowUp`) through submitted chat history, saving `current_input` as the draft
+    /// when starting navigation from the bottom.
+    pub fn navigate_up(&mut self, current_input: &str) -> Option<String> {
+        if self.entries.is_empty() {
+            return None;
+        }
+        let next_idx = match self.cursor {
+            None => {
+                self.draft = current_input.to_string();
+                self.entries.len() - 1
+            }
+            Some(0) => 0,
+            Some(idx) => idx - 1,
+        };
+        self.cursor = Some(next_idx);
+        self.entries.get(next_idx).cloned()
+    }
+
+    /// Moves forward (`ArrowDown`) through submitted chat history, restoring the saved draft
+    /// when advancing past the newest entry.
+    pub fn navigate_down(&mut self) -> Option<String> {
+        let idx = self.cursor?;
+        if idx + 1 < self.entries.len() {
+            let next_idx = idx + 1;
+            self.cursor = Some(next_idx);
+            self.entries.get(next_idx).cloned()
+        } else {
+            self.cursor = None;
+            Some(self.draft.clone())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -823,5 +963,51 @@ mod tests {
             .unwrap();
         assert_eq!(out_exp9.initial_dice.len(), 6);
         assert_eq!(out_exp9.final_value, RollValue::Scalar(33));
+    }
+
+    #[test]
+    fn test_help_flags_and_chat_input_history() {
+        for flag in ["--help", "/help", "/msg --help", "/roll --help", "/roll -h"] {
+            let parsed = parse_chat_command(flag).unwrap();
+            assert!(
+                matches!(parsed, Some(ChatCommand::Help { .. })),
+                "expected Help variant for '{flag}'"
+            );
+        }
+
+        if let Some(ChatCommand::Help { topic, help_text }) =
+            parse_chat_command("/roll --help").unwrap()
+        {
+            assert_eq!(topic.as_deref(), Some("roll"));
+            assert!(help_text.contains("4d10|>hi(3)"));
+            assert!(help_text.contains("4d10e(9)"));
+        }
+
+        let mut hist = ChatInputHistory::new();
+        assert_eq!(hist.navigate_up("draft"), None);
+
+        hist.record_sent("/roll 2d10");
+        hist.record_sent("/roll 4d10|>hi(3)");
+        // Consecutive duplicate should be deduplicated
+        hist.record_sent("/roll 4d10|>hi(3)");
+        hist.record_sent("/msg @sara Ready?");
+
+        assert_eq!(
+            hist.navigate_up("in-progress text"),
+            Some("/msg @sara Ready?".to_string())
+        );
+        assert_eq!(
+            hist.navigate_up("ignored while browsing"),
+            Some("/roll 4d10|>hi(3)".to_string())
+        );
+        assert_eq!(hist.navigate_up(""), Some("/roll 2d10".to_string()));
+        // Clamps at oldest entry
+        assert_eq!(hist.navigate_up(""), Some("/roll 2d10".to_string()));
+
+        // Navigate back down to draft
+        assert_eq!(hist.navigate_down(), Some("/roll 4d10|>hi(3)".to_string()));
+        assert_eq!(hist.navigate_down(), Some("/msg @sara Ready?".to_string()));
+        assert_eq!(hist.navigate_down(), Some("in-progress text".to_string()));
+        assert_eq!(hist.navigate_down(), None);
     }
 }

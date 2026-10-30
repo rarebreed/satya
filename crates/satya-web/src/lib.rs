@@ -102,6 +102,95 @@ fn HeaderBar() -> impl IntoView {
                             </button>
                             <button
                                 type="button"
+                                id="btn-menu-toggle-settings"
+                                class="btn btn-sm btn-secondary"
+                                onclick="window.satyaToggleSettingsMenu()"
+                                on:click=move |_| wasm_client::satya_toggle_settings_menu()
+                            >
+                                "Settings"
+                            </button>
+                            <div
+                                id="menu-settings-panel"
+                                class="menu-settings-panel"
+                                style="display: none;"
+                            >
+                                <div class="menu-section-title">"Settings"</div>
+                                <button
+                                    type="button"
+                                    id="btn-menu-toggle-chat-settings"
+                                    class="btn btn-sm btn-secondary"
+                                    onclick="window.satyaToggleChatSettings()"
+                                    on:click=move |_| wasm_client::satya_toggle_chat_settings()
+                                >
+                                    "Chat"
+                                </button>
+                                <div
+                                    id="menu-chat-settings-panel"
+                                    class="menu-chat-settings-panel"
+                                    style="display: none;"
+                                >
+                                    <span class="filter-label">"Show Message Types:"</span>
+                                    <div class="filter-checkboxes-vertical">
+                                        <label class="recip-option">
+                                            <input
+                                                id="filter-msg-public"
+                                                type="checkbox"
+                                                value="PUBLIC"
+                                                checked
+                                                onchange="window.satyaFilterChat()"
+                                                on:change=move |_| wasm_client::satya_filter_chat()
+                                            />
+                                            <span>"Public"</span>
+                                        </label>
+                                        <label class="recip-option">
+                                            <input
+                                                id="filter-msg-private"
+                                                type="checkbox"
+                                                value="PRIVATE"
+                                                checked
+                                                onchange="window.satyaFilterChat()"
+                                                on:change=move |_| wasm_client::satya_filter_chat()
+                                            />
+                                            <span>"Private / Whisper"</span>
+                                        </label>
+                                        <label class="recip-option">
+                                            <input
+                                                id="filter-msg-ai-gm"
+                                                type="checkbox"
+                                                value="AI_GM"
+                                                checked
+                                                onchange="window.satyaFilterChat()"
+                                                on:change=move |_| wasm_client::satya_filter_chat()
+                                            />
+                                            <span>"AI GM"</span>
+                                        </label>
+                                        <label class="recip-option">
+                                            <input
+                                                id="filter-msg-mechanics"
+                                                type="checkbox"
+                                                value="MECHANICS"
+                                                checked
+                                                onchange="window.satyaFilterChat()"
+                                                on:change=move |_| wasm_client::satya_filter_chat()
+                                            />
+                                            <span>"Mechanics"</span>
+                                        </label>
+                                        <label class="recip-option">
+                                            <input
+                                                id="filter-msg-system"
+                                                type="checkbox"
+                                                value="SYSTEM"
+                                                checked
+                                                onchange="window.satyaFilterChat()"
+                                                on:change=move |_| wasm_client::satya_filter_chat()
+                                            />
+                                            <span>"System (RUST/WASM)"</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
                                 id="btn-menu-logout"
                                 class="btn btn-sm btn-danger"
                                 onclick="window.satyaLogout()"
@@ -409,104 +498,70 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                     </div>
 
                     <div class="recipient-selector-bar">
-                        <div class="vis-row">
-                            <label>
-                                <span>"Visibility"</span>
-                                <select
-                                    id="chat-visibility"
-                                    onchange="window.satyaVisibilityChanged()"
-                                    on:change=move |_| wasm_client::satya_visibility_changed()
-                                >
-                                    <option value="PUBLIC">"PUBLIC (Broadcast to All)"</option>
-                                    <option value="PRIVATE">"PRIVATE (Selected Recipients Only)"</option>
-                                    <option value="GM_ONLY">"GM_ONLY (Secret to GM / AI-GM)"</option>
-                                </select>
+                        <span class="picker-label">"Send To (Click BROADCAST or Select Participant(s)):"</span>
+                        <div id="recipient-checkboxes" class="chat-recipient-list">
+                            <label id="recipient-row-broadcast" class="recip-row broadcast-row selected">
+                                <input
+                                    id="recipient-cb-broadcast"
+                                    type="checkbox"
+                                    value="BROADCAST"
+                                    checked
+                                    onchange="window.satyaSelectBroadcast()"
+                                    on:change=move |_| wasm_client::satya_select_broadcast()
+                                />
+                                <span class="recip-name broadcast-tag">"BROADCAST (All Participants)"</span>
                             </label>
-                            <label>
-                                <span>"Channel Context"</span>
-                                <select id="chat-context">
-                                    <option value="IN_CHARACTER">"IN_CHARACTER"</option>
-                                    <option value="OUT_OF_CHARACTER">"OUT_OF_CHARACTER"</option>
-                                    <option value="GM_NARRATION">"GM_NARRATION"</option>
-                                </select>
-                            </label>
-                        </div>
-                        <div id="private-recipient-picker" class="private-picker">
-                            <span class="picker-label">"Select Private Recipients (user_id):"</span>
-                            <div id="recipient-checkboxes" class="recipient-checkboxes"></div>
-                        </div>
-                        <div class="chat-filter-bar">
-                            <span class="filter-label">"Show Message Types:"</span>
-                            <div class="filter-checkboxes">
-                                <label class="recip-option">
-                                    <input
-                                        id="filter-msg-public"
-                                        type="checkbox"
-                                        value="PUBLIC"
-                                        checked
-                                        onchange="window.satyaFilterChat()"
-                                        on:change=move |_| wasm_client::satya_filter_chat()
-                                    />
-                                    <span>"Public"</span>
-                                </label>
-                                <label class="recip-option">
-                                    <input
-                                        id="filter-msg-private"
-                                        type="checkbox"
-                                        value="PRIVATE"
-                                        checked
-                                        onchange="window.satyaFilterChat()"
-                                        on:change=move |_| wasm_client::satya_filter_chat()
-                                    />
-                                    <span>"Private / Whisper"</span>
-                                </label>
-                                <label class="recip-option">
-                                    <input
-                                        id="filter-msg-ai-gm"
-                                        type="checkbox"
-                                        value="AI_GM"
-                                        checked
-                                        onchange="window.satyaFilterChat()"
-                                        on:change=move |_| wasm_client::satya_filter_chat()
-                                    />
-                                    <span>"AI GM"</span>
-                                </label>
-                                <label class="recip-option">
-                                    <input
-                                        id="filter-msg-mechanics"
-                                        type="checkbox"
-                                        value="MECHANICS"
-                                        checked
-                                        onchange="window.satyaFilterChat()"
-                                        on:change=move |_| wasm_client::satya_filter_chat()
-                                    />
-                                    <span>"Mechanics"</span>
-                                </label>
-                                <label class="recip-option">
-                                    <input
-                                        id="filter-msg-system"
-                                        type="checkbox"
-                                        value="SYSTEM"
-                                        checked
-                                        onchange="window.satyaFilterChat()"
-                                        on:change=move |_| wasm_client::satya_filter_chat()
-                                    />
-                                    <span>"System (RUST/WASM)"</span>
-                                </label>
-                            </div>
                         </div>
                     </div>
 
                     <div id="chat-log" class="chat-log"></div>
 
                     <div class="chat-composer">
-                        <input
-                            id="chat-input"
-                            type="text"
-                            placeholder="Type message, /msg @user ..., or /roll 4d10|>hi(3)..."
-                            onkeydown="window.satyaChatKeydown(event)"
-                            on:keydown=wasm_client::satya_chat_keydown
-                        />
+                        <div class="chat-input-wrap">
+                            <input
+                                id="chat-input"
+                                type="text"
+                                placeholder="Type message, /msg @user ..., or /roll 4d10|>hi(3)..."
+                                onkeydown="window.satyaChatKeydown(event)"
+                                on:keydown=wasm_client::satya_chat_keydown
+                            />
+                            <div class="chat-ctx-toggles" role="group" aria-label="Message Channel Context">
+                                <button
+                                    type="button"
+                                    id="btn-ctx-ic"
+                                    class="btn-ctx-toggle active"
+                                    title="IN_CHARACTER (In-Character Roleplay)"
+                                    aria-label="IN_CHARACTER"
+                                    aria-pressed="true"
+                                    onclick="window.satyaSelectChatContext('IN_CHARACTER')"
+                                    on:click=move |_| wasm_client::satya_select_chat_context("IN_CHARACTER".to_string())
+                                    inner_html=wasm_client::CTX_IC_SVG
+                                ></button>
+                                <button
+                                    type="button"
+                                    id="btn-ctx-ooc"
+                                    class="btn-ctx-toggle"
+                                    title="OUT_OF_CHARACTER (Out-of-Character / Table Talk)"
+                                    aria-label="OUT_OF_CHARACTER"
+                                    aria-pressed="false"
+                                    onclick="window.satyaSelectChatContext('OUT_OF_CHARACTER')"
+                                    on:click=move |_| wasm_client::satya_select_chat_context("OUT_OF_CHARACTER".to_string())
+                                    inner_html=wasm_client::CTX_OOC_SVG
+                                ></button>
+                                <button
+                                    type="button"
+                                    id="btn-ctx-gm"
+                                    class="btn-ctx-toggle"
+                                    style="display: none;"
+                                    title="GM_NARRATION (Game Master Narration)"
+                                    aria-label="GM_NARRATION"
+                                    aria-pressed="false"
+                                    onclick="window.satyaSelectChatContext('GM_NARRATION')"
+                                    on:click=move |_| wasm_client::satya_select_chat_context("GM_NARRATION".to_string())
+                                    inner_html=wasm_client::CTX_GM_SVG
+                                ></button>
+                            </div>
+                        </div>
                         <button
                             type="button"
                             class="btn btn-primary"
@@ -682,6 +737,28 @@ mod tests {
         }]);
         assert!(table_html.contains("session-lifecycle"));
         assert!(table_html.contains("last offset: 3"));
+
+        // Initial mesh uses deterministic tie-breaking; camera/mic renegotiation always initiates
+        assert!(wasm_client::should_initiate_peer_connection(
+            "u-demo-gm-sean",
+            "u-demo-sara",
+            false
+        ));
+        assert!(!wasm_client::should_initiate_peer_connection(
+            "u-demo-sara",
+            "u-demo-gm-sean",
+            false
+        ));
+        assert!(wasm_client::should_initiate_peer_connection(
+            "u-demo-sara",
+            "u-demo-gm-sean",
+            true
+        ));
+        assert!(!wasm_client::should_initiate_peer_connection(
+            "u-demo-sara",
+            "u-demo-sara",
+            true
+        ));
     }
 
     #[test]
@@ -701,18 +778,34 @@ mod tests {
         assert!(html.contains("hamburger-menu-dropdown"));
         assert!(html.contains("btn-menu-toggle-auth-pane"));
         assert!(html.contains("btn-menu-toggle-session-pane"));
+        assert!(html.contains("btn-menu-toggle-settings"));
+        assert!(html.contains("btn-menu-toggle-chat-settings"));
+        assert!(html.contains("menu-chat-settings-panel"));
+        assert!(html.contains("filter-checkboxes-vertical"));
         assert!(html.contains(r#"id="auth-card""#));
         assert!(html.contains(r#"id="session-card""#));
         assert!(html.contains(r#"id="workspace-panel""#));
         let session_card_idx = html.find(r#"id="session-card""#).unwrap();
-        assert!(html[session_card_idx.saturating_sub(40)..session_card_idx + 80].contains("display: none"));
+        assert!(
+            html[session_card_idx.saturating_sub(40)..session_card_idx + 80]
+                .contains("display: none")
+        );
         let workspace_idx = html.find(r#"id="workspace-panel""#).unwrap();
-        assert!(html[workspace_idx.saturating_sub(40)..workspace_idx + 80].contains("display: none"));
+        assert!(
+            html[workspace_idx.saturating_sub(40)..workspace_idx + 80].contains("display: none")
+        );
         assert!(html.contains("<h2>Session Chat</h2>"));
         assert!(!html.contains("Public &amp; Private Targeted Session Chat"));
         assert!(html.contains("Roll Satya Task"));
         assert!(!html.contains("Roll Satya Task &amp; Emit Avro Event"));
         assert!(html.contains("filter-msg-system"));
+        assert!(!html.contains(r#"id="chat-visibility""#));
+        assert!(!html.contains(r#"id="chat-context""#));
+        assert!(html.contains("recipient-cb-broadcast"));
+        assert!(html.contains("BROADCAST (All Participants)"));
+        assert!(html.contains("btn-ctx-ic"));
+        assert!(html.contains("btn-ctx-ooc"));
+        assert!(html.contains("btn-ctx-gm"));
         assert!(!html.contains("MEETING_PUBLIC"));
         assert!(!html.contains(r#"<option value="HOST">Meeting Host</option>"#));
         assert!(!html.contains(r#"<option value="PARTICIPANT">Meeting Participant</option>"#));
