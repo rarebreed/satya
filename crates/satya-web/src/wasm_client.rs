@@ -359,9 +359,12 @@ pub fn parse_combat_stance(raw: &str) -> Option<CombatStance> {
     }
 }
 
+/// Static slice of `(value, label)` pairs used to populate `<select>` dropdown elements.
+pub type SelectOptionSlice = &'static [(&'static str, &'static str)];
+
 /// Returns the valid `(value, label)` option pairs for `#session-role-select`
 /// scoped to a given business mode option string (`"TTRPG"`, `"TTRPG_GM_AI"`, `"TTRPG_AI_GM"`, or `"MEETING"`).
-pub fn role_options_for_mode(mode_raw: &str) -> &'static [(&'static str, &'static str)] {
+pub fn role_options_for_mode(mode_raw: &str) -> SelectOptionSlice {
     match mode_raw {
         "MEETING" => &[
             ("HOST", "Meeting Host"),
@@ -402,12 +405,7 @@ fn sync_role_options_for_mode(mode_raw: &str, default_role: Option<&str>) {
 
 /// Returns the valid `(value, label)` option pairs for `(visibility_options, context_options)`
 /// scoped to a given [`SessionMode`].
-pub fn chat_options_for_mode(
-    mode: SessionMode,
-) -> (
-    &'static [(&'static str, &'static str)],
-    &'static [(&'static str, &'static str)],
-) {
+pub fn chat_options_for_mode(mode: SessionMode) -> (SelectOptionSlice, SelectOptionSlice) {
     match mode {
         SessionMode::Ttrpg => (
             &[
