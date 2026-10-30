@@ -10,8 +10,8 @@ service_url = "http://127.0.0.1:8090"
 service_token = "satya_gm_secret_dev_token"
 default_provider = "ollama"
 ollama_base_url = "http://127.0.0.1:11434"
-reasoning_model = "qwen2.5:14b"
-vision_model = "llama3.2-vision"
+reasoning_model = "gemma4:12b"
+vision_model = "gemma4:12b"
 persona_id = "harsh-reality-arbiter"
 temperature = 0.35
 # In end-to-end runtime (`config/storage.toml`), fail fast if the Python FastAPI AI GM service is unreachable.
