@@ -366,6 +366,7 @@ fn AuthAndSessionGate() -> impl IntoView {
                             on:change=move |_| wasm_client::satya_mode_changed()
                         >
                             <option value="TTRPG">"TTRPG Mode (GM + Players)"</option>
+                            <option value="TTRPG_GM_AI">"TTRPG Mode (GM + AI + Players)"</option>
                             <option value="TTRPG_AI_GM">"TTRPG Mode (AI GM + Players)"</option>
                             <option value="MEETING">"Meeting Mode (Host + 2+ Attendees)"</option>
                         </select>
@@ -676,10 +677,16 @@ mod tests {
             SessionMode::Ttrpg
         );
         assert_eq!(
+            wasm_client::parse_session_mode("TTRPG_GM_AI"),
+            SessionMode::Ttrpg
+        );
+        assert_eq!(
             wasm_client::parse_session_mode("TTRPG_AI_GM"),
             SessionMode::Ttrpg
         );
+        assert!(!wasm_client::is_ai_gm_mode("TTRPG"));
         assert!(!wasm_client::is_ai_gm_mode("TTRPG_GM"));
+        assert!(wasm_client::is_ai_gm_mode("TTRPG_GM_AI"));
         assert!(wasm_client::is_ai_gm_mode("TTRPG_AI_GM"));
         assert!(!wasm_client::is_ai_gm_mode("MEETING"));
         assert_eq!(wasm_client::parse_session_role("GM"), SessionRole::Gm);
@@ -711,6 +718,12 @@ mod tests {
         assert!(ttrpg_roles.iter().any(|(v, _)| *v == "PLAYER"));
         assert!(!ttrpg_roles.iter().any(|(v, _)| *v == "HOST"));
         assert!(!ttrpg_roles.iter().any(|(v, _)| *v == "PARTICIPANT"));
+
+        let gm_ai_roles = wasm_client::role_options_for_mode("TTRPG_GM_AI");
+        assert!(gm_ai_roles.iter().any(|(v, _)| *v == "GM"));
+        assert!(gm_ai_roles.iter().any(|(v, _)| *v == "PLAYER"));
+        assert!(gm_ai_roles.iter().any(|(v, _)| *v == "OBSERVER"));
+        assert!(!gm_ai_roles.iter().any(|(v, _)| *v == "HOST"));
 
         let ai_gm_roles = wasm_client::role_options_for_mode("TTRPG_AI_GM");
         assert!(ai_gm_roles.iter().any(|(v, _)| *v == "PLAYER"));
@@ -771,6 +784,7 @@ mod tests {
         assert!(!html.contains("Apache Iggy + Avro v1/v2 Ready"));
         assert!(!html.contains("WebRTC + Durable Avro Event Stream"));
         assert!(html.contains("TTRPG Mode (GM + Players)"));
+        assert!(html.contains("TTRPG Mode (GM + AI + Players)"));
         assert!(html.contains("TTRPG Mode (AI GM + Players)"));
         assert!(html.contains("btn-toggle-auth-password"));
         assert!(html.contains("btn-toggle-session-password"));

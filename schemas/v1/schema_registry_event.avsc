@@ -28,7 +28,13 @@
           },
           { "name": "client_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
           { "name": "ingest_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
-          { "name": "timezone_offset_min", "type": "int" }
+          {
+            "name": "timezone_offset_min",
+            "type": "int",
+            "satya.pii_category": "QUASI_IDENTIFIER",
+            "satya.pii_owner": "PRIMARY_ACTOR",
+            "satya.erasure_action": "SET_ZERO"
+          }
         ]
       }
     },
@@ -47,6 +53,7 @@
     { "name": "avro_schema_json", "type": "string" },
     {
       "name": "registered_by",
+      "satya.subject_role": "PRIMARY_ACTOR",
       "type": [
         "null",
         {
@@ -54,9 +61,32 @@
           "name": "Participant",
           "namespace": "com.satya.types",
           "fields": [
-            { "name": "user_id", "type": "string" },
-            { "name": "username", "type": "string" },
-            { "name": "display_name", "type": "string" },
+            {
+              "name": "user_id",
+              "type": "string",
+              "satya.gdpr_subject_key": true,
+              "satya.pii_category": "DIRECT_IDENTIFIER",
+              "satya.erasure_action": "HMAC_TOMBSTONE",
+              "satya.dsar_third_party_mask": true,
+              "satya.dsar_mask_value": "redacted-peer"
+            },
+            {
+              "name": "username",
+              "type": "string",
+              "satya.pii_category": "DIRECT_IDENTIFIER",
+              "satya.erasure_action": "REPLACE_STATIC",
+              "satya.erasure_replacement": "deleted_user",
+              "satya.dsar_third_party_mask": true,
+              "satya.dsar_mask_value": "redacted_user"
+            },
+            {
+              "name": "display_name",
+              "type": "string",
+              "satya.pii_category": "DIRECT_IDENTIFIER",
+              "satya.erasure_action": "REPLACE_STATIC",
+              "satya.erasure_replacement": "Deleted Participant",
+              "satya.dsar_third_party_mask": false
+            },
             {
               "name": "participant_kind",
               "type": {
@@ -75,7 +105,14 @@
                 "symbols": ["GM", "AI_GM", "PLAYER", "HOST", "PARTICIPANT", "OBSERVER"]
               }
             },
-            { "name": "character_id", "type": ["null", "string"], "default": null },
+            {
+              "name": "character_id",
+              "type": ["null", "string"],
+              "default": null,
+              "satya.pii_category": "PSEUDONYMOUS_ID",
+              "satya.erasure_action": "SET_NULL",
+              "satya.dsar_third_party_mask": false
+            },
             {
               "name": "ai_agent_info",
               "type": [

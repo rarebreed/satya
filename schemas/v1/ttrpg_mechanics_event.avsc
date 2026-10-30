@@ -28,7 +28,13 @@
           },
           { "name": "client_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
           { "name": "ingest_timestamp_us", "type": { "type": "long", "logicalType": "timestamp-micros" } },
-          { "name": "timezone_offset_min", "type": "int" }
+          {
+            "name": "timezone_offset_min",
+            "type": "int",
+            "satya.pii_category": "QUASI_IDENTIFIER",
+            "satya.pii_owner": "PRIMARY_ACTOR",
+            "satya.erasure_action": "SET_ZERO"
+          }
         ]
       }
     },
@@ -42,14 +48,38 @@
     },
     {
       "name": "actor",
+      "satya.subject_role": "PRIMARY_ACTOR",
       "type": {
         "type": "record",
         "name": "Participant",
         "namespace": "com.satya.types",
         "fields": [
-          { "name": "user_id", "type": "string" },
-          { "name": "username", "type": "string" },
-          { "name": "display_name", "type": "string" },
+          {
+            "name": "user_id",
+            "type": "string",
+            "satya.gdpr_subject_key": true,
+            "satya.pii_category": "DIRECT_IDENTIFIER",
+            "satya.erasure_action": "HMAC_TOMBSTONE",
+            "satya.dsar_third_party_mask": true,
+            "satya.dsar_mask_value": "redacted-peer"
+          },
+          {
+            "name": "username",
+            "type": "string",
+            "satya.pii_category": "DIRECT_IDENTIFIER",
+            "satya.erasure_action": "REPLACE_STATIC",
+            "satya.erasure_replacement": "deleted_user",
+            "satya.dsar_third_party_mask": true,
+            "satya.dsar_mask_value": "redacted_user"
+          },
+          {
+            "name": "display_name",
+            "type": "string",
+            "satya.pii_category": "DIRECT_IDENTIFIER",
+            "satya.erasure_action": "REPLACE_STATIC",
+            "satya.erasure_replacement": "Deleted Participant",
+            "satya.dsar_third_party_mask": false
+          },
           {
             "name": "participant_kind",
             "type": {
@@ -68,7 +98,14 @@
               "symbols": ["GM", "AI_GM", "PLAYER", "HOST", "PARTICIPANT", "OBSERVER"]
             }
           },
-          { "name": "character_id", "type": ["null", "string"], "default": null },
+          {
+            "name": "character_id",
+            "type": ["null", "string"],
+            "default": null,
+            "satya.pii_category": "PSEUDONYMOUS_ID",
+            "satya.erasure_action": "SET_NULL",
+            "satya.dsar_third_party_mask": false
+          },
           {
             "name": "ai_agent_info",
             "type": [
@@ -89,7 +126,11 @@
         ]
       }
     },
-    { "name": "target_participants", "type": { "type": "array", "items": "com.satya.types.Participant" } },
+    {
+      "name": "target_participants",
+      "satya.subject_role": "SECONDARY_PARTICIPANT",
+      "type": { "type": "array", "items": "com.satya.types.Participant" }
+    },
     { "name": "skill_name", "type": ["null", "string"], "default": null },
     { "name": "attribute_tn", "type": ["null", "int"], "default": null, "doc": "Target Number from character attribute" },
     { "name": "difficulty_rating", "type": ["null", "int"], "default": null, "doc": "Required successes" },
@@ -120,6 +161,13 @@
     },
     { "name": "fatigue_level", "type": "int" },
     { "name": "wound_shock_index", "type": "float" },
-    { "name": "notes", "type": ["null", "string"], "default": null }
+    {
+      "name": "notes",
+      "type": ["null", "string"],
+      "default": null,
+      "satya.pii_category": "USER_CONTENT",
+      "satya.pii_owner": "PRIMARY_ACTOR",
+      "satya.erasure_action": "SET_NULL"
+    }
   ]
 }

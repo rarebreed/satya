@@ -299,7 +299,7 @@ pub const CTX_OOC_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="
 /// SVG icon markup for the `GM_NARRATION` chat input toggle button (open book / tome).
 pub const CTX_GM_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>"#;
 
-/// Parses a `<select>` option string (`"TTRPG"`, `"TTRPG_GM"`, `"TTRPG_AI_GM"`, or `"MEETING"`) into a [`SessionMode`].
+/// Parses a `<select>` option string (`"TTRPG"`, `"TTRPG_GM"`, `"TTRPG_GM_AI"`, `"TTRPG_AI_GM"`, or `"MEETING"`) into a [`SessionMode`].
 pub fn parse_session_mode(raw: &str) -> SessionMode {
     match raw {
         "MEETING" => SessionMode::Meeting,
@@ -307,9 +307,10 @@ pub fn parse_session_mode(raw: &str) -> SessionMode {
     }
 }
 
-/// Returns `true` when the selected business mode option is the AI GM + Players TTRPG variant (`"TTRPG_AI_GM"`).
+/// Returns `true` when the selected business mode option enables the AI GM
+/// (`"TTRPG_GM_AI"` for GM + AI + Players, or `"TTRPG_AI_GM"` for AI GM + Players).
 pub fn is_ai_gm_mode(raw: &str) -> bool {
-    raw == "TTRPG_AI_GM"
+    matches!(raw, "TTRPG_GM_AI" | "TTRPG_AI_GM")
 }
 
 /// Parses a `<select>` option string into a [`SessionRole`].
@@ -359,7 +360,7 @@ pub fn parse_combat_stance(raw: &str) -> Option<CombatStance> {
 }
 
 /// Returns the valid `(value, label)` option pairs for `#session-role-select`
-/// scoped to a given business mode option string (`"TTRPG"`, `"TTRPG_AI_GM"`, or `"MEETING"`).
+/// scoped to a given business mode option string (`"TTRPG"`, `"TTRPG_GM_AI"`, `"TTRPG_AI_GM"`, or `"MEETING"`).
 pub fn role_options_for_mode(mode_raw: &str) -> &'static [(&'static str, &'static str)] {
     match mode_raw {
         "MEETING" => &[
@@ -757,9 +758,15 @@ pub fn satya_fill_demo(username: String, password: String, display_name: String)
     set_input_value("auth-password", &password);
     set_input_value("auth-display-name", &display_name);
     if username.starts_with("gm_") {
-        set_select_value("session-mode-select", "TTRPG");
-        sync_role_options_for_mode("TTRPG", Some("GM"));
-        set_input_checked("enable-ai-gm", false);
+        let cur_mode = select_value("session-mode-select");
+        let target_mode = if cur_mode == "TTRPG_GM_AI" {
+            "TTRPG_GM_AI"
+        } else {
+            set_select_value("session-mode-select", "TTRPG");
+            "TTRPG"
+        };
+        sync_role_options_for_mode(target_mode, Some("GM"));
+        set_input_checked("enable-ai-gm", is_ai_gm_mode(target_mode));
         set_display("ttrpg-drawer", "block");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else if username.starts_with("host_") {
@@ -794,6 +801,11 @@ pub fn satya_mode_changed() {
         sync_chat_options_for_mode(SessionMode::Meeting);
     } else if mode == "TTRPG_AI_GM" {
         sync_role_options_for_mode("TTRPG_AI_GM", Some("PLAYER"));
+        set_input_checked("enable-ai-gm", true);
+        set_display("ttrpg-drawer", "block");
+        sync_chat_options_for_mode(SessionMode::Ttrpg);
+    } else if mode == "TTRPG_GM_AI" {
+        sync_role_options_for_mode("TTRPG_GM_AI", Some("GM"));
         set_input_checked("enable-ai-gm", true);
         set_display("ttrpg-drawer", "block");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
