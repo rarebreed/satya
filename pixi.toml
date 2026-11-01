@@ -7,8 +7,8 @@ version = "0.1.0"
 
 [dependencies]
 python = ">=3.14.7,<3.15"
-rust = ">=1.85"
-rust-std-wasm32-unknown-unknown = ">=1.85"
+rust = ">=1.99.1"
+rust-std-wasm32-unknown-unknown = ">=1.99.1"
 wasm-pack = ">=0.13"
 
 [pypi-dependencies]

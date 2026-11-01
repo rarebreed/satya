@@ -214,7 +214,30 @@ def build_ai_gm_graph(
         else:
             bound_model = model
 
-        response = bound_model.invoke(state.get("messages") or [])
+        messages = state.get("messages") or []
+        try:
+            response = bound_model.invoke(messages)
+        except Exception as exc:
+            err_text = str(exc)
+            # If the selected local Ollama model does not support native tool-calling,
+            # automatically fall back to direct chat completion without `bind_tools`.
+            if "does not support tools" in err_text.lower() and bound_model is not model:
+                try:
+                    response = model.invoke(messages)
+                except Exception as inner_exc:
+                    response = AIMessage(
+                        content=(
+                            f"[AI GM Model Error ({cfg.provider}/{cfg.model_id})]: {inner_exc}"
+                        )
+                    )
+            else:
+                response = AIMessage(
+                    content=(
+                        f"[AI GM Connection/Model Error ({cfg.provider}/{cfg.model_id} "
+                        f"at {cfg.base_url or 'default'})]: {exc}"
+                    )
+                )
+
         if not isinstance(response, BaseMessage):
             response = AIMessage(content=str(response))
         return {"messages": [response]}

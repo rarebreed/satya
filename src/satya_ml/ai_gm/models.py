@@ -51,9 +51,15 @@ def build_gm_chat_model(cfg: SessionLlmConfig, *, for_vision: bool = False) -> A
     if cfg.provider == "google_genai":
         from langchain_google_genai import ChatGoogleGenerativeAI
 
-        api_key = cfg.api_key or os.environ.get("GOOGLE_API_KEY")
+        api_key = (
+            cfg.api_key
+            or os.environ.get("GOOGLE_API_KEY")
+            or os.environ.get("GEMINI_API_KEY")
+        )
         if not api_key:
-            raise ValueError("Missing API key for provider 'google_genai'")
+            raise ValueError(
+                "Missing API key for provider 'google_genai' (set GOOGLE_API_KEY or GEMINI_API_KEY, or pass a session BYOK key)"
+            )
         return ChatGoogleGenerativeAI(
             model=target_model,
             google_api_key=api_key,

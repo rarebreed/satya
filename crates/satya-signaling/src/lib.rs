@@ -1741,7 +1741,13 @@ pub async fn trigger_ai_gm_chat_reply(
     let base_url = vault_opt
         .as_ref()
         .and_then(|v| v.base_url.clone())
-        .or_else(|| Some(ai_cfg.ollama_base_url.clone()));
+        .or_else(|| {
+            if provider == "ollama" {
+                Some(ai_cfg.ollama_base_url.clone())
+            } else {
+                None
+            }
+        });
     let ephemeral_key = vault_opt.as_ref().and_then(|v| v.api_key.clone());
 
     let trigger_payload = AiGmTurnTriggerRequest {
