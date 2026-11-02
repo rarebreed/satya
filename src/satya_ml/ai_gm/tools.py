@@ -17,6 +17,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from satya_ml.ai_gm.models import SessionLlmConfig  # noqa: F401 (installs Windows SSL fallback)
+
 try:
     import httpx
 except ImportError:  # pragma: no cover
@@ -125,6 +127,53 @@ _SESSION_NPCS: dict[str, dict[str, dict[str, Any]]] = {}
 _SESSION_MODES: dict[str, str] = {}
 _SESSION_HUMAN_GMS: dict[str, str | None] = {}
 
+_DEFAULT_STARTER_NPCS: dict[str, dict[str, Any]] = {
+    "captain_vance": {
+        "npc_id": "captain_vance",
+        "name": "Captain Elena Vance",
+        "archetype": "Veteran Aethelgard Fleet Commander",
+        "faction": "Aethelgard Colonial Navy",
+        "attribute_tns": {"STR": 13, "DEX": 12, "INT": 11, "WIL": 10},
+        "skills": {"astrogation": 3, "command": 3, "tactics": 2},
+        "combat_stance": "DEFENSIVE",
+        "fatigue": 1,
+        "wound_shock": 0,
+        "disposition": "wary",
+        "notes": "Commands the orbital relay station over Aethelgard Sector 4.",
+        "secrets": [
+            "Possesses the encrypted Aethelgard nav-log detailing the Ghost Drift anomaly."
+        ],
+    },
+    "secops_sentry": {
+        "npc_id": "secops_sentry",
+        "name": "Station SecOps Sentry",
+        "archetype": "Armored Bulkhead Patrol Guard",
+        "faction": "Sector 4 Security Operations",
+        "attribute_tns": {"STR": 11, "DEX": 12, "INT": 14, "WIL": 13},
+        "skills": {"small_arms": 2, "close_combat": 2, "surveillance": 1},
+        "combat_stance": "NEUTRAL",
+        "fatigue": 0,
+        "wound_shock": 0,
+        "disposition": "suspicious",
+        "notes": "Patrols the Sector 4 Docking Bay airlocks.",
+        "secrets": ["Keycard overrides the West Bulkhead containment lock."],
+    },
+    "dr_aris_thorne": {
+        "npc_id": "dr_aris_thorne",
+        "name": "Dr. Aris Thorne",
+        "archetype": "Xenobiology & Telemetry Specialist",
+        "faction": "Aethelgard Science Directorate",
+        "attribute_tns": {"STR": 15, "DEX": 13, "INT": 10, "WIL": 11},
+        "skills": {"xenobiology": 3, "sensor_analysis": 3, "medicine": 2},
+        "combat_stance": "DEFENSIVE",
+        "fatigue": 2,
+        "wound_shock": 0,
+        "disposition": "cooperative",
+        "notes": "Investigating signal harmonics from the Aethelgard deep-core relay.",
+        "secrets": ["Secretly transmitted telemetry samples to an off-world courier."],
+    },
+}
+
 
 def set_session_operating_mode(
     session_id: str,
@@ -148,18 +197,29 @@ def get_session_human_gm(session_id: str) -> str | None:
 
 
 def load_all_npc_profiles(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
-    """Load all NPC definitions from `data/npcs/*.toml`."""
+    """Load all NPC definitions from `data/npcs/*.toml`, falling back to built-in Sector 4 starter NPCs."""
     root = repo_root or _repo_root()
     npcs_dir = root / "data" / "npcs"
-    profiles: dict[str, dict[str, Any]] = {}
+    profiles: dict[str, dict[str, Any]] = {
+        npc_id: {
+            **data,
+            "attribute_tns": dict(data.get("attribute_tns", {})),
+            "skills": dict(data.get("skills", {})),
+            "secrets": list(data.get("secrets", [])),
+        }
+        for npc_id, data in _DEFAULT_STARTER_NPCS.items()
+    }
     if not npcs_dir.exists():
         return profiles
 
     for toml_path in sorted(npcs_dir.glob("*.toml")):
-        raw = tomllib.loads(toml_path.read_text(encoding="utf-8"))
-        for key, npc_data in raw.get("npcs", {}).items():
-            npc_id = str(npc_data.get("npc_id", key))
-            profiles[npc_id] = dict(npc_data)
+        try:
+            raw = tomllib.loads(toml_path.read_text(encoding="utf-8"))
+            for key, npc_data in raw.get("npcs", {}).items():
+                npc_id = str(npc_data.get("npc_id", key))
+                profiles[npc_id] = dict(npc_data)
+        except OSError:
+            continue
     return profiles
 
 

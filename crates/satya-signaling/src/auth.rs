@@ -20,11 +20,12 @@ use satya_storage::AuthConfig;
 use serde::{Deserialize, Serialize};
 use sqlx::{
     Row, SqlitePool,
-    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
 };
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -139,6 +140,7 @@ impl AuthAndSessionManager {
             Self::resolve_sqlite_options(base_dir.as_ref(), &auth_config.database_url)?;
         let db_pool = SqlitePoolOptions::new()
             .max_connections(8)
+            .acquire_timeout(Duration::from_secs(10))
             .connect_with(connect_opts)
             .await?;
 
@@ -246,7 +248,9 @@ impl AuthAndSessionManager {
     ) -> anyhow::Result<SqliteConnectOptions> {
         let trimmed = database_url.trim();
         if trimmed.contains(":memory:") {
-            return Ok(SqliteConnectOptions::from_str("sqlite::memory:")?.create_if_missing(true));
+            return Ok(SqliteConnectOptions::from_str("sqlite::memory:")?
+                .create_if_missing(true)
+                .busy_timeout(Duration::from_secs(10)));
         }
 
         let path_part = trimmed
@@ -254,12 +258,13 @@ impl AuthAndSessionManager {
             .or_else(|| trimmed.strip_prefix("sqlite:"))
             .unwrap_or(trimmed);
         let file_rel = path_part.split('?').next().unwrap_or("data/auth/users.db");
-        let candidate = PathBuf::from(file_rel);
-        let full_path = if candidate.is_absolute() {
+        let candidate: PathBuf = Path::new(file_rel).components().collect();
+        let raw_path = if candidate.is_absolute() {
             candidate
         } else {
             base_dir.join(candidate)
         };
+        let full_path: PathBuf = raw_path.components().collect();
 
         if let Some(parent) = full_path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -268,7 +273,9 @@ impl AuthAndSessionManager {
         Ok(SqliteConnectOptions::new()
             .filename(full_path)
             .create_if_missing(true)
-            .journal_mode(SqliteJournalMode::Wal))
+            .busy_timeout(Duration::from_secs(10))
+            .journal_mode(SqliteJournalMode::Wal)
+            .synchronous(SqliteSynchronous::Normal))
     }
 
     /// Hashes a plaintext secret (user password or session password) using Argon2id and a CSPRNG salt.

@@ -12,14 +12,15 @@ import time
 import uuid
 from typing import Annotated, Any, Literal, TypedDict
 
+from satya_ml.ai_gm.maps import set_session_llm_config
+from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model
+
 import httpx
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from satya_ml.ai_gm.maps import set_session_llm_config
-from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model
 from satya_ml.ai_gm.tools import (
     _gm_headers,
     _signaling_base_url,
@@ -210,20 +211,25 @@ def build_ai_gm_graph(
         }
 
     def gm_supervisor_node(state: AiGmSessionState) -> dict[str, Any]:
-        model = chat_model if chat_model is not None else build_gm_chat_model(cfg)
-        if hasattr(model, "bind_tools") and active_tools:
-            bound_model = model.bind_tools(active_tools)
-        else:
-            bound_model = model
-
         messages = state.get("messages") or []
+        model: Any | None = None
+        bound_model: Any | None = None
         try:
+            model = chat_model if chat_model is not None else build_gm_chat_model(cfg)
+            if hasattr(model, "bind_tools") and active_tools:
+                bound_model = model.bind_tools(active_tools)
+            else:
+                bound_model = model
             response = bound_model.invoke(messages)
         except Exception as exc:
             err_text = str(exc)
             # If the selected local Ollama model does not support native tool-calling,
             # automatically fall back to direct chat completion without `bind_tools`.
-            if "does not support tools" in err_text.lower() and bound_model is not model:
+            if (
+                "does not support tools" in err_text.lower()
+                and model is not None
+                and bound_model is not model
+            ):
                 try:
                     response = model.invoke(messages)
                 except Exception as inner_exc:

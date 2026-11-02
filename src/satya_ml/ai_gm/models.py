@@ -3,10 +3,43 @@
 from __future__ import annotations
 
 import os
+import ssl
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 ProviderName = Literal["ollama", "google_genai", "openai", "anthropic"]
+
+_ORIG_CREATE_DEFAULT_CONTEXT = ssl.create_default_context
+
+
+def _create_default_context_with_system_fallback(
+    purpose: ssl.Purpose = ssl.Purpose.SERVER_AUTH,
+    *,
+    cafile: str | bytes | os.PathLike[Any] | None = None,
+    capath: str | bytes | os.PathLike[Any] | None = None,
+    cadata: str | bytes | None = None,
+) -> ssl.SSLContext:
+    """Create an SSLContext, falling back to OS root certs if `cafile`/`capath` raises `PermissionError`."""
+    try:
+        return _ORIG_CREATE_DEFAULT_CONTEXT(
+            purpose=purpose,
+            cafile=cafile,
+            capath=capath,
+            cadata=cadata,
+        )
+    except PermissionError:
+        if cafile is not None or capath is not None:
+            return _ORIG_CREATE_DEFAULT_CONTEXT(
+                purpose=purpose,
+                cafile=None,
+                capath=None,
+                cadata=cadata,
+            )
+        raise
+
+
+if getattr(ssl.create_default_context, "__name__", "") != "_create_default_context_with_system_fallback":
+    ssl.create_default_context = _create_default_context_with_system_fallback  # type: ignore[assignment]
 
 
 def redact_api_key(api_key: str | None) -> str:

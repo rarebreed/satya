@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 import uuid
@@ -248,6 +249,19 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
         raise AssertionError("Expected ValueError when API key is missing")
     except (ValueError, ImportError):
         pass
+
+    # Verify Ollama ChatOllama instantiation succeeds even when SSL_CERT_FILE raises PermissionError
+    prev_ssl_cert = os.environ.get("SSL_CERT_FILE")
+    os.environ["SSL_CERT_FILE"] = str(Path(__file__).resolve().parent.parent)
+    try:
+        ollama_cfg = SessionLlmConfig(provider="ollama", model_id="gemma4:12b")
+        ollama_model = build_gm_chat_model(ollama_cfg)
+        assert getattr(ollama_model, "model", None) == "gemma4:12b"
+    finally:
+        if prev_ssl_cert is None:
+            os.environ.pop("SSL_CERT_FILE", None)
+        else:
+            os.environ["SSL_CERT_FILE"] = prev_ssl_cert
 
     # NPC lookup & state update
     sid = f"test-sess-{uuid.uuid4().hex[:6]}"
