@@ -318,16 +318,8 @@ pub fn evaluate_k20_full_range(
                         for &b_rule in b_rules {
                             for &m_mode in m_modes {
                                 let res = paired_list_signed_margin_pmfs(
-                                    skill_n,
-                                    k,
-                                    tn_eff,
-                                    d_over,
-                                    d_under,
-                                    c_mode,
-                                    false,
-                                    false,
-                                    b_rule,
-                                    m_mode,
+                                    skill_n, k, tn_eff, d_over, d_under, c_mode, false, false,
+                                    b_rule, m_mode,
                                 );
                                 let stats = compute_stats(&res.signed_margin_pmf);
                                 rows.push(CascadeSummaryRow {
@@ -385,8 +377,7 @@ pub fn compare_control_vs_skill_k20(
     lines.push(header);
     lines.push(sep.clone());
 
-    let mut col_vals: BTreeMap<usize, Vec<f64>> =
-        skills.iter().map(|&n| (n, Vec::new())).collect();
+    let mut col_vals: BTreeMap<usize, Vec<f64>> = skills.iter().map(|&n| (n, Vec::new())).collect();
 
     for c in controls {
         let tn = match tn_formula {
@@ -481,8 +472,7 @@ pub fn compare_control_vs_skill_k10(
     lines.push(header);
     lines.push(sep.clone());
 
-    let mut col_vals: BTreeMap<usize, Vec<f64>> =
-        skills.iter().map(|&n| (n, Vec::new())).collect();
+    let mut col_vals: BTreeMap<usize, Vec<f64>> = skills.iter().map(|&n| (n, Vec::new())).collect();
 
     for c in controls {
         let tn = match tn_formula {
@@ -580,16 +570,8 @@ pub fn evaluate_k10_full_range(
                         for &b_rule in b_rules {
                             for &m_mode in m_modes {
                                 let res = paired_list_signed_margin_pmfs(
-                                    skill_n,
-                                    k,
-                                    tn_eff,
-                                    d_over,
-                                    d_under,
-                                    c_mode,
-                                    false,
-                                    false,
-                                    b_rule,
-                                    m_mode,
+                                    skill_n, k, tn_eff, d_over, d_under, c_mode, false, false,
+                                    b_rule, m_mode,
                                 );
                                 let stats = compute_stats(&res.signed_margin_pmf);
                                 rows.push(CascadeSummaryRow {
@@ -754,7 +736,9 @@ pub fn run_calibration_report(preset: CalibrationPreset) -> String {
             );
             sections.push(format_summary_table(&rows_ctrl));
         }
-        CalibrationPreset::Midpoint2c | CalibrationPreset::Raw2kMinusC | CalibrationPreset::Both => {
+        CalibrationPreset::Midpoint2c
+        | CalibrationPreset::Raw2kMinusC
+        | CalibrationPreset::Both => {
             if matches!(
                 preset,
                 CalibrationPreset::Midpoint2c | CalibrationPreset::Both
@@ -763,8 +747,14 @@ pub fn run_calibration_report(preset: CalibrationPreset) -> String {
                     "\n=== CALIBRATION A: Midpoint-Anchored Roll-Over (TN_eff = (2K + 1) - 2C -> K + 1 at C = K/2) ==="
                         .to_string(),
                 );
-                let rows_mid =
-                    evaluate_parameter_grid(None, None, None, None, None, TnCalibration::Midpoint2c);
+                let rows_mid = evaluate_parameter_grid(
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    TnCalibration::Midpoint2c,
+                );
                 sections.push(format_summary_table(&rows_mid));
             }
             if matches!(

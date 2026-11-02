@@ -319,9 +319,7 @@ pub fn try_order_statistic_pmf(
         let q = 1.0 - p;
         let mut sum = 0.0;
         for j in k_rank_from_lowest..=pool_size {
-            sum += binomial_coeff(pool_size, j)
-                * p.powi(j as i32)
-                * q.powi((pool_size - j) as i32);
+            sum += binomial_coeff(pool_size, j) * p.powi(j as i32) * q.powi((pool_size - j) as i32);
         }
         sum
     };
@@ -386,8 +384,8 @@ pub fn center_distance_selection_pmf(
 
     for faces_in_bucket in ordered_buckets {
         let b = faces_in_bucket.len() as f64;
-        let p_bucket = (remaining_faces / sides_f).powi(n_exp)
-            - ((remaining_faces - b) / sides_f).powi(n_exp);
+        let p_bucket =
+            (remaining_faces / sides_f).powi(n_exp) - ((remaining_faces - b) / sides_f).powi(n_exp);
         for &f in faces_in_bucket {
             out.insert(f, p_bucket / b);
         }
@@ -412,7 +410,7 @@ pub fn try_median_gated_bimodal_pmf(
     gate_tn: i32,
     roll_under: bool,
 ) -> Result<Pmf, String> {
-    if pool_size % 2 == 0 || pool_size < 3 {
+    if pool_size.is_multiple_of(2) || pool_size < 3 {
         return Err(format!(
             "pool_size must be an odd integer >= 3 (e.g., 3 or 5), got {pool_size}"
         ));
@@ -430,7 +428,6 @@ pub fn try_median_gated_bimodal_pmf(
     fn recurse(
         face: i32,
         sides: i32,
-        pool_size: usize,
         mid_idx: usize,
         gate_tn: i32,
         roll_under: bool,
@@ -464,7 +461,6 @@ pub fn try_median_gated_bimodal_pmf(
         recurse(
             face + 1,
             sides,
-            pool_size,
             mid_idx,
             gate_tn,
             roll_under,
@@ -483,7 +479,6 @@ pub fn try_median_gated_bimodal_pmf(
             recurse(
                 face + 1,
                 sides,
-                pool_size,
                 mid_idx,
                 gate_tn,
                 roll_under,
@@ -504,7 +499,6 @@ pub fn try_median_gated_bimodal_pmf(
     recurse(
         1,
         sides,
-        pool_size,
         mid_idx,
         gate_tn,
         roll_under,
@@ -910,7 +904,9 @@ pub fn paired_list_signed_margin_pmfs(
                 }
             }
         };
-        *state_probs.entry((next_mod, s1, b1, m1_tier)).or_insert(0.0) += px;
+        *state_probs
+            .entry((next_mod, s1, b1, m1_tier))
+            .or_insert(0.0) += px;
         if num_pairs == 1 {
             *final_y_pmf.entry(y1).or_insert(0.0) += px;
             if s1 == 0 {

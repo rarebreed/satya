@@ -20,7 +20,9 @@ pub use summarize_cascade_odds::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use satya_schema::{OutcomeTier, Participant, SchemaRegistry, SessionMode, SessionRole, subjects};
+    use satya_schema::{
+        OutcomeTier, Participant, SchemaRegistry, SessionMode, SessionRole, subjects,
+    };
 
     fn assert_close(a: f64, b: f64, tol: f64) {
         assert!(
@@ -292,7 +294,13 @@ mod tests {
 
         let registry = SchemaRegistry::default();
         let meta = registry
-            .build_metadata(99, subjects::TTRPG_MECHANICS, 1, "sector-4", SessionMode::Ttrpg)
+            .build_metadata(
+                99,
+                subjects::TTRPG_MECHANICS,
+                1,
+                "sector-4",
+                SessionMode::Ttrpg,
+            )
             .unwrap();
         let actor = Participant::human("u-sara", "sara_v", "Sara", SessionRole::Player);
         let (event, outcome) = evaluate_satya_cascade_task(

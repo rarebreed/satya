@@ -278,9 +278,7 @@ impl StorageConfig {
         let has_inline_ai_gm = raw_table.get("ai_gm").is_some();
         let mut cfg: StorageConfig = toml::from_str(&content)?;
 
-        if !has_inline_ai_gm
-            && let Some(parent) = path_ref.parent()
-        {
+        if !has_inline_ai_gm && let Some(parent) = path_ref.parent() {
             let sibling_ai_path = parent.join("ai.toml");
             if sibling_ai_path.exists() {
                 cfg.ai_gm = AiGmConfig::load_from_file(&sibling_ai_path)?;
