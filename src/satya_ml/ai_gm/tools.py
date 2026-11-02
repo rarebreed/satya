@@ -48,12 +48,33 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
+def load_ai_gm_toml_config(repo_root: Path | None = None) -> dict[str, Any]:
+    """Load `[ai_gm]` defaults from `config/ai.toml` if present."""
+    root = repo_root or _repo_root()
+    ai_toml_path = root / "config" / "ai.toml"
+    if not ai_toml_path.exists():
+        return {}
+    try:
+        raw = tomllib.loads(ai_toml_path.read_text(encoding="utf-8"))
+        if isinstance(raw.get("ai_gm"), dict):
+            return dict(raw["ai_gm"])
+        return dict(raw)
+    except Exception:
+        return {}
+
+
 def _signaling_base_url() -> str:
     return os.environ.get("SATYA_SIGNALING_URL", "http://127.0.0.1:3000").rstrip("/")
 
 
 def _gm_service_token() -> str:
-    return os.environ.get("SATYA_GM_SERVICE_TOKEN", "satya_gm_secret_dev_token")
+    env_tok = os.environ.get("SATYA_GM_SERVICE_TOKEN")
+    if env_tok:
+        return env_tok
+    cfg_tok = load_ai_gm_toml_config().get("service_token")
+    if cfg_tok:
+        return str(cfg_tok)
+    return "satya_gm_secret_dev_token"
 
 
 def _gm_headers() -> dict[str, str]:

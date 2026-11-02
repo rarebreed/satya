@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from satya_ml.ai_gm.graph import build_ai_gm_graph
 from satya_ml.ai_gm.models import SessionLlmConfig, redact_api_key
-from satya_ml.ai_gm.tools import _gm_service_token
+from satya_ml.ai_gm.tools import _gm_service_token, load_ai_gm_toml_config
 
 app = FastAPI(
     title="Satya AI GM LangGraph Service",
@@ -80,13 +80,40 @@ def handle_ai_gm_event(
     _verify_service_auth(authorization)
 
     p_cfg = payload.provider_config or {}
-    provider = str(payload.provider or p_cfg.get("provider") or "ollama")
-    model_id = str(payload.model_id or p_cfg.get("model_id") or "qwen3:8b")
-    vision_model_id = payload.vision_model_id or p_cfg.get("vision_model_id") or "qwen2.5vl:7b"
-    temperature = float(
-        payload.temperature if payload.temperature is not None else (p_cfg.get("temperature") or 0.35)
+    file_cfg = load_ai_gm_toml_config()
+    provider = str(
+        payload.provider
+        or p_cfg.get("provider")
+        or file_cfg.get("default_provider")
+        or "ollama"
     )
-    base_url = payload.base_url or p_cfg.get("base_url") or "http://127.0.0.1:11434"
+    model_id = str(
+        payload.model_id
+        or p_cfg.get("model_id")
+        or file_cfg.get("reasoning_model")
+        or "gemma4:12b"
+    )
+    vision_model_id = (
+        payload.vision_model_id
+        or p_cfg.get("vision_model_id")
+        or file_cfg.get("vision_model")
+        or "gemma4:12b"
+    )
+    temperature = float(
+        payload.temperature
+        if payload.temperature is not None
+        else (
+            p_cfg.get("temperature")
+            if p_cfg.get("temperature") is not None
+            else (file_cfg.get("temperature") if file_cfg.get("temperature") is not None else 0.35)
+        )
+    )
+    base_url = (
+        payload.base_url
+        or p_cfg.get("base_url")
+        or file_cfg.get("ollama_base_url")
+        or "http://127.0.0.1:11434"
+    )
 
     llm_cfg = SessionLlmConfig(
         provider=provider,  # type: ignore[arg-type]

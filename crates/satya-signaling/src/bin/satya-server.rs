@@ -2,7 +2,7 @@
 #![deny(missing_docs)]
 
 use satya_signaling::{SignalingAppState, build_router};
-use satya_storage::StorageConfig;
+use satya_storage::{AiGmConfig, StorageConfig};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tracing::info;
@@ -17,12 +17,16 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let base_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let config_path = base_dir.join("config").join("storage.toml");
-    let storage_cfg = if config_path.exists() {
-        StorageConfig::load_from_file(&config_path)?
+    let storage_config_path = base_dir.join("config").join("storage.toml");
+    let ai_config_path = base_dir.join("config").join("ai.toml");
+    let mut storage_cfg = if storage_config_path.exists() {
+        StorageConfig::load_from_file(&storage_config_path)?
     } else {
         StorageConfig::default()
     };
+    if ai_config_path.exists() {
+        storage_cfg.ai_gm = AiGmConfig::load_from_file(&ai_config_path)?;
+    }
 
     let state = SignalingAppState::new(storage_cfg, &base_dir).await?;
     let app = build_router(state);

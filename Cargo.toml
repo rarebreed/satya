@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/satya-schema",
+    "crates/satya-engine",
     "crates/satya-storage",
     "crates/satya-signaling",
     "crates/satya-web",

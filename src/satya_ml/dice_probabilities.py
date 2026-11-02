@@ -1269,12 +1269,17 @@ def paired_list_signed_margin_pmfs(
                 botch = 0
             return succ, botch, miss_dist
 
-    # DP state: (current_mod, successes_so_far, botches_so_far, min_miss_tier, last_y) -> probability
-    state_probs: Dict[Tuple[int, int, int, int, int], float] = defaultdict(float)
+    tier_step = max(2, sides // 5)
+
+    # DP state for steps 1..N-1: (current_mod, successes_so_far, botches_so_far, min_miss_tier) -> prob
+    state_probs: Dict[Tuple[int, int, int, int], float] = defaultdict(float)
+    final_y_pmf: Dict[int, float] = defaultdict(float)
+    overshoot_raw: Dict[int, float] = defaultdict(float)
+
     for x1, px in pair_pmf.items():
         y1 = x1
         s1, b1, m1 = is_success_and_botch(y1)
-        m1_tier = min(5, m1 // 2)
+        m1_tier = min(5, m1 // tier_step)
         if mode == "linear_margin":
             next_mod = sign * (y1 - characteristic_c)
         else:
@@ -1284,17 +1289,33 @@ def paired_list_signed_margin_pmfs(
                 next_mod = eff_under
             else:
                 next_mod = 0
-        state_probs[(next_mod, s1, b1, m1_tier, y1)] += px
+        state_probs[(next_mod, s1, b1, m1_tier)] += px
+        if num_pairs == 1:
+            final_y_pmf[y1] += px
+            if s1 == 0:
+                overshoot_raw[m1] += px
 
-    for _step in range(2, num_pairs + 1):
-        next_states: Dict[Tuple[int, int, int, int, int], float] = defaultdict(float)
-        for (mod_n, succ_so_far, botch_so_far, min_miss_so_far, _prev_y), p_state in state_probs.items():
+    for step in range(2, num_pairs + 1):
+        is_last = step == num_pairs
+        next_states: Dict[Tuple[int, int, int, int], float] = defaultdict(float)
+        for (mod_n, succ_so_far, botch_so_far, min_miss_so_far), p_state in state_probs.items():
             for xn, px in pair_pmf.items():
                 yn = xn + mod_n
                 sn, bn, mn = is_success_and_botch(yn)
                 new_succ = succ_so_far + sn
                 new_botch = botch_so_far + bn
-                new_min_miss = min(min_miss_so_far, min(5, mn // 2))
+                new_min_miss = min(min_miss_so_far, min(5, mn // tier_step))
+                joint_p = p_state * px
+
+                if is_last:
+                    final_y_pmf[yn] += joint_p
+                    if new_succ == 0:
+                        overshoot = (
+                            (yn - characteristic_c)
+                            if count_under_as_success
+                            else (characteristic_c - yn)
+                        )
+                        overshoot_raw[overshoot] += joint_p
 
                 if mode == "markov_step":
                     if yn > characteristic_c:
@@ -1315,25 +1336,22 @@ def paired_list_signed_margin_pmfs(
                 else:
                     raise ValueError(f"Unknown mode: {mode}")
 
-                next_states[(next_mod, new_succ, new_botch, new_min_miss, yn)] += p_state * px
+                next_states[(next_mod, new_succ, new_botch, new_min_miss)] += joint_p
         state_probs = next_states
 
     signed_margin_pmf: Dict[int, float] = defaultdict(float)
     success_pmf: Dict[int, float] = defaultdict(float)
     botch_pmf: Dict[int, float] = defaultdict(float)
-    final_y_pmf: Dict[int, float] = defaultdict(float)
-    overshoot_raw: Dict[int, float] = defaultdict(float)
 
     prob_any_succ = 0.0
     prob_succ_with_comp = 0.0
     prob_clean_fail = 0.0
     prob_botch_fail = 0.0
 
-    for (_mod, succ, botch, min_miss_tier, final_y), prob in state_probs.items():
+    for (_mod, succ, botch, min_miss_tier), prob in state_probs.items():
         eff_botch = min_miss_tier if (botch_rule == "closest_miss" and succ == 0) else botch
         success_pmf[succ] += prob
         botch_pmf[eff_botch] += prob
-        final_y_pmf[final_y] += prob
 
         if margin_aggregation == "piecewise_zero_floor":
             margin = succ if succ > 0 else -eff_botch
@@ -1353,12 +1371,6 @@ def paired_list_signed_margin_pmfs(
                 prob_clean_fail += prob
             else:
                 prob_botch_fail += prob
-            overshoot = (
-                (final_y - characteristic_c)
-                if count_under_as_success
-                else (characteristic_c - final_y)
-            )
-            overshoot_raw[overshoot] += prob
 
     return SignedCascadeResult(
         signed_margin_pmf=normalize_pmf(signed_margin_pmf),

@@ -1,0 +1,15 @@
+[package]
+name = "satya-engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "summarize-cascade-odds"
+path = "src/bin/summarize_cascade_odds.rs"
+
+[dependencies]
+satya-schema = { path = "../satya-schema" }
+serde.workspace = true
+serde_json.workspace = true

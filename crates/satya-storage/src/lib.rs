@@ -136,7 +136,7 @@ impl Default for AuthConfig {
     }
 }
 
-/// Configuration for the Python LangGraph + Ollama / BYOK AI Game Master service (`[ai_gm]` in `config/storage.toml`).
+/// Configuration for the Python LangGraph + Ollama / BYOK AI Game Master service (`[ai_gm]` in `config/ai.toml`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiGmConfig {
     /// Whether AI Game Master dispatch is enabled.
@@ -149,20 +149,43 @@ pub struct AiGmConfig {
     pub default_provider: String,
     /// Base URL for local Ollama inference (`"http://127.0.0.1:11434"`).
     pub ollama_base_url: String,
-    /// Default reasoning and tool-calling model ID (e.g. `"qwen2.5:14b"`).
+    /// Default reasoning and tool-calling model ID (e.g. `"gemma4:12b"` or `"qwen2.5:14b"`).
     pub reasoning_model: String,
-    /// Default multimodal vision model ID for tactical map inspection (e.g. `"llama3.2-vision"`).
+    /// Default multimodal vision model ID for tactical map inspection (e.g. `"gemma4:12b"` or `"llama3.2-vision"`).
     pub vision_model: String,
     /// Default persona profile ID (e.g. `"harsh-reality-arbiter"`).
     pub persona_id: String,
     /// Default sampling temperature (`0.35`).
     #[serde(default = "default_ai_gm_temp")]
     pub temperature: f32,
-    /// When `true` (configured in `config/storage.toml` for end-to-end runtime), `satya-signaling` fails fast
+    /// When `true` (configured in `config/ai.toml` for end-to-end runtime), `satya-signaling` fails fast
     /// if the Python FastAPI service at `service_url` is unreachable. When `false` (`Default::default()` used by
     /// unit/integration tests), falls back to deterministic in-process replies when `service_url` is offline.
     #[serde(default)]
     pub fail_fast_when_offline: bool,
+}
+
+/// Top-level wrapper for `config/ai.toml` containing `[ai_gm]`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AiConfigFile {
+    /// Python LangGraph AI Game Master service configuration (`[ai_gm]`).
+    #[serde(default)]
+    pub ai_gm: AiGmConfig,
+}
+
+impl AiGmConfig {
+    /// Loads and parses an [`AiGmConfig`] from `config/ai.toml` (supporting either a `[ai_gm]` table or top-level keys).
+    pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let content = std::fs::read_to_string(path)?;
+        let raw_table: toml::Value = toml::from_str(&content)?;
+        if raw_table.get("ai_gm").is_some() {
+            let wrapper: AiConfigFile = toml::from_str(&content)?;
+            Ok(wrapper.ai_gm)
+        } else {
+            let cfg: AiGmConfig = toml::from_str(&content)?;
+            Ok(cfg)
+        }
+    }
 }
 
 fn default_ai_gm_temp() -> f32 {
@@ -186,22 +209,22 @@ impl Default for AiGmConfig {
     }
 }
 
-/// Root storage configuration loaded from `config/storage.toml`.
+/// Root storage and persistence configuration loaded from `config/storage.toml` (and companion `config/ai.toml`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
-    /// Persistent SQLx user authentication and bootstrap administrator configuration.
+    /// Persistent SQLx user authentication and bootstrap administrator configuration (`[auth]`).
     #[serde(default)]
     pub auth: AuthConfig,
-    /// Python LangGraph AI Game Master service configuration.
+    /// Python LangGraph AI Game Master service configuration (loaded from `config/ai.toml` or `[ai_gm]`).
     #[serde(default)]
     pub ai_gm: AiGmConfig,
-    /// Apache Iggy broker configuration.
+    /// Apache Iggy broker configuration (`[iggy]`).
     #[serde(default)]
     pub iggy: IggyConfig,
-    /// Micro-batching threshold configuration.
+    /// Micro-batching threshold configuration (`[batching]`).
     #[serde(default)]
     pub batching: BatchingConfig,
-    /// Map of topic name to its [`TopicStorageConfig`].
+    /// Map of topic name to its [`TopicStorageConfig`] (`[topics.*]`).
     pub topics: HashMap<String, TopicStorageConfig>,
 }
 
@@ -245,10 +268,24 @@ impl Default for StorageConfig {
 }
 
 impl StorageConfig {
-    /// Loads and parses a [`StorageConfig`] from a TOML file on disk.
+    /// Loads and parses a [`StorageConfig`] from `config/storage.toml`.
+    /// If `[ai_gm]` is not present inline in `storage.toml` and a sibling `ai.toml` file exists
+    /// in the same directory, `ai_gm` is automatically loaded from that `ai.toml` file.
     pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-        let cfg: StorageConfig = toml::from_str(&content)?;
+        let path_ref = path.as_ref();
+        let content = std::fs::read_to_string(path_ref)?;
+        let raw_table: toml::Value = toml::from_str(&content)?;
+        let has_inline_ai_gm = raw_table.get("ai_gm").is_some();
+        let mut cfg: StorageConfig = toml::from_str(&content)?;
+
+        if !has_inline_ai_gm
+            && let Some(parent) = path_ref.parent()
+        {
+            let sibling_ai_path = parent.join("ai.toml");
+            if sibling_ai_path.exists() {
+                cfg.ai_gm = AiGmConfig::load_from_file(&sibling_ai_path)?;
+            }
+        }
         Ok(cfg)
     }
 }
@@ -889,5 +926,24 @@ mod tests {
         assert_eq!(records[0].recipients[0].username, "mark_dev");
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_load_storage_toml_and_companion_ai_toml() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
+        let storage_toml_path = workspace_root.join("config").join("storage.toml");
+        let ai_toml_path = workspace_root.join("config").join("ai.toml");
+
+        let ai_cfg = AiGmConfig::load_from_file(&ai_toml_path).unwrap();
+        assert!(ai_cfg.enabled);
+        assert_eq!(ai_cfg.default_provider, "ollama");
+        assert_eq!(ai_cfg.reasoning_model, "gemma4:12b");
+        assert!(ai_cfg.fail_fast_when_offline);
+
+        let storage_cfg = StorageConfig::load_from_file(&storage_toml_path).unwrap();
+        assert_eq!(storage_cfg.topics.len(), 9);
+        assert_eq!(storage_cfg.ai_gm.reasoning_model, "gemma4:12b");
+        assert!(storage_cfg.ai_gm.fail_fast_when_offline);
     }
 }

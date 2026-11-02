@@ -423,7 +423,7 @@ def inspect_tactical_map(image_path: str, tactical_question: str) -> str:
 To allow the Python LangGraph service (or any external MCP/agent process) to interact with active sessions safely and deterministically, `satya-signaling` exposes a scoped `/api/gm/*` REST surface alongside an asynchronous event webhook dispatcher.
 
 ### 7.1 Service Authentication
-- Configured in `config/storage.toml` under an `[ai_gm]` section:
+- Configured in `config/ai.toml` under an `[ai_gm]` section:
   ```toml
   [ai_gm]
   enabled = true
@@ -431,9 +431,11 @@ To allow the Python LangGraph service (or any external MCP/agent process) to int
   service_token = "satya_gm_secret_dev_token"
   default_provider = "ollama"
   ollama_base_url = "http://127.0.0.1:11434"
-  reasoning_model = "qwen2.5:14b"
-  vision_model = "llama3.2-vision"
+  reasoning_model = "gemma4:12b"
+  vision_model = "gemma4:12b"
   persona_id = "harsh-reality-arbiter"
+  temperature = 0.35
+  fail_fast_when_offline = true
   ```
 - Requests from the Python LangGraph service to `satya-signaling` carry `Authorization: Bearer <service_token>` (verified by a `verify_gm_service_header` helper in `crates/satya-signaling/src/lib.rs`).
 
