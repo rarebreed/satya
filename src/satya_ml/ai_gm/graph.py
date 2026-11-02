@@ -18,6 +18,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from satya_ml.ai_gm.maps import set_session_llm_config
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model
 from satya_ml.ai_gm.tools import (
     _gm_headers,
@@ -172,6 +173,7 @@ def build_ai_gm_graph(
             operating_mode = "co_pilot" if "co_pilot" in raw_mode else "autonomous"
 
         set_session_operating_mode(session_id, operating_mode, human_gm_user_id)
+        set_session_llm_config(session_id, cfg)
         npcs = get_session_npcs(session_id)
 
         new_messages: list[BaseMessage] = []

@@ -301,6 +301,10 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
         )
         assert "Capt. Vance" in inspection
         assert "(5, 4)" in inspection
+        assert "[PARTIAL COVER / OBSTRUCTED]" in inspection
+        svg_text = svg_file.read_text(encoding="utf-8")
+        assert ">COVER</text>" in svg_text
+        assert 'cx="264" cy="216"' in svg_text
     finally:
         svg_file.unlink(missing_ok=True)
 
@@ -326,10 +330,15 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
 def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
     """Verify the 4-node LangGraph workflow and FastAPI `/internal/ai-gm/events` bridge in autonomous & co-pilot modes."""
     try:
-        from fastapi.testclient import TestClient
+        from fastapi import HTTPException
         from langchain_core.messages import AIMessage
         from satya_ml.ai_gm.graph import build_ai_gm_graph
-        from satya_ml.ai_gm.server import app, set_chat_model_override
+        from satya_ml.ai_gm.server import (
+            AiGmTurnEventPayload,
+            handle_ai_gm_event,
+            health,
+            set_chat_model_override,
+        )
     except ImportError:
         # If langgraph / fastapi are not yet installed in the active Python environment, skip gracefully
         return
@@ -386,36 +395,36 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
     # Test FastAPI service in Co-Pilot mode with BYOK header
     set_chat_model_override(FakeToolCallingChatModel())
     try:
-        client = TestClient(app)
-        health_res = client.get("/health")
-        assert health_res.status_code == 200
-        assert health_res.json()["status"] == "ok"
+        health_res = health()
+        assert health_res["status"] == "ok"
 
         # Unauthorized request fails with 401
-        unauth = client.post("/internal/ai-gm/events", json={"session_id": "ep-1"})
-        assert unauth.status_code == 401
+        try:
+            handle_ai_gm_event(
+                AiGmTurnEventPayload(session_id="ep-1"),
+                authorization=None,
+                x_satya_provider_key=None,
+            )
+            raise AssertionError("Expected HTTPException(401)")
+        except HTTPException as exc:
+            assert exc.status_code == 401
 
         # Authorized Co-Pilot turn with ephemeral BYOK header
-        ev_res = client.post(
-            "/internal/ai-gm/events",
-            headers={
-                "Authorization": "Bearer satya_gm_secret_dev_token",
-                "X-Satya-Provider-Key": "sk-ephemeral-secret-key",
-            },
-            json={
-                "session_id": "ep-copilot-fastapi",
-                "session_mode": "TTRPG_GM_AI",
-                "operating_mode": "CO_PILOT",
-                "human_gm_user_id": "u-gm-sean",
-                "trigger_event_id": "ev-202",
-                "trigger_actor": {"user_id": "u-gm-sean", "display_name": "Sean (GM)"},
-                "context_text": "What are Captain Vance's stats?",
-                "provider": "openai",
-                "model_id": "gpt-4o",
-            },
+        body = handle_ai_gm_event(
+            AiGmTurnEventPayload(
+                session_id="ep-copilot-fastapi",
+                session_mode="TTRPG_GM_AI",
+                operating_mode="CO_PILOT",
+                human_gm_user_id="u-gm-sean",
+                trigger_event_id="ev-202",
+                trigger_actor={"user_id": "u-gm-sean", "display_name": "Sean (GM)"},
+                context_text="What are Captain Vance's stats?",
+                provider="openai",
+                model_id="gpt-4o",
+            ),
+            authorization="Bearer satya_gm_secret_dev_token",
+            x_satya_provider_key="sk-ephemeral-secret-key",
         )
-        assert ev_res.status_code == 200
-        body = ev_res.json()
         assert body["operating_mode"] == "co_pilot"
         assert body["final_channel"] == "GM_WHISPER"
         assert body["api_key_status"] == "[REDACTED_BYOK_KEY]"

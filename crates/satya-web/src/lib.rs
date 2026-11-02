@@ -188,6 +188,70 @@ fn HeaderBar() -> impl IntoView {
                                         </label>
                                     </div>
                                 </div>
+                                <button
+                                    type="button"
+                                    id="btn-menu-toggle-ai-gm-settings"
+                                    class="btn btn-sm btn-secondary"
+                                    onclick="window.satyaToggleAiGmSettings()"
+                                    on:click=move |_| wasm_client::satya_toggle_ai_gm_settings()
+                                >
+                                    "AI GM (BYOK)"
+                                </button>
+                                <div
+                                    id="menu-ai-gm-settings-panel"
+                                    class="menu-chat-settings-panel"
+                                    style="display: none;"
+                                >
+                                    <label for="menu-ai-gm-provider">
+                                        <span>"LLM Provider"</span>
+                                        <select
+                                            id="menu-ai-gm-provider"
+                                            name="menu_ai_gm_provider"
+                                            onchange="window.satyaMenuAiGmProviderChanged()"
+                                            on:change=move |_| wasm_client::satya_menu_ai_gm_provider_changed()
+                                        >
+                                            <option value="ollama">"Ollama (Local)"</option>
+                                            <option value="google_genai">"Google Gemini (BYOK)"</option>
+                                            <option value="openai">"OpenAI (BYOK)"</option>
+                                            <option value="anthropic">"Anthropic Claude (BYOK)"</option>
+                                        </select>
+                                    </label>
+                                    <label for="menu-ai-gm-model">
+                                        <span>"Model ID"</span>
+                                        <input
+                                            id="menu-ai-gm-model"
+                                            name="menu_ai_gm_model"
+                                            type="text"
+                                            autocorrect="off"
+                                            autocapitalize="off"
+                                            spellcheck="false"
+                                            value="gemma4:12b"
+                                        />
+                                    </label>
+                                    <label for="menu-ai-gm-key">
+                                        <span>"Ephemeral BYOK API Key"</span>
+                                        <input
+                                            id="menu-ai-gm-key"
+                                            name="menu_ai_gm_key"
+                                            type="password"
+                                            autocomplete="off"
+                                            autocorrect="off"
+                                            autocapitalize="off"
+                                            spellcheck="false"
+                                            placeholder="In-memory session key only"
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        id="btn-apply-ai-gm-config"
+                                        class="btn btn-sm btn-accent"
+                                        onclick="window.satyaUpdateSessionGmConfig()"
+                                        on:click=move |_| wasm_client::satya_update_session_gm_config()
+                                    >
+                                        "Apply Session AI GM Config"
+                                    </button>
+                                    <div id="menu-ai-gm-feedback" class="feedback-box" aria-live="polite"></div>
+                                </div>
                             </div>
                             <button
                                 type="button"
@@ -381,6 +445,64 @@ fn AuthAndSessionGate() -> impl IntoView {
                     </label>
                     <input id="enable-ai-gm" type="checkbox" style="display: none"/>
                 </div>
+                <div id="ai-gm-config-fields" class="form-grid ai-gm-config-grid" style="display: none;">
+                    <label for="ai-gm-provider-select">
+                        <span>"AI GM Provider"</span>
+                        <select
+                            id="ai-gm-provider-select"
+                            name="ai_gm_provider"
+                            onchange="window.satyaAiGmProviderChanged()"
+                            on:change=move |_| wasm_client::satya_ai_gm_provider_changed()
+                        >
+                            <option value="ollama">"Ollama (Local - Default)"</option>
+                            <option value="google_genai">"Google Gemini (BYOK / Env)"</option>
+                            <option value="openai">"OpenAI (BYOK / Env)"</option>
+                            <option value="anthropic">"Anthropic Claude (BYOK / Env)"</option>
+                        </select>
+                    </label>
+                    <label for="ai-gm-model-input">
+                        <span>"AI GM Model ID"</span>
+                        <input
+                            id="ai-gm-model-input"
+                            name="ai_gm_model"
+                            type="text"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            placeholder="e.g. gemma4:12b or gemini-2.5-flash"
+                            value="gemma4:12b"
+                        />
+                    </label>
+                    <label for="ai-gm-api-key-input">
+                        <span>"Ephemeral BYOK API Key (RAM Only)"</span>
+                        <div class="password-field">
+                            <input
+                                id="ai-gm-api-key-input"
+                                name="ai_gm_api_key"
+                                type="password"
+                                autocomplete="off"
+                                autocorrect="off"
+                                autocapitalize="off"
+                                spellcheck="false"
+                                placeholder="Optional cloud API key (never logged)"
+                            />
+                            <button
+                                type="button"
+                                id="btn-toggle-ai-gm-key"
+                                class="btn-password-toggle"
+                                title="Show password"
+                                aria-label="Show password"
+                                aria-pressed="false"
+                                onclick="window.satyaTogglePassword('ai-gm-api-key-input', 'btn-toggle-ai-gm-key')"
+                                on:click=move |_| wasm_client::satya_toggle_password(
+                                    "ai-gm-api-key-input".to_string(),
+                                    "btn-toggle-ai-gm-key".to_string(),
+                                )
+                                inner_html=wasm_client::EYE_OPEN_SVG
+                            ></button>
+                        </div>
+                    </label>
+                </div>
                 <div class="btn-row">
                     <button
                         type="button"
@@ -485,6 +607,39 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                     <div class="roster-bar">
                         <span class="roster-title">"Session Roster (Nested Avro Participant Records):"</span>
                         <div id="roster-list" class="roster-chips"></div>
+                    </div>
+                </div>
+
+                <div id="tabletop-canvas-card" class="card tabletop-canvas-card">
+                    <div class="card-header-inline">
+                        <div>
+                            <h2>"Tactical Map & 3D Dice Tabletop Canvas"</h2>
+                            <span class="subtitle">"Live SVG Battlemap (`MAP_UPDATED`) & Synchronized 3D Physics Dice (`WGPU_DICE_ROLL`)"</span>
+                        </div>
+                        <span id="canvas-map-pill" class="pill pill-muted">"Standby Grid"</span>
+                    </div>
+                    <div id="tabletop-map-viewport" class="tabletop-map-viewport">
+                        <div id="tabletop-map-placeholder" class="tabletop-map-placeholder">
+                            "Awaiting tactical map generation (`generate_tactical_map`) or GM map update..."
+                        </div>
+                        <img
+                            id="tabletop-map-img"
+                            class="tabletop-map-img"
+                            alt="Tactical Battlemap"
+                            style="display: none;"
+                        />
+                    </div>
+                    <div class="roster-bar">
+                        <span class="roster-title">"Grid Tokens & Coordinates:"</span>
+                        <div id="tabletop-token-list" class="roster-chips">
+                            <span class="pill pill-muted">"No active tokens"</span>
+                        </div>
+                    </div>
+                    <div id="wgpu-dice-tray" class="wgpu-dice-tray">
+                        <span class="roster-title">"3D Physics Dice Tray (`wgpu` Seed Sync):"</span>
+                        <div id="wgpu-dice-readout" class="wgpu-dice-readout" aria-live="polite">
+                            "No 3D dice rolls spawned yet."
+                        </div>
                     </div>
                 </div>
             </div>
@@ -772,6 +927,59 @@ mod tests {
             "u-demo-sara",
             true
         ));
+
+        // Phase 3: AI GM provider default models & tabletop canvas HTML formatters
+        assert_eq!(
+            wasm_client::default_model_for_provider("google_genai"),
+            "gemini-2.5-flash"
+        );
+        assert_eq!(wasm_client::default_model_for_provider("openai"), "gpt-4o");
+        assert_eq!(
+            wasm_client::default_model_for_provider("anthropic"),
+            "claude-3-7-sonnet-latest"
+        );
+        assert_eq!(
+            wasm_client::default_model_for_provider("ollama"),
+            "gemma4:12b"
+        );
+
+        let map_req = satya_schema::GmMapUpdateRequest {
+            map_id: "map-docking-bay".to_string(),
+            title: "Sector 4 Docking Bay".to_string(),
+            image_url: "/api/maps/ep-1/map-docking-bay.svg".to_string(),
+            grid_width: 12,
+            grid_height: 10,
+            tokens: vec![satya_schema::TokenPlacement {
+                entity_id: "tok-vance".to_string(),
+                label: "Capt. Vance".to_string(),
+                x: 5,
+                y: 4,
+                visibility: satya_schema::MessageVisibility::GmOnly,
+            }],
+            notes: Some("Cover bulkhead at (5, 4)".to_string()),
+        };
+        let tokens_html = wasm_client::format_tactical_tokens_html(&map_req);
+        assert!(tokens_html.contains("Capt. Vance (5, 4)"));
+        assert!(tokens_html.contains("GmOnly"));
+
+        let dice_actor = satya_schema::Participant::human(
+            "u-sara",
+            "sara_p1",
+            "Sara (Valkyrie)",
+            satya_schema::SessionRole::Player,
+        );
+        let dice_html = wasm_client::format_wgpu_dice_roll_html(
+            &dice_actor,
+            &satya_schema::WgpuDiceSpec {
+                dice_notation: "3d20".to_string(),
+                physics_seed: 42,
+                outcomes: vec![3, 11, 19],
+                visibility: satya_schema::MessageVisibility::Public,
+            },
+        );
+        assert!(dice_html.contains("3d20"));
+        assert!(dice_html.contains(r#"<span class="dice-cube">3</span>"#));
+        assert!(dice_html.contains(r#"<span class="dice-cube">19</span>"#));
     }
 
     #[test]
@@ -788,6 +996,17 @@ mod tests {
         assert!(html.contains("TTRPG Mode (AI GM + Players)"));
         assert!(html.contains("btn-toggle-auth-password"));
         assert!(html.contains("btn-toggle-session-password"));
+        assert!(html.contains("btn-toggle-ai-gm-key"));
+        assert!(html.contains("ai-gm-config-fields"));
+        assert!(html.contains("ai-gm-provider-select"));
+        assert!(html.contains("ai-gm-model-input"));
+        assert!(html.contains("ai-gm-api-key-input"));
+        assert!(html.contains("btn-menu-toggle-ai-gm-settings"));
+        assert!(html.contains("menu-ai-gm-settings-panel"));
+        assert!(html.contains("tabletop-canvas-card"));
+        assert!(html.contains("tabletop-map-viewport"));
+        assert!(html.contains("wgpu-dice-tray"));
+        assert!(html.contains("wgpu-dice-readout"));
         assert!(html.contains("btn-hamburger-menu"));
         assert!(html.contains("hamburger-menu-dropdown"));
         assert!(html.contains("btn-menu-toggle-auth-pane"));

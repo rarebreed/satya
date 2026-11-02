@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field
 
@@ -65,15 +65,14 @@ def _verify_service_auth(authorization: str | None) -> None:
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
+def health() -> dict[str, str]:
     """Liveness check for `satya-signaling` and `pixi run serve-ai-gm`."""
     return {"status": "ok", "service": "satya-ai-gm"}
 
 
 @app.post("/internal/ai-gm/events")
-async def handle_ai_gm_event(
+def handle_ai_gm_event(
     payload: AiGmTurnEventPayload,
-    request: Request,
     authorization: str | None = Header(default=None),
     x_satya_provider_key: str | None = Header(default=None),
 ) -> dict[str, Any]:

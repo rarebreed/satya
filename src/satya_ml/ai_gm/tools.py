@@ -91,9 +91,16 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> 
     return None
 
 
-# In-memory per-session caches for NPC states, tactical maps, operating mode, and human GM ID
+from satya_ml.ai_gm.maps import (
+    generate_tactical_map,
+    get_session_map,
+    inspect_tactical_map,
+    move_map_token,
+    set_session_map,
+)
+
+# In-memory per-session caches for NPC states, operating mode, and human GM ID
 _SESSION_NPCS: dict[str, dict[str, dict[str, Any]]] = {}
-_SESSION_MAPS: dict[str, dict[str, Any]] = {}
 _SESSION_MODES: dict[str, str] = {}
 _SESSION_HUMAN_GMS: dict[str, str | None] = {}
 
@@ -140,19 +147,6 @@ def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
     if session_id not in _SESSION_NPCS:
         _SESSION_NPCS[session_id] = load_all_npc_profiles()
     return _SESSION_NPCS[session_id]
-
-
-def get_session_map(session_id: str) -> dict[str, Any] | None:
-    """Return the current tactical map state for `session_id`, if any."""
-    return _SESSION_MAPS.get(session_id)
-
-
-def set_session_map(session_id: str, map_state: dict[str, Any] | None) -> None:
-    """Update the cached tactical map state for `session_id`."""
-    if map_state is None:
-        _SESSION_MAPS.pop(session_id, None)
-    else:
-        _SESSION_MAPS[session_id] = map_state
 
 
 # ============================================================================
@@ -278,258 +272,6 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
     if not matches:
         return f"No specific lore entries matched '{query}'."
     return "\n".join(matches[:8])
-
-
-# ============================================================================
-# 5.3 Procedural Tactical Map Generation & Token Movement
-# ============================================================================
-
-
-def _normalize_token(tok: dict[str, Any]) -> dict[str, Any]:
-    gx = int(tok.get("grid_x", tok.get("x", 0)))
-    gy = int(tok.get("grid_y", tok.get("y", 0)))
-    return {
-        "token_id": str(tok.get("token_id", f"tok-{uuid.uuid4().hex[:6]}")),
-        "label": str(tok.get("label", tok.get("token_id", "Token"))),
-        "actor": tok.get("actor"),
-        "grid_x": gx,
-        "grid_y": gy,
-        "x": gx,
-        "y": gy,
-        "color_hex": str(tok.get("color_hex", "#38bdf8")),
-        "is_hidden": bool(tok.get("is_hidden", False)),
-        "status_badges": list(tok.get("status_badges", [])),
-    }
-
-
-def _render_tactical_svg(
-    map_id: str,
-    theme: str,
-    width: int,
-    height: int,
-    tokens: list[dict[str, Any]],
-) -> str:
-    cell_px = 48
-    svg_w = width * cell_px
-    svg_h = height * cell_px
-
-    lines = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {svg_w} {svg_h}" width="{svg_w}" height="{svg_h}">',
-        '  <defs>',
-        '    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">',
-        '      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#2a364f" stroke-width="1"/>',
-        '    </pattern>',
-        '  </defs>',
-        f'  <rect width="{svg_w}" height="{svg_h}" fill="#0f172a"/>',
-        f'  <rect width="{svg_w}" height="{svg_h}" fill="url(#grid)"/>',
-        f'  <rect x="4" y="4" width="{svg_w - 8}" height="{svg_h - 8}" fill="none" stroke="#475569" stroke-width="4"/>',
-    ]
-
-    mid_x = max(2, width // 2 - 1) * cell_px
-    mid_y = max(2, height // 2 - 1) * cell_px
-    lines.append(
-        f'  <rect x="{mid_x}" y="{mid_y}" width="{cell_px * 2}" height="{cell_px}" '
-        f'fill="#1e293b" stroke="#64748b" stroke-width="2" rx="4"/>'
-    )
-    lines.append(
-        f'  <text x="14" y="24" fill="#94a3b8" font-family="monospace" font-size="14">'
-        f"SATYA TACTICAL MAP [{map_id}] - {theme[:48]}</text>"
-    )
-
-    for tok in tokens:
-        gx = int(tok.get("grid_x", tok.get("x", 0)))
-        gy = int(tok.get("grid_y", tok.get("y", 0)))
-        cx = gx * cell_px + cell_px // 2
-        cy = gy * cell_px + cell_px // 2
-        color = str(tok.get("color_hex", "#38bdf8"))
-        label = str(tok.get("label", tok.get("token_id", "?")))[:10]
-        lines.append(
-            f'  <circle cx="{cx}" cy="{cy}" r="16" fill="{color}" stroke="#f8fafc" stroke-width="2"/>'
-        )
-        lines.append(
-            f'  <text x="{cx}" y="{cy + 4}" text-anchor="middle" fill="#0f172a" '
-            f'font-family="monospace" font-weight="bold" font-size="10">{label}</text>'
-        )
-
-    lines.append("</svg>")
-    return "\n".join(lines)
-
-
-def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None:
-    wire_tokens = [
-        {
-            "token_id": t["token_id"],
-            "label": t["label"],
-            "actor": t.get("actor"),
-            "grid_x": int(t.get("grid_x", t.get("x", 0))),
-            "grid_y": int(t.get("grid_y", t.get("y", 0))),
-            "is_hidden": bool(t.get("is_hidden", False)),
-            "status_badges": list(t.get("status_badges", [])),
-        }
-        for t in map_state.get("tokens", [])
-    ]
-    wire_payload = {
-        "map_id": map_state["map_id"],
-        "title": map_state.get("title", map_state.get("theme", "Tactical Map")),
-        "image_url": map_state.get("image_url", map_state.get("map_image_url", "")),
-        "grid_width": int(map_state["grid_width"]),
-        "grid_height": int(map_state["grid_height"]),
-        "tokens": wire_tokens,
-        "notes": map_state.get("notes"),
-    }
-    _http_post_json(
-        f"{_signaling_base_url()}/api/gm/sessions/{session_id}/map",
-        wire_payload,
-        timeout=2.0,
-    )
-
-
-@tool
-def generate_tactical_map(
-    session_id: str,
-    theme: str,
-    width: int = 16,
-    height: int = 12,
-    initial_tokens: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Generate a top-down tactical SVG battlemap (`data/maps/`) and broadcast `MAP_UPDATED` to the session."""
-    width = max(4, min(int(width), 32))
-    height = max(4, min(int(height), 32))
-    map_id = f"map-{uuid.uuid4().hex[:8]}"
-    raw_tokens = list(initial_tokens or [])
-    if not raw_tokens:
-        raw_tokens = [
-            {
-                "token_id": "tok-vance",
-                "label": "Capt. Vance",
-                "grid_x": 2,
-                "grid_y": height // 2,
-                "color_hex": "#38bdf8",
-            },
-            {
-                "token_id": "tok-secops-1",
-                "label": "SecOps Sentry",
-                "grid_x": width - 3,
-                "grid_y": height // 2,
-                "color_hex": "#f87171",
-            },
-        ]
-    tokens = [_normalize_token(t) for t in raw_tokens]
-
-    maps_dir = _repo_root() / "data" / "maps"
-    maps_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{session_id}_{map_id}.svg"
-    svg_path = maps_dir / filename
-    svg_path.write_text(_render_tactical_svg(map_id, theme, width, height, tokens), encoding="utf-8")
-
-    map_state: dict[str, Any] = {
-        "event_type": "MAP_GENERATED",
-        "map_id": map_id,
-        "title": theme,
-        "theme": theme,
-        "image_url": f"/maps/{filename}",
-        "map_image_url": f"/maps/{filename}",
-        "grid_width": width,
-        "grid_height": height,
-        "tokens": tokens,
-        "notes": f"Procedural SVG battlemap for {theme}",
-    }
-    set_session_map(session_id, map_state)
-    _sync_map_with_signaling(session_id, map_state)
-    return map_state
-
-
-@tool
-def move_map_token(
-    session_id: str,
-    token_id: str,
-    to_x: int,
-    to_y: int,
-) -> dict[str, Any]:
-    """Move a token to `(to_x, to_y)` on the session's active tactical map after bounds validation."""
-    map_state = get_session_map(session_id)
-    if map_state is None:
-        return {"error": f"No active tactical map for session '{session_id}'."}
-
-    grid_w = int(map_state.get("grid_width", 16))
-    grid_h = int(map_state.get("grid_height", 12))
-    if not (0 <= int(to_x) < grid_w and 0 <= int(to_y) < grid_h):
-        return {
-            "error": f"Target coordinates ({to_x}, {to_y}) out of bounds for {grid_w}x{grid_h} grid."
-        }
-
-    tokens = [_normalize_token(t) for t in map_state.get("tokens", [])]
-    found = False
-    for tok in tokens:
-        if tok.get("token_id") == token_id or str(tok.get("label", "")).lower() == token_id.lower():
-            tok["grid_x"] = int(to_x)
-            tok["grid_y"] = int(to_y)
-            tok["x"] = int(to_x)
-            tok["y"] = int(to_y)
-            found = True
-            break
-
-    if not found:
-        tokens.append(
-            _normalize_token(
-                {
-                    "token_id": token_id,
-                    "label": token_id,
-                    "grid_x": int(to_x),
-                    "grid_y": int(to_y),
-                    "color_hex": "#a78bfa",
-                }
-            )
-        )
-
-    updated = dict(map_state)
-    updated["event_type"] = "TOKEN_MOVED"
-    updated["tokens"] = tokens
-    set_session_map(session_id, updated)
-    _sync_map_with_signaling(session_id, updated)
-    return updated
-
-
-# ============================================================================
-# 5.4 Multimodal Vision Tool (`inspect_tactical_map`)
-# ============================================================================
-
-
-@tool
-def inspect_tactical_map(session_id: str, question: str) -> str:
-    """Inspect the active tactical map geometry, token positions, distances, and cover lines of sight."""
-    map_state = get_session_map(session_id)
-    if map_state is None:
-        return f"No active tactical map for session '{session_id}'."
-
-    width = int(map_state.get("grid_width", 16))
-    height = int(map_state.get("grid_height", 12))
-    tokens = map_state.get("tokens", [])
-    obstacle_x_range = (max(2, width // 2 - 1), max(2, width // 2))
-    obstacle_y = max(2, height // 2 - 1)
-
-    token_summaries = [
-        f"- {t.get('label', t.get('token_id'))} (`{t.get('token_id')}`) at ({t.get('grid_x', t.get('x'))}, {t.get('grid_y', t.get('y'))})"
-        for t in tokens
-    ]
-    pairwise: list[str] = []
-    for i in range(len(tokens)):
-        for j in range(i + 1, len(tokens)):
-            t1, t2 = tokens[i], tokens[j]
-            dx = int(t1.get("grid_x", t1.get("x", 0))) - int(t2.get("grid_x", t2.get("x", 0)))
-            dy = int(t1.get("grid_y", t1.get("y", 0))) - int(t2.get("grid_y", t2.get("y", 0)))
-            dist = round(math.hypot(dx, dy), 1)
-            pairwise.append(
-                f"{t1.get('label', t1.get('token_id'))} <-> {t2.get('label', t2.get('token_id'))}: {dist} cells"
-            )
-
-    return (
-        f"Map '{map_state.get('map_id')}' ({width}x{height} grid, url={map_state.get('image_url', map_state.get('map_image_url'))}):\n"
-        f"Central cover bulkhead at x={obstacle_x_range[0]}..{obstacle_x_range[1]}, y={obstacle_y}.\n"
-        f"Tokens:\n" + "\n".join(token_summaries) + "\n"
-        f"Pairwise Distances: {', '.join(pairwise) if pairwise else 'N/A'}\n"
-        f"Query context: {question}"
-    )
 
 
 # ============================================================================

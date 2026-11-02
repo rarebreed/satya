@@ -26,6 +26,9 @@ langchain-mcp-adapters = ">=0.1.0"
 fastapi = ">=0.115.0"
 uvicorn = ">=0.34.0"
 httpx = ">=0.28.0"
+plotly = ">=6.0.0"
+marimo = ">=0.11.0"
+pyrefly = ">=0.15.0"
 
 [tasks]
 # --- Build & Quality ---
@@ -57,3 +60,5 @@ compact-to-lance = { cmd = "python -m satya_ml.lance_ingest", env = { PYTHONPATH
 inspect-schemas = { cmd = "python -m satya_ml.inspect_avro --schemas", env = { PYTHONPATH = "src" }, description = "Validate and display all versioned .avsc schemas in schemas/" }
 inspect-topics = { cmd = "python -m satya_ml.inspect_avro --topics", env = { PYTHONPATH = "src" }, description = "Inspect flushed .avro batch watermarks and .lance table row counts" }
 ml-pipeline = { depends-on = ["compact-to-lance", "inspect-topics"], description = "Run incremental Avro-to-PyLance compaction and print dataset summary" }
+notebook = { cmd = "marimo edit notebooks/dice_probability_distributions.py", env = { PYTHONPATH = "src" }, description = "Launch interactive Marimo notebook editor for Satya TTRPG Dice Probability Distributions" }
+notebook-app = { cmd = "marimo run notebooks/dice_probability_distributions.py", env = { PYTHONPATH = "src" }, description = "Launch the Satya TTRPG Dice Probability Distributions Marimo dashboard app" }

@@ -3,12 +3,12 @@
 
 use js_sys::{Array, Float32Array, Reflect};
 use satya_schema::{
-    AccountRole, AuthSuccessResponse, ChannelContext, ChatMessageEvent, ClientWsPacket,
-    CombatStance, CreateSessionRequest, InteractionTurnType, JoinSessionRequest,
-    LeaveSessionRequest, LoginRequest, LogoutRequest, MessageVisibility, Participant,
-    ParticipantKind, RegisterRequest, ServerWsPacket, SessionEnterResponse, SessionMode,
-    SessionRole, StorageMetricsViewResponse, TopicMetricsView, TtrpgMechanicsEvent,
-    WebRtcEventKind,
+    AccountRole, AiGmProviderConfig, AuthSuccessResponse, ChannelContext, ChatMessageEvent,
+    ClientWsPacket, CombatStance, CreateSessionRequest, GmMapUpdateRequest, InteractionTurnType,
+    JoinSessionRequest, LeaveSessionRequest, LoginRequest, LogoutRequest, MessageVisibility,
+    Participant, ParticipantKind, RegisterRequest, ServerWsPacket, SessionEnterResponse,
+    SessionMode, SessionRole, StorageMetricsViewResponse, TopicMetricsView, TtrpgMechanicsEvent,
+    WebRtcEventKind, WgpuDiceSpec,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -597,6 +597,22 @@ pub fn register_window_bindings() {
     bind("satyaToggleChatSettings", c_chat_settings.as_ref());
     c_chat_settings.forget();
 
+    let c_ai_gm_settings = Closure::<dyn Fn()>::new(satya_toggle_ai_gm_settings);
+    bind("satyaToggleAiGmSettings", c_ai_gm_settings.as_ref());
+    c_ai_gm_settings.forget();
+
+    let c_ai_gm_prov = Closure::<dyn Fn()>::new(satya_ai_gm_provider_changed);
+    bind("satyaAiGmProviderChanged", c_ai_gm_prov.as_ref());
+    c_ai_gm_prov.forget();
+
+    let c_menu_ai_gm_prov = Closure::<dyn Fn()>::new(satya_menu_ai_gm_provider_changed);
+    bind("satyaMenuAiGmProviderChanged", c_menu_ai_gm_prov.as_ref());
+    c_menu_ai_gm_prov.forget();
+
+    let c_update_gm_cfg = Closure::<dyn Fn()>::new(satya_update_session_gm_config);
+    bind("satyaUpdateSessionGmConfig", c_update_gm_cfg.as_ref());
+    c_update_gm_cfg.forget();
+
     let c_bcast = Closure::<dyn Fn()>::new(satya_select_broadcast);
     bind("satyaSelectBroadcast", c_bcast.as_ref());
     c_bcast.forget();
@@ -725,6 +741,104 @@ pub fn satya_toggle_chat_settings() {
         .set_property("display", if is_hidden { "flex" } else { "none" });
 }
 
+/// Toggles the `Settings -> AI GM Provider` sub-panel (`#menu-ai-gm-settings-panel`) inside the top-bar Hamburger Menu.
+#[wasm_bindgen]
+pub fn satya_toggle_ai_gm_settings() {
+    let Some(panel) =
+        get_element("menu-ai-gm-settings-panel").and_then(|el| el.dyn_into::<HtmlElement>().ok())
+    else {
+        return;
+    };
+    let is_hidden = panel
+        .style()
+        .get_property_value("display")
+        .unwrap_or_default()
+        == "none";
+    let _ = panel
+        .style()
+        .set_property("display", if is_hidden { "flex" } else { "none" });
+}
+
+/// Returns the default recommended model identifier for the given AI GM provider (`ollama`, `google_genai`, `openai`, `anthropic`).
+pub fn default_model_for_provider(provider: &str) -> &'static str {
+    match provider {
+        "google_genai" => "gemini-2.5-flash",
+        "openai" => "gpt-4o",
+        "anthropic" => "claude-3-7-sonnet-latest",
+        _ => "gemma4:12b",
+    }
+}
+
+/// Updates `#ai-gm-model-input` with the recommended default model when `#ai-gm-provider-select` changes.
+#[wasm_bindgen]
+pub fn satya_ai_gm_provider_changed() {
+    let provider = select_value("ai-gm-provider-select");
+    set_input_value("ai-gm-model-input", default_model_for_provider(&provider));
+}
+
+/// Updates `#menu-ai-gm-model` with the recommended default model when `#menu-ai-gm-provider` changes.
+#[wasm_bindgen]
+pub fn satya_menu_ai_gm_provider_changed() {
+    let provider = select_value("menu-ai-gm-provider");
+    set_input_value("menu-ai-gm-model", default_model_for_provider(&provider));
+}
+
+/// Applies an updated AI GM provider, model, and optional ephemeral BYOK API key to the active session
+/// via `POST /api/sessions/:id/gm-config`, scrubbing the password input immediately after reading it.
+#[wasm_bindgen]
+pub fn satya_update_session_gm_config() {
+    spawn_local(async move {
+        let (session_id, auth_token) =
+            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
+        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
+            set_feedback(
+                "menu-ai-gm-feedback",
+                "Join or create an active session as GM first.",
+                true,
+            );
+            return;
+        };
+        let provider = select_value("menu-ai-gm-provider");
+        let model_raw = input_value("menu-ai-gm-model").trim().to_string();
+        let model_id = if model_raw.is_empty() {
+            default_model_for_provider(&provider).to_string()
+        } else {
+            model_raw
+        };
+        let key_raw = input_value("menu-ai-gm-key").trim().to_string();
+        // Scrub ephemeral BYOK password field from DOM immediately after reading
+        set_input_value("menu-ai-gm-key", "");
+        let api_key = if key_raw.is_empty() {
+            None
+        } else {
+            Some(key_raw)
+        };
+
+        let cfg = AiGmProviderConfig {
+            provider: provider.clone(),
+            model_id: model_id.clone(),
+            vision_model_id: None,
+            temperature: 0.35,
+            persona_id: "harsh-reality-arbiter".to_string(),
+            api_key,
+            base_url: None,
+        };
+        let path = format!("/api/sessions/{sid}/gm-config");
+        match fetch_json::<_, serde_json::Value>("POST", &path, Some(&tok), Some(&cfg)).await {
+            Ok(_) => {
+                set_feedback(
+                    "menu-ai-gm-feedback",
+                    &format!("Updated AI GM: {provider} / {model_id}"),
+                    false,
+                );
+            }
+            Err(err) => {
+                set_feedback("menu-ai-gm-feedback", &err, true);
+            }
+        }
+    });
+}
+
 /// Toggles a password `<input>` element between `"password"` (masked) and `"text"` (visible characters),
 /// updating the associated eye toggle button's icon and accessibility attributes.
 #[wasm_bindgen]
@@ -763,22 +877,32 @@ pub fn satya_fill_demo(username: String, password: String, display_name: String)
             set_select_value("session-mode-select", "TTRPG");
             "TTRPG"
         };
+        let ai_enabled = is_ai_gm_mode(target_mode);
         sync_role_options_for_mode(target_mode, Some("GM"));
-        set_input_checked("enable-ai-gm", is_ai_gm_mode(target_mode));
+        set_input_checked("enable-ai-gm", ai_enabled);
+        set_display(
+            "ai-gm-config-fields",
+            if ai_enabled { "grid" } else { "none" },
+        );
         set_display("ttrpg-drawer", "block");
+        set_display("tabletop-canvas-card", "block");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else if username.starts_with("host_") {
         set_select_value("session-mode-select", "MEETING");
         sync_role_options_for_mode("MEETING", Some("HOST"));
         set_input_checked("enable-ai-gm", false);
+        set_display("ai-gm-config-fields", "none");
         set_display("ttrpg-drawer", "none");
+        set_display("tabletop-canvas-card", "none");
         sync_chat_options_for_mode(SessionMode::Meeting);
     } else {
         let cur_mode = select_value("session-mode-select");
         let target_mode = if cur_mode == "MEETING" {
             set_select_value("session-mode-select", "TTRPG");
             set_input_checked("enable-ai-gm", false);
+            set_display("ai-gm-config-fields", "none");
             set_display("ttrpg-drawer", "block");
+            set_display("tabletop-canvas-card", "block");
             sync_chat_options_for_mode(SessionMode::Ttrpg);
             "TTRPG".to_string()
         } else {
@@ -795,22 +919,30 @@ pub fn satya_mode_changed() {
     if mode == "MEETING" {
         sync_role_options_for_mode("MEETING", Some("HOST"));
         set_input_checked("enable-ai-gm", false);
+        set_display("ai-gm-config-fields", "none");
         set_display("ttrpg-drawer", "none");
+        set_display("tabletop-canvas-card", "none");
         sync_chat_options_for_mode(SessionMode::Meeting);
     } else if mode == "TTRPG_AI_GM" {
         sync_role_options_for_mode("TTRPG_AI_GM", Some("PLAYER"));
         set_input_checked("enable-ai-gm", true);
+        set_display("ai-gm-config-fields", "grid");
         set_display("ttrpg-drawer", "block");
+        set_display("tabletop-canvas-card", "block");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else if mode == "TTRPG_GM_AI" {
         sync_role_options_for_mode("TTRPG_GM_AI", Some("GM"));
         set_input_checked("enable-ai-gm", true);
+        set_display("ai-gm-config-fields", "grid");
         set_display("ttrpg-drawer", "block");
+        set_display("tabletop-canvas-card", "block");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else {
         sync_role_options_for_mode("TTRPG", Some("GM"));
         set_input_checked("enable-ai-gm", false);
+        set_display("ai-gm-config-fields", "none");
         set_display("ttrpg-drawer", "block");
+        set_display("tabletop-canvas-card", "block");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     }
 }
@@ -958,6 +1090,40 @@ pub fn satya_create_session() {
             Some(display_raw)
         };
 
+        let ai_gm_config = if enable_ai_gm {
+            let provider = select_value("ai-gm-provider-select");
+            let provider = if provider.is_empty() {
+                "ollama".to_string()
+            } else {
+                provider
+            };
+            let model_raw = input_value("ai-gm-model-input").trim().to_string();
+            let model_id = if model_raw.is_empty() {
+                default_model_for_provider(&provider).to_string()
+            } else {
+                model_raw
+            };
+            let key_raw = input_value("ai-gm-api-key-input").trim().to_string();
+            // Scrub ephemeral BYOK password field from DOM immediately after reading
+            set_input_value("ai-gm-api-key-input", "");
+            let api_key = if key_raw.is_empty() {
+                None
+            } else {
+                Some(key_raw)
+            };
+            Some(AiGmProviderConfig {
+                provider,
+                model_id,
+                vision_model_id: None,
+                temperature: 0.35,
+                persona_id: "harsh-reality-arbiter".to_string(),
+                api_key,
+                base_url: None,
+            })
+        } else {
+            None
+        };
+
         let req = CreateSessionRequest {
             session_id,
             session_password,
@@ -965,7 +1131,7 @@ pub fn satya_create_session() {
             role,
             display_name,
             enable_ai_gm,
-            ai_gm_config: None,
+            ai_gm_config,
         };
 
         match fetch_json::<_, SessionEnterResponse>(
@@ -1080,6 +1246,14 @@ fn enter_session(data: SessionEnterResponse) {
     set_text("btn-menu-toggle-session-pane", "Show Session Pane");
     set_display(
         "ttrpg-drawer",
+        if session_mode == SessionMode::Meeting {
+            "none"
+        } else {
+            "block"
+        },
+    );
+    set_display(
+        "tabletop-canvas-card",
         if session_mode == SessionMode::Meeting {
             "none"
         } else {
@@ -1495,6 +1669,7 @@ fn handle_server_packet(pkt: ServerWsPacket) {
             satya_refresh_metrics();
         }
         ServerWsPacket::MapUpdated { map } => {
+            render_map_updated(&map);
             append_system_notice(&format!(
                 "Tactical map updated: {} ({}x{}, {} tokens)",
                 map.map_id,
@@ -1505,6 +1680,7 @@ fn handle_server_packet(pkt: ServerWsPacket) {
             satya_refresh_metrics();
         }
         ServerWsPacket::WgpuDiceRoll { actor, spec } => {
+            render_wgpu_dice_roll(&actor, &spec);
             append_system_notice(&format!(
                 "{} triggered 3D dice roll ({} -> {:?})",
                 actor.display_name, spec.dice_notation, spec.outcomes
@@ -2552,6 +2728,77 @@ pub fn append_system_notice(text: &str) {
     ));
     let _ = log.append_child(&div);
     log.set_scroll_top(log.scroll_height());
+}
+
+/// Formats an HTML snippet of tactical token chips (`label (x, y)`) for `#tabletop-token-list`.
+pub fn format_tactical_tokens_html(map: &GmMapUpdateRequest) -> String {
+    if map.tokens.is_empty() {
+        return r#"<span class="pill pill-muted">No tokens on map</span>"#.to_string();
+    }
+    map.tokens
+        .iter()
+        .map(|tok| {
+            let vis_suffix = if tok.visibility != MessageVisibility::Public {
+                format!(" · {:?}", tok.visibility)
+            } else {
+                String::new()
+            };
+            format!(
+                r#"<span class="pill pill-active">{} ({}, {}){}</span>"#,
+                escape_html(&tok.label),
+                tok.x,
+                tok.y,
+                vis_suffix
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Renders an incoming [`GmMapUpdateRequest`] into the `#tabletop-canvas-card` SVG battlemap viewport and token bar.
+pub fn render_map_updated(map: &GmMapUpdateRequest) {
+    set_text(
+        "canvas-map-pill",
+        &format!("{} ({}x{})", map.title, map.grid_width, map.grid_height),
+    );
+    set_class("canvas-map-pill", "pill pill-active");
+    set_display("tabletop-map-placeholder", "none");
+    if let Some(img) = get_element("tabletop-map-img") {
+        let _ = img.set_attribute("src", &map.image_url);
+        let _ = img.set_attribute(
+            "alt",
+            &format!(
+                "Tactical map {} ({}x{})",
+                map.title, map.grid_width, map.grid_height
+            ),
+        );
+    }
+    set_display("tabletop-map-img", "block");
+    if let Some(list) = get_element("tabletop-token-list") {
+        list.set_inner_html(&format_tactical_tokens_html(map));
+    }
+}
+
+/// Formats an HTML snippet of 3D physics dice cubes and roll notation for `#wgpu-dice-readout`.
+pub fn format_wgpu_dice_roll_html(actor: &Participant, spec: &WgpuDiceSpec) -> String {
+    let cubes: String = spec
+        .outcomes
+        .iter()
+        .map(|val| format!(r#"<span class="dice-cube">{val}</span>"#))
+        .collect::<Vec<_>>()
+        .join("");
+    format!(
+        r#"<span><strong>{}</strong> rolled <span class="mono">{}</span>:</span> {cubes}"#,
+        escape_html(&actor.display_name),
+        escape_html(&spec.dice_notation),
+    )
+}
+
+/// Renders an incoming [`WgpuDiceSpec`] into `#wgpu-dice-readout` inside the tabletop canvas card.
+pub fn render_wgpu_dice_roll(actor: &Participant, spec: &WgpuDiceSpec) {
+    if let Some(readout) = get_element("wgpu-dice-readout") {
+        readout.set_inner_html(&format_wgpu_dice_roll_html(actor, spec));
+    }
 }
 
 // ============================================================================

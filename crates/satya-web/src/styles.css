@@ -723,3 +723,94 @@ table.metrics-table th {
 #admin-inspector-card {
     display: none;
 }
+
+.ai-gm-config-grid {
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(56, 189, 248, 0.06);
+    border: 1px dashed rgba(56, 189, 248, 0.35);
+}
+
+.tabletop-map-viewport {
+    position: relative;
+    min-height: 220px;
+    background: #090d16;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.tabletop-map-placeholder {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-family: monospace;
+    padding: 24px;
+    text-align: center;
+}
+
+.tabletop-map-img {
+    width: 100%;
+    max-height: 380px;
+    object-fit: contain;
+    display: block;
+}
+
+.wgpu-dice-tray {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.wgpu-dice-readout {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.dice-cubes-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.dice-cube {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    border: 1px solid var(--accent);
+    color: #f8fafc;
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 0.82rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.dice-cube.crit-one {
+    border-color: #34d399;
+    color: #34d399;
+}
+
+.dice-cube.crit-twenty {
+    border-color: #f43f5e;
+    color: #f43f5e;
+}
