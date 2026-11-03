@@ -202,6 +202,10 @@ pub fn register_window_bindings() {
     bind("satyaToggleWebcamFloat", c_wc_float.as_ref());
     c_wc_float.forget();
 
+    let c_wc_drawer = Closure::<dyn Fn()>::new(satya_toggle_webcam_drawer);
+    bind("satyaToggleWebcamDrawer", c_wc_drawer.as_ref());
+    c_wc_drawer.forget();
+
     let c_wc_cols = Closure::<dyn Fn()>::new(satya_toggle_webcam_columns);
     bind("satyaToggleWebcamColumns", c_wc_cols.as_ref());
     c_wc_cols.forget();
@@ -225,6 +229,51 @@ pub fn register_window_bindings() {
     let c_combat_tick = Closure::<dyn Fn(i32)>::new(satya_advance_combat_tick);
     bind("satyaAdvanceCombatTick", c_combat_tick.as_ref());
     c_combat_tick.forget();
+
+    let c_google_auth = Closure::<dyn Fn()>::new(satya_link_google_account);
+    bind("satyaLinkGoogleAccount", c_google_auth.as_ref());
+    c_google_auth.forget();
+
+    let c_google_tok = Closure::<dyn Fn(String)>::new(satya_receive_google_token);
+    bind("satyaReceiveGoogleToken", c_google_tok.as_ref());
+    c_google_tok.forget();
+
+    let c_google_picked =
+        Closure::<dyn Fn(String, String, String, String)>::new(satya_receive_picked_google_doc);
+    bind("satyaReceivePickedGoogleDoc", c_google_picked.as_ref());
+    c_google_picked.forget();
+
+    let c_doc_file = Closure::<dyn Fn()>::new(satya_gm_doc_file_selected);
+    bind("satyaGmDocFileSelected", c_doc_file.as_ref());
+    c_doc_file.forget();
+
+    let c_doc_url = Closure::<dyn Fn()>::new(satya_gm_doc_url_changed);
+    bind("satyaGmDocUrlChanged", c_doc_url.as_ref());
+    c_doc_url.forget();
+
+    let c_doc_oauth_cfg = Closure::<dyn Fn()>::new(satya_toggle_google_oauth_config);
+    bind("satyaToggleGoogleOauthConfig", c_doc_oauth_cfg.as_ref());
+    c_doc_oauth_cfg.forget();
+
+    let c_doc_picker = Closure::<dyn Fn()>::new(satya_open_google_drive_picker);
+    bind("satyaOpenGoogleDrivePicker", c_doc_picker.as_ref());
+    c_doc_picker.forget();
+
+    let c_doc_src = Closure::<dyn Fn()>::new(satya_gm_doc_source_changed);
+    bind("satyaGmDocSourceChanged", c_doc_src.as_ref());
+    c_doc_src.forget();
+
+    let c_doc_preset = Closure::<dyn Fn(String)>::new(satya_load_gm_doc_preset);
+    bind("satyaLoadGmDocPreset", c_doc_preset.as_ref());
+    c_doc_preset.forget();
+
+    let c_doc_submit = Closure::<dyn Fn()>::new(satya_submit_gm_document);
+    bind("satyaSubmitGmDocument", c_doc_submit.as_ref());
+    c_doc_submit.forget();
+
+    let c_doc_refresh = Closure::<dyn Fn()>::new(satya_refresh_gm_documents);
+    bind("satyaRefreshGmDocuments", c_doc_refresh.as_ref());
+    c_doc_refresh.forget();
 
     let on_move = Closure::<dyn FnMut(web_sys::Event)>::new(move |ev: web_sys::Event| {
         handle_webcam_drag_move(&ev);

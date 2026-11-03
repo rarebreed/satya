@@ -41,15 +41,26 @@ pub(crate) fn get_element(id: &str) -> Option<Element> {
 }
 
 pub(crate) fn input_value(id: &str) -> String {
-    get_element(id)
-        .and_then(|el| el.dyn_into::<HtmlInputElement>().ok())
-        .map(|inp| inp.value())
+    let Some(el) = get_element(id) else {
+        return String::new();
+    };
+    if let Ok(inp) = el.clone().dyn_into::<HtmlInputElement>() {
+        return inp.value();
+    }
+    js_sys::Reflect::get(&el, &JsValue::from_str("value"))
+        .ok()
+        .and_then(|v| v.as_string())
         .unwrap_or_default()
 }
 
 pub(crate) fn set_input_value(id: &str, val: &str) {
-    if let Some(inp) = get_element(id).and_then(|el| el.dyn_into::<HtmlInputElement>().ok()) {
+    let Some(el) = get_element(id) else {
+        return;
+    };
+    if let Ok(inp) = el.clone().dyn_into::<HtmlInputElement>() {
         inp.set_value(val);
+    } else {
+        let _ = js_sys::Reflect::set(&el, &JsValue::from_str("value"), &JsValue::from_str(val));
     }
 }
 

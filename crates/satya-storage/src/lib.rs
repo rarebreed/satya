@@ -125,6 +125,12 @@ pub struct AuthConfig {
     /// List of usernames automatically assigned [`satya_schema::AccountRole::Admin`].
     #[serde(default)]
     pub bootstrap_admins: Vec<String>,
+    /// Optional Google Cloud OAuth 2.0 Web Client ID for browser-side `drive.file` authentication.
+    #[serde(default)]
+    pub google_oauth_client_id: Option<String>,
+    /// Optional Google Cloud Picker API Key for launching `google.picker.PickerBuilder` in the browser.
+    #[serde(default)]
+    pub google_picker_api_key: Option<String>,
 }
 
 impl Default for AuthConfig {
@@ -132,6 +138,8 @@ impl Default for AuthConfig {
         Self {
             database_url: "sqlite://data/auth/users.db?mode=rwc".to_string(),
             bootstrap_admins: vec!["gm_sean".to_string()],
+            google_oauth_client_id: None,
+            google_picker_api_key: None,
         }
     }
 }

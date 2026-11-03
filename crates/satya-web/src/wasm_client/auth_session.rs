@@ -10,7 +10,7 @@ use crate::wasm_client::dom::{
     set_button_disabled, set_class, set_display, set_feedback, set_input_checked, set_input_value,
     set_select_value, set_text,
 };
-use crate::wasm_client::notebook::render_combat_tracker;
+use crate::wasm_client::notebook::{render_combat_tracker, sync_google_auth_status_from_server};
 use crate::wasm_client::options::{
     default_model_for_provider, is_ai_gm_mode, parse_session_mode, parse_session_role,
     sync_chat_options_for_mode, sync_role_options_for_mode,
@@ -213,6 +213,7 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
         st.auth_token = Some(data.auth_token.clone());
         st.user = Some(data);
     });
+    sync_google_auth_status_from_server();
 
     if is_admin {
         set_display("iggy-non-admin-notice", "none");
@@ -676,6 +677,9 @@ pub(crate) fn render_roster() {
         }
         let _ = recip_el.append_child(&b_label);
     }
+
+    let roster_count = roster.len().max(1);
+    set_text("webcam-drawer-count-badge", &roster_count.to_string());
 
     for p in roster {
         if let Ok(chip) = doc.create_element("span") {

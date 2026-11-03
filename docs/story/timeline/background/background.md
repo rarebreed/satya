@@ -1,14 +1,6 @@
 # Earth 2035
 
-Satya takes place on Earth in 2035 AD.  This makes the Earth both familiar enough. but with enough distance in time  
-to account for drastic changes to both Earth, and society.  In order to understand the world of 2040, one needs to  
-understand some of the monumental changes that occurred.
-
-- Post Truth
-- Post Human
-- Dying Democracy
-- Rising Authoritarianism
-- Brink of War
+Satya takes place on Earth in 2032 AD.  
 
 ## The AI revolution
 
@@ -48,5 +40,4 @@ How countries around the world started supporting protectionism and populism
 ### Russia
 
 ### China
-
 

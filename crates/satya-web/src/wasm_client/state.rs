@@ -1,7 +1,9 @@
 //! Thread-local client state (`SatyaWasmState`) and WebRTC peer entries (`PeerEntry`)
 //! managed in Rust/WebAssembly across the session lifecycle.
 
-use satya_schema::{AuthSuccessResponse, ChannelContext, Participant, SessionMode};
+use satya_schema::{
+    AuthSuccessResponse, ChannelContext, GmDocumentRecord, Participant, SessionMode,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -63,6 +65,8 @@ pub struct SatyaWasmState {
     pub active_notebook_tab: String,
     /// Whether the Web Cams pane (`#webrtc-card`) is currently detached as a floating frame.
     pub webcam_floating: bool,
+    /// Whether the Web Cams column/drawer (`#webrtc-dock-column` / `#webrtc-card`) is collapsed to the right-edge rail.
+    pub webcam_collapsed: bool,
     /// Number of vertical columns in `#video-grid` (`1` or `2` — capped at most 2 columns).
     pub webcam_columns: u8,
     /// Active drag offset `(offset_x, offset_y)` while dragging the floating Web Cams frame.
@@ -71,6 +75,16 @@ pub struct SatyaWasmState {
     pub combat_round: u32,
     /// Current Satya Action-Count (Tick) clock in the Combat Tracker tab.
     pub combat_tick: u32,
+    /// Whether the current user has linked a Google account (`drive.file` scope).
+    pub google_linked: bool,
+    /// Ephemeral browser-side Google OAuth 2.0 `drive.file` access token (if authenticated via Google Identity Services).
+    pub google_access_token: Option<String>,
+    /// Optional Google Cloud OAuth 2.0 Web Client ID loaded from `/api/auth/google/status` or user input.
+    pub google_oauth_client_id: Option<String>,
+    /// Optional Google Cloud Picker API Key loaded from `/api/auth/google/status` or user input.
+    pub google_picker_api_key: Option<String>,
+    /// Cached `GM_ONLY` documents visible to the current user in the active session.
+    pub gm_documents: Vec<GmDocumentRecord>,
 }
 
 impl Default for SatyaWasmState {
@@ -97,10 +111,16 @@ impl Default for SatyaWasmState {
             active_channel_context: ChannelContext::InCharacter,
             active_notebook_tab: "maps".to_string(),
             webcam_floating: false,
+            webcam_collapsed: false,
             webcam_columns: 1,
             webcam_drag_offset: None,
             combat_round: 1,
             combat_tick: 0,
+            google_linked: false,
+            google_access_token: None,
+            google_oauth_client_id: None,
+            google_picker_api_key: None,
+            gm_documents: Vec::new(),
         }
     }
 }

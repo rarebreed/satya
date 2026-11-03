@@ -13,8 +13,8 @@ use argon2::{
 use chrono::Utc;
 pub use satya_schema::{AccountRole, AuthSuccessResponse};
 use satya_schema::{
-    AiGmOperatingMode, AiGmProviderConfig, GmContextResponse, GmMapUpdateRequest, Participant,
-    ParticipantKind, SessionMode, SessionRole,
+    AiGmOperatingMode, AiGmProviderConfig, GmContextResponse, GmDocumentRecord, GmMapUpdateRequest,
+    GoogleAuthStatusResponse, Participant, ParticipantKind, SessionMode, SessionRole,
 };
 use satya_storage::AuthConfig;
 use serde::{Deserialize, Serialize};
@@ -89,6 +89,8 @@ pub struct ProtectedSession {
     pub ai_gm_vault: Option<SessionAiGmVault>,
     /// Optional currently active tactical map in the session.
     pub active_map: Option<GmMapUpdateRequest>,
+    /// Sanitized `GM_ONLY` documents submitted to the GM in this session.
+    pub gm_documents: Vec<GmDocumentRecord>,
     /// Session creation timestamp in UTC microseconds since Unix epoch.
     pub created_at_us: i64,
 }
@@ -125,8 +127,11 @@ pub struct SessionDisconnectSummary {
 pub struct AuthAndSessionManager {
     db_pool: SqlitePool,
     bootstrap_admins: HashSet<String>,
+    google_oauth_client_id: Option<String>,
+    google_picker_api_key: Option<String>,
     users_by_username: RwLock<HashMap<String, UserAccount>>,
     auth_tokens: RwLock<HashMap<String, UserAccount>>,
+    google_links: RwLock<HashMap<String, (String, Option<String>)>>,
     sessions: RwLock<HashMap<String, ProtectedSession>>,
     join_tokens: RwLock<HashMap<String, JoinTokenClaims>>,
 }
@@ -232,11 +237,25 @@ impl AuthAndSessionManager {
             );
         }
 
+        let google_oauth_client_id = auth_config
+            .google_oauth_client_id
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let google_picker_api_key = auth_config
+            .google_picker_api_key
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
         Ok(Self {
             db_pool,
             bootstrap_admins,
+            google_oauth_client_id,
+            google_picker_api_key,
             users_by_username: RwLock::new(initial_users),
             auth_tokens: RwLock::new(HashMap::new()),
+            google_links: RwLock::new(HashMap::new()),
             sessions: RwLock::new(HashMap::new()),
             join_tokens: RwLock::new(HashMap::new()),
         })
@@ -497,6 +516,7 @@ impl AuthAndSessionManager {
                     roster,
                     ai_gm_vault: None,
                     active_map: None,
+                    gm_documents: Vec::new(),
                     created_at_us: Utc::now().timestamp_micros(),
                 },
             );
@@ -666,9 +686,144 @@ impl AuthAndSessionManager {
             human_gm_user_id,
             roster,
             active_map: session.active_map.clone(),
+            gm_documents: session.gm_documents.clone(),
         };
 
         Some((ctx, session.ai_gm_vault.clone()))
+    }
+
+    /// Links a Google OIDC identity (`google_sub`) and optional ephemeral `drive.file` access token
+    /// to an authenticated Satya `user_id` strictly in memory.
+    pub async fn link_google_account(
+        &self,
+        user_id: &str,
+        google_sub: String,
+        access_token: Option<String>,
+    ) -> GoogleAuthStatusResponse {
+        let clean_sub = google_sub.trim().to_string();
+        let clean_tok = access_token
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty());
+        let has_tok = clean_tok.is_some();
+        self.google_links
+            .write()
+            .await
+            .insert(user_id.to_string(), (clean_sub.clone(), clean_tok));
+        GoogleAuthStatusResponse {
+            user_id: user_id.to_string(),
+            google_linked: true,
+            google_sub: Some(clean_sub),
+            has_ephemeral_drive_token: has_tok,
+            enforced_scope: "https://www.googleapis.com/auth/drive.file".to_string(),
+            google_oauth_client_id: self.google_oauth_client_id.clone(),
+            google_picker_api_key: self.google_picker_api_key.clone(),
+        }
+    }
+
+    /// Returns the Google OAuth link status for `user_id` without exposing any access token.
+    pub async fn get_google_auth_status(&self, user_id: &str) -> GoogleAuthStatusResponse {
+        let guard = self.google_links.read().await;
+        if let Some((sub, tok)) = guard.get(user_id) {
+            GoogleAuthStatusResponse {
+                user_id: user_id.to_string(),
+                google_linked: true,
+                google_sub: Some(sub.clone()),
+                has_ephemeral_drive_token: tok.is_some(),
+                enforced_scope: "https://www.googleapis.com/auth/drive.file".to_string(),
+                google_oauth_client_id: self.google_oauth_client_id.clone(),
+                google_picker_api_key: self.google_picker_api_key.clone(),
+            }
+        } else {
+            GoogleAuthStatusResponse {
+                user_id: user_id.to_string(),
+                google_linked: false,
+                google_sub: None,
+                has_ephemeral_drive_token: false,
+                enforced_scope: "https://www.googleapis.com/auth/drive.file".to_string(),
+                google_oauth_client_id: self.google_oauth_client_id.clone(),
+                google_picker_api_key: self.google_picker_api_key.clone(),
+            }
+        }
+    }
+
+    /// Retrieves the ephemeral in-memory `drive.file` access token for `user_id`, if present.
+    pub async fn get_ephemeral_google_token(&self, user_id: &str) -> Option<String> {
+        self.google_links
+            .read()
+            .await
+            .get(user_id)
+            .and_then(|(_, tok)| tok.clone())
+    }
+
+    /// Appends a sanitized `GM_ONLY` [`GmDocumentRecord`] to `session_id` and returns both the stored
+    /// record and the authorized recipient `user_id`s (strictly the session's Human GM/Host and the uploader).
+    pub async fn add_session_gm_document(
+        &self,
+        session_id: &str,
+        uploader_user_id: &str,
+        mut doc: GmDocumentRecord,
+    ) -> anyhow::Result<(GmDocumentRecord, Participant, Vec<String>)> {
+        let sid = session_id.trim();
+        let mut guard = self.sessions.write().await;
+        let session = guard
+            .get_mut(sid)
+            .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+
+        let uploader = session
+            .roster
+            .get(uploader_user_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
+
+        doc.uploader_user_id = uploader.user_id.clone();
+        doc.uploader_display_name = uploader.display_name.clone();
+        session.gm_documents.push(doc.clone());
+
+        let mut delivery_ids: Vec<String> = session
+            .roster
+            .values()
+            .filter(|p| {
+                p.participant_kind == ParticipantKind::Human
+                    && (matches!(p.role, SessionRole::Gm | SessionRole::Host)
+                        || p.user_id == uploader.user_id)
+            })
+            .map(|p| p.user_id.clone())
+            .collect();
+        delivery_ids.sort();
+        delivery_ids.dedup();
+
+        Ok((doc, uploader, delivery_ids))
+    }
+
+    /// Lists `GM_ONLY` documents in `session_id` visible to `caller_user_id`:
+    /// - Human GM (`SessionRole::Gm`) or Host (`SessionRole::Host`) receives all submitted documents.
+    /// - Players/Participants receive only their own submitted documents (never another player's document).
+    pub async fn list_session_gm_documents_for_user(
+        &self,
+        session_id: &str,
+        caller_user_id: &str,
+    ) -> anyhow::Result<Vec<GmDocumentRecord>> {
+        let sid = session_id.trim();
+        let guard = self.sessions.read().await;
+        let session = guard
+            .get(sid)
+            .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+
+        let caller = session
+            .roster
+            .get(caller_user_id)
+            .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
+
+        if matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+            Ok(session.gm_documents.clone())
+        } else {
+            Ok(session
+                .gm_documents
+                .iter()
+                .filter(|d| d.uploader_user_id == caller_user_id)
+                .cloned()
+                .collect())
+        }
     }
 
     /// Updates the active tactical map stored in `session_id`.
@@ -708,6 +863,7 @@ impl AuthAndSessionManager {
             // Scrub ephemeral BYOK credentials when the sponsoring user leaves or no humans remain
             if remaining_human_count == 0 {
                 session.ai_gm_vault = None;
+                session.gm_documents.clear();
             } else if let Some(vault) = session.ai_gm_vault.as_mut()
                 && vault.sponsor_user_id == user_id
             {
@@ -737,6 +893,9 @@ impl AuthAndSessionManager {
     ) -> Option<(UserAccount, Vec<SessionDisconnectSummary>)> {
         let clean = token.strip_prefix("Bearer ").unwrap_or(token).trim();
         let account = self.auth_tokens.write().await.remove(clean)?;
+        if let Some(entry) = self.google_links.write().await.get_mut(&account.user_id) {
+            entry.1 = None;
+        }
 
         let session_ids: Vec<String> = {
             let sessions = self.sessions.read().await;

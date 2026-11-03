@@ -138,10 +138,11 @@ from satya_ml.ai_gm.maps import (
     set_session_map,
 )
 
-# In-memory per-session caches for NPC states, operating mode, and human GM ID
+# In-memory per-session caches for NPC states, operating mode, human GM ID, and GM_ONLY documents
 _SESSION_NPCS: dict[str, dict[str, dict[str, Any]]] = {}
 _SESSION_MODES: dict[str, str] = {}
 _SESSION_HUMAN_GMS: dict[str, str | None] = {}
+_SESSION_GM_DOCS: dict[str, list[dict[str, Any]]] = {}
 
 _DEFAULT_STARTER_NPCS: dict[str, dict[str, Any]] = {
     "captain_vance": {
@@ -210,6 +211,16 @@ def get_session_operating_mode(session_id: str) -> str:
 def get_session_human_gm(session_id: str) -> str | None:
     """Return the human GM user_id for a co-pilot session, if known."""
     return _SESSION_HUMAN_GMS.get(session_id)
+
+
+def set_session_gm_docs(session_id: str, docs: list[dict[str, Any]]) -> None:
+    """Cache the sanitized `GM_ONLY` documents synced from `GET /api/gm/sessions/:id/context`."""
+    _SESSION_GM_DOCS[session_id] = list(docs)
+
+
+def get_session_gm_docs(session_id: str) -> list[dict[str, Any]]:
+    """Return cached `GM_ONLY` documents for `session_id`."""
+    return list(_SESSION_GM_DOCS.get(session_id, []))
 
 
 def load_all_npc_profiles(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
@@ -409,6 +420,47 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
     if not matches:
         return f"No specific lore entries matched '{query}'."
     return "\n".join(matches[:8])
+
+
+@tool
+def read_gm_documents(session_id: str = "default", query: str | None = None) -> str:
+    """Read sanitized `GM_ONLY` documents (character dossiers, backstories, Google Docs/Sheets) uploaded to the GM in this session."""
+    docs = get_session_gm_docs(session_id)
+    if not docs and httpx is not None:
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                resp = client.get(
+                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/context",
+                    headers=_gm_headers(),
+                )
+                if resp.status_code == 200:
+                    data = dict(resp.json())
+                    docs = list(data.get("gm_documents") or [])
+                    set_session_gm_docs(session_id, docs)
+        except Exception:
+            pass
+
+    if not docs:
+        return f"No GM_ONLY documents have been uploaded for session '{session_id}'."
+
+    kw = (query or "").strip().lower()
+    blocks: list[str] = []
+    for d in docs:
+        title = str(d.get("title") or "Untitled")
+        uploader = str(d.get("uploader_display_name") or d.get("uploader_user_id") or "Unknown")
+        source = str(d.get("source_kind") or "DIRECT_TEXT_UPLOAD")
+        doc_id = str(d.get("doc_id") or "doc")
+        body = str(d.get("sanitized_content") or "")
+        if kw and kw not in title.lower() and kw not in uploader.lower() and kw not in body.lower():
+            continue
+        blocks.append(
+            f'<untrusted_player_document doc_id="{doc_id}" uploader="{uploader}" '
+            f'title="{title}" source="{source}">\n{body}\n</untrusted_player_document>'
+        )
+
+    if not blocks:
+        return f"No GM_ONLY documents matched query '{query}'."
+    return "\n\n".join(blocks[:6])
 
 
 # ============================================================================
@@ -627,6 +679,7 @@ def get_builtin_gm_tools() -> list[Any]:
         update_npc_state,
         query_satya_rules,
         query_campaign_lore,
+        read_gm_documents,
         generate_tactical_map,
         move_map_token,
         inspect_tactical_map,

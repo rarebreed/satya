@@ -102,6 +102,17 @@ fn HeaderBar() -> impl IntoView {
                             </button>
                             <button
                                 type="button"
+                                id="btn-menu-toggle-webcam-pane"
+                                class="btn btn-sm btn-secondary"
+                                aria-expanded="true"
+                                aria-controls="webrtc-card"
+                                onclick="window.satyaToggleWebcamDrawer()"
+                                on:click=move |_| wasm_client::satya_toggle_webcam_drawer()
+                            >
+                                "Hide Web Cams"
+                            </button>
+                            <button
+                                type="button"
                                 id="btn-menu-toggle-settings"
                                 class="btn btn-sm btn-secondary"
                                 onclick="window.satyaToggleSettingsMenu()"
@@ -380,6 +391,17 @@ fn AuthAndSessionGate() -> impl IntoView {
                     </button>
                     <button
                         type="button"
+                        id="btn-google-auth"
+                        class="btn btn-secondary"
+                        title="Link Google account with non-sensitive `drive.file` single-file Picker scope for GM_ONLY Google Doc/Sheet import"
+                        onclick="window.satyaLinkGoogleAccount()"
+                        on:click=move |_| wasm_client::satya_link_google_account()
+                    >
+                        "Link Google (drive.file)"
+                    </button>
+                    <span id="google-auth-status-pill" class="pill pill-muted">"Google Not Linked"</span>
+                    <button
+                        type="button"
                         id="btn-logout"
                         class="btn btn-danger"
                         onclick="window.satyaLogout()"
@@ -621,6 +643,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                 on:click=move |_| wasm_client::satya_select_notebook_tab("combat".to_string())
                             >
                                 "Combat Tracker"
+                            </button>
+                            <button
+                                type="button"
+                                id="tab-btn-docs"
+                                role="tab"
+                                aria-selected="false"
+                                aria-controls="notebook-pane-docs"
+                                data-notebook-tab="docs"
+                                class="notebook-tab"
+                                onclick="window.satyaSelectNotebookTab('docs')"
+                                on:click=move |_| wasm_client::satya_select_notebook_tab("docs".to_string())
+                            >
+                                "GM Docs"
                             </button>
                             <button
                                 type="button"
@@ -962,7 +997,180 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             </div>
                         </div>
 
-                        // --- TAB 6: APACHE IGGY, TOPICS AND PYLANCE STATS ---
+                        // --- TAB 6: GM_ONLY DOCUMENTS (TEXT/MARKDOWN & GOOGLE DOCS/SHEETS) ---
+                        <div
+                            id="notebook-pane-docs"
+                            role="tabpanel"
+                            aria-labelledby="tab-btn-docs"
+                            data-notebook-pane="docs"
+                            class="notebook-pane"
+                            style="display: none;"
+                        >
+                            <div class="pane-toolbar">
+                                <div>
+                                    <span class="subtitle">
+                                        "GM_ONLY Document Vault (`Player -> GM & AI GM Only` · Text/Table Extraction · Images & Scripts Stripped)"
+                                    </span>
+                                </div>
+                                <div class="btn-row-compact">
+                                    <span id="gm-docs-count-pill" class="pill pill-iggy">"0 GM Docs"</span>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaRefreshGmDocuments()"
+                                        on:click=move |_| wasm_client::satya_refresh_gm_documents()
+                                    >
+                                        "Refresh"
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="roster-bar">
+                                <span class="roster-title">"1. Specify File: Upload Local File, Pick from Google Drive (`drive.file`), or Load Demo Preset:"</span>
+                                <div class="preset-users">
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadGmDocPreset('doc')"
+                                        on:click=move |_| wasm_client::satya_load_gm_doc_preset("doc".to_string())
+                                    >
+                                        "Demo Preset: Sara Dossier (gdoc-demo-sara)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadGmDocPreset('sheet')"
+                                        on:click=move |_| wasm_client::satya_load_gm_doc_preset("sheet".to_string())
+                                    >
+                                        "Demo Preset: Squad Loadout (gsheet-demo-gear)"
+                                    </button>
+                                </div>
+                                <div id="gm-doc-file-row" class="form-grid">
+                                    <label for="gm-doc-file-input">
+                                        <span>"Choose Local File or Exported Google Doc/Sheet (.md, .txt, .csv, <= 32 KB)"</span>
+                                        <input
+                                            id="gm-doc-file-input"
+                                            class="gm-doc-file-input"
+                                            type="file"
+                                            accept=".txt,.md,.markdown,.csv,.tsv"
+                                            onchange="window.satyaGmDocFileSelected()"
+                                            on:change=move |_| wasm_client::satya_gm_doc_file_selected()
+                                        />
+                                    </label>
+                                </div>
+                                <div class="form-grid">
+                                    <label>
+                                        <span>"Document Title"</span>
+                                        <input
+                                            id="gm-doc-title"
+                                            type="text"
+                                            placeholder="e.g. Character Backstory or Gear Sheet"
+                                            value="Sara Valkyrie Medical Dossier"
+                                        />
+                                    </label>
+                                    <label>
+                                        <span>"Document Source (`GM_ONLY`)"</span>
+                                        <select
+                                            id="gm-doc-source"
+                                            onchange="window.satyaGmDocSourceChanged()"
+                                            on:change=move |_| wasm_client::satya_gm_doc_source_changed()
+                                        >
+                                            <option value="DIRECT_TEXT_UPLOAD">"Direct Text / Markdown / CSV (<= 32 KB)"</option>
+                                            <option value="GOOGLE_DOC">"Google Doc (drive.file Single-File Scope)"</option>
+                                            <option value="GOOGLE_SHEET">"Google Sheet (drive.file Single-File Scope)"</option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <div id="gm-doc-google-row" class="form-grid" style="display: none;">
+                                    <label>
+                                        <span>"Google Drive File ID or Full Google Docs/Sheets URL (`drive.file`)"</span>
+                                        <input
+                                            id="gm-doc-google-id"
+                                            type="text"
+                                            placeholder="Paste https://docs.google.com/document/d/<ID>/edit or File ID"
+                                            value="gdoc-demo-sara"
+                                            onchange="window.satyaGmDocUrlChanged()"
+                                            on:change=move |_| wasm_client::satya_gm_doc_url_changed()
+                                        />
+                                    </label>
+                                    <div class="btn-row">
+                                        <button
+                                            type="button"
+                                            id="btn-google-picker"
+                                            class="btn btn-sm btn-primary"
+                                            onclick="window.satyaOpenGoogleDrivePicker()"
+                                            on:click=move |_| wasm_client::satya_open_google_drive_picker()
+                                        >
+                                            "Pick from Google Drive (drive.file)..."
+                                        </button>
+                                        <button
+                                            type="button"
+                                            id="btn-toggle-google-oauth-cfg"
+                                            class="btn btn-sm btn-secondary"
+                                            onclick="window.satyaToggleGoogleOauthConfig()"
+                                            on:click=move |_| wasm_client::satya_toggle_google_oauth_config()
+                                        >
+                                            "Google OAuth Credentials"
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="gm-google-oauth-config-row" class="form-grid" style="display: none;">
+                                    <label>
+                                        <span>"Google Cloud OAuth 2.0 Web Client ID (or set in `config/storage.toml`)"</span>
+                                        <input
+                                            id="gm-google-client-id"
+                                            type="text"
+                                            autocorrect="off"
+                                            autocapitalize="off"
+                                            spellcheck="false"
+                                            placeholder="e.g. 123456789-abc.apps.googleusercontent.com"
+                                        />
+                                    </label>
+                                    <label>
+                                        <span>"Google Cloud Picker API Key (`google.picker.PickerBuilder`)"</span>
+                                        <input
+                                            id="gm-google-api-key"
+                                            type="password"
+                                            autocomplete="off"
+                                            autocorrect="off"
+                                            autocapitalize="off"
+                                            spellcheck="false"
+                                            placeholder="Optional Picker API Key (AIza...)"
+                                        />
+                                    </label>
+                                </div>
+                                <label>
+                                    <span>"Plain-Text / Markdown / CSV Snapshot (Images, HTML & Prompt-Injection Stripped on Ingest)"</span>
+                                    <textarea
+                                        id="gm-doc-content"
+                                        class="gm-doc-textarea"
+                                        rows="4"
+                                        placeholder="Paste Markdown, character notes, or CSV table here, choose a local file above, or pick from Google Drive..."
+                                    ></textarea>
+                                </label>
+                                <div class="btn-row">
+                                    <button
+                                        type="button"
+                                        id="btn-submit-gm-doc"
+                                        class="btn btn-sm btn-accent"
+                                        onclick="window.satyaSubmitGmDocument()"
+                                        on:click=move |_| wasm_client::satya_submit_gm_document()
+                                    >
+                                        "Submit to GM Only (Human & AI GM)"
+                                    </button>
+                                </div>
+                                <div id="gm-doc-feedback" class="feedback-box" aria-live="polite"></div>
+                            </div>
+
+                            <div class="roster-bar">
+                                <span class="roster-title">"Session GM_ONLY Documents (Visible to GM/AI-GM & Uploader Only):"</span>
+                                <div id="gm-docs-list" class="gm-docs-list">
+                                    <span class="pill pill-muted">"No GM_ONLY documents submitted in this session yet."</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        // --- TAB 7: APACHE IGGY, TOPICS AND PYLANCE STATS ---
                         <div
                             id="notebook-pane-iggy"
                             role="tabpanel"
@@ -1214,10 +1422,31 @@ fn ActiveSessionWorkspace() -> impl IntoView {
             </div>
 
             // ================================================================
-            // RIGHT COLUMN / DETACHABLE FLOATING FRAME: Web Cams of Joined Users
-            // (Vertical column layout with 1 or at most 2 columns; can float & dock back)
+            // RIGHT COLUMN / COLLAPSIBLE SLIDE-OUT DRAWER & FLOATING FRAME:
+            // Web Cams of Joined Users (1 or at most 2 columns; collapsible to right-edge rail)
             // ================================================================
             <div id="webrtc-dock-column" class="col-webcams">
+                <div
+                    id="webcam-drawer-rail"
+                    class="webcam-drawer-rail"
+                    style="display: none;"
+                >
+                    <button
+                        type="button"
+                        id="btn-expand-webcam-drawer"
+                        class="btn-webcam-drawer-tab"
+                        title="Slide out Web Cams Drawer"
+                        aria-label="Expand Web Cams Drawer"
+                        aria-expanded="false"
+                        aria-controls="webrtc-card"
+                        onclick="window.satyaToggleWebcamDrawer()"
+                        on:click=move |_| wasm_client::satya_toggle_webcam_drawer()
+                    >
+                        <span class="drawer-tab-chevron" aria-hidden="true">"◂"</span>
+                        <span class="drawer-tab-label">"Web Cams"</span>
+                        <span id="webcam-drawer-count-badge" class="pill pill-active drawer-count-badge">"1"</span>
+                    </button>
+                </div>
                 <div id="webrtc-card" class="card webrtc-card">
                     <div
                         id="webrtc-drag-header"
@@ -1248,6 +1477,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                 on:click=move |_| wasm_client::satya_toggle_webcam_float()
                             >
                                 "Float"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-toggle-webcam-drawer"
+                                class="btn btn-sm btn-secondary"
+                                title="Collapse Web Cams drawer into the right edge to save workspace space"
+                                aria-label="Collapse Web Cams Drawer"
+                                aria-expanded="true"
+                                aria-controls="webrtc-card"
+                                onclick="window.satyaToggleWebcamDrawer()"
+                                on:click=move |_| wasm_client::satya_toggle_webcam_drawer()
+                            >
+                                "Collapse ▸"
                             </button>
                         </div>
                     </div>
@@ -1634,11 +1876,47 @@ mod tests {
             assert!(html.contains(&format!(r#"id="{pane_id}""#)));
         }
 
-        // Verify Web Cams vertical column controls (1 or at most 2 cols) & floating frame toggle
+        // Verify Web Cams vertical column controls (1 or at most 2 cols), collapsible drawer & floating frame toggle
         assert!(html.contains(r#"id="btn-toggle-webcam-cols""#));
         assert!(html.contains(r#"id="btn-toggle-webcam-float""#));
+        assert!(html.contains(r#"id="btn-toggle-webcam-drawer""#));
+        assert!(html.contains(r#"id="btn-expand-webcam-drawer""#));
+        assert!(html.contains(r#"id="webcam-drawer-rail""#));
+        assert!(html.contains(r#"id="btn-menu-toggle-webcam-pane""#));
         assert!(html.contains(r#"id="webrtc-drag-header""#));
         assert!(html.contains(r#"class="video-grid cols-1""#));
+
+        // Verify Google OAuth (`drive.file`) & GM_ONLY Document Vault controls
+        assert!(html.contains(r#"id="btn-google-auth""#));
+        assert!(html.contains(r#"id="google-auth-status-pill""#));
+        assert!(html.contains(r#"id="tab-btn-docs""#));
+        assert!(html.contains(r#"id="notebook-pane-docs""#));
+        assert!(html.contains(r#"id="gm-doc-file-input""#));
+        assert!(html.contains(r#"id="gm-doc-title""#));
+        assert!(html.contains(r#"id="gm-doc-source""#));
+        assert!(html.contains(r#"id="btn-google-picker""#));
+        assert!(html.contains(r#"id="gm-google-oauth-config-row""#));
+        assert!(html.contains(r#"id="gm-google-client-id""#));
+        assert!(html.contains(r#"id="gm-google-api-key""#));
+        assert!(html.contains(r#"id="gm-doc-content""#));
+        assert!(html.contains(r#"id="btn-submit-gm-doc""#));
+        assert!(html.contains(r#"id="gm-docs-list""#));
+
+        assert_eq!(
+            wasm_client::extract_google_drive_file_id_and_kind(
+                "https://docs.google.com/document/d/1aBcDeFgHiJkLmNoPqRsTuVwXyZ/edit?usp=sharing"
+            ),
+            (
+                "1aBcDeFgHiJkLmNoPqRsTuVwXyZ".to_string(),
+                Some("GOOGLE_DOC")
+            )
+        );
+        assert_eq!(
+            wasm_client::extract_google_drive_file_id_and_kind(
+                "https://docs.google.com/spreadsheets/d/1sheetId987654/edit#gid=0"
+            ),
+            ("1sheetId987654".to_string(), Some("GOOGLE_SHEET"))
+        );
 
         let (model_html, model_pill) =
             wasm_client::format_3d_model_stage_html("recon_mk4", "hit_zones");

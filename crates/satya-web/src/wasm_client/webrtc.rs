@@ -6,7 +6,9 @@ use crate::wasm_client::chat_and_ttrpg::{
     append_system_notice, render_chat_event, render_mechanics_event,
 };
 use crate::wasm_client::dom::{document, escape_html, get_element, set_class, set_text, window};
-use crate::wasm_client::notebook::{render_map_updated, render_wgpu_dice_roll};
+use crate::wasm_client::notebook::{
+    render_gm_document_added, render_map_updated, render_wgpu_dice_roll,
+};
 use crate::wasm_client::state::{PeerEntry, with_state, with_state_mut};
 use crate::wasm_client::telemetry::satya_refresh_metrics;
 use js_sys::{Array, Float32Array, Reflect};
@@ -25,42 +27,111 @@ use web_sys::{
     RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, RtcTrackEvent, WebSocket,
 };
 
-/// Toggles the Web Cams container (`#webrtc-card`) between a docked right-column panel
-/// and a floating, draggable overlay frame that can be re-attached back into the column.
-#[wasm_bindgen]
-pub fn satya_toggle_webcam_float() {
-    let is_floating = with_state_mut(|st| {
-        st.webcam_floating = !st.webcam_floating;
-        st.webcam_drag_offset = None;
-        st.webcam_floating
-    });
-
+fn sync_webcam_layout_dom(is_floating: bool, is_collapsed: bool) {
     if let Some(card) = get_element("webrtc-card").and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
-        if is_floating {
+        if is_collapsed {
+            card.set_class_name("card webrtc-card is-collapsed");
+            let _ = card.set_attribute("inert", "");
+            let _ = card.style().set_property("display", "none");
+        } else if is_floating {
             card.set_class_name("card webrtc-card is-floating");
+            let _ = card.remove_attribute("inert");
+            let _ = card.style().set_property("display", "flex");
             let _ = card.style().set_property("right", "24px");
             let _ = card.style().set_property("top", "78px");
             let _ = card.style().remove_property("left");
         } else {
             card.set_class_name("card webrtc-card");
+            let _ = card.remove_attribute("inert");
+            let _ = card.style().set_property("display", "flex");
             let _ = card.style().remove_property("left");
             let _ = card.style().remove_property("top");
             let _ = card.style().remove_property("right");
         }
     }
 
+    if let Some(col) = get_element("webrtc-dock-column") {
+        col.set_class_name(if is_collapsed {
+            "col-webcams is-collapsed"
+        } else {
+            "col-webcams"
+        });
+    }
+
+    if let Some(rail) =
+        get_element("webcam-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        let _ = rail
+            .style()
+            .set_property("display", if is_collapsed { "flex" } else { "none" });
+    }
+
     if let Some(ws_panel) = get_element("workspace-panel") {
-        ws_panel.set_class_name(if is_floating {
+        ws_panel.set_class_name(if is_collapsed {
+            "workspace-columns webcam-collapsed"
+        } else if is_floating {
             "workspace-columns webcam-undocked"
         } else {
             "workspace-columns"
         });
     }
 
+    let expanded_str = if is_collapsed { "false" } else { "true" };
+    for btn_id in [
+        "btn-toggle-webcam-drawer",
+        "btn-expand-webcam-drawer",
+        "btn-menu-toggle-webcam-pane",
+    ] {
+        if let Some(btn) = get_element(btn_id) {
+            let _ = btn.set_attribute("aria-expanded", expanded_str);
+        }
+    }
+
+    set_text(
+        "btn-toggle-webcam-drawer",
+        if is_collapsed {
+            "◂ Web Cams"
+        } else {
+            "Collapse ▸"
+        },
+    );
+    set_text(
+        "btn-menu-toggle-webcam-pane",
+        if is_collapsed {
+            "Show Web Cams"
+        } else {
+            "Hide Web Cams"
+        },
+    );
     set_text(
         "btn-toggle-webcam-float",
         if is_floating { "Dock" } else { "Float" },
     );
+}
+
+/// Toggles the Web Cams column (`#webrtc-dock-column`) between an expanded drawer and a
+/// collapsed right-edge vertical rail tab (`#webcam-drawer-rail`) to reclaim workspace width.
+#[wasm_bindgen]
+pub fn satya_toggle_webcam_drawer() {
+    let (is_floating, is_collapsed) = with_state_mut(|st| {
+        st.webcam_collapsed = !st.webcam_collapsed;
+        st.webcam_drag_offset = None;
+        (st.webcam_floating, st.webcam_collapsed)
+    });
+    sync_webcam_layout_dom(is_floating, is_collapsed);
+}
+
+/// Toggles the Web Cams container (`#webrtc-card`) between a docked right-column panel
+/// and a floating, draggable overlay frame that can be re-attached back into the column.
+#[wasm_bindgen]
+pub fn satya_toggle_webcam_float() {
+    let (is_floating, is_collapsed) = with_state_mut(|st| {
+        st.webcam_floating = !st.webcam_floating;
+        st.webcam_collapsed = false;
+        st.webcam_drag_offset = None;
+        (st.webcam_floating, st.webcam_collapsed)
+    });
+    sync_webcam_layout_dom(is_floating, is_collapsed);
 }
 
 /// Toggles the vertical Web Cams grid (`#video-grid`) between 1 column (`cols-1`) and 2 columns (`cols-2`),
@@ -270,6 +341,17 @@ fn handle_server_packet(pkt: ServerWsPacket) {
             append_system_notice(&format!(
                 "{} triggered 3D dice roll ({} -> {:?})",
                 actor.display_name, spec.dice_notation, spec.outcomes
+            ));
+            satya_refresh_metrics();
+        }
+        ServerWsPacket::GmDocumentAdded { document } => {
+            render_gm_document_added(&document);
+            append_system_notice(&format!(
+                "GM_ONLY document '{}' ({:?}) submitted by {} ({} chars).",
+                document.title,
+                document.source_kind,
+                document.uploader_display_name,
+                document.char_count
             ));
             satya_refresh_metrics();
         }

@@ -3,6 +3,10 @@
 database_url = "sqlite://data/auth/users.db?mode=rwc"
 # Usernames automatically granted the platform-wide `ADMIN` role on startup or registration.
 bootstrap_admins = ["gm_sean"]
+# Optional Google Cloud OAuth 2.0 Web Client ID & Google Picker API Key for live `drive.file` single-file selection.
+# Leave empty (`""`) for offline development (uses built-in `gdoc-demo-sara` / `gsheet-demo-gear` presets & local file picker).
+google_oauth_client_id = ""
+google_picker_api_key = ""
 
 # Note: AI Game Master & LLM model settings live in `config/ai.toml`.
 

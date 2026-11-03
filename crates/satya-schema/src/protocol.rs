@@ -308,6 +308,118 @@ pub enum ServerWsPacket {
         /// Deterministic 3D physics seed, dice expression, and outcomes.
         spec: WgpuDiceSpec,
     },
+    /// Delivers a sanitized `GM_ONLY` document snapshot strictly to the session's Human GM (and the uploader).
+    GmDocumentAdded {
+        /// Sanitized `GM_ONLY` document record.
+        document: Box<GmDocumentRecord>,
+    },
+}
+
+/// Source format of a `GM_ONLY` document submitted to the session Game Master.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GmDocumentSource {
+    /// Plain-text, Markdown, or CSV file (`<= 32 KB`) uploaded directly.
+    #[default]
+    DirectTextUpload,
+    /// Google Docs document imported via the single-file `drive.file` Picker/API.
+    GoogleDoc,
+    /// Google Sheets spreadsheet imported as a tabular CSV/Markdown snapshot via `drive.file`.
+    GoogleSheet,
+}
+
+/// Sanitized, text-only `GM_ONLY` document snapshot stored in the session vault for the Human GM and AI GM.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GmDocumentRecord {
+    /// Unique identifier (`doc_<uuid>`) for this document snapshot.
+    pub doc_id: String,
+    /// Session ID to which this document belongs.
+    pub session_id: String,
+    /// Persistent `user_id` of the participant who submitted the document.
+    pub uploader_user_id: String,
+    /// Display name of the participant who submitted the document.
+    pub uploader_display_name: String,
+    /// Sanitized human-readable document title.
+    pub title: String,
+    /// Origin of the document (`DIRECT_TEXT_UPLOAD`, `GOOGLE_DOC`, or `GOOGLE_SHEET`).
+    pub source_kind: GmDocumentSource,
+    /// Optional opaque Google Drive file ID (never exposes personal email addresses).
+    #[serde(default)]
+    pub google_file_id: Option<String>,
+    /// Strictly enforced [`MessageVisibility::GmOnly`] visibility (`Player -> GM` only).
+    pub visibility: MessageVisibility,
+    /// Sanitized plain-text/Markdown/CSV content (all HTML, images, scripts, and binary payloads stripped).
+    pub sanitized_content: String,
+    /// Character count of `sanitized_content`.
+    pub char_count: usize,
+    /// Whether prompt-injection tags or unsafe control sequences were scrubbed during ingestion.
+    #[serde(default)]
+    pub safety_flagged: bool,
+    /// Ingestion timestamp in UTC microseconds since Unix epoch.
+    pub created_at_us: i64,
+}
+
+/// HTTP request body for `POST /api/auth/google` linking an authenticated user's Google identity
+/// and optional ephemeral `drive.file` access token.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoogleAuthLinkRequest {
+    /// Opaque Google OIDC subject identifier (`sub`) or local dev Google identifier.
+    pub google_sub: String,
+    /// Optional display label for the linked Google identity (never broadcast to other players).
+    #[serde(default)]
+    pub google_display_hint: Option<String>,
+    /// Optional short-lived OAuth 2.0 `drive.file` access token held strictly in memory.
+    #[serde(default)]
+    pub access_token: Option<String>,
+}
+
+/// HTTP response body for `POST /api/auth/google` and `GET /api/auth/google/status`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoogleAuthStatusResponse {
+    /// Authenticated Satya `user_id`.
+    pub user_id: String,
+    /// Whether a Google identity is linked to this Satya account.
+    pub google_linked: bool,
+    /// Opaque Google subject identifier (`sub`), if linked.
+    pub google_sub: Option<String>,
+    /// Whether an active in-memory `drive.file` access token is available for single-file Picker imports.
+    pub has_ephemeral_drive_token: bool,
+    /// Enforced OAuth scope (`"https://www.googleapis.com/auth/drive.file"`).
+    pub enforced_scope: String,
+    /// Optional server-configured Google Cloud OAuth 2.0 Web Client ID for `drive.file`.
+    #[serde(default)]
+    pub google_oauth_client_id: Option<String>,
+    /// Optional server-configured Google Picker API Key for `google.picker.PickerBuilder`.
+    #[serde(default)]
+    pub google_picker_api_key: Option<String>,
+}
+
+/// HTTP request body for `POST /api/sessions/:session_id/docs` submitting a `GM_ONLY` document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubmitGmDocumentRequest {
+    /// Human-readable title for the character sheet, backstory, or spreadsheet.
+    pub title: String,
+    /// Document source type (`DIRECT_TEXT_UPLOAD`, `GOOGLE_DOC`, or `GOOGLE_SHEET`).
+    #[serde(default)]
+    pub source_kind: GmDocumentSource,
+    /// Plain-text/Markdown/CSV content (required for `DIRECT_TEXT_UPLOAD`; optional if fetched by `google_file_id`).
+    #[serde(default)]
+    pub raw_content: Option<String>,
+    /// Optional Google Doc or Sheet file ID selected via Google Picker (`drive.file`).
+    #[serde(default)]
+    pub google_file_id: Option<String>,
+    /// Optional single-use OAuth `drive.file` access token (never logged or persisted).
+    #[serde(default)]
+    pub google_access_token: Option<String>,
+}
+
+/// HTTP response body for `GET /api/sessions/:session_id/docs`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionGmDocsResponse {
+    /// Session identifier.
+    pub session_id: String,
+    /// List of `GM_ONLY` documents visible to the caller (all docs for GM/Host; own submissions only for Players).
+    pub documents: Vec<GmDocumentRecord>,
 }
 
 /// HTTP response body for `GET /api/gm/sessions/:session_id/context`.
@@ -327,6 +439,9 @@ pub struct GmContextResponse {
     pub roster: Vec<Participant>,
     /// Currently active tactical map in the session, if any.
     pub active_map: Option<GmMapUpdateRequest>,
+    /// Sanitized `GM_ONLY` documents submitted to the GM in this session.
+    #[serde(default)]
+    pub gm_documents: Vec<GmDocumentRecord>,
 }
 
 /// HTTP request body for `POST /api/gm/sessions/:session_id/chat`.

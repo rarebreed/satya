@@ -24,7 +24,9 @@ from satya_ml.ai_gm.tools import (
     narrate_to_session,
     query_campaign_lore,
     query_satya_rules,
+    read_gm_documents,
     roll_satya_d20_check,
+    set_session_gm_docs,
     set_session_operating_mode,
     update_npc_state,
 )
@@ -341,6 +343,23 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
     narration = narrate_to_session.invoke({"session_id": sid, "content": "Suggest TN 11 check."})
     assert narration["visibility"] == "PRIVATE"
     assert narration["channel"] == "GM_WHISPER"
+
+    # GM_ONLY document retrieval with <untrusted_player_document> delimiters
+    set_session_gm_docs(
+        sid,
+        [
+            {
+                "doc_id": "doc_test_1",
+                "uploader_display_name": "Sara (Valkyrie)",
+                "title": "Sara Valkyrie Dossier",
+                "source_kind": "GOOGLE_DOC",
+                "sanitized_content": "Former orbital trauma surgeon in Sector 4.",
+            }
+        ],
+    )
+    doc_out = read_gm_documents.invoke({"session_id": sid, "query": "surgeon"})
+    assert '<untrusted_player_document doc_id="doc_test_1"' in doc_out
+    assert "Former orbital trauma surgeon in Sector 4." in doc_out
 
 
 def test_ai_gm_langgraph_and_fastapi_bridge() -> None:

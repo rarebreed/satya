@@ -1,0 +1,28 @@
+- TTRPG
+    - Characters
+        - Characteristics
+            - 
+        - Personality
+            - 
+        - Principles
+            - 
+        - Talents
+        - Skills
+            - Category: 
+            - Innate: some skills are "common" but that doesnt mean you are good (eg, running, singing, drawing)
+            - controlling characteristic(s)
+            - difficulty: some skills are harder to learn
+            - Prerequisites: some skills may have restrictions
+                - other skills
+                - minimum characteristic(s)
+                - education type or level
+                - career (eg you can only get Heavy Weapons if you served in the military)
+        - Lifepath
+            - faction
+            - economic
+            - teen
+            - education
+    - Task resolution
+        - opposed
+        - assisted
+        - unskilled
