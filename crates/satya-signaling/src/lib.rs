@@ -468,6 +468,8 @@ mod tests {
                             attribute_tn: 13,
                             pool_size: 3,
                             difficulty_rating: 2,
+                            internal_mod: Some(1),
+                            carry_mode: Some("markov_step".to_string()),
                             combat_stance: Some(CombatStance::RangedSnap),
                             fatigue_level: 1,
                             wound_shock_index: 0.0,
@@ -566,6 +568,14 @@ mod tests {
                             cached_tokens: 0,
                             total_turn_latency_ms: 310,
                             turn_status: AiGmTurnStatus::Completed,
+                            turn_logs: vec![GmSessionLogEntry {
+                                level: satya_schema::LogLevel::Info,
+                                span_id: Some("a1b2c3d4e5f60001".to_string()),
+                                parent_span_id: Some("00f067aa0ba902b7".to_string()),
+                                lineage_id: Some("L1".to_string()),
+                                parent_lineage_ids: vec!["msg-1".to_string()],
+                                log_line: "[2026-11-02T22:10:28.112Z] [INFO] [session=ep1-copilot] [trace=0123456789abcdef0123456789abcdef span=a1b2c3d4e5f60001<-00f067aa0ba902b7] [lineage=L1<-msg-1] satya_ml.ai_gm.graph: Completed Co-Pilot turn".to_string(),
+                            }],
                         })
                         .unwrap(),
                     ))
@@ -574,6 +584,23 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(traj_res.status(), StatusCode::OK);
+        let gm_metrics = state.storage.metrics_snapshot().await;
+        assert_eq!(
+            gm_metrics
+                .iter()
+                .find(|m| m.topic == "ai-gm-trajectories")
+                .unwrap()
+                .total_messages_ingested,
+            1
+        );
+        assert_eq!(
+            gm_metrics
+                .iter()
+                .find(|m| m.topic == "system-logs")
+                .unwrap()
+                .total_messages_ingested,
+            1
+        );
 
         // 4. Verify ephemeral BYOK key is scrubbed when sponsoring user (GM) leaves the session
         let (_, vault_before) = state

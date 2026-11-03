@@ -20,8 +20,8 @@ use futures::{SinkExt, StreamExt};
 use rand::Rng;
 use satya_schema::{
     ChatMessageEvent, ClientWsPacket, IceCandidateType, InteractionDynamicsEvent,
-    LifecycleEventType, MessageVisibility, ParticipantKind, SessionMode, SessionRole,
-    TtrpgMechanicsEvent, WebRtcTelemetryEvent, subjects,
+    LifecycleEventType, MessageVisibility, ParticipantKind, ServerWsPacket, SessionMode,
+    SessionRole, WebRtcTelemetryEvent, WgpuDiceSpec, subjects,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -160,19 +160,27 @@ async fn handle_ws_client(
                             &body,
                         )
                     {
-                        trigger_ai_gm_chat_reply(
-                            &state,
-                            &session_id,
-                            session_mode,
-                            &ai_gm,
-                            &self_participant,
-                            &chat_event.message_id,
-                            "CHAT",
-                            visibility,
-                            &body,
-                            &current_roster,
-                        )
-                        .await;
+                        let state_clone = state.clone();
+                        let session_id_clone = session_id.clone();
+                        let self_part_clone = self_participant.clone();
+                        let msg_id_clone = chat_event.message_id.clone();
+                        let body_clone = body.clone();
+                        let roster_clone = current_roster.clone();
+                        tokio::spawn(async move {
+                            trigger_ai_gm_chat_reply(
+                                &state_clone,
+                                &session_id_clone,
+                                session_mode,
+                                &ai_gm,
+                                &self_part_clone,
+                                &msg_id_clone,
+                                "CHAT",
+                                visibility,
+                                &body_clone,
+                                &roster_clone,
+                            )
+                            .await;
+                        });
                     }
                 }
             }
@@ -283,16 +291,34 @@ async fn handle_ws_client(
             }
             ClientWsPacket::RollTtrpgTask {
                 skill_name,
-                attribute_tn,
-                pool_size,
-                difficulty_rating,
+                skill_level,
+                control_c,
+                internal_mod,
+                external_mod,
+                carry_mode,
                 combat_stance,
                 fatigue_level,
+                wound_shock_index,
             } => {
-                let count = pool_size.clamp(1, 12);
-                let rolls: Vec<i32> = {
+                let n_pairs = skill_level.clamp(1, 10);
+                let c_val = control_c.clamp(1, 20);
+                let int_mod = internal_mod.clamp(-2, 10);
+                let ext_mod = external_mod.clamp(-10, 16);
+                let mut params =
+                    satya_engine::CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, ext_mod);
+                if let Some(mode_str) = carry_mode.as_deref()
+                    && let Ok(parsed_mode) = mode_str.parse::<satya_engine::CarryMode>()
+                {
+                    params.carry_mode = parsed_mode;
+                }
+
+                let (rolled_pairs, physics_seed): (Vec<(i32, i32)>, i64) = {
                     let mut rng = rand::thread_rng();
-                    (0..count).map(|_| rng.gen_range(1..=20)).collect()
+                    let pairs = (0..n_pairs)
+                        .map(|_| (rng.gen_range(1..=20), rng.gen_range(1..=20)))
+                        .collect();
+                    let seed: i64 = rng.r#gen::<i64>().abs();
+                    (pairs, seed)
                 };
 
                 if let Ok(meta) = state.storage.registry().build_metadata(
@@ -302,19 +328,31 @@ async fn handle_ws_client(
                     &session_id,
                     session_mode,
                 ) {
-                    let mech_ev = TtrpgMechanicsEvent::evaluate_satya_task(
+                    let (mech_ev, cascade_outcome) = satya_engine::evaluate_satya_cascade_task(
                         meta,
                         self_participant.clone(),
                         Vec::new(),
                         skill_name.clone(),
-                        attribute_tn,
-                        difficulty_rating,
-                        rolls,
+                        &params,
+                        &rolled_pairs,
                         combat_stance,
                         fatigue_level,
-                        0.0,
+                        wound_shock_index,
                     );
                     let _ = state.storage.log_ttrpg_mechanics(&mech_ev).await;
+
+                    let dice_spec = WgpuDiceSpec {
+                        dice_notation: format!("{n_pairs}x2d20"),
+                        physics_seed,
+                        outcomes: mech_ev.dice_rolled_d20.clone(),
+                        visibility: MessageVisibility::Public,
+                    };
+                    if let Ok(wgpu_pkt) = serde_json::to_string(&ServerWsPacket::WgpuDiceRoll {
+                        actor: self_participant.clone(),
+                        spec: dice_spec,
+                    }) {
+                        state.broadcast_to_session(&session_id, &wgpu_pkt).await;
+                    }
 
                     let pkt_str = json!({
                         "type": "TTRPG_MECHANICS_EVENT",
@@ -331,28 +369,38 @@ async fn handle_ws_client(
                         && should_trigger_ai_gm_for_roll(&current_roster)
                     {
                         let narration = format!(
-                            "[Satya Simulation] {} attempted '{}' (TN {}, Diff {}) -> {:?} ({} successes). Action Count Cost: {} ticks.",
+                            "[Satya Simulation] {} attempted '{}' (Skill N={}, Control C={}, TN_eff={}, Carry={}) -> {:?} ({} successes, signed_margin={:+}). Action Count Cost: {} ticks.",
                             self_participant.display_name,
                             skill_name,
-                            attribute_tn,
-                            difficulty_rating,
+                            params.skill_level,
+                            params.control_c,
+                            params.tn_eff(),
+                            params.carry_mode,
                             mech_ev.outcome_tier,
                             mech_ev.successes_counted,
+                            cascade_outcome.signed_margin,
                             mech_ev.action_count_cost.unwrap_or(10)
                         );
-                        trigger_ai_gm_chat_reply(
-                            &state,
-                            &session_id,
-                            session_mode,
-                            &ai_gm,
-                            &self_participant,
-                            &mech_ev.metadata.event_id,
-                            "MECHANICS",
-                            MessageVisibility::Public,
-                            &narration,
-                            &current_roster,
-                        )
-                        .await;
+                        let state_clone = state.clone();
+                        let session_id_clone = session_id.clone();
+                        let self_part_clone = self_participant.clone();
+                        let ev_id_clone = mech_ev.metadata.event_id.clone();
+                        let roster_clone = current_roster.clone();
+                        tokio::spawn(async move {
+                            trigger_ai_gm_chat_reply(
+                                &state_clone,
+                                &session_id_clone,
+                                session_mode,
+                                &ai_gm,
+                                &self_part_clone,
+                                &ev_id_clone,
+                                "MECHANICS",
+                                MessageVisibility::Public,
+                                &narration,
+                                &roster_clone,
+                            )
+                            .await;
+                        });
                     }
                 }
             }

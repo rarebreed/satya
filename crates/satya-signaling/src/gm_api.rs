@@ -14,7 +14,7 @@ use satya_schema::{
     AiGmTurnTriggerRequest, CanvasEventType, ChannelContext, ChatMessageEvent, GmChatRequest,
     GmMapUpdateRequest, GmRollRequest, LogLevel, McpToolInvocationRecord, MechanicEventType,
     MessageVisibility, Participant, ParticipantKind, ServerWsPacket, SessionLogEvent, SessionMode,
-    SessionRole, TabletopCanvasEvent, TtrpgMechanicsEvent, WgpuDiceSpec, subjects,
+    SessionRole, TabletopCanvasEvent, WgpuDiceSpec, subjects,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -243,12 +243,24 @@ pub async fn gm_session_roll_handler(
         .cloned()
         .collect();
 
-    let count = req.pool_size.clamp(1, 12);
-    let (rolls, physics_seed): (Vec<i32>, i64) = {
+    let n_pairs = req.pool_size.clamp(1, 10);
+    let c_val = req.attribute_tn.clamp(1, 20);
+    let int_mod = req.internal_mod.unwrap_or(req.fatigue_level).clamp(-2, 10);
+    let ext_mod = req.difficulty_rating.clamp(-10, 16);
+    let mut params = satya_engine::CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, ext_mod);
+    if let Some(mode_str) = req.carry_mode.as_deref()
+        && let Ok(parsed_mode) = mode_str.parse::<satya_engine::CarryMode>()
+    {
+        params.carry_mode = parsed_mode;
+    }
+
+    let (rolled_pairs, physics_seed): (Vec<(i32, i32)>, i64) = {
         let mut rng = rand::thread_rng();
-        let outcomes = (0..count).map(|_| rng.gen_range(1..=20)).collect();
+        let pairs = (0..n_pairs)
+            .map(|_| (rng.gen_range(1..=20), rng.gen_range(1..=20)))
+            .collect();
         let seed: i64 = rng.r#gen::<i64>().abs();
-        (outcomes, seed)
+        (pairs, seed)
     };
 
     let Ok(meta) = state.storage.registry().build_metadata(
@@ -265,28 +277,39 @@ pub async fn gm_session_roll_handler(
             .into_response();
     };
 
-    let mut mech_ev = TtrpgMechanicsEvent::evaluate_satya_task(
+    let (mut mech_ev, _) = satya_engine::evaluate_satya_cascade_task(
         meta,
         actor.clone(),
         target_participants,
         req.skill_name.clone(),
-        req.attribute_tn,
-        req.difficulty_rating,
-        rolls.clone(),
+        &params,
+        &rolled_pairs,
         req.combat_stance,
         req.fatigue_level,
         req.wound_shock_index,
     );
     mech_ev.mechanic_type = MechanicEventType::AiGmDecision;
-    mech_ev.notes = req.notes.clone();
+    if let Some(user_note) = req
+        .notes
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        let base_note = mech_ev.notes.unwrap_or_default();
+        mech_ev.notes = Some(if base_note.is_empty() {
+            user_note.to_string()
+        } else {
+            format!("{base_note} | {user_note}")
+        });
+    }
 
     let _ = state.storage.log_ttrpg_mechanics(&mech_ev).await;
 
     // Also emit Topic 7 (`tabletop-canvas`) WgpuDiceSpawned event & broadcast 3D dice seed
     let dice_spec = WgpuDiceSpec {
-        dice_notation: format!("{count}d20"),
+        dice_notation: format!("{n_pairs}x2d20"),
         physics_seed,
-        outcomes: rolls,
+        outcomes: mech_ev.dice_rolled_d20.clone(),
         visibility: MessageVisibility::Public,
     };
     if let Ok(canvas_meta) = state.storage.registry().build_metadata(
@@ -404,6 +427,27 @@ pub async fn gm_session_map_handler(
     (StatusCode::OK, Json(canvas_ev)).into_response()
 }
 
+/// Single turn-scoped log entry piggybacked onto [`GmTrajectoryReportRequest`] for batch ingestion into `system-logs` (Topic 9).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GmSessionLogEntry {
+    /// Log severity level (`INFO`, `WARN`, `ERROR`, etc.).
+    pub level: LogLevel,
+    /// Optional 16-character hex W3C `span_id`.
+    #[serde(default)]
+    pub span_id: Option<String>,
+    /// Optional 16-character hex caller `parent_span_id`.
+    #[serde(default)]
+    pub parent_span_id: Option<String>,
+    /// Optional data artifact lineage ID produced or inspected at this step.
+    #[serde(default)]
+    pub lineage_id: Option<String>,
+    /// Upstream data artifact lineage IDs consumed at this step.
+    #[serde(default)]
+    pub parent_lineage_ids: Vec<String>,
+    /// Complete formatted plain-text log line prefixed with `[session=...] [trace=... span=...<-...] [lineage=...<-...]`.
+    pub log_line: String,
+}
+
 /// Request payload for `POST /api/gm/sessions/:session_id/trajectory`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GmTrajectoryReportRequest {
@@ -452,6 +496,9 @@ pub struct GmTrajectoryReportRequest {
     pub total_turn_latency_ms: i64,
     /// Completion status of the turn.
     pub turn_status: AiGmTurnStatus,
+    /// Bounded batch of turn-scoped `INFO`/`WARN`/`ERROR` log entries to persist to `system-logs` (Topic 9).
+    #[serde(default)]
+    pub turn_logs: Vec<GmSessionLogEntry>,
 }
 
 fn default_ruleset_id() -> String {
@@ -499,6 +546,10 @@ pub async fn gm_session_trajectory_handler(
             .into_response();
     };
 
+    let trigger_actor = req.trigger_actor.clone();
+    let trace_id = req.trace_id.clone();
+    let turn_logs = req.turn_logs;
+
     let traj_ev = AiGmTrajectoryEvent {
         metadata: meta,
         turn_id: req.turn_id,
@@ -523,6 +574,33 @@ pub async fn gm_session_trajectory_handler(
     };
 
     let _ = state.storage.log_ai_gm_trajectory(&traj_ev).await;
+
+    // Persist bounded turn-scoped log lines into Topic 9 (`system-logs`)
+    for entry in turn_logs.into_iter().take(64) {
+        if let Ok(log_meta) = state.storage.registry().build_metadata(
+            state.next_seq(),
+            subjects::SESSION_LOG,
+            1,
+            &session_id,
+            ctx.session_mode,
+        ) {
+            let log_ev = SessionLogEvent {
+                metadata: log_meta,
+                log_id: Uuid::now_v7().to_string(),
+                level: entry.level,
+                service_name: "satya-ml-ai-gm".to_string(),
+                actor: Some(trigger_actor.clone()),
+                trace_id: Some(trace_id.clone()),
+                span_id: entry.span_id,
+                parent_span_id: entry.parent_span_id,
+                lineage_id: entry.lineage_id,
+                parent_lineage_ids: entry.parent_lineage_ids,
+                log_line: entry.log_line,
+            };
+            let _ = state.storage.log_session_log(&log_ev).await;
+        }
+    }
+
     (StatusCode::OK, Json(traj_ev)).into_response()
 }
 
@@ -570,15 +648,51 @@ pub fn should_trigger_ai_gm_for_roll(roster: &[Participant]) -> bool {
 }
 
 /// Dispatches an [`AiGmTurnTriggerRequest`] over HTTP/1.1 to the Python FastAPI LangGraph service
-/// at `{service_url}/internal/ai-gm/events`, passing the ephemeral BYOK key in `X-Satya-Provider-Key`
-/// if present.
+/// at `{service_url}/internal/ai-gm/events` using default timeout settings (`3000` ms connect, `180` s response),
+/// passing the ephemeral BYOK key in `X-Satya-Provider-Key` if present.
 pub async fn post_ai_gm_event_to_fastapi(
     service_url: &str,
     service_token: &str,
     ephemeral_api_key: Option<&str>,
     payload: &AiGmTurnTriggerRequest,
 ) -> anyhow::Result<()> {
+    post_ai_gm_event_to_fastapi_with_timeouts(
+        service_url,
+        service_token,
+        ephemeral_api_key,
+        payload,
+        3_000,
+        180,
+    )
+    .await
+}
+
+/// Dispatches an [`AiGmTurnTriggerRequest`] over HTTP/1.1 to the Python FastAPI LangGraph service
+/// at `{service_url}/internal/ai-gm/events` with configurable TCP connection (`connect_timeout_ms`)
+/// and response read (`request_timeout_secs`) timeouts.
+///
+/// Either timeout can also be overridden at runtime via the `SATYA_AI_GM_CONNECT_TIMEOUT_MS`
+/// and `SATYA_AI_GM_REQUEST_TIMEOUT_SECS` environment variables.
+pub async fn post_ai_gm_event_to_fastapi_with_timeouts(
+    service_url: &str,
+    service_token: &str,
+    ephemeral_api_key: Option<&str>,
+    payload: &AiGmTurnTriggerRequest,
+    connect_timeout_ms: u64,
+    request_timeout_secs: u64,
+) -> anyhow::Result<()> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let effective_connect_ms = std::env::var("SATYA_AI_GM_CONNECT_TIMEOUT_MS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(connect_timeout_ms)
+        .max(100);
+    let effective_request_secs = std::env::var("SATYA_AI_GM_REQUEST_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(request_timeout_secs)
+        .max(1);
 
     let trimmed = service_url
         .trim()
@@ -593,16 +707,30 @@ pub async fn post_ai_gm_event_to_fastapi(
     };
 
     let body_bytes = serde_json::to_vec(payload)?;
-    let mut key_hdr = String::new();
+    let mut extra_hdrs = String::new();
     if let Some(k) = ephemeral_api_key.filter(|s| !s.trim().is_empty()) {
-        key_hdr = format!("X-Satya-Provider-Key: {}\r\n", k.trim());
+        extra_hdrs.push_str(&format!("X-Satya-Provider-Key: {}\r\n", k.trim()));
+    }
+    if let (Some(tid), Some(psid)) = (
+        payload.trace_id.as_deref().filter(|s| !s.is_empty()),
+        payload.parent_span_id.as_deref().filter(|s| !s.is_empty()),
+    ) {
+        extra_hdrs.push_str(&format!("traceparent: 00-{tid}-{psid}-01\r\n"));
+    }
+    if let Some(lid) = payload
+        .lineage_id
+        .as_deref()
+        .or(Some(payload.trigger_event_id.as_str()))
+        .filter(|s| !s.is_empty())
+    {
+        extra_hdrs.push_str(&format!("X-Satya-Lineage-Id: {lid}\r\n"));
     }
 
     let req_bytes = format!(
         "POST /internal/ai-gm/events HTTP/1.1\r\n\
          Host: {host_port}\r\n\
          Authorization: Bearer {service_token}\r\n\
-         {key_hdr}\
+         {extra_hdrs}\
          Content-Type: application/json\r\n\
          Content-Length: {}\r\n\
          Connection: close\r\n\r\n",
@@ -610,7 +738,7 @@ pub async fn post_ai_gm_event_to_fastapi(
     );
 
     let mut stream = tokio::time::timeout(
-        std::time::Duration::from_millis(1500),
+        std::time::Duration::from_millis(effective_connect_ms),
         tokio::net::TcpStream::connect(&connect_addr),
     )
     .await
@@ -622,12 +750,14 @@ pub async fn post_ai_gm_event_to_fastapi(
 
     let mut resp_buf = vec![0u8; 512];
     let n = tokio::time::timeout(
-        std::time::Duration::from_secs(30),
+        std::time::Duration::from_secs(effective_request_secs),
         stream.read(&mut resp_buf),
     )
     .await
     .map_err(|_| {
-        anyhow::anyhow!("Timed out awaiting response from AI GM service at {connect_addr}")
+        anyhow::anyhow!(
+            "Timed out after {effective_request_secs}s awaiting response from AI GM service at {connect_addr}"
+        )
     })??;
 
     let status_line = String::from_utf8_lossy(&resp_buf[..n]);
@@ -717,6 +847,8 @@ pub async fn trigger_ai_gm_chat_reply(
             }
         });
     let ephemeral_key = vault_opt.as_ref().and_then(|v| v.api_key.clone());
+    let trace_id = Uuid::now_v7().simple().to_string();
+    let root_span_id = Uuid::now_v7().simple().to_string()[..16].to_string();
 
     let trigger_payload = AiGmTurnTriggerRequest {
         session_id: session_id.to_string(),
@@ -735,24 +867,39 @@ pub async fn trigger_ai_gm_chat_reply(
         temperature,
         persona_id,
         base_url,
+        trace_id: Some(trace_id.clone()),
+        parent_span_id: Some(root_span_id.clone()),
+        lineage_id: Some(trigger_event_id.to_string()),
     };
 
-    match post_ai_gm_event_to_fastapi(
+    match post_ai_gm_event_to_fastapi_with_timeouts(
         &ai_cfg.service_url,
         &ai_cfg.service_token,
         ephemeral_key.as_deref(),
         &trigger_payload,
+        ai_cfg.connect_timeout_ms,
+        ai_cfg.request_timeout_secs,
     )
     .await
     {
         Ok(()) => return,
         Err(err) => {
             if ai_cfg.fail_fast_when_offline {
-                let err_msg = format!(
-                    "[AI GM Service Error] FastAPI AI GM service at {} is unreachable ({err}). Ensure `pixi run serve-ai-gm` is running.",
-                    ai_cfg.service_url
-                );
-                tracing::error!(session_id = %session_id, error = %err, "AI GM service unreachable (fail_fast_when_offline=true)");
+                let err_str = err.to_string();
+                let is_response_timeout =
+                    err_str.contains("Timed out") && err_str.contains("awaiting response");
+                let err_msg = if is_response_timeout {
+                    format!(
+                        "[AI GM Turn Timeout] FastAPI AI GM service at {} is still generating a response ({err}). Increase `ai_gm.request_timeout_secs` in `config/ai.toml` (or set `SATYA_AI_GM_REQUEST_TIMEOUT_SECS`) for slower local models.",
+                        ai_cfg.service_url
+                    )
+                } else {
+                    format!(
+                        "[AI GM Service Error] FastAPI AI GM service at {} is unreachable ({err}). Ensure `pixi run serve-ai-gm` is running.",
+                        ai_cfg.service_url
+                    )
+                };
+                tracing::error!(session_id = %session_id, trace_id = %trace_id, error = %err, "AI GM service dispatch failed (fail_fast_when_offline=true)");
 
                 if let Ok(log_meta) = state.storage.registry().build_metadata(
                     state.next_seq(),
@@ -767,12 +914,14 @@ pub async fn trigger_ai_gm_chat_reply(
                         level: LogLevel::Error,
                         service_name: "satya-signaling".to_string(),
                         actor: Some(triggering_player.clone()),
-                        trace_id: None,
-                        span_id: None,
+                        trace_id: Some(trace_id.clone()),
+                        span_id: Some(root_span_id.clone()),
                         parent_span_id: None,
                         lineage_id: Some(trigger_event_id.to_string()),
                         parent_lineage_ids: vec![],
-                        log_line: format!("[ERROR] [session={session_id}] {err_msg}"),
+                        log_line: format!(
+                            "[ERROR] [session={session_id}] [trace={trace_id} span={root_span_id}] [lineage={trigger_event_id}] {err_msg}"
+                        ),
                     };
                     let _ = state.storage.log_session_log(&log_ev).await;
                 }

@@ -79,11 +79,23 @@ def _gm_service_token() -> str:
     return "satya_gm_secret_dev_token"
 
 
+from satya_ml.ai_gm.telemetry import current_trace_headers, record_emitted_event_id
+
+
 def _gm_headers() -> dict[str, str]:
     return {
         "Authorization": f"Bearer {_gm_service_token()}",
         "Content-Type": "application/json",
+        **current_trace_headers(),
     }
+
+
+def _extract_and_record_event_id(res_dict: dict[str, Any]) -> None:
+    meta = res_dict.get("metadata")
+    if isinstance(meta, dict) and meta.get("event_id"):
+        record_emitted_event_id(str(meta["event_id"]))
+    elif res_dict.get("message_id"):
+        record_emitted_event_id(str(res_dict["message_id"]))
 
 
 def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> dict[str, Any] | None:
@@ -94,7 +106,9 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> 
             with httpx.Client(timeout=timeout) as client:
                 resp = client.post(url, headers=headers, json=payload)
                 if resp.status_code == 200:
-                    return dict(resp.json())
+                    data = dict(resp.json())
+                    _extract_and_record_event_id(data)
+                    return data
         except Exception:
             return None
         return None
@@ -108,7 +122,9 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> 
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status == 200:
-                return dict(json.loads(resp.read().decode("utf-8")))
+                data = dict(json.loads(resp.read().decode("utf-8")))
+                _extract_and_record_event_id(data)
+                return data
     except Exception:
         return None
     return None
@@ -290,31 +306,71 @@ def update_npc_state(
 
 @tool
 def query_satya_rules(query: str) -> str:
-    """Search `docs/satya_d20_rules.md` for Satya d20 mechanics, dice pools, target numbers, stances, and degrees of success."""
-    rules_path = _repo_root() / "docs" / "satya_d20_rules.md"
+    """Search `docs/ttrpg/satya_d20_rules.md` for Satya d20 Two-List Cascading (`2d20`) mechanics, skill levels, target numbers, stances, and degrees of success."""
+    rules_path = _repo_root() / "docs" / "ttrpg" / "satya_d20_rules.md"
+    if not rules_path.exists():
+        rules_path = _repo_root() / "docs" / "satya_d20_rules.md"
     if not rules_path.exists():
         return "Satya d20 ruleset document not found."
 
     text = rules_path.read_text(encoding="utf-8")
     sections = text.split("\n## ")
-    keywords = [w.lower() for w in query.replace("?", " ").split() if len(w) >= 3]
+    stopwords = {
+        "you",
+        "know",
+        "how",
+        "what",
+        "when",
+        "where",
+        "why",
+        "who",
+        "does",
+        "work",
+        "works",
+        "the",
+        "and",
+        "for",
+        "with",
+        "about",
+        "can",
+        "tell",
+        "explain",
+        "satya",
+        "are",
+        "this",
+        "that",
+        "from",
+    }
+    raw_words = [
+        w.strip(".,!?:;\"'()[]{}").lower()
+        for w in query.replace("?", " ").split()
+    ]
+    keywords: list[str] = []
+    for w in raw_words:
+        if len(w) >= 3 and w not in stopwords:
+            keywords.append(w)
+            if w.endswith("s") and len(w) >= 4:
+                keywords.append(w[:-1])
+
     if not keywords:
-        return text[:1500]
+        return text[:4000]
 
     scored: list[tuple[int, str]] = []
     for idx, section in enumerate(sections):
-        header_and_body = section if idx == 0 else f"## {section}"
+        if idx == 0:
+            continue
+        header_and_body = f"## {section}".strip()
         lowered = header_and_body.lower()
-        score = sum(lowered.count(kw) for kw in keywords)
+        score = sum(lowered.count(kw) for kw in set(keywords))
         if score > 0:
-            scored.append((score, header_and_body.strip()))
+            scored.append((score, header_and_body))
 
     if not scored:
-        return text[:1500]
+        return text[:4000]
 
     scored.sort(key=lambda item: item[0], reverse=True)
     top_excerpts = "\n\n---\n\n".join(chunk for _, chunk in scored[:2])
-    return top_excerpts[:2400]
+    return top_excerpts[:4500]
 
 
 @tool
@@ -368,36 +424,72 @@ def _local_satya_d20_fallback(
     difficulty_mod: int,
     combat_stance: str | None,
     note: str | None,
+    internal_mod: int = 0,
 ) -> dict[str, Any]:
     """Deterministic/local fallback for unit tests when satya-signaling HTTP server is not running."""
-    rng = random.Random(f"{actor_name}:{check_category}:{attribute_tn}:{skill_rank}:{difficulty_mod}")
-    d20_base = rng.randint(1, 20)
-    stance_mod = 1 if combat_stance == "AGGRESSIVE" else (-1 if combat_stance == "DEFENSIVE" else 0)
-    net_pool = skill_rank + difficulty_mod + stance_mod
-    pool_rolls = [rng.randint(1, 20) for _ in range(abs(net_pool))]
-    all_dice = [d20_base, *pool_rolls]
-    kept_die = min(all_dice) if net_pool >= 0 else max(all_dice)
-    effective_tn = max(2, min(19, int(attribute_tn)))
-    margin = effective_tn - kept_die
-    if kept_die == 1 or margin >= 5:
-        degree = "CRITICAL_SUCCESS"
-    elif kept_die <= effective_tn:
+    rng = random.Random(
+        f"{actor_name}:{check_category}:{attribute_tn}:{skill_rank}:{difficulty_mod}:{internal_mod}"
+    )
+    n_pairs = max(1, min(10, int(skill_rank) if int(skill_rank) > 0 else 1))
+    control_c = max(1, min(20, int(attribute_tn)))
+    tn_eff = 31 - control_c + int(difficulty_mod)
+    delta_over = 6
+    delta_under = max(0, 6 + int(internal_mod))
+
+    pairs: list[tuple[int, int]] = [
+        (rng.randint(1, 20), rng.randint(1, 20)) for _ in range(n_pairs)
+    ]
+    all_dice: list[int] = [d for pair in pairs for d in pair]
+
+    carry = 0
+    total_successes = 0
+    raw_botches = 0
+    min_miss_tier = 5
+    for die_a, die_b in pairs:
+        yn = die_a + die_b + carry
+        if yn > tn_eff:
+            total_successes += 1
+            carry = delta_over
+            min_miss_tier = 0
+        elif yn < tn_eff:
+            miss_dist = tn_eff - yn
+            min_miss_tier = min(min_miss_tier, min(5, miss_dist // 4))
+            if yn < 2:
+                raw_botches += 1
+            carry = -delta_under
+        else:
+            min_miss_tier = 0
+            carry = 0
+
+    eff_botches = min_miss_tier if total_successes == 0 else raw_botches
+    signed_margin = total_successes if total_successes > 0 else -eff_botches
+    if total_successes >= 3 and raw_botches == 0:
+        degree = "EXTRAORDINARY_SUCCESS"
+    elif total_successes >= 1 and raw_botches == 0:
         degree = "SUCCESS"
-    elif kept_die == 20 or margin <= -5:
-        degree = "CRITICAL_FAILURE"
-    else:
+    elif total_successes >= 1 and raw_botches >= 1:
+        degree = "PARTIAL_SUCCESS"
+    elif eff_botches == 0:
         degree = "FAILURE"
+    else:
+        degree = "CRITICAL_FAILURE"
+
     return {
-        "d20_base": d20_base,
-        "skill_pool_rolls": pool_rolls,
-        "net_pool_size": net_pool,
-        "kept_die": kept_die,
-        "attribute_tn": attribute_tn,
-        "effective_tn": effective_tn,
-        "margin": margin,
+        "skill_level": n_pairs,
+        "control_c": control_c,
+        "attribute_tn": control_c,
+        "effective_tn": tn_eff,
+        "internal_mod": int(internal_mod),
+        "external_mod": int(difficulty_mod),
+        "rolled_pairs": pairs,
+        "dice_rolled_d20": all_dice,
+        "successes_counted": total_successes,
+        "signed_margin": signed_margin,
+        "margin": signed_margin,
         "degree_of_success": degree,
+        "outcome_tier": degree,
         "wgpu_dice": {
-            "dice_notation": f"1d20+{abs(net_pool)}d20",
+            "dice_notation": f"{n_pairs}x2d20",
             "physics_seed": 424242,
             "outcomes": all_dice,
             "visibility": "PUBLIC",
@@ -412,23 +504,26 @@ def roll_satya_d20_check(
     actor_name: str,
     check_category: str = "SKILL_CHECK",
     attribute_tn: int = 12,
-    skill_rank: int = 0,
+    skill_rank: int = 2,
     difficulty_mod: int = 0,
+    internal_mod: int = 0,
+    carry_mode: str = "markov_step",
     combat_stance: str | None = None,
     note: str | None = None,
 ) -> dict[str, Any]:
-    """Execute a server-authoritative Satya d20 roll-under check via `POST /api/gm/sessions/:id/roll`."""
-    pool_size = max(1, 1 + int(skill_rank))
-    difficulty_rating = max(1, 1 - int(difficulty_mod))
+    """Execute a server-authoritative Satya Two-List Cascading (`2d20`) check via `POST /api/gm/sessions/:id/roll`."""
+    n_pairs = max(1, min(10, int(skill_rank) if int(skill_rank) > 0 else 1))
     payload = {
         "actor_display_name": actor_name,
         "target_user_ids": [],
         "skill_name": check_category,
         "attribute_tn": int(attribute_tn),
-        "pool_size": pool_size,
-        "difficulty_rating": difficulty_rating,
+        "pool_size": n_pairs,
+        "difficulty_rating": int(difficulty_mod),
+        "internal_mod": int(internal_mod),
+        "carry_mode": carry_mode,
         "combat_stance": combat_stance,
-        "fatigue_level": 0,
+        "fatigue_level": max(0, int(internal_mod)),
         "wound_shock_index": 0.0,
         "notes": note,
     }
@@ -444,10 +539,11 @@ def roll_satya_d20_check(
         actor_name=actor_name,
         check_category=check_category,
         attribute_tn=int(attribute_tn),
-        skill_rank=int(skill_rank),
+        skill_rank=n_pairs,
         difficulty_mod=int(difficulty_mod),
         combat_stance=combat_stance,
         note=note,
+        internal_mod=int(internal_mod),
     )
 
 

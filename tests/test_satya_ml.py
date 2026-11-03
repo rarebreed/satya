@@ -283,8 +283,10 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
     assert updated_vance["disposition"] == "friendly"
 
     # Rules & lore retrieval
-    rules_excerpt = query_satya_rules.invoke({"query": "target number degree of success"})
+    rules_excerpt = query_satya_rules.invoke({"query": "skills target number degree of success"})
     assert len(rules_excerpt) > 50
+    assert "Two-List Cascading" in rules_excerpt or "2d20" in rules_excerpt
+    assert "OutcomeTier" in rules_excerpt or "31 - C" in rules_excerpt
     lore_excerpt = query_campaign_lore.invoke({"query": "Aethelgard", "session_id": sid})
     assert "Captain Elena Vance" in lore_excerpt
 
@@ -353,9 +355,24 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
             health,
             set_chat_model_override,
         )
+        from satya_ml.ai_gm.telemetry import (
+            parse_traceparent,
+            redact_sensitive_text,
+            turn_telemetry_scope,
+        )
     except ImportError:
         # If langgraph / fastapi are not yet installed in the active Python environment, skip gracefully
         return
+
+    parsed_tp = parse_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+    assert parsed_tp == ("4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7")
+    assert parse_traceparent("invalid-header") == (None, None)
+    redacted_sample = redact_sensitive_text(
+        'Authorization: Bearer satya_secret_123 and api_key="sk-live-abcdef123456"'
+    )
+    assert "[REDACTED]" in redacted_sample
+    assert "sk-live-abcdef123456" not in redacted_sample
+    assert "satya_secret_123" not in redacted_sample
 
     class FakeToolCallingChatModel:
         def __init__(self) -> None:
@@ -386,25 +403,35 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
 
     fake_model = FakeToolCallingChatModel()
     graph = build_ai_gm_graph(chat_model=fake_model)
-    out = graph.invoke(
-        {
-            "session_id": "ep-graph-test",
-            "session_mode": "TTRPG_AI_GM",
-            "operating_mode": "autonomous",
-            "trigger_event": {
-                "event_id": "ev-101",
-                "actor": {"user_id": "u-p1", "display_name": "Sara"},
-                "content": "I ask Captain Vance about the Aethelgard logs.",
+    with turn_telemetry_scope(
+        session_id="ep-graph-test",
+        lineage_id="ev-101",
+    ):
+        out = graph.invoke(
+            {
+                "session_id": "ep-graph-test",
+                "session_mode": "TTRPG_AI_GM",
+                "operating_mode": "autonomous",
+                "trigger_event": {
+                    "event_id": "ev-101",
+                    "actor": {"user_id": "u-p1", "display_name": "Sara"},
+                    "content": "I ask Captain Vance about the Aethelgard logs.",
+                },
+                "tool_invocations": [],
             },
-            "tool_invocations": [],
-        },
-        config={"configurable": {"thread_id": "ep-graph-test"}},
-    )
+            config={"configurable": {"thread_id": "ep-graph-test"}},
+        )
     assert out["final_channel"] == "IN_CHARACTER"
     assert "Captain Elena Vance" in out["final_reply"]
     assert len(out["tool_invocations"]) == 1
     assert out["tool_invocations"][0]["tool_name"] == "lookup_npc_profile"
     assert out["tool_invocations"][0]["server_tier"] == "TIER_2_RULESET_ENGINE"
+    assert out["tool_invocations"][0]["mcp_tier"] == "TIER_2_RULESET_ENGINE"
+    assert len(out["trace_id"]) == 32
+    assert len(out["turn_logs"]) >= 1
+    assert "[session=ep-graph-test]" in out["turn_logs"][0]["log_line"]
+    assert f"[trace={out['trace_id']} " in out["turn_logs"][0]["log_line"]
+    assert "[lineage=" in out["turn_logs"][0]["log_line"]
 
     # Test FastAPI service in Co-Pilot mode with BYOK header
     set_chat_model_override(FakeToolCallingChatModel())
@@ -423,7 +450,7 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
         except HTTPException as exc:
             assert exc.status_code == 401
 
-        # Authorized Co-Pilot turn with ephemeral BYOK header
+        # Authorized Co-Pilot turn with ephemeral BYOK header + W3C traceparent
         body = handle_ai_gm_event(
             AiGmTurnEventPayload(
                 session_id="ep-copilot-fastapi",
@@ -438,11 +465,15 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
             ),
             authorization="Bearer satya_gm_secret_dev_token",
             x_satya_provider_key="sk-ephemeral-secret-key",
+            traceparent="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            x_satya_lineage_id="ev-202",
         )
         assert body["operating_mode"] == "co_pilot"
         assert body["final_channel"] == "GM_WHISPER"
         assert body["api_key_status"] == "[REDACTED_BYOK_KEY]"
         assert "sk-ephemeral-secret-key" not in json.dumps(body)
         assert body["tool_invocations_count"] == 1
+        assert body["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"
+        assert body["turn_logs_count"] >= 1
     finally:
         set_chat_model_override(None)

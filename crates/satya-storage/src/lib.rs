@@ -158,6 +158,12 @@ pub struct AiGmConfig {
     /// Default sampling temperature (`0.35`).
     #[serde(default = "default_ai_gm_temp")]
     pub temperature: f32,
+    /// TCP connection timeout in milliseconds when connecting to the FastAPI AI GM service (`3000` ms by default).
+    #[serde(default = "default_ai_gm_connect_timeout_ms")]
+    pub connect_timeout_ms: u64,
+    /// Maximum time in seconds to wait for an AI GM LangGraph turn to finish before timing out (`180` seconds by default).
+    #[serde(default = "default_ai_gm_request_timeout_secs")]
+    pub request_timeout_secs: u64,
     /// When `true` (configured in `config/ai.toml` for end-to-end runtime), `satya-signaling` fails fast
     /// if the Python FastAPI service at `service_url` is unreachable. When `false` (`Default::default()` used by
     /// unit/integration tests), falls back to deterministic in-process replies when `service_url` is offline.
@@ -192,6 +198,14 @@ fn default_ai_gm_temp() -> f32 {
     0.35
 }
 
+fn default_ai_gm_connect_timeout_ms() -> u64 {
+    3000
+}
+
+fn default_ai_gm_request_timeout_secs() -> u64 {
+    180
+}
+
 impl Default for AiGmConfig {
     fn default() -> Self {
         Self {
@@ -204,6 +218,8 @@ impl Default for AiGmConfig {
             vision_model: "llama3.2-vision".to_string(),
             persona_id: "harsh-reality-arbiter".to_string(),
             temperature: 0.35,
+            connect_timeout_ms: default_ai_gm_connect_timeout_ms(),
+            request_timeout_secs: default_ai_gm_request_timeout_secs(),
             fail_fast_when_offline: false,
         }
     }
@@ -537,7 +553,7 @@ impl EventLogRouter {
             };
             if state.buffer.is_empty() {
                 return Ok(None);
-            }
+            };
             std::mem::take(&mut state.buffer)
         };
 
@@ -937,11 +953,14 @@ mod tests {
         assert!(ai_cfg.enabled);
         assert_eq!(ai_cfg.default_provider, "ollama");
         assert_eq!(ai_cfg.reasoning_model, "gemma4:12b");
+        assert_eq!(ai_cfg.connect_timeout_ms, 3000);
+        assert_eq!(ai_cfg.request_timeout_secs, 180);
         assert!(ai_cfg.fail_fast_when_offline);
 
         let storage_cfg = StorageConfig::load_from_file(&storage_toml_path).unwrap();
         assert_eq!(storage_cfg.topics.len(), 9);
         assert_eq!(storage_cfg.ai_gm.reasoning_model, "gemma4:12b");
+        assert_eq!(storage_cfg.ai_gm.request_timeout_secs, 180);
         assert!(storage_cfg.ai_gm.fail_fast_when_offline);
     }
 }

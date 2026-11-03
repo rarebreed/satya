@@ -224,20 +224,33 @@ pub enum ClientWsPacket {
         /// Preceding silence duration in milliseconds.
         preceding_silence_ms: i64,
     },
-    /// Requests server-authoritative evaluation of a Satya d20 skill or combat task.
+    /// Requests server-authoritative evaluation of a Satya Two-List Cascading (`2d20`) skill or combat task.
     RollTtrpgTask {
         /// Name of the skill being tested.
         skill_name: String,
-        /// Controlling attribute Target Number (`1..=20`).
-        attribute_tn: i32,
-        /// Number of `d20`s rolled in the pool.
-        pool_size: usize,
-        /// Required number of successes.
-        difficulty_rating: i32,
+        /// Skill Level $N \in [1, 10]$ (number of `2d20` pairs rolled).
+        #[serde(alias = "pool_size")]
+        skill_level: usize,
+        /// Controlling Characteristic $C \in [1, 20]$ (shifts $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$).
+        #[serde(alias = "attribute_tn")]
+        control_c: i32,
+        /// Internal Character Modifier $\Delta_{\text{int}} \in [-2, +10]$ (Fatigue, Injury, Stress; increases failure carry penalty $\delta_{\text{under}} = 6 + \Delta_{\text{int}}$).
+        #[serde(default)]
+        internal_mod: i32,
+        /// External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (Range, Darkness, Tool Quality; shifts $\text{TN}_{\text{eff}}$).
+        #[serde(default, alias = "difficulty_rating")]
+        external_mod: i32,
+        /// Optional cascade carry-over mode (`"markov_step"`, `"cumulative_snowball"`, or `"linear_margin"`).
+        #[serde(default)]
+        carry_mode: Option<String>,
         /// Optional combat stance selected for the action.
         combat_stance: Option<CombatStance>,
-        /// Current character fatigue level.
+        /// Current character fatigue level (scales Action Time Factor).
+        #[serde(default)]
         fatigue_level: i32,
+        /// Current character wound shock index (scales Action Time Factor).
+        #[serde(default)]
+        wound_shock_index: f32,
     },
     /// Notifies the server that the participant is intentionally disconnecting from the session.
     LeaveSession {
@@ -351,12 +364,21 @@ pub struct GmRollRequest {
     pub target_user_ids: Vec<String>,
     /// Name of the Satya skill being tested.
     pub skill_name: String,
-    /// Controlling attribute Target Number (`1..=20`).
+    /// Controlling Characteristic $C \in [1, 20]$ (shifts $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$; also accepts `control_c`).
+    #[serde(alias = "control_c")]
     pub attribute_tn: i32,
-    /// Number of `d20`s in the dice pool.
+    /// Skill Level $N \in [1, 10]$ (number of `2d20` pairs rolled; also accepts `skill_level`).
+    #[serde(alias = "skill_level")]
     pub pool_size: usize,
-    /// Required number of successes.
+    /// External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (shifts $\text{TN}_{\text{eff}}$; also accepts `external_mod`).
+    #[serde(default, alias = "external_mod")]
     pub difficulty_rating: i32,
+    /// Optional Internal Character Modifier $\Delta_{\text{int}} \in [-2, +10]$ (defaults to `fatigue_level` when omitted).
+    #[serde(default)]
+    pub internal_mod: Option<i32>,
+    /// Optional cascade carry-over mode (`"markov_step"`, `"cumulative_snowball"`, or `"linear_margin"`).
+    #[serde(default)]
+    pub carry_mode: Option<String>,
     /// Optional Satya combat stance.
     #[serde(default)]
     pub combat_stance: Option<CombatStance>,
@@ -428,6 +450,15 @@ pub struct AiGmTurnTriggerRequest {
     pub persona_id: String,
     /// Optional custom LLM base URL.
     pub base_url: Option<String>,
+    /// Optional 32-character lowercase hex W3C `trace_id` correlating this turn across Rust and Python.
+    #[serde(default)]
+    pub trace_id: Option<String>,
+    /// Optional 16-character lowercase hex caller `span_id` from `satya-signaling`.
+    #[serde(default)]
+    pub parent_span_id: Option<String>,
+    /// Optional upstream data artifact lineage ID (`trigger_event_id`).
+    #[serde(default)]
+    pub lineage_id: Option<String>,
 }
 
 /// Client-side view model of per-topic Apache Iggy & Avro storage metrics.

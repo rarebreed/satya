@@ -1,0 +1,189 @@
+//! Pure Rust enum parsers, dropdown `<select>` option tables, and AI GM provider model defaults.
+
+use crate::wasm_client::chat_and_ttrpg::satya_visibility_changed;
+use crate::wasm_client::dom::get_element;
+use satya_schema::{ChannelContext, CombatStance, MessageVisibility, SessionMode, SessionRole};
+use wasm_bindgen::JsCast;
+use web_sys::HtmlSelectElement;
+
+/// Parses a `<select>` option string (`"TTRPG"`, `"TTRPG_GM"`, `"TTRPG_GM_AI"`, `"TTRPG_AI_GM"`, or `"MEETING"`) into a [`SessionMode`].
+pub fn parse_session_mode(raw: &str) -> SessionMode {
+    match raw {
+        "MEETING" => SessionMode::Meeting,
+        _ => SessionMode::Ttrpg,
+    }
+}
+
+/// Returns `true` when the selected business mode option enables the AI GM
+/// (`"TTRPG_GM_AI"` for GM + AI + Players, or `"TTRPG_AI_GM"` for AI GM + Players).
+pub fn is_ai_gm_mode(raw: &str) -> bool {
+    matches!(raw, "TTRPG_GM_AI" | "TTRPG_AI_GM")
+}
+
+/// Parses a `<select>` option string into a [`SessionRole`].
+pub fn parse_session_role(raw: &str) -> SessionRole {
+    match raw {
+        "GM" => SessionRole::Gm,
+        "AI_GM" => SessionRole::AiGm,
+        "HOST" => SessionRole::Host,
+        "PARTICIPANT" => SessionRole::Participant,
+        "OBSERVER" => SessionRole::Observer,
+        _ => SessionRole::Player,
+    }
+}
+
+/// Parses a `<select>` option string into a [`MessageVisibility`].
+pub fn parse_visibility(raw: &str) -> MessageVisibility {
+    match raw {
+        "PRIVATE" => MessageVisibility::Private,
+        "GM_ONLY" => MessageVisibility::GmOnly,
+        "HOST_ONLY" => MessageVisibility::HostOnly,
+        _ => MessageVisibility::Public,
+    }
+}
+
+/// Parses a `<select>` option string into a [`ChannelContext`].
+pub fn parse_channel_context(raw: &str) -> ChannelContext {
+    match raw {
+        "OUT_OF_CHARACTER" => ChannelContext::OutOfCharacter,
+        "GM_NARRATION" => ChannelContext::GmNarration,
+        "MEETING_PUBLIC" => ChannelContext::MeetingPublic,
+        "MEETING_BACKCHANNEL" => ChannelContext::MeetingBackchannel,
+        "SYSTEM_NOTICE" => ChannelContext::SystemNotice,
+        _ => ChannelContext::InCharacter,
+    }
+}
+
+/// Parses a `<select>` option string into an optional Satya TTRPG [`CombatStance`].
+pub fn parse_combat_stance(raw: &str) -> Option<CombatStance> {
+    match raw {
+        "POWER" => Some(CombatStance::Power),
+        "MANEUVER" => Some(CombatStance::Maneuver),
+        "STABILITY" => Some(CombatStance::Stability),
+        "RANGED_AIMED" => Some(CombatStance::RangedAimed),
+        "RANGED_SNAP" => Some(CombatStance::RangedSnap),
+        _ => None,
+    }
+}
+
+/// Returns the default recommended model identifier for the given AI GM provider (`ollama`, `google_genai`, `openai`, `anthropic`).
+pub fn default_model_for_provider(provider: &str) -> &'static str {
+    match provider {
+        "google_genai" => "gemini-2.5-flash",
+        "openai" => "gpt-4o",
+        "anthropic" => "claude-3-7-sonnet-latest",
+        _ => "gemma4:12b",
+    }
+}
+
+/// Static slice of `(value, label)` pairs used to populate `<select>` dropdown elements.
+pub type SelectOptionSlice = &'static [(&'static str, &'static str)];
+
+/// Returns the valid `(value, label)` option pairs for `#session-role-select`
+/// scoped to a given business mode option string (`"TTRPG"`, `"TTRPG_GM_AI"`, `"TTRPG_AI_GM"`, or `"MEETING"`).
+pub fn role_options_for_mode(mode_raw: &str) -> SelectOptionSlice {
+    match mode_raw {
+        "MEETING" => &[
+            ("HOST", "Meeting Host"),
+            ("PARTICIPANT", "Meeting Participant"),
+            ("OBSERVER", "Observer"),
+        ],
+        "TTRPG_AI_GM" => &[("PLAYER", "Player"), ("OBSERVER", "Observer")],
+        _ => &[
+            ("GM", "Game Master (GM)"),
+            ("PLAYER", "Player"),
+            ("OBSERVER", "Observer"),
+        ],
+    }
+}
+
+pub(crate) fn sync_role_options_for_mode(mode_raw: &str, default_role: Option<&str>) {
+    let opts = role_options_for_mode(mode_raw);
+    if let Some(role_sel) =
+        get_element("session-role-select").and_then(|el| el.dyn_into::<HtmlSelectElement>().ok())
+    {
+        let prev = role_sel.value();
+        let html: String = opts
+            .iter()
+            .map(|(val, label)| format!(r#"<option value="{val}">{label}</option>"#))
+            .collect();
+        role_sel.set_inner_html(&html);
+        if let Some(def) = default_role
+            && opts.iter().any(|(val, _)| *val == def)
+        {
+            role_sel.set_value(def);
+        } else if opts.iter().any(|(val, _)| *val == prev) {
+            role_sel.set_value(&prev);
+        } else {
+            role_sel.set_value(opts[0].0);
+        }
+    }
+}
+
+/// Returns the valid `(value, label)` option pairs for `(visibility_options, context_options)`
+/// scoped to a given [`SessionMode`].
+pub fn chat_options_for_mode(mode: SessionMode) -> (SelectOptionSlice, SelectOptionSlice) {
+    match mode {
+        SessionMode::Ttrpg => (
+            &[
+                ("PUBLIC", "PUBLIC (Broadcast to All)"),
+                ("PRIVATE", "PRIVATE (Selected Recipients Only)"),
+                ("GM_ONLY", "GM_ONLY (Secret to GM / AI-GM)"),
+            ],
+            &[
+                ("IN_CHARACTER", "IN_CHARACTER"),
+                ("OUT_OF_CHARACTER", "OUT_OF_CHARACTER"),
+                ("GM_NARRATION", "GM_NARRATION"),
+            ],
+        ),
+        SessionMode::Meeting => (
+            &[
+                ("PUBLIC", "PUBLIC (Broadcast to All)"),
+                ("PRIVATE", "PRIVATE (Selected Recipients Only)"),
+                ("HOST_ONLY", "HOST_ONLY (Meeting Host Only)"),
+            ],
+            &[
+                ("MEETING_PUBLIC", "MEETING_PUBLIC"),
+                ("MEETING_BACKCHANNEL", "MEETING_BACKCHANNEL"),
+            ],
+        ),
+    }
+}
+
+pub(crate) fn sync_chat_options_for_mode(mode: SessionMode) {
+    let (vis_opts, ctx_opts) = chat_options_for_mode(mode);
+
+    if let Some(vis_sel) =
+        get_element("chat-visibility").and_then(|el| el.dyn_into::<HtmlSelectElement>().ok())
+    {
+        let prev = vis_sel.value();
+        let html: String = vis_opts
+            .iter()
+            .map(|(val, label)| format!(r#"<option value="{val}">{label}</option>"#))
+            .collect();
+        vis_sel.set_inner_html(&html);
+        if vis_opts.iter().any(|(val, _)| *val == prev) {
+            vis_sel.set_value(&prev);
+        } else {
+            vis_sel.set_value(vis_opts[0].0);
+        }
+    }
+
+    if let Some(ctx_sel) =
+        get_element("chat-context").and_then(|el| el.dyn_into::<HtmlSelectElement>().ok())
+    {
+        let prev = ctx_sel.value();
+        let html: String = ctx_opts
+            .iter()
+            .map(|(val, label)| format!(r#"<option value="{val}">{label}</option>"#))
+            .collect();
+        ctx_sel.set_inner_html(&html);
+        if ctx_opts.iter().any(|(val, _)| *val == prev) {
+            ctx_sel.set_value(&prev);
+        } else {
+            ctx_sel.set_value(ctx_opts[0].0);
+        }
+    }
+
+    satya_visibility_changed();
+}

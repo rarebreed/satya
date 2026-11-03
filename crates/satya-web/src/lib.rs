@@ -541,110 +541,478 @@ fn AuthAndSessionGate() -> impl IntoView {
 fn ActiveSessionWorkspace() -> impl IntoView {
     view! {
         <section id="workspace-panel" class="workspace-columns" style="display: none;">
-            <div class="col-left">
-                <div class="card webrtc-card">
-                    <div class="card-header-inline">
-                        <div>
-                            <h2>"WebRTC Audio / Video & Prosody Mesh"</h2>
-                            <span class="subtitle">"P2P Media + DataChannel + VAD InteractionDynamicsEvent"</span>
+            // ================================================================
+            // LEFT COLUMN: Tabbed "Notebook" UI
+            // (Maps, 3D Dice, 3D Model, Character Sheet/Status, Combat Tracker,
+            //  Apache Iggy / Topics / PyLance stats)
+            // ================================================================
+            <div id="notebook-column" class="col-notebook">
+                <div id="tabletop-canvas-card" class="card tabletop-canvas-card notebook-card">
+                    <div class="notebook-header">
+                        <div class="notebook-title-row">
+                            <div>
+                                <h2>"Tabletop Notebook"</h2>
+                                <span class="subtitle">"Maps · 3D Dice · 3D Model · Character Sheet · Combat Tracker · Apache Iggy & PyLance"</span>
+                            </div>
+                            <span id="canvas-map-pill" class="pill pill-muted">"Standby Grid"</span>
                         </div>
-                        <div class="media-controls">
+                        <div class="notebook-tabs" role="tablist" aria-label="Tabletop Notebook Views">
                             <button
                                 type="button"
-                                class="btn btn-sm btn-secondary"
-                                onclick="window.satyaStartCamera()"
-                                on:click=move |_| wasm_client::satya_start_camera()
+                                id="tab-btn-maps"
+                                role="tab"
+                                aria-selected="true"
+                                aria-controls="notebook-pane-maps"
+                                data-notebook-tab="maps"
+                                class="notebook-tab active"
+                                onclick="window.satyaSelectNotebookTab('maps')"
+                                on:click=move |_| wasm_client::satya_select_notebook_tab("maps".to_string())
                             >
-                                "Enable Cam/Mic"
+                                "Maps"
                             </button>
                             <button
                                 type="button"
-                                id="btn-mute-audio"
-                                class="btn btn-sm btn-secondary"
-                                onclick="window.satyaToggleAudio()"
-                                on:click=move |_| wasm_client::satya_toggle_audio()
+                                id="tab-btn-dice"
+                                role="tab"
+                                aria-selected="false"
+                                aria-controls="notebook-pane-dice"
+                                data-notebook-tab="dice"
+                                class="notebook-tab"
+                                onclick="window.satyaSelectNotebookTab('dice')"
+                                on:click=move |_| wasm_client::satya_select_notebook_tab("dice".to_string())
                             >
-                                "Mute Mic"
+                                "3D Dice"
                             </button>
                             <button
                                 type="button"
-                                id="btn-mute-video"
-                                class="btn btn-sm btn-secondary"
-                                onclick="window.satyaToggleVideo()"
-                                on:click=move |_| wasm_client::satya_toggle_video()
+                                id="tab-btn-model"
+                                role="tab"
+                                aria-selected="false"
+                                aria-controls="notebook-pane-model"
+                                data-notebook-tab="model"
+                                class="notebook-tab"
+                                onclick="window.satyaSelectNotebookTab('model')"
+                                on:click=move |_| wasm_client::satya_select_notebook_tab("model".to_string())
                             >
-                                "Mute Video"
+                                "3D Model"
                             </button>
                             <button
                                 type="button"
-                                class="btn btn-sm btn-accent"
-                                onclick="window.satyaEmitProsodySample()"
-                                on:click=move |_| wasm_client::satya_emit_prosody_sample()
+                                id="tab-btn-character"
+                                role="tab"
+                                aria-selected="false"
+                                aria-controls="notebook-pane-character"
+                                data-notebook-tab="character"
+                                class="notebook-tab"
+                                onclick="window.satyaSelectNotebookTab('character')"
+                                on:click=move |_| wasm_client::satya_select_notebook_tab("character".to_string())
                             >
-                                "Log VAD Turn"
+                                "Character Sheet/Status"
                             </button>
                             <button
                                 type="button"
-                                id="btn-workspace-disconnect"
-                                class="btn btn-sm btn-danger"
-                                onclick="window.satyaLeaveSession()"
-                                on:click=move |_| wasm_client::satya_leave_session()
-                                disabled
+                                id="tab-btn-combat"
+                                role="tab"
+                                aria-selected="false"
+                                aria-controls="notebook-pane-combat"
+                                data-notebook-tab="combat"
+                                class="notebook-tab"
+                                onclick="window.satyaSelectNotebookTab('combat')"
+                                on:click=move |_| wasm_client::satya_select_notebook_tab("combat".to_string())
                             >
-                                "Disconnect"
+                                "Combat Tracker"
+                            </button>
+                            <button
+                                type="button"
+                                id="tab-btn-iggy"
+                                role="tab"
+                                aria-selected="false"
+                                aria-controls="notebook-pane-iggy"
+                                data-notebook-tab="iggy"
+                                class="notebook-tab"
+                                onclick="window.satyaSelectNotebookTab('iggy')"
+                                on:click=move |_| wasm_client::satya_select_notebook_tab("iggy".to_string())
+                            >
+                                "Apache Iggy, Topics & PyLance"
                             </button>
                         </div>
                     </div>
-                    <div id="video-grid" class="video-grid">
-                        <div class="video-tile local-tile">
-                            <video id="local-video" autoplay muted playsinline></video>
-                            <div class="tile-overlay">
-                                <span id="local-participant-label" class="role-tag">"Local Preview"</span>
-                                <span id="vad-energy-readout" class="telemetry-mini">"RMS: 0.00"</span>
+
+                    <div class="notebook-body">
+                        // --- TAB 1: MAPS ---
+                        <div
+                            id="notebook-pane-maps"
+                            role="tabpanel"
+                            aria-labelledby="tab-btn-maps"
+                            data-notebook-pane="maps"
+                            class="notebook-pane active"
+                        >
+                            <div class="pane-toolbar">
+                                <span class="subtitle">"Live SVG Battlemap (`MAP_UPDATED`) & Tactical Grid Coordinates"</span>
+                            </div>
+                            <div id="tabletop-map-viewport" class="tabletop-map-viewport">
+                                <div id="tabletop-map-placeholder" class="tabletop-map-placeholder">
+                                    "Awaiting tactical map generation (`generate_tactical_map`) or GM map update..."
+                                </div>
+                                <img
+                                    id="tabletop-map-img"
+                                    class="tabletop-map-img"
+                                    alt="Tactical Battlemap"
+                                    style="display: none;"
+                                />
+                            </div>
+                            <div class="roster-bar">
+                                <span class="roster-title">"Grid Tokens & Coordinates:"</span>
+                                <div id="tabletop-token-list" class="roster-chips">
+                                    <span class="pill pill-muted">"No active tokens"</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="roster-bar">
-                        <span class="roster-title">"Session Roster (Nested Avro Participant Records):"</span>
-                        <div id="roster-list" class="roster-chips"></div>
-                    </div>
-                </div>
 
-                <div id="tabletop-canvas-card" class="card tabletop-canvas-card">
-                    <div class="card-header-inline">
-                        <div>
-                            <h2>"Tactical Map & 3D Dice Tabletop Canvas"</h2>
-                            <span class="subtitle">"Live SVG Battlemap (`MAP_UPDATED`) & Synchronized 3D Physics Dice (`WGPU_DICE_ROLL`)"</span>
-                        </div>
-                        <span id="canvas-map-pill" class="pill pill-muted">"Standby Grid"</span>
-                    </div>
-                    <div id="tabletop-map-viewport" class="tabletop-map-viewport">
-                        <div id="tabletop-map-placeholder" class="tabletop-map-placeholder">
-                            "Awaiting tactical map generation (`generate_tactical_map`) or GM map update..."
-                        </div>
-                        <img
-                            id="tabletop-map-img"
-                            class="tabletop-map-img"
-                            alt="Tactical Battlemap"
+                        // --- TAB 2: 3D DICE ---
+                        <div
+                            id="notebook-pane-dice"
+                            role="tabpanel"
+                            aria-labelledby="tab-btn-dice"
+                            data-notebook-pane="dice"
+                            class="notebook-pane"
                             style="display: none;"
-                        />
-                    </div>
-                    <div class="roster-bar">
-                        <span class="roster-title">"Grid Tokens & Coordinates:"</span>
-                        <div id="tabletop-token-list" class="roster-chips">
-                            <span class="pill pill-muted">"No active tokens"</span>
+                        >
+                            <div class="pane-toolbar">
+                                <div>
+                                    <span class="subtitle">"Synchronized 3D Physics Dice (`WGPU_DICE_ROLL` · Deterministic Seed Sync)"</span>
+                                </div>
+                                <div class="btn-row-compact">
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaQuick3dDiceRoll('2d20')"
+                                        on:click=move |_| wasm_client::satya_quick_3d_dice_roll("2d20".to_string())
+                                    >
+                                        "Roll 2d20"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaQuick3dDiceRoll('4d20')"
+                                        on:click=move |_| wasm_client::satya_quick_3d_dice_roll("4d20".to_string())
+                                    >
+                                        "Roll 4d20"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaQuick3dDiceRoll('6d20')"
+                                        on:click=move |_| wasm_client::satya_quick_3d_dice_roll("6d20".to_string())
+                                    >
+                                        "Roll 6d20"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-accent"
+                                        onclick="window.satyaRollTask()"
+                                        on:click=move |_| wasm_client::satya_roll_task()
+                                    >
+                                        "Roll Active Task"
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="wgpu-dice-tray" class="wgpu-dice-tray notebook-dice-stage">
+                                <span class="roster-title">"3D Physics Dice Tray (`wgpu` Seed Sync):"</span>
+                                <div id="wgpu-dice-readout" class="wgpu-dice-readout" aria-live="polite">
+                                    "No 3D dice rolls spawned yet."
+                                </div>
+                                <div id="wgpu-dice-history" class="wgpu-dice-history">
+                                    <div class="roster-title">"Recent 3D Roll Log:"</div>
+                                    <div id="wgpu-dice-history-list" class="dice-history-list">
+                                        <span class="subtitle">"Roll via Die Roller, `/roll`, or quick buttons above to populate 3D trajectory log."</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div id="wgpu-dice-tray" class="wgpu-dice-tray">
-                        <span class="roster-title">"3D Physics Dice Tray (`wgpu` Seed Sync):"</span>
-                        <div id="wgpu-dice-readout" class="wgpu-dice-readout" aria-live="polite">
-                            "No 3D dice rolls spawned yet."
+
+                        // --- TAB 3: 3D MODEL ---
+                        <div
+                            id="notebook-pane-model"
+                            role="tabpanel"
+                            aria-labelledby="tab-btn-model"
+                            data-notebook-pane="model"
+                            class="notebook-pane"
+                            style="display: none;"
+                        >
+                            <div class="pane-toolbar">
+                                <div class="model-controls-row">
+                                    <label class="inline-label">
+                                        <span>"3D Asset"</span>
+                                        <select
+                                            id="model-preset-select"
+                                            onchange="window.satyaUpdate3dModelView()"
+                                            on:change=move |_| wasm_client::satya_update_3d_model_view()
+                                        >
+                                            <option value="valkyrie_rig">"Valkyrie Exo-Rig (Sara)"</option>
+                                            <option value="recon_mk4">"Recon Suit Mk-IV (Marcus)"</option>
+                                            <option value="secops_sentry">"SecOps Heavy Sentry"</option>
+                                            <option value="sector4_airlock">"Sector 4 Orbital Airlock"</option>
+                                        </select>
+                                    </label>
+                                    <label class="inline-label">
+                                        <span>"Shader Mode"</span>
+                                        <select
+                                            id="model-render-mode"
+                                            onchange="window.satyaUpdate3dModelView()"
+                                            on:change=move |_| wasm_client::satya_update_3d_model_view()
+                                        >
+                                            <option value="wireframe_pbr">"Wireframe + PBR"</option>
+                                            <option value="hit_zones">"Anatomical Hit Zones"</option>
+                                            <option value="thermal">"Thermal / IR Sensor"</option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <span id="model-telemetry-pill" class="pill pill-iggy">"Mesh: Valkyrie Exo-Rig · 14.2k tris"</span>
+                            </div>
+                            <div
+                                id="model-preview-stage"
+                                class="model-preview-stage"
+                                inner_html=wasm_client:: default_3d_model_stage_html()
+                            ></div>
+                        </div>
+
+                        // --- TAB 4: CHARACTER SHEET / STATUS ---
+                        <div
+                            id="notebook-pane-character"
+                            role="tabpanel"
+                            aria-labelledby="tab-btn-character"
+                            data-notebook-pane="character"
+                            class="notebook-pane"
+                            style="display: none;"
+                        >
+                            <div class="pane-toolbar">
+                                <span class="subtitle">"Satya d20 Operator Profile, Attributes & Quick-Load Skill Presets"</span>
+                                <span id="char-sheet-status-pill" class="pill pill-active">"Combat Ready · Fatigue 1 · Shock 0.0"</span>
+                            </div>
+                            <div class="char-sheet-grid">
+                                <div class="char-stat-box">
+                                    <span class="stat-label">"Control (C)"</span>
+                                    <span id="char-stat-control" class="stat-value">"12"</span>
+                                    <span class="stat-note">"Base Precision"</span>
+                                </div>
+                                <div class="char-stat-box">
+                                    <span class="stat-label">"Reflexes"</span>
+                                    <span class="stat-value">"14"</span>
+                                    <span class="stat-note">"Initiative / Dodge"</span>
+                                </div>
+                                <div class="char-stat-box">
+                                    <span class="stat-label">"Stamina"</span>
+                                    <span class="stat-value">"13"</span>
+                                    <span class="stat-note">"Endurance / Soak"</span>
+                                </div>
+                                <div class="char-stat-box">
+                                    <span class="stat-label">"Intellect"</span>
+                                    <span class="stat-value">"15"</span>
+                                    <span class="stat-note">"Medical / Tech"</span>
+                                </div>
+                                <div class="char-stat-box">
+                                    <span class="stat-label">"Resolve"</span>
+                                    <span class="stat-value">"12"</span>
+                                    <span class="stat-note">"Composure / Stress"</span>
+                                </div>
+                                <div class="char-stat-box">
+                                    <span class="stat-label">"Armor Mitigation"</span>
+                                    <span class="stat-value">"DR 4"</span>
+                                    <span class="stat-note">"EVA Ballistic"</span>
+                                </div>
+                            </div>
+                            <div class="roster-bar">
+                                <span class="roster-title">"Trained Skills (Click to Load into Die Roller):"</span>
+                                <div class="preset-users">
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadSkillPreset('Trauma Surgery', 3, 12)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Trauma Surgery".to_string(), 3, 12)
+                                    >
+                                        "Trauma Surgery (N=3, C=12)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadSkillPreset('Zero-G Maneuver', 4, 14)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Zero-G Maneuver".to_string(), 4, 14)
+                                    >
+                                        "Zero-G Maneuver (N=4, C=14)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadSkillPreset('Suppressive Fire', 3, 13)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Suppressive Fire".to_string(), 3, 13)
+                                    >
+                                        "Suppressive Fire (N=3, C=13)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadSkillPreset('Sensor Recon', 2, 15)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Sensor Recon".to_string(), 2, 15)
+                                    >
+                                        "Sensor Recon (N=2, C=15)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadSkillPreset('Close-Quarters Breach', 4, 11)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Close-Quarters Breach".to_string(), 4, 11)
+                                    >
+                                        "Close-Quarters Breach (N=4, C=11)"
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        // --- TAB 5: COMBAT TRACKER ---
+                        <div
+                            id="notebook-pane-combat"
+                            role="tabpanel"
+                            aria-labelledby="tab-btn-combat"
+                            data-notebook-pane="combat"
+                            class="notebook-pane"
+                            style="display: none;"
+                        >
+                            <div class="pane-toolbar">
+                                <div>
+                                    <span class="subtitle">"Satya Action-Count (Tick) Initiative Timeline & Stance Economy"</span>
+                                </div>
+                                <div class="btn-row-compact">
+                                    <span id="combat-round-pill" class="pill pill-active">"Round 1 · Tick 0"</span>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaAdvanceCombatTick(1)"
+                                        on:click=move |_| wasm_client::satya_advance_combat_tick(1)
+                                    >
+                                        "+1 Tick"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaAdvanceCombatTick(5)"
+                                        on:click=move |_| wasm_client::satya_advance_combat_tick(5)
+                                    >
+                                        "+5 Ticks"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-accent"
+                                        onclick="window.satyaAdvanceCombatTick(0)"
+                                        on:click=move |_| wasm_client::satya_advance_combat_tick(0)
+                                    >
+                                        "Reset Clock"
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="roster-bar">
+                                <span class="roster-title">"Active Combatants & Session Order:"</span>
+                                <div id="combat-tracker-list" class="combat-tracker-list">
+                                    <span class="pill pill-muted">"Join or create a session to populate active combatants."</span>
+                                </div>
+                            </div>
+                            <div class="metrics-table-wrap">
+                                <table class="metrics-table">
+                                    <thead>
+                                        <tr>
+                                            <th>"Combat Stance"</th>
+                                            <th>"Target Control (TC)"</th>
+                                            <th>"Action Cost"</th>
+                                            <th>"Tactical Effect"</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>"Melee: Maneuver"</strong></td>
+                                            <td><span class="mono">"TC 11"</span></td>
+                                            <td>"8 ticks"</td>
+                                            <td>"Balanced footwork; +1 defensive parry margin"</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>"Melee: Power"</strong></td>
+                                            <td><span class="mono">"TC 14"</span></td>
+                                            <td>"12 ticks"</td>
+                                            <td>"Heavy kinetic strike; +2 Wound Shock on hit"</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>"Melee: Stability"</strong></td>
+                                            <td><span class="mono">"TC 9"</span></td>
+                                            <td>"10 ticks"</td>
+                                            <td>"Braced zero-G/recoil stance; resists knockdown"</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>"Ranged: Aimed"</strong></td>
+                                            <td><span class="mono">"TC 12"</span></td>
+                                            <td>"11 ticks"</td>
+                                            <td>"Deliberate sight acquisition; precision bonus"</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>"Ranged: Snap"</strong></td>
+                                            <td><span class="mono">"TC 7"</span></td>
+                                            <td>"6 ticks"</td>
+                                            <td>"Rapid reaction shot; low tick commitment"</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        // --- TAB 6: APACHE IGGY, TOPICS AND PYLANCE STATS ---
+                        <div
+                            id="notebook-pane-iggy"
+                            role="tabpanel"
+                            aria-labelledby="tab-btn-iggy"
+                            data-notebook-pane="iggy"
+                            class="notebook-pane"
+                            style="display: none;"
+                        >
+                            <div id="iggy-non-admin-notice" class="roster-bar">
+                                <span class="roster-title">"Apache Iggy Event Stream & PyLance Sink Telemetry"</span>
+                                <span class="subtitle">
+                                    "Log in with an ADMIN account (e.g. `gm_sean`) to inspect live CRC-64-AVRO fingerprints, topic offsets, and trigger PyLance `.avro` batch flushes."
+                                </span>
+                            </div>
+                            <div id="admin-inspector-card" class="inspector-card-inner" style="display: none;">
+                                <div class="card-header-inline">
+                                    <div>
+                                        <h2>"Apache Iggy Topics, Avro Schemas & PyLance Batch Sink"</h2>
+                                        <span class="subtitle">"Admin Only · CRC-64-AVRO Fingerprints + Offset-Tracked .avro Container Batches"</span>
+                                    </div>
+                                    <div class="btn-row-compact">
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-secondary"
+                                            onclick="window.satyaRefreshMetrics()"
+                                            on:click=move |_| wasm_client::satya_refresh_metrics()
+                                        >
+                                            "Refresh"
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="btn btn-sm btn-accent"
+                                            onclick="window.satyaFlushBatches()"
+                                            on:click=move |_| wasm_client::satya_flush_batches()
+                                        >
+                                            "Flush Avro Batches Now"
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="topic-metrics-table" class="metrics-table-wrap"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-right">
+            // ================================================================
+            // CENTER COLUMN: Chat Session Interface (Top) + Die Roller (Bottom)
+            // ================================================================
+            <div id="center-column" class="col-center">
                 <div class="card chat-card">
                     <div class="card-header-inline">
                         <div>
@@ -733,8 +1101,13 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                     <div class="card-header-inline">
                         <div>
                             <h2>"Satya TTRPG Task Resolution & Combat Economy"</h2>
-                            <span class="subtitle">"Logs TtrpgMechanicsEvent to Apache Iggy (`ttrpg-mechanics`)"</span>
+                            <span class="subtitle">"Two-List Cascading (`2d20`) Roll-Over Engine · Logs TtrpgMechanicsEvent to Apache Iggy (`ttrpg-mechanics`)"</span>
                         </div>
+                        <span id="ttrpg-odds-pill" class="pill pill-active">
+                            {wasm_client::format_cascade_odds_preview(
+                                &satya_engine::CascadeTaskParams::new_k20(3, 12, 0, 0),
+                            )}
+                        </span>
                     </div>
                     <div class="ttrpg-controls">
                         <label>
@@ -742,16 +1115,63 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             <input id="ttrpg-skill" type="text" value="Trauma Surgery"/>
                         </label>
                         <label>
-                            <span>"Attribute TN (1-20)"</span>
-                            <input id="ttrpg-tn" type="number" value="13" min="1" max="20"/>
+                            <span>"Skill Level N (2d20 Pairs, 1-10)"</span>
+                            <input
+                                id="ttrpg-skill-level"
+                                type="number"
+                                value="3"
+                                min="1"
+                                max="10"
+                                onchange="window.satyaUpdateCascadePreview()"
+                                oninput="window.satyaUpdateCascadePreview()"
+                            />
                         </label>
                         <label>
-                            <span>"Dice Pool (d20s)"</span>
-                            <input id="ttrpg-pool" type="number" value="3" min="1" max="10"/>
+                            <span>"Control Characteristic C (1-20)"</span>
+                            <input
+                                id="ttrpg-control-c"
+                                type="number"
+                                value="12"
+                                min="1"
+                                max="20"
+                                onchange="window.satyaUpdateCascadePreview()"
+                                oninput="window.satyaUpdateCascadePreview()"
+                            />
                         </label>
                         <label>
-                            <span>"Difficulty (Req. Successes)"</span>
-                            <input id="ttrpg-diff" type="number" value="2" min="1" max="8"/>
+                            <span>"Internal Mod Δ_int (-2 to +10)"</span>
+                            <input
+                                id="ttrpg-internal-mod"
+                                type="number"
+                                value="0"
+                                min="-2"
+                                max="10"
+                                onchange="window.satyaUpdateCascadePreview()"
+                                oninput="window.satyaUpdateCascadePreview()"
+                            />
+                        </label>
+                        <label>
+                            <span>"External Mod Δ_ext (-10 to +16)"</span>
+                            <input
+                                id="ttrpg-external-mod"
+                                type="number"
+                                value="0"
+                                min="-10"
+                                max="16"
+                                onchange="window.satyaUpdateCascadePreview()"
+                                oninput="window.satyaUpdateCascadePreview()"
+                            />
+                        </label>
+                        <label>
+                            <span>"Cascade Carry Mode"</span>
+                            <select
+                                id="ttrpg-carry-mode"
+                                onchange="window.satyaUpdateCascadePreview()"
+                            >
+                                <option value="markov_step">"Markov Step (Standard)"</option>
+                                <option value="cumulative_snowball">"Cumulative Snowball"</option>
+                                <option value="linear_margin">"Linear Margin"</option>
+                            </select>
                         </label>
                         <label>
                             <span>"Combat Stance"</span>
@@ -768,6 +1188,17 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             <span>"Fatigue Level"</span>
                             <input id="ttrpg-fatigue" type="number" value="1" min="0" max="10"/>
                         </label>
+                        <label>
+                            <span>"Wound Shock Index"</span>
+                            <input
+                                id="ttrpg-wound-shock"
+                                type="number"
+                                step="0.5"
+                                value="0"
+                                min="0"
+                                max="10"
+                            />
+                        </label>
                     </div>
                     <div class="btn-row">
                         <button
@@ -780,33 +1211,105 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                         </button>
                     </div>
                 </div>
+            </div>
 
-                <div id="admin-inspector-card" class="card inspector-card" style="display: none;">
-                    <div class="card-header-inline">
-                        <div>
-                            <h2>"Apache Iggy Topics, Avro Schemas & PyLance Batch Sink"</h2>
-                            <span class="subtitle">"Admin Only · CRC-64-AVRO Fingerprints + Offset-Tracked .avro Container Batches"</span>
+            // ================================================================
+            // RIGHT COLUMN / DETACHABLE FLOATING FRAME: Web Cams of Joined Users
+            // (Vertical column layout with 1 or at most 2 columns; can float & dock back)
+            // ================================================================
+            <div id="webrtc-dock-column" class="col-webcams">
+                <div id="webrtc-card" class="card webrtc-card">
+                    <div
+                        id="webrtc-drag-header"
+                        class="webrtc-header"
+                        onmousedown="window.satyaStartWebcamDrag(event)"
+                    >
+                        <div class="webrtc-title-wrap">
+                            <h2>"Web Cams"</h2>
+                            <span class="subtitle">"P2P Media & Prosody Mesh"</span>
                         </div>
-                        <div class="btn-row-compact">
+                        <div class="webcam-frame-actions">
                             <button
                                 type="button"
+                                id="btn-toggle-webcam-cols"
                                 class="btn btn-sm btn-secondary"
-                                onclick="window.satyaRefreshMetrics()"
-                                on:click=move |_| wasm_client::satya_refresh_metrics()
+                                title="Switch between 1-column and 2-column vertical webcam layout (max 2 columns)"
+                                onclick="window.satyaToggleWebcamColumns()"
+                                on:click=move |_| wasm_client::satya_toggle_webcam_columns()
                             >
-                                "Refresh"
+                                "2 Cols"
                             </button>
                             <button
                                 type="button"
-                                class="btn btn-sm btn-accent"
-                                onclick="window.satyaFlushBatches()"
-                                on:click=move |_| wasm_client::satya_flush_batches()
+                                id="btn-toggle-webcam-float"
+                                class="btn btn-sm btn-secondary"
+                                title="Detach Web Cams into a floating draggable frame or dock back into column"
+                                onclick="window.satyaToggleWebcamFloat()"
+                                on:click=move |_| wasm_client::satya_toggle_webcam_float()
                             >
-                                "Flush Avro Batches Now"
+                                "Float"
                             </button>
                         </div>
                     </div>
-                    <div id="topic-metrics-table" class="metrics-table-wrap"></div>
+                    <div class="media-controls">
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-secondary"
+                            onclick="window.satyaStartCamera()"
+                            on:click=move |_| wasm_client::satya_start_camera()
+                        >
+                            "Enable Cam/Mic"
+                        </button>
+                        <button
+                            type="button"
+                            id="btn-mute-audio"
+                            class="btn btn-sm btn-secondary"
+                            onclick="window.satyaToggleAudio()"
+                            on:click=move |_| wasm_client::satya_toggle_audio()
+                        >
+                            "Mute Mic"
+                        </button>
+                        <button
+                            type="button"
+                            id="btn-mute-video"
+                            class="btn btn-sm btn-secondary"
+                            onclick="window.satyaToggleVideo()"
+                            on:click=move |_| wasm_client::satya_toggle_video()
+                        >
+                            "Mute Video"
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-accent"
+                            onclick="window.satyaEmitProsodySample()"
+                            on:click=move |_| wasm_client::satya_emit_prosody_sample()
+                        >
+                            "Log VAD Turn"
+                        </button>
+                        <button
+                            type="button"
+                            id="btn-workspace-disconnect"
+                            class="btn btn-sm btn-danger"
+                            onclick="window.satyaLeaveSession()"
+                            on:click=move |_| wasm_client::satya_leave_session()
+                            disabled
+                        >
+                            "Disconnect"
+                        </button>
+                    </div>
+                    <div id="video-grid" class="video-grid cols-1">
+                        <div class="video-tile local-tile">
+                            <video id="local-video" autoplay muted playsinline></video>
+                            <div class="tile-overlay">
+                                <span id="local-participant-label" class="role-tag">"Local Preview"</span>
+                                <span id="vad-energy-readout" class="telemetry-mini">"RMS: 0.00"</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="roster-bar">
+                        <span class="roster-title">"Session Roster:"</span>
+                        <div id="roster-list" class="roster-chips"></div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -980,6 +1483,66 @@ mod tests {
         assert!(dice_html.contains("3d20"));
         assert!(dice_html.contains(r#"<span class="dice-cube">3</span>"#));
         assert!(dice_html.contains(r#"<span class="dice-cube">19</span>"#));
+
+        // Chat timestamp formatting & ChatMessageEvent HTML rendering
+        // 2026-11-02T18:42:15.123000Z = 1_793_644_935_123_000 microseconds
+        let (ts_short, ts_iso) = wasm_client::format_timestamp_us_utc(1_793_644_935_123_000);
+        assert_eq!(ts_short, "18:42:15");
+        assert_eq!(ts_iso, "2026-11-02T18:42:15.123Z");
+
+        let chat_ev = satya_schema::ChatMessageEvent {
+            metadata: satya_schema::EventMetadata {
+                event_id: "ev-chat-ts-1".to_string(),
+                sequence_num: 1,
+                client_timestamp_us: 1_793_644_935_123_000,
+                ingest_timestamp_us: 1_793_644_935_123_000,
+                timezone_offset_min: -300,
+                schema_subject: "io.satya.events.v1.ChatMessageEvent".to_string(),
+                schema_version: 1,
+                schema_fingerprint_crc64: vec![0; 8],
+                session_id: "ep1-test".to_string(),
+                session_mode: SessionMode::Ttrpg,
+            },
+            message_id: "msg-ts-1".to_string(),
+            sender: dice_actor.clone(),
+            visibility: MessageVisibility::Public,
+            recipients: vec![],
+            channel_context: satya_schema::ChannelContext::OutOfCharacter,
+            reply_to_message_id: None,
+            body: "Checking comms!".to_string(),
+            char_count: 15,
+            word_count: 2,
+            composition_time_ms: 420,
+            is_edited: false,
+        };
+        let chat_html = wasm_client::format_chat_event_html(&chat_ev);
+        assert!(chat_html.contains(r#"class="chat-timestamp""#));
+        assert!(chat_html.contains("18:42:15"));
+        assert!(chat_html.contains("2026-11-02T18:42:15.123Z"));
+        assert!(chat_html.contains("Checking comms!"));
+
+        // satya-engine Four-Factor Cascade preview & mechanics HTML rendering
+        let params = satya_engine::CascadeTaskParams::new_k20(3, 12, 0, 0);
+        let preview_str = wasm_client::format_cascade_odds_preview(&params);
+        assert!(preview_str.contains("TN_eff 19"));
+        assert!(preview_str.contains("P(Succ)"));
+
+        let (mech_ev, _) = satya_engine::evaluate_satya_cascade_task(
+            chat_ev.metadata.clone(),
+            dice_actor,
+            vec![],
+            "Trauma Surgery".to_string(),
+            &params,
+            &[(14, 9), (7, 11), (15, 12)],
+            Some(CombatStance::Maneuver),
+            1,
+            0.0,
+        );
+        let mech_html = wasm_client::format_mechanics_event_html(&mech_ev);
+        assert!(mech_html.contains("2d20 Pairs: [(14+9=23), (7+11=18), (15+12=27)]"));
+        assert!(mech_html.contains("Control C: 12"));
+        assert!(mech_html.contains("TN_eff: 19"));
+        assert!(mech_html.contains("cascade(mode=markov_step"));
     }
 
     #[test]
@@ -1030,6 +1593,16 @@ mod tests {
         assert!(html.contains("<h2>Session Chat</h2>"));
         assert!(!html.contains("Public &amp; Private Targeted Session Chat"));
         assert!(html.contains("Roll Satya Task"));
+        assert!(html.contains(r#"id="ttrpg-skill-level""#));
+        assert!(html.contains(r#"id="ttrpg-control-c""#));
+        assert!(html.contains(r#"id="ttrpg-internal-mod""#));
+        assert!(html.contains(r#"id="ttrpg-external-mod""#));
+        assert!(html.contains(r#"id="ttrpg-carry-mode""#));
+        assert!(html.contains(r#"id="ttrpg-wound-shock""#));
+        assert!(html.contains(r#"id="ttrpg-odds-pill""#));
+        assert!(!html.contains(r#"id="ttrpg-tn""#));
+        assert!(!html.contains(r#"id="ttrpg-pool""#));
+        assert!(!html.contains(r#"id="ttrpg-diff""#));
         assert!(!html.contains("Roll Satya Task &amp; Emit Avro Event"));
         assert!(html.contains("filter-msg-system"));
         assert!(!html.contains(r#"id="chat-visibility""#));
@@ -1048,6 +1621,30 @@ mod tests {
             ttrpg_idx > chat_idx,
             "ttrpg-drawer should be rendered beneath chat-card"
         );
+        // Verify 3-column layout order: Left Notebook -> Center Chat+Die Roller -> Right Web Cams
+        let notebook_col_idx = html.find(r#"id="notebook-column""#).unwrap();
+        let center_col_idx = html.find(r#"id="center-column""#).unwrap();
+        let webrtc_col_idx = html.find(r#"id="webrtc-dock-column""#).unwrap();
+        assert!(notebook_col_idx < center_col_idx);
+        assert!(center_col_idx < webrtc_col_idx);
+
+        // Verify all 6 Tabbed Notebook tabs & panes exist
+        for (_, btn_id, pane_id) in wasm_client::NOTEBOOK_TABS {
+            assert!(html.contains(&format!(r#"id="{btn_id}""#)));
+            assert!(html.contains(&format!(r#"id="{pane_id}""#)));
+        }
+
+        // Verify Web Cams vertical column controls (1 or at most 2 cols) & floating frame toggle
+        assert!(html.contains(r#"id="btn-toggle-webcam-cols""#));
+        assert!(html.contains(r#"id="btn-toggle-webcam-float""#));
+        assert!(html.contains(r#"id="webrtc-drag-header""#));
+        assert!(html.contains(r#"class="video-grid cols-1""#));
+
+        let (model_html, model_pill) =
+            wasm_client::format_3d_model_stage_html("recon_mk4", "hit_zones");
+        assert!(model_html.contains("Recon Suit Mk-IV"));
+        assert!(model_pill.contains("11.8k tris"));
+
         assert!(html.contains("btn-logout"));
         assert!(html.contains("btn-leave-session"));
         assert!(html.contains("btn-workspace-disconnect"));
