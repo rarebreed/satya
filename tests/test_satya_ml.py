@@ -361,6 +361,12 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
     assert '<untrusted_player_document doc_id="doc_test_1"' in doc_out
     assert "Former orbital trauma surgeon in Sector 4." in doc_out
 
+    # Multi-word / non-verbatim query still matches via keyword or session fallback
+    doc_out_multi = read_gm_documents.invoke(
+        {"session_id": sid, "query": "setting for satya valkyrie"}
+    )
+    assert '<untrusted_player_document doc_id="doc_test_1"' in doc_out_multi
+
 
 def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
     """Verify the 4-node LangGraph workflow and FastAPI `/internal/ai-gm/events` bridge in autonomous & co-pilot modes."""
@@ -451,6 +457,70 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
     assert "[session=ep-graph-test]" in out["turn_logs"][0]["log_line"]
     assert f"[trace={out['trace_id']} " in out["turn_logs"][0]["log_line"]
     assert "[lineage=" in out["turn_logs"][0]["log_line"]
+
+    # Verify uploaded GM_ONLY documents are automatically injected into prompt context
+    # without requiring an explicit tool call, and not duplicated on subsequent turns.
+    seen_human_contents: list[str] = []
+
+    class InspectingChatModel:
+        def bind_tools(self, _tools: list[Any]) -> InspectingChatModel:
+            return self
+
+        def invoke(self, messages: list[Any]) -> AIMessage:
+            last = messages[-1]
+            seen_human_contents.append(str(getattr(last, "content", "")))
+            return AIMessage(content="I understand the Satya setting and the AI supporters faction.")
+
+    doc_session_id = "ep-auto-gm-doc-test"
+    set_session_gm_docs(
+        doc_session_id,
+        [
+            {
+                "doc_id": "doc_setting_1",
+                "uploader_display_name": "Sean (GM)",
+                "title": "Satya Setting Overview",
+                "source_kind": "DIRECT_TEXT_UPLOAD",
+                "sanitized_content": "The faction of AI supporters seeks synthetic sovereignty.",
+            }
+        ],
+    )
+    auto_doc_graph = build_ai_gm_graph(chat_model=InspectingChatModel())
+    auto_doc_graph.invoke(
+        {
+            "session_id": doc_session_id,
+            "session_mode": "TTRPG",
+            "operating_mode": "autonomous",
+            "trigger_event": {
+                "event_id": "ev-doc-1",
+                "actor": {"user_id": "u-demo-gm-sean", "display_name": "Sean (GM)"},
+                "content": "do you understand the setting for satya?",
+            },
+            "tool_invocations": [],
+        },
+        config={"configurable": {"thread_id": doc_session_id}},
+    )
+    assert len(seen_human_contents) == 1
+    assert "[Uploaded Session GM Document(s)]:" in seen_human_contents[0]
+    assert '<untrusted_player_document doc_id="doc_setting_1"' in seen_human_contents[0]
+    assert "synthetic sovereignty" in seen_human_contents[0]
+
+    # Follow-up turn in the same session does not re-inject an unchanged document block
+    auto_doc_graph.invoke(
+        {
+            "session_id": doc_session_id,
+            "session_mode": "TTRPG",
+            "operating_mode": "autonomous",
+            "trigger_event": {
+                "event_id": "ev-doc-2",
+                "actor": {"user_id": "u-demo-gm-sean", "display_name": "Sean (GM)"},
+                "content": "tell me more about that faction.",
+            },
+            "tool_invocations": [],
+        },
+        config={"configurable": {"thread_id": doc_session_id}},
+    )
+    assert len(seen_human_contents) == 2
+    assert "[Uploaded Session GM Document(s)]:" not in seen_human_contents[1]
 
     # Test FastAPI service in Co-Pilot mode with BYOK header
     set_chat_model_override(FakeToolCallingChatModel())

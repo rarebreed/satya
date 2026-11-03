@@ -422,6 +422,19 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
     return "\n".join(matches[:8])
 
 
+def format_gm_document_block(d: dict[str, Any]) -> str:
+    """Format a single `GM_ONLY` document record with `<untrusted_player_document>` delimiters."""
+    title = str(d.get("title") or "Untitled")
+    uploader = str(d.get("uploader_display_name") or d.get("uploader_user_id") or "Unknown")
+    source = str(d.get("source_kind") or "DIRECT_TEXT_UPLOAD")
+    doc_id = str(d.get("doc_id") or "doc")
+    body = str(d.get("sanitized_content") or "")
+    return (
+        f'<untrusted_player_document doc_id="{doc_id}" uploader="{uploader}" '
+        f'title="{title}" source="{source}">\n{body}\n</untrusted_player_document>'
+    )
+
+
 @tool
 def read_gm_documents(session_id: str = "default", query: str | None = None) -> str:
     """Read sanitized `GM_ONLY` documents (character dossiers, backstories, Google Docs/Sheets) uploaded to the GM in this session."""
@@ -444,22 +457,23 @@ def read_gm_documents(session_id: str = "default", query: str | None = None) -> 
         return f"No GM_ONLY documents have been uploaded for session '{session_id}'."
 
     kw = (query or "").strip().lower()
+    keywords = [
+        w.strip(".,!?:;\"'()[]{}").lower()
+        for w in kw.replace("?", " ").split()
+        if len(w.strip(".,!?:;\"'()[]{}")) >= 3
+    ]
     blocks: list[str] = []
     for d in docs:
-        title = str(d.get("title") or "Untitled")
-        uploader = str(d.get("uploader_display_name") or d.get("uploader_user_id") or "Unknown")
-        source = str(d.get("source_kind") or "DIRECT_TEXT_UPLOAD")
-        doc_id = str(d.get("doc_id") or "doc")
-        body = str(d.get("sanitized_content") or "")
-        if kw and kw not in title.lower() and kw not in uploader.lower() and kw not in body.lower():
+        title = str(d.get("title") or "Untitled").lower()
+        uploader = str(d.get("uploader_display_name") or d.get("uploader_user_id") or "Unknown").lower()
+        body = str(d.get("sanitized_content") or "").lower()
+        haystack = f"{title} {uploader} {body}"
+        if kw and kw not in haystack and not any(word in haystack for word in keywords):
             continue
-        blocks.append(
-            f'<untrusted_player_document doc_id="{doc_id}" uploader="{uploader}" '
-            f'title="{title}" source="{source}">\n{body}\n</untrusted_player_document>'
-        )
+        blocks.append(format_gm_document_block(d))
 
     if not blocks:
-        return f"No GM_ONLY documents matched query '{query}'."
+        blocks = [format_gm_document_block(d) for d in docs]
     return "\n\n".join(blocks[:6])
 
 

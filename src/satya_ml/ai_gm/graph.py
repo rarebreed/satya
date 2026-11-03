@@ -34,7 +34,9 @@ from langgraph.graph.message import add_messages
 from satya_ml.ai_gm.tools import (
     _gm_headers,
     _signaling_base_url,
+    format_gm_document_block,
     get_builtin_gm_tools,
+    get_session_gm_docs,
     get_session_map,
     get_session_npcs,
     set_session_gm_docs,
@@ -228,6 +230,21 @@ def build_ai_gm_graph(
                     prompt_text = (
                         f"[Session={session_id} | Mode={operating_mode}] {actor_name}: {content}"
                     )
+
+                session_docs = get_session_gm_docs(session_id)
+                if session_docs:
+                    unseen_doc_blocks = [
+                        block
+                        for d in session_docs
+                        if (block := format_gm_document_block(d))
+                        and not any(block in str(getattr(m, "content", "")) for m in existing_msgs)
+                    ]
+                    if unseen_doc_blocks:
+                        docs_context = "\n\n".join(unseen_doc_blocks[:6])
+                        prompt_text = (
+                            f"[Uploaded Session GM Document(s)]:\n{docs_context}\n\n{prompt_text}"
+                        )
+
                 new_messages.append(HumanMessage(content=prompt_text))
                 logger.debug(
                     "[sync_session_context] Appended HumanMessage (%d history msgs): %s",
@@ -591,7 +608,12 @@ def build_ai_gm_graph(
                     inv["tool_name"]
                     for inv in invocations
                     if inv["tool_name"]
-                    in {"lookup_npc_profile", "query_satya_rules", "query_campaign_lore"}
+                    in {
+                        "lookup_npc_profile",
+                        "query_satya_rules",
+                        "query_campaign_lore",
+                        "read_gm_documents",
+                    }
                 ],
                 "emitted_event_ids": emitted_event_ids,
                 "prompt_tokens": max(32, len(str(trigger)) // 4),
