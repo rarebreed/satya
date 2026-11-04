@@ -479,6 +479,7 @@ mod tests {
                             difficulty_rating: 2,
                             internal_mod: Some(1),
                             carry_mode: Some("markov_step".to_string()),
+                            botch_rule: None,
                             combat_stance: Some(CombatStance::RangedSnap),
                             fatigue_level: 1,
                             wound_shock_index: 0.0,

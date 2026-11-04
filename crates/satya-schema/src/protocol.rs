@@ -224,26 +224,34 @@ pub enum ClientWsPacket {
         /// Preceding silence duration in milliseconds.
         preceding_silence_ms: i64,
     },
-    /// Requests server-authoritative evaluation of a Satya Two-List Cascading (`2d20`) skill or combat task.
+    /// Requests server-authoritative evaluation of a Satya Two-List Cascading ("Watershed") `2d20` skill or combat task.
     RollTtrpgTask {
-        /// Name of the skill being tested.
+        /// Name of the skill being tested (e.g. `"Trauma Surgery"`).
         skill_name: String,
-        /// Skill Level $N \in [1, 10]$ (number of `2d20` pairs rolled).
-        #[serde(alias = "pool_size")]
+        /// Skill Level $N \in [1, 10]$ (number of `2d20` pairs rolled; trained average `3`).
+        #[serde(
+            default = "default_skill_level_n",
+            alias = "pool_size",
+            alias = "skill_level_n"
+        )]
         skill_level: usize,
-        /// Controlling Characteristic $C \in [1, 20]$ (shifts $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$).
-        #[serde(alias = "attribute_tn")]
+        /// Controlling Characteristic $C \in [1, 20]$ (shifts $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$; human average `10`).
+        #[serde(default = "default_control_c", alias = "attribute_tn")]
         control_c: i32,
         /// Internal Character Modifier $\Delta_{\text{int}} \in [-2, +10]$ (Fatigue, Injury, Stress; increases failure carry penalty $\delta_{\text{under}} = 6 + \Delta_{\text{int}}$).
-        #[serde(default)]
+        #[serde(default, alias = "delta_int")]
         internal_mod: i32,
         /// External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (Range, Darkness, Tool Quality; shifts $\text{TN}_{\text{eff}}$).
-        #[serde(default, alias = "difficulty_rating")]
+        #[serde(default, alias = "difficulty_rating", alias = "delta_ext")]
         external_mod: i32,
         /// Optional cascade carry-over mode (`"markov_step"`, `"cumulative_snowball"`, or `"linear_margin"`).
         #[serde(default)]
         carry_mode: Option<String>,
+        /// Optional botch severity rule (`"closest_miss"`, `"ceiling_breach"`, or `"overrun_k"`).
+        #[serde(default)]
+        botch_rule: Option<String>,
         /// Optional combat stance selected for the action.
+        #[serde(default)]
         combat_stance: Option<CombatStance>,
         /// Current character fatigue level (scales Action Time Factor).
         #[serde(default)]
@@ -469,6 +477,14 @@ fn default_gm_channel_context() -> ChannelContext {
     ChannelContext::GmNarration
 }
 
+fn default_control_c() -> i32 {
+    10
+}
+
+fn default_skill_level_n() -> usize {
+    3
+}
+
 /// HTTP request body for `POST /api/gm/sessions/:session_id/roll`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GmRollRequest {
@@ -480,13 +496,17 @@ pub struct GmRollRequest {
     /// Name of the Satya skill being tested.
     pub skill_name: String,
     /// Controlling Characteristic $C \in [1, 20]$ (shifts $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$; also accepts `control_c`).
-    #[serde(alias = "control_c")]
+    #[serde(default = "default_control_c", alias = "control_c")]
     pub attribute_tn: i32,
-    /// Skill Level $N \in [1, 10]$ (number of `2d20` pairs rolled; also accepts `skill_level`).
-    #[serde(alias = "skill_level")]
+    /// Skill Level $N \in [1, 10]$ (number of `2d20` pairs rolled; also accepts `skill_level` or `skill_level_n`).
+    #[serde(
+        default = "default_skill_level_n",
+        alias = "skill_level",
+        alias = "skill_level_n"
+    )]
     pub pool_size: usize,
-    /// External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (shifts $\text{TN}_{\text{eff}}$; also accepts `external_mod`).
-    #[serde(default, alias = "external_mod")]
+    /// External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (shifts $\text{TN}_{\text{eff}}$; also accepts `external_mod` or `delta_ext`).
+    #[serde(default, alias = "external_mod", alias = "delta_ext")]
     pub difficulty_rating: i32,
     /// Optional Internal Character Modifier $\Delta_{\text{int}} \in [-2, +10]$ (defaults to `fatigue_level` when omitted).
     #[serde(default)]
@@ -494,11 +514,14 @@ pub struct GmRollRequest {
     /// Optional cascade carry-over mode (`"markov_step"`, `"cumulative_snowball"`, or `"linear_margin"`).
     #[serde(default)]
     pub carry_mode: Option<String>,
+    /// Optional botch severity rule (`"closest_miss"`, `"ceiling_breach"`, or `"overrun_k"`).
+    #[serde(default)]
+    pub botch_rule: Option<String>,
     /// Optional Satya combat stance.
     #[serde(default)]
     pub combat_stance: Option<CombatStance>,
-    /// Accumulated fatigue level of the acting NPC.
-    #[serde(default)]
+    /// Accumulated internal penalty / fatigue level $\Delta_{\text{int}}$ of the acting NPC.
+    #[serde(default, alias = "delta_int")]
     pub fatigue_level: i32,
     /// Accumulated wound shock index of the acting NPC.
     #[serde(default)]

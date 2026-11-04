@@ -734,8 +734,8 @@ pub fn satya_gm_doc_url_changed() {
 /// Google Cloud OAuth 2.0 Web Client ID and Google Picker API Key.
 #[wasm_bindgen]
 pub fn satya_toggle_google_oauth_config() {
-    let Some(el) = get_element("gm-google-oauth-config-row")
-        .and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    let Some(el) =
+        get_element("gm-google-oauth-config-row").and_then(|e| e.dyn_into::<HtmlElement>().ok())
     else {
         return;
     };

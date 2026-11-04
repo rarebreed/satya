@@ -1274,3 +1274,16 @@ table.metrics-table th {
     max-height: 160px;
     overflow-y: auto;
 }
+
+.ttrpg-odds-readout {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    font-size: 0.76rem;
+    font-family: monospace;
+    color: var(--text-primary);
+    line-height: 1.5;
+}

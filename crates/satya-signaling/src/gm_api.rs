@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 use rand::Rng;
+use satya_engine::{CascadeTaskParams, evaluate_satya_cascade_task};
 use satya_schema::{
     AiGmOperatingMode, AiGmProviderConfig, AiGmTrajectoryEvent, AiGmTurnStatus,
     AiGmTurnTriggerRequest, CanvasEventType, ChannelContext, ChatMessageEvent, GmChatRequest,
@@ -247,11 +248,16 @@ pub async fn gm_session_roll_handler(
     let c_val = req.attribute_tn.clamp(1, 20);
     let int_mod = req.internal_mod.unwrap_or(req.fatigue_level).clamp(-2, 10);
     let ext_mod = req.difficulty_rating.clamp(-10, 16);
-    let mut params = satya_engine::CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, ext_mod);
+    let mut params = CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, ext_mod);
     if let Some(mode_str) = req.carry_mode.as_deref()
         && let Ok(parsed_mode) = mode_str.parse::<satya_engine::CarryMode>()
     {
         params.carry_mode = parsed_mode;
+    }
+    if let Some(botch_str) = req.botch_rule.as_deref()
+        && let Ok(parsed_botch) = botch_str.parse::<satya_engine::BotchRule>()
+    {
+        params.botch_rule = parsed_botch;
     }
 
     let (rolled_pairs, physics_seed): (Vec<(i32, i32)>, i64) = {
@@ -277,7 +283,7 @@ pub async fn gm_session_roll_handler(
             .into_response();
     };
 
-    let (mut mech_ev, _) = satya_engine::evaluate_satya_cascade_task(
+    let (mut mech_ev, outcome) = evaluate_satya_cascade_task(
         meta,
         actor.clone(),
         target_participants,
@@ -285,23 +291,27 @@ pub async fn gm_session_roll_handler(
         &params,
         &rolled_pairs,
         req.combat_stance,
-        req.fatigue_level,
+        req.fatigue_level.max(0),
         req.wound_shock_index,
     );
     mech_ev.mechanic_type = MechanicEventType::AiGmDecision;
-    if let Some(user_note) = req
+    let base_note = format!(
+        "cascade(mode={}, botch={}, tn_eff={}, signed_margin={:+}, {:?})",
+        params.carry_mode,
+        params.botch_rule,
+        params.tn_eff(),
+        outcome.signed_margin,
+        outcome.outcome_kind
+    );
+    mech_ev.notes = match req
         .notes
         .as_ref()
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
     {
-        let base_note = mech_ev.notes.unwrap_or_default();
-        mech_ev.notes = Some(if base_note.is_empty() {
-            user_note.to_string()
-        } else {
-            format!("{base_note} | {user_note}")
-        });
-    }
+        Some(user_note) => Some(format!("{base_note} | {user_note}")),
+        None => Some(base_note),
+    };
 
     let _ = state.storage.log_ttrpg_mechanics(&mech_ev).await;
 

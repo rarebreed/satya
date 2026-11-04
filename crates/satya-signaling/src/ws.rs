@@ -18,13 +18,15 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use rand::Rng;
+use satya_engine::{BotchRule, CarryMode, CascadeTaskParams, evaluate_satya_cascade_task};
 use satya_schema::{
-    ChatMessageEvent, ClientWsPacket, IceCandidateType, InteractionDynamicsEvent,
+    CanvasEventType, ChatMessageEvent, ClientWsPacket, IceCandidateType, InteractionDynamicsEvent,
     LifecycleEventType, MessageVisibility, ParticipantKind, ServerWsPacket, SessionMode,
-    SessionRole, WebRtcTelemetryEvent, WgpuDiceSpec, subjects,
+    SessionRole, TabletopCanvasEvent, WebRtcTelemetryEvent, WgpuDiceSpec, subjects,
 };
 use serde::Deserialize;
 use serde_json::json;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -296,6 +298,7 @@ async fn handle_ws_client(
                 internal_mod,
                 external_mod,
                 carry_mode,
+                botch_rule,
                 combat_stance,
                 fatigue_level,
                 wound_shock_index,
@@ -304,12 +307,16 @@ async fn handle_ws_client(
                 let c_val = control_c.clamp(1, 20);
                 let int_mod = internal_mod.clamp(-2, 10);
                 let ext_mod = external_mod.clamp(-10, 16);
-                let mut params =
-                    satya_engine::CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, ext_mod);
+                let mut params = CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, ext_mod);
                 if let Some(mode_str) = carry_mode.as_deref()
-                    && let Ok(parsed_mode) = mode_str.parse::<satya_engine::CarryMode>()
+                    && let Ok(parsed_mode) = CarryMode::from_str(mode_str)
                 {
                     params.carry_mode = parsed_mode;
+                }
+                if let Some(botch_str) = botch_rule.as_deref()
+                    && let Ok(parsed_botch) = BotchRule::from_str(botch_str)
+                {
+                    params.botch_rule = parsed_botch;
                 }
 
                 let (rolled_pairs, physics_seed): (Vec<(i32, i32)>, i64) = {
@@ -328,7 +335,7 @@ async fn handle_ws_client(
                     &session_id,
                     session_mode,
                 ) {
-                    let (mech_ev, cascade_outcome) = satya_engine::evaluate_satya_cascade_task(
+                    let (mut mech_ev, outcome) = evaluate_satya_cascade_task(
                         meta,
                         self_participant.clone(),
                         Vec::new(),
@@ -336,17 +343,79 @@ async fn handle_ws_client(
                         &params,
                         &rolled_pairs,
                         combat_stance,
-                        fatigue_level,
+                        fatigue_level.max(0),
                         wound_shock_index,
                     );
+
+                    let odds = params.exact_odds();
+                    let step_summary: Vec<String> = outcome
+                        .steps
+                        .iter()
+                        .map(|s| {
+                            let mark = if s.succeeded {
+                                "PASS"
+                            } else if s.step_botch {
+                                "BOTCH"
+                            } else {
+                                "MISS"
+                            };
+                            format!(
+                                "P{}: {}+{}{:+}={} ({})",
+                                s.pair_index, s.die_a, s.die_b, s.carry_in, s.effective_y, mark
+                            )
+                        })
+                        .collect();
+
+                    mech_ev.notes = Some(format!(
+                        "cascade(mode={}, botch={}, tn_eff={}, signed_margin={:+}) | Pairs: [{}] | C={}, Δext={:+} => TN_eff={} | Mode: {} (+{}/-{}) | Botch: {} | Signed Margin: {:+} ({:?}, P(Succ>=1)={:.1}%)",
+                        params.carry_mode,
+                        params.botch_rule,
+                        params.tn_eff(),
+                        outcome.signed_margin,
+                        step_summary.join(", "),
+                        c_val,
+                        ext_mod,
+                        params.tn_eff(),
+                        params.carry_mode,
+                        params.delta_over,
+                        params.effective_delta_under(),
+                        params.botch_rule,
+                        outcome.signed_margin,
+                        outcome.outcome_kind,
+                        odds.prob_any_success * 100.0
+                    ));
+
                     let _ = state.storage.log_ttrpg_mechanics(&mech_ev).await;
 
+                    // Emit synchronized 3D `wgpu` physics dice roll for the `2d20` pairs
                     let dice_spec = WgpuDiceSpec {
                         dice_notation: format!("{n_pairs}x2d20"),
                         physics_seed,
                         outcomes: mech_ev.dice_rolled_d20.clone(),
                         visibility: MessageVisibility::Public,
                     };
+                    if let Ok(canvas_meta) = state.storage.registry().build_metadata(
+                        state.next_seq(),
+                        subjects::TABLETOP_CANVAS,
+                        1,
+                        &session_id,
+                        session_mode,
+                    ) {
+                        let canvas_ev = TabletopCanvasEvent {
+                            metadata: canvas_meta,
+                            canvas_event_type: CanvasEventType::WgpuDiceSpawned,
+                            actor: self_participant.clone(),
+                            map_id: None,
+                            map_title: None,
+                            image_url: None,
+                            grid_width: None,
+                            grid_height: None,
+                            token_placements: Vec::new(),
+                            wgpu_dice_roll: Some(dice_spec.clone()),
+                            terrain_notes: mech_ev.notes.clone(),
+                        };
+                        let _ = state.storage.log_tabletop_canvas(&canvas_ev).await;
+                    }
                     if let Ok(wgpu_pkt) = serde_json::to_string(&ServerWsPacket::WgpuDiceRoll {
                         actor: self_participant.clone(),
                         spec: dice_spec,
@@ -369,16 +438,20 @@ async fn handle_ws_client(
                         && should_trigger_ai_gm_for_roll(&current_roster)
                     {
                         let narration = format!(
-                            "[Satya Simulation] {} attempted '{}' (Skill N={}, Control C={}, TN_eff={}, Carry={}) -> {:?} ({} successes, signed_margin={:+}). Action Count Cost: {} ticks.",
+                            "[Satya Simulation] {} attempted '{}' (Skill N={}, Control C={}, Δext={:+}, TN_eff={}, Δint={:+}, Carry={}) -> {:?} / {:?} ({} successes, signed_margin={:+}). {} Action Count Cost: {} ticks.",
                             self_participant.display_name,
                             skill_name,
                             params.skill_level,
                             params.control_c,
+                            ext_mod,
                             params.tn_eff(),
+                            int_mod,
                             params.carry_mode,
                             mech_ev.outcome_tier,
+                            outcome.outcome_kind,
                             mech_ev.successes_counted,
-                            cascade_outcome.signed_margin,
+                            outcome.signed_margin,
+                            mech_ev.notes.as_deref().unwrap_or(""),
                             mech_ev.action_count_cost.unwrap_or(10)
                         );
                         let state_clone = state.clone();

@@ -1382,9 +1382,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             </select>
                         </label>
                         <label>
-                            <span>"Combat Stance"</span>
+                            <span>"Botch Severity Rule"</span>
+                            <select
+                                id="ttrpg-botch-rule"
+                                onchange="window.satyaUpdateCascadePreview()"
+                            >
+                                <option value="closest_miss" selected>"Closest Miss (Paradox-Free)"</option>
+                                <option value="ceiling_breach">"Floor Breach (<2 Complication)"</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>"Combat Stance (Count-Up TC)"</span>
                             <select id="ttrpg-stance">
-                                <option value="">"Non-Combat Task"</option>
+                                <option value="">"Non-Combat Task (TC 10)"</option>
                                 <option value="MANEUVER">"Melee: Maneuver (TC 11)"</option>
                                 <option value="POWER">"Melee: Power (TC 14)"</option>
                                 <option value="STABILITY">"Melee: Stability (TC 9)"</option>
@@ -1407,6 +1417,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                 max="10"
                             />
                         </label>
+                    </div>
+                    <div id="ttrpg-odds-readout" class="ttrpg-odds-readout" aria-live="polite">
+                        {
+                            wasm_client::format_cascade_odds_summary(
+                                3,
+                                12,
+                                0,
+                                0,
+                                "markov_step",
+                                "closest_miss",
+                            )
+                            .1
+                        }
                     </div>
                     <div class="btn-row">
                         <button
@@ -1769,6 +1792,14 @@ mod tests {
         assert!(preview_str.contains("TN_eff 19"));
         assert!(preview_str.contains("P(Succ)"));
 
+        let (pill, readout) =
+            wasm_client::format_cascade_odds_summary(3, 10, 0, 0, "markov_step", "closest_miss");
+        assert_eq!(pill, "TN_eff: 21 · P(Succ≥1): 70.1%");
+        assert!(readout.contains("P(Succ ≥ 1): 70.10%"));
+        assert!(readout.contains("P(BotchFail): 12.96%"));
+        assert!(readout.contains("P(Succ+Botch): 1.13%"));
+        assert!(readout.contains("E[Margin]: +1.27"));
+
         let (mech_ev, _) = satya_engine::evaluate_satya_cascade_task(
             chat_ev.metadata.clone(),
             dice_actor,
@@ -1840,8 +1871,10 @@ mod tests {
         assert!(html.contains(r#"id="ttrpg-internal-mod""#));
         assert!(html.contains(r#"id="ttrpg-external-mod""#));
         assert!(html.contains(r#"id="ttrpg-carry-mode""#));
+        assert!(html.contains(r#"id="ttrpg-botch-rule""#));
         assert!(html.contains(r#"id="ttrpg-wound-shock""#));
         assert!(html.contains(r#"id="ttrpg-odds-pill""#));
+        assert!(html.contains(r#"id="ttrpg-odds-readout""#));
         assert!(!html.contains(r#"id="ttrpg-tn""#));
         assert!(!html.contains(r#"id="ttrpg-pool""#));
         assert!(!html.contains(r#"id="ttrpg-diff""#));

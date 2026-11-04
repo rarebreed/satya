@@ -308,8 +308,60 @@ pub fn format_cascade_odds_preview(params: &satya_engine::CascadeTaskParams) -> 
     )
 }
 
+/// Computes and formats the live exact Combinatorial & DP probability readout for the
+/// Satya Two-List Cascading ("Watershed") `2d20` task drawer (`#ttrpg-odds-pill` and `#ttrpg-odds-readout`).
+pub fn format_cascade_odds_summary(
+    skill_level_n: usize,
+    control_c: i32,
+    delta_ext: i32,
+    delta_int: i32,
+    carry_mode_raw: &str,
+    botch_rule_raw: &str,
+) -> (String, String) {
+    use satya_engine::{BotchRule, CarryMode, CascadeTaskParams, compute_stats};
+    use std::str::FromStr;
+
+    let n = skill_level_n.clamp(1, 10);
+    let c = control_c.clamp(1, 20);
+    let d_ext = delta_ext.clamp(-10, 16);
+    let d_int = delta_int.clamp(-2, 10);
+    let carry_mode = CarryMode::from_str(carry_mode_raw).unwrap_or(CarryMode::MarkovStep);
+    let botch_rule = BotchRule::from_str(botch_rule_raw).unwrap_or(BotchRule::ClosestMiss);
+
+    let mut params = CascadeTaskParams::new_k20(n, c, d_int, d_ext);
+    params.carry_mode = carry_mode;
+    params.botch_rule = botch_rule;
+
+    let odds = params.exact_odds();
+    let stats = compute_stats(&odds.signed_margin_pmf);
+    let tn_eff = params.tn_eff();
+    let p_succ = odds.prob_any_success * 100.0;
+    let p_clean_fail = odds.prob_clean_failure * 100.0;
+    let p_botch_fail = odds.prob_botch_failure * 100.0;
+    let p_complication = odds.prob_success_with_complication * 100.0;
+
+    let pill_text = format!("TN_eff: {tn_eff} · P(Succ≥1): {p_succ:.1}%");
+    let readout_text = format!(
+        "TN_eff = {} (31 - C {} + Δ_ext {:+}) · Carry: +{} / -{} ({}, {}) | P(Succ ≥ 1): {:.2}% · P(CleanFail): {:.2}% · P(BotchFail): {:.2}% · P(Succ+Botch): {:.2}% · E[Margin]: {:+.2}",
+        tn_eff,
+        c,
+        d_ext,
+        params.delta_over,
+        params.effective_delta_under(),
+        params.carry_mode,
+        params.botch_rule,
+        p_succ,
+        p_clean_fail,
+        p_botch_fail,
+        p_complication,
+        stats.mean
+    );
+
+    (pill_text, readout_text)
+}
+
 /// Reads the current Four-Factor Cascade inputs in `#ttrpg-drawer` and updates `#ttrpg-odds-pill`
-/// with live exact probabilities from `satya-engine`.
+/// and `#ttrpg-odds-readout` with live exact probabilities from `satya-engine`.
 #[wasm_bindgen]
 pub fn satya_update_cascade_preview() {
     let skill_level = input_value("ttrpg-skill-level")
@@ -328,17 +380,36 @@ pub fn satya_update_cascade_preview() {
         .parse::<i32>()
         .unwrap_or(0)
         .clamp(-10, 16);
+    let mode_raw = select_value("ttrpg-carry-mode");
+    let botch_raw = select_value("ttrpg-botch-rule");
     let mut params = satya_engine::CascadeTaskParams::new_k20(
         skill_level,
         control_c,
         internal_mod,
         external_mod,
     );
-    let mode_raw = select_value("ttrpg-carry-mode");
     if let Ok(parsed_mode) = mode_raw.parse::<satya_engine::CarryMode>() {
         params.carry_mode = parsed_mode;
     }
+    if let Ok(parsed_botch) = botch_raw.parse::<satya_engine::BotchRule>() {
+        params.botch_rule = parsed_botch;
+    }
     set_text("ttrpg-odds-pill", &format_cascade_odds_preview(&params));
+    let (_, readout_text) = format_cascade_odds_summary(
+        skill_level,
+        control_c,
+        external_mod,
+        internal_mod,
+        params.carry_mode.as_str(),
+        params.botch_rule.as_str(),
+    );
+    set_text("ttrpg-odds-readout", &readout_text);
+}
+
+/// Alias for [`satya_update_cascade_preview`] updating both `#ttrpg-odds-pill` and `#ttrpg-odds-readout`.
+#[wasm_bindgen]
+pub fn satya_update_cascade_odds() {
+    satya_update_cascade_preview();
 }
 
 /// Evaluates and emits a Satya Two-List Cascading (`2d20`) TTRPG task resolution event (`ROLL_TTRPG_TASK`) over the WebSocket.
@@ -372,6 +443,12 @@ pub fn satya_roll_task() {
     } else {
         Some(carry_mode_raw)
     };
+    let botch_rule_raw = select_value("ttrpg-botch-rule");
+    let botch_rule = if botch_rule_raw.trim().is_empty() {
+        Some("closest_miss".to_string())
+    } else {
+        Some(botch_rule_raw)
+    };
     let combat_stance = parse_combat_stance(&select_value("ttrpg-stance"));
     let fatigue_level = input_value("ttrpg-fatigue").parse::<i32>().unwrap_or(0);
     let wound_shock_index = input_value("ttrpg-wound-shock")
@@ -387,6 +464,7 @@ pub fn satya_roll_task() {
         internal_mod,
         external_mod,
         carry_mode,
+        botch_rule,
         combat_stance,
         fatigue_level,
         wound_shock_index,

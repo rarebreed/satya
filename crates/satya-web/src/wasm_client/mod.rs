@@ -194,6 +194,10 @@ pub fn register_window_bindings() {
     bind("satyaUpdateCascadePreview", c_cascade_prev.as_ref());
     c_cascade_prev.forget();
 
+    let c_cascade_odds = Closure::<dyn Fn()>::new(satya_update_cascade_odds);
+    bind("satyaUpdateCascadeOdds", c_cascade_odds.as_ref());
+    c_cascade_odds.forget();
+
     let c_nb_tab = Closure::<dyn Fn(String)>::new(satya_select_notebook_tab);
     bind("satyaSelectNotebookTab", c_nb_tab.as_ref());
     c_nb_tab.forget();
