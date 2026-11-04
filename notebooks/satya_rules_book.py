@@ -7,11 +7,35 @@ app = marimo.App(width="full")
 @app.cell
 def _():
     from pathlib import Path
+    import re
     import sys
 
     import marimo as mo
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
+
+    _mermaid_fence_re = re.compile(r"```mermaid[ \t]*\r?\n(.*?)```", re.DOTALL)
+
+    def render_markdown_with_mermaid(md_text: str):
+        """Render Markdown text while converting fenced ```mermaid blocks into native `mo.mermaid` diagrams."""
+        parts = []
+        last_idx = 0
+        for match in _mermaid_fence_re.finditer(md_text):
+            before = md_text[last_idx : match.start()].strip()
+            if before:
+                parts.append(mo.md(before))
+            diagram_src = match.group(1).strip()
+            if diagram_src:
+                parts.append(mo.mermaid(diagram_src))
+            last_idx = match.end()
+        tail = md_text[last_idx:].strip()
+        if tail:
+            parts.append(mo.md(tail))
+        if not parts:
+            return mo.md(md_text)
+        if len(parts) == 1:
+            return parts[0]
+        return mo.vstack(parts)
 
     repo_root = Path(__file__).resolve().parent.parent
     src_path = repo_root / "src"
@@ -88,17 +112,17 @@ def _():
     ]
 
     chapters_by_id = {}
-    for idx, (cid, part, title, rel_path) in enumerate(CHAPTER_SPECS, start=1):
-        md_path = ttrpg_dir / rel_path
-        md_text = md_path.read_text(encoding="utf-8") if md_path.exists() else f"# {title}\n\n*(Missing {rel_path})*"
-        chapters_by_id[cid] = {
-            "id": cid,
-            "order": idx,
-            "part": part,
-            "title": title,
-            "rel_path": f"docs/ttrpg/{rel_path}",
-            "markdown": md_text,
-            "word_count": len(md_text.split()),
+    for _idx, (_cid, _part, _title, _rel_path) in enumerate(CHAPTER_SPECS, start=1):
+        _md_path = ttrpg_dir / _rel_path
+        _md_text = _md_path.read_text(encoding="utf-8") if _md_path.exists() else f"# {_title}\n\n*(Missing {_rel_path})*"
+        chapters_by_id[_cid] = {
+            "id": _cid,
+            "order": _idx,
+            "part": _part,
+            "title": _title,
+            "rel_path": f"docs/ttrpg/{_rel_path}",
+            "markdown": _md_text,
+            "word_count": len(_md_text.split()),
         }
 
     return (
@@ -114,6 +138,7 @@ def _():
         make_subplots,
         mo,
         paired_list_signed_margin_pmfs,
+        render_markdown_with_mermaid,
         using_satya_py_backend,
     )
 
@@ -159,20 +184,26 @@ def _(CHAPTER_SPECS, chapters_by_id, mo, using_satya_py_backend):
 
 
 @app.cell
-def _(chapter_dropdown, chapters_by_id, mo, search_input):
+def _(
+    chapter_dropdown,
+    chapters_by_id,
+    mo,
+    render_markdown_with_mermaid,
+    search_input,
+):
     selected_id = chapter_dropdown.value
     query_str = (search_input.value or "").strip().lower()
 
     blocks = []
     if query_str:
         hits = []
-        for cid, ch in chapters_by_id.items():
-            for sec in ch["markdown"].split("\n## "):
-                chunk = sec.strip()
-                if query_str in chunk.lower():
-                    first_line = chunk.splitlines()[0].lstrip("# ").strip()
-                    snippet = " ".join(chunk.split())[:260]
-                    hits.append(f"- **{ch['title']}** (`{ch['rel_path']}`) — *{first_line}*: {snippet}...")
+        for _cid, _ch in chapters_by_id.items():
+            for _sec in _ch["markdown"].split("\n## "):
+                _chunk = _sec.strip()
+                if query_str in _chunk.lower():
+                    _first_line = _chunk.splitlines()[0].lstrip("# ").strip()
+                    _snippet = " ".join(_chunk.split())[:260]
+                    hits.append(f"- **{_ch['title']}** (`{_ch['rel_path']}`) — *{_first_line}*: {_snippet}...")
         if hits:
             blocks.append(
                 mo.md(
@@ -184,19 +215,19 @@ def _(chapter_dropdown, chapters_by_id, mo, search_input):
             blocks.append(mo.md(f"*No sections matched `{query_str}`.*"))
 
     if selected_id == "ALL":
-        for cid, ch in chapters_by_id.items():
+        for _cid, _ch in chapters_by_id.items():
             blocks.append(
-                mo.md(
-                    f"---\n*Part: {ch['part']} · Source: `{ch['rel_path']}` ({ch['word_count']:,} words)*\n\n"
-                    + ch["markdown"]
+                render_markdown_with_mermaid(
+                    f"---\n*Part: {_ch['part']} · Source: `{_ch['rel_path']}` ({_ch['word_count']:,} words)*\n\n"
+                    + _ch["markdown"]
                 )
             )
     else:
-        ch = chapters_by_id.get(selected_id, chapters_by_id["tasks"])
+        _ch = chapters_by_id.get(selected_id, chapters_by_id["tasks"])
         blocks.append(
-            mo.md(
-                f"*Part: {ch['part']} · Source: `{ch['rel_path']}` ({ch['word_count']:,} words)*\n\n"
-                + ch["markdown"]
+            render_markdown_with_mermaid(
+                f"*Part: {_ch['part']} · Source: `{_ch['rel_path']}` ({_ch['word_count']:,} words)*\n\n"
+                + _ch["markdown"]
             )
         )
 
@@ -235,7 +266,7 @@ def _(mo):
     mo.vstack(
         [
             mo.md(
-                """
+                r"""
                 ---
                 ## Interactive Lab 1: `2d20` Two-List Cascading ("Watershed") Task Simulator (Chapters 2–4)
                 $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}, \qquad \delta_{\text{over}} = 6, \qquad \delta_{\text{under}} = \max(0, 6 + \Delta_{\text{int}})$$
