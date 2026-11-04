@@ -1,8 +1,8 @@
-# Satya TTRPG Action Economy, Time Scales & The Count-Up Tick Clock
+# Action Economy, OODA Loops, The Count-Up Tick Clock & Multi-Sensory Perception
 
-This chapter defines the canonical **Action Economy and Temporal Resolution System** for **Satya**. Unlike traditional tabletop systems that slice time into rigid, alternating 6-second turns where every participant receives an identical bundle of "1 Standard Action + 1 Move Action + 1 Bonus Action," Satya resolves time on a continuous **Count-Up Tick Clock**.
+This chapter defines the canonical **Action Economy, Temporal Resolution, and Multi-Sensory Perception System** for **Satya**. Unlike traditional tabletop systems that slice time into rigid, alternating 6-second turns where every participant receives an identical bundle of "1 Standard Action + 1 Move Action + 1 Bonus Action," Satya resolves time on a continuous **Count-Up Tick Clock**.
 
-Every physical, mental, perceptual, and communicative act consumes a concrete number of **Ticks (`TC`)**. Crucially, Satya does **not** treat action speed as purely physical muscle twitch or visual nerve latency: in John Boyd's **OODA Loop (`Observe` $\to$ `Orient` $\to$ `Decide` $\to$ `Act`)**, the bottleneck in real-world engagements is just as often **cognitive processing and decision synthesis ("Quick Thinking")** as it is physical movement. Every action on the clock is therefore governed by both **Cognitive Decision Speed (`D_cog`: `ANA`, `CRE`, `INS`, `FOC`, `DIS`)** and **Biomechanical Execution Speed (`SPD`, `DEX`, `KIN`, `FOR`, and Tactical `Tempo` $T$)**, scaled by the character's current **Health, Fatigue, and Encumbrance State (`action_time_factor`)**.
+Every physical, mental, perceptual, and communicative act consumes a concrete number of **Ticks (`TC`)**. Crucially, Satya does **not** treat action speed as purely physical muscle twitch or visual nerve latency: in John Boyd's **OODA Loop (`Observe` $\to$ `Orient` $\to$ `Decide` $\to$ `Act`)**, the bottleneck in real-world engagements is just as often **cognitive processing and decision synthesis ("Quick Thinking")** as it is physical movement. Every action on the clock is therefore governed by both **Cognitive Decision Speed (`D_cog`: `ANA`, `CRE`, `FOC`)** and **Biomechanical Execution Speed (`SPD`, `DEX`, `KIN`, `FOR`, and Tactical `Tempo` $T$)**, scaled by the character's current **Health, Fatigue, and Encumbrance State (`action_time_factor`)**.
 
 ---
 
@@ -30,14 +30,14 @@ flowchart LR
 
 ## 2. The Full OODA Loop: "Quick Thinking" (`TC_decide`) vs. Physical Execution (`TC_act`)
 
-In traditional RPGs, a character with high physical `Speed` or `Dexterity` acts faster at *everything*, even when the situation requires complex tactical judgment or rapid improvisation. In **Satya**, every action on the timeline passes through **two distinct latency phases** mapped across the character's 25 Characteristics:
+In traditional RPGs, a character with high physical `Speed` or `Dexterity` acts faster at *everything*, even when the situation requires complex tactical judgment or rapid improvisation. In **Satya**, every action on the timeline passes through **two distinct latency phases** mapped across the character's 25 Characteristics (see [Character Characteristics & Aptitudes](../03-character/characteristics_and_aptitudes.md)):
 
 ```mermaid
 flowchart LR
     subgraph Cog["1. Cognitive Phase: 'Quick Thinking' (TC_decide)"]
-        Obs["<b>Observe</b><br/>SIG · HEA · TAC · ITU<br/>Sensory Intake & Threat Detection"]
-        Ori["<b>Orient</b><br/>INS · MEM · FOC<br/>Pattern Recognition & Context"]
-        Dec["<b>Decide</b><br/>ANA · CRE · DIS<br/>Tactical Calculation or Snap Improvisation"]
+        Obs["<b>Observe</b><br/>ITU · SIG · HEA · TAC<br/>Sensory Intake & Threat Detection"]
+        Ori["<b>Orient</b><br/>INS · MEM<br/>Pattern Recognition & Context"]
+        Dec["<b>Decide (D_cog)</b><br/>max(ANA, CRE) · FOC<br/>Tactical Calculation or Snap Improvisation"]
         Obs --> Ori --> Dec
     end
 
@@ -52,23 +52,23 @@ flowchart LR
 ### 2.1 Mapping OODA Phases to Satya Characteristics
 
 1. **Cognitive Phase (`Observe` $\to$ `Orient` $\to$ `Decide`) — "Quick Thinking" ($\text{TC}_{\text{decide}}$)**:
-   - **Observe (`SIG`, `HEA`, `TAC`, `ITU`)**: Raw sensory intake and pre-conscious threat detection (`ITU`).
-   - **Orient (`INS`, `MEM`, `FOC`)**: Situational synthesis—reading an opponent's body language or feint (`INS`), recalling tactical doctrine (`MEM`), and filtering out battlefield chaos (`FOC`).
-   - **Decide (`ANA`, `CRE`, `DIS`)**:
+   - **Observe (`ITU`, `SIG`, `HEA`, `TAC`)**: Raw sensory intake and pre-conscious threat detection (`ITU` serves as the canonical **Observe** pillar in `OODA`).
+   - **Orient (`INS`, `MEM`)**: Situational synthesis—reading an opponent's body language, intent, or feint (`INS` serves as the canonical **Orient** pillar in `OODA`) and recalling tactical doctrine (`MEM`).
+   - **Decide ($D_{\text{cog}}$: `ANA`, `CRE`, `FOC`)**:
      - **`ANA` (Analysis)**: Rapid tactical geometry, calculating risk/reward, and selecting the optimal target, angle, or counter-move.
      - **`CRE` (Creativity)**: Snap improvisation when a plan breaks down—spotting an unorthodox environmental interaction or lateral solution on the fly.
-     - **`DIS` (Discipline)**: Overcoming hesitation ("analysis paralysis" or startle freeze) to commit to a decision immediately under fire.
+     - **`FOC` (Focus)**: Attentional concentration and filtering out battlefield chaos to lock onto a course of action ($D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$ serves as the canonical **Decide** pillar in `OODA`).
 2. **Biomechanical Phase (`Act`) — Physical Execution ($\text{TC}_{\text{act}}$)**:
-   - **Act (`SPD`, `DEX`, `KIN`, `FOR`)**: Neuromuscular twitch speed (`SPD`), fine manual coordination (`DEX`), whole-body agility (`KIN`), and overcoming weapon or body inertia (`FOR`).
+   - **Act (`SPD`, `DEX`, `KIN`, `FOR`)**: Neuromuscular twitch speed (`SPD` serves as the canonical **Act** pillar in `OODA`), fine manual coordination (`DEX`), whole-body agility (`KIN`), and overcoming weapon or body inertia (`FOR`).
 
 ### 2.2 The Cognitive Decision Score ($D_{\text{cog}}$ — "Quick Thinking")
 
-Parallel to a character's physical **Speed (`SPD`)** and **Motor Tempo ($T$)**, Satya defines a character's **Cognitive Decision Score ($D_{\text{cog}}$)**:
+Parallel to a character's physical **Speed (`SPD`)** and **Motor Tempo ($T$)**, Satya defines a character's **Cognitive Decision Score ($D_{\text{cog}}$)** as the **Decide** pillar of the OODA loop (without double-counting `INS`, which already governs the **Orient** pillar):
 
-$$\text{Cognitive Decision Score } (D_{\text{cog}}) = \left\lfloor \frac{\max(\text{ANA}, \text{CRE}) + \text{INS} + \text{FOC}}{3} \right\rfloor$$
+$$\text{Cognitive Decision Score } (D_{\text{cog}}) = \left\lfloor \frac{\max(\text{ANA}, \text{CRE}) + \text{FOC}}{2} \right\rfloor$$
 
-- **Why $\max(\text{ANA}, \text{CRE})$ Governs the `Decide` (`D`) Term**:
-  - It honors two distinct archetypes of real-world "quick thinkers":
+- **Why $\max(\text{ANA}, \text{CRE}) + \text{FOC}$ Governs the `Decide` (`D`) Pillar**:
+  - It pairs attentional concentration (`FOC`) with two distinct archetypes of real-world "quick thinkers":
     1. **The Cold Tactical Calculator (`ANA`)**: The chessmaster, engineer, or fire-team leader who instantly computes geometry, ballistics, and odds.
     2. **The Instinctive Improviser (`CRE`)**: The street-smart operative or unorthodox brawler who invents a lateral play on the spot when conventional doctrine fails.
 - **How `D_cog` Shaves Decision Ticks ($\Delta\text{TC}_{\text{decide}}$)**:
@@ -82,13 +82,14 @@ Instead of treating an action's Base Time Cost (`Base TC`) as a single monolithi
 
 $$\text{Base TC} = \text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$$
 
-$$\text{Effective TC} = \max\!\left(1,\; \text{TC}_{\text{decide, eff}} + \text{TC}_{\text{act, eff}}\right)$$
+$$\text{Effective TC} = \max\!\Big(2,\; \text{round}\big(\text{Base TC} \times \text{action\_time\_factor}\big) - (T - B) + \Delta\text{TC}_{\text{decide}}\Big)$$
+*(where $\Delta\text{TC}_{\text{decide}} = 0$ for standard drilled reflex exchanges and $\Delta\text{TC}_{\text{decide}} = -\lfloor(D_{\text{cog}} - 10)/2\rfloor$ for complex, tactical, or improvised actions; or `min floor 1` for purely mental/perceptual micro-actions).*
 
 1. **Drilled / Reflexive Actions (Low $\text{TC}_{\text{decide}} = 1\text{–}2\text{ Ticks}$, High $\text{TC}_{\text{act}}$)**:
-   - A practiced boxing jab, parry, or speed-reload uses Boyd's *"Implicit Guidance & Control"* pathway (`Orient` $\to$ `Act`), bypassing slow conscious deliberation.
+   - A practiced boxing jab, parry, or speed-reload uses Boyd's *"Implicit Guidance & Control"* pathway (`Orient` $\to$ `Act`), bypassing slow conscious deliberation ($\Delta\text{TC}_{\text{decide}} = 0$).
    - **Skill Level ($N$) Reflex Compression**: Higher skill proficiency ($N$) converts conscious `Decide` ticks into conditioned muscle memory, reducing $\text{TC}_{\text{decide}}$ by **`-1 Tick` at $N \ge 4$** and **`-2 Ticks` at $N \ge 6$** (to a floor of `0–1 Tick`).
 2. **Complex, Novel & Tactical Actions (High $\text{TC}_{\text{decide}} = 3\text{–}8\text{ Ticks}$, Low-to-Moderate $\text{TC}_{\text{act}}$)**:
-   - Re-assessing a shifting battlefield, improvising an environmental trap or dirty trick, redirecting an aborted action mid-stream, issuing a coordinated squad command, or operating unfamiliar equipment.
+   - Re-assessing a shifting battlefield, improvising an environmental trap or dirty trick, redirecting an aborted action mid-stream, issuing a coordinated squad command, or operating unfamiliar equipment ($\Delta\text{TC}_{\text{decide}} = -\lfloor(D_{\text{cog}} - 10)/2\rfloor$).
    - **Where "Quick Thinking" Beats Raw Muscle Speed**:
      - Suppose a **Sharp Tactician (`D_cog 16`, `SPD 10`)** and a **Slow-Thinking Athlete (`D_cog 8`, `SPD 15`)** both face an unexpected structural collapse or ambush requiring a novel tactical improvisation (`Base TC = 8`: $\text{TC}_{\text{decide}} = 5$, $\text{TC}_{\text{act}} = 3$).
      - The **Sharp Tactician** shaves `-3 Ticks` off $\text{TC}_{\text{decide}}$ ($5 - 3 = 2\text{ decision ticks}$) + $3\text{ physical ticks} = \mathbf{5\text{ Ticks total}}$ (`1.25s`).
@@ -99,9 +100,9 @@ $$\text{Effective TC} = \max\!\left(1,\; \text{TC}_{\text{decide, eff}} + \text{
 
 ## 3. How the Continuous Count-Up Clock Works
 
-1. **Entering the Clock (`Starting Tick` via `OODA` + `D_cog`)**:
-   - When a time-sensitive scene or combat begins, each participant calculates their **Full-Loop OODA Initiative**, which blends perceptual intake (`ITU`), orientation (`INS`), cognitive decision speed ($D_{\text{cog}}$), and neuromuscular readiness (`SPD`):
-     $$\text{OODA} = \left\lfloor \frac{\text{SPD} + \text{INS} + \text{ITU} + D_{\text{cog}}}{4} \right\rfloor \quad \left(\text{or } \left\lfloor \frac{\text{SPD} + \text{INS} + \text{ITU}}{3} \right\rfloor \text{ in drilled exchanges}\right)$$
+1. **Entering the Clock (`Starting Tick` via 4-Pillar `OODA`)**:
+   - When a time-sensitive scene or combat begins, each participant calculates their **4-Pillar OODA Initiative**, where each term corresponds directly to one phase of Boyd's loop — **O**bserve (`ITU`), **O**rient (`INS`), **D**ecide ($D_{\text{cog}}$), and **A**ct (`SPD`):
+     $$\text{OODA} = \left\lfloor \frac{\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD}}{4} \right\rfloor \quad \text{where} \quad D_{\text{cog}} = \left\lfloor \frac{\max(\text{ANA}, \text{CRE}) + \text{FOC}}{2} \right\rfloor$$
    - Aware, ready participants enter the clock at:
      $$\text{Tick}_{\text{start}} = \max(1,\; 15 - \text{OODA} - \text{Awareness Margin})$$
    - **Surprise / Ambush Penalty (Orientation Freeze)**: An unaware or ambushed character adds **`+8` to `+12` Ticks** (`2.0–3.0 seconds` of startle/OODA orientation freeze) to their $\text{Tick}_{\text{start}}$, reduced by their **Quick Thinking** offset $\lfloor(D_{\text{cog}} - 10)/2\rfloor$ and **Discipline (`DIS`)**.
@@ -114,6 +115,15 @@ $$\text{Effective TC} = \max\!\left(1,\; \text{TC}_{\text{decide, eff}} + \text{
 4. **Declaration vs. Completion & Interrupts**:
    - Actions have a **Decision & Wind-Up Phase** ($\text{TC}_{\text{decide}}$ + first half of $\text{TC}_{\text{act}}$) and a **Release / Recovery Phase** (remaining $\text{TC}_{\text{act}}$).
    - If Combatant A begins a slow, low-`Tempo` haymaker on `Tick 3` that takes `12 Ticks` (completing on `Tick 15`), and Combatant B on `Tick 5` executes a fast `5-Tick` stop-thrust or snap-shot (completing on `Tick 10`), Combatant B's strike **lands first on Tick 10** and can **interrupt or spoil** Combatant A's wind-up!
+
+### 3.1 Quick Reference: Engine Combat Stances (`CombatStance`)
+In `satya-engine` (`crates/satya-engine/src/dice_probabilities.rs`), six canonical stance presets summarize common action time costs (`TC`):
+- **`POWER`** (`TC = 14` / `3.50s`): Heavy, high-impact melee or ordnance strike; slower recovery.
+- **`RANGED_AIMED`** (`TC = 12` / `3.00s`): Deliberate sighted fire; grants accuracy at higher tick cost.
+- **`MANEUVER`** (`TC = 11` / `2.75s`): Mobile tactical engagement, flanking, or repositioning during an exchange.
+- **Unstanced / Standard Action** (`TC = 10` / `2.50s`): Default skill check or interaction.
+- **`STABILITY`** (`TC = 9` / `2.25s`): Braced, defensive posture prioritizing guard and low tick recovery.
+- **`RANGED_SNAP`** (`TC = 7` / `1.75s`): Fast reactive snapshot at reduced time cost.
 
 ---
 
@@ -196,7 +206,7 @@ flowchart TD
 
 ### 5.1 Layer 1: Systemic Health, Fatigue & Encumbrance (`action_time_factor`)
 
-Physical exhaustion, systemic trauma shock, heavy gear load, and neurological status conditions degrade both physical execution and mental processing:
+Physical exhaustion, systemic trauma shock, heavy gear load, and neurological status conditions degrade both physical execution and mental processing (detailed in [Health, Anatomical Trauma, Fatigue & Mental Conditions](../06-health-and-survival/health_and_trauma.md) and [Movement, Vehicles, Encumbrance & Environmental Survival](../06-health-and-survival/movement_vehicles_and_environment.md)):
 
 $$\text{action\_time\_factor} = 1.0 + (0.10 \times \text{fatigue\_level}) + (0.25 \times \text{wound\_shock\_index}) + \Delta_{\text{enc}} + \Delta_{\text{status}}$$
 
@@ -219,16 +229,16 @@ Before physical execution begins, the character's mind must complete the `Observ
 
 $$\text{TC}_{\text{decide, eff}} = \max\!\left(\text{TC}_{\text{floor}},\; \text{round}\big(\text{TC}_{\text{decide}} \times \text{mental\_time\_factor}\big) - \left\lfloor \frac{D_{\text{cog}} - 10}{2} \right\rfloor - \Delta\text{TC}_{\text{skill}}\right)$$
 
-- **Quick Thinking Offset ($\lfloor(D_{\text{cog}} - 10)/2\rfloor$)**: Driven by $\max(\text{ANA}, \text{CRE})$, `INS`, and `FOC`. Shaves `-1 Tick` per `2` points of $D_{\text{cog}}$ above `10` (`-1` at `12`, `-2` at `14`, `-3` at `16`, `-4` at `18`).
+- **Quick Thinking Offset ($\lfloor(D_{\text{cog}} - 10)/2\rfloor$)**: Driven by $\lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$. Shaves `-1 Tick` per `2` points of $D_{\text{cog}}$ above `10` (`-1` at `12`, `-2` at `14`, `-3` at `16`, `-4` at `18`).
 - **Skill Reflex Compression ($\Delta\text{TC}_{\text{skill}}$)**: For drilled techniques within a trained skill (`N >= 4` shaves `-1 Tick`, `N >= 6` shaves `-2 Ticks`), training compresses conscious `Decide` time down to a conditioned reflex floor ($\text{TC}_{\text{floor}} = 0\text{ or }1$).
 
 ### 5.3 Layer 3: Combat & Athletic Physical Execution (`Tempo` $T$ & `SPD`)
 
-Once the decision is made, **Speed (`SPD`)** defines the character's **Tempo Ceiling ($T_{\max} = \text{SPD} - \text{Leg Wounds}$)**, and the points allocated to **Tempo ($T$)** relative to their neutral baseline ($B = \lfloor P_{\text{base}} / 3 \rfloor$) directly shave or add ticks to $\text{TC}_{\text{act}}$:
+Once the decision is made, **Speed (`SPD`)** defines the character's **Tempo Ceiling ($T_{\max} = \text{SPD} - \text{Leg Wounds}$)**, and the points allocated to **Tempo ($T$)** relative to their neutral baseline ($B = \lfloor P_{\text{base}} / 3 \rfloor$) directly shave or add ticks to the action (see [Tactical Triad & Combat Pools](../05-combat/tactical_triad_and_pools.md)):
 
-$$\text{Effective TC}_{\text{combat}} = \max\!\Big(2,\; \text{TC}_{\text{decide, eff}} + \text{round}\big(\text{TC}_{\text{act}} \times \text{action\_time\_factor}\big) - (T - B)\Big)$$
+$$\text{Effective TC}_{\text{combat}} = \max\!\Big(2,\; \text{round}\big(\text{Base TC} \times \text{action\_time\_factor}\big) - (T - B) + \Delta\text{TC}_{\text{decide}}\Big)$$
 
-- *Fast-Play Compatibility Note*: For standard drilled combat strikes where $\text{TC}_{\text{decide}} = 1\text{–}2$, `Base TC` (`TC_decide + TC_act`) can be resolved as a single combined number using $\text{round}(\text{Base TC} \times \text{action\_time\_factor}) - \lfloor(T - B)/2\rfloor$, while applying the explicit $\Delta\text{TC}_{\text{decide}}$ Quick Thinking modifier whenever a combatant performs a tactical scan, feint, precision calculation, malfunction clearance, environmental improvisation, or mid-action OODA pivot!
+- **Drilled vs. Complex Combat Actions**: For standard drilled combat strikes and reloads, $\Delta\text{TC}_{\text{decide}} = 0$ (resolved directly via $\max(2, \text{round}(\text{Base TC} \times \text{action\_time\_factor}) - (T - B))$). Whenever a combatant performs a tactical scan, feint, ballistic calculation, malfunction clearance, environmental improvisation, or mid-action OODA pivot, $\Delta\text{TC}_{\text{decide}} = -\lfloor(D_{\text{cog}} - 10)/2\rfloor$ applies!
 - **Leg / Hip / Ankle Wounds**: Directly slash $T_{\max}$. If a character's $T_{\max}$ is slashed below their baseline $B$ (e.g., $B = 8$, but a shattered knee locks $T_{\max} = 2$), they are **forced** to take a negative $(T - B)$ offset—automatically adding **`+6 ticks`** to every movement or melee action!
 
 ### 5.4 Layer 4: Non-Combat Physical, Technical & Mental Actions (`Characteristic Speed Scaling`)
@@ -238,7 +248,7 @@ When performing a non-combat action on the clock (such as picking a lock under f
 1. **Dual Cognitive + Motor Speed Offset ($\Delta\text{TC}_{\text{decide}} + \Delta\text{TC}_{\text{act}}$)**:
    - **Cognitive Component ($\text{TC}_{\text{decide}}$)**: Adjusted by **Quick Thinking** $-\lfloor(D_{\text{cog}} - 10)/2\rfloor$.
    - **Manual / Physical Component ($\text{TC}_{\text{act}}$)**: Adjusted by $-\lfloor(C_{\text{motor}} - 10)/2\rfloor$, where $C_{\text{motor}}$ is **`DEX`** (for fine manual tasks like lockpicking, surgery, electronics, reloads) or **`SPD`/`KIN`** (for gross athletic tasks).
-   - **Purely Mental / Analytical Tasks** (cryptography, tactical calculation, diagnostics, recall): `100%` of the action is $\text{TC}_{\text{decide}}$, governed by $D_{\text{cog}}$ (`ANA`, `CRE`, `INS`, `FOC`, `MEM`) and ignoring physical `Encumbrance` penalties.
+   - **Purely Mental / Analytical Tasks** (cryptography, tactical calculation, diagnostics, recall): `100%` of the action is $\text{TC}_{\text{decide}}$, governed by $D_{\text{cog}}$ ($\lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$) and ignoring physical `Encumbrance` penalties.
 2. **Extraordinary Success Time Compression**:
    - Every cascade success beyond the first (`total_successes >= 2`) on a timed task reduces the task's remaining duration by **`-15%` per extra success** (up to `-45%` at `4+` successes).
 
@@ -253,3 +263,29 @@ What happens if a character starts a `12-tick` aimed shot or heavy melee swing o
   - **Adaptive Genius / High-Speed Operator ($D_{\text{cog}} = 15, \text{ITU} = 15$)**: Pivots in **`1 tick` (`0.25s`)**—almost zero hesitation between aborting the old action and initiating the new response.
   - **Average Combatant ($D_{\text{cog}} = 10, \text{ITU} = 10$)**: Pivots in **`3 ticks` (`0.75s`)**.
   - **Sluggish, Tunnel-Visioned, or Concussed Combatant ($D_{\text{cog}} = 6, \text{ITU} = 6$)**: Takes **`4–5 ticks` (`1.0–1.25s`)** just to mentally dump their old plan and re-orient before their new action's ticks begin counting.
+
+---
+
+## 6. Multi-Sensory Perception, Stealth & Illumination (`Observe` Phase)
+
+Because Satya models **six distinct Sensory Characteristics (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`)** rather than a single generic "Perception" stat, stealth, detection, and awareness on the OODA clock are resolved as an asymmetric **Multi-Channel Sensory Contest**.
+
+### 6.1 Resolving Stealth vs. Detection (`2d20` Opposed Cascade)
+
+- **The Infiltrator** rolls **Stealth & Sneaking (`KIN / FOC`)** (or *Camouflage & Concealment* `INS/CRE` if stationary in a hide site, or *Surveillance & Urban Tail* `FOC/SIG` in a crowd).
+  - **Movement Gait & Encumbrance Modifiers**: Moving at a **Stealth Creep** (`0.34 m/Tick`) imposes `+0` $\Delta_{\text{ext}}$; moving at a **Combat Glide** imposes `+4` $\Delta_{\text{ext}}$; **Running** imposes `+8` $\Delta_{\text{ext}}$. Each **Encumbrance Tier** above Tier 1 adds **`+2` $\Delta_{\text{ext}}$** (gear rattle and footfall weight).
+- **The Observer / Sentry** rolls **Observation & Awareness** using the **specific sensory channel** suited to the environment:
+  - **Visual Channel (`SIG / FOC`)**: Governed by **Illumination**, **Concealment/Cover**, and **Target Motion**.
+  - **Auditory Channel (`HEA / FOC`)**: Governed by **Ambient Noise**, **Surface Material** (gravel/broken glass vs. concrete), and **Weapon Suppression**.
+  - **Olfactory Channel (`OLF / INS`)**: Detects smoke, fuel, blood, sweat, or chemical residues in enclosed spaces (or K9/animal trackers).
+  - **Intuitive Channel (`ITU / INS`)**: Subconscious "sixth sense" when being watched by a sniper or stalked in an eerie environment—can alert the target to drop behind cover even before `SIG` or `HEA` pinpoints the attacker's coordinates!
+
+### 6.2 Illumination, Visibility & Acoustic Modifiers ($\Delta_{\text{ext}}$)
+
+| Environmental Condition | Visual Check (`SIG`) $\Delta_{\text{ext}}$ | Visual Stealth Bonus ($\Delta_{\text{ext}}$) | Countermeasures & Sensor Interaction |
+| :--- | :---: | :---: | :--- |
+| **Bright Daylight / Well-Lit Room** | `+0` | `+4` *(Harder to hide)* | Requires solid cover or urban crowd blending. |
+| **Dusk / Twilight / Urban Streetlights / Shadows** | `+2` | `-2` | Flashlights create a cone of `+0` light but reveal the holder (`-6` to spot holder). |
+| **Moonlight / Starlight / Power Outage Indoors** | `+6` | `-6` | **Gen-3+ Night Vision (`NVG`)** reduces visual penalty to `+1` (but narrows FOV, `-2` `OODA`). |
+| **Dense Fog / Heavy Rain / Thick Smoke** | `+8` | `-8` | **Thermal / FLIR Optics** cut through smoke/darkness (`+0`), unless target wears thermal-baffled cloak. |
+| **Pitch Black (Subterranean / Windowless Vault)** | **Impossible (`Blinded`)** | **Auto-Concealed vs. `SIG`** | Observer must rely on **Hearing (`HEA`)**, **Tactile (`TAC`)**, or active **IR / LiDAR**. |

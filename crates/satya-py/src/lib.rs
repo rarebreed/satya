@@ -280,7 +280,10 @@ impl PyCascadeTaskParams {
 #[pyclass(name = "TacticalPoolEnvelope")]
 #[derive(Debug, Clone)]
 pub struct PyTacticalPoolEnvelope {
-    /// OODA Initiative rating: $\lfloor(\text{SPD} + \text{INS} + \text{ITU}) / 3\rfloor$.
+    /// Cognitive Decision Score ("Quick Thinking"): $D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$.
+    #[pyo3(get)]
+    pub d_cog: i32,
+    /// 4-Pillar OODA Initiative rating: $\lfloor(\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD}) / 4\rfloor$.
     #[pyo3(get)]
     pub ooda_init: i32,
     /// Combat Readiness controller: $C_{\text{combat}} = \lfloor(C_{\text{skill}} + \text{OODA}) / 2\rfloor$.
@@ -340,6 +343,7 @@ pub struct PyTacticalPoolEnvelope {
 impl From<TacticalPoolEnvelope> for PyTacticalPoolEnvelope {
     fn from(e: TacticalPoolEnvelope) -> Self {
         Self {
+            d_cog: e.d_cog,
             ooda_init: e.ooda_init,
             combat_readiness_c: e.combat_readiness_c,
             p_base: e.p_base,
@@ -825,7 +829,10 @@ pub fn compare_control_vs_skill_k20(
     leg_wound_penalty=0,
     arm_head_wound_penalty=0,
     torso_shoulder_wound_penalty=0,
-    morale_state="steady"
+    morale_state="steady",
+    ana=10,
+    cre=10,
+    foc=10
 ))]
 pub fn compute_tactical_pool(
     spd: i32,
@@ -847,6 +854,9 @@ pub fn compute_tactical_pool(
     arm_head_wound_penalty: i32,
     torso_shoulder_wound_penalty: i32,
     morale_state: &str,
+    ana: i32,
+    cre: i32,
+    foc: i32,
 ) -> PyResult<PyTacticalPoolEnvelope> {
     let ms = MoraleState::from_str_name(morale_state).map_err(to_py_err)?;
     let params = TacticalPoolParams {
@@ -857,6 +867,9 @@ pub fn compute_tactical_pool(
         sig,
         ins,
         itu,
+        ana,
+        cre,
+        foc,
         dis,
         fit,
         mass_kg,
@@ -965,7 +978,8 @@ mod tests {
         assert_eq!(roll.outcome_tier, "EXTRAORDINARY_SUCCESS");
 
         let env = compute_tactical_pool(
-            12, 12, 13, 13, 11, 12, 12, 12, 12, 75.0, 14, 4, false, 0, 0, 0, 0, 0, "steady",
+            12, 12, 13, 13, 11, 12, 12, 12, 12, 75.0, 14, 4, false, 0, 0, 0, 0, 0, "steady", 12,
+            12, 12,
         )
         .unwrap();
         assert!(env.p_eff > 0);
@@ -973,7 +987,7 @@ mod tests {
         assert!(triad.valid);
 
         let chapters = list_rules_chapters();
-        assert_eq!(chapters.len(), 9);
+        assert_eq!(chapters.len(), 13);
 
         let hits = search_rules_book("Tactical Triad", 3);
         assert!(!hits.is_empty());

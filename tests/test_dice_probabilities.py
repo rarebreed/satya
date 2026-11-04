@@ -371,12 +371,17 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
     assert summary["chapter_count"] == 13
     assert summary["total_words"] > 10_000
     assert (tmp_path / "index.html").exists()
+    assert (tmp_path / "design_philosophy.html").exists()
     assert (tmp_path / "tasks.html").exists()
+    assert (tmp_path / "skills_and_trees.html").exists()
+    assert (tmp_path / "lifepaths_and_economy.html").exists()
+    assert (tmp_path / "psyche_and_social.html").exists()
+    assert (tmp_path / "tactical_triad.html").exists()
     assert (tmp_path / "melee_combat.html").exists()
+    assert (tmp_path / "ranged_combat_and_armor.html").exists()
     assert (tmp_path / "action_economy.html").exists()
     assert (tmp_path / "health_and_trauma.html").exists()
     assert (tmp_path / "movement_and_environment.html").exists()
-    assert (tmp_path / "world_and_equipment_stubs.html").exists()
     assert (tmp_path / "catalog.json").exists()
 
     # Multi-chapter AI GM rules search

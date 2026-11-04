@@ -1028,19 +1028,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                             onchange="window.satyaSelectRulesChapter('')"
                                             on:change=move |_| wasm_client::satya_select_rules_chapter(String::new())
                                         >
-                                            <option value="background">"1. Design Philosophy & Goals of Satya"</option>
-                                            <option value="satya_d20_rules">"2. Core 2d20 Cascading System Rules"</option>
-                                            <option value="tasks" selected>"3. Task Resolution & Skill Check Mechanics"</option>
-                                            <option value="probability">"4. Mathematical Foundations & Exact Probability Engine"</option>
-                                            <option value="characteristics">"5. Core Characteristics & Derived Scales"</option>
-                                            <option value="skill-design">"6. Skill Ontology, Lifepath & Non-Linear Progression"</option>
-                                            <option value="combat">"7. Combat Overview, Morale & Ranged Firefights"</option>
-                                            <option value="melee_combat">"8. Close-Quarters & Melee Combat (Tactical Triad)"</option>
-                                            <option value="social_interactions">"9. Social Mechanics & Cognitive Dissonance"</option>
-                                            <option value="action_economy">"10. Action Economy, Time Scales & Tick Clock"</option>
-                                            <option value="health_and_trauma">"11. Health, Anatomical Trauma, Fatigue & Mental Conditions"</option>
-                                            <option value="movement_and_environment">"12. Movement, Encumbrance & Environmental Survival"</option>
-                                            <option value="world_and_equipment_stubs">"13. Equipment, Armor, Stealth, Vehicles & World Systems"</option>
+                                            <option value="design_philosophy">"1. Design Philosophy & Goals of Satya"</option>
+                                            <option value="probability">"2. Probability & Mathematical Calibration"</option>
+                                            <option value="tasks" selected>"3. Cascading 2d20 Engine & Task Resolution"</option>
+                                            <option value="action_economy">"4. Action Economy, OODA Loop, Time Scales & Stealth"</option>
+                                            <option value="characteristics">"5. Characteristics, Senses, Psyche & Aptitudes"</option>
+                                            <option value="skills_and_trees">"6. Skill System & Hierarchical Skill Trees"</option>
+                                            <option value="lifepaths_and_economy">"7. Lifepath Creation, Socioeconomic Upkeep & Heat"</option>
+                                            <option value="psyche_and_social">"8. Psyche, Morale & Social Combat"</option>
+                                            <option value="tactical_triad">"9. Combat Architecture, Tactical Triad & Pools"</option>
+                                            <option value="melee_combat">"10. Melee Combat & Close-Quarters Tactics"</option>
+                                            <option value="ranged_combat_and_armor">"11. Ranged Combat, Suppression, Armor & Reliability"</option>
+                                            <option value="health_and_trauma">"12. Health, Anatomical Trauma, Fatigue & Mental Conditions"</option>
+                                            <option value="movement_and_environment">"13. Movement, Encumbrance, Vehicles & Survival"</option>
                                         </select>
                                     </label>
                                     <label class="inline-label" for="rules-search-input">
@@ -2081,7 +2081,7 @@ mod tests {
         assert!(html.contains(r#"id="rules-chapter-select""#));
         assert!(html.contains(r#"id="rules-search-input""#));
         assert!(html.contains(r#"id="rules-book-viewport""#));
-        assert!(html.contains("Task Resolution &amp; Skill Check Mechanics"));
+        assert!(html.contains("Cascading 2d20 Engine &amp; Task Resolution"));
 
         assert!(html.contains("btn-logout"));
         assert!(html.contains("btn-leave-session"));

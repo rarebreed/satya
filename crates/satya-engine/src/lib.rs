@@ -343,9 +343,18 @@ mod tests {
     fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
         let chapters = list_rules_chapters();
         assert_eq!(chapters.len(), 13);
+        assert!(chapters.iter().any(|c| c.chapter_id == "design_philosophy"));
         assert!(chapters.iter().any(|c| c.chapter_id == "tasks"));
-        assert!(chapters.iter().any(|c| c.chapter_id == "combat"));
+        assert!(chapters.iter().any(|c| c.chapter_id == "skills_and_trees"));
+        assert!(chapters.iter().any(|c| c.chapter_id == "lifepaths_and_economy"));
+        assert!(chapters.iter().any(|c| c.chapter_id == "psyche_and_social"));
+        assert!(chapters.iter().any(|c| c.chapter_id == "tactical_triad"));
         assert!(chapters.iter().any(|c| c.chapter_id == "melee_combat"));
+        assert!(
+            chapters
+                .iter()
+                .any(|c| c.chapter_id == "ranged_combat_and_armor")
+        );
         assert!(chapters.iter().any(|c| c.chapter_id == "action_economy"));
         assert!(chapters.iter().any(|c| c.chapter_id == "health_and_trauma"));
         assert!(
@@ -353,15 +362,14 @@ mod tests {
                 .iter()
                 .any(|c| c.chapter_id == "movement_and_environment")
         );
-        assert!(
-            chapters
-                .iter()
-                .any(|c| c.chapter_id == "world_and_equipment_stubs")
-        );
 
         let tasks_doc = get_rules_chapter("tasks").expect("tasks chapter exists");
         assert!(tasks_doc.markdown.contains("Sarah"));
         assert!(tasks_doc.rendered_html.contains("satya-rules-article"));
+        // Verify backward-compatible legacy chapter ID aliases
+        assert!(get_rules_chapter("satya_d20_rules").is_some());
+        assert!(get_rules_chapter("combat").is_some());
+        assert!(get_rules_chapter("skill-design").is_some());
 
         let health_hits = search_rules_book("hemorrhaging broken bones blinded catatonia", 5);
         assert!(!health_hits.is_empty());
@@ -370,8 +378,8 @@ mod tests {
         let hits = search_rules_book("Envelope & Fill Tempo Control Force", 5);
         assert!(!hits.is_empty());
         assert!(
-            hits[0].chapter_id == "combat" || hits[0].chapter_id == "melee_combat",
-            "expected combat or melee_combat chapter at top of search hits, got {}",
+            hits[0].chapter_id == "tactical_triad" || hits[0].chapter_id == "melee_combat",
+            "expected tactical_triad or melee_combat chapter at top of search hits, got {}",
             hits[0].chapter_id
         );
 
@@ -384,6 +392,9 @@ mod tests {
             sig: 12,
             ins: 12,
             itu: 13,
+            ana: 12,
+            cre: 10,
+            foc: 12,
             dis: 13,
             fit: 12,
             mass_kg: 65.0,
@@ -398,6 +409,7 @@ mod tests {
             morale_state: MoraleState::Steady,
         };
         let elena_env = compute_tactical_pool(&elena_params);
+        assert_eq!(elena_env.d_cog, 12);
         assert_eq!(elena_env.ooda_init, 12);
         assert_eq!(elena_env.combat_readiness_c, 12);
         assert_eq!(elena_env.p_base, 24);

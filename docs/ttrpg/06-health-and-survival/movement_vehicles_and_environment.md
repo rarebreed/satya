@@ -1,12 +1,12 @@
-# Satya TTRPG Movement, Encumbrance & Environmental Survival
+# Satya TTRPG Movement, Encumbrance, Vehicles & Environmental Survival
 
-This chapter defines the canonical **Movement, Load-Bearing Encumbrance, and Environmental Survival Systems** for **Satya**. In keeping with Satya's simulation philosophy, movement speed is not an arbitrary fixed integer (`"30 feet per turn"`) shared by every human regardless of stature, conditioning, or backpack weight, nor are environmental hazards hand-waved when operators deploy into deserts, mountains, maritime storms, or depressurized orbital habitats.
+This chapter defines the canonical **Movement, Load-Bearing Encumbrance, Vehicular Pursuits & G-Force Physics, and Environmental Survival Systems** for **Satya**. In keeping with Satya's simulation philosophy, movement speed is not an arbitrary fixed integer (`"30 feet per turn"`) shared by every human regardless of stature, conditioning, or backpack weight, nor are environmental hazards hand-waved when operators deploy into deserts, mountains, maritime storms, or depressurized orbital habitats.
 
 ---
 
 ## 1. Movement Architecture: Combat & Non-Combat Gaits
 
-A character's movement velocity is governed by their **Speed (`SPD`)**, **Fitness (`FIT`)**, **Kinesthesis (`KIN`)**, **Height (`HGT` stride length)**, **Encumbrance Tier**, and any **Lower-Extremity Wounds** (which directly slash their **Tempo Cap $T_{\max}$**).
+A character's movement velocity is governed by their **Speed (`SPD`)**, **Fitness (`FIT`)**, **Kinesthesis (`KIN`)**, **Height (`HGT` stride length)**, **Encumbrance Tier**, and any **[Lower-Extremity Wounds](health_and_trauma.md#1-hit-locations--specificity-of-damage-effects)** (which directly slash their **Tempo Cap $T_{\max}$**).
 
 ### 1.1 Baseline Velocity Formulas (`SPD`, `FIT` & `HGT`)
 
@@ -25,7 +25,7 @@ A character's movement velocity is governed by their **Speed (`SPD`)**, **Fitnes
 
 ### 1.2 Tactical Combat Movement (Meters per Tick & Triad Interaction)
 
-On the [Count-Up Action Clock](action_economy.md) (`1 Tick = 0.25s`, `4 Ticks = 1s`, `20 Ticks = 5s`), a combatant chooses their **Movement Gait**, which determines how far they move per Tick and how much of their **Tactical Pool ($P_{\text{eff}}$)** is available for simultaneous shooting or melee (`Control` & `Force`):
+On the **[Count-Up Action Clock](../02-core-mechanics/action_economy_and_ooda.md)** (`1 Tick = 0.25s`, `4 Ticks = 1s`, `20 Ticks = 5s`), a combatant chooses their **Movement Gait**, which determines how far they move per Tick and how much of their **[Tactical Pool ($P_{\text{eff}}$)](../05-combat/tactical_triad_and_pools.md)** is available for simultaneous shooting or melee (`Control` & `Force`):
 
 | Combat Gait Mode | Fraction of $V_{\text{sprint}}$ | Speed at `SPD 10` (`m/s` · `m/Tick`) | Distance per `10 Ticks` (`2.5s`) | Tactical Triad (`TCF`) & Exertion Impact |
 | :--- | :---: | :---: | :---: | :--- |
@@ -37,7 +37,7 @@ On the [Count-Up Action Clock](action_economy.md) (`1 Tick = 0.25s`, `4 Ticks = 
 
 ### 1.3 Special Movement Modes (Jumping, Climbing, Swimming & Zero-G)
 
-1. **Jumping & Vaulting (*Athletics & Parkour* `KIN/SPD`, powered by `POW`)**:
+1. **Jumping & Vaulting (*Jumping* / *Parkour* `KIN/SPD`, powered by `POW`)**:
    - **Running Broad Jump**: Base distance $= 2.0\text{ m} + (0.25\text{ m} \times \text{POW}) + (0.3\text{ m} \times \text{Cascade Successes})$ (`4.5 m` baseline at `POW 10`).
    - **Standing Broad Jump**: `55%` of Running Broad Jump (`~2.5 m` at `POW 10`).
    - **Running High Jump / Wall Scaling**: Base vertical clearance $= 0.6\text{ m} + (0.06\text{ m} \times \text{POW}) + (0.1\text{ m} \times \text{Successes})$ (`1.2 m` waist/chest vault without hands; add `0.8 × HGT` when grabbing a ledge with hands and pulling up via `FOR/KIN`).
@@ -114,7 +114,24 @@ Compare the character's **Effective Load ($L_{\text{eff}}$)** against multiples 
 
 ---
 
-## 3. Environment & Survival Systems: Water, Food, Temperature & Atmosphere
+## 3. Vehicles, High-Speed Chases & Crash / G-Force Physics
+
+Satya's **[Tactical Triad (`Tempo`, `Control`, `Force`)](../05-combat/tactical_triad_and_pools.md)** scales seamlessly from close-quarters foot combat to **vehicular pursuits, aerial dogfights, and orbital docking**:
+
+1. **The Vehicle as a Physical Envelope**:
+   - A vehicle provides its own mechanical **Envelope Ceilings**: **Top Speed / Acceleration (`Vehicle Tempo Cap`)**, **Handling & Braking (`Vehicle Control Cap`)**, and **Chassis Mass & Armor (`Vehicle Force / Root Cap`)**.
+   - The driver/pilot fills this envelope using their **[Driving / Piloting Skill ($N$)](../03-character/skills_and_trees.md#37-tree-6-athletics-vehicles-aviation--drone-operations-athletic-technical-fieldcraft)** and **`SPD / KIN`** (or **`DEX / FOC`** for remote drones), bounded by the vehicle's ceilings!
+2. **Tactical Triad in a Chase or Dogfight**:
+   - **Tempo ($T$)**: Throttle commitment—closing or opening the **Chase Range Band** (`Bumper-to-Bumper` $\leftrightarrow$ `Close [15m]` $\leftrightarrow$ `Medium [50m]` $\leftrightarrow$ `Long [150m+]` $\leftrightarrow$ `Lost Visual`).
+   - **Control ($C$)**: Steering precision—threading through oncoming traffic, drifting a hairpin corner without spinning out, holding a steady platform for passengers firing from windows, and evading PIT maneuvers.
+   - **Force ($F$)**: Ramming, PIT maneuvers, sideswiping, and holding the road (`Vehicle Root`) against collisions or crosswinds.
+3. **Collision Kinetic Trauma & High-G Maneuvers**:
+   - **Collisions**: Impact severity scales with relative velocity ($\Delta v$) and mass ratio ($m_1 / m_2$), inflicting **Blunt Trauma** across multiple random **[Hit Locations](health_and_trauma.md#1-hit-locations--specificity-of-damage-effects)** (mitigated by seatbelts, airbags, or crash harnesses).
+   - **High-G Blackout (`G-LOC`)**: In high-performance aircraft or orbital burn maneuvers exceeding `5G+`, crew members must roll **`HLT / FIT`** (assisted by anti-G flight suits) or suffer **Tunnel Vision (`Dazzled`)** followed by **`G-LOC` (`Unconscious`)**.
+
+---
+
+## 4. Environment & Survival Systems: Water, Food, Temperature & Atmosphere
 
 Environmental survival in Satya operates through the exact same physiological levers as combat trauma: **Internal Cascade Modifiers ($\Delta_{\text{int}}$)**, **Fatigue Levels (`fatigue_level`)**, **Wound Shock (`wound_shock_index`)**, and temporary **Characteristic Degradation (`HLT`, `FIT`, `DEX`, `FOC`, `ANA`)**.
 
@@ -138,7 +155,7 @@ flowchart LR
 
 ---
 
-### 3.1 Hydration & Water Deprivation
+### 4.1 Hydration & Water Deprivation
 
 Water is the most acute survival resource after breathable air. A human can survive weeks without food, but in arid heat or heavy combat exertion, lethal dehydration occurs within **`24 to 72 hours`**.
 
@@ -164,7 +181,7 @@ For every **25% of Daily Water Requirement missed** (or every `2 Liters` of unre
 
 ---
 
-### 3.2 Nutrition, Caloric Deficit & Starvation
+### 4.2 Nutrition, Caloric Deficit & Starvation
 
 - **Daily Caloric Requirement**:
   - **Sedentary / Watch Duty**: `2,000–2,400 kcal/day` (`~0.5 kg` dry field rations).
@@ -180,12 +197,12 @@ For every **25% of Daily Water Requirement missed** (or every `2 Liters` of unre
 
 ---
 
-### 3.3 Temperature Extremes: Cold (Hypothermia) & Heat (Hyperthermia)
+### 4.3 Temperature Extremes: Cold (Hypothermia) & Heat (Hyperthermia)
 
 Human core body temperature must remain within a narrow window around **`37.0°C` (`98.6°F`)**. Both extreme cold and extreme heat are governed by the balance between **Ambient Effective Temperature** (including windchill or humidity), **Clothing Insulation / Cooling (`CLO` Rating)**, and **Metabolic Heat Production**.
 
 | Clothing / Suit Tier | Comfort Zone (Light Activity) | Cold Protection Bonus ($\Delta_{\text{cold}}$) | Heat Retention Penalty ($\Delta_{\text{heat}}$) |
-| :--- | :---: | :---: | :--- |
+| :--- | :---: | :---: | :---: |
 | **Light Streetwear / Tropical Uniform** | `+18°C` to `+32°C` | `+0` | `+0` |
 | **Cold-Weather Field Jacket & Layers** | `-5°C` to `+15°C` | **`-4` to $\Delta_{\text{ext}}$** vs. Cold | **`+4` to $\Delta_{\text{ext}}$** in Heat `> 28°C` |
 | **Extreme Arctic Parka / ECWCS Level 7** | `-35°C` to `-5°C` | **`-8` to $\Delta_{\text{ext}}$** vs. Cold | **`+8` to $\Delta_{\text{ext}}$** in Heat `> 20°C` |
@@ -209,7 +226,7 @@ When operating in high ambient temperatures (`> 32°C` dry or `> 26°C` at high 
 
 ---
 
-### 3.4 Sleep Deprivation, Atmospheric Pressure, Radiation & Toxins (Stubs)
+### 4.4 Sleep Deprivation, Atmospheric Pressure, Radiation & Toxins
 
 1. **Sleep Deprivation & Circadian Debt**:
    - Humans require **`6–8 hours` of sleep per `24-hour` cycle** (`4 hours` minimum maintenance with a successful `DIS` check).
@@ -222,7 +239,7 @@ When operating in high ambient temperatures (`> 32°C` dry or `> 26°C` at high 
    - **Hard Vacuum / Explosive Decompression (`0 atm`)**: Ebullism and rapid deoxygenation of venous blood in the lungs reduces useful consciousness to **`12–16 seconds` (`48–64 Ticks`)**, with `-2` `HLT` cold/barotrauma per `20 ticks` after unconsciousness.
 3. **Toxins, Venoms, Chemical Agents & Pathogens (`HLT` Saves)**:
    - Model every poison, nerve agent, or biological pathogen with **Four Parameters**: **Vector** (*Inhalation*, *Contact*, *Ingestion*, *Injection/Wound*), **Onset Delay** (*Ticks*, *Minutes*, or *Days*), **Virulence ($\Delta_{\text{ext}}$ on the victim's `HLT` cascade save)**, and **Target Effect** (e.g., *Tear Gas / CS*: `Onset 4 ticks, Virulence +2, Effect: Blinded/Dazzled + Coughing`; *Neurotoxin / Sarin*: `Onset 12 ticks, Virulence +10, Effect: Paralysis + Asphyxiation + Convulsions`).
-4. **Ionizing Radiation (`Sievert / Gray` Exposure Tiers — Stub)**:
+4. **Ionizing Radiation (`Sievert / Gray` Exposure Tiers)**:
    - Tracked in cumulative **Acute Dose Equivalents (`Sv`)**:
      - `< 0.5 Sv`: Subclinical (no acute symptoms).
      - `0.5 – 1.5 Sv` (*Mild ARS*): `Nausea` and `+1` `fatigue_level` after `6–12 hours`; temporary `-2 HLT`.

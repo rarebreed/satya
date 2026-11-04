@@ -27,97 +27,106 @@ except ImportError:
 
 BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
     {
-        "chapter_id": "background",
-        "part": "Part I: Philosophy & Design Vision",
-        "title": "An RPG for a More Civilized Age",
-        "relative_path": "design-notes/background.md",
+        "chapter_id": "design_philosophy",
+        "part": "Part I: Foundation & Mathematical Calibration",
+        "title": "An RPG for a More Civilized Age: Design Philosophy",
+        "relative_path": "01-foundation/design_philosophy.md",
         "description": "Origins of Satya, realism vs. escapism, and how Satya solves 17 structural flaws of traditional RPG systems.",
     },
     {
-        "chapter_id": "satya_d20_rules",
-        "part": "Part II: Core 2d20 Watershed Resolution & Probability",
-        "title": "Satya d20 Core Ruleset Reference",
-        "relative_path": "satya_d20_rules.md",
-        "description": "Canonical Two-List Cascading (2d20) dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, and the Count-Up Action Clock.",
-    },
-    {
         "chapter_id": "probability",
-        "part": "Part II: Core 2d20 Watershed Resolution & Probability",
-        "title": "Probability & The Cascading Dice Mechanic",
-        "relative_path": "probability.md",
+        "part": "Part I: Foundation & Mathematical Calibration",
+        "title": "Probability & Calibration of the Cascading Dice Mechanic",
+        "relative_path": "01-foundation/probability_and_calibration.md",
         "description": "Mathematical foundation, distribution topology (skewness, modality, tail behavior), scale invariance across K, and avoiding the Skilled Botch Paradox.",
     },
     {
         "chapter_id": "tasks",
-        "part": "Part II: Core 2d20 Watershed Resolution & Probability",
-        "title": "Task Resolution & Skill Check Mechanics",
-        "relative_path": "tasks.md",
-        "description": "Step-by-step task resolution pipeline, Gate Classifications (Class A / B / C), Tool Tiers, Complementary KNO -> PHY Skill Synergy, and worked examples.",
-    },
-    {
-        "chapter_id": "characteristics",
-        "part": "Part III: Characters, Attributes & Lifepaths",
-        "title": "Character Characteristics & Attribute Architecture",
-        "relative_path": "character/characteristics.md",
-        "description": "Physical, Mental, Social, Sensory, and Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG) characteristics on the 1-20 Controlling Scale plus derived metrics.",
-    },
-    {
-        "chapter_id": "skill-design",
-        "part": "Part III: Characters, Attributes & Lifepaths",
-        "title": "Skill System & Lifepath Architecture",
-        "relative_path": "skill-design.md",
-        "description": "Talents vs. Physical and Knowledge skills, 8 hierarchical Skill Trees, Master Task Requirements Table, and chronological Lifepath creation.",
-    },
-    {
-        "chapter_id": "social_interactions",
-        "part": "Part IV: Psyche, Social Combat & Tactical Combat",
-        "title": "Social Interactions, Psyche Mechanics & Social Combat",
-        "relative_path": "social_interactions.md",
-        "description": "Acting against Psyche (Friction Checks & Trait Drift), Conviction Surges, Combat Morale modifiers, and Social Combat (Cognitive Dissonance).",
-    },
-    {
-        "chapter_id": "combat",
-        "part": "Part IV: Psyche, Social Combat & Tactical Combat",
-        "title": "Combat Architecture, Morale & Ranged Firefights",
-        "relative_path": "combat/combat.md",
-        "description": "Combat philosophy, anatomical trauma over Hit Points, Count-Up Action Clock, 5 Morale Conditions, the Envelope & Fill Tactical Pool, and Ranged Firefights.",
-    },
-    {
-        "chapter_id": "melee_combat",
-        "part": "Part IV: Psyche, Social Combat & Tactical Combat",
-        "title": "Melee Combat, Close-Quarters Tactics & The Tactical Triad",
-        "relative_path": "combat/melee_combat.md",
-        "description": "Close-quarters anatomy, the Tactical Triad (Tempo, Control, Force), Guard & Seizing the Initiative, Root vs. throws, and Viktor vs. Elena walkthrough.",
+        "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
+        "title": "Cascading 2d20 Engine & Task Resolution",
+        "relative_path": "02-core-mechanics/cascading_d20_and_tasks.md",
+        "description": "Canonical Two-List Cascading (2d20) dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, 5-step Task Pipeline, Tool Tiers, Gate Classifications, Master Task Table, and Extended Project Clocks.",
     },
     {
         "chapter_id": "action_economy",
-        "part": "Part V: Action Economy, Health, Movement, Environment & World Systems",
-        "title": "Action Economy, Time Scales & The Count-Up Tick Clock",
-        "relative_path": "systems/action_economy.md",
-        "description": "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Count-Up Clock mechanics, Base TC tables, and characteristic/health/encumbrance action cost modifiers.",
+        "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
+        "title": "Action Economy, OODA Loop, Time Scales & Stealth",
+        "relative_path": "02-core-mechanics/action_economy_and_ooda.md",
+        "description": "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Full OODA Loop & Quick Thinking (D_cog), Count-Up Clock mechanics, Base TC tables, action_time_factor, and Multi-Sensory Stealth & Detection.",
+    },
+    {
+        "chapter_id": "characteristics",
+        "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
+        "title": "Characteristics, Senses, Psyche & Aptitudes",
+        "relative_path": "03-character/characteristics_and_aptitudes.md",
+        "description": "Physical, Mental, Social, Sensory, and Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG) characteristics on the 1-20 Controlling Scale, derived metrics, and domain Aptitudes (A in [-2, +3]).",
+    },
+    {
+        "chapter_id": "skills_and_trees",
+        "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
+        "title": "Skill System & Hierarchical Skill Trees",
+        "relative_path": "03-character/skills_and_trees.md",
+        "description": "Talents (TAL) vs. Physical (PHY), Knowledge (KNO), and Hybrid (PHY/KNO) skills, Multi-Category taxonomy, [Access] restriction tiers, and the 8 Hierarchical Skill Trees.",
+    },
+    {
+        "chapter_id": "lifepaths_and_economy",
+        "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
+        "title": "Lifepath Character Creation, Socioeconomic Upkeep & Heat",
+        "relative_path": "03-character/lifepaths_and_economy.md",
+        "description": "Chronological Lifepath education & career progression (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
+    },
+    {
+        "chapter_id": "psyche_and_social",
+        "part": "Part IV: Psyche, Morale & Social Combat",
+        "title": "Psyche, Morale & Social Combat",
+        "relative_path": "04-psyche-and-social/psyche_morale_and_social_combat.md",
+        "description": "Acting against Psyche (DIS Friction Checks & Trait Drift), Conviction Surges, Psychological Drives (Harm:Other vs. Self:Protect), the 5 Morale Conditions, and Social Combat (Cognitive Dissonance).",
+    },
+    {
+        "chapter_id": "tactical_triad",
+        "part": "Part V: Combat Architecture, Close Quarters & Firefights",
+        "title": "Combat Architecture, Tactical Triad & Pools",
+        "relative_path": "05-combat/tactical_triad_and_pools.md",
+        "description": "Combat philosophy, anatomical trauma over Hit Points, Count-Up Action Clock overview, and the Envelope & Fill Tactical Pool Architecture (P_base = C_combat + 3N) across Tempo, Control, and Force.",
+    },
+    {
+        "chapter_id": "melee_combat",
+        "part": "Part V: Combat Architecture, Close Quarters & Firefights",
+        "title": "Melee Combat, Close-Quarters Tactics & The Tactical Triad",
+        "relative_path": "05-combat/melee_combat.md",
+        "description": "Close-quarters anatomy, the Tactical Triad (Tempo, Control, Force), Guard & Seizing the Initiative, Root vs. throws, and Viktor vs. Elena walkthrough.",
+    },
+    {
+        "chapter_id": "ranged_combat_and_armor",
+        "part": "Part V: Combat Architecture, Close Quarters & Firefights",
+        "title": "Ranged Combat, Suppression, Armor & Weapon Reliability",
+        "relative_path": "05-combat/ranged_combat_and_armor.md",
+        "description": "Ranged fire modes & Recoil Ratings (R), Suppression vs. Morale, Armor Penetration (PR) vs. Behind-Armor Blunt Trauma (BABT), Weapon Reliability (Rel) & Malfunctions, and firefight walkthroughs.",
     },
     {
         "chapter_id": "health_and_trauma",
-        "part": "Part V: Action Economy, Health, Movement, Environment & World Systems",
+        "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
         "title": "Health, Anatomical Trauma, Fatigue & Mental Conditions",
-        "relative_path": "systems/health_and_trauma.md",
+        "relative_path": "06-health-and-survival/health_and_trauma.md",
         "description": "1d20 Hit Locations & Called Shots, Fatigue, Structural Wounds, Broken Bones, Hemorrhaging & Blood Volume, Wound Shock, Status Effects, and Mental Trauma.",
     },
     {
         "chapter_id": "movement_and_environment",
-        "part": "Part V: Action Economy, Health, Movement, Environment & World Systems",
-        "title": "Movement, Encumbrance & Environmental Survival",
-        "relative_path": "systems/movement_and_environment.md",
-        "description": "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, Hydration, Starvation, Temperature (Hypothermia/Heatstroke), Hypoxia, and Toxins.",
-    },
-    {
-        "chapter_id": "world_and_equipment_stubs",
-        "part": "Part V: Action Economy, Health, Movement, Environment & World Systems",
-        "title": "Equipment, Armor, Stealth, Vehicles & World Systems (Reference Stubs)",
-        "relative_path": "systems/world_and_equipment_stubs.md",
-        "description": "Armor Penetration vs. Behind-Armor Blunt Trauma (BABT), Weapon Malfunctions, Multi-Sensory Stealth, Vehicle Chases, Economy (SQM/Access), and Downtime Clocks.",
+        "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
+        "title": "Movement, Encumbrance, Vehicles & Environmental Survival",
+        "relative_path": "06-health-and-survival/movement_vehicles_and_environment.md",
+        "description": "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, Vehicles & High-Speed Chases, Hydration, Starvation, Temperature (Hypothermia/Heatstroke), Hypoxia, and Toxins.",
     },
 ]
+
+_LEGACY_CHAPTER_ALIASES: dict[str, str] = {
+    "background": "design-philosophy",
+    "satya-d20-rules": "tasks",
+    "skill-design": "skills-and-trees",
+    "social-interactions": "psyche-and-social",
+    "combat": "tactical-triad",
+    "world-and-equipment-stubs": "ranged-combat-and-armor",
+}
 
 
 def _default_repo_root() -> Path:
@@ -144,7 +153,8 @@ def extract_markdown_headings(markdown_text: str) -> list[str]:
 
 def load_chapter_markdown_by_id(chapter_id: str, repo_root: Path | None = None) -> str:
     """Load the canonical Markdown for `chapter_id` from `docs/ttrpg/` (or `satya_py`)."""
-    norm = chapter_id.strip().lower().replace("_", "-")
+    raw_norm = chapter_id.strip().lower().replace("_", "-")
+    norm = _LEGACY_CHAPTER_ALIASES.get(raw_norm, raw_norm)
     root = repo_root or _default_repo_root()
     for spec in BOOK_CHAPTER_SPECS:
         if spec["chapter_id"].lower().replace("_", "-") == norm:
@@ -423,6 +433,9 @@ def compute_tactical_pool_python(
     arm_head_wound_penalty: int = 0,
     torso_shoulder_wound_penalty: int = 0,
     morale_state: str = "steady",
+    ana: int = 12,
+    cre: int = 12,
+    foc: int = 12,
 ) -> dict[str, Any]:
     """Compute the Satya Combat Tactical Pool ('Envelope & Fill') parameters."""
     if _satya_py is not None:
@@ -447,8 +460,12 @@ def compute_tactical_pool_python(
                 arm_head_wound_penalty=arm_head_wound_penalty,
                 torso_shoulder_wound_penalty=torso_shoulder_wound_penalty,
                 morale_state=morale_state,
+                ana=ana,
+                cre=cre,
+                foc=foc,
             )
             return {
+                "d_cog": int(getattr(env, "d_cog", (max(ana, cre) + foc) // 2)),
                 "ooda_init": int(env.ooda_init),
                 "combat_readiness_c": int(env.combat_readiness_c),
                 "p_base": int(env.p_base),
@@ -471,7 +488,8 @@ def compute_tactical_pool_python(
         except Exception:
             pass
 
-    ooda = (spd + ins + itu) // 3
+    d_cog = (max(ana, cre) + foc) // 2
+    ooda = (itu + ins + d_cog + spd) // 4
     c_combat = (skill_c + ooda) // 2
     p_base = c_combat + 3 * skill_n
     b_val = p_base // 3
@@ -491,6 +509,7 @@ def compute_tactical_pool_python(
     max_f = min(f_cap, b_val) if m_norm == "shaken" else f_cap
 
     return {
+        "d_cog": d_cog,
         "ooda_init": ooda,
         "combat_readiness_c": c_combat,
         "p_base": p_base,
@@ -679,43 +698,50 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
 def _rewrite_chapter_links(rendered_html: str) -> str:
     """Rewrite relative `.md` links in rendered HTML so static book chapters link to `<chapter_id>.html`."""
     mapping = {
-        "design-notes/background.md": "background.html",
-        "../design-notes/background.md": "background.html",
-        "satya_d20_rules.md": "satya_d20_rules.html",
-        "../satya_d20_rules.md": "satya_d20_rules.html",
-        "probability.md": "probability.html",
-        "../probability.md": "probability.html",
-        "tasks.md": "tasks.html",
-        "../tasks.md": "tasks.html",
-        "character/characteristics.md": "characteristics.html",
-        "../character/characteristics.md": "characteristics.html",
-        "characteristics.md": "characteristics.html",
-        "skill-design.md": "skill-design.html",
-        "../skill-design.md": "skill-design.html",
-        "social_interactions.md": "social_interactions.html",
-        "../social_interactions.md": "social_interactions.html",
-        "combat/combat.md": "combat.html",
-        "../combat/combat.md": "combat.html",
-        "combat.md": "combat.html",
-        "combat/melee_combat.md": "melee_combat.html",
-        "../combat/melee_combat.md": "melee_combat.html",
+        "01-foundation/design_philosophy.md": "design_philosophy.html",
+        "../01-foundation/design_philosophy.md": "design_philosophy.html",
+        "design_philosophy.md": "design_philosophy.html",
+        "01-foundation/probability_and_calibration.md": "probability.html",
+        "../01-foundation/probability_and_calibration.md": "probability.html",
+        "probability_and_calibration.md": "probability.html",
+        "02-core-mechanics/cascading_d20_and_tasks.md": "tasks.html",
+        "../02-core-mechanics/cascading_d20_and_tasks.md": "tasks.html",
+        "cascading_d20_and_tasks.md": "tasks.html",
+        "02-core-mechanics/action_economy_and_ooda.md": "action_economy.html",
+        "../02-core-mechanics/action_economy_and_ooda.md": "action_economy.html",
+        "action_economy_and_ooda.md": "action_economy.html",
+        "03-character/characteristics_and_aptitudes.md": "characteristics.html",
+        "../03-character/characteristics_and_aptitudes.md": "characteristics.html",
+        "characteristics_and_aptitudes.md": "characteristics.html",
+        "03-character/skills_and_trees.md": "skills_and_trees.html",
+        "../03-character/skills_and_trees.md": "skills_and_trees.html",
+        "skills_and_trees.md": "skills_and_trees.html",
+        "03-character/lifepaths_and_economy.md": "lifepaths_and_economy.html",
+        "../03-character/lifepaths_and_economy.md": "lifepaths_and_economy.html",
+        "lifepaths_and_economy.md": "lifepaths_and_economy.html",
+        "04-psyche-and-social/psyche_morale_and_social_combat.md": "psyche_and_social.html",
+        "../04-psyche-and-social/psyche_morale_and_social_combat.md": "psyche_and_social.html",
+        "psyche_morale_and_social_combat.md": "psyche_and_social.html",
+        "05-combat/tactical_triad_and_pools.md": "tactical_triad.html",
+        "../05-combat/tactical_triad_and_pools.md": "tactical_triad.html",
+        "tactical_triad_and_pools.md": "tactical_triad.html",
+        "05-combat/melee_combat.md": "melee_combat.html",
+        "../05-combat/melee_combat.md": "melee_combat.html",
         "melee_combat.md": "melee_combat.html",
-        "systems/action_economy.md": "action_economy.html",
-        "../systems/action_economy.md": "action_economy.html",
-        "action_economy.md": "action_economy.html",
-        "systems/health_and_trauma.md": "health_and_trauma.html",
-        "../systems/health_and_trauma.md": "health_and_trauma.html",
+        "05-combat/ranged_combat_and_armor.md": "ranged_combat_and_armor.html",
+        "../05-combat/ranged_combat_and_armor.md": "ranged_combat_and_armor.html",
+        "ranged_combat_and_armor.md": "ranged_combat_and_armor.html",
+        "06-health-and-survival/health_and_trauma.md": "health_and_trauma.html",
+        "../06-health-and-survival/health_and_trauma.md": "health_and_trauma.html",
         "health_and_trauma.md": "health_and_trauma.html",
-        "systems/movement_and_environment.md": "movement_and_environment.html",
-        "../systems/movement_and_environment.md": "movement_and_environment.html",
-        "movement_and_environment.md": "movement_and_environment.html",
-        "systems/world_and_equipment_stubs.md": "world_and_equipment_stubs.html",
-        "../systems/world_and_equipment_stubs.md": "world_and_equipment_stubs.html",
-        "world_and_equipment_stubs.md": "world_and_equipment_stubs.html",
+        "06-health-and-survival/movement_vehicles_and_environment.md": "movement_and_environment.html",
+        "../06-health-and-survival/movement_vehicles_and_environment.md": "movement_and_environment.html",
+        "movement_vehicles_and_environment.md": "movement_and_environment.html",
     }
     out = rendered_html
     for src, dst in mapping.items():
         out = out.replace(f'href="{src}"', f'href="{dst}"')
+        out = out.replace(f'href="{src}#', f'href="{dst}#')
     return out
 
 
@@ -1130,7 +1156,7 @@ def build_static_rules_book(
         total_words += len(md.split())
         headings = extract_markdown_headings(md)
         rendered = _rewrite_chapter_links(render_markdown_to_html_python(md))
-        if cid in {"satya_d20_rules", "tasks", "combat", "melee_combat"}:
+        if cid in {"tasks", "tactical_triad", "melee_combat", "ranged_combat_and_armor"}:
             rendered = rendered + "\n" + _INTERACTIVE_WIDGET_HTML
 
         prev_spec = BOOK_CHAPTER_SPECS[idx - 1] if idx > 0 else None

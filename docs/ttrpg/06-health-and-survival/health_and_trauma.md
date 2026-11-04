@@ -1,6 +1,6 @@
 # Satya TTRPG Health, Anatomical Trauma, Fatigue & Mental Conditions
 
-This chapter defines the canonical **Health, Anatomical Trauma, Physiological Status, and Mental Condition System** for **Satya**. As established in [Combat Architecture](../combat/combat.md), Satya completely rejects ablative "Hit Points" (`HP`). A human being is not a uniform sack of numeric points that operates at `100%` efficiency until reaching `0`.
+This chapter defines the canonical **Health, Anatomical Trauma, Physiological Status, and Mental Condition System** for **Satya**. As established in **[Combat Architecture, Tactical Triad & Pools](../05-combat/tactical_triad_and_pools.md)**, Satya completely rejects ablative "Hit Points" (`HP`). A human being is not a uniform sack of numeric points that operates at `100%` efficiency until reaching `0`.
 
 Instead, Satya models human survivability and degradation across **five interconnected physiological and psychological tracks**:
 1. **Hit Locations & Anatomical Specificity** (Where the trauma lands and which biomechanical ceilings $T_{\max}, C_{\max}, F_{\max}$ or senses it disables)
@@ -118,7 +118,7 @@ Long-term physical trauma damages the body's structural skeleton, musculature, v
 
 ### 3.1 Structural Wound Severity Tiers (`Tiers 1–5`)
 
-When a strike or projectile penetrates armor (exceeding the armor's Protection Rating), the net **Trauma Magnitude** (scaled by weapon profile, `Strike Impact`, and cascade successes) inflicts one of **5 Structural Wound Tiers** on the struck Hit Location:
+When a strike or projectile penetrates armor (exceeding the armor's Protection Rating; see **[Ranged Combat & Armor](../05-combat/ranged_combat_and_armor.md#2-armor-penetration--behind-armor-blunt-trauma-babt)**), the net **Trauma Magnitude** (scaled by weapon profile, `Strike Impact`, and cascade successes) inflicts one of **5 Structural Wound Tiers** on the struck Hit Location:
 
 | Wound Tier | Clinical Severity | Aspect Ceiling Penalty ($T_{\max}, C_{\max}, F_{\max}$) | Wound Shock Added (`wound_shock_index`) | Typical Tissue, Bone & Vascular Damage |
 | :---: | :--- | :---: | :---: | :--- |
@@ -198,7 +198,7 @@ Status effects in Satya are never arbitrary labels; each condition directly modi
 
 ## 5. Mental Damage & Psychological Trauma Effects
 
-Just as physical force fractures bone and drains blood, extreme terror, horrific violence, ideological shattering, and prolonged **Cognitive Dissonance** (see [Social Interactions](../social_interactions.md)) inflict acute and chronic **Mental Trauma**.
+Just as physical force fractures bone and drains blood, extreme terror, horrific violence, ideological shattering, and prolonged **Cognitive Dissonance** (see **[Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md)**) inflict acute and chronic **Mental Trauma**.
 
 ### 5.1 Acute Mental Trauma Conditions
 
@@ -207,20 +207,20 @@ When a character suffers a catastrophic failure on a **Discipline (`DIS`) Morale
 | Mental Condition | Severity Tier | Psychological Mechanism & Trigger | Mechanical Effect on Action Clock, Pool & Behavior |
 | :--- | :---: | :--- | :--- |
 | **1. Acute Mental Shock (`OODA Freeze`)** | **Tier 1** *(Transient)* | Startle overload, witnessing sudden gruesome death, or unexpected ambush (`Tachypsychia` / auditory exclusion). | **Freezes for `6–12 Ticks` (`1.5–3.0s`)** on the Action Clock (cannot initiate actions; passive `Control` capped at baseline $B$). Clears after the freeze ticks elapse or when an ally shouts/shakes them (`4 ticks`). |
-| **2. Panic / Fight-or-Flight Override** | **Tier 2** *(Acute)* | Morale drops to **Panic** (`combat.md`), claustrophobic entrapment, fire, or imminent execution. | **Pool `-4`**; **Amygdala Hijack**: Rational `ANA` and `FOC` drop by `-6`. If flight is possible, **`100%` of Pool is locked into `Pure Tempo`** to flee; if cornered with high `AGG`, shifts into blind **Feral Rage** (`Control <= P_eff / 4`). |
+| **2. Panic / Fight-or-Flight Override** | **Tier 2** *(Acute)* | Morale drops to **Panic**, claustrophobic entrapment, fire, or imminent execution. | **Pool `-4`**; **Amygdala Hijack**: Rational `ANA` and `FOC` drop by `-6`. If flight is possible, **`100%` of Pool is locked into `Pure Tempo`** to flee; if cornered with high `AGG`, shifts into blind **Feral Rage** (`Control <= P_eff / 4`). |
 | **3. Dissociation / Shell Shock ("Thousand-Yard Stare")** | **Tier 3** *(Sub-Acute)* | Prolonged bombardment, surviving a mass-casualty event, or executing an act that violently shatters a core `Psyche` trait (`P >= 16` or `P <= 4`). | **Emotional & Sensory Detachment**: The character goes numb—immune to further **Fear/Panic**, **but** suffers **`-6` to `ITU`, `INS`, `FOC`, and `ELO`**, **`+0.30` `action_time_factor`**, and cannot initiate complex plans without direct step-by-step guidance from a leader. |
-| **4. Catatonia (Psychomotor Shutdown)** | **Tier 4** *(Critical)* | Complete collapse of psychological defense (`Botch` on `DIS` check at `0` Composure, `3+` unresolved **Cognitive Dissonance** stacks during existential trauma, or prolonged torture). | **Total Psychomotor Lock**: The character curls up, stares blankly into space, or becomes rigid and mute (**`Tempo = 0`, `Control = 0`, `Force = 0`, `ELO = 0`**). Completely unresponsive to threats until stabilized in a safe environment via *Psychology & Counseling* (`INS/ELO`) or anchored by a trusted loved one (`BLG`). |
+| **4. Catatonia (Psychomotor Shutdown)** | **Tier 4** *(Critical)* | Complete collapse of psychological defense (`Botch` on `DIS` check at `0` Composure, `3+` unresolved **Cognitive Dissonance** stacks during existential trauma, or prolonged torture). | **Total Psychomotor Lock**: The character curls up, stares blankly into space, or becomes rigid and mute (**`Tempo = 0`, `Control = 0`, `Force = 0`, `ELO = 0`**). Completely unresponsive to threats until stabilized in a safe environment via *Clinical Psychology & Psychiatry* (`INS/ELO`) or anchored by a trusted loved one (`BLG`). |
 
-### 5.2 Long-Term Psychological Scars & Trauma Recovery (Stub)
+### 5.2 Long-Term Psychological Scars & Trauma Recovery
 
 - **Accumulated Trauma & `Psyche` Drift**: Surviving **Tier 3 (`Dissociation`)** or **Tier 4 (`Catatonia`)** mental trauma permanently marks the character with **`2` Drift Marks** on the relevant `Psyche` axis (e.g., shifting `Aggressiveness`, `Belongingness`, or `Openness`) and may leave a situational **Trauma Trigger** (imposing `+4` $\Delta_{\text{morale}}$ when exposed to the specific stressor, such as enclosed spaces, fire, or a specific faction).
-- **Decompression & Psychiatric Therapy**: Removing long-term mental strain and Trauma Triggers requires Downtime scenes combining safe shelter, supportive social bonds (`BLG`/`EXT`), or professional *Psychology & Counseling* (`INS/ELO`) cascade rolls over weeks of campaign time.
+- **Decompression & Psychiatric Therapy**: Removing long-term mental strain and Trauma Triggers requires Downtime scenes combining safe shelter, supportive social bonds (`BLG`/`EXT`), or professional *Clinical Psychology & Psychiatry* (`INS/ELO`) cascade rolls over weeks of campaign time.
 
 ---
 
-## 6. Medical Triage, Stabilization & Healing Timelines (Stub)
+## 6. Medical Triage, Stabilization & Healing Timelines
 
-1. **The "Golden Hour" & Field Stabilization (*First Aid / Paramedicine* `DEX/INS`)**:
+1. **The "Golden Hour" & Field Stabilization (*First Aid / Paramedicine* `DEX/DIS`)**:
    - Halting **Grade 2–4 Hemorrhage** (via tourniquets, hemostatic packing, and pressure dressings) and clearing obstructed airways within the first `60 minutes` (`14,400 ticks`) prevents death from hypovolemic shock.
    - Administering field analgesics (morphine/ketamine/fentanyl lozenge) temporarily reduces **`wound_shock_index` by `-1` or `-2` tiers**, but imposes **`-2` to `-4` on `FOC`, `ANA`, and `SPD`** (drowsiness/sedation).
 2. **Definitive Surgical Repair (*Trauma & General Surgery* `DEX/FOC`, Gate `Class A`)**:

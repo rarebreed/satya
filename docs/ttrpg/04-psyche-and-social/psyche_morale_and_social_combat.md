@@ -1,14 +1,18 @@
-# Satya TTRPG Social Interactions, Psyche Mechanics & Social Combat
+# Satya TTRPG Psyche, Morale & Social Combat
 
-This document defines the canonical **Social Interaction Rules, Behavioral Friction & Drift Mechanics, Combat Morale, and Social Combat ("Mental Wounds" & Cognitive Dissonance)** for **Satya**. It builds directly upon the **Social Primary Characteristics (`COM`, `PRE`, `ELO`)**, **Mental Primary Characteristics (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`)**, and **Psyche Characteristics (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`)** defined in [`docs/ttrpg/character/characteristics.md`](character/characteristics.md), and the **Social Skill Tree** in [`docs/ttrpg/skill-design.md`](skill-design.md).
+This chapter defines the canonical **Psyche Mechanics (Behavioral Friction, Trait Drift & Conviction Surges), Psychological Drives & Combat Morale, and Social Combat ("Mental Wounds" & Cognitive Dissonance)** for **Satya**. It builds directly upon:
+- **[Characteristics, Senses, Psyche & Aptitudes](../03-character/characteristics_and_aptitudes.md)** (for the Social Primary Characteristics `COM`, `PRE`, `ELO`, Mental Characteristics `MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`, and the seven Psyche Characteristics `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`),
+- **[Skill System & Hierarchical Skill Trees](../03-character/skills_and_trees.md#38-tree-7-social-influence-interrogation--psychological-warfare-social-knowledge-fieldcraft)** (for Tree 7 Social, Influence & Interrogation skills), and
+- **[Combat Architecture & Tactical Pools](../05-combat/tactical_triad_and_pools.md)** (where Morale states directly constrain Tactical Pool allocations across `Tempo`, `Control`, and `Force`).
 
 ---
 
 ## 1. Acting Against One's Psyche: Friction Checks & Trait Drift
 
-While players always retain agency over their characters, acting in direct violation of a deeply ingrained **Psyche** trait ($P \ge 13$ or $P \le 7$; see [`docs/ttrpg/character/characteristics.md`](character/characteristics.md#7-psyche-the-invisible-traits)) creates internal psychological friction.
+While players always retain agency over their characters, acting in direct violation of a deeply ingrained **Psyche** trait ($P \ge 13$ or $P \le 7$; see **[Characteristics](../03-character/characteristics_and_aptitudes.md#7-psyche-the-invisible-traits)**) creates internal psychological friction.
 
 ### 1.1 When a Psyche Friction Check Triggers
+
 The GM calls for a **Psyche Friction Check** when a character attempts a deliberate action that violently contradicts one of their extreme Psyche traits:
 - A character with **High `Ego` (`EGO 16`)** willingly groveling, begging, or accepting public humiliation without retaliating.
 - A character with **Low `Selfishness` (`SLF 4`)** abandoning an innocent bystander to die for a bag of cash.
@@ -17,6 +21,7 @@ The GM calls for a **Psyche Friction Check** when a character attempts a deliber
 - A character with **High `Belongingness` (`BLG 16`)** informing on or betraying their own crew, faction, or family.
 
 ### 1.2 Resolving the Friction Check (`DIS` vs. Psyche Deviation)
+
 1. Compute the trait's **Psyche Deviation** from neutral (`10`):
    $$\Delta_{\text{psyche}} = |P - 10|$$
 2. The character rolls **Discipline (`DIS`)** (`N = 1` pair of `2d20`, or `N = 2` if trained in *Counter-Interrogation & Resistance (SERE)*) against:
@@ -27,6 +32,7 @@ The GM calls for a **Psyche Friction Check** when a character attempts a deliber
    - **`0` Successes (`Failure` / `CriticalFailure`)**: The character balks at the threshold—freezing for `6 ticks` on the Action Clock, pulling their punch, blurting telltale hesitation, or refusing to cross the line unless they spend a full turn steeling themselves at **`+4` to $\Delta_{\text{int}}$**.
 
 ### 1.3 Psyche Drift (How Behavior Reshapes Personality Over Time)
+
 Personality in Satya is not static stone; it is shaped by lived choices and trauma:
 - Whenever a character **overrides a Psyche trait** on a Friction Check (or is forced by a traumatic life event or coercive interrogation to violate it), they record **1 Drift Mark** alongside that Psyche trait.
 - When **Drift Marks $= \max(2, \lfloor \text{DIS} / 4 \rfloor)$** (typically `3` marks), the character's Psyche score **permanently shifts by `1` point** toward the behavior they practiced (e.g., an idealistic rookie cop with `CNF 15, SLF 6` who repeatedly takes dirty money and plants evidence gradually drifts toward `CNF 11, SLF 10`).
@@ -45,13 +51,62 @@ Just as violating one's Psyche imposes friction, acting as a pure vessel of one'
 - **Mechanical Benefit**:
   For that decisive action (or combat exchange):
   1. Internal Fatigue and Wound Shock penalties ($\Delta_{\text{int}}$) are **reduced by `-6`** (allowing the character to reach the **Focused/Resolved** state of $\Delta_{\text{int}} = -2$, so $\delta_{\text{under}} = 4$).
-  2. The character ignores the `action_time_factor` penalty from Fatigue and Wound Shock for that action.
+  2. The character ignores the `action_time_factor` penalty from Fatigue and Wound Shock for that action and gains **`+2` to their Effective Tactical Pool ($P_{\text{eff}}$)**.
 
 ---
 
-## 3. Combat Morale & Tactical OODA Behavior
+## 3. Psychological State of Combat, Aggression & Morale
 
-In physical combat (see [`docs/ttrpg/combat/combat.md`](combat/combat.md)), NPCs and PCs under extreme shock (ambush, heavy automatic suppression, 50% unit casualties, or gruesome wounds) make **Morale / Composure Checks** using **Discipline (`DIS`)** modified by their Psyche profile:
+Combat is greatly affected by the psychological state of the fighters. A combatant's mind and will to fight will often be defeated before their body.
+
+### 3.1 Psychological Drives (`Harm:Other` vs. `Self:Protect`)
+
+To model the psychological state of a character under fire, Satya tracks four dynamic drives anchored by **Discipline (`DIS`)** and the seven **Psyche Characteristics (`AGG`, `SLF`, `EGO`, `BLG`, `CNF`, `OPN`, `EXT`)**:
+
+- **Fight (`Harm:Other`)**: How willing and driven you are to do harm (anchored by **Aggressiveness `AGG`** and situational motivation).
+- **Preservation (`Self:Protect`)**: How needful you are to stay alive and unharmed (anchored by **Selfishness `SLF`** vs. **Belongingness `BLG`**).
+- **Rage**: Acute adrenaline and emotional spike that surges `Harm:Other` while collapsing `Self:Protect` (capping **Control** and forcing pool points into **Force + Tempo**).
+- **Fear**: Acute threat response that spikes `Self:Protect` while collapsing `Harm:Other` (capping **Force** and forcing pool points into **Control + Tempo**, or **Pure Tempo** in a rout).
+
+### 3.2 Motivation & Psyche Alignment ($\Delta_{\text{mot}}$)
+
+Fighters who have nothing to lose or are fighting for a cause greater than themselves are much harder to break than mercenaries fighting only for a paycheck. If a character's or unit's morale drops, the will to fight collapses and only defensive or self-preservation moves can be taken.
+
+A combatant's situational **Motivation Modifier ($\Delta_{\text{mot}}$)** shifts their **Discipline (`DIS`)** Morale Checks and **Self-Preservation Threshold** based on how the fight aligns with their **Psyche**:
+- **Fighting for Crew, Family, or Homeland (`BLG >= 14` or `SLF <= 6`)**: Grants **`-2` to `-4` to $\text{TN}_{\text{eff}}$** on all Morale checks and **`+2` to the Tactical Pool** during a **Conviction Surge** (e.g., holding a doorway so allies can escape).
+- **Mercenary / Transactional Motive (`SLF >= 14` and `BLG <= 8`)**: Imposes **`+2` to `+4` to $\text{TN}_{\text{eff}}$** on Morale checks as soon as the character takes a wound (`wound_shock_index >= 1`) or the odds turn against them—they are fighting for money, not to die.
+- **Sworn Duty / Chain of Command (`CNF >= 14`)**: Grants **`-2` to $\text{TN}_{\text{eff}}$** on Morale checks while a commanding officer is present and issuing orders, but imposes **`+4` Morale Shock** if command breaks down.
+
+### 3.3 Aggressiveness (`Harm:Other / Self:Protect`) & Emotional Triggers
+
+As Churchill famously said, *"It's not the size of the dog in the fight, but the size of the fight in the dog."* Conversely, some people are timid, meek, or conflict-averse, and either have no heart to harm others or are terrified of harm being done to themselves.
+
+Essentially, aggressiveness is the ratio of **desire to do harm to others (`Harm:Other`)** versus **willingness to be harmed (`Self:Protect`)**. Notice the distinction between *desire* and *willingness*: a berserker has a high baseline `AGG`, whereas a cold professional assassin may be completely capable of killing without feeling emotional aggression unless triggered. If a character has a very low `Self:Protect` (`SLF <= 5`, `BLG >= 15`), they are willing to sacrifice themselves to achieve their goal.
+
+#### How the Balance Changes Under Fire
+Aggression starts from **Personality (`AGG` vs. `SLF`)** and **Situation** (e.g., hatred of a rival faction, sense of honor when an opponent is disadvantaged, or revulsion at innocent suffering), and shifts dynamically during combat. Whenever a psychological trigger occurs, the character makes a **Discipline (`DIS`) Composure Check** (`2d20` cascade with $\text{TN}_{\text{eff}} = 31 - \text{DIS} + \Delta_{\text{trigger}}$):
+
+| Trigger | Controlling Check & Psyche Modifier | Effect on Failed `DIS` Check |
+| :--- | :--- | :--- |
+| **Being Wounded** | `DIS` check ($\Delta_{\text{ext}} = +2 \times \text{Wound Tier}$; `+2` harder if `SLF >= 13`, `-2` easier if `AGG >= 14`) | Shifts toward **Self:Protect** (**Wavering** morale, or **Rage** if `AGG >= 15` and `SLF <= 8`). |
+| **Good Friend / Squadmate Wounded** | `DIS` check ($\Delta_{\text{ext}} = +2$ if `BLG >= 13`) | If `AGG >= 12`, triggers **Rage** against the attacker; if `AGG <= 8`, drops morale by `-1` step toward **Wavering**. |
+| **Loved One Attacked or Wounded** | `DIS` check ($\Delta_{\text{ext}} = +4$ if `BLG >= 14` or `SLF <= 7`) | Immediate shift into **Vengeful Rage** (`+2` Pool, `Control` capped) or **Altruistic Conviction Surge** to shield them. |
+| **Insulted or Taunted** | `DIS` check ($\Delta_{\text{ext}} = |\text{EGO} - 10|$ or $|\text{AGG} - 10|$) | If `EGO >= 13` or `AGG >= 13`, character is baited into **Aggressive / Rage** allocation (must commit to **Force + Tempo**). |
+| **Publicly Humiliated** | `DIS` check ($\Delta_{\text{ext}} = +4$ if `EGO >= 14`) | Inflicts an **Ego Wound** (`+2` to $\Delta_{\text{int}}$) and triggers reckless **Rage** (`AGG >= 12`) or **Broken** withdrawal (`AGG <= 8`). |
+| **Seeing Innocent Suffering** | `DIS` check (if `SLF <= 7`) | Lessens aggression toward surrendering foes, or triggers protective resolve against the perpetrator. |
+
+#### Tactical Effects of Aggression vs. Timidity
+- **High Aggression / Rage (`Harm:Other >> Self:Protect`)**: Grants an adrenaline surge (**`+2` to Tactical Pool** and ignores `-2` of pain shock), **but** imposes tunnel vision—you **must** allocate at least `50%` of your pool into **Force**, and your **Control (Guard & Precision)** is capped at $\le \lfloor P_{\text{eff}} / 4 \rfloor$. You become a terrifying blitz against a stunned or timid opponent, but walk straight into traps and counter-strikes against a composed master.
+- **High Self-Protection / Timidity (`Self:Protect >> Harm:Other`)**: Preserves **Control (Guard/Cover)** and **Tempo (Escape)**, **but** caps **Force** ($\text{Force} \le \text{Control}$), making it difficult to finish an armored or braced opponent or push through suppressive fire.
+
+---
+
+### 3.4 Combat Morale, Tactical OODA Behavior & The Five Conditions of Morale
+
+Having a character be automatically immune to fear cheapens heroism; nothing is valuable without the cost of overcoming fear.
+
+#### Psyche & OODA Tactical Behavior Table
+In physical firefights and melee engagements, NPCs and PCs under extreme shock make **Morale / Composure Checks** using **Discipline (`DIS`)** modified by their Psyche profile:
 
 | Combat Situation | Relevant Psyche Traits | Mechanical Modifier to `DIS` Morale Check & AI GM Behavior |
 | :--- | :--- | :--- |
@@ -59,6 +114,46 @@ In physical combat (see [`docs/ttrpg/combat/combat.md`](combat/combat.md)), NPCs
 | **Fighting Alongside Squad / Crew** | **`Belongingness (BLG)`** & **`Conformity (CNF)`** | **`BLG >= 14`**: Grants **`-2` to $\text{TN}_{\text{eff}}$** on all Morale checks while allies are within sight/comms.<br/>**Squad Leader Killed / Unit Routed**: High-`BLG` / High-`CNF` combatants suffer an immediate **`+6` Morale Shock** check! |
 | **Outnumbered, Wounded, or Losing** | **`Selfishness (SLF)`** & **`Belongingness (BLG)`** | **`SLF >= 14` & `BLG <= 8`** (*Mercenary Survivor*): As soon as `wound_shock_index >= 2` or survival odds drop below `30%`, the NPC attempts to flee, surrender, or flip on their employer.<br/>**`SLF <= 6` & `BLG >= 14`** (*Fanatic / Protector*): Fights to the last breath to protect the group. |
 | **Taunted, Challenged, or Insulted in Combat** | **`Ego (EGO)`** & **`Aggressiveness (AGG)`** | **`EGO >= 14` or `AGG >= 14`**: An opponent's *Intimidation* or *Deception (Taunt)* check gains a **`-4` Resonance bonus** to bait the character out of cover or into a reckless `POWER` strike. |
+
+#### Circumstantial Morale Penalties ($\Delta_{\text{morale}}$)
+
+| Battlefield Trigger | Morale Penalty ($\Delta_{\text{morale}}$) |
+| :--- | :---: |
+| **25% of your party/unit is down** | `+2` *(or `-1` step)* |
+| **50% of your party/unit is down** | `+4` *(or `-2` steps)* |
+| **75% of your party/unit is down** | `+6` *(or `-3` steps)* |
+| **Outnumbered 2 to 1** | `+2` |
+| **Outnumbered 3 to 1** | `+4` |
+| **Outnumbered $> 4$ to 1** | `+6` |
+| **Leader is unreachable / killed** | `+2` *(`+4` if `CNF >= 14`)* |
+| **Headquarters / position is overrun** | `+6` |
+| **Down to $\le 20\%$ ammunition** | `+4` |
+| **Attacks are doing nothing (e.g., vs. heavy armor)** | `+6` |
+| **Started the fight already Fatigued** | `+2` |
+
+#### Base Morale & Rolling for Morale
+
+A character's **Base Morale Controller ($C_{\text{morale}}$)** is anchored by their **Discipline (`DIS`, `1–20` scale)** plus their situational **Motivation Modifier ($\Delta_{\text{mot}}$)**:
+
+$$C_{\text{morale}} = \text{DIS} + \Delta_{\text{mot}}$$
+
+Whenever a Morale Trigger occurs, the character rolls a `2d20` cascade check (`N = 1` pair for civilians, `N = 2` for hardened combat veterans or characters trained in *SERE* / *Command*) against:
+
+$$\text{TN}_{\text{morale}} = 31 - C_{\text{morale}} + \Delta_{\text{morale}}$$
+
+- **`1+` Successes**: The character holds their nerve and remains at their current Morale Condition (or rallies `+1` step on `2+` Extraordinary Successes).
+- **`0` Successes (`CleanFailure`)**: Morale drops by **`1` Condition Step** (e.g., `Steady` $\to$ `Wavering`, or `Wavering` $\to$ `Broken`).
+- **Botch (`CriticalFailure`)**: Morale drops by **`2` Condition Steps** (e.g., `Steady` $\to$ `Broken`, or `Wavering` $\to$ `Panic`).
+
+#### The Five Conditions of Morale
+
+| Morale Condition | Pool Mod ($\Delta P_{\text{morale}}$) | Tactical Triad (`Tempo / Control / Force`) Allocation Constraint | Behavioral Description |
+| :--- | :---: | :--- | :--- |
+| **1. High** | **`+2` Pool** | No restriction (`+1` to $F_{\max}$ or $T_{\max}$). | Eager and ready to take the fight to the enemy. |
+| **2. Steady** | **`0` Pool** | Full freedom of allocation up to normal Aspect Ceilings. | Default composed state; equally capable of offense and defense. |
+| **3. Wavering** | **`-2` Pool** | **Force cannot exceed Control ($F \le C$)**. | Doubt creeps in; switches to a cautious mode prioritizing cover/guard over commitment. |
+| **4. Broken** | **`-4` Pool** | **Active offensive `Force = 0`** (`Control + Tempo` only). | Will to attack collapses; tries to disengage using cover, dodges, parries, or blind covering fire. |
+| **5. Panic** | **`-4` Pool** | **`Control = 0` and `Force = 0`** (`100% Pure Tempo`). | Full-blown rout; turns back to the enemy (`Guard = 0`) and flees at maximum speed (or surrenders on a `DIS`/`INS` check if flight is hopeless). |
 
 ---
 
@@ -127,7 +222,7 @@ In an extended debate or social duel, each participant has a **Social Composure 
 
 $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$
 
-(typically **`5`** at human average `DIS 10, FOC 10`). Opposed social exchanges inflict four distinct psychological conditions that mirror Satya's physical trauma system:
+(typically **`5`** at human average `DIS 10, FOC 10`). Opposed social exchanges inflict four distinct psychological conditions that mirror Satya's [physical trauma system](../06-health-and-survival/health_and_trauma.md):
 
 | Social Wound Type | Physical Equivalent | How It Is Inflicted | Mechanical Effect on the Target |
 | :--- | :--- | :--- | :--- |

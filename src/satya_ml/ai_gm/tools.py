@@ -316,27 +316,27 @@ def update_npc_state(
 
 
 _CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
-    ("satya_d20_rules.md", "Ch. 2: Core 2d20 Cascading System Rules"),
-    ("tasks.md", "Ch. 3: Task Resolution & Skill Check Mechanics"),
-    ("probability.md", "Ch. 4: Mathematical Foundations & Exact Probability Engine"),
-    ("character/characteristics.md", "Ch. 5: Core Characteristics & Derived Scales"),
-    ("skill-design.md", "Ch. 6: Skill Ontology, Lifepath & Non-Linear Progression"),
-    ("combat/combat.md", "Ch. 7: Combat Overview, Morale & Ranged Firefights"),
-    ("combat/melee_combat.md", "Ch. 8: Close-Quarters & Melee Combat (Tactical Triad)"),
-    ("social_interactions.md", "Ch. 9: Social Mechanics & Cognitive Dissonance"),
-    ("systems/action_economy.md", "Ch. 10: Action Economy, Time Scales & The Count-Up Tick Clock"),
-    ("systems/health_and_trauma.md", "Ch. 11: Health, Anatomical Trauma, Fatigue & Mental Conditions"),
-    ("systems/movement_and_environment.md", "Ch. 12: Movement, Encumbrance & Environmental Survival"),
-    ("systems/world_and_equipment_stubs.md", "Ch. 13: Equipment, Armor, Stealth, Vehicles & World Systems"),
-    ("design-notes/background.md", "Ch. 1: Design Philosophy & Goals of Satya"),
+    ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 3: Cascading 2d20 Engine & Task Resolution"),
+    ("02-core-mechanics/action_economy_and_ooda.md", "Ch. 4: Action Economy, OODA Loop, Time Scales & Stealth"),
+    ("01-foundation/probability_and_calibration.md", "Ch. 2: Probability & Mathematical Calibration"),
+    ("03-character/characteristics_and_aptitudes.md", "Ch. 5: Characteristics, Senses, Psyche & Aptitudes"),
+    ("03-character/skills_and_trees.md", "Ch. 6: Skill System & Hierarchical Skill Trees"),
+    ("03-character/lifepaths_and_economy.md", "Ch. 7: Lifepath Creation, Socioeconomic Upkeep & Heat"),
+    ("04-psyche-and-social/psyche_morale_and_social_combat.md", "Ch. 8: Psyche, Morale & Social Combat"),
+    ("05-combat/tactical_triad_and_pools.md", "Ch. 9: Combat Architecture, Tactical Triad & Pools"),
+    ("05-combat/melee_combat.md", "Ch. 10: Melee Combat & Close-Quarters Tactics"),
+    ("05-combat/ranged_combat_and_armor.md", "Ch. 11: Ranged Combat, Suppression, Armor & Reliability"),
+    ("06-health-and-survival/health_and_trauma.md", "Ch. 12: Health, Anatomical Trauma, Fatigue & Mental Conditions"),
+    ("06-health-and-survival/movement_vehicles_and_environment.md", "Ch. 13: Movement, Encumbrance, Vehicles & Survival"),
+    ("01-foundation/design_philosophy.md", "Ch. 1: Design Philosophy & Goals of Satya"),
 )
 
 
 @tool
 def query_satya_rules(query: str) -> str:
-    """Search the 9-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), and social dissonance."""
+    """Search the 13-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), and social dissonance."""
     ttrpg_dir = _repo_root() / "docs" / "ttrpg"
-    default_rules_path = ttrpg_dir / "satya_d20_rules.md"
+    default_rules_path = ttrpg_dir / "02-core-mechanics" / "cascading_d20_and_tasks.md"
     if not default_rules_path.exists():
         default_rules_path = _repo_root() / "docs" / "satya_d20_rules.md"
     if not default_rules_path.exists():

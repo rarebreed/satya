@@ -168,61 +168,59 @@ window.addEventListener('DOMContentLoaded', satyaBookRecalc);
 
 fn rewrite_chapter_links(rendered_html: &str) -> String {
     let mapping = [
-        ("design-notes/background.md", "background.html"),
-        ("../design-notes/background.md", "background.html"),
-        ("satya_d20_rules.md", "satya_d20_rules.html"),
-        ("../satya_d20_rules.md", "satya_d20_rules.html"),
-        ("probability.md", "probability.html"),
-        ("../probability.md", "probability.html"),
-        ("tasks.md", "tasks.html"),
-        ("../tasks.md", "tasks.html"),
-        ("character/characteristics.md", "characteristics.html"),
-        ("../character/characteristics.md", "characteristics.html"),
-        ("characteristics.md", "characteristics.html"),
-        ("skill-design.md", "skill-design.html"),
-        ("../skill-design.md", "skill-design.html"),
-        ("social_interactions.md", "social_interactions.html"),
-        ("../social_interactions.md", "social_interactions.html"),
-        ("combat/combat.md", "combat.html"),
-        ("../combat/combat.md", "combat.html"),
-        ("combat.md", "combat.html"),
-        ("combat/melee_combat.md", "melee_combat.html"),
-        ("../combat/melee_combat.md", "melee_combat.html"),
+        ("01-foundation/design_philosophy.md", "design_philosophy.html"),
+        ("../01-foundation/design_philosophy.md", "design_philosophy.html"),
+        ("design_philosophy.md", "design_philosophy.html"),
+        ("01-foundation/probability_and_calibration.md", "probability.html"),
+        ("../01-foundation/probability_and_calibration.md", "probability.html"),
+        ("probability_and_calibration.md", "probability.html"),
+        ("02-core-mechanics/cascading_d20_and_tasks.md", "tasks.html"),
+        ("../02-core-mechanics/cascading_d20_and_tasks.md", "tasks.html"),
+        ("cascading_d20_and_tasks.md", "tasks.html"),
+        ("02-core-mechanics/action_economy_and_ooda.md", "action_economy.html"),
+        ("../02-core-mechanics/action_economy_and_ooda.md", "action_economy.html"),
+        ("action_economy_and_ooda.md", "action_economy.html"),
+        ("03-character/characteristics_and_aptitudes.md", "characteristics.html"),
+        ("../03-character/characteristics_and_aptitudes.md", "characteristics.html"),
+        ("characteristics_and_aptitudes.md", "characteristics.html"),
+        ("03-character/skills_and_trees.md", "skills_and_trees.html"),
+        ("../03-character/skills_and_trees.md", "skills_and_trees.html"),
+        ("skills_and_trees.md", "skills_and_trees.html"),
+        ("03-character/lifepaths_and_economy.md", "lifepaths_and_economy.html"),
+        ("../03-character/lifepaths_and_economy.md", "lifepaths_and_economy.html"),
+        ("lifepaths_and_economy.md", "lifepaths_and_economy.html"),
+        ("04-psyche-and-social/psyche_morale_and_social_combat.md", "psyche_and_social.html"),
+        ("../04-psyche-and-social/psyche_morale_and_social_combat.md", "psyche_and_social.html"),
+        ("psyche_morale_and_social_combat.md", "psyche_and_social.html"),
+        ("05-combat/tactical_triad_and_pools.md", "tactical_triad.html"),
+        ("../05-combat/tactical_triad_and_pools.md", "tactical_triad.html"),
+        ("tactical_triad_and_pools.md", "tactical_triad.html"),
+        ("05-combat/melee_combat.md", "melee_combat.html"),
+        ("../05-combat/melee_combat.md", "melee_combat.html"),
         ("melee_combat.md", "melee_combat.html"),
-        ("systems/action_economy.md", "action_economy.html"),
-        ("../systems/action_economy.md", "action_economy.html"),
-        ("action_economy.md", "action_economy.html"),
-        ("systems/health_and_trauma.md", "health_and_trauma.html"),
-        ("../systems/health_and_trauma.md", "health_and_trauma.html"),
+        ("05-combat/ranged_combat_and_armor.md", "ranged_combat_and_armor.html"),
+        ("../05-combat/ranged_combat_and_armor.md", "ranged_combat_and_armor.html"),
+        ("ranged_combat_and_armor.md", "ranged_combat_and_armor.html"),
+        ("06-health-and-survival/health_and_trauma.md", "health_and_trauma.html"),
+        ("../06-health-and-survival/health_and_trauma.md", "health_and_trauma.html"),
         ("health_and_trauma.md", "health_and_trauma.html"),
         (
-            "systems/movement_and_environment.md",
+            "06-health-and-survival/movement_vehicles_and_environment.md",
             "movement_and_environment.html",
         ),
         (
-            "../systems/movement_and_environment.md",
+            "../06-health-and-survival/movement_vehicles_and_environment.md",
             "movement_and_environment.html",
         ),
         (
-            "movement_and_environment.md",
+            "movement_vehicles_and_environment.md",
             "movement_and_environment.html",
-        ),
-        (
-            "systems/world_and_equipment_stubs.md",
-            "world_and_equipment_stubs.html",
-        ),
-        (
-            "../systems/world_and_equipment_stubs.md",
-            "world_and_equipment_stubs.html",
-        ),
-        (
-            "world_and_equipment_stubs.md",
-            "world_and_equipment_stubs.html",
         ),
     ];
     let mut out = rendered_html.to_string();
     for (src, dst) in mapping {
         out = out.replace(&format!("href=\"{src}\""), &format!("href=\"{dst}\""));
+        out = out.replace(&format!("href=\"{src}#"), &format!("href=\"{dst}#"));
     }
     out
 }
@@ -387,7 +385,7 @@ fn main() {
         let mut body = rewrite_chapter_links(&doc.rendered_html);
         if matches!(
             cid.as_str(),
-            "satya_d20_rules" | "tasks" | "combat" | "melee_combat"
+            "tasks" | "tactical_triad" | "melee_combat" | "ranged_combat_and_armor"
         ) {
             body.push('\n');
             body.push_str(INTERACTIVE_WIDGET_HTML);

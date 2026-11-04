@@ -1,16 +1,16 @@
-# Satya TTRPG Character Characteristics & Attribute Architecture
+# Character Characteristics, Derived Metrics & Domain Aptitudes
 
-This document defines the canonical **Character Characteristics System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, and **Action Speed**) are derived from them, how **Psyche** governs behavior and **Social Combat / Cognitive Dissonance**, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](../satya_d20_rules.md) and the [Skill System](../skill-design.md).
+This document defines the canonical **Character Characteristics and Aptitudes System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, **Quick Thinking (`D_cog`)**, and **OODA Initiative**) are derived from them, how **Domain Aptitudes ($A \in [-2, +3]$)** accelerate learning, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](../02-core-mechanics/cascading_d20_and_tasks.md) and the [Skill System](skills_and_trees.md).
 
 ---
 
 ## 1. Architectural Overview & Taxonomy
 
-Unlike traditional tabletop systems that collapse physicality into "Strength/Dexterity," reduce the mind to a single monolithic "Intelligence" score, and leave personality entirely unquantified, Satya models a character across **five distinct attribute categories**:
+Unlike traditional tabletop systems that collapse physicality into "Strength/Dexterity," reduce the mind to a single monolithic "Intelligence" score, and leave personality entirely unquantified, Satya models a character across **five distinct attribute categories** plus **nine learning Aptitudes**:
 
 ```mermaid
 flowchart TD
-    Char["<b>Character Attributes & Traits</b>"]
+    Char["<b>Character Attributes, Traits & Aptitudes</b>"]
 
     subgraph Primaries["Primary Characteristics (Task Controllers & Lifepath Gates)"]
         Phys["<b>Physical Primary Characteristics</b><br/>Speed (SPD) · Force (FOR)<br/>Dexterity (DEX) · Kinesthesis (KIN)<br/>Health (HLT) · Fitness (FIT)<br/>Mass (kg) · Height (m)"]
@@ -22,9 +22,10 @@ flowchart TD
         Sens["<b>Human Senses</b><br/>Sight (SIG) · Hearing (HEA)<br/>Tactile (TAC) · Olfactory (OLF)<br/>Taste (TAS) · Intuition (ITU)"]
     end
 
-    subgraph Psych["Psychological & Derived Traits"]
+    subgraph Psych["Psychological, Derived & Learning Traits"]
         Psy["<b>Psyche: The Invisible Traits</b><br/>Ego (EGO) · Selfishness (SLF)<br/>Openness (OPN) · Belongingness (BLG)<br/>Extraversion (EXT) · Conformity (CNF)<br/>Aggressiveness (AGG)"]
-        Sec["<b>Secondary / Derived Characteristics</b><br/>Power (Force × Speed)<br/>Build, BMI & Reach · OODA Initiative<br/>Composure & Cognitive Dissonance"]
+        Sec["<b>Secondary / Derived Characteristics</b><br/>Power (Force × Speed) · MMF & Reach<br/>OODA & Quick Thinking (D_cog)<br/>Composure, FT & WSR"]
+        Apt["<b>Domain Aptitudes (A ∈ [-2, +3])</b><br/>QNT · MEC · CMP · BIO · LNG<br/>KIN · FIN · AUD · SOC"]
     end
 
     Char --> Primaries
@@ -37,6 +38,7 @@ flowchart TD
 3. **Social Primary Characteristics**: Attributes that influence other people's behavior, perceptions, or attitudes—physical beauty, silent magnetism, and verbal articulateness.
 4. **Sensory Characteristics**: The six perceptual channels through which an entity senses the environment and detects subtle cues—sight, hearing, touch, smell, taste, and gut intuition.
 5. **Psyche Characteristics (The Invisible Traits)**: Seven foundational personality spectrums (`Ego`, `Selfishness`, `Openness`, `Belongingness`, `Extraversion`, `Conformity`, and `Aggressiveness`) that quantify behavioral drives, guide NPC/AI roleplay, trigger friction checks when violated, govern combat morale, and serve as the target vectors in **Social Combat & Cognitive Dissonance**.
+6. **Domain Aptitudes ($A \in [-2, +3]$)**: Innate neurological or somatic affinities for acquiring skills across nine specific domains during [Lifepath Education & Career Progression](lifepaths_and_economy.md).
 
 ---
 
@@ -160,7 +162,7 @@ In Satya, **Psyche** consists of **seven core behavioral spectrums** (`1–20` s
 
 | Abbr | Psyche Trait | Core Definition | Low Pole (`1–7` / `0–37.4`) | Balanced (`8–12`) | High Pole (`13–20` / `62.5–100`) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`EGO`** | **Ego** | **How important one thinks one is.** | **Humble / Self-Effacing / Servile**: Undervalues own status; immune to flattery or status insults, but easily talked over or exploited. | **Grounded Self-Respect**: Realistic sense of personal worth. | **Proud / Grandiose / Narcissistic**: Demands deference and spotlight; receptive to flattery, butflies into a rage or suffers **Ego Wounds** when publicly slighted or humiliated. |
+| **`EGO`** | **Ego** | **How important one thinks one is.** | **Humble / Self-Effacing / Servile**: Undervalues own status; immune to flattery or status insults, but easily talked over or exploited. | **Grounded Self-Respect**: Realistic sense of personal worth. | **Proud / Grandiose / Narcissistic**: Demands deference and spotlight; receptive to flattery, but flies into a rage or suffers **Ego Wounds** when publicly slighted or humiliated. |
 | **`SLF`** | **Selfishness** | **A measure of what the character thinks is owed or belongs to them.** | **Altruistic / Self-Sacrificing**: Prioritizes others, the mission, or a cause above personal gain; immune to bribery, vulnerable to hostage/guilt leverage. | **Pragmatic Fairness**: Looks out for self while honoring fair deals. | **Entitled / Mercenary / Acquisitive**: Driven by *"What's in it for me?"*; easily motivated by money/leverage, quick to betray or abandon a losing side to save their own skin. |
 | **`OPN`** | **Openness** | **Intellectual curiosity and willingness to change one's mind.** | **Dogmatic / Rigid / Closed-Minded**: Impervious to new theories or contrary evidence; rock-solid against ideological subversion, but blind to paradigm shifts. | **Discerning**: Weighs new evidence against established experience. | **Curious / Receptive / Open-Minded**: Eager to explore novel ideas and compelled by sound evidence—even when that truth is dangerous or socially forbidden. |
 | **`BLG`** | **Belongingness** | **Need to be accepted and validated by a group, tribe, or peer network.** | **Detached / Lone Wolf ("Sigma")**: Indifferent to group approval or peer pressure; operates solo without loneliness, but struggles to trust or bond with a crew. | **Healthy Camaraderie**: Values teammates without losing personal identity. | **Tribal / Group-Dependent**: Deeply loyal to crew, gang, corporation, or family; gains morale alongside allies, but terrified of ostracism, exile, or breaking group consensus. |
@@ -179,7 +181,7 @@ Combinations of the seven Psyche traits immediately generate rich, mechanically 
 
 > [!NOTE]
 > **Psyche Mechanics in Play (Friction, Drift, Morale & Social Combat)**:
-> For the full rules on how **Psyche** traits govern **Psyche Friction Checks & Trait Drift**, **Conviction Surges**, **Combat Morale**, and **Social Combat / Cognitive Dissonance ("Mental Wounds")**, see [`docs/ttrpg/social_interactions.md`](../social_interactions.md).
+> For the full rules on how **Psyche** traits govern **Psyche Friction Checks & Trait Drift**, **Conviction Surges**, **Combat Morale & Motivation**, and **Social Combat / Cognitive Dissonance ("Mental Wounds")**, see [Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md).
 
 ---
 
@@ -190,21 +192,44 @@ Several crucial mechanical metrics in Satya are derived directly from combinatio
 | Derived Metric | Formula / Inputs | Mechanical Application |
 | :--- | :--- | :--- |
 | **Power (`POW`)** | $$\text{POW} = \frac{\text{FOR} \times \text{SPD}}{10}$$ *(or `force * speed` on the `0–100` spectrum)* | Determines kinetic energy transmitted in unarmed strikes, melee weapons, throwing distance, and explosive athletic leaps (`POW = 10` at human average `FOR 10, SPD 10`). |
-| **Momentum & Mass Factor (`MMF`)** | $$\text{MMF} = \left(\frac{\text{MAS}}{70.0\text{ kg}}\right) \times \text{SPD}$$ | Governs tackling, shoving, body-checking, knockback resistance, and heavy weapon recoil absorption. |
+| **Momentum & Mass Factor (`MMF`)** | $$\text{MMF} = \left(\frac{\text{MAS}}{70.0\text{ kg}}\right) \times \text{SPD}$$ | Governs tackling, shoving, body-checking, knockback resistance (`Effective Root`), and heavy weapon recoil absorption. |
 | **Melee Reach Index** | Derived from **Height (`HGT`)** + Weapon Length | Every `15 cm` (`0.15 m`) of height advantage (coupled with `KIN`) grants a positional edge in unarmed/melee engagement distance. |
-| **OODA Initiative & Tick Speed** | $$\text{OODA} = \left\lfloor \frac{\text{SPD} + \text{INS} + \text{ITU}}{3} \right\rfloor$$ | Determines initial tick placement on the Count-Up Action Clock at the start of combat and surprise reaction checks. |
-| **Cognitive Decision Score (`D_cog` — "Quick Thinking")** | $$D_{\text{cog}} = \left\lfloor \frac{\max(\text{ANA}, \text{CRE}) + \text{INS} + \text{FOC}}{3} \right\rfloor$$ | Governs the **Orientation & Decision (`Decide`)** phase of the OODA loop ($\text{TC}_{\text{decide}}$), shaving `-1 Tick` per `+2` points above `10` on complex tactical judgments, snap improvisations, and mid-action OODA resets (see [`action_economy.md`](../systems/action_economy.md)). |
+| **OODA Initiative & Tick Speed** | $$\text{OODA} = \left\lfloor \frac{\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD}}{4} \right\rfloor$$ | Determines initial tick placement on the Count-Up Action Clock at the start of combat ($\text{Tick}_{\text{start}} = \max(1, 15 - \text{OODA})$), Combat Readiness ($C_{\text{combat}}$), and surprise reaction checks across all four phases of Boyd's OODA loop (**O**bserve `ITU`, **O**rient `INS`, **D**ecide $D_{\text{cog}}$, **A**ct `SPD`). |
+| **Cognitive Decision Score (`D_cog` — "Quick Thinking")** | $$D_{\text{cog}} = \left\lfloor \frac{\max(\text{ANA}, \text{CRE}) + \text{FOC}}{2} \right\rfloor$$ | Governs the **Decide** pillar of the OODA loop and $\text{TC}_{\text{decide}}$, shaving `-1 Tick` per `+2` points above `10` on complex tactical judgments, snap improvisations, and mid-action OODA resets (see [Action Economy & OODA](../02-core-mechanics/action_economy_and_ooda.md)). |
 | **General Awareness (`AWR`)** | $$\text{AWR} = \left\lfloor \frac{\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU}}{3} \right\rfloor$$ | Used for passive multi-sensory *Observation & Awareness* checks when no single sense is isolated. |
-| **Fatigue Threshold** | $$\text{FT} = \text{FIT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Determines how many high-exertion combat ticks or hours of labor a character can sustain before gaining +1 `fatigue_level`. |
-| **Wound Shock Resistance** | $$\text{WSR} = \text{HLT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Mitigates `wound_shock_index` penalties from blood loss, structural trauma, and pain in combat. |
-| **Social Composure Threshold** | $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$ | Number of Rhetorical Strain / Cognitive Dissonance tiers a character can absorb in Social Combat before their composure breaks (see [`docs/ttrpg/social_interactions.md`](../social_interactions.md)). |
+| **Fatigue Threshold (`FT`)** | $$\text{FT} = \text{FIT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Determines how many high-exertion combat ticks or hours of labor a character can sustain before gaining +1 `fatigue_level`. |
+| **Wound Shock Resistance (`WSR`)** | $$\text{WSR} = \text{HLT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Mitigates `wound_shock_index` penalties from blood loss, structural trauma, and pain in combat. |
+| **Social Composure Threshold (`CMP`)** | $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$ | Number of Rhetorical Strain / Cognitive Dissonance tiers a character can absorb in Social Combat before their composure breaks (see [Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md)). |
 | **Academic Study Controller ($C_{\text{study}}$)** | $$C_{\text{study}} = \left\lfloor \frac{\text{DIS} + C_{\text{mental}}}{2} \right\rfloor + \text{APT}$$ | Governs Lifepath school and university advancement rolls (where $C_{\text{mental}}$ is typically `ANA`, `MEM`, `INS`, or `CRE` depending on the subject). |
 
 ---
 
-## 9. How Characteristics Govern Skills (`Control (C)`)
+## 9. Domain Aptitudes ($A \in [-2, +3]$, Human Baseline `0`)
 
-Every skill in [`docs/ttrpg/skill-design.md`](../skill-design.md) specifies its **Controlling Characteristic(s)** and any **Minimum Characteristic Prerequisites (`Min C`)**:
+While **Characteristics ($C$)** measure raw physical, cognitive, social, or sensory capability, **Aptitudes ($A$)** represent a character's innate neurological or somatic *affinity for learning specific domains*. A teenager with average Analysis (`ANA 10`) in an underfunded school might still possess a rare **Quantitative Aptitude (`+2`)**, allowing them to grasp *Trigonometry* where peers stall at *Arithmetic*.
+
+| Code | Aptitude Name | Associated Skill Categories & Branches |
+| :--- | :--- | :--- |
+| **`APT-QNT`** | **Quantitative & Mathematical** | Mathematics spine, Physics, Quantitative Finance, Cryptography, Ballistics (`ANA`/`FOC`). |
+| **`APT-MEC`** | **Mechanical & Spatial** | Mechanical/Civil/Aerospace Engineering, Fabrication, Gunsmithing, Piloting, Driving (`ANA`/`DEX`/`KIN`). |
+| **`APT-CMP`** | **Computational & Algorithmic** | Programming, Software Architecture, AI/ML, Network Exploitation, Cyberwarfare (`ANA`/`CRE`/`FOC`). |
+| **`APT-BIO`** | **Biomedical & Chemical** | Chemistry, Biology, Pharmacology, Diagnostics, Surgery, Forensics (`MEM`/`ANA`/`INS`). |
+| **`APT-LNG`** | **Linguistic & Humanities** | Reading, Writing, Foreign Languages, Law, History, Intelligence Analysis (`MEM`/`ELO`/`INS`). |
+| **`APT-KIN`** | **Kinesthetic & Somatic** | Athletics, Martial Arts, Melee Combat, Parkour, Swimming, Stealth (`KIN`/`SPD`/`FOR`). |
+| **`APT-FIN`** | **Fine-Motor & Tactile** | Sleight of Hand, Lockpicking, Micro-Electronics, Trauma Surgery, Watchmaking (`DEX`/`TAC`/`FOC`). |
+| **`APT-AUD`** | **Auditory & Musical** | Singing, Instrumental Music, Acoustic Analysis, Voice Mimicry, Tonal Languages (`HEA`/`CRE`/`ELO`). |
+| **`APT-SOC`** | **Interpersonal & Street** | Persuasion, Deception, Empathy, Streetwise, Command, Interrogation (`PRE`/`ELO`/`INS`/`COM`). |
+
+### 9.1 Mechanical Effects of Aptitudes
+1. **Lifepath Education & Training Bonus**: Added directly as a modifier (`-2` to `+3`) to **Discipline (`DIS`)** learning checks ($C_{\text{study}} = \lfloor(\text{DIS} + C_{\text{mental}})/2\rfloor + \text{APT}$) when advancing skills in that domain during school or career terms (see [Lifepath Character Creation, Economy & Heat](lifepaths_and_economy.md)).
+2. **Prerequisite Threshold Relief**: An Aptitude of **`+2` or `+3`** lowers the minimum characteristic prerequisite (`ANA`, `MEM`, `INS`, `DEX`, `KIN`, etc.) for skills in that domain by `1` point, and allows a self-taught or under-schooled character to unlock **one tier higher** in a foundational tree (e.g., reaching *Trigonometry* in Junior High despite poor school quality).
+3. **Training Time Multiplier**: Each `+1` of Aptitude reduces post-creation study/training time by `15%` (`-1` increases time by `20%`).
+
+---
+
+## 10. How Characteristics Govern Skills (`Control (C)`)
+
+Every skill in [Skill System & The 8 Hierarchical Skill Trees](skills_and_trees.md) specifies its **Controlling Characteristic(s)** and any **Minimum Characteristic Prerequisites (`Min C`)**:
 
 1. **Balanced Composite Controller (`C1 / C2`)**:
    Most skills in Satya combine two characteristics—for example, a motor or mental attribute paired with a sensory or focus attribute:

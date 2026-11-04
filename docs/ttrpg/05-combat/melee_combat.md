@@ -1,6 +1,6 @@
 # Satya TTRPG Melee Combat, Close-Quarters Tactics & The Tactical Triad
 
-Melee combat in **Satya** is fundamentally different from ranged firefights—not only in its physical mechanics of reach, leverage, balance (`Root`), and structural defense (`Guard`), but also in its psychological immediacy. This chapter builds directly upon the core combat engine, **Count-Up Action Clock**, **Morale System**, and **"Envelope & Fill" Tactical Pool Architecture ($P_{\text{base}} = C_{\text{combat}} + 3N$)** defined in [Combat Architecture, Morale & Ranged Firefights](combat.md).
+Melee combat in **Satya** is fundamentally different from ranged firefights—not only in its physical mechanics of reach, leverage, balance (`Root`), and structural defense (`Guard`), but also in its psychological immediacy. This chapter builds directly upon the core combat engine, **[Count-Up Action Clock](../02-core-mechanics/action_economy_and_ooda.md)**, **[Morale System](../04-psyche-and-social/psyche_morale_and_social_combat.md)**, and **["Envelope & Fill" Tactical Pool Architecture ($P_{\text{base}} = C_{\text{combat}} + 3N$)](tactical_triad_and_pools.md)**.
 
 ---
 
@@ -8,13 +8,13 @@ Melee combat in **Satya** is fundamentally different from ranged firefights—no
 
 Unlike traditional RPGs where two fighters stand toe-to-toe trading static "I swing / You swing" turns, a melee fight in Satya is a continuous, asymmetric contest for **distance (Reach)**, **timing (Tempo)**, **structural openings (Control / Guard)**, and **grounded kinetic power (Force / Root)**:
 
-1. **Determine Psychological & Morale State**: Establish each fighter's **Discipline (`DIS`)** composure, **Motivation ($\Delta_{\text{mot}}$)**, and starting **Combat Mode** (*Disengaging*, *Defensive*, *Opportunistic*, *Offensive*, or *Aggressive*; see [Combat](combat.md#4-psychological-state-of-combat--morale)).
-2. **Determine Awareness & Distance to Contact (`Reach`)**: Compare **OODA Initiative** ($\lfloor(\text{SPD} + \text{INS} + \text{ITU})/3\rfloor$) and establish whether combatants are at **Standoff Range**, **Long Weapon / Kick Reach**, **Punch / Close Blade Reach**, or **Clinch / Grappling Range**.
+1. **Determine Psychological & Morale State**: Establish each fighter's **Discipline (`DIS`)** composure, **Motivation ($\Delta_{\text{mot}}$)**, and starting **Combat Mode** (*Disengaging*, *Defensive*, *Opportunistic*, *Offensive*, or *Aggressive*; see **[Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md#3-psychological-state-of-combat-aggression--morale)**).
+2. **Determine Awareness & Distance to Contact (`Reach`)**: Compare **OODA Initiative** ($\lfloor(\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD})/4\rfloor$) and establish whether combatants are at **Standoff Range**, **Long Weapon / Kick Reach**, **Punch / Close Blade Reach**, or **Clinch / Grappling Range**.
 3. **Secretly Allocate the Tactical Pool ($P_{\text{eff}} = T + C + F$)**: Each combatant distributes their Effective Tactical Pool across **Tempo (`T`)**, **Control (`C`)**, and **Force (`F`)**, bounded by their anatomical **Aspect Ceilings ($T_{\max}, C_{\max}, F_{\max}$)** and any active **Morale / Rage Constraints**.
 4. **Read the Opponent (`Observation` / `Combat Awareness`)**: On the Count-Up Clock, a fighter with superior `OODA` or `INS/SIG` can read a low-`Tempo`, telegraphed wind-up before it lands and adjust their defensive or counter-striking allocation.
 5. **Resolve the Contested `2d20` Cascade**:
-   - The attacker's **Tempo ($T$)** determines the maneuver's **Effective Tick Cost (`TC`)**:
-     $$\text{Effective TC} = \max\!\Big(2,\; \text{round}\big(\text{Base TC} \times \text{action\_time\_factor}\big) - (T - B)\Big)$$
+   - The attacker's **Tempo ($T$)** (and Quick Thinking $\Delta\text{TC}_{\text{decide}}$ on complex feints/traps) determines the maneuver's **Effective Tick Cost (`TC`)**:
+     $$\text{Effective TC} = \max\!\Big(2,\; \text{round}\big(\text{Base TC} \times \text{action\_time\_factor}\big) - (T - B) + \Delta\text{TC}_{\text{decide}}\Big)$$
    - The **Control Differential ($\Delta_{\text{control}} = C_{\text{def}} - C_{\text{att}}$)** shifts the attacker's External Task Difficulty ($\Delta_{\text{ext}}$) on their `2d20` cascade roll.
    - If the attack lands, **Force ($F$)** scales kinetic impact ($\text{Strike Impact} = \text{POW} \times \frac{F}{B}$) or throw leverage against the defender's **Root ($F_{\text{def}} + \text{MMF}$)**.
    - If the attack fails against a defender with higher **Control ($C_{\text{def}} > C_{\text{att}}$)**, the defender **seizes the initiative**—imposing $(C_{\text{def}} - C_{\text{att}})$ recovery ticks (or pool drain) on the overextended attacker!
@@ -59,7 +59,7 @@ How quickly you pull off a maneuver and how rapidly you cover or yield ground is
 **Control** (`Ceiling:` $C_{\max} = \max(\text{KIN}, \text{DEX}) - \text{Arm/Head Wounds}$) combines two inseparable halves of martial discipline: **Precision (Accuracy)** and **Guard (Structural Protection)**.
 
 1. **Precision & Technical Leverage**:
-   - Targeting anatomical weak points (chin, liver, carotid, unarmored joints) or threading a blade thrust past a shield.
+   - Targeting anatomical weak points (chin, liver, carotid, unarmored joints; see **[Hit Locations](../06-health-and-survival/health_and_trauma.md#1-hit-locations--specificity-of-damage-effects)**) or threading a blade thrust past a shield.
    - Executing technical grappling transitions—wrist locks, kimuras, rear-naked chokes, disarms, and off-balancing setups (*Kuzushi*) that rely on body mechanics (`KIN`/`DEX`) rather than brute muscle.
    - Defensively, clean parrying, deflecting, or limb-trapping that redirects an incoming blow onto an angle where the attacker cannot follow up.
 2. **Guard (Exposure vs. Protection & Seizing the Initiative)**:
@@ -128,7 +128,7 @@ At the start of an engagement, each fighter declares (or the AI GM selects based
 
 ## 4. Melee Weapons, Reach Tiers & Base Action Costs (`TC`)
 
-Unlike generic RPGs where weapons are differentiated only by a damage die (`1d6` vs. `1d8`), melee weapons in Satya have distinct **Reach Tiers**, **Base Tick Costs (`TC`)**, **Control/Parry Modifiers**, and **Damage Profiles** (Blunt/Crushing, Incising/Slashing, or Piercing/Impaling):
+Unlike generic RPGs where weapons are differentiated only by a damage die (`1d6` vs. `1d8`), melee weapons in Satya have distinct **Reach Tiers**, **Base Tick Costs (`TC`)**, **Control/Parry Modifiers**, and **Damage Profiles** (Blunt/Crushing, Incising/Slashing, or Piercing/Impaling; see **[Ranged Combat & Armor](ranged_combat_and_armor.md#2-armor-penetration--behind-armor-blunt-trauma-babt)** for how armor resists Edged vs. Blunt trauma):
 
 | Weapon / Unarmed Mode | Governing Skill (`Control`) | Reach Tier | Base `TC` | Guard / Parry Mod | Force & Trauma Profile |
 | :--- | :--- | :---: | :---: | :---: | :--- |
@@ -153,7 +153,7 @@ This example illustrates how the **Envelope & Fill** model, the **Count-Up Clock
 
 #### The Combatants
 1. **Viktor ("The Hammer") — Heavy Street Enforcer**:
-   - **Characteristics**: `FOR 15`, `SPD 8`, `KIN 9`, `DEX 9`, `INS 9`, `ITU 9`, `DIS 9`, `Mass 102 kg` ($\text{POW} = 12.0$, $\text{OODA} = 9$).
+   - **Characteristics**: `FOR 15`, `SPD 8`, `KIN 9`, `DEX 9`, `INS 10`, `ITU 9`, `ANA 9`, `FOC 9` ($D_{\text{cog}} = 9$), `DIS 9`, `Mass 102 kg` ($\text{POW} = 12.0$, $\text{OODA} = \lfloor(9 + 10 + 9 + 8)/4\rfloor = 9$).
    - **Psyche**: `AGG 16` *(Combative hothead)*, `EGO 15` *(Easily baited)*, `SLF 12`.
    - **Skill**: *Brawling* (`TAL`, `FOR/SPD`, $C_{\text{skill}} = 11$, **`N = 2`**).
    - **Tactical Pool ($P_{\text{base}}$)**: $C_{\text{combat}} = \lfloor(11 + 9)/2\rfloor = 10 \implies P_{\text{base}} = 10 + 3(2) = \mathbf{16}$ points (Neutral baseline $B = 5$).
@@ -161,7 +161,7 @@ This example illustrates how the **Envelope & Fill** model, the **Count-Up Clock
    - *Profile*: Viktor can hit like a wrecking ball (`Force` up to `15`), but his slow `SPD 8` caps his `Tempo` at `8`, and his `16`-point pool means that if he swings hard, he has almost nothing left for `Tempo` or `Control`.
 
 2. **Elena — Trained Kickboxer & Close-Protection Operative**:
-   - **Characteristics**: `FOR 10`, `SPD 13`, `KIN 13`, `DEX 12`, `INS 12`, `ITU 13`, `DIS 13`, `Mass 65 kg` ($\text{POW} = 13.0$, $\text{OODA} = 12$).
+   - **Characteristics**: `FOR 10`, `SPD 13`, `KIN 13`, `DEX 12`, `INS 12`, `ITU 13`, `ANA 12`, `FOC 12` ($D_{\text{cog}} = 12$), `DIS 13`, `Mass 65 kg` ($\text{POW} = 13.0$, $\text{OODA} = \lfloor(13 + 12 + 12 + 13)/4\rfloor = 12$).
    - **Psyche**: `AGG 10` *(Measured)*, `EGO 10`, `DIS 13` *(Cool under pressure)*.
    - **Skill**: *Boxing, Kickboxing & Striking* (`SPD/KIN`, $C_{\text{skill}} = 13$, **`N = 4`**).
    - **Tactical Pool ($P_{\text{base}}$)**: $C_{\text{combat}} = \lfloor(13 + 12)/2\rfloor = 12 \implies P_{\text{base}} = 12 + 3(4) = \mathbf{24}$ points (Neutral baseline $B = 8$).
@@ -196,7 +196,7 @@ This example illustrates how the **Envelope & Fill** model, the **Count-Up Clock
 
 What happens when a grappler (*Wrestling, Judo & Grappling* `KIN/FOR`) faces an opponent who tries to blitz or bull-rush them?
 
--Suppose an attacker charges Elena with a **Knife Blitz (`TF`: `9 Tempo / 2 Control / 7 Force`)**, sacrificing structure (`Control 2`) for speed and stabbing power.
+- Suppose an attacker charges Elena with a **Knife Blitz (`TF`: `9 Tempo / 2 Control / 7 Force`)**, sacrificing structure (`Control 2`) for speed and stabbing power.
 - Elena (`Grappling N = 3`, $P_{\text{eff}} = 21$) responds with a **Deflecting Wrist-Trap & Hip Throw (`CF`: `5 Tempo / 9 Control / 7 Force`)**:
   1. **Control Differential ($\Delta_{\text{control}}$)**: Elena's `Control 9` crushes the knife attacker's `Control 2` by **`+7`**, trapping the knife wrist off-line (`-7` to Elena's $\text{TN}_{\text{eff}}$) and breaking the attacker's balance (*Kuzushi*).
   2. **Overcoming `Root`**: Because the attacker spent `9 Tempo` rushing forward and left their structure open (`Control 2`), their effective `Root` against a redirection throw is shattered by Elena's `Control 9 + Force 7`, slamming the attacker onto the pavement (`Blunt Impact` + disarm + prone `-4` `Tempo Cap` penalty)!
