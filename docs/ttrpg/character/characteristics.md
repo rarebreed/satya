@@ -1,12 +1,12 @@
 # Satya TTRPG Character Characteristics & Attribute Architecture
 
-This document defines the canonical **Character Characteristics System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, and **Action Speed**) are derived from them, and how they govern task resolution in the [`2d20` Cascading Engine](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/satya_d20_rules.md) and the [Skill System](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/skill-design.md).
+This document defines the canonical **Character Characteristics System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, and **Action Speed**) are derived from them, how **Psyche** governs behavior and **Social Combat / Cognitive Dissonance**, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/satya_d20_rules.md) and the [Skill System](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/skill-design.md).
 
 ---
 
 ## 1. Architectural Overview & Taxonomy
 
-Unlike traditional tabletop systems that collapse physicality into "Strength/Dexterity" or the mind into a single monolithic "Intelligence" score, Satya models a character across **five distinct attribute categories**:
+Unlike traditional tabletop systems that collapse physicality into "Strength/Dexterity," reduce the mind to a single monolithic "Intelligence" score, and leave personality entirely unquantified, Satya models a character across **five distinct attribute categories**:
 
 ```mermaid
 flowchart TD
@@ -23,8 +23,8 @@ flowchart TD
     end
 
     subgraph Psych["Psychological & Derived Traits"]
-        Psy["<b>Psyche & Principles</b><br/>Psychological Spectrums<br/>Drives, Triggers & Convictions"]
-        Sec["<b>Secondary / Derived Characteristics</b><br/>Power (Force × Speed)<br/>Build, BMI & Reach<br/>OODA Initiative & Stamina Pool"]
+        Psy["<b>Psyche: The Invisible Traits</b><br/>Ego (EGO) · Selfishness (SLF)<br/>Openness (OPN) · Belongingness (BLG)<br/>Extraversion (EXT) · Conformity (CNF)<br/>Aggressiveness (AGG)"]
+        Sec["<b>Secondary / Derived Characteristics</b><br/>Power (Force × Speed)<br/>Build, BMI & Reach · OODA Initiative<br/>Composure & Cognitive Dissonance"]
     end
 
     Char --> Primaries
@@ -36,7 +36,7 @@ flowchart TD
 2. **Mental Primary Characteristics**: Attributes of the mind—recall, analytical problem-solving, pattern wisdom, lateral creativity, mental fortitude, and sustained concentration.
 3. **Social Primary Characteristics**: Attributes that influence other people's behavior, perceptions, or attitudes—physical beauty, silent magnetism, and verbal articulateness.
 4. **Sensory Characteristics**: The six perceptual channels through which an entity senses the environment and detects subtle cues—sight, hearing, touch, smell, taste, and gut intuition.
-5. **Psychological Traits (`Psyche`)**: Spectrum-based psychological tendencies, convictions, and behavioral traits that shape roleplay, stress responses, and internal modifiers.
+5. **Psyche Characteristics (The Invisible Traits)**: Seven foundational personality spectrums (`Ego`, `Selfishness`, `Openness`, `Belongingness`, `Extraversion`, `Conformity`, and `Aggressiveness`) that quantify behavioral drives, guide NPC/AI roleplay, trigger friction checks when violated, govern combat morale, and serve as the target vectors in **Social Combat & Cognitive Dissonance**.
 
 ---
 
@@ -48,11 +48,11 @@ $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$$
 
 | Controlling Scale ($C$) | Underlying Spectrum (`0.0–100.0`) | Population Tier | Mechanical & Narrative Benchmark |
 | :---: | :---: | :--- | :--- |
-| **`1–3`** | `0.0 – 17.4` | **Severely Impaired / Incapacitated** | Debilitating congenital, traumatic, or degenerative deficit ($\text{TN}_{\text{eff}} = 28\text{–}30$). |
-| **`4–6`** | `17.5 – 32.4` | **Deficient / Frail** | Noticeably weak, slow, clumsy, or unfocused ($\text{TN}_{\text{eff}} = 25\text{–}27$). |
-| **`7–8`** | `32.5 – 42.4` | **Below Average** | Functional but unsuited for demanding specialist work in this attribute ($\text{TN}_{\text{eff}} = 23\text{–}24$). |
+| **`1–3`** | `0.0 – 17.4` | **Severely Impaired / Extreme Low Pole** | Debilitating deficit (or extreme low-pole Psyche trait) ($\text{TN}_{\text{eff}} = 28\text{–}30$). |
+| **`4–6`** | `17.5 – 32.4` | **Deficient / Strong Low Pole** | Noticeably weak, slow, clumsy, or strongly low-pole in a Psyche trait ($\text{TN}_{\text{eff}} = 25\text{–}27$). |
+| **`7–8`** | `32.5 – 42.4` | **Below Average / Moderate Low Pole** | Functional but unsuited for demanding specialist work in this attribute ($\text{TN}_{\text{eff}} = 23\text{–}24$). |
 | **`9–11`** | `42.5 – 57.4` | **Human Average (`C = 10` / `50.0`)** | Typical adult civilian baseline; yields exact midpoint **$\text{TN}_{\text{eff}} = 21$** at $C = 10, \Delta_{\text{ext}} = 0$. |
-| **`12–13`** | `57.5 – 67.4` | **Above Average / Gifted** |Varsity athlete, honors student, sharp-eyed scout, or naturally magnetic speaker ($\text{TN}_{\text{eff}} = 18\text{–}19$). |
+| **`12–13`** | `57.5 – 67.4` | **Above Average / Gifted** | Varsity athlete, honors student, sharp-eyed scout, or naturally magnetic speaker ($\text{TN}_{\text{eff}} = 18\text{–}19$). |
 | **`14–15`** | `67.5 – 77.4` | **Exceptional / Elite Professional** | Special operations selection standard, premier neurosurgeon, or frontier mathematician ($\text{TN}_{\text{eff}} = 16\text{–}17$). |
 | **`16–17`** | `77.5 – 87.4` | **World-Class / Olympic / Genius** | Top `0.1%` of unaugmented humanity ($\text{TN}_{\text{eff}} = 14\text{–}15$). |
 | **`18`** | `87.5 – 92.4` | **Peak Unaugmented Human Cap** | Historical human maximum ($\text{TN}_{\text{eff}} = 13$). |
@@ -93,7 +93,7 @@ $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$$
 
 ## 4. Mental Primary Characteristics
 
-**Mental Primary Characteristics** cover attributes that are of the mind in nature. By separating memory, logical analysis, pattern insight, lateral creativity, mental fortitude, and sustained attention, Satya avoids the classic RPG trap where a single "Intelligence" stat makes a character simultaneously aneidetic historian, a brilliant mathematician, a wise detective, an avant-garde artist, and an unshakable sniper.
+**Mental Primary Characteristics** cover attributes that are of the mind in nature. By separating memory, logical analysis, pattern insight, lateral creativity, mental fortitude, and sustained attention, Satya avoids the classic RPG trap where a single "Intelligence" stat makes a character simultaneously an eidetic historian, a brilliant mathematician, a wise detective, an avant-garde artist, and an unshakable sniper.
 
 | Abbr | Characteristic | Value Type / Range | Default | Core Definition & Mechanical Role |
 | :--- | :--- | :---: | :---: | :--- |
@@ -101,7 +101,7 @@ $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$$
 | **`ANA`** | **Analysis** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **What most games call Intelligence: the ability to solve problems through logic, deduction, and calculation.** Governs mathematics, physics, formal engineering, software algorithms, cryptography, structural mechanics, and ballistic calculation. |
 | **`INS`** | **Insight** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **A combination of wisdom and the ability to see patterns, hidden relationships, and underlying dynamics.** Governs clinical diagnostics, reading human motives (*Empathy/Elicitation*), strategic intelligence synthesis, forensic reconstruction, and market/behavioral forecasting. |
 | **`CRE`** | **Creativity** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures how well one can think outside the box, improvise, or come up with new ideas or expressions.** Governs fine and synth arts, zero-day exploit ideation, improvised munitions/repairs, con artistry/pretexting, culinary arts, and unconventional tactical solutions. |
-| **`DIS`** | **Discipline** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures mental fortitude, willpower, self-control, and training diligence.** Governs composure under fire, resistance to coercion/interrogation (*SERE*), pain tolerance, martial arts mental conditioning, and **Lifepath Educational & Training Advancement Rolls**. |
+| **`DIS`** | **Discipline** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures mental fortitude, willpower, self-control, and training diligence.** Governs composure under fire, resistance to coercion/interrogation (*SERE*), pain tolerance, martial arts mental conditioning, **Psyche Override Checks**, and **Lifepath Educational & Training Advancement Rolls**. |
 | **`FOC`** | **Focus** | Spectrum `0–100` (`C: 1–20`) | `50.0` (`C = 10`) | **Measures concentration and the ability to keep track of one thing without distraction.** Governs long-duration or high-precision tasks: long-range sniping, trauma/neurosurgery, explosive ordnance disposal (EOD), multi-drone swarm control, instrument flying, and stakeout surveillance. |
 
 ### 4.1 Key Mental Distinctions in Satya
@@ -111,7 +111,7 @@ $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$$
   - **Insight (`INS`)** connects disparate dots into a holistic pattern (e.g., realizing *why* three seemingly unrelated patients have the same rare toxic syndrome, or spotting a geopolitical mole).
   - **Creativity (`CRE`)** invents what is not in the textbook (e.g., chaining two benign software bugs into a novel zero-day exploit, improvising a shaped charge from household chemicals, or composing a piece of music).
 - **`Discipline (DIS)` vs. `Focus (FOC)`**:
-  - **Discipline (`DIS`)** is *mental fortitude and grit*—enduring hardship, suppressing panic when rounds are snapping overhead, resisting an interrogator, and forcing oneself to study or drill day after day.
+  - **Discipline (`DIS`)** is *mental fortitude and grit*—enduring hardship, suppressing panic when rounds are snapping overhead, resisting an interrogator, overriding one's own impulses, and forcing oneself to study or drill day after day.
   - **Focus (`FOC`)** is *attentional bandwidth and tunnel-vision control*—tuning out noise to hold a crosshair steady between heartbeats, tracking a target through a crowded transit station for six hours, or suturing a 1mm vessel without a tremor of distraction.
 
 ---
@@ -148,21 +148,44 @@ Rather than lumping all five senses and sixth-sense danger awareness into a sing
 
 ---
 
-## 7. Psychological Characteristics (`Psyche` & `Principles`)
+## 7. Psyche: The Invisible Traits & Behavioral Architecture
 
-In addition to physical, mental, social, and sensory attributes, a character possesses **Psychological Characteristics (`Psyche`)**:
+### 7.1 Design Philosophy: Quantifying `Role` Playing & NPC Agency
 
-- **Structure**: Each `Psyche` trait is a named attribute on a continuous `Spectrum` (`0.0–100.0` or bipolar `-10.0 to +10.0`) attached to the character's psychological profile.
-- **Role in Gameplay**:
-  - **Principles & Convictions**: Core moral or ideological anchors (e.g., *Loyalty to Crew*, *Hippocratic Oath*, *Ruthless Pragmatism*, *Civic Duty*).
-  - **Behavioral Tendencies**: Spectrums such as *Caution vs. Thrill-Seeking*, *Empathy vs. Detachment*, or *Trust vs. Paranoia*.
-  - **Stress & Composure Interaction**: When a character is forced to act against a core `Psyche` principle or faces a psychological trigger without passing a **Discipline (`DIS`)** check, they accrue internal stress ($\Delta_{\text{int}} > 0$), increasing their cascade failure penalty $\delta_{\text{under}} = 6 + \Delta_{\text{int}}$. Conversely, acting in direct alignment with a defining conviction during a crisis can grant a temporary **Focused/Resolved** bonus ($\Delta_{\text{int}} = -2$).
+Most TTRPGs lack a set of characteristics that quantify and guide behavior—an ironic omission given that many players are drawn to **`role` playing** rather than **`roll` playing**, and given pop culture's fascination with personality frameworks (Myers-Briggs, the Big Five, the Enneagram, or "Alpha/Sigma" archetypes). Furthermore, both human Game Masters and the **Satya AI Game Master** need a concise, structured personality vector to make NPCs feel like distinct human beings with predictable blind spots, loyalties, and breaking points rather than interchangeable stat blocks.
+
+In Satya, **Psyche** consists of **seven core behavioral spectrums** (`1–20` scale / `0.0–100.0` spectrum, where `10` / `50.0` is balanced neutrality). Unlike Primary Characteristics—where higher is always objectively "better"—each Psyche trait is a **bipolar behavioral axis** where both high (`13–20`) and low (`1–8`) scores carry distinct strengths, vulnerabilities, and roleplaying imperatives.
+
+### 7.2 The Seven Core Psyche Characteristics
+
+| Abbr | Psyche Trait | Core Definition | Low Pole (`1–7` / `0–37.4`) | Balanced (`8–12`) | High Pole (`13–20` / `62.5–100`) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`EGO`** | **Ego** | **How important one thinks one is.** | **Humble / Self-Effacing / Servile**: Undervalues own status; immune to flattery or status insults, but easily talked over or exploited. | **Grounded Self-Respect**: Realistic sense of personal worth. | **Proud / Grandiose / Narcissistic**: Demands deference and spotlight; receptive to flattery, butflies into a rage or suffers **Ego Wounds** when publicly slighted or humiliated. |
+| **`SLF`** | **Selfishness** | **A measure of what the character thinks is owed or belongs to them.** | **Altruistic / Self-Sacrificing**: Prioritizes others, the mission, or a cause above personal gain; immune to bribery, vulnerable to hostage/guilt leverage. | **Pragmatic Fairness**: Looks out for self while honoring fair deals. | **Entitled / Mercenary / Acquisitive**: Driven by *"What's in it for me?"*; easily motivated by money/leverage, quick to betray or abandon a losing side to save their own skin. |
+| **`OPN`** | **Openness** | **Intellectual curiosity and willingness to change one's mind.** | **Dogmatic / Rigid / Closed-Minded**: Impervious to new theories or contrary evidence; rock-solid against ideological subversion, but blind to paradigm shifts. | **Discerning**: Weighs new evidence against established experience. | **Curious / Receptive / Open-Minded**: Eager to explore novel ideas and compelled by sound evidence—even when that truth is dangerous or socially forbidden. |
+| **`BLG`** | **Belongingness** | **Need to be accepted and validated by a group, tribe, or peer network.** | **Detached / Lone Wolf ("Sigma")**: Indifferent to group approval or peer pressure; operates solo without loneliness, but struggles to trust or bond with a crew. | **Healthy Camaraderie**: Values teammates without losing personal identity. | **Tribal / Group-Dependent**: Deeply loyal to crew, gang, corporation, or family; gains morale alongside allies, but terrified of ostracism, exile, or breaking group consensus. |
+| **`EXT`** | **Extraversion** | **Joy, energy, and desire in social contact and external stimulation.** | **Introverted / Solitary / Guarded**: Energized by solitude; excels at long solo stakeouts or lab work, but drains rapidly in loud, crowded social arenas. | **Ambivert**: Comfortable in both social gatherings and quiet focus. | **Gregarious / Thrill-Seeking**: Energized by crowds, parties, and constant interaction; naturally builds wide contact networks, but grows restless in isolation. |
+| **`CNF`** | **Conformity** | **Need to follow the rules, laws, hierarchy, or expectations of a situation.** | **Rebellious / Iconoclastic / Maverick**: Instinctively bucks authority, protocol, and social norms; thrives in unstructured chaos, clashes with command hierarchies. | **Adaptable**: Follows sensible rules; bends them when necessary. | **Institutionalist / By-the-Book**: Finds security in clear chains of command, standard operating procedures, and laws; suffers severe anxiety when forced to go rogue. |
+| **`AGG`** | **Aggressiveness** | **Competitiveness, confrontational drive, or in-your-face attitude.** | **Passive / Conflict-Averse / Gentle**: Avoids confrontation, seeks compromise or flight; excels at de-escalation, hesitates to initiate violence. | **Measured Assertiveness**: Stands ground when pushed without seeking fights. | **Combative / Dominant / Hyper-Competitive**: Confrontational and relentless; excels at intimidation and aggressive combat stances (`POWER`), easily baited by dares or challenges. |
+
+### 7.3 Emergent Personality Archetypes (PC & NPC Examples)
+
+Combinations of the seven Psyche traits immediately generate rich, mechanically actionable personas for players and the AI GM:
+
+- **The "Sigma" Lone-Wolf Operative**: `BLG 4` (needs no group), `CNF 5` (ignores protocol), `EXT 5` (silent loner), `EGO 13` (quietly confident), `AGG 13` (lethal when cornered). *Immune to peer pressure and group shaming, but difficult to integrate into a strict military chain of command.*
+- **The Conflicted Corporate Whistleblower**: `OPN 16` (cannot ignore the data), `BLG 15` (loves their research team), `CNF 14` (raised to respect the law), `SLF 5` (altruistic). *A prime target for **Cognitive Dissonance** when they discover their beloved employer is poisoning a city.*
+- **The Street Gang Shot-Caller**: `EGO 16` (obsessed with street rep), `AGG 16` (in-your-face dominance), `BLG 15` (blood-in, blood-out loyalty to the set), `SLF 14` (wants their cut), `CNF 4` (hates cops/laws). *Will never back down from a public challenge in front of their crew, even when outgunned.*
+- **The Dogmatic Cult / Ideological Zealot**: `OPN 3` (mind locked shut), `BLG 18` (total tribal fusion), `CNF 17` (obeys doctrine blindly), `SLF 4` (willing martyr). *Virtually impossible to persuade with facts (`OPN 3`), unless you first fracture their sense of group belonging (`BLG`).*
+
+> [!NOTE]
+> **Psyche Mechanics in Play (Friction, Drift, Morale & Social Combat)**:
+> For the full rules on how **Psyche** traits govern **Psyche Friction Checks & Trait Drift**, **Conviction Surges**, **Combat Morale**, and **Social Combat / Cognitive Dissonance ("Mental Wounds")**, see [`docs/ttrpg/social_interactions.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/social_interactions.md).
 
 ---
 
 ## 8. Secondary & Derived Characteristics
 
-Several crucial mechanical metrics in Satya are derived directly from combinations of the Primary and Sensory Characteristics:
+Several crucial mechanical metrics in Satya are derived directly from combinations of the Primary, Sensory, and Psyche Characteristics:
 
 | Derived Metric | Formula / Inputs | Mechanical Application |
 | :--- | :--- | :--- |
@@ -173,6 +196,7 @@ Several crucial mechanical metrics in Satya are derived directly from combinatio
 | **General Awareness (`AWR`)** | $$\text{AWR} = \left\lfloor \frac{\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU}}{3} \right\rfloor$$ | Used for passive multi-sensory *Observation & Awareness* checks when no single sense is isolated. |
 | **Fatigue Threshold** | $$\text{FT} = \text{FIT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Determines how many high-exertion combat ticks or hours of labor a character can sustain before gaining +1 `fatigue_level`. |
 | **Wound Shock Resistance** | $$\text{WSR} = \text{HLT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Mitigates `wound_shock_index` penalties from blood loss, structural trauma, and pain in combat. |
+| **Social Composure Threshold** | $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$ | Number of Rhetorical Strain / Cognitive Dissonance tiers a character can absorb in Social Combat before their composure breaks (see [`docs/ttrpg/social_interactions.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/social_interactions.md)). |
 | **Academic Study Controller ($C_{\text{study}}$)** | $$C_{\text{study}} = \left\lfloor \frac{\text{DIS} + C_{\text{mental}}}{2} \right\rfloor + \text{APT}$$ | Governs Lifepath school and university advancement rolls (where $C_{\text{mental}}$ is typically `ANA`, `MEM`, `INS`, or `CRE` depending on the subject). |
 
 ---
@@ -189,8 +213,8 @@ Every skill in [`docs/ttrpg/skill-design.md`](file:///c:/Users/hapah/Projects/sa
    - *Lockpicking & Physical Security Bypass*: **`DEX / TAC`** (Fine finger dexterity + tactile touch sensitivity to feel the pins).
    - *Grappling (*Wrestling, Judo & BJJ*)*: **`KIN / FOR`** (Full-body spatial control + muscular force, aided by `TAC` and `MAS`).
    - *Trauma & General Surgery*: **`DEX / FOC`** with **`Min DIS 12, TAC 11`** (Surgeon's hand-eye precision + intense focus under pressure).
-   - *Persuasion & Rhetoric*: **`ELO / ANA`** or **`ELO / INS`** (Verbal eloquence + logical or insightful framing).
-   - *Intimidation & Coercion*: **`PRE / DIS`** (Silent physical magnetism/menace + mental fortitude).
+   - *Persuasion & Rhetoric*: **`ELO / ANA`** or **`ELO / INS`** (Verbal eloquence + logical or insightful framing, modified by the target's `Psyche` Resonance/Resistance).
+   - *Intimidation & Coercion*: **`PRE / DIS`** (Silent physical magnetism/menace + mental fortitude, opposed by the target's `DIS` and `AGG`).
    - *Culinary Arts & Mixology*: **`TAS / OLF`** paired with **`CRE / DEX`** (Taste and smell acuity + creative presentation and knife skill).
 2. **Task-Specific Controller Swaps**:
    When the narrative context changes how a skill is used, the GM may swap one half of the composite controller:

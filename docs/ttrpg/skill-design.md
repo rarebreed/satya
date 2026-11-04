@@ -75,6 +75,19 @@ Rather than collapsing physicality into generic "Strength/Agility" or the mind i
 | **`TAS`** | **Taste** | How well an entity can taste. Governs *Culinary Arts & Mixology* and detecting trace toxins or chemical contamination. |
 | **`ITU`** | **Intuition** | A kind of gut feeling or sixth sense. Governs danger sense, ambush detection, counter-surveillance ("spotting a tail"), and reading the shifting mood of a room. |
 
+#### E. Psyche Characteristics (The Invisible Behavioral Traits)
+Defined in [Section 7 of `docs/ttrpg/character/characteristics.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/character/characteristics.md) with interaction mechanics detailed in [`docs/ttrpg/social_interactions.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/social_interactions.md), the seven **Psyche** spectrums (`1–20`, neutral `10`) quantify personality, govern NPC/AI behavioral decisions, trigger **Psyche Friction Checks** (`DIS` vs. $|P - 10|$) when violated, and serve as the target vectors in **Social Combat & Cognitive Dissonance**:
+
+| Abbr | Psyche Trait | Behavioral Spectrum (`1–7` Low Pole $\leftrightarrow$ `13–20` High Pole) & Mechanical Role |
+| :--- | :--- | :--- |
+| **`EGO`** | **Ego** | How important one thinks one is (*Humble/Self-Effacing $\leftrightarrow$ Proud/Grandiose*). High `EGO` is vulnerable to flattery (`-` to $\Delta_{\text{ext}}$) and suffers **Ego Wounds** when publicly slighted. |
+| **`SLF`** | **Selfishness** | What the character thinks is owed or belongs to them (*Altruistic/Self-Sacrificing $\leftrightarrow$ Entitled/Mercenary*). Governs susceptibility to bribery vs. humanitarian appeals and combat surrender thresholds. |
+| **`OPN`** | **Openness** | Intellectual curiosity and willingness to change one's mind (*Dogmatic/Rigid $\leftrightarrow$ Curious/Open-Minded*). High `OPN` resonates with evidence-based *Persuasion* (`ELO/ANA`); low `OPN` resists new ideas. |
+| **`BLG`** | **Belongingness** | Need to be accepted by a group (*Detached Lone Wolf $\leftrightarrow$ Tribal/Group-Dependent*). High `BLG` bolsters squad morale but creates severe **Cognitive Dissonance** when truth (`OPN`) clashes with group consensus (`BLG`). |
+| **`EXT`** | **Extraversion** | Joy and desire in social contact (*Introverted/Solitary $\leftrightarrow$ Gregarious/Social*). Affects social stamina in crowd networking vs. long solitary stakeouts or lab work. |
+| **`CNF`** | **Conformity** | Need to follow rules, laws, or expectations (*Rebellious/Iconoclastic $\leftrightarrow$ Institutionalist/By-the-Book*). Governs obedience to chain of command and friction when breaking protocol. |
+| **`AGG`** | **Aggressiveness** | Competitiveness and in-your-face attitude (*Passive/Conflict-Averse $\leftrightarrow$ Combative/Dominant*). Biases combat stance selection (`POWER` vs. `STABILITY`), resists suppression, and reacts to dares/taunts. |
+
 #### Composite Controlling Characteristics
 Most skills in Satya list two Controlling Characteristics:
 - **`C1 / C2` (Balanced Composite)**: The effective Controlling Characteristic is the rounded-down mean:
@@ -660,9 +673,10 @@ flowchart TD
 | **Psychological Operations (PsyOps) & Disinformation** | `KNO` | `Social`, `Cyber`, `Knowledge` | `CRE/INS` | `CRE 11, INS 12, ELO 10` | *Public Speaking* $\ge 2$, *AI 2.0 Synth-Media* $\ge 2$ | `Restricted` / `Illicit` | `Mandatory` *(Media/Botnet)* |
 
 > [!NOTE]
-> **Elicitation vs. Coercive Interrogation**:
+> **Elicitation, Coercive Interrogation & Social Combat (Psyche Resonance & Cognitive Dissonance)**:
 > - **Investigative Interviewing & Subtle Elicitation** (`INS/ELO`) uses *Charm*, *Empathy*, pattern insight, and conversational framing to draw out secrets from a subject who does not even realize they are being interrogated (or via rapport-based detective questioning).
 > - **Coercive Interrogation & Psychological Breaking** (`DIS/INS`) is used when a captive knows they are being interrogated and is actively resisting. It pits the interrogator's *Coercive Interrogation* (`DIS/INS`) against the subject's *Counter-Interrogation & Resistance* (`DIS/FOC`, or raw `DIS` at `N = 1` if untrained).
+> - **Targeting Psyche in Social Combat**: As detailed in [`docs/ttrpg/social_interactions.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/social_interactions.md), social skills interact directly with the target's seven **Psyche** traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`). First rolling *Empathy & Read Person* (`INS/ITU`) reveals the target's high/low Psyche poles. Aligning an argument with a strong trait (such as logical proof via *Persuasion* `ELO/ANA` against high **Openness `OPN`**, or flattery via *Charm* `PRE/ELO` against high **Ego `EGO`**) grants a **Resonance Bonus (`-2` to `-6` to $\Delta_{\text{ext}}$)**. When an argument simultaneously **resonates** with one strong Psyche trait (e.g., high `Openness`) while **clashing** with another (e.g., high `Belongingness` because the target's group rejects the truth), a successful roll inflicts **Cognitive Dissonance ("Mental Bleed")**—imposing compounding internal penalties ($\Delta_{\text{int}}$) until the target converts, hardens in denial (drifting `OPN` downward), or snaps!
 
 ---
 
@@ -998,6 +1012,7 @@ This walkthrough demonstrates the exact scenario from the design brief: a bright
    - **Mental Primary Characteristics**: `MEM 12`, `ANA 13` *(Sharp analytical mind)*, `INS 12`, `CRE 11`, `DIS 13` *(High mental fortitude & study diligence)*, `FOC 12`.
    - **Social Primary Characteristics**: `COM 10`, `PRE 12` *(Street magnetism)*, `ELO 10`.
    - **Sensory Characteristics**: `SIG 12`, `HEA 11`, `TAC 12`, `OLF 10`, `TAS 10`, `ITU 13` *(Strong street danger sense)*.
+   - **Psyche Characteristics**: `EGO 12`, `SLF 7` *(Protective of family)*, `OPN 14` *(Intellectually curious)*, `BLG 15` *(Deep need for crew/family belonging)*, `EXT 11`, `CNF 6` *(Distrusts authority)*, `AGG 13` *(Stands his ground)*.
    - **Aptitudes**: **Quantitative (`APT-QNT = +2`)**, **Kinesthetic (`APT-KIN = +1`)**, **Interpersonal/Street (`APT-SOC = +1`)**.
    - **Composite Math Study Stat ($C_{\text{study, math}}$)**:
      $$C_{\text{study, math}} = \left\lfloor \frac{\text{DIS } 13 + \text{ANA } 13}{2} \right\rfloor + \text{APT-QNT } (+2) = 13 + 2 = \mathbf{15}$$
@@ -1039,6 +1054,7 @@ This walkthrough demonstrates the exact scenario from the design brief: a bright
    - **Mental Primary Characteristics**: `MEM 13`, `ANA 15`, `INS 14`, `CRE 13`, `DIS 14`, `FOC 14`.
    - **Social Primary Characteristics**: `COM 11`, `PRE 10`, `ELO 12`.
    - **Sensory Characteristics**: `SIG 11`, `HEA 10`, `TAC 11`, `OLF 10`, `TAS 10`, `ITU 10`.
+   - **Psyche Characteristics**: `EGO 13` *(Proud of her research)*, `SLF 9`, `OPN 16` *(Driven by scientific truth)*, `BLG 13` *(Attached to her lab peers)*, `EXT 8` *(Introverted researcher)*, `CNF 14` *(By-the-book institutionalist)*, `AGG 5` *(Conflict-averse)*.
    - **Aptitudes**: `APT-QNT +2`, `APT-CMP +2`, `APT-MEC +1`.
    - Completes Elementary, Junior High, and **AP STEM High School** with `2` successes per stage:
      - *Arithmetic* `N = 4`, *Algebra & Geometry* `N = 4`, *Trigonometry* `N = 3`, *Calculus & Linear Algebra* `N = 2`, *Classical Physics* `N = 2`, *Programming Fundamentals* `N = 2`.
