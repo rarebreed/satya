@@ -1,12 +1,12 @@
 # Satya TTRPG Social Interactions, Psyche Mechanics & Social Combat
 
-This document defines the canonical **Social Interaction Rules, Behavioral Friction & Drift Mechanics, Combat Morale, and Social Combat ("Mental Wounds" & Cognitive Dissonance)** for **Satya**. It builds directly upon the **Social Primary Characteristics (`COM`, `PRE`, `ELO`)**, **Mental Primary Characteristics (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`)**, and **Psyche Characteristics (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`)** defined in [`docs/ttrpg/character/characteristics.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/character/characteristics.md), and the **Social Skill Tree** in [`docs/ttrpg/skill-design.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/skill-design.md).
+This document defines the canonical **Social Interaction Rules, Behavioral Friction & Drift Mechanics, Combat Morale, and Social Combat ("Mental Wounds" & Cognitive Dissonance)** for **Satya**. It builds directly upon the **Social Primary Characteristics (`COM`, `PRE`, `ELO`)**, **Mental Primary Characteristics (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`)**, and **Psyche Characteristics (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`)** defined in [`docs/ttrpg/character/characteristics.md`](character/characteristics.md), and the **Social Skill Tree** in [`docs/ttrpg/skill-design.md`](skill-design.md).
 
 ---
 
 ## 1. Acting Against One's Psyche: Friction Checks & Trait Drift
 
-While players always retain agency over their characters, acting in direct violation of a deeply ingrained **Psyche** trait ($P \ge 13$ or $P \le 7$; see [`docs/ttrpg/character/characteristics.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/character/characteristics.md#7-psyche-the-invisible-traits)) creates internal psychological friction.
+While players always retain agency over their characters, acting in direct violation of a deeply ingrained **Psyche** trait ($P \ge 13$ or $P \le 7$; see [`docs/ttrpg/character/characteristics.md`](character/characteristics.md#7-psyche-the-invisible-traits)) creates internal psychological friction.
 
 ### 1.1 When a Psyche Friction Check Triggers
 The GM calls for a **Psyche Friction Check** when a character attempts a deliberate action that violently contradicts one of their extreme Psyche traits:
@@ -51,7 +51,7 @@ Just as violating one's Psyche imposes friction, acting as a pure vessel of one'
 
 ## 3. Combat Morale & Tactical OODA Behavior
 
-In physical combat (see [`docs/ttrpg/combat.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/combat.md)), NPCs and PCs under extreme shock (ambush, heavy automatic suppression, 50% unit casualties, or gruesome wounds) make **Morale / Composure Checks** using **Discipline (`DIS`)** modified by their Psyche profile:
+In physical combat (see [`docs/ttrpg/combat/combat.md`](combat/combat.md)), NPCs and PCs under extreme shock (ambush, heavy automatic suppression, 50% unit casualties, or gruesome wounds) make **Morale / Composure Checks** using **Discipline (`DIS`)** modified by their Psyche profile:
 
 | Combat Situation | Relevant Psyche Traits | Mechanical Modifier to `DIS` Morale Check & AI GM Behavior |
 | :--- | :--- | :--- |

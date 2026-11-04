@@ -315,17 +315,30 @@ def update_npc_state(
 # ============================================================================
 
 
+_CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
+    ("satya_d20_rules.md", "Ch. 2: Core 2d20 Cascading System Rules"),
+    ("tasks.md", "Ch. 3: Task Resolution & Skill Check Mechanics"),
+    ("probability.md", "Ch. 4: Mathematical Foundations & Exact Probability Engine"),
+    ("character/characteristics.md", "Ch. 5: Core Characteristics & Derived Scales"),
+    ("skill-design.md", "Ch. 6: Skill Ontology, Lifepath & Non-Linear Progression"),
+    ("combat/combat.md", "Ch. 7: Combat Overview, Morale & Ranged Firefights"),
+    ("combat/melee_combat.md", "Ch. 8: Close-Quarters & Melee Combat (Tactical Triad)"),
+    ("social_interactions.md", "Ch. 9: Social Mechanics & Cognitive Dissonance"),
+    ("design-notes/background.md", "Ch. 1: Design Philosophy & Goals of Satya"),
+)
+
+
 @tool
 def query_satya_rules(query: str) -> str:
-    """Search `docs/ttrpg/satya_d20_rules.md` for Satya d20 Two-List Cascading (`2d20`) mechanics, skill levels, target numbers, stances, and degrees of success."""
-    rules_path = _repo_root() / "docs" / "ttrpg" / "satya_d20_rules.md"
-    if not rules_path.exists():
-        rules_path = _repo_root() / "docs" / "satya_d20_rules.md"
-    if not rules_path.exists():
+    """Search the 9-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), and social dissonance."""
+    ttrpg_dir = _repo_root() / "docs" / "ttrpg"
+    default_rules_path = ttrpg_dir / "satya_d20_rules.md"
+    if not default_rules_path.exists():
+        default_rules_path = _repo_root() / "docs" / "satya_d20_rules.md"
+    if not default_rules_path.exists():
         return "Satya d20 ruleset document not found."
 
-    text = rules_path.read_text(encoding="utf-8")
-    sections = text.split("\n## ")
+    default_text = default_rules_path.read_text(encoding="utf-8")
     stopwords = {
         "you",
         "know",
@@ -364,23 +377,37 @@ def query_satya_rules(query: str) -> str:
                 keywords.append(w[:-1])
 
     if not keywords:
-        return text[:4000]
+        return default_text[:4000]
 
-    scored: list[tuple[int, str]] = []
-    for idx, section in enumerate(sections):
-        if idx == 0:
+    scored: list[tuple[int, int, str]] = []
+    kw_set = set(keywords)
+    for file_idx, (rel_path, chapter_label) in enumerate(_CANONICAL_RULES_FILES):
+        chapter_path = ttrpg_dir / rel_path
+        if not chapter_path.exists():
             continue
-        header_and_body = f"## {section}".strip()
-        lowered = header_and_body.lower()
-        score = sum(lowered.count(kw) for kw in set(keywords))
-        if score > 0:
-            scored.append((score, header_and_body))
+        try:
+            text = chapter_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        sections = text.split("\n## ")
+        for sec_idx, section in enumerate(sections):
+            header_and_body = section.strip() if sec_idx == 0 else f"## {section}".strip()
+            if not header_and_body:
+                continue
+            first_line = header_and_body.splitlines()[0].lower()
+            lowered = f"{chapter_label.lower()}\n{header_and_body.lower()}"
+            score = sum(lowered.count(kw) for kw in kw_set) + sum(
+                3 for kw in kw_set if kw in first_line
+            )
+            if score > 0:
+                formatted_chunk = f"[{chapter_label} — `docs/ttrpg/{rel_path}`]\n{header_and_body}"
+                scored.append((score, -file_idx, formatted_chunk))
 
     if not scored:
-        return text[:4000]
+        return default_text[:4000]
 
-    scored.sort(key=lambda item: item[0], reverse=True)
-    top_excerpts = "\n\n---\n\n".join(chunk for _, chunk in scored[:2])
+    scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    top_excerpts = "\n\n---\n\n".join(chunk for _, _, chunk in scored[:3])
     return top_excerpts[:4500]
 
 

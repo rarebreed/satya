@@ -6,6 +6,7 @@ members = [
     "crates/satya-storage",
     "crates/satya-signaling",
     "crates/satya-web",
+    "crates/satya-py",
 ]
 
 [workspace.package]
@@ -39,6 +40,7 @@ leptos = { version = "0.7", features = ["csr", "ssr"] }
 object_store = { version = "0.11", features = ["aws"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 hex = "0.4"
+pyo3 = { version = "0.27.2", features = ["abi3-py312"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"

@@ -8,13 +8,17 @@
 //!   and Four-Factor Two-List Cascade game-engine task evaluators (`CascadeTaskParams`, `CascadeRollOutcome`,
 //!   `evaluate_cascade_roll`, `evaluate_satya_cascade_task`).
 //! - [`summarize_cascade_odds`]: Odds summary table generator and `K = 10/20/100` calibration sweeps.
+//! - [`rules_book`]: Canonical Satya TTRPG Rules Book catalog, Markdown-to-HTML renderer, multi-chapter search,
+//!   and Combat Tactical Pool ("Envelope & Fill" — Tempo, Control, Force) calculator.
 
 #![deny(missing_docs)]
 
 pub mod dice_probabilities;
+pub mod rules_book;
 pub mod summarize_cascade_odds;
 
 pub use dice_probabilities::*;
+pub use rules_book::*;
 pub use summarize_cascade_odds::*;
 
 #[cfg(test)]
@@ -333,5 +337,63 @@ mod tests {
         assert!(c_vs_n_matrix.contains("70.10%"));
         assert!(c_vs_n_matrix.contains("82.69%"));
         assert!(c_vs_n_matrix.contains("92.37%"));
+    }
+
+    #[test]
+    fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
+        let chapters = list_rules_chapters();
+        assert_eq!(chapters.len(), 9);
+        assert!(chapters.iter().any(|c| c.chapter_id == "tasks"));
+        assert!(chapters.iter().any(|c| c.chapter_id == "combat"));
+        assert!(chapters.iter().any(|c| c.chapter_id == "melee_combat"));
+
+        let tasks_doc = get_rules_chapter("tasks").expect("tasks chapter exists");
+        assert!(tasks_doc.markdown.contains("Sarah"));
+        assert!(tasks_doc.rendered_html.contains("satya-rules-article"));
+
+        let hits = search_rules_book("Envelope & Fill Tempo Control Force", 5);
+        assert!(!hits.is_empty());
+        assert!(
+            hits[0].chapter_id == "combat" || hits[0].chapter_id == "melee_combat",
+            "expected combat or melee_combat chapter at top of search hits, got {}",
+            hits[0].chapter_id
+        );
+
+        // Verify Elena's exact Envelope & Fill numbers from melee_combat.md
+        let elena_params = TacticalPoolParams {
+            spd: 13,
+            for_stat: 10,
+            dex: 12,
+            kin: 13,
+            sig: 12,
+            ins: 12,
+            itu: 13,
+            dis: 13,
+            fit: 12,
+            mass_kg: 65.0,
+            skill_c: 13,
+            skill_n: 4,
+            is_ranged: false,
+            fatigue_level: 0,
+            wound_shock_index: 0,
+            leg_wound_penalty: 0,
+            arm_head_wound_penalty: 0,
+            torso_shoulder_wound_penalty: 0,
+            morale_state: MoraleState::Steady,
+        };
+        let elena_env = compute_tactical_pool(&elena_params);
+        assert_eq!(elena_env.ooda_init, 12);
+        assert_eq!(elena_env.combat_readiness_c, 12);
+        assert_eq!(elena_env.p_base, 24);
+        assert_eq!(elena_env.p_eff, 24);
+        assert_eq!(elena_env.neutral_baseline_b, 8);
+        assert_eq!(elena_env.tempo_cap, 13);
+        assert_eq!(elena_env.control_cap, 13);
+        assert_eq!(elena_env.force_cap, 10);
+
+        let probe_eval = evaluate_tactical_triad(&elena_env, 8, 11, 11, 2);
+        assert!(probe_eval.valid);
+        assert_eq!(probe_eval.effective_tc, 5);
+        assert!(probe_eval.archetype_label.starts_with("TC"));
     }
 }

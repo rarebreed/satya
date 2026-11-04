@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Table of Contents &amp; Interactive Sandbox — Satya TTRPG Rules Book</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --panel: #111827;
+      --border: #1f2937;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --emerald: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      min-height: 100vh;
+    }
+    aside.book-sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 20px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .book-brand { font-size: 1.15rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .book-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }
+    .book-nav-part { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+    .book-nav-link { display: block; padding: 7px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.88rem; margin-bottom: 3px; }
+    .book-nav-link:hover { background: rgba(56, 189, 248, 0.12); }
+    .book-nav-link.active { background: rgba(56, 189, 248, 0.2); color: var(--accent); font-weight: 600; }
+    main.book-main { max-width: 980px; padding: 32px 44px 64px; line-height: 1.65; }
+    h1, h2, h3, h4 { color: #f8fafc; }
+    h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    a { color: var(--accent); }
+    code, pre { font-family: "JetBrains Mono", Consolas, monospace; }
+    .rules-inline-code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }
+    .rules-code-block { background: #0f172a; border: 1px solid var(--border); padding: 14px; border-radius: 8px; overflow-x: auto; }
+    .rules-table-wrap { overflow-x: auto; margin: 14px 0; }
+    .rules-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .rules-table th, .rules-table td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+    .rules-table th { background: #1e293b; color: var(--accent); }
+    .rules-alert, .rules-blockquote { border-left: 4px solid var(--accent); background: rgba(30, 41, 59, 0.55); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+    .rules-alert-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .book-interactive-widget { background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin: 24px 0; }
+    .widget-grid { display: grid; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .widget-panel { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .widget-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .widget-controls label, label.full-width { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 4px; }
+    .widget-controls input, label.full-width input { background: #1e293b; border: 1px solid #334155; color: var(--text); padding: 6px 8px; border-radius: 4px; }
+    .widget-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .widget-presets button { background: #1e293b; border: 1px solid #38bdf8; color: var(--accent); padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
+    .book-pager { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .book-pager-btn { background: var(--panel); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <aside class="book-sidebar">
+    <div class="book-brand">SATYA // RULES BOOK</div>
+    <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
+    <a href="index.html" class="book-nav-link active">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Philosophy &amp; Design Vision</div><a href="background.html" class="book-nav-link">1. An RPG for a More Civilized Age</a><div class="book-nav-part">Part II: Core 2d20 Watershed Resolution &amp; Probability</div><a href="satya_d20_rules.html" class="book-nav-link">2. Satya d20 Core Ruleset Reference</a><a href="probability.html" class="book-nav-link">3. Probability &amp; The Cascading Dice Mechanic</a><a href="tasks.html" class="book-nav-link">4. Task Resolution &amp; Skill Check Mechanics</a><div class="book-nav-part">Part III: Characters, Attributes &amp; Lifepaths</div><a href="characteristics.html" class="book-nav-link">5. Character Characteristics &amp; Attribute Architecture</a><a href="skill-design.html" class="book-nav-link">6. Skill System &amp; Lifepath Architecture</a><div class="book-nav-part">Part IV: Psyche, Social Combat &amp; Tactical Combat</div><a href="social_interactions.html" class="book-nav-link">7. Social Interactions, Psyche Mechanics &amp; Social Combat</a><a href="combat.html" class="book-nav-link">8. Combat Architecture, Morale &amp; Ranged Firefights</a><a href="melee_combat.html" class="book-nav-link">9. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a>
+  </aside>
+  <main class="book-main">
+    <h1>Satya TTRPG Rules Book &amp; Interactive 2d20 Reference</h1>
+<p>
+  Welcome to the static HTML &amp; Marimo Rules Book generated from <code>docs/ttrpg/</code>.
+  Every chapter is also accessible inside the <strong>Satya Web Client (<code>Rules Book</code> Notebook Tab)</strong>,
+  via the REST API (<code>GET /api/rules</code> and <code>GET /api/rules/:chapter_id</code>), and interactively
+  in Marimo (<code>marimo run notebooks/satya_rules_book.py</code>).
+</p>
+
+<section class="book-interactive-widget">
+  <h2>Interactive Satya 2d20 Watershed Cascade &amp; Tactical Pool Calculator</h2>
+  <p class="widget-sub">
+    Powered by the Satya Four-Factor Cascade formula
+    (<code>TN_eff = 31 - C + &Delta;_ext</code>, <code>&delta;_over = +6</code>, <code>&delta;_under = -(6 + &Delta;_int)</code>)
+    and the Combat Tactical Pool (<code>P_base = C_combat + 3N</code>).
+  </p>
+  <div class="widget-grid">
+    <div class="widget-panel">
+      <h3>1. 2d20 Watershed Cascade Simulator</h3>
+      <div class="widget-controls">
+        <label>Skill Level (N Pairs: 1..8)
+          <input id="bk-n" type="number" min="1" max="8" value="4" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Controlling Characteristic (C: 1..20)
+          <input id="bk-c" type="number" min="1" max="20" value="11" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Internal Mod (&Delta;_int: Fatigue/Shock)
+          <input id="bk-dint" type="number" min="-2" max="10" value="2" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>External Mod (&Delta;_ext: Difficulty/Tools)
+          <input id="bk-dext" type="number" min="-6" max="12" value="2" onchange="satyaBookRecalc()"/>
+        </label>
+      </div>
+      <div class="widget-presets">
+        <button type="button" onclick="satyaBookLoadPreset(4,11,2,2,'14+11, 8+7, 16+15, 17+12')">Sarah's Lockpick</button>
+        <button type="button" onclick="satyaBookLoadPreset(5,16,0,2,'12+10, 9+11, 14+8, 16+9, 11+12')">Elena's Probe</button>
+        <button type="button" onclick="satyaBookLoadPreset(4,13,0,3,'15+11, 7+6, 13+10, 18+9')">Viktor's Cleave</button>
+        <button type="button" onclick="satyaBookRandomRoll()">Roll Random N&times;2d20</button>
+      </div>
+      <label class="full-width">Rolled 2d20 Pairs (A+B, comma-separated):
+        <input id="bk-pairs" type="text" value="14+11, 8+7, 16+15, 17+12" oninput="satyaBookRecalc()"/>
+      </label>
+      <div id="bk-cascade-readout" class="widget-readout"></div>
+    </div>
+
+    <div class="widget-panel">
+      <h3>2. Combat Tactical Pool (Tempo &middot; Control &middot; Force)</h3>
+      <div class="widget-controls">
+        <label>Combat Readiness C_combat
+          <input id="bk-ccombat" type="number" min="1" max="20" value="13" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Skill Level N
+          <input id="bk-combat-n" type="number" min="1" max="8" value="4" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Tempo (T)
+          <input id="bk-t" type="number" min="0" max="20" value="9" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Control (C)
+          <input id="bk-ctrl" type="number" min="0" max="20" value="9" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Force (F)
+          <input id="bk-f" type="number" min="0" max="20" value="7" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Base Weapon TC
+          <input id="bk-wtc" type="number" min="4" max="16" value="8" onchange="satyaBookRecalc()"/>
+        </label>
+      </div>
+      <div id="bk-tactical-readout" class="widget-readout"></div>
+    </div>
+  </div>
+</section>
+<script>
+function satyaBookLoadPreset(n, c, dint, dext, pairs) {
+  document.getElementById('bk-n').value = n;
+  document.getElementById('bk-c').value = c;
+  document.getElementById('bk-dint').value = dint;
+  document.getElementById('bk-dext').value = dext;
+  document.getElementById('bk-pairs').value = pairs;
+  satyaBookRecalc();
+}
+function satyaBookRandomRoll() {
+  const n = Math.max(1, Math.min(8, parseInt(document.getElementById('bk-n').value || '3', 10)));
+  const rolls = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(Math.random() * 20) + 1;
+    const b = Math.floor(Math.random() * 20) + 1;
+    rolls.push(a + '+' + b);
+  }
+  document.getElementById('bk-pairs').value = rolls.join(', ');
+  satyaBookRecalc();
+}
+function satyaBookRecalc() {
+  const n = Math.max(1, Math.min(8, parseInt(document.getElementById('bk-n').value || '4', 10)));
+  const c = Math.max(1, Math.min(20, parseInt(document.getElementById('bk-c').value || '11', 10)));
+  const dint = parseInt(document.getElementById('bk-dint').value || '0', 10);
+  const dext = parseInt(document.getElementById('bk-dext').value || '0', 10);
+  const tnEff = 31 - c + dext;
+  const dOver = 6;
+  const dUnder = Math.max(0, 6 + dint);
+  const rawPairs = (document.getElementById('bk-pairs').value || '').split(',');
+  let carry = 0, succ = 0, botch = 0, minMissTier = 5;
+  let rows = [];
+  for (let i = 0; i < n; i++) {
+    const token = (rawPairs[i] || '11+10').trim().split('+');
+    const a = parseInt(token[0] || '11', 10) || 11;
+    const b = parseInt(token[1] || '10', 10) || 10;
+    const raw = a + b;
+    const yn = raw + carry;
+    let status = 'Miss';
+    let nextCarry = 0;
+    if (yn > tnEff) {
+      succ += 1;
+      minMissTier = 0;
+      status = '<strong style="color:#34d399">SUCCESS (+1)</strong>';
+      nextCarry = dOver;
+    } else if (yn < tnEff) {
+      const dist = tnEff - yn;
+      minMissTier = Math.min(minMissTier, Math.min(5, Math.floor(dist / 4)));
+      if (yn < 2) {
+        botch += 1;
+        status = '<strong style="color:#fb7185">FLOOR BREACH (&lt;2)</strong>';
+      }
+      nextCarry = -dUnder;
+    } else {
+      minMissTier = 0;
+      status = 'Exact Tie (0)';
+      nextCarry = 0;
+    }
+    rows.push('<tr><td>#' + (i+1) + '</td><td>' + a + '+' + b + '=' + raw + '</td><td>' + (carry>=0?'+'+carry:carry) + '</td><td><strong>' + yn + '</strong></td><td>' + tnEff + '</td><td>' + status + '</td><td>' + (nextCarry>=0?'+'+nextCarry:nextCarry) + '</td></tr>');
+    carry = nextCarry;
+  }
+  const effBotch = succ === 0 ? minMissTier : botch;
+  const margin = succ > 0 ? '+' + succ : String(-effBotch);
+  const tier = (succ >= 3 && botch === 0) ? 'EXTRAORDINARY_SUCCESS' : (succ >= 1 && botch === 0) ? 'SUCCESS' : (succ >= 1 && botch >= 1) ? 'PARTIAL_SUCCESS (Complication)' : (effBotch === 0 ? 'CLEAN_FAILURE' : 'CRITICAL_FAILURE');
+  document.getElementById('bk-cascade-readout').innerHTML =
+    '<div><strong>TN_eff = ' + tnEff + '</strong> | &delta;_over = +' + dOver + ' | &delta;_under = -' + dUnder + ' | <strong>Outcome: ' + tier + ' (Margin ' + margin + ')</strong></div>' +
+    '<table class="rules-table" style="margin-top:8px"><thead><tr><th>Pair</th><th>Roll</th><th>Carry In</th><th>Y_n</th><th>TN_eff</th><th>Result</th><th>Carry Out</th></tr></thead><tbody>' + rows.join('') + '</tbody></table>';
+
+  const cCombat = parseInt(document.getElementById('bk-ccombat').value || '13', 10);
+  const combatN = parseInt(document.getElementById('bk-combat-n').value || '4', 10);
+  const pBase = cCombat + 3 * combatN;
+  const bVal = Math.floor(pBase / 3);
+  const tVal = parseInt(document.getElementById('bk-t').value || '0', 10);
+  const ctrlVal = parseInt(document.getElementById('bk-ctrl').value || '0', 10);
+  const fVal = parseInt(document.getElementById('bk-f').value || '0', 10);
+  const wTc = parseInt(document.getElementById('bk-wtc').value || '8', 10);
+  const sumTcf = tVal + ctrlVal + fVal;
+  const effTc = Math.max(3, wTc - Math.floor((tVal - bVal) / 2));
+  const impactMult = (fVal / Math.max(1, bVal)).toFixed(2);
+  const validBadge = sumTcf <= pBase
+    ? '<span style="color:#34d399">VALID (' + sumTcf + ' / ' + pBase + ' pts)</span>'
+    : '<span style="color:#fb7185">OVER POOL (' + sumTcf + ' &gt; ' + pBase + ' pts)</span>';
+  document.getElementById('bk-tactical-readout').innerHTML =
+    '<p><strong>Pool P_base = ' + pBase + '</strong> | Neutral Baseline <strong>B = ' + bVal + '</strong> | Allocation: ' + validBadge + '</p>' +
+    '<ul><li><strong>Effective Action Cost (TC)</strong>: <code>' + effTc + ' ticks</code> (Base Weapon TC ' + wTc + ')</li>' +
+    '<li><strong>Control Task Bonus</strong>: <code>' + (ctrlVal - bVal >= 0 ? '+' + (ctrlVal - bVal) : (ctrlVal - bVal)) + '</code> vs. Neutral Baseline</li>' +
+    '<li><strong>Force Impact Multiplier</strong>: <code>' + impactMult + '&times; POW</code></li></ul>';
+}
+window.addEventListener('DOMContentLoaded', satyaBookRecalc);
+</script>
+
+<h2>Chapter Directory</h2>
+<ul class="rules-list"><li><strong><a href="background.html">1. An RPG for a More Civilized Age</a></strong> <span class="rules-inline-code">docs/ttrpg/design-notes/background.md</span><br/>Origins of Satya, realism vs. escapism, and how Satya solves 17 structural flaws of traditional RPG systems.</li><li><strong><a href="satya_d20_rules.html">2. Satya d20 Core Ruleset Reference</a></strong> <span class="rules-inline-code">docs/ttrpg/satya_d20_rules.md</span><br/>Canonical Two-List Cascading (2d20) dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, and the Count-Up Action Clock.</li><li><strong><a href="probability.html">3. Probability &amp; The Cascading Dice Mechanic</a></strong> <span class="rules-inline-code">docs/ttrpg/probability.md</span><br/>Mathematical foundation, distribution topology (skewness, modality, tail behavior), scale invariance across K, and avoiding the Skilled Botch Paradox.</li><li><strong><a href="tasks.html">4. Task Resolution &amp; Skill Check Mechanics</a></strong> <span class="rules-inline-code">docs/ttrpg/tasks.md</span><br/>Step-by-step task resolution pipeline, Gate Classifications (Class A / B / C), Tool Tiers, Complementary KNO -&gt; PHY Skill Synergy, and worked examples.</li><li><strong><a href="characteristics.html">5. Character Characteristics &amp; Attribute Architecture</a></strong> <span class="rules-inline-code">docs/ttrpg/character/characteristics.md</span><br/>Physical, Mental, Social, Sensory, and Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG) characteristics on the 1-20 Controlling Scale plus derived metrics.</li><li><strong><a href="skill-design.html">6. Skill System &amp; Lifepath Architecture</a></strong> <span class="rules-inline-code">docs/ttrpg/skill-design.md</span><br/>Talents vs. Physical and Knowledge skills, 8 hierarchical Skill Trees, Master Task Requirements Table, and chronological Lifepath creation.</li><li><strong><a href="social_interactions.html">7. Social Interactions, Psyche Mechanics &amp; Social Combat</a></strong> <span class="rules-inline-code">docs/ttrpg/social_interactions.md</span><br/>Acting against Psyche (Friction Checks &amp; Trait Drift), Conviction Surges, Combat Morale modifiers, and Social Combat (Cognitive Dissonance).</li><li><strong><a href="combat.html">8. Combat Architecture, Morale &amp; Ranged Firefights</a></strong> <span class="rules-inline-code">docs/ttrpg/combat/combat.md</span><br/>Combat philosophy, anatomical trauma over Hit Points, Count-Up Action Clock, 5 Morale Conditions, the Envelope &amp; Fill Tactical Pool, and Ranged Firefights.</li><li><strong><a href="melee_combat.html">9. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a></strong> <span class="rules-inline-code">docs/ttrpg/combat/melee_combat.md</span><br/>Close-quarters anatomy, the Tactical Triad (Tempo, Control, Force), Guard &amp; Seizing the Initiative, Root vs. throws, and Viktor vs. Elena walkthrough.</li></ul>
+<h2>Reference Calibration Table (<code>K = 20</code>, <code>TN_eff = 31 - C</code>, <code>&delta; = &pm;6</code>)</h2>
+<div class="rules-table-wrap">
+  <table class="rules-table">
+    <thead>
+      <tr>
+        <th>Control C</th><th>TN_eff</th><th>Skill N</th>
+        <th>P(Success &ge; 1)</th><th>P(Clean Fail)</th><th>P(Botch Fail)</th><th>E[Margin]</th>
+      </tr>
+    </thead>
+    <tbody><tr><td><code>C=8</code></td><td><code>TN_eff=23</code></td><td><code>N=2</code></td><td><strong>49.4%</strong></td><td>20.7%</td><td>29.9%</td><td><code>+0.25</code></td></tr><tr><td><code>C=8</code></td><td><code>TN_eff=23</code></td><td><code>N=3</code></td><td><strong>58.2%</strong></td><td>20.9%</td><td>20.9%</td><td><code>+0.80</code></td></tr><tr><td><code>C=8</code></td><td><code>TN_eff=23</code></td><td><code>N=4</code></td><td><strong>65.4%</strong></td><td>19.9%</td><td>14.7%</td><td><code>+1.26</code></td></tr><tr><td><code>C=8</code></td><td><code>TN_eff=23</code></td><td><code>N=5</code></td><td><strong>71.4%</strong></td><td>18.3%</td><td>10.3%</td><td><code>+1.67</code></td></tr><tr><td><code>C=10</code></td><td><code>TN_eff=21</code></td><td><code>N=2</code></td><td><strong>60.7%</strong></td><td>18.3%</td><td>21.0%</td><td><code>+0.64</code></td></tr><tr><td><code>C=10</code></td><td><code>TN_eff=21</code></td><td><code>N=3</code></td><td><strong>70.1%</strong></td><td>16.9%</td><td>13.0%</td><td><code>+1.27</code></td></tr><tr><td><code>C=10</code></td><td><code>TN_eff=21</code></td><td><code>N=4</code></td><td><strong>77.2%</strong></td><td>14.7%</td><td>8.0%</td><td><code>+1.82</code></td></tr><tr><td><code>C=10</code></td><td><code>TN_eff=21</code></td><td><code>N=5</code></td><td><strong>82.7%</strong></td><td>12.4%</td><td>4.9%</td><td><code>+2.35</code></td></tr><tr><td><code>C=12</code></td><td><code>TN_eff=19</code></td><td><code>N=2</code></td><td><strong>71.3%</strong></td><td>14.9%</td><td>13.8%</td><td><code>+0.98</code></td></tr><tr><td><code>C=12</code></td><td><code>TN_eff=19</code></td><td><code>N=3</code></td><td><strong>80.4%</strong></td><td>12.4%</td><td>7.2%</td><td><code>+1.70</code></td></tr><tr><td><code>C=12</code></td><td><code>TN_eff=19</code></td><td><code>N=4</code></td><td><strong>86.6%</strong></td><td>9.6%</td><td>3.8%</td><td><code>+2.36</code></td></tr><tr><td><code>C=12</code></td><td><code>TN_eff=19</code></td><td><code>N=5</code></td><td><strong>90.8%</strong></td><td>7.2%</td><td>2.0%</td><td><code>+3.01</code></td></tr><tr><td><code>C=14</code></td><td><code>TN_eff=17</code></td><td><code>N=2</code></td><td><strong>80.1%</strong></td><td>11.5%</td><td>8.3%</td><td><code>+1.26</code></td></tr><tr><td><code>C=14</code></td><td><code>TN_eff=17</code></td><td><code>N=3</code></td><td><strong>88.1%</strong></td><td>8.3%</td><td>3.6%</td><td><code>+2.06</code></td></tr><tr><td><code>C=14</code></td><td><code>TN_eff=17</code></td><td><code>N=4</code></td><td><strong>92.9%</strong></td><td>5.6%</td><td>1.5%</td><td><code>+2.83</code></td></tr><tr><td><code>C=14</code></td><td><code>TN_eff=17</code></td><td><code>N=5</code></td><td><strong>95.8%</strong></td><td>3.6%</td><td>0.7%</td><td><code>+3.59</code></td></tr><tr><td><code>C=16</code></td><td><code>TN_eff=15</code></td><td><code>N=2</code></td><td><strong>87.1%</strong></td><td>8.2%</td><td>4.7%</td><td><code>+1.48</code></td></tr><tr><td><code>C=16</code></td><td><code>TN_eff=15</code></td><td><code>N=3</code></td><td><strong>93.6%</strong></td><td>4.8%</td><td>1.6%</td><td><code>+2.36</code></td></tr><tr><td><code>C=16</code></td><td><code>TN_eff=15</code></td><td><code>N=4</code></td><td><strong>96.8%</strong></td><td>2.7%</td><td>0.5%</td><td><code>+3.21</code></td></tr><tr><td><code>C=16</code></td><td><code>TN_eff=15</code></td><td><code>N=5</code></td><td><strong>98.4%</strong></td><td>1.4%</td><td>0.2%</td><td><code>+4.07</code></td></tr></tbody>
+  </table>
+</div>
+<article class="satya-rules-article"><h1 id="satya-ttrpg-rules-book-summary-table-of-contents">Satya TTRPG Rules Book — Summary &amp; Table of Contents</h1><p>This manifest defines the canonical chapter ordering, identifiers, categories, and cross-references for the <strong>Satya Computer-Assisted RPG (CARPG) Rules Book</strong>. It is consumed by:</p><ul class="rules-list"><li>The <strong>Satya Rust Engine &amp;amp; Web Frontend</strong> (<code class="rules-inline-code">satya-engine</code>, <code class="rules-inline-code">satya-signaling</code> <code class="rules-inline-code">/api/rules</code>, and the <code class="rules-inline-code">satya-web</code> Left Tabbed Notebook <strong>Rules Book</strong> pane)</li><li>The <strong>Interactive Marimo Rules Book &amp;amp; Static HTML Generator</strong> (<code class="rules-inline-code">notebooks/satya_rules_book.py</code> &amp; <code class="rules-inline-code">python -m satya_ml.build_rules_book</code>)</li><li>The <strong>Satya AI Game Master</strong> (<code class="rules-inline-code">query_satya_rules</code> in <code class="rules-inline-code">src/satya_ml/ai_gm/tools.py</code>)</li></ul><hr class="rules-divider"/><h2 id="table-of-contents">Table of Contents</h2><h3 id="part-i-philosophy-design-vision">Part I: Philosophy &amp; Design Vision</h3><ol class="rules-list rules-list-ordered"><li><a class="rules-link" href="background.html">An RPG for a More Civilized Age</a> (<code class="rules-inline-code">id: background</code>)</li></ol><ul class="rules-list"><li>Origins of Satya, realism vs. escapism, and how Satya solves 17 structural flaws of traditional RPG systems.</li></ul><h3 id="part-ii-core-2d20-watershed-resolution-probability">Part II: Core <code class="rules-inline-code">2d20</code> Watershed Resolution &amp; Probability</h3><ol class="rules-list rules-list-ordered"><li><a class="rules-link" href="satya_d20_rules.html">Satya d20 Core Ruleset Reference</a> (<code class="rules-inline-code">id: satya_d20_rules</code>)</li></ol><ul class="rules-list"><li>Canonical Two-List Cascading (<code class="rules-inline-code">2d20</code>) dice mechanic, $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$, carry modes (<code class="rules-inline-code">markov_step</code>, <code class="rules-inline-code">cumulative_snowball</code>), signed outcome tiers, and the Count-Up Action Clock.</li></ul><ol class="rules-list rules-list-ordered"><li><a class="rules-link" href="probability.html">Probability &amp; The Cascading Dice Mechanic</a> (<code class="rules-inline-code">id: probability</code>)</li></ol><ul class="rules-list"><li>Mathematical foundation, distribution topology (skewness, modality, tail behavior), scale invariance across $K$, and avoiding the &quot;Skilled Botch Paradox.&quot;</li></ul><ol class="rules-list rules-list-ordered"><li><a class="rules-link" href="tasks.html">Task Resolution &amp; Skill Check Mechanics</a> (<code class="rules-inline-code">id: tasks</code>)</li></ol><ul class="rules-list"><li>Step-by-step task resolution pipeline, Gate Classifications (<code class="rules-inline-code">Class A / B / C</code>), Tool Tiers, Complementary <code class="rules-inline-code">KNO</code> $\to$ <code class="rules-inline-code">PHY</code> Skill Synergy, and complete worked examples (including Sarah&#39;s lockpicking cascade).</li></ul><h3 id="part-iii-characters-attributes-lifepaths">Part III: Characters, Attributes &amp; Lifepaths</h3><ol class="rules-list rules-list-ordered"><li><a class="rules-link" href="characteristics.html">Character Characteristics &amp; Attribute Architecture</a> (<code class="rules-inline-code">id: characteristics</code>)</li></ol><ul class="rules-list"><li>Physical (<code class="rules-inline-code">SPD</code>, <code class="rules-inline-code">FOR</code>, <code class="rules-inline-code">DEX</code>, <code class="rules-inline-code">KIN</code>, <code class="rules-inline-code">HLT</code>, <code class="rules-inline-code">FIT</code>, <code class="rules-inline-code">MAS</code>, <code class="rules-inline-code">HGT</code>), Mental (<code class="rules-inline-code">MEM</code>, <code class="rules-inline-code">ANA</code>, <code class="rules-inline-code">INS</code>, <code class="rules-inline-code">CRE</code>, <code class="rules-inline-code">DIS</code>, <code class="rules-inline-code">FOC</code>), Social (<code class="rules-inline-code">COM</code>, <code class="rules-inline-code">PRE</code>, <code class="rules-inline-code">ELO</code>), Sensory (<code class="rules-inline-code">SIG</code>, <code class="rules-inline-code">HEA</code>, <code class="rules-inline-code">TAC</code>, <code class="rules-inline-code">OLF</code>, <code class="rules-inline-code">TAS</code>, <code class="rules-inline-code">ITU</code>), and Psyche (<code class="rules-inline-code">EGO</code>, <code class="rules-inline-code">SLF</code>, <code class="rules-inline-code">OPN</code>, <code class="rules-inline-code">BLG</code>, <code class="rules-inline-code">EXT</code>, <code class="rules-inline-code">CNF</code>, <code class="rules-inline-code">AGG</code>) attributes plus derived metrics (<code class="rules-inline-code">POW</code>, <code class="rules-inline-code">MMF</code>, <code class="rules-inline-code">OODA</code>, <code class="rules-inline-code">CMP</code>).</li></ul><ol class="rules-list rules-list-ordered"><li><a class="rules-link" href="skill-design.html">Skill System &amp; Lifepath Architecture</a> (<code class="rules-inline-code">id: skill-design</code>)</li></ol><ul class="rules-list"><li>Talents (<code class="rules-inline-code">TAL</code>) vs. Physical (<code class="rules-inline-code">PHY</code>) and Knowledge (<code class="rules-inline-code">KNO</code>) skills, 8 hierarchical Skill Trees, Master Task Requirements Table, and chronological Lifepath creation (<code class="rules-inline-code">SQM</code>, <code class="rules-inline-code">DIS + Mental + APT</code> study rolls, and <code class="rules-inline-code">[Access]</code> gates).</li></ul><h3 id="part-iv-psyche-social-combat-tactical-combat">Part IV: Psyche, Social Combat &amp; Tactical Combat</h3><ol class="rules-list rules-list-ordered"><li><a class="rules-link" href="social_interactions.html">Social Interactions, Psyche Mechanics &amp; Social Combat</a> (<code class="rules-inline-code">id: social_interactions</code>)</li></ol><ul class="rules-list"><li>Acting against Psyche (<code class="rules-inline-code">DIS</code> Friction Checks &amp; Trait Drift), Conviction Surges, Combat Morale modifiers, and Social Combat (&quot;Mental Wounds&quot;: Rhetorical Strain, Doubt, Ego Wounds, and Cognitive Dissonance).</li></ul><ol class="rules-list rules-list-ordered"><li><a class="rules-link" href="combat.html">Combat Architecture, Morale &amp; Ranged Firefights</a> (<code class="rules-inline-code">id: combat</code>)</li></ol><ul class="rules-list"><li>Combat philosophy, anatomical trauma over Hit Points, Count-Up Action Clock (<code class="rules-inline-code">TC</code> &amp; <code class="rules-inline-code">action_time_factor</code>), Psychological Drives &amp; 5 Morale Conditions, the <strong>&amp;quot;Envelope &amp;amp; Fill&amp;quot; Tactical Pool ($P_{\text{base}} = C_{\text{combat}} + 3N$)</strong>, and Ranged Firefight mechanics (Worked Examples 2 &amp; 3).</li></ul><ol class="rules-list rules-list-ordered"><li><a class="rules-link" href="melee_combat.html">Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a> (<code class="rules-inline-code">id: melee_combat</code>)</li></ol><ul class="rules-list"><li>Close-quarters anatomy, the <strong>Tactical Triad (<code class="rules-inline-code">Tempo</code>, <code class="rules-inline-code">Control</code>, <code class="rules-inline-code">Force</code> — <code class="rules-inline-code">TCF</code>)</strong>, <code class="rules-inline-code">Guard</code> &amp; Seizing the Initiative, <code class="rules-inline-code">Root</code> vs. throws/sweeps, the Six Core Tactical Allocations (<code class="rules-inline-code">TC</code>, <code class="rules-inline-code">TF</code>, <code class="rules-inline-code">CF</code>, <code class="rules-inline-code">Pure T/C/F</code>), Melee Weapon Reach &amp; Profiles, and the Viktor vs. Elena tick-by-tick walkthrough.</li></ul></article>
+    <div class="book-pager">
+      <a class="book-pager-btn" href="index.html">&larr; Table of Contents</a><a class="book-pager-btn" href="background.html">Next: An RPG for a More Civilized Age &rarr;</a>
+    </div>
+  </main>
+</body>
+</html>

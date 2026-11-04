@@ -646,6 +646,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             </button>
                             <button
                                 type="button"
+                                id="tab-btn-rules"
+                                role="tab"
+                                aria-selected="false"
+                                aria-controls="notebook-pane-rules"
+                                data-notebook-tab="rules"
+                                class="notebook-tab"
+                                onclick="window.satyaSelectNotebookTab('rules')"
+                                on:click=move |_| wasm_client::satya_select_notebook_tab("rules".to_string())
+                            >
+                                "Rules Book"
+                            </button>
+                            <button
+                                type="button"
                                 id="tab-btn-docs"
                                 role="tab"
                                 aria-selected="false"
@@ -997,7 +1010,110 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             </div>
                         </div>
 
-                        // --- TAB 6: GM_ONLY DOCUMENTS (TEXT/MARKDOWN & GOOGLE DOCS/SHEETS) ---
+                        // --- TAB 6: SATYA TTRPG RULES BOOK ---
+                        <div
+                            id="notebook-pane-rules"
+                            role="tabpanel"
+                            aria-labelledby="tab-btn-rules"
+                            data-notebook-pane="rules"
+                            class="notebook-pane"
+                            style="display: none;"
+                        >
+                            <div class="pane-toolbar">
+                                <div class="model-controls-row">
+                                    <label class="inline-label" for="rules-chapter-select">
+                                        <span>"Chapter"</span>
+                                        <select
+                                            id="rules-chapter-select"
+                                            onchange="window.satyaSelectRulesChapter('')"
+                                            on:change=move |_| wasm_client::satya_select_rules_chapter(String::new())
+                                        >
+                                            <option value="background">"1. Design Philosophy & Goals of Satya"</option>
+                                            <option value="satya_d20_rules">"2. Core 2d20 Cascading System Rules"</option>
+                                            <option value="tasks" selected>"3. Task Resolution & Skill Check Mechanics"</option>
+                                            <option value="probability">"4. Mathematical Foundations & Exact Probability Engine"</option>
+                                            <option value="characteristics">"5. Core Characteristics & Derived Scales"</option>
+                                            <option value="skill-design">"6. Skill Ontology, Lifepath & Non-Linear Progression"</option>
+                                            <option value="combat">"7. Combat Overview, Morale & Ranged Firefights"</option>
+                                            <option value="melee_combat">"8. Close-Quarters & Melee Combat (Tactical Triad)"</option>
+                                            <option value="social_interactions">"9. Social Mechanics & Cognitive Dissonance"</option>
+                                        </select>
+                                    </label>
+                                    <label class="inline-label" for="rules-search-input">
+                                        <span>"Search Rules"</span>
+                                        <input
+                                            id="rules-search-input"
+                                            type="search"
+                                            placeholder="e.g. TN_eff, botch, Tempo, Dissonance..."
+                                            oninput="window.satyaSearchRulesBook()"
+                                            onchange="window.satyaSearchRulesBook()"
+                                        />
+                                    </label>
+                                </div>
+                                <div class="btn-row-compact">
+                                    <span id="rules-chapter-pill" class="pill pill-active">
+                                        {wasm_client::format_rules_chapter_html("tasks").1}
+                                    </span>
+                                    <a
+                                        href="/book/index.html"
+                                        target="_blank"
+                                        rel="noopener"
+                                        class="btn btn-sm btn-secondary"
+                                    >
+                                        "Static Marimo Book"
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="roster-bar">
+                                <span class="roster-title">"Worked Book Examples (Click to Load into 2d20 Task Roller):"</span>
+                                <div class="preset-users">
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadRulesExample('sarah_lockpick')"
+                                        on:click=move |_| wasm_client::satya_load_rules_example("sarah_lockpick".to_string())
+                                    >
+                                        "Sarah's Lockpick (N=4, C=14, Δ_int=+1, Δ_ext=+4)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadRulesExample('elena_probe')"
+                                        on:click=move |_| wasm_client::satya_load_rules_example("elena_probe".to_string())
+                                    >
+                                        "Elena's Sword Probe (N=5, C=16, Δ_ext=+2)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadRulesExample('viktor_cleave')"
+                                        on:click=move |_| wasm_client::satya_load_rules_example("viktor_cleave".to_string())
+                                    >
+                                        "Viktor's Greatsword Cleave (N=4, C=13, Δ_ext=+3)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadRulesExample('social_persuasion')"
+                                        on:click=move |_| wasm_client::satya_load_rules_example("social_persuasion".to_string())
+                                    >
+                                        "Social Rhetoric (N=3, C=15, Δ_int=+2, Δ_ext=+3)"
+                                    </button>
+                                </div>
+                            </div>
+                            <div
+                                id="rules-search-results"
+                                class="gm-docs-list"
+                                style="display: none;"
+                            ></div>
+                            <div
+                                id="rules-book-viewport"
+                                class="rules-book-viewport"
+                                inner_html=wasm_client::default_rules_book_chapter_html()
+                            ></div>
+                        </div>
+
+                        // --- TAB 7: GM_ONLY DOCUMENTS (TEXT/MARKDOWN & GOOGLE DOCS/SHEETS) ---
                         <div
                             id="notebook-pane-docs"
                             role="tabpanel"
@@ -1955,6 +2071,13 @@ mod tests {
             wasm_client::format_3d_model_stage_html("recon_mk4", "hit_zones");
         assert!(model_html.contains("Recon Suit Mk-IV"));
         assert!(model_pill.contains("11.8k tris"));
+
+        assert!(html.contains(r#"id="tab-btn-rules""#));
+        assert!(html.contains(r#"id="notebook-pane-rules""#));
+        assert!(html.contains(r#"id="rules-chapter-select""#));
+        assert!(html.contains(r#"id="rules-search-input""#));
+        assert!(html.contains(r#"id="rules-book-viewport""#));
+        assert!(html.contains("Task Resolution &amp; Skill Check Mechanics"));
 
         assert!(html.contains("btn-logout"));
         assert!(html.contains("btn-leave-session"));

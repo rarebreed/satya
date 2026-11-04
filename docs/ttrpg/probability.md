@@ -57,7 +57,7 @@ flowchart LR
 ```
 
 #### Carry-Over Modes
-Satya supports two carry-over modes in [`paired_list_signed_margin_pmfs`](file:///c:/Users/hapah/Projects/satya/src/satya_ml/dice_probabilities.py#L469-L661):
+Satya supports two carry-over modes in [`paired_list_signed_margin_pmfs`](../../src/satya_ml/dice_probabilities.py):
 - **Single-Step Markov Carry (`markov_step` — Standard Resolution):**
   Pair $n$ only receives a single $+\delta_{\text{over}}$ if Pair $n-1$ succeeded, or a single $-\delta_{\text{under}}$ if Pair $n-1$ failed. This allows a skilled character who misses Pair 1 to fight through the $-\delta_{\text{under}}$ penalty on Pair 2 or 3, recover their footing, and flip the cascade back into positive $+\delta_{\text{over}}$ momentum.
 - **Cumulative Snowball Carry (`cumulative_snowball` — High-Stakes / Unforgiving Resolution):**
@@ -110,7 +110,7 @@ Why? Because "inherent difficulty" is mathematically indistinguishable from shif
 ## 4. Core Calibration Decisions for `K = 20`
 
 ### 4.1 Why `K = 20` Over `K = 10` or `K = 100`?
-Simulation across $K \in \{10, 20, 100\}$ (see [`summarize_cascade_odds.py`](file:///c:/Users/hapah/Projects/satya/src/satya_ml/summarize_cascade_odds.py)) proved that when $C = 0.5K$ and $\delta = 0.3K$ are scaled proportionally to $K$, the cascade probabilities are **nearly scale-invariant** (differing by `< 1.6%` between `d10` and `d20`).
+Simulation across $K \in \{10, 20, 100\}$ (see [`summarize_cascade_odds.py`](../../src/satya_ml/summarize_cascade_odds.py)) proved that when $C = 0.5K$ and $\delta = 0.3K$ are scaled proportionally to $K$, the cascade probabilities are **nearly scale-invariant** (differing by `< 1.6%` between `d10` and `d20`).
 We chose **`K = 20`** because:
 - It provides **twice the granularity of `K = 10`** for differentiating character attributes ($4\dots 18$ vs. $2\dots 9$) and fine-grained environmental/equipment modifiers ($\pm 1, \pm 2$) without saturating the scale.
 - It avoids the two-digit mental arithmetic bloat of summing `2d100` pairs (`2..200`), keeping `2d20` sums (`2..40`) fast and intuitive.
@@ -204,19 +204,19 @@ A key design question is how natural talent (**Controlling Characteristic $C$**)
 
 ## 6. Codebase & Interactive Simulation Tools
 
-- **Exact Combinatorial & DP Engine (Python & Rust):**
-  - Python: [`src/satya_ml/dice_probabilities.py`](file:///c:/Users/hapah/Projects/satya/src/satya_ml/dice_probabilities.py)
-  - Rust Game Engine Crate (`satya-engine`): [`crates/satya-engine/src/dice_probabilities.rs`](file:///c:/Users/hapah/Projects/satya/crates/satya-engine/src/dice_probabilities.rs)
+- **Exact Combinatorial & DP Engine (Python, PyO3 & Rust):**
+  - Python & PyO3 (`satya_py`): [`src/satya_ml/dice_probabilities.py`](../../src/satya_ml/dice_probabilities.py) & [`crates/satya-py/src/lib.rs`](../../crates/satya-py/src/lib.rs)
+  - Rust Game Engine Crate (`satya-engine`): [`crates/satya-engine/src/dice_probabilities.rs`](../../crates/satya-engine/src/dice_probabilities.rs)
 - **CLI Odds Summary & Calibration Sweeps (Python & Rust):**
-  - Python: [`src/satya_ml/summarize_cascade_odds.py`](file:///c:/Users/hapah/Projects/satya/src/satya_ml/summarize_cascade_odds.py)
-  - Rust Module & CLI Binary (`satya-engine`): [`crates/satya-engine/src/summarize_cascade_odds.rs`](file:///c:/Users/hapah/Projects/satya/crates/satya-engine/src/summarize_cascade_odds.rs) & [`crates/satya-engine/src/bin/summarize_cascade_odds.rs`](file:///c:/Users/hapah/Projects/satya/crates/satya-engine/src/bin/summarize_cascade_odds.rs)
+  - Python: [`src/satya_ml/summarize_cascade_odds.py`](../../src/satya_ml/summarize_cascade_odds.py)
+  - Rust Module & CLI Binary (`satya-engine`): [`crates/satya-engine/src/summarize_cascade_odds.rs`](../../crates/satya-engine/src/summarize_cascade_odds.rs) & [`crates/satya-engine/src/bin/summarize_cascade_odds.rs`](../../crates/satya-engine/src/bin/summarize_cascade_odds.rs)
   ```powershell
   # Rust CLI
   cargo run -p satya-engine --bin summarize-cascade-odds -- --calibration k20_full
   cargo run -p satya-engine --bin summarize-cascade-odds -- --calibration c_vs_n
 
   # Python CLI
-  $env:PYTHONPATH="src"; .\.pixi\envs\default\python.exe -m satya_ml.summarize_cascade_odds --calibration k20_full
-  $env:PYTHONPATH="src"; .\.pixi\envs\default\python.exe -m satya_ml.summarize_cascade_odds --calibration c_vs_n
+  $env:PYTHONPATH="src"; python -m satya_ml.summarize_cascade_odds --calibration k20_full
+  $env:PYTHONPATH="src"; python -m satya_ml.summarize_cascade_odds --calibration c_vs_n
   ```
-- **Interactive Marimo Sandbox:** [`notebooks/dice_probability_distributions.py`](file:///c:/Users/hapah/Projects/satya/notebooks/dice_probability_distributions.py) (`pixi run notebook`)
+- **Interactive Marimo Notebooks & Rules Book:** [`notebooks/dice_probability_distributions.py`](../../notebooks/dice_probability_distributions.py) & [`notebooks/satya_rules_book.py`](../../notebooks/satya_rules_book.py) (`pixi run notebook` / `pixi run rules-book`)

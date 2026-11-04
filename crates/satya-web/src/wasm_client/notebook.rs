@@ -20,19 +20,20 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{Headers, HtmlElement, Request, RequestInit, Response};
 
-/// Canonical list of the 7 Tabbed Notebook tab slugs and their `(button_id, pane_id)` pairs.
+/// Canonical list of the 8 Tabbed Notebook tab slugs and their `(button_id, pane_id)` pairs.
 pub const NOTEBOOK_TABS: &[(&str, &str, &str)] = &[
     ("maps", "tab-btn-maps", "notebook-pane-maps"),
     ("dice", "tab-btn-dice", "notebook-pane-dice"),
     ("model", "tab-btn-model", "notebook-pane-model"),
     ("character", "tab-btn-character", "notebook-pane-character"),
     ("combat", "tab-btn-combat", "notebook-pane-combat"),
+    ("rules", "tab-btn-rules", "notebook-pane-rules"),
     ("docs", "tab-btn-docs", "notebook-pane-docs"),
     ("iggy", "tab-btn-iggy", "notebook-pane-iggy"),
 ];
 
 /// Switches the active view inside the Left Tabbed Notebook (`#tabletop-canvas-card`) between
-/// `"maps"`, `"dice"`, `"model"`, `"character"`, `"combat"`, and `"iggy"`.
+/// `"maps"`, `"dice"`, `"model"`, `"character"`, `"combat"`, `"rules"`, `"docs"`, and `"iggy"`.
 #[wasm_bindgen]
 pub fn satya_select_notebook_tab(tab_id: String) {
     let target = if NOTEBOOK_TABS.iter().any(|(slug, _, _)| *slug == tab_id) {
@@ -1024,4 +1025,136 @@ pub fn satya_refresh_gm_documents() {
             );
         }
     });
+}
+
+/// Returns the default rendered HTML for the `Rules Book` notebook tab (`tasks` chapter).
+pub fn default_rules_book_chapter_html() -> String {
+    format_rules_chapter_html("tasks").0
+}
+
+/// Formats `(rendered_html, pill_text)` for a canonical Satya TTRPG Rules Book chapter.
+pub fn format_rules_chapter_html(chapter_id: &str) -> (String, String) {
+    let doc = satya_engine::get_rules_chapter(chapter_id)
+        .or_else(|| satya_engine::get_rules_chapter("tasks"));
+    let Some(doc) = doc else {
+        return (
+            r#"<div class="rules-book-empty">Rules chapter not found.</div>"#.to_string(),
+            "Chapter Not Found".to_string(),
+        );
+    };
+    let pill = format!(
+        "{} · {} ({} sections)",
+        doc.summary.part,
+        doc.summary.relative_path,
+        doc.summary.headings.len()
+    );
+    (doc.rendered_html, pill)
+}
+
+/// Switches the displayed chapter in the `Rules Book` notebook tab (`#rules-book-viewport`).
+#[wasm_bindgen]
+pub fn satya_select_rules_chapter(chapter_id: String) {
+    let target = if chapter_id.trim().is_empty() {
+        select_value("rules-chapter-select")
+    } else {
+        set_select_value("rules-chapter-select", &chapter_id);
+        chapter_id
+    };
+    let (html, pill) = format_rules_chapter_html(&target);
+    set_text("rules-chapter-pill", &pill);
+    if let Some(vp) = get_element("rules-book-viewport") {
+        vp.set_inner_html(&html);
+    }
+}
+
+/// Searches across all 9 canonical Satya TTRPG Rules Book chapters and renders clickable hits
+/// inside `#rules-search-results`.
+#[wasm_bindgen]
+pub fn satya_search_rules_book() {
+    let query = input_value("rules-search-input");
+    let Some(results_el) = get_element("rules-search-results") else {
+        return;
+    };
+    if query.trim().is_empty() {
+        results_el.set_inner_html("");
+        set_display("rules-search-results", "none");
+        return;
+    }
+    let hits = satya_engine::search_rules_book(&query, 8);
+    if hits.is_empty() {
+        results_el.set_inner_html(&format!(
+            r#"<div class="pill pill-muted">No rules sections matched "{}"</div>"#,
+            escape_html(query.trim())
+        ));
+        set_display("rules-search-results", "block");
+        return;
+    }
+    let items: String = hits
+        .iter()
+        .map(|hit| {
+            format!(
+                r#"<div class="gm-doc-card rules-search-hit"><div class="gm-doc-header"><button type="button" class="btn-chip" onclick="window.satyaSelectRulesChapter('{}')">{}</button><span class="mono">{}</span></div><div class="gm-doc-preview">{}</div></div>"#,
+                escape_html(&hit.chapter_id),
+                escape_html(&hit.chapter_title),
+                escape_html(&hit.section_heading),
+                escape_html(&hit.snippet),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    results_el.set_inner_html(&items);
+    set_display("rules-search-results", "block");
+}
+
+/// Loads a canonical worked example from the Satya Rules Book into the Center-Bottom `2d20`
+/// Task Resolution drawer (`#ttrpg-drawer`) and recalculates the exact probability preview.
+#[wasm_bindgen]
+pub fn satya_load_rules_example(preset: String) {
+    let (skill, n, c, d_int, d_ext, carry, botch) = match preset.as_str() {
+        "elena_probe" => (
+            "Arming Sword Probe (Elena)",
+            5,
+            16,
+            0,
+            2,
+            "markov_step",
+            "closest_miss",
+        ),
+        "viktor_cleave" => (
+            "Greatsword Cleave (Viktor)",
+            4,
+            13,
+            0,
+            3,
+            "markov_step",
+            "closest_miss",
+        ),
+        "social_persuasion" => (
+            "Counter-Interrogation Rhetoric",
+            3,
+            15,
+            2,
+            3,
+            "markov_step",
+            "closest_miss",
+        ),
+        _ => (
+            "Mechanical Lockpicking (Sarah)",
+            4,
+            14,
+            1,
+            4,
+            "markov_step",
+            "closest_miss",
+        ),
+    };
+    set_input_value("ttrpg-skill", skill);
+    set_input_value("ttrpg-skill-level", &n.to_string());
+    set_input_value("ttrpg-control-c", &c.to_string());
+    set_input_value("ttrpg-internal-mod", &d_int.to_string());
+    set_input_value("ttrpg-external-mod", &d_ext.to_string());
+    set_select_value("ttrpg-carry-mode", carry);
+    set_select_value("ttrpg-botch-rule", botch);
+    set_text("char-stat-control", &c.to_string());
+    satya_update_cascade_preview();
 }

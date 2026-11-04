@@ -279,6 +279,30 @@ pub fn register_window_bindings() {
     bind("satyaRefreshGmDocuments", c_doc_refresh.as_ref());
     c_doc_refresh.forget();
 
+    let c_rules_chap = Closure::<dyn Fn(String)>::new(satya_select_rules_chapter);
+    bind("satyaSelectRulesChapter", c_rules_chap.as_ref());
+    c_rules_chap.forget();
+
+    let c_rules_search = Closure::<dyn Fn()>::new(satya_search_rules_book);
+    bind("satyaSearchRulesBook", c_rules_search.as_ref());
+    c_rules_search.forget();
+
+    let c_rules_ex = Closure::<dyn Fn(String)>::new(satya_load_rules_example);
+    bind("satyaLoadRulesExample", c_rules_ex.as_ref());
+    c_rules_ex.forget();
+
+    let c_rules_ch = Closure::<dyn Fn(String)>::new(satya_select_rules_chapter);
+    bind("satyaSelectRulesChapter", c_rules_ch.as_ref());
+    c_rules_ch.forget();
+
+    let c_rules_search = Closure::<dyn Fn()>::new(satya_search_rules_book);
+    bind("satyaSearchRulesBook", c_rules_search.as_ref());
+    c_rules_search.forget();
+
+    let c_rules_ex = Closure::<dyn Fn(String)>::new(satya_load_rules_example);
+    bind("satyaLoadRulesExample", c_rules_ex.as_ref());
+    c_rules_ex.forget();
+
     let on_move = Closure::<dyn FnMut(web_sys::Event)>::new(move |ev: web_sys::Event| {
         handle_webcam_drag_move(&ev);
     });

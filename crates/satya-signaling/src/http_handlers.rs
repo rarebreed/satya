@@ -4,10 +4,11 @@
 use crate::state::SignalingAppState;
 use axum::{
     Json,
-    extract::State,
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse},
 };
+use satya_engine::{build_rules_catalog_response, get_rules_chapter};
 use satya_schema::{
     AccountRole, AiGmProviderConfig, CreateSessionRequest, JoinSessionRequest, LeaveSessionRequest,
     LifecycleEventType, LoginRequest, LogoutRequest, Participant, RegisterRequest,
@@ -15,7 +16,7 @@ use satya_schema::{
 };
 use satya_storage::TopicMetricsSnapshot;
 use satya_web::render_satya_app_html;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -425,4 +426,34 @@ pub async fn storage_flush_handler(
     }
     let flushed = state.storage.flush_all_topics().await.unwrap_or_default();
     (StatusCode::OK, Json(json!({ "flushed_files": flushed }))).into_response()
+}
+
+/// Optional query parameters for `GET /api/rules`.
+#[derive(Debug, Default, Deserialize)]
+pub struct RulesCatalogQuery {
+    /// Optional keyword search query across all chapters in `docs/ttrpg/`.
+    pub q: Option<String>,
+    /// Maximum number of ranked search hits to return (default `8`).
+    pub limit: Option<usize>,
+}
+
+/// Returns the canonical Satya TTRPG Rules Book chapter catalog and optional `?q=` search hits at `GET /api/rules`.
+pub async fn list_rules_handler(Query(params): Query<RulesCatalogQuery>) -> impl IntoResponse {
+    let limit = params.limit.unwrap_or(8).clamp(1, 25);
+    let catalog = build_rules_catalog_response(params.q.as_deref(), limit);
+    (StatusCode::OK, Json(catalog)).into_response()
+}
+
+/// Returns a single Satya TTRPG Rules Book chapter (metadata, raw Markdown, and rendered HTML) at `GET /api/rules/:chapter_id`.
+pub async fn get_rules_chapter_handler(Path(chapter_id): Path<String>) -> impl IntoResponse {
+    match get_rules_chapter(&chapter_id) {
+        Some(doc) => (StatusCode::OK, Json(json!(doc))).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": format!("Rules chapter '{}' not found", chapter_id)
+            })),
+        )
+            .into_response(),
+    }
 }

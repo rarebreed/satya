@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Task Resolution &amp; Skill Check Mechanics — Satya TTRPG Rules Book</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --panel: #111827;
+      --border: #1f2937;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --emerald: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      min-height: 100vh;
+    }
+    aside.book-sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 20px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .book-brand { font-size: 1.15rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .book-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }
+    .book-nav-part { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+    .book-nav-link { display: block; padding: 7px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.88rem; margin-bottom: 3px; }
+    .book-nav-link:hover { background: rgba(56, 189, 248, 0.12); }
+    .book-nav-link.active { background: rgba(56, 189, 248, 0.2); color: var(--accent); font-weight: 600; }
+    main.book-main { max-width: 980px; padding: 32px 44px 64px; line-height: 1.65; }
+    h1, h2, h3, h4 { color: #f8fafc; }
+    h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    a { color: var(--accent); }
+    code, pre { font-family: "JetBrains Mono", Consolas, monospace; }
+    .rules-inline-code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }
+    .rules-code-block { background: #0f172a; border: 1px solid var(--border); padding: 14px; border-radius: 8px; overflow-x: auto; }
+    .rules-table-wrap { overflow-x: auto; margin: 14px 0; }
+    .rules-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .rules-table th, .rules-table td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+    .rules-table th { background: #1e293b; color: var(--accent); }
+    .rules-alert, .rules-blockquote { border-left: 4px solid var(--accent); background: rgba(30, 41, 59, 0.55); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+    .rules-alert-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .book-interactive-widget { background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin: 24px 0; }
+    .widget-grid { display: grid; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .widget-panel { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .widget-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .widget-controls label, label.full-width { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 4px; }
+    .widget-controls input, label.full-width input { background: #1e293b; border: 1px solid #334155; color: var(--text); padding: 6px 8px; border-radius: 4px; }
+    .widget-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .widget-presets button { background: #1e293b; border: 1px solid #38bdf8; color: var(--accent); padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
+    .book-pager { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .book-pager-btn { background: var(--panel); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <aside class="book-sidebar">
+    <div class="book-brand">SATYA // RULES BOOK</div>
+    <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
+    <a href="index.html" class="book-nav-link">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Philosophy &amp; Design Vision</div><a href="background.html" class="book-nav-link">1. An RPG for a More Civilized Age</a><div class="book-nav-part">Part II: Core 2d20 Watershed Resolution &amp; Probability</div><a href="satya_d20_rules.html" class="book-nav-link">2. Satya d20 Core Ruleset Reference</a><a href="probability.html" class="book-nav-link">3. Probability &amp; The Cascading Dice Mechanic</a><a href="tasks.html" class="book-nav-link active">4. Task Resolution &amp; Skill Check Mechanics</a><div class="book-nav-part">Part III: Characters, Attributes &amp; Lifepaths</div><a href="characteristics.html" class="book-nav-link">5. Character Characteristics &amp; Attribute Architecture</a><a href="skill-design.html" class="book-nav-link">6. Skill System &amp; Lifepath Architecture</a><div class="book-nav-part">Part IV: Psyche, Social Combat &amp; Tactical Combat</div><a href="social_interactions.html" class="book-nav-link">7. Social Interactions, Psyche Mechanics &amp; Social Combat</a><a href="combat.html" class="book-nav-link">8. Combat Architecture, Morale &amp; Ranged Firefights</a><a href="melee_combat.html" class="book-nav-link">9. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a>
+  </aside>
+  <main class="book-main">
+    <article class="satya-rules-article"><h1 id="satya-ttrpg-task-resolution-skill-check-mechanics">Satya TTRPG Task Resolution &amp; Skill Check Mechanics</h1><p>Whenever a character performs an action with meaningful stakes and some degree of uncertainty that can influence the narrative or tactical situation, the Game Master (or the Satya AI Game Master via <code class="rules-inline-code">evaluate_satya_cascade_task</code>) calls for a <strong>Task Resolution</strong> roll.</p><p>This chapter defines the step-by-step procedure for framing, gating, modifying, and resolving any non-combat or tactical skill check in <strong>Satya</strong>, uniting the mathematical foundation in <a class="rules-link" href="probability.html">Probability &amp; The Cascading Dice Mechanic</a> and <a class="rules-link" href="satya_d20_rules.html">Core Ruleset Reference</a> with the skill hierarchy in <a class="rules-link" href="skill-design.html">Skill System &amp; Lifepath Architecture</a> and attribute controllers in <a class="rules-link" href="characteristics.html">Character Characteristics</a>.</p><hr class="rules-divider"/><h2 id="1-the-task-resolution-pipeline">1. The Task Resolution Pipeline</h2><p>Every task in Satya is resolved through a five-step pipeline:</p><pre class="mermaid rules-mermaid">flowchart LR
+    S1[&quot;&lt;b&gt;1. Gate &amp; Tools&lt;/b&gt;&lt;br/&gt;Class A / B / C Check&lt;br/&gt;Verify Min Skill (N_min)&lt;br/&gt;&amp; Tool Requirement&quot;]
+    S2[&quot;&lt;b&gt;2. Four Task Factors&lt;/b&gt;&lt;br/&gt;Skill Pairs (N = 1–8)&lt;br/&gt;Controller C = ⌊(C₁+C₂)/2⌋&lt;br/&gt;Internal Δ_int &amp; External Δ_ext&quot;]
+    S3[&quot;&lt;b&gt;3. Compute Targets&lt;/b&gt;&lt;br/&gt;TN_eff = 31 - C + Δ_ext&lt;br/&gt;δ_over = +6&lt;br/&gt;δ_under = 6 + Δ_int&quot;]
+    S4[&quot;&lt;b&gt;4. Roll 2d20 Cascade&lt;/b&gt;&lt;br/&gt;Roll N sequential 2d20 pairs&lt;br/&gt;Apply Carry_n at each step&lt;br/&gt;Count Successes &amp; Floor Breaches&quot;]
+    S5[&quot;&lt;b&gt;5. Outcome Tier&lt;/b&gt;&lt;br/&gt;Compare vs. Required S_req&lt;br/&gt;Resolve Signed Margin (-N..+N)&lt;br/&gt;&amp; Narrative Complication&quot;]
+
+    S1 --&gt; S2 --&gt; S3 --&gt; S4 --&gt; S5</pre><hr class="rules-divider"/><h2 id="2-step-1-task-gate-classifications-prerequisites-tools">2. Step 1: Task Gate Classifications, Prerequisites &amp; Tools</h2><p>Before any dice are rolled, the GM determines <strong>whether the character is qualified and equipped</strong> to attempt the task. Every task belongs to one of three <strong>Gate Classifications</strong>:</p><div class="rules-table-wrap"><table class="rules-table"><thead><tr><th>Gate Class</th><th>Who May Attempt the Task</th><th>Effective Skill ($N$) &amp; Untrained / Default Modifier ($\Delta_{\text{ext}}$)</th></tr></thead><tbody><tr><td><strong>Class A: Open / Talent Task</strong></td><td><strong>Anyone</strong> (uses an innate Talent <code class="rules-inline-code">TAL</code> at $N \ge 1$ or a basic Physical <code class="rules-inline-code">PHY</code> action).</td><td>Roll the character&#39;s Talent level ($N \ge 1$). If attempting a basic <code class="rules-inline-code">PHY</code> skill untrained (<code class="rules-inline-code">N = 0</code>), roll <strong><code class="rules-inline-code">N = 1</code> pair</strong> with <strong>$\Delta_{\text{ext}} = +4$</strong>.</td></tr><tr><td><strong>Class B: Trained / Defaultable Task</strong></td><td>Characters with the required skill ($N \ge 1$), <strong>OR</strong> characters who possess its immediate <strong>Parent or Sibling Skill</strong> at $N_{\text{parent}} \ge 2$.</td><td>If trained ($N \ge 1$), roll $N$ pairs at normal $\Delta_{\text{ext}}$. If defaulting from a Parent/Sibling skill, roll <strong>$\max(1, N_{\text{parent}} - 1)$ pairs</strong> with an added <strong>$\Delta_{\text{ext}} = +4$ to $+6$</strong>. Characters with neither cannot attempt the roll.</td></tr><tr><td><strong>Class C: Hard-Gated Specialist Task (<code class="rules-inline-code">[Locked]</code>)</strong></td><td><strong>Only</strong> characters who possess the exact required skill at or above <strong>$N_{\text{min}}$</strong> AND possess <strong>Mandatory Tools</strong>.</td><td><strong>No defaulting allowed.</strong> Without $N \ge N_{\text{min}}$ and the required tools, the character cannot meaningfully attempt the task (or automatically botches if forced under duress).</td></tr></tbody></table></div><h3 id="21-tool-dependency-tiers">2.1 Tool Dependency Tiers</h3><p>Every skill and task specifies one of three tool dependencies:</p><ol class="rules-list rules-list-ordered"><li><strong><code class="rules-inline-code">[Tool: None]</code></strong>: Relies purely on the character&#39;s body, senses, voice, or mind (*Running*, *Brawling*, *Observation*, *Persuasion*, *Empathy*).</li><li><strong><code class="rules-inline-code">[Tool: Situational]</code></strong>: Can be attempted barehanded (<code class="rules-inline-code">+0</code> baseline), while specialized gear grants an equipment bonus (<code class="rules-inline-code">-2</code> to <code class="rules-inline-code">-4</code> to $\Delta_{\text{ext}}$), or lacking basic protective gear in harsh conditions imposes <code class="rules-inline-code">+2</code> to <code class="rules-inline-code">+4</code>.</li><li><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong>: Requires dedicated instruments (*Lockpicking*, *Trauma Surgery*, *Network Exploitation*, *Firearms*).</li></ol><ul class="rules-list"><li><strong>Standard Professional Kit</strong>: <code class="rules-inline-code">0</code> modifier to $\Delta_{\text{ext}}$.</li><li><strong>High-Precision / 2033 AI-Assisted Kit</strong>: <strong><code class="rules-inline-code">-2</code> to <code class="rules-inline-code">-4</code> to $\Delta_{\text{ext}}$</strong> (e.g., an AI ballistic solver scope or ultrasonic lock diagnostic probe).</li><li><strong>Improvised / Substandard Tools</strong>: <strong><code class="rules-inline-code">+4</code> to <code class="rules-inline-code">+8</code> to $\Delta_{\text{ext}}$</strong> (only permitted if the task is Class A/B or the character passes an engineering/tradecraft setup check).</li></ul><hr class="rules-divider"/><h2 id="3-step-2-the-four-task-factors-n-c-delta-textint-delta-textext">3. Step 2: The Four Task Factors (<code class="rules-inline-code">N</code>, <code class="rules-inline-code">C</code>, $\Delta_{\text{int}}$, $\Delta_{\text{ext}}$)</h2><p>Every task roll in Satya is parameterized by <strong>four orthogonal factors</strong> (<code class="rules-inline-code">CascadeTaskParams</code> in <code class="rules-inline-code">satya-engine</code>), each shaping a distinct property of the probability distribution:</p><h3 id="31-factor-1-skill-level-n-in-1-8-mythic-cap-10-number-of-2d20-pairs">3.1 Factor 1: Skill Level ($N \in [1, 8]$, Mythic Cap <code class="rules-inline-code">10</code>) — Number of <code class="rules-inline-code">2d20</code> Pairs</h3><p>The character&#39;s <strong>Skill Level ($N$)</strong> determines how many sequential pairs of 20-sided dice (<code class="rules-inline-code">2d20</code>) are rolled:</p><div class="rules-math-block">$$\text{List A} = (A_1, A_2, \dots, A_N), \qquad \text{List B} = (B_1, B_2, \dots, B_N)$$</div><div class="rules-table-wrap"><table class="rules-table"><thead><tr><th>Skill Level ($N$)</th><th>Proficiency Tier</th><th>Pairs of <code class="rules-inline-code">2d20</code> Rolled</th><th>Benchmark Success Rate ($C = 10, \Delta_{\text{int}} = 0, \Delta_{\text{ext}} = 0$)</th></tr></thead><tbody><tr><td><strong><code class="rules-inline-code">N = 0</code></strong></td><td><strong>Untrained</strong> *(Non-Talent <code class="rules-inline-code">PHY</code>/<code class="rules-inline-code">KNO</code>)*</td><td>Cannot roll Class C; defaults to <code class="rules-inline-code">N = 1</code> (<code class="rules-inline-code">+4</code> to <code class="rules-inline-code">+6</code> $\Delta_{\text{ext}}$) on Class A/B</td><td>—</td></tr><tr><td><strong><code class="rules-inline-code">N = 1</code></strong></td><td><strong>Novice / Baseline Talent (<code class="rules-inline-code">TAL</code>)</strong></td><td><code class="rules-inline-code">1</code> pair (<code class="rules-inline-code">2d20</code>)</td><td><code class="rules-inline-code">52.50%</code></td></tr><tr><td><strong><code class="rules-inline-code">N = 2</code></strong></td><td><strong>Apprentice / Vocational Dabbler</strong></td><td><code class="rules-inline-code">2</code> pairs</td><td><code class="rules-inline-code">61.69%</code></td></tr><tr><td><strong><code class="rules-inline-code">N = 3</code></strong></td><td><strong>Competent / Journeyman (Trained Professional)</strong></td><td><code class="rules-inline-code">3</code> pairs</td><td><strong><code class="rules-inline-code">70.10%</code></strong></td></tr><tr><td><strong><code class="rules-inline-code">N = 4</code></strong></td><td><strong>Seasoned Specialist</strong></td><td><code class="rules-inline-code">4</code> pairs</td><td><code class="rules-inline-code">76.81%</code></td></tr><tr><td><strong><code class="rules-inline-code">N = 5</code></strong></td><td><strong>Veteran Expert</strong></td><td><code class="rules-inline-code">5</code> pairs</td><td><code class="rules-inline-code">82.06%</code></td></tr><tr><td><strong><code class="rules-inline-code">N = 6–7</code></strong></td><td><strong>Master Practitioner</strong></td><td><code class="rules-inline-code">6–7</code> pairs</td><td><code class="rules-inline-code">86.14% – 89.29%</code></td></tr><tr><td><strong><code class="rules-inline-code">N = 8</code></strong></td><td><strong>Grandmaster (Standard Human Cap)</strong></td><td><code class="rules-inline-code">8</code> pairs</td><td><strong><code class="rules-inline-code">92.37%</code></strong></td></tr></tbody></table></div><h3 id="32-factor-2-controlling-characteristic-c-in-1-20-baseline-target-shift">3.2 Factor 2: Controlling Characteristic ($C \in [1, 20]$) — Baseline Target Shift</h3><p>Most skills use a balanced composite of two Controlling Characteristics (<code class="rules-inline-code">C1 / C2</code>, such as <code class="rules-inline-code">DEX/TAC</code> for *Lockpicking*, <code class="rules-inline-code">ELO/ANA</code> for *Persuasion*, or <code class="rules-inline-code">DEX/SIG</code> for *Pistols*):</p><div class="rules-math-block">$$C = \left\lfloor \frac{C_1 + C_2}{2} \right\rfloor$$</div><ul class="rules-list"><li>If a skill specifies a <strong>Minimum Supporting Characteristic (<code class="rules-inline-code">Min C3 &amp;gt;= X</code>)</strong> and the character falls short by $k = X - C_3$ points, each point of shortfall imposes <strong><code class="rules-inline-code">+2</code> to $\Delta_{\text{ext}}$</strong> (e.g., firing *Fully Automatic Weapons* with <code class="rules-inline-code">FOR 8</code> against <code class="rules-inline-code">Min FOR &gt;= 10</code> adds <code class="rules-inline-code">+4</code> to $\Delta_{\text{ext}}$).</li></ul><h3 id="33-factor-3-internal-character-modifiers-delta-textint-in-2-10-stumble-recovery-penalty">3.3 Factor 3: Internal Character Modifiers ($\Delta_{\text{int}} \in [-2, +10]$) — Stumble Recovery Penalty</h3><p>Internal modifiers reflect the character&#39;s physiological and psychological condition (<strong>Fatigue</strong>, <strong>Wound Shock</strong>, <strong>Pain</strong>, <strong>Psychological Strain</strong>, or <strong>Cognitive Dissonance</strong>). Rather than penalizing the character&#39;s opening motion (Pair 1), $\Delta_{\text{int}}$ increases the <strong>negative carry-over penalty ($\delta_{\text{under}}$)</strong> after a missed pair:</p><div class="rules-math-block">$$\delta_{\text{under}} = 6 + \Delta_{\text{int}}, \qquad \delta_{\text{over}} = 6$$</div><div class="rules-table-wrap"><table class="rules-table"><thead><tr><th>Character Internal State</th><th>$\Delta_{\text{int}}$</th><th>Failure Carry Penalty ($-\delta_{\text{under}}$)</th><th>Mechanical &amp; Narrative Meaning</th></tr></thead><tbody><tr><td><strong>Focused / Conviction Surge</strong></td><td><strong><code class="rules-inline-code">-2</code></strong></td><td><strong><code class="rules-inline-code">-4</code></strong></td><td>Calm, rested, or surging with conviction; a stumble on Pair 1 is easy to recover from on Pair 2.</td></tr><tr><td><strong>Fresh (Baseline)</strong></td><td><strong><code class="rules-inline-code">0</code></strong></td><td><strong><code class="rules-inline-code">-6</code></strong></td><td>Symmetric watershed carry (<code class="rules-inline-code">+6</code> on success, <code class="rules-inline-code">-6</code> on failure).</td></tr><tr><td><strong> distracted / Mild Strain</strong></td><td><strong><code class="rules-inline-code">+2</code></strong></td><td><strong><code class="rules-inline-code">-8</code></strong></td><td>Flustered (<code class="rules-inline-code">1</code> stack of Rhetorical Strain or minor fatigue).</td></tr><tr><td><strong>Winded / Shaken</strong></td><td><strong><code class="rules-inline-code">+4</code></strong></td><td><strong><code class="rules-inline-code">-10</code></strong></td><td>Breathing hard or Rattled (<code class="rules-inline-code">2</code> Fatigue Levels or <code class="rules-inline-code">1</code> Wound Shock tier).</td></tr><tr><td><strong>Battered / Moderately Wounded</strong></td><td><strong><code class="rules-inline-code">+6</code></strong></td><td><strong><code class="rules-inline-code">-12</code></strong></td><td>Bleeding or in significant pain; missing Pair 1 makes recovery steep.</td></tr><tr><td><strong>Exhausted / Severely Wounded</strong></td><td><strong><code class="rules-inline-code">+8</code> to <code class="rules-inline-code">+10</code></strong></td><td><strong><code class="rules-inline-code">-14</code> to <code class="rules-inline-code">-16</code></strong></td><td>On the verge of collapse; if Pair 1 succeeds, muscle memory carries through (<code class="rules-inline-code">+6</code>), but a miss almost guarantees cascade failure or a floor-breach complication.</td></tr></tbody></table></div><h3 id="34-factor-4-external-task-difficulty-delta-textext-in-10-16-environmental-target-shift">3.4 Factor 4: External Task Difficulty ($\Delta_{\text{ext}} \in [-10, +16]$) — Environmental Target Shift</h3><p>External modifiers represent the objective complexity of the task, environmental hazards, lighting, range, tool quality, and opponent resistance. They directly shift the <strong>Effective Roll-Over Target Number ($\text{TN}_{\text{eff}}$)</strong>:</p><div class="rules-math-block">$$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$$</div><div class="rules-table-wrap"><table class="rules-table"><thead><tr><th>Task Difficulty Tier</th><th>$\Delta_{\text{ext}}$</th><th>Target $\text{TN}_{\text{eff}}$ at Average $C = 10$</th><th>Example Situational Conditions</th></tr></thead><tbody><tr><td><strong>Trivial / Routine</strong></td><td><code class="rules-inline-code">-8</code> to <code class="rules-inline-code">-10</code></td><td><code class="rules-inline-code">11 – 13</code></td><td>Ideal lab conditions, abundant time, AI diagnostic guidance.</td></tr><tr><td><strong>Easy</strong></td><td><code class="rules-inline-code">-4</code></td><td><code class="rules-inline-code">17</code></td><td>Good lighting, superior tools (<code class="rules-inline-code">-2</code>), cooperative subject.</td></tr><tr><td><strong>Standard Benchmark</strong></td><td><strong><code class="rules-inline-code">0</code></strong></td><td><strong><code class="rules-inline-code">21</code></strong> *(Exact <code class="rules-inline-code">2d20</code> midpoint)*</td><td>Standard professional challenge under field conditions.</td></tr><tr><td><strong>Challenging</strong></td><td><code class="rules-inline-code">+4</code></td><td><code class="rules-inline-code">25</code></td><td>Poor lighting, rain, rushed execution, commercial high-security hardware, or untrained Class A default.</td></tr><tr><td><strong>Hard</strong></td><td><code class="rules-inline-code">+8</code></td><td><code class="rules-inline-code">29</code></td><td>Pitch darkness, improvised tools, active combat stress, encrypted military-grade countermeasures.</td></tr><tr><td><strong>Extreme</strong></td><td><code class="rules-inline-code">+12</code></td><td><code class="rules-inline-code">33</code></td><td>Near-impossible conditions requiring both high Characteristic $C$ and multi-pair momentum.</td></tr><tr><td><strong>Heroic / Nearly Impossible</strong></td><td><code class="rules-inline-code">+16</code></td><td><code class="rules-inline-code">37</code></td><td>Achievable on Pair 1 only by elite specialists ($C \ge 17$), or on Pair 2+ after riding a $+\delta_{\text{over}}$ cascade.</td></tr></tbody></table></div><hr class="rules-divider"/><h2 id="4-step-3-4-resolving-the-sequential-2d20-cascade">4. Step 3 &amp; 4: Resolving the Sequential <code class="rules-inline-code">2d20</code> Cascade</h2><p>Once $N$, $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$, $\delta_{\text{over}} = 6$, and $\delta_{\text{under}} = 6 + \Delta_{\text{int}}$ are set, the character rolls <strong>$N$ sequential pairs of <code class="rules-inline-code">2d20</code></strong>:</p><ol class="rules-list rules-list-ordered"><li><strong>Pair 1 ($n = 1$)</strong>:</li></ol><ul class="rules-list"><li>Compute $Y_1 = A_1 + B_1$ (since $\text{Carry}_1 = 0$).</li><li>If $Y_1 \ge \text{TN}_{\text{eff}}$ *(or $&gt; \text{TN}_{\text{eff}}$ when strict comparison is selected)*:</li><li>Record <strong><code class="rules-inline-code">+1</code> Success</strong>.</li><li>Set carry-over for Pair 2 to <strong>$+\delta_{\text{over}}$ (<code class="rules-inline-code">+6</code>)</strong>.</li><li>If $Y_1 &lt; \text{TN}_{\text{eff}}$:</li><li>Record <strong><code class="rules-inline-code">0</code> Successes</strong> on Pair 1.</li><li>Set carry-over for Pair 2 to <strong>$-\delta_{\text{under}}$ (<code class="rules-inline-code">-(6 + \Delta_{\text{int}})</code> )</strong>.</li></ul><ol class="rules-list rules-list-ordered"><li><strong>Pairs $n = 2 \dots N$</strong>:</li></ol><ul class="rules-list"><li>Compute the modified pair sum:</li></ul><div class="rules-math-block">$$Y_n = A_n + B_n + \text{Carry}_n$$</div><ul class="rules-list"><li>Compare $Y_n$ against $\text{TN}_{\text{eff}}$:</li><li>If $Y_n \ge \text{TN}_{\text{eff}}$: Record <strong><code class="rules-inline-code">+1</code> Success</strong>!</li><li>If $Y_n &lt; \text{TN}_{\text{eff}}$: Record <strong><code class="rules-inline-code">0</code> Successes</strong> on Pair $n$.</li><li>If $Y_n &lt; 2$ (dropping below the physical <code class="rules-inline-code">2d20</code> minimum of snake-eyes <code class="rules-inline-code">2</code> due to negative carry $-\delta_{\text{under}}$): Record <strong><code class="rules-inline-code">+1</code> Floor Breach (<code class="rules-inline-code">raw_botches += 1</code>)</strong>.</li><li>Update $\text{Carry}_{n+1}$ according to the task&#39;s <strong>Carry Mode</strong>:</li><li><strong><code class="rules-inline-code">markov_step</code> (Standard Carry Mode — Default)</strong>: $\text{Carry}_{n+1} = +\delta_{\text{over}}$ if Pair $n$ succeeded, or $-\delta_{\text{under}}$ if Pair $n$ failed. Carry does not stack beyond a single step, allowing a skilled practitioner who stumbles on Pair 1 to fight through $-\delta_{\text{under}}$ on Pair 2 or 3 and flip the cascade back to <code class="rules-inline-code">+6</code>!</li><li><strong><code class="rules-inline-code">cumulative_snowball</code> (High-Stakes Carry Mode)</strong>: $\text{Carry}_{n+1} = \text{Carry}_n + \delta_{\text{over}}$ on success, or $\text{Carry}_n - \delta_{\text{under}}$ on failure. Used for unforgiving high-stakes procedures (*Neurosurgery*, *EOD Disarming*, *Orbital Docking*) where early mistakes compound rapidly.</li><li><strong><code class="rules-inline-code">linear_margin</code> (Exact Margin Carry Mode)</strong>: $\text{Carry}_{n+1} = Y_n - \text{TN}_{\text{eff}}$.</li></ul><hr class="rules-divider"/><h2 id="5-step-5-interpreting-successes-complications-botches">5. Step 5: Interpreting Successes, Complications &amp; Botches</h2><p>At the end of the $N$ pairs, the engine totals <code class="rules-inline-code">total_successes</code> ($0 \dots N$) and checks for botches or complications:</p><div class="rules-table-wrap"><table class="rules-table"><thead><tr><th>Outcome Tier (<code class="rules-inline-code">OutcomeTier</code>)</th><th>Engine Classification (<code class="rules-inline-code">CascadeOutcomeKind</code>)</th><th>Condition</th><th>Narrative &amp; Mechanical Result</th></tr></thead><tbody><tr><td><strong><code class="rules-inline-code">EXTRAORDINARY_SUCCESS</code></strong></td><td><code class="rules-inline-code">Success</code></td><td><code class="rules-inline-code">total_successes &gt;= 3</code> and <code class="rules-inline-code">raw_botches == 0</code></td><td>Masterful execution: accomplishes the task faster (<code class="rules-inline-code">-2 ticks</code>), silently, with bonus yield, or grants <code class="rules-inline-code">-4</code> $\Delta_{\text{ext}}$ setup synergy.</td></tr><tr><td><strong><code class="rules-inline-code">SUCCESS</code></strong></td><td><code class="rules-inline-code">Success</code></td><td><code class="rules-inline-code">1 &lt;= total_successes &lt;= 2</code> (meets $S_{\text{req}}$) and <code class="rules-inline-code">raw_botches == 0</code></td><td>Clean professional execution of the task.</td></tr><tr><td><strong><code class="rules-inline-code">PARTIAL_SUCCESS</code></strong></td><td><code class="rules-inline-code">SuccessWithComplication</code></td><td><code class="rules-inline-code">total_successes &gt;= 1</code> <strong>AND</strong> <code class="rules-inline-code">raw_botches &gt;= 1</code> ($Y_n &lt; 2$ on a failed pair)</td><td><strong>Success at a Cost</strong>: The character achieves their goal, but the floor-breach pair causes a complication (e.g., snapping a lockpick inside the cylinder after it turns, making noise that alerts a guard, or taking <code class="rules-inline-code">+2</code> $\Delta_{\text{int}}$ strain).</td></tr><tr><td><strong><code class="rules-inline-code">FAILURE</code></strong></td><td><code class="rules-inline-code">CleanFailure</code></td><td><code class="rules-inline-code">total_successes == 0</code> and <code class="rules-inline-code">effective_botches == 0</code> ($\max Y_n \ge \text{TN}_{\text{eff}} - 4$)</td><td><strong>Near Miss / Clean Failure</strong>: The task does not succeed and time (<code class="rules-inline-code">TC</code>) is spent, but no catastrophic mistake occurs.</td></tr><tr><td><strong><code class="rules-inline-code">CRITICAL_FAILURE</code></strong></td><td><code class="rules-inline-code">BotchFailure</code></td><td><code class="rules-inline-code">total_successes == 0</code> and <code class="rules-inline-code">effective_botches &gt;= 1</code> (<code class="rules-inline-code">signed_margin &lt; 0</code>)</td><td><strong>Botch (<code class="rules-inline-code">-1</code> to <code class="rules-inline-code">-N</code>)</strong>: Something goes actively wrong—tools jam, alarms trigger, patient destabilizes, or the character exposes themselves to counterattack.</td></tr></tbody></table></div><h3 id="51-complementary-skills-multi-skill-synergy">5.1 Complementary Skills &amp; Multi-Skill Synergy</h3><ol class="rules-list rules-list-ordered"><li><strong>Complementary Knowledge-to-Physical Setup (<code class="rules-inline-code">KNO</code> $\to$ <code class="rules-inline-code">PHY</code>)</strong>:</li></ol><p>When a character uses an analytical or academic <strong>Knowledge (<code class="rules-inline-code">KNO</code>)</strong> skill to plan, diagnose, or calculate a physical or technical execution (e.g., *Clinical Diagnostics* before *Paramedicine*, *Basic Electronics* before *Lockpicking* an electronic strike plate, or *Trigonometry* before *Precision Rifle*), resolve the <code class="rules-inline-code">KNO</code> setup roll first:</p><ul class="rules-list"><li><strong><code class="rules-inline-code">3+</code> Successes (<code class="rules-inline-code">ExtraordinarySuccess</code>)</strong>: Grants <strong><code class="rules-inline-code">-4</code> to $\Delta_{\text{ext}}$</strong> AND boosts positive carry $\delta_{\text{over}}$ from <code class="rules-inline-code">+6</code> to <strong><code class="rules-inline-code">+8</code></strong> on the execution roll.</li><li><strong><code class="rules-inline-code">1–2</code> Successes (<code class="rules-inline-code">Success</code>)</strong>: Grants <strong><code class="rules-inline-code">-2</code> to $\Delta_{\text{ext}}$</strong> on the execution roll.</li><li><strong><code class="rules-inline-code">0</code> Successes (<code class="rules-inline-code">CleanFailure</code>)</strong>: No modifier (<code class="rules-inline-code">+0</code>).</li><li><strong>Botch (<code class="rules-inline-code">CriticalFailure</code>)</strong>: Flawed assessment imposes <strong><code class="rules-inline-code">+4</code> to $\Delta_{\text{ext}}$</strong> on the execution roll.</li></ul><ol class="rules-list rules-list-ordered"><li><strong>Dual-Skill Gate</strong>:</li></ol><p>When a single continuous action requires two skills simultaneously, the number of <code class="rules-inline-code">2d20</code> pairs rolled is:</p><div class="rules-math-block">$$N_{\text{eff}} = \min(N_1, N_2) + \begin{cases} 1 &amp; \text{if } \max(N_1, N_2) \ge \min(N_1, N_2) + 2 \\ 0 &amp; \text{otherwise} \end{cases}$$</div><hr class="rules-divider"/><h2 id="6-complete-worked-examples">6. Complete Worked Examples</h2><h3 id="61-worked-example-1-sarahs-lockpicking-task-standard-vs-stumble-and-recovery">6.1 Worked Example 1: Sarah&#39;s Lockpicking Task (Standard vs. Stumble-and-Recovery)</h3><blockquote class="rules-blockquote"><p><strong>Scenario</strong>: Sarah needs to pick the mechanical pin-tumbler cylinder on a heavy hardened-steel bike lock in a dimly lit alley before a security patrol rounds the corner.</p></blockquote><ol class="rules-list rules-list-ordered"><li><strong>Character Profile &amp;amp; Gate Check</strong>:</li></ol><ul class="rules-list"><li><strong>Characteristics</strong>: <strong>Dexterity (<code class="rules-inline-code">DEX</code>) = <code class="rules-inline-code">13</code></strong> (steady hands), <strong>Tactile (<code class="rules-inline-code">TAC</code>) = <code class="rules-inline-code">12</code></strong> (sensitive fingertips), <strong>Focus (<code class="rules-inline-code">FOC</code>) = <code class="rules-inline-code">11</code></strong>.</li><li><strong>Skill</strong>: <strong>Lockpicking &amp;amp; Physical Security Bypass</strong> (<code class="rules-inline-code">PHY/KNO</code>, <code class="rules-inline-code">DEX/TAC</code>, Minimum <code class="rules-inline-code">DEX 10, TAC 10, FOC 9</code>) at <strong>Skill Level <code class="rules-inline-code">N = 3</code></strong> (Competent Journeyman).</li><li><strong>Gate &amp;amp; Tools</strong>: Picking a mechanical pin-tumbler lock is a <strong>Class B (Trained / Defaultable)</strong> task with <strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong>. Sarah has a professional tension wrench and hook pick set (<code class="rules-inline-code">+0</code> tool modifier).</li></ul><ol class="rules-list rules-list-ordered"><li><strong>The Four Task Factors</strong>:</li></ol><ul class="rules-list"><li><strong>Skill Level ($N$)</strong>: <strong><code class="rules-inline-code">3</code> pairs of <code class="rules-inline-code">2d20</code></strong>.</li><li><strong>Controlling Characteristic ($C$)</strong>:</li></ul><div class="rules-math-block">$$C = \left\lfloor \frac{\text{DEX } 13 + \text{TAC } 12}{2} \right\rfloor = \mathbf{12}$$</div><ul class="rules-list"><li><strong>Internal Modifier ($\Delta_{\text{int}}$)</strong>: Sarah is winded from sprinting two blocks (<strong><code class="rules-inline-code">fatigue_level = 1</code> $\implies \Delta_{\text{int}} = +2$</strong>).</li><li>Her positive momentum carry is $\delta_{\text{over}} = \mathbf{+6}$.</li><li>Her failure stumble carry is $\delta_{\text{under}} = 6 + 2 = \mathbf{8}$ (<code class="rules-inline-code">-8</code> penalty after a missed pair).</li><li><strong>External Modifier ($\Delta_{\text{ext}}$)</strong>: Standard commercial lock (<code class="rules-inline-code">0</code>) in dim alley lighting (<code class="rules-inline-code">+2</code>) = <strong>$\Delta_{\text{ext}} = +2$</strong>, requiring <strong>$S_{\text{req}} = 1$ success</strong> to open (<code class="rules-inline-code">2+</code> successes to pop it silently in half the time).</li><li><strong>Effective Target Number ($\text{TN}_{\text{eff}}$)</strong>:</li></ul><div class="rules-math-block">$$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}} = 31 - 12 + 2 = \mathbf{21}$$</div><ol class="rules-list rules-list-ordered"><li><strong>Rolling the <code class="rules-inline-code">N = 3</code> Sequential <code class="rules-inline-code">2d20</code> Cascade</strong>:</li></ol><ul class="rules-list"><li><strong>Pair 1 ($n = 1$, $\text{Carry}_1 = 0$)</strong>:</li><li>Sarah rolls $A_1 = 7, B_1 = 11 \implies Y_1 = 7 + 11 + 0 = \mathbf{18}$.</li><li>Comparing $Y_1 = 18$ vs. $\text{TN}_{\text{eff}} = 21$: <strong>Miss!</strong> A stiff security spool pin catches her tension wrench.</li><li>Because Sarah is slightly winded ($\Delta_{\text{int}} = +2$), her stumble passes <strong>$\text{Carry}_2 = -\delta_{\text{under}} = -8$</strong> to Pair 2!</li><li><strong>Pair 2 ($n = 2$, $\text{Carry}_2 = -8$)</strong>:</li><li>Sarah steadies her breathing and feels for the counter-rotation on the spool pin. She rolls $A_2 = 16, B_2 = 14$.</li><li>Modified total: $Y_2 = 16 + 14 - 8 = \mathbf{22} \ge 21$!</li><li><strong>+1 Success (<code class="rules-inline-code">total_successes = 1</code>)!</strong> Despite the <code class="rules-inline-code">-8</code> stumble penalty from Pair 1, her strong roll (<code class="rules-inline-code">30</code> raw) overcomes the bind and sets the spool pin!</li><li>Under standard <code class="rules-inline-code">markov_step</code> carry, her success flips the cascade into positive momentum: <strong>$\text{Carry}_3 = +\delta_{\text{over}} = +6$</strong>!</li><li><strong>Pair 3 ($n = 3$, $\text{Carry}_3 = +6$)</strong>:</li><li>Riding the <code class="rules-inline-code">+6</code> momentum as the plug begins to turn, Sarah rolls $A_3 = 9, B_3 = 10$.</li><li>Modified total: $Y_3 = 9 + 10 + 6 = \mathbf{25} \ge 21$!</li><li><strong>+1 Success (<code class="rules-inline-code">total_successes = 2</code>, <code class="rules-inline-code">raw_botches = 0</code>)!</strong></li></ul><ol class="rules-list rules-list-ordered"><li><strong>Final Resolution</strong>:</li></ol><ul class="rules-list"><li>With <strong><code class="rules-inline-code">2</code> Total Successes</strong> (<code class="rules-inline-code">OutcomeTier::Success</code>, exceeding $S_{\text{req}} = 1$), the shackle clicks open cleanly and silently on the first try before the patrol&#39;s flashlight beam sweeps the alley!</li></ul><hr class="rules-divider"/><h3 id="62-worked-example-2-what-if-a-complication-occurs-successwithcomplication">6.2 Worked Example 2: What If a Complication Occurs? (<code class="rules-inline-code">SuccessWithComplication</code>)</h3><p>Suppose on <strong>Pair 1</strong> above, Sarah had rolled $A_1 = 4, B_1 = 5 \implies Y_1 = 9 &lt; 21$ (Miss, $\text{Carry}_2 = -8$), and then on <strong>Pair 2</strong> she rolled snake-eyes/low dice $A_2 = 3, B_2 = 5$:</p><ul class="rules-list"><li>Her modified Pair 2 total would be $Y_2 = 3 + 5 - 8 = \mathbf{0} &lt; 2$!</li><li>Because $Y_2 &lt; 2$ drops below the physical minimum of <code class="rules-inline-code">2d20</code>, Pair 2 triggers a <strong>Floor Breach (<code class="rules-inline-code">raw_botches = 1</code>)</strong>.</li><li>If she then rolled $A_3 = 15, B_3 = 15 \implies Y_3 = 30 - 8 = \mathbf{22} \ge 21$ on Pair 3 (<code class="rules-inline-code">total_successes = 1</code>, <code class="rules-inline-code">raw_botches = 1</code>), the engine returns <strong><code class="rules-inline-code">CascadeOutcomeKind::SuccessWithComplication</code> (<code class="rules-inline-code">OutcomeTier::PartialSuccess</code>)</strong>:</li><li><strong>Narrative Result</strong>: Sarah forces the final pin and pops the bike lock open (<code class="rules-inline-code">1</code> success), <strong>but</strong> the Pair 2 floor breach snaps the tip of her hook pick off inside the keyway (leaving forensic evidence behind and degrading her lockpick kit until replaced)!</li></ul><hr class="rules-divider"/><h3 id="63-quick-reference-canonical-task-parameters-across-domains">6.3 Quick Reference: Canonical Task Parameters Across Domains</h3><p>For the full 22-row Master Task Table spanning <code class="rules-inline-code">Athletic</code>, <code class="rules-inline-code">Fieldcraft</code>, <code class="rules-inline-code">Combat</code>, <code class="rules-inline-code">Technical</code>, <code class="rules-inline-code">Medical</code>, <code class="rules-inline-code">Cyber</code>, <code class="rules-inline-code">Science</code>, and <code class="rules-inline-code">Social</code> tasks, see <a class="rules-link" href="skill-design.md#53-master-task-requirements-table-skills-prerequisites-tools--difficulty">Section 5.3 of `docs/ttrpg/skill-design.md`</a>.</p></article>
+
+<section class="book-interactive-widget">
+  <h2>Interactive Satya 2d20 Watershed Cascade &amp; Tactical Pool Calculator</h2>
+  <p class="widget-sub">
+    Powered by the Satya Four-Factor Cascade formula
+    (<code>TN_eff = 31 - C + &Delta;_ext</code>, <code>&delta;_over = +6</code>, <code>&delta;_under = -(6 + &Delta;_int)</code>)
+    and the Combat Tactical Pool (<code>P_base = C_combat + 3N</code>).
+  </p>
+  <div class="widget-grid">
+    <div class="widget-panel">
+      <h3>1. 2d20 Watershed Cascade Simulator</h3>
+      <div class="widget-controls">
+        <label>Skill Level (N Pairs: 1..8)
+          <input id="bk-n" type="number" min="1" max="8" value="4" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Controlling Characteristic (C: 1..20)
+          <input id="bk-c" type="number" min="1" max="20" value="11" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Internal Mod (&Delta;_int: Fatigue/Shock)
+          <input id="bk-dint" type="number" min="-2" max="10" value="2" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>External Mod (&Delta;_ext: Difficulty/Tools)
+          <input id="bk-dext" type="number" min="-6" max="12" value="2" onchange="satyaBookRecalc()"/>
+        </label>
+      </div>
+      <div class="widget-presets">
+        <button type="button" onclick="satyaBookLoadPreset(4,11,2,2,'14+11, 8+7, 16+15, 17+12')">Sarah's Lockpick</button>
+        <button type="button" onclick="satyaBookLoadPreset(5,16,0,2,'12+10, 9+11, 14+8, 16+9, 11+12')">Elena's Probe</button>
+        <button type="button" onclick="satyaBookLoadPreset(4,13,0,3,'15+11, 7+6, 13+10, 18+9')">Viktor's Cleave</button>
+        <button type="button" onclick="satyaBookRandomRoll()">Roll Random N&times;2d20</button>
+      </div>
+      <label class="full-width">Rolled 2d20 Pairs (A+B, comma-separated):
+        <input id="bk-pairs" type="text" value="14+11, 8+7, 16+15, 17+12" oninput="satyaBookRecalc()"/>
+      </label>
+      <div id="bk-cascade-readout" class="widget-readout"></div>
+    </div>
+
+    <div class="widget-panel">
+      <h3>2. Combat Tactical Pool (Tempo &middot; Control &middot; Force)</h3>
+      <div class="widget-controls">
+        <label>Combat Readiness C_combat
+          <input id="bk-ccombat" type="number" min="1" max="20" value="13" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Skill Level N
+          <input id="bk-combat-n" type="number" min="1" max="8" value="4" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Tempo (T)
+          <input id="bk-t" type="number" min="0" max="20" value="9" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Control (C)
+          <input id="bk-ctrl" type="number" min="0" max="20" value="9" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Force (F)
+          <input id="bk-f" type="number" min="0" max="20" value="7" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Base Weapon TC
+          <input id="bk-wtc" type="number" min="4" max="16" value="8" onchange="satyaBookRecalc()"/>
+        </label>
+      </div>
+      <div id="bk-tactical-readout" class="widget-readout"></div>
+    </div>
+  </div>
+</section>
+<script>
+function satyaBookLoadPreset(n, c, dint, dext, pairs) {
+  document.getElementById('bk-n').value = n;
+  document.getElementById('bk-c').value = c;
+  document.getElementById('bk-dint').value = dint;
+  document.getElementById('bk-dext').value = dext;
+  document.getElementById('bk-pairs').value = pairs;
+  satyaBookRecalc();
+}
+function satyaBookRandomRoll() {
+  const n = Math.max(1, Math.min(8, parseInt(document.getElementById('bk-n').value || '3', 10)));
+  const rolls = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(Math.random() * 20) + 1;
+    const b = Math.floor(Math.random() * 20) + 1;
+    rolls.push(a + '+' + b);
+  }
+  document.getElementById('bk-pairs').value = rolls.join(', ');
+  satyaBookRecalc();
+}
+function satyaBookRecalc() {
+  const n = Math.max(1, Math.min(8, parseInt(document.getElementById('bk-n').value || '4', 10)));
+  const c = Math.max(1, Math.min(20, parseInt(document.getElementById('bk-c').value || '11', 10)));
+  const dint = parseInt(document.getElementById('bk-dint').value || '0', 10);
+  const dext = parseInt(document.getElementById('bk-dext').value || '0', 10);
+  const tnEff = 31 - c + dext;
+  const dOver = 6;
+  const dUnder = Math.max(0, 6 + dint);
+  const rawPairs = (document.getElementById('bk-pairs').value || '').split(',');
+  let carry = 0, succ = 0, botch = 0, minMissTier = 5;
+  let rows = [];
+  for (let i = 0; i < n; i++) {
+    const token = (rawPairs[i] || '11+10').trim().split('+');
+    const a = parseInt(token[0] || '11', 10) || 11;
+    const b = parseInt(token[1] || '10', 10) || 10;
+    const raw = a + b;
+    const yn = raw + carry;
+    let status = 'Miss';
+    let nextCarry = 0;
+    if (yn > tnEff) {
+      succ += 1;
+      minMissTier = 0;
+      status = '<strong style="color:#34d399">SUCCESS (+1)</strong>';
+      nextCarry = dOver;
+    } else if (yn < tnEff) {
+      const dist = tnEff - yn;
+      minMissTier = Math.min(minMissTier, Math.min(5, Math.floor(dist / 4)));
+      if (yn < 2) {
+        botch += 1;
+        status = '<strong style="color:#fb7185">FLOOR BREACH (&lt;2)</strong>';
+      }
+      nextCarry = -dUnder;
+    } else {
+      minMissTier = 0;
+      status = 'Exact Tie (0)';
+      nextCarry = 0;
+    }
+    rows.push('<tr><td>#' + (i+1) + '</td><td>' + a + '+' + b + '=' + raw + '</td><td>' + (carry>=0?'+'+carry:carry) + '</td><td><strong>' + yn + '</strong></td><td>' + tnEff + '</td><td>' + status + '</td><td>' + (nextCarry>=0?'+'+nextCarry:nextCarry) + '</td></tr>');
+    carry = nextCarry;
+  }
+  const effBotch = succ === 0 ? minMissTier : botch;
+  const margin = succ > 0 ? '+' + succ : String(-effBotch);
+  const tier = (succ >= 3 && botch === 0) ? 'EXTRAORDINARY_SUCCESS' : (succ >= 1 && botch === 0) ? 'SUCCESS' : (succ >= 1 && botch >= 1) ? 'PARTIAL_SUCCESS (Complication)' : (effBotch === 0 ? 'CLEAN_FAILURE' : 'CRITICAL_FAILURE');
+  document.getElementById('bk-cascade-readout').innerHTML =
+    '<div><strong>TN_eff = ' + tnEff + '</strong> | &delta;_over = +' + dOver + ' | &delta;_under = -' + dUnder + ' | <strong>Outcome: ' + tier + ' (Margin ' + margin + ')</strong></div>' +
+    '<table class="rules-table" style="margin-top:8px"><thead><tr><th>Pair</th><th>Roll</th><th>Carry In</th><th>Y_n</th><th>TN_eff</th><th>Result</th><th>Carry Out</th></tr></thead><tbody>' + rows.join('') + '</tbody></table>';
+
+  const cCombat = parseInt(document.getElementById('bk-ccombat').value || '13', 10);
+  const combatN = parseInt(document.getElementById('bk-combat-n').value || '4', 10);
+  const pBase = cCombat + 3 * combatN;
+  const bVal = Math.floor(pBase / 3);
+  const tVal = parseInt(document.getElementById('bk-t').value || '0', 10);
+  const ctrlVal = parseInt(document.getElementById('bk-ctrl').value || '0', 10);
+  const fVal = parseInt(document.getElementById('bk-f').value || '0', 10);
+  const wTc = parseInt(document.getElementById('bk-wtc').value || '8', 10);
+  const sumTcf = tVal + ctrlVal + fVal;
+  const effTc = Math.max(3, wTc - Math.floor((tVal - bVal) / 2));
+  const impactMult = (fVal / Math.max(1, bVal)).toFixed(2);
+  const validBadge = sumTcf <= pBase
+    ? '<span style="color:#34d399">VALID (' + sumTcf + ' / ' + pBase + ' pts)</span>'
+    : '<span style="color:#fb7185">OVER POOL (' + sumTcf + ' &gt; ' + pBase + ' pts)</span>';
+  document.getElementById('bk-tactical-readout').innerHTML =
+    '<p><strong>Pool P_base = ' + pBase + '</strong> | Neutral Baseline <strong>B = ' + bVal + '</strong> | Allocation: ' + validBadge + '</p>' +
+    '<ul><li><strong>Effective Action Cost (TC)</strong>: <code>' + effTc + ' ticks</code> (Base Weapon TC ' + wTc + ')</li>' +
+    '<li><strong>Control Task Bonus</strong>: <code>' + (ctrlVal - bVal >= 0 ? '+' + (ctrlVal - bVal) : (ctrlVal - bVal)) + '</code> vs. Neutral Baseline</li>' +
+    '<li><strong>Force Impact Multiplier</strong>: <code>' + impactMult + '&times; POW</code></li></ul>';
+}
+window.addEventListener('DOMContentLoaded', satyaBookRecalc);
+</script>
+
+    <div class="book-pager">
+      <a class="book-pager-btn" href="probability.html">&larr; Previous: Probability &amp; The Cascading Dice Mechanic</a><a class="book-pager-btn" href="characteristics.html">Next: Character Characteristics &amp; Attribute Architecture &rarr;</a>
+    </div>
+  </main>
+</body>
+</html>

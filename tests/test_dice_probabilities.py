@@ -269,4 +269,103 @@ def test_signed_margin_degrees_of_failure() -> None:
     assert novice_n2.signed_margin_pmf.get(-4, 0.0) > master_n6.signed_margin_pmf.get(-4, 0.0)
 
 
+def test_rules_book_builder_and_tactical_pool_bridge() -> None:
+    """Verify static HTML Rules Book generation, multi-chapter search, and Tactical Pool evaluation."""
+    from satya_ml.ai_gm.tools import query_satya_rules
+    from satya_ml.build_rules_book import (
+        BOOK_CHAPTER_SPECS,
+        build_static_rules_book,
+        compute_tactical_pool_python,
+        evaluate_cascade_pairs_python,
+        evaluate_tactical_triad_python,
+        search_rules_book_python,
+    )
+
+    assert len(BOOK_CHAPTER_SPECS) == 9
+    summary = build_static_rules_book()
+    assert summary["chapter_count"] == 9
+    assert len(summary["generated_files"]) == 11  # 9 chapters + index.html + catalog.json
+
+    hits_melee = search_rules_book_python("Tactical Triad Tempo Control Force", max_results=3)
+    assert hits_melee
+    assert any(h["chapter_id"] in {"melee_combat", "combat"} for h in hits_melee)
+
+    gm_excerpt = query_satya_rules.invoke({"query": "lockpicking Complementary KNO PHY synergy"})
+    assert "tasks.md" in gm_excerpt or "Complementary" in gm_excerpt
+
+    trace = evaluate_cascade_pairs_python(
+        skill_level=4,
+        control_c=11,
+        internal_mod=2,
+        external_mod=2,
+        pairs=[(14, 11), (8, 7), (16, 15), (17, 12)],
+    )
+    assert trace["total_successes"] == 3
+    assert trace["outcome_tier"] == "EXTRAORDINARY_SUCCESS"
+
+    env = compute_tactical_pool_python(skill_c=14, skill_n=4, morale_state="steady")
+    assert env["p_eff"] > 0
+    triad = evaluate_tactical_triad_python(env, base_weapon_tc=8, tempo=8, control=8, force=6)
+    assert triad["valid"] is True
+    assert triad["effective_tc"] >= 3
+
+
+
+def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None:
+    """Verify the Tactical Pool, Melee Triad, Lifepath, Social Dissonance, and Static HTML Rules Book generator."""
+    from satya_ml.ai_gm.tools import query_satya_rules
+    from satya_ml.build_rules_book import build_rules_book
+    from satya_ml.dice_probabilities import (
+        compute_lifepath_skill_progression,
+        compute_social_dissonance_check,
+        compute_tactical_pool_envelope,
+        evaluate_tactical_triad_contest,
+    )
+
+    pool = compute_tactical_pool_envelope(control_c=16, skill_level=5, num_successes=3)
+    assert pool["base_envelope"] >= 8
+    assert pool["effective_pool"] <= pool["base_envelope"]
+
+    triad = evaluate_tactical_triad_contest(
+        attacker_tempo=4,
+        attacker_control=5,
+        attacker_force=4,
+        defender_tempo=2,
+        defender_control=2,
+        defender_force=2,
+    )
+    assert triad["seizes_initiative"] is True
+    assert triad["guard_broken"] is True
+    assert triad["penetrating_force"] > 0
+
+    lifepath = compute_lifepath_skill_progression(hours_studied=1600, instruction_quality=1.2)
+    assert lifepath["skill_level_n"] >= 4
+    assert lifepath["hours_to_next_level"] > 0
+
+    social = compute_social_dissonance_check(
+        argument_margin=4,
+        target_conviction=10,
+        evidence_tier=3,
+    )
+    assert social["net_dissonance_shift"] > 0
+    assert "Concession" in social["social_outcome"] or "Shift" in social["social_outcome"]
+
+    # Build static HTML book into tmp_path and into docs/book
+    summary = build_rules_book(output_dir=tmp_path)
+    assert summary["chapter_count"] == 9
+    assert summary["total_words"] > 10_000
+    assert (tmp_path / "index.html").exists()
+    assert (tmp_path / "tasks.html").exists()
+    assert (tmp_path / "melee_combat.html").exists()
+    assert (tmp_path / "catalog.json").exists()
+
+    # Multi-chapter AI GM rules search
+    melee_res = query_satya_rules.invoke({"query": "Tactical Triad Tempo Control Force Kuzushi"})
+    assert "melee_combat.md" in melee_res or "Tempo" in melee_res
+
+    social_res = query_satya_rules.invoke({"query": "Cognitive Dissonance belief shift"})
+    assert "social_interactions.md" in social_res or "Dissonance" in social_res
+
+
+
 

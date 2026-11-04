@@ -10,12 +10,25 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 import math
-from typing import TYPE_CHECKING, Dict, List, Literal, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Tuple
+
+try:
+    import satya_py as _satya_py
+
+    HAS_SATYA_PY = True
+except ImportError:
+    _satya_py = None  # type: ignore[assignment]
+    HAS_SATYA_PY = False
 
 if TYPE_CHECKING:
     import plotly.graph_objects as go
 
 PMF = Dict[int, float]
+
+
+def using_satya_py_backend() -> bool:
+    """Return True if the compiled Rust `satya_py` PyO3 extension module is active."""
+    return HAS_SATYA_PY
 
 
 @dataclass(frozen=True)
@@ -1486,6 +1499,208 @@ def plot_signed_margin_spectrum(
         fig,
         "10. Degrees of Failure & Success: Full -N to +N Signed Outcome Spectrum",
     )
+
+
+# ---------------------------------------------------------------------------
+# 11. Satya Rules Book Interactive Simulators (Tactical Pool, Lifepath, Social)
+# ---------------------------------------------------------------------------
+
+
+def compute_tactical_pool_envelope(
+    control_c: int,
+    skill_level: int,
+    delta_int: int = 0,
+    delta_ext: int = 0,
+    num_successes: int = 2,
+    weapon_reach: int = 2,
+    opponent_reach: int = 2,
+) -> Dict[str, Any]:
+    """Compute the Satya Combat Tactical Pool ('Envelope & Fill') from Chapters 7 & 8.
+
+    Delegates to `satya_py.py_compute_tactical_pool` when the Rust PyO3 extension is installed.
+    """
+    if HAS_SATYA_PY and _satya_py is not None and hasattr(_satya_py, "compute_tactical_pool"):
+        env = _satya_py.compute_tactical_pool(
+            skill_c=int(control_c),
+            skill_n=max(0, int(skill_level)),
+            fatigue_level=max(0, -int(delta_int)),
+        )
+        reach_delta = int(weapon_reach) - int(opponent_reach)
+        reach_mod = max(-2, min(3, reach_delta))
+        return {
+            "base_envelope": int(env.total_pool_b),
+            "raw_pool": int(env.total_pool_b) + max(0, int(num_successes)) + reach_mod,
+            "effective_pool": int(env.total_pool_b),
+            "overflow_wasted": max(0, int(num_successes) + reach_mod),
+            "reach_modifier": reach_mod,
+            "max_tempo": int(env.max_tempo),
+            "max_control": int(env.max_control),
+            "max_force": int(env.max_force),
+            "backend": "satya_py (Rust PyO3)",
+        }
+
+    c_clamped = max(1, min(20, int(control_c)))
+    n_clamped = max(0, min(10, int(skill_level)))
+    s_clamped = max(0, int(num_successes))
+    base_envelope = max(
+        1,
+        ((c_clamped + 2 * n_clamped) // 3) + int(delta_int) - max(0, int(delta_ext) // 2),
+    )
+    reach_delta = int(weapon_reach) - int(opponent_reach)
+    reach_mod = max(-2, min(3, reach_delta))
+    raw_pool = max(0, s_clamped * 3 + max(0, n_clamped // 2) + reach_mod)
+    effective_pool = min(raw_pool, base_envelope)
+    overflow = max(0, raw_pool - base_envelope)
+    return {
+        "base_envelope": base_envelope,
+        "raw_pool": raw_pool,
+        "effective_pool": effective_pool,
+        "overflow_wasted": overflow,
+        "reach_modifier": reach_mod,
+        "backend": "satya_ml (Python)",
+    }
+
+
+def evaluate_tactical_triad_contest(
+    attacker_tempo: int,
+    attacker_control: int,
+    attacker_force: int,
+    defender_tempo: int,
+    defender_control: int,
+    defender_force: int,
+    attacker_root: int = 12,
+    defender_guard: int = 4,
+    armor_dr: int = 3,
+) -> Dict[str, Any]:
+    """Evaluate a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) exchange from Chapter 8."""
+    archetype_label = "Custom Triad"
+    if HAS_SATYA_PY and _satya_py is not None and hasattr(_satya_py, "compute_tactical_pool"):
+        env = _satya_py.compute_tactical_pool(skill_c=14, skill_n=5)
+        eval_res = env.evaluate_triad(
+            int(attacker_tempo),
+            int(attacker_control),
+            int(attacker_force),
+            10,
+        )
+        archetype_label = str(eval_res.archetype_label)
+
+    atk_t = max(0, int(attacker_tempo))
+    atk_c = max(0, int(attacker_control))
+    atk_f = max(0, int(attacker_force))
+    def_t = max(0, int(defender_tempo))
+    def_c = max(0, int(defender_control))
+    def_f = max(0, int(defender_force))
+
+    net_tempo = atk_t - def_t
+    net_control = atk_c - def_c
+    seizes_initiative = net_tempo >= 2 and net_control >= 0
+    guard_broken = (atk_c + max(0, atk_f // 2)) > (def_c + max(0, int(defender_guard)))
+    unbalance = max(0, (atk_c + atk_f) - (def_c + def_f))
+    throw_triggered = unbalance >= max(1, int(attacker_root) // 3)
+    raw_impact = atk_f + (max(0, net_control) if guard_broken else 0)
+    penetrating_force = max(0, raw_impact - max(0, int(armor_dr)) - (0 if guard_broken else def_c))
+    next_tick_cost = max(3, 10 - min(5, atk_t) + max(0, def_c // 2))
+
+    if throw_triggered and penetrating_force >= 3:
+        summary = "Decisive Takedown & Armor Breach (Prone + Shock)"
+    elif throw_triggered:
+        summary = "Kuzushi Throw / Sweep (Target Off-Balance / Prone)"
+    elif guard_broken and penetrating_force > 0:
+        summary = "Guard Broken & Penetrating Strike"
+    elif seizes_initiative:
+        summary = "Initiative Seized (Tempo Advantage on Next Exchange)"
+    elif penetrating_force > 0:
+        summary = "Glancing Penetrating Blow"
+    else:
+        summary = "Deflected on Guard / Bind Equilibrium"
+
+    return {
+        "net_tempo": net_tempo,
+        "net_control": net_control,
+        "seizes_initiative": seizes_initiative,
+        "guard_broken": guard_broken,
+        "throw_triggered": throw_triggered,
+        "penetrating_force": penetrating_force,
+        "next_tick_cost": next_tick_cost,
+        "archetype_label": archetype_label,
+        "outcome_summary": summary,
+        "backend": "satya_py (Rust PyO3)" if HAS_SATYA_PY else "satya_ml (Python)",
+    }
+
+
+def compute_lifepath_skill_progression(
+    hours_studied: float,
+    difficulty_multiplier: float = 1.0,
+    instruction_quality: float = 1.0,
+    aptitude_bonus: int = 0,
+) -> Dict[str, Any]:
+    """Compute non-linear skill level `N` (`0..10`) from study hours using Chapter 6's exponential curve.
+
+    Each rank `N >= 1` requires `100 * (2 ** (N - 1)) * difficulty_multiplier` effective hours.
+    """
+    eff_hours = max(0.0, float(hours_studied)) * max(0.25, float(instruction_quality)) * (
+        1.0 + 0.08 * int(aptitude_bonus)
+    )
+    diff = max(0.5, float(difficulty_multiplier))
+    thresholds: List[Tuple[int, float]] = []
+    cumulative = 0.0
+    achieved_level = 0
+    for lvl in range(1, 11):
+        step_req = 100.0 * (2 ** (lvl - 1)) * diff
+        cumulative += step_req
+        thresholds.append((lvl, round(cumulative, 1)))
+        if eff_hours >= cumulative:
+            achieved_level = lvl
+
+    next_level = min(10, achieved_level + 1)
+    next_threshold = thresholds[next_level - 1][1] if achieved_level < 10 else thresholds[-1][1]
+    hours_to_next = max(0.0, round(next_threshold - eff_hours, 1))
+    return {
+        "raw_hours": round(float(hours_studied), 1),
+        "effective_hours": round(eff_hours, 1),
+        "skill_level_n": achieved_level,
+        "next_level_n": next_level,
+        "hours_to_next_level": hours_to_next,
+        "cumulative_thresholds": dict(thresholds),
+    }
+
+
+def compute_social_dissonance_check(
+    argument_margin: int,
+    target_conviction: int,
+    evidence_tier: int,
+    shared_values_bonus: int = 0,
+    public_audience_pressure: int = 0,
+) -> Dict[str, Any]:
+    """Compute Cognitive Dissonance pressure and belief-shift outcome from Chapter 9 (`social_interactions.md`)."""
+    margin = int(argument_margin)
+    conviction = max(1, min(20, int(target_conviction)))
+    evidence = max(0, min(5, int(evidence_tier)))
+    shared = max(-3, min(5, int(shared_values_bonus)))
+    audience = max(-3, min(5, int(public_audience_pressure)))
+
+    dissonance_pressure = max(0, margin * 2 + evidence * 3 + shared * 2 + audience)
+    resistance_threshold = conviction + max(0, (conviction - 10) // 2)
+    net_shift = dissonance_pressure - resistance_threshold
+
+    if margin <= 0 and net_shift < -4:
+        state = "Backfire / Entrenchment (Target hardens belief +2 Conviction)"
+    elif net_shift < 0:
+        state = "Rationalized Dismissal (Target absorbs tension without shifting)"
+    elif net_shift < 5:
+        state = "Seed of Doubt (+1 Dissonance Fatigue; opens follow-up concession)"
+    elif net_shift < 10:
+        state = "Tactical Concession (Target yields immediate behavioral compliance)"
+    else:
+        state = "Paradigm Fracture / Core Belief Shift (Lasting alignment change)"
+
+    return {
+        "dissonance_pressure": dissonance_pressure,
+        "resistance_threshold": resistance_threshold,
+        "net_dissonance_shift": net_shift,
+        "social_outcome": state,
+    }
+
 
 
 

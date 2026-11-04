@@ -16,7 +16,7 @@ that I was the DM), but it must have been enjoyable.
 
 Fast forward to 1982, and I started playing American Civil War miniatures with my father and his gaming group.  I also
 started playing some Napoleonics era wargames a little after this time, and also occasionally played some "modern" micro
-armor (I don't even think TOW missles had come out yet as Dragon ATM were the best infantry could get). Every once
+armor (I don't even think TOW missiles had come out yet as Dragon ATM were the best infantry could get). Every once
 in awhile, my father's gaming group couldn't make it for some reason, so I wound up having nothing to do on weekends.
 
 However, at the store we played at, the owner had a son who was just a year younger than myself, and we started to hang
@@ -69,7 +69,7 @@ I probably played scores of 1 or 2-shot games, only a few of which I can remembe
 - Talislanta
 - Palladium RPG
 
-## The Beginnging of the End
+## The Beginning of the End
 
 I slowly started getting out of RPG's starting around 1988.  I still played, but I guess at that point I was 16 and able
 to drive, and RPG's lost some of their importance to me.  I still played once in a blue moon, but not like before. I
@@ -84,7 +84,7 @@ reading several books on the Vietnam War, including Chicken Hawk, We Were Warrio
 Because the soldiers were reviled (generally speaking) when they got back home, and the horrible hypocrisy of why
 America was even waging the war, it seemed tailor made for running some very interesting game sessions.
 
-## Gaming isnt't just Escapism
+## Gaming Isn't Just Escapism
 
 So now, I can finally come to what this game is about.  Back in the early days of roleplaying, many of the games
 featured regular people in unusual circumstances.  Look at that list above and here are the games that featured
@@ -96,9 +96,9 @@ predominately normal humans without any magical, mystical or (for the most part)
 - Aftermath
 - Bushido
 - Twilight 2000
-- Traveller (yes, i am including this, because you didn't always have high technology)
+- Traveller (yes, I am including this, because you didn't always have high technology)
 - The Morrow Project (yes, I know they had HAAM suits and fusion reactors)
-- Call of Cthulhu (sure, the monsters were supernatural and had powers, but basically the characters didnt)
+- Call of Cthulhu (sure, the monsters were supernatural and had powers, but basically the characters didn't)
 - Phoenix Command
 - Chill (like CoC, generally, the characters didn't have powers)
 - Car Wars
@@ -109,7 +109,7 @@ That's probably half the games I listed.  While I haven't _played_ an RPG in eon
 have been buying RPG's ever since either in dead tree or electronic formats.  What I have noticed in the last 20 years
 or more, is the trend towards ubermensch with some kind of cool crazy power, whether those powers come from some kind of
 magical, mystical or innate nature, or it comes from advanced technology (which as Mr. Clarke said, can become
-indistinguishable from magic)
+indistinguishable from magic).
 
 That's not what appeals to me in games, or even in watching movies.  I generally speaking love martial arts movies,
 except when they go into the fantastical wuxia type stuff.  My jaw drops when I see Jackie Chan in his peak being able
@@ -123,7 +123,7 @@ And this trend where games cater mostly to characters having some kind of extrao
 the market demanding this, or is this what game designers are offering?  As I showed in the kinds of games above, close
 to half the games on the market were about your _Everyman_ (albeit, probably highly skilled) facing extraordinary
 circumstances.  When did RPG's have to be all about high tech or fantasy?  Perhaps I'm imagining all this, so, let's 
-take a look a look at the top 20 "Hottest Items" on drivethrurpg.com right now (08/14/2020):
+take a look at the top 20 "Hottest Items" on drivethrurpg.com right now (08/14/2020):
 
 - Mysteries of the World: Scion
 - Ancestries & Culture: Alternatives to race in 5e
@@ -210,7 +210,7 @@ So it might be easiest to describe the things I don't like about many game syste
 - Lack of personality traits to enforce and/or reward character behavior
 - Character creation systems that allow choices of skills without any constraints (how did the professor get Artillery?)
 - Damage systems that are ablative rather than inhibiting
-- Damage systems that dont differentiate between different kinds of damage
+- Damage systems that don't differentiate between different kinds of damage
 - Systems that do not take fatigue into consideration
 - Systems that claim to be generic but require reams and reams of special one-off rules
 - Combat systems that lack tactical flavor (a swing is a swing)
@@ -221,21 +221,21 @@ So it might be easiest to describe the things I don't like about many game syste
 Far too many game systems nowadays have only a handful of attributes, some as few as 3 (eg, mind, body, spirit).  This
 lack of specialization leads to numerous special "advantages" to account for differentiation.  For example, suppose your
 game system has Dexterity that implies both hand-eye coordination and overall body gracefulness.  So if you rank very
-high in this attributes, does that mean you could be a world class surgeon and a gymnast?  Probably not, but that's 
+high in this attribute, does that mean you could be a world class surgeon and a gymnast?  Probably not, but that's 
 what happens when your system is relegated to just a few attributes.
 
 Another disadvantage of having too few attributes is that many characters start to feel the same.
 
 #### How satya solves this
 
-I think that many will balk when they first see how many attributes satya has.  But this amount of detail gives more
-flavor and variance between characters.  It also makes it clear that a character can be lean but powerful, but lacking
-in raw strength, or someone who has a superb memory, but might not be able to think outside of the box.
+I think that many will balk when they first see how many attributes satya has (see [Character Characteristics](../character/characteristics.md)).  But this amount of detail gives more
+flavor and variance between characters.  It also makes it clear that a character can be lean and explosive (`Speed`), yet lacking
+in raw static strength (`Force`), or someone who has a superb recall (`Memory`), but might not be able to think outside of the box (`Creativity`).
 
 This solution also makes many "advantages" that most other games have become unnecessary.  You no longer need to take
 a limitation or advantage on an attribute.
 
-### Lack of Granularity in ratings and skills
+### Lack of Granularity in Ratings and Skills
 
 Closely related to the lack of specialization of attributes, is having too narrow a range for attribute or skill ratings.
 For example, some systems might have an attribute or skill range from 0-5.  But think about it, are people really only
@@ -245,18 +245,94 @@ becomes too small to make a noticeable difference, or too large.
 
 #### How satya solves this
 
-In satya, both attributes are rated from 1-20 and skills from 0-10.  This gives enough variance to make the difference
+In satya, attributes are rated from 1–20 on the `2d20` Controlling Scale (backed by an underlying `0.0–100.0` continuous spectrum) and skills from 0–10 (`1–8` standard human range).  This gives enough variance to make the difference
 between a neophyte and a master much more clear.
 
-### Artificial cutoffs
+### Artificial Cutoffs
 
 Many game systems use some form of artificial cut off to streamline the system.  For example the Modiphius 2d20 
 system maxes out the number of dice you can roll to 5.  The Hero System makes you divide some attributes by 5 (round 
-up or down) to determine some other value.  The consequence of these cutoffs is it creates a min-maxers dream.  Why buy 
+up or down) to determine some other value.  The consequence of these cutoffs is it creates a min-maxer's dream.  Why buy 
 a level of 15 when a 13 will give you the same?
 
 Another example is a Characteristic from 9-11 gives no bonus, 12-14 gives +1 etc.  It's the same thing.
 
 #### How satya solves this
 
-Precision is always kept in satya.  There are no cutoffs, groupings, or step-wise math functions.
+Precision is always kept in satya.  There are no cutoffs, groupings, or step-wise math functions: every single point of a Controlling Characteristic ($C \in [1, 20]$) shifts $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$ by `1`, and every point of $C_{\text{combat}}$ or skill $N$ adds directly to a character's Tactical Pool ($P_{\text{base}} = C_{\text{combat}} + 3N$).
+
+### Linear and Static-Shape Gaussian Dice Systems
+
+Single-die systems (`1d20` or `d100`) produce flat uniform distributions where every outcome from 1 to 20 is equally likely, making experts feel cartoonishly swingy. Conversely, standard multi-die sum systems (`3d6`) converge by the Central Limit Theorem to a fixed symmetric Gaussian bell curve; modifiers only slide the mean left or right without changing the shape of the uncertainty. Worse, many dice-pool systems suffer from the "Skilled Botch Paradox," where rolling more dice for higher skill accidentally increases the chance of rolling critical failures.
+
+#### How satya solves this
+
+Satya uses a **Two-List Cascading ("Watershed") `2d20` Dice Mechanic** (see [Probability & The Cascading Dice Mechanic](../probability.md) and [Core Ruleset Reference](../satya_d20_rules.md)). Rolling $N$ sequential pairs of `2d20` where each pair passes positive momentum ($+\delta_{\text{over}} = +6$) or negative stumble penalty ($-\delta_{\text{under}} = -(6 + \Delta_{\text{int}})$) to the next pair dynamically reshapes the probability distribution's **skewness, modality, and tails**:
+- **Skill ($N$)** expands the upper tail (`+1` to `+N` successes) and gives extra pairs to recover from an early stumble, while strictly reducing botch risk (`closest_miss` botch evaluation).
+- **Controlling Characteristic ($C$)** shifts the baseline target $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$ across every pair.
+- **Internal Fatigue & Shock ($\Delta_{\text{int}}$)** deepens the failure carry penalty ($\delta_{\text{under}} = 6 + \Delta_{\text{int}}$) without penalizing Pair 1—meaning an exhausted master who hits their first motion flows through on muscle memory, while a stumble cascades into a heavy penalty.
+
+### Innate Talents vs. Learned Physical and Knowledge Skills
+
+Many RPGs treat every skill identically—either letting an untrained character roll at a tiny penalty for brain surgery, or making a character spend skill points just to know how to run, jump, or notice an obvious ambush.
+
+#### How satya solves this
+
+As detailed in [Skill System & Lifepath Architecture](../skill-design.md), Satya classifies every ability into **Talents (`TAL`)** (innate universal capacities like *Running*, *Brawling*, *Observation*, *Stealth*, *Persuasion*, and *Empathy* that every human starts with at `N = 1`), **Physical Skills (`PHY`)** (trained motor/kinesthetic execution starting at `N = 0`), **Knowledge Skills (`KNO`)** (academic/analytical disciplines starting at `N = 0`), and **Hybrid Skills (`PHY/KNO`)** (such as *Trauma Surgery* or *Explosive Ordnance Disposal*). Combined with **Class A (Open)**, **Class B (Defaultable)**, and **Class C (Hard-Gated Specialist)** task rules in [Task Resolution](../tasks.md), anyone can sprint or throw a punch, but nobody defaults into *Neurosurgery* or *Quantum Cryptography*.
+
+### Epistemic Fog of War vs. Metagame Probability
+
+In traditional tabletop games, players know the exact target number and modifiers before they roll (`"I need a 14 or higher on 1d20, so I have a 35% chance"`), turning tense life-or-death moments into spreadsheet expected-value calculations.
+
+#### How satya solves this
+
+Because Satya is designed from the ground up as a **Computer-Assisted RPG (CARPG)**, characters do not see raw floating target numbers above an enemy's head. Instead, perceptual skills (*Observation*, *Empathy & Read Person*, *Clinical Diagnostics*, *Tactical Recon*) reveal qualitative and situational cues according to the character's senses (`SIG`, `HEA`, `ITU`) and expertise ($N$), preserving true epistemic fog of war.
+
+### Courage, OODA Loops, and the Count-Up Action Clock
+
+Most turn-based initiative systems only ask *"Who acts first?"* and then put everyone on a rigid cyclic carousel where a heavy two-handed haymaker takes the exact same "1 Action" as a lightning jab. Furthermore, traditional initiative ignores whether a combatant actually has the nerve to step out of cover when bullets are snapping past their head.
+
+#### How satya solves this
+
+Satya replaces cyclic rounds with a continuous **Count-Up Action Clock** anchored by the character's **OODA Loop** ($\lfloor(\text{SPD} + \text{INS} + \text{ITU}) / 3\rfloor$) and **Discipline (`DIS`)** Morale state (see [Combat](../combat/combat.md)):
+- Every maneuver has a **Tick Cost (`TC`)** that determines *when the action finishes*, modified by how much **Tempo** the fighter invests and degraded by `action_time_factor` from Fatigue and Wound Shock.
+- A fast probe (`High Tempo`) can interrupt a slow, telegraphed haymaker (`Low Tempo`) mid-swing.
+- Combatants under fire must pass **Discipline (`DIS`) Composure & Morale Checks** or drop through five morale conditions (**High**, **Steady**, **Wavering**, **Broken**, **Panic**), directly constraining how they can allocate their Tactical Pool.
+
+### Quantified Psyche, Behavioral Friction, and Social Combat
+
+In most games, personality alignments or traits are either toothless flavor text that players ignore whenever convenient, or rigid straitjackets. Likewise, social encounters are often reduced to a single binary `Persuasion` roll.
+
+#### How satya solves this
+
+Satya defines seven **Psyche Characteristics** (`Ego`, `Selfishness`, `Openness`, `Belongingness`, `Extraversion`, `Conformity`, and `Aggressiveness` on the `1–20` scale; see [Social Interactions & Psyche Mechanics](../social_interactions.md)):
+- **Psyche Friction & Drift**: Acting violently against a core Psyche trait triggers a `DIS` Friction Check ($\text{TN} = 31 - \text{DIS} + |P - 10|$), while repeated choices organically shift personality over time via **Psyche Drift**. Conversely, risking everything for a core conviction triggers a **Conviction Surge**.
+- **Social Combat & Cognitive Dissonance**: Arguments resonate with or clash against specific Psyche traits. When a speaker crafts an argument that simultaneously **resonates** with one strong trait (e.g., hard scientific proof appealing to high `Openness`) while **clashing** with another (e.g., tribal loyalty in high `Belongingness`), it inflicts **Cognitive Dissonance ("Mental Bleed")**—forcing the target to convert, harden into dogmatic denial, compartmentalize, or snap.
+
+### Lifepath Grounding and Hierarchical Skill Prerequisites
+
+Point-buy character creation systems routinely allow absurd min-maxed combinations—such as an ivory-tower professor who inexplicably has rank-5 *Heavy Machine Guns* or a street teen who knows *Aerospace Engineering* without knowing *Algebra*.
+
+#### How satya solves this
+
+In [Skill System & Lifepath Architecture](../skill-design.md), characters develop through chronological **Lifepath Stages** (Socioeconomic Origin, Elementary, Junior High, High School vs. Street Dropout, and Adult Career Terms). Academic progression uses study rolls governed by **Discipline (`DIS`) + Mental Characteristic + Domain Aptitude (`APT`)** modified by **School Quality (`SQM`)**, while advanced skills require both **Skill Tree Prerequisites** (e.g., *Arithmetic* $\to$ *Algebra* $\to$ *Trigonometry* $\to$ *Calculus* $\to$ *Engineering*) and **Institutional Access Tags** (`[Access: Academic]`, `[Access: Restricted]`, `[Access: Illicit]`).
+
+### Anatomical Trauma, Wound Shock, and Fatigue Over Hit Points
+
+Ablative Hit Points treat a human body like a progress bar: a fighter with 80 HP fights at 100% peak efficiency at 1 HP until the final point is depleted, and healing rules absurdly take longer to restore "luck and grit."
+
+#### How satya solves this
+
+Satya eliminates Hit Points in favor of **Anatomical Wound Tracks, Systemic Shock, and Fatigue**:
+- **Fatigue (`fatigue_level`)** and **Wound Shock (`wound_shock_index`)** drain `-2` points per tier from the combatant's Effective Tactical Pool ($P_{\text{eff}}$), increase internal cascade difficulty ($\Delta_{\text{int}}$, deepening $-\delta_{\text{under}}$), and slow every action via `action_time_factor`.
+- **Localized Structural Wounds** directly slash the corresponding **Aspect Ceiling** ($T_{\max}$ for leg wounds, $C_{\max}$ for arm/head/eye wounds, $F_{\max}$ for shoulder/torso wounds)—so a sliced calf immediately hobbles a fighter's **Tempo**, and a fractured wrist ruins their **Control**.
+
+### The Tactical Triad (Tempo, Control, Force) Over Feat Bloat
+
+Many systems try to add tactical depth to combat by publishing hundreds of special-case "Feats," "Maneuvers," or "Cards" (`Power Attack`, `Combat Expertise`, `Riposte`, `Double Tap`), forcing players to memorize exceptions while weapons still feel like reskinned damage dice.
+
+#### How satya solves this
+
+Satya's **"Envelope & Fill" Tactical Pool Architecture** (see [Combat](../combat/combat.md) and [Melee Combat](../combat/melee_combat.md)) derives every maneuver from a single unified mechanic:
+- Your **Characteristics** (`SPD`, `DEX`/`KIN`/`SIG`, `FOR`) set your physical **Aspect Ceilings** ($T_{\max}, C_{\max}, F_{\max}$—the Envelope), while your **Combat Readiness and Skill ($N$)** determine your **Tactical Pool** ($P_{\text{base}} = C_{\text{combat}} + 3N$—the Fill).
+- On every exchange, splitting your pool across **Tempo (`T` — speed & mobility)**, **Control (`C` — precision & guard)**, and **Force (`F` — impact power, recoil bracing & rooted balance)** naturally produces jabs/probes (`TC`), blitzes/dives (`TF`), planted finishers/braced fire (`CF`), and counter-initiative traps—without a single bolt-on Feat rule.

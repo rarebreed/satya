@@ -1,6 +1,6 @@
 # Satya d20 TTRPG Core Ruleset Reference
 
-This document defines the canonical **Satya d20** mechanics implemented by `CascadeTaskParams`, `evaluate_cascade_roll`, and `evaluate_satya_cascade_task` in [`crates/satya-engine/src/dice_probabilities.rs`](file:///c:/Users/hapah/Projects/satya/crates/satya-engine/src/dice_probabilities.rs) (calibrated in [`docs/ttrpg/probability.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/probability.md)) and used by the Satya AI Game Master (`query_satya_rules`).
+This document defines the canonical **Satya d20** mechanics implemented by `CascadeTaskParams`, `evaluate_cascade_roll`, and `evaluate_satya_cascade_task` in [`crates/satya-engine/src/dice_probabilities.rs`](../../crates/satya-engine/src/dice_probabilities.rs) (calibrated in [`docs/ttrpg/probability.md`](probability.md)) and used by the Satya AI Game Master (`query_satya_rules`).
 
 ## 1. Two-List Cascading ("Watershed") `2d20` Dice Mechanic & Target Numbers ($\text{TN}_{\text{eff}}$)
 

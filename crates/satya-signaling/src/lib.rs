@@ -37,6 +37,9 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route("/", get(index_handler))
         .nest_service("/pkg", tower_http::services::ServeDir::new("pkg"))
         .nest_service("/maps", tower_http::services::ServeDir::new("data/maps"))
+        .nest_service("/book", tower_http::services::ServeDir::new("docs/book"))
+        .route("/api/rules", get(list_rules_handler))
+        .route("/api/rules/:chapter_id", get(get_rules_chapter_handler))
         .route("/api/auth/register", post(register_handler))
         .route("/api/auth/login", post(login_handler))
         .route("/api/auth/logout", post(logout_handler))
@@ -274,6 +277,7 @@ mod tests {
             .unwrap();
         assert_eq!(admin_auth.account_role, AccountRole::Admin);
         let res_metrics = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .uri("/api/storage/metrics")
@@ -284,6 +288,30 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res_metrics.status(), StatusCode::OK);
+
+        // 3. Verify GET /api/rules and GET /api/rules/:chapter_id serve the canonical Rules Book
+        let res_rules = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/rules?q=Watershed")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res_rules.status(), StatusCode::OK);
+
+        let res_tasks_ch = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/rules/tasks")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res_tasks_ch.status(), StatusCode::OK);
 
         let metrics = state.storage.metrics_snapshot().await;
         assert_eq!(metrics.len(), 9);
@@ -1041,6 +1069,41 @@ mod tests {
 
         let (gm_ctx, _) = state.auth.get_session_gm_context("ep-docs").await.unwrap();
         assert_eq!(gm_ctx.gm_documents.len(), 2);
+
+        // Verify Rules Book catalog, search, and single-chapter REST endpoints
+        let rules_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/rules?q=lockpicking")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(rules_res.status(), StatusCode::OK);
+        let rules_bytes = to_bytes(rules_res.into_body(), 128 * 1024).await.unwrap();
+        let catalog: satya_schema::RulesBookCatalogResponse =
+            serde_json::from_slice(&rules_bytes).unwrap();
+        assert_eq!(catalog.chapters.len(), 9);
+        assert!(!catalog.search_hits.is_empty());
+
+        let ch_res = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/rules/tasks")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(ch_res.status(), StatusCode::OK);
+        let ch_bytes = to_bytes(ch_res.into_body(), 256 * 1024).await.unwrap();
+        let ch_doc: satya_schema::RulesChapterDocument = serde_json::from_slice(&ch_bytes).unwrap();
+        assert_eq!(ch_doc.summary.chapter_id, "tasks");
+        assert!(ch_doc.rendered_html.contains("satya-rules-article"));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

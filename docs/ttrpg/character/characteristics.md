@@ -1,6 +1,6 @@
 # Satya TTRPG Character Characteristics & Attribute Architecture
 
-This document defines the canonical **Character Characteristics System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, and **Action Speed**) are derived from them, how **Psyche** governs behavior and **Social Combat / Cognitive Dissonance**, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/satya_d20_rules.md) and the [Skill System](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/skill-design.md).
+This document defines the canonical **Character Characteristics System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, and **Action Speed**) are derived from them, how **Psyche** governs behavior and **Social Combat / Cognitive Dissonance**, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](../satya_d20_rules.md) and the [Skill System](../skill-design.md).
 
 ---
 
@@ -179,7 +179,7 @@ Combinations of the seven Psyche traits immediately generate rich, mechanically 
 
 > [!NOTE]
 > **Psyche Mechanics in Play (Friction, Drift, Morale & Social Combat)**:
-> For the full rules on how **Psyche** traits govern **Psyche Friction Checks & Trait Drift**, **Conviction Surges**, **Combat Morale**, and **Social Combat / Cognitive Dissonance ("Mental Wounds")**, see [`docs/ttrpg/social_interactions.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/social_interactions.md).
+> For the full rules on how **Psyche** traits govern **Psyche Friction Checks & Trait Drift**, **Conviction Surges**, **Combat Morale**, and **Social Combat / Cognitive Dissonance ("Mental Wounds")**, see [`docs/ttrpg/social_interactions.md`](../social_interactions.md).
 
 ---
 
@@ -196,14 +196,14 @@ Several crucial mechanical metrics in Satya are derived directly from combinatio
 | **General Awareness (`AWR`)** | $$\text{AWR} = \left\lfloor \frac{\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU}}{3} \right\rfloor$$ | Used for passive multi-sensory *Observation & Awareness* checks when no single sense is isolated. |
 | **Fatigue Threshold** | $$\text{FT} = \text{FIT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Determines how many high-exertion combat ticks or hours of labor a character can sustain before gaining +1 `fatigue_level`. |
 | **Wound Shock Resistance** | $$\text{WSR} = \text{HLT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$ | Mitigates `wound_shock_index` penalties from blood loss, structural trauma, and pain in combat. |
-| **Social Composure Threshold** | $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$ | Number of Rhetorical Strain / Cognitive Dissonance tiers a character can absorb in Social Combat before their composure breaks (see [`docs/ttrpg/social_interactions.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/social_interactions.md)). |
+| **Social Composure Threshold** | $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$ | Number of Rhetorical Strain / Cognitive Dissonance tiers a character can absorb in Social Combat before their composure breaks (see [`docs/ttrpg/social_interactions.md`](../social_interactions.md)). |
 | **Academic Study Controller ($C_{\text{study}}$)** | $$C_{\text{study}} = \left\lfloor \frac{\text{DIS} + C_{\text{mental}}}{2} \right\rfloor + \text{APT}$$ | Governs Lifepath school and university advancement rolls (where $C_{\text{mental}}$ is typically `ANA`, `MEM`, `INS`, or `CRE` depending on the subject). |
 
 ---
 
 ## 9. How Characteristics Govern Skills (`Control (C)`)
 
-Every skill in [`docs/ttrpg/skill-design.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/skill-design.md) specifies its **Controlling Characteristic(s)** and any **Minimum Characteristic Prerequisites (`Min C`)**:
+Every skill in [`docs/ttrpg/skill-design.md`](../skill-design.md) specifies its **Controlling Characteristic(s)** and any **Minimum Characteristic Prerequisites (`Min C`)**:
 
 1. **Balanced Composite Controller (`C1 / C2`)**:
    Most skills in Satya combine two characteristics—for example, a motor or mental attribute paired with a sensory or focus attribute:

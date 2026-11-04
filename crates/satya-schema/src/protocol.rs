@@ -630,3 +630,59 @@ pub struct StorageMetricsViewResponse {
     /// Metrics snapshots for all configured Apache Iggy topics.
     pub topics: Vec<TopicMetricsView>,
 }
+
+/// Metadata summary for a single chapter in the Satya TTRPG Rules Book (`docs/ttrpg/`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RulesChapterSummary {
+    /// Canonical chapter slug identifier (e.g. `"satya_d20_rules"`, `"tasks"`, `"combat"`, `"melee_combat"`).
+    pub chapter_id: String,
+    /// Book part/section grouping label (e.g. `"Part II: Core 2d20 Watershed Resolution & Probability"`).
+    pub part: String,
+    /// Human-readable chapter title.
+    pub title: String,
+    /// Relative path inside `docs/ttrpg/` (e.g. `"combat/melee_combat.md"`).
+    pub relative_path: String,
+    /// Concise summary of the rules covered in this chapter.
+    pub description: String,
+    /// Top-level `##` and `###` section headings extracted from the chapter markdown.
+    #[serde(default)]
+    pub headings: Vec<String>,
+}
+
+/// Full Satya TTRPG Rules Book chapter payload returned by `GET /api/rules/:chapter_id`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RulesChapterDocument {
+    /// Chapter metadata summary.
+    pub summary: RulesChapterSummary,
+    /// Raw canonical Markdown source of the chapter.
+    pub markdown: String,
+    /// Pre-rendered safe HTML representation of the chapter for direct display in web clients.
+    pub rendered_html: String,
+}
+
+/// Ranked section match returned when searching across the Satya TTRPG Rules Book (`GET /api/rules?q=...`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RulesSearchHit {
+    /// Canonical chapter slug identifier where the match occurred.
+    pub chapter_id: String,
+    /// Human-readable title of the matching chapter.
+    pub chapter_title: String,
+    /// Relative file path inside `docs/ttrpg/`.
+    pub relative_path: String,
+    /// Heading of the specific section that matched the query.
+    pub section_heading: String,
+    /// Markdown excerpt of the matching section.
+    pub snippet: String,
+    /// Relevance score computed from keyword and heading hits.
+    pub score: usize,
+}
+
+/// HTTP response body returned by `GET /api/rules` listing all chapters and optional search hits.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RulesBookCatalogResponse {
+    /// Ordered list of all canonical chapters in the Satya TTRPG Rules Book.
+    pub chapters: Vec<RulesChapterSummary>,
+    /// Ranked section search hits when a `?q=` query parameter was supplied.
+    #[serde(default)]
+    pub search_hits: Vec<RulesSearchHit>,
+}

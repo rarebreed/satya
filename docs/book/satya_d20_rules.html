@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Satya d20 Core Ruleset Reference — Satya TTRPG Rules Book</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --panel: #111827;
+      --border: #1f2937;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --emerald: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      min-height: 100vh;
+    }
+    aside.book-sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 20px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .book-brand { font-size: 1.15rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .book-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }
+    .book-nav-part { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+    .book-nav-link { display: block; padding: 7px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.88rem; margin-bottom: 3px; }
+    .book-nav-link:hover { background: rgba(56, 189, 248, 0.12); }
+    .book-nav-link.active { background: rgba(56, 189, 248, 0.2); color: var(--accent); font-weight: 600; }
+    main.book-main { max-width: 980px; padding: 32px 44px 64px; line-height: 1.65; }
+    h1, h2, h3, h4 { color: #f8fafc; }
+    h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    a { color: var(--accent); }
+    code, pre { font-family: "JetBrains Mono", Consolas, monospace; }
+    .rules-inline-code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }
+    .rules-code-block { background: #0f172a; border: 1px solid var(--border); padding: 14px; border-radius: 8px; overflow-x: auto; }
+    .rules-table-wrap { overflow-x: auto; margin: 14px 0; }
+    .rules-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .rules-table th, .rules-table td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+    .rules-table th { background: #1e293b; color: var(--accent); }
+    .rules-alert, .rules-blockquote { border-left: 4px solid var(--accent); background: rgba(30, 41, 59, 0.55); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+    .rules-alert-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .book-interactive-widget { background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin: 24px 0; }
+    .widget-grid { display: grid; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .widget-panel { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+    .widget-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .widget-controls label, label.full-width { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 4px; }
+    .widget-controls input, label.full-width input { background: #1e293b; border: 1px solid #334155; color: var(--text); padding: 6px 8px; border-radius: 4px; }
+    .widget-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .widget-presets button { background: #1e293b; border: 1px solid #38bdf8; color: var(--accent); padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
+    .book-pager { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .book-pager-btn { background: var(--panel); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <aside class="book-sidebar">
+    <div class="book-brand">SATYA // RULES BOOK</div>
+    <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
+    <a href="index.html" class="book-nav-link">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Philosophy &amp; Design Vision</div><a href="background.html" class="book-nav-link">1. An RPG for a More Civilized Age</a><div class="book-nav-part">Part II: Core 2d20 Watershed Resolution &amp; Probability</div><a href="satya_d20_rules.html" class="book-nav-link active">2. Satya d20 Core Ruleset Reference</a><a href="probability.html" class="book-nav-link">3. Probability &amp; The Cascading Dice Mechanic</a><a href="tasks.html" class="book-nav-link">4. Task Resolution &amp; Skill Check Mechanics</a><div class="book-nav-part">Part III: Characters, Attributes &amp; Lifepaths</div><a href="characteristics.html" class="book-nav-link">5. Character Characteristics &amp; Attribute Architecture</a><a href="skill-design.html" class="book-nav-link">6. Skill System &amp; Lifepath Architecture</a><div class="book-nav-part">Part IV: Psyche, Social Combat &amp; Tactical Combat</div><a href="social_interactions.html" class="book-nav-link">7. Social Interactions, Psyche Mechanics &amp; Social Combat</a><a href="combat.html" class="book-nav-link">8. Combat Architecture, Morale &amp; Ranged Firefights</a><a href="melee_combat.html" class="book-nav-link">9. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a>
+  </aside>
+  <main class="book-main">
+    <article class="satya-rules-article"><h1 id="satya-d20-ttrpg-core-ruleset-reference">Satya d20 TTRPG Core Ruleset Reference</h1><p>This document defines the canonical <strong>Satya d20</strong> mechanics implemented by <code class="rules-inline-code">CascadeTaskParams</code>, <code class="rules-inline-code">evaluate_cascade_roll</code>, and <code class="rules-inline-code">evaluate_satya_cascade_task</code> in <a class="rules-link" href="../../crates/satya-engine/src/dice_probabilities.rs">`crates/satya-engine/src/dice_probabilities.rs`</a> (calibrated in <a class="rules-link" href="probability.html">`docs/ttrpg/probability.md`</a>) and used by the Satya AI Game Master (<code class="rules-inline-code">query_satya_rules</code>).</p><h2 id="1-two-list-cascading-watershed-2d20-dice-mechanic-target-numbers-texttn-texteff">1. Two-List Cascading (&quot;Watershed&quot;) <code class="rules-inline-code">2d20</code> Dice Mechanic &amp; Target Numbers ($\text{TN}_{\text{eff}}$)</h2><p>Satya uses the <strong>Two-List Cascading (&amp;quot;Watershed&amp;quot;) Dice Mechanic</strong> with <strong><code class="rules-inline-code">K = 20</code> (<code class="rules-inline-code">d20</code>)</strong> dice so that the shape (skewness, modality, and tail behavior) of the probability distribution dynamically reflects skill, natural control, fatigue/injury, and environmental difficulty.</p><h3 id="11-the-dice-pool-sequential-pairs-of-2d20-determined-by-skill-level-n">1.1 The Dice Pool: Sequential Pairs of <code class="rules-inline-code">2d20</code> Determined by Skill Level ($N$)</h3><ul class="rules-list"><li>When attempting a skill check or combat action, a character rolls <strong>$N$ sequential pairs of 20-sided dice (<code class="rules-inline-code">2d20</code>)</strong>, where <strong>$N$ is the character&amp;#39;s Skill Level</strong>:</li></ul><div class="rules-math-block">$$\text{List A} = (A_1, A_2, \dots, A_N), \qquad \text{List B} = (B_1, B_2, \dots, B_N)$$</div><ul class="rules-list"><li><strong>Skill Level ($N$) Scale</strong>:</li><li><strong><code class="rules-inline-code">N = 1</code></strong>: Untrained / Novice (or raw Controlling Characteristic check; rolls a single <code class="rules-inline-code">2d20</code> pair).</li><li><strong><code class="rules-inline-code">N = 2</code></strong>: Apprentice / Dabbler (<code class="rules-inline-code">2</code> sequential <code class="rules-inline-code">2d20</code> pairs).</li><li><strong><code class="rules-inline-code">N = 3</code></strong>: <strong>Competent / Journeyman (Trained Average)</strong> (<code class="rules-inline-code">3</code> sequential <code class="rules-inline-code">2d20</code> pairs; <code class="rules-inline-code">70.10%</code> success chance at $C = 10, \Delta = 0$).</li><li><strong><code class="rules-inline-code">N = 4–5</code></strong>: Professional / Veteran Specialist.</li><li><strong><code class="rules-inline-code">N = 6–7</code></strong>: Expert / Master.</li><li><strong><code class="rules-inline-code">N = 8</code></strong>: <strong>Grandmaster (Standard Maximum)</strong> (<code class="rules-inline-code">92.37%</code> success chance at $C = 10, \Delta = 0$).</li><li><strong><code class="rules-inline-code">N = 10</code></strong>: Mythic / Transcendent Cap.</li><li>At each step $n \in \{1, \dots, N\}$, the unmodified pair sum $X_n = A_n + B_n$ ranges from <strong>$2$ to $40$</strong>, forming a triangular distribution centered at its exact midpoint of <strong>$21$</strong>.</li></ul><h3 id="12-roll-over-target-number-texttn-texteff-controlling-characteristic-c">1.2 Roll-Over Target Number ($\text{TN}_{\text{eff}}$) &amp; Controlling Characteristic ($C$)</h3><ul class="rules-list"><li>Satya is a <strong>Roll-Over</strong> system where <strong>higher numbers are always better</strong>:</li><li>A higher pair sum ($A_n + B_n$) is always better.</li><li>A higher <strong>Controlling Characteristic ($C$)</strong> (such as Strength, Dexterity/Agility, Intelligence, or Willpower) is always better.</li><li><strong>Controlling Characteristic ($C$) Scale</strong>: Theoretical range <code class="rules-inline-code">1–20</code>, playable human range <strong><code class="rules-inline-code">4–18</code></strong>, with the <strong>Human Average at <code class="rules-inline-code">C = 10</code></strong>.</li><li>The <strong>Midpoint-Anchored Target Number ($\text{TN}_{\text{eff}}$)</strong> is calibrated so an average human ($C = 10$) attempting a standard benchmark task ($\Delta_{\text{ext}} = 0$) needs the exact <code class="rules-inline-code">2d20</code> midpoint of <strong>$21$</strong>:</li></ul><div class="rules-math-block">$$\text{TN}_{\text{eff}} = (1.5K + 1) - C + \Delta_{\text{ext}} = 31 - C + \Delta_{\text{ext}}$$</div><ul class="rules-list"><li>Each <strong>+1 to Controlling Characteristic ($C$)</strong> *lowers* $\text{TN}_{\text{eff}}$ by <code class="rules-inline-code">1</code> on every pair (making the check easier).</li><li>Each <strong>+1 to External Task Difficulty ($\Delta_{\text{ext}}$)</strong> *raises* $\text{TN}_{\text{eff}}$ by <code class="rules-inline-code">1</code> on every pair (making the check harder).</li></ul><h3 id="13-sequential-watershed-cascade-carry-over-momentum-delta-textover-delta-textunder">1.3 Sequential Watershed Cascade: Carry-Over Momentum ($\delta_{\text{over}}$ &amp; $\delta_{\text{under}}$)</h3><p>The $N$ pairs are resolved sequentially from $n = 1$ to $N$ using the effective pair total $Y_n = A_n + B_n + \text{Carry}_n$: 1. <strong>Pair 1 ($n = 1$)</strong>: Starts with zero carry-over ($\text{Carry}_1 = 0$, so $Y_1 = A_1 + B_1$).</p><ul class="rules-list"><li>If $Y_1 &gt; \text{TN}_{\text{eff}}$ (or $\ge \text{TN}_{\text{eff}}$): <strong>+1 Success!</strong> The character gains momentum, passing a positive carry bonus $+\delta_{\text{over}}$ (<strong><code class="rules-inline-code">+6</code></strong> baseline) to Pair 2.</li><li>If $Y_1 &lt; \text{TN}_{\text{eff}}$: <strong>0 Successes on Pair 1.</strong> The character stumbles, passing a negative carry penalty $-\delta_{\text{under}}$ to Pair 2, where:</li></ul><div class="rules-math-block">$$\delta_{\text{under}} = \delta_{\text{base}} + \Delta_{\text{int}} = 6 + \Delta_{\text{int}}$$</div><ol class="rules-list rules-list-ordered"><li><strong>Subsequent Pairs ($n = 2 \dots N$)</strong>: Each pair computes $Y_n = A_n + B_n + \text{Carry}_n$ and compares $Y_n$ against $\text{TN}_{\text{eff}}$.</li></ol><ul class="rules-list"><li><strong>Standard Carry Mode (<code class="rules-inline-code">markov_step</code> / <code class="rules-inline-code">CarryMode::MarkovStep</code>)</strong>: Pair $n$ receives only a single $+\delta_{\text{over}}$ (<code class="rules-inline-code">+6</code>) if Pair $n-1$ succeeded, or a single $-\delta_{\text{under}}$ (<code class="rules-inline-code">-4</code> to <code class="rules-inline-code">-16</code>) if Pair $n-1$ failed. A skilled character who misses Pair 1 can fight through the penalty on Pair 2 or 3 and flip the cascade back into positive $+\delta_{\text{over}}$ momentum.</li><li><strong>High-Stakes Carry Mode (<code class="rules-inline-code">cumulative_snowball</code> / <code class="rules-inline-code">CarryMode::CumulativeSnowball</code>)</strong>: Carry-over compounds across steps ($\text{Carry}_{n+1} = \text{Carry}_n \pm \delta$), creating a stark bimodal (&quot;watershed&quot;) distribution where early momentum snowballs.</li><li><strong>Linear Margin Carry Mode (<code class="rules-inline-code">linear_margin</code> / <code class="rules-inline-code">CarryMode::LinearMargin</code>)</strong>: Exact difference carry ($\text{Carry}_{n+1} = Y_n - \text{TN}_{\text{eff}}$).</li></ul><h3 id="14-the-four-task-factors">1.4 The Four Task Factors</h3><p>Every task in Satya is parameterized by four orthogonal factors (<code class="rules-inline-code">CascadeTaskParams</code>): 1. <strong>Skill Level ($N \in [1, 8]$)</strong>: Number of <code class="rules-inline-code">2d20</code> pairs rolled; expands the right tail (<code class="rules-inline-code">+1</code> to <code class="rules-inline-code">+N</code> successes), raises expected margin <code class="rules-inline-code">E[Margin]</code>, and provides extra chances to recover from an early miss. 2. <strong>Controlling Characteristic ($C \in [1, 20]$)</strong>: Shifts $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$ across all pairs simultaneously (including Pair 1). 3. <strong>Internal Character Modifiers ($\Delta_{\text{int}} \in [-2, +10]$)</strong>: Models Fatigue, Injury, and Stress by increasing the failure carry penalty $\delta_{\text{under}} = 6 + \Delta_{\text{int}}$ (<code class="rules-inline-code">-4</code> when Focused/Rested at $\Delta_{\text{int}} = -2$, <code class="rules-inline-code">-6</code> Fresh baseline at $\Delta_{\text{int}} = 0$, <code class="rules-inline-code">-10</code> Winded at $+4$, <code class="rules-inline-code">-12</code> Battered at $+6$, up to <code class="rules-inline-code">-16</code> Exhausted/Agonized at $+10$). Crucially, $\Delta_{\text{int}}$ imposes <strong>zero penalty on Pair 1</strong>—if a fatigued master succeeds on Pair 1, fatigue never slows them down, but if they miss Pair 1, recovery is much harder. 4. <strong>External Task Modifiers ($\Delta_{\text{ext}} \in [-10, +16]$)</strong>: Shifts $\text{TN}_{\text{eff}}$ for environmental conditions and task complexity (<code class="rules-inline-code">-10</code> Trivial, <code class="rules-inline-code">-4</code> Easy, <code class="rules-inline-code">0</code> Standard Benchmark, <code class="rules-inline-code">+4</code> Challenging, <code class="rules-inline-code">+8</code> Hard, <code class="rules-inline-code">+12</code> Extreme, <code class="rules-inline-code">+16</code> Nearly Impossible).</p><hr class="rules-divider"/><h2 id="2-signed-outcome-spectrum-n-to-n-botch-rules-outcometier">2. Signed Outcome Spectrum (<code class="rules-inline-code">-N</code> to <code class="rules-inline-code">+N</code>), Botch Rules, &amp; <code class="rules-inline-code">OutcomeTier</code></h2><p>A single cascading roll resolves both <strong>how well the character succeeds</strong> and <strong>how badly they fail</strong> on a unified signed margin spectrum (<code class="rules-inline-code">signed_margin</code> in <code class="rules-inline-code">-N..=+N</code>):</p><h3 id="21-positive-outcomes-1-to-n-successes">2.1 Positive Outcomes (<code class="rules-inline-code">+1</code> to <code class="rules-inline-code">+N</code> Successes)</h3><ul class="rules-list"><li><strong><code class="rules-inline-code">+1</code> Success (Bare Minimum)</strong>: Accomplishes the task with minimal margin.</li><li><strong><code class="rules-inline-code">+2</code> Successes (Solid Execution)</strong>: Clean, reliable professional execution.</li><li><strong><code class="rules-inline-code">+3</code> to <code class="rules-inline-code">+4</code> Successes (Extraordinary / Critical)</strong>: Faster, quieter, higher yield, or secondary tactical advantage (<code class="rules-inline-code">OutcomeTier::ExtraordinarySuccess</code>).</li><li><strong><code class="rules-inline-code">+5+</code> Successes (Masterwork / Legendary)</strong>: Achievable only by highly trained specialists ($N \ge 5$).</li></ul><h3 id="22-botch-severity-1-to-n-avoiding-the-skilled-botch-paradox">2.2 Botch Severity (<code class="rules-inline-code">-1</code> to <code class="rules-inline-code">-N</code>) &amp; Avoiding the &quot;Skilled Botch Paradox&quot;</h3><p>Satya prevents the classic dice-pool paradox (where rolling more dice for higher skill accidentally increases critical failure rates) through two botch evaluation rules (<code class="rules-inline-code">BotchRule</code>): 1. <strong>Worst-Case Recovery (<code class="rules-inline-code">closest_miss</code> / <code class="rules-inline-code">BotchRule::ClosestMiss</code> — Default)</strong>:</p><ul class="rules-list"><li>A botch failure only occurs when <strong><code class="rules-inline-code">total_successes == 0</code></strong>.</li><li>Severity is determined by the character&#39;s <strong>closest attempt across all $N$ pairs</strong>, $Y_{\text{best}} = \max(Y_1, \dots, Y_N)$, binned in 4-point ($K / 5 = 4$) tiers below $\text{TN}_{\text{eff}}$ (<code class="rules-inline-code">min_miss_tier</code> in <code class="rules-inline-code">0..=5</code>):</li><li>If $\text{TN}_{\text{eff}} - 4 \le Y_{\text{best}} \le \text{TN}_{\text{eff}}$ (<code class="rules-inline-code">min_miss_tier == 0</code>): <strong><code class="rules-inline-code">0</code> (Clean Failure / Near Miss)</strong>.</li><li>Each additional 4-point tier below $\text{TN}_{\text{eff}}$ adds <code class="rules-inline-code">-1</code> botch severity (<code class="rules-inline-code">-1</code> to <code class="rules-inline-code">-5</code>).</li><li>Because adding another skill pair $Y_{N+1}$ can only increase $\max(Y_1, \dots, Y_N)$, higher skill $N$ strictly reduces both failure probability and botch severity.</li></ul><ol class="rules-list rules-list-ordered"><li><strong>Impossible Floor Breach (<code class="rules-inline-code">ceiling_breach</code> &amp;amp; &amp;quot;Success with a Complication&amp;quot;)</strong>:</li></ol><ul class="rules-list"><li>Because two <code class="rules-inline-code">d20</code> dice have a minimum sum of <code class="rules-inline-code">2</code>, an effective pair total $Y_n = A_n + B_n - \delta_{\text{under}}$ can only drop <strong>below <code class="rules-inline-code">2</code> ($Y_n &amp;lt; 2$)</strong> after a prior failed pair applies $-\delta_{\text{under}}$ and the current pair rolls near snake-eyes (<code class="rules-inline-code">raw_botches += 1</code>).</li><li>If a character achieves <strong><code class="rules-inline-code">total_successes &amp;gt;= 1</code> AND <code class="rules-inline-code">raw_botches &amp;gt;= 1</code></strong> in the same cascade, the result is <strong><code class="rules-inline-code">CascadeOutcomeKind::SuccessWithComplication</code></strong> (<code class="rules-inline-code">OutcomeTier::PartialSuccess</code> — succeeding at a cost, noise, tool damage, or strain).</li></ul><h3 id="23-canonical-cascadeoutcomekind-outcometier-mapping">2.3 Canonical <code class="rules-inline-code">CascadeOutcomeKind</code> &amp; <code class="rules-inline-code">OutcomeTier</code> Mapping</h3><p>In <code class="rules-inline-code">evaluate_cascade_roll</code> and <code class="rules-inline-code">evaluate_satya_cascade_task</code> (<code class="rules-inline-code">crates/satya-engine/src/dice_probabilities.rs</code>):</p><ul class="rules-list"><li><strong><code class="rules-inline-code">EXTRAORDINARY_SUCCESS</code></strong> (<code class="rules-inline-code">OutcomeTier::ExtraordinarySuccess</code>): <code class="rules-inline-code">CascadeOutcomeKind::Success</code> with <code class="rules-inline-code">total_successes &gt;= 3</code> (<code class="rules-inline-code">raw_botches == 0</code>).</li><li><strong><code class="rules-inline-code">SUCCESS</code></strong> (<code class="rules-inline-code">OutcomeTier::Success</code>): <code class="rules-inline-code">CascadeOutcomeKind::Success</code> with <code class="rules-inline-code">1 &lt;= total_successes &lt;= 2</code> (<code class="rules-inline-code">raw_botches == 0</code>).</li><li><strong><code class="rules-inline-code">PARTIAL_SUCCESS</code></strong> (<code class="rules-inline-code">OutcomeTier::PartialSuccess</code>): <code class="rules-inline-code">CascadeOutcomeKind::SuccessWithComplication</code> (<code class="rules-inline-code">total_successes &gt;= 1</code> and <code class="rules-inline-code">raw_botches &gt;= 1</code>, succeeding with a complication).</li><li><strong><code class="rules-inline-code">FAILURE</code></strong> (<code class="rules-inline-code">OutcomeTier::Failure</code>): <code class="rules-inline-code">CascadeOutcomeKind::CleanFailure</code> (<code class="rules-inline-code">total_successes == 0</code> and <code class="rules-inline-code">effective_botches == 0</code>).</li><li><strong><code class="rules-inline-code">CRITICAL_FAILURE</code></strong> (<code class="rules-inline-code">OutcomeTier::CriticalFailure</code>): <code class="rules-inline-code">CascadeOutcomeKind::BotchFailure</code> (<code class="rules-inline-code">total_successes == 0</code> and <code class="rules-inline-code">effective_botches &gt;= 1</code>, <code class="rules-inline-code">signed_margin &lt; 0</code>).</li></ul><hr class="rules-divider"/><h2 id="3-count-up-action-clock-combat-stances-combatstance">3. Count-Up Action Clock &amp; Combat Stances (<code class="rules-inline-code">CombatStance</code>)</h2><p>Satya combat uses a continuous <strong>Count-Up Tick Clock</strong> rather than fixed cyclic rounds. The combatant with the lowest tick count acts next, and their action advances their clock by <code class="rules-inline-code">action_count_cost</code>.</p><h3 id="base-time-cost-action-time-cost-tc-by-stance">Base Time Cost (<code class="rules-inline-code">action_time_cost</code> / <code class="rules-inline-code">TC</code>) by Stance</h3><ul class="rules-list"><li><strong><code class="rules-inline-code">POWER</code></strong> (<code class="rules-inline-code">TC = 14</code>): Heavy, high-impact melee or ordnance strike; slower recovery.</li><li><strong><code class="rules-inline-code">RANGED_AIMED</code></strong> (<code class="rules-inline-code">TC = 12</code>): Deliberate sighted fire; grants accuracy at higher tick cost.</li><li><strong><code class="rules-inline-code">MANEUVER</code></strong> (<code class="rules-inline-code">TC = 11</code>): Mobile tactical engagement, flanking, or repositioning during an exchange.</li><li><strong>Unstanced / Standard Action</strong> (<code class="rules-inline-code">TC = 10</code>): Default skill check or interaction.</li><li><strong><code class="rules-inline-code">STABILITY</code></strong> (<code class="rules-inline-code">TC = 9</code>): Braced, defensive posture prioritizing guard and low tick recovery.</li><li><strong><code class="rules-inline-code">RANGED_SNAP</code></strong> (<code class="rules-inline-code">TC = 7</code>): Fast reactive snapshot at reduced time cost.</li></ul><h2 id="4-fatigue-wound-shock-time-penalty-action-time-factor">4. Fatigue &amp; Wound Shock Time Penalty (<code class="rules-inline-code">action_time_factor</code>)</h2><p>Accumulated <strong>Fatigue (<code class="rules-inline-code">fatigue_level</code>)</strong> and <strong>Wound Shock (<code class="rules-inline-code">wound_shock_index</code>)</strong> degrade a character&#39;s speed on the tick clock:</p><div class="rules-math-block">$$\text{action\_time\_factor} = 1.0 + (0.10 \times \text{fatigue\_level}) + (0.25 \times \text{wound\_shock\_index})$$</div><div class="rules-math-block">$$\text{action\_count\_cost} = \text{round}(\text{base\_tc} \times \text{action\_time\_factor})$$</div></article>
+
+<section class="book-interactive-widget">
+  <h2>Interactive Satya 2d20 Watershed Cascade &amp; Tactical Pool Calculator</h2>
+  <p class="widget-sub">
+    Powered by the Satya Four-Factor Cascade formula
+    (<code>TN_eff = 31 - C + &Delta;_ext</code>, <code>&delta;_over = +6</code>, <code>&delta;_under = -(6 + &Delta;_int)</code>)
+    and the Combat Tactical Pool (<code>P_base = C_combat + 3N</code>).
+  </p>
+  <div class="widget-grid">
+    <div class="widget-panel">
+      <h3>1. 2d20 Watershed Cascade Simulator</h3>
+      <div class="widget-controls">
+        <label>Skill Level (N Pairs: 1..8)
+          <input id="bk-n" type="number" min="1" max="8" value="4" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Controlling Characteristic (C: 1..20)
+          <input id="bk-c" type="number" min="1" max="20" value="11" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Internal Mod (&Delta;_int: Fatigue/Shock)
+          <input id="bk-dint" type="number" min="-2" max="10" value="2" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>External Mod (&Delta;_ext: Difficulty/Tools)
+          <input id="bk-dext" type="number" min="-6" max="12" value="2" onchange="satyaBookRecalc()"/>
+        </label>
+      </div>
+      <div class="widget-presets">
+        <button type="button" onclick="satyaBookLoadPreset(4,11,2,2,'14+11, 8+7, 16+15, 17+12')">Sarah's Lockpick</button>
+        <button type="button" onclick="satyaBookLoadPreset(5,16,0,2,'12+10, 9+11, 14+8, 16+9, 11+12')">Elena's Probe</button>
+        <button type="button" onclick="satyaBookLoadPreset(4,13,0,3,'15+11, 7+6, 13+10, 18+9')">Viktor's Cleave</button>
+        <button type="button" onclick="satyaBookRandomRoll()">Roll Random N&times;2d20</button>
+      </div>
+      <label class="full-width">Rolled 2d20 Pairs (A+B, comma-separated):
+        <input id="bk-pairs" type="text" value="14+11, 8+7, 16+15, 17+12" oninput="satyaBookRecalc()"/>
+      </label>
+      <div id="bk-cascade-readout" class="widget-readout"></div>
+    </div>
+
+    <div class="widget-panel">
+      <h3>2. Combat Tactical Pool (Tempo &middot; Control &middot; Force)</h3>
+      <div class="widget-controls">
+        <label>Combat Readiness C_combat
+          <input id="bk-ccombat" type="number" min="1" max="20" value="13" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Skill Level N
+          <input id="bk-combat-n" type="number" min="1" max="8" value="4" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Tempo (T)
+          <input id="bk-t" type="number" min="0" max="20" value="9" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Control (C)
+          <input id="bk-ctrl" type="number" min="0" max="20" value="9" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Force (F)
+          <input id="bk-f" type="number" min="0" max="20" value="7" onchange="satyaBookRecalc()"/>
+        </label>
+        <label>Base Weapon TC
+          <input id="bk-wtc" type="number" min="4" max="16" value="8" onchange="satyaBookRecalc()"/>
+        </label>
+      </div>
+      <div id="bk-tactical-readout" class="widget-readout"></div>
+    </div>
+  </div>
+</section>
+<script>
+function satyaBookLoadPreset(n, c, dint, dext, pairs) {
+  document.getElementById('bk-n').value = n;
+  document.getElementById('bk-c').value = c;
+  document.getElementById('bk-dint').value = dint;
+  document.getElementById('bk-dext').value = dext;
+  document.getElementById('bk-pairs').value = pairs;
+  satyaBookRecalc();
+}
+function satyaBookRandomRoll() {
+  const n = Math.max(1, Math.min(8, parseInt(document.getElementById('bk-n').value || '3', 10)));
+  const rolls = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor(Math.random() * 20) + 1;
+    const b = Math.floor(Math.random() * 20) + 1;
+    rolls.push(a + '+' + b);
+  }
+  document.getElementById('bk-pairs').value = rolls.join(', ');
+  satyaBookRecalc();
+}
+function satyaBookRecalc() {
+  const n = Math.max(1, Math.min(8, parseInt(document.getElementById('bk-n').value || '4', 10)));
+  const c = Math.max(1, Math.min(20, parseInt(document.getElementById('bk-c').value || '11', 10)));
+  const dint = parseInt(document.getElementById('bk-dint').value || '0', 10);
+  const dext = parseInt(document.getElementById('bk-dext').value || '0', 10);
+  const tnEff = 31 - c + dext;
+  const dOver = 6;
+  const dUnder = Math.max(0, 6 + dint);
+  const rawPairs = (document.getElementById('bk-pairs').value || '').split(',');
+  let carry = 0, succ = 0, botch = 0, minMissTier = 5;
+  let rows = [];
+  for (let i = 0; i < n; i++) {
+    const token = (rawPairs[i] || '11+10').trim().split('+');
+    const a = parseInt(token[0] || '11', 10) || 11;
+    const b = parseInt(token[1] || '10', 10) || 10;
+    const raw = a + b;
+    const yn = raw + carry;
+    let status = 'Miss';
+    let nextCarry = 0;
+    if (yn > tnEff) {
+      succ += 1;
+      minMissTier = 0;
+      status = '<strong style="color:#34d399">SUCCESS (+1)</strong>';
+      nextCarry = dOver;
+    } else if (yn < tnEff) {
+      const dist = tnEff - yn;
+      minMissTier = Math.min(minMissTier, Math.min(5, Math.floor(dist / 4)));
+      if (yn < 2) {
+        botch += 1;
+        status = '<strong style="color:#fb7185">FLOOR BREACH (&lt;2)</strong>';
+      }
+      nextCarry = -dUnder;
+    } else {
+      minMissTier = 0;
+      status = 'Exact Tie (0)';
+      nextCarry = 0;
+    }
+    rows.push('<tr><td>#' + (i+1) + '</td><td>' + a + '+' + b + '=' + raw + '</td><td>' + (carry>=0?'+'+carry:carry) + '</td><td><strong>' + yn + '</strong></td><td>' + tnEff + '</td><td>' + status + '</td><td>' + (nextCarry>=0?'+'+nextCarry:nextCarry) + '</td></tr>');
+    carry = nextCarry;
+  }
+  const effBotch = succ === 0 ? minMissTier : botch;
+  const margin = succ > 0 ? '+' + succ : String(-effBotch);
+  const tier = (succ >= 3 && botch === 0) ? 'EXTRAORDINARY_SUCCESS' : (succ >= 1 && botch === 0) ? 'SUCCESS' : (succ >= 1 && botch >= 1) ? 'PARTIAL_SUCCESS (Complication)' : (effBotch === 0 ? 'CLEAN_FAILURE' : 'CRITICAL_FAILURE');
+  document.getElementById('bk-cascade-readout').innerHTML =
+    '<div><strong>TN_eff = ' + tnEff + '</strong> | &delta;_over = +' + dOver + ' | &delta;_under = -' + dUnder + ' | <strong>Outcome: ' + tier + ' (Margin ' + margin + ')</strong></div>' +
+    '<table class="rules-table" style="margin-top:8px"><thead><tr><th>Pair</th><th>Roll</th><th>Carry In</th><th>Y_n</th><th>TN_eff</th><th>Result</th><th>Carry Out</th></tr></thead><tbody>' + rows.join('') + '</tbody></table>';
+
+  const cCombat = parseInt(document.getElementById('bk-ccombat').value || '13', 10);
+  const combatN = parseInt(document.getElementById('bk-combat-n').value || '4', 10);
+  const pBase = cCombat + 3 * combatN;
+  const bVal = Math.floor(pBase / 3);
+  const tVal = parseInt(document.getElementById('bk-t').value || '0', 10);
+  const ctrlVal = parseInt(document.getElementById('bk-ctrl').value || '0', 10);
+  const fVal = parseInt(document.getElementById('bk-f').value || '0', 10);
+  const wTc = parseInt(document.getElementById('bk-wtc').value || '8', 10);
+  const sumTcf = tVal + ctrlVal + fVal;
+  const effTc = Math.max(3, wTc - Math.floor((tVal - bVal) / 2));
+  const impactMult = (fVal / Math.max(1, bVal)).toFixed(2);
+  const validBadge = sumTcf <= pBase
+    ? '<span style="color:#34d399">VALID (' + sumTcf + ' / ' + pBase + ' pts)</span>'
+    : '<span style="color:#fb7185">OVER POOL (' + sumTcf + ' &gt; ' + pBase + ' pts)</span>';
+  document.getElementById('bk-tactical-readout').innerHTML =
+    '<p><strong>Pool P_base = ' + pBase + '</strong> | Neutral Baseline <strong>B = ' + bVal + '</strong> | Allocation: ' + validBadge + '</p>' +
+    '<ul><li><strong>Effective Action Cost (TC)</strong>: <code>' + effTc + ' ticks</code> (Base Weapon TC ' + wTc + ')</li>' +
+    '<li><strong>Control Task Bonus</strong>: <code>' + (ctrlVal - bVal >= 0 ? '+' + (ctrlVal - bVal) : (ctrlVal - bVal)) + '</code> vs. Neutral Baseline</li>' +
+    '<li><strong>Force Impact Multiplier</strong>: <code>' + impactMult + '&times; POW</code></li></ul>';
+}
+window.addEventListener('DOMContentLoaded', satyaBookRecalc);
+</script>
+
+    <div class="book-pager">
+      <a class="book-pager-btn" href="background.html">&larr; Previous: An RPG for a More Civilized Age</a><a class="book-pager-btn" href="probability.html">Next: Probability &amp; The Cascading Dice Mechanic &rarr;</a>
+    </div>
+  </main>
+</body>
+</html>

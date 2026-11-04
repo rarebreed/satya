@@ -63,3 +63,7 @@ inspect-topics = { cmd = "python -m satya_ml.inspect_avro --topics", env = { PYT
 ml-pipeline = { depends-on = ["compact-to-lance", "inspect-topics"], description = "Run incremental Avro-to-PyLance compaction and print dataset summary" }
 notebook = { cmd = "marimo edit notebooks/dice_probability_distributions.py", env = { PYTHONPATH = "src" }, description = "Launch interactive Marimo notebook editor for Satya TTRPG Dice Probability Distributions" }
 notebook-app = { cmd = "marimo run notebooks/dice_probability_distributions.py", env = { PYTHONPATH = "src" }, description = "Launch the Satya TTRPG Dice Probability Distributions Marimo dashboard app" }
+rules-book = { cmd = "marimo edit notebooks/satya_rules_book.py", env = { PYTHONPATH = "src" }, description = "Launch interactive Marimo Rules Book notebook (`docs/ttrpg/` + 2d20 & Tactical Pool cells)" }
+rules-book-app = { cmd = "marimo run notebooks/satya_rules_book.py", env = { PYTHONPATH = "src" }, description = "Launch the Satya TTRPG Rules Book Marimo web app" }
+build-book = { cmd = "python -m satya_ml.build_rules_book", env = { PYTHONPATH = "src" }, description = "Generate static HTML Rules Book pages and catalog.json into docs/book/" }
+check-py-ext = { cmd = "cargo check -p satya-py", description = "Type-check the satya-py PyO3 Python extension crate" }

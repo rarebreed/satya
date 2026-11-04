@@ -1,6 +1,6 @@
 # Satya TTRPG Skill System & Lifepath Architecture
 
-This document defines the canonical **Skill System, Hierarchical Skill Tree, Task Prerequisite Rules, and Lifepath Acquisition Mechanics** for **Satya** (set on near-future Earth, 5 years in the future, ca. 2031–2035). It integrates directly with the **Character Characteristics System** defined in [`docs/ttrpg/character/characteristics.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/character/characteristics.md) and the **Two-List Cascading ("Watershed") `2d20` Dice Mechanic** defined in [`docs/ttrpg/satya_d20_rules.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/satya_d20_rules.md) (calibrated in [`docs/ttrpg/probability.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/probability.md)).
+This document defines the canonical **Skill System, Hierarchical Skill Tree, Task Prerequisite Rules, and Lifepath Acquisition Mechanics** for **Satya** (set on near-future Earth, 5 years in the future, ca. 2031–2035). It integrates directly with the **Character Characteristics System** defined in [`docs/ttrpg/character/characteristics.md`](character/characteristics.md) and the **Two-List Cascading ("Watershed") `2d20` Dice Mechanic** defined in [`docs/ttrpg/satya_d20_rules.md`](satya_d20_rules.md) (calibrated in [`docs/ttrpg/probability.md`](probability.md)).
 
 ---
 
@@ -31,11 +31,11 @@ In the Satya `2d20` Cascading Engine, a character rolls **$N$ sequential pairs o
 
 $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$$
 
-To support both task execution and Lifepath learning progression, characters possess **Primary Characteristics**, **Sensory Characteristics**, and **Psychological Traits (`Psyche`)**—defined in full in [`docs/ttrpg/character/characteristics.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/character/characteristics.md)—alongside domain **Aptitudes ($A$)**.
+To support both task execution and Lifepath learning progression, characters possess **Primary Characteristics**, **Sensory Characteristics**, and **Psychological Traits (`Psyche`)**—defined in full in [`docs/ttrpg/character/characteristics.md`](character/characteristics.md)—alongside domain **Aptitudes ($A$)**.
 
 ### 2.1 Controlling Characteristics ($C \in [1, 20]$, Underlying Spectrum `0.0–100.0`, Human Average `10`)
 
-Rather than collapsing physicality into generic "Strength/Agility" or the mind into a single monolithic "Intelligence" or "Perception" score, Satya separates attributes into **Physical**, **Mental**, **Social**, and **Sensory** characteristics (see [`docs/ttrpg/character/characteristics.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/character/characteristics.md) for full mechanical derivations, including $\text{Power} = \text{Force} \times \text{Speed}$, `Mass`, `Height`, and `Psyche`):
+Rather than collapsing physicality into generic "Strength/Agility" or the mind into a single monolithic "Intelligence" or "Perception" score, Satya separates attributes into **Physical**, **Mental**, **Social**, and **Sensory** characteristics (see [`docs/ttrpg/character/characteristics.md`](character/characteristics.md) for full mechanical derivations, including $\text{Power} = \text{Force} \times \text{Speed}$, `Mass`, `Height`, and `Psyche`):
 
 #### A. Physical Primary Characteristics
 | Abbr | Characteristic | Role in Task Resolution & Skill Prerequisites |
@@ -76,7 +76,7 @@ Rather than collapsing physicality into generic "Strength/Agility" or the mind i
 | **`ITU`** | **Intuition** | A kind of gut feeling or sixth sense. Governs danger sense, ambush detection, counter-surveillance ("spotting a tail"), and reading the shifting mood of a room. |
 
 #### E. Psyche Characteristics (The Invisible Behavioral Traits)
-Defined in [Section 7 of `docs/ttrpg/character/characteristics.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/character/characteristics.md) with interaction mechanics detailed in [`docs/ttrpg/social_interactions.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/social_interactions.md), the seven **Psyche** spectrums (`1–20`, neutral `10`) quantify personality, govern NPC/AI behavioral decisions, trigger **Psyche Friction Checks** (`DIS` vs. $|P - 10|$) when violated, and serve as the target vectors in **Social Combat & Cognitive Dissonance**:
+Defined in [Section 7 of `docs/ttrpg/character/characteristics.md`](character/characteristics.md) with interaction mechanics detailed in [`docs/ttrpg/social_interactions.md`](social_interactions.md), the seven **Psyche** spectrums (`1–20`, neutral `10`) quantify personality, govern NPC/AI behavioral decisions, trigger **Psyche Friction Checks** (`DIS` vs. $|P - 10|$) when violated, and serve as the target vectors in **Social Combat & Cognitive Dissonance**:
 
 | Abbr | Psyche Trait | Behavioral Spectrum (`1–7` Low Pole $\leftrightarrow$ `13–20` High Pole) & Mechanical Role |
 | :--- | :--- | :--- |
@@ -676,7 +676,7 @@ flowchart TD
 > **Elicitation, Coercive Interrogation & Social Combat (Psyche Resonance & Cognitive Dissonance)**:
 > - **Investigative Interviewing & Subtle Elicitation** (`INS/ELO`) uses *Charm*, *Empathy*, pattern insight, and conversational framing to draw out secrets from a subject who does not even realize they are being interrogated (or via rapport-based detective questioning).
 > - **Coercive Interrogation & Psychological Breaking** (`DIS/INS`) is used when a captive knows they are being interrogated and is actively resisting. It pits the interrogator's *Coercive Interrogation* (`DIS/INS`) against the subject's *Counter-Interrogation & Resistance* (`DIS/FOC`, or raw `DIS` at `N = 1` if untrained).
-> - **Targeting Psyche in Social Combat**: As detailed in [`docs/ttrpg/social_interactions.md`](file:///c:/Users/hapah/Projects/satya/docs/ttrpg/social_interactions.md), social skills interact directly with the target's seven **Psyche** traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`). First rolling *Empathy & Read Person* (`INS/ITU`) reveals the target's high/low Psyche poles. Aligning an argument with a strong trait (such as logical proof via *Persuasion* `ELO/ANA` against high **Openness `OPN`**, or flattery via *Charm* `PRE/ELO` against high **Ego `EGO`**) grants a **Resonance Bonus (`-2` to `-6` to $\Delta_{\text{ext}}$)**. When an argument simultaneously **resonates** with one strong Psyche trait (e.g., high `Openness`) while **clashing** with another (e.g., high `Belongingness` because the target's group rejects the truth), a successful roll inflicts **Cognitive Dissonance ("Mental Bleed")**—imposing compounding internal penalties ($\Delta_{\text{int}}$) until the target converts, hardens in denial (drifting `OPN` downward), or snaps!
+> - **Targeting Psyche in Social Combat**: As detailed in [`docs/ttrpg/social_interactions.md`](social_interactions.md), social skills interact directly with the target's seven **Psyche** traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`). First rolling *Empathy & Read Person* (`INS/ITU`) reveals the target's high/low Psyche poles. Aligning an argument with a strong trait (such as logical proof via *Persuasion* `ELO/ANA` against high **Openness `OPN`**, or flattery via *Charm* `PRE/ELO` against high **Ego `EGO`**) grants a **Resonance Bonus (`-2` to `-6` to $\Delta_{\text{ext}}$)**. When an argument simultaneously **resonates** with one strong Psyche trait (e.g., high `Openness`) while **clashing** with another (e.g., high `Belongingness` because the target's group rejects the truth), a successful roll inflicts **Cognitive Dissonance ("Mental Bleed")**—imposing compounding internal penalties ($\Delta_{\text{int}}$) until the target converts, hardens in denial (drifting `OPN` downward), or snaps!
 
 ---
 

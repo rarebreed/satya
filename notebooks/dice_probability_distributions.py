@@ -33,6 +33,7 @@ def _():
         plot_positive_vs_negative_feedback,
         plot_signed_margin_spectrum,
         plot_success_counting_and_satya_d20,
+        using_satya_py_backend,
     )
 
     return (
@@ -51,17 +52,25 @@ def _():
         plot_positive_vs_negative_feedback,
         plot_signed_margin_spectrum,
         plot_success_counting_and_satya_d20,
+        using_satya_py_backend,
     )
 
 
 @app.cell
-def _(mo):
-    mo.md("""
+def _(mo, using_satya_py_backend):
+    backend_badge = (
+        "Rust `satya_py` PyO3 Extension Active (`crates/satya-py`)"
+        if using_satya_py_backend()
+        else "Pure-Python DP Engine (`src/satya_ml/dice_probabilities.py`)"
+    )
+    mo.md(f"""
     # Satya CARPG: Dice Mechanics & Probability Distribution Topologies
+
+    > **Active Probability Engine**: {backend_badge}
 
     This reactive **Marimo** notebook demonstrates and visualizes how different tabletop and **Computer-Assisted RPG (CARPG)** dice mechanics alter the **actual probability distribution family** (skewness, kurtosis, modality, and tail behavior) rather than merely shifting the mean or scaling the variance of a Gaussian bell curve.
 
-    All probability distributions are computed **exactly** (zero Monte Carlo sampling noise) via combinatorial and dynamic-programming engines in `src/satya_ml/dice_probabilities.py` and rendered interactively with **Plotly**.
+    All probability distributions are computed **exactly** (zero Monte Carlo sampling noise) via combinatorial and dynamic-programming engines in `crates/satya-engine` (`satya_py`) / `src/satya_ml/dice_probabilities.py` and rendered interactively with **Plotly**.
     """)
     return
 
@@ -215,8 +224,8 @@ def _(mo, plot_four_factor_task_comparison):
             mo.md(
                 """
                 ## 9. Four-Factor Task Resolution (Roll-Over: High Roll & High Characteristic Are Both Good!)
-                Uses a **Fixed Universal Target $T_0 = 2K + 2$** ($22$ on $2\\text{d}10$), so each pair succeeds when:
-                $$(A_n + B_n + \\text{mod}_n) + C - \\Delta_{\\text{ext}} > 22 \\quad \\Longleftrightarrow \\quad A_n + B_n + \\text{mod}_n > \\text{TN}_{\\text{eff}} \\;\\; (\\text{where } \\text{TN}_{\\text{eff}} = 22 - C + \\Delta_{\\text{ext}})$$
+                Uses the **Canonical Satya Universal Target $T_0 = 31$ on $2\\text{d}20$** ($K = 20$, where average roll is $21$ and human median characteristic is $C = 10$), so each pair succeeds when:
+                $$(A_n + B_n + \\text{mod}_n) + C - \\Delta_{\\text{ext}} > 31 \\quad \\Longleftrightarrow \\quad A_n + B_n + \\text{mod}_n > \\text{TN}_{\\text{eff}} \\;\\; (\\text{where } \\text{TN}_{\\text{eff}} = 31 - C + \\Delta_{\\text{ext}})$$
                 - **Rolling OVER $\\text{TN}_{\\text{eff}}$ (Success)**: Score $+1$ Success and **add $+\\delta_{\\text{over}}$** (Skill bonus) to pair $n+1$.
                 - **Rolling UNDER $\\text{TN}_{\\text{eff}}$ (Miss)**: Score $0$ Successes and **subtract $-\\delta_{\\text{under}}$** (Base Penalty + Fatigue) from pair $n+1$.
                 """
@@ -225,7 +234,7 @@ def _(mo, plot_four_factor_task_comparison):
                 plot_four_factor_task_comparison(
                     characteristic_c=13,
                     external_mod=3,
-                    sides=10,
+                    sides=20,
                     num_pairs=5,
                 )
             ),
@@ -249,7 +258,7 @@ def _(mo, plot_signed_margin_spectrum):
                 plot_signed_margin_spectrum(
                     characteristic_c=13,
                     external_mod=3,
-                    sides=10,
+                    sides=20,
                     num_pairs=5,
                 )
             ),
@@ -261,22 +270,22 @@ def _(mo, plot_signed_margin_spectrum):
 @app.cell
 def _(mo):
     num_pairs_slider = mo.ui.slider(
-        start=2, stop=8, step=1, value=5, label="1. Skill — Chain Length (N Pairs)"
+        start=1, stop=8, step=1, value=3, label="1. Skill — Chain Length (N Pairs)"
     )
     characteristic_slider = mo.ui.slider(
-        start=4, stop=25, step=1, value=13, label="2. Controlling Characteristic (C — Higher is Better!)"
+        start=1, stop=20, step=1, value=12, label="2. Controlling Characteristic (C — Higher is Better!)"
     )
     internal_mod_slider = mo.ui.slider(
-        start=-2, stop=6, step=1, value=1, label="3. Internal Character Mod (Fatigue / Shock -> adds to miss penalty)"
+        start=-2, stop=8, step=1, value=0, label="3. Internal Character Mod (Fatigue / Shock -> adds to miss penalty)"
     )
     external_mod_slider = mo.ui.slider(
-        start=-5, stop=10, step=1, value=3, label="4. External Task Mod (Difficulty -> raises TN_eff)"
+        start=-6, stop=12, step=1, value=0, label="4. External Task Mod (Difficulty -> raises TN_eff)"
     )
     delta_over_slider = mo.ui.slider(
-        start=0, stop=6, step=1, value=3, label="Cascade Bonus: delta_over (Added to n+1 when > TN_eff)"
+        start=0, stop=10, step=1, value=6, label="Cascade Bonus: delta_over (Added to n+1 when > TN_eff)"
     )
     delta_under_slider = mo.ui.slider(
-        start=0, stop=6, step=1, value=2, label="Base Cascade Penalty: delta_under (Subtracted from n+1 when < TN_eff)"
+        start=0, stop=10, step=1, value=6, label="Base Cascade Penalty: delta_under (Subtracted from n+1 when < TN_eff)"
     )
     die_sides_dropdown = mo.ui.dropdown(
         options={
@@ -284,9 +293,9 @@ def _(mo):
             "d8 (2d8 avg=9, Fixed T_0=18)": 8,
             "d10 (2d10 avg=11, Fixed T_0=22)": 10,
             "d12 (2d12 avg=13, Fixed T_0=26)": 12,
-            "d20 (2d20 avg=21, Fixed T_0=42)": 20,
+            "d20 (2d20 avg=21, Canonical Satya T_0=31)": 20,
         },
-        value="d10 (2d10 avg=11, Fixed T_0=22)",
+        value="d20 (2d20 avg=21, Canonical Satya T_0=31)",
         label="Die Size (dK)",
     )
     mode_dropdown = mo.ui.dropdown(
@@ -392,7 +401,7 @@ def _(
     roll_under_checkbox,
 ):
     sides_k = die_sides_dropdown.value
-    fixed_t0 = 2 * sides_k + 2
+    fixed_t0 = 31 if sides_k == 20 else (2 * sides_k + 2)
     if roll_under_checkbox.value:
         # Roll-Under: Y_n < C - Ext
         threshold_eff = characteristic_slider.value - external_mod_slider.value

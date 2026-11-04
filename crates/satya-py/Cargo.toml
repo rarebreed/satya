@@ -1,0 +1,22 @@
+[package]
+name = "satya-py"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "PyO3 Python bindings for satya-engine (2d20 Watershed Cascade, Tactical Pool, Rules Book) and satya-schema (Avro Schema Registry & GDPR PII tools)."
+
+[lib]
+name = "satya_py"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["extension-module"]
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+pyo3.workspace = true
+satya-engine = { path = "../satya-engine" }
+satya-schema = { path = "../satya-schema" }
+serde.workspace = true
+serde_json.workspace = true
