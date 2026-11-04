@@ -1037,6 +1037,10 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                             <option value="combat">"7. Combat Overview, Morale & Ranged Firefights"</option>
                                             <option value="melee_combat">"8. Close-Quarters & Melee Combat (Tactical Triad)"</option>
                                             <option value="social_interactions">"9. Social Mechanics & Cognitive Dissonance"</option>
+                                            <option value="action_economy">"10. Action Economy, Time Scales & Tick Clock"</option>
+                                            <option value="health_and_trauma">"11. Health, Anatomical Trauma, Fatigue & Mental Conditions"</option>
+                                            <option value="movement_and_environment">"12. Movement, Encumbrance & Environmental Survival"</option>
+                                            <option value="world_and_equipment_stubs">"13. Equipment, Armor, Stealth, Vehicles & World Systems"</option>
                                         </select>
                                     </label>
                                     <label class="inline-label" for="rules-search-input">

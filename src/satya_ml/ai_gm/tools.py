@@ -324,6 +324,10 @@ _CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
     ("combat/combat.md", "Ch. 7: Combat Overview, Morale & Ranged Firefights"),
     ("combat/melee_combat.md", "Ch. 8: Close-Quarters & Melee Combat (Tactical Triad)"),
     ("social_interactions.md", "Ch. 9: Social Mechanics & Cognitive Dissonance"),
+    ("systems/action_economy.md", "Ch. 10: Action Economy, Time Scales & The Count-Up Tick Clock"),
+    ("systems/health_and_trauma.md", "Ch. 11: Health, Anatomical Trauma, Fatigue & Mental Conditions"),
+    ("systems/movement_and_environment.md", "Ch. 12: Movement, Encumbrance & Environmental Survival"),
+    ("systems/world_and_equipment_stubs.md", "Ch. 13: Equipment, Armor, Stealth, Vehicles & World Systems"),
     ("design-notes/background.md", "Ch. 1: Design Philosophy & Goals of Satya"),
 )
 
@@ -396,11 +400,18 @@ def query_satya_rules(query: str) -> str:
                 continue
             first_line = header_and_body.splitlines()[0].lower()
             lowered = f"{chapter_label.lower()}\n{header_and_body.lower()}"
-            score = sum(lowered.count(kw) for kw in kw_set) + sum(
-                3 for kw in kw_set if kw in first_line
-            )
+            distinct_kw_hits = sum(1 for kw in kw_set if kw in lowered)
+            capped_freq = sum(min(lowered.count(kw), 6) for kw in kw_set)
+            heading_hits = sum(6 for kw in kw_set if kw in first_line)
+            core_boost = 15 if (file_idx == 0 and distinct_kw_hits >= 2) else 0
+            score = (distinct_kw_hits * 12) + capped_freq + heading_hits + core_boost
             if score > 0:
-                formatted_chunk = f"[{chapter_label} — `docs/ttrpg/{rel_path}`]\n{header_and_body}"
+                snippet_body = (
+                    header_and_body[:1400] + "\n...[truncated]..."
+                    if len(header_and_body) > 1400
+                    else header_and_body
+                )
+                formatted_chunk = f"[{chapter_label} — `docs/ttrpg/{rel_path}`]\n{snippet_body}"
                 scored.append((score, -file_idx, formatted_chunk))
 
     if not scored:

@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from satya_ml.dice_probabilities import (
     center_distance_selection_pmf,
@@ -281,14 +285,26 @@ def test_rules_book_builder_and_tactical_pool_bridge() -> None:
         search_rules_book_python,
     )
 
-    assert len(BOOK_CHAPTER_SPECS) == 9
+    assert len(BOOK_CHAPTER_SPECS) == 13
     summary = build_static_rules_book()
-    assert summary["chapter_count"] == 9
-    assert len(summary["generated_files"]) == 11  # 9 chapters + index.html + catalog.json
+    assert summary["chapter_count"] == 13
+    assert len(summary["generated_files"]) == 15  # 13 chapters + index.html + catalog.json
 
     hits_melee = search_rules_book_python("Tactical Triad Tempo Control Force", max_results=3)
     assert hits_melee
     assert any(h["chapter_id"] in {"melee_combat", "combat"} for h in hits_melee)
+
+    hits_health = search_rules_book_python("hemorrhaging broken bones blinded catatonia", max_results=3)
+    assert hits_health
+    assert hits_health[0]["chapter_id"] == "health_and_trauma"
+
+    hits_env = search_rules_book_python("hypothermia dehydration encumbrance m/tick", max_results=3)
+    assert hits_env
+    assert hits_env[0]["chapter_id"] == "movement_and_environment"
+
+    hits_ticks = search_rules_book_python("240 ticks in a minute 4 ticks per second", max_results=3)
+    assert hits_ticks
+    assert hits_ticks[0]["chapter_id"] == "action_economy"
 
     gm_excerpt = query_satya_rules.invoke({"query": "lockpicking Complementary KNO PHY synergy"})
     assert "tasks.md" in gm_excerpt or "Complementary" in gm_excerpt
@@ -352,11 +368,15 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
 
     # Build static HTML book into tmp_path and into docs/book
     summary = build_rules_book(output_dir=tmp_path)
-    assert summary["chapter_count"] == 9
+    assert summary["chapter_count"] == 13
     assert summary["total_words"] > 10_000
     assert (tmp_path / "index.html").exists()
     assert (tmp_path / "tasks.html").exists()
     assert (tmp_path / "melee_combat.html").exists()
+    assert (tmp_path / "action_economy.html").exists()
+    assert (tmp_path / "health_and_trauma.html").exists()
+    assert (tmp_path / "movement_and_environment.html").exists()
+    assert (tmp_path / "world_and_equipment_stubs.html").exists()
     assert (tmp_path / "catalog.json").exists()
 
     # Multi-chapter AI GM rules search
@@ -365,6 +385,9 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
 
     social_res = query_satya_rules.invoke({"query": "Cognitive Dissonance belief shift"})
     assert "social_interactions.md" in social_res or "Dissonance" in social_res
+
+    health_res = query_satya_rules.invoke({"query": "hemorrhaging blood volume broken bones catatonia"})
+    assert "health_and_trauma.md" in health_res or "Hemorrhaging" in health_res
 
 
 

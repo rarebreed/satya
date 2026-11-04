@@ -109,6 +109,30 @@ def _():
             "9. Social Mechanics & Cognitive Dissonance",
             "social_interactions.md",
         ),
+        (
+            "action_economy",
+            "Part V: Action Economy, Health, Movement, Environment & World Systems",
+            "10. Action Economy, Time Scales & The Count-Up Tick Clock",
+            "systems/action_economy.md",
+        ),
+        (
+            "health_and_trauma",
+            "Part V: Action Economy, Health, Movement, Environment & World Systems",
+            "11. Health, Anatomical Trauma, Fatigue & Mental Conditions",
+            "systems/health_and_trauma.md",
+        ),
+        (
+            "movement_and_environment",
+            "Part V: Action Economy, Health, Movement, Environment & World Systems",
+            "12. Movement, Encumbrance & Environmental Survival",
+            "systems/movement_and_environment.md",
+        ),
+        (
+            "world_and_equipment_stubs",
+            "Part V: Action Economy, Health, Movement, Environment & World Systems",
+            "13. Equipment, Armor, Stealth, Vehicles & World Systems (Reference Stubs)",
+            "systems/world_and_equipment_stubs.md",
+        ),
     ]
 
     chapters_by_id = {}

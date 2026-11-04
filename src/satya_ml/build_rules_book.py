@@ -89,6 +89,34 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
         "relative_path": "combat/melee_combat.md",
         "description": "Close-quarters anatomy, the Tactical Triad (Tempo, Control, Force), Guard & Seizing the Initiative, Root vs. throws, and Viktor vs. Elena walkthrough.",
     },
+    {
+        "chapter_id": "action_economy",
+        "part": "Part V: Action Economy, Health, Movement, Environment & World Systems",
+        "title": "Action Economy, Time Scales & The Count-Up Tick Clock",
+        "relative_path": "systems/action_economy.md",
+        "description": "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Count-Up Clock mechanics, Base TC tables, and characteristic/health/encumbrance action cost modifiers.",
+    },
+    {
+        "chapter_id": "health_and_trauma",
+        "part": "Part V: Action Economy, Health, Movement, Environment & World Systems",
+        "title": "Health, Anatomical Trauma, Fatigue & Mental Conditions",
+        "relative_path": "systems/health_and_trauma.md",
+        "description": "1d20 Hit Locations & Called Shots, Fatigue, Structural Wounds, Broken Bones, Hemorrhaging & Blood Volume, Wound Shock, Status Effects, and Mental Trauma.",
+    },
+    {
+        "chapter_id": "movement_and_environment",
+        "part": "Part V: Action Economy, Health, Movement, Environment & World Systems",
+        "title": "Movement, Encumbrance & Environmental Survival",
+        "relative_path": "systems/movement_and_environment.md",
+        "description": "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, Hydration, Starvation, Temperature (Hypothermia/Heatstroke), Hypoxia, and Toxins.",
+    },
+    {
+        "chapter_id": "world_and_equipment_stubs",
+        "part": "Part V: Action Economy, Health, Movement, Environment & World Systems",
+        "title": "Equipment, Armor, Stealth, Vehicles & World Systems (Reference Stubs)",
+        "relative_path": "systems/world_and_equipment_stubs.md",
+        "description": "Armor Penetration vs. Behind-Armor Blunt Trauma (BABT), Weapon Malfunctions, Multi-Sensory Stealth, Vehicle Chases, Economy (SQM/Access), and Downtime Clocks.",
+    },
 ]
 
 
@@ -117,6 +145,13 @@ def extract_markdown_headings(markdown_text: str) -> list[str]:
 def load_chapter_markdown_by_id(chapter_id: str, repo_root: Path | None = None) -> str:
     """Load the canonical Markdown for `chapter_id` from `docs/ttrpg/` (or `satya_py`)."""
     norm = chapter_id.strip().lower().replace("_", "-")
+    root = repo_root or _default_repo_root()
+    for spec in BOOK_CHAPTER_SPECS:
+        if spec["chapter_id"].lower().replace("_", "-") == norm:
+            path = root / "docs" / "ttrpg" / spec["relative_path"]
+            if path.exists():
+                return path.read_text(encoding="utf-8")
+
     if _satya_py is not None:
         try:
             doc = _satya_py.get_rules_chapter(chapter_id)
@@ -125,13 +160,30 @@ def load_chapter_markdown_by_id(chapter_id: str, repo_root: Path | None = None) 
         except Exception:
             pass
 
-    root = repo_root or _default_repo_root()
-    for spec in BOOK_CHAPTER_SPECS:
-        if spec["chapter_id"].lower().replace("_", "-") == norm:
-            path = root / "docs" / "ttrpg" / spec["relative_path"]
-            if path.exists():
-                return path.read_text(encoding="utf-8")
     return f"# Chapter `{chapter_id}` not found"
+
+
+_SEARCH_STOPWORDS = {
+    "in",
+    "on",
+    "at",
+    "to",
+    "of",
+    "by",
+    "or",
+    "an",
+    "as",
+    "is",
+    "it",
+    "be",
+    "the",
+    "and",
+    "for",
+    "per",
+    "with",
+    "from",
+    "into",
+}
 
 
 def search_rules_book_python(
@@ -139,27 +191,32 @@ def search_rules_book_python(
     max_results: int = 5,
     repo_root: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Search across all 9 canonical Satya Rules Book chapters and return ranked section dicts."""
+    """Search across all 13 canonical Satya Rules Book chapters and return ranked section dicts."""
     if _satya_py is not None:
         try:
-            hits = _satya_py.search_rules_book(query, max_results)
-            return [
-                {
-                    "chapter_id": h.chapter_id,
-                    "chapter_title": h.chapter_title,
-                    "relative_path": h.relative_path,
-                    "section_heading": h.section_heading,
-                    "snippet": h.snippet,
-                    "score": int(h.score),
-                }
-                for h in hits
-            ]
+            if len(_satya_py.list_rules_chapters()) == len(BOOK_CHAPTER_SPECS):
+                hits = _satya_py.search_rules_book(query, max_results)
+                return [
+                    {
+                        "chapter_id": h.chapter_id,
+                        "chapter_title": h.chapter_title,
+                        "relative_path": h.relative_path,
+                        "section_heading": h.section_heading,
+                        "snippet": h.snippet,
+                        "score": int(h.score),
+                    }
+                    for h in hits
+                ]
         except Exception:
             pass
 
     root = repo_root or _default_repo_root()
     q_clean = query.strip().lower()
-    tokens = [t for t in re.split(r"[^a-z0-9_]+", q_clean) if len(t) >= 2]
+    tokens = [
+        t
+        for t in re.split(r"[^a-z0-9_]+", q_clean)
+        if len(t) >= 2 and t not in _SEARCH_STOPWORDS
+    ]
     results: list[dict[str, Any]] = []
 
     for spec in BOOK_CHAPTER_SPECS:
@@ -174,14 +231,20 @@ def search_rules_book_python(
                 continue
             first_line = sec_text.splitlines()[0].lstrip("#").strip() or spec["title"]
             body_low = sec_text.lower()
-            head_low = f"{spec['title']} {first_line}".lower()
+            head_low = f"{spec['chapter_id']} {spec['title']} {first_line}".lower()
             score = 0
             if q_clean and q_clean in head_low:
                 score += 25
             if q_clean and q_clean in body_low:
-                score += 10
+                score += 15
+            distinct_hits = 0
             for tok in tokens:
-                score += head_low.count(tok) * 8 + body_low.count(tok) * 2
+                h_cnt = min(head_low.count(tok), 4)
+                b_cnt = min(body_low.count(tok), 8)
+                if h_cnt > 0 or b_cnt > 0:
+                    distinct_hits += 1
+                score += h_cnt * 8 + b_cnt * 2
+            score += distinct_hits * 12
             if score > 0 or not tokens:
                 snippet = sec_text[:700] + ("..." if len(sec_text) > 700 else "")
                 results.append(
@@ -637,6 +700,18 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         "combat/melee_combat.md": "melee_combat.html",
         "../combat/melee_combat.md": "melee_combat.html",
         "melee_combat.md": "melee_combat.html",
+        "systems/action_economy.md": "action_economy.html",
+        "../systems/action_economy.md": "action_economy.html",
+        "action_economy.md": "action_economy.html",
+        "systems/health_and_trauma.md": "health_and_trauma.html",
+        "../systems/health_and_trauma.md": "health_and_trauma.html",
+        "health_and_trauma.md": "health_and_trauma.html",
+        "systems/movement_and_environment.md": "movement_and_environment.html",
+        "../systems/movement_and_environment.md": "movement_and_environment.html",
+        "movement_and_environment.md": "movement_and_environment.html",
+        "systems/world_and_equipment_stubs.md": "world_and_equipment_stubs.html",
+        "../systems/world_and_equipment_stubs.md": "world_and_equipment_stubs.html",
+        "world_and_equipment_stubs.md": "world_and_equipment_stubs.html",
     }
     out = rendered_html
     for src, dst in mapping.items():
@@ -1040,17 +1115,19 @@ def build_static_rules_book(
     output_dir: Path | None = None,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Compile all 9 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
+    """Compile all 13 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
     root = repo_root or _default_repo_root()
     out_dir = output_dir or (root / "docs" / "book")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     catalog_chapters: list[dict[str, Any]] = []
     generated_files: list[str] = []
+    total_words = 0
 
     for idx, spec in enumerate(BOOK_CHAPTER_SPECS):
         cid = spec["chapter_id"]
         md = load_chapter_markdown_by_id(cid, repo_root=root)
+        total_words += len(md.split())
         headings = extract_markdown_headings(md)
         rendered = _rewrite_chapter_links(render_markdown_to_html_python(md))
         if cid in {"satya_d20_rules", "tasks", "combat", "melee_combat"}:
@@ -1171,9 +1248,13 @@ def build_static_rules_book(
     return {
         "output_dir": str(out_dir),
         "chapter_count": len(catalog_chapters),
+        "total_words": total_words,
         "generated_files": generated_files,
         "using_satya_py": using_satya_py_backend(),
     }
+
+
+build_rules_book = build_static_rules_book
 
 
 if __name__ == "__main__":

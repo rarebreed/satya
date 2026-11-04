@@ -342,14 +342,30 @@ mod tests {
     #[test]
     fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
         let chapters = list_rules_chapters();
-        assert_eq!(chapters.len(), 9);
+        assert_eq!(chapters.len(), 13);
         assert!(chapters.iter().any(|c| c.chapter_id == "tasks"));
         assert!(chapters.iter().any(|c| c.chapter_id == "combat"));
         assert!(chapters.iter().any(|c| c.chapter_id == "melee_combat"));
+        assert!(chapters.iter().any(|c| c.chapter_id == "action_economy"));
+        assert!(chapters.iter().any(|c| c.chapter_id == "health_and_trauma"));
+        assert!(
+            chapters
+                .iter()
+                .any(|c| c.chapter_id == "movement_and_environment")
+        );
+        assert!(
+            chapters
+                .iter()
+                .any(|c| c.chapter_id == "world_and_equipment_stubs")
+        );
 
         let tasks_doc = get_rules_chapter("tasks").expect("tasks chapter exists");
         assert!(tasks_doc.markdown.contains("Sarah"));
         assert!(tasks_doc.rendered_html.contains("satya-rules-article"));
+
+        let health_hits = search_rules_book("hemorrhaging broken bones blinded catatonia", 5);
+        assert!(!health_hits.is_empty());
+        assert_eq!(health_hits[0].chapter_id, "health_and_trauma");
 
         let hits = search_rules_book("Envelope & Fill Tempo Control Force", 5);
         assert!(!hits.is_empty());

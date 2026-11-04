@@ -89,6 +89,40 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
         description: "Close-quarters anatomy, the Tactical Triad (Tempo, Control, Force), Guard & Seizing the Initiative, Root vs. throws, and Viktor vs. Elena walkthrough.",
         embedded_markdown: include_str!("../../../docs/ttrpg/combat/melee_combat.md"),
     },
+    StaticChapterSpec {
+        chapter_id: "action_economy",
+        part: "Part V: Action Economy, Health, Movement, Environment & World Systems",
+        title: "Action Economy, Time Scales & The Count-Up Tick Clock",
+        relative_path: "systems/action_economy.md",
+        description: "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Count-Up Clock mechanics, Base TC tables, and characteristic/health/encumbrance action cost modifiers.",
+        embedded_markdown: include_str!("../../../docs/ttrpg/systems/action_economy.md"),
+    },
+    StaticChapterSpec {
+        chapter_id: "health_and_trauma",
+        part: "Part V: Action Economy, Health, Movement, Environment & World Systems",
+        title: "Health, Anatomical Trauma, Fatigue & Mental Conditions",
+        relative_path: "systems/health_and_trauma.md",
+        description: "1d20 Hit Locations & Called Shots, Fatigue, Structural Wounds, Broken Bones, Hemorrhaging & Blood Volume, Wound Shock, Status Effects, and Mental Trauma.",
+        embedded_markdown: include_str!("../../../docs/ttrpg/systems/health_and_trauma.md"),
+    },
+    StaticChapterSpec {
+        chapter_id: "movement_and_environment",
+        part: "Part V: Action Economy, Health, Movement, Environment & World Systems",
+        title: "Movement, Encumbrance & Environmental Survival",
+        relative_path: "systems/movement_and_environment.md",
+        description: "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, Hydration, Starvation, Temperature (Hypothermia/Heatstroke), Hypoxia, and Toxins.",
+        embedded_markdown: include_str!("../../../docs/ttrpg/systems/movement_and_environment.md"),
+    },
+    StaticChapterSpec {
+        chapter_id: "world_and_equipment_stubs",
+        part: "Part V: Action Economy, Health, Movement, Environment & World Systems",
+        title: "Equipment, Armor, Stealth, Vehicles & World Systems (Reference Stubs)",
+        relative_path: "systems/world_and_equipment_stubs.md",
+        description: "Armor Penetration vs. Behind-Armor Blunt Trauma (BABT), Weapon Malfunctions, Multi-Sensory Stealth, Vehicle Chases, Economy (SQM/Access), and Downtime Clocks.",
+        embedded_markdown: include_str!(
+            "../../../docs/ttrpg/systems/world_and_equipment_stubs.md"
+        ),
+    },
 ];
 
 /// Reads a chapter's markdown from `docs/ttrpg/<relative_path>` on native targets if present on disk,

@@ -189,6 +189,36 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
         ("combat/melee_combat.md", "melee_combat.html"),
         ("../combat/melee_combat.md", "melee_combat.html"),
         ("melee_combat.md", "melee_combat.html"),
+        ("systems/action_economy.md", "action_economy.html"),
+        ("../systems/action_economy.md", "action_economy.html"),
+        ("action_economy.md", "action_economy.html"),
+        ("systems/health_and_trauma.md", "health_and_trauma.html"),
+        ("../systems/health_and_trauma.md", "health_and_trauma.html"),
+        ("health_and_trauma.md", "health_and_trauma.html"),
+        (
+            "systems/movement_and_environment.md",
+            "movement_and_environment.html",
+        ),
+        (
+            "../systems/movement_and_environment.md",
+            "movement_and_environment.html",
+        ),
+        (
+            "movement_and_environment.md",
+            "movement_and_environment.html",
+        ),
+        (
+            "systems/world_and_equipment_stubs.md",
+            "world_and_equipment_stubs.html",
+        ),
+        (
+            "../systems/world_and_equipment_stubs.md",
+            "world_and_equipment_stubs.html",
+        ),
+        (
+            "world_and_equipment_stubs.md",
+            "world_and_equipment_stubs.html",
+        ),
     ];
     let mut out = rendered_html.to_string();
     for (src, dst) in mapping {

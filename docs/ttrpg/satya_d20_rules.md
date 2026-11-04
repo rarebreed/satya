@@ -49,9 +49,9 @@ Every task in Satya is parameterized by four orthogonal factors (`CascadeTaskPar
 
 ---
 
-## 2. Signed Outcome Spectrum (`-N` to `+N`), Botch Rules, & `OutcomeTier`
+## 2. Signed Outcome Spectrum (`-N` to `+N`), Degrees of Success, Botch Rules, & `OutcomeTier`
 
-A single cascading roll resolves both **how well the character succeeds** and **how badly they fail** on a unified signed margin spectrum (`signed_margin` in `-N..=+N`):
+A single cascading roll resolves both **how well the character succeeds (degree of success)** and **how badly they fail (degree of failure)** on a unified signed margin spectrum (`signed_margin` in `-N..=+N`) against the target number $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$:
 
 ### 2.1 Positive Outcomes (`+1` to `+N` Successes)
 - **`+1` Success (Bare Minimum)**: Accomplishes the task with minimal margin.
@@ -83,20 +83,35 @@ In `evaluate_cascade_roll` and `evaluate_satya_cascade_task` (`crates/satya-engi
 
 ## 3. Count-Up Action Clock & Combat Stances (`CombatStance`)
 
-Satya combat uses a continuous **Count-Up Tick Clock** rather than fixed cyclic rounds. The combatant with the lowest tick count acts next, and their action advances their clock by `action_count_cost`.
+Satya combat uses a continuous **Count-Up Tick Clock** rather than fixed cyclic rounds (see [`docs/ttrpg/systems/action_economy.md`](systems/action_economy.md) for the full action cost tables and characteristic modifiers). The combatant with the lowest tick count acts next, and their action advances their clock by `action_count_cost`.
 
-### Base Time Cost (`action_time_cost` / `TC`) by Stance
-- **`POWER`** (`TC = 14`): Heavy, high-impact melee or ordnance strike; slower recovery.
-- **`RANGED_AIMED`** (`TC = 12`): Deliberate sighted fire; grants accuracy at higher tick cost.
-- **`MANEUVER`** (`TC = 11`): Mobile tactical engagement, flanking, or repositioning during an exchange.
-- **Unstanced / Standard Action** (`TC = 10`): Default skill check or interaction.
-- **`STABILITY`** (`TC = 9`): Braced, defensive posture prioritizing guard and low tick recovery.
-- **`RANGED_SNAP`** (`TC = 7`): Fast reactive snapshot at reduced time cost.
+### 3.1 Temporal Calibration (`Ticks`, `Seconds`, & `Minutes`)
+- **`1 Tick` = `0.25 Seconds` (`250 ms`)** — Fundamental discrete simulation step on the Count-Up Action Clock.
+- **`4 Ticks` = `1.0 Second`** — Standard human perceptual/movement second (`1 m/tick = 4 m/s`).
+- **`20 Ticks` = `5.0 Seconds` (1 Tactical Window)** — Periodic check interval for ongoing bleeding, breath-holding, and environmental exposure.
+- **`240 Ticks` = `1.0 Minute` (`60 Seconds`)** — Post-combat recovery, short-term treatment, and social exchange horizon.
 
-## 4. Fatigue & Wound Shock Time Penalty (`action_time_factor`)
+### 3.2 Base Time Cost (`action_time_cost` / `TC`) by Stance
+- **`POWER`** (`TC = 14` / `3.50s`): Heavy, high-impact melee or ordnance strike; slower recovery.
+- **`RANGED_AIMED`** (`TC = 12` / `3.00s`): Deliberate sighted fire; grants accuracy at higher tick cost.
+- **`MANEUVER`** (`TC = 11` / `2.75s`): Mobile tactical engagement, flanking, or repositioning during an exchange.
+- **Unstanced / Standard Action** (`TC = 10` / `2.50s`): Default skill check or interaction.
+- **`STABILITY`** (`TC = 9` / `2.25s`): Braced, defensive posture prioritizing guard and low tick recovery.
+- **`RANGED_SNAP`** (`TC = 7` / `1.75s`): Fast reactive snapshot at reduced time cost.
 
-Accumulated **Fatigue (`fatigue_level`)** and **Wound Shock (`wound_shock_index`)** degrade a character's speed on the tick clock:
+## 4. Fatigue, Wound Shock & Encumbrance Time Penalty (`action_time_factor`)
 
-$$\text{action\_time\_factor} = 1.0 + (0.10 \times \text{fatigue\_level}) + (0.25 \times \text{wound\_shock\_index})$$
+Accumulated **Fatigue (`fatigue_level`)**, **Wound Shock (`wound_shock_index`)**, and **Encumbrance (`encumbrance_tier`)** degrade a character's speed on the tick clock (detailed in [`docs/ttrpg/systems/health_and_trauma.md`](systems/health_and_trauma.md) and [`docs/ttrpg/systems/movement_and_environment.md`](systems/movement_and_environment.md)):
+
+$$\text{action\_time\_factor} = 1.0 + (0.10 \times \text{fatigue\_level}) + (0.25 \times \text{wound\_shock\_index}) + \Delta_{\text{enc\_time}}$$
 
 $$\text{action\_count\_cost} = \text{round}(\text{base\_tc} \times \text{action\_time\_factor})$$
+
+---
+
+## 5. Extended Core System Reference Chapters
+
+- **[Action Economy, Time Scales & The Count-Up Tick Clock](systems/action_economy.md)**: Complete action cost tables (`Base TC`), characteristic speed adjustments (`SPD`, `DEX`, `ANA`, `OODA`), and mid-action `OODA` pivots.
+- **[Health, Anatomical Trauma, Fatigue & Mental Conditions](systems/health_and_trauma.md)**: `1d20` Hit Location & Called Shot tables, broken bones, hemorrhaging (`10.0-Unit` Blood Volume track), systemic wound shock, sensory/status conditions (`Blinded`, `Stunned`, `Dizzy`, `Nausea`, `Unconscious`), and mental trauma (`Shock`, `Panic`, `Catatonia`).
+- **[Movement, Encumbrance & Environmental Survival](systems/movement_and_environment.md)**: Combat movement gaits (`m/tick`), overland travel (`km/h`), Encumbrance tiers (`FOR` & `MAS`), food, water, temperature (`Hypothermia` / `Heatstroke`), hypoxia, toxins, and radiation.
+- **[Equipment, Armor, Stealth, Vehicles & World Systems](systems/world_and_equipment_stubs.md)**: Armor penetration vs. Behind-Armor Blunt Trauma (`BABT`), weapon malfunctions, multi-sensory stealth, vehicle chases, and economy/downtime clocks.

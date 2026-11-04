@@ -339,7 +339,7 @@ flowchart TD
 
 ### 1. Calculating the Base & Effective Tactical Pool ($P_{\text{eff}}$)
 
-Every combat action uses a specific **Combat Skill ($N \in [1, 8]$)** (or `N = 1` *Brawling* / *Throwing* Talent if untrained) and its **Controlling Characteristic ($C_{\text{skill}} = \lfloor(C_1 + C_2)/2\rfloor$)** from [`docs/ttrpg/skill-design.md`](../skill-design.md#46-tree-5-combat--unarmed-melee-firearms--heavy-ordnance-combat-athletic-technical), paired with the character's **OODA Initiative ($\text{OODA} = \lfloor(\text{SPD} + \text{INS} + \text{ITU})/3\rfloor$)** from [`docs/ttrpg/character/characteristics.md`](../character/characteristics.md#8-secondary--derived-characteristics):
+Every combat action uses a specific **Combat Skill ($N \in [1, 8]$)** (or `N = 1` *Brawling* / *Throwing* Talent if untrained) and its **Controlling Characteristic ($C_{\text{skill}} = \lfloor(C_1 + C_2)/2\rfloor$)** from [`docs/ttrpg/skill-design.md`](../skill-design.md#46-tree-5-combat--unarmed-melee-firearms--heavy-ordnance-combat-athletic-technical), paired with the character's **OODA Initiative ($\text{OODA} = \lfloor(\text{SPD} + \text{INS} + \text{ITU})/3\rfloor$)** and **Cognitive Decision Score ($D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{INS} + \text{FOC})/3\rfloor$ — "Quick Thinking" for complex tactical decisions and mid-action OODA pivots; see [`docs/ttrpg/systems/action_economy.md`](../systems/action_economy.md))** from [`docs/ttrpg/character/characteristics.md`](../character/characteristics.md#8-secondary--derived-characteristics):
 
 $$\text{Combat Readiness } (C_{\text{combat}}) = \left\lfloor \frac{C_{\text{skill}} + \text{OODA}}{2} \right\rfloor$$
 
