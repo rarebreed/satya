@@ -7,7 +7,6 @@
 //! - [`dice_probabilities`]: Exact PMF combinatorial/DP engines, summary moments (`DistributionStats`),
 //!   and Four-Factor Two-List Cascade game-engine task evaluators (`CascadeTaskParams`, `CascadeRollOutcome`,
 //!   `evaluate_cascade_roll`, `evaluate_satya_cascade_task`).
-//! - [`summarize_cascade_odds`]: Odds summary table generator and `K = 10/20/100` calibration sweeps.
 //! - [`rules_book`]: Canonical Satya TTRPG Rules Book catalog, Markdown-to-HTML renderer, multi-chapter search,
 //!   and Combat Tactical Pool ("Envelope & Fill" — Tempo, Control, Force) calculator.
 
@@ -15,11 +14,9 @@
 
 pub mod dice_probabilities;
 pub mod rules_book;
-pub mod summarize_cascade_odds;
 
 pub use dice_probabilities::*;
 pub use rules_book::*;
-pub use summarize_cascade_odds::*;
 
 #[cfg(test)]
 mod tests {
@@ -327,16 +324,6 @@ mod tests {
         );
         assert_eq!(event.outcome_tier, OutcomeTier::PartialSuccess);
         assert_eq!(event.dice_rolled_d20, vec![7, 8, 1, 2, 15, 14]);
-
-        let c_vs_n_matrix = compare_control_vs_skill_k20(
-            6,
-            6,
-            CarryMode::MarkovStep,
-            TnFormulaK20::Formula31MinusC,
-        );
-        assert!(c_vs_n_matrix.contains("70.10%"));
-        assert!(c_vs_n_matrix.contains("82.69%"));
-        assert!(c_vs_n_matrix.contains("92.37%"));
     }
 
     #[test]

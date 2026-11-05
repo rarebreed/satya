@@ -13,9 +13,11 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use satya_engine::{
     BotchRule, CarryMode, CascadeRollOutcome, CascadeStepTrace, CascadeTaskParams,
-    CenterDistanceMode, DistributionStats, MarginAggregation, MoraleState, Pmf,
+    CenterDistanceMode, ComplementarySynergyResult, ContestedCascadeOdds,
+    ContestedCascadeRollOutcome, ContestedCascadeTaskParams, ContestedTieRule, DistributionStats,
+    ExtendedProjectClock, ExtendedProjectStepResult, MarginAggregation, MoraleState, Pmf,
     SignedCascadeResult, TacticalPoolEnvelope, TacticalPoolParams, TacticalTriadEvaluation,
-    TnFormulaK20, format_summary_table,
+    TaskGateClass, TaskGateResolution, ToolDependency, ToolQualityTier,
 };
 use satya_schema::{
     PiiFieldDescriptor, RulesChapterDocument, RulesChapterSummary, RulesSearchHit, SchemaRegistry,
@@ -273,6 +275,339 @@ impl PyCascadeTaskParams {
     /// Evaluates a concrete list of rolled `(die_a, die_b)` `d20` pairs against this task.
     pub fn evaluate_pairs(&self, pairs: Vec<(i32, i32)>) -> PyCascadeRollOutcome {
         PyCascadeRollOutcome::from(self.inner.evaluate_pairs(&pairs))
+    }
+}
+
+/// Exact combinatorial probability breakdown and net margin PMF for a Contested Cascade check.
+#[pyclass(name = "ContestedCascadeOdds", get_all)]
+#[derive(Debug, Clone)]
+pub struct PyContestedCascadeOdds {
+    /// Exact PMF of the net signed margin $\Delta M = M_P - M_{GM}$.
+    pub net_signed_margin_pmf: Pmf,
+    /// Exact PMF of the net success count $\Delta S = S_P - S_{GM}$.
+    pub net_success_pmf: Pmf,
+    /// Total probability of achieving any success tier (`ExtraordinarySuccess + CleanSuccess + PartialSuccess`).
+    pub prob_total_win: f64,
+    /// Probability of an unblemished win ($S_P > S_{GM}$ without complication).
+    pub prob_clean_or_extraordinary_win: f64,
+    /// Probability of `OutcomeTier::ExtraordinarySuccess`.
+    pub prob_extraordinary_success: f64,
+    /// Probability of standard `OutcomeTier::Success`.
+    pub prob_clean_success: f64,
+    /// Total probability of `OutcomeTier::PartialSuccess`.
+    pub prob_partial_success: f64,
+    /// Sub-probability of `PartialSuccess` caused by a player floor breach ($B_P \ge 1$) on a winning roll.
+    pub prob_floor_breach_partial: f64,
+    /// Sub-probability of `PartialSuccess` caused by a positive tie ($S_P == S_{GM} \ge 1$).
+    pub prob_grazing_tie_partial: f64,
+    /// Sub-probability of `PartialSuccess` caused by a GM botch ($M_{GM} < 0$) rescuing a player's Clean Miss ($M_P == 0$).
+    pub prob_lucky_break_partial: f64,
+    /// Probability of `OutcomeTier::Failure` (`CleanFailure`).
+    pub prob_clean_failure: f64,
+    /// Probability of `OutcomeTier::CriticalFailure` (`BotchFailure`).
+    pub prob_botch_failure: f64,
+    /// Summary moments of `net_signed_margin_pmf`.
+    pub net_margin_stats: PyDistributionStats,
+    /// Sarle's Bimodality Coefficient $\text{BC} = (\gamma_1^2 + 1) / (\kappa_2 + 3)$.
+    pub bimodality_coefficient: f64,
+}
+
+impl From<ContestedCascadeOdds> for PyContestedCascadeOdds {
+    fn from(o: ContestedCascadeOdds) -> Self {
+        Self {
+            net_signed_margin_pmf: o.net_signed_margin_pmf,
+            net_success_pmf: o.net_success_pmf,
+            prob_total_win: o.prob_total_win,
+            prob_clean_or_extraordinary_win: o.prob_clean_or_extraordinary_win,
+            prob_extraordinary_success: o.prob_extraordinary_success,
+            prob_clean_success: o.prob_clean_success,
+            prob_partial_success: o.prob_partial_success,
+            prob_floor_breach_partial: o.prob_floor_breach_partial,
+            prob_grazing_tie_partial: o.prob_grazing_tie_partial,
+            prob_lucky_break_partial: o.prob_lucky_break_partial,
+            prob_clean_failure: o.prob_clean_failure,
+            prob_botch_failure: o.prob_botch_failure,
+            net_margin_stats: PyDistributionStats::from(o.net_margin_stats),
+            bimodality_coefficient: o.bimodality_coefficient,
+        }
+    }
+}
+
+/// Complete live roll outcome for a Contested Cascade task check.
+#[pyclass(name = "ContestedCascadeRollOutcome", get_all)]
+#[derive(Debug, Clone)]
+pub struct PyContestedCascadeRollOutcome {
+    /// Step-by-step cascade outcome for the Player.
+    pub player_outcome: PyCascadeRollOutcome,
+    /// Step-by-step cascade outcome for the GM / Opponent.
+    pub gm_outcome: PyCascadeRollOutcome,
+    /// Difference in raw positive successes ($S_P - S_{GM}$).
+    pub net_successes: i32,
+    /// Difference in unified signed margins ($M_P - M_{GM}$).
+    pub net_signed_margin: i32,
+    /// Detailed 7-way contested outcome classification (`SCREAMING_SNAKE_CASE`).
+    pub contested_kind: String,
+    /// Canonical 5-tier `OutcomeTier` (`SCREAMING_SNAKE_CASE`).
+    pub outcome_tier: String,
+    /// Task duration / Tick Cost (`TC`) multiplier per §5 of `cascading_d20_and_tasks.md`.
+    pub duration_multiplier: f64,
+    /// External difficulty modifier ($\Delta_{\text{ext}}$) granted to the next linked action (`-4`, `0`, or `+4`).
+    pub next_linked_action_delta_ext: i32,
+    /// Physical or mental Strain cost inflicted by a Grazing Tie (`1` on `GRAZING_TIE_SUCCESS`, `0` otherwise).
+    pub grazing_strain_cost: i32,
+}
+
+impl From<ContestedCascadeRollOutcome> for PyContestedCascadeRollOutcome {
+    fn from(o: ContestedCascadeRollOutcome) -> Self {
+        let duration_multiplier = o.contested_kind.duration_multiplier(o.net_successes);
+        let next_linked_action_delta_ext = o.contested_kind.next_linked_action_delta_ext();
+        let grazing_strain_cost = o.contested_kind.grazing_strain_cost();
+        Self {
+            player_outcome: PyCascadeRollOutcome::from(o.player_outcome),
+            gm_outcome: PyCascadeRollOutcome::from(o.gm_outcome),
+            net_successes: o.net_successes,
+            net_signed_margin: o.net_signed_margin,
+            contested_kind: o.contested_kind.as_str().to_string(),
+            outcome_tier: format!("{:?}", o.outcome_tier).to_uppercase(),
+            duration_multiplier,
+            next_linked_action_delta_ext,
+            grazing_strain_cost,
+        }
+    }
+}
+
+/// Always-Contested Two-List Cascade task configuration (Player vs. 1-Pair Tiered GM Resistance or Full Cascade NPC).
+#[pyclass(name = "ContestedCascadeTaskParams")]
+#[derive(Debug, Clone)]
+pub struct PyContestedCascadeTaskParams {
+    inner: ContestedCascadeTaskParams,
+}
+
+#[pymethods]
+impl PyContestedCascadeTaskParams {
+    /// Creates a Contested Cascade task configuration (`1-Pair Tiered GM Resistance` by default).
+    #[new]
+    #[pyo3(signature = (
+        player_skill_n,
+        player_control_c,
+        player_internal_mod=0,
+        player_known_tool_mod=0,
+        hidden_external_difficulty=0,
+        gm_mode="tiered_single_pair",
+        gm_pairs=1,
+        tie_rule="hybrid_signed_margin",
+        delta_over=6,
+    ))]
+    pub fn new(
+        player_skill_n: usize,
+        player_control_c: i32,
+        player_internal_mod: i32,
+        player_known_tool_mod: i32,
+        hidden_external_difficulty: i32,
+        gm_mode: &str,
+        gm_pairs: usize,
+        tie_rule: &str,
+        delta_over: i32,
+    ) -> Self {
+        let parsed_tie = match tie_rule.trim().to_ascii_lowercase().as_str() {
+            "strict_signed_margin" | "strict" => ContestedTieRule::StrictSignedMargin,
+            "active_player_wins_ties" | "active" => ContestedTieRule::ActivePlayerWinsTies,
+            _ => ContestedTieRule::HybridSignedMargin,
+        };
+        let mut inner = if gm_mode.trim().eq_ignore_ascii_case("full_cascade") {
+            ContestedCascadeTaskParams::new_hybrid_environment(
+                player_skill_n.clamp(1, 10),
+                player_control_c.clamp(1, 20),
+                player_internal_mod,
+                player_known_tool_mod,
+                gm_pairs.clamp(1, 10),
+                hidden_external_difficulty,
+                parsed_tie,
+            )
+        } else {
+            ContestedCascadeTaskParams::new_tiered_environment(
+                player_skill_n.clamp(1, 10),
+                player_control_c.clamp(1, 20),
+                player_internal_mod,
+                player_known_tool_mod,
+                hidden_external_difficulty,
+                parsed_tie,
+            )
+        };
+        inner.player.delta_over = delta_over;
+        Self { inner }
+    }
+
+    /// Loads one of the 6 canonical worked task presets (`"sarah_lockpick"`, `"marcus_surgery"`, `"elena_hack"`, etc.).
+    #[staticmethod]
+    pub fn from_preset(preset_id: &str) -> Self {
+        let p = satya_engine::get_canonical_task_preset(preset_id);
+        Self {
+            inner: p.to_contested_params(),
+        }
+    }
+
+    /// Player's known personal target number $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$.
+    pub fn tn_player(&self) -> i32 {
+        self.inner.player.tn_eff()
+    }
+
+    /// GM's hidden resistance target number $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$.
+    pub fn tn_gm(&self) -> i32 {
+        self.inner.gm.tn_eff()
+    }
+
+    /// Computes the exact combinatorial [`PyContestedCascadeOdds`] for this contested task.
+    pub fn exact_contested_odds(&self) -> PyContestedCascadeOdds {
+        PyContestedCascadeOdds::from(self.inner.exact_contested_odds())
+    }
+
+    /// Evaluates concrete `(die_a, die_b)` `2d20` pairs for both the Player and the GM.
+    pub fn evaluate_contested_pairs(
+        &self,
+        player_pairs: Vec<(i32, i32)>,
+        gm_pairs: Vec<(i32, i32)>,
+    ) -> PyContestedCascadeRollOutcome {
+        PyContestedCascadeRollOutcome::from(
+            self.inner.evaluate_contested_pairs(&player_pairs, &gm_pairs),
+        )
+    }
+}
+
+/// Resolved eligibility, effective pair pool $N$, known $\Delta_{\text{tool}}$, and hidden $\Delta_{\text{ext}}$ gate penalty.
+#[pyclass(name = "TaskGateResolution", get_all)]
+#[derive(Debug, Clone)]
+pub struct PyTaskGateResolution {
+    /// Whether the character is permitted to roll the task (`false` means `[Locked]`).
+    pub allowed: bool,
+    /// Effective number of `2d20` cascade pairs $N$ to roll (`0` if `[Locked]`).
+    pub effective_skill_n: usize,
+    /// Additional external difficulty penalty ($\Delta_{\text{ext}}$) from untrained or sibling defaulting.
+    pub gate_delta_ext: i32,
+    /// Known player tool modifier ($\Delta_{\text{tool}}$) shifting $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$.
+    pub tool_delta_mod: i32,
+    /// Whether any Floor Breach ($Y_n < 2$) automatically inflicts 1 step of equipment wear/degradation.
+    pub improvised_wear_on_floor_breach: bool,
+    /// Whether the character used Talent (`Class A`) or sibling-skill (`Class B`) defaulting.
+    pub used_defaulting: bool,
+    /// Human-readable reason if `allowed == false` (`[Locked]`).
+    pub lock_reason: Option<String>,
+}
+
+impl From<TaskGateResolution> for PyTaskGateResolution {
+    fn from(r: TaskGateResolution) -> Self {
+        Self {
+            allowed: r.allowed,
+            effective_skill_n: r.effective_skill_n,
+            gate_delta_ext: r.gate_delta_ext,
+            tool_delta_mod: r.tool_delta_mod,
+            improvised_wear_on_floor_breach: r.improvised_wear_on_floor_breach,
+            used_defaulting: r.used_defaulting,
+            lock_reason: r.lock_reason,
+        }
+    }
+}
+
+/// Mechanical synergy transferred from a preliminary analytical (`KNO` / `LOG`) setup roll
+/// to a subsequent physical or technical execution roll per §6.1 of `cascading_d20_and_tasks.md`.
+#[pyclass(name = "ComplementarySynergyResult", get_all)]
+#[derive(Debug, Clone)]
+pub struct PyComplementarySynergyResult {
+    /// External difficulty modifier ($\Delta_{\text{ext}}$) applied to the execution task (`-4`, `-2`, `0`, or `+4`).
+    pub delta_ext_mod: i32,
+    /// Over-target step carry bonus $\delta_{\text{over}}$ for the execution task (`8` on `ExtraordinarySuccess`, `6` otherwise).
+    pub delta_over_carry: i32,
+    /// Canonical description of the setup synergy tier.
+    pub summary: String,
+}
+
+impl From<ComplementarySynergyResult> for PyComplementarySynergyResult {
+    fn from(s: ComplementarySynergyResult) -> Self {
+        Self {
+            delta_ext_mod: s.delta_ext_mod,
+            delta_over_carry: s.delta_over_carry,
+            summary: s.summary.to_string(),
+        }
+    }
+}
+
+/// Result of applying a single interval roll to an [`PyExtendedProjectClock`].
+#[pyclass(name = "ExtendedProjectStepResult", get_all)]
+#[derive(Debug, Clone)]
+pub struct PyExtendedProjectStepResult {
+    /// Net progress delta added (or subtracted on a botch) during this interval.
+    pub progress_delta: i32,
+    /// Updated cumulative net successes on the project clock (`>= 0`).
+    pub accumulated_successes: i32,
+    /// Target net successes required to complete the project (`10`, `20`, or `40`).
+    pub target_net_successes: i32,
+    /// Total work intervals rolled so far.
+    pub intervals_rolled: u32,
+    /// Cumulative Heat / detection risk generated by floor-breach complications.
+    pub heat_generated: i32,
+    /// Cumulative extra material consumption percentage (`+25%` per floor-breach complication).
+    pub extra_material_pct: i32,
+    /// Whether the project has reached or exceeded `target_net_successes`.
+    pub is_completed: bool,
+}
+
+impl From<ExtendedProjectStepResult> for PyExtendedProjectStepResult {
+    fn from(r: ExtendedProjectStepResult) -> Self {
+        Self {
+            progress_delta: r.progress_delta,
+            accumulated_successes: r.accumulated_successes,
+            target_net_successes: r.target_net_successes,
+            intervals_rolled: r.intervals_rolled,
+            heat_generated: r.heat_generated,
+            extra_material_pct: r.extra_material_pct,
+            is_completed: r.is_completed,
+        }
+    }
+}
+
+/// Extended Project Progress Clock per §6.3 of `cascading_d20_and_tasks.md`.
+#[pyclass(name = "ExtendedProjectClock")]
+#[derive(Debug, Clone)]
+pub struct PyExtendedProjectClock {
+    inner: ExtendedProjectClock,
+}
+
+#[pymethods]
+impl PyExtendedProjectClock {
+    /// Creates a new [`PyExtendedProjectClock`] with `target_net_successes` (`10`, `20`, or `40`).
+    #[new]
+    pub fn new(project_name: String, target_net_successes: i32) -> Self {
+        Self {
+            inner: ExtendedProjectClock::new(project_name, target_net_successes),
+        }
+    }
+
+    /// Returns `true` if `accumulated_successes >= target_net_successes`.
+    pub fn is_completed(&self) -> bool {
+        self.inner.is_completed()
+    }
+
+    /// Current accumulated net successes (`>= 0`).
+    #[getter]
+    pub fn accumulated_successes(&self) -> i32 {
+        self.inner.accumulated_successes
+    }
+
+    /// Applies a single interval roll to the extended project clock.
+    #[pyo3(signature = (positive_successes, signed_margin, had_floor_breach_complication=false, is_botch=false))]
+    pub fn apply_interval(
+        &mut self,
+        positive_successes: i32,
+        signed_margin: i32,
+        had_floor_breach_complication: bool,
+        is_botch: bool,
+    ) -> PyExtendedProjectStepResult {
+        PyExtendedProjectStepResult::from(self.inner.apply_interval(
+            positive_successes,
+            signed_margin,
+            had_floor_breach_complication,
+            is_botch,
+        ))
     }
 }
 
@@ -762,52 +1097,6 @@ pub fn evaluate_cascade_roll(
     Ok(params.evaluate_pairs(pairs))
 }
 
-/// Formats the full `K = 20` (`2d20`) parameter-range calibration report as a table string.
-#[pyfunction]
-#[pyo3(signature = (control_values=None, skill_levels=None))]
-pub fn evaluate_k20_full_range(
-    control_values: Option<Vec<i32>>,
-    skill_levels: Option<Vec<usize>>,
-) -> String {
-    let rows = satya_engine::evaluate_k20_full_range(
-        control_values.as_deref(),
-        skill_levels.as_deref(),
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
-    format_summary_table(&rows)
-}
-
-/// Formats the `K = 20` (`2d20`) Controlling Characteristic ($C$) vs. Skill Level ($N$) comparison matrix.
-#[pyfunction]
-#[pyo3(signature = (base_delta_over=6, base_delta_under=6, carry_mode="markov_step", tn_formula="31_minus_c"))]
-pub fn compare_control_vs_skill_k20(
-    base_delta_over: i32,
-    base_delta_under: i32,
-    carry_mode: &str,
-    tn_formula: &str,
-) -> PyResult<String> {
-    let cm = CarryMode::from_str(carry_mode).map_err(to_py_err)?;
-    let tf = match tn_formula.trim().to_ascii_lowercase().as_str() {
-        "31_minus_c" | "31-c" => TnFormulaK20::Formula31MinusC,
-        "41_minus_2c" | "41-2c" => TnFormulaK20::Formula41Minus2c,
-        other => {
-            return Err(to_py_err(format!(
-                "invalid tn_formula '{other}' (expected '31_minus_c' or '41_minus_2c')"
-            )));
-        }
-    };
-    Ok(satya_engine::compare_control_vs_skill_k20(
-        base_delta_over,
-        base_delta_under,
-        cm,
-        tf,
-    ))
-}
-
 /// Computes the Combat Tactical Pool ("Envelope & Fill" — Tempo, Control, Force) for a character.
 #[pyfunction]
 #[pyo3(signature = (
@@ -919,6 +1208,82 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
     satya_engine::render_rules_markdown_to_html(markdown)
 }
 
+/// Evaluates Step 1 of the Satya Task Resolution Procedure (§2.1 Task Gate Classifications & §2.2 Tool Dependency Tiers).
+#[pyfunction]
+#[pyo3(signature = (
+    gate_class="class_a",
+    trained_skill_n=0,
+    talent_or_parent_n=0,
+    default_penalty_ext=4,
+    tool_dependency="none",
+    tool_tier="standard_kit",
+    min_skill_n=1,
+))]
+pub fn resolve_task_gate_and_tools(
+    gate_class: &str,
+    trained_skill_n: usize,
+    talent_or_parent_n: usize,
+    default_penalty_ext: i32,
+    tool_dependency: &str,
+    tool_tier: &str,
+    min_skill_n: usize,
+) -> PyTaskGateResolution {
+    let gate = match gate_class.trim().to_ascii_lowercase().as_str() {
+        "class_b" | "b" => TaskGateClass::ClassB,
+        "class_c" | "c" => TaskGateClass::ClassC {
+            min_skill_n: min_skill_n.max(1),
+        },
+        _ => TaskGateClass::ClassA,
+    };
+    let dep = match tool_dependency.trim().to_ascii_lowercase().as_str() {
+        "mandatory" => ToolDependency::Mandatory,
+        "situational" => ToolDependency::Situational,
+        _ => ToolDependency::None,
+    };
+    let tier = ToolQualityTier::from_key(tool_tier);
+    PyTaskGateResolution::from(satya_engine::resolve_task_gate_and_tools(
+        gate,
+        trained_skill_n,
+        talent_or_parent_n,
+        default_penalty_ext,
+        dep,
+        tier,
+    ))
+}
+
+/// Computes a Composite Controlling Characteristic $C = \lfloor (C_1 + C_2) / 2 \rfloor$.
+#[pyfunction]
+pub fn compute_composite_characteristic(c1: i32, c2: i32) -> i32 {
+    satya_engine::compute_composite_characteristic(c1, c2)
+}
+
+/// Computes the Gated Supporting Characteristic shortfall penalty ($+2$ to $\Delta_{\text{ext}}$ per point below `min_required_c`).
+#[pyfunction]
+pub fn compute_supporting_characteristic_shortfall_penalty(
+    supporting_c: i32,
+    min_required_c: i32,
+) -> i32 {
+    satya_engine::compute_supporting_characteristic_shortfall_penalty(supporting_c, min_required_c)
+}
+
+/// Evaluates a preliminary `KNO` / `LOG` complementary setup roll per §6.1 of `cascading_d20_and_tasks.md`.
+#[pyfunction]
+pub fn evaluate_complementary_setup_synergy(
+    setup_total_successes: i32,
+    setup_signed_margin: i32,
+) -> PyComplementarySynergyResult {
+    PyComplementarySynergyResult::from(satya_engine::evaluate_complementary_setup_synergy(
+        setup_total_successes,
+        setup_signed_margin,
+    ))
+}
+
+/// Computes the effective cascade pool size $N_{\text{eff}}$ for a Simultaneous Dual-Skill Gate per §6.2.
+#[pyfunction]
+pub fn compute_dual_skill_pool(skill_n1: usize, skill_n2: usize) -> usize {
+    satya_engine::compute_dual_skill_pool(skill_n1, skill_n2)
+}
+
 /// PyO3 module definition for `satya_py`.
 #[pymodule]
 pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -927,6 +1292,13 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCascadeStepTrace>()?;
     m.add_class::<PyCascadeRollOutcome>()?;
     m.add_class::<PyCascadeTaskParams>()?;
+    m.add_class::<PyContestedCascadeOdds>()?;
+    m.add_class::<PyContestedCascadeRollOutcome>()?;
+    m.add_class::<PyContestedCascadeTaskParams>()?;
+    m.add_class::<PyTaskGateResolution>()?;
+    m.add_class::<PyComplementarySynergyResult>()?;
+    m.add_class::<PyExtendedProjectStepResult>()?;
+    m.add_class::<PyExtendedProjectClock>()?;
     m.add_class::<PyTacticalPoolEnvelope>()?;
     m.add_class::<PyTacticalTriadEvaluation>()?;
     m.add_class::<PyRulesChapterSummary>()?;
@@ -949,9 +1321,15 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(paired_list_cascade_pmfs, m)?)?;
     m.add_function(wrap_pyfunction!(paired_list_signed_margin_pmfs, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_cascade_roll, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_k20_full_range, m)?)?;
-    m.add_function(wrap_pyfunction!(compare_control_vs_skill_k20, m)?)?;
     m.add_function(wrap_pyfunction!(compute_tactical_pool, m)?)?;
+    m.add_function(wrap_pyfunction!(resolve_task_gate_and_tools, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_composite_characteristic, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        compute_supporting_characteristic_shortfall_penalty,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(evaluate_complementary_setup_synergy, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_dual_skill_pool, m)?)?;
     m.add_function(wrap_pyfunction!(list_rules_chapters, m)?)?;
     m.add_function(wrap_pyfunction!(get_rules_chapter, m)?)?;
     m.add_function(wrap_pyfunction!(search_rules_book, m)?)?;
@@ -977,6 +1355,31 @@ mod tests {
         assert_eq!(roll.total_successes, 3);
         assert_eq!(roll.outcome_tier, "EXTRAORDINARY_SUCCESS");
 
+        let sarah_contested = PyContestedCascadeTaskParams::from_preset("sarah_lockpick");
+        assert_eq!(sarah_contested.tn_player(), 19);
+        assert_eq!(sarah_contested.tn_gm(), 17);
+        let c_odds = sarah_contested.exact_contested_odds();
+        assert!(c_odds.prob_total_win > 0.45);
+        let c_roll = sarah_contested
+            .evaluate_contested_pairs(vec![(11, 9), (7, 6), (12, 10)], vec![(9, 9)]);
+        assert_eq!(c_roll.contested_kind, "CLEAN_SUCCESS");
+
+        let gate_res = resolve_task_gate_and_tools("class_b", 0, 3, 4, "situational", "improvised", 1);
+        assert!(gate_res.allowed);
+        assert_eq!(gate_res.effective_skill_n, 2);
+        assert_eq!(gate_res.tool_delta_mod, 4);
+
+        assert_eq!(compute_dual_skill_pool(4, 2), 3);
+        let syn = evaluate_complementary_setup_synergy(3, 3);
+        assert_eq!(syn.delta_ext_mod, -4);
+        assert_eq!(syn.delta_over_carry, 8);
+
+        let mut clock = PyExtendedProjectClock::new("Antitoxin Synthesis".to_string(), 10);
+        let step = clock.apply_interval(4, 4, true, false);
+        assert_eq!(step.accumulated_successes, 4);
+        assert_eq!(step.heat_generated, 1);
+        assert_eq!(step.extra_material_pct, 25);
+
         let env = compute_tactical_pool(
             12, 12, 13, 13, 11, 12, 12, 12, 12, 75.0, 14, 4, false, 0, 0, 0, 0, 0, "steady", 12,
             12, 12,
@@ -987,7 +1390,7 @@ mod tests {
         assert!(triad.valid);
 
         let chapters = list_rules_chapters();
-        assert_eq!(chapters.len(), 13);
+        assert_eq!(chapters.len(), 14);
 
         let hits = search_rules_book("Tactical Triad", 3);
         assert!(!hits.is_empty());

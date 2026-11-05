@@ -241,9 +241,21 @@ pub enum ClientWsPacket {
         /// Internal Character Modifier $\Delta_{\text{int}} \in [-2, +10]$ (Fatigue, Injury, Stress; increases failure carry penalty $\delta_{\text{under}} = 6 + \Delta_{\text{int}}$).
         #[serde(default, alias = "delta_int")]
         internal_mod: i32,
-        /// External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (Range, Darkness, Tool Quality; shifts $\text{TN}_{\text{eff}}$).
+        /// Known Player Tool Modifier $\Delta_{\text{tool}} \in [-4, +12]$ (shifts $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$).
+        #[serde(default, alias = "delta_tool", alias = "tool_mod")]
+        known_tool_mod: i32,
+        /// External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (shifts $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$ in contested mode, or $\text{TN}_{\text{eff}}$ in uncontested mode).
         #[serde(default, alias = "difficulty_rating", alias = "delta_ext")]
         external_mod: i32,
+        /// Optional over-target step carry $\delta_{\text{over}}$ (`6` standard, `8` when boosted by Extraordinary `KNO -> PHY` synergy).
+        #[serde(default)]
+        delta_over: Option<i32>,
+        /// Optional GM resistance mode (`"tiered_single_pair"` default, `"full_cascade"`, or `"uncontested"`).
+        #[serde(default)]
+        gm_resistance_mode: Option<String>,
+        /// Optional contested tie-breaking rule (`"hybrid_signed_margin"` default, `"strict_signed_margin"`, or `"active_player_wins_ties"`).
+        #[serde(default)]
+        tie_rule: Option<String>,
         /// Optional cascade carry-over mode (`"markov_step"`, `"cumulative_snowball"`, or `"linear_margin"`).
         #[serde(default)]
         carry_mode: Option<String>,
@@ -505,12 +517,24 @@ pub struct GmRollRequest {
         alias = "skill_level_n"
     )]
     pub pool_size: usize,
-    /// External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (shifts $\text{TN}_{\text{eff}}$; also accepts `external_mod` or `delta_ext`).
+    /// Known Player Tool Modifier $\Delta_{\text{tool}} \in [-4, +12]$ (shifts $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$).
+    #[serde(default, alias = "delta_tool", alias = "tool_mod")]
+    pub known_tool_mod: i32,
+    /// External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (shifts $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$ in contested mode; also accepts `external_mod` or `delta_ext`).
     #[serde(default, alias = "external_mod", alias = "delta_ext")]
     pub difficulty_rating: i32,
     /// Optional Internal Character Modifier $\Delta_{\text{int}} \in [-2, +10]$ (defaults to `fatigue_level` when omitted).
     #[serde(default)]
     pub internal_mod: Option<i32>,
+    /// Optional over-target step carry $\delta_{\text{over}}$ (`6` standard, `8` when boosted by Extraordinary `KNO -> PHY` synergy).
+    #[serde(default)]
+    pub delta_over: Option<i32>,
+    /// Optional GM resistance mode (`"tiered_single_pair"` default, `"full_cascade"`, or `"uncontested"`).
+    #[serde(default)]
+    pub gm_resistance_mode: Option<String>,
+    /// Optional contested tie-breaking rule (`"hybrid_signed_margin"` default, `"strict_signed_margin"`, or `"active_player_wins_ties"`).
+    #[serde(default)]
+    pub tie_rule: Option<String>,
     /// Optional cascade carry-over mode (`"markov_step"`, `"cumulative_snowball"`, or `"linear_margin"`).
     #[serde(default)]
     pub carry_mode: Option<String>,

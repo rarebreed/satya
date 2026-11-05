@@ -308,6 +308,91 @@ pub fn format_cascade_odds_preview(params: &satya_engine::CascadeTaskParams) -> 
     )
 }
 
+/// Computes and formats the live exact Contested (`1-Pair Tiered GM Resistance`) and Uncontested
+/// Combinatorial & DP probability readout for the Satya Two-List Cascading ("Watershed") `2d20`
+/// task drawer (`#ttrpg-odds-pill` and `#ttrpg-odds-readout`).
+pub fn format_contested_cascade_odds_summary(
+    skill_level_n: usize,
+    control_c: i32,
+    delta_tool: i32,
+    delta_ext: i32,
+    delta_int: i32,
+    carry_mode_raw: &str,
+    botch_rule_raw: &str,
+) -> (String, String) {
+    use satya_engine::{
+        BotchRule, CarryMode, CascadeTaskParams, ContestedCascadeTaskParams, ContestedTieRule,
+        compute_stats,
+    };
+    use std::str::FromStr;
+
+    let n = skill_level_n.clamp(1, 10);
+    let c = control_c.clamp(1, 20);
+    let d_tool = delta_tool.clamp(-4, 12);
+    let d_ext = delta_ext.clamp(-10, 16);
+    let d_int = delta_int.clamp(-2, 10);
+    let carry_mode = CarryMode::from_str(carry_mode_raw).unwrap_or(CarryMode::MarkovStep);
+    let botch_rule = BotchRule::from_str(botch_rule_raw).unwrap_or(BotchRule::ClosestMiss);
+
+    let mut contested = ContestedCascadeTaskParams::new_tiered_environment(
+        n,
+        c,
+        d_int,
+        d_tool,
+        d_ext,
+        ContestedTieRule::HybridSignedMargin,
+    );
+    contested.player.carry_mode = carry_mode;
+    contested.player.botch_rule = botch_rule;
+    let c_odds = contested.exact_contested_odds();
+
+    let mut uncontested = CascadeTaskParams::new_k20(n, c, d_int, d_tool + d_ext);
+    uncontested.carry_mode = carry_mode;
+    uncontested.botch_rule = botch_rule;
+    let u_odds = uncontested.exact_odds();
+    let u_stats = compute_stats(&u_odds.signed_margin_pmf);
+
+    let tn_p = contested.player.tn_eff();
+    let tn_gm = contested.gm.tn_eff();
+    let tn_eff = uncontested.tn_eff();
+    let p_win = c_odds.prob_total_win * 100.0;
+    let p_succ = u_odds.prob_any_success * 100.0;
+
+    let pill_text = format!(
+        "TN_P: {tn_p} vs TN_GM: {tn_gm} · P(Win): {p_win:.1}% · TN_eff: {tn_eff} · P(Succ≥1): {p_succ:.1}%"
+    );
+    let readout_text = format!(
+        "Contested (TN_P = {} [31 - C {} + Δ_tool {:+}], TN_GM = {} [21 - Δ_ext {:+}]) · P(Win): {:.2}% (Extraord {:.1}%, Clean {:.1}%, GrazingTie {:.1}%, LuckyBreak {:.1}%, FloorBreach {:.1}%) · P(Botch): {:.2}% · E[ΔM]: {:+.2} | Uncontested TN_eff = {} (31 - C {} + Δ_ext {:+}) · Carry: +{} / -{} ({}, {}) | P(Succ ≥ 1): {:.2}% · P(CleanFail): {:.2}% · P(BotchFail): {:.2}% · P(Succ+Botch): {:.2}% · E[Margin]: {:+.2}",
+        tn_p,
+        c,
+        d_tool,
+        tn_gm,
+        d_ext,
+        p_win,
+        c_odds.prob_extraordinary_success * 100.0,
+        c_odds.prob_clean_success * 100.0,
+        c_odds.prob_grazing_tie_partial * 100.0,
+        c_odds.prob_lucky_break_partial * 100.0,
+        c_odds.prob_floor_breach_partial * 100.0,
+        c_odds.prob_botch_failure * 100.0,
+        c_odds.net_margin_stats.mean,
+        tn_eff,
+        c,
+        d_tool + d_ext,
+        uncontested.delta_over,
+        uncontested.effective_delta_under(),
+        uncontested.carry_mode,
+        uncontested.botch_rule,
+        p_succ,
+        u_odds.prob_clean_failure * 100.0,
+        u_odds.prob_botch_failure * 100.0,
+        u_odds.prob_success_with_complication * 100.0,
+        u_stats.mean
+    );
+
+    (pill_text, readout_text)
+}
+
 /// Computes and formats the live exact Combinatorial & DP probability readout for the
 /// Satya Two-List Cascading ("Watershed") `2d20` task drawer (`#ttrpg-odds-pill` and `#ttrpg-odds-readout`).
 pub fn format_cascade_odds_summary(
@@ -318,50 +403,37 @@ pub fn format_cascade_odds_summary(
     carry_mode_raw: &str,
     botch_rule_raw: &str,
 ) -> (String, String) {
-    use satya_engine::{BotchRule, CarryMode, CascadeTaskParams, compute_stats};
-    use std::str::FromStr;
-
+    let (_, readout) = format_contested_cascade_odds_summary(
+        skill_level_n,
+        control_c,
+        0,
+        delta_ext,
+        delta_int,
+        carry_mode_raw,
+        botch_rule_raw,
+    );
     let n = skill_level_n.clamp(1, 10);
     let c = control_c.clamp(1, 20);
     let d_ext = delta_ext.clamp(-10, 16);
     let d_int = delta_int.clamp(-2, 10);
-    let carry_mode = CarryMode::from_str(carry_mode_raw).unwrap_or(CarryMode::MarkovStep);
-    let botch_rule = BotchRule::from_str(botch_rule_raw).unwrap_or(BotchRule::ClosestMiss);
-
-    let mut params = CascadeTaskParams::new_k20(n, c, d_int, d_ext);
-    params.carry_mode = carry_mode;
-    params.botch_rule = botch_rule;
-
+    let mut params = satya_engine::CascadeTaskParams::new_k20(n, c, d_int, d_ext);
+    if let Ok(m) = carry_mode_raw.parse::<satya_engine::CarryMode>() {
+        params.carry_mode = m;
+    }
+    if let Ok(b) = botch_rule_raw.parse::<satya_engine::BotchRule>() {
+        params.botch_rule = b;
+    }
     let odds = params.exact_odds();
-    let stats = compute_stats(&odds.signed_margin_pmf);
-    let tn_eff = params.tn_eff();
-    let p_succ = odds.prob_any_success * 100.0;
-    let p_clean_fail = odds.prob_clean_failure * 100.0;
-    let p_botch_fail = odds.prob_botch_failure * 100.0;
-    let p_complication = odds.prob_success_with_complication * 100.0;
-
-    let pill_text = format!("TN_eff: {tn_eff} · P(Succ≥1): {p_succ:.1}%");
-    let readout_text = format!(
-        "TN_eff = {} (31 - C {} + Δ_ext {:+}) · Carry: +{} / -{} ({}, {}) | P(Succ ≥ 1): {:.2}% · P(CleanFail): {:.2}% · P(BotchFail): {:.2}% · P(Succ+Botch): {:.2}% · E[Margin]: {:+.2}",
-        tn_eff,
-        c,
-        d_ext,
-        params.delta_over,
-        params.effective_delta_under(),
-        params.carry_mode,
-        params.botch_rule,
-        p_succ,
-        p_clean_fail,
-        p_botch_fail,
-        p_complication,
-        stats.mean
+    let pill = format!(
+        "TN_eff: {} · P(Succ≥1): {:.1}%",
+        params.tn_eff(),
+        odds.prob_any_success * 100.0
     );
-
-    (pill_text, readout_text)
+    (pill, readout)
 }
 
-/// Reads the current Four-Factor Cascade inputs in `#ttrpg-drawer` and updates `#ttrpg-odds-pill`
-/// and `#ttrpg-odds-readout` with live exact probabilities from `satya-engine`.
+/// Reads the current Cascade inputs in `#ttrpg-drawer` and updates `#ttrpg-odds-pill`
+/// and `#ttrpg-odds-readout` with live exact Contested & Uncontested probabilities from `satya-engine`.
 #[wasm_bindgen]
 pub fn satya_update_cascade_preview() {
     let skill_level = input_value("ttrpg-skill-level")
@@ -376,33 +448,26 @@ pub fn satya_update_cascade_preview() {
         .parse::<i32>()
         .unwrap_or(0)
         .clamp(-2, 10);
+    let tool_mod = input_value("ttrpg-tool-mod")
+        .parse::<i32>()
+        .unwrap_or(0)
+        .clamp(-4, 12);
     let external_mod = input_value("ttrpg-external-mod")
         .parse::<i32>()
         .unwrap_or(0)
         .clamp(-10, 16);
     let mode_raw = select_value("ttrpg-carry-mode");
     let botch_raw = select_value("ttrpg-botch-rule");
-    let mut params = satya_engine::CascadeTaskParams::new_k20(
+    let (pill_text, readout_text) = format_contested_cascade_odds_summary(
         skill_level,
         control_c,
-        internal_mod,
-        external_mod,
-    );
-    if let Ok(parsed_mode) = mode_raw.parse::<satya_engine::CarryMode>() {
-        params.carry_mode = parsed_mode;
-    }
-    if let Ok(parsed_botch) = botch_raw.parse::<satya_engine::BotchRule>() {
-        params.botch_rule = parsed_botch;
-    }
-    set_text("ttrpg-odds-pill", &format_cascade_odds_preview(&params));
-    let (_, readout_text) = format_cascade_odds_summary(
-        skill_level,
-        control_c,
+        tool_mod,
         external_mod,
         internal_mod,
-        params.carry_mode.as_str(),
-        params.botch_rule.as_str(),
+        &mode_raw,
+        &botch_raw,
     );
+    set_text("ttrpg-odds-pill", &pill_text);
     set_text("ttrpg-odds-readout", &readout_text);
 }
 
@@ -433,6 +498,10 @@ pub fn satya_roll_task() {
         .parse::<i32>()
         .unwrap_or(0)
         .clamp(-2, 10);
+    let known_tool_mod = input_value("ttrpg-tool-mod")
+        .parse::<i32>()
+        .unwrap_or(0)
+        .clamp(-4, 12);
     let external_mod = input_value("ttrpg-external-mod")
         .parse::<i32>()
         .unwrap_or(0)
@@ -462,7 +531,11 @@ pub fn satya_roll_task() {
         skill_level,
         control_c,
         internal_mod,
+        known_tool_mod,
         external_mod,
+        delta_over: None,
+        gm_resistance_mode: None,
+        tie_rule: None,
         carry_mode,
         botch_rule,
         combat_stance,

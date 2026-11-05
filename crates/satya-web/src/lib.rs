@@ -1051,18 +1051,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                             on:change=move |_| wasm_client::satya_select_rules_chapter(String::new())
                                         >
                                             <option value="design_philosophy">"1. Design Philosophy & Goals of Satya"</option>
-                                            <option value="probability">"2. Probability & Mathematical Calibration"</option>
-                                            <option value="tasks" selected>"3. Cascading 2d20 Engine & Task Resolution"</option>
-                                            <option value="action_economy">"4. Action Economy, OODA Loop, Time Scales & Stealth"</option>
-                                            <option value="characteristics">"5. Characteristics, Senses, Psyche & Aptitudes"</option>
-                                            <option value="skills_and_trees">"6. Skill System & Hierarchical Skill Trees"</option>
-                                            <option value="lifepaths_and_economy">"7. Lifepath Creation, Socioeconomic Upkeep & Heat"</option>
-                                            <option value="psyche_and_social">"8. Psyche, Morale & Social Combat"</option>
-                                            <option value="tactical_triad">"9. Combat Architecture, Tactical Triad & Pools"</option>
-                                            <option value="melee_combat">"10. Melee Combat & Close-Quarters Tactics"</option>
-                                            <option value="ranged_combat_and_armor">"11. Ranged Combat, Suppression, Armor & Reliability"</option>
-                                            <option value="health_and_trauma">"12. Health, Anatomical Trauma, Fatigue & Mental Conditions"</option>
-                                            <option value="movement_and_environment">"13. Movement, Encumbrance, Vehicles & Survival"</option>
+                                            <option value="notation_glossary">"2. Canonical Mathematical Notation & Variable Reference"</option>
+                                            <option value="probability">"3. Probability & Mathematical Calibration"</option>
+                                            <option value="tasks" selected>"4. Cascading 2d20 Engine & Task Resolution"</option>
+                                            <option value="action_economy">"5. Action Economy, OODA Loop, Time Scales & Stealth"</option>
+                                            <option value="characteristics">"6. Characteristics, Senses, Psyche & Aptitudes"</option>
+                                            <option value="skills_and_trees">"7. Skill System & Hierarchical Skill Trees"</option>
+                                            <option value="lifepaths_and_economy">"8. Lifepath Creation, Socioeconomic Upkeep & Heat"</option>
+                                            <option value="psyche_and_social">"9. Psyche, Morale & Social Combat"</option>
+                                            <option value="tactical_triad">"10. Combat Architecture, Tactical Triad & Pools"</option>
+                                            <option value="melee_combat">"11. Melee Combat & Close-Quarters Tactics"</option>
+                                            <option value="ranged_combat_and_armor">"12. Ranged Combat, Suppression, Armor & Reliability"</option>
+                                            <option value="health_and_trauma">"13. Health, Anatomical Trauma, Fatigue & Mental Conditions"</option>
+                                            <option value="movement_and_environment">"14. Movement, Encumbrance, Vehicles & Survival"</option>
                                         </select>
                                     </label>
                                     <label class="inline-label" for="rules-search-input">
@@ -1099,7 +1100,23 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                         onclick="window.satyaLoadRulesExample('sarah_lockpick')"
                                         on:click=move |_| wasm_client::satya_load_rules_example("sarah_lockpick".to_string())
                                     >
-                                        "Sarah's Lockpick (N=4, C=14, Δ_int=+1, Δ_ext=+4)"
+                                        "Sarah's Lockpick (N=3, C=12, Δ_tool=0, Δ_int=+2, Δ_ext=+4)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadRulesExample('marcus_surgery')"
+                                        on:click=move |_| wasm_client::satya_load_rules_example("marcus_surgery".to_string())
+                                    >
+                                        "Marcus's Trauma Surgery (N=4, C=14, Δ_tool=-2, Δ_int=-1, Δ_ext=+4)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadRulesExample('elena_hack')"
+                                        on:click=move |_| wasm_client::satya_load_rules_example("elena_hack".to_string())
+                                    >
+                                        "Elena's Intrusion Hack (N=3, C=15, Δ_tool=-2, Δ_ext=+2)"
                                     </button>
                                     <button
                                         type="button"
@@ -1573,6 +1590,18 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             />
                         </label>
                         <label>
+                            <span>"Tool Mod Δ_tool (-4 to +12)"</span>
+                            <input
+                                id="ttrpg-tool-mod"
+                                type="number"
+                                value="0"
+                                min="-4"
+                                max="12"
+                                onchange="window.satyaUpdateCascadePreview()"
+                                oninput="window.satyaUpdateCascadePreview()"
+                            />
+                        </label>
+                        <label>
                             <span>"External Mod Δ_ext (-10 to +16)"</span>
                             <input
                                 id="ttrpg-external-mod"
@@ -2013,6 +2042,18 @@ mod tests {
         assert!(readout.contains("P(BotchFail): 12.96%"));
         assert!(readout.contains("P(Succ+Botch): 1.13%"));
         assert!(readout.contains("E[Margin]: +1.27"));
+
+        let (c_pill, c_readout) = wasm_client::format_contested_cascade_odds_summary(
+            3,
+            12,
+            0,
+            4,
+            2,
+            "markov_step",
+            "closest_miss",
+        );
+        assert!(c_pill.contains("TN_P: 19 vs TN_GM: 17"));
+        assert!(c_readout.contains("Contested (TN_P = 19"));
 
         let (mech_ev, _) = satya_engine::evaluate_satya_cascade_task(
             chat_ev.metadata.clone(),

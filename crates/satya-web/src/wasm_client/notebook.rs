@@ -1118,44 +1118,7 @@ pub fn satya_search_rules_book() {
 /// Task Resolution drawer (`#ttrpg-drawer`) and recalculates the exact probability preview.
 #[wasm_bindgen]
 pub fn satya_load_rules_example(preset: String) {
-    let (skill, n, c, d_int, d_ext, carry, botch) = match preset.as_str() {
-        "elena_probe" => (
-            "Arming Sword Probe (Elena)",
-            5,
-            16,
-            0,
-            2,
-            "markov_step",
-            "closest_miss",
-        ),
-        "viktor_cleave" => (
-            "Greatsword Cleave (Viktor)",
-            4,
-            13,
-            0,
-            3,
-            "markov_step",
-            "closest_miss",
-        ),
-        "social_persuasion" => (
-            "Counter-Interrogation Rhetoric",
-            3,
-            15,
-            2,
-            3,
-            "markov_step",
-            "closest_miss",
-        ),
-        _ => (
-            "Mechanical Lockpicking (Sarah)",
-            4,
-            14,
-            1,
-            4,
-            "markov_step",
-            "closest_miss",
-        ),
-    };
+    let p = satya_engine::get_canonical_task_preset(&preset);
     let was_collapsed = with_state_mut(|st| {
         let prev = st.ttrpg_collapsed;
         st.ttrpg_collapsed = false;
@@ -1164,13 +1127,17 @@ pub fn satya_load_rules_example(preset: String) {
     if was_collapsed {
         sync_workspace_drawers_dom();
     }
-    set_input_value("ttrpg-skill", skill);
-    set_input_value("ttrpg-skill-level", &n.to_string());
-    set_input_value("ttrpg-control-c", &c.to_string());
-    set_input_value("ttrpg-internal-mod", &d_int.to_string());
-    set_input_value("ttrpg-external-mod", &d_ext.to_string());
-    set_select_value("ttrpg-carry-mode", carry);
-    set_select_value("ttrpg-botch-rule", botch);
-    set_text("char-stat-control", &c.to_string());
+    set_input_value("ttrpg-skill", p.skill_name);
+    set_input_value("ttrpg-skill-level", &p.player_skill_n.to_string());
+    set_input_value("ttrpg-control-c", &p.player_control_c.to_string());
+    set_input_value("ttrpg-internal-mod", &p.player_internal_mod.to_string());
+    set_input_value("ttrpg-tool-mod", &p.player_known_tool_mod.to_string());
+    set_input_value(
+        "ttrpg-external-mod",
+        &p.hidden_external_difficulty.to_string(),
+    );
+    set_select_value("ttrpg-carry-mode", "markov_step");
+    set_select_value("ttrpg-botch-rule", "closest_miss");
+    set_text("char-stat-control", &p.player_control_c.to_string());
     satya_update_cascade_preview();
 }

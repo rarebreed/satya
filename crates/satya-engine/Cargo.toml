@@ -6,10 +6,6 @@ authors.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "summarize-cascade-odds"
-path = "src/bin/summarize_cascade_odds.rs"
-
-[[bin]]
 name = "build-rules-book"
 path = "src/bin/build_rules_book.rs"
 

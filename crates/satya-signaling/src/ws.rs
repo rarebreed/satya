@@ -18,7 +18,10 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use rand::Rng;
-use satya_engine::{BotchRule, CarryMode, CascadeTaskParams, evaluate_satya_cascade_task};
+use satya_engine::{
+    BotchRule, CarryMode, CascadeTaskParams, ContestedCascadeTaskParams, ContestedTieRule,
+    GmResistanceMode, evaluate_satya_cascade_task, evaluate_satya_contested_cascade_task,
+};
 use satya_schema::{
     CanvasEventType, ChatMessageEvent, ClientWsPacket, IceCandidateType, InteractionDynamicsEvent,
     LifecycleEventType, MessageVisibility, ParticipantKind, ServerWsPacket, SessionMode,
@@ -296,7 +299,11 @@ async fn handle_ws_client(
                 skill_level,
                 control_c,
                 internal_mod,
+                known_tool_mod,
                 external_mod,
+                delta_over,
+                gm_resistance_mode,
+                tie_rule,
                 carry_mode,
                 botch_rule,
                 combat_stance,
@@ -306,26 +313,55 @@ async fn handle_ws_client(
                 let n_pairs = skill_level.clamp(1, 10);
                 let c_val = control_c.clamp(1, 20);
                 let int_mod = internal_mod.clamp(-2, 10);
+                let tool_mod = known_tool_mod.clamp(-4, 12);
                 let ext_mod = external_mod.clamp(-10, 16);
-                let mut params = CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, ext_mod);
+                let parsed_tie_rule = match tie_rule.as_deref() {
+                    Some("strict_signed_margin") => ContestedTieRule::StrictSignedMargin,
+                    Some("active_player_wins_ties") => ContestedTieRule::ActivePlayerWinsTies,
+                    _ => ContestedTieRule::HybridSignedMargin,
+                };
+                let is_uncontested = matches!(
+                    gm_resistance_mode.as_deref(),
+                    Some("uncontested" | "none")
+                );
+
+                let mut contested_params = ContestedCascadeTaskParams::new_tiered_environment(
+                    n_pairs,
+                    c_val,
+                    int_mod,
+                    tool_mod,
+                    ext_mod,
+                    parsed_tie_rule,
+                );
+                if matches!(gm_resistance_mode.as_deref(), Some("full_cascade")) {
+                    contested_params.gm_mode = GmResistanceMode::FullCascade;
+                }
+                if let Some(d_over) = delta_over {
+                    contested_params.player.delta_over = d_over.clamp(2, 12);
+                }
                 if let Some(mode_str) = carry_mode.as_deref()
                     && let Ok(parsed_mode) = CarryMode::from_str(mode_str)
                 {
-                    params.carry_mode = parsed_mode;
+                    contested_params.player.carry_mode = parsed_mode;
                 }
                 if let Some(botch_str) = botch_rule.as_deref()
                     && let Ok(parsed_botch) = BotchRule::from_str(botch_str)
                 {
-                    params.botch_rule = parsed_botch;
+                    contested_params.player.botch_rule = parsed_botch;
                 }
 
-                let (rolled_pairs, physics_seed): (Vec<(i32, i32)>, i64) = {
+                let (rolled_pairs, gm_pairs, physics_seed): (
+                    Vec<(i32, i32)>,
+                    Vec<(i32, i32)>,
+                    i64,
+                ) = {
                     let mut rng = rand::thread_rng();
                     let pairs = (0..n_pairs)
                         .map(|_| (rng.gen_range(1..=20), rng.gen_range(1..=20)))
                         .collect();
+                    let gm = vec![(rng.gen_range(1..=20), rng.gen_range(1..=20))];
                     let seed: i64 = rng.r#gen::<i64>().abs();
-                    (pairs, seed)
+                    (pairs, gm, seed)
                 };
 
                 if let Ok(meta) = state.storage.registry().build_metadata(
@@ -335,55 +371,138 @@ async fn handle_ws_client(
                     &session_id,
                     session_mode,
                 ) {
-                    let (mut mech_ev, outcome) = evaluate_satya_cascade_task(
-                        meta,
-                        self_participant.clone(),
-                        Vec::new(),
-                        skill_name.clone(),
-                        &params,
-                        &rolled_pairs,
-                        combat_stance,
-                        fatigue_level.max(0),
-                        wound_shock_index,
-                    );
-
-                    let odds = params.exact_odds();
-                    let step_summary: Vec<String> = outcome
-                        .steps
-                        .iter()
-                        .map(|s| {
-                            let mark = if s.succeeded {
-                                "PASS"
-                            } else if s.step_botch {
-                                "BOTCH"
-                            } else {
-                                "MISS"
-                            };
-                            format!(
-                                "P{}: {}+{}{:+}={} ({})",
-                                s.pair_index, s.die_a, s.die_b, s.carry_in, s.effective_y, mark
-                            )
-                        })
-                        .collect();
-
-                    mech_ev.notes = Some(format!(
-                        "cascade(mode={}, botch={}, tn_eff={}, signed_margin={:+}) | Pairs: [{}] | C={}, Δext={:+} => TN_eff={} | Mode: {} (+{}/-{}) | Botch: {} | Signed Margin: {:+} ({:?}, P(Succ>=1)={:.1}%)",
-                        params.carry_mode,
-                        params.botch_rule,
-                        params.tn_eff(),
-                        outcome.signed_margin,
-                        step_summary.join(", "),
-                        c_val,
-                        ext_mod,
-                        params.tn_eff(),
-                        params.carry_mode,
-                        params.delta_over,
-                        params.effective_delta_under(),
-                        params.botch_rule,
-                        outcome.signed_margin,
-                        outcome.outcome_kind,
-                        odds.prob_any_success * 100.0
-                    ));
+                    let mech_ev = if is_uncontested {
+                        let mut params = CascadeTaskParams::new_k20(
+                            n_pairs,
+                            c_val,
+                            int_mod,
+                            tool_mod + ext_mod,
+                        );
+                        params.carry_mode = contested_params.player.carry_mode;
+                        params.botch_rule = contested_params.player.botch_rule;
+                        params.delta_over = contested_params.player.delta_over;
+                        let (mut ev, outcome) = evaluate_satya_cascade_task(
+                            meta,
+                            self_participant.clone(),
+                            Vec::new(),
+                            skill_name.clone(),
+                            &params,
+                            &rolled_pairs,
+                            combat_stance,
+                            fatigue_level.max(0),
+                            wound_shock_index,
+                        );
+                        let odds = params.exact_odds();
+                        let step_summary: Vec<String> = outcome
+                            .steps
+                            .iter()
+                            .map(|s| {
+                                let mark = if s.succeeded {
+                                    "PASS"
+                                } else if s.step_botch {
+                                    "BOTCH"
+                                } else {
+                                    "MISS"
+                                };
+                                format!(
+                                    "P{}: {}+{}{:+}={} ({})",
+                                    s.pair_index, s.die_a, s.die_b, s.carry_in, s.effective_y, mark
+                                )
+                            })
+                            .collect();
+                        ev.notes = Some(format!(
+                            "cascade(mode={}, botch={}, tn_eff={}, signed_margin={:+}) | Pairs: [{}] | C={}, Δext={:+} => TN_eff={} | Mode: {} (+{}/-{}) | Botch: {} | Signed Margin: {:+} ({:?}, P(Succ>=1)={:.1}%)",
+                            params.carry_mode,
+                            params.botch_rule,
+                            params.tn_eff(),
+                            outcome.signed_margin,
+                            step_summary.join(", "),
+                            c_val,
+                            tool_mod + ext_mod,
+                            params.tn_eff(),
+                            params.carry_mode,
+                            params.delta_over,
+                            params.effective_delta_under(),
+                            params.botch_rule,
+                            outcome.signed_margin,
+                            outcome.outcome_kind,
+                            odds.prob_any_success * 100.0
+                        ));
+                        ev
+                    } else {
+                        let (mut ev, outcome) = evaluate_satya_contested_cascade_task(
+                            meta,
+                            self_participant.clone(),
+                            Vec::new(),
+                            skill_name.clone(),
+                            &contested_params,
+                            &rolled_pairs,
+                            &gm_pairs,
+                            combat_stance,
+                            fatigue_level.max(0),
+                            wound_shock_index,
+                        );
+                        let odds = contested_params.exact_contested_odds();
+                        let step_summary: Vec<String> = outcome
+                            .player_outcome
+                            .steps
+                            .iter()
+                            .map(|s| {
+                                let mark = if s.succeeded {
+                                    "PASS"
+                                } else if s.step_botch {
+                                    "BOTCH"
+                                } else {
+                                    "MISS"
+                                };
+                                format!(
+                                    "P{}: {}+{}{:+}={} ({})",
+                                    s.pair_index, s.die_a, s.die_b, s.carry_in, s.effective_y, mark
+                                )
+                            })
+                            .collect();
+                        let gm_step = outcome.gm_outcome.steps.first();
+                        let gm_summary = gm_step
+                            .map(|g| {
+                                format!(
+                                    "GM: {}+{}={} vs TN_GM={} (S_GM={}, M_GM={:+})",
+                                    g.die_a,
+                                    g.die_b,
+                                    g.raw_sum,
+                                    g.tn_eff,
+                                    outcome.gm_outcome.total_successes,
+                                    outcome.gm_outcome.signed_margin
+                                )
+                            })
+                            .unwrap_or_default();
+                        ev.notes = Some(format!(
+                            "contested(kind={}, tn_p={}, tn_gm={}, s_p={}, s_gm={}, net_margin={:+}) | cascade(mode={}, botch={}, tn_eff={}, signed_margin={:+}) | Pairs: [{}] | {} | C={}, Δtool={:+}, Δext={:+} => TN_P={}, TN_GM={} | Mode: {} (+{}/-{}) | Net Margin: {:+} ({}, P(Win)={:.1}%)",
+                            outcome.contested_kind,
+                            contested_params.player.tn_eff(),
+                            contested_params.gm.tn_eff(),
+                            outcome.player_outcome.total_successes,
+                            outcome.gm_outcome.total_successes,
+                            outcome.net_signed_margin,
+                            contested_params.player.carry_mode,
+                            contested_params.player.botch_rule,
+                            contested_params.player.tn_eff(),
+                            outcome.player_outcome.signed_margin,
+                            step_summary.join(", "),
+                            gm_summary,
+                            c_val,
+                            tool_mod,
+                            ext_mod,
+                            contested_params.player.tn_eff(),
+                            contested_params.gm.tn_eff(),
+                            contested_params.player.carry_mode,
+                            contested_params.player.delta_over,
+                            contested_params.player.effective_delta_under(),
+                            outcome.net_signed_margin,
+                            outcome.contested_kind,
+                            odds.prob_total_win * 100.0
+                        ));
+                        ev
+                    };
 
                     let _ = state.storage.log_ttrpg_mechanics(&mech_ev).await;
 
@@ -438,19 +557,19 @@ async fn handle_ws_client(
                         && should_trigger_ai_gm_for_roll(&current_roster)
                     {
                         let narration = format!(
-                            "[Satya Simulation] {} attempted '{}' (Skill N={}, Control C={}, Δext={:+}, TN_eff={}, Δint={:+}, Carry={}) -> {:?} / {:?} ({} successes, signed_margin={:+}). {} Action Count Cost: {} ticks.",
+                            "[Satya Simulation] {} attempted '{}' (Skill N={}, Control C={}, Δtool={:+}, Δext={:+}, TN_P={}, TN_GM={}, Δint={:+}, Carry={}) -> {:?} ({} successes). {} Action Count Cost: {} ticks.",
                             self_participant.display_name,
                             skill_name,
-                            params.skill_level,
-                            params.control_c,
+                            contested_params.player.skill_level,
+                            contested_params.player.control_c,
+                            tool_mod,
                             ext_mod,
-                            params.tn_eff(),
+                            contested_params.player.tn_eff(),
+                            contested_params.gm.tn_eff(),
                             int_mod,
-                            params.carry_mode,
+                            contested_params.player.carry_mode,
                             mech_ev.outcome_tier,
-                            outcome.outcome_kind,
                             mech_ev.successes_counted,
-                            outcome.signed_margin,
                             mech_ev.notes.as_deref().unwrap_or(""),
                             mech_ev.action_count_cost.unwrap_or(10)
                         );

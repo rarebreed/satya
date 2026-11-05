@@ -9,7 +9,10 @@ use axum::{
     response::IntoResponse,
 };
 use rand::Rng;
-use satya_engine::{CascadeTaskParams, evaluate_satya_cascade_task};
+use satya_engine::{
+    CascadeTaskParams, ContestedCascadeTaskParams, ContestedTieRule, GmResistanceMode,
+    evaluate_satya_cascade_task, evaluate_satya_contested_cascade_task,
+};
 use satya_schema::{
     AiGmOperatingMode, AiGmProviderConfig, AiGmTrajectoryEvent, AiGmTurnStatus,
     AiGmTurnTriggerRequest, CanvasEventType, ChannelContext, ChatMessageEvent, GmChatRequest,
@@ -247,26 +250,50 @@ pub async fn gm_session_roll_handler(
     let n_pairs = req.pool_size.clamp(1, 10);
     let c_val = req.attribute_tn.clamp(1, 20);
     let int_mod = req.internal_mod.unwrap_or(req.fatigue_level).clamp(-2, 10);
+    let tool_mod = req.known_tool_mod.clamp(-4, 12);
     let ext_mod = req.difficulty_rating.clamp(-10, 16);
-    let mut params = CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, ext_mod);
+    let parsed_tie_rule = match req.tie_rule.as_deref() {
+        Some("strict_signed_margin") => ContestedTieRule::StrictSignedMargin,
+        Some("active_player_wins_ties") => ContestedTieRule::ActivePlayerWinsTies,
+        _ => ContestedTieRule::HybridSignedMargin,
+    };
+    let is_uncontested = matches!(
+        req.gm_resistance_mode.as_deref(),
+        Some("uncontested" | "none")
+    );
+    let mut contested_params = ContestedCascadeTaskParams::new_tiered_environment(
+        n_pairs,
+        c_val,
+        int_mod,
+        tool_mod,
+        ext_mod,
+        parsed_tie_rule,
+    );
+    if matches!(req.gm_resistance_mode.as_deref(), Some("full_cascade")) {
+        contested_params.gm_mode = GmResistanceMode::FullCascade;
+    }
+    if let Some(d_over) = req.delta_over {
+        contested_params.player.delta_over = d_over.clamp(2, 12);
+    }
     if let Some(mode_str) = req.carry_mode.as_deref()
         && let Ok(parsed_mode) = mode_str.parse::<satya_engine::CarryMode>()
     {
-        params.carry_mode = parsed_mode;
+        contested_params.player.carry_mode = parsed_mode;
     }
     if let Some(botch_str) = req.botch_rule.as_deref()
         && let Ok(parsed_botch) = botch_str.parse::<satya_engine::BotchRule>()
     {
-        params.botch_rule = parsed_botch;
+        contested_params.player.botch_rule = parsed_botch;
     }
 
-    let (rolled_pairs, physics_seed): (Vec<(i32, i32)>, i64) = {
+    let (rolled_pairs, gm_pairs, physics_seed): (Vec<(i32, i32)>, Vec<(i32, i32)>, i64) = {
         let mut rng = rand::thread_rng();
         let pairs = (0..n_pairs)
             .map(|_| (rng.gen_range(1..=20), rng.gen_range(1..=20)))
             .collect();
+        let gm = vec![(rng.gen_range(1..=20), rng.gen_range(1..=20))];
         let seed: i64 = rng.r#gen::<i64>().abs();
-        (pairs, seed)
+        (pairs, gm, seed)
     };
 
     let Ok(meta) = state.storage.registry().build_metadata(
@@ -283,26 +310,60 @@ pub async fn gm_session_roll_handler(
             .into_response();
     };
 
-    let (mut mech_ev, outcome) = evaluate_satya_cascade_task(
-        meta,
-        actor.clone(),
-        target_participants,
-        req.skill_name.clone(),
-        &params,
-        &rolled_pairs,
-        req.combat_stance,
-        req.fatigue_level.max(0),
-        req.wound_shock_index,
-    );
+    let (mut mech_ev, base_note) = if is_uncontested {
+        let mut params = CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, tool_mod + ext_mod);
+        params.carry_mode = contested_params.player.carry_mode;
+        params.botch_rule = contested_params.player.botch_rule;
+        params.delta_over = contested_params.player.delta_over;
+        let (ev, outcome) = evaluate_satya_cascade_task(
+            meta,
+            actor.clone(),
+            target_participants,
+            req.skill_name.clone(),
+            &params,
+            &rolled_pairs,
+            req.combat_stance,
+            req.fatigue_level.max(0),
+            req.wound_shock_index,
+        );
+        let note = format!(
+            "cascade(mode={}, botch={}, tn_eff={}, signed_margin={:+}, {:?})",
+            params.carry_mode,
+            params.botch_rule,
+            params.tn_eff(),
+            outcome.signed_margin,
+            outcome.outcome_kind
+        );
+        (ev, note)
+    } else {
+        let (ev, outcome) = evaluate_satya_contested_cascade_task(
+            meta,
+            actor.clone(),
+            target_participants,
+            req.skill_name.clone(),
+            &contested_params,
+            &rolled_pairs,
+            &gm_pairs,
+            req.combat_stance,
+            req.fatigue_level.max(0),
+            req.wound_shock_index,
+        );
+        let note = format!(
+            "contested(kind={}, tn_p={}, tn_gm={}, s_p={}, s_gm={}, net_margin={:+}) | cascade(mode={}, botch={}, tn_eff={}, signed_margin={:+})",
+            outcome.contested_kind,
+            contested_params.player.tn_eff(),
+            contested_params.gm.tn_eff(),
+            outcome.player_outcome.total_successes,
+            outcome.gm_outcome.total_successes,
+            outcome.net_signed_margin,
+            contested_params.player.carry_mode,
+            contested_params.player.botch_rule,
+            contested_params.player.tn_eff(),
+            outcome.player_outcome.signed_margin
+        );
+        (ev, note)
+    };
     mech_ev.mechanic_type = MechanicEventType::AiGmDecision;
-    let base_note = format!(
-        "cascade(mode={}, botch={}, tn_eff={}, signed_margin={:+}, {:?})",
-        params.carry_mode,
-        params.botch_rule,
-        params.tn_eff(),
-        outcome.signed_margin,
-        outcome.outcome_kind
-    );
     mech_ev.notes = match req
         .notes
         .as_ref()
