@@ -1100,7 +1100,23 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                         onclick="window.satyaLoadRulesExample('sarah_lockpick')"
                                         on:click=move |_| wasm_client::satya_load_rules_example("sarah_lockpick".to_string())
                                     >
-                                        "Sarah's Lockpick (N=4, C=14, Δ_int=+1, Δ_ext=+4)"
+                                        "Sarah's Lockpick (N=3, C=12, Δ_tool=0, Δ_int=+2, Δ_ext=+4)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadRulesExample('marcus_surgery')"
+                                        on:click=move |_| wasm_client::satya_load_rules_example("marcus_surgery".to_string())
+                                    >
+                                        "Marcus's Trauma Surgery (N=4, C=14, Δ_tool=-2, Δ_int=-1, Δ_ext=+4)"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn-chip"
+                                        onclick="window.satyaLoadRulesExample('elena_hack')"
+                                        on:click=move |_| wasm_client::satya_load_rules_example("elena_hack".to_string())
+                                    >
+                                        "Elena's Intrusion Hack (N=3, C=15, Δ_tool=-2, Δ_ext=+2)"
                                     </button>
                                     <button
                                         type="button"
@@ -1527,6 +1543,18 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                 value="0"
                                 min="-2"
                                 max="10"
+                                onchange="window.satyaUpdateCascadePreview()"
+                                oninput="window.satyaUpdateCascadePreview()"
+                            />
+                        </label>
+                        <label>
+                            <span>"Tool Mod Δ_tool (-4 to +12)"</span>
+                            <input
+                                id="ttrpg-tool-mod"
+                                type="number"
+                                value="0"
+                                min="-4"
+                                max="12"
                                 onchange="window.satyaUpdateCascadePreview()"
                                 oninput="window.satyaUpdateCascadePreview()"
                             />
@@ -2019,6 +2047,18 @@ mod tests {
         assert!(readout.contains("P(BotchFail): 12.96%"));
         assert!(readout.contains("P(Succ+Botch): 1.13%"));
         assert!(readout.contains("E[Margin]: +1.27"));
+
+        let (c_pill, c_readout) = wasm_client::format_contested_cascade_odds_summary(
+            3,
+            12,
+            0,
+            4,
+            2,
+            "markov_step",
+            "closest_miss",
+        );
+        assert!(c_pill.contains("TN_P: 19 vs TN_GM: 17"));
+        assert!(c_readout.contains("Contested (TN_P = 19"));
 
         let (mech_ev, _) = satya_engine::evaluate_satya_cascade_task(
             chat_ev.metadata.clone(),

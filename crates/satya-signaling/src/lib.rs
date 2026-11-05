@@ -504,8 +504,12 @@ mod tests {
                             skill_name: "Suppressive Fire".to_string(),
                             attribute_tn: 13,
                             pool_size: 3,
+                            known_tool_mod: 0,
                             difficulty_rating: 2,
                             internal_mod: Some(1),
+                            delta_over: None,
+                            gm_resistance_mode: None,
+                            tie_rule: None,
                             carry_mode: Some("markov_step".to_string()),
                             botch_rule: None,
                             combat_stance: Some(CombatStance::RangedSnap),
@@ -1086,7 +1090,7 @@ mod tests {
         let rules_bytes = to_bytes(rules_res.into_body(), 128 * 1024).await.unwrap();
         let catalog: satya_schema::RulesBookCatalogResponse =
             serde_json::from_slice(&rules_bytes).unwrap();
-        assert_eq!(catalog.chapters.len(), 13);
+        assert_eq!(catalog.chapters.len(), 14);
         assert!(!catalog.search_hits.is_empty());
 
         let ch_res = app
