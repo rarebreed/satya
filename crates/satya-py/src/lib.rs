@@ -950,8 +950,7 @@ pub fn classify_contested_outcome(
     tie_rule: &str,
 ) -> PyResult<(String, i32)> {
     let tr = ContestedTieRule::from_str(tie_rule).map_err(to_py_err)?;
-    let (kind, net_margin) =
-        satya_engine::classify_contested_outcome(sp, bp, mp, sg, bg, mg, tr);
+    let (kind, net_margin) = satya_engine::classify_contested_outcome(sp, bp, mp, sg, bg, mg, tr);
     Ok((kind.as_str().to_string(), net_margin))
 }
 
@@ -1017,7 +1016,10 @@ pub fn compute_contested_cascade_odds<'py>(
         "prob_clean_or_extraordinary_win",
         odds.prob_clean_or_extraordinary_win,
     )?;
-    dict.set_item("prob_extraordinary_success", odds.prob_extraordinary_success)?;
+    dict.set_item(
+        "prob_extraordinary_success",
+        odds.prob_extraordinary_success,
+    )?;
     dict.set_item("prob_clean_success", odds.prob_clean_success)?;
     dict.set_item("prob_partial_success", odds.prob_partial_success)?;
     dict.set_item("prob_floor_breach_partial", odds.prob_floor_breach_partial)?;

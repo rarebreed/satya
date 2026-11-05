@@ -614,9 +614,74 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
     out: list[str] = ['<article class="satya-rules-article">']
     i = 0
 
+    def _render_latex(expr: str, display: bool) -> str:
+        inner = expr.strip().strip("$").strip()
+        if not inner:
+            return ""
+        text = html.escape(inner)
+        text = re.sub(
+            r"\\(?:text|mathrm|operatorname)\{([^{}]*)\}",
+            r'<span class="math-text">\1</span>',
+            text,
+        )
+        text = re.sub(
+            r"\\frac\{([^{}]*)\}\{([^{}]*)\}",
+            r'<span class="math-frac"><span class="math-num">\1</span><span class="math-den">\2</span></span>',
+            text,
+        )
+        for cmd, sym in [
+            (r"\Delta", "Δ"),
+            (r"\delta", "δ"),
+            (r"\gamma", "γ"),
+            (r"\kappa", "κ"),
+            (r"\mu", "μ"),
+            (r"\sigma", "σ"),
+            (r"\times", "×"),
+            (r"\cdot", "·"),
+            (r"\pm", "±"),
+            (r"\le", "≤"),
+            (r"\leq", "≤"),
+            (r"\ge", "≥"),
+            (r"\geq", "≥"),
+            (r"\ne", "≠"),
+            (r"\neq", "≠"),
+            (r"\approx", "≈"),
+            (r"\implies", "⇒"),
+            (r"\rightarrow", "→"),
+            (r"\to", "→"),
+            (r"\leftrightarrow", "↔"),
+            (r"\in", "∈"),
+            (r"\lfloor", "⌊"),
+            (r"\rfloor", "⌋"),
+            (r"\dots", "…"),
+            (r"\ldots", "…"),
+            (r"\quad", " "),
+            (r"\qquad", "  "),
+            (r"\left", ""),
+            (r"\right", ""),
+        ]:
+            text = text.replace(cmd, sym)
+        text = re.sub(r"_\{([^{}]*)\}", r"<sub>\1</sub>", text)
+        text = re.sub(r"_([A-Za-z0-9])", r"<sub>\1</sub>", text)
+        text = re.sub(r"\^\{([^{}]*)\}", r"<sup>\1</sup>", text)
+        text = re.sub(r"\^([A-Za-z0-9+-])", r"<sup>\1</sup>", text)
+        if display:
+            return f'<div class="rules-math-block" role="math">{text}</div>'
+        return f'<span class="rules-math-inline" role="math">{text}</span>'
+
     def _inline(text: str) -> str:
         esc = html.escape(text)
         esc = re.sub(r"`([^`]+)`", r'<code class="rules-inline-code">\1</code>', esc)
+        esc = re.sub(
+            r"\$\$([^$]+)\$\$",
+            lambda m: _render_latex(html.unescape(m.group(1)), True),
+            esc,
+        )
+        esc = re.sub(
+            r"\$([^\s$][^$]*?[^\s$]|[A-Za-z0-9])\$(?![0-9])",
+            lambda m: _render_latex(html.unescape(m.group(1)), False),
+            esc,
+        )
         esc = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", esc)
         esc = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", esc)
         esc = re.sub(
@@ -631,6 +696,18 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
         if not s:
             i += 1
             continue
+        if s.startswith("$$"):
+            math_buf = [s]
+            if not s.endswith("$$") or len(s) == 2:
+                i += 1
+                while i < len(lines):
+                    math_buf.append(lines[i].strip())
+                    if lines[i].strip().endswith("$$"):
+                        break
+                    i += 1
+            i += 1
+            out.append(_render_latex("\n".join(math_buf), True))
+            continue
         if s.startswith("```"):
             lang = s[3:].strip()
             i += 1
@@ -641,7 +718,24 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
             if i < len(lines):
                 i += 1
             if lang == "mermaid":
-                out.append(f'<pre class="mermaid">{html.escape(chr(10).join(buf))}</pre>')
+                nodes_html: list[str] = []
+                for m_line in buf:
+                    for m_match in re.finditer(r'([A-Za-z0-9_]+)\["([^"]+)"\]', m_line):
+                        lbl = m_match.group(2).replace("<br/>", "<br>")
+                        nodes_html.append(
+                            f'<div class="mermaid-node"><div class="mermaid-node-body">{lbl}</div></div>'
+                        )
+                if nodes_html:
+                    out.append(
+                        '<div class="mermaid rules-mermaid rules-mermaid-lr">'
+                        '<div class="mermaid-flow-track mermaid-flow-lr">'
+                        + '<div class="mermaid-connector" aria-hidden="true"><span class="mermaid-arrow-glyph">→</span></div>'.join(
+                            nodes_html
+                        )
+                        + "</div></div>"
+                    )
+                else:
+                    out.append(f'<div class="mermaid rules-mermaid">{html.escape(chr(10).join(buf))}</div>')
             else:
                 out.append(
                     f'<pre class="rules-code-block"><code class="language-{html.escape(lang)}">'
@@ -708,6 +802,9 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         "01-foundation/design_philosophy.md": "design_philosophy.html",
         "../01-foundation/design_philosophy.md": "design_philosophy.html",
         "design_philosophy.md": "design_philosophy.html",
+        "01-foundation/mathematical_notation_glossary.md": "notation_glossary.html",
+        "../01-foundation/mathematical_notation_glossary.md": "notation_glossary.html",
+        "mathematical_notation_glossary.md": "notation_glossary.html",
         "01-foundation/probability_and_calibration.md": "probability.html",
         "../01-foundation/probability_and_calibration.md": "probability.html",
         "probability_and_calibration.md": "probability.html",
@@ -1053,6 +1150,30 @@ def _wrap_book_page_html(
       margin: 14px 0;
     }}
     .rules-alert-title {{ font-weight: 700; color: var(--accent); margin-bottom: 4px; }}
+    .rules-math-inline {{ font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.98em; color: #f8fafc; background: rgba(56, 189, 248, 0.08); padding: 0 4px; border-radius: 3px; }}
+    .rules-math-block {{ background: #111827; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.96rem; color: #f8fafc; text-align: center; overflow-x: auto; }}
+    .math-roman, .math-fn {{ font-family: Inter, system-ui, sans-serif; font-style: normal; }}
+    .math-fn {{ font-weight: 600; color: #7dd3fc; }}
+    .math-frac {{ display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; line-height: 1.1; font-size: 0.88em; }}
+    .math-num {{ border-bottom: 1px solid currentColor; padding: 0 3px 1px; }}
+    .math-den {{ padding: 1px 3px 0; }}
+    .math-cases {{ display: inline-flex; align-items: center; vertical-align: middle; gap: 6px; }}
+    .math-brace {{ font-size: 1.65em; line-height: 1; }}
+    .math-cases-rows {{ display: inline-flex; flex-direction: column; gap: 2px; text-align: left; }}
+    .rules-mermaid {{ background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 14px 0; max-width: 100%; overflow-x: auto; display: flex; flex-direction: column; gap: 10px; }}
+    .mermaid-top-nodes {{ display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }}
+    .mermaid-flow-track {{ display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }}
+    .mermaid-dir-td > .mermaid-flow-track {{ flex-direction: column; }}
+    .mermaid-subgraphs-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; align-items: start; }}
+    .mermaid-subgraph {{ background: #111827; border: 1px solid var(--border); border-top: 2px solid var(--accent); border-radius: 7px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }}
+    .mermaid-subgraph-title {{ font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); padding-bottom: 4px; border-bottom: 1px dashed var(--border); }}
+    .mermaid-subgraph-nodes {{ display: flex; flex-direction: column; gap: 8px; }}
+    .mermaid-node {{ flex: 1 1 180px; background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 9px 11px; font-size: 0.82rem; line-height: 1.42; color: var(--text); display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }}
+    .mermaid-node-diamond {{ border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }}
+    .mermaid-connector {{ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px 4px; color: var(--accent); font-weight: 700; }}
+    .mermaid-node-links {{ display: flex; flex-wrap: wrap; gap: 4px; padding-top: 5px; border-top: 1px dashed rgba(148, 163, 184, 0.25); }}
+    .mermaid-link-pill {{ display: inline-flex; align-items: center; gap: 4px; background: #090d16; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; color: #94a3b8; }}
+    .mermaid-edge-label {{ color: var(--emerald); font-weight: 600; font-size: 0.72rem; }}
     .book-interactive-widget {{
       background: #111827;
       border: 1px solid #334155;

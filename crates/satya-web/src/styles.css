@@ -205,9 +205,10 @@ body {
     align-items: stretch;
 }
 
-.workspace-columns.ttrpg-collapsed {
+.workspace-columns.ttrpg-collapsed,
+.workspace-columns.chat-collapsed {
     --col-left-track: minmax(450px, 1.48fr);
-    --col-center-track: minmax(280px, 0.85fr);
+    --col-center-track: minmax(320px, 0.95fr);
 }
 
 .workspace-columns.center-collapsed {
@@ -272,7 +273,8 @@ body {
     .workspace-columns.webcam-undocked,
     .workspace-columns.webcam-collapsed,
     .workspace-columns.center-collapsed,
-    .workspace-columns.ttrpg-collapsed {
+    .workspace-columns.ttrpg-collapsed,
+    .workspace-columns.chat-collapsed {
         grid-template-columns: minmax(0, 1fr);
     }
 }
@@ -490,8 +492,8 @@ input:focus, select:focus {
 
 .right-drawer-rails {
     display: none;
-    flex-direction: column;
-    align-items: center;
+    flex-direction: row;
+    align-items: flex-start;
     gap: 8px;
     position: sticky;
     top: 12px;
@@ -1085,6 +1087,8 @@ table.metrics-table th {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    min-inline-size: 0;
+    max-inline-size: 100%;
 }
 
 .notebook-pane {
@@ -1093,6 +1097,8 @@ table.metrics-table th {
     flex-direction: column;
     gap: 8px;
     min-height: 0;
+    min-inline-size: 0;
+    max-inline-size: 100%;
 }
 
 .pane-toolbar {
@@ -1418,4 +1424,455 @@ table.metrics-table th {
     color: var(--text-primary);
     line-height: 1.45;
     overflow-wrap: anywhere;
+}
+
+/* ============================================================================
+ * Satya TTRPG Rules Book Tab (`#notebook-pane-rules` & `#rules-book-viewport`)
+ * ============================================================================ */
+
+.rules-book-viewport {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    flex: 1 1 0;
+    min-height: 440px;
+    max-height: 680px;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.satya-rules-article {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    font-size: 0.84rem;
+    line-height: 1.58;
+    color: var(--text-primary);
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.satya-rules-article h1,
+.satya-rules-article h2,
+.satya-rules-article h3,
+.satya-rules-article h4 {
+    color: #f8fafc;
+    line-height: 1.3;
+    text-wrap: balance;
+    overflow-wrap: break-word;
+    margin-top: 6px;
+}
+
+.satya-rules-article h1 {
+    font-size: 1.15rem;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+
+.satya-rules-article h2 {
+    font-size: 0.98rem;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(42, 53, 75, 0.7);
+}
+
+.satya-rules-article h3 {
+    font-size: 0.9rem;
+    color: #e2e8f0;
+}
+
+.satya-rules-article h4 {
+    font-size: 0.84rem;
+    color: var(--accent);
+}
+
+.satya-rules-article p,
+.satya-rules-article li {
+    text-wrap: pretty;
+    overflow-wrap: break-word;
+    min-inline-size: 0;
+}
+
+.satya-rules-article .rules-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 4px 0;
+}
+
+.satya-rules-article .rules-list {
+    padding-inline-start: 1.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+}
+
+.satya-rules-article .rules-sublist-item {
+    margin-top: 3px;
+    padding-inline-start: 0.75rem;
+    color: #cbd5e1;
+    font-size: 0.81rem;
+}
+
+.satya-rules-article .rules-link,
+.satya-rules-article a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    overflow-wrap: anywhere;
+}
+
+.satya-rules-article .rules-link:hover,
+.satya-rules-article a:hover {
+    color: #7dd3fc;
+}
+
+.satya-rules-article .rules-inline-code {
+    background: var(--bg-2);
+    color: #7dd3fc;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: monospace;
+    font-size: 0.85em;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.satya-rules-article .rules-code-block {
+    background: #070a10;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    max-inline-size: 100%;
+    overflow-x: auto;
+    overscroll-behavior: contain;
+}
+
+.satya-rules-article .rules-alert,
+.satya-rules-article .rules-blockquote {
+    background: rgba(28, 36, 51, 0.65);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+}
+
+.satya-rules-article .rules-alert-tip {
+    border-left-color: var(--emerald);
+}
+
+.satya-rules-article .rules-alert-important {
+    border-left-color: var(--purple);
+}
+
+.satya-rules-article .rules-alert-warning {
+    border-left-color: var(--amber);
+}
+
+.satya-rules-article .rules-alert-caution {
+    border-left-color: var(--rose);
+}
+
+.satya-rules-article .rules-alert-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+.satya-rules-article .rules-alert-tip .rules-alert-title {
+    color: #34d399;
+}
+
+.satya-rules-article .rules-alert-important .rules-alert-title {
+    color: #d8b4fe;
+}
+
+.satya-rules-article .rules-alert-warning .rules-alert-title {
+    color: var(--amber);
+}
+
+.satya-rules-article .rules-alert-caution .rules-alert-title {
+    color: var(--rose);
+}
+
+.satya-rules-article .rules-table-wrap {
+    max-inline-size: 100%;
+    overflow-x: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.satya-rules-article .rules-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+.satya-rules-article .rules-table th,
+.satya-rules-article .rules-table td {
+    padding: 6px 9px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid rgba(42, 53, 75, 0.5);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: break-word;
+}
+
+.satya-rules-article .rules-table th:last-child,
+.satya-rules-article .rules-table td:last-child {
+    border-right: none;
+}
+
+.satya-rules-article .rules-table th {
+    background: var(--bg-2);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+/* LaTeX Math Styling */
+.satya-rules-article .rules-math-inline {
+    font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', Georgia, serif;
+    font-size: 0.96em;
+    color: #f8fafc;
+    background: rgba(56, 189, 248, 0.08);
+    padding: 0 4px;
+    border-radius: 3px;
+    overflow-wrap: break-word;
+}
+
+.satya-rules-article .rules-math-block {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', Georgia, serif;
+    font-size: 0.92rem;
+    color: #f8fafc;
+    text-align: center;
+    max-inline-size: 100%;
+    overflow-x: auto;
+    overscroll-behavior: contain;
+}
+
+.satya-rules-article .math-roman,
+.satya-rules-article .math-fn {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-style: normal;
+}
+
+.satya-rules-article .math-fn {
+    font-weight: 600;
+    color: #7dd3fc;
+}
+
+.satya-rules-article .math-frac {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    vertical-align: middle;
+    margin: 0 3px;
+    line-height: 1.1;
+    font-size: 0.88em;
+}
+
+.satya-rules-article .math-num {
+    border-bottom: 1px solid currentColor;
+    padding: 0 3px 1px;
+}
+
+.satya-rules-article .math-den {
+    padding: 1px 3px 0;
+}
+
+.satya-rules-article .math-cases {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    gap: 6px;
+}
+
+.satya-rules-article .math-brace {
+    font-size: 1.65em;
+    line-height: 1;
+}
+
+.satya-rules-article .math-cases-rows {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.satya-rules-article .math-cases-row {
+    display: block;
+}
+
+/* Mermaid Flowchart Diagram Styling */
+.satya-rules-article .rules-mermaid {
+    background: #070a10;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    max-inline-size: 100%;
+    overflow-x: auto;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.satya-rules-article .mermaid-top-nodes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.satya-rules-article .mermaid-flow-track {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.satya-rules-article .mermaid-dir-td > .mermaid-flow-track {
+    flex-direction: column;
+}
+
+.satya-rules-article .mermaid-subgraphs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 10px;
+    align-items: start;
+}
+
+.satya-rules-article .mermaid-subgraph {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--accent);
+    border-radius: 7px;
+    padding: 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-inline-size: 0;
+}
+
+.satya-rules-article .mermaid-subgraph-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    padding-bottom: 4px;
+    border-bottom: 1px dashed var(--border);
+}
+
+.satya-rules-article .mermaid-subgraph-nodes {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.satya-rules-article .mermaid-node {
+    flex: 1 1 170px;
+    background: var(--bg-2);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.77rem;
+    line-height: 1.4;
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+    min-inline-size: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.satya-rules-article .mermaid-node-diamond {
+    border-color: var(--amber);
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.satya-rules-article .mermaid-node-body strong {
+    color: #f8fafc;
+}
+
+.satya-rules-article .mermaid-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 2px 4px;
+    color: var(--accent);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.satya-rules-article .mermaid-arrow-glyph {
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.satya-rules-article .mermaid-node-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-top: 5px;
+    border-top: 1px dashed rgba(139, 155, 180, 0.25);
+}
+
+.satya-rules-article .mermaid-link-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    color: #94a3b8;
+    max-inline-size: 100%;
+    overflow-wrap: break-word;
+}
+
+.satya-rules-article .mermaid-edge-label {
+    color: var(--emerald);
+    font-weight: 600;
+    font-size: 0.7rem;
+}
+
+.gm-doc-preview {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    line-clamp: 3;
+    overflow: clip;
 }

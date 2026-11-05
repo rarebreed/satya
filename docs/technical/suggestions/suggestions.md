@@ -1,5 +1,3 @@
-- the latex isn't rendering in the rules tab
-- the text is overflowing in the rules tab
 - rust crates based on rules
     - character sheet
     - combat tracker

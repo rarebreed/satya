@@ -347,7 +347,11 @@ mod tests {
         assert!(chapters.iter().any(|c| c.chapter_id == "notation_glossary"));
         assert!(chapters.iter().any(|c| c.chapter_id == "tasks"));
         assert!(chapters.iter().any(|c| c.chapter_id == "skills_and_trees"));
-        assert!(chapters.iter().any(|c| c.chapter_id == "lifepaths_and_economy"));
+        assert!(
+            chapters
+                .iter()
+                .any(|c| c.chapter_id == "lifepaths_and_economy")
+        );
         assert!(chapters.iter().any(|c| c.chapter_id == "psyche_and_social"));
         assert!(chapters.iter().any(|c| c.chapter_id == "tactical_triad"));
         assert!(chapters.iter().any(|c| c.chapter_id == "melee_combat"));
@@ -367,6 +371,52 @@ mod tests {
         let tasks_doc = get_rules_chapter("tasks").expect("tasks chapter exists");
         assert!(tasks_doc.markdown.contains("Sarah"));
         assert!(tasks_doc.rendered_html.contains("satya-rules-article"));
+        assert!(
+            tasks_doc.rendered_html.contains("rules-math-inline"),
+            "expected inline LaTeX math elements in rendered tasks chapter"
+        );
+        assert!(
+            tasks_doc.rendered_html.contains("rules-math-block"),
+            "expected display LaTeX math elements in rendered tasks chapter"
+        );
+        assert!(
+            tasks_doc.rendered_html.contains("rules-mermaid"),
+            "expected rendered Mermaid flowchart in tasks chapter"
+        );
+        assert!(
+            tasks_doc.rendered_html.contains("mermaid-node"),
+            "expected Mermaid flowchart nodes in tasks chapter"
+        );
+        assert!(
+            !tasks_doc.rendered_html.contains(r"\text{TN}_P"),
+            "expected raw LaTeX \\text{{TN}}_P to be rendered into HTML math"
+        );
+        assert!(
+            !tasks_doc.rendered_html.contains("S1[\""),
+            "expected raw Mermaid node syntax S1[\" to be parsed into flowchart cards"
+        );
+        for ch in &chapters {
+            let doc = get_rules_chapter(&ch.chapter_id).expect("chapter exists");
+            assert!(
+                !doc.rendered_html.contains("&amp;amp;"),
+                "chapter {} should not contain double-escaped &amp;amp;",
+                ch.chapter_id
+            );
+            assert!(
+                !doc.rendered_html.contains(r"\text{"),
+                "chapter {} should not leak raw \\text{{...}} LaTeX commands",
+                ch.chapter_id
+            );
+            assert!(
+                !doc.rendered_html.contains(r"\frac{"),
+                "chapter {} should not leak raw \\frac{{...}} LaTeX commands",
+                ch.chapter_id
+            );
+        }
+        // Verify currency strings in lifepaths_and_economy are preserved as literal $ amounts
+        let economy_doc =
+            get_rules_chapter("lifepaths_and_economy").expect("lifepaths_and_economy exists");
+        assert!(economy_doc.rendered_html.contains("$500"));
         // Verify backward-compatible legacy chapter ID aliases
         assert!(get_rules_chapter("satya_d20_rules").is_some());
         assert!(get_rules_chapter("combat").is_some());
@@ -448,10 +498,8 @@ mod tests {
         assert_close(odds.prob_lucky_break_partial * 100.0, 5.76, 0.05);
 
         // Live roll check: Grazing Tie (Player rolls 1 success, GM rolls 1 success)
-        let graze_roll = contested_std.evaluate_contested_pairs(
-            &[(12, 10), (5, 5), (5, 5)],
-            &[(12, 10)],
-        );
+        let graze_roll =
+            contested_std.evaluate_contested_pairs(&[(12, 10), (5, 5), (5, 5)], &[(12, 10)]);
         assert_eq!(
             graze_roll.contested_kind,
             ContestedOutcomeKind::GrazingTieSuccess
@@ -459,10 +507,8 @@ mod tests {
         assert_eq!(graze_roll.outcome_tier, OutcomeTier::PartialSuccess);
 
         // Live roll check: Lucky Break (Player rolls Clean Miss 0, GM botches with snake-eyes 2)
-        let lucky_roll = contested_std.evaluate_contested_pairs(
-            &[(10, 10), (12, 14), (10, 10)],
-            &[(1, 1)],
-        );
+        let lucky_roll =
+            contested_std.evaluate_contested_pairs(&[(10, 10), (12, 14), (10, 10)], &[(1, 1)]);
         assert_eq!(lucky_roll.player_outcome.total_successes, 0);
         assert_eq!(lucky_roll.player_outcome.signed_margin, 0);
         assert!(lucky_roll.gm_outcome.signed_margin < 0);
@@ -484,10 +530,8 @@ mod tests {
             1e-9,
         );
         // Live roll check: GM rolls 28 against TN_GM=21 (over by 7 -> 2 successes at 4-pt step!)
-        let tiered_roll = tiered_std.evaluate_contested_pairs(
-            &[(12, 10), (12, 10), (5, 5)],
-            &[(15, 13)],
-        );
+        let tiered_roll =
+            tiered_std.evaluate_contested_pairs(&[(12, 10), (12, 10), (5, 5)], &[(15, 13)]);
         assert_eq!(tiered_roll.player_outcome.total_successes, 2);
         assert_eq!(tiered_roll.gm_outcome.total_successes, 2);
         assert_eq!(

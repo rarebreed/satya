@@ -168,41 +168,116 @@ window.addEventListener('DOMContentLoaded', satyaBookRecalc);
 
 fn rewrite_chapter_links(rendered_html: &str) -> String {
     let mapping = [
-        ("01-foundation/design_philosophy.md", "design_philosophy.html"),
-        ("../01-foundation/design_philosophy.md", "design_philosophy.html"),
+        (
+            "01-foundation/design_philosophy.md",
+            "design_philosophy.html",
+        ),
+        (
+            "../01-foundation/design_philosophy.md",
+            "design_philosophy.html",
+        ),
         ("design_philosophy.md", "design_philosophy.html"),
-        ("01-foundation/probability_and_calibration.md", "probability.html"),
-        ("../01-foundation/probability_and_calibration.md", "probability.html"),
+        (
+            "01-foundation/mathematical_notation_glossary.md",
+            "notation_glossary.html",
+        ),
+        (
+            "../01-foundation/mathematical_notation_glossary.md",
+            "notation_glossary.html",
+        ),
+        (
+            "mathematical_notation_glossary.md",
+            "notation_glossary.html",
+        ),
+        (
+            "01-foundation/probability_and_calibration.md",
+            "probability.html",
+        ),
+        (
+            "../01-foundation/probability_and_calibration.md",
+            "probability.html",
+        ),
         ("probability_and_calibration.md", "probability.html"),
         ("02-core-mechanics/cascading_d20_and_tasks.md", "tasks.html"),
-        ("../02-core-mechanics/cascading_d20_and_tasks.md", "tasks.html"),
+        (
+            "../02-core-mechanics/cascading_d20_and_tasks.md",
+            "tasks.html",
+        ),
         ("cascading_d20_and_tasks.md", "tasks.html"),
-        ("02-core-mechanics/action_economy_and_ooda.md", "action_economy.html"),
-        ("../02-core-mechanics/action_economy_and_ooda.md", "action_economy.html"),
+        (
+            "02-core-mechanics/action_economy_and_ooda.md",
+            "action_economy.html",
+        ),
+        (
+            "../02-core-mechanics/action_economy_and_ooda.md",
+            "action_economy.html",
+        ),
         ("action_economy_and_ooda.md", "action_economy.html"),
-        ("03-character/characteristics_and_aptitudes.md", "characteristics.html"),
-        ("../03-character/characteristics_and_aptitudes.md", "characteristics.html"),
+        (
+            "03-character/characteristics_and_aptitudes.md",
+            "characteristics.html",
+        ),
+        (
+            "../03-character/characteristics_and_aptitudes.md",
+            "characteristics.html",
+        ),
         ("characteristics_and_aptitudes.md", "characteristics.html"),
         ("03-character/skills_and_trees.md", "skills_and_trees.html"),
-        ("../03-character/skills_and_trees.md", "skills_and_trees.html"),
+        (
+            "../03-character/skills_and_trees.md",
+            "skills_and_trees.html",
+        ),
         ("skills_and_trees.md", "skills_and_trees.html"),
-        ("03-character/lifepaths_and_economy.md", "lifepaths_and_economy.html"),
-        ("../03-character/lifepaths_and_economy.md", "lifepaths_and_economy.html"),
+        (
+            "03-character/lifepaths_and_economy.md",
+            "lifepaths_and_economy.html",
+        ),
+        (
+            "../03-character/lifepaths_and_economy.md",
+            "lifepaths_and_economy.html",
+        ),
         ("lifepaths_and_economy.md", "lifepaths_and_economy.html"),
-        ("04-psyche-and-social/psyche_morale_and_social_combat.md", "psyche_and_social.html"),
-        ("../04-psyche-and-social/psyche_morale_and_social_combat.md", "psyche_and_social.html"),
-        ("psyche_morale_and_social_combat.md", "psyche_and_social.html"),
-        ("05-combat/tactical_triad_and_pools.md", "tactical_triad.html"),
-        ("../05-combat/tactical_triad_and_pools.md", "tactical_triad.html"),
+        (
+            "04-psyche-and-social/psyche_morale_and_social_combat.md",
+            "psyche_and_social.html",
+        ),
+        (
+            "../04-psyche-and-social/psyche_morale_and_social_combat.md",
+            "psyche_and_social.html",
+        ),
+        (
+            "psyche_morale_and_social_combat.md",
+            "psyche_and_social.html",
+        ),
+        (
+            "05-combat/tactical_triad_and_pools.md",
+            "tactical_triad.html",
+        ),
+        (
+            "../05-combat/tactical_triad_and_pools.md",
+            "tactical_triad.html",
+        ),
         ("tactical_triad_and_pools.md", "tactical_triad.html"),
         ("05-combat/melee_combat.md", "melee_combat.html"),
         ("../05-combat/melee_combat.md", "melee_combat.html"),
         ("melee_combat.md", "melee_combat.html"),
-        ("05-combat/ranged_combat_and_armor.md", "ranged_combat_and_armor.html"),
-        ("../05-combat/ranged_combat_and_armor.md", "ranged_combat_and_armor.html"),
+        (
+            "05-combat/ranged_combat_and_armor.md",
+            "ranged_combat_and_armor.html",
+        ),
+        (
+            "../05-combat/ranged_combat_and_armor.md",
+            "ranged_combat_and_armor.html",
+        ),
         ("ranged_combat_and_armor.md", "ranged_combat_and_armor.html"),
-        ("06-health-and-survival/health_and_trauma.md", "health_and_trauma.html"),
-        ("../06-health-and-survival/health_and_trauma.md", "health_and_trauma.html"),
+        (
+            "06-health-and-survival/health_and_trauma.md",
+            "health_and_trauma.html",
+        ),
+        (
+            "../06-health-and-survival/health_and_trauma.md",
+            "health_and_trauma.html",
+        ),
         ("health_and_trauma.md", "health_and_trauma.html"),
         (
             "06-health-and-survival/movement_vehicles_and_environment.md",
@@ -343,6 +418,30 @@ fn wrap_book_page_html(
     .rules-table th {{ background: #1e293b; color: var(--accent); }}
     .rules-alert, .rules-blockquote {{ border-left: 4px solid var(--accent); background: rgba(30, 41, 59, 0.55); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }}
     .rules-alert-title {{ font-weight: 700; color: var(--accent); margin-bottom: 4px; }}
+    .rules-math-inline {{ font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.98em; color: #f8fafc; background: rgba(56, 189, 248, 0.08); padding: 0 4px; border-radius: 3px; }}
+    .rules-math-block {{ background: #111827; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.96rem; color: #f8fafc; text-align: center; overflow-x: auto; }}
+    .math-roman, .math-fn {{ font-family: Inter, system-ui, sans-serif; font-style: normal; }}
+    .math-fn {{ font-weight: 600; color: #7dd3fc; }}
+    .math-frac {{ display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; line-height: 1.1; font-size: 0.88em; }}
+    .math-num {{ border-bottom: 1px solid currentColor; padding: 0 3px 1px; }}
+    .math-den {{ padding: 1px 3px 0; }}
+    .math-cases {{ display: inline-flex; align-items: center; vertical-align: middle; gap: 6px; }}
+    .math-brace {{ font-size: 1.65em; line-height: 1; }}
+    .math-cases-rows {{ display: inline-flex; flex-direction: column; gap: 2px; text-align: left; }}
+    .rules-mermaid {{ background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 14px 0; max-width: 100%; overflow-x: auto; display: flex; flex-direction: column; gap: 10px; }}
+    .mermaid-top-nodes {{ display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }}
+    .mermaid-flow-track {{ display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }}
+    .mermaid-dir-td > .mermaid-flow-track {{ flex-direction: column; }}
+    .mermaid-subgraphs-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; align-items: start; }}
+    .mermaid-subgraph {{ background: #111827; border: 1px solid var(--border); border-top: 2px solid var(--accent); border-radius: 7px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }}
+    .mermaid-subgraph-title {{ font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); padding-bottom: 4px; border-bottom: 1px dashed var(--border); }}
+    .mermaid-subgraph-nodes {{ display: flex; flex-direction: column; gap: 8px; }}
+    .mermaid-node {{ flex: 1 1 180px; background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 9px 11px; font-size: 0.82rem; line-height: 1.42; color: var(--text); display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }}
+    .mermaid-node-diamond {{ border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }}
+    .mermaid-connector {{ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px 4px; color: var(--accent); font-weight: 700; }}
+    .mermaid-node-links {{ display: flex; flex-wrap: wrap; gap: 4px; padding-top: 5px; border-top: 1px dashed rgba(148, 163, 184, 0.25); }}
+    .mermaid-link-pill {{ display: inline-flex; align-items: center; gap: 4px; background: #090d16; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; color: #94a3b8; }}
+    .mermaid-edge-label {{ color: var(--emerald); font-weight: 600; font-size: 0.72rem; }}
     .book-interactive-widget {{ background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin: 24px 0; }}
     .widget-grid {{ display: grid; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }}
     .widget-panel {{ background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }}

@@ -156,7 +156,7 @@ Once $N_P$, $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$, $\delta_{\text{over
      - Set carry-over for Pair 2 to **$+\delta_{\text{over}}$ (`+6`)**.
    - If $Y_1 \le \text{TN}_P$:
      - Record **`0` Successes** on Pair 1.
-     - Set carry-over for Pair 2 to **$-\delta_{\text{under}}$ (`-(6 + \Delta_{\text{int}})` )**.
+     - Set carry-over for Pair 2 to **$-\delta_{\text{under}}$ ($-(6 + \Delta_{\text{int}})$)**.
 2. **Subsequent Pairs ($n = 2 \dots N_P$)**:
    - Compute the modified pair sum:
      $$Y_n = A_n + B_n + \text{Carry}_n$$

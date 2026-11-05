@@ -1633,7 +1633,12 @@ impl ContestedCascadeTaskParams {
         let p_out = self.player.evaluate_pairs(player_pairs);
         let g_out = match self.gm_mode {
             GmResistanceMode::TieredSinglePair { step_size } => {
-                evaluate_tiered_single_pair_gm_roll(gm_pairs, self.gm.sides, self.gm.tn_eff(), step_size)
+                evaluate_tiered_single_pair_gm_roll(
+                    gm_pairs,
+                    self.gm.sides,
+                    self.gm.tn_eff(),
+                    step_size,
+                )
             }
             GmResistanceMode::FullCascade => self.gm.evaluate_pairs(gm_pairs),
         };
@@ -1660,7 +1665,12 @@ impl ContestedCascadeTaskParams {
     /// Computes the exact combinatorial probability distribution ([`ContestedCascadeOdds`])
     /// for this contested task configuration.
     pub fn exact_contested_odds(&self) -> ContestedCascadeOdds {
-        compute_contested_cascade_odds_with_mode(&self.player, &self.gm, self.gm_mode, self.tie_rule)
+        compute_contested_cascade_odds_with_mode(
+            &self.player,
+            &self.gm,
+            self.gm_mode,
+            self.tie_rule,
+        )
     }
 }
 
@@ -1808,13 +1818,8 @@ fn cascade_joint_outcome_pmf(params: &CascadeTaskParams) -> HashMap<(i32, i32, i
         for (&(mod_n, succ_so_far, botch_so_far, min_miss_tier), &p_state) in &state_probs {
             for (&x, &p_roll) in &base_pmf {
                 let yn = x + mod_n;
-                let (sn, bn, mn) = evaluate_step_success_and_botch(
-                    yn,
-                    sides,
-                    characteristic_c,
-                    false,
-                    botch_rule,
-                );
+                let (sn, bn, mn) =
+                    evaluate_step_success_and_botch(yn, sides, characteristic_c, false, botch_rule);
                 let new_succ = succ_so_far + sn;
                 let new_botch = botch_so_far + bn;
                 let miss_tier = (mn / tier_step).min(5);

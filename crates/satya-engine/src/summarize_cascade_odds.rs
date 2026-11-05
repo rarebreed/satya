@@ -706,7 +706,8 @@ pub fn format_contested_calibration_report() -> String {
             d_ext,
             ContestedTieRule::HybridSignedMargin,
         );
-        gm_6pt_params.gm_mode = crate::dice_probabilities::GmResistanceMode::TieredSinglePair { step_size: 6 };
+        gm_6pt_params.gm_mode =
+            crate::dice_probabilities::GmResistanceMode::TieredSinglePair { step_size: 6 };
         let gm_6pt = gm_6pt_params.exact_contested_odds();
 
         let gm_4pt = ContestedCascadeTaskParams::new_tiered_environment(
@@ -738,11 +739,7 @@ pub fn format_contested_calibration_report() -> String {
     );
     lines.push(format!(
         "{:<26} | {:>12} | {:>14} | {:>14} | {:>14}",
-        "Hidden GM Config",
-        "P(GM>=1|S=1)",
-        "P(GM>1 |S=1)",
-        "P(GM>=2|S=2)",
-        "P(GM>=3|S=3)"
+        "Hidden GM Config", "P(GM>=1|S=1)", "P(GM>1 |S=1)", "P(GM>=2|S=2)", "P(GM>=3|S=3)"
     ));
     lines.push("-".repeat(92));
 

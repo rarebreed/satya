@@ -1051,18 +1051,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                             on:change=move |_| wasm_client::satya_select_rules_chapter(String::new())
                                         >
                                             <option value="design_philosophy">"1. Design Philosophy & Goals of Satya"</option>
-                                            <option value="probability">"2. Probability & Mathematical Calibration"</option>
-                                            <option value="tasks" selected>"3. Cascading 2d20 Engine & Task Resolution"</option>
-                                            <option value="action_economy">"4. Action Economy, OODA Loop, Time Scales & Stealth"</option>
-                                            <option value="characteristics">"5. Characteristics, Senses, Psyche & Aptitudes"</option>
-                                            <option value="skills_and_trees">"6. Skill System & Hierarchical Skill Trees"</option>
-                                            <option value="lifepaths_and_economy">"7. Lifepath Creation, Socioeconomic Upkeep & Heat"</option>
-                                            <option value="psyche_and_social">"8. Psyche, Morale & Social Combat"</option>
-                                            <option value="tactical_triad">"9. Combat Architecture, Tactical Triad & Pools"</option>
-                                            <option value="melee_combat">"10. Melee Combat & Close-Quarters Tactics"</option>
-                                            <option value="ranged_combat_and_armor">"11. Ranged Combat, Suppression, Armor & Reliability"</option>
-                                            <option value="health_and_trauma">"12. Health, Anatomical Trauma, Fatigue & Mental Conditions"</option>
-                                            <option value="movement_and_environment">"13. Movement, Encumbrance, Vehicles & Survival"</option>
+                                            <option value="notation_glossary">"2. Mathematical Notation, Variables & Formula Glossary"</option>
+                                            <option value="probability">"3. Probability & Mathematical Calibration"</option>
+                                            <option value="tasks" selected>"4. Cascading 2d20 Engine & Task Resolution"</option>
+                                            <option value="action_economy">"5. Action Economy, OODA Loop, Time Scales & Stealth"</option>
+                                            <option value="characteristics">"6. Characteristics, Senses, Psyche & Aptitudes"</option>
+                                            <option value="skills_and_trees">"7. Skill System & Hierarchical Skill Trees"</option>
+                                            <option value="lifepaths_and_economy">"8. Lifepath Creation, Socioeconomic Upkeep & Heat"</option>
+                                            <option value="psyche_and_social">"9. Psyche, Morale & Social Combat"</option>
+                                            <option value="tactical_triad">"10. Combat Architecture, Tactical Triad & Pools"</option>
+                                            <option value="melee_combat">"11. Melee Combat & Close-Quarters Tactics"</option>
+                                            <option value="ranged_combat_and_armor">"12. Ranged Combat, Suppression, Armor & Reliability"</option>
+                                            <option value="health_and_trauma">"13. Health, Anatomical Trauma, Fatigue & Mental Conditions"</option>
+                                            <option value="movement_and_environment">"14. Movement, Encumbrance, Vehicles & Survival"</option>
                                         </select>
                                     </label>
                                     <label class="inline-label" for="rules-search-input">
@@ -2199,9 +2200,17 @@ mod tests {
         assert!(html.contains(r#"id="tab-btn-rules""#));
         assert!(html.contains(r#"id="notebook-pane-rules""#));
         assert!(html.contains(r#"id="rules-chapter-select""#));
+        assert!(html.contains(r#"value="notation_glossary""#));
         assert!(html.contains(r#"id="rules-search-input""#));
         assert!(html.contains(r#"id="rules-book-viewport""#));
         assert!(html.contains("Cascading 2d20 Engine &amp; Task Resolution"));
+        assert!(html.contains(".rules-book-viewport"));
+        assert!(html.contains("rules-math-inline"));
+        assert!(html.contains("rules-math-block"));
+        assert!(html.contains("rules-mermaid"));
+        assert!(html.contains("mermaid-node"));
+        assert!(!html.contains(r"\text{TN}_P"));
+        assert!(!html.contains("&amp;amp;"));
 
         assert!(html.contains("btn-logout"));
         assert!(html.contains("btn-leave-session"));

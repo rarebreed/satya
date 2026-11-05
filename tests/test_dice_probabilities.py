@@ -374,7 +374,15 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
     assert summary["total_words"] > 10_000
     assert (tmp_path / "index.html").exists()
     assert (tmp_path / "design_philosophy.html").exists()
+    assert (tmp_path / "notation_glossary.html").exists()
     assert (tmp_path / "tasks.html").exists()
+    tasks_html = (tmp_path / "tasks.html").read_text(encoding="utf-8")
+    assert "rules-math-inline" in tasks_html
+    assert "rules-math-block" in tasks_html
+    assert "rules-mermaid" in tasks_html
+    assert "mermaid-node" in tasks_html
+    assert r"\text{TN}_P" not in tasks_html
+    assert "&amp;amp;" not in tasks_html
     assert (tmp_path / "skills_and_trees.html").exists()
     assert (tmp_path / "lifepaths_and_economy.html").exists()
     assert (tmp_path / "psyche_and_social.html").exists()
