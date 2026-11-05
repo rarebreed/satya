@@ -285,10 +285,11 @@ def test_rules_book_builder_and_tactical_pool_bridge() -> None:
         search_rules_book_python,
     )
 
-    assert len(BOOK_CHAPTER_SPECS) == 13
+    assert len(BOOK_CHAPTER_SPECS) == 14
     summary = build_static_rules_book()
-    assert summary["chapter_count"] == 13
-    assert len(summary["generated_files"]) == 15  # 13 chapters + index.html + catalog.json
+    assert summary["chapter_count"] == 14
+    assert summary["using_satya_py"] is True
+    assert len(summary["generated_files"]) == 16  # 14 chapters + index.html + catalog.json
 
     hits_melee = search_rules_book_python("Tactical Triad Tempo Control Force", max_results=3)
     assert hits_melee
@@ -368,7 +369,8 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
 
     # Build static HTML book into tmp_path and into docs/book
     summary = build_rules_book(output_dir=tmp_path)
-    assert summary["chapter_count"] == 13
+    assert summary["chapter_count"] == 14
+    assert summary["using_satya_py"] is True
     assert summary["total_words"] > 10_000
     assert (tmp_path / "index.html").exists()
     assert (tmp_path / "design_philosophy.html").exists()
@@ -393,6 +395,43 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
 
     health_res = query_satya_rules.invoke({"query": "hemorrhaging blood volume broken bones catatonia"})
     assert "health_and_trauma.md" in health_res or "Hemorrhaging" in health_res
+
+
+def test_satya_py_contested_cascade_and_plotly_builders() -> None:
+    """Verify that `satya_ml.dice_probabilities` delegates directly to the Rust `satya_py` PyO3 extension."""
+    from satya_ml.dice_probabilities import (
+        classify_contested_outcome,
+        compute_contested_cascade_odds,
+        plot_clt_sum_pools,
+        plot_signed_margin_spectrum,
+        using_satya_py_backend,
+    )
+
+    assert using_satya_py_backend() is True
+    assert sum_dice_pool_pmf.__module__ == "satya_py"
+
+    kind, net_m = classify_contested_outcome(2, 0, 2, 2, 0, 2, "hybrid_signed_margin")
+    assert kind == "GRAZING_TIE_SUCCESS"
+    assert net_m == 0
+
+    tiered = compute_contested_cascade_odds(
+        player_skill_n=3,
+        player_control_c=10,
+        hidden_external_difficulty=0,
+        gm_mode="tiered_single_pair",
+        gm_over_tier_step=4,
+    )
+    assert math.isclose(
+        tiered["prob_total_win"] + tiered["prob_clean_failure"] + tiered["prob_botch_failure"],
+        1.0,
+        abs_tol=1e-9,
+    )
+
+    fig_clt = plot_clt_sum_pools()
+    assert len(fig_clt.data) == 8
+    fig_spec = plot_signed_margin_spectrum()
+    assert len(fig_spec.data) == 6
+
 
 
 

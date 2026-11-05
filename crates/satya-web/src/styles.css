@@ -212,7 +212,7 @@ body {
 
 .workspace-columns.center-collapsed {
     --col-left-track: minmax(480px, 1.8fr);
-    --col-center-track: auto;
+    grid-template-columns: var(--col-left-track) var(--col-right-track);
 }
 
 .workspace-columns.webcam-collapsed {
@@ -224,6 +224,10 @@ body {
     grid-template-columns: var(--col-left-track) var(--col-center-track);
 }
 
+.workspace-columns.center-collapsed.webcam-undocked {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .workspace-columns.webcam-undocked .col-webcams {
     width: 0;
     min-width: 0;
@@ -231,11 +235,14 @@ body {
     overflow: visible;
 }
 
-.col-webcams.is-collapsed,
-.col-center.is-collapsed {
+.col-webcams.is-collapsed {
     width: auto;
     min-width: 0;
-    align-items: flex-end;
+    justify-content: flex-end;
+}
+
+.col-center.is-collapsed {
+    display: none;
 }
 
 .col-notebook,
@@ -247,6 +254,17 @@ body {
     flex-direction: column;
     gap: 10px;
     min-width: 0;
+}
+
+.col-webcams {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.col-webcams > .webrtc-card {
+    flex: 1 1 auto;
+    min-inline-size: 0;
 }
 
 @media (max-width: 1240px) {
@@ -470,30 +488,20 @@ input:focus, select:focus {
     color: var(--accent);
 }
 
+.right-drawer-rails {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    position: sticky;
+    top: 12px;
+    flex-shrink: 0;
+}
+
 .webcam-drawer-rail {
     display: none;
     flex-direction: column;
     align-items: center;
-    position: sticky;
-    top: 12px;
-}
-
-.col-center:not(.is-collapsed) .center-drawer-rail {
-    position: static;
-    align-items: stretch;
-}
-
-.col-center:not(.is-collapsed) .center-drawer-rail .btn-webcam-drawer-tab {
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 8px;
-    width: 100%;
-    padding: 7px 10px;
-    border-radius: 8px;
-}
-
-.col-center:not(.is-collapsed) .center-drawer-rail .drawer-tab-label {
-    writing-mode: horizontal-tb;
 }
 
 .btn-webcam-drawer-tab {

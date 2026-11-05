@@ -33,46 +33,165 @@
       height: 100vh;
       overflow-y: auto;
     }
-    .book-brand { font-size: 1.15rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
-    .book-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }
-    .book-nav-part { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
-    .book-nav-link { display: block; padding: 7px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.88rem; margin-bottom: 3px; }
+    .book-brand {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .book-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .book-nav-part {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 14px 0 6px;
+      font-weight: 600;
+    }
+    .book-nav-link {
+      display: block;
+      padding: 7px 10px;
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.88rem;
+      margin-bottom: 3px;
+    }
     .book-nav-link:hover { background: rgba(56, 189, 248, 0.12); }
-    .book-nav-link.active { background: rgba(56, 189, 248, 0.2); color: var(--accent); font-weight: 600; }
-    main.book-main { max-width: 980px; padding: 32px 44px 64px; line-height: 1.65; }
+    .book-nav-link.active {
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    main.book-main {
+      max-width: 980px;
+      padding: 32px 44px 64px;
+      line-height: 1.65;
+    }
     h1, h2, h3, h4 { color: #f8fafc; }
     h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
     h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
     a { color: var(--accent); }
     code, pre { font-family: "JetBrains Mono", Consolas, monospace; }
-    .rules-inline-code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }
-    .rules-code-block { background: #0f172a; border: 1px solid var(--border); padding: 14px; border-radius: 8px; overflow-x: auto; }
+    .rules-inline-code {
+      background: #1e293b;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+    }
+    .rules-code-block {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      padding: 14px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
     .rules-table-wrap { overflow-x: auto; margin: 14px 0; }
-    .rules-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    .rules-table th, .rules-table td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+    .rules-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .rules-table th, .rules-table td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+    }
     .rules-table th { background: #1e293b; color: var(--accent); }
-    .rules-alert, .rules-blockquote { border-left: 4px solid var(--accent); background: rgba(30, 41, 59, 0.55); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+    .rules-alert, .rules-blockquote {
+      border-left: 4px solid var(--accent);
+      background: rgba(30, 41, 59, 0.55);
+      padding: 10px 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 14px 0;
+    }
     .rules-alert-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
-    .book-interactive-widget { background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin: 24px 0; }
-    .widget-grid { display: grid; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .widget-panel { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
-    .widget-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-    .widget-controls label, label.full-width { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 4px; }
-    .widget-controls input, label.full-width input { background: #1e293b; border: 1px solid #334155; color: var(--text); padding: 6px 8px; border-radius: 4px; }
-    .widget-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-    .widget-presets button { background: #1e293b; border: 1px solid #38bdf8; color: var(--accent); padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
-    .book-pager { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
-    .book-pager-btn { background: var(--panel); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; }
+    .book-interactive-widget {
+      background: #111827;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+    .widget-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .widget-panel {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .widget-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .widget-controls label, label.full-width {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.8rem;
+      color: var(--muted);
+      gap: 4px;
+    }
+    .widget-controls input, label.full-width input {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 4px;
+    }
+    .widget-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+    .widget-presets button {
+      background: #1e293b;
+      border: 1px solid #38bdf8;
+      color: var(--accent);
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .book-pager {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .book-pager-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+    @media (max-width: 900px) {
+      body { grid-template-columns: 1fr; }
+      aside.book-sidebar { position: static; height: auto; }
+      .widget-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <aside class="book-sidebar">
     <div class="book-brand">SATYA // RULES BOOK</div>
     <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
-    <a href="index.html" class="book-nav-link">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Foundation &amp; Mathematical Calibration</div><a href="design_philosophy.html" class="book-nav-link">1. An RPG for a More Civilized Age: Design Philosophy</a><a href="probability.html" class="book-nav-link">2. Probability &amp; Calibration of the Cascading Dice Mechanic</a><div class="book-nav-part">Part II: Core Mechanics, Task Resolution &amp; Action Economy</div><a href="tasks.html" class="book-nav-link">3. Cascading 2d20 Engine &amp; Task Resolution</a><a href="action_economy.html" class="book-nav-link">4. Action Economy, OODA Loop, Time Scales &amp; Stealth</a><div class="book-nav-part">Part III: Character Architecture, Skills, Lifepaths &amp; Economy</div><a href="characteristics.html" class="book-nav-link">5. Characteristics, Senses, Psyche &amp; Aptitudes</a><a href="skills_and_trees.html" class="book-nav-link">6. Skill System &amp; Hierarchical Skill Trees</a><a href="lifepaths_and_economy.html" class="book-nav-link active">7. Lifepath Character Creation, Socioeconomic Upkeep &amp; Heat</a><div class="book-nav-part">Part IV: Psyche, Morale &amp; Social Combat</div><a href="psyche_and_social.html" class="book-nav-link">8. Psyche, Morale &amp; Social Combat</a><div class="book-nav-part">Part V: Combat Architecture, Close Quarters &amp; Firefights</div><a href="tactical_triad.html" class="book-nav-link">9. Combat Architecture, Tactical Triad &amp; Pools</a><a href="melee_combat.html" class="book-nav-link">10. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a><a href="ranged_combat_and_armor.html" class="book-nav-link">11. Ranged Combat, Suppression, Armor &amp; Weapon Reliability</a><div class="book-nav-part">Part VI: Health, Trauma, Movement, Vehicles &amp; Survival</div><a href="health_and_trauma.html" class="book-nav-link">12. Health, Anatomical Trauma, Fatigue &amp; Mental Conditions</a><a href="movement_and_environment.html" class="book-nav-link">13. Movement, Encumbrance, Vehicles &amp; Environmental Survival</a>
+    <a href="index.html" class="book-nav-link ">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Foundation &amp; Mathematical Calibration</div><a href="design_philosophy.html" class="book-nav-link">1. An RPG for a More Civilized Age: Design Philosophy</a><a href="notation_glossary.html" class="book-nav-link">2. Mathematical Notation, Variables &amp; Formula Glossary</a><a href="probability.html" class="book-nav-link">3. Probability &amp; Calibration of the Cascading Dice Mechanic</a><div class="book-nav-part">Part II: Core Mechanics, Task Resolution &amp; Action Economy</div><a href="tasks.html" class="book-nav-link">4. Cascading 2d20 Engine &amp; Task Resolution</a><a href="action_economy.html" class="book-nav-link">5. Action Economy, OODA Loop, Time Scales &amp; Stealth</a><div class="book-nav-part">Part III: Character Architecture, Skills, Lifepaths &amp; Economy</div><a href="characteristics.html" class="book-nav-link">6. Characteristics, Senses, Psyche &amp; Aptitudes</a><a href="skills_and_trees.html" class="book-nav-link">7. Skill System &amp; Hierarchical Skill Trees</a><a href="lifepaths_and_economy.html" class="book-nav-link active">8. Lifepath Character Creation, Socioeconomic Upkeep &amp; Heat</a><div class="book-nav-part">Part IV: Psyche, Morale &amp; Social Combat</div><a href="psyche_and_social.html" class="book-nav-link">9. Psyche, Morale &amp; Social Combat</a><div class="book-nav-part">Part V: Combat Architecture, Close Quarters &amp; Firefights</div><a href="tactical_triad.html" class="book-nav-link">10. Combat Architecture, Tactical Triad &amp; Pools</a><a href="melee_combat.html" class="book-nav-link">11. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a><a href="ranged_combat_and_armor.html" class="book-nav-link">12. Ranged Combat, Suppression, Armor &amp; Weapon Reliability</a><div class="book-nav-part">Part VI: Health, Trauma, Movement, Vehicles &amp; Survival</div><a href="health_and_trauma.html" class="book-nav-link">13. Health, Anatomical Trauma, Fatigue &amp; Mental Conditions</a><a href="movement_and_environment.html" class="book-nav-link">14. Movement, Encumbrance, Vehicles &amp; Environmental Survival</a>
   </aside>
   <main class="book-main">
-    <article class="satya-rules-article"><h1 id="lifepath-character-creation-socioeconomic-upkeep-sqm-access-gates-heat">Lifepath Character Creation, Socioeconomic Upkeep (<code class="rules-inline-code">SQM</code>), <code class="rules-inline-code">[Access]</code> Gates &amp; <code class="rules-inline-code">Heat</code></h1><p>In <strong>Satya</strong>, characters are not assembled from an unconstrained point-buy shopping cart where an academic researcher can arbitrarily purchase *Heavy Machine Guns* or a street teen can buy *Aerospace Engineering* without knowing *Algebra*. Instead, characters are created chronologically through <strong>Lifepath Stages</strong>, and their ongoing campaign operations are grounded by their <strong>Socioeconomic Tier (<code class="rules-inline-code">SQM</code>)</strong>, <strong>Black-Market <code class="rules-inline-code">[Access]</code> Procurement Gates</strong>, and <strong>Operational <code class="rules-inline-code">Heat</code></strong>.</p><p>This chapter builds directly on <a class="rules-link" href="characteristics.html">Character Characteristics &amp; Aptitudes</a> and the skill prerequisites in <a class="rules-link" href="skills_and_trees.html">Skill System &amp; The 8 Hierarchical Skill Trees</a>.</p><hr class="rules-divider"/><h2 id="1-chronological-lifepath-architecture">1. Chronological Lifepath Architecture</h2><p>At every lifepath stage, the character&#39;s <strong>Socioeconomic Class</strong>, <strong>School Quality (<code class="rules-inline-code">SQM</code>)</strong>, <strong>Discipline (<code class="rules-inline-code">DIS</code>)</strong>, <strong>Mental Primary Characteristics (<code class="rules-inline-code">ANA</code>, <code class="rules-inline-code">MEM</code>, <code class="rules-inline-code">INS</code>, <code class="rules-inline-code">CRE</code>, <code class="rules-inline-code">FOC</code>)</strong>, <strong>Aptitudes (<code class="rules-inline-code">APT</code>)</strong>, and <strong>Life Events</strong> determine which skill trees open and how high those skills advance:</p><pre class="mermaid rules-mermaid">flowchart LR
+    <article class="satya-rules-article"><h1 id="lifepath-character-creation-socioeconomic-upkeep-sqm-access-gates-heat">Lifepath Character Creation, Socioeconomic Upkeep (<code class="rules-inline-code">SQM</code>), <code class="rules-inline-code">[Access]</code> Gates &amp; <code class="rules-inline-code">Heat</code></h1><p>In <strong>Satya</strong>, characters are not assembled from an unconstrained point-buy shopping cart where an academic researcher can arbitrarily purchase *Heavy Machine Guns* or a street teen can buy *Aerospace Engineering* without knowing *Algebra*. Instead, characters are created chronologically through <strong>Lifepath Stages</strong>, and their ongoing campaign operations are grounded by their <strong>Socioeconomic Tier (<code class="rules-inline-code">SQM</code>)</strong>, <strong>Black-Market <code class="rules-inline-code">[Access]</code> Procurement Gates</strong>, and <strong>Operational <code class="rules-inline-code">Heat</code></strong>.</p><p>This chapter builds directly on <a class="rules-link" href="characteristics.html">Character Characteristics &amp; Aptitudes</a>, the skill prerequisites in <a class="rules-link" href="skills_and_trees.html">Skill System &amp; The 8 Hierarchical Skill Trees</a>, and the <a class="rules-link" href="../01-foundation/mathematical_notation_glossary.md">Mathematical Notation, Variables &amp; Formula Glossary</a>.</p><hr class="rules-divider"/><h2 id="1-chronological-lifepath-architecture">1. Chronological Lifepath Architecture</h2><p>At every lifepath stage, the character&#39;s <strong>Socioeconomic Class</strong>, <strong>School Quality (<code class="rules-inline-code">SQM</code>)</strong>, <strong>Discipline (<code class="rules-inline-code">DIS</code>)</strong>, <strong>Mental Primary Characteristics (<code class="rules-inline-code">ANA</code>, <code class="rules-inline-code">MEM</code>, <code class="rules-inline-code">INS</code>, <code class="rules-inline-code">CRE</code>, <code class="rules-inline-code">FOC</code>)</strong>, <strong>Aptitudes (<code class="rules-inline-code">APT</code>)</strong>, and <strong>Life Events</strong> determine which skill trees open and how high those skills advance:</p><pre class="mermaid rules-mermaid">flowchart LR
     S1[&quot;&lt;b&gt;Stage 1: Origin (Ages 0–5)&lt;/b&gt;&lt;br/&gt;Socioeconomic Class &amp; SQM&lt;br/&gt;Characteristics &amp; Aptitudes&lt;br/&gt;Baseline Talents (N=1)&quot;]
     S2[&quot;&lt;b&gt;Stage 2: Elementary (Ages 6–11)&lt;/b&gt;&lt;br/&gt;School Quality Tier (SQM)&lt;br/&gt;Reading, Writing, Arithmetic&lt;br/&gt;Childhood Talents&quot;]
     S3[&quot;&lt;b&gt;Stage 3: Junior High (Ages 12–14)&lt;/b&gt;&lt;br/&gt;DIS + Mental + APT Rolls&lt;br/&gt;Algebra/Trig Gate Check&lt;br/&gt;Adolescent Life Event Roll&quot;]

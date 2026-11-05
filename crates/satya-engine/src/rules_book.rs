@@ -1124,3 +1124,279 @@ pub fn evaluate_tactical_triad(
         archetype_label,
     }
 }
+
+// ============================================================================
+// Interactive Rules Book Simulator Helpers (Tactical Pool, Triad, Lifepath, Social)
+// ============================================================================
+
+/// Summary of the Combat Tactical Pool ("Envelope & Fill") interactive lab calculation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TacticalPoolEnvelopeSummary {
+    /// Maximum capacity of the tactical envelope (`E_base`).
+    pub base_envelope: i32,
+    /// Uncapped tactical pool generated from cascade successes, skill, and reach (`P_raw`).
+    pub raw_pool: i32,
+    /// Effective pool available after clamping to `base_envelope` (`P_eff`).
+    pub effective_pool: i32,
+    /// Excess points above `base_envelope` lost to envelope overflow.
+    pub overflow_wasted: i32,
+    /// Net weapon reach modifier (`-2..=+3`).
+    pub reach_modifier: i32,
+    /// Maximum Tempo allocation cap from [`TacticalPoolEnvelope`].
+    pub max_tempo: i32,
+    /// Maximum Control allocation cap from [`TacticalPoolEnvelope`].
+    pub max_control: i32,
+    /// Maximum Force allocation cap from [`TacticalPoolEnvelope`].
+    pub max_force: i32,
+}
+
+/// Computes the Satya Combat Tactical Pool ("Envelope & Fill") interactive lab summary.
+pub fn compute_tactical_pool_envelope(
+    control_c: i32,
+    skill_level: i32,
+    delta_int: i32,
+    delta_ext: i32,
+    num_successes: i32,
+    weapon_reach: i32,
+    opponent_reach: i32,
+) -> TacticalPoolEnvelopeSummary {
+    let c_clamped = control_c.clamp(1, 20);
+    let n_clamped = skill_level.clamp(0, 10);
+    let s_clamped = num_successes.max(0);
+
+    let env = compute_tactical_pool(&TacticalPoolParams {
+        skill_c: c_clamped,
+        skill_n: n_clamped as usize,
+        fatigue_level: (-delta_int).max(0),
+        ..Default::default()
+    });
+
+    let base_envelope = (((c_clamped + 2 * n_clamped).div_euclid(3))
+        + delta_int
+        - delta_ext.div_euclid(2).max(0))
+    .max(1);
+    let reach_delta = weapon_reach - opponent_reach;
+    let reach_modifier = reach_delta.clamp(-2, 3);
+    let raw_pool = (s_clamped * 3 + n_clamped.div_euclid(2).max(0) + reach_modifier).max(0);
+    let effective_pool = raw_pool.min(base_envelope);
+    let overflow_wasted = (raw_pool - base_envelope).max(0);
+
+    TacticalPoolEnvelopeSummary {
+        base_envelope,
+        raw_pool,
+        effective_pool,
+        overflow_wasted,
+        reach_modifier,
+        max_tempo: env.tempo_cap,
+        max_control: env.control_cap,
+        max_force: env.force_cap,
+    }
+}
+
+/// Outcome of a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) contested exchange.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TacticalTriadContestOutcome {
+    /// Net Tempo differential (`attacker_tempo - defender_tempo`).
+    pub net_tempo: i32,
+    /// Net Control differential (`attacker_control - defender_control`).
+    pub net_control: i32,
+    /// Whether the attacker seizes the initiative (`net_tempo >= 2 && net_control >= 0`).
+    pub seizes_initiative: bool,
+    /// Whether the defender's guard is broken.
+    pub guard_broken: bool,
+    /// Whether a Kuzushi throw/sweep is triggered against `attacker_root`.
+    pub throw_triggered: bool,
+    /// Net penetrating force after armor DR and guard mitigation.
+    pub penetrating_force: i32,
+    /// Count-Up tick cost of the attacker's next exchange.
+    pub next_tick_cost: i32,
+    /// Canonical Tactical Archetype classification of the attacker's triad.
+    pub archetype_label: String,
+    /// Human-readable summary of the exchange outcome.
+    pub outcome_summary: String,
+}
+
+/// Evaluates a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) exchange from Chapter 8.
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_tactical_triad_contest(
+    attacker_tempo: i32,
+    attacker_control: i32,
+    attacker_force: i32,
+    defender_tempo: i32,
+    defender_control: i32,
+    defender_force: i32,
+    attacker_root: i32,
+    defender_guard: i32,
+    armor_dr: i32,
+) -> TacticalTriadContestOutcome {
+    let env = compute_tactical_pool(&TacticalPoolParams {
+        skill_c: 14,
+        skill_n: 5,
+        ..Default::default()
+    });
+    let eval_res =
+        evaluate_tactical_triad(&env, 10, attacker_tempo, attacker_control, attacker_force);
+
+    let atk_t = attacker_tempo.max(0);
+    let atk_c = attacker_control.max(0);
+    let atk_f = attacker_force.max(0);
+    let def_t = defender_tempo.max(0);
+    let def_c = defender_control.max(0);
+    let def_f = defender_force.max(0);
+
+    let net_tempo = atk_t - def_t;
+    let net_control = atk_c - def_c;
+    let seizes_initiative = net_tempo >= 2 && net_control >= 0;
+    let guard_broken = (atk_c + (atk_f / 2).max(0)) > (def_c + defender_guard.max(0));
+    let unbalance = ((atk_c + atk_f) - (def_c + def_f)).max(0);
+    let throw_triggered = unbalance >= (attacker_root / 3).max(1);
+    let raw_impact = atk_f + if guard_broken { net_control.max(0) } else { 0 };
+    let penetrating_force =
+        (raw_impact - armor_dr.max(0) - if guard_broken { 0 } else { def_c }).max(0);
+    let next_tick_cost = (10 - atk_t.min(5) + (def_c / 2).max(0)).max(3);
+
+    let outcome_summary = if throw_triggered && penetrating_force >= 3 {
+        "Decisive Takedown & Armor Breach (Prone + Shock)".to_string()
+    } else if throw_triggered {
+        "Kuzushi Throw / Sweep (Target Off-Balance / Prone)".to_string()
+    } else if guard_broken && penetrating_force > 0 {
+        "Guard Broken & Penetrating Strike".to_string()
+    } else if seizes_initiative {
+        "Initiative Seized (Tempo Advantage on Next Exchange)".to_string()
+    } else if penetrating_force > 0 {
+        "Glancing Penetrating Blow".to_string()
+    } else {
+        "Deflected on Guard / Bind Equilibrium".to_string()
+    };
+
+    TacticalTriadContestOutcome {
+        net_tempo,
+        net_control,
+        seizes_initiative,
+        guard_broken,
+        throw_triggered,
+        penetrating_force,
+        next_tick_cost,
+        archetype_label: eval_res.archetype_label,
+        outcome_summary,
+    }
+}
+
+/// Summary of Lifepath exponential skill progression (`N in 0..=10`) from study hours.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LifepathSkillProgression {
+    /// Unmodified study hours invested.
+    pub raw_hours: f64,
+    /// Effective hours after instruction quality and aptitude multipliers.
+    pub effective_hours: f64,
+    /// Achieved skill rank $N \in [0, 10]$.
+    pub skill_level_n: i32,
+    /// Next skill rank target $\min(10, N + 1)$.
+    pub next_level_n: i32,
+    /// Remaining effective hours needed to reach `next_level_n`.
+    pub hours_to_next_level: f64,
+    /// Cumulative effective hour thresholds for each rank `1..=10`.
+    pub cumulative_thresholds: std::collections::BTreeMap<i32, f64>,
+}
+
+fn round_1_dec(val: f64) -> f64 {
+    (val * 10.0).round() / 10.0
+}
+
+/// Computes non-linear skill level $N \in [0, 10]$ from study hours using Chapter 6's exponential curve.
+///
+/// Each rank $N \ge 1$ requires $100 \times 2^{N - 1} \times \text{difficulty\_multiplier}$ effective hours.
+pub fn compute_lifepath_skill_progression(
+    hours_studied: f64,
+    difficulty_multiplier: f64,
+    instruction_quality: f64,
+    aptitude_bonus: i32,
+) -> LifepathSkillProgression {
+    let eff_hours = hours_studied.max(0.0)
+        * instruction_quality.max(0.25)
+        * (1.0 + 0.08 * (aptitude_bonus as f64));
+    let diff = difficulty_multiplier.max(0.5);
+    let mut cumulative_thresholds = std::collections::BTreeMap::new();
+    let mut cumulative = 0.0;
+    let mut achieved_level = 0;
+
+    for lvl in 1..=10 {
+        let step_req = 100.0 * (2.0_f64.powi(lvl - 1)) * diff;
+        cumulative += step_req;
+        let rounded_cum = round_1_dec(cumulative);
+        cumulative_thresholds.insert(lvl, rounded_cum);
+        if eff_hours >= cumulative {
+            achieved_level = lvl;
+        }
+    }
+
+    let next_level = (achieved_level + 1).min(10);
+    let next_threshold = if achieved_level < 10 {
+        cumulative_thresholds
+            .get(&next_level)
+            .copied()
+            .unwrap_or(0.0)
+    } else {
+        cumulative_thresholds.get(&10).copied().unwrap_or(0.0)
+    };
+    let hours_to_next = round_1_dec((next_threshold - eff_hours).max(0.0));
+
+    LifepathSkillProgression {
+        raw_hours: round_1_dec(hours_studied),
+        effective_hours: round_1_dec(eff_hours),
+        skill_level_n: achieved_level,
+        next_level_n: next_level,
+        hours_to_next_level: hours_to_next,
+        cumulative_thresholds,
+    }
+}
+
+/// Outcome of a Social Combat / Cognitive Dissonance check from Chapter 9.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SocialDissonanceOutcome {
+    /// Total cognitive dissonance pressure generated by argument margin, evidence, and audience.
+    pub dissonance_pressure: i32,
+    /// Target's psychological resistance threshold derived from core conviction.
+    pub resistance_threshold: i32,
+    /// Net shift (`dissonance_pressure - resistance_threshold`).
+    pub net_dissonance_shift: i32,
+    /// Canonical narrative social outcome tier.
+    pub social_outcome: String,
+}
+
+/// Computes Cognitive Dissonance pressure and belief-shift outcome from Chapter 9 (`psyche_morale_and_social_combat.md`).
+pub fn compute_social_dissonance_check(
+    argument_margin: i32,
+    target_conviction: i32,
+    evidence_tier: i32,
+    shared_values_bonus: i32,
+    public_audience_pressure: i32,
+) -> SocialDissonanceOutcome {
+    let conviction = target_conviction.clamp(1, 20);
+    let evidence = evidence_tier.clamp(0, 5);
+    let shared = shared_values_bonus.clamp(-3, 5);
+    let audience = public_audience_pressure.clamp(-3, 5);
+
+    let dissonance_pressure = (argument_margin * 2 + evidence * 3 + shared * 2 + audience).max(0);
+    let resistance_threshold = conviction + (conviction - 10).div_euclid(2).max(0);
+    let net_shift = dissonance_pressure - resistance_threshold;
+
+    let social_outcome = if argument_margin <= 0 && net_shift < -4 {
+        "Backfire / Entrenchment (Target hardens belief +2 Conviction)".to_string()
+    } else if net_shift < 0 {
+        "Rationalized Dismissal (Target absorbs tension without shifting)".to_string()
+    } else if net_shift < 5 {
+        "Seed of Doubt (+1 Dissonance Fatigue; opens follow-up concession)".to_string()
+    } else if net_shift < 10 {
+        "Tactical Concession (Target yields immediate behavioral compliance)".to_string()
+    } else {
+        "Paradigm Fracture / Core Belief Shift (Lasting alignment change)".to_string()
+    };
+
+    SocialDissonanceOutcome {
+        dissonance_pressure,
+        resistance_threshold,
+        net_dissonance_shift: net_shift,
+        social_outcome,
+    }
+}

@@ -1,6 +1,6 @@
 //! Exact combinatorial and dynamic-programming probability distribution engines for Satya TTRPG dice mechanics.
 //!
-//! Ported from `src/satya_ml/dice_probabilities.py` and calibrated per `docs/ttrpg/probability.md`.
+//! Canonical Rust source of truth (exposed to Python via the `satya_py` PyO3 crate) and calibrated per `docs/ttrpg/probability.md`.
 //!
 //! Provides:
 //! - Exact probability mass functions ([`Pmf`]) and summary moments ([`DistributionStats`]: mean, variance, std, skewness, excess kurtosis).
@@ -1472,6 +1472,19 @@ impl fmt::Display for ContestedTieRule {
     }
 }
 
+impl FromStr for ContestedTieRule {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim() {
+            "hybrid_signed_margin" => Ok(Self::HybridSignedMargin),
+            "strict_signed_margin" => Ok(Self::StrictSignedMargin),
+            "active_player_wins_ties" => Ok(Self::ActivePlayerWinsTies),
+            other => Err(format!("Unknown ContestedTieRule: '{other}'")),
+        }
+    }
+}
+
 /// Specific sub-classification of how a Contested Cascade roll resolved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -1493,6 +1506,19 @@ pub enum ContestedOutcomeKind {
 }
 
 impl ContestedOutcomeKind {
+    /// Canonical `SCREAMING_SNAKE_CASE` string identifier.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ExtraordinarySuccess => "EXTRAORDINARY_SUCCESS",
+            Self::CleanSuccess => "CLEAN_SUCCESS",
+            Self::SuccessWithFloorBreach => "SUCCESS_WITH_FLOOR_BREACH",
+            Self::GrazingTieSuccess => "GRAZING_TIE_SUCCESS",
+            Self::LuckyBreakSuccess => "LUCKY_BREAK_SUCCESS",
+            Self::CleanFailure => "CLEAN_FAILURE",
+            Self::BotchFailure => "BOTCH_FAILURE",
+        }
+    }
+
     /// Maps the detailed [`ContestedOutcomeKind`] to the canonical 5-tier [`OutcomeTier`].
     pub const fn to_outcome_tier(self) -> OutcomeTier {
         match self {

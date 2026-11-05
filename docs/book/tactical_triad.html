@@ -33,46 +33,165 @@
       height: 100vh;
       overflow-y: auto;
     }
-    .book-brand { font-size: 1.15rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
-    .book-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }
-    .book-nav-part { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
-    .book-nav-link { display: block; padding: 7px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.88rem; margin-bottom: 3px; }
+    .book-brand {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .book-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .book-nav-part {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 14px 0 6px;
+      font-weight: 600;
+    }
+    .book-nav-link {
+      display: block;
+      padding: 7px 10px;
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.88rem;
+      margin-bottom: 3px;
+    }
     .book-nav-link:hover { background: rgba(56, 189, 248, 0.12); }
-    .book-nav-link.active { background: rgba(56, 189, 248, 0.2); color: var(--accent); font-weight: 600; }
-    main.book-main { max-width: 980px; padding: 32px 44px 64px; line-height: 1.65; }
+    .book-nav-link.active {
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    main.book-main {
+      max-width: 980px;
+      padding: 32px 44px 64px;
+      line-height: 1.65;
+    }
     h1, h2, h3, h4 { color: #f8fafc; }
     h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
     h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
     a { color: var(--accent); }
     code, pre { font-family: "JetBrains Mono", Consolas, monospace; }
-    .rules-inline-code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }
-    .rules-code-block { background: #0f172a; border: 1px solid var(--border); padding: 14px; border-radius: 8px; overflow-x: auto; }
+    .rules-inline-code {
+      background: #1e293b;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+    }
+    .rules-code-block {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      padding: 14px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
     .rules-table-wrap { overflow-x: auto; margin: 14px 0; }
-    .rules-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    .rules-table th, .rules-table td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+    .rules-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .rules-table th, .rules-table td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+    }
     .rules-table th { background: #1e293b; color: var(--accent); }
-    .rules-alert, .rules-blockquote { border-left: 4px solid var(--accent); background: rgba(30, 41, 59, 0.55); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+    .rules-alert, .rules-blockquote {
+      border-left: 4px solid var(--accent);
+      background: rgba(30, 41, 59, 0.55);
+      padding: 10px 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 14px 0;
+    }
     .rules-alert-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
-    .book-interactive-widget { background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin: 24px 0; }
-    .widget-grid { display: grid; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .widget-panel { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
-    .widget-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-    .widget-controls label, label.full-width { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 4px; }
-    .widget-controls input, label.full-width input { background: #1e293b; border: 1px solid #334155; color: var(--text); padding: 6px 8px; border-radius: 4px; }
-    .widget-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-    .widget-presets button { background: #1e293b; border: 1px solid #38bdf8; color: var(--accent); padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
-    .book-pager { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
-    .book-pager-btn { background: var(--panel); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; }
+    .book-interactive-widget {
+      background: #111827;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+    .widget-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .widget-panel {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .widget-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .widget-controls label, label.full-width {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.8rem;
+      color: var(--muted);
+      gap: 4px;
+    }
+    .widget-controls input, label.full-width input {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 4px;
+    }
+    .widget-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+    .widget-presets button {
+      background: #1e293b;
+      border: 1px solid #38bdf8;
+      color: var(--accent);
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .book-pager {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .book-pager-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+    @media (max-width: 900px) {
+      body { grid-template-columns: 1fr; }
+      aside.book-sidebar { position: static; height: auto; }
+      .widget-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <aside class="book-sidebar">
     <div class="book-brand">SATYA // RULES BOOK</div>
     <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
-    <a href="index.html" class="book-nav-link">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Foundation &amp; Mathematical Calibration</div><a href="design_philosophy.html" class="book-nav-link">1. An RPG for a More Civilized Age: Design Philosophy</a><a href="probability.html" class="book-nav-link">2. Probability &amp; Calibration of the Cascading Dice Mechanic</a><div class="book-nav-part">Part II: Core Mechanics, Task Resolution &amp; Action Economy</div><a href="tasks.html" class="book-nav-link">3. Cascading 2d20 Engine &amp; Task Resolution</a><a href="action_economy.html" class="book-nav-link">4. Action Economy, OODA Loop, Time Scales &amp; Stealth</a><div class="book-nav-part">Part III: Character Architecture, Skills, Lifepaths &amp; Economy</div><a href="characteristics.html" class="book-nav-link">5. Characteristics, Senses, Psyche &amp; Aptitudes</a><a href="skills_and_trees.html" class="book-nav-link">6. Skill System &amp; Hierarchical Skill Trees</a><a href="lifepaths_and_economy.html" class="book-nav-link">7. Lifepath Character Creation, Socioeconomic Upkeep &amp; Heat</a><div class="book-nav-part">Part IV: Psyche, Morale &amp; Social Combat</div><a href="psyche_and_social.html" class="book-nav-link">8. Psyche, Morale &amp; Social Combat</a><div class="book-nav-part">Part V: Combat Architecture, Close Quarters &amp; Firefights</div><a href="tactical_triad.html" class="book-nav-link active">9. Combat Architecture, Tactical Triad &amp; Pools</a><a href="melee_combat.html" class="book-nav-link">10. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a><a href="ranged_combat_and_armor.html" class="book-nav-link">11. Ranged Combat, Suppression, Armor &amp; Weapon Reliability</a><div class="book-nav-part">Part VI: Health, Trauma, Movement, Vehicles &amp; Survival</div><a href="health_and_trauma.html" class="book-nav-link">12. Health, Anatomical Trauma, Fatigue &amp; Mental Conditions</a><a href="movement_and_environment.html" class="book-nav-link">13. Movement, Encumbrance, Vehicles &amp; Environmental Survival</a>
+    <a href="index.html" class="book-nav-link ">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Foundation &amp; Mathematical Calibration</div><a href="design_philosophy.html" class="book-nav-link">1. An RPG for a More Civilized Age: Design Philosophy</a><a href="notation_glossary.html" class="book-nav-link">2. Mathematical Notation, Variables &amp; Formula Glossary</a><a href="probability.html" class="book-nav-link">3. Probability &amp; Calibration of the Cascading Dice Mechanic</a><div class="book-nav-part">Part II: Core Mechanics, Task Resolution &amp; Action Economy</div><a href="tasks.html" class="book-nav-link">4. Cascading 2d20 Engine &amp; Task Resolution</a><a href="action_economy.html" class="book-nav-link">5. Action Economy, OODA Loop, Time Scales &amp; Stealth</a><div class="book-nav-part">Part III: Character Architecture, Skills, Lifepaths &amp; Economy</div><a href="characteristics.html" class="book-nav-link">6. Characteristics, Senses, Psyche &amp; Aptitudes</a><a href="skills_and_trees.html" class="book-nav-link">7. Skill System &amp; Hierarchical Skill Trees</a><a href="lifepaths_and_economy.html" class="book-nav-link">8. Lifepath Character Creation, Socioeconomic Upkeep &amp; Heat</a><div class="book-nav-part">Part IV: Psyche, Morale &amp; Social Combat</div><a href="psyche_and_social.html" class="book-nav-link">9. Psyche, Morale &amp; Social Combat</a><div class="book-nav-part">Part V: Combat Architecture, Close Quarters &amp; Firefights</div><a href="tactical_triad.html" class="book-nav-link active">10. Combat Architecture, Tactical Triad &amp; Pools</a><a href="melee_combat.html" class="book-nav-link">11. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a><a href="ranged_combat_and_armor.html" class="book-nav-link">12. Ranged Combat, Suppression, Armor &amp; Weapon Reliability</a><div class="book-nav-part">Part VI: Health, Trauma, Movement, Vehicles &amp; Survival</div><a href="health_and_trauma.html" class="book-nav-link">13. Health, Anatomical Trauma, Fatigue &amp; Mental Conditions</a><a href="movement_and_environment.html" class="book-nav-link">14. Movement, Encumbrance, Vehicles &amp; Environmental Survival</a>
   </aside>
   <main class="book-main">
-    <article class="satya-rules-article"><h1 id="satya-ttrpg-combat-architecture-tactical-triad-pools">Satya TTRPG Combat Architecture, Tactical Triad &amp; Pools</h1><p>Because simulation-style tactical agency is at the heart of <strong>Satya</strong>, combat is a deeply integrated extension of <strong><a class="rules-link" href="tasks.html">Cascading `2d20` Engine &amp;amp; Task Resolution</a></strong>. As in all Task Resolutions, every combat exchange—including ranged combat—is a contested system using the Two-List Cascading (<code class="rules-inline-code">2d20</code>) Watershed Mechanic.</p><p>What separates combat in Satya from mainstream RPGs is the depth of tactical agency, psychological realism, and anatomical consequence—achieved through a single unified architecture (<strong><a class="rules-link" href="action_economy.html">The Count-Up Action Clock</a></strong>, <strong><a class="rules-link" href="psyche_and_social.html">Psyche &amp;amp; Morale</a></strong>, and the <strong>&amp;quot;Envelope &amp;amp; Fill&amp;quot; Tactical Pool</strong>) rather than hundreds of disjointed special-case &quot;Feat&quot; rules. Both <strong><a class="rules-link" href="melee_combat.html">Melee Combat</a></strong> and <strong><a class="rules-link" href="ranged_combat_and_armor.html">Ranged Combat &amp;amp; Armor</a></strong> share this exact foundation.</p><hr class="rules-divider"/><h2 id="1-aspects-of-combat-genre-support">1. Aspects of Combat &amp; Genre Support</h2><p>So what makes Satya different?</p><p>Most games only factor in skill of the adversaries, how fast they are, weapon damage, and armor. Most games typically resolve combat along these lines:</p><ul class="rules-list"><li>Determine who has initiative, so that their actions go first or can preempt others</li><li>Choose an action (some kind of attack or feat)</li><li>One being attacked can determine some kind of active or passive defense if possible</li><li>Determine odds of attacker hitting</li><li>If hit, roll for damage, possibly rolling for hit location and subtract armor if any from damage</li><li>The character with the next initiative repeats the above, rinse, lather, repeat</li></ul><p>Most games don&#39;t consider (or bolt them on in a very ad-hoc manner via feats or advantages) any of the following:</p><ul class="rules-list"><li><strong>Morale</strong>: If you are scared, you may not even get to choose your action or may be at severe tactical disadvantage (see <strong><a class="rules-link" href="psyche_and_social.html#3-psychological-state-of-combat-aggression--morale">Psyche, Morale &amp;amp; Social Combat</a></strong>)</li><li><strong>Aggressiveness</strong>: &quot;It&#39;s not the size of the dog in the fight, it&#39;s the size of the fight in the dog&quot;</li><li><strong>Fatigue</strong>: It doesn&#39;t matter how skilled you are if you are too tired to move</li><li><strong>Anatomical Trauma</strong>: Wounds, concussions, broken limbs, blood loss, pain, and shock drastically reduce effectiveness and slash specific physical capabilities (see <strong><a class="rules-link" href="health_and_trauma.html">Health &amp;amp; Trauma</a></strong>)</li><li><strong>Reach</strong>: If your weapon can&#39;t reach your target, you have to get into range (which can be difficult and takes time)</li><li><strong>Time (Action Duration)</strong>: How fast does your (re)action take? It&#39;s not just when an action starts that matters, but how soon it finishes on the Count-Up Clock</li><li><strong>Reliability</strong>: Especially for modern weapons, how prone is your weapon to malfunction under stress or poor maintenance?</li></ul><p>Some will argue that factoring in the above is too much minutiae to keep track of, and will bog down the &quot;fun&quot; of the game. We argue that without consideration of these elements, the narrative value of the action is lost, and perhaps worse, the unrealism will tar victories with a poor brush. When done smartly and consistently, all of the above can be factored in with the added benefits:</p><ul class="rules-list"><li>Make combat much more visceral and narratively exciting by providing meaningful tactical choices on every exchange</li><li>Realism makes hard-earned victories all the more rewarding</li><li>The added simulation depth is governed by one consistent set of rules rather than a library of exception-based Feats</li><li>While each combat decision carries more weight, overall real-world time spent in combat remains fast because combat is decisive and lethal</li><li>Makes characters think twice before treating violence as their default first resort</li></ul><h3 id="11-genre-support">1.1 Genre Support</h3><p>Satya is not a super-hero fantasy system at its heart. While it could model such things, Satya is geared towards modeling real-world human-level skills. Moreover, player characters do not have any inherent plot-armor advantages over NPCs. They do not get to dodge bullets, and most solid gunshots (a decent margin of success) will incapacitate a character no matter how much experience and training they have.</p><p>The idea behind the realism is twofold:</p><ul class="rules-list"><li>Make combat interesting by providing genuine tactical choices</li><li>Make combat memorable and consequential by making it deadly</li></ul><p>Too many game systems that are not war-related make combat a first-choice option. This is because in most systems, characters can take multiple solid hits until they are *hors de combat*, and helpful healing spells or sci-fi med kits can instantaneously heal at least some of the damage done. Also, many game systems don&#39;t take into account how being wounded or fatigued affects performance. In many game systems, as long as your &quot;hit points&quot; are not <code class="rules-inline-code">0</code> or less, your character functions at 100% normal capacity. This is not only unrealistic from a simulation point of view, it is boring from a storytelling point of view. How many stories are made more dramatic and memorable because the protagonist has to overcome pain, fatigue, or physical constraints imposed by wounds? Hit-point style systems without wounding effects are not just unrealistic—leading to one-dimensional play—they are poor at storytelling as well.</p><p>In other words, Satya is designed to dispel two pervasive myths:</p><ul class="rules-list"><li>That realism is too time-consuming</li><li>That realism isn&#39;t fun or interesting because it doesn&#39;t let you do cinematic things</li></ul><hr class="rules-divider"/><h2 id="2-design-philosophy-of-combat-in-satya">2. Design Philosophy of Combat in Satya</h2><p>Most combat in RPGs is neither realistic nor narratively interesting. Most games typically allow each participant in the combat an equal number of actions and reactions. And even games that let characters have more actions than others still allow automatic defensive reactions, and generally apply an evenness or &quot;fairness&quot; to combat. Combat, however, is anything but fair—and if you are playing fair, either you are in a sporting duel, or you are doing it wrong. Most games show this fairness by trading action for action:</p><pre class="rules-code-block"><code data-lang="text">Character A attacks
+    <article class="satya-rules-article"><h1 id="satya-ttrpg-combat-architecture-tactical-triad-pools">Satya TTRPG Combat Architecture, Tactical Triad &amp; Pools</h1><p>Because simulation-style tactical agency is at the heart of <strong>Satya</strong>, combat is a deeply integrated extension of <strong><a class="rules-link" href="tasks.html">Cascading `2d20` Engine &amp;amp; Task Resolution</a></strong>. As in all Task Resolutions, every combat exchange—including ranged combat—is a contested system using the Two-List Cascading (<code class="rules-inline-code">2d20</code>) Watershed Mechanic.</p><p>What separates combat in Satya from mainstream RPGs is the depth of tactical agency, psychological realism, and anatomical consequence—achieved through a single unified architecture (<strong><a class="rules-link" href="action_economy.html">The Count-Up Action Clock</a></strong>, <strong><a class="rules-link" href="psyche_and_social.html">Psyche &amp;amp; Morale</a></strong>, and the <strong>&amp;quot;Envelope &amp;amp; Fill&amp;quot; Tactical Pool</strong>; see the <strong><a class="rules-link" href="../01-foundation/mathematical_notation_glossary.md">Mathematical Notation, Variables &amp;amp; Formula Glossary</a></strong> for all combat symbols $C_{\text{combat}}, P_{\text{base}}, P_{\text{eff}}, B, T_{\max}, C_{\max}, F_{\max}$) rather than hundreds of disjointed special-case &quot;Feat&quot; rules. Both <strong><a class="rules-link" href="melee_combat.html">Melee Combat</a></strong> and <strong><a class="rules-link" href="ranged_combat_and_armor.html">Ranged Combat &amp;amp; Armor</a></strong> share this exact foundation.</p><hr class="rules-divider"/><h2 id="1-aspects-of-combat-genre-support">1. Aspects of Combat &amp; Genre Support</h2><p>So what makes Satya different?</p><p>Most games only factor in skill of the adversaries, how fast they are, weapon damage, and armor. Most games typically resolve combat along these lines:</p><ul class="rules-list"><li>Determine who has initiative, so that their actions go first or can preempt others</li><li>Choose an action (some kind of attack or feat)</li><li>One being attacked can determine some kind of active or passive defense if possible</li><li>Determine odds of attacker hitting</li><li>If hit, roll for damage, possibly rolling for hit location and subtract armor if any from damage</li><li>The character with the next initiative repeats the above, rinse, lather, repeat</li></ul><p>Most games don&#39;t consider (or bolt them on in a very ad-hoc manner via feats or advantages) any of the following:</p><ul class="rules-list"><li><strong>Morale</strong>: If you are scared, you may not even get to choose your action or may be at severe tactical disadvantage (see <strong><a class="rules-link" href="psyche_and_social.html#3-psychological-state-of-combat-aggression--morale">Psyche, Morale &amp;amp; Social Combat</a></strong>)</li><li><strong>Aggressiveness</strong>: &quot;It&#39;s not the size of the dog in the fight, it&#39;s the size of the fight in the dog&quot;</li><li><strong>Fatigue</strong>: It doesn&#39;t matter how skilled you are if you are too tired to move</li><li><strong>Anatomical Trauma</strong>: Wounds, concussions, broken limbs, blood loss, pain, and shock drastically reduce effectiveness and slash specific physical capabilities (see <strong><a class="rules-link" href="health_and_trauma.html">Health &amp;amp; Trauma</a></strong>)</li><li><strong>Reach</strong>: If your weapon can&#39;t reach your target, you have to get into range (which can be difficult and takes time)</li><li><strong>Time (Action Duration)</strong>: How fast does your (re)action take? It&#39;s not just when an action starts that matters, but how soon it finishes on the Count-Up Clock</li><li><strong>Reliability</strong>: Especially for modern weapons, how prone is your weapon to malfunction under stress or poor maintenance?</li></ul><p>Some will argue that factoring in the above is too much minutiae to keep track of, and will bog down the &quot;fun&quot; of the game. We argue that without consideration of these elements, the narrative value of the action is lost, and perhaps worse, the unrealism will tar victories with a poor brush. When done smartly and consistently, all of the above can be factored in with the added benefits:</p><ul class="rules-list"><li>Make combat much more visceral and narratively exciting by providing meaningful tactical choices on every exchange</li><li>Realism makes hard-earned victories all the more rewarding</li><li>The added simulation depth is governed by one consistent set of rules rather than a library of exception-based Feats</li><li>While each combat decision carries more weight, overall real-world time spent in combat remains fast because combat is decisive and lethal</li><li>Makes characters think twice before treating violence as their default first resort</li></ul><h3 id="11-genre-support">1.1 Genre Support</h3><p>Satya is not a super-hero fantasy system at its heart. While it could model such things, Satya is geared towards modeling real-world human-level skills. Moreover, player characters do not have any inherent plot-armor advantages over NPCs. They do not get to dodge bullets, and most solid gunshots (a decent margin of success) will incapacitate a character no matter how much experience and training they have.</p><p>The idea behind the realism is twofold:</p><ul class="rules-list"><li>Make combat interesting by providing genuine tactical choices</li><li>Make combat memorable and consequential by making it deadly</li></ul><p>Too many game systems that are not war-related make combat a first-choice option. This is because in most systems, characters can take multiple solid hits until they are *hors de combat*, and helpful healing spells or sci-fi med kits can instantaneously heal at least some of the damage done. Also, many game systems don&#39;t take into account how being wounded or fatigued affects performance. In many game systems, as long as your &quot;hit points&quot; are not <code class="rules-inline-code">0</code> or less, your character functions at 100% normal capacity. This is not only unrealistic from a simulation point of view, it is boring from a storytelling point of view. How many stories are made more dramatic and memorable because the protagonist has to overcome pain, fatigue, or physical constraints imposed by wounds? Hit-point style systems without wounding effects are not just unrealistic—leading to one-dimensional play—they are poor at storytelling as well.</p><p>In other words, Satya is designed to dispel two pervasive myths:</p><ul class="rules-list"><li>That realism is too time-consuming</li><li>That realism isn&#39;t fun or interesting because it doesn&#39;t let you do cinematic things</li></ul><hr class="rules-divider"/><h2 id="2-design-philosophy-of-combat-in-satya">2. Design Philosophy of Combat in Satya</h2><p>Most combat in RPGs is neither realistic nor narratively interesting. Most games typically allow each participant in the combat an equal number of actions and reactions. And even games that let characters have more actions than others still allow automatic defensive reactions, and generally apply an evenness or &quot;fairness&quot; to combat. Combat, however, is anything but fair—and if you are playing fair, either you are in a sporting duel, or you are doing it wrong. Most games show this fairness by trading action for action:</p><pre class="rules-code-block"><code data-lang="text">Character A attacks
 NPC B blocks/dodges
 NPC B attacks
 Character A blocks/dodges</code></pre><p>This is not only unrealistic, it is narratively boring. How many boxing matches or UFC fights do you see alternating like that? None. In the real world, opponents size each other up and then unleash a flurry of attacks, stopping only to catch their breath, regain balance, or because the defender was able to counter and <strong>seize the initiative</strong>. For example, the defender might trap the attack, sweep the lead leg, or sidestep out of the line of attack. Or maybe one combatant only throws out an exploratory jab or thrust—perhaps as a feint, or perhaps to judge their opponent&#39;s reflexes—while the other combatant holds a tight guard, waiting for an opening to counter or escape.</p><p>In the latter scenario where a defender only defends, what is in it for them game-wise in most systems? All they have done is allow the attacker a free shot. Without rules for fatigue, guard exposure, or tactical advantage, there is no reason from a metagame perspective for a character to ever probe or hold back. Although Satya initially looks more detailed, in practice it is cleaner because tactical behavior emerges naturally from the <strong>Tactical Pool</strong> rather than special-case rules.</p><p>Even if proponents of traditional turn-based systems argue that a single attack roll abstracts a whole exchange of feints, footwork, and parries, why does each side still get the exact same rhythmic opportunity to attack and defend every round? That is not how real fights work—as we hear in boxing: *&quot;he&#39;s got him on the ropes,&quot; &quot;he&#39;s on his last legs,&quot; &quot;the enemy has seized the initiative,&quot; &quot;the unit is pinned down.&quot;* By making <strong>Tempo</strong>, <strong>Control</strong>, and <strong>Force</strong> explicit in the rules, tactical decision-making directly drives the story.</p><blockquote class="rules-alert rules-alert-important"><div class="rules-alert-title">IMPORTANT</div><p><strong>Why Satya Replaces Hit Points with Anatomical Trauma, Shock &amp;amp; Fatigue</strong>:</p><p>The popularity of classic RPGs has made the notion of ablative Hit Points ubiquitous. Yet it strains verisimilitude to the breaking point when a high-HP character shrugs off a point-blank gunshot or assassination attempt. The old excuse is that Hit Points abstract &quot;skill, luck, and stamina&quot; turning a lethal blow into a graze—until luck runs out.</p><p>If Hit Points are mostly &quot;luck and stamina,&quot; why do healing rules require weeks of bedrest or multiple medical treatments to restore a high-level character&#39;s &quot;luck&quot;? Worse, a single bag of Hit Points fosters a cavalier attitude toward violence and forces GMs to artificially &quot;level up&quot; bandits and guards so combat stays threatening.</p><p>In <strong>Satya</strong>, Hit Points are replaced by <strong><a class="rules-link" href="health_and_trauma.html">Anatomical Wound Tracks, Systemic Shock, Blood Loss, and Fatigue</a></strong>:</p><p>- <strong>Systemic Drain</strong>: Every tier of <strong>Fatigue (<code class="rules-inline-code">fatigue_level</code>)</strong> and <strong>Wound Shock (<code class="rules-inline-code">wound_shock_index</code>)</strong> drains <strong><code class="rules-inline-code">-2</code> points</strong> from the character&#39;s Effective Tactical Pool ($P_{\text{eff}}$), increases internal cascade difficulty ($\Delta_{\text{int}}$), and slows all actions via <code class="rules-inline-code">action_time_factor</code>.</p><p>- <strong>Structural Limb &amp;amp; Organ Trauma</strong>: Wounds to specific hit locations (legs, arms, torso, head/eyes) directly slash the character&#39;s <strong>Aspect Ceilings ($T_{\max}, C_{\max}, F_{\max}$)</strong>—so a sliced calf immediately caps <strong>Tempo</strong>, a fractured wrist caps <strong>Control</strong>, and cracked ribs or a dislocated shoulder cap <strong>Force</strong>.</p></blockquote><hr class="rules-divider"/><h2 id="3-the-action-economy-overview-of-a-combat-exchange">3. The Action Economy &amp; Overview of a Combat Exchange</h2><p>Determining <strong>what</strong> a character does, <strong>how long</strong> it takes, and <strong>when</strong> it resolves is governed by Satya&#39;s continuous <strong><a class="rules-link" href="action_economy.html">Count-Up Action Clock</a></strong>:</p><ol class="rules-list rules-list-ordered"><li><strong>Starting Tick (OODA Initiative &amp;amp; Awareness)</strong>:</li></ol><ul class="rules-list"><li>At the onset of combat, each participant computes their <strong>4-Pillar OODA Readiness</strong> (<strong>O</strong>bserve <code class="rules-inline-code">ITU</code>, <strong>O</strong>rient <code class="rules-inline-code">INS</code>, <strong>D</strong>ecide $D_{\text{cog}}$, <strong>A</strong>ct <code class="rules-inline-code">SPD</code>):</li></ul><div class="rules-math-block">$$\text{OODA} = \left\lfloor \frac{\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD}}{4} \right\rfloor \quad \text{where} \quad D_{\text{cog}} = \left\lfloor \frac{\max(\text{ANA}, \text{CRE}) + \text{FOC}}{2} \right\rfloor$$</div><ul class="rules-list"><li>Combatants who are aware and ready enter the clock at $\text{Starting Tick} = \max(1, 15 - \text{OODA})$ (modified by *Observation* / *Combat Awareness* margins on ambush checks). The combatant on the <strong>lowest Tick</strong> acts first.</li></ul><ol class="rules-list rules-list-ordered"><li><strong>Base Action Time Cost (<code class="rules-inline-code">TC</code>) &amp;amp; Stances</strong>:</li></ol><ul class="rules-list"><li>Every weapon mode, movement, or combat stance has a <strong>Base Tick Cost (<code class="rules-inline-code">TC</code>)</strong>:</li><li><strong><code class="rules-inline-code">POWER</code> / Heavy Melee Wind-Up</strong>: <code class="rules-inline-code">TC = 14</code> (<code class="rules-inline-code">10–12</code> for standard heavy unarmed/melee)</li><li><strong><code class="rules-inline-code">RANGED_AIMED</code> / Deliberate Sighted Shot</strong>: <code class="rules-inline-code">TC = 12</code></li><li><strong><code class="rules-inline-code">MANEUVER</code> / Bounding Advance</strong>: <code class="rules-inline-code">TC = 11</code></li><li><strong>Standard Unstanced Action</strong>: <code class="rules-inline-code">TC = 10</code></li><li><strong><code class="rules-inline-code">STABILITY</code> / Controlled Double-Tap / Guarded Strike</strong>: <code class="rules-inline-code">TC = 8–9</code></li><li><strong><code class="rules-inline-code">RANGED_SNAP</code> / Quick Point-Shoot / Fast Jab or Knife Slash</strong>: <code class="rules-inline-code">TC = 7</code></li></ul><ol class="rules-list rules-list-ordered"><li><strong>Fatigue &amp;amp; Wound Shock Time Multiplier (<code class="rules-inline-code">action_time_factor</code>)</strong>:</li></ol><ul class="rules-list"><li>Physical exhaustion and pain slow neuromuscular execution:</li></ul><div class="rules-math-block">$$\text{action\_time\_factor} = 1.0 + (0.10 \times \text{fatigue\_level}) + (0.25 \times \text{wound\_shock\_index})$$</div><ol class="rules-list rules-list-ordered"><li><strong>Tempo ($T$) &amp;amp; Quick Thinking ($\Delta\text{TC}_{\text{decide}}$) Adjustment to Effective Tick Cost</strong>:</li></ol><ul class="rules-list"><li>Allocating <strong>Tempo ($T$)</strong> above your neutral baseline ($B = \lfloor P_{\text{base}} / 3 \rfloor$) shaves ticks directly off your action; dumping <strong>Tempo</strong> below $B$ adds wind-up/recovery ticks:</li></ul><div class="rules-math-block">$$\text{Effective TC} = \max\!\Big(2,\; \text{round}\big(\text{Base TC} \times \text{action\_time\_factor}\big) - (T - B) + \Delta\text{TC}_{\text{decide}}\Big)$$</div><p>*(where $\Delta\text{TC}_{\text{decide}} = 0$ for standard drilled reflex strikes/reloads, and $\Delta\text{TC}_{\text{decide}} = -\lfloor(D_{\text{cog}} - 10)/2\rfloor$ for complex tactical actions, feints, ballistic calculations, or environmental improvisations).*</p><ul class="rules-list"><li>When a character initiates an action on $\text{Tick}_{\text{start}}$, it resolves and advances their clock to $\text{Tick}_{\text{next}} = \text{Tick}_{\text{start}} + \text{Effective TC}$. If an opponent on an earlier tick executes a fast, high-<code class="rules-inline-code">Tempo</code> action whose completion tick is *less than* a slow attacker&#39;s completion tick, the faster combatant <strong>interrupts</strong> the slow wind-up before it lands!</li></ul><h3 id="31-six-step-sequence-of-a-combat-exchange">3.1 Six-Step Sequence of a Combat Exchange</h3><ol class="rules-list rules-list-ordered"><li><strong>Determine psychological and morale state</strong> (<code class="rules-inline-code">High</code>, <code class="rules-inline-code">Steady</code>, <code class="rules-inline-code">Wavering</code>, <code class="rules-inline-code">Broken</code>, <code class="rules-inline-code">Panic</code>, or <code class="rules-inline-code">Rage</code>; see <strong><a class="rules-link" href="psyche_and_social.html#34-combat-morale-tactical-ooda-behavior--the-five-conditions-of-morale">Psyche, Morale &amp;amp; Social Combat</a></strong>).</li><li><strong>Determine awareness (surprise) and starting OODA tick</strong>.</li><li><strong>Determine engagement distance / reach and cover</strong>.</li><li><strong>Plan maneuver and allocate Effective Tactical Pool ($P_{\text{eff}}$)</strong>:</li></ol><ul class="rules-list"><li>Split pool across the Tactical Triad: <strong>Tempo</strong> (speed/mobility), <strong>Control</strong> (precision/guard), <strong>Force</strong> (power/grounding).</li></ul><ol class="rules-list rules-list-ordered"><li><strong>Make combat awareness check</strong> (<code class="rules-inline-code">INS/SIG</code> or <code class="rules-inline-code">ITU</code>) to read when and how the opponent&#39;s move will resolve.</li><li><strong>Resolve contested <code class="rules-inline-code">2d20</code> cascade</strong> (factoring in any reaction time penalty if changing a committed action mid-tick).</li></ol><hr class="rules-divider"/><h2 id="4-the-tactical-pool-architecture-envelope-fill">4. The Tactical Pool Architecture: &quot;Envelope &amp; Fill&quot;</h2><p>In Satya, a combatant&#39;s <strong>Tactical Pool ($P_{\text{eff}}$)</strong> and how they can distribute it across <strong>Tempo (<code class="rules-inline-code">T</code>)</strong>, <strong>Control (<code class="rules-inline-code">C</code>)</strong>, and <strong>Force (<code class="rules-inline-code">F</code>)</strong> are governed by the <strong>&amp;quot;Envelope &amp;amp; Fill&amp;quot; Model</strong>:</p><ol class="rules-list rules-list-ordered"><li><strong>Characteristics Set Your Physical Envelope (Aspect Ceilings)</strong>:</li></ol><p>Your physical and sensory attributes (<code class="rules-inline-code">SPD</code>, <code class="rules-inline-code">KIN</code>, <code class="rules-inline-code">DEX</code>, <code class="rules-inline-code">FOR</code>, <code class="rules-inline-code">SIG</code>) define the <strong>maximum number of points</strong> you can put into any single aspect on a single action ($T_{\max}, C_{\max}, F_{\max}$). A slow heavyweight (<code class="rules-inline-code">FOR 15, SPD 8</code>) has a massive <code class="rules-inline-code">Force</code> ceiling (<code class="rules-inline-code">15</code>) but a low <code class="rules-inline-code">Tempo</code> ceiling (<code class="rules-inline-code">8</code>); he cannot magically convert his muscle mass into lightning footwork. 2. <strong>Skill Fills Your Envelope (Pool Size)</strong>: An untrained athletic prodigy (<code class="rules-inline-code">SPD 14, KIN 12, FOR 14</code>, *Brawling* <code class="rules-inline-code">N = 1</code>) has high ceilings (<code class="rules-inline-code">14 / 12 / 14</code>), but a small total pool—so to throw a max-power <code class="rules-inline-code">Force 14</code> punch, they *must* starve <code class="rules-inline-code">Tempo</code> and <code class="rules-inline-code">Control</code> down to almost <code class="rules-inline-code">0</code> (telegraphing the swing and leaving their chin wide open). A trained martial artist (<code class="rules-inline-code">N = 5</code>) with the exact same physique has a large enough pool to fill <strong>Tempo</strong>, <strong>Control</strong>, and <strong>Force</strong> *simultaneously*!</p><pre class="mermaid rules-mermaid">flowchart TD
@@ -129,13 +248,13 @@ Character A blocks/dodges</code></pre><p>This is not only unrealistic, it is nar
         </label>
       </div>
       <div class="widget-presets">
-        <button type="button" onclick="satyaBookLoadPreset(4,11,2,2,'14+11, 8+7, 16+15, 17+12')">Sarah's Lockpick</button>
+        <button type="button" onclick="satyaBookLoadPreset(4,11,2,2,'14+11, 8+7, 15+13, 17+12')">Sarah's Lockpick</button>
         <button type="button" onclick="satyaBookLoadPreset(5,16,0,2,'12+10, 9+11, 14+8, 16+9, 11+12')">Elena's Probe</button>
         <button type="button" onclick="satyaBookLoadPreset(4,13,0,3,'15+11, 7+6, 13+10, 18+9')">Viktor's Cleave</button>
         <button type="button" onclick="satyaBookRandomRoll()">Roll Random N&times;2d20</button>
       </div>
       <label class="full-width">Rolled 2d20 Pairs (A+B, comma-separated):
-        <input id="bk-pairs" type="text" value="14+11, 8+7, 16+15, 17+12" oninput="satyaBookRecalc()"/>
+        <input id="bk-pairs" type="text" value="14+11, 8+7, 15+13, 17+12" oninput="satyaBookRecalc()"/>
       </label>
       <div id="bk-cascade-readout" class="widget-readout"></div>
     </div>

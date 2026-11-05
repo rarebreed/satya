@@ -39,6 +39,7 @@ prep = { depends-on = ["fmt", "lint"] }
 prepc = { cmd = "git commit -m ",  depends-on = ["check", "fmt", "lint"] }
 build = { cmd = "cargo build --workspace", description = "Build debug binaries for the workspace" }
 build-release = { cmd = "cargo build --workspace --release", description = "Build optimized release binaries" }
+build-py = { cmd = "cargo build -p satya-py --release && copy /Y target\\release\\satya_py.dll src\\satya_py.pyd", description = "Compile the satya-py PyO3 Rust extension and install satya_py.pyd into src/" }
 build-wasm = { cmd = "wasm-pack build crates/satya-web --target web --out-dir ../../pkg", description = "Compile satya-web Rust/Leptos frontend to WebAssembly in pkg/" }
 
 # --- Granular & Unified Test Suites ---
@@ -47,7 +48,7 @@ test-storage = { cmd = "cargo test -p satya-storage", description = "Run Apache 
 test-signaling = { cmd = "cargo test -p satya-signaling", description = "Run Argon2 auth, session password, disconnect, and private routing tests" }
 test-web = { cmd = "cargo test -p satya-web", description = "Run Leptos SSR and Rust/Wasm client unit tests" }
 test-rust = { cmd = "cargo test --workspace", description = "Run all Rust unit, integration, and doc tests" }
-test-py = { cmd = "pytest tests", env = { PYTHONPATH = "src" }, description = "Run Python Avro & PyLance ML pipeline unit tests" }
+test-py = { cmd = "pytest tests", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Run Python Avro & PyLance ML pipeline unit tests" }
 test = { depends-on = ["test-rust", "test-py"], description = "Run the full polyglot (Rust + Python) test suite" }
 
 # --- Server & Runtime ---
@@ -63,11 +64,11 @@ inspect-topics = { cmd = "python -m satya_ml.inspect_avro --topics", env = { PYT
 ml-pipeline = { depends-on = ["compact-to-lance", "inspect-topics"], description = "Run incremental Avro-to-PyLance compaction and print dataset summary" }
 
 # --- Notebooks and pyo3 ---
-notebook = { cmd = "marimo edit notebooks/dice_probability_distributions.py", env = { PYTHONPATH = "src" }, description = "Launch interactive Marimo notebook editor for Satya TTRPG Dice Probability Distributions" }
-notebook-app = { cmd = "marimo run notebooks/dice_probability_distributions.py", env = { PYTHONPATH = "src" }, description = "Launch the Satya TTRPG Dice Probability Distributions Marimo dashboard app" }
-rules-book = { cmd = "marimo edit notebooks/satya_rules_book.py", env = { PYTHONPATH = "src" }, description = "Launch interactive Marimo Rules Book notebook (`docs/ttrpg/` + 2d20 & Tactical Pool cells)" }
-rules-book-app = { cmd = "marimo run notebooks/satya_rules_book.py", env = { PYTHONPATH = "src" }, description = "Launch the Satya TTRPG Rules Book Marimo web app" }
-notebook-rules = { cmd = "marimo edit notebooks/satya_rules_book.py", env = { PYTHONPATH = "src" }, description = "Alias for rules-book: launch interactive Marimo Rules Book notebook" }
-notebook-rules-app = { cmd = "marimo run notebooks/satya_rules_book.py", env = { PYTHONPATH = "src" }, description = "Alias for rules-book-app: launch the Satya TTRPG Rules Book Marimo web app" }
-build-book = { cmd = "python -m satya_ml.build_rules_book", env = { PYTHONPATH = "src" }, description = "Generate static HTML Rules Book pages and catalog.json into docs/book/" }
+notebook = { cmd = "marimo edit notebooks/dice_probability_distributions.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Launch interactive Marimo notebook editor for Satya TTRPG Dice Probability Distributions" }
+notebook-app = { cmd = "marimo run notebooks/dice_probability_distributions.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Launch the Satya TTRPG Dice Probability Distributions Marimo dashboard app" }
+rules-book = { cmd = "marimo edit notebooks/satya_rules_book.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Launch interactive Marimo Rules Book notebook (`docs/ttrpg/` + 2d20 & Tactical Pool cells)" }
+rules-book-app = { cmd = "marimo run notebooks/satya_rules_book.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Launch the Satya TTRPG Rules Book Marimo web app" }
+notebook-rules = { cmd = "marimo edit notebooks/satya_rules_book.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Alias for rules-book: launch interactive Marimo Rules Book notebook" }
+notebook-rules-app = { cmd = "marimo run notebooks/satya_rules_book.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Alias for rules-book-app: launch the Satya TTRPG Rules Book Marimo web app" }
+build-book = { cmd = "python -m satya_ml.build_rules_book", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Generate static HTML Rules Book pages and catalog.json into docs/book/" }
 check-py-ext = { cmd = "cargo check -p satya-py", description = "Type-check the satya-py PyO3 Python extension crate" }

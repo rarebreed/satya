@@ -11,11 +11,13 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use satya_engine::{
     BotchRule, CarryMode, CascadeRollOutcome, CascadeStepTrace, CascadeTaskParams,
-    CenterDistanceMode, DistributionStats, MarginAggregation, MoraleState, Pmf,
-    SignedCascadeResult, TacticalPoolEnvelope, TacticalPoolParams, TacticalTriadEvaluation,
-    TnFormulaK20, format_summary_table,
+    CenterDistanceMode, ContestedTieRule, DistributionStats, GmResistanceMode, MarginAggregation,
+    MoraleState, Pmf, SignedCascadeResult, TacticalPoolEnvelope, TacticalPoolParams,
+    TacticalTriadEvaluation, TnFormulaK20, compute_contested_cascade_odds_with_mode,
+    format_summary_table,
 };
 use satya_schema::{
     PiiFieldDescriptor, RulesChapterDocument, RulesChapterSummary, RulesSearchHit, SchemaRegistry,
@@ -577,78 +579,90 @@ impl PySchemaRegistry {
 
 /// Normalizes a map of outcome weights so that all probabilities sum to `1.0`.
 #[pyfunction]
-pub fn normalize_pmf(weights: Pmf) -> Pmf {
-    satya_engine::normalize_pmf(&weights)
+#[pyo3(signature = (pmf))]
+pub fn normalize_pmf(pmf: Pmf) -> Pmf {
+    satya_engine::normalize_pmf(&pmf)
 }
 
 /// Computes exact mean, variance, standard deviation, skewness, and excess kurtosis of a PMF.
 #[pyfunction]
+#[pyo3(signature = (pmf))]
 pub fn compute_stats(pmf: Pmf) -> PyDistributionStats {
     PyDistributionStats::from(satya_engine::compute_stats(&pmf))
 }
 
 /// Computes the discrete convolution $P(Z = x + y)$ of two independent PMFs.
 #[pyfunction]
+#[pyo3(signature = (pmf_a, pmf_b))]
 pub fn convolve_pmfs(pmf_a: Pmf, pmf_b: Pmf) -> Pmf {
     satya_engine::convolve_pmfs(&pmf_a, &pmf_b)
 }
 
-/// Uniform PMF for a single $k$-sided die ($1 \dots k$, or $-k \dots -1$ if `negative=True`).
+/// Uniform PMF for a single `sides`-sided die ($1 \dots \text{sides}$, or $-\text{sides} \dots -1$ if `negative=True`).
 #[pyfunction]
-#[pyo3(signature = (k, negative=false))]
-pub fn single_die_pmf(k: i32, negative: bool) -> Pmf {
-    satya_engine::single_die_pmf(k, negative)
+#[pyo3(signature = (sides, negative=false))]
+pub fn single_die_pmf(sides: i32, negative: bool) -> Pmf {
+    satya_engine::single_die_pmf(sides, negative)
 }
 
-/// Exact PMF for the sum of `n_pos` positive `dK` dice and `n_neg` negative `dK` dice.
+/// Exact PMF for the sum of `pos_dice` positive `dK` dice and `neg_dice` negative `dK` dice.
 #[pyfunction]
-#[pyo3(signature = (n_pos, k, n_neg=0))]
-pub fn sum_dice_pool_pmf(n_pos: usize, k: i32, n_neg: usize) -> Pmf {
-    satya_engine::sum_dice_pool_pmf(n_pos, k, n_neg)
+#[pyo3(signature = (pos_dice, sides, neg_dice=0))]
+pub fn sum_dice_pool_pmf(pos_dice: usize, sides: i32, neg_dice: usize) -> Pmf {
+    satya_engine::sum_dice_pool_pmf(pos_dice, sides, neg_dice)
 }
 
 /// Exact PMF for counting successes in an $N\text{d}K$ pool.
 #[pyfunction]
-#[pyo3(signature = (n, k, target, roll_under=true, crit_double_on_one=false))]
+#[pyo3(signature = (pool_size, sides, target_num, roll_under=true, crit_on_one_double=false))]
 pub fn count_successes_pmf(
-    n: usize,
-    k: i32,
-    target: i32,
+    pool_size: usize,
+    sides: i32,
+    target_num: i32,
     roll_under: bool,
-    crit_double_on_one: bool,
+    crit_on_one_double: bool,
 ) -> Pmf {
-    satya_engine::count_successes_pmf(n, k, target, roll_under, crit_double_on_one)
+    satya_engine::count_successes_pmf(pool_size, sides, target_num, roll_under, crit_on_one_double)
 }
 
 /// Exact PMF for a single exploding die (`dK`) up to `max_explosions`.
 #[pyfunction]
-#[pyo3(signature = (k, explode_at=None, max_explosions=4))]
-pub fn single_exploding_die_pmf(k: i32, explode_at: Option<i32>, max_explosions: usize) -> Pmf {
-    satya_engine::single_exploding_die_pmf(k, explode_at, max_explosions)
-}
-
-/// Exact PMF for the maximum of $N$ exploding `dK` dice (Gumbel extreme-value distribution).
-#[pyfunction]
-#[pyo3(signature = (n, k, explode_at=None, max_explosions=4))]
-pub fn exploding_pool_keep_highest_pmf(
-    n: usize,
-    k: i32,
-    explode_at: Option<i32>,
+#[pyo3(signature = (sides, explode_min=None, max_explosions=4))]
+pub fn single_exploding_die_pmf(
+    sides: i32,
+    explode_min: Option<i32>,
     max_explosions: usize,
 ) -> Pmf {
-    satya_engine::exploding_pool_keep_highest_pmf(n, k, explode_at, max_explosions)
+    satya_engine::single_exploding_die_pmf(sides, explode_min, max_explosions)
 }
 
-/// Exact PMF of the $r$-th order statistic ($X_{(r)}$, 1-indexed from lowest) of $N\text{d}K$.
+/// Exact PMF for the maximum of `pool_size` exploding `dK` dice (Gumbel extreme-value distribution).
 #[pyfunction]
-pub fn order_statistic_pmf(n: usize, k: i32, rank: usize) -> Pmf {
-    satya_engine::order_statistic_pmf(n, k, rank)
+#[pyo3(signature = (pool_size, sides, explode_min=None, max_explosions=4))]
+pub fn exploding_pool_keep_highest_pmf(
+    pool_size: usize,
+    sides: i32,
+    explode_min: Option<i32>,
+    max_explosions: usize,
+) -> Pmf {
+    satya_engine::exploding_pool_keep_highest_pmf(pool_size, sides, explode_min, max_explosions)
+}
+
+/// Exact PMF of the `k_rank_from_lowest`-th order statistic ($X_{(k)}$, 1-indexed from lowest) of $N\text{d}K$.
+#[pyfunction]
+#[pyo3(signature = (pool_size, sides, k_rank_from_lowest))]
+pub fn order_statistic_pmf(
+    pool_size: usize,
+    sides: i32,
+    k_rank_from_lowest: usize,
+) -> PyResult<Pmf> {
+    satya_engine::try_order_statistic_pmf(pool_size, sides, k_rank_from_lowest).map_err(to_py_err)
 }
 
 /// Exact PMF when rolling $N\text{d}K$ and selecting the die closest to (`"closest"`) or furthest from (`"furthest"`) the midpoint.
 #[pyfunction]
-#[pyo3(signature = (n, k, mode="closest"))]
-pub fn center_distance_selection_pmf(n: usize, k: i32, mode: &str) -> PyResult<Pmf> {
+#[pyo3(signature = (pool_size, sides, mode="furthest"))]
+pub fn center_distance_selection_pmf(pool_size: usize, sides: i32, mode: &str) -> PyResult<Pmf> {
     let m = match mode.trim().to_ascii_lowercase().as_str() {
         "closest" | "focus" => CenterDistanceMode::Closest,
         "furthest" | "chaos" => CenterDistanceMode::Furthest,
@@ -658,45 +672,49 @@ pub fn center_distance_selection_pmf(n: usize, k: i32, mode: &str) -> PyResult<P
             )));
         }
     };
-    Ok(satya_engine::center_distance_selection_pmf(n, k, m))
+    Ok(satya_engine::center_distance_selection_pmf(
+        pool_size, sides, m,
+    ))
 }
 
 /// Exact PMF for a Regime-Switching (Median-Gated) pool of $N\text{d}K$.
 #[pyfunction]
-#[pyo3(signature = (n, k, threshold, roll_under=false))]
+#[pyo3(signature = (pool_size, sides, gate_tn, roll_under=false))]
 pub fn median_gated_bimodal_pmf(
-    n: usize,
-    k: i32,
-    threshold: i32,
+    pool_size: usize,
+    sides: i32,
+    gate_tn: i32,
     roll_under: bool,
 ) -> PyResult<Pmf> {
-    satya_engine::try_median_gated_bimodal_pmf(n, k, threshold, roll_under).map_err(to_py_err)
+    satya_engine::try_median_gated_bimodal_pmf(pool_size, sides, gate_tn, roll_under)
+        .map_err(to_py_err)
 }
 
 /// Exact PMF for the product of $N\text{d}K$ ($Z = \prod_{i=1}^N X_i$).
 #[pyfunction]
-pub fn multiplicative_pool_pmf(n: usize, k: i32) -> Pmf {
-    satya_engine::multiplicative_pool_pmf(n, k)
+#[pyo3(signature = (pool_size, sides))]
+pub fn multiplicative_pool_pmf(pool_size: usize, sides: i32) -> Pmf {
+    satya_engine::multiplicative_pool_pmf(pool_size, sides)
 }
 
 /// Exact PMF for the Two-List Cascading ("Watershed" / "Recoil") mechanic, returning `(success_pmf, final_y_pmf)`.
 #[pyfunction]
-#[pyo3(signature = (n_pairs, k, threshold, delta_over, delta_under, carry_mode="markov_step", count_under_as_success=false, invert_feedback=false))]
+#[pyo3(signature = (num_pairs, sides, characteristic_c, delta_over=3, delta_under=3, mode="markov_step", count_under_as_success=false, invert_feedback=false))]
 pub fn paired_list_cascade_pmfs(
-    n_pairs: usize,
-    k: i32,
-    threshold: i32,
+    num_pairs: usize,
+    sides: i32,
+    characteristic_c: i32,
     delta_over: i32,
     delta_under: i32,
-    carry_mode: &str,
+    mode: &str,
     count_under_as_success: bool,
     invert_feedback: bool,
 ) -> PyResult<(Pmf, Pmf)> {
-    let cm = CarryMode::from_str(carry_mode).map_err(to_py_err)?;
+    let cm = CarryMode::from_str(mode).map_err(to_py_err)?;
     Ok(satya_engine::paired_list_cascade_pmfs(
-        n_pairs,
-        k,
-        threshold,
+        num_pairs,
+        sides,
+        characteristic_c,
         delta_over,
         delta_under,
         cm,
@@ -705,29 +723,29 @@ pub fn paired_list_cascade_pmfs(
     ))
 }
 
-/// Exact PMF for the Signed Two-List Cascading ("Watershed" / "Recoil") mechanic over `-n_pairs..=+n_pairs`.
+/// Exact PMF for the Signed Two-List Cascading ("Watershed" / "Recoil") mechanic over `-num_pairs..=+num_pairs`.
 #[pyfunction]
-#[pyo3(signature = (n_pairs, k, threshold, delta_over, delta_under, carry_mode="markov_step", count_under_as_success=false, invert_feedback=false, botch_rule="closest_miss", margin_aggregation="piecewise_zero_floor"))]
+#[pyo3(signature = (num_pairs, sides, characteristic_c, delta_over=3, delta_under=3, mode="markov_step", count_under_as_success=true, invert_feedback=false, botch_rule="closest_miss", margin_aggregation="piecewise_zero_floor"))]
 pub fn paired_list_signed_margin_pmfs(
-    n_pairs: usize,
-    k: i32,
-    threshold: i32,
+    num_pairs: usize,
+    sides: i32,
+    characteristic_c: i32,
     delta_over: i32,
     delta_under: i32,
-    carry_mode: &str,
+    mode: &str,
     count_under_as_success: bool,
     invert_feedback: bool,
     botch_rule: &str,
     margin_aggregation: &str,
 ) -> PyResult<PySignedCascadeResult> {
-    let cm = CarryMode::from_str(carry_mode).map_err(to_py_err)?;
+    let cm = CarryMode::from_str(mode).map_err(to_py_err)?;
     let br = BotchRule::from_str(botch_rule).map_err(to_py_err)?;
     let ma = MarginAggregation::from_str(margin_aggregation).map_err(to_py_err)?;
     Ok(PySignedCascadeResult::from(
         satya_engine::paired_list_signed_margin_pmfs(
-            n_pairs,
-            k,
-            threshold,
+            num_pairs,
+            sides,
+            characteristic_c,
             delta_over,
             delta_under,
             cm,
@@ -919,6 +937,258 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
     satya_engine::render_rules_markdown_to_html(markdown)
 }
 
+/// Classifies a single `(player, gm)` state realization into a contested outcome kind and net margin.
+#[pyfunction]
+#[pyo3(signature = (sp, bp, mp, sg, bg, mg, tie_rule="hybrid_signed_margin"))]
+pub fn classify_contested_outcome(
+    sp: i32,
+    bp: i32,
+    mp: i32,
+    sg: i32,
+    bg: i32,
+    mg: i32,
+    tie_rule: &str,
+) -> PyResult<(String, i32)> {
+    let tr = ContestedTieRule::from_str(tie_rule).map_err(to_py_err)?;
+    let (kind, net_margin) =
+        satya_engine::classify_contested_outcome(sp, bp, mp, sg, bg, mg, tr);
+    Ok((kind.as_str().to_string(), net_margin))
+}
+
+/// Computes exact combinatorial probabilities for a Contested Two-List Cascade check.
+#[pyfunction]
+#[pyo3(signature = (
+    player_skill_n,
+    player_control_c=10,
+    player_internal_mod=0,
+    player_known_tool_mod=0,
+    gm_pairs=1,
+    hidden_external_difficulty=0,
+    tie_rule="hybrid_signed_margin",
+    carry_mode="markov_step",
+    gm_mode="tiered_single_pair",
+    gm_over_tier_step=4
+))]
+pub fn compute_contested_cascade_odds<'py>(
+    py: Python<'py>,
+    player_skill_n: usize,
+    player_control_c: i32,
+    player_internal_mod: i32,
+    player_known_tool_mod: i32,
+    gm_pairs: usize,
+    hidden_external_difficulty: i32,
+    tie_rule: &str,
+    carry_mode: &str,
+    gm_mode: &str,
+    gm_over_tier_step: i32,
+) -> PyResult<Bound<'py, PyDict>> {
+    let cm = CarryMode::from_str(carry_mode).map_err(to_py_err)?;
+    let tr = ContestedTieRule::from_str(tie_rule).map_err(to_py_err)?;
+    let gm_res_mode = match gm_mode.trim().to_ascii_lowercase().as_str() {
+        "tiered_single_pair" => GmResistanceMode::TieredSinglePair {
+            step_size: gm_over_tier_step,
+        },
+        "full_cascade" => GmResistanceMode::FullCascade,
+        other => {
+            return Err(to_py_err(format!(
+                "Unknown gm_mode: '{other}' (expected 'tiered_single_pair' or 'full_cascade')"
+            )));
+        }
+    };
+
+    let mut player = CascadeTaskParams::new_k20(
+        player_skill_n,
+        player_control_c,
+        player_internal_mod,
+        player_known_tool_mod,
+    );
+    player.carry_mode = cm;
+
+    let mut gm = CascadeTaskParams::new_k20(1.max(gm_pairs), 10 + hidden_external_difficulty, 0, 0);
+    gm.carry_mode = cm;
+
+    let odds = compute_contested_cascade_odds_with_mode(&player, &gm, gm_res_mode, tr);
+
+    let dict = PyDict::new(py);
+    dict.set_item("net_signed_margin_pmf", odds.net_signed_margin_pmf)?;
+    dict.set_item("net_success_pmf", odds.net_success_pmf)?;
+    dict.set_item("prob_total_win", odds.prob_total_win)?;
+    dict.set_item(
+        "prob_clean_or_extraordinary_win",
+        odds.prob_clean_or_extraordinary_win,
+    )?;
+    dict.set_item("prob_extraordinary_success", odds.prob_extraordinary_success)?;
+    dict.set_item("prob_clean_success", odds.prob_clean_success)?;
+    dict.set_item("prob_partial_success", odds.prob_partial_success)?;
+    dict.set_item("prob_floor_breach_partial", odds.prob_floor_breach_partial)?;
+    dict.set_item("prob_grazing_tie_partial", odds.prob_grazing_tie_partial)?;
+    dict.set_item("prob_lucky_break_partial", odds.prob_lucky_break_partial)?;
+    dict.set_item("prob_clean_failure", odds.prob_clean_failure)?;
+    dict.set_item("prob_botch_failure", odds.prob_botch_failure)?;
+    dict.set_item(
+        "net_margin_stats",
+        PyDistributionStats::from(odds.net_margin_stats),
+    )?;
+    dict.set_item("bimodality_coefficient", odds.bimodality_coefficient)?;
+    Ok(dict)
+}
+
+/// Computes the Satya Combat Tactical Pool ("Envelope & Fill") interactive lab summary.
+#[pyfunction]
+#[pyo3(signature = (
+    control_c,
+    skill_level,
+    delta_int=0,
+    delta_ext=0,
+    num_successes=2,
+    weapon_reach=2,
+    opponent_reach=2
+))]
+pub fn compute_tactical_pool_envelope<'py>(
+    py: Python<'py>,
+    control_c: i32,
+    skill_level: i32,
+    delta_int: i32,
+    delta_ext: i32,
+    num_successes: i32,
+    weapon_reach: i32,
+    opponent_reach: i32,
+) -> PyResult<Bound<'py, PyDict>> {
+    let res = satya_engine::compute_tactical_pool_envelope(
+        control_c,
+        skill_level,
+        delta_int,
+        delta_ext,
+        num_successes,
+        weapon_reach,
+        opponent_reach,
+    );
+    let dict = PyDict::new(py);
+    dict.set_item("base_envelope", res.base_envelope)?;
+    dict.set_item("raw_pool", res.raw_pool)?;
+    dict.set_item("effective_pool", res.effective_pool)?;
+    dict.set_item("overflow_wasted", res.overflow_wasted)?;
+    dict.set_item("reach_modifier", res.reach_modifier)?;
+    dict.set_item("max_tempo", res.max_tempo)?;
+    dict.set_item("max_control", res.max_control)?;
+    dict.set_item("max_force", res.max_force)?;
+    dict.set_item("backend", "satya_py (Rust PyO3)")?;
+    Ok(dict)
+}
+
+/// Evaluates a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) contested exchange.
+#[pyfunction]
+#[pyo3(signature = (
+    attacker_tempo,
+    attacker_control,
+    attacker_force,
+    defender_tempo,
+    defender_control,
+    defender_force,
+    attacker_root=12,
+    defender_guard=4,
+    armor_dr=3
+))]
+pub fn evaluate_tactical_triad_contest<'py>(
+    py: Python<'py>,
+    attacker_tempo: i32,
+    attacker_control: i32,
+    attacker_force: i32,
+    defender_tempo: i32,
+    defender_control: i32,
+    defender_force: i32,
+    attacker_root: i32,
+    defender_guard: i32,
+    armor_dr: i32,
+) -> PyResult<Bound<'py, PyDict>> {
+    let res = satya_engine::evaluate_tactical_triad_contest(
+        attacker_tempo,
+        attacker_control,
+        attacker_force,
+        defender_tempo,
+        defender_control,
+        defender_force,
+        attacker_root,
+        defender_guard,
+        armor_dr,
+    );
+    let dict = PyDict::new(py);
+    dict.set_item("net_tempo", res.net_tempo)?;
+    dict.set_item("net_control", res.net_control)?;
+    dict.set_item("seizes_initiative", res.seizes_initiative)?;
+    dict.set_item("guard_broken", res.guard_broken)?;
+    dict.set_item("throw_triggered", res.throw_triggered)?;
+    dict.set_item("penetrating_force", res.penetrating_force)?;
+    dict.set_item("next_tick_cost", res.next_tick_cost)?;
+    dict.set_item("archetype_label", res.archetype_label)?;
+    dict.set_item("outcome_summary", res.outcome_summary)?;
+    dict.set_item("backend", "satya_py (Rust PyO3)")?;
+    Ok(dict)
+}
+
+/// Computes non-linear skill level `N` (`0..10`) from study hours using Chapter 6's exponential curve.
+#[pyfunction]
+#[pyo3(signature = (
+    hours_studied,
+    difficulty_multiplier=1.0,
+    instruction_quality=1.0,
+    aptitude_bonus=0
+))]
+pub fn compute_lifepath_skill_progression<'py>(
+    py: Python<'py>,
+    hours_studied: f64,
+    difficulty_multiplier: f64,
+    instruction_quality: f64,
+    aptitude_bonus: i32,
+) -> PyResult<Bound<'py, PyDict>> {
+    let res = satya_engine::compute_lifepath_skill_progression(
+        hours_studied,
+        difficulty_multiplier,
+        instruction_quality,
+        aptitude_bonus,
+    );
+    let dict = PyDict::new(py);
+    dict.set_item("raw_hours", res.raw_hours)?;
+    dict.set_item("effective_hours", res.effective_hours)?;
+    dict.set_item("skill_level_n", res.skill_level_n)?;
+    dict.set_item("next_level_n", res.next_level_n)?;
+    dict.set_item("hours_to_next_level", res.hours_to_next_level)?;
+    dict.set_item("cumulative_thresholds", res.cumulative_thresholds)?;
+    Ok(dict)
+}
+
+/// Computes Cognitive Dissonance pressure and belief-shift outcome from Chapter 9.
+#[pyfunction]
+#[pyo3(signature = (
+    argument_margin,
+    target_conviction,
+    evidence_tier,
+    shared_values_bonus=0,
+    public_audience_pressure=0
+))]
+pub fn compute_social_dissonance_check<'py>(
+    py: Python<'py>,
+    argument_margin: i32,
+    target_conviction: i32,
+    evidence_tier: i32,
+    shared_values_bonus: i32,
+    public_audience_pressure: i32,
+) -> PyResult<Bound<'py, PyDict>> {
+    let res = satya_engine::compute_social_dissonance_check(
+        argument_margin,
+        target_conviction,
+        evidence_tier,
+        shared_values_bonus,
+        public_audience_pressure,
+    );
+    let dict = PyDict::new(py);
+    dict.set_item("dissonance_pressure", res.dissonance_pressure)?;
+    dict.set_item("resistance_threshold", res.resistance_threshold)?;
+    dict.set_item("net_dissonance_shift", res.net_dissonance_shift)?;
+    dict.set_item("social_outcome", res.social_outcome)?;
+    Ok(dict)
+}
+
 /// PyO3 module definition for `satya_py`.
 #[pymodule]
 pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -956,6 +1226,12 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_rules_chapter, m)?)?;
     m.add_function(wrap_pyfunction!(search_rules_book, m)?)?;
     m.add_function(wrap_pyfunction!(render_rules_markdown_to_html, m)?)?;
+    m.add_function(wrap_pyfunction!(classify_contested_outcome, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_contested_cascade_odds, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_tactical_pool_envelope, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_tactical_triad_contest, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_lifepath_skill_progression, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_social_dissonance_check, m)?)?;
 
     Ok(())
 }
@@ -987,7 +1263,7 @@ mod tests {
         assert!(triad.valid);
 
         let chapters = list_rules_chapters();
-        assert_eq!(chapters.len(), 13);
+        assert_eq!(chapters.len(), 14);
 
         let hits = search_rules_book("Tactical Triad", 3);
         assert!(!hits.is_empty());

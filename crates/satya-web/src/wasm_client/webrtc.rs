@@ -59,21 +59,31 @@ pub(crate) fn sync_workspace_drawers_dom() {
         }
     }
 
+    let any_rail_collapsed = webcam_collapsed || chat_collapsed || ttrpg_collapsed;
+    let both_center_collapsed = chat_collapsed && ttrpg_collapsed;
+
     if let Some(col) = get_element("webrtc-dock-column") {
-        col.set_class_name(if webcam_collapsed {
+        col.set_class_name(if webcam_collapsed || (is_floating && any_rail_collapsed) {
             "col-webcams is-collapsed"
         } else {
             "col-webcams"
         });
     }
 
+    if let Some(rails_dock) =
+        get_element("right-drawer-rails").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        let _ = rails_dock
+            .style()
+            .set_property("display", if any_rail_collapsed { "flex" } else { "none" });
+    }
+
     if let Some(rail) =
         get_element("webcam-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
     {
-        let _ = rail.style().set_property(
-            "display",
-            if webcam_collapsed { "flex" } else { "none" },
-        );
+        let _ = rail
+            .style()
+            .set_property("display", if webcam_collapsed { "flex" } else { "none" });
     }
 
     if let Some(chat_card) = get_element("chat-card").and_then(|e| e.dyn_into::<HtmlElement>().ok())
@@ -92,10 +102,9 @@ pub(crate) fn sync_workspace_drawers_dom() {
     if let Some(chat_rail) =
         get_element("chat-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
     {
-        let _ = chat_rail.style().set_property(
-            "display",
-            if chat_collapsed { "flex" } else { "none" },
-        );
+        let _ = chat_rail
+            .style()
+            .set_property("display", if chat_collapsed { "flex" } else { "none" });
     }
 
     if let Some(ttrpg_card) =
@@ -115,24 +124,26 @@ pub(crate) fn sync_workspace_drawers_dom() {
     if let Some(ttrpg_rail) =
         get_element("ttrpg-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
     {
-        let _ = ttrpg_rail.style().set_property(
-            "display",
-            if ttrpg_collapsed { "flex" } else { "none" },
-        );
+        let _ = ttrpg_rail
+            .style()
+            .set_property("display", if ttrpg_collapsed { "flex" } else { "none" });
     }
 
-    let both_center_collapsed = chat_collapsed && ttrpg_collapsed;
-    if let Some(center_col) = get_element("center-column") {
-        center_col.set_class_name(if both_center_collapsed {
-            "col-center is-collapsed"
+    if let Some(center_col) =
+        get_element("center-column").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        if both_center_collapsed {
+            center_col.set_class_name("col-center is-collapsed");
+            let _ = center_col.style().set_property("display", "none");
         } else {
-            "col-center"
-        });
+            center_col.set_class_name("col-center");
+            let _ = center_col.style().set_property("display", "flex");
+        }
     }
 
     if let Some(ws_panel) = get_element("workspace-panel") {
         let mut classes = String::from("workspace-columns");
-        if webcam_collapsed {
+        if webcam_collapsed || (is_floating && any_rail_collapsed) {
             classes.push_str(" webcam-collapsed");
         } else if is_floating {
             classes.push_str(" webcam-undocked");

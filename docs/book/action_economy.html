@@ -33,46 +33,165 @@
       height: 100vh;
       overflow-y: auto;
     }
-    .book-brand { font-size: 1.15rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
-    .book-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }
-    .book-nav-part { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
-    .book-nav-link { display: block; padding: 7px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.88rem; margin-bottom: 3px; }
+    .book-brand {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .book-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .book-nav-part {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 14px 0 6px;
+      font-weight: 600;
+    }
+    .book-nav-link {
+      display: block;
+      padding: 7px 10px;
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.88rem;
+      margin-bottom: 3px;
+    }
     .book-nav-link:hover { background: rgba(56, 189, 248, 0.12); }
-    .book-nav-link.active { background: rgba(56, 189, 248, 0.2); color: var(--accent); font-weight: 600; }
-    main.book-main { max-width: 980px; padding: 32px 44px 64px; line-height: 1.65; }
+    .book-nav-link.active {
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    main.book-main {
+      max-width: 980px;
+      padding: 32px 44px 64px;
+      line-height: 1.65;
+    }
     h1, h2, h3, h4 { color: #f8fafc; }
     h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
     h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
     a { color: var(--accent); }
     code, pre { font-family: "JetBrains Mono", Consolas, monospace; }
-    .rules-inline-code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }
-    .rules-code-block { background: #0f172a; border: 1px solid var(--border); padding: 14px; border-radius: 8px; overflow-x: auto; }
+    .rules-inline-code {
+      background: #1e293b;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+    }
+    .rules-code-block {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      padding: 14px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
     .rules-table-wrap { overflow-x: auto; margin: 14px 0; }
-    .rules-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    .rules-table th, .rules-table td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+    .rules-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .rules-table th, .rules-table td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+    }
     .rules-table th { background: #1e293b; color: var(--accent); }
-    .rules-alert, .rules-blockquote { border-left: 4px solid var(--accent); background: rgba(30, 41, 59, 0.55); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+    .rules-alert, .rules-blockquote {
+      border-left: 4px solid var(--accent);
+      background: rgba(30, 41, 59, 0.55);
+      padding: 10px 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 14px 0;
+    }
     .rules-alert-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
-    .book-interactive-widget { background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin: 24px 0; }
-    .widget-grid { display: grid; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .widget-panel { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
-    .widget-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-    .widget-controls label, label.full-width { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 4px; }
-    .widget-controls input, label.full-width input { background: #1e293b; border: 1px solid #334155; color: var(--text); padding: 6px 8px; border-radius: 4px; }
-    .widget-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-    .widget-presets button { background: #1e293b; border: 1px solid #38bdf8; color: var(--accent); padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
-    .book-pager { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
-    .book-pager-btn { background: var(--panel); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; }
+    .book-interactive-widget {
+      background: #111827;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+    .widget-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .widget-panel {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .widget-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .widget-controls label, label.full-width {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.8rem;
+      color: var(--muted);
+      gap: 4px;
+    }
+    .widget-controls input, label.full-width input {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 4px;
+    }
+    .widget-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+    .widget-presets button {
+      background: #1e293b;
+      border: 1px solid #38bdf8;
+      color: var(--accent);
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .book-pager {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .book-pager-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+    @media (max-width: 900px) {
+      body { grid-template-columns: 1fr; }
+      aside.book-sidebar { position: static; height: auto; }
+      .widget-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <aside class="book-sidebar">
     <div class="book-brand">SATYA // RULES BOOK</div>
     <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
-    <a href="index.html" class="book-nav-link">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Foundation &amp; Mathematical Calibration</div><a href="design_philosophy.html" class="book-nav-link">1. An RPG for a More Civilized Age: Design Philosophy</a><a href="probability.html" class="book-nav-link">2. Probability &amp; Calibration of the Cascading Dice Mechanic</a><div class="book-nav-part">Part II: Core Mechanics, Task Resolution &amp; Action Economy</div><a href="tasks.html" class="book-nav-link">3. Cascading 2d20 Engine &amp; Task Resolution</a><a href="action_economy.html" class="book-nav-link active">4. Action Economy, OODA Loop, Time Scales &amp; Stealth</a><div class="book-nav-part">Part III: Character Architecture, Skills, Lifepaths &amp; Economy</div><a href="characteristics.html" class="book-nav-link">5. Characteristics, Senses, Psyche &amp; Aptitudes</a><a href="skills_and_trees.html" class="book-nav-link">6. Skill System &amp; Hierarchical Skill Trees</a><a href="lifepaths_and_economy.html" class="book-nav-link">7. Lifepath Character Creation, Socioeconomic Upkeep &amp; Heat</a><div class="book-nav-part">Part IV: Psyche, Morale &amp; Social Combat</div><a href="psyche_and_social.html" class="book-nav-link">8. Psyche, Morale &amp; Social Combat</a><div class="book-nav-part">Part V: Combat Architecture, Close Quarters &amp; Firefights</div><a href="tactical_triad.html" class="book-nav-link">9. Combat Architecture, Tactical Triad &amp; Pools</a><a href="melee_combat.html" class="book-nav-link">10. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a><a href="ranged_combat_and_armor.html" class="book-nav-link">11. Ranged Combat, Suppression, Armor &amp; Weapon Reliability</a><div class="book-nav-part">Part VI: Health, Trauma, Movement, Vehicles &amp; Survival</div><a href="health_and_trauma.html" class="book-nav-link">12. Health, Anatomical Trauma, Fatigue &amp; Mental Conditions</a><a href="movement_and_environment.html" class="book-nav-link">13. Movement, Encumbrance, Vehicles &amp; Environmental Survival</a>
+    <a href="index.html" class="book-nav-link ">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Foundation &amp; Mathematical Calibration</div><a href="design_philosophy.html" class="book-nav-link">1. An RPG for a More Civilized Age: Design Philosophy</a><a href="notation_glossary.html" class="book-nav-link">2. Mathematical Notation, Variables &amp; Formula Glossary</a><a href="probability.html" class="book-nav-link">3. Probability &amp; Calibration of the Cascading Dice Mechanic</a><div class="book-nav-part">Part II: Core Mechanics, Task Resolution &amp; Action Economy</div><a href="tasks.html" class="book-nav-link">4. Cascading 2d20 Engine &amp; Task Resolution</a><a href="action_economy.html" class="book-nav-link active">5. Action Economy, OODA Loop, Time Scales &amp; Stealth</a><div class="book-nav-part">Part III: Character Architecture, Skills, Lifepaths &amp; Economy</div><a href="characteristics.html" class="book-nav-link">6. Characteristics, Senses, Psyche &amp; Aptitudes</a><a href="skills_and_trees.html" class="book-nav-link">7. Skill System &amp; Hierarchical Skill Trees</a><a href="lifepaths_and_economy.html" class="book-nav-link">8. Lifepath Character Creation, Socioeconomic Upkeep &amp; Heat</a><div class="book-nav-part">Part IV: Psyche, Morale &amp; Social Combat</div><a href="psyche_and_social.html" class="book-nav-link">9. Psyche, Morale &amp; Social Combat</a><div class="book-nav-part">Part V: Combat Architecture, Close Quarters &amp; Firefights</div><a href="tactical_triad.html" class="book-nav-link">10. Combat Architecture, Tactical Triad &amp; Pools</a><a href="melee_combat.html" class="book-nav-link">11. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a><a href="ranged_combat_and_armor.html" class="book-nav-link">12. Ranged Combat, Suppression, Armor &amp; Weapon Reliability</a><div class="book-nav-part">Part VI: Health, Trauma, Movement, Vehicles &amp; Survival</div><a href="health_and_trauma.html" class="book-nav-link">13. Health, Anatomical Trauma, Fatigue &amp; Mental Conditions</a><a href="movement_and_environment.html" class="book-nav-link">14. Movement, Encumbrance, Vehicles &amp; Environmental Survival</a>
   </aside>
   <main class="book-main">
-    <article class="satya-rules-article"><h1 id="action-economy-ooda-loops-the-count-up-tick-clock-multi-sensory-perception">Action Economy, OODA Loops, The Count-Up Tick Clock &amp; Multi-Sensory Perception</h1><p>This chapter defines the canonical <strong>Action Economy, Temporal Resolution, and Multi-Sensory Perception System</strong> for <strong>Satya</strong>. Unlike traditional tabletop systems that slice time into rigid, alternating 6-second turns where every participant receives an identical bundle of &quot;1 Standard Action + 1 Move Action + 1 Bonus Action,&quot; Satya resolves time on a continuous <strong>Count-Up Tick Clock</strong>.</p><p>Every physical, mental, perceptual, and communicative act consumes a concrete number of <strong>Ticks (<code class="rules-inline-code">TC</code>)</strong>. Crucially, Satya does <strong>not</strong> treat action speed as purely physical muscle twitch or visual nerve latency: in John Boyd&#39;s <strong>OODA Loop (<code class="rules-inline-code">Observe</code> $\to$ <code class="rules-inline-code">Orient</code> $\to$ <code class="rules-inline-code">Decide</code> $\to$ <code class="rules-inline-code">Act</code>)</strong>, the bottleneck in real-world engagements is just as often <strong>cognitive processing and decision synthesis (&amp;quot;Quick Thinking&amp;quot;)</strong> as it is physical movement. Every action on the clock is therefore governed by both <strong>Cognitive Decision Speed (<code class="rules-inline-code">D_cog</code>: <code class="rules-inline-code">ANA</code>, <code class="rules-inline-code">CRE</code>, <code class="rules-inline-code">FOC</code>)</strong> and <strong>Biomechanical Execution Speed (<code class="rules-inline-code">SPD</code>, <code class="rules-inline-code">DEX</code>, <code class="rules-inline-code">KIN</code>, <code class="rules-inline-code">FOR</code>, and Tactical <code class="rules-inline-code">Tempo</code> $T$)</strong>, scaled by the character&#39;s current <strong>Health, Fatigue, and Encumbrance State (<code class="rules-inline-code">action_time_factor</code>)</strong>.</p><hr class="rules-divider"/><h2 id="1-temporal-calibration-ticks-seconds-minutes">1. Temporal Calibration: Ticks, Seconds &amp; Minutes</h2><p>To bridge micro-level tactical exchanges (gunfights, blade duels, vehicular evasions) and macro-level scene tracking (hemorrhaging, breath-holding, lockpicking, security response timers), Satya anchors the <strong>Tick</strong> to human neuromuscular and visual reaction latency (<strong><code class="rules-inline-code">250 milliseconds</code></strong>):</p><div class="rules-table-wrap"><table class="rules-table"><thead><tr><th>Time Unit</th><th>Tick Equivalent</th><th>Real-World / Narrative Benchmark</th></tr></thead><tbody><tr><td><strong><code class="rules-inline-code">1 Tick</code></strong></td><td><strong><code class="rules-inline-code">1 Tick</code></strong></td><td><strong><code class="rules-inline-code">0.25 Seconds</code> (<code class="rules-inline-code">250 ms</code>)</strong> — Human visual OODA reaction latency; dropping a held object; a single syllable or trigger break.</td></tr><tr><td><strong><code class="rules-inline-code">1 Second</code></strong></td><td><strong><code class="rules-inline-code">4 Ticks</code></strong></td><td><strong><code class="rules-inline-code">1.00 Second</code></strong> — A fast snap-jab, a 1-step sidestep, or <code class="rules-inline-code">7.5 meters</code> of sprinting at average human <code class="rules-inline-code">SPD 10</code>.</td></tr><tr><td><strong><code class="rules-inline-code">1 Tactical Window</code></strong></td><td><strong><code class="rules-inline-code">20 Ticks</code></strong></td><td><strong><code class="rules-inline-code">5.00 Seconds</code></strong> — One standard HUD cycle on the Satya Combat Tracker (<code class="rules-inline-code">Round</code> marker advances every <code class="rules-inline-code">20 Ticks</code>); typically encompasses <code class="rules-inline-code">2–3</code> brisk exchanges.</td></tr><tr><td><strong><code class="rules-inline-code">1 Minute</code></strong></td><td><strong><code class="rules-inline-code">240 Ticks</code></strong></td><td><strong><code class="rules-inline-code">60.0 Seconds</code> (<code class="rules-inline-code">12</code> Tactical Windows)</strong> — Standard interval for <strong>Venous Hemorrhage</strong> ticks, <strong>Asphyxiation / Breath-Holding</strong> checks, and short technical tasks.</td></tr><tr><td><strong><code class="rules-inline-code">15 Minutes</code></strong></td><td><strong><code class="rules-inline-code">3,600 Ticks</code></strong></td><td><strong>Scene / Post-Combat Recovery Window</strong> — Short rest interval for catching breath (<code class="rules-inline-code">-1</code> <code class="rules-inline-code">fatigue_level</code>), applying field dressings, or conducting a room search.</td></tr><tr><td><strong><code class="rules-inline-code">1 Hour</code></strong></td><td><strong><code class="rules-inline-code">14,400 Ticks</code></strong></td><td><strong>Overland / Investigation Interval</strong> — Standard interval for overland march distance, surgical procedures, and environmental exposure (<code class="rules-inline-code">Temperature</code> / <code class="rules-inline-code">Hydration</code>).</td></tr></tbody></table></div><pre class="mermaid rules-mermaid">flowchart LR
+    <article class="satya-rules-article"><h1 id="action-economy-ooda-loops-the-count-up-tick-clock-multi-sensory-perception">Action Economy, OODA Loops, The Count-Up Tick Clock &amp; Multi-Sensory Perception</h1><p>This chapter defines the canonical <strong>Action Economy, Temporal Resolution, and Multi-Sensory Perception System</strong> for <strong>Satya</strong>. Unlike traditional tabletop systems that slice time into rigid, alternating 6-second turns where every participant receives an identical bundle of &quot;1 Standard Action + 1 Move Action + 1 Bonus Action,&quot; Satya resolves time on a continuous <strong>Count-Up Tick Clock</strong>.</p><p>Every physical, mental, perceptual, and communicative act consumes a concrete number of <strong>Ticks (<code class="rules-inline-code">TC</code>)</strong>. Crucially, Satya does <strong>not</strong> treat action speed as purely physical muscle twitch or visual nerve latency: in John Boyd&#39;s <strong>OODA Loop (<code class="rules-inline-code">Observe</code> $\to$ <code class="rules-inline-code">Orient</code> $\to$ <code class="rules-inline-code">Decide</code> $\to$ <code class="rules-inline-code">Act</code>)</strong>, the bottleneck in real-world engagements is just as often <strong>cognitive processing and decision synthesis (&amp;quot;Quick Thinking&amp;quot;)</strong> as it is physical movement. Every action on the clock is therefore governed by both <strong>Cognitive Decision Speed (<code class="rules-inline-code">D_cog</code>: <code class="rules-inline-code">ANA</code>, <code class="rules-inline-code">CRE</code>, <code class="rules-inline-code">FOC</code>)</strong> and <strong>Biomechanical Execution Speed (<code class="rules-inline-code">SPD</code>, <code class="rules-inline-code">DEX</code>, <code class="rules-inline-code">KIN</code>, <code class="rules-inline-code">FOR</code>, and Tactical <code class="rules-inline-code">Tempo</code> $T$)</strong>, scaled by the character&#39;s current <strong>Health, Fatigue, and Encumbrance State (<code class="rules-inline-code">action_time_factor</code>)</strong> (for a complete reference of all mathematical variables and subscripts, see the <strong><a class="rules-link" href="../01-foundation/mathematical_notation_glossary.md">Mathematical Notation, Variables &amp;amp; Formula Glossary</a></strong>).</p><hr class="rules-divider"/><h2 id="1-temporal-calibration-ticks-seconds-minutes">1. Temporal Calibration: Ticks, Seconds &amp; Minutes</h2><p>To bridge micro-level tactical exchanges (gunfights, blade duels, vehicular evasions) and macro-level scene tracking (hemorrhaging, breath-holding, lockpicking, security response timers), Satya anchors the <strong>Tick</strong> to human neuromuscular and visual reaction latency (<strong><code class="rules-inline-code">250 milliseconds</code></strong>):</p><div class="rules-table-wrap"><table class="rules-table"><thead><tr><th>Time Unit</th><th>Tick Equivalent</th><th>Real-World / Narrative Benchmark</th></tr></thead><tbody><tr><td><strong><code class="rules-inline-code">1 Tick</code></strong></td><td><strong><code class="rules-inline-code">1 Tick</code></strong></td><td><strong><code class="rules-inline-code">0.25 Seconds</code> (<code class="rules-inline-code">250 ms</code>)</strong> — Human visual OODA reaction latency; dropping a held object; a single syllable or trigger break.</td></tr><tr><td><strong><code class="rules-inline-code">1 Second</code></strong></td><td><strong><code class="rules-inline-code">4 Ticks</code></strong></td><td><strong><code class="rules-inline-code">1.00 Second</code></strong> — A fast snap-jab, a 1-step sidestep, or <code class="rules-inline-code">7.5 meters</code> of sprinting at average human <code class="rules-inline-code">SPD 10</code>.</td></tr><tr><td><strong><code class="rules-inline-code">1 Tactical Window</code></strong></td><td><strong><code class="rules-inline-code">20 Ticks</code></strong></td><td><strong><code class="rules-inline-code">5.00 Seconds</code></strong> — One standard HUD cycle on the Satya Combat Tracker (<code class="rules-inline-code">Round</code> marker advances every <code class="rules-inline-code">20 Ticks</code>); typically encompasses <code class="rules-inline-code">2–3</code> brisk exchanges.</td></tr><tr><td><strong><code class="rules-inline-code">1 Minute</code></strong></td><td><strong><code class="rules-inline-code">240 Ticks</code></strong></td><td><strong><code class="rules-inline-code">60.0 Seconds</code> (<code class="rules-inline-code">12</code> Tactical Windows)</strong> — Standard interval for <strong>Venous Hemorrhage</strong> ticks, <strong>Asphyxiation / Breath-Holding</strong> checks, and short technical tasks.</td></tr><tr><td><strong><code class="rules-inline-code">15 Minutes</code></strong></td><td><strong><code class="rules-inline-code">3,600 Ticks</code></strong></td><td><strong>Scene / Post-Combat Recovery Window</strong> — Short rest interval for catching breath (<code class="rules-inline-code">-1</code> <code class="rules-inline-code">fatigue_level</code>), applying field dressings, or conducting a room search.</td></tr><tr><td><strong><code class="rules-inline-code">1 Hour</code></strong></td><td><strong><code class="rules-inline-code">14,400 Ticks</code></strong></td><td><strong>Overland / Investigation Interval</strong> — Standard interval for overland march distance, surgical procedures, and environmental exposure (<code class="rules-inline-code">Temperature</code> / <code class="rules-inline-code">Hydration</code>).</td></tr></tbody></table></div><pre class="mermaid rules-mermaid">flowchart LR
     T1[&quot;&lt;b&gt;1 Tick = 0.25s&lt;/b&gt;&lt;br/&gt;(250 ms OODA Latency)&quot;] --&gt;|&quot;× 4&quot;| S1[&quot;&lt;b&gt;4 Ticks = 1 Second&lt;/b&gt;&lt;br/&gt;Fast Jab / Snap Shot (4–7 Ticks)&quot;]
     S1 --&gt;|&quot;× 5&quot;| W1[&quot;&lt;b&gt;20 Ticks = 5 Seconds&lt;/b&gt;&lt;br/&gt;1 Tactical HUD Window&lt;br/&gt;Standard Actions (8–12 Ticks)&quot;]
     W1 --&gt;|&quot;× 12&quot;| M1[&quot;&lt;b&gt;240 Ticks = 1 Minute&lt;/b&gt;&lt;br/&gt;Sustained Tasks, Bleed &amp;&lt;br/&gt;Breath-Holding Intervals&quot;]</pre><hr class="rules-divider"/><h2 id="2-the-full-ooda-loop-quick-thinking-tc-decide-vs-physical-execution-tc-act">2. The Full OODA Loop: &quot;Quick Thinking&quot; (<code class="rules-inline-code">TC_decide</code>) vs. Physical Execution (<code class="rules-inline-code">TC_act</code>)</h2><p>In traditional RPGs, a character with high physical <code class="rules-inline-code">Speed</code> or <code class="rules-inline-code">Dexterity</code> acts faster at *everything*, even when the situation requires complex tactical judgment or rapid improvisation. In <strong>Satya</strong>, every action on the timeline passes through <strong>two distinct latency phases</strong> mapped across the character&#39;s 25 Characteristics (see <a class="rules-link" href="characteristics.html">Character Characteristics &amp; Aptitudes</a>):</p><pre class="mermaid rules-mermaid">flowchart LR
