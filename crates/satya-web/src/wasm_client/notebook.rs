@@ -236,25 +236,29 @@ pub fn satya_load_skill_preset(skill_name: String, skill_level: i32, control_c: 
     satya_update_cascade_preview();
 }
 
-/// Advances (or resets when `delta == 0`) the Satya Action-Count (Tick) clock in the `Combat Tracker` notebook tab.
+/// Advances (or resets when `delta == 0`) the Satya Count-Up Tick Timeline (`1 Tick = 0.5s`) in the `Combat Tracker` notebook tab.
 #[wasm_bindgen]
 pub fn satya_advance_combat_tick(delta: i32) {
     let (round, tick) = with_state_mut(|st| {
         if delta <= 0 {
             st.combat_round = 1;
-            st.combat_tick = 0;
+            st.combat_tick = 1;
         } else {
             let next = st.combat_tick + (delta as u32);
-            st.combat_round += next / 20;
-            st.combat_tick = next % 20;
+            st.combat_tick = next;
+            st.combat_round = 1 + (next / 20);
         }
         (st.combat_round, st.combat_tick)
     });
-    set_text("combat-round-pill", &format!("Round {round} · Tick {tick}"));
+    let elapsed_sec = f64::from(tick) * 0.5;
+    set_text(
+        "combat-round-pill",
+        &format!("Window {round} · Tick {tick} ({elapsed_sec:.1}s)"),
+    );
     render_combat_tracker();
 }
 
-/// Formats the HTML chip list of active session combatants and their tick readiness for `#combat-tracker-list`.
+/// Formats the HTML chip list of active session combatants and their continuous Count-Up Tick readiness (`Tick_start = max(1, 15 - OODA - Awareness)`) for `#combat-tracker-list`.
 pub fn format_combat_tracker_html(roster: &[Participant], round: u32, tick: u32) -> String {
     if roster.is_empty() {
         return r#"<span class="pill pill-muted">Join or create a session to populate active combatants.</span>"#.to_string();
@@ -263,14 +267,16 @@ pub fn format_combat_tracker_html(roster: &[Participant], round: u32, tick: u32)
         .iter()
         .enumerate()
         .map(|(idx, p)| {
-            let actor_tick = (tick + (idx as u32) * 3) % 20;
+            let ooda = (13 - (idx as i32)).clamp(8, 16);
+            let start_tick = satya_engine::compute_starting_tick(ooda, 0, 0, ooda + 1, 12) as u32;
+            let actor_tick = tick.max(start_tick) + (idx as u32) * 2;
             let badge_cls = if p.participant_kind == ParticipantKind::AiAgent {
                 "participant-chip ai"
             } else {
                 "participant-chip"
             };
             format!(
-                r#"<div class="{badge_cls}"><strong>{}</strong> [{:?}] · R{round} Tick {actor_tick}</div>"#,
+                r#"<div class="{badge_cls}"><strong>{}</strong> [{:?}] · OODA {ooda} · Next Action @ Tick {actor_tick} (W{round})</div>"#,
                 escape_html(&p.display_name),
                 p.role
             )

@@ -2523,18 +2523,21 @@ fn round_1_dec(val: f64) -> f64 {
     (val * 10.0).round() / 10.0
 }
 
-/// Computes non-linear skill level $N \in [0, 10]$ from study hours using Chapter 6's exponential curve.
+/// Computes non-linear post-creation skill level $N \in [0, 10]$ from study hours using the
+/// canonical Aptitude training time multiplier (`-15%` per `+1` APT, `+20%` per `-1` APT;
+/// `characteristics_and_aptitudes.md` §9.1.3).
 ///
-/// Each rank $N \ge 1$ requires $100 \times 2^{N - 1} \times \text{difficulty\_multiplier}$ effective hours.
+/// Each rank $N \ge 1$ requires $100 \times 2^{N - 1} \times \text{difficulty\_multiplier} \times \text{aptitude\_time\_multiplier}$ hours.
 pub fn compute_lifepath_skill_progression(
     hours_studied: f64,
     difficulty_multiplier: f64,
     instruction_quality: f64,
     aptitude_bonus: i32,
 ) -> LifepathSkillProgression {
-    let eff_hours = hours_studied.max(0.0)
-        * instruction_quality.max(0.25)
-        * (1.0 + 0.08 * (aptitude_bonus as f64));
+    let apt_time_mult =
+        crate::characteristics::compute_aptitude_training_time_multiplier(aptitude_bonus);
+    let eff_hours =
+        (hours_studied.max(0.0) * instruction_quality.max(0.25)) / apt_time_mult.max(0.25);
     let diff = difficulty_multiplier.max(0.5);
     let mut cumulative_thresholds = std::collections::BTreeMap::new();
     let mut cumulative = 0.0;

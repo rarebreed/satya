@@ -857,83 +857,83 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             style="display: none;"
                         >
                             <div class="pane-toolbar">
-                                <span class="subtitle">"Satya d20 Operator Profile, Attributes & Quick-Load Skill Presets"</span>
-                                <span id="char-sheet-status-pill" class="pill pill-active">"Combat Ready · Fatigue 1 · Shock 0.0"</span>
+                                <span class="subtitle">"Satya 25-Characteristic Operator Profile, Derived OODA/D_cog & 8-Tree Skill Presets"</span>
+                                <span id="char-sheet-status-pill" class="pill pill-active">"Combat Ready · OODA 13 · D_cog 14 · Fatigue 1 · Shock 0.0"</span>
                             </div>
                             <div class="char-sheet-grid">
                                 <div class="char-stat-box">
                                     <span class="stat-label">"Control (C)"</span>
                                     <span id="char-stat-control" class="stat-value">"12"</span>
-                                    <span class="stat-note">"Base Precision"</span>
+                                    <span class="stat-note">"DEX / TAC Composite"</span>
                                 </div>
                                 <div class="char-stat-box">
-                                    <span class="stat-label">"Reflexes"</span>
+                                    <span class="stat-label">"Speed (SPD)"</span>
                                     <span class="stat-value">"14"</span>
-                                    <span class="stat-note">"Initiative / Dodge"</span>
+                                    <span class="stat-note">"OODA / Tempo Cap"</span>
                                 </div>
                                 <div class="char-stat-box">
-                                    <span class="stat-label">"Stamina"</span>
-                                    <span class="stat-value">"13"</span>
-                                    <span class="stat-note">"Endurance / Soak"</span>
+                                    <span class="stat-label">"Kinesthesia (KIN)"</span>
+                                    <span class="stat-value">"14"</span>
+                                    <span class="stat-note">"Balance / Melee Control"</span>
                                 </div>
                                 <div class="char-stat-box">
-                                    <span class="stat-label">"Intellect"</span>
+                                    <span class="stat-label">"Analysis (ANA)"</span>
                                     <span class="stat-value">"15"</span>
-                                    <span class="stat-note">"Medical / Tech"</span>
+                                    <span class="stat-note">"Quick Thinking (D_cog 14)"</span>
                                 </div>
                                 <div class="char-stat-box">
-                                    <span class="stat-label">"Resolve"</span>
-                                    <span class="stat-value">"12"</span>
-                                    <span class="stat-note">"Composure / Stress"</span>
+                                    <span class="stat-label">"Discipline (DIS)"</span>
+                                    <span class="stat-value">"14"</span>
+                                    <span class="stat-note">"FT 19 / WSR 20 / CMP 6"</span>
                                 </div>
                                 <div class="char-stat-box">
                                     <span class="stat-label">"Armor Mitigation"</span>
                                     <span class="stat-value">"DR 4"</span>
-                                    <span class="stat-note">"EVA Ballistic"</span>
+                                    <span class="stat-note">"EVA Ballistic · Tier 2 Load"</span>
                                 </div>
                             </div>
                             <div class="roster-bar">
-                                <span class="roster-title">"Trained Skills (Click to Load into Die Roller):"</span>
+                                <span class="roster-title">"Trained 8-Tree Skills (Click to Load into Die Roller):"</span>
                                 <div class="preset-users">
                                     <button
                                         type="button"
                                         class="btn-chip"
-                                        onclick="window.satyaLoadSkillPreset('Trauma Surgery', 3, 12)"
-                                        on:click=move |_| wasm_client::satya_load_skill_preset("Trauma Surgery".to_string(), 3, 12)
+                                        onclick="window.satyaLoadSkillPreset('Trauma, Orthopedic & General Surgery', 3, 12)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Trauma, Orthopedic & General Surgery".to_string(), 3, 12)
                                     >
-                                        "Trauma Surgery (N=3, C=12)"
+                                        "Trauma Surgery [Tree 3] (N=3, DEX/FOC=12)"
                                     </button>
                                     <button
                                         type="button"
                                         class="btn-chip"
-                                        onclick="window.satyaLoadSkillPreset('Zero-G Maneuver', 4, 14)"
-                                        on:click=move |_| wasm_client::satya_load_skill_preset("Zero-G Maneuver".to_string(), 4, 14)
+                                        onclick="window.satyaLoadSkillPreset('Zero-G / EVA Operations', 4, 14)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Zero-G / EVA Operations".to_string(), 4, 14)
                                     >
-                                        "Zero-G Maneuver (N=4, C=14)"
+                                        "Zero-G / EVA Ops [Tree 5] (N=4, KIN/FOC=14)"
                                     </button>
                                     <button
                                         type="button"
                                         class="btn-chip"
-                                        onclick="window.satyaLoadSkillPreset('Suppressive Fire', 3, 13)"
-                                        on:click=move |_| wasm_client::satya_load_skill_preset("Suppressive Fire".to_string(), 3, 13)
+                                        onclick="window.satyaLoadSkillPreset('Fully Automatic & Burst Weapons', 3, 13)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Fully Automatic & Burst Weapons".to_string(), 3, 13)
                                     >
-                                        "Suppressive Fire (N=3, C=13)"
+                                        "Full-Auto & Burst [Tree 6] (N=3, FOR/DEX=13)"
                                     </button>
                                     <button
                                         type="button"
                                         class="btn-chip"
-                                        onclick="window.satyaLoadSkillPreset('Sensor Recon', 2, 15)"
-                                        on:click=move |_| wasm_client::satya_load_skill_preset("Sensor Recon".to_string(), 2, 15)
+                                        onclick="window.satyaLoadSkillPreset('Surveillance, Reconnaissance & Countersurveillance', 2, 15)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Surveillance, Reconnaissance & Countersurveillance".to_string(), 2, 15)
                                     >
-                                        "Sensor Recon (N=2, C=15)"
+                                        "Surveillance & Recon [Tree 7] (N=2, SIG/FOC=15)"
                                     </button>
                                     <button
                                         type="button"
                                         class="btn-chip"
-                                        onclick="window.satyaLoadSkillPreset('Close-Quarters Breach', 4, 11)"
-                                        on:click=move |_| wasm_client::satya_load_skill_preset("Close-Quarters Breach".to_string(), 4, 11)
+                                        onclick="window.satyaLoadSkillPreset('Small-Unit Tactics & CQB Doctrine', 4, 11)"
+                                        on:click=move |_| wasm_client::satya_load_skill_preset("Small-Unit Tactics & CQB Doctrine".to_string(), 4, 11)
                                     >
-                                        "Close-Quarters Breach (N=4, C=11)"
+                                        "Small-Unit Tactics & CQB [Tree 6] (N=4, INS/ANA=11)"
                                     </button>
                                 </div>
                             </div>
@@ -950,7 +950,7 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                         >
                             <div class="pane-toolbar">
                                 <div>
-                                    <span class="subtitle">"Satya Action-Count (Tick) Initiative Timeline & Stance Economy"</span>
+                                    <span class="subtitle">"Satya Count-Up Tick Timeline (1 Tick = 0.5s) & Two-Component Action Economy"</span>
                                 </div>
                                 <div class="btn-row-compact">
                                     <span id="combat-round-pill" class="pill pill-active">"Round 1 · Tick 0"</span>
@@ -990,42 +990,42 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                 <table class="metrics-table">
                                     <thead>
                                         <tr>
-                                            <th>"Combat Stance"</th>
-                                            <th>"Target Control (TC)"</th>
-                                            <th>"Action Cost"</th>
-                                            <th>"Tactical Effect"</th>
+                                            <th>"Combat Stance / Action"</th>
+                                            <th>"Base TC (TC_decide + TC_act)"</th>
+                                            <th>"Wind-Up / Floor"</th>
+                                            <th>"Tactical & OODA Effect"</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr>
-                                            <td><strong>"Melee: Maneuver"</strong></td>
-                                            <td><span class="mono">"TC 11"</span></td>
-                                            <td>"8 ticks"</td>
-                                            <td>"Balanced footwork; +1 defensive parry margin"</td>
+                                            <td><strong>"Melee: Maneuver / Probe"</strong></td>
+                                            <td><span class="mono">"11 TC (4 decide + 7 act)"</span></td>
+                                            <td>"8 wind-up · 2 floor"</td>
+                                            <td>"INS/CRE/KIN; +1 defensive parry margin; D_cog & N>=4 compress TC_decide"</td>
                                         </tr>
                                         <tr>
-                                            <td><strong>"Melee: Power"</strong></td>
-                                            <td><span class="mono">"TC 14"</span></td>
-                                            <td>"12 ticks"</td>
-                                            <td>"Heavy kinetic strike; +2 Wound Shock on hit"</td>
+                                            <td><strong>"Melee: Heavy Power Strike"</strong></td>
+                                            <td><span class="mono">"14 TC (3 decide + 11 act)"</span></td>
+                                            <td>"9 wind-up · 2 floor"</td>
+                                            <td>"FOR/SPD/MAS; +2 Wound Shock on hit; vulnerable to fast interrupts"</td>
                                         </tr>
                                         <tr>
-                                            <td><strong>"Melee: Stability"</strong></td>
-                                            <td><span class="mono">"TC 9"</span></td>
-                                            <td>"10 ticks"</td>
-                                            <td>"Braced zero-G/recoil stance; resists knockdown"</td>
+                                            <td><strong>"Melee: Defensive Guard / Stability"</strong></td>
+                                            <td><span class="mono">"9 TC (3 decide + 6 act)"</span></td>
+                                            <td>"6 wind-up · 2 floor"</td>
+                                            <td>"KIN/INS/SPD; braced stance resists knockdown & boosts Guard Pool"</td>
                                         </tr>
                                         <tr>
-                                            <td><strong>"Ranged: Aimed"</strong></td>
-                                            <td><span class="mono">"TC 12"</span></td>
-                                            <td>"11 ticks"</td>
-                                            <td>"Deliberate sight acquisition; precision bonus"</td>
+                                            <td><strong>"Ranged: Aimed Single Shot"</strong></td>
+                                            <td><span class="mono">"12 TC (5 decide + 7 act)"</span></td>
+                                            <td>"9 wind-up · 2 floor"</td>
+                                            <td>"SIG/FOC/DEX; deliberate sight acquisition (-2 to -4 to TN)"</td>
                                         </tr>
                                         <tr>
-                                            <td><strong>"Ranged: Snap"</strong></td>
-                                            <td><span class="mono">"TC 7"</span></td>
-                                            <td>"6 ticks"</td>
-                                            <td>"Rapid reaction shot; low tick commitment"</td>
+                                            <td><strong>"Ranged: Snap Shot"</strong></td>
+                                            <td><span class="mono">"7 TC (2 decide + 5 act)"</span></td>
+                                            <td>"5 wind-up · 2 floor"</td>
+                                            <td>"SPD/DEX/ITU; rapid reaction shot (-2 precision penalty)"</td>
                                         </tr>
                                     </tbody>
                                 </table>

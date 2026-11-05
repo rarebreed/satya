@@ -12,11 +12,23 @@
 
 #![deny(missing_docs)]
 
+#[allow(missing_docs)]
+pub mod action_economy;
+#[allow(missing_docs)]
+pub mod characteristics;
 pub mod dice_probabilities;
+#[allow(missing_docs)]
+pub mod lifepath_economy;
 pub mod rules_book;
+#[allow(missing_docs)]
+pub mod skills_trees;
 
+pub use action_economy::*;
+pub use characteristics::*;
 pub use dice_probabilities::*;
+pub use lifepath_economy::*;
 pub use rules_book::*;
+pub use skills_trees::*;
 
 #[cfg(test)]
 mod tests {

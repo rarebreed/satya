@@ -1555,6 +1555,137 @@ pub fn compute_dual_skill_pool(skill_n1: usize, skill_n2: usize) -> usize {
     satya_engine::compute_dual_skill_pool(skill_n1, skill_n2)
 }
 
+/// Evaluates a two-component ($\text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$) action cost per `action_economy_and_ooda.md` (§2.3, §5.1–§5.3).
+#[pyfunction]
+#[pyo3(signature = (base_tc_decide, base_tc_act, d_cog, skill_level_n=1, apply_cognitive_offset=true, tempo_allocated=0, weapon_balance_b=0, min_total_tc_floor=2, fatigue_level=0, wound_shock_index=0.0, encumbrance_tier=1, status_time_penalty=0.0, is_concussed_or_dazed=false))]
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_two_component_action_cost(
+    py: Python<'_>,
+    base_tc_decide: i32,
+    base_tc_act: i32,
+    d_cog: i32,
+    skill_level_n: usize,
+    apply_cognitive_offset: bool,
+    tempo_allocated: i32,
+    weapon_balance_b: i32,
+    min_total_tc_floor: i32,
+    fatigue_level: i32,
+    wound_shock_index: f64,
+    encumbrance_tier: u8,
+    status_time_penalty: f64,
+    is_concussed_or_dazed: bool,
+) -> PyResult<Py<PyDict>> {
+    let tf = satya_engine::ActionTimeFactorParams {
+        fatigue_level,
+        wound_shock_index,
+        encumbrance_tier: satya_engine::EncumbranceTier::from_tier_number(encumbrance_tier),
+        status_time_penalty,
+        is_concussed_or_dazed,
+    };
+    let res = satya_engine::evaluate_combat_action_cost(
+        base_tc_decide,
+        base_tc_act,
+        d_cog,
+        skill_level_n,
+        apply_cognitive_offset,
+        tempo_allocated,
+        weapon_balance_b,
+        min_total_tc_floor,
+        &tf,
+    );
+    let d = PyDict::new(py);
+    d.set_item("base_tc_decide", res.base_tc_decide)?;
+    d.set_item("base_tc_act", res.base_tc_act)?;
+    d.set_item("base_total_tc", res.base_total_tc)?;
+    d.set_item("effective_d_cog", res.effective_d_cog)?;
+    d.set_item("delta_tc_decide", res.delta_tc_decide)?;
+    d.set_item("skill_reflex_compression", res.skill_reflex_compression)?;
+    d.set_item("effective_tc_decide", res.effective_tc_decide)?;
+    d.set_item("effective_tc_act", res.effective_tc_act)?;
+    d.set_item("physical_time_factor", res.physical_time_factor)?;
+    d.set_item("effective_total_tc", res.effective_total_tc)?;
+    d.set_item("wind_up_ticks", res.wind_up_ticks)?;
+    d.set_item("recovery_ticks", res.recovery_ticks)?;
+    Ok(d.unbind())
+}
+
+/// Computes Starting Tick on the continuous timeline, including Surprise / Ambush Orientation Freeze (`action_economy_and_ooda.md` §3.1).
+#[pyfunction]
+#[pyo3(signature = (ooda, awareness_margin=0, base_surprise_penalty_ticks=0, d_cog=10, dis=10))]
+pub fn compute_starting_tick(
+    ooda: i32,
+    awareness_margin: i32,
+    base_surprise_penalty_ticks: i32,
+    d_cog: i32,
+    dis: i32,
+) -> i32 {
+    satya_engine::compute_starting_tick(
+        ooda,
+        awareness_margin,
+        base_surprise_penalty_ticks,
+        d_cog,
+        dis,
+    )
+}
+
+/// Computes the OODA Reset / Action Pivot Penalty in ticks (`action_economy_and_ooda.md` §5.5).
+#[pyfunction]
+pub fn compute_ooda_reset_pivot_ticks(d_cog: i32, itu: i32) -> i32 {
+    satya_engine::compute_ooda_reset_pivot_ticks(d_cog, itu)
+}
+
+/// Evaluates a Lifepath Educational Advancement Roll (`2d20` with $N=2$ pairs against $\text{TN}_{\text{edu}} = 31 - C_{\text{study}} + \text{SQM}$; `lifepaths_and_economy.md` §1.2).
+#[pyfunction]
+pub fn evaluate_educational_advancement_roll(
+    py: Python<'_>,
+    dis: i32,
+    c_mental: i32,
+    aptitude_domain: i32,
+    school_quality_modifier_sqm: i32,
+    pair1: (i32, i32),
+    pair2: (i32, i32),
+) -> PyResult<Py<PyDict>> {
+    let res = satya_engine::evaluate_educational_advancement_roll(
+        dis,
+        c_mental,
+        aptitude_domain,
+        school_quality_modifier_sqm,
+        [pair1, pair2],
+    );
+    let d = PyDict::new(py);
+    d.set_item("c_study", res.c_study)?;
+    d.set_item(
+        "school_quality_modifier_sqm",
+        res.school_quality_modifier_sqm,
+    )?;
+    d.set_item("tn_edu", res.tn_edu)?;
+    d.set_item("successes", res.successes)?;
+    d.set_item("skill_levels_gained", res.skill_levels_gained)?;
+    d.set_item("grants_early_tier_unlock", res.grants_early_tier_unlock)?;
+    Ok(d.unbind())
+}
+
+/// Audits a skill unlock attempt against a canonical Lifepath preset (`"mateo_vance"` or `"priya_nair"`, `lifepaths_and_economy.md` §2.1–§2.2).
+#[pyfunction]
+pub fn audit_canonical_lifepath_character(
+    preset_name: &str,
+    skill_id: &str,
+    target_level: usize,
+) -> PyResult<String> {
+    let profile = match preset_name.trim().to_ascii_lowercase().as_str() {
+        "mateo" | "mateo_vance" => satya_engine::build_mateo_vance_lifepath(),
+        "priya" | "priya_nair" | "dr_priya_nair" => satya_engine::build_priya_nair_lifepath(),
+        other => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown lifepath preset '{other}'; expected 'mateo_vance' or 'priya_nair'"
+            )))
+        }
+    };
+    let validation = profile.audit_skill_unlock(skill_id, target_level);
+    serde_json::to_string(&validation)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
 /// PyO3 module definition for `satya_py`.
 #[pymodule]
 pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1601,6 +1732,11 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(evaluate_complementary_setup_synergy, m)?)?;
     m.add_function(wrap_pyfunction!(compute_dual_skill_pool, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_two_component_action_cost, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_starting_tick, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_ooda_reset_pivot_ticks, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_educational_advancement_roll, m)?)?;
+    m.add_function(wrap_pyfunction!(audit_canonical_lifepath_character, m)?)?;
     m.add_function(wrap_pyfunction!(list_rules_chapters, m)?)?;
     m.add_function(wrap_pyfunction!(get_rules_chapter, m)?)?;
     m.add_function(wrap_pyfunction!(search_rules_book, m)?)?;
