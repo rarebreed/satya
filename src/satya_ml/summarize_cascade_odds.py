@@ -20,7 +20,11 @@ import argparse
 from dataclasses import dataclass
 from typing import List, Literal
 
-from satya_ml.dice_probabilities import compute_stats, paired_list_signed_margin_pmfs
+from satya_ml.dice_probabilities import (
+    compute_contested_cascade_odds,
+    compute_stats,
+    paired_list_signed_margin_pmfs,
+)
 
 
 @dataclass(frozen=True)
@@ -396,11 +400,30 @@ def main() -> None:
     )
     parser.add_argument(
         "--calibration",
-        choices=["midpoint_2c", "raw_2k_minus_c", "both", "k20_full", "c_vs_n", "k10_all"],
+        choices=["midpoint_2c", "raw_2k_minus_c", "both", "k20_full", "c_vs_n", "k10_all", "contested"],
         default="both",
-        help="How C = K/2 maps to TN_eff on 2dK, 'k20_full', 'c_vs_n', or 'k10_all'.",
+        help="How C = K/2 maps to TN_eff on 2dK, 'k20_full', 'c_vs_n', 'k10_all', or 'contested'.",
     )
     args = parser.parse_args()
+
+    if args.calibration == "contested":
+        print(
+            "=== CONTESTED SWEEP 1: Hybrid 1-Pair GM Resistance (N_GM=1) Across Skill Levels (C_P=10, Delta_ext=0) ==="
+        )
+        for n_p in range(1, 9):
+            res = compute_contested_cascade_odds(
+                player_skill_n=n_p, gm_pairs=1, hidden_external_difficulty=0
+            )
+            print(
+                f"N_P={n_p}: TotalWin={res['prob_total_win']*100:.2f}%, "
+                f"CleanWin={res['prob_clean_or_extraordinary_win']*100:.2f}%, "
+                f"GrazeTie={res['prob_grazing_tie_partial']*100:.2f}%, "
+                f"LuckyBrk={res['prob_lucky_break_partial']*100:.2f}%, "
+                f"FlrBrch={res['prob_floor_breach_partial']*100:.2f}%, "
+                f"CleanFail={res['prob_clean_failure']*100:.2f}%, "
+                f"BotchFail={res['prob_botch_failure']*100:.2f}%"
+            )
+        return
 
     if args.calibration == "k10_all":
         print(compare_control_vs_skill_k10(3, 3, "markov_step", "16_minus_c"))

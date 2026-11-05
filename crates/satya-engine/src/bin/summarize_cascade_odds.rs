@@ -16,7 +16,7 @@ use std::str::FromStr;
 
 fn print_usage(prog: &str) {
     eprintln!(
-        "Usage: {prog} [--calibration {{midpoint_2c|raw_2k_minus_c|both|k20_full|c_vs_n|k10_all}}]"
+        "Usage: {prog} [--calibration {{midpoint_2c|raw_2k_minus_c|both|k20_full|c_vs_n|k10_all|contested}}]"
     );
 }
 

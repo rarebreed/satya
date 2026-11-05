@@ -2,7 +2,7 @@
 
 Because simulation-style tactical agency is at the heart of **Satya**, combat is a deeply integrated extension of **[Cascading `2d20` Engine & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md)**. As in all Task Resolutions, every combat exchange—including ranged combat—is a contested system using the Two-List Cascading (`2d20`) Watershed Mechanic.
 
-What separates combat in Satya from mainstream RPGs is the depth of tactical agency, psychological realism, and anatomical consequence—achieved through a single unified architecture (**[The Count-Up Action Clock](../02-core-mechanics/action_economy_and_ooda.md)**, **[Psyche & Morale](../04-psyche-and-social/psyche_morale_and_social_combat.md)**, and the **"Envelope & Fill" Tactical Pool**) rather than hundreds of disjointed special-case "Feat" rules. Both **[Melee Combat](melee_combat.md)** and **[Ranged Combat & Armor](ranged_combat_and_armor.md)** share this exact foundation.
+What separates combat in Satya from mainstream RPGs is the depth of tactical agency, psychological realism, and anatomical consequence—achieved through a single unified architecture (**[The Count-Up Action Clock](../02-core-mechanics/action_economy_and_ooda.md)**, **[Psyche & Morale](../04-psyche-and-social/psyche_morale_and_social_combat.md)**, and the **"Envelope & Fill" Tactical Pool**; see the **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** for all combat symbols $C_{\text{combat}}, P_{\text{base}}, P_{\text{eff}}, B, T_{\max}, C_{\max}, F_{\max}$) rather than hundreds of disjointed special-case "Feat" rules. Both **[Melee Combat](melee_combat.md)** and **[Ranged Combat & Armor](ranged_combat_and_armor.md)** share this exact foundation.
 
 ---
 

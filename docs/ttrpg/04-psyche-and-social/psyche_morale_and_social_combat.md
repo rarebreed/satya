@@ -1,6 +1,7 @@
 # Satya TTRPG Psyche, Morale & Social Combat
 
 This chapter defines the canonical **Psyche Mechanics (Behavioral Friction, Trait Drift & Conviction Surges), Psychological Drives & Combat Morale, and Social Combat ("Mental Wounds" & Cognitive Dissonance)** for **Satya**. It builds directly upon:
+- **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for definitions of all mathematical symbols and subscripts such as $\text{TN}_P, \text{TN}_{GM}, \Delta_{\text{psyche}}, \Delta_{\text{mot}}, C_{\text{morale}}, \text{CMP}$),
 - **[Characteristics, Senses, Psyche & Aptitudes](../03-character/characteristics_and_aptitudes.md)** (for the Social Primary Characteristics `COM`, `PRE`, `ELO`, Mental Characteristics `MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`, and the seven Psyche Characteristics `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`),
 - **[Skill System & Hierarchical Skill Trees](../03-character/skills_and_trees.md#38-tree-7-social-influence-interrogation--psychological-warfare-social-knowledge-fieldcraft)** (for Tree 7 Social, Influence & Interrogation skills), and
 - **[Combat Architecture & Tactical Pools](../05-combat/tactical_triad_and_pools.md)** (where Morale states directly constrain Tactical Pool allocations across `Tempo`, `Control`, and `Force`).
@@ -24,12 +25,12 @@ The GM calls for a **Psyche Friction Check** when a character attempts a deliber
 
 1. Compute the trait's **Psyche Deviation** from neutral (`10`):
    $$\Delta_{\text{psyche}} = |P - 10|$$
-2. The character rolls **Discipline (`DIS`)** (`N = 1` pair of `2d20`, or `N = 2` if trained in *Counter-Interrogation & Resistance (SERE)*) against:
-   $$\text{TN}_{\text{psyche}} = 31 - \text{DIS} + \Delta_{\text{psyche}}$$
-3. **Outcomes**:
-   - **`2+` Successes**: Clean self-mastery. The character suppresses their nature and executes the action without hesitation.
-   - **`1` Success (or `PartialSuccess`)**: The character forces themselves to go through with the act, but suffers **Internal Psychological Strain (`+2` to $\Delta_{\text{int}}$)** for the remainder of the scene as guilt, shame, or suppressed rage gnaws at their focus.
-   - **`0` Successes (`Failure` / `CriticalFailure`)**: The character balks at the threshold—freezing for `6 ticks` on the Action Clock, pulling their punch, blurting telltale hesitation, or refusing to cross the line unless they spend a full turn steeling themselves at **`+4` to $\Delta_{\text{int}}$**.
+2. The character rolls **Discipline (`DIS`)** (`N_P = 1` pair of `2d20`, or `N_P = 2` if trained in *Counter-Interrogation & Resistance (SERE)*) against their personal target $\text{TN}_P = 31 - \text{DIS}$, opposed by the GM's hidden **1-Pair Tiered Resistance Roll** against $\text{TN}_{GM} = 21 - \Delta_{\text{psyche}}$ (`4`-point over-tiers):
+   $$\text{TN}_P = 31 - \text{DIS}, \qquad \text{TN}_{GM} = 21 - \Delta_{\text{psyche}}$$
+3. **Contested Outcomes**:
+   - **`CleanSuccess` / `ExtraordinarySuccess` ($S_P > S_{GM}$)**: Clean self-mastery. The character suppresses their nature and executes the action without hesitation.
+   - **`PartialSuccess` (`GrazingTieSuccess`, `LuckyBreakSuccess`, or `SuccessWithFloorBreach`)**: The character forces themselves to go through with the act, but suffers **Internal Psychological Strain (`+2` to $\Delta_{\text{int}}$)** for the remainder of the scene as guilt, shame, or suppressed rage gnaws at their focus.
+   - **`CleanFailure` / `BotchFailure`**: The character balks at the threshold—freezing for `6 ticks` on the Action Clock, pulling their punch, blurting telltale hesitation, or refusing to cross the line unless they spend a full turn steeling themselves at **`+4` to $\Delta_{\text{int}}$**.
 
 ### 1.3 Psyche Drift (How Behavior Reshapes Personality Over Time)
 
@@ -137,13 +138,13 @@ A character's **Base Morale Controller ($C_{\text{morale}}$)** is anchored by th
 
 $$C_{\text{morale}} = \text{DIS} + \Delta_{\text{mot}}$$
 
-Whenever a Morale Trigger occurs, the character rolls a `2d20` cascade check (`N = 1` pair for civilians, `N = 2` for hardened combat veterans or characters trained in *SERE* / *Command*) against:
+Whenever a Morale Trigger occurs, the character rolls a contested `2d20` cascade check (`N_P = 1` pair for civilians, `N_P = 2` for hardened combat veterans or characters trained in *SERE* / *Command*) against their personal target $\text{TN}_P = 31 - C_{\text{morale}}$, opposed by the GM's hidden **1-Pair Tiered Resistance Roll** against $\text{TN}_{GM} = 21 - \Delta_{\text{morale}}$ (`4`-point over-tiers):
 
-$$\text{TN}_{\text{morale}} = 31 - C_{\text{morale}} + \Delta_{\text{morale}}$$
+$$\text{TN}_P = 31 - C_{\text{morale}}, \qquad \text{TN}_{GM} = 21 - \Delta_{\text{morale}}$$
 
-- **`1+` Successes**: The character holds their nerve and remains at their current Morale Condition (or rallies `+1` step on `2+` Extraordinary Successes).
-- **`0` Successes (`CleanFailure`)**: Morale drops by **`1` Condition Step** (e.g., `Steady` $\to$ `Wavering`, or `Wavering` $\to$ `Broken`).
-- **Botch (`CriticalFailure`)**: Morale drops by **`2` Condition Steps** (e.g., `Steady` $\to$ `Broken`, or `Wavering` $\to$ `Panic`).
+- **`CleanSuccess` / `ExtraordinarySuccess` / `PartialSuccess` ($S_P \ge S_{GM}$ or `LuckyBreakSuccess`)**: The character holds their nerve and remains at their current Morale Condition (or rallies `+1` step on `ExtraordinarySuccess` with net margin $\Delta M \ge +2$).
+- **`CleanFailure` ($S_P < S_{GM}$ with $M_P \ge 0$)**: Morale drops by **`1` Condition Step** (e.g., `Steady` $\to$ `Wavering`, or `Wavering` $\to$ `Broken`).
+- **`BotchFailure` ($M_P < 0$)**: Morale drops by **`2` Condition Steps** (e.g., `Steady` $\to$ `Broken`, or `Wavering` $\to$ `Panic`).
 
 #### The Five Conditions of Morale
 

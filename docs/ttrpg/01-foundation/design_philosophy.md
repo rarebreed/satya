@@ -130,6 +130,8 @@ What you will see are down-to-earth characters who, like everyone else, have to 
 
 ## 5. Goals of Satya: Solving 17 Structural Flaws of Traditional RPGs
 
+*(Note: For a complete reference of all mathematical variables, subscripts, and formulas used below, see the **[Mathematical Notation, Variables & Formula Glossary](mathematical_notation_glossary.md)**).*
+
 **Satya** has been in the back of my mind for over 25 years. While I don't play as many games as I used to, I am still an avid reader and buyer of games. I still see the same designs over and over which I have become disillusioned with. So it is easiest to describe the 17 structural flaws I dislike in many game systems, and how Satya solves them:
 
 1. Not varied enough in attributes
@@ -169,17 +171,18 @@ In Satya, attributes are rated from **`1–20`** on the `2d20` Controlling Scale
 Many game systems use artificial step-functions or cutoffs to streamline math. For example, some `2d20` systems cap dice pools at 5, D&D groups ability scores into even-numbered buckets (`10–11 = +0`, `12–13 = +1`), and the Hero System divides attributes by 5 and rounds. The consequence of these cutoffs is a min-maxer's dream: why buy a `15` when a `13` gives the exact same mechanical modifier?
 
 #### How Satya Solves This
-Precision is always preserved in Satya. There are no step-wise modifier buckets: every single point of a Controlling Characteristic ($C \in [1, 20]$) shifts $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$ by `1` on every `2d20` pair, and every point of $C_{\text{combat}}$ or skill $N$ adds directly to a character's Tactical Pool ($P_{\text{base}} = C_{\text{combat}} + 3N$).
+Precision is always preserved in Satya. There are no step-wise modifier buckets: every single point of a Controlling Characteristic ($C_P \in [1, 20]$) shifts the player's personal target $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$ by `1` on every `2d20` pair, every point of hidden external difficulty ($\Delta_{\text{ext}}$) shifts the GM's resistance target $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$ by `1`, and every point of $C_{\text{combat}}$ or skill $N$ adds directly to a character's Tactical Pool ($P_{\text{base}} = C_{\text{combat}} + 3N$).
 
 ### 5.4 Linear and Static-Shape Gaussian Dice Systems
 
 Single-die systems (`1d20` or `d100`) produce flat uniform distributions where every outcome from 1 to 20 is equally likely, making experts feel cartoonishly swingy. Conversely, standard multi-die sum systems (`3d6`) converge by the Central Limit Theorem to a fixed symmetric Gaussian bell curve; modifiers only slide the mean left or right without changing the shape of the uncertainty. Worse, many dice-pool systems suffer from the "Skilled Botch Paradox," where rolling more dice for higher skill accidentally increases the chance of rolling critical failures.
 
 #### How Satya Solves This
-Satya uses a **Two-List Cascading ("Watershed") `2d20` Dice Mechanic** (see [Probability & Calibration](probability_and_calibration.md) and [Core `2d20` Cascade & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md)). Rolling $N$ sequential pairs of `2d20` where each pair passes positive momentum ($+\delta_{\text{over}} = +6$) or negative stumble penalty ($-\delta_{\text{under}} = -(6 + \Delta_{\text{int}})$) to the next pair dynamically reshapes the probability distribution's **skewness, modality, and tails**:
-- **Skill ($N$)** expands the upper tail (`+1` to `+N` successes) and gives extra pairs to recover from an early stumble, while strictly reducing botch risk (`closest_miss` botch evaluation).
-- **Controlling Characteristic ($C$)** shifts the baseline target $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$ across every pair.
+Satya uses an **Always-Contested Two-List Cascading ("Watershed") `2d20` Dice Mechanic** (see [Probability & Calibration](probability_and_calibration.md) and [Core `2d20` Cascade & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md)). Rolling $N_P$ sequential pairs of `2d20` where each pair passes positive momentum ($+\delta_{\text{over}} = +6$) or negative stumble penalty ($-\delta_{\text{under}} = -(6 + \Delta_{\text{int}})$) to the next pair dynamically reshapes the probability distribution's **skewness, modality, and tails**:
+- **Skill ($N_P$)** expands the upper tail (`+1` to `+N_P` successes) and gives extra pairs to recover from an early stumble, while strictly reducing botch risk (`closest_miss` botch evaluation).
+- **Controlling Characteristic ($C_P$)** shifts the player's personal target $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$ across every pair.
 - **Internal Fatigue & Shock ($\Delta_{\text{int}}$)** deepens the failure carry penalty ($\delta_{\text{under}} = 6 + \Delta_{\text{int}}$) without penalizing Pair 1—meaning an exhausted master who hits their first motion flows through on muscle memory, while a stumble cascades into a heavy penalty.
+- **1-Pair Tiered GM Resistance ($\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$, `4`-pt Over-Tiers)** opposes the player's cascade with a single hidden `2d20` roll by the GM, preserving the player's bimodal watershed topology (`BC = 0.585 > 0.555` in high-stakes snowball mode) while keeping task difficulty hidden.
 
 ### 5.5 Innate Talents vs. Learned Physical and Knowledge Skills
 
@@ -190,10 +193,12 @@ As detailed in [Skill System & The 8 Hierarchical Skill Trees](../03-character/s
 
 ### 5.6 Epistemic Fog of War vs. Metagame Probability
 
-In traditional tabletop games, players know the exact target number and modifiers before they roll (*"I need a 14 or higher on 1d20, so I have a 35% chance"*), turning tense life-or-death moments into spreadsheet expected-value calculations.
+In traditional tabletop games, players know the exact target number and modifiers before they roll (*"I need a 14 or higher on 1d20, so I have a 35% chance"*), and once the die lands, they immediately know whether they succeeded or failed before the GM says a word—turning tense life-or-death moments into spreadsheet expected-value calculations.
 
 #### How Satya Solves This
-Because Satya is designed from the ground up as a **Computer-Assisted RPG (CARPG)**, characters do not see raw floating target numbers above an enemy's head. Instead, perceptual skills (*Observation*, *Empathy & Read Person*, *Clinical Diagnostics*, *Tactical Recon*) reveal qualitative and situational cues according to the character's senses (`SIG`, `HEA`, `ITU`) and expertise ($N$), preserving true epistemic fog of war.
+Satya enforces **true epistemic fog of war** at both the perceptual and mechanical levels:
+1. **Always-Contested Tasks & The Hidden 1-Pair Tiered GM Resistance Roll:** The player rolls their sequential `2d20` cascade against their **known personal target number ($\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$)**, while the GM secretly rolls an opposing `2d20` pair against the **hidden environmental target ($\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$)** using `4`-point over-success and under-botch tiers (`TieredSinglePair { step_size: 4 }`). Because $\Delta_{\text{ext}}$ is on the GM's hidden roll rather than the player's target number, the player can feel their own execution momentum—yet even when they roll `2` or `3` successes, they never know if it was enough to beat a hardened obstacle (`S_P > S_GM`), and even when they roll `0` successes (a clean near-miss), a hidden GM botch ($M_{GM} < 0$) can rescue them with a **`LuckyBreakSuccess`**!
+2. **Sensory-Gated Information:** Because Satya is a **Computer-Assisted RPG (CARPG)**, characters do not see raw floating target numbers above an enemy's head. Instead, perceptual skills (*Observation*, *Empathy & Read Person*, *Clinical Diagnostics*, *Tactical Recon*) reveal qualitative cues according to the character's senses (`SIG`, `HEA`, `ITU`) and expertise ($N$).
 
 ### 5.7 Courage, OODA Loops, and the Count-Up Action Clock
 

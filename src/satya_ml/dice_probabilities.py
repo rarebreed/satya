@@ -1702,6 +1702,248 @@ def compute_social_dissonance_check(
     }
 
 
+# ---------------------------------------------------------------------------
+# 10. Contested & Hybrid-Contested Two-List Cascade Resolution Engine
+# ---------------------------------------------------------------------------
+
+ContestedTieRuleLiteral = Literal[
+    "hybrid_signed_margin",
+    "strict_signed_margin",
+    "active_player_wins_ties",
+]
+
+
+def classify_contested_outcome(
+    sp: int,
+    bp: int,
+    mp: int,
+    sg: int,
+    bg: int,
+    mg: int,
+    tie_rule: ContestedTieRuleLiteral = "hybrid_signed_margin",
+) -> Tuple[str, int]:
+    """Classify a single `(player, gm)` state realization into a contested outcome kind and net margin."""
+    _ = bg
+    net_margin = mp - mg
+    if tie_rule == "hybrid_signed_margin":
+        if sp > sg:
+            if bp >= 1 and mg >= 0:
+                return ("SUCCESS_WITH_FLOOR_BREACH", net_margin)
+            if net_margin >= 3:
+                return ("EXTRAORDINARY_SUCCESS", net_margin)
+            return ("CLEAN_SUCCESS", net_margin)
+        if sp == sg and sp >= 1:
+            return ("GRAZING_TIE_SUCCESS", net_margin)
+        if sp == 0 and mp == 0 and mg < 0:
+            return ("LUCKY_BREAK_SUCCESS", net_margin)
+        if mp < 0 or (sp < sg and bp >= 1):
+            return ("BOTCH_FAILURE", net_margin)
+        return ("CLEAN_FAILURE", net_margin)
+
+    if tie_rule == "strict_signed_margin":
+        if sp > sg:
+            if bp >= 1 and mg >= 0:
+                return ("SUCCESS_WITH_FLOOR_BREACH", net_margin)
+            if net_margin >= 3:
+                return ("EXTRAORDINARY_SUCCESS", net_margin)
+            return ("CLEAN_SUCCESS", net_margin)
+        if sp == 0 and mp == 0 and mg < 0:
+            return ("LUCKY_BREAK_SUCCESS", net_margin)
+        if mp < 0 or (sp <= sg and bp >= 1):
+            return ("BOTCH_FAILURE", net_margin)
+        return ("CLEAN_FAILURE", net_margin)
+
+    # active_player_wins_ties
+    if sp >= sg and sp >= 1:
+        if bp >= 1:
+            return ("SUCCESS_WITH_FLOOR_BREACH", net_margin)
+        if (sp - sg) >= 3:
+            return ("EXTRAORDINARY_SUCCESS", net_margin)
+        return ("CLEAN_SUCCESS", net_margin)
+    if mp < 0 or bp >= 1:
+        return ("BOTCH_FAILURE", net_margin)
+    return ("CLEAN_FAILURE", net_margin)
+
+
+def _cascade_joint_outcome_pmf(
+    n_pairs: int,
+    sides: int,
+    tn_eff: int,
+    delta_over: int,
+    delta_under: int,
+    carry_mode: str = "markov_step",
+    botch_rule: str = "closest_miss",
+    margin_aggregation: str = "piecewise_zero_floor",
+) -> Dict[Tuple[int, int, int], float]:
+    """Compute the exact joint PMF over `(succ, raw_botch, signed_margin)` for a cascade configuration."""
+    base_pmf = sum_dice_pool_pmf(2, sides, 0)
+    tier_step = max(2, sides // 5)
+    state_probs: Dict[Tuple[int, int, int, int], float] = {(0, 0, 0, 5): 1.0}
+
+    for step in range(n_pairs):
+        next_states: Dict[Tuple[int, int, int, int], float] = defaultdict(float)
+        for (mod_n, succ_so_far, botch_so_far, min_miss_tier), p_state in state_probs.items():
+            for x, p_roll in base_pmf.items():
+                yn = x + mod_n
+                sn, bn, mn = _evaluate_step_success_and_botch(
+                    yn=yn,
+                    sides=sides,
+                    characteristic_c=tn_eff,
+                    count_under_as_success=False,
+                    botch_rule=botch_rule,
+                    strict_comparison=True,
+                )
+                new_succ = succ_so_far + sn
+                new_botch = botch_so_far + bn
+                miss_tier = min(5, mn // tier_step)
+                new_min_miss = min(min_miss_tier, miss_tier)
+                jp = p_state * p_roll
+
+                if step == n_pairs - 1:
+                    next_mod = 0
+                elif carry_mode == "markov_step":
+                    next_mod = delta_over if yn > tn_eff else (-delta_under if yn < tn_eff else 0)
+                elif carry_mode == "cumulative_snowball":
+                    next_mod = (
+                        mod_n + delta_over
+                        if yn > tn_eff
+                        else (mod_n - delta_under if yn < tn_eff else mod_n)
+                    )
+                else:
+                    next_mod = yn - tn_eff
+
+                next_states[(next_mod, new_succ, new_botch, new_min_miss)] += jp
+        state_probs = next_states
+
+    joint: Dict[Tuple[int, int, int], float] = defaultdict(float)
+    for (_mod, succ, raw_botch, min_miss_tier), prob in state_probs.items():
+        eff_botch = min_miss_tier if (botch_rule == "closest_miss" and succ == 0) else raw_botch
+        if margin_aggregation == "piecewise_zero_floor":
+            signed_margin = succ if succ > 0 else -eff_botch
+        else:
+            signed_margin = succ - eff_botch
+        joint[(succ, raw_botch, signed_margin)] += prob
+    return dict(joint)
+
+
+def _tiered_single_pair_gm_joint_pmf(
+    sides: int,
+    tn_gm: int,
+    step_size: int = 4,
+    strict_comparison: bool = True,
+) -> Dict[Tuple[int, int, int], float]:
+    """Compute the exact joint PMF over `(succ, raw_botch, signed_margin)` for a 1-Pair Tiered GM roll."""
+    base_pmf = sum_dice_pool_pmf(2, sides, 0)
+    under_step = max(2, sides // 5)
+    over_step = max(1, step_size)
+    joint: Dict[Tuple[int, int, int], float] = defaultdict(float)
+
+    for x, p_roll in base_pmf.items():
+        if strict_comparison:
+            is_succ = x > tn_gm
+            over_margin = x - tn_gm - 1
+            under_margin = tn_gm - x
+        else:
+            is_succ = x >= tn_gm
+            over_margin = x - tn_gm
+            under_margin = tn_gm - x - 1
+
+        if is_succ:
+            succ = 1 + max(0, over_margin) // over_step
+            joint[(succ, 0, succ)] += p_roll
+        else:
+            botch = min(5, max(0, under_margin) // under_step)
+            joint[(0, botch, -botch)] += p_roll
+
+    return dict(joint)
+
+
+def compute_contested_cascade_odds(
+    player_skill_n: int,
+    player_control_c: int = 10,
+    player_internal_mod: int = 0,
+    player_known_tool_mod: int = 0,
+    gm_pairs: int = 1,
+    hidden_external_difficulty: int = 0,
+    tie_rule: ContestedTieRuleLiteral = "hybrid_signed_margin",
+    carry_mode: str = "markov_step",
+    gm_mode: Literal["tiered_single_pair", "full_cascade"] = "tiered_single_pair",
+    gm_over_tier_step: int = 4,
+) -> Dict[str, Any]:
+    """Compute exact combinatorial probabilities for a Contested Two-List Cascade check."""
+    tn_p = 31 - player_control_c + player_known_tool_mod
+    d_under_p = max(0, 6 + player_internal_mod)
+    tn_gm = 21 - hidden_external_difficulty
+
+    p_joint = _cascade_joint_outcome_pmf(
+        n_pairs=player_skill_n,
+        sides=20,
+        tn_eff=tn_p,
+        delta_over=6,
+        delta_under=d_under_p,
+        carry_mode=carry_mode,
+    )
+    if gm_mode == "tiered_single_pair":
+        g_joint = _tiered_single_pair_gm_joint_pmf(
+            sides=20,
+            tn_gm=tn_gm,
+            step_size=gm_over_tier_step,
+        )
+    else:
+        g_joint = _cascade_joint_outcome_pmf(
+            n_pairs=gm_pairs,
+            sides=20,
+            tn_eff=tn_gm,
+            delta_over=6,
+            delta_under=6,
+            carry_mode=carry_mode,
+        )
+
+    net_margin_map: Dict[int, float] = defaultdict(float)
+    net_succ_map: Dict[int, float] = defaultdict(float)
+    probs: Dict[str, float] = defaultdict(float)
+
+    for (sp, bp, mp), pp in p_joint.items():
+        for (sg, bg, mg), pg in g_joint.items():
+            jp = pp * pg
+            kind, net_m = classify_contested_outcome(sp, bp, mp, sg, bg, mg, tie_rule)
+            net_margin_map[net_m] += jp
+            net_succ_map[sp - sg] += jp
+            probs[kind] += jp
+
+    net_signed_margin_pmf = normalize_pmf(net_margin_map)
+    net_success_pmf = normalize_pmf(net_succ_map)
+    stats = compute_stats(net_signed_margin_pmf)
+    denom = stats.excess_kurtosis + 3.0
+    bc = (stats.skewness**2 + 1.0) / denom if denom > 1e-9 else 0.0
+
+    p_extr = probs["EXTRAORDINARY_SUCCESS"]
+    p_clean = probs["CLEAN_SUCCESS"]
+    p_flr = probs["SUCCESS_WITH_FLOOR_BREACH"]
+    p_graze = probs["GRAZING_TIE_SUCCESS"]
+    p_lucky = probs["LUCKY_BREAK_SUCCESS"]
+    p_cfail = probs["CLEAN_FAILURE"]
+    p_bfail = probs["BOTCH_FAILURE"]
+
+    return {
+        "net_signed_margin_pmf": net_signed_margin_pmf,
+        "net_success_pmf": net_success_pmf,
+        "prob_total_win": p_extr + p_clean + p_flr + p_graze + p_lucky,
+        "prob_clean_or_extraordinary_win": p_extr + p_clean,
+        "prob_extraordinary_success": p_extr,
+        "prob_clean_success": p_clean,
+        "prob_partial_success": p_flr + p_graze + p_lucky,
+        "prob_floor_breach_partial": p_flr,
+        "prob_grazing_tie_partial": p_graze,
+        "prob_lucky_break_partial": p_lucky,
+        "prob_clean_failure": p_cfail,
+        "prob_botch_failure": p_bfail,
+        "net_margin_stats": stats,
+        "bimodality_coefficient": bc,
+    }
+
+
+
 
 
 

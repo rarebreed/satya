@@ -2,7 +2,7 @@
 
 In **Satya**, characters are not assembled from an unconstrained point-buy shopping cart where an academic researcher can arbitrarily purchase *Heavy Machine Guns* or a street teen can buy *Aerospace Engineering* without knowing *Algebra*. Instead, characters are created chronologically through **Lifepath Stages**, and their ongoing campaign operations are grounded by their **Socioeconomic Tier (`SQM`)**, **Black-Market `[Access]` Procurement Gates**, and **Operational `Heat`**.
 
-This chapter builds directly on [Character Characteristics & Aptitudes](characteristics_and_aptitudes.md) and the skill prerequisites in [Skill System & The 8 Hierarchical Skill Trees](skills_and_trees.md).
+This chapter builds directly on [Character Characteristics & Aptitudes](characteristics_and_aptitudes.md), the skill prerequisites in [Skill System & The 8 Hierarchical Skill Trees](skills_and_trees.md), and the [Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md).
 
 ---
 

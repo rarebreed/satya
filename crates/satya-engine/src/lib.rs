@@ -342,8 +342,9 @@ mod tests {
     #[test]
     fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
         let chapters = list_rules_chapters();
-        assert_eq!(chapters.len(), 13);
+        assert_eq!(chapters.len(), 14);
         assert!(chapters.iter().any(|c| c.chapter_id == "design_philosophy"));
+        assert!(chapters.iter().any(|c| c.chapter_id == "notation_glossary"));
         assert!(chapters.iter().any(|c| c.chapter_id == "tasks"));
         assert!(chapters.iter().any(|c| c.chapter_id == "skills_and_trees"));
         assert!(chapters.iter().any(|c| c.chapter_id == "lifepaths_and_economy"));
@@ -423,5 +424,75 @@ mod tests {
         assert!(probe_eval.valid);
         assert_eq!(probe_eval.effective_tc, 5);
         assert!(probe_eval.archetype_label.starts_with("TC"));
+    }
+
+    #[test]
+    fn test_contested_cascade_hybrid_and_live_rolls() {
+        let contested_std = ContestedCascadeTaskParams::new_hybrid_environment(
+            3,
+            10,
+            0,
+            0,
+            1,
+            0,
+            ContestedTieRule::HybridSignedMargin,
+        );
+        let odds = contested_std.exact_contested_odds();
+        assert_close(
+            odds.prob_total_win + odds.prob_clean_failure + odds.prob_botch_failure,
+            1.0,
+            1e-9,
+        );
+        assert_close(odds.prob_clean_or_extraordinary_win * 100.0, 59.39, 0.05);
+        assert_close(odds.prob_grazing_tie_partial * 100.0, 10.50, 0.05);
+        assert_close(odds.prob_lucky_break_partial * 100.0, 5.76, 0.05);
+
+        // Live roll check: Grazing Tie (Player rolls 1 success, GM rolls 1 success)
+        let graze_roll = contested_std.evaluate_contested_pairs(
+            &[(12, 10), (5, 5), (5, 5)],
+            &[(12, 10)],
+        );
+        assert_eq!(
+            graze_roll.contested_kind,
+            ContestedOutcomeKind::GrazingTieSuccess
+        );
+        assert_eq!(graze_roll.outcome_tier, OutcomeTier::PartialSuccess);
+
+        // Live roll check: Lucky Break (Player rolls Clean Miss 0, GM botches with snake-eyes 2)
+        let lucky_roll = contested_std.evaluate_contested_pairs(
+            &[(10, 10), (12, 14), (10, 10)],
+            &[(1, 1)],
+        );
+        assert_eq!(lucky_roll.player_outcome.total_successes, 0);
+        assert_eq!(lucky_roll.player_outcome.signed_margin, 0);
+        assert!(lucky_roll.gm_outcome.signed_margin < 0);
+        // Verify 4-point Tiered 1-Pair GM Resistance Rule
+        let tiered_std = ContestedCascadeTaskParams::new_tiered_environment(
+            3,
+            10,
+            0,
+            0,
+            0,
+            ContestedTieRule::HybridSignedMargin,
+        );
+        let tiered_odds = tiered_std.exact_contested_odds();
+        assert_close(
+            tiered_odds.prob_total_win
+                + tiered_odds.prob_clean_failure
+                + tiered_odds.prob_botch_failure,
+            1.0,
+            1e-9,
+        );
+        // Live roll check: GM rolls 28 against TN_GM=21 (over by 7 -> 2 successes at 4-pt step!)
+        let tiered_roll = tiered_std.evaluate_contested_pairs(
+            &[(12, 10), (12, 10), (5, 5)],
+            &[(15, 13)],
+        );
+        assert_eq!(tiered_roll.player_outcome.total_successes, 2);
+        assert_eq!(tiered_roll.gm_outcome.total_successes, 2);
+        assert_eq!(
+            tiered_roll.contested_kind,
+            ContestedOutcomeKind::GrazingTieSuccess
+        );
     }
 }

@@ -1,6 +1,6 @@
 # Satya TTRPG Movement, Encumbrance, Vehicles & Environmental Survival
 
-This chapter defines the canonical **Movement, Load-Bearing Encumbrance, Vehicular Pursuits & G-Force Physics, and Environmental Survival Systems** for **Satya**. In keeping with Satya's simulation philosophy, movement speed is not an arbitrary fixed integer (`"30 feet per turn"`) shared by every human regardless of stature, conditioning, or backpack weight, nor are environmental hazards hand-waved when operators deploy into deserts, mountains, maritime storms, or depressurized orbital habitats.
+This chapter defines the canonical **Movement, Load-Bearing Encumbrance, Vehicular Pursuits & G-Force Physics, and Environmental Survival Systems** for **Satya** (for definitions of all mathematical variables and formulas such as $\text{SF}, V_{\text{sprint}}, W_{\text{req}}, \text{CLO}, \text{Sv}$, see the **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**). In keeping with Satya's simulation philosophy, movement speed is not an arbitrary fixed integer (`"30 feet per turn"`) shared by every human regardless of stature, conditioning, or backpack weight, nor are environmental hazards hand-waved when operators deploy into deserts, mountains, maritime storms, or depressurized orbital habitats.
 
 ---
 
@@ -147,7 +147,7 @@ flowchart LR
     subgraph Mech["Unified Satya Mechanical Impact"]
         Int["<b>Internal Difficulty (+Δ_int)</b><br/>Raises Failure Carry δ_under = 6 + Δ_int"]
         Cap["<b>Characteristic & Ceiling Erosion</b><br/>Lowers FIT, HLT, DEX, FOC, ANA<br/>& Tactical Pool P_eff"]
-        Save["<b>Physiological Cascade Saves</b><br/>HLT / FIT / DIS 2d20 Checks"]
+        Save["<b>Contested Physiological Saves</b><br/>HLT / FIT / DIS vs. Hidden TN_GM"]
     end
 
     Env --> Mech

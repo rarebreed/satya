@@ -1,6 +1,6 @@
 # Satya TTRPG Health, Anatomical Trauma, Fatigue & Mental Conditions
 
-This chapter defines the canonical **Health, Anatomical Trauma, Physiological Status, and Mental Condition System** for **Satya**. As established in **[Combat Architecture, Tactical Triad & Pools](../05-combat/tactical_triad_and_pools.md)**, Satya completely rejects ablative "Hit Points" (`HP`). A human being is not a uniform sack of numeric points that operates at `100%` efficiency until reaching `0`.
+This chapter defines the canonical **Health, Anatomical Trauma, Physiological Status, and Mental Condition System** for **Satya** (for definitions of all mathematical variables and trauma/stamina symbols such as $\text{FT}, \text{WSR}, T_{\max}, C_{\max}, F_{\max}, \text{TN}_P, \text{TN}_{GM}$, see the **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**). As established in **[Combat Architecture, Tactical Triad & Pools](../05-combat/tactical_triad_and_pools.md)**, Satya completely rejects ablative "Hit Points" (`HP`). A human being is not a uniform sack of numeric points that operates at `100%` efficiency until reaching `0`.
 
 Instead, Satya models human survivability and degradation across **five interconnected physiological and psychological tracks**:
 1. **Hit Locations & Anatomical Specificity** (Where the trauma lands and which biomechanical ceilings $T_{\max}, C_{\max}, F_{\max}$ or senses it disables)
@@ -171,11 +171,11 @@ As **Blood Volume Lost** increases from `0` toward `10 Units`, the character suf
 - **Wound Shock Resistance (`WSR`)**:
   $$\text{WSR} = \text{HLT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$
 - **Immediate Consciousness & Shock Check**:
-  Whenever a character takes a **Tier 2+ Wound** (or accumulates **`wound_shock_index >= 2`**), they immediately roll a `2d20` check using **`HLT / DIS`** ($C = \lfloor(\text{HLT} + \text{DIS})/2\rfloor$) with $\Delta_{\text{ext}} = +2 \times \text{wound\_shock\_index}$:
-  - **`2+` Successes**: The character grits their teeth through the agony, reducing the effective `wound_shock_index` penalty by **`-1` tier** for the current scene.
-  - **`1` Success**: The character stays conscious, suffering the standard `wound_shock_index` penalties (`-2` Tactical Pool per tier, `+25%` `action_time_factor` per tier, and $+\Delta_{\text{int}}$).
-  - **`0` Successes (`CleanFailure`)**: The character is **`Stunned` for `8 Ticks` (`2 seconds`)**, drops to their knees or Prone, and must make an immediate **Morale Check**.
-  - **Botch (`CriticalFailure`)** *(or any failure at `wound_shock_index >= 4`)*: Neurogenic syncope—the character blacks out and falls **Unconscious**!
+  Whenever a character takes a **Tier 2+ Wound** (or accumulates **`wound_shock_index >= 2`**), they immediately roll a contested `2d20` check using **`HLT / DIS`** ($C_P = \lfloor(\text{HLT} + \text{DIS})/2\rfloor$, $\text{TN}_P = 31 - C_P$) against the GM's hidden **1-Pair Tiered Resistance Roll** ($\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$ with $\Delta_{\text{ext}} = +2 \times \text{wound\_shock\_index}$):
+  - **`ExtraordinarySuccess` ($\Delta M \ge +2$)**: The character grits their teeth through the agony, reducing the effective `wound_shock_index` penalty by **`-1` tier** for the current scene.
+  - **`CleanSuccess` / `PartialSuccess` ($S_P \ge S_{GM}$ or `LuckyBreakSuccess`)**: The character stays conscious, suffering the standard `wound_shock_index` penalties (`-2` Tactical Pool per tier, `+25%` `action_time_factor` per tier, and $+\Delta_{\text{int}}$).
+  - **`CleanFailure`**: The character is **`Stunned` for `8 Ticks` (`2 seconds`)**, drops to their knees or Prone, and must make an immediate **Morale Check**.
+  - **`BotchFailure`** *(or any failure at `wound_shock_index >= 4`)*: Neurogenic syncope—the character blacks out and falls **Unconscious**!
 
 ---
 

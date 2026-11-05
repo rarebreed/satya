@@ -1,6 +1,6 @@
 # Character Characteristics, Derived Metrics & Domain Aptitudes
 
-This document defines the canonical **Character Characteristics and Aptitudes System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, **Quick Thinking (`D_cog`)**, and **OODA Initiative**) are derived from them, how **Domain Aptitudes ($A \in [-2, +3]$)** accelerate learning, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](../02-core-mechanics/cascading_d20_and_tasks.md) and the [Skill System](skills_and_trees.md).
+This document defines the canonical **Character Characteristics and Aptitudes System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, **Quick Thinking (`D_cog`)**, and **OODA Initiative**) are derived from them, how **Domain Aptitudes ($A \in [-2, +3]$)** accelerate learning, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](../02-core-mechanics/cascading_d20_and_tasks.md), the [Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md), and the [Skill System](skills_and_trees.md).
 
 ---
 
@@ -44,9 +44,9 @@ flowchart TD
 
 ## 2. Characteristic Scales: Spectrum (`0.0–100.0`) & `2d20` Controlling Scale (`1–20`)
 
-In Satya's underlying data model, every non-dimensional characteristic is represented on a continuous **Spectrum (`0.00` to `100.00`)**, which maps linearly (`5.0` spectrum points = `1` d20 step) onto the **`1–20` Controlling Characteristic ($C$) Scale** used by the `2d20` Cascading Dice Engine:
+In Satya's underlying data model, every non-dimensional characteristic is represented on a continuous **Spectrum (`0.00` to `100.00`)**, which maps linearly (`5.0` spectrum points = `1` d20 step) onto the **`1–20` Controlling Characteristic ($C_P$) Scale** used by the `2d20` Cascading Dice Engine to set the character's **Personal Target Number ($\text{TN}_P$)** (opposed by the GM's hidden resistance roll against $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$):
 
-$$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$$
+$$\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}, \qquad \text{TN}_{GM} = 21 - \Delta_{\text{ext}}$$
 
 | Controlling Scale ($C$) | Underlying Spectrum (`0.0–100.0`) | Population Tier | Mechanical & Narrative Benchmark |
 | :---: | :---: | :--- | :--- |

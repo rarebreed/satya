@@ -1,6 +1,7 @@
 # Satya TTRPG Ranged Combat, Suppression, Armor & Weapon Reliability
 
 This chapter defines the canonical rules for **Ranged Firefights, Recoil & Suppression, Ballistic & Edged Armor (`PR` vs. Behind-Armor Blunt Trauma `BABT`), and Weapon/Equipment Reliability (`Rel`)** in **Satya**. It builds directly upon:
+- **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for all mathematical variables and ballistics/combat symbols $R, \text{PR}_{\text{Edged}}, \text{PR}_{\text{Ballistic}}, \text{BABT}, \text{Rel}$),
 - **[Combat Architecture, Tactical Triad & Pools](tactical_triad_and_pools.md)** (for the "Envelope & Fill" Tactical Pool $P_{\text{base}} = C_{\text{combat}} + 3N$),
 - **[Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md#34-combat-morale-tactical-ooda-behavior--the-five-conditions-of-morale)** (for Suppression Morale Checks and the Five Conditions of Morale), and
 - **[Health, Anatomical Trauma, Fatigue & Mental Conditions](../06-health-and-survival/health_and_trauma.md)** (for Hit Locations, Called Shots, Structural Wounds, and Hemorrhaging).

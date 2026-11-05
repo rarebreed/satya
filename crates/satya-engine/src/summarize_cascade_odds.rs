@@ -13,7 +13,8 @@
 //! carry-over modes, botch rules, and margin aggregation modes.
 
 use crate::dice_probabilities::{
-    BotchRule, CarryMode, MarginAggregation, compute_stats, paired_list_signed_margin_pmfs,
+    BotchRule, CarryMode, CascadeTaskParams, ContestedCascadeTaskParams, ContestedTieRule,
+    MarginAggregation, compute_stats, paired_list_signed_margin_pmfs,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -139,6 +140,8 @@ pub enum CalibrationPreset {
     CvsN,
     /// Complete $K = 10$ matrices and sweeps (`k10_all`).
     K10All,
+    /// Contested & Hybrid-Contested Task Resolution calibration sweeps (`contested`).
+    Contested,
 }
 
 impl FromStr for CalibrationPreset {
@@ -152,8 +155,9 @@ impl FromStr for CalibrationPreset {
             "k20_full" => Ok(Self::K20Full),
             "c_vs_n" => Ok(Self::CvsN),
             "k10_all" => Ok(Self::K10All),
+            "contested" => Ok(Self::Contested),
             other => Err(format!(
-                "Invalid calibration preset '{other}'. Expected one of: midpoint_2c, raw_2k_minus_c, both, k20_full, c_vs_n, k10_all"
+                "Invalid calibration preset '{other}'. Expected one of: midpoint_2c, raw_2k_minus_c, both, k20_full, c_vs_n, k10_all, contested"
             )),
         }
     }
@@ -600,11 +604,268 @@ pub fn evaluate_k10_full_range(
     rows
 }
 
+/// Generates a comprehensive comparison report for Hybrid Contested vs. Uncontested task resolution.
+pub fn format_contested_calibration_report() -> String {
+    let mut lines: Vec<String> = Vec::new();
+    lines.push(
+        "=== CONTESTED SWEEP 1: 1-Pair Tiered GM Resistance (4-pt Over-Tiers) Across Skill Levels (C_P=10, Delta_ext=0) ==="
+            .to_string(),
+    );
+    lines.push(format!(
+        "{:>4} | {:>11} | {:>9} | {:>9} | {:>9} | {:>10} | {:>10} | {:>10} | {:>9} | {:>9} | {:>8} | {:>6}",
+        "N_P",
+        "Uncontested",
+        "TotalWin%",
+        "CleanWin%",
+        "ExtrWin%",
+        "GrazeTie%",
+        "LuckyBrk%",
+        "FlrBrch%",
+        "CleanFail",
+        "BotchFail",
+        "E[dM]",
+        "BC"
+    ));
+    lines.push("-".repeat(134));
+
+    for n_p in [1, 2, 3, 4, 5, 6, 7, 8] {
+        let uncontested = CascadeTaskParams::new_k20(n_p, 10, 0, 0).exact_odds();
+        let contested = ContestedCascadeTaskParams::new_tiered_environment(
+            n_p,
+            10,
+            0,
+            0,
+            0,
+            ContestedTieRule::HybridSignedMargin,
+        )
+        .exact_contested_odds();
+
+        lines.push(format!(
+            "{:>4} | {:>10.2}% | {:>8.2}% | {:>8.2}% | {:>8.2}% | {:>9.2}% | {:>9.2}% | {:>9.2}% | {:>8.2}% | {:>8.2}% | {:>+8.2} | {:>6.3}",
+            n_p,
+            uncontested.prob_any_success * 100.0,
+            contested.prob_total_win * 100.0,
+            contested.prob_clean_or_extraordinary_win * 100.0,
+            contested.prob_extraordinary_success * 100.0,
+            contested.prob_grazing_tie_partial * 100.0,
+            contested.prob_lucky_break_partial * 100.0,
+            contested.prob_floor_breach_partial * 100.0,
+            contested.prob_clean_failure * 100.0,
+            contested.prob_botch_failure * 100.0,
+            contested.net_margin_stats.mean,
+            contested.bimodality_coefficient,
+        ));
+    }
+
+    lines.push(
+        "\n=== CONTESTED SWEEP 2: Hiding Difficulty (Delta_ext on Player TN vs. Hidden in GM Roll at N_P=3, C_P=10) ==="
+            .to_string(),
+    );
+    lines.push(format!(
+        "{:<20} | {:>5} | {:>11} | {:>11} | {:>14} | {:>14} | {:>14} | {:>14}",
+        "Difficulty Tier",
+        "d_ext",
+        "Uncont(S>=1)",
+        "GM(N=1)Cln",
+        "GM(6ptTier)Cln",
+        "GM(6ptTier)Tot",
+        "GM(4ptTier)Cln",
+        "GM(4ptTier)Tot"
+    ));
+    lines.push("-".repeat(120));
+
+    let base_2d20 = crate::dice_probabilities::sum_dice_pool_pmf(2, 20, 0);
+
+    for &(tier_name, d_ext) in &[
+        ("Trivial / Routine", -8),
+        ("Easy", -4),
+        ("Standard Benchmark", 0),
+        ("Challenging", 4),
+        ("Hard", 8),
+        ("Extreme", 12),
+    ] {
+        let unc = CascadeTaskParams::new_k20(3, 10, 0, d_ext).exact_odds();
+        let unc_s1 = unc.prob_any_success * 100.0;
+
+        let gm1 = ContestedCascadeTaskParams::new_hybrid_environment(
+            3,
+            10,
+            0,
+            0,
+            1,
+            d_ext,
+            ContestedTieRule::HybridSignedMargin,
+        )
+        .exact_contested_odds();
+
+        let mut gm_6pt_params = ContestedCascadeTaskParams::new_tiered_environment(
+            3,
+            10,
+            0,
+            0,
+            d_ext,
+            ContestedTieRule::HybridSignedMargin,
+        );
+        gm_6pt_params.gm_mode = crate::dice_probabilities::GmResistanceMode::TieredSinglePair { step_size: 6 };
+        let gm_6pt = gm_6pt_params.exact_contested_odds();
+
+        let gm_4pt = ContestedCascadeTaskParams::new_tiered_environment(
+            3,
+            10,
+            0,
+            0,
+            d_ext,
+            ContestedTieRule::HybridSignedMargin,
+        )
+        .exact_contested_odds();
+
+        lines.push(format!(
+            "{:<20} | {:>+5} | {:>10.2}% | {:>10.2}% | {:>13.2}% | {:>13.2}% | {:>13.2}% | {:>13.2}%",
+            tier_name,
+            d_ext,
+            unc_s1,
+            gm1.prob_clean_or_extraordinary_win * 100.0,
+            gm_6pt.prob_clean_or_extraordinary_win * 100.0,
+            gm_6pt.prob_total_win * 100.0,
+            gm_4pt.prob_clean_or_extraordinary_win * 100.0,
+            gm_4pt.prob_total_win * 100.0,
+        ));
+    }
+
+    lines.push(
+        "\n=== CONTESTED SWEEP 3: Epistemic Uncertainty — P(Player Loses | Player Rolled k Successes) at C_P=10, N_P=3 ==="
+            .to_string(),
+    );
+    lines.push(format!(
+        "{:<26} | {:>12} | {:>14} | {:>14} | {:>14}",
+        "Hidden GM Config",
+        "P(GM>=1|S=1)",
+        "P(GM>1 |S=1)",
+        "P(GM>=2|S=2)",
+        "P(GM>=3|S=3)"
+    ));
+    lines.push("-".repeat(92));
+
+    for &(label, n_gm, d_ext) in &[
+        ("Standard (N_GM=1, d_ext=0)", 1, 0),
+        ("Hard (N_GM=1, d_ext=+8)", 1, 8),
+        ("Standard-2 (N_GM=2, d_ext=0)", 2, 0),
+        ("Challenging-2 (N_GM=2, d_ext=+4)", 2, 4),
+        ("Hard-2 (N_GM=2, d_ext=+8)", 2, 8),
+        ("Peer-3 (N_GM=3, d_ext=0)", 3, 0),
+        ("Elite-3 (N_GM=3, d_ext=+4)", 3, 4),
+        ("Master-4 (N_GM=4, d_ext=+4)", 4, 4),
+    ] {
+        let gm_params = CascadeTaskParams::new_k20(n_gm, 10 + d_ext, 0, 0);
+        let gm_odds = gm_params.exact_odds();
+        let p_gm_ge_1: f64 = gm_odds
+            .success_count_pmf
+            .iter()
+            .filter(|&(&s, _)| s >= 1)
+            .map(|(_, &p)| p * 100.0)
+            .sum();
+        let p_gm_gt_1: f64 = gm_odds
+            .success_count_pmf
+            .iter()
+            .filter(|&(&s, _)| s > 1)
+            .map(|(_, &p)| p * 100.0)
+            .sum();
+        let p_gm_ge_2: f64 = gm_odds
+            .success_count_pmf
+            .iter()
+            .filter(|&(&s, _)| s >= 2)
+            .map(|(_, &p)| p * 100.0)
+            .sum();
+        let p_gm_ge_3: f64 = gm_odds
+            .success_count_pmf
+            .iter()
+            .filter(|&(&s, _)| s >= 3)
+            .map(|(_, &p)| p * 100.0)
+            .sum();
+
+        lines.push(format!(
+            "{:<26} | {:>11.2}% | {:>13.2}% | {:>13.2}% | {:>13.2}%",
+            label, p_gm_ge_1, p_gm_gt_1, p_gm_ge_2, p_gm_ge_3
+        ));
+    }
+
+    lines.push(
+        "\n=== CONTESTED SWEEP 4: Epistemic Uncertainty of 1-Pair Tiered GM Roll (6-pt & 4-pt Over-Tiers) ==="
+            .to_string(),
+    );
+    for &step_size in &[6, 4] {
+        lines.push(format!(
+            "\n--- 1-Pair Tiered GM Roll (Over-Tier Step = {} pts: S_GM = 1 + (X_GM - TN_GM - 1) / {}) ---",
+            step_size, step_size
+        ));
+        lines.push(format!(
+            "{:<22} | {:>5} | {:>6} | {:>11} | {:>11} | {:>11} | {:>11} | {:>11} | {:>13}",
+            "Difficulty Tier",
+            "d_ext",
+            "TN_GM",
+            "P(GM>=1)",
+            "P(GM>=2)",
+            "P(GM>=3)",
+            "P(GM>=4)",
+            "P(GM>=5)",
+            "P(GM Botch<0)"
+        ));
+        lines.push("-".repeat(120));
+
+        for &(tier_name, d_ext) in &[
+            ("Trivial / Routine", -8),
+            ("Easy", -4),
+            ("Standard Benchmark", 0),
+            ("Challenging", 4),
+            ("Hard", 8),
+            ("Extreme", 12),
+            ("Heroic", 16),
+        ] {
+            let tn_gm = 21 - d_ext;
+            let mut p_ge = [0.0_f64; 6]; // indices 1..=5
+            let mut p_botch = 0.0_f64;
+
+            for (&x_gm, &pg) in &base_2d20 {
+                if x_gm > tn_gm {
+                    let s = 1 + (x_gm - tn_gm - 1) / step_size;
+                    for k in 1..=5 {
+                        if s >= k as i32 {
+                            p_ge[k] += pg * 100.0;
+                        }
+                    }
+                } else {
+                    let b = ((tn_gm - x_gm) / 4).min(5);
+                    if b >= 1 {
+                        p_botch += pg * 100.0;
+                    }
+                }
+            }
+
+            lines.push(format!(
+                "{:<22} | {:>+5} | {:>6} | {:>10.2}% | {:>10.2}% | {:>10.2}% | {:>10.2}% | {:>10.2}% | {:>12.2}%",
+                tier_name,
+                d_ext,
+                tn_gm,
+                p_ge[1],
+                p_ge[2],
+                p_ge[3],
+                p_ge[4],
+                p_ge[5],
+                p_botch,
+            ));
+        }
+    }
+
+    lines.join("\n")
+}
 /// Generates the complete formatted CLI report for a given [`CalibrationPreset`], matching `python -m satya_ml.summarize_cascade_odds`.
 pub fn run_calibration_report(preset: CalibrationPreset) -> String {
     let mut sections: Vec<String> = Vec::new();
 
     match preset {
+        CalibrationPreset::Contested => {
+            sections.push(format_contested_calibration_report());
+        }
         CalibrationPreset::K10All => {
             sections.push(compare_control_vs_skill_k10(
                 3,

@@ -316,18 +316,19 @@ def update_npc_state(
 
 
 _CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
-    ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 3: Cascading 2d20 Engine & Task Resolution"),
-    ("02-core-mechanics/action_economy_and_ooda.md", "Ch. 4: Action Economy, OODA Loop, Time Scales & Stealth"),
-    ("01-foundation/probability_and_calibration.md", "Ch. 2: Probability & Mathematical Calibration"),
-    ("03-character/characteristics_and_aptitudes.md", "Ch. 5: Characteristics, Senses, Psyche & Aptitudes"),
-    ("03-character/skills_and_trees.md", "Ch. 6: Skill System & Hierarchical Skill Trees"),
-    ("03-character/lifepaths_and_economy.md", "Ch. 7: Lifepath Creation, Socioeconomic Upkeep & Heat"),
-    ("04-psyche-and-social/psyche_morale_and_social_combat.md", "Ch. 8: Psyche, Morale & Social Combat"),
-    ("05-combat/tactical_triad_and_pools.md", "Ch. 9: Combat Architecture, Tactical Triad & Pools"),
-    ("05-combat/melee_combat.md", "Ch. 10: Melee Combat & Close-Quarters Tactics"),
-    ("05-combat/ranged_combat_and_armor.md", "Ch. 11: Ranged Combat, Suppression, Armor & Reliability"),
-    ("06-health-and-survival/health_and_trauma.md", "Ch. 12: Health, Anatomical Trauma, Fatigue & Mental Conditions"),
-    ("06-health-and-survival/movement_vehicles_and_environment.md", "Ch. 13: Movement, Encumbrance, Vehicles & Survival"),
+    ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 4: Cascading 2d20 Engine & Task Resolution"),
+    ("01-foundation/mathematical_notation_glossary.md", "Ch. 2: Mathematical Notation, Variables & Formula Glossary"),
+    ("02-core-mechanics/action_economy_and_ooda.md", "Ch. 5: Action Economy, OODA Loop, Time Scales & Stealth"),
+    ("01-foundation/probability_and_calibration.md", "Ch. 3: Probability & Mathematical Calibration"),
+    ("03-character/characteristics_and_aptitudes.md", "Ch. 6: Characteristics, Senses, Psyche & Aptitudes"),
+    ("03-character/skills_and_trees.md", "Ch. 7: Skill System & Hierarchical Skill Trees"),
+    ("03-character/lifepaths_and_economy.md", "Ch. 8: Lifepath Creation, Socioeconomic Upkeep & Heat"),
+    ("04-psyche-and-social/psyche_morale_and_social_combat.md", "Ch. 9: Psyche, Morale & Social Combat"),
+    ("05-combat/tactical_triad_and_pools.md", "Ch. 10: Combat Architecture, Tactical Triad & Pools"),
+    ("05-combat/melee_combat.md", "Ch. 11: Melee Combat & Close-Quarters Tactics"),
+    ("05-combat/ranged_combat_and_armor.md", "Ch. 12: Ranged Combat, Suppression, Armor & Reliability"),
+    ("06-health-and-survival/health_and_trauma.md", "Ch. 13: Health, Anatomical Trauma, Fatigue & Mental Conditions"),
+    ("06-health-and-survival/movement_vehicles_and_environment.md", "Ch. 14: Movement, Encumbrance, Vehicles & Survival"),
     ("01-foundation/design_philosophy.md", "Ch. 1: Design Philosophy & Goals of Satya"),
 )
 

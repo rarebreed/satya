@@ -26,11 +26,21 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
         embedded_markdown: include_str!("../../../docs/ttrpg/01-foundation/design_philosophy.md"),
     },
     StaticChapterSpec {
+        chapter_id: "notation_glossary",
+        part: "Part I: Foundation & Mathematical Calibration",
+        title: "Mathematical Notation, Variables & Formula Glossary",
+        relative_path: "01-foundation/mathematical_notation_glossary.md",
+        description: "Canonical reference for every mathematical variable, subscript (_P, _GM, _n, _eff), dice/cascade symbol (TN_P, TN_GM, delta_over, delta_under, Delta M), attribute abbreviation, OODA/Action Clock metric, and Tactical Triad formula.",
+        embedded_markdown: include_str!(
+            "../../../docs/ttrpg/01-foundation/mathematical_notation_glossary.md"
+        ),
+    },
+    StaticChapterSpec {
         chapter_id: "probability",
         part: "Part I: Foundation & Mathematical Calibration",
         title: "Probability & Calibration of the Cascading Dice Mechanic",
         relative_path: "01-foundation/probability_and_calibration.md",
-        description: "Mathematical foundation, distribution topology (skewness, modality, tail behavior), scale invariance across K, and avoiding the Skilled Botch Paradox.",
+        description: "Mathematical foundation, distribution topology (skewness, modality, tail behavior), scale invariance across K, avoiding the Skilled Botch Paradox, and the 1-Pair Tiered GM Resistance Rule.",
         embedded_markdown: include_str!(
             "../../../docs/ttrpg/01-foundation/probability_and_calibration.md"
         ),
