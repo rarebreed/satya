@@ -21,7 +21,7 @@ use crate::characteristics::{
     compute_aptitude_min_c_relief, AptitudeCode, CharacterAptitudes, CharacterCharacteristics,
     CharacteristicCode,
 };
-use crate::dice_probabilities::ToolDependency;
+use crate::task_resolution::ToolDependency;
 
 /// The 8 canonical Hierarchical Skill Trees (§4.1–§4.8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

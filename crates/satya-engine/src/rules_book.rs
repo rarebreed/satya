@@ -2371,7 +2371,9 @@ pub struct TacticalPoolEnvelopeSummary {
     pub max_force: i32,
 }
 
-/// Computes the Satya Combat Tactical Pool ("Envelope & Fill") interactive lab summary.
+/// Computes the Satya Combat Tactical Pool ("Envelope & Fill") interactive lab summary
+/// using the canonical `P_base = C_combat + 3N` and Aspect Ceiling (`T_max`, `C_max`, `F_max`) formulas
+/// from `tactical_triad_and_pools.md` and `melee_combat.md`.
 pub fn compute_tactical_pool_envelope(
     control_c: i32,
     skill_level: i32,
@@ -2386,18 +2388,29 @@ pub fn compute_tactical_pool_envelope(
     let s_clamped = num_successes.max(0);
 
     let env = compute_tactical_pool(&TacticalPoolParams {
+        spd: c_clamped,
+        for_stat: c_clamped,
+        dex: c_clamped,
+        kin: c_clamped,
+        sig: c_clamped,
+        ins: c_clamped,
+        itu: c_clamped,
+        ana: c_clamped,
+        cre: c_clamped,
+        foc: c_clamped,
+        dis: c_clamped,
+        fit: c_clamped,
         skill_c: c_clamped,
         skill_n: n_clamped as usize,
-        fatigue_level: (-delta_int).max(0),
+        fatigue_level: delta_int.max(0).div_euclid(2),
         ..Default::default()
     });
 
-    let base_envelope = (((c_clamped + 2 * n_clamped).div_euclid(3)) + delta_int
-        - delta_ext.div_euclid(2).max(0))
-    .max(1);
+    // Canonical Envelope capacity is the sum of the three physical/sensory aspect ceilings (or P_base)
+    let base_envelope = (env.tempo_cap + env.control_cap + env.force_cap).max(1);
     let reach_delta = weapon_reach - opponent_reach;
-    let reach_modifier = reach_delta.clamp(-2, 3);
-    let raw_pool = (s_clamped * 3 + n_clamped.div_euclid(2).max(0) + reach_modifier).max(0);
+    let reach_modifier = (reach_delta * 2).clamp(-4, 4);
+    let raw_pool = (env.p_eff - delta_ext.max(0) + (s_clamped * 2) + reach_modifier).max(0);
     let effective_pool = raw_pool.min(base_envelope);
     let overflow_wasted = (raw_pool - base_envelope).max(0);
 
@@ -2436,7 +2449,9 @@ pub struct TacticalTriadContestOutcome {
     pub outcome_summary: String,
 }
 
-/// Evaluates a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) exchange from Chapter 8.
+/// Evaluates a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) exchange using the canonical
+/// Control Differential ($\Delta_{\text{control}} = C_{\text{def}} - C_{\text{att}}$), Seizing the Initiative,
+/// and Kuzushi Throw vs. Root rules from `melee_combat.md`.
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_tactical_triad_contest(
     attacker_tempo: i32,
@@ -2455,7 +2470,7 @@ pub fn evaluate_tactical_triad_contest(
         ..Default::default()
     });
     let eval_res =
-        evaluate_tactical_triad(&env, 10, attacker_tempo, attacker_control, attacker_force);
+        evaluate_tactical_triad(&env, 8, attacker_tempo, attacker_control, attacker_force);
 
     let atk_t = attacker_tempo.max(0);
     let atk_c = attacker_control.max(0);
@@ -2463,28 +2478,36 @@ pub fn evaluate_tactical_triad_contest(
     let def_t = defender_tempo.max(0);
     let def_c = defender_control.max(0);
     let def_f = defender_force.max(0);
+    let def_eff_c = def_c + defender_guard;
 
     let net_tempo = atk_t - def_t;
     let net_control = atk_c - def_c;
-    let seizes_initiative = net_tempo >= 2 && net_control >= 0;
-    let guard_broken = (atk_c + (atk_f / 2).max(0)) > (def_c + defender_guard.max(0));
-    let unbalance = ((atk_c + atk_f) - (def_c + def_f)).max(0);
-    let throw_triggered = unbalance >= (attacker_root / 3).max(1);
+    let seizes_initiative = net_tempo >= 2 && atk_c >= def_eff_c;
+    let guard_broken = (atk_c + (atk_f / 2).max(0)) > def_eff_c.max(0);
+    let leveraged_throw_force = atk_f + (atk_c - def_eff_c).max(0);
+    let effective_defender_root = def_f + (attacker_root / 3).max(1);
+    let throw_triggered = leveraged_throw_force >= effective_defender_root;
     let raw_impact = atk_f + if guard_broken { net_control.max(0) } else { 0 };
     let penetrating_force =
         (raw_impact - armor_dr.max(0) - if guard_broken { 0 } else { def_c }).max(0);
-    let next_tick_cost = (10 - atk_t.min(5) + (def_c / 2).max(0)).max(3);
+    // Canonical Count-Up Tick Cost + Defender Seizing the Initiative recovery penalty (C_def - C_att)
+    let defender_initiative_penalty = (def_eff_c - atk_c).max(0);
+    let next_tick_cost = (eval_res.effective_tc + defender_initiative_penalty).max(2);
 
     let outcome_summary = if throw_triggered && penetrating_force >= 3 {
-        "Decisive Takedown & Armor Breach (Prone + Shock)".to_string()
+        "Decisive Takedown & Armor Breach (Prone +6 Ticks + Shock)".to_string()
     } else if throw_triggered {
-        "Kuzushi Throw / Sweep (Target Off-Balance / Prone)".to_string()
+        "Kuzushi Throw / Sweep (Leveraged Force Overcomes Root -> Prone +6 Ticks)".to_string()
     } else if guard_broken && penetrating_force > 0 {
         "Guard Broken & Penetrating Strike".to_string()
     } else if seizes_initiative {
-        "Initiative Seized (Tempo Advantage on Next Exchange)".to_string()
+        "Initiative Seized (Tempo & Control Advantage on Next Exchange)".to_string()
+    } else if defender_initiative_penalty > 0 && penetrating_force == 0 {
+        format!(
+            "Defender Seizes Initiative (+{defender_initiative_penalty} Recovery Ticks / Pool Drain on Attacker)"
+        )
     } else if penetrating_force > 0 {
-        "Glancing Penetrating Blow".to_string()
+        "Glancing Penetrating Blow (Behind-Armor Blunt Trauma)".to_string()
     } else {
         "Deflected on Guard / Bind Equilibrium".to_string()
     };
@@ -2587,7 +2610,8 @@ pub struct SocialDissonanceOutcome {
     pub social_outcome: String,
 }
 
-/// Computes Cognitive Dissonance pressure and belief-shift outcome from Chapter 9 (`psyche_morale_and_social_combat.md`).
+/// Computes Cognitive Dissonance pressure, Dual-Psyche Wedge bleed, and Social Wound tier
+/// using the canonical rules from `psyche_morale_and_social_combat.md` §4.
 pub fn compute_social_dissonance_check(
     argument_margin: i32,
     target_conviction: i32,
@@ -2596,24 +2620,34 @@ pub fn compute_social_dissonance_check(
     public_audience_pressure: i32,
 ) -> SocialDissonanceOutcome {
     let conviction = target_conviction.clamp(1, 20);
+    let delta_psyche = (conviction - 10).abs();
     let evidence = evidence_tier.clamp(0, 5);
     let shared = shared_values_bonus.clamp(-3, 5);
     let audience = public_audience_pressure.clamp(-3, 5);
 
     let dissonance_pressure = (argument_margin * 2 + evidence * 3 + shared * 2 + audience).max(0);
-    let resistance_threshold = conviction + (conviction - 10).div_euclid(2).max(0);
+    let resistance_threshold = 10 + delta_psyche;
     let net_shift = dissonance_pressure - resistance_threshold;
+    let bleed_delta_int = argument_margin.max(0) * 2;
 
     let social_outcome = if argument_margin <= 0 && net_shift < -4 {
-        "Backfire / Entrenchment (Target hardens belief +2 Conviction)".to_string()
+        "Dogmatic Denial / Entrenchment (Target locks OPN -4, clears Dissonance)".to_string()
     } else if net_shift < 0 {
-        "Rationalized Dismissal (Target absorbs tension without shifting)".to_string()
+        format!(
+            "Rhetorical Strain (-1 CMP, +{} Delta_int; Target rationalizes tension)",
+            bleed_delta_int.max(2)
+        )
     } else if net_shift < 5 {
-        "Seed of Doubt (+1 Dissonance Fatigue; opens follow-up concession)".to_string()
+        format!(
+            "Doubt Fracture & Cognitive Dissonance (+1 Doubt, +{bleed_delta_int} Delta_int/turn bleed)"
+        )
     } else if net_shift < 10 {
-        "Tactical Concession (Target yields immediate behavioral compliance)".to_string()
+        format!(
+            "Dual-Psyche Wedge & Ego Wound (Dissonance Index {}, +{bleed_delta_int} Delta_int bleed/turn)",
+            argument_margin.max(1)
+        )
     } else {
-        "Paradigm Fracture / Core Belief Shift (Lasting alignment change)".to_string()
+        "Conversion / Defection (Core Belief Shift + 1 Permanent Psyche Drift Mark)".to_string()
     };
 
     SocialDissonanceOutcome {

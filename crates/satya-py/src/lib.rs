@@ -1686,6 +1686,139 @@ pub fn audit_canonical_lifepath_character(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
+/// Evaluates a Contested Psyche Friction Check (`psyche_morale_and_social_combat.md` §1.2) and returns a JSON report.
+#[pyfunction]
+#[pyo3(signature = (trait_code, trait_score, violates_high_pole, dis, has_sere_training, delta_int, delta_ext, player_pairs, gm_pair))]
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_psyche_friction_check(
+    trait_code: &str,
+    trait_score: i32,
+    violates_high_pole: bool,
+    dis: i32,
+    has_sere_training: bool,
+    delta_int: i32,
+    delta_ext: i32,
+    player_pairs: Vec<(i32, i32)>,
+    gm_pair: (i32, i32),
+) -> PyResult<String> {
+    let trait_id = match trait_code.trim().to_ascii_uppercase().as_str() {
+        "OPN" | "OPENNESS" => satya_engine::PsycheTraitId::Openness,
+        "SLF" | "SELFISHNESS" => satya_engine::PsycheTraitId::Selfishness,
+        "BLG" | "BELONGING" => satya_engine::PsycheTraitId::Belonging,
+        "AGG" | "AGGRESSION" => satya_engine::PsycheTraitId::Aggression,
+        "EGO" => satya_engine::PsycheTraitId::Ego,
+        "CNF" | "CONFORMITY" => satya_engine::PsycheTraitId::Conformity,
+        other => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown Psyche trait '{other}'; expected OPN, SLF, BLG, AGG, EGO, or CNF"
+            )))
+        }
+    };
+    let pole = if violates_high_pole {
+        satya_engine::PsycheViolationPole::HighPole
+    } else {
+        satya_engine::PsycheViolationPole::LowPole
+    };
+    let params = satya_engine::PsycheFrictionCheckParams {
+        trait_id,
+        trait_score,
+        violated_pole: pole,
+        dis,
+        has_sere_training,
+        delta_int,
+        delta_ext,
+    };
+    let out = satya_engine::evaluate_psyche_friction_roll(&params, &player_pairs, gm_pair);
+    serde_json::to_string(&out)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+/// Evaluates Ranged Recoil Bracing ($F \ge R$) and Suppressive Fire Morale Shock ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$, `ranged_combat_and_armor.md` §1.2–§1.3).
+#[pyfunction]
+pub fn evaluate_ranged_recoil_and_suppression(
+    py: Python<'_>,
+    allocated_tempo: i32,
+    allocated_control: i32,
+    allocated_force: i32,
+    weapon_recoil_r: i32,
+    is_bounding_on_move: bool,
+    is_suppressive_or_full_auto: bool,
+) -> PyResult<Py<PyDict>> {
+    let res = satya_engine::evaluate_ranged_recoil_and_suppression(
+        allocated_tempo,
+        allocated_control,
+        allocated_force,
+        weapon_recoil_r,
+        is_bounding_on_move,
+        is_suppressive_or_full_auto,
+    );
+    let d = PyDict::new(py);
+    d.set_item("effective_recoil_r", res.effective_recoil_r)?;
+    d.set_item("recoil_fully_braced", res.recoil_fully_braced)?;
+    d.set_item(
+        "unbraced_dispersion_delta_ext",
+        res.unbraced_dispersion_delta_ext,
+    )?;
+    d.set_item("suppression_morale_delta", res.suppression_morale_delta)?;
+    d.set_item(
+        "calm_return_fire_control_threshold",
+        res.calm_return_fire_control_threshold,
+    )?;
+    Ok(d.unbind())
+}
+
+/// Resolves Armor Penetration (`PR`) vs. Behind-Armor Blunt Trauma (`BABT`) against one of the 6 canonical armor profiles (`ranged_combat_and_armor.md` §2.1–§2.2).
+#[pyfunction]
+pub fn resolve_canonical_armor_impact(
+    py: Python<'_>,
+    armor_index: usize,
+    damage_type: &str,
+    raw_impact: i32,
+    base_pen: i32,
+    net_successes: i32,
+    hits_visor_weak_spot: bool,
+) -> PyResult<Py<PyDict>> {
+    let catalog = satya_engine::canonical_armor_catalog();
+    let armor = catalog.get(armor_index).ok_or_else(|| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "armor_index {armor_index} out of range (0..{})",
+            catalog.len()
+        ))
+    })?;
+    let dtype = match damage_type.trim().to_ascii_lowercase().as_str() {
+        "edged" | "slash" | "stab" => satya_engine::WeaponDamageType::Edged,
+        "icepick" | "flechette" | "icepick_or_flechette" => {
+            satya_engine::WeaponDamageType::IcepickOrFlechette
+        }
+        "ballistic" | "bullet" => satya_engine::WeaponDamageType::Ballistic,
+        "blunt" => satya_engine::WeaponDamageType::Blunt,
+        other => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown damage_type '{other}'; expected edged, icepick, ballistic, or blunt"
+            )))
+        }
+    };
+    let out = satya_engine::resolve_armor_impact(
+        armor,
+        dtype,
+        raw_impact,
+        base_pen,
+        net_successes,
+        hits_visor_weak_spot,
+    );
+    let d = PyDict::new(py);
+    d.set_item("armor_name", armor.name)?;
+    d.set_item("effective_pen", out.effective_pen)?;
+    d.set_item("active_armor_pr", out.active_armor_pr)?;
+    d.set_item("penetrated", out.penetrated)?;
+    d.set_item("babt_trauma", out.babt_trauma)?;
+    d.set_item("penetrating_trauma", out.penetrating_trauma)?;
+    d.set_item("total_effective_trauma", out.total_effective_trauma)?;
+    d.set_item("causes_bleed", out.causes_bleed)?;
+    d.set_item("armor_pr_degradation", out.armor_pr_degradation)?;
+    Ok(d.unbind())
+}
+
 /// PyO3 module definition for `satya_py`.
 #[pymodule]
 pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1747,6 +1880,9 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_tactical_triad_contest, m)?)?;
     m.add_function(wrap_pyfunction!(compute_lifepath_skill_progression, m)?)?;
     m.add_function(wrap_pyfunction!(compute_social_dissonance_check, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_psyche_friction_check, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_ranged_recoil_and_suppression, m)?)?;
+    m.add_function(wrap_pyfunction!(resolve_canonical_armor_impact, m)?)?;
 
     Ok(())
 }
