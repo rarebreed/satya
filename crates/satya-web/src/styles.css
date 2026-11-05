@@ -29,18 +29,18 @@ body {
 .app-shell {
     max-width: 1840px;
     margin: 0 auto;
-    padding: 14px 20px 32px;
+    padding: 10px 14px 22px;
 }
 
 .top-bar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 18px;
+    padding: 8px 13px;
     background: var(--bg-1);
     border: 1px solid var(--border);
     border-radius: 10px;
-    margin-bottom: 16px;
+    margin-bottom: 11px;
 }
 
 .brand {
@@ -190,24 +190,38 @@ body {
 
 .gate-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 16px;
-    margin-bottom: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+    gap: 11px;
+    margin-bottom: 11px;
 }
 
 .workspace-columns {
+    --col-left-track: minmax(420px, 1.38fr);
+    --col-center-track: minmax(340px, 1fr);
+    --col-right-track: minmax(240px, 0.62fr);
     display: grid;
-    grid-template-columns: minmax(420px, 1.38fr) minmax(360px, 1fr) minmax(240px, 0.62fr);
-    gap: 14px;
+    grid-template-columns: var(--col-left-track) var(--col-center-track) var(--col-right-track);
+    gap: 10px;
     align-items: stretch;
 }
 
-.workspace-columns.webcam-undocked {
-    grid-template-columns: minmax(460px, 1.4fr) minmax(380px, 1fr);
+.workspace-columns.ttrpg-collapsed {
+    --col-left-track: minmax(450px, 1.48fr);
+    --col-center-track: minmax(280px, 0.85fr);
+}
+
+.workspace-columns.center-collapsed {
+    --col-left-track: minmax(480px, 1.8fr);
+    --col-center-track: auto;
 }
 
 .workspace-columns.webcam-collapsed {
-    grid-template-columns: minmax(460px, 1.4fr) minmax(380px, 1fr) auto;
+    --col-left-track: minmax(460px, 1.4fr);
+    --col-right-track: auto;
+}
+
+.workspace-columns.webcam-undocked {
+    grid-template-columns: var(--col-left-track) var(--col-center-track);
 }
 
 .workspace-columns.webcam-undocked .col-webcams {
@@ -217,7 +231,8 @@ body {
     overflow: visible;
 }
 
-.col-webcams.is-collapsed {
+.col-webcams.is-collapsed,
+.col-center.is-collapsed {
     width: auto;
     min-width: 0;
     align-items: flex-end;
@@ -230,15 +245,17 @@ body {
 .col-right {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 10px;
     min-width: 0;
 }
 
 @media (max-width: 1240px) {
     .workspace-columns,
     .workspace-columns.webcam-undocked,
-    .workspace-columns.webcam-collapsed {
-        grid-template-columns: 1fr;
+    .workspace-columns.webcam-collapsed,
+    .workspace-columns.center-collapsed,
+    .workspace-columns.ttrpg-collapsed {
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -246,19 +263,27 @@ body {
     background: var(--bg-1);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 16px;
+    padding: 11px;
+    min-inline-size: 0;
+    max-inline-size: 100%;
 }
 
 .card-header {
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .card-header-inline {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 7px 8px;
+    margin-bottom: 8px;
+}
+
+.card-header-inline > div:first-child {
+    flex: 1 1 200px;
+    min-inline-size: 0;
 }
 
 .card h2 {
@@ -275,9 +300,9 @@ body {
 .preset-users {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex-wrap: wrap;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .preset-label {
@@ -290,7 +315,7 @@ body {
     color: var(--accent);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 3px 8px;
+    padding: 3px 7px;
     font-size: 0.73rem;
     cursor: pointer;
 }
@@ -301,38 +326,43 @@ body {
 
 .form-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 10px;
-    margin-bottom: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+    gap: 7px;
+    margin-bottom: 8px;
 }
 
 label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     font-size: 0.75rem;
     color: var(--text-muted);
+    min-inline-size: 0;
 }
 
 .checkbox-label {
     flex-direction: row;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     grid-column: 1 / -1;
     color: var(--text-primary);
-    margin-top: 4px;
+    margin-top: 3px;
 }
 
 input[type="text"],
 input[type="password"],
 input[type="number"],
+input[type="search"],
 select {
     background: var(--bg-0);
     color: var(--text-primary);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 7px 10px;
+    padding: 5px 7px;
     font-size: 0.83rem;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-inline-size: 0;
 }
 
 input:focus, select:focus {
@@ -383,14 +413,14 @@ input:focus, select:focus {
 
 .btn-row, .btn-row-compact, .media-controls {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
 }
 
 .btn {
     border: none;
     border-radius: 6px;
-    padding: 8px 14px;
+    padding: 6px 10px;
     font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
@@ -402,7 +432,7 @@ input:focus, select:focus {
 }
 
 .btn-sm {
-    padding: 5px 10px;
+    padding: 4px 7px;
     font-size: 0.75rem;
 }
 
@@ -445,7 +475,25 @@ input:focus, select:focus {
     flex-direction: column;
     align-items: center;
     position: sticky;
-    top: 16px;
+    top: 12px;
+}
+
+.col-center:not(.is-collapsed) .center-drawer-rail {
+    position: static;
+    align-items: stretch;
+}
+
+.col-center:not(.is-collapsed) .center-drawer-rail .btn-webcam-drawer-tab {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: 8px;
+}
+
+.col-center:not(.is-collapsed) .center-drawer-rail .drawer-tab-label {
+    writing-mode: horizontal-tb;
 }
 
 .btn-webcam-drawer-tab {
@@ -453,9 +501,9 @@ input:focus, select:focus {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    width: 38px;
-    padding: 14px 6px;
+    gap: 8px;
+    width: 36px;
+    padding: 10px 5px;
     background: var(--bg-1);
     color: var(--text-primary);
     border: 1px solid var(--border);
@@ -494,12 +542,14 @@ input:focus, select:focus {
 .webrtc-card {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 7px;
     height: 100%;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-    .webrtc-card {
+    .webrtc-card,
+    .chat-card,
+    .ttrpg-card {
         animation: webcam-drawer-slide-in 0.18s cubic-bezier(0.22, 1, 0.36, 1);
     }
 }
@@ -515,7 +565,9 @@ input:focus, select:focus {
     }
 }
 
-.webrtc-card.is-collapsed {
+.webrtc-card.is-collapsed,
+.chat-card.is-collapsed,
+.ttrpg-card.is-collapsed {
     display: none;
 }
 
@@ -621,25 +673,25 @@ input:focus, select:focus {
     background: var(--bg-0);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 8px 10px;
+    padding: 6px 7px;
 }
 
 .roster-title {
     font-size: 0.74rem;
     color: var(--text-muted);
     display: block;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .roster-chips {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     flex-wrap: wrap;
 }
 
 .participant-chip {
     font-size: 0.74rem;
-    padding: 3px 9px;
+    padding: 2px 7px;
     border-radius: 999px;
     background: var(--bg-2);
     border: 1px solid var(--border);
@@ -650,30 +702,95 @@ input:focus, select:focus {
     color: #d8b4fe;
 }
 
+.ttrpg-card {
+    container: ttrpg-card / inline-size;
+}
+
+.ttrpg-card #ttrpg-odds-pill {
+    border-radius: 8px;
+    line-height: 1.35;
+    max-inline-size: 100%;
+    align-self: flex-start;
+}
+
 .ttrpg-controls {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr));
+    gap: 7px;
+    margin-bottom: 8px;
+}
+
+.ttrpg-controls label {
+    justify-content: space-between;
+}
+
+.ttrpg-controls label > span {
+    line-height: 1.25;
+    overflow-wrap: break-word;
+}
+
+@container ttrpg-card (inline-size < 560px) {
+    .ttrpg-card .card-header-inline {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .ttrpg-card .card-header-inline > div:first-child {
+        flex-basis: auto;
+    }
+
+    .ttrpg-card .webcam-frame-actions {
+        justify-content: space-between;
+    }
+}
+
+@container ttrpg-card (inline-size < 360px) {
+    .ttrpg-controls {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ttrpg-card .btn-row .btn {
+        inline-size: 100%;
+        text-align: center;
+    }
+}
+
+@container ttrpg-card (inline-size >= 360px) and (inline-size < 580px) {
+    .ttrpg-controls {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@container ttrpg-card (inline-size >= 580px) and (inline-size < 880px) {
+    .ttrpg-controls {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@container ttrpg-card (inline-size >= 880px) {
+    .ttrpg-controls {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
 }
 
 .recipient-selector-bar {
     background: var(--bg-0);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 10px;
-    margin-bottom: 10px;
+    padding: 7px;
+    margin-bottom: 7px;
 }
 
 .vis-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+    gap: 7px;
 }
 
 .private-picker {
-    margin-top: 8px;
-    padding-top: 8px;
+    margin-top: 6px;
+    padding-top: 6px;
     border-top: 1px dashed var(--border);
 }
 
@@ -681,15 +798,15 @@ input:focus, select:focus {
     font-size: 0.74rem;
     color: var(--amber);
     display: block;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
 }
 
 .chat-recipient-list {
-    max-height: 118px;
+    max-height: 110px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     padding-right: 4px;
 }
 
@@ -698,8 +815,8 @@ input:focus, select:focus {
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
-    padding: 5px 10px;
+    gap: 6px;
+    padding: 4px 7px;
     border-radius: 6px;
     background: var(--bg-1);
     border: 1px solid var(--border);
@@ -769,15 +886,15 @@ input:focus, select:focus {
     background: var(--bg-0);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 10px;
+    padding: 7px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-bottom: 10px;
+    gap: 6px;
+    margin-bottom: 7px;
 }
 
 .chat-msg {
-    padding: 8px 10px;
+    padding: 6px 7px;
     border-radius: 6px;
     background: var(--bg-2);
     border-left: 3px solid var(--accent);
@@ -913,23 +1030,23 @@ table.metrics-table th {
 .notebook-header {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 7px;
     border-bottom: 1px solid var(--border);
-    padding-bottom: 10px;
-    margin-bottom: 12px;
+    padding-bottom: 7px;
+    margin-bottom: 8px;
 }
 
 .notebook-title-row {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 12px;
+    gap: 8px;
 }
 
 .notebook-tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
 }
 
 .notebook-tab {
@@ -937,7 +1054,7 @@ table.metrics-table th {
     color: var(--text-muted);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 6px 11px;
+    padding: 5px 9px;
     font-size: 0.76rem;
     font-weight: 600;
     cursor: pointer;
@@ -966,7 +1083,7 @@ table.metrics-table th {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     min-height: 0;
 }
 
@@ -975,7 +1092,7 @@ table.metrics-table th {
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
 }
 
 .tabletop-map-viewport {
@@ -1070,6 +1187,12 @@ table.metrics-table th {
     gap: 6px;
 }
 
+.inline-label input,
+.inline-label select {
+    inline-size: auto;
+    flex: 1 1 auto;
+}
+
 .model-preview-stage {
     flex: 1;
     background: #090d16;
@@ -1106,7 +1229,7 @@ table.metrics-table th {
 
 .char-sheet-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
     gap: 10px;
 }
 
@@ -1280,10 +1403,11 @@ table.metrics-table th {
     border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
     border-radius: 6px;
-    padding: 8px 10px;
-    margin-bottom: 10px;
+    padding: 6px 7px;
+    margin-bottom: 7px;
     font-size: 0.76rem;
     font-family: monospace;
     color: var(--text-primary);
-    line-height: 1.5;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
 }

@@ -67,6 +67,10 @@ pub struct SatyaWasmState {
     pub webcam_floating: bool,
     /// Whether the Web Cams column/drawer (`#webrtc-dock-column` / `#webrtc-card`) is collapsed to the right-edge rail.
     pub webcam_collapsed: bool,
+    /// Whether the Session Chat drawer (`#chat-card`) in `#center-column` is collapsed.
+    pub chat_collapsed: bool,
+    /// Whether the Satya TTRPG Task Resolution drawer (`#ttrpg-drawer`) in `#center-column` is collapsed.
+    pub ttrpg_collapsed: bool,
     /// Number of vertical columns in `#video-grid` (`1` or `2` — capped at most 2 columns).
     pub webcam_columns: u8,
     /// Active drag offset `(offset_x, offset_y)` while dragging the floating Web Cams frame.
@@ -112,6 +116,8 @@ impl Default for SatyaWasmState {
             active_notebook_tab: "maps".to_string(),
             webcam_floating: false,
             webcam_collapsed: false,
+            chat_collapsed: false,
+            ttrpg_collapsed: false,
             webcam_columns: 1,
             webcam_drag_offset: None,
             combat_round: 1,

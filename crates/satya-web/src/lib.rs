@@ -102,6 +102,28 @@ fn HeaderBar() -> impl IntoView {
                             </button>
                             <button
                                 type="button"
+                                id="btn-menu-toggle-chat-pane"
+                                class="btn btn-sm btn-secondary"
+                                aria-expanded="true"
+                                aria-controls="chat-card"
+                                onclick="window.satyaToggleChatDrawer()"
+                                on:click=move |_| wasm_client::satya_toggle_chat_drawer()
+                            >
+                                "Hide Session Chat"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-menu-toggle-ttrpg-pane"
+                                class="btn btn-sm btn-secondary"
+                                aria-expanded="true"
+                                aria-controls="ttrpg-drawer"
+                                onclick="window.satyaToggleTtrpgDrawer()"
+                                on:click=move |_| wasm_client::satya_toggle_ttrpg_drawer()
+                            >
+                                "Hide Task Roller"
+                            </button>
+                            <button
+                                type="button"
                                 id="btn-menu-toggle-webcam-pane"
                                 class="btn btn-sm btn-secondary"
                                 aria-expanded="true"
@@ -1341,11 +1363,47 @@ fn ActiveSessionWorkspace() -> impl IntoView {
             // CENTER COLUMN: Chat Session Interface (Top) + Die Roller (Bottom)
             // ================================================================
             <div id="center-column" class="col-center">
-                <div class="card chat-card">
+                <div
+                    id="chat-drawer-rail"
+                    class="webcam-drawer-rail center-drawer-rail"
+                    style="display: none;"
+                >
+                    <button
+                        type="button"
+                        id="btn-expand-chat-drawer"
+                        class="btn-webcam-drawer-tab"
+                        title="Slide out Session Chat Drawer"
+                        aria-label="Expand Session Chat Drawer"
+                        aria-expanded="false"
+                        aria-controls="chat-card"
+                        onclick="window.satyaToggleChatDrawer()"
+                        on:click=move |_| wasm_client::satya_toggle_chat_drawer()
+                    >
+                        <span class="drawer-tab-chevron" aria-hidden="true">"◂"</span>
+                        <span class="drawer-tab-label">"Session Chat"</span>
+                    </button>
+                </div>
+
+                <div id="chat-card" class="card chat-card">
                     <div class="card-header-inline">
                         <div>
                             <h2>"Session Chat"</h2>
                             <span class="subtitle">"Broadcast publicly or whisper privately to selected Participant(s)"</span>
+                        </div>
+                        <div class="webcam-frame-actions">
+                            <button
+                                type="button"
+                                id="btn-toggle-chat-drawer"
+                                class="btn btn-sm btn-secondary"
+                                title="Collapse Session Chat drawer to save workspace space"
+                                aria-label="Collapse Session Chat Drawer"
+                                aria-expanded="true"
+                                aria-controls="chat-card"
+                                onclick="window.satyaToggleChatDrawer()"
+                                on:click=move |_| wasm_client::satya_toggle_chat_drawer()
+                            >
+                                "Collapse ▸"
+                            </button>
                         </div>
                     </div>
 
@@ -1425,17 +1483,53 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                     </div>
                 </div>
 
+                <div
+                    id="ttrpg-drawer-rail"
+                    class="webcam-drawer-rail center-drawer-rail"
+                    style="display: none;"
+                >
+                    <button
+                        type="button"
+                        id="btn-expand-ttrpg-drawer"
+                        class="btn-webcam-drawer-tab"
+                        title="Slide out Satya TTRPG Task Resolution Drawer"
+                        aria-label="Expand Satya TTRPG Task Resolution Drawer"
+                        aria-expanded="false"
+                        aria-controls="ttrpg-drawer"
+                        onclick="window.satyaToggleTtrpgDrawer()"
+                        on:click=move |_| wasm_client::satya_toggle_ttrpg_drawer()
+                    >
+                        <span class="drawer-tab-chevron" aria-hidden="true">"◂"</span>
+                        <span class="drawer-tab-label">"Task Roller"</span>
+                    </button>
+                </div>
+
                 <div id="ttrpg-drawer" class="card ttrpg-card">
                     <div class="card-header-inline">
                         <div>
                             <h2>"Satya TTRPG Task Resolution & Combat Economy"</h2>
                             <span class="subtitle">"Two-List Cascading (`2d20`) Roll-Over Engine · Logs TtrpgMechanicsEvent to Apache Iggy (`ttrpg-mechanics`)"</span>
                         </div>
-                        <span id="ttrpg-odds-pill" class="pill pill-active">
-                            {wasm_client::format_cascade_odds_preview(
-                                &satya_engine::CascadeTaskParams::new_k20(3, 12, 0, 0),
-                            )}
-                        </span>
+                        <div class="webcam-frame-actions">
+                            <span id="ttrpg-odds-pill" class="pill pill-active">
+                                {wasm_client::format_cascade_odds_preview(
+                                    &satya_engine::CascadeTaskParams::new_k20(3, 12, 0, 0),
+                                )}
+                            </span>
+                            <button
+                                type="button"
+                                id="btn-toggle-ttrpg-drawer"
+                                class="btn btn-sm btn-secondary"
+                                title="Collapse Satya TTRPG Task Resolution drawer to save workspace space"
+                                aria-label="Collapse Satya TTRPG Task Resolution Drawer"
+                                aria-expanded="true"
+                                aria-controls="ttrpg-drawer"
+                                onclick="window.satyaToggleTtrpgDrawer()"
+                                on:click=move |_| wasm_client::satya_toggle_ttrpg_drawer()
+                            >
+                                "Collapse ▸"
+                            </button>
+                        </div>
                     </div>
                     <div class="ttrpg-controls">
                         <label>
@@ -1995,6 +2089,8 @@ mod tests {
         assert!(html.contains(r#"id="ttrpg-wound-shock""#));
         assert!(html.contains(r#"id="ttrpg-odds-pill""#));
         assert!(html.contains(r#"id="ttrpg-odds-readout""#));
+        assert!(html.contains("container: ttrpg-card / inline-size"));
+        assert!(html.contains("@container ttrpg-card"));
         assert!(!html.contains(r#"id="ttrpg-tn""#));
         assert!(!html.contains(r#"id="ttrpg-pool""#));
         assert!(!html.contains(r#"id="ttrpg-diff""#));
@@ -2029,13 +2125,22 @@ mod tests {
             assert!(html.contains(&format!(r#"id="{pane_id}""#)));
         }
 
-        // Verify Web Cams vertical column controls (1 or at most 2 cols), collapsible drawer & floating frame toggle
+        // Verify Web Cams, Session Chat, and Task Roller collapsible drawer controls
         assert!(html.contains(r#"id="btn-toggle-webcam-cols""#));
         assert!(html.contains(r#"id="btn-toggle-webcam-float""#));
         assert!(html.contains(r#"id="btn-toggle-webcam-drawer""#));
         assert!(html.contains(r#"id="btn-expand-webcam-drawer""#));
         assert!(html.contains(r#"id="webcam-drawer-rail""#));
         assert!(html.contains(r#"id="btn-menu-toggle-webcam-pane""#));
+        assert!(html.contains(r#"id="chat-card""#));
+        assert!(html.contains(r#"id="chat-drawer-rail""#));
+        assert!(html.contains(r#"id="btn-toggle-chat-drawer""#));
+        assert!(html.contains(r#"id="btn-expand-chat-drawer""#));
+        assert!(html.contains(r#"id="btn-menu-toggle-chat-pane""#));
+        assert!(html.contains(r#"id="ttrpg-drawer-rail""#));
+        assert!(html.contains(r#"id="btn-toggle-ttrpg-drawer""#));
+        assert!(html.contains(r#"id="btn-expand-ttrpg-drawer""#));
+        assert!(html.contains(r#"id="btn-menu-toggle-ttrpg-pane""#));
         assert!(html.contains(r#"id="webrtc-drag-header""#));
         assert!(html.contains(r#"class="video-grid cols-1""#));
 

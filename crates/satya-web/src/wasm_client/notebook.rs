@@ -8,7 +8,7 @@ use crate::wasm_client::dom::{
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
 use crate::wasm_client::telemetry::satya_refresh_metrics;
-use crate::wasm_client::webrtc::send_ws_packet;
+use crate::wasm_client::webrtc::{send_ws_packet, sync_workspace_drawers_dom};
 use js_sys::{Function, Promise, Reflect};
 use satya_schema::{
     ChannelContext, ClientWsPacket, GmDocumentRecord, GmDocumentSource, GmMapUpdateRequest,
@@ -221,6 +221,14 @@ pub fn satya_update_3d_model_view() {
 /// `Character Sheet/Status` notebook tab and recalculates the exact Four-Factor Cascade preview.
 #[wasm_bindgen]
 pub fn satya_load_skill_preset(skill_name: String, skill_level: i32, control_c: i32) {
+    let was_collapsed = with_state_mut(|st| {
+        let prev = st.ttrpg_collapsed;
+        st.ttrpg_collapsed = false;
+        prev
+    });
+    if was_collapsed {
+        sync_workspace_drawers_dom();
+    }
     set_input_value("ttrpg-skill", &skill_name);
     set_input_value("ttrpg-skill-level", &skill_level.clamp(1, 10).to_string());
     set_input_value("ttrpg-control-c", &control_c.clamp(1, 20).to_string());
@@ -1148,6 +1156,14 @@ pub fn satya_load_rules_example(preset: String) {
             "closest_miss",
         ),
     };
+    let was_collapsed = with_state_mut(|st| {
+        let prev = st.ttrpg_collapsed;
+        st.ttrpg_collapsed = false;
+        prev
+    });
+    if was_collapsed {
+        sync_workspace_drawers_dom();
+    }
     set_input_value("ttrpg-skill", skill);
     set_input_value("ttrpg-skill-level", &n.to_string());
     set_input_value("ttrpg-control-c", &c.to_string());

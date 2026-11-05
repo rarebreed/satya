@@ -210,6 +210,14 @@ pub fn register_window_bindings() {
     bind("satyaToggleWebcamDrawer", c_wc_drawer.as_ref());
     c_wc_drawer.forget();
 
+    let c_chat_drawer = Closure::<dyn Fn()>::new(satya_toggle_chat_drawer);
+    bind("satyaToggleChatDrawer", c_chat_drawer.as_ref());
+    c_chat_drawer.forget();
+
+    let c_ttrpg_drawer = Closure::<dyn Fn()>::new(satya_toggle_ttrpg_drawer);
+    bind("satyaToggleTtrpgDrawer", c_ttrpg_drawer.as_ref());
+    c_ttrpg_drawer.forget();
+
     let c_wc_cols = Closure::<dyn Fn()>::new(satya_toggle_webcam_columns);
     bind("satyaToggleWebcamColumns", c_wc_cols.as_ref());
     c_wc_cols.forget();

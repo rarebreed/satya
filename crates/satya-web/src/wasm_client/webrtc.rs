@@ -27,9 +27,18 @@ use web_sys::{
     RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, RtcTrackEvent, WebSocket,
 };
 
-fn sync_webcam_layout_dom(is_floating: bool, is_collapsed: bool) {
+pub(crate) fn sync_workspace_drawers_dom() {
+    let (is_floating, webcam_collapsed, chat_collapsed, ttrpg_collapsed) = with_state(|st| {
+        (
+            st.webcam_floating,
+            st.webcam_collapsed,
+            st.chat_collapsed,
+            st.ttrpg_collapsed,
+        )
+    });
+
     if let Some(card) = get_element("webrtc-card").and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
-        if is_collapsed {
+        if webcam_collapsed {
             card.set_class_name("card webrtc-card is-collapsed");
             let _ = card.set_attribute("inert", "");
             let _ = card.style().set_property("display", "none");
@@ -51,7 +60,7 @@ fn sync_webcam_layout_dom(is_floating: bool, is_collapsed: bool) {
     }
 
     if let Some(col) = get_element("webrtc-dock-column") {
-        col.set_class_name(if is_collapsed {
+        col.set_class_name(if webcam_collapsed {
             "col-webcams is-collapsed"
         } else {
             "col-webcams"
@@ -61,35 +70,119 @@ fn sync_webcam_layout_dom(is_floating: bool, is_collapsed: bool) {
     if let Some(rail) =
         get_element("webcam-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
     {
-        let _ = rail
-            .style()
-            .set_property("display", if is_collapsed { "flex" } else { "none" });
+        let _ = rail.style().set_property(
+            "display",
+            if webcam_collapsed { "flex" } else { "none" },
+        );
     }
 
-    if let Some(ws_panel) = get_element("workspace-panel") {
-        ws_panel.set_class_name(if is_collapsed {
-            "workspace-columns webcam-collapsed"
-        } else if is_floating {
-            "workspace-columns webcam-undocked"
+    if let Some(chat_card) = get_element("chat-card").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        if chat_collapsed {
+            chat_card.set_class_name("card chat-card is-collapsed");
+            let _ = chat_card.set_attribute("inert", "");
+            let _ = chat_card.style().set_property("display", "none");
         } else {
-            "workspace-columns"
+            chat_card.set_class_name("card chat-card");
+            let _ = chat_card.remove_attribute("inert");
+            let _ = chat_card.style().set_property("display", "block");
+        }
+    }
+
+    if let Some(chat_rail) =
+        get_element("chat-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        let _ = chat_rail.style().set_property(
+            "display",
+            if chat_collapsed { "flex" } else { "none" },
+        );
+    }
+
+    if let Some(ttrpg_card) =
+        get_element("ttrpg-drawer").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        if ttrpg_collapsed {
+            ttrpg_card.set_class_name("card ttrpg-card is-collapsed");
+            let _ = ttrpg_card.set_attribute("inert", "");
+            let _ = ttrpg_card.style().set_property("display", "none");
+        } else {
+            ttrpg_card.set_class_name("card ttrpg-card");
+            let _ = ttrpg_card.remove_attribute("inert");
+            let _ = ttrpg_card.style().set_property("display", "block");
+        }
+    }
+
+    if let Some(ttrpg_rail) =
+        get_element("ttrpg-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        let _ = ttrpg_rail.style().set_property(
+            "display",
+            if ttrpg_collapsed { "flex" } else { "none" },
+        );
+    }
+
+    let both_center_collapsed = chat_collapsed && ttrpg_collapsed;
+    if let Some(center_col) = get_element("center-column") {
+        center_col.set_class_name(if both_center_collapsed {
+            "col-center is-collapsed"
+        } else {
+            "col-center"
         });
     }
 
-    let expanded_str = if is_collapsed { "false" } else { "true" };
+    if let Some(ws_panel) = get_element("workspace-panel") {
+        let mut classes = String::from("workspace-columns");
+        if webcam_collapsed {
+            classes.push_str(" webcam-collapsed");
+        } else if is_floating {
+            classes.push_str(" webcam-undocked");
+        }
+        if both_center_collapsed {
+            classes.push_str(" center-collapsed");
+        } else if ttrpg_collapsed {
+            classes.push_str(" ttrpg-collapsed");
+        } else if chat_collapsed {
+            classes.push_str(" chat-collapsed");
+        }
+        ws_panel.set_class_name(&classes);
+    }
+
+    let webcam_expanded_str = if webcam_collapsed { "false" } else { "true" };
     for btn_id in [
         "btn-toggle-webcam-drawer",
         "btn-expand-webcam-drawer",
         "btn-menu-toggle-webcam-pane",
     ] {
         if let Some(btn) = get_element(btn_id) {
-            let _ = btn.set_attribute("aria-expanded", expanded_str);
+            let _ = btn.set_attribute("aria-expanded", webcam_expanded_str);
+        }
+    }
+
+    let chat_expanded_str = if chat_collapsed { "false" } else { "true" };
+    for btn_id in [
+        "btn-toggle-chat-drawer",
+        "btn-expand-chat-drawer",
+        "btn-menu-toggle-chat-pane",
+    ] {
+        if let Some(btn) = get_element(btn_id) {
+            let _ = btn.set_attribute("aria-expanded", chat_expanded_str);
+        }
+    }
+
+    let ttrpg_expanded_str = if ttrpg_collapsed { "false" } else { "true" };
+    for btn_id in [
+        "btn-toggle-ttrpg-drawer",
+        "btn-expand-ttrpg-drawer",
+        "btn-menu-toggle-ttrpg-pane",
+    ] {
+        if let Some(btn) = get_element(btn_id) {
+            let _ = btn.set_attribute("aria-expanded", ttrpg_expanded_str);
         }
     }
 
     set_text(
         "btn-toggle-webcam-drawer",
-        if is_collapsed {
+        if webcam_collapsed {
             "◂ Web Cams"
         } else {
             "Collapse ▸"
@@ -97,7 +190,7 @@ fn sync_webcam_layout_dom(is_floating: bool, is_collapsed: bool) {
     );
     set_text(
         "btn-menu-toggle-webcam-pane",
-        if is_collapsed {
+        if webcam_collapsed {
             "Show Web Cams"
         } else {
             "Hide Web Cams"
@@ -107,31 +200,83 @@ fn sync_webcam_layout_dom(is_floating: bool, is_collapsed: bool) {
         "btn-toggle-webcam-float",
         if is_floating { "Dock" } else { "Float" },
     );
+
+    set_text(
+        "btn-toggle-chat-drawer",
+        if chat_collapsed {
+            "◂ Session Chat"
+        } else {
+            "Collapse ▸"
+        },
+    );
+    set_text(
+        "btn-menu-toggle-chat-pane",
+        if chat_collapsed {
+            "Show Session Chat"
+        } else {
+            "Hide Session Chat"
+        },
+    );
+
+    set_text(
+        "btn-toggle-ttrpg-drawer",
+        if ttrpg_collapsed {
+            "◂ Task Roller"
+        } else {
+            "Collapse ▸"
+        },
+    );
+    set_text(
+        "btn-menu-toggle-ttrpg-pane",
+        if ttrpg_collapsed {
+            "Show Task Roller"
+        } else {
+            "Hide Task Roller"
+        },
+    );
 }
 
 /// Toggles the Web Cams column (`#webrtc-dock-column`) between an expanded drawer and a
 /// collapsed right-edge vertical rail tab (`#webcam-drawer-rail`) to reclaim workspace width.
 #[wasm_bindgen]
 pub fn satya_toggle_webcam_drawer() {
-    let (is_floating, is_collapsed) = with_state_mut(|st| {
+    with_state_mut(|st| {
         st.webcam_collapsed = !st.webcam_collapsed;
         st.webcam_drag_offset = None;
-        (st.webcam_floating, st.webcam_collapsed)
     });
-    sync_webcam_layout_dom(is_floating, is_collapsed);
+    sync_workspace_drawers_dom();
+}
+
+/// Toggles the Session Chat container (`#chat-card`) in `#center-column` between expanded
+/// and a collapsed drawer rail tab (`#chat-drawer-rail`) to reclaim vertical and horizontal room.
+#[wasm_bindgen]
+pub fn satya_toggle_chat_drawer() {
+    with_state_mut(|st| {
+        st.chat_collapsed = !st.chat_collapsed;
+    });
+    sync_workspace_drawers_dom();
+}
+
+/// Toggles the Satya TTRPG Task Resolution & Combat Economy container (`#ttrpg-drawer`) in `#center-column`
+/// between expanded and a collapsed drawer rail tab (`#ttrpg-drawer-rail`) to reclaim vertical and horizontal room.
+#[wasm_bindgen]
+pub fn satya_toggle_ttrpg_drawer() {
+    with_state_mut(|st| {
+        st.ttrpg_collapsed = !st.ttrpg_collapsed;
+    });
+    sync_workspace_drawers_dom();
 }
 
 /// Toggles the Web Cams container (`#webrtc-card`) between a docked right-column panel
 /// and a floating, draggable overlay frame that can be re-attached back into the column.
 #[wasm_bindgen]
 pub fn satya_toggle_webcam_float() {
-    let (is_floating, is_collapsed) = with_state_mut(|st| {
+    with_state_mut(|st| {
         st.webcam_floating = !st.webcam_floating;
         st.webcam_collapsed = false;
         st.webcam_drag_offset = None;
-        (st.webcam_floating, st.webcam_collapsed)
     });
-    sync_webcam_layout_dom(is_floating, is_collapsed);
+    sync_workspace_drawers_dom();
 }
 
 /// Toggles the vertical Web Cams grid (`#video-grid`) between 1 column (`cols-1`) and 2 columns (`cols-2`),
