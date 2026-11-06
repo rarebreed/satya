@@ -884,20 +884,128 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                         type="range"
                                         id="dice-opacity-slider"
                                         class="dice-opacity-slider"
-                                        min="15"
+                                        min="8"
                                         max="100"
                                         step="1"
-                                        value="68"
-                                        aria-valuetext="68% opacity"
+                                        value="38"
+                                        aria-valuetext="38% opacity"
                                         oninput="window.satyaUpdateDiceMaterial()"
                                         on:input=move |_| wasm_client::satya_update_dice_material()
                                     />
-                                    <span id="dice-opacity-readout" class="mono">"68%"</span>
+                                    <span id="dice-opacity-readout" class="mono">"38%"</span>
                                 </label>
                                 <span id="wgpu-status-pill" class="pill pill-iggy">"WebGPU Ready · 2-Pass Translucent"</span>
                             </div>
+                            <div class="dice-camera-toolbar" role="group" aria-label="3D Dice Camera Angle, Pan & Zoom Controls">
+                                <label class="inline-label dice-camera-slider-label" for="dice-camera-yaw">
+                                    <span>"Orbit Yaw"</span>
+                                    <input
+                                        type="range"
+                                        id="dice-camera-yaw"
+                                        class="dice-opacity-slider"
+                                        min="-180"
+                                        max="180"
+                                        step="1"
+                                        value="0"
+                                        aria-valuetext="0 degrees yaw"
+                                        oninput="window.satyaUpdateDiceCamera()"
+                                        on:input=move |_| wasm_client::satya_update_dice_camera()
+                                    />
+                                    <span id="dice-camera-yaw-readout" class="mono">"0°"</span>
+                                </label>
+                                <label class="inline-label dice-camera-slider-label" for="dice-camera-pitch">
+                                    <span>"Viewing Angle"</span>
+                                    <input
+                                        type="range"
+                                        id="dice-camera-pitch"
+                                        class="dice-opacity-slider"
+                                        min="12"
+                                        max="88"
+                                        step="1"
+                                        value="55"
+                                        aria-valuetext="55 degrees pitch"
+                                        oninput="window.satyaUpdateDiceCamera()"
+                                        on:input=move |_| wasm_client::satya_update_dice_camera()
+                                    />
+                                    <span id="dice-camera-pitch-readout" class="mono">"55°"</span>
+                                </label>
+                                <label class="inline-label dice-camera-slider-label" for="dice-camera-zoom">
+                                    <span>"Zoom"</span>
+                                    <input
+                                        type="range"
+                                        id="dice-camera-zoom"
+                                        class="dice-opacity-slider"
+                                        min="40"
+                                        max="250"
+                                        step="5"
+                                        value="100"
+                                        aria-valuetext="100% zoom"
+                                        oninput="window.satyaUpdateDiceCamera()"
+                                        on:input=move |_| wasm_client::satya_update_dice_camera()
+                                    />
+                                    <span id="dice-camera-zoom-readout" class="mono">"100%"</span>
+                                </label>
+                                <div class="dice-pan-controls">
+                                    <span class="subtitle">"Pan:"</span>
+                                    <button
+                                        type="button"
+                                        id="btn-dice-pan-left"
+                                        class="btn btn-sm btn-secondary"
+                                        title="Pan camera left"
+                                        aria-label="Pan camera left"
+                                        onclick="window.satyaPanDiceCamera(-0.6, 0.0)"
+                                        on:click=move |_| wasm_client::satya_pan_dice_camera(-0.6, 0.0)
+                                    >
+                                        "◀"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="btn-dice-pan-up"
+                                        class="btn btn-sm btn-secondary"
+                                        title="Pan camera forward"
+                                        aria-label="Pan camera forward"
+                                        onclick="window.satyaPanDiceCamera(0.0, 0.6)"
+                                        on:click=move |_| wasm_client::satya_pan_dice_camera(0.0, 0.6)
+                                    >
+                                        "▲"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="btn-dice-pan-down"
+                                        class="btn btn-sm btn-secondary"
+                                        title="Pan camera backward"
+                                        aria-label="Pan camera backward"
+                                        onclick="window.satyaPanDiceCamera(0.0, -0.6)"
+                                        on:click=move |_| wasm_client::satya_pan_dice_camera(0.0, -0.6)
+                                    >
+                                        "▼"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="btn-dice-pan-right"
+                                        class="btn btn-sm btn-secondary"
+                                        title="Pan camera right"
+                                        aria-label="Pan camera right"
+                                        onclick="window.satyaPanDiceCamera(0.6, 0.0)"
+                                        on:click=move |_| wasm_client::satya_pan_dice_camera(0.6, 0.0)
+                                    >
+                                        "▶"
+                                    </button>
+                                    <span id="dice-camera-pan-readout" class="mono">"(+0.0, +0.0)"</span>
+                                    <button
+                                        type="button"
+                                        id="btn-reset-dice-camera"
+                                        class="btn btn-sm btn-secondary"
+                                        title="Reset camera angle, pan, and zoom (or double-click canvas)"
+                                        onclick="window.satyaResetDiceCamera()"
+                                        on:click=move |_| wasm_client::satya_reset_dice_camera()
+                                    >
+                                        "Reset View"
+                                    </button>
+                                </div>
+                            </div>
                             <div id="wgpu-dice-tray" class="wgpu-dice-tray notebook-dice-stage">
-                                <span class="roster-title">"3D Physics Dice Tray (`wgpu` Seed Sync):"</span>
+                                <span class="roster-title">"3D Physics Dice Tray (`wgpu` Seed Sync · Drag: Orbit Angle · Shift+Drag / Right-Drag: Pan · Wheel: Zoom):"</span>
                                 <div class="wgpu-dice-canvas-wrap">
                                     <canvas
                                         id="wgpu-dice-canvas"
@@ -2267,6 +2375,12 @@ mod tests {
         assert!(html.contains("dice-base-color"));
         assert!(html.contains("dice-ink-color"));
         assert!(html.contains("dice-opacity-slider"));
+        assert!(html.contains("38% opacity"));
+        assert!(html.contains("dice-camera-yaw"));
+        assert!(html.contains("dice-camera-pitch"));
+        assert!(html.contains("dice-camera-zoom"));
+        assert!(html.contains("btn-dice-pan-left"));
+        assert!(html.contains("btn-reset-dice-camera"));
         assert!(html.contains("wgpu-dice-readout"));
         assert!(html.contains("btn-hamburger-menu"));
         assert!(html.contains("hamburger-menu-dropdown"));
@@ -2457,6 +2571,8 @@ mod tests {
         wiz.active_step = 5;
         let step5_html = wasm_client::format_character_wizard_html(&wiz);
         assert!(step5_html.contains("Step 5: 8-Tree Hierarchical Skill Builder"));
+        assert!(step5_html.contains("5-Factor SP Cost Calculator"));
+        assert!(step5_html.contains("Piloting (Rotary-Wing / Helicopter &amp; VTOL)"));
         assert!(step5_html.contains("Tree 1: Mathematics, Computing &amp; Physical Sciences"));
 
         wiz.active_step = 6;

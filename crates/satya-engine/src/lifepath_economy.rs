@@ -18,8 +18,8 @@ use crate::characteristics::{
     AptitudeCode, CharacterAptitudes, CharacterCharacteristics, compute_academic_study_controller,
 };
 use crate::skills_trees::{
-    SkillAccessTier, SkillAdvancementValidation, initialize_universal_talents,
-    validate_skill_advancement,
+    SkillAccessTier, SkillAdvancementValidation, SkillStepCostBreakdown, SkillTrainingMode,
+    compute_skill_step_sp_cost, initialize_universal_talents, validate_skill_advancement,
 };
 
 /// Socioeconomic Class from Stage 1 (`Ages 0–5`) (§1.1).
@@ -203,6 +203,53 @@ pub fn evaluate_educational_advancement_roll(
     }
 }
 
+/// Stage 4 Adolescent Path (`Ages 15–18`) (§1.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Stage4Path {
+    /// Path 4A: Formal High School Track (`[Access: Academic]`, or `+ [Access: Vocational/Licensed]` on Vocational Track)
+    Path4AHighSchool,
+    /// Path 4B: Urban Dropout / Street Gang / Juvenile Underworld (`Academic Tree Freeze`, unlocks `[Access: Illicit]`)
+    Path4BStreetGang,
+    /// Path 4C: Rural, Agrarian & Developing-Region Youth (`Academic Tree Freeze` if leaving school at 15, unlocks `[Access: Vocational/Licensed]` & rural/fieldcraft skills)
+    Path4CRuralAgrarian,
+}
+
+impl Stage4Path {
+    /// Canonical code string.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Path4AHighSchool => "STAY_4A",
+            Self::Path4BStreetGang => "DROPOUT_4B",
+            Self::Path4CRuralAgrarian => "RURAL_4C",
+        }
+    }
+
+    /// Human-readable label.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Path4AHighSchool => "Path 4A: Formal High School (Ages 15–18)",
+            Self::Path4BStreetGang => "Path 4B: Urban Dropout / Street Gang (Ages 15–18)",
+            Self::Path4CRuralAgrarian => {
+                "Path 4C: Rural, Agrarian & Developing-Region Youth (Ages 15–18)"
+            }
+        }
+    }
+
+    /// Parse from a code string.
+    #[must_use]
+    pub fn from_code_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_uppercase().as_str() {
+            "STAY_4A" | "PATH_4A" | "HIGH_SCHOOL" => Some(Self::Path4AHighSchool),
+            "DROPOUT_4B" | "PATH_4B" | "STREET_GANG" => Some(Self::Path4BStreetGang),
+            "RURAL_4C" | "PATH_4C" | "RURAL_AGRARIAN" => Some(Self::Path4CRuralAgrarian),
+            _ => None,
+        }
+    }
+}
+
 /// Stage 4A High School Track (`Ages 16–18`) (§1.5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -229,6 +276,24 @@ pub enum StreetGangArchetype {
     BackAlleyCookModder,
 }
 
+/// Stage 4C Rural, Agrarian & Developing-Region Youth Archetype (`Ages 15–18`) (§1.5).
+///
+/// Represents adolescents raised in rural, frontier, pastoral, or underdeveloped regions who leave formal
+/// classroom schooling after basic literacy/numeracy to work the land, hunt/trap, herd livestock, or serve
+/// in local village/border militias.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RuralYouthArchetype {
+    /// *Subsistence Hunter, Trapper & Bush Guide*: `Hunting, Trapping & Field Butchery` $N=2$, `Wilderness Survival` $N=2$, `Long Guns` or `Archery & Bows` $N=2$, `Stealth` $N=2$
+    SubsistenceHunterTrapper,
+    /// *Agrarian Homesteader & Rural Mechanist*: `Agriculture, Agronomy & Crop Husbandry` $N=2$, `Animal Handling` $N=1$, `Automotive & Small-Engine Mechanics` $N=2$, `Carpentry & Woodworking` $N=1$, `Driving` $N=1$
+    AgrarianHomesteaderMechanist,
+    /// *Pastoral Herder, Stockman & Outrider*: `Animal Handling, Husbandry & Riding` $N=2$, `Veterinary Medicine & Livestock Care` $N=1$, `Herbalism, Ethnobotany & Field Remedies` $N=1$, `Land Navigation` $N=1$
+    PastoralHerderOutrider,
+    /// *Frontier Scout, Border Smuggler & Village Militia*: `Long Guns` $N=2$, `Camouflage & Concealment` $N=2$, `Land Navigation` $N=1$, `Alertness` $N=2$ (also unlocks `[Access: Illicit]`)
+    FrontierScoutMilitiaSmuggler,
+}
+
 /// Stage 5 Adult 4-Year Career Term Track (`Ages 18+`) (§1.6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -240,6 +305,7 @@ pub enum CareerTermTrack {
     IntelligenceServiceClandestine,
     OrganizedCrimeCartelSyndicate,
     BlueCollarTradesMerchantMarine,
+    RuralAgrarianFrontierRanger,
 }
 
 impl CareerTermTrack {
@@ -258,7 +324,9 @@ impl CareerTermTrack {
                 SkillAccessTier::VocationalLicensed,
             ],
             Self::OrganizedCrimeCartelSyndicate => &[SkillAccessTier::Illicit],
-            Self::BlueCollarTradesMerchantMarine => &[SkillAccessTier::VocationalLicensed],
+            Self::BlueCollarTradesMerchantMarine | Self::RuralAgrarianFrontierRanger => {
+                &[SkillAccessTier::VocationalLicensed]
+            }
         }
     }
 
@@ -386,6 +454,74 @@ impl LifepathCharacterProfile {
 
         self.stage_history.push(format!(
             "Stage 4B (Ages 16–18): Dropped out into {:?} — Academic Tree Frozen; granted [Access: Illicit]",
+            archetype
+        ));
+    }
+
+    /// Apply Stage 4C Rural, Agrarian & Developing-Region Youth Transition (`Ages 15–18`) (§1.5).
+    ///
+    /// Leaving formal classroom schooling at age 15 in a rural/agrarian or underdeveloped region
+    /// triggers the **Academic Tree Freeze** (unless later cleared via GED/Adult Education),
+    /// unlocks `[Access: Vocational/Licensed]` (plus `[Access: Illicit]` for `FrontierScoutMilitiaSmuggler`),
+    /// and grants authentic rural/fieldcraft/agrarian skill foundations.
+    pub fn apply_stage4c_rural_agrarian_package(&mut self, archetype: RuralYouthArchetype) {
+        self.age_years = 18;
+        self.academic_tree_frozen = true;
+        self.granted_access_tags
+            .retain(|tag| *tag != SkillAccessTier::Academic);
+        if !self
+            .granted_access_tags
+            .contains(&SkillAccessTier::VocationalLicensed)
+        {
+            self.granted_access_tags
+                .push(SkillAccessTier::VocationalLicensed);
+        }
+
+        // Common rural/agrarian foundations
+        bump_skill_floor(&mut self.skills, "foraging_campcraft", 2);
+        bump_skill_floor(&mut self.skills, "wilderness_survival_biome_specific", 1);
+        bump_skill_floor(&mut self.skills, "manual_dexterity_tinkering", 2);
+
+        match archetype {
+            RuralYouthArchetype::SubsistenceHunterTrapper => {
+                bump_skill_floor(&mut self.skills, "stealth_sneaking_hiding", 2);
+                bump_skill_floor(&mut self.skills, "hunting_trapping_field_butchery", 2);
+                bump_skill_floor(&mut self.skills, "wilderness_survival_biome_specific", 2);
+                bump_skill_floor(&mut self.skills, "long_guns_rifles_carbines_shotguns", 2);
+                bump_skill_floor(&mut self.skills, "archery_bows_crossbows", 1);
+            }
+            RuralYouthArchetype::AgrarianHomesteaderMechanist => {
+                bump_skill_floor(&mut self.skills, "agriculture_agronomy_pastoralism", 2);
+                bump_skill_floor(&mut self.skills, "animal_handling_husbandry_riding", 1);
+                bump_skill_floor(&mut self.skills, "automotive_small_engine_mechanics", 2);
+                bump_skill_floor(&mut self.skills, "carpentry_woodworking", 1);
+                bump_skill_floor(&mut self.skills, "driving_wheeled_tracked", 1);
+            }
+            RuralYouthArchetype::PastoralHerderOutrider => {
+                bump_skill_floor(&mut self.skills, "animal_handling_husbandry_riding", 2);
+                bump_skill_floor(&mut self.skills, "first_aid_bls_cpr", 1);
+                bump_skill_floor(&mut self.skills, "veterinary_medicine_livestock_care", 1);
+                bump_skill_floor(
+                    &mut self.skills,
+                    "herbalism_ethnobotany_natural_remedies",
+                    1,
+                );
+                bump_skill_floor(&mut self.skills, "land_navigation_cartography", 1);
+            }
+            RuralYouthArchetype::FrontierScoutMilitiaSmuggler => {
+                if !self.granted_access_tags.contains(&SkillAccessTier::Illicit) {
+                    self.granted_access_tags.push(SkillAccessTier::Illicit);
+                }
+                bump_skill_floor(&mut self.skills, "alertness_situational_awareness", 2);
+                bump_skill_floor(&mut self.skills, "stealth_sneaking_hiding", 2);
+                bump_skill_floor(&mut self.skills, "camouflage_concealment", 2);
+                bump_skill_floor(&mut self.skills, "long_guns_rifles_carbines_shotguns", 2);
+                bump_skill_floor(&mut self.skills, "land_navigation_cartography", 1);
+            }
+        }
+
+        self.stage_history.push(format!(
+            "Stage 4C (Ages 15–18): Rural / Developing-Region Youth ({:?}) — Academic Tree Frozen; granted [Access: Vocational/Licensed]",
             archetype
         ));
     }
@@ -563,6 +699,96 @@ pub fn build_priya_nair_lifepath() -> LifepathCharacterProfile {
     priya.operational_heat = 0;
 
     priya
+}
+
+/// Build the canonical walkthrough profile for **Amara Okafor — Rural Bush Tracker, Herbalist & Anti-Poaching Ranger** (§2.3 of `lifepaths_and_economy.md`).
+#[must_use]
+pub fn build_amara_okafor_lifepath() -> LifepathCharacterProfile {
+    let mut chars = CharacterCharacteristics::default();
+    chars.ins = 14;
+    chars.sig = 14;
+    chars.hea = 13;
+    chars.olf = 12;
+    chars.fit = 13;
+    chars.hlt = 13;
+    chars.for_stat = 11;
+    chars.dex = 12;
+    chars.kin = 12;
+    chars.dis = 12;
+    chars.mem = 12;
+    chars.ana = 10;
+
+    let mut aptitudes = CharacterAptitudes::default();
+    aptitudes.set(AptitudeCode::AptBio, 2);
+    aptitudes.set(AptitudeCode::AptKin, 1);
+    aptitudes.set(AptitudeCode::AptFin, 1);
+
+    // Stage 1: Destitute / Underdeveloped Rural Frontier (roll 5 -> SQM +4), early talent Foraging & Campcraft -> N=2
+    let mut amara = LifepathCharacterProfile::new_with_stage2_baseline(
+        "Amara Okafor",
+        5,
+        "foraging_campcraft",
+        chars,
+        aptitudes,
+    );
+
+    // Stage 2 (Ages 6–11): Rural village primary school -> Reading N=2, Arithmetic N=2, Stealth N=2
+    amara.skills.insert("reading_comprehension".to_string(), 2);
+    amara.skills.insert("arithmetic".to_string(), 2);
+    amara
+        .skills
+        .insert("stealth_sneaking_hiding".to_string(), 2);
+
+    // Stage 3 (Ages 12–15): Natural History / General Biology N=2, First Aid N=1; leaves formal school at Age 15 to support family homestead (Path 4C)
+    amara
+        .skills
+        .insert("general_biology_natural_history".to_string(), 2);
+    amara.skills.insert("first_aid_bls_cpr".to_string(), 1);
+    amara.stage_history.push(
+        "Stage 3 (Ages 12–15): Village Middle School — General Biology & Natural History N=2; transitioned at Age 15 to Path 4C Rural / Subsistence Youth.".to_string(),
+    );
+
+    // Stage 4C (Ages 15–18): Subsistence Hunter, Trapper & Bush Guide + Agriculture N=1 + Animal Handling N=2
+    amara.apply_stage4c_rural_agrarian_package(RuralYouthArchetype::SubsistenceHunterTrapper);
+    amara
+        .skills
+        .insert("agriculture_agronomy_pastoralism".to_string(), 1);
+    amara
+        .skills
+        .insert("animal_handling_husbandry_riding".to_string(), 2);
+    amara
+        .skills
+        .insert("herbalism_ethnobotany_natural_remedies".to_string(), 2);
+
+    // Stage 5 (Ages 18–22): 1 Term in Rural, Agrarian, Wilderness Guide & Frontier Ranger
+    amara.age_years = 22;
+    amara.skills.insert("foraging_campcraft".to_string(), 3);
+    amara
+        .skills
+        .insert("stealth_sneaking_hiding".to_string(), 3);
+    amara
+        .skills
+        .insert("hunting_trapping_field_butchery".to_string(), 4);
+    amara
+        .skills
+        .insert("wilderness_survival_biome_specific".to_string(), 3);
+    amara
+        .skills
+        .insert("long_guns_rifles_carbines_shotguns".to_string(), 3);
+    amara
+        .skills
+        .insert("land_navigation_cartography".to_string(), 2);
+    amara.skills.insert("camouflage_concealment".to_string(), 2);
+    amara
+        .skills
+        .insert("veterinary_medicine_livestock_care".to_string(), 2);
+    amara.campaign_sqm = 4;
+    amara.operational_heat = 0;
+    amara.stage_history.push(
+        "Stage 5 (Ages 18–22): Rural, Agrarian, Wilderness Guide & Frontier Ranger (Hunting & Trapping N=4, Wilderness Survival N=3, Long Guns N=3, Herbalism N=2, Veterinary Care N=2).".to_string(),
+    );
+
+    amara
 }
 
 /// Campaign Socioeconomic Status & Upkeep Tier (`SQM 1–10`) (§3.1).
@@ -899,9 +1125,82 @@ impl StreetGangArchetype {
     }
 }
 
+impl RuralYouthArchetype {
+    /// All 4 canonical Stage 4C Rural, Agrarian & Developing-Region Youth Archetypes.
+    pub const ALL: [Self; 4] = [
+        Self::SubsistenceHunterTrapper,
+        Self::AgrarianHomesteaderMechanist,
+        Self::PastoralHerderOutrider,
+        Self::FrontierScoutMilitiaSmuggler,
+    ];
+
+    /// Canonical code string.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SubsistenceHunterTrapper => "SUBSISTENCE_HUNTER_TRAPPER",
+            Self::AgrarianHomesteaderMechanist => "AGRARIAN_HOMESTEADER_MECHANIST",
+            Self::PastoralHerderOutrider => "PASTORAL_HERDER_OUTRIDER",
+            Self::FrontierScoutMilitiaSmuggler => "FRONTIER_SCOUT_MILITIA",
+        }
+    }
+
+    /// Human-readable title for the Rural Youth archetype.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::SubsistenceHunterTrapper => "Subsistence Hunter, Trapper & Bush Guide",
+            Self::AgrarianHomesteaderMechanist => "Agrarian Homesteader & Rural Mechanist",
+            Self::PastoralHerderOutrider => "Pastoral Herder, Stockman & Outrider",
+            Self::FrontierScoutMilitiaSmuggler => {
+                "Frontier Scout, Border Smuggler & Village Militia"
+            }
+        }
+    }
+
+    /// Summary of `[Access]` and skill grants.
+    #[must_use]
+    pub const fn subtitle(self) -> &'static str {
+        match self {
+            Self::SubsistenceHunterTrapper => {
+                "[Access: Vocational/Licensed] Grants Foraging N=2, Hunting & Trapping N=2, Wilderness Survival N=2, Long Guns N=2, Archery N=1, Stealth N=2."
+            }
+            Self::AgrarianHomesteaderMechanist => {
+                "[Access: Vocational/Licensed] Grants Agriculture & Agronomy N=2, Animal Handling N=1, Automotive & Small-Engine Mechanics N=2, Carpentry N=1, Driving N=1."
+            }
+            Self::PastoralHerderOutrider => {
+                "[Access: Vocational/Licensed] Grants Animal Handling & Riding N=2, Veterinary Care N=1, Herbalism & Ethnobotany N=1, First Aid N=1, Land Navigation N=1."
+            }
+            Self::FrontierScoutMilitiaSmuggler => {
+                "[Access: Vocational/Licensed + Illicit] Grants Long Guns N=2, Camouflage N=2, Stealth N=2, Alertness N=2, Land Navigation N=1."
+            }
+        }
+    }
+
+    /// Parse from a code string.
+    #[must_use]
+    pub fn from_code_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_uppercase().as_str() {
+            "SUBSISTENCE_HUNTER_TRAPPER" | "HUNTER_TRAPPER" | "HUNTER" => {
+                Some(Self::SubsistenceHunterTrapper)
+            }
+            "AGRARIAN_HOMESTEADER_MECHANIST" | "AGRARIAN_HOMESTEADER" | "AGRARIAN" => {
+                Some(Self::AgrarianHomesteaderMechanist)
+            }
+            "PASTORAL_HERDER_OUTRIDER" | "PASTORAL_HERDER" | "PASTORAL" => {
+                Some(Self::PastoralHerderOutrider)
+            }
+            "FRONTIER_SCOUT_MILITIA" | "FRONTIER_SCOUT_MILITIA_SMUGGLER" | "FRONTIER_SCOUT" => {
+                Some(Self::FrontierScoutMilitiaSmuggler)
+            }
+            _ => None,
+        }
+    }
+}
+
 impl CareerTermTrack {
-    /// All 7 canonical Stage 5 Adult 4-Year Career Tracks.
-    pub const ALL: [Self; 7] = [
+    /// All 8 canonical Stage 5 Adult 4-Year Career Tracks.
+    pub const ALL: [Self; 8] = [
         Self::UniversityUndergraduateStem,
         Self::MedicalSchoolAndResidency,
         Self::MilitaryCombatArmsSpecOps,
@@ -909,6 +1208,7 @@ impl CareerTermTrack {
         Self::IntelligenceServiceClandestine,
         Self::OrganizedCrimeCartelSyndicate,
         Self::BlueCollarTradesMerchantMarine,
+        Self::RuralAgrarianFrontierRanger,
     ];
 
     /// Canonical code string.
@@ -922,6 +1222,7 @@ impl CareerTermTrack {
             Self::IntelligenceServiceClandestine => "INTELLIGENCE_CLANDESTINE",
             Self::OrganizedCrimeCartelSyndicate => "ORGANIZED_CRIME_SYNDICATE",
             Self::BlueCollarTradesMerchantMarine => "BLUE_COLLAR_TRADES",
+            Self::RuralAgrarianFrontierRanger => "RURAL_AGRARIAN_RANGER",
         }
     }
 
@@ -941,6 +1242,9 @@ impl CareerTermTrack {
             Self::OrganizedCrimeCartelSyndicate => "Organized Crime / Cartel / Street Syndicate",
             Self::BlueCollarTradesMerchantMarine => {
                 "Blue-Collar Trades / Industrial Tech / Merchant Marine"
+            }
+            Self::RuralAgrarianFrontierRanger => {
+                "Rural, Agrarian, Wilderness Guide & Frontier Ranger"
             }
         }
     }
@@ -962,6 +1266,9 @@ impl CareerTermTrack {
                 "Underworld recruitment or Juvenile Gang background (PRE >= 9 or INS >= 9)"
             }
             Self::BlueCollarTradesMerchantMarine => "Arithmetic >= 2, Manual Dexterity >= 1",
+            Self::RuralAgrarianFrontierRanger => {
+                "Foraging & Campcraft >= 2, Agriculture >= 1, or Animal Handling >= 1 (or FIT >= 9 & HLT >= 9)"
+            }
         }
     }
 
@@ -980,6 +1287,15 @@ impl CareerTermTrack {
             .unwrap_or(0);
         let chem = skills.get("general_chemistry").copied().unwrap_or(0);
         let arith = skills.get("arithmetic").copied().unwrap_or(0);
+        let foraging = skills.get("foraging_campcraft").copied().unwrap_or(0);
+        let ag = skills
+            .get("agriculture_agronomy_pastoralism")
+            .copied()
+            .unwrap_or(0);
+        let animal = skills
+            .get("animal_handling_husbandry_riding")
+            .copied()
+            .unwrap_or(0);
 
         match self {
             Self::UniversityUndergraduateStem => {
@@ -1038,6 +1354,17 @@ impl CareerTermTrack {
             Self::BlueCollarTradesMerchantMarine => {
                 let ok = arith >= 1;
                 let msg = format!("Arithmetic N={arith} (req >=1)");
+                (ok, msg)
+            }
+            Self::RuralAgrarianFrontierRanger => {
+                let ok = foraging >= 2
+                    || ag >= 1
+                    || animal >= 1
+                    || (chars.fit >= 9 && chars.hlt >= 9);
+                let msg = format!(
+                    "Foraging N={foraging}, Agriculture N={ag}, Animal Handling N={animal}, FIT {}/HLT {}",
+                    chars.fit, chars.hlt
+                );
                 (ok, msg)
             }
         }
@@ -1102,6 +1429,8 @@ impl CareerTermTrack {
                 "paramedic_combat_trauma_care",
                 "precision_marksmanship_sniping",
                 "demolitions_explosive_ordnance_eod",
+                "piloting_fixed_wing_rotary",
+                "piloting_rotary_wing_helicopter",
             ],
             Self::LawEnforcementSwatDetective => &[
                 "manual_dexterity_tinkering",
@@ -1176,6 +1505,29 @@ impl CareerTermTrack {
                 "small_boat_seamanship",
                 "armourer_gunsmithing",
                 "micro_electronics_avionics_cyberware_tech",
+                "piloting_fixed_wing_rotary",
+            ],
+            Self::RuralAgrarianFrontierRanger => &[
+                "foraging_campcraft",
+                "stealth_sneaking_hiding",
+                "alertness_situational_awareness",
+                "manual_dexterity_tinkering",
+                "first_aid_bls_cpr",
+                "general_biology_natural_history",
+                "agriculture_agronomy_pastoralism",
+                "animal_handling_husbandry_riding",
+                "hunting_trapping_field_butchery",
+                "wilderness_survival_biome_specific",
+                "herbalism_ethnobotany_natural_remedies",
+                "veterinary_medicine_livestock_care",
+                "long_guns_rifles_carbines_shotguns",
+                "archery_bows_crossbows",
+                "land_navigation_cartography",
+                "camouflage_concealment",
+                "automotive_small_engine_mechanics",
+                "carpentry_woodworking",
+                "driving_wheeled_tracked",
+                "small_boat_seamanship",
             ],
         }
     }
@@ -1205,6 +1557,10 @@ impl CareerTermTrack {
             "BLUE_COLLAR_TRADES" | "BLUE_COLLAR_TRADES_MERCHANT_MARINE" => {
                 Some(Self::BlueCollarTradesMerchantMarine)
             }
+            "RURAL_AGRARIAN_RANGER"
+            | "RURAL_AGRARIAN_FRONTIER_RANGER"
+            | "RURAL_RANGER"
+            | "AGRARIAN_RANGER" => Some(Self::RuralAgrarianFrontierRanger),
             _ => None,
         }
     }
@@ -1261,13 +1617,18 @@ pub struct LifepathBuildConfig {
     pub age15_crisis_roll_2d20: i32,
     /// Optional player override for Age 15 path (`Some(true)` = Force Dropout Path 4B, `Some(false)` = Stay in High School Path 4A).
     pub age15_dropout_override: Option<bool>,
+    /// Optional explicit Stage 4 path override (`Path4AHighSchool`, `Path4BStreetGang`, or `Path4CRuralAgrarian`).
+    /// Takes precedence over `age15_dropout_override` when set.
+    pub stage4_path_override: Option<Stage4Path>,
     /// Stage 4A: Selected High School Track (when staying in school).
     pub stage4a_hs_track: HighSchoolTrack,
     /// Stage 4A: High School Advancement `2d20` pairs.
     pub stage4a_hs_pairs: [(i32, i32); 2],
     pub stage4a_hs_override: Option<usize>,
-    /// Stage 4B: Selected Street Gang / Underworld Archetype (when dropping out at Age 15).
+    /// Stage 4B: Selected Street Gang / Underworld Archetype (when dropping out into urban underworld at Age 15).
     pub stage4b_gang_archetype: StreetGangArchetype,
+    /// Stage 4C: Selected Rural, Agrarian & Developing-Region Youth Archetype (when taking Path 4C at Age 15).
+    pub stage4c_rural_archetype: RuralYouthArchetype,
     /// Stage 5: Whether a dropout later obtained a GED / Adult Academic Waiver to unfreeze `[Access: Academic]`.
     pub adult_ged_waiver: bool,
     /// Stage 5: `0` to `4` Adult 4-Year Career Terms (`Ages 18–34`).
@@ -1296,10 +1657,12 @@ impl Default for LifepathBuildConfig {
             stage3_hum_override: None,
             age15_crisis_roll_2d20: 20,
             age15_dropout_override: None,
+            stage4_path_override: None,
             stage4a_hs_track: HighSchoolTrack::StandardCollegePrep,
             stage4a_hs_pairs: [(13, 11), (12, 10)],
             stage4a_hs_override: None,
             stage4b_gang_archetype: StreetGangArchetype::ShooterEnforcer,
+            stage4c_rural_archetype: RuralYouthArchetype::SubsistenceHunterTrapper,
             adult_ged_waiver: false,
             career_terms: vec![CareerTermConfig::default()],
             campaign_sqm_override: None,
@@ -1319,9 +1682,10 @@ pub struct LifepathBaselineResult {
     pub stage3_sci_eval: EducationalAdvancementResult,
     pub stage3_hum_eval: EducationalAdvancementResult,
     pub dropped_out_at_15: bool,
+    pub stage4_path: Stage4Path,
     pub stage4a_hs_eval: Option<EducationalAdvancementResult>,
     pub term_evals: Vec<EducationalAdvancementResult>,
-    /// Skills granted automatically by Stages 1–4 (`Universal Talents` + `Origin` + `Elementary` + `Junior High` + `High School / Gang`).
+    /// Skills granted automatically by Stages 1–4 (`Universal Talents` + `Origin` + `Elementary` + `Junior High` + `High School / Gang / Rural`).
     /// Serves as the minimum floor in the Step 5 Skill Tree Builder.
     pub baseline_skills: BTreeMap<String, usize>,
     /// All `[Access]` tags unlocked across Stages 1–5.
@@ -1535,7 +1899,21 @@ pub fn compute_lifepath_baseline_from_config(
 
     let natural_dropout =
         cfg.age15_crisis_roll_2d20.clamp(2, 40) <= origin.adolescent_dropout_risk_max_2d20;
-    let dropped_out_at_15 = cfg.age15_dropout_override.unwrap_or(natural_dropout);
+    let stage4_path = match cfg.stage4_path_override {
+        Some(path) => path,
+        None => match cfg.age15_dropout_override {
+            Some(true) => Stage4Path::Path4BStreetGang,
+            Some(false) => Stage4Path::Path4AHighSchool,
+            None => {
+                if natural_dropout {
+                    Stage4Path::Path4BStreetGang
+                } else {
+                    Stage4Path::Path4AHighSchool
+                }
+            }
+        },
+    };
+    let dropped_out_at_15 = stage4_path != Stage4Path::Path4AHighSchool;
 
     stage_history.push(format!(
         "Stage 3 (Ages 12–15): Junior High — Math {} succ, Science {} succ, Humanities {} succ; Age-15 Crisis Roll={} (Threshold <={}) -> {}",
@@ -1544,147 +1922,203 @@ pub fn compute_lifepath_baseline_from_config(
         stage3_hum_eval.successes,
         cfg.age15_crisis_roll_2d20.clamp(2, 40),
         origin.adolescent_dropout_risk_max_2d20,
-        if dropped_out_at_15 {
-            "DROPPED OUT (Path 4B)"
-        } else {
-            "Stayed in High School (Path 4A)"
+        match stage4_path {
+            Stage4Path::Path4AHighSchool => "Stayed in High School (Path 4A)",
+            Stage4Path::Path4BStreetGang => "DROPPED OUT — Urban Underworld (Path 4B)",
+            Stage4Path::Path4CRuralAgrarian => "RURAL / AGRARIAN / FRONTIER YOUTH (Path 4C)",
         }
     ));
 
-    // Stage 4: Ages 16–18 (Path 4A High School vs. Path 4B Dropout & Street Gang)
+    // Stage 4: Ages 15–18 (Path 4A High School vs. Path 4B Urban Dropout & Street Gang vs. Path 4C Rural & Developing-Region Youth)
     let mut academic_tree_frozen = false;
     let mut stage4a_hs_eval = None;
 
-    if dropped_out_at_15 {
-        academic_tree_frozen = true;
-        granted_access_tags.retain(|t| *t != SkillAccessTier::Academic);
-        if !granted_access_tags.contains(&SkillAccessTier::Illicit) {
-            granted_access_tags.push(SkillAccessTier::Illicit);
-        }
+    match stage4_path {
+        Stage4Path::Path4BStreetGang => {
+            academic_tree_frozen = true;
+            granted_access_tags.retain(|t| *t != SkillAccessTier::Academic);
+            if !granted_access_tags.contains(&SkillAccessTier::Illicit) {
+                granted_access_tags.push(SkillAccessTier::Illicit);
+            }
 
-        bump_skill_floor(&mut skills, "streetwise_underworld_etiquette", 2);
-        bump_skill_floor(&mut skills, "brawling_unarmed_striking", 2);
-        match cfg.stage4b_gang_archetype {
-            StreetGangArchetype::ShooterEnforcer => {
-                bump_skill_floor(&mut skills, "pistols_handguns", 2);
-                bump_skill_floor(&mut skills, "short_blades_knife_fighting", 2);
-                bump_skill_floor(&mut skills, "intimidation_coercion", 2);
-                if chars.for_stat >= 10 {
-                    bump_skill_floor(&mut skills, "fully_automatic_burst_weapons", 1);
+            bump_skill_floor(&mut skills, "streetwise_underworld_etiquette", 2);
+            bump_skill_floor(&mut skills, "brawling_unarmed_striking", 2);
+            match cfg.stage4b_gang_archetype {
+                StreetGangArchetype::ShooterEnforcer => {
+                    bump_skill_floor(&mut skills, "pistols_handguns", 2);
+                    bump_skill_floor(&mut skills, "short_blades_knife_fighting", 2);
+                    bump_skill_floor(&mut skills, "intimidation_coercion", 2);
+                    if chars.for_stat >= 10 {
+                        bump_skill_floor(&mut skills, "fully_automatic_burst_weapons", 1);
+                    }
+                }
+                StreetGangArchetype::BoostWheelman => {
+                    bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
+                    bump_skill_floor(&mut skills, "driving_wheeled_tracked", 2);
+                    bump_skill_floor(&mut skills, "lockpicking_physical_intrusion", 2);
+                    bump_skill_floor(&mut skills, "automotive_small_engine_mechanics", 1);
+                }
+                StreetGangArchetype::RunnerLookout => {
+                    bump_skill_floor(&mut skills, "balance_footwork", 2);
+                    bump_skill_floor(&mut skills, "jumping_leaping", 2);
+                    bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
+                    bump_skill_floor(&mut skills, "stealth_sneaking_hiding", 2);
+                    bump_skill_floor(&mut skills, "alertness_situational_awareness", 2);
+                    bump_skill_floor(&mut skills, "acrobatics_tumbling_parkour", 2);
+                    bump_skill_floor(&mut skills, "sleight_of_hand_pickpocketing_palming", 1);
+                }
+                StreetGangArchetype::BackAlleyCookModder => {
+                    bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
+                    bump_skill_floor(&mut skills, "metalworking_machining_blacksmithing", 2);
+                    bump_skill_floor(&mut skills, "armourer_gunsmithing", 2);
+                    bump_skill_floor(&mut skills, "pharmacology_toxicology", 2);
                 }
             }
-            StreetGangArchetype::BoostWheelman => {
-                bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
-                bump_skill_floor(&mut skills, "driving_wheeled_tracked", 2);
-                bump_skill_floor(&mut skills, "lockpicking_physical_intrusion", 2);
-                bump_skill_floor(&mut skills, "automotive_small_engine_mechanics", 1);
-            }
-            StreetGangArchetype::RunnerLookout => {
-                bump_skill_floor(&mut skills, "balance_footwork", 2);
-                bump_skill_floor(&mut skills, "jumping_leaping", 2);
-                bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
-                bump_skill_floor(&mut skills, "stealth_sneaking_hiding", 2);
-                bump_skill_floor(&mut skills, "alertness_situational_awareness", 2);
-                bump_skill_floor(&mut skills, "acrobatics_tumbling_parkour", 2);
-                bump_skill_floor(&mut skills, "sleight_of_hand_pickpocketing_palming", 1);
-            }
-            StreetGangArchetype::BackAlleyCookModder => {
-                bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
-                bump_skill_floor(&mut skills, "metalworking_machining_blacksmithing", 2);
-                bump_skill_floor(&mut skills, "armourer_gunsmithing", 2);
-                bump_skill_floor(&mut skills, "pharmacology_toxicology", 2);
-            }
+            stage_history.push(format!(
+                "Stage 4B (Ages 16–18): Dropout / {} — Academic Tree FROZEN; unlocked [Access: Illicit]",
+                cfg.stage4b_gang_archetype.label()
+            ));
         }
-        stage_history.push(format!(
-            "Stage 4B (Ages 16–18): Dropout / {} — Academic Tree FROZEN; unlocked [Access: Illicit]",
-            cfg.stage4b_gang_archetype.label()
-        ));
-    } else {
-        let hs_sqm = if cfg.stage4a_hs_track == HighSchoolTrack::ApHonorsStemMagnet {
-            sqm - 1
-        } else {
-            sqm
-        };
-        let mut hs_eval = evaluate_educational_advancement_roll(
-            chars.dis,
-            chars.ana.max(chars.mem),
-            aptitudes.apt_qnt.max(aptitudes.apt_cmp),
-            hs_sqm,
-            cfg.stage4a_hs_pairs,
-        );
-        if let Some(ov) = cfg.stage4a_hs_override {
-            hs_eval.successes = ov.min(2);
-        }
+        Stage4Path::Path4CRuralAgrarian => {
+            academic_tree_frozen = true;
+            granted_access_tags.retain(|t| *t != SkillAccessTier::Academic);
+            if !granted_access_tags.contains(&SkillAccessTier::VocationalLicensed) {
+                granted_access_tags.push(SkillAccessTier::VocationalLicensed);
+            }
 
-        match cfg.stage4a_hs_track {
-            HighSchoolTrack::StandardCollegePrep => {
-                bump_skill_floor(&mut skills, "arithmetic", 2);
-                bump_skill_floor(&mut skills, "elementary_algebra_geometry", 2);
-                bump_skill_floor(
-                    &mut skills,
-                    "trigonometry",
-                    1 + usize::from(hs_eval.successes >= 1),
-                );
-                bump_skill_floor(
-                    &mut skills,
-                    "general_chemistry",
-                    1 + usize::from(hs_eval.successes >= 2),
-                );
-                bump_skill_floor(&mut skills, "classical_mechanics_physics", 1);
-                bump_skill_floor(&mut skills, "foreign_language_specific", 1);
-                bump_skill_floor(&mut skills, "driving_wheeled_tracked", 1);
-            }
-            HighSchoolTrack::ApHonorsStemMagnet => {
-                bump_skill_floor(&mut skills, "arithmetic", 3);
-                bump_skill_floor(&mut skills, "digital_ai_literacy", 2);
-                bump_skill_floor(&mut skills, "elementary_algebra_geometry", 3);
-                bump_skill_floor(
-                    &mut skills,
-                    "trigonometry",
-                    2 + usize::from(hs_eval.successes >= 1),
-                );
-                bump_skill_floor(
-                    &mut skills,
-                    "calculus_linear_algebra",
-                    1 + usize::from(hs_eval.successes >= 1),
-                );
-                bump_skill_floor(&mut skills, "statistics_probability", 1);
-                bump_skill_floor(
-                    &mut skills,
-                    "programming_scripting",
-                    1 + usize::from(hs_eval.successes >= 2),
-                );
-                bump_skill_floor(&mut skills, "classical_mechanics_physics", 2);
-                bump_skill_floor(&mut skills, "general_chemistry", 2);
-            }
-            HighSchoolTrack::VocationalTechnical => {
-                if !granted_access_tags.contains(&SkillAccessTier::VocationalLicensed) {
-                    granted_access_tags.push(SkillAccessTier::VocationalLicensed);
+            bump_skill_floor(&mut skills, "foraging_campcraft", 2);
+            bump_skill_floor(&mut skills, "wilderness_survival_biome_specific", 1);
+            bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
+
+            match cfg.stage4c_rural_archetype {
+                RuralYouthArchetype::SubsistenceHunterTrapper => {
+                    bump_skill_floor(&mut skills, "stealth_sneaking_hiding", 2);
+                    bump_skill_floor(&mut skills, "hunting_trapping_field_butchery", 2);
+                    bump_skill_floor(&mut skills, "wilderness_survival_biome_specific", 2);
+                    bump_skill_floor(&mut skills, "long_guns_rifles_carbines_shotguns", 2);
+                    bump_skill_floor(&mut skills, "archery_bows_crossbows", 1);
                 }
-                bump_skill_floor(&mut skills, "arithmetic", 2);
-                bump_skill_floor(&mut skills, "elementary_algebra_geometry", 2);
-                bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
-                bump_skill_floor(&mut skills, "driving_wheeled_tracked", 1);
-                bump_skill_floor(
-                    &mut skills,
-                    "automotive_small_engine_mechanics",
-                    1 + usize::from(hs_eval.successes >= 1),
-                );
-                bump_skill_floor(
-                    &mut skills,
-                    "electrical_power_systems",
-                    1 + usize::from(hs_eval.successes >= 2),
-                );
-                bump_skill_floor(&mut skills, "metalworking_machining_blacksmithing", 1);
+                RuralYouthArchetype::AgrarianHomesteaderMechanist => {
+                    bump_skill_floor(&mut skills, "agriculture_agronomy_pastoralism", 2);
+                    bump_skill_floor(&mut skills, "animal_handling_husbandry_riding", 1);
+                    bump_skill_floor(&mut skills, "automotive_small_engine_mechanics", 2);
+                    bump_skill_floor(&mut skills, "carpentry_woodworking", 1);
+                    bump_skill_floor(&mut skills, "driving_wheeled_tracked", 1);
+                }
+                RuralYouthArchetype::PastoralHerderOutrider => {
+                    bump_skill_floor(&mut skills, "animal_handling_husbandry_riding", 2);
+                    bump_skill_floor(&mut skills, "first_aid_bls_cpr", 1);
+                    bump_skill_floor(&mut skills, "veterinary_medicine_livestock_care", 1);
+                    bump_skill_floor(
+                        &mut skills,
+                        "herbalism_ethnobotany_natural_remedies",
+                        1,
+                    );
+                    bump_skill_floor(&mut skills, "land_navigation_cartography", 1);
+                }
+                RuralYouthArchetype::FrontierScoutMilitiaSmuggler => {
+                    if !granted_access_tags.contains(&SkillAccessTier::Illicit) {
+                        granted_access_tags.push(SkillAccessTier::Illicit);
+                    }
+                    bump_skill_floor(&mut skills, "alertness_situational_awareness", 2);
+                    bump_skill_floor(&mut skills, "stealth_sneaking_hiding", 2);
+                    bump_skill_floor(&mut skills, "camouflage_concealment", 2);
+                    bump_skill_floor(&mut skills, "long_guns_rifles_carbines_shotguns", 2);
+                    bump_skill_floor(&mut skills, "land_navigation_cartography", 1);
+                }
             }
+            stage_history.push(format!(
+                "Stage 4C (Ages 15–18): Rural / Developing-Region Youth ({}) — Academic Tree FROZEN; unlocked [Access: Vocational/Licensed]",
+                cfg.stage4c_rural_archetype.label()
+            ));
         }
-        stage_history.push(format!(
-            "Stage 4A (Ages 16–18): {} — Advancement {} succ (TN {})",
-            cfg.stage4a_hs_track.label(),
-            hs_eval.successes,
-            hs_eval.tn_edu
-        ));
-        stage4a_hs_eval = Some(hs_eval);
+        Stage4Path::Path4AHighSchool => {
+            let hs_sqm = if cfg.stage4a_hs_track == HighSchoolTrack::ApHonorsStemMagnet {
+                sqm - 1
+            } else {
+                sqm
+            };
+            let mut hs_eval = evaluate_educational_advancement_roll(
+                chars.dis,
+                chars.ana.max(chars.mem),
+                aptitudes.apt_qnt.max(aptitudes.apt_cmp),
+                hs_sqm,
+                cfg.stage4a_hs_pairs,
+            );
+            if let Some(ov) = cfg.stage4a_hs_override {
+                hs_eval.successes = ov.min(2);
+            }
+
+            match cfg.stage4a_hs_track {
+                HighSchoolTrack::StandardCollegePrep => {
+                    bump_skill_floor(&mut skills, "arithmetic", 2);
+                    bump_skill_floor(&mut skills, "elementary_algebra_geometry", 2);
+                    bump_skill_floor(
+                        &mut skills,
+                        "trigonometry",
+                        1 + usize::from(hs_eval.successes >= 1),
+                    );
+                    bump_skill_floor(
+                        &mut skills,
+                        "general_chemistry",
+                        1 + usize::from(hs_eval.successes >= 2),
+                    );
+                    bump_skill_floor(&mut skills, "classical_mechanics_physics", 1);
+                    bump_skill_floor(&mut skills, "foreign_language_specific", 1);
+                    bump_skill_floor(&mut skills, "driving_wheeled_tracked", 1);
+                }
+                HighSchoolTrack::ApHonorsStemMagnet => {
+                    bump_skill_floor(&mut skills, "arithmetic", 3);
+                    bump_skill_floor(&mut skills, "digital_ai_literacy", 2);
+                    bump_skill_floor(&mut skills, "elementary_algebra_geometry", 3);
+                    bump_skill_floor(
+                        &mut skills,
+                        "trigonometry",
+                        2 + usize::from(hs_eval.successes >= 1),
+                    );
+                    bump_skill_floor(
+                        &mut skills,
+                        "calculus_linear_algebra",
+                        1 + usize::from(hs_eval.successes >= 1),
+                    );
+                    bump_skill_floor(&mut skills, "statistics_probability", 1);
+                    bump_skill_floor(
+                        &mut skills,
+                        "programming_scripting",
+                        1 + usize::from(hs_eval.successes >= 2),
+                    );
+                    bump_skill_floor(&mut skills, "classical_mechanics_physics", 2);
+                    bump_skill_floor(&mut skills, "general_chemistry", 2);
+                }
+                HighSchoolTrack::VocationalTechnical => {
+                    if !granted_access_tags.contains(&SkillAccessTier::VocationalLicensed) {
+                        granted_access_tags.push(SkillAccessTier::VocationalLicensed);
+                    }
+                    bump_skill_floor(&mut skills, "arithmetic", 2);
+                    bump_skill_floor(&mut skills, "elementary_algebra_geometry", 2);
+                    bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
+                    bump_skill_floor(&mut skills, "driving_wheeled_tracked", 1);
+                    bump_skill_floor(
+                        &mut skills,
+                        "automotive_small_engine_mechanics",
+                        1 + usize::from(hs_eval.successes >= 1),
+                    );
+                    bump_skill_floor(
+                        &mut skills,
+                        "electrical_power_systems",
+                        1 + usize::from(hs_eval.successes >= 2),
+                    );
+                    bump_skill_floor(&mut skills, "metalworking_machining_blacksmithing", 1);
+                }
+            }
+            stage_history.push(format!(
+                "Stage 4A (Ages 16–18): {} — Advancement {} succ (TN {})",
+                cfg.stage4a_hs_track.label(),
+                hs_eval.successes,
+                hs_eval.tn_edu
+            ));
+            stage4a_hs_eval = Some(hs_eval);
+        }
     }
 
     // Stage 5: Adult 4-Year Career Terms (Ages 18+, 0..=4 terms)
@@ -1699,7 +2133,7 @@ pub fn compute_lifepath_baseline_from_config(
     }
 
     let mut career_skill_budget = 0usize;
-    let mut elective_skill_budget = 2usize; // 2 base youth/young-adult elective skill levels
+    let mut elective_skill_budget = 40usize; // 40 base youth/young-adult Experience SP
     let mut term_evals = Vec::with_capacity(cfg.career_terms.len());
 
     for (t_idx, term) in cfg.career_terms.iter().take(4).enumerate() {
@@ -1728,6 +2162,7 @@ pub fn compute_lifepath_baseline_from_config(
             CareerTermTrack::IntelligenceServiceClandestine => chars.ins.max(chars.elo),
             CareerTermTrack::OrganizedCrimeCartelSyndicate => chars.pre.max(chars.ins),
             CareerTermTrack::BlueCollarTradesMerchantMarine => chars.dex.max(chars.ana),
+            CareerTermTrack::RuralAgrarianFrontierRanger => chars.ins.max(chars.sig.max(chars.fit)),
         };
         let apt_career = match term.track {
             CareerTermTrack::UniversityUndergraduateStem => {
@@ -1745,6 +2180,9 @@ pub fn compute_lifepath_baseline_from_config(
                 aptitudes.apt_soc.max(aptitudes.apt_fin)
             }
             CareerTermTrack::BlueCollarTradesMerchantMarine => aptitudes.apt_mec,
+            CareerTermTrack::RuralAgrarianFrontierRanger => {
+                aptitudes.apt_bio.max(aptitudes.apt_mec)
+            }
         };
         let mut t_eval = evaluate_educational_advancement_roll(
             chars.dis,
@@ -1756,20 +2194,19 @@ pub fn compute_lifepath_baseline_from_config(
         if let Some(ov) = term.override_successes {
             t_eval.successes = ov.min(2);
         }
-        let term_bonus = usize::from(t_eval.successes >= 2);
-        let term_career_pts = 6 + term_bonus;
-        career_skill_budget += term_career_pts;
-        elective_skill_budget += 2;
+        let term_formal_sp = 120 + 20 * t_eval.successes.min(2);
+        career_skill_budget += term_formal_sp;
+        elective_skill_budget += 40;
 
         let age_start = 18 + (t_idx as u32) * 4;
         let age_end = age_start + 4;
         stage_history.push(format!(
-            "Stage 5 Term {} (Ages {age_start}–{age_end}): {} — Roll {} succ (TN {}) -> +{} Career Skill Levels (+2 Elective)",
+            "Stage 5 Term {} (Ages {age_start}–{age_end}): {} — Roll {} succ (TN {}) -> +{} Formal SP (+40 Experience SP)",
             t_idx + 1,
             term.track.label(),
             t_eval.successes,
             t_eval.tn_edu,
-            term_career_pts
+            term_formal_sp
         ));
         term_evals.push(t_eval);
     }
@@ -1792,7 +2229,10 @@ pub fn compute_lifepath_baseline_from_config(
         .any(|t| t.track == CareerTermTrack::OrganizedCrimeCartelSyndicate)
     {
         2
-    } else if dropped_out_at_15 {
+    } else if stage4_path == Stage4Path::Path4BStreetGang
+        || (stage4_path == Stage4Path::Path4CRuralAgrarian
+            && cfg.stage4c_rural_archetype == RuralYouthArchetype::FrontierScoutMilitiaSmuggler)
+    {
         1
     } else {
         0
@@ -1807,6 +2247,7 @@ pub fn compute_lifepath_baseline_from_config(
         stage3_sci_eval,
         stage3_hum_eval,
         dropped_out_at_15,
+        stage4_path,
         stage4a_hs_eval,
         term_evals,
         baseline_skills: skills,
@@ -1827,9 +2268,193 @@ pub fn compute_lifepath_baseline_from_config(
     }
 }
 
-/// Automatically allocates available `career_skill_budget` and `elective_skill_budget` across the character's
-/// Career Track `recommended_skills()` and high-aptitude universal skills, strictly respecting all 4 canonical
-/// DAG gates (`validate_skill_advancement`) and `max_post_school_gain_per_skill`.
+/// Returns true if `skill_id` is part of the formal curriculum (`recommended_skills()`) of any active Stage 5 Career Term.
+#[must_use]
+pub fn is_career_formal_skill(skill_id: &str, cfg: &LifepathBuildConfig) -> bool {
+    cfg.career_terms
+        .iter()
+        .take(4)
+        .any(|t| t.track.recommended_skills().contains(&skill_id))
+}
+
+/// Ledger tracking Formal Training SP (`FOC + INS`) and Experience SP (`INS`) spent across post-school skill advancements.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SkillAllocationSpLedger {
+    pub formal_sp_budget: usize,
+    pub experience_sp_budget: usize,
+    pub formal_sp_spent: usize,
+    pub experience_sp_spent: usize,
+    pub formal_sp_remaining: usize,
+    pub experience_sp_remaining: usize,
+    pub total_sp_budget: usize,
+    pub total_sp_spent: usize,
+    pub total_sp_remaining: usize,
+    pub total_levels_gained: usize,
+    /// Total SP invested in each skill above its Stage 1–4 baseline floor.
+    pub per_skill_sp_spent: BTreeMap<String, usize>,
+}
+
+/// Computes the exact Formal Training SP (`FOC + INS`) and Experience SP (`INS`) spent and remaining
+/// for a character's current `skills` map relative to their `baseline.baseline_skills` floor.
+///
+/// - Skills in any active Career Term's `recommended_skills()` draw from `Formal SP` first (using
+///   [`SkillTrainingMode::FormalTraining`]); if a step exceeds `formal_sp_remaining`, it spills over into
+///   `Experience SP` (using [`SkillTrainingMode::Experience`]).
+/// - Non-career elective/hobby skills draw directly from `Experience SP` (using [`SkillTrainingMode::Experience`]),
+///   or from `Formal SP` if `Experience SP` is exhausted.
+#[must_use]
+pub fn compute_skill_allocation_sp_ledger(
+    baseline: &LifepathBaselineResult,
+    cfg: &LifepathBuildConfig,
+    chars: &CharacterCharacteristics,
+    aptitudes: &CharacterAptitudes,
+    skills: &BTreeMap<String, usize>,
+) -> SkillAllocationSpLedger {
+    let formal_sp_budget = baseline.career_skill_budget;
+    let experience_sp_budget = baseline.elective_skill_budget;
+    let mut formal_sp_spent = 0usize;
+    let mut experience_sp_spent = 0usize;
+    let mut total_levels_gained = 0usize;
+    let mut per_skill_sp_spent = BTreeMap::new();
+
+    // First pass: Career-recommended skills (use Formal SP first)
+    for (sk_id, &cur_n) in skills {
+        let floor_n = baseline.baseline_skills.get(sk_id).copied().unwrap_or(0);
+        if cur_n <= floor_n || !is_career_formal_skill(sk_id, cfg) {
+            continue;
+        }
+        let mut sk_spent = 0usize;
+        for step_n in (floor_n + 1)..=cur_n {
+            total_levels_gained += 1;
+            let formal_cost = compute_skill_step_sp_cost(
+                sk_id,
+                step_n,
+                SkillTrainingMode::FormalTraining,
+                chars,
+                aptitudes,
+            )
+            .final_sp_cost;
+            if formal_sp_spent + formal_cost <= formal_sp_budget {
+                formal_sp_spent += formal_cost;
+                sk_spent += formal_cost;
+            } else {
+                let exp_cost = compute_skill_step_sp_cost(
+                    sk_id,
+                    step_n,
+                    SkillTrainingMode::Experience,
+                    chars,
+                    aptitudes,
+                )
+                .final_sp_cost;
+                experience_sp_spent += exp_cost;
+                sk_spent += exp_cost;
+            }
+        }
+        per_skill_sp_spent.insert(sk_id.clone(), sk_spent);
+    }
+
+    // Second pass: Non-career elective skills (use Experience SP first, or Formal SP if Experience SP is full)
+    for (sk_id, &cur_n) in skills {
+        let floor_n = baseline.baseline_skills.get(sk_id).copied().unwrap_or(0);
+        if cur_n <= floor_n || is_career_formal_skill(sk_id, cfg) {
+            continue;
+        }
+        let mut sk_spent = 0usize;
+        for step_n in (floor_n + 1)..=cur_n {
+            total_levels_gained += 1;
+            let exp_cost = compute_skill_step_sp_cost(
+                sk_id,
+                step_n,
+                SkillTrainingMode::Experience,
+                chars,
+                aptitudes,
+            )
+            .final_sp_cost;
+            if experience_sp_spent + exp_cost <= experience_sp_budget {
+                experience_sp_spent += exp_cost;
+                sk_spent += exp_cost;
+            } else if formal_sp_spent + exp_cost <= formal_sp_budget {
+                formal_sp_spent += exp_cost;
+                sk_spent += exp_cost;
+            } else {
+                experience_sp_spent += exp_cost;
+                sk_spent += exp_cost;
+            }
+        }
+        per_skill_sp_spent.insert(sk_id.clone(), sk_spent);
+    }
+
+    let formal_sp_remaining = formal_sp_budget.saturating_sub(formal_sp_spent);
+    let experience_sp_remaining = experience_sp_budget.saturating_sub(experience_sp_spent);
+    let total_sp_budget = formal_sp_budget + experience_sp_budget;
+    let total_sp_spent = formal_sp_spent + experience_sp_spent;
+    let total_sp_remaining = formal_sp_remaining + experience_sp_remaining;
+
+    SkillAllocationSpLedger {
+        formal_sp_budget,
+        experience_sp_budget,
+        formal_sp_spent,
+        experience_sp_spent,
+        formal_sp_remaining,
+        experience_sp_remaining,
+        total_sp_budget,
+        total_sp_spent,
+        total_sp_remaining,
+        total_levels_gained,
+        per_skill_sp_spent,
+    }
+}
+
+/// Preview the [`SkillStepCostBreakdown`] and whether the character has enough SP to advance `skill_id` to `target_level`.
+#[must_use]
+pub fn preview_next_skill_step_sp(
+    skill_id: &str,
+    target_level: usize,
+    cfg: &LifepathBuildConfig,
+    ledger: &SkillAllocationSpLedger,
+    chars: &CharacterCharacteristics,
+    aptitudes: &CharacterAptitudes,
+) -> (SkillStepCostBreakdown, bool) {
+    let is_career = is_career_formal_skill(skill_id, cfg);
+    if is_career {
+        let formal_bd = compute_skill_step_sp_cost(
+            skill_id,
+            target_level,
+            SkillTrainingMode::FormalTraining,
+            chars,
+            aptitudes,
+        );
+        if formal_bd.final_sp_cost <= ledger.formal_sp_remaining {
+            return (formal_bd, true);
+        }
+        let exp_bd = compute_skill_step_sp_cost(
+            skill_id,
+            target_level,
+            SkillTrainingMode::Experience,
+            chars,
+            aptitudes,
+        );
+        if exp_bd.final_sp_cost <= ledger.experience_sp_remaining {
+            return (exp_bd, true);
+        }
+        (formal_bd, false)
+    } else {
+        let exp_bd = compute_skill_step_sp_cost(
+            skill_id,
+            target_level,
+            SkillTrainingMode::Experience,
+            chars,
+            aptitudes,
+        );
+        let affordable = exp_bd.final_sp_cost <= ledger.experience_sp_remaining
+            || exp_bd.final_sp_cost <= ledger.formal_sp_remaining;
+        (exp_bd, affordable)
+    }
+}
+
+/// Automatically allocates available `career_skill_budget` (`Formal SP`) and `elective_skill_budget` (`Experience SP`)
+/// across the character's Career Track `recommended_skills()` and universal electives, strictly respecting all 4 canonical
+/// DAG gates (`validate_skill_advancement`), the 5-factor SP step cost, and `max_post_school_gain_per_skill`.
 pub fn auto_allocate_career_and_elective_skills(
     baseline: &LifepathBaselineResult,
     cfg: &LifepathBuildConfig,
@@ -1845,29 +2470,17 @@ pub fn auto_allocate_career_and_elective_skills(
         }
     }
 
-    let total_budget = baseline.career_skill_budget + baseline.elective_skill_budget;
-    let current_spent: usize = skills
-        .iter()
-        .map(|(k, &v)| {
-            let floor = baseline.baseline_skills.get(k).copied().unwrap_or(0);
-            v.saturating_sub(floor)
-        })
-        .sum();
-    let mut remaining = total_budget.saturating_sub(current_spent);
-    if remaining == 0 {
-        return;
-    }
-
     // Build priority candidate list from all Career Terms' recommended skills, followed by general staples
-    let mut candidates: Vec<&'static str> = Vec::new();
+    let mut career_candidates: Vec<&'static str> = Vec::new();
     for term in cfg.career_terms.iter().take(4) {
         for &sk_id in term.track.recommended_skills() {
-            if !candidates.contains(&sk_id) {
-                candidates.push(sk_id);
+            if !career_candidates.contains(&sk_id) {
+                career_candidates.push(sk_id);
             }
         }
     }
     let fallback_electives = [
+        "swimming_diving",
         "alertness_situational_awareness",
         "first_aid_bls_cpr",
         "driving_wheeled_tracked",
@@ -1879,26 +2492,21 @@ pub fn auto_allocate_career_and_elective_skills(
         "brawling_unarmed_striking",
         "manual_dexterity_tinkering",
     ];
+    let mut all_candidates = career_candidates.clone();
     for &sk_id in &fallback_electives {
-        if !candidates.contains(&sk_id) {
-            candidates.push(sk_id);
+        if !all_candidates.contains(&sk_id) {
+            all_candidates.push(sk_id);
         }
     }
 
     // Multi-pass allocation so parent prerequisites advance first and unlock child specializations
-    for _pass in 0..4 {
-        if remaining == 0 {
-            break;
-        }
+    for _pass in 0..6 {
         let mut made_progress = false;
-        for &sk_id in &candidates {
-            if remaining == 0 {
-                break;
-            }
+        for &sk_id in &all_candidates {
             let cur_n = skills.get(sk_id).copied().unwrap_or(0);
             let floor_n = baseline.baseline_skills.get(sk_id).copied().unwrap_or(0);
             let gained_post_school = cur_n.saturating_sub(floor_n);
-            if gained_post_school >= baseline.max_post_school_gain_per_skill || cur_n >= 6 {
+            if gained_post_school >= baseline.max_post_school_gain_per_skill || cur_n >= 5 {
                 continue;
             }
             let target_n = cur_n + 1;
@@ -1911,9 +2519,15 @@ pub fn auto_allocate_career_and_elective_skills(
                 &baseline.granted_access_tags,
                 baseline.academic_tree_frozen,
             );
-            if validation.is_valid {
+            if !validation.is_valid {
+                continue;
+            }
+            let ledger =
+                compute_skill_allocation_sp_ledger(baseline, cfg, chars, aptitudes, skills);
+            let (_, affordable) =
+                preview_next_skill_step_sp(sk_id, target_n, cfg, &ledger, chars, aptitudes);
+            if affordable {
                 skills.insert(sk_id.to_string(), target_n);
-                remaining -= 1;
                 made_progress = true;
             }
         }
@@ -1933,6 +2547,8 @@ mod tests {
             ana: 14,
             dis: 13,
             mem: 12,
+            foc: 13,
+            ins: 13,
             for_stat: 11,
             dex: 13,
             sig: 12,
@@ -1978,23 +2594,18 @@ mod tests {
                 .granted_access_tags
                 .contains(&SkillAccessTier::Restricted)
         );
-        assert_eq!(baseline.career_skill_budget, 7 + 6); // Term 1 Honors (7) + Term 2 Standard (6)
-        assert_eq!(baseline.elective_skill_budget, 2 + 4); // 2 base + 2*2 terms
+        assert_eq!(baseline.career_skill_budget, 160 + 140); // Term 1 Honors (160 Formal SP) + Term 2 Standard (140 Formal SP)
+        assert_eq!(baseline.elective_skill_budget, 40 + 80); // 40 Youth Experience SP + 2*40 Term Experience SP
 
         let mut skills = baseline.baseline_skills.clone();
         auto_allocate_career_and_elective_skills(&baseline, &cfg, &chars, &aptitudes, &mut skills);
 
-        let total_spent: usize = skills
-            .iter()
-            .map(|(k, &v)| {
-                let fl = baseline.baseline_skills.get(k).copied().unwrap_or(0);
-                v.saturating_sub(fl)
-            })
-            .sum();
-        assert_eq!(
-            total_spent,
-            baseline.career_skill_budget + baseline.elective_skill_budget
-        );
+        let ledger =
+            compute_skill_allocation_sp_ledger(&baseline, &cfg, &chars, &aptitudes, &skills);
+        assert!(ledger.total_levels_gained >= 12);
+        assert!(ledger.formal_sp_spent <= ledger.formal_sp_budget);
+        assert!(ledger.experience_sp_spent <= ledger.experience_sp_budget);
+        assert!(ledger.total_sp_spent >= 350);
     }
 
     #[test]
@@ -2079,5 +2690,47 @@ mod tests {
 
         let heat7 = evaluate_operational_heat(7);
         assert!(heat7.legal_bank_accounts_frozen);
+    }
+
+    #[test]
+    fn test_amara_okafor_rural_lifepath_and_skills() {
+        let amara = build_amara_okafor_lifepath();
+        assert_eq!(amara.origin.school_quality_modifier_sqm, 4);
+        assert!(amara.academic_tree_frozen);
+        assert!(
+            amara
+                .granted_access_tags
+                .contains(&SkillAccessTier::VocationalLicensed)
+        );
+        assert_eq!(amara.operational_heat, 0);
+
+        // Verify Amara's rural/fieldcraft skills
+        assert_eq!(
+            amara.skills.get("hunting_trapping_field_butchery"),
+            Some(&4)
+        );
+        assert_eq!(
+            amara.skills.get("animal_handling_husbandry_riding"),
+            Some(&2)
+        );
+        assert_eq!(
+            amara
+                .skills
+                .get("herbalism_ethnobotany_natural_remedies"),
+            Some(&2)
+        );
+        assert_eq!(
+            amara.skills.get("veterinary_medicine_livestock_care"),
+            Some(&2)
+        );
+
+        // Amara can advance Hunting & Trapping to N=5 and Veterinary Medicine to N=3,
+        // but is locked out of Academic-only Organic Chemistry due to Stage 4C Academic Tree Freeze
+        let hunt_audit = amara.audit_skill_unlock("hunting_trapping_field_butchery", 5);
+        assert!(hunt_audit.is_valid);
+        let vet_audit = amara.audit_skill_unlock("veterinary_medicine_livestock_care", 3);
+        assert!(vet_audit.is_valid);
+        let org_chem_audit = amara.audit_skill_unlock("organic_analytical_chemistry", 1);
+        assert!(!org_chem_audit.is_valid);
     }
 }

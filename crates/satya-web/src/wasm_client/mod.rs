@@ -242,6 +242,18 @@ pub fn register_window_bindings() {
     bind("satyaSelectDiceMaterialPreset", c_dice_preset.as_ref());
     c_dice_preset.forget();
 
+    let c_dice_cam = Closure::<dyn Fn()>::new(satya_update_dice_camera);
+    bind("satyaUpdateDiceCamera", c_dice_cam.as_ref());
+    c_dice_cam.forget();
+
+    let c_dice_pan = Closure::<dyn Fn(f32, f32)>::new(satya_pan_dice_camera);
+    bind("satyaPanDiceCamera", c_dice_pan.as_ref());
+    c_dice_pan.forget();
+
+    let c_dice_reset = Closure::<dyn Fn()>::new(satya_reset_dice_camera);
+    bind("satyaResetDiceCamera", c_dice_reset.as_ref());
+    c_dice_reset.forget();
+
     let c_model_view = Closure::<dyn Fn()>::new(satya_update_3d_model_view);
     bind("satyaUpdate3dModelView", c_model_view.as_ref());
     c_model_view.forget();

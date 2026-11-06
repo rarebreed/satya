@@ -1144,7 +1144,8 @@ table.metrics-table th {
     flex: 1;
 }
 
-.dice-material-toolbar {
+.dice-material-toolbar,
+.dice-camera-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1170,6 +1171,17 @@ table.metrics-table th {
     min-inline-size: 220px;
 }
 
+.dice-camera-slider-label {
+    min-inline-size: 165px;
+}
+
+.dice-pan-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
 input[type="range"].dice-opacity-slider {
     --slider-track-size: 0.45rem;
     --slider-thumb-size: 1rem;
@@ -1179,9 +1191,9 @@ input[type="range"].dice-opacity-slider {
     --slider-fill-color: var(--accent, #38bdf8);
     --slider-thumb-color: var(--slider-fill-color);
     --slider-direction: to right;
-    --attr-min: attr(min type(<number>), 15);
+    --attr-min: attr(min type(<number>), 8);
     --attr-max: attr(max type(<number>), 100);
-    --control-value: attr(value type(<number>), 68);
+    --control-value: attr(value type(<number>), 38);
     --slider-progress: calc(
         progress(var(--control-value), var(--attr-min), var(--attr-max)) * 100%
     );
@@ -1273,6 +1285,13 @@ input[type="range"].dice-opacity-slider:focus-visible {
     display: block;
     inline-size: 100%;
     block-size: 300px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.wgpu-dice-canvas:active {
+    cursor: grabbing;
 }
 
 .wgpu-dice-readout {

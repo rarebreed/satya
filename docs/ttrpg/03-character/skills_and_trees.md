@@ -322,7 +322,10 @@ flowchart TD
 | Skill Name | Type | Categories | Control ($C$) | Min $C$ | Prerequisites | Access | Tools |
 | :--- | :---: | :--- | :---: | :---: | :--- | :--- | :---: |
 | **First Aid & Basic Life Support** | `PHY/KNO` | `Medical` | `DEX/DIS` | — | None | `Universal` | `Situational` |
-| **General Biology** | `KNO` | `Science` | `MEM/ANA` | `MEM 9` | *Reading* $\ge 2$ | `Universal` / `Academic` | `Situational` |
+| **General Biology & Natural History** | `KNO` | `Science` | `MEM/ANA` | `MEM 9` | *Reading* $\ge 2$ *(or rural field lore)* | `Universal` / `Academic` | `Situational` |
+| **Agriculture, Agronomy & Crop Husbandry** | `PHY/KNO` | `Science`, `Fieldcraft` | `INS/FOR` | `INS 8, FOR 8` | *Foraging & Campcraft* $\ge 1$ or *Hygiene* $\ge 1$ | `Universal` / `Vocational` / `Academic` | `Mandatory` |
+| **Herbalism, Ethnobotany & Field Remedies** | `KNO` | `Medical`, `Fieldcraft` | `MEM/OLF` | `MEM 9, INS 9` | *Foraging & Campcraft* $\ge 2$, *First Aid* $\ge 1$ | `Universal` / `Vocational` | `Situational` |
+| **Veterinary Medicine & Livestock Care** | `PHY/KNO` | `Medical`, `Fieldcraft` | `INS/DEX` | `INS 9, DEX 9` | *Animal Handling* $\ge 1$, *First Aid* $\ge 1$ | `Universal` / `Vocational` / `Academic` | `Mandatory` |
 | **Paramedicine & TCCC (Combat Medic)** | `PHY/KNO` | `Medical`, `Combat` | `DEX/DIS` | `DEX 10, DIS 10, FOC 10` | *First Aid* $\ge 2$ | `Vocational` / `Restricted` / `Illicit` | `Mandatory` |
 | **Human Anatomy & Physiology** | `KNO` | `Science`, `Medical` | `MEM/INS` | `MEM 10, ANA 10` | *General Biology* $\ge 2$ | `Academic` / `Vocational` | `Situational` |
 | **Microbiology, Genetics & Immunology** | `KNO` | `Science`, `Medical` | `ANA/MEM` | `ANA 11, MEM 11` | *General Biology* $\ge 3$, *General Chemistry* $\ge 2$ | `Academic` | `Mandatory` *(Lab)* |
@@ -645,6 +648,10 @@ flowchart TD
 | **Strategic Intelligence & Threat Analysis** | `KNO` | `Knowledge`, `Fieldcraft` | `INS/ANA` | `INS 11, ANA 11` | *Research & OSINT* $\ge 2$, *History & Civics* $\ge 2$ | `Restricted` | `Mandatory` |
 | **Observation & Awareness** | `TAL` | `Fieldcraft` | `SIG/HEA` | — | None *(Starts at `N = 1`; swaps to `ITU`/`FOC` by context)* | `Universal` | `Situational` |
 | **Stealth & Sneaking** | `TAL` | `Fieldcraft`, `Athletic` | `KIN/FOC` | — | None *(Starts at `N = 1`)* | `Universal` | `Situational` |
+| **Foraging & Campcraft** | `TAL` | `Fieldcraft` | `INS/OLF` | — | None *(Starts at `N = 1`)* | `Universal` | `Situational` |
+| **Hunting, Trapping & Field Butchery** | `PHY/KNO` | `Fieldcraft`, `Combat` | `SIG/INS` | `SIG 9, INS 8` | *Foraging & Campcraft* $\ge 1$, *Stealth* $\ge 1$ | `Universal` / `Vocational` | `Mandatory` |
+| **Animal Handling, Husbandry & Riding** | `PHY/KNO` | `Fieldcraft`, `Athletic`, `Social` | `INS/KIN` | `INS 8, KIN 8` | *Empathy* $\ge 1$ or *Foraging & Campcraft* $\ge 1$ | `Universal` / `Vocational` | `Situational` |
+| **Wilderness Survival (Biome-Specific)** | `KNO/PHY` | `Fieldcraft` | `INS/HLT` | `INS 9, HLT 9` | *Foraging & Campcraft* $\ge 2$ | `Universal` / `Vocational` / `Restricted` | `Situational` |
 | **Sleight of Hand, Palming & Pickpocketing** | `PHY` | `Fieldcraft`, `Artistic` | `DEX/TAC` | `DEX 11, TAC 10` | *Stealth* $\ge 1$ | `Illicit` / `Artistic` | `None` |
 | **Lockpicking & Physical Security Bypass** | `PHY/KNO` | `Fieldcraft`, `Technical` | `DEX/TAC` | `DEX 10, TAC 10, FOC 9` | *Basic Tool Use* $\ge 1$ or *Sleight of Hand* $\ge 1$ | `Illicit` / `Restricted` / `Licensed` | `Mandatory` |
 | **Vehicle Hotwiring & Transponder Spoofing** | `PHY/KNO` | `Fieldcraft`, `Technical`, `Cyber` | `DEX/ANA` | `DEX 9` | *Streetwise* $\ge 1$ or *Basic Electronics* $\ge 1$ | `Illicit` / `Restricted` | `Mandatory` |

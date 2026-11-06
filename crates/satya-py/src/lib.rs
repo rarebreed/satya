@@ -1666,7 +1666,7 @@ pub fn evaluate_educational_advancement_roll(
     Ok(d.unbind())
 }
 
-/// Audits a skill unlock attempt against a canonical Lifepath preset (`"mateo_vance"` or `"priya_nair"`, `lifepaths_and_economy.md` §2.1–§2.2).
+/// Audits a skill unlock attempt against a canonical Lifepath preset (`"mateo_vance"`, `"priya_nair"`, or `"amara_okafor"`, `lifepaths_and_economy.md` §2.1–§2.3).
 #[pyfunction]
 pub fn audit_canonical_lifepath_character(
     preset_name: &str,
@@ -1676,9 +1676,10 @@ pub fn audit_canonical_lifepath_character(
     let profile = match preset_name.trim().to_ascii_lowercase().as_str() {
         "mateo" | "mateo_vance" => satya_engine::build_mateo_vance_lifepath(),
         "priya" | "priya_nair" | "dr_priya_nair" => satya_engine::build_priya_nair_lifepath(),
+        "amara" | "amara_okafor" => satya_engine::build_amara_okafor_lifepath(),
         other => {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "unknown lifepath preset '{other}'; expected 'mateo_vance' or 'priya_nair'"
+                "unknown lifepath preset '{other}'; expected 'mateo_vance', 'priya_nair', or 'amara_okafor'"
             )));
         }
     };

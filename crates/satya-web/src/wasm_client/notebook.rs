@@ -81,6 +81,7 @@ pub fn satya_select_notebook_tab(tab_id: String) {
         crate::wasm_client::wizard::render_character_wizard();
     } else if target == "dice" {
         crate::wasm_client::dice_3d::sync_dice_material_from_dom_and_render();
+        crate::wasm_client::dice_3d::sync_dice_camera_from_dom_and_render();
     }
 }
 
@@ -96,6 +97,25 @@ pub fn satya_update_dice_material() {
 #[wasm_bindgen]
 pub fn satya_select_dice_material_preset() {
     crate::wasm_client::dice_3d::apply_dice_material_preset_from_dom();
+}
+
+/// Updates the 3D WebGPU dice camera viewing angle (`#dice-camera-yaw`, `#dice-camera-pitch`) and
+/// zoom (`#dice-camera-zoom`) from the toolbar controls and immediately re-renders the canvas.
+#[wasm_bindgen]
+pub fn satya_update_dice_camera() {
+    crate::wasm_client::dice_3d::sync_dice_camera_from_dom_and_render();
+}
+
+/// Pans the 3D WebGPU dice tray camera across the floor plane by `(dx, dz)` and re-renders.
+#[wasm_bindgen]
+pub fn satya_pan_dice_camera(dx: f32, dz: f32) {
+    crate::wasm_client::dice_3d::pan_dice_camera_and_render(dx, dz);
+}
+
+/// Resets the 3D WebGPU dice tray camera orbit angle, pan offset, and zoom factor to defaults.
+#[wasm_bindgen]
+pub fn satya_reset_dice_camera() {
+    crate::wasm_client::dice_3d::reset_dice_camera_and_render();
 }
 
 /// Triggers a quick 3D dice roll from the `3D Dice` notebook tab and updates the 3D dice tray readout.

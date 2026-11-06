@@ -30,14 +30,16 @@ use satya_engine::{
     CharacterAptitudes, CharacterCharacteristics, CharacteristicCategory, CharacteristicCode,
     CharacteristicGroupPool, CharacteristicRollMethod, CorrelatedHeightMassRoll, HighSchoolTrack,
     LifepathBaselineResult, LifepathBuildConfig, PopulationTier, PrerequisiteMode, PsychePole,
-    SingleCharacteristicRoll, SkillTreeId, SkillType, SocioeconomicClass, StreetGangArchetype,
-    auto_allocate_career_and_elective_skills, compute_academic_study_controller,
-    compute_aptitude_min_c_relief, compute_aptitude_training_time_multiplier,
-    compute_correlated_height_mass, compute_lifepath_baseline_from_config,
-    evaluate_operational_heat, lookup_campaign_sqm, lookup_skill_node, psyche_pole_descriptor,
-    resolve_skill_tree_default, resolve_socioeconomic_origin, roll_aptitude_pool_11_drop_2,
-    roll_characteristic_2d4_2d5, roll_characteristic_group_pool, roll_correlated_height_mass,
-    skills_in_tree, validate_skill_advancement,
+    RuralYouthArchetype, SingleCharacteristicRoll, SkillTrainingMode, SkillTreeId, SkillType,
+    SocioeconomicClass, Stage4Path, StreetGangArchetype, auto_allocate_career_and_elective_skills,
+    compute_academic_study_controller, compute_aptitude_min_c_relief,
+    compute_aptitude_training_time_multiplier, compute_correlated_height_mass,
+    compute_lifepath_baseline_from_config, compute_skill_allocation_sp_ledger,
+    evaluate_operational_heat, is_career_formal_skill, lookup_campaign_sqm, lookup_skill_node,
+    preview_next_skill_step_sp, psyche_pole_descriptor, resolve_skill_tree_default,
+    resolve_socioeconomic_origin, roll_aptitude_pool_11_drop_2, roll_characteristic_2d4_2d5,
+    roll_characteristic_group_pool, roll_correlated_height_mass, skills_in_tree,
+    validate_skill_advancement,
 };
 use wasm_bindgen::prelude::*;
 
@@ -1019,167 +1021,227 @@ fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
     let s3_sci_opts = format_override_select_options(cfg.stage3_sci_override);
     let s3_hum_opts = format_override_select_options(cfg.stage3_hum_override);
 
-    let age15_auto_sel = if cfg.age15_dropout_override.is_none() {
+    let age15_auto_sel = if cfg.stage4_path_override.is_none() && cfg.age15_dropout_override.is_none()
+    {
         " selected"
     } else {
         ""
     };
-    let age15_stay_sel = if cfg.age15_dropout_override == Some(false) {
+    let age15_stay_sel = if cfg.stage4_path_override == Some(Stage4Path::Path4AHighSchool)
+        || (cfg.stage4_path_override.is_none() && cfg.age15_dropout_override == Some(false))
+    {
         " selected"
     } else {
         ""
     };
-    let age15_drop_sel = if cfg.age15_dropout_override == Some(true) {
+    let age15_drop_sel = if cfg.stage4_path_override == Some(Stage4Path::Path4BStreetGang)
+        || (cfg.stage4_path_override.is_none() && cfg.age15_dropout_override == Some(true))
+    {
+        " selected"
+    } else {
+        ""
+    };
+    let age15_rural_sel = if cfg.stage4_path_override == Some(Stage4Path::Path4CRuralAgrarian) {
         " selected"
     } else {
         ""
     };
 
-    // Stage 4: Either Path 4A (High School) or Path 4B (Dropout / Street Gang)
-    let stage4_html = if baseline.dropped_out_at_15 {
-        let gang_cards: String = StreetGangArchetype::ALL
-            .iter()
-            .map(|&arch| {
-                let checked = if cfg.stage4b_gang_archetype == arch {
-                    " checked"
-                } else {
-                    ""
-                };
-                let code = arch.as_str();
-                let radio_id = format!("wiz-gang-arch-{}", code.to_ascii_lowercase());
-                format!(
-                    r#"<label class="wiz-radio-card" for="{radio_id}">
-                        <input
-                            id="{radio_id}"
-                            type="radio"
-                            name="wiz_stage4b_archetype"
-                            value="{code}"
-                            {checked}
-                            onchange="window.satyaWizardUpdateLifepathField('stage4b_archetype', '{code}')"
-                        />
-                        <div>
-                            <strong>{label}</strong>
-                            <div class="subtitle">{sub}</div>
-                        </div>
-                    </label>"#,
-                    label = escape_html(arch.label()),
-                    sub = escape_html(arch.subtitle()),
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("");
+    // Stage 4: Path 4A (High School), Path 4B (Urban Dropout / Street Gang), or Path 4C (Rural / Developing-Region Youth)
+    let stage4_html = match baseline.stage4_path {
+        Stage4Path::Path4BStreetGang => {
+            let gang_cards: String = StreetGangArchetype::ALL
+                .iter()
+                .map(|&arch| {
+                    let checked = if cfg.stage4b_gang_archetype == arch {
+                        " checked"
+                    } else {
+                        ""
+                    };
+                    let code = arch.as_str();
+                    let radio_id = format!("wiz-gang-arch-{}", code.to_ascii_lowercase());
+                    format!(
+                        r#"<label class="wiz-radio-card" for="{radio_id}">
+                            <input
+                                id="{radio_id}"
+                                type="radio"
+                                name="wiz_stage4b_archetype"
+                                value="{code}"
+                                {checked}
+                                onchange="window.satyaWizardUpdateLifepathField('stage4b_archetype', '{code}')"
+                            />
+                            <div>
+                                <strong>{label}</strong>
+                                <div class="subtitle">{sub}</div>
+                            </div>
+                        </label>"#,
+                        label = escape_html(arch.label()),
+                        sub = escape_html(arch.subtitle()),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("");
 
-        format!(
-            r#"<fieldset class="wiz-fieldset">
-                <legend class="wiz-legend">
-                    <span>Stage 4B (Ages 16–18): School Dropout &amp; Street Gang Archetype</span>
-                    <span class="pill pill-danger">Academic Tree FROZEN · [Access: Illicit] Unlocked</span>
-                </legend>
-                <div class="subtitle">Dropping out at Age 15 freezes `[Access: Academic]` (blocking University Calculus/Engineering unless a GED waiver is taken in Stage 5) and unlocks `[Access: Illicit]` street gang training:</div>
-                <div class="wiz-method-radios">
-                    {gang_cards}
-                </div>
-            </fieldset>"#
-        )
-    } else {
-        let alg_n = baseline
-            .baseline_skills
-            .get("elementary_algebra_geometry")
-            .copied()
-            .unwrap_or(0);
-        let stem_qual = alg_n >= 2 && st.characteristics.ana >= 11 && st.characteristics.dis >= 11;
-        let stem_badge = if stem_qual {
-            "Qualifies Natively"
-        } else {
-            "Waiver / Player Override"
-        };
-        let hs_cards: String = HighSchoolTrack::ALL
-            .iter()
-            .map(|&trk| {
-                let checked = if cfg.stage4a_hs_track == trk {
-                    " checked"
-                } else {
-                    ""
-                };
-                let code = trk.as_str();
-                let radio_id = format!("wiz-hs-track-{}", code.to_ascii_lowercase());
-                let qual_note = if trk == HighSchoolTrack::ApHonorsStemMagnet {
-                    format!(" ({stem_badge})")
-                } else {
-                    String::new()
-                };
-                format!(
-                    r#"<label class="wiz-radio-card" for="{radio_id}">
-                        <input
-                            id="{radio_id}"
-                            type="radio"
-                            name="wiz_stage4a_track"
-                            value="{code}"
-                            {checked}
-                            onchange="window.satyaWizardUpdateLifepathField('stage4a_track', '{code}')"
-                        />
-                        <div>
-                            <strong>{label}{qual_note}</strong>
-                            <div class="subtitle">{sub}</div>
-                        </div>
-                    </label>"#,
-                    label = escape_html(trk.label()),
-                    sub = escape_html(trk.subtitle()),
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("");
-
-        let hs_eval = baseline.stage4a_hs_eval.as_ref();
-        let hs_roll_str = hs_eval.map_or_else(
-            || "N/A".to_string(),
-            |e| {
-                format!(
-                    "Pairs [{}, {}] vs TN {} → {} Success(es)",
-                    e.pair_sums[0], e.pair_sums[1], e.tn_edu, e.successes
-                )
-            },
-        );
-        let hs_override_opts = format_override_select_options(cfg.stage4a_hs_override);
-
-        format!(
-            r#"<fieldset class="wiz-fieldset">
-                <legend class="wiz-legend">
-                    <span>Stage 4A (Ages 16–18): Formal High School Track</span>
-                    <span class="pill pill-active">[Access: Academic] Active</span>
-                </legend>
-                <div class="pane-toolbar">
-                    <span class="subtitle">Select High School curriculum track and roll 2d20 for High School honors advancement:</span>
-                    <button
-                        type="button"
-                        class="btn btn-sm btn-secondary"
-                        onclick="window.satyaWizardRollLifepathStage(4)"
-                    >
-                        "Roll Stage 4A High School (2d20)"
-                    </button>
-                </div>
-                <div class="wiz-method-radios">
-                    {hs_cards}
-                </div>
-                <div class="wiz-char-grid">
-                    <div class="wiz-char-assign-card">
-                        <div class="wiz-char-header">
-                            <strong>High School Advancement Roll</strong>
-                            <span class="pill pill-iggy">{hs_roll_str}</span>
-                        </div>
-                        <label for="wiz-s4a-hs-override">
-                            <span>Roll Result or Player Override</span>
-                            <select
-                                id="wiz-s4a-hs-override"
-                                onchange="window.satyaWizardUpdateLifepathField('stage4a_hs_override', this.value)"
-                            >
-                                {hs_override_opts}
-                            </select>
-                        </label>
+            format!(
+                r#"<fieldset class="wiz-fieldset">
+                    <legend class="wiz-legend">
+                        <span>Stage 4B (Ages 16–18): School Dropout &amp; Street Gang Archetype</span>
+                        <span class="pill pill-danger">Academic Tree FROZEN · [Access: Illicit] Unlocked</span>
+                    </legend>
+                    <div class="subtitle">Dropping out at Age 15 freezes `[Access: Academic]` (blocking University Calculus/Engineering unless a GED waiver is taken in Stage 5) and unlocks `[Access: Illicit]` street gang training:</div>
+                    <div class="wiz-method-radios">
+                        {gang_cards}
                     </div>
-                </div>
-            </fieldset>"#
-        )
+                </fieldset>"#
+            )
+        }
+        Stage4Path::Path4CRuralAgrarian => {
+            let rural_cards: String = RuralYouthArchetype::ALL
+                .iter()
+                .map(|&arch| {
+                    let checked = if cfg.stage4c_rural_archetype == arch {
+                        " checked"
+                    } else {
+                        ""
+                    };
+                    let code = arch.as_str();
+                    let radio_id = format!("wiz-rural-arch-{}", code.to_ascii_lowercase());
+                    format!(
+                        r#"<label class="wiz-radio-card" for="{radio_id}">
+                            <input
+                                id="{radio_id}"
+                                type="radio"
+                                name="wiz_stage4c_archetype"
+                                value="{code}"
+                                {checked}
+                                onchange="window.satyaWizardUpdateLifepathField('stage4c_archetype', '{code}')"
+                            />
+                            <div>
+                                <strong>{label}</strong>
+                                <div class="subtitle">{sub}</div>
+                            </div>
+                        </label>"#,
+                        label = escape_html(arch.label()),
+                        sub = escape_html(arch.subtitle()),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("");
+
+            format!(
+                r#"<fieldset class="wiz-fieldset">
+                    <legend class="wiz-legend">
+                        <span>Stage 4C (Ages 15–18): Rural, Agrarian &amp; Developing-Region Youth</span>
+                        <span class="pill pill-active">Academic Tree FROZEN · [Access: Vocational/Licensed] Unlocked</span>
+                    </legend>
+                    <div class="subtitle">Leaving formal classroom schooling after Junior High to work family homesteads, herd livestock, hunt/trap in the bush, or serve in frontier militias freezes `[Access: Academic]` (unless an Adult GED waiver is taken in Stage 5) and grants `[Access: Vocational/Licensed]` &amp; rural fieldcraft skills:</div>
+                    <div class="wiz-method-radios">
+                        {rural_cards}
+                    </div>
+                </fieldset>"#
+            )
+        }
+        Stage4Path::Path4AHighSchool => {
+            let alg_n = baseline
+                .baseline_skills
+                .get("elementary_algebra_geometry")
+                .copied()
+                .unwrap_or(0);
+            let stem_qual =
+                alg_n >= 2 && st.characteristics.ana >= 11 && st.characteristics.dis >= 11;
+            let stem_badge = if stem_qual {
+                "Qualifies Natively"
+            } else {
+                "Waiver / Player Override"
+            };
+            let hs_cards: String = HighSchoolTrack::ALL
+                .iter()
+                .map(|&trk| {
+                    let checked = if cfg.stage4a_hs_track == trk {
+                        " checked"
+                    } else {
+                        ""
+                    };
+                    let code = trk.as_str();
+                    let radio_id = format!("wiz-hs-track-{}", code.to_ascii_lowercase());
+                    let qual_note = if trk == HighSchoolTrack::ApHonorsStemMagnet {
+                        format!(" ({stem_badge})")
+                    } else {
+                        String::new()
+                    };
+                    format!(
+                        r#"<label class="wiz-radio-card" for="{radio_id}">
+                            <input
+                                id="{radio_id}"
+                                type="radio"
+                                name="wiz_stage4a_track"
+                                value="{code}"
+                                {checked}
+                                onchange="window.satyaWizardUpdateLifepathField('stage4a_track', '{code}')"
+                            />
+                            <div>
+                                <strong>{label}{qual_note}</strong>
+                                <div class="subtitle">{sub}</div>
+                            </div>
+                        </label>"#,
+                        label = escape_html(trk.label()),
+                        sub = escape_html(trk.subtitle()),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("");
+
+            let hs_eval = baseline.stage4a_hs_eval.as_ref();
+            let hs_roll_str = hs_eval.map_or_else(
+                || "N/A".to_string(),
+                |e| {
+                    format!(
+                        "Pairs [{}, {}] vs TN {} → {} Success(es)",
+                        e.pair_sums[0], e.pair_sums[1], e.tn_edu, e.successes
+                    )
+                },
+            );
+            let hs_override_opts = format_override_select_options(cfg.stage4a_hs_override);
+
+            format!(
+                r#"<fieldset class="wiz-fieldset">
+                    <legend class="wiz-legend">
+                        <span>Stage 4A (Ages 16–18): Formal High School Track</span>
+                        <span class="pill pill-active">[Access: Academic] Active</span>
+                    </legend>
+                    <div class="pane-toolbar">
+                        <span class="subtitle">Select High School curriculum track and roll 2d20 for High School honors advancement:</span>
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-secondary"
+                            onclick="window.satyaWizardRollLifepathStage(4)"
+                        >
+                            "Roll Stage 4A High School (2d20)"
+                        </button>
+                    </div>
+                    <div class="wiz-method-radios">
+                        {hs_cards}
+                    </div>
+                    <div class="wiz-char-grid">
+                        <div class="wiz-char-assign-card">
+                            <div class="wiz-char-header">
+                                <strong>High School Advancement Roll</strong>
+                                <span class="pill pill-iggy">{hs_roll_str}</span>
+                            </div>
+                            <label for="wiz-s4a-hs-override">
+                                <span>Roll Result or Player Override</span>
+                                <select
+                                    id="wiz-s4a-hs-override"
+                                    onchange="window.satyaWizardUpdateLifepathField('stage4a_hs_override', this.value)"
+                                >
+                                    {hs_override_opts}
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>"#
+            )
+        }
     };
 
     // Stage 5: Career Terms (0..=4 terms)
@@ -1189,9 +1251,10 @@ fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
             let age = 18 + n * 4;
             let sel = if n == num_terms { " selected" } else { "" };
             format!(
-                r#"<option value="{n}"{sel}>{n} Term(s) — Starting Age {age} ({pts} Career + {elec} Elective Skill Levels)</option>"#,
-                pts = n * 6,
-                elec = 2 + n * 2
+                r#"<option value="{n}"{sel}>{n} Term(s) — Starting Age {age} ({min_sp}–{max_sp} Formal SP + {exp_sp} Experience SP)</option>"#,
+                min_sp = n * 120,
+                max_sp = n * 160,
+                exp_sp = 40 + n * 40
             )
         })
         .collect::<Vec<_>>()
@@ -1238,12 +1301,12 @@ fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                 || "N/A".to_string(),
                 |e| {
                     format!(
-                        "Pairs [{}, {}] vs TN {} → {} Succ (+{} Skill Levels)",
+                        "Pairs [{}, {}] vs TN {} → {} Succ (+{} Formal SP + 40 Exp SP)",
                         e.pair_sums[0],
                         e.pair_sums[1],
                         e.tn_edu,
                         e.successes,
-                        6 + usize::from(e.successes >= 2)
+                        120 + 20 * e.successes.min(2)
                     )
                 },
             );
@@ -1331,7 +1394,7 @@ fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
         r#"<fieldset class="wiz-fieldset">
             <legend class="wiz-legend">
                 <span>Step 4: Chronological 5-Stage Lifepath (Ages 0–{age})</span>
-                <span class="pill pill-active">Age {age} · Career Budget: {c_bud} Levels · Elective: {e_bud} Levels</span>
+                <span class="pill pill-active">Age {age} · Formal SP: {c_bud} (FOC+INS) · Experience SP: {e_bud} (INS)</span>
             </legend>
             <div class="pane-toolbar">
                 <span class="subtitle">Roll or choose Socioeconomic Origin, Elementary &amp; Junior High schooling, Age-15 Dropout vs. High School, and 1–4 Adult Career Terms:</span>
@@ -1519,7 +1582,7 @@ fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                 </div>
                 <div class="wiz-char-assign-card">
                     <div class="wiz-char-header">
-                        <strong>Age-15 Path (High School vs. Dropout)</strong>
+                        <strong>Age-15 Path (High School, Street Gang, or Rural/Agrarian)</strong>
                         <span class="pill pill-iggy">2d20 = {crisis_roll}</span>
                     </div>
                     <label for="wiz-s3-age15-path">
@@ -1531,6 +1594,7 @@ fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                             <option value="AUTO"{age15_auto_sel}>Follow 2d20 Roll ({crisis_roll} vs &lt;={drop_max})</option>
                             <option value="STAY_4A"{age15_stay_sel}>Override: Stay in High School (Path 4A)</option>
                             <option value="DROPOUT_4B"{age15_drop_sel}>Override: Drop Out at Age 15 — Street Gang (Path 4B)</option>
+                            <option value="RURAL_4C"{age15_rural_sel}>Override: Rural / Agrarian / Frontier Youth (Path 4C)</option>
                         </select>
                     </label>
                 </div>
@@ -1542,7 +1606,7 @@ fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
         <fieldset class="wiz-fieldset">
             <legend class="wiz-legend">
                 <span>Stage 5 (Ages 18–34): Adult 4-Year Career Terms (1 to 4 Terms)</span>
-                <span class="pill pill-active">{num_terms} Term(s) · +{c_bud} Career Levels · +{e_bud} Elective Levels</span>
+                <span class="pill pill-active">{num_terms} Term(s) · +{c_bud} Formal SP (FOC+INS) · +{e_bud} Experience SP (INS)</span>
             </legend>
             <div class="pane-toolbar">
                 <div class="model-controls-row">
@@ -1618,46 +1682,20 @@ fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
     )
 }
 
-/// Formats Step 5: 8-Tree Hierarchical Skill Builder & DAG Prerequisite Auditor.
+/// Formats Step 5: 8-Tree Hierarchical Skill Builder, 5-Factor SP Cost Calculator & DAG Prerequisite Auditor.
 fn format_skills_step_html(st: &CharacterWizardState) -> String {
     let baseline = st.compute_lifepath_baseline();
-    let total_budget = baseline.career_skill_budget + baseline.elective_skill_budget;
-
-    let mut career_spent = 0usize;
-    let mut elective_spent = 0usize;
-    let career_recommended: Vec<&'static str> = st
-        .lifepath
-        .career_terms
-        .iter()
-        .take(4)
-        .flat_map(|t| t.track.recommended_skills().iter().copied())
-        .collect();
-
-    for (sk_id, &cur_n) in &st.skills {
-        let floor_n = baseline.baseline_skills.get(sk_id).copied().unwrap_or(0);
-        let added = cur_n.saturating_sub(floor_n);
-        if added > 0 {
-            if career_recommended.contains(&sk_id.as_str())
-                && career_spent + added <= baseline.career_skill_budget
-            {
-                career_spent += added;
-            } else if career_recommended.contains(&sk_id.as_str())
-                && career_spent < baseline.career_skill_budget
-            {
-                let to_career = baseline.career_skill_budget - career_spent;
-                career_spent += to_career;
-                elective_spent += added - to_career;
-            } else {
-                elective_spent += added;
-            }
-        }
-    }
-    let total_spent = career_spent + elective_spent;
-    let remaining_budget = total_budget.saturating_sub(total_spent);
+    let ledger = compute_skill_allocation_sp_ledger(
+        &baseline,
+        &st.lifepath,
+        &st.characteristics,
+        &st.aptitudes,
+        &st.skills,
+    );
 
     let tree_opts: String = std::iter::once((
         "ALL",
-        "All 8 Hierarchical Skill Trees (88 Canonical Skills)",
+        "All 8 Hierarchical Skill Trees (89 Canonical Skills)",
     ))
     .chain(SkillTreeId::ALL.iter().map(|t| (t.short_code(), t.title())))
     .map(|(code, title)| {
@@ -1704,19 +1742,28 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                     let cur_n = st.skills.get(spec.id).copied().unwrap_or(0);
                     let floor_n = baseline.baseline_skills.get(spec.id).copied().unwrap_or(0);
                     let gained_post_school = cur_n.saturating_sub(floor_n);
+                    let next_n = cur_n + 1;
                     let next_validation = validate_skill_advancement(
                         spec.id,
-                        cur_n + 1,
+                        next_n,
                         &st.skills,
                         &st.characteristics,
                         &st.aptitudes,
                         &baseline.granted_access_tags,
                         baseline.academic_tree_frozen,
                     );
+                    let (step_cost_bd, sp_affordable) = preview_next_skill_step_sp(
+                        spec.id,
+                        next_n,
+                        &st.lifepath,
+                        &ledger,
+                        &st.characteristics,
+                        &st.aptitudes,
+                    );
                     let within_term_cap =
                         gained_post_school < baseline.max_post_school_gain_per_skill && cur_n < 6;
                     let can_advance =
-                        next_validation.is_valid && within_term_cap && remaining_budget > 0;
+                        next_validation.is_valid && within_term_cap && sp_affordable;
                     let can_reduce = cur_n > floor_n;
 
                     if st.skill_view_mode.eq_ignore_ascii_case("TRAINED") && cur_n == 0 {
@@ -1736,7 +1783,8 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                     let base_tn = PopulationTier::base_tn(c_val);
                     let apt_code = spec.governing_aptitude();
                     let apt_val = st.aptitudes.get(apt_code);
-                    let is_career_rec = career_recommended.contains(&spec.id);
+                    let is_career_rec = is_career_formal_skill(spec.id, &st.lifepath);
+                    let sk_sp_invested = ledger.per_skill_sp_spent.get(spec.id).copied().unwrap_or(0);
 
                     let access_str: String = spec
                         .allowed_access
@@ -1762,11 +1810,28 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                             .join(joiner)
                     };
 
+                    let mode_short = match step_cost_bd.training_mode {
+                        SkillTrainingMode::FormalTraining => "Formal [FOC+INS]",
+                        SkillTrainingMode::Experience => "Experience [INS]",
+                    };
+                    let cost_breakdown_line = format!(
+                        "Next N={next_n}: <strong>{final_sp} SP</strong> ({mode_short}) — Base {base_sp} × Diff {diff_m:.2}x (D{diff_r}) × Ctrl {ctrl_m:.2}x × Apt {apt_m:.2}x × Train {tr_m:.2}x",
+                        final_sp = step_cost_bd.final_sp_cost,
+                        base_sp = step_cost_bd.base_level_sp,
+                        diff_m = step_cost_bd.difficulty_multiplier,
+                        diff_r = step_cost_bd.difficulty_rating,
+                        ctrl_m = step_cost_bd.controller_multiplier,
+                        apt_m = step_cost_bd.aptitude_multiplier,
+                        tr_m = step_cost_bd.training_mode_multiplier,
+                    );
+
                     let status_note = if cur_n >= 1 {
                         let career_tag = if is_career_rec {
-                            " · [Career Track]"
+                            format!(" · [Career Curriculum · {sk_sp_invested} SP Invested]")
+                        } else if sk_sp_invested > 0 {
+                            format!(" · [Elective · {sk_sp_invested} SP Invested]")
                         } else {
-                            ""
+                            String::new()
                         };
                         format!(
                             "Trained N={cur_n} (Floor N={floor_n}, Post-School +{gained_post_school}) · Roll {cur_n} Pair(s) vs Base TN {base_tn}{career_tag}"
@@ -1789,9 +1854,16 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                                 r#"<span class="pill pill-iggy">Term Cap (+{} Max Reached)</span>"#,
                                 baseline.max_post_school_gain_per_skill
                             )
+                        } else if !sp_affordable {
+                            format!(
+                                r#"<span class="pill pill-iggy">Needs {} SP (Rem: {} SP)</span>"#,
+                                step_cost_bd.final_sp_cost, ledger.total_sp_remaining
+                            )
                         } else {
-                            r#"<span class="pill pill-active">Eligible (+1 Valid)</span>"#
-                                .to_string()
+                            format!(
+                                r#"<span class="pill pill-active">+1 → {} SP ({mode_short})</span>"#,
+                                step_cost_bd.final_sp_cost
+                            )
                         }
                     } else {
                         let first_reason = next_validation
@@ -1799,12 +1871,13 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                             .first()
                             .map_or("Locked", |f| f.detail.as_str());
                         format!(
-                            r#"<span class="pill pill-danger" title="{tip}">Locked: {code}</span>"#,
+                            r#"<span class="pill pill-danger" title="{tip}">Locked: {code} ({cost} SP)</span>"#,
                             tip = escape_html(first_reason),
                             code = next_validation
                                 .failures
                                 .first()
-                                .map_or("LOCKED", |f| f.code)
+                                .map_or("LOCKED", |f| f.code),
+                            cost = step_cost_bd.final_sp_cost,
                         )
                     };
 
@@ -1817,7 +1890,7 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                         r#"<div class="wiz-char-assign-card">
                             <div class="wiz-char-header">
                                 <div>
-                                    <span class="wiz-char-code">T{tier} · {stype}</span>
+                                    <span class="wiz-char-code">T{tier} · {stype} · Diff {diff}/5 ({diff_lbl})</span>
                                     <strong class="wiz-char-name">{name}</strong>
                                 </div>
                                 <span class="stat-value">N = {cur_n}</span>
@@ -1825,6 +1898,7 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                             <div class="stat-note">
                                 <strong>{ctrl_str} = {c_val}</strong> (Base TN {base_tn}) · <strong>{apt_str} {apt_val:+}</strong> · [{access_str}]
                             </div>
+                            <div class="stat-note">{cost_breakdown_line}</div>
                             <div class="stat-note"><strong>Prereqs:</strong> {prereq_str}</div>
                             <div class="stat-note">{status_note}</div>
                             <div class="wiz-skill-actions-row">
@@ -1844,7 +1918,7 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                                         onclick="window.satyaWizardAdjustSkill('{sk_id}', 1)"
                                         {plus_disabled}
                                     >
-                                        "+1"
+                                        "+1 ({next_sp} SP)"
                                     </button>
                                     <button
                                         type="button"
@@ -1858,9 +1932,12 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                         </div>"#,
                         tier = spec.tier,
                         stype = spec.skill_type.as_str(),
+                        diff = spec.difficulty,
+                        diff_lbl = spec.difficulty_label(),
                         name = escape_html(spec.name),
                         apt_str = apt_code.as_str(),
                         sk_id = spec.id,
+                        next_sp = step_cost_bd.final_sp_cost,
                     ))
                 })
                 .collect();
@@ -1892,8 +1969,8 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
     format!(
         r#"<fieldset class="wiz-fieldset">
             <legend class="wiz-legend">
-                <span>Step 5: 8-Tree Hierarchical Skill Builder &amp; Prerequisite Auditor</span>
-                <span class="pill pill-active">Remaining Budget: {remaining_budget} Level(s) · Career {career_spent}/{c_bud} · Elective {elective_spent}/{e_bud}</span>
+                <span>Step 5: 8-Tree Hierarchical Skill Builder &amp; 5-Factor SP Cost Calculator (FOC={foc}, INS={ins})</span>
+                <span class="pill pill-active">Remaining: {rem_sp} SP · Formal {f_spent}/{f_bud} SP · Experience {e_spent}/{e_bud} SP</span>
             </legend>
             <div class="pane-toolbar">
                 <div class="model-controls-row">
@@ -1922,7 +1999,7 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                         class="btn btn-sm btn-accent"
                         onclick="window.satyaWizardAutoAllocateSkills()"
                     >
-                        "Auto-Allocate Remaining ({remaining_budget}) Levels"
+                        "Auto-Allocate Remaining ({rem_sp} SP)"
                     </button>
                     <button
                         type="button"
@@ -1934,12 +2011,17 @@ fn format_skills_step_html(st: &CharacterWizardState) -> String {
                 </div>
             </div>
             <div class="subtitle">
-                Enforces all 4 canonical Satya DAG gates: <strong>1. [Access] Tag &amp; Academic Freeze</strong>, <strong>2. Min Characteristic</strong> (-1 relief if APT &gt;= +2), <strong>3. Parent Skill Level</strong>, and <strong>4. Foundation Ceiling (N_child &lt;= N_parent + 2)</strong>. Max post-school gain per skill: <strong>+{max_gain}</strong>.
+                <strong>5-Factor SP Step Cost:</strong> <code>Base(N) = 10 × N</code> × <code>Difficulty (1–5: 0.80x–2.50x)</code> × <code>Controller C (±4%/pt)</code> × <code>Aptitude (-15%/+20%)</code> × <code>Training Mode (Formal [FOC+INS] 0.85x vs Experience [INS] 1.00x/1.25x)</code>. Compare <em>Swimming &amp; Diving</em> (Diff 1) vs <em>Piloting (Rotary-Wing / Helicopter &amp; VTOL)</em> (Diff 5). Max post-school gain per skill: <strong>+{max_gain}</strong>.
             </div>
         </fieldset>
         {trees_html}"#,
-        c_bud = baseline.career_skill_budget,
-        e_bud = baseline.elective_skill_budget,
+        foc = st.characteristics.foc,
+        ins = st.characteristics.ins,
+        rem_sp = ledger.total_sp_remaining,
+        f_spent = ledger.formal_sp_spent,
+        f_bud = ledger.formal_sp_budget,
+        e_spent = ledger.experience_sp_spent,
+        e_bud = ledger.experience_sp_budget,
         max_gain = baseline.max_post_school_gain_per_skill,
     )
 }
@@ -2671,6 +2753,7 @@ pub fn satya_wizard_roll_complete_lifepath() {
         lp.stage3_hum_override = None;
         lp.age15_crisis_roll_2d20 = browser_die_roller(20) + browser_die_roller(20);
         lp.age15_dropout_override = None;
+        lp.stage4_path_override = None;
         lp.stage4a_hs_pairs = roll_2d20_pairs();
         lp.stage4a_hs_override = None;
         for term in &mut lp.career_terms {
@@ -2715,6 +2798,7 @@ pub fn satya_wizard_roll_lifepath_stage(stage_num: u8) {
                 lp.stage3_hum_override = None;
                 lp.age15_crisis_roll_2d20 = browser_die_roller(20) + browser_die_roller(20);
                 lp.age15_dropout_override = None;
+                lp.stage4_path_override = None;
             }
             4 => {
                 lp.stage4a_hs_pairs = roll_2d20_pairs();
@@ -2773,9 +2857,11 @@ pub fn satya_wizard_update_lifepath_field(field_name: String, raw_value: String)
             "stage3_sci_override" => lp.stage3_sci_override = parsed_ov,
             "stage3_hum_override" => lp.stage3_hum_override = parsed_ov,
             "age15_path" => {
-                lp.age15_dropout_override = match val.to_ascii_uppercase().as_str() {
+                let code = val.to_ascii_uppercase();
+                lp.stage4_path_override = Stage4Path::from_code_str(&code);
+                lp.age15_dropout_override = match code.as_str() {
                     "STAY_4A" => Some(false),
-                    "DROPOUT_4B" => Some(true),
+                    "DROPOUT_4B" | "RURAL_4C" => Some(true),
                     _ => None,
                 };
             }
@@ -2788,6 +2874,11 @@ pub fn satya_wizard_update_lifepath_field(field_name: String, raw_value: String)
             "stage4b_archetype" => {
                 if let Some(arch) = StreetGangArchetype::from_code_str(val) {
                     lp.stage4b_gang_archetype = arch;
+                }
+            }
+            "stage4c_archetype" => {
+                if let Some(arch) = RuralYouthArchetype::from_code_str(val) {
+                    lp.stage4c_rural_archetype = arch;
                 }
             }
             "num_career_terms" => {
@@ -2850,7 +2941,8 @@ pub fn satya_wizard_set_skill_filter(tree_code: String, view_mode: String) {
     render_character_wizard();
 }
 
-/// Adjusts a single skill level by `delta` (`+1` or `-1`) in Step 5, enforcing all 4 DAG gates and the Stage 1–4 school floor.
+/// Adjusts a single skill level by `delta` (`+1` or `-1`) in Step 5, enforcing all 4 DAG gates,
+/// the 5-factor Skill Point (`SP`) step cost, and the Stage 1–4 school floor.
 #[wasm_bindgen]
 pub fn satya_wizard_adjust_skill(skill_id: String, delta: i32) {
     let sk = skill_id.trim();
@@ -2869,7 +2961,24 @@ pub fn satya_wizard_adjust_skill(skill_id: String, delta: i32) {
                 } else {
                     st.wizard.skills.insert(sk.to_string(), new_n);
                 }
-                feedback_msg = Some((format!("Reduced '{sk}' to N={new_n}."), false));
+                let new_ledger = compute_skill_allocation_sp_ledger(
+                    &baseline,
+                    &st.wizard.lifepath,
+                    &st.wizard.characteristics,
+                    &st.wizard.aptitudes,
+                    &st.wizard.skills,
+                );
+                feedback_msg = Some((
+                    format!(
+                        "Reduced '{sk}' to N={new_n} (Remaining: {} SP — Formal {}/{} SP, Experience {}/{} SP).",
+                        new_ledger.total_sp_remaining,
+                        new_ledger.formal_sp_spent,
+                        new_ledger.formal_sp_budget,
+                        new_ledger.experience_sp_spent,
+                        new_ledger.experience_sp_budget
+                    ),
+                    false,
+                ));
             } else {
                 feedback_msg = Some((
                     format!("Cannot reduce '{sk}' below Stage 1–4 Lifepath floor (N={floor_n})."),
@@ -2877,20 +2986,33 @@ pub fn satya_wizard_adjust_skill(skill_id: String, delta: i32) {
                 ));
             }
         } else if delta > 0 {
-            let total_budget = baseline.career_skill_budget + baseline.elective_skill_budget;
-            let total_spent: usize = st
-                .wizard
-                .skills
-                .iter()
-                .map(|(k, &v)| {
-                    let fl = baseline.baseline_skills.get(k).copied().unwrap_or(0);
-                    v.saturating_sub(fl)
-                })
-                .sum();
+            let target_n = cur_n + 1;
+            let ledger = compute_skill_allocation_sp_ledger(
+                &baseline,
+                &st.wizard.lifepath,
+                &st.wizard.characteristics,
+                &st.wizard.aptitudes,
+                &st.wizard.skills,
+            );
+            let (step_bd, sp_affordable) = preview_next_skill_step_sp(
+                sk,
+                target_n,
+                &st.wizard.lifepath,
+                &ledger,
+                &st.wizard.characteristics,
+                &st.wizard.aptitudes,
+            );
             let gained_post_school = cur_n.saturating_sub(floor_n);
-            if total_spent >= total_budget {
+            if !sp_affordable {
                 feedback_msg = Some((
-                    "No remaining Career or Elective skill level budget. Reduce another skill or add a Career Term.".to_string(),
+                    format!(
+                        "Advancing '{sk}' to N={target_n} costs {} SP ({}), but only {} SP remains (Formal {} SP, Experience {} SP).",
+                        step_bd.final_sp_cost,
+                        step_bd.training_mode.as_label(),
+                        ledger.total_sp_remaining,
+                        ledger.formal_sp_remaining,
+                        ledger.experience_sp_remaining
+                    ),
                     true,
                 ));
             } else if gained_post_school >= baseline.max_post_school_gain_per_skill {
@@ -2902,7 +3024,6 @@ pub fn satya_wizard_adjust_skill(skill_id: String, delta: i32) {
                     true,
                 ));
             } else {
-                let target_n = cur_n + 1;
                 let val = validate_skill_advancement(
                     sk,
                     target_n,
@@ -2914,8 +3035,22 @@ pub fn satya_wizard_adjust_skill(skill_id: String, delta: i32) {
                 );
                 if val.is_valid {
                     st.wizard.skills.insert(sk.to_string(), target_n);
+                    let new_ledger = compute_skill_allocation_sp_ledger(
+                        &baseline,
+                        &st.wizard.lifepath,
+                        &st.wizard.characteristics,
+                        &st.wizard.aptitudes,
+                        &st.wizard.skills,
+                    );
                     feedback_msg = Some((
-                        format!("Advanced '{}' to N={target_n}.", val.skill_name),
+                        format!(
+                            "Advanced '{}' to N={target_n} for {} SP ({} · Diff {}/5). Remaining: {} SP.",
+                            val.skill_name,
+                            step_bd.final_sp_cost,
+                            step_bd.training_mode.as_label(),
+                            step_bd.difficulty_rating,
+                            new_ledger.total_sp_remaining
+                        ),
                         false,
                     ));
                 } else {

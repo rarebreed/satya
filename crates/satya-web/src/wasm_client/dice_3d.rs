@@ -126,18 +126,18 @@ pub struct DiceMaterialConfig {
     pub ink_color_hex: String,
     /// Linear/sRGB `[r, g, b]` (`0.0..=1.0`) for the engraved face numerals.
     pub ink_rgb: [f32; 3],
-    /// Alpha opacity (`0.15` glass translucent to `1.0` solid opaque).
+    /// Alpha opacity (`0.08` glass translucent to `1.0` solid opaque).
     pub opacity: f32,
 }
 
 impl Default for DiceMaterialConfig {
     fn default() -> Self {
-        Self::from_hex_and_opacity("#0ea5e9", "#f8fafc", 0.68)
+        Self::from_hex_and_opacity("#0ea5e9", "#f8fafc", 0.38)
     }
 }
 
 impl DiceMaterialConfig {
-    /// Constructs a [`DiceMaterialConfig`] from `#RRGGBB` hex strings and an opacity in `[0.15, 1.0]`.
+    /// Constructs a [`DiceMaterialConfig`] from `#RRGGBB` hex strings and an opacity in `[0.08, 1.0]`.
     pub fn from_hex_and_opacity(base_hex: &str, ink_hex: &str, opacity: f32) -> Self {
         let (norm_base, base_rgb) = parse_hex_color(base_hex, [0.055, 0.647, 0.914]);
         let (norm_ink, ink_rgb) = parse_hex_color(ink_hex, [0.973, 0.980, 0.988]);
@@ -146,20 +146,20 @@ impl DiceMaterialConfig {
             base_rgb,
             ink_color_hex: norm_ink,
             ink_rgb,
-            opacity: opacity.clamp(0.15, 1.0),
+            opacity: opacity.clamp(0.08, 1.0),
         }
     }
 
     /// Returns a named preset material configuration (`"translucent_sapphire"`, `"amber_resin"`,
-    /// `"emerald_glass"`, `"crimson_ruby"`, or `"obsidian_opaque"`).
+    /// `"emerald_glass"`, `"crimson_ruby"`, `"amethyst_void"`, or `"obsidian_opaque"`).
     pub fn from_preset(preset: &str) -> Self {
         match preset.trim() {
-            "amber_resin" => Self::from_hex_and_opacity("#f59e0b", "#fef3c7", 0.64),
-            "emerald_glass" => Self::from_hex_and_opacity("#10b981", "#ecfdf5", 0.58),
-            "crimson_ruby" => Self::from_hex_and_opacity("#e11d48", "#ffe4e6", 0.62),
-            "amethyst_void" => Self::from_hex_and_opacity("#9333ea", "#f3e8ff", 0.60),
+            "amber_resin" => Self::from_hex_and_opacity("#f59e0b", "#fef3c7", 0.36),
+            "emerald_glass" => Self::from_hex_and_opacity("#10b981", "#ecfdf5", 0.32),
+            "crimson_ruby" => Self::from_hex_and_opacity("#e11d48", "#ffe4e6", 0.35),
+            "amethyst_void" => Self::from_hex_and_opacity("#9333ea", "#f3e8ff", 0.34),
             "obsidian_opaque" => Self::from_hex_and_opacity("#1e293b", "#38bdf8", 1.00),
-            _ => Self::from_hex_and_opacity("#0ea5e9", "#f8fafc", 0.68),
+            _ => Self::from_hex_and_opacity("#0ea5e9", "#f8fafc", 0.38),
         }
     }
 }
@@ -375,7 +375,7 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
             let faces = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
             for (idx, f) in faces.iter().enumerate() {
                 let poly = [v[f[0]], v[f[1]], v[f[2]]];
-                append_polygon_face(&mut vertices, &mut face_normals, &poly, idx + 1, 0.62);
+                append_polygon_face(&mut vertices, &mut face_normals, &poly, idx + 1, 0.82);
             }
         }
         DieKind::D6 => {
@@ -390,7 +390,7 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
                 ([[-h, -h, -h], [h, -h, -h], [h, -h, h], [-h, -h, h]], 6),
             ];
             for (poly, num) in faces {
-                append_polygon_face(&mut vertices, &mut face_normals, &poly, num, 0.72);
+                append_polygon_face(&mut vertices, &mut face_normals, &poly, num, 0.90);
             }
         }
         DieKind::D8 => {
@@ -412,7 +412,7 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
                 [bot, pz, nx],
             ];
             for (idx, poly) in faces.iter().enumerate() {
-                append_polygon_face(&mut vertices, &mut face_normals, poly, idx + 1, 0.65);
+                append_polygon_face(&mut vertices, &mut face_normals, poly, idx + 1, 0.84);
             }
         }
         DieKind::D10 => {
@@ -432,9 +432,9 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
             for i in 0..5 {
                 let next = (i + 1) % 5;
                 let kite_top = [apex_top, upper[i], lower[i], upper[next]];
-                append_polygon_face(&mut vertices, &mut face_normals, &kite_top, i * 2 + 1, 0.62);
+                append_polygon_face(&mut vertices, &mut face_normals, &kite_top, i * 2 + 1, 0.82);
                 let kite_bot = [apex_bot, lower[i], upper[next], lower[next]];
-                append_polygon_face(&mut vertices, &mut face_normals, &kite_bot, i * 2 + 2, 0.62);
+                append_polygon_face(&mut vertices, &mut face_normals, &kite_bot, i * 2 + 2, 0.82);
             }
         }
         DieKind::D12 => {
@@ -474,7 +474,7 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
                     &mut face_normals,
                     &incident_centers,
                     v_idx + 1,
-                    0.68,
+                    0.88,
                 );
             }
         }
@@ -483,7 +483,7 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
             let tris = raw_icosahedron_triangles();
             for (idx, tri) in tris.iter().enumerate() {
                 let poly = [v[tri[0]], v[tri[1]], v[tri[2]]];
-                append_polygon_face(&mut vertices, &mut face_normals, &poly, idx + 1, 0.65);
+                append_polygon_face(&mut vertices, &mut face_normals, &poly, idx + 1, 0.85);
             }
         }
     }
@@ -577,20 +577,20 @@ pub fn generate_dice_numeral_atlas_rgba8() -> Vec<u8> {
 
                 let mut min_dist = 10.0_f32;
                 if digits.len() == 1 {
-                    min_dist = min_dist.min(digit_sdf(digits[0], nx / 0.36, ny / 0.42));
+                    min_dist = min_dist.min(digit_sdf(digits[0], nx / 0.20, ny / 0.23));
                 } else {
-                    let d0 = digit_sdf(digits[0], (nx + 0.24) / 0.27, ny / 0.38);
-                    let d1 = digit_sdf(digits[1], (nx - 0.24) / 0.27, ny / 0.38);
+                    let d0 = digit_sdf(digits[0], (nx + 0.135) / 0.15, ny / 0.21);
+                    let d1 = digit_sdf(digits[1], (nx - 0.135) / 0.15, ny / 0.21);
                     min_dist = min_dist.min(d0).min(d1);
                 }
 
                 if needs_underline {
-                    let ul = segment_sdf(nx, ny, -0.24, 0.54, 0.24, 0.54) - 0.045;
+                    let ul = segment_sdf(nx, ny, -0.12, 0.27, 0.12, 0.27) - 0.025;
                     min_dist = min_dist.min(ul);
                 }
 
                 // Smooth anti-aliased stroke coverage
-                let edge_softness = 0.035_f32;
+                let edge_softness = 0.028_f32;
                 let alpha_f = ((edge_softness - min_dist) / (2.0 * edge_softness)).clamp(0.0, 1.0);
                 if alpha_f > 0.0 {
                     let a = (alpha_f * 255.0).round() as u8;
@@ -620,7 +620,7 @@ fn segment_sdf(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
 
 /// Evaluates the signed distance to crisp vector strokes for a digit `0..=9` in local `[-1, 1]` space.
 fn digit_sdf(digit: u8, x: f32, y: f32) -> f32 {
-    let stroke_r = 0.145_f32;
+    let stroke_r = 0.125_f32;
     // Standard 7-segment + diagonal coordinates in [-0.55..0.55, -0.75..0.75]
     let l = -0.50_f32;
     let r = 0.50_f32;
@@ -954,8 +954,80 @@ pub struct DieInstanceData {
     pub model: [[f32; 4]; 4],
 }
 
-/// Perspective look-at view-projection matrix builder for the 3D dice tray camera.
+/// Interactive orbit (viewing angle), pan, and zoom camera configuration for the 3D WebGPU dice tray.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DiceCameraConfig {
+    /// Horizontal orbit angle (azimuth yaw) around `+Y` in degrees (`-180.0..=180.0`, default `0.0`).
+    pub yaw_deg: f32,
+    /// Vertical viewing angle (elevation pitch) above the tray floor in degrees (`12.0..=88.0`, default `55.0`).
+    pub pitch_deg: f32,
+    /// Camera zoom multiplier (`0.40..=2.50`, where `> 1.0` zooms in closer and `< 1.0` zooms out; default `1.0`).
+    pub zoom: f32,
+    /// World-space horizontal pan offset `[pan_x, pan_z]` across the tray floor (`-6.0..=6.0`).
+    pub pan: [f32; 2],
+}
+
+impl Default for DiceCameraConfig {
+    fn default() -> Self {
+        Self {
+            yaw_deg: 0.0,
+            pitch_deg: 55.0,
+            zoom: 1.0,
+            pan: [0.0, 0.0],
+        }
+    }
+}
+
+impl DiceCameraConfig {
+    /// Orbits the camera viewing angle by `(delta_yaw_deg, delta_pitch_deg)`, wrapping yaw into
+    /// `[-180.0, 180.0]` and clamping pitch into `[12.0, 88.0]`.
+    pub fn orbit_by(&mut self, delta_yaw_deg: f32, delta_pitch_deg: f32) {
+        let mut y = (self.yaw_deg + delta_yaw_deg) % 360.0;
+        if y > 180.0 {
+            y -= 360.0;
+        } else if y < -180.0 {
+            y += 360.0;
+        }
+        self.yaw_deg = y;
+        self.pitch_deg = (self.pitch_deg + delta_pitch_deg).clamp(12.0, 88.0);
+    }
+
+    /// Pans the camera look-at target across the XZ tray floor relative to the current `yaw_deg`
+    /// orientation, clamping `pan` within `[-6.0, 6.0]`.
+    pub fn pan_by_screen_delta(&mut self, right_delta: f32, forward_delta: f32) {
+        let yaw_rad = self.yaw_deg.to_radians();
+        let (sin_y, cos_y) = yaw_rad.sin_cos();
+        let inv_zoom = 1.0 / self.zoom.clamp(0.40, 2.50);
+        // Camera right vector on XZ plane is [cos_y, -sin_y]; forward into scene is [-sin_y, -cos_y]
+        let dx = (right_delta * cos_y - forward_delta * sin_y) * inv_zoom;
+        let dz = (-right_delta * sin_y - forward_delta * cos_y) * inv_zoom;
+        self.pan[0] = (self.pan[0] + dx).clamp(-6.0, 6.0);
+        self.pan[1] = (self.pan[1] + dz).clamp(-6.0, 6.0);
+    }
+
+    /// Multiplies the camera zoom factor by `factor` and clamps within `[0.40, 2.50]`.
+    pub fn zoom_by_factor(&mut self, factor: f32) {
+        self.zoom = (self.zoom * factor).clamp(0.40, 2.50);
+    }
+
+    /// Resets orbit angle, zoom, and pan to their default tabletop view.
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
+/// Perspective look-at view-projection matrix builder for the 3D dice tray camera using default camera parameters.
 pub fn compute_view_proj_matrix(aspect: f32, die_count: usize) -> ([[f32; 4]; 4], [f32; 3]) {
+    compute_view_proj_matrix_with_camera(aspect, die_count, &DiceCameraConfig::default())
+}
+
+/// Perspective look-at view-projection matrix builder for the 3D dice tray camera with user
+/// orbit (`yaw_deg`, `pitch_deg`), `zoom`, and `pan`.
+pub fn compute_view_proj_matrix_with_camera(
+    aspect: f32,
+    die_count: usize,
+    camera: &DiceCameraConfig,
+) -> ([[f32; 4]; 4], [f32; 3]) {
     let dist_scale = if die_count <= 2 {
         1.0
     } else if die_count <= 6 {
@@ -963,8 +1035,22 @@ pub fn compute_view_proj_matrix(aspect: f32, die_count: usize) -> ([[f32; 4]; 4]
     } else {
         1.65
     };
-    let eye = [0.0_f32, 6.2 * dist_scale, 4.4 * dist_scale];
-    let target = [0.0_f32, 0.0, 0.15];
+    let zoom = camera.zoom.clamp(0.40, 2.50);
+    let radius = (7.52_f32 * dist_scale) / zoom;
+    let pitch_rad = camera.pitch_deg.clamp(12.0, 88.0).to_radians();
+    let yaw_rad = camera.yaw_deg.to_radians();
+
+    let target = [
+        camera.pan[0].clamp(-6.0, 6.0),
+        0.0_f32,
+        0.15 + camera.pan[1].clamp(-6.0, 6.0),
+    ];
+    let horiz = radius * pitch_rad.cos();
+    let eye = [
+        target[0] + horiz * yaw_rad.sin(),
+        target[1] + radius * pitch_rad.sin(),
+        target[2] + horiz * yaw_rad.cos(),
+    ];
     let up = [0.0_f32, 1.0, 0.0];
 
     let f = vec3_normalize(vec3_sub(target, eye));
@@ -981,7 +1067,7 @@ pub fn compute_view_proj_matrix(aspect: f32, die_count: usize) -> ([[f32; 4]; 4]
     let fov_y = 40.0_f32.to_radians();
     let f_cot = 1.0 / (0.5 * fov_y).tan();
     let z_near = 0.2_f32;
-    let z_far = 50.0_f32;
+    let z_far = 65.0_f32;
     let safe_aspect = aspect.max(0.25);
 
     // WebGPU [0, 1] depth clip space perspective matrix
@@ -1017,7 +1103,8 @@ pub fn pack_model_matrix(pos: [f32; 3], rot: [[f32; 3]; 3]) -> [[f32; 4]; 4] {
 }
 
 /// WGSL shader source implementing two-pass translucent polyhedral rendering:
-/// - `fs_back`: interior back-face pass (`CullMode::Front`) rendering refracted internal facets and edges.
+/// - `fs_back`: interior back-face pass (`CullMode::Front`) rendering refracted internal facets,
+///   tabletop grid lines, and opposite-side numerals visible through the glass die body.
 /// - `fs_front`: exterior front-face pass (`CullMode::Back`) rendering Blinn-Phong + Fresnel rim lighting,
 ///   chamfered facet edges, and high-contrast numeral ink sampled from the procedural atlas.
 pub const DICE_WGSL_SHADER: &str = r#"
@@ -1075,16 +1162,22 @@ fn fs_back(in: VertexOutput) -> @location(0) vec4<f32> {
     let n = normalize(-in.world_normal);
     let v = normalize(scene.camera_pos.xyz - in.world_pos);
     let l1 = normalize(vec3<f32>(0.45, 0.85, 0.35));
-    let ndl = max(dot(n, l1), 0.2);
+    let ndl = max(dot(n, l1), 0.22);
 
-    // Subtle internal facet edge glow visible through translucent dice
-    let edge_highlight = 1.0 - smoothstep(0.0, 0.09, in.edge_dist);
+    // Internal facet edge refraction & tabletop grid visible through translucent dice
+    let edge_highlight = 1.0 - smoothstep(0.0, 0.10, in.edge_dist);
     let ink_mask = textureSample(numeral_tex, numeral_sampler, in.uv).a;
 
-    let body_rgb = scene.base_color.rgb * (0.38 + 0.35 * ndl)
-        + scene.base_color.rgb * edge_highlight * 0.28;
-    let mixed_rgb = mix(body_rgb, scene.ink_color.rgb * 0.65, ink_mask * 0.45);
-    let back_alpha = clamp(scene.base_color.a * 0.52 + edge_highlight * 0.14, 0.10, 0.85);
+    let grid_uv = fract(in.world_pos.xz * 0.85);
+    let grid_line = (1.0 - smoothstep(0.0, 0.06, min(grid_uv.x, 1.0 - grid_uv.x)))
+        + (1.0 - smoothstep(0.0, 0.06, min(grid_uv.y, 1.0 - grid_uv.y)));
+    let tray_refract = vec3<f32>(0.08, 0.18, 0.30) * clamp(grid_line, 0.0, 1.0) * (1.0 - scene.base_color.a);
+
+    let body_rgb = scene.base_color.rgb * (0.30 + 0.38 * ndl)
+        + mix(scene.base_color.rgb, vec3<f32>(1.0, 1.0, 1.0), 0.38) * edge_highlight * 0.44
+        + tray_refract;
+    let mixed_rgb = mix(body_rgb, scene.ink_color.rgb * 0.72, ink_mask * 0.52);
+    let back_alpha = clamp(scene.base_color.a * 0.40 + edge_highlight * 0.24 + ink_mask * 0.20, 0.05, 0.80);
     return vec4<f32>(mixed_rgb, back_alpha);
 }
 
@@ -1098,20 +1191,23 @@ fn fs_front(in: VertexOutput) -> @location(0) vec4<f32> {
     let diff1 = max(dot(n, l1), 0.0);
     let diff2 = max(dot(n, l2), 0.0) * 0.35;
     let h = normalize(l1 + v);
-    let spec = pow(max(dot(n, h), 0.0), 48.0) * 0.65;
-    let fresnel = pow(1.0 - max(dot(n, v), 0.0), 2.6);
+    let spec = pow(max(dot(n, h), 0.0), 54.0) * 0.70;
+    let fresnel = pow(1.0 - max(dot(n, v), 0.0), 2.8);
 
     // Chamfered polygon edge bevel highlight
-    let edge_bevel = 1.0 - smoothstep(0.0, 0.075, in.edge_dist);
+    let edge_bevel = 1.0 - smoothstep(0.0, 0.07, in.edge_dist);
     let ink_mask = textureSample(numeral_tex, numeral_sampler, in.uv).a;
 
-    let lit_body = scene.base_color.rgb * (0.26 + 0.68 * diff1 + diff2)
+    let lit_body = scene.base_color.rgb * (0.24 + 0.64 * diff1 + diff2)
         + vec3<f32>(1.0, 1.0, 1.0) * spec
-        + mix(scene.base_color.rgb, vec3<f32>(1.0, 1.0, 1.0), 0.55) * (fresnel * 0.42 + edge_bevel * 0.26);
+        + mix(scene.base_color.rgb, vec3<f32>(1.0, 1.0, 1.0), 0.55) * (fresnel * 0.40 + edge_bevel * 0.28);
 
     let final_rgb = mix(lit_body, scene.ink_color.rgb, ink_mask);
-    let body_alpha = clamp(scene.base_color.a + fresnel * 0.22 + spec * 0.30 + edge_bevel * 0.16, 0.15, 1.0);
-    let final_alpha = max(body_alpha, ink_mask * 0.98);
+    // Keep front-surface glass transmission low when translucent so back-facing facets and
+    // refracted edges shine clearly through the die body, while still reaching 1.0 when opaque.
+    let glass_base = mix(scene.base_color.a * 0.50, 1.0, pow(scene.base_color.a, 3.2));
+    let body_alpha = clamp(glass_base + fresnel * 0.16 + spec * 0.35 + edge_bevel * 0.14, 0.06, 1.0);
+    let final_alpha = max(body_alpha, ink_mask * 0.96);
     return vec4<f32>(final_rgb, final_alpha);
 }
 "#;
@@ -1128,7 +1224,7 @@ mod webgpu_runtime {
     use wasm_bindgen::JsCast;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::spawn_local;
-    use web_sys::HtmlCanvasElement;
+    use web_sys::{HtmlCanvasElement, MouseEvent, WheelEvent};
 
     #[cfg(target_arch = "wasm32")]
     fn create_canvas_surface(
@@ -1167,11 +1263,20 @@ mod webgpu_runtime {
         meshes: HashMap<DieKind, GpuMeshBuffer>,
     }
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum CanvasDragMode {
+        Orbit,
+        Pan,
+    }
+
     #[derive(Default)]
     pub struct DiceRendererController {
         pub pipeline: Option<WebGpuDicePipeline>,
         pub initializing: bool,
+        pub canvas_listeners_attached: bool,
         pub material: DiceMaterialConfig,
+        pub camera: DiceCameraConfig,
+        pub active_drag: Option<(CanvasDragMode, i32, i32)>,
         pub scene: Option<DicePhysicsScene>,
         pub anim_start_ms: f64,
         pub anim_loop_active: bool,
@@ -1207,7 +1312,120 @@ mod webgpu_runtime {
         tex.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
+    pub fn attach_canvas_camera_listeners_if_needed() {
+        let already_attached = with_dice_controller(|ctrl| {
+            if ctrl.canvas_listeners_attached {
+                true
+            } else {
+                ctrl.canvas_listeners_attached = true;
+                false
+            }
+        });
+        if already_attached {
+            return;
+        }
+        let Some(canvas) = crate::wasm_client::dom::get_element("wgpu-dice-canvas") else {
+            with_dice_controller(|ctrl| {
+                ctrl.canvas_listeners_attached = false;
+            });
+            return;
+        };
+        let Some(win) = crate::wasm_client::dom::window() else {
+            return;
+        };
+
+        let on_down = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
+            ev.prevent_default();
+            let mode = if ev.shift_key() || ev.button() == 1 || ev.button() == 2 {
+                CanvasDragMode::Pan
+            } else {
+                CanvasDragMode::Orbit
+            };
+            with_dice_controller(|ctrl| {
+                ctrl.active_drag = Some((mode, ev.client_x(), ev.client_y()));
+            });
+        });
+        let _ =
+            canvas.add_event_listener_with_callback("mousedown", on_down.as_ref().unchecked_ref());
+        on_down.forget();
+
+        let on_ctx = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
+            ev.prevent_default();
+        });
+        let _ =
+            canvas.add_event_listener_with_callback("contextmenu", on_ctx.as_ref().unchecked_ref());
+        on_ctx.forget();
+
+        let on_dbl = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
+            ev.prevent_default();
+            with_dice_controller(|ctrl| {
+                ctrl.camera.reset();
+                super::sync_camera_dom_from_config(&ctrl.camera);
+                render_current_frame(ctrl);
+            });
+        });
+        let _ =
+            canvas.add_event_listener_with_callback("dblclick", on_dbl.as_ref().unchecked_ref());
+        on_dbl.forget();
+
+        let on_wheel = Closure::<dyn FnMut(WheelEvent)>::new(move |ev: WheelEvent| {
+            ev.prevent_default();
+            let dy = ev.delta_y();
+            let factor = if dy < 0.0 {
+                1.10_f32
+            } else if dy > 0.0 {
+                1.0 / 1.10_f32
+            } else {
+                1.0
+            };
+            with_dice_controller(|ctrl| {
+                ctrl.camera.zoom_by_factor(factor);
+                super::sync_camera_dom_from_config(&ctrl.camera);
+                render_current_frame(ctrl);
+            });
+        });
+        let _ = canvas.add_event_listener_with_callback("wheel", on_wheel.as_ref().unchecked_ref());
+        on_wheel.forget();
+
+        let on_move = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
+            with_dice_controller(|ctrl| {
+                let Some((mode, last_x, last_y)) = ctrl.active_drag else {
+                    return;
+                };
+                let cx = ev.client_x();
+                let cy = ev.client_y();
+                let dx = (cx - last_x) as f32;
+                let dy = (cy - last_y) as f32;
+                if dx.abs() < 0.5 && dy.abs() < 0.5 {
+                    return;
+                }
+                ctrl.active_drag = Some((mode, cx, cy));
+                match mode {
+                    CanvasDragMode::Orbit => {
+                        ctrl.camera.orbit_by(-dx * 0.45, dy * 0.35);
+                    }
+                    CanvasDragMode::Pan => {
+                        ctrl.camera.pan_by_screen_delta(-dx * 0.015, -dy * 0.015);
+                    }
+                }
+                super::sync_camera_dom_from_config(&ctrl.camera);
+                render_current_frame(ctrl);
+            });
+        });
+        let _ = win.add_event_listener_with_callback("mousemove", on_move.as_ref().unchecked_ref());
+        on_move.forget();
+
+        let on_up = Closure::<dyn FnMut(MouseEvent)>::new(move |_ev: MouseEvent| {
+            with_dice_controller(|ctrl| {
+                ctrl.active_drag = None;
+            });
+        });
+        let _ = win.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
+        on_up.forget();
+    }
+
     pub fn ensure_webgpu_initialized_and_render() {
+        attach_canvas_camera_listeners_if_needed();
         let should_init = with_dice_controller(|ctrl| {
             if ctrl.pipeline.is_some() {
                 render_current_frame(ctrl);
@@ -1245,6 +1463,7 @@ mod webgpu_runtime {
                             }));
                             ctrl.anim_start_ms = js_sys::Date::now();
                         }
+                        super::sync_camera_dom_from_config(&ctrl.camera);
                         render_current_frame(ctrl);
                         start_animation_loop_if_needed(ctrl);
                     }
@@ -1654,7 +1873,8 @@ mod webgpu_runtime {
         let aspect =
             (pipe.surface_config.width as f32) / (pipe.surface_config.height.max(1) as f32);
         let die_count = scene.dice.len().max(1);
-        let (view_proj, eye) = compute_view_proj_matrix(aspect, die_count);
+        let (view_proj, eye) =
+            compute_view_proj_matrix_with_camera(aspect, die_count, &ctrl.camera);
 
         let uniforms = SceneUniforms {
             view_proj,
@@ -1680,13 +1900,24 @@ mod webgpu_runtime {
             return;
         };
 
-        let mut instances = Vec::with_capacity(scene.dice.len());
+        // Sort dice back-to-front relative to camera eye for accurate translucent compositing
+        let mut instances_with_dist: Vec<(f32, DieInstanceData)> =
+            Vec::with_capacity(scene.dice.len());
         for i in 0..scene.dice.len() {
             let (pos, rot) = scene.sample_die_transform(i, scene.progress);
-            instances.push(DieInstanceData {
-                model: pack_model_matrix(pos, rot),
-            });
+            let diff = vec3_sub(pos, eye);
+            let dist_sq = vec3_dot(diff, diff);
+            instances_with_dist.push((
+                dist_sq,
+                DieInstanceData {
+                    model: pack_model_matrix(pos, rot),
+                },
+            ));
         }
+        instances_with_dist
+            .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        let instances: Vec<DieInstanceData> =
+            instances_with_dist.into_iter().map(|(_, d)| d).collect();
         pipe.queue
             .write_buffer(&pipe.instance_buffer, 0, bytemuck::cast_slice(&instances));
 
@@ -1787,6 +2018,65 @@ mod webgpu_runtime {
     }
 }
 
+fn sync_range_slider_css_vars(
+    id: &str,
+    min_str: &str,
+    max_str: &str,
+    val_str: &str,
+    aria_text: &str,
+) {
+    if let Some(slider_el) = crate::wasm_client::dom::get_element(id)
+        && let Ok(html_el) = slider_el.clone().dyn_into::<web_sys::HtmlElement>()
+    {
+        let _ = html_el.style().set_property("--attr-min", min_str);
+        let _ = html_el.style().set_property("--attr-max", max_str);
+        let _ = html_el.style().set_property("--control-value", val_str);
+        let _ = slider_el.set_attribute("aria-valuetext", aria_text);
+    }
+}
+
+/// Synchronizes the DOM camera sliders and readouts (`#dice-camera-yaw`, `#dice-camera-pitch`,
+/// `#dice-camera-zoom`, `#dice-camera-pan-readout`) with `cam`.
+pub fn sync_camera_dom_from_config(cam: &DiceCameraConfig) {
+    let yaw_i = cam.yaw_deg.round() as i32;
+    let pitch_i = cam.pitch_deg.round() as i32;
+    let zoom_pct = (cam.zoom * 100.0).round() as i32;
+
+    crate::wasm_client::dom::set_input_value("dice-camera-yaw", &yaw_i.to_string());
+    crate::wasm_client::dom::set_input_value("dice-camera-pitch", &pitch_i.to_string());
+    crate::wasm_client::dom::set_input_value("dice-camera-zoom", &zoom_pct.to_string());
+
+    sync_range_slider_css_vars(
+        "dice-camera-yaw",
+        "-180",
+        "180",
+        &yaw_i.to_string(),
+        &format!("{yaw_i} degrees yaw"),
+    );
+    sync_range_slider_css_vars(
+        "dice-camera-pitch",
+        "12",
+        "88",
+        &pitch_i.to_string(),
+        &format!("{pitch_i} degrees pitch"),
+    );
+    sync_range_slider_css_vars(
+        "dice-camera-zoom",
+        "40",
+        "250",
+        &zoom_pct.to_string(),
+        &format!("{zoom_pct}% zoom"),
+    );
+
+    crate::wasm_client::dom::set_text("dice-camera-yaw-readout", &format!("{yaw_i}°"));
+    crate::wasm_client::dom::set_text("dice-camera-pitch-readout", &format!("{pitch_i}°"));
+    crate::wasm_client::dom::set_text("dice-camera-zoom-readout", &format!("{zoom_pct}%"));
+    crate::wasm_client::dom::set_text(
+        "dice-camera-pan-readout",
+        &format!("({:+.1}, {:+.1})", cam.pan[0], cam.pan[1]),
+    );
+}
+
 /// Spawns a new 3D physics roll in the WebGPU dice canvas and starts the throw animation.
 pub fn spawn_wgpu_dice_scene(spec: &WgpuDiceSpec) {
     if crate::wasm_client::dom::window().is_none() {
@@ -1812,23 +2102,16 @@ pub fn sync_dice_material_from_dom_and_render() {
     let base_hex = crate::wasm_client::dom::input_value("dice-base-color");
     let ink_hex = crate::wasm_client::dom::input_value("dice-ink-color");
     let opacity_raw = crate::wasm_client::dom::input_value("dice-opacity-slider");
-    let opacity_pct = opacity_raw
-        .parse::<f32>()
-        .unwrap_or(68.0)
-        .clamp(15.0, 100.0);
+    let opacity_pct = opacity_raw.parse::<f32>().unwrap_or(38.0).clamp(8.0, 100.0);
     let opacity = opacity_pct / 100.0;
 
-    // Sync custom property `--control-value` for WebKit/Blink range slider fill track per modern-web-guidance
-    if let Some(slider_el) = crate::wasm_client::dom::get_element("dice-opacity-slider")
-        && let Ok(html_el) = slider_el.clone().dyn_into::<web_sys::HtmlElement>()
-    {
-        let _ = html_el.style().set_property("--attr-min", "15");
-        let _ = html_el.style().set_property("--attr-max", "100");
-        let _ = html_el
-            .style()
-            .set_property("--control-value", &format!("{opacity_pct:.0}"));
-        let _ = slider_el.set_attribute("aria-valuetext", &format!("{opacity_pct:.0}% opacity"));
-    }
+    sync_range_slider_css_vars(
+        "dice-opacity-slider",
+        "8",
+        "100",
+        &format!("{opacity_pct:.0}"),
+        &format!("{opacity_pct:.0}% opacity"),
+    );
     crate::wasm_client::dom::set_text("dice-opacity-readout", &format!("{opacity_pct:.0}%"));
 
     let mat = DiceMaterialConfig::from_hex_and_opacity(
@@ -1867,6 +2150,61 @@ pub fn apply_dice_material_preset_from_dom() {
     sync_dice_material_from_dom_and_render();
 }
 
+/// Reads camera orbit angle (`#dice-camera-yaw`, `#dice-camera-pitch`) and zoom (`#dice-camera-zoom`)
+/// sliders from the DOM and immediately re-renders the 3D WebGPU dice canvas.
+pub fn sync_dice_camera_from_dom_and_render() {
+    if crate::wasm_client::dom::window().is_none() {
+        return;
+    }
+    let yaw = crate::wasm_client::dom::input_value("dice-camera-yaw")
+        .parse::<f32>()
+        .unwrap_or(0.0)
+        .clamp(-180.0, 180.0);
+    let pitch = crate::wasm_client::dom::input_value("dice-camera-pitch")
+        .parse::<f32>()
+        .unwrap_or(55.0)
+        .clamp(12.0, 88.0);
+    let zoom_pct = crate::wasm_client::dom::input_value("dice-camera-zoom")
+        .parse::<f32>()
+        .unwrap_or(100.0)
+        .clamp(40.0, 250.0);
+
+    webgpu_runtime::with_dice_controller(|ctrl| {
+        ctrl.camera.yaw_deg = yaw;
+        ctrl.camera.pitch_deg = pitch;
+        ctrl.camera.zoom = zoom_pct / 100.0;
+        sync_camera_dom_from_config(&ctrl.camera);
+        webgpu_runtime::render_current_frame(ctrl);
+    });
+    webgpu_runtime::ensure_webgpu_initialized_and_render();
+}
+
+/// Pans the 3D WebGPU dice camera across the tray floor by `(dx, dz)` and re-renders.
+pub fn pan_dice_camera_and_render(dx: f32, dz: f32) {
+    if crate::wasm_client::dom::window().is_none() {
+        return;
+    }
+    webgpu_runtime::with_dice_controller(|ctrl| {
+        ctrl.camera.pan_by_screen_delta(dx, -dz);
+        sync_camera_dom_from_config(&ctrl.camera);
+        webgpu_runtime::render_current_frame(ctrl);
+    });
+    webgpu_runtime::ensure_webgpu_initialized_and_render();
+}
+
+/// Resets the 3D WebGPU dice camera orbit angle, pan offset, and zoom factor to defaults and re-renders.
+pub fn reset_dice_camera_and_render() {
+    if crate::wasm_client::dom::window().is_none() {
+        return;
+    }
+    webgpu_runtime::with_dice_controller(|ctrl| {
+        ctrl.camera.reset();
+        sync_camera_dom_from_config(&ctrl.camera);
+        webgpu_runtime::render_current_frame(ctrl);
+    });
+    webgpu_runtime::ensure_webgpu_initialized_and_render();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1901,7 +2239,7 @@ mod tests {
     }
 
     #[test]
-    fn test_numeral_atlas_generates_non_empty_strokes_for_all_20_cells() {
+    fn test_numeral_atlas_generates_compact_strokes_for_all_20_cells() {
         let rgba = generate_dice_numeral_atlas_rgba8();
         assert_eq!(rgba.len(), (ATLAS_WIDTH * ATLAS_HEIGHT * 4) as usize);
 
@@ -1910,6 +2248,7 @@ mod tests {
             let col = idx % ATLAS_COLS;
             let row = idx / ATLAS_COLS;
             let mut non_zero_alpha = 0_usize;
+            let mut max_radius_from_center = 0.0_f32;
             for py in 0..ATLAS_CELL_SIZE {
                 for px in 0..ATLAS_CELL_SIZE {
                     let x = col * ATLAS_CELL_SIZE + px;
@@ -1917,12 +2256,22 @@ mod tests {
                     let a = rgba[((y * ATLAS_WIDTH + x) * 4 + 3) as usize];
                     if a > 128 {
                         non_zero_alpha += 1;
+                        let nx = ((px as f32 + 0.5) / (ATLAS_CELL_SIZE as f32)) * 2.0 - 1.0;
+                        let ny = ((py as f32 + 0.5) / (ATLAS_CELL_SIZE as f32)) * 2.0 - 1.0;
+                        let r = (nx * nx + ny * ny).sqrt();
+                        if r > max_radius_from_center {
+                            max_radius_from_center = r;
+                        }
                     }
                 }
             }
             assert!(
                 non_zero_alpha > 40,
                 "Atlas cell for face {face_num} must contain rendered numeral strokes (got {non_zero_alpha})"
+            );
+            assert!(
+                max_radius_from_center < 0.40,
+                "Numeral for face {face_num} must stay compact within cell center (max_r = {max_radius_from_center})"
             );
         }
     }
@@ -1967,14 +2316,40 @@ mod tests {
     }
 
     #[test]
-    fn test_material_config_and_hex_color_parsing() {
-        let mat = DiceMaterialConfig::from_hex_and_opacity("#38BDF8", "#FDE047", 0.65);
+    fn test_material_config_and_camera_orbit_pan_zoom() {
+        let def = DiceMaterialConfig::default();
+        assert!(
+            def.opacity <= 0.45,
+            "Default dice material should be genuinely translucent (got {})",
+            def.opacity
+        );
+
+        let mat = DiceMaterialConfig::from_hex_and_opacity("#38BDF8", "#FDE047", 0.35);
         assert_eq!(mat.base_color_hex, "#38bdf8");
         assert_eq!(mat.ink_color_hex, "#fde047");
-        assert!((mat.opacity - 0.65).abs() < 1e-5);
+        assert!((mat.opacity - 0.35).abs() < 1e-5);
 
         let amber = DiceMaterialConfig::from_preset("amber_resin");
         assert_eq!(amber.base_color_hex, "#f59e0b");
-        assert!(amber.opacity < 0.9);
+        assert!(amber.opacity < 0.45);
+
+        let mut cam = DiceCameraConfig::default();
+        let (_, eye_default) = compute_view_proj_matrix_with_camera(2.0, 2, &cam);
+        cam.zoom_by_factor(1.5);
+        let (_, eye_zoomed) = compute_view_proj_matrix_with_camera(2.0, 2, &cam);
+        assert!(
+            vec3_len(eye_zoomed) < vec3_len(eye_default),
+            "Zooming in must bring the camera eye closer to the tray"
+        );
+
+        cam.orbit_by(90.0, 15.0);
+        assert!((cam.yaw_deg - 90.0).abs() < 1e-4);
+        assert!((cam.pitch_deg - 70.0).abs() < 1e-4);
+
+        cam.pan_by_screen_delta(1.2, -0.8);
+        assert!(cam.pan[0].abs() > 0.01 || cam.pan[1].abs() > 0.01);
+
+        cam.reset();
+        assert_eq!(cam, DiceCameraConfig::default());
     }
 }

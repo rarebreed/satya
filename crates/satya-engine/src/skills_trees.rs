@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::characteristics::{
     AptitudeCode, CharacterAptitudes, CharacterCharacteristics, CharacteristicCode,
-    compute_aptitude_min_c_relief,
+    compute_aptitude_min_c_relief, compute_aptitude_training_time_multiplier,
 };
 use crate::task_resolution::ToolDependency;
 
@@ -215,6 +215,8 @@ pub struct SkillNodeSpec {
     pub name: &'static str,
     pub tree: SkillTreeId,
     pub tier: u8,
+    /// Inherent learning difficulty rating (`1` = Routine/Easy .. `5` = Extreme/Apex), independent of tree tier.
+    pub difficulty: u8,
     pub skill_type: SkillType,
     pub categories: &'static [SkillCategory],
     pub primary_char: CharacteristicCode,
@@ -239,6 +241,40 @@ impl SkillNodeSpec {
             None => self.tree.primary_aptitude(),
         }
     }
+
+    /// Inherent Skill Point (SP) difficulty multiplier derived from `self.difficulty` (`1..=5`) and `self.skill_type`.
+    ///
+    /// - `Difficulty 1` (`TAL`): `0.80x`
+    /// - `Difficulty 1` (`PHY` / `KNO` / `PHY/KNO`, e.g. *Swimming*, *Driving*, *Reading*): `1.00x`
+    /// - `Difficulty 2` (Standard Trade / Athletics / Basic Arms): `1.25x`
+    /// - `Difficulty 3` (Challenging Specialist): `1.60x`
+    /// - `Difficulty 4` (Complex Professional / Fixed-Wing Aviation / Engineering): `2.00x`
+    /// - `Difficulty 5` (Extreme / Rotary-Wing Helicopter / Trauma Surgery / Frontier Science): `2.50x`
+    #[must_use]
+    pub const fn difficulty_multiplier(&self) -> f64 {
+        match self.difficulty {
+            0 | 1 => match self.skill_type {
+                SkillType::Tal => 0.80,
+                _ => 1.00,
+            },
+            2 => 1.25,
+            3 => 1.60,
+            4 => 2.00,
+            _ => 2.50,
+        }
+    }
+
+    /// Short human-readable label for the skill's inherent difficulty rating (`1..=5`).
+    #[must_use]
+    pub const fn difficulty_label(&self) -> &'static str {
+        match self.difficulty {
+            0 | 1 => "Diff 1 (Routine)",
+            2 => "Diff 2 (Moderate)",
+            3 => "Diff 3 (Challenging)",
+            4 => "Diff 4 (Complex)",
+            _ => "Diff 5 (Extreme)",
+        }
+    }
 }
 
 /// Complete canonical catalog of skills across all 8 Hierarchical Skill Trees (`03-character/skills_and_trees.md`).
@@ -251,6 +287,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Counting & Basic Numeracy",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Knowledge],
         primary_char: CharacteristicCode::MEM,
@@ -268,6 +305,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Arithmetic",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge, SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -285,6 +323,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Digital & AI Literacy",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge, SkillCategory::Cyber],
         primary_char: CharacteristicCode::MEM,
@@ -302,6 +341,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Elementary Algebra & Geometry",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science, SkillCategory::Knowledge],
         primary_char: CharacteristicCode::ANA,
@@ -319,6 +359,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Trigonometry",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -336,6 +377,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Calculus & Linear Algebra",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 4,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -353,6 +395,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Differential Equations & Vector Calculus",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 5,
+        difficulty: 5,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -370,6 +413,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Statistics & Probability",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science, SkillCategory::Knowledge],
         primary_char: CharacteristicCode::ANA,
@@ -387,6 +431,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Programming & Scripting",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Cyber, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -410,6 +455,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Algorithms & Systems Architecture",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Cyber, SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -433,6 +479,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Cybersecurity & Network Intrusion",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Cyber, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -454,6 +501,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Cryptography & Quantum Computing",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 5,
+        difficulty: 5,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Cyber, SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -474,6 +522,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Machine Learning & AI Engineering",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 5,
+        difficulty: 5,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Cyber, SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -495,6 +544,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Classical Mechanics (Physics)",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 4,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -512,6 +562,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Electromagnetism & Optics",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 5,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -532,6 +583,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Thermodynamics & Fluid Dynamics",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 5,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -552,6 +604,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Quantum, Relativity & Nuclear Physics",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 6,
+        difficulty: 5,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -572,6 +625,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Astronomy, Astrophysics & Orbital Mechanics",
         tree: SkillTreeId::Tree1MathCompPhysicalSciences,
         tier: 5,
+        difficulty: 5,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -595,6 +649,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Manual Dexterity & Tinkering",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Technical],
         primary_char: CharacteristicCode::DEX,
@@ -612,6 +667,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Carpentry & Woodworking",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical, SkillCategory::Artistic],
         primary_char: CharacteristicCode::DEX,
@@ -632,6 +688,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Masonry & Construction",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical, SkillCategory::Athletic],
         primary_char: CharacteristicCode::FOR,
@@ -652,6 +709,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Metalworking, Machining & Blacksmithing",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical],
         primary_char: CharacteristicCode::DEX,
@@ -669,6 +727,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Lockpicking & Physical Intrusion",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::DEX,
@@ -690,6 +749,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Automotive & Small Engine Mechanics",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical],
         primary_char: CharacteristicCode::DEX,
@@ -710,6 +770,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Electrical & Power Systems",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -730,6 +791,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Micro-Electronics, Avionics & Cyberware Tech",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical, SkillCategory::Cyber],
         primary_char: CharacteristicCode::DEX,
@@ -750,6 +812,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Armourer & Gunsmithing",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical, SkillCategory::Combat],
         primary_char: CharacteristicCode::DEX,
@@ -771,6 +834,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Mechanical & Structural Engineering",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 4,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -791,6 +855,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Aerospace, Naval & Robotics Engineering",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 5,
+        difficulty: 5,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -811,6 +876,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Driving (Wheeled & Tracked Ground Vehicles)",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Technical, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::DEX,
@@ -828,6 +894,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Small Boat & Seamanship",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::KIN,
@@ -845,9 +912,10 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
     },
     SkillNodeSpec {
         id: "piloting_fixed_wing_rotary",
-        name: "Piloting (Fixed-Wing & Rotary Aircraft)",
+        name: "Piloting (Fixed-Wing Aircraft)",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical],
         primary_char: CharacteristicCode::DEX,
@@ -868,10 +936,36 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         aptitude_override: Some(AptitudeCode::AptMec),
     },
     SkillNodeSpec {
+        id: "piloting_rotary_wing_helicopter",
+        name: "Piloting (Rotary-Wing / Helicopter & VTOL)",
+        tree: SkillTreeId::Tree2MechanicalCraftPilotage,
+        tier: 4,
+        difficulty: 5,
+        skill_type: SkillType::PhyKno,
+        categories: &[SkillCategory::Technical],
+        primary_char: CharacteristicCode::KIN,
+        secondary_char: Some(CharacteristicCode::DEX),
+        min_chars: &[
+            (CharacteristicCode::KIN, 12),
+            (CharacteristicCode::DEX, 11),
+            (CharacteristicCode::FOC, 11),
+        ],
+        parent_mode: PrerequisiteMode::AllOf,
+        parent_prereqs: &[("driving_wheeled_tracked", 2), ("trigonometry", 1)],
+        allowed_access: &[
+            SkillAccessTier::VocationalLicensed,
+            SkillAccessTier::Restricted,
+        ],
+        tool_dependency: ToolDependency::Mandatory,
+        defaultable: false,
+        aptitude_override: Some(AptitudeCode::AptKin),
+    },
+    SkillNodeSpec {
         id: "spacecraft_orbital_helm",
         name: "Spacecraft & Orbital Helm",
         tree: SkillTreeId::Tree2MechanicalCraftPilotage,
         tier: 4,
+        difficulty: 5,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical, SkillCategory::Science],
         primary_char: CharacteristicCode::DEX,
@@ -895,6 +989,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Hygiene & Basic Self-Care",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Medical],
         primary_char: CharacteristicCode::INS,
@@ -912,6 +1007,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "First Aid & Basic Life Support (BLS / CPR)",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Medical, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::DEX,
@@ -929,6 +1025,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "General Biology & Natural History",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science, SkillCategory::Knowledge],
         primary_char: CharacteristicCode::MEM,
@@ -936,8 +1033,88 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         min_chars: &[(CharacteristicCode::MEM, 8)],
         parent_mode: PrerequisiteMode::AllOf,
         parent_prereqs: &[("hygiene_basic_self_care", 1)],
-        allowed_access: &[SkillAccessTier::Academic],
+        allowed_access: &[SkillAccessTier::Academic, SkillAccessTier::Universal],
         tool_dependency: ToolDependency::None,
+        defaultable: true,
+        aptitude_override: Some(AptitudeCode::AptBio),
+    },
+    SkillNodeSpec {
+        id: "agriculture_agronomy_pastoralism",
+        name: "Agriculture, Agronomy & Crop Husbandry",
+        tree: SkillTreeId::Tree3BiologyChemistryMedicine,
+        tier: 1,
+        difficulty: 2,
+        skill_type: SkillType::PhyKno,
+        categories: &[
+            SkillCategory::Science,
+            SkillCategory::Technical,
+            SkillCategory::Fieldcraft,
+        ],
+        primary_char: CharacteristicCode::INS,
+        secondary_char: Some(CharacteristicCode::FOR),
+        min_chars: &[(CharacteristicCode::INS, 7), (CharacteristicCode::FIT, 7)],
+        parent_mode: PrerequisiteMode::AnyOf,
+        parent_prereqs: &[("foraging_campcraft", 1), ("hygiene_basic_self_care", 1)],
+        allowed_access: &[
+            SkillAccessTier::Universal,
+            SkillAccessTier::VocationalLicensed,
+            SkillAccessTier::Academic,
+        ],
+        tool_dependency: ToolDependency::Situational,
+        defaultable: true,
+        aptitude_override: Some(AptitudeCode::AptBio),
+    },
+    SkillNodeSpec {
+        id: "herbalism_ethnobotany_natural_remedies",
+        name: "Herbalism, Ethnobotany & Field Remedies",
+        tree: SkillTreeId::Tree3BiologyChemistryMedicine,
+        tier: 2,
+        difficulty: 2,
+        skill_type: SkillType::Kno,
+        categories: &[
+            SkillCategory::Medical,
+            SkillCategory::Fieldcraft,
+            SkillCategory::Science,
+        ],
+        primary_char: CharacteristicCode::MEM,
+        secondary_char: Some(CharacteristicCode::OLF),
+        min_chars: &[(CharacteristicCode::MEM, 8), (CharacteristicCode::OLF, 8)],
+        parent_mode: PrerequisiteMode::AllOf,
+        parent_prereqs: &[("foraging_campcraft", 2), ("first_aid_bls_cpr", 1)],
+        allowed_access: &[
+            SkillAccessTier::Universal,
+            SkillAccessTier::VocationalLicensed,
+        ],
+        tool_dependency: ToolDependency::Situational,
+        defaultable: true,
+        aptitude_override: Some(AptitudeCode::AptBio),
+    },
+    SkillNodeSpec {
+        id: "veterinary_medicine_livestock_care",
+        name: "Veterinary Medicine & Livestock Care",
+        tree: SkillTreeId::Tree3BiologyChemistryMedicine,
+        tier: 2,
+        difficulty: 3,
+        skill_type: SkillType::PhyKno,
+        categories: &[
+            SkillCategory::Medical,
+            SkillCategory::Fieldcraft,
+            SkillCategory::Science,
+        ],
+        primary_char: CharacteristicCode::INS,
+        secondary_char: Some(CharacteristicCode::DEX),
+        min_chars: &[(CharacteristicCode::INS, 8), (CharacteristicCode::DEX, 8)],
+        parent_mode: PrerequisiteMode::AllOf,
+        parent_prereqs: &[
+            ("animal_handling_husbandry_riding", 1),
+            ("first_aid_bls_cpr", 1),
+        ],
+        allowed_access: &[
+            SkillAccessTier::Universal,
+            SkillAccessTier::VocationalLicensed,
+            SkillAccessTier::Academic,
+        ],
+        tool_dependency: ToolDependency::Situational,
         defaultable: true,
         aptitude_override: Some(AptitudeCode::AptBio),
     },
@@ -946,6 +1123,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "General Chemistry",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -963,6 +1141,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Organic & Analytical Chemistry",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -980,6 +1159,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Anatomy & Physiology",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Medical, SkillCategory::Science],
         primary_char: CharacteristicCode::MEM,
@@ -1000,6 +1180,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Paramedic & Combat Trauma Care",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Medical, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::DEX,
@@ -1020,6 +1201,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Nursing & Patient Care",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Medical],
         primary_char: CharacteristicCode::INS,
@@ -1040,6 +1222,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Pharmacology & Toxicology",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 4,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Medical, SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -1060,6 +1243,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Clinical Diagnosis & Internal Medicine",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 4,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Medical, SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -1077,6 +1261,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Trauma, Orthopedic & General Surgery",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 5,
+        difficulty: 5,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Medical],
         primary_char: CharacteristicCode::DEX,
@@ -1101,6 +1286,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Genetics, Biotech & Cyber-Implantation",
         tree: SkillTreeId::Tree3BiologyChemistryMedicine,
         tier: 6,
+        difficulty: 5,
         skill_type: SkillType::PhyKno,
         categories: &[
             SkillCategory::Medical,
@@ -1128,6 +1314,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Native Language Speech",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Social, SkillCategory::Knowledge],
         primary_char: CharacteristicCode::ELO,
@@ -1145,6 +1332,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Empathy & Social Perception",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Social],
         primary_char: CharacteristicCode::INS,
@@ -1162,6 +1350,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Persuasion & Fast-Talk",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Social],
         primary_char: CharacteristicCode::ELO,
@@ -1179,6 +1368,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Deception & Bluff",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Social],
         primary_char: CharacteristicCode::ELO,
@@ -1196,6 +1386,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Intimidation & Coercion",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Social, SkillCategory::Combat],
         primary_char: CharacteristicCode::PRE,
@@ -1213,6 +1404,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Reading (Comprehension)",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge],
         primary_char: CharacteristicCode::MEM,
@@ -1230,6 +1422,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Writing (Composition)",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge, SkillCategory::Artistic],
         primary_char: CharacteristicCode::ELO,
@@ -1247,6 +1440,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Foreign Language (Specific)",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge, SkillCategory::Social],
         primary_char: CharacteristicCode::MEM,
@@ -1264,6 +1458,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Rhetoric, Oratory & Debate",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Social, SkillCategory::Knowledge],
         primary_char: CharacteristicCode::ELO,
@@ -1281,6 +1476,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Research & Archival Science",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge],
         primary_char: CharacteristicCode::ANA,
@@ -1298,6 +1494,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "History & Political Science",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge],
         primary_char: CharacteristicCode::MEM,
@@ -1315,6 +1512,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Philosophy, Formal Logic & Ethics",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge],
         primary_char: CharacteristicCode::ANA,
@@ -1332,6 +1530,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Linguistics, Cryptanalysis & Philology",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge, SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -1352,6 +1551,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Psychology, Behavioral Analysis & Counseling",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[
             SkillCategory::Science,
@@ -1376,6 +1576,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Economics, Finance & Accounting",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge, SkillCategory::Science],
         primary_char: CharacteristicCode::ANA,
@@ -1396,6 +1597,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Law & Jurisprudence",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 4,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Knowledge, SkillCategory::Social],
         primary_char: CharacteristicCode::MEM,
@@ -1416,6 +1618,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Negotiation & Diplomacy",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Social],
         primary_char: CharacteristicCode::ELO,
@@ -1440,6 +1643,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Leadership & Command",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Social, SkillCategory::Combat],
         primary_char: CharacteristicCode::PRE,
@@ -1457,6 +1661,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Interrogation & Counter-Interrogation",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Social, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::INS,
@@ -1474,6 +1679,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Streetwise & Underworld Etiquette",
         tree: SkillTreeId::Tree4LanguageHumanitiesSocial,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Social, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::INS,
@@ -1494,6 +1700,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Running & Sprinting",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Athletic],
         primary_char: CharacteristicCode::SPD,
@@ -1511,6 +1718,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Jumping & Leaping",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Athletic],
         primary_char: CharacteristicCode::FOR,
@@ -1528,6 +1736,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Balance & Footwork",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Athletic],
         primary_char: CharacteristicCode::KIN,
@@ -1545,6 +1754,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Strength & Lifting",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Athletic],
         primary_char: CharacteristicCode::FOR,
@@ -1562,6 +1772,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Brawling (Unarmed Striking)",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Combat, SkillCategory::Athletic],
         primary_char: CharacteristicCode::SPD,
@@ -1579,6 +1790,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Climbing & Scaling",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Athletic, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::FOR,
@@ -1596,6 +1808,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Swimming & Diving",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Athletic, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::FIT,
@@ -1613,6 +1826,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Acrobatics, Tumbling & Parkour",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Athletic],
         primary_char: CharacteristicCode::KIN,
@@ -1633,6 +1847,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Zero-G / EVA Operations",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Athletic, SkillCategory::Technical],
         primary_char: CharacteristicCode::KIN,
@@ -1653,6 +1868,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Martial Arts (Striking — Boxing, Muay Thai, Karate)",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Combat, SkillCategory::Athletic],
         primary_char: CharacteristicCode::SPD,
@@ -1674,6 +1890,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Grappling, Wrestling & Submissions (Judo, BJJ, Sambo)",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Combat, SkillCategory::Athletic],
         primary_char: CharacteristicCode::FOR,
@@ -1695,6 +1912,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Short Blades & Knife Fighting",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Combat],
         primary_char: CharacteristicCode::SPD,
@@ -1716,6 +1934,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Swords, Fencing & Long Blades",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Combat, SkillCategory::Athletic],
         primary_char: CharacteristicCode::SPD,
@@ -1736,6 +1955,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Blunt / Impact Weapons & Polearms",
         tree: SkillTreeId::Tree5AthleticsAcrobaticsMelee,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Combat],
         primary_char: CharacteristicCode::FOR,
@@ -1756,6 +1976,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Throwing & Lobbing",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Athletic, SkillCategory::Combat],
         primary_char: CharacteristicCode::DEX,
@@ -1773,6 +1994,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Archery (Bows & Crossbows)",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::Phy,
         categories: &[
             SkillCategory::Combat,
@@ -1794,6 +2016,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Pistols & Handguns",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Combat],
         primary_char: CharacteristicCode::DEX,
@@ -1815,6 +2038,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Long Guns (Rifles, Carbines & Shotguns)",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Combat, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::DEX,
@@ -1836,6 +2060,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Fully Automatic & Burst Weapons (SMGs, Assault Rifles, LMGs)",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Combat],
         primary_char: CharacteristicCode::FOR,
@@ -1857,6 +2082,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Precision Marksmanship & Sniping",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Combat, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::SIG,
@@ -1881,6 +2107,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Heavy Weapons, Mounted Gunnery & ATGMs",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Combat, SkillCategory::Technical],
         primary_char: CharacteristicCode::DEX,
@@ -1898,6 +2125,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Indirect Fire, Mortars & Artillery",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 3,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Combat, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -1918,6 +2146,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Demolitions & Explosive Ordnance (EOD)",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Technical, SkillCategory::Combat],
         primary_char: CharacteristicCode::DEX,
@@ -1939,6 +2168,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Small-Unit Tactics & CQB Doctrine",
         tree: SkillTreeId::Tree6MarksmanshipGunneryTactical,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Combat, SkillCategory::Knowledge],
         primary_char: CharacteristicCode::INS,
@@ -1962,6 +2192,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Alertness (Visual & Auditory Situational Awareness)",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::SIG,
@@ -1979,6 +2210,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Stealth (Sneaking & Hiding)",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Fieldcraft, SkillCategory::Athletic],
         primary_char: CharacteristicCode::KIN,
@@ -1996,6 +2228,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Foraging & Campcraft",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::INS,
@@ -2013,6 +2246,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Camouflage & Concealment",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::INS,
@@ -2030,6 +2264,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Sleight of Hand, Pickpocketing & Palming",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Phy,
         categories: &[SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::DEX,
@@ -2050,6 +2285,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Disguise & Impersonation",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::PhyKno,
         categories: &[
             SkillCategory::Social,
@@ -2075,6 +2311,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Tracking & Spoor Analysis",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::SIG,
@@ -2091,10 +2328,63 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         aptitude_override: Some(AptitudeCode::AptAud),
     },
     SkillNodeSpec {
+        id: "hunting_trapping_field_butchery",
+        name: "Hunting, Trapping & Field Butchery",
+        tree: SkillTreeId::Tree7PerceptionStealthSurvival,
+        tier: 1,
+        difficulty: 2,
+        skill_type: SkillType::PhyKno,
+        categories: &[SkillCategory::Fieldcraft, SkillCategory::Combat],
+        primary_char: CharacteristicCode::SIG,
+        secondary_char: Some(CharacteristicCode::INS),
+        min_chars: &[(CharacteristicCode::SIG, 8), (CharacteristicCode::DIS, 7)],
+        parent_mode: PrerequisiteMode::AllOf,
+        parent_prereqs: &[
+            ("foraging_campcraft", 1),
+            ("stealth_sneaking_hiding", 1),
+        ],
+        allowed_access: &[
+            SkillAccessTier::Universal,
+            SkillAccessTier::VocationalLicensed,
+        ],
+        tool_dependency: ToolDependency::Mandatory,
+        defaultable: true,
+        aptitude_override: Some(AptitudeCode::AptBio),
+    },
+    SkillNodeSpec {
+        id: "animal_handling_husbandry_riding",
+        name: "Animal Handling, Husbandry & Riding",
+        tree: SkillTreeId::Tree7PerceptionStealthSurvival,
+        tier: 1,
+        difficulty: 2,
+        skill_type: SkillType::PhyKno,
+        categories: &[
+            SkillCategory::Fieldcraft,
+            SkillCategory::Athletic,
+            SkillCategory::Social,
+        ],
+        primary_char: CharacteristicCode::INS,
+        secondary_char: Some(CharacteristicCode::KIN),
+        min_chars: &[(CharacteristicCode::INS, 7), (CharacteristicCode::KIN, 7)],
+        parent_mode: PrerequisiteMode::AnyOf,
+        parent_prereqs: &[
+            ("empathy_social_perception", 1),
+            ("foraging_campcraft", 1),
+        ],
+        allowed_access: &[
+            SkillAccessTier::Universal,
+            SkillAccessTier::VocationalLicensed,
+        ],
+        tool_dependency: ToolDependency::Situational,
+        defaultable: true,
+        aptitude_override: Some(AptitudeCode::AptBio),
+    },
+    SkillNodeSpec {
         id: "wilderness_survival_biome_specific",
         name: "Wilderness Survival (Biome-Specific)",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::INS,
@@ -2115,6 +2405,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Land Navigation & Cartography",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Fieldcraft, SkillCategory::Technical],
         primary_char: CharacteristicCode::ANA,
@@ -2139,6 +2430,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Surveillance, Reconnaissance & Countersurveillance",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Fieldcraft, SkillCategory::Cyber],
         primary_char: CharacteristicCode::SIG,
@@ -2159,6 +2451,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Forensics & Crime Scene Investigation",
         tree: SkillTreeId::Tree7PerceptionStealthSurvival,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::Kno,
         categories: &[
             SkillCategory::Science,
@@ -2187,6 +2480,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Singing & Vocal Rhythm",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Artistic, SkillCategory::Social],
         primary_char: CharacteristicCode::HEA,
@@ -2204,6 +2498,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Sketching & Doodling",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Artistic],
         primary_char: CharacteristicCode::DEX,
@@ -2221,6 +2516,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Basic Cooking",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 0,
+        difficulty: 1,
         skill_type: SkillType::Tal,
         categories: &[SkillCategory::Artistic, SkillCategory::Fieldcraft],
         primary_char: CharacteristicCode::OLF,
@@ -2238,6 +2534,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Drawing, Painting & Illustration",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Artistic],
         primary_char: CharacteristicCode::DEX,
@@ -2255,6 +2552,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Sculpting, Ceramics & Carving",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Artistic, SkillCategory::Technical],
         primary_char: CharacteristicCode::DEX,
@@ -2275,6 +2573,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Photography, Cinematography & Digital Media",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Artistic, SkillCategory::Technical],
         primary_char: CharacteristicCode::SIG,
@@ -2292,6 +2591,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Forgery, Counterfeiting & Document Alteration",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 3,
+        difficulty: 4,
         skill_type: SkillType::PhyKno,
         categories: &[
             SkillCategory::Artistic,
@@ -2320,6 +2620,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Musical Instrument (Specific)",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 1,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Artistic],
         primary_char: CharacteristicCode::DEX,
@@ -2337,6 +2638,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Music Theory, Composition & Sound Engineering",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 2,
+        difficulty: 3,
         skill_type: SkillType::Kno,
         categories: &[SkillCategory::Artistic, SkillCategory::Knowledge],
         primary_char: CharacteristicCode::CRE,
@@ -2354,6 +2656,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Dancing & Choreography",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 1,
+        difficulty: 1,
         skill_type: SkillType::Phy,
         categories: &[
             SkillCategory::Artistic,
@@ -2375,6 +2678,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Acting, Stagecraft & Mimicry",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Artistic, SkillCategory::Social],
         primary_char: CharacteristicCode::PRE,
@@ -2392,6 +2696,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         name: "Culinary Arts, Gastronomy & Brewing",
         tree: SkillTreeId::Tree8VisualMusicalCulinaryArts,
         tier: 2,
+        difficulty: 2,
         skill_type: SkillType::PhyKno,
         categories: &[SkillCategory::Artistic, SkillCategory::Science],
         primary_char: CharacteristicCode::TAS,
@@ -2772,6 +3077,147 @@ pub fn resolve_skill_tree_default(
     }
 }
 
+/// Whether a skill step is acquired through **Formal Instruction** (`FOC` + `INS` institutional curriculum)
+/// or **Practical Experience / Self-Study** (`INS` elective / street practice).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SkillTrainingMode {
+    /// Institutional / Career curriculum governed by Focus (`FOC`) and Insight (`INS`).
+    FormalTraining,
+    /// On-the-job / Elective / Hobby / Street experience governed by Insight (`INS`) and skill type (`TAL`/`PHY` vs `KNO`).
+    Experience,
+}
+
+impl SkillTrainingMode {
+    #[must_use]
+    pub const fn as_label(self) -> &'static str {
+        match self {
+            Self::FormalTraining => "Formal Training (FOC + INS)",
+            Self::Experience => "Experience (INS)",
+        }
+    }
+}
+
+/// Full 5-factor breakdown of the Skill Point (`SP`) cost to advance a skill by 1 level to `target_level` ($N$).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SkillStepCostBreakdown {
+    pub skill_id: String,
+    pub target_level: usize,
+    pub training_mode: SkillTrainingMode,
+    /// Triangular step base cost: $\text{Base}(N) = 10 \times N$.
+    pub base_level_sp: usize,
+    /// Inherent skill difficulty rating ($1\dots 5$).
+    pub difficulty_rating: u8,
+    /// Difficulty multiplier ($0.80\times$ for D1 Tal, $1.00\times$ for D1 Phy/Kno, $1.25\times$ D2, $1.60\times$ D3, $2.00\times$ D4, $2.50\times$ D5).
+    pub difficulty_multiplier: f64,
+    /// Effective controlling characteristic $C_{\text{eff}} \in [1, 20]$ ($70/30$ weighted for dual-stat skills).
+    pub controller_c: i32,
+    /// Controlling characteristic multiplier: $\text{clamp}(1.0 - 0.04 \times (C_{\text{eff}} - 10),\; 0.65,\; 1.40)$.
+    pub controller_multiplier: f64,
+    /// Governing Domain Aptitude score $A \in [-2, +3]$.
+    pub aptitude_score: i32,
+    /// Domain Aptitude multiplier ($-15\%$ per $+1$, $+20\%$ per $-1$).
+    pub aptitude_multiplier: f64,
+    /// Training mode multiplier (`FormalTraining` via `FOC`+`INS` vs `Experience` via `INS`).
+    pub training_mode_multiplier: f64,
+    /// Final rounded Skill Point (`SP`) cost for this single step (minimum `3 SP`).
+    pub final_sp_cost: usize,
+}
+
+/// Compute the 5-factor Skill Point (`SP`) cost to advance `skill_id` from `target_level - 1` to `target_level` ($N$):
+///
+/// $$\text{SP}(s, N) = \max\!\Big(3,\; \text{round}\big(\text{Base}(N) \times M_{\text{diff}}(s) \times M_{\text{ctrl}}(C_{\text{eff}}) \times M_{\text{apt}}(A) \times M_{\text{train}}(\text{mode}, \text{FOC}, \text{INS})\big)\Big)$$
+///
+/// 1. **Target Level Scaling**: $\text{Base}(N) = 10 \times N$ (`10 SP` for $N=1$, `20 SP` for $N=2$, `30 SP` for $N=3$, `40 SP` for $N=4$, `50 SP` for $N=5$).
+/// 2. **Inherent Skill Difficulty ($1\dots 5$)**:
+///    - `Difficulty 1 (Basic)`: `0.80x` (`TAL`) / `1.00x` (`PHY`/`KNO`, e.g., *Swimming & Diving*)
+///    - `Difficulty 2 (Standard)`: `1.25x` (e.g., *Pistols & Handguns*, *Ground Vehicle Operation*)
+///    - `Difficulty 3 (Complex)`: `1.60x` (e.g., *Calculus*, *Fully Automatic Weapons*)
+///    - `Difficulty 4 (Advanced)`: `2.00x` (e.g., *Fixed-Wing Aircraft*, *Precision Marksmanship*)
+///    - `Difficulty 5 (Extreme)`: `2.50x` (e.g., *Piloting (Rotary-Wing / Helicopter & VTOL)*, *Trauma Surgery*)
+/// 3. **Controlling Characteristic ($C_{\text{eff}}$)**:
+///    $$M_{\text{ctrl}} = \text{clamp}\big(1.0 - 0.04 \times (C_{\text{eff}} - 10),\; 0.65,\; 1.40\big)$$
+/// 4. **Governing Domain Aptitude ($A \in [-2, +3]$)**:
+///    $$M_{\text{apt}} = \begin{cases} 1.0 - 0.15 A & A \ge 0 \\ 1.0 + 0.20 |A| & A < 0 \end{cases}$$
+/// 5. **Training Mode (`FormalTraining` via `FOC` + `INS` vs `Experience` via `INS`)**:
+///    - `FormalTraining`: $\text{clamp}\big(0.85 \times (1.0 - 0.03(\text{FOC} - 10) - 0.03(\text{INS} - 10)),\; 0.45,\; 1.35\big)$
+///    - `Experience`: $\text{clamp}\big(B_{\text{type}} \times (1.0 - 0.02(\text{INS} - 10)),\; 0.65,\; 1.60\big)$, where $B_{\text{type}} = 1.00$ for `TAL`/`PHY` and $1.25$ for `KNO`/`PHY/KNO`.
+#[must_use]
+pub fn compute_skill_step_sp_cost(
+    skill_id: &str,
+    target_level: usize,
+    training_mode: SkillTrainingMode,
+    characteristics: &CharacterCharacteristics,
+    aptitudes: &CharacterAptitudes,
+) -> SkillStepCostBreakdown {
+    let n = target_level.max(1);
+    let base_level_sp = 10 * n;
+
+    let Some(spec) = lookup_skill_node(skill_id) else {
+        return SkillStepCostBreakdown {
+            skill_id: skill_id.to_string(),
+            target_level: n,
+            training_mode,
+            base_level_sp,
+            difficulty_rating: 2,
+            difficulty_multiplier: 1.25,
+            controller_c: 10,
+            controller_multiplier: 1.0,
+            aptitude_score: 0,
+            aptitude_multiplier: 1.0,
+            training_mode_multiplier: 1.0,
+            final_sp_cost: base_level_sp,
+        };
+    };
+
+    let difficulty_rating = spec.difficulty.clamp(1, 5);
+    let difficulty_multiplier = spec.difficulty_multiplier();
+
+    let controller_c = characteristics.compute_controller(spec.primary_char, spec.secondary_char);
+    let controller_multiplier = (1.0 - 0.04 * f64::from(controller_c - 10)).clamp(0.65, 1.40);
+
+    let aptitude_score = aptitudes.get(spec.governing_aptitude());
+    let aptitude_multiplier = compute_aptitude_training_time_multiplier(aptitude_score);
+
+    let foc = characteristics.foc.clamp(1, 20);
+    let ins = characteristics.ins.clamp(1, 20);
+    let training_mode_multiplier = match training_mode {
+        SkillTrainingMode::FormalTraining => {
+            let study_factor = 1.0 - 0.03 * f64::from(foc - 10) - 0.03 * f64::from(ins - 10);
+            (0.85 * study_factor).clamp(0.45, 1.35)
+        }
+        SkillTrainingMode::Experience => {
+            let type_base = match spec.skill_type {
+                SkillType::Tal | SkillType::Phy => 1.00,
+                SkillType::Kno | SkillType::PhyKno => 1.25,
+            };
+            let insight_factor = 1.0 - 0.02 * f64::from(ins - 10);
+            (type_base * insight_factor).clamp(0.65, 1.60)
+        }
+    };
+
+    let raw_sp = (base_level_sp as f64)
+        * difficulty_multiplier
+        * controller_multiplier
+        * aptitude_multiplier
+        * training_mode_multiplier;
+    let final_sp_cost = (raw_sp.round().max(3.0)) as usize;
+
+    SkillStepCostBreakdown {
+        skill_id: spec.id.to_string(),
+        target_level: n,
+        training_mode,
+        base_level_sp,
+        difficulty_rating,
+        difficulty_multiplier,
+        controller_c,
+        controller_multiplier,
+        aptitude_score,
+        aptitude_multiplier,
+        training_mode_multiplier,
+        final_sp_cost,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2844,5 +3290,91 @@ mod tests {
         // Trauma Surgery is [No Default] -> cannot be attempted at N=0
         let surg = resolve_skill_tree_default("trauma_orthopedic_general_surgery", &skills);
         assert!(!surg.can_attempt);
+    }
+
+    #[test]
+    fn test_skill_point_cost_formula_swimming_vs_helicopter() {
+        let avg_chars = CharacterCharacteristics::default();
+        let avg_apts = CharacterAptitudes::default();
+
+        // 1. Swimming & Diving (Difficulty 1, PHY) at human average (C=10, APT=0, FOC=10, INS=10)
+        let swim_n1_exp = compute_skill_step_sp_cost(
+            "swimming_diving",
+            1,
+            SkillTrainingMode::Experience,
+            &avg_chars,
+            &avg_apts,
+        );
+        assert_eq!(swim_n1_exp.difficulty_rating, 1);
+        assert_eq!(swim_n1_exp.final_sp_cost, 10);
+
+        let swim_n1_formal = compute_skill_step_sp_cost(
+            "swimming_diving",
+            1,
+            SkillTrainingMode::FormalTraining,
+            &avg_chars,
+            &avg_apts,
+        );
+        assert_eq!(swim_n1_formal.final_sp_cost, 9);
+
+        // 2. Piloting (Rotary-Wing / Helicopter & VTOL) (Difficulty 5, PHY/KNO) at human average
+        let heli_n1_formal = compute_skill_step_sp_cost(
+            "piloting_rotary_wing_helicopter",
+            1,
+            SkillTrainingMode::FormalTraining,
+            &avg_chars,
+            &avg_apts,
+        );
+        let heli_n2_formal = compute_skill_step_sp_cost(
+            "piloting_rotary_wing_helicopter",
+            2,
+            SkillTrainingMode::FormalTraining,
+            &avg_chars,
+            &avg_apts,
+        );
+        let heli_n3_formal = compute_skill_step_sp_cost(
+            "piloting_rotary_wing_helicopter",
+            3,
+            SkillTrainingMode::FormalTraining,
+            &avg_chars,
+            &avg_apts,
+        );
+        assert_eq!(heli_n1_formal.difficulty_rating, 5);
+        assert_eq!(heli_n1_formal.final_sp_cost, 21);
+        assert_eq!(heli_n2_formal.final_sp_cost, 43);
+        assert_eq!(heli_n3_formal.final_sp_cost, 64);
+
+        // Unassisted experience for Helicopter Piloting is markedly more expensive (31 / 63 / 94 SP)
+        let heli_n1_exp = compute_skill_step_sp_cost(
+            "piloting_rotary_wing_helicopter",
+            1,
+            SkillTrainingMode::Experience,
+            &avg_chars,
+            &avg_apts,
+        );
+        assert_eq!(heli_n1_exp.final_sp_cost, 31);
+
+        // 3. Gifted aviation student (KIN=15, DEX=14, FOC=14, INS=13, APT_KIN=+2)
+        let gifted_chars = CharacterCharacteristics {
+            kin: 15,
+            dex: 14,
+            foc: 14,
+            ins: 13,
+            ..Default::default()
+        };
+        let gifted_apts = CharacterAptitudes {
+            apt_kin: 2,
+            ..Default::default()
+        };
+
+        let heli_gifted_n1 = compute_skill_step_sp_cost(
+            "piloting_rotary_wing_helicopter",
+            1,
+            SkillTrainingMode::FormalTraining,
+            &gifted_chars,
+            &gifted_apts,
+        );
+        assert!(heli_gifted_n1.final_sp_cost < heli_n1_formal.final_sp_cost);
+        assert_eq!(heli_gifted_n1.final_sp_cost, 10);
     }
 }
