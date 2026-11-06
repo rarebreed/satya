@@ -471,7 +471,8 @@ impl PyContestedCascadeTaskParams {
         gm_pairs: Vec<(i32, i32)>,
     ) -> PyContestedCascadeRollOutcome {
         PyContestedCascadeRollOutcome::from(
-            self.inner.evaluate_contested_pairs(&player_pairs, &gm_pairs),
+            self.inner
+                .evaluate_contested_pairs(&player_pairs, &gm_pairs),
         )
     }
 }
@@ -1678,7 +1679,7 @@ pub fn audit_canonical_lifepath_character(
         other => {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "unknown lifepath preset '{other}'; expected 'mateo_vance' or 'priya_nair'"
-            )))
+            )));
         }
     };
     let validation = profile.audit_skill_unlock(skill_id, target_level);
@@ -1711,7 +1712,7 @@ pub fn evaluate_psyche_friction_check(
         other => {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "unknown Psyche trait '{other}'; expected OPN, SLF, BLG, AGG, EGO, or CNF"
-            )))
+            )));
         }
     };
     let pole = if violates_high_pole {
@@ -1795,7 +1796,7 @@ pub fn resolve_canonical_armor_impact(
         other => {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "unknown damage_type '{other}'; expected edged, icepick, ballistic, or blunt"
-            )))
+            )));
         }
     };
     let out = satya_engine::resolve_armor_impact(
@@ -1889,10 +1890,7 @@ pub fn evaluate_health_fatigue_and_bleed(
         fat.is_unconscious || asph.is_unconscious || bleed.immediate_unconsciousness_and_coma,
     )?;
     d.set_item("remaining_blood_units", bleed.remaining_blood_units)?;
-    d.set_item(
-        "hypovolemic_shock_added",
-        bleed.added_wound_shock_index,
-    )?;
+    d.set_item("hypovolemic_shock_added", bleed.added_wound_shock_index)?;
     Ok(d.unbind())
 }
 
@@ -2027,11 +2025,12 @@ mod tests {
         assert_eq!(sarah_contested.tn_gm(), 17);
         let c_odds = sarah_contested.exact_contested_odds();
         assert!(c_odds.prob_total_win > 0.45);
-        let c_roll = sarah_contested
-            .evaluate_contested_pairs(vec![(11, 9), (7, 6), (12, 10)], vec![(9, 9)]);
+        let c_roll =
+            sarah_contested.evaluate_contested_pairs(vec![(11, 9), (7, 6), (12, 10)], vec![(9, 9)]);
         assert_eq!(c_roll.contested_kind, "CLEAN_SUCCESS");
 
-        let gate_res = resolve_task_gate_and_tools("class_b", 0, 3, 4, "situational", "improvised", 1);
+        let gate_res =
+            resolve_task_gate_and_tools("class_b", 0, 3, 4, "situational", "improvised", 1);
         assert!(gate_res.allowed);
         assert_eq!(gate_res.effective_skill_n, 2);
         assert_eq!(gate_res.tool_delta_mod, 4);

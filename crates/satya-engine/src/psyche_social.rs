@@ -276,26 +276,17 @@ pub fn evaluate_psyche_friction_roll(
     let roll = contest.evaluate_contested_pairs(player_pairs, &[gm_pair]);
     let (resolution_kind, delta_int_penalty_gained, hesitation_ticks, drift_marks_gained) =
         match roll.contested_kind {
-            ContestedOutcomeKind::CleanSuccess | ContestedOutcomeKind::ExtraordinarySuccess => (
-                PsycheFrictionResolutionKind::CleanOverride,
-                0,
-                0,
-                1,
-            ),
+            ContestedOutcomeKind::CleanSuccess | ContestedOutcomeKind::ExtraordinarySuccess => {
+                (PsycheFrictionResolutionKind::CleanOverride, 0, 0, 1)
+            }
             ContestedOutcomeKind::GrazingTieSuccess
             | ContestedOutcomeKind::LuckyBreakSuccess
-            | ContestedOutcomeKind::SuccessWithFloorBreach => (
-                PsycheFrictionResolutionKind::StrainedOverride,
-                2,
-                0,
-                1,
-            ),
-            ContestedOutcomeKind::CleanFailure | ContestedOutcomeKind::BotchFailure => (
-                PsycheFrictionResolutionKind::BalkOrFreeze,
-                4,
-                6,
-                0,
-            ),
+            | ContestedOutcomeKind::SuccessWithFloorBreach => {
+                (PsycheFrictionResolutionKind::StrainedOverride, 2, 0, 1)
+            }
+            ContestedOutcomeKind::CleanFailure | ContestedOutcomeKind::BotchFailure => {
+                (PsycheFrictionResolutionKind::BalkOrFreeze, 4, 6, 0)
+            }
         };
 
     PsycheFrictionOutcome {
@@ -897,10 +888,7 @@ pub struct BattlefieldMoraleSituation {
 }
 
 /// Computes the total Circumstantial Morale Penalty $\Delta_{\text{morale}}$ from `§3.4`.
-pub fn compute_battlefield_morale_delta(
-    situation: &BattlefieldMoraleSituation,
-    cnf: i32,
-) -> i32 {
+pub fn compute_battlefield_morale_delta(situation: &BattlefieldMoraleSituation, cnf: i32) -> i32 {
     let mut delta = 0;
 
     if situation.ally_casualty_ratio >= 0.75 {
@@ -1175,12 +1163,7 @@ pub fn compute_single_vector_psyche_modifier(
                     true,
                 )
             } else if profile.opn <= 7 {
-                (
-                    10 - profile.opn,
-                    None,
-                    Some(PsycheTraitId::Openness),
-                    false,
-                )
+                (10 - profile.opn, None, Some(PsycheTraitId::Openness), false)
             } else {
                 (0, None, None, false)
             }
@@ -1189,12 +1172,7 @@ pub fn compute_single_vector_psyche_modifier(
             asks_to_betray_group,
         } => {
             if asks_to_betray_group && profile.blg >= 13 {
-                (
-                    profile.blg - 10,
-                    None,
-                    Some(PsycheTraitId::Belonging),
-                    true,
-                )
+                (profile.blg - 10, None, Some(PsycheTraitId::Belonging), true)
             } else if !asks_to_betray_group && profile.blg >= 13 {
                 (
                     -(profile.blg - 10),

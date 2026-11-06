@@ -31,8 +31,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::dice_probabilities::{
-    ContestedCascadeRollOutcome, ContestedCascadeTaskParams, ContestedOutcomeKind,
-    ContestedTieRule,
+    ContestedCascadeRollOutcome, ContestedCascadeTaskParams, ContestedOutcomeKind, ContestedTieRule,
 };
 
 // ============================================================================
@@ -828,9 +827,7 @@ pub fn evaluate_wound_shock_save(
         ContestedOutcomeKind::ExtraordinarySuccess => {
             ((shock - 1).max(0), true, 0, false, false, false)
         }
-        ContestedOutcomeKind::CleanSuccess
-            if contested_roll.net_signed_margin >= 2 =>
-        {
+        ContestedOutcomeKind::CleanSuccess if contested_roll.net_signed_margin >= 2 => {
             ((shock - 1).max(0), true, 0, false, false, false)
         }
         ContestedOutcomeKind::CleanSuccess
@@ -1838,19 +1835,27 @@ pub fn evaluate_dehydration(
     extra_sweat_deficit_liters: f64,
 ) -> DehydrationEvaluation {
     let req = env.daily_water_requirement_liters();
-    let missed = (req - water_consumed_liters.max(0.0)).max(0.0) + extra_sweat_deficit_liters.max(0.0);
+    let missed =
+        (req - water_consumed_liters.max(0.0)).max(0.0) + extra_sweat_deficit_liters.max(0.0);
     let stages_by_pct = ((missed / (0.25 * req)) + 1e-9).floor() as i32;
     let stages_by_liters = ((missed / 2.0) + 1e-9).floor() as i32;
     let stage_num = stages_by_pct.max(stages_by_liters).clamp(0, 4);
 
-    let (stage, delta_int, fatigue_level_floor, fit_penalty, foc_penalty, spd_hlt_ana_penalty, is_comatose) =
-        match stage_num {
-            0 => (DehydrationStage::Stage0Euhydrated, 0, 0, 0, 0, 0, false),
-            1 => (DehydrationStage::Stage1Thirsty, 2, 1, 1, 1, 0, false),
-            2 => (DehydrationStage::Stage2Parched, 4, 2, 3, 0, 2, false),
-            3 => (DehydrationStage::Stage3Severe, 8, 4, 6, 6, 6, false),
-            _ => (DehydrationStage::Stage4Lethal, 10, 5, 10, 10, 10, true),
-        };
+    let (
+        stage,
+        delta_int,
+        fatigue_level_floor,
+        fit_penalty,
+        foc_penalty,
+        spd_hlt_ana_penalty,
+        is_comatose,
+    ) = match stage_num {
+        0 => (DehydrationStage::Stage0Euhydrated, 0, 0, 0, 0, 0, false),
+        1 => (DehydrationStage::Stage1Thirsty, 2, 1, 1, 1, 0, false),
+        2 => (DehydrationStage::Stage2Parched, 4, 2, 3, 0, 2, false),
+        3 => (DehydrationStage::Stage3Severe, 8, 4, 6, 6, 6, false),
+        _ => (DehydrationStage::Stage4Lethal, 10, 5, 10, 10, 10, true),
+    };
 
     DehydrationEvaluation {
         daily_requirement_liters: req,
@@ -2269,7 +2274,14 @@ pub fn evaluate_radiation_exposure(
 ) -> (RadiationExposureTier, i32, bool, i32, bool, bool) {
     let sv = cumulative_sieverts_sv.max(0.0);
     if sv < 0.5 {
-        (RadiationExposureTier::Subclinical, 0, false, 0, false, false)
+        (
+            RadiationExposureTier::Subclinical,
+            0,
+            false,
+            0,
+            false,
+            false,
+        )
     } else if sv <= 1.5 {
         (RadiationExposureTier::MildArs, 2, false, 1, true, false)
     } else if sv <= 4.0 {
@@ -2377,13 +2389,13 @@ mod tests {
         assert_eq!(new_tier, StructuralWoundTier::Tier3SevereFracture);
 
         // Grade 4 Arterial Severance loses 1.0 Unit per 4 ticks -> 5.0 Units in 20 ticks (Class IV Coma!)
-        let bleed = evaluate_blood_loss_progression(
-            0.0,
-            &[HemorrhageGrade::Grade4ArterialSeverance],
-            20,
-        );
+        let bleed =
+            evaluate_blood_loss_progression(0.0, &[HemorrhageGrade::Grade4ArterialSeverance], 20);
         assert!((bleed.total_units_lost - 5.0).abs() < 1e-6);
-        assert_eq!(bleed.hypovolemic_class, HypovolemicShockClass::ClassIVLethalComa);
+        assert_eq!(
+            bleed.hypovolemic_class,
+            HypovolemicShockClass::ClassIVLethalComa
+        );
         assert!(bleed.immediate_unconsciousness_and_coma);
         assert_eq!(bleed.ticks_until_cardiac_arrest, Some(240));
 
@@ -2417,12 +2429,8 @@ mod tests {
         assert!((sp18.v_sprint_m_per_sec - 10.30).abs() < 1e-6);
 
         // Bounding Run (65%): +4 Recoil, caps ranged Control at floor(C_max / 2)
-        let bound = evaluate_combat_movement_gait(
-            CombatMovementGait::BoundingRunHustle,
-            10,
-            1.75,
-            11,
-        );
+        let bound =
+            evaluate_combat_movement_gait(CombatMovementGait::BoundingRunHustle, 10, 1.75, 11);
         assert_eq!(bound.ranged_recoil_adder, 4);
         assert_eq!(bound.effective_ranged_control_cap, 5);
         assert_eq!(bound.exertion_marks_per_20_ticks, 1);

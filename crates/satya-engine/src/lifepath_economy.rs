@@ -15,11 +15,11 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::characteristics::{
-    compute_academic_study_controller, AptitudeCode, CharacterAptitudes, CharacterCharacteristics,
+    AptitudeCode, CharacterAptitudes, CharacterCharacteristics, compute_academic_study_controller,
 };
 use crate::skills_trees::{
-    initialize_universal_talents, validate_skill_advancement, SkillAccessTier,
-    SkillAdvancementValidation,
+    SkillAccessTier, SkillAdvancementValidation, initialize_universal_talents,
+    validate_skill_advancement,
 };
 
 /// Socioeconomic Class from Stage 1 (`Ages 0–5`) (§1.1).
@@ -247,9 +247,10 @@ impl CareerTermTrack {
     #[must_use]
     pub const fn granted_access_tags(self) -> &'static [SkillAccessTier] {
         match self {
-            Self::UniversityUndergraduateStem | Self::MedicalSchoolAndResidency => {
-                &[SkillAccessTier::Academic, SkillAccessTier::VocationalLicensed]
-            }
+            Self::UniversityUndergraduateStem | Self::MedicalSchoolAndResidency => &[
+                SkillAccessTier::Academic,
+                SkillAccessTier::VocationalLicensed,
+            ],
             Self::MilitaryCombatArmsSpecOps
             | Self::LawEnforcementSwatDetective
             | Self::IntelligenceServiceClandestine => &[
@@ -745,19 +746,18 @@ mod tests {
 
         // Mateo has Trigonometry N=2 and Fully Automatic Weapons N=2
         assert_eq!(mateo.skills.get("trigonometry"), Some(&2));
-        assert_eq!(
-            mateo.skills.get("fully_automatic_burst_weapons"),
-            Some(&2)
-        );
+        assert_eq!(mateo.skills.get("fully_automatic_burst_weapons"), Some(&2));
         assert!(mateo.academic_tree_frozen);
 
         // Despite ANA 13 and APT-QNT +3, Mateo is LOCKED out of Calculus & Linear Algebra because of Academic Tree Freeze
         let calc_audit = mateo.audit_skill_unlock("calculus_linear_algebra", 1);
         assert!(!calc_audit.is_valid);
-        assert!(calc_audit
-            .failures
-            .iter()
-            .any(|f| f.code == "MISSING_ACCESS_GATE"));
+        assert!(
+            calc_audit
+                .failures
+                .iter()
+                .any(|f| f.code == "MISSING_ACCESS_GATE")
+        );
     }
 
     #[test]
@@ -779,18 +779,24 @@ mod tests {
         // 3. PARENT_PREREQ_SHORTFALL (requires Pistols >= 2 OR Long Guns >= 2, Priya has N = 0 in both)
         let full_auto_audit = priya.audit_skill_unlock("fully_automatic_burst_weapons", 1);
         assert!(!full_auto_audit.is_valid);
-        assert!(full_auto_audit
-            .failures
-            .iter()
-            .any(|f| f.code == "MISSING_ACCESS_GATE"));
-        assert!(full_auto_audit
-            .failures
-            .iter()
-            .any(|f| f.code == "MIN_CHARACTERISTIC_SHORTFALL"));
-        assert!(full_auto_audit
-            .failures
-            .iter()
-            .any(|f| f.code == "PARENT_PREREQ_SHORTFALL"));
+        assert!(
+            full_auto_audit
+                .failures
+                .iter()
+                .any(|f| f.code == "MISSING_ACCESS_GATE")
+        );
+        assert!(
+            full_auto_audit
+                .failures
+                .iter()
+                .any(|f| f.code == "MIN_CHARACTERISTIC_SHORTFALL")
+        );
+        assert!(
+            full_auto_audit
+                .failures
+                .iter()
+                .any(|f| f.code == "PARENT_PREREQ_SHORTFALL")
+        );
     }
 
     #[test]

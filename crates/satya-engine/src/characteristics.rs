@@ -156,13 +156,9 @@ impl CharacteristicCode {
             Self::SIG | Self::HEA | Self::TAC | Self::OLF | Self::TAS | Self::ITU => {
                 CharacteristicCategory::Sensory
             }
-            Self::EGO
-            | Self::SLF
-            | Self::OPN
-            | Self::BLG
-            | Self::EXT
-            | Self::CNF
-            | Self::AGG => CharacteristicCategory::Psyche,
+            Self::EGO | Self::SLF | Self::OPN | Self::BLG | Self::EXT | Self::CNF | Self::AGG => {
+                CharacteristicCategory::Psyche
+            }
         }
     }
 
@@ -512,11 +508,7 @@ pub fn compute_aptitude_training_time_multiplier(aptitude: i32) -> f64 {
 /// of skills in that tree reduced by `1` point.
 #[must_use]
 pub const fn compute_aptitude_min_c_relief(aptitude: i32) -> i32 {
-    if aptitude >= 2 {
-        1
-    } else {
-        0
-    }
+    if aptitude >= 2 { 1 } else { 0 }
 }
 
 /// Complete canonical 25+ Characteristic profile (`03-character/characteristics_and_aptitudes.md`).
@@ -728,11 +720,7 @@ impl CharacterCharacteristics {
 }
 
 const fn mem_or_ana(mem: i32, ana: i32) -> i32 {
-    if mem >= ana {
-        mem
-    } else {
-        ana
-    }
+    if mem >= ana { mem } else { ana }
 }
 
 /// Compute the Academic Study Controller $C_{\text{study}} = \lfloor(\text{DIS} + C_{\text{mental}}) / 2\rfloor + \text{APT}$ (§8, §9.1.1).

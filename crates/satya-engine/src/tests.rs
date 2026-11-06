@@ -2,9 +2,7 @@
 //! Task Resolution gates/tools/clocks, Tactical Pool "Envelope & Fill", and Rules Book catalog/search.
 
 use super::*;
-use satya_schema::{
-    OutcomeTier, Participant, SchemaRegistry, SessionMode, SessionRole, subjects,
-};
+use satya_schema::{OutcomeTier, Participant, SchemaRegistry, SessionMode, SessionRole, subjects};
 
 fn assert_close(a: f64, b: f64, tol: f64) {
     assert!(
@@ -571,8 +569,14 @@ fn test_composite_and_supporting_characteristic_formulas() {
     // Marcus: DEX 14, FOC 15 -> floor((14 + 15)/2) = 14
     assert_eq!(compute_composite_characteristic(14, 15), 14);
     // Supporting characteristic shortfall: Min DIS >= 13, character has DIS = 11 -> shortfall 2 -> +4 Delta_ext
-    assert_eq!(compute_supporting_characteristic_shortfall_penalty(11, 13), 4);
-    assert_eq!(compute_supporting_characteristic_shortfall_penalty(13, 13), 0);
+    assert_eq!(
+        compute_supporting_characteristic_shortfall_penalty(11, 13),
+        4
+    );
+    assert_eq!(
+        compute_supporting_characteristic_shortfall_penalty(13, 13),
+        0
+    );
 }
 
 #[test]
@@ -603,7 +607,10 @@ fn test_complementary_synergy_dual_skill_and_project_clocks() {
     let out = boosted.evaluate_contested_pairs(&[(11, 9), (6, 5), (14, 12)], &[(10, 8)]);
     assert_eq!(out.player_outcome.total_successes, 3);
     assert_eq!(out.gm_outcome.total_successes, 0);
-    assert_eq!(out.contested_kind, ContestedOutcomeKind::ExtraordinarySuccess);
+    assert_eq!(
+        out.contested_kind,
+        ContestedOutcomeKind::ExtraordinarySuccess
+    );
     assert!((out.contested_kind.duration_multiplier(out.net_successes) - 0.70).abs() < 1e-6);
 
     // Extended project clock
@@ -622,7 +629,10 @@ fn test_worked_examples_7_1_and_7_2_and_master_benchmarks() {
     let sarah_roll = sarah.evaluate_contested_pairs(&[(11, 9), (7, 6), (12, 10)], &[(9, 9)]);
     assert_eq!(sarah_roll.player_outcome.total_successes, 2);
     assert_eq!(sarah_roll.gm_outcome.total_successes, 1);
-    assert_eq!(sarah_roll.contested_kind, ContestedOutcomeKind::CleanSuccess);
+    assert_eq!(
+        sarah_roll.contested_kind,
+        ContestedOutcomeKind::CleanSuccess
+    );
 
     // §7.2 Marcus's Trauma Surgery (delta_under = 6 - 1 = 5; Floor breach on Pair 2: (3,3) - 5 = 1 < 2)
     let marcus = get_canonical_task_preset("marcus_surgery").to_contested_params();

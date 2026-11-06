@@ -320,10 +320,8 @@ async fn handle_ws_client(
                     Some("active_player_wins_ties") => ContestedTieRule::ActivePlayerWinsTies,
                     _ => ContestedTieRule::HybridSignedMargin,
                 };
-                let is_uncontested = matches!(
-                    gm_resistance_mode.as_deref(),
-                    Some("uncontested" | "none")
-                );
+                let is_uncontested =
+                    matches!(gm_resistance_mode.as_deref(), Some("uncontested" | "none"));
 
                 let mut contested_params = ContestedCascadeTaskParams::new_tiered_environment(
                     n_pairs,
@@ -372,12 +370,8 @@ async fn handle_ws_client(
                     session_mode,
                 ) {
                     let mech_ev = if is_uncontested {
-                        let mut params = CascadeTaskParams::new_k20(
-                            n_pairs,
-                            c_val,
-                            int_mod,
-                            tool_mod + ext_mod,
-                        );
+                        let mut params =
+                            CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, tool_mod + ext_mod);
                         params.carry_mode = contested_params.player.carry_mode;
                         params.botch_rule = contested_params.player.botch_rule;
                         params.delta_over = contested_params.player.delta_over;

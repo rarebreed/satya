@@ -18,8 +18,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::characteristics::{
-    compute_aptitude_min_c_relief, AptitudeCode, CharacterAptitudes, CharacterCharacteristics,
-    CharacteristicCode,
+    AptitudeCode, CharacterAptitudes, CharacterCharacteristics, CharacteristicCode,
+    compute_aptitude_min_c_relief,
 };
 use crate::task_resolution::ToolDependency;
 
@@ -517,7 +517,6 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         defaultable: false,
         aptitude_override: Some(AptitudeCode::AptQnt),
     },
-
     // =========================================================================
     // TREE 2: MECHANICAL, CRAFT & PILOTAGE
     // =========================================================================
@@ -818,7 +817,6 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         defaultable: false,
         aptitude_override: Some(AptitudeCode::AptMec),
     },
-
     // =========================================================================
     // TREE 3: BIOLOGY, CHEMISTRY & MEDICINE
     // =========================================================================
@@ -998,10 +996,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         secondary_char: Some(CharacteristicCode::INS),
         min_chars: &[(CharacteristicCode::ANA, 12), (CharacteristicCode::MEM, 12)],
         parent_mode: PrerequisiteMode::AllOf,
-        parent_prereqs: &[
-            ("anatomy_physiology", 3),
-            ("pharmacology_toxicology", 2),
-        ],
+        parent_prereqs: &[("anatomy_physiology", 3), ("pharmacology_toxicology", 2)],
         allowed_access: &[SkillAccessTier::Academic],
         tool_dependency: ToolDependency::Mandatory,
         defaultable: false,
@@ -1055,7 +1050,6 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         defaultable: false,
         aptitude_override: Some(AptitudeCode::AptBio),
     },
-
     // =========================================================================
     // TREE 4: LANGUAGE, HUMANITIES & SOCIAL INFLUENCE
     // =========================================================================
@@ -1274,7 +1268,10 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         secondary_char: Some(CharacteristicCode::MEM),
         min_chars: &[(CharacteristicCode::ANA, 11)],
         parent_mode: PrerequisiteMode::AllOf,
-        parent_prereqs: &[("reading_comprehension", 3), ("foreign_language_specific", 2)],
+        parent_prereqs: &[
+            ("reading_comprehension", 3),
+            ("foreign_language_specific", 2),
+        ],
         allowed_access: &[SkillAccessTier::Academic],
         tool_dependency: ToolDependency::None,
         defaultable: false,
@@ -1295,7 +1292,10 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         secondary_char: Some(CharacteristicCode::ANA),
         min_chars: &[(CharacteristicCode::INS, 10), (CharacteristicCode::ANA, 9)],
         parent_mode: PrerequisiteMode::AllOf,
-        parent_prereqs: &[("empathy_social_perception", 2), ("reading_comprehension", 2)],
+        parent_prereqs: &[
+            ("empathy_social_perception", 2),
+            ("reading_comprehension", 2),
+        ],
         allowed_access: &[SkillAccessTier::Academic],
         tool_dependency: ToolDependency::None,
         defaultable: false,
@@ -1410,16 +1410,12 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         secondary_char: Some(CharacteristicCode::ITU),
         min_chars: &[(CharacteristicCode::INS, 8)],
         parent_mode: PrerequisiteMode::AllOf,
-        parent_prereqs: &[
-            ("empathy_social_perception", 2),
-            ("deception_bluff", 1),
-        ],
+        parent_prereqs: &[("empathy_social_perception", 2), ("deception_bluff", 1)],
         allowed_access: &[SkillAccessTier::Illicit, SkillAccessTier::Universal],
         tool_dependency: ToolDependency::None,
         defaultable: true,
         aptitude_override: Some(AptitudeCode::AptSoc),
     },
-
     // =========================================================================
     // TREE 5: ATHLETICS, ACROBATICS & MELEE COMBAT
     // =========================================================================
@@ -1682,7 +1678,6 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         defaultable: true,
         aptitude_override: Some(AptitudeCode::AptKin),
     },
-
     // =========================================================================
     // TREE 6: MARKSMANSHIP, GUNNERY & TACTICAL SYSTEMS
     // =========================================================================
@@ -1839,7 +1834,10 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         secondary_char: Some(CharacteristicCode::SIG),
         min_chars: &[(CharacteristicCode::ANA, 10)],
         parent_mode: PrerequisiteMode::AllOf,
-        parent_prereqs: &[("trigonometry", 2), ("heavy_weapons_mounted_gunnery_atgms", 1)],
+        parent_prereqs: &[
+            ("trigonometry", 2),
+            ("heavy_weapons_mounted_gunnery_atgms", 1),
+        ],
         allowed_access: &[SkillAccessTier::Restricted],
         tool_dependency: ToolDependency::Mandatory,
         defaultable: false,
@@ -1886,7 +1884,6 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         defaultable: true,
         aptitude_override: Some(AptitudeCode::AptSoc),
     },
-
     // =========================================================================
     // TREE 7: PERCEPTION, STEALTH & SURVIVAL
     // =========================================================================
@@ -2112,7 +2109,6 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         defaultable: false,
         aptitude_override: Some(AptitudeCode::AptBio),
     },
-
     // =========================================================================
     // TREE 8: VISUAL, MUSICAL & CULINARY ARTS
     // =========================================================================
@@ -2195,10 +2191,7 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
         secondary_char: Some(CharacteristicCode::TAC),
         min_chars: &[(CharacteristicCode::DEX, 8), (CharacteristicCode::TAC, 8)],
         parent_mode: PrerequisiteMode::AllOf,
-        parent_prereqs: &[
-            ("sketching_doodling", 1),
-            ("manual_dexterity_tinkering", 1),
-        ],
+        parent_prereqs: &[("sketching_doodling", 1), ("manual_dexterity_tinkering", 1)],
         allowed_access: &[
             SkillAccessTier::Universal,
             SkillAccessTier::VocationalLicensed,
@@ -2518,9 +2511,12 @@ pub fn validate_skill_advancement(
                 }
             }
             PrerequisiteMode::AnyOf => {
-                let any_meets_min = spec.parent_prereqs.iter().any(|&(parent_id, min_parent_n)| {
-                    current_skills.get(parent_id).copied().unwrap_or(0) >= min_parent_n
-                });
+                let any_meets_min = spec
+                    .parent_prereqs
+                    .iter()
+                    .any(|&(parent_id, min_parent_n)| {
+                        current_skills.get(parent_id).copied().unwrap_or(0) >= min_parent_n
+                    });
                 if !any_meets_min {
                     failures.push(SkillValidationFailure {
                         code: "PARENT_PREREQ_SHORTFALL",
@@ -2535,11 +2531,7 @@ pub fn validate_skill_advancement(
                         .iter()
                         .filter_map(|&(parent_id, min_parent_n)| {
                             let n = current_skills.get(parent_id).copied().unwrap_or(0);
-                            if n >= min_parent_n {
-                                Some(n)
-                            } else {
-                                None
-                            }
+                            if n >= min_parent_n { Some(n) } else { None }
                         })
                         .max()
                         .unwrap_or(0);
@@ -2654,9 +2646,10 @@ pub fn resolve_skill_tree_default(
         if node.tree == spec.tree && node.id != spec.id {
             let sib_n = current_skills.get(node.id).copied().unwrap_or(0);
             if sib_n >= 1 {
-                let shares_parent = node.parent_prereqs.iter().any(|(p1, _)| {
-                    spec.parent_prereqs.iter().any(|(p2, _)| p1 == p2)
-                });
+                let shares_parent = node
+                    .parent_prereqs
+                    .iter()
+                    .any(|(p1, _)| spec.parent_prereqs.iter().any(|(p2, _)| p1 == p2));
                 if shares_parent {
                     return SkillDefaultResolution {
                         target_skill_id: spec.id.to_string(),
@@ -2759,10 +2752,12 @@ mod tests {
             false,
         );
         assert!(!ceil_res.is_valid);
-        assert!(ceil_res
-            .failures
-            .iter()
-            .any(|f| f.code == "FOUNDATION_CEILING_EXCEEDED"));
+        assert!(
+            ceil_res
+                .failures
+                .iter()
+                .any(|f| f.code == "FOUNDATION_CEILING_EXCEEDED")
+        );
     }
 
     #[test]

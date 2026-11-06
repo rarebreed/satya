@@ -756,6 +756,46 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                     <button
                                         type="button"
                                         class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaQuick3dDiceRoll('1d4')"
+                                        on:click=move |_| wasm_client::satya_quick_3d_dice_roll("1d4".to_string())
+                                    >
+                                        "1d4"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaQuick3dDiceRoll('2d6')"
+                                        on:click=move |_| wasm_client::satya_quick_3d_dice_roll("2d6".to_string())
+                                    >
+                                        "2d6"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaQuick3dDiceRoll('1d8')"
+                                        on:click=move |_| wasm_client::satya_quick_3d_dice_roll("1d8".to_string())
+                                    >
+                                        "1d8"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaQuick3dDiceRoll('1d10')"
+                                        on:click=move |_| wasm_client::satya_quick_3d_dice_roll("1d10".to_string())
+                                    >
+                                        "1d10"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaQuick3dDiceRoll('1d12')"
+                                        on:click=move |_| wasm_client::satya_quick_3d_dice_roll("1d12".to_string())
+                                    >
+                                        "1d12"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-secondary"
                                         onclick="window.satyaQuick3dDiceRoll('2d20')"
                                         on:click=move |_| wasm_client::satya_quick_3d_dice_roll("2d20".to_string())
                                     >
@@ -787,8 +827,73 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                     </button>
                                 </div>
                             </div>
+                            <div class="dice-material-toolbar" role="group" aria-label="3D Dice Material & Translucency Controls">
+                                <label class="inline-label" for="dice-material-preset">
+                                    <span>"Material Preset"</span>
+                                    <select
+                                        id="dice-material-preset"
+                                        onchange="window.satyaSelectDiceMaterialPreset()"
+                                        on:change=move |_| wasm_client::satya_select_dice_material_preset()
+                                    >
+                                        <option value="translucent_sapphire">"Translucent Sapphire"</option>
+                                        <option value="amber_resin">"Amber Resin"</option>
+                                        <option value="emerald_glass">"Emerald Glass"</option>
+                                        <option value="crimson_ruby">"Crimson Ruby"</option>
+                                        <option value="amethyst_void">"Amethyst Void"</option>
+                                        <option value="obsidian_opaque">"Obsidian Opaque"</option>
+                                    </select>
+                                </label>
+                                <label class="inline-label" for="dice-base-color">
+                                    <span>"Die Color"</span>
+                                    <input
+                                        type="color"
+                                        id="dice-base-color"
+                                        class="dice-color-input"
+                                        value="#0ea5e9"
+                                        oninput="window.satyaUpdateDiceMaterial()"
+                                        on:input=move |_| wasm_client::satya_update_dice_material()
+                                    />
+                                </label>
+                                <label class="inline-label" for="dice-ink-color">
+                                    <span>"Numeral Ink"</span>
+                                    <input
+                                        type="color"
+                                        id="dice-ink-color"
+                                        class="dice-color-input"
+                                        value="#f8fafc"
+                                        oninput="window.satyaUpdateDiceMaterial()"
+                                        on:input=move |_| wasm_client::satya_update_dice_material()
+                                    />
+                                </label>
+                                <label class="inline-label dice-slider-label" for="dice-opacity-slider">
+                                    <span>"Opacity / Translucency"</span>
+                                    <input
+                                        type="range"
+                                        id="dice-opacity-slider"
+                                        class="dice-opacity-slider"
+                                        min="15"
+                                        max="100"
+                                        step="1"
+                                        value="68"
+                                        aria-valuetext="68% opacity"
+                                        oninput="window.satyaUpdateDiceMaterial()"
+                                        on:input=move |_| wasm_client::satya_update_dice_material()
+                                    />
+                                    <span id="dice-opacity-readout" class="mono">"68%"</span>
+                                </label>
+                                <span id="wgpu-status-pill" class="pill pill-iggy">"WebGPU Ready · 2-Pass Translucent"</span>
+                            </div>
                             <div id="wgpu-dice-tray" class="wgpu-dice-tray notebook-dice-stage">
                                 <span class="roster-title">"3D Physics Dice Tray (`wgpu` Seed Sync):"</span>
+                                <div class="wgpu-dice-canvas-wrap">
+                                    <canvas
+                                        id="wgpu-dice-canvas"
+                                        class="wgpu-dice-canvas"
+                                        width="640"
+                                        height="320"
+                                        aria-label="3D WebGPU Polyhedral Dice Stage"
+                                    ></canvas>
+                                </div>
                                 <div id="wgpu-dice-readout" class="wgpu-dice-readout" aria-live="polite">
                                     "No 3D dice rolls spawned yet."
                                 </div>
@@ -2102,6 +2207,11 @@ mod tests {
         assert!(html.contains("tabletop-canvas-card"));
         assert!(html.contains("tabletop-map-viewport"));
         assert!(html.contains("wgpu-dice-tray"));
+        assert!(html.contains("wgpu-dice-canvas"));
+        assert!(html.contains("dice-material-preset"));
+        assert!(html.contains("dice-base-color"));
+        assert!(html.contains("dice-ink-color"));
+        assert!(html.contains("dice-opacity-slider"));
         assert!(html.contains("wgpu-dice-readout"));
         assert!(html.contains("btn-hamburger-menu"));
         assert!(html.contains("hamburger-menu-dropdown"));

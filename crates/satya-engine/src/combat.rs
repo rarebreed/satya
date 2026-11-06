@@ -14,9 +14,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::dice_probabilities::{CascadeOutcomeKind, CascadeRollOutcome};
-use crate::rules_book::{
-    TacticalPoolEnvelope, TacticalTriadEvaluation, evaluate_tactical_triad,
-};
+use crate::rules_book::{TacticalPoolEnvelope, TacticalTriadEvaluation, evaluate_tactical_triad};
 
 // ============================================================================
 // Tactical Triad Extensions (Decision Tick Modifier & Exertion Progression)
@@ -242,11 +240,7 @@ pub fn compute_reach_and_clinch_delta_ext(
     defender_has_keep_out_weapon: bool,
 ) -> i32 {
     if in_clinch {
-        if attacker_reach >= 3 {
-            4
-        } else {
-            0
-        }
+        if attacker_reach >= 3 { 4 } else { 0 }
     } else if attacker_reach < defender_reach && attacker_tempo <= defender_tempo {
         let base_penalty = 2 * (defender_reach - attacker_reach);
         if defender_has_keep_out_weapon {
@@ -337,9 +331,8 @@ pub fn resolve_contested_melee_exchange(
         + redirected_momentum;
     let defender_effective_root = defender_force as f64 + defender_mmf;
 
-    let kuzushi_throw_succeeded = is_throw_or_sweep
-        && strike_lands
-        && leveraged_throw_force >= defender_effective_root;
+    let kuzushi_throw_succeeded =
+        is_throw_or_sweep && strike_lands && leveraged_throw_force >= defender_effective_root;
     let prone_recovery_ticks = if kuzushi_throw_succeeded { 6 } else { 0 };
 
     MeleeExchangeResolution {
@@ -977,9 +970,9 @@ impl FirearmActionType {
         match self {
             Self::BoltAction => 1.00,
             Self::SingleAction | Self::StrikerFired | Self::PumpAction => 0.99,
-            Self::DirectImpingement
-            | Self::ShortStrokeGasPiston
-            | Self::LongStrokeGasPiston => 0.97,
+            Self::DirectImpingement | Self::ShortStrokeGasPiston | Self::LongStrokeGasPiston => {
+                0.97
+            }
             Self::DelayedBlowback | Self::OpenBoltOrAutoSwitch => 0.95,
             Self::RevolverCylinderGap => 0.92,
         }
@@ -1222,9 +1215,8 @@ pub fn evaluate_granular_firearm_ballistics(
 ) -> GranularBallisticsEvaluation {
     // 1. Barrel efficiency eta_bbl & Action gas seal eta_action -> Kinetic Energy E_k(d)
     let ratio = (spec.barrel_length_cm / spec.ammo.optimal_barrel_cm).max(0.1);
-    let barrel_efficiency_eta = (1.0 + 0.35 * ratio.ln())
-        .clamp(0.60, 1.15)
-        + spec.muzzle_device.energy_efficiency_delta();
+    let barrel_efficiency_eta =
+        (1.0 + 0.35 * ratio.ln()).clamp(0.60, 1.15) + spec.muzzle_device.energy_efficiency_delta();
     let action_efficiency_eta = spec.action_type.gas_efficiency_factor();
     let muzzle_energy_joules =
         spec.ammo.reference_muzzle_energy_j * barrel_efficiency_eta * action_efficiency_eta;
@@ -1281,8 +1273,7 @@ pub fn evaluate_granular_firearm_ballistics(
     .max(1);
 
     // 6. Recoil Rating (R_wpn) from bullet/powder impulse, weapon mass, CoG, and muzzle device
-    let impulse_num =
-        0.025 * spec.ammo.bullet_mass_grains + 0.14 * spec.ammo.powder_charge_grains;
+    let impulse_num = 0.025 * spec.ammo.bullet_mass_grains + 0.14 * spec.ammo.powder_charge_grains;
     let weight_sqrt = spec.loaded_weight_kg.max(0.3).sqrt();
     let base_recoil_r = ((impulse_num / weight_sqrt).round() as i32
         + spec.center_of_gravity.recoil_mod()
@@ -1290,9 +1281,12 @@ pub fn evaluate_granular_firearm_ballistics(
     .max(1);
 
     // 7. Mechanical Reliability (Rel) = Action + Feed - round(Tolerance) + Mfg Quality + Ammo Rel
-    let ammo_rel_mod = if spec.ammo.ammo_quality_q < -1.0 { -1 } else { 0 };
-    let reliability_rel = (spec.action_type.reliability_mod()
-        + spec.feed_type.reliability_mod()
+    let ammo_rel_mod = if spec.ammo.ammo_quality_q < -1.0 {
+        -1
+    } else {
+        0
+    };
+    let reliability_rel = (spec.action_type.reliability_mod() + spec.feed_type.reliability_mod()
         - (spec.tolerance_tau.round() as i32)
         + spec.manufacturing_quality_q
         + ammo_rel_mod)
@@ -1583,22 +1577,15 @@ mod tests {
 
         // AP Carbine round (Base Pen 4, Raw Impact 9, 2 Net Successes -> Effective Pen = 4 + 1 = 5 > PR_Ballistic 4)
         // Overmatches Kevlar! Inflicts 9 - 4 = 5 penetrating trauma + bleed + 1 PR degradation.
-        let overmatched =
-            resolve_armor_impact(kevlar, WeaponDamageType::Ballistic, 9, 4, 2, false);
+        let overmatched = resolve_armor_impact(kevlar, WeaponDamageType::Ballistic, 9, 4, 2, false);
         assert!(overmatched.penetrated);
         assert!(overmatched.causes_bleed);
         assert_eq!(overmatched.penetrating_trauma, 5);
         assert_eq!(overmatched.armor_pr_degradation, 1);
 
         // Icepick thrust against Soft Kevlar uses pr_icepick_flechette = 1!
-        let icepick = resolve_armor_impact(
-            kevlar,
-            WeaponDamageType::IcepickOrFlechette,
-            5,
-            1,
-            2,
-            false,
-        );
+        let icepick =
+            resolve_armor_impact(kevlar, WeaponDamageType::IcepickOrFlechette, 5, 1, 2, false);
         assert_eq!(icepick.active_armor_pr, 1);
         assert_eq!(icepick.effective_pen, 2);
         assert!(icepick.penetrated);
