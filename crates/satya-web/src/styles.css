@@ -1876,3 +1876,290 @@ table.metrics-table th {
     line-clamp: 3;
     overflow: clip;
 }
+
+/* ============================================================================
+ * Satya Character Creation Wizard Tab (`#notebook-pane-wizard`)
+ * ============================================================================ */
+
+.wizard-stage-container {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    flex: 1 1 0;
+    min-height: 440px;
+    max-height: 680px;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.wiz-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-inline-size: 0;
+}
+
+.wiz-progress-nav {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px;
+}
+
+.wiz-step-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+    gap: 6px;
+}
+
+.wiz-step-btn {
+    width: 100%;
+    background: var(--bg-0);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.wiz-step-btn:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.wiz-step-btn.completed {
+    border-color: rgba(16, 185, 129, 0.45);
+    color: #34d399;
+}
+
+.wiz-step-btn.active {
+    background: rgba(56, 189, 248, 0.16);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.wiz-step-btn:focus-visible,
+.wiz-radio-card input:focus-visible,
+.wiz-char-assign-card select:focus-visible,
+.wiz-char-assign-card input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.wiz-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.wiz-fieldset {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-inline-size: 0;
+}
+
+.wiz-legend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+    padding: 0 4px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.wiz-method-radios {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 8px;
+}
+
+.wiz-radio-card {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 9px 11px;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.wiz-radio-card:hover {
+    border-color: var(--accent);
+}
+
+.wiz-radio-card input[type="radio"] {
+    accent-color: var(--accent);
+    margin-top: 3px;
+    inline-size: auto;
+}
+
+.wiz-pool-readout {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.wiz-pool-empty {
+    background: var(--bg-0);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 9px 11px;
+    font-size: 0.77rem;
+    color: var(--text-muted);
+}
+
+.wiz-raw-rolls-row,
+.wiz-kept-slots-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.wiz-roll-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-2);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-size: 0.74rem;
+    color: var(--text-primary);
+}
+
+.wiz-roll-chip.dropped {
+    opacity: 0.6;
+    border-color: rgba(244, 63, 94, 0.45);
+    background: rgba(244, 63, 94, 0.08);
+}
+
+.wiz-drop-tag {
+    color: var(--rose);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.wiz-char-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+    gap: 8px;
+}
+
+.wiz-char-assign-card {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 9px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-inline-size: 0;
+}
+
+.wiz-char-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+}
+
+.wiz-char-code {
+    display: inline-block;
+    background: var(--bg-2);
+    color: var(--accent);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: monospace;
+    font-size: 0.73rem;
+    font-weight: 700;
+    margin-right: 5px;
+}
+
+.wiz-char-name {
+    font-size: 0.81rem;
+    color: #f8fafc;
+}
+
+.wiz-psyche-slider-row {
+    display: grid;
+    grid-template-columns: 1fr 68px;
+    gap: 8px;
+    align-items: end;
+}
+
+.wiz-psyche-slider-row input[type="range"] {
+    accent-color: var(--accent);
+    width: 100%;
+    cursor: pointer;
+}
+
+.wiz-psyche-pole-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.wiz-footer-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+}
+
+.wiz-lifepath-log {
+    margin: 6px 0 0 18px;
+    padding: 0;
+    font-size: 0.76rem;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.wiz-skill-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: auto;
+    padding-top: 4px;
+}
+
+.pill-danger {
+    background: rgba(244, 63, 94, 0.16);
+    color: #fda4af;
+    border: 1px solid rgba(244, 63, 94, 0.45);
+}

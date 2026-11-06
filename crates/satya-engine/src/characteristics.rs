@@ -156,13 +156,9 @@ impl CharacteristicCode {
             Self::SIG | Self::HEA | Self::TAC | Self::OLF | Self::TAS | Self::ITU => {
                 CharacteristicCategory::Sensory
             }
-            Self::EGO
-            | Self::SLF
-            | Self::OPN
-            | Self::BLG
-            | Self::EXT
-            | Self::CNF
-            | Self::AGG => CharacteristicCategory::Psyche,
+            Self::EGO | Self::SLF | Self::OPN | Self::BLG | Self::EXT | Self::CNF | Self::AGG => {
+                CharacteristicCategory::Psyche
+            }
         }
     }
 
@@ -512,11 +508,7 @@ pub fn compute_aptitude_training_time_multiplier(aptitude: i32) -> f64 {
 /// of skills in that tree reduced by `1` point.
 #[must_use]
 pub const fn compute_aptitude_min_c_relief(aptitude: i32) -> i32 {
-    if aptitude >= 2 {
-        1
-    } else {
-        0
-    }
+    if aptitude >= 2 { 1 } else { 0 }
 }
 
 /// Complete canonical 25+ Characteristic profile (`03-character/characteristics_and_aptitudes.md`).
@@ -728,11 +720,7 @@ impl CharacterCharacteristics {
 }
 
 const fn mem_or_ana(mem: i32, ana: i32) -> i32 {
-    if mem >= ana {
-        mem
-    } else {
-        ana
-    }
+    if mem >= ana { mem } else { ana }
 }
 
 /// Compute the Academic Study Controller $C_{\text{study}} = \lfloor(\text{DIS} + C_{\text{mental}}) / 2\rfloor + \text{APT}$ (§8, §9.1.1).
@@ -787,6 +775,395 @@ pub struct DerivedCharacteristics {
     pub cmp_social_composure_threshold: i32,
     /// $\lfloor(\text{DIS} + \max(\text{MEM}, \text{ANA})) / 2\rfloor$ (before specific domain aptitude)
     pub base_c_study: i32,
+}
+
+impl CharacteristicCode {
+    /// The 6 non-dimensional Physical characteristics (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`).
+    pub const PHYSICAL_SCALED: [Self; 6] = [
+        Self::SPD,
+        Self::FOR,
+        Self::DEX,
+        Self::KIN,
+        Self::HLT,
+        Self::FIT,
+    ];
+
+    /// The 6 Mental characteristics (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`).
+    pub const MENTAL_ALL: [Self; 6] = [
+        Self::MEM,
+        Self::ANA,
+        Self::INS,
+        Self::CRE,
+        Self::DIS,
+        Self::FOC,
+    ];
+
+    /// The 6 Sensory characteristics (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`).
+    pub const SENSORY_ALL: [Self; 6] = [
+        Self::SIG,
+        Self::HEA,
+        Self::TAC,
+        Self::OLF,
+        Self::TAS,
+        Self::ITU,
+    ];
+
+    /// The 3 Social characteristics (`COM`, `PRE`, `ELO`).
+    pub const SOCIAL_ALL: [Self; 3] = [Self::COM, Self::PRE, Self::ELO];
+
+    /// The 7 Psyche characteristics (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`).
+    pub const PSYCHE_ALL: [Self; 7] = [
+        Self::EGO,
+        Self::SLF,
+        Self::OPN,
+        Self::BLG,
+        Self::EXT,
+        Self::CNF,
+        Self::AGG,
+    ];
+}
+
+impl AptitudeCode {
+    /// All 9 canonical Domain Aptitudes in order.
+    pub const ALL: [Self; 9] = [
+        Self::AptQnt,
+        Self::AptMec,
+        Self::AptCmp,
+        Self::AptBio,
+        Self::AptLng,
+        Self::AptKin,
+        Self::AptFin,
+        Self::AptAud,
+        Self::AptSoc,
+    ];
+}
+
+impl CharacterCharacteristics {
+    /// Set a `1–20` integer score for a characteristic code.
+    pub fn set_scale(&mut self, code: CharacteristicCode, value: i32) {
+        let clamped = value.clamp(1, 20);
+        match code {
+            CharacteristicCode::SPD => self.spd = clamped,
+            CharacteristicCode::FOR => self.for_stat = clamped,
+            CharacteristicCode::DEX => self.dex = clamped,
+            CharacteristicCode::KIN => self.kin = clamped,
+            CharacteristicCode::HLT => self.hlt = clamped,
+            CharacteristicCode::FIT => self.fit = clamped,
+            CharacteristicCode::MAS => self.mas_kg = 70.0 + f64::from(clamped - 10) * 7.0,
+            CharacteristicCode::HGT => self.hgt_m = 1.75 + f64::from(clamped - 10) * 0.05,
+            CharacteristicCode::MEM => self.mem = clamped,
+            CharacteristicCode::ANA => self.ana = clamped,
+            CharacteristicCode::INS => self.ins = clamped,
+            CharacteristicCode::CRE => self.cre = clamped,
+            CharacteristicCode::DIS => self.dis = clamped,
+            CharacteristicCode::FOC => self.foc = clamped,
+            CharacteristicCode::COM => self.com = clamped,
+            CharacteristicCode::PRE => self.pre = clamped,
+            CharacteristicCode::ELO => self.elo = clamped,
+            CharacteristicCode::SIG => self.sig = clamped,
+            CharacteristicCode::HEA => self.hea = clamped,
+            CharacteristicCode::TAC => self.tac = clamped,
+            CharacteristicCode::OLF => self.olf = clamped,
+            CharacteristicCode::TAS => self.tas = clamped,
+            CharacteristicCode::ITU => self.itu = clamped,
+            CharacteristicCode::EGO => self.ego = clamped,
+            CharacteristicCode::SLF => self.slf = clamped,
+            CharacteristicCode::OPN => self.opn = clamped,
+            CharacteristicCode::BLG => self.blg = clamped,
+            CharacteristicCode::EXT => self.ext = clamped,
+            CharacteristicCode::CNF => self.cnf = clamped,
+            CharacteristicCode::AGG => self.agg = clamped,
+        }
+    }
+}
+
+/// Dice generation method for rolling Characteristic groups in the Character Creation Wizard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CharacteristicRollMethod {
+    /// Method 1: Roll `2d4 + 3d5` and drop the lowest `d5` (`4–18`, skewed mean `~11.96`).
+    /// Rolled `6` times for Physical/Mental/Sensory and `3` times for Social.
+    Method1DropLowestD5,
+    /// Method 2: Roll `2d4 + 2d5` (`4–18`, mean `11.0`) `8` times and keep the `6` highest
+    /// for Physical/Mental/Sensory; roll `4` times and keep the `3` highest for Social.
+    Method2PoolKeepHighest,
+}
+
+/// Detailed breakdown of a single `4–18` characteristic roll under Method 1 or Method 2.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SingleCharacteristicRoll {
+    /// The two `d4` outcomes (`1..=4`).
+    pub d4_rolls: [i32; 2],
+    /// The `d5` outcomes (`3` dice for Method 1, `2` dice for Method 2, each `1..=5`).
+    pub d5_rolls: Vec<i32>,
+    /// Index in `d5_rolls` of the dropped lowest `d5` (only `Some` for Method 1).
+    pub dropped_d5_index: Option<usize>,
+    /// Resulting characteristic score (`4..=18`).
+    pub total: i32,
+    /// True if this roll was dropped as one of the lowest rolls in a Method 2 pool (`8 -> 6` or `4 -> 3`).
+    pub dropped_from_pool: bool,
+}
+
+/// Rolled characteristic pool for a domain group (`Physical`, `Mental`, `Sensory`, or `Social`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CharacteristicGroupPool {
+    /// Domain category (`Physical`, `Mental`, `Sensory`, or `Social`).
+    pub category: CharacteristicCategory,
+    /// Generation method used.
+    pub method: CharacteristicRollMethod,
+    /// All individual rolls generated (`6` or `3` for Method 1; `8` or `4` for Method 2).
+    pub raw_rolls: Vec<SingleCharacteristicRoll>,
+    /// Kept assignable values (`6` for Physical/Mental/Sensory; `3` for Social).
+    pub kept_values: Vec<i32>,
+}
+
+/// Roll a single `2d4 + 3d5` (dropping the lowest `d5`) using a caller-supplied die roller `roll_die(sides) -> 1..=sides`.
+pub fn roll_characteristic_method1<R>(roller: &mut R) -> SingleCharacteristicRoll
+where
+    R: FnMut(i32) -> i32,
+{
+    let d4_1 = roller(4).clamp(1, 4);
+    let d4_2 = roller(4).clamp(1, 4);
+    let d5_1 = roller(5).clamp(1, 5);
+    let d5_2 = roller(5).clamp(1, 5);
+    let d5_3 = roller(5).clamp(1, 5);
+    let d5_rolls = vec![d5_1, d5_2, d5_3];
+
+    let mut min_idx = 0usize;
+    for idx in 1..3 {
+        if d5_rolls[idx] < d5_rolls[min_idx] {
+            min_idx = idx;
+        }
+    }
+    let kept_d5_sum: i32 = d5_rolls
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &v)| if i == min_idx { None } else { Some(v) })
+        .sum();
+    let total = (d4_1 + d4_2 + kept_d5_sum).clamp(4, 18);
+
+    SingleCharacteristicRoll {
+        d4_rolls: [d4_1, d4_2],
+        d5_rolls,
+        dropped_d5_index: Some(min_idx),
+        total,
+        dropped_from_pool: false,
+    }
+}
+
+/// Roll a single `2d4 + 2d5` (`4..=18`, mean `11.0`) using a caller-supplied die roller `roll_die(sides) -> 1..=sides`.
+pub fn roll_characteristic_2d4_2d5<R>(roller: &mut R) -> SingleCharacteristicRoll
+where
+    R: FnMut(i32) -> i32,
+{
+    let d4_1 = roller(4).clamp(1, 4);
+    let d4_2 = roller(4).clamp(1, 4);
+    let d5_1 = roller(5).clamp(1, 5);
+    let d5_2 = roller(5).clamp(1, 5);
+    let total = (d4_1 + d4_2 + d5_1 + d5_2).clamp(4, 18);
+
+    SingleCharacteristicRoll {
+        d4_rolls: [d4_1, d4_2],
+        d5_rolls: vec![d5_1, d5_2],
+        dropped_d5_index: None,
+        total,
+        dropped_from_pool: false,
+    }
+}
+
+/// Roll a complete assignable pool for `category` (`Physical`, `Mental`, `Sensory`, or `Social`)
+/// using either `Method1DropLowestD5` or `Method2PoolKeepHighest`.
+pub fn roll_characteristic_group_pool<R>(
+    category: CharacteristicCategory,
+    method: CharacteristicRollMethod,
+    roller: &mut R,
+) -> CharacteristicGroupPool
+where
+    R: FnMut(i32) -> i32,
+{
+    let (num_rolls, num_keep) = match (category, method) {
+        (CharacteristicCategory::Social, CharacteristicRollMethod::Method1DropLowestD5) => (3, 3),
+        (CharacteristicCategory::Social, CharacteristicRollMethod::Method2PoolKeepHighest) => {
+            (4, 3)
+        }
+        (_, CharacteristicRollMethod::Method1DropLowestD5) => (6, 6),
+        (_, CharacteristicRollMethod::Method2PoolKeepHighest) => (8, 6),
+    };
+
+    let mut raw_rolls: Vec<SingleCharacteristicRoll> = (0..num_rolls)
+        .map(|_| match method {
+            CharacteristicRollMethod::Method1DropLowestD5 => roll_characteristic_method1(roller),
+            CharacteristicRollMethod::Method2PoolKeepHighest => roll_characteristic_2d4_2d5(roller),
+        })
+        .collect();
+
+    if num_rolls > num_keep {
+        let drop_count = num_rolls - num_keep;
+        let mut indices_by_val: Vec<(usize, i32)> = raw_rolls
+            .iter()
+            .enumerate()
+            .map(|(i, r)| (i, r.total))
+            .collect();
+        indices_by_val.sort_by_key(|&(_, val)| val);
+        for &(drop_idx, _) in indices_by_val.iter().take(drop_count) {
+            raw_rolls[drop_idx].dropped_from_pool = true;
+        }
+    }
+
+    let kept_values: Vec<i32> = raw_rolls
+        .iter()
+        .filter(|r| !r.dropped_from_pool)
+        .map(|r| r.total)
+        .collect();
+
+    CharacteristicGroupPool {
+        category,
+        method,
+        raw_rolls,
+        kept_values,
+    }
+}
+
+/// Correlated Height (`m`) and Build/Force-derived Mass (`kg`) roll outcome.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CorrelatedHeightMassRoll {
+    /// `2d4 + 2d5` roll (`4..=18`, mean `11`) governing stature around `1.72 m`.
+    pub height_roll: SingleCharacteristicRoll,
+    /// `2d4 + 2d5` roll (`4..=18`, mean `11`) governing somatic build/frame.
+    pub build_roll: SingleCharacteristicRoll,
+    /// Force (`FOR`) score (`1..=20`) contributing muscular mass to BMI.
+    pub for_stat: i32,
+    /// Resulting Height in meters (`1.51 m ..= 1.93 m` from roll, `±0.03 m` per point from `11`).
+    pub height_m: f64,
+    /// Resulting Body Mass Index (`kg / m²`) combining build roll and `FOR`.
+    pub bmi: f64,
+    /// Resulting Mass in kilograms (rounded to nearest `0.5 kg`).
+    pub mass_kg: f64,
+}
+
+/// Compute correlated Height (`m`) and Mass (`kg`) from a `height_roll_total` (`4..=18`),
+/// `build_roll_total` (`4..=18`), and `for_stat` (`1..=20`).
+#[must_use]
+pub fn compute_correlated_height_mass(
+    height_roll_total: i32,
+    build_roll_total: i32,
+    for_stat: i32,
+) -> (f64, f64, f64) {
+    let h_clamped = height_roll_total.clamp(4, 18);
+    let b_clamped = build_roll_total.clamp(4, 18);
+    let f_clamped = for_stat.clamp(1, 20);
+
+    let height_m = ((1.72 + f64::from(h_clamped - 11) * 0.03) * 100.0).round() / 100.0;
+    let bmi = 23.0 + 0.55 * f64::from(b_clamped - 11) + 0.45 * f64::from(f_clamped - 10);
+    let raw_mass = bmi * height_m * height_m;
+    let mass_kg = (raw_mass * 2.0).round() / 2.0;
+
+    (height_m, bmi, mass_kg)
+}
+
+/// Roll correlated Height (`m`) and Mass (`kg`) using `2d4 + 2d5` for stature and build, combined with `for_stat`.
+pub fn roll_correlated_height_mass<R>(for_stat: i32, roller: &mut R) -> CorrelatedHeightMassRoll
+where
+    R: FnMut(i32) -> i32,
+{
+    let height_roll = roll_characteristic_2d4_2d5(roller);
+    let build_roll = roll_characteristic_2d4_2d5(roller);
+    let (height_m, bmi, mass_kg) =
+        compute_correlated_height_mass(height_roll.total, build_roll.total, for_stat);
+
+    CorrelatedHeightMassRoll {
+        height_roll,
+        build_roll,
+        for_stat: for_stat.clamp(1, 20),
+        height_m,
+        bmi,
+        mass_kg,
+    }
+}
+
+/// Map a `3d6` sum (`3..=18`) to a canonical Satya Domain Aptitude score (`-2..=+3`).
+///
+/// Distribution on `3d6` (`216` permutations):
+/// - `3–4` $\to -2$ (`4/216 = 1.85%`)
+/// - `5–7` $\to -1$ (`31/216 = 14.35%`)
+/// - `8–13` $\to 0$ (`135/216 = 62.50%`)
+/// - `14–15` $\to +1$ (`35/216 = 16.20%`)
+/// - `16–17` $\to +2$ (`10/216 = 4.63%`)
+/// - `18` $\to +3$ (`1/216 = 0.46%` per roll, `~4.98%` chance of at least one `+3` across 11 rolls)
+#[must_use]
+pub const fn aptitude_from_3d6_sum(sum_3d6: i32) -> i32 {
+    match sum_3d6 {
+        ..=4 => -2,
+        5..=7 => -1,
+        8..=13 => 0,
+        14..=15 => 1,
+        16..=17 => 2,
+        18.. => 3,
+    }
+}
+
+/// Single `3d6` Domain Aptitude roll in the `11 rolls, drop 2 lowest` pool.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SingleAptitudeRoll {
+    /// The three `d6` outcomes (`1..=6`).
+    pub d6_rolls: [i32; 3],
+    /// Sum of the three `d6` (`3..=18`).
+    pub sum_3d6: i32,
+    /// Mapped Domain Aptitude modifier (`-2..=+3`).
+    pub aptitude_value: i32,
+    /// True if this roll is one of the 2 lowest rolls dropped from the 11-roll pool.
+    pub dropped_from_pool: bool,
+}
+
+/// Complete `11 x 3d6 (drop 2 lowest -> 9 kept)` Domain Aptitude pool.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AptitudePoolRoll {
+    /// All 11 `3d6` rolls in order.
+    pub raw_rolls: Vec<SingleAptitudeRoll>,
+    /// The 9 kept aptitude values (`-2..=+3`) after dropping the 2 lowest rolls.
+    pub kept_values: Vec<i32>,
+}
+
+/// Roll `3d6` 11 times and drop the 2 lowest rolls (by `sum_3d6`), leaving 9 Domain Aptitude scores (`-2..=+3`).
+pub fn roll_aptitude_pool_11_drop_2<R>(roller: &mut R) -> AptitudePoolRoll
+where
+    R: FnMut(i32) -> i32,
+{
+    let mut raw_rolls: Vec<SingleAptitudeRoll> = (0..11)
+        .map(|_| {
+            let d1 = roller(6).clamp(1, 6);
+            let d2 = roller(6).clamp(1, 6);
+            let d3 = roller(6).clamp(1, 6);
+            let sum_3d6 = d1 + d2 + d3;
+            SingleAptitudeRoll {
+                d6_rolls: [d1, d2, d3],
+                sum_3d6,
+                aptitude_value: aptitude_from_3d6_sum(sum_3d6),
+                dropped_from_pool: false,
+            }
+        })
+        .collect();
+
+    let mut indices_by_sum: Vec<(usize, i32)> = raw_rolls
+        .iter()
+        .enumerate()
+        .map(|(i, r)| (i, r.sum_3d6))
+        .collect();
+    indices_by_sum.sort_by_key(|&(_, sum)| sum);
+    for &(drop_idx, _) in indices_by_sum.iter().take(2) {
+        raw_rolls[drop_idx].dropped_from_pool = true;
+    }
+
+    let kept_values = raw_rolls
+        .iter()
+        .filter(|r| !r.dropped_from_pool)
+        .map(|r| r.aptitude_value)
+        .collect();
+
+    AptitudePoolRoll {
+        raw_rolls,
+        kept_values,
+    }
 }
 
 #[cfg(test)]
@@ -868,5 +1245,125 @@ mod tests {
         assert!((compute_aptitude_training_time_multiplier(-2) - 1.40).abs() < 1e-6);
         assert_eq!(compute_aptitude_min_c_relief(2), 1);
         assert_eq!(compute_aptitude_min_c_relief(1), 0);
+    }
+
+    #[test]
+    fn test_characteristic_roll_methods_height_mass_and_aptitude_pool() {
+        // Method 1: 2d4 + 3d5 drop lowest d5
+        // Sequence: d4=[3, 4], d5=[2, 5, 4] -> drops 2 (index 0), total = 3 + 4 + 5 + 4 = 16
+        let seq = [3, 4, 2, 5, 4];
+        let mut idx = 0usize;
+        let r1 = roll_characteristic_method1(&mut |_sides| {
+            let v = seq[idx % seq.len()];
+            idx += 1;
+            v
+        });
+        assert_eq!(r1.d4_rolls, [3, 4]);
+        assert_eq!(r1.d5_rolls, vec![2, 5, 4]);
+        assert_eq!(r1.dropped_d5_index, Some(0));
+        assert_eq!(r1.total, 16);
+
+        // Method 1 Physical Pool: 6 rolls, 6 kept
+        let mut counter = 1i32;
+        let phys_m1 = roll_characteristic_group_pool(
+            CharacteristicCategory::Physical,
+            CharacteristicRollMethod::Method1DropLowestD5,
+            &mut |sides| {
+                let v = ((counter - 1) % sides) + 1;
+                counter += 1;
+                v
+            },
+        );
+        assert_eq!(phys_m1.raw_rolls.len(), 6);
+        assert_eq!(phys_m1.kept_values.len(), 6);
+        assert!(phys_m1.kept_values.iter().all(|&v| (4..=18).contains(&v)));
+
+        // Method 1 Social Pool: 3 rolls, 3 kept
+        let soc_m1 = roll_characteristic_group_pool(
+            CharacteristicCategory::Social,
+            CharacteristicRollMethod::Method1DropLowestD5,
+            &mut |sides| {
+                let v = ((counter - 1) % sides) + 1;
+                counter += 1;
+                v
+            },
+        );
+        assert_eq!(soc_m1.raw_rolls.len(), 3);
+        assert_eq!(soc_m1.kept_values.len(), 3);
+
+        // Method 2 Physical Pool: 8 rolls of 2d4+2d5, drops 2 lowest -> keeps 6 highest
+        let phys_m2 = roll_characteristic_group_pool(
+            CharacteristicCategory::Physical,
+            CharacteristicRollMethod::Method2PoolKeepHighest,
+            &mut |sides| {
+                let v = ((counter - 1) % sides) + 1;
+                counter += 1;
+                v
+            },
+        );
+        assert_eq!(phys_m2.raw_rolls.len(), 8);
+        assert_eq!(
+            phys_m2
+                .raw_rolls
+                .iter()
+                .filter(|r| r.dropped_from_pool)
+                .count(),
+            2
+        );
+        assert_eq!(phys_m2.kept_values.len(), 6);
+
+        // Method 2 Social Pool: 4 rolls of 2d4+2d5, drops 1 lowest -> keeps 3 highest
+        let soc_m2 = roll_characteristic_group_pool(
+            CharacteristicCategory::Social,
+            CharacteristicRollMethod::Method2PoolKeepHighest,
+            &mut |sides| {
+                let v = ((counter - 1) % sides) + 1;
+                counter += 1;
+                v
+            },
+        );
+        assert_eq!(soc_m2.raw_rolls.len(), 4);
+        assert_eq!(
+            soc_m2
+                .raw_rolls
+                .iter()
+                .filter(|r| r.dropped_from_pool)
+                .count(),
+            1
+        );
+        assert_eq!(soc_m2.kept_values.len(), 3);
+
+        // Correlated Height & Mass around mean (roll 11 -> 1.72m, FOR 10 -> BMI 23.0 -> 68.0 kg)
+        let (hgt, bmi, mas) = compute_correlated_height_mass(11, 11, 10);
+        assert!((hgt - 1.72).abs() < 1e-6);
+        assert!((bmi - 23.0).abs() < 1e-6);
+        assert!((mas - 68.0).abs() < 1e-6);
+
+        // Aptitude 3d6 table & 11-roll drop-2-lowest pool
+        assert_eq!(aptitude_from_3d6_sum(3), -2);
+        assert_eq!(aptitude_from_3d6_sum(4), -2);
+        assert_eq!(aptitude_from_3d6_sum(6), -1);
+        assert_eq!(aptitude_from_3d6_sum(10), 0);
+        assert_eq!(aptitude_from_3d6_sum(13), 0);
+        assert_eq!(aptitude_from_3d6_sum(14), 1);
+        assert_eq!(aptitude_from_3d6_sum(17), 2);
+        assert_eq!(aptitude_from_3d6_sum(18), 3);
+
+        let apt_pool = roll_aptitude_pool_11_drop_2(&mut |sides| {
+            let v = ((counter - 1) % sides) + 1;
+            counter += 1;
+            v
+        });
+        assert_eq!(apt_pool.raw_rolls.len(), 11);
+        assert_eq!(
+            apt_pool
+                .raw_rolls
+                .iter()
+                .filter(|r| r.dropped_from_pool)
+                .count(),
+            2
+        );
+        assert_eq!(apt_pool.kept_values.len(), 9);
+        assert!(apt_pool.kept_values.iter().all(|&v| (-2..=3).contains(&v)));
     }
 }

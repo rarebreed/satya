@@ -1,0 +1,79 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.25.2",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "00f944fba9dee2ec1e44f9f2aa7edf0f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "5e76a95abb53481418ca0d688be8de1e",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "The option name '3. Task Resolution & Skill Check Mechanics (Part I: Foundations & Core Resolution)' is not a valid option. Please use one of the following options: ['1. Design Philosophy & Goals of Satya (Part I: Foundation & Mathematical Calibration)', '2. Mathematical Notation, Variables & Formula Glossary (Part I: Foundation & Mathematical Calibration)', '3. Probability & Mathematical Calibration (Part I: Foundation & Mathematical Calibration)', '4. Cascading 2d20 Engine & Task Resolution (Part II: Core Mechanics, Task Resolution & Action Economy)', '5. Action Economy, OODA Loop, Time Scales & Stealth (Part II: Core Mechanics, Task Resolution & Action Economy)', '6. Characteristics, Senses, Psyche & Aptitudes (Part III: Character Architecture, Skills, Lifepaths & Economy)', '7. Skill System & Hierarchical Skill Trees (Part III: Character Architecture, Skills, Lifepaths & Economy)', '8. Lifepath Character Creation, Socioeconomic Upkeep & Heat (Part III: Character Architecture, Skills, Lifepaths & Economy)', '9. Psyche, Morale & Social Combat (Part IV: Psyche, Morale & Social Combat)', '10. Combat Architecture, Tactical Triad & Pools (Part V: Combat Architecture, Close Quarters & Firefights)', '11. Melee Combat, Close-Quarters Tactics & The Tactical Triad (Part V: Combat Architecture, Close Quarters & Firefights)', '12. Ranged Combat, Suppression, Armor & Weapon Reliability (Part V: Combat Architecture, Close Quarters & Firefights)', '13. Health, Anatomical Trauma, Fatigue & Mental Conditions (Part VI: Health, Trauma, Movement, Vehicles & Survival)', '14. Movement, Encumbrance, Vehicles & Environmental Survival (Part VI: Health, Trauma, Movement, Vehicles & Survival)', 'All 9 Chapters (Complete Rules Compendium)']",
+          "traceback": null
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">\"C:\\Users\\hapah\\AppData\\Local\\Temp\\marimo_8696\\__marimo__cell_MJUe_.py\"</span>, line <span class=\"m\">12</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">chapter_dropdown</span> <span class=\"o\">=</span> <span class=\"n\">mo</span><span class=\"o\">.</span><span class=\"n\">ui</span><span class=\"o\">.</span><span class=\"n\">dropdown</span><span class=\"p\">(</span>\n<span class=\"w\">    </span>    <span class=\"n\">options</span><span class=\"o\">=</span><span class=\"n\">chapter_options</span><span class=\"p\">,</span>\n<span class=\"w\">    </span>    <span class=\"n\">value</span><span class=\"o\">=</span><span class=\"s2\">\"3. Task Resolution &amp; Skill Check Mechanics (Part I: Foundations &amp; Core Resolution)\"</span><span class=\"p\">,</span>\n<span class=\"w\">    </span>    <span class=\"n\">label</span><span class=\"o\">=</span><span class=\"s2\">\"Select Rules Chapter\"</span><span class=\"p\">,</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n  File <span class=\"nb\">\"C:\\Users\\hapah\\Projects\\satya\\.pixi\\envs\\default\\Lib\\site-packages\\marimo\\_plugins\\ui\\_impl\\input.py\"</span>, line <span class=\"m\">1097</span>, in <span class=\"n\">__init__</span>\n<span class=\"w\">    </span><span class=\"nb\">super</span><span class=\"p\">()</span><span class=\"o\">.</span><span class=\"fm\">__init__</span><span class=\"p\">(</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~~~~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"n\">component_name</span><span class=\"o\">=</span><span class=\"n\">dropdown</span><span class=\"o\">.</span><span class=\"n\">_name</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">9</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"n\">on_change</span><span class=\"o\">=</span><span class=\"n\">on_change</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">\"C:\\Users\\hapah\\Projects\\satya\\.pixi\\envs\\default\\Lib\\site-packages\\marimo\\_plugins\\ui\\_core\\ui_element.py\"</span>, line <span class=\"m\">167</span>, in <span class=\"n\">__init__</span>\n<span class=\"w\">    </span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_initialize</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_args</span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~~~~~~~~~~~~~^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"C:\\Users\\hapah\\Projects\\satya\\.pixi\\envs\\default\\Lib\\site-packages\\marimo\\_plugins\\ui\\_core\\ui_element.py\"</span>, line <span class=\"m\">274</span>, in <span class=\"n\">_initialize</span>\n<span class=\"w\">    </span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_value</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_initial_value</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_convert_value</span><span class=\"p\">(</span><span class=\"n\">initial_value</span><span class=\"p\">)</span>\n<span class=\"w\">                                        </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"C:\\Users\\hapah\\Projects\\satya\\.pixi\\envs\\default\\Lib\\site-packages\\marimo\\_plugins\\ui\\_impl\\input.py\"</span>, line <span class=\"m\">1123</span>, in <span class=\"n\">_convert_value</span>\n<span class=\"w\">    </span><span class=\"n\">_validate_option_name</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_selected_key</span><span class=\"p\">,</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">options</span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">\"C:\\Users\\hapah\\Projects\\satya\\.pixi\\envs\\default\\Lib\\site-packages\\marimo\\_plugins\\ui\\_impl\\input.py\"</span>, line <span class=\"m\">961</span>, in <span class=\"n\">_validate_option_name</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"ne\">ValueError</span><span class=\"p\">(</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">4</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"gr\">ValueError</span>: <span class=\"n\">The option name '3. Task Resolution &amp; Skill Check Mechanics (Part I: Foundations &amp; Core Resolution)' is not a valid option. Please use one of the following options: ['1. Design Philosophy &amp; Goals of Satya (Part I: Foundation &amp; Mathematical Calibration)', '2. Mathematical Notation, Variables &amp; Formula Glossary (Part I: Foundation &amp; Mathematical Calibration)', '3. Probability &amp; Mathematical Calibration (Part I: Foundation &amp; Mathematical Calibration)', '4. Cascading 2d20 Engine &amp; Task Resolution (Part II: Core Mechanics, Task Resolution &amp; Action Economy)', '5. Action Economy, OODA Loop, Time Scales &amp; Stealth (Part II: Core Mechanics, Task Resolution &amp; Action Economy)', '6. Characteristics, Senses, Psyche &amp; Aptitudes (Part III: Character Architecture, Skills, Lifepaths &amp; Economy)', '7. Skill System &amp; Hierarchical Skill Trees (Part III: Character Architecture, Skills, Lifepaths &amp; Economy)', '8. Lifepath Character Creation, Socioeconomic Upkeep &amp; Heat (Part III: Character Architecture, Skills, Lifepaths &amp; Economy)', '9. Psyche, Morale &amp; Social Combat (Part IV: Psyche, Morale &amp; Social Combat)', '10. Combat Architecture, Tactical Triad &amp; Pools (Part V: Combat Architecture, Close Quarters &amp; Firefights)', '11. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad (Part V: Combat Architecture, Close Quarters &amp; Firefights)', '12. Ranged Combat, Suppression, Armor &amp; Weapon Reliability (Part V: Combat Architecture, Close Quarters &amp; Firefights)', '13. Health, Anatomical Trauma, Fatigue &amp; Mental Conditions (Part VI: Health, Trauma, Movement, Vehicles &amp; Survival)', '14. Movement, Encumbrance, Vehicles &amp; Environmental Survival (Part VI: Health, Trauma, Movement, Vehicles &amp; Survival)', 'All 9 Chapters (Complete Rules Compendium)']</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "vblA",
+      "code_hash": "c98c6cf6a8b61525fcdf1948b119e9a8",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (ValueError): ",
+          "traceback": null
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "662b2ff7ae46f59a01878bdc49387691",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "3527ffb9b57e7ec500da862e7ecacaa4",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "05d9584069cfe030d81d5d119e46f6c9",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "3323efb68e7ee71a2c4087be3fd05ade",
+      "outputs": [],
+      "console": []
+    }
+  ]
+}

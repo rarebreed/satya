@@ -21,6 +21,7 @@ pub mod options;
 pub mod state;
 pub mod telemetry;
 pub mod webrtc;
+pub mod wizard;
 
 pub use auth_session::*;
 pub use chat_and_ttrpg::*;
@@ -31,6 +32,7 @@ pub use options::*;
 pub use state::*;
 pub use telemetry::*;
 pub use webrtc::*;
+pub use wizard::*;
 
 use crate::wasm_client::dom::{select_value, set_display, window};
 use crate::wasm_client::options::{sync_chat_options_for_mode, sync_role_options_for_mode};
@@ -298,6 +300,95 @@ pub fn register_window_bindings() {
     let c_rules_ex = Closure::<dyn Fn(String)>::new(satya_load_rules_example);
     bind("satyaLoadRulesExample", c_rules_ex.as_ref());
     c_rules_ex.forget();
+
+    let c_wiz_step = Closure::<dyn Fn(u8)>::new(satya_wizard_set_step);
+    bind("satyaWizardSetStep", c_wiz_step.as_ref());
+    c_wiz_step.forget();
+
+    let c_wiz_name = Closure::<dyn Fn()>::new(satya_wizard_name_changed);
+    bind("satyaWizardNameChanged", c_wiz_name.as_ref());
+    c_wiz_name.forget();
+
+    let c_wiz_method = Closure::<dyn Fn(String)>::new(satya_wizard_set_method);
+    bind("satyaWizardSetMethod", c_wiz_method.as_ref());
+    c_wiz_method.forget();
+
+    let c_wiz_roll_grp = Closure::<dyn Fn(String)>::new(satya_wizard_roll_group);
+    bind("satyaWizardRollGroup", c_wiz_roll_grp.as_ref());
+    c_wiz_roll_grp.forget();
+
+    let c_wiz_roll_all = Closure::<dyn Fn()>::new(satya_wizard_roll_all_groups);
+    bind("satyaWizardRollAllGroups", c_wiz_roll_all.as_ref());
+    c_wiz_roll_all.forget();
+
+    let c_wiz_auto = Closure::<dyn Fn(String)>::new(satya_wizard_auto_assign_group);
+    bind("satyaWizardAutoAssignGroup", c_wiz_auto.as_ref());
+    c_wiz_auto.forget();
+
+    let c_wiz_assign = Closure::<dyn Fn(String, usize)>::new(satya_wizard_assign_slot);
+    bind("satyaWizardAssignSlot", c_wiz_assign.as_ref());
+    c_wiz_assign.forget();
+
+    let c_wiz_hm_roll = Closure::<dyn Fn()>::new(satya_wizard_roll_height_mass);
+    bind("satyaWizardRollHeightMass", c_wiz_hm_roll.as_ref());
+    c_wiz_hm_roll.forget();
+
+    let c_wiz_hm_upd = Closure::<dyn Fn()>::new(satya_wizard_update_height_mass);
+    bind("satyaWizardUpdateHeightMass", c_wiz_hm_upd.as_ref());
+    c_wiz_hm_upd.forget();
+
+    let c_wiz_psy_roll = Closure::<dyn Fn()>::new(satya_wizard_roll_psyche_pool);
+    bind("satyaWizardRollPsychePool", c_wiz_psy_roll.as_ref());
+    c_wiz_psy_roll.forget();
+
+    let c_wiz_psy_rst = Closure::<dyn Fn()>::new(satya_wizard_reset_psyche_balanced);
+    bind("satyaWizardResetPsycheBalanced", c_wiz_psy_rst.as_ref());
+    c_wiz_psy_rst.forget();
+
+    let c_wiz_psy_set = Closure::<dyn Fn(String, String)>::new(satya_wizard_set_psyche);
+    bind("satyaWizardSetPsyche", c_wiz_psy_set.as_ref());
+    c_wiz_psy_set.forget();
+
+    let c_wiz_apt_roll = Closure::<dyn Fn()>::new(satya_wizard_roll_aptitudes);
+    bind("satyaWizardRollAptitudes", c_wiz_apt_roll.as_ref());
+    c_wiz_apt_roll.forget();
+
+    let c_wiz_lp_all = Closure::<dyn Fn()>::new(satya_wizard_roll_complete_lifepath);
+    bind("satyaWizardRollCompleteLifepath", c_wiz_lp_all.as_ref());
+    c_wiz_lp_all.forget();
+
+    let c_wiz_lp_stg = Closure::<dyn Fn(u8)>::new(satya_wizard_roll_lifepath_stage);
+    bind("satyaWizardRollLifepathStage", c_wiz_lp_stg.as_ref());
+    c_wiz_lp_stg.forget();
+
+    let c_wiz_lp_fld = Closure::<dyn Fn(String, String)>::new(satya_wizard_update_lifepath_field);
+    bind("satyaWizardUpdateLifepathField", c_wiz_lp_fld.as_ref());
+    c_wiz_lp_fld.forget();
+
+    let c_wiz_lp_trm =
+        Closure::<dyn Fn(usize, String, String)>::new(satya_wizard_update_career_term);
+    bind("satyaWizardUpdateCareerTerm", c_wiz_lp_trm.as_ref());
+    c_wiz_lp_trm.forget();
+
+    let c_wiz_sk_flt = Closure::<dyn Fn(String, String)>::new(satya_wizard_set_skill_filter);
+    bind("satyaWizardSetSkillFilter", c_wiz_sk_flt.as_ref());
+    c_wiz_sk_flt.forget();
+
+    let c_wiz_sk_adj = Closure::<dyn Fn(String, i32)>::new(satya_wizard_adjust_skill);
+    bind("satyaWizardAdjustSkill", c_wiz_sk_adj.as_ref());
+    c_wiz_sk_adj.forget();
+
+    let c_wiz_sk_auto = Closure::<dyn Fn()>::new(satya_wizard_auto_allocate_skills);
+    bind("satyaWizardAutoAllocateSkills", c_wiz_sk_auto.as_ref());
+    c_wiz_sk_auto.forget();
+
+    let c_wiz_sk_rst = Closure::<dyn Fn()>::new(satya_wizard_reset_post_school_skills);
+    bind("satyaWizardResetPostSchoolSkills", c_wiz_sk_rst.as_ref());
+    c_wiz_sk_rst.forget();
+
+    let c_wiz_apply = Closure::<dyn Fn()>::new(satya_wizard_apply_to_sheet);
+    bind("satyaWizardApplyToSheet", c_wiz_apply.as_ref());
+    c_wiz_apply.forget();
 
     let on_move = Closure::<dyn FnMut(web_sys::Event)>::new(move |ev: web_sys::Event| {
         handle_webcam_drag_move(&ev);

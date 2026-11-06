@@ -321,11 +321,7 @@ pub const fn compute_supporting_characteristic_shortfall_penalty(
     min_required_c: i32,
 ) -> i32 {
     let shortfall = min_required_c - supporting_c;
-    if shortfall > 0 {
-        shortfall * 2
-    } else {
-        0
-    }
+    if shortfall > 0 { shortfall * 2 } else { 0 }
 }
 
 // ---------------------------------------------------------------------------

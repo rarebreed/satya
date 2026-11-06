@@ -39,7 +39,7 @@ prep = { depends-on = ["fmt", "lint"] }
 prepc = { cmd = "git commit -m ",  depends-on = ["check", "fmt", "lint"] }
 build = { cmd = "cargo build --workspace", description = "Build debug binaries for the workspace" }
 build-release = { cmd = "cargo build --workspace --release", description = "Build optimized release binaries" }
-build-py = { cmd = "cargo build -p satya-py --release && copy /Y target\\release\\satya_py.dll src\\satya_py.pyd", description = "Compile the satya-py PyO3 Rust extension and install satya_py.pyd into src/" }
+build-py = { cmd = "cargo build -p satya-py --release && cp target/release/satya_py.dll src/satya_py.pyd", description = "Compile the satya-py PyO3 Rust extension and install satya_py.pyd into src/" }
 build-wasm = { cmd = "wasm-pack build crates/satya-web --target web --out-dir ../../pkg", description = "Compile satya-web Rust/Leptos frontend to WebAssembly in pkg/" }
 
 # --- Granular & Unified Test Suites ---

@@ -655,6 +655,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             </button>
                             <button
                                 type="button"
+                                id="tab-btn-wizard"
+                                role="tab"
+                                aria-selected="false"
+                                aria-controls="notebook-pane-wizard"
+                                data-notebook-tab="wizard"
+                                class="notebook-tab"
+                                onclick="window.satyaSelectNotebookTab('wizard')"
+                                on:click=move |_| wasm_client::satya_select_notebook_tab("wizard".to_string())
+                            >
+                                "Character Wizard"
+                            </button>
+                            <button
+                                type="button"
                                 id="tab-btn-combat"
                                 role="tab"
                                 aria-selected="false"
@@ -868,22 +881,22 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                 </div>
                                 <div class="char-stat-box">
                                     <span class="stat-label">"Speed (SPD)"</span>
-                                    <span class="stat-value">"14"</span>
+                                    <span id="char-stat-spd" class="stat-value">"14"</span>
                                     <span class="stat-note">"OODA / Tempo Cap"</span>
                                 </div>
                                 <div class="char-stat-box">
                                     <span class="stat-label">"Kinesthesia (KIN)"</span>
-                                    <span class="stat-value">"14"</span>
+                                    <span id="char-stat-kin" class="stat-value">"14"</span>
                                     <span class="stat-note">"Balance / Melee Control"</span>
                                 </div>
                                 <div class="char-stat-box">
                                     <span class="stat-label">"Analysis (ANA)"</span>
-                                    <span class="stat-value">"15"</span>
+                                    <span id="char-stat-ana" class="stat-value">"15"</span>
                                     <span class="stat-note">"Quick Thinking (D_cog 14)"</span>
                                 </div>
                                 <div class="char-stat-box">
                                     <span class="stat-label">"Discipline (DIS)"</span>
-                                    <span class="stat-value">"14"</span>
+                                    <span id="char-stat-dis" class="stat-value">"14"</span>
                                     <span class="stat-note">"FT 19 / WSR 20 / CMP 6"</span>
                                 </div>
                                 <div class="char-stat-box">
@@ -894,7 +907,7 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                             </div>
                             <div class="roster-bar">
                                 <span class="roster-title">"Trained 8-Tree Skills (Click to Load into Die Roller):"</span>
-                                <div class="preset-users">
+                                <div id="char-sheet-skills-chips" class="preset-users">
                                     <button
                                         type="button"
                                         class="btn-chip"
@@ -937,6 +950,48 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                     </button>
                                 </div>
                             </div>
+                            <div id="char-sheet-lifepath-summary" class="roster-bar">
+                                <span class="roster-title">"Lifepath, [Access] Gates & Economy:"</span>
+                                <div class="roster-chips">
+                                    <span class="pill pill-iggy">"Use Character Wizard Tab to Generate Lifepath & Skills"</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        // --- TAB 4B: CHARACTER CREATION WIZARD ---
+                        <div
+                            id="notebook-pane-wizard"
+                            role="tabpanel"
+                            aria-labelledby="tab-btn-wizard"
+                            data-notebook-pane="wizard"
+                            class="notebook-pane"
+                            style="display: none;"
+                        >
+                            <div class="pane-toolbar">
+                                <div class="model-controls-row">
+                                    <label class="inline-label" for="wiz-char-name-input">
+                                        <span>"Character Name"</span>
+                                        <input
+                                            id="wiz-char-name-input"
+                                            name="wiz_char_name"
+                                            type="text"
+                                            autocorrect="off"
+                                            spellcheck="false"
+                                            value="New Operator"
+                                            onchange="window.satyaWizardNameChanged()"
+                                        />
+                                    </label>
+                                </div>
+                                <span id="wizard-status-pill" class="pill pill-active">
+                                    "Step 1/4 · OODA 10 · D_cog 10 · POW 10.0"
+                                </span>
+                            </div>
+                            <div id="wizard-feedback" class="feedback-box" aria-live="polite"></div>
+                            <div
+                                id="wizard-stage-container"
+                                class="wizard-stage-container"
+                                inner_html=wasm_client::default_character_wizard_html()
+                            ></div>
                         </div>
 
                         // --- TAB 5: COMBAT TRACKER ---
@@ -2257,5 +2312,47 @@ mod tests {
         assert!(html.contains("btn-workspace-disconnect"));
         assert!(html.contains(r#"id="admin-inspector-card""#));
         assert!(html.contains("display: none"));
+
+        // Verify Character Creation Wizard tab & all 4 steps
+        assert!(html.contains(r#"id="tab-btn-wizard""#));
+        assert!(html.contains(r#"id="notebook-pane-wizard""#));
+        assert!(html.contains(r#"id="wiz-char-name-input""#));
+        assert!(html.contains(r#"id="wizard-stage-container""#));
+        assert!(html.contains("Method 1: Roll 2d4 + 3d5 (Drop Lowest d5)"));
+        assert!(html.contains("Method 2: Roll 2d4 + 2d5 Pool (Keep Highest)"));
+        assert!(html.contains("Physical Dimensions: Height (HGT) &amp; Mass (MAS)"));
+
+        let mut wiz = wasm_client::CharacterWizardState {
+            active_step: 2,
+            ..Default::default()
+        };
+        let step2_html = wasm_client::format_character_wizard_html(&wiz);
+        assert!(step2_html.contains("Step 2: Psyche Characteristics"));
+        assert!(step2_html.contains("wiz-psyche-range-ego"));
+
+        wiz.active_step = 3;
+        let step3_html = wasm_client::format_character_wizard_html(&wiz);
+        assert!(
+            step3_html.contains("Step 3: Domain Aptitudes (11 × 3d6 Bell-Curve, Drop 2 Lowest")
+        );
+        assert!(step3_html.contains("APT-QNT"));
+        assert!(step3_html.contains("APT-SOC"));
+
+        wiz.active_step = 4;
+        let step4_html = wasm_client::format_character_wizard_html(&wiz);
+        assert!(step4_html.contains("Step 4: Chronological 5-Stage Lifepath"));
+        assert!(step4_html.contains("Stage 1 (Ages 0–5): Socioeconomic Origin"));
+        assert!(step4_html.contains("Stage 5 (Ages 18–34): Adult 4-Year Career Terms"));
+
+        wiz.active_step = 5;
+        let step5_html = wasm_client::format_character_wizard_html(&wiz);
+        assert!(step5_html.contains("Step 5: 8-Tree Hierarchical Skill Builder"));
+        assert!(step5_html.contains("Tree 1: Mathematics, Computing &amp; Physical Sciences"));
+
+        wiz.active_step = 6;
+        let step6_html = wasm_client::format_character_wizard_html(&wiz);
+        assert!(step6_html.contains("Step 6: Derived Telemetry"));
+        assert!(step6_html.contains("Striking Power (POW)"));
+        assert!(step6_html.contains("OODA Initiative"));
     }
 }

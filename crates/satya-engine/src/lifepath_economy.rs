@@ -15,11 +15,11 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::characteristics::{
-    compute_academic_study_controller, AptitudeCode, CharacterAptitudes, CharacterCharacteristics,
+    AptitudeCode, CharacterAptitudes, CharacterCharacteristics, compute_academic_study_controller,
 };
 use crate::skills_trees::{
-    initialize_universal_talents, validate_skill_advancement, SkillAccessTier,
-    SkillAdvancementValidation,
+    SkillAccessTier, SkillAdvancementValidation, initialize_universal_talents,
+    validate_skill_advancement,
 };
 
 /// Socioeconomic Class from Stage 1 (`Ages 0–5`) (§1.1).
@@ -247,9 +247,10 @@ impl CareerTermTrack {
     #[must_use]
     pub const fn granted_access_tags(self) -> &'static [SkillAccessTier] {
         match self {
-            Self::UniversityUndergraduateStem | Self::MedicalSchoolAndResidency => {
-                &[SkillAccessTier::Academic, SkillAccessTier::VocationalLicensed]
-            }
+            Self::UniversityUndergraduateStem | Self::MedicalSchoolAndResidency => &[
+                SkillAccessTier::Academic,
+                SkillAccessTier::VocationalLicensed,
+            ],
             Self::MilitaryCombatArmsSpecOps
             | Self::LawEnforcementSwatDetective
             | Self::IntelligenceServiceClandestine => &[
@@ -723,9 +724,1278 @@ pub const fn evaluate_operational_heat(heat_score: u8) -> OperationalHeatStatus 
     }
 }
 
+impl SocioeconomicClass {
+    /// All 6 canonical Stage 1 Socioeconomic Classes in ascending order of affluence.
+    pub const ALL: [Self; 6] = [
+        Self::DestituteUnderclassWarZone,
+        Self::WorkingPoorLowerClass,
+        Self::WorkingMiddleClass,
+        Self::ProfessionalUpperMiddleClass,
+        Self::AffluentElitePreparatory,
+        Self::WealthyCorporateAristocraticElite,
+    ];
+
+    /// Canonical code string for `<select>` options.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::DestituteUnderclassWarZone => "DESTITUTE",
+            Self::WorkingPoorLowerClass => "WORKING_POOR",
+            Self::WorkingMiddleClass => "MIDDLE_CLASS",
+            Self::ProfessionalUpperMiddleClass => "UPPER_MIDDLE",
+            Self::AffluentElitePreparatory => "AFFLUENT_PREP",
+            Self::WealthyCorporateAristocraticElite => "WEALTHY_ELITE",
+        }
+    }
+
+    /// Representative `2d20` roll (`2..=40`) that maps to this Socioeconomic Class in [`resolve_socioeconomic_origin`].
+    #[must_use]
+    pub const fn representative_roll_2d20(self) -> i32 {
+        match self {
+            Self::DestituteUnderclassWarZone => 4,
+            Self::WorkingPoorLowerClass => 8,
+            Self::WorkingMiddleClass => 18,
+            Self::ProfessionalUpperMiddleClass => 30,
+            Self::AffluentElitePreparatory => 36,
+            Self::WealthyCorporateAristocraticElite => 40,
+        }
+    }
+
+    /// Parse from a code string (`"DESTITUTE"`, `"WORKING_POOR"`, etc.).
+    #[must_use]
+    pub fn from_code_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_uppercase().as_str() {
+            "DESTITUTE" | "DESTITUTE_UNDERCLASS_WAR_ZONE" => Some(Self::DestituteUnderclassWarZone),
+            "WORKING_POOR" | "WORKING_POOR_LOWER_CLASS" => Some(Self::WorkingPoorLowerClass),
+            "MIDDLE_CLASS" | "WORKING_MIDDLE_CLASS" => Some(Self::WorkingMiddleClass),
+            "UPPER_MIDDLE" | "PROFESSIONAL_UPPER_MIDDLE_CLASS" => {
+                Some(Self::ProfessionalUpperMiddleClass)
+            }
+            "AFFLUENT_PREP" | "AFFLUENT_ELITE_PREPARATORY" => Some(Self::AffluentElitePreparatory),
+            "WEALTHY_ELITE" | "WEALTHY_CORPORATE_ARISTOCRATIC_ELITE" => {
+                Some(Self::WealthyCorporateAristocraticElite)
+            }
+            _ => None,
+        }
+    }
+}
+
+impl HighSchoolTrack {
+    /// All 3 canonical Stage 4A High School Tracks.
+    pub const ALL: [Self; 3] = [
+        Self::StandardCollegePrep,
+        Self::ApHonorsStemMagnet,
+        Self::VocationalTechnical,
+    ];
+
+    /// Canonical code string.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::StandardCollegePrep => "STANDARD_COLLEGE_PREP",
+            Self::ApHonorsStemMagnet => "AP_HONORS_STEM",
+            Self::VocationalTechnical => "VOCATIONAL_TECHNICAL",
+        }
+    }
+
+    /// Human-readable title for the High School track.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::StandardCollegePrep => "Standard / College-Prep High School",
+            Self::ApHonorsStemMagnet => "AP / Honors / STEM Magnet Academy",
+            Self::VocationalTechnical => "Vocational / Technical High School",
+        }
+    }
+
+    /// Summary of curriculum unlocks and prerequisites.
+    #[must_use]
+    pub const fn subtitle(self) -> &'static str {
+        match self {
+            Self::StandardCollegePrep => {
+                "[Access: Academic] Advances Algebra & Geometry, Trigonometry, General Chemistry, Classical Physics, Foreign Language & Driving."
+            }
+            Self::ApHonorsStemMagnet => {
+                "[Access: Academic] (Req: Algebra >= 2, ANA >= 11, DIS >= 11; SQM -1 bonus) Unlocks Calculus, Statistics, Programming, Classical Physics & Chemistry at N=2."
+            }
+            Self::VocationalTechnical => {
+                "[Access: Academic + Vocational/Licensed] Unlocks Automotive Mechanics, Metalworking, Electrical Systems, Tinkering N=2 & Driving."
+            }
+        }
+    }
+
+    /// Parse from a code string.
+    #[must_use]
+    pub fn from_code_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_uppercase().as_str() {
+            "STANDARD_COLLEGE_PREP" | "STANDARD" => Some(Self::StandardCollegePrep),
+            "AP_HONORS_STEM" | "AP_HONORS_STEM_MAGNET" | "STEM" => Some(Self::ApHonorsStemMagnet),
+            "VOCATIONAL_TECHNICAL" | "VOCATIONAL" => Some(Self::VocationalTechnical),
+            _ => None,
+        }
+    }
+}
+
+impl StreetGangArchetype {
+    /// All 4 canonical Stage 4B Dropout / Street Gang Archetypes.
+    pub const ALL: [Self; 4] = [
+        Self::ShooterEnforcer,
+        Self::BoostWheelman,
+        Self::RunnerLookout,
+        Self::BackAlleyCookModder,
+    ];
+
+    /// Canonical code string.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ShooterEnforcer => "SHOOTER_ENFORCER",
+            Self::BoostWheelman => "BOOST_WHEELMAN",
+            Self::RunnerLookout => "RUNNER_LOOKOUT",
+            Self::BackAlleyCookModder => "COOK_MODDER",
+        }
+    }
+
+    /// Human-readable title for the Street Gang archetype.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::ShooterEnforcer => "Shooter / Street Enforcer",
+            Self::BoostWheelman => "Boost / Wheelman & Tech Thief",
+            Self::RunnerLookout => "Runner / Lookout & Urban Burglar",
+            Self::BackAlleyCookModder => "Back-Alley Cook / Street Gunsmith Modder",
+        }
+    }
+
+    /// Summary of `[Access: Illicit]` skill grants.
+    #[must_use]
+    pub const fn subtitle(self) -> &'static str {
+        match self {
+            Self::ShooterEnforcer => {
+                "Grants Streetwise N=2, Pistols N=2, Short Blades N=2, Intimidation N=2, plus Fully Automatic Weapons N=1 (if FOR >= 10)."
+            }
+            Self::BoostWheelman => {
+                "Grants Streetwise N=2, Driving N=2, Lockpicking & Physical Intrusion N=2, Automotive Mechanics N=1."
+            }
+            Self::RunnerLookout => {
+                "Grants Streetwise N=2, Stealth N=2, Alertness N=2, Acrobatics/Parkour N=2, Sleight of Hand N=1."
+            }
+            Self::BackAlleyCookModder => {
+                "Grants Streetwise N=2, Armourer & Gunsmithing N=2, Pharmacology & Toxicology N=2."
+            }
+        }
+    }
+
+    /// Parse from a code string.
+    #[must_use]
+    pub fn from_code_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_uppercase().as_str() {
+            "SHOOTER_ENFORCER" | "SHOOTER" => Some(Self::ShooterEnforcer),
+            "BOOST_WHEELMAN" | "WHEELMAN" => Some(Self::BoostWheelman),
+            "RUNNER_LOOKOUT" | "RUNNER" => Some(Self::RunnerLookout),
+            "COOK_MODDER" | "BACK_ALLEY_COOK_MODDER" => Some(Self::BackAlleyCookModder),
+            _ => None,
+        }
+    }
+}
+
+impl CareerTermTrack {
+    /// All 7 canonical Stage 5 Adult 4-Year Career Tracks.
+    pub const ALL: [Self; 7] = [
+        Self::UniversityUndergraduateStem,
+        Self::MedicalSchoolAndResidency,
+        Self::MilitaryCombatArmsSpecOps,
+        Self::LawEnforcementSwatDetective,
+        Self::IntelligenceServiceClandestine,
+        Self::OrganizedCrimeCartelSyndicate,
+        Self::BlueCollarTradesMerchantMarine,
+    ];
+
+    /// Canonical code string.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::UniversityUndergraduateStem => "UNIVERSITY_STEM",
+            Self::MedicalSchoolAndResidency => "MEDICAL_SCHOOL",
+            Self::MilitaryCombatArmsSpecOps => "MILITARY_COMBAT_ARMS",
+            Self::LawEnforcementSwatDetective => "LAW_ENFORCEMENT_SWAT",
+            Self::IntelligenceServiceClandestine => "INTELLIGENCE_CLANDESTINE",
+            Self::OrganizedCrimeCartelSyndicate => "ORGANIZED_CRIME_SYNDICATE",
+            Self::BlueCollarTradesMerchantMarine => "BLUE_COLLAR_TRADES",
+        }
+    }
+
+    /// Human-readable title for the 4-year Career Track.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::UniversityUndergraduateStem => {
+                "University — STEM / Engineering (B.S. / M.S. / Ph.D.)"
+            }
+            Self::MedicalSchoolAndResidency => "Medical School & Surgical Residency",
+            Self::MilitaryCombatArmsSpecOps => {
+                "Military Service — Combat Arms / Special Operations"
+            }
+            Self::LawEnforcementSwatDetective => "Law Enforcement / SWAT / Detective Bureau",
+            Self::IntelligenceServiceClandestine => "Intelligence Service / Clandestine Operations",
+            Self::OrganizedCrimeCartelSyndicate => "Organized Crime / Cartel / Street Syndicate",
+            Self::BlueCollarTradesMerchantMarine => {
+                "Blue-Collar Trades / Industrial Tech / Merchant Marine"
+            }
+        }
+    }
+
+    /// Summary of entry prerequisites (§1.6).
+    #[must_use]
+    pub const fn entry_prereq_summary(self) -> &'static str {
+        match self {
+            Self::UniversityUndergraduateStem => {
+                "High School Diploma (or GED), Trigonometry >= 2, ANA >= 11, DIS >= 10"
+            }
+            Self::MedicalSchoolAndResidency => {
+                "General Biology >= 2, General Chemistry >= 2, MEM >= 12, ANA >= 11, DIS >= 12"
+            }
+            Self::MilitaryCombatArmsSpecOps => "FOR >= 9, FIT >= 10, HLT >= 10",
+            Self::LawEnforcementSwatDetective => "DIS >= 10, SIG >= 10, INS >= 10",
+            Self::IntelligenceServiceClandestine => "INS >= 11, DIS >= 11, ELO >= 10",
+            Self::OrganizedCrimeCartelSyndicate => {
+                "Underworld recruitment or Juvenile Gang background (PRE >= 9 or INS >= 9)"
+            }
+            Self::BlueCollarTradesMerchantMarine => "Arithmetic >= 2, Manual Dexterity >= 1",
+        }
+    }
+
+    /// Check whether a character natively meets the entry prerequisites for this Career Track (§1.6).
+    #[must_use]
+    pub fn check_entry_qualification(
+        self,
+        chars: &CharacterCharacteristics,
+        skills: &BTreeMap<String, usize>,
+        academic_tree_frozen: bool,
+    ) -> (bool, String) {
+        let trig = skills.get("trigonometry").copied().unwrap_or(0);
+        let bio = skills
+            .get("general_biology_natural_history")
+            .copied()
+            .unwrap_or(0);
+        let chem = skills.get("general_chemistry").copied().unwrap_or(0);
+        let arith = skills.get("arithmetic").copied().unwrap_or(0);
+
+        match self {
+            Self::UniversityUndergraduateStem => {
+                let ok = !academic_tree_frozen && trig >= 2 && chars.ana >= 11 && chars.dis >= 10;
+                let msg = format!(
+                    "Academic Unfrozen: {}, Trig N={trig} (req >=2), ANA {} (req >=11), DIS {} (req >=10)",
+                    !academic_tree_frozen, chars.ana, chars.dis
+                );
+                (ok, msg)
+            }
+            Self::MedicalSchoolAndResidency => {
+                let ok = !academic_tree_frozen
+                    && bio >= 1
+                    && chem >= 1
+                    && chars.mem >= 12
+                    && chars.ana >= 11
+                    && chars.dis >= 12;
+                let msg = format!(
+                    "Academic Unfrozen: {}, Bio N={bio}, Chem N={chem}, MEM {} (req >=12), ANA {} (req >=11), DIS {} (req >=12)",
+                    !academic_tree_frozen, chars.mem, chars.ana, chars.dis
+                );
+                (ok, msg)
+            }
+            Self::MilitaryCombatArmsSpecOps => {
+                let ok = chars.for_stat >= 9 && chars.fit >= 10 && chars.hlt >= 10;
+                let msg = format!(
+                    "FOR {} (req >=9), FIT {} (req >=10), HLT {} (req >=10)",
+                    chars.for_stat, chars.fit, chars.hlt
+                );
+                (ok, msg)
+            }
+            Self::LawEnforcementSwatDetective => {
+                let ok = chars.dis >= 10 && chars.sig >= 10 && chars.ins >= 10;
+                let msg = format!(
+                    "DIS {} (req >=10), SIG {} (req >=10), INS {} (req >=10)",
+                    chars.dis, chars.sig, chars.ins
+                );
+                (ok, msg)
+            }
+            Self::IntelligenceServiceClandestine => {
+                let ok = chars.ins >= 11 && chars.dis >= 11 && chars.elo >= 10;
+                let msg = format!(
+                    "INS {} (req >=11), DIS {} (req >=11), ELO {} (req >=10)",
+                    chars.ins, chars.dis, chars.elo
+                );
+                (ok, msg)
+            }
+            Self::OrganizedCrimeCartelSyndicate => {
+                let ok = chars.pre >= 9 || chars.ins >= 9 || academic_tree_frozen;
+                let msg = format!(
+                    "PRE {} / INS {} (or Dropout/Street background)",
+                    chars.pre, chars.ins
+                );
+                (ok, msg)
+            }
+            Self::BlueCollarTradesMerchantMarine => {
+                let ok = arith >= 1;
+                let msg = format!("Arithmetic N={arith} (req >=1)");
+                (ok, msg)
+            }
+        }
+    }
+
+    /// Ordered list of canonical curriculum & career skills taught by this track (ordered from parent foundation to advanced specialization).
+    #[must_use]
+    pub const fn recommended_skills(self) -> &'static [&'static str] {
+        match self {
+            Self::UniversityUndergraduateStem => &[
+                "elementary_algebra_geometry",
+                "trigonometry",
+                "digital_ai_literacy",
+                "calculus_linear_algebra",
+                "statistics_probability",
+                "programming_scripting",
+                "classical_mechanics_physics",
+                "algorithms_systems_architecture",
+                "differential_equations_vector_calculus",
+                "mechanical_structural_engineering",
+                "electrical_power_systems",
+                "thermodynamics_fluid_dynamics",
+                "machine_learning_ai_engineering",
+                "aerospace_naval_robotics_engineering",
+                "micro_electronics_avionics_cyberware_tech",
+            ],
+            Self::MedicalSchoolAndResidency => &[
+                "hygiene_basic_self_care",
+                "first_aid_bls_cpr",
+                "general_biology_natural_history",
+                "elementary_algebra_geometry",
+                "general_chemistry",
+                "anatomy_physiology",
+                "organic_analytical_chemistry",
+                "paramedic_combat_trauma_care",
+                "nursing_patient_care",
+                "pharmacology_toxicology",
+                "clinical_diagnosis_internal_medicine",
+                "trauma_orthopedic_general_surgery",
+                "psychology_behavioral_analysis_counseling",
+                "genetics_biotech_cyber_implantation",
+            ],
+            Self::MilitaryCombatArmsSpecOps => &[
+                "manual_dexterity_tinkering",
+                "brawling_unarmed_striking",
+                "balance_footwork",
+                "alertness_situational_awareness",
+                "stealth_sneaking_hiding",
+                "persuasion_fast_talk",
+                "first_aid_bls_cpr",
+                "long_guns_rifles_carbines_shotguns",
+                "pistols_handguns",
+                "fully_automatic_burst_weapons",
+                "leadership_command",
+                "small_unit_tactics_cqb_doctrine",
+                "heavy_weapons_mounted_gunnery_atgms",
+                "martial_arts_striking",
+                "grappling_wrestling_submissions",
+                "short_blades_knife_fighting",
+                "camouflage_concealment",
+                "land_navigation_cartography",
+                "paramedic_combat_trauma_care",
+                "precision_marksmanship_sniping",
+                "demolitions_explosive_ordnance_eod",
+            ],
+            Self::LawEnforcementSwatDetective => &[
+                "manual_dexterity_tinkering",
+                "alertness_situational_awareness",
+                "empathy_social_perception",
+                "intimidation_coercion",
+                "deception_bluff",
+                "persuasion_fast_talk",
+                "brawling_unarmed_striking",
+                "balance_footwork",
+                "pistols_handguns",
+                "long_guns_rifles_carbines_shotguns",
+                "driving_wheeled_tracked",
+                "grappling_wrestling_submissions",
+                "interrogation_counter_interrogation",
+                "surveillance_reconnaissance_countersurveillance",
+                "leadership_command",
+                "small_unit_tactics_cqb_doctrine",
+                "fully_automatic_burst_weapons",
+                "forensics_crime_scene_investigation",
+                "law_jurisprudence",
+            ],
+            Self::IntelligenceServiceClandestine => &[
+                "alertness_situational_awareness",
+                "stealth_sneaking_hiding",
+                "deception_bluff",
+                "empathy_social_perception",
+                "persuasion_fast_talk",
+                "intimidation_coercion",
+                "manual_dexterity_tinkering",
+                "pistols_handguns",
+                "foreign_language_specific",
+                "surveillance_reconnaissance_countersurveillance",
+                "interrogation_counter_interrogation",
+                "camouflage_concealment",
+                "disguise_impersonation",
+                "lockpicking_physical_intrusion",
+                "streetwise_underworld_etiquette",
+                "programming_scripting",
+                "cybersecurity_network_intrusion",
+                "forgery_counterfeiting_document_alteration",
+            ],
+            Self::OrganizedCrimeCartelSyndicate => &[
+                "manual_dexterity_tinkering",
+                "brawling_unarmed_striking",
+                "balance_footwork",
+                "intimidation_coercion",
+                "deception_bluff",
+                "empathy_social_perception",
+                "stealth_sneaking_hiding",
+                "alertness_situational_awareness",
+                "streetwise_underworld_etiquette",
+                "pistols_handguns",
+                "short_blades_knife_fighting",
+                "fully_automatic_burst_weapons",
+                "lockpicking_physical_intrusion",
+                "driving_wheeled_tracked",
+                "sleight_of_hand_pickpocketing_palming",
+                "interrogation_counter_interrogation",
+                "armourer_gunsmithing",
+            ],
+            Self::BlueCollarTradesMerchantMarine => &[
+                "manual_dexterity_tinkering",
+                "arithmetic",
+                "elementary_algebra_geometry",
+                "driving_wheeled_tracked",
+                "automotive_small_engine_mechanics",
+                "metalworking_machining_blacksmithing",
+                "electrical_power_systems",
+                "carpentry_woodworking",
+                "masonry_construction",
+                "small_boat_seamanship",
+                "armourer_gunsmithing",
+                "micro_electronics_avionics_cyberware_tech",
+            ],
+        }
+    }
+
+    /// Parse from a code string.
+    #[must_use]
+    pub fn from_code_str(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_uppercase().as_str() {
+            "UNIVERSITY_STEM" | "UNIVERSITY_UNDERGRADUATE_STEM" => {
+                Some(Self::UniversityUndergraduateStem)
+            }
+            "MEDICAL_SCHOOL" | "MEDICAL_SCHOOL_AND_RESIDENCY" => {
+                Some(Self::MedicalSchoolAndResidency)
+            }
+            "MILITARY_COMBAT_ARMS" | "MILITARY_COMBAT_ARMS_SPEC_OPS" => {
+                Some(Self::MilitaryCombatArmsSpecOps)
+            }
+            "LAW_ENFORCEMENT_SWAT" | "LAW_ENFORCEMENT_SWAT_DETECTIVE" => {
+                Some(Self::LawEnforcementSwatDetective)
+            }
+            "INTELLIGENCE_CLANDESTINE" | "INTELLIGENCE_SERVICE_CLANDESTINE" => {
+                Some(Self::IntelligenceServiceClandestine)
+            }
+            "ORGANIZED_CRIME_SYNDICATE" | "ORGANIZED_CRIME_CARTEL_SYNDICATE" => {
+                Some(Self::OrganizedCrimeCartelSyndicate)
+            }
+            "BLUE_COLLAR_TRADES" | "BLUE_COLLAR_TRADES_MERCHANT_MARINE" => {
+                Some(Self::BlueCollarTradesMerchantMarine)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Configuration for a single 4-Year Adult Career Term in Stage 5 (`Ages 18+`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CareerTermConfig {
+    pub track: CareerTermTrack,
+    /// Two `2d20` pairs rolled for career term performance (`0`, `1`, or `2` successes).
+    pub term_roll_pairs: [(i32, i32); 2],
+    /// Optional manual override for term advancement successes (`0..=2`).
+    pub override_successes: Option<usize>,
+    /// True if the player granted a moral/academic entry waiver for this term.
+    pub waiver_override: bool,
+}
+
+impl Default for CareerTermConfig {
+    fn default() -> Self {
+        Self {
+            track: CareerTermTrack::MilitaryCombatArmsSpecOps,
+            term_roll_pairs: [(12, 11), (13, 10)],
+            override_successes: None,
+            waiver_override: true,
+        }
+    }
+}
+
+/// Complete player-configurable 5-Stage Lifepath state for the Character Creation Wizard.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LifepathBuildConfig {
+    /// Stage 1: `2d20` roll (`2..=40`) for Socioeconomic Origin (or set via class override).
+    pub origin_roll_2d20: i32,
+    /// Stage 1: Chosen Early Environment Bonus Talent (`TAL` boosted by `+1` to `N = 2`).
+    pub stage1_early_talent: String,
+    /// Stage 2: Elementary Literacy `2d20` pairs (`DIS/MEM + APT-LNG`).
+    pub stage2_lit_pairs: [(i32, i32); 2],
+    pub stage2_lit_override: Option<usize>,
+    /// Stage 2: Elementary Mathematics `2d20` pairs (`DIS/ANA + APT-QNT`).
+    pub stage2_math_pairs: [(i32, i32); 2],
+    pub stage2_math_override: Option<usize>,
+    /// Stage 2: Playground / Recess Talent (`TAL` boosted by `+1`).
+    pub stage2_playground_talent: String,
+    /// Stage 3: Junior High Mathematics `2d20` pairs (`DIS/ANA + APT-QNT`).
+    pub stage3_math_pairs: [(i32, i32); 2],
+    pub stage3_math_override: Option<usize>,
+    /// Stage 3: Junior High General Science `2d20` pairs (`DIS/ANA + APT-QNT`).
+    pub stage3_sci_pairs: [(i32, i32); 2],
+    pub stage3_sci_override: Option<usize>,
+    /// Stage 3: Junior High Literacy & Humanities `2d20` pairs (`DIS/MEM + APT-LNG`).
+    pub stage3_hum_pairs: [(i32, i32); 2],
+    pub stage3_hum_override: Option<usize>,
+    /// Stage 3 -> 4 Transition: `2d20` roll for Adolescent Crisis / Dropout Check at Age 15.
+    pub age15_crisis_roll_2d20: i32,
+    /// Optional player override for Age 15 path (`Some(true)` = Force Dropout Path 4B, `Some(false)` = Stay in High School Path 4A).
+    pub age15_dropout_override: Option<bool>,
+    /// Stage 4A: Selected High School Track (when staying in school).
+    pub stage4a_hs_track: HighSchoolTrack,
+    /// Stage 4A: High School Advancement `2d20` pairs.
+    pub stage4a_hs_pairs: [(i32, i32); 2],
+    pub stage4a_hs_override: Option<usize>,
+    /// Stage 4B: Selected Street Gang / Underworld Archetype (when dropping out at Age 15).
+    pub stage4b_gang_archetype: StreetGangArchetype,
+    /// Stage 5: Whether a dropout later obtained a GED / Adult Academic Waiver to unfreeze `[Access: Academic]`.
+    pub adult_ged_waiver: bool,
+    /// Stage 5: `0` to `4` Adult 4-Year Career Terms (`Ages 18–34`).
+    pub career_terms: Vec<CareerTermConfig>,
+    /// Campaign `SQM` Tier (`1–10`) override (`None` = derived from Origin & Career Terms).
+    pub campaign_sqm_override: Option<u8>,
+    /// Campaign Operational `Heat` (`0–10`) override (`None` = derived from Dropout/Syndicate history).
+    pub operational_heat_override: Option<u8>,
+}
+
+impl Default for LifepathBuildConfig {
+    fn default() -> Self {
+        Self {
+            origin_roll_2d20: 18,
+            stage1_early_talent: "alertness_situational_awareness".to_string(),
+            stage2_lit_pairs: [(12, 11), (10, 11)],
+            stage2_lit_override: None,
+            stage2_math_pairs: [(13, 11), (11, 10)],
+            stage2_math_override: None,
+            stage2_playground_talent: "running_sprinting".to_string(),
+            stage3_math_pairs: [(12, 12), (11, 10)],
+            stage3_math_override: None,
+            stage3_sci_pairs: [(12, 10), (11, 9)],
+            stage3_sci_override: None,
+            stage3_hum_pairs: [(11, 11), (10, 9)],
+            stage3_hum_override: None,
+            age15_crisis_roll_2d20: 20,
+            age15_dropout_override: None,
+            stage4a_hs_track: HighSchoolTrack::StandardCollegePrep,
+            stage4a_hs_pairs: [(13, 11), (12, 10)],
+            stage4a_hs_override: None,
+            stage4b_gang_archetype: StreetGangArchetype::ShooterEnforcer,
+            adult_ged_waiver: false,
+            career_terms: vec![CareerTermConfig::default()],
+            campaign_sqm_override: None,
+            operational_heat_override: None,
+        }
+    }
+}
+
+/// Detailed result of evaluating Stages 1–5 of a [`LifepathBuildConfig`].
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LifepathBaselineResult {
+    pub age_years: u32,
+    pub origin: SocioeconomicOriginSpec,
+    pub stage2_lit_eval: EducationalAdvancementResult,
+    pub stage2_math_eval: EducationalAdvancementResult,
+    pub stage3_math_eval: EducationalAdvancementResult,
+    pub stage3_sci_eval: EducationalAdvancementResult,
+    pub stage3_hum_eval: EducationalAdvancementResult,
+    pub dropped_out_at_15: bool,
+    pub stage4a_hs_eval: Option<EducationalAdvancementResult>,
+    pub term_evals: Vec<EducationalAdvancementResult>,
+    /// Skills granted automatically by Stages 1–4 (`Universal Talents` + `Origin` + `Elementary` + `Junior High` + `High School / Gang`).
+    /// Serves as the minimum floor in the Step 5 Skill Tree Builder.
+    pub baseline_skills: BTreeMap<String, usize>,
+    /// All `[Access]` tags unlocked across Stages 1–5.
+    pub granted_access_tags: Vec<SkillAccessTier>,
+    /// True if `[Access: Academic]` is frozen due to Stage 4B Dropout without a GED/University waiver.
+    pub academic_tree_frozen: bool,
+    /// Total Career Skill Level budget granted by Stage 5 Career Terms (`6` per term + `+1` per Honors term roll).
+    pub career_skill_budget: usize,
+    /// Total Elective / Hobby Skill Level budget (`2` youth elective + `2` per Career Term).
+    pub elective_skill_budget: usize,
+    /// Maximum additional levels any single skill can gain during Stage 5 (`2 * max(1, career_terms.len())`).
+    pub max_post_school_gain_per_skill: usize,
+    pub campaign_sqm: u8,
+    pub operational_heat: u8,
+    pub stage_history: Vec<String>,
+}
+
+fn bump_skill_floor(skills: &mut BTreeMap<String, usize>, skill_id: &str, min_level: usize) {
+    let entry = skills.entry(skill_id.to_string()).or_insert(0);
+    if *entry < min_level {
+        *entry = min_level;
+    }
+}
+
+fn add_skill_levels_capped(
+    skills: &mut BTreeMap<String, usize>,
+    skill_id: &str,
+    add: usize,
+    cap: usize,
+) {
+    let entry = skills.entry(skill_id.to_string()).or_insert(0);
+    *entry = (*entry + add).min(cap);
+}
+
+/// Deterministically evaluates Stages 1–5 from [`LifepathBuildConfig`], returning the Stage 1–4 skill floor,
+/// Stage 5 `[Access]` gates, Career/Elective skill budgets, and chronological history log.
+#[must_use]
+pub fn compute_lifepath_baseline_from_config(
+    cfg: &LifepathBuildConfig,
+    chars: &CharacterCharacteristics,
+    aptitudes: &CharacterAptitudes,
+) -> LifepathBaselineResult {
+    let origin = resolve_socioeconomic_origin(cfg.origin_roll_2d20.clamp(2, 40));
+    let sqm = origin.school_quality_modifier_sqm;
+    let mut skills = initialize_universal_talents();
+    let mut granted_access_tags = vec![SkillAccessTier::Universal, SkillAccessTier::Academic];
+    let mut stage_history = Vec::new();
+
+    // Stage 1: Ages 0–5 (Universal Talents + Early Environment Bonus Talent)
+    let early_tal = if skills.contains_key(&cfg.stage1_early_talent) {
+        cfg.stage1_early_talent.as_str()
+    } else {
+        origin
+            .early_environment_bonus_talents
+            .first()
+            .copied()
+            .unwrap_or("alertness_situational_awareness")
+    };
+    add_skill_levels_capped(&mut skills, early_tal, 1, 3);
+    stage_history.push(format!(
+        "Stage 1 (Ages 0–5): {} (2d20={}, SQM {:+}) — Early Talent '{}' -> N={}",
+        origin.label,
+        cfg.origin_roll_2d20.clamp(2, 40),
+        sqm,
+        early_tal,
+        skills.get(early_tal).copied().unwrap_or(2)
+    ));
+
+    // Stage 2: Ages 6–11 (Elementary School Automatic Grants + Literacy & Math Rolls + Playground Talent)
+    bump_skill_floor(&mut skills, "reading_comprehension", 1);
+    bump_skill_floor(&mut skills, "writing_composition", 1);
+    bump_skill_floor(&mut skills, "arithmetic", 1);
+    bump_skill_floor(&mut skills, "digital_ai_literacy", 1);
+
+    let mut stage2_lit_eval = evaluate_educational_advancement_roll(
+        chars.dis,
+        chars.mem,
+        aptitudes.apt_lng,
+        sqm,
+        cfg.stage2_lit_pairs,
+    );
+    if let Some(ov) = cfg.stage2_lit_override {
+        stage2_lit_eval.successes = ov.min(2);
+    }
+    match stage2_lit_eval.successes {
+        0 => {}
+        1 => {
+            bump_skill_floor(&mut skills, "reading_comprehension", 2);
+            bump_skill_floor(&mut skills, "writing_composition", 2);
+        }
+        _ => {
+            bump_skill_floor(&mut skills, "reading_comprehension", 3);
+            bump_skill_floor(&mut skills, "writing_composition", 2);
+            bump_skill_floor(&mut skills, "history_political_science", 1);
+        }
+    }
+
+    let mut stage2_math_eval = evaluate_educational_advancement_roll(
+        chars.dis,
+        chars.ana,
+        aptitudes.apt_qnt,
+        sqm,
+        cfg.stage2_math_pairs,
+    );
+    if let Some(ov) = cfg.stage2_math_override {
+        stage2_math_eval.successes = ov.min(2);
+    }
+    match stage2_math_eval.successes {
+        0 => {}
+        1 => {
+            bump_skill_floor(&mut skills, "arithmetic", 2);
+        }
+        _ => {
+            bump_skill_floor(&mut skills, "arithmetic", 3);
+            bump_skill_floor(&mut skills, "elementary_algebra_geometry", 1);
+        }
+    }
+
+    if skills.contains_key(&cfg.stage2_playground_talent) {
+        add_skill_levels_capped(&mut skills, &cfg.stage2_playground_talent, 1, 3);
+    }
+    stage_history.push(format!(
+        "Stage 2 (Ages 6–11): Elementary School — Literacy {} succ (TN {}), Math {} succ (TN {}), Recess Talent '{}' -> N={}",
+        stage2_lit_eval.successes,
+        stage2_lit_eval.tn_edu,
+        stage2_math_eval.successes,
+        stage2_math_eval.tn_edu,
+        cfg.stage2_playground_talent,
+        skills.get(&cfg.stage2_playground_talent).copied().unwrap_or(2)
+    ));
+
+    // Stage 3: Ages 12–15 (Junior High / Middle School + Age-15 Dropout Crisis Check)
+    let mut stage3_math_eval = evaluate_educational_advancement_roll(
+        chars.dis,
+        chars.ana,
+        aptitudes.apt_qnt,
+        sqm,
+        cfg.stage3_math_pairs,
+    );
+    if let Some(ov) = cfg.stage3_math_override {
+        stage3_math_eval.successes = ov.min(2);
+    }
+    let arith_before_s3 = skills.get("arithmetic").copied().unwrap_or(1);
+    if arith_before_s3 >= 2 {
+        bump_skill_floor(&mut skills, "elementary_algebra_geometry", 1);
+        match stage3_math_eval.successes {
+            0 => {}
+            1 => {
+                bump_skill_floor(&mut skills, "elementary_algebra_geometry", 2);
+            }
+            _ => {
+                bump_skill_floor(&mut skills, "elementary_algebra_geometry", 2);
+                bump_skill_floor(&mut skills, "trigonometry", 1);
+            }
+        }
+    } else {
+        match stage3_math_eval.successes {
+            0 => {}
+            1 => {
+                bump_skill_floor(&mut skills, "arithmetic", 2);
+            }
+            _ => {
+                bump_skill_floor(&mut skills, "arithmetic", 2);
+                bump_skill_floor(&mut skills, "elementary_algebra_geometry", 1);
+            }
+        }
+    }
+
+    let mut stage3_sci_eval = evaluate_educational_advancement_roll(
+        chars.dis,
+        chars.ana.max(chars.mem),
+        aptitudes.apt_qnt.max(aptitudes.apt_bio),
+        sqm,
+        cfg.stage3_sci_pairs,
+    );
+    if let Some(ov) = cfg.stage3_sci_override {
+        stage3_sci_eval.successes = ov.min(2);
+    }
+    match stage3_sci_eval.successes {
+        0 => {
+            bump_skill_floor(&mut skills, "general_biology_natural_history", 1);
+        }
+        1 => {
+            bump_skill_floor(&mut skills, "general_biology_natural_history", 1);
+            bump_skill_floor(&mut skills, "digital_ai_literacy", 2);
+        }
+        _ => {
+            bump_skill_floor(&mut skills, "general_biology_natural_history", 2);
+            bump_skill_floor(&mut skills, "digital_ai_literacy", 2);
+        }
+    }
+
+    let mut stage3_hum_eval = evaluate_educational_advancement_roll(
+        chars.dis,
+        chars.mem,
+        aptitudes.apt_lng,
+        sqm,
+        cfg.stage3_hum_pairs,
+    );
+    if let Some(ov) = cfg.stage3_hum_override {
+        stage3_hum_eval.successes = ov.min(2);
+    }
+    if stage3_hum_eval.successes >= 1 {
+        add_skill_levels_capped(&mut skills, "reading_comprehension", 1, 3);
+        add_skill_levels_capped(&mut skills, "writing_composition", 1, 3);
+        bump_skill_floor(&mut skills, "history_political_science", 1);
+    }
+    if stage3_hum_eval.successes >= 2 {
+        bump_skill_floor(&mut skills, "history_political_science", 2);
+    }
+
+    let natural_dropout =
+        cfg.age15_crisis_roll_2d20.clamp(2, 40) <= origin.adolescent_dropout_risk_max_2d20;
+    let dropped_out_at_15 = cfg.age15_dropout_override.unwrap_or(natural_dropout);
+
+    stage_history.push(format!(
+        "Stage 3 (Ages 12–15): Junior High — Math {} succ, Science {} succ, Humanities {} succ; Age-15 Crisis Roll={} (Threshold <={}) -> {}",
+        stage3_math_eval.successes,
+        stage3_sci_eval.successes,
+        stage3_hum_eval.successes,
+        cfg.age15_crisis_roll_2d20.clamp(2, 40),
+        origin.adolescent_dropout_risk_max_2d20,
+        if dropped_out_at_15 {
+            "DROPPED OUT (Path 4B)"
+        } else {
+            "Stayed in High School (Path 4A)"
+        }
+    ));
+
+    // Stage 4: Ages 16–18 (Path 4A High School vs. Path 4B Dropout & Street Gang)
+    let mut academic_tree_frozen = false;
+    let mut stage4a_hs_eval = None;
+
+    if dropped_out_at_15 {
+        academic_tree_frozen = true;
+        granted_access_tags.retain(|t| *t != SkillAccessTier::Academic);
+        if !granted_access_tags.contains(&SkillAccessTier::Illicit) {
+            granted_access_tags.push(SkillAccessTier::Illicit);
+        }
+
+        bump_skill_floor(&mut skills, "streetwise_underworld_etiquette", 2);
+        bump_skill_floor(&mut skills, "brawling_unarmed_striking", 2);
+        match cfg.stage4b_gang_archetype {
+            StreetGangArchetype::ShooterEnforcer => {
+                bump_skill_floor(&mut skills, "pistols_handguns", 2);
+                bump_skill_floor(&mut skills, "short_blades_knife_fighting", 2);
+                bump_skill_floor(&mut skills, "intimidation_coercion", 2);
+                if chars.for_stat >= 10 {
+                    bump_skill_floor(&mut skills, "fully_automatic_burst_weapons", 1);
+                }
+            }
+            StreetGangArchetype::BoostWheelman => {
+                bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
+                bump_skill_floor(&mut skills, "driving_wheeled_tracked", 2);
+                bump_skill_floor(&mut skills, "lockpicking_physical_intrusion", 2);
+                bump_skill_floor(&mut skills, "automotive_small_engine_mechanics", 1);
+            }
+            StreetGangArchetype::RunnerLookout => {
+                bump_skill_floor(&mut skills, "balance_footwork", 2);
+                bump_skill_floor(&mut skills, "jumping_leaping", 2);
+                bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
+                bump_skill_floor(&mut skills, "stealth_sneaking_hiding", 2);
+                bump_skill_floor(&mut skills, "alertness_situational_awareness", 2);
+                bump_skill_floor(&mut skills, "acrobatics_tumbling_parkour", 2);
+                bump_skill_floor(&mut skills, "sleight_of_hand_pickpocketing_palming", 1);
+            }
+            StreetGangArchetype::BackAlleyCookModder => {
+                bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
+                bump_skill_floor(&mut skills, "metalworking_machining_blacksmithing", 2);
+                bump_skill_floor(&mut skills, "armourer_gunsmithing", 2);
+                bump_skill_floor(&mut skills, "pharmacology_toxicology", 2);
+            }
+        }
+        stage_history.push(format!(
+            "Stage 4B (Ages 16–18): Dropout / {} — Academic Tree FROZEN; unlocked [Access: Illicit]",
+            cfg.stage4b_gang_archetype.label()
+        ));
+    } else {
+        let hs_sqm = if cfg.stage4a_hs_track == HighSchoolTrack::ApHonorsStemMagnet {
+            sqm - 1
+        } else {
+            sqm
+        };
+        let mut hs_eval = evaluate_educational_advancement_roll(
+            chars.dis,
+            chars.ana.max(chars.mem),
+            aptitudes.apt_qnt.max(aptitudes.apt_cmp),
+            hs_sqm,
+            cfg.stage4a_hs_pairs,
+        );
+        if let Some(ov) = cfg.stage4a_hs_override {
+            hs_eval.successes = ov.min(2);
+        }
+
+        match cfg.stage4a_hs_track {
+            HighSchoolTrack::StandardCollegePrep => {
+                bump_skill_floor(&mut skills, "arithmetic", 2);
+                bump_skill_floor(&mut skills, "elementary_algebra_geometry", 2);
+                bump_skill_floor(
+                    &mut skills,
+                    "trigonometry",
+                    1 + usize::from(hs_eval.successes >= 1),
+                );
+                bump_skill_floor(
+                    &mut skills,
+                    "general_chemistry",
+                    1 + usize::from(hs_eval.successes >= 2),
+                );
+                bump_skill_floor(&mut skills, "classical_mechanics_physics", 1);
+                bump_skill_floor(&mut skills, "foreign_language_specific", 1);
+                bump_skill_floor(&mut skills, "driving_wheeled_tracked", 1);
+            }
+            HighSchoolTrack::ApHonorsStemMagnet => {
+                bump_skill_floor(&mut skills, "arithmetic", 3);
+                bump_skill_floor(&mut skills, "digital_ai_literacy", 2);
+                bump_skill_floor(&mut skills, "elementary_algebra_geometry", 3);
+                bump_skill_floor(
+                    &mut skills,
+                    "trigonometry",
+                    2 + usize::from(hs_eval.successes >= 1),
+                );
+                bump_skill_floor(
+                    &mut skills,
+                    "calculus_linear_algebra",
+                    1 + usize::from(hs_eval.successes >= 1),
+                );
+                bump_skill_floor(&mut skills, "statistics_probability", 1);
+                bump_skill_floor(
+                    &mut skills,
+                    "programming_scripting",
+                    1 + usize::from(hs_eval.successes >= 2),
+                );
+                bump_skill_floor(&mut skills, "classical_mechanics_physics", 2);
+                bump_skill_floor(&mut skills, "general_chemistry", 2);
+            }
+            HighSchoolTrack::VocationalTechnical => {
+                if !granted_access_tags.contains(&SkillAccessTier::VocationalLicensed) {
+                    granted_access_tags.push(SkillAccessTier::VocationalLicensed);
+                }
+                bump_skill_floor(&mut skills, "arithmetic", 2);
+                bump_skill_floor(&mut skills, "elementary_algebra_geometry", 2);
+                bump_skill_floor(&mut skills, "manual_dexterity_tinkering", 2);
+                bump_skill_floor(&mut skills, "driving_wheeled_tracked", 1);
+                bump_skill_floor(
+                    &mut skills,
+                    "automotive_small_engine_mechanics",
+                    1 + usize::from(hs_eval.successes >= 1),
+                );
+                bump_skill_floor(
+                    &mut skills,
+                    "electrical_power_systems",
+                    1 + usize::from(hs_eval.successes >= 2),
+                );
+                bump_skill_floor(&mut skills, "metalworking_machining_blacksmithing", 1);
+            }
+        }
+        stage_history.push(format!(
+            "Stage 4A (Ages 16–18): {} — Advancement {} succ (TN {})",
+            cfg.stage4a_hs_track.label(),
+            hs_eval.successes,
+            hs_eval.tn_edu
+        ));
+        stage4a_hs_eval = Some(hs_eval);
+    }
+
+    // Stage 5: Adult 4-Year Career Terms (Ages 18+, 0..=4 terms)
+    if cfg.adult_ged_waiver && academic_tree_frozen {
+        academic_tree_frozen = false;
+        if !granted_access_tags.contains(&SkillAccessTier::Academic) {
+            granted_access_tags.push(SkillAccessTier::Academic);
+        }
+        stage_history.push(
+            "Stage 5 Adult Education: Completed GED / Equivalency Waiver — [Access: Academic] unfrozen.".to_string(),
+        );
+    }
+
+    let mut career_skill_budget = 0usize;
+    let mut elective_skill_budget = 2usize; // 2 base youth/young-adult elective skill levels
+    let mut term_evals = Vec::with_capacity(cfg.career_terms.len());
+
+    for (t_idx, term) in cfg.career_terms.iter().take(4).enumerate() {
+        for &tag in term.track.granted_access_tags() {
+            if tag == SkillAccessTier::Academic && academic_tree_frozen && !term.waiver_override {
+                continue;
+            }
+            if tag == SkillAccessTier::Academic {
+                academic_tree_frozen = false;
+            }
+            if !granted_access_tags.contains(&tag) {
+                granted_access_tags.push(tag);
+            }
+        }
+        if term.track == CareerTermTrack::IntelligenceServiceClandestine
+            && !granted_access_tags.contains(&SkillAccessTier::Illicit)
+        {
+            granted_access_tags.push(SkillAccessTier::Illicit);
+        }
+
+        let c_mental_or_career = match term.track {
+            CareerTermTrack::UniversityUndergraduateStem => chars.ana,
+            CareerTermTrack::MedicalSchoolAndResidency => chars.mem.max(chars.ana),
+            CareerTermTrack::MilitaryCombatArmsSpecOps => chars.for_stat.max(chars.dex),
+            CareerTermTrack::LawEnforcementSwatDetective => chars.ins.max(chars.sig),
+            CareerTermTrack::IntelligenceServiceClandestine => chars.ins.max(chars.elo),
+            CareerTermTrack::OrganizedCrimeCartelSyndicate => chars.pre.max(chars.ins),
+            CareerTermTrack::BlueCollarTradesMerchantMarine => chars.dex.max(chars.ana),
+        };
+        let apt_career = match term.track {
+            CareerTermTrack::UniversityUndergraduateStem => {
+                aptitudes.apt_qnt.max(aptitudes.apt_cmp)
+            }
+            CareerTermTrack::MedicalSchoolAndResidency => aptitudes.apt_bio,
+            CareerTermTrack::MilitaryCombatArmsSpecOps => aptitudes.apt_fin.max(aptitudes.apt_kin),
+            CareerTermTrack::LawEnforcementSwatDetective => {
+                aptitudes.apt_soc.max(aptitudes.apt_fin)
+            }
+            CareerTermTrack::IntelligenceServiceClandestine => {
+                aptitudes.apt_soc.max(aptitudes.apt_cmp)
+            }
+            CareerTermTrack::OrganizedCrimeCartelSyndicate => {
+                aptitudes.apt_soc.max(aptitudes.apt_fin)
+            }
+            CareerTermTrack::BlueCollarTradesMerchantMarine => aptitudes.apt_mec,
+        };
+        let mut t_eval = evaluate_educational_advancement_roll(
+            chars.dis,
+            c_mental_or_career,
+            apt_career,
+            0,
+            term.term_roll_pairs,
+        );
+        if let Some(ov) = term.override_successes {
+            t_eval.successes = ov.min(2);
+        }
+        let term_bonus = usize::from(t_eval.successes >= 2);
+        let term_career_pts = 6 + term_bonus;
+        career_skill_budget += term_career_pts;
+        elective_skill_budget += 2;
+
+        let age_start = 18 + (t_idx as u32) * 4;
+        let age_end = age_start + 4;
+        stage_history.push(format!(
+            "Stage 5 Term {} (Ages {age_start}–{age_end}): {} — Roll {} succ (TN {}) -> +{} Career Skill Levels (+2 Elective)",
+            t_idx + 1,
+            term.track.label(),
+            t_eval.successes,
+            t_eval.tn_edu,
+            term_career_pts
+        ));
+        term_evals.push(t_eval);
+    }
+
+    let num_terms = cfg.career_terms.len().min(4);
+    let age_years = 18 + (num_terms as u32) * 4;
+    let max_post_school_gain_per_skill = (2 * num_terms.max(1)).max(2);
+
+    let default_sqm: u8 = match origin.class {
+        SocioeconomicClass::DestituteUnderclassWarZone => 2,
+        SocioeconomicClass::WorkingPoorLowerClass => 4,
+        SocioeconomicClass::WorkingMiddleClass => 5,
+        SocioeconomicClass::ProfessionalUpperMiddleClass => 7,
+        SocioeconomicClass::AffluentElitePreparatory => 8,
+        SocioeconomicClass::WealthyCorporateAristocraticElite => 9,
+    };
+    let default_heat: u8 = if cfg
+        .career_terms
+        .iter()
+        .any(|t| t.track == CareerTermTrack::OrganizedCrimeCartelSyndicate)
+    {
+        2
+    } else if dropped_out_at_15 {
+        1
+    } else {
+        0
+    };
+
+    LifepathBaselineResult {
+        age_years,
+        origin,
+        stage2_lit_eval,
+        stage2_math_eval,
+        stage3_math_eval,
+        stage3_sci_eval,
+        stage3_hum_eval,
+        dropped_out_at_15,
+        stage4a_hs_eval,
+        term_evals,
+        baseline_skills: skills,
+        granted_access_tags,
+        academic_tree_frozen,
+        career_skill_budget,
+        elective_skill_budget,
+        max_post_school_gain_per_skill,
+        campaign_sqm: cfg
+            .campaign_sqm_override
+            .unwrap_or(default_sqm)
+            .clamp(1, 10),
+        operational_heat: cfg
+            .operational_heat_override
+            .unwrap_or(default_heat)
+            .clamp(0, 10),
+        stage_history,
+    }
+}
+
+/// Automatically allocates available `career_skill_budget` and `elective_skill_budget` across the character's
+/// Career Track `recommended_skills()` and high-aptitude universal skills, strictly respecting all 4 canonical
+/// DAG gates (`validate_skill_advancement`) and `max_post_school_gain_per_skill`.
+pub fn auto_allocate_career_and_elective_skills(
+    baseline: &LifepathBaselineResult,
+    cfg: &LifepathBuildConfig,
+    chars: &CharacterCharacteristics,
+    aptitudes: &CharacterAptitudes,
+    skills: &mut BTreeMap<String, usize>,
+) {
+    // Ensure all baseline skills are at least at their Stage 1-4 floor
+    for (k, &v) in &baseline.baseline_skills {
+        let cur = skills.entry(k.clone()).or_insert(0);
+        if *cur < v {
+            *cur = v;
+        }
+    }
+
+    let total_budget = baseline.career_skill_budget + baseline.elective_skill_budget;
+    let current_spent: usize = skills
+        .iter()
+        .map(|(k, &v)| {
+            let floor = baseline.baseline_skills.get(k).copied().unwrap_or(0);
+            v.saturating_sub(floor)
+        })
+        .sum();
+    let mut remaining = total_budget.saturating_sub(current_spent);
+    if remaining == 0 {
+        return;
+    }
+
+    // Build priority candidate list from all Career Terms' recommended skills, followed by general staples
+    let mut candidates: Vec<&'static str> = Vec::new();
+    for term in cfg.career_terms.iter().take(4) {
+        for &sk_id in term.track.recommended_skills() {
+            if !candidates.contains(&sk_id) {
+                candidates.push(sk_id);
+            }
+        }
+    }
+    let fallback_electives = [
+        "alertness_situational_awareness",
+        "first_aid_bls_cpr",
+        "driving_wheeled_tracked",
+        "digital_ai_literacy",
+        "stealth_sneaking_hiding",
+        "persuasion_fast_talk",
+        "empathy_social_perception",
+        "running_sprinting",
+        "brawling_unarmed_striking",
+        "manual_dexterity_tinkering",
+    ];
+    for &sk_id in &fallback_electives {
+        if !candidates.contains(&sk_id) {
+            candidates.push(sk_id);
+        }
+    }
+
+    // Multi-pass allocation so parent prerequisites advance first and unlock child specializations
+    for _pass in 0..4 {
+        if remaining == 0 {
+            break;
+        }
+        let mut made_progress = false;
+        for &sk_id in &candidates {
+            if remaining == 0 {
+                break;
+            }
+            let cur_n = skills.get(sk_id).copied().unwrap_or(0);
+            let floor_n = baseline.baseline_skills.get(sk_id).copied().unwrap_or(0);
+            let gained_post_school = cur_n.saturating_sub(floor_n);
+            if gained_post_school >= baseline.max_post_school_gain_per_skill || cur_n >= 6 {
+                continue;
+            }
+            let target_n = cur_n + 1;
+            let validation = validate_skill_advancement(
+                sk_id,
+                target_n,
+                skills,
+                chars,
+                aptitudes,
+                &baseline.granted_access_tags,
+                baseline.academic_tree_frozen,
+            );
+            if validation.is_valid {
+                skills.insert(sk_id.to_string(), target_n);
+                remaining -= 1;
+                made_progress = true;
+            }
+        }
+        if !made_progress {
+            break;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_interactive_lifepath_builder_and_auto_skill_allocation() {
+        let chars = CharacterCharacteristics {
+            ana: 14,
+            dis: 13,
+            mem: 12,
+            for_stat: 11,
+            dex: 13,
+            sig: 12,
+            fit: 11,
+            hlt: 11,
+            ..Default::default()
+        };
+
+        let mut aptitudes = CharacterAptitudes::default();
+        aptitudes.set(AptitudeCode::AptQnt, 2);
+        aptitudes.set(AptitudeCode::AptFin, 1);
+
+        let cfg = LifepathBuildConfig {
+            origin_roll_2d20: 28, // Professional / Upper-Middle (SQM -2)
+            stage4a_hs_track: HighSchoolTrack::ApHonorsStemMagnet,
+            career_terms: vec![
+                CareerTermConfig {
+                    track: CareerTermTrack::UniversityUndergraduateStem,
+                    term_roll_pairs: [(14, 12), (13, 11)],
+                    override_successes: Some(2),
+                    waiver_override: false,
+                },
+                CareerTermConfig {
+                    track: CareerTermTrack::MilitaryCombatArmsSpecOps,
+                    term_roll_pairs: [(13, 10), (12, 9)],
+                    override_successes: Some(1),
+                    waiver_override: false,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let baseline = compute_lifepath_baseline_from_config(&cfg, &chars, &aptitudes);
+        assert_eq!(baseline.age_years, 26);
+        assert!(!baseline.academic_tree_frozen);
+        assert!(
+            baseline
+                .granted_access_tags
+                .contains(&SkillAccessTier::Academic)
+        );
+        assert!(
+            baseline
+                .granted_access_tags
+                .contains(&SkillAccessTier::Restricted)
+        );
+        assert_eq!(baseline.career_skill_budget, 7 + 6); // Term 1 Honors (7) + Term 2 Standard (6)
+        assert_eq!(baseline.elective_skill_budget, 2 + 4); // 2 base + 2*2 terms
+
+        let mut skills = baseline.baseline_skills.clone();
+        auto_allocate_career_and_elective_skills(&baseline, &cfg, &chars, &aptitudes, &mut skills);
+
+        let total_spent: usize = skills
+            .iter()
+            .map(|(k, &v)| {
+                let fl = baseline.baseline_skills.get(k).copied().unwrap_or(0);
+                v.saturating_sub(fl)
+            })
+            .sum();
+        assert_eq!(
+            total_spent,
+            baseline.career_skill_budget + baseline.elective_skill_budget
+        );
+    }
 
     #[test]
     fn test_mateo_vance_walkthrough_and_academic_freeze() {
@@ -745,19 +2015,18 @@ mod tests {
 
         // Mateo has Trigonometry N=2 and Fully Automatic Weapons N=2
         assert_eq!(mateo.skills.get("trigonometry"), Some(&2));
-        assert_eq!(
-            mateo.skills.get("fully_automatic_burst_weapons"),
-            Some(&2)
-        );
+        assert_eq!(mateo.skills.get("fully_automatic_burst_weapons"), Some(&2));
         assert!(mateo.academic_tree_frozen);
 
         // Despite ANA 13 and APT-QNT +3, Mateo is LOCKED out of Calculus & Linear Algebra because of Academic Tree Freeze
         let calc_audit = mateo.audit_skill_unlock("calculus_linear_algebra", 1);
         assert!(!calc_audit.is_valid);
-        assert!(calc_audit
-            .failures
-            .iter()
-            .any(|f| f.code == "MISSING_ACCESS_GATE"));
+        assert!(
+            calc_audit
+                .failures
+                .iter()
+                .any(|f| f.code == "MISSING_ACCESS_GATE")
+        );
     }
 
     #[test]
@@ -779,18 +2048,24 @@ mod tests {
         // 3. PARENT_PREREQ_SHORTFALL (requires Pistols >= 2 OR Long Guns >= 2, Priya has N = 0 in both)
         let full_auto_audit = priya.audit_skill_unlock("fully_automatic_burst_weapons", 1);
         assert!(!full_auto_audit.is_valid);
-        assert!(full_auto_audit
-            .failures
-            .iter()
-            .any(|f| f.code == "MISSING_ACCESS_GATE"));
-        assert!(full_auto_audit
-            .failures
-            .iter()
-            .any(|f| f.code == "MIN_CHARACTERISTIC_SHORTFALL"));
-        assert!(full_auto_audit
-            .failures
-            .iter()
-            .any(|f| f.code == "PARENT_PREREQ_SHORTFALL"));
+        assert!(
+            full_auto_audit
+                .failures
+                .iter()
+                .any(|f| f.code == "MISSING_ACCESS_GATE")
+        );
+        assert!(
+            full_auto_audit
+                .failures
+                .iter()
+                .any(|f| f.code == "MIN_CHARACTERISTIC_SHORTFALL")
+        );
+        assert!(
+            full_auto_audit
+                .failures
+                .iter()
+                .any(|f| f.code == "PARENT_PREREQ_SHORTFALL")
+        );
     }
 
     #[test]

@@ -179,11 +179,7 @@ pub const fn compute_d_cog_and_ooda(
     let base_d_cog = (max_cog + foc).div_euclid(2);
     let eff_d_cog = if is_concussed_or_dazed {
         let v = base_d_cog - 4;
-        if v < 1 {
-            1
-        } else {
-            v
-        }
+        if v < 1 { 1 } else { v }
     } else {
         base_d_cog
     };
@@ -423,8 +419,7 @@ pub fn compute_starting_tick(
     }
     let cog_mitigation = ((d_cog - 10).div_euclid(2)).max(0);
     let dis_mitigation = ((dis - 10).div_euclid(2)).max(0);
-    let effective_surprise =
-        (base_surprise_penalty_ticks - cog_mitigation - dis_mitigation).max(0);
+    let effective_surprise = (base_surprise_penalty_ticks - cog_mitigation - dis_mitigation).max(0);
     base_start + effective_surprise
 }
 
@@ -461,11 +456,7 @@ pub fn sort_tick_timeline(combatants: &mut [TickTimelineCombatant]) {
 pub const fn compute_ooda_reset_pivot_ticks(d_cog: i32, itu: i32) -> i32 {
     let bonus = (d_cog + itu).div_euclid(5);
     let raw = 5 - bonus;
-    if raw < 1 {
-        1
-    } else {
-        raw
-    }
+    if raw < 1 { 1 } else { raw }
 }
 
 /// Outcome of checking whether an incoming fast attack or suppression interrupts a declared action (§3.4).
@@ -1202,7 +1193,8 @@ mod tests {
     #[test]
     fn test_canonical_action_catalog_and_stealth_perception() {
         assert_eq!(CANONICAL_ACTION_CATALOG.len(), 37);
-        let speed_reload = lookup_canonical_action(CanonicalActionId::SpeedReloadDetachableMagDropEmpty);
+        let speed_reload =
+            lookup_canonical_action(CanonicalActionId::SpeedReloadDetachableMagDropEmpty);
         assert_eq!(speed_reload.base_tc_decide, 1);
         assert_eq!(speed_reload.base_tc_act, 5);
         assert_eq!(speed_reload.base_total_tc, 6);

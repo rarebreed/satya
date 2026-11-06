@@ -20,12 +20,13 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{Headers, HtmlElement, Request, RequestInit, Response};
 
-/// Canonical list of the 8 Tabbed Notebook tab slugs and their `(button_id, pane_id)` pairs.
+/// Canonical list of the 9 Tabbed Notebook tab slugs and their `(button_id, pane_id)` pairs.
 pub const NOTEBOOK_TABS: &[(&str, &str, &str)] = &[
     ("maps", "tab-btn-maps", "notebook-pane-maps"),
     ("dice", "tab-btn-dice", "notebook-pane-dice"),
     ("model", "tab-btn-model", "notebook-pane-model"),
     ("character", "tab-btn-character", "notebook-pane-character"),
+    ("wizard", "tab-btn-wizard", "notebook-pane-wizard"),
     ("combat", "tab-btn-combat", "notebook-pane-combat"),
     ("rules", "tab-btn-rules", "notebook-pane-rules"),
     ("docs", "tab-btn-docs", "notebook-pane-docs"),
@@ -33,7 +34,7 @@ pub const NOTEBOOK_TABS: &[(&str, &str, &str)] = &[
 ];
 
 /// Switches the active view inside the Left Tabbed Notebook (`#tabletop-canvas-card`) between
-/// `"maps"`, `"dice"`, `"model"`, `"character"`, `"combat"`, `"rules"`, `"docs"`, and `"iggy"`.
+/// `"maps"`, `"dice"`, `"model"`, `"character"`, `"wizard"`, `"combat"`, `"rules"`, `"docs"`, and `"iggy"`.
 #[wasm_bindgen]
 pub fn satya_select_notebook_tab(tab_id: String) {
     let target = if NOTEBOOK_TABS.iter().any(|(slug, _, _)| *slug == tab_id) {
@@ -76,6 +77,8 @@ pub fn satya_select_notebook_tab(tab_id: String) {
         render_combat_tracker();
     } else if target == "docs" {
         satya_refresh_gm_documents();
+    } else if target == "wizard" {
+        crate::wasm_client::wizard::render_character_wizard();
     }
 }
 

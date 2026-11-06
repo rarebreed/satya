@@ -89,6 +89,8 @@ pub struct SatyaWasmState {
     pub google_picker_api_key: Option<String>,
     /// Cached `GM_ONLY` documents visible to the current user in the active session.
     pub gm_documents: Vec<GmDocumentRecord>,
+    /// Interactive state for the Character Creation Wizard notebook tab (`#notebook-pane-wizard`).
+    pub wizard: crate::wasm_client::wizard::CharacterWizardState,
 }
 
 impl Default for SatyaWasmState {
@@ -127,6 +129,7 @@ impl Default for SatyaWasmState {
             google_oauth_client_id: None,
             google_picker_api_key: None,
             gm_documents: Vec::new(),
+            wizard: crate::wasm_client::wizard::CharacterWizardState::default(),
         }
     }
 }
