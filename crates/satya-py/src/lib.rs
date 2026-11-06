@@ -1819,6 +1819,121 @@ pub fn resolve_canonical_armor_impact(
     Ok(d.unbind())
 }
 
+/// Resolves a `1d20` Anatomical Hit Location roll and Called Shot $\Delta_{\text{ext}}$ (`health_and_trauma.md` §1).
+#[pyfunction]
+#[pyo3(signature = (d20_roll, attacker_control=10, defender_control=10))]
+pub fn resolve_hit_location_d20(
+    py: Python<'_>,
+    d20_roll: i32,
+    attacker_control: i32,
+    defender_control: i32,
+) -> PyResult<Py<PyDict>> {
+    let spec = satya_engine::resolve_hit_location_d20(d20_roll);
+    let broad_called_shot_delta_ext = satya_engine::compute_called_shot_delta_ext(
+        satya_engine::CalledShotZoneTier::BroadZone,
+        attacker_control,
+        defender_control,
+    );
+    let d = PyDict::new(py);
+    d.set_item("name", spec.name)?;
+    d.set_item("d20_min", spec.d20_min)?;
+    d.set_item("d20_max", spec.d20_max)?;
+    d.set_item("called_shot_delta_ext", spec.called_shot_delta_ext)?;
+    d.set_item("broad_called_shot_delta_ext", broad_called_shot_delta_ext)?;
+    d.set_item("slashes_tempo_cap", spec.slashes_tempo_cap)?;
+    d.set_item("slashes_control_cap", spec.slashes_control_cap)?;
+    d.set_item("slashes_force_cap", spec.slashes_force_cap)?;
+    d.set_item("major_arterial_hazard", spec.major_arterial_hazard)?;
+    d.set_item("mechanical_notes", spec.mechanical_notes)?;
+    Ok(d.unbind())
+}
+
+/// Evaluates Fatigue Level (`0–5`), Breath-Holding, Asphyxiation, and Bloodloss Hypovolemic Shock (`health_and_trauma.md` §2–§3).
+#[pyfunction]
+#[pyo3(signature = (fatigue_level=0, fit=10, took_full_breath=true, is_vigorous_activity=false, asphyxia_ticks=0, is_vascular_blood_choke=false, blood_units_lost=0.0))]
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_health_fatigue_and_bleed(
+    py: Python<'_>,
+    fatigue_level: i32,
+    fit: i32,
+    took_full_breath: bool,
+    is_vigorous_activity: bool,
+    asphyxia_ticks: i32,
+    is_vascular_blood_choke: bool,
+    blood_units_lost: f64,
+) -> PyResult<Py<PyDict>> {
+    let fat = satya_engine::evaluate_fatigue_level(fatigue_level);
+    let asph = satya_engine::evaluate_breath_holding_and_asphyxiation(
+        fit,
+        fatigue_level,
+        took_full_breath,
+        is_vigorous_activity,
+        asphyxia_ticks,
+        is_vascular_blood_choke,
+    );
+    let bleed = satya_engine::evaluate_blood_loss_progression(blood_units_lost, &[], 0);
+    let d = PyDict::new(py);
+    d.set_item("fatigue_condition", fat.condition_name)?;
+    d.set_item("fatigue_delta_int", fat.delta_int)?;
+    d.set_item("fatigue_pool_drain", fat.tactical_pool_drain)?;
+    d.set_item("fatigue_time_factor", fat.action_time_factor)?;
+    d.set_item("spd_and_for_cap_penalty", fat.spd_and_for_cap_penalty)?;
+    d.set_item("can_sprint", fat.can_sprint)?;
+    d.set_item(
+        "breath_holding_capacity_ticks",
+        asph.breath_holding_capacity_ticks,
+    )?;
+    d.set_item("resulting_fatigue_level", asph.resulting_fatigue_level)?;
+    d.set_item(
+        "is_unconscious",
+        fat.is_unconscious || asph.is_unconscious || bleed.immediate_unconsciousness_and_coma,
+    )?;
+    d.set_item("remaining_blood_units", bleed.remaining_blood_units)?;
+    d.set_item(
+        "hypovolemic_shock_added",
+        bleed.added_wound_shock_index,
+    )?;
+    Ok(d.unbind())
+}
+
+/// Evaluates Sprint Velocity ($V_{\text{sprint}}$) and Load-Bearing Encumbrance (`Tiers 0–4`, `movement_vehicles_and_environment.md` §1–§2).
+#[pyfunction]
+#[pyo3(signature = (spd_eff=10, hgt_m=1.75, mas_kg=70.0, for_stat=10, carried_mass_kg=12.0, exo_offset_kg=0.0))]
+pub fn evaluate_movement_and_encumbrance(
+    py: Python<'_>,
+    spd_eff: i32,
+    hgt_m: f64,
+    mas_kg: f64,
+    for_stat: i32,
+    carried_mass_kg: f64,
+    exo_offset_kg: f64,
+) -> PyResult<Py<PyDict>> {
+    let sprint = satya_engine::compute_stride_and_sprint_velocity(spd_eff, hgt_m);
+    let enc = satya_engine::evaluate_encumbrance_load(
+        mas_kg,
+        for_stat,
+        &[satya_engine::CarriedLoadItem {
+            mass_kg: carried_mass_kg,
+            carry_method: satya_engine::CarryErgonomicMethod::BalancedWebbingOrRucksack,
+        }],
+        exo_offset_kg,
+    );
+    let d = PyDict::new(py);
+    d.set_item("stride_factor_sf", sprint.stride_factor_sf)?;
+    d.set_item("v_sprint_m_per_sec", sprint.v_sprint_m_per_sec)?;
+    d.set_item("v_sprint_m_per_tick", sprint.v_sprint_m_per_tick)?;
+    d.set_item("base_comfort_load_kg", enc.base_comfort_load_kg)?;
+    d.set_item("effective_load_kg", enc.effective_load_kg)?;
+    d.set_item("load_ratio", enc.load_ratio)?;
+    d.set_item("encumbrance_tier_0_to_4", enc.tier.tier_number())?;
+    d.set_item("tempo_cap_penalty", enc.tempo_cap_penalty)?;
+    d.set_item("kin_penalty", enc.kin_penalty)?;
+    d.set_item("action_time_factor_delta", enc.action_time_factor_delta)?;
+    d.set_item("can_sprint", enc.can_sprint)?;
+    d.set_item("max_deadlift_drag_limit_kg", enc.max_deadlift_drag_limit_kg)?;
+    Ok(d.unbind())
+}
+
 /// PyO3 module definition for `satya_py`.
 #[pymodule]
 pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1883,6 +1998,9 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_psyche_friction_check, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_ranged_recoil_and_suppression, m)?)?;
     m.add_function(wrap_pyfunction!(resolve_canonical_armor_impact, m)?)?;
+    m.add_function(wrap_pyfunction!(resolve_hit_location_d20, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_health_fatigue_and_bleed, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_movement_and_encumbrance, m)?)?;
 
     Ok(())
 }

@@ -1,13 +1,9 @@
 {
   "book_title": "Satya: A Grounded Tabletop Role-Playing System",
-  "using_satya_py": true,
   "chapter_count": 14,
   "chapters": [
     {
       "chapter_id": "design_philosophy",
-      "part": "Part I: Foundation & Mathematical Calibration",
-      "title": "An RPG for a More Civilized Age: Design Philosophy",
-      "relative_path": "01-foundation/design_philosophy.md",
       "description": "Origins of Satya, realism vs. escapism, and how Satya solves 17 structural flaws of traditional RPG systems.",
       "headings": [
         "1. My Gaming Background",
@@ -27,13 +23,13 @@
         "5.10 Anatomical Trauma, Wound Shock, and Fatigue Over Hit Points",
         "5.11 The Tactical Triad (Tempo, Control, Force) Over Feat Bloat"
       ],
-      "html_file": "design_philosophy.html"
+      "html_file": "design_philosophy.html",
+      "part": "Part I: Foundation & Mathematical Calibration",
+      "relative_path": "01-foundation/design_philosophy.md",
+      "title": "An RPG for a More Civilized Age: Design Philosophy"
     },
     {
       "chapter_id": "notation_glossary",
-      "part": "Part I: Foundation & Mathematical Calibration",
-      "title": "Mathematical Notation, Variables & Formula Glossary",
-      "relative_path": "01-foundation/mathematical_notation_glossary.md",
       "description": "Canonical reference for every mathematical variable, subscript (_P, _GM, _n, _eff), dice/cascade symbol (TN_P, TN_GM, delta_over, delta_under, Delta M), attribute abbreviation, OODA/Action Clock metric, and Tactical Triad formula.",
       "headings": [
         "1. Universal Subscript & Prefix Conventions",
@@ -44,13 +40,13 @@
         "4. Action Economy, OODA Loop, Psyche & Social Combat Variables",
         "5. Combat Tactical Triad (\"Envelope & Fill\"), Ballistics & Survival Variables"
       ],
-      "html_file": "notation_glossary.html"
+      "html_file": "notation_glossary.html",
+      "part": "Part I: Foundation & Mathematical Calibration",
+      "relative_path": "01-foundation/mathematical_notation_glossary.md",
+      "title": "Mathematical Notation, Variables & Formula Glossary"
     },
     {
       "chapter_id": "probability",
-      "part": "Part I: Foundation & Mathematical Calibration",
-      "title": "Probability & Calibration of the Cascading Dice Mechanic",
-      "relative_path": "01-foundation/probability_and_calibration.md",
       "description": "Mathematical foundation, distribution topology (skewness, modality, tail behavior), scale invariance across K, avoiding the Skilled Botch Paradox, and the 1-Pair Tiered GM Resistance Rule.",
       "headings": [
         "1. Mathematical Structure of the Two-List Cascading (\"Watershed\") Process",
@@ -73,23 +69,23 @@
         "6.5 Diagonal Shift-Invariance & Epistemic Uncertainty Table",
         "7. Codebase & Interactive Simulation Tools"
       ],
-      "html_file": "probability.html"
+      "html_file": "probability.html",
+      "part": "Part I: Foundation & Mathematical Calibration",
+      "relative_path": "01-foundation/probability_and_calibration.md",
+      "title": "Probability & Calibration of the Cascading Dice Mechanic"
     },
     {
       "chapter_id": "tasks",
-      "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
-      "title": "Cascading 2d20 Engine & Task Resolution",
-      "relative_path": "02-core-mechanics/cascading_d20_and_tasks.md",
       "description": "Canonical Two-List Cascading (2d20) dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, 5-step Task Pipeline, Tool Tiers, Gate Classifications, Master Task Table, and Extended Project Clocks.",
       "headings": [
         "1. The Always-Contested Task Resolution Pipeline",
         "2. Step 1: Task Gate Classifications, Prerequisites & Tools",
         "2.1 Three Task Gate Classifications (`Class A / B / C`)",
-        "2.2 Tool Dependency Tiers (`[Tool]`) & 2031\u20132035 Smart-Tech Modifiers",
+        "2.2 Tool Dependency Tiers (`[Tool]`) & 2031–2035 Smart-Tech Modifiers",
         "3. Step 2: The Four Task Factors (`N` Skills, Target Number `31 - C`, $\\Delta_{\\text{int}}$, $\\Delta_{\\text{ext}}$ & Degrees of Success)",
-        "3.1 Factor 1: Skill Level ($N \\in [1, 8]$, Mythic Cap `10`) \u2014 Number of `2d20` Pairs",
-        "3.2 Factor 2: Controlling Characteristic ($C \\in [1, 20]$) \u2014 Baseline Target Shift",
-        "3.3 Factor 3: Internal Character Modifiers ($\\Delta_{\\text{int}} \\in [-2, +10]$) \u2014 Stumble Recovery Penalty",
+        "3.1 Factor 1: Skill Level ($N \\in [1, 8]$, Mythic Cap `10`) — Number of `2d20` Pairs",
+        "3.2 Factor 2: Controlling Characteristic ($C \\in [1, 20]$) — Baseline Target Shift",
+        "3.3 Factor 3: Internal Character Modifiers ($\\Delta_{\\text{int}} \\in [-2, +10]$) — Stumble Recovery Penalty",
         "3.4 Factor 4: Known Tool Modifier ($\\Delta_{\\text{tool}}$) vs. Hidden External Difficulty ($\\Delta_{\\text{ext}}$)",
         "4. Step 3 & 4: Rolling the Player's Cascade & The GM's Hidden Resistance",
         "4.1 The Player's Sequential `2d20` Cascade (Against Known $\\text{TN}_P = 31 - C_P + \\Delta_{\\text{tool}}$)",
@@ -106,19 +102,19 @@
         "7.2 Worked Example 2: Floor Breach (`SuccessWithFloorBreach`) & Lucky Break (`LuckyBreakSuccess`)",
         "8. Master Task Requirements Table (Skills, Prerequisites, Tools & Hidden GM Resistance)"
       ],
-      "html_file": "tasks.html"
+      "html_file": "tasks.html",
+      "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
+      "relative_path": "02-core-mechanics/cascading_d20_and_tasks.md",
+      "title": "Cascading 2d20 Engine & Task Resolution"
     },
     {
       "chapter_id": "action_economy",
-      "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
-      "title": "Action Economy, OODA Loop, Time Scales & Stealth",
-      "relative_path": "02-core-mechanics/action_economy_and_ooda.md",
       "description": "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Full OODA Loop & Quick Thinking (D_cog), Count-Up Clock mechanics, Base TC tables, action_time_factor, and Multi-Sensory Stealth & Detection.",
       "headings": [
         "1. Temporal Calibration: Ticks, Seconds & Minutes",
         "2. The Full OODA Loop: \"Quick Thinking\" (`TC_decide`) vs. Physical Execution (`TC_act`)",
         "2.1 Mapping OODA Phases to Satya Characteristics",
-        "2.2 The Cognitive Decision Score ($D_{\\text{cog}}$ \u2014 \"Quick Thinking\")",
+        "2.2 The Cognitive Decision Score ($D_{\\text{cog}}$ — \"Quick Thinking\")",
         "2.3 Two-Component Action Cost Formula ($\\text{Base TC} = \\text{TC}_{\\text{decide}} + \\text{TC}_{\\text{act}}$)",
         "3. How the Continuous Count-Up Clock Works",
         "3.1 Quick Reference: Engine Combat Stances (`CombatStance`)",
@@ -137,17 +133,17 @@
         "6.1 Resolving Stealth vs. Detection (`2d20` Opposed Cascade)",
         "6.2 Illumination, Visibility & Acoustic Modifiers ($\\Delta_{\\text{ext}}$)"
       ],
-      "html_file": "action_economy.html"
+      "html_file": "action_economy.html",
+      "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
+      "relative_path": "02-core-mechanics/action_economy_and_ooda.md",
+      "title": "Action Economy, OODA Loop, Time Scales & Stealth"
     },
     {
       "chapter_id": "characteristics",
-      "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
-      "title": "Characteristics, Senses, Psyche & Aptitudes",
-      "relative_path": "03-character/characteristics_and_aptitudes.md",
       "description": "Physical, Mental, Social, Sensory, and Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG) characteristics on the 1-20 Controlling Scale, derived metrics, and domain Aptitudes (A in [-2, +3]).",
       "headings": [
         "1. Architectural Overview & Taxonomy",
-        "2. Characteristic Scales: Spectrum (`0.0\u2013100.0`) & `2d20` Controlling Scale (`1\u201320`)",
+        "2. Characteristic Scales: Spectrum (`0.0–100.0`) & `2d20` Controlling Scale (`1–20`)",
         "3. Physical Primary Characteristics",
         "3.1 Key Physical Distinctions in Satya",
         "4. Mental Primary Characteristics",
@@ -164,13 +160,13 @@
         "9.1 Mechanical Effects of Aptitudes",
         "10. How Characteristics Govern Skills (`Control (C)`)"
       ],
-      "html_file": "characteristics.html"
+      "html_file": "characteristics.html",
+      "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
+      "relative_path": "03-character/characteristics_and_aptitudes.md",
+      "title": "Characteristics, Senses, Psyche & Aptitudes"
     },
     {
       "chapter_id": "skills_and_trees",
-      "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
-      "title": "Skill System & Hierarchical Skill Trees",
-      "relative_path": "03-character/skills_and_trees.md",
       "description": "Talents (TAL) vs. Physical (PHY), Knowledge (KNO), and Hybrid (PHY/KNO) skills, Multi-Category taxonomy, [Access] restriction tiers, and the 8 Hierarchical Skill Trees.",
       "headings": [
         "1. Core Design Philosophy",
@@ -185,41 +181,41 @@
         "3.3 Tree 2: Physical Sciences, Engineering & Practical Trades (`Science`, `Technical`)",
         "3.4 Tree 3: Computing, AI 2.0 & Cyberwarfare (`Cyber`, `Technical`, `Science`)",
         "3.5 Tree 4: Biology, Medicine, Biotech & Forensics (`Medical`, `Science`)",
-        "3.6 Tree 5: Combat \u2014 Unarmed, Melee, Firearms & Heavy Ordnance (`Combat`, `Athletic`, `Technical`)",
+        "3.6 Tree 5: Combat — Unarmed, Melee, Firearms & Heavy Ordnance (`Combat`, `Athletic`, `Technical`)",
         "3.7 Tree 6: Athletics, Vehicles, Aviation & Drone Operations (`Athletic`, `Technical`, `Fieldcraft`)",
         "3.8 Tree 7: Social, Influence, Interrogation & Psychological Warfare (`Social`, `Knowledge`, `Fieldcraft`)",
         "3.9 Tree 8: Literacy, Law, Intelligence, Tradecraft & Artistic (`Knowledge`, `Fieldcraft`, `Artistic`)"
       ],
-      "html_file": "skills_and_trees.html"
+      "html_file": "skills_and_trees.html",
+      "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
+      "relative_path": "03-character/skills_and_trees.md",
+      "title": "Skill System & Hierarchical Skill Trees"
     },
     {
       "chapter_id": "lifepaths_and_economy",
-      "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
-      "title": "Lifepath Character Creation, Socioeconomic Upkeep & Heat",
-      "relative_path": "03-character/lifepaths_and_economy.md",
       "description": "Chronological Lifepath education & career progression (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
       "headings": [
         "1. Chronological Lifepath Architecture",
-        "1.1 Stage 1: Socioeconomic Origin & School Quality (Ages 0\u20135)",
+        "1.1 Stage 1: Socioeconomic Origin & School Quality (Ages 0–5)",
         "1.2 The Educational Advancement Roll Mechanic (`DIS` + Mental Characteristic + `APT`)",
-        "1.3 Stage 2: Elementary School (Ages 6\u201311)",
-        "1.4 Stage 3: Junior High / Middle School (Ages 12\u201314)",
-        "1.5 Stage 4: Ages 15\u201318 \u2014 High School Track vs. Street Gang / Dropout Path",
+        "1.3 Stage 2: Elementary School (Ages 6–11)",
+        "1.4 Stage 3: Junior High / Middle School (Ages 12–14)",
+        "1.5 Stage 4: Ages 15–18 — High School Track vs. Street Gang / Dropout Path",
         "1.6 Stage 5: Adult Career & Higher Education Terms (Ages 18+, 4-Year Terms)",
         "2. Complete Worked Lifepath Walkthroughs",
-        "2.1 Walkthrough A: Mateo Vance \u2014 The Gifted Dropout & Gang Enforcer",
-        "2.2 Walkthrough B: Dr. Priya Nair \u2014 Corporate AI & Robotics Scientist (Why She Cannot Take Full-Auto)",
-        "3. Campaign Economy, Upkeep (`SQM 1\u201310`), `[Access]` Procurement & `Heat`",
-        "3.1 Socioeconomic Tier (`SQM 1\u201310`) & Lifestyle Upkeep",
+        "2.1 Walkthrough A: Mateo Vance — The Gifted Dropout & Gang Enforcer",
+        "2.2 Walkthrough B: Dr. Priya Nair — Corporate AI & Robotics Scientist (Why She Cannot Take Full-Auto)",
+        "3. Campaign Economy, Upkeep (`SQM 1–10`), `[Access]` Procurement & `Heat`",
+        "3.1 Socioeconomic Tier (`SQM 1–10`) & Lifestyle Upkeep",
         "3.2 Black-Market Procurement (`[Access]` Gates) & Law Enforcement `Heat`"
       ],
-      "html_file": "lifepaths_and_economy.html"
+      "html_file": "lifepaths_and_economy.html",
+      "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
+      "relative_path": "03-character/lifepaths_and_economy.md",
+      "title": "Lifepath Character Creation, Socioeconomic Upkeep & Heat"
     },
     {
       "chapter_id": "psyche_and_social",
-      "part": "Part IV: Psyche, Morale & Social Combat",
-      "title": "Psyche, Morale & Social Combat",
-      "relative_path": "04-psyche-and-social/psyche_morale_and_social_combat.md",
       "description": "Acting against Psyche (DIS Friction Checks & Trait Drift), Conviction Surges, Psychological Drives (Harm:Other vs. Self:Protect), the 5 Morale Conditions, and Social Combat (Cognitive Dissonance).",
       "headings": [
         "1. Acting Against One's Psyche: Friction Checks & Trait Drift",
@@ -238,13 +234,13 @@
         "4.3 The Four Social \"Wound\" Types: Composure, Doubt, Cognitive Dissonance & Ego Wounds",
         "4.4 Worked Example of Cognitive Dissonance: High `Openness` vs. High `Belongingness`"
       ],
-      "html_file": "psyche_and_social.html"
+      "html_file": "psyche_and_social.html",
+      "part": "Part IV: Psyche, Morale & Social Combat",
+      "relative_path": "04-psyche-and-social/psyche_morale_and_social_combat.md",
+      "title": "Psyche, Morale & Social Combat"
     },
     {
       "chapter_id": "tactical_triad",
-      "part": "Part V: Combat Architecture, Close Quarters & Firefights",
-      "title": "Combat Architecture, Tactical Triad & Pools",
-      "relative_path": "05-combat/tactical_triad_and_pools.md",
       "description": "Combat philosophy, anatomical trauma over Hit Points, Count-Up Action Clock overview, and the Envelope & Fill Tactical Pool Architecture (P_base = C_combat + 3N) across Tempo, Control, and Force.",
       "headings": [
         "1. Aspects of Combat & Genre Support",
@@ -259,17 +255,17 @@
         "4.4 Mechanical Resolution of Tempo, Control, and Force",
         "5. Companion Combat Chapters"
       ],
-      "html_file": "tactical_triad.html"
+      "html_file": "tactical_triad.html",
+      "part": "Part V: Combat Architecture, Close Quarters & Firefights",
+      "relative_path": "05-combat/tactical_triad_and_pools.md",
+      "title": "Combat Architecture, Tactical Triad & Pools"
     },
     {
       "chapter_id": "melee_combat",
-      "part": "Part V: Combat Architecture, Close Quarters & Firefights",
-      "title": "Melee Combat, Close-Quarters Tactics & The Tactical Triad",
-      "relative_path": "05-combat/melee_combat.md",
       "description": "Close-quarters anatomy, the Tactical Triad (Tempo, Control, Force), Guard & Seizing the Initiative, Root vs. throws, and Viktor vs. Elena walkthrough.",
       "headings": [
         "1. Anatomy of a Melee Exchange",
-        "2. The Tactical Triad in Close Quarters (`Tempo`, `Control`, `Force` \u2014 `TCF`)",
+        "2. The Tactical Triad in Close Quarters (`Tempo`, `Control`, `Force` — `TCF`)",
         "2.1 Tempo *(Speed, Footwork & Reach)*",
         "2.2 Control *(Precision, Limb Traps & Guard)*",
         "2.3 Force *(Kinetic Impact & Grounded Root)*",
@@ -282,34 +278,46 @@
         "5.1 Worked Example 1: Heavy Street Bruiser (Viktor) vs. Trained Kickboxer (Elena)",
         "5.2 Worked Example 2: Clinch, Off-Balancing (`Kuzushi`) & Hip Throw vs. `Root`"
       ],
-      "html_file": "melee_combat.html"
+      "html_file": "melee_combat.html",
+      "part": "Part V: Combat Architecture, Close Quarters & Firefights",
+      "relative_path": "05-combat/melee_combat.md",
+      "title": "Melee Combat, Close-Quarters Tactics & The Tactical Triad"
     },
     {
       "chapter_id": "ranged_combat_and_armor",
-      "part": "Part V: Combat Architecture, Close Quarters & Firefights",
-      "title": "Ranged Combat, Suppression, Armor & Weapon Reliability",
-      "relative_path": "05-combat/ranged_combat_and_armor.md",
       "description": "Ranged fire modes & Recoil Ratings (R), Suppression vs. Morale, Armor Penetration (PR) vs. Behind-Armor Blunt Trauma (BABT), Weapon Reliability (Rel) & Malfunctions, and firefight walkthroughs.",
       "headings": [
-        "1. Ranged Combat, Suppression & Firefight Mechanics",
-        "1.1 Ranged Weapon Recoil & Action Modes in the Triad",
-        "2. Armor, Penetration & Behind-Armor Blunt Trauma (BABT)",
-        "2.1 Armor Profiles (`Coverage`, `Protection Rating`, `Blunt Damping` & `Mass`)",
-        "2.2 Resolving Armor vs. Incoming Hits (`Penetration` vs. `BABT`)",
-        "3. Weapon & Equipment Reliability, Maintenance & Malfunctions",
-        "3.1 Weapon & Tool Reliability Ratings (`Rel`)",
-        "3.2 When Malfunctions Trigger (Integration with `2d20` Botch Rules)",
-        "4. Complete Worked Examples",
-        "4.1 Worked Example 1: Ranged Firefight (Alley Ambush \u2014 Street SMG vs. Tactical Handgun)",
-        "4.2 Worked Example 2: Ranged Maneuver & Evasion (Sniper Overwatch vs. Grenade Flush)"
+        "1. Why Guns Don't Feel the Same in Satya: Granular Engineering Architecture",
+        "2. Ranged Combat in the Tactical Triad (`Tempo`, `Control`, `Force`)",
+        "2.1 Ranged Fire Modes, Base `TC` & Recoil Bracing",
+        "3. Ammunition Architecture & Internal/External Ballistics",
+        "3.1 How Kinetic Energy ($E_k$) Is Calculated",
+        "3.2 Master Ammunition Reference Table",
+        "3.3 Feed Mechanisms, Capacity & Reload Dynamics",
+        "4. Terminal Ballistics: How Kinetic Energy, Caliber & Inverse Accuracy Determine Damage",
+        "4.1 The Three Components of Ballistic Damage",
+        "4.2 Unified Ballistic Impact, Penetration & Wound Tier Formulas",
+        "5. Firearm Architecture, Accuracy ($\\text{Acc}$) & Recoil Engineering",
+        "5.1 Action Types: Cycle Mechanics, Gas Loss, Accuracy & Reliability",
+        "5.2 Weight, Center of Gravity ($\\Delta_{\\text{CoG}}$), Length ($\\text{OAL}$), Barrel Specs & Tolerances",
+        "6. Reliability ($\\text{Rel}$), Tolerances ($\\tau_{\\text{tol}}$), Jam Clearance & Strip Time",
+        "6.1 The Accuracy–Reliability Tolerance Trade-Off ($\\tau_{\\text{tol}}$)",
+        "6.2 When Malfunctions Trigger, Clear Jam Time ($\\text{TC}_{\\text{clear}}$) & Strip Time ($\\text{TC}_{\\text{strip}}$)",
+        "7. Master Granular Firearms Catalog (`2032–2035` Benchmark Weapons)",
+        "8. Granular Armor Engineering, Penetration (`PR`) vs. `BABT` & Degradation",
+        "8.1 Armor Engineering Properties & Material Physics",
+        "8.2 Resolving Armor vs. Incoming Hits (`Penetration` vs. `BABT`)",
+        "9. Complete Worked Examples",
+        "9.1 Worked Example 1: Ranged Firefight (Alley Ambush — Sear-Modified Drum Pistol vs. Duty Service Pistol)",
+        "9.2 Worked Example 2: Engineering Comparison — Loose-Tolerance `7.62×39mm` AKM vs. Free-Floated Bolt-Action `6.5mm Creedmoor` at 400 Meters"
       ],
-      "html_file": "ranged_combat_and_armor.html"
+      "html_file": "ranged_combat_and_armor.html",
+      "part": "Part V: Combat Architecture, Close Quarters & Firefights",
+      "relative_path": "05-combat/ranged_combat_and_armor.md",
+      "title": "Ranged Combat, Suppression, Armor & Weapon Reliability"
     },
     {
       "chapter_id": "health_and_trauma",
-      "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
-      "title": "Health, Anatomical Trauma, Fatigue & Mental Conditions",
-      "relative_path": "06-health-and-survival/health_and_trauma.md",
       "description": "1d20 Hit Locations & Called Shots, Fatigue, Structural Wounds, Broken Bones, Hemorrhaging & Blood Volume, Wound Shock, Status Effects, and Mental Trauma.",
       "headings": [
         "1. Hit Locations & Specificity of Damage Effects",
@@ -317,10 +325,10 @@
         "1.2 Master Anatomical Hit Location & Specificity Table",
         "2. Physical Short-Term Damage: Fatigue, Exertion & Asphyxiation",
         "2.1 Exertion Marks & The Fatigue Threshold (`FT`)",
-        "2.2 The Six Fatigue Levels (`0\u20135`)",
+        "2.2 The Six Fatigue Levels (`0–5`)",
         "2.3 Breath-Holding, Choking & Asphyxiation",
         "3. Physical Long-Term Damage: Broken Bones, Hemorrhaging & Shock",
-        "3.1 Structural Wound Severity Tiers (`Tiers 1\u20135`)",
+        "3.1 Structural Wound Severity Tiers (`Tiers 1–5`)",
         "3.2 Broken Bones & Joint Dislocations",
         "3.3 Hemorrhaging & Blood Volume (`bleed_rate`)",
         "3.4 Systemic Wound Shock (`wound_shock_index`) & `WSR` Saves",
@@ -330,13 +338,13 @@
         "5.2 Long-Term Psychological Scars & Trauma Recovery",
         "6. Medical Triage, Stabilization & Healing Timelines"
       ],
-      "html_file": "health_and_trauma.html"
+      "html_file": "health_and_trauma.html",
+      "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
+      "relative_path": "06-health-and-survival/health_and_trauma.md",
+      "title": "Health, Anatomical Trauma, Fatigue & Mental Conditions"
     },
     {
       "chapter_id": "movement_and_environment",
-      "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
-      "title": "Movement, Encumbrance, Vehicles & Environmental Survival",
-      "relative_path": "06-health-and-survival/movement_vehicles_and_environment.md",
       "description": "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, Vehicles & High-Speed Chases, Hydration, Starvation, Temperature (Hypothermia/Heatstroke), Hypoxia, and Toxins.",
       "headings": [
         "1. Movement Architecture: Combat & Non-Combat Gaits",
@@ -347,7 +355,7 @@
         "2. Encumbrance & Load-Bearing Architecture",
         "2.1 Calculating Base Comfort Load ($L_{\\text{base}}$)",
         "2.2 Ergonomic Load Multipliers (How Weight Is Carried)",
-        "2.3 The Five Encumbrance Tiers (`Tiers 0\u20134`)",
+        "2.3 The Five Encumbrance Tiers (`Tiers 0–4`)",
         "3. Vehicles, High-Speed Chases & Crash / G-Force Physics",
         "4. Environment & Survival Systems: Water, Food, Temperature & Atmosphere",
         "4.1 Hydration & Water Deprivation",
@@ -355,7 +363,10 @@
         "4.3 Temperature Extremes: Cold (Hypothermia) & Heat (Hyperthermia)",
         "4.4 Sleep Deprivation, Atmospheric Pressure, Radiation & Toxins"
       ],
-      "html_file": "movement_and_environment.html"
+      "html_file": "movement_and_environment.html",
+      "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
+      "relative_path": "06-health-and-survival/movement_vehicles_and_environment.md",
+      "title": "Movement, Encumbrance, Vehicles & Environmental Survival"
     }
   ]
 }

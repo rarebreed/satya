@@ -14,13 +14,13 @@
 
 use serde::{Deserialize, Serialize};
 
-/// The 6 canonical time scales of the Satya Engine (§1.1).
+/// The 6 canonical time scales of the Satya Engine (§1.1, calibrated at `1 Tick = 0.25s`, `4 Ticks = 1s`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TemporalLayer {
-    /// Layer 1: `0.5 seconds` per Tick (continuous count-up timeline)
+    /// Layer 1: `0.25 seconds` per Tick (`4 Ticks = 1s`, continuous count-up timeline)
     Layer1TacticalTick,
-    /// Layer 2: `3–7 seconds` (`6–14 Ticks`) single combat or emergency action window
+    /// Layer 2: `3–7 seconds` (`12–28 Ticks`) single combat or emergency action window
     Layer2ActionWindow,
     /// Layer 3: `5 minutes` post-combat triage, quick lockpick, room search, breather
     Layer3BreatherTurn,
@@ -32,22 +32,24 @@ pub enum TemporalLayer {
     Layer6CampaignDowntime,
 }
 
-/// Encumbrance tier governing physical action speed and stealth noise/silhouette (§5.1, §6.1).
+/// Encumbrance tier governing physical action speed and stealth noise/silhouette (§5.1, §6.1, and `movement_vehicles_and_environment.md` §2.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EncumbranceTier {
-    /// Tier 1: Unencumbered (`+0.00` time factor, `+0` stealth $\Delta_{\text{ext}}$)
+    /// Tier 0 / 1: Unencumbered ($\le 1.0 \times L_{\text{base}}$, `+0.00` time factor, `+0` stealth $\Delta_{\text{ext}}$)
     Tier1Unencumbered,
-    /// Tier 2: Light Load (`+0.10` physical time factor, `+2` stealth $\Delta_{\text{ext}}$)
+    /// Tier 1 Patrol Load ($1.01\text{–}1.5 \times L_{\text{base}}$, `+0.05` physical time factor, `-1` $T_{\max}$, `+1` stealth/parkour $\Delta_{\text{ext}}$)
+    Tier1LightPatrol,
+    /// Tier 2 Tactical / Fighting Load ($1.51\text{–}2.5 \times L_{\text{base}}$, `+0.10` physical time factor, `-3` $T_{\max}$, `-2` `KIN`, `+2` stealth $\Delta_{\text{ext}}$)
     Tier2Light,
-    /// Tier 3: Medium Load (`+0.25` physical time factor, `+4` stealth $\Delta_{\text{ext}}$)
+    /// Tier 3 Heavy / March Load ($2.51\text{–}4.0 \times L_{\text{base}}$, `+0.25` physical time factor, `-6` $T_{\max}$, `-4` `KIN`, `+4` stealth $\Delta_{\text{ext}}$)
     Tier3Medium,
-    /// Tier 4: Heavy Load (`+0.50` physical time factor, `+6` stealth $\Delta_{\text{ext}}$)
+    /// Tier 4 Overloaded / Staggering ($4.01\text{–}6.0 \times L_{\text{base}}$, `+0.50` physical time factor, `-10` $T_{\max}$, `-8` `KIN`, `+6` stealth $\Delta_{\text{ext}}$)
     Tier4Heavy,
 }
 
 impl EncumbranceTier {
-    /// Convert a numeric tier (`1..=4`) into `EncumbranceTier`.
+    /// Convert a legacy `1..=4` numeric tier into `EncumbranceTier`.
     #[must_use]
     pub const fn from_tier_number(tier: u8) -> Self {
         match tier {
@@ -58,24 +60,38 @@ impl EncumbranceTier {
         }
     }
 
-    /// Physical `action_time_factor` delta ($\Delta_{\text{enc}}$) (§5.1).
+    /// Convert a `0..=4` [`crate::health_survival::LoadEncumbranceTier`] number (`0..=4`) into `EncumbranceTier`.
+    #[must_use]
+    pub const fn from_load_tier_0_to_4(tier_0_to_4: u8) -> Self {
+        match tier_0_to_4 {
+            0 => Self::Tier1Unencumbered,
+            1 => Self::Tier1LightPatrol,
+            2 => Self::Tier2Light,
+            3 => Self::Tier3Medium,
+            4.. => Self::Tier4Heavy,
+        }
+    }
+
+    /// Physical `action_time_factor` delta ($\Delta_{\text{enc}}$) (§5.1, `movement_vehicles_and_environment.md` §2.3).
     ///
     /// Note: Applies **only** to physical $\text{TC}_{\text{act}}$; purely mental actions ignore physical load.
     #[must_use]
     pub const fn physical_time_factor_delta(self) -> f64 {
         match self {
             Self::Tier1Unencumbered => 0.0,
+            Self::Tier1LightPatrol => 0.05,
             Self::Tier2Light => 0.10,
             Self::Tier3Medium => 0.25,
             Self::Tier4Heavy => 0.50,
         }
     }
 
-    /// Acoustic & silhouette penalty (`+2` $\Delta_{\text{ext}}$ per tier above Tier 1) for Stealth (§6.1).
+    /// Acoustic & silhouette penalty (`+2` $\Delta_{\text{ext}}$ per tier) for Stealth (§6.1).
     #[must_use]
     pub const fn stealth_penalty_delta_ext(self) -> i32 {
         match self {
             Self::Tier1Unencumbered => 0,
+            Self::Tier1LightPatrol => 1,
             Self::Tier2Light => 2,
             Self::Tier3Medium => 4,
             Self::Tier4Heavy => 6,
@@ -961,17 +977,17 @@ pub fn lookup_canonical_action(id: CanonicalActionId) -> &'static CanonicalActio
         .expect("All CanonicalActionId variants exist in CANONICAL_ACTION_CATALOG")
 }
 
-/// Movement gait during Stealth & Infiltration (§6.1).
+/// Movement gait during Stealth & Infiltration (§6.1, calibrated with `movement_vehicles_and_environment.md` §1.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StealthGait {
     /// Stationary & Camouflaged (`0 m/Tick`, `+0` penalty, benefits from Camouflage & Concealment)
     StationaryCamouflaged,
-    /// Stealth Creep (`<= 0.5 m/Tick`, `+0` movement penalty)
+    /// Stealth Creep / Crouch-Walk (`18%` of $V_{\text{sprint}}$, `~0.34 m/Tick` at `SPD 10`, `+0` movement penalty)
     StealthCreep,
-    /// Combat Glide (`1.5 m/Tick`, `+4` $\Delta_{\text{ext}}$ penalty to Stealth)
+    /// Combat Glide / Tactical Walk (`35%` of $V_{\text{sprint}}$, `~0.65 m/Tick` at `SPD 10`, `+4` $\Delta_{\text{ext}}$ penalty to Stealth)
     CombatGlide,
-    /// Running / Dash (`3.0+ m/Tick`, `+8` $\Delta_{\text{ext}}$ penalty to Stealth)
+    /// Bounding Run / All-Out Sprint (`65–100%` of $V_{\text{sprint}}$, `1.22–1.88 m/Tick` at `SPD 10`, `+8` $\Delta_{\text{ext}}$ penalty to Stealth)
     RunningDash,
 }
 

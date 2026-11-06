@@ -118,15 +118,15 @@ Long-term physical trauma damages the body's structural skeleton, musculature, v
 
 ### 3.1 Structural Wound Severity Tiers (`Tiers 1–5`)
 
-When a strike or projectile penetrates armor (exceeding the armor's Protection Rating; see **[Ranged Combat & Armor](../05-combat/ranged_combat_and_armor.md#2-armor-penetration--behind-armor-blunt-trauma-babt)**), the net **Trauma Magnitude** (scaled by weapon profile, `Strike Impact`, and cascade successes) inflicts one of **5 Structural Wound Tiers** on the struck Hit Location:
+When a strike or projectile hits a target (after resolving Armor Protection Rating $\text{PR}$ vs. Penetration $\text{Pen}$ and Behind-Armor Blunt Trauma $\text{BABT}$; see **[Ranged Combat, Granular Ballistics & Armor](../05-combat/ranged_combat_and_armor.md#4-terminal-ballistics-how-kinetic-energy-caliber--inverse-accuracy-determine-damage)**), the net **Effective Trauma Magnitude**—derived for firearms from **Impact Kinetic Energy ($I_{\text{KE}}$)**, **Caliber Crush ($I_{\text{cal}}$)**, **Inverse Accuracy Projectile Wobble/Yaw ($W_{\text{yaw}}$)**, and $+\lfloor \Delta M / 2 \rfloor$ cascade successes—inflicts one of **5 Structural Wound Tiers** on the struck Hit Location:
 
-| Wound Tier | Clinical Severity | Aspect Ceiling Penalty ($T_{\max}, C_{\max}, F_{\max}$) | Wound Shock Added (`wound_shock_index`) | Typical Tissue, Bone & Vascular Damage |
+| Wound Tier *(Net Effective Trauma)* | Clinical Severity | Aspect Ceiling Penalty ($T_{\max}, C_{\max}, F_{\max}$) | Wound Shock Added (`wound_shock_index`) | Typical Tissue, Bone & Vascular Damage *(Note: Penetrating rounds with Wobble $W_{\text{yaw}} \ge 2$ inflict **`+1` Bleed Grade** from tumbling/keyholing cavitation!)* |
 | :---: | :--- | :---: | :---: | :--- |
-| **Tier 1** | **Superficial / Minor** | **`-2`** to Location's Ceiling | `+0` *(or `+1` if `WSR < 10`)* | Contusion, shallow laceration, mild Grade-I sprain; **Capillary Bleed**. Heals in `3–7 days`. |
-| **Tier 2** | **Moderate Trauma** | **`-5`** to Location's Ceiling | **`+1` Shock Tier** | Deep muscle tear, Grade-II ligament tear, hairline bone fracture, or clean through-and-through flesh wound; **Venous Bleed**. Heals in `2–4 weeks`. |
-| **Tier 3** | **Severe / Fracture** | **`-10` (Limb Disabled)** | **`+2` Shock Tiers** | **Complete Bone Fracture**, joint dislocation, severed tendon, or perforated hollow organ; **Major Venous / Arterial Bleed**. Requires surgery; `6–12 weeks` recovery. |
-| **Tier 4** | **Critical / Maiming** | **Locked at `0`** | **`+3` Shock Tiers** | **Comminuted / Compound Fracture**, shattered joint, ruptured solid organ (liver/spleen/lung), or **Arterial Severance**. Immediate life threat; `3–6 months` rehab. |
-| **Tier 5** | **Catastrophic / Lethal** | **Locked at `0` (Destroyed)** | **`+4` Shock Tiers** | **Traumatic Amputation**, crushed cranium, transected spinal cord, or ruptured heart/aorta. Instant incapacitation; fatal within seconds without trauma surgery. |
+| **Tier 1** *(`Trauma 1–2`)* | **Superficial / Minor** | **`-2`** to Location's Ceiling | `+0` *(or `+1` if `WSR < 10`)* | Contusion, shallow laceration, mild Grade-I sprain; **Capillary Bleed (Grade 1)**. Heals in `3–7 days`. |
+| **Tier 2** *(`Trauma 3–5`)* | **Moderate Trauma** | **`-5`** to Location's Ceiling | **`+1` Shock Tier** | Deep muscle tear, Grade-II ligament tear, hairline bone fracture, or clean through-and-through flesh wound; **Venous Bleed (Grade 2)**. Heals in `2–4 weeks`. |
+| **Tier 3** *(`Trauma 6–8`)* | **Severe / Fracture** | **`-10` (Limb Disabled)** | **`+2` Shock Tiers** | **Complete Bone Fracture**, joint dislocation, severed tendon, or perforated hollow organ; **Major Venous / Visceral Bleed (Grade 3)**. Requires surgery; `6–12 weeks` recovery. |
+| **Tier 4** *(`Trauma 9–11`)* | **Critical / Maiming** | **Locked at `0`** | **`+3` Shock Tiers** | **Comminuted / Compound Fracture**, shattered joint, ruptured solid organ (liver/spleen/lung), or **Arterial Severance (Grade 4)**. Immediate life threat; `3–6 months` rehab. |
+| **Tier 5** *(`Trauma 12+`)* | **Catastrophic / Lethal** | **Locked at `0` (Destroyed)** | **`+4` Shock Tiers** | **Traumatic Amputation**, crushed cranium, transected spinal cord, or ruptured heart/aorta. Instant incapacitation; fatal within seconds without trauma surgery. |
 
 ### 3.2 Broken Bones & Joint Dislocations
 

@@ -458,7 +458,7 @@ fn render_latex_tokens(expr: &str) -> String {
                         out.push_str("</em>");
                     }
                 }
-                "mathbb" | "mathcal" | "mathrel" => {
+                "mathbb" | "mathcal" | "mathrel" | "underbrace" | "overbrace" => {
                     while i < chars.len() && chars[i].is_whitespace() {
                         i += 1;
                     }
@@ -2189,17 +2189,37 @@ pub fn compute_tactical_pool(params: &TacticalPoolParams) -> TacticalPoolEnvelop
     };
     let high_morale_bonus = i32::from(params.morale_state == MoraleState::High);
 
-    let tempo_cap = (params.spd - params.leg_wound_penalty.max(0) + high_morale_bonus).max(0);
+    // Per `health_and_trauma.md` §2.2:
+    // - Fatigue Level >= 3 (Exhausted): SPD and FOR caps are reduced by -2.
+    // - Fatigue Level >= 5 (Metabolic Collapse) or Wound Shock >= 5: Unconscious (all ceilings locked at 0).
+    let fatigue_spd_for_cap_penalty = if params.fatigue_level >= 3 { 2 } else { 0 };
+    let is_metabolic_or_shock_unconscious =
+        params.fatigue_level >= 5 || params.wound_shock_index >= 5;
+
+    let tempo_cap = if is_metabolic_or_shock_unconscious {
+        0
+    } else {
+        (params.spd - fatigue_spd_for_cap_penalty - params.leg_wound_penalty.max(0)
+            + high_morale_bonus)
+            .max(0)
+    };
     let base_control_attr = if params.is_ranged {
         (params.dex + params.sig).div_euclid(2)
     } else {
         params.kin.max(params.dex)
     };
-    let control_cap =
-        (base_control_attr + mastery_overflow - params.arm_head_wound_penalty.max(0)).max(0);
-    let force_cap = (params.for_stat + mastery_overflow + high_morale_bonus
-        - params.torso_shoulder_wound_penalty.max(0))
-    .max(0);
+    let control_cap = if is_metabolic_or_shock_unconscious {
+        0
+    } else {
+        (base_control_attr + mastery_overflow - params.arm_head_wound_penalty.max(0)).max(0)
+    };
+    let force_cap = if is_metabolic_or_shock_unconscious {
+        0
+    } else {
+        (params.for_stat - fatigue_spd_for_cap_penalty + mastery_overflow + high_morale_bonus
+            - params.torso_shoulder_wound_penalty.max(0))
+        .max(0)
+    };
 
     let power_pow = (params.for_stat as f64 * params.spd as f64) / 10.0;
     let momentum_mass_factor_mmf = (params.mass_kg / 70.0) * (params.spd as f64);
