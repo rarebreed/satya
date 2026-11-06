@@ -79,7 +79,23 @@ pub fn satya_select_notebook_tab(tab_id: String) {
         satya_refresh_gm_documents();
     } else if target == "wizard" {
         crate::wasm_client::wizard::render_character_wizard();
+    } else if target == "dice" {
+        crate::wasm_client::dice_3d::sync_dice_material_from_dom_and_render();
     }
+}
+
+/// Updates the 3D WebGPU dice material (base color, numeral ink color, and opacity/translucency)
+/// when the color pickers or opacity range slider change.
+#[wasm_bindgen]
+pub fn satya_update_dice_material() {
+    crate::wasm_client::dice_3d::sync_dice_material_from_dom_and_render();
+}
+
+/// Applies a preset 3D dice material (`"translucent_sapphire"`, `"amber_resin"`, `"emerald_glass"`,
+/// `"crimson_ruby"`, `"amethyst_void"`, or `"obsidian_opaque"`) and updates the WebGPU canvas.
+#[wasm_bindgen]
+pub fn satya_select_dice_material_preset() {
+    crate::wasm_client::dice_3d::apply_dice_material_preset_from_dom();
 }
 
 /// Triggers a quick 3D dice roll from the `3D Dice` notebook tab and updates the 3D dice tray readout.
@@ -360,8 +376,9 @@ pub fn format_wgpu_dice_roll_html(actor: &Participant, spec: &WgpuDiceSpec) -> S
     )
 }
 
-/// Renders an incoming [`WgpuDiceSpec`] into `#wgpu-dice-readout` inside the tabletop canvas card.
+/// Renders an incoming [`WgpuDiceSpec`] into `#wgpu-dice-readout` and spawns the 3D WebGPU trajectory on `#wgpu-dice-canvas`.
 pub fn render_wgpu_dice_roll(actor: &Participant, spec: &WgpuDiceSpec) {
+    crate::wasm_client::dice_3d::spawn_wgpu_dice_scene(spec);
     let html = format_wgpu_dice_roll_html(actor, spec);
     if let Some(readout) = get_element("wgpu-dice-readout") {
         readout.set_inner_html(&html);

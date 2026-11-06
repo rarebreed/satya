@@ -14,6 +14,7 @@
 
 pub mod auth_session;
 pub mod chat_and_ttrpg;
+pub mod dice_3d;
 pub mod dom;
 pub mod menu;
 pub mod notebook;
@@ -25,6 +26,7 @@ pub mod wizard;
 
 pub use auth_session::*;
 pub use chat_and_ttrpg::*;
+pub use dice_3d::*;
 pub use dom::*;
 pub use menu::*;
 pub use notebook::*;
@@ -231,6 +233,14 @@ pub fn register_window_bindings() {
     let c_q_dice = Closure::<dyn Fn(String)>::new(satya_quick_3d_dice_roll);
     bind("satyaQuick3dDiceRoll", c_q_dice.as_ref());
     c_q_dice.forget();
+
+    let c_dice_mat = Closure::<dyn Fn()>::new(satya_update_dice_material);
+    bind("satyaUpdateDiceMaterial", c_dice_mat.as_ref());
+    c_dice_mat.forget();
+
+    let c_dice_preset = Closure::<dyn Fn()>::new(satya_select_dice_material_preset);
+    bind("satyaSelectDiceMaterialPreset", c_dice_preset.as_ref());
+    c_dice_preset.forget();
 
     let c_model_view = Closure::<dyn Fn()>::new(satya_update_3d_model_view);
     bind("satyaUpdate3dModelView", c_model_view.as_ref());
