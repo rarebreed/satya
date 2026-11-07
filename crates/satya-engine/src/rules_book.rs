@@ -1,5 +1,5 @@
 //! Canonical Satya TTRPG Rules Book catalog and multi-chapter search engine
-//! (`docs/ttrpg/SUMMARY.md`, Parts I–VI, Chapters 1–14).
+//! (`docs/ttrpg/SUMMARY.md`, Parts I–VI, Chapters 1–17).
 
 use satya_schema::{
     RulesBookCatalogResponse, RulesChapterDocument, RulesChapterSummary, RulesSearchHit,

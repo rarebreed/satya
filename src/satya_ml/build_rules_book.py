@@ -229,7 +229,7 @@ def search_rules_book_python(
     max_results: int = 5,
     repo_root: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Search across all 13 canonical Satya Rules Book chapters and return ranked section dicts."""
+    """Search across all 17 canonical Satya Rules Book chapters and return ranked section dicts."""
     if _satya_py is not None:
         try:
             if len(_satya_py.list_rules_chapters()) == len(BOOK_CHAPTER_SPECS):
@@ -832,6 +832,9 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         "02-core-mechanics/cascading_d20_and_tasks.md": "tasks.html",
         "../02-core-mechanics/cascading_d20_and_tasks.md": "tasks.html",
         "cascading_d20_and_tasks.md": "tasks.html",
+        "02-core-mechanics/task_requirements_catalog.md": "task_requirements_catalog.html",
+        "../02-core-mechanics/task_requirements_catalog.md": "task_requirements_catalog.html",
+        "task_requirements_catalog.md": "task_requirements_catalog.html",
         "02-core-mechanics/action_economy_and_ooda.md": "action_economy.html",
         "../02-core-mechanics/action_economy_and_ooda.md": "action_economy.html",
         "action_economy_and_ooda.md": "action_economy.html",
@@ -841,6 +844,9 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         "03-character/skills_and_trees.md": "skills_and_trees.html",
         "../03-character/skills_and_trees.md": "skills_and_trees.html",
         "skills_and_trees.md": "skills_and_trees.html",
+        "03-character/skills_trees_tactical_and_social.md": "skills_trees_tactical_and_social.html",
+        "../03-character/skills_trees_tactical_and_social.md": "skills_trees_tactical_and_social.html",
+        "skills_trees_tactical_and_social.md": "skills_trees_tactical_and_social.html",
         "03-character/lifepaths_and_economy.md": "lifepaths_and_economy.html",
         "../03-character/lifepaths_and_economy.md": "lifepaths_and_economy.html",
         "lifepaths_and_economy.md": "lifepaths_and_economy.html",
@@ -853,6 +859,9 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         "05-combat/melee_combat.md": "melee_combat.html",
         "../05-combat/melee_combat.md": "melee_combat.html",
         "melee_combat.md": "melee_combat.html",
+        "05-combat/firearms_and_ballistics.md": "firearms_and_ballistics.html",
+        "../05-combat/firearms_and_ballistics.md": "firearms_and_ballistics.html",
+        "firearms_and_ballistics.md": "firearms_and_ballistics.html",
         "05-combat/ranged_combat_and_armor.md": "ranged_combat_and_armor.html",
         "../05-combat/ranged_combat_and_armor.md": "ranged_combat_and_armor.html",
         "ranged_combat_and_armor.md": "ranged_combat_and_armor.html",
@@ -1290,7 +1299,7 @@ def build_static_rules_book(
     output_dir: Path | None = None,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Compile all 13 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
+    """Compile all 17 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
     root = repo_root or _default_repo_root()
     out_dir = output_dir or (root / "docs" / "book")
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -1,4 +1,4 @@
-//! CLI utility (`cargo run -p satya-engine --bin build-rules-book`) that compiles all 9 canonical
+//! CLI utility (`cargo run -p satya-engine --bin build-rules-book`) that compiles all 17 canonical
 //! chapters of the Satya TTRPG Rules Book (`docs/ttrpg/`) into static HTML pages and `catalog.json`
 //! inside `docs/book/`.
 

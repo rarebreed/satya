@@ -1122,7 +1122,7 @@ pub fn satya_select_rules_chapter(chapter_id: String) {
     }
 }
 
-/// Searches across all 9 canonical Satya TTRPG Rules Book chapters and renders clickable hits
+/// Searches across all 17 canonical Satya TTRPG Rules Book chapters and renders clickable hits
 /// inside `#rules-search-results`.
 #[wasm_bindgen]
 pub fn satya_search_rules_book() {

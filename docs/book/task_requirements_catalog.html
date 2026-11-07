@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Master Task Requirements Catalog — Satya TTRPG Rules Book</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --panel: #111827;
+      --border: #1f2937;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --emerald: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      min-height: 100vh;
+    }
+    aside.book-sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 20px 16px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .book-brand {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .book-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .book-nav-part {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 14px 0 6px;
+      font-weight: 600;
+    }
+    .book-nav-link {
+      display: block;
+      padding: 7px 10px;
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.88rem;
+      margin-bottom: 3px;
+    }
+    .book-nav-link:hover { background: rgba(56, 189, 248, 0.12); }
+    .book-nav-link.active {
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    main.book-main {
+      max-width: 980px;
+      padding: 32px 44px 64px;
+      line-height: 1.65;
+    }
+    h1, h2, h3, h4 { color: #f8fafc; }
+    h1 { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    a { color: var(--accent); }
+    code, pre { font-family: "JetBrains Mono", Consolas, monospace; }
+    .rules-inline-code {
+      background: #1e293b;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+    }
+    .rules-code-block {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      padding: 14px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .rules-table-wrap { overflow-x: auto; margin: 14px 0; }
+    .rules-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .rules-table th, .rules-table td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+    }
+    .rules-table th { background: #1e293b; color: var(--accent); }
+    .rules-alert, .rules-blockquote {
+      border-left: 4px solid var(--accent);
+      background: rgba(30, 41, 59, 0.55);
+      padding: 10px 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 14px 0;
+    }
+    .rules-alert-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .rules-math-inline { font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.98em; color: #f8fafc; background: rgba(56, 189, 248, 0.08); padding: 0 4px; border-radius: 3px; }
+    .rules-math-block { background: #111827; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.96rem; color: #f8fafc; text-align: center; overflow-x: auto; }
+    .math-roman, .math-fn { font-family: Inter, system-ui, sans-serif; font-style: normal; }
+    .math-fn { font-weight: 600; color: #7dd3fc; }
+    .math-frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; line-height: 1.1; font-size: 0.88em; }
+    .math-num { border-bottom: 1px solid currentColor; padding: 0 3px 1px; }
+    .math-den { padding: 1px 3px 0; }
+    .math-cases { display: inline-flex; align-items: center; vertical-align: middle; gap: 6px; }
+    .math-brace { font-size: 1.65em; line-height: 1; }
+    .math-cases-rows { display: inline-flex; flex-direction: column; gap: 2px; text-align: left; }
+    .rules-mermaid { background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 14px 0; max-width: 100%; overflow-x: auto; display: flex; flex-direction: column; gap: 10px; }
+    .mermaid-top-nodes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .mermaid-flow-track { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+    .mermaid-dir-td > .mermaid-flow-track { flex-direction: column; }
+    .mermaid-subgraphs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; align-items: start; }
+    .mermaid-subgraph { background: #111827; border: 1px solid var(--border); border-top: 2px solid var(--accent); border-radius: 7px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .mermaid-subgraph-title { font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); padding-bottom: 4px; border-bottom: 1px dashed var(--border); }
+    .mermaid-subgraph-nodes { display: flex; flex-direction: column; gap: 8px; }
+    .mermaid-node { flex: 1 1 180px; background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 9px 11px; font-size: 0.82rem; line-height: 1.42; color: var(--text); display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
+    .mermaid-node-diamond { border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
+    .mermaid-connector { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px 4px; color: var(--accent); font-weight: 700; }
+    .mermaid-node-links { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 5px; border-top: 1px dashed rgba(148, 163, 184, 0.25); }
+    .mermaid-link-pill { display: inline-flex; align-items: center; gap: 4px; background: #090d16; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; color: #94a3b8; }
+    .mermaid-edge-label { color: var(--emerald); font-weight: 600; font-size: 0.72rem; }
+    .book-interactive-widget {
+      background: #111827;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+    .widget-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+    .widget-panel {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .widget-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .widget-controls label, label.full-width {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.8rem;
+      color: var(--muted);
+      gap: 4px;
+    }
+    .widget-controls input, label.full-width input {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: var(--text);
+      padding: 6px 8px;
+      border-radius: 4px;
+    }
+    .widget-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+    .widget-presets button {
+      background: #1e293b;
+      border: 1px solid #38bdf8;
+      color: var(--accent);
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .book-pager {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .book-pager-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+    @media (max-width: 900px) {
+      body { grid-template-columns: 1fr; }
+      aside.book-sidebar { position: static; height: auto; }
+      .widget-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="book-sidebar">
+    <div class="book-brand">SATYA // RULES BOOK</div>
+    <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
+    <a href="index.html" class="book-nav-link ">0. Table of Contents &amp; Interactive Sandbox</a><div class="book-nav-part">Part I: Foundation &amp; Mathematical Calibration</div><a href="design_philosophy.html" class="book-nav-link">1. An RPG for a More Civilized Age: Design Philosophy</a><a href="notation_glossary.html" class="book-nav-link">2. Mathematical Notation, Variables &amp; Formula Glossary</a><a href="probability.html" class="book-nav-link">3. Probability &amp; Calibration of the Cascading Dice Mechanic</a><div class="book-nav-part">Part II: Core Mechanics, Task Resolution &amp; Action Economy</div><a href="tasks.html" class="book-nav-link">4. Cascading 2d20 Engine &amp; Task Resolution</a><a href="task_requirements_catalog.html" class="book-nav-link active">5. Master Task Requirements Catalog</a><a href="action_economy.html" class="book-nav-link">6. Action Economy, OODA Loop, Time Scales &amp; Stealth</a><div class="book-nav-part">Part III: Character Architecture, Skills, Lifepaths &amp; Economy</div><a href="characteristics.html" class="book-nav-link">7. Characteristics, Senses, Psyche &amp; Aptitudes</a><a href="skills_and_trees.html" class="book-nav-link">8. Skill System &amp; Hierarchical Skill Trees (Trees 1-4)</a><a href="skills_trees_tactical_and_social.html" class="book-nav-link">9. Hierarchical Skill Trees (Trees 5-8: Combat, Vehicles, Social &amp; Tradecraft)</a><a href="lifepaths_and_economy.html" class="book-nav-link">10. Lifepath Character Creation, Socioeconomic Upkeep &amp; Heat</a><div class="book-nav-part">Part IV: Psyche, Morale &amp; Social Combat</div><a href="psyche_and_social.html" class="book-nav-link">11. Psyche, Morale &amp; Social Combat</a><div class="book-nav-part">Part V: Combat Architecture, Close Quarters &amp; Firefights</div><a href="tactical_triad.html" class="book-nav-link">12. Combat Architecture, Tactical Triad &amp; Pools</a><a href="melee_combat.html" class="book-nav-link">13. Melee Combat, Close-Quarters Tactics &amp; The Tactical Triad</a><a href="firearms_and_ballistics.html" class="book-nav-link">14. Firearm Engineering &amp; Internal/External/Terminal Ballistics</a><a href="ranged_combat_and_armor.html" class="book-nav-link">15. Ranged Combat, Suppression, Armor &amp; Weapon Reliability</a><div class="book-nav-part">Part VI: Health, Trauma, Movement, Vehicles &amp; Survival</div><a href="health_and_trauma.html" class="book-nav-link">16. Health, Anatomical Trauma, Fatigue &amp; Mental Conditions</a><a href="movement_and_environment.html" class="book-nav-link">17. Movement, Encumbrance, Vehicles &amp; Environmental Survival</a>
+  </aside>
+  <main class="book-main">
+    <article class="satya-rules-article"><h1 id="satya-ttrpg-master-task-requirements-catalog-section-8">Satya TTRPG Master Task Requirements Catalog (Section 8)</h1><blockquote class="rules-blockquote"><p><strong>Rust Engine Implementation</strong>: <a class="rules-link" href="../../../crates/satya-engine/src/task_resolution.rs"><code class="rules-inline-code">crates/satya-engine/src/task_resolution.rs</code></a> (<code class="rules-inline-code">BenchmarkTaskSpec</code>, <code class="rules-inline-code">CANONICAL_BENCHMARK_TASKS</code>, <code class="rules-inline-code">evaluate_task_gate</code>, <code class="rules-inline-code">evaluate_tool_modifier</code>, <code class="rules-inline-code">evaluate_kno_to_phy_synergy</code>, <code class="rules-inline-code">compute_dual_skill_pairs</code>). Companion chapter to <strong><a class="rules-link" href="tasks.html" data-rules-chapter="tasks" onclick="if(window.satyaSelectRulesChapter){window.satyaSelectRulesChapter('tasks');return false;}">Core <code class="rules-inline-code">2d20</code> Watershed Cascade &amp; Always-Contested Task Resolution (<code class="rules-inline-code">cascading_d20_and_tasks.md</code>)</a></strong>.</p></blockquote><h2 id="8-master-task-requirements-table-skills-prerequisites-tools-hidden-gm-resistance">8. Master Task Requirements Table (Skills, Prerequisites, Tools &amp; Hidden GM Resistance)</h2><p>The following canonical reference table defines the exact skills, minimum skill ranks (<span class="rules-math-inline">N<sub><span class="math-roman">min</span></sub></span>), controlling characteristics (<span class="rules-math-inline">C<sub>P</sub></span>), known tool requirements (<span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub></span>), and hidden GM resistance modifiers (<span class="rules-math-inline">Δ<sub><span class="math-roman">ext</span></sub></span> where <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 21 − Δ<sub><span class="math-roman">ext</span></sub></span> in <code class="rules-inline-code">1-Pair Tiered GM Resistance</code> or Opposed NPC cascade) for benchmark tasks across all categories:</p><div class="rules-table-wrap"><table class="rules-table"><thead><tr><th>Task Description</th><th>Category</th><th>Gate Class</th><th>Primary Skill (<span class="rules-math-inline">N<sub><span class="math-roman">min</span></sub></span>)</th><th>Complementary / Alt Skill</th><th>Control (<span class="rules-math-inline">C<sub>P</sub></span>)</th><th>Tool Requirement (<span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub></span>)</th><th>Hidden <span class="rules-math-inline">Δ<sub><span class="math-roman">ext</span></sub></span> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 21 − Δ<sub><span class="math-roman">ext</span></sub></span>)</th><th>Contested Resolution (<code class="rules-inline-code">S_P vs. S_GM</code>)</th></tr></thead><tbody><tr><td><strong>Sprint across open street under fire &amp; vault a 1.5m barrier</strong></td><td><code class="rules-inline-code">Athletic</code>, <code class="rules-inline-code">Combat</code></td><td>Class A</td><td><em>Parkour</em> (<code class="rules-inline-code">N&gt;=1</code>) or <em>Running</em> (<code class="rules-inline-code">TAL N&gt;=1</code>)</td><td><em>Jumping</em> (<code class="rules-inline-code">TAL</code>)</td><td><code class="rules-inline-code">KIN/SPD</code> <em>(or <code class="rules-inline-code">FIT/SPD</code>)</em></td><td><code class="rules-inline-code">[Tool: None]</code></td><td><code class="rules-inline-code">0</code> <em>(Parkour)</em> / <code class="rules-inline-code">+4</code> <em>(Running)</em></td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> (<code class="rules-inline-code">ΔM &gt;= +2</code> reduces Tick Cost by 2)</td></tr><tr><td><strong>Scale a rain-slicked brick warehouse drainpipe (3 stories)</strong></td><td><code class="rules-inline-code">Athletic</code>, <code class="rules-inline-code">Fieldcraft</code></td><td>Class A</td><td><em>Climbing</em> (<code class="rules-inline-code">TAL N&gt;=1</code>)</td><td><em>Parkour</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td><code class="rules-inline-code">FOR/KIN</code></td><td><code class="rules-inline-code">[Tool: Situational]</code> <em>(Gloves/Rope <code class="rules-inline-code">-2</code>)</em></td><td><code class="rules-inline-code">+4</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 17</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> (<code class="rules-inline-code">GrazingTie</code> = slow/noisy climb)</td></tr><tr><td><strong>Identify a tail in a crowded 2033 transit hub</strong></td><td><code class="rules-inline-code">Fieldcraft</code></td><td>Class A</td><td><em>Surveillance &amp; Counter-Surveillance</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Default: <em>Observation</em> (<code class="rules-inline-code">TAL</code>, <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub> +4</span>)</td><td><code class="rules-inline-code">FOC/ITU</code> <em>(or <code class="rules-inline-code">FOC/SIG</code>)</em></td><td><code class="rules-inline-code">[Tool: Situational]</code> <em>(AR Smart-Glasses <code class="rules-inline-code">-2</code>)</em></td><td>Opposed vs. Tail&#39;s <em>Surveillance</em></td><td>Beat opponent&#39;s <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Pick a mechanical pin-tumbler padlock or deadbolt</strong></td><td><code class="rules-inline-code">Fieldcraft</code>, <code class="rules-inline-code">Technical</code></td><td>Class B</td><td><em>Lockpicking &amp; Security Bypass</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Default: <em>Basic Tool Use</em> (<code class="rules-inline-code">N&gt;=2</code>, <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub> +6</span>)</td><td><code class="rules-inline-code">DEX/TAC</code></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Tension wrench &amp; picks; improvised bobby pins <code class="rules-inline-code">+6</code>)</em></td><td><code class="rules-inline-code">0</code> <em>(Standard, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=21</span>)</em> / <code class="rules-inline-code">+4</code> <em>(High-Sec, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=17</span>)</em></td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> (<code class="rules-inline-code">ΔM &gt;= +2</code> silent/fast)</td></tr><tr><td><strong>Bypass a 2033 biometric / encrypted RFID smart-lock</strong></td><td><code class="rules-inline-code">Fieldcraft</code>, <code class="rules-inline-code">Cyber</code></td><td>Class C (<code class="rules-inline-code">[Locked]</code>)</td><td><em>Lockpicking &amp; Security Bypass</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td><em>Basic Electronics</em> (<code class="rules-inline-code">N&gt;=2</code>) or <em>Network Exploitation</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td><code class="rules-inline-code">ANA/DEX</code></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(RFID/BLE Signal Spoofer or Logic Probe)</em></td><td><code class="rules-inline-code">+4</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 17</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Hotwire an older IC car vs. spoof a 2032 encrypted EV keyfob</strong></td><td><code class="rules-inline-code">Fieldcraft</code>, <code class="rules-inline-code">Technical</code></td><td>Class B / C</td><td><em>Vehicle Hotwiring &amp; Transponder Spoofing</em> (<code class="rules-inline-code">N&gt;=1</code> IC / <code class="rules-inline-code">N&gt;=2</code> EV)</td><td><em>Automotive Mechanics</em> (<code class="rules-inline-code">N&gt;=2</code>, IC only)</td><td><code class="rules-inline-code">DEX/ANA</code></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Strippers/Screwdriver for IC; CAN-bus/OBD-II injector for EV)</em></td><td><code class="rules-inline-code">0</code> <em>(IC, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=21</span>)</em> / <code class="rules-inline-code">+4</code> <em>(2032 EV, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=17</span>)</em></td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Fire a semi-automatic pistol at 15m under combat stress</strong></td><td><code class="rules-inline-code">Combat</code></td><td>Class B</td><td><em>Pistols &amp; Revolvers</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td><em>Tactical Handgun</em> or <em>Street Shooting</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td><code class="rules-inline-code">DEX/SIG</code></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Handgun &amp; Ammunition)</em></td><td><code class="rules-inline-code">0</code> <em>(Aimed <code class="rules-inline-code">TC 12</code>)</em> / <code class="rules-inline-code">+4</code> <em>(Snap <code class="rules-inline-code">TC 7</code>)</em></td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> (or target&#39;s Evasion/Cover)</td></tr><tr><td><strong>Control a 5-round burst from a submachine gun or assault rifle</strong></td><td><code class="rules-inline-code">Combat</code></td><td>Class B</td><td><em>Fully Automatic Weapons</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Default from <em>Long Guns</em> / <em>Pistols</em> at <strong><span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub> = +6</span></strong> <em>(or <code class="rules-inline-code">+8</code> if <code class="rules-inline-code">FOR &lt; 10</code>)</em></td><td><code class="rules-inline-code">DEX/FOR</code></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Select-fire or sear-modified weapon)</em></td><td><code class="rules-inline-code">+2</code> <em>(Braced, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=19</span>)</em> / <code class="rules-inline-code">+6</code> <em>(Moving, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=15</span>)</em></td><td><code class="rules-inline-code">1</code> hit on beat/tie (<code class="rules-inline-code">+1</code> hit per net success <span class="rules-math-inline">Δ M</span>)</td></tr><tr><td><strong>Engage a point target at 900m in 15 mph crosswind</strong></td><td><code class="rules-inline-code">Combat</code>, <code class="rules-inline-code">Science</code></td><td>Class C (<code class="rules-inline-code">[Locked]</code>)</td><td><em>Precision Rifle &amp; Sniping</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td>Setup: <em>Trigonometry</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td><code class="rules-inline-code">DEX/FOC</code> <em>(Min <code class="rules-inline-code">SIG 12</code>)</em></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Precision Rifle, Optic; AI Ballistic Scope <code class="rules-inline-code">-4</code> <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub></span>)</em></td><td><code class="rules-inline-code">+6</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 15</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Convert a semi-auto pistol to full-auto or mill a ghost-gun receiver</strong></td><td><code class="rules-inline-code">Technical</code>, <code class="rules-inline-code">Combat</code></td><td>Class C (<code class="rules-inline-code">[Locked]</code>)</td><td><em>Gunsmithing &amp; Armorer</em> (<code class="rules-inline-code">N&gt;=2</code>) or <em>Improvised Munitions</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td><em>Metalworking / CNC</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td><code class="rules-inline-code">DEX/ANA</code> <em>(or <code class="rules-inline-code">DEX/CRE</code>)</em></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Machining tools / 3D printer &amp; jigs)</em></td><td><code class="rules-inline-code">+2</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 19</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> (<code class="rules-inline-code">PartialSuccess</code> = gun jams on floor breach)</td></tr><tr><td><strong>Stop severe arterial extremity bleeding in an alley</strong></td><td><code class="rules-inline-code">Medical</code></td><td>Class A</td><td><em>First Aid</em> (<code class="rules-inline-code">N&gt;=1</code>) or <em>Paramedicine</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Default: Raw <code class="rules-inline-code">DEX/DIS</code> (<code class="rules-inline-code">N=1</code>, <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub> +4</span>)</td><td><code class="rules-inline-code">DEX/DIS</code></td><td><code class="rules-inline-code">[Tool: Situational]</code> <em>(CAT Tourniquet <code class="rules-inline-code">0</code>; improvised belt/rag <code class="rules-inline-code">+6</code> <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub></span>)</em></td><td><code class="rules-inline-code">0</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 21</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Decompress a tension pneumothorax or establish a surgical airway</strong></td><td><code class="rules-inline-code">Medical</code></td><td>Class C (<code class="rules-inline-code">[Locked]</code>)</td><td><em>Paramedicine &amp; TCCC</em> (<code class="rules-inline-code">N&gt;=2</code>) or <em>Trauma Surgery</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Setup: <em>Clinical Diagnostics</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td><code class="rules-inline-code">DEX/DIS</code></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(14ga decompression needle / cricothyrotomy kit; improvised blade/tube <code class="rules-inline-code">+8</code>)</em></td><td><code class="rules-inline-code">+4</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 17</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Extract a fragmented rifle round near the abdominal aorta</strong></td><td><code class="rules-inline-code">Medical</code></td><td>Class C (<code class="rules-inline-code">[Locked]</code>)</td><td><em>Trauma &amp; General Surgery</em> (<code class="rules-inline-code">N&gt;=3</code>)</td><td><em>Human Anatomy</em> (<code class="rules-inline-code">N&gt;=3</code>), <em>Diagnostics</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td><code class="rules-inline-code">DEX/FOC</code> <em>(Min <code class="rules-inline-code">TAC 11</code>)</em></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Sterile Surgical Suite; back-alley ripperdoc clinic <code class="rules-inline-code">+6</code>)</em></td><td><code class="rules-inline-code">+6</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 15</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> <em>(High-Stakes <code class="rules-inline-code">cumulative_snowball</code>)</em></td></tr><tr><td><strong>Disarm a dual-trigger improvised explosive device (IED) with anti-handling tilt switch</strong></td><td><code class="rules-inline-code">Combat</code>, <code class="rules-inline-code">Technical</code></td><td>Class C (<code class="rules-inline-code">[Locked]</code>)</td><td><em>Explosive Ordnance Disposal (EOD)</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td><em>Basic Electronics</em> (<code class="rules-inline-code">N&gt;=2</code>), <em>Improvised Munitions</em> (<code class="rules-inline-code">N&gt;=3</code>, <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub> +4</span>)</td><td><code class="rules-inline-code">DEX/FOC</code> <em>(Min <code class="rules-inline-code">DIS 12</code>)</em></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(EOD Diagnostic &amp; Disarm Kit)</em></td><td><code class="rules-inline-code">+6</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 15</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> <em>(Botch detonates device)</em></td></tr><tr><td><strong>Spear-phish a corporate employee and deploy a credential stealer</strong></td><td><code class="rules-inline-code">Cyber</code>, <code class="rules-inline-code">Social</code></td><td>Class B</td><td><em>Street Phishing &amp; Script Intrusion</em> (<code class="rules-inline-code">N&gt;=1</code>) or <em>Network Exploitation</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Setup: <em>Research &amp; OSINT</em> (<code class="rules-inline-code">N&gt;=1</code>) + <em>Deception</em> (<code class="rules-inline-code">TAL</code>)</td><td><code class="rules-inline-code">CRE/INS</code> <em>(or <code class="rules-inline-code">ELO/CRE</code>)</em></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Laptop/Deck &amp; C2 Server)</em></td><td><code class="rules-inline-code">0</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 21</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Chain a kernel privilege-escalation exploit across an air-gapped industrial SCADA network</strong></td><td><code class="rules-inline-code">Cyber</code></td><td>Class C (<code class="rules-inline-code">[Locked]</code>)</td><td><em>Zero-Day Exploit Dev</em> (<code class="rules-inline-code">N&gt;=2</code>) or <em>Network Exploitation</em> (<code class="rules-inline-code">N&gt;=4</code>)</td><td><em>Software Engineering</em> (<code class="rules-inline-code">N&gt;=3</code>)</td><td><code class="rules-inline-code">ANA/CRE</code></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Custom Hardware Implant &amp; Exploit Framework)</em></td><td><code class="rules-inline-code">+8</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 13</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Fine-tune a 2033 multimodal AI 2.0 model to detect forged satellite telemetry</strong></td><td><code class="rules-inline-code">Cyber</code>, <code class="rules-inline-code">Science</code></td><td>Class C (<code class="rules-inline-code">[Locked]</code>)</td><td><em>Machine Learning &amp; Neural Architecture</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td><em>Calculus &amp; Linear Algebra</em> (<code class="rules-inline-code">N&gt;=3</code>), <em>Applied Statistics</em> (<code class="rules-inline-code">N&gt;=3</code>)</td><td><code class="rules-inline-code">ANA/INS</code></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(GPU/TPU Compute Cluster &amp; Training Dataset)</em></td><td><code class="rules-inline-code">+4</code> (<span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub> = 17</span>)</td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Cook high-purity synthetic methamphetamine or fentanyl analogues</strong></td><td><code class="rules-inline-code">Science</code>, <code class="rules-inline-code">Technical</code></td><td>Class C (<code class="rules-inline-code">[Locked]</code>)</td><td><em>Clandestine Narcotics Synthesis</em> (<code class="rules-inline-code">N&gt;=2</code>) or <em>Organic Chemistry</em> (<code class="rules-inline-code">N&gt;=3</code>)</td><td><em>Pharmacology</em> (<code class="rules-inline-code">N&gt;=2</code>)</td><td><code class="rules-inline-code">MEM/DEX</code> <em>(or <code class="rules-inline-code">ANA/DEX</code>)</em></td><td><strong><code class="rules-inline-code">[Tool: Mandatory]</code></strong> <em>(Precursor Chemicals &amp; Glassware/Ventilation)</em></td><td><code class="rules-inline-code">+2</code> <em>(Lab, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=19</span>)</em> / <code class="rules-inline-code">+6</code> <em>(Street RV, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=15</span>)</em></td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> (<code class="rules-inline-code">PartialSuccess</code> = toxic fumes or impure yield)</td></tr><tr><td><strong>Charm a hostile VIP or disarm tension at a high-society gala</strong></td><td><code class="rules-inline-code">Social</code></td><td>Class A</td><td><em>Charm &amp; Rapport</em> (<code class="rules-inline-code">TAL N&gt;=1</code>) or <em>Seduction</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Setup: <em>Etiquette &amp; Corporate Protocol</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td><code class="rules-inline-code">PRE/ELO</code> <em>(or <code class="rules-inline-code">COM/PRE</code>)</em></td><td><code class="rules-inline-code">[Tool: Situational]</code> <em>(Tailored Wardrobe <code class="rules-inline-code">-2</code>; street clothes <code class="rules-inline-code">+4</code> <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub></span>)</em></td><td><code class="rules-inline-code">0</code> <em>(Neutral, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=21</span>)</em> / <code class="rules-inline-code">+4</code> <em>(Suspicious, <span class="rules-math-inline"><span class="math-roman">TN</span><sub>GM</sub>=17</span>)</em></td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> (<code class="rules-inline-code">ΔM &gt;= +2</code> gains private invitation/trust)</td></tr><tr><td><strong>Run a live voice-cloned pretext call to trick a security desk into opening a vault door</strong></td><td><code class="rules-inline-code">Social</code>, <code class="rules-inline-code">Fieldcraft</code>, <code class="rules-inline-code">Cyber</code></td><td>Class B</td><td><em>Con Artistry &amp; Social Engineering</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Default: <em>Deception</em> (<code class="rules-inline-code">TAL</code>, <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub> +4</span>); Setup: <em>AI 2.0 Synth-Media</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td><code class="rules-inline-code">ELO/CRE</code></td><td><code class="rules-inline-code">[Tool: Situational]</code> <em>(Spoofed Caller-ID &amp; Voice Clone Rig <code class="rules-inline-code">-2</code> <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub></span>)</em></td><td><code class="rules-inline-code">+2</code> <em>(or Opposed vs. Guard&#39;s Empathy)</em></td><td>Beat Guard&#39;s <span class="rules-math-inline">S<sub>GM</sub></span></td></tr><tr><td><strong>Subtly elicit classified project details from an engineer over drinks without alerting them</strong></td><td><code class="rules-inline-code">Social</code>, <code class="rules-inline-code">Fieldcraft</code></td><td>Class B</td><td><em>Investigative Interviewing &amp; Subtle Elicitation</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Default: <em>Charm</em> or <em>Empathy</em> (<code class="rules-inline-code">TAL</code>, <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub> +4</span>)</td><td><code class="rules-inline-code">INS/ELO</code></td><td><code class="rules-inline-code">[Tool: None]</code></td><td>Opposed vs. Target&#39;s <em>Empathy</em> / <em>Discipline</em></td><td>Beat <span class="rules-math-inline">S<sub>GM</sub></span> (<code class="rules-inline-code">PartialSuccess</code> = gets info, but target grows suspicious later)</td></tr><tr><td><strong>Break a hardened syndicate courier or operative under high-pressure interrogation</strong></td><td><code class="rules-inline-code">Social</code>, <code class="rules-inline-code">Fieldcraft</code></td><td>Class B / C</td><td><em>Coercive Interrogation &amp; Psychological Breaking</em> (<code class="rules-inline-code">N&gt;=1</code>)</td><td>Default: <em>Intimidation</em> (<code class="rules-inline-code">TAL</code>, <span class="rules-math-inline">Δ<sub><span class="math-roman">tool</span></sub> +6</span> vs. trained target)</td><td><code class="rules-inline-code">DIS/INS</code></td><td><code class="rules-inline-code">[Tool: Situational]</code> <em>(2033 Biometric Pupillometry / Voice-Stress Monitor <code class="rules-inline-code">-2</code>)</em></td><td>Opposed vs. Subject&#39;s <em>Counter-Interrogation (SERE)</em> (<code class="rules-inline-code">DIS/FOC</code>)</td><td>Net <span class="rules-math-inline">Δ M  ≥  +2</span> over subject</td></tr></tbody></table></div></article>
+    <div class="book-pager">
+      <a class="book-pager-btn" href="tasks.html">&larr; Previous: Cascading 2d20 Engine &amp; Task Resolution</a><a class="book-pager-btn" href="action_economy.html">Next: Action Economy, OODA Loop, Time Scales &amp; Stealth &rarr;</a>
+    </div>
+  </main>
+</body>
+</html>

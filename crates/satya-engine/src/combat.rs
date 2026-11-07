@@ -536,7 +536,7 @@ pub fn evaluate_tactical_triad_contest(
 
     let net_tempo = delta.tempo;
     let net_control = delta.control;
-    let seizes_initiative = net_tempo >= 2 && atk.control >= def_eff_c;
+    let seizes_initiative = net_tempo >= 2 && net_control >= 0;
     let guard_broken = (atk.control + (atk.force / 2).max(0)) > def_eff_c.max(0);
     let leveraged_throw_force = atk.force + (atk.control - def_eff_c).max(0);
     let effective_defender_root = def.force + (attacker_root / 3).max(1);

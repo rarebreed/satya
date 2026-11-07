@@ -33,7 +33,7 @@ pub struct EmpathyReadResult {
 /// check against a target's [`HasPsyche`] profile (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §4.1):
 /// - **1 Net Success**: Reveals the target's single most extreme Psyche trait (furthest from `10`).
 /// - **2 Net Successes**: Reveals the top two most extreme traits and whether they are in potential tension.
-/// - **3+ Net Successes**: Reveals the full 7-trait [`PsycheProfile`] and grants `-2` $\Delta_{\text{ext}}$ on the next maneuver.
+/// - **3+ Net Successes**: Reveals the full 7-trait [`CharacterCharacteristics`](crate::characteristics::CharacterCharacteristics) Psyche profile and grants `-2` $\Delta_{\text{ext}}$ on the next maneuver.
 pub fn evaluate_empathy_read(
     target_psyche: &impl HasPsyche,
     net_successes: i32,
@@ -105,7 +105,7 @@ pub enum SocialArgumentVector {
     },
 }
 
-/// Evaluation of how a single or compound [`SocialArgumentVector`] interacts with a target's [`PsycheProfile`]
+/// Evaluation of how a single or compound [`SocialArgumentVector`] interacts with a target's [`CharacterCharacteristics`](crate::characteristics::CharacterCharacteristics) Psyche profile
 /// (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §4.2 & §4.4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArgumentPsycheEvaluation {
@@ -316,7 +316,7 @@ pub fn ego_wound_dis_check_tn(dis: i32, ego: i32) -> i32 {
 /// Outcome of a single Contested Social Exchange (`§4.2–§4.4`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SocialExchangeOutcome {
-    /// Argument Resonance vs. Clash evaluation against the target's [`PsycheProfile`].
+    /// Argument Resonance vs. Clash evaluation against the target's [`CharacterCharacteristics`](crate::characteristics::CharacterCharacteristics) Psyche profile.
     pub argument_eval: ArgumentPsycheEvaluation,
     /// Net successes scored by the speaker ($\max(0, S_{\text{speaker}} - S_{\text{target}})$).
     pub net_successes: i32,

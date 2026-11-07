@@ -1090,7 +1090,7 @@ mod tests {
         let rules_bytes = to_bytes(rules_res.into_body(), 128 * 1024).await.unwrap();
         let catalog: satya_schema::RulesBookCatalogResponse =
             serde_json::from_slice(&rules_bytes).unwrap();
-        assert_eq!(catalog.chapters.len(), 14);
+        assert_eq!(catalog.chapters.len(), 17);
         assert!(!catalog.search_hits.is_empty());
 
         let ch_res = app

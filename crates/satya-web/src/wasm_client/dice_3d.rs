@@ -1216,6 +1216,7 @@ fn fs_front(in: VertexOutput) -> @location(0) vec4<f32> {
 // Browser WebGPU (`wgpu`) Runtime State
 // ============================================================================
 
+#[cfg(target_arch = "wasm32")]
 mod webgpu_runtime {
     use super::*;
     use std::cell::RefCell;
@@ -2016,6 +2017,37 @@ mod webgpu_runtime {
         });
         let _ = win.request_animation_frame(cb.unchecked_ref());
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+mod webgpu_runtime {
+    use super::*;
+    use std::cell::RefCell;
+
+    #[derive(Default)]
+    pub struct DiceRendererController {
+        pub pipeline: Option<()>,
+        pub material: DiceMaterialConfig,
+        pub camera: DiceCameraConfig,
+        pub scene: Option<DicePhysicsScene>,
+        pub anim_start_ms: f64,
+    }
+
+    thread_local! {
+        static DICE_CONTROLLER: RefCell<DiceRendererController> =
+            RefCell::new(DiceRendererController::default());
+    }
+
+    pub fn with_dice_controller<F, R>(f: F) -> R
+    where
+        F: FnOnce(&mut DiceRendererController) -> R,
+    {
+        DICE_CONTROLLER.with(|cell| f(&mut cell.borrow_mut()))
+    }
+
+    pub fn render_current_frame(_ctrl: &mut DiceRendererController) {}
+    pub fn start_animation_loop_if_needed(_ctrl: &mut DiceRendererController) {}
+    pub fn ensure_webgpu_initialized_and_render() {}
 }
 
 fn sync_range_slider_css_vars(

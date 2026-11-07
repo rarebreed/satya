@@ -718,9 +718,7 @@ impl PyTacticalPoolEnvelope {
         PyTacticalTriadEvaluation::from(satya_engine::evaluate_tactical_triad(
             &self.inner,
             base_weapon_tc,
-            tempo,
-            control,
-            force,
+            satya_engine::Triad::new(tempo, control, force),
         ))
     }
 }
@@ -1166,7 +1164,7 @@ pub fn compute_tactical_pool(
     cre: i32,
     foc: i32,
 ) -> PyResult<PyTacticalPoolEnvelope> {
-    let ms = MoraleState::from_str_name(morale_state).map_err(to_py_err)?;
+    let ms = MoraleState::from_str(morale_state).map_err(to_py_err)?;
     let params = TacticalPoolParams {
         chars: satya_engine::CharacterCharacteristics {
             spd,
@@ -1400,12 +1398,8 @@ pub fn evaluate_tactical_triad_contest<'py>(
     armor_dr: i32,
 ) -> PyResult<Bound<'py, PyDict>> {
     let res = satya_engine::evaluate_tactical_triad_contest(
-        attacker_tempo,
-        attacker_control,
-        attacker_force,
-        defender_tempo,
-        defender_control,
-        defender_force,
+        satya_engine::Triad::new(attacker_tempo, attacker_control, attacker_force),
+        satya_engine::Triad::new(defender_tempo, defender_control, defender_force),
         attacker_root,
         defender_guard,
         armor_dr,
@@ -1746,16 +1740,14 @@ pub fn evaluate_psyche_friction_check(
 #[pyfunction]
 pub fn evaluate_ranged_recoil_and_suppression(
     py: Python<'_>,
-    allocated_tempo: i32,
-    allocated_control: i32,
+    _allocated_tempo: i32,
+    _allocated_control: i32,
     allocated_force: i32,
     weapon_recoil_r: i32,
     is_bounding_on_move: bool,
     is_suppressive_or_full_auto: bool,
 ) -> PyResult<Py<PyDict>> {
     let res = satya_engine::evaluate_ranged_recoil_and_suppression(
-        allocated_tempo,
-        allocated_control,
         allocated_force,
         weapon_recoil_r,
         is_bounding_on_move,
@@ -2064,7 +2056,7 @@ mod tests {
         assert!(triad.valid);
 
         let chapters = list_rules_chapters();
-        assert_eq!(chapters.len(), 14);
+        assert_eq!(chapters.len(), 17);
 
         let hits = search_rules_book("Tactical Triad", 3);
         assert!(!hits.is_empty());

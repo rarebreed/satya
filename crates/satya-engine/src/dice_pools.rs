@@ -26,7 +26,7 @@ pub type Pmf = BTreeMap<i32, f64>;
 /// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DistributionStats {
-    /// Expected value $E[X] = \sum x P(X = x)$.
+    /// Expected value `E[X] = sum(x * P(X = x))`.
     pub mean: f64,
     /// Variance $\text{Var}(X) = E[(X - \mu)^2]$.
     pub variance: f64,

@@ -20,4 +20,5 @@ wasm-bindgen-futures.workspace = true
 js-sys.workspace = true
 web-sys.workspace = true
 bytemuck.workspace = true
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 wgpu.workspace = true

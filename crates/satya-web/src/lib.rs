@@ -1321,16 +1321,19 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                                             <option value="notation_glossary">"2. Mathematical Notation, Variables & Formula Glossary"</option>
                                             <option value="probability">"3. Probability & Mathematical Calibration"</option>
                                             <option value="tasks" selected>"4. Cascading 2d20 Engine & Task Resolution"</option>
-                                            <option value="action_economy">"5. Action Economy, OODA Loop, Time Scales & Stealth"</option>
-                                            <option value="characteristics">"6. Characteristics, Senses, Psyche & Aptitudes"</option>
-                                            <option value="skills_and_trees">"7. Skill System & Hierarchical Skill Trees"</option>
-                                            <option value="lifepaths_and_economy">"8. Lifepath Creation, Socioeconomic Upkeep & Heat"</option>
-                                            <option value="psyche_and_social">"9. Psyche, Morale & Social Combat"</option>
-                                            <option value="tactical_triad">"10. Combat Architecture, Tactical Triad & Pools"</option>
-                                            <option value="melee_combat">"11. Melee Combat & Close-Quarters Tactics"</option>
-                                            <option value="ranged_combat_and_armor">"12. Ranged Combat, Suppression, Armor & Reliability"</option>
-                                            <option value="health_and_trauma">"13. Health, Anatomical Trauma, Fatigue & Mental Conditions"</option>
-                                            <option value="movement_and_environment">"14. Movement, Encumbrance, Vehicles & Survival"</option>
+                                            <option value="task_requirements_catalog">"5. Master Task Requirements Catalog (Section 8)"</option>
+                                            <option value="action_economy">"6. Action Economy, OODA Loop, Time Scales & Stealth"</option>
+                                            <option value="characteristics">"7. Characteristics, Senses, Psyche & Aptitudes"</option>
+                                            <option value="skills_and_trees">"8. Skill System & Hierarchical Skill Trees 1–4"</option>
+                                            <option value="skills_trees_tactical_and_social">"9. Hierarchical Skill Trees 5–8: Combat, Vehicles, Social & Tradecraft"</option>
+                                            <option value="lifepaths_and_economy">"10. Lifepath Creation, Socioeconomic Upkeep & Heat"</option>
+                                            <option value="psyche_and_social">"11. Psyche, Morale & Social Combat"</option>
+                                            <option value="tactical_triad">"12. Combat Architecture, Tactical Triad & Pools"</option>
+                                            <option value="melee_combat">"13. Melee Combat & Close-Quarters Tactics"</option>
+                                            <option value="firearms_and_ballistics">"14. Granular Ballistics, Ammunition Physics & Firearm Engineering"</option>
+                                            <option value="ranged_combat_and_armor">"15. Ranged Combat, Suppression, Armor & Reliability"</option>
+                                            <option value="health_and_trauma">"16. Health, Anatomical Trauma, Fatigue & Mental Conditions"</option>
+                                            <option value="movement_and_environment">"17. Movement, Encumbrance, Vehicles & Survival"</option>
                                         </select>
                                     </label>
                                     <label class="inline-label" for="rules-search-input">
@@ -2519,6 +2522,9 @@ mod tests {
         assert!(html.contains(r#"id="notebook-pane-rules""#));
         assert!(html.contains(r#"id="rules-chapter-select""#));
         assert!(html.contains(r#"value="notation_glossary""#));
+        assert!(html.contains(r#"value="task_requirements_catalog""#));
+        assert!(html.contains(r#"value="skills_trees_tactical_and_social""#));
+        assert!(html.contains(r#"value="firearms_and_ballistics""#));
         assert!(html.contains(r#"id="rules-search-input""#));
         assert!(html.contains(r#"id="rules-book-viewport""#));
         assert!(html.contains("Cascading 2d20 Engine &amp; Task Resolution"));
