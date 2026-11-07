@@ -267,11 +267,12 @@ define_coded_enum! {
 }
 
 macro_rules! impl_aptitudes_struct {
-    ($(#[doc = $doc:literal] $Variant:ident => $field:ident),+ $(,)?) => {
+    ($($(#[$meta:meta])* $Variant:ident => $field:ident),+ $(,)?) => {
+        /// Character's 9 Domain Aptitude scores (`-2..=+3`, default `0`; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §9).
         #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
         pub struct CharacterAptitudes {
             $(
-                #[doc = $doc]
+                $(#[$meta])*
                 pub $field: i32,
             )+
         }
@@ -308,23 +309,14 @@ macro_rules! impl_aptitudes_struct {
 }
 
 impl_aptitudes_struct! {
-    /// Quantitative & Mathematical aptitude (`APT-QNT`, `-2..=+3`).
     AptQnt => apt_qnt,
-    /// Mechanical & Spatial aptitude (`APT-MEC`, `-2..=+3`).
     AptMec => apt_mec,
-    /// Computational & Algorithmic aptitude (`APT-CMP`, `-2..=+3`).
     AptCmp => apt_cmp,
-    /// Biological & Chemical aptitude (`APT-BIO`, `-2..=+3`).
     AptBio => apt_bio,
-    /// Linguistic & Symbolic aptitude (`APT-LNG`, `-2..=+3`).
     AptLng => apt_lng,
-    /// Gross Kinesthetic & Athletic aptitude (`APT-KIN`, `-2..=+3`).
     AptKin => apt_kin,
-    /// Fine Motor & Ballistic Precision aptitude (`APT-FIN`, `-2..=+3`).
     AptFin => apt_fin,
-    /// Musical & Auditory-Rhythmic aptitude (`APT-AUD`, `-2..=+3`).
     AptAud => apt_aud,
-    /// Interpersonal & Rhetorical aptitude (`APT-SOC`, `-2..=+3`).
     AptSoc => apt_soc,
 }
 
@@ -356,11 +348,12 @@ const SCALE_TABLE: [i32; 21] = [
 ];
 
 macro_rules! impl_characteristics_struct {
-    ($(#[doc = $doc:literal] $Variant:ident => $field:ident),+ $(,)?) => {
+    ($($(#[$meta:meta])* $Variant:ident => $field:ident),+ $(,)?) => {
+        /// Complete canonical 30-characteristic profile (`1..=20` controlling scale for 28 attributes, plus `mas_kg` and `hgt_m`; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §3–§7).
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         pub struct CharacterCharacteristics {
             $(
-                #[doc = $doc]
+                $(#[$meta])*
                 pub $field: i32,
             )+
             pub mas_kg: f64,
@@ -425,61 +418,33 @@ macro_rules! impl_characteristics_struct {
 }
 
 impl_characteristics_struct! {
-    /// Speed (`SPD`, `1..=20`).
     SPD => spd,
-    /// Force (`FOR`, `1..=20`).
     FOR => for_stat,
-    /// Dexterity (`DEX`, `1..=20`).
     DEX => dex,
-    /// Kinesthesia (`KIN`, `1..=20`).
     KIN => kin,
-    /// Health (`HLT`, `1..=20`).
     HLT => hlt,
-    /// Fitness (`FIT`, `1..=20`).
     FIT => fit,
-    /// Memory (`MEM`, `1..=20`).
     MEM => mem,
-    /// Analysis (`ANA`, `1..=20`).
     ANA => ana,
-    /// Insight (`INS`, `1..=20`).
     INS => ins,
-    /// Creativity (`CRE`, `1..=20`).
     CRE => cre,
-    /// Discipline (`DIS`, `1..=20`).
     DIS => dis,
-    /// Focus (`FOC`, `1..=20`).
     FOC => foc,
-    /// Comeliness (`COM`, `1..=20`).
     COM => com,
-    /// Presence (`PRE`, `1..=20`).
     PRE => pre,
-    /// Eloquence (`ELO`, `1..=20`).
     ELO => elo,
-    /// Sight (`SIG`, `1..=20`).
     SIG => sig,
-    /// Hearing (`HEA`, `1..=20`).
     HEA => hea,
-    /// Tactile (`TAC`, `1..=20`).
     TAC => tac,
-    /// Olfaction (`OLF`, `1..=20`).
     OLF => olf,
-    /// Taste (`TAS`, `1..=20`).
     TAS => tas,
-    /// Intuition (`ITU`, `1..=20`).
     ITU => itu,
-    /// Ego (`EGO`, `1..=20` — §7.2).
     EGO => ego,
-    /// Selfishness (`SLF`, `1..=20` — §7.2).
     SLF => slf,
-    /// Openness (`OPN`, `1..=20` — §7.2).
     OPN => opn,
-    /// Belongingness (`BLG`, `1..=20` — §7.2).
     BLG => blg,
-    /// Extraversion (`EXT`, `1..=20` — §7.2).
     EXT => ext,
-    /// Conformity (`CNF`, `1..=20` — §7.2).
     CNF => cnf,
-    /// Aggressiveness (`AGG`, `1..=20` — §7.2).
     AGG => agg,
 }
 

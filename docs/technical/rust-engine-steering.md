@@ -85,11 +85,14 @@ Static game tables (skills, actions, weapons, fire modes, armor, hit locations, 
    - **Narrative Walkthroughs**: Named character walkthrough simulations (Viktor vs. Elena, Mateo vs. Sgt. Vance, Marcus vs. Nadia, Mateo/Priya/Amara lifepath builds) belong in [`crates/satya-engine/src/walkthroughs.rs`](../../crates/satya-engine/src/walkthroughs.rs).
    - **Documentation Rendering**: Markdown/LaTeX/Mermaid-to-HTML rendering belongs in [`rules_book_html.rs`](../../crates/satya-engine/src/rules_book_html.rs), separate from chapter catalog and search logic in [`rules_book.rs`](../../crates/satya-engine/src/rules_book.rs).
    - **Unit Test Suites**: Keep cross-module and domain test suites split across [`tests.rs`](../../crates/satya-engine/src/tests.rs) and [`tests_domain.rs`](../../crates/satya-engine/src/tests_domain.rs).
-4. **Canonical Sign Conventions ($\Delta_{\text{int}}$ vs. $\Delta_{\text{ext}}$ / $\Delta_{\text{tool}}$)**:
-   - **Internal Competence Modifiers ($\Delta_{\text{int}}$)** adjust effective competence ($C_{\text{eff}} = C + \Delta_{\text{int}}$):
-     - **Negative** (`-2` Fatigue, `-4` Wound Shock, `-2` Off-Balance) = **Penalty** to character competence (increases $\text{TN}_P = 31 - C_{\text{eff}}$).
-     - **Positive** (`+1` Focus/Preparation) = **Bonus** to character competence (decreases $\text{TN}_P$).
-   - **External / Tool Modifiers ($\Delta_{\text{ext}}$, $\Delta_{\text{tool}}$)** adjust target numbers directly ($\text{TN}_{\text{eff}} = 31 - C_{\text{eff}} + \Delta_{\text{ext}}$ and $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$):
+4. **Canonical Sign Conventions ($\Delta_{\text{int}}$ vs. $\Delta_{\text{ext}}$ / $\Delta_{\text{tool}}$ vs. Characteristic Penalties)**:
+   - **Internal Failure-Carry / Strain Modifiers ($\Delta_{\text{int}}$ in `ConditionImpact::delta_int` and `CascadeTaskParams::internal_mod`)** adjust the failure-carry stumble magnitude ($\delta_{\text{under}} = \max(0, 6 + \Delta_{\text{int}})$):
+     - **Positive** (`+2` per Fatigue level, `+4` Nausea, `+2` Ego Wound) = **Penalty** (increases failure stumble $\delta_{\text{under}}$).
+     - **Negative** (`-2` Focused / Conviction Surge) = **Bonus** (reduces failure stumble $\delta_{\text{under}}$).
+   - **Direct Characteristic / Pool Modifiers** (`fit_penalty`, `hlt_penalty`, `delta_mot`, `tactical_pool_mod`) adjust $C$ or $P_{\text{eff}}$ directly:
+     - **Negative** (`-2`, `-6`) = **Penalty** to the characteristic or Tactical Pool.
+     - **Positive** (`+1`, `+2`) = **Bonus** to the characteristic or Tactical Pool.
+   - **External / Tool Modifiers ($\Delta_{\text{ext}}$, $\Delta_{\text{tool}}$)** adjust target numbers directly ($\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$ and $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$):
      - **Positive** (`+3` Darkness, `+6` High-Security Lock, `+2` Improvised Tool) = **Harder Task** (raises $\text{TN}_P$ or lowers $\text{TN}_{GM}$ so environmental resistance cascades more easily).
      - **Negative** (`-2` Superior Tool, `-4` Trivial Lock) = **Easier Task** (lowers $\text{TN}_P$ or raises $\text{TN}_{GM}$).
    - Never mix or invert $\Delta_{\text{int}}$ and $\Delta_{\text{ext}}$ signs when aggregating `ConditionImpact` or evaluating `TieredSaveEval`.
@@ -101,7 +104,12 @@ Static game tables (skills, actions, weapons, fire modes, armor, hit locations, 
 1. **`docs/ttrpg/` is the Canonical Design Authority**:
    - If a formula, modifier, threshold, or table in `crates/satya-engine` ever diverges from `docs/ttrpg/`, `docs/ttrpg/` is the design source of truth unless the user explicitly directs a rule change (in which case both `docs/ttrpg/` and `crates/satya-engine` must be updated together).
 2. **Reciprocal Traceability Links & High-Signal Docstrings**:
-   - **Rust -> TTRPG (No `#![deny(missing_docs)]`)**: Require `//!` module headers and `///` docstrings on top-level `pub fn` calculators and non-obvious domain structs in `crates/satya-engine/src/`, citing the governing chapter path (`docs/ttrpg/...`), section (`§X.Y`), canonical formula, and any unit/sign conventions. Omit `///` comments on self-explanatory struct fields, enum variants, and simple accessors unless a field has a non-obvious unit (`kg`, `m/s`), scale (`1–20` controlling scale vs. `0.0–100.0` spectrum), or sign convention ($\Delta_{\text{int}}$ vs. $\Delta_{\text{ext}}$).
+   - **Rust -> TTRPG (No `#![deny(missing_docs)]`)**:
+     - Require `//!` module headers and `///` docstrings on top-level `pub fn` calculators and non-obvious domain structs in `crates/satya-engine/src/`, citing the governing chapter path (`docs/ttrpg/...`), section (`§X.Y`), canonical formula, and any unit/sign conventions.
+     - Omit `///` comments on self-explanatory struct fields, enum variants, and simple accessors unless a field has a non-obvious unit, scale (`1–20` controlling scale vs. `0.0–100.0` spectrum), or sign convention ($\Delta_{\text{int}}$ vs. $\Delta_{\text{ext}}$).
+     - **Encode Units in Field & Parameter Names**: Prefer unit suffixes directly in identifiers (`mass_kg`, `height_m`, `barrel_length_cm`, `caliber_mm`, `bullet_mass_grains`, `muzzle_energy_joules`, `v_sprint_m_per_sec`, `water_deficit_liters`, `cumulative_sieverts_sv`, `cost_usd`, `clearance_ticks`) over writing docstrings to explain bare float/int units, so the unit is visible at every call site.
+     - **Never Duplicate Static Catalog or `define_coded_enum!` Data in Variant Docstrings**: Do not add `///` comments on enum variants that merely repeat the variant's `label: "..."` or its static `*_CATALOG` row numbers (which go stale when balance numbers change). Only document a variant when it carries non-obvious semantics not captured in the catalog (e.g., bipolar Low vs. High pole meanings on `Psyche` traits).
+     - **Use Optional `$(#[$meta:meta])*` in `macro_rules!`**: Never write `#[doc = $doc:literal]` in macro patterns, which forces callers to supply boilerplate docstrings on every row; always match attributes with `$(#[$meta:meta])*`.
    - **TTRPG -> Rust**: Every markdown chapter in `docs/ttrpg/` begins with a `> **Rust Engine Implementation**:` callout linking to its implementing `crates/satya-engine/src/*.rs` module(s), and [`docs/ttrpg/SUMMARY.md`](../ttrpg/SUMMARY.md) maintains the master 1-to-1 Reciprocal Rust Engine Module Index.
 3. **Markdown / LaTeX / Mermaid Rendering Invariants**:
    - `test_rules_book_catalog_search_and_tactical_pool_envelope` in [`crates/satya-engine/src/tests.rs`](../../crates/satya-engine/src/tests.rs) compiles every `docs/ttrpg/` chapter into HTML and asserts:
