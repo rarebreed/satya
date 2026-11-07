@@ -30,39 +30,28 @@ define_coded_enum! {
     /// The 8 canonical Hierarchical Skill Trees (`docs/ttrpg/03-character/skills_and_trees.md` Â§3.2â€“Â§3.9).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
     pub enum SkillTreeId [count = 8] {
-        /// Tree 1: Mathematics, Computing & Physical Sciences (`APT-QNT`, `APT-CMP`) (`Â§3.2`)
         Tree1MathCompPhysicalSciences => { code: "TREE_1", label: "Tree 1: Mathematics, Computing & Physical Sciences", aliases: ["1"] },
-        /// Tree 2: Mechanical, Craft & Pilotage (`APT-MEC`, `APT-FIN`) (`Â§3.3`)
         Tree2MechanicalCraftPilotage => { code: "TREE_2", label: "Tree 2: Mechanical, Craft & Pilotage", aliases: ["2"] },
-        /// Tree 3: Biology, Chemistry & Medicine (`APT-BIO`) (`Â§3.4`)
         Tree3BiologyChemistryMedicine => { code: "TREE_3", label: "Tree 3: Biology, Chemistry & Medicine", aliases: ["3"] },
-        /// Tree 4: Language, Humanities & Social Influence (`APT-LNG`, `APT-SOC`) (`Â§3.8`)
         Tree4LanguageHumanitiesSocial => { code: "TREE_4", label: "Tree 4: Language, Humanities & Social Influence", aliases: ["4"] },
-        /// Tree 5: Athletics, Acrobatics & Melee Combat (`APT-KIN`) (`Â§3.5`)
         Tree5AthleticsAcrobaticsMelee => { code: "TREE_5", label: "Tree 5: Athletics, Acrobatics & Melee Combat", aliases: ["5"] },
-        /// Tree 6: Marksmanship, Gunnery & Tactical Systems (`APT-FIN`) (`Â§3.6`)
         Tree6MarksmanshipGunneryTactical => { code: "TREE_6", label: "Tree 6: Marksmanship, Gunnery & Tactical Systems", aliases: ["6"] },
-        /// Tree 7: Perception, Stealth & Survival (`APT-AUD`, `APT-KIN`) (`Â§3.9`)
         Tree7PerceptionStealthSurvival => { code: "TREE_7", label: "Tree 7: Perception, Stealth & Survival", aliases: ["7"] },
-        /// Tree 8: Visual, Musical & Culinary Arts (`APT-FIN`, `APT-AUD`) (`Â§3.7`)
         Tree8VisualMusicalCulinaryArts => { code: "TREE_8", label: "Tree 8: Visual, Musical & Culinary Arts", aliases: ["8"] },
     }
 }
 
 impl SkillTreeId {
-    /// Short tree code (`"TREE_1"` .. `"TREE_8"`).
     #[must_use]
     pub const fn short_code(self) -> &'static str {
         self.as_str()
     }
 
-    /// Parse a `SkillTreeId` from its short code (`"TREE_1"` .. `"TREE_8"`).
     #[must_use]
     pub fn from_code(s: &str) -> Option<Self> {
         Self::from_code_str(s)
     }
 
-    /// Canonical tree title from `docs/ttrpg/03-character/skills_and_trees.md` (Â§3.2â€“Â§3.9).
     #[must_use]
     pub const fn title(self) -> &'static str {
         self.label()
@@ -91,11 +80,8 @@ define_coded_enum! {
     pub enum SkillType [count = 4] {
         /// `TAL`: Innate Talent â€” universal childhood baseline ($N \ge 1$, `Native Language Speech` starts at $N = 2$)
         Tal => { code: "TAL", label: "Innate Talent" },
-        /// `PHY`: Physical / Motor Skill
         Phy => { code: "PHY", label: "Physical / Motor Skill" },
-        /// `KNO`: Knowledge / Academic / Technical Skill
         Kno => { code: "KNO", label: "Knowledge / Academic Skill" },
-        /// `PHY/KNO`: Hybrid Motor + Technical/Tactical Skill
         PhyKno => { code: "PHY/KNO", label: "Hybrid Physical & Knowledge Skill", aliases: ["PHY_KNO"] },
     }
 }
@@ -105,25 +91,15 @@ define_coded_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum SkillCategory [count = 10] {
-        /// Athletic & locomotive skills.
         Athletic => { code: "ATHLETIC", label: "Athletic" },
-        /// Melee, ranged, and tactical combat skills.
         Combat => { code: "COMBAT", label: "Combat" },
-        /// Mechanical, electrical, and craft skills.
         Technical => { code: "TECHNICAL", label: "Technical" },
-        /// Mathematical, physical, and natural sciences.
         Science => { code: "SCIENCE", label: "Science" },
-        /// Humanities, literacy, and academic scholarship.
         Knowledge => { code: "KNOWLEDGE", label: "Knowledge" },
-        /// Computing, networks, and cyber-electronics.
         Cyber => { code: "CYBER", label: "Cyber" },
-        /// First aid, clinical medicine, and surgery.
         Medical => { code: "MEDICAL", label: "Medical" },
-        /// Visual, musical, performing, and culinary arts.
         Artistic => { code: "ARTISTIC", label: "Artistic" },
-        /// Interpersonal persuasion, deception, and leadership.
         Social => { code: "SOCIAL", label: "Social" },
-        /// Perception, stealth, survival, and outdoor fieldcraft.
         Fieldcraft => { code: "FIELDCRAFT", label: "Fieldcraft" },
     }
 }
@@ -134,15 +110,10 @@ define_coded_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum SkillAccessTier [count = 5] {
-        /// `[Access: Universal]`: Open to all characters through everyday life or self-study
         Universal => { code: "UNIVERSAL", label: "Universal" },
-        /// `[Access: Academic]`: Requires formal school, high school STEM, or university enrollment
         Academic => { code: "ACADEMIC", label: "Academic" },
-        /// `[Access: Vocational/Licensed]`: Requires trade school, guild apprenticeship, clinical certification, or licensed range
         VocationalLicensed => { code: "VOCATIONAL_LICENSED", label: "Vocational/Licensed", aliases: ["Vocational/Licensed"] },
-        /// `[Access: Restricted]`: Requires military, law enforcement, intelligence, or cleared corporate security access
         Restricted => { code: "RESTRICTED", label: "Restricted" },
-        /// `[Access: Illicit]`: Requires street gang, criminal syndicate, insurgent cell, or black-market mentor
         Illicit => { code: "ILLICIT", label: "Illicit" },
     }
 }
@@ -152,9 +123,7 @@ define_coded_enum! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PrerequisiteMode {
-    /// Every listed `(parent_skill_id, min_level)` must be met (`AND`).
     AllOf,
-    /// At least one listed `(parent_skill_id, min_level)` must be met (`OR`).
     AnyOf,
 }
 
@@ -162,42 +131,25 @@ pub enum PrerequisiteMode {
 /// (`docs/ttrpg/03-character/skills_and_trees.md` Â§3.2â€“Â§3.9).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SkillNodeSpec {
-    /// Canonical snake_case identifier.
     pub id: &'static str,
-    /// Human-readable display name.
     pub name: &'static str,
-    /// Hierarchical tree (`TREE_1` .. `TREE_8`).
     pub tree: SkillTreeId,
-    /// Tree depth tier (`0..=6`).
     pub tier: u8,
-    /// Inherent learning difficulty rating (`1` = Routine/Easy .. `5` = Extreme/Apex), independent of tree tier.
     pub difficulty: u8,
-    /// Skill type (`TAL`, `PHY`, `KNO`, `PHY/KNO`).
     pub skill_type: SkillType,
-    /// Multi-category functional tags.
     pub categories: &'static [SkillCategory],
-    /// Primary controlling characteristic (`C_1`).
     pub primary_char: CharacteristicCode,
-    /// Optional secondary controlling characteristic (`C_2`).
     pub secondary_char: Option<CharacteristicCode>,
-    /// Minimum characteristic (`Min C`) gates required to learn/advance this node.
     pub min_chars: &'static [(CharacteristicCode, i32)],
-    /// Combinator (`AllOf` vs `AnyOf`) for `parent_prereqs`.
     pub parent_mode: PrerequisiteMode,
-    /// Required parent skill IDs and minimum levels `(parent_id, min_n)`.
     pub parent_prereqs: &'static [(&'static str, usize)],
-    /// Institutional or subcultural `[Access]` tags that unlock this node.
     pub allowed_access: &'static [SkillAccessTier],
-    /// Tool/equipment requirement (`None`, `Situational`, `Mandatory`).
     pub tool_dependency: ToolDependency,
-    /// If `false`, this node is marked `[No Default]` and cannot be attempted at $N = 0$ via tree defaulting.
     pub defaultable: bool,
-    /// Associated Domain Aptitude override (defaults to `tree.primary_aptitude()` if `None`).
     pub aptitude_override: Option<AptitudeCode>,
 }
 
 impl SkillNodeSpec {
-    /// Effective Domain Aptitude governing this skill node.
     #[must_use]
     pub const fn governing_aptitude(&self) -> AptitudeCode {
         match self.aptitude_override {
@@ -229,7 +181,6 @@ impl SkillNodeSpec {
         }
     }
 
-    /// Short human-readable label for the skill's inherent difficulty rating (`1..=5`).
     #[must_use]
     pub const fn difficulty_label(&self) -> &'static str {
         match self.difficulty {
@@ -246,28 +197,19 @@ pub use crate::skills_catalog::*;
 /// Specific reason why a skill unlock or advancement was rejected by the DAG validator.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SkillValidationFailure {
-    /// Machine-readable rejection code.
     pub code: &'static str,
-    /// Human-readable diagnostic explanation.
     pub detail: String,
 }
 
 /// Result of validating whether a character can unlock or advance a skill node to `target_level`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SkillAdvancementValidation {
-    /// Canonical skill identifier.
     pub skill_id: String,
-    /// Human-readable skill name.
     pub skill_name: String,
-    /// Requested target skill level (`target_level`).
     pub target_level: usize,
-    /// True if all prerequisite, access, characteristic, and foundation ceiling gates passed.
     pub is_valid: bool,
-    /// Effective controlling characteristic score $C_{\text{eff}}$.
     pub effective_controller_c: i32,
-    /// Minimum characteristic relief (`0` or `1`) granted by Domain Aptitude $\ge +2$.
     pub aptitude_min_c_relief: i32,
-    /// Any validation gate failures encountered.
     pub failures: Vec<SkillValidationFailure>,
 }
 
@@ -440,17 +382,12 @@ pub fn validate_skill_advancement(
 /// (`docs/ttrpg/03-character/skills_and_trees.md` Â§2.4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillDefaultResolution {
-    /// Requested target skill identifier.
     pub target_skill_id: String,
-    /// True if the skill can be attempted (either directly or via defaulting).
     pub can_attempt: bool,
-    /// Source skill ID used (`target_skill_id` if trained directly, or parent/sibling/grandparent ID if defaulted).
     pub source_skill_id: Option<String>,
-    /// Effective skill level $N$ rolled.
     pub effective_n: usize,
     /// External difficulty penalty $\Delta_{\text{ext}}$ (`0`, `+4`, or `+8`).
     pub default_penalty_delta_ext: i32,
-    /// Diagnostic explanation of how the default was resolved.
     pub reason: String,
 }
 
@@ -616,14 +553,11 @@ pub fn resolve_skill_tree_default(
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` Â§1.7.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SkillTrainingMode {
-    /// Institutional / Career curriculum governed by Focus (`FOC`) and Insight (`INS`).
     FormalTraining,
-    /// On-the-job / Elective / Hobby / Street experience governed by Insight (`INS`) and skill type (`TAL`/`PHY` vs `KNO`).
     Experience,
 }
 
 impl SkillTrainingMode {
-    /// Human-readable label for this training mode.
     #[must_use]
     pub const fn as_label(self) -> &'static str {
         match self {
@@ -637,15 +571,11 @@ impl SkillTrainingMode {
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` Â§1.7.2â€“Â§1.7.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SkillStepCostBreakdown {
-    /// Canonical skill identifier.
     pub skill_id: String,
-    /// Target skill level $N$ being unlocked or advanced to.
     pub target_level: usize,
-    /// Training mode (`FormalTraining` vs `Experience`).
     pub training_mode: SkillTrainingMode,
     /// Triangular step base cost: $\text{Base}(N) = 10 \times N$.
     pub base_level_sp: usize,
-    /// Inherent skill difficulty rating ($1\dots 5$).
     pub difficulty_rating: u8,
     /// Difficulty multiplier ($0.80\times$ for D1 Tal, $1.00\times$ for D1 Phy/Kno, $1.25\times$ D2, $1.60\times$ D3, $2.00\times$ D4, $2.50\times$ D5).
     pub difficulty_multiplier: f64,
@@ -655,11 +585,8 @@ pub struct SkillStepCostBreakdown {
     pub controller_multiplier: f64,
     /// Governing Domain Aptitude score $A \in [-2, +3]$.
     pub aptitude_score: i32,
-    /// Domain Aptitude multiplier ($-15\%$ per $+1$, $+20\%$ per $-1$).
     pub aptitude_multiplier: f64,
-    /// Training mode multiplier (`FormalTraining` via `FOC`+`INS` vs `Experience` via `INS`).
     pub training_mode_multiplier: f64,
-    /// Final rounded Skill Point (`SP`) cost for this single step (minimum `3 SP`).
     pub final_sp_cost: usize,
 }
 

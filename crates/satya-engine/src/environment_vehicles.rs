@@ -27,13 +27,10 @@ pub use crate::environmental_hazards::*;
 /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SprintVelocityMetrics {
-    /// Stride Factor $\text{SF} = \text{HGT} / 1.75\text{ m}$.
     pub stride_factor_sf: f64,
     /// Maximum Sprint Velocity $V_{\text{sprint}} = (4.0 + 0.35 \times \text{SPD}_{\text{eff}}) \times \text{SF}$ in meters per second (`m/s`).
     pub v_sprint_m_per_sec: f64,
-    /// Maximum Sprint Velocity in kilometers per hour (`km/h`).
     pub v_sprint_km_per_hr: f64,
-    /// Maximum Sprint Velocity in meters per Tick (`m/Tick`, where `1 second = 4 Ticks`).
     pub v_sprint_m_per_tick: f64,
 }
 
@@ -110,7 +107,6 @@ impl CombatMovementGait {
         }
     }
 
-    /// Equivalent [`StealthGait`] for Stealth vs. Perception resolution (`action_economy_and_ooda.md` §6.1).
     #[must_use]
     pub const fn to_stealth_gait(self) -> StealthGait {
         match self {
@@ -131,21 +127,14 @@ impl From<CombatMovementGait> for StealthGait {
 /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CombatGaitEvaluation {
-    /// Chosen gait mode.
     pub gait: CombatMovementGait,
-    /// Speed in meters per second (`m/s`).
     pub speed_m_per_sec: f64,
-    /// Speed in meters per Tick (`m/Tick`, `1 Tick = 0.25s`).
     pub speed_m_per_tick: f64,
-    /// Distance covered over `10 Ticks` (`2.5s`) in meters.
     pub distance_per_10_ticks_m: f64,
-    /// Ranged weapon Recoil (`R`) adder (`+0`, `+2`, `+4`).
     pub ranged_recoil_adder: i32,
     /// Effective Ranged `Control Cap` after gait constraints ($\lfloor C_{\max}/2\rfloor$ in `BoundingRunHustle`, `2` in `AllOutSprint`).
     pub effective_ranged_control_cap: i32,
-    /// Whether aimed ranged shots are permitted (`false` in `AllOutSprint`).
     pub allows_aimed_ranged_fire: bool,
-    /// Base Exertion Marks accumulated per `20 Ticks` (`5 seconds`).
     pub exertion_marks_per_20_ticks: i32,
 }
 
@@ -194,7 +183,6 @@ pub struct JumpDistances {
     pub standing_broad_jump_m: f64,
     /// Running High Jump / Waist-Chest Vault without hands: $0.6 + 0.06\times\text{POW} + 0.1\times\text{Successes}$ (`1.2 m` at `POW 10`).
     pub running_high_jump_no_hands_m: f64,
-    /// Maximum Wall Scaling / Ledge Grab height (`running_high_jump_no_hands_m + 0.8 * HGT`).
     pub ledge_grab_pullup_height_m: f64,
 }
 
@@ -400,9 +388,7 @@ impl CarryErgonomicMethod {
 /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.2).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CarriedLoadItem {
-    /// Physical mass in kilograms (`kg`).
     pub mass_kg: f64,
-    /// How the weight is worn or carried on the body.
     pub carry_method: CarryErgonomicMethod,
 }
 
@@ -416,21 +402,15 @@ pub type LoadEncumbranceTier = EncumbranceTier;
 pub struct EncumbranceEvaluation {
     /// Base Uninhibited Comfort Load $L_{\text{base}} = (\text{MAS}/70.0) \times (\text{FOR} \times 1.2\text{ kg})$.
     pub base_comfort_load_kg: f64,
-    /// Unmodified total physical mass carried in kilograms.
     pub raw_carried_mass_kg: f64,
     /// Effective Load $L_{\text{eff}} = \max(0, \sum (\text{Mass}_i \times \text{Ergonomic}_i) - \text{Exo Offset})$.
     pub effective_load_kg: f64,
-    /// Load Ratio $L_{\text{eff}} / L_{\text{base}}$.
     pub load_ratio: f64,
-    /// Derived Encumbrance Tier (`Tier 0..=4`).
     pub tier: LoadEncumbranceTier,
-    /// Penalty to Tempo Cap ($T_{\max}$).
     pub tempo_cap_penalty: i32,
-    /// Penalty to `KIN`.
     pub kin_penalty: i32,
     /// Physical `action_time_factor` delta ($\Delta_{\text{enc}}$).
     pub action_time_factor_delta: f64,
-    /// Whether the character can perform an All-Out Sprint (`false` at `Tier 3+`).
     pub can_sprint: bool,
     /// Maximum deadlift / drag limit in kilograms ($8.0 \times L_{\text{base}}$).
     pub max_deadlift_drag_limit_kg: f64,
@@ -545,13 +525,9 @@ impl ChaseRangeBand {
 /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.1).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VehicleEnvelopeProfile {
-    /// Display name of the vehicle.
     pub name: String,
-    /// Vehicular Triad ceilings `(tempo_cap, control_cap, force_cap)`.
     pub caps: Triad<i32>,
-    /// Vehicle mass in kilograms (`kg`).
     pub mass_kg: f64,
-    /// Armor Protection Rating (`PR`) of the chassis.
     pub armor_pr: i32,
 }
 
@@ -561,9 +537,7 @@ pub struct VehicleEnvelopeProfile {
 pub struct VehicleChaseOutcome {
     /// Pilot's effective `(tempo, control, force)` triad clamped to the vehicle's envelope ceilings.
     pub effective_pilot_triad: Triad<i32>,
-    /// Updated [`ChaseRangeBand`] after the exchange.
     pub next_band: ChaseRangeBand,
-    /// Whether an attempted PIT maneuver or ram succeeded at `BumperToBumper` range.
     pub pit_or_ram_succeeded: bool,
 }
 

@@ -100,8 +100,8 @@ Static game tables (skills, actions, weapons, fire modes, armor, hit locations, 
 
 1. **`docs/ttrpg/` is the Canonical Design Authority**:
    - If a formula, modifier, threshold, or table in `crates/satya-engine` ever diverges from `docs/ttrpg/`, `docs/ttrpg/` is the design source of truth unless the user explicitly directs a rule change (in which case both `docs/ttrpg/` and `crates/satya-engine` must be updated together).
-2. **Reciprocal Traceability Links**:
-   - **Rust -> TTRPG**: Every module header (`//!`) and public item docstring (`///`) in `crates/satya-engine/src/` must cite the governing chapter path (`docs/ttrpg/...`) and section (`§X.Y`).
+2. **Reciprocal Traceability Links & High-Signal Docstrings**:
+   - **Rust -> TTRPG (No `#![deny(missing_docs)]`)**: Require `//!` module headers and `///` docstrings on top-level `pub fn` calculators and non-obvious domain structs in `crates/satya-engine/src/`, citing the governing chapter path (`docs/ttrpg/...`), section (`§X.Y`), canonical formula, and any unit/sign conventions. Omit `///` comments on self-explanatory struct fields, enum variants, and simple accessors unless a field has a non-obvious unit (`kg`, `m/s`), scale (`1–20` controlling scale vs. `0.0–100.0` spectrum), or sign convention ($\Delta_{\text{int}}$ vs. $\Delta_{\text{ext}}$).
    - **TTRPG -> Rust**: Every markdown chapter in `docs/ttrpg/` begins with a `> **Rust Engine Implementation**:` callout linking to its implementing `crates/satya-engine/src/*.rs` module(s), and [`docs/ttrpg/SUMMARY.md`](../ttrpg/SUMMARY.md) maintains the master 1-to-1 Reciprocal Rust Engine Module Index.
 3. **Markdown / LaTeX / Mermaid Rendering Invariants**:
    - `test_rules_book_catalog_search_and_tactical_pool_envelope` in [`crates/satya-engine/src/tests.rs`](../../crates/satya-engine/src/tests.rs) compiles every `docs/ttrpg/` chapter into HTML and asserts:

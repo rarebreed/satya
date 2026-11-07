@@ -76,36 +76,22 @@ pub const fn compute_called_shot_delta_ext(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HitLocationId {
-    /// `1d20 = 1`: Foot / Ankle (L or R)
     FootAnkle = 0,
-    /// `1d20 = 2–3`: Calf / Shin (Tibia/Fibula) (L or R)
     CalfShin = 1,
-    /// `1d20 = 4`: Knee Joint (Patella/ACL) (L or R)
     KneeJoint = 2,
-    /// `1d20 = 5–6`: Thigh (Femur / Femoral) (L or R)
     ThighFemur = 3,
-    /// `1d20 = 7`: Pelvis / Hip Girdle / Groin
     PelvisHipGroin = 4,
-    /// `1d20 = 8–10`: Abdomen / Gut / Liver / Spleen
     AbdomenGutLiverSpleen = 5,
-    /// `1d20 = 11–13`: Chest / Ribcage / Lungs
     ChestRibcageLungs = 6,
-    /// `1d20 = 14`: Vital Thoracic (Heart / Spine / Aorta)
     VitalThoracicHeartSpineAorta = 7,
-    /// `1d20 = 15`: Shoulder / Clavicle / Scapula (L or R)
     ShoulderClavicleScapula = 8,
-    /// `1d20 = 16–17`: Upper Arm / Elbow / Forearm (L or R)
     UpperArmElbowForearm = 9,
-    /// `1d20 = 18`: Wrist / Hand / Fingers (L or R)
     WristHandFingers = 10,
-    /// `1d20 = 19`: Neck / Throat / Carotid / Cervical
     NeckThroatCarotidCervical = 11,
-    /// `1d20 = 20`: Head (Cranium / Face / Jaw / Eyes)
     HeadCraniumFaceJawEyes = 12,
 }
 
 impl HitLocationId {
-    /// All 13 canonical hit location identifiers in declaration order (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
     pub const ALL: [Self; 13] = [
         Self::FootAnkle,
         Self::CalfShin,
@@ -127,31 +113,22 @@ impl HitLocationId {
 /// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HitLocationSpec {
-    /// Canonical hit location identifier.
     pub id: HitLocationId,
     /// Minimum `1d20` roll (`1..=20`).
     pub d20_min: i32,
     /// Maximum `1d20` roll (`1..=20`).
     pub d20_max: i32,
-    /// Display name from §1.2.
     pub name: &'static str,
     /// Base Called Shot $\Delta_{\text{ext}}$ (`+2`, `+4`, `+6`, or `+8`).
     pub called_shot_delta_ext: i32,
-    /// Whether this location slashes **Tempo Cap ($T_{\max}$)**.
     pub slashes_tempo_cap: bool,
-    /// Whether this location slashes **Control Cap ($C_{\max}$)**.
     pub slashes_control_cap: bool,
-    /// Whether this location slashes **Force Cap ($F_{\max}$)**.
     pub slashes_force_cap: bool,
-    /// Whether deep penetrating trauma to this location risks major arterial hemorrhage (Femoral, Brachial, Carotid, Aorta/Heart).
     pub major_arterial_hazard: bool,
-    /// Summary of specific anatomical and mechanical effects from §1.2.
     pub mechanical_notes: &'static str,
 }
 
 impl HitLocationSpec {
-    /// Returns the `Tempo / Control / Force` aspect ceiling slash flags as a [`Triad<bool>`]
-    /// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
     #[must_use]
     pub const fn slashes_triad(&self) -> Triad<bool> {
         Triad::new(
@@ -211,8 +188,6 @@ pub const HIT_LOCATION_TABLE: [HitLocationSpec; 13] = [
 
 impl_static_catalog!(HitLocationId => HitLocationSpec : HIT_LOCATION_TABLE);
 
-/// Returns the canonical 13-entry Master Anatomical Hit Location Table
-/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
 #[must_use]
 pub const fn canonical_hit_location_table() -> &'static [HitLocationSpec] {
     HitLocationId::CATALOG
@@ -239,7 +214,6 @@ pub fn resolve_hit_location_d20(d20_roll: i32) -> HitLocationSpec {
 pub struct FatigueLevelSpec {
     /// Numeric fatigue level (`0..=5`).
     pub fatigue_level: i32,
-    /// Canonical condition name (`"Fresh / Rested"`, `"Winded / Warm"`, etc.).
     pub condition_name: &'static str,
     /// Internal difficulty modifier $\Delta_{\text{int}} = 2 \times \text{fatigue\_level}$.
     pub delta_int: i32,
@@ -251,11 +225,8 @@ pub struct FatigueLevelSpec {
     pub action_time_factor: f64,
     /// Penalty applied to `SPD` and `FOR` aspect ceilings (`-2` at Fatigue Level `3+`, else `0`).
     pub spd_and_for_cap_penalty: i32,
-    /// Whether the character is still capable of All-Out Sprinting (`false` at Fatigue `4+`).
     pub can_sprint: bool,
-    /// Whether the character collapses into Metabolic Unconsciousness (`true` at Fatigue `5`).
     pub is_unconscious: bool,
-    /// Required rest & hydration duration to recover `-1` level.
     pub recovery_requirement: &'static str,
 }
 
@@ -312,15 +283,11 @@ pub struct AsphyxiationOutcome {
     /// Maximum ticks the character can hold their breath before hypoxic fatigue accumulation begins
     /// ($40\times\text{FIT}$ calm, $16\times\text{FIT}$ vigorous, `0` if surprised without air or in a blood choke).
     pub breath_holding_capacity_ticks: i32,
-    /// Ticks elapsed beyond breath-holding capacity.
     pub hypoxic_overrun_ticks: i32,
-    /// Additional `fatigue_level` steps gained from oxygen deprivation (`+1` per `20 ticks` past breath capacity).
     pub fatigue_levels_gained: i32,
     /// Resulting total `fatigue_level` (`0..=5`).
     pub resulting_fatigue_level: i32,
-    /// Whether the character has lost consciousness from `Fatigue 5` or a Vascular Blood Choke (`>= 24 ticks` minimum, `32 ticks` typical).
     pub is_unconscious: bool,
-    /// Whether irreversible hypoxic brain death has occurred (`>= 240 ticks` / `1 minute` after hypoxic unconsciousness).
     pub hypoxic_brain_death_risk: bool,
 }
 
@@ -401,7 +368,6 @@ pub enum StructuralWoundTier {
 }
 
 impl StructuralWoundTier {
-    /// Converts a numeric wound tier (`1..=5`) into [`StructuralWoundTier`] (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1 Table).
     #[must_use]
     pub const fn from_tier_number(tier: u8) -> Self {
         match tier {
@@ -413,7 +379,6 @@ impl StructuralWoundTier {
         }
     }
 
-    /// Numeric tier (`1..=5`, `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1 Table).
     #[must_use]
     pub const fn tier_number(self) -> u8 {
         match self {
@@ -595,19 +560,13 @@ pub struct BloodLossProgressionOutcome {
     pub total_units_lost: f64,
     /// Remaining circulating blood volume (`0.0..=10.0`, baseline `10.0`).
     pub remaining_blood_units: f64,
-    /// Current clinical Hypovolemic Shock classification.
     pub hypovolemic_class: HypovolemicShockClass,
-    /// Additional `fatigue_level` imposed by blood loss (`0`, `1`, `2`, `4`, or `5`).
     pub added_fatigue_level: i32,
-    /// Additional `wound_shock_index` imposed by blood loss (`0`, `1`, `3`, or `5`).
     pub added_wound_shock_index: i32,
     /// `KIN` penalty from orthostatic dizziness (`-2` in Class II+).
     pub dizzy_kin_penalty: i32,
-    /// Whether the character must roll `HLT/DIS` every `20 ticks` (`5s`) to stay conscious (`Class III`).
     pub requires_consciousness_check_every_20_ticks: bool,
-    /// Whether the character is immediately `Unconscious & Comatose` (`Class IV`, `>= 5.0 Units` lost, or Grade 4 Arterial `>= 20 ticks`).
     pub immediate_unconsciousness_and_coma: bool,
-    /// Remaining ticks until fatal cardiac arrest once `Class IV` (`>= 5.0 Units` lost) is reached (`240 Ticks = 1 minute`).
     pub ticks_until_cardiac_arrest: Option<i32>,
 }
 
@@ -718,17 +677,11 @@ pub struct WoundShockSaveEffect {
     pub tn_player: i32,
     /// External difficulty $\Delta_{\text{ext}} = 2 \times \text{wound\_shock\_index}$.
     pub delta_ext: i32,
-    /// Effective `wound_shock_index` after applying `-1` reduction on `ExtraordinarySuccess`.
     pub effective_wound_shock_index: i32,
-    /// Whether the character remains conscious.
     pub stays_conscious: bool,
-    /// Ticks the character is `Stunned` (`8 ticks` on `CleanFailure`, `0` on success).
     pub stunned_ticks: i32,
-    /// Whether the character is forced `Prone` (`true` on any failure).
     pub drops_prone: bool,
-    /// Whether the character must make an immediate **Morale Check** (`true` on `CleanFailure`).
     pub triggers_morale_check: bool,
-    /// Whether neurogenic syncope knocks the character **Unconscious** (`BotchFailure` or any failure at `wound_shock_index >= 4`).
     pub falls_unconscious: bool,
 }
 

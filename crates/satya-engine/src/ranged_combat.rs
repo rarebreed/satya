@@ -21,20 +21,14 @@ use crate::primitives::StaticCatalog;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RangedFireModeId {
-    /// **Single Snap Shot (Point-Shoot)**: Base TC `7`, Mode Recoil `+0` (`1 rd`), prioritizes `Tempo` (`CQB`).
     SingleSnapShotPointShoot = 0,
-    /// **Deliberate Sighted / Aimed Shot**: Base TC `11–12`, Mode Recoil `+1` (`1 rd`), prioritizes `Control` (called shots, weak spots).
     DeliberateSightedAimedShot = 1,
-    /// **Controlled Double-Tap / Short Burst**: Base TC `9`, Mode Recoil `+2..+3` (`2–3 rds`), balanced `Control + Force` (`+1` hit tier per `2` Net Successes).
     ControlledDoubleTapShortBurst = 2,
-    /// **Full-Auto Burst / Suppressive Fire**: Base TC `8–10`, Mode Recoil `+4..+6` (`5–15 rds`), prioritizes `Force` ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$).
     FullAutoBurstSuppressiveFire = 3,
-    /// **Bounding / Shooting on the Move**: Base TC `10`, Mode Recoil `+3` (`1–3 rds`), unbraced recoil added to weapon `R`.
     BoundingShootingOnTheMove = 4,
 }
 
 impl RangedFireModeId {
-    /// All 5 canonical ranged fire mode identifiers in declaration order.
     pub const ALL: [Self; 5] = [
         Self::SingleSnapShotPointShoot,
         Self::DeliberateSightedAimedShot,
@@ -47,25 +41,17 @@ impl RangedFireModeId {
 /// Canonical profile for a Ranged Fire Mode (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RangedFireModeProfile {
-    /// Canonical fire mode identifier.
     pub id: RangedFireModeId,
-    /// Display name from the §2.1 table.
     pub name: &'static str,
-    /// Minimum Base Count-Up Tick Cost (`Base TC`).
     pub min_base_tc: i32,
-    /// Maximum Base Count-Up Tick Cost (`Base TC`).
     pub max_base_tc: i32,
-    /// Typical minimum total Recoil Rating (`R`).
     pub min_recoil_r: i32,
-    /// Typical maximum total Recoil Rating (`R`).
     pub max_recoil_r: i32,
     /// Minimum Fire-Mode Recoil Adder ($\Delta R_{\text{mode}}$, `ranged_combat_and_armor.md` §2.1 Table).
     pub min_mode_recoil_adder: i32,
     /// Maximum Fire-Mode Recoil Adder ($\Delta R_{\text{mode}}$, `ranged_combat_and_armor.md` §2.1 Table).
     pub max_mode_recoil_adder: i32,
-    /// Minimum ammunition rounds expended per trigger press (`ranged_combat_and_armor.md` §2.1 Table).
     pub min_rounds_expended: i32,
-    /// Maximum ammunition rounds expended per trigger press (`ranged_combat_and_armor.md` §2.1 Table).
     pub max_rounds_expended: i32,
     /// Extra unbraced recoil penalty added when shooting on the move (`+3` for `BoundingShootingOnTheMove`).
     pub movement_recoil_adder: i32,
@@ -100,7 +86,6 @@ pub const RANGED_FIRE_MODES: [RangedFireModeProfile; 5] = [
 
 impl_static_catalog!(RangedFireModeId => RangedFireModeProfile : RANGED_FIRE_MODES);
 
-/// Returns the canonical 5-entry Ranged Fire Mode catalog (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.1).
 #[must_use]
 pub const fn canonical_ranged_fire_modes() -> &'static [RangedFireModeProfile] {
     RangedFireModeId::CATALOG
@@ -110,9 +95,7 @@ pub const fn canonical_ranged_fire_modes() -> &'static [RangedFireModeProfile] {
 /// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.2–§2.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RangedExchangeEvaluation {
-    /// Effective Recoil demand $R_{\text{eff}} = R + \text{movement\_recoil\_adder}$.
     pub effective_recoil_r: i32,
-    /// Whether the shooter's allocated `Force` fully braces the weapon ($F \ge R_{\text{eff}}$).
     pub recoil_fully_braced: bool,
     /// Unbraced recoil shortfall $\max(0, R_{\text{eff}} - F)$, applied directly as a muzzle-climb dispersion penalty to $\Delta_{\text{ext}}$.
     pub unbraced_dispersion_delta_ext: i32,
@@ -174,24 +157,16 @@ pub fn evaluate_ranged_recoil_with_gait(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ArmorProfileId {
-    /// **Heavy Leather / Synth-Weave Jacket**: `PR_Edged 2`, `PR_Ballistic 1`, `BTD 1`, `2.5 kg`.
     HeavyLeatherSynthWeaveJacket = 0,
-    /// **Concealable Soft Kevlar Vest (NIJ IIIA)**: `PR_Edged 2` (`1` vs. icepick/flechette), `PR_Ballistic 4`, `BTD 2`, `2.2 kg`.
     ConcealableSoftKevlarVestNij3a = 1,
-    /// **Lightweight UHMWPE Patrol Carrier (NIJ III / RF1)**: `PR_Edged 5`, `PR_Ballistic 6`, `BTD 4`, `4.8 kg`.
     LightweightUhmwpePatrolCarrierNij3 = 2,
-    /// **Tactical Plate Carrier (Level IV Ceramic)**: `PR_Edged 6`, `PR_Ballistic 8`, `BTD 5`, `8.5 kg`.
     TacticalPlateCarrierLevel4 = 3,
-    /// **Ballistic Combat Helmet + Visor**: `PR_Edged 5`, `PR_Ballistic 4` (`3` visor), `BTD 4`, `1.6 kg`.
     BallisticCombatHelmetVisor = 4,
-    /// **Full Riot / Breacher Suit**: `PR_Edged 6` (`5` vs. icepick/flechette), `PR_Ballistic 5`, `BTD 6`, `16.0 kg`, `+6` Heat Retention.
     FullRiotBreacherSuit = 5,
-    /// **2035 "Valkyrie" Recon Exo-Carapace**: `PR_Edged 8`, `PR_Ballistic 9`, `BTD 8`, `18.5 kg` (`-20.0 kg` Exo Offset).
     ValkyrieReconExoCarapace2035 = 6,
 }
 
 impl ArmorProfileId {
-    /// All 7 canonical armor profile identifiers in declaration order (`ranged_combat_and_armor.md` §8.1).
     pub const ALL: [Self; 7] = [
         Self::HeavyLeatherSynthWeaveJacket,
         Self::ConcealableSoftKevlarVestNij3a,
@@ -202,7 +177,6 @@ impl ArmorProfileId {
         Self::ValkyrieReconExoCarapace2035,
     ];
 
-    /// Canonical machine-readable code for this armor profile.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
@@ -218,7 +192,6 @@ impl ArmorProfileId {
         }
     }
 
-    /// Human-readable display label from `ranged_combat_and_armor.md` §8.1.
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
@@ -234,7 +207,6 @@ impl ArmorProfileId {
         }
     }
 
-    /// Recognized shorthand aliases for this armor profile.
     #[must_use]
     pub const fn aliases(self) -> &'static [&'static str] {
         match self {
@@ -254,27 +226,16 @@ impl ArmorProfileId {
 /// Canonical Armor Profile from `docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.1.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArmorProfile {
-    /// Canonical armor identifier.
     pub id: ArmorProfileId,
-    /// Display name from the §8.1 table.
     pub name: &'static str,
-    /// Penetration Resistance against Edged/Stabbing attacks (`PR_Edged`).
     pub pr_edged: i32,
-    /// Penetration Resistance against icepick/flechette thrusts (`1` for Soft Kevlar, `5` for Riot Suit, else equals `pr_edged`).
     pub pr_icepick_flechette: i32,
-    /// Penetration Resistance against Ballistic projectiles (`PR_Ballistic`).
     pub pr_ballistic: i32,
-    /// Penetration Resistance of the visor/weak spot (`3` for Ballistic Helmet Visor, else equals `pr_ballistic`).
     pub pr_visor_weak_spot: i32,
-    /// Blunt Trauma Dampening (`BTD`) absorbed before Behind-Armor Blunt Trauma (`BABT`) transfers to the wearer.
     pub blunt_trauma_dampening_btd: i32,
-    /// Physical weight in kilograms.
     pub weight_kg: f64,
-    /// Protected / encumbered body zones (`ranged_combat_and_armor.md` §8.1 Table).
     pub encumbered_zones: &'static str,
-    /// Street/retail price in 2032 USD / Credits (`ranged_combat_and_armor.md` §8.1 Table).
     pub cost_usd: i32,
-    /// Powered exoskeleton carry-load offset in kilograms (`20.0 kg` for Valkyrie Exo-Carapace, else `0.0`).
     pub exo_load_offset_kg: f64,
     /// Environmental Heat Retention penalty (`+6` for Full Riot/Breacher Suit, else `0`).
     pub heat_retention_delta: i32,
@@ -312,7 +273,6 @@ pub const ARMOR_CATALOG: [ArmorProfile; 7] = [
 
 impl_static_catalog!(ArmorProfileId => ArmorProfile : ARMOR_CATALOG);
 
-/// Returns the canonical 7-entry Armor Catalog (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.1).
 #[must_use]
 pub const fn canonical_armor_catalog() -> &'static [ArmorProfile] {
     ArmorProfileId::CATALOG
@@ -339,19 +299,12 @@ pub enum WeaponDamageType {
 pub struct ArmorImpactOutcome {
     /// Effective Penetration $\text{Effective Pen} = \text{Base Pen} + \lfloor \max(0, \text{Net Successes}) / 2 \rfloor$.
     pub effective_pen: i32,
-    /// Active Armor Penetration Resistance (`PR`) for the struck location and damage type.
     pub active_armor_pr: i32,
-    /// Whether the attack penetrated the armor ($\text{Effective Pen} > \text{PR}$ for non-blunt attacks).
     pub penetrated: bool,
-    /// Behind-Armor Blunt Trauma (`BABT`) inflicted when stopped by armor ($\max(0, \text{Effective Raw Impact} - \text{BTD})$).
     pub babt_trauma: i32,
-    /// Penetrating trauma inflicted when armor is overmatched ($\max(0, \text{Effective Raw Impact} - \text{PR})$).
     pub penetrating_trauma: i32,
-    /// Total effective trauma transferred to the target (`penetrating_trauma` if penetrated, else `babt_trauma`).
     pub total_effective_trauma: i32,
-    /// Whether the wound causes internal/external bleeding (`true` when an Edged/Icepick/Ballistic attack penetrates).
     pub causes_bleed: bool,
-    /// Armor `PR` ablation/degradation inflicted on the struck plate (`1..=2` on penetration, `1` when a Level IV Ceramic plate stops a hit with `raw_impact >= 6`, else `0`).
     pub armor_pr_degradation: i32,
 }
 
@@ -473,11 +426,8 @@ pub enum MalfunctionKind {
 pub struct WeaponMalfunctionOutcome {
     /// Effective Reliability rating (`Rel`) clamped to `-4..=+4`.
     pub effective_reliability: i32,
-    /// Triggered malfunction severity.
     pub malfunction_kind: MalfunctionKind,
-    /// Count-Up ticks required to clear the malfunction (`0`, `8`, or `26` average of `20..=32`).
     pub clearance_ticks: i32,
-    /// Tool Tier degradation if the item is a non-firearm tool (`-1` on Minor, `-2` on Major, else `0`).
     pub tool_tier_degradation: i32,
 }
 

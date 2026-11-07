@@ -26,15 +26,11 @@ pub type Pmf = BTreeMap<i32, f64>;
 /// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DistributionStats {
-    /// Expected value $E[X] = \sum x P(X = x)$.
     pub mean: f64,
-    /// Variance $\text{Var}(X) = E[(X - \mu)^2]$.
     pub variance: f64,
     /// Standard deviation $\sigma = \sqrt{\text{Var}(X)}$.
     pub std: f64,
-    /// Standardized third central moment $E[(X - \mu)^3] / \sigma^3$.
     pub skewness: f64,
-    /// Standardized fourth central moment minus 3: $(E[(X - \mu)^4] / \sigma^4) - 3$.
     pub excess_kurtosis: f64,
 }
 
@@ -357,9 +353,7 @@ pub fn order_statistic_pmf(pool_size: usize, sides: i32, k_rank_from_lowest: usi
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CenterDistanceMode {
-    /// Pick the die closest to the midpoint $(K+1)/2$ (Focus / bell-like concentration).
     Closest,
-    /// Pick the die furthest from the midpoint $(K+1)/2$ (Chaos / U-shaped bimodal distribution).
     Furthest,
 }
 

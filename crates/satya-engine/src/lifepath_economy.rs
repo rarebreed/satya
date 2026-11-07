@@ -30,27 +30,16 @@ pub use crate::walkthroughs::{
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1–§1.7, §2.1–§2.3).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LifepathCharacterProfile {
-    /// Character name.
     pub name: String,
-    /// Character age in years at the end of lifepath generation.
     pub age_years: u32,
-    /// Stage 1 Socioeconomic Origin specification.
     pub origin: SocioeconomicOriginSpec,
-    /// 30 Core Characteristics.
     pub characteristics: CharacterCharacteristics,
-    /// 9 Domain Aptitudes.
     pub aptitudes: CharacterAptitudes,
-    /// Unlocked skill ranks (`skill_id -> rank N`).
     pub skills: BTreeMap<String, usize>,
-    /// Institutional `[Access]` tags unlocked across Stages 1–5.
     pub granted_access_tags: Vec<SkillAccessTier>,
-    /// True if the character dropped out in Stage 3 / 4B / 4C without returning to adult basic education (locks `[Access: Academic]`).
     pub academic_tree_frozen: bool,
-    /// Chronological narrative log of Stages 1–5.
     pub stage_history: Vec<String>,
-    /// Campaign socioeconomic tier (`SQM 1–10`).
     pub campaign_sqm: u8,
-    /// Operational heat score (`0–10`).
     pub operational_heat: u8,
 }
 
@@ -319,13 +308,9 @@ impl RuralYouthArchetype {
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CareerTermConfig {
-    /// Selected career term track.
     pub track: CareerTermTrack,
-    /// Two `2d20` pairs rolled for career term performance (`0`, `1`, or `2` successes).
     pub term_roll_pairs: [(i32, i32); 2],
-    /// Optional manual override for term advancement successes (`0..=2`).
     pub override_successes: Option<usize>,
-    /// True if the player granted a moral/academic entry waiver for this term.
     pub waiver_override: bool,
 }
 
@@ -346,54 +331,29 @@ impl Default for CareerTermConfig {
 pub struct LifepathBuildConfig {
     /// Stage 1: `2d20` roll (`2..=40`) for Socioeconomic Origin (or set via class override).
     pub origin_roll_2d20: i32,
-    /// Stage 1: Chosen Early Environment Bonus Talent (`TAL` boosted by `+1` to `N = 2`).
     pub stage1_early_talent: String,
-    /// Stage 2: Elementary Literacy `2d20` pairs (`DIS/MEM + APT-LNG`).
     pub stage2_lit_pairs: [(i32, i32); 2],
-    /// Stage 2: Optional manual override for Elementary Literacy successes (`0..=2`).
     pub stage2_lit_override: Option<usize>,
-    /// Stage 2: Elementary Mathematics `2d20` pairs (`DIS/ANA + APT-QNT`).
     pub stage2_math_pairs: [(i32, i32); 2],
-    /// Stage 2: Optional manual override for Elementary Mathematics successes (`0..=2`).
     pub stage2_math_override: Option<usize>,
-    /// Stage 2: Playground / Recess Talent (`TAL` boosted by `+1`).
     pub stage2_playground_talent: String,
-    /// Stage 3: Junior High Mathematics `2d20` pairs (`DIS/ANA + APT-QNT`).
     pub stage3_math_pairs: [(i32, i32); 2],
-    /// Stage 3: Optional manual override for Junior High Mathematics successes (`0..=2`).
     pub stage3_math_override: Option<usize>,
-    /// Stage 3: Junior High General Science `2d20` pairs (`DIS/ANA + APT-QNT`).
     pub stage3_sci_pairs: [(i32, i32); 2],
-    /// Stage 3: Optional manual override for Junior High General Science successes (`0..=2`).
     pub stage3_sci_override: Option<usize>,
-    /// Stage 3: Junior High Literacy & Humanities `2d20` pairs (`DIS/MEM + APT-LNG`).
     pub stage3_hum_pairs: [(i32, i32); 2],
-    /// Stage 3: Optional manual override for Junior High Literacy & Humanities successes (`0..=2`).
     pub stage3_hum_override: Option<usize>,
-    /// Stage 3 -> 4 Transition: `2d20` roll for Adolescent Crisis / Dropout Check at Age 15.
     pub age15_crisis_roll_2d20: i32,
-    /// Optional player override for Age 15 path (`Some(true)` = Force Dropout Path 4B, `Some(false)` = Stay in High School Path 4A).
     pub age15_dropout_override: Option<bool>,
-    /// Optional explicit Stage 4 path override (`Path4AHighSchool`, `Path4BStreetGang`, or `Path4CRuralAgrarian`).
-    /// Takes precedence over `age15_dropout_override` when set.
     pub stage4_path_override: Option<Stage4Path>,
-    /// Stage 4A: Selected High School Track (when staying in school).
     pub stage4a_hs_track: HighSchoolTrack,
-    /// Stage 4A: High School Advancement `2d20` pairs.
     pub stage4a_hs_pairs: [(i32, i32); 2],
-    /// Stage 4A: Optional manual override for High School Advancement successes (`0..=2`).
     pub stage4a_hs_override: Option<usize>,
-    /// Stage 4B: Selected Street Gang / Underworld Archetype (when dropping out into urban underworld at Age 15).
     pub stage4b_gang_archetype: StreetGangArchetype,
-    /// Stage 4C: Selected Rural, Agrarian & Developing-Region Youth Archetype (when taking Path 4C at Age 15).
     pub stage4c_rural_archetype: RuralYouthArchetype,
-    /// Stage 5: Whether a dropout later obtained a GED / Adult Academic Waiver to unfreeze `[Access: Academic]`.
     pub adult_ged_waiver: bool,
-    /// Stage 5: `0` to `4` Adult 4-Year Career Terms (`Ages 18–34`).
     pub career_terms: Vec<CareerTermConfig>,
-    /// Campaign `SQM` Tier (`1–10`) override (`None` = derived from Origin & Career Terms).
     pub campaign_sqm_override: Option<u8>,
-    /// Campaign Operational `Heat` (`0–10`) override (`None` = derived from Dropout/Syndicate history).
     pub operational_heat_override: Option<u8>,
 }
 
@@ -433,46 +393,25 @@ impl Default for LifepathBuildConfig {
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1–§1.7, §3.1–§3.2).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LifepathBaselineResult {
-    /// Character age in years at the end of Stage 5.
     pub age_years: u32,
-    /// Stage 1 Socioeconomic Origin specification.
     pub origin: SocioeconomicOriginSpec,
-    /// Stage 2 Elementary Literacy advancement roll evaluation.
     pub stage2_lit_eval: EducationalAdvancementResult,
-    /// Stage 2 Elementary Mathematics advancement roll evaluation.
     pub stage2_math_eval: EducationalAdvancementResult,
-    /// Stage 3 Junior High Mathematics advancement roll evaluation.
     pub stage3_math_eval: EducationalAdvancementResult,
-    /// Stage 3 Junior High Science advancement roll evaluation.
     pub stage3_sci_eval: EducationalAdvancementResult,
-    /// Stage 3 Junior High Humanities advancement roll evaluation.
     pub stage3_hum_eval: EducationalAdvancementResult,
-    /// True if the character left formal academic high school at Age 15 (`Path4B` or `Path4C`).
     pub dropped_out_at_15: bool,
-    /// Active Stage 4 adolescent path (`Path4A`, `Path4B`, or `Path4C`).
     pub stage4_path: Stage4Path,
-    /// Stage 4A High School advancement roll evaluation (when `stage4_path == Path4AHighSchool`).
     pub stage4a_hs_eval: Option<EducationalAdvancementResult>,
-    /// Stage 5 Adult Career Term advancement roll evaluations.
     pub term_evals: Vec<EducationalAdvancementResult>,
-    /// Skills granted automatically by Stages 1–4 (`Universal Talents` + `Origin` + `Elementary` + `Junior High` + `High School / Gang / Rural`).
-    /// Serves as the minimum floor in the Step 5 Skill Tree Builder.
     pub baseline_skills: BTreeMap<String, usize>,
-    /// All `[Access]` tags unlocked across Stages 1–5.
     pub granted_access_tags: Vec<SkillAccessTier>,
-    /// True if `[Access: Academic]` is frozen due to Stage 4B/4C Dropout without a GED/University waiver.
     pub academic_tree_frozen: bool,
-    /// Total Formal Training SP budget granted by Stage 5 Career Terms (`120 + 20 * successes` per term).
     pub career_skill_budget: usize,
-    /// Total Experience / Elective SP budget (`40` youth + `40` per Career Term).
     pub elective_skill_budget: usize,
-    /// Maximum additional levels any single skill can gain during Stage 5 (`2 * max(1, career_terms.len())`).
     pub max_post_school_gain_per_skill: usize,
-    /// Effective Campaign `SQM` Tier (`1–10`).
     pub campaign_sqm: u8,
-    /// Effective Campaign Operational `Heat` (`0–10`).
     pub operational_heat: u8,
-    /// Chronological narrative log of Stages 1–5.
     pub stage_history: Vec<String>,
 }
 

@@ -52,8 +52,6 @@
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor)
 //!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3).
 
-#![deny(missing_docs)]
-
 pub mod action_catalog_stealth;
 pub mod action_economy;
 pub mod ballistics;

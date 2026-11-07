@@ -72,23 +72,16 @@ impl MoraleState {
 /// Satya Combat Tactical Pool ("Envelope & Fill") calculator (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3–§4.4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TacticalPoolParams {
-    /// Character's 30-attribute profile (`SPD`, `FOR`, `DEX`, `KIN`, `SIG`, `INS`, `ITU`, `ANA`, `CRE`, `FOC`, `DIS`, `FIT`, `mas_kg`).
     pub chars: CharacterCharacteristics,
     /// Controlling Characteristic $C_{\text{skill}}$ of the active combat skill (`1..=20`).
     pub skill_c: i32,
-    /// Active Combat Skill Level $N \in [0, 10]$.
     pub skill_n: usize,
-    /// Whether the action is a ranged weapon exchange (`true`) or melee/unarmed exchange (`false`).
     pub is_ranged: bool,
-    /// Accumulated systemic Fatigue Level (`-2` pool per level, `+10%` `action_time_factor` per level).
     pub fatigue_level: i32,
-    /// Accumulated systemic Wound Shock Tier (`-2` pool per tier, `+25%` `action_time_factor` per tier).
     pub wound_shock_index: i32,
     /// Localized structural wound penalties to `(Tempo, Control, Force)` ceilings (`(leg_wound, arm_head_wound, torso_shoulder_wound)`).
     pub wound_cap_penalties: Triad<i32>,
-    /// Additional composable [`ConditionImpact`] from status, environmental, or encumbrance conditions.
     pub condition: ConditionImpact,
-    /// Active psychological Morale Condition.
     pub morale_state: MoraleState,
 }
 
@@ -109,7 +102,6 @@ impl Default for TacticalPoolParams {
 }
 
 impl TacticalPoolParams {
-    /// Build a [`TacticalPoolParams`] directly from a [`CharacterCharacteristics`] profile.
     #[must_use]
     pub fn from_characteristics(
         chars: &CharacterCharacteristics,
@@ -137,19 +129,14 @@ pub struct TacticalPoolEnvelope {
     pub ooda_init: i32,
     /// Combat Readiness controller: $C_{\text{combat}} = \lfloor(C_{\text{skill}} + \text{OODA}) / 2\rfloor$.
     pub combat_readiness_c: i32,
-    /// Base Tactical Pool before fatigue, shock, or morale: $P_{\text{base}} = C_{\text{combat}} + 3N$.
     pub p_base: i32,
     /// Effective Tactical Pool available to allocate: $P_{\text{eff}} = \max(0, P_{\text{base}} - 2\cdot\text{Fatigue} - 2\cdot\text{Shock} + \Delta P_{\text{morale}})$.
     pub p_eff: i32,
     /// Neutral per-aspect baseline: $B = \lfloor P_{\text{base}} / 3 \rfloor$.
     pub neutral_baseline_b: i32,
-    /// Aspect ceiling triad `(tempo_cap, control_cap, force_cap)`.
     pub caps: Triad<i32>,
-    /// Maximum points allocatable to **Tempo ($T_{\max}$)**.
     pub tempo_cap: i32,
-    /// Maximum points allocatable to **Control ($C_{\max}$)**.
     pub control_cap: i32,
-    /// Maximum points allocatable to **Force ($F_{\max}$)**.
     pub force_cap: i32,
     /// Mastery technique overflow bonus ($\lfloor(N - 3)/2\rfloor$ for $N \ge 5$) added to Control & Force caps.
     pub mastery_overflow: i32,
@@ -161,20 +148,15 @@ pub struct TacticalPoolEnvelope {
     pub fatigue_threshold_ft: i32,
     /// Action Time Factor multiplier: $1.0 + 0.10\cdot\text{Fatigue} + 0.25\cdot\text{Shock}$.
     pub action_time_factor: f64,
-    /// Active psychological Morale Condition.
     pub morale_state: MoraleState,
     /// Minimum Force allocation required by Morale/Rage ($\lfloor P_{\text{eff}} / 2 \rfloor$ in `Rage`, else `0`).
     pub min_force_required: i32,
-    /// Maximum Control allocation permitted by Morale/Rage + Ceiling.
     pub max_control_allowed: i32,
-    /// Maximum Force allocation permitted by Morale/Rage + Ceiling.
     pub max_force_allowed: i32,
-    /// Whether `Force` is constrained to not exceed `Control` ($F \le C$, active in `Wavering` morale).
     pub force_must_not_exceed_control: bool,
 }
 
 impl TacticalPoolEnvelope {
-    /// Return `(tempo_cap, control_cap, force_cap)` as a [`Triad`].
     #[must_use]
     pub const fn caps_triad(&self) -> Triad<i32> {
         self.caps
@@ -185,21 +167,15 @@ impl TacticalPoolEnvelope {
 /// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.1–§4.4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TacticalTriadEvaluation {
-    /// Allocated `(tempo, control, force)` triad.
     pub alloc: Triad<i32>,
-    /// Whether the allocation satisfies all Pool, Ceiling, and Morale/Rage constraints.
     pub valid: bool,
-    /// Human-readable descriptions of any violated constraints (empty when `valid == true`).
     pub violations: Vec<String>,
-    /// Effective Count-Up Action Tick Cost (`TC`) after Tempo and `action_time_factor`.
     pub effective_tc: i32,
     /// Scaled melee Strike Impact ($\text{POW} \times (F / B)$).
     pub strike_impact: f64,
     /// Effective Rooted stability against throws, sweeps, and knockback ($F + \text{MMF}$).
     pub effective_root: f64,
-    /// Exertion marks accumulated by this action (`0`, `1`, or `2`).
     pub exertion_marks_gained: i32,
-    /// Canonical Tactical Archetype classification.
     pub archetype_label: String,
 }
 
@@ -212,7 +188,6 @@ impl Deref for TacticalTriadEvaluation {
 }
 
 impl TacticalTriadEvaluation {
-    /// Return `(tempo, control, force)` as a [`Triad`].
     #[must_use]
     pub const fn triad(&self) -> Triad<i32> {
         self.alloc
@@ -415,21 +390,14 @@ pub fn evaluate_tactical_triad(
 /// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TacticalPoolEnvelopeSummary {
-    /// Maximum capacity of the tactical envelope (`E_base`).
     pub base_envelope: i32,
-    /// Uncapped tactical pool generated from cascade successes, skill, and reach (`P_raw`).
     pub raw_pool: i32,
-    /// Effective pool available after clamping to `base_envelope` (`P_eff`).
     pub effective_pool: i32,
-    /// Excess points above `base_envelope` lost to envelope overflow.
     pub overflow_wasted: i32,
     /// Net weapon reach modifier (`-2..=+3`).
     pub reach_modifier: i32,
-    /// Maximum Tempo allocation cap from [`TacticalPoolEnvelope`].
     pub max_tempo: i32,
-    /// Maximum Control allocation cap from [`TacticalPoolEnvelope`].
     pub max_control: i32,
-    /// Maximum Force allocation cap from [`TacticalPoolEnvelope`].
     pub max_force: i32,
 }
 
@@ -493,23 +461,15 @@ pub fn compute_tactical_pool_envelope(
 /// (`docs/ttrpg/05-combat/melee_combat.md` §1–§2.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TacticalTriadContestOutcome {
-    /// Net Tempo differential (`attacker.tempo - defender.tempo`).
     pub net_tempo: i32,
-    /// Net Control differential (`attacker.control - defender.control`).
     pub net_control: i32,
     /// Whether the attacker seizes the initiative (`net_tempo >= 2 && net_control >= 0`).
     pub seizes_initiative: bool,
-    /// Whether the defender's guard is broken.
     pub guard_broken: bool,
-    /// Whether a Kuzushi throw/sweep is triggered against `attacker_root`.
     pub throw_triggered: bool,
-    /// Net penetrating force after armor DR and guard mitigation.
     pub penetrating_force: i32,
-    /// Count-Up tick cost of the attacker's next exchange.
     pub next_tick_cost: i32,
-    /// Canonical Tactical Archetype classification of the attacker's triad.
     pub archetype_label: String,
-    /// Human-readable summary of the exchange outcome.
     pub outcome_summary: String,
 }
 
@@ -613,11 +573,9 @@ pub fn evaluate_tactical_triad_with_decision(
 /// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExertionProgressionResult {
-    /// Updated Exertion Marks remaining after checking against `fatigue_threshold_ft`.
     pub remaining_exertion_marks: i32,
     /// Updated systemic Fatigue Level (`-2` $P_{\text{eff}}$, `+2` $\Delta_{\text{int}}$, `+10%` `action_time_factor` per level).
     pub new_fatigue_level: i32,
-    /// Number of new Fatigue Levels gained on this exchange.
     pub fatigue_levels_gained: i32,
 }
 
@@ -668,22 +626,15 @@ pub enum CombatEngagementMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MeleeWeaponId {
-    /// **Unarmed (Jab / Low Kick / Clinch Knee)**: Reach `1`, Base TC `8`, Guard `+0`, Blunt (`1.0x POW`).
     UnarmedJabLowKickClinchKnee = 0,
-    /// **Unarmed (Haymaker / High Kick / Throw)**: Reach `1–2`, Base TC `10`, Guard `-1` (strike) / `+1` (grapple), Heavy Blunt (`1.25x POW`).
     UnarmedHaymakerHighKickThrow = 1,
-    /// **Combat Knife / Karambit / Shiv**: Reach `1` (Clinch), Base TC `7`, Guard `-1`, Piercing / Lacerating (`+2` Base Bleed).
     CombatKnifeKarambitShiv = 2,
-    /// **Expandable Baton / Tonfa / Club**: Reach `2`, Base TC `8`, Guard `+2 Control`, Blunt (`1.2x POW`), `+1` Control on Disarm/Bind.
     ExpandableBatonTonfaClub = 3,
-    /// **Machete / Wakizashi / Tactical Blade**: Reach `2–3`, Base TC `9`, Guard `+1 Control`, Lacerating / Impaling (`+4` Base Trauma).
     MacheteWakizashiTacticalBlade = 4,
-    /// **Two-Handed Staff / Spear / Riot Shield**: Reach `4`, Base TC `10–11`, Guard `+3 Control`, `+2` effective Force on blocks/sweeps, `+4` $\Delta_{\text{ext}}$ keep-out.
     TwoHandedStaffSpearRiotShield = 5,
 }
 
 impl MeleeWeaponId {
-    /// All 6 canonical melee weapon identifiers in declaration order.
     pub const ALL: [Self; 6] = [
         Self::UnarmedJabLowKickClinchKnee,
         Self::UnarmedHaymakerHighKickThrow,
@@ -697,15 +648,10 @@ impl MeleeWeaponId {
 /// Canonical profile for a Melee Weapon or Unarmed Attack (`docs/ttrpg/05-combat/melee_combat.md` §4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MeleeWeaponProfile {
-    /// Canonical weapon identifier.
     pub id: MeleeWeaponId,
-    /// Display name from the §4 table.
     pub name: &'static str,
-    /// Minimum effective Reach tier (`1..=4`).
     pub min_reach: i32,
-    /// Maximum effective Reach tier (`1..=4`).
     pub max_reach: i32,
-    /// Base Count-Up Tick Cost (`Base TC`).
     pub base_tc: i32,
     /// Passive Guard bonus added to `Control` when parrying/defending (`-1..=+3`).
     pub guard_bonus: i32,
@@ -713,7 +659,6 @@ pub struct MeleeWeaponProfile {
     pub pow_multiplier: f64,
     /// Flat bonus added to base trauma or bleed (`+2` knife bleed, `+4` tactical blade trauma).
     pub flat_trauma_or_bleed_bonus: i32,
-    /// Bonus to effective `Force` on blocks and sweeps (`+2` for Staff/Spear/Riot Shield).
     pub block_sweep_force_bonus: i32,
     /// Whether this weapon imposes a `+4` $\Delta_{\text{ext}}$ keep-out penalty on shorter-reach attackers.
     pub has_keep_out_property: bool,
@@ -748,7 +693,6 @@ pub const MELEE_WEAPON_CATALOG: [MeleeWeaponProfile; 6] = [
 
 impl_static_catalog!(MeleeWeaponId => MeleeWeaponProfile : MELEE_WEAPON_CATALOG);
 
-/// Returns the canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`docs/ttrpg/05-combat/melee_combat.md` §4).
 #[must_use]
 pub const fn canonical_melee_weapon_catalog() -> &'static [MeleeWeaponProfile] {
     MeleeWeaponId::CATALOG
@@ -786,26 +730,18 @@ pub struct MeleeExchangeContext {
     pub defender_guard_bonus: i32,
     /// Defender's Momentum & Mass Factor ($\text{MMF}_{\text{def}}$).
     pub defender_mmf: f64,
-    /// Attacker's weapon Reach tier (`1..=4`).
     pub attacker_reach: i32,
-    /// Defender's weapon Reach tier (`1..=4`).
     pub defender_reach: i32,
-    /// Whether the fighters are locked inside the Clinch (`Reach 1`).
     pub in_clinch: bool,
-    /// Whether the defender wields a keep-out weapon (`Reach 4` staff/spear/shield).
     pub defender_has_keep_out_weapon: bool,
-    /// Net cascade successes scored by the attacker ($S_{\text{att}} - S_{\text{def}}$).
     pub attacker_net_successes: i32,
-    /// Whether the attacker is attempting a Kuzushi Throw or Sweep.
     pub is_throw_or_sweep: bool,
-    /// Whether the attacker is redirecting an opponent's high-Tempo blitz inside the clinch.
     pub redirect_opponent_blitz_in_clinch: bool,
 }
 
 /// Outcome of a Contested Melee Exchange (`docs/ttrpg/05-combat/melee_combat.md` §1, §2.2, §2.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MeleeExchangeResolution {
-    /// Defender's Effective Control including weapon guard ($C_{\text{def}} + \text{Guard}_{\text{def}}$).
     pub defender_effective_control: i32,
     /// Control Differential $\Delta_{\text{control}} = (C_{\text{def}} + \text{Guard}_{\text{def}}) - C_{\text{att}}$.
     pub delta_control: i32,
@@ -813,19 +749,14 @@ pub struct MeleeExchangeResolution {
     pub control_delta_ext_on_attacker: i32,
     /// External penalty $\Delta_{\text{ext}}$ from Reach disadvantage or Clinch crowding.
     pub reach_clinch_delta_ext: i32,
-    /// Whether the attacker's strike lands (`attacker_net_successes > 0`).
     pub strike_lands: bool,
     /// Whether the defender **Seizes the Initiative** (`attacker_net_successes <= 0` and $C_{\text{def}} > C_{\text{att}}$, `§2.2`).
     pub defender_seizes_initiative: bool,
-    /// Recovery ticks added to the attacker's next action (or pool drain on next exchange) when the defender Seizes the Initiative.
     pub initiative_seized_penalty: i32,
-    /// Attacker's Leveraged Throw/Takedown Force ($F_{\text{att}} + \max(0, C_{\text{att}} - C_{\text{def}}) + \text{redirected\_blitz\_tempo}$).
     pub leveraged_throw_force: f64,
     /// Defender's Effective Root ($F_{\text{def}} + \text{MMF}_{\text{def}}$).
     pub defender_effective_root: f64,
-    /// Whether a Kuzushi Throw / Sweep succeeds (`is_throw_or_sweep && strike_lands && leveraged_throw_force >= defender_effective_root`).
     pub kuzushi_throw_succeeded: bool,
-    /// Recovery ticks imposed on a thrown/swept target (`6 ticks` to stand from Prone).
     pub prone_recovery_ticks: i32,
 }
 

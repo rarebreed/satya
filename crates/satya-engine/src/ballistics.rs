@@ -261,23 +261,14 @@ impl CenterOfGravityProfile {
 /// Physical and ballistic specification of a cartridge (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §3.1–§3.2, lines 121–176).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AmmunitionProfile {
-    /// Canonical caliber identifier.
     pub caliber_id: AmmoCaliberId,
-    /// Display name (e.g., `"9×19mm Parabellum"`).
     pub name: &'static str,
-    /// Projectile bore diameter in millimeters ($d_{\text{cal}}$).
     pub caliber_mm: f64,
-    /// Projectile mass in grains ($m_{\text{proj}}$, $1\text{ g} = 15.432\text{ gr}$).
     pub bullet_mass_grains: f64,
-    /// Chemical gunpowder propellant charge in grains ($m_{\text{prop}}$).
     pub powder_charge_grains: f64,
-    /// Optimal propellant-burn reference barrel length in centimeters ($L_{\text{opt}}$).
     pub optimal_barrel_cm: f64,
-    /// Reference muzzle kinetic energy at $L_{\text{opt}}$ in a sealed barrel ($E_{\text{chem}}$ in Joules, §3.1.1 line 127).
     pub reference_muzzle_energy_j: f64,
-    /// Aerodynamic energy retention length scale in meters ($D_{\text{decay}}$, §3.1.4 line 168).
     pub energy_decay_scale_m: f64,
-    /// Hollow-point / soft-point expansion multiplier ($\epsilon_{\text{exp}} = 1.0$ for FMJ/AP, $1.55$ for JHP, §4.1.2 line 226).
     pub expansion_factor: f64,
     /// Sectional density & penetrator bonus ($\text{SD}_{\text{bonus}} + \Delta\text{Pen}_{\text{ammo}}$, §4.2 line 263).
     pub sectional_density_pen_bonus: i32,
@@ -290,43 +281,27 @@ pub struct AmmunitionProfile {
 /// Complete granular engineering profile for a Firearm (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §3, §5–§7).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GranularFirearmSpec {
-    /// Model name & archetype.
     pub name: &'static str,
-    /// Chambered ammunition profile.
     pub ammo: AmmunitionProfile,
-    /// Feed system (`Box`, `Drum`, `Belt`, `Tubular`, `Cylinder`, `Single`, §3.3).
     pub feed_type: WeaponFeedType,
-    /// Rounds per feed unit (`Capacity`).
     pub capacity_rounds: i32,
-    /// Operating action mechanism (`Bolt`, `Pump`, `DI`, `SingleAction`, `Piston`, `Striker`, etc., §5.1).
     pub action_type: FirearmActionType,
-    /// Unloaded weapon mass in kilograms.
     pub unloaded_weight_kg: f64,
-    /// Loaded weapon mass in kilograms ($M_{\text{wpn}}$, §5.2.1).
     pub loaded_weight_kg: f64,
-    /// Overall weapon length in centimeters ($\text{OAL}$, §5.2.2 line 325).
     pub overall_length_cm: f64,
-    /// Barrel length in centimeters ($L_{\text{bbl}}$, §3.1.2 & §5.2.3).
     pub barrel_length_cm: f64,
     /// Barrel quality modifier ($Q_{\text{bbl}} \in [-2.0, +1.5]$, §5.2.4).
     pub barrel_quality_q: f64,
-    /// Barrel mounting method (`FreeFloating`, `ClampedNonFreeFloated`, `StandardPistolMount`, §5.2.4).
     pub barrel_mounting: BarrelMountingType,
-    /// Muzzle device (`BareCrown`, `FlashHider`, `MuzzleBrakeCompensator`, `SoundSuppressor`, §3.1.2).
     pub muzzle_device: MuzzleDeviceType,
-    /// Center of Gravity relative to chamber ($\Delta_{\text{CoG}}$, §5.2.2).
     pub center_of_gravity: CenterOfGravityProfile,
     /// Machining tolerance ($\tau_{\text{tol}} \in [-1.5, +1.5]$: positive boosts `Acc` and reduces `Rel`, §6.1).
     pub tolerance_tau: f64,
     /// Manufacturing & coating quality ($Q_{\text{mfg}} \in [-2, +2]$, §6.1).
     pub manufacturing_quality_q: i32,
-    /// Count-Up Ticks required to clear a Minor Malfunction ($\text{TC}_{\text{clear, minor}}$, §6.2).
     pub clear_jam_minor_ticks: i32,
-    /// Count-Up Ticks required to clear a Major Malfunction ($\text{TC}_{\text{clear, major}}$, §6.2).
     pub clear_jam_major_ticks: i32,
-    /// Count-Up Ticks required to field-strip the weapon ($\text{TC}_{\text{strip}}$, §6.2).
     pub strip_time_ticks: i32,
-    /// Street/retail price in 2032 USD / Credits (§7).
     pub cost_usd: i32,
 }
 
@@ -334,37 +309,24 @@ pub struct GranularFirearmSpec {
 /// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §3–§6).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GranularBallisticsEvaluation {
-    /// Barrel length + muzzle device efficiency factor $\eta_{\text{bbl}}$ (§3.1.2, line 136).
     pub barrel_efficiency_eta: f64,
-    /// Action gas retention factor $\eta_{\text{action}}$ (§3.1.3, line 153).
     pub action_efficiency_eta: f64,
-    /// Muzzle kinetic energy $E_{\text{muzzle}}$ in Joules (§3.1.3, line 153).
     pub muzzle_energy_joules: f64,
-    /// Impact kinetic energy $E_k(d)$ at target distance $d$ in Joules (§3.1.4, line 168).
     pub impact_energy_joules: f64,
-    /// Logarithmic Kinetic Energy Index $I_{\text{KE}} \in [1, 9]$ (§4.1.1, line 208).
     pub ke_index: i32,
-    /// Caliber & expansion permanent crush index $I_{\text{cal}} \in [1, 4]$ (§4.1.2, line 226).
     pub caliber_crush_index: i32,
     /// Intrinsic Weapon Accuracy rating $\text{Acc} \in [-4, +4]$ (§5.2.4, line 354).
     pub accuracy_acc: i32,
-    /// Inverse-Accuracy Projectile Wobble / Yaw factor $W_{\text{yaw}} \in [0, 3]$ (§4.1.3, line 238).
     pub wobble_yaw_factor: i32,
-    /// Total Raw Ballistic Impact ($\text{Raw Impact} = I_{\text{KE}} + I_{\text{cal}} + W_{\text{yaw}}$, §4.2, line 255).
     pub raw_ballistic_impact: i32,
-    /// Base Armor Penetration ($\text{Base Pen}$, §4.2, line 263).
     pub base_armor_pen: i32,
-    /// Base Single-Shot Recoil Rating ($R_{\text{wpn}}$, §5.2.1, line 308).
     pub base_recoil_r: i32,
     /// Net Mechanical Reliability rating $\text{Rel} \in [-4, +4]$ (§6.1, line 361).
     pub reliability_rel: i32,
     /// CQB Overall Length crowding penalty in Clinch / tight corridors ($\max(0, \lfloor (\text{OAL} - 50)/20 \rfloor)$, §5.2.2, line 325).
     pub cqb_length_crowding_penalty: i32,
-    /// Minor jam clearance time in Count-Up Ticks ($\text{TC}_{\text{clear, minor}}$, §6.2).
     pub clear_jam_minor_ticks: i32,
-    /// Major jam clearance time in Count-Up Ticks ($\text{TC}_{\text{clear, major}}$, §6.2).
     pub clear_jam_major_ticks: i32,
-    /// Field-strip disassembly time in Count-Up Ticks ($\text{TC}_{\text{strip}}$, §6.2).
     pub strip_time_ticks: i32,
 }
 

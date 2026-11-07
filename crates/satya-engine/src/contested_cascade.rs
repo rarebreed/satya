@@ -67,7 +67,6 @@ define_coded_enum! {
 }
 
 impl ContestedOutcomeKind {
-    /// Maps the detailed [`ContestedOutcomeKind`] to the canonical 5-tier [`OutcomeTier`].
     pub const fn to_outcome_tier(self) -> OutcomeTier {
         match self {
             Self::ExtraordinarySuccess => OutcomeTier::ExtraordinarySuccess,
@@ -126,7 +125,6 @@ pub enum GmResistanceMode {
     /// **1-Pair Tiered GM Resistance Roll (Default for Environmental / Technical Tasks)**:
     /// The GM rolls a single hidden `2d20` pair ($X_{GM} = A_{GM} + B_{GM}$) against $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$.
     TieredSinglePair {
-        /// Over-target step size per additional GM success (canonical default `4`, matching $K / 5 = 4$).
         step_size: i32,
     },
     /// **Full Multi-Pair Cascade (Used for Active NPC Opponents)**:
@@ -151,9 +149,7 @@ pub struct ContestedCascadeTaskParams {
     pub player: CascadeTaskParams,
     /// GM's hidden resistance or NPC opponent parameters ($\text{TN}_{GM} = 31 - C_{GM}$, $N_{GM} \ge 1$).
     pub gm: CascadeTaskParams,
-    /// GM evaluation mode (`TieredSinglePair { step_size: 4 }` for environmental tasks, `FullCascade` for NPCs).
     pub gm_mode: GmResistanceMode,
-    /// Tie-breaking and margin interaction rule.
     pub tie_rule: ContestedTieRule,
 }
 
@@ -203,7 +199,6 @@ impl ContestedCascadeTaskParams {
         }
     }
 
-    /// Evaluates concrete rolled pair sequences for both the Player and the GM.
     pub fn evaluate_contested_pairs(
         &self,
         player_pairs: &[(i32, i32)],
@@ -240,8 +235,6 @@ impl ContestedCascadeTaskParams {
         }
     }
 
-    /// Computes the exact combinatorial probability distribution ([`ContestedCascadeOdds`])
-    /// for this contested task configuration.
     pub fn exact_contested_odds(&self) -> ContestedCascadeOdds {
         compute_contested_cascade_odds_with_mode(
             &self.player,
@@ -259,17 +252,11 @@ impl ContestedCascadeTaskParams {
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.2, §5).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContestedCascadeRollOutcome {
-    /// Step-by-step cascade outcome for the Player.
     pub player_outcome: CascadeRollOutcome,
-    /// Step-by-step cascade outcome for the GM / Opponent.
     pub gm_outcome: CascadeRollOutcome,
-    /// Difference in raw positive successes ($S_P - S_{GM}$).
     pub net_successes: i32,
-    /// Difference in unified signed margins ($M_P - M_{GM}$).
     pub net_signed_margin: i32,
-    /// Detailed 7-way contested outcome classification.
     pub contested_kind: ContestedOutcomeKind,
-    /// Canonical 5-tier [`OutcomeTier`] (`ExtraordinarySuccess`, `Success`, `PartialSuccess`, `Failure`, `CriticalFailure`).
     pub outcome_tier: OutcomeTier,
 }
 
@@ -284,29 +271,19 @@ pub struct ContestedCascadeOdds {
     pub net_signed_margin_pmf: Pmf,
     /// Exact PMF of the net success count $\Delta S = S_P - S_{GM}$.
     pub net_success_pmf: Pmf,
-    /// Total probability of achieving any success tier (`ExtraordinarySuccess + CleanSuccess + PartialSuccess`).
     pub prob_total_win: f64,
-    /// Probability of an unblemished win ($S_P > S_{GM}$ without complication, or `ActivePlayerWinsTies`).
     pub prob_clean_or_extraordinary_win: f64,
     /// Probability of `OutcomeTier::ExtraordinarySuccess` ($\Delta M \ge 3, S_P > S_{GM}$).
     pub prob_extraordinary_success: f64,
-    /// Probability of standard `OutcomeTier::Success`.
     pub prob_clean_success: f64,
-    /// Total probability of `OutcomeTier::PartialSuccess` (`SuccessWithFloorBreach + GrazingTieSuccess + LuckyBreakSuccess`).
     pub prob_partial_success: f64,
     /// Sub-probability of `PartialSuccess` caused by a player floor breach ($B_P \ge 1$) on a winning roll.
     pub prob_floor_breach_partial: f64,
-    /// Sub-probability of `PartialSuccess` caused by a positive tie ($S_P == S_{GM} \ge 1$).
     pub prob_grazing_tie_partial: f64,
-    /// Sub-probability of `PartialSuccess` caused by a GM botch ($M_{GM} < 0$) rescuing a player's Clean Miss ($M_P == 0$).
     pub prob_lucky_break_partial: f64,
-    /// Probability of `OutcomeTier::Failure` (`CleanFailure`).
     pub prob_clean_failure: f64,
-    /// Probability of `OutcomeTier::CriticalFailure` (`BotchFailure`).
     pub prob_botch_failure: f64,
-    /// Summary moments (mean, variance, std, skewness, excess kurtosis) of `net_signed_margin_pmf`.
     pub net_margin_stats: DistributionStats,
-    /// Sarle's Bimodality Coefficient $\text{BC} = (\gamma_1^2 + 1) / (\kappa_2 + 3)$ of `net_signed_margin_pmf`.
     pub bimodality_coefficient: f64,
 }
 
@@ -363,7 +340,6 @@ pub fn classify_contested_outcome(
     (kind, net_margin)
 }
 
-/// Computes the exact joint distribution over `(succ, raw_botch, signed_margin)` for a [`CascadeTaskParams`].
 fn cascade_joint_outcome_pmf(params: &CascadeTaskParams) -> HashMap<(i32, i32, i32), f64> {
     let (state_probs, _, _) = run_cascade_dp(
         params.skill_level,
@@ -453,7 +429,6 @@ pub fn evaluate_tiered_single_pair_gm_roll(
     }
 }
 
-/// Computes the exact joint distribution over `(succ, raw_botch, signed_margin)` for a 1-Pair Tiered GM Resistance Roll.
 fn tiered_single_pair_gm_joint_pmf(
     sides: i32,
     tn_gm: i32,

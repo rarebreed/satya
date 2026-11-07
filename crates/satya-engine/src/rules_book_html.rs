@@ -2,7 +2,6 @@
 
 pub use crate::rules_book::render_mermaid_to_html;
 
-/// Extracts top-level `##` and `###` headings from a Markdown document.
 pub fn extract_markdown_headings(markdown: &str) -> Vec<String> {
     let mut headings = Vec::new();
     let mut in_code_block = false;
@@ -25,7 +24,6 @@ pub fn extract_markdown_headings(markdown: &str) -> Vec<String> {
     headings
 }
 
-/// Escapes HTML special characters (`&`, `<`, `>`, `"`, `'`).
 pub fn escape_html_text(input: &str) -> String {
     let mut out = String::with_capacity(input.len() + 16);
     for ch in input.chars() {
@@ -77,8 +75,6 @@ pub(crate) fn resolve_markdown_link_chapter_id(url: &str) -> Option<&'static str
     }
 }
 
-/// Extracts a brace-delimited `{...}` group starting at `chars[pos]` (where `chars[pos] == '{'`),
-/// returning `(inner_string, next_index_after_closing_brace)`.
 fn consume_braced_group(chars: &[char], pos: usize) -> Option<(String, usize)> {
     if pos >= chars.len() || chars[pos] != '{' {
         return None;
@@ -105,8 +101,6 @@ fn consume_braced_group(chars: &[char], pos: usize) -> Option<(String, usize)> {
     Some((inner, chars.len()))
 }
 
-/// Consumes a single LaTeX script argument (either `{...}`, a `\command`, or a single character)
-/// starting at `pos` for `_` or `^`.
 fn consume_latex_script_atom(chars: &[char], pos: usize) -> (String, usize) {
     let mut i = pos;
     while i < chars.len() && chars[i].is_whitespace() {
@@ -138,7 +132,6 @@ fn consume_latex_script_atom(chars: &[char], pos: usize) -> (String, usize) {
     (escape_html_text(&ch.to_string()), i + 1)
 }
 
-/// Renders plain text inside `\text{...}` or `\mathrm{...}`, unescaping `\_` and escaping HTML.
 fn render_latex_text_argument(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len() + 8);
     let chars: Vec<char> = raw.chars().collect();
@@ -259,8 +252,6 @@ const LATEX_SYMBOLS: &[(&str, &str)] = &[
     ("qquad", "&emsp;&emsp;"),
 ];
 
-/// Converts a raw LaTeX math expression into semantic HTML tokens (`<sub>`, `<sup>`, fractions,
-/// cases, and Unicode mathematical operators/symbols).
 fn render_latex_tokens(expr: &str) -> String {
     let chars: Vec<char> = expr.chars().collect();
     let mut out = String::with_capacity(expr.len() * 2 + 16);
@@ -468,8 +459,6 @@ pub fn render_latex_math_to_html(expr: &str, display: bool) -> String {
 }
 
 
-/// Checks if a `$` at `start` begins a valid inline LaTeX math span `$...$`, returning
-/// the index of the closing `$` if valid.
 fn find_closing_inline_math_dollar(chars: &[char], start: usize) -> Option<usize> {
     if start + 2 > chars.len() || chars[start] != '$' {
         return None;
@@ -645,8 +634,6 @@ pub fn format_inline_markdown(line: &str) -> String {
     result
 }
 
-/// Splits a GFM table row (`| col1 | col2 |`) into trimmed cell strings without splitting on
-/// `|` inside inline code (`` `...` ``), inline math (`$...$`), or escaped pipes (`\|`).
 fn split_markdown_table_cells(row_str: &str) -> Vec<String> {
     let inner = row_str.trim().trim_matches('|');
     let chars: Vec<char> = inner.chars().collect();
@@ -692,7 +679,6 @@ fn split_markdown_table_cells(row_str: &str) -> Vec<String> {
     cells
 }
 
-/// Converts a heading title into a URL-safe anchor slug.
 pub fn slugify_heading(title: &str) -> String {
     let mut slug = String::new();
     let mut prev_dash = false;
@@ -708,7 +694,6 @@ pub fn slugify_heading(title: &str) -> String {
     slug.trim_end_matches('-').to_string()
 }
 
-/// Shared list item body & sublist continuation parser used by both `<ul>` and `<ol>`.
 fn consume_list_item_body<'a>(
     html: &mut String,
     lines: &[&'a str],

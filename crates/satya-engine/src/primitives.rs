@@ -25,16 +25,12 @@ use crate::dice_probabilities::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(usize)]
 pub enum TriadAxis {
-    /// Tempo axis (initiative, rate of action, maneuvering speed).
     Tempo = 0,
-    /// Control axis (positional dominance, accuracy, reach/clinch control).
     Control = 1,
-    /// Force axis (impact energy, follow-through, structural power).
     Force = 2,
 }
 
 impl TriadAxis {
-    /// All three axes in canonical `(Tempo, Control, Force)` order.
     pub const ALL: [Self; 3] = [Self::Tempo, Self::Control, Self::Force];
 }
 
@@ -48,16 +44,12 @@ impl TriadAxis {
 /// `docs/ttrpg/05-combat/tactical_triad_and_pools.md` (§1–§4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Triad<T = i32> {
-    /// Tempo axis (initiative, rate of action, maneuvering speed).
     pub tempo: T,
-    /// Control axis (positional dominance, accuracy, reach/clinch control).
     pub control: T,
-    /// Force axis (impact energy, follow-through, structural power).
     pub force: T,
 }
 
 impl<T> Triad<T> {
-    /// Construct a new `Triad` from `(tempo, control, force)`.
     #[must_use]
     pub const fn new(tempo: T, control: T, force: T) -> Self {
         Self {
@@ -67,13 +59,11 @@ impl<T> Triad<T> {
         }
     }
 
-    /// Convert into a `(tempo, control, force)` 3-tuple.
     #[must_use]
     pub fn into_tuple(self) -> (T, T, T) {
         (self.tempo, self.control, self.force)
     }
 
-    /// Transform each axis of the triad using `f`.
     #[must_use]
     pub fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Triad<U> {
         Triad {
@@ -83,7 +73,6 @@ impl<T> Triad<T> {
         }
     }
 
-    /// Combine two triads element-wise using `f`.
     #[must_use]
     pub fn zip_with<U, V, F: FnMut(T, U) -> V>(self, other: Triad<U>, mut f: F) -> Triad<V> {
         Triad {
@@ -169,7 +158,6 @@ impl<T: Neg<Output = U>, U> Neg for Triad<T> {
 }
 
 impl<T: Copy> Triad<T> {
-    /// Construct a `Triad` with the same value on all three axes.
     #[must_use]
     pub const fn splat(value: T) -> Self {
         Self {
@@ -181,22 +169,18 @@ impl<T: Copy> Triad<T> {
 }
 
 impl Triad<i32> {
-    /// Zero triad `(0, 0, 0)`.
     pub const ZERO: Self = Self::new(0, 0, 0);
 
-    /// Total points allocated across all three axes (`tempo + control + force`).
     #[must_use]
     pub const fn sum(self) -> i32 {
         self.tempo + self.control + self.force
     }
 
-    /// True if any axis of the triad is strictly negative (`< 0`).
     #[must_use]
     pub const fn has_negative(self) -> bool {
         self.tempo < 0 || self.control < 0 || self.force < 0
     }
 
-    /// Clamp each axis to at least `floor`.
     #[must_use]
     pub fn clamp_min(self, floor: i32) -> Self {
         Self {
@@ -206,7 +190,6 @@ impl Triad<i32> {
         }
     }
 
-    /// Clamp each axis between the corresponding axes of `min_triad` and `max_triad`.
     #[must_use]
     pub fn clamp_each(self, min_triad: Self, max_triad: Self) -> Self {
         Self {
@@ -236,24 +219,18 @@ pub struct ConditionImpact {
     pub tactical_pool_mod: i32,
     /// Additive penalty to the character's Action Time Factor (`+0.25 = +25%` slower).
     pub action_time_factor_delta: f64,
-    /// Fatigue levels added by this condition.
     pub fatigue_added: i32,
     /// Minimum Fatigue Level floor enforced while this condition persists (`0..=5`).
     pub fatigue_floor: i32,
-    /// Wound Shock (`WS`) points added by this condition.
     pub wound_shock_added: i32,
-    /// Initiative clock freeze duration in ticks (`0` if none).
     pub clock_freeze_ticks: i32,
     /// Subtractive penalty to `(Tempo, Control, Force)` envelope caps.
     pub triad_cap_penalty: Triad<i32>,
-    /// Axes of `(Tempo, Control, Force)` hard-locked to `0`.
     pub triad_locked_zero: Triad<bool>,
-    /// True if this condition causes immediate unconsciousness or incapacitation.
     pub is_unconscious: bool,
 }
 
 impl ConditionImpact {
-    /// Neutral `ConditionImpact` with zero penalties.
     pub const ZERO: Self = Self {
         delta_int: 0,
         delta_ext: 0,
@@ -334,11 +311,8 @@ pub fn aggregate_condition_impacts<'a>(
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.2, §5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TieredSaveEval {
-    /// Player's effective Target Number (`TN`).
     pub player_tn: i32,
-    /// GM's 1-Pair Resistance Target Number (`TN_GM`).
     pub gm_tn: i32,
-    /// Full contested cascade roll breakdown.
     pub contested_roll: ContestedCascadeRollOutcome,
 }
 
@@ -353,19 +327,14 @@ pub struct TieredSaveEval {
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.2, §5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ContestedCheck<D> {
-    /// Player's effective Target Number (`TN`).
     pub player_tn: i32,
-    /// GM's 1-Pair Resistance Target Number (`TN_GM`).
     pub gm_tn: i32,
-    /// Full contested cascade roll breakdown.
     pub contested_roll: ContestedCascadeRollOutcome,
-    /// Domain-specific effect payload.
     #[serde(flatten)]
     pub effect: D,
 }
 
 impl<D> ContestedCheck<D> {
-    /// Construct a `ContestedCheck<D>` from its [`TieredSaveEval`] and domain effect `D`.
     #[must_use]
     pub fn new(eval: TieredSaveEval, effect: D) -> Self {
         Self {
@@ -484,12 +453,10 @@ macro_rules! define_coded_enum {
         }
 
         impl $Name {
-            /// All canonical variants of this enum in declaration order.
             pub const ALL: [Self; $Count] = [
                 $(Self::$Variant),+
             ];
 
-            /// Canonical code string for this variant.
             #[must_use]
             pub const fn as_str(self) -> &'static str {
                 match self {
@@ -497,7 +464,6 @@ macro_rules! define_coded_enum {
                 }
             }
 
-            /// Human-readable label for this variant.
             #[must_use]
             pub const fn label(self) -> &'static str {
                 match self {
@@ -512,13 +478,11 @@ macro_rules! define_coded_enum {
                 }
             }
 
-            /// Full human-readable name (alias for [`Self::label`]).
             #[must_use]
             pub const fn full_name(self) -> &'static str {
                 self.label()
             }
 
-            /// Optional descriptive subtitle for this variant (empty if none specified).
             #[must_use]
             pub const fn subtitle(self) -> &'static str {
                 match self {
@@ -533,7 +497,6 @@ macro_rules! define_coded_enum {
                 }
             }
 
-            /// Parse a variant from its code string or any registered alias (case-insensitive, trimmed).
             #[must_use]
             pub fn from_code_str(code: &str) -> Option<Self> {
                 let normalized = code.trim();
@@ -564,31 +527,21 @@ macro_rules! define_coded_enum {
     };
 }
 
-/// Trait implemented by any `#[repr(usize)]` coded enum that indexes into a compile-time static
-/// specification catalog (`&'static [Self::Spec]`).
 pub trait StaticCatalog: Copy + Eq + 'static {
-    /// Associated specification record type stored in [`Self::CATALOG`].
     type Spec: 'static;
 
-    /// Slice of all canonical enum IDs in declaration order.
     const ALL_IDS: &'static [Self];
 
-    /// Slice of all canonical specification records in declaration order.
     const CATALOG: &'static [Self::Spec];
 
-    /// Look up the static specification record for `self` in `O(1)`.
     #[must_use]
     fn spec(self) -> &'static Self::Spec;
 }
 
-/// Declarative macro to bind a `#[repr(usize)]` enum `$Id` to its compile-time static
-/// catalog `$CATALOG: [$Spec; N]`, generating both `const fn spec(self) -> &'static $Spec`
-/// and an implementation of [`StaticCatalog`].
 #[macro_export]
 macro_rules! impl_static_catalog {
     ($Id:ty => $Spec:ty : $CATALOG:ident) => {
         impl $Id {
-            /// Look up the canonical static specification for this identifier in `O(1)`.
             #[must_use]
             pub const fn spec(self) -> &'static $Spec {
                 &$CATALOG[self as usize]

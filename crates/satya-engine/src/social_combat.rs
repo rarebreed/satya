@@ -19,11 +19,8 @@ use crate::psyche_social::{HasPsyche, PsycheTraitId};
 /// (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §4.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmpathyReadResult {
-    /// Net successes achieved on the Read Person check.
     pub net_successes: i32,
-    /// Revealed Psyche traits and their exact scores.
     pub revealed_traits: Vec<(PsycheTraitId, i32)>,
-    /// Whether the reader detects an active or potential Dual-Psyche Wedge tension (two traits $\ge 13$).
     pub detects_psyche_wedge_tension: bool,
     /// Leverage modifier $\Delta_{\text{ext}}$ granted on the subsequent social maneuver (`-2` at `3+` successes, else `0`).
     pub leverage_delta_ext_bonus: i32,
@@ -74,13 +71,11 @@ pub enum SocialArgumentVector {
     /// Resonates with High `BLG >= 13` ($-(\text{BLG}-10)$); clashes with Low `BLG <= 7` ($+(10-\text{BLG})$)
     /// or when asking a High `BLG >= 13` target to betray their group ($+(\text{BLG}-10)$).
     GroupConsensusLoyaltySharedIdentity {
-        /// True if the argument asks a High-`BLG` target to betray or indict their own group.
         asks_to_betray_group: bool,
     },
     /// **3. Flattery, Prestige, Legacy, Status** (*Charm* `PRE/ELO` / *Deception* `ELO/CRE`):
     /// Resonates with High `EGO >= 13` ($-(\text{EGO}-10)$); clashes when humiliating or demanding fault admission from `EGO >= 13` ($+(\text{EGO}-10)$).
     FlatteryPrestigeLegacyStatus {
-        /// True if the argument publicly humiliates or demands admission of fault from the target.
         humiliates_or_demands_fault_admission: bool,
     },
     /// **4. Personal Profit, Immunity, Self-Interest** (*Negotiation* `ELO/INS` / *Bribery*):
@@ -93,14 +88,12 @@ pub enum SocialArgumentVector {
     /// Resonates with High `CNF >= 13` ($-(\text{CNF}-10)$); clashes with Low `CNF <= 7` ($+(10-\text{CNF})$)
     /// or when asking a High `CNF >= 13` target to break the law ($+(\text{CNF}-10)$).
     RulesLawProtocolChainOfCommand {
-        /// True if the argument asks a High-`CNF` target to violate protocol or break the law.
         asks_to_break_law_or_orders: bool,
     },
     /// **7. Dominance, Threat, Dare, Confrontation** (*Intimidation* `PRE/DIS`):
     /// Resonates with Low `AGG <= 7` ($-(10-\text{AGG})$ to yield) or High `AGG >= 13` ($-(\text{AGG}-10)$ to bait into fight);
     /// clashes with High `AGG >= 13` when forcing submission ($+(\text{AGG}-10)$).
     DominanceThreatDareConfrontation {
-        /// True if the speaker is trying to bait a High-`AGG` target into a rash fight rather than force submission.
         aims_to_bait_into_fight: bool,
     },
 }
@@ -115,12 +108,8 @@ pub struct ArgumentPsycheEvaluation {
     pub clash_delta_ext: i32,
     /// Net external modifier $\Delta_{\text{ext}} = \text{resonance\_delta\_ext} + \text{clash\_delta\_ext}$.
     pub net_delta_ext: i32,
-    /// High Psyche trait ($P_1 \ge 13$ or Low pole $\le 7$) that resonated with the argument.
     pub resonated_trait: Option<PsycheTraitId>,
-    /// High Psyche trait ($P_2 \ge 13$ or Low pole $\le 7$) that clashed with the argument.
     pub clashed_trait: Option<PsycheTraitId>,
-    /// True when the argument simultaneously resonates with one high Psyche trait ($P_1 \ge 13$)
-    /// and clashes with another high Psyche trait ($P_2 \ge 13$) — the **Dual-Psyche Wedge** (`§4.3–§4.4`).
     pub triggers_dual_psyche_wedge: bool,
 }
 
@@ -256,24 +245,18 @@ pub enum SocialWoundKind {
 pub struct SocialComposureState {
     /// Maximum Social Composure Threshold $\text{CMP} = \lfloor(\text{DIS} + \text{FOC})/4\rfloor$.
     pub max_cmp: i32,
-    /// Remaining Social Composure before being rhetorically cornered.
     pub current_cmp: i32,
-    /// Accumulated **Doubt** fractures (`0..=3`; at `3`, the defended position is intellectually demolished).
     pub doubt_fractures: i32,
     /// Active **Cognitive Dissonance Index** stacks (each stack bleeds `+2` $\Delta_{\text{int}}$ per turn/exchange).
     pub dissonance_index: i32,
     /// Accumulated internal strain $\Delta_{\text{int}}$ from Rhetorical Strain, Dissonance bleed, or Ego Wounds.
     pub accumulated_delta_int: i32,
-    /// Penalty to `FOC` from unresisted Ego Wounds (`-3` per failed Ego Wound check).
     pub focus_penalty: i32,
-    /// Whether the character's rhetorical position has been demolished (`doubt_fractures >= 3`).
     pub position_demolished: bool,
-    /// Whether an unresisted Ego Wound caused the character to lose their cool and lash out.
     pub lashed_out_from_ego_wound: bool,
 }
 
 impl SocialComposureState {
-    /// Initializes a fresh [`SocialComposureState`] from `DIS` and `FOC`.
     pub fn new(dis: i32, foc: i32) -> Self {
         let cmp = compute_social_composure_threshold(dis, foc);
         Self {
@@ -316,17 +299,12 @@ pub fn ego_wound_dis_check_tn(dis: i32, ego: i32) -> i32 {
 /// Outcome of a single Contested Social Exchange (`§4.2–§4.4`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SocialExchangeOutcome {
-    /// Argument Resonance vs. Clash evaluation against the target's [`PsycheProfile`].
     pub argument_eval: ArgumentPsycheEvaluation,
-    /// Net successes scored by the speaker ($\max(0, S_{\text{speaker}} - S_{\text{target}})$).
     pub net_successes: i32,
-    /// Social wounds inflicted on this exchange.
     pub wounds_inflicted: Vec<SocialWoundKind>,
-    /// Dissonance Index stacks added on this exchange.
     pub dissonance_stacks_added: i32,
     /// Immediate $\Delta_{\text{int}}$ bleed at the start of the target's next turn ($2 \times \text{dissonance\_index}$).
     pub next_turn_dissonance_bleed_delta_int: i32,
-    /// Updated [`SocialComposureState`] of the target.
     pub updated_state: SocialComposureState,
 }
 
@@ -421,21 +399,18 @@ pub enum DissonanceResolutionPath {
     /// **1. Conversion / Defection (Yielding to the New Truth)**:
     /// Clears `dissonance_index` to `0` and records `1` **Psyche Drift Mark** on the violated trait.
     ConversionDefection {
-        /// The Psyche trait that was violated and receives `1` Drift Mark.
         violated_trait: PsycheTraitId,
     },
     /// **2. Dogmatic Denial (Doubling Down)**:
     /// Requires a `DIS` check against $\text{TN} = 31 - \text{DIS} + 2 \times \text{Dissonance Index}$.
     /// On success, clears `dissonance_index` to `0`, penalizes `OPN` by `-4` for the scene, and shifts Morale to `Rage` or `High`.
     DogmaticDenial {
-        /// Successes scored on the `DIS` check.
         dis_check_successes: i32,
     },
     /// **3. Compartmentalization (Time & Rationalization)**:
     /// Spends `12 ticks` (or `1` quiet scene); reduces `dissonance_index` by `1` per `DIS` success,
     /// leaving a residual `+2` $\Delta_{\text{int}}$ until a full `8-hour` rest.
     Compartmentalization {
-        /// Successes scored on the `DIS` rationalization roll.
         dis_check_successes: i32,
     },
     /// **4. Emotional Lashing Out (Fight or Flight)**:
@@ -446,19 +421,15 @@ pub enum DissonanceResolutionPath {
 /// Result of resolving **Cognitive Dissonance** via one of the 4 canonical paths (`§4.4`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DissonanceResolutionOutcome {
-    /// Updated [`SocialComposureState`] after resolution.
     pub updated_state: SocialComposureState,
     /// Target number required if `DogmaticDenial` was chosen ($\text{TN} = 31 - \text{DIS} + 2 \times \text{Dissonance Index}$).
     pub dogmatic_denial_tn: Option<i32>,
-    /// Psyche Drift Mark awarded (if `ConversionDefection` was chosen).
     pub psyche_drift_mark_awarded: Option<PsycheTraitId>,
     /// Scene penalty to `OPN` (`-4` on successful `DogmaticDenial`, else `0`).
     pub openness_scene_penalty: i32,
     /// Residual $\Delta_{\text{int}}$ until an `8-hour` rest (`+2` on `Compartmentalization`, else `0`).
     pub residual_delta_int_until_rest: i32,
-    /// Ticks spent rationalizing (`12` on `Compartmentalization`, else `0`).
     pub ticks_spent: i32,
-    /// Resulting combat [`MoraleState`] shift (e.g., `Rage` on `EmotionalLashingOut` or `DogmaticDenial`).
     pub resulting_morale_state: Option<MoraleState>,
 }
 
@@ -514,13 +485,9 @@ pub fn resolve_cognitive_dissonance(
 /// Outcome of a Social Combat / Cognitive Dissonance check from Chapter 9.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SocialDissonanceOutcome {
-    /// Total cognitive dissonance pressure generated by argument margin, evidence, and audience.
     pub dissonance_pressure: i32,
-    /// Target's psychological resistance threshold derived from core conviction.
     pub resistance_threshold: i32,
-    /// Net shift (`dissonance_pressure - resistance_threshold`).
     pub net_dissonance_shift: i32,
-    /// Canonical narrative social outcome tier.
     pub social_outcome: String,
 }
 

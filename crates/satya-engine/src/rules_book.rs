@@ -183,8 +183,6 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
     },
 ];
 
-/// Reads a chapter's markdown from `docs/ttrpg/<relative_path>` on native targets if present on disk,
-/// falling back to the compile-time embedded markdown.
 fn load_chapter_markdown(spec: &StaticChapterSpec) -> String {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -225,7 +223,6 @@ pub fn canonical_rules_chapters() -> Vec<RulesChapterDocument> {
         .collect()
 }
 
-/// Returns the ordered list of chapter metadata summaries for the Satya TTRPG Rules Book.
 pub fn list_rules_chapters() -> Vec<RulesChapterSummary> {
     canonical_rules_chapters()
         .into_iter()
@@ -233,7 +230,6 @@ pub fn list_rules_chapters() -> Vec<RulesChapterSummary> {
         .collect()
 }
 
-/// Resolves legacy chapter IDs or filenames to their canonical reorganized `chapter_id`.
 fn resolve_chapter_alias(needle: &str) -> &str {
     match needle {
         "background" | "design-notes/background" => "design-philosophy",
@@ -248,7 +244,6 @@ fn resolve_chapter_alias(needle: &str) -> &str {
     }
 }
 
-/// Looks up a single chapter by its `chapter_id` slug (or relative filename stem, including legacy aliases).
 pub fn get_rules_chapter(chapter_id: &str) -> Option<RulesChapterDocument> {
     let raw_needle = chapter_id
         .trim()
@@ -358,7 +353,6 @@ pub fn search_rules_book(query: &str, max_results: usize) -> Vec<RulesSearchHit>
     hits
 }
 
-/// Builds a [`RulesBookCatalogResponse`] containing all chapters and optional search hits.
 pub fn build_rules_catalog_response(
     query: Option<&str>,
     max_hits: usize,
@@ -404,8 +398,6 @@ struct MermaidSubgraph {
     node_ids: Vec<String>,
 }
 
-/// Safely formats a Mermaid node or edge label into HTML, preserving `<b>`, `<i>`, and `<br/>`
-/// tags while escaping raw `&`, `<`, `>` characters.
 fn format_mermaid_label(raw: &str) -> String {
     let unquoted = raw.trim().trim_matches('"').trim();
     let tokenized = unquoted
@@ -429,7 +421,6 @@ fn format_mermaid_label(raw: &str) -> String {
         .replace("\x01BR\x02", "<br/>")
 }
 
-/// Parses a single Mermaid node token such as `S1["<b>1. Gate</b>"]`, `C1{"Y >= TN?"}`, or bare `S1`.
 fn parse_mermaid_node_token(token: &str) -> Option<(String, Option<(String, bool)>)> {
     let t = token.trim();
     if t.is_empty() {
@@ -459,7 +450,6 @@ fn parse_mermaid_node_token(token: &str) -> Option<(String, Option<(String, bool
 
 type MermaidEdgeStep = (Option<String>, bool, String);
 
-/// Splits a Mermaid edge statement line into a sequence of `(node_token, Vec<MermaidEdgeStep>)` steps.
 fn split_mermaid_edge_chain(line: &str) -> Option<(String, Vec<MermaidEdgeStep>)> {
     let chars: Vec<char> = line.chars().collect();
     let mut parts: Vec<MermaidEdgeStep> = Vec::new();
@@ -556,7 +546,6 @@ fn split_mermaid_edge_chain(line: &str) -> Option<(String, Vec<MermaidEdgeStep>)
     }
 }
 
-/// Renders a single Mermaid node box and optional outgoing edge pills.
 fn render_mermaid_node_html<F: Fn(&str) -> String>(
     html: &mut String,
     node: &MermaidNode,

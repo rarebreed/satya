@@ -92,15 +92,11 @@ impl SocioeconomicClass {
 /// Complete Stage 1 Socioeconomic Origin specification (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SocioeconomicOriginSpec {
-    /// Canonical socioeconomic class enum.
     pub class: SocioeconomicClass,
-    /// Human-readable class label.
     pub label: &'static str,
-    /// School Quality Modifier (`SQM`) applied to `TN_edu`.
     pub school_quality_modifier_sqm: i32,
     /// Eligible early-environment universal talent bonus choices (`+1` rank at Stage 1).
     pub early_environment_bonus_talents: &'static [&'static str],
-    /// Maximum `2d20` threshold (`<=`) that triggers an Age-15 dropout crisis in Stage 3.
     pub adolescent_dropout_risk_max_2d20: i32,
 }
 
@@ -188,13 +184,10 @@ pub const fn resolve_socioeconomic_origin(roll_2d20: i32) -> SocioeconomicOrigin
 pub struct CampaignSqmSpec {
     /// Clamped campaign socioeconomic tier (`1..=10`).
     pub sqm_tier: u8,
-    /// Human-readable tier name.
     pub tier_name: &'static str,
-    /// Monthly liquid baseline budget in USD.
     pub monthly_liquid_baseline_usd: u32,
     /// Daily internal fatigue penalty (`\Delta_int`) from unhoused exposure.
     pub unhoused_fatigue_delta_int: i32,
-    /// Corresponding school quality modifier (`SQM`).
     pub school_quality_modifier: i32,
 }
 
@@ -242,8 +235,6 @@ pub const fn lookup_campaign_sqm(sqm_tier: u8) -> CampaignSqmSpec {
 }
 
 define_coded_enum! {
-    /// Equipment restriction class for Legal vs. Black-Market Procurement
-    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.2).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum BlackMarketRestrictionClass [count = 4] {
@@ -345,13 +336,10 @@ define_coded_enum! {
 pub struct OperationalHeatStatus {
     /// Clamped operational heat score (`0..=10`).
     pub heat_score: u8,
-    /// Law enforcement response tier.
     pub tier: OperationalHeatTier,
     /// External difficulty modifier (`\Delta_ext`) applied to legal/public social and travel checks.
     pub public_check_delta_ext: i32,
-    /// Whether legal `SQM` bank accounts and credit lines are frozen.
     pub legal_bank_accounts_frozen: bool,
-    /// Narrative description of law enforcement response.
     pub description: &'static str,
 }
 
@@ -413,23 +401,14 @@ pub fn is_career_formal_skill(skill_id: &str, cfg: &LifepathBuildConfig) -> bool
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SkillAllocationSpLedger {
-    /// Total Formal Training SP budget granted by Stage 5 Career Terms.
     pub formal_sp_budget: usize,
-    /// Total Experience / Elective SP budget granted across youth and adult terms.
     pub experience_sp_budget: usize,
-    /// Formal Training SP spent so far.
     pub formal_sp_spent: usize,
-    /// Experience SP spent so far.
     pub experience_sp_spent: usize,
-    /// Remaining Formal Training SP (`formal_sp_budget - formal_sp_spent`).
     pub formal_sp_remaining: usize,
-    /// Remaining Experience SP (`experience_sp_budget - experience_sp_spent`).
     pub experience_sp_remaining: usize,
-    /// Combined SP budget (`formal_sp_budget + experience_sp_budget`).
     pub total_sp_budget: usize,
-    /// Combined SP spent (`formal_sp_spent + experience_sp_spent`).
     pub total_sp_spent: usize,
-    /// Combined SP remaining (`formal_sp_remaining + experience_sp_remaining`).
     pub total_sp_remaining: usize,
     /// Total skill ranks gained above the Stage 1–4 baseline floor.
     pub total_levels_gained: usize,
@@ -672,15 +651,10 @@ pub fn auto_allocate_career_and_elective_skills(
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §9.1.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LifepathSkillProgression {
-    /// Unmodified study hours invested.
     pub raw_hours: f64,
-    /// Effective hours after instruction quality and aptitude multipliers.
     pub effective_hours: f64,
-    /// Achieved skill rank $N \in [0, 10]$.
     pub skill_level_n: i32,
-    /// Next skill rank target $\min(10, N + 1)$.
     pub next_level_n: i32,
-    /// Remaining effective hours needed to reach `next_level_n`.
     pub hours_to_next_level: f64,
     /// Cumulative effective hour thresholds for each rank `1..=10`.
     pub cumulative_thresholds: BTreeMap<i32, f64>,
