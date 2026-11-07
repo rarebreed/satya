@@ -1,5 +1,7 @@
 # Satya TTRPG Psyche, Morale & Social Combat
 
+> **Rust Engine Implementation**: [`crates/satya-engine/src/psyche_social.rs`](../../../crates/satya-engine/src/psyche_social.rs) (`PsycheTraitId`, `PurposeStrength`, `PsychologicalDriveState`, `MotivationTier`, `CombatMoraleCondition`, `evaluate_psyche_friction`, `evaluate_conviction_surge`, `evaluate_psychological_drives`, `evaluate_aggression_escalation`, `evaluate_combat_morale_check`) and [`crates/satya-engine/src/social_combat.rs`](../../../crates/satya-engine/src/social_combat.rs) (`RhetoricalVector`, `SocialLeverageTier`, `CognitiveDissonanceTier`, `SocialExchangeInput`, `compute_social_dissonance_check`, `evaluate_social_combat_exchange`).
+
 This chapter defines the canonical **Psyche Mechanics (Behavioral Friction, Trait Drift & Conviction Surges), Psychological Drives & Combat Morale, and Social Combat ("Mental Wounds" & Cognitive Dissonance)** for **Satya**. It builds directly upon:
 - **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for definitions of all mathematical symbols and subscripts such as $\text{TN}_P, \text{TN}_{GM}, \Delta_{\text{psyche}}, \Delta_{\text{mot}}, C_{\text{morale}}, \text{CMP}$),
 - **[Characteristics, Senses, Psyche & Aptitudes](../03-character/characteristics_and_aptitudes.md)** (for the Social Primary Characteristics `COM`, `PRE`, `ELO`, Mental Characteristics `MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`, and the seven Psyche Characteristics `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`),

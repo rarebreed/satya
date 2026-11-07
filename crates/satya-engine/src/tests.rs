@@ -308,11 +308,21 @@ fn test_probability_md_k20_calibration_and_game_engine_evaluator() {
 #[test]
 fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
     let chapters = list_rules_chapters();
-    assert_eq!(chapters.len(), 14);
+    assert_eq!(chapters.len(), 17);
     assert!(chapters.iter().any(|c| c.chapter_id == "design_philosophy"));
     assert!(chapters.iter().any(|c| c.chapter_id == "notation_glossary"));
     assert!(chapters.iter().any(|c| c.chapter_id == "tasks"));
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "task_requirements_catalog")
+    );
     assert!(chapters.iter().any(|c| c.chapter_id == "skills_and_trees"));
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "skills_trees_tactical_and_social")
+    );
     assert!(
         chapters
             .iter()
@@ -321,6 +331,11 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
     assert!(chapters.iter().any(|c| c.chapter_id == "psyche_and_social"));
     assert!(chapters.iter().any(|c| c.chapter_id == "tactical_triad"));
     assert!(chapters.iter().any(|c| c.chapter_id == "melee_combat"));
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "firearms_and_ballistics")
+    );
     assert!(
         chapters
             .iter()
@@ -402,28 +417,26 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
 
     // Verify Elena's exact Envelope & Fill numbers from melee_combat.md
     let elena_params = TacticalPoolParams {
-        spd: 13,
-        for_stat: 10,
-        dex: 12,
-        kin: 13,
-        sig: 12,
-        ins: 12,
-        itu: 13,
-        ana: 12,
-        cre: 10,
-        foc: 12,
-        dis: 13,
-        fit: 12,
-        mass_kg: 65.0,
+        chars: CharacterCharacteristics {
+            spd: 13,
+            for_stat: 10,
+            dex: 12,
+            kin: 13,
+            sig: 12,
+            ins: 12,
+            itu: 13,
+            ana: 12,
+            cre: 10,
+            foc: 12,
+            dis: 13,
+            fit: 12,
+            mas_kg: 65.0,
+            ..Default::default()
+        },
         skill_c: 13,
         skill_n: 4,
         is_ranged: false,
-        fatigue_level: 0,
-        wound_shock_index: 0,
-        leg_wound_penalty: 0,
-        arm_head_wound_penalty: 0,
-        torso_shoulder_wound_penalty: 0,
-        morale_state: MoraleState::Steady,
+        ..Default::default()
     };
     let elena_env = compute_tactical_pool(&elena_params);
     assert_eq!(elena_env.d_cog, 12);
@@ -654,38 +667,44 @@ fn test_worked_examples_7_1_and_7_2_and_master_benchmarks() {
 #[test]
 fn test_viktor_vs_elena_melee_walkthrough() {
     let elena_params = TacticalPoolParams {
-        spd: 13,
-        for_stat: 10,
-        dex: 12,
-        kin: 13,
-        sig: 12,
-        ins: 12,
-        itu: 13,
-        ana: 12,
-        cre: 10,
-        foc: 12,
-        dis: 13,
-        fit: 12,
-        mass_kg: 65.0,
+        chars: CharacterCharacteristics {
+            spd: 13,
+            for_stat: 10,
+            dex: 12,
+            kin: 13,
+            sig: 12,
+            ins: 12,
+            itu: 13,
+            ana: 12,
+            cre: 10,
+            foc: 12,
+            dis: 13,
+            fit: 12,
+            mas_kg: 65.0,
+            ..Default::default()
+        },
         skill_c: 13,
         skill_n: 4,
         is_ranged: false,
         ..Default::default()
     };
     let mut viktor_params = TacticalPoolParams {
-        spd: 8,
-        for_stat: 15,
-        dex: 9,
-        kin: 9,
-        sig: 10,
-        ins: 10,
-        itu: 9,
-        ana: 9,
-        cre: 8,
-        foc: 9,
-        dis: 9,
-        fit: 13,
-        mass_kg: 102.0,
+        chars: CharacterCharacteristics {
+            spd: 8,
+            for_stat: 15,
+            dex: 9,
+            kin: 9,
+            sig: 10,
+            ins: 10,
+            itu: 9,
+            ana: 9,
+            cre: 8,
+            foc: 9,
+            dis: 9,
+            fit: 13,
+            mas_kg: 102.0,
+            ..Default::default()
+        },
         skill_c: 11,
         skill_n: 2,
         is_ranged: false,
@@ -702,7 +721,7 @@ fn test_viktor_vs_elena_melee_walkthrough() {
     let elena_ex1 = evaluate_tactical_triad(&elena_env, 8, Triad::new(11, 11, 2));
     assert!(elena_ex1.valid && elena_ex1.effective_tc == 5);
 
-    viktor_params.leg_wound_penalty = 2;
+    viktor_params.wound_cap_penalties.tempo = 2;
     viktor_params.morale_state = MoraleState::Rage;
     let viktor_rage_env = compute_tactical_pool(&viktor_params);
     assert_eq!(
@@ -818,20 +837,22 @@ fn test_mateo_vs_sgt_vance_firefight_suppression_walkthrough() {
     assert_eq!(mateo_morale_roll.new_morale, MoraleState::Broken);
 
     let mateo_broken_env = compute_tactical_pool(&TacticalPoolParams {
-        spd: 12,
-        for_stat: 12,
-        dex: 8,
-        sig: 8,
-        ins: 12,
-        itu: 12,
-        ana: 12,
-        foc: 12,
+        chars: CharacterCharacteristics {
+            spd: 12,
+            for_stat: 12,
+            dex: 8,
+            sig: 8,
+            ins: 12,
+            itu: 12,
+            ana: 12,
+            foc: 12,
+            ..Default::default()
+        },
         skill_c: 12,
         skill_n: 2,
         is_ranged: true,
         wound_shock_index: 2,
-        arm_head_wound_penalty: 5,
-        torso_shoulder_wound_penalty: 5,
+        wound_cap_penalties: Triad::new(0, 5, 5),
         morale_state: MoraleState::Broken,
         ..Default::default()
     });
@@ -852,19 +873,22 @@ fn test_mateo_vs_sgt_vance_firefight_suppression_walkthrough() {
 #[test]
 fn test_sniper_overwatch_and_grenade_dive_walkthrough() {
     let elena_env = compute_tactical_pool(&TacticalPoolParams {
-        spd: 13,
-        for_stat: 10,
-        dex: 12,
-        kin: 13,
-        sig: 12,
-        ins: 12,
-        itu: 13,
-        ana: 12,
-        cre: 10,
-        foc: 12,
-        dis: 13,
-        fit: 12,
-        mass_kg: 65.0,
+        chars: CharacterCharacteristics {
+            spd: 13,
+            for_stat: 10,
+            dex: 12,
+            kin: 13,
+            sig: 12,
+            ins: 12,
+            itu: 13,
+            ana: 12,
+            cre: 10,
+            foc: 12,
+            dis: 13,
+            fit: 12,
+            mas_kg: 65.0,
+            ..Default::default()
+        },
         skill_c: 13,
         skill_n: 4,
         is_ranged: false,

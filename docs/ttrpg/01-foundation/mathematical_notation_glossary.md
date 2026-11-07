@@ -1,5 +1,7 @@
 # Mathematical Notation, Variables & Formula Glossary
 
+> **Rust Engine Implementation**: [`crates/satya-engine/src/lib.rs`](../../../crates/satya-engine/src/lib.rs), [`crates/satya-engine/src/characteristics.rs`](../../../crates/satya-engine/src/characteristics.rs), [`crates/satya-engine/src/dice_probabilities.rs`](../../../crates/satya-engine/src/dice_probabilities.rs), [`crates/satya-engine/src/contested_cascade.rs`](../../../crates/satya-engine/src/contested_cascade.rs), [`crates/satya-engine/src/action_economy.rs`](../../../crates/satya-engine/src/action_economy.rs), [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs), and [`crates/satya-engine/src/ballistics.rs`](../../../crates/satya-engine/src/ballistics.rs).
+
 Because **Satya** is a Computer-Assisted RPG (CARPG) built on an exact combinatorial and physics-grounded simulation engine, the rules chapters use consistent mathematical notation across task resolution, probability distributions, character attributes, lifepaths, action economy, combat pools, and survival mechanics.
 
 This chapter serves as the **single canonical glossary of every mathematical symbol, subscript, acronym, and formula** used throughout the Satya TTRPG Rules Book. Whenever you encounter a variable such as $\text{TN}_P$, $\text{TN}_{GM}$, $\delta_{\text{under}}$, $D_{\text{cog}}$, or $P_{\text{eff}}$ in any chapter, refer here for its full name, scale, and definition.

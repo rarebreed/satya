@@ -1,5 +1,7 @@
 # Satya TTRPG Health, Anatomical Trauma, Fatigue & Mental Conditions
 
+> **Rust Engine Implementation**: [`crates/satya-engine/src/health_survival.rs`](../../../crates/satya-engine/src/health_survival.rs) (`HitLocationZone`, `FatigueLevel`, `StructuralWoundTier`, `FractureBiomechanics`, `HemorrhageGrade`, `BloodLossStage`, `WoundShockTier`, `lookup_hit_location_1d20`, `evaluate_fatigue_state`, `evaluate_asphyxiation`, `evaluate_blood_loss_state`, `evaluate_wound_shock_save`) and [`crates/satya-engine/src/status_and_triage.rs`](../../../crates/satya-engine/src/status_and_triage.rs) (`PhysiologicalStatusEffect`, `MentalTraumaCondition`, `MedicalInterventionKind`, `evaluate_mental_trauma_shock`, `evaluate_medical_triage`).
+
 This chapter defines the canonical **Health, Anatomical Trauma, Physiological Status, and Mental Condition System** for **Satya** (for definitions of all mathematical variables and trauma/stamina symbols such as $\text{FT}, \text{WSR}, T_{\max}, C_{\max}, F_{\max}, \text{TN}_P, \text{TN}_{GM}$, see the **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**). As established in **[Combat Architecture, Tactical Triad & Pools](../05-combat/tactical_triad_and_pools.md)**, Satya completely rejects ablative "Hit Points" (`HP`). A human being is not a uniform sack of numeric points that operates at `100%` efficiency until reaching `0`.
 
 Instead, Satya models human survivability and degradation across **five interconnected physiological and psychological tracks**:

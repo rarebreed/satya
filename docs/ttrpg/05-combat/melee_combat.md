@@ -1,5 +1,7 @@
 # Satya TTRPG Melee Combat, Close-Quarters Tactics & The Tactical Triad
 
+> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`ReachBand`, `MeleeDamageType`, `MeleeWeaponProfile`, `TacticalAllocationArchetype`, `TacticalTriadContestInput`, `evaluate_tactical_triad_contest`, `resolve_grappling_or_throw`, `canonical_melee_weapons`) and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_viktor_vs_elena_melee`).
+
 Melee combat in **Satya** is fundamentally different from ranged firefights—not only in its physical mechanics of reach, leverage, balance (`Root`), and structural defense (`Guard`), but also in its psychological immediacy. This chapter builds directly upon the core combat engine, **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**, **[Count-Up Action Clock](../02-core-mechanics/action_economy_and_ooda.md)**, **[Morale System](../04-psyche-and-social/psyche_morale_and_social_combat.md)**, and **["Envelope & Fill" Tactical Pool Architecture ($P_{\text{base}} = C_{\text{combat}} + 3N$)](tactical_triad_and_pools.md)**.
 
 ---

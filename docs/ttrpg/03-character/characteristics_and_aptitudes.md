@@ -1,5 +1,7 @@
 # Character Characteristics, Derived Metrics & Domain Aptitudes
 
+> **Rust Engine Implementation**: [`crates/satya-engine/src/characteristics.rs`](../../../crates/satya-engine/src/characteristics.rs) (`CharacteristicId`, `CharacteristicCategory`, `AptitudeDomain`, `CharacterAttributes`, `DerivedCharacteristics`, `compute_composite_controller`, `compute_gated_shortfall_penalty`, `study_time_multiplier`).
+
 This document defines the canonical **Character Characteristics and Aptitudes System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, **Quick Thinking (`D_cog`)**, and **OODA Initiative**) are derived from them, how **Domain Aptitudes ($A \in [-2, +3]$)** accelerate learning, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](../02-core-mechanics/cascading_d20_and_tasks.md), the [Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md), and the [Skill System](skills_and_trees.md).
 
 ---

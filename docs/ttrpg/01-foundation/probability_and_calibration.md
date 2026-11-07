@@ -1,5 +1,7 @@
 # Probability, Distribution Topology & `2d20` Calibration in Satya
 
+> **Rust Engine Implementation**: [`crates/satya-engine/src/dice_probabilities.rs`](../../../crates/satya-engine/src/dice_probabilities.rs) (`CarryMode`, `compute_stats`, `paired_list_signed_margin_pmfs`, `paired_list_cascade_pmfs`) and [`crates/satya-engine/src/contested_cascade.rs`](../../../crates/satya-engine/src/contested_cascade.rs) (`GmResistanceMode`, `ContestedTieRule`, `contested_2d20_cascade_pmfs`).
+
 Dice are a tool to inject uncertainty, risk, and surprise into a roleplaying game. Whenever a character attempts an action where the outcome is uncertain and meaningful, the game's resolution engine must answer two questions:
 1. **Did the character succeed or fail?**
 2. **By how much?** (Did they barely scrape by, achieve a masterwork triumph, fail cleanly, or suffer a catastrophic botch?)

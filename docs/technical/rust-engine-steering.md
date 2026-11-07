@@ -72,13 +72,48 @@ Static game tables (skills, actions, weapons, fire modes, armor, hit locations, 
 
 ---
 
-## 4. Function Signatures & Module Organization
+## 4. Function Signatures, Module Splits & File Size Ceiling (`<= 45 KB`)
 
 1. **Maximum 5–6 Positional Parameters**: If a function requires more than 6 inputs, group related parameters into a domain context struct or `Triad<i32>`.
-2. **Separate Narrative Walkthroughs from Core Mechanics**:
-   - Core rules modules (`combat.rs`, `psyche_social.rs`, `lifepath_economy.rs`, `health_survival.rs`) must contain **only** types, static tables, and mechanical resolution functions.
-   - Named character walkthrough simulations (Viktor vs. Elena, Mateo vs. Sgt. Vance, Marcus vs. Nadia, Mateo/Priya/Amara lifepath builds) belong in [`crates/satya-engine/src/walkthroughs.rs`](../../crates/satya-engine/src/walkthroughs.rs).
-3. **Separate Documentation Rendering from Mechanics**:
-   - Markdown/LaTeX/Mermaid-to-HTML rendering belongs in `rules_book/markdown_html.rs`, separate from chapter search/catalog logic in `rules_book/mod.rs`.
-4. **Target File Size Ceiling (`<= 1,600 lines`)**:
-   - No single `.rs` file in `crates/satya-engine/src/` should exceed ~1,600 lines. If a module grows past that threshold, split it into focused submodules or compress repetitive tables with a declarative macro.
+2. **Hard File Size Ceiling (`<= 45 KB` / `< 46,080` bytes)**:
+   - Every `.rs` file in `crates/satya-engine/src/` and every `.md` file in `docs/ttrpg/` must remain under `45 KB` (~1,000 lines) so an AI coding agent can read the entire file in a single `read_file` call without truncation.
+   - **Split Files Rather Than Deleting Content**: When a Rust module or TTRPG markdown chapter approaches `45 KB`, split it into modular companion files along domain boundaries rather than cutting prose, worked examples, or reference tables.
+3. **Separate Static Catalogs, Sub-Domains, Walkthroughs & HTML Rendering**:
+   - **Static Reference Catalogs**: Store large `const` tables in dedicated `*_catalog.rs` modules ([`skills_catalog.rs`](../../crates/satya-engine/src/skills_catalog.rs), [`lifepath_catalog.rs`](../../crates/satya-engine/src/lifepath_catalog.rs), [`action_catalog_stealth.rs`](../../crates/satya-engine/src/action_catalog_stealth.rs)).
+   - **Domain Companion Modules**: Keep core mechanics modularized by sub-domain (`combat.rs` + `ranged_combat.rs` + `ballistics.rs`, `psyche_social.rs` + `social_combat.rs`, `health_survival.rs` + `status_and_triage.rs`, `environment_vehicles.rs` + `environmental_hazards.rs`, `dice_probabilities.rs` + `contested_cascade.rs`).
+   - **Preserve Flat Re-Exports When Splitting**: Whenever a module is split into a companion `.rs` file, re-export its public items (`pub use companion::*;`) in both the parent module and `crates/satya-engine/src/lib.rs` so downstream crates (`satya-web`, `satya-py`, `satya-signaling`) continue to compile without import-path breakage.
+   - **Narrative Walkthroughs**: Named character walkthrough simulations (Viktor vs. Elena, Mateo vs. Sgt. Vance, Marcus vs. Nadia, Mateo/Priya/Amara lifepath builds) belong in [`crates/satya-engine/src/walkthroughs.rs`](../../crates/satya-engine/src/walkthroughs.rs).
+   - **Documentation Rendering**: Markdown/LaTeX/Mermaid-to-HTML rendering belongs in [`rules_book_html.rs`](../../crates/satya-engine/src/rules_book_html.rs), separate from chapter catalog and search logic in [`rules_book.rs`](../../crates/satya-engine/src/rules_book.rs).
+   - **Unit Test Suites**: Keep cross-module and domain test suites split across [`tests.rs`](../../crates/satya-engine/src/tests.rs) and [`tests_domain.rs`](../../crates/satya-engine/src/tests_domain.rs).
+4. **Canonical Sign Conventions ($\Delta_{\text{int}}$ vs. $\Delta_{\text{ext}}$ / $\Delta_{\text{tool}}$)**:
+   - **Internal Competence Modifiers ($\Delta_{\text{int}}$)** adjust effective competence ($C_{\text{eff}} = C + \Delta_{\text{int}}$):
+     - **Negative** (`-2` Fatigue, `-4` Wound Shock, `-2` Off-Balance) = **Penalty** to character competence (increases $\text{TN}_P = 31 - C_{\text{eff}}$).
+     - **Positive** (`+1` Focus/Preparation) = **Bonus** to character competence (decreases $\text{TN}_P$).
+   - **External / Tool Modifiers ($\Delta_{\text{ext}}$, $\Delta_{\text{tool}}$)** adjust target numbers directly ($\text{TN}_{\text{eff}} = 31 - C_{\text{eff}} + \Delta_{\text{ext}}$ and $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$):
+     - **Positive** (`+3` Darkness, `+6` High-Security Lock, `+2` Improvised Tool) = **Harder Task** (raises $\text{TN}_P$ or lowers $\text{TN}_{GM}$ so environmental resistance cascades more easily).
+     - **Negative** (`-2` Superior Tool, `-4` Trivial Lock) = **Easier Task** (lowers $\text{TN}_P$ or raises $\text{TN}_{GM}$).
+   - Never mix or invert $\Delta_{\text{int}}$ and $\Delta_{\text{ext}}$ signs when aggregating `ConditionImpact` or evaluating `TieredSaveEval`.
+
+---
+
+## 5. Bidirectional Synchronization Between `docs/ttrpg/` and `satya-engine`
+
+1. **`docs/ttrpg/` is the Canonical Design Authority**:
+   - If a formula, modifier, threshold, or table in `crates/satya-engine` ever diverges from `docs/ttrpg/`, `docs/ttrpg/` is the design source of truth unless the user explicitly directs a rule change (in which case both `docs/ttrpg/` and `crates/satya-engine` must be updated together).
+2. **Reciprocal Traceability Links**:
+   - **Rust -> TTRPG**: Every module header (`//!`) and public item docstring (`///`) in `crates/satya-engine/src/` must cite the governing chapter path (`docs/ttrpg/...`) and section (`§X.Y`).
+   - **TTRPG -> Rust**: Every markdown chapter in `docs/ttrpg/` begins with a `> **Rust Engine Implementation**:` callout linking to its implementing `crates/satya-engine/src/*.rs` module(s), and [`docs/ttrpg/SUMMARY.md`](../ttrpg/SUMMARY.md) maintains the master 1-to-1 Reciprocal Rust Engine Module Index.
+3. **Markdown / LaTeX / Mermaid Rendering Invariants**:
+   - `test_rules_book_catalog_search_and_tactical_pool_envelope` in [`crates/satya-engine/src/tests.rs`](../../crates/satya-engine/src/tests.rs) compiles every `docs/ttrpg/` chapter into HTML and asserts:
+     - Zero raw `\text{...}` or `\frac{...}` LaTeX commands leaking outside `$...$` or `$$...$$` delimiters.
+     - Zero double-escaped `&amp;amp;` entities.
+     - All Mermaid node labels containing parentheses or brackets are quoted (`S1["Node Label (Extra Info)"]`).
+     - Currency strings (`$500`, `$10,000`) are preserved as literal dollar amounts and not accidentally paired into inline LaTeX math.
+   - **Windows Editing Pitfall**: Never use PowerShell double-quoted strings (`"..."`) to write or modify Markdown containing backticks (`` `r ``, `` `t ``, `` `f ``) or `$` math symbols, as PowerShell strips backtick escapes and interpolates `$var` as empty strings. Always use `edit_file` / `write_file` or UTF-8 Python scripts with LF (`\n`) line endings.
+4. **Checklist When Adding, Renaming, or Splitting a `docs/ttrpg/` Chapter**:
+   - Update [`docs/ttrpg/SUMMARY.md`](../ttrpg/SUMMARY.md)
+   - Update `STATIC_CHAPTERS` in [`crates/satya-engine/src/rules_book.rs`](../../crates/satya-engine/src/rules_book.rs) and `resolve_markdown_link_chapter_id` in [`crates/satya-engine/src/rules_book_html.rs`](../../crates/satya-engine/src/rules_book_html.rs)
+   - Update the relative link map in [`crates/satya-engine/src/bin/build_rules_book.rs`](../../crates/satya-engine/src/bin/build_rules_book.rs)
+   - Update `BOOK_CHAPTER_SPECS` in [`src/satya_ml/build_rules_book.py`](../../src/satya_ml/build_rules_book.py) and `CHAPTER_SPECS` in [`notebooks/satya_rules_book.py`](../../notebooks/satya_rules_book.py)
+   - Update `_CANONICAL_RULES_FILES` in [`src/satya_ml/ai_gm/tools.py`](../../src/satya_ml/ai_gm/tools.py)
+   - Run `cargo test -p satya-engine` to verify chapter counts, HTML/LaTeX/Mermaid rendering, and search indexing.

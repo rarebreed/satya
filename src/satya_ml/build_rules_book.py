@@ -52,7 +52,14 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
         "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
         "title": "Cascading 2d20 Engine & Task Resolution",
         "relative_path": "02-core-mechanics/cascading_d20_and_tasks.md",
-        "description": "Canonical Two-List Cascading (2d20) dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, 5-step Task Pipeline, Tool Tiers, Gate Classifications, Master Task Table, and Extended Project Clocks.",
+        "description": "Canonical Two-List Cascading (2d20) dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, 5-step Task Pipeline, Tool Tiers, Gate Classifications, and Extended Project Clocks.",
+    },
+    {
+        "chapter_id": "task_requirements_catalog",
+        "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
+        "title": "Master Task Requirements Catalog",
+        "relative_path": "02-core-mechanics/task_requirements_catalog.md",
+        "description": "Reference tables mapping physical, technical, investigative, medical, and social tasks to Governing Skills, Characteristic Triads, Gate Classifications, Tool Tiers, and Time Scales.",
     },
     {
         "chapter_id": "action_economy",
@@ -71,9 +78,16 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
     {
         "chapter_id": "skills_and_trees",
         "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
-        "title": "Skill System & Hierarchical Skill Trees",
+        "title": "Skill System & Hierarchical Skill Trees (Trees 1-4)",
         "relative_path": "03-character/skills_and_trees.md",
-        "description": "Talents (TAL) vs. Physical (PHY), Knowledge (KNO), and Hybrid (PHY/KNO) skills, Multi-Category taxonomy, [Access] restriction tiers, and the 8 Hierarchical Skill Trees.",
+        "description": "Talents (TAL) vs. Physical (PHY), Knowledge (KNO), and Hybrid (PHY/KNO) skills, Multi-Category taxonomy, [Access] restriction tiers, and Hierarchical Skill Trees 1-4.",
+    },
+    {
+        "chapter_id": "skills_trees_tactical_and_social",
+        "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
+        "title": "Hierarchical Skill Trees (Trees 5-8: Combat, Vehicles, Social & Tradecraft)",
+        "relative_path": "03-character/skills_trees_tactical_and_social.md",
+        "description": "Hierarchical Skill Trees 5-8: Close-Quarters & Ranged Combat, Vehicles & Piloting, Social & Psychological Manipulation, and Tradecraft, Intelligence & Survival.",
     },
     {
         "chapter_id": "lifepaths_and_economy",
@@ -102,6 +116,13 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
         "title": "Melee Combat, Close-Quarters Tactics & The Tactical Triad",
         "relative_path": "05-combat/melee_combat.md",
         "description": "Close-quarters anatomy, the Tactical Triad (Tempo, Control, Force), Guard & Seizing the Initiative, Root vs. throws, and Viktor vs. Elena walkthrough.",
+    },
+    {
+        "chapter_id": "firearms_and_ballistics",
+        "part": "Part V: Combat Architecture, Close Quarters & Firefights",
+        "title": "Firearm Engineering & Internal/External/Terminal Ballistics",
+        "relative_path": "05-combat/firearms_and_ballistics.md",
+        "description": "Granular ammunition & cartridge physics (E_k = m*v^2/2000), terminal wound channel indices (I_KE + I_cal + W_yaw), firearm action mechanisms, mass/CoG/OAL handling, and barrel dynamics.",
     },
     {
         "chapter_id": "ranged_combat_and_armor",

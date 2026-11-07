@@ -10,41 +10,43 @@
 //! - [`dice_pools`]: Exact discrete probability mass functions (`Pmf`), statistical moments
 //!   (`DistributionStats`, Sarle's $\text{BC}$), and comparative dice pool topology benchmarks
 //!   (`docs/ttrpg/01-foundation/probability_and_calibration.md` §1).
-//! - [`dice_probabilities`]: Two-List Cascading (`2d20`) dynamic-programming engines, Four-Factor task
-//!   evaluators (`CascadeTaskParams`, `CascadeRollOutcome`), and 1-Pair Tiered GM Resistance contested
-//!   evaluators (`ContestedCascadeTaskParams`, `ContestedOutcomeKind`)
+//! - [`dice_probabilities`] & [`contested_cascade`]: Two-List Cascading (`2d20`) dynamic-programming engines,
+//!   Four-Factor task evaluators (`CascadeTaskParams`, `CascadeRollOutcome`), and 1-Pair Tiered GM Resistance
+//!   contested evaluators (`ContestedCascadeTaskParams`, `ContestedOutcomeKind`)
 //!   (`docs/ttrpg/01-foundation/probability_and_calibration.md` §1–§6,
 //!   `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` §1–§5).
 //! - [`task_resolution`]: Task Gate Classifications (`ClassA`/`B`/`C`), Tool Dependency & Quality tiers,
 //!   Composite/Supporting Characteristic helpers, Complementary Synergy (`KNO -> PHY`), Dual-Skill Gates,
 //!   Extended Project Clocks, and the 22-entry Master Task Requirements catalog
 //!   (`docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` §2–§8).
-//! - [`action_economy`]: Temporal calibration (`1 Tick = 0.25s`), OODA Loop & Quick Thinking ($D_{\text{cog}}$),
-//!   Count-Up Tick Clock, `CANONICAL_ACTION_CATALOG`, `action_time_factor`, and Multi-Sensory Stealth & Detection
-//!   (`docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md` §1–§6).
+//! - [`action_economy`] & [`action_catalog_stealth`]: Temporal calibration (`1 Tick = 0.25s`), OODA Loop &
+//!   Quick Thinking ($D_{\text{cog}}$), Count-Up Tick Clock, `CANONICAL_ACTION_CATALOG`, `action_time_factor`,
+//!   and Multi-Sensory Stealth & Detection (`docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md` §1–§6).
 //! - [`characteristics`]: All 30 Physical, Mental, Social, Sensory, and Psyche characteristics on the `1–20`
 //!   Controlling Scale, 10 derived metrics (`POW`, `MMF`, `OODA`, `D_cog`, `AWR`, `FT`, `WSR`, `CMP`, `C_study`),
 //!   and 9 Domain Aptitudes ($A \in [-2, +3]$)
 //!   (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §1–§10).
-//! - [`skills_trees`]: Skill taxonomy (`TAL`, `PHY`, `KNO`, `PHY/KNO`), `[Access]` gates, the 8 Hierarchical
-//!   Skill Trees (`CANONICAL_SKILL_TREES`), tree defaulting, and the 5-Factor Skill Point (`SP`) step cost formula
-//!   (`docs/ttrpg/03-character/skills_and_trees.md` §1–§3, `docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7).
-//! - [`lifepath_economy`] & [`economy_gear`]: Chronological Lifepath creation (Stages 1–5), School Quality (`SQM`),
-//!   `DIS + Mental + APT` advancement rolls, Socioeconomic Upkeep (`SQM 1–10`), Black-Market `[Access]` procurement,
-//!   and Operational `Heat` (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1–§3).
-//! - [`psyche_social`]: Psyche Friction Checks, Long-Term Psyche Drift, Conviction Surges, Combat Morale,
-//!   Argument Vectors, Social Composure, and Cognitive Dissonance resolution
+//! - [`skills_trees`] & [`skills_catalog`]: Skill taxonomy (`TAL`, `PHY`, `KNO`, `PHY/KNO`), `[Access]` gates,
+//!   the 8 Hierarchical Skill Trees (`CANONICAL_SKILL_TREES`), tree defaulting, and the 5-Factor Skill Point (`SP`)
+//!   step cost formula (`docs/ttrpg/03-character/skills_and_trees.md` §1–§3,
+//!   `docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7).
+//! - [`lifepath_economy`], [`lifepath_catalog`] & [`economy_gear`]: Chronological Lifepath creation (Stages 1–5),
+//!   School Quality (`SQM`), `DIS + Mental + APT` advancement rolls, Socioeconomic Upkeep (`SQM 1–10`),
+//!   Black-Market `[Access]` procurement, and Operational `Heat`
+//!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1–§3).
+//! - [`psyche_social`] & [`social_combat`]: Psyche Friction Checks, Long-Term Psyche Drift, Conviction Surges,
+//!   Combat Morale, Argument Vectors, Social Composure, and Cognitive Dissonance resolution
 //!   (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §1–§4).
-//! - [`combat`] & [`ballistics`]: Tactical Triad ("Envelope & Fill" — `Tempo`, `Control`, `Force`), Melee Weapons,
-//!   Reach & Clinch Polarity Flip, Kuzushi Throws, Granular Ballistics & Firearms Engineering ($E_k, I_{\text{KE}},
-//!   I_{\text{cal}}, W_{\text{yaw}}, \text{Acc}, \text{Rel}$), Ranged Fire Modes, Recoil Bracing, Suppression,
-//!   Armor `PR` vs. `BABT`, and Weapon Malfunctions
+//! - [`combat`], [`ranged_combat`] & [`ballistics`]: Tactical Triad ("Envelope & Fill" — `Tempo`, `Control`, `Force`),
+//!   Melee Weapons, Reach & Clinch Polarity Flip, Kuzushi Throws, Granular Ballistics & Firearms Engineering
+//!   ($E_k, I_{\text{KE}}, I_{\text{cal}}, W_{\text{yaw}}, \text{Acc}, \text{Rel}$), Ranged Fire Modes, Recoil Bracing,
+//!   Suppression, Armor `PR` vs. `BABT`, and Weapon Malfunctions
 //!   (`docs/ttrpg/05-combat/tactical_triad_and_pools.md`, `melee_combat.md`, `ranged_combat_and_armor.md`).
-//! - [`health_survival`] & [`environment_vehicles`]: `1d20` Hit Locations & Called Shots, Fatigue Levels (`0–5`),
-//!   Asphyxiation, Structural Wounds (`Tiers 1–5`), Fractures, Hemorrhaging & Hypovolemic Shock, `WSR` Saves,
-//!   Physiological & Mental Trauma Conditions, Combat Movement Gaits, Encumbrance (`Tiers 0–4`), Vehicular Chases
-//!   & High-G Physics, and Environmental Survival (`docs/ttrpg/06-health-and-survival/health_and_trauma.md`,
-//!   `movement_vehicles_and_environment.md`).
+//! - [`health_survival`], [`status_and_triage`], [`environment_vehicles`] & [`environmental_hazards`]:
+//!   `1d20` Hit Locations & Called Shots, Fatigue Levels (`0–5`), Asphyxiation, Structural Wounds (`Tiers 1–5`),
+//!   Fractures, Hemorrhaging & Hypovolemic Shock, `WSR` Saves, Physiological & Mental Trauma Conditions,
+//!   Combat Movement Gaits, Encumbrance (`Tiers 0–4`), Vehicular Chases & High-G Physics, and Environmental
+//!   Survival (`docs/ttrpg/06-health-and-survival/health_and_trauma.md`, `movement_vehicles_and_environment.md`).
 //! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
 //!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor)
@@ -52,21 +54,29 @@
 
 #![deny(missing_docs)]
 
+pub mod action_catalog_stealth;
 pub mod action_economy;
 pub mod ballistics;
 pub mod characteristics;
 pub mod combat;
+pub mod contested_cascade;
 pub mod dice_pools;
 pub mod dice_probabilities;
 pub mod economy_gear;
 pub mod environment_vehicles;
+pub mod environmental_hazards;
 pub mod health_survival;
+pub mod lifepath_catalog;
 pub mod lifepath_economy;
 pub mod primitives;
 pub mod psyche_social;
+pub mod ranged_combat;
 pub mod rules_book;
 pub mod rules_book_html;
+pub mod skills_catalog;
 pub mod skills_trees;
+pub mod social_combat;
+pub mod status_and_triage;
 pub mod task_resolution;
 pub mod walkthroughs;
 
@@ -85,3 +95,5 @@ pub use task_resolution::*;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_domain;

@@ -205,6 +205,18 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
         ),
         ("cascading_d20_and_tasks.md", "tasks.html"),
         (
+            "02-core-mechanics/task_requirements_catalog.md",
+            "task_requirements_catalog.html",
+        ),
+        (
+            "../02-core-mechanics/task_requirements_catalog.md",
+            "task_requirements_catalog.html",
+        ),
+        (
+            "task_requirements_catalog.md",
+            "task_requirements_catalog.html",
+        ),
+        (
             "02-core-mechanics/action_economy_and_ooda.md",
             "action_economy.html",
         ),
@@ -228,6 +240,18 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
             "skills_and_trees.html",
         ),
         ("skills_and_trees.md", "skills_and_trees.html"),
+        (
+            "03-character/skills_trees_tactical_and_social.md",
+            "skills_trees_tactical_and_social.html",
+        ),
+        (
+            "../03-character/skills_trees_tactical_and_social.md",
+            "skills_trees_tactical_and_social.html",
+        ),
+        (
+            "skills_trees_tactical_and_social.md",
+            "skills_trees_tactical_and_social.html",
+        ),
         (
             "03-character/lifepaths_and_economy.md",
             "lifepaths_and_economy.html",
@@ -261,6 +285,18 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
         ("05-combat/melee_combat.md", "melee_combat.html"),
         ("../05-combat/melee_combat.md", "melee_combat.html"),
         ("melee_combat.md", "melee_combat.html"),
+        (
+            "05-combat/firearms_and_ballistics.md",
+            "firearms_and_ballistics.html",
+        ),
+        (
+            "../05-combat/firearms_and_ballistics.md",
+            "firearms_and_ballistics.html",
+        ),
+        (
+            "firearms_and_ballistics.md",
+            "firearms_and_ballistics.html",
+        ),
         (
             "05-combat/ranged_combat_and_armor.md",
             "ranged_combat_and_armor.html",

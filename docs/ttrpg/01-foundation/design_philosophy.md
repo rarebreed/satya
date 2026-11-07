@@ -1,5 +1,7 @@
 # An RPG for a More Civilized Age — Design Philosophy & Goals of Satya
 
+> **Rust Engine Implementation**: [`crates/satya-engine/src/lib.rs`](../../../crates/satya-engine/src/lib.rs) (top-level CARPG simulation crate), [`crates/satya-engine/src/rules_book.rs`](../../../crates/satya-engine/src/rules_book.rs) (`canonical_rules_chapters`, `search_rules_book`), and [`crates/satya-engine/src/rules_book_html.rs`](../../../crates/satya-engine/src/rules_book_html.rs) (`render_rules_markdown_to_html`).
+
 So, what's so special about **Satya**? Is this some old-school OD&D clone? To explain what Satya is, and the audience this game is catering to, I need to tell a little story first.
 
 ---
