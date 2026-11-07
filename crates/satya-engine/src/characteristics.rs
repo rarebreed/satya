@@ -19,68 +19,40 @@ use crate::define_coded_enum;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CharacteristicCategory {
-    /// Physical somatic attributes (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`, `MAS`, `HGT` — §3).
     Physical,
-    /// Mental cognitive attributes (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC` — §4).
     Mental,
-    /// Social interpersonal attributes (`COM`, `PRE`, `ELO` — §5).
     Social,
-    /// Sensory acuity attributes (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU` — §6).
     Sensory,
-    /// Bipolar psychological disposition traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG` — §7).
     Psyche,
 }
 
 define_coded_enum! {
-    /// Canonical 30 characteristic codes across Physical (§3), Mental (§4), Social (§5),
-    /// Sensory (§6), and Psyche (§7) domains (`docs/ttrpg/03-character/characteristics_and_aptitudes.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub enum CharacteristicCode [count = 30] {
-        /// Speed (`SPD`, Physical §3).
         SPD => { code: "SPD", label: "Speed" },
-        /// Force (`FOR`, Physical §3).
         FOR => { code: "FOR", label: "Force" },
-        /// Dexterity (`DEX`, Physical §3).
         DEX => { code: "DEX", label: "Dexterity" },
-        /// Kinesthesis (`KIN`, Physical §3).
         KIN => { code: "KIN", label: "Kinesthesis", aliases: ["KINESTHESIA"] },
-        /// Health (`HLT`, Physical §3).
         HLT => { code: "HLT", label: "Health" },
-        /// Fitness (`FIT`, Physical §3).
         FIT => { code: "FIT", label: "Fitness" },
         /// Mass in kilograms (`MAS`, Physical §3; `70.0 kg` baseline).
         MAS => { code: "MAS", label: "Mass (kg)" },
         /// Height in meters (`HGT`, Physical §3; `1.75 m` baseline).
         HGT => { code: "HGT", label: "Height (m)" },
-        /// Memory (`MEM`, Mental §4).
         MEM => { code: "MEM", label: "Memory" },
-        /// Analysis (`ANA`, Mental §4).
         ANA => { code: "ANA", label: "Analysis" },
-        /// Insight (`INS`, Mental §4).
         INS => { code: "INS", label: "Insight" },
-        /// Creativity (`CRE`, Mental §4).
         CRE => { code: "CRE", label: "Creativity" },
-        /// Discipline (`DIS`, Mental §4).
         DIS => { code: "DIS", label: "Discipline" },
-        /// Focus (`FOC`, Mental §4).
         FOC => { code: "FOC", label: "Focus" },
-        /// Comeliness (`COM`, Social §5).
         COM => { code: "COM", label: "Comeliness" },
-        /// Presence (`PRE`, Social §5).
         PRE => { code: "PRE", label: "Presence" },
-        /// Eloquence (`ELO`, Social §5).
         ELO => { code: "ELO", label: "Eloquence" },
-        /// Sight (`SIG`, Sensory §6).
         SIG => { code: "SIG", label: "Sight" },
-        /// Hearing (`HEA`, Sensory §6).
         HEA => { code: "HEA", label: "Hearing" },
-        /// Tactile (`TAC`, Sensory §6).
         TAC => { code: "TAC", label: "Tactile" },
-        /// Olfactory (`OLF`, Sensory §6).
         OLF => { code: "OLF", label: "Olfactory", aliases: ["OLFACTION"] },
-        /// Taste (`TAS`, Sensory §6).
         TAS => { code: "TAS", label: "Taste" },
-        /// Intuition (`ITU`, Sensory §6).
         ITU => { code: "ITU", label: "Intuition" },
         /// Ego (`EGO`, Psyche §7.2: Humble / Self-Effacing vs. Proud / Grandiose / Narcissistic).
         EGO => { code: "EGO", label: "Ego", aliases: ["EGOISM"] },
@@ -100,7 +72,6 @@ define_coded_enum! {
 }
 
 impl CharacteristicCode {
-    /// Domain category of the characteristic.
     #[must_use]
     pub const fn category(self) -> CharacteristicCategory {
         match self {
@@ -168,7 +139,6 @@ impl PopulationTier {
         }
     }
 
-    /// Human-readable label from `characteristics_and_aptitudes.md` §2 Table.
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
@@ -284,46 +254,35 @@ define_coded_enum! {
     /// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §9 Table).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub enum AptitudeCode [count = 9] {
-        /// `APT-QNT`: Quantitative & Mathematical (Tree 1 — Mathematics, Statistics, Quantitative Physics & Finance)
         AptQnt => { code: "APT-QNT", label: "Quantitative & Mathematical", aliases: ["QNT"] },
-        /// `APT-MEC`: Mechanical & Spatial (Tree 2 — Mechanical/Civil Engineering, Machining, Vehicle Pilotage)
         AptMec => { code: "APT-MEC", label: "Mechanical & Spatial", aliases: ["MEC"] },
-        /// `APT-CMP`: Computational & Algorithmic (Tree 3 — Software, AI 2.0, Cryptography, Cyberwarfare)
         AptCmp => { code: "APT-CMP", label: "Computational & Algorithmic", aliases: ["CMP"] },
-        /// `APT-BIO`: Biomedical & Chemical (Tree 4 — Biology, Chemistry, Pharmacology, Medicine, Surgery)
         AptBio => { code: "APT-BIO", label: "Biomedical & Chemical", aliases: ["BIO"] },
-        /// `APT-LNG`: Linguistic & Humanities (Tree 8 — Languages, Law, History, Research, Intelligence Analysis)
         AptLng => { code: "APT-LNG", label: "Linguistic & Humanities", aliases: ["LNG"] },
-        /// `APT-KIN`: Kinesthetic & Somatic (Trees 5–6 — Athletics, Parkour, Martial Arts, Melee Combat)
         AptKin => { code: "APT-KIN", label: "Kinesthetic & Somatic", aliases: ["KIN"] },
-        /// `APT-FIN`: Fine-Motor & Tactile (Trees 2, 4, 5, 8 — Lockpicking, Micro-Surgery, Marksmanship, Sleight of Hand)
         AptFin => { code: "APT-FIN", label: "Fine-Motor & Tactile", aliases: ["FIN"] },
-        /// `APT-AUD`: Auditory & Musical (Tree 8 — Singing, Musical Instruments, Acoustic Analysis, Voice Mimicry)
         AptAud => { code: "APT-AUD", label: "Auditory & Musical", aliases: ["AUD"] },
-        /// `APT-SOC`: Interpersonal & Street (Trees 7–8 — Persuasion, Deception, Streetwise, Interrogation, Leadership)
         AptSoc => { code: "APT-SOC", label: "Interpersonal & Street", aliases: ["SOC"] },
     }
 }
 
 macro_rules! impl_aptitudes_struct {
-    ($(#[doc = $doc:literal] $Variant:ident => $field:ident),+ $(,)?) => {
-        /// Character's 9 Domain Aptitude scores (`-2` to `+3`, default `0`).
+    ($($(#[$meta:meta])* $Variant:ident => $field:ident),+ $(,)?) => {
+        /// Character's 9 Domain Aptitude scores (`-2..=+3`, default `0`; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §9).
         #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
         pub struct CharacterAptitudes {
             $(
-                #[doc = $doc]
+                $(#[$meta])*
                 pub $field: i32,
             )+
         }
 
         impl CharacterAptitudes {
-            /// Look up the clamped (`-2..=+3`) score for a specific `AptitudeCode`.
             #[must_use]
             pub fn get(&self, code: AptitudeCode) -> i32 {
                 self[code].clamp(-2, 3)
             }
 
-            /// Set the score for a specific `AptitudeCode` (clamped to `-2..=+3`).
             pub fn set(&mut self, code: AptitudeCode, value: i32) {
                 self[code] = value.clamp(-2, 3);
             }
@@ -350,23 +309,14 @@ macro_rules! impl_aptitudes_struct {
 }
 
 impl_aptitudes_struct! {
-    /// Quantitative & Mathematical aptitude (`APT-QNT`, `-2..=+3`).
     AptQnt => apt_qnt,
-    /// Mechanical & Spatial aptitude (`APT-MEC`, `-2..=+3`).
     AptMec => apt_mec,
-    /// Computational & Algorithmic aptitude (`APT-CMP`, `-2..=+3`).
     AptCmp => apt_cmp,
-    /// Biological & Chemical aptitude (`APT-BIO`, `-2..=+3`).
     AptBio => apt_bio,
-    /// Linguistic & Symbolic aptitude (`APT-LNG`, `-2..=+3`).
     AptLng => apt_lng,
-    /// Gross Kinesthetic & Athletic aptitude (`APT-KIN`, `-2..=+3`).
     AptKin => apt_kin,
-    /// Fine Motor & Ballistic Precision aptitude (`APT-FIN`, `-2..=+3`).
     AptFin => apt_fin,
-    /// Musical & Auditory-Rhythmic aptitude (`APT-AUD`, `-2..=+3`).
     AptAud => apt_aud,
-    /// Interpersonal & Rhetorical aptitude (`APT-SOC`, `-2..=+3`).
     AptSoc => apt_soc,
 }
 
@@ -398,17 +348,15 @@ const SCALE_TABLE: [i32; 21] = [
 ];
 
 macro_rules! impl_characteristics_struct {
-    ($(#[doc = $doc:literal] $Variant:ident => $field:ident),+ $(,)?) => {
-        /// Complete canonical 25+ Characteristic profile (`03-character/characteristics_and_aptitudes.md`).
+    ($($(#[$meta:meta])* $Variant:ident => $field:ident),+ $(,)?) => {
+        /// Complete canonical 30-characteristic profile (`1..=20` controlling scale for 28 attributes, plus `mas_kg` and `hgt_m`; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §3–§7).
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         pub struct CharacterCharacteristics {
             $(
-                #[doc = $doc]
+                $(#[$meta])*
                 pub $field: i32,
             )+
-            /// Body mass in kilograms (`MAS`).
             pub mas_kg: f64,
-            /// Stature height in meters (`HGT`).
             pub hgt_m: f64,
         }
 
@@ -423,9 +371,6 @@ macro_rules! impl_characteristics_struct {
         }
 
         impl CharacterCharacteristics {
-            /// Retrieve the `1–20` integer score for a characteristic code.
-            ///
-            /// For `MAS` and `HGT`, converts `70.0 kg -> 10` (`7 kg` per step) and `1.75 m -> 10` (`0.05 m` per step).
             #[must_use]
             pub fn get_scale(&self, code: CharacteristicCode) -> i32 {
                 let raw = match code {
@@ -436,7 +381,6 @@ macro_rules! impl_characteristics_struct {
                 raw.clamp(1, 20)
             }
 
-            /// Set a `1–20` integer score for a characteristic code.
             pub fn set_scale(&mut self, code: CharacteristicCode, value: i32) {
                 let clamped = value.clamp(1, 20);
                 match code {
@@ -474,61 +418,33 @@ macro_rules! impl_characteristics_struct {
 }
 
 impl_characteristics_struct! {
-    /// Speed (`SPD`, `1..=20`).
     SPD => spd,
-    /// Force (`FOR`, `1..=20`).
     FOR => for_stat,
-    /// Dexterity (`DEX`, `1..=20`).
     DEX => dex,
-    /// Kinesthesia (`KIN`, `1..=20`).
     KIN => kin,
-    /// Health (`HLT`, `1..=20`).
     HLT => hlt,
-    /// Fitness (`FIT`, `1..=20`).
     FIT => fit,
-    /// Memory (`MEM`, `1..=20`).
     MEM => mem,
-    /// Analysis (`ANA`, `1..=20`).
     ANA => ana,
-    /// Insight (`INS`, `1..=20`).
     INS => ins,
-    /// Creativity (`CRE`, `1..=20`).
     CRE => cre,
-    /// Discipline (`DIS`, `1..=20`).
     DIS => dis,
-    /// Focus (`FOC`, `1..=20`).
     FOC => foc,
-    /// Comeliness (`COM`, `1..=20`).
     COM => com,
-    /// Presence (`PRE`, `1..=20`).
     PRE => pre,
-    /// Eloquence (`ELO`, `1..=20`).
     ELO => elo,
-    /// Sight (`SIG`, `1..=20`).
     SIG => sig,
-    /// Hearing (`HEA`, `1..=20`).
     HEA => hea,
-    /// Tactile (`TAC`, `1..=20`).
     TAC => tac,
-    /// Olfaction (`OLF`, `1..=20`).
     OLF => olf,
-    /// Taste (`TAS`, `1..=20`).
     TAS => tas,
-    /// Intuition (`ITU`, `1..=20`).
     ITU => itu,
-    /// Ego (`EGO`, `1..=20` — §7.2).
     EGO => ego,
-    /// Selfishness (`SLF`, `1..=20` — §7.2).
     SLF => slf,
-    /// Openness (`OPN`, `1..=20` — §7.2).
     OPN => opn,
-    /// Belongingness (`BLG`, `1..=20` — §7.2).
     BLG => blg,
-    /// Extraversion (`EXT`, `1..=20` — §7.2).
     EXT => ext,
-    /// Conformity (`CNF`, `1..=20` — §7.2).
     CNF => cnf,
-    /// Aggressiveness (`AGG`, `1..=20` — §7.2).
     AGG => agg,
 }
 
@@ -695,7 +611,6 @@ pub struct DerivedCharacteristics {
     pub pow_striking_power: f64,
     /// $\text{MMF} = (\text{MAS} / 70.0) \times \text{SPD}$
     pub mmf_momentum_factor: f64,
-    /// Height-based reach edge (`+1` per `0.15m` over `1.75m`)
     pub height_reach_edge: i32,
     /// Total Melee Reach Index (`height_reach_edge + floor((KIN - 10)/4) + weapon_reach_bonus`)
     pub melee_reach_index: i32,
@@ -716,7 +631,6 @@ pub struct DerivedCharacteristics {
 }
 
 impl CharacteristicCode {
-    /// The 6 non-dimensional Physical characteristics (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`).
     pub const PHYSICAL_SCALED: [Self; 6] = [
         Self::SPD,
         Self::FOR,
@@ -726,7 +640,6 @@ impl CharacteristicCode {
         Self::FIT,
     ];
 
-    /// The 6 Mental characteristics (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`).
     pub const MENTAL_ALL: [Self; 6] = [
         Self::MEM,
         Self::ANA,
@@ -736,7 +649,6 @@ impl CharacteristicCode {
         Self::FOC,
     ];
 
-    /// The 6 Sensory characteristics (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`).
     pub const SENSORY_ALL: [Self; 6] = [
         Self::SIG,
         Self::HEA,
@@ -746,10 +658,8 @@ impl CharacteristicCode {
         Self::ITU,
     ];
 
-    /// The 3 Social characteristics (`COM`, `PRE`, `ELO`).
     pub const SOCIAL_ALL: [Self; 3] = [Self::COM, Self::PRE, Self::ELO];
 
-    /// The 7 Psyche characteristics (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`).
     pub const PSYCHE_ALL: [Self; 7] = [
         Self::EGO,
         Self::SLF,
@@ -776,28 +686,20 @@ pub enum CharacteristicRollMethod {
 /// Detailed breakdown of a single `4–18` characteristic roll under Method 1 or Method 2.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SingleCharacteristicRoll {
-    /// The two `d4` outcomes (`1..=4`).
     pub d4_rolls: [i32; 2],
-    /// The `d5` outcomes (`3` dice for Method 1, `2` dice for Method 2, each `1..=5`).
     pub d5_rolls: Vec<i32>,
-    /// Index in `d5_rolls` of the dropped lowest `d5` (only `Some` for Method 1).
     pub dropped_d5_index: Option<usize>,
     /// Resulting characteristic score (`4..=18`).
     pub total: i32,
-    /// True if this roll was dropped as one of the lowest rolls in a Method 2 pool (`8 -> 6` or `4 -> 3`).
     pub dropped_from_pool: bool,
 }
 
 /// Rolled characteristic pool for a domain group (`Physical`, `Mental`, `Sensory`, or `Social`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CharacteristicGroupPool {
-    /// Domain category (`Physical`, `Mental`, `Sensory`, or `Social`).
     pub category: CharacteristicCategory,
-    /// Generation method used.
     pub method: CharacteristicRollMethod,
-    /// All individual rolls generated (`6` or `3` for Method 1; `8` or `4` for Method 2).
     pub raw_rolls: Vec<SingleCharacteristicRoll>,
-    /// Kept assignable values (`6` for Physical/Mental/Sensory; `3` for Social).
     pub kept_values: Vec<i32>,
 }
 
@@ -855,8 +757,6 @@ where
     }
 }
 
-/// Generic helper to mark the `drop_count` lowest items in `raw_rolls` (sorted by `sort_key`)
-/// via `mark_dropped` and return the extracted `kept_value`s for all non-dropped rolls.
 fn mark_and_extract_drop_lowest<T, K, V>(
     raw_rolls: &mut [T],
     drop_count: usize,
@@ -944,11 +844,8 @@ pub struct CorrelatedHeightMassRoll {
     pub build_roll: SingleCharacteristicRoll,
     /// Force (`FOR`) score (`1..=20`) contributing muscular mass to BMI.
     pub for_stat: i32,
-    /// Resulting Height in meters (`1.51 m ..= 1.93 m` from roll, `±0.03 m` per point from `11`).
     pub height_m: f64,
-    /// Resulting Body Mass Index (`kg / m²`) combining build roll and `FOR`.
     pub bmi: f64,
-    /// Resulting Mass in kilograms (rounded to nearest `0.5 kg`).
     pub mass_kg: f64,
 }
 
@@ -1016,22 +913,17 @@ pub const fn aptitude_from_3d6_sum(sum_3d6: i32) -> i32 {
 /// Single `3d6` Domain Aptitude roll in the `11 rolls, drop 2 lowest` pool.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SingleAptitudeRoll {
-    /// The three `d6` outcomes (`1..=6`).
     pub d6_rolls: [i32; 3],
-    /// Sum of the three `d6` (`3..=18`).
     pub sum_3d6: i32,
     /// Mapped Domain Aptitude modifier (`-2..=+3`).
     pub aptitude_value: i32,
-    /// True if this roll is one of the 2 lowest rolls dropped from the 11-roll pool.
     pub dropped_from_pool: bool,
 }
 
 /// Complete `11 x 3d6 (drop 2 lowest -> 9 kept)` Domain Aptitude pool.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AptitudePoolRoll {
-    /// All 11 `3d6` rolls in order.
     pub raw_rolls: Vec<SingleAptitudeRoll>,
-    /// The 9 kept aptitude values (`-2..=+3`) after dropping the 2 lowest rolls.
     pub kept_values: Vec<i32>,
 }
 

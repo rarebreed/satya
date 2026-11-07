@@ -60,23 +60,16 @@ pub enum DehydrationStage {
 /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.1 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DehydrationEvaluation {
-    /// Daily water requirement $W_{\text{req}}$ in Liters.
     pub daily_requirement_liters: f64,
-    /// Unreplaced water deficit in Liters.
     pub water_deficit_liters: f64,
-    /// Resulting Dehydration Stage (`0..=4`).
     pub stage: DehydrationStage,
     /// Internal difficulty modifier $\Delta_{\text{int}}$ (`0`, `2`, `4`, `8`, `10`).
     pub delta_int: i32,
     /// Minimum `fatigue_level` floor that cannot be removed by rest until rehydrated (`0`, `1`, `2`, `4`, `5`).
     pub fatigue_level_floor: i32,
-    /// Penalty to `FIT` (`0`, `-1`, `-3`, `-6`).
     pub fit_penalty: i32,
-    /// Penalty to `FOC` (`0`, `-1`, `0`, `-6`).
     pub foc_penalty: i32,
-    /// Penalty to `SPD`, `HLT`, `ANA` (`0`, `0`, `-2`, `-6`).
     pub spd_hlt_ana_penalty: i32,
-    /// Whether the character is Comatose (`All Caps = 0`) at Stage 4.
     pub is_comatose: bool,
 }
 
@@ -157,15 +150,10 @@ pub struct StarvationEvaluation {
     pub delta_int: i32,
     /// Minimum `fatigue_level` floor (`+1` at `48h+` without food).
     pub fatigue_level_floor: i32,
-    /// Penalty to `FOC` and `FIT` from glycogen depletion (`-2` at `48h+`).
     pub glycogen_foc_fit_penalty: i32,
-    /// Number of 3-day / `10,000 kcal` catabolic starvation intervals suffered (`Days 4+`).
     pub catabolic_intervals: i32,
-    /// Cumulative Body Mass (`MAS`) lost in kilograms (`1.5 kg` per catabolic interval).
     pub mass_lost_kg: f64,
-    /// Cumulative erosion to `FOR`, `FIT`, and `HLT` (`1` point per catabolic interval).
     pub for_fit_hlt_erosion: i32,
-    /// Whether fatal organ failure occurs (`FOR <= 0` or `HLT <= 0`).
     pub fatal_organ_failure: bool,
 }
 
@@ -327,17 +315,12 @@ pub enum HyperthermiaStage {
 pub struct ThermalStressEvaluation {
     /// Internal difficulty modifier $\Delta_{\text{int}}$.
     pub delta_int: i32,
-    /// Penalty to `DEX` and `TAC`.
     pub dex_tac_penalty: i32,
     /// Broad attribute penalty (`SPD`, `KIN`, `ANA`, `FOC`).
     pub all_stat_penalty: i32,
-    /// Penalty to $T_{\max}$ and $F_{\max}$ (`2` when `HyperthermiaStage::Stage1HeatCramps` or higher, `§4.3.B.1`).
     pub tempo_and_force_cap_penalty: i32,
-    /// Added `action_time_factor` multiplier delta.
     pub action_time_factor_added: f64,
-    /// Added systemic `fatigue_level`.
     pub added_fatigue_level: i32,
-    /// Whether the character is unconscious or comatose.
     pub is_unconscious_or_coma: bool,
 }
 
@@ -439,11 +422,9 @@ pub fn evaluate_frostbite_exposure(
 /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SleepDeprivationEvaluation {
-    /// Total hours awake without required sleep (`6–8h` standard, `4h` minimum with `DIS` check).
     pub hours_awake: i32,
     /// Internal difficulty modifier $\Delta_{\text{int}}$ (`0`, `+2` at `24h`, `+4` at `48h`, `+8` at `72h+`).
     pub delta_int: i32,
-    /// Penalty to `FOC`, `INS`, `ITU`, `OODA` (and `ANA`, `MEM` at `48h+`; all Mental & Sensory at `72h+`).
     pub mental_sensory_ooda_penalty: i32,
     /// Minimum `fatigue_level` floor (`0` at `<48h`, `+2` at `48h+`).
     pub fatigue_level_floor: i32,
@@ -486,15 +467,10 @@ impl ConditionSource for SleepDeprivationEvaluation {
 /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AltitudeVacuumEvaluation {
-    /// Penalty to `Fitness (FIT)` (`-2` per `1,000 meters` above `2,000 m`, minimum `-2` when unacclimatized above `2,500 m`).
     pub fit_penalty: i32,
-    /// Whether Acute Mountain Sickness (`Dizzy`, `Nausea`) and HAPE/HACE checks apply (`> 5,500 m` without $\text{O}_2$).
     pub acute_mountain_sickness_risk: bool,
-    /// Useful consciousness window in ticks when exposed to Hard Vacuum (`48–64 Ticks` = `12–16s`).
     pub vacuum_useful_consciousness_ticks: i32,
-    /// Whether the character has lost consciousness in Hard Vacuum.
     pub vacuum_unconscious: bool,
-    /// Cumulative `HLT` cold/barotrauma erosion suffered after losing consciousness in Hard Vacuum (`-2 HLT` per `20 ticks`).
     pub vacuum_hlt_erosion: i32,
 }
 
@@ -585,13 +561,9 @@ pub const fn evaluate_altitude_and_vacuum_hypoxia(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToxinVector {
-    /// Airborne gas, aerosol, smoke, or spore (`Inhalation`).
     Inhalation,
-    /// Percutaneous skin/mucosa absorption (`Contact`).
     Contact,
-    /// Swallowed in food or water (`Ingestion`).
     Ingestion,
-    /// Dart, fang, needle, or contaminated blade (`InjectionOrWound`).
     InjectionOrWound,
 }
 
@@ -601,15 +573,11 @@ pub enum ToxinVector {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToxinAgentId {
-    /// **Tear Gas / CS Riot Agent** (`Inhalation`, Onset `4 ticks`, Virulence `+2`).
     TearGasCsRiotAgent = 0,
-    /// **Neurotoxin / Sarin (GB) Nerve Agent** (`Inhalation`, Onset `12 ticks`, Virulence `+10`).
     SarinNerveAgent = 1,
 }
 
 impl ToxinAgentId {
-    /// All canonical toxin identifiers in declaration order
-    /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.3).
     pub const ALL: [Self; 2] = [Self::TearGasCsRiotAgent, Self::SarinNerveAgent];
 }
 
@@ -617,19 +585,13 @@ impl ToxinAgentId {
 /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ToxinOrPathogenProfile {
-    /// Canonical toxin agent identifier.
     pub id: ToxinAgentId,
-    /// Agent name (`"Tear Gas (CS)"`, `"Sarin Nerve Agent"`, etc.).
     pub name: &'static str,
-    /// Parameter 1: Transmission / Exposure Vector.
     pub vector: ToxinVector,
-    /// Parameter 2: Onset delay in Ticks before symptoms take effect.
     pub onset_delay_ticks: i32,
     /// Parameter 3: Virulence ($\Delta_{\text{ext}}$ on the victim's `HLT` cascade save).
     pub virulence_delta_ext: i32,
-    /// Parameter 4: Target physiological status effects inflicted on a failed `HLT` save.
     pub target_conditions: &'static [PhysiologicalStatusCondition],
-    /// Narrative description of target effects.
     pub effect_summary: &'static str,
 }
 
@@ -665,8 +627,6 @@ pub const TOXIN_CATALOG: [ToxinOrPathogenProfile; 2] = [
 
 impl_static_catalog!(ToxinAgentId => ToxinOrPathogenProfile : TOXIN_CATALOG);
 
-/// Returns the canonical example Toxin & Chemical Agent profiles from
-/// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.3.
 #[must_use]
 pub const fn canonical_toxin_catalog() -> &'static [ToxinOrPathogenProfile] {
     ToxinAgentId::CATALOG
@@ -691,17 +651,13 @@ pub enum RadiationExposureTier {
 /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AcuteRadiationEvaluation {
-    /// Derived Acute Radiation Sickness tier.
     pub tier: RadiationExposureTier,
     /// Subtractive penalty to `HLT`.
     pub hlt_penalty: i32,
     /// Whether `HLT` is halved against infection over `2–6 weeks`.
     pub hlt_halved_vs_infection: bool,
-    /// Added systemic `fatigue_level`.
     pub added_fatigue_level: i32,
-    /// Whether acute radiation nausea (`+4` $\Delta_{\text{int}}$) is inflicted.
     pub inflicts_nausea: bool,
-    /// Whether the dose is lethal without nanomedical regeneration (`> 6.0 Sv`).
     pub is_lethal_without_nanomed: bool,
 }
 

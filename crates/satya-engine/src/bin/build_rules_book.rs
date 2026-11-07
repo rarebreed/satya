@@ -2,8 +2,6 @@
 //! chapters of the Satya TTRPG Rules Book (`docs/ttrpg/`) into static HTML pages and `catalog.json`
 //! inside `docs/book/`.
 
-#![deny(missing_docs)]
-
 use satya_engine::{
     BotchRule, CarryMode, MarginAggregation, canonical_rules_chapters, compute_stats,
     escape_html_text, paired_list_signed_margin_pmfs, render_rules_markdown_to_html,

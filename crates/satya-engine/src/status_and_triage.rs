@@ -45,11 +45,9 @@ pub enum PhysiologicalStatusCondition {
 /// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §4 Table).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AggregatedStatusEffects {
-    /// Whether `Sight (SIG)` is locked to `0` (`Blinded`).
     pub sig_locked_zero: bool,
     /// Subtractive penalty to `SIG` (`-5` when `Dazzled`).
     pub sig_penalty: i32,
-    /// Whether `Hearing (HEA)` is locked to `0` (`Deafened`).
     pub hea_locked_zero: bool,
     /// Subtractive penalty to `HEA` (`-6` when `Tinnitus`).
     pub hea_penalty: i32,
@@ -67,7 +65,6 @@ pub struct AggregatedStatusEffects {
     pub delta_int_added: i32,
     /// Additional `action_time_factor` penalty (`+0.25` when `Concussed`).
     pub action_time_factor_added: f64,
-    /// Immediate clock freeze in ticks (`+8` ticks when `Stunned`).
     pub clock_freeze_ticks: i32,
     /// Subtractive penalty to `Tempo Cap ($T_{\max}$)` (`-4` when `Blinded`).
     pub tempo_cap_penalty: i32,
@@ -215,11 +212,8 @@ pub enum AcuteMentalTraumaTier {
 /// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §5.1–§5.2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AcuteMentalTraumaEffect {
-    /// Mental trauma severity tier (`1..=4`).
     pub tier: AcuteMentalTraumaTier,
-    /// Action clock freeze in ticks (`6..=12`, midpoint `9` for Tier 1).
     pub ooda_freeze_ticks: i32,
-    /// Tactical Pool modifier (`-4` in Tier 2 Panic).
     pub tactical_pool_modifier: i32,
     /// Subtractive penalty to `ANA` and `FOC` (`-6` in Tier 2, `0` in Tier 3).
     pub ana_foc_penalty: i32,
@@ -231,7 +225,6 @@ pub struct AcuteMentalTraumaEffect {
     pub shifts_into_feral_rage: bool,
     /// Whether all physical and verbal output (`Tempo, Control, Force, ELO`) is locked at `0` (`Tier 4 Catatonia`).
     pub total_psychomotor_shutdown: bool,
-    /// Permanent **Psyche Drift Marks** inflicted on the relevant `Psyche` axis upon surviving (`2` marks for Tier 3 or Tier 4, `§5.2`).
     pub permanent_psyche_drift_marks: i32,
     /// Situational **Trauma Trigger** morale penalty (`+4` $\Delta_{\text{morale}}$ for Tier 3 or Tier 4, `§5.2`).
     pub trauma_trigger_delta_morale: i32,

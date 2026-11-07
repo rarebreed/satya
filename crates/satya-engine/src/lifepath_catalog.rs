@@ -31,21 +31,14 @@ pub enum EducationalAdvancementTier {
 /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EducationalAdvancementResult {
-    /// Computed academic study controller (`C_study`).
     pub c_study: i32,
-    /// School Quality Modifier (`SQM`) applied to `TN_edu`.
     pub school_quality_modifier_sqm: i32,
     /// Clamped educational target number (`TN_edu = 31 - C_study + SQM`).
     pub tn_edu: i32,
-    /// Clamped `2d20` pair sums for the two rolls.
     pub pair_sums: [i32; 2],
-    /// Total successes scored across the two `2d20` pairs.
     pub successes: usize,
-    /// Achieved advancement outcome tier.
     pub outcome_tier: EducationalAdvancementTier,
-    /// Number of skill ranks gained from this roll (`0`, `1`, or `2`).
     pub skill_levels_gained: usize,
-    /// Whether this roll grants an early child-tier unlock (`true` on `2+` successes).
     pub grants_early_tier_unlock: bool,
 }
 
@@ -123,23 +116,19 @@ pub(crate) fn evaluate_educational_advancement_with_override(
 }
 
 define_coded_enum! {
-    /// Stage 4 Adolescent Path (`Ages 15–18`) (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Stage4Path [count = 3] {
-        /// Path 4A: Formal High School Track (`[Access: Academic]`, or `+ [Access: Vocational/Licensed]` on Vocational Track).
         Path4AHighSchool => {
             code: "STAY_4A",
             label: "Path 4A: Formal High School (Ages 15–18)",
             aliases: ["PATH_4A", "HIGH_SCHOOL"],
         },
-        /// Path 4B: Urban Dropout / Street Gang / Juvenile Underworld (`Academic Tree Freeze`, unlocks `[Access: Illicit]`).
         Path4BStreetGang => {
             code: "DROPOUT_4B",
             label: "Path 4B: Urban Dropout / Street Gang (Ages 15–18)",
             aliases: ["PATH_4B", "STREET_GANG"],
         },
-        /// Path 4C: Rural, Agrarian & Developing-Region Youth (`Academic Tree Freeze` if leaving school at 15, unlocks `[Access: Vocational/Licensed]` & rural/fieldcraft skills).
         Path4CRuralAgrarian => {
             code: "RURAL_4C",
             label: "Path 4C: Rural, Agrarian & Developing-Region Youth (Ages 15–18)",
@@ -149,25 +138,21 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Stage 4A High School Track (`Ages 16–18`) (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum HighSchoolTrack [count = 3] {
-        /// Track 1: Standard / College-Prep High School (`[Access: Academic]`).
         StandardCollegePrep => {
             code: "STANDARD_COLLEGE_PREP",
             label: "Standard / College-Prep High School",
             subtitle: "[Access: Academic] Advances Algebra & Geometry, Trigonometry, General Chemistry, Classical Physics, Foreign Language & Driving.",
             aliases: ["STANDARD"],
         },
-        /// Track 2: AP / Honors / STEM Magnet Track (requires `Elementary Algebra >= 2` and `C_study >= 13`, `SQM -1` bonus).
         ApHonorsStemMagnet => {
             code: "AP_HONORS_STEM",
             label: "AP / Honors / STEM Magnet Academy",
             subtitle: "[Access: Academic] (Req: Algebra >= 2, ANA >= 11, DIS >= 11; SQM -1 bonus) Unlocks Calculus, Statistics, Programming, Classical Physics & Chemistry at N=2.",
             aliases: ["AP_HONORS_STEM_MAGNET", "STEM"],
         },
-        /// Track 3: Vocational / Technical High School (unlocks `[Access: Vocational/Licensed]`).
         VocationalTechnical => {
             code: "VOCATIONAL_TECHNICAL",
             label: "Vocational / Technical High School",
@@ -178,33 +163,27 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Stage 4B Dropout / Street Gang / Juvenile Underworld Archetype (`Ages 16–18`)
-    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum StreetGangArchetype [count = 4] {
-        /// *Shooter / Enforcer*: `Short Blades` or `Pistols` to $N=2$ (and `Fully Automatic Weapons` to $N=1$ if `FOR >= 10`), `Intimidation` to $N=2$.
         ShooterEnforcer => {
             code: "SHOOTER_ENFORCER",
             label: "Shooter / Street Enforcer",
             subtitle: "Grants Streetwise N=2, Pistols N=2, Short Blades N=2, Intimidation N=2, plus Fully Automatic Weapons N=1 (if FOR >= 10).",
             aliases: ["SHOOTER"],
         },
-        /// *Boost / Wheelman*: `Driving` to $N=2$, `Lockpicking & Physical Intrusion` to $N=2$, `Automotive Mechanics` to $N=1$.
         BoostWheelman => {
             code: "BOOST_WHEELMAN",
             label: "Boost / Wheelman & Tech Thief",
             subtitle: "Grants Streetwise N=2, Driving N=2, Lockpicking & Physical Intrusion N=2, Automotive Mechanics N=1.",
             aliases: ["WHEELMAN"],
         },
-        /// *Runner / Lookout*: `Stealth` to $N=2$, `Alertness` to $N=2$, `Running` or `Acrobatics/Parkour` to $N=2$, `Sleight of Hand` to $N=1$.
         RunnerLookout => {
             code: "RUNNER_LOOKOUT",
             label: "Runner / Lookout & Urban Burglar",
             subtitle: "Grants Streetwise N=2, Stealth N=2, Alertness N=2, Acrobatics/Parkour N=2, Sleight of Hand N=1.",
             aliases: ["RUNNER"],
         },
-        /// *Back-Alley Cook / Modder*: `Pharmacology & Toxicology` (illicit synthesis) or `Armourer & Gunsmithing` to $N=2$.
         BackAlleyCookModder => {
             code: "COOK_MODDER",
             label: "Back-Alley Cook / Street Gunsmith Modder",
@@ -215,33 +194,27 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Stage 4C Rural, Agrarian & Developing-Region Youth Archetype (`Ages 15–18`)
-    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum RuralYouthArchetype [count = 4] {
-        /// *Subsistence Hunter, Trapper & Bush Guide*: `Hunting, Trapping & Field Butchery` $N=2$, `Wilderness Survival` $N=2$, `Long Guns` or `Archery & Bows` $N=2$, `Stealth` $N=2$.
         SubsistenceHunterTrapper => {
             code: "SUBSISTENCE_HUNTER_TRAPPER",
             label: "Subsistence Hunter, Trapper & Bush Guide",
             subtitle: "[Access: Vocational/Licensed] Grants Foraging N=2, Hunting & Trapping N=2, Wilderness Survival N=2, Long Guns N=2, Archery N=1, Stealth N=2.",
             aliases: ["HUNTER_TRAPPER", "HUNTER"],
         },
-        /// *Agrarian Homesteader & Rural Mechanist*: `Agriculture, Agronomy & Crop Husbandry` $N=2$, `Animal Handling` $N=1$, `Automotive & Small-Engine Mechanics` $N=2$, `Carpentry & Woodworking` $N=1$, `Driving` $N=1$.
         AgrarianHomesteaderMechanist => {
             code: "AGRARIAN_HOMESTEADER_MECHANIST",
             label: "Agrarian Homesteader & Rural Mechanist",
             subtitle: "[Access: Vocational/Licensed] Grants Agriculture & Agronomy N=2, Animal Handling N=1, Automotive & Small-Engine Mechanics N=2, Carpentry N=1, Driving N=1.",
             aliases: ["AGRARIAN_HOMESTEADER", "AGRARIAN"],
         },
-        /// *Pastoral Herder, Stockman & Outrider*: `Animal Handling, Husbandry & Riding` $N=2$, `Veterinary Medicine & Livestock Care` $N=1$, `Herbalism, Ethnobotany & Field Remedies` $N=1$, `Land Navigation` $N=1$.
         PastoralHerderOutrider => {
             code: "PASTORAL_HERDER_OUTRIDER",
             label: "Pastoral Herder, Stockman & Outrider",
             subtitle: "[Access: Vocational/Licensed] Grants Animal Handling & Riding N=2, Veterinary Care N=1, Herbalism & Ethnobotany N=1, First Aid N=1, Land Navigation N=1.",
             aliases: ["PASTORAL_HERDER", "PASTORAL"],
         },
-        /// *Frontier Scout, Border Smuggler & Village Militia*: `Long Guns` $N=2$, `Camouflage & Concealment` $N=2$, `Land Navigation` $N=1$, `Alertness` $N=2$ (also unlocks `[Access: Illicit]`).
         FrontierScoutMilitiaSmuggler => {
             code: "FRONTIER_SCOUT_MILITIA",
             label: "Frontier Scout, Border Smuggler & Village Militia",
@@ -252,54 +225,44 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Stage 5 Adult 4-Year Career Term Track (`Ages 18+`)
-    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum CareerTermTrack [count = 8] {
-        /// University — STEM / Engineering (`B.S. / M.S. / Ph.D.`).
         UniversityUndergraduateStem => {
             code: "UNIVERSITY_STEM",
             label: "University — STEM / Engineering (B.S. / M.S. / Ph.D.)",
             aliases: ["UNIVERSITY_UNDERGRADUATE_STEM"],
         },
-        /// Medical School & Surgical Residency.
         MedicalSchoolAndResidency => {
             code: "MEDICAL_SCHOOL",
             label: "Medical School & Surgical Residency",
             aliases: ["MEDICAL_SCHOOL_AND_RESIDENCY"],
         },
-        /// Military Service — Combat Arms / Special Operations.
         MilitaryCombatArmsSpecOps => {
             code: "MILITARY_COMBAT_ARMS",
             label: "Military Service — Combat Arms / Special Operations",
             aliases: ["MILITARY_COMBAT_ARMS_SPEC_OPS"],
         },
-        /// Law Enforcement / SWAT / Detective Bureau.
         LawEnforcementSwatDetective => {
             code: "LAW_ENFORCEMENT_SWAT",
             label: "Law Enforcement / SWAT / Detective Bureau",
             aliases: ["LAW_ENFORCEMENT_SWAT_DETECTIVE"],
         },
-        /// Intelligence Service / Clandestine Operations.
         IntelligenceServiceClandestine => {
             code: "INTELLIGENCE_CLANDESTINE",
             label: "Intelligence Service / Clandestine Operations",
             aliases: ["INTELLIGENCE_SERVICE_CLANDESTINE"],
         },
-        /// Organized Crime / Cartel / Street Syndicate.
         OrganizedCrimeCartelSyndicate => {
             code: "ORGANIZED_CRIME_SYNDICATE",
             label: "Organized Crime / Cartel / Street Syndicate",
             aliases: ["ORGANIZED_CRIME_CARTEL_SYNDICATE"],
         },
-        /// Blue-Collar Trades / Industrial Tech / Merchant Marine.
         BlueCollarTradesMerchantMarine => {
             code: "BLUE_COLLAR_TRADES",
             label: "Blue-Collar Trades / Industrial Tech / Merchant Marine",
             aliases: ["BLUE_COLLAR_TRADES_MERCHANT_MARINE"],
         },
-        /// Rural, Agrarian, Wilderness Guide & Frontier Ranger.
         RuralAgrarianFrontierRanger => {
             code: "RURAL_AGRARIAN_RANGER",
             label: "Rural, Agrarian, Wilderness Guide & Frontier Ranger",

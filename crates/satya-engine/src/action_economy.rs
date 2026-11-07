@@ -76,7 +76,6 @@ impl EncumbranceTier {
         }
     }
 
-    /// Numeric tier (`0..=4`).
     #[must_use]
     pub const fn tier_number(self) -> u8 {
         match self {
@@ -88,7 +87,6 @@ impl EncumbranceTier {
         }
     }
 
-    /// Convert a legacy `1..=4` numeric tier into `EncumbranceTier`.
     #[must_use]
     pub const fn from_tier_number(tier: u8) -> Self {
         match tier {
@@ -99,7 +97,6 @@ impl EncumbranceTier {
         }
     }
 
-    /// Convert a `0..=4` load tier number into `EncumbranceTier`.
     #[must_use]
     pub const fn from_load_tier_0_to_4(tier_0_to_4: u8) -> Self {
         match tier_0_to_4 {
@@ -154,7 +151,6 @@ impl EncumbranceTier {
         }
     }
 
-    /// Alias for [`Self::physical_time_factor_delta`].
     #[must_use]
     pub const fn action_time_factor_delta(self) -> f64 {
         self.physical_time_factor_delta()
@@ -187,15 +183,12 @@ impl ConditionSource for EncumbranceTier {
 /// Parameters for computing the canonical `action_time_factor` and cognitive status penalties (§5.1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ActionTimeFactorParams {
-    /// Current Fatigue Level (`0..=6+`, `+0.10` per level)
     pub fatigue_level: i32,
     /// Current Wound Shock Index (`>= 0.0`, `+0.25` per point)
     pub wound_shock_index: f64,
-    /// Physical Encumbrance Tier (`Tier 0..=4`, applies only to physical `TC_act`)
     pub encumbrance_tier: EncumbranceTier,
     /// Status penalty (`+0.25` to `+0.50`) from Concussed / Dazed / Acute Mental Shock (`0.0` if none)
     pub status_time_penalty: f64,
-    /// Whether the character is currently Concussed / Dazed / in Acute Mental Shock (`-4` to $D_{\text{cog}}$)
     pub is_concussed_or_dazed: bool,
 }
 
@@ -296,29 +289,19 @@ pub const fn compute_skill_reflex_compression(skill_level_n: usize) -> i32 {
 /// Result of evaluating a two-component ($\text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$) action cost (`action_economy_and_ooda.md` §2.3, §3.2, §5.1–§5.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TwoComponentActionCost {
-    /// Base cognitive decision cost (`TC_decide`) in ticks.
     pub base_tc_decide: i32,
-    /// Base physical execution cost (`TC_act`) in ticks.
     pub base_tc_act: i32,
-    /// Unmodified total tick cost (`base_tc_decide + base_tc_act`).
     pub base_total_tc: i32,
     /// Effective $D_{\text{cog}}$ after Concussed/Dazed penalty.
     pub effective_d_cog: i32,
     /// Cognitive decision offset $\Delta\text{TC}_{\text{decide}}$.
     pub delta_tc_decide: i32,
-    /// Skill reflex compression in ticks (`0..=2`).
     pub skill_reflex_compression: i32,
-    /// Effective cognitive decision ticks (`effective_tc_decide`).
     pub effective_tc_decide: i32,
-    /// Effective physical execution ticks (`effective_tc_act`).
     pub effective_tc_act: i32,
-    /// Multiplier applied to physical `TC_act`.
     pub physical_time_factor: f64,
-    /// Final clamped total tick cost (`effective_total_tc`).
     pub effective_total_tc: i32,
-    /// Wind-up duration in ticks before the action executes (`effective_tc_decide + ceil(effective_tc_act / 2)`) (§3.2)
     pub wind_up_ticks: i32,
-    /// Release & recovery ticks (`effective_total_tc - wind_up_ticks`) (§3.2)
     pub recovery_ticks: i32,
 }
 
@@ -413,25 +396,17 @@ pub fn evaluate_combat_action_cost(
 /// Result of evaluating a Layer 3 / Layer 4 Non-Combat Action or Extended Project interval (§5.4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NonCombatActionDuration {
-    /// Base cognitive decision units (`TC_decide`).
     pub base_tc_decide: i32,
-    /// Base physical execution units (`TC_act`).
     pub base_tc_act: i32,
     /// Cognitive decision offset $\Delta\text{TC}_{\text{decide}}$.
     pub delta_tc_decide: i32,
     /// Physical motor execution offset $\Delta\text{TC}_{\text{act}}$.
     pub delta_tc_act: i32,
-    /// Skill reflex compression in units (`0..=2`).
     pub skill_reflex_compression: i32,
-    /// Adjusted cognitive decision units after offsets (`adjusted_decide_units`).
     pub adjusted_decide_units: i32,
-    /// Adjusted physical execution units after offsets (`adjusted_act_units`).
     pub adjusted_act_units: i32,
-    /// Physiological/encumbrance time factor multiplier (`time_factor`).
     pub time_factor: f64,
-    /// Duration compression/expansion multiplier from net successes (`outcome_duration_multiplier`).
     pub outcome_duration_multiplier: f64,
-    /// Final effective duration in units (`effective_duration_units`).
     pub effective_duration_units: f64,
 }
 
@@ -544,9 +519,7 @@ pub fn compute_starting_tick(
 /// Combatant entry on the continuous Count-Up Tick Timeline (`action_economy_and_ooda.md` §3 Items 1–4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TickTimelineCombatant {
-    /// Unique identifier for the combatant.
     pub combatant_id: String,
-    /// Current tick position on the count-up timeline.
     pub current_tick: i32,
     /// 4-Pillar OODA Initiative score (`1..=20`).
     pub ooda: i32,
@@ -585,19 +558,12 @@ pub const fn compute_ooda_reset_pivot_ticks(d_cog: i32, itu: i32) -> i32 {
 /// Outcome of checking whether an incoming fast attack or suppression interrupts a declared action (`action_economy_and_ooda.md` §3.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionInterruptOutcome {
-    /// Tick when the action was originally declared.
     pub declared_tick: i32,
-    /// Tick when the vulnerable wind-up phase finishes.
     pub wind_up_end_tick: i32,
-    /// Tick when the action would normally complete if uninterrupted.
     pub scheduled_completion_tick: i32,
-    /// Tick when the interrupting event struck.
     pub interrupt_tick: i32,
-    /// True if the interrupt arrived before `scheduled_completion_tick` and caused shock/knockdown/failed composure.
     pub action_spoiled: bool,
-    /// True if the interrupt struck during the vulnerable Wind-Up phase (`interrupt_tick <= wind_up_end_tick`).
     pub struck_during_wind_up: bool,
-    /// Resulting tick position of the actor after the interrupt or normal completion.
     pub resulting_actor_tick: i32,
 }
 

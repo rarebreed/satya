@@ -192,26 +192,15 @@ pub fn paired_list_cascade_pmfs(
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SignedCascadeResult {
-    /// Unified PMF over `-num_pairs..=+num_pairs`:
-    /// - `> 0`: Margin of Success (`+1` = bare minimum, `+2..=+N` = higher degrees of success).
-    /// - `0`: Clean Failure (`0` successes, `0` botches).
-    /// - `< 0`: Degree of Failure (`-1` = minor setback, `-2` = severe, `-3..=-N` = catastrophic).
     pub signed_margin_pmf: Pmf,
-    /// PMF of raw success counts `0..=num_pairs`.
     pub success_count_pmf: Pmf,
-    /// PMF of effective botch/overrun counts.
     pub botch_count_pmf: Pmf,
-    /// PMF of the final pair's effective value $Y_N$.
     pub final_pair_value_pmf: Pmf,
-    /// Conditional PMF of $Y_N - C_{\text{eff}}$ (or $C_{\text{eff}} - Y_N$ in Roll-Over) given `successes == 0`.
     pub failure_overshoot_pmf: Pmf,
-    /// Total probability of achieving at least 1 success (`successes >= 1`).
     pub prob_any_success: f64,
     /// Probability of succeeding while also triggering at least 1 floor/ceiling breach (`successes >= 1 && botches >= 1`).
     pub prob_success_with_complication: f64,
-    /// Probability of failing with 0 botches (`successes == 0 && eff_botch == 0`).
     pub prob_clean_failure: f64,
-    /// Probability of failing with 1 or more botches (`successes == 0 && eff_botch >= 1`).
     pub prob_botch_failure: f64,
 }
 
@@ -417,7 +406,6 @@ pub fn paired_list_signed_margin_pmfs(
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§1, §3.1–§3.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CascadeTaskParams {
-    /// 1. Skill Level $N \in [1, 10]$ (number of `2dK` pairs rolled).
     pub skill_level: usize,
     /// 2. Controlling Characteristic $C \in [1, 20]$ (human playable range `4..=18`, average `10`).
     pub control_c: i32,
@@ -425,17 +413,13 @@ pub struct CascadeTaskParams {
     pub internal_mod: i32,
     /// 4. External Task Modifier $\Delta_{\text{ext}} \in [-10, +16]$ (Range, Darkness, Tool Quality; shifts $\text{TN}_{\text{eff}}$).
     pub external_mod: i32,
-    /// Die size $K$ (default `20` for `2d20`).
     pub sides: i32,
     /// Positive momentum bonus $+\delta_{\text{over}}$ on a successful pair (default `6` for `K=20`).
     pub delta_over: i32,
     /// Unfatigued baseline failure penalty $\delta_{\text{base}}$ (default `6` for `K=20`).
     pub base_delta_under: i32,
-    /// Carry-over mode (`MarkovStep` standard resolution vs. `CumulativeSnowball` high-stakes resolution).
     pub carry_mode: CarryMode,
-    /// Botch evaluation rule (default `ClosestMiss`).
     pub botch_rule: BotchRule,
-    /// Margin aggregation mode (default `PiecewiseZeroFloor`).
     pub margin_aggregation: MarginAggregation,
 }
 
@@ -484,7 +468,6 @@ impl CascadeTaskParams {
         (self.base_delta_under + self.internal_mod).max(0)
     }
 
-    /// Computes the exact probability distribution ([`SignedCascadeResult`]) for this task configuration.
     pub fn exact_odds(&self) -> SignedCascadeResult {
         paired_list_signed_margin_pmfs(
             self.skill_level,
@@ -500,7 +483,6 @@ impl CascadeTaskParams {
         )
     }
 
-    /// Evaluates a concrete sequence of rolled `(die_a, die_b)` pairs against this task configuration.
     pub fn evaluate_pairs(&self, pairs: &[(i32, i32)]) -> CascadeRollOutcome {
         evaluate_cascade_roll(
             pairs,
@@ -516,7 +498,6 @@ impl CascadeTaskParams {
         )
     }
 
-    /// Generates `self.skill_level` pairs using `roll_die(sides) -> 1..=sides` and resolves the cascade.
     pub fn evaluate_with_roller<F>(&self, mut roll_die: F) -> CascadeRollOutcome
     where
         F: FnMut(i32) -> i32,
@@ -539,13 +520,9 @@ define_coded_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum CascadeOutcomeKind [count = 4] {
-        /// At least 1 success and 0 floor-breach complications (`Succ >= 1 && Botch == 0`).
         Success => { code: "SUCCESS", label: "Success" },
-        /// At least 1 success, but also triggered at least 1 floor-breach complication (`Succ >= 1 && Botch >= 1`).
         SuccessWithComplication => { code: "SUCCESS_WITH_COMPLICATION", label: "Success with Complication" },
-        /// Zero successes and zero effective botches (`Succ == 0 && EffBotch == 0`).
         CleanFailure => { code: "CLEAN_FAILURE", label: "Clean Failure" },
-        /// Zero successes and at least 1 effective botch (`Succ == 0 && EffBotch >= 1`).
         BotchFailure => { code: "BOTCH_FAILURE", label: "Botch Failure" },
     }
 }
@@ -571,7 +548,6 @@ impl CascadeOutcomeKind {
         }
     }
 
-    /// Maps this outcome classification and `total_successes` to the canonical 5-tier [`OutcomeTier`].
     #[inline]
     pub const fn to_outcome_tier(self, total_successes: i32) -> OutcomeTier {
         match self {
@@ -595,27 +571,16 @@ impl CascadeOutcomeKind {
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CascadeStepTrace {
-    /// 1-based pair index ($n \in 1..=N$).
     pub pair_index: usize,
-    /// Die outcome from List A ($A_n \in 1..=K$).
     pub die_a: i32,
-    /// Die outcome from List B ($B_n \in 1..=K$).
     pub die_b: i32,
-    /// Unmodified pair sum $X_n = A_n + B_n$.
     pub raw_sum: i32,
-    /// Carry-over modifier entering step $n$ ($\text{Carry}_1 = 0$).
     pub carry_in: i32,
-    /// Effective pair total $Y_n = X_n + \text{Carry}_n$.
     pub effective_y: i32,
-    /// Target number $\text{TN}_{\text{eff}}$ compared against $Y_n$.
     pub tn_eff: i32,
-    /// Whether this pair scored a success.
     pub succeeded: bool,
-    /// Whether this pair triggered a floor/ceiling breach botch.
     pub step_botch: bool,
-    /// Non-negative miss distance from $\text{TN}_{\text{eff}}$ (`0` on success or exact tie).
     pub miss_distance: i32,
-    /// Carry-over modifier propagated to step $n + 1$.
     pub carry_out: i32,
 }
 
@@ -625,23 +590,15 @@ pub struct CascadeStepTrace {
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CascadeRollOutcome {
-    /// Ordered trace of each evaluated pair $(A_n, B_n)$ for $n = 1..=N$.
     pub steps: Vec<CascadeStepTrace>,
-    /// Total number of pairs that succeeded (`0..=N`).
     pub total_successes: i32,
-    /// Total raw floor/ceiling breach botches across all steps (`0..=N`).
     pub raw_botches: i32,
-    /// Effective botch severity (`min_miss_tier` when `botch_rule == ClosestMiss && total_successes == 0`, else `raw_botches`).
     pub effective_botches: i32,
     /// Best (minimum) miss tier across all pairs (`0..=5`).
     pub min_miss_tier: i32,
-    /// Unified signed margin in `-N..=+N`.
     pub signed_margin: i32,
-    /// Effective value $Y_N$ of the final pair in the chain.
     pub final_pair_y: i32,
-    /// Four-way cascade outcome classification (`Success`, `SuccessWithComplication`, `CleanFailure`, `BotchFailure`).
     pub outcome_kind: CascadeOutcomeKind,
-    /// Canonical [`OutcomeTier`] mapping for `TtrpgMechanicsEvent` telemetry.
     pub outcome_tier: OutcomeTier,
 }
 

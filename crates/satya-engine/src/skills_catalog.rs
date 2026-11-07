@@ -193,7 +193,6 @@ pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
     sn!(T8, "acting_stagecraft_mimicry", "Acting, Stagecraft & Mimicry", (2, 2, PhyKno), [Artistic, Social], (PRE, Some(ELO)), [(PRE, 9), (CRE, 9)], AllOf [("deception_bluff", 2), ("native_language_speech", 2)], [Universal, Academic], None, true, AptSoc),
     sn!(T8, "culinary_arts_gastronomy_brewing", "Culinary Arts, Gastronomy & Brewing", (2, 2, PhyKno), [Artistic, Science], (TAS, Some(OLF)), [(TAS, 9), (OLF, 9)], AllOf [("basic_cooking", 2)], [VocationalLicensed, Universal], Mandatory, true, AptBio),
 ];
-/// Look up a canonical skill specification by its `id` (or case-insensitive `name`).
 #[must_use]
 pub fn lookup_skill_node(id_or_name: &str) -> Option<&'static SkillNodeSpec> {
     let trimmed = id_or_name.trim();
@@ -202,7 +201,6 @@ pub fn lookup_skill_node(id_or_name: &str) -> Option<&'static SkillNodeSpec> {
     })
 }
 
-/// Return all canonical skill nodes belonging to a specific `SkillTreeId`.
 #[must_use]
 pub fn skills_in_tree(tree: SkillTreeId) -> Vec<&'static SkillNodeSpec> {
     CANONICAL_SKILL_TREES

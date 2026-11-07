@@ -13,95 +13,53 @@ use crate::{define_coded_enum, impl_static_catalog};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CatalogActionCategory {
-    /// Combat attacks, parries, maneuvers, dodges, and overwatch (§4.1).
     CombatAttackOrDefense,
-    /// Weapon draws, transitions, reloads, and malfunction drills (§4.2).
     WeaponHandlingAndReload,
-    /// Tactical steps, posture transitions, vaulting, and breaching (§4.3).
     MovementAndPosture,
-    /// Visual/sector scans, target analysis, comms relays, and triage (§4.4).
     CognitivePerceptualAndComms,
 }
 
 define_coded_enum! {
-    /// Canonical identifier for all 37 actions in the Reference Catalog of Base Action Time Costs (§4.1–§4.4).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     #[repr(usize)]
     pub enum CanonicalActionId [count = 37] {
-        /// Snap Shot / Point-Blank Reflex Strike (`2 + 5 = 7` Ticks).
         SnapShotPointBlank => { code: "SNAP_SHOT_POINT_BLANK", label: "Snap Shot / Point-Blank Reflex Strike" },
-        /// Standard Melee Strike (Balanced / Light) (`3 + 6 = 9` Ticks).
         StandardMeleeStrikeLight => { code: "STANDARD_MELEE_STRIKE_LIGHT", label: "Standard Melee Strike (Balanced / Light)" },
-        /// Standard Ranged Fire (Combat Sight Picture) (`3 + 7 = 10` Ticks).
         StandardRangedFire => { code: "STANDARD_RANGED_FIRE", label: "Standard Ranged Fire (Combat Sight Picture)" },
-        /// Defensive Guard / Active Parry Stance (`3 + 6 = 9` Ticks).
         DefensiveGuardParryStance => { code: "DEFENSIVE_GUARD_PARRY_STANCE", label: "Defensive Guard / Active Parry Stance" },
-        /// Tactical Maneuver / Probe / Feint (`4 + 7 = 11` Ticks).
         TacticalManeuverProbeFeint => { code: "TACTICAL_MANEUVER_PROBE_FEINT", label: "Tactical Maneuver / Probe / Feint" },
-        /// Aimed Shot (Deliberate Single Fire) (`5 + 7 = 12` Ticks).
         AimedShotSingle => { code: "AIMED_SHOT_SINGLE", label: "Aimed Shot (Deliberate Single Fire)" },
-        /// Heavy Power Strike / Cleave (`3 + 11 = 14` Ticks).
         HeavyPowerStrikeCleave => { code: "HEAVY_POWER_STRIKE_CLEAVE", label: "Heavy Power Strike / Cleave" },
-        /// Suppressive Fire (Burst / Automatic Zone) (`3 + 9 = 12` Ticks).
         SuppressiveFireBurstZone => { code: "SUPPRESSIVE_FIRE_BURST_ZONE", label: "Suppressive Fire (Burst / Automatic Zone)" },
-        /// Active Dodge / Dive for Cover (Interrupt) (`2 + 6 = 8` Ticks).
         ActiveDodgeDiveForCover => { code: "ACTIVE_DODGE_DIVE_FOR_COVER", label: "Active Dodge / Dive for Cover (Interrupt)" },
-        /// Overwatch / Held Trigger Release (`1 + 2 = 3` Ticks).
         OverwatchTriggeredRelease => { code: "OVERWATCH_TRIGGERED_RELEASE", label: "Overwatch / Held Trigger Release" },
-        /// Drop Weapon / Release Held Item (`1 + 0 = 1` Tick).
         DropWeaponOrItem => { code: "DROP_WEAPON_OR_ITEM", label: "Drop Weapon / Release Held Item" },
-        /// Switch Fire Selector / Toggle Optic Magnification (`1 + 1 = 2` Ticks).
         SwitchFireSelectorOrOptic => { code: "SWITCH_FIRE_SELECTOR_OR_OPTIC", label: "Switch Fire Selector / Toggle Optic Magnification" },
-        /// Clear Simple Malfunction (Tap-Rack Drill) (`2 + 3 = 5` Ticks).
         ClearSimpleMalfunctionTapRack => { code: "CLEAR_SIMPLE_MALFUNCTION_TAP_RACK", label: "Clear Simple Malfunction (Tap-Rack Drill)" },
-        /// Draw Holstered Sidearm / Sheathed Blade (`1 + 3 = 4` Ticks).
         DrawHolsteredSidearmOrBlade => { code: "DRAW_HOLSTERED_SIDEARM_OR_BLADE", label: "Draw Holstered Sidearm / Sheathed Blade" },
-        /// Sling Transition (Drop Primary on Sling -> Draw Sidearm) (`1 + 3 = 4` Ticks).
         SlingTransitionRifleToSidearm => { code: "SLING_TRANSITION_RIFLE_TO_SIDEARM", label: "Sling Transition (Drop Primary on Sling -> Draw Sidearm)" },
-        /// Speed Reload — Detachable Box Magazine (Drop Empty) (`1 + 5 = 6` Ticks).
         SpeedReloadDetachableMagDropEmpty => { code: "SPEED_RELOAD_DETACHABLE_MAG_DROP_EMPTY", label: "Speed Reload — Detachable Box Magazine (Drop Empty)" },
-        /// Tactical Reload — Retain Partial Magazine in Pouch (`2 + 7 = 9` Ticks).
         TacticalReloadRetainPartialMag => { code: "TACTICAL_RELOAD_RETAIN_PARTIAL_MAG", label: "Tactical Reload — Retain Partial Magazine in Pouch" },
-        /// Clear Complex Malfunction (Double-Feed / Bolt Override) (`3 + 9 = 12` Ticks).
         ClearComplexDoubleFeedOrBoltOverride => { code: "CLEAR_COMPLEX_DOUBLE_FEED_OR_BOLT_OVERRIDE", label: "Clear Complex Malfunction (Double-Feed / Bolt Override)" },
-        /// Revolver / Tube Shotgun Reload (Loose Rounds, per cartridge) (`1 + 2 = 3` Ticks).
         LooseRoundReloadPerCartridge => { code: "LOOSE_ROUND_RELOAD_PER_CARTRIDGE", label: "Revolver / Tube Shotgun Reload (Loose Rounds, per cartridge)" },
-        /// Belt-Fed Machine Gun / Heavy Weapon Link Reload (`3 + 13 = 16` Ticks).
         BeltFedMgLinkReload => { code: "BELT_FED_MG_LINK_RELOAD", label: "Belt-Fed Machine Gun / Heavy Weapon Link Reload" },
-        /// 5-Foot Tactical Step / Shift Weight (`<= 1.5 m`) (`1 + 2 = 3` Ticks).
         FiveFootTacticalStep => { code: "FIVE_FOOT_TACTICAL_STEP", label: "5-Foot Tactical Step / Shift Weight (<= 1.5 m)" },
-        /// Drop Prone (Immediate) (`1 + 2 = 3` Ticks).
         DropProneImmediate => { code: "DROP_PRONE_IMMEDIATE", label: "Drop Prone (Immediate)" },
-        /// Stand Up from Kneeling / Crouch (`1 + 3 = 4` Ticks).
         StandUpFromKneelingCrouch => { code: "STAND_UP_FROM_KNEELING_CROUCH", label: "Stand Up from Kneeling / Crouch" },
-        /// Tactical Bound / Dash Between Cover (`2–3 m`) (`1 + 4 = 5` Ticks).
         TacticalBound2To3m => { code: "TACTICAL_BOUND_2_TO_3M", label: "Tactical Bound / Dash Between Cover (2–3 m)" },
-        /// Stand Up from Prone (`1 + 5 = 6` Ticks).
         StandUpFromProne => { code: "STAND_UP_FROM_PRONE", label: "Stand Up from Prone" },
-        /// Vault Low Obstacle / Window Breach (`1 + 5 = 6` Ticks).
         VaultLowObstacleOrWindow => { code: "VAULT_LOW_OBSTACLE_OR_WINDOW", label: "Vault Low Obstacle / Window Breach" },
-        /// Open Unlocked Door / Manipulate Hatch Lever (`1 + 3 = 4` Ticks).
         OpenUnlockedDoorOrHatch => { code: "OPEN_UNLOCKED_DOOR_OR_HATCH", label: "Open Unlocked Door / Manipulate Hatch Lever" },
-        /// Breach (Mechanical Kick / Battering Ram on Door) (`2 + 6 = 8` Ticks).
         BreachMechanicalKickRamDoor => { code: "BREACH_MECHANICAL_KICK_RAM_DOOR", label: "Breach (Mechanical Kick / Battering Ram on Door)" },
-        /// Mount / Dismount Vehicle or Saddle (`1 + 5 = 6` Ticks).
         MountOrDismountVehicle => { code: "MOUNT_OR_DISMOUNT_VEHICLE", label: "Mount / Dismount Vehicle or Saddle" },
-        /// Retrieve / Stow Item from Backpack or Load-Bearing Rig (`2 + 6 = 8` Ticks).
         RetrieveOrStowPackItem => { code: "RETRIEVE_OR_STOW_PACK_ITEM", label: "Retrieve / Stow Item from Backpack or Load-Bearing Rig" },
-        /// Quick Visual Glance / Threat Reaction Check (`2 + 0 = 2` Ticks).
         QuickVisualGlanceReactionCheck => { code: "QUICK_VISUAL_GLANCE_REACTION_CHECK", label: "Quick Visual Glance / Threat Reaction Check" },
-        /// Tactical Callout / Short Verbal Command (`<= 5 words`) (`2 + 1 = 3` Ticks).
         TacticalCalloutShortCommand => { code: "TACTICAL_CALLOUT_SHORT_COMMAND", label: "Tactical Callout / Short Verbal Command (<= 5 words)" },
-        /// Active Scan (Deliberate Room / Sector Sweep) (`4 + 2 = 6` Ticks).
         ActiveScanRoomOrSectorSweep => { code: "ACTIVE_SCAN_ROOM_OR_SECTOR_SWEEP", label: "Active Scan (Deliberate Room / Sector Sweep)" },
-        /// Assess Tactical Weakness / Analyze Target Pattern (`5 + 1 = 6` Ticks).
         AssessTacticalWeaknessAnalyzeTarget => { code: "ASSESS_TACTICAL_WEAKNESS_ANALYZE_TARGET", label: "Assess Tactical Weakness / Analyze Target Pattern" },
-        /// Complex Comms Relay / Coordinate Data Transmission (`4 + 4 = 8` Ticks).
         ComplexCommsRelayCoordTransmission => { code: "COMPLEX_COMMS_RELAY_COORD_TRANSMISSION", label: "Complex Comms Relay / Coordinate Data Transmission" },
-        /// Emergency Field Triage / Apply Combat Tourniquet (`3 + 9 = 12` Ticks).
         EmergencyFieldTriageTourniquet => { code: "EMERGENCY_FIELD_TRIAGE_TOURNIQUET", label: "Emergency Field Triage / Apply Combat Tourniquet" },
-        /// Improvised Gadget / Cyberdeck Quick-Deploy or Reset (`4 + 4 = 8` Ticks).
         ImprovisedGadgetCyberdeckReset => { code: "IMPROVISED_GADGET_CYBERDECK_RESET", label: "Improvised Gadget / Cyberdeck Quick-Deploy or Reset" },
     }
 }
@@ -109,21 +67,14 @@ define_coded_enum! {
 /// Metadata entry for a canonical action in §4.1–§4.4.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CanonicalActionSpec {
-    /// Action identifier.
     pub id: CanonicalActionId,
-    /// Action catalog category.
     pub category: CatalogActionCategory,
-    /// Canonical action name.
     pub name: &'static str,
-    /// Base cognitive decision ticks (`TC_decide`).
     pub base_tc_decide: i32,
-    /// Base physical execution ticks (`TC_act`).
     pub base_tc_act: i32,
-    /// Unmodified total tick cost (`base_tc_decide + base_tc_act`).
     pub base_total_tc: i32,
     /// Minimum floor in ticks after all compression (`min_floor_ticks`).
     pub min_floor_ticks: i32,
-    /// Governing characteristics, skills, and special rules notes.
     pub governing_notes: &'static str,
 }
 
@@ -191,7 +142,6 @@ impl_static_catalog!(CanonicalActionId => CanonicalActionSpec : CANONICAL_ACTION
 /// Full canonical 37-entry Reference Catalog of Base Action Time Costs (§4.1–§4.4 of `action_economy_and_ooda.md`).
 pub const CANONICAL_ACTION_CATALOG: &[CanonicalActionSpec] = &CANONICAL_ACTION_CATALOG_ARRAY;
 
-/// Look up a canonical action specification by its `CanonicalActionId` in `O(1)`.
 #[must_use]
 pub const fn lookup_canonical_action(id: CanonicalActionId) -> &'static CanonicalActionSpec {
     id.spec()
@@ -307,28 +257,19 @@ pub enum VisualCountermeasure {
 /// Structured input context for a Contested Stealth vs. Multi-Sensory Perception exchange (§6.1–§6.2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StealthExchangeParams {
-    /// Infiltrator's full [`CharacterCharacteristics`] profile (`KIN`, `ITU`).
     pub infiltrator: CharacterCharacteristics,
-    /// Infiltrator's movement gait.
     pub infiltrator_gait: StealthGait,
-    /// Infiltrator's physical load tier.
     pub infiltrator_encumbrance: EncumbranceTier,
     /// Camouflage & Concealment $\Delta_{\text{ext}}$ bonus (applied when stationary).
     pub infiltrator_camouflage_bonus_delta_ext: i32,
-    /// True if the infiltrator wears thermal/IR shielding against FLIR.
     pub infiltrator_thermally_shielded: bool,
-    /// Observer's full [`CharacterCharacteristics`] profile (`SIG`, `HEA`, `OLF`, `ITU`, `FOC`, `INS`).
     pub observer: CharacterCharacteristics,
-    /// Sensory channel used by the observer.
     pub observer_channel: SensoryChannel,
-    /// Ambient illumination and atmospheric visibility condition.
     pub illumination: IlluminationCondition,
-    /// Electro-optical countermeasure worn by the observer.
     pub countermeasure: VisualCountermeasure,
 }
 
 impl StealthExchangeParams {
-    /// Construct a [`StealthExchangeParams`] from infiltrator and observer [`CharacterCharacteristics`].
     #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn from_characteristics(
@@ -363,9 +304,7 @@ pub struct StealthPerceptionModifiers {
     pub infiltrator_controller_c: i32,
     /// Total external modifier ($\Delta_{\text{ext}}$) on the infiltrator's Stealth check.
     pub infiltrator_delta_ext: i32,
-    /// Sensory channel evaluated for the observer.
     pub observer_channel: SensoryChannel,
-    /// Observer's composite sensory controller for `observer_channel`.
     pub observer_controller_c: i32,
     /// Total environmental/illumination penalty ($\Delta_{\text{ext}}$) on the observer's Perception check.
     pub observer_delta_ext: i32,

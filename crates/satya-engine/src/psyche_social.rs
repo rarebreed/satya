@@ -57,13 +57,11 @@ define_coded_enum! {
 }
 
 impl PsycheTraitId {
-    /// Three-letter canonical code (`OPN`, `SLF`, `BLG`, `AGG`, `EGO`, `CNF`, `EXT`).
     #[must_use]
     pub const fn code(self) -> &'static str {
         self.as_str()
     }
 
-    /// Map this `PsycheTraitId` to its corresponding [`CharacteristicCode`].
     #[must_use]
     pub const fn to_characteristic_code(self) -> CharacteristicCode {
         match self {
@@ -94,7 +92,6 @@ macro_rules! impl_psyche_profile {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         pub struct PsycheProfile {
             $(
-                /// Trait score (`1..=20`).
                 pub $field: i32,
             )+
         }
@@ -106,13 +103,11 @@ macro_rules! impl_psyche_profile {
         }
 
         impl PsycheProfile {
-            /// Returns the score (`1..=20`) of the requested [`PsycheTraitId`].
             #[must_use]
             pub fn get(&self, trait_id: PsycheTraitId) -> i32 {
                 self[trait_id]
             }
 
-            /// Sets the score (`1..=20`) of the requested [`PsycheTraitId`].
             pub fn set(&mut self, trait_id: PsycheTraitId, value: i32) {
                 self[trait_id] = value.clamp(1, 20);
             }
@@ -163,13 +158,11 @@ macro_rules! impl_psyche_profile {
         }
 
         impl CharacterCharacteristics {
-            /// Extract the 6-trait [`PsycheProfile`] slice from this character's characteristics.
             #[must_use]
             pub fn psyche_profile(&self) -> PsycheProfile {
                 PsycheProfile::from(self)
             }
 
-            /// Write a [`PsycheProfile`] slice back into this character's characteristics.
             pub fn set_psyche_profile(&mut self, profile: PsycheProfile) {
                 $(self.$field = profile.$field.clamp(1, 20);)+
             }
@@ -189,7 +182,6 @@ impl_psyche_profile! {
 
 /// Trait implemented by any type that exposes the 7 canonical Psyche scores ([`PsycheProfile`] and [`CharacterCharacteristics`]).
 pub trait HasPsyche: Index<PsycheTraitId, Output = i32> {
-    /// Returns a 7-trait [`PsycheProfile`] snapshot.
     fn as_psyche_profile(&self) -> PsycheProfile;
 }
 
@@ -240,15 +232,12 @@ pub fn triggers_psyche_friction_check(trait_score: i32, pole: PsycheViolationPol
 /// Parameters for a Contested Psyche Friction Check (`§1.2`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PsycheFrictionCheckParams {
-    /// Which Psyche trait is being violated.
     pub trait_id: PsycheTraitId,
     /// Current score of the violated trait (`1..=20`).
     pub trait_score: i32,
-    /// Which pole of the trait is being violated.
     pub violated_pole: PsycheViolationPole,
     /// Character's Mental Discipline (`DIS`, `1..=20`).
     pub dis: i32,
-    /// Whether the character is trained in *Counter-Interrogation & Resistance (SERE)* ($N_P = 2$ vs. $N_P = 1$).
     pub has_sere_training: bool,
     /// Current internal penalty $\Delta_{\text{int}}$ on the character.
     pub delta_int: i32,
@@ -273,23 +262,16 @@ pub enum PsycheFrictionResolutionKind {
 /// Complete outcome of a Psyche Friction Check (`§1.2`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PsycheFrictionOutcome {
-    /// Whether the trait score was extreme enough ($P \ge 13$ or $P \le 7$) to trigger a check.
     pub triggered: bool,
     /// Psyche deviation $\Delta_{\text{psyche}} = |P - 10|$.
     pub delta_psyche: i32,
-    /// Player target number $\text{TN}_P = 31 - \text{DIS} + \Delta_{\text{ext}}$.
     pub player_tn: i32,
-    /// GM 1-Pair Tiered Resistance target number $\text{TN}_{GM} = 21 - \Delta_{\text{psyche}}$.
     pub gm_tn: i32,
-    /// Resolution tier of the friction check.
     pub resolution_kind: PsycheFrictionResolutionKind,
     /// Internal penalty $\Delta_{\text{int}}$ added for the remainder of the scene (`0`, `+2`, or `+4` if forced after balking).
     pub delta_int_penalty_gained: i32,
-    /// Action Clock hesitation freeze in ticks (`6` on `BalkOrFreeze`, else `0`).
     pub hesitation_ticks: i32,
-    /// Number of Psyche Drift Marks gained (`1` when overriding the trait, `0` when balking).
     pub drift_marks_gained: i32,
-    /// Detailed contested cascade roll outcome (if a roll was triggered).
     pub contested_roll: Option<ContestedCascadeRollOutcome>,
 }
 
@@ -381,15 +363,11 @@ pub fn psyche_drift_threshold(dis: i32) -> i32 {
 /// Result of recording a Psyche Drift Mark (`§1.3`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PsycheDriftResult {
-    /// Previous trait score before checking threshold.
     pub previous_score: i32,
-    /// Updated trait score (`1..=20`), shifted by `1` if `shifted == true`.
     pub new_score: i32,
-    /// Remaining Drift Marks on this trait (`0` if a permanent shift occurred).
     pub remaining_drift_marks: i32,
     /// Drift threshold $\max(2, \lfloor\text{DIS}/4\rfloor)$ required for a permanent shift.
     pub drift_threshold: i32,
-    /// Whether the trait permanently shifted by `1` point.
     pub shifted: bool,
 }
 
@@ -445,9 +423,7 @@ pub enum ConvictionPrincipleArchetype {
 /// Mechanical benefits of triggering a **Conviction Surge** (`§2`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConvictionSurgeResult {
-    /// Whether the character meets all requirements to trigger the Conviction Surge.
     pub eligible: bool,
-    /// Matched Core Principle archetype (if eligible).
     pub matched_principle: Option<ConvictionPrincipleArchetype>,
     /// Original internal penalty $\Delta_{\text{int}}$ before the surge (must be $\ge +4$ to trigger).
     pub previous_delta_int: i32,
@@ -457,7 +433,6 @@ pub struct ConvictionSurgeResult {
     /// (reaching $\delta_{\text{under}} = 4$ at Focused/Resolved $\Delta_{\text{int}} = -2$ per
     /// `docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §2).
     pub surge_delta_under: i32,
-    /// Whether Fatigue and Wound Shock `action_time_factor` penalties are ignored for this exchange (`1.0`).
     pub ignores_fatigue_and_shock_time_penalty: bool,
     /// Immediate bonus to Effective Tactical Pool $P_{\text{eff}}$ (`+2`).
     pub tactical_pool_bonus: i32,
@@ -546,7 +521,6 @@ pub enum CombatMotivationKind {
     MercenaryTransactionalUnderFire,
     /// **Sworn Duty / Chain of Command** (`CNF >= 14`), with commanding officer present (`true`) or command broken (`false`).
     SwornDutyChainOfCommand {
-        /// Whether the commanding officer is present and issuing orders (`true`) or incapacitated/cut off (`false`).
         command_intact: bool,
     },
     /// Standard / neutral combat motivation.
@@ -561,7 +535,6 @@ pub struct CombatMotivationModifier {
     pub delta_mot: i32,
     /// Additional Morale Shock ($\Delta_{\text{morale}}$) if command structure breaks down for a High-`CNF` soldier.
     pub command_breakdown_morale_shock: i32,
-    /// Bonus to Tactical Pool during a Conviction Surge (`+2` for Crew/Family/Homeland).
     pub conviction_surge_pool_bonus: i32,
 }
 
@@ -609,7 +582,6 @@ pub enum EmotionalTriggerKind {
     /// **Being Wounded** (`wound_tier` $1..=4$): $\Delta_{\text{ext}} = +2 \times \text{Wound Tier}$
     /// (`+2` if `SLF >= 13`, `-2` if `AGG >= 14`).
     BeingWounded {
-        /// Severity tier of the wound sustained (`1` Minor, `2` Moderate, `3` Severe, `4` Critical).
         wound_tier: i32,
     },
     /// **Friend / Squadmate Wounded**: Relevant when `BLG >= 13` ($\Delta_{\text{ext}} = +2$).
@@ -627,17 +599,13 @@ pub enum EmotionalTriggerKind {
 /// Outcome of a `DIS` Composure Check against an [`EmotionalTriggerKind`] (`§3.3`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EmotionalTriggerOutcome {
-    /// Whether the character's Psyche profile makes them susceptible to this trigger.
     pub susceptible: bool,
     /// Computed external penalty $\Delta_{\text{ext}}$ on the `DIS` Composure Check.
     pub delta_ext: i32,
-    /// Resulting [`MoraleState`] after the trigger.
     pub new_morale_state: MoraleState,
     /// Additional internal strain $\Delta_{\text{int}}$ inflicted (e.g. `+2` Ego Wound on `PubliclyHumiliated`).
     pub delta_int_inflicted: i32,
-    /// Whether an Altruistic Conviction Surge or protective resolve is unlocked.
     pub unlocks_protective_conviction: bool,
-    /// Roll outcome if a `DIS` Composure check was rolled.
     pub composure_roll: Option<CascadeRollOutcome>,
 }
 
@@ -773,23 +741,15 @@ pub fn evaluate_emotional_trigger(
 /// Battlefield situational inputs for Circumstantial Morale Penalties ($\Delta_{\text{morale}}$, `§3.4`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct BattlefieldMoraleSituation {
-    /// Fraction of squad/allies wounded or down (`0.0..=1.0`; `>=0.25 -> +2`, `>=0.50 -> +4`, `>=0.75 -> +6`).
     pub ally_casualty_ratio: f64,
-    /// Numerical enemy-to-ally ratio (`>=2.0 -> +2`, `>=3.0 -> +4`, `>4.0 -> +6`).
     pub outnumbered_ratio: f64,
-    /// Commanding officer incapacitated or comms cut off (`+2`, or `+4` if `CNF >= 14`).
     pub leader_incapacitated_or_comms_cut: bool,
-    /// Position overrun, flanked, or ambushed from cover (`+6`).
     pub position_overrun_flanked_or_ambushed: bool,
     /// Remaining ammunition fraction (`0.0..=1.0`; `<= 0.20 -> +4`).
     pub ammo_fraction_remaining: f64,
-    /// Whether ammo tracking applies to this combatant (if `false`, `ammo_fraction_remaining` is ignored).
     pub tracks_ammo: bool,
-    /// Primary weapon compromised or destroyed (`+4`).
     pub primary_weapon_compromised: bool,
-    /// Own attacks doing nothing against heavy armor (`+6`).
     pub attacks_ineffective_against_heavy_armor: bool,
-    /// Started engagement already fatigued or sleep-deprived (`+2`).
     pub started_fatigued_or_sleep_deprived: bool,
     /// Additional Morale Shock (e.g., $\lfloor F / 2 \rfloor$ from incoming suppressive fire).
     pub additional_suppression_or_shock_delta: i32,
@@ -873,11 +833,8 @@ pub fn step_morale_condition(current: MoraleState, rally_or_drop_steps: i32) -> 
 pub struct CombatMoraleEffect {
     /// Base Morale Controller $C_{\text{morale}} = \text{DIS} + \Delta_{\text{mot}}$.
     pub c_morale: i32,
-    /// Previous [`MoraleState`] before the check.
     pub previous_morale: MoraleState,
-    /// Updated [`MoraleState`] after the check.
     pub new_morale: MoraleState,
-    /// Condition step change (`+1` rally, `0` hold, `-1` clean failure, `-2` botch failure).
     pub condition_step_delta: i32,
 }
 
