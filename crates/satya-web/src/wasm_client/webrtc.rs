@@ -27,6 +27,53 @@ use web_sys::{
     RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, RtcTrackEvent, WebSocket,
 };
 
+fn sync_drawer_rail_and_aria(
+    collapsed: bool,
+    rail_id: &str,
+    toggle_btn_id: &str,
+    expand_btn_id: &str,
+    menu_btn_id: &str,
+    title: &str,
+) {
+    if let Some(rail) = get_element(rail_id).and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
+        let _ = rail
+            .style()
+            .set_property("display", if collapsed { "flex" } else { "none" });
+    }
+    let expanded_str = if collapsed { "false" } else { "true" };
+    for btn_id in [toggle_btn_id, expand_btn_id, menu_btn_id] {
+        if let Some(btn) = get_element(btn_id) {
+            let _ = btn.set_attribute("aria-expanded", expanded_str);
+        }
+    }
+    let toggle_label = if collapsed {
+        format!("◂ {title}")
+    } else {
+        "Collapse ▸".to_string()
+    };
+    set_text(toggle_btn_id, &toggle_label);
+    let menu_label = if collapsed {
+        format!("Show {title}")
+    } else {
+        format!("Hide {title}")
+    };
+    set_text(menu_btn_id, &menu_label);
+}
+
+fn sync_center_drawer_card(card_id: &str, base_class: &str, collapsed: bool) {
+    if let Some(card) = get_element(card_id).and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
+        if collapsed {
+            card.set_class_name(&format!("{base_class} is-collapsed"));
+            let _ = card.set_attribute("inert", "");
+            let _ = card.style().set_property("display", "none");
+        } else {
+            card.set_class_name(base_class);
+            let _ = card.remove_attribute("inert");
+            let _ = card.style().set_property("display", "flex");
+        }
+    }
+}
+
 pub(crate) fn sync_workspace_drawers_dom() {
     let (is_floating, webcam_collapsed, chat_collapsed, ttrpg_collapsed) = with_state(|st| {
         (
@@ -78,56 +125,8 @@ pub(crate) fn sync_workspace_drawers_dom() {
             .set_property("display", if any_rail_collapsed { "flex" } else { "none" });
     }
 
-    if let Some(rail) =
-        get_element("webcam-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
-    {
-        let _ = rail
-            .style()
-            .set_property("display", if webcam_collapsed { "flex" } else { "none" });
-    }
-
-    if let Some(chat_card) = get_element("chat-card").and_then(|e| e.dyn_into::<HtmlElement>().ok())
-    {
-        if chat_collapsed {
-            chat_card.set_class_name("card chat-card is-collapsed");
-            let _ = chat_card.set_attribute("inert", "");
-            let _ = chat_card.style().set_property("display", "none");
-        } else {
-            chat_card.set_class_name("card chat-card");
-            let _ = chat_card.remove_attribute("inert");
-            let _ = chat_card.style().set_property("display", "flex");
-        }
-    }
-
-    if let Some(chat_rail) =
-        get_element("chat-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
-    {
-        let _ = chat_rail
-            .style()
-            .set_property("display", if chat_collapsed { "flex" } else { "none" });
-    }
-
-    if let Some(ttrpg_card) =
-        get_element("ttrpg-drawer").and_then(|e| e.dyn_into::<HtmlElement>().ok())
-    {
-        if ttrpg_collapsed {
-            ttrpg_card.set_class_name("card ttrpg-card is-collapsed");
-            let _ = ttrpg_card.set_attribute("inert", "");
-            let _ = ttrpg_card.style().set_property("display", "none");
-        } else {
-            ttrpg_card.set_class_name("card ttrpg-card");
-            let _ = ttrpg_card.remove_attribute("inert");
-            let _ = ttrpg_card.style().set_property("display", "flex");
-        }
-    }
-
-    if let Some(ttrpg_rail) =
-        get_element("ttrpg-drawer-rail").and_then(|e| e.dyn_into::<HtmlElement>().ok())
-    {
-        let _ = ttrpg_rail
-            .style()
-            .set_property("display", if ttrpg_collapsed { "flex" } else { "none" });
-    }
+    sync_center_drawer_card("chat-card", "card chat-card", chat_collapsed);
+    sync_center_drawer_card("ttrpg-drawer", "card ttrpg-card", ttrpg_collapsed);
 
     if let Some(center_col) =
         get_element("center-column").and_then(|e| e.dyn_into::<HtmlElement>().ok())
@@ -158,92 +157,35 @@ pub(crate) fn sync_workspace_drawers_dom() {
         ws_panel.set_class_name(&classes);
     }
 
-    let webcam_expanded_str = if webcam_collapsed { "false" } else { "true" };
-    for btn_id in [
+    sync_drawer_rail_and_aria(
+        webcam_collapsed,
+        "webcam-drawer-rail",
         "btn-toggle-webcam-drawer",
         "btn-expand-webcam-drawer",
         "btn-menu-toggle-webcam-pane",
-    ] {
-        if let Some(btn) = get_element(btn_id) {
-            let _ = btn.set_attribute("aria-expanded", webcam_expanded_str);
-        }
-    }
-
-    let chat_expanded_str = if chat_collapsed { "false" } else { "true" };
-    for btn_id in [
-        "btn-toggle-chat-drawer",
-        "btn-expand-chat-drawer",
-        "btn-menu-toggle-chat-pane",
-    ] {
-        if let Some(btn) = get_element(btn_id) {
-            let _ = btn.set_attribute("aria-expanded", chat_expanded_str);
-        }
-    }
-
-    let ttrpg_expanded_str = if ttrpg_collapsed { "false" } else { "true" };
-    for btn_id in [
-        "btn-toggle-ttrpg-drawer",
-        "btn-expand-ttrpg-drawer",
-        "btn-menu-toggle-ttrpg-pane",
-    ] {
-        if let Some(btn) = get_element(btn_id) {
-            let _ = btn.set_attribute("aria-expanded", ttrpg_expanded_str);
-        }
-    }
-
-    set_text(
-        "btn-toggle-webcam-drawer",
-        if webcam_collapsed {
-            "◂ Web Cams"
-        } else {
-            "Collapse ▸"
-        },
-    );
-    set_text(
-        "btn-menu-toggle-webcam-pane",
-        if webcam_collapsed {
-            "Show Web Cams"
-        } else {
-            "Hide Web Cams"
-        },
+        "Web Cams",
     );
     set_text(
         "btn-toggle-webcam-float",
         if is_floating { "Dock" } else { "Float" },
     );
 
-    set_text(
+    sync_drawer_rail_and_aria(
+        chat_collapsed,
+        "chat-drawer-rail",
         "btn-toggle-chat-drawer",
-        if chat_collapsed {
-            "◂ Session Chat"
-        } else {
-            "Collapse ▸"
-        },
-    );
-    set_text(
+        "btn-expand-chat-drawer",
         "btn-menu-toggle-chat-pane",
-        if chat_collapsed {
-            "Show Session Chat"
-        } else {
-            "Hide Session Chat"
-        },
+        "Session Chat",
     );
 
-    set_text(
+    sync_drawer_rail_and_aria(
+        ttrpg_collapsed,
+        "ttrpg-drawer-rail",
         "btn-toggle-ttrpg-drawer",
-        if ttrpg_collapsed {
-            "◂ Task Roller"
-        } else {
-            "Collapse ▸"
-        },
-    );
-    set_text(
+        "btn-expand-ttrpg-drawer",
         "btn-menu-toggle-ttrpg-pane",
-        if ttrpg_collapsed {
-            "Show Task Roller"
-        } else {
-            "Hide Task Roller"
-        },
+        "Task Roller",
     );
 }
 

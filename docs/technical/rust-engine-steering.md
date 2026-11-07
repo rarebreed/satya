@@ -1,6 +1,14 @@
+---
+name: satya-rust-engine
+description: >-
+  Domain architecture, shared primitives (Triad, ContestedCheck, ConditionImpact,
+  define_coded_enum!), sign conventions (Delta_int vs Delta_ext/Delta_tool), and
+  bidirectional docs/ttrpg/ synchronization workflow for crates/satya-engine.
+---
+
 # Rust Domain & Game Engine Technical Steering Guide (`satya-engine`)
 
-This document defines the architectural standards, type-design patterns, and anti-bloat rules for `crates/satya-engine` and dependent Rust crates (`satya-schema`, `satya-web`, `satya-py`, `satya-signaling`). Both human engineers and AI coding agents must follow these rules when adding or modifying mechanics.
+This document defines the domain-specific architectural standards, type-design patterns, and TTRPG synchronization rules for `crates/satya-engine`. It extends the universal workspace rules in [`docs/technical/rust-workspace-steering.md`](rust-workspace-steering.md) (which governs the `<= 45 KB` file size ceiling, flat `pub use` re-exports, high-signal docstrings, and unit suffixes across all crates) and pairs with the frontend guide in [`docs/technical/rust-web-steering.md`](rust-web-steering.md).
 
 ---
 

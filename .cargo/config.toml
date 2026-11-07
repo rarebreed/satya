@@ -1,6 +1,0 @@
-[future-incompat-report]
-frequency = "never"
-
-[env]
-PYO3_NO_PYTHON = "1"
-

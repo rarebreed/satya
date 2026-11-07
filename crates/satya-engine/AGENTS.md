@@ -1,6 +1,6 @@
 # `satya-engine` Agent Coding & Architecture Rules
 
-When reading, adding, or refactoring code in `crates/satya-engine`, follow these mandatory architectural rules (full guide in `docs/technical/rust-engine-steering.md`):
+When reading, adding, or refactoring code in `crates/satya-engine`, activate the [`satya-rust-engine`](../../.agents/skills/satya-rust-engine/SKILL.md) and [`satya-rust-workspace`](../../.agents/skills/satya-rust-workspace/SKILL.md) skills and follow these mandatory architectural rules (full guide in [`docs/technical/rust-engine-steering.md`](../../docs/technical/rust-engine-steering.md) and [`docs/technical/rust-workspace-steering.md`](../../docs/technical/rust-workspace-steering.md)):
 
 1. **Use Shared Primitives (`src/primitives.rs`)**:
    - **Tactical Triad**: Always use `Triad<T>` (`tempo`, `control`, `force`) for allocations (`Triad<i32>`), caps (`Triad<i32>`), and limb-slash flags (`Triad<bool>`). Do not pass `(att_t, att_c, att_f, def_t, def_c, def_f)` as 6 separate integers when `Triad<i32>` applies.

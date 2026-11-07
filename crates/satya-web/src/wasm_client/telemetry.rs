@@ -7,19 +7,22 @@ use satya_schema::{AccountRole, StorageMetricsViewResponse, TopicMetricsView};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
+fn current_admin_token() -> Option<String> {
+    with_state(|st| {
+        if st.user.as_ref().map(|u| u.account_role) == Some(AccountRole::Admin) {
+            st.auth_token.clone()
+        } else {
+            None
+        }
+    })
+}
+
 /// Fetches live Apache Iggy topic metrics from `GET /api/storage/metrics` and updates `#topic-metrics-table`
 /// (only executed when the currently authenticated user has [`AccountRole::Admin`]).
 #[wasm_bindgen]
 pub fn satya_refresh_metrics() {
     spawn_local(async move {
-        let admin_token = with_state(|st| {
-            if st.user.as_ref().map(|u| u.account_role) == Some(AccountRole::Admin) {
-                st.auth_token.clone()
-            } else {
-                None
-            }
-        });
-        let Some(tok) = admin_token else {
+        let Some(tok) = current_admin_token() else {
             return;
         };
         if let Ok(resp) = fetch_json::<(), StorageMetricsViewResponse>(
@@ -40,14 +43,7 @@ pub fn satya_refresh_metrics() {
 #[wasm_bindgen]
 pub fn satya_flush_batches() {
     spawn_local(async move {
-        let admin_token = with_state(|st| {
-            if st.user.as_ref().map(|u| u.account_role) == Some(AccountRole::Admin) {
-                st.auth_token.clone()
-            } else {
-                None
-            }
-        });
-        let Some(tok) = admin_token else {
+        let Some(tok) = current_admin_token() else {
             return;
         };
         if let Ok(val) =

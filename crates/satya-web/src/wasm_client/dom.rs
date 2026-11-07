@@ -114,6 +114,28 @@ pub(crate) fn set_display(id: &str, display: &str) {
     }
 }
 
+/// Toggles `#id`'s inline `style.display` between `open_display` (when currently `"none"`) and `"none"`,
+/// returning `Some(true)` when opened, `Some(false)` when closed, or `None` if the element is absent.
+pub(crate) fn toggle_element_display(id: &str, open_display: &str) -> Option<bool> {
+    let el = get_element(id).and_then(|e| e.dyn_into::<HtmlElement>().ok())?;
+    let is_opening = el.style().get_property_value("display").unwrap_or_default() == "none";
+    let _ = el
+        .style()
+        .set_property("display", if is_opening { open_display } else { "none" });
+    Some(is_opening)
+}
+
+/// Rolls a uniform `1..=sides` die using browser `Math.random()`.
+pub(crate) fn roll_browser_die_i32(sides: i32) -> i32 {
+    let sides = sides.max(1);
+    ((js_sys::Math::random() * (sides as f64)).floor() as i32 + 1).clamp(1, sides)
+}
+
+/// Rolls a uniform `1..=sides` die as `i64` using browser `Math.random()`.
+pub(crate) fn roll_browser_die_i64(sides: i64) -> i64 {
+    i64::from(roll_browser_die_i32(sides as i32))
+}
+
 /// Updates a status feedback element (`#auth-feedback` or `#session-feedback`) with styled text.
 pub fn set_feedback(id: &str, text: &str, is_error: bool) {
     if let Some(el) = get_element(id).and_then(|e| e.dyn_into::<HtmlElement>().ok()) {

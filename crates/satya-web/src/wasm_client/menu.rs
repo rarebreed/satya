@@ -3,7 +3,7 @@
 
 use crate::wasm_client::dom::{
     EYE_OFF_SVG, EYE_OPEN_SVG, fetch_json, get_element, input_value, select_value, set_display,
-    set_feedback, set_input_value, set_text,
+    set_feedback, set_input_value, set_text, toggle_element_display,
 };
 use crate::wasm_client::options::default_model_for_provider;
 use crate::wasm_client::state::with_state;
@@ -11,139 +11,76 @@ use satya_schema::AiGmProviderConfig;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{HtmlElement, HtmlInputElement};
+use web_sys::HtmlInputElement;
+
+fn close_hamburger_dropdown() {
+    set_display("hamburger-menu-dropdown", "none");
+    if let Some(btn) = get_element("btn-hamburger-menu") {
+        let _ = btn.set_attribute("aria-expanded", "false");
+    }
+}
 
 /// Toggles the top-bar hamburger menu dropdown (`#hamburger-menu-dropdown`) open or closed.
 #[wasm_bindgen]
 pub fn satya_toggle_hamburger_menu() {
-    let Some(menu) =
-        get_element("hamburger-menu-dropdown").and_then(|el| el.dyn_into::<HtmlElement>().ok())
-    else {
+    let Some(is_opening) = toggle_element_display("hamburger-menu-dropdown", "flex") else {
         return;
     };
-    let is_hidden = menu
-        .style()
-        .get_property_value("display")
-        .unwrap_or_default()
-        == "none";
-    let _ = menu
-        .style()
-        .set_property("display", if is_hidden { "flex" } else { "none" });
     if let Some(btn) = get_element("btn-hamburger-menu") {
-        let _ = btn.set_attribute("aria-expanded", if is_hidden { "true" } else { "false" });
+        let _ = btn.set_attribute("aria-expanded", if is_opening { "true" } else { "false" });
     }
 }
 
 /// Toggles the `1. User Authentication` pane (`#auth-card`) visible or hidden.
 #[wasm_bindgen]
 pub fn satya_toggle_auth_pane() {
-    let Some(card) = get_element("auth-card").and_then(|el| el.dyn_into::<HtmlElement>().ok())
-    else {
+    let Some(is_opening) = toggle_element_display("auth-card", "block") else {
         return;
     };
-    let is_hidden = card
-        .style()
-        .get_property_value("display")
-        .unwrap_or_default()
-        == "none";
-    let _ = card
-        .style()
-        .set_property("display", if is_hidden { "block" } else { "none" });
     set_text(
         "btn-menu-toggle-auth-pane",
-        if is_hidden {
+        if is_opening {
             "Hide Auth Pane"
         } else {
             "Show Auth Pane"
         },
     );
-    set_display("hamburger-menu-dropdown", "none");
-    if let Some(btn) = get_element("btn-hamburger-menu") {
-        let _ = btn.set_attribute("aria-expanded", "false");
-    }
+    close_hamburger_dropdown();
 }
 
 /// Toggles the `2. Create or Join Password-Protected Session` pane (`#session-card`) visible or hidden.
 #[wasm_bindgen]
 pub fn satya_toggle_session_pane() {
-    let Some(card) = get_element("session-card").and_then(|el| el.dyn_into::<HtmlElement>().ok())
-    else {
+    let Some(is_opening) = toggle_element_display("session-card", "block") else {
         return;
     };
-    let is_hidden = card
-        .style()
-        .get_property_value("display")
-        .unwrap_or_default()
-        == "none";
-    let _ = card
-        .style()
-        .set_property("display", if is_hidden { "block" } else { "none" });
     set_text(
         "btn-menu-toggle-session-pane",
-        if is_hidden {
+        if is_opening {
             "Hide Session Pane"
         } else {
             "Show Session Pane"
         },
     );
-    set_display("hamburger-menu-dropdown", "none");
-    if let Some(btn) = get_element("btn-hamburger-menu") {
-        let _ = btn.set_attribute("aria-expanded", "false");
-    }
+    close_hamburger_dropdown();
 }
 
 /// Toggles the `Settings` sub-panel (`#menu-settings-panel`) inside the top-bar Hamburger Menu.
 #[wasm_bindgen]
 pub fn satya_toggle_settings_menu() {
-    let Some(panel) =
-        get_element("menu-settings-panel").and_then(|el| el.dyn_into::<HtmlElement>().ok())
-    else {
-        return;
-    };
-    let is_hidden = panel
-        .style()
-        .get_property_value("display")
-        .unwrap_or_default()
-        == "none";
-    let _ = panel
-        .style()
-        .set_property("display", if is_hidden { "flex" } else { "none" });
+    let _ = toggle_element_display("menu-settings-panel", "flex");
 }
 
 /// Toggles the `Settings -> Chat` sub-panel (`#menu-chat-settings-panel`) inside the top-bar Hamburger Menu.
 #[wasm_bindgen]
 pub fn satya_toggle_chat_settings() {
-    let Some(panel) =
-        get_element("menu-chat-settings-panel").and_then(|el| el.dyn_into::<HtmlElement>().ok())
-    else {
-        return;
-    };
-    let is_hidden = panel
-        .style()
-        .get_property_value("display")
-        .unwrap_or_default()
-        == "none";
-    let _ = panel
-        .style()
-        .set_property("display", if is_hidden { "flex" } else { "none" });
+    let _ = toggle_element_display("menu-chat-settings-panel", "flex");
 }
 
 /// Toggles the `Settings -> AI GM Provider` sub-panel (`#menu-ai-gm-settings-panel`) inside the top-bar Hamburger Menu.
 #[wasm_bindgen]
 pub fn satya_toggle_ai_gm_settings() {
-    let Some(panel) =
-        get_element("menu-ai-gm-settings-panel").and_then(|el| el.dyn_into::<HtmlElement>().ok())
-    else {
-        return;
-    };
-    let is_hidden = panel
-        .style()
-        .get_property_value("display")
-        .unwrap_or_default()
-        == "none";
-    let _ = panel
-        .style()
-        .set_property("display", if is_hidden { "flex" } else { "none" });
+    let _ = toggle_element_display("menu-ai-gm-settings-panel", "flex");
 }
 
 /// Updates `#ai-gm-model-input` with the recommended default model when `#ai-gm-provider-select` changes.

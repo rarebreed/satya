@@ -2,8 +2,8 @@
 //! timestamp formatting, and Satya Two-List Cascading (`2d20`) task resolution.
 
 use crate::wasm_client::dom::{
-    document, escape_html, get_element, input_value, select_value, set_class, set_display,
-    set_input_checked, set_input_value, set_text,
+    document, escape_html, get_element, input_value, roll_browser_die_i64, select_value, set_class,
+    set_display, set_input_checked, set_input_value, set_text,
 };
 use crate::wasm_client::notebook::render_wgpu_dice_roll;
 use crate::wasm_client::options::{parse_channel_context, parse_combat_stance};
@@ -265,9 +265,7 @@ pub fn satya_send_chat() {
             msg_body
         }
         Ok(Some(crate::chat_cmd::ChatCommand::Roll { expr_raw, pipeline })) => {
-            let outcome = match pipeline.evaluate_with_roller(&expr_raw, |sides| {
-                ((js_sys::Math::random() * (sides as f64)).floor() as i64 + 1).clamp(1, sides)
-            }) {
+            let outcome = match pipeline.evaluate_with_roller(&expr_raw, roll_browser_die_i64) {
                 Ok(out) => out,
                 Err(err) => {
                     append_system_notice(&format!("Roll error: {err}"));
