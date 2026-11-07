@@ -1710,9 +1710,10 @@ pub fn evaluate_psyche_friction_check(
         "AGG" | "AGGRESSION" => satya_engine::PsycheTraitId::Aggression,
         "EGO" => satya_engine::PsycheTraitId::Ego,
         "CNF" | "CONFORMITY" => satya_engine::PsycheTraitId::Conformity,
+        "EXT" | "EXTRAVERSION" => satya_engine::PsycheTraitId::Extraversion,
         other => {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "unknown Psyche trait '{other}'; expected OPN, SLF, BLG, AGG, EGO, or CNF"
+                "unknown Psyche trait '{other}'; expected OPN, SLF, BLG, AGG, EGO, CNF, or EXT"
             )));
         }
     };

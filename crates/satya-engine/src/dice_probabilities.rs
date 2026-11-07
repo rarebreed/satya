@@ -1,10 +1,14 @@
 //! Exact combinatorial and dynamic-programming probability distribution engines for Satya TTRPG dice mechanics.
 //!
-//! Canonical Rust source of truth (exposed to Python via the `satya_py` PyO3 crate) and calibrated per `docs/ttrpg/probability.md`.
+//! Canonical Rust source of truth (exposed to Python via the `satya_py` PyO3 crate) and calibrated per
+//! `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1–§6),
+//! `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1–§2.2),
+//! `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§1–§5), and
+//! `docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md` (§3.1, §5.1).
 //!
 //! Provides:
 //! - Exact probability mass functions ([`Pmf`]) and summary moments ([`DistributionStats`]: mean, variance, std, skewness, excess kurtosis).
-//! - Additive & negative dice pools ([`sum_dice_pool_pmf`]), binomial & Satya d20 critical-1 pools ([`count_successes_pmf`]).
+//! - Additive & negative dice pools ([`sum_dice_pool_pmf`]), binomial & comparative roll-under `2d20` critical-`1` pools ([`count_successes_pmf`]).
 //! - Exploding dice & Gumbel keep-highest pools ([`single_exploding_die_pmf`], [`exploding_pool_keep_highest_pmf`]).
 //! - Order statistics ([`order_statistic_pmf`]), center-distance Focus vs. Chaos ([`center_distance_selection_pmf`]),
 //!   median-gated bimodal pools ([`median_gated_bimodal_pmf`]), and multiplicative log-normal pools ([`multiplicative_pool_pmf`]).
@@ -34,6 +38,10 @@ pub use crate::dice_pools::{
 
 define_coded_enum! {
     /// Carry-over propagation rule governing how `mod_{n+1}` is calculated from step `n` in the Two-List Cascade.
+    ///
+    /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§2.1–§2.2),
+    /// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1), and
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.2).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
     pub enum CarryMode [count = 3] {
@@ -49,6 +57,11 @@ define_coded_enum! {
 
 impl CarryMode {
     /// Computes the carry-over modifier $\text{mod}_{n+1}$ propagated from step $n$.
+    ///
+    /// An exact threshold tie ($Y_n == \text{TN}_P$) produces `0` successes and `0` carry-over
+    /// (`step_delta = 0`), which is the calibrated tie behavior behind the `47.50%` / `60.68%` / `70.10%`
+    /// success tables in `docs/ttrpg/01-foundation/probability_and_calibration.md` (§4.2–§4.3) and
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1).
     #[inline]
     pub const fn next_mod(
         self,
@@ -76,6 +89,10 @@ impl CarryMode {
 
 define_coded_enum! {
     /// Botch / complication evaluation rule for [`paired_list_signed_margin_pmfs`].
+    ///
+    /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§3.1–§3.3),
+    /// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1–§2.2), and
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.2–§3.3).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
     pub enum BotchRule [count = 3] {
@@ -104,6 +121,10 @@ impl BotchRule {
 
 define_coded_enum! {
     /// Rule for combining total successes and botches into the unified `-N..=+N` signed margin.
+    ///
+    /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§3.2),
+    /// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2), and
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.3).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
     pub enum MarginAggregation [count = 2] {
@@ -134,6 +155,9 @@ impl MarginAggregation {
 
 /// Computes exact PMFs `(success_count_pmf, final_pair_value_pmf)` for the Two-List Cascading
 /// ("Watershed" or "Recoil") Dice Mechanic.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§2–§4) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.2).
 #[allow(clippy::too_many_arguments)]
 pub fn paired_list_cascade_pmfs(
     num_pairs: usize,
@@ -161,6 +185,10 @@ pub fn paired_list_cascade_pmfs(
 }
 
 /// Complete outcome breakdown from [`paired_list_signed_margin_pmfs`] including Degrees of Failure and Degrees of Success.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§3–§4),
+/// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2), and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SignedCascadeResult {
     /// Unified PMF over `-num_pairs..=+num_pairs`:
@@ -295,6 +323,9 @@ fn run_cascade_dp(
 }
 
 /// Computes the full `-N..=+N` Signed Outcome Spectrum (Degrees of Failure & Success) for the Two-List Cascade.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§3–§4) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.3).
 #[allow(clippy::too_many_arguments)]
 pub fn paired_list_signed_margin_pmfs(
     num_pairs: usize,
@@ -381,7 +412,8 @@ pub fn paired_list_signed_margin_pmfs(
 // ---------------------------------------------------------------------------
 
 /// Four-Factor Task configuration for Satya's Two-List Cascading ("Watershed") resolution engine
-/// as specified in `docs/ttrpg/probability.md`.
+/// as specified in `docs/ttrpg/01-foundation/probability_and_calibration.md` (§4) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§1, §3.1–§3.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CascadeTaskParams {
     /// 1. Skill Level $N \in [1, 10]$ (number of `2dK` pairs rolled).
@@ -413,7 +445,9 @@ impl Default for CascadeTaskParams {
 }
 
 impl CascadeTaskParams {
-    /// Constructs a canonical `K = 20` (`2d20`) Four-Factor Task configuration per `docs/ttrpg/probability.md`:
+    /// Constructs a canonical `K = 20` (`2d20`) Four-Factor Task configuration per
+    /// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§4.1) and
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1):
     /// - $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$
     /// - $\delta_{\text{over}} = +6$
     /// - $\delta_{\text{under}} = \max(0, 6 + \Delta_{\text{int}})$
@@ -498,6 +532,9 @@ impl CascadeTaskParams {
 
 define_coded_enum! {
     /// High-level narrative outcome category of a resolved Two-List Cascade roll.
+    ///
+    /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§3.2) and
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.3, §5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum CascadeOutcomeKind [count = 4] {
@@ -552,6 +589,9 @@ impl CascadeOutcomeKind {
 }
 
 /// Step-by-step trace for a single pair $(A_n, B_n)$ in a resolved Two-List Cascade roll.
+///
+/// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CascadeStepTrace {
     /// 1-based pair index ($n \in 1..=N$).
@@ -579,6 +619,9 @@ pub struct CascadeStepTrace {
 }
 
 /// Complete game-engine resolution of a rolled Two-List Cascade check.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§3–§4) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CascadeRollOutcome {
     /// Ordered trace of each evaluated pair $(A_n, B_n)$ for $n = 1..=N$.
@@ -603,6 +646,9 @@ pub struct CascadeRollOutcome {
 
 /// Evaluates a concrete list of rolled `(A_n, B_n)` dice pairs using the exact Two-List Cascading
 /// ("Watershed" / "Recoil") state machine.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§2–§4) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.3).
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_cascade_roll(
     pairs: &[(i32, i32)],
@@ -754,7 +800,10 @@ fn build_cascade_mechanics_event(
     }
 }
 
-/// Evaluates a Two-List Cascading ("Watershed") `2d20` task roll per `docs/ttrpg/probability.md`
+/// Evaluates a Two-List Cascading ("Watershed") `2d20` task roll per
+/// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§4) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3), with action tick telemetry per
+/// `docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md` (§3.1, §5.1),
 /// and returns both the [`TtrpgMechanicsEvent`] telemetry record and the step-by-step [`CascadeRollOutcome`].
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_satya_cascade_task(
@@ -801,6 +850,9 @@ pub fn evaluate_satya_cascade_task(
 
 define_coded_enum! {
     /// Tie-breaking and margin-interaction rule for Contested Cascade Task Resolution.
+    ///
+    /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.1–§6.3) and
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.1–§4.2, §5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
     pub enum ContestedTieRule [count = 3] {
@@ -816,6 +868,10 @@ define_coded_enum! {
 
 define_coded_enum! {
     /// Specific sub-classification of how a Contested Cascade roll resolved.
+    ///
+    /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.2–§6.3),
+    /// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2), and
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.2, §5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum ContestedOutcomeKind [count = 7] {
@@ -887,6 +943,9 @@ impl ContestedOutcomeKind {
 }
 
 /// Mode for evaluating the GM's opposing roll in a Contested Task.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.2–§6.3) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.1–§4.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GmResistanceMode {
@@ -908,6 +967,10 @@ impl Default for GmResistanceMode {
 }
 
 /// Configuration for a Contested Two-List Cascade check (Player vs. GM Environment or Active Opponent).
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.1–§6.3),
+/// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2), and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.1–§4.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContestedCascadeTaskParams {
     /// Player's task parameters (uses player's known personal target $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$).
@@ -1016,6 +1079,10 @@ impl ContestedCascadeTaskParams {
 }
 
 /// Complete live roll outcome for a Contested Cascade task check.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.2–§6.3),
+/// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2), and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.2, §5).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContestedCascadeRollOutcome {
     /// Step-by-step cascade outcome for the Player.
@@ -1033,6 +1100,10 @@ pub struct ContestedCascadeRollOutcome {
 }
 
 /// Exact combinatorial probability breakdown and net margin PMF for a Contested Cascade check.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.1–§6.3),
+/// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2), and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.1–§4.2, §5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ContestedCascadeOdds {
     /// Exact PMF of the net signed margin $\Delta M = M_P - M_{GM}$.
@@ -1066,6 +1137,9 @@ pub struct ContestedCascadeOdds {
 }
 
 /// Classifies a single `(player, gm)` state realization into [`ContestedOutcomeKind`] and net margin $\Delta M$.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.2–§6.3) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.2, §5).
 pub fn classify_contested_outcome(
     sp: i32,
     bp: i32,
@@ -1143,6 +1217,10 @@ fn cascade_joint_outcome_pmf(params: &CascadeTaskParams) -> HashMap<(i32, i32, i
 /// Evaluates a single GM `2dK` resistance pair using the Tiered Over-Success & Under-Botch rule:
 /// - If $X_{GM} > \text{TN}_{GM}$, $S_{GM} = 1 + \lfloor (X_{GM} - \text{TN}_{GM} - 1) / \text{step\_size} \rfloor$.
 /// - If $X_{GM} \le \text{TN}_{GM}$, $S_{GM} = 0$ and $B_{GM} = \min(5, \lfloor (\text{TN}_{GM} - X_{GM}) / 4 \rfloor)$.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.2),
+/// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2), and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.1–§4.2).
 pub fn evaluate_tiered_single_pair_gm_roll(
     gm_pairs: &[(i32, i32)],
     sides: i32,
@@ -1225,6 +1303,9 @@ fn tiered_single_pair_gm_joint_pmf(
 }
 
 /// Computes exact contested probabilities ([`ContestedCascadeOdds`]) using `FullCascade` mode.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.1–§6.3) and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.1–§4.2).
 pub fn compute_contested_cascade_odds(
     player: &CascadeTaskParams,
     gm: &CascadeTaskParams,
@@ -1235,6 +1316,10 @@ pub fn compute_contested_cascade_odds(
 
 /// Computes exact contested probabilities ([`ContestedCascadeOdds`]) by convolving the joint `(succ, raw_botch, signed_margin)`
 /// state distributions of `player` and `gm` under `gm_mode` (`TieredSinglePair` or `FullCascade`).
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.1–§6.3),
+/// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2), and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.1–§4.2, §5).
 pub fn compute_contested_cascade_odds_with_mode(
     player: &CascadeTaskParams,
     gm: &CascadeTaskParams,
@@ -1281,13 +1366,8 @@ pub fn compute_contested_cascade_odds_with_mode(
 
     let net_signed_margin_pmf = normalize_hash_pmf(&net_margin_map);
     let net_success_pmf = normalize_hash_pmf(&net_succ_map);
-    let net_margin_stats = compute_stats(&net_signed_margin_pmf);
-    let denom = net_margin_stats.excess_kurtosis + 3.0;
-    let bimodality_coefficient = if denom > 1e-9 {
-        (net_margin_stats.skewness.powi(2) + 1.0) / denom
-    } else {
-        0.0
-    };
+    let stats = compute_stats(&net_signed_margin_pmf);
+    let bimodality_coefficient = stats.bimodality_coefficient();
 
     let prob_clean_or_extraordinary_win = prob_extraordinary_success + prob_clean_success;
     let prob_partial_success =
@@ -1307,7 +1387,7 @@ pub fn compute_contested_cascade_odds_with_mode(
         prob_lucky_break_partial,
         prob_clean_failure,
         prob_botch_failure,
-        net_margin_stats,
+        net_margin_stats: stats,
         bimodality_coefficient,
     }
 }
@@ -1316,6 +1396,10 @@ pub fn compute_contested_cascade_odds_with_mode(
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` and returns both the
 /// [`TtrpgMechanicsEvent`] telemetry record (including §5 Tick Cost duration modifiers for
 /// `ExtraordinarySuccess` and `GrazingTieSuccess`) and the [`ContestedCascadeRollOutcome`].
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.2–§6.3),
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.1–§4.2, §5), and
+/// `docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md` (§3.1, §5.1).
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_satya_contested_cascade_task(
     metadata: EventMetadata,

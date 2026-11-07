@@ -4,10 +4,10 @@
 //! `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md`:
 //! - **Task Gate Classifications (`§2.1`)**: [`TaskGateClass`] (`ClassA`, `ClassB`, `ClassC { min_skill_n }`).
 //! - **Tool Dependency & Equipment Quality Tiers (`§2.2`)**: [`ToolDependency`], [`ToolQualityTier`], and [`resolve_task_gate_and_tools`].
-//! - **Composite & Supporting Characteristics (`§3.2`)**: [`compute_composite_characteristic`] and [`compute_supporting_characteristic_shortfall_penalty`].
+//! - **Composite & Supporting Characteristics (`§3.1–§3.2`)**: [`compute_composite_characteristic`] and [`compute_supporting_characteristic_shortfall_penalty`].
 //! - **Complementary Skills (`KNO -> PHY`, `§6.1`), Dual-Skill Gates (`§6.2`) & Extended Project Clocks (`§6.3`)**:
 //!   [`ComplementarySynergyResult`], [`evaluate_complementary_setup_synergy`], [`compute_dual_skill_pool`], and [`ExtendedProjectClock`].
-//! - **Canonical Worked Examples (`§7`) & 22-Entry Master Task Requirements Catalog (`§8`)**:
+//! - **Canonical Worked Examples (`§7.1–§7.3`) & 22-Entry Master Task Requirements Catalog (`§8`)**:
 //!   [`CanonicalTaskPreset`], [`CANONICAL_TASK_PRESETS`], [`MasterTaskBenchmark`], and [`MASTER_TASK_BENCHMARKS`].
 
 use serde::{Deserialize, Serialize};
@@ -21,14 +21,15 @@ use crate::dice_probabilities::{
 // 11. Task Gate Classifications (Class A / B / C) & Tool Dependency Tiers
 // ---------------------------------------------------------------------------
 
-/// Task Gate Classification per §2.1 of `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md`.
+/// Task Gate Classification per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§2.1)
+/// and `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskGateClass {
     /// **Class A — Open / Talent Tasks (`N >= 0`)**:
     /// Actions any conscious character can attempt without formal training.
-    /// - If `trained_skill_n == 0`, the character may either roll their raw Talent rating
-    ///   $N_{\text{talent}} \in [1, 3]$ with $\Delta_{\text{ext}} = 0$, or default to $N = 1$ pair
+    /// - If `trained_skill_n == 0`, the character may either roll their Talent rating
+    ///   $N_{\text{talent}} \in [1, 10]$ with $\Delta_{\text{ext}} = 0$, or default to $N = 1$ pair
     ///   with a $+4$ external difficulty penalty ($\Delta_{\text{ext}} = +4$).
     ClassA,
     /// **Class B — Trained / Defaultable Tasks (`N >= 1`, or Default from Related Skill)**:
@@ -40,9 +41,9 @@ pub enum TaskGateClass {
     ClassB,
     /// **Class C — Hard-Gated Specialist Tasks (`N >= min_skill_n`, `[Locked]`)**:
     /// High-complexity specialist procedures. Strictly requires `trained_skill_n >= min_skill_n`
-    /// (`1` to `3`) AND appropriate tools if `[Tool: Mandatory]`. No Talent or sibling defaulting is permitted.
+    /// (`1..=4`) AND appropriate tools if `[Tool: Mandatory]`. No Talent or sibling defaulting is permitted.
     ClassC {
-        /// Minimum trained skill level $N_{\text{min}}$ required (`1`, `2`, or `3`).
+        /// Minimum trained skill level $N_{\text{min}}$ required (`1..=4`, per `mathematical_notation_glossary.md` §2.1).
         min_skill_n: usize,
     },
 }
@@ -58,7 +59,7 @@ impl TaskGateClass {
     }
 }
 
-/// Tool Dependency classification per §2.2 of `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md`.
+/// Tool Dependency classification per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§2.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolDependency {
@@ -81,7 +82,8 @@ impl ToolDependency {
     }
 }
 
-/// Equipment quality tier and known player tool modifier ($\Delta_{\text{tool}}$) per §2.2 of `cascading_d20_and_tasks.md`.
+/// Equipment quality tier and known player tool modifier ($\Delta_{\text{tool}}$) per
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§2.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolQualityTier {
@@ -122,6 +124,8 @@ impl ToolQualityTier {
 }
 
 /// Resolved eligibility, effective pair pool $N$, known $\Delta_{\text{tool}}$, and hidden $\Delta_{\text{ext}}$ gate penalty.
+///
+/// Origin: `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§2.1–§2.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskGateResolution {
     /// Whether the character is permitted to roll the task (`false` means `[Locked]`).
@@ -140,11 +144,12 @@ pub struct TaskGateResolution {
     pub lock_reason: Option<String>,
 }
 
-/// Evaluates Step 1 of the Satya Task Resolution Procedure (§2.1 Task Gate Classifications & §2.2 Tool Dependency Tiers).
+/// Evaluates Step 1 of the Satya Task Resolution Procedure (`docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md`
+/// §2.1 Task Gate Classifications & §2.2 Tool Dependency Tiers).
 ///
 /// - `gate_class`: `ClassA`, `ClassB`, or `ClassC { min_skill_n }`.
 /// - `trained_skill_n`: Character's trained skill level $N$ in the required skill (`0..=10`).
-/// - `talent_or_parent_n`: For `ClassA` when `trained_skill_n == 0`, the character's raw Talent rating $N_{\text{talent}} \in [0, 3]$;
+/// - `talent_or_parent_n`: For `ClassA` when `trained_skill_n == 0`, the character's Talent rating $N_{\text{talent}} \in [0, 10]$;
 ///   for `ClassB` when `trained_skill_n == 0`, the character's related parent/sibling skill level $N_{\text{parent}}$.
 /// - `default_penalty_ext`: External difficulty penalty when defaulting in `ClassB` (clamped to `4..=6`, canonical `+4`).
 /// - `tool_dependency`: `[Tool: None]`, `[Tool: Situational]`, or `[Tool: Mandatory]`.
@@ -210,10 +215,10 @@ pub fn resolve_task_gate_and_tools(
                     lock_reason: None,
                 }
             } else if talent_or_parent_n >= 1 {
-                // Raw Talent rating N_talent in [1, 3] with Delta_ext = 0
+                // Talent rating N_talent in [1, 10] with Delta_ext = 0
                 TaskGateResolution {
                     allowed: true,
-                    effective_skill_n: talent_or_parent_n.min(3),
+                    effective_skill_n: talent_or_parent_n.min(10),
                     gate_delta_ext: 0,
                     tool_delta_mod,
                     improvised_wear_on_floor_breach,
@@ -303,17 +308,17 @@ pub fn resolve_task_gate_and_tools(
 }
 
 // ---------------------------------------------------------------------------
-// 12. Controlling & Supporting Characteristic Formulas (§3.2)
+// 12. Controlling & Supporting Characteristic Formulas (§3.1–§3.2)
 // ---------------------------------------------------------------------------
 
 /// Computes a Composite Controlling Characteristic $C = \lfloor (C_1 + C_2) / 2 \rfloor$
-/// per §3.2 of `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md`.
+/// per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.2).
 pub const fn compute_composite_characteristic(c1: i32, c2: i32) -> i32 {
     (c1 + c2).div_euclid(2)
 }
 
 /// Computes the Gated Supporting Characteristic external difficulty penalty ($\Delta_{\text{ext}}$)
-/// per §3.2 of `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md`:
+/// per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.2):
 /// - If a task specifies `Min C3 >= X` and the character has `supporting_c < min_required_c`,
 ///   each point of shortfall $k = X - C_3$ imposes a $+2$ external difficulty penalty ($+2k$ to $\Delta_{\text{ext}}$).
 pub const fn compute_supporting_characteristic_shortfall_penalty(
@@ -325,11 +330,12 @@ pub const fn compute_supporting_characteristic_shortfall_penalty(
 }
 
 // ---------------------------------------------------------------------------
-// 13. Complementary Skills (KNO -> PHY), Dual-Skill Gate & Extended Clocks (§6)
+// 13. Complementary Skills (KNO -> PHY), Dual-Skill Gate & Extended Clocks (§6.1–§6.3)
 // ---------------------------------------------------------------------------
 
 /// Mechanical synergy transferred from a preliminary analytical (`KNO` / `LOG`) setup roll
-/// to a subsequent physical or technical execution roll per §6.1 of `cascading_d20_and_tasks.md`.
+/// to a subsequent physical or technical execution roll per
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§6.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComplementarySynergyResult {
     /// External difficulty modifier ($\Delta_{\text{ext}}$) applied to the execution task (`-4`, `-2`, `0`, or `+4`).
@@ -340,7 +346,8 @@ pub struct ComplementarySynergyResult {
     pub summary: &'static str,
 }
 
-/// Evaluates a preliminary `KNO` / `LOG` complementary setup roll per §6.1 of `cascading_d20_and_tasks.md`:
+/// Evaluates a preliminary `KNO` / `LOG` complementary setup roll per
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§6.1):
 /// - `3+` successes (`ExtraordinarySuccess` and `setup_signed_margin >= 3`): `-4` to $\Delta_{\text{ext}}$ AND $\delta_{\text{over}}$ boosted from `+6` to `+8`.
 /// - `1–2` successes (`setup_total_successes >= 1`): `-2` to $\Delta_{\text{ext}}$ and standard $\delta_{\text{over}} = 6$.
 /// - `0` successes (`CleanFailure`, `setup_signed_margin == 0`): `0` modifier and $\delta_{\text{over}} = 6$.
@@ -378,7 +385,7 @@ pub const fn evaluate_complementary_setup_synergy(
 
 impl CascadeTaskParams {
     /// Returns a copy of `self` with a [`ComplementarySynergyResult`] applied (`external_mod += synergy.delta_ext_mod`,
-    /// `delta_over = synergy.delta_over_carry`).
+    /// `delta_over = synergy.delta_over_carry`) per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§6.1).
     pub const fn with_complementary_synergy(mut self, synergy: ComplementarySynergyResult) -> Self {
         self.external_mod += synergy.delta_ext_mod;
         self.delta_over = synergy.delta_over_carry;
@@ -387,7 +394,8 @@ impl CascadeTaskParams {
 }
 
 impl ContestedCascadeTaskParams {
-    /// Returns a copy of `self` with a [`ComplementarySynergyResult`] applied to the contested check:
+    /// Returns a copy of `self` with a [`ComplementarySynergyResult`] applied to the contested check per
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§6.1):
     /// - Adjusts the GM's hidden resistance difficulty by `synergy.delta_ext_mod` ($\Delta_{\text{ext}} \mathrel{+}= \text{delta\_ext\_mod}$,
     ///   shifting $C_{GM}$ by `synergy.delta_ext_mod` so $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$ updates accordingly).
     /// - Sets the player's over-target step carry $\delta_{\text{over}}$ to `synergy.delta_over_carry` (`+8` on Extraordinary setup).
@@ -399,7 +407,7 @@ impl ContestedCascadeTaskParams {
 }
 
 /// Computes the effective cascade pool size $N_{\text{eff}}$ for a Simultaneous Dual-Skill Gate
-/// per §6.2 of `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md`:
+/// per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§6.2):
 /// $$N_{\text{eff}} = \min(N_1, N_2) + \mathbb{I}\big(\max(N_1, N_2) \ge \min(N_1, N_2) + 2\big)$$
 pub const fn compute_dual_skill_pool(skill_n1: usize, skill_n2: usize) -> usize {
     let min_n = if skill_n1 < skill_n2 {
@@ -417,6 +425,8 @@ pub const fn compute_dual_skill_pool(skill_n1: usize, skill_n2: usize) -> usize 
 }
 
 /// Result of applying a single interval roll to an [`ExtendedProjectClock`].
+///
+/// Origin: `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§6.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExtendedProjectStepResult {
     /// Net progress delta added (or subtracted on a botch) during this interval.
@@ -435,7 +445,7 @@ pub struct ExtendedProjectStepResult {
     pub is_completed: bool,
 }
 
-/// Extended Project Progress Clock per §6.3 of `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md`.
+/// Extended Project Progress Clock per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§6.3).
 ///
 /// Tracks multi-interval engineering, research, surgical, decryption, or post-lifepath training projects:
 /// - **Standard Project**: `10` net successes (`target_net_successes = 10`)
@@ -525,7 +535,8 @@ impl ExtendedProjectClock {
         )
     }
 
-    /// Applies a [`ContestedCascadeRollOutcome`] to the project clock.
+    /// Applies a [`ContestedCascadeRollOutcome`] to the project clock per
+    /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§5.1 & §6.3).
     pub fn apply_contested_roll(
         &mut self,
         outcome: &ContestedCascadeRollOutcome,
@@ -541,11 +552,13 @@ impl ExtendedProjectClock {
             ContestedOutcomeKind::CleanFailure | ContestedOutcomeKind::BotchFailure => 0,
         };
         let setback_margin = if is_botch {
-            -outcome
-                .player_outcome
-                .effective_botches
-                .max(outcome.net_signed_margin.abs())
-                .max(1)
+            let eff_setback = if outcome.gm_outcome.signed_margin < 0 {
+                (outcome.player_outcome.effective_botches - outcome.gm_outcome.effective_botches)
+                    .max(1)
+            } else {
+                outcome.player_outcome.effective_botches.max(1)
+            };
+            -eff_setback
         } else {
             progress
         };
@@ -554,10 +567,10 @@ impl ExtendedProjectClock {
 }
 
 // ---------------------------------------------------------------------------
-// 14. Canonical Worked Examples (§7) & Master Task Requirements Catalog (§8)
+// 14. Canonical Worked Examples (§7.1–§7.3) & Master Task Requirements Catalog (§8)
 // ---------------------------------------------------------------------------
 
-/// Canonical worked example preset from §7 of `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md`
+/// Canonical worked example preset from `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§7.1–§7.3)
 /// and the Satya combat/social chapters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CanonicalTaskPreset {
@@ -626,7 +639,7 @@ macro_rules! task_preset {
     };
 }
 
-/// Canonical worked examples from §7 of `cascading_d20_and_tasks.md` and the core rules book.
+/// Canonical worked examples from `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§7.1–§7.3) and the core rules book.
 pub static CANONICAL_TASK_PRESETS: &[CanonicalTaskPreset] = &[
     task_preset!("sarah_lockpick", "Sarah's Lockpick (N=3, C=12, Δ_tool=0, Δ_int=+2, Δ_ext=+4)", "Mechanical Lockpicking (Sarah)", (3, 12, 2, 0, 4, 6)),
     task_preset!("marcus_surgery", "Marcus's Trauma Surgery (N=4, C=14, Δ_tool=-2, Δ_int=-1, Δ_ext=+4)", "Trauma Surgery (Marcus)", (4, 14, -1, -2, 4, 6)),
@@ -636,12 +649,13 @@ pub static CANONICAL_TASK_PRESETS: &[CanonicalTaskPreset] = &[
     task_preset!("social_persuasion", "Counter-Interrogation Rhetoric (N=3, C=15, Δ_tool=0, Δ_int=+2, Δ_ext=+3)", "Counter-Interrogation Rhetoric", (3, 15, 2, 0, 3, 6)),
 ];
 
-/// Returns all canonical worked task presets.
+/// Returns all canonical worked task presets (`docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` §7.1–§7.3).
 pub fn list_canonical_task_presets() -> &'static [CanonicalTaskPreset] {
     CANONICAL_TASK_PRESETS
 }
 
-/// Looks up a canonical worked task preset by `id` (falling back to `"sarah_lockpick"` if not found).
+/// Looks up a canonical worked task preset by `id` (falling back to `"sarah_lockpick"` if not found)
+/// per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§7.1–§7.3).
 pub fn get_canonical_task_preset(id: &str) -> &'static CanonicalTaskPreset {
     let key = id.trim();
     CANONICAL_TASK_PRESETS
@@ -656,7 +670,7 @@ pub fn get_canonical_task_preset(id: &str) -> &'static CanonicalTaskPreset {
 pub struct MasterTaskBenchmark {
     /// Snake-case benchmark identifier.
     pub id: &'static str,
-    /// Domain category (`"Physical"`, `"Subterfuge"`, `"Medical"`, `"Engineering"`, `"Computing"`, `"Investigative"`, `"Social"`, `"Survival"`).
+    /// Domain category (`"Athletic"`, `"Fieldcraft"`, `"Cyber"`, `"Technical"`, `"Medical"`, `"Science"`, `"Social"`).
     pub domain: &'static str,
     /// Representative task name.
     pub task_name: &'static str,
@@ -664,7 +678,7 @@ pub struct MasterTaskBenchmark {
     pub required_skill: &'static str,
     /// Task Gate Class (`ClassA`, `ClassB`, or `ClassC { min_skill_n }`).
     pub gate_class: TaskGateClass,
-    /// Primary Controlling Characteristic code(s), e.g. `"STR"`, `"FIN + PER"`.
+    /// Primary Controlling Characteristic code(s), e.g. `"DEX/TAC"`, `"ANA/CRE"`, `"DEX + TAC"`, `"ANA + CRE"`.
     pub controlling_characteristic: &'static str,
     /// Optional Gated Supporting Characteristic code and minimum value (`Min C3 >= X`).
     pub min_supporting_characteristic: Option<(&'static str, i32)>,
@@ -693,7 +707,7 @@ macro_rules! task_benchmark {
     };
 }
 
-/// Complete 22-entry Master Task Requirements catalog from §8 of `cascading_d20_and_tasks.md`.
+/// Complete 22-entry Master Task Requirements catalog from `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§8).
 pub static MASTER_TASK_BENCHMARKS: &[MasterTaskBenchmark] = &[
     task_benchmark!("sprint_vault_gap", "Athletic", "Sprint & Vault Gap", "Acrobatics, Tumbling & Parkour", TaskGateClass::ClassA, "KIN + SPD", None, None, 0, "6 TC"),
     task_benchmark!("free_climb_sheer_wet_rock", "Athletic", "Free-Climb Sheer Wet Rock", "Climbing & Scaling", TaskGateClass::ClassA, "FOR + KIN", Some(("FIT", 11)), Situational, 4, "15 TC / pitch"),
@@ -719,15 +733,56 @@ pub static MASTER_TASK_BENCHMARKS: &[MasterTaskBenchmark] = &[
     task_benchmark!("navigate_magnetic_anomaly_storm_by_dead_reckoning", "Fieldcraft", "Navigate Magnetic Anomaly Storm by Dead Reckoning", "Land Navigation & Cartography", TaskGateClass::ClassB, "ANA + SIG", Some(("DIS", 11)), Situational, 4, "1 hr"),
 ];
 
-/// Returns all 22 benchmark entries from the §8 Master Task Requirements Table.
+/// Returns all 22 benchmark entries from the §8 Master Task Requirements Table
+/// (`docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` §8).
 pub fn list_master_task_benchmarks() -> &'static [MasterTaskBenchmark] {
     MASTER_TASK_BENCHMARKS
 }
 
-/// Looks up a [`MasterTaskBenchmark`] by its `id` or `task_name`.
+/// Looks up a [`MasterTaskBenchmark`] by its `id`, `task_name`, or legacy benchmark alias
+/// (`docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` §8).
 pub fn get_master_task_benchmark(id_or_name: &str) -> Option<&'static MasterTaskBenchmark> {
     let q = id_or_name.trim();
-    MASTER_TASK_BENCHMARKS
+    if let Some(found) = MASTER_TASK_BENCHMARKS
         .iter()
         .find(|b| b.id.eq_ignore_ascii_case(q) || b.task_name.eq_ignore_ascii_case(q))
+    {
+        return Some(found);
+    }
+    let canonical_id = match q.to_ascii_lowercase().as_str() {
+        "sprint_vault" | "vault_gap" => "sprint_vault_gap",
+        "free_climb" | "climb_sheer_wet_rock" => "free_climb_sheer_wet_rock",
+        "force_door" | "force_bulkhead_door" => "force_rusted_bulkhead_door",
+        "zero_g_eva" | "eva_thruster_stabilization" => "zero_g_eva_thruster_stabilization",
+        "silent_infiltration" | "stealth_sentries" => "silent_infiltration_past_sentries",
+        "pick_lock" | "lockpick" | "sarah_lockpick" => "pick_high_security_pin_lock",
+        "bypass_biometric" | "biometric_pad" => "bypass_biometric_capacitance_pad",
+        "disarm_ied" | "eod_disarm" => "disarm_shaped_charge_ied",
+        "staunch_bleed" | "first_aid_arterial" => "staunch_arterial_bleed_in_combat",
+        "field_surgery" | "marcus_surgery" | "trauma_surgery" => {
+            "field_extraction_of_fragment_near_spine"
+        }
+        "synthesize_antitoxin" => "synthesize_antitoxin_from_tissue_sample",
+        "patch_hydraulic" | "hydraulic_line" => "patch_ruptured_hydraulic_line",
+        "reroute_coolant" | "micro_fission_coolant" => "reroute_damaged_micro_fission_coolant_loop",
+        "fabricate_suppressor" | "suppressor_baffle" => "fabricate_custom_suppressor_baffle",
+        "packet_sniff" | "sniff_subnet" => "packet_sniff_local_unencrypted_subnet",
+        "kernel_injection" | "elena_hack" | "air_gapped_injection" => {
+            "live_kernel_injection_on_air_gapped_node"
+        }
+        "ballistic_trajectory" | "forensics_ricochet" => {
+            "reconstruct_ballistic_trajectory_from_ricochets"
+        }
+        "spot_ambush" | "urban_ambush" => "spot_ambush_in_dense_urban_ruins",
+        "fast_talk" | "checkpoint_sentry" => "fast_talk_checkpoint_sentry",
+        "interrogation" | "break_hostile_subject" => "break_hostile_subject_in_interrogation",
+        "rally_squad" | "rally_panicked_squad" => "rally_panicked_squad_under_artillery_fire",
+        "dead_reckoning" | "navigate_magnetic_storm" => {
+            "navigate_magnetic_anomaly_storm_by_dead_reckoning"
+        }
+        _ => return None,
+    };
+    MASTER_TASK_BENCHMARKS
+        .iter()
+        .find(|b| b.id == canonical_id)
 }

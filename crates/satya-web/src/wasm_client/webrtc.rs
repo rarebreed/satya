@@ -95,7 +95,7 @@ pub(crate) fn sync_workspace_drawers_dom() {
         } else {
             chat_card.set_class_name("card chat-card");
             let _ = chat_card.remove_attribute("inert");
-            let _ = chat_card.style().set_property("display", "block");
+            let _ = chat_card.style().set_property("display", "flex");
         }
     }
 
@@ -117,7 +117,7 @@ pub(crate) fn sync_workspace_drawers_dom() {
         } else {
             ttrpg_card.set_class_name("card ttrpg-card");
             let _ = ttrpg_card.remove_attribute("inert");
-            let _ = ttrpg_card.style().set_property("display", "block");
+            let _ = ttrpg_card.style().set_property("display", "flex");
         }
     }
 

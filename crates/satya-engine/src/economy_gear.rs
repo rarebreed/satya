@@ -1,6 +1,7 @@
 //! Socioeconomic Origin, Campaign Upkeep (`SQM 1–10`), Black-Market `[Access]` Procurement,
 //! Operational `Heat` (`0–10`), and Post-School Skill Point (`SP`) Ledger & Study Progression
-//! (`03-character/lifepaths_and_economy.md` §1.1, §3.1–§3.2).
+//! (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1, §1.6–§1.7, §3.1–§3.2;
+//! `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §9.1.3).
 
 use std::collections::BTreeMap;
 
@@ -15,39 +16,39 @@ use crate::skills_trees::{
 };
 
 define_coded_enum! {
-    /// Socioeconomic Class from Stage 1 (`Ages 0–5`) (§1.1).
+    /// Socioeconomic Class from Stage 1 (`Ages 0–5`) (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum SocioeconomicClass [count = 6] {
-        /// `2–5`: Destitute / Underclass / War Zone (`SQM +4`, Dropout Risk `2–16`).
+        /// `2–7`: Destitute / Urban Underclass / War Zone (`SQM +4`, Dropout Risk `2–16`).
         DestituteUnderclassWarZone => {
             code: "DESTITUTE",
             label: "Destitute / Underclass / War Zone",
-            aliases: ["DESTITUTE_UNDERCLASS_WAR_ZONE"],
+            aliases: ["DESTITUTE_UNDERCLASS_WAR_ZONE", "DESTITUTE_URBAN_UNDERCLASS"],
         },
-        /// `6–11`: Working Poor / Inner-City Lower Class (`SQM +2`, Dropout Risk `2–12`).
+        /// `8–14`: Working Poor / Inner-City Lower Class (`SQM +2`, Dropout Risk `2–13`).
         WorkingPoorLowerClass => {
             code: "WORKING_POOR",
             label: "Working Poor / Inner-City Lower Class",
             aliases: ["WORKING_POOR_LOWER_CLASS"],
         },
-        /// `12–25`: Working / Middle Class (`SQM 0`, Dropout Risk `2–8`).
+        /// `15–26`: Working / Lower-Middle Class (`SQM 0`, Dropout Risk `2–9`).
         WorkingMiddleClass => {
             code: "MIDDLE_CLASS",
             label: "Working / Middle Class",
-            aliases: ["WORKING_MIDDLE_CLASS"],
+            aliases: ["WORKING_MIDDLE_CLASS", "WORKING_LOWER_MIDDLE_CLASS"],
         },
-        /// `26–33`: Professional / Upper-Middle Class (`SQM -2`, Dropout Risk `2–5`).
+        /// `27–33`: Professional / Middle Class (`SQM -2`, Dropout Risk `2–6`).
         ProfessionalUpperMiddleClass => {
             code: "UPPER_MIDDLE",
             label: "Professional / Upper-Middle Class",
-            aliases: ["PROFESSIONAL_UPPER_MIDDLE_CLASS"],
+            aliases: ["PROFESSIONAL_UPPER_MIDDLE_CLASS", "PROFESSIONAL_MIDDLE_CLASS"],
         },
-        /// `34–38`: Affluent / Elite Preparatory (`SQM -4`, Dropout Risk `2–3`).
+        /// `34–38`: Upper-Middle / Technocratic Class (`SQM -4`, Dropout Risk `2–4`).
         AffluentElitePreparatory => {
             code: "AFFLUENT_PREP",
             label: "Affluent / Elite Preparatory",
-            aliases: ["AFFLUENT_ELITE_PREPARATORY"],
+            aliases: ["AFFLUENT_ELITE_PREPARATORY", "UPPER_MIDDLE_TECHNOCRATIC_CLASS"],
         },
         /// `39–40`: Wealthy / Corporate or Aristocratic Elite (`SQM -6`, Dropout Risk `2`).
         WealthyCorporateAristocraticElite => {
@@ -59,7 +60,8 @@ define_coded_enum! {
 }
 
 impl SocioeconomicClass {
-    /// Representative `2d20` roll (`2..=40`) that maps to this Socioeconomic Class in [`resolve_socioeconomic_origin`].
+    /// Representative `2d20` roll (`2..=40`) that maps to this Socioeconomic Class in [`resolve_socioeconomic_origin`]
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1).
     #[must_use]
     pub const fn representative_roll_2d20(self) -> i32 {
         match self {
@@ -72,7 +74,8 @@ impl SocioeconomicClass {
         }
     }
 
-    /// Default campaign `SQM` tier (`1–10`) associated with this socioeconomic origin.
+    /// Default campaign `SQM` tier (`1–10`) associated with this socioeconomic origin
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1, §3.1).
     #[must_use]
     pub const fn default_campaign_sqm(self) -> u8 {
         match self {
@@ -86,7 +89,7 @@ impl SocioeconomicClass {
     }
 }
 
-/// Complete Stage 1 Socioeconomic Origin specification (§1.1).
+/// Complete Stage 1 Socioeconomic Origin specification (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SocioeconomicOriginSpec {
     /// Canonical socioeconomic class enum.
@@ -101,11 +104,12 @@ pub struct SocioeconomicOriginSpec {
     pub adolescent_dropout_risk_max_2d20: i32,
 }
 
-/// Resolve Stage 1 Socioeconomic Origin from a `2d20` roll (`2..=40`) (§1.1).
+/// Resolve Stage 1 Socioeconomic Origin from a `2d20` roll (`2..=40`)
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1).
 #[must_use]
 pub const fn resolve_socioeconomic_origin(roll_2d20: i32) -> SocioeconomicOriginSpec {
     match roll_2d20 {
-        ..=5 => SocioeconomicOriginSpec {
+        ..=7 => SocioeconomicOriginSpec {
             class: SocioeconomicClass::DestituteUnderclassWarZone,
             label: "Destitute / Underclass / War Zone",
             school_quality_modifier_sqm: 4,
@@ -117,7 +121,7 @@ pub const fn resolve_socioeconomic_origin(roll_2d20: i32) -> SocioeconomicOrigin
             ],
             adolescent_dropout_risk_max_2d20: 16,
         },
-        6..=11 => SocioeconomicOriginSpec {
+        8..=14 => SocioeconomicOriginSpec {
             class: SocioeconomicClass::WorkingPoorLowerClass,
             label: "Working Poor / Inner-City Lower Class",
             school_quality_modifier_sqm: 2,
@@ -127,9 +131,9 @@ pub const fn resolve_socioeconomic_origin(roll_2d20: i32) -> SocioeconomicOrigin
                 "deception_bluff",
                 "manual_dexterity_tinkering",
             ],
-            adolescent_dropout_risk_max_2d20: 12,
+            adolescent_dropout_risk_max_2d20: 13,
         },
-        12..=25 => SocioeconomicOriginSpec {
+        15..=26 => SocioeconomicOriginSpec {
             class: SocioeconomicClass::WorkingMiddleClass,
             label: "Working / Middle Class",
             school_quality_modifier_sqm: 0,
@@ -139,9 +143,9 @@ pub const fn resolve_socioeconomic_origin(roll_2d20: i32) -> SocioeconomicOrigin
                 "running_sprinting",
                 "empathy_social_perception",
             ],
-            adolescent_dropout_risk_max_2d20: 8,
+            adolescent_dropout_risk_max_2d20: 9,
         },
-        26..=33 => SocioeconomicOriginSpec {
+        27..=33 => SocioeconomicOriginSpec {
             class: SocioeconomicClass::ProfessionalUpperMiddleClass,
             label: "Professional / Upper-Middle Class",
             school_quality_modifier_sqm: -2,
@@ -151,7 +155,7 @@ pub const fn resolve_socioeconomic_origin(roll_2d20: i32) -> SocioeconomicOrigin
                 "sketching_doodling",
                 "singing_vocal_rhythm",
             ],
-            adolescent_dropout_risk_max_2d20: 5,
+            adolescent_dropout_risk_max_2d20: 6,
         },
         34..=38 => SocioeconomicOriginSpec {
             class: SocioeconomicClass::AffluentElitePreparatory,
@@ -162,7 +166,7 @@ pub const fn resolve_socioeconomic_origin(roll_2d20: i32) -> SocioeconomicOrigin
                 "persuasion_fast_talk",
                 "empathy_social_perception",
             ],
-            adolescent_dropout_risk_max_2d20: 3,
+            adolescent_dropout_risk_max_2d20: 4,
         },
         39.. => SocioeconomicOriginSpec {
             class: SocioeconomicClass::WealthyCorporateAristocraticElite,
@@ -178,7 +182,8 @@ pub const fn resolve_socioeconomic_origin(roll_2d20: i32) -> SocioeconomicOrigin
     }
 }
 
-/// Campaign Socioeconomic Status & Upkeep Tier (`SQM 1–10`) (§3.1).
+/// Campaign Socioeconomic Status & Upkeep Tier (`SQM 1–10`)
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CampaignSqmSpec {
     /// Clamped campaign socioeconomic tier (`1..=10`).
@@ -193,42 +198,43 @@ pub struct CampaignSqmSpec {
     pub school_quality_modifier: i32,
 }
 
-/// Look up the canonical Campaign `SQM 1–10` Upkeep & Lifestyle specification (§3.1).
+/// Look up the canonical Campaign `SQM 1–10` Upkeep & Lifestyle specification
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.1).
 #[must_use]
 pub const fn lookup_campaign_sqm(sqm_tier: u8) -> CampaignSqmSpec {
     match sqm_tier {
         ..=2 => CampaignSqmSpec {
             sqm_tier: if sqm_tier == 0 { 1 } else { sqm_tier },
-            tier_name: "Destitute / Unhoused / Squatting",
-            monthly_liquid_baseline_usd: 200,
+            tier_name: "Destitute / Unhoused / Off-Grid Squat",
+            monthly_liquid_baseline_usd: 400,
             unhoused_fatigue_delta_int: 1,
             school_quality_modifier: 4,
         },
         3..=4 => CampaignSqmSpec {
             sqm_tier,
-            tier_name: "Working Poor / Tenement / Slum",
-            monthly_liquid_baseline_usd: 1_500,
+            tier_name: "Working Class / Hustler",
+            monthly_liquid_baseline_usd: 3_000,
             unhoused_fatigue_delta_int: 0,
             school_quality_modifier: 2,
         },
         5..=6 => CampaignSqmSpec {
             sqm_tier,
-            tier_name: "Middle Class / Standard Apartment",
-            monthly_liquid_baseline_usd: 4_500,
+            tier_name: "Middle Class / Salaried Professional",
+            monthly_liquid_baseline_usd: 9_000,
             unhoused_fatigue_delta_int: 0,
             school_quality_modifier: 0,
         },
         7..=8 => CampaignSqmSpec {
             sqm_tier,
-            tier_name: "Affluent Professional / Gated Condo",
-            monthly_liquid_baseline_usd: 15_000,
+            tier_name: "Affluent / Corporate Executive / Syndicate Boss",
+            monthly_liquid_baseline_usd: 50_000,
             unhoused_fatigue_delta_int: 0,
             school_quality_modifier: -2,
         },
         9.. => CampaignSqmSpec {
             sqm_tier: if sqm_tier > 10 { 10 } else { sqm_tier },
-            tier_name: "Corporate Executive / Penthouse / Compound",
-            monthly_liquid_baseline_usd: 100_000,
+            tier_name: "Ultra-High Net Worth / Sovereign Oligarch",
+            monthly_liquid_baseline_usd: 500_000,
             unhoused_fatigue_delta_int: 0,
             school_quality_modifier: -4,
         },
@@ -236,7 +242,8 @@ pub const fn lookup_campaign_sqm(sqm_tier: u8) -> CampaignSqmSpec {
 }
 
 define_coded_enum! {
-    /// Equipment restriction class for Legal vs. Black-Market Procurement (§3.2).
+    /// Equipment restriction class for Legal vs. Black-Market Procurement
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.2).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum BlackMarketRestrictionClass [count = 4] {
@@ -268,7 +275,8 @@ define_coded_enum! {
 }
 
 impl BlackMarketRestrictionClass {
-    /// External difficulty modifier ($\Delta_{\text{ext}}$) on the Black-Market procurement roll (§3.2).
+    /// External difficulty modifier ($\Delta_{\text{ext}}$) on the Black-Market procurement roll
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.2).
     #[must_use]
     pub const fn procurement_delta_ext(self) -> i32 {
         match self {
@@ -279,7 +287,8 @@ impl BlackMarketRestrictionClass {
         }
     }
 
-    /// Typical black-market price multiplier midpoint (`1.35x`, `2.5x`, `4.0x`, `10.0x`) (§3.2).
+    /// Typical black-market price multiplier midpoint (`1.35x`, `2.5x`, `4.0x`, `10.0x`)
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.2).
     #[must_use]
     pub const fn typical_price_multiplier(self) -> f64 {
         match self {
@@ -292,7 +301,8 @@ impl BlackMarketRestrictionClass {
 }
 
 define_coded_enum! {
-    /// Operational `Heat` & Law Enforcement Response Tier (`0–10`) (§3.2).
+    /// Operational `Heat` & Law Enforcement Response Tier (`0–10`)
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.2).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum OperationalHeatTier [count = 5] {
@@ -329,7 +339,8 @@ define_coded_enum! {
     }
 }
 
-/// Mechanical effects of a character's current Operational `Heat` (`0–10`) (§3.2).
+/// Mechanical effects of a character's current Operational `Heat` (`0–10`)
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OperationalHeatStatus {
     /// Clamped operational heat score (`0..=10`).
@@ -344,7 +355,8 @@ pub struct OperationalHeatStatus {
     pub description: &'static str,
 }
 
-/// Evaluate the mechanical effects of Operational `Heat` (`0..=10`) (§3.2).
+/// Evaluate the mechanical effects of Operational `Heat` (`0..=10`)
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.2).
 #[must_use]
 pub const fn evaluate_operational_heat(heat_score: u8) -> OperationalHeatStatus {
     let clamped = if heat_score > 10 { 10 } else { heat_score };
@@ -387,7 +399,8 @@ pub const fn evaluate_operational_heat(heat_score: u8) -> OperationalHeatStatus 
     }
 }
 
-/// Returns true if `skill_id` is part of the formal curriculum (`recommended_skills()`) of any active Stage 5 Career Term.
+/// Returns true if `skill_id` is part of the formal curriculum (`recommended_skills()`) of any active Stage 5 Career Term
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6–§1.7).
 #[must_use]
 pub fn is_career_formal_skill(skill_id: &str, cfg: &LifepathBuildConfig) -> bool {
     cfg.career_terms
@@ -396,7 +409,8 @@ pub fn is_career_formal_skill(skill_id: &str, cfg: &LifepathBuildConfig) -> bool
         .any(|t| t.track.recommended_skills().contains(&skill_id))
 }
 
-/// Ledger tracking Formal Training SP (`FOC + INS`) and Experience SP (`INS`) spent across post-school skill advancements.
+/// Ledger tracking Formal Training SP (`FOC + INS`) and Experience SP (`INS`) spent across post-school skill advancements
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SkillAllocationSpLedger {
     /// Total Formal Training SP budget granted by Stage 5 Career Terms.
@@ -424,7 +438,8 @@ pub struct SkillAllocationSpLedger {
 }
 
 /// Computes the exact Formal Training SP (`FOC + INS`) and Experience SP (`INS`) spent and remaining
-/// for a character's current `skills` map relative to their `baseline.baseline_skills` floor.
+/// for a character's current `skills` map relative to their `baseline.baseline_skills` floor
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7).
 ///
 /// - Skills in any active Career Term's `recommended_skills()` draw from `Formal SP` first (using
 ///   [`SkillTrainingMode::FormalTraining`]); if a step exceeds `formal_sp_remaining`, it spills over into
@@ -523,7 +538,8 @@ pub fn compute_skill_allocation_sp_ledger(
     }
 }
 
-/// Preview the [`SkillStepCostBreakdown`] and whether the character has enough SP to advance `skill_id` to `target_level`.
+/// Preview the [`SkillStepCostBreakdown`] and whether the character has enough SP to advance `skill_id` to `target_level`
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7).
 #[must_use]
 pub fn preview_next_skill_step_sp(
     skill_id: &str,
@@ -571,7 +587,8 @@ pub fn preview_next_skill_step_sp(
 
 /// Automatically allocates available `career_skill_budget` (`Formal SP`) and `elective_skill_budget` (`Experience SP`)
 /// across the character's Career Track `recommended_skills()` and universal electives, strictly respecting all 4 canonical
-/// DAG gates (`validate_skill_advancement`), the 5-factor SP step cost, and `max_post_school_gain_per_skill`.
+/// DAG gates (`validate_skill_advancement`), the 5-factor SP step cost, and `max_post_school_gain_per_skill`
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6–§1.7).
 pub fn auto_allocate_career_and_elective_skills(
     baseline: &LifepathBaselineResult,
     cfg: &LifepathBuildConfig,
@@ -651,7 +668,8 @@ pub fn auto_allocate_career_and_elective_skills(
     }
 }
 
-/// Summary of Lifepath exponential skill progression (`N in 0..=10`) from study hours.
+/// Summary of Lifepath exponential skill progression (`N in 0..=10`) from study hours
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §9.1.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LifepathSkillProgression {
     /// Unmodified study hours invested.
@@ -674,7 +692,7 @@ fn round_1_dec(val: f64) -> f64 {
 
 /// Computes non-linear post-creation skill level $N \in [0, 10]$ from study hours using the
 /// canonical Aptitude training time multiplier (`-15%` per `+1` APT, `+20%` per `-1` APT;
-/// `characteristics_and_aptitudes.md` §9.1.3).
+/// `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §9.1.3).
 ///
 /// Each rank $N \ge 1$ requires $100 \times 2^{N - 1} \times \text{difficulty\_multiplier} \times \text{aptitude\_time\_multiplier}$ hours.
 #[must_use]
@@ -858,8 +876,69 @@ mod tests {
 
     #[test]
     fn test_campaign_sqm_and_operational_heat() {
+        let origin_7 = resolve_socioeconomic_origin(7);
+        assert_eq!(
+            origin_7.class,
+            SocioeconomicClass::DestituteUnderclassWarZone
+        );
+        assert_eq!(origin_7.adolescent_dropout_risk_max_2d20, 16);
+
+        let origin_14 = resolve_socioeconomic_origin(14);
+        assert_eq!(origin_14.class, SocioeconomicClass::WorkingPoorLowerClass);
+        assert_eq!(origin_14.adolescent_dropout_risk_max_2d20, 13);
+
+        let origin_26 = resolve_socioeconomic_origin(26);
+        assert_eq!(origin_26.class, SocioeconomicClass::WorkingMiddleClass);
+        assert_eq!(origin_26.adolescent_dropout_risk_max_2d20, 9);
+
+        let origin_33 = resolve_socioeconomic_origin(33);
+        assert_eq!(
+            origin_33.class,
+            SocioeconomicClass::ProfessionalUpperMiddleClass
+        );
+        assert_eq!(origin_33.adolescent_dropout_risk_max_2d20, 6);
+
+        let origin_38 = resolve_socioeconomic_origin(38);
+        assert_eq!(
+            origin_38.class,
+            SocioeconomicClass::AffluentElitePreparatory
+        );
+        assert_eq!(origin_38.adolescent_dropout_risk_max_2d20, 4);
+
+        let origin_39 = resolve_socioeconomic_origin(39);
+        assert_eq!(
+            origin_39.class,
+            SocioeconomicClass::WealthyCorporateAristocraticElite
+        );
+        assert_eq!(origin_39.adolescent_dropout_risk_max_2d20, 2);
+
         let sqm1 = lookup_campaign_sqm(1);
+        assert_eq!(sqm1.tier_name, "Destitute / Unhoused / Off-Grid Squat");
+        assert_eq!(sqm1.monthly_liquid_baseline_usd, 400);
         assert_eq!(sqm1.unhoused_fatigue_delta_int, 1);
+
+        let sqm4 = lookup_campaign_sqm(4);
+        assert_eq!(sqm4.tier_name, "Working Class / Hustler");
+        assert_eq!(sqm4.monthly_liquid_baseline_usd, 3_000);
+
+        let sqm6 = lookup_campaign_sqm(6);
+        assert_eq!(sqm6.tier_name, "Middle Class / Salaried Professional");
+        assert_eq!(sqm6.monthly_liquid_baseline_usd, 9_000);
+
+        let sqm8 = lookup_campaign_sqm(8);
+        assert_eq!(
+            sqm8.tier_name,
+            "Affluent / Corporate Executive / Syndicate Boss"
+        );
+        assert_eq!(sqm8.monthly_liquid_baseline_usd, 50_000);
+
+        let sqm10 = lookup_campaign_sqm(10);
+        assert_eq!(
+            sqm10.tier_name,
+            "Ultra-High Net Worth / Sovereign Oligarch"
+        );
+        assert_eq!(sqm10.monthly_liquid_baseline_usd, 500_000);
+
         let heat4 = evaluate_operational_heat(4);
         assert_eq!(heat4.tier, OperationalHeatTier::Heat3To5ActiveWarrantApb);
         assert_eq!(heat4.public_check_delta_ext, 4);

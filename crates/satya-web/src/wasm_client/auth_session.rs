@@ -49,8 +49,8 @@ pub fn satya_fill_demo(username: String, password: String, display_name: String)
             "ai-gm-config-fields",
             if ai_enabled { "grid" } else { "none" },
         );
-        set_display("ttrpg-drawer", "block");
-        set_display("tabletop-canvas-card", "block");
+        set_display("ttrpg-drawer", "flex");
+        set_display("tabletop-canvas-card", "flex");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else if username.starts_with("host_") {
         set_select_value("session-mode-select", "MEETING");
@@ -66,8 +66,8 @@ pub fn satya_fill_demo(username: String, password: String, display_name: String)
             set_select_value("session-mode-select", "TTRPG");
             set_input_checked("enable-ai-gm", false);
             set_display("ai-gm-config-fields", "none");
-            set_display("ttrpg-drawer", "block");
-            set_display("tabletop-canvas-card", "block");
+            set_display("ttrpg-drawer", "flex");
+            set_display("tabletop-canvas-card", "flex");
             sync_chat_options_for_mode(SessionMode::Ttrpg);
             "TTRPG".to_string()
         } else {
@@ -92,22 +92,22 @@ pub fn satya_mode_changed() {
         sync_role_options_for_mode("TTRPG_AI_GM", Some("PLAYER"));
         set_input_checked("enable-ai-gm", true);
         set_display("ai-gm-config-fields", "grid");
-        set_display("ttrpg-drawer", "block");
-        set_display("tabletop-canvas-card", "block");
+        set_display("ttrpg-drawer", "flex");
+        set_display("tabletop-canvas-card", "flex");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else if mode == "TTRPG_GM_AI" {
         sync_role_options_for_mode("TTRPG_GM_AI", Some("GM"));
         set_input_checked("enable-ai-gm", true);
         set_display("ai-gm-config-fields", "grid");
-        set_display("ttrpg-drawer", "block");
-        set_display("tabletop-canvas-card", "block");
+        set_display("ttrpg-drawer", "flex");
+        set_display("tabletop-canvas-card", "flex");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     } else {
         sync_role_options_for_mode("TTRPG", Some("GM"));
         set_input_checked("enable-ai-gm", false);
         set_display("ai-gm-config-fields", "none");
-        set_display("ttrpg-drawer", "block");
-        set_display("tabletop-canvas-card", "block");
+        set_display("ttrpg-drawer", "flex");
+        set_display("tabletop-canvas-card", "flex");
         sync_chat_options_for_mode(SessionMode::Ttrpg);
     }
 }
@@ -217,7 +217,7 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
 
     if is_admin {
         set_display("iggy-non-admin-notice", "none");
-        set_display("admin-inspector-card", "block");
+        set_display("admin-inspector-card", "flex");
         satya_refresh_metrics();
     } else {
         set_display("iggy-non-admin-notice", "block");
@@ -417,7 +417,7 @@ fn enter_session(data: SessionEnterResponse) {
         if session_mode == SessionMode::Meeting {
             "none"
         } else {
-            "block"
+            "flex"
         },
     );
     set_display(
@@ -425,7 +425,7 @@ fn enter_session(data: SessionEnterResponse) {
         if session_mode == SessionMode::Meeting {
             "none"
         } else {
-            "block"
+            "flex"
         },
     );
     render_roster();

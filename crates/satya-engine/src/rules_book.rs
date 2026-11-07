@@ -1,4 +1,5 @@
-//! Canonical Satya TTRPG Rules Book catalog and multi-chapter search engine.
+//! Canonical Satya TTRPG Rules Book catalog and multi-chapter search engine
+//! (`docs/ttrpg/SUMMARY.md`, Parts I–VI, Chapters 1–14).
 
 use satya_schema::{
     RulesBookCatalogResponse, RulesChapterDocument, RulesChapterSummary, RulesSearchHit,
@@ -9,7 +10,7 @@ pub use crate::rules_book_html::{
     render_mermaid_to_html, render_rules_markdown_to_html, slugify_heading,
 };
 
-/// Static compile-time definition of a canonical chapter in `docs/ttrpg/`.
+/// Static compile-time definition of a canonical chapter in `docs/ttrpg/SUMMARY.md`.
 struct StaticChapterSpec {
     chapter_id: &'static str,
     part: &'static str,
@@ -53,7 +54,7 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
         part: "Part II: Core Mechanics, Task Resolution & Action Economy",
         title: "Cascading 2d20 Engine & Task Resolution",
         relative_path: "02-core-mechanics/cascading_d20_and_tasks.md",
-        description: "Canonical Two-List Cascading (2d20) dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, 5-step Task Pipeline, Tool Tiers, Gate Classifications, Master Task Table, and Extended Project Clocks.",
+        description: "Canonical Two-List Cascading (2d20) dice mechanic, Player Personal Target TN_P = 31 - C_P + Delta_tool vs. Hidden GM Resistance Target TN_GM = 21 - Delta_ext (1-Pair Tiered GM Resistance), carry modes, 7-Way Contested Outcome Matrix, 5-step Task Pipeline, Tool Tiers, Gate Classifications, Master Task Table, and Extended Project Clocks.",
         embedded_markdown: include_str!(
             "../../../docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md"
         ),
@@ -127,9 +128,9 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
     StaticChapterSpec {
         chapter_id: "ranged_combat_and_armor",
         part: "Part V: Combat Architecture, Close Quarters & Firefights",
-        title: "Ranged Combat, Suppression, Armor & Weapon Reliability",
+        title: "Ranged Combat, Granular Ballistics, Firearms Engineering & Armor",
         relative_path: "05-combat/ranged_combat_and_armor.md",
-        description: "Ranged fire modes & Recoil Ratings (R), Suppression vs. Morale, Armor Penetration (PR) vs. Behind-Armor Blunt Trauma (BABT), Weapon Reliability (Rel) & Malfunctions, and firefight walkthroughs.",
+        description: "Granular firearm & ammunition physics: calibers (9mm to .50 BMG), bullet mass & powder grains -> impact kinetic energy (E_k), action types, feed systems, barrel length/quality/mount, Center of Gravity, Overall Length (OAL), Accuracy (Acc) & tumbling wound channels (W_yaw), Tolerance vs. Reliability (Rel), Clear Jam & Field-Strip times, Master Weapons & Armor Catalogs (PR vs. BABT), and worked firefights.",
         embedded_markdown: include_str!("../../../docs/ttrpg/05-combat/ranged_combat_and_armor.md"),
     },
     StaticChapterSpec {

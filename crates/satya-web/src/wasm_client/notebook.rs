@@ -1118,6 +1118,7 @@ pub fn satya_select_rules_chapter(chapter_id: String) {
     set_text("rules-chapter-pill", &pill);
     if let Some(vp) = get_element("rules-book-viewport") {
         vp.set_inner_html(&html);
+        vp.set_scroll_top(0);
     }
 }
 
@@ -1140,7 +1141,7 @@ pub fn satya_search_rules_book() {
             r#"<div class="pill pill-muted">No rules sections matched "{}"</div>"#,
             escape_html(query.trim())
         ));
-        set_display("rules-search-results", "block");
+        set_display("rules-search-results", "flex");
         return;
     }
     let items: String = hits
@@ -1157,7 +1158,7 @@ pub fn satya_search_rules_book() {
         .collect::<Vec<_>>()
         .join("");
     results_el.set_inner_html(&items);
-    set_display("rules-search-results", "block");
+    set_display("rules-search-results", "flex");
 }
 
 /// Loads a canonical worked example from the Satya Rules Book into the Center-Bottom `2d20`

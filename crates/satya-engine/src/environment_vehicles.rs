@@ -1,30 +1,31 @@
-//! # Movement Architecture, Encumbrance, Vehicles, Chases & Environmental Survival (`06-health-and-survival`)
+//! # Movement Architecture, Encumbrance, Vehicles, Chases & Environmental Survival (`06-health-and-survival/movement_vehicles_and_environment.md`)
 //!
 //! Canonical Rust implementation of `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md`:
-//! - **§1 Movement Architecture**: Stride Factor ($\text{SF} = \text{HGT}/1.75$), Maximum Sprint Velocity
+//! - **§1 Movement Architecture (`§1.1–§1.4`)**: Stride Factor ($\text{SF} = \text{HGT}/1.75$), Maximum Sprint Velocity
 //!   ($V_{\text{sprint}} = (4.0 + 0.35\times\text{SPD}_{\text{eff}})\times\text{SF}$), 5 Combat Movement Gaits,
 //!   Jumping/Climbing/Swimming/Zero-G EVA, and Overland Travel Paces & Terrain Multipliers.
-//! - **§2 Encumbrance & Load-Bearing (`Tiers 0–4`)**: Base Comfort Load
+//! - **§2 Encumbrance & Load-Bearing (`§2.1–§2.3`, `Tiers 0–4`)**: Base Comfort Load
 //!   ($L_{\text{base}} = (\text{MAS}/70.0)\times(\text{FOR}\times 1.2\text{ kg})$), Ergonomic Load Multipliers
 //!   (`×0.8` to `×1.5` and Powered Exo-Rig offsets), and the 5 Encumbrance Tiers (`0–4`).
-//! - **§3 Vehicles, Chases & High-G / Crash Physics**: Vehicle Envelope Ceilings (`Tempo`, `Control`, `Force/Root`),
+//! - **§3 Vehicles, Chases & High-G / Crash Physics (`§3.1–§3.3`)**: Vehicle Envelope Ceilings (`Tempo`, `Control`, `Force/Root`),
 //!   Chase Range Bands, Collision Kinetic Trauma, and High-G `G-LOC` Checks.
-//! - **§4 Environmental Survival**: Hydration & Dehydration (`Stages 0–4` with Fatigue Floors),
+//! - **§4 Environmental Survival (`§4.1–§4.4`)**: Hydration & Dehydration (`Stages 0–4` with Fatigue Floors),
 //!   Caloric Deficit & Starvation, Thermal Extremes (`CLO` Suit Tiers, Hypothermia, Frostbite, Heatstroke),
 //!   Sleep Deprivation (`24h/48h/72h+`), Altitude/Vacuum Hypoxia, 4-Parameter Toxins, and Ionizing Radiation (`Sv`).
 
 use serde::{Deserialize, Serialize};
 
 use crate::action_economy::EncumbranceTier;
-use crate::health_survival::PhysiologicalStatusCondition;
+use crate::health_survival::{PhysiologicalStatusCondition, StructuralWoundTier};
 use crate::impl_static_catalog;
 use crate::primitives::{ConditionImpact, ConditionSource, StaticCatalog, Triad};
 
 // ============================================================================
-// 5. Movement Architecture, Combat Gaits, Special Modes & Overland (§1)
+// 1. Movement Architecture, Combat Gaits, Special Modes & Overland (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.1–§1.4)
 // ============================================================================
 
-/// Baseline Stride Factor ($\text{SF}$) and Sprint Velocity ($V_{\text{sprint}}$) (`movement_vehicles_and_environment.md` §1.1).
+/// Baseline Stride Factor ($\text{SF}$) and Sprint Velocity ($V_{\text{sprint}}$)
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SprintVelocityMetrics {
     /// Stride Factor $\text{SF} = \text{HGT} / 1.75\text{ m}$.
@@ -37,7 +38,8 @@ pub struct SprintVelocityMetrics {
     pub v_sprint_m_per_tick: f64,
 }
 
-/// Computes Stride Factor ($\text{SF}$) and Maximum Sprint Velocity ($V_{\text{sprint}}$) (`movement_vehicles_and_environment.md` §1.1).
+/// Computes Stride Factor ($\text{SF}$) and Maximum Sprint Velocity ($V_{\text{sprint}}$)
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.1).
 #[must_use]
 pub fn compute_stride_and_sprint_velocity(spd_eff: i32, hgt_m: f64) -> SprintVelocityMetrics {
     let spd = spd_eff.clamp(0, 25);
@@ -55,7 +57,8 @@ pub fn compute_stride_and_sprint_velocity(spd_eff: i32, hgt_m: f64) -> SprintVel
     }
 }
 
-/// The 5 Canonical Tactical Combat Movement Gaits (`movement_vehicles_and_environment.md` §1.2).
+/// The 5 Canonical Tactical Combat Movement Gaits
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CombatMovementGait {
@@ -72,7 +75,8 @@ pub enum CombatMovementGait {
 }
 
 impl CombatMovementGait {
-    /// Fraction of $V_{\text{sprint}}$ (`0.08`, `0.18`, `0.35`, `0.65`, `1.00`).
+    /// Fraction of $V_{\text{sprint}}$ (`0.08`, `0.18`, `0.35`, `0.65`, `1.00`,
+    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
     #[must_use]
     pub const fn sprint_fraction(self) -> f64 {
         match self {
@@ -84,7 +88,8 @@ impl CombatMovementGait {
         }
     }
 
-    /// Extra Recoil (`R`) added when firing a ranged weapon while moving at this gait (`0`, `0`, `+2`, `+4`, or un-aimable).
+    /// Extra Recoil (`R`) added when firing a ranged weapon while moving at this gait (`0`, `0`, `+2`, `+4`, or un-aimable,
+    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
     #[must_use]
     pub const fn ranged_recoil_adder(self) -> i32 {
         match self {
@@ -95,7 +100,8 @@ impl CombatMovementGait {
         }
     }
 
-    /// Exertion Marks accumulated per `20 Ticks` (`5 seconds`) of continuous movement in this gait.
+    /// Exertion Marks accumulated per `20 Ticks` (`5 seconds`) of continuous movement in this gait
+    /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
     #[must_use]
     pub const fn exertion_marks_per_20_ticks(self) -> i32 {
         match self {
@@ -106,7 +112,8 @@ impl CombatMovementGait {
     }
 }
 
-/// Complete combat movement and triad interaction metrics for a chosen [`CombatMovementGait`] (`movement_vehicles_and_environment.md` §1.2).
+/// Complete combat movement and triad interaction metrics for a chosen [`CombatMovementGait`]
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CombatGaitEvaluation {
     /// Chosen gait mode.
@@ -127,7 +134,8 @@ pub struct CombatGaitEvaluation {
     pub exertion_marks_per_20_ticks: i32,
 }
 
-/// Evaluates velocity (`m/s`, `m/Tick`, distance per `10 Ticks`) and Tactical Triad constraints for a [`CombatMovementGait`] (`movement_vehicles_and_environment.md` §1.2).
+/// Evaluates velocity (`m/s`, `m/Tick`, distance per `10 Ticks`) and Tactical Triad constraints for a [`CombatMovementGait`]
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
 #[must_use]
 pub fn evaluate_combat_movement_gait(
     gait: CombatMovementGait,
@@ -162,7 +170,7 @@ pub fn evaluate_combat_movement_gait(
     }
 }
 
-/// Jump & Vault distances in meters (`movement_vehicles_and_environment.md` §1.3.1).
+/// Jump & Vault distances in meters (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct JumpDistances {
     /// Running Broad Jump: $2.0 + 0.25\times\text{POW} + 0.3\times\text{Successes}$ (`4.5 m` baseline at `POW 10`).
@@ -175,7 +183,8 @@ pub struct JumpDistances {
     pub ledge_grab_pullup_height_m: f64,
 }
 
-/// Computes Running Broad Jump, Standing Broad Jump, Running High Jump, and Ledge-Grab Scaling heights (`movement_vehicles_and_environment.md` §1.3.1).
+/// Computes Running Broad Jump, Standing Broad Jump, Running High Jump, and Ledge-Grab Scaling heights
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.1).
 #[must_use]
 pub fn compute_jump_distances(pow: f64, hgt_m: f64, cascade_successes: i32) -> JumpDistances {
     let p = pow.max(0.0);
@@ -195,7 +204,33 @@ pub fn compute_jump_distances(pow: f64, hgt_m: f64, cascade_successes: i32) -> J
     }
 }
 
-/// Evaluates surface swimming speed (`20%` of $V_{\text{sprint}}$) and water encumbrance hazards (`movement_vehicles_and_environment.md` §1.3.3).
+/// Evaluates vertical climbing speed and `FOR`/`KIN` check difficulty
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.2).
+///
+/// Returns `(speed_m_per_tick, speed_m_per_s, requires_check, total_delta_ext)`:
+/// - Ladder or knotted rope: `0.5 m/Tick` (`2.0 m/s`) without a check (`(0.5, 2.0, false, 0)`).
+/// - Rough wall / rock face / pipe: `0.15 m/Tick` (`0.6 m/s`) with a `FOR` + `KIN` check and `+2` $\Delta_{\text{ext}}$ per Encumbrance Tier.
+#[must_use]
+pub const fn evaluate_climbing_movement(
+    is_ladder_or_knotted_rope: bool,
+    encumbrance: LoadEncumbranceTier,
+    surface_base_delta_ext: i32,
+) -> (f64, f64, bool, i32) {
+    if is_ladder_or_knotted_rope {
+        (0.5, 2.0, false, 0)
+    } else {
+        let base_ext = if surface_base_delta_ext < 0 {
+            0
+        } else {
+            surface_base_delta_ext
+        };
+        let total_delta_ext = base_ext + 2 * (encumbrance.tier_number() as i32);
+        (0.15, 0.6, true, total_delta_ext)
+    }
+}
+
+/// Evaluates surface swimming speed (`20%` of $V_{\text{sprint}}$) and water encumbrance hazards
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.3).
 ///
 /// Returns `(swim_speed_m_per_sec, swim_speed_m_per_tick, stay_afloat_delta_ext, sinks_at_1m_per_sec)`.
 #[must_use]
@@ -222,7 +257,26 @@ pub fn evaluate_swimming_movement(
     )
 }
 
-/// Non-Combat Overland Travel Pace (`movement_vehicles_and_environment.md` §1.4).
+/// Evaluates a Microgravity / Zero-G EVA push-off or thruster maneuver
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.4).
+///
+/// Returns `(velocity_m_per_s, is_adrift_tempo_zero)` where $v = \text{Impulse} / \text{MAS}$ and
+/// a failed `KIN` maneuver check leaves the character **Adrift** (`Tempo = 0` until grabbing a handhold or firing thrusters).
+#[must_use]
+pub fn evaluate_zero_g_maneuver(
+    impulse_newton_seconds: f64,
+    mass_kg: f64,
+    maneuver_check_succeeded: bool,
+) -> (f64, bool) {
+    let velocity_m_per_s = if mass_kg > 0.0 {
+        impulse_newton_seconds.max(0.0) / mass_kg
+    } else {
+        0.0
+    };
+    (velocity_m_per_s, !maneuver_check_succeeded)
+}
+
+/// Non-Combat Overland Travel Pace (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OverlandTravelPace {
@@ -236,7 +290,8 @@ pub enum OverlandTravelPace {
     SustainedCrossCountryRun,
 }
 
-/// Terrain multiplier to movement speed and exertion (`movement_vehicles_and_environment.md` §1.4).
+/// Terrain multiplier to movement speed and exertion
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OverlandTerrainKind {
@@ -251,7 +306,8 @@ pub enum OverlandTerrainKind {
 }
 
 impl OverlandTerrainKind {
-    /// Speed multiplier (`1.00`, `0.75`, `0.50`, `0.25`).
+    /// Speed multiplier (`1.00`, `0.75`, `0.50`, `0.25`,
+    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4).
     #[must_use]
     pub const fn speed_multiplier(self) -> f64 {
         match self {
@@ -262,7 +318,8 @@ impl OverlandTerrainKind {
         }
     }
 
-    /// Extra Exertion Marks per travel interval (`0`, `0`, `1`, `2`).
+    /// Extra Exertion Marks per travel interval (`0`, `0`, `1`, `2`,
+    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4).
     #[must_use]
     pub const fn extra_exertion_marks(self) -> i32 {
         match self {
@@ -273,7 +330,8 @@ impl OverlandTerrainKind {
     }
 }
 
-/// Evaluates effective overland travel speed (`km/h`) and daily range (`km` over `8 hours`) (`movement_vehicles_and_environment.md` §1.4).
+/// Evaluates effective overland travel speed (`km/h`) and daily range (`km` over `8 hours`)
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4).
 #[must_use]
 pub fn evaluate_overland_travel(
     pace: OverlandTravelPace,
@@ -291,10 +349,11 @@ pub fn evaluate_overland_travel(
 }
 
 // ============================================================================
-// 6. Encumbrance & Load-Bearing Architecture: Tiers 0–4 (§2)
+// 2. Encumbrance & Load-Bearing Architecture: Tiers 0–4 (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.1–§2.3)
 // ============================================================================
 
-/// Ergonomic distribution method for carried equipment (`movement_vehicles_and_environment.md` §2.2).
+/// Ergonomic distribution method for carried equipment
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CarryErgonomicMethod {
@@ -309,7 +368,8 @@ pub enum CarryErgonomicMethod {
 }
 
 impl CarryErgonomicMethod {
-    /// Canonical ergonomic mass multiplier (`0.8`, `1.0`, `1.3`, `1.5`).
+    /// Canonical ergonomic mass multiplier (`0.8`, `1.0`, `1.3`, `1.5`,
+    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.2).
     #[must_use]
     pub const fn ergonomic_factor(self) -> f64 {
         match self {
@@ -321,7 +381,8 @@ impl CarryErgonomicMethod {
     }
 }
 
-/// A carried item or load group with physical mass (`kg`) and [`CarryErgonomicMethod`].
+/// A carried item or load group with physical mass (`kg`) and [`CarryErgonomicMethod`]
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.2).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CarriedLoadItem {
     /// Physical mass in kilograms (`kg`).
@@ -330,12 +391,12 @@ pub struct CarriedLoadItem {
     pub carry_method: CarryErgonomicMethod,
 }
 
-/// The 5 Canonical Encumbrance Tiers (`Tiers 0–4`) from `movement_vehicles_and_environment.md` §2.3,
+/// The 5 Canonical Encumbrance Tiers (`Tiers 0–4`) from `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.3 Table,
 /// unified with [`crate::action_economy::EncumbranceTier`].
 pub type LoadEncumbranceTier = EncumbranceTier;
 
 /// Complete evaluation of a character's Base Comfort Load ($L_{\text{base}}$), Effective Load ($L_{\text{eff}}$),
-/// and resulting [`LoadEncumbranceTier`] (`movement_vehicles_and_environment.md` §2.1–§2.3).
+/// and resulting [`LoadEncumbranceTier`] (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.1–§2.3).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct EncumbranceEvaluation {
     /// Base Uninhibited Comfort Load $L_{\text{base}} = (\text{MAS}/70.0) \times (\text{FOR} \times 1.2\text{ kg})$.
@@ -360,7 +421,8 @@ pub struct EncumbranceEvaluation {
     pub max_deadlift_drag_limit_kg: f64,
 }
 
-/// Computes Base Comfort Load $L_{\text{base}} = (\text{MAS}/70.0) \times (\text{FOR} \times 1.2\text{ kg})$ (`movement_vehicles_and_environment.md` §2.1).
+/// Computes Base Comfort Load $L_{\text{base}} = (\text{MAS}/70.0) \times (\text{FOR} \times 1.2\text{ kg})$
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.1).
 #[must_use]
 pub fn compute_base_comfort_load_kg(mas_kg: f64, for_stat: i32) -> f64 {
     let mas = mas_kg.max(20.0);
@@ -368,7 +430,8 @@ pub fn compute_base_comfort_load_kg(mas_kg: f64, for_stat: i32) -> f64 {
     (mas / 70.0) * (f * 1.2)
 }
 
-/// Evaluates a character's carried items and powered exoskeleton offset against their Base Comfort Load ($L_{\text{base}}$) (`movement_vehicles_and_environment.md` §2.1–§2.3).
+/// Evaluates a character's carried items and powered exoskeleton offset against their Base Comfort Load ($L_{\text{base}}$)
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.1–§2.3).
 #[must_use]
 pub fn evaluate_encumbrance_load(
     mas_kg: f64,
@@ -417,10 +480,11 @@ impl ConditionSource for EncumbranceEvaluation {
 }
 
 // ============================================================================
-// 7. Vehicles, High-Speed Chases & Crash / G-Force Physics (§3)
+// 3. Vehicles, High-Speed Chases & Crash / G-Force Physics (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.1–§3.3)
 // ============================================================================
 
-/// Chase Range Bands in a vehicular pursuit or aerial dogfight (`movement_vehicles_and_environment.md` §3.2).
+/// Chase Range Bands in a vehicular pursuit or aerial dogfight
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChaseRangeBand {
@@ -437,7 +501,8 @@ pub enum ChaseRangeBand {
 }
 
 impl ChaseRangeBand {
-    /// Shifts the range band by `steps` (`-1` closes distance toward `BumperToBumper`, `+1` opens distance toward `LostVisual`).
+    /// Shifts the range band by `steps` (`-1` closes distance toward `BumperToBumper`, `+1` opens distance toward `LostVisual`,
+    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.2).
     #[must_use]
     pub const fn shift(self, steps: i32) -> Self {
         const BANDS: [ChaseRangeBand; 5] = [
@@ -466,7 +531,8 @@ impl ChaseRangeBand {
     }
 }
 
-/// Mechanical Envelope Ceilings of a ground, maritime, aerial, or orbital vehicle (`movement_vehicles_and_environment.md` §3.1).
+/// Mechanical Envelope Ceilings of a ground, maritime, aerial, or orbital vehicle
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.1).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VehicleEnvelopeProfile {
     /// Display name of the vehicle.
@@ -479,7 +545,8 @@ pub struct VehicleEnvelopeProfile {
     pub armor_pr: i32,
 }
 
-/// Outcome of a Vehicular Chase Exchange (`movement_vehicles_and_environment.md` §3.1–§3.2).
+/// Outcome of a Vehicular Chase Exchange
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.1–§3.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VehicleChaseOutcome {
     /// Pilot's effective `(tempo, control, force)` triad clamped to the vehicle's envelope ceilings.
@@ -491,7 +558,8 @@ pub struct VehicleChaseOutcome {
 }
 
 /// Evaluates a driver/pilot's Effective Vehicular Triad Ceilings (bounded by both pilot attributes and the
-/// [`VehicleEnvelopeProfile`]) and resolves a chase exchange (`movement_vehicles_and_environment.md` §3.1–§3.2).
+/// [`VehicleEnvelopeProfile`]) and resolves a chase exchange
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.1–§3.2).
 #[must_use]
 pub fn evaluate_vehicle_chase_exchange(
     vehicle: &VehicleEnvelopeProfile,
@@ -530,7 +598,8 @@ pub fn evaluate_vehicle_chase_exchange(
     }
 }
 
-/// Evaluates **Collision Kinetic Trauma** and **High-G Blackout (`G-LOC`)** (`movement_vehicles_and_environment.md` §3.3).
+/// Evaluates **Collision Kinetic Trauma** and **High-G Blackout (`G-LOC`)**
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.3).
 ///
 /// Returns `(raw_collision_blunt_trauma, g_loc_delta_ext, suffers_tunnel_vision_dazzled, suffers_g_loc_unconscious)`.
 #[must_use]
@@ -578,10 +647,11 @@ pub fn evaluate_collision_and_g_force(
 }
 
 // ============================================================================
-// 8. Environment & Survival Systems (§4)
+// 4. Environment & Survival Systems (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.1–§4.4)
 // ============================================================================
 
-/// Climate & operational activity level governing Daily Water Requirement ($W_{\text{req}}$, `movement_vehicles_and_environment.md` §4.1).
+/// Climate & operational activity level governing Daily Water Requirement ($W_{\text{req}}$,
+/// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HydrationEnvironment {
@@ -594,7 +664,8 @@ pub enum HydrationEnvironment {
 }
 
 impl HydrationEnvironment {
-    /// Canonical Daily Water Requirement ($W_{\text{req}}$) in Liters (`3.0`, `5.0`, `9.0`).
+    /// Canonical Daily Water Requirement ($W_{\text{req}}$) in Liters (`3.0`, `5.0`, `9.0`,
+    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.1).
     #[must_use]
     pub const fn daily_water_requirement_liters(self) -> f64 {
         match self {
@@ -605,7 +676,8 @@ impl HydrationEnvironment {
     }
 }
 
-/// The Five Stages of Dehydration (`Stages 0–4`, `movement_vehicles_and_environment.md` §4.1).
+/// The Five Stages of Dehydration (`Stages 0–4`,
+/// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.1 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DehydrationStage {
@@ -621,7 +693,8 @@ pub enum DehydrationStage {
     Stage4Lethal,
 }
 
-/// Mechanical evaluation of a character's Hydration / Dehydration state (`movement_vehicles_and_environment.md` §4.1).
+/// Mechanical evaluation of a character's Hydration / Dehydration state
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.1 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DehydrationEvaluation {
     /// Daily water requirement $W_{\text{req}}$ in Liters.
@@ -645,7 +718,10 @@ pub struct DehydrationEvaluation {
 }
 
 /// Evaluates a character's [`DehydrationStage`] from their daily water requirement ($W_{\text{req}}$) and
-/// unreplaced water deficit (`movement_vehicles_and_environment.md` §4.1).
+/// unreplaced water deficit (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.1).
+///
+/// Advances `+1` stage for every `25%` of Daily Water Requirement missed plus `+1` stage for every `2.0 Liters`
+/// of unreplaced extra sweat deficit.
 #[must_use]
 pub fn evaluate_dehydration(
     env: HydrationEnvironment,
@@ -653,11 +729,12 @@ pub fn evaluate_dehydration(
     extra_sweat_deficit_liters: f64,
 ) -> DehydrationEvaluation {
     let req = env.daily_water_requirement_liters();
-    let missed =
-        (req - water_consumed_liters.max(0.0)).max(0.0) + extra_sweat_deficit_liters.max(0.0);
-    let stages_by_pct = ((missed / (0.25 * req)) + 1e-9).floor() as i32;
-    let stages_by_liters = ((missed / 2.0) + 1e-9).floor() as i32;
-    let stage_num = stages_by_pct.max(stages_by_liters).clamp(0, 4);
+    let daily_missed = (req - water_consumed_liters.max(0.0)).max(0.0);
+    let sweat_missed = extra_sweat_deficit_liters.max(0.0);
+    let missed = daily_missed + sweat_missed;
+    let stages_by_pct = ((daily_missed / (0.25 * req)) + 1e-9).floor() as i32;
+    let stages_by_sweat = ((sweat_missed / 2.0) + 1e-9).floor() as i32;
+    let stage_num = (stages_by_pct + stages_by_sweat).clamp(0, 4);
 
     let (
         stage,
@@ -701,14 +778,16 @@ impl ConditionSource for DehydrationEvaluation {
 }
 
 /// Enforces all active **Fatigue Floors** (from Dehydration, Starvation, and Sleep Deprivation) so that
-/// rest cannot reduce `fatigue_level` below the highest active floor (`movement_vehicles_and_environment.md` §4.1).
+/// rest cannot reduce `fatigue_level` below the highest active floor
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.1).
 #[must_use]
 pub fn enforce_fatigue_floor(current_fatigue_level: i32, active_floors: &[i32]) -> i32 {
     let max_floor = active_floors.iter().copied().max().unwrap_or(0).clamp(0, 5);
     current_fatigue_level.max(max_floor).clamp(0, 5)
 }
 
-/// Evaluation of Short-Term Fasting and Prolonged Caloric Deficit / Starvation (`movement_vehicles_and_environment.md` §4.2).
+/// Evaluation of Short-Term Fasting and Prolonged Caloric Deficit / Starvation
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.2).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct StarvationEvaluation {
     /// Internal difficulty modifier $\Delta_{\text{int}}$.
@@ -732,6 +811,7 @@ impl ConditionSource for StarvationEvaluation {
         ConditionImpact {
             delta_int: self.delta_int,
             fatigue_floor: self.fatigue_level_floor,
+            triad_locked_zero: Triad::splat(self.fatal_organ_failure),
             is_unconscious: self.fatal_organ_failure,
             ..ConditionImpact::ZERO
         }
@@ -739,7 +819,7 @@ impl ConditionSource for StarvationEvaluation {
 }
 
 /// Evaluates Short-Term Fasting (`Days 1–3`) and Prolonged Starvation (`Days 4–30+` or cumulative `10,000 kcal` deficits)
-/// (`movement_vehicles_and_environment.md` §4.2).
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.2).
 #[must_use]
 pub fn evaluate_starvation_and_caloric_deficit(
     hours_without_food: i32,
@@ -781,7 +861,8 @@ pub fn evaluate_starvation_and_caloric_deficit(
     }
 }
 
-/// The 5 Canonical Clothing / Suit Insulation (`CLO`) Tiers (`movement_vehicles_and_environment.md` §4.3).
+/// The 5 Canonical Clothing / Suit Insulation (`CLO`) Tiers
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ClothingSuitTier {
@@ -798,7 +879,8 @@ pub enum ClothingSuitTier {
 }
 
 impl ClothingSuitTier {
-    /// Comfort zone `(min_temp_c, max_temp_c)` in degrees Celsius.
+    /// Comfort zone `(min_temp_c, max_temp_c)` in degrees Celsius
+    /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3 Table).
     #[must_use]
     pub const fn comfort_zone_celsius(self) -> (f64, f64) {
         match self {
@@ -810,7 +892,8 @@ impl ClothingSuitTier {
         }
     }
 
-    /// Cold Protection Bonus ($\Delta_{\text{cold}}$ applied to $\Delta_{\text{ext}}$ vs. Cold).
+    /// Cold Protection Bonus ($\Delta_{\text{cold}}$ applied to $\Delta_{\text{ext}}$ vs. Cold,
+    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3 Table).
     #[must_use]
     pub const fn cold_protection_delta_ext(self) -> i32 {
         match self {
@@ -822,7 +905,8 @@ impl ClothingSuitTier {
         }
     }
 
-    /// Heat Retention Penalty ($\Delta_{\text{heat}}$ applied to $\Delta_{\text{ext}}$ in high heat).
+    /// Heat Retention Penalty ($\Delta_{\text{heat}}$ applied to $\Delta_{\text{ext}}$ in high heat,
+    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3 Table).
     #[must_use]
     pub const fn heat_retention_delta_ext(self, ambient_temp_c: f64) -> i32 {
         match self {
@@ -846,7 +930,7 @@ impl ClothingSuitTier {
     }
 }
 
-/// Cold Exposure & Hypothermia stages (`movement_vehicles_and_environment.md` §4.3.A).
+/// Cold Exposure & Hypothermia stages (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3.A).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HypothermiaStage {
@@ -860,7 +944,7 @@ pub enum HypothermiaStage {
     Stage3SevereHypothermia,
 }
 
-/// Heat Exposure, Heat Exhaustion & Heatstroke stages (`movement_vehicles_and_environment.md` §4.3.B).
+/// Heat Exposure, Heat Exhaustion & Heatstroke stages (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3.B).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HyperthermiaStage {
@@ -874,7 +958,8 @@ pub enum HyperthermiaStage {
     Stage3Heatstroke,
 }
 
-/// Structured evaluation of Cold (`HypothermiaStage`) and Heat (`HyperthermiaStage`) penalties (`movement_vehicles_and_environment.md` §4.3).
+/// Structured evaluation of Cold (`HypothermiaStage`) and Heat (`HyperthermiaStage`) penalties
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ThermalStressEvaluation {
     /// Internal difficulty modifier $\Delta_{\text{int}}$.
@@ -883,6 +968,8 @@ pub struct ThermalStressEvaluation {
     pub dex_tac_penalty: i32,
     /// Broad attribute penalty (`SPD`, `KIN`, `ANA`, `FOC`).
     pub all_stat_penalty: i32,
+    /// Penalty to $T_{\max}$ and $F_{\max}$ (`2` when `HyperthermiaStage::Stage1HeatCramps` or higher, `§4.3.B.1`).
+    pub tempo_and_force_cap_penalty: i32,
     /// Added `action_time_factor` multiplier delta.
     pub action_time_factor_added: f64,
     /// Added systemic `fatigue_level`.
@@ -897,6 +984,11 @@ impl ConditionSource for ThermalStressEvaluation {
             delta_int: self.delta_int,
             action_time_factor_delta: self.action_time_factor_added,
             fatigue_added: self.added_fatigue_level,
+            triad_cap_penalty: Triad::new(
+                self.tempo_and_force_cap_penalty,
+                0,
+                self.tempo_and_force_cap_penalty,
+            ),
             triad_locked_zero: Triad::splat(self.is_unconscious_or_coma),
             is_unconscious: self.is_unconscious_or_coma,
             ..ConditionImpact::ZERO
@@ -904,7 +996,8 @@ impl ConditionSource for ThermalStressEvaluation {
     }
 }
 
-/// Evaluates Cold Exposure (`HypothermiaStage`) or Heat Exposure (`HyperthermiaStage`) penalties (`movement_vehicles_and_environment.md` §4.3).
+/// Evaluates Cold Exposure (`HypothermiaStage`) or Heat Exposure (`HyperthermiaStage`) penalties
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3).
 ///
 /// Returns `(delta_int, dex_tac_penalty, all_stat_penalty, action_time_factor_added, added_fatigue_level, is_unconscious_or_coma)`.
 #[must_use]
@@ -923,7 +1016,8 @@ pub const fn evaluate_thermal_stage_penalties(
     }
 }
 
-/// Evaluates Cold/Heat stage penalties as a structured [`ThermalStressEvaluation`] implementing [`ConditionSource`].
+/// Evaluates Cold/Heat stage penalties as a structured [`ThermalStressEvaluation`] implementing [`ConditionSource`]
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3).
 #[must_use]
 pub const fn evaluate_thermal_stress(
     hypothermia: HypothermiaStage,
@@ -937,17 +1031,49 @@ pub const fn evaluate_thermal_stress(
         added_fatigue_level,
         is_unconscious_or_coma,
     ) = evaluate_thermal_stage_penalties(hypothermia, hyperthermia);
+    let tempo_and_force_cap_penalty = match hyperthermia {
+        HyperthermiaStage::None => 0,
+        HyperthermiaStage::Stage1HeatCramps
+        | HyperthermiaStage::Stage2HeatExhaustion
+        | HyperthermiaStage::Stage3Heatstroke => 2,
+    };
     ThermalStressEvaluation {
         delta_int,
         dex_tac_penalty,
         all_stat_penalty,
+        tempo_and_force_cap_penalty,
         action_time_factor_added,
         added_fatigue_level,
         is_unconscious_or_coma,
     }
 }
 
-/// Evaluation of Sleep Deprivation & Circadian Debt (`movement_vehicles_and_environment.md` §4.4.1).
+/// Evaluates localized **Frostbite** structural tissue trauma on exposed extremities in sub-zero windchill
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.3.A.4).
+///
+/// In sub-zero windchill (`< -10.0°C`), exposed skin on a failed `HLT` check suffers localized [`StructuralWoundTier`]
+/// damage (`Tier 1` Frostnip down to `Tier 3` / `Tier 4` Deep Frostbite on Fingers/Toes/Face).
+#[must_use]
+pub fn evaluate_frostbite_exposure(
+    effective_windchill_c: f64,
+    has_exposed_skin: bool,
+    hlt_save_succeeded: bool,
+) -> Option<StructuralWoundTier> {
+    if !has_exposed_skin || hlt_save_succeeded || effective_windchill_c >= -10.0 {
+        None
+    } else if effective_windchill_c <= -40.0 {
+        Some(StructuralWoundTier::Tier4CriticalMaiming)
+    } else if effective_windchill_c <= -25.0 {
+        Some(StructuralWoundTier::Tier3SevereFracture)
+    } else if effective_windchill_c <= -18.0 {
+        Some(StructuralWoundTier::Tier2Moderate)
+    } else {
+        Some(StructuralWoundTier::Tier1Superficial)
+    }
+}
+
+/// Evaluation of Sleep Deprivation & Circadian Debt
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SleepDeprivationEvaluation {
     /// Total hours awake without required sleep (`6–8h` standard, `4h` minimum with `DIS` check).
@@ -962,7 +1088,8 @@ pub struct SleepDeprivationEvaluation {
     pub requires_microsleep_dis_check: bool,
 }
 
-/// Evaluates Sleep Deprivation penalties from `hours_awake` (`movement_vehicles_and_environment.md` §4.4.1).
+/// Evaluates Sleep Deprivation penalties from `hours_awake`
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.1).
 #[must_use]
 pub const fn evaluate_sleep_deprivation(hours_awake: i32) -> SleepDeprivationEvaluation {
     let hrs = if hours_awake < 0 { 0 } else { hours_awake };
@@ -992,10 +1119,11 @@ impl ConditionSource for SleepDeprivationEvaluation {
     }
 }
 
-/// Evaluation of Altitude Hypoxia and Hard Vacuum Decompression (`movement_vehicles_and_environment.md` §4.4.2).
+/// Evaluation of Altitude Hypoxia and Hard Vacuum Decompression
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AltitudeVacuumEvaluation {
-    /// Penalty to `Fitness (FIT)` (`-2` per `1,000 meters` above `2,000 m` when unacclimatized above `2,500 m`).
+    /// Penalty to `Fitness (FIT)` (`-2` per `1,000 meters` above `2,000 m`, minimum `-2` when unacclimatized above `2,500 m`).
     pub fit_penalty: i32,
     /// Whether Acute Mountain Sickness (`Dizzy`, `Nausea`) and HAPE/HACE checks apply (`> 5,500 m` without $\text{O}_2$).
     pub acute_mountain_sickness_risk: bool,
@@ -1022,7 +1150,8 @@ impl ConditionSource for AltitudeVacuumEvaluation {
     }
 }
 
-/// Evaluates High-Altitude Hypoxia (`> 2,500 m`) and Hard Vacuum (`0 atm`) exposure (`movement_vehicles_and_environment.md` §4.4.2).
+/// Evaluates High-Altitude Hypoxia (`> 2,500 m`) and Hard Vacuum (`0 atm`) exposure
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.2).
 #[must_use]
 pub const fn evaluate_altitude_and_vacuum_hypoxia(
     altitude_meters: i32,
@@ -1076,8 +1205,11 @@ pub const fn evaluate_altitude_and_vacuum_hypoxia(
         };
     }
 
+    let brackets = (altitude_meters - 2000).div_euclid(1000);
+    let min_one_bracket = if brackets < 1 { 1 } else { brackets };
+
     AltitudeVacuumEvaluation {
-        fit_penalty: 2 * (altitude_meters - 2000).div_euclid(1000),
+        fit_penalty: 2 * min_one_bracket,
         acute_mountain_sickness_risk: altitude_meters > 5500,
         vacuum_useful_consciousness_ticks: 0,
         vacuum_unconscious: false,
@@ -1085,7 +1217,8 @@ pub const fn evaluate_altitude_and_vacuum_hypoxia(
     }
 }
 
-/// Exposure vector for a Toxin, Venom, Chemical Agent, or Pathogen (`movement_vehicles_and_environment.md` §4.4.3).
+/// Exposure vector for a Toxin, Venom, Chemical Agent, or Pathogen
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToxinVector {
@@ -1099,7 +1232,8 @@ pub enum ToxinVector {
     InjectionOrWound,
 }
 
-/// Canonical Toxin or Chemical Agent identifier (`movement_vehicles_and_environment.md` §4.4.3).
+/// Canonical Toxin or Chemical Agent identifier
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.3).
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1111,11 +1245,13 @@ pub enum ToxinAgentId {
 }
 
 impl ToxinAgentId {
-    /// All canonical toxin identifiers in declaration order.
+    /// All canonical toxin identifiers in declaration order
+    /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.3).
     pub const ALL: [Self; 2] = [Self::TearGasCsRiotAgent, Self::SarinNerveAgent];
 }
 
-/// Canonical 4-Parameter Toxin, Chemical Agent, or Pathogen profile (`movement_vehicles_and_environment.md` §4.4.3).
+/// Canonical 4-Parameter Toxin, Chemical Agent, or Pathogen profile
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ToxinOrPathogenProfile {
     /// Canonical toxin agent identifier.
@@ -1134,7 +1270,8 @@ pub struct ToxinOrPathogenProfile {
     pub effect_summary: &'static str,
 }
 
-/// Static catalog of canonical toxin and chemical agent profiles (`movement_vehicles_and_environment.md` §4.4.3).
+/// Static catalog of canonical toxin and chemical agent profiles
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.3).
 pub const TOXIN_CATALOG: [ToxinOrPathogenProfile; 2] = [
     ToxinOrPathogenProfile {
         id: ToxinAgentId::TearGasCsRiotAgent,
@@ -1165,13 +1302,15 @@ pub const TOXIN_CATALOG: [ToxinOrPathogenProfile; 2] = [
 
 impl_static_catalog!(ToxinAgentId => ToxinOrPathogenProfile : TOXIN_CATALOG);
 
-/// Returns the canonical example Toxin & Chemical Agent profiles from `movement_vehicles_and_environment.md` §4.4.3.
+/// Returns the canonical example Toxin & Chemical Agent profiles from
+/// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.3.
 #[must_use]
 pub const fn canonical_toxin_catalog() -> &'static [ToxinOrPathogenProfile] {
     ToxinAgentId::CATALOG
 }
 
-/// Acute Radiation Sickness (`ARS`) tiers by cumulative Sievert (`Sv`) dose (`movement_vehicles_and_environment.md` §4.4.4).
+/// Acute Radiation Sickness (`ARS`) tiers by cumulative Sievert (`Sv`) dose
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RadiationExposureTier {
@@ -1185,7 +1324,8 @@ pub enum RadiationExposureTier {
     LethalGiNeurovascularArs,
 }
 
-/// Structured evaluation of Ionizing Radiation (`Sv`) exposure (`movement_vehicles_and_environment.md` §4.4.4).
+/// Structured evaluation of Ionizing Radiation (`Sv`) exposure
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AcuteRadiationEvaluation {
     /// Derived Acute Radiation Sickness tier.
@@ -1207,13 +1347,15 @@ impl ConditionSource for AcuteRadiationEvaluation {
         ConditionImpact {
             delta_int: if self.inflicts_nausea { 4 } else { 0 },
             fatigue_added: self.added_fatigue_level,
+            triad_locked_zero: Triad::splat(self.is_lethal_without_nanomed),
             is_unconscious: self.is_lethal_without_nanomed,
             ..ConditionImpact::ZERO
         }
     }
 }
 
-/// Evaluates Ionizing Radiation (`Sv`) exposure tier and physiological penalties (`movement_vehicles_and_environment.md` §4.4.4).
+/// Evaluates Ionizing Radiation (`Sv`) exposure tier and physiological penalties
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.4).
 ///
 /// Returns `(tier, hlt_penalty, hlt_halved_vs_infection, added_fatigue_level, inflicts_nausea, is_lethal_without_nanomed)`.
 #[must_use]
@@ -1253,7 +1395,8 @@ pub fn evaluate_radiation_exposure(
     }
 }
 
-/// Evaluates Ionizing Radiation (`Sv`) exposure as a structured [`AcuteRadiationEvaluation`] implementing [`ConditionSource`].
+/// Evaluates Ionizing Radiation (`Sv`) exposure as a structured [`AcuteRadiationEvaluation`] implementing [`ConditionSource`]
+/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §4.4.4).
 #[must_use]
 pub fn evaluate_acute_radiation(cumulative_sieverts_sv: f64) -> AcuteRadiationEvaluation {
     let (

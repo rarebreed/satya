@@ -1,4 +1,5 @@
-//! Canonical Character Lifepath Walkthroughs (§2.1–§2.3 of `lifepaths_and_economy.md`).
+//! Canonical Character Lifepath Walkthroughs (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3;
+//! `docs/ttrpg/05-combat/ranged_combat_and_armor.md` §9.1).
 //!
 //! Extracted from `lifepath_economy` so hardcoded character fixtures and narrative walkthroughs
 //! remain cleanly separated from the core Lifepath & Economy engine rules.
@@ -17,17 +18,27 @@ pub(crate) fn insert_skill_ranks(skills: &mut BTreeMap<String, usize>, ranks: &[
     }
 }
 
-/// Build the canonical walkthrough profile for **Mateo Vance — The Gifted Dropout & Gang Enforcer** (§2.1 of `lifepaths_and_economy.md`).
+/// Build the canonical walkthrough profile for **Mateo Vance — The Gifted Dropout & Gang Enforcer**
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1; `docs/ttrpg/05-combat/ranged_combat_and_armor.md` §9.1).
 #[must_use]
 pub fn build_mateo_vance_lifepath() -> LifepathCharacterProfile {
     let chars = CharacterCharacteristics {
         ana: 13,
+        mem: 11,
+        foc: 12,
+        ins: 12,
         dis: 11,
         spd: 14,
         dex: 13,
+        kin: 12,
         for_stat: 11,
+        fit: 12,
+        hlt: 12,
+        sig: 12,
+        hea: 11,
         itu: 13,
         pre: 12,
+        elo: 10,
         ..Default::default()
     };
     let mut aptitudes = CharacterAptitudes::default();
@@ -78,7 +89,8 @@ pub fn build_mateo_vance_lifepath() -> LifepathCharacterProfile {
     mateo
 }
 
-/// Build the canonical walkthrough profile for **Dr. Priya Nair — Corporate AI & Robotics Scientist** (§2.2 of `lifepaths_and_economy.md`).
+/// Build the canonical walkthrough profile for **Dr. Priya Nair — Corporate AI & Robotics Scientist**
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.2).
 #[must_use]
 pub fn build_priya_nair_lifepath() -> LifepathCharacterProfile {
     let chars = CharacterCharacteristics {
@@ -86,9 +98,17 @@ pub fn build_priya_nair_lifepath() -> LifepathCharacterProfile {
         mem: 15,
         dis: 14,
         foc: 14,
+        ins: 13,
         dex: 11,
+        sig: 11,
+        hea: 10,
         for_stat: 8,
         spd: 9,
+        fit: 9,
+        hlt: 10,
+        kin: 9,
+        elo: 12,
+        pre: 11,
         ..Default::default()
     };
     let mut aptitudes = CharacterAptitudes::default();
@@ -136,7 +156,8 @@ pub fn build_priya_nair_lifepath() -> LifepathCharacterProfile {
     priya
 }
 
-/// Build the canonical walkthrough profile for **Amara Okafor — Rural Bush Tracker, Herbalist & Anti-Poaching Ranger** (§2.3 of `lifepaths_and_economy.md`).
+/// Build the canonical walkthrough profile for **Amara Okafor — Rural Bush Tracker, Herbalist & Anti-Poaching Ranger**
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.3).
 #[must_use]
 pub fn build_amara_okafor_lifepath() -> LifepathCharacterProfile {
     let chars = CharacterCharacteristics {

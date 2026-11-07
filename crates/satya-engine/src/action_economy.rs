@@ -1,12 +1,12 @@
 //! Action Economy, 4-Pillar OODA Loop, Continuous Tick Timeline & Multi-Sensory Stealth
-//! (`02-core-mechanics/action_economy_and_ooda.md`).
+//! (`docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md`).
 //!
 //! Implements:
-//! - The 6 Temporal Layers (`0.5s` Tick through `4-Year` Lifepath Term) (§1.1)
+//! - The 6 Temporal Layers (`0.25s` Tick through `4-Year` Lifepath Term) (§1.1)
 //! - The 4-Pillar OODA Loop (`ITU`, `INS`, `D_cog`, `SPD`) and Quick Thinking ($D_{\text{cog}}$) (§2.2)
-//! - Two-Component Action Cost ($\text{Base TC} = \text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$) (§2.3)
-//! - Continuous Count-Up Tick Timeline, Starting Tick, Tie-Breaking & Surprise/Ambush Freeze (§3.1–§3.3)
-//! - Action Declaration vs. Completion Phases & Interrupt/Spoiling Resolution (§3.4)
+//! - Two-Component Action Cost ($\text{Base TC} = \text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$) (§2.3, §2.3.1)
+//! - Continuous Count-Up Tick Timeline, Starting Tick, Tie-Breaking & Surprise/Ambush Freeze (§3 Items 1–4, §3.1)
+//! - Action Declaration vs. Completion Phases & Interrupt/Spoiling Resolution (§3.2)
 //! - Canonical 37-Action Reference Catalog across Combat, Weapon Handling, Movement & Cognitive tasks (§4.1–§4.4)
 //! - Full `action_time_factor` (Fatigue, Wound Shock, Encumbrance Tier 1–4, Concussed/Dazed status),
 //!   Skill Level ($N \ge 4$, $N \ge 6$) Reflex Compression, Layer 4 Non-Combat Dual Scaling & OODA Reset Pivot (§5.1–§5.5)
@@ -271,7 +271,7 @@ pub const fn compute_delta_tc_decide(d_cog: i32) -> i32 {
     -(d_cog - 10).div_euclid(2)
 }
 
-/// Compute Skill Level ($N$) Reflex Compression on $\text{TC}_{\text{decide}}$ (§5.3).
+/// Compute Skill Level ($N$) Reflex Compression on $\text{TC}_{\text{decide}}$ (`action_economy_and_ooda.md` §2.3.1, §5.2).
 ///
 /// - $N \in [0, 3]$: `0` ticks compression
 /// - $N \in [4, 5]$: `1` tick compression (`-1 Tick` on $\text{TC}_{\text{decide}}$)
@@ -285,7 +285,7 @@ pub const fn compute_skill_reflex_compression(skill_level_n: usize) -> i32 {
     }
 }
 
-/// Result of evaluating a two-component ($\text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$) action cost.
+/// Result of evaluating a two-component ($\text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$) action cost (`action_economy_and_ooda.md` §2.3, §3.2, §5.1–§5.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TwoComponentActionCost {
     /// Base cognitive decision cost (`TC_decide`) in ticks.
@@ -308,17 +308,18 @@ pub struct TwoComponentActionCost {
     pub physical_time_factor: f64,
     /// Final clamped total tick cost (`effective_total_tc`).
     pub effective_total_tc: i32,
-    /// Wind-up duration in ticks before the action executes (`effective_tc_decide + ceil(effective_tc_act / 2)`) (§3.4)
+    /// Wind-up duration in ticks before the action executes (`effective_tc_decide + ceil(effective_tc_act / 2)`) (§3.2)
     pub wind_up_ticks: i32,
-    /// Release & recovery ticks (`effective_total_tc - wind_up_ticks`) (§3.4)
+    /// Release & recovery ticks (`effective_total_tc - wind_up_ticks`) (§3.2)
     pub recovery_ticks: i32,
 }
 
-/// Evaluate the canonical two-component Combat / Tactical Action Tick Cost (§2.3, §5.1–§5.3).
+/// Evaluate the canonical two-component Combat / Tactical Action Tick Cost (`action_economy_and_ooda.md` §2.3, §5.1–§5.3).
 ///
 /// - Splits `Base TC = base_tc_decide + base_tc_act`.
-/// - Applies $\Delta\text{TC}_{\text{decide}} = -\lfloor(D_{\text{cog}} - 10)/2\rfloor$ (when `apply_cognitive_offset` is true)
-///   and Skill Level Reflex Compression ($N \ge 4 \implies -1$, $N \ge 6 \implies -2$) to $\text{TC}_{\text{decide}}$.
+/// - Scales $\text{TC}_{\text{decide}}$ by `cognitive_action_time_factor()` (§5.1–§5.2: Fatigue, Wound Shock, and Status slow both `TC_decide` and `TC_act`)
+///   and applies $\Delta\text{TC}_{\text{decide}} = -\lfloor(D_{\text{cog}} - 10)/2\rfloor$ (when `apply_cognitive_offset` is true)
+///   and Skill Level Reflex Compression ($N \ge 4 \implies -1$, $N \ge 6 \implies -2$).
 /// - Scales $\text{TC}_{\text{act}}$ by the physical `action_time_factor` and subtracts `(tempo_allocated - weapon_balance_b)`.
 /// - Enforces `min_total_tc_floor` (`2` ticks for standard actions, `1` tick for reflexes/free callouts).
 #[must_use]
@@ -356,13 +357,19 @@ pub fn evaluate_combat_action_cost(
     } else {
         1
     };
-    let raw_decide = base_decide + delta_tc_decide - skill_reflex_compression;
+    let cognitive_time_factor = time_factor_params.cognitive_action_time_factor();
+    let scaled_decide = if base_decide > 0 {
+        (f64::from(base_decide) * cognitive_time_factor).round() as i32
+    } else {
+        0
+    };
+    let raw_decide = scaled_decide + delta_tc_decide - skill_reflex_compression;
     let effective_tc_decide = raw_decide.max(decide_floor);
 
     let physical_time_factor = if base_act > 0 {
         time_factor_params.physical_action_time_factor()
     } else {
-        time_factor_params.cognitive_action_time_factor()
+        cognitive_time_factor
     };
 
     let effective_tc_act = if base_act > 0 {
@@ -466,10 +473,12 @@ pub fn evaluate_non_combat_action_duration(
         0
     };
 
+    let cog_factor = time_factor_params.cognitive_action_time_factor();
+    let phys_factor = time_factor_params.physical_action_time_factor();
     let time_factor = if base_tc_act > 0 {
-        time_factor_params.physical_action_time_factor()
+        phys_factor
     } else {
-        time_factor_params.cognitive_action_time_factor()
+        cog_factor
     };
 
     let outcome_duration_multiplier = if grazing_tie {
@@ -481,9 +490,10 @@ pub fn evaluate_non_combat_action_duration(
         (1.0 - 0.15 * f64::from(extra)).max(0.25)
     };
 
-    let base_combined = f64::from(adjusted_decide_units + adjusted_act_units).max(1.0);
-    let effective_duration_units =
-        (base_combined * time_factor * outcome_duration_multiplier).max(0.25);
+    let scaled_combined = (f64::from(adjusted_decide_units) * cog_factor
+        + f64::from(adjusted_act_units) * phys_factor)
+        .max(1.0);
+    let effective_duration_units = (scaled_combined * outcome_duration_multiplier).max(0.25);
 
     NonCombatActionDuration {
         base_tc_decide: base_tc_decide.max(0),
@@ -523,7 +533,7 @@ pub fn compute_starting_tick(
     base_start + effective_surprise
 }
 
-/// Combatant entry on the continuous Count-Up Tick Timeline (§3.1–§3.2).
+/// Combatant entry on the continuous Count-Up Tick Timeline (`action_economy_and_ooda.md` §3 Items 1–4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TickTimelineCombatant {
     /// Unique identifier for the combatant.
@@ -538,7 +548,7 @@ pub struct TickTimelineCombatant {
     pub spd: i32,
 }
 
-/// Sort combatants according to the canonical Count-Up Tick Timeline & Tie-Breaking rules (§3.1):
+/// Sort combatants according to the canonical Count-Up Tick Timeline & Tie-Breaking rules (`action_economy_and_ooda.md` §3 Items 1–4):
 /// 1. Lowest `current_tick` acts first
 /// 2. Highest `ooda` breaks ties
 /// 3. Highest `d_cog` breaks remaining ties
@@ -554,7 +564,7 @@ pub fn sort_tick_timeline(combatants: &mut [TickTimelineCombatant]) {
     });
 }
 
-/// Compute the OODA Reset / Action Pivot Penalty in ticks when aborting a declared action mid-stream (§3.4, §5.5).
+/// Compute the OODA Reset / Action Pivot Penalty in ticks when aborting a declared action mid-stream (`action_economy_and_ooda.md` §3.2, §5.5).
 ///
 /// $$\text{OODA Reset Ticks} = \max\left(1, 5 - \left\lfloor\frac{D_{\text{cog}} + \text{ITU}}{5}\right\rfloor\right)$$
 #[must_use]
@@ -564,7 +574,7 @@ pub const fn compute_ooda_reset_pivot_ticks(d_cog: i32, itu: i32) -> i32 {
     if raw < 1 { 1 } else { raw }
 }
 
-/// Outcome of checking whether an incoming fast attack or suppression interrupts a declared action (§3.4).
+/// Outcome of checking whether an incoming fast attack or suppression interrupts a declared action (`action_economy_and_ooda.md` §3.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionInterruptOutcome {
     /// Tick when the action was originally declared.
@@ -583,7 +593,7 @@ pub struct ActionInterruptOutcome {
     pub resulting_actor_tick: i32,
 }
 
-/// Evaluate whether an incoming event at `interrupt_tick` interrupts and spoils a declared action (§3.4).
+/// Evaluate whether an incoming event at `interrupt_tick` interrupts and spoils a declared action (`action_economy_and_ooda.md` §3.2).
 #[must_use]
 pub fn evaluate_action_interrupt(
     declared_tick: i32,
@@ -831,7 +841,7 @@ impl StealthGait {
     }
 }
 
-/// Sensory channel used by an observer in a Multi-Sensory Perception Contest (§6.2).
+/// Sensory channel used by an observer in a Multi-Sensory Perception Contest (`action_economy_and_ooda.md` §6.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SensoryChannel {
@@ -845,23 +855,49 @@ pub enum SensoryChannel {
     SixthSenseItuIns,
 }
 
-/// Illumination and atmospheric visibility conditions (§6.2).
+/// Illumination and atmospheric visibility conditions (`action_economy_and_ooda.md` §6.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum IlluminationCondition {
-    /// Bright Daylight / Well-Lit Interior (`+0` visual $\Delta_{\text{ext}}$)
+    /// Bright Daylight / Well-Lit Room (`+0` visual $\Delta_{\text{ext}}$, `+4` visual stealth $\Delta_{\text{ext}}$)
     BrightDaylight,
-    /// Dim Light / Dusk / Urban Shadows (`+2` visual $\Delta_{\text{ext}}$)
+    /// Dusk / Twilight / Urban Streetlights / Shadows (`+2` visual $\Delta_{\text{ext}}$, `-2` visual stealth $\Delta_{\text{ext}}$)
     DimLightDuskShadows,
-    /// Moonlight / Starlight (`+4` visual $\Delta_{\text{ext}}$; `+1` with Gen-3+ NVG)
+    /// Moonlight / Starlight / Power Outage Indoors (`+6` unaided visual $\Delta_{\text{ext}}$; `+1` with Gen-3+ NVG; `-6` visual stealth $\Delta_{\text{ext}}$)
     MoonlightStarlight,
-    /// Heavy Fog / Rain / Dense Smoke (`+6` visual, `+2` auditory $\Delta_{\text{ext}}$; `+1` with Thermal/FLIR)
+    /// Dense Fog / Heavy Rain / Thick Smoke (`+8` unaided visual $\Delta_{\text{ext}}$, `+2` auditory $\Delta_{\text{ext}}$; `+0` with Thermal/FLIR; `-8` visual stealth $\Delta_{\text{ext}}$)
     HeavyFogRainSmoke,
-    /// Pitch Black / Total Darkness (`+10` visual $\Delta_{\text{ext}}$; `+0` with Thermal/FLIR)
+    /// Pitch Black / Total Darkness (`+10` / Blinded unaided visual $\Delta_{\text{ext}}$; `+0` with Thermal/FLIR)
     PitchBlackTotalDarkness,
 }
 
-/// Electro-optical countermeasure worn or mounted by the observer (§6.2).
+impl IlluminationCondition {
+    /// Unaided visual check (`SIG`) $\Delta_{\text{ext}}$ penalty per `action_economy_and_ooda.md` §6.2.
+    #[must_use]
+    pub const fn unaided_visual_check_delta_ext(self) -> i32 {
+        match self {
+            Self::BrightDaylight => 0,
+            Self::DimLightDuskShadows => 2,
+            Self::MoonlightStarlight => 6,
+            Self::HeavyFogRainSmoke => 8,
+            Self::PitchBlackTotalDarkness => 10,
+        }
+    }
+
+    /// Visual stealth concealment modifier ($\Delta_{\text{ext}}$) per `action_economy_and_ooda.md` §6.2.
+    #[must_use]
+    pub const fn visual_stealth_delta_ext(self) -> i32 {
+        match self {
+            Self::BrightDaylight => 4,
+            Self::DimLightDuskShadows => -2,
+            Self::MoonlightStarlight => -6,
+            Self::HeavyFogRainSmoke => -8,
+            Self::PitchBlackTotalDarkness => -10,
+        }
+    }
+}
+
+/// Electro-optical countermeasure worn or mounted by the observer (`action_economy_and_ooda.md` §6.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum VisualCountermeasure {
@@ -869,7 +905,7 @@ pub enum VisualCountermeasure {
     None,
     /// Gen-3+ Night Vision Goggles (reduces `MoonlightStarlight` penalty to `+1`)
     Gen3PlusNvg,
-    /// Thermal / FLIR Imaging (reduces `HeavyFogRainSmoke` to `+1` and `PitchBlackTotalDarkness` to `+0` unless target is thermally shielded)
+    /// Thermal / FLIR Imaging (reduces `HeavyFogRainSmoke` and `PitchBlackTotalDarkness` to `+0` unless target is thermally shielded)
     ThermalFlir,
 }
 
@@ -1001,13 +1037,13 @@ pub fn compute_stealth_and_perception_modifiers(
             {
                 0
             }
-            (IlluminationCondition::MoonlightStarlight, _) => 4,
+            (IlluminationCondition::MoonlightStarlight, _) => 6,
             (IlluminationCondition::HeavyFogRainSmoke, VisualCountermeasure::ThermalFlir)
                 if !params.infiltrator_thermally_shielded =>
             {
-                1
+                0
             }
-            (IlluminationCondition::HeavyFogRainSmoke, _) => 6,
+            (IlluminationCondition::HeavyFogRainSmoke, _) => 8,
             (IlluminationCondition::PitchBlackTotalDarkness, VisualCountermeasure::ThermalFlir)
                 if !params.infiltrator_thermally_shielded =>
             {
@@ -1070,6 +1106,20 @@ mod tests {
         assert!((params.cognitive_action_time_factor() - 1.60).abs() < 1e-6);
         // Concussed reduces D_cog by -4
         assert_eq!(params.effective_d_cog(14), 10);
+
+        // §5.1 Compounding Fatigue 2 (+0.20) + Wound Shock 2 (+0.50) = 1.70x:
+        // A 10-tick (3 decide + 7 act) strike at neutral stats costs 5 + 12 = 17 ticks!
+        let compound = ActionTimeFactorParams {
+            fatigue_level: 2,
+            wound_shock_index: 2.0,
+            encumbrance_tier: EncumbranceTier::Tier1Unencumbered,
+            status_time_penalty: 0.0,
+            is_concussed_or_dazed: false,
+        };
+        let strike_cost = evaluate_combat_action_cost(3, 7, 10, 0, false, 0, 0, 2, &compound);
+        assert_eq!(strike_cost.effective_tc_decide, 5);
+        assert_eq!(strike_cost.effective_tc_act, 12);
+        assert_eq!(strike_cost.effective_total_tc, 17);
     }
 
     #[test]

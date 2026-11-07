@@ -1,15 +1,18 @@
 //! # Tactical Triad Extensions, Melee Combat, Ranged Firepower, Armor & Reliability (`05-combat`)
 //!
 //! Canonical Rust implementation of `docs/ttrpg/05-combat/`:
-//! - **`tactical_triad_and_pools.md`**: Decision Tick Modifier ($\Delta\text{TC}_{\text{decide}} = -\lfloor(D_{\text{cog}}-10)/2\rfloor$)
-//!   and Exertion Mark accumulation against Fatigue Threshold ($\text{FT} = \text{FIT} + \lfloor\text{DIS}/2\rfloor$).
-//! - **`melee_combat.md`**: Starting Combat Modes (`§3.3`), Melee Weapon Catalog (`§4`), Reach Advantage &
-//!   Clinch Polarity Flip (`§4`), Contested Melee Exchanges (`§1`), Counter-Hits & Seizing the Initiative (`§2.2`),
-//!   Interrupting Telegraphed Strikes (`§1.2`), and Kuzushi Throws vs. Root (`§2.3`, `§5.2`).
-//! - **`ranged_combat_and_armor.md`**: Ranged Fire Modes (`§1.1`), Recoil Bracing ($F \ge R$) & Muzzle Climb
-//!   Dispersion (`§1.2`), Suppressive Fire Morale Shock ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$, `§1.3`),
-//!   Armor Profiles Catalog (`§2.1`), Penetration (`PR`) vs. Behind-Armor Blunt Trauma (`BABT`, `§2.2`),
-//!   and Weapon Reliability (`Rel` in `-4..=+4`) & Malfunction Mechanics (`§3.1–§3.2`).
+//! - **`docs/ttrpg/05-combat/tactical_triad_and_pools.md`**: Tactical Pool ("Envelope & Fill", `§3`),
+//!   Tempo & Decision Tick Modifier ($\Delta\text{TC}_{\text{decide}} = -\lfloor(D_{\text{cog}}-10)/2\rfloor$, `§4.1`),
+//!   Control (`§4.2`), Force (`§4.3`), and Exertion Mark accumulation against Fatigue Threshold
+//!   ($\text{FT} = \text{FIT} + \lfloor\text{DIS}/2\rfloor$, `§4.4`).
+//! - **`docs/ttrpg/05-combat/melee_combat.md`**: Contested Melee Exchanges (`§1`), Interrupting Telegraphed
+//!   Strikes (`§1.2`), Counter-Hits & Seizing the Initiative (`§2.2`), Kuzushi Throws vs. Root (`§2.3`, `§5.2`),
+//!   Starting Combat Modes (`§3.3`), Melee Weapon Catalog & Reach/Clinch Polarity Flip (`§4`), and Viktor vs. Elena
+//!   Walkthrough (`§5.1`).
+//! - **`docs/ttrpg/05-combat/ranged_combat_and_armor.md`**: Ranged Fire Modes (`§2.1`), Recoil Bracing ($F \ge R$)
+//!   & Muzzle Climb Dispersion (`§2.2`), Suppressive Fire Morale Shock ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$, `§2.3`),
+//!   Effective Penetration & Impact Scaling (`§4.2`), Weapon Reliability (`Rel` in `-4..=+4`) & Malfunction Mechanics
+//!   (`§6.1–§6.2`), and Armor Profiles Catalog (`§8.1`) & Penetration (`PR`) vs. Behind-Armor Blunt Trauma (`BABT`, `§8.2`).
 
 use std::ops::Deref;
 
@@ -30,7 +33,8 @@ use crate::{define_coded_enum, impl_static_catalog};
 // ============================================================================
 
 define_coded_enum! {
-    /// Psychological & Morale condition governing a combatant's Tactical Pool size and allocation constraints.
+    /// Psychological & Morale condition governing a combatant's Tactical Pool size and allocation constraints
+    /// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3.2).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
     pub enum MoraleState [count = 6] {
@@ -51,7 +55,8 @@ define_coded_enum! {
 }
 
 impl MoraleState {
-    /// Returns the Tactical Pool modifier ($\Delta P_{\text{morale}}$) for this morale state.
+    /// Returns the Tactical Pool modifier ($\Delta P_{\text{morale}}$) for this morale state
+    /// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3.2).
     #[must_use]
     pub const fn pool_modifier(self) -> i32 {
         match self {
@@ -64,7 +69,7 @@ impl MoraleState {
 }
 
 /// Character attributes, skill level, and physical/psychological state inputs for the
-/// Satya Combat Tactical Pool ("Envelope & Fill") calculator (`docs/ttrpg/combat/combat.md`).
+/// Satya Combat Tactical Pool ("Envelope & Fill") calculator (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3–§4.4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TacticalPoolParams {
     /// Physical Speed (`SPD`, `1..=20`).
@@ -173,7 +178,8 @@ impl TacticalPoolParams {
     }
 }
 
-/// Computed Tactical Pool ("Fill") and Characteristic Aspect Ceilings ("Envelope") for a combatant.
+/// Computed Tactical Pool ("Fill") and Characteristic Aspect Ceilings ("Envelope") for a combatant
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3–§4.4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TacticalPoolEnvelope {
     /// Cognitive Decision Score ("Quick Thinking"): $D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$.
@@ -226,7 +232,8 @@ impl TacticalPoolEnvelope {
     }
 }
 
-/// Evaluation of a specific `Tempo + Control + Force` Tactical Triad allocation against a [`TacticalPoolEnvelope`].
+/// Evaluation of a specific `Tempo + Control + Force` Tactical Triad allocation against a [`TacticalPoolEnvelope`]
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.1–§4.4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TacticalTriadEvaluation {
     /// Allocated `(tempo, control, force)` triad.
@@ -263,7 +270,8 @@ impl TacticalTriadEvaluation {
     }
 }
 
-/// Computes the [`TacticalPoolEnvelope`] ("Envelope & Fill") for a combatant.
+/// Computes the [`TacticalPoolEnvelope`] ("Envelope & Fill") for a combatant
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3).
 pub fn compute_tactical_pool(params: &TacticalPoolParams) -> TacticalPoolEnvelope {
     let d_cog = compute_d_cog_score(params.ana, params.cre, params.foc);
     let ooda_init = compute_ooda_score(params.itu, params.ins, d_cog, params.spd);
@@ -353,7 +361,8 @@ pub fn compute_tactical_pool(params: &TacticalPoolParams) -> TacticalPoolEnvelop
 }
 
 /// Evaluates a [`Triad`] `(tempo, control, force)` allocation against a [`TacticalPoolEnvelope`]
-/// and computes the resulting Count-Up Tick Cost (`TC`), Strike Impact, Root, Exertion Marks, and Archetype.
+/// and computes the resulting Count-Up Tick Cost (`TC`), Strike Impact, Root, Exertion Marks, and Archetype
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.1–§4.4).
 pub fn evaluate_tactical_triad(
     envelope: &TacticalPoolEnvelope,
     base_weapon_tc: i32,
@@ -447,7 +456,8 @@ pub fn evaluate_tactical_triad(
     }
 }
 
-/// Summary of the Combat Tactical Pool ("Envelope & Fill") interactive lab calculation.
+/// Summary of the Combat Tactical Pool ("Envelope & Fill") interactive lab calculation
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TacticalPoolEnvelopeSummary {
     /// Maximum capacity of the tactical envelope (`E_base`).
@@ -468,7 +478,8 @@ pub struct TacticalPoolEnvelopeSummary {
     pub max_force: i32,
 }
 
-/// Computes the Satya Combat Tactical Pool ("Envelope & Fill") interactive lab summary.
+/// Computes the Satya Combat Tactical Pool ("Envelope & Fill") interactive lab summary
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §3).
 pub fn compute_tactical_pool_envelope(
     control_c: i32,
     skill_level: i32,
@@ -520,7 +531,8 @@ pub fn compute_tactical_pool_envelope(
     }
 }
 
-/// Outcome of a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) contested exchange.
+/// Outcome of a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) contested exchange
+/// (`docs/ttrpg/05-combat/melee_combat.md` §1–§2.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TacticalTriadContestOutcome {
     /// Net Tempo differential (`attacker.tempo - defender.tempo`).
@@ -543,7 +555,8 @@ pub struct TacticalTriadContestOutcome {
     pub outcome_summary: String,
 }
 
-/// Evaluates a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) exchange.
+/// Evaluates a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) exchange
+/// (`docs/ttrpg/05-combat/melee_combat.md` §1–§2.3).
 pub fn evaluate_tactical_triad_contest(
     attacker: Triad<i32>,
     defender: Triad<i32>,
@@ -612,7 +625,7 @@ pub fn evaluate_tactical_triad_contest(
 // ============================================================================
 
 /// Computes the **Cognitive Decision Tick Modifier ($\Delta\text{TC}_{\text{decide}}$)** from
-/// `tactical_triad_and_pools.md` §1.2.
+/// `docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.1.
 pub fn compute_decision_tick_modifier(d_cog: i32, is_complex_or_feint: bool) -> i32 {
     if is_complex_or_feint {
         compute_delta_tc_decide(d_cog)
@@ -622,7 +635,8 @@ pub fn compute_decision_tick_modifier(d_cog: i32, is_complex_or_feint: bool) -> 
 }
 
 /// Evaluates a `Tempo + Control + Force` [`Triad`] allocation including the optional `is_complex_or_feint`
-/// Cognitive Decision Tick Modifier $\Delta\text{TC}_{\text{decide}}$ (`tactical_triad_and_pools.md` §1.2).
+/// Cognitive Decision Tick Modifier $\Delta\text{TC}_{\text{decide}}$
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.1).
 pub fn evaluate_tactical_triad_with_decision(
     envelope: &TacticalPoolEnvelope,
     base_weapon_tc: i32,
@@ -637,7 +651,8 @@ pub fn evaluate_tactical_triad_with_decision(
     eval
 }
 
-/// Result of accumulating Exertion Marks after a combat exchange (`tactical_triad_and_pools.md` §1.3).
+/// Result of accumulating Exertion Marks after a combat exchange
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExertionProgressionResult {
     /// Updated Exertion Marks remaining after checking against `fatigue_threshold_ft`.
@@ -649,7 +664,7 @@ pub struct ExertionProgressionResult {
 }
 
 /// Accumulates `exertion_marks_gained` against the combatant's Fatigue Threshold
-/// $\text{FT} = \text{FIT} + \lfloor\text{DIS}/2\rfloor$ (`tactical_triad_and_pools.md` §1.3).
+/// $\text{FT} = \text{FIT} + \lfloor\text{DIS}/2\rfloor$ (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.4).
 pub fn accumulate_exertion_marks(
     current_exertion_marks: i32,
     exertion_marks_gained: i32,
@@ -673,7 +688,8 @@ pub fn accumulate_exertion_marks(
 // Melee Combat: Starting Modes, Weapon Catalog, Reach & Clinch, Exchanges
 // ============================================================================
 
-/// Starting Combat Engagement Mode declared when entering a combat scene (`melee_combat.md` §3.3).
+/// Starting Combat Engagement Mode declared when entering a combat scene
+/// (`docs/ttrpg/05-combat/melee_combat.md` §3.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CombatEngagementMode {
@@ -689,7 +705,7 @@ pub enum CombatEngagementMode {
     Aggressive,
 }
 
-/// Canonical Melee Weapon & Unarmed Attack identifiers from `melee_combat.md` §4.
+/// Canonical Melee Weapon & Unarmed Attack identifiers from `docs/ttrpg/05-combat/melee_combat.md` §4.
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -720,7 +736,7 @@ impl MeleeWeaponId {
     ];
 }
 
-/// Canonical profile for a Melee Weapon or Unarmed Attack (`melee_combat.md` §4).
+/// Canonical profile for a Melee Weapon or Unarmed Attack (`docs/ttrpg/05-combat/melee_combat.md` §4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MeleeWeaponProfile {
     /// Canonical weapon identifier.
@@ -762,7 +778,7 @@ macro_rules! mw {
     };
 }
 
-/// Canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`melee_combat.md` §4).
+/// Canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`docs/ttrpg/05-combat/melee_combat.md` §4).
 pub const MELEE_WEAPON_CATALOG: [MeleeWeaponProfile; 6] = [
     mw!(UnarmedJabLowKickClinchKnee, "Unarmed (Jab / Low Kick / Clinch Knee)", 1, 1, 8, 0, 1.0, 0, 0, false),
     mw!(UnarmedHaymakerHighKickThrow, "Unarmed (Haymaker / High Kick / Throw)", 1, 2, 10, -1, 1.25, 0, 0, false),
@@ -774,13 +790,14 @@ pub const MELEE_WEAPON_CATALOG: [MeleeWeaponProfile; 6] = [
 
 impl_static_catalog!(MeleeWeaponId => MeleeWeaponProfile : MELEE_WEAPON_CATALOG);
 
-/// Returns the canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`melee_combat.md` §4).
+/// Returns the canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`docs/ttrpg/05-combat/melee_combat.md` §4).
 #[must_use]
 pub const fn canonical_melee_weapon_catalog() -> &'static [MeleeWeaponProfile] {
     MeleeWeaponId::CATALOG
 }
 
-/// Computes the **Reach Advantage & Clinch Polarity Flip** external penalty $\Delta_{\text{ext}}$ (`melee_combat.md` §4).
+/// Computes the **Reach Advantage & Clinch Polarity Flip** external penalty $\Delta_{\text{ext}}$
+/// (`docs/ttrpg/05-combat/melee_combat.md` §4).
 pub fn compute_reach_and_clinch_delta_ext(
     attacker_reach: i32,
     defender_reach: i32,
@@ -803,7 +820,8 @@ pub fn compute_reach_and_clinch_delta_ext(
     }
 }
 
-/// Situational weapon, reach, root, and clinch parameters for [`resolve_contested_melee_exchange`].
+/// Situational weapon, reach, root, and clinch parameters for [`resolve_contested_melee_exchange`]
+/// (`docs/ttrpg/05-combat/melee_combat.md` §1, §2.2, §2.3).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct MeleeExchangeContext {
     /// Passive weapon guard bonus added to the defender's `Control`.
@@ -826,7 +844,7 @@ pub struct MeleeExchangeContext {
     pub redirect_opponent_blitz_in_clinch: bool,
 }
 
-/// Outcome of a Contested Melee Exchange (`melee_combat.md` §1, §2.2, §2.3).
+/// Outcome of a Contested Melee Exchange (`docs/ttrpg/05-combat/melee_combat.md` §1, §2.2, §2.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MeleeExchangeResolution {
     /// Defender's Effective Control including weapon guard ($C_{\text{def}} + \text{Guard}_{\text{def}}$).
@@ -853,7 +871,7 @@ pub struct MeleeExchangeResolution {
     pub prone_recovery_ticks: i32,
 }
 
-/// Evaluates a Contested Melee Exchange (`melee_combat.md` §1, §2.2, §2.3).
+/// Evaluates a Contested Melee Exchange (`docs/ttrpg/05-combat/melee_combat.md` §1, §2.2, §2.3).
 pub fn resolve_contested_melee_exchange(
     attacker: Triad<i32>,
     defender: Triad<i32>,
@@ -910,7 +928,8 @@ pub fn resolve_contested_melee_exchange(
     }
 }
 
-/// Checks whether a counter-attacker's strike interrupts an opponent's telegraphed attack before impact (`melee_combat.md` §1.2).
+/// Checks whether a counter-attacker's strike interrupts an opponent's telegraphed attack before impact
+/// (`docs/ttrpg/05-combat/melee_combat.md` §1.2).
 pub fn check_melee_interrupt_before_impact(
     telegraphed_land_tick: i32,
     counter_start_tick: i32,
@@ -927,20 +946,20 @@ pub fn check_melee_interrupt_before_impact(
 // Ranged Combat: Fire Modes, Recoil Bracing & Suppression
 // ============================================================================
 
-/// Canonical Ranged Fire Mode identifiers (`ranged_combat_and_armor.md` §1.1).
+/// Canonical Ranged Fire Mode identifiers (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.1).
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RangedFireModeId {
-    /// **Single Snap Shot (Point-Shoot)**: Base TC `7`, Recoil `3–4`, prioritizes `Tempo` (`CQB`).
+    /// **Single Snap Shot (Point-Shoot)**: Base TC `7`, Mode Recoil `+0` (`1 rd`), prioritizes `Tempo` (`CQB`).
     SingleSnapShotPointShoot = 0,
-    /// **Deliberate Sighted / Aimed Shot**: Base TC `11–12`, Recoil `4–6`, prioritizes `Control` (called shots, weak spots).
+    /// **Deliberate Sighted / Aimed Shot**: Base TC `11–12`, Mode Recoil `+1` (`1 rd`), prioritizes `Control` (called shots, weak spots).
     DeliberateSightedAimedShot = 1,
-    /// **Controlled Double-Tap / Short Burst**: Base TC `9`, Recoil `6–7`, balanced `Control + Force` (`+1` hit tier per `2` Net Successes).
+    /// **Controlled Double-Tap / Short Burst**: Base TC `9`, Mode Recoil `+2..+3` (`2–3 rds`), balanced `Control + Force` (`+1` hit tier per `2` Net Successes).
     ControlledDoubleTapShortBurst = 2,
-    /// **Full-Auto Burst / Suppressive Fire**: Base TC `8–10`, Recoil `8–12`, prioritizes `Force` ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$).
+    /// **Full-Auto Burst / Suppressive Fire**: Base TC `8–10`, Mode Recoil `+4..+6` (`5–15 rds`), prioritizes `Force` ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$).
     FullAutoBurstSuppressiveFire = 3,
-    /// **Bounding / Shooting on the Move**: Base TC `10`, `+3` unbraced recoil added to weapon `R`.
+    /// **Bounding / Shooting on the Move**: Base TC `10`, Mode Recoil `+3` (`1–3 rds`), unbraced recoil added to weapon `R`.
     BoundingShootingOnTheMove = 4,
 }
 
@@ -955,27 +974,35 @@ impl RangedFireModeId {
     ];
 }
 
-/// Canonical profile for a Ranged Fire Mode (`ranged_combat_and_armor.md` §1.1).
+/// Canonical profile for a Ranged Fire Mode (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RangedFireModeProfile {
     /// Canonical fire mode identifier.
     pub id: RangedFireModeId,
-    /// Display name from the §1.1 table.
+    /// Display name from the §2.1 table.
     pub name: &'static str,
     /// Minimum Base Count-Up Tick Cost (`Base TC`).
     pub min_base_tc: i32,
     /// Maximum Base Count-Up Tick Cost (`Base TC`).
     pub max_base_tc: i32,
-    /// Typical minimum Recoil Rating (`R`).
+    /// Typical minimum total Recoil Rating (`R`).
     pub min_recoil_r: i32,
-    /// Typical maximum Recoil Rating (`R`).
+    /// Typical maximum total Recoil Rating (`R`).
     pub max_recoil_r: i32,
+    /// Minimum Fire-Mode Recoil Adder ($\Delta R_{\text{mode}}$, `ranged_combat_and_armor.md` §2.1 Table).
+    pub min_mode_recoil_adder: i32,
+    /// Maximum Fire-Mode Recoil Adder ($\Delta R_{\text{mode}}$, `ranged_combat_and_armor.md` §2.1 Table).
+    pub max_mode_recoil_adder: i32,
+    /// Minimum ammunition rounds expended per trigger press (`ranged_combat_and_armor.md` §2.1 Table).
+    pub min_rounds_expended: i32,
+    /// Maximum ammunition rounds expended per trigger press (`ranged_combat_and_armor.md` §2.1 Table).
+    pub max_rounds_expended: i32,
     /// Extra unbraced recoil penalty added when shooting on the move (`+3` for `BoundingShootingOnTheMove`).
     pub movement_recoil_adder: i32,
 }
 
 macro_rules! fm {
-    ($id:ident, $name:literal, $min_tc:expr, $max_tc:expr, $min_r:expr, $max_r:expr, $move_r:expr) => {
+    ($id:ident, $name:literal, $min_tc:expr, $max_tc:expr, $min_r:expr, $max_r:expr, $min_mr:expr, $max_mr:expr, $min_rds:expr, $max_rds:expr, $move_r:expr) => {
         RangedFireModeProfile {
             id: RangedFireModeId::$id,
             name: $name,
@@ -983,29 +1010,34 @@ macro_rules! fm {
             max_base_tc: $max_tc,
             min_recoil_r: $min_r,
             max_recoil_r: $max_r,
+            min_mode_recoil_adder: $min_mr,
+            max_mode_recoil_adder: $max_mr,
+            min_rounds_expended: $min_rds,
+            max_rounds_expended: $max_rds,
             movement_recoil_adder: $move_r,
         }
     };
 }
 
-/// Canonical 5-entry Ranged Fire Mode catalog (`ranged_combat_and_armor.md` §1.1).
+/// Canonical 5-entry Ranged Fire Mode catalog (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.1).
 pub const RANGED_FIRE_MODES: [RangedFireModeProfile; 5] = [
-    fm!(SingleSnapShotPointShoot, "Single Snap Shot (Point-Shoot)", 7, 7, 3, 4, 0),
-    fm!(DeliberateSightedAimedShot, "Deliberate Sighted / Aimed Shot", 11, 12, 4, 6, 0),
-    fm!(ControlledDoubleTapShortBurst, "Controlled Double-Tap / Short Burst", 9, 9, 6, 7, 0),
-    fm!(FullAutoBurstSuppressiveFire, "Full-Auto Burst / Suppressive Fire", 8, 10, 8, 12, 0),
-    fm!(BoundingShootingOnTheMove, "Bounding / Shooting on the Move", 10, 10, 6, 10, 3),
+    fm!(SingleSnapShotPointShoot, "Single Snap Shot (Point-Shoot)", 7, 7, 3, 4, 0, 0, 1, 1, 0),
+    fm!(DeliberateSightedAimedShot, "Deliberate Sighted / Aimed Shot", 11, 12, 4, 6, 1, 1, 1, 1, 0),
+    fm!(ControlledDoubleTapShortBurst, "Controlled Double-Tap / Short Burst", 9, 9, 6, 7, 2, 3, 2, 3, 0),
+    fm!(FullAutoBurstSuppressiveFire, "Full-Auto Burst / Suppressive Fire", 8, 10, 8, 12, 4, 6, 5, 15, 0),
+    fm!(BoundingShootingOnTheMove, "Bounding / Shooting on the Move", 10, 10, 6, 10, 3, 3, 1, 3, 3),
 ];
 
 impl_static_catalog!(RangedFireModeId => RangedFireModeProfile : RANGED_FIRE_MODES);
 
-/// Returns the canonical 5-entry Ranged Fire Mode catalog (`ranged_combat_and_armor.md` §1.1).
+/// Returns the canonical 5-entry Ranged Fire Mode catalog (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.1).
 #[must_use]
 pub const fn canonical_ranged_fire_modes() -> &'static [RangedFireModeProfile] {
     RangedFireModeId::CATALOG
 }
 
-/// Evaluation of a ranged weapon triad allocation against Recoil (`R`) and Suppressive Fire rules (`ranged_combat_and_armor.md` §1.2–§1.3).
+/// Evaluation of a ranged weapon triad allocation against Recoil (`R`) and Suppressive Fire rules
+/// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.2–§2.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RangedExchangeEvaluation {
     /// Effective Recoil demand $R_{\text{eff}} = R + \text{movement\_recoil\_adder}$.
@@ -1021,7 +1053,7 @@ pub struct RangedExchangeEvaluation {
 }
 
 /// Evaluates Recoil Bracing ($F \ge R$) and Suppressive Fire Morale Shock ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$)
-/// from `ranged_combat_and_armor.md` §1.2–§1.3.
+/// from `docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.2–§2.3.
 pub fn evaluate_ranged_recoil_and_suppression(
     allocated_force: i32,
     weapon_recoil_r: i32,
@@ -1047,7 +1079,8 @@ pub fn evaluate_ranged_recoil_and_suppression(
 }
 
 /// Evaluates Ranged Recoil Bracing and Suppressive Fire using the canonical 5-gait movement model
-/// from `movement_vehicles_and_environment.md` §1.2 (`+0` Crawl/Creep, `+2` Combat Glide, `+4` Bounding Run).
+/// from `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2
+/// (`+0` Crawl/Creep, `+2` Combat Glide, `+4` Bounding Run).
 pub fn evaluate_ranged_recoil_with_gait(
     allocated_force: i32,
     weapon_recoil_r: i32,
@@ -1066,47 +1099,98 @@ pub fn evaluate_ranged_recoil_with_gait(
 // Armor Catalog & Penetration (PR) vs. Behind-Armor Blunt Trauma (BABT)
 // ============================================================================
 
-/// Canonical Armor Profile identifiers (`ranged_combat_and_armor.md` §2.1).
+/// Canonical Armor Profile identifiers (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.1).
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ArmorProfileId {
     /// **Heavy Leather / Synth-Weave Jacket**: `PR_Edged 2`, `PR_Ballistic 1`, `BTD 1`, `2.5 kg`.
     HeavyLeatherSynthWeaveJacket = 0,
-    /// **Concealable Soft Kevlar Vest (NIJ IIIA)**: `PR_Edged 2` (`1` vs. icepick/flechette), `PR_Ballistic 4`, `BTD 2`, `2.8 kg`.
+    /// **Concealable Soft Kevlar Vest (NIJ IIIA)**: `PR_Edged 2` (`1` vs. icepick/flechette), `PR_Ballistic 4`, `BTD 2`, `2.2 kg`.
     ConcealableSoftKevlarVestNij3a = 1,
+    /// **Lightweight UHMWPE Patrol Carrier (NIJ III / RF1)**: `PR_Edged 5`, `PR_Ballistic 6`, `BTD 4`, `4.8 kg`.
+    LightweightUhmwpePatrolCarrierNij3 = 2,
     /// **Tactical Plate Carrier (Level IV Ceramic)**: `PR_Edged 6`, `PR_Ballistic 8`, `BTD 5`, `8.5 kg`.
-    TacticalPlateCarrierLevel4 = 2,
+    TacticalPlateCarrierLevel4 = 3,
     /// **Ballistic Combat Helmet + Visor**: `PR_Edged 5`, `PR_Ballistic 4` (`3` visor), `BTD 4`, `1.6 kg`.
-    BallisticCombatHelmetVisor = 3,
-    /// **Full Riot / Breacher Suit**: `PR_Edged 6`, `PR_Ballistic 5`, `BTD 6`, `16.0 kg`, `+6` Heat Retention.
-    FullRiotBreacherSuit = 4,
+    BallisticCombatHelmetVisor = 4,
+    /// **Full Riot / Breacher Suit**: `PR_Edged 6` (`5` vs. icepick/flechette), `PR_Ballistic 5`, `BTD 6`, `16.0 kg`, `+6` Heat Retention.
+    FullRiotBreacherSuit = 5,
     /// **2035 "Valkyrie" Recon Exo-Carapace**: `PR_Edged 8`, `PR_Ballistic 9`, `BTD 8`, `18.5 kg` (`-20.0 kg` Exo Offset).
-    ValkyrieReconExoCarapace2035 = 5,
+    ValkyrieReconExoCarapace2035 = 6,
 }
 
 impl ArmorProfileId {
-    /// All 6 canonical armor profile identifiers in declaration order.
-    pub const ALL: [Self; 6] = [
+    /// All 7 canonical armor profile identifiers in declaration order (`ranged_combat_and_armor.md` §8.1).
+    pub const ALL: [Self; 7] = [
         Self::HeavyLeatherSynthWeaveJacket,
         Self::ConcealableSoftKevlarVestNij3a,
+        Self::LightweightUhmwpePatrolCarrierNij3,
         Self::TacticalPlateCarrierLevel4,
         Self::BallisticCombatHelmetVisor,
         Self::FullRiotBreacherSuit,
         Self::ValkyrieReconExoCarapace2035,
     ];
+
+    /// Canonical machine-readable code for this armor profile.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::HeavyLeatherSynthWeaveJacket => "HEAVY_LEATHER_SYNTH_WEAVE_JACKET",
+            Self::ConcealableSoftKevlarVestNij3a => "CONCEALABLE_SOFT_KEVLAR_VEST_NIJ_3A",
+            Self::LightweightUhmwpePatrolCarrierNij3 => {
+                "LIGHTWEIGHT_UHMWPE_PATROL_CARRIER_NIJ_3"
+            }
+            Self::TacticalPlateCarrierLevel4 => "TACTICAL_PLATE_CARRIER_LEVEL_4",
+            Self::BallisticCombatHelmetVisor => "BALLISTIC_COMBAT_HELMET_VISOR",
+            Self::FullRiotBreacherSuit => "FULL_RIOT_BREACHER_SUIT",
+            Self::ValkyrieReconExoCarapace2035 => "VALKYRIE_RECON_EXO_CARAPACE_2035",
+        }
+    }
+
+    /// Human-readable display label from `ranged_combat_and_armor.md` §8.1.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::HeavyLeatherSynthWeaveJacket => "Heavy Leather / Synth-Weave Jacket",
+            Self::ConcealableSoftKevlarVestNij3a => "Concealable Soft Kevlar Vest (NIJ IIIA)",
+            Self::LightweightUhmwpePatrolCarrierNij3 => {
+                "Lightweight UHMWPE Patrol Carrier (NIJ III / RF1)"
+            }
+            Self::TacticalPlateCarrierLevel4 => "Tactical Plate Carrier (Level IV Ceramic)",
+            Self::BallisticCombatHelmetVisor => "Ballistic Combat Helmet + Visor",
+            Self::FullRiotBreacherSuit => "Full Riot / Breacher Suit",
+            Self::ValkyrieReconExoCarapace2035 => "2035 \"Valkyrie\" Recon Exo-Carapace",
+        }
+    }
+
+    /// Recognized shorthand aliases for this armor profile.
+    #[must_use]
+    pub const fn aliases(self) -> &'static [&'static str] {
+        match self {
+            Self::HeavyLeatherSynthWeaveJacket => &["SYNTH_WEAVE_JACKET", "LEATHER_JACKET"],
+            Self::ConcealableSoftKevlarVestNij3a => &["SOFT_KEVLAR_VEST", "NIJ_3A", "KEVLAR_3A"],
+            Self::LightweightUhmwpePatrolCarrierNij3 => {
+                &["UHMWPE_PATROL_CARRIER", "NIJ_3", "RF1"]
+            }
+            Self::TacticalPlateCarrierLevel4 => &["PLATE_CARRIER", "LEVEL_4", "NIJ_4"],
+            Self::BallisticCombatHelmetVisor => &["COMBAT_HELMET", "BALLISTIC_HELMET"],
+            Self::FullRiotBreacherSuit => &["RIOT_SUIT", "BREACHER_SUIT"],
+            Self::ValkyrieReconExoCarapace2035 => &["VALKYRIE_EXO", "EXO_CARAPACE"],
+        }
+    }
 }
 
-/// Canonical Armor Profile from `ranged_combat_and_armor.md` §2.1.
+/// Canonical Armor Profile from `docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.1.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArmorProfile {
     /// Canonical armor identifier.
     pub id: ArmorProfileId,
-    /// Display name from the §2.1 table.
+    /// Display name from the §8.1 table.
     pub name: &'static str,
     /// Penetration Resistance against Edged/Stabbing attacks (`PR_Edged`).
     pub pr_edged: i32,
-    /// Penetration Resistance against icepick/flechette thrusts (`1` for Soft Kevlar, else equals `pr_edged`).
+    /// Penetration Resistance against icepick/flechette thrusts (`1` for Soft Kevlar, `5` for Riot Suit, else equals `pr_edged`).
     pub pr_icepick_flechette: i32,
     /// Penetration Resistance against Ballistic projectiles (`PR_Ballistic`).
     pub pr_ballistic: i32,
@@ -1116,6 +1200,10 @@ pub struct ArmorProfile {
     pub blunt_trauma_dampening_btd: i32,
     /// Physical weight in kilograms.
     pub weight_kg: f64,
+    /// Protected / encumbered body zones (`ranged_combat_and_armor.md` §8.1 Table).
+    pub encumbered_zones: &'static str,
+    /// Street/retail price in 2032 USD / Credits (`ranged_combat_and_armor.md` §8.1 Table).
+    pub cost_usd: i32,
     /// Powered exoskeleton carry-load offset in kilograms (`20.0 kg` for Valkyrie Exo-Carapace, else `0.0`).
     pub exo_load_offset_kg: f64,
     /// Environmental Heat Retention penalty (`+6` for Full Riot/Breacher Suit, else `0`).
@@ -1123,7 +1211,7 @@ pub struct ArmorProfile {
 }
 
 macro_rules! ar {
-    ($id:ident, $name:literal, $edged:expr, $ice:expr, $bal:expr, $vis:expr, $btd:expr, $wt:expr, $exo:expr, $heat:expr) => {
+    ($id:ident, $name:literal, $edged:expr, $ice:expr, $bal:expr, $vis:expr, $btd:expr, $wt:expr, $zones:literal, $cost:expr, $exo:expr, $heat:expr) => {
         ArmorProfile {
             id: ArmorProfileId::$id,
             name: $name,
@@ -1133,31 +1221,35 @@ macro_rules! ar {
             pr_visor_weak_spot: $vis,
             blunt_trauma_dampening_btd: $btd,
             weight_kg: $wt,
+            encumbered_zones: $zones,
+            cost_usd: $cost,
             exo_load_offset_kg: $exo,
             heat_retention_delta: $heat,
         }
     };
 }
 
-/// Canonical 6-entry Armor Catalog (`ranged_combat_and_armor.md` §2.1).
-pub const ARMOR_CATALOG: [ArmorProfile; 6] = [
-    ar!(HeavyLeatherSynthWeaveJacket, "Heavy Leather / Synth-Weave Jacket", 2, 2, 1, 1, 1, 2.5, 0.0, 0),
-    ar!(ConcealableSoftKevlarVestNij3a, "Concealable Soft Kevlar Vest (NIJ IIIA)", 2, 1, 4, 4, 2, 2.8, 0.0, 0),
-    ar!(TacticalPlateCarrierLevel4, "Tactical Plate Carrier (Level IV Ceramic)", 6, 6, 8, 8, 5, 8.5, 0.0, 0),
-    ar!(BallisticCombatHelmetVisor, "Ballistic Combat Helmet + Visor", 5, 5, 4, 3, 4, 1.6, 0.0, 0),
-    ar!(FullRiotBreacherSuit, "Full Riot / Breacher Suit", 6, 6, 5, 5, 6, 16.0, 0.0, 6),
-    ar!(ValkyrieReconExoCarapace2035, "2035 \"Valkyrie\" Recon Exo-Carapace", 8, 8, 9, 9, 8, 18.5, 20.0, 0),
+/// Canonical 7-entry Armor Catalog (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.1).
+pub const ARMOR_CATALOG: [ArmorProfile; 7] = [
+    ar!(HeavyLeatherSynthWeaveJacket, "Heavy Leather / Synth-Weave Jacket", 2, 2, 1, 1, 1, 2.5, "Torso, Arms", 350, 0.0, 0),
+    ar!(ConcealableSoftKevlarVestNij3a, "Concealable Soft Kevlar Vest (NIJ IIIA)", 2, 1, 4, 4, 2, 2.2, "Torso (Concealed)", 800, 0.0, 0),
+    ar!(LightweightUhmwpePatrolCarrierNij3, "Lightweight UHMWPE Patrol Carrier (NIJ III / RF1)", 5, 5, 6, 6, 4, 4.8, "Torso (Vital Organs)", 1600, 0.0, 0),
+    ar!(TacticalPlateCarrierLevel4, "Tactical Plate Carrier (Level IV Ceramic)", 6, 6, 8, 8, 5, 8.5, "Torso (Vital Organs)", 2400, 0.0, 0),
+    ar!(BallisticCombatHelmetVisor, "Ballistic Combat Helmet + Visor", 5, 5, 4, 3, 4, 1.6, "Head, Neck, Face", 950, 0.0, 0),
+    ar!(FullRiotBreacherSuit, "Full Riot / Breacher Suit", 6, 5, 5, 5, 6, 16.0, "Full Body", 4500, 0.0, 6),
+    ar!(ValkyrieReconExoCarapace2035, "2035 \"Valkyrie\" Recon Exo-Carapace", 8, 8, 9, 9, 8, 18.5, "Full Body (Powered)", 45000, 20.0, 0),
 ];
 
 impl_static_catalog!(ArmorProfileId => ArmorProfile : ARMOR_CATALOG);
 
-/// Returns the canonical 6-entry Armor Catalog (`ranged_combat_and_armor.md` §2.1).
+/// Returns the canonical 7-entry Armor Catalog (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.1).
 #[must_use]
 pub const fn canonical_armor_catalog() -> &'static [ArmorProfile] {
     ArmorProfileId::CATALOG
 }
 
-/// Incoming weapon damage type for Armor `PR` vs. `BABT` resolution (`ranged_combat_and_armor.md` §2.2).
+/// Incoming weapon damage type for Armor `PR` vs. `BABT` resolution
+/// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WeaponDamageType {
@@ -1167,11 +1259,12 @@ pub enum WeaponDamageType {
     IcepickOrFlechette,
     /// Ballistic firearm projectile or high-velocity fragment (`PR_Ballistic`).
     Ballistic,
-    /// Pure Blunt impact (`BABT = max(0, Raw Impact - BTD)`).
+    /// Pure Blunt impact (`BABT = max(0, Effective Raw Impact - BTD)`).
     Blunt,
 }
 
-/// Result of resolving an attack's Penetration (`Effective Pen`) and Impact against an [`ArmorProfile`] (`ranged_combat_and_armor.md` §2.2).
+/// Result of resolving an attack's Penetration (`Effective Pen`) and Impact against an [`ArmorProfile`]
+/// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §4.2 & §8.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArmorImpactOutcome {
     /// Effective Penetration $\text{Effective Pen} = \text{Base Pen} + \lfloor \max(0, \text{Net Successes}) / 2 \rfloor$.
@@ -1180,19 +1273,20 @@ pub struct ArmorImpactOutcome {
     pub active_armor_pr: i32,
     /// Whether the attack penetrated the armor ($\text{Effective Pen} > \text{PR}$ for non-blunt attacks).
     pub penetrated: bool,
-    /// Behind-Armor Blunt Trauma (`BABT`) inflicted when stopped by armor ($\max(0, \text{Raw Impact} - \text{BTD})$).
+    /// Behind-Armor Blunt Trauma (`BABT`) inflicted when stopped by armor ($\max(0, \text{Effective Raw Impact} - \text{BTD})$).
     pub babt_trauma: i32,
-    /// Penetrating trauma inflicted when armor is overmatched ($\max(0, \text{Raw Impact} - \text{PR})$).
+    /// Penetrating trauma inflicted when armor is overmatched ($\max(0, \text{Effective Raw Impact} - \text{PR})$).
     pub penetrating_trauma: i32,
     /// Total effective trauma transferred to the target (`penetrating_trauma` if penetrated, else `babt_trauma`).
     pub total_effective_trauma: i32,
     /// Whether the wound causes internal/external bleeding (`true` when an Edged/Icepick/Ballistic attack penetrates).
     pub causes_bleed: bool,
-    /// Armor `PR` ablation/degradation inflicted on the struck plate (`1..=2` on penetration, `0` when stopped).
+    /// Armor `PR` ablation/degradation inflicted on the struck plate (`1..=2` on penetration, `1` when a Level IV Ceramic plate stops a hit with `raw_impact >= 6`, else `0`).
     pub armor_pr_degradation: i32,
 }
 
-/// Resolves **Armor Penetration (`PR`) vs. Behind-Armor Blunt Trauma (`BABT`)** (`ranged_combat_and_armor.md` §2.2).
+/// Resolves **Armor Penetration (`PR`) vs. Behind-Armor Blunt Trauma (`BABT`)**
+/// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §4.2, line 257 & §8.2, lines 453–465).
 pub fn resolve_armor_impact(
     armor: &ArmorProfile,
     damage_type: WeaponDamageType,
@@ -1201,7 +1295,9 @@ pub fn resolve_armor_impact(
     net_successes: i32,
     hits_visor_weak_spot: bool,
 ) -> ArmorImpactOutcome {
-    let effective_pen = base_pen + (net_successes.max(0).div_euclid(2));
+    let bonus_margin = net_successes.max(0).div_euclid(2);
+    let effective_pen = base_pen + bonus_margin;
+    let effective_raw_impact = raw_impact + bonus_margin;
     let active_armor_pr = match damage_type {
         WeaponDamageType::Edged => armor.pr_edged,
         WeaponDamageType::IcepickOrFlechette => armor.pr_icepick_flechette,
@@ -1216,7 +1312,15 @@ pub fn resolve_armor_impact(
     };
 
     if damage_type == WeaponDamageType::Blunt || effective_pen <= active_armor_pr {
-        let babt_trauma = (raw_impact - armor.blunt_trauma_dampening_btd).max(0);
+        let babt_trauma = (effective_raw_impact - armor.blunt_trauma_dampening_btd).max(0);
+        let armor_pr_degradation = if damage_type != WeaponDamageType::Blunt
+            && armor.id == ArmorProfileId::TacticalPlateCarrierLevel4
+            && raw_impact >= 6
+        {
+            1
+        } else {
+            0
+        };
         ArmorImpactOutcome {
             effective_pen,
             active_armor_pr,
@@ -1225,10 +1329,10 @@ pub fn resolve_armor_impact(
             penetrating_trauma: 0,
             total_effective_trauma: babt_trauma,
             causes_bleed: false,
-            armor_pr_degradation: 0,
+            armor_pr_degradation,
         }
     } else {
-        let penetrating_trauma = (raw_impact - active_armor_pr).max(0);
+        let penetrating_trauma = (effective_raw_impact - active_armor_pr).max(0);
         let overmatch = effective_pen - active_armor_pr;
         let armor_pr_degradation = if overmatch >= 4 { 2 } else { 1 };
         ArmorImpactOutcome {
@@ -1245,10 +1349,11 @@ pub fn resolve_armor_impact(
 }
 
 // ============================================================================
-// Weapon & Equipment Reliability (`Rel`) & Malfunctions (§3.1 – §3.2)
+// Weapon & Equipment Reliability (`Rel`) & Malfunctions (§6.1 – §6.2)
 // ============================================================================
 
-/// Canonical Equipment Quality & Reliability (`Rel`) classes (`ranged_combat_and_armor.md` §3.1).
+/// Canonical Equipment Quality & Reliability (`Rel`) classes
+/// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §6.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WeaponReliabilityClass {
@@ -1278,7 +1383,7 @@ impl WeaponReliabilityClass {
     }
 }
 
-/// Severity of a Weapon or Equipment Malfunction (`ranged_combat_and_armor.md` §3.2).
+/// Severity of a Weapon or Equipment Malfunction (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §6.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MalfunctionKind {
@@ -1292,7 +1397,8 @@ pub enum MalfunctionKind {
     MajorMalfunctionDoubleFeed,
 }
 
-/// Outcome of checking a cascade roll for Weapon/Equipment Malfunction (`ranged_combat_and_armor.md` §3.2).
+/// Outcome of checking a cascade roll for Weapon/Equipment Malfunction
+/// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §6.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WeaponMalfunctionOutcome {
     /// Effective Reliability rating (`Rel`) clamped to `-4..=+4`.
@@ -1305,7 +1411,8 @@ pub struct WeaponMalfunctionOutcome {
     pub tool_tier_degradation: i32,
 }
 
-/// Evaluates whether a [`CascadeRollOutcome`] triggers a Weapon or Equipment Malfunction (`ranged_combat_and_armor.md` §3.2).
+/// Evaluates whether a [`CascadeRollOutcome`] triggers a Weapon or Equipment Malfunction
+/// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §6.2 & §9.2 line 530).
 pub fn evaluate_weapon_malfunction(
     roll: &CascadeRollOutcome,
     reliability_rel: i32,
@@ -1321,8 +1428,10 @@ pub fn evaluate_weapon_malfunction(
         CascadeOutcomeKind::BotchFailure => {
             if roll.effective_botches + fouling > 2 + rel {
                 (MalfunctionKind::MajorMalfunctionDoubleFeed, 26, 2)
-            } else {
+            } else if roll.effective_botches + fouling > rel {
                 (MalfunctionKind::MinorMalfunctionStovepipe, 8, 1)
+            } else {
+                (MalfunctionKind::None, 0, 0)
             }
         }
         _ => (MalfunctionKind::None, 0, 0),
@@ -1336,7 +1445,8 @@ pub fn evaluate_weapon_malfunction(
     }
 }
 
-/// Applies `30 minutes` of Downtime **Preventative Maintenance** with *Gunsmithing & Armorer* (`DEX/ANA`) (`ranged_combat_and_armor.md` §3.2).
+/// Applies `30 minutes` of Downtime **Preventative Maintenance** with *Gunsmithing & Armorer* (`DEX/ANA`)
+/// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §6.2).
 pub fn apply_preventative_maintenance(
     base_reliability: i32,
     _current_fouling: i32,
@@ -1344,216 +1454,4 @@ pub fn apply_preventative_maintenance(
 ) -> (i32, i32) {
     let bonus = i32::from(armorer_successes >= 1);
     ((base_reliability + bonus).clamp(-4, 4), 0)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::psyche_social::{
-        CombatMotivationKind, PsycheProfile, evaluate_combat_morale_roll,
-        evaluate_combat_motivation_modifier,
-    };
-
-    #[test]
-    fn test_viktor_vs_elena_melee_walkthrough() {
-        let elena_params = TacticalPoolParams {
-            spd: 13,
-            for_stat: 10,
-            dex: 12,
-            kin: 13,
-            sig: 12,
-            ins: 12,
-            itu: 13,
-            ana: 12,
-            cre: 10,
-            foc: 12,
-            dis: 13,
-            fit: 12,
-            mass_kg: 65.0,
-            skill_c: 13,
-            skill_n: 4,
-            is_ranged: false,
-            ..Default::default()
-        };
-        let mut viktor_params = TacticalPoolParams {
-            spd: 9,
-            for_stat: 15,
-            dex: 10,
-            kin: 10,
-            sig: 10,
-            ins: 8,
-            itu: 8,
-            ana: 8,
-            cre: 8,
-            foc: 8,
-            dis: 9,
-            fit: 13,
-            mass_kg: 100.0,
-            skill_c: 12,
-            skill_n: 2,
-            is_ranged: false,
-            ..Default::default()
-        };
-
-        let elena_env = compute_tactical_pool(&elena_params);
-        let viktor_env = compute_tactical_pool(&viktor_params);
-        assert_eq!((elena_env.p_base, elena_env.neutral_baseline_b), (24, 8));
-        assert_eq!((viktor_env.p_base, viktor_env.neutral_baseline_b), (16, 5));
-        assert_eq!(viktor_env.caps, Triad::new(9, 10, 15));
-        assert!((viktor_env.power_pow - 13.5).abs() < 1e-6);
-
-        let elena_ex1 = evaluate_tactical_triad(&elena_env, 8, Triad::new(11, 11, 2));
-        assert!(elena_ex1.valid && elena_ex1.effective_tc == 5);
-
-        viktor_params.leg_wound_penalty = 2;
-        viktor_params.morale_state = MoraleState::Rage;
-        let viktor_rage_env = compute_tactical_pool(&viktor_params);
-        assert_eq!(
-            (viktor_rage_env.p_eff, viktor_rage_env.tempo_cap, viktor_rage_env.min_force_required, viktor_rage_env.max_control_allowed),
-            (18, 7, 9, 4)
-        );
-
-        let viktor_haymaker = evaluate_tactical_triad(&viktor_rage_env, 10, Triad::new(3, 3, 12));
-        assert!(viktor_haymaker.valid && viktor_haymaker.effective_tc == 12);
-
-        let elena_ex2 = evaluate_tactical_triad(&elena_env, 8, Triad::new(6, 10, 8));
-        assert!(elena_ex2.valid);
-        let (interrupted, counter_land_tick) =
-            check_melee_interrupt_before_impact(15, 6, elena_ex2.effective_tc - 2, true);
-        assert!(interrupted && counter_land_tick < 15);
-
-        viktor_params.morale_state = MoraleState::Steady;
-        viktor_params.wound_shock_index = 2;
-        viktor_params.fatigue_level = 1;
-        let viktor_after = compute_tactical_pool(&viktor_params);
-        assert_eq!(viktor_after.p_eff, 10);
-    }
-
-    #[test]
-    fn test_clinch_and_hip_throw_vs_knife_blitz() {
-        let res = resolve_contested_melee_exchange(
-            Triad::new(4, 12, 8),
-            Triad::new(10, 2, 8),
-            &MeleeExchangeContext {
-                defender_guard_bonus: -1,
-                defender_mmf: 12.0,
-                attacker_reach: 1,
-                defender_reach: 1,
-                in_clinch: true,
-                defender_has_keep_out_weapon: false,
-                attacker_net_successes: 2,
-                is_throw_or_sweep: true,
-                redirect_opponent_blitz_in_clinch: true,
-            },
-        );
-        assert!(res.kuzushi_throw_succeeded);
-        assert!(res.leveraged_throw_force >= res.defender_effective_root);
-        assert_eq!(res.prone_recovery_ticks, 6);
-    }
-
-    #[test]
-    fn test_mateo_vs_sgt_vance_firefight_suppression_walkthrough() {
-        let mateo_ranged = evaluate_ranged_recoil_and_suppression(8, 8, false, true);
-        assert!(mateo_ranged.recoil_fully_braced);
-        assert_eq!((mateo_ranged.unbraced_dispersion_delta_ext, mateo_ranged.suppression_morale_delta), (0, 4));
-
-        let vance_morale = evaluate_combat_morale_roll(
-            14,
-            0,
-            0,
-            mateo_ranged.suppression_morale_delta,
-            true,
-            MoraleState::Steady,
-            &[(10, 9), (8, 8)],
-            (8, 7),
-        );
-        assert_eq!(vance_morale.new_morale, MoraleState::Steady);
-
-        let vance_ranged = evaluate_ranged_recoil_and_suppression(5, 5, false, false);
-        assert!(vance_ranged.recoil_fully_braced);
-
-        let mateo_profile = PsycheProfile { slf: 15, blg: 7, ..Default::default() };
-        let mateo_mot = evaluate_combat_motivation_modifier(
-            &mateo_profile,
-            CombatMotivationKind::MercenaryTransactionalUnderFire,
-        );
-        assert_eq!(mateo_mot.delta_mot, -2);
-
-        let mateo_morale_roll = evaluate_combat_morale_roll(
-            9,
-            mateo_mot.delta_mot,
-            0,
-            4,
-            false,
-            MoraleState::Steady,
-            &[(4, 4)],
-            (10, 10),
-        );
-        assert_eq!(mateo_morale_roll.new_morale, MoraleState::Broken);
-
-        let mateo_broken_env = compute_tactical_pool(&TacticalPoolParams {
-            spd: 12,
-            for_stat: 12,
-            dex: 8,
-            sig: 8,
-            ins: 12,
-            itu: 12,
-            ana: 12,
-            foc: 12,
-            skill_c: 12,
-            skill_n: 2,
-            is_ranged: true,
-            wound_shock_index: 2,
-            arm_head_wound_penalty: 5,
-            torso_shoulder_wound_penalty: 5,
-            morale_state: MoraleState::Broken,
-            ..Default::default()
-        });
-        assert_eq!((mateo_broken_env.p_base, mateo_broken_env.p_eff, mateo_broken_env.max_force_allowed, mateo_broken_env.control_cap), (18, 10, 0, 3));
-
-        let scramble = evaluate_tactical_triad(&mateo_broken_env, 8, Triad::new(7, 3, 0));
-        assert!(scramble.valid);
-    }
-
-    #[test]
-    fn test_sniper_overwatch_and_grenade_dive_walkthrough() {
-        let elena_env = compute_tactical_pool(&TacticalPoolParams {
-            spd: 13,
-            for_stat: 10,
-            dex: 12,
-            kin: 13,
-            sig: 12,
-            ins: 12,
-            itu: 13,
-            ana: 12,
-            cre: 10,
-            foc: 12,
-            dis: 13,
-            fit: 12,
-            mass_kg: 65.0,
-            skill_c: 13,
-            skill_n: 4,
-            is_ranged: false,
-            ..Default::default()
-        });
-        let bound1 = evaluate_tactical_triad(&elena_env, 8, Triad::new(12, 12, 0));
-        assert!(bound1.valid && bound1.archetype_label.starts_with("TC") && bound1.exertion_marks_gained == 1);
-
-        let bound2 = evaluate_tactical_triad(&elena_env, 8, Triad::new(12, 2, 10));
-        assert!(bound2.valid && bound2.archetype_label.starts_with("TF") && bound2.exertion_marks_gained == 2);
-    }
-
-    #[test]
-    fn test_armor_penetration_vs_babt_and_weapon_malfunctions() {
-        let kevlar = ArmorProfileId::ConcealableSoftKevlarVestNij3a.spec();
-        let stopped = resolve_armor_impact(kevlar, WeaponDamageType::Ballistic, 6, 2, 1, false);
-        assert!(!stopped.penetrated && !stopped.causes_bleed && stopped.babt_trauma == 4 && stopped.total_effective_trauma == 4);
-
-        let overmatched = resolve_armor_impact(kevlar, WeaponDamageType::Ballistic, 9, 4, 2, false);
-        assert!(overmatched.penetrated && overmatched.causes_bleed && overmatched.penetrating_trauma == 5 && overmatched.armor_pr_degradation == 1);
-
-        let icepick = resolve_armor_impact(kevlar, WeaponDamageType::IcepickOrFlechette, 5, 1, 2, false);
-        assert_eq!((icepick.active_armor_pr, icepick.effective_pen), (1, 2));
-        assert!(icepick.penetrated);
-    }
 }

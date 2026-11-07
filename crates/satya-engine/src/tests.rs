@@ -650,3 +650,285 @@ fn test_worked_examples_7_1_and_7_2_and_master_benchmarks() {
 
     assert_eq!(list_master_task_benchmarks().len(), 22);
 }
+
+#[test]
+fn test_viktor_vs_elena_melee_walkthrough() {
+    let elena_params = TacticalPoolParams {
+        spd: 13,
+        for_stat: 10,
+        dex: 12,
+        kin: 13,
+        sig: 12,
+        ins: 12,
+        itu: 13,
+        ana: 12,
+        cre: 10,
+        foc: 12,
+        dis: 13,
+        fit: 12,
+        mass_kg: 65.0,
+        skill_c: 13,
+        skill_n: 4,
+        is_ranged: false,
+        ..Default::default()
+    };
+    let mut viktor_params = TacticalPoolParams {
+        spd: 8,
+        for_stat: 15,
+        dex: 9,
+        kin: 9,
+        sig: 10,
+        ins: 10,
+        itu: 9,
+        ana: 9,
+        cre: 8,
+        foc: 9,
+        dis: 9,
+        fit: 13,
+        mass_kg: 102.0,
+        skill_c: 11,
+        skill_n: 2,
+        is_ranged: false,
+        ..Default::default()
+    };
+
+    let elena_env = compute_tactical_pool(&elena_params);
+    let viktor_env = compute_tactical_pool(&viktor_params);
+    assert_eq!((elena_env.p_base, elena_env.neutral_baseline_b), (24, 8));
+    assert_eq!((viktor_env.p_base, viktor_env.neutral_baseline_b), (16, 5));
+    assert_eq!(viktor_env.caps, Triad::new(8, 9, 15));
+    assert!((viktor_env.power_pow - 12.0).abs() < 1e-6);
+
+    let elena_ex1 = evaluate_tactical_triad(&elena_env, 8, Triad::new(11, 11, 2));
+    assert!(elena_ex1.valid && elena_ex1.effective_tc == 5);
+
+    viktor_params.leg_wound_penalty = 2;
+    viktor_params.morale_state = MoraleState::Rage;
+    let viktor_rage_env = compute_tactical_pool(&viktor_params);
+    assert_eq!(
+        (
+            viktor_rage_env.p_eff,
+            viktor_rage_env.tempo_cap,
+            viktor_rage_env.min_force_required,
+            viktor_rage_env.max_control_allowed
+        ),
+        (18, 6, 9, 4)
+    );
+
+    let viktor_haymaker = evaluate_tactical_triad(&viktor_rage_env, 10, Triad::new(3, 3, 12));
+    assert!(viktor_haymaker.valid && viktor_haymaker.effective_tc == 12);
+
+    let elena_ex2 = evaluate_tactical_triad(&elena_env, 8, Triad::new(6, 10, 8));
+    assert!(elena_ex2.valid);
+    let (interrupted, counter_land_tick) =
+        check_melee_interrupt_before_impact(15, 6, elena_ex2.effective_tc - 2, true);
+    assert!(interrupted && counter_land_tick < 15);
+
+    viktor_params.morale_state = MoraleState::Steady;
+    viktor_params.wound_shock_index = 2;
+    viktor_params.fatigue_level = 1;
+    let viktor_after = compute_tactical_pool(&viktor_params);
+    assert_eq!(viktor_after.p_eff, 10);
+}
+
+#[test]
+fn test_clinch_and_hip_throw_vs_knife_blitz() {
+    let res = resolve_contested_melee_exchange(
+        Triad::new(4, 12, 8),
+        Triad::new(10, 2, 8),
+        &MeleeExchangeContext {
+            defender_guard_bonus: -1,
+            defender_mmf: 12.0,
+            attacker_reach: 1,
+            defender_reach: 1,
+            in_clinch: true,
+            defender_has_keep_out_weapon: false,
+            attacker_net_successes: 2,
+            is_throw_or_sweep: true,
+            redirect_opponent_blitz_in_clinch: true,
+        },
+    );
+    assert!(res.kuzushi_throw_succeeded);
+    assert!(res.leveraged_throw_force >= res.defender_effective_root);
+    assert_eq!(res.prone_recovery_ticks, 6);
+}
+
+#[test]
+fn test_mateo_vs_sgt_vance_firefight_suppression_walkthrough() {
+    let mateo_ranged = evaluate_ranged_recoil_and_suppression(8, 8, false, true);
+    assert!(mateo_ranged.recoil_fully_braced);
+    assert_eq!(
+        (
+            mateo_ranged.unbraced_dispersion_delta_ext,
+            mateo_ranged.suppression_morale_delta
+        ),
+        (0, 4)
+    );
+
+    // Vance scores 2 successes vs 1 GM success (net margin +1 -> holds Steady per §9.1 & §3.4)
+    let vance_morale = evaluate_combat_morale_roll(
+        14,
+        0,
+        0,
+        mateo_ranged.suppression_morale_delta,
+        true,
+        MoraleState::Steady,
+        &[(10, 9), (12, 13)],
+        (8, 14),
+    );
+    assert_eq!(vance_morale.new_morale, MoraleState::Steady);
+
+    // CleanSuccess with net_signed_margin >= +2 rallies +1 step toward High (§3.4)
+    let vance_rally = evaluate_combat_morale_roll(
+        14,
+        0,
+        0,
+        mateo_ranged.suppression_morale_delta,
+        true,
+        MoraleState::Steady,
+        &[(10, 9), (8, 8)],
+        (8, 7),
+    );
+    assert_eq!(vance_rally.new_morale, MoraleState::High);
+
+    let vance_ranged = evaluate_ranged_recoil_and_suppression(5, 5, false, false);
+    assert!(vance_ranged.recoil_fully_braced);
+
+    let mateo_profile = PsycheProfile {
+        slf: 15,
+        blg: 7,
+        ..Default::default()
+    };
+    let mateo_mot = evaluate_combat_motivation_modifier(
+        &mateo_profile,
+        CombatMotivationKind::MercenaryTransactionalUnderFire,
+    );
+    assert_eq!(mateo_mot.delta_mot, -2);
+
+    let mateo_morale_roll = evaluate_combat_morale_roll(
+        9,
+        mateo_mot.delta_mot,
+        0,
+        4,
+        false,
+        MoraleState::Steady,
+        &[(4, 4)],
+        (10, 10),
+    );
+    assert_eq!(mateo_morale_roll.new_morale, MoraleState::Broken);
+
+    let mateo_broken_env = compute_tactical_pool(&TacticalPoolParams {
+        spd: 12,
+        for_stat: 12,
+        dex: 8,
+        sig: 8,
+        ins: 12,
+        itu: 12,
+        ana: 12,
+        foc: 12,
+        skill_c: 12,
+        skill_n: 2,
+        is_ranged: true,
+        wound_shock_index: 2,
+        arm_head_wound_penalty: 5,
+        torso_shoulder_wound_penalty: 5,
+        morale_state: MoraleState::Broken,
+        ..Default::default()
+    });
+    assert_eq!(
+        (
+            mateo_broken_env.p_base,
+            mateo_broken_env.p_eff,
+            mateo_broken_env.max_force_allowed,
+            mateo_broken_env.control_cap
+        ),
+        (18, 10, 0, 3)
+    );
+
+    let scramble = evaluate_tactical_triad(&mateo_broken_env, 8, Triad::new(7, 3, 0));
+    assert!(scramble.valid);
+}
+
+#[test]
+fn test_sniper_overwatch_and_grenade_dive_walkthrough() {
+    let elena_env = compute_tactical_pool(&TacticalPoolParams {
+        spd: 13,
+        for_stat: 10,
+        dex: 12,
+        kin: 13,
+        sig: 12,
+        ins: 12,
+        itu: 13,
+        ana: 12,
+        cre: 10,
+        foc: 12,
+        dis: 13,
+        fit: 12,
+        mass_kg: 65.0,
+        skill_c: 13,
+        skill_n: 4,
+        is_ranged: false,
+        ..Default::default()
+    });
+    let bound1 = evaluate_tactical_triad(&elena_env, 8, Triad::new(12, 12, 0));
+    assert!(
+        bound1.valid
+            && bound1.archetype_label.starts_with("TC")
+            && bound1.exertion_marks_gained == 1
+    );
+
+    let bound2 = evaluate_tactical_triad(&elena_env, 8, Triad::new(12, 2, 10));
+    assert!(
+        bound2.valid
+            && bound2.archetype_label.starts_with("TF")
+            && bound2.exertion_marks_gained == 2
+    );
+}
+
+#[test]
+fn test_armor_penetration_vs_babt_and_weapon_malfunctions() {
+    assert_eq!(canonical_armor_catalog().len(), 7);
+    let uhmwpe = ArmorProfileId::LightweightUhmwpePatrolCarrierNij3.spec();
+    assert_eq!(
+        (
+            uhmwpe.pr_edged,
+            uhmwpe.pr_icepick_flechette,
+            uhmwpe.pr_ballistic,
+            uhmwpe.blunt_trauma_dampening_btd,
+            uhmwpe.cost_usd
+        ),
+        (5, 5, 6, 4, 1600)
+    );
+
+    let kevlar = ArmorProfileId::ConcealableSoftKevlarVestNij3a.spec();
+    assert!((kevlar.weight_kg - 2.2).abs() < 1e-6);
+    let stopped = resolve_armor_impact(kevlar, WeaponDamageType::Ballistic, 6, 2, 1, false);
+    assert!(
+        !stopped.penetrated
+            && !stopped.causes_bleed
+            && stopped.babt_trauma == 4
+            && stopped.total_effective_trauma == 4
+    );
+
+    let overmatched = resolve_armor_impact(kevlar, WeaponDamageType::Ballistic, 9, 4, 2, false);
+    assert!(
+        overmatched.penetrated
+            && overmatched.causes_bleed
+            && overmatched.penetrating_trauma == 6
+            && overmatched.armor_pr_degradation == 1
+    );
+
+    let plate_carrier = ArmorProfileId::TacticalPlateCarrierLevel4.spec();
+    let ceramic_stop =
+        resolve_armor_impact(plate_carrier, WeaponDamageType::Ballistic, 8, 6, 2, false);
+    assert!(
+        !ceramic_stop.penetrated
+            && ceramic_stop.babt_trauma == 4
+            && ceramic_stop.armor_pr_degradation == 1
+    );
+
+    let icepick =
+        resolve_armor_impact(kevlar, WeaponDamageType::IcepickOrFlechette, 5, 1, 2, false);
+    assert_eq!((icepick.active_armor_pr, icepick.effective_pen), (1, 2));
+    assert!(icepick.penetrated);
+}

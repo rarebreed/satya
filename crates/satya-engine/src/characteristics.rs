@@ -15,86 +15,87 @@ use serde::{Deserialize, Serialize};
 
 use crate::define_coded_enum;
 
-/// Category of a primary characteristic in the Satya system.
+/// Category of a primary characteristic in the Satya system (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §1 & §3–§7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CharacteristicCategory {
-    /// Physical somatic attributes (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`, `MAS`, `HGT`).
+    /// Physical somatic attributes (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`, `MAS`, `HGT` — §3).
     Physical,
-    /// Mental cognitive attributes (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`).
+    /// Mental cognitive attributes (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC` — §4).
     Mental,
-    /// Social interpersonal attributes (`COM`, `PRE`, `ELO`).
+    /// Social interpersonal attributes (`COM`, `PRE`, `ELO` — §5).
     Social,
-    /// Sensory acuity attributes (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`).
+    /// Sensory acuity attributes (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU` — §6).
     Sensory,
-    /// Bipolar psychological disposition traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`).
+    /// Bipolar psychological disposition traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG` — §7).
     Psyche,
 }
 
 define_coded_enum! {
-    /// Canonical characteristic codes across Physical, Mental, Social, Sensory, and Psyche domains.
+    /// Canonical 30 characteristic codes across Physical (§3), Mental (§4), Social (§5),
+    /// Sensory (§6), and Psyche (§7) domains (`docs/ttrpg/03-character/characteristics_and_aptitudes.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub enum CharacteristicCode [count = 30] {
-        /// Speed (`SPD`).
+        /// Speed (`SPD`, Physical §3).
         SPD => { code: "SPD", label: "Speed" },
-        /// Force (`FOR`).
+        /// Force (`FOR`, Physical §3).
         FOR => { code: "FOR", label: "Force" },
-        /// Dexterity (`DEX`).
+        /// Dexterity (`DEX`, Physical §3).
         DEX => { code: "DEX", label: "Dexterity" },
-        /// Kinesthesia (`KIN`).
-        KIN => { code: "KIN", label: "Kinesthesia" },
-        /// Health (`HLT`).
+        /// Kinesthesis (`KIN`, Physical §3).
+        KIN => { code: "KIN", label: "Kinesthesis", aliases: ["KINESTHESIA"] },
+        /// Health (`HLT`, Physical §3).
         HLT => { code: "HLT", label: "Health" },
-        /// Fitness (`FIT`).
+        /// Fitness (`FIT`, Physical §3).
         FIT => { code: "FIT", label: "Fitness" },
-        /// Mass in kilograms (`MAS`).
+        /// Mass in kilograms (`MAS`, Physical §3; `70.0 kg` baseline).
         MAS => { code: "MAS", label: "Mass (kg)" },
-        /// Height in meters (`HGT`).
+        /// Height in meters (`HGT`, Physical §3; `1.75 m` baseline).
         HGT => { code: "HGT", label: "Height (m)" },
-        /// Memory (`MEM`).
+        /// Memory (`MEM`, Mental §4).
         MEM => { code: "MEM", label: "Memory" },
-        /// Analysis (`ANA`).
+        /// Analysis (`ANA`, Mental §4).
         ANA => { code: "ANA", label: "Analysis" },
-        /// Insight (`INS`).
+        /// Insight (`INS`, Mental §4).
         INS => { code: "INS", label: "Insight" },
-        /// Creativity (`CRE`).
+        /// Creativity (`CRE`, Mental §4).
         CRE => { code: "CRE", label: "Creativity" },
-        /// Discipline (`DIS`).
+        /// Discipline (`DIS`, Mental §4).
         DIS => { code: "DIS", label: "Discipline" },
-        /// Focus (`FOC`).
+        /// Focus (`FOC`, Mental §4).
         FOC => { code: "FOC", label: "Focus" },
-        /// Comeliness (`COM`).
+        /// Comeliness (`COM`, Social §5).
         COM => { code: "COM", label: "Comeliness" },
-        /// Presence (`PRE`).
+        /// Presence (`PRE`, Social §5).
         PRE => { code: "PRE", label: "Presence" },
-        /// Eloquence (`ELO`).
+        /// Eloquence (`ELO`, Social §5).
         ELO => { code: "ELO", label: "Eloquence" },
-        /// Sight (`SIG`).
+        /// Sight (`SIG`, Sensory §6).
         SIG => { code: "SIG", label: "Sight" },
-        /// Hearing (`HEA`).
+        /// Hearing (`HEA`, Sensory §6).
         HEA => { code: "HEA", label: "Hearing" },
-        /// Tactile (`TAC`).
+        /// Tactile (`TAC`, Sensory §6).
         TAC => { code: "TAC", label: "Tactile" },
-        /// Olfaction (`OLF`).
-        OLF => { code: "OLF", label: "Olfaction" },
-        /// Taste (`TAS`).
+        /// Olfactory (`OLF`, Sensory §6).
+        OLF => { code: "OLF", label: "Olfactory", aliases: ["OLFACTION"] },
+        /// Taste (`TAS`, Sensory §6).
         TAS => { code: "TAS", label: "Taste" },
-        /// Intuition (`ITU`).
+        /// Intuition (`ITU`, Sensory §6).
         ITU => { code: "ITU", label: "Intuition" },
-        /// Egoism (`EGO`).
-        EGO => { code: "EGO", label: "Egoism" },
-        /// Self-Esteem (`SLF`).
-        SLF => { code: "SLF", label: "Self-Esteem" },
-        /// Openness (`OPN`).
+        /// Ego (`EGO`, Psyche §7.2: Humble / Self-Effacing vs. Proud / Grandiose / Narcissistic).
+        EGO => { code: "EGO", label: "Ego", aliases: ["EGOISM"] },
+        /// Selfishness (`SLF`, Psyche §7.2: Altruistic / Self-Sacrificing vs. Entitled / Mercenary / Acquisitive).
+        SLF => { code: "SLF", label: "Selfishness", aliases: ["SELF_ESTEEM"] },
+        /// Openness (`OPN`, Psyche §7.2: Dogmatic / Rigid vs. Curious / Receptive / Open-Minded).
         OPN => { code: "OPN", label: "Openness" },
-        /// Belonging (`BLG`).
-        BLG => { code: "BLG", label: "Belonging" },
-        /// Extraversion (`EXT`).
+        /// Belongingness (`BLG`, Psyche §7.2: Detached / Lone Wolf vs. Tribal / Group-Dependent).
+        BLG => { code: "BLG", label: "Belongingness", aliases: ["BELONGING"] },
+        /// Extraversion (`EXT`, Psyche §7.2: Introverted / Solitary vs. Gregarious / Thrill-Seeking).
         EXT => { code: "EXT", label: "Extraversion" },
-        /// Conformity (`CNF`).
+        /// Conformity (`CNF`, Psyche §7.2: Rebellious / Iconoclastic vs. Institutionalist / By-the-Book).
         CNF => { code: "CNF", label: "Conformity" },
-        /// Aggression (`AGG`).
-        AGG => { code: "AGG", label: "Aggression" },
+        /// Aggressiveness (`AGG`, Psyche §7.2: Passive / Conflict-Averse vs. Combative / Dominant).
+        AGG => { code: "AGG", label: "Aggressiveness", aliases: ["AGGRESSION"] },
     }
 }
 
@@ -125,32 +126,33 @@ impl CharacteristicCode {
     }
 }
 
-/// Population distribution tier on the `1–20` Controlling Scale (`0.0–100.0` Spectrum) (§2).
+/// Population distribution tier on the `1–20` Controlling Scale (`0.0–100.0` Spectrum)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §2 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PopulationTier {
-    /// `1–3` (`0.0–15.0`): Severely Impaired / Deficient
+    /// `1–3` (`0.0–17.4`): Severely Impaired / Extreme Low Pole
     SeverelyImpaired,
-    /// `4–6` (`15.1–30.0`): Below Average / Weak
+    /// `4–6` (`17.5–32.4`): Deficient / Strong Low Pole
     BelowAverage,
-    /// `7–8` (`30.1–42.5`): Low Average
+    /// `7–8` (`32.5–42.4`): Below Average / Moderate Low Pole
     LowAverage,
-    /// `9–11` (`42.6–57.5`): Human Median (`10 = 50.0`)
+    /// `9–11` (`42.5–57.4`): Human Average (`10 = 50.0`)
     HumanMedian,
-    /// `12–13` (`57.6–67.5`): Trained / Competent Professional
+    /// `12–13` (`57.5–67.4`): Above Average / Gifted
     TrainedCompetent,
-    /// `14–15` (`67.6–77.5`): Gifted / Veteran Specialist
+    /// `14–15` (`67.5–77.4`): Exceptional / Elite Professional
     GiftedVeteran,
-    /// `16–17` (`77.6–87.5`): World-Class / Olympic / Savant
+    /// `16–17` (`77.5–87.4`): World-Class / Olympic / Genius
     WorldClass,
-    /// `18` (`87.6–92.5`): Peak Unaugmented Human Limit
+    /// `18` (`87.5–92.4`): Peak Unaugmented Human Cap
     PeakUnaugmented,
-    /// `19–20` (`92.6–100.0`): Augmented / Transhuman Apex
+    /// `19–20` (`92.5–100.0`): Augmented / Transhuman Apex
     AugmentedApex,
 }
 
 impl PopulationTier {
-    /// Classify a `1–20` controlling characteristic score into its canonical Population Tier.
+    /// Classify a `1–20` controlling characteristic score into its canonical Population Tier (§2).
     #[must_use]
     pub const fn from_controlling_scale(c: i32) -> Self {
         match c {
@@ -166,23 +168,23 @@ impl PopulationTier {
         }
     }
 
-    /// Human-readable label from §2 table.
+    /// Human-readable label from `characteristics_and_aptitudes.md` §2 Table.
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::SeverelyImpaired => "Severely Impaired / Deficient",
-            Self::BelowAverage => "Below Average / Weak",
-            Self::LowAverage => "Low Average",
-            Self::HumanMedian => "Human Median",
-            Self::TrainedCompetent => "Trained / Competent Professional",
-            Self::GiftedVeteran => "Gifted / Veteran Specialist",
-            Self::WorldClass => "World-Class / Olympic / Savant",
-            Self::PeakUnaugmented => "Peak Unaugmented Human Limit",
+            Self::SeverelyImpaired => "Severely Impaired / Extreme Low Pole",
+            Self::BelowAverage => "Deficient / Strong Low Pole",
+            Self::LowAverage => "Below Average / Moderate Low Pole",
+            Self::HumanMedian => "Human Average",
+            Self::TrainedCompetent => "Above Average / Gifted",
+            Self::GiftedVeteran => "Exceptional / Elite Professional",
+            Self::WorldClass => "World-Class / Olympic / Genius",
+            Self::PeakUnaugmented => "Peak Unaugmented Human Cap",
             Self::AugmentedApex => "Augmented / Transhuman Apex",
         }
     }
 
-    /// Base Target Number (`31 - C`) for a single characteristic score `c`.
+    /// Base Personal Target Number ($\text{TN}_P = 31 - C$) for a single characteristic score `c` (§2).
     #[must_use]
     pub const fn base_tn(c: i32) -> i32 {
         let clamped = if c < 1 {
@@ -196,7 +198,8 @@ impl PopulationTier {
     }
 }
 
-/// Convert a continuous `0.0–100.0` Character Spectrum value to the `1–20` Controlling Scale (§2).
+/// Convert a continuous `0.0–100.0` Character Spectrum value to the `1–20` Controlling Scale
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §2).
 ///
 /// `5.0` spectrum points = `1` d20 scale step (`50.0 -> 10`).
 #[must_use]
@@ -206,13 +209,13 @@ pub fn spectrum_to_controlling_scale(spectrum: f64) -> i32 {
     step.clamp(1, 20)
 }
 
-/// Convert a `1–20` Controlling Scale integer to its canonical `0.0–100.0` Spectrum midpoint (`C * 5.0`).
+/// Convert a `1–20` Controlling Scale integer to its canonical `0.0–100.0` Spectrum midpoint (`C * 5.0`) (§2).
 #[must_use]
 pub fn controlling_scale_to_spectrum(scale: i32) -> f64 {
     f64::from(scale.clamp(1, 20)) * 5.0
 }
 
-/// Bipolar disposition pole for the 7 Psyche characteristics (§7).
+/// Bipolar disposition pole for the 7 Psyche characteristics (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §7.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PsychePole {
@@ -225,7 +228,7 @@ pub enum PsychePole {
 }
 
 impl PsychePole {
-    /// Classify a `1–20` Psyche score into `LowPole (1–7)`, `Balanced (8–12)`, or `HighPole (13–20)`.
+    /// Classify a `1–20` Psyche score into `LowPole (1–7)`, `Balanced (8–12)`, or `HighPole (13–20)` (§7.2).
     #[must_use]
     pub const fn from_score(score: i32) -> Self {
         match score {
@@ -236,65 +239,69 @@ impl PsychePole {
     }
 }
 
-/// Return the canonical Low Pole / Balanced / High Pole descriptor for a Psyche characteristic (§7).
+/// Return the canonical Low Pole / Balanced / High Pole descriptor for a Psyche characteristic
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §7.2 Table).
 #[must_use]
 pub const fn psyche_pole_descriptor(code: CharacteristicCode, score: i32) -> &'static str {
     let pole = PsychePole::from_score(score);
     match (code, pole) {
-        (CharacteristicCode::EGO, PsychePole::LowPole) => "Selfless / Altruistic",
-        (CharacteristicCode::EGO, PsychePole::Balanced) => "Pragmatic Self-Interest",
-        (CharacteristicCode::EGO, PsychePole::HighPole) => "Self-Serving / Narcissistic",
+        (CharacteristicCode::EGO, PsychePole::LowPole) => "Humble / Self-Effacing / Servile",
+        (CharacteristicCode::EGO, PsychePole::Balanced) => "Grounded Self-Respect",
+        (CharacteristicCode::EGO, PsychePole::HighPole) => "Proud / Grandiose / Narcissistic",
 
-        (CharacteristicCode::SLF, PsychePole::LowPole) => "Skeptical / Insecure",
-        (CharacteristicCode::SLF, PsychePole::Balanced) => "Grounded Confidence",
-        (CharacteristicCode::SLF, PsychePole::HighPole) => "Unshakeable / Arrogant",
+        (CharacteristicCode::SLF, PsychePole::LowPole) => "Altruistic / Self-Sacrificing",
+        (CharacteristicCode::SLF, PsychePole::Balanced) => "Pragmatic Fairness",
+        (CharacteristicCode::SLF, PsychePole::HighPole) => "Entitled / Mercenary / Acquisitive",
 
-        (CharacteristicCode::OPN, PsychePole::LowPole) => "Guarded / Secretive",
-        (CharacteristicCode::OPN, PsychePole::Balanced) => "Selective Candor",
-        (CharacteristicCode::OPN, PsychePole::HighPole) => "Candid / Transparent",
+        (CharacteristicCode::OPN, PsychePole::LowPole) => "Dogmatic / Rigid / Closed-Minded",
+        (CharacteristicCode::OPN, PsychePole::Balanced) => "Discerning",
+        (CharacteristicCode::OPN, PsychePole::HighPole) => "Curious / Receptive / Open-Minded",
 
-        (CharacteristicCode::BLG, PsychePole::LowPole) => "Lone Wolf / Detached",
-        (CharacteristicCode::BLG, PsychePole::Balanced) => "Cooperative Autonomous",
-        (CharacteristicCode::BLG, PsychePole::HighPole) => "Tribal / Loyal / Codependent",
+        (CharacteristicCode::BLG, PsychePole::LowPole) => "Detached / Lone Wolf",
+        (CharacteristicCode::BLG, PsychePole::Balanced) => "Healthy Camaraderie",
+        (CharacteristicCode::BLG, PsychePole::HighPole) => "Tribal / Group-Dependent",
 
-        (CharacteristicCode::EXT, PsychePole::LowPole) => "Introverted / Reserved",
-        (CharacteristicCode::EXT, PsychePole::Balanced) => "Ambiverted",
-        (CharacteristicCode::EXT, PsychePole::HighPole) => "Gregarious / Extraverted",
+        (CharacteristicCode::EXT, PsychePole::LowPole) => "Introverted / Solitary / Guarded",
+        (CharacteristicCode::EXT, PsychePole::Balanced) => "Ambivert",
+        (CharacteristicCode::EXT, PsychePole::HighPole) => "Gregarious / Thrill-Seeking",
 
-        (CharacteristicCode::CNF, PsychePole::LowPole) => "Iconoclastic / Rebellious",
-        (CharacteristicCode::CNF, PsychePole::Balanced) => "Situational Pragmatist",
-        (CharacteristicCode::CNF, PsychePole::HighPole) => "Orthodox / Rule-Bound",
+        (CharacteristicCode::CNF, PsychePole::LowPole) => "Rebellious / Iconoclastic / Maverick",
+        (CharacteristicCode::CNF, PsychePole::Balanced) => "Adaptable",
+        (CharacteristicCode::CNF, PsychePole::HighPole) => "Institutionalist / By-the-Book",
 
-        (CharacteristicCode::AGG, PsychePole::LowPole) => "Avoidant / De-escalatory",
+        (CharacteristicCode::AGG, PsychePole::LowPole) => "Passive / Conflict-Averse / Gentle",
         (CharacteristicCode::AGG, PsychePole::Balanced) => "Measured Assertiveness",
-        (CharacteristicCode::AGG, PsychePole::HighPole) => "Confrontational / Ruthless",
+        (CharacteristicCode::AGG, PsychePole::HighPole) => {
+            "Combative / Dominant / Hyper-Competitive"
+        }
 
         _ => "Non-Psyche Characteristic",
     }
 }
 
 define_coded_enum! {
-    /// The 9 canonical Domain Aptitudes (`APT-*`, ranging from `-2` to `+3`) (§9).
+    /// The 9 canonical Domain Aptitudes (`APT-*`, ranging from `-2` to `+3`)
+    /// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §9 Table).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub enum AptitudeCode [count = 9] {
-        /// `APT-QNT`: Quantitative & Mathematical (Tree 1)
+        /// `APT-QNT`: Quantitative & Mathematical (Tree 1 — Mathematics, Statistics, Quantitative Physics & Finance)
         AptQnt => { code: "APT-QNT", label: "Quantitative & Mathematical", aliases: ["QNT"] },
-        /// `APT-MEC`: Mechanical & Spatial (Tree 2)
+        /// `APT-MEC`: Mechanical & Spatial (Tree 2 — Mechanical/Civil Engineering, Machining, Vehicle Pilotage)
         AptMec => { code: "APT-MEC", label: "Mechanical & Spatial", aliases: ["MEC"] },
-        /// `APT-CMP`: Computational & Algorithmic (Tree 1)
+        /// `APT-CMP`: Computational & Algorithmic (Tree 3 — Software, AI 2.0, Cryptography, Cyberwarfare)
         AptCmp => { code: "APT-CMP", label: "Computational & Algorithmic", aliases: ["CMP"] },
-        /// `APT-BIO`: Biological & Chemical (Tree 3)
-        AptBio => { code: "APT-BIO", label: "Biological & Chemical", aliases: ["BIO"] },
-        /// `APT-LNG`: Linguistic & Symbolic (Tree 4)
-        AptLng => { code: "APT-LNG", label: "Linguistic & Symbolic", aliases: ["LNG"] },
-        /// `APT-KIN`: Gross Kinesthetic & Athletic (Tree 5)
-        AptKin => { code: "APT-KIN", label: "Gross Kinesthetic & Athletic", aliases: ["KIN"] },
-        /// `APT-FIN`: Fine Motor & Ballistic Precision (Trees 2, 6, 8)
-        AptFin => { code: "APT-FIN", label: "Fine Motor & Ballistic Precision", aliases: ["FIN"] },
-        /// `APT-AUD`: Musical & Auditory-Rhythmic (Trees 7, 8)
-        AptAud => { code: "APT-AUD", label: "Musical & Auditory-Rhythmic", aliases: ["AUD"] },
-        /// `APT-SOC`: Interpersonal & Rhetorical (Tree 4)
-        AptSoc => { code: "APT-SOC", label: "Interpersonal & Rhetorical", aliases: ["SOC"] },
+        /// `APT-BIO`: Biomedical & Chemical (Tree 4 — Biology, Chemistry, Pharmacology, Medicine, Surgery)
+        AptBio => { code: "APT-BIO", label: "Biomedical & Chemical", aliases: ["BIO"] },
+        /// `APT-LNG`: Linguistic & Humanities (Tree 8 — Languages, Law, History, Research, Intelligence Analysis)
+        AptLng => { code: "APT-LNG", label: "Linguistic & Humanities", aliases: ["LNG"] },
+        /// `APT-KIN`: Kinesthetic & Somatic (Trees 5–6 — Athletics, Parkour, Martial Arts, Melee Combat)
+        AptKin => { code: "APT-KIN", label: "Kinesthetic & Somatic", aliases: ["KIN"] },
+        /// `APT-FIN`: Fine-Motor & Tactile (Trees 2, 4, 5, 8 — Lockpicking, Micro-Surgery, Marksmanship, Sleight of Hand)
+        AptFin => { code: "APT-FIN", label: "Fine-Motor & Tactile", aliases: ["FIN"] },
+        /// `APT-AUD`: Auditory & Musical (Tree 8 — Singing, Musical Instruments, Acoustic Analysis, Voice Mimicry)
+        AptAud => { code: "APT-AUD", label: "Auditory & Musical", aliases: ["AUD"] },
+        /// `APT-SOC`: Interpersonal & Street (Trees 7–8 — Persuasion, Deception, Streetwise, Interrogation, Leadership)
+        AptSoc => { code: "APT-SOC", label: "Interpersonal & Street", aliases: ["SOC"] },
     }
 }
 
@@ -409,7 +416,7 @@ macro_rules! impl_characteristics_struct {
             fn default() -> Self {
                 Self {
                     $($field: 10,)+
-                    mas_kg: 75.0,
+                    mas_kg: 70.0,
                     hgt_m: 1.75,
                 }
             }
@@ -509,23 +516,24 @@ impl_characteristics_struct! {
     TAS => tas,
     /// Intuition (`ITU`, `1..=20`).
     ITU => itu,
-    /// Egoism (`EGO`, `1..=20`).
+    /// Ego (`EGO`, `1..=20` — §7.2).
     EGO => ego,
-    /// Self-Esteem (`SLF`, `1..=20`).
+    /// Selfishness (`SLF`, `1..=20` — §7.2).
     SLF => slf,
-    /// Openness (`OPN`, `1..=20`).
+    /// Openness (`OPN`, `1..=20` — §7.2).
     OPN => opn,
-    /// Belonging (`BLG`, `1..=20`).
+    /// Belongingness (`BLG`, `1..=20` — §7.2).
     BLG => blg,
-    /// Extraversion (`EXT`, `1..=20`).
+    /// Extraversion (`EXT`, `1..=20` — §7.2).
     EXT => ext,
-    /// Conformity (`CNF`, `1..=20`).
+    /// Conformity (`CNF`, `1..=20` — §7.2).
     CNF => cnf,
-    /// Aggression (`AGG`, `1..=20`).
+    /// Aggressiveness (`AGG`, `1..=20` — §7.2).
     AGG => agg,
 }
 
-/// Compute Quick Thinking ($D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$) (§8).
+/// Compute Quick Thinking ($D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
 #[must_use]
 pub fn compute_d_cog_score(ana: i32, cre: i32, foc: i32) -> i32 {
     let a = ana.clamp(1, 20);
@@ -534,7 +542,9 @@ pub fn compute_d_cog_score(ana: i32, cre: i32, foc: i32) -> i32 {
     (a.max(c) + f).div_euclid(2)
 }
 
-/// Compute OODA Initiative ($\text{OODA} = \lfloor(\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD}) / 4\rfloor$) (§8).
+/// Compute OODA Initiative ($\text{OODA} = \lfloor(\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD}) / 4\rfloor$,
+/// $\text{Tick}_{\text{start}} = \max(1, 15 - \text{OODA})$)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
 #[must_use]
 pub fn compute_ooda_score(itu: i32, ins: i32, d_cog: i32, spd: i32) -> i32 {
     let i = itu.clamp(1, 20);
@@ -544,37 +554,43 @@ pub fn compute_ooda_score(itu: i32, ins: i32, d_cog: i32, spd: i32) -> i32 {
     (i + n + d + s).div_euclid(4)
 }
 
-/// Compute Striking Power ($\text{POW} = (\text{FOR} \times \text{SPD}) / 10.0$) (§8).
+/// Compute Striking Power ($\text{POW} = (\text{FOR} \times \text{SPD}) / 10.0$)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
 #[must_use]
 pub fn compute_pow_striking_power(for_stat: i32, spd: i32) -> f64 {
     f64::from(for_stat.clamp(1, 20) * spd.clamp(1, 20)) / 10.0
 }
 
-/// Compute Mass-Momentum Factor ($\text{MMF} = (\text{MAS} / 70.0) \times \text{SPD}$) (§8).
+/// Compute Mass-Momentum Factor ($\text{MMF} = (\text{MAS} / 70.0) \times \text{SPD}$)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
 #[must_use]
 pub fn compute_mmf_momentum_factor(mas_kg: f64, spd: i32) -> f64 {
     (mas_kg.max(20.0) / 70.0) * f64::from(spd.clamp(1, 20))
 }
 
-/// Compute Fatigue Threshold ($\text{FT} = \text{FIT} + \lfloor\text{DIS} / 2\rfloor$) (§8).
+/// Compute Fatigue Threshold ($\text{FT} = \text{FIT} + \lfloor\text{DIS} / 2\rfloor$)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
 #[must_use]
 pub fn compute_fatigue_threshold_score(fit: i32, dis: i32) -> i32 {
     fit.clamp(1, 20) + dis.clamp(1, 20).div_euclid(2)
 }
 
-/// Compute Wound Shock Resistance ($\text{WSR} = \text{HLT} + \lfloor\text{DIS} / 2\rfloor$) (§8).
+/// Compute Wound Shock Resistance ($\text{WSR} = \text{HLT} + \lfloor\text{DIS} / 2\rfloor$)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
 #[must_use]
 pub fn compute_wound_shock_resistance_score(hlt: i32, dis: i32) -> i32 {
     hlt.clamp(1, 20) + dis.clamp(1, 20).div_euclid(2)
 }
 
-/// Compute Social Composure Threshold ($\text{CMP} = \lfloor(\text{DIS} + \text{FOC}) / 4\rfloor$) (§8).
+/// Compute Social Composure Threshold ($\text{CMP} = \lfloor(\text{DIS} + \text{FOC}) / 4\rfloor$)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
 #[must_use]
 pub fn compute_social_composure_score(dis: i32, foc: i32) -> i32 {
     (dis.clamp(1, 20) + foc.clamp(1, 20)).div_euclid(4)
 }
 
-/// Compute General Awareness ($\text{AWR} = \lfloor(\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU}) / 3\rfloor$) (§8).
+/// Compute General Awareness ($\text{AWR} = \lfloor(\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU}) / 3\rfloor$)
+/// (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §8 Table).
 #[must_use]
 pub fn compute_general_awareness_score(sig: i32, hea: i32, foc: i32, itu: i32) -> i32 {
     (sig.clamp(1, 20).max(hea.clamp(1, 20)) + foc.clamp(1, 20) + itu.clamp(1, 20)).div_euclid(3)

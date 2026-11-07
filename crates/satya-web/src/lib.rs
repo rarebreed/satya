@@ -2523,6 +2523,11 @@ mod tests {
         assert!(html.contains(r#"id="rules-book-viewport""#));
         assert!(html.contains("Cascading 2d20 Engine &amp; Task Resolution"));
         assert!(html.contains(".rules-book-viewport"));
+        assert!(html.contains("height: max(680px, calc(100dvh - 76px))"));
+        let rules_css_idx = html.find(".satya-rules-article").unwrap();
+        let wiz_css_idx = html.find(".wiz-shell").unwrap();
+        assert!(!html[rules_css_idx..wiz_css_idx].contains("overscroll-behavior: contain"));
+        assert!(!html[rules_css_idx..wiz_css_idx].contains("overflow-x: auto"));
         assert!(html.contains("rules-math-inline"));
         assert!(html.contains("rules-math-block"));
         assert!(html.contains("rules-mermaid"));

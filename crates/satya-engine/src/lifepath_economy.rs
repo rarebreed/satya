@@ -1,14 +1,14 @@
 //! Chronological 5-Stage Lifepath Creation, Socioeconomic Upkeep, Black-Market Procurement & Operational Heat
-//! (`03-character/lifepaths_and_economy.md`).
+//! (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1–§1.7, §2.1–§2.3, §3.1–§3.2).
 //!
 //! Implements:
-//! - Stage 1: Socioeconomic Origin & School Quality Modifier (`SQM`) (`2d20` table) (§1.1, in [`crate::economy_gear`])
-//! - Educational Advancement Roll (`2d20` cascade with $N = 2$ pairs vs. $\text{TN}_{\text{edu}} = 31 - C_{\text{study}} + \text{SQM}$) (§1.2)
+//! - Stage 1: Socioeconomic Origin & School Quality Modifier (`SQM`) (`2d20` table) (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1, in [`crate::economy_gear`])
+//! - Educational Advancement Roll (`2d20` cascade with $N = 2$ pairs vs. $\text{TN}_{\text{edu}} = 31 - C_{\text{study}} + \text{SQM}$) (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.2)
 //! - Stages 2, 3, 4A/4B/4C (High School Tracks vs. Dropout **Academic Tree Freeze**, Street Gang Archetypes, & Rural Youth),
-//!   and Stage 5 Adult 4-Year Career Terms (§1.3–§1.6)
+//!   and Stage 5 Adult 4-Year Career Terms (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.3–§1.7)
 //! - Canonical Character Walkthrough Builders & Skill Lock Auditors (**Mateo Vance** §2.1, **Dr. Priya Nair** §2.2, **Amara Okafor** §2.3)
 //! - Campaign Socioeconomic Upkeep (`SQM 1–10`), Black-Market `[Access]` Procurement (`Class I–IV`),
-//!   and Operational `Heat` (`0–10`) (§3.1–§3.2, re-exported from [`crate::economy_gear`])
+//!   and Operational `Heat` (`0–10`) (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.1–§3.2, re-exported from [`crate::economy_gear`])
 
 use std::collections::BTreeMap;
 
@@ -28,7 +28,8 @@ pub use crate::walkthroughs::{
     build_amara_okafor_lifepath, build_mateo_vance_lifepath, build_priya_nair_lifepath,
 };
 
-/// Outcome tier of an Educational Advancement Roll (`2d20` with $N = 2$ pairs) (§1.2).
+/// Outcome tier of an Educational Advancement Roll (`2d20` with $N = 2$ pairs)
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EducationalAdvancementTier {
@@ -40,7 +41,8 @@ pub enum EducationalAdvancementTier {
     HonorsAcceleratedBreakthrough,
 }
 
-/// Detailed result of evaluating a Lifepath Educational Advancement Roll (§1.2).
+/// Detailed result of evaluating a Lifepath Educational Advancement Roll
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EducationalAdvancementResult {
     /// Computed academic study controller (`C_study`).
@@ -61,7 +63,8 @@ pub struct EducationalAdvancementResult {
     pub grants_early_tier_unlock: bool,
 }
 
-/// Evaluate a Lifepath Educational Advancement Roll (`N = 2` pairs of `2d20` against $\text{TN}_{\text{edu}} = 31 - C_{\text{study}} + \text{SQM}$) (§1.2).
+/// Evaluate a Lifepath Educational Advancement Roll (`N = 2` pairs of `2d20` against $\text{TN}_{\text{edu}} = 31 - C_{\text{study}} + \text{SQM}$)
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.2).
 ///
 /// Each pair succeeds if `d1 + d2 >= tn_edu` (and is not a double-1 botch; double-20 counts as 2 successes).
 #[must_use]
@@ -134,7 +137,7 @@ fn evaluate_educational_advancement_with_override(
 }
 
 define_coded_enum! {
-    /// Stage 4 Adolescent Path (`Ages 15–18`) (§1.5).
+    /// Stage 4 Adolescent Path (`Ages 15–18`) (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Stage4Path [count = 3] {
@@ -160,7 +163,7 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Stage 4A High School Track (`Ages 16–18`) (§1.5).
+    /// Stage 4A High School Track (`Ages 16–18`) (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum HighSchoolTrack [count = 3] {
@@ -189,7 +192,8 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Stage 4B Dropout / Street Gang / Juvenile Underworld Archetype (`Ages 16–18`) (§1.5).
+    /// Stage 4B Dropout / Street Gang / Juvenile Underworld Archetype (`Ages 16–18`)
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum StreetGangArchetype [count = 4] {
@@ -225,7 +229,8 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Stage 4C Rural, Agrarian & Developing-Region Youth Archetype (`Ages 15–18`) (§1.5).
+    /// Stage 4C Rural, Agrarian & Developing-Region Youth Archetype (`Ages 15–18`)
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum RuralYouthArchetype [count = 4] {
@@ -261,7 +266,8 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Stage 5 Adult 4-Year Career Term Track (`Ages 18+`) (§1.6).
+    /// Stage 5 Adult 4-Year Career Term Track (`Ages 18+`)
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum CareerTermTrack [count = 8] {
@@ -317,7 +323,8 @@ define_coded_enum! {
 }
 
 impl CareerTermTrack {
-    /// Institutional `[Access]` tags granted upon entering this Career Term (§1.6).
+    /// Institutional `[Access]` tags granted upon entering this Career Term
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
     #[must_use]
     pub const fn granted_access_tags(self) -> &'static [SkillAccessTier] {
         match self {
@@ -325,10 +332,13 @@ impl CareerTermTrack {
                 SkillAccessTier::Academic,
                 SkillAccessTier::VocationalLicensed,
             ],
-            Self::MilitaryCombatArmsSpecOps
-            | Self::LawEnforcementSwatDetective
-            | Self::IntelligenceServiceClandestine => &[
+            Self::MilitaryCombatArmsSpecOps | Self::LawEnforcementSwatDetective => &[
                 SkillAccessTier::Restricted,
+                SkillAccessTier::VocationalLicensed,
+            ],
+            Self::IntelligenceServiceClandestine => &[
+                SkillAccessTier::Restricted,
+                SkillAccessTier::Illicit,
                 SkillAccessTier::VocationalLicensed,
             ],
             Self::OrganizedCrimeCartelSyndicate => &[SkillAccessTier::Illicit],
@@ -338,13 +348,15 @@ impl CareerTermTrack {
         }
     }
 
-    /// Maximum skill level advancement (`+1` to `+2`) per 4-year term in a single node (§1.6).
+    /// Maximum skill level advancement (`+1` to `+2`) per 4-year term in a single node
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
     #[must_use]
     pub const fn max_level_gain_per_term(self) -> usize {
         2
     }
 
-    /// Governing characteristic and aptitude values (`(c_mental_or_career, apt_career)`) for term advancement rolls.
+    /// Governing characteristic and aptitude values (`(c_mental_or_career, apt_career)`) for term advancement rolls
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
     #[must_use]
     pub fn eval_controllers(
         self,
@@ -380,7 +392,7 @@ impl CareerTermTrack {
         }
     }
 
-    /// Summary of entry prerequisites (§1.6).
+    /// Summary of entry prerequisites (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
     #[must_use]
     pub const fn entry_prereq_summary(self) -> &'static str {
         match self {
@@ -403,7 +415,8 @@ impl CareerTermTrack {
         }
     }
 
-    /// Check whether a character natively meets the entry prerequisites for this Career Track (§1.6).
+    /// Check whether a character natively meets the entry prerequisites for this Career Track
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
     #[must_use]
     pub fn check_entry_qualification(
         self,
@@ -504,7 +517,8 @@ impl CareerTermTrack {
         }
     }
 
-    /// Ordered list of canonical curriculum & career skills taught by this track (ordered from parent foundation to advanced specialization).
+    /// Ordered list of canonical curriculum & career skills taught by this track (ordered from parent foundation to advanced specialization)
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
     #[must_use]
     pub const fn recommended_skills(self) -> &'static [&'static str] {
         match self {
@@ -667,7 +681,8 @@ impl CareerTermTrack {
     }
 }
 
-/// Complete Lifepath Character Profile produced by the 5-Stage Chronological Lifepath Engine (§1–§2).
+/// Complete Lifepath Character Profile produced by the 5-Stage Chronological Lifepath Engine
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1–§1.7, §2.1–§2.3).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LifepathCharacterProfile {
     /// Character name.
@@ -676,9 +691,9 @@ pub struct LifepathCharacterProfile {
     pub age_years: u32,
     /// Stage 1 Socioeconomic Origin specification.
     pub origin: SocioeconomicOriginSpec,
-    /// 20 Core Characteristics.
+    /// 30 Core Characteristics.
     pub characteristics: CharacterCharacteristics,
-    /// 11 Domain Aptitudes.
+    /// 9 Domain Aptitudes.
     pub aptitudes: CharacterAptitudes,
     /// Unlocked skill ranks (`skill_id -> rank N`).
     pub skills: BTreeMap<String, usize>,
@@ -695,7 +710,8 @@ pub struct LifepathCharacterProfile {
 }
 
 impl LifepathCharacterProfile {
-    /// Initialize a new character at Stage 1 (`Ages 0–5`) and Stage 2 (`Ages 6–11`) baseline (§1.1, §1.3).
+    /// Initialize a new character at Stage 1 (`Ages 0–5`) and Stage 2 (`Ages 6–11`) baseline
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1, §1.3).
     #[must_use]
     pub fn new_with_stage2_baseline(
         name: impl Into<String>,
@@ -707,7 +723,12 @@ impl LifepathCharacterProfile {
         let origin = resolve_socioeconomic_origin(origin_roll_2d20);
         let mut skills = initialize_universal_talents();
 
-        if let Some(level) = skills.get_mut(early_talent_choice) {
+        if skills.contains_key(early_talent_choice)
+            || origin
+                .early_environment_bonus_talents
+                .contains(&early_talent_choice)
+        {
+            let level = skills.entry(early_talent_choice.to_string()).or_insert(1);
             *level = (*level + 1).max(2);
         }
 
@@ -745,7 +766,8 @@ impl LifepathCharacterProfile {
         }
     }
 
-    /// Apply Stage 4B Dropout / Street Gang Transition, triggering the **Academic Tree Freeze** (§1.5).
+    /// Apply Stage 4B Dropout / Street Gang Transition, triggering the **Academic Tree Freeze**
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     pub fn apply_stage4b_dropout_gang_package(&mut self, archetype: StreetGangArchetype) {
         self.age_years = 18;
         self.academic_tree_frozen = true;
@@ -753,7 +775,7 @@ impl LifepathCharacterProfile {
             &mut self.skills,
             &mut self.granted_access_tags,
             self.characteristics.for_stat,
-            false,
+            true,
         );
         self.stage_history.push(format!(
             "Stage 4B (Ages 16–18): Dropped out into {:?} — Academic Tree Frozen; granted [Access: Illicit]",
@@ -761,7 +783,8 @@ impl LifepathCharacterProfile {
         ));
     }
 
-    /// Apply Stage 4C Rural, Agrarian & Developing-Region Youth Transition (`Ages 15–18`) (§1.5).
+    /// Apply Stage 4C Rural, Agrarian & Developing-Region Youth Transition (`Ages 15–18`)
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.5).
     ///
     /// Leaving formal classroom schooling at age 15 in a rural/agrarian or underdeveloped region
     /// triggers the **Academic Tree Freeze** (unless later cleared via GED/Adult Education),
@@ -777,7 +800,8 @@ impl LifepathCharacterProfile {
         ));
     }
 
-    /// Audit whether this character can unlock or advance `skill_id` to `target_level` (§2.1, §2.2).
+    /// Audit whether this character can unlock or advance `skill_id` to `target_level`
+    /// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1, §2.2).
     #[must_use]
     pub fn audit_skill_unlock(
         &self,
@@ -946,7 +970,8 @@ impl RuralYouthArchetype {
     }
 }
 
-/// Configuration for a single 4-Year Adult Career Term in Stage 5 (`Ages 18+`).
+/// Configuration for a single 4-Year Adult Career Term in Stage 5 (`Ages 18+`)
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CareerTermConfig {
     /// Selected career term track.
@@ -970,7 +995,8 @@ impl Default for CareerTermConfig {
     }
 }
 
-/// Complete player-configurable 5-Stage Lifepath state for the Character Creation Wizard.
+/// Complete player-configurable 5-Stage Lifepath state for the Character Creation Wizard
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1–§1.7, §3.1–§3.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LifepathBuildConfig {
     /// Stage 1: `2d20` roll (`2..=40`) for Socioeconomic Origin (or set via class override).
@@ -1058,7 +1084,8 @@ impl Default for LifepathBuildConfig {
     }
 }
 
-/// Detailed result of evaluating Stages 1–5 of a [`LifepathBuildConfig`].
+/// Detailed result of evaluating Stages 1–5 of a [`LifepathBuildConfig`]
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1–§1.7, §3.1–§3.2).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LifepathBaselineResult {
     /// Character age in years at the end of Stage 5.
@@ -1105,7 +1132,8 @@ pub struct LifepathBaselineResult {
 }
 
 /// Deterministically evaluates Stages 1–5 from [`LifepathBuildConfig`], returning the Stage 1–4 skill floor,
-/// Stage 5 `[Access]` gates, Career/Elective skill budgets, and chronological history log.
+/// Stage 5 `[Access]` gates, Career/Elective skill budgets, and chronological history log
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1–§1.7, §3.1–§3.2).
 #[must_use]
 pub fn compute_lifepath_baseline_from_config(
     cfg: &LifepathBuildConfig,
@@ -1119,7 +1147,11 @@ pub fn compute_lifepath_baseline_from_config(
     let mut stage_history = Vec::new();
 
     // Stage 1: Ages 0–5 (Universal Talents + Early Environment Bonus Talent)
-    let early_tal = if skills.contains_key(&cfg.stage1_early_talent) {
+    let early_tal = if skills.contains_key(&cfg.stage1_early_talent)
+        || origin
+            .early_environment_bonus_talents
+            .contains(&cfg.stage1_early_talent.as_str())
+    {
         cfg.stage1_early_talent.as_str()
     } else {
         origin
@@ -1128,6 +1160,9 @@ pub fn compute_lifepath_baseline_from_config(
             .copied()
             .unwrap_or("alertness_situational_awareness")
     };
+    if !skills.contains_key(early_tal) {
+        skills.insert(early_tal.to_string(), 1);
+    }
     add_skill_levels_capped(&mut skills, early_tal, 1, 3);
     stage_history.push(format!(
         "Stage 1 (Ages 0–5): {} (2d20={}, SQM {:+}) — Early Talent '{}' -> N={}",
@@ -1213,13 +1248,21 @@ pub fn compute_lifepath_baseline_from_config(
         cfg.stage3_math_override,
     );
     let arith_before_s3 = skills.get("arithmetic").copied().unwrap_or(1);
+    let alg_before_s3 = skills
+        .get("elementary_algebra_geometry")
+        .copied()
+        .unwrap_or(0);
     if arith_before_s3 >= 2 {
         bump_skill_floor(&mut skills, "elementary_algebra_geometry", 1);
         if stage3_math_eval.successes >= 1 {
             bump_skill_floor(&mut skills, "elementary_algebra_geometry", 2);
         }
         if stage3_math_eval.successes >= 2 {
-            bump_skill_floor(&mut skills, "trigonometry", 1);
+            bump_skill_floor(
+                &mut skills,
+                "trigonometry",
+                if alg_before_s3 >= 1 { 2 } else { 1 },
+            );
         }
     } else {
         if stage3_math_eval.successes >= 1 {
@@ -1413,11 +1456,6 @@ pub fn compute_lifepath_baseline_from_config(
             if !granted_access_tags.contains(&tag) {
                 granted_access_tags.push(tag);
             }
-        }
-        if term.track == CareerTermTrack::IntelligenceServiceClandestine
-            && !granted_access_tags.contains(&SkillAccessTier::Illicit)
-        {
-            granted_access_tags.push(SkillAccessTier::Illicit);
         }
 
         let (c_mental_or_career, apt_career) = term.track.eval_controllers(chars, aptitudes);

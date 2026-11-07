@@ -1,5 +1,13 @@
 //! Shared foundational primitives, generic containers, composable status impacts,
 //! tiered save helpers, and declarative enum/catalog macros used across `satya-engine`.
+//!
+//! # TTRPG Rules Origins
+//! - `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1, §2.2, §5)
+//! - `docs/ttrpg/01-foundation/design_philosophy.md` (§5.10, §5.11)
+//! - `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.2–§6.3)
+//! - `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.2, §5)
+//! - `docs/ttrpg/05-combat/tactical_triad_and_pools.md` (§1–§4)
+//! - `docs/ttrpg/06-health-and-survival/health_and_trauma.md` (§2–§5)
 
 use std::ops::{Add, AddAssign, Deref, DerefMut, Index, IndexMut, Neg, Sub, SubAssign};
 
@@ -10,6 +18,10 @@ use crate::dice_probabilities::{
 };
 
 /// Axis selector for a [`Triad`].
+///
+/// Origin: `docs/ttrpg/01-foundation/design_philosophy.md` (§5.10),
+/// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§5), and
+/// `docs/ttrpg/05-combat/tactical_triad_and_pools.md` (§1–§4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(usize)]
 pub enum TriadAxis {
@@ -30,6 +42,10 @@ impl TriadAxis {
 ///
 /// Used across `combat`, `health_survival`, and `rules_book` to represent triad allocations,
 /// envelope caps, hit-location cap slashes (`Triad<bool>`), and vehicle/status penalties.
+///
+/// Origin: `docs/ttrpg/01-foundation/design_philosophy.md` (§5.10),
+/// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§5), and
+/// `docs/ttrpg/05-combat/tactical_triad_and_pools.md` (§1–§4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Triad<T = i32> {
     /// Tempo axis (initiative, rate of action, maneuvering speed).
@@ -206,13 +222,17 @@ impl Triad<i32> {
 /// Unifies the recurring modifier fields shared across Fatigue, Status Conditions,
 /// Acute Mental Trauma, Dehydration, Starvation, Sleep Deprivation, Thermal Stress,
 /// Radiation, and High-G Collisions.
+///
+/// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1, §5),
+/// `docs/ttrpg/01-foundation/design_philosophy.md` (§5.11), and
+/// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` (§2–§5).
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct ConditionImpact {
-    /// Internal/Physiological TN penalty (`Delta_int`, typically `<= 0`).
+    /// Internal/Physiological penalty modifier (\Delta_{int}, typically >= 0 for penalties, -2 for Focused/Surge; increases \delta_{under} = 6 + \Delta_{int} per mathematical_notation_glossary.md §2.1).
     pub delta_int: i32,
-    /// External/Environmental TN penalty (`Delta_ext`, typically `<= 0`).
+    /// External/Environmental difficulty modifier (\Delta_{ext}, typically >= 0 for penalties, < 0 for bonuses; shifts TN_{GM} = 21 - \Delta_{ext} per mathematical_notation_glossary.md §2.1).
     pub delta_ext: i32,
-    /// Direct modifier to total Tactical Pool (`P_tactical`, typically `<= 0`).
+    /// Direct modifier to Effective Tactical Pool (P_{eff}, typically <= 0; mathematical_notation_glossary.md §5).
     pub tactical_pool_mod: i32,
     /// Additive penalty to the character's Action Time Factor (`+0.25 = +25%` slower).
     pub action_time_factor_delta: f64,
@@ -274,6 +294,9 @@ impl ConditionImpact {
 
 /// Trait implemented by any physiological, psychological, encumbrance, or environmental state
 /// that produces a [`ConditionImpact`] modifier bundle.
+///
+/// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1, §5) and
+/// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` (§2–§5).
 pub trait ConditionSource {
     /// Convert this condition or evaluation state into its canonical [`ConditionImpact`].
     #[must_use]
@@ -287,6 +310,9 @@ impl ConditionSource for ConditionImpact {
 }
 
 /// Aggregate an arbitrary collection of [`ConditionSource`] references into a single combined [`ConditionImpact`].
+///
+/// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1, §5) and
+/// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` (§2–§5).
 #[must_use]
 pub fn aggregate_condition_impacts<'a>(
     sources: impl IntoIterator<Item = &'a dyn ConditionSource>,
@@ -302,6 +328,10 @@ pub fn aggregate_condition_impacts<'a>(
 ///
 /// Used across `psyche_social` (Psyche Friction, Combat Morale, Social Exchange) and
 /// `health_survival` (`WSR` Consciousness Saves) to eliminate repetitive contested-save boilerplate.
+///
+/// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2),
+/// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.2–§6.3), and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.2, §5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TieredSaveEval {
     /// Player's effective Target Number (`TN`).
@@ -317,6 +347,10 @@ pub struct TieredSaveEval {
 ///
 /// Implements [`Deref<Target = D>`] so all domain fields on `D` can be accessed directly on
 /// `ContestedCheck<D>`, while `#[serde(flatten)]` preserves flat JSON serialization compatibility.
+///
+/// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2),
+/// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.2–§6.3), and
+/// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§4.2, §5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ContestedCheck<D> {
     /// Player's effective Target Number (`TN`).

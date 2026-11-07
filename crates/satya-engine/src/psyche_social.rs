@@ -34,27 +34,31 @@ use crate::primitives::{ContestedCheck, TieredSaveEval};
 // ============================================================================
 
 define_coded_enum! {
-    /// The 6 canonical Bipolar Psyche Traits (`1..=20`, neutral equilibrium `10`).
+    /// The 7 canonical Bipolar Psyche Traits (`1..=20`, neutral equilibrium `10`)
+    /// from `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §7.2 and
+    /// `docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §1.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "snake_case")]
-    pub enum PsycheTraitId [count = 6] {
-        /// **Openness (`OPN`)**: Low (`1–7`) Dogmatic / Traditionalist vs. High (`13–20`) Curious / Iconoclastic.
+    pub enum PsycheTraitId [count = 7] {
+        /// **Openness (`OPN`)**: Low (`1–7`) Dogmatic / Rigid / Closed-Minded vs. High (`13–20`) Curious / Receptive / Open-Minded.
         Openness => { code: "OPN", label: "Openness" },
-        /// **Selfishness (`SLF`)**: Low (`1–7`) Altruistic / Self-Sacrificing vs. High (`13–20`) Mercenary / Self-Preserving.
+        /// **Selfishness (`SLF`)**: Low (`1–7`) Altruistic / Self-Sacrificing vs. High (`13–20`) Entitled / Mercenary / Acquisitive.
         Selfishness => { code: "SLF", label: "Selfishness" },
-        /// **Belonging (`BLG`)**: Low (`1–7`) Lone Wolf / Detached vs. High (`13–20`) Tribal / Devoted to Crew.
-        Belonging => { code: "BLG", label: "Belonging" },
-        /// **Aggression (`AGG`)**: Low (`1–7`) Pacifist / Conflict-Averse vs. High (`13–20`) Belligerent / Ruthless.
-        Aggression => { code: "AGG", label: "Aggression" },
-        /// **Ego (`EGO`)**: Low (`1–7`) Humble / Self-Effacing vs. High (`13–20`) Proud / Glory-Seeking.
+        /// **Belonging (`BLG`)**: Low (`1–7`) Detached / Lone Wolf vs. High (`13–20`) Tribal / Group-Dependent.
+        Belonging => { code: "BLG", label: "Belonging", aliases: ["BELONGINGNESS"] },
+        /// **Aggression (`AGG`)**: Low (`1–7`) Passive / Conflict-Averse vs. High (`13–20`) Combative / Dominant.
+        Aggression => { code: "AGG", label: "Aggression", aliases: ["AGGRESSIVENESS"] },
+        /// **Ego (`EGO`)**: Low (`1–7`) Humble / Self-Effacing vs. High (`13–20`) Proud / Grandiose / Narcissistic.
         Ego => { code: "EGO", label: "Ego" },
-        /// **Conformity (`CNF`)**: Low (`1–7`) Rebellious / Maverick vs. High (`13–20`) Lawful / Disciplined / Dutiful.
+        /// **Conformity (`CNF`)**: Low (`1–7`) Rebellious / Iconoclastic / Maverick vs. High (`13–20`) Institutionalist / By-the-Book.
         Conformity => { code: "CNF", label: "Conformity" },
+        /// **Extraversion (`EXT`)**: Low (`1–7`) Introverted / Solitary / Guarded vs. High (`13–20`) Gregarious / Thrill-Seeking.
+        Extraversion => { code: "EXT", label: "Extraversion" },
     }
 }
 
 impl PsycheTraitId {
-    /// Three-letter canonical code (`OPN`, `SLF`, `BLG`, `AGG`, `EGO`, `CNF`).
+    /// Three-letter canonical code (`OPN`, `SLF`, `BLG`, `AGG`, `EGO`, `CNF`, `EXT`).
     #[must_use]
     pub const fn code(self) -> &'static str {
         self.as_str()
@@ -70,6 +74,7 @@ impl PsycheTraitId {
             Self::Aggression => CharacteristicCode::AGG,
             Self::Ego => CharacteristicCode::EGO,
             Self::Conformity => CharacteristicCode::CNF,
+            Self::Extraversion => CharacteristicCode::EXT,
         }
     }
 }
@@ -180,11 +185,12 @@ impl_psyche_profile! {
     Aggression => agg,
     Ego => ego,
     Conformity => cnf,
+    Extraversion => ext,
 }
 
-/// Trait implemented by any type that exposes the 6 canonical Psyche scores ([`PsycheProfile`] and [`CharacterCharacteristics`]).
+/// Trait implemented by any type that exposes the 7 canonical Psyche scores ([`PsycheProfile`] and [`CharacterCharacteristics`]).
 pub trait HasPsyche: Index<PsycheTraitId, Output = i32> {
-    /// Returns a 6-trait [`PsycheProfile`] snapshot.
+    /// Returns a 7-trait [`PsycheProfile`] snapshot.
     fn as_psyche_profile(&self) -> PsycheProfile;
 }
 
@@ -212,7 +218,8 @@ impl PsycheProfile {
     }
 }
 
-/// Computes the Psyche Deviation $\Delta_{\text{psyche}} = |P - 10|$ (`§1.1`).
+/// Computes the Psyche Deviation $\Delta_{\text{psyche}} = |P - 10|$
+/// (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §1.2, line 27).
 pub fn psyche_deviation(trait_score: i32) -> i32 {
     (trait_score.clamp(1, 20) - 10).abs()
 }
@@ -447,9 +454,9 @@ pub struct ConvictionSurgeResult {
     pub previous_delta_int: i32,
     /// Adjusted internal penalty $\Delta_{\text{int}} = \max(-2, \text{previous\_delta\_int} - 6)$.
     pub adjusted_delta_int: i32,
-    /// Effective cascade carry bonus $\delta_{\text{under}} = (6 - \text{adjusted\_delta\_int}).\text{clamp}(0, 8)$
-    /// (Wait: in Satya, negative $\Delta_{\text{int}}$ increases $\delta_{\text{under}}$ up to `4` below base or `8` total;
-    /// specifically §2 states: *"reducing $\Delta_{\text{int}}$ by `-6` (down to a minimum of `-2`, granting $\delta_{\text{under}} = 4$)"*).
+    /// Effective failure stumble magnitude $\delta_{\text{under}} = \max(0, 6 + \Delta_{\text{int}})$
+    /// (reaching $\delta_{\text{under}} = 4$ at Focused/Resolved $\Delta_{\text{int}} = -2$ per
+    /// `docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §2).
     pub surge_delta_under: i32,
     /// Whether Fatigue and Wound Shock `action_time_factor` penalties are ignored for this exchange (`1.0`).
     pub ignores_fatigue_and_shock_time_penalty: bool,
@@ -459,7 +466,7 @@ pub struct ConvictionSurgeResult {
 
 /// Evaluates whether a character can trigger a **Conviction Surge** (`§2`) and computes its effects.
 ///
-/// Requirements (`§2`):
+/// Requirements (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §2):
 /// 1. Once per scene/session (`!already_used_this_scene`).
 /// 2. Character is currently suffering from severe internal strain ($\Delta_{\text{int}} \ge +4$).
 /// 3. The action directly embodies a Core Principle / extreme Psyche trait ($P \ge 15$ or $P \le 6$,
@@ -476,7 +483,7 @@ pub fn evaluate_conviction_surge(
         matched_principle: None,
         previous_delta_int: current_delta_int,
         adjusted_delta_int: current_delta_int,
-        surge_delta_under: (6 - current_delta_int).max(0),
+        surge_delta_under: (6 + current_delta_int).max(0),
         ignores_fatigue_and_shock_time_penalty: false,
         tactical_pool_bonus: 0,
     };
@@ -514,11 +521,7 @@ pub fn evaluate_conviction_surge(
         return ineligible;
     };
     let adjusted_delta_int = (current_delta_int - 6).max(-2);
-    let surge_delta_under = if adjusted_delta_int <= -2 {
-        4
-    } else {
-        (6 - adjusted_delta_int).clamp(0, 6)
-    };
+    let surge_delta_under = (6 + adjusted_delta_int).max(0);
     ConvictionSurgeResult {
         eligible: true,
         matched_principle: Some(principle),
@@ -915,8 +918,14 @@ pub fn evaluate_combat_morale_roll(
     );
 
     let step_delta = save.classify_4way(
-        |r| if r.net_signed_margin >= 2 { 1 } else { 0 },
-        |_| 0,
+        |_| 1,
+        |r| {
+            if r.contested_kind == ContestedOutcomeKind::CleanSuccess && r.net_signed_margin >= 2 {
+                1
+            } else {
+                0
+            }
+        },
         |_| -1,
         |_| -2,
     );
@@ -936,7 +945,8 @@ pub fn evaluate_combat_morale_roll(
 // §4 Social Combat, Debate & Cognitive Dissonance ("Mental Wounds")
 // ============================================================================
 
-/// Result of an **Empathy & Read Person** (`INS/ITU`) or **Psychology** (`INS/ANA`) setup roll (`§4.1`).
+/// Result of an **Empathy & Read Person** (`INS/ITU`) or **Investigative Elicitation** (`INS/ELO`) setup roll
+/// (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §4.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmpathyReadResult {
     /// Net successes achieved on the Read Person check.
@@ -949,10 +959,11 @@ pub struct EmpathyReadResult {
     pub leverage_delta_ext_bonus: i32,
 }
 
-/// Evaluates a `§4.1 Reading the Room` (`INS/ITU` or `INS/ANA`) check against a target's [`HasPsyche`] profile:
+/// Evaluates a `§4.1 Reading the Target` (*Empathy & Read Person* `INS/ITU` or *Investigative Elicitation* `INS/ELO`)
+/// check against a target's [`HasPsyche`] profile (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §4.1):
 /// - **1 Net Success**: Reveals the target's single most extreme Psyche trait (furthest from `10`).
 /// - **2 Net Successes**: Reveals the top two most extreme traits and whether they are in potential tension.
-/// - **3+ Net Successes**: Reveals the full 6-trait [`PsycheProfile`] and grants `-2` $\Delta_{\text{ext}}$ on the next maneuver.
+/// - **3+ Net Successes**: Reveals the full 7-trait [`PsycheProfile`] and grants `-2` $\Delta_{\text{ext}}$ on the next maneuver.
 pub fn evaluate_empathy_read(
     target_psyche: &impl HasPsyche,
     net_successes: i32,
@@ -962,7 +973,7 @@ pub fn evaluate_empathy_read(
         n if n <= 0 => 0,
         1 => 1,
         2 => 2,
-        _ => 6,
+        _ => PsycheTraitId::ALL.len(),
     };
     let revealed_traits: Vec<(PsycheTraitId, i32)> = sorted
         .iter()
@@ -1024,7 +1035,8 @@ pub enum SocialArgumentVector {
     },
 }
 
-/// Evaluation of how a single or compound [`SocialArgumentVector`] interacts with a target's [`PsycheProfile`] (`§4.2`, `§4.3.3`).
+/// Evaluation of how a single or compound [`SocialArgumentVector`] interacts with a target's [`PsycheProfile`]
+/// (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §4.2 & §4.4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArgumentPsycheEvaluation {
     /// Total Resonance bonus ($\le 0$, reduces $\Delta_{\text{ext}}$).
@@ -1038,7 +1050,7 @@ pub struct ArgumentPsycheEvaluation {
     /// High Psyche trait ($P_2 \ge 13$ or Low pole $\le 7$) that clashed with the argument.
     pub clashed_trait: Option<PsycheTraitId>,
     /// True when the argument simultaneously resonates with one high Psyche trait ($P_1 \ge 13$)
-    /// and clashes with another high Psyche trait ($P_2 \ge 13$) — the **Dual-Psyche Wedge** (`§4.3.3`).
+    /// and clashes with another high Psyche trait ($P_2 \ge 13$) — the **Dual-Psyche Wedge** (`§4.3–§4.4`).
     pub triggers_dual_psyche_wedge: bool,
 }
 
@@ -1206,13 +1218,29 @@ impl SocialComposureState {
         }
     }
 
-    /// Applies the per-turn/per-exchange **Psychological Bleeding** (`§4.3.3`) from active `dissonance_index`:
+    /// Applies the per-turn/per-exchange **Psychological Bleeding** (`§4.3`) from active `dissonance_index`:
     /// adds $+2 \times \text{dissonance\_index}$ to `accumulated_delta_int` and returns the bleed amount.
     pub fn apply_turn_dissonance_bleed(&mut self) -> i32 {
         let bleed = 2 * self.dissonance_index.max(0);
         self.accumulated_delta_int += bleed;
         bleed
     }
+
+    /// Computes the target's effective Skill Level $N_{\text{eff}} = \max(1, N_{\text{base}} - \text{doubt\_fractures})$
+    /// when defending a fractured Pillar of Conviction (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §4.3, line 231).
+    #[must_use]
+    pub fn effective_skill_pairs(&self, base_n: usize) -> usize {
+        base_n
+            .saturating_sub(self.doubt_fractures.max(0) as usize)
+            .max(1)
+    }
+}
+
+/// Computes the Target Number $\text{TN} = 31 - \text{DIS} + (\text{EGO} - 10)$ for resisting an **Ego Wound**
+/// (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §4.3, line 233).
+#[must_use]
+pub fn ego_wound_dis_check_tn(dis: i32, ego: i32) -> i32 {
+    31 - dis.clamp(1, 20) + (ego.clamp(1, 20) - 10).max(0)
 }
 
 /// Outcome of a single Contested Social Exchange (`§4.2–§4.4`).
@@ -1262,6 +1290,7 @@ pub fn evaluate_social_exchange_wounds(
         matches!(
             v,
             SocialArgumentVector::EmpiricalEvidenceLogicNovelIdeas
+                | SocialArgumentVector::PersonalProfitImmunitySelfInterest
                 | SocialArgumentVector::SelfSacrificeHumanitarianDutyMercy
                 | SocialArgumentVector::RulesLawProtocolChainOfCommand { .. }
                 | SocialArgumentVector::GroupConsensusLoyaltySharedIdentity { .. }

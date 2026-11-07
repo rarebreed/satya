@@ -1,21 +1,20 @@
-//! # Health, Anatomical Trauma, Movement, Vehicles & Environmental Survival (`06-health-and-survival`)
+//! # Health, Anatomical Trauma, Fatigue & Mental Conditions (06-health-and-survival/health_and_trauma.md)
 //!
-//! Canonical Rust implementation of `docs/ttrpg/06-health-and-survival/`:
-//! - **`health_and_trauma.md`**:
-//!   - **§1 Hit Locations & Called Shots**: `1d20` Master Anatomical Hit Location Table (13 sub-zones)
-//!     and Called Shot $\Delta_{\text{ext}}$ (`+2` Broad Zone waived when $C_{\text{att}} - C_{\text{def}} \ge 3$,
-//!     `+4` Specific Sub-Zone/Joint, `+6..=+8` Vital Pinpoint).
-//!   - **§2 Short-Term Metabolic Damage**: Fatigue Threshold ($\text{FT} = \text{FIT} + \lfloor\text{DIS}/2\rfloor$),
-//!     the 6 Fatigue Levels (`0–5`), Breath-Holding ($40\times\text{FIT}$ calm vs. $16\times\text{FIT}$ vigorous ticks),
-//!     Asphyxiation/Drowning (`+1` fatigue per `20 ticks`), and Vascular Blood Chokes (`24–40 ticks`).
-//!   - **§3 Long-Term Structural Trauma**: Structural Wound Severity Tiers (`Tiers 1–5`), Broken Bones &
-//!     Dislocations (hairline fracture aggravation, ribcage exertion, femoral/brachial arterial hazard),
-//!     Hemorrhaging Grades (`Grades 0–4`) on the `10.0-Unit` Blood Volume track, Hypovolemic Shock (`Classes I–IV`),
-//!     and Contested `2d20` Wound Shock Resistance (`WSR`) Consciousness Saves.
-//!   - **§4–§6 Status Effects, Mental Trauma & Medical Triage**: The 8 Physiological/Sensory Status Conditions,
-//!     the 4 Acute Mental Trauma Tiers (`OODA Freeze`, `Panic/Feral Rage`, `Dissociation`, `Catatonia`),
-//!     Field Analgesics, and Weekly `HLT` Healing Recovery Cascades.
-//! - **`movement_vehicles_and_environment.md`**: Re-exported from [`crate::environment_vehicles`].
+//! Canonical Rust implementation of `docs/ttrpg/06-health-and-survival/health_and_trauma.md`:
+//! - **§1 Hit Locations & Called Shots (`§1.1–§1.2`)**: `1d20` Master Anatomical Hit Location Table (13 sub-zones)
+//!   and Called Shot $\Delta_{\text{ext}}$ (`+2` Broad Zone waived when $C_{\text{att}} - C_{\text{def}} \ge 3$,
+//!   `+4` Specific Sub-Zone/Joint, `+6` Cranium/Face/Jaw, `+8` Vital Pinpoint).
+//! - **§2 Short-Term Metabolic Damage (`§2.1–§2.3`)**: Fatigue Threshold ($\text{FT} = \text{FIT} + \lfloor\text{DIS}/2\rfloor$),
+//!   the 6 Fatigue Levels (`0–5`), Breath-Holding ($40\times\text{FIT}$ calm vs. $16\times\text{FIT}$ vigorous ticks),
+//!   Asphyxiation/Drowning (`+1` fatigue per `20 ticks`), and Vascular Blood Chokes (`24–40 ticks`).
+//! - **§3 Long-Term Structural Trauma (`§3.1–§3.4`)**: Structural Wound Severity Tiers (`Tiers 1–5`, trauma ranges
+//!   `1–2`, `3–5`, `6–8`, `9–11`, `12+`), Broken Bones & Dislocations (hairline fracture aggravation, ribcage exertion,
+//!   femoral/brachial arterial hazard), Hemorrhaging Grades (`Grades 0–4`) on the `10.0-Unit` Blood Volume track,
+//!   Hypovolemic Shock (`Classes I–IV`), and Contested `2d20` Wound Shock Resistance (`WSR`) Consciousness Saves.
+//! - **§4–§6 Status Effects, Mental Trauma & Medical Triage (`§4`, `§5.1–§5.2`, `§6.1–§6.3`)**: The Physiological/Sensory
+//!   Status Conditions, the 4 Acute Mental Trauma Tiers (`OODA Freeze`, `Panic/Feral Rage`, `Dissociation`, `Catatonia`),
+//!   Field Analgesics, and Weekly `HLT` Healing Recovery Cascades.
+//! - **`movement_vehicles_and_environment.md`**: Implemented in and re-exported from [`crate::environment_vehicles`].
 
 use serde::{Deserialize, Serialize};
 
@@ -28,10 +27,10 @@ use crate::primitives::{
 };
 
 // ============================================================================
-// 1. Hit Locations & Called Shots (`health_and_trauma.md` §1)
+// 1. Hit Locations & Called Shots (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.1–§1.2)
 // ============================================================================
 
-/// Precision tier for a targeted / called shot (`health_and_trauma.md` §1.1).
+/// Precision tier for a targeted / called shot (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.1 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CalledShotZoneTier {
@@ -48,7 +47,8 @@ pub enum CalledShotZoneTier {
     VitalPinpointOrArmorGap,
 }
 
-/// Computes the External Difficulty modifier ($\Delta_{\text{ext, loc}}$) for a Called Shot (`health_and_trauma.md` §1.1).
+/// Computes the External Difficulty modifier ($\Delta_{\text{ext, loc}}$) for a Called Shot
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.1 Table).
 #[must_use]
 pub const fn compute_called_shot_delta_ext(
     zone_tier: CalledShotZoneTier,
@@ -70,7 +70,7 @@ pub const fn compute_called_shot_delta_ext(
     }
 }
 
-/// Canonical 13 Anatomical Hit Location sub-zones (`health_and_trauma.md` §1.2).
+/// Canonical 13 Anatomical Hit Location sub-zones (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -104,7 +104,7 @@ pub enum HitLocationId {
 }
 
 impl HitLocationId {
-    /// All 13 canonical hit location identifiers in declaration order.
+    /// All 13 canonical hit location identifiers in declaration order (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
     pub const ALL: [Self; 13] = [
         Self::FootAnkle,
         Self::CalfShin,
@@ -122,7 +122,8 @@ impl HitLocationId {
     ];
 }
 
-/// Canonical specification for an entry in the `1d20` Master Anatomical Hit Location Table (`health_and_trauma.md` §1.2).
+/// Canonical specification for an entry in the `1d20` Master Anatomical Hit Location Table
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HitLocationSpec {
     /// Canonical hit location identifier.
@@ -148,7 +149,8 @@ pub struct HitLocationSpec {
 }
 
 impl HitLocationSpec {
-    /// Returns the `Tempo / Control / Force` aspect ceiling slash flags as a [`Triad<bool>`].
+    /// Returns the `Tempo / Control / Force` aspect ceiling slash flags as a [`Triad<bool>`]
+    /// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
     #[must_use]
     pub const fn slashes_triad(&self) -> Triad<bool> {
         Triad::new(
@@ -176,7 +178,7 @@ macro_rules! hl {
     };
 }
 
-/// Canonical 13-entry Master Anatomical Hit Location Table (`health_and_trauma.md` §1.2).
+/// Canonical 13-entry Master Anatomical Hit Location Table (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
 pub const HIT_LOCATION_TABLE: [HitLocationSpec; 13] = [
     hl!(FootAnkle, 1, 1, "Foot / Ankle (L or R)", 4, (true, false, false), false,
         "Mobility Anchor: Fractured tarsals or severed Achilles locks running/sprinting; -4 to Effective Root against sweeps."),
@@ -208,13 +210,15 @@ pub const HIT_LOCATION_TABLE: [HitLocationSpec; 13] = [
 
 impl_static_catalog!(HitLocationId => HitLocationSpec : HIT_LOCATION_TABLE);
 
-/// Returns the canonical 13-entry Master Anatomical Hit Location Table (`health_and_trauma.md` §1.2).
+/// Returns the canonical 13-entry Master Anatomical Hit Location Table
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
 #[must_use]
 pub const fn canonical_hit_location_table() -> &'static [HitLocationSpec] {
     HitLocationId::CATALOG
 }
 
-/// Resolves a `1d20` roll (`1..=20`) into its canonical [`HitLocationSpec`] (`health_and_trauma.md` §1.2).
+/// Resolves a `1d20` roll (`1..=20`) into its canonical [`HitLocationSpec`]
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
 #[must_use]
 pub fn resolve_hit_location_d20(d20_roll: i32) -> HitLocationSpec {
     let clamped = d20_roll.clamp(1, 20);
@@ -226,10 +230,10 @@ pub fn resolve_hit_location_d20(d20_roll: i32) -> HitLocationSpec {
 }
 
 // ============================================================================
-// 2. Short-Term Metabolic Damage: Fatigue Levels (0–5) & Asphyxiation (§2)
+// 2. Short-Term Metabolic Damage: Fatigue Levels (0–5) & Asphyxiation (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §2.1–§2.3)
 // ============================================================================
 
-/// Mechanical effects of a character's current Fatigue Level (`0..=5`, `health_and_trauma.md` §2.2).
+/// Mechanical effects of a character's current Fatigue Level (`0..=5`, `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §2.1–§2.2 Table).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FatigueLevelSpec {
     /// Numeric fatigue level (`0..=5`).
@@ -254,7 +258,8 @@ pub struct FatigueLevelSpec {
     pub recovery_requirement: &'static str,
 }
 
-/// Evaluates the exact mechanical penalties and physiological state for a `fatigue_level` (`0..=5`, `health_and_trauma.md` §2.2).
+/// Evaluates the exact mechanical penalties and physiological state for a `fatigue_level` (`0..=5`,
+/// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §2.2 Table).
 #[must_use]
 pub fn evaluate_fatigue_level(fatigue_level: i32) -> FatigueLevelSpec {
     let lvl = fatigue_level.clamp(0, 5);
@@ -299,7 +304,8 @@ impl ConditionSource for FatigueLevelSpec {
     }
 }
 
-/// Outcome of evaluating Breath-Holding, Drowning/Asphyxiation, or a Vascular Blood Choke (`health_and_trauma.md` §2.3).
+/// Outcome of evaluating Breath-Holding, Drowning/Asphyxiation, or a Vascular Blood Choke
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §2.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AsphyxiationOutcome {
     /// Maximum ticks the character can hold their breath before hypoxic fatigue accumulation begins
@@ -318,7 +324,8 @@ pub struct AsphyxiationOutcome {
 }
 
 /// Evaluates breath-holding capacity, drowning/vacuum asphyxiation (`+1` fatigue per `20 ticks`),
-/// and vascular blood chokes (`24–40 ticks` to unconsciousness) (`health_and_trauma.md` §2.3).
+/// and vascular blood chokes (`24–40 ticks` to unconsciousness)
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §2.3).
 #[must_use]
 pub fn evaluate_breath_holding_and_asphyxiation(
     fit: i32,
@@ -373,27 +380,27 @@ pub fn evaluate_breath_holding_and_asphyxiation(
 }
 
 // ============================================================================
-// 3. Long-Term Damage: Structural Wounds, Fractures, Bleed & WSR Saves (§3)
+// 3. Long-Term Damage: Structural Wounds, Fractures, Bleed & WSR Saves (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1–§3.4)
 // ============================================================================
 
-/// The 5 Structural Wound Severity Tiers (`health_and_trauma.md` §3.1).
+/// The 5 Structural Wound Severity Tiers (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StructuralWoundTier {
-    /// **Tier 1: Superficial / Minor**: `-2` to Location's Ceiling, `+0` Shock (`+1` if `WSR < 10`), Capillary Bleed. Heals in `3–7 days`.
+    /// **Tier 1: Superficial / Minor (`1–2` effective trauma)**: `-2` to Location's Ceiling, `+0` Shock (`+1` if `WSR < 10`), Capillary Bleed. Heals in `3–7 days`.
     Tier1Superficial,
-    /// **Tier 2: Moderate Trauma**: `-5` to Location's Ceiling, `+1` Shock Tier, Venous Bleed / hairline fracture. Heals in `2–4 weeks`.
+    /// **Tier 2: Moderate Trauma (`3–5` effective trauma)**: `-5` to Location's Ceiling, `+1` Shock Tier, Venous Bleed / hairline fracture. Heals in `2–4 weeks`.
     Tier2Moderate,
-    /// **Tier 3: Severe / Fracture**: `-10` (Limb Disabled), `+2` Shock Tiers, Complete Bone Fracture / Major Venous or Arterial Bleed. `6–12 weeks`.
+    /// **Tier 3: Severe / Fracture (`6–8` effective trauma)**: `-10` (Limb Disabled), `+2` Shock Tiers, Complete Bone Fracture / Major Venous or Arterial Bleed. `6–12 weeks`.
     Tier3SevereFracture,
-    /// **Tier 4: Critical / Maiming**: Ceiling Locked at `0`, `+3` Shock Tiers, Compound Fracture / Solid Organ Rupture / Arterial Severance. `3–6 months`.
+    /// **Tier 4: Critical / Maiming (`9–11` effective trauma)**: Ceiling Locked at `0`, `+3` Shock Tiers, Compound Fracture / Solid Organ Rupture / Arterial Severance. `3–6 months`.
     Tier4CriticalMaiming,
-    /// **Tier 5: Catastrophic / Lethal**: Ceiling Locked at `0` (Destroyed), `+4` Shock Tiers, Traumatic Amputation / Transected Spine / Ruptured Heart.
+    /// **Tier 5: Catastrophic / Lethal (`12+` effective trauma)**: Ceiling Locked at `0` (Destroyed), `+4` Shock Tiers, Traumatic Amputation / Transected Spine / Ruptured Heart.
     Tier5CatastrophicLethal,
 }
 
 impl StructuralWoundTier {
-    /// Converts a numeric wound tier (`1..=5`) into [`StructuralWoundTier`].
+    /// Converts a numeric wound tier (`1..=5`) into [`StructuralWoundTier`] (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1 Table).
     #[must_use]
     pub const fn from_tier_number(tier: u8) -> Self {
         match tier {
@@ -405,7 +412,7 @@ impl StructuralWoundTier {
         }
     }
 
-    /// Numeric tier (`1..=5`).
+    /// Numeric tier (`1..=5`, `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1 Table).
     #[must_use]
     pub const fn tier_number(self) -> u8 {
         match self {
@@ -417,7 +424,8 @@ impl StructuralWoundTier {
         }
     }
 
-    /// Aspect ceiling penalty ($T_{\max}, C_{\max}, F_{\max}$) inflicted on the struck location (`2`, `5`, `10`, or `20` for Locked at `0`).
+    /// Aspect ceiling penalty ($T_{\max}, C_{\max}, F_{\max}$) inflicted on the struck location (`2`, `5`, `10`, or `20` for Locked at `0`,
+    /// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1 Table).
     #[must_use]
     pub const fn aspect_ceiling_penalty(self) -> i32 {
         match self {
@@ -428,7 +436,8 @@ impl StructuralWoundTier {
         }
     }
 
-    /// Whether the struck location's aspect ceiling is completely locked at `0` (`Tier 4` or `Tier 5`).
+    /// Whether the struck location's aspect ceiling is completely locked at `0` (`Tier 4` or `Tier 5`,
+    /// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1 Table).
     #[must_use]
     pub const fn locks_ceiling_to_zero(self) -> bool {
         matches!(
@@ -437,7 +446,7 @@ impl StructuralWoundTier {
         )
     }
 
-    /// Systemic `wound_shock_index` tiers added by this wound (`health_and_trauma.md` §3.1).
+    /// Systemic `wound_shock_index` tiers added by this wound (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1 Table).
     #[must_use]
     pub const fn wound_shock_added(self, wsr: i32) -> i32 {
         match self {
@@ -456,25 +465,35 @@ impl StructuralWoundTier {
     }
 }
 
-/// Maps net penetrating/BABT trauma magnitude into a [`StructuralWoundTier`] (`health_and_trauma.md` §3.1).
+/// Maps net penetrating/BABT trauma magnitude into a [`StructuralWoundTier`]
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.1 Table; `ranged_combat_and_armor.md` §4.2 Table).
+///
+/// Thresholds:
+/// - `<= 0` -> `None`
+/// - `1..=2` -> [`StructuralWoundTier::Tier1Superficial`]
+/// - `3..=5` -> [`StructuralWoundTier::Tier2Moderate`]
+/// - `6..=8` -> [`StructuralWoundTier::Tier3SevereFracture`]
+/// - `9..=11` -> [`StructuralWoundTier::Tier4CriticalMaiming`]
+/// - `12+` -> [`StructuralWoundTier::Tier5CatastrophicLethal`]
 #[must_use]
 pub const fn classify_structural_wound_tier(effective_trauma: i32) -> Option<StructuralWoundTier> {
     if effective_trauma <= 0 {
         None
-    } else if effective_trauma <= 3 {
+    } else if effective_trauma <= 2 {
         Some(StructuralWoundTier::Tier1Superficial)
-    } else if effective_trauma <= 6 {
+    } else if effective_trauma <= 5 {
         Some(StructuralWoundTier::Tier2Moderate)
-    } else if effective_trauma <= 10 {
+    } else if effective_trauma <= 8 {
         Some(StructuralWoundTier::Tier3SevereFracture)
-    } else if effective_trauma <= 14 {
+    } else if effective_trauma <= 11 {
         Some(StructuralWoundTier::Tier4CriticalMaiming)
     } else {
         Some(StructuralWoundTier::Tier5CatastrophicLethal)
     }
 }
 
-/// Evaluates whether a **Tier 2 Hairline Fracture** snaps into a **Tier 3 Complete Fracture** under load (`health_and_trauma.md` §3.2.1).
+/// Evaluates whether a **Tier 2 Hairline Fracture** snaps into a **Tier 3 Complete Fracture** under load
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.2.1).
 #[must_use]
 pub const fn check_hairline_fracture_aggravation(
     allocated_aspect: i32,
@@ -489,13 +508,15 @@ pub const fn check_hairline_fracture_aggravation(
     }
 }
 
-/// Evaluates reducing ("popping back in") a **Joint Dislocation** (`health_and_trauma.md` §3.2.2).
+/// Evaluates reducing ("popping back in") a **Joint Dislocation**
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.2.2).
 #[must_use]
 pub const fn reduce_joint_dislocation(first_aid_succeeded: bool) -> (i32, i32) {
     (20, if first_aid_succeeded { 3 } else { 8 })
 }
 
-/// The Four Hemorrhage Grades (plus `Grade0None`) on the `10.0-Unit` Blood Volume Track (`health_and_trauma.md` §3.3).
+/// The Four Hemorrhage Grades (plus `Grade0None`) on the `10.0-Unit` Blood Volume Track
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.3 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HemorrhageGrade {
@@ -512,7 +533,8 @@ pub enum HemorrhageGrade {
 }
 
 impl HemorrhageGrade {
-    /// Blood volume lost per Tick (`1 Tick = 0.25s`, `240 Ticks = 1 min`, `14,400 Ticks = 1 hr`) in Units (`10.0 Units` baseline).
+    /// Blood volume lost per Tick (`1 Tick = 0.25s`, `240 Ticks = 1 min`, `14,400 Ticks = 1 hr`) in Units (`10.0 Units` baseline,
+    /// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.3 Table).
     #[must_use]
     pub fn units_lost_per_tick(self) -> f64 {
         match self {
@@ -524,7 +546,8 @@ impl HemorrhageGrade {
         }
     }
 
-    /// Whether this hemorrhage grade can slow or clot naturally without hemostatic packing/tourniquet/surgery (`Grades 0–2`).
+    /// Whether this hemorrhage grade can slow or clot naturally without hemostatic packing/tourniquet/surgery (`Grades 0–2`,
+    /// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.3 Table).
     #[must_use]
     pub const fn can_clot_naturally(self) -> bool {
         matches!(
@@ -533,7 +556,8 @@ impl HemorrhageGrade {
         )
     }
 
-    /// Ticks required to apply standard field hemorrhage control (`8` bandage, `20` pressure dressing, `24` CAT tourniquet).
+    /// Ticks required to apply standard field hemorrhage control (`8` bandage, `20` pressure dressing, `24` CAT tourniquet,
+    /// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.3 Table).
     #[must_use]
     pub const fn field_stabilization_ticks(self) -> i32 {
         match self {
@@ -545,7 +569,8 @@ impl HemorrhageGrade {
     }
 }
 
-/// Clinical Hypovolemic Shock Classes (`Classes I–IV`) from cumulative blood volume lost (`health_and_trauma.md` §3.3).
+/// Clinical Hypovolemic Shock Classes (`Classes I–IV`) from cumulative blood volume lost
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.3 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HypovolemicShockClass {
@@ -561,7 +586,8 @@ pub enum HypovolemicShockClass {
     ClassIVLethalComa,
 }
 
-/// Complete state of a character's `10.0-Unit` Blood Volume Track after advancing by `elapsed_ticks` (`health_and_trauma.md` §3.3).
+/// Complete state of a character's `10.0-Unit` Blood Volume Track after advancing by `elapsed_ticks`
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BloodLossProgressionOutcome {
     /// Total cumulative blood units lost (`0.0..=10.0`).
@@ -597,7 +623,7 @@ impl ConditionSource for BloodLossProgressionOutcome {
 }
 
 /// Advances blood loss over `elapsed_ticks` across active [`HemorrhageGrade`] sources and evaluates
-/// Hypovolemic Shock progression (`health_and_trauma.md` §3.3).
+/// Hypovolemic Shock progression (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.3).
 #[must_use]
 pub fn evaluate_blood_loss_progression(
     prior_units_lost: f64,
@@ -679,7 +705,8 @@ pub fn evaluate_blood_loss_progression(
     }
 }
 
-/// Domain-specific Wound Shock Consciousness Save effect payload (`health_and_trauma.md` §3.4).
+/// Domain-specific Wound Shock Consciousness Save effect payload
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.4).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WoundShockSaveEffect {
     /// Derived Wound Shock Resistance $\text{WSR} = \text{HLT} + \lfloor\text{DIS}/2\rfloor$.
@@ -704,10 +731,12 @@ pub struct WoundShockSaveEffect {
     pub falls_unconscious: bool,
 }
 
-/// Outcome of a Contested `2d20` **Systemic Wound Shock (`WSR`) Consciousness Save** (`health_and_trauma.md` §3.4).
+/// Outcome of a Contested `2d20` **Systemic Wound Shock (`WSR`) Consciousness Save**
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.4).
 pub type WoundShockSaveOutcome = ContestedCheck<WoundShockSaveEffect>;
 
-/// Evaluates a Contested `2d20` **Systemic Wound Shock (`WSR`) Consciousness Save** (`health_and_trauma.md` §3.4).
+/// Evaluates a Contested `2d20` **Systemic Wound Shock (`WSR`) Consciousness Save**
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.4).
 #[must_use]
 pub fn evaluate_wound_shock_save(
     hlt: i32,
@@ -782,10 +811,10 @@ pub fn evaluate_wound_shock_save(
 }
 
 // ============================================================================
-// 4. Physiological, Sensory & Acute Mental Status Conditions (§4 – §6)
+// 4. Physiological, Sensory & Acute Mental Status Conditions (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §4 – §6.3)
 // ============================================================================
 
-/// Canonical Acute Physiological & Sensory Status Conditions (`health_and_trauma.md` §4).
+/// Canonical Acute Physiological & Sensory Status Conditions (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §4 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PhysiologicalStatusCondition {
@@ -807,13 +836,14 @@ pub enum PhysiologicalStatusCondition {
     NauseaSickened,
     /// **`Pinned` / `Immobilized`**: `Tempo = 0` (cannot translate in space).
     PinnedImmobilized,
-    /// **`Paralyzed`**: `Tempo = 0`, `Control = 0`, `Force = 0` for affected limbs.
+    /// **`Paralyzed`**: `Tempo = 0`, `Control = 0`, `Force = 0` for affected limbs (conscious, `AWR > 0`).
     Paralyzed,
     /// **`Unconscious` / `Comatose`**: `Tempo = 0, Control = 0, Force = 0, AWR = 0`, collapses Prone.
     UnconsciousComatose,
 }
 
-/// Aggregated characteristic, ceiling, and clock modifiers from active [`PhysiologicalStatusCondition`]s (`health_and_trauma.md` §4).
+/// Aggregated characteristic, ceiling, and clock modifiers from active [`PhysiologicalStatusCondition`]s
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §4 Table).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AggregatedStatusEffects {
     /// Whether `Sight (SIG)` is locked to `0` (`Blinded`).
@@ -850,10 +880,13 @@ pub struct AggregatedStatusEffects {
     pub tempo_locked_zero: bool,
     /// Whether `Control` and `Force` are locked at `0` (`Paralyzed` or `Unconscious`).
     pub control_and_force_locked_zero: bool,
+    /// Whether `Awareness (AWR)` is locked at `0` and the character is unconscious (`Unconscious/Comatose`, distinct from conscious `Paralyzed`).
+    pub awr_locked_zero: bool,
 }
 
 impl AggregatedStatusEffects {
-    /// Converts this status aggregation into a [`ConditionImpact`] primitive.
+    /// Converts this status aggregation into a [`ConditionImpact`] primitive
+    /// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §4 Table).
     #[must_use]
     pub const fn to_condition_impact(&self) -> ConditionImpact {
         ConditionImpact {
@@ -875,7 +908,7 @@ impl AggregatedStatusEffects {
                 self.control_and_force_locked_zero,
                 self.control_and_force_locked_zero,
             ),
-            is_unconscious: self.tempo_locked_zero && self.control_and_force_locked_zero,
+            is_unconscious: self.awr_locked_zero,
         }
     }
 }
@@ -886,7 +919,8 @@ impl ConditionSource for AggregatedStatusEffects {
     }
 }
 
-/// Evaluates the combined mechanical impact of a slice of [`PhysiologicalStatusCondition`]s (`health_and_trauma.md` §4).
+/// Evaluates the combined mechanical impact of a slice of [`PhysiologicalStatusCondition`]s
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §4 Table).
 #[must_use]
 pub fn evaluate_physiological_status_conditions(
     conditions: &[PhysiologicalStatusCondition],
@@ -909,6 +943,7 @@ pub fn evaluate_physiological_status_conditions(
         melee_control_cap_halved: false,
         tempo_locked_zero: false,
         control_and_force_locked_zero: false,
+        awr_locked_zero: false,
     };
 
     for &cond in conditions {
@@ -942,16 +977,20 @@ pub fn evaluate_physiological_status_conditions(
                 out.effective_root_halved = true;
             }
             PhysiologicalStatusCondition::NauseaSickened => {
-                out.delta_int_added += 4;
+                out.delta_int_added = out.delta_int_added.max(4);
                 out.fit_halved = true;
             }
             PhysiologicalStatusCondition::PinnedImmobilized => {
                 out.tempo_locked_zero = true;
             }
-            PhysiologicalStatusCondition::Paralyzed
-            | PhysiologicalStatusCondition::UnconsciousComatose => {
+            PhysiologicalStatusCondition::Paralyzed => {
                 out.tempo_locked_zero = true;
                 out.control_and_force_locked_zero = true;
+            }
+            PhysiologicalStatusCondition::UnconsciousComatose => {
+                out.tempo_locked_zero = true;
+                out.control_and_force_locked_zero = true;
+                out.awr_locked_zero = true;
             }
         }
     }
@@ -959,7 +998,7 @@ pub fn evaluate_physiological_status_conditions(
     out
 }
 
-/// The 4 Acute Mental Trauma Conditions (`health_and_trauma.md` §5.1).
+/// The 4 Acute Mental Trauma Conditions (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §5.1 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AcuteMentalTraumaTier {
@@ -973,7 +1012,8 @@ pub enum AcuteMentalTraumaTier {
     Tier4Catatonia,
 }
 
-/// Mechanical evaluation of an [`AcuteMentalTraumaTier`] (`health_and_trauma.md` §5.1–§5.2).
+/// Mechanical evaluation of an [`AcuteMentalTraumaTier`]
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §5.1–§5.2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AcuteMentalTraumaEffect {
     /// Mental trauma severity tier (`1..=4`).
@@ -982,7 +1022,7 @@ pub struct AcuteMentalTraumaEffect {
     pub ooda_freeze_ticks: i32,
     /// Tactical Pool modifier (`-4` in Tier 2 Panic).
     pub tactical_pool_modifier: i32,
-    /// Subtractive penalty to `ANA` and `FOC` (`-6` in Tier 2).
+    /// Subtractive penalty to `ANA` and `FOC` (`-6` in Tier 2, `0` in Tier 3).
     pub ana_foc_penalty: i32,
     /// Subtractive penalty to `ITU`, `INS`, `FOC`, and `ELO` (`-6` in Tier 3).
     pub dissociation_stat_penalty: i32,
@@ -998,7 +1038,8 @@ pub struct AcuteMentalTraumaEffect {
     pub trauma_trigger_delta_morale: i32,
 }
 
-/// Evaluates the mechanical effects and long-term psychological scars of an [`AcuteMentalTraumaTier`] (`health_and_trauma.md` §5.1–§5.2).
+/// Evaluates the mechanical effects and long-term psychological scars of an [`AcuteMentalTraumaTier`]
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §5.1 Table, §5.2).
 #[must_use]
 pub fn evaluate_acute_mental_trauma(
     tier: AcuteMentalTraumaTier,
@@ -1023,7 +1064,7 @@ pub fn evaluate_acute_mental_trauma(
             (0, -4, 6, 0, 0.0, is_cornered && agg_score >= 13, false, 0, 0)
         }
         AcuteMentalTraumaTier::Tier3DissociationShellShock => {
-            (0, 0, 6, 6, 0.30, false, false, 2, 4)
+            (0, 0, 0, 6, 0.30, false, false, 2, 4)
         }
         AcuteMentalTraumaTier::Tier4Catatonia => (0, 0, 0, 0, 0.0, false, true, 2, 4),
     };
@@ -1054,7 +1095,8 @@ impl ConditionSource for AcuteMentalTraumaEffect {
     }
 }
 
-/// Evaluates administering field analgesics (morphine/ketamine/fentanyl lozenge) (`health_and_trauma.md` §6.1).
+/// Evaluates administering field analgesics (morphine/ketamine/fentanyl lozenge)
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §6.1–§6.2).
 #[must_use]
 pub const fn apply_field_analgesic(
     current_wound_shock_index: i32,
@@ -1069,7 +1111,8 @@ pub const fn apply_field_analgesic(
     )
 }
 
-/// Estimates healing recovery days for a stabilized [`StructuralWoundTier`] (`health_and_trauma.md` §6.3).
+/// Estimates healing recovery days for a stabilized [`StructuralWoundTier`]
+/// (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §6.3).
 #[must_use]
 pub const fn evaluate_wound_recovery_timeline_days(
     tier: StructuralWoundTier,
@@ -1162,6 +1205,44 @@ mod tests {
 
     #[test]
     fn test_wounds_fractures_hemorrhage_and_wsr_saves() {
+        assert_eq!(classify_structural_wound_tier(0), None);
+        assert_eq!(
+            classify_structural_wound_tier(1),
+            Some(StructuralWoundTier::Tier1Superficial)
+        );
+        assert_eq!(
+            classify_structural_wound_tier(2),
+            Some(StructuralWoundTier::Tier1Superficial)
+        );
+        assert_eq!(
+            classify_structural_wound_tier(3),
+            Some(StructuralWoundTier::Tier2Moderate)
+        );
+        assert_eq!(
+            classify_structural_wound_tier(5),
+            Some(StructuralWoundTier::Tier2Moderate)
+        );
+        assert_eq!(
+            classify_structural_wound_tier(6),
+            Some(StructuralWoundTier::Tier3SevereFracture)
+        );
+        assert_eq!(
+            classify_structural_wound_tier(8),
+            Some(StructuralWoundTier::Tier3SevereFracture)
+        );
+        assert_eq!(
+            classify_structural_wound_tier(9),
+            Some(StructuralWoundTier::Tier4CriticalMaiming)
+        );
+        assert_eq!(
+            classify_structural_wound_tier(11),
+            Some(StructuralWoundTier::Tier4CriticalMaiming)
+        );
+        assert_eq!(
+            classify_structural_wound_tier(12),
+            Some(StructuralWoundTier::Tier5CatastrophicLethal)
+        );
+
         let (snapped, new_tier) = check_hairline_fracture_aggravation(7, 12, false);
         assert!(snapped && new_tier == StructuralWoundTier::Tier3SevereFracture);
 
@@ -1188,6 +1269,34 @@ mod tests {
     }
 
     #[test]
+    fn test_status_conditions_and_acute_mental_trauma() {
+        let nausea_dup = evaluate_physiological_status_conditions(&[
+            PhysiologicalStatusCondition::NauseaSickened,
+            PhysiologicalStatusCondition::NauseaSickened,
+        ]);
+        assert_eq!(nausea_dup.delta_int_added, 4);
+
+        let paralyzed =
+            evaluate_physiological_status_conditions(&[PhysiologicalStatusCondition::Paralyzed]);
+        assert!(paralyzed.tempo_locked_zero && paralyzed.control_and_force_locked_zero);
+        assert!(!paralyzed.awr_locked_zero);
+        assert!(!paralyzed.to_condition_impact().is_unconscious);
+
+        let unconscious = evaluate_physiological_status_conditions(&[
+            PhysiologicalStatusCondition::UnconsciousComatose,
+        ]);
+        assert!(unconscious.awr_locked_zero);
+        assert!(unconscious.to_condition_impact().is_unconscious);
+
+        let t3 = evaluate_acute_mental_trauma(
+            AcuteMentalTraumaTier::Tier3DissociationShellShock,
+            false,
+            10,
+        );
+        assert_eq!((t3.ana_foc_penalty, t3.dissociation_stat_penalty), (0, 6));
+    }
+
+    #[test]
     fn test_movement_gaits_and_encumbrance_tiers_0_to_4() {
         let sp10 = compute_stride_and_sprint_velocity(10, 1.75);
         assert!((sp10.v_sprint_m_per_sec - 7.50).abs() < 1e-6);
@@ -1202,6 +1311,16 @@ mod tests {
             (bound.ranged_recoil_adder, bound.effective_ranged_control_cap, bound.exertion_marks_per_20_ticks),
             (4, 5, 1)
         );
+
+        let climb_ladder =
+            evaluate_climbing_movement(true, LoadEncumbranceTier::Tier2TacticalFightingLoad, 2);
+        assert_eq!(climb_ladder, (0.5, 2.0, false, 0));
+        let climb_wall =
+            evaluate_climbing_movement(false, LoadEncumbranceTier::Tier2TacticalFightingLoad, 2);
+        assert_eq!(climb_wall, (0.15, 0.6, true, 6));
+
+        let eva = evaluate_zero_g_maneuver(140.0, 70.0, false);
+        assert!((eva.0 - 2.0).abs() < 1e-6 && eva.1);
 
         assert!((compute_base_comfort_load_kg(70.0, 10) - 12.0).abs() < 1e-6);
         assert!((compute_base_comfort_load_kg(85.0, 14) - 20.4).abs() < 1e-6);
@@ -1242,13 +1361,42 @@ mod tests {
         assert_eq!((dehyd.delta_int, dehyd.fatigue_level_floor), (4, 2));
         assert_eq!(enforce_fatigue_floor(0, &[dehyd.fatigue_level_floor]), 2);
 
+        let dehyd_sweat = evaluate_dehydration(
+            HydrationEnvironment::TemperateLowActivity,
+            2.25,
+            2.0,
+        );
+        assert_eq!(dehyd_sweat.stage, DehydrationStage::Stage2Parched);
+
         let starv = evaluate_starvation_and_caloric_deficit(6 * 24, 18_000, 10, 10, 10);
         assert_eq!((starv.catabolic_intervals, starv.for_fit_hlt_erosion), (2, 2));
         assert!((starv.mass_lost_kg - 3.0).abs() < 1e-6);
 
+        let cramps = evaluate_thermal_stress(
+            HypothermiaStage::None,
+            HyperthermiaStage::Stage1HeatCramps,
+        );
+        assert_eq!(cramps.tempo_and_force_cap_penalty, 2);
+        assert_eq!(
+            cramps.to_condition_impact().triad_cap_penalty,
+            Triad::new(2, 0, 2)
+        );
+
+        assert_eq!(
+            evaluate_frostbite_exposure(-15.0, true, false),
+            Some(StructuralWoundTier::Tier1Superficial)
+        );
+        assert_eq!(
+            evaluate_frostbite_exposure(-30.0, true, false),
+            Some(StructuralWoundTier::Tier3SevereFracture)
+        );
+
         let sleep = evaluate_sleep_deprivation(72);
         assert_eq!((sleep.delta_int, sleep.mental_sensory_ooda_penalty), (8, 6));
         assert!(sleep.requires_microsleep_dis_check);
+
+        let alt_2600 = evaluate_altitude_and_vacuum_hypoxia(2600, false, false, 0, 10);
+        assert_eq!(alt_2600.fit_penalty, 2);
 
         let vac = evaluate_altitude_and_vacuum_hypoxia(0, false, true, 68, 10);
         assert_eq!((vac.vacuum_useful_consciousness_ticks, vac.vacuum_hlt_erosion), (48, 2));

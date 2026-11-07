@@ -1,5 +1,11 @@
 //! Classical and exotic dice pool probability mass functions ([`Pmf`]), summary statistics
 //! ([`DistributionStats`]), and exact combinatorial pool generators.
+//!
+//! # TTRPG Rules Origins
+//! - `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1–§2.2)
+//! - `docs/ttrpg/01-foundation/design_philosophy.md` (§5.4)
+//! - `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1)
+//! - `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.2)
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -8,9 +14,16 @@ use serde::{Deserialize, Serialize};
 /// Discrete probability mass function mapping outcome integer values to their exact probabilities in `[0.0, 1.0]`.
 ///
 /// Stored in a [`BTreeMap`] so keys are always sorted in ascending order.
+///
+/// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1) and
+/// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub type Pmf = BTreeMap<i32, f64>;
 
 /// Summary moments of a discrete probability distribution.
+///
+/// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2),
+/// `docs/ttrpg/01-foundation/design_philosophy.md` (§5.4), and
+/// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DistributionStats {
     /// Expected value $E[X] = \sum x P(X = x)$.
@@ -24,6 +37,24 @@ pub struct DistributionStats {
     /// Standardized fourth central moment minus 3: $(E[(X - \mu)^4] / \sigma^4) - 3$.
     pub excess_kurtosis: f64,
 }
+
+impl DistributionStats {
+    /// Sarle's uniform-distribution bimodality threshold $\text{BC}_{\text{uniform}} = 5/9 \approx 0.5556$
+    /// (`docs/ttrpg/01-foundation/mathematical_notation_glossary.md` §2.2).
+    pub const SARLE_BIMODAL_THRESHOLD: f64 = 5.0 / 9.0;
+
+    /// Computes Sarle's Bimodality Coefficient $\text{BC} = (\gamma_1^2 + 1) / (\kappa_2 + 3)$
+    /// (`docs/ttrpg/01-foundation/mathematical_notation_glossary.md` §2.2,
+    /// `docs/ttrpg/01-foundation/design_philosophy.md` §5.4).
+    #[must_use]
+    pub fn bimodality_coefficient(&self) -> f64 {
+        (self.skewness.powi(2) + 1.0) / ((self.excess_kurtosis + 3.0).max(1e-9))
+    }
+}
+
+/// Sarle's uniform-distribution bimodality threshold $\text{BC}_{\text{uniform}} = 5/9 \approx 0.5556$
+/// (`docs/ttrpg/01-foundation/mathematical_notation_glossary.md` §2.2).
+pub const SARLE_BIMODAL_THRESHOLD: f64 = DistributionStats::SARLE_BIMODAL_THRESHOLD;
 
 pub(crate) fn normalize_pmf_iter<'a, I>(entries: I) -> Pmf
 where
@@ -40,6 +71,8 @@ where
 }
 
 /// Returns a sorted, normalized probability mass function with negligible entries (`<= 1e-15`) removed.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn normalize_pmf(pmf: &BTreeMap<i32, f64>) -> Pmf {
     normalize_pmf_iter(pmf)
 }
@@ -49,6 +82,9 @@ pub(crate) fn normalize_hash_pmf(pmf: &HashMap<i32, f64>) -> Pmf {
 }
 
 /// Computes exact mean, variance, standard deviation, skewness, and excess kurtosis for a [`Pmf`].
+///
+/// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2) and
+/// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn compute_stats(pmf: &Pmf) -> DistributionStats {
     let norm = normalize_pmf(pmf);
     if norm.is_empty() {
@@ -92,6 +128,8 @@ pub fn compute_stats(pmf: &Pmf) -> DistributionStats {
 }
 
 /// Computes the exact distribution of $X + Y$ for independent discrete random variables $X$ and $Y$.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn convolve_pmfs(pmf_a: &Pmf, pmf_b: &Pmf) -> Pmf {
     let mut out: BTreeMap<i32, f64> = BTreeMap::new();
     for (&x, &px) in pmf_a {
@@ -103,6 +141,8 @@ pub fn convolve_pmfs(pmf_a: &Pmf, pmf_b: &Pmf) -> Pmf {
 }
 
 /// Returns the uniform [`Pmf`] for a single die `dK` (`1..=sides`), or `-dK` (`-sides..=-1`) when `negative` is `true`.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn single_die_pmf(sides: i32, negative: bool) -> Pmf {
     if sides <= 0 {
         return BTreeMap::new();
@@ -117,6 +157,8 @@ pub fn single_die_pmf(sides: i32, negative: bool) -> Pmf {
 // ---------------------------------------------------------------------------
 
 /// Exact [`Pmf`] of the sum of `pos_dice` `dK` minus `neg_dice` `dK`.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn sum_dice_pool_pmf(pos_dice: usize, sides: i32, neg_dice: usize) -> Pmf {
     let mut result = BTreeMap::from([(0, 1.0)]);
     let pos_die = single_die_pmf(sides, false);
@@ -131,12 +173,15 @@ pub fn sum_dice_pool_pmf(pos_dice: usize, sides: i32, neg_dice: usize) -> Pmf {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Success-Counting Dice Pools (Binomial & Satya d20 Critical-1 Pool)
+// 2. Success-Counting Dice Pools (Binomial & Comparative Roll-Under 2d20 Critical-1 Pool)
 // ---------------------------------------------------------------------------
 
 /// Exact [`Pmf`] of success counts in an `NdK` pool.
 ///
-/// If `crit_on_one_double` is `true` (as in Satya's roll-under `d20` rules), rolling a `1` on a hit counts as `2` successes.
+/// If `crit_on_one_double` is `true`, rolling a `1` on a hit counts as `2` successes—modeling classic
+/// roll-under `2d20` critical-`1` success-counting pools for comparative distribution analysis
+/// (`docs/ttrpg/01-foundation/probability_and_calibration.md` §1), whereas Satya itself is a Roll-Over
+/// `2d20` Two-List Cascade system (`docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` §3.2).
 pub fn count_successes_pmf(
     pool_size: usize,
     sides: i32,
@@ -176,6 +221,8 @@ pub fn count_successes_pmf(
 // ---------------------------------------------------------------------------
 
 /// Exact [`Pmf`] of a single exploding `dK` (re-roll and add when `face >= explode_min`, up to `max_explosions` times).
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn single_exploding_die_pmf(
     sides: i32,
     explode_min: Option<i32>,
@@ -212,6 +259,8 @@ pub fn single_exploding_die_pmf(
 }
 
 /// Exact [`Pmf`] of taking the maximum of `pool_size` independent exploding dice (Gumbel extreme value limit).
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn exploding_pool_keep_highest_pmf(
     pool_size: usize,
     sides: i32,
@@ -248,6 +297,8 @@ fn binomial_coeff(n: usize, k: usize) -> f64 {
 }
 
 /// Fallible version of [`order_statistic_pmf`] that validates `1 <= k_rank_from_lowest <= pool_size`.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn try_order_statistic_pmf(
     pool_size: usize,
     sides: i32,
@@ -287,6 +338,8 @@ pub fn try_order_statistic_pmf(
 
 /// Exact [`Pmf`] of the `k`-th order statistic (`1` = lowest, `pool_size` = highest) of `NdK`.
 ///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
+///
 /// # Panics
 /// Panics if `k_rank_from_lowest` is outside `1..=pool_size` or `sides <= 0`.
 pub fn order_statistic_pmf(pool_size: usize, sides: i32, k_rank_from_lowest: usize) -> Pmf {
@@ -299,6 +352,8 @@ pub fn order_statistic_pmf(pool_size: usize, sides: i32, k_rank_from_lowest: usi
 // ---------------------------------------------------------------------------
 
 /// Selection mode for [`center_distance_selection_pmf`].
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CenterDistanceMode {
@@ -311,6 +366,8 @@ pub enum CenterDistanceMode {
 /// Roll `pool_size` `dK` and pick the die closest to or furthest from the center $(K+1)/2$.
 ///
 /// Ties in distance between a low face $f$ and its mirror $K + 1 - f$ are split 50/50 so symmetry is preserved.
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn center_distance_selection_pmf(
     pool_size: usize,
     sides: i32,
@@ -397,6 +454,9 @@ impl MedianGateCtx {
 }
 
 /// Fallible version of [`median_gated_bimodal_pmf`] validating that `pool_size` is an odd integer `>= 3`.
+///
+/// Origin: `docs/ttrpg/01-foundation/design_philosophy.md` (§5.4) and
+/// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn try_median_gated_bimodal_pmf(
     pool_size: usize,
     sides: i32,
@@ -430,6 +490,9 @@ pub fn try_median_gated_bimodal_pmf(
 /// - If `roll_under == false`: if `median >= gate_tn`, return `max(pool)`; else return `min(pool)`.
 /// - If `roll_under == true`: if `median <= gate_tn`, return `min(pool)`; else return `max(pool)`.
 ///
+/// Origin: `docs/ttrpg/01-foundation/design_philosophy.md` (§5.4) and
+/// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
+///
 /// # Panics
 /// Panics if `pool_size` is even or `< 3`.
 pub fn median_gated_bimodal_pmf(
@@ -447,6 +510,8 @@ pub fn median_gated_bimodal_pmf(
 // ---------------------------------------------------------------------------
 
 /// Exact [`Pmf`] of multiplying `pool_size` `dK` together ($d_1 \times d_2 \times \dots \times d_N$).
+///
+/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
 pub fn multiplicative_pool_pmf(pool_size: usize, sides: i32) -> Pmf {
     if sides <= 0 {
         return BTreeMap::new();

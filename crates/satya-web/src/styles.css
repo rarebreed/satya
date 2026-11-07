@@ -19,17 +19,36 @@
     padding: 0;
 }
 
+html,
+body {
+    min-height: 100dvh;
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg-0);
     color: var(--text-primary);
     line-height: 1.45;
+    display: flex;
+    flex-direction: column;
 }
 
 .app-shell {
-    max-width: 1840px;
+    width: 100%;
+    max-width: 2560px;
+    min-height: 100dvh;
     margin: 0 auto;
-    padding: 10px 14px 22px;
+    padding: 10px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.workspace-grid {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .top-bar {
@@ -193,6 +212,12 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
     gap: 11px;
     margin-bottom: 11px;
+    flex-shrink: 0;
+}
+
+.gate-container:not(:has(> :not([style*="display: none"]))) {
+    display: none;
+    margin-bottom: 0;
 }
 
 .workspace-columns {
@@ -201,8 +226,17 @@ body {
     --col-right-track: minmax(240px, 0.62fr);
     display: grid;
     grid-template-columns: var(--col-left-track) var(--col-center-track) var(--col-right-track);
+    grid-template-rows: minmax(0, 1fr);
     gap: 10px;
     align-items: stretch;
+    flex: 1 1 0;
+    height: max(680px, calc(100dvh - 76px));
+    min-height: max(680px, calc(100dvh - 76px));
+}
+
+.workspace-grid:has(.gate-container > :not([style*="display: none"])) .workspace-columns {
+    height: max(680px, calc(100dvh - 300px));
+    min-height: max(680px, calc(100dvh - 300px));
 }
 
 .workspace-columns.ttrpg-collapsed,
@@ -255,11 +289,13 @@ body {
     flex-direction: column;
     gap: 10px;
     min-width: 0;
+    min-height: 0;
+    height: 100%;
 }
 
 .col-webcams {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 8px;
 }
 
@@ -274,8 +310,30 @@ body {
     .workspace-columns.webcam-collapsed,
     .workspace-columns.center-collapsed,
     .workspace-columns.ttrpg-collapsed,
-    .workspace-columns.chat-collapsed {
+    .workspace-columns.chat-collapsed,
+    .workspace-grid:has(.gate-container > :not([style*="display: none"])) .workspace-columns {
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto;
+        height: auto;
+        min-height: 0;
+    }
+
+    .col-notebook,
+    .col-center,
+    .col-webcams,
+    .col-left,
+    .col-right,
+    .notebook-card,
+    .notebook-body,
+    .notebook-pane {
+        height: auto;
+        overflow: visible;
+    }
+
+    .rules-book-viewport,
+    .wizard-stage-container {
+        flex: 1 1 auto;
+        max-height: 75dvh;
     }
 }
 
@@ -494,6 +552,7 @@ input:focus, select:focus {
     display: none;
     flex-direction: row;
     align-items: flex-start;
+    align-self: flex-start;
     gap: 8px;
     position: sticky;
     top: 12px;
@@ -623,12 +682,18 @@ input:focus, select:focus {
     display: grid;
     grid-template-columns: 1fr;
     gap: 10px;
-    max-height: 520px;
+    flex: 1 1 0;
+    min-height: 160px;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
     align-content: start;
     padding-right: 4px;
+}
+
+.webrtc-card.is-floating .video-grid {
+    flex: 0 1 auto;
+    max-height: 520px;
 }
 
 .video-grid.cols-1 {
@@ -684,6 +749,7 @@ input:focus, select:focus {
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 7px;
+    flex-shrink: 0;
 }
 
 .roster-title {
@@ -714,6 +780,13 @@ input:focus, select:focus {
 
 .ttrpg-card {
     container: ttrpg-card / inline-size;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.workspace-columns.chat-collapsed .ttrpg-card {
+    flex: 1 1 auto;
 }
 
 .ttrpg-card #ttrpg-odds-pill {
@@ -890,9 +963,18 @@ input:focus, select:focus {
     flex-wrap: wrap;
 }
 
+.chat-card {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 280px;
+}
+
 .chat-log {
-    height: 290px;
+    flex: 1 1 0;
+    min-height: 160px;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
     background: var(--bg-0);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -1033,8 +1115,10 @@ table.metrics-table th {
 .notebook-card {
     display: flex;
     flex-direction: column;
+    flex: 1 1 0;
     height: 100%;
-    min-height: 680px;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .notebook-header {
@@ -1044,6 +1128,7 @@ table.metrics-table th {
     border-bottom: 1px solid var(--border);
     padding-bottom: 7px;
     margin-bottom: 8px;
+    flex-shrink: 0;
 }
 
 .notebook-title-row {
@@ -1083,22 +1168,32 @@ table.metrics-table th {
 }
 
 .notebook-body {
-    flex: 1;
+    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     min-height: 0;
     min-inline-size: 0;
     max-inline-size: 100%;
+    overflow: hidden;
 }
 
 .notebook-pane {
-    flex: 1;
+    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     gap: 8px;
     min-height: 0;
     min-inline-size: 0;
     max-inline-size: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#notebook-pane-rules,
+#notebook-pane-wizard,
+#notebook-pane-dice,
+#notebook-pane-maps {
+    overflow: hidden;
 }
 
 .pane-toolbar {
@@ -1107,6 +1202,7 @@ table.metrics-table th {
     align-items: center;
     flex-wrap: wrap;
     gap: 6px;
+    flex-shrink: 0;
 }
 
 .tabletop-map-viewport {
@@ -1132,7 +1228,8 @@ table.metrics-table th {
 
 .tabletop-map-img {
     width: 100%;
-    max-height: 480px;
+    height: 100%;
+    max-height: 100%;
     object-fit: contain;
     display: block;
 }
@@ -1142,6 +1239,7 @@ table.metrics-table th {
     flex-direction: column;
     gap: 10px;
     flex: 1;
+    min-height: 0;
 }
 
 .dice-material-toolbar,
@@ -1315,9 +1413,10 @@ input[type="range"].dice-opacity-slider:focus-visible {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    flex: 1;
-    max-height: 360px;
+    flex: 1 1 0;
+    min-height: 220px;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
 }
 
 .dice-history-list {
@@ -1373,12 +1472,16 @@ input[type="range"].dice-opacity-slider:focus-visible {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    flex: 1;
+    min-height: 0;
     height: 100%;
 }
 
 .model-wireframe-svg {
     width: 100%;
-    max-height: 290px;
+    flex: 1;
+    min-height: 220px;
+    height: 100%;
     border-radius: 6px;
     border: 1px solid rgba(56, 189, 248, 0.25);
 }
@@ -1521,13 +1624,21 @@ input[type="range"].dice-opacity-slider:focus-visible {
     border-color: var(--accent);
 }
 
+#notebook-pane-docs > .roster-bar:last-child {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 180px;
+}
+
 .gm-docs-list {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 280px;
+    flex: 1 1 0;
+    min-height: 140px;
     overflow-y: auto;
-    overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
     scrollbar-gutter: stable;
 }
 
@@ -1580,19 +1691,23 @@ input[type="range"].dice-opacity-slider:focus-visible {
  * Satya TTRPG Rules Book Tab (`#notebook-pane-rules` & `#rules-book-viewport`)
  * ============================================================================ */
 
+#rules-search-results {
+    flex: 0 0 auto;
+    max-height: 220px;
+}
+
 .rules-book-viewport {
     background: var(--bg-0);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 14px 16px;
     flex: 1 1 0;
-    min-height: 440px;
-    max-height: 680px;
+    min-height: 360px;
     min-inline-size: 0;
     max-inline-size: 100%;
     overflow-y: auto;
     overflow-x: hidden;
-    overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
     scrollbar-gutter: stable;
 }
 
@@ -1705,8 +1820,8 @@ input[type="range"].dice-opacity-slider:focus-visible {
     font-size: 0.78rem;
     line-height: 1.45;
     max-inline-size: 100%;
-    overflow-x: auto;
-    overscroll-behavior: contain;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
 }
 
 .satya-rules-article .rules-alert,
@@ -1765,8 +1880,7 @@ input[type="range"].dice-opacity-slider:focus-visible {
 
 .satya-rules-article .rules-table-wrap {
     max-inline-size: 100%;
-    overflow-x: auto;
-    overscroll-behavior: contain;
+    overflow: clip;
     border: 1px solid var(--border);
     border-radius: 6px;
 }
@@ -1820,8 +1934,7 @@ input[type="range"].dice-opacity-slider:focus-visible {
     color: #f8fafc;
     text-align: center;
     max-inline-size: 100%;
-    overflow-x: auto;
-    overscroll-behavior: contain;
+    overflow-wrap: break-word;
 }
 
 .satya-rules-article .math-roman,
@@ -1884,8 +1997,6 @@ input[type="range"].dice-opacity-slider:focus-visible {
     border-radius: 8px;
     padding: 12px;
     max-inline-size: 100%;
-    overflow-x: auto;
-    overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -2037,13 +2148,12 @@ input[type="range"].dice-opacity-slider:focus-visible {
     border-radius: 8px;
     padding: 12px 14px;
     flex: 1 1 0;
-    min-height: 440px;
-    max-height: 680px;
+    min-height: 360px;
     min-inline-size: 0;
     max-inline-size: 100%;
     overflow-y: auto;
     overflow-x: hidden;
-    overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
     scrollbar-gutter: stable;
 }
 
