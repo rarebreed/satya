@@ -577,6 +577,31 @@ impl CarryMode {
             Self::LinearMargin => "linear_margin",
         }
     }
+
+    /// Computes the carry-over modifier $\text{mod}_{n+1}$ propagated from step $n$.
+    #[inline]
+    pub const fn next_mod(
+        self,
+        mod_n: i32,
+        yn: i32,
+        characteristic_c: i32,
+        eff_over: i32,
+        eff_under: i32,
+        sign: i32,
+    ) -> i32 {
+        let step_delta = if yn > characteristic_c {
+            eff_over
+        } else if yn < characteristic_c {
+            eff_under
+        } else {
+            0
+        };
+        match self {
+            Self::MarkovStep => step_delta,
+            Self::CumulativeSnowball => mod_n + step_delta,
+            Self::LinearMargin => sign * (yn - characteristic_c),
+        }
+    }
 }
 
 impl fmt::Display for CarryMode {
@@ -621,6 +646,16 @@ impl BotchRule {
             Self::OverrunK => "overrun_k",
         }
     }
+
+    /// Resolves effective botch severity from `(succ, raw_botch, min_miss_tier)`.
+    #[inline]
+    pub const fn effective_botches(self, succ: i32, raw_botch: i32, min_miss_tier: i32) -> i32 {
+        if matches!(self, Self::ClosestMiss) && succ == 0 {
+            min_miss_tier
+        } else {
+            raw_botch
+        }
+    }
 }
 
 impl fmt::Display for BotchRule {
@@ -659,6 +694,21 @@ impl MarginAggregation {
         match self {
             Self::PiecewiseZeroFloor => "piecewise_zero_floor",
             Self::NetDifference => "net_difference",
+        }
+    }
+
+    /// Combines total successes and effective botches into a unified signed margin.
+    #[inline]
+    pub const fn compute(self, succ: i32, eff_botch: i32) -> i32 {
+        match self {
+            Self::PiecewiseZeroFloor => {
+                if succ > 0 {
+                    succ
+                } else {
+                    -eff_botch
+                }
+            }
+            Self::NetDifference => succ - eff_botch,
         }
     }
 }
@@ -700,88 +750,19 @@ pub fn paired_list_cascade_pmfs(
     count_under_as_success: bool,
     invert_feedback: bool,
 ) -> (Pmf, Pmf) {
-    if num_pairs == 0 || sides <= 0 {
-        return (BTreeMap::new(), BTreeMap::new());
-    }
-    let pair_pmf = sum_dice_pool_pmf(2, sides, 0);
-    let sign = if invert_feedback { -1 } else { 1 };
-    let eff_over = sign * delta_over;
-    let eff_under = -sign * delta_under;
-
-    // DP state: (current_mod, successes_so_far, last_y) -> probability
-    let mut state_probs: HashMap<(i32, i32, i32), f64> = HashMap::new();
-    for (&x1, &px) in &pair_pmf {
-        let y1 = x1;
-        let is_hit = if count_under_as_success {
-            y1 < characteristic_c
-        } else {
-            y1 > characteristic_c
-        };
-        let succ = i32::from(is_hit);
-        let next_mod = match mode {
-            CarryMode::LinearMargin => sign * (y1 - characteristic_c),
-            CarryMode::MarkovStep | CarryMode::CumulativeSnowball => {
-                if y1 > characteristic_c {
-                    eff_over
-                } else if y1 < characteristic_c {
-                    eff_under
-                } else {
-                    0
-                }
-            }
-        };
-        *state_probs.entry((next_mod, succ, y1)).or_insert(0.0) += px;
-    }
-
-    for _step in 2..=num_pairs {
-        let mut next_states: HashMap<(i32, i32, i32), f64> = HashMap::new();
-        for (&(mod_n, succ_so_far, _prev_y), &p_state) in &state_probs {
-            for (&xn, &px) in &pair_pmf {
-                let yn = xn + mod_n;
-                let is_hit = if count_under_as_success {
-                    yn < characteristic_c
-                } else {
-                    yn > characteristic_c
-                };
-                let new_succ = succ_so_far + i32::from(is_hit);
-                let next_mod = match mode {
-                    CarryMode::MarkovStep => {
-                        if yn > characteristic_c {
-                            eff_over
-                        } else if yn < characteristic_c {
-                            eff_under
-                        } else {
-                            0
-                        }
-                    }
-                    CarryMode::CumulativeSnowball => {
-                        if yn > characteristic_c {
-                            mod_n + eff_over
-                        } else if yn < characteristic_c {
-                            mod_n + eff_under
-                        } else {
-                            mod_n
-                        }
-                    }
-                    CarryMode::LinearMargin => sign * (yn - characteristic_c),
-                };
-                *next_states.entry((next_mod, new_succ, yn)).or_insert(0.0) += p_state * px;
-            }
-        }
-        state_probs = next_states;
-    }
-
-    let mut success_pmf: HashMap<i32, f64> = HashMap::new();
-    let mut final_y_pmf: HashMap<i32, f64> = HashMap::new();
-    for (&(_mod, succ, final_y), &prob) in &state_probs {
-        *success_pmf.entry(succ).or_insert(0.0) += prob;
-        *final_y_pmf.entry(final_y).or_insert(0.0) += prob;
-    }
-
-    (
-        normalize_hash_pmf(&success_pmf),
-        normalize_hash_pmf(&final_y_pmf),
-    )
+    let res = paired_list_signed_margin_pmfs(
+        num_pairs,
+        sides,
+        characteristic_c,
+        delta_over,
+        delta_under,
+        mode,
+        count_under_as_success,
+        invert_feedback,
+        BotchRule::ClosestMiss,
+        MarginAggregation::PiecewiseZeroFloor,
+    );
+    (res.success_count_pmf, res.final_pair_value_pmf)
 }
 
 /// Complete outcome breakdown from [`paired_list_signed_margin_pmfs`] including Degrees of Failure and Degrees of Success.
@@ -843,9 +824,8 @@ fn evaluate_step_success_and_botch(
     }
 }
 
-/// Computes the full `-N..=+N` Signed Outcome Spectrum (Degrees of Failure & Success) for the Two-List Cascade.
-#[allow(clippy::too_many_arguments)]
-pub fn paired_list_signed_margin_pmfs(
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+fn run_cascade_dp(
     num_pairs: usize,
     sides: i32,
     characteristic_c: i32,
@@ -855,22 +835,11 @@ pub fn paired_list_signed_margin_pmfs(
     count_under_as_success: bool,
     invert_feedback: bool,
     botch_rule: BotchRule,
-    margin_aggregation: MarginAggregation,
-) -> SignedCascadeResult {
-    if num_pairs == 0 || sides <= 0 {
-        return SignedCascadeResult {
-            signed_margin_pmf: BTreeMap::new(),
-            success_count_pmf: BTreeMap::new(),
-            botch_count_pmf: BTreeMap::new(),
-            final_pair_value_pmf: BTreeMap::new(),
-            failure_overshoot_pmf: BTreeMap::new(),
-            prob_any_success: 0.0,
-            prob_success_with_complication: 0.0,
-            prob_clean_failure: 0.0,
-            prob_botch_failure: 0.0,
-        };
-    }
-
+) -> (
+    HashMap<(i32, i32, i32, i32), f64>,
+    HashMap<i32, f64>,
+    HashMap<i32, f64>,
+) {
     let pair_pmf = sum_dice_pool_pmf(2, sides, 0);
     let sign = if invert_feedback { -1 } else { 1 };
     let eff_over = sign * delta_over;
@@ -878,44 +847,11 @@ pub fn paired_list_signed_margin_pmfs(
     let tier_step = (sides / 5).max(2);
 
     // DP state: (current_mod, successes_so_far, botches_so_far, min_miss_tier) -> prob
-    let mut state_probs: HashMap<(i32, i32, i32, i32), f64> = HashMap::new();
+    let mut state_probs: HashMap<(i32, i32, i32, i32), f64> = HashMap::from([((0, 0, 0, 5), 1.0)]);
     let mut final_y_pmf: HashMap<i32, f64> = HashMap::new();
     let mut overshoot_raw: HashMap<i32, f64> = HashMap::new();
 
-    for (&x1, &px) in &pair_pmf {
-        let y1 = x1;
-        let (s1, b1, m1) = evaluate_step_success_and_botch(
-            y1,
-            sides,
-            characteristic_c,
-            count_under_as_success,
-            botch_rule,
-        );
-        let m1_tier = (m1 / tier_step).min(5);
-        let next_mod = match mode {
-            CarryMode::LinearMargin => sign * (y1 - characteristic_c),
-            CarryMode::MarkovStep | CarryMode::CumulativeSnowball => {
-                if y1 > characteristic_c {
-                    eff_over
-                } else if y1 < characteristic_c {
-                    eff_under
-                } else {
-                    0
-                }
-            }
-        };
-        *state_probs
-            .entry((next_mod, s1, b1, m1_tier))
-            .or_insert(0.0) += px;
-        if num_pairs == 1 {
-            *final_y_pmf.entry(y1).or_insert(0.0) += px;
-            if s1 == 0 {
-                *overshoot_raw.entry(m1).or_insert(0.0) += px;
-            }
-        }
-    }
-
-    for step in 2..=num_pairs {
+    for step in 1..=num_pairs {
         let is_last = step == num_pairs;
         let mut next_states: HashMap<(i32, i32, i32, i32), f64> = HashMap::new();
         for (&(mod_n, succ_so_far, botch_so_far, min_miss_so_far), &p_state) in &state_probs {
@@ -948,27 +884,7 @@ pub fn paired_list_signed_margin_pmfs(
                 let next_mod = if is_last {
                     0
                 } else {
-                    match mode {
-                        CarryMode::MarkovStep => {
-                            if yn > characteristic_c {
-                                eff_over
-                            } else if yn < characteristic_c {
-                                eff_under
-                            } else {
-                                0
-                            }
-                        }
-                        CarryMode::CumulativeSnowball => {
-                            if yn > characteristic_c {
-                                mod_n + eff_over
-                            } else if yn < characteristic_c {
-                                mod_n + eff_under
-                            } else {
-                                mod_n
-                            }
-                        }
-                        CarryMode::LinearMargin => sign * (yn - characteristic_c),
-                    }
+                    mode.next_mod(mod_n, yn, characteristic_c, eff_over, eff_under, sign)
                 };
 
                 *next_states
@@ -978,6 +894,49 @@ pub fn paired_list_signed_margin_pmfs(
         }
         state_probs = next_states;
     }
+
+    (state_probs, final_y_pmf, overshoot_raw)
+}
+
+/// Computes the full `-N..=+N` Signed Outcome Spectrum (Degrees of Failure & Success) for the Two-List Cascade.
+#[allow(clippy::too_many_arguments)]
+pub fn paired_list_signed_margin_pmfs(
+    num_pairs: usize,
+    sides: i32,
+    characteristic_c: i32,
+    delta_over: i32,
+    delta_under: i32,
+    mode: CarryMode,
+    count_under_as_success: bool,
+    invert_feedback: bool,
+    botch_rule: BotchRule,
+    margin_aggregation: MarginAggregation,
+) -> SignedCascadeResult {
+    if num_pairs == 0 || sides <= 0 {
+        return SignedCascadeResult {
+            signed_margin_pmf: BTreeMap::new(),
+            success_count_pmf: BTreeMap::new(),
+            botch_count_pmf: BTreeMap::new(),
+            final_pair_value_pmf: BTreeMap::new(),
+            failure_overshoot_pmf: BTreeMap::new(),
+            prob_any_success: 0.0,
+            prob_success_with_complication: 0.0,
+            prob_clean_failure: 0.0,
+            prob_botch_failure: 0.0,
+        };
+    }
+
+    let (state_probs, final_y_pmf, overshoot_raw) = run_cascade_dp(
+        num_pairs,
+        sides,
+        characteristic_c,
+        delta_over,
+        delta_under,
+        mode,
+        count_under_as_success,
+        invert_feedback,
+        botch_rule,
+    );
 
     let mut signed_margin_pmf: HashMap<i32, f64> = HashMap::new();
     let mut success_pmf: HashMap<i32, f64> = HashMap::new();
@@ -989,25 +948,11 @@ pub fn paired_list_signed_margin_pmfs(
     let mut prob_botch_fail = 0.0_f64;
 
     for (&(_mod, succ, botch, min_miss_tier), &prob) in &state_probs {
-        let eff_botch = if botch_rule == BotchRule::ClosestMiss && succ == 0 {
-            min_miss_tier
-        } else {
-            botch
-        };
+        let eff_botch = botch_rule.effective_botches(succ, botch, min_miss_tier);
         *success_pmf.entry(succ).or_insert(0.0) += prob;
         *botch_pmf.entry(eff_botch).or_insert(0.0) += prob;
 
-        let margin = match margin_aggregation {
-            MarginAggregation::PiecewiseZeroFloor => {
-                if succ > 0 {
-                    succ
-                } else {
-                    -eff_botch
-                }
-            }
-            MarginAggregation::NetDifference => succ - eff_botch,
-        };
-
+        let margin = margin_aggregation.compute(succ, eff_botch);
         *signed_margin_pmf.entry(margin).or_insert(0.0) += prob;
 
         if succ >= 1 {
@@ -1169,6 +1114,45 @@ pub enum CascadeOutcomeKind {
     BotchFailure,
 }
 
+impl CascadeOutcomeKind {
+    /// Classifies a roll outcome from `(total_successes, raw_botches, effective_botches)`.
+    #[inline]
+    pub const fn classify(
+        total_successes: i32,
+        raw_botches: i32,
+        effective_botches: i32,
+    ) -> Self {
+        if total_successes >= 1 {
+            if raw_botches >= 1 {
+                Self::SuccessWithComplication
+            } else {
+                Self::Success
+            }
+        } else if effective_botches == 0 {
+            Self::CleanFailure
+        } else {
+            Self::BotchFailure
+        }
+    }
+
+    /// Maps this outcome classification and `total_successes` to the canonical 5-tier [`OutcomeTier`].
+    #[inline]
+    pub const fn to_outcome_tier(self, total_successes: i32) -> OutcomeTier {
+        match self {
+            Self::BotchFailure => OutcomeTier::CriticalFailure,
+            Self::CleanFailure => OutcomeTier::Failure,
+            Self::SuccessWithComplication => OutcomeTier::PartialSuccess,
+            Self::Success => {
+                if total_successes >= 3 {
+                    OutcomeTier::ExtraordinarySuccess
+                } else {
+                    OutcomeTier::Success
+                }
+            }
+        }
+    }
+}
+
 /// Step-by-step trace for a single pair $(A_n, B_n)$ in a resolved Two-List Cascade roll.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CascadeStepTrace {
@@ -1276,27 +1260,7 @@ pub fn evaluate_cascade_roll(
         min_miss_tier = min_miss_tier.min((mn / tier_step).min(5));
         final_pair_y = yn;
 
-        let next_mod = match mode {
-            CarryMode::MarkovStep => {
-                if yn > characteristic_c {
-                    eff_over
-                } else if yn < characteristic_c {
-                    eff_under
-                } else {
-                    0
-                }
-            }
-            CarryMode::CumulativeSnowball => {
-                if yn > characteristic_c {
-                    mod_n + eff_over
-                } else if yn < characteristic_c {
-                    mod_n + eff_under
-                } else {
-                    mod_n
-                }
-            }
-            CarryMode::LinearMargin => sign * (yn - characteristic_c),
-        };
+        let next_mod = mode.next_mod(mod_n, yn, characteristic_c, eff_over, eff_under, sign);
 
         steps.push(CascadeStepTrace {
             pair_index: idx + 1,
@@ -1315,47 +1279,12 @@ pub fn evaluate_cascade_roll(
         mod_n = next_mod;
     }
 
-    let effective_botches = if botch_rule == BotchRule::ClosestMiss && total_successes == 0 {
-        min_miss_tier
-    } else {
-        raw_botches
-    };
-
-    let signed_margin = match margin_aggregation {
-        MarginAggregation::PiecewiseZeroFloor => {
-            if total_successes > 0 {
-                total_successes
-            } else {
-                -effective_botches
-            }
-        }
-        MarginAggregation::NetDifference => total_successes - effective_botches,
-    };
-
-    let outcome_kind = if total_successes >= 1 {
-        if raw_botches >= 1 {
-            CascadeOutcomeKind::SuccessWithComplication
-        } else {
-            CascadeOutcomeKind::Success
-        }
-    } else if effective_botches == 0 {
-        CascadeOutcomeKind::CleanFailure
-    } else {
-        CascadeOutcomeKind::BotchFailure
-    };
-
-    let outcome_tier = match outcome_kind {
-        CascadeOutcomeKind::BotchFailure => OutcomeTier::CriticalFailure,
-        CascadeOutcomeKind::CleanFailure => OutcomeTier::Failure,
-        CascadeOutcomeKind::SuccessWithComplication => OutcomeTier::PartialSuccess,
-        CascadeOutcomeKind::Success => {
-            if total_successes >= 3 {
-                OutcomeTier::ExtraordinarySuccess
-            } else {
-                OutcomeTier::Success
-            }
-        }
-    };
+    let effective_botches =
+        botch_rule.effective_botches(total_successes, raw_botches, min_miss_tier);
+    let signed_margin = margin_aggregation.compute(total_successes, effective_botches);
+    let outcome_kind =
+        CascadeOutcomeKind::classify(total_successes, raw_botches, effective_botches);
+    let outcome_tier = outcome_kind.to_outcome_tier(total_successes);
 
     CascadeRollOutcome {
         steps,
@@ -1367,6 +1296,65 @@ pub fn evaluate_cascade_roll(
         final_pair_y,
         outcome_kind,
         outcome_tier,
+    }
+}
+
+#[inline]
+const fn stance_base_tc(combat_stance: Option<CombatStance>) -> i32 {
+    match combat_stance {
+        Some(CombatStance::Power) => 14,
+        Some(CombatStance::Maneuver) => 11,
+        Some(CombatStance::Stability) => 9,
+        Some(CombatStance::RangedAimed) => 12,
+        Some(CombatStance::RangedSnap) => 7,
+        None => 10,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_cascade_mechanics_event(
+    metadata: EventMetadata,
+    actor: Participant,
+    target_participants: Vec<Participant>,
+    skill_name: String,
+    control_c: i32,
+    tn_eff: i32,
+    dice_rolled_d20: Vec<i32>,
+    successes_counted: i32,
+    outcome_tier: OutcomeTier,
+    combat_stance: Option<CombatStance>,
+    fatigue_level: i32,
+    wound_shock_index: f32,
+    outcome_tc_mult: f32,
+    notes: String,
+) -> TtrpgMechanicsEvent {
+    let base_tc = stance_base_tc(combat_stance);
+    let time_factor =
+        (1.0 + (fatigue_level as f32 * 0.1) + (wound_shock_index * 0.25)) * outcome_tc_mult;
+    let action_count_cost = ((base_tc as f32) * time_factor).round() as i32;
+
+    TtrpgMechanicsEvent {
+        metadata,
+        mechanic_type: if combat_stance.is_some() {
+            MechanicEventType::CombatAction
+        } else {
+            MechanicEventType::TaskResolution
+        },
+        actor,
+        target_participants,
+        skill_name: Some(skill_name),
+        attribute_tn: Some(control_c),
+        difficulty_rating: Some(tn_eff),
+        dice_rolled_d20,
+        successes_counted,
+        outcome_tier,
+        action_time_factor: Some(time_factor),
+        action_time_cost: Some(base_tc),
+        action_count_cost: Some(action_count_cost),
+        combat_stance,
+        fatigue_level,
+        wound_shock_index,
+        notes: Some(notes),
     }
 }
 
@@ -1386,48 +1374,28 @@ pub fn evaluate_satya_cascade_task(
 ) -> (TtrpgMechanicsEvent, CascadeRollOutcome) {
     let outcome = params.evaluate_pairs(rolled_pairs);
     let dice_rolled_d20: Vec<i32> = rolled_pairs.iter().flat_map(|&(a, b)| [a, b]).collect();
-
-    let base_tc = match combat_stance {
-        Some(CombatStance::Power) => 14,
-        Some(CombatStance::Maneuver) => 11,
-        Some(CombatStance::Stability) => 9,
-        Some(CombatStance::RangedAimed) => 12,
-        Some(CombatStance::RangedSnap) => 7,
-        None => 10,
-    };
-    let time_factor = 1.0 + (fatigue_level as f32 * 0.1) + (wound_shock_index * 0.25);
-    let action_count_cost = ((base_tc as f32) * time_factor).round() as i32;
-
-    let event = TtrpgMechanicsEvent {
+    let event = build_cascade_mechanics_event(
         metadata,
-        mechanic_type: if combat_stance.is_some() {
-            MechanicEventType::CombatAction
-        } else {
-            MechanicEventType::TaskResolution
-        },
         actor,
         target_participants,
-        skill_name: Some(skill_name),
-        attribute_tn: Some(params.control_c),
-        difficulty_rating: Some(params.tn_eff()),
+        skill_name,
+        params.control_c,
+        params.tn_eff(),
         dice_rolled_d20,
-        successes_counted: outcome.total_successes,
-        outcome_tier: outcome.outcome_tier,
-        action_time_factor: Some(time_factor),
-        action_time_cost: Some(base_tc),
-        action_count_cost: Some(action_count_cost),
+        outcome.total_successes,
+        outcome.outcome_tier,
         combat_stance,
         fatigue_level,
         wound_shock_index,
-        notes: Some(format!(
+        1.0,
+        format!(
             "cascade(mode={}, botch={}, tn_eff={}, signed_margin={:+})",
             params.carry_mode,
             params.botch_rule,
             params.tn_eff(),
             outcome.signed_margin
-        )),
-    };
-
+        ),
+    );
     (event, outcome)
 }
 
@@ -1837,87 +1805,24 @@ pub fn classify_contested_outcome(
 
 /// Computes the exact joint distribution over `(succ, raw_botch, signed_margin)` for a [`CascadeTaskParams`].
 fn cascade_joint_outcome_pmf(params: &CascadeTaskParams) -> HashMap<(i32, i32, i32), f64> {
-    let n_pairs = params.skill_level;
-    let sides = params.sides;
-    let characteristic_c = params.tn_eff();
-    let delta_over = params.delta_over;
-    let delta_under = params.effective_delta_under();
-    let mode = params.carry_mode;
-    let botch_rule = params.botch_rule;
-    let margin_aggregation = params.margin_aggregation;
-
-    let base_pmf = sum_dice_pool_pmf(2, sides, 0);
-    let eff_over = delta_over;
-    let eff_under = -delta_under;
-    let tier_step = (sides / 5).max(2);
-
-    let mut state_probs: HashMap<(i32, i32, i32, i32), f64> = HashMap::new();
-    state_probs.insert((0, 0, 0, 5), 1.0);
-
-    for step in 0..n_pairs {
-        let mut next_states: HashMap<(i32, i32, i32, i32), f64> = HashMap::new();
-        for (&(mod_n, succ_so_far, botch_so_far, min_miss_tier), &p_state) in &state_probs {
-            for (&x, &p_roll) in &base_pmf {
-                let yn = x + mod_n;
-                let (sn, bn, mn) =
-                    evaluate_step_success_and_botch(yn, sides, characteristic_c, false, botch_rule);
-                let new_succ = succ_so_far + sn;
-                let new_botch = botch_so_far + bn;
-                let miss_tier = (mn / tier_step).min(5);
-                let new_min_miss = min_miss_tier.min(miss_tier);
-                let joint_p = p_state * p_roll;
-
-                let next_mod = if step == n_pairs - 1 {
-                    0
-                } else {
-                    match mode {
-                        CarryMode::MarkovStep => {
-                            if yn > characteristic_c {
-                                eff_over
-                            } else if yn < characteristic_c {
-                                eff_under
-                            } else {
-                                0
-                            }
-                        }
-                        CarryMode::CumulativeSnowball => {
-                            if yn > characteristic_c {
-                                mod_n + eff_over
-                            } else if yn < characteristic_c {
-                                mod_n + eff_under
-                            } else {
-                                mod_n
-                            }
-                        }
-                        CarryMode::LinearMargin => yn - characteristic_c,
-                    }
-                };
-
-                *next_states
-                    .entry((next_mod, new_succ, new_botch, new_min_miss))
-                    .or_insert(0.0) += joint_p;
-            }
-        }
-        state_probs = next_states;
-    }
+    let (state_probs, _, _) = run_cascade_dp(
+        params.skill_level,
+        params.sides,
+        params.tn_eff(),
+        params.delta_over,
+        params.effective_delta_under(),
+        params.carry_mode,
+        false,
+        false,
+        params.botch_rule,
+    );
 
     let mut joint: HashMap<(i32, i32, i32), f64> = HashMap::new();
     for (&(_mod, succ, raw_botch, min_miss_tier), &prob) in &state_probs {
-        let eff_botch = if botch_rule == BotchRule::ClosestMiss && succ == 0 {
-            min_miss_tier
-        } else {
-            raw_botch
-        };
-        let signed_margin = match margin_aggregation {
-            MarginAggregation::PiecewiseZeroFloor => {
-                if succ > 0 {
-                    succ
-                } else {
-                    -eff_botch
-                }
-            }
-            MarginAggregation::NetDifference => succ - eff_botch,
-        };
+        let eff_botch = params
+            .botch_rule
+            .effective_botches(succ, raw_botch, min_miss_tier);
+        let signed_margin = params.margin_aggregation.compute(succ, eff_botch);
         *joint.entry((succ, raw_botch, signed_margin)).or_insert(0.0) += prob;
     }
     joint
@@ -1957,30 +1862,10 @@ pub fn evaluate_tiered_single_pair_gm_roll(
         let b = (dist / under_step).min(5);
         (0, b, dist)
     };
-    let signed_margin = if total_successes > 0 {
-        total_successes
-    } else {
-        -effective_botches
-    };
-    let outcome_kind = if total_successes >= 1 {
-        CascadeOutcomeKind::Success
-    } else if effective_botches == 0 {
-        CascadeOutcomeKind::CleanFailure
-    } else {
-        CascadeOutcomeKind::BotchFailure
-    };
-    let outcome_tier = match outcome_kind {
-        CascadeOutcomeKind::BotchFailure => OutcomeTier::CriticalFailure,
-        CascadeOutcomeKind::CleanFailure => OutcomeTier::Failure,
-        CascadeOutcomeKind::SuccessWithComplication => OutcomeTier::PartialSuccess,
-        CascadeOutcomeKind::Success => {
-            if total_successes >= 3 {
-                OutcomeTier::ExtraordinarySuccess
-            } else {
-                OutcomeTier::Success
-            }
-        }
-    };
+    let signed_margin =
+        MarginAggregation::PiecewiseZeroFloor.compute(total_successes, effective_botches);
+    let outcome_kind = CascadeOutcomeKind::classify(total_successes, 0, effective_botches);
+    let outcome_tier = outcome_kind.to_outcome_tier(total_successes);
     CascadeRollOutcome {
         steps: vec![CascadeStepTrace {
             pair_index: 1,
@@ -2138,43 +2023,24 @@ pub fn evaluate_satya_contested_cascade_task(
     let mut dice_rolled_d20: Vec<i32> = player_pairs.iter().flat_map(|&(a, b)| [a, b]).collect();
     dice_rolled_d20.extend(gm_pairs.iter().flat_map(|&(a, b)| [a, b]));
 
-    let base_tc = match combat_stance {
-        Some(CombatStance::Power) => 14,
-        Some(CombatStance::Maneuver) => 11,
-        Some(CombatStance::Stability) => 9,
-        Some(CombatStance::RangedAimed) => 12,
-        Some(CombatStance::RangedSnap) => 7,
-        None => 10,
-    };
-    let fatigue_shock_factor = 1.0 + (fatigue_level as f32 * 0.1) + (wound_shock_index * 0.25);
     let outcome_tc_mult = outcome
         .contested_kind
         .duration_multiplier(outcome.net_successes) as f32;
-    let time_factor = fatigue_shock_factor * outcome_tc_mult;
-    let action_count_cost = ((base_tc as f32) * time_factor).round() as i32;
-
-    let event = TtrpgMechanicsEvent {
+    let event = build_cascade_mechanics_event(
         metadata,
-        mechanic_type: if combat_stance.is_some() {
-            MechanicEventType::CombatAction
-        } else {
-            MechanicEventType::TaskResolution
-        },
         actor,
         target_participants,
-        skill_name: Some(skill_name),
-        attribute_tn: Some(params.player.control_c),
-        difficulty_rating: Some(params.player.tn_eff()),
+        skill_name,
+        params.player.control_c,
+        params.player.tn_eff(),
         dice_rolled_d20,
-        successes_counted: outcome.player_outcome.total_successes,
-        outcome_tier: outcome.outcome_tier,
-        action_time_factor: Some(time_factor),
-        action_time_cost: Some(base_tc),
-        action_count_cost: Some(action_count_cost),
+        outcome.player_outcome.total_successes,
+        outcome.outcome_tier,
         combat_stance,
         fatigue_level,
         wound_shock_index,
-        notes: Some(format!(
+        outcome_tc_mult,
+        format!(
             "contested(kind={}, tn_p={}, tn_gm={}, s_p={}, s_gm={}, net_margin={:+}, tc_mult={:.2})",
             outcome.contested_kind,
             params.player.tn_eff(),
@@ -2183,8 +2049,8 @@ pub fn evaluate_satya_contested_cascade_task(
             outcome.gm_outcome.total_successes,
             outcome.net_signed_margin,
             outcome_tc_mult
-        )),
-    };
+        ),
+    );
 
     (event, outcome)
 }

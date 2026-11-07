@@ -11,6 +11,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::define_coded_enum;
+
 /// Category of a primary characteristic in the Satya system.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -22,121 +24,49 @@ pub enum CharacteristicCategory {
     Psyche,
 }
 
-/// Canonical characteristic codes across Physical, Mental, Social, Sensory, and Psyche domains.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum CharacteristicCode {
-    // Physical (8)
-    SPD,
-    FOR,
-    DEX,
-    KIN,
-    HLT,
-    FIT,
-    MAS,
-    HGT,
-    // Mental (6)
-    MEM,
-    ANA,
-    INS,
-    CRE,
-    DIS,
-    FOC,
-    // Social (3)
-    COM,
-    PRE,
-    ELO,
-    // Sensory (6)
-    SIG,
-    HEA,
-    TAC,
-    OLF,
-    TAS,
-    ITU,
-    // Psyche (7)
-    EGO,
-    SLF,
-    OPN,
-    BLG,
-    EXT,
-    CNF,
-    AGG,
+define_coded_enum! {
+    /// Canonical characteristic codes across Physical, Mental, Social, Sensory, and Psyche domains.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub enum CharacteristicCode [count = 30] {
+        // Physical (8)
+        SPD => { code: "SPD", label: "Speed" },
+        FOR => { code: "FOR", label: "Force" },
+        DEX => { code: "DEX", label: "Dexterity" },
+        KIN => { code: "KIN", label: "Kinesthesia" },
+        HLT => { code: "HLT", label: "Health" },
+        FIT => { code: "FIT", label: "Fitness" },
+        MAS => { code: "MAS", label: "Mass (kg)" },
+        HGT => { code: "HGT", label: "Height (m)" },
+        // Mental (6)
+        MEM => { code: "MEM", label: "Memory" },
+        ANA => { code: "ANA", label: "Analysis" },
+        INS => { code: "INS", label: "Insight" },
+        CRE => { code: "CRE", label: "Creativity" },
+        DIS => { code: "DIS", label: "Discipline" },
+        FOC => { code: "FOC", label: "Focus" },
+        // Social (3)
+        COM => { code: "COM", label: "Comeliness" },
+        PRE => { code: "PRE", label: "Presence" },
+        ELO => { code: "ELO", label: "Eloquence" },
+        // Sensory (6)
+        SIG => { code: "SIG", label: "Sight" },
+        HEA => { code: "HEA", label: "Hearing" },
+        TAC => { code: "TAC", label: "Tactile" },
+        OLF => { code: "OLF", label: "Olfaction" },
+        TAS => { code: "TAS", label: "Taste" },
+        ITU => { code: "ITU", label: "Intuition" },
+        // Psyche (7)
+        EGO => { code: "EGO", label: "Egoism" },
+        SLF => { code: "SLF", label: "Self-Esteem" },
+        OPN => { code: "OPN", label: "Openness" },
+        BLG => { code: "BLG", label: "Belonging" },
+        EXT => { code: "EXT", label: "Extraversion" },
+        CNF => { code: "CNF", label: "Conformity" },
+        AGG => { code: "AGG", label: "Aggression" },
+    }
 }
 
 impl CharacteristicCode {
-    /// Canonical 3-letter code string.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::SPD => "SPD",
-            Self::FOR => "FOR",
-            Self::DEX => "DEX",
-            Self::KIN => "KIN",
-            Self::HLT => "HLT",
-            Self::FIT => "FIT",
-            Self::MAS => "MAS",
-            Self::HGT => "HGT",
-            Self::MEM => "MEM",
-            Self::ANA => "ANA",
-            Self::INS => "INS",
-            Self::CRE => "CRE",
-            Self::DIS => "DIS",
-            Self::FOC => "FOC",
-            Self::COM => "COM",
-            Self::PRE => "PRE",
-            Self::ELO => "ELO",
-            Self::SIG => "SIG",
-            Self::HEA => "HEA",
-            Self::TAC => "TAC",
-            Self::OLF => "OLF",
-            Self::TAS => "TAS",
-            Self::ITU => "ITU",
-            Self::EGO => "EGO",
-            Self::SLF => "SLF",
-            Self::OPN => "OPN",
-            Self::BLG => "BLG",
-            Self::EXT => "EXT",
-            Self::CNF => "CNF",
-            Self::AGG => "AGG",
-        }
-    }
-
-    /// Full human-readable name from `characteristics_and_aptitudes.md`.
-    #[must_use]
-    pub const fn full_name(self) -> &'static str {
-        match self {
-            Self::SPD => "Speed",
-            Self::FOR => "Force",
-            Self::DEX => "Dexterity",
-            Self::KIN => "Kinesthesia",
-            Self::HLT => "Health",
-            Self::FIT => "Fitness",
-            Self::MAS => "Mass (kg)",
-            Self::HGT => "Height (m)",
-            Self::MEM => "Memory",
-            Self::ANA => "Analysis",
-            Self::INS => "Insight",
-            Self::CRE => "Creativity",
-            Self::DIS => "Discipline",
-            Self::FOC => "Focus",
-            Self::COM => "Comeliness",
-            Self::PRE => "Presence",
-            Self::ELO => "Eloquence",
-            Self::SIG => "Sight",
-            Self::HEA => "Hearing",
-            Self::TAC => "Tactile",
-            Self::OLF => "Olfaction",
-            Self::TAS => "Taste",
-            Self::ITU => "Intuition",
-            Self::EGO => "Egoism",
-            Self::SLF => "Self-Esteem",
-            Self::OPN => "Openness",
-            Self::BLG => "Belonging",
-            Self::EXT => "Extraversion",
-            Self::CNF => "Conformity",
-            Self::AGG => "Aggression",
-        }
-    }
-
     /// Domain category of the characteristic.
     #[must_use]
     pub const fn category(self) -> CharacteristicCategory {
@@ -159,44 +89,6 @@ impl CharacteristicCode {
             Self::EGO | Self::SLF | Self::OPN | Self::BLG | Self::EXT | Self::CNF | Self::AGG => {
                 CharacteristicCategory::Psyche
             }
-        }
-    }
-
-    /// Parse a 3-letter characteristic code (case-insensitive).
-    #[must_use]
-    pub fn from_code_str(code: &str) -> Option<Self> {
-        match code.trim().to_ascii_uppercase().as_str() {
-            "SPD" => Some(Self::SPD),
-            "FOR" => Some(Self::FOR),
-            "DEX" => Some(Self::DEX),
-            "KIN" => Some(Self::KIN),
-            "HLT" => Some(Self::HLT),
-            "FIT" => Some(Self::FIT),
-            "MAS" => Some(Self::MAS),
-            "HGT" => Some(Self::HGT),
-            "MEM" => Some(Self::MEM),
-            "ANA" => Some(Self::ANA),
-            "INS" => Some(Self::INS),
-            "CRE" => Some(Self::CRE),
-            "DIS" => Some(Self::DIS),
-            "FOC" => Some(Self::FOC),
-            "COM" => Some(Self::COM),
-            "PRE" => Some(Self::PRE),
-            "ELO" => Some(Self::ELO),
-            "SIG" => Some(Self::SIG),
-            "HEA" => Some(Self::HEA),
-            "TAC" => Some(Self::TAC),
-            "OLF" => Some(Self::OLF),
-            "TAS" => Some(Self::TAS),
-            "ITU" => Some(Self::ITU),
-            "EGO" => Some(Self::EGO),
-            "SLF" => Some(Self::SLF),
-            "OPN" => Some(Self::OPN),
-            "BLG" => Some(Self::BLG),
-            "EXT" => Some(Self::EXT),
-            "CNF" => Some(Self::CNF),
-            "AGG" => Some(Self::AGG),
-            _ => None,
         }
     }
 }
@@ -349,143 +241,70 @@ pub const fn psyche_pole_descriptor(code: CharacteristicCode, score: i32) -> &'s
     }
 }
 
-/// The 9 canonical Domain Aptitudes (`APT-*`, ranging from `-2` to `+3`) (§9).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum AptitudeCode {
-    /// `APT-QNT`: Quantitative & Mathematical (Tree 1)
-    AptQnt,
-    /// `APT-MEC`: Mechanical & Spatial (Tree 2)
-    AptMec,
-    /// `APT-CMP`: Computational & Algorithmic (Tree 1)
-    AptCmp,
-    /// `APT-BIO`: Biological & Chemical (Tree 3)
-    AptBio,
-    /// `APT-LNG`: Linguistic & Symbolic (Tree 4)
-    AptLng,
-    /// `APT-KIN`: Gross Kinesthetic & Athletic (Tree 5)
-    AptKin,
-    /// `APT-FIN`: Fine Motor & Ballistic Precision (Trees 2, 6, 8)
-    AptFin,
-    /// `APT-AUD`: Musical & Auditory-Rhythmic (Trees 7, 8)
-    AptAud,
-    /// `APT-SOC`: Interpersonal & Rhetorical (Tree 4)
-    AptSoc,
-}
-
-impl AptitudeCode {
-    /// Canonical hyphenated code (`APT-QNT`, etc.).
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::AptQnt => "APT-QNT",
-            Self::AptMec => "APT-MEC",
-            Self::AptCmp => "APT-CMP",
-            Self::AptBio => "APT-BIO",
-            Self::AptLng => "APT-LNG",
-            Self::AptKin => "APT-KIN",
-            Self::AptFin => "APT-FIN",
-            Self::AptAud => "APT-AUD",
-            Self::AptSoc => "APT-SOC",
-        }
-    }
-
-    /// Full name of the Domain Aptitude (§9).
-    #[must_use]
-    pub const fn full_name(self) -> &'static str {
-        match self {
-            Self::AptQnt => "Quantitative & Mathematical",
-            Self::AptMec => "Mechanical & Spatial",
-            Self::AptCmp => "Computational & Algorithmic",
-            Self::AptBio => "Biological & Chemical",
-            Self::AptLng => "Linguistic & Symbolic",
-            Self::AptKin => "Gross Kinesthetic & Athletic",
-            Self::AptFin => "Fine Motor & Ballistic Precision",
-            Self::AptAud => "Musical & Auditory-Rhythmic",
-            Self::AptSoc => "Interpersonal & Rhetorical",
-        }
-    }
-
-    /// Parse an aptitude code string (`APT-QNT`, `QNT`, etc.).
-    #[must_use]
-    pub fn from_code_str(code: &str) -> Option<Self> {
-        match code.trim().to_ascii_uppercase().as_str() {
-            "APT-QNT" | "QNT" => Some(Self::AptQnt),
-            "APT-MEC" | "MEC" => Some(Self::AptMec),
-            "APT-CMP" | "CMP" => Some(Self::AptCmp),
-            "APT-BIO" | "BIO" => Some(Self::AptBio),
-            "APT-LNG" | "LNG" => Some(Self::AptLng),
-            "APT-KIN" | "KIN" => Some(Self::AptKin),
-            "APT-FIN" | "FIN" => Some(Self::AptFin),
-            "APT-AUD" | "AUD" => Some(Self::AptAud),
-            "APT-SOC" | "SOC" => Some(Self::AptSoc),
-            _ => None,
-        }
+define_coded_enum! {
+    /// The 9 canonical Domain Aptitudes (`APT-*`, ranging from `-2` to `+3`) (§9).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    pub enum AptitudeCode [count = 9] {
+        /// `APT-QNT`: Quantitative & Mathematical (Tree 1)
+        AptQnt => { code: "APT-QNT", label: "Quantitative & Mathematical", aliases: ["QNT"] },
+        /// `APT-MEC`: Mechanical & Spatial (Tree 2)
+        AptMec => { code: "APT-MEC", label: "Mechanical & Spatial", aliases: ["MEC"] },
+        /// `APT-CMP`: Computational & Algorithmic (Tree 1)
+        AptCmp => { code: "APT-CMP", label: "Computational & Algorithmic", aliases: ["CMP"] },
+        /// `APT-BIO`: Biological & Chemical (Tree 3)
+        AptBio => { code: "APT-BIO", label: "Biological & Chemical", aliases: ["BIO"] },
+        /// `APT-LNG`: Linguistic & Symbolic (Tree 4)
+        AptLng => { code: "APT-LNG", label: "Linguistic & Symbolic", aliases: ["LNG"] },
+        /// `APT-KIN`: Gross Kinesthetic & Athletic (Tree 5)
+        AptKin => { code: "APT-KIN", label: "Gross Kinesthetic & Athletic", aliases: ["KIN"] },
+        /// `APT-FIN`: Fine Motor & Ballistic Precision (Trees 2, 6, 8)
+        AptFin => { code: "APT-FIN", label: "Fine Motor & Ballistic Precision", aliases: ["FIN"] },
+        /// `APT-AUD`: Musical & Auditory-Rhythmic (Trees 7, 8)
+        AptAud => { code: "APT-AUD", label: "Musical & Auditory-Rhythmic", aliases: ["AUD"] },
+        /// `APT-SOC`: Interpersonal & Rhetorical (Tree 4)
+        AptSoc => { code: "APT-SOC", label: "Interpersonal & Rhetorical", aliases: ["SOC"] },
     }
 }
 
-/// Character's 9 Domain Aptitude scores (`-2` to `+3`, default `0`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CharacterAptitudes {
-    pub apt_qnt: i32,
-    pub apt_mec: i32,
-    pub apt_cmp: i32,
-    pub apt_bio: i32,
-    pub apt_lng: i32,
-    pub apt_kin: i32,
-    pub apt_fin: i32,
-    pub apt_aud: i32,
-    pub apt_soc: i32,
+macro_rules! impl_aptitudes_struct {
+    ($($Variant:ident => $field:ident),+ $(,)?) => {
+        /// Character's 9 Domain Aptitude scores (`-2` to `+3`, default `0`).
+        #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+        pub struct CharacterAptitudes {
+            $(pub $field: i32,)+
+        }
+
+        impl CharacterAptitudes {
+            /// Look up the clamped (`-2..=+3`) score for a specific `AptitudeCode`.
+            #[must_use]
+            pub fn get(&self, code: AptitudeCode) -> i32 {
+                let raw = match code {
+                    $(AptitudeCode::$Variant => self.$field,)+
+                };
+                raw.clamp(-2, 3)
+            }
+
+            /// Set the score for a specific `AptitudeCode` (clamped to `-2..=+3`).
+            pub fn set(&mut self, code: AptitudeCode, value: i32) {
+                let clamped = value.clamp(-2, 3);
+                match code {
+                    $(AptitudeCode::$Variant => self.$field = clamped,)+
+                }
+            }
+        }
+    };
 }
 
-impl Default for CharacterAptitudes {
-    fn default() -> Self {
-        Self {
-            apt_qnt: 0,
-            apt_mec: 0,
-            apt_cmp: 0,
-            apt_bio: 0,
-            apt_lng: 0,
-            apt_kin: 0,
-            apt_fin: 0,
-            apt_aud: 0,
-            apt_soc: 0,
-        }
-    }
-}
-
-impl CharacterAptitudes {
-    /// Look up the clamped (`-2..=+3`) score for a specific `AptitudeCode`.
-    #[must_use]
-    pub fn get(&self, code: AptitudeCode) -> i32 {
-        let raw = match code {
-            AptitudeCode::AptQnt => self.apt_qnt,
-            AptitudeCode::AptMec => self.apt_mec,
-            AptitudeCode::AptCmp => self.apt_cmp,
-            AptitudeCode::AptBio => self.apt_bio,
-            AptitudeCode::AptLng => self.apt_lng,
-            AptitudeCode::AptKin => self.apt_kin,
-            AptitudeCode::AptFin => self.apt_fin,
-            AptitudeCode::AptAud => self.apt_aud,
-            AptitudeCode::AptSoc => self.apt_soc,
-        };
-        raw.clamp(-2, 3)
-    }
-
-    /// Set the score for a specific `AptitudeCode` (clamped to `-2..=+3`).
-    pub fn set(&mut self, code: AptitudeCode, value: i32) {
-        let clamped = value.clamp(-2, 3);
-        match code {
-            AptitudeCode::AptQnt => self.apt_qnt = clamped,
-            AptitudeCode::AptMec => self.apt_mec = clamped,
-            AptitudeCode::AptCmp => self.apt_cmp = clamped,
-            AptitudeCode::AptBio => self.apt_bio = clamped,
-            AptitudeCode::AptLng => self.apt_lng = clamped,
-            AptitudeCode::AptKin => self.apt_kin = clamped,
-            AptitudeCode::AptFin => self.apt_fin = clamped,
-            AptitudeCode::AptAud => self.apt_aud = clamped,
-            AptitudeCode::AptSoc => self.apt_soc = clamped,
-        }
-    }
+impl_aptitudes_struct! {
+    AptQnt => apt_qnt,
+    AptMec => apt_mec,
+    AptCmp => apt_cmp,
+    AptBio => apt_bio,
+    AptLng => apt_lng,
+    AptKin => apt_kin,
+    AptFin => apt_fin,
+    AptAud => apt_aud,
+    AptSoc => apt_soc,
 }
 
 /// Compute the Training Time Multiplier for a Domain Aptitude score $A \in [-2, +3]$ (§9.1.3).
@@ -511,128 +330,140 @@ pub const fn compute_aptitude_min_c_relief(aptitude: i32) -> i32 {
     if aptitude >= 2 { 1 } else { 0 }
 }
 
-/// Complete canonical 25+ Characteristic profile (`03-character/characteristics_and_aptitudes.md`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CharacterCharacteristics {
-    // Physical (6 on 1-20 scale + Mass in kg + Height in m)
-    pub spd: i32,
-    pub for_stat: i32,
-    pub dex: i32,
-    pub kin: i32,
-    pub hlt: i32,
-    pub fit: i32,
-    pub mas_kg: f64,
-    pub hgt_m: f64,
+macro_rules! impl_characteristics_struct {
+    ($($Variant:ident => $field:ident),+ $(,)?) => {
+        /// Complete canonical 25+ Characteristic profile (`03-character/characteristics_and_aptitudes.md`).
+        #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+        pub struct CharacterCharacteristics {
+            $(pub $field: i32,)+
+            pub mas_kg: f64,
+            pub hgt_m: f64,
+        }
 
-    // Mental (6 on 1-20 scale)
-    pub mem: i32,
-    pub ana: i32,
-    pub ins: i32,
-    pub cre: i32,
-    pub dis: i32,
-    pub foc: i32,
+        impl Default for CharacterCharacteristics {
+            fn default() -> Self {
+                Self {
+                    $($field: 10,)+
+                    mas_kg: 75.0,
+                    hgt_m: 1.75,
+                }
+            }
+        }
 
-    // Social (3 on 1-20 scale)
-    pub com: i32,
-    pub pre: i32,
-    pub elo: i32,
+        impl CharacterCharacteristics {
+            /// Retrieve the `1–20` integer score for a characteristic code.
+            ///
+            /// For `MAS` and `HGT`, converts `70.0 kg -> 10` (`7 kg` per step) and `1.75 m -> 10` (`0.05 m` per step).
+            #[must_use]
+            pub fn get_scale(&self, code: CharacteristicCode) -> i32 {
+                let raw = match code {
+                    $(CharacteristicCode::$Variant => self.$field,)+
+                    CharacteristicCode::MAS => (10.0 + (self.mas_kg - 70.0) / 7.0).round() as i32,
+                    CharacteristicCode::HGT => (10.0 + (self.hgt_m - 1.75) / 0.05).round() as i32,
+                };
+                raw.clamp(1, 20)
+            }
 
-    // Sensory (6 on 1-20 scale)
-    pub sig: i32,
-    pub hea: i32,
-    pub tac: i32,
-    pub olf: i32,
-    pub tas: i32,
-    pub itu: i32,
-
-    // Psyche (7 on 1-20 scale)
-    pub ego: i32,
-    pub slf: i32,
-    pub opn: i32,
-    pub blg: i32,
-    pub ext: i32,
-    pub cnf: i32,
-    pub agg: i32,
+            /// Set a `1–20` integer score for a characteristic code.
+            pub fn set_scale(&mut self, code: CharacteristicCode, value: i32) {
+                let clamped = value.clamp(1, 20);
+                match code {
+                    $(CharacteristicCode::$Variant => self.$field = clamped,)+
+                    CharacteristicCode::MAS => self.mas_kg = 70.0 + f64::from(clamped - 10) * 7.0,
+                    CharacteristicCode::HGT => self.hgt_m = 1.75 + f64::from(clamped - 10) * 0.05,
+                }
+            }
+        }
+    };
 }
 
-impl Default for CharacterCharacteristics {
-    fn default() -> Self {
-        Self {
-            spd: 10,
-            for_stat: 10,
-            dex: 10,
-            kin: 10,
-            hlt: 10,
-            fit: 10,
-            mas_kg: 75.0,
-            hgt_m: 1.75,
-            mem: 10,
-            ana: 10,
-            ins: 10,
-            cre: 10,
-            dis: 10,
-            foc: 10,
-            com: 10,
-            pre: 10,
-            elo: 10,
-            sig: 10,
-            hea: 10,
-            tac: 10,
-            olf: 10,
-            tas: 10,
-            itu: 10,
-            ego: 10,
-            slf: 10,
-            opn: 10,
-            blg: 10,
-            ext: 10,
-            cnf: 10,
-            agg: 10,
-        }
-    }
+impl_characteristics_struct! {
+    SPD => spd,
+    FOR => for_stat,
+    DEX => dex,
+    KIN => kin,
+    HLT => hlt,
+    FIT => fit,
+    MEM => mem,
+    ANA => ana,
+    INS => ins,
+    CRE => cre,
+    DIS => dis,
+    FOC => foc,
+    COM => com,
+    PRE => pre,
+    ELO => elo,
+    SIG => sig,
+    HEA => hea,
+    TAC => tac,
+    OLF => olf,
+    TAS => tas,
+    ITU => itu,
+    EGO => ego,
+    SLF => slf,
+    OPN => opn,
+    BLG => blg,
+    EXT => ext,
+    CNF => cnf,
+    AGG => agg,
+}
+
+/// Compute Quick Thinking ($D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$) (§8).
+#[must_use]
+pub fn compute_d_cog_score(ana: i32, cre: i32, foc: i32) -> i32 {
+    let a = ana.clamp(1, 20);
+    let c = cre.clamp(1, 20);
+    let f = foc.clamp(1, 20);
+    (a.max(c) + f).div_euclid(2)
+}
+
+/// Compute OODA Initiative ($\text{OODA} = \lfloor(\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD}) / 4\rfloor$) (§8).
+#[must_use]
+pub fn compute_ooda_score(itu: i32, ins: i32, d_cog: i32, spd: i32) -> i32 {
+    let i = itu.clamp(1, 20);
+    let n = ins.clamp(1, 20);
+    let d = d_cog.clamp(1, 20);
+    let s = spd.clamp(1, 20);
+    (i + n + d + s).div_euclid(4)
+}
+
+/// Compute Striking Power ($\text{POW} = (\text{FOR} \times \text{SPD}) / 10.0$) (§8).
+#[must_use]
+pub fn compute_pow_striking_power(for_stat: i32, spd: i32) -> f64 {
+    f64::from(for_stat.clamp(1, 20) * spd.clamp(1, 20)) / 10.0
+}
+
+/// Compute Mass-Momentum Factor ($\text{MMF} = (\text{MAS} / 70.0) \times \text{SPD}$) (§8).
+#[must_use]
+pub fn compute_mmf_momentum_factor(mas_kg: f64, spd: i32) -> f64 {
+    (mas_kg.max(20.0) / 70.0) * f64::from(spd.clamp(1, 20))
+}
+
+/// Compute Fatigue Threshold ($\text{FT} = \text{FIT} + \lfloor\text{DIS} / 2\rfloor$) (§8).
+#[must_use]
+pub fn compute_fatigue_threshold_score(fit: i32, dis: i32) -> i32 {
+    fit.clamp(1, 20) + dis.clamp(1, 20).div_euclid(2)
+}
+
+/// Compute Wound Shock Resistance ($\text{WSR} = \text{HLT} + \lfloor\text{DIS} / 2\rfloor$) (§8).
+#[must_use]
+pub fn compute_wound_shock_resistance_score(hlt: i32, dis: i32) -> i32 {
+    hlt.clamp(1, 20) + dis.clamp(1, 20).div_euclid(2)
+}
+
+/// Compute Social Composure Threshold ($\text{CMP} = \lfloor(\text{DIS} + \text{FOC}) / 4\rfloor$) (§8).
+#[must_use]
+pub fn compute_social_composure_score(dis: i32, foc: i32) -> i32 {
+    (dis.clamp(1, 20) + foc.clamp(1, 20)).div_euclid(4)
+}
+
+/// Compute General Awareness ($\text{AWR} = \lfloor(\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU}) / 3\rfloor$) (§8).
+#[must_use]
+pub fn compute_general_awareness_score(sig: i32, hea: i32, foc: i32, itu: i32) -> i32 {
+    (sig.clamp(1, 20).max(hea.clamp(1, 20)) + foc.clamp(1, 20) + itu.clamp(1, 20)).div_euclid(3)
 }
 
 impl CharacterCharacteristics {
-    /// Retrieve the `1–20` integer score for a characteristic code.
-    ///
-    /// For `MAS` and `HGT`, converts `70.0 kg -> 10` (`7 kg` per step) and `1.75 m -> 10` (`0.05 m` per step).
-    #[must_use]
-    pub fn get_scale(&self, code: CharacteristicCode) -> i32 {
-        let raw = match code {
-            CharacteristicCode::SPD => self.spd,
-            CharacteristicCode::FOR => self.for_stat,
-            CharacteristicCode::DEX => self.dex,
-            CharacteristicCode::KIN => self.kin,
-            CharacteristicCode::HLT => self.hlt,
-            CharacteristicCode::FIT => self.fit,
-            CharacteristicCode::MAS => (10.0 + (self.mas_kg - 70.0) / 7.0).round() as i32,
-            CharacteristicCode::HGT => (10.0 + (self.hgt_m - 1.75) / 0.05).round() as i32,
-            CharacteristicCode::MEM => self.mem,
-            CharacteristicCode::ANA => self.ana,
-            CharacteristicCode::INS => self.ins,
-            CharacteristicCode::CRE => self.cre,
-            CharacteristicCode::DIS => self.dis,
-            CharacteristicCode::FOC => self.foc,
-            CharacteristicCode::COM => self.com,
-            CharacteristicCode::PRE => self.pre,
-            CharacteristicCode::ELO => self.elo,
-            CharacteristicCode::SIG => self.sig,
-            CharacteristicCode::HEA => self.hea,
-            CharacteristicCode::TAC => self.tac,
-            CharacteristicCode::OLF => self.olf,
-            CharacteristicCode::TAS => self.tas,
-            CharacteristicCode::ITU => self.itu,
-            CharacteristicCode::EGO => self.ego,
-            CharacteristicCode::SLF => self.slf,
-            CharacteristicCode::OPN => self.opn,
-            CharacteristicCode::BLG => self.blg,
-            CharacteristicCode::EXT => self.ext,
-            CharacteristicCode::CNF => self.cnf,
-            CharacteristicCode::AGG => self.agg,
-        };
-        raw.clamp(1, 20)
-    }
-
     /// Compute the effective controlling score $C$ for a skill governed by `(primary, Option<secondary>)` (§10.1).
     ///
     /// - Single controller: $C = C_1$
@@ -653,54 +484,28 @@ impl CharacterCharacteristics {
     /// Compute all 10 Secondary & Derived Characteristics (§8).
     #[must_use]
     pub fn compute_derived(&self, weapon_reach_bonus: i32) -> DerivedCharacteristics {
-        let spd = self.spd.clamp(1, 20);
-        let for_val = self.for_stat.clamp(1, 20);
         let kin = self.kin.clamp(1, 20);
-        let hlt = self.hlt.clamp(1, 20);
-        let fit = self.fit.clamp(1, 20);
         let ana = self.ana.clamp(1, 20);
-        let ins = self.ins.clamp(1, 20);
-        let cre = self.cre.clamp(1, 20);
         let dis = self.dis.clamp(1, 20);
-        let foc = self.foc.clamp(1, 20);
-        let sig = self.sig.clamp(1, 20);
-        let hea = self.hea.clamp(1, 20);
-        let itu = self.itu.clamp(1, 20);
-        let mas_kg = self.mas_kg.max(20.0);
         let hgt_m = self.hgt_m.clamp(0.5, 3.0);
 
-        // 1. Striking Power (POW) = (FOR * SPD) / 10.0
-        let pow_striking_power = f64::from(for_val * spd) / 10.0;
+        let pow_striking_power = compute_pow_striking_power(self.for_stat, self.spd);
+        let mmf_momentum_factor = compute_mmf_momentum_factor(self.mas_kg, self.spd);
 
-        // 2. Mass-Momentum Factor (MMF) = (MAS / 70.0) * SPD
-        let mmf_momentum_factor = (mas_kg / 70.0) * f64::from(spd);
-
-        // 3. Melee Reach Index = Height Reach Edge ((HGT - 1.75) / 0.15) + Kinesthetic Extension ((KIN - 10) / 4) + Weapon Length
         let height_delta = hgt_m - 1.75;
         let height_reach_edge =
             ((height_delta + 1e-9 * height_delta.signum()) / 0.15).trunc() as i32;
         let kin_reach_edge = (kin - 10).div_euclid(4);
         let melee_reach_index = height_reach_edge + kin_reach_edge + weapon_reach_bonus;
 
-        // 4. Quick Thinking (D_cog) = floor((max(ANA, CRE) + FOC) / 2)
-        let d_cog_quick_thinking = (ana.max(cre) + foc).div_euclid(2);
-
-        // 5. OODA Initiative (OODA) = floor((ITU + INS + D_cog + SPD) / 4)
-        let ooda_initiative = (itu + ins + d_cog_quick_thinking + spd).div_euclid(4);
-
-        // 6. General Awareness (AWR) = floor((max(SIG, HEA) + FOC + ITU) / 3)
-        let awr_general_awareness = (sig.max(hea) + foc + itu).div_euclid(3);
-
-        // 7. Fatigue Threshold (FT) = FIT + floor(DIS / 2)
-        let ft_fatigue_threshold = fit + dis.div_euclid(2);
-
-        // 8. Wound Shock Resistance (WSR) = HLT + floor(DIS / 2)
-        let wsr_wound_shock_resistance = hlt + dis.div_euclid(2);
-
-        // 9. Social Composure Threshold (CMP) = floor((DIS + FOC) / 4)
-        let cmp_social_composure_threshold = (dis + foc).div_euclid(4);
-
-        // 10. Base Academic Study Controller (C_study with APT = 0 using max(MEM, ANA))
+        let d_cog_quick_thinking = compute_d_cog_score(self.ana, self.cre, self.foc);
+        let ooda_initiative =
+            compute_ooda_score(self.itu, self.ins, d_cog_quick_thinking, self.spd);
+        let awr_general_awareness =
+            compute_general_awareness_score(self.sig, self.hea, self.foc, self.itu);
+        let ft_fatigue_threshold = compute_fatigue_threshold_score(self.fit, self.dis);
+        let wsr_wound_shock_resistance = compute_wound_shock_resistance_score(self.hlt, self.dis);
+        let cmp_social_composure_threshold = compute_social_composure_score(self.dis, self.foc);
         let base_c_study = compute_academic_study_controller(dis, mem_or_ana(self.mem, ana), 0);
 
         DerivedCharacteristics {
@@ -821,60 +626,6 @@ impl CharacteristicCode {
         Self::CNF,
         Self::AGG,
     ];
-}
-
-impl AptitudeCode {
-    /// All 9 canonical Domain Aptitudes in order.
-    pub const ALL: [Self; 9] = [
-        Self::AptQnt,
-        Self::AptMec,
-        Self::AptCmp,
-        Self::AptBio,
-        Self::AptLng,
-        Self::AptKin,
-        Self::AptFin,
-        Self::AptAud,
-        Self::AptSoc,
-    ];
-}
-
-impl CharacterCharacteristics {
-    /// Set a `1–20` integer score for a characteristic code.
-    pub fn set_scale(&mut self, code: CharacteristicCode, value: i32) {
-        let clamped = value.clamp(1, 20);
-        match code {
-            CharacteristicCode::SPD => self.spd = clamped,
-            CharacteristicCode::FOR => self.for_stat = clamped,
-            CharacteristicCode::DEX => self.dex = clamped,
-            CharacteristicCode::KIN => self.kin = clamped,
-            CharacteristicCode::HLT => self.hlt = clamped,
-            CharacteristicCode::FIT => self.fit = clamped,
-            CharacteristicCode::MAS => self.mas_kg = 70.0 + f64::from(clamped - 10) * 7.0,
-            CharacteristicCode::HGT => self.hgt_m = 1.75 + f64::from(clamped - 10) * 0.05,
-            CharacteristicCode::MEM => self.mem = clamped,
-            CharacteristicCode::ANA => self.ana = clamped,
-            CharacteristicCode::INS => self.ins = clamped,
-            CharacteristicCode::CRE => self.cre = clamped,
-            CharacteristicCode::DIS => self.dis = clamped,
-            CharacteristicCode::FOC => self.foc = clamped,
-            CharacteristicCode::COM => self.com = clamped,
-            CharacteristicCode::PRE => self.pre = clamped,
-            CharacteristicCode::ELO => self.elo = clamped,
-            CharacteristicCode::SIG => self.sig = clamped,
-            CharacteristicCode::HEA => self.hea = clamped,
-            CharacteristicCode::TAC => self.tac = clamped,
-            CharacteristicCode::OLF => self.olf = clamped,
-            CharacteristicCode::TAS => self.tas = clamped,
-            CharacteristicCode::ITU => self.itu = clamped,
-            CharacteristicCode::EGO => self.ego = clamped,
-            CharacteristicCode::SLF => self.slf = clamped,
-            CharacteristicCode::OPN => self.opn = clamped,
-            CharacteristicCode::BLG => self.blg = clamped,
-            CharacteristicCode::EXT => self.ext = clamped,
-            CharacteristicCode::CNF => self.cnf = clamped,
-            CharacteristicCode::AGG => self.agg = clamped,
-        }
-    }
 }
 
 /// Dice generation method for rolling Characteristic groups in the Character Creation Wizard.

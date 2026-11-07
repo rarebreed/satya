@@ -33,22 +33,67 @@ pub enum TemporalLayer {
 }
 
 /// Encumbrance tier governing physical action speed and stealth noise/silhouette (§5.1, §6.1, and `movement_vehicles_and_environment.md` §2.3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EncumbranceTier {
     /// Tier 0 / 1: Unencumbered ($\le 1.0 \times L_{\text{base}}$, `+0.00` time factor, `+0` stealth $\Delta_{\text{ext}}$)
+    #[serde(alias = "tier0_unencumbered")]
     Tier1Unencumbered,
     /// Tier 1 Patrol Load ($1.01\text{–}1.5 \times L_{\text{base}}$, `+0.05` physical time factor, `-1` $T_{\max}$, `+1` stealth/parkour $\Delta_{\text{ext}}$)
+    #[serde(alias = "tier1_light_patrol_load")]
     Tier1LightPatrol,
     /// Tier 2 Tactical / Fighting Load ($1.51\text{–}2.5 \times L_{\text{base}}$, `+0.10` physical time factor, `-3` $T_{\max}$, `-2` `KIN`, `+2` stealth $\Delta_{\text{ext}}$)
+    #[serde(alias = "tier2_tactical_fighting_load")]
     Tier2Light,
     /// Tier 3 Heavy / March Load ($2.51\text{–}4.0 \times L_{\text{base}}$, `+0.25` physical time factor, `-6` $T_{\max}$, `-4` `KIN`, `+4` stealth $\Delta_{\text{ext}}$)
+    #[serde(alias = "tier3_heavy_march_load")]
     Tier3Medium,
     /// Tier 4 Overloaded / Staggering ($4.01\text{–}6.0 \times L_{\text{base}}$, `+0.50` physical time factor, `-10` $T_{\max}$, `-8` `KIN`, `+6` stealth $\Delta_{\text{ext}}$)
+    #[serde(alias = "tier4_overloaded_staggering")]
     Tier4Heavy,
 }
 
+#[allow(non_upper_case_globals)]
 impl EncumbranceTier {
+    /// Alias for [`Self::Tier1Unencumbered`] (`Tier 0: Unencumbered`).
+    pub const Tier0Unencumbered: Self = Self::Tier1Unencumbered;
+    /// Alias for [`Self::Tier1LightPatrol`] (`Tier 1: Light / Patrol Load`).
+    pub const Tier1LightPatrolLoad: Self = Self::Tier1LightPatrol;
+    /// Alias for [`Self::Tier2Light`] (`Tier 2: Tactical / Fighting Load`).
+    pub const Tier2TacticalFightingLoad: Self = Self::Tier2Light;
+    /// Alias for [`Self::Tier3Medium`] (`Tier 3: Heavy / March Load`).
+    pub const Tier3HeavyMarchLoad: Self = Self::Tier3Medium;
+    /// Alias for [`Self::Tier4Heavy`] (`Tier 4: Overloaded / Staggering`).
+    pub const Tier4OverloadedStaggering: Self = Self::Tier4Heavy;
+
+    /// Classify a load ratio $L_{\text{eff}} / L_{\text{base}}$ into its canonical `EncumbranceTier`.
+    #[must_use]
+    pub fn from_load_ratio(load_ratio: f64) -> Self {
+        if load_ratio <= 1.0 + 1e-9 {
+            Self::Tier1Unencumbered
+        } else if load_ratio <= 1.5 + 1e-9 {
+            Self::Tier1LightPatrol
+        } else if load_ratio <= 2.5 + 1e-9 {
+            Self::Tier2Light
+        } else if load_ratio <= 4.0 + 1e-9 {
+            Self::Tier3Medium
+        } else {
+            Self::Tier4Heavy
+        }
+    }
+
+    /// Numeric tier (`0..=4`).
+    #[must_use]
+    pub const fn tier_number(self) -> u8 {
+        match self {
+            Self::Tier1Unencumbered => 0,
+            Self::Tier1LightPatrol => 1,
+            Self::Tier2Light => 2,
+            Self::Tier3Medium => 3,
+            Self::Tier4Heavy => 4,
+        }
+    }
+
     /// Convert a legacy `1..=4` numeric tier into `EncumbranceTier`.
     #[must_use]
     pub const fn from_tier_number(tier: u8) -> Self {
@@ -60,7 +105,7 @@ impl EncumbranceTier {
         }
     }
 
-    /// Convert a `0..=4` [`crate::health_survival::LoadEncumbranceTier`] number (`0..=4`) into `EncumbranceTier`.
+    /// Convert a `0..=4` load tier number (`0..=4`) into `EncumbranceTier`.
     #[must_use]
     pub const fn from_load_tier_0_to_4(tier_0_to_4: u8) -> Self {
         match tier_0_to_4 {
@@ -69,6 +114,29 @@ impl EncumbranceTier {
             2 => Self::Tier2Light,
             3 => Self::Tier3Medium,
             4.. => Self::Tier4Heavy,
+        }
+    }
+
+    /// Penalty to **Tempo Cap ($T_{\max}$)** (`0`, `1`, `3`, `6`, `10`).
+    #[must_use]
+    pub const fn tempo_cap_penalty(self) -> i32 {
+        match self {
+            Self::Tier1Unencumbered => 0,
+            Self::Tier1LightPatrol => 1,
+            Self::Tier2Light => 3,
+            Self::Tier3Medium => 6,
+            Self::Tier4Heavy => 10,
+        }
+    }
+
+    /// Penalty to **Kinesthesis (`KIN`)** (`0`, `0`, `2`, `4`, `8`).
+    #[must_use]
+    pub const fn kin_penalty(self) -> i32 {
+        match self {
+            Self::Tier1Unencumbered | Self::Tier1LightPatrol => 0,
+            Self::Tier2Light => 2,
+            Self::Tier3Medium => 4,
+            Self::Tier4Heavy => 8,
         }
     }
 
@@ -84,6 +152,12 @@ impl EncumbranceTier {
             Self::Tier3Medium => 0.25,
             Self::Tier4Heavy => 0.50,
         }
+    }
+
+    /// Alias for [`Self::physical_time_factor_delta`].
+    #[must_use]
+    pub const fn action_time_factor_delta(self) -> f64 {
+        self.physical_time_factor_delta()
     }
 
     /// Acoustic & silhouette penalty (`+2` $\Delta_{\text{ext}}$ per tier) for Stealth (§6.1).
@@ -581,382 +655,64 @@ pub struct CanonicalActionSpec {
     pub governing_notes: &'static str,
 }
 
+macro_rules! action_spec {
+    ($id:ident, $cat:ident, $name:literal, ($decide:expr, $act:expr, $floor:expr), $notes:literal) => {
+        CanonicalActionSpec {
+            id: CanonicalActionId::$id,
+            category: CatalogActionCategory::$cat,
+            name: $name,
+            base_tc_decide: $decide,
+            base_tc_act: $act,
+            base_total_tc: $decide + $act,
+            min_floor_ticks: $floor,
+            governing_notes: $notes,
+        }
+    };
+}
+
 /// Full canonical 37-entry Reference Catalog of Base Action Time Costs (§4.1–§4.4 of `action_economy_and_ooda.md`).
 pub const CANONICAL_ACTION_CATALOG: &[CanonicalActionSpec] = &[
     // §4.1 Combat Actions (Attacks & Defenses)
-    CanonicalActionSpec {
-        id: CanonicalActionId::SnapShotPointBlank,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Snap Shot / Point-Blank Reflex Strike",
-        base_tc_decide: 2,
-        base_tc_act: 5,
-        base_total_tc: 7,
-        min_floor_ticks: 2,
-        governing_notes: "SPD, DEX, ITU; Pistols / Blades; -2 precision penalty",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::StandardMeleeStrikeLight,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Standard Melee Strike (Balanced / Light)",
-        base_tc_decide: 3,
-        base_tc_act: 6,
-        base_total_tc: 9,
-        min_floor_ticks: 2,
-        governing_notes: "SPD, KIN; Melee Combat; modified by Weapon Balance (B)",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::StandardRangedFire,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Standard Ranged Fire (Combat Sight Picture)",
-        base_tc_decide: 3,
-        base_tc_act: 7,
-        base_total_tc: 10,
-        min_floor_ticks: 2,
-        governing_notes: "DEX, SIG, FOC; Pistols / Long Guns",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::DefensiveGuardParryStance,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Defensive Guard / Active Parry Stance",
-        base_tc_decide: 3,
-        base_tc_act: 6,
-        base_total_tc: 9,
-        min_floor_ticks: 2,
-        governing_notes: "KIN, INS, SPD; Melee / Martial Arts; boosts Guard Pool",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::TacticalManeuverProbeFeint,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Tactical Maneuver / Probe / Feint",
-        base_tc_decide: 4,
-        base_tc_act: 7,
-        base_total_tc: 11,
-        min_floor_ticks: 2,
-        governing_notes: "INS, CRE, KIN; Tactician / Melee; +1 defensive parry margin",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::AimedShotSingle,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Aimed Shot (Deliberate Single Fire)",
-        base_tc_decide: 5,
-        base_tc_act: 7,
-        base_total_tc: 12,
-        min_floor_ticks: 2,
-        governing_notes: "SIG, FOC, DEX; Precision Marksmanship; -2 to -4 to TN",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::HeavyPowerStrikeCleave,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Heavy Power Strike / Cleave",
-        base_tc_decide: 3,
-        base_tc_act: 11,
-        base_total_tc: 14,
-        min_floor_ticks: 2,
-        governing_notes: "FOR, SPD, MAS; Heavy Weapons; +2 Wound Shock on hit",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::SuppressiveFireBurstZone,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Suppressive Fire (Burst / Automatic Zone)",
-        base_tc_decide: 3,
-        base_tc_act: 9,
-        base_total_tc: 12,
-        min_floor_ticks: 2,
-        governing_notes: "FOR, DIS, FOC; Fully Automatic / Heavy Weapons",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::ActiveDodgeDiveForCover,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Active Dodge / Dive for Cover (Interrupt)",
-        base_tc_decide: 2,
-        base_tc_act: 6,
-        base_total_tc: 8,
-        min_floor_ticks: 2,
-        governing_notes: "ITU, SPD, KIN; Evasion; advances actor's Current Tick by +8",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::OverwatchTriggeredRelease,
-        category: CatalogActionCategory::CombatAttackOrDefense,
-        name: "Overwatch / Held Trigger Release",
-        base_tc_decide: 1,
-        base_tc_act: 2,
-        base_total_tc: 3,
-        min_floor_ticks: 1,
-        governing_notes: "FOC, ITU, SPD; fires when trigger condition is met",
-    },
+    action_spec!(SnapShotPointBlank, CombatAttackOrDefense, "Snap Shot / Point-Blank Reflex Strike", (2, 5, 2), "SPD, DEX, ITU; Pistols / Blades; -2 precision penalty"),
+    action_spec!(StandardMeleeStrikeLight, CombatAttackOrDefense, "Standard Melee Strike (Balanced / Light)", (3, 6, 2), "SPD, KIN; Melee Combat; modified by Weapon Balance (B)"),
+    action_spec!(StandardRangedFire, CombatAttackOrDefense, "Standard Ranged Fire (Combat Sight Picture)", (3, 7, 2), "DEX, SIG, FOC; Pistols / Long Guns"),
+    action_spec!(DefensiveGuardParryStance, CombatAttackOrDefense, "Defensive Guard / Active Parry Stance", (3, 6, 2), "KIN, INS, SPD; Melee / Martial Arts; boosts Guard Pool"),
+    action_spec!(TacticalManeuverProbeFeint, CombatAttackOrDefense, "Tactical Maneuver / Probe / Feint", (4, 7, 2), "INS, CRE, KIN; Tactician / Melee; +1 defensive parry margin"),
+    action_spec!(AimedShotSingle, CombatAttackOrDefense, "Aimed Shot (Deliberate Single Fire)", (5, 7, 2), "SIG, FOC, DEX; Precision Marksmanship; -2 to -4 to TN"),
+    action_spec!(HeavyPowerStrikeCleave, CombatAttackOrDefense, "Heavy Power Strike / Cleave", (3, 11, 2), "FOR, SPD, MAS; Heavy Weapons; +2 Wound Shock on hit"),
+    action_spec!(SuppressiveFireBurstZone, CombatAttackOrDefense, "Suppressive Fire (Burst / Automatic Zone)", (3, 9, 2), "FOR, DIS, FOC; Fully Automatic / Heavy Weapons"),
+    action_spec!(ActiveDodgeDiveForCover, CombatAttackOrDefense, "Active Dodge / Dive for Cover (Interrupt)", (2, 6, 2), "ITU, SPD, KIN; Evasion; advances actor's Current Tick by +8"),
+    action_spec!(OverwatchTriggeredRelease, CombatAttackOrDefense, "Overwatch / Held Trigger Release", (1, 2, 1), "FOC, ITU, SPD; fires when trigger condition is met"),
     // §4.2 Weapon Handling, Reloads & Malfunctions
-    CanonicalActionSpec {
-        id: CanonicalActionId::DropWeaponOrItem,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Drop Weapon / Release Held Item",
-        base_tc_decide: 1,
-        base_tc_act: 0,
-        base_total_tc: 1,
-        min_floor_ticks: 1,
-        governing_notes: "D_cog; Free reflex; 0 Ticks if combined with drawing sidearm",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::SwitchFireSelectorOrOptic,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Switch Fire Selector / Toggle Optic Magnification",
-        base_tc_decide: 1,
-        base_tc_act: 1,
-        base_total_tc: 2,
-        min_floor_ticks: 1,
-        governing_notes: "DEX; Firearms N >= 3 reduces to 1 Tick",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::ClearSimpleMalfunctionTapRack,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Clear Simple Malfunction (Tap-Rack Drill)",
-        base_tc_decide: 2,
-        base_tc_act: 3,
-        base_total_tc: 5,
-        min_floor_ticks: 2,
-        governing_notes: "DEX, TAC; Pistols / Long Guns; -1 Tick at N >= 3, -2 at N >= 5",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::DrawHolsteredSidearmOrBlade,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Draw Holstered Sidearm / Sheathed Blade",
-        base_tc_decide: 1,
-        base_tc_act: 3,
-        base_total_tc: 4,
-        min_floor_ticks: 2,
-        governing_notes: "SPD, DEX; Pistols / Blades; -1 Tick at N >= 3, -2 at N >= 5 (floor 2)",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::SlingTransitionRifleToSidearm,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Sling Transition (Drop Primary on Sling -> Draw Sidearm)",
-        base_tc_decide: 1,
-        base_tc_act: 3,
-        base_total_tc: 4,
-        min_floor_ticks: 2,
-        governing_notes: "SPD, DEX, KIN; requires tactical sling; -1 Tick at N >= 4",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::SpeedReloadDetachableMagDropEmpty,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Speed Reload — Detachable Box Magazine (Drop Empty)",
-        base_tc_decide: 1,
-        base_tc_act: 5,
-        base_total_tc: 6,
-        min_floor_ticks: 3,
-        governing_notes: "DEX, SPD, TAC; -1 Tick at N >= 3, -2 at N >= 5 (floor 3 Ticks = 1.5s)",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::TacticalReloadRetainPartialMag,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Tactical Reload — Retain Partial Magazine in Pouch",
-        base_tc_decide: 2,
-        base_tc_act: 7,
-        base_total_tc: 9,
-        min_floor_ticks: 3,
-        governing_notes: "DEX, TAC; -1 Tick at N >= 3, -2 at N >= 5",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::ClearComplexDoubleFeedOrBoltOverride,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Clear Complex Malfunction (Double-Feed / Bolt Override)",
-        base_tc_decide: 3,
-        base_tc_act: 9,
-        base_total_tc: 12,
-        min_floor_ticks: 4,
-        governing_notes: "DEX, TAC, FOC; Armourer / Firearms; requires tool or mag strip",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::LooseRoundReloadPerCartridge,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Revolver / Tube Shotgun Reload (Loose Rounds, per cartridge)",
-        base_tc_decide: 1,
-        base_tc_act: 2,
-        base_total_tc: 3,
-        min_floor_ticks: 2,
-        governing_notes: "+2 Ticks per additional shell; Speedloader / Violin-load reduces to 6 Ticks total",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::BeltFedMgLinkReload,
-        category: CatalogActionCategory::WeaponHandlingAndReload,
-        name: "Belt-Fed Machine Gun / Heavy Weapon Link Reload",
-        base_tc_decide: 3,
-        base_tc_act: 13,
-        base_total_tc: 16,
-        min_floor_ticks: 6,
-        governing_notes: "DEX, FOR; Heavy Weapons; Dedicated Assistant Gunner reduces TC_act by -6 Ticks",
-    },
+    action_spec!(DropWeaponOrItem, WeaponHandlingAndReload, "Drop Weapon / Release Held Item", (1, 0, 1), "D_cog; Free reflex; 0 Ticks if combined with drawing sidearm"),
+    action_spec!(SwitchFireSelectorOrOptic, WeaponHandlingAndReload, "Switch Fire Selector / Toggle Optic Magnification", (1, 1, 1), "DEX; Firearms N >= 3 reduces to 1 Tick"),
+    action_spec!(ClearSimpleMalfunctionTapRack, WeaponHandlingAndReload, "Clear Simple Malfunction (Tap-Rack Drill)", (2, 3, 2), "DEX, TAC; Pistols / Long Guns; -1 Tick at N >= 3, -2 at N >= 5"),
+    action_spec!(DrawHolsteredSidearmOrBlade, WeaponHandlingAndReload, "Draw Holstered Sidearm / Sheathed Blade", (1, 3, 2), "SPD, DEX; Pistols / Blades; -1 Tick at N >= 3, -2 at N >= 5 (floor 2)"),
+    action_spec!(SlingTransitionRifleToSidearm, WeaponHandlingAndReload, "Sling Transition (Drop Primary on Sling -> Draw Sidearm)", (1, 3, 2), "SPD, DEX, KIN; requires tactical sling; -1 Tick at N >= 4"),
+    action_spec!(SpeedReloadDetachableMagDropEmpty, WeaponHandlingAndReload, "Speed Reload — Detachable Box Magazine (Drop Empty)", (1, 5, 3), "DEX, SPD, TAC; -1 Tick at N >= 3, -2 at N >= 5 (floor 3 Ticks = 1.5s)"),
+    action_spec!(TacticalReloadRetainPartialMag, WeaponHandlingAndReload, "Tactical Reload — Retain Partial Magazine in Pouch", (2, 7, 3), "DEX, TAC; -1 Tick at N >= 3, -2 at N >= 5"),
+    action_spec!(ClearComplexDoubleFeedOrBoltOverride, WeaponHandlingAndReload, "Clear Complex Malfunction (Double-Feed / Bolt Override)", (3, 9, 4), "DEX, TAC, FOC; Armourer / Firearms; requires tool or mag strip"),
+    action_spec!(LooseRoundReloadPerCartridge, WeaponHandlingAndReload, "Revolver / Tube Shotgun Reload (Loose Rounds, per cartridge)", (1, 2, 2), "+2 Ticks per additional shell; Speedloader / Violin-load reduces to 6 Ticks total"),
+    action_spec!(BeltFedMgLinkReload, WeaponHandlingAndReload, "Belt-Fed Machine Gun / Heavy Weapon Link Reload", (3, 13, 6), "DEX, FOR; Heavy Weapons; Dedicated Assistant Gunner reduces TC_act by -6 Ticks"),
     // §4.3 Movement, Posture & Physical Interaction
-    CanonicalActionSpec {
-        id: CanonicalActionId::FiveFootTacticalStep,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "5-Foot Tactical Step / Shift Weight (<= 1.5 m)",
-        base_tc_decide: 1,
-        base_tc_act: 2,
-        base_total_tc: 3,
-        min_floor_ticks: 2,
-        governing_notes: "KIN, SPD; Balance & Footwork; can combine with melee stance",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::DropProneImmediate,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "Drop Prone (Immediate)",
-        base_tc_decide: 1,
-        base_tc_act: 2,
-        base_total_tc: 3,
-        min_floor_ticks: 2,
-        governing_notes: "SPD, KIN; Acrobatics N >= 3 reduces to 2 Ticks",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::StandUpFromKneelingCrouch,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "Stand Up from Kneeling / Crouch",
-        base_tc_decide: 1,
-        base_tc_act: 3,
-        base_total_tc: 4,
-        min_floor_ticks: 2,
-        governing_notes: "SPD, KIN; penalized by Encumbrance Tier",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::TacticalBound2To3m,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "Tactical Bound / Dash Between Cover (2–3 m)",
-        base_tc_decide: 1,
-        base_tc_act: 4,
-        base_total_tc: 5,
-        min_floor_ticks: 2,
-        governing_notes: "SPD, FIT; Running & Sprinting; scales with SPD",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::StandUpFromProne,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "Stand Up from Prone",
-        base_tc_decide: 1,
-        base_tc_act: 5,
-        base_total_tc: 6,
-        min_floor_ticks: 3,
-        governing_notes: "SPD, KIN, FOR; Acrobatics / Martial Arts N >= 3 reduces by -2 Ticks",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::VaultLowObstacleOrWindow,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "Vault Low Obstacle / Window Breach",
-        base_tc_decide: 1,
-        base_tc_act: 5,
-        base_total_tc: 6,
-        min_floor_ticks: 2,
-        governing_notes: "SPD, KIN, FOR; Climbing / Parkour",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::OpenUnlockedDoorOrHatch,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "Open Unlocked Door / Manipulate Hatch Lever",
-        base_tc_decide: 1,
-        base_tc_act: 3,
-        base_total_tc: 4,
-        min_floor_ticks: 2,
-        governing_notes: "DEX, FOR",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::BreachMechanicalKickRamDoor,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "Breach (Mechanical Kick / Battering Ram on Door)",
-        base_tc_decide: 2,
-        base_tc_act: 6,
-        base_total_tc: 8,
-        min_floor_ticks: 3,
-        governing_notes: "FOR, MAS, SPD; Strength & Lifting / Demolitions",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::MountOrDismountVehicle,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "Mount / Dismount Vehicle or Saddle",
-        base_tc_decide: 1,
-        base_tc_act: 5,
-        base_total_tc: 6,
-        min_floor_ticks: 2,
-        governing_notes: "KIN, SPD; Riding / Driving N >= 3 reduces by -2 Ticks",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::RetrieveOrStowPackItem,
-        category: CatalogActionCategory::MovementAndPosture,
-        name: "Retrieve / Stow Item from Backpack or Load-Bearing Rig",
-        base_tc_decide: 2,
-        base_tc_act: 6,
-        base_total_tc: 8,
-        min_floor_ticks: 2,
-        governing_notes: "DEX, TAC; Chest-rig / quick-release pouch reduces to 4 Ticks",
-    },
+    action_spec!(FiveFootTacticalStep, MovementAndPosture, "5-Foot Tactical Step / Shift Weight (<= 1.5 m)", (1, 2, 2), "KIN, SPD; Balance & Footwork; can combine with melee stance"),
+    action_spec!(DropProneImmediate, MovementAndPosture, "Drop Prone (Immediate)", (1, 2, 2), "SPD, KIN; Acrobatics N >= 3 reduces to 2 Ticks"),
+    action_spec!(StandUpFromKneelingCrouch, MovementAndPosture, "Stand Up from Kneeling / Crouch", (1, 3, 2), "SPD, KIN; penalized by Encumbrance Tier"),
+    action_spec!(TacticalBound2To3m, MovementAndPosture, "Tactical Bound / Dash Between Cover (2–3 m)", (1, 4, 2), "SPD, FIT; Running & Sprinting; scales with SPD"),
+    action_spec!(StandUpFromProne, MovementAndPosture, "Stand Up from Prone", (1, 5, 3), "SPD, KIN, FOR; Acrobatics / Martial Arts N >= 3 reduces by -2 Ticks"),
+    action_spec!(VaultLowObstacleOrWindow, MovementAndPosture, "Vault Low Obstacle / Window Breach", (1, 5, 2), "SPD, KIN, FOR; Climbing / Parkour"),
+    action_spec!(OpenUnlockedDoorOrHatch, MovementAndPosture, "Open Unlocked Door / Manipulate Hatch Lever", (1, 3, 2), "DEX, FOR"),
+    action_spec!(BreachMechanicalKickRamDoor, MovementAndPosture, "Breach (Mechanical Kick / Battering Ram on Door)", (2, 6, 3), "FOR, MAS, SPD; Strength & Lifting / Demolitions"),
+    action_spec!(MountOrDismountVehicle, MovementAndPosture, "Mount / Dismount Vehicle or Saddle", (1, 5, 2), "KIN, SPD; Riding / Driving N >= 3 reduces by -2 Ticks"),
+    action_spec!(RetrieveOrStowPackItem, MovementAndPosture, "Retrieve / Stow Item from Backpack or Load-Bearing Rig", (2, 6, 2), "DEX, TAC; Chest-rig / quick-release pouch reduces to 4 Ticks"),
     // §4.4 Cognitive, Perceptual & Communication Actions
-    CanonicalActionSpec {
-        id: CanonicalActionId::QuickVisualGlanceReactionCheck,
-        category: CatalogActionCategory::CognitivePerceptualAndComms,
-        name: "Quick Visual Glance / Threat Reaction Check",
-        base_tc_decide: 2,
-        base_tc_act: 0,
-        base_total_tc: 2,
-        min_floor_ticks: 1,
-        governing_notes: "SIG, ITU, D_cog; Alertness; reduced to 1 Tick if D_cog >= 14",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::TacticalCalloutShortCommand,
-        category: CatalogActionCategory::CognitivePerceptualAndComms,
-        name: "Tactical Callout / Short Verbal Command (<= 5 words)",
-        base_tc_decide: 2,
-        base_tc_act: 1,
-        base_total_tc: 3,
-        min_floor_ticks: 1,
-        governing_notes: "D_cog, PRE, ELO; Leadership; 1 Tick if standard squad brevity code",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::ActiveScanRoomOrSectorSweep,
-        category: CatalogActionCategory::CognitivePerceptualAndComms,
-        name: "Active Scan (Deliberate Room / Sector Sweep)",
-        base_tc_decide: 4,
-        base_tc_act: 2,
-        base_total_tc: 6,
-        min_floor_ticks: 2,
-        governing_notes: "SIG, HEA, FOC; Surveillance & Reconnaissance",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::AssessTacticalWeaknessAnalyzeTarget,
-        category: CatalogActionCategory::CognitivePerceptualAndComms,
-        name: "Assess Tactical Weakness / Analyze Target Pattern",
-        base_tc_decide: 5,
-        base_tc_act: 1,
-        base_total_tc: 6,
-        min_floor_ticks: 2,
-        governing_notes: "ANA, INS, FOC; Tactician; compressed heavily by high D_cog",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::ComplexCommsRelayCoordTransmission,
-        category: CatalogActionCategory::CognitivePerceptualAndComms,
-        name: "Complex Comms Relay / Coordinate Data Transmission",
-        base_tc_decide: 4,
-        base_tc_act: 4,
-        base_total_tc: 8,
-        min_floor_ticks: 2,
-        governing_notes: "ANA, MEM, ELO; Electronic Warfare / Comms",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::EmergencyFieldTriageTourniquet,
-        category: CatalogActionCategory::CognitivePerceptualAndComms,
-        name: "Emergency Field Triage / Apply Combat Tourniquet",
-        base_tc_decide: 3,
-        base_tc_act: 9,
-        base_total_tc: 12,
-        min_floor_ticks: 4,
-        governing_notes: "ANA, DEX, FOC; First Aid / Paramedic; -2 Ticks at N >= 4",
-    },
-    CanonicalActionSpec {
-        id: CanonicalActionId::ImprovisedGadgetCyberdeckReset,
-        category: CatalogActionCategory::CognitivePerceptualAndComms,
-        name: "Improvised Gadget / Cyberdeck Quick-Deploy or Reset",
-        base_tc_decide: 4,
-        base_tc_act: 4,
-        base_total_tc: 8,
-        min_floor_ticks: 2,
-        governing_notes: "CRE, ANA, DEX; Cybersecurity / Electronics",
-    },
+    action_spec!(QuickVisualGlanceReactionCheck, CognitivePerceptualAndComms, "Quick Visual Glance / Threat Reaction Check", (2, 0, 1), "SIG, ITU, D_cog; Alertness; reduced to 1 Tick if D_cog >= 14"),
+    action_spec!(TacticalCalloutShortCommand, CognitivePerceptualAndComms, "Tactical Callout / Short Verbal Command (<= 5 words)", (2, 1, 1), "D_cog, PRE, ELO; Leadership; 1 Tick if standard squad brevity code"),
+    action_spec!(ActiveScanRoomOrSectorSweep, CognitivePerceptualAndComms, "Active Scan (Deliberate Room / Sector Sweep)", (4, 2, 2), "SIG, HEA, FOC; Surveillance & Reconnaissance"),
+    action_spec!(AssessTacticalWeaknessAnalyzeTarget, CognitivePerceptualAndComms, "Assess Tactical Weakness / Analyze Target Pattern", (5, 1, 2), "ANA, INS, FOC; Tactician; compressed heavily by high D_cog"),
+    action_spec!(ComplexCommsRelayCoordTransmission, CognitivePerceptualAndComms, "Complex Comms Relay / Coordinate Data Transmission", (4, 4, 2), "ANA, MEM, ELO; Electronic Warfare / Comms"),
+    action_spec!(EmergencyFieldTriageTourniquet, CognitivePerceptualAndComms, "Emergency Field Triage / Apply Combat Tourniquet", (3, 9, 4), "ANA, DEX, FOC; First Aid / Paramedic; -2 Ticks at N >= 4"),
+    action_spec!(ImprovisedGadgetCyberdeckReset, CognitivePerceptualAndComms, "Improvised Gadget / Cyberdeck Quick-Deploy or Reset", (4, 4, 2), "CRE, ANA, DEX; Cybersecurity / Electronics"),
 ];
 
 /// Look up a canonical action specification by its `CanonicalActionId`.

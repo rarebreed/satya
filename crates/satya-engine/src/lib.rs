@@ -32,6 +32,7 @@ pub mod dice_probabilities;
 pub mod health_survival;
 #[allow(missing_docs)]
 pub mod lifepath_economy;
+pub mod primitives;
 pub mod psyche_social;
 pub mod rules_book;
 #[allow(missing_docs)]
@@ -44,6 +45,7 @@ pub use combat::*;
 pub use dice_probabilities::*;
 pub use health_survival::*;
 pub use lifepath_economy::*;
+pub use primitives::*;
 pub use psyche_social::*;
 pub use rules_book::*;
 pub use skills_trees::*;

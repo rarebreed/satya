@@ -16,54 +16,58 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::characteristics::{
+    CharacterCharacteristics, CharacteristicCode, compute_social_composure_score,
+};
+use crate::combat::MoraleState;
+use crate::define_coded_enum;
 use crate::dice_probabilities::{
     CascadeRollOutcome, CascadeTaskParams, ContestedCascadeOdds, ContestedCascadeRollOutcome,
     ContestedCascadeTaskParams, ContestedOutcomeKind, ContestedTieRule,
 };
-use crate::rules_book::MoraleState;
+use crate::primitives::TieredSaveEval;
 
 // ============================================================================
 // §1 Core Psyche Profile & Trait Definitions
 // ============================================================================
 
-/// The 6 canonical Bipolar Psyche Traits (`1..=20`, neutral equilibrium `10`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PsycheTraitId {
-    /// **Openness (`OPN`)**: Low (`1–7`) Dogmatic / Traditionalist vs. High (`13–20`) Curious / Iconoclastic.
-    Openness,
-    /// **Selfishness (`SLF`)**: Low (`1–7`) Altruistic / Self-Sacrificing vs. High (`13–20`) Mercenary / Self-Preserving.
-    Selfishness,
-    /// **Belonging (`BLG`)**: Low (`1–7`) Lone Wolf / Detached vs. High (`13–20`) Tribal / Devoted to Crew.
-    Belonging,
-    /// **Aggression (`AGG`)**: Low (`1–7`) Pacifist / Conflict-Averse vs. High (`13–20`) Belligerent / Ruthless.
-    Aggression,
-    /// **Ego (`EGO`)**: Low (`1–7`) Humble / Self-Effacing vs. High (`13–20`) Proud / Glory-Seeking.
-    Ego,
-    /// **Conformity (`CNF`)**: Low (`1–7`) Rebellious / Maverick vs. High (`13–20`) Lawful / Disciplined / Dutiful.
-    Conformity,
+define_coded_enum! {
+    /// The 6 canonical Bipolar Psyche Traits (`1..=20`, neutral equilibrium `10`).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum PsycheTraitId [count = 6] {
+        /// **Openness (`OPN`)**: Low (`1–7`) Dogmatic / Traditionalist vs. High (`13–20`) Curious / Iconoclastic.
+        Openness => { code: "OPN", label: "Openness" },
+        /// **Selfishness (`SLF`)**: Low (`1–7`) Altruistic / Self-Sacrificing vs. High (`13–20`) Mercenary / Self-Preserving.
+        Selfishness => { code: "SLF", label: "Selfishness" },
+        /// **Belonging (`BLG`)**: Low (`1–7`) Lone Wolf / Detached vs. High (`13–20`) Tribal / Devoted to Crew.
+        Belonging => { code: "BLG", label: "Belonging" },
+        /// **Aggression (`AGG`)**: Low (`1–7`) Pacifist / Conflict-Averse vs. High (`13–20`) Belligerent / Ruthless.
+        Aggression => { code: "AGG", label: "Aggression" },
+        /// **Ego (`EGO`)**: Low (`1–7`) Humble / Self-Effacing vs. High (`13–20`) Proud / Glory-Seeking.
+        Ego => { code: "EGO", label: "Ego" },
+        /// **Conformity (`CNF`)**: Low (`1–7`) Rebellious / Maverick vs. High (`13–20`) Lawful / Disciplined / Dutiful.
+        Conformity => { code: "CNF", label: "Conformity" },
+    }
 }
 
 impl PsycheTraitId {
-    /// All 6 Psyche traits in canonical order.
-    pub const ALL: [Self; 6] = [
-        Self::Openness,
-        Self::Selfishness,
-        Self::Belonging,
-        Self::Aggression,
-        Self::Ego,
-        Self::Conformity,
-    ];
-
     /// Three-letter canonical code (`OPN`, `SLF`, `BLG`, `AGG`, `EGO`, `CNF`).
-    pub fn code(self) -> &'static str {
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        self.as_str()
+    }
+
+    /// Map this `PsycheTraitId` to its corresponding [`CharacteristicCode`].
+    #[must_use]
+    pub const fn to_characteristic_code(self) -> CharacteristicCode {
         match self {
-            Self::Openness => "OPN",
-            Self::Selfishness => "SLF",
-            Self::Belonging => "BLG",
-            Self::Aggression => "AGG",
-            Self::Ego => "EGO",
-            Self::Conformity => "CNF",
+            Self::Openness => CharacteristicCode::OPN,
+            Self::Selfishness => CharacteristicCode::SLF,
+            Self::Belonging => CharacteristicCode::BLG,
+            Self::Aggression => CharacteristicCode::AGG,
+            Self::Ego => CharacteristicCode::EGO,
+            Self::Conformity => CharacteristicCode::CNF,
         }
     }
 }
@@ -78,62 +82,74 @@ pub enum PsycheViolationPole {
     LowPole,
 }
 
-/// A character's 6-trait Psyche profile (`1..=20`, default `10` for all traits).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PsycheProfile {
-    /// Openness (`OPN`, `1..=20`).
-    pub opn: i32,
-    /// Selfishness (`SLF`, `1..=20`).
-    pub slf: i32,
-    /// Belonging (`BLG`, `1..=20`).
-    pub blg: i32,
-    /// Aggression (`AGG`, `1..=20`).
-    pub agg: i32,
-    /// Ego (`EGO`, `1..=20`).
-    pub ego: i32,
-    /// Conformity (`CNF`, `1..=20`).
-    pub cnf: i32,
+macro_rules! impl_psyche_profile {
+    ($($Variant:ident => $field:ident),+ $(,)?) => {
+        /// A character's 6-trait Psyche profile (`1..=20`, default `10` for all traits).
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+        pub struct PsycheProfile {
+            $(
+                /// Trait score (`1..=20`).
+                pub $field: i32,
+            )+
+        }
+
+        impl Default for PsycheProfile {
+            fn default() -> Self {
+                Self { $($field: 10,)+ }
+            }
+        }
+
+        impl PsycheProfile {
+            /// Returns the score (`1..=20`) of the requested [`PsycheTraitId`].
+            #[must_use]
+            pub fn get(&self, trait_id: PsycheTraitId) -> i32 {
+                match trait_id {
+                    $(PsycheTraitId::$Variant => self.$field,)+
+                }
+            }
+
+            /// Sets the score (`1..=20`) of the requested [`PsycheTraitId`].
+            pub fn set(&mut self, trait_id: PsycheTraitId, value: i32) {
+                let clamped = value.clamp(1, 20);
+                match trait_id {
+                    $(PsycheTraitId::$Variant => self.$field = clamped,)+
+                }
+            }
+        }
+
+        impl From<&CharacterCharacteristics> for PsycheProfile {
+            fn from(chars: &CharacterCharacteristics) -> Self {
+                Self {
+                    $($field: chars.$field.clamp(1, 20),)+
+                }
+            }
+        }
+
+        impl CharacterCharacteristics {
+            /// Extract the 6-trait [`PsycheProfile`] slice from this character's characteristics.
+            #[must_use]
+            pub fn psyche_profile(&self) -> PsycheProfile {
+                PsycheProfile::from(self)
+            }
+
+            /// Write a [`PsycheProfile`] slice back into this character's characteristics.
+            pub fn set_psyche_profile(&mut self, profile: PsycheProfile) {
+                $(self.$field = profile.$field.clamp(1, 20);)+
+            }
+        }
+    };
 }
 
-impl Default for PsycheProfile {
-    fn default() -> Self {
-        Self {
-            opn: 10,
-            slf: 10,
-            blg: 10,
-            agg: 10,
-            ego: 10,
-            cnf: 10,
-        }
-    }
+impl_psyche_profile! {
+    Openness => opn,
+    Selfishness => slf,
+    Belonging => blg,
+    Aggression => agg,
+    Ego => ego,
+    Conformity => cnf,
 }
 
 impl PsycheProfile {
-    /// Returns the score (`1..=20`) of the requested [`PsycheTraitId`].
-    pub fn get(&self, trait_id: PsycheTraitId) -> i32 {
-        match trait_id {
-            PsycheTraitId::Openness => self.opn,
-            PsycheTraitId::Selfishness => self.slf,
-            PsycheTraitId::Belonging => self.blg,
-            PsycheTraitId::Aggression => self.agg,
-            PsycheTraitId::Ego => self.ego,
-            PsycheTraitId::Conformity => self.cnf,
-        }
-    }
-
-    /// Sets the score (`1..=20`) of the requested [`PsycheTraitId`].
-    pub fn set(&mut self, trait_id: PsycheTraitId, value: i32) {
-        let clamped = value.clamp(1, 20);
-        match trait_id {
-            PsycheTraitId::Openness => self.opn = clamped,
-            PsycheTraitId::Selfishness => self.slf = clamped,
-            PsycheTraitId::Belonging => self.blg = clamped,
-            PsycheTraitId::Aggression => self.agg = clamped,
-            PsycheTraitId::Ego => self.ego = clamped,
-            PsycheTraitId::Conformity => self.cnf = clamped,
-        }
-    }
-
     /// Returns all traits sorted by descending absolute deviation $\Delta_{\text{psyche}} = |P - 10|$.
     pub fn traits_by_extremity(&self) -> Vec<(PsycheTraitId, i32, i32)> {
         let mut list: Vec<(PsycheTraitId, i32, i32)> = PsycheTraitId::ALL
@@ -651,6 +667,34 @@ pub struct EmotionalTriggerOutcome {
     pub composure_roll: Option<CascadeRollOutcome>,
 }
 
+impl EmotionalTriggerOutcome {
+    const fn not_susceptible(current_morale: MoraleState) -> Self {
+        Self {
+            susceptible: false,
+            delta_ext: 0,
+            new_morale_state: current_morale,
+            delta_int_inflicted: 0,
+            unlocks_protective_conviction: false,
+            composure_roll: None,
+        }
+    }
+}
+
+fn eval_composure_roll(
+    dis: i32,
+    current_delta_int: i32,
+    delta_ext: i32,
+    composure_roll_pairs: &[(i32, i32)],
+) -> CascadeRollOutcome {
+    CascadeTaskParams::new_k20(
+        composure_roll_pairs.len().max(1),
+        dis.clamp(1, 20),
+        current_delta_int,
+        delta_ext,
+    )
+    .evaluate_pairs(composure_roll_pairs)
+}
+
 /// Evaluates an [`EmotionalTriggerKind`] against a character's [`PsycheProfile`] and `DIS` Composure roll (`§3.3`).
 pub fn evaluate_emotional_trigger(
     profile: &PsycheProfile,
@@ -662,21 +706,11 @@ pub fn evaluate_emotional_trigger(
 ) -> EmotionalTriggerOutcome {
     match trigger {
         EmotionalTriggerKind::BeingWounded { wound_tier } => {
-            let tier = wound_tier.max(1);
-            let mut delta_ext = 2 * tier;
-            if profile.slf >= 13 {
-                delta_ext += 2;
-            }
+            let mut delta_ext = 2 * wound_tier.max(1) + if profile.slf >= 13 { 2 } else { 0 };
             if profile.agg >= 14 {
                 delta_ext = (delta_ext - 2).max(0);
             }
-            let task = CascadeTaskParams::new_k20(
-                composure_roll_pairs.len().max(1),
-                dis.clamp(1, 20),
-                current_delta_int,
-                delta_ext,
-            );
-            let roll = task.evaluate_pairs(composure_roll_pairs);
+            let roll = eval_composure_roll(dis, current_delta_int, delta_ext, composure_roll_pairs);
             let new_morale_state = if roll.total_successes > 0 {
                 current_morale
             } else if profile.agg >= 15 && profile.slf <= 8 {
@@ -695,23 +729,9 @@ pub fn evaluate_emotional_trigger(
         }
         EmotionalTriggerKind::FriendOrSquadmateWounded => {
             if profile.blg < 13 {
-                return EmotionalTriggerOutcome {
-                    susceptible: false,
-                    delta_ext: 0,
-                    new_morale_state: current_morale,
-                    delta_int_inflicted: 0,
-                    unlocks_protective_conviction: false,
-                    composure_roll: None,
-                };
+                return EmotionalTriggerOutcome::not_susceptible(current_morale);
             }
-            let delta_ext = 2;
-            let task = CascadeTaskParams::new_k20(
-                composure_roll_pairs.len().max(1),
-                dis.clamp(1, 20),
-                current_delta_int,
-                delta_ext,
-            );
-            let roll = task.evaluate_pairs(composure_roll_pairs);
+            let roll = eval_composure_roll(dis, current_delta_int, 2, composure_roll_pairs);
             let new_morale_state = if roll.total_successes > 0 {
                 current_morale
             } else if profile.agg >= 12 {
@@ -723,7 +743,7 @@ pub fn evaluate_emotional_trigger(
             };
             EmotionalTriggerOutcome {
                 susceptible: true,
-                delta_ext,
+                delta_ext: 2,
                 new_morale_state,
                 delta_int_inflicted: 0,
                 unlocks_protective_conviction: false,
@@ -731,68 +751,37 @@ pub fn evaluate_emotional_trigger(
             }
         }
         EmotionalTriggerKind::LovedOneAttackedOrWounded => {
-            let susceptible = profile.blg >= 14 || profile.slf <= 7;
-            if !susceptible {
-                return EmotionalTriggerOutcome {
-                    susceptible: false,
-                    delta_ext: 0,
-                    new_morale_state: current_morale,
-                    delta_int_inflicted: 0,
-                    unlocks_protective_conviction: false,
-                    composure_roll: None,
-                };
+            if !(profile.blg >= 14 || profile.slf <= 7) {
+                return EmotionalTriggerOutcome::not_susceptible(current_morale);
             }
-            let delta_ext = 4;
-            let task = CascadeTaskParams::new_k20(
-                composure_roll_pairs.len().max(1),
-                dis.clamp(1, 20),
-                current_delta_int,
-                delta_ext,
-            );
-            let roll = task.evaluate_pairs(composure_roll_pairs);
-            let new_morale_state = if roll.total_successes > 0 {
-                MoraleState::High
-            } else {
-                MoraleState::Rage
-            };
+            let roll = eval_composure_roll(dis, current_delta_int, 4, composure_roll_pairs);
             EmotionalTriggerOutcome {
                 susceptible: true,
-                delta_ext,
-                new_morale_state,
+                delta_ext: 4,
+                new_morale_state: if roll.total_successes > 0 {
+                    MoraleState::High
+                } else {
+                    MoraleState::Rage
+                },
                 delta_int_inflicted: 0,
                 unlocks_protective_conviction: true,
                 composure_roll: Some(roll),
             }
         }
         EmotionalTriggerKind::InsultedOrTaunted => {
-            let susceptible = profile.ego >= 13 || profile.agg >= 13;
-            if !susceptible {
-                return EmotionalTriggerOutcome {
-                    susceptible: false,
-                    delta_ext: 0,
-                    new_morale_state: current_morale,
-                    delta_int_inflicted: 0,
-                    unlocks_protective_conviction: false,
-                    composure_roll: None,
-                };
+            if !(profile.ego >= 13 || profile.agg >= 13) {
+                return EmotionalTriggerOutcome::not_susceptible(current_morale);
             }
             let delta_ext = psyche_deviation(profile.ego).max(psyche_deviation(profile.agg));
-            let task = CascadeTaskParams::new_k20(
-                composure_roll_pairs.len().max(1),
-                dis.clamp(1, 20),
-                current_delta_int,
-                delta_ext,
-            );
-            let roll = task.evaluate_pairs(composure_roll_pairs);
-            let new_morale_state = if roll.total_successes > 0 {
-                current_morale
-            } else {
-                MoraleState::Rage
-            };
+            let roll = eval_composure_roll(dis, current_delta_int, delta_ext, composure_roll_pairs);
             EmotionalTriggerOutcome {
                 susceptible: true,
                 delta_ext,
-                new_morale_state,
+                new_morale_state: if roll.total_successes > 0 {
+                    current_morale
+                } else {
+                    MoraleState::Rage
+                },
                 delta_int_inflicted: 0,
                 unlocks_protective_conviction: false,
                 composure_roll: Some(roll),
@@ -800,48 +789,28 @@ pub fn evaluate_emotional_trigger(
         }
         EmotionalTriggerKind::PubliclyHumiliated => {
             if profile.ego < 14 {
-                return EmotionalTriggerOutcome {
-                    susceptible: false,
-                    delta_ext: 0,
-                    new_morale_state: current_morale,
-                    delta_int_inflicted: 0,
-                    unlocks_protective_conviction: false,
-                    composure_roll: None,
-                };
+                return EmotionalTriggerOutcome::not_susceptible(current_morale);
             }
-            let delta_ext = 4;
-            let task = CascadeTaskParams::new_k20(
-                composure_roll_pairs.len().max(1),
-                dis.clamp(1, 20),
-                current_delta_int,
-                delta_ext,
-            );
-            let roll = task.evaluate_pairs(composure_roll_pairs);
-            if roll.total_successes > 0 {
-                EmotionalTriggerOutcome {
-                    susceptible: true,
-                    delta_ext,
-                    new_morale_state: current_morale,
-                    delta_int_inflicted: 0,
-                    unlocks_protective_conviction: false,
-                    composure_roll: Some(roll),
-                }
+            let roll = eval_composure_roll(dis, current_delta_int, 4, composure_roll_pairs);
+            let (new_morale_state, delta_int_inflicted) = if roll.total_successes > 0 {
+                (current_morale, 0)
             } else {
-                let new_morale_state = if profile.agg >= 12 {
+                let st = if profile.agg >= 12 {
                     MoraleState::Rage
                 } else if profile.agg <= 8 {
                     MoraleState::Broken
                 } else {
                     MoraleState::Wavering
                 };
-                EmotionalTriggerOutcome {
-                    susceptible: true,
-                    delta_ext,
-                    new_morale_state,
-                    delta_int_inflicted: 2,
-                    unlocks_protective_conviction: false,
-                    composure_roll: Some(roll),
-                }
+                (st, 2)
+            };
+            EmotionalTriggerOutcome {
+                susceptible: true,
+                delta_ext: 4,
+                new_morale_state,
+                delta_int_inflicted,
+                unlocks_protective_conviction: false,
+                composure_roll: Some(roll),
             }
         }
         EmotionalTriggerKind::SeeingInnocentSuffering => {
@@ -1002,37 +971,34 @@ pub fn evaluate_combat_morale_roll(
 ) -> CombatMoraleRollOutcome {
     let c_morale = (dis + delta_mot).clamp(1, 25);
     let n_p = if is_veteran_or_sere { 2 } else { 1 };
-    let contest = ContestedCascadeTaskParams::new_tiered_environment(
+    let save = TieredSaveEval::evaluate(
         n_p,
         c_morale,
         delta_int,
         0,
         delta_morale,
         ContestedTieRule::HybridSignedMargin,
+        player_pairs,
+        gm_pair,
     );
-    let roll = contest.evaluate_contested_pairs(player_pairs, &[gm_pair]);
 
-    let step_delta = match roll.contested_kind {
-        ContestedOutcomeKind::ExtraordinarySuccess if roll.net_signed_margin >= 2 => 1,
-        ContestedOutcomeKind::ExtraordinarySuccess
-        | ContestedOutcomeKind::CleanSuccess
-        | ContestedOutcomeKind::GrazingTieSuccess
-        | ContestedOutcomeKind::LuckyBreakSuccess
-        | ContestedOutcomeKind::SuccessWithFloorBreach => 0,
-        ContestedOutcomeKind::CleanFailure => -1,
-        ContestedOutcomeKind::BotchFailure => -2,
-    };
+    let step_delta = save.classify_4way(
+        |r| if r.net_signed_margin >= 2 { 1 } else { 0 },
+        |_| 0,
+        |_| -1,
+        |_| -2,
+    );
 
     let new_morale = step_morale_condition(current_morale, step_delta);
 
     CombatMoraleRollOutcome {
         c_morale,
-        player_tn: contest.player.tn_eff(),
-        gm_tn: contest.gm.tn_eff(),
+        player_tn: save.player_tn,
+        gm_tn: save.gm_tn,
         previous_morale: current_morale,
         new_morale,
         condition_step_delta: step_delta,
-        contested_roll: roll,
+        contested_roll: save.contested_roll,
     }
 }
 
@@ -1355,7 +1321,7 @@ pub fn compute_argument_psyche_modifier(
 /// Computes the **Social Composure Threshold (`CMP`)** from `§4.3`:
 /// $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$
 pub fn compute_social_composure_threshold(dis: i32, foc: i32) -> i32 {
-    (dis.clamp(1, 20) + foc.clamp(1, 20)).div_euclid(4)
+    compute_social_composure_score(dis, foc)
 }
 
 /// The 4 canonical Social Wounds from `§4.3`.
@@ -1656,6 +1622,67 @@ pub fn resolve_cognitive_dissonance(
                 resulting_morale_state: Some(MoraleState::Rage),
             }
         }
+    }
+}
+
+/// Outcome of a Social Combat / Cognitive Dissonance check from Chapter 9.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SocialDissonanceOutcome {
+    /// Total cognitive dissonance pressure generated by argument margin, evidence, and audience.
+    pub dissonance_pressure: i32,
+    /// Target's psychological resistance threshold derived from core conviction.
+    pub resistance_threshold: i32,
+    /// Net shift (`dissonance_pressure - resistance_threshold`).
+    pub net_dissonance_shift: i32,
+    /// Canonical narrative social outcome tier.
+    pub social_outcome: String,
+}
+
+/// Computes Cognitive Dissonance pressure, Dual-Psyche Wedge bleed, and Social Wound tier
+/// using the canonical rules from `psyche_morale_and_social_combat.md` §4.
+pub fn compute_social_dissonance_check(
+    argument_margin: i32,
+    target_conviction: i32,
+    evidence_tier: i32,
+    shared_values_bonus: i32,
+    public_audience_pressure: i32,
+) -> SocialDissonanceOutcome {
+    let conviction = target_conviction.clamp(1, 20);
+    let delta_psyche = (conviction - 10).abs();
+    let evidence = evidence_tier.clamp(0, 5);
+    let shared = shared_values_bonus.clamp(-3, 5);
+    let audience = public_audience_pressure.clamp(-3, 5);
+
+    let dissonance_pressure = (argument_margin * 2 + evidence * 3 + shared * 2 + audience).max(0);
+    let resistance_threshold = 10 + delta_psyche;
+    let net_shift = dissonance_pressure - resistance_threshold;
+    let bleed_delta_int = argument_margin.max(0) * 2;
+
+    let social_outcome = if argument_margin <= 0 && net_shift < -4 {
+        "Dogmatic Denial / Entrenchment (Target locks OPN -4, clears Dissonance)".to_string()
+    } else if net_shift < 0 {
+        format!(
+            "Rhetorical Strain (-1 CMP, +{} Delta_int; Target rationalizes tension)",
+            bleed_delta_int.max(2)
+        )
+    } else if net_shift < 5 {
+        format!(
+            "Doubt Fracture & Cognitive Dissonance (+1 Doubt, +{bleed_delta_int} Delta_int/turn bleed)"
+        )
+    } else if net_shift < 10 {
+        format!(
+            "Dual-Psyche Wedge & Ego Wound (Dissonance Index {}, +{bleed_delta_int} Delta_int bleed/turn)",
+            argument_margin.max(1)
+        )
+    } else {
+        "Conversion / Defection (Core Belief Shift + 1 Permanent Psyche Drift Mark)".to_string()
+    };
+
+    SocialDissonanceOutcome {
+        dissonance_pressure,
+        resistance_threshold,
+        net_dissonance_shift: net_shift,
+        social_outcome,
     }
 }
 

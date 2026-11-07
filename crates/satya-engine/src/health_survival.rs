@@ -30,9 +30,12 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::action_economy::EncumbranceTier;
+use crate::characteristics::compute_wound_shock_resistance_score;
 use crate::dice_probabilities::{
-    ContestedCascadeRollOutcome, ContestedCascadeTaskParams, ContestedOutcomeKind, ContestedTieRule,
+    ContestedCascadeRollOutcome, ContestedOutcomeKind, ContestedTieRule,
 };
+use crate::primitives::{ConditionImpact, TieredSaveEval, Triad};
 
 // ============================================================================
 // 1. Hit Locations & Called Shots (`health_and_trauma.md` §1)
@@ -137,166 +140,64 @@ pub struct HitLocationSpec {
     pub mechanical_notes: &'static str,
 }
 
+impl HitLocationSpec {
+    /// Returns the `Tempo / Control / Force` aspect ceiling slash flags as a [`Triad<bool>`].
+    #[must_use]
+    pub const fn slashes_triad(&self) -> Triad<bool> {
+        Triad::new(
+            self.slashes_tempo_cap,
+            self.slashes_control_cap,
+            self.slashes_force_cap,
+        )
+    }
+}
+
 /// Returns the canonical 13-entry Master Anatomical Hit Location Table (`health_and_trauma.md` §1.2).
 #[must_use]
 pub fn canonical_hit_location_table() -> Vec<HitLocationSpec> {
+    macro_rules! hl {
+        ($id:ident, $min:expr, $max:expr, $name:literal, $ext:expr, ($t:expr, $c:expr, $f:expr), $art:expr, $notes:literal) => {
+            HitLocationSpec {
+                id: HitLocationId::$id,
+                d20_min: $min,
+                d20_max: $max,
+                name: $name,
+                called_shot_delta_ext: $ext,
+                slashes_tempo_cap: $t,
+                slashes_control_cap: $c,
+                slashes_force_cap: $f,
+                major_arterial_hazard: $art,
+                mechanical_notes: $notes,
+            }
+        };
+    }
     vec![
-        HitLocationSpec {
-            id: HitLocationId::FootAnkle,
-            d20_min: 1,
-            d20_max: 1,
-            name: "Foot / Ankle (L or R)",
-            called_shot_delta_ext: 4,
-            slashes_tempo_cap: true,
-            slashes_control_cap: false,
-            slashes_force_cap: false,
-            major_arterial_hazard: false,
-            mechanical_notes: "Mobility Anchor: Fractured tarsals or severed Achilles locks running/sprinting; -4 to Effective Root against sweeps.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::CalfShin,
-            d20_min: 2,
-            d20_max: 3,
-            name: "Calf / Shin (Tibia/Fibula) (L or R)",
-            called_shot_delta_ext: 2,
-            slashes_tempo_cap: true,
-            slashes_control_cap: false,
-            slashes_force_cap: false,
-            major_arterial_hazard: false,
-            mechanical_notes: "Footwork Degradation: Muscle cramp or tibial fracture; Tier 3+ fracture prevents standing without support.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::KneeJoint,
-            d20_min: 4,
-            d20_max: 4,
-            name: "Knee Joint (Patella/ACL) (L or R)",
-            called_shot_delta_ext: 4,
-            slashes_tempo_cap: true,
-            slashes_control_cap: false,
-            slashes_force_cap: false,
-            major_arterial_hazard: false,
-            mechanical_notes: "Joint Collapse: High susceptibility to Blunt/Leverage trauma (-4/-8/Locked 0 T_max & Root); Tier 2+ tear/dislocation forces immediate Prone check.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::ThighFemur,
-            d20_min: 5,
-            d20_max: 6,
-            name: "Thigh (Femur / Femoral) (L or R)",
-            called_shot_delta_ext: 2,
-            slashes_tempo_cap: true,
-            slashes_control_cap: false,
-            slashes_force_cap: true,
-            major_arterial_hazard: true,
-            mechanical_notes: "Arterial Hazard: Deep Piercing/Slashing wounds risk Femoral Arterial Bleed; broken femur inflicts immediate Wound Shock +3.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::PelvisHipGroin,
-            d20_min: 7,
-            d20_max: 7,
-            name: "Pelvis / Hip Girdle / Groin",
-            called_shot_delta_ext: 4,
-            slashes_tempo_cap: true,
-            slashes_control_cap: false,
-            slashes_force_cap: true,
-            major_arterial_hazard: true,
-            mechanical_notes: "Center of Mass Structural Lock: Pelvic fracture locks Tempo = 0 (cannot walk/stand) and inflicts excruciating neurogenic shock.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::AbdomenGutLiverSpleen,
-            d20_min: 8,
-            d20_max: 10,
-            name: "Abdomen / Gut / Liver / Spleen",
-            called_shot_delta_ext: 2,
-            slashes_tempo_cap: false,
-            slashes_control_cap: false,
-            slashes_force_cap: true,
-            major_arterial_hazard: false,
-            mechanical_notes: "Visceral Shock & Nausea: Blunt liver/solar-plexus hit triggers Nausea / Winded; penetrating gut wound causes sepsis & internal bleed.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::ChestRibcageLungs,
-            d20_min: 11,
-            d20_max: 13,
-            name: "Chest / Ribcage / Lungs",
-            called_shot_delta_ext: 2,
-            slashes_tempo_cap: false,
-            slashes_control_cap: false,
-            slashes_force_cap: true,
-            major_arterial_hazard: false,
-            mechanical_notes: "Respiratory Trauma: Cracked ribs slash Force Cap and impose -4 FIT (+1 Exertion Mark / 20 ticks); penetrating hit causes Pneumothorax.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::VitalThoracicHeartSpineAorta,
-            d20_min: 14,
-            d20_max: 14,
-            name: "Vital Thoracic (Heart / Spine / Aorta)",
-            called_shot_delta_ext: 8,
-            slashes_tempo_cap: true,
-            slashes_control_cap: true,
-            slashes_force_cap: true,
-            major_arterial_hazard: true,
-            mechanical_notes: "Catastrophic Vitals: Penetrating trauma causes massive Arterial Hemorrhage; spinal hit causes immediate lower-body Paralysis.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::ShoulderClavicleScapula,
-            d20_min: 15,
-            d20_max: 15,
-            name: "Shoulder / Clavicle / Scapula (L or R)",
-            called_shot_delta_ext: 4,
-            slashes_tempo_cap: false,
-            slashes_control_cap: true,
-            slashes_force_cap: true,
-            major_arterial_hazard: true,
-            mechanical_notes: "Shoulder Girdle Failure: Dislocated shoulder or broken collarbone disables lifting, two-handed bracing, and heavy swings with that arm.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::UpperArmElbowForearm,
-            d20_min: 16,
-            d20_max: 17,
-            name: "Upper Arm / Elbow / Forearm (L or R)",
-            called_shot_delta_ext: 2,
-            slashes_tempo_cap: false,
-            slashes_control_cap: true,
-            slashes_force_cap: true,
-            major_arterial_hazard: true,
-            mechanical_notes: "Brachial & Lever Trauma: Slashes parry/aiming stability (Control) and striking power (Force); deep cuts risk Brachial Artery.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::WristHandFingers,
-            d20_min: 18,
-            d20_max: 18,
-            name: "Wrist / Hand / Fingers (L or R)",
-            called_shot_delta_ext: 4,
-            slashes_tempo_cap: false,
-            slashes_control_cap: true,
-            slashes_force_cap: false,
-            major_arterial_hazard: false,
-            mechanical_notes: "Disarm & Manual Lock: Tier 2+ hit forces immediate FOR/DEX Disarm Check; fractured wrist/fingers prevent firing or gripping with that hand.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::NeckThroatCarotidCervical,
-            d20_min: 19,
-            d20_max: 19,
-            name: "Neck / Throat / Carotid / Cervical",
-            called_shot_delta_ext: 8,
-            slashes_tempo_cap: true,
-            slashes_control_cap: true,
-            slashes_force_cap: true,
-            major_arterial_hazard: true,
-            mechanical_notes: "Lethal Vulnerability: Blunt strike crushes trachea (Asphyxiation + mutes speech ELO = 0); blade/bullet severs Carotid/Jugular or cervical spine.",
-        },
-        HitLocationSpec {
-            id: HitLocationId::HeadCraniumFaceJawEyes,
-            d20_min: 20,
-            d20_max: 20,
-            name: "Head (Cranium / Face / Jaw / Eyes)",
-            called_shot_delta_ext: 6,
-            slashes_tempo_cap: false,
-            slashes_control_cap: true,
-            slashes_force_cap: false,
-            major_arterial_hazard: false,
-            mechanical_notes: "Neurological & Sensory Apex: Blunt impact triggers Stunned / Concussed / Unconscious; eye hit causes Blinded; jaw hit impairs speech.",
-        },
+        hl!(FootAnkle, 1, 1, "Foot / Ankle (L or R)", 4, (true, false, false), false,
+            "Mobility Anchor: Fractured tarsals or severed Achilles locks running/sprinting; -4 to Effective Root against sweeps."),
+        hl!(CalfShin, 2, 3, "Calf / Shin (Tibia/Fibula) (L or R)", 2, (true, false, false), false,
+            "Footwork Degradation: Muscle cramp or tibial fracture; Tier 3+ fracture prevents standing without support."),
+        hl!(KneeJoint, 4, 4, "Knee Joint (Patella/ACL) (L or R)", 4, (true, false, false), false,
+            "Joint Collapse: High susceptibility to Blunt/Leverage trauma (-4/-8/Locked 0 T_max & Root); Tier 2+ tear/dislocation forces immediate Prone check."),
+        hl!(ThighFemur, 5, 6, "Thigh (Femur / Femoral) (L or R)", 2, (true, false, true), true,
+            "Arterial Hazard: Deep Piercing/Slashing wounds risk Femoral Arterial Bleed; broken femur inflicts immediate Wound Shock +3."),
+        hl!(PelvisHipGroin, 7, 7, "Pelvis / Hip Girdle / Groin", 4, (true, false, true), true,
+            "Center of Mass Structural Lock: Pelvic fracture locks Tempo = 0 (cannot walk/stand) and inflicts excruciating neurogenic shock."),
+        hl!(AbdomenGutLiverSpleen, 8, 10, "Abdomen / Gut / Liver / Spleen", 2, (false, false, true), false,
+            "Visceral Shock & Nausea: Blunt liver/solar-plexus hit triggers Nausea / Winded; penetrating gut wound causes sepsis & internal bleed."),
+        hl!(ChestRibcageLungs, 11, 13, "Chest / Ribcage / Lungs", 2, (false, false, true), false,
+            "Respiratory Trauma: Cracked ribs slash Force Cap and impose -4 FIT (+1 Exertion Mark / 20 ticks); penetrating hit causes Pneumothorax."),
+        hl!(VitalThoracicHeartSpineAorta, 14, 14, "Vital Thoracic (Heart / Spine / Aorta)", 8, (true, true, true), true,
+            "Catastrophic Vitals: Penetrating trauma causes massive Arterial Hemorrhage; spinal hit causes immediate lower-body Paralysis."),
+        hl!(ShoulderClavicleScapula, 15, 15, "Shoulder / Clavicle / Scapula (L or R)", 4, (false, true, true), true,
+            "Shoulder Girdle Failure: Dislocated shoulder or broken collarbone disables lifting, two-handed bracing, and heavy swings with that arm."),
+        hl!(UpperArmElbowForearm, 16, 17, "Upper Arm / Elbow / Forearm (L or R)", 2, (false, true, true), true,
+            "Brachial & Lever Trauma: Slashes parry/aiming stability (Control) and striking power (Force); deep cuts risk Brachial Artery."),
+        hl!(WristHandFingers, 18, 18, "Wrist / Hand / Fingers (L or R)", 4, (false, true, false), false,
+            "Disarm & Manual Lock: Tier 2+ hit forces immediate FOR/DEX Disarm Check; fractured wrist/fingers prevent firing or gripping with that hand."),
+        hl!(NeckThroatCarotidCervical, 19, 19, "Neck / Throat / Carotid / Cervical", 8, (true, true, true), true,
+            "Lethal Vulnerability: Blunt strike crushes trachea (Asphyxiation + mutes speech ELO = 0); blade/bullet severs Carotid/Jugular or cervical spine."),
+        hl!(HeadCraniumFaceJawEyes, 20, 20, "Head (Cranium / Face / Jaw / Eyes)", 6, (false, true, false), false,
+            "Neurological & Sensory Apex: Blunt impact triggers Stunned / Concussed / Unconscious; eye hit causes Blinded; jaw hit impairs speech."),
     ]
 }
 
@@ -801,20 +702,23 @@ pub fn evaluate_wound_shock_save(
 ) -> WoundShockSaveOutcome {
     let hlt_c = hlt.clamp(1, 20);
     let dis_c = dis.clamp(1, 20);
-    let wsr = hlt_c + dis_c.div_euclid(2);
+    let wsr = compute_wound_shock_resistance_score(hlt_c, dis_c);
     let controller_c_p = (hlt_c + dis_c).div_euclid(2);
     let shock = wound_shock_index.clamp(0, 5);
     let delta_ext = 2 * shock;
 
-    let params = ContestedCascadeTaskParams::new_tiered_environment(
+    let eval = TieredSaveEval::evaluate(
         pairs_n.max(1),
         controller_c_p,
         delta_int,
         0,
         delta_ext,
         ContestedTieRule::HybridSignedMargin,
+        player_pairs,
+        gm_pair,
     );
-    let contested_roll = params.evaluate_contested_pairs(player_pairs, &[gm_pair]);
+    let tn_player = eval.player_tn;
+    let contested_roll = eval.contested_roll;
 
     let (
         effective_wound_shock_index,
@@ -847,7 +751,7 @@ pub fn evaluate_wound_shock_save(
     WoundShockSaveOutcome {
         wsr,
         controller_c_p,
-        tn_player: params.player.tn_eff(),
+        tn_player,
         delta_ext,
         contested_roll,
         effective_wound_shock_index,
@@ -928,6 +832,34 @@ pub struct AggregatedStatusEffects {
     pub tempo_locked_zero: bool,
     /// Whether `Control` and `Force` are locked at `0` (`Paralyzed` or `Unconscious`).
     pub control_and_force_locked_zero: bool,
+}
+
+impl AggregatedStatusEffects {
+    /// Converts this status aggregation into a [`ConditionImpact`] primitive.
+    #[must_use]
+    pub const fn to_condition_impact(&self) -> ConditionImpact {
+        ConditionImpact {
+            delta_int: self.delta_int_added,
+            delta_ext: 0,
+            tactical_pool_mod: 0,
+            action_time_factor_delta: self.action_time_factor_added,
+            fatigue_added: 0,
+            fatigue_floor: 0,
+            wound_shock_added: 0,
+            clock_freeze_ticks: self.clock_freeze_ticks,
+            triad_cap_penalty: Triad::new(
+                self.tempo_cap_penalty,
+                self.ranged_control_cap_penalty,
+                0,
+            ),
+            triad_locked_zero: Triad::new(
+                self.tempo_locked_zero,
+                self.control_and_force_locked_zero,
+                self.control_and_force_locked_zero,
+            ),
+            is_unconscious: self.tempo_locked_zero && self.control_and_force_locked_zero,
+        }
+    }
 }
 
 /// Evaluates the combined mechanical impact of a slice of [`PhysiologicalStatusCondition`]s (`health_and_trauma.md` §4).
@@ -1460,70 +1392,9 @@ pub struct CarriedLoadItem {
     pub carry_method: CarryErgonomicMethod,
 }
 
-/// The 5 Canonical Encumbrance Tiers (`Tiers 0–4`) from `movement_vehicles_and_environment.md` §2.3.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LoadEncumbranceTier {
-    /// **Tier 0: Unencumbered** ($L_{\text{eff}} / L_{\text{base}} \le 1.0$): `0` $T_{\max}$, `0` `KIN`, `+0.00` $\Delta_{\text{enc}}$.
-    Tier0Unencumbered,
-    /// **Tier 1: Light / Patrol Load** ($1.01\text{–}1.5 \times L_{\text{base}}$): `-1` $T_{\max}$, `0` `KIN`, `+0.05` $\Delta_{\text{enc}}$.
-    Tier1LightPatrolLoad,
-    /// **Tier 2: Tactical / Fighting Load** ($1.51\text{–}2.5 \times L_{\text{base}}$): `-3` $T_{\max}$, `-2` `KIN`, `+0.10` $\Delta_{\text{enc}}`, `+1` Exertion Mark/window.
-    Tier2TacticalFightingLoad,
-    /// **Tier 3: Heavy / March Load** ($2.51\text{–}4.0 \times L_{\text{base}}$): `-6` $T_{\max}$, `-4` `KIN`, `+0.25` $\Delta_{\text{enc}}`, cannot Sprint.
-    Tier3HeavyMarchLoad,
-    /// **Tier 4: Overloaded / Staggering** ($4.01\text{–}6.0+ \times L_{\text{base}}$): `-10` $T_{\max}$, `-8` `KIN`, `+0.50` $\Delta_{\text{enc}}`, walking only (`0.3 m/Tick`).
-    Tier4OverloadedStaggering,
-}
-
-impl LoadEncumbranceTier {
-    /// Numeric tier (`0..=4`).
-    #[must_use]
-    pub const fn tier_number(self) -> u8 {
-        match self {
-            Self::Tier0Unencumbered => 0,
-            Self::Tier1LightPatrolLoad => 1,
-            Self::Tier2TacticalFightingLoad => 2,
-            Self::Tier3HeavyMarchLoad => 3,
-            Self::Tier4OverloadedStaggering => 4,
-        }
-    }
-
-    /// Penalty to **Tempo Cap ($T_{\max}$)** (`0`, `-1`, `-3`, `-6`, `-10`).
-    #[must_use]
-    pub const fn tempo_cap_penalty(self) -> i32 {
-        match self {
-            Self::Tier0Unencumbered => 0,
-            Self::Tier1LightPatrolLoad => 1,
-            Self::Tier2TacticalFightingLoad => 3,
-            Self::Tier3HeavyMarchLoad => 6,
-            Self::Tier4OverloadedStaggering => 10,
-        }
-    }
-
-    /// Penalty to **Kinesthesis (`KIN`)** (`0`, `0`, `-2`, `-4`, `-8`).
-    #[must_use]
-    pub const fn kin_penalty(self) -> i32 {
-        match self {
-            Self::Tier0Unencumbered | Self::Tier1LightPatrolLoad => 0,
-            Self::Tier2TacticalFightingLoad => 2,
-            Self::Tier3HeavyMarchLoad => 4,
-            Self::Tier4OverloadedStaggering => 8,
-        }
-    }
-
-    /// Physical time multiplier delta ($\Delta_{\text{enc}}$ to `action_time_factor`: `0.00`, `0.05`, `0.10`, `0.25`, `0.50`).
-    #[must_use]
-    pub const fn action_time_factor_delta(self) -> f64 {
-        match self {
-            Self::Tier0Unencumbered => 0.00,
-            Self::Tier1LightPatrolLoad => 0.05,
-            Self::Tier2TacticalFightingLoad => 0.10,
-            Self::Tier3HeavyMarchLoad => 0.25,
-            Self::Tier4OverloadedStaggering => 0.50,
-        }
-    }
-}
+/// The 5 Canonical Encumbrance Tiers (`Tiers 0–4`) from `movement_vehicles_and_environment.md` §2.3,
+/// unified with [`crate::action_economy::EncumbranceTier`].
+pub type LoadEncumbranceTier = EncumbranceTier;
 
 /// Complete evaluation of a character's Base Comfort Load ($L_{\text{base}}$), Effective Load ($L_{\text{eff}}$),
 /// and resulting [`LoadEncumbranceTier`] (`movement_vehicles_and_environment.md` §2.1–§2.3).
@@ -1580,17 +1451,7 @@ pub fn evaluate_encumbrance_load(
         0.0
     };
 
-    let tier = if load_ratio <= 1.0 + 1e-9 {
-        LoadEncumbranceTier::Tier0Unencumbered
-    } else if load_ratio <= 1.5 + 1e-9 {
-        LoadEncumbranceTier::Tier1LightPatrolLoad
-    } else if load_ratio <= 2.5 + 1e-9 {
-        LoadEncumbranceTier::Tier2TacticalFightingLoad
-    } else if load_ratio <= 4.0 + 1e-9 {
-        LoadEncumbranceTier::Tier3HeavyMarchLoad
-    } else {
-        LoadEncumbranceTier::Tier4OverloadedStaggering
-    };
+    let tier = LoadEncumbranceTier::from_load_ratio(load_ratio);
 
     EncumbranceEvaluation {
         base_comfort_load_kg,

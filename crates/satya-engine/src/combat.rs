@@ -13,21 +13,632 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::action_economy::compute_delta_tc_decide;
+use crate::characteristics::{
+    CharacterCharacteristics, compute_d_cog_score, compute_fatigue_threshold_score,
+    compute_mmf_momentum_factor, compute_ooda_score, compute_pow_striking_power,
+};
 use crate::dice_probabilities::{CascadeOutcomeKind, CascadeRollOutcome};
-use crate::rules_book::{TacticalPoolEnvelope, TacticalTriadEvaluation, evaluate_tactical_triad};
+use crate::primitives::Triad;
+
+// ============================================================================
+// Combat Tactical Pool ("Envelope & Fill" — Tempo, Control, Force) Calculator
+// ============================================================================
+
+/// Psychological & Morale condition governing a combatant's Tactical Pool size and allocation constraints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MoraleState {
+    /// Eager and ready to attack (`+2` Pool; `+1` to Force or Tempo ceiling).
+    High,
+    /// Default composed condition (`0` Pool modifier; full allocation freedom up to ceilings).
+    #[default]
+    Steady,
+    /// Adrenaline bloodlust surge (`+2` Pool; must allocate `Force >= P_eff / 2`, and `Control <= P_eff / 4`).
+    Rage,
+    /// Doubt creeping in (`-2` Pool; `Force` cannot exceed `Control`, `F <= C`).
+    Wavering,
+    /// Disengaging / withdrawing (`-4` Pool; active offensive `Force == 0`).
+    Broken,
+    /// Full-blown rout (`-4` Pool; `Control == 0` and `Force == 0`, `100%` locked into `Tempo`).
+    Panic,
+}
+
+impl MoraleState {
+    /// Parses a morale condition identifier string (`"high"`, `"steady"`, `"rage"`, `"wavering"`, `"broken"`, `"panic"`).
+    pub fn from_str_name(name: &str) -> Result<Self, String> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "high" | "conviction" | "conviction_surge" => Ok(Self::High),
+            "steady" | "normal" => Ok(Self::Steady),
+            "rage" | "bloodlust" => Ok(Self::Rage),
+            "wavering" | "shaken" => Ok(Self::Wavering),
+            "broken" | "withdrawing" => Ok(Self::Broken),
+            "panic" | "routed" => Ok(Self::Panic),
+            other => Err(format!(
+                "unknown MoraleState '{other}'; expected high, steady, rage, wavering, broken, or panic"
+            )),
+        }
+    }
+
+    /// Returns the canonical snake_case string representation of this morale condition.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::High => "high",
+            Self::Steady => "steady",
+            Self::Rage => "rage",
+            Self::Wavering => "wavering",
+            Self::Broken => "broken",
+            Self::Panic => "panic",
+        }
+    }
+
+    /// Returns the Tactical Pool modifier ($\Delta P_{\text{morale}}$) for this morale state.
+    #[must_use]
+    pub const fn pool_modifier(self) -> i32 {
+        match self {
+            Self::High | Self::Rage => 2,
+            Self::Steady => 0,
+            Self::Wavering => -2,
+            Self::Broken | Self::Panic => -4,
+        }
+    }
+}
+
+/// Character attributes, skill level, and physical/psychological state inputs for the
+/// Satya Combat Tactical Pool ("Envelope & Fill") calculator (`docs/ttrpg/combat/combat.md`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TacticalPoolParams {
+    /// Physical Speed (`SPD`, `1..=20`).
+    pub spd: i32,
+    /// Physical Force (`FOR`, `1..=20`).
+    pub for_stat: i32,
+    /// Physical Dexterity (`DEX`, `1..=20`).
+    pub dex: i32,
+    /// Physical Kinesthesis (`KIN`, `1..=20`).
+    pub kin: i32,
+    /// Sensory Sight (`SIG`, `1..=20`).
+    pub sig: i32,
+    /// Mental Insight (`INS`, `1..=20`).
+    pub ins: i32,
+    /// Sensory Intuition (`ITU`, `1..=20`).
+    pub itu: i32,
+    /// Mental Analysis (`ANA`, `1..=20`).
+    pub ana: i32,
+    /// Mental Creativity (`CRE`, `1..=20`).
+    pub cre: i32,
+    /// Mental Focus (`FOC`, `1..=20`).
+    pub foc: i32,
+    /// Mental Discipline (`DIS`, `1..=20`).
+    pub dis: i32,
+    /// Physical Fitness (`FIT`, `1..=20`).
+    pub fit: i32,
+    /// Character body mass in kilograms (default `70.0 kg`).
+    pub mass_kg: f64,
+    /// Controlling Characteristic $C_{\text{skill}}$ of the active combat skill (`1..=20`).
+    pub skill_c: i32,
+    /// Active Combat Skill Level $N \in [1, 10]$.
+    pub skill_n: usize,
+    /// Whether the action is a ranged weapon exchange (`true`) or melee/unarmed exchange (`false`).
+    pub is_ranged: bool,
+    /// Accumulated systemic Fatigue Level (`-2` pool per level, `+10%` `action_time_factor` per level).
+    pub fatigue_level: i32,
+    /// Accumulated systemic Wound Shock Tier (`-2` pool per tier, `+25%` `action_time_factor` per tier).
+    pub wound_shock_index: i32,
+    /// Localized structural wound penalty to Leg/Hip/Foot (slashes `Tempo Cap`).
+    pub leg_wound_penalty: i32,
+    /// Localized structural wound penalty to Arm/Wrist/Head/Eye (slashes `Control Cap`).
+    pub arm_head_wound_penalty: i32,
+    /// Localized structural wound penalty to Arm/Shoulder/Torso (slashes `Force Cap`).
+    pub torso_shoulder_wound_penalty: i32,
+    /// Active psychological Morale Condition.
+    pub morale_state: MoraleState,
+}
+
+impl Default for TacticalPoolParams {
+    fn default() -> Self {
+        Self {
+            spd: 10,
+            for_stat: 10,
+            dex: 10,
+            kin: 10,
+            sig: 10,
+            ins: 10,
+            itu: 10,
+            ana: 10,
+            cre: 10,
+            foc: 10,
+            dis: 10,
+            fit: 10,
+            mass_kg: 70.0,
+            skill_c: 10,
+            skill_n: 3,
+            is_ranged: false,
+            fatigue_level: 0,
+            wound_shock_index: 0,
+            leg_wound_penalty: 0,
+            arm_head_wound_penalty: 0,
+            torso_shoulder_wound_penalty: 0,
+            morale_state: MoraleState::Steady,
+        }
+    }
+}
+
+impl TacticalPoolParams {
+    /// Build a [`TacticalPoolParams`] directly from a [`CharacterCharacteristics`] profile.
+    #[must_use]
+    pub fn from_characteristics(
+        chars: &CharacterCharacteristics,
+        skill_c: i32,
+        skill_n: usize,
+        is_ranged: bool,
+    ) -> Self {
+        Self {
+            spd: chars.spd,
+            for_stat: chars.for_stat,
+            dex: chars.dex,
+            kin: chars.kin,
+            sig: chars.sig,
+            ins: chars.ins,
+            itu: chars.itu,
+            ana: chars.ana,
+            cre: chars.cre,
+            foc: chars.foc,
+            dis: chars.dis,
+            fit: chars.fit,
+            mass_kg: chars.mas_kg,
+            skill_c,
+            skill_n,
+            is_ranged,
+            ..Default::default()
+        }
+    }
+}
+
+/// Computed Tactical Pool ("Fill") and Characteristic Aspect Ceilings ("Envelope") for a combatant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TacticalPoolEnvelope {
+    /// Cognitive Decision Score ("Quick Thinking"): $D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$.
+    pub d_cog: i32,
+    /// 4-Pillar OODA Initiative rating: $\lfloor(\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD}) / 4\rfloor$.
+    pub ooda_init: i32,
+    /// Combat Readiness controller: $C_{\text{combat}} = \lfloor(C_{\text{skill}} + \text{OODA}) / 2\rfloor$.
+    pub combat_readiness_c: i32,
+    /// Base Tactical Pool before fatigue, shock, or morale: $P_{\text{base}} = C_{\text{combat}} + 3N$.
+    pub p_base: i32,
+    /// Effective Tactical Pool available to allocate: $P_{\text{eff}} = \max(0, P_{\text{base}} - 2\cdot\text{Fatigue} - 2\cdot\text{Shock} + \Delta P_{\text{morale}})$.
+    pub p_eff: i32,
+    /// Neutral per-aspect baseline: $B = \lfloor P_{\text{base}} / 3 \rfloor$.
+    pub neutral_baseline_b: i32,
+    /// Maximum points allocatable to **Tempo ($T_{\max}$)**.
+    pub tempo_cap: i32,
+    /// Maximum points allocatable to **Control ($C_{\max}$)**.
+    pub control_cap: i32,
+    /// Maximum points allocatable to **Force ($F_{\max}$)**.
+    pub force_cap: i32,
+    /// Mastery technique overflow bonus ($\lfloor(N - 3)/2\rfloor$ for $N \ge 5$) added to Control & Force caps.
+    pub mastery_overflow: i32,
+    /// Derived kinetic Power: $\text{POW} = (\text{FOR} \times \text{SPD}) / 10.0$.
+    pub power_pow: f64,
+    /// Derived Momentum & Mass Factor: $\text{MMF} = (\text{MAS} / 70.0) \times \text{SPD}$.
+    pub momentum_mass_factor_mmf: f64,
+    /// Derived Fatigue Threshold: $\text{FT} = \text{FIT} + \lfloor\text{DIS} / 2\rfloor$.
+    pub fatigue_threshold_ft: i32,
+    /// Action Time Factor multiplier: $1.0 + 0.10\cdot\text{Fatigue} + 0.25\cdot\text{Shock}$.
+    pub action_time_factor: f64,
+    /// Active psychological Morale Condition.
+    pub morale_state: MoraleState,
+    /// Minimum Force allocation required by Morale/Rage ($\lfloor P_{\text{eff}} / 2 \rfloor$ in `Rage`, else `0`).
+    pub min_force_required: i32,
+    /// Maximum Control allocation permitted by Morale/Rage + Ceiling.
+    pub max_control_allowed: i32,
+    /// Maximum Force allocation permitted by Morale/Rage + Ceiling.
+    pub max_force_allowed: i32,
+    /// Whether `Force` is constrained to not exceed `Control` ($F \le C$, active in `Wavering` morale).
+    pub force_must_not_exceed_control: bool,
+}
+
+impl TacticalPoolEnvelope {
+    /// Return `(tempo_cap, control_cap, force_cap)` as a [`Triad`].
+    #[must_use]
+    pub const fn caps_triad(&self) -> Triad<i32> {
+        Triad::new(self.tempo_cap, self.control_cap, self.force_cap)
+    }
+}
+
+/// Evaluation of a specific `Tempo + Control + Force` Tactical Triad allocation against a [`TacticalPoolEnvelope`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TacticalTriadEvaluation {
+    /// Points allocated to **Tempo (`T`)**.
+    pub tempo: i32,
+    /// Points allocated to **Control (`C`)**.
+    pub control: i32,
+    /// Points allocated to **Force (`F`)**.
+    pub force: i32,
+    /// Whether the allocation satisfies all Pool, Ceiling, and Morale/Rage constraints.
+    pub valid: bool,
+    /// Human-readable descriptions of any violated constraints (empty when `valid == true`).
+    pub violations: Vec<String>,
+    /// Effective Count-Up Action Tick Cost (`TC`) after Tempo and `action_time_factor`.
+    pub effective_tc: i32,
+    /// Scaled melee Strike Impact ($\text{POW} \times (F / B)$).
+    pub strike_impact: f64,
+    /// Effective Rooted stability against throws, sweeps, and knockback ($F + \text{MMF}$).
+    pub effective_root: f64,
+    /// Exertion marks accumulated by this action (`0`, `1`, or `2`).
+    pub exertion_marks_gained: i32,
+    /// Canonical Tactical Archetype classification.
+    pub archetype_label: String,
+}
+
+impl TacticalTriadEvaluation {
+    /// Return `(tempo, control, force)` as a [`Triad`].
+    #[must_use]
+    pub const fn triad(&self) -> Triad<i32> {
+        Triad::new(self.tempo, self.control, self.force)
+    }
+}
+
+/// Computes the [`TacticalPoolEnvelope`] ("Envelope & Fill") for a combatant.
+pub fn compute_tactical_pool(params: &TacticalPoolParams) -> TacticalPoolEnvelope {
+    let d_cog = compute_d_cog_score(params.ana, params.cre, params.foc);
+    let ooda_init = compute_ooda_score(params.itu, params.ins, d_cog, params.spd);
+    let combat_readiness_c = (params.skill_c + ooda_init).div_euclid(2);
+    let n_i32 = params.skill_n as i32;
+    let p_base = combat_readiness_c + (3 * n_i32);
+    let neutral_baseline_b = p_base.div_euclid(3).max(1);
+
+    let morale_mod = params.morale_state.pool_modifier();
+    let p_eff =
+        (p_base - (2 * params.fatigue_level.max(0)) - (2 * params.wound_shock_index.max(0))
+            + morale_mod)
+            .max(0);
+
+    let mastery_overflow = if n_i32 >= 5 {
+        (n_i32 - 3).div_euclid(2)
+    } else {
+        0
+    };
+    let high_morale_bonus = i32::from(params.morale_state == MoraleState::High);
+
+    let fatigue_spd_for_cap_penalty = if params.fatigue_level >= 3 { 2 } else { 0 };
+    let is_metabolic_or_shock_unconscious =
+        params.fatigue_level >= 5 || params.wound_shock_index >= 5;
+
+    let base_control_attr = if params.is_ranged {
+        (params.dex + params.sig).div_euclid(2)
+    } else {
+        params.kin.max(params.dex)
+    };
+    let caps = if is_metabolic_or_shock_unconscious {
+        Triad::ZERO
+    } else {
+        Triad::new(
+            params.spd - fatigue_spd_for_cap_penalty - params.leg_wound_penalty.max(0)
+                + high_morale_bonus,
+            base_control_attr + mastery_overflow - params.arm_head_wound_penalty.max(0),
+            params.for_stat - fatigue_spd_for_cap_penalty + mastery_overflow + high_morale_bonus
+                - params.torso_shoulder_wound_penalty.max(0),
+        )
+        .clamp_min(0)
+    };
+
+    let power_pow = compute_pow_striking_power(params.for_stat, params.spd);
+    let momentum_mass_factor_mmf = compute_mmf_momentum_factor(params.mass_kg, params.spd);
+    let fatigue_threshold_ft = compute_fatigue_threshold_score(params.fit, params.dis);
+    let action_time_factor = 1.0
+        + (0.10 * params.fatigue_level.max(0) as f64)
+        + (0.25 * params.wound_shock_index.max(0) as f64);
+
+    let (min_force_required, max_control_allowed, max_force_allowed, force_must_not_exceed_control) =
+        match params.morale_state {
+            MoraleState::High | MoraleState::Steady => (0, caps.control, caps.force, false),
+            MoraleState::Rage => (
+                p_eff.div_euclid(2),
+                caps.control.min(p_eff.div_euclid(4)),
+                caps.force,
+                false,
+            ),
+            MoraleState::Wavering => (0, caps.control, caps.force, true),
+            MoraleState::Broken => (0, caps.control, 0, false),
+            MoraleState::Panic => (0, 0, 0, false),
+        };
+
+    TacticalPoolEnvelope {
+        d_cog,
+        ooda_init,
+        combat_readiness_c,
+        p_base,
+        p_eff,
+        neutral_baseline_b,
+        tempo_cap: caps.tempo,
+        control_cap: caps.control,
+        force_cap: caps.force,
+        mastery_overflow,
+        power_pow,
+        momentum_mass_factor_mmf,
+        fatigue_threshold_ft,
+        action_time_factor,
+        morale_state: params.morale_state,
+        min_force_required,
+        max_control_allowed,
+        max_force_allowed,
+        force_must_not_exceed_control,
+    }
+}
+
+/// Evaluates a specific `(tempo, control, force)` allocation against a [`TacticalPoolEnvelope`]
+/// and computes the resulting Count-Up Tick Cost (`TC`), Strike Impact, Root, Exertion Marks, and Archetype.
+pub fn evaluate_tactical_triad(
+    envelope: &TacticalPoolEnvelope,
+    base_weapon_tc: i32,
+    tempo: i32,
+    control: i32,
+    force: i32,
+) -> TacticalTriadEvaluation {
+    let mut violations = Vec::new();
+    let alloc = Triad::new(tempo, control, force);
+
+    if alloc.tempo < 0 || alloc.control < 0 || alloc.force < 0 {
+        violations
+            .push("Aspect allocations (Tempo, Control, Force) cannot be negative.".to_string());
+    }
+    let sum = alloc.sum();
+    if sum > envelope.p_eff {
+        violations.push(format!(
+            "Total allocated points ({sum}) exceed Effective Tactical Pool P_eff ({}).",
+            envelope.p_eff
+        ));
+    }
+    if tempo > envelope.tempo_cap && envelope.morale_state != MoraleState::Panic {
+        violations.push(format!(
+            "Tempo ({tempo}) exceeds Tempo Ceiling T_max ({}).",
+            envelope.tempo_cap
+        ));
+    }
+    if control > envelope.max_control_allowed {
+        violations.push(format!(
+            "Control ({control}) exceeds maximum allowed Control ({}) under {:?} morale.",
+            envelope.max_control_allowed, envelope.morale_state
+        ));
+    }
+    if force > envelope.max_force_allowed {
+        violations.push(format!(
+            "Force ({force}) exceeds maximum allowed Force ({}) under {:?} morale.",
+            envelope.max_force_allowed, envelope.morale_state
+        ));
+    }
+    if force < envelope.min_force_required {
+        violations.push(format!(
+            "Force ({force}) is below minimum required Force ({}) under {:?} morale.",
+            envelope.min_force_required, envelope.morale_state
+        ));
+    }
+    if envelope.force_must_not_exceed_control && force > control {
+        violations.push(format!(
+            "Under Wavering morale, Force ({force}) cannot exceed Control ({control})."
+        ));
+    }
+
+    let scaled_base_tc = (base_weapon_tc as f64 * envelope.action_time_factor).round() as i32;
+    let effective_tc = (scaled_base_tc - (tempo - envelope.neutral_baseline_b)).max(2);
+
+    let strike_impact = envelope.power_pow * (force as f64 / envelope.neutral_baseline_b as f64);
+    let effective_root = force as f64 + envelope.momentum_mass_factor_mmf;
+
+    let exertion_marks_gained = i32::from(envelope.tempo_cap > 0 && tempo * 2 > envelope.tempo_cap)
+        + i32::from(envelope.force_cap > 0 && force * 2 > envelope.force_cap);
+
+    let total_pos = sum.max(1) as f64;
+    let t_share = tempo as f64 / total_pos;
+    let c_share = control as f64 / total_pos;
+    let f_share = force as f64 / total_pos;
+
+    let archetype_label = if t_share >= 0.60 {
+        "Pure T — All-Out Tempo (Sprint / Snap / Evade)"
+    } else if c_share >= 0.60 {
+        "Pure C — All-Out Control (Turtle Guard / Counter-Trap)"
+    } else if f_share >= 0.60 {
+        "Pure F — All-Out Force (Haymaker / Mag-Dump)"
+    } else if t_share >= 0.35 && c_share >= 0.35 && f_share < 0.25 {
+        "TC — Tempo + Control (The Probe / Counter)"
+    } else if t_share >= 0.35 && f_share >= 0.35 && c_share < 0.25 {
+        "TF — Tempo + Force (The Blitz / Dive)"
+    } else if c_share >= 0.35 && f_share >= 0.35 && t_share < 0.25 {
+        "CF — Control + Force (The Finisher / Anchor)"
+    } else {
+        "Balanced Triad Allocation (T / C / F)"
+    }
+    .to_string();
+
+    TacticalTriadEvaluation {
+        tempo,
+        control,
+        force,
+        valid: violations.is_empty(),
+        violations,
+        effective_tc,
+        strike_impact,
+        effective_root,
+        exertion_marks_gained,
+        archetype_label,
+    }
+}
+
+/// Summary of the Combat Tactical Pool ("Envelope & Fill") interactive lab calculation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TacticalPoolEnvelopeSummary {
+    /// Maximum capacity of the tactical envelope (`E_base`).
+    pub base_envelope: i32,
+    /// Uncapped tactical pool generated from cascade successes, skill, and reach (`P_raw`).
+    pub raw_pool: i32,
+    /// Effective pool available after clamping to `base_envelope` (`P_eff`).
+    pub effective_pool: i32,
+    /// Excess points above `base_envelope` lost to envelope overflow.
+    pub overflow_wasted: i32,
+    /// Net weapon reach modifier (`-2..=+3`).
+    pub reach_modifier: i32,
+    /// Maximum Tempo allocation cap from [`TacticalPoolEnvelope`].
+    pub max_tempo: i32,
+    /// Maximum Control allocation cap from [`TacticalPoolEnvelope`].
+    pub max_control: i32,
+    /// Maximum Force allocation cap from [`TacticalPoolEnvelope`].
+    pub max_force: i32,
+}
+
+/// Computes the Satya Combat Tactical Pool ("Envelope & Fill") interactive lab summary.
+pub fn compute_tactical_pool_envelope(
+    control_c: i32,
+    skill_level: i32,
+    delta_int: i32,
+    delta_ext: i32,
+    num_successes: i32,
+    weapon_reach: i32,
+    opponent_reach: i32,
+) -> TacticalPoolEnvelopeSummary {
+    let c_clamped = control_c.clamp(1, 20);
+    let n_clamped = skill_level.clamp(0, 10);
+    let s_clamped = num_successes.max(0);
+
+    let env = compute_tactical_pool(&TacticalPoolParams {
+        spd: c_clamped,
+        for_stat: c_clamped,
+        dex: c_clamped,
+        kin: c_clamped,
+        sig: c_clamped,
+        ins: c_clamped,
+        itu: c_clamped,
+        ana: c_clamped,
+        cre: c_clamped,
+        foc: c_clamped,
+        dis: c_clamped,
+        fit: c_clamped,
+        skill_c: c_clamped,
+        skill_n: n_clamped as usize,
+        fatigue_level: delta_int.max(0).div_euclid(2),
+        ..Default::default()
+    });
+
+    let base_envelope = env.caps_triad().sum().max(1);
+    let reach_delta = weapon_reach - opponent_reach;
+    let reach_modifier = (reach_delta * 2).clamp(-4, 4);
+    let raw_pool = (env.p_eff - delta_ext.max(0) + (s_clamped * 2) + reach_modifier).max(0);
+    let effective_pool = raw_pool.min(base_envelope);
+    let overflow_wasted = (raw_pool - base_envelope).max(0);
+
+    TacticalPoolEnvelopeSummary {
+        base_envelope,
+        raw_pool,
+        effective_pool,
+        overflow_wasted,
+        reach_modifier,
+        max_tempo: env.tempo_cap,
+        max_control: env.control_cap,
+        max_force: env.force_cap,
+    }
+}
+
+/// Outcome of a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) contested exchange.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TacticalTriadContestOutcome {
+    /// Net Tempo differential (`attacker_tempo - defender_tempo`).
+    pub net_tempo: i32,
+    /// Net Control differential (`attacker_control - defender_control`).
+    pub net_control: i32,
+    /// Whether the attacker seizes the initiative (`net_tempo >= 2 && net_control >= 0`).
+    pub seizes_initiative: bool,
+    /// Whether the defender's guard is broken.
+    pub guard_broken: bool,
+    /// Whether a Kuzushi throw/sweep is triggered against `attacker_root`.
+    pub throw_triggered: bool,
+    /// Net penetrating force after armor DR and guard mitigation.
+    pub penetrating_force: i32,
+    /// Count-Up tick cost of the attacker's next exchange.
+    pub next_tick_cost: i32,
+    /// Canonical Tactical Archetype classification of the attacker's triad.
+    pub archetype_label: String,
+    /// Human-readable summary of the exchange outcome.
+    pub outcome_summary: String,
+}
+
+/// Evaluates a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) exchange.
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_tactical_triad_contest(
+    attacker_tempo: i32,
+    attacker_control: i32,
+    attacker_force: i32,
+    defender_tempo: i32,
+    defender_control: i32,
+    defender_force: i32,
+    attacker_root: i32,
+    defender_guard: i32,
+    armor_dr: i32,
+) -> TacticalTriadContestOutcome {
+    let env = compute_tactical_pool(&TacticalPoolParams {
+        skill_c: 14,
+        skill_n: 5,
+        ..Default::default()
+    });
+    let eval_res =
+        evaluate_tactical_triad(&env, 8, attacker_tempo, attacker_control, attacker_force);
+
+    let atk = Triad::new(attacker_tempo, attacker_control, attacker_force).clamp_min(0);
+    let def = Triad::new(defender_tempo, defender_control, defender_force).clamp_min(0);
+    let def_eff_c = def.control + defender_guard;
+
+    let net_tempo = atk.tempo - def.tempo;
+    let net_control = atk.control - def.control;
+    let seizes_initiative = net_tempo >= 2 && atk.control >= def_eff_c;
+    let guard_broken = (atk.control + (atk.force / 2).max(0)) > def_eff_c.max(0);
+    let leveraged_throw_force = atk.force + (atk.control - def_eff_c).max(0);
+    let effective_defender_root = def.force + (attacker_root / 3).max(1);
+    let throw_triggered = leveraged_throw_force >= effective_defender_root;
+    let raw_impact = atk.force + if guard_broken { net_control.max(0) } else { 0 };
+    let penetrating_force =
+        (raw_impact - armor_dr.max(0) - if guard_broken { 0 } else { def.control }).max(0);
+    let defender_initiative_penalty = (def_eff_c - atk.control).max(0);
+    let next_tick_cost = (eval_res.effective_tc + defender_initiative_penalty).max(2);
+
+    let outcome_summary = if throw_triggered && penetrating_force >= 3 {
+        "Decisive Takedown & Armor Breach (Prone +6 Ticks + Shock)".to_string()
+    } else if throw_triggered {
+        "Kuzushi Throw / Sweep (Leveraged Force Overcomes Root -> Prone +6 Ticks)".to_string()
+    } else if guard_broken && penetrating_force > 0 {
+        "Guard Broken & Penetrating Strike".to_string()
+    } else if seizes_initiative {
+        "Initiative Seized (Tempo & Control Advantage on Next Exchange)".to_string()
+    } else if defender_initiative_penalty > 0 && penetrating_force == 0 {
+        format!(
+            "Defender Seizes Initiative (+{defender_initiative_penalty} Recovery Ticks / Pool Drain on Attacker)"
+        )
+    } else if penetrating_force > 0 {
+        "Glancing Penetrating Blow (Behind-Armor Blunt Trauma)".to_string()
+    } else {
+        "Deflected on Guard / Bind Equilibrium".to_string()
+    };
+
+    TacticalTriadContestOutcome {
+        net_tempo,
+        net_control,
+        seizes_initiative,
+        guard_broken,
+        throw_triggered,
+        penetrating_force,
+        next_tick_cost,
+        archetype_label: eval_res.archetype_label,
+        outcome_summary,
+    }
+}
 
 // ============================================================================
 // Tactical Triad Extensions (Decision Tick Modifier & Exertion Progression)
 // ============================================================================
 
 /// Computes the **Cognitive Decision Tick Modifier ($\Delta\text{TC}_{\text{decide}}$)** from
-/// `tactical_triad_and_pools.md` §1.2:
-/// - For complex tactical reads, feints, or multi-target prioritization (`is_complex_or_feint == true`):
-///   $$\Delta\text{TC}_{\text{decide}} = -\left\lfloor \frac{D_{\text{cog}} - 10}{2} \right\rfloor$$
-/// - For simple drilled reflex actions (`is_complex_or_feint == false`): `0`.
+/// `tactical_triad_and_pools.md` §1.2.
 pub fn compute_decision_tick_modifier(d_cog: i32, is_complex_or_feint: bool) -> i32 {
     if is_complex_or_feint {
-        -((d_cog - 10).div_euclid(2))
+        compute_delta_tc_decide(d_cog)
     } else {
         0
     }
@@ -148,79 +759,29 @@ pub struct MeleeWeaponProfile {
 
 /// Returns the canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`melee_combat.md` §4).
 pub fn canonical_melee_weapon_catalog() -> Vec<MeleeWeaponProfile> {
+    macro_rules! mw {
+        ($id:ident, $name:literal, $min_r:expr, $max_r:expr, $tc:expr, $guard:expr, $pow:expr, $flat:expr, $blk:expr, $keep:expr) => {
+            MeleeWeaponProfile {
+                id: MeleeWeaponId::$id,
+                name: $name,
+                min_reach: $min_r,
+                max_reach: $max_r,
+                base_tc: $tc,
+                guard_bonus: $guard,
+                pow_multiplier: $pow,
+                flat_trauma_or_bleed_bonus: $flat,
+                block_sweep_force_bonus: $blk,
+                has_keep_out_property: $keep,
+            }
+        };
+    }
     vec![
-        MeleeWeaponProfile {
-            id: MeleeWeaponId::UnarmedJabLowKickClinchKnee,
-            name: "Unarmed (Jab / Low Kick / Clinch Knee)",
-            min_reach: 1,
-            max_reach: 1,
-            base_tc: 8,
-            guard_bonus: 0,
-            pow_multiplier: 1.0,
-            flat_trauma_or_bleed_bonus: 0,
-            block_sweep_force_bonus: 0,
-            has_keep_out_property: false,
-        },
-        MeleeWeaponProfile {
-            id: MeleeWeaponId::UnarmedHaymakerHighKickThrow,
-            name: "Unarmed (Haymaker / High Kick / Throw)",
-            min_reach: 1,
-            max_reach: 2,
-            base_tc: 10,
-            guard_bonus: -1,
-            pow_multiplier: 1.25,
-            flat_trauma_or_bleed_bonus: 0,
-            block_sweep_force_bonus: 0,
-            has_keep_out_property: false,
-        },
-        MeleeWeaponProfile {
-            id: MeleeWeaponId::CombatKnifeKarambitShiv,
-            name: "Combat Knife / Karambit / Shiv",
-            min_reach: 1,
-            max_reach: 1,
-            base_tc: 7,
-            guard_bonus: -1,
-            pow_multiplier: 1.0,
-            flat_trauma_or_bleed_bonus: 2,
-            block_sweep_force_bonus: 0,
-            has_keep_out_property: false,
-        },
-        MeleeWeaponProfile {
-            id: MeleeWeaponId::ExpandableBatonTonfaClub,
-            name: "Expandable Baton / Tonfa / Club",
-            min_reach: 2,
-            max_reach: 2,
-            base_tc: 8,
-            guard_bonus: 2,
-            pow_multiplier: 1.2,
-            flat_trauma_or_bleed_bonus: 0,
-            block_sweep_force_bonus: 0,
-            has_keep_out_property: false,
-        },
-        MeleeWeaponProfile {
-            id: MeleeWeaponId::MacheteWakizashiTacticalBlade,
-            name: "Machete / Wakizashi / Tactical Blade",
-            min_reach: 2,
-            max_reach: 3,
-            base_tc: 9,
-            guard_bonus: 1,
-            pow_multiplier: 1.15,
-            flat_trauma_or_bleed_bonus: 4,
-            block_sweep_force_bonus: 0,
-            has_keep_out_property: false,
-        },
-        MeleeWeaponProfile {
-            id: MeleeWeaponId::TwoHandedStaffSpearRiotShield,
-            name: "Two-Handed Staff / Spear / Riot Shield",
-            min_reach: 4,
-            max_reach: 4,
-            base_tc: 10,
-            guard_bonus: 3,
-            pow_multiplier: 1.2,
-            flat_trauma_or_bleed_bonus: 0,
-            block_sweep_force_bonus: 2,
-            has_keep_out_property: true,
-        },
+        mw!(UnarmedJabLowKickClinchKnee, "Unarmed (Jab / Low Kick / Clinch Knee)", 1, 1, 8, 0, 1.0, 0, 0, false),
+        mw!(UnarmedHaymakerHighKickThrow, "Unarmed (Haymaker / High Kick / Throw)", 1, 2, 10, -1, 1.25, 0, 0, false),
+        mw!(CombatKnifeKarambitShiv, "Combat Knife / Karambit / Shiv", 1, 1, 7, -1, 1.0, 2, 0, false),
+        mw!(ExpandableBatonTonfaClub, "Expandable Baton / Tonfa / Club", 2, 2, 8, 2, 1.2, 0, 0, false),
+        mw!(MacheteWakizashiTacticalBlade, "Machete / Wakizashi / Tactical Blade", 2, 3, 9, 1, 1.15, 4, 0, false),
+        mw!(TwoHandedStaffSpearRiotShield, "Two-Handed Staff / Spear / Riot Shield", 4, 4, 10, 3, 1.2, 0, 2, true),
     ]
 }
 
@@ -406,52 +967,25 @@ pub struct RangedFireModeProfile {
 
 /// Returns the canonical 5-entry Ranged Fire Mode catalog (`ranged_combat_and_armor.md` §1.1).
 pub fn canonical_ranged_fire_modes() -> Vec<RangedFireModeProfile> {
+    macro_rules! fm {
+        ($id:ident, $name:literal, $min_tc:expr, $max_tc:expr, $min_r:expr, $max_r:expr, $move_r:expr) => {
+            RangedFireModeProfile {
+                id: RangedFireModeId::$id,
+                name: $name,
+                min_base_tc: $min_tc,
+                max_base_tc: $max_tc,
+                min_recoil_r: $min_r,
+                max_recoil_r: $max_r,
+                movement_recoil_adder: $move_r,
+            }
+        };
+    }
     vec![
-        RangedFireModeProfile {
-            id: RangedFireModeId::SingleSnapShotPointShoot,
-            name: "Single Snap Shot (Point-Shoot)",
-            min_base_tc: 7,
-            max_base_tc: 7,
-            min_recoil_r: 3,
-            max_recoil_r: 4,
-            movement_recoil_adder: 0,
-        },
-        RangedFireModeProfile {
-            id: RangedFireModeId::DeliberateSightedAimedShot,
-            name: "Deliberate Sighted / Aimed Shot",
-            min_base_tc: 11,
-            max_base_tc: 12,
-            min_recoil_r: 4,
-            max_recoil_r: 6,
-            movement_recoil_adder: 0,
-        },
-        RangedFireModeProfile {
-            id: RangedFireModeId::ControlledDoubleTapShortBurst,
-            name: "Controlled Double-Tap / Short Burst",
-            min_base_tc: 9,
-            max_base_tc: 9,
-            min_recoil_r: 6,
-            max_recoil_r: 7,
-            movement_recoil_adder: 0,
-        },
-        RangedFireModeProfile {
-            id: RangedFireModeId::FullAutoBurstSuppressiveFire,
-            name: "Full-Auto Burst / Suppressive Fire",
-            min_base_tc: 8,
-            max_base_tc: 10,
-            min_recoil_r: 8,
-            max_recoil_r: 12,
-            movement_recoil_adder: 0,
-        },
-        RangedFireModeProfile {
-            id: RangedFireModeId::BoundingShootingOnTheMove,
-            name: "Bounding / Shooting on the Move",
-            min_base_tc: 10,
-            max_base_tc: 10,
-            min_recoil_r: 6,
-            max_recoil_r: 10,
-            movement_recoil_adder: 3,
-        },
+        fm!(SingleSnapShotPointShoot, "Single Snap Shot (Point-Shoot)", 7, 7, 3, 4, 0),
+        fm!(DeliberateSightedAimedShot, "Deliberate Sighted / Aimed Shot", 11, 12, 4, 6, 0),
+        fm!(ControlledDoubleTapShortBurst, "Controlled Double-Tap / Short Burst", 9, 9, 6, 7, 0),
+        fm!(FullAutoBurstSuppressiveFire, "Full-Auto Burst / Suppressive Fire", 8, 10, 8, 12, 0),
+        fm!(BoundingShootingOnTheMove, "Bounding / Shooting on the Move", 10, 10, 6, 10, 3),
     ]
 }
 
@@ -576,79 +1110,29 @@ pub struct ArmorProfile {
 
 /// Returns the canonical 6-entry Armor Catalog (`ranged_combat_and_armor.md` §2.1).
 pub fn canonical_armor_catalog() -> Vec<ArmorProfile> {
+    macro_rules! ar {
+        ($id:ident, $name:literal, $edged:expr, $ice:expr, $bal:expr, $vis:expr, $btd:expr, $wt:expr, $exo:expr, $heat:expr) => {
+            ArmorProfile {
+                id: ArmorProfileId::$id,
+                name: $name,
+                pr_edged: $edged,
+                pr_icepick_flechette: $ice,
+                pr_ballistic: $bal,
+                pr_visor_weak_spot: $vis,
+                blunt_trauma_dampening_btd: $btd,
+                weight_kg: $wt,
+                exo_load_offset_kg: $exo,
+                heat_retention_delta: $heat,
+            }
+        };
+    }
     vec![
-        ArmorProfile {
-            id: ArmorProfileId::HeavyLeatherSynthWeaveJacket,
-            name: "Heavy Leather / Synth-Weave Jacket",
-            pr_edged: 2,
-            pr_icepick_flechette: 2,
-            pr_ballistic: 1,
-            pr_visor_weak_spot: 1,
-            blunt_trauma_dampening_btd: 1,
-            weight_kg: 2.5,
-            exo_load_offset_kg: 0.0,
-            heat_retention_delta: 0,
-        },
-        ArmorProfile {
-            id: ArmorProfileId::ConcealableSoftKevlarVestNij3a,
-            name: "Concealable Soft Kevlar Vest (NIJ IIIA)",
-            pr_edged: 2,
-            pr_icepick_flechette: 1,
-            pr_ballistic: 4,
-            pr_visor_weak_spot: 4,
-            blunt_trauma_dampening_btd: 2,
-            weight_kg: 2.8,
-            exo_load_offset_kg: 0.0,
-            heat_retention_delta: 0,
-        },
-        ArmorProfile {
-            id: ArmorProfileId::TacticalPlateCarrierLevel4,
-            name: "Tactical Plate Carrier (Level IV Ceramic)",
-            pr_edged: 6,
-            pr_icepick_flechette: 6,
-            pr_ballistic: 8,
-            pr_visor_weak_spot: 8,
-            blunt_trauma_dampening_btd: 5,
-            weight_kg: 8.5,
-            exo_load_offset_kg: 0.0,
-            heat_retention_delta: 0,
-        },
-        ArmorProfile {
-            id: ArmorProfileId::BallisticCombatHelmetVisor,
-            name: "Ballistic Combat Helmet + Visor",
-            pr_edged: 5,
-            pr_icepick_flechette: 5,
-            pr_ballistic: 4,
-            pr_visor_weak_spot: 3,
-            blunt_trauma_dampening_btd: 4,
-            weight_kg: 1.6,
-            exo_load_offset_kg: 0.0,
-            heat_retention_delta: 0,
-        },
-        ArmorProfile {
-            id: ArmorProfileId::FullRiotBreacherSuit,
-            name: "Full Riot / Breacher Suit",
-            pr_edged: 6,
-            pr_icepick_flechette: 6,
-            pr_ballistic: 5,
-            pr_visor_weak_spot: 5,
-            blunt_trauma_dampening_btd: 6,
-            weight_kg: 16.0,
-            exo_load_offset_kg: 0.0,
-            heat_retention_delta: 6,
-        },
-        ArmorProfile {
-            id: ArmorProfileId::ValkyrieReconExoCarapace2035,
-            name: "2035 \"Valkyrie\" Recon Exo-Carapace",
-            pr_edged: 8,
-            pr_icepick_flechette: 8,
-            pr_ballistic: 9,
-            pr_visor_weak_spot: 9,
-            blunt_trauma_dampening_btd: 8,
-            weight_kg: 18.5,
-            exo_load_offset_kg: 20.0,
-            heat_retention_delta: 0,
-        },
+        ar!(HeavyLeatherSynthWeaveJacket, "Heavy Leather / Synth-Weave Jacket", 2, 2, 1, 1, 1, 2.5, 0.0, 0),
+        ar!(ConcealableSoftKevlarVestNij3a, "Concealable Soft Kevlar Vest (NIJ IIIA)", 2, 1, 4, 4, 2, 2.8, 0.0, 0),
+        ar!(TacticalPlateCarrierLevel4, "Tactical Plate Carrier (Level IV Ceramic)", 6, 6, 8, 8, 5, 8.5, 0.0, 0),
+        ar!(BallisticCombatHelmetVisor, "Ballistic Combat Helmet + Visor", 5, 5, 4, 3, 4, 1.6, 0.0, 0),
+        ar!(FullRiotBreacherSuit, "Full Riot / Breacher Suit", 6, 6, 5, 5, 6, 16.0, 0.0, 6),
+        ar!(ValkyrieReconExoCarapace2035, "2035 \"Valkyrie\" Recon Exo-Carapace", 8, 8, 9, 9, 8, 18.5, 20.0, 0),
     ]
 }
 
@@ -1325,7 +1809,6 @@ mod tests {
         CombatMotivationKind, PsycheProfile, evaluate_combat_morale_roll,
         evaluate_combat_motivation_modifier,
     };
-    use crate::rules_book::{MoraleState, TacticalPoolParams, compute_tactical_pool};
 
     #[test]
     fn test_viktor_vs_elena_melee_walkthrough() {
