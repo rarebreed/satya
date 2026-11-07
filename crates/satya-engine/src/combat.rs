@@ -757,32 +757,45 @@ pub struct MeleeWeaponProfile {
     pub has_keep_out_property: bool,
 }
 
-/// Returns the canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`melee_combat.md` §4).
-pub fn canonical_melee_weapon_catalog() -> Vec<MeleeWeaponProfile> {
-    macro_rules! mw {
-        ($id:ident, $name:literal, $min_r:expr, $max_r:expr, $tc:expr, $guard:expr, $pow:expr, $flat:expr, $blk:expr, $keep:expr) => {
-            MeleeWeaponProfile {
-                id: MeleeWeaponId::$id,
-                name: $name,
-                min_reach: $min_r,
-                max_reach: $max_r,
-                base_tc: $tc,
-                guard_bonus: $guard,
-                pow_multiplier: $pow,
-                flat_trauma_or_bleed_bonus: $flat,
-                block_sweep_force_bonus: $blk,
-                has_keep_out_property: $keep,
-            }
-        };
+macro_rules! mw {
+    ($id:ident, $name:literal, $min_r:expr, $max_r:expr, $tc:expr, $guard:expr, $pow:expr, $flat:expr, $blk:expr, $keep:expr) => {
+        MeleeWeaponProfile {
+            id: MeleeWeaponId::$id,
+            name: $name,
+            min_reach: $min_r,
+            max_reach: $max_r,
+            base_tc: $tc,
+            guard_bonus: $guard,
+            pow_multiplier: $pow,
+            flat_trauma_or_bleed_bonus: $flat,
+            block_sweep_force_bonus: $blk,
+            has_keep_out_property: $keep,
+        }
+    };
+}
+
+/// Canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`melee_combat.md` §4).
+pub const MELEE_WEAPON_CATALOG: [MeleeWeaponProfile; 6] = [
+    mw!(UnarmedJabLowKickClinchKnee, "Unarmed (Jab / Low Kick / Clinch Knee)", 1, 1, 8, 0, 1.0, 0, 0, false),
+    mw!(UnarmedHaymakerHighKickThrow, "Unarmed (Haymaker / High Kick / Throw)", 1, 2, 10, -1, 1.25, 0, 0, false),
+    mw!(CombatKnifeKarambitShiv, "Combat Knife / Karambit / Shiv", 1, 1, 7, -1, 1.0, 2, 0, false),
+    mw!(ExpandableBatonTonfaClub, "Expandable Baton / Tonfa / Club", 2, 2, 8, 2, 1.2, 0, 0, false),
+    mw!(MacheteWakizashiTacticalBlade, "Machete / Wakizashi / Tactical Blade", 2, 3, 9, 1, 1.15, 4, 0, false),
+    mw!(TwoHandedStaffSpearRiotShield, "Two-Handed Staff / Spear / Riot Shield", 4, 4, 10, 3, 1.2, 0, 2, true),
+];
+
+impl MeleeWeaponId {
+    /// Static [`MeleeWeaponProfile`] for this weapon identifier.
+    #[must_use]
+    pub const fn spec(self) -> &'static MeleeWeaponProfile {
+        &MELEE_WEAPON_CATALOG[self as usize]
     }
-    vec![
-        mw!(UnarmedJabLowKickClinchKnee, "Unarmed (Jab / Low Kick / Clinch Knee)", 1, 1, 8, 0, 1.0, 0, 0, false),
-        mw!(UnarmedHaymakerHighKickThrow, "Unarmed (Haymaker / High Kick / Throw)", 1, 2, 10, -1, 1.25, 0, 0, false),
-        mw!(CombatKnifeKarambitShiv, "Combat Knife / Karambit / Shiv", 1, 1, 7, -1, 1.0, 2, 0, false),
-        mw!(ExpandableBatonTonfaClub, "Expandable Baton / Tonfa / Club", 2, 2, 8, 2, 1.2, 0, 0, false),
-        mw!(MacheteWakizashiTacticalBlade, "Machete / Wakizashi / Tactical Blade", 2, 3, 9, 1, 1.15, 4, 0, false),
-        mw!(TwoHandedStaffSpearRiotShield, "Two-Handed Staff / Spear / Riot Shield", 4, 4, 10, 3, 1.2, 0, 2, true),
-    ]
+}
+
+/// Returns the canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`melee_combat.md` §4).
+#[must_use]
+pub fn canonical_melee_weapon_catalog() -> Vec<MeleeWeaponProfile> {
+    MELEE_WEAPON_CATALOG.to_vec()
 }
 
 /// Computes the **Reach Advantage & Clinch Polarity Flip** external penalty $\Delta_{\text{ext}}$ (`melee_combat.md` §4):
@@ -965,28 +978,41 @@ pub struct RangedFireModeProfile {
     pub movement_recoil_adder: i32,
 }
 
-/// Returns the canonical 5-entry Ranged Fire Mode catalog (`ranged_combat_and_armor.md` §1.1).
-pub fn canonical_ranged_fire_modes() -> Vec<RangedFireModeProfile> {
-    macro_rules! fm {
-        ($id:ident, $name:literal, $min_tc:expr, $max_tc:expr, $min_r:expr, $max_r:expr, $move_r:expr) => {
-            RangedFireModeProfile {
-                id: RangedFireModeId::$id,
-                name: $name,
-                min_base_tc: $min_tc,
-                max_base_tc: $max_tc,
-                min_recoil_r: $min_r,
-                max_recoil_r: $max_r,
-                movement_recoil_adder: $move_r,
-            }
-        };
+macro_rules! fm {
+    ($id:ident, $name:literal, $min_tc:expr, $max_tc:expr, $min_r:expr, $max_r:expr, $move_r:expr) => {
+        RangedFireModeProfile {
+            id: RangedFireModeId::$id,
+            name: $name,
+            min_base_tc: $min_tc,
+            max_base_tc: $max_tc,
+            min_recoil_r: $min_r,
+            max_recoil_r: $max_r,
+            movement_recoil_adder: $move_r,
+        }
+    };
+}
+
+/// Canonical 5-entry Ranged Fire Mode catalog (`ranged_combat_and_armor.md` §1.1).
+pub const RANGED_FIRE_MODES: [RangedFireModeProfile; 5] = [
+    fm!(SingleSnapShotPointShoot, "Single Snap Shot (Point-Shoot)", 7, 7, 3, 4, 0),
+    fm!(DeliberateSightedAimedShot, "Deliberate Sighted / Aimed Shot", 11, 12, 4, 6, 0),
+    fm!(ControlledDoubleTapShortBurst, "Controlled Double-Tap / Short Burst", 9, 9, 6, 7, 0),
+    fm!(FullAutoBurstSuppressiveFire, "Full-Auto Burst / Suppressive Fire", 8, 10, 8, 12, 0),
+    fm!(BoundingShootingOnTheMove, "Bounding / Shooting on the Move", 10, 10, 6, 10, 3),
+];
+
+impl RangedFireModeId {
+    /// Static [`RangedFireModeProfile`] for this fire mode.
+    #[must_use]
+    pub const fn spec(self) -> &'static RangedFireModeProfile {
+        &RANGED_FIRE_MODES[self as usize]
     }
-    vec![
-        fm!(SingleSnapShotPointShoot, "Single Snap Shot (Point-Shoot)", 7, 7, 3, 4, 0),
-        fm!(DeliberateSightedAimedShot, "Deliberate Sighted / Aimed Shot", 11, 12, 4, 6, 0),
-        fm!(ControlledDoubleTapShortBurst, "Controlled Double-Tap / Short Burst", 9, 9, 6, 7, 0),
-        fm!(FullAutoBurstSuppressiveFire, "Full-Auto Burst / Suppressive Fire", 8, 10, 8, 12, 0),
-        fm!(BoundingShootingOnTheMove, "Bounding / Shooting on the Move", 10, 10, 6, 10, 3),
-    ]
+}
+
+/// Returns the canonical 5-entry Ranged Fire Mode catalog (`ranged_combat_and_armor.md` §1.1).
+#[must_use]
+pub fn canonical_ranged_fire_modes() -> Vec<RangedFireModeProfile> {
+    RANGED_FIRE_MODES.to_vec()
 }
 
 /// Evaluation of a ranged weapon triad allocation against Recoil (`R`) and Suppressive Fire rules (`ranged_combat_and_armor.md` §1.2–§1.3).
@@ -1042,23 +1068,14 @@ pub fn evaluate_ranged_recoil_with_gait(
     movement_gait: crate::health_survival::CombatMovementGait,
     is_suppressive_or_full_auto: bool,
 ) -> RangedExchangeEvaluation {
-    let effective_recoil_r = weapon_recoil_r.max(0) + movement_gait.ranged_recoil_adder();
-    let unbraced_dispersion_delta_ext = (effective_recoil_r - allocated_force.max(0)).max(0);
-    let recoil_fully_braced = unbraced_dispersion_delta_ext == 0;
-    let suppression_morale_delta = if is_suppressive_or_full_auto {
-        allocated_force.max(0).div_euclid(2)
-    } else {
-        0
-    };
-    let _ = (allocated_tempo, allocated_control);
-
-    RangedExchangeEvaluation {
-        effective_recoil_r,
-        recoil_fully_braced,
-        unbraced_dispersion_delta_ext,
-        suppression_morale_delta,
-        calm_return_fire_control_threshold: 6,
-    }
+    evaluate_ranged_recoil_and_suppression(
+        allocated_tempo,
+        allocated_control,
+        allocated_force,
+        weapon_recoil_r.max(0) + movement_gait.ranged_recoil_adder(),
+        false,
+        is_suppressive_or_full_auto,
+    )
 }
 
 // ============================================================================
@@ -1108,32 +1125,45 @@ pub struct ArmorProfile {
     pub heat_retention_delta: i32,
 }
 
-/// Returns the canonical 6-entry Armor Catalog (`ranged_combat_and_armor.md` §2.1).
-pub fn canonical_armor_catalog() -> Vec<ArmorProfile> {
-    macro_rules! ar {
-        ($id:ident, $name:literal, $edged:expr, $ice:expr, $bal:expr, $vis:expr, $btd:expr, $wt:expr, $exo:expr, $heat:expr) => {
-            ArmorProfile {
-                id: ArmorProfileId::$id,
-                name: $name,
-                pr_edged: $edged,
-                pr_icepick_flechette: $ice,
-                pr_ballistic: $bal,
-                pr_visor_weak_spot: $vis,
-                blunt_trauma_dampening_btd: $btd,
-                weight_kg: $wt,
-                exo_load_offset_kg: $exo,
-                heat_retention_delta: $heat,
-            }
-        };
+macro_rules! ar {
+    ($id:ident, $name:literal, $edged:expr, $ice:expr, $bal:expr, $vis:expr, $btd:expr, $wt:expr, $exo:expr, $heat:expr) => {
+        ArmorProfile {
+            id: ArmorProfileId::$id,
+            name: $name,
+            pr_edged: $edged,
+            pr_icepick_flechette: $ice,
+            pr_ballistic: $bal,
+            pr_visor_weak_spot: $vis,
+            blunt_trauma_dampening_btd: $btd,
+            weight_kg: $wt,
+            exo_load_offset_kg: $exo,
+            heat_retention_delta: $heat,
+        }
+    };
+}
+
+/// Canonical 6-entry Armor Catalog (`ranged_combat_and_armor.md` §2.1).
+pub const ARMOR_CATALOG: [ArmorProfile; 6] = [
+    ar!(HeavyLeatherSynthWeaveJacket, "Heavy Leather / Synth-Weave Jacket", 2, 2, 1, 1, 1, 2.5, 0.0, 0),
+    ar!(ConcealableSoftKevlarVestNij3a, "Concealable Soft Kevlar Vest (NIJ IIIA)", 2, 1, 4, 4, 2, 2.8, 0.0, 0),
+    ar!(TacticalPlateCarrierLevel4, "Tactical Plate Carrier (Level IV Ceramic)", 6, 6, 8, 8, 5, 8.5, 0.0, 0),
+    ar!(BallisticCombatHelmetVisor, "Ballistic Combat Helmet + Visor", 5, 5, 4, 3, 4, 1.6, 0.0, 0),
+    ar!(FullRiotBreacherSuit, "Full Riot / Breacher Suit", 6, 6, 5, 5, 6, 16.0, 0.0, 6),
+    ar!(ValkyrieReconExoCarapace2035, "2035 \"Valkyrie\" Recon Exo-Carapace", 8, 8, 9, 9, 8, 18.5, 20.0, 0),
+];
+
+impl ArmorProfileId {
+    /// Static [`ArmorProfile`] for this armor identifier.
+    #[must_use]
+    pub const fn spec(self) -> &'static ArmorProfile {
+        &ARMOR_CATALOG[self as usize]
     }
-    vec![
-        ar!(HeavyLeatherSynthWeaveJacket, "Heavy Leather / Synth-Weave Jacket", 2, 2, 1, 1, 1, 2.5, 0.0, 0),
-        ar!(ConcealableSoftKevlarVestNij3a, "Concealable Soft Kevlar Vest (NIJ IIIA)", 2, 1, 4, 4, 2, 2.8, 0.0, 0),
-        ar!(TacticalPlateCarrierLevel4, "Tactical Plate Carrier (Level IV Ceramic)", 6, 6, 8, 8, 5, 8.5, 0.0, 0),
-        ar!(BallisticCombatHelmetVisor, "Ballistic Combat Helmet + Visor", 5, 5, 4, 3, 4, 1.6, 0.0, 0),
-        ar!(FullRiotBreacherSuit, "Full Riot / Breacher Suit", 6, 6, 5, 5, 6, 16.0, 0.0, 6),
-        ar!(ValkyrieReconExoCarapace2035, "2035 \"Valkyrie\" Recon Exo-Carapace", 8, 8, 9, 9, 8, 18.5, 20.0, 0),
-    ]
+}
+
+/// Returns the canonical 6-entry Armor Catalog (`ranged_combat_and_armor.md` §2.1).
+#[must_use]
+pub fn canonical_armor_catalog() -> Vec<ArmorProfile> {
+    ARMOR_CATALOG.to_vec()
 }
 
 /// Incoming weapon damage type for Armor `PR` vs. `BABT` resolution (`ranged_combat_and_armor.md` §2.2).

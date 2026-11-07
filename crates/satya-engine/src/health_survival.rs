@@ -35,7 +35,7 @@ use crate::characteristics::compute_wound_shock_resistance_score;
 use crate::dice_probabilities::{
     ContestedCascadeRollOutcome, ContestedOutcomeKind, ContestedTieRule,
 };
-use crate::primitives::{ConditionImpact, TieredSaveEval, Triad};
+use crate::primitives::{ConditionImpact, ConditionSource, TieredSaveEval, Triad};
 
 // ============================================================================
 // 1. Hit Locations & Called Shots (`health_and_trauma.md` §1)
@@ -152,63 +152,76 @@ impl HitLocationSpec {
     }
 }
 
+macro_rules! hl {
+    ($id:ident, $min:expr, $max:expr, $name:literal, $ext:expr, ($t:expr, $c:expr, $f:expr), $art:expr, $notes:literal) => {
+        HitLocationSpec {
+            id: HitLocationId::$id,
+            d20_min: $min,
+            d20_max: $max,
+            name: $name,
+            called_shot_delta_ext: $ext,
+            slashes_tempo_cap: $t,
+            slashes_control_cap: $c,
+            slashes_force_cap: $f,
+            major_arterial_hazard: $art,
+            mechanical_notes: $notes,
+        }
+    };
+}
+
+/// Canonical 13-entry Master Anatomical Hit Location Table (`health_and_trauma.md` §1.2).
+pub const HIT_LOCATION_TABLE: [HitLocationSpec; 13] = [
+    hl!(FootAnkle, 1, 1, "Foot / Ankle (L or R)", 4, (true, false, false), false,
+        "Mobility Anchor: Fractured tarsals or severed Achilles locks running/sprinting; -4 to Effective Root against sweeps."),
+    hl!(CalfShin, 2, 3, "Calf / Shin (Tibia/Fibula) (L or R)", 2, (true, false, false), false,
+        "Footwork Degradation: Muscle cramp or tibial fracture; Tier 3+ fracture prevents standing without support."),
+    hl!(KneeJoint, 4, 4, "Knee Joint (Patella/ACL) (L or R)", 4, (true, false, false), false,
+        "Joint Collapse: High susceptibility to Blunt/Leverage trauma (-4/-8/Locked 0 T_max & Root); Tier 2+ tear/dislocation forces immediate Prone check."),
+    hl!(ThighFemur, 5, 6, "Thigh (Femur / Femoral) (L or R)", 2, (true, false, true), true,
+        "Arterial Hazard: Deep Piercing/Slashing wounds risk Femoral Arterial Bleed; broken femur inflicts immediate Wound Shock +3."),
+    hl!(PelvisHipGroin, 7, 7, "Pelvis / Hip Girdle / Groin", 4, (true, false, true), true,
+        "Center of Mass Structural Lock: Pelvic fracture locks Tempo = 0 (cannot walk/stand) and inflicts excruciating neurogenic shock."),
+    hl!(AbdomenGutLiverSpleen, 8, 10, "Abdomen / Gut / Liver / Spleen", 2, (false, false, true), false,
+        "Visceral Shock & Nausea: Blunt liver/solar-plexus hit triggers Nausea / Winded; penetrating gut wound causes sepsis & internal bleed."),
+    hl!(ChestRibcageLungs, 11, 13, "Chest / Ribcage / Lungs", 2, (false, false, true), false,
+        "Respiratory Trauma: Cracked ribs slash Force Cap and impose -4 FIT (+1 Exertion Mark / 20 ticks); penetrating hit causes Pneumothorax."),
+    hl!(VitalThoracicHeartSpineAorta, 14, 14, "Vital Thoracic (Heart / Spine / Aorta)", 8, (true, true, true), true,
+        "Catastrophic Vitals: Penetrating trauma causes massive Arterial Hemorrhage; spinal hit causes immediate lower-body Paralysis."),
+    hl!(ShoulderClavicleScapula, 15, 15, "Shoulder / Clavicle / Scapula (L or R)", 4, (false, true, true), true,
+        "Shoulder Girdle Failure: Dislocated shoulder or broken collarbone disables lifting, two-handed bracing, and heavy swings with that arm."),
+    hl!(UpperArmElbowForearm, 16, 17, "Upper Arm / Elbow / Forearm (L or R)", 2, (false, true, true), true,
+        "Brachial & Lever Trauma: Slashes parry/aiming stability (Control) and striking power (Force); deep cuts risk Brachial Artery."),
+    hl!(WristHandFingers, 18, 18, "Wrist / Hand / Fingers (L or R)", 4, (false, true, false), false,
+        "Disarm & Manual Lock: Tier 2+ hit forces immediate FOR/DEX Disarm Check; fractured wrist/fingers prevent firing or gripping with that hand."),
+    hl!(NeckThroatCarotidCervical, 19, 19, "Neck / Throat / Carotid / Cervical", 8, (true, true, true), true,
+        "Lethal Vulnerability: Blunt strike crushes trachea (Asphyxiation + mutes speech ELO = 0); blade/bullet severs Carotid/Jugular or cervical spine."),
+    hl!(HeadCraniumFaceJawEyes, 20, 20, "Head (Cranium / Face / Jaw / Eyes)", 6, (false, true, false), false,
+        "Neurological & Sensory Apex: Blunt impact triggers Stunned / Concussed / Unconscious; eye hit causes Blinded; jaw hit impairs speech."),
+];
+
+impl HitLocationId {
+    /// Static [`HitLocationSpec`] for this anatomical location.
+    #[must_use]
+    pub const fn spec(self) -> &'static HitLocationSpec {
+        &HIT_LOCATION_TABLE[self as usize]
+    }
+}
+
 /// Returns the canonical 13-entry Master Anatomical Hit Location Table (`health_and_trauma.md` §1.2).
 #[must_use]
 pub fn canonical_hit_location_table() -> Vec<HitLocationSpec> {
-    macro_rules! hl {
-        ($id:ident, $min:expr, $max:expr, $name:literal, $ext:expr, ($t:expr, $c:expr, $f:expr), $art:expr, $notes:literal) => {
-            HitLocationSpec {
-                id: HitLocationId::$id,
-                d20_min: $min,
-                d20_max: $max,
-                name: $name,
-                called_shot_delta_ext: $ext,
-                slashes_tempo_cap: $t,
-                slashes_control_cap: $c,
-                slashes_force_cap: $f,
-                major_arterial_hazard: $art,
-                mechanical_notes: $notes,
-            }
-        };
-    }
-    vec![
-        hl!(FootAnkle, 1, 1, "Foot / Ankle (L or R)", 4, (true, false, false), false,
-            "Mobility Anchor: Fractured tarsals or severed Achilles locks running/sprinting; -4 to Effective Root against sweeps."),
-        hl!(CalfShin, 2, 3, "Calf / Shin (Tibia/Fibula) (L or R)", 2, (true, false, false), false,
-            "Footwork Degradation: Muscle cramp or tibial fracture; Tier 3+ fracture prevents standing without support."),
-        hl!(KneeJoint, 4, 4, "Knee Joint (Patella/ACL) (L or R)", 4, (true, false, false), false,
-            "Joint Collapse: High susceptibility to Blunt/Leverage trauma (-4/-8/Locked 0 T_max & Root); Tier 2+ tear/dislocation forces immediate Prone check."),
-        hl!(ThighFemur, 5, 6, "Thigh (Femur / Femoral) (L or R)", 2, (true, false, true), true,
-            "Arterial Hazard: Deep Piercing/Slashing wounds risk Femoral Arterial Bleed; broken femur inflicts immediate Wound Shock +3."),
-        hl!(PelvisHipGroin, 7, 7, "Pelvis / Hip Girdle / Groin", 4, (true, false, true), true,
-            "Center of Mass Structural Lock: Pelvic fracture locks Tempo = 0 (cannot walk/stand) and inflicts excruciating neurogenic shock."),
-        hl!(AbdomenGutLiverSpleen, 8, 10, "Abdomen / Gut / Liver / Spleen", 2, (false, false, true), false,
-            "Visceral Shock & Nausea: Blunt liver/solar-plexus hit triggers Nausea / Winded; penetrating gut wound causes sepsis & internal bleed."),
-        hl!(ChestRibcageLungs, 11, 13, "Chest / Ribcage / Lungs", 2, (false, false, true), false,
-            "Respiratory Trauma: Cracked ribs slash Force Cap and impose -4 FIT (+1 Exertion Mark / 20 ticks); penetrating hit causes Pneumothorax."),
-        hl!(VitalThoracicHeartSpineAorta, 14, 14, "Vital Thoracic (Heart / Spine / Aorta)", 8, (true, true, true), true,
-            "Catastrophic Vitals: Penetrating trauma causes massive Arterial Hemorrhage; spinal hit causes immediate lower-body Paralysis."),
-        hl!(ShoulderClavicleScapula, 15, 15, "Shoulder / Clavicle / Scapula (L or R)", 4, (false, true, true), true,
-            "Shoulder Girdle Failure: Dislocated shoulder or broken collarbone disables lifting, two-handed bracing, and heavy swings with that arm."),
-        hl!(UpperArmElbowForearm, 16, 17, "Upper Arm / Elbow / Forearm (L or R)", 2, (false, true, true), true,
-            "Brachial & Lever Trauma: Slashes parry/aiming stability (Control) and striking power (Force); deep cuts risk Brachial Artery."),
-        hl!(WristHandFingers, 18, 18, "Wrist / Hand / Fingers (L or R)", 4, (false, true, false), false,
-            "Disarm & Manual Lock: Tier 2+ hit forces immediate FOR/DEX Disarm Check; fractured wrist/fingers prevent firing or gripping with that hand."),
-        hl!(NeckThroatCarotidCervical, 19, 19, "Neck / Throat / Carotid / Cervical", 8, (true, true, true), true,
-            "Lethal Vulnerability: Blunt strike crushes trachea (Asphyxiation + mutes speech ELO = 0); blade/bullet severs Carotid/Jugular or cervical spine."),
-        hl!(HeadCraniumFaceJawEyes, 20, 20, "Head (Cranium / Face / Jaw / Eyes)", 6, (false, true, false), false,
-            "Neurological & Sensory Apex: Blunt impact triggers Stunned / Concussed / Unconscious; eye hit causes Blinded; jaw hit impairs speech."),
-    ]
+    HIT_LOCATION_TABLE.to_vec()
 }
 
 /// Resolves a `1d20` roll (`1..=20`) into its canonical [`HitLocationSpec`] (`health_and_trauma.md` §1.2).
 #[must_use]
 pub fn resolve_hit_location_d20(d20_roll: i32) -> HitLocationSpec {
     let clamped = d20_roll.clamp(1, 20);
-    canonical_hit_location_table()
-        .into_iter()
+    HIT_LOCATION_TABLE
+        .iter()
         .find(|spec| clamped >= spec.d20_min && clamped <= spec.d20_max)
-        .expect("1..=20 is exhaustively covered by canonical_hit_location_table")
+        .expect("1..=20 is exhaustively covered by HIT_LOCATION_TABLE")
+        .clone()
 }
 
 // ============================================================================
@@ -271,6 +284,24 @@ pub fn evaluate_fatigue_level(fatigue_level: i32) -> FatigueLevelSpec {
         can_sprint,
         is_unconscious,
         recovery_requirement,
+    }
+}
+
+impl ConditionSource for FatigueLevelSpec {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        ConditionImpact {
+            delta_int: self.delta_int,
+            tactical_pool_mod: self.tactical_pool_drain,
+            action_time_factor_delta: self.action_time_factor - 1.0,
+            triad_cap_penalty: Triad::new(
+                self.spd_and_for_cap_penalty,
+                0,
+                self.spd_and_for_cap_penalty,
+            ),
+            triad_locked_zero: Triad::splat(self.is_unconscious),
+            is_unconscious: self.is_unconscious,
+            ..ConditionImpact::ZERO
+        }
     }
 }
 
@@ -862,6 +893,12 @@ impl AggregatedStatusEffects {
     }
 }
 
+impl ConditionSource for AggregatedStatusEffects {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        Self::to_condition_impact(self)
+    }
+}
+
 /// Evaluates the combined mechanical impact of a slice of [`PhysiologicalStatusCondition`]s (`health_and_trauma.md` §4).
 #[must_use]
 pub fn evaluate_physiological_status_conditions(
@@ -981,55 +1018,52 @@ pub fn evaluate_acute_mental_trauma(
     is_cornered: bool,
     agg_score: i32,
 ) -> AcuteMentalTraumaEffect {
-    match tier {
-        AcuteMentalTraumaTier::Tier1AcuteMentalShockOodaFreeze => AcuteMentalTraumaEffect {
-            tier,
-            ooda_freeze_ticks: 9,
-            tactical_pool_modifier: 0,
-            ana_foc_penalty: 0,
-            dissociation_stat_penalty: 0,
-            action_time_factor_added: 0.0,
-            shifts_into_feral_rage: false,
-            total_psychomotor_shutdown: false,
-            permanent_psyche_drift_marks: 0,
-            trauma_trigger_delta_morale: 0,
-        },
-        AcuteMentalTraumaTier::Tier2PanicFightOrFlight => AcuteMentalTraumaEffect {
-            tier,
-            ooda_freeze_ticks: 0,
-            tactical_pool_modifier: -4,
-            ana_foc_penalty: 6,
-            dissociation_stat_penalty: 0,
-            action_time_factor_added: 0.0,
-            shifts_into_feral_rage: is_cornered && agg_score >= 13,
-            total_psychomotor_shutdown: false,
-            permanent_psyche_drift_marks: 0,
-            trauma_trigger_delta_morale: 0,
-        },
-        AcuteMentalTraumaTier::Tier3DissociationShellShock => AcuteMentalTraumaEffect {
-            tier,
-            ooda_freeze_ticks: 0,
-            tactical_pool_modifier: 0,
-            ana_foc_penalty: 6,
-            dissociation_stat_penalty: 6,
-            action_time_factor_added: 0.30,
-            shifts_into_feral_rage: false,
-            total_psychomotor_shutdown: false,
-            permanent_psyche_drift_marks: 2,
-            trauma_trigger_delta_morale: 4,
-        },
-        AcuteMentalTraumaTier::Tier4Catatonia => AcuteMentalTraumaEffect {
-            tier,
-            ooda_freeze_ticks: 0,
-            tactical_pool_modifier: 0,
-            ana_foc_penalty: 0,
-            dissociation_stat_penalty: 0,
-            action_time_factor_added: 0.0,
-            shifts_into_feral_rage: false,
-            total_psychomotor_shutdown: true,
-            permanent_psyche_drift_marks: 2,
-            trauma_trigger_delta_morale: 4,
-        },
+    let (
+        ooda_freeze_ticks,
+        tactical_pool_modifier,
+        ana_foc_penalty,
+        dissociation_stat_penalty,
+        action_time_factor_added,
+        shifts_into_feral_rage,
+        total_psychomotor_shutdown,
+        permanent_psyche_drift_marks,
+        trauma_trigger_delta_morale,
+    ) = match tier {
+        AcuteMentalTraumaTier::Tier1AcuteMentalShockOodaFreeze => {
+            (9, 0, 0, 0, 0.0, false, false, 0, 0)
+        }
+        AcuteMentalTraumaTier::Tier2PanicFightOrFlight => {
+            (0, -4, 6, 0, 0.0, is_cornered && agg_score >= 13, false, 0, 0)
+        }
+        AcuteMentalTraumaTier::Tier3DissociationShellShock => {
+            (0, 0, 6, 6, 0.30, false, false, 2, 4)
+        }
+        AcuteMentalTraumaTier::Tier4Catatonia => (0, 0, 0, 0, 0.0, false, true, 2, 4),
+    };
+    AcuteMentalTraumaEffect {
+        tier,
+        ooda_freeze_ticks,
+        tactical_pool_modifier,
+        ana_foc_penalty,
+        dissociation_stat_penalty,
+        action_time_factor_added,
+        shifts_into_feral_rage,
+        total_psychomotor_shutdown,
+        permanent_psyche_drift_marks,
+        trauma_trigger_delta_morale,
+    }
+}
+
+impl ConditionSource for AcuteMentalTraumaEffect {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        ConditionImpact {
+            tactical_pool_mod: self.tactical_pool_modifier,
+            action_time_factor_delta: self.action_time_factor_added,
+            clock_freeze_ticks: self.ooda_freeze_ticks,
+            triad_locked_zero: Triad::splat(self.total_psychomotor_shutdown),
+            is_unconscious: self.total_psychomotor_shutdown,
+            ..ConditionImpact::ZERO
+        }
     }
 }
 
@@ -1467,6 +1501,17 @@ pub fn evaluate_encumbrance_load(
     }
 }
 
+impl ConditionSource for EncumbranceEvaluation {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        ConditionImpact {
+            delta_ext: self.tier.stealth_penalty_delta_ext(),
+            action_time_factor_delta: self.action_time_factor_delta,
+            triad_cap_penalty: Triad::new(self.tempo_cap_penalty, 0, 0),
+            ..ConditionImpact::ZERO
+        }
+    }
+}
+
 // ============================================================================
 // 7. Vehicles, High-Speed Chases & Crash / G-Force Physics (`movement_vehicles_and_environment.md` §3)
 // ============================================================================
@@ -1731,6 +1776,18 @@ pub fn evaluate_dehydration(
     }
 }
 
+impl ConditionSource for DehydrationEvaluation {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        ConditionImpact {
+            delta_int: self.delta_int,
+            fatigue_floor: self.fatigue_level_floor,
+            triad_locked_zero: Triad::splat(self.is_comatose),
+            is_unconscious: self.is_comatose,
+            ..ConditionImpact::ZERO
+        }
+    }
+}
+
 /// Enforces all active **Fatigue Floors** (from Dehydration, Starvation, and Sleep Deprivation) so that
 /// rest cannot reduce `fatigue_level` below the highest active floor (`movement_vehicles_and_environment.md` §4.1).
 #[must_use]
@@ -1756,6 +1813,17 @@ pub struct StarvationEvaluation {
     pub for_fit_hlt_erosion: i32,
     /// Whether fatal organ failure occurs (`FOR <= 0` or `HLT <= 0`).
     pub fatal_organ_failure: bool,
+}
+
+impl ConditionSource for StarvationEvaluation {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        ConditionImpact {
+            delta_int: self.delta_int,
+            fatigue_floor: self.fatigue_level_floor,
+            is_unconscious: self.fatal_organ_failure,
+            ..ConditionImpact::ZERO
+        }
+    }
 }
 
 /// Evaluates Short-Term Fasting (`Days 1–3`) and Prolonged Starvation (`Days 4–30+` or cumulative `10,000 kcal` deficits)
@@ -1932,37 +2000,28 @@ pub struct SleepDeprivationEvaluation {
 #[must_use]
 pub const fn evaluate_sleep_deprivation(hours_awake: i32) -> SleepDeprivationEvaluation {
     let hrs = if hours_awake < 0 { 0 } else { hours_awake };
-    if hrs >= 72 {
-        SleepDeprivationEvaluation {
-            hours_awake: hrs,
-            delta_int: 8,
-            mental_sensory_ooda_penalty: 6,
-            fatigue_level_floor: 2,
-            requires_microsleep_dis_check: true,
-        }
-    } else if hrs >= 48 {
-        SleepDeprivationEvaluation {
-            hours_awake: hrs,
-            delta_int: 4,
-            mental_sensory_ooda_penalty: 3,
-            fatigue_level_floor: 2,
-            requires_microsleep_dis_check: false,
-        }
-    } else if hrs >= 24 {
-        SleepDeprivationEvaluation {
-            hours_awake: hrs,
-            delta_int: 2,
-            mental_sensory_ooda_penalty: 1,
-            fatigue_level_floor: 0,
-            requires_microsleep_dis_check: false,
-        }
-    } else {
-        SleepDeprivationEvaluation {
-            hours_awake: hrs,
-            delta_int: 0,
-            mental_sensory_ooda_penalty: 0,
-            fatigue_level_floor: 0,
-            requires_microsleep_dis_check: false,
+    let (delta_int, mental_sensory_ooda_penalty, fatigue_level_floor, requires_microsleep_dis_check) =
+        match hrs {
+            72.. => (8, 6, 2, true),
+            48..=71 => (4, 3, 2, false),
+            24..=47 => (2, 1, 0, false),
+            _ => (0, 0, 0, false),
+        };
+    SleepDeprivationEvaluation {
+        hours_awake: hrs,
+        delta_int,
+        mental_sensory_ooda_penalty,
+        fatigue_level_floor,
+        requires_microsleep_dis_check,
+    }
+}
+
+impl ConditionSource for SleepDeprivationEvaluation {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        ConditionImpact {
+            delta_int: self.delta_int,
+            fatigue_floor: self.fatigue_level_floor,
+            ..ConditionImpact::ZERO
         }
     }
 }
@@ -1980,6 +2039,21 @@ pub struct AltitudeVacuumEvaluation {
     pub vacuum_unconscious: bool,
     /// Cumulative `HLT` cold/barotrauma erosion suffered after losing consciousness in Hard Vacuum (`-2 HLT` per `20 ticks`).
     pub vacuum_hlt_erosion: i32,
+}
+
+impl ConditionSource for AltitudeVacuumEvaluation {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        ConditionImpact {
+            delta_int: if self.acute_mountain_sickness_risk {
+                4
+            } else {
+                0
+            },
+            triad_locked_zero: Triad::splat(self.vacuum_unconscious),
+            is_unconscious: self.vacuum_unconscious,
+            ..ConditionImpact::ZERO
+        }
+    }
 }
 
 /// Evaluates High-Altitude Hypoxia (`> 2,500 m`) and Hard Vacuum (`0 atm`) exposure (`movement_vehicles_and_environment.md` §4.4.2).
@@ -2012,19 +2086,17 @@ pub const fn evaluate_altitude_and_vacuum_hypoxia(
         } else {
             ticks_in_vacuum
         };
-        let vacuum_unconscious = t >= clamped_useful;
         let overrun = if t > clamped_useful {
             t - clamped_useful
         } else {
             0
         };
-        let vacuum_hlt_erosion = 2 * overrun.div_euclid(20);
         return AltitudeVacuumEvaluation {
             fit_penalty: 20,
             acute_mountain_sickness_risk: true,
             vacuum_useful_consciousness_ticks: clamped_useful,
-            vacuum_unconscious,
-            vacuum_hlt_erosion,
+            vacuum_unconscious: t >= clamped_useful,
+            vacuum_hlt_erosion: 2 * overrun.div_euclid(20),
         };
     }
 
@@ -2038,13 +2110,9 @@ pub const fn evaluate_altitude_and_vacuum_hypoxia(
         };
     }
 
-    let meters_above_2000 = altitude_meters - 2000;
-    let fit_penalty = 2 * meters_above_2000.div_euclid(1000);
-    let acute_mountain_sickness_risk = altitude_meters > 5500;
-
     AltitudeVacuumEvaluation {
-        fit_penalty,
-        acute_mountain_sickness_risk,
+        fit_penalty: 2 * (altitude_meters - 2000).div_euclid(1000),
+        acute_mountain_sickness_risk: altitude_meters > 5500,
         vacuum_useful_consciousness_ticks: 0,
         vacuum_unconscious: false,
         vacuum_hlt_erosion: 0,

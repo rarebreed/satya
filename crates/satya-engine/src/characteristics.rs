@@ -9,6 +9,8 @@
 //!   `AWR`, `FT`, `WSR`, `CMP`, and `C_study`) (§8)
 //! - 9 Domain Aptitudes (`APT-QNT` .. `APT-SOC`, `-2` to `+3`) with prerequisite relief and training time scaling (§9)
 
+use std::ops::{Index, IndexMut};
+
 use serde::{Deserialize, Serialize};
 
 use crate::define_coded_enum;
@@ -278,17 +280,29 @@ macro_rules! impl_aptitudes_struct {
             /// Look up the clamped (`-2..=+3`) score for a specific `AptitudeCode`.
             #[must_use]
             pub fn get(&self, code: AptitudeCode) -> i32 {
-                let raw = match code {
-                    $(AptitudeCode::$Variant => self.$field,)+
-                };
-                raw.clamp(-2, 3)
+                self[code].clamp(-2, 3)
             }
 
             /// Set the score for a specific `AptitudeCode` (clamped to `-2..=+3`).
             pub fn set(&mut self, code: AptitudeCode, value: i32) {
-                let clamped = value.clamp(-2, 3);
+                self[code] = value.clamp(-2, 3);
+            }
+        }
+
+        impl Index<AptitudeCode> for CharacterAptitudes {
+            type Output = i32;
+
+            fn index(&self, code: AptitudeCode) -> &Self::Output {
                 match code {
-                    $(AptitudeCode::$Variant => self.$field = clamped,)+
+                    $(AptitudeCode::$Variant => &self.$field,)+
+                }
+            }
+        }
+
+        impl IndexMut<AptitudeCode> for CharacterAptitudes {
+            fn index_mut(&mut self, code: AptitudeCode) -> &mut Self::Output {
+                match code {
+                    $(AptitudeCode::$Variant => &mut self.$field,)+
                 }
             }
         }
@@ -329,6 +343,10 @@ pub fn compute_aptitude_training_time_multiplier(aptitude: i32) -> f64 {
 pub const fn compute_aptitude_min_c_relief(aptitude: i32) -> i32 {
     if aptitude >= 2 { 1 } else { 0 }
 }
+
+const SCALE_TABLE: [i32; 21] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+];
 
 macro_rules! impl_characteristics_struct {
     ($($Variant:ident => $field:ident),+ $(,)?) => {
@@ -371,6 +389,30 @@ macro_rules! impl_characteristics_struct {
                     $(CharacteristicCode::$Variant => self.$field = clamped,)+
                     CharacteristicCode::MAS => self.mas_kg = 70.0 + f64::from(clamped - 10) * 7.0,
                     CharacteristicCode::HGT => self.hgt_m = 1.75 + f64::from(clamped - 10) * 0.05,
+                }
+            }
+        }
+
+        impl Index<CharacteristicCode> for CharacterCharacteristics {
+            type Output = i32;
+
+            fn index(&self, code: CharacteristicCode) -> &Self::Output {
+                match code {
+                    $(CharacteristicCode::$Variant => &self.$field,)+
+                    CharacteristicCode::MAS | CharacteristicCode::HGT => {
+                        &SCALE_TABLE[self.get_scale(code) as usize]
+                    }
+                }
+            }
+        }
+
+        impl IndexMut<CharacteristicCode> for CharacterCharacteristics {
+            fn index_mut(&mut self, code: CharacteristicCode) -> &mut Self::Output {
+                match code {
+                    $(CharacteristicCode::$Variant => &mut self.$field,)+
+                    CharacteristicCode::MAS | CharacteristicCode::HGT => {
+                        panic!("use set_scale or mas_kg/hgt_m directly to mutate MAS/HGT")
+                    }
                 }
             }
         }

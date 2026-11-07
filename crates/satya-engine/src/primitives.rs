@@ -1,6 +1,8 @@
 //! Shared foundational primitives, generic containers, composable status impacts,
 //! tiered save helpers, and declarative enum/catalog macros used across `satya-engine`.
 
+use std::ops::{Deref, DerefMut};
+
 use serde::{Deserialize, Serialize};
 
 use crate::dice_probabilities::{
@@ -173,10 +175,36 @@ impl ConditionImpact {
     }
 }
 
+/// Trait implemented by any physiological, psychological, encumbrance, or environmental state
+/// that produces a [`ConditionImpact`] modifier bundle.
+pub trait ConditionSource {
+    /// Convert this condition or evaluation state into its canonical [`ConditionImpact`].
+    #[must_use]
+    fn to_condition_impact(&self) -> ConditionImpact;
+}
+
+impl ConditionSource for ConditionImpact {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        *self
+    }
+}
+
+/// Aggregate an arbitrary collection of [`ConditionSource`] references into a single combined [`ConditionImpact`].
+#[must_use]
+pub fn aggregate_condition_impacts<'a>(
+    sources: impl IntoIterator<Item = &'a dyn ConditionSource>,
+) -> ConditionImpact {
+    sources
+        .into_iter()
+        .fold(ConditionImpact::ZERO, |acc, src| {
+            acc.combine(src.to_condition_impact())
+        })
+}
+
 /// Shared evaluation result for a 1-Pair Tiered GM Resistance check (`ContestedCascadeTaskParams::new_tiered_environment`).
 ///
 /// Used across `psyche_social` (Psyche Friction, Combat Morale, Social Exchange) and
-/// `health_survival` (`WSR` Consciousness Saves) to eliminate repetitivecontested-save boilerplate.
+/// `health_survival` (`WSR` Consciousness Saves) to eliminate repetitive contested-save boilerplate.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TieredSaveEval {
     /// Player's effective Target Number (`TN`).
@@ -185,6 +213,51 @@ pub struct TieredSaveEval {
     pub gm_tn: i32,
     /// Full contested cascade roll breakdown.
     pub contested_roll: ContestedCascadeRollOutcome,
+}
+
+/// Generic wrapper pairing a 1-Pair Tiered GM Resistance evaluation (`player_tn`, `gm_tn`, `contested_roll`)
+/// with a domain-specific outcome payload `D`.
+///
+/// Implements [`Deref<Target = D>`] so all domain fields on `D` can be accessed directly on
+/// `ContestedCheck<D>`, while `#[serde(flatten)]` preserves flat JSON serialization compatibility.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContestedCheck<D> {
+    /// Player's effective Target Number (`TN`).
+    pub player_tn: i32,
+    /// GM's 1-Pair Resistance Target Number (`TN_GM`).
+    pub gm_tn: i32,
+    /// Full contested cascade roll breakdown.
+    pub contested_roll: ContestedCascadeRollOutcome,
+    /// Domain-specific effect payload.
+    #[serde(flatten)]
+    pub effect: D,
+}
+
+impl<D> ContestedCheck<D> {
+    /// Construct a `ContestedCheck<D>` from its [`TieredSaveEval`] and domain effect `D`.
+    #[must_use]
+    pub fn new(eval: TieredSaveEval, effect: D) -> Self {
+        Self {
+            player_tn: eval.player_tn,
+            gm_tn: eval.gm_tn,
+            contested_roll: eval.contested_roll,
+            effect,
+        }
+    }
+}
+
+impl<D> Deref for ContestedCheck<D> {
+    type Target = D;
+
+    fn deref(&self) -> &Self::Target {
+        &self.effect
+    }
+}
+
+impl<D> DerefMut for ContestedCheck<D> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.effect
+    }
 }
 
 impl TieredSaveEval {
@@ -340,6 +413,20 @@ macro_rules! define_coded_enum {
                     }
                 )+
                 None
+            }
+        }
+
+        impl ::std::fmt::Display for $Name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                f.write_str(self.as_str())
+            }
+        }
+
+        impl ::std::str::FromStr for $Name {
+            type Err = String;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Self::from_code_str(s).ok_or_else(|| format!("unknown {}: {s}", stringify!($Name)))
             }
         }
     };

@@ -14,6 +14,8 @@
 //!   ($\text{CMP} = \lfloor(\text{DIS} + \text{FOC}) / 4\rfloor$), the 4 Social Wounds (`RhetoricalStrain`,
 //!   `Doubt`, `CognitiveDissonance`, `EgoWound`), the Dual-Psyche Wedge, and the 4 Dissonance Resolution Paths.
 
+use std::ops::{Index, IndexMut};
+
 use serde::{Deserialize, Serialize};
 
 use crate::characteristics::{
@@ -25,7 +27,7 @@ use crate::dice_probabilities::{
     CascadeRollOutcome, CascadeTaskParams, ContestedCascadeOdds, ContestedCascadeRollOutcome,
     ContestedCascadeTaskParams, ContestedOutcomeKind, ContestedTieRule,
 };
-use crate::primitives::TieredSaveEval;
+use crate::primitives::{ContestedCheck, TieredSaveEval};
 
 // ============================================================================
 // §1 Core Psyche Profile & Trait Definitions
@@ -103,16 +105,47 @@ macro_rules! impl_psyche_profile {
             /// Returns the score (`1..=20`) of the requested [`PsycheTraitId`].
             #[must_use]
             pub fn get(&self, trait_id: PsycheTraitId) -> i32 {
-                match trait_id {
-                    $(PsycheTraitId::$Variant => self.$field,)+
-                }
+                self[trait_id]
             }
 
             /// Sets the score (`1..=20`) of the requested [`PsycheTraitId`].
             pub fn set(&mut self, trait_id: PsycheTraitId, value: i32) {
-                let clamped = value.clamp(1, 20);
+                self[trait_id] = value.clamp(1, 20);
+            }
+        }
+
+        impl Index<PsycheTraitId> for PsycheProfile {
+            type Output = i32;
+
+            fn index(&self, trait_id: PsycheTraitId) -> &Self::Output {
                 match trait_id {
-                    $(PsycheTraitId::$Variant => self.$field = clamped,)+
+                    $(PsycheTraitId::$Variant => &self.$field,)+
+                }
+            }
+        }
+
+        impl IndexMut<PsycheTraitId> for PsycheProfile {
+            fn index_mut(&mut self, trait_id: PsycheTraitId) -> &mut Self::Output {
+                match trait_id {
+                    $(PsycheTraitId::$Variant => &mut self.$field,)+
+                }
+            }
+        }
+
+        impl Index<PsycheTraitId> for CharacterCharacteristics {
+            type Output = i32;
+
+            fn index(&self, trait_id: PsycheTraitId) -> &Self::Output {
+                match trait_id {
+                    $(PsycheTraitId::$Variant => &self.$field,)+
+                }
+            }
+        }
+
+        impl IndexMut<PsycheTraitId> for CharacterCharacteristics {
+            fn index_mut(&mut self, trait_id: PsycheTraitId) -> &mut Self::Output {
+                match trait_id {
+                    $(PsycheTraitId::$Variant => &mut self.$field,)+
                 }
             }
         }
@@ -540,7 +573,7 @@ pub enum CombatMotivationKind {
 }
 
 /// Computed motivation modifier ($\Delta_{\text{mot}}$) for Combat Morale checks (`§3.2`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct CombatMotivationModifier {
     /// Modifier $\Delta_{\text{mot}}$ added to $C_{\text{morale}} = \text{DIS} + \Delta_{\text{mot}}$
     /// (equivalent to $-\Delta_{\text{mot}}$ on $\text{TN}_P = 31 - C_{\text{morale}}$).
@@ -557,74 +590,45 @@ pub fn evaluate_combat_motivation_modifier(
     motivation: CombatMotivationKind,
 ) -> CombatMotivationModifier {
     match motivation {
-        CombatMotivationKind::FightingForCrewFamilyHomeland => {
-            if profile.blg >= 14 || profile.slf <= 6 {
-                let bonus = if profile.blg >= 16 || profile.slf <= 4 {
+        CombatMotivationKind::FightingForCrewFamilyHomeland
+            if profile.blg >= 14 || profile.slf <= 6 =>
+        {
+            CombatMotivationModifier {
+                delta_mot: if profile.blg >= 16 || profile.slf <= 4 {
                     4
                 } else {
                     2
-                };
-                CombatMotivationModifier {
-                    delta_mot: bonus,
-                    command_breakdown_morale_shock: 0,
-                    conviction_surge_pool_bonus: 2,
-                }
-            } else {
-                CombatMotivationModifier {
-                    delta_mot: 0,
-                    command_breakdown_morale_shock: 0,
-                    conviction_surge_pool_bonus: 0,
-                }
+                },
+                command_breakdown_morale_shock: 0,
+                conviction_surge_pool_bonus: 2,
             }
         }
-        CombatMotivationKind::MercenaryTransactionalUnderFire => {
-            if profile.slf >= 14 && profile.blg <= 8 {
-                let penalty = if profile.slf >= 16 && profile.blg <= 6 {
+        CombatMotivationKind::MercenaryTransactionalUnderFire
+            if profile.slf >= 14 && profile.blg <= 8 =>
+        {
+            CombatMotivationModifier {
+                delta_mot: if profile.slf >= 16 && profile.blg <= 6 {
                     -4
                 } else {
                     -2
-                };
+                },
+                ..Default::default()
+            }
+        }
+        CombatMotivationKind::SwornDutyChainOfCommand { command_intact } if profile.cnf >= 14 => {
+            if command_intact {
                 CombatMotivationModifier {
-                    delta_mot: penalty,
-                    command_breakdown_morale_shock: 0,
-                    conviction_surge_pool_bonus: 0,
+                    delta_mot: 2,
+                    ..Default::default()
                 }
             } else {
                 CombatMotivationModifier {
-                    delta_mot: 0,
-                    command_breakdown_morale_shock: 0,
-                    conviction_surge_pool_bonus: 0,
+                    command_breakdown_morale_shock: 4,
+                    ..Default::default()
                 }
             }
         }
-        CombatMotivationKind::SwornDutyChainOfCommand { command_intact } => {
-            if profile.cnf >= 14 {
-                if command_intact {
-                    CombatMotivationModifier {
-                        delta_mot: 2,
-                        command_breakdown_morale_shock: 0,
-                        conviction_surge_pool_bonus: 0,
-                    }
-                } else {
-                    CombatMotivationModifier {
-                        delta_mot: 0,
-                        command_breakdown_morale_shock: 4,
-                        conviction_surge_pool_bonus: 0,
-                    }
-                }
-            } else {
-                CombatMotivationModifier {
-                    delta_mot: 0,
-                    command_breakdown_morale_shock: 0,
-                    conviction_surge_pool_bonus: 0,
-                }
-            }
-        }
-        CombatMotivationKind::NeutralOrSurvival => CombatMotivationModifier {
-            delta_mot: 0,
-            command_breakdown_morale_shock: 0,
-            conviction_surge_pool_bonus: 0,
-        },
+        _ => CombatMotivationModifier::default(),
     }
 }
 
@@ -932,24 +936,21 @@ pub fn step_morale_condition(current: MoraleState, rally_or_drop_steps: i32) -> 
     LADDER[next_idx]
 }
 
-/// Outcome of a Contested Combat Morale Roll (`§3.4`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CombatMoraleRollOutcome {
+/// Domain-specific morale transition payload for [`CombatMoraleRollOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CombatMoraleEffect {
     /// Base Morale Controller $C_{\text{morale}} = \text{DIS} + \Delta_{\text{mot}}$.
     pub c_morale: i32,
-    /// Player target number $\text{TN}_P = 31 - C_{\text{morale}}$.
-    pub player_tn: i32,
-    /// GM 1-Pair Tiered Resistance target number $\text{TN}_{GM} = 21 - \Delta_{\text{morale}}$.
-    pub gm_tn: i32,
     /// Previous [`MoraleState`] before the check.
     pub previous_morale: MoraleState,
     /// Updated [`MoraleState`] after the check.
     pub new_morale: MoraleState,
     /// Condition step change (`+1` rally, `0` hold, `-1` clean failure, `-2` botch failure).
     pub condition_step_delta: i32,
-    /// Full contested cascade roll details.
-    pub contested_roll: ContestedCascadeRollOutcome,
 }
+
+/// Outcome of a Contested Combat Morale Roll (`§3.4`).
+pub type CombatMoraleRollOutcome = ContestedCheck<CombatMoraleEffect>;
 
 /// Evaluates a Contested Combat Morale Roll (`§3.4 Rolling for Morale`):
 /// - $C_{\text{morale}} = \text{DIS} + \Delta_{\text{mot}}$
@@ -989,17 +990,15 @@ pub fn evaluate_combat_morale_roll(
         |_| -2,
     );
 
-    let new_morale = step_morale_condition(current_morale, step_delta);
-
-    CombatMoraleRollOutcome {
-        c_morale,
-        player_tn: save.player_tn,
-        gm_tn: save.gm_tn,
-        previous_morale: current_morale,
-        new_morale,
-        condition_step_delta: step_delta,
-        contested_roll: save.contested_roll,
-    }
+    ContestedCheck::new(
+        save,
+        CombatMoraleEffect {
+            c_morale,
+            previous_morale: current_morale,
+            new_morale: step_morale_condition(current_morale, step_delta),
+            condition_step_delta: step_delta,
+        },
+    )
 }
 
 // ============================================================================
@@ -1114,156 +1113,77 @@ pub struct ArgumentPsycheEvaluation {
     pub triggers_dual_psyche_wedge: bool,
 }
 
+fn eval_trait_pole(
+    score: i32,
+    trait_id: PsycheTraitId,
+    high_pole_resonates: bool,
+    allow_low_pole: bool,
+) -> (i32, Option<PsycheTraitId>, Option<PsycheTraitId>, bool) {
+    if score >= 13 {
+        if high_pole_resonates {
+            (-(score - 10), Some(trait_id), None, true)
+        } else {
+            (score - 10, None, Some(trait_id), true)
+        }
+    } else if allow_low_pole && score <= 7 {
+        if high_pole_resonates {
+            (10 - score, None, Some(trait_id), false)
+        } else {
+            (-(10 - score), Some(trait_id), None, false)
+        }
+    } else {
+        (0, None, None, false)
+    }
+}
+
 /// Computes the $\Delta_{\text{ext}}$ contribution of a single [`SocialArgumentVector`] (`§4.2`).
 pub fn compute_single_vector_psyche_modifier(
     profile: &PsycheProfile,
     vector: SocialArgumentVector,
 ) -> (i32, Option<PsycheTraitId>, Option<PsycheTraitId>, bool) {
+    use PsycheTraitId::{Aggression, Belonging, Conformity, Ego, Openness, Selfishness};
     match vector {
         SocialArgumentVector::EmpiricalEvidenceLogicNovelIdeas => {
-            if profile.opn >= 13 {
-                (
-                    -(profile.opn - 10),
-                    Some(PsycheTraitId::Openness),
-                    None,
-                    true,
-                )
-            } else if profile.opn <= 7 {
-                (10 - profile.opn, None, Some(PsycheTraitId::Openness), false)
-            } else {
-                (0, None, None, false)
-            }
+            eval_trait_pole(profile.opn, Openness, true, true)
         }
         SocialArgumentVector::GroupConsensusLoyaltySharedIdentity {
             asks_to_betray_group,
-        } => {
-            if asks_to_betray_group && profile.blg >= 13 {
-                (profile.blg - 10, None, Some(PsycheTraitId::Belonging), true)
-            } else if !asks_to_betray_group && profile.blg >= 13 {
-                (
-                    -(profile.blg - 10),
-                    Some(PsycheTraitId::Belonging),
-                    None,
-                    true,
-                )
-            } else if !asks_to_betray_group && profile.blg <= 7 {
-                (
-                    10 - profile.blg,
-                    None,
-                    Some(PsycheTraitId::Belonging),
-                    false,
-                )
-            } else {
-                (0, None, None, false)
-            }
-        }
+        } => eval_trait_pole(
+            profile.blg,
+            Belonging,
+            !asks_to_betray_group,
+            !asks_to_betray_group,
+        ),
         SocialArgumentVector::FlatteryPrestigeLegacyStatus {
             humiliates_or_demands_fault_admission,
-        } => {
-            if profile.ego >= 13 {
-                if humiliates_or_demands_fault_admission {
-                    (profile.ego - 10, None, Some(PsycheTraitId::Ego), true)
-                } else {
-                    (-(profile.ego - 10), Some(PsycheTraitId::Ego), None, true)
-                }
-            } else {
-                (0, None, None, false)
-            }
-        }
+        } => eval_trait_pole(
+            profile.ego,
+            Ego,
+            !humiliates_or_demands_fault_admission,
+            false,
+        ),
         SocialArgumentVector::PersonalProfitImmunitySelfInterest => {
-            if profile.slf >= 13 {
-                (
-                    -(profile.slf - 10),
-                    Some(PsycheTraitId::Selfishness),
-                    None,
-                    true,
-                )
-            } else if profile.slf <= 7 {
-                (
-                    10 - profile.slf,
-                    None,
-                    Some(PsycheTraitId::Selfishness),
-                    false,
-                )
-            } else {
-                (0, None, None, false)
-            }
+            eval_trait_pole(profile.slf, Selfishness, true, true)
         }
         SocialArgumentVector::SelfSacrificeHumanitarianDutyMercy => {
-            if profile.slf <= 7 {
-                (
-                    -(10 - profile.slf),
-                    Some(PsycheTraitId::Selfishness),
-                    None,
-                    false,
-                )
-            } else if profile.slf >= 13 {
-                (
-                    profile.slf - 10,
-                    None,
-                    Some(PsycheTraitId::Selfishness),
-                    true,
-                )
-            } else {
-                (0, None, None, false)
-            }
+            eval_trait_pole(profile.slf, Selfishness, false, true)
         }
         SocialArgumentVector::RulesLawProtocolChainOfCommand {
             asks_to_break_law_or_orders,
-        } => {
-            if asks_to_break_law_or_orders && profile.cnf >= 13 {
-                (
-                    profile.cnf - 10,
-                    None,
-                    Some(PsycheTraitId::Conformity),
-                    true,
-                )
-            } else if !asks_to_break_law_or_orders && profile.cnf >= 13 {
-                (
-                    -(profile.cnf - 10),
-                    Some(PsycheTraitId::Conformity),
-                    None,
-                    true,
-                )
-            } else if !asks_to_break_law_or_orders && profile.cnf <= 7 {
-                (
-                    10 - profile.cnf,
-                    None,
-                    Some(PsycheTraitId::Conformity),
-                    false,
-                )
-            } else {
-                (0, None, None, false)
-            }
-        }
+        } => eval_trait_pole(
+            profile.cnf,
+            Conformity,
+            !asks_to_break_law_or_orders,
+            !asks_to_break_law_or_orders,
+        ),
         SocialArgumentVector::DominanceThreatDareConfrontation {
             aims_to_bait_into_fight,
-        } => {
-            if profile.agg <= 7 && !aims_to_bait_into_fight {
-                (
-                    -(10 - profile.agg),
-                    Some(PsycheTraitId::Aggression),
-                    None,
-                    false,
-                )
-            } else if profile.agg >= 13 && aims_to_bait_into_fight {
-                (
-                    -(profile.agg - 10),
-                    Some(PsycheTraitId::Aggression),
-                    None,
-                    true,
-                )
-            } else if profile.agg >= 13 && !aims_to_bait_into_fight {
-                (
-                    profile.agg - 10,
-                    None,
-                    Some(PsycheTraitId::Aggression),
-                    true,
-                )
-            } else {
-                (0, None, None, false)
-            }
-        }
+        } => eval_trait_pole(
+            profile.agg,
+            Aggression,
+            aims_to_bait_into_fight,
+            !aims_to_bait_into_fight,
+        ),
     }
 }
 

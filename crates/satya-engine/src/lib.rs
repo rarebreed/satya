@@ -35,9 +35,11 @@ pub mod lifepath_economy;
 pub mod primitives;
 pub mod psyche_social;
 pub mod rules_book;
+pub mod rules_book_html;
 #[allow(missing_docs)]
 pub mod skills_trees;
 pub mod task_resolution;
+pub mod walkthroughs;
 
 pub use action_economy::*;
 pub use characteristics::*;
