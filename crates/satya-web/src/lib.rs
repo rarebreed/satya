@@ -596,7 +596,6 @@ fn ActiveSessionWorkspace() -> impl IntoView {
                         <div class="notebook-title-row">
                             <div>
                                 <h2>"Tabletop Notebook"</h2>
-                                <span class="subtitle">"Maps · 3D Dice · 3D Model · Character Sheet · Combat Tracker · Apache Iggy & PyLance"</span>
                             </div>
                             <span id="canvas-map-pill" class="pill pill-muted">"Standby Grid"</span>
                         </div>
