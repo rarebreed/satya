@@ -91,6 +91,8 @@ pub struct SatyaWasmState {
     pub gm_documents: Vec<GmDocumentRecord>,
     /// Interactive state for the Character Creation Wizard notebook tab (`#notebook-pane-wizard`).
     pub wizard: crate::wasm_client::wizard::CharacterWizardState,
+    /// Interactive state for the Character Sheet / Status notebook tab (`#notebook-pane-character`).
+    pub character_sheet: crate::wasm_client::character_sheet::CharacterSheetState,
 }
 
 impl Default for SatyaWasmState {
@@ -130,6 +132,7 @@ impl Default for SatyaWasmState {
             google_picker_api_key: None,
             gm_documents: Vec::new(),
             wizard: crate::wasm_client::wizard::CharacterWizardState::default(),
+            character_sheet: crate::wasm_client::character_sheet::CharacterSheetState::default(),
         }
     }
 }

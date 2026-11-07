@@ -20,80 +20,6 @@ const QUICK_3D_DICE_SPECS: &[(&str, &str)] = &[
     ("6d20", "Roll 6d20"),
 ];
 
-/// Default Character Sheet stat summary boxes (`(label, optional_id, default_val, note)`).
-const CHAR_SHEET_STAT_BOXES: &[(&str, Option<&str>, &str, &str)] = &[
-    (
-        "Control (C)",
-        Some("char-stat-control"),
-        "12",
-        "DEX / TAC Composite",
-    ),
-    (
-        "Speed (SPD)",
-        Some("char-stat-spd"),
-        "14",
-        "OODA / Tempo Cap",
-    ),
-    (
-        "Kinesthesia (KIN)",
-        Some("char-stat-kin"),
-        "14",
-        "Balance / Melee Control",
-    ),
-    (
-        "Analysis (ANA)",
-        Some("char-stat-ana"),
-        "15",
-        "Quick Thinking (D_cog 14)",
-    ),
-    (
-        "Discipline (DIS)",
-        Some("char-stat-dis"),
-        "14",
-        "FT 19 / WSR 20 / CMP 6",
-    ),
-    (
-        "Armor Mitigation",
-        None,
-        "DR 4",
-        "EVA Ballistic · Tier 2 Load",
-    ),
-];
-
-/// Default Character Sheet trained skill presets (`(skill_name, skill_level, control_c, chip_label)`).
-const DEFAULT_SKILL_PRESETS: &[(&str, i32, i32, &str)] = &[
-    (
-        "Trauma, Orthopedic & General Surgery",
-        3,
-        12,
-        "Trauma Surgery [Tree 3] (N=3, DEX/FOC=12)",
-    ),
-    (
-        "Zero-G / EVA Operations",
-        4,
-        14,
-        "Zero-G / EVA Ops [Tree 5] (N=4, KIN/FOC=14)",
-    ),
-    (
-        "Fully Automatic & Burst Weapons",
-        3,
-        13,
-        "Full-Auto & Burst [Tree 6] (N=3, FOR/DEX=13)",
-    ),
-    (
-        "Surveillance, Reconnaissance & Countersurveillance",
-        2,
-        15,
-        "Surveillance & Recon [Tree 7] (N=2, SIG/FOC=15)",
-    ),
-    (
-        "Small-Unit Tactics & CQB Doctrine",
-        4,
-        11,
-        "Small-Unit Tactics & CQB [Tree 6] (N=4, INS/ANA=11)",
-    ),
-];
-
 /// Left-column Tabbed Tabletop Notebook (`#notebook-column`).
 #[component]
 pub fn NotebookColumn() -> impl IntoView {
@@ -463,59 +389,39 @@ pub fn NotebookColumn() -> impl IntoView {
                         style="display: none;"
                     >
                         <div class="pane-toolbar">
-                            <span class="subtitle">"Satya 25-Characteristic Operator Profile, Derived OODA/D_cog & 8-Tree Skill Presets"</span>
-                            <span id="char-sheet-status-pill" class="pill pill-active">"Combat Ready · OODA 13 · D_cog 14 · Fatigue 1 · Shock 0.0"</span>
-                        </div>
-                        <div class="char-sheet-grid">
-                            {CHAR_SHEET_STAT_BOXES
-                                .iter()
-                                .copied()
-                                .map(|(label, maybe_id, val, note)| {
-                                    view! {
-                                        <div class="char-stat-box">
-                                            <span class="stat-label">{label}</span>
-                                            <span id=maybe_id class="stat-value">{val}</span>
-                                            <span class="stat-note">{note}</span>
-                                        </div>
-                                    }
-                                })
-                                .collect_view()}
-                        </div>
-                        <div class="roster-bar">
-                            <span class="roster-title">"Trained 8-Tree Skills (Click to Load into Die Roller):"</span>
-                            <div id="char-sheet-skills-chips" class="preset-users">
-                                {DEFAULT_SKILL_PRESETS
-                                    .iter()
-                                    .copied()
-                                    .map(|(skill, n, c, label)| {
-                                        let onclick_js =
-                                            format!("window.satyaLoadSkillPreset('{skill}', {n}, {c})");
-                                        view! {
-                                            <button
-                                                type="button"
-                                                class="btn-chip"
-                                                onclick=onclick_js
-                                                on:click=move |_| {
-                                                    wasm_client::satya_load_skill_preset(
-                                                        skill.to_string(),
-                                                        n,
-                                                        c,
-                                                    )
-                                                }
-                                            >
-                                                {label}
-                                            </button>
-                                        }
-                                    })
-                                    .collect_view()}
+                            <div class="model-controls-row">
+                                <label class="inline-label" for="char-sheet-preset-select">
+                                    <span>"Operator Dossier"</span>
+                                    <select
+                                        id="char-sheet-preset-select"
+                                        onchange="window.satyaCharSheetLoadPreset(this.value)"
+                                        on:change=move |_| wasm_client::satya_char_sheet_load_preset(String::new())
+                                    >
+                                        <option value="sara_valkyrie">"Sara \"Valkyrie\" Lin (Med-Assault Operator)"</option>
+                                        <option value="mateo_vance">"Mateo Vance (Syndicate Enforcer)"</option>
+                                        <option value="priya_nair">"Dr. Priya Nair (AI & Robotics Lead)"</option>
+                                        <option value="amara_okafor">"Amara Okafor (Frontier Recon Ranger)"</option>
+                                        <option value="custom_wizard">"Custom Character (From Character Wizard)"</option>
+                                    </select>
+                                </label>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-secondary"
+                                    onclick="window.satyaWizardApplyToSheet()"
+                                    on:click=move |_| wasm_client::satya_wizard_apply_to_sheet()
+                                >
+                                    "Sync from Character Wizard"
+                                </button>
                             </div>
+                            <span id="char-sheet-status-pill" class="pill pill-active">
+                                "Sara \"Valkyrie\" Lin (Age 26) · Combat Ready · OODA 14 · D_cog 14 · Pool 26/27 · Fatigue 1 · Shock 0 · Δ_int +1"
+                            </span>
                         </div>
-                        <div id="char-sheet-lifepath-summary" class="roster-bar">
-                            <span class="roster-title">"Lifepath, [Access] Gates & Economy:"</span>
-                            <div class="roster-chips">
-                                <span class="pill pill-iggy">"Use Character Wizard Tab to Generate Lifepath & Skills"</span>
-                            </div>
-                        </div>
+                        <div
+                            id="char-sheet-stage-container"
+                            class="char-sheet-stage-container"
+                            inner_html=wasm_client::default_character_sheet_html()
+                        ></div>
                     </div>
 
                     // --- TAB 4B: CHARACTER CREATION WIZARD ---

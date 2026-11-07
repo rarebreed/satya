@@ -116,6 +116,8 @@ pub fn satya_select_notebook_tab(tab_id: String) {
         render_combat_tracker();
     } else if target == "docs" {
         satya_refresh_gm_documents();
+    } else if target == "character" {
+        crate::wasm_client::character_sheet::render_character_sheet();
     } else if target == "wizard" {
         crate::wasm_client::wizard::render_character_wizard();
     } else if target == "dice" {

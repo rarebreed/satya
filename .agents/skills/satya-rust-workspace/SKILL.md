@@ -18,13 +18,12 @@ For crate-specific workflows and module maps, also activate:
 
 ---
 
-## 1. Hard File Size Ceiling (`<= 45 KB` / `< 46,080` Bytes)
+## 1. Pragmatic Modularization & File Size Guideline (~`15–45 KB`)
 
-1. **Every Source File Must Fit in a Single `read_file` Call**:
-   - Every `.rs`, `.css`, and `.md` file in the repository must remain strictly **`<= 45 KB` (`<= 45,000` bytes)**—below the `46,080`-byte (`800`-line) single-call truncation limit of AI agent file-reading tools.
-2. **Split Into Companion Modules Rather Than Deleting Features or Prose**:
-   - When a file approaches `45 KB`, split it along clear domain, view, or pipeline boundaries into focused `15–42 KB` companion files rather than stripping functionality, tests, or documentation.
-3. **Preserve Flat Re-Exports (`pub use companion::*;`) When Splitting**:
+1. **Design Focused Submodules Upfront — Don't Micromanage Byte Counts**:
+   - Aim to keep `.rs`, `.css`, and `.md` files roughly in the **`15–45 KB`** range so they are easy to navigate and read.
+   - **Do not** waste turns counting bytes, golf-compressing code, or repeatedly re-editing a file over a few kilobytes. If a file grows substantially large, split it cleanly along domain or view boundaries into a companion module.
+2. **Preserve Flat Re-Exports (`pub use companion::*;`) When Splitting**:
    - Whenever a module `foo.rs` is split into `foo.rs` + `foo_sub.rs`, re-export `pub use foo_sub::*;` in both `foo.rs` and the parent `mod.rs` / `lib.rs` so downstream crates and existing test suites compile with zero import-path churn.
 
 ---
@@ -56,13 +55,8 @@ For crate-specific workflows and module maps, also activate:
 
 ## 4. Verification Workflow
 
-After modifying any Rust crate:
-1. **Verify File Sizes (`<= 45,000` bytes)**:
-   ```powershell
-   Get-ChildItem -Path crates -Recurse -File -Include *.rs,*.css,*.md | Where-Object { $_.Length -gt 45000 } | Select-Object FullName, Length
-   ```
-2. **Run Unit Tests & Clippy**:
-   ```powershell
-   cargo test --offline -p <crate-name>
-   cargo clippy --offline -p <crate-name> --all-targets -- -D warnings
-   ```
+After modifying any Rust crate, run its unit tests and Clippy:
+```powershell
+cargo test --offline -p <crate-name>
+cargo clippy --offline -p <crate-name> --all-targets -- -D warnings
+```

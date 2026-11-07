@@ -482,4 +482,31 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(step6_html.contains("Step 6: Derived Telemetry"));
     assert!(step6_html.contains("Striking Power (POW)"));
     assert!(step6_html.contains("OODA Initiative"));
+
+    // Verify Complete Character Sheet / Status pane (All 30 Characteristics, 9 Aptitudes,
+    // Talents & Skills tables, Weapons/Armor/Gear tables, Human-Shaped Hit Location SVG,
+    // Damage/Fatigue/Psyche trackers, and Writable Notes)
+    assert!(html.contains(r#"id="char-sheet-preset-select""#));
+    assert!(html.contains(r#"id="char-sheet-stage-container""#));
+    assert!(html.contains(r#"id="char-human-hit-svg""#));
+    assert!(html.contains(r#"id="char-sheet-skills-table""#));
+    assert!(html.contains(r#"id="char-sheet-talents-table""#));
+    assert!(html.contains(r#"id="char-sheet-ranged-table""#));
+    assert!(html.contains(r#"id="char-sheet-melee-table""#));
+    assert!(html.contains(r#"id="char-sheet-armor-table""#));
+    assert!(html.contains(r#"id="char-sheet-gear-table""#));
+    assert!(html.contains(r#"id="char-sheet-notes-textarea""#));
+
+    let mut sheet = wasm_client::CharacterSheetState::from_preset("mateo_vance");
+    assert_eq!(sheet.character_name, "Mateo Vance");
+    let zone_idx = satya_engine::HitLocationId::ChestRibcageLungs as usize;
+    sheet.hit_zones[zone_idx].wound_tier = 3;
+    sheet.hit_zones[zone_idx].bone_status = wasm_client::BoneFractureStatus::CompleteFracture;
+    sheet.hit_zones[zone_idx].bleed_grade = satya_engine::HemorrhageGrade::Grade4ArterialSeverance;
+    let mateo_html = wasm_client::format_character_sheet_html(&sheet);
+    assert!(mateo_html.contains("Mateo Vance"));
+    assert!(mateo_html.contains("Broken Bone"));
+    assert!(mateo_html.contains("Bleed G4"));
+    assert!(mateo_html.contains("Kalashnikov AKM Assault Rifle"));
+    assert!(mateo_html.contains("Concealable Soft Kevlar Vest"));
 }

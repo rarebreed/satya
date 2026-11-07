@@ -16,6 +16,9 @@
 //! - [`telemetry`]: Apache Iggy Topic & Avro Schema Inspector (`#admin-inspector-card`).
 
 pub mod auth_session;
+pub mod character_sheet;
+pub mod character_sheet_status_views;
+pub mod character_sheet_views;
 pub mod chat_and_ttrpg;
 pub mod dice_3d;
 pub mod dice_3d_wgpu;
@@ -33,6 +36,7 @@ pub mod wizard_views_skills;
 pub mod wizard_views_stats;
 
 pub use auth_session::*;
+pub use character_sheet::*;
 pub use chat_and_ttrpg::*;
 pub use dice_3d::*;
 pub use dom::*;
@@ -186,6 +190,17 @@ pub fn register_window_bindings() {
         "satyaWizardAutoAllocateSkills" => satya_wizard_auto_allocate_skills(),
         "satyaWizardResetPostSchoolSkills" => satya_wizard_reset_post_school_skills(),
         "satyaWizardApplyToSheet" => satya_wizard_apply_to_sheet(),
+
+        // Interactive Character Sheet & Anatomical/Physiological/Psyche Status Tracker
+        "satyaCharSheetLoadPreset" => satya_char_sheet_load_preset(String),
+        "satyaCharSheetSetSection" => satya_char_sheet_set_section(String),
+        "satyaCharSheetSetSkillFilter" => satya_char_sheet_set_skill_filter(String, bool),
+        "satyaCharSheetSelectZone" => satya_char_sheet_select_zone(usize),
+        "satyaCharSheetRollHitLocation" => satya_char_sheet_roll_hit_location(),
+        "satyaCharSheetUpdateZone" => satya_char_sheet_update_zone(usize, String, String),
+        "satyaCharSheetUpdateStatus" => satya_char_sheet_update_status(String, String),
+        "satyaCharSheetModifyEquipment" => satya_char_sheet_modify_equipment(String, String),
+        "satyaCharSheetSaveNotes" => satya_char_sheet_save_notes(String),
     );
 
     let on_move = Closure::<dyn FnMut(web_sys::Event)>::new(move |ev: web_sys::Event| {

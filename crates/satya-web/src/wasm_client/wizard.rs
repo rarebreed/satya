@@ -948,13 +948,15 @@ pub fn satya_wizard_apply_to_sheet() {
         if !name_val.trim().is_empty() {
             st.wizard.character_name = name_val.trim().to_string();
         }
-        st.wizard.sync_lifepath_skills();
+        crate::wasm_client::character_sheet::apply_wizard_to_character_sheet(st);
         let c = st.wizard.characteristics.clone();
         let d = c.compute_derived(0);
         let b = st.wizard.compute_lifepath_baseline();
         let s = st.wizard.skills.clone();
         (st.wizard.character_name.clone(), c, d, b, s)
     });
+
+    crate::wasm_client::character_sheet::render_character_sheet();
 
     let control_dex_tac =
         chars.compute_controller(CharacteristicCode::DEX, Some(CharacteristicCode::TAC));
