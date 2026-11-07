@@ -17,567 +17,37 @@ use satya_schema::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-use std::fmt;
-use std::str::FromStr;
 
-/// Discrete probability mass function mapping outcome integer values to their exact probabilities in `[0.0, 1.0]`.
-///
-/// Stored in a [`BTreeMap`] so keys are always sorted in ascending order.
-pub type Pmf = BTreeMap<i32, f64>;
-
-/// Summary moments of a discrete probability distribution.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct DistributionStats {
-    /// Expected value $E[X] = \sum x P(X = x)$.
-    pub mean: f64,
-    /// Variance $\text{Var}(X) = E[(X - \mu)^2]$.
-    pub variance: f64,
-    /// Standard deviation $\sigma = \sqrt{\text{Var}(X)}$.
-    pub std: f64,
-    /// Standardized third central moment $E[(X - \mu)^3] / \sigma^3$.
-    pub skewness: f64,
-    /// Standardized fourth central moment minus 3: $(E[(X - \mu)^4] / \sigma^4) - 3$.
-    pub excess_kurtosis: f64,
-}
-
-/// Returns a sorted, normalized probability mass function with negligible entries (`<= 1e-15`) removed.
-pub fn normalize_pmf(pmf: &BTreeMap<i32, f64>) -> Pmf {
-    let total: f64 = pmf.values().copied().sum();
-    if total <= 0.0 {
-        return BTreeMap::new();
-    }
-    let mut out = BTreeMap::new();
-    for (&k, &v) in pmf {
-        if v > 1e-15 {
-            out.insert(k, v / total);
-        }
-    }
-    out
-}
-
-fn normalize_hash_pmf(pmf: &HashMap<i32, f64>) -> Pmf {
-    let total: f64 = pmf.values().copied().sum();
-    if total <= 0.0 {
-        return BTreeMap::new();
-    }
-    let mut out = BTreeMap::new();
-    for (&k, &v) in pmf {
-        if v > 1e-15 {
-            out.insert(k, v / total);
-        }
-    }
-    out
-}
-
-/// Computes exact mean, variance, standard deviation, skewness, and excess kurtosis for a [`Pmf`].
-pub fn compute_stats(pmf: &Pmf) -> DistributionStats {
-    let norm = normalize_pmf(pmf);
-    if norm.is_empty() {
-        return DistributionStats {
-            mean: 0.0,
-            variance: 0.0,
-            std: 0.0,
-            skewness: 0.0,
-            excess_kurtosis: 0.0,
-        };
-    }
-
-    let mean: f64 = norm.iter().map(|(&x, &p)| (x as f64) * p).sum();
-    let variance: f64 = norm
-        .iter()
-        .map(|(&x, &p)| {
-            let diff = (x as f64) - mean;
-            diff * diff * p
-        })
-        .sum();
-    let std = variance.max(0.0).sqrt();
-    if std < 1e-12 {
-        return DistributionStats {
-            mean,
-            variance: 0.0,
-            std: 0.0,
-            skewness: 0.0,
-            excess_kurtosis: 0.0,
-        };
-    }
-
-    let m3: f64 = norm
-        .iter()
-        .map(|(&x, &p)| {
-            let diff = (x as f64) - mean;
-            diff.powi(3) * p
-        })
-        .sum();
-    let m4: f64 = norm
-        .iter()
-        .map(|(&x, &p)| {
-            let diff = (x as f64) - mean;
-            diff.powi(4) * p
-        })
-        .sum();
-
-    let skewness = m3 / std.powi(3);
-    let excess_kurtosis = (m4 / variance.powi(2)) - 3.0;
-
-    DistributionStats {
-        mean,
-        variance,
-        std,
-        skewness,
-        excess_kurtosis,
-    }
-}
-
-/// Computes the exact distribution of $X + Y$ for independent discrete random variables $X$ and $Y$.
-pub fn convolve_pmfs(pmf_a: &Pmf, pmf_b: &Pmf) -> Pmf {
-    let mut out: BTreeMap<i32, f64> = BTreeMap::new();
-    for (&x, &px) in pmf_a {
-        for (&y, &py) in pmf_b {
-            *out.entry(x + y).or_insert(0.0) += px * py;
-        }
-    }
-    normalize_pmf(&out)
-}
-
-/// Returns the uniform [`Pmf`] for a single die `dK` (`1..=sides`), or `-dK` (`-sides..=-1`) when `negative` is `true`.
-pub fn single_die_pmf(sides: i32, negative: bool) -> Pmf {
-    let mut out = BTreeMap::new();
-    if sides <= 0 {
-        return out;
-    }
-    let p = 1.0 / (sides as f64);
-    if negative {
-        for face in 1..=sides {
-            out.insert(-face, p);
-        }
-    } else {
-        for face in 1..=sides {
-            out.insert(face, p);
-        }
-    }
-    out
-}
-
-// ---------------------------------------------------------------------------
-// 1. Additive & Negative Dice Pools (Central Limit Theorem Demonstration)
-// ---------------------------------------------------------------------------
-
-/// Exact [`Pmf`] of the sum of `pos_dice` `dK` minus `neg_dice` `dK`.
-pub fn sum_dice_pool_pmf(pos_dice: usize, sides: i32, neg_dice: usize) -> Pmf {
-    let mut result = BTreeMap::from([(0, 1.0)]);
-    let pos_die = single_die_pmf(sides, false);
-    let neg_die = single_die_pmf(sides, true);
-    for _ in 0..pos_dice {
-        result = convolve_pmfs(&result, &pos_die);
-    }
-    for _ in 0..neg_dice {
-        result = convolve_pmfs(&result, &neg_die);
-    }
-    result
-}
-
-// ---------------------------------------------------------------------------
-// 2. Success-Counting Dice Pools (Binomial & Satya d20 Critical-1 Pool)
-// ---------------------------------------------------------------------------
-
-/// Exact [`Pmf`] of success counts in an `NdK` pool.
-///
-/// If `crit_on_one_double` is `true` (as in Satya's roll-under `d20` rules), rolling a `1` on a hit counts as `2` successes.
-pub fn count_successes_pmf(
-    pool_size: usize,
-    sides: i32,
-    target_num: i32,
-    roll_under: bool,
-    crit_on_one_double: bool,
-) -> Pmf {
-    let mut die_success_pmf: BTreeMap<i32, f64> = BTreeMap::new();
-    if sides <= 0 {
-        return die_success_pmf;
-    }
-    let p = 1.0 / (sides as f64);
-    for face in 1..=sides {
-        let is_hit = if roll_under {
-            face <= target_num
-        } else {
-            face >= target_num
-        };
-        if crit_on_one_double && face == 1 && is_hit {
-            *die_success_pmf.entry(2).or_insert(0.0) += p;
-        } else if is_hit {
-            *die_success_pmf.entry(1).or_insert(0.0) += p;
-        } else {
-            *die_success_pmf.entry(0).or_insert(0.0) += p;
-        }
-    }
-
-    let mut result = BTreeMap::from([(0, 1.0)]);
-    for _ in 0..pool_size {
-        result = convolve_pmfs(&result, &die_success_pmf);
-    }
-    result
-}
-
-// ---------------------------------------------------------------------------
-// 3. Exploding Dice (Single, Summed Pool, and Keep-Highest Gumbel Pool)
-// ---------------------------------------------------------------------------
-
-/// Exact [`Pmf`] of a single exploding `dK` (re-roll and add when `face >= explode_min`, up to `max_explosions` times).
-pub fn single_exploding_die_pmf(
-    sides: i32,
-    explode_min: Option<i32>,
-    max_explosions: usize,
-) -> Pmf {
-    if sides <= 0 {
-        return BTreeMap::new();
-    }
-    let exp_min = explode_min.unwrap_or(sides);
-    let p = 1.0 / (sides as f64);
-    let mut active: BTreeMap<i32, f64> = BTreeMap::from([(0, 1.0)]);
-    let mut finished: BTreeMap<i32, f64> = BTreeMap::new();
-
-    for step in 0..=max_explosions {
-        let mut next_active: BTreeMap<i32, f64> = BTreeMap::new();
-        let is_last = step == max_explosions;
-        for (&current_sum, &prob) in &active {
-            for face in 1..=sides {
-                let new_sum = current_sum + face;
-                if face >= exp_min && !is_last {
-                    *next_active.entry(new_sum).or_insert(0.0) += prob * p;
-                } else {
-                    *finished.entry(new_sum).or_insert(0.0) += prob * p;
-                }
-            }
-        }
-        active = next_active;
-        if active.is_empty() {
-            break;
-        }
-    }
-
-    normalize_pmf(&finished)
-}
-
-/// Exact [`Pmf`] of taking the maximum of `pool_size` independent exploding dice (Gumbel extreme value limit).
-pub fn exploding_pool_keep_highest_pmf(
-    pool_size: usize,
-    sides: i32,
-    explode_min: Option<i32>,
-    max_explosions: usize,
-) -> Pmf {
-    let single = single_exploding_die_pmf(sides, explode_min, max_explosions);
-    let mut cdf_prev = 0.0_f64;
-    let mut out = BTreeMap::new();
-    let n_exp = pool_size as i32;
-    for (&v, &prob) in &single {
-        let cdf_curr = cdf_prev + prob;
-        out.insert(v, cdf_curr.powi(n_exp) - cdf_prev.powi(n_exp));
-        cdf_prev = cdf_curr;
-    }
-    normalize_pmf(&out)
-}
-
-// ---------------------------------------------------------------------------
-// 4. Order Statistics: Roll N, Keep k-th Lowest/Highest (Discrete Beta Family)
-// ---------------------------------------------------------------------------
-
-fn binomial_coeff(n: usize, k: usize) -> f64 {
-    if k > n {
-        return 0.0;
-    }
-    let k = k.min(n - k);
-    let mut result = 1.0_f64;
-    for i in 0..k {
-        result *= (n - i) as f64;
-        result /= (i + 1) as f64;
-    }
-    result
-}
-
-/// Fallible version of [`order_statistic_pmf`] that validates `1 <= k_rank_from_lowest <= pool_size`.
-pub fn try_order_statistic_pmf(
-    pool_size: usize,
-    sides: i32,
-    k_rank_from_lowest: usize,
-) -> Result<Pmf, String> {
-    if k_rank_from_lowest < 1 || k_rank_from_lowest > pool_size {
-        return Err(format!(
-            "k_rank_from_lowest must be in 1..={pool_size}, got {k_rank_from_lowest}"
-        ));
-    }
-    if sides <= 0 {
-        return Err(format!("sides must be >= 1, got {sides}"));
-    }
-
-    let cdf = |x: i32| -> f64 {
-        if x <= 0 {
-            return 0.0;
-        }
-        if x >= sides {
-            return 1.0;
-        }
-        let p = (x as f64) / (sides as f64);
-        let q = 1.0 - p;
-        let mut sum = 0.0;
-        for j in k_rank_from_lowest..=pool_size {
-            sum += binomial_coeff(pool_size, j) * p.powi(j as i32) * q.powi((pool_size - j) as i32);
-        }
-        sum
-    };
-
-    let mut out = BTreeMap::new();
-    for face in 1..=sides {
-        out.insert(face, cdf(face) - cdf(face - 1));
-    }
-    Ok(normalize_pmf(&out))
-}
-
-/// Exact [`Pmf`] of the `k`-th order statistic (`1` = lowest, `pool_size` = highest) of `NdK`.
-///
-/// # Panics
-/// Panics if `k_rank_from_lowest` is outside `1..=pool_size` or `sides <= 0`.
-pub fn order_statistic_pmf(pool_size: usize, sides: i32, k_rank_from_lowest: usize) -> Pmf {
-    try_order_statistic_pmf(pool_size, sides, k_rank_from_lowest)
-        .expect("invalid order_statistic_pmf arguments")
-}
-
-// ---------------------------------------------------------------------------
-// 5. Distance-from-Center Selection: Focus vs. Neutral vs. Chaos (U-Shaped)
-// ---------------------------------------------------------------------------
-
-/// Selection mode for [`center_distance_selection_pmf`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CenterDistanceMode {
-    /// Pick the die closest to the midpoint $(K+1)/2$ (Focus / bell-like concentration).
-    Closest,
-    /// Pick the die furthest from the midpoint $(K+1)/2$ (Chaos / U-shaped bimodal distribution).
-    Furthest,
-}
-
-/// Roll `pool_size` `dK` and pick the die closest to or furthest from the center $(K+1)/2$.
-///
-/// Ties in distance between a low face $f$ and its mirror $K + 1 - f$ are split 50/50 so symmetry is preserved.
-pub fn center_distance_selection_pmf(
-    pool_size: usize,
-    sides: i32,
-    mode: CenterDistanceMode,
-) -> Pmf {
-    if sides <= 0 || pool_size == 0 {
-        return BTreeMap::new();
-    }
-    // Twice the distance from (sides + 1) / 2 is an exact integer: |2 * face - (sides + 1)|
-    let mut dist_groups: BTreeMap<i32, Vec<i32>> = BTreeMap::new();
-    for face in 1..=sides {
-        let dist_twice = (2 * face - (sides + 1)).abs();
-        dist_groups.entry(dist_twice).or_default().push(face);
-    }
-
-    let ordered_buckets: Vec<&Vec<i32>> = match mode {
-        CenterDistanceMode::Closest => dist_groups.values().collect(),
-        CenterDistanceMode::Furthest => dist_groups.values().rev().collect(),
-    };
-
-    let mut out = BTreeMap::new();
-    let mut remaining_faces = sides as f64;
-    let sides_f = sides as f64;
-    let n_exp = pool_size as i32;
-
-    for faces_in_bucket in ordered_buckets {
-        let b = faces_in_bucket.len() as f64;
-        let p_bucket =
-            (remaining_faces / sides_f).powi(n_exp) - ((remaining_faces - b) / sides_f).powi(n_exp);
-        for &f in faces_in_bucket {
-            out.insert(f, p_bucket / b);
-        }
-        remaining_faces -= b;
-    }
-
-    normalize_pmf(&out)
-}
-
-// ---------------------------------------------------------------------------
-// 6. Median-Gated Branching Pool (True Two-Humped Bimodal Distribution)
-// ---------------------------------------------------------------------------
-
-fn factorial_u64(n: usize) -> u64 {
-    (1..=(n as u64)).product::<u64>().max(1)
-}
-
-/// Fallible version of [`median_gated_bimodal_pmf`] validating that `pool_size` is an odd integer `>= 3`.
-pub fn try_median_gated_bimodal_pmf(
-    pool_size: usize,
-    sides: i32,
-    gate_tn: i32,
-    roll_under: bool,
-) -> Result<Pmf, String> {
-    if pool_size.is_multiple_of(2) || pool_size < 3 {
-        return Err(format!(
-            "pool_size must be an odd integer >= 3 (e.g., 3 or 5), got {pool_size}"
-        ));
-    }
-    if sides <= 0 {
-        return Err(format!("sides must be >= 1, got {sides}"));
-    }
-
-    let mut out: BTreeMap<i32, f64> = BTreeMap::new();
-    let mid_idx = pool_size / 2;
-    let total_perms = (sides as f64).powi(pool_size as i32);
-    let n_fact = factorial_u64(pool_size);
-
-    #[allow(clippy::too_many_arguments)]
-    fn recurse(
-        face: i32,
-        sides: i32,
-        mid_idx: usize,
-        gate_tn: i32,
-        roll_under: bool,
-        n_fact: u64,
-        total_perms: f64,
-        remaining: usize,
-        current_tuple: &mut Vec<i32>,
-        mult_denom: u64,
-        out: &mut BTreeMap<i32, f64>,
-    ) {
-        if remaining == 0 {
-            let perm_count = (n_fact / mult_denom) as f64;
-            let prob = perm_count / total_perms;
-            let mn = current_tuple[0];
-            let md = current_tuple[mid_idx];
-            let mx = *current_tuple.last().unwrap_or(&mn);
-            let chosen = if roll_under {
-                if md <= gate_tn { mn } else { mx }
-            } else if md >= gate_tn {
-                mx
-            } else {
-                mn
-            };
-            *out.entry(chosen).or_insert(0.0) += prob;
-            return;
-        }
-        if face > sides {
-            return;
-        }
-        // Option 0: 0 dice show `face`
-        recurse(
-            face + 1,
-            sides,
-            mid_idx,
-            gate_tn,
-            roll_under,
-            n_fact,
-            total_perms,
-            remaining,
-            current_tuple,
-            mult_denom,
-            out,
-        );
-        // Option c >= 1 dice show `face`
-        for c in 1..=remaining {
-            for _ in 0..c {
-                current_tuple.push(face);
-            }
-            recurse(
-                face + 1,
-                sides,
-                mid_idx,
-                gate_tn,
-                roll_under,
-                n_fact,
-                total_perms,
-                remaining - c,
-                current_tuple,
-                mult_denom * factorial_u64(c),
-                out,
-            );
-            for _ in 0..c {
-                current_tuple.pop();
-            }
-        }
-    }
-
-    let mut current_tuple = Vec::with_capacity(pool_size);
-    recurse(
-        1,
-        sides,
-        mid_idx,
-        gate_tn,
-        roll_under,
-        n_fact,
-        total_perms,
-        pool_size,
-        &mut current_tuple,
-        1,
-        &mut out,
-    );
-    Ok(normalize_pmf(&out))
-}
-
-/// Roll an odd number of dice `pool_size` `dK` (`>= 3`) and branch on the median die vs. `gate_tn`:
-/// - If `roll_under == false`: if `median >= gate_tn`, return `max(pool)`; else return `min(pool)`.
-/// - If `roll_under == true`: if `median <= gate_tn`, return `min(pool)`; else return `max(pool)`.
-///
-/// # Panics
-/// Panics if `pool_size` is even or `< 3`.
-pub fn median_gated_bimodal_pmf(
-    pool_size: usize,
-    sides: i32,
-    gate_tn: i32,
-    roll_under: bool,
-) -> Pmf {
-    try_median_gated_bimodal_pmf(pool_size, sides, gate_tn, roll_under)
-        .expect("invalid median_gated_bimodal_pmf arguments")
-}
-
-// ---------------------------------------------------------------------------
-// 7. Multiplicative Dice Pool (Log-Normal Heavy-Tailed Distribution)
-// ---------------------------------------------------------------------------
-
-/// Exact [`Pmf`] of multiplying `pool_size` `dK` together ($d_1 \times d_2 \times \dots \times d_N$).
-pub fn multiplicative_pool_pmf(pool_size: usize, sides: i32) -> Pmf {
-    if sides <= 0 {
-        return BTreeMap::new();
-    }
-    let mut result = BTreeMap::from([(1, 1.0)]);
-    let p = 1.0 / (sides as f64);
-    for _ in 0..pool_size {
-        let mut nxt: BTreeMap<i32, f64> = BTreeMap::new();
-        for (&val, &prob) in &result {
-            for face in 1..=sides {
-                *nxt.entry(val * face).or_insert(0.0) += prob * p;
-            }
-        }
-        result = nxt;
-    }
-    normalize_pmf(&result)
-}
+use crate::define_coded_enum;
+use crate::dice_pools::normalize_hash_pmf;
+pub use crate::dice_pools::{
+    CenterDistanceMode, DistributionStats, Pmf, center_distance_selection_pmf, compute_stats,
+    convolve_pmfs, count_successes_pmf, exploding_pool_keep_highest_pmf, median_gated_bimodal_pmf,
+    multiplicative_pool_pmf, normalize_pmf, order_statistic_pmf, single_die_pmf,
+    single_exploding_die_pmf, sum_dice_pool_pmf, try_median_gated_bimodal_pmf,
+    try_order_statistic_pmf,
+};
 
 // ---------------------------------------------------------------------------
 // 8. Paired-List Cascading / Contagious Dice (The Watershed Mechanic)
 // ---------------------------------------------------------------------------
 
-/// Carry-over propagation rule governing how `mod_{n+1}` is calculated from step `n` in the Two-List Cascade.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum CarryMode {
-    /// 1-step Markov memory (`mod_{n+1}` depends only on whether step `n` rolled over or under `C`).
-    #[default]
-    MarkovStep,
-    /// Compounding momentum (`mod_{n+1} = mod_n + step_mod`).
-    CumulativeSnowball,
-    /// Exact difference carry (`mod_{n+1} = Y_n - C`, or `C - Y_n` when `invert_feedback = true`).
-    LinearMargin,
+define_coded_enum! {
+    /// Carry-over propagation rule governing how `mod_{n+1}` is calculated from step `n` in the Two-List Cascade.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+    #[serde(rename_all = "snake_case")]
+    pub enum CarryMode [count = 3] {
+        /// 1-step Markov memory (`mod_{n+1}` depends only on whether step `n` rolled over or under `C`).
+        #[default]
+        MarkovStep => { code: "markov_step", label: "Markov Step" },
+        /// Compounding momentum (`mod_{n+1} = mod_n + step_mod`).
+        CumulativeSnowball => { code: "cumulative_snowball", label: "Cumulative Snowball" },
+        /// Exact difference carry (`mod_{n+1} = Y_n - C`, or `C - Y_n` when `invert_feedback = true`).
+        LinearMargin => { code: "linear_margin", label: "Linear Margin" },
+    }
 }
 
 impl CarryMode {
-    /// Canonical snake_case identifier matching Python's `Literal["markov_step", "cumulative_snowball", "linear_margin"]`.
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::MarkovStep => "markov_step",
-            Self::CumulativeSnowball => "cumulative_snowball",
-            Self::LinearMargin => "linear_margin",
-        }
-    }
-
     /// Computes the carry-over modifier $\text{mod}_{n+1}$ propagated from step $n$.
     #[inline]
     pub const fn next_mod(
@@ -604,49 +74,23 @@ impl CarryMode {
     }
 }
 
-impl fmt::Display for CarryMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+define_coded_enum! {
+    /// Botch / complication evaluation rule for [`paired_list_signed_margin_pmfs`].
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+    #[serde(rename_all = "snake_case")]
+    pub enum BotchRule [count = 3] {
+        /// Monotonic / Anti-Paradox rule: when `successes == 0`, failure severity is determined by the closest pair
+        /// to `C_eff` across all `N` pairs, binned every `max(2, K / 5)` points (`0..=5`).
+        #[default]
+        ClosestMiss => { code: "closest_miss", label: "Closest Miss" },
+        /// Physical dice bound breach: `Y_n > 2K` (in Roll-Under) or `Y_n < 2` (in Roll-Over).
+        CeilingBreach => { code: "ceiling_breach", label: "Ceiling Breach" },
+        /// Relative overrun: `Y_n > C_eff + K` (in Roll-Under) or `Y_n < C_eff - K` (in Roll-Over).
+        OverrunK => { code: "overrun_k", label: "Overrun K" },
     }
-}
-
-impl FromStr for CarryMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim() {
-            "markov_step" => Ok(Self::MarkovStep),
-            "cumulative_snowball" => Ok(Self::CumulativeSnowball),
-            "linear_margin" => Ok(Self::LinearMargin),
-            other => Err(format!("Unknown CarryMode: '{other}'")),
-        }
-    }
-}
-
-/// Botch / complication evaluation rule for [`paired_list_signed_margin_pmfs`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum BotchRule {
-    /// Monotonic / Anti-Paradox rule: when `successes == 0`, failure severity is determined by the closest pair
-    /// to `C_eff` across all `N` pairs, binned every `max(2, K / 5)` points (`0..=5`).
-    #[default]
-    ClosestMiss,
-    /// Physical dice bound breach: `Y_n > 2K` (in Roll-Under) or `Y_n < 2` (in Roll-Over).
-    CeilingBreach,
-    /// Relative overrun: `Y_n > C_eff + K` (in Roll-Under) or `Y_n < C_eff - K` (in Roll-Over).
-    OverrunK,
 }
 
 impl BotchRule {
-    /// Canonical snake_case identifier matching Python's `Literal["closest_miss", "ceiling_breach", "overrun_k"]`.
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::ClosestMiss => "closest_miss",
-            Self::CeilingBreach => "ceiling_breach",
-            Self::OverrunK => "overrun_k",
-        }
-    }
-
     /// Resolves effective botch severity from `(succ, raw_botch, min_miss_tier)`.
     #[inline]
     pub const fn effective_botches(self, succ: i32, raw_botch: i32, min_miss_tier: i32) -> i32 {
@@ -658,45 +102,20 @@ impl BotchRule {
     }
 }
 
-impl fmt::Display for BotchRule {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+define_coded_enum! {
+    /// Rule for combining total successes and botches into the unified `-N..=+N` signed margin.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+    #[serde(rename_all = "snake_case")]
+    pub enum MarginAggregation [count = 2] {
+        /// If `successes > 0`, margin is `+successes`; if `successes == 0`, margin is `-eff_botch`.
+        #[default]
+        PiecewiseZeroFloor => { code: "piecewise_zero_floor", label: "Piecewise Zero Floor" },
+        /// Margin is `successes - eff_botch` across the whole chain.
+        NetDifference => { code: "net_difference", label: "Net Difference" },
     }
-}
-
-impl FromStr for BotchRule {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim() {
-            "closest_miss" => Ok(Self::ClosestMiss),
-            "ceiling_breach" => Ok(Self::CeilingBreach),
-            "overrun_k" => Ok(Self::OverrunK),
-            other => Err(format!("Unknown BotchRule: '{other}'")),
-        }
-    }
-}
-
-/// Rule for combining total successes and botches into the unified `-N..=+N` signed margin.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum MarginAggregation {
-    /// If `successes > 0`, margin is `+successes`; if `successes == 0`, margin is `-eff_botch`.
-    #[default]
-    PiecewiseZeroFloor,
-    /// Margin is `successes - eff_botch` across the whole chain.
-    NetDifference,
 }
 
 impl MarginAggregation {
-    /// Canonical snake_case identifier matching Python's `Literal["piecewise_zero_floor", "net_difference"]`.
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::PiecewiseZeroFloor => "piecewise_zero_floor",
-            Self::NetDifference => "net_difference",
-        }
-    }
-
     /// Combines total successes and effective botches into a unified signed margin.
     #[inline]
     pub const fn compute(self, succ: i32, eff_botch: i32) -> i32 {
@@ -713,32 +132,8 @@ impl MarginAggregation {
     }
 }
 
-impl fmt::Display for MarginAggregation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for MarginAggregation {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim() {
-            "piecewise_zero_floor" => Ok(Self::PiecewiseZeroFloor),
-            "net_difference" => Ok(Self::NetDifference),
-            other => Err(format!("Unknown MarginAggregation: '{other}'")),
-        }
-    }
-}
-
 /// Computes exact PMFs `(success_count_pmf, final_pair_value_pmf)` for the Two-List Cascading
 /// ("Watershed" or "Recoil") Dice Mechanic.
-///
-/// Two lists of `num_pairs` dice (`sides`-sided, `dK`) are rolled in parallel:
-/// - At each index $n \in \{1, \dots, N\}$, the base pair sum is $X_n = A_n + B_n \in [2, 2K]$.
-/// - The effective value is $Y_n = X_n + \text{mod}_n$ (where $\text{mod}_1 = 0$).
-/// - $Y_n$ is compared to `characteristic_c` to determine whether step $n$ succeeded and what
-///   modifier $\text{mod}_{n+1}$ propagates to step $n+1$.
 #[allow(clippy::too_many_arguments)]
 pub fn paired_list_cascade_pmfs(
     num_pairs: usize,
@@ -799,29 +194,30 @@ fn evaluate_step_success_and_botch(
     count_under_as_success: bool,
     botch_rule: BotchRule,
 ) -> (i32, i32, i32) {
-    if count_under_as_success {
-        let succ = i32::from(y_val < characteristic_c);
-        let miss_dist = (y_val - characteristic_c).max(0);
-        let mut botch = match botch_rule {
-            BotchRule::CeilingBreach | BotchRule::ClosestMiss => i32::from(y_val > 2 * sides),
-            BotchRule::OverrunK => i32::from(y_val > characteristic_c + sides),
-        };
-        if succ == 1 {
-            botch = 0;
-        }
-        (succ, botch, miss_dist)
+    let (succ, miss_dist, bound_breach, overrun_breach) = if count_under_as_success {
+        (
+            i32::from(y_val < characteristic_c),
+            (y_val - characteristic_c).max(0),
+            i32::from(y_val > 2 * sides),
+            i32::from(y_val > characteristic_c + sides),
+        )
     } else {
-        let succ = i32::from(y_val > characteristic_c);
-        let miss_dist = (characteristic_c - y_val).max(0);
-        let mut botch = match botch_rule {
-            BotchRule::CeilingBreach | BotchRule::ClosestMiss => i32::from(y_val < 2),
-            BotchRule::OverrunK => i32::from(y_val < characteristic_c - sides),
-        };
-        if succ == 1 {
-            botch = 0;
+        (
+            i32::from(y_val > characteristic_c),
+            (characteristic_c - y_val).max(0),
+            i32::from(y_val < 2),
+            i32::from(y_val < characteristic_c - sides),
+        )
+    };
+    let botch = if succ == 1 {
+        0
+    } else {
+        match botch_rule {
+            BotchRule::CeilingBreach | BotchRule::ClosestMiss => bound_breach,
+            BotchRule::OverrunK => overrun_breach,
         }
-        (succ, botch, miss_dist)
-    }
+    };
+    (succ, botch, miss_dist)
 }
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -1100,18 +496,20 @@ impl CascadeTaskParams {
     }
 }
 
-/// High-level narrative outcome category of a resolved Two-List Cascade roll.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum CascadeOutcomeKind {
-    /// At least 1 success and 0 floor-breach complications (`Succ >= 1 && Botch == 0`).
-    Success,
-    /// At least 1 success, but also triggered at least 1 floor-breach complication (`Succ >= 1 && Botch >= 1`).
-    SuccessWithComplication,
-    /// Zero successes and zero effective botches (`Succ == 0 && EffBotch == 0`).
-    CleanFailure,
-    /// Zero successes and at least 1 effective botch (`Succ == 0 && EffBotch >= 1`).
-    BotchFailure,
+define_coded_enum! {
+    /// High-level narrative outcome category of a resolved Two-List Cascade roll.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum CascadeOutcomeKind [count = 4] {
+        /// At least 1 success and 0 floor-breach complications (`Succ >= 1 && Botch == 0`).
+        Success => { code: "SUCCESS", label: "Success" },
+        /// At least 1 success, but also triggered at least 1 floor-breach complication (`Succ >= 1 && Botch >= 1`).
+        SuccessWithComplication => { code: "SUCCESS_WITH_COMPLICATION", label: "Success with Complication" },
+        /// Zero successes and zero effective botches (`Succ == 0 && EffBotch == 0`).
+        CleanFailure => { code: "CLEAN_FAILURE", label: "Clean Failure" },
+        /// Zero successes and at least 1 effective botch (`Succ == 0 && EffBotch >= 1`).
+        BotchFailure => { code: "BOTCH_FAILURE", label: "Botch Failure" },
+    }
 }
 
 impl CascadeOutcomeKind {
@@ -1261,7 +659,6 @@ pub fn evaluate_cascade_roll(
         final_pair_y = yn;
 
         let next_mod = mode.next_mod(mod_n, yn, characteristic_c, eff_over, eff_under, sign);
-
         steps.push(CascadeStepTrace {
             pair_index: idx + 1,
             die_a,
@@ -1275,7 +672,6 @@ pub fn evaluate_cascade_roll(
             miss_distance: mn,
             carry_out: next_mod,
         });
-
         mod_n = next_mod;
     }
 
@@ -1403,90 +799,44 @@ pub fn evaluate_satya_cascade_task(
 // 10. Contested & Hybrid-Contested Two-List Cascade Resolution Engine
 // ---------------------------------------------------------------------------
 
-/// Tie-breaking and margin-interaction rule for Contested Cascade Task Resolution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum ContestedTieRule {
-    /// Recommended Hybrid Rule:
-    /// - Clean Win (`Success` / `ExtraordinarySuccess`): $S_P > S_{GM}$ and $B_P == 0$ (or GM botch cancels $B_P$).
-    /// - Grazing Win (`PartialSuccess`): Positive tie $S_P == S_{GM} \ge 1$ succeeds at a minor cost/delay.
-    /// - Lucky Break (`PartialSuccess`): Player rolls a Clean Miss ($S_P == 0, M_P == 0$) while the GM Botches ($M_{GM} < 0$).
-    /// - Floor-Breach Win (`PartialSuccess`): $S_P > S_{GM}$ with $B_P \ge 1$ and $M_{GM} \ge 0$.
-    #[default]
-    HybridSignedMargin,
-    /// Strict Signed Margin ($M_P > M_{GM}$):
-    /// Positive ties ($S_P == S_{GM} \ge 1$) count as `Failure` (stalemate/blocked), while a GM Botch ($M_{GM} < 0$)
-    /// against a player Clean Miss ($M_P == 0$) still triggers a Lucky Break (`PartialSuccess`).
-    StrictSignedMargin,
-    /// Active Player Wins Positive Ties ($S_P \ge S_{GM} \ge 1$):
-    /// Positive ties count as a full `Success` (no grazing complication), and GM botches do not rescue $S_P == 0$.
-    ActivePlayerWinsTies,
-}
-
-impl ContestedTieRule {
-    /// Canonical string identifier.
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::HybridSignedMargin => "hybrid_signed_margin",
-            Self::StrictSignedMargin => "strict_signed_margin",
-            Self::ActivePlayerWinsTies => "active_player_wins_ties",
-        }
+define_coded_enum! {
+    /// Tie-breaking and margin-interaction rule for Contested Cascade Task Resolution.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+    #[serde(rename_all = "snake_case")]
+    pub enum ContestedTieRule [count = 3] {
+        /// Recommended Hybrid Rule: positive ties succeed at a grazing cost; GM botches rescue player clean misses.
+        #[default]
+        HybridSignedMargin => { code: "hybrid_signed_margin", label: "Hybrid Signed Margin" },
+        /// Strict Signed Margin ($M_P > M_{GM}$): positive ties fail; GM botches still rescue player clean misses.
+        StrictSignedMargin => { code: "strict_signed_margin", label: "Strict Signed Margin" },
+        /// Active Player Wins Positive Ties ($S_P \ge S_{GM} \ge 1$).
+        ActivePlayerWinsTies => { code: "active_player_wins_ties", label: "Active Player Wins Ties" },
     }
 }
 
-impl fmt::Display for ContestedTieRule {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+define_coded_enum! {
+    /// Specific sub-classification of how a Contested Cascade roll resolved.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum ContestedOutcomeKind [count = 7] {
+        /// Player strictly beat GM ($S_P > S_{GM}$) with net margin $\Delta M \ge 3$ and no uncancelled floor breach.
+        ExtraordinarySuccess => { code: "EXTRAORDINARY_SUCCESS", label: "Extraordinary Success" },
+        /// Player cleanly beat GM ($S_P > S_{GM}$) with no uncancelled floor breach.
+        CleanSuccess => { code: "CLEAN_SUCCESS", label: "Clean Success" },
+        /// Player beat GM ($S_P > S_{GM}$), but suffered a floor-breach complication ($B_P \ge 1$).
+        SuccessWithFloorBreach => { code: "SUCCESS_WITH_FLOOR_BREACH", label: "Success with Floor Breach" },
+        /// Player tied GM on positive successes ($S_P == S_{GM} \ge 1$); succeeds at a grazing cost or delay.
+        GrazingTieSuccess => { code: "GRAZING_TIE_SUCCESS", label: "Grazing Tie Success" },
+        /// Player rolled a Clean Failure ($S_P == 0, M_P == 0$), but the GM botched ($M_{GM} < 0$), creating an opportunistic opening.
+        LuckyBreakSuccess => { code: "LUCKY_BREAK_SUCCESS", label: "Lucky Break Success" },
+        /// Player failed to beat GM without botching ($M_P \ge 0$, or stalemate $0 == 0$).
+        CleanFailure => { code: "CLEAN_FAILURE", label: "Clean Failure" },
+        /// Player botched ($M_P < 0$) or failed while suffering a floor breach.
+        BotchFailure => { code: "BOTCH_FAILURE", label: "Botch Failure" },
     }
-}
-
-impl FromStr for ContestedTieRule {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim() {
-            "hybrid_signed_margin" => Ok(Self::HybridSignedMargin),
-            "strict_signed_margin" => Ok(Self::StrictSignedMargin),
-            "active_player_wins_ties" => Ok(Self::ActivePlayerWinsTies),
-            other => Err(format!("Unknown ContestedTieRule: '{other}'")),
-        }
-    }
-}
-
-/// Specific sub-classification of how a Contested Cascade roll resolved.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ContestedOutcomeKind {
-    /// Player strictly beat GM ($S_P > S_{GM}$) with net margin $\Delta M \ge 3$ and no uncancelled floor breach.
-    ExtraordinarySuccess,
-    /// Player cleanly beat GM ($S_P > S_{GM}$) with no uncancelled floor breach.
-    CleanSuccess,
-    /// Player beat GM ($S_P > S_{GM}$), but suffered a floor-breach complication ($B_P \ge 1$).
-    SuccessWithFloorBreach,
-    /// Player tied GM on positive successes ($S_P == S_{GM} \ge 1$); succeeds at a grazing cost or delay.
-    GrazingTieSuccess,
-    /// Player rolled a Clean Failure ($S_P == 0, M_P == 0$), but the GM botched ($M_{GM} < 0$), creating an opportunistic opening.
-    LuckyBreakSuccess,
-    /// Player failed to beat GM without botching ($M_P \ge 0$, or stalemate $0 == 0$).
-    CleanFailure,
-    /// Player botched ($M_P < 0$) or failed while suffering a floor breach.
-    BotchFailure,
 }
 
 impl ContestedOutcomeKind {
-    /// Canonical `SCREAMING_SNAKE_CASE` string identifier.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::ExtraordinarySuccess => "EXTRAORDINARY_SUCCESS",
-            Self::CleanSuccess => "CLEAN_SUCCESS",
-            Self::SuccessWithFloorBreach => "SUCCESS_WITH_FLOOR_BREACH",
-            Self::GrazingTieSuccess => "GRAZING_TIE_SUCCESS",
-            Self::LuckyBreakSuccess => "LUCKY_BREAK_SUCCESS",
-            Self::CleanFailure => "CLEAN_FAILURE",
-            Self::BotchFailure => "BOTCH_FAILURE",
-        }
-    }
-
     /// Maps the detailed [`ContestedOutcomeKind`] to the canonical 5-tier [`OutcomeTier`].
     pub const fn to_outcome_tier(self) -> OutcomeTier {
         match self {
@@ -1536,20 +886,12 @@ impl ContestedOutcomeKind {
     }
 }
 
-impl fmt::Display for ContestedOutcomeKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 /// Mode for evaluating the GM's opposing roll in a Contested Task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GmResistanceMode {
     /// **1-Pair Tiered GM Resistance Roll (Default for Environmental / Technical Tasks)**:
-    /// The GM rolls a single hidden `2d20` pair ($X_{GM} = A_{GM} + B_{GM}$) against $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$:
-    /// - If $X_{GM} > \text{TN}_{GM}$, scores $S_{GM} = 1 + \lfloor (X_{GM} - \text{TN}_{GM} - 1) / \text{step\_size} \rfloor$ Resistance Successes (`step_size = 4` by default).
-    /// - If $X_{GM} \le \text{TN}_{GM}$, scores $S_{GM} = 0$ successes and $B_{GM} = \min(5, \lfloor (\text{TN}_{GM} - X_{GM}) / 4 \rfloor)$ botch tiers ($M_{GM} = -B_{GM}$).
+    /// The GM rolls a single hidden `2d20` pair ($X_{GM} = A_{GM} + B_{GM}$) against $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$.
     TieredSinglePair {
         /// Over-target step size per additional GM success (canonical default `4`, matching $K / 5 = 4$).
         step_size: i32,
@@ -1579,10 +921,7 @@ pub struct ContestedCascadeTaskParams {
 }
 
 impl ContestedCascadeTaskParams {
-    /// Constructs a **1-Pair Tiered GM Resistance Environmental Task** (with canonical `4`-point over-tiers) where:
-    /// - The Player rolls `player_skill_n` pairs against their known personal target $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$.
-    /// - The GM secretly rolls `1` `2d20` pair against $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$ ($C_{GM} = 10 + \Delta_{\text{ext}}$),
-    ///   scoring `1` success plus `+1` per `4` points above $\text{TN}_{GM}$ (or `-1` botch per `4` points below $\text{TN}_{GM}$).
+    /// Constructs a **1-Pair Tiered GM Resistance Environmental Task** (with canonical `4`-point over-tiers).
     pub const fn new_tiered_environment(
         player_skill_n: usize,
         player_control_c: i32,
@@ -1591,17 +930,14 @@ impl ContestedCascadeTaskParams {
         hidden_external_difficulty: i32,
         tie_rule: ContestedTieRule,
     ) -> Self {
-        let player = CascadeTaskParams::new_k20(
-            player_skill_n,
-            player_control_c,
-            player_internal_mod,
-            player_known_tool_mod,
-        );
-        let gm_control_c = 10 + hidden_external_difficulty;
-        let gm = CascadeTaskParams::new_k20(1, gm_control_c, 0, 0);
         Self {
-            player,
-            gm,
+            player: CascadeTaskParams::new_k20(
+                player_skill_n,
+                player_control_c,
+                player_internal_mod,
+                player_known_tool_mod,
+            ),
+            gm: CascadeTaskParams::new_k20(1, 10 + hidden_external_difficulty, 0, 0),
             gm_mode: GmResistanceMode::TieredSinglePair { step_size: 4 },
             tie_rule,
         }
@@ -1617,17 +953,14 @@ impl ContestedCascadeTaskParams {
         hidden_external_difficulty: i32,
         tie_rule: ContestedTieRule,
     ) -> Self {
-        let player = CascadeTaskParams::new_k20(
-            player_skill_n,
-            player_control_c,
-            player_internal_mod,
-            player_known_tool_mod,
-        );
-        let gm_control_c = 10 + hidden_external_difficulty;
-        let gm = CascadeTaskParams::new_k20(gm_pairs, gm_control_c, 0, 0);
         Self {
-            player,
-            gm,
+            player: CascadeTaskParams::new_k20(
+                player_skill_n,
+                player_control_c,
+                player_internal_mod,
+                player_known_tool_mod,
+            ),
+            gm: CascadeTaskParams::new_k20(gm_pairs, 10 + hidden_external_difficulty, 0, 0),
             gm_mode: GmResistanceMode::FullCascade,
             tie_rule,
         }
@@ -1660,14 +993,13 @@ impl ContestedCascadeTaskParams {
             g_out.signed_margin,
             self.tie_rule,
         );
-        let net_successes = p_out.total_successes - g_out.total_successes;
         ContestedCascadeRollOutcome {
-            player_outcome: p_out,
-            gm_outcome: g_out,
-            net_successes,
+            net_successes: p_out.total_successes - g_out.total_successes,
             net_signed_margin: net_margin,
             contested_kind,
             outcome_tier: contested_kind.to_outcome_tier(),
+            player_outcome: p_out,
+            gm_outcome: g_out,
         }
     }
 
@@ -1744,63 +1076,43 @@ pub fn classify_contested_outcome(
     tie_rule: ContestedTieRule,
 ) -> (ContestedOutcomeKind, i32) {
     let net_margin = mp - mg;
-    match tie_rule {
-        ContestedTieRule::HybridSignedMargin => {
-            if sp > sg {
-                // Player has strictly more successes than GM.
-                // If player had a floor breach (bp >= 1), it causes a complication UNLESS GM also botched (mg < 0).
-                if bp >= 1 && mg >= 0 {
-                    (ContestedOutcomeKind::SuccessWithFloorBreach, net_margin)
-                } else if net_margin >= 3 {
-                    (ContestedOutcomeKind::ExtraordinarySuccess, net_margin)
-                } else {
-                    (ContestedOutcomeKind::CleanSuccess, net_margin)
-                }
-            } else if sp == sg && sp >= 1 {
-                // Positive Tie: Player and GM achieved the same number of positive successes.
-                (ContestedOutcomeKind::GrazingTieSuccess, net_margin)
-            } else if sp == 0 && mp == 0 && mg < 0 {
-                // Player had a Clean Failure (0 successes, 0 botches), but GM botched!
-                (ContestedOutcomeKind::LuckyBreakSuccess, net_margin)
-            } else if mp < 0 || (sp < sg && bp >= 1) {
-                (ContestedOutcomeKind::BotchFailure, net_margin)
-            } else {
-                (ContestedOutcomeKind::CleanFailure, net_margin)
-            }
-        }
-        ContestedTieRule::StrictSignedMargin => {
+    let kind = match tie_rule {
+        ContestedTieRule::HybridSignedMargin | ContestedTieRule::StrictSignedMargin => {
             if sp > sg {
                 if bp >= 1 && mg >= 0 {
-                    (ContestedOutcomeKind::SuccessWithFloorBreach, net_margin)
+                    ContestedOutcomeKind::SuccessWithFloorBreach
                 } else if net_margin >= 3 {
-                    (ContestedOutcomeKind::ExtraordinarySuccess, net_margin)
+                    ContestedOutcomeKind::ExtraordinarySuccess
                 } else {
-                    (ContestedOutcomeKind::CleanSuccess, net_margin)
+                    ContestedOutcomeKind::CleanSuccess
                 }
+            } else if tie_rule == ContestedTieRule::HybridSignedMargin && sp == sg && sp >= 1 {
+                ContestedOutcomeKind::GrazingTieSuccess
             } else if sp == 0 && mp == 0 && mg < 0 {
-                (ContestedOutcomeKind::LuckyBreakSuccess, net_margin)
-            } else if mp < 0 || (sp <= sg && bp >= 1) {
-                (ContestedOutcomeKind::BotchFailure, net_margin)
+                ContestedOutcomeKind::LuckyBreakSuccess
+            } else if mp < 0 || bp >= 1 {
+                ContestedOutcomeKind::BotchFailure
             } else {
-                (ContestedOutcomeKind::CleanFailure, net_margin)
+                ContestedOutcomeKind::CleanFailure
             }
         }
         ContestedTieRule::ActivePlayerWinsTies => {
             if sp >= sg && sp >= 1 {
                 if bp >= 1 {
-                    (ContestedOutcomeKind::SuccessWithFloorBreach, net_margin)
+                    ContestedOutcomeKind::SuccessWithFloorBreach
                 } else if (sp - sg) >= 3 {
-                    (ContestedOutcomeKind::ExtraordinarySuccess, net_margin)
+                    ContestedOutcomeKind::ExtraordinarySuccess
                 } else {
-                    (ContestedOutcomeKind::CleanSuccess, net_margin)
+                    ContestedOutcomeKind::CleanSuccess
                 }
             } else if mp < 0 || bp >= 1 {
-                (ContestedOutcomeKind::BotchFailure, net_margin)
+                ContestedOutcomeKind::BotchFailure
             } else {
-                (ContestedOutcomeKind::CleanFailure, net_margin)
+                ContestedOutcomeKind::CleanFailure
             }
         }
-    }
+    };
+    (kind, net_margin)
 }
 
 /// Computes the exact joint distribution over `(succ, raw_botch, signed_margin)` for a [`CascadeTaskParams`].
@@ -1855,12 +1167,10 @@ pub fn evaluate_tiered_single_pair_gm_roll(
     let over_step = step_size.max(1);
     let under_step = (sides / 5).max(2);
     let (total_successes, effective_botches, miss_distance) = if raw_sum > tn_gm {
-        let s = 1 + (raw_sum - tn_gm - 1) / over_step;
-        (s, 0, 0)
+        (1 + (raw_sum - tn_gm - 1) / over_step, 0, 0)
     } else {
         let dist = tn_gm - raw_sum;
-        let b = (dist / under_step).min(5);
-        (0, b, dist)
+        (0, (dist / under_step).min(5), dist)
     };
     let signed_margin =
         MarginAggregation::PiecewiseZeroFloor.compute(total_successes, effective_botches);

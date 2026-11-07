@@ -19,10 +19,15 @@ use crate::define_coded_enum;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CharacteristicCategory {
+    /// Physical somatic attributes (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`, `MAS`, `HGT`).
     Physical,
+    /// Mental cognitive attributes (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`).
     Mental,
+    /// Social interpersonal attributes (`COM`, `PRE`, `ELO`).
     Social,
+    /// Sensory acuity attributes (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`).
     Sensory,
+    /// Bipolar psychological disposition traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`).
     Psyche,
 }
 
@@ -30,40 +35,65 @@ define_coded_enum! {
     /// Canonical characteristic codes across Physical, Mental, Social, Sensory, and Psyche domains.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub enum CharacteristicCode [count = 30] {
-        // Physical (8)
+        /// Speed (`SPD`).
         SPD => { code: "SPD", label: "Speed" },
+        /// Force (`FOR`).
         FOR => { code: "FOR", label: "Force" },
+        /// Dexterity (`DEX`).
         DEX => { code: "DEX", label: "Dexterity" },
+        /// Kinesthesia (`KIN`).
         KIN => { code: "KIN", label: "Kinesthesia" },
+        /// Health (`HLT`).
         HLT => { code: "HLT", label: "Health" },
+        /// Fitness (`FIT`).
         FIT => { code: "FIT", label: "Fitness" },
+        /// Mass in kilograms (`MAS`).
         MAS => { code: "MAS", label: "Mass (kg)" },
+        /// Height in meters (`HGT`).
         HGT => { code: "HGT", label: "Height (m)" },
-        // Mental (6)
+        /// Memory (`MEM`).
         MEM => { code: "MEM", label: "Memory" },
+        /// Analysis (`ANA`).
         ANA => { code: "ANA", label: "Analysis" },
+        /// Insight (`INS`).
         INS => { code: "INS", label: "Insight" },
+        /// Creativity (`CRE`).
         CRE => { code: "CRE", label: "Creativity" },
+        /// Discipline (`DIS`).
         DIS => { code: "DIS", label: "Discipline" },
+        /// Focus (`FOC`).
         FOC => { code: "FOC", label: "Focus" },
-        // Social (3)
+        /// Comeliness (`COM`).
         COM => { code: "COM", label: "Comeliness" },
+        /// Presence (`PRE`).
         PRE => { code: "PRE", label: "Presence" },
+        /// Eloquence (`ELO`).
         ELO => { code: "ELO", label: "Eloquence" },
-        // Sensory (6)
+        /// Sight (`SIG`).
         SIG => { code: "SIG", label: "Sight" },
+        /// Hearing (`HEA`).
         HEA => { code: "HEA", label: "Hearing" },
+        /// Tactile (`TAC`).
         TAC => { code: "TAC", label: "Tactile" },
+        /// Olfaction (`OLF`).
         OLF => { code: "OLF", label: "Olfaction" },
+        /// Taste (`TAS`).
         TAS => { code: "TAS", label: "Taste" },
+        /// Intuition (`ITU`).
         ITU => { code: "ITU", label: "Intuition" },
-        // Psyche (7)
+        /// Egoism (`EGO`).
         EGO => { code: "EGO", label: "Egoism" },
+        /// Self-Esteem (`SLF`).
         SLF => { code: "SLF", label: "Self-Esteem" },
+        /// Openness (`OPN`).
         OPN => { code: "OPN", label: "Openness" },
+        /// Belonging (`BLG`).
         BLG => { code: "BLG", label: "Belonging" },
+        /// Extraversion (`EXT`).
         EXT => { code: "EXT", label: "Extraversion" },
+        /// Conformity (`CNF`).
         CNF => { code: "CNF", label: "Conformity" },
+        /// Aggression (`AGG`).
         AGG => { code: "AGG", label: "Aggression" },
     }
 }
@@ -269,11 +299,14 @@ define_coded_enum! {
 }
 
 macro_rules! impl_aptitudes_struct {
-    ($($Variant:ident => $field:ident),+ $(,)?) => {
+    ($(#[doc = $doc:literal] $Variant:ident => $field:ident),+ $(,)?) => {
         /// Character's 9 Domain Aptitude scores (`-2` to `+3`, default `0`).
         #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
         pub struct CharacterAptitudes {
-            $(pub $field: i32,)+
+            $(
+                #[doc = $doc]
+                pub $field: i32,
+            )+
         }
 
         impl CharacterAptitudes {
@@ -310,14 +343,23 @@ macro_rules! impl_aptitudes_struct {
 }
 
 impl_aptitudes_struct! {
+    /// Quantitative & Mathematical aptitude (`APT-QNT`, `-2..=+3`).
     AptQnt => apt_qnt,
+    /// Mechanical & Spatial aptitude (`APT-MEC`, `-2..=+3`).
     AptMec => apt_mec,
+    /// Computational & Algorithmic aptitude (`APT-CMP`, `-2..=+3`).
     AptCmp => apt_cmp,
+    /// Biological & Chemical aptitude (`APT-BIO`, `-2..=+3`).
     AptBio => apt_bio,
+    /// Linguistic & Symbolic aptitude (`APT-LNG`, `-2..=+3`).
     AptLng => apt_lng,
+    /// Gross Kinesthetic & Athletic aptitude (`APT-KIN`, `-2..=+3`).
     AptKin => apt_kin,
+    /// Fine Motor & Ballistic Precision aptitude (`APT-FIN`, `-2..=+3`).
     AptFin => apt_fin,
+    /// Musical & Auditory-Rhythmic aptitude (`APT-AUD`, `-2..=+3`).
     AptAud => apt_aud,
+    /// Interpersonal & Rhetorical aptitude (`APT-SOC`, `-2..=+3`).
     AptSoc => apt_soc,
 }
 
@@ -349,12 +391,17 @@ const SCALE_TABLE: [i32; 21] = [
 ];
 
 macro_rules! impl_characteristics_struct {
-    ($($Variant:ident => $field:ident),+ $(,)?) => {
+    ($(#[doc = $doc:literal] $Variant:ident => $field:ident),+ $(,)?) => {
         /// Complete canonical 25+ Characteristic profile (`03-character/characteristics_and_aptitudes.md`).
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         pub struct CharacterCharacteristics {
-            $(pub $field: i32,)+
+            $(
+                #[doc = $doc]
+                pub $field: i32,
+            )+
+            /// Body mass in kilograms (`MAS`).
             pub mas_kg: f64,
+            /// Stature height in meters (`HGT`).
             pub hgt_m: f64,
         }
 
@@ -420,33 +467,61 @@ macro_rules! impl_characteristics_struct {
 }
 
 impl_characteristics_struct! {
+    /// Speed (`SPD`, `1..=20`).
     SPD => spd,
+    /// Force (`FOR`, `1..=20`).
     FOR => for_stat,
+    /// Dexterity (`DEX`, `1..=20`).
     DEX => dex,
+    /// Kinesthesia (`KIN`, `1..=20`).
     KIN => kin,
+    /// Health (`HLT`, `1..=20`).
     HLT => hlt,
+    /// Fitness (`FIT`, `1..=20`).
     FIT => fit,
+    /// Memory (`MEM`, `1..=20`).
     MEM => mem,
+    /// Analysis (`ANA`, `1..=20`).
     ANA => ana,
+    /// Insight (`INS`, `1..=20`).
     INS => ins,
+    /// Creativity (`CRE`, `1..=20`).
     CRE => cre,
+    /// Discipline (`DIS`, `1..=20`).
     DIS => dis,
+    /// Focus (`FOC`, `1..=20`).
     FOC => foc,
+    /// Comeliness (`COM`, `1..=20`).
     COM => com,
+    /// Presence (`PRE`, `1..=20`).
     PRE => pre,
+    /// Eloquence (`ELO`, `1..=20`).
     ELO => elo,
+    /// Sight (`SIG`, `1..=20`).
     SIG => sig,
+    /// Hearing (`HEA`, `1..=20`).
     HEA => hea,
+    /// Tactile (`TAC`, `1..=20`).
     TAC => tac,
+    /// Olfaction (`OLF`, `1..=20`).
     OLF => olf,
+    /// Taste (`TAS`, `1..=20`).
     TAS => tas,
+    /// Intuition (`ITU`, `1..=20`).
     ITU => itu,
+    /// Egoism (`EGO`, `1..=20`).
     EGO => ego,
+    /// Self-Esteem (`SLF`, `1..=20`).
     SLF => slf,
+    /// Openness (`OPN`, `1..=20`).
     OPN => opn,
+    /// Belonging (`BLG`, `1..=20`).
     BLG => blg,
+    /// Extraversion (`EXT`, `1..=20`).
     EXT => ext,
+    /// Conformity (`CNF`, `1..=20`).
     CNF => cnf,
+    /// Aggression (`AGG`, `1..=20`).
     AGG => agg,
 }
 
@@ -764,6 +839,44 @@ where
     }
 }
 
+/// Generic helper to mark the `drop_count` lowest items in `raw_rolls` (sorted by `sort_key`)
+/// via `mark_dropped` and return the extracted `kept_value`s for all non-dropped rolls.
+fn mark_and_extract_drop_lowest<T, K, V>(
+    raw_rolls: &mut [T],
+    drop_count: usize,
+    sort_key: impl Fn(&T) -> K,
+    mark_dropped: impl Fn(&mut T),
+    kept_value: impl Fn(&T) -> V,
+) -> Vec<V>
+where
+    K: Ord,
+{
+    let mut dropped_flags = vec![false; raw_rolls.len()];
+    if drop_count > 0 && drop_count <= raw_rolls.len() {
+        let mut indices_by_key: Vec<(usize, K)> = raw_rolls
+            .iter()
+            .enumerate()
+            .map(|(i, item)| (i, sort_key(item)))
+            .collect();
+        indices_by_key.sort_by(|a, b| a.1.cmp(&b.1));
+        for &(drop_idx, _) in indices_by_key.iter().take(drop_count) {
+            mark_dropped(&mut raw_rolls[drop_idx]);
+            dropped_flags[drop_idx] = true;
+        }
+    }
+    raw_rolls
+        .iter()
+        .enumerate()
+        .filter_map(|(i, item)| {
+            if dropped_flags[i] {
+                None
+            } else {
+                Some(kept_value(item))
+            }
+        })
+        .collect()
+}
+
 /// Roll a complete assignable pool for `category` (`Physical`, `Mental`, `Sensory`, or `Social`)
 /// using either `Method1DropLowestD5` or `Method2PoolKeepHighest`.
 pub fn roll_characteristic_group_pool<R>(
@@ -774,7 +887,7 @@ pub fn roll_characteristic_group_pool<R>(
 where
     R: FnMut(i32) -> i32,
 {
-    let (num_rolls, num_keep) = match (category, method) {
+    let (num_rolls, num_keep): (usize, usize) = match (category, method) {
         (CharacteristicCategory::Social, CharacteristicRollMethod::Method1DropLowestD5) => (3, 3),
         (CharacteristicCategory::Social, CharacteristicRollMethod::Method2PoolKeepHighest) => {
             (4, 3)
@@ -790,24 +903,13 @@ where
         })
         .collect();
 
-    if num_rolls > num_keep {
-        let drop_count = num_rolls - num_keep;
-        let mut indices_by_val: Vec<(usize, i32)> = raw_rolls
-            .iter()
-            .enumerate()
-            .map(|(i, r)| (i, r.total))
-            .collect();
-        indices_by_val.sort_by_key(|&(_, val)| val);
-        for &(drop_idx, _) in indices_by_val.iter().take(drop_count) {
-            raw_rolls[drop_idx].dropped_from_pool = true;
-        }
-    }
-
-    let kept_values: Vec<i32> = raw_rolls
-        .iter()
-        .filter(|r| !r.dropped_from_pool)
-        .map(|r| r.total)
-        .collect();
+    let kept_values = mark_and_extract_drop_lowest(
+        &mut raw_rolls,
+        num_rolls.saturating_sub(num_keep),
+        |r| r.total,
+        |r| r.dropped_from_pool = true,
+        |r| r.total,
+    );
 
     CharacteristicGroupPool {
         category,
@@ -937,21 +1039,13 @@ where
         })
         .collect();
 
-    let mut indices_by_sum: Vec<(usize, i32)> = raw_rolls
-        .iter()
-        .enumerate()
-        .map(|(i, r)| (i, r.sum_3d6))
-        .collect();
-    indices_by_sum.sort_by_key(|&(_, sum)| sum);
-    for &(drop_idx, _) in indices_by_sum.iter().take(2) {
-        raw_rolls[drop_idx].dropped_from_pool = true;
-    }
-
-    let kept_values = raw_rolls
-        .iter()
-        .filter(|r| !r.dropped_from_pool)
-        .map(|r| r.aptitude_value)
-        .collect();
+    let kept_values = mark_and_extract_drop_lowest(
+        &mut raw_rolls,
+        2,
+        |r| r.sum_3d6,
+        |r| r.dropped_from_pool = true,
+        |r| r.aptitude_value,
+    );
 
     AptitudePoolRoll {
         raw_rolls,
@@ -992,22 +1086,24 @@ mod tests {
 
     #[test]
     fn test_all_10_derived_characteristics_and_aptitudes() {
-        let mut chars = CharacterCharacteristics::default();
-        chars.spd = 14;
-        chars.for_stat = 12;
-        chars.kin = 14;
-        chars.hlt = 13;
-        chars.fit = 12;
-        chars.mas_kg = 84.0;
-        chars.hgt_m = 1.90;
-        chars.ana = 15;
-        chars.cre = 12;
-        chars.foc = 13;
-        chars.itu = 14;
-        chars.ins = 12;
-        chars.sig = 15;
-        chars.hea = 11;
-        chars.dis = 14;
+        let chars = CharacterCharacteristics {
+            spd: 14,
+            for_stat: 12,
+            kin: 14,
+            hlt: 13,
+            fit: 12,
+            mas_kg: 84.0,
+            hgt_m: 1.90,
+            ana: 15,
+            cre: 12,
+            foc: 13,
+            itu: 14,
+            ins: 12,
+            sig: 15,
+            hea: 11,
+            dis: 14,
+            ..Default::default()
+        };
 
         let derived = chars.compute_derived(2);
         // POW = (12 * 14) / 10 = 16.8

@@ -1,13 +1,30 @@
 //! Shared foundational primitives, generic containers, composable status impacts,
 //! tiered save helpers, and declarative enum/catalog macros used across `satya-engine`.
 
-use std::ops::{Deref, DerefMut};
+use std::ops::{Add, AddAssign, Deref, DerefMut, Index, IndexMut, Neg, Sub, SubAssign};
 
 use serde::{Deserialize, Serialize};
 
 use crate::dice_probabilities::{
     ContestedCascadeRollOutcome, ContestedCascadeTaskParams, ContestedOutcomeKind, ContestedTieRule,
 };
+
+/// Axis selector for a [`Triad`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(usize)]
+pub enum TriadAxis {
+    /// Tempo axis (initiative, rate of action, maneuvering speed).
+    Tempo = 0,
+    /// Control axis (positional dominance, accuracy, reach/clinch control).
+    Control = 1,
+    /// Force axis (impact energy, follow-through, structural power).
+    Force = 2,
+}
+
+impl TriadAxis {
+    /// All three axes in canonical `(Tempo, Control, Force)` order.
+    pub const ALL: [Self; 3] = [Self::Tempo, Self::Control, Self::Force];
+}
 
 /// Generic 3-axis Tactical Triad container (`tempo`, `control`, `force`).
 ///
@@ -61,6 +78,80 @@ impl<T> Triad<T> {
     }
 }
 
+impl<T> From<(T, T, T)> for Triad<T> {
+    fn from((tempo, control, force): (T, T, T)) -> Self {
+        Self::new(tempo, control, force)
+    }
+}
+
+impl<T> From<Triad<T>> for (T, T, T) {
+    fn from(triad: Triad<T>) -> Self {
+        (triad.tempo, triad.control, triad.force)
+    }
+}
+
+impl<T> Index<TriadAxis> for Triad<T> {
+    type Output = T;
+
+    fn index(&self, axis: TriadAxis) -> &Self::Output {
+        match axis {
+            TriadAxis::Tempo => &self.tempo,
+            TriadAxis::Control => &self.control,
+            TriadAxis::Force => &self.force,
+        }
+    }
+}
+
+impl<T> IndexMut<TriadAxis> for Triad<T> {
+    fn index_mut(&mut self, axis: TriadAxis) -> &mut Self::Output {
+        match axis {
+            TriadAxis::Tempo => &mut self.tempo,
+            TriadAxis::Control => &mut self.control,
+            TriadAxis::Force => &mut self.force,
+        }
+    }
+}
+
+impl<T: Add<Output = U>, U> Add for Triad<T> {
+    type Output = Triad<U>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        self.zip_with(rhs, |a, b| a + b)
+    }
+}
+
+impl<T: Sub<Output = U>, U> Sub for Triad<T> {
+    type Output = Triad<U>;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.zip_with(rhs, |a, b| a - b)
+    }
+}
+
+impl<T: AddAssign> AddAssign for Triad<T> {
+    fn add_assign(&mut self, rhs: Self) {
+        self.tempo += rhs.tempo;
+        self.control += rhs.control;
+        self.force += rhs.force;
+    }
+}
+
+impl<T: SubAssign> SubAssign for Triad<T> {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.tempo -= rhs.tempo;
+        self.control -= rhs.control;
+        self.force -= rhs.force;
+    }
+}
+
+impl<T: Neg<Output = U>, U> Neg for Triad<T> {
+    type Output = Triad<U>;
+
+    fn neg(self) -> Self::Output {
+        self.map(|v| -v)
+    }
+}
+
 impl<T: Copy> Triad<T> {
     /// Construct a `Triad` with the same value on all three axes.
     #[must_use]
@@ -81,6 +172,12 @@ impl Triad<i32> {
     #[must_use]
     pub const fn sum(self) -> i32 {
         self.tempo + self.control + self.force
+    }
+
+    /// True if any axis of the triad is strictly negative (`< 0`).
+    #[must_use]
+    pub const fn has_negative(self) -> bool {
+        self.tempo < 0 || self.control < 0 || self.force < 0
     }
 
     /// Clamp each axis to at least `floor`.
@@ -263,6 +360,7 @@ impl<D> DerefMut for ContestedCheck<D> {
 impl TieredSaveEval {
     /// Evaluate a player's pairs against a 1-Pair Tiered GM Resistance (`hidden_external_difficulty`).
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn evaluate(
         player_skill_n: usize,
         player_control_c: i32,
@@ -427,6 +525,49 @@ macro_rules! define_coded_enum {
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 Self::from_code_str(s).ok_or_else(|| format!("unknown {}: {s}", stringify!($Name)))
+            }
+        }
+    };
+}
+
+/// Trait implemented by any `#[repr(usize)]` coded enum that indexes into a compile-time static
+/// specification catalog (`&'static [Self::Spec]`).
+pub trait StaticCatalog: Copy + Eq + 'static {
+    /// Associated specification record type stored in [`Self::CATALOG`].
+    type Spec: 'static;
+
+    /// Slice of all canonical enum IDs in declaration order.
+    const ALL_IDS: &'static [Self];
+
+    /// Slice of all canonical specification records in declaration order.
+    const CATALOG: &'static [Self::Spec];
+
+    /// Look up the static specification record for `self` in `O(1)`.
+    #[must_use]
+    fn spec(self) -> &'static Self::Spec;
+}
+
+/// Declarative macro to bind a `#[repr(usize)]` enum `$Id` to its compile-time static
+/// catalog `$CATALOG: [$Spec; N]`, generating both `const fn spec(self) -> &'static $Spec`
+/// and an implementation of [`StaticCatalog`].
+#[macro_export]
+macro_rules! impl_static_catalog {
+    ($Id:ty => $Spec:ty : $CATALOG:ident) => {
+        impl $Id {
+            /// Look up the canonical static specification for this identifier in `O(1)`.
+            #[must_use]
+            pub const fn spec(self) -> &'static $Spec {
+                &$CATALOG[self as usize]
+            }
+        }
+
+        impl $crate::primitives::StaticCatalog for $Id {
+            type Spec = $Spec;
+            const ALL_IDS: &'static [Self] = &Self::ALL;
+            const CATALOG: &'static [$Spec] = &$CATALOG;
+
+            fn spec(self) -> &'static Self::Spec {
+                Self::spec(self)
             }
         }
     };

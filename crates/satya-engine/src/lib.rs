@@ -23,20 +23,20 @@
 
 #![deny(missing_docs)]
 
-#[allow(missing_docs)]
 pub mod action_economy;
-#[allow(missing_docs)]
+pub mod ballistics;
 pub mod characteristics;
 pub mod combat;
+pub mod dice_pools;
 pub mod dice_probabilities;
+pub mod economy_gear;
+pub mod environment_vehicles;
 pub mod health_survival;
-#[allow(missing_docs)]
 pub mod lifepath_economy;
 pub mod primitives;
 pub mod psyche_social;
 pub mod rules_book;
 pub mod rules_book_html;
-#[allow(missing_docs)]
 pub mod skills_trees;
 pub mod task_resolution;
 pub mod walkthroughs;

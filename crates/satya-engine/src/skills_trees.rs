@@ -82,76 +82,65 @@ impl SkillTreeId {
     }
 }
 
-/// Skill Type (`TAL`, `PHY`, `KNO`, `PHY/KNO`) (§1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum SkillType {
-    /// `TAL`: Innate Talent — universal childhood baseline ($N \ge 1$, `Native Language Speech` starts at $N = 2$)
-    Tal,
-    /// `PHY`: Physical / Motor Skill
-    Phy,
-    /// `KNO`: Knowledge / Academic / Technical Skill
-    Kno,
-    /// `PHY/KNO`: Hybrid Motor + Technical/Tactical Skill
-    PhyKno,
-}
-
-impl SkillType {
-    /// Canonical abbreviation (`"TAL"`, `"PHY"`, `"KNO"`, `"PHY/KNO"`).
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Tal => "TAL",
-            Self::Phy => "PHY",
-            Self::Kno => "KNO",
-            Self::PhyKno => "PHY/KNO",
-        }
+define_coded_enum! {
+    /// Skill Type (`TAL`, `PHY`, `KNO`, `PHY/KNO`) (§1).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum SkillType [count = 4] {
+        /// `TAL`: Innate Talent — universal childhood baseline ($N \ge 1$, `Native Language Speech` starts at $N = 2$)
+        Tal => { code: "TAL", label: "Innate Talent" },
+        /// `PHY`: Physical / Motor Skill
+        Phy => { code: "PHY", label: "Physical / Motor Skill" },
+        /// `KNO`: Knowledge / Academic / Technical Skill
+        Kno => { code: "KNO", label: "Knowledge / Academic Skill" },
+        /// `PHY/KNO`: Hybrid Motor + Technical/Tactical Skill
+        PhyKno => { code: "PHY/KNO", label: "Hybrid Physical & Knowledge Skill", aliases: ["PHY_KNO"] },
     }
 }
 
-/// Multi-category functional tags assigned to skills (§1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum SkillCategory {
-    Athletic,
-    Combat,
-    Technical,
-    Science,
-    Knowledge,
-    Cyber,
-    Medical,
-    Artistic,
-    Social,
-    Fieldcraft,
+define_coded_enum! {
+    /// Multi-category functional tags assigned to skills (§1).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum SkillCategory [count = 10] {
+        /// Athletic & locomotive skills.
+        Athletic => { code: "ATHLETIC", label: "Athletic" },
+        /// Melee, ranged, and tactical combat skills.
+        Combat => { code: "COMBAT", label: "Combat" },
+        /// Mechanical, electrical, and craft skills.
+        Technical => { code: "TECHNICAL", label: "Technical" },
+        /// Mathematical, physical, and natural sciences.
+        Science => { code: "SCIENCE", label: "Science" },
+        /// Humanities, literacy, and academic scholarship.
+        Knowledge => { code: "KNOWLEDGE", label: "Knowledge" },
+        /// Computing, networks, and cyber-electronics.
+        Cyber => { code: "CYBER", label: "Cyber" },
+        /// First aid, clinical medicine, and surgery.
+        Medical => { code: "MEDICAL", label: "Medical" },
+        /// Visual, musical, performing, and culinary arts.
+        Artistic => { code: "ARTISTIC", label: "Artistic" },
+        /// Interpersonal persuasion, deception, and leadership.
+        Social => { code: "SOCIAL", label: "Social" },
+        /// Perception, stealth, survival, and outdoor fieldcraft.
+        Fieldcraft => { code: "FIELDCRAFT", label: "Fieldcraft" },
+    }
 }
 
-/// Institutional or subcultural `[Access]` gate required to learn or advance a skill node (§1, §3.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum SkillAccessTier {
-    /// `[Access: Universal]`: Open to all characters through everyday life or self-study
-    Universal,
-    /// `[Access: Academic]`: Requires formal school, high school STEM, or university enrollment
-    Academic,
-    /// `[Access: Vocational/Licensed]`: Requires trade school, guild apprenticeship, clinical certification, or licensed range
-    VocationalLicensed,
-    /// `[Access: Restricted]`: Requires military, law enforcement, intelligence, or cleared corporate security access
-    Restricted,
-    /// `[Access: Illicit]`: Requires street gang, criminal syndicate, insurgent cell, or black-market mentor
-    Illicit,
-}
-
-impl SkillAccessTier {
-    /// Human-readable `[Access]` tag label.
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Universal => "Universal",
-            Self::Academic => "Academic",
-            Self::VocationalLicensed => "Vocational/Licensed",
-            Self::Restricted => "Restricted",
-            Self::Illicit => "Illicit",
-        }
+define_coded_enum! {
+    /// Institutional or subcultural `[Access]` gate required to learn or advance a skill node (§1, §3.1).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum SkillAccessTier [count = 5] {
+        /// `[Access: Universal]`: Open to all characters through everyday life or self-study
+        Universal => { code: "UNIVERSAL", label: "Universal" },
+        /// `[Access: Academic]`: Requires formal school, high school STEM, or university enrollment
+        Academic => { code: "ACADEMIC", label: "Academic" },
+        /// `[Access: Vocational/Licensed]`: Requires trade school, guild apprenticeship, clinical certification, or licensed range
+        VocationalLicensed => { code: "VOCATIONAL_LICENSED", label: "Vocational/Licensed", aliases: ["Vocational/Licensed"] },
+        /// `[Access: Restricted]`: Requires military, law enforcement, intelligence, or cleared corporate security access
+        Restricted => { code: "RESTRICTED", label: "Restricted" },
+        /// `[Access: Illicit]`: Requires street gang, criminal syndicate, insurgent cell, or black-market mentor
+        Illicit => { code: "ILLICIT", label: "Illicit" },
     }
 }
 
@@ -168,20 +157,33 @@ pub enum PrerequisiteMode {
 /// Canonical specification for a single node in the 8 Hierarchical Skill Trees (§4.1–§4.8).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SkillNodeSpec {
+    /// Canonical snake_case identifier.
     pub id: &'static str,
+    /// Human-readable display name.
     pub name: &'static str,
+    /// Hierarchical tree (`TREE_1` .. `TREE_8`).
     pub tree: SkillTreeId,
+    /// Tree depth tier (`0..=6`).
     pub tier: u8,
     /// Inherent learning difficulty rating (`1` = Routine/Easy .. `5` = Extreme/Apex), independent of tree tier.
     pub difficulty: u8,
+    /// Skill type (`TAL`, `PHY`, `KNO`, `PHY/KNO`).
     pub skill_type: SkillType,
+    /// Multi-category functional tags.
     pub categories: &'static [SkillCategory],
+    /// Primary controlling characteristic (`C_1`).
     pub primary_char: CharacteristicCode,
+    /// Optional secondary controlling characteristic (`C_2`).
     pub secondary_char: Option<CharacteristicCode>,
+    /// Minimum characteristic (`Min C`) gates required to learn/advance this node.
     pub min_chars: &'static [(CharacteristicCode, i32)],
+    /// Combinator (`AllOf` vs `AnyOf`) for `parent_prereqs`.
     pub parent_mode: PrerequisiteMode,
+    /// Required parent skill IDs and minimum levels `(parent_id, min_n)`.
     pub parent_prereqs: &'static [(&'static str, usize)],
+    /// Institutional or subcultural `[Access]` tags that unlock this node.
     pub allowed_access: &'static [SkillAccessTier],
+    /// Tool/equipment requirement (`None`, `Situational`, `Mandatory`).
     pub tool_dependency: ToolDependency,
     /// If `false`, this node is marked `[No Default]` and cannot be attempted at $N = 0$ via tree defaulting.
     pub defaultable: bool,
@@ -268,6 +270,7 @@ use CharacteristicCode::*;
 #[allow(unused_imports)]
 use AptitudeCode::*;
 
+/// Complete static catalog of all canonical skill nodes across the 8 Hierarchical Skill Trees (§4.1–§4.8).
 pub const CANONICAL_SKILL_TREES: &[SkillNodeSpec] = &[
     // === Tree1MathCompPhysicalSciences ===
     skill_node!(Tree1MathCompPhysicalSciences, "counting_basic_numeracy", "Counting & Basic Numeracy", (0, 1, Tal), cats: [Knowledge], chars: (MEM, Some(INS)), min_c: [], parents: AllOf [], access: [Universal], tool: None, def: true, apt: Some(AptQnt)),
@@ -438,19 +441,28 @@ pub fn initialize_universal_talents() -> BTreeMap<String, usize> {
 /// Specific reason why a skill unlock or advancement was rejected by the DAG validator.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SkillValidationFailure {
+    /// Machine-readable rejection code.
     pub code: &'static str,
+    /// Human-readable diagnostic explanation.
     pub detail: String,
 }
 
 /// Result of validating whether a character can unlock or advance a skill node to `target_level`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SkillAdvancementValidation {
+    /// Canonical skill identifier.
     pub skill_id: String,
+    /// Human-readable skill name.
     pub skill_name: String,
+    /// Requested target skill level (`target_level`).
     pub target_level: usize,
+    /// True if all prerequisite, access, characteristic, and foundation ceiling gates passed.
     pub is_valid: bool,
+    /// Effective controlling characteristic score $C_{\text{eff}}$.
     pub effective_controller_c: i32,
+    /// Minimum characteristic relief (`0` or `1`) granted by Domain Aptitude $\ge +2$.
     pub aptitude_min_c_relief: i32,
+    /// Any validation gate failures encountered.
     pub failures: Vec<SkillValidationFailure>,
 }
 
@@ -621,11 +633,17 @@ pub fn validate_skill_advancement(
 /// Result of resolving a Skill Tree Default when a character has $N = 0$ in a target skill (§3.1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillDefaultResolution {
+    /// Requested target skill identifier.
     pub target_skill_id: String,
+    /// True if the skill can be attempted (either directly or via defaulting).
     pub can_attempt: bool,
+    /// Source skill ID used (`target_skill_id` if trained directly, or parent/sibling/grandparent ID if defaulted).
     pub source_skill_id: Option<String>,
+    /// Effective skill level $N$ rolled.
     pub effective_n: usize,
+    /// External difficulty penalty $\Delta_{\text{ext}}$ (`0`, `+4`, or `+8`).
     pub default_penalty_delta_ext: i32,
+    /// Diagnostic explanation of how the default was resolved.
     pub reason: String,
 }
 
@@ -681,7 +699,7 @@ pub fn resolve_skill_tree_default(
     let mut best_parent: Option<(&str, usize)> = None;
     for &(parent_id, _) in spec.parent_prereqs {
         let p_n = current_skills.get(parent_id).copied().unwrap_or(0);
-        if p_n >= 1 && best_parent.map_or(true, |(_, best_n)| p_n > best_n) {
+        if p_n >= 1 && best_parent.is_none_or(|(_, best_n)| p_n > best_n) {
             best_parent = Some((parent_id, p_n));
         }
     }
@@ -771,6 +789,7 @@ pub enum SkillTrainingMode {
 }
 
 impl SkillTrainingMode {
+    /// Human-readable label for this training mode.
     #[must_use]
     pub const fn as_label(self) -> &'static str {
         match self {
@@ -783,8 +802,11 @@ impl SkillTrainingMode {
 /// Full 5-factor breakdown of the Skill Point (`SP`) cost to advance a skill by 1 level to `target_level` ($N$).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SkillStepCostBreakdown {
+    /// Canonical skill identifier.
     pub skill_id: String,
+    /// Target skill level $N$ being unlocked or advanced to.
     pub target_level: usize,
+    /// Training mode (`FormalTraining` vs `Experience`).
     pub training_mode: SkillTrainingMode,
     /// Triangular step base cost: $\text{Base}(N) = 10 \times N$.
     pub base_level_sp: usize,
@@ -922,9 +944,11 @@ mod tests {
         let mut skills = initialize_universal_talents();
         skills.insert("pistols_handguns".to_string(), 2);
 
-        let mut chars = CharacterCharacteristics::default();
-        chars.for_stat = 11;
-        chars.dex = 13;
+        let chars = CharacterCharacteristics {
+            for_stat: 11,
+            dex: 13,
+            ..Default::default()
+        };
         let aptitudes = CharacterAptitudes::default();
         let access = vec![SkillAccessTier::Illicit];
 

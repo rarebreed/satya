@@ -182,17 +182,32 @@ impl_psyche_profile! {
     Conformity => cnf,
 }
 
+/// Trait implemented by any type that exposes the 6 canonical Psyche scores ([`PsycheProfile`] and [`CharacterCharacteristics`]).
+pub trait HasPsyche: Index<PsycheTraitId, Output = i32> {
+    /// Returns a 6-trait [`PsycheProfile`] snapshot.
+    fn as_psyche_profile(&self) -> PsycheProfile;
+}
+
+impl HasPsyche for PsycheProfile {
+    fn as_psyche_profile(&self) -> PsycheProfile {
+        *self
+    }
+}
+
+impl HasPsyche for CharacterCharacteristics {
+    fn as_psyche_profile(&self) -> PsycheProfile {
+        self.psyche_profile()
+    }
+}
+
 impl PsycheProfile {
     /// Returns all traits sorted by descending absolute deviation $\Delta_{\text{psyche}} = |P - 10|$.
     pub fn traits_by_extremity(&self) -> Vec<(PsycheTraitId, i32, i32)> {
-        let mut list: Vec<(PsycheTraitId, i32, i32)> = PsycheTraitId::ALL
+        let mut list: Vec<_> = PsycheTraitId::ALL
             .into_iter()
-            .map(|id| {
-                let val = self.get(id);
-                (id, val, psyche_deviation(val))
-            })
+            .map(|id| (id, self[id], psyche_deviation(self[id])))
             .collect();
-        list.sort_by(|a, b| b.2.cmp(&a.2));
+        list.sort_by_key(|a| std::cmp::Reverse(a.2));
         list
     }
 }
@@ -383,28 +398,23 @@ pub fn apply_psyche_drift_mark(
     target_pole_score: Option<i32>,
 ) -> PsycheDriftResult {
     let previous_score = trait_score.clamp(1, 20);
-    let threshold = psyche_drift_threshold(dis);
+    let drift_threshold = psyche_drift_threshold(dis);
     let total_marks = (current_marks.max(0) + marks_added.max(0)).max(0);
     let target = target_pole_score.unwrap_or(10).clamp(1, 20);
-
-    if total_marks >= threshold && previous_score != target {
-        let step = if target > previous_score { 1 } else { -1 };
-        let new_score = (previous_score + step).clamp(1, 20);
-        PsycheDriftResult {
-            previous_score,
-            new_score,
-            remaining_drift_marks: total_marks - threshold,
-            drift_threshold: threshold,
-            shifted: true,
-        }
+    let shifted = total_marks >= drift_threshold && previous_score != target;
+    let step = if !shifted {
+        0
+    } else if target > previous_score {
+        1
     } else {
-        PsycheDriftResult {
-            previous_score,
-            new_score: previous_score,
-            remaining_drift_marks: total_marks,
-            drift_threshold: threshold,
-            shifted: false,
-        }
+        -1
+    };
+    PsycheDriftResult {
+        previous_score,
+        new_score: (previous_score + step).clamp(1, 20),
+        remaining_drift_marks: if shifted { total_marks - drift_threshold } else { total_marks },
+        drift_threshold,
+        shifted,
     }
 }
 
@@ -455,99 +465,68 @@ pub struct ConvictionSurgeResult {
 /// 3. The action directly embodies a Core Principle / extreme Psyche trait ($P \ge 15$ or $P \le 6$,
 ///    or one of the three named archetypes).
 pub fn evaluate_conviction_surge(
-    profile: &PsycheProfile,
+    psyche: &impl HasPsyche,
     current_delta_int: i32,
     already_used_this_scene: bool,
     requested_principle: Option<ConvictionPrincipleArchetype>,
 ) -> ConvictionSurgeResult {
+    let p = psyche.as_psyche_profile();
+    let ineligible = ConvictionSurgeResult {
+        eligible: false,
+        matched_principle: None,
+        previous_delta_int: current_delta_int,
+        adjusted_delta_int: current_delta_int,
+        surge_delta_under: (6 - current_delta_int).max(0),
+        ignores_fatigue_and_shock_time_penalty: false,
+        tactical_pool_bonus: 0,
+    };
     if already_used_this_scene || current_delta_int < 4 {
-        return ConvictionSurgeResult {
-            eligible: false,
-            matched_principle: None,
-            previous_delta_int: current_delta_int,
-            adjusted_delta_int: current_delta_int,
-            surge_delta_under: (6 - current_delta_int).max(0),
-            ignores_fatigue_and_shock_time_penalty: false,
-            tactical_pool_bonus: 0,
-        };
+        return ineligible;
     }
 
-    let matched = match requested_principle {
-        Some(ConvictionPrincipleArchetype::AltruisticOrTribalSacrifice) => {
-            if profile.blg >= 15 || profile.slf <= 5 {
-                Some(ConvictionPrincipleArchetype::AltruisticOrTribalSacrifice)
-            } else {
-                None
-            }
-        }
-        Some(ConvictionPrincipleArchetype::UnbowedDefiance) => {
-            if profile.agg >= 15 || profile.ego >= 15 {
-                Some(ConvictionPrincipleArchetype::UnbowedDefiance)
-            } else {
-                None
-            }
-        }
-        Some(ConvictionPrincipleArchetype::IconoclasticTruth) => {
-            if profile.opn >= 15 || profile.cnf <= 5 {
-                Some(ConvictionPrincipleArchetype::IconoclasticTruth)
-            } else {
-                None
-            }
-        }
-        Some(ConvictionPrincipleArchetype::ExtremeTraitEmbodiment(t)) => {
-            let score = profile.get(t);
-            if score >= 15 || score <= 6 {
-                Some(ConvictionPrincipleArchetype::ExtremeTraitEmbodiment(t))
-            } else {
-                None
-            }
-        }
-        None => {
-            if profile.blg >= 15 || profile.slf <= 5 {
-                Some(ConvictionPrincipleArchetype::AltruisticOrTribalSacrifice)
-            } else if profile.agg >= 15 || profile.ego >= 15 {
-                Some(ConvictionPrincipleArchetype::UnbowedDefiance)
-            } else if profile.opn >= 15 || profile.cnf <= 5 {
-                Some(ConvictionPrincipleArchetype::IconoclasticTruth)
-            } else {
-                PsycheTraitId::ALL
-                    .into_iter()
-                    .find(|&t| {
-                        let s = profile.get(t);
-                        s >= 15 || s <= 6
-                    })
-                    .map(ConvictionPrincipleArchetype::ExtremeTraitEmbodiment)
-            }
+    let check = |arch: ConvictionPrincipleArchetype| -> bool {
+        match arch {
+            ConvictionPrincipleArchetype::AltruisticOrTribalSacrifice => p.blg >= 15 || p.slf <= 5,
+            ConvictionPrincipleArchetype::UnbowedDefiance => p.agg >= 15 || p.ego >= 15,
+            ConvictionPrincipleArchetype::IconoclasticTruth => p.opn >= 15 || p.cnf <= 5,
+            ConvictionPrincipleArchetype::ExtremeTraitEmbodiment(t) => p[t] >= 15 || p[t] <= 6,
         }
     };
 
-    if let Some(principle) = matched {
-        let adjusted_delta_int = (current_delta_int - 6).max(-2);
-        // Per §2: "reducing Delta_int by -6 (down to a minimum of -2, granting delta_under = 4)"
-        let surge_delta_under = if adjusted_delta_int <= -2 {
-            4
-        } else {
-            (6 - adjusted_delta_int).clamp(0, 6)
-        };
-        ConvictionSurgeResult {
-            eligible: true,
-            matched_principle: Some(principle),
-            previous_delta_int: current_delta_int,
-            adjusted_delta_int,
-            surge_delta_under,
-            ignores_fatigue_and_shock_time_penalty: true,
-            tactical_pool_bonus: 2,
-        }
+    let matched = match requested_principle {
+        Some(arch) => check(arch).then_some(arch),
+        None => [
+            ConvictionPrincipleArchetype::AltruisticOrTribalSacrifice,
+            ConvictionPrincipleArchetype::UnbowedDefiance,
+            ConvictionPrincipleArchetype::IconoclasticTruth,
+        ]
+        .into_iter()
+        .find(|&arch| check(arch))
+        .or_else(|| {
+            PsycheTraitId::ALL
+                .into_iter()
+                .map(ConvictionPrincipleArchetype::ExtremeTraitEmbodiment)
+                .find(|&arch| check(arch))
+        }),
+    };
+
+    let Some(principle) = matched else {
+        return ineligible;
+    };
+    let adjusted_delta_int = (current_delta_int - 6).max(-2);
+    let surge_delta_under = if adjusted_delta_int <= -2 {
+        4
     } else {
-        ConvictionSurgeResult {
-            eligible: false,
-            matched_principle: None,
-            previous_delta_int: current_delta_int,
-            adjusted_delta_int: current_delta_int,
-            surge_delta_under: (6 - current_delta_int).max(0),
-            ignores_fatigue_and_shock_time_penalty: false,
-            tactical_pool_bonus: 0,
-        }
+        (6 - adjusted_delta_int).clamp(0, 6)
+    };
+    ConvictionSurgeResult {
+        eligible: true,
+        matched_principle: Some(principle),
+        previous_delta_int: current_delta_int,
+        adjusted_delta_int,
+        surge_delta_under,
+        ignores_fatigue_and_shock_time_penalty: true,
+        tactical_pool_bonus: 2,
     }
 }
 
@@ -586,36 +565,25 @@ pub struct CombatMotivationModifier {
 
 /// Evaluates the Motivation & Psyche Alignment modifier ($\Delta_{\text{mot}}$) from `§3.2`.
 pub fn evaluate_combat_motivation_modifier(
-    profile: &PsycheProfile,
+    psyche: &impl HasPsyche,
     motivation: CombatMotivationKind,
 ) -> CombatMotivationModifier {
+    let p = psyche.as_psyche_profile();
     match motivation {
-        CombatMotivationKind::FightingForCrewFamilyHomeland
-            if profile.blg >= 14 || profile.slf <= 6 =>
-        {
+        CombatMotivationKind::FightingForCrewFamilyHomeland if p.blg >= 14 || p.slf <= 6 => {
             CombatMotivationModifier {
-                delta_mot: if profile.blg >= 16 || profile.slf <= 4 {
-                    4
-                } else {
-                    2
-                },
+                delta_mot: if p.blg >= 16 || p.slf <= 4 { 4 } else { 2 },
                 command_breakdown_morale_shock: 0,
                 conviction_surge_pool_bonus: 2,
             }
         }
-        CombatMotivationKind::MercenaryTransactionalUnderFire
-            if profile.slf >= 14 && profile.blg <= 8 =>
-        {
+        CombatMotivationKind::MercenaryTransactionalUnderFire if p.slf >= 14 && p.blg <= 8 => {
             CombatMotivationModifier {
-                delta_mot: if profile.slf >= 16 && profile.blg <= 6 {
-                    -4
-                } else {
-                    -2
-                },
+                delta_mot: if p.slf >= 16 && p.blg <= 6 { -4 } else { -2 },
                 ..Default::default()
             }
         }
-        CombatMotivationKind::SwornDutyChainOfCommand { command_intact } if profile.cnf >= 14 => {
+        CombatMotivationKind::SwornDutyChainOfCommand { command_intact } if p.cnf >= 14 => {
             if command_intact {
                 CombatMotivationModifier {
                     delta_mot: 2,
@@ -699,126 +667,91 @@ fn eval_composure_roll(
     .evaluate_pairs(composure_roll_pairs)
 }
 
-/// Evaluates an [`EmotionalTriggerKind`] against a character's [`PsycheProfile`] and `DIS` Composure roll (`§3.3`).
+/// Evaluates an [`EmotionalTriggerKind`] against a character's [`HasPsyche`] profile and `DIS` Composure roll (`§3.3`).
 pub fn evaluate_emotional_trigger(
-    profile: &PsycheProfile,
+    psyche: &impl HasPsyche,
     dis: i32,
     current_morale: MoraleState,
     current_delta_int: i32,
     trigger: EmotionalTriggerKind,
     composure_roll_pairs: &[(i32, i32)],
 ) -> EmotionalTriggerOutcome {
+    let p = psyche.as_psyche_profile();
+    let roll_outcome = |delta_ext: i32,
+                        unlocks: bool,
+                        on_pass: MoraleState,
+                        on_fail: (MoraleState, i32)|
+     -> EmotionalTriggerOutcome {
+        let roll = eval_composure_roll(dis, current_delta_int, delta_ext, composure_roll_pairs);
+        let (new_morale_state, delta_int_inflicted) = if roll.total_successes > 0 {
+            (on_pass, 0)
+        } else {
+            on_fail
+        };
+        EmotionalTriggerOutcome {
+            susceptible: true,
+            delta_ext,
+            new_morale_state,
+            delta_int_inflicted,
+            unlocks_protective_conviction: unlocks,
+            composure_roll: Some(roll),
+        }
+    };
+
     match trigger {
         EmotionalTriggerKind::BeingWounded { wound_tier } => {
-            let mut delta_ext = 2 * wound_tier.max(1) + if profile.slf >= 13 { 2 } else { 0 };
-            if profile.agg >= 14 {
+            let mut delta_ext = 2 * wound_tier.max(1) + if p.slf >= 13 { 2 } else { 0 };
+            if p.agg >= 14 {
                 delta_ext = (delta_ext - 2).max(0);
             }
-            let roll = eval_composure_roll(dis, current_delta_int, delta_ext, composure_roll_pairs);
-            let new_morale_state = if roll.total_successes > 0 {
-                current_morale
-            } else if profile.agg >= 15 && profile.slf <= 8 {
+            let fail_st = if p.agg >= 15 && p.slf <= 8 {
                 MoraleState::Rage
             } else {
                 MoraleState::Wavering
             };
-            EmotionalTriggerOutcome {
-                susceptible: true,
-                delta_ext,
-                new_morale_state,
-                delta_int_inflicted: 0,
-                unlocks_protective_conviction: false,
-                composure_roll: Some(roll),
-            }
+            roll_outcome(delta_ext, false, current_morale, (fail_st, 0))
         }
         EmotionalTriggerKind::FriendOrSquadmateWounded => {
-            if profile.blg < 13 {
+            if p.blg < 13 {
                 return EmotionalTriggerOutcome::not_susceptible(current_morale);
             }
-            let roll = eval_composure_roll(dis, current_delta_int, 2, composure_roll_pairs);
-            let new_morale_state = if roll.total_successes > 0 {
-                current_morale
-            } else if profile.agg >= 12 {
+            let fail_st = if p.agg >= 12 {
                 MoraleState::Rage
-            } else if profile.agg <= 8 {
+            } else if p.agg <= 8 {
                 step_morale_condition(current_morale, -1)
             } else {
                 current_morale
             };
-            EmotionalTriggerOutcome {
-                susceptible: true,
-                delta_ext: 2,
-                new_morale_state,
-                delta_int_inflicted: 0,
-                unlocks_protective_conviction: false,
-                composure_roll: Some(roll),
-            }
+            roll_outcome(2, false, current_morale, (fail_st, 0))
         }
         EmotionalTriggerKind::LovedOneAttackedOrWounded => {
-            if !(profile.blg >= 14 || profile.slf <= 7) {
+            if !(p.blg >= 14 || p.slf <= 7) {
                 return EmotionalTriggerOutcome::not_susceptible(current_morale);
             }
-            let roll = eval_composure_roll(dis, current_delta_int, 4, composure_roll_pairs);
-            EmotionalTriggerOutcome {
-                susceptible: true,
-                delta_ext: 4,
-                new_morale_state: if roll.total_successes > 0 {
-                    MoraleState::High
-                } else {
-                    MoraleState::Rage
-                },
-                delta_int_inflicted: 0,
-                unlocks_protective_conviction: true,
-                composure_roll: Some(roll),
-            }
+            roll_outcome(4, true, MoraleState::High, (MoraleState::Rage, 0))
         }
         EmotionalTriggerKind::InsultedOrTaunted => {
-            if !(profile.ego >= 13 || profile.agg >= 13) {
+            if !(p.ego >= 13 || p.agg >= 13) {
                 return EmotionalTriggerOutcome::not_susceptible(current_morale);
             }
-            let delta_ext = psyche_deviation(profile.ego).max(psyche_deviation(profile.agg));
-            let roll = eval_composure_roll(dis, current_delta_int, delta_ext, composure_roll_pairs);
-            EmotionalTriggerOutcome {
-                susceptible: true,
-                delta_ext,
-                new_morale_state: if roll.total_successes > 0 {
-                    current_morale
-                } else {
-                    MoraleState::Rage
-                },
-                delta_int_inflicted: 0,
-                unlocks_protective_conviction: false,
-                composure_roll: Some(roll),
-            }
+            let delta_ext = psyche_deviation(p.ego).max(psyche_deviation(p.agg));
+            roll_outcome(delta_ext, false, current_morale, (MoraleState::Rage, 0))
         }
         EmotionalTriggerKind::PubliclyHumiliated => {
-            if profile.ego < 14 {
+            if p.ego < 14 {
                 return EmotionalTriggerOutcome::not_susceptible(current_morale);
             }
-            let roll = eval_composure_roll(dis, current_delta_int, 4, composure_roll_pairs);
-            let (new_morale_state, delta_int_inflicted) = if roll.total_successes > 0 {
-                (current_morale, 0)
+            let fail_st = if p.agg >= 12 {
+                MoraleState::Rage
+            } else if p.agg <= 8 {
+                MoraleState::Broken
             } else {
-                let st = if profile.agg >= 12 {
-                    MoraleState::Rage
-                } else if profile.agg <= 8 {
-                    MoraleState::Broken
-                } else {
-                    MoraleState::Wavering
-                };
-                (st, 2)
+                MoraleState::Wavering
             };
-            EmotionalTriggerOutcome {
-                susceptible: true,
-                delta_ext: 4,
-                new_morale_state,
-                delta_int_inflicted,
-                unlocks_protective_conviction: false,
-                composure_roll: Some(roll),
-            }
+            roll_outcome(4, false, current_morale, (fail_st, 2))
         }
         EmotionalTriggerKind::SeeingInnocentSuffering => {
-            let susceptible = profile.slf <= 7;
+            let susceptible = p.slf <= 7;
             EmotionalTriggerOutcome {
                 susceptible,
                 delta_ext: 0,
@@ -862,47 +795,45 @@ pub struct BattlefieldMoraleSituation {
 
 /// Computes the total Circumstantial Morale Penalty $\Delta_{\text{morale}}$ from `§3.4`.
 pub fn compute_battlefield_morale_delta(situation: &BattlefieldMoraleSituation, cnf: i32) -> i32 {
-    let mut delta = 0;
-
-    if situation.ally_casualty_ratio >= 0.75 {
-        delta += 6;
+    let casualty = if situation.ally_casualty_ratio >= 0.75 {
+        6
     } else if situation.ally_casualty_ratio >= 0.50 {
-        delta += 4;
+        4
     } else if situation.ally_casualty_ratio >= 0.25 {
-        delta += 2;
-    }
-
-    if situation.outnumbered_ratio > 4.0 {
-        delta += 6;
+        2
+    } else {
+        0
+    };
+    let outnumbered = if situation.outnumbered_ratio > 4.0 {
+        6
     } else if situation.outnumbered_ratio >= 3.0 {
-        delta += 4;
+        4
     } else if situation.outnumbered_ratio >= 2.0 {
-        delta += 2;
-    }
-
-    if situation.leader_incapacitated_or_comms_cut {
-        delta += if cnf >= 14 { 4 } else { 2 };
-    }
-
-    if situation.position_overrun_flanked_or_ambushed {
-        delta += 6;
-    }
-
-    if (situation.tracks_ammo && situation.ammo_fraction_remaining <= 0.20)
+        2
+    } else {
+        0
+    };
+    let leader = if situation.leader_incapacitated_or_comms_cut {
+        if cnf >= 14 { 4 } else { 2 }
+    } else {
+        0
+    };
+    let ammo_or_wpn = if (situation.tracks_ammo && situation.ammo_fraction_remaining <= 0.20)
         || situation.primary_weapon_compromised
     {
-        delta += 4;
-    }
+        4
+    } else {
+        0
+    };
 
-    if situation.attacks_ineffective_against_heavy_armor {
-        delta += 6;
-    }
-
-    if situation.started_fatigued_or_sleep_deprived {
-        delta += 2;
-    }
-
-    delta + situation.additional_suppression_or_shock_delta.max(0)
+    casualty
+        + outnumbered
+        + leader
+        + ammo_or_wpn
+        + if situation.position_overrun_flanked_or_ambushed { 6 } else { 0 }
+        + if situation.attacks_ineffective_against_heavy_armor { 6 } else { 0 }
+        + if situation.started_fatigued_or_sleep_deprived { 2 } else { 0 }
+        + situation.additional_suppression_or_shock_delta.max(0)
 }
 
 /// Moves a combatant along the canonical 5-step Morale Condition Ladder (`§3.1`, `§3.4`):
@@ -932,8 +863,7 @@ pub fn step_morale_condition(current: MoraleState, rally_or_drop_steps: i32) -> 
             MoraleState::Rage
         };
     }
-    let next_idx = (current_idx - rally_or_drop_steps).clamp(0, 4) as usize;
-    LADDER[next_idx]
+    LADDER[(current_idx - rally_or_drop_steps).clamp(0, 4) as usize]
 }
 
 /// Domain-specific morale transition payload for [`CombatMoraleRollOutcome`].
@@ -960,6 +890,7 @@ pub type CombatMoraleRollOutcome = ContestedCheck<CombatMoraleEffect>;
 /// - **Clean / Partial Success**: Holds current Morale State (`0` steps).
 /// - **Clean Failure**: Drops `1` Condition Step (`-1`).
 /// - **Botch Failure**: Drops `2` Condition Steps (`-2`).
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_combat_morale_roll(
     dis: i32,
     delta_mot: i32,
@@ -1018,15 +949,15 @@ pub struct EmpathyReadResult {
     pub leverage_delta_ext_bonus: i32,
 }
 
-/// Evaluates a `§4.1 Reading the Room` (`INS/ITU` or `INS/ANA`) check against a target's [`PsycheProfile`]:
+/// Evaluates a `§4.1 Reading the Room` (`INS/ITU` or `INS/ANA`) check against a target's [`HasPsyche`] profile:
 /// - **1 Net Success**: Reveals the target's single most extreme Psyche trait (furthest from `10`).
 /// - **2 Net Successes**: Reveals the top two most extreme traits and whether they are in potential tension.
 /// - **3+ Net Successes**: Reveals the full 6-trait [`PsycheProfile`] and grants `-2` $\Delta_{\text{ext}}$ on the next maneuver.
 pub fn evaluate_empathy_read(
-    target_profile: &PsycheProfile,
+    target_psyche: &impl HasPsyche,
     net_successes: i32,
 ) -> EmpathyReadResult {
-    let sorted = target_profile.traits_by_extremity();
+    let sorted = target_psyche.as_psyche_profile().traits_by_extremity();
     let revealed_count = match net_successes {
         n if n <= 0 => 0,
         1 => 1,
@@ -1043,13 +974,11 @@ pub fn evaluate_empathy_read(
         && sorted.len() >= 2
         && ((sorted[0].1 >= 13 && sorted[1].1 >= 13) || (sorted[0].2 >= 3 && sorted[1].2 >= 3));
 
-    let leverage_delta_ext_bonus = if net_successes >= 3 { -2 } else { 0 };
-
     EmpathyReadResult {
         net_successes,
         revealed_traits,
         detects_psyche_wedge_tension,
-        leverage_delta_ext_bonus,
+        leverage_delta_ext_bonus: if net_successes >= 3 { -2 } else { 0 },
     }
 }
 
@@ -1138,40 +1067,31 @@ fn eval_trait_pole(
 
 /// Computes the $\Delta_{\text{ext}}$ contribution of a single [`SocialArgumentVector`] (`§4.2`).
 pub fn compute_single_vector_psyche_modifier(
-    profile: &PsycheProfile,
+    psyche: &impl HasPsyche,
     vector: SocialArgumentVector,
 ) -> (i32, Option<PsycheTraitId>, Option<PsycheTraitId>, bool) {
+    let p = psyche.as_psyche_profile();
     use PsycheTraitId::{Aggression, Belonging, Conformity, Ego, Openness, Selfishness};
     match vector {
         SocialArgumentVector::EmpiricalEvidenceLogicNovelIdeas => {
-            eval_trait_pole(profile.opn, Openness, true, true)
+            eval_trait_pole(p.opn, Openness, true, true)
         }
         SocialArgumentVector::GroupConsensusLoyaltySharedIdentity {
             asks_to_betray_group,
-        } => eval_trait_pole(
-            profile.blg,
-            Belonging,
-            !asks_to_betray_group,
-            !asks_to_betray_group,
-        ),
+        } => eval_trait_pole(p.blg, Belonging, !asks_to_betray_group, !asks_to_betray_group),
         SocialArgumentVector::FlatteryPrestigeLegacyStatus {
             humiliates_or_demands_fault_admission,
-        } => eval_trait_pole(
-            profile.ego,
-            Ego,
-            !humiliates_or_demands_fault_admission,
-            false,
-        ),
+        } => eval_trait_pole(p.ego, Ego, !humiliates_or_demands_fault_admission, false),
         SocialArgumentVector::PersonalProfitImmunitySelfInterest => {
-            eval_trait_pole(profile.slf, Selfishness, true, true)
+            eval_trait_pole(p.slf, Selfishness, true, true)
         }
         SocialArgumentVector::SelfSacrificeHumanitarianDutyMercy => {
-            eval_trait_pole(profile.slf, Selfishness, false, true)
+            eval_trait_pole(p.slf, Selfishness, false, true)
         }
         SocialArgumentVector::RulesLawProtocolChainOfCommand {
             asks_to_break_law_or_orders,
         } => eval_trait_pole(
-            profile.cnf,
+            p.cnf,
             Conformity,
             !asks_to_break_law_or_orders,
             !asks_to_break_law_or_orders,
@@ -1179,7 +1099,7 @@ pub fn compute_single_vector_psyche_modifier(
         SocialArgumentVector::DominanceThreatDareConfrontation {
             aims_to_bait_into_fight,
         } => eval_trait_pole(
-            profile.agg,
+            p.agg,
             Aggression,
             aims_to_bait_into_fight,
             !aims_to_bait_into_fight,
@@ -1187,10 +1107,10 @@ pub fn compute_single_vector_psyche_modifier(
     }
 }
 
-/// Evaluates one or more [`SocialArgumentVector`] components against a target's [`PsycheProfile`],
+/// Evaluates one or more [`SocialArgumentVector`] components against a target's [`HasPsyche`] profile,
 /// computing Resonance, Clash, Net $\Delta_{\text{ext}}$, and whether a **Dual-Psyche Wedge** (`§4.3.3`) is formed.
 pub fn compute_argument_psyche_modifier(
-    profile: &PsycheProfile,
+    psyche: &impl HasPsyche,
     vectors: &[SocialArgumentVector],
 ) -> ArgumentPsycheEvaluation {
     let mut resonance_delta_ext = 0;
@@ -1201,24 +1121,15 @@ pub fn compute_argument_psyche_modifier(
     let mut high_pole_clashed = false;
 
     for &vec in vectors {
-        let (delta, res_t, cls_t, is_high_pole) =
-            compute_single_vector_psyche_modifier(profile, vec);
+        let (delta, res_t, cls_t, is_high_pole) = compute_single_vector_psyche_modifier(psyche, vec);
         if delta < 0 {
             resonance_delta_ext += delta;
-            if resonated_trait.is_none() {
-                resonated_trait = res_t;
-            }
-            if is_high_pole {
-                high_pole_resonated = true;
-            }
+            resonated_trait = resonated_trait.or(res_t);
+            high_pole_resonated |= is_high_pole;
         } else if delta > 0 {
             clash_delta_ext += delta;
-            if clashed_trait.is_none() {
-                clashed_trait = cls_t;
-            }
-            if is_high_pole {
-                high_pole_clashed = true;
-            }
+            clashed_trait = clashed_trait.or(cls_t);
+            high_pole_clashed |= is_high_pole;
         }
     }
 
@@ -1321,21 +1232,16 @@ pub struct SocialExchangeOutcome {
     pub updated_state: SocialComposureState,
 }
 
-/// Evaluates the Social Wounds inflicted by a contested social exchange with `net_successes` (`§4.3`):
-/// - `+1` Net Success: Inflicts **Rhetorical Strain** (`-1` `CMP`, `+2` $\Delta_{\text{int}}$).
-/// - `+2+` Net Successes with a logical/evidentiary/empathetic vector: Inflicts `1` **Doubt** fracture (`-1` `CMP`, `+1` `doubt_fractures`).
-/// - **Dual-Psyche Wedge** (`argument_eval.triggers_dual_psyche_wedge && net_successes >= 1`):
-///   Inflicts **Cognitive Dissonance** (`dissonance_index += net_successes`).
-/// - `+2+` Net Successes with a humiliating/dominance vector against `EGO >= 13 || AGG >= 13`:
-///   Inflicts an **Ego Wound** (if `ego_wound_dis_check_passed == Some(false)`).
+/// Evaluates the Social Wounds inflicted by a contested social exchange with `net_successes` (`§4.3`).
 pub fn evaluate_social_exchange_wounds(
-    target_profile: &PsycheProfile,
+    target_psyche: &impl HasPsyche,
     state: &SocialComposureState,
     vectors: &[SocialArgumentVector],
     net_successes: i32,
     ego_wound_dis_check_passed: Option<bool>,
 ) -> SocialExchangeOutcome {
-    let argument_eval = compute_argument_psyche_modifier(target_profile, vectors);
+    let target_profile = target_psyche.as_psyche_profile();
+    let argument_eval = compute_argument_psyche_modifier(&target_profile, vectors);
     let mut updated = state.clone();
     let mut wounds_inflicted = Vec::new();
     let mut dissonance_stacks_added = 0;
@@ -1352,12 +1258,6 @@ pub fn evaluate_social_exchange_wounds(
         };
     }
 
-    if net_successes == 1 {
-        wounds_inflicted.push(SocialWoundKind::RhetoricalStrain);
-        updated.current_cmp = (updated.current_cmp - 1).max(0);
-        updated.accumulated_delta_int += 2;
-    }
-
     let has_logical_or_empathetic_vector = vectors.iter().any(|v| {
         matches!(
             v,
@@ -1372,10 +1272,8 @@ pub fn evaluate_social_exchange_wounds(
         wounds_inflicted.push(SocialWoundKind::Doubt);
         updated.current_cmp = (updated.current_cmp - 1).max(0);
         updated.doubt_fractures += 1;
-        if updated.doubt_fractures >= 3 {
-            updated.position_demolished = true;
-        }
-    } else if net_successes >= 2 {
+        updated.position_demolished |= updated.doubt_fractures >= 3;
+    } else {
         wounds_inflicted.push(SocialWoundKind::RhetoricalStrain);
         updated.current_cmp = (updated.current_cmp - 1).max(0);
         updated.accumulated_delta_int += 2;
@@ -1407,14 +1305,12 @@ pub fn evaluate_social_exchange_wounds(
         }
     }
 
-    let next_turn_dissonance_bleed_delta_int = 2 * updated.dissonance_index;
-
     SocialExchangeOutcome {
         argument_eval,
         net_successes,
         wounds_inflicted,
         dissonance_stacks_added,
-        next_turn_dissonance_bleed_delta_int,
+        next_turn_dissonance_bleed_delta_int: 2 * updated.dissonance_index,
         updated_state: updated,
     }
 }
@@ -1474,75 +1370,46 @@ pub fn resolve_cognitive_dissonance(
     path: DissonanceResolutionPath,
 ) -> DissonanceResolutionOutcome {
     let mut updated = state.clone();
+    let mut out = DissonanceResolutionOutcome {
+        updated_state: updated.clone(),
+        dogmatic_denial_tn: None,
+        psyche_drift_mark_awarded: None,
+        openness_scene_penalty: 0,
+        residual_delta_int_until_rest: 0,
+        ticks_spent: 0,
+        resulting_morale_state: None,
+    };
     match path {
         DissonanceResolutionPath::ConversionDefection { violated_trait } => {
             updated.dissonance_index = 0;
-            DissonanceResolutionOutcome {
-                updated_state: updated,
-                dogmatic_denial_tn: None,
-                psyche_drift_mark_awarded: Some(violated_trait),
-                openness_scene_penalty: 0,
-                residual_delta_int_until_rest: 0,
-                ticks_spent: 0,
-                resulting_morale_state: Some(MoraleState::Steady),
-            }
+            out.psyche_drift_mark_awarded = Some(violated_trait);
+            out.resulting_morale_state = Some(MoraleState::Steady);
         }
         DissonanceResolutionPath::DogmaticDenial {
             dis_check_successes,
         } => {
-            let tn = 31 - dis.clamp(1, 20) + (2 * updated.dissonance_index.max(0));
+            out.dogmatic_denial_tn = Some(31 - dis.clamp(1, 20) + (2 * updated.dissonance_index.max(0)));
             if dis_check_successes > 0 {
                 updated.dissonance_index = 0;
-                DissonanceResolutionOutcome {
-                    updated_state: updated,
-                    dogmatic_denial_tn: Some(tn),
-                    psyche_drift_mark_awarded: None,
-                    openness_scene_penalty: -4,
-                    residual_delta_int_until_rest: 0,
-                    ticks_spent: 0,
-                    resulting_morale_state: Some(MoraleState::Rage),
-                }
-            } else {
-                DissonanceResolutionOutcome {
-                    updated_state: updated,
-                    dogmatic_denial_tn: Some(tn),
-                    psyche_drift_mark_awarded: None,
-                    openness_scene_penalty: 0,
-                    residual_delta_int_until_rest: 0,
-                    ticks_spent: 0,
-                    resulting_morale_state: None,
-                }
+                out.openness_scene_penalty = -4;
+                out.resulting_morale_state = Some(MoraleState::Rage);
             }
         }
         DissonanceResolutionPath::Compartmentalization {
             dis_check_successes,
         } => {
-            updated.dissonance_index =
-                (updated.dissonance_index - dis_check_successes.max(0)).max(0);
+            updated.dissonance_index = (updated.dissonance_index - dis_check_successes.max(0)).max(0);
             updated.accumulated_delta_int = 2;
-            DissonanceResolutionOutcome {
-                updated_state: updated,
-                dogmatic_denial_tn: None,
-                psyche_drift_mark_awarded: None,
-                openness_scene_penalty: 0,
-                residual_delta_int_until_rest: 2,
-                ticks_spent: 12,
-                resulting_morale_state: None,
-            }
+            out.residual_delta_int_until_rest = 2;
+            out.ticks_spent = 12;
         }
         DissonanceResolutionPath::EmotionalLashingOut => {
             updated.dissonance_index = 0;
-            DissonanceResolutionOutcome {
-                updated_state: updated,
-                dogmatic_denial_tn: None,
-                psyche_drift_mark_awarded: None,
-                openness_scene_penalty: 0,
-                residual_delta_int_until_rest: 0,
-                ticks_spent: 0,
-                resulting_morale_state: Some(MoraleState::Rage),
-            }
+            out.resulting_morale_state = Some(MoraleState::Rage);
         }
     }
+    out.updated_state = updated;
+    out
 }
 
 /// Outcome of a Social Combat / Cognitive Dissonance check from Chapter 9.
@@ -1612,7 +1479,6 @@ mod tests {
 
     #[test]
     fn test_psyche_friction_check_and_drift_threshold() {
-        // High BLG (16) character ordered to abandon wounded squadmate (violates HighPole)
         let params = PsycheFrictionCheckParams {
             trait_id: PsycheTraitId::Belonging,
             trait_score: 16,
@@ -1623,138 +1489,79 @@ mod tests {
             delta_ext: 0,
         };
         assert_eq!(psyche_deviation(16), 6);
-        assert!(triggers_psyche_friction_check(
-            16,
-            PsycheViolationPole::HighPole
-        ));
+        assert!(triggers_psyche_friction_check(16, PsycheViolationPole::HighPole));
 
         let contest = build_psyche_friction_contest(&params);
-        assert_eq!(contest.player.tn_eff(), 19); // 31 - 12 = 19
-        assert_eq!(contest.gm.tn_eff(), 15); // 21 - 6 = 15
+        assert_eq!((contest.player.tn_eff(), contest.gm.tn_eff()), (19, 15));
 
-        // In Satya roll-over cascade, X > TN scores a success:
-        // Player rolls (12, 10) = 22 > 19 (1 success); GM rolls (7, 7) = 14 <= 15 (0 successes) -> CleanOverride
         let clean = evaluate_psyche_friction_roll(&params, &[(12, 10)], (7, 7));
         assert!(clean.triggered);
-        assert_eq!(
-            clean.resolution_kind,
-            PsycheFrictionResolutionKind::CleanOverride
-        );
-        assert_eq!(clean.delta_int_penalty_gained, 0);
-        assert_eq!(clean.drift_marks_gained, 1);
+        assert_eq!(clean.resolution_kind, PsycheFrictionResolutionKind::CleanOverride);
+        assert_eq!((clean.delta_int_penalty_gained, clean.drift_marks_gained), (0, 1));
 
-        // Player rolls (12, 10) = 22 > 19 (1 success); GM rolls (9, 8) = 17 > 15 (1 success) -> GrazingTie / StrainedOverride (+2 Delta_int)
         let strained = evaluate_psyche_friction_roll(&params, &[(12, 10)], (9, 8));
-        assert_eq!(
-            strained.resolution_kind,
-            PsycheFrictionResolutionKind::StrainedOverride
-        );
-        assert_eq!(strained.delta_int_penalty_gained, 2);
-        assert_eq!(strained.drift_marks_gained, 1);
+        assert_eq!(strained.resolution_kind, PsycheFrictionResolutionKind::StrainedOverride);
+        assert_eq!((strained.delta_int_penalty_gained, strained.drift_marks_gained), (2, 1));
 
-        // Player rolls (9, 8) = 17 <= 19 (0 successes); GM rolls (9, 8) = 17 > 15 (1 success) -> BalkOrFreeze (6 ticks)
         let balk = evaluate_psyche_friction_roll(&params, &[(9, 8)], (9, 8));
-        assert_eq!(
-            balk.resolution_kind,
-            PsycheFrictionResolutionKind::BalkOrFreeze
-        );
-        assert_eq!(balk.hesitation_ticks, 6);
-        assert_eq!(balk.drift_marks_gained, 0);
+        assert_eq!(balk.resolution_kind, PsycheFrictionResolutionKind::BalkOrFreeze);
+        assert_eq!((balk.hesitation_ticks, balk.drift_marks_gained), (6, 0));
 
-        // Psyche Drift threshold for DIS 12 is max(2, 12/4) = 3 marks
         assert_eq!(psyche_drift_threshold(12), 3);
         let d1 = apply_psyche_drift_mark(16, 2, 1, 12, None);
-        assert!(d1.shifted);
-        assert_eq!(d1.new_score, 15);
-        assert_eq!(d1.remaining_drift_marks, 0);
+        assert!(d1.shifted && d1.new_score == 15 && d1.remaining_drift_marks == 0);
     }
 
     #[test]
     fn test_conviction_surge_mechanics() {
-        let profile = PsycheProfile {
-            blg: 16,
-            slf: 5,
-            ..Default::default()
-        };
+        let profile = PsycheProfile { blg: 16, slf: 5, ..Default::default() };
         let surge = evaluate_conviction_surge(
             &profile,
             4,
             false,
             Some(ConvictionPrincipleArchetype::AltruisticOrTribalSacrifice),
         );
-        assert!(surge.eligible);
-        assert_eq!(surge.adjusted_delta_int, -2);
-        assert_eq!(surge.surge_delta_under, 4);
-        assert!(surge.ignores_fatigue_and_shock_time_penalty);
-        assert_eq!(surge.tactical_pool_bonus, 2);
+        assert!(surge.eligible && surge.ignores_fatigue_and_shock_time_penalty);
+        assert_eq!((surge.adjusted_delta_int, surge.surge_delta_under, surge.tactical_pool_bonus), (-2, 4, 2));
     }
 
     #[test]
     fn test_marcus_vs_nadia_cognitive_dissonance_walkthrough() {
-        // Canonical §4.4 Worked Example: Marcus vs. Dr. Nadia Vance
-        // Nadia: OPN 16, BLG 16, DIS 11, FOC 11 -> CMP = floor((11 + 11) / 4) = 5
-        let nadia = PsycheProfile {
-            opn: 16,
-            blg: 16,
-            ..Default::default()
-        };
+        let nadia = PsycheProfile { opn: 16, blg: 16, ..Default::default() };
         let state = SocialComposureState::new(11, 11);
         assert_eq!(state.max_cmp, 5);
 
-        // Step 1: Marcus's Empathy read scores 2 net successes -> reveals OPN 16 & BLG 16 + detects wedge tension
         let read = evaluate_empathy_read(&nadia, 2);
         assert_eq!(read.revealed_traits.len(), 2);
         assert!(read.detects_psyche_wedge_tension);
 
-        // Step 2: Marcus presents raw telemetry logs proving Nadia's lab director falsified safety data
-        // - Resonates with OPN 16: -(16 - 10) = -6
-        // - Clashes with BLG 16 (asking her to indict her own team): +(16 - 10) = +6
-        // - Net Delta_ext = 0, triggers Dual-Psyche Wedge!
         let vectors = [
             SocialArgumentVector::EmpiricalEvidenceLogicNovelIdeas,
-            SocialArgumentVector::GroupConsensusLoyaltySharedIdentity {
-                asks_to_betray_group: true,
-            },
+            SocialArgumentVector::GroupConsensusLoyaltySharedIdentity { asks_to_betray_group: true },
         ];
-        // Step 3: Marcus scores 3 successes vs. Nadia's 1 success -> 2 Net Successes
         let exchange = evaluate_social_exchange_wounds(&nadia, &state, &vectors, 2, None);
-        assert_eq!(exchange.argument_eval.resonance_delta_ext, -6);
-        assert_eq!(exchange.argument_eval.clash_delta_ext, 6);
-        assert_eq!(exchange.argument_eval.net_delta_ext, 0);
+        assert_eq!(
+            (exchange.argument_eval.resonance_delta_ext, exchange.argument_eval.clash_delta_ext, exchange.argument_eval.net_delta_ext),
+            (-6, 6, 0)
+        );
         assert!(exchange.argument_eval.triggers_dual_psyche_wedge);
         assert!(exchange.wounds_inflicted.contains(&SocialWoundKind::Doubt));
-        assert!(
-            exchange
-                .wounds_inflicted
-                .contains(&SocialWoundKind::CognitiveDissonance)
-        );
-        assert_eq!(exchange.updated_state.doubt_fractures, 1);
-        assert_eq!(exchange.updated_state.dissonance_index, 2);
-        assert_eq!(exchange.next_turn_dissonance_bleed_delta_int, 4);
+        assert!(exchange.wounds_inflicted.contains(&SocialWoundKind::CognitiveDissonance));
+        assert_eq!((exchange.updated_state.doubt_fractures, exchange.updated_state.dissonance_index, exchange.next_turn_dissonance_bleed_delta_int), (1, 2, 4));
 
-        // Step 4: Next exchange, Nadia bleeds +4 Delta_int from her Dissonance Index of 2.
-        // If she attempts Dogmatic Denial, her TN is 31 - 11 + 2*2 = 24.
         let denial = resolve_cognitive_dissonance(
             &exchange.updated_state,
             11,
-            DissonanceResolutionPath::DogmaticDenial {
-                dis_check_successes: 0,
-            },
+            DissonanceResolutionPath::DogmaticDenial { dis_check_successes: 0 },
         );
         assert_eq!(denial.dogmatic_denial_tn, Some(24));
 
-        // She chooses Conversion / Defection: clears Dissonance Index to 0 and records 1 Drift Mark on BLG.
         let conversion = resolve_cognitive_dissonance(
             &exchange.updated_state,
             11,
-            DissonanceResolutionPath::ConversionDefection {
-                violated_trait: PsycheTraitId::Belonging,
-            },
+            DissonanceResolutionPath::ConversionDefection { violated_trait: PsycheTraitId::Belonging },
         );
         assert_eq!(conversion.updated_state.dissonance_index, 0);
-        assert_eq!(
-            conversion.psyche_drift_mark_awarded,
-            Some(PsycheTraitId::Belonging)
-        );
+        assert_eq!(conversion.psyche_drift_mark_awarded, Some(PsycheTraitId::Belonging));
     }
 }

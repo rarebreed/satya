@@ -432,11 +432,11 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
     assert_eq!(elena_env.p_base, 24);
     assert_eq!(elena_env.p_eff, 24);
     assert_eq!(elena_env.neutral_baseline_b, 8);
-    assert_eq!(elena_env.tempo_cap, 13);
-    assert_eq!(elena_env.control_cap, 13);
-    assert_eq!(elena_env.force_cap, 10);
+    assert_eq!(elena_env.caps.tempo, 13);
+    assert_eq!(elena_env.caps.control, 13);
+    assert_eq!(elena_env.caps.force, 10);
 
-    let probe_eval = evaluate_tactical_triad(&elena_env, 8, 11, 11, 2);
+    let probe_eval = evaluate_tactical_triad(&elena_env, 8, Triad::new(11, 11, 2));
     assert!(probe_eval.valid);
     assert_eq!(probe_eval.effective_tc, 5);
     assert!(probe_eval.archetype_label.starts_with("TC"));
