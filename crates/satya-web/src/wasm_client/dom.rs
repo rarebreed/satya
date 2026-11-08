@@ -78,6 +78,23 @@ pub(crate) fn local_storage_set(key: &str, val: &str) {
     }
 }
 
+pub(crate) fn local_storage_remove(key: &str) {
+    let Some(win) = window() else {
+        return;
+    };
+    let Ok(storage) = js_sys::Reflect::get(&win, &JsValue::from_str("localStorage")) else {
+        return;
+    };
+    if storage.is_null() || storage.is_undefined() {
+        return;
+    }
+    if let Ok(func) = js_sys::Reflect::get(&storage, &JsValue::from_str("removeItem"))
+        .and_then(|v| v.dyn_into::<js_sys::Function>())
+    {
+        let _ = func.call1(&storage, &JsValue::from_str(key));
+    }
+}
+
 pub(crate) fn input_value(id: &str) -> String {
     let Some(el) = get_element(id) else {
         return String::new();
@@ -250,4 +267,48 @@ pub(crate) async fn fetch_json<Req: Serialize, Resp: DeserializeOwned>(
     }
 
     serde_json::from_str::<Resp>(&text).map_err(|e| format!("JSON decode error: {e}"))
+}
+
+pub(crate) async fn fetch_text(
+    method: &str,
+    url: &str,
+    auth_token: Option<&str>,
+) -> Result<String, String> {
+    let win = window().ok_or_else(|| "No browser Window available".to_string())?;
+    let opts = RequestInit::new();
+    opts.set_method(method);
+
+    let headers = Headers::new().map_err(|_| "Failed to construct Headers".to_string())?;
+    if let Some(tok) = auth_token {
+        let _ = headers.set("Authorization", &format!("Bearer {tok}"));
+    }
+    opts.set_headers(&headers);
+
+    let request =
+        Request::new_with_str_and_init(url, &opts).map_err(|_| "Invalid Request".to_string())?;
+    let resp_val = JsFuture::from(win.fetch_with_request(&request))
+        .await
+        .map_err(|_| "Network fetch failed".to_string())?;
+    let resp: Response = resp_val
+        .dyn_into()
+        .map_err(|_| "Invalid Response cast".to_string())?;
+
+    let text_promise = resp
+        .text()
+        .map_err(|_| "Failed to read response text".to_string())?;
+    let text_val = JsFuture::from(text_promise)
+        .await
+        .map_err(|_| "Failed awaiting response text".to_string())?;
+    let text = text_val.as_string().unwrap_or_default();
+
+    if !resp.ok() {
+        if let Ok(err_val) = serde_json::from_str::<serde_json::Value>(&text)
+            && let Some(msg) = err_val.get("error").and_then(|v| v.as_str())
+        {
+            return Err(msg.to_string());
+        }
+        return Err(format!("HTTP {}: {}", resp.status(), text));
+    }
+
+    Ok(text)
 }

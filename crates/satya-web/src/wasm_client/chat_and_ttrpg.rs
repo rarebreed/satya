@@ -1138,7 +1138,7 @@ pub fn format_mechanics_event_html(ev: &TtrpgMechanicsEvent) -> String {
     )
 }
 
-pub(crate) fn render_mechanics_event(ev: &TtrpgMechanicsEvent) {
+pub(crate) fn render_mechanics_event_bubble_only(ev: &TtrpgMechanicsEvent) {
     let (Some(doc), Some(log)) = (document(), get_element("chat-log")) else {
         return;
     };
@@ -1152,6 +1152,10 @@ pub(crate) fn render_mechanics_event(ev: &TtrpgMechanicsEvent) {
     div.set_inner_html(&format_mechanics_event_html(ev));
     let _ = log.append_child(&div);
     log.set_scroll_top(log.scroll_height());
+}
+
+pub(crate) fn render_mechanics_event(ev: &TtrpgMechanicsEvent) {
+    render_mechanics_event_bubble_only(ev);
 
     if !ev.dice_rolled_d20.is_empty() {
         let spec = WgpuDiceSpec {

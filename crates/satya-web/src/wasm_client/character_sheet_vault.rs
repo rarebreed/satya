@@ -538,7 +538,7 @@ pub fn format_character_vault_and_assets_html(sheet: &CharacterSheetState) -> St
     )
 }
 
-async fn read_first_file_bytes(input_id: &str) -> Option<(String, String, Vec<u8>)> {
+pub(crate) async fn read_first_file_bytes(input_id: &str) -> Option<(String, String, Vec<u8>)> {
     let el = get_element(input_id)?;
     let files = Reflect::get(&el, &JsValue::from_str("files")).ok()?;
     let file = Reflect::get(&files, &JsValue::from_f64(0.0)).ok()?;
@@ -564,7 +564,7 @@ async fn read_first_file_bytes(input_id: &str) -> Option<(String, String, Vec<u8
     Some((name, mime, bytes))
 }
 
-async fn prompt_save_satyachar_bytes(suggested_name: &str, bytes: &[u8]) -> bool {
+pub(crate) async fn prompt_save_satyachar_bytes(suggested_name: &str, bytes: &[u8]) -> bool {
     let Some(win) = window() else {
         return false;
     };

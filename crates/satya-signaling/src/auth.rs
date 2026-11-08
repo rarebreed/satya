@@ -132,15 +132,15 @@ pub struct SessionDisconnectSummary {
 /// Manages SQLx-backed Argon2id user registration/login, account-level RBAC (`USER` vs. `ADMIN`),
 /// bearer authentication tokens, password-protected session creation/joining, and disconnect/logout flows.
 pub struct AuthAndSessionManager {
-    db_pool: SqlitePool,
+    pub(crate) db_pool: SqlitePool,
     bootstrap_admins: HashSet<String>,
     google_oauth_client_id: Option<String>,
     google_picker_api_key: Option<String>,
-    users_by_username: RwLock<HashMap<String, UserAccount>>,
-    auth_tokens: RwLock<HashMap<String, UserAccount>>,
+    pub(crate) users_by_username: RwLock<HashMap<String, UserAccount>>,
+    pub(crate) auth_tokens: RwLock<HashMap<String, UserAccount>>,
     google_links: RwLock<HashMap<String, (String, Option<String>)>>,
     pub(crate) sessions: RwLock<HashMap<String, ProtectedSession>>,
-    join_tokens: RwLock<HashMap<String, JoinTokenClaims>>,
+    pub(crate) join_tokens: RwLock<HashMap<String, JoinTokenClaims>>,
 }
 
 impl AuthAndSessionManager {
@@ -226,6 +226,45 @@ impl AuthAndSessionManager {
                 state_json    TEXT NOT NULL,
                 updated_at_us INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS auth_tokens (
+                token         TEXT PRIMARY KEY NOT NULL,
+                user_id       TEXT NOT NULL,
+                created_at_us INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS saved_sessions (
+                session_id       TEXT PRIMARY KEY NOT NULL,
+                password_hash    TEXT NOT NULL,
+                session_mode     TEXT NOT NULL,
+                host_user_id     TEXT NOT NULL,
+                campaign_tag     TEXT NOT NULL,
+                enable_ai_gm     INTEGER NOT NULL DEFAULT 0,
+                ai_provider_json TEXT,
+                active_map_json  TEXT,
+                created_at_us    INTEGER NOT NULL,
+                updated_at_us    INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS session_participants (
+                session_id    TEXT NOT NULL,
+                user_id       TEXT NOT NULL,
+                username      TEXT NOT NULL,
+                display_name  TEXT NOT NULL,
+                role          TEXT NOT NULL,
+                character_id  TEXT,
+                updated_at_us INTEGER NOT NULL,
+                PRIMARY KEY (session_id, user_id)
+            );
+            CREATE TABLE IF NOT EXISTS session_event_history (
+                session_id     TEXT NOT NULL,
+                sequence_num   INTEGER NOT NULL,
+                event_kind     TEXT NOT NULL,
+                timestamp_us   INTEGER NOT NULL,
+                sender_user_id TEXT NOT NULL,
+                visibility     TEXT NOT NULL,
+                payload_json   TEXT NOT NULL,
+                PRIMARY KEY (session_id, sequence_num)
+            );
+            CREATE INDEX IF NOT EXISTS idx_session_event_history_sid
+                ON session_event_history(session_id, sequence_num);
             "#,
         )
         .execute(&db_pool)
@@ -288,20 +327,35 @@ impl AuthAndSessionManager {
         .await?;
 
         let mut initial_users = HashMap::with_capacity(rows.len());
+        let mut users_by_id = HashMap::with_capacity(rows.len());
         for row in rows {
             let uname: String = row.try_get("username")?;
             let role_str: String = row.try_get("account_role")?;
-            initial_users.insert(
-                uname.clone(),
-                UserAccount {
-                    user_id: row.try_get("user_id")?,
-                    username: uname,
-                    display_name: row.try_get("display_name")?,
-                    password_hash: row.try_get("password_hash")?,
-                    account_role: AccountRole::from_db_str(&role_str),
-                    created_at_us: row.try_get("created_at_us")?,
-                },
-            );
+            let acct = UserAccount {
+                user_id: row.try_get("user_id")?,
+                username: uname.clone(),
+                display_name: row.try_get("display_name")?,
+                password_hash: row.try_get("password_hash")?,
+                account_role: AccountRole::from_db_str(&role_str),
+                created_at_us: row.try_get("created_at_us")?,
+            };
+            users_by_id.insert(acct.user_id.clone(), acct.clone());
+            initial_users.insert(uname, acct);
+        }
+
+        let token_rows = sqlx::query("SELECT token, user_id FROM auth_tokens")
+            .fetch_all(&db_pool)
+            .await
+            .unwrap_or_default();
+        let mut initial_tokens = HashMap::with_capacity(token_rows.len());
+        for row in token_rows {
+            if let (Ok(tok), Ok(uid)) = (
+                row.try_get::<String, _>("token"),
+                row.try_get::<String, _>("user_id"),
+            ) && let Some(acct) = users_by_id.get(&uid)
+            {
+                initial_tokens.insert(tok, acct.clone());
+            }
         }
 
         let google_oauth_client_id = auth_config
@@ -321,7 +375,7 @@ impl AuthAndSessionManager {
             google_oauth_client_id,
             google_picker_api_key,
             users_by_username: RwLock::new(initial_users),
-            auth_tokens: RwLock::new(HashMap::new()),
+            auth_tokens: RwLock::new(initial_tokens),
             google_links: RwLock::new(HashMap::new()),
             sessions: RwLock::new(HashMap::new()),
             join_tokens: RwLock::new(HashMap::new()),
@@ -497,8 +551,21 @@ impl AuthAndSessionManager {
         self.issue_auth_token(account).await
     }
 
-    async fn issue_auth_token(&self, account: UserAccount) -> anyhow::Result<AuthSuccessResponse> {
+    pub(crate) async fn issue_auth_token(
+        &self,
+        account: UserAccount,
+    ) -> anyhow::Result<AuthSuccessResponse> {
         let token = format!("satya_tok_{}", Uuid::new_v4());
+        let now_us = Utc::now().timestamp_micros();
+        let _ = sqlx::query(
+            "INSERT OR REPLACE INTO auth_tokens (token, user_id, created_at_us) VALUES (?1, ?2, ?3)",
+        )
+        .bind(&token)
+        .bind(&account.user_id)
+        .bind(now_us)
+        .execute(&self.db_pool)
+        .await;
+
         self.auth_tokens
             .write()
             .await
@@ -553,13 +620,34 @@ impl AuthAndSessionManager {
             }
         }
 
-        let password_hash = Self::hash_secret(session_password)?;
-        let self_participant = Participant::human(
+        let (password_hash, saved_active_map, created_at_us) =
+            if let Some((saved_hash, saved_map, saved_created_us)) =
+                self.load_saved_session_meta_from_db(sid).await
+            {
+                if !Self::verify_secret(session_password, &saved_hash) {
+                    anyhow::bail!("Invalid session password for existing session '{sid}'");
+                }
+                (saved_hash, saved_map, saved_created_us)
+            } else {
+                (
+                    Self::hash_secret(session_password)?,
+                    None,
+                    Utc::now().timestamp_micros(),
+                )
+            };
+
+        let mut self_participant = Participant::human(
             &user.user_id,
             &user.username,
             display_name_override.unwrap_or_else(|| user.display_name.clone()),
             role,
         );
+        if let Some(bound_cid) = self
+            .load_saved_participant_character_id(sid, &user.user_id)
+            .await
+        {
+            self_participant.character_id = Some(bound_cid);
+        }
 
         let mut roster = HashMap::new();
         roster.insert(self_participant.user_id.clone(), self_participant.clone());
@@ -576,25 +664,29 @@ impl AuthAndSessionManager {
             .load_or_init_combat_tracker(sid, &roster_vec)
             .await;
 
+        let session_obj = ProtectedSession {
+            session_id: sid.to_string(),
+            password_hash,
+            session_mode,
+            host_user_id: user.user_id.clone(),
+            roster,
+            ai_gm_vault: None,
+            active_map: saved_active_map,
+            gm_documents: persisted_docs,
+            campaign_tag: sid.to_string(),
+            gm_memories: persisted_memories,
+            combat_tracker,
+            created_at_us,
+        };
+
+        self.persist_session_metadata_to_db(&session_obj, enable_ai_gm)
+            .await;
+        self.persist_session_participant_to_db(sid, &self_participant)
+            .await;
+
         {
             let mut sessions = self.sessions.write().await;
-            sessions.insert(
-                sid.to_string(),
-                ProtectedSession {
-                    session_id: sid.to_string(),
-                    password_hash,
-                    session_mode,
-                    host_user_id: user.user_id.clone(),
-                    roster,
-                    ai_gm_vault: None,
-                    active_map: None,
-                    gm_documents: persisted_docs,
-                    campaign_tag: sid.to_string(),
-                    gm_memories: persisted_memories,
-                    combat_tracker,
-                    created_at_us: Utc::now().timestamp_micros(),
-                },
-            );
+            sessions.insert(sid.to_string(), session_obj);
         }
 
         let join_token = format!("join_{}", Uuid::new_v4());
@@ -620,30 +712,44 @@ impl AuthAndSessionManager {
         display_name_override: Option<String>,
     ) -> anyhow::Result<(String, SessionMode, Participant, Vec<Participant>)> {
         let sid = session_id.trim();
-        let mut sessions = self.sessions.write().await;
-        let session = sessions
-            .get_mut(sid)
-            .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
-
-        if !Self::verify_secret(session_password, &session.password_hash) {
-            anyhow::bail!("Invalid session password for session '{sid}'");
+        if !self.sessions.read().await.contains_key(sid) {
+            let _ = self.rehydrate_session_from_db(sid).await;
         }
+        let saved_cid = self
+            .load_saved_participant_character_id(sid, &user.user_id)
+            .await;
 
-        let self_participant = Participant::human(
-            &user.user_id,
-            &user.username,
-            display_name_override.unwrap_or_else(|| user.display_name.clone()),
-            role,
-        );
+        let (mode, self_participant, roster_vec) = {
+            let mut sessions = self.sessions.write().await;
+            let session = sessions
+                .get_mut(sid)
+                .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
 
-        session
-            .roster
-            .insert(self_participant.user_id.clone(), self_participant.clone());
-        Self::sync_combatant_into_tracker(&mut session.combat_tracker, &self_participant);
-        let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
-        let mode = session.session_mode;
+            if !Self::verify_secret(session_password, &session.password_hash) {
+                anyhow::bail!("Invalid session password for session '{sid}'");
+            }
 
-        drop(sessions);
+            let mut self_participant = Participant::human(
+                &user.user_id,
+                &user.username,
+                display_name_override.unwrap_or_else(|| user.display_name.clone()),
+                role,
+            );
+            if let Some(cid) = saved_cid {
+                self_participant.character_id = Some(cid);
+            }
+
+            session
+                .roster
+                .insert(self_participant.user_id.clone(), self_participant.clone());
+            Self::sync_combatant_into_tracker(&mut session.combat_tracker, &self_participant);
+            let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
+            let mode = session.session_mode;
+            (mode, self_participant, roster_vec)
+        };
+
+        self.persist_session_participant_to_db(sid, &self_participant)
+            .await;
 
         let join_token = format!("join_{}", Uuid::new_v4());
         self.join_tokens.write().await.insert(
@@ -729,6 +835,12 @@ impl AuthAndSessionManager {
         }
         session.roster.insert(ai_uid, ai_participant.clone());
         let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
+        let vault_snap = session.ai_gm_vault.clone();
+        drop(sessions);
+
+        if let Some(v) = vault_snap.as_ref() {
+            self.persist_session_ai_gm_meta_to_db(sid, v).await;
+        }
 
         Ok((ai_participant, roster_vec))
     }
@@ -959,11 +1071,14 @@ impl AuthAndSessionManager {
         map: GmMapUpdateRequest,
     ) -> anyhow::Result<()> {
         let sid = session_id.trim();
-        let mut guard = self.sessions.write().await;
-        let session = guard
-            .get_mut(sid)
-            .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
-        session.active_map = Some(map);
+        {
+            let mut guard = self.sessions.write().await;
+            let session = guard
+                .get_mut(sid)
+                .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+            session.active_map = Some(map.clone());
+        }
+        self.persist_session_active_map_to_db(sid, &map).await;
         Ok(())
     }
 
@@ -1020,6 +1135,10 @@ impl AuthAndSessionManager {
     ) -> Option<(UserAccount, Vec<SessionDisconnectSummary>)> {
         let clean = token.strip_prefix("Bearer ").unwrap_or(token).trim();
         let account = self.auth_tokens.write().await.remove(clean)?;
+        let _ = sqlx::query("DELETE FROM auth_tokens WHERE token = ?1")
+            .bind(clean)
+            .execute(&self.db_pool)
+            .await;
         if let Some(entry) = self.google_links.write().await.get_mut(&account.user_id) {
             entry.1 = None;
         }
@@ -1089,6 +1208,10 @@ impl AuthAndSessionManager {
                 claims.participant = updated.0.clone();
             }
         }
+        drop(join_guard);
+
+        self.persist_session_participant_to_db(sid, &updated.0)
+            .await;
 
         Ok(updated)
     }
