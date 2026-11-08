@@ -67,6 +67,7 @@ pub mod environmental_hazards;
 pub mod health_survival;
 pub mod lifepath_catalog;
 pub mod lifepath_economy;
+pub mod npc_generator;
 pub mod primitives;
 pub mod psyche_social;
 pub mod ranged_combat;
@@ -87,6 +88,7 @@ pub use dice_pools::{SARLE_BIMODAL_THRESHOLD, try_median_gated_bimodal_pmf, try_
 pub use dice_probabilities::*;
 pub use health_survival::*;
 pub use lifepath_economy::*;
+pub use npc_generator::*;
 pub use primitives::*;
 pub use psyche_social::*;
 pub use rules_book::*;

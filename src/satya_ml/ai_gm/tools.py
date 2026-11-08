@@ -352,6 +352,267 @@ def update_npc_state(
     return npc
 
 
+@tool
+def generate_npc_from_description(
+    description: str,
+    template: str = "AUTO",
+    name_override: str | None = None,
+    career_terms: int = 2,
+    gm_secret_notes: str | None = None,
+    is_persistent: bool = True,
+    session_id: str = "default",
+) -> dict[str, Any]:
+    """Roll up a complete Satya NPC (Characteristics, 7 bipolar Psyche traits, 5-Stage Lifepath, and Skills) from a short natural-language description (e.g., 'Terry is a kind general MD, but needs to feel like she belongs') and/or template ('AUTO', 'MEDICAL_DOCTOR', 'COMBAT_SOLDIER', 'DETECTIVE_INVESTIGATOR', 'SYNDICATE_ENFORCER', 'STEM_ENGINEER', 'INTELLIGENCE_OPERATIVE', 'BLUE_COLLAR_TECH', 'FRONTIER_RANGER')."""
+    payload = {
+        "prompt": description,
+        "name_override": name_override,
+        "template": template,
+        "career_terms": max(1, min(4, int(career_terms))),
+        "seed": 0,
+        "gm_secret_notes": gm_secret_notes,
+        "is_persistent": bool(is_persistent),
+        "campaign_tag": session_id,
+    }
+    remote_res = _http_post_json(
+        f"{_signaling_base_url()}/api/gm/sessions/{session_id}/npcs/generate",
+        payload,
+        timeout=3.0,
+    )
+    if remote_res is not None and isinstance(remote_res.get("npc"), dict):
+        npc_entry = dict(remote_res["npc"])
+        gm_char = npc_entry.get("gm_character")
+        if isinstance(gm_char, dict):
+            chars = get_session_characters(session_id)
+            chars = [c for c in chars if c.get("character_id") != gm_char.get("character_id")]
+            chars.append(gm_char)
+            set_session_characters(session_id, chars)
+        return remote_res
+
+    # Local deterministic fallback when signaling server is offline
+    desc_clean = description.strip()
+    lower = desc_clean.lower()
+    npc_name = (name_override or "").strip()
+    if not npc_name:
+        for sep in (" is a ", " is an ", " is the ", ", a ", ", an ", " - ", ": "):
+            if sep in desc_clean:
+                cand = desc_clean.split(sep, 1)[0].strip().strip("\"'")
+                if 1 <= len(cand.split()) <= 4 and cand[0].isupper():
+                    npc_name = cand
+                    break
+    if not npc_name:
+        npc_name = "Terry Vance"
+
+    tmpl = (template or "AUTO").strip().upper()
+    if tmpl == "AUTO":
+        if any(w in lower for w in ("md", "doctor", "physician", "surgeon", "medic", "nurse", "clinic")):
+            tmpl = "MEDICAL_DOCTOR"
+        elif any(w in lower for w in ("detective", "investigator", "police", "cop", "swat", "forensic")):
+            tmpl = "DETECTIVE_INVESTIGATOR"
+        elif any(w in lower for w in ("spy", "intelligence", "operative", "handler", "undercover")):
+            tmpl = "INTELLIGENCE_OPERATIVE"
+        elif any(w in lower for w in ("syndicate", "cartel", "gang", "fixer", "enforcer", "smuggler")):
+            tmpl = "SYNDICATE_ENFORCER"
+        elif any(w in lower for w in ("engineer", "scientist", "hacker", "programmer", "robotics")):
+            tmpl = "STEM_ENGINEER"
+        elif any(w in lower for w in ("mechanic", "technician", "pilot", "electrician")):
+            tmpl = "BLUE_COLLAR_TECH"
+        elif any(w in lower for w in ("ranger", "scout", "hunter", "tracker", "herbalist")):
+            tmpl = "FRONTIER_RANGER"
+        elif any(w in lower for w in ("soldier", "marine", "mercenary", "sniper", "veteran")):
+            tmpl = "COMBAT_SOLDIER"
+        else:
+            tmpl = "DETECTIVE_INVESTIGATOR"
+
+    role_titles = {
+        "MEDICAL_DOCTOR": "General MD & Clinical Physician",
+        "COMBAT_SOLDIER": "Tactical Security Operator",
+        "DETECTIVE_INVESTIGATOR": "Investigative Detective",
+        "SYNDICATE_ENFORCER": "Underworld Fixer & Enforcer",
+        "STEM_ENGINEER": "Systems & Research Engineer",
+        "INTELLIGENCE_OPERATIVE": "Field Intelligence Handler",
+        "BLUE_COLLAR_TECH": "Lead Mechanical Technician",
+        "FRONTIER_RANGER": "Frontier Guide & Outrider",
+    }
+    role_title = role_titles.get(tmpl, "Civilian Specialist")
+
+    # 7 Bipolar Psyche traits (1-20)
+    psyche = {"EGO": 10, "SLF": 10, "OPN": 12, "BLG": 10, "EXT": 10, "CNF": 11, "AGG": 10}
+    if any(w in lower for w in ("kind", "caring", "compassionate", "gentle", "altruistic", "empathetic", "healer")):
+        psyche["SLF"] = 5
+        psyche["AGG"] = 5
+        psyche["EGO"] = 7
+        psyche["OPN"] = 14
+    if any(w in lower for w in ("selfish", "greedy", "mercenary", "ruthless", "callous")):
+        psyche["SLF"] = 16
+        psyche["AGG"] = 15
+    if any(w in lower for w in ("belong", "belongs", "belonging", "loyal", "tribal", "team", "family", "accepted")):
+        psyche["BLG"] = 16
+    if any(w in lower for w in ("loner", "lone wolf", "detached", "solitary", "aloof")):
+        psyche["BLG"] = 4
+    if any(w in lower for w in ("rebel", "rebellious", "maverick", "unconventional")):
+        psyche["CNF"] = 4
+    if any(w in lower for w in ("by-the-book", "orthodox", "strict", "dutiful")):
+        psyche["CNF"] = 16
+
+    pole_labels = {
+        "EGO": ("Humble / Self-Effacing", "Grounded Self-Worth", "Proud / Imperious"),
+        "SLF": ("Altruistic / Self-Sacrificing", "Pragmatic Reciprocity", "Self-Serving / Mercenary"),
+        "OPN": ("Dogmatic / Rigid", "Selective Pragmatist", "Curious / Open-Minded"),
+        "BLG": ("Detached / Lone Wolf", "Cooperative Individual", "Tribal / Group-Dependent"),
+        "EXT": ("Solitary / Reserved", "Ambiverted", "Gregarious / Outgoing"),
+        "CNF": ("Maverick / Rebellious", "Adaptive", "Orthodox / Institutional"),
+        "AGG": ("Passive / Conflict-Averse / Gentle", "Measured Assertiveness", "Combative / Escalatory"),
+    }
+    psyche_summary: list[str] = []
+    for code, score in psyche.items():
+        low_l, mid_l, high_l = pole_labels[code]
+        desc_l = low_l if score <= 7 else (high_l if score >= 13 else mid_l)
+        psyche_summary.append(f"{code} {score} ({desc_l})")
+
+    template_skills: dict[str, dict[str, int]] = {
+        "MEDICAL_DOCTOR": {
+            "clinical_diagnosis_internal_medicine": 3,
+            "first_aid_bls_cpr": 4,
+            "nursing_patient_care": 3,
+            "pharmacology_toxicology": 3,
+            "anatomy_physiology": 3,
+            "empathy_social_perception": 3,
+        },
+        "COMBAT_SOLDIER": {
+            "long_guns_rifles_carbines_shotguns": 4,
+            "pistols_handguns": 3,
+            "small_unit_tactics_cqb": 3,
+            "brawling_unarmed_striking": 3,
+            "alertness_situational_awareness": 3,
+        },
+        "DETECTIVE_INVESTIGATOR": {
+            "criminology_scene_investigation": 4,
+            "interrogation_interviewing": 3,
+            "empathy_social_perception": 3,
+            "pistols_handguns": 3,
+            "alertness_situational_awareness": 3,
+        },
+        "SYNDICATE_ENFORCER": {
+            "streetwise_underworld_etiquette": 4,
+            "intimidation_coercion": 3,
+            "pistols_handguns": 3,
+            "short_blades_knife_fighting": 3,
+            "deception_bluff": 3,
+        },
+        "STEM_ENGINEER": {
+            "programming_scripting": 4,
+            "calculus_linear_algebra": 3,
+            "electronics_circuit_design": 3,
+            "digital_ai_literacy": 4,
+        },
+        "INTELLIGENCE_OPERATIVE": {
+            "espionage_tradecraft_surveillance": 4,
+            "deception_bluff": 4,
+            "stealth_sneaking_hiding": 3,
+            "pistols_handguns": 3,
+        },
+        "BLUE_COLLAR_TECH": {
+            "automotive_small_engine_mechanics": 4,
+            "electrical_power_systems": 3,
+            "driving_wheeled_tracked": 3,
+            "manual_dexterity_tinkering": 3,
+        },
+        "FRONTIER_RANGER": {
+            "wilderness_survival_biome_specific": 4,
+            "hunting_trapping_field_butchery": 3,
+            "long_guns_rifles_carbines_shotguns": 3,
+            "first_aid_bls_cpr": 3,
+        },
+    }
+    skills = dict(template_skills.get(tmpl, template_skills["DETECTIVE_INVESTIGATOR"]))
+    top_skills = [f"{k} (N={v})" for k, v in skills.items()]
+    age_years = 18 + 4 * max(1, min(4, int(career_terms)))
+    cid = f"npc_{npc_name.lower().replace(' ', '_')}"
+
+    public_summary = (
+        f"{npc_name} — {role_title} (Age {age_years}). Apparent demeanor: {desc_clean or role_title}."
+    )
+    gm_dossier = (
+        f"NPC Dossier: {npc_name} ({role_title}, Age {age_years})\n"
+        f"Prompt: {desc_clean}\n"
+        f"Psyche: {'; '.join(psyche_summary)}\n"
+        f"Top Skills: {', '.join(top_skills)}"
+    )
+    if gm_secret_notes:
+        gm_dossier += f"\nGM Secret Notes: {gm_secret_notes}"
+
+    char_sheet = {
+        "character_id": cid,
+        "owner_user_id": "ai_gm_service",
+        "character_name": npc_name,
+        "callsign_or_role": role_title,
+        "age_years": age_years,
+        "characteristics": {
+            "spd": 11, "for_stat": 11, "dex": 13, "kin": 11, "hlt": 12, "fit": 11,
+            "hgt_m": 1.72, "mas_kg": 68.0,
+            "mem": 14 if tmpl == "MEDICAL_DOCTOR" else 12,
+            "ana": 14 if tmpl in ("MEDICAL_DOCTOR", "STEM_ENGINEER") else 12,
+            "ins": 13, "cre": 11, "dis": 13, "foc": 13,
+            "com": 13, "pre": 12, "elo": 12,
+            "sig": 12, "hea": 12, "tac": 12, "olf": 10, "tas": 10, "itu": 12,
+            "ego": psyche["EGO"], "slf": psyche["SLF"], "opn": psyche["OPN"],
+            "blg": psyche["BLG"], "ext": psyche["EXT"], "cnf": psyche["CNF"], "agg": psyche["AGG"],
+        },
+        "skills": skills,
+        "notes": gm_dossier,
+    }
+
+    npcs = get_session_npcs(session_id)
+    npcs[cid] = {
+        "npc_id": cid,
+        "name": npc_name,
+        "archetype": role_title,
+        "template": tmpl,
+        "psyche": psyche,
+        "psyche_summary": psyche_summary,
+        "skills": skills,
+        "public_summary": public_summary,
+        "gm_secret_dossier": gm_dossier,
+        "fatigue": 0,
+        "wound_shock": 0,
+        "combat_stance": "NEUTRAL",
+    }
+    chars = [c for c in get_session_characters(session_id) if c.get("character_id") != cid]
+    chars.append(char_sheet)
+    set_session_characters(session_id, chars)
+
+    gm_mem = None
+    if is_persistent:
+        gm_mem = upsert_gm_memory.invoke(
+            {
+                "title": f"NPC: {npc_name} ({role_title})",
+                "content": gm_dossier,
+                "category": "NPC_SECRET",
+                "is_pinned": True,
+                "is_persistent": True,
+                "session_id": session_id,
+            }
+        )
+
+    return {
+        "npc": {
+            "character_id": cid,
+            "character_name": npc_name,
+            "callsign_or_role": role_title,
+            "age_years": age_years,
+            "inferred_template": tmpl,
+            "public_summary": public_summary,
+            "apparent_condition": "Healthy & Alert",
+            "is_persistent": bool(is_persistent),
+            "gm_character": char_sheet,
+            "psyche_summary": psyche_summary,
+            "top_skills": top_skills,
+            "gm_secret_dossier": gm_dossier,
+        },
+        "gm_memory": gm_mem,
+    }
+
+
 # ============================================================================
 # 5.2 Ruleset & Lore Retrieval
 # ============================================================================
@@ -1062,6 +1323,7 @@ def get_builtin_gm_tools() -> list[Any]:
     return [
         lookup_npc_profile,
         update_npc_state,
+        generate_npc_from_description,
         lookup_character_sheet,
         get_combat_tracker_state,
         advance_combat_tracker,

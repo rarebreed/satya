@@ -15,6 +15,7 @@ pub mod gm_api;
 pub mod gm_docs;
 pub mod gm_persistence;
 pub mod http_handlers;
+pub mod npcs;
 pub mod state;
 pub mod ws;
 
@@ -23,6 +24,7 @@ pub use gm_api::*;
 pub use gm_docs::*;
 pub use gm_persistence::*;
 pub use http_handlers::*;
+pub use npcs::*;
 pub use state::*;
 pub use ws::*;
 
@@ -79,6 +81,14 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             get(gm_omnisearch_lookup_handler),
         )
         .route(
+            "/api/sessions/:session_id/npcs",
+            get(list_session_npcs_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/npcs/generate",
+            post(generate_session_npc_handler),
+        )
+        .route(
             "/api/gm/sessions/:session_id/context",
             get(gm_session_context_handler),
         )
@@ -93,6 +103,14 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route(
             "/api/gm/sessions/:session_id/lookup",
             get(gm_omnisearch_lookup_handler),
+        )
+        .route(
+            "/api/gm/sessions/:session_id/npcs",
+            get(list_session_npcs_handler),
+        )
+        .route(
+            "/api/gm/sessions/:session_id/npcs/generate",
+            post(generate_session_npc_handler),
         )
         .route(
             "/api/gm/sessions/:session_id/chat",
@@ -1688,6 +1706,76 @@ mod tests {
             hydrated_ctx.combat_tracker.unwrap().tick,
             6
         );
+
+        // 7. Generate an NPC ("Terry is a kind general MD, but needs to feel like she belongs") and verify GM vs Player visibility
+        state
+            .auth
+            .join_session(
+                &sara_user,
+                "camp-persist-1",
+                "room-pw",
+                SessionRole::Player,
+                None,
+            )
+            .await
+            .unwrap();
+
+        let npc_gen_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/sessions/camp-persist-1/npcs/generate")
+                    .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_vec(&satya_schema::GenerateNpcRequest {
+                            prompt: "Terry is a kind general MD, but needs to feel like she belongs"
+                                .to_string(),
+                            name_override: None,
+                            template: Some("AUTO".to_string()),
+                            career_terms: 2,
+                            seed: 42,
+                            gm_secret_notes: Some("Working undercover clinic shifts for free.".to_string()),
+                            is_persistent: true,
+                            campaign_tag: Some("camp-persist-1".to_string()),
+                        })
+                        .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(npc_gen_res.status(), StatusCode::OK);
+        let npc_gen_bytes = to_bytes(npc_gen_res.into_body(), 128 * 1024).await.unwrap();
+        let npc_gen_resp: satya_schema::GenerateNpcResponse =
+            serde_json::from_slice(&npc_gen_bytes).unwrap();
+        assert_eq!(npc_gen_resp.npc.character_name, "Terry");
+        assert!(npc_gen_resp.npc.gm_character.is_some());
+        assert!(npc_gen_resp.gm_memory.is_some());
+
+        // Player listing NPCs sees public summary only (gm_character & gm_secret_dossier redacted)
+        let player_npcs_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/sessions/camp-persist-1/npcs")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(player_npcs_res.status(), StatusCode::OK);
+        let player_npcs_bytes = to_bytes(player_npcs_res.into_body(), 128 * 1024).await.unwrap();
+        let player_npcs: satya_schema::SessionNpcsResponse =
+            serde_json::from_slice(&player_npcs_bytes).unwrap();
+        assert!(!player_npcs.viewer_can_see_gm_secrets);
+        assert_eq!(player_npcs.npcs.len(), 1);
+        assert_eq!(player_npcs.npcs[0].character_name, "Terry");
+        assert!(player_npcs.npcs[0].gm_character.is_none());
+        assert!(player_npcs.npcs[0].gm_secret_dossier.is_none());
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

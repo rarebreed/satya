@@ -559,4 +559,43 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
 
     let empty_dd = wasm_client::format_ttrpg_skill_dropdown_html("zzzz_nonexistent_skill", &default_sheet);
     assert!(empty_dd.contains("No canonical skills matched"));
+
+    // Verify NPC List tab & Role-Filtered GM/Solo vs Player NPC card formatting
+    assert!(html.contains(r#"id="tab-btn-npcs""#));
+    assert!(html.contains(r#"id="notebook-pane-npcs""#));
+    assert!(html.contains(r#"id="npc-roster-select""#));
+    assert!(html.contains(r#"id="npc-selected-card-container""#));
+    assert!(html.contains(r#"id="npc-generator-panel""#));
+    assert!(html.contains(r#"id="npc-gen-prompt""#));
+    assert!(html.contains(r#"id="npc-gen-template""#));
+    assert!(html.contains(r#"id="btn-generate-npc""#));
+
+    let terry_entry = satya_schema::SessionNpcEntry {
+        character_id: "npc_terry".to_string(),
+        character_name: "Terry".to_string(),
+        callsign_or_role: "General MD & Clinical Physician".to_string(),
+        age_years: 26,
+        public_summary: "Terry — General MD & Clinical Physician (Age 26). Apparent demeanor: kind general MD.".to_string(),
+        apparent_condition: "Healthy & Alert".to_string(),
+        is_persistent: true,
+        gm_character: None,
+        psyche_summary: vec![
+            "SLF 5 (Altruistic / Self-Sacrificing)".to_string(),
+            "BLG 16 (Tribal / Group-Dependent)".to_string(),
+        ],
+        top_skills: vec!["Clinical Diagnosis & Internal Medicine (N=3)".to_string()],
+        gm_secret_dossier: Some("Secretly treating wounded couriers for free.".to_string()),
+    };
+
+    let gm_card_html = wasm_client::format_npc_card_html(&terry_entry, true);
+    assert!(gm_card_html.contains("BLG 16 (Tribal / Group-Dependent)"));
+    assert!(gm_card_html.contains("Clinical Diagnosis &amp; Internal Medicine (N=3)"));
+    assert!(gm_card_html.contains("Secretly treating wounded couriers for free."));
+
+    let player_card_html = wasm_client::format_npc_card_html(&terry_entry, false);
+    assert!(player_card_html.contains("Terry"));
+    assert!(player_card_html.contains("General MD &amp; Clinical Physician"));
+    assert!(!player_card_html.contains("BLG 16"));
+    assert!(!player_card_html.contains("Secretly treating wounded couriers for free."));
+    assert!(player_card_html.contains("Player View: GM-only Characteristics"));
 }

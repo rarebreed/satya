@@ -619,3 +619,24 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
         assert body["turn_logs_count"] >= 1
     finally:
         set_chat_model_override(None)
+
+    from satya_ml.ai_gm.tools import generate_npc_from_description, lookup_character_sheet
+
+    terry_res = generate_npc_from_description.invoke(
+        {
+            "description": "Terry is a kind general MD, but needs to feel like she belongs",
+            "template": "AUTO",
+            "career_terms": 2,
+            "is_persistent": True,
+            "session_id": "npc-gen-session",
+        }
+    )
+    assert terry_res["npc"]["character_name"] == "Terry"
+    assert terry_res["npc"]["callsign_or_role"] == "General MD & Clinical Physician"
+    assert any("BLG 16" in s for s in terry_res["npc"]["psyche_summary"])
+    assert any("SLF 5" in s for s in terry_res["npc"]["psyche_summary"])
+    assert any("clinical_diagnosis_internal_medicine" in s for s in terry_res["npc"]["top_skills"])
+    bound_terry = lookup_character_sheet.invoke(
+        {"character_name_or_id": "Terry", "session_id": "npc-gen-session"}
+    )
+    assert bound_terry["character_name"] == "Terry"

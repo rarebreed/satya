@@ -16,20 +16,21 @@ use satya_schema::{
 };
 use wasm_bindgen::prelude::*;
 
-/// Canonical list of the 9 Tabbed Notebook tab slugs and their `(button_id, pane_id)` pairs.
+/// Canonical list of the 10 Tabbed Notebook tab slugs and their `(button_id, pane_id)` pairs.
 pub const NOTEBOOK_TABS: &[(&str, &str, &str)] = &[
     ("maps", "tab-btn-maps", "notebook-pane-maps"),
     ("dice", "tab-btn-dice", "notebook-pane-dice"),
     ("model", "tab-btn-model", "notebook-pane-model"),
     ("character", "tab-btn-character", "notebook-pane-character"),
     ("wizard", "tab-btn-wizard", "notebook-pane-wizard"),
+    ("npcs", "tab-btn-npcs", "notebook-pane-npcs"),
     ("combat", "tab-btn-combat", "notebook-pane-combat"),
     ("rules", "tab-btn-rules", "notebook-pane-rules"),
     ("docs", "tab-btn-docs", "notebook-pane-docs"),
     ("iggy", "tab-btn-iggy", "notebook-pane-iggy"),
 ];
 
-/// Canonical list of the 9 Tabbed Notebook tabs with `(slug, button_id, pane_id, label)` for SSR and Wasm.
+/// Canonical list of the 10 Tabbed Notebook tabs with `(slug, button_id, pane_id, label)` for SSR and Wasm.
 pub const NOTEBOOK_TAB_SPECS: &[(&str, &str, &str, &str)] = &[
     ("maps", "tab-btn-maps", "notebook-pane-maps", "Maps"),
     ("dice", "tab-btn-dice", "notebook-pane-dice", "3D Dice"),
@@ -45,6 +46,12 @@ pub const NOTEBOOK_TAB_SPECS: &[(&str, &str, &str, &str)] = &[
         "tab-btn-wizard",
         "notebook-pane-wizard",
         "Character Wizard",
+    ),
+    (
+        "npcs",
+        "tab-btn-npcs",
+        "notebook-pane-npcs",
+        "NPC List",
     ),
     (
         "combat",
@@ -116,6 +123,8 @@ pub fn satya_select_notebook_tab(tab_id: String) {
         render_combat_tracker();
     } else if target == "docs" {
         satya_refresh_gm_documents();
+    } else if target == "npcs" {
+        crate::wasm_client::npcs::satya_refresh_npcs_tab();
     } else if target == "character" {
         crate::wasm_client::character_sheet::render_character_sheet();
     } else if target == "wizard" {

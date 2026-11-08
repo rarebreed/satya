@@ -243,6 +243,162 @@ pub fn NotebookReferencePanes() -> impl IntoView {
             ></div>
         </div>
 
+        // --- TAB: NPC LIST & QUICK NPC GENERATOR (ROLE-FILTERED PLAYER vs GM/SOLO VIEW) ---
+        <div
+            id="notebook-pane-npcs"
+            role="tabpanel"
+            aria-labelledby="tab-btn-npcs"
+            data-notebook-pane="npcs"
+            class="notebook-pane"
+            style="display: none;"
+        >
+            <div class="pane-toolbar">
+                <div>
+                    <span class="subtitle">
+                        "Session NPC Roster & Quick NPC Roll-Up (Public Summary for Players · Full Psyche, Skills & Secrets for GM / Solo Mode)"
+                    </span>
+                </div>
+                <div class="btn-row-compact">
+                    <span id="npc-roster-count-pill" class="pill pill-iggy">"1 NPCs"</span>
+                    <span id="npc-list-visibility-badge" class="pill pill-accent">
+                        "GM / Solo View (Full Stats, Psyche & Secrets Visible)"
+                    </span>
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaRefreshNpcsTab()"
+                        on:click=move |_| wasm_client::satya_refresh_npcs_tab()
+                    >
+                        "Refresh NPCs"
+                    </button>
+                </div>
+            </div>
+
+            // --- 1. NPC SELECTOR & SHORTENED DISPLAY CARD ---
+            <div class="roster-bar">
+                <span class="roster-title">"1. Select Session NPC to Inspect:"</span>
+                <div class="form-grid">
+                    <label>
+                        <span>"Active Session & Campaign NPCs"</span>
+                        <select
+                            id="npc-roster-select"
+                            onchange="window.satyaSelectNpcFromList()"
+                            on:change=move |_| wasm_client::satya_select_npc_from_list()
+                        >
+                            <option value="npc_demo_terry">
+                                "Terry — General MD & Clinical Physician (Age 26)"
+                            </option>
+                        </select>
+                    </label>
+                </div>
+                <div id="npc-selected-card-container" class="gm-docs-list">
+                    <div class="gm-doc-card">
+                        <div class="gm-doc-header">
+                            <div>
+                                <strong>"Terry"</strong>
+                                <span class="muted">" · General MD & Clinical Physician (Age 26)"</span>
+                            </div>
+                            <div class="btn-row-compact">
+                                <span class="pill pill-active">"Healthy & Alert"</span>
+                                <span class="pill pill-accent">"Persistent Campaign NPC"</span>
+                            </div>
+                        </div>
+                        <div class="gm-doc-meta">
+                            <strong>"Public Appearance & Demeanor (Visible to All Players):"</strong>
+                            <br />
+                            "Terry — General MD & Clinical Physician (Age 26). Apparent demeanor: Terry is a kind general MD, but needs to feel like she belongs."
+                        </div>
+                        <div class="gm-doc-meta">
+                            <strong>"GM / Solo Only — 7 Bipolar Psyche Highlights:"</strong>
+                            " SLF 5 (Altruistic / Self-Sacrificing) · AGG 5 (Passive / Conflict-Averse / Gentle) · EGO 7 (Humble / Self-Effacing) · BLG 16 (Tribal / Group-Dependent) · OPN 14 (Curious / Open-Minded)"
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            // --- 2. GM / SOLO QUICK NPC ROLL-UP GENERATOR ---
+            <div id="npc-generator-panel" class="roster-bar">
+                <span class="roster-title">
+                    "2. Quick NPC Roll-Up Generator (GM & Solo Mode Only — Hidden from Non-GM Players):"
+                </span>
+                <div class="form-grid">
+                    <label>
+                        <span>"Natural-Language NPC Description / Personality & Role Prompt"</span>
+                        <input
+                            id="npc-gen-prompt"
+                            type="text"
+                            value="Terry is a kind general MD, but needs to feel like she belongs"
+                            placeholder="e.g. Terry is a kind general MD, but needs to feel like she belongs"
+                        />
+                    </label>
+                    <label>
+                        <span>"Archetype Template (or Auto-Infer from Prompt)"</span>
+                        <select id="npc-gen-template">
+                            <option value="AUTO">"Auto-Infer from Description"</option>
+                            <option value="MEDICAL_DOCTOR">"General MD / Physician / Surgeon"</option>
+                            <option value="COMBAT_SOLDIER">"Combat Soldier / Tactical Operator"</option>
+                            <option value="DETECTIVE_INVESTIGATOR">"Detective / Law Enforcement Investigator"</option>
+                            <option value="SYNDICATE_ENFORCER">"Syndicate Enforcer / Underworld Fixer"</option>
+                            <option value="STEM_ENGINEER">"STEM Scientist / Cyber & Robotics Engineer"</option>
+                            <option value="INTELLIGENCE_OPERATIVE">"Clandestine Intelligence Operative / Handler"</option>
+                            <option value="BLUE_COLLAR_TECH">"Blue-Collar Technician / Mechanic / Pilot"</option>
+                            <option value="FRONTIER_RANGER">"Frontier Ranger / Wilderness Scout & Herbalist"</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>"Optional Name Override"</span>
+                        <input
+                            id="npc-gen-name"
+                            type="text"
+                            placeholder="Leave blank to extract from prompt"
+                        />
+                    </label>
+                    <label>
+                        <span>"Adult 4-Year Career Terms"</span>
+                        <select id="npc-gen-terms">
+                            <option value="1">"1 Term (Age 22)"</option>
+                            <option value="2" selected>"2 Terms (Age 26)"</option>
+                            <option value="3">"3 Terms (Age 30)"</option>
+                            <option value="4">"4 Terms (Age 34)"</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="form-grid">
+                    <label>
+                        <span>"Optional GM-Only Secret Agenda / Notes (Never Shown to Players)"</span>
+                        <input
+                            id="npc-gen-secret"
+                            type="text"
+                            placeholder="e.g. Quietly treating wounded couriers off the books to earn their trust..."
+                        />
+                    </label>
+                    <label class="inline-label">
+                        <input id="npc-gen-persist" type="checkbox" checked />
+                        <span>"Persist NPC & GM Memory Across Campaign Sessions"</span>
+                    </label>
+                </div>
+                <div class="btn-row">
+                    <button
+                        type="button"
+                        id="btn-generate-npc"
+                        class="btn btn-sm btn-accent"
+                        onclick="window.satyaGenerateNpcFromPrompt()"
+                        on:click=move |_| wasm_client::satya_generate_npc_from_prompt()
+                    >
+                        "Roll Up NPC & Assign Skills + Psyche"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaLoadSelectedNpcToSheet()"
+                        on:click=move |_| wasm_client::satya_load_selected_npc_to_sheet()
+                    >
+                        "Open Selected NPC in Character Sheet Tab"
+                    </button>
+                </div>
+            </div>
+        </div>
+
         // --- TAB 7: GM_ONLY DOCUMENTS (TEXT/MARKDOWN & GOOGLE DOCS/SHEETS) ---
         <div
             id="notebook-pane-docs"

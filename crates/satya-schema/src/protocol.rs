@@ -923,3 +923,81 @@ pub struct RulesBookCatalogResponse {
     #[serde(default)]
     pub search_hits: Vec<RulesSearchHit>,
 }
+
+fn default_npc_career_terms() -> usize {
+    2
+}
+
+/// HTTP request body for `POST /api/sessions/:session_id/npcs/generate` (and `/api/gm/sessions/:session_id/npcs/generate`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GenerateNpcRequest {
+    /// Free-text description of the NPC (e.g., `"Terry is a kind general MD, but needs to feel like she belongs"`).
+    pub prompt: String,
+    /// Optional explicit name override.
+    #[serde(default)]
+    pub name_override: Option<String>,
+    /// Optional archetype code (`"AUTO"`, `"MEDICAL_DOCTOR"`, `"COMBAT_SOLDIER"`, `"DETECTIVE_INVESTIGATOR"`, etc.).
+    #[serde(default)]
+    pub template: Option<String>,
+    /// Number of 4-year adult career terms (`1..=4`, default `2`).
+    #[serde(default = "default_npc_career_terms")]
+    pub career_terms: usize,
+    /// Optional deterministic seed (`0` hashes `prompt`).
+    #[serde(default)]
+    pub seed: u64,
+    /// Optional extra GM-only secret note to attach to the NPC dossier.
+    #[serde(default)]
+    pub gm_secret_notes: Option<String>,
+    /// Whether to persist the generated NPC and its GM memory note across restarts (`default = true`).
+    #[serde(default = "default_true_flag")]
+    pub is_persistent: bool,
+    /// Optional campaign tag override scoping the persistent NPC memory.
+    #[serde(default)]
+    pub campaign_tag: Option<String>,
+}
+
+/// Role-filtered NPC summary entry returned in [`SessionNpcsResponse`] and [`GenerateNpcResponse`].
+///
+/// Players receive only the public fields (`character_id`, `character_name`, `callsign_or_role`,
+/// `age_years`, `public_summary`, `apparent_condition`), whereas Game Masters and Solo-Mode players
+/// also receive `gm_character`, `psyche_summary`, `top_skills`, and `gm_secret_dossier`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionNpcEntry {
+    pub character_id: String,
+    pub character_name: String,
+    pub callsign_or_role: String,
+    pub age_years: i32,
+    pub public_summary: String,
+    pub apparent_condition: String,
+    #[serde(default)]
+    pub is_persistent: bool,
+    /// Populated only for `GM` or in Solo / AI-GM mode (`None` for non-GM players when a human GM runs the table).
+    #[serde(default)]
+    pub gm_character: Option<crate::character::CharacterSheetRecord>,
+    /// Populated only for `GM` or in Solo / AI-GM mode.
+    #[serde(default)]
+    pub psyche_summary: Vec<String>,
+    /// Populated only for `GM` or in Solo / AI-GM mode (`"Skill Name (N=3)"`).
+    #[serde(default)]
+    pub top_skills: Vec<String>,
+    /// Populated only for `GM` or in Solo / AI-GM mode.
+    #[serde(default)]
+    pub gm_secret_dossier: Option<String>,
+}
+
+/// HTTP response body for `POST /api/sessions/:session_id/npcs/generate`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GenerateNpcResponse {
+    pub npc: SessionNpcEntry,
+    #[serde(default)]
+    pub gm_memory: Option<GmMemoryNoteRecord>,
+}
+
+/// HTTP response body for `GET /api/sessions/:session_id/npcs`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionNpcsResponse {
+    pub session_id: String,
+    pub campaign_tag: String,
+    pub viewer_can_see_gm_secrets: bool,
+    pub npcs: Vec<SessionNpcEntry>,
+}

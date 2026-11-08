@@ -638,7 +638,17 @@ pub fn auto_allocate_career_and_elective_skills(
                 preview_next_skill_step_sp(sk_id, target_n, cfg, &ledger, chars, aptitudes);
             if affordable {
                 skills.insert(sk_id.to_string(), target_n);
-                made_progress = true;
+                let post_ledger =
+                    compute_skill_allocation_sp_ledger(baseline, cfg, chars, aptitudes, skills);
+                if post_ledger.formal_sp_spent <= post_ledger.formal_sp_budget
+                    && post_ledger.experience_sp_spent <= post_ledger.experience_sp_budget
+                {
+                    made_progress = true;
+                } else if cur_n == 0 {
+                    skills.remove(sk_id);
+                } else {
+                    skills.insert(sk_id.to_string(), cur_n);
+                }
             }
         }
         if !made_progress {

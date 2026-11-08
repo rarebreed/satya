@@ -9,7 +9,7 @@ When reading, adding, or refactoring code in `crates/satya-signaling`, activate 
      - `state.rs`: Shared `SignalingAppState`, message visibility target resolution (`resolve_message_targets`), WebSocket fanout, and disconnect lifecycle processing.
      - `http_handlers.rs`: SSR shell (`/`), `/api/rules/*`, `/api/auth/*`, `/api/sessions/*`, and `/api/storage/*` admin endpoints.
      - `gm_api.rs`: AI Game Master bridge endpoints (`/api/sessions/:id/gm-config`, `/api/gm/sessions/:id/*`), Co-Pilot vs. Autonomous trigger filters, and FastAPI LangGraph turn dispatch.
-     - `gm_docs.rs` & companion modules: `GM_ONLY` document vault (`/api/sessions/:id/docs`), persistent GM memory/notes, unified GM omnisearch (`/api/sessions/:id/lookup`), HTML/script stripping, minor-safety filtering, and prompt-injection neutralization.
+     - `gm_docs.rs`, `gm_persistence.rs` & `npcs.rs`: `GM_ONLY` document vault (`/api/sessions/:id/docs`), persistent GM memory/notes, unified GM omnisearch (`/api/sessions/:id/lookup`), prompt-driven NPC generation & role-filtered NPC roster (`/api/sessions/:id/npcs`), HTML/script stripping, minor-safety filtering, and prompt-injection neutralization.
      - `characters.rs`: Character persistence (`/api/characters/*`), `.satyachar` portable bundle export/import, HMAC-SHA256 anti-cheat verification (`satya_engine::verify_character_sheet_legality`), and multimodal character assets.
      - `ws.rs`: Full-duplex `/ws/session` WebSocket upgrade, real-time chat, WebRTC SDP/ICE relay, prosody telemetry, and TTRPG task resolution.
 

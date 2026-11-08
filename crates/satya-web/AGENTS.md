@@ -4,8 +4,8 @@ When reading, adding, or refactoring code in `crates/satya-web`, activate the [`
 
 1. **Hard File Size Ceiling (`<= 45 KB` / `< 46,080` bytes) & Flat Re-Exports**:
    - Every `.rs` and `.css` file in `crates/satya-web/src/` MUST remain under `45 KB` (~1,000 lines) so it fits inside a single AI agent `read_file` call without truncation.
-   - Keep SSR views split across `lib.rs` (app shell), `views_gate.rs` (header + auth/session gate), `views_notebook.rs` + `views_notebook_docs.rs` (left 9-tab Tabletop Notebook), `views_workspace.rs` (center chat/task roller + right WebRTC dock), and `tests.rs`.
-   - Keep large `wasm_client/` domains split into companion modules (`notebook.rs` + `gm_docs.rs`, `dice_3d.rs` + `dice_3d_wgpu.rs`, `wizard.rs` + `wizard_views_stats.rs` + `wizard_views_lifepath.rs` + `wizard_views_skills.rs`) and re-export `pub use companion::*;` in both the parent module and `wasm_client/mod.rs`.
+   - Keep SSR views split across `lib.rs` (app shell), `views_gate.rs` (header + auth/session gate), `views_notebook.rs` + `views_notebook_docs.rs` (left 10-tab Tabletop Notebook including `NPC List`), `views_workspace.rs` (center chat/task roller + right WebRTC dock), and `tests.rs`.
+   - Keep large `wasm_client/` domains split into companion modules (`notebook.rs` + `gm_docs.rs` + `npcs.rs`, `dice_3d.rs` + `dice_3d_wgpu.rs`, `wizard.rs` + `wizard_views_stats.rs` + `wizard_views_lifepath.rs` + `wizard_views_skills.rs`) and re-export `pub use companion::*;` in both the parent module and `wasm_client/mod.rs`.
    - Keep CSS split between `styles.css` (core layout, gate, chat, WebRTC, 3D dice/model) and `styles_notebook.css` (GM Docs, Rules Book `.satya-rules-article`, and Character Wizard `.wiz-*`).
 
 2. **Declarative `window.satya*` Registration (`bind_window_callbacks!`)**:

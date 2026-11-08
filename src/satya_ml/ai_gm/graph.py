@@ -133,6 +133,7 @@ def _classify_tool_tier(tool_name: str) -> tuple[str, str]:
     if tool_name in {
         "lookup_npc_profile",
         "update_npc_state",
+        "generate_npc_from_description",
         "lookup_character_sheet",
         "query_satya_rules",
     }:
@@ -434,6 +435,7 @@ def build_ai_gm_graph(
             if "session_id" not in t_args and t_name in {
                 "lookup_npc_profile",
                 "update_npc_state",
+                "generate_npc_from_description",
                 "lookup_character_sheet",
                 "get_combat_tracker_state",
                 "advance_combat_tracker",

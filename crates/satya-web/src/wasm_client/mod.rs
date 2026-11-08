@@ -27,6 +27,7 @@ pub mod dom;
 pub mod gm_docs;
 pub mod menu;
 pub mod notebook;
+pub mod npcs;
 pub mod options;
 pub mod state;
 pub mod telemetry;
@@ -43,6 +44,7 @@ pub use dice_3d::*;
 pub use dom::*;
 pub use menu::*;
 pub use notebook::*;
+pub use npcs::*;
 pub use options::*;
 pub use state::*;
 pub use telemetry::*;
@@ -177,6 +179,10 @@ pub fn register_window_bindings() {
         "satyaDeleteGmMemory" => satya_delete_gm_memory(String),
         "satyaRefreshGmMemories" => satya_refresh_gm_memories(),
         "satyaSearchGmOmnisearch" => satya_search_gm_omnisearch(),
+        "satyaRefreshNpcsTab" => satya_refresh_npcs_tab(),
+        "satyaSelectNpcFromList" => satya_select_npc_from_list(),
+        "satyaGenerateNpcFromPrompt" => satya_generate_npc_from_prompt(),
+        "satyaLoadSelectedNpcToSheet" => satya_load_selected_npc_to_sheet(),
 
         // 6-Step Character Creation Wizard
         "satyaWizardSetStep" => satya_wizard_set_step(u8),

@@ -3,7 +3,7 @@
 
 use satya_schema::{
     AuthSuccessResponse, ChannelContext, GmDocumentRecord, GmMemoryNoteRecord, Participant,
-    SessionMode,
+    SessionMode, SessionNpcEntry,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -92,6 +92,12 @@ pub struct SatyaWasmState {
     pub gm_documents: Vec<GmDocumentRecord>,
     /// Cached persistent and session-scoped GM memory notes for the active session/campaign.
     pub gm_memories: Vec<GmMemoryNoteRecord>,
+    /// Cached NPC entries for the `NPC List` tab (`#notebook-pane-npcs`).
+    pub session_npcs: Vec<SessionNpcEntry>,
+    /// Currently selected NPC `character_id` in the `NPC List` tab.
+    pub selected_npc_id: Option<String>,
+    /// Whether the current viewer is allowed to see GM-only NPC secrets (`true` for GM or in Solo/AI mode; `false` for non-GM players when a human GM runs the session).
+    pub viewer_can_see_gm_secrets: bool,
     /// Interactive state for the Character Creation Wizard notebook tab (`#notebook-pane-wizard`).
     pub wizard: crate::wasm_client::wizard::CharacterWizardState,
     /// Interactive state for the Character Sheet / Status notebook tab (`#notebook-pane-character`).
@@ -135,6 +141,9 @@ impl Default for SatyaWasmState {
             google_picker_api_key: None,
             gm_documents: Vec::new(),
             gm_memories: Vec::new(),
+            session_npcs: Vec::new(),
+            selected_npc_id: None,
+            viewer_can_see_gm_secrets: true,
             wizard: crate::wasm_client::wizard::CharacterWizardState::default(),
             character_sheet: crate::wasm_client::character_sheet::CharacterSheetState::default(),
         }
