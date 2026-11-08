@@ -19,7 +19,11 @@ from satya_ml.ai_gm.telemetry import (
     SatyaTurnLogBufferHandler,
     turn_telemetry_scope,
 )
-from satya_ml.ai_gm.tools import _gm_service_token, load_ai_gm_toml_config
+from satya_ml.ai_gm.tools import (
+    _gm_service_token,
+    load_ai_gm_toml_config,
+    set_session_scenario_director,
+)
 
 logger = logging.getLogger("satya_ml.ai_gm.server")
 
@@ -122,6 +126,25 @@ class AiGmTurnEventPayload(BaseModel):
     lineage_id: str | None = None
 
 
+class ScenarioBeatRequestPayload(BaseModel):
+    """Payload for `POST /internal/ai-gm/scenario-beat` to trigger a proactive world beat."""
+
+    session_id: str
+    task_slug: str = "auto"
+    custom_context: str = ""
+    flow_mode: str | None = None
+    campaign_premise: str | None = None
+    planned_beats: list[str] | None = None
+    player_desires: list[str] | None = None
+    event_weights: dict[str, float] | None = None
+    beat_probability_per_turn: float | None = None
+    beat_interval_turns: int | None = None
+    rng_seed: int | None = None
+    operating_mode: str = "AUTONOMOUS"
+    provider: str | None = None
+    model_id: str | None = None
+
+
 def _verify_service_auth(authorization: str | None) -> None:
     expected = f"Bearer {_gm_service_token()}"
     if authorization != expected:
@@ -181,13 +204,22 @@ def handle_ai_gm_event(
         or "http://127.0.0.1:11434"
     )
 
+    effective_actor = payload.trigger_actor or payload.actor
+    effective_content = payload.context_text if payload.context_text is not None else payload.content
+    effective_event_id = payload.trigger_event_id or payload.event_id
+    effective_lineage_id = (
+        (x_satya_lineage_id if isinstance(x_satya_lineage_id, str) else None)
+        or payload.lineage_id
+        or effective_event_id
+    )
+    raw_provider_key = x_satya_provider_key if isinstance(x_satya_provider_key, str) else None
     llm_cfg = SessionLlmConfig(
         provider=provider,  # type: ignore[arg-type]
         model_id=model_id,
         vision_model_id=vision_model_id,
         temperature=temperature,
         base_url=base_url,
-        api_key=x_satya_provider_key,
+        api_key=raw_provider_key,
     )
 
     graph = build_ai_gm_graph(
@@ -197,10 +229,6 @@ def handle_ai_gm_event(
     )
 
     op_mode = "co_pilot" if "co_pilot" in payload.operating_mode.lower() else "autonomous"
-    effective_actor = payload.trigger_actor or payload.actor
-    effective_content = payload.context_text if payload.context_text is not None else payload.content
-    effective_event_id = payload.trigger_event_id or payload.event_id
-    effective_lineage_id = x_satya_lineage_id or payload.lineage_id or effective_event_id
     actor_display = (
         (effective_actor or {}).get("display_name")
         or (effective_actor or {}).get("username")
@@ -239,6 +267,7 @@ def handle_ai_gm_event(
             "roster": payload.roster,
             "trigger_event": {
                 "event_id": effective_event_id,
+                "trigger_kind": payload.trigger_kind,
                 "actor": effective_actor,
                 "channel": payload.channel or payload.visibility,
                 "content": effective_content,
@@ -277,8 +306,87 @@ def handle_ai_gm_event(
             "api_key_status": redact_api_key(x_satya_provider_key),
             "final_channel": result.get("final_channel"),
             "final_reply": result.get("final_reply"),
+            "active_director_mandate": result.get("active_director_mandate", ""),
+            "scenario_director": result.get("scenario_director"),
             "tool_invocations_count": tool_count,
             "turn_logs_count": len(telemetry.log_buffer),
+        }
+
+
+@app.post("/internal/ai-gm/scenario-beat")
+def handle_scenario_beat(
+    payload: ScenarioBeatRequestPayload,
+    authorization: str | None = Header(default=None),
+    x_satya_provider_key: str | None = Header(default=None),
+    traceparent: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Proactively trigger a Scenario Director world beat for `payload.session_id`."""
+    _verify_service_auth(authorization)
+    updates: dict[str, Any] = {}
+    if payload.flow_mode is not None:
+        updates["flow_mode"] = payload.flow_mode
+    if payload.campaign_premise is not None:
+        updates["campaign_premise"] = payload.campaign_premise
+    if payload.planned_beats is not None:
+        updates["planned_beats"] = payload.planned_beats
+    if payload.player_desires is not None:
+        updates["player_desires"] = payload.player_desires
+    if payload.event_weights is not None:
+        updates["event_weights"] = payload.event_weights
+    if payload.beat_probability_per_turn is not None:
+        updates["beat_probability_per_turn"] = payload.beat_probability_per_turn
+    if payload.beat_interval_turns is not None:
+        updates["beat_interval_turns"] = payload.beat_interval_turns
+    if updates:
+        set_session_scenario_director(payload.session_id, updates)
+
+    file_cfg = load_ai_gm_toml_config()
+    llm_cfg = SessionLlmConfig(
+        provider=str(payload.provider or file_cfg.get("default_provider") or "ollama"),  # type: ignore[arg-type]
+        model_id=str(payload.model_id or file_cfg.get("reasoning_model") or "gemma4:12b"),
+        vision_model_id=str(file_cfg.get("vision_model") or "gemma4:12b"),
+        temperature=float(file_cfg.get("temperature") or 0.35),
+        base_url=str(file_cfg.get("ollama_base_url") or "http://127.0.0.1:11434"),
+        api_key=x_satya_provider_key if isinstance(x_satya_provider_key, str) else None,
+    )
+    graph = build_ai_gm_graph(
+        llm_cfg,
+        chat_model=_CHAT_MODEL_OVERRIDE,
+        checkpointer=_SHARED_CHECKPOINTER,
+    )
+    op_mode = "co_pilot" if "co_pilot" in payload.operating_mode.lower() else "autonomous"
+    with turn_telemetry_scope(payload.session_id, traceparent=traceparent) as telemetry:
+        initial_state = {
+            "session_id": payload.session_id,
+            "session_mode": "TTRPG",
+            "operating_mode": op_mode,
+            "trigger_event": {
+                "trigger_kind": "SCENARIO_BEAT",
+                "force_scenario_beat": True,
+                "task_slug": payload.task_slug,
+                "custom_context": payload.custom_context,
+                "rng_seed": payload.rng_seed,
+                "actor": {"user_id": "scenario-director", "display_name": "Scenario Director"},
+                "channel": "PUBLIC",
+                "content": payload.custom_context or f"Trigger proactive scenario beat ({payload.task_slug})",
+                "operating_mode": op_mode,
+                "trace_id": telemetry.trace_id,
+            },
+            "tool_invocations": [],
+        }
+        result = graph.invoke(
+            initial_state,
+            config={"configurable": {"thread_id": payload.session_id}},
+        )
+        return {
+            "status": "ok",
+            "session_id": payload.session_id,
+            "trace_id": telemetry.trace_id,
+            "operating_mode": result.get("operating_mode", op_mode),
+            "final_channel": result.get("final_channel"),
+            "final_reply": result.get("final_reply"),
+            "active_director_mandate": result.get("active_director_mandate", ""),
+            "scenario_director": result.get("scenario_director"),
         }
 
 

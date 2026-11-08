@@ -14,3 +14,6 @@ When reading, adding, or refactoring code in `crates/satya-py` (or Python consum
 
 4. **High-Signal Docstrings (No `#![deny(missing_docs)]`)**:
    - Do not enable `#![deny(missing_docs)]`. Provide concise `//!` module headers and `///` docstrings on exported `#[pyclass]` and `#[pyfunction]` items so Python `help(satya_py)` and IDE hover tooltips remain informative without boilerplate on internal plumbing.
+
+5. **AI Game Master (`src/satya_ml/ai_gm/`) Persona, Markdown & Scenario Director Rules**:
+   - When modifying the Python LangGraph AI GM (`src/satya_ml/ai_gm/`), follow [`src/satya_ml/ai_gm/AGENTS.md`](../../src/satya_ml/ai_gm/AGENTS.md) and [`docs/technical/ai-gm-agent-design.md`](../../docs/technical/ai-gm-agent-design.md).

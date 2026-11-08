@@ -12,4 +12,4 @@ When working on any Rust crate or documentation file in this repository, activat
 - **`crates/satya-storage` (Apache Iggy WAL & Avro Batch Sink)**: [`crates/satya-storage/AGENTS.md`](crates/satya-storage/AGENTS.md)
 - **`crates/satya-signaling` (Axum HTTP/WS Server, Auth, GM Vault & AI GM Bridge)**: [`crates/satya-signaling/AGENTS.md`](crates/satya-signaling/AGENTS.md)
 - **`crates/satya-web` (Leptos SSR + WebAssembly Client)**: Skill [`satya-rust-web`](.agents/skills/satya-rust-web/SKILL.md) · [`crates/satya-web/AGENTS.md`](crates/satya-web/AGENTS.md) · [`docs/technical/rust-web-steering.md`](docs/technical/rust-web-steering.md)
-- **`crates/satya-py` (PyO3 Extension for `satya_ml` & Marimo Notebooks)**: [`crates/satya-py/AGENTS.md`](crates/satya-py/AGENTS.md)
+- **`crates/satya-py` & `src/satya_ml/ai_gm/` (PyO3 Extension, LangGraph AI GM, Markdown Chat & Scenario Director)**: [`crates/satya-py/AGENTS.md`](crates/satya-py/AGENTS.md) · [`src/satya_ml/ai_gm/AGENTS.md`](src/satya_ml/ai_gm/AGENTS.md) · [`docs/technical/ai-gm-agent-design.md`](docs/technical/ai-gm-agent-design.md)

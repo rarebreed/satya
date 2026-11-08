@@ -431,6 +431,170 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                 </div>
             </div>
 
+            // --- SCENARIO & CAMPAIGN DIRECTOR DESIGNER (PLOT GUIDE + EVENT PROBABILITY DIALS) ---
+            <div id="scenario-director-designer-panel" class="roster-bar">
+                <div class="gm-doc-header">
+                    <span class="roster-title">
+                        "Scenario & Campaign Director (LangGraph Flow Mode, Plot Guide & Event Probability Dials):"
+                    </span>
+                    <span id="scenario-dials-summary-pill" class="pill pill-active">
+                        "Beat Odds: 35%/turn (Cap 3t) · Top: Combat & Ambush: 15% · Mysterious Stranger: 11% · New NPC Arrives: 11%"
+                    </span>
+                </div>
+                <div class="preset-users">
+                    <span class="subtitle">"Quick Dial Presets:"</span>
+                    <button
+                        type="button"
+                        class="btn-chip"
+                        onclick="window.satyaApplyScenarioPreset('balanced')"
+                        on:click=move |_| wasm_client::satya_apply_scenario_preset("balanced".to_string())
+                    >
+                        "Balanced Mix"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-chip"
+                        onclick="window.satyaApplyScenarioPreset('combat_heavy')"
+                        on:click=move |_| wasm_client::satya_apply_scenario_preset("combat_heavy".to_string())
+                    >
+                        "Combat & Tactical Heavy"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-chip"
+                        onclick="window.satyaApplyScenarioPreset('intrigue_drama')"
+                        on:click=move |_| wasm_client::satya_apply_scenario_preset("intrigue_drama".to_string())
+                    >
+                        "Intrigue & High Drama"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn-chip"
+                        onclick="window.satyaApplyScenarioPreset('investigation_heist')"
+                        on:click=move |_| wasm_client::satya_apply_scenario_preset("investigation_heist".to_string())
+                    >
+                        "Investigation & Heist"
+                    </button>
+                </div>
+                <div class="form-grid">
+                    <label>
+                        <span>"Director Flow Mode (`flow_mode`)"</span>
+                        <select id="scenario-flow-mode">
+                            <option value="hybrid" selected>
+                                "Hybrid (Overarching Plot Milestones + Weighted Emergent Dials)"
+                            </option>
+                            <option value="scenario_driven">
+                                "Scenario-Driven (Non-Railroaded Overarching Plot Adaptation)"
+                            </option>
+                            <option value="free_form">
+                                "Free-Form Sandbox (Sample Purely from Event Probability Dials)"
+                            </option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>"Campaign Premise / Overarching Scenario Guide"</span>
+                        <input
+                            id="scenario-premise"
+                            type="text"
+                            value="Orbital quarantine aboard Aethelgard Sector 4; rival syndicates vying over synthetic telemetry."
+                            placeholder="e.g. Orbital quarantine aboard Aethelgard Sector 4..."
+                        />
+                    </label>
+                </div>
+                <div class="form-grid">
+                    <label>
+                        <span>
+                            "Per-Turn Emergent Beat Probability (`beat_probability_per_turn`): "
+                            <strong id="scenario-beat-prob-val" class="mono">"35% / turn"</strong>
+                        </span>
+                        <input
+                            id="scenario-beat-prob"
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value="35"
+                            oninput="window.satyaUpdateScenarioDialReadouts()"
+                            on:input=move |_| wasm_client::satya_update_scenario_dial_readouts()
+                        />
+                    </label>
+                    <label>
+                        <span>"Max Rabbit-Hole Turn Ceiling (`beat_interval_turns`, 1-20)"</span>
+                        <input
+                            id="scenario-beat-interval"
+                            type="number"
+                            min="1"
+                            max="20"
+                            value="3"
+                            onchange="window.satyaUpdateScenarioDialReadouts()"
+                            on:change=move |_| wasm_client::satya_update_scenario_dial_readouts()
+                        />
+                    </label>
+                </div>
+                <label>
+                    <span>
+                        "Planned Scenario Milestones / Plot Beats (One per line — AI GM adapts these to player actions without railroading)"
+                    </span>
+                    <textarea
+                        id="scenario-planned-beats"
+                        class="gm-doc-textarea"
+                        rows="3"
+                        placeholder="e.g.\nEncrypted distress beacon from Bio-Lab 3 reveals a survivor.\nSyndicate enforcers lock down the tramway where the crew is operating."
+                    ></textarea>
+                </label>
+                <div>
+                    <span class="subtitle">
+                        "Event Probability Dials (0 = Disable Event Completely · Higher = Higher Relative Probability):"
+                    </span>
+                    <div class="scenario-dial-grid">
+                        {wasm_client::SCENARIO_DIRECTOR_DIAL_SPECS
+                            .iter()
+                            .copied()
+                            .map(|(slug, label, pillar_hint, default_w)| {
+                                let input_id = format!("scenario-dial-{slug}");
+                                let val_id = format!("scenario-dial-val-{slug}");
+                                let default_str = default_w.to_string();
+                                let readout_init = format!("{default_w}");
+                                view! {
+                                    <div class="scenario-dial-card">
+                                        <div class="scenario-dial-header">
+                                            <strong>{label}</strong>
+                                            <span id=val_id class="mono">{readout_init}</span>
+                                        </div>
+                                        <span class="subtitle">{pillar_hint}</span>
+                                        <input
+                                            id=input_id
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            step="5"
+                                            value=default_str
+                                            oninput="window.satyaUpdateScenarioDialReadouts()"
+                                            on:input=move |_| wasm_client::satya_update_scenario_dial_readouts()
+                                        />
+                                    </div>
+                                }
+                            })
+                            .collect_view()}
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <label class="checkbox-label">
+                        <input id="scenario-persistent" type="checkbox" checked=true />
+                        <span>"Persist Scenario Director Config in Campaign/Session SQLite Vault (`mem-scenario-director`)"</span>
+                    </label>
+                    <button
+                        type="button"
+                        id="btn-save-scenario-director"
+                        class="btn btn-sm btn-accent"
+                        onclick="window.satyaSaveScenarioDirectorConfig()"
+                        on:click=move |_| wasm_client::satya_save_scenario_director_config()
+                    >
+                        "Save & Pin Scenario Director Config"
+                    </button>
+                </div>
+            </div>
+
             // --- GM OMNISEARCH PANEL (RULES + PERSISTENT GM DOCS + GM MEMORIES + SHEETS + COMBAT + MAP) ---
             <div class="roster-bar">
                 <span class="roster-title">"0. GM Omnisearch (Unified Lookup Across Rules, Persistent GM Docs, GM Memory, Character Sheets, Combat & Map):"</span>

@@ -61,7 +61,7 @@ def parse_traceparent(header: str | None) -> tuple[str | None, str | None]:
 
     Returns `(trace_id, parent_span_id)` in lowercase hex, or `(None, None)` if invalid.
     """
-    if not header:
+    if not header or not isinstance(header, str):
         return None, None
     m = _TRACEPARENT_RE.match(header)
     if not m:

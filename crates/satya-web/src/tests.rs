@@ -598,4 +598,54 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(!player_card_html.contains("BLG 16"));
     assert!(!player_card_html.contains("Secretly treating wounded couriers for free."));
     assert!(player_card_html.contains("Player View: GM-only Characteristics"));
+
+    // Verify Markdown Chat Composer (<textarea>) & Scenario Director Designer UI in SSR HTML
+    assert!(html.contains(r#"id="chat-input""#));
+    assert!(html.contains(r#"class="chat-markdown-input""#));
+    assert!(html.contains(r#"id="scenario-director-designer-panel""#));
+    assert!(html.contains(r#"id="scenario-flow-mode""#));
+    assert!(html.contains(r#"id="scenario-premise""#));
+    assert!(html.contains(r#"id="scenario-planned-beats""#));
+    assert!(html.contains(r#"id="scenario-beat-prob""#));
+    assert!(html.contains(r#"id="scenario-beat-interval""#));
+    assert!(html.contains(r#"id="scenario-dial-combat_encounter""#));
+    assert!(html.contains(r#"id="scenario-dial-thought_provoking_discussion""#));
+    assert!(html.contains(r#"id="scenario-dial-dramatic_revelation""#));
+    assert!(html.contains(r#"id="btn-save-scenario-director""#));
+
+    // Verify Markdown rendering in Session Chat (bold, italics, lists, blockquotes, code, math, XSS safety)
+    let md_html = wasm_client::format_chat_markdown_html(
+        "**Vance** whispers *urgent* telemetry:\n\n> **[COMMS INTERCEPT]** Lockdown in `Sector 4`\n\n- Breach airlock\n- Negotiate with $\\text{TN}_P = 19$\n\n<script>alert('xss')</script>",
+    );
+    assert!(md_html.contains(r#"class="chat-markdown-body""#));
+    assert!(md_html.contains("<strong>Vance</strong>"));
+    assert!(md_html.contains("<em>urgent</em>"));
+    assert!(md_html.contains("<blockquote"));
+    assert!(md_html.contains(">Sector 4</code>"));
+    assert!(md_html.contains("<li>Breach airlock</li>"));
+    assert!(md_html.contains("rules-math-inline"));
+    assert!(!md_html.contains("<script>"));
+    assert!(md_html.contains("&lt;script&gt;"));
+
+    // Verify Scenario Director JSON serialization from UI controls
+    let dir_json = wasm_client::build_scenario_director_config_json(
+        "hybrid",
+        "Orbital quarantine",
+        "Beat 1: Distress signal\nBeat 2: Enforcer lockdown",
+        40,
+        3,
+        &[
+            ("combat_encounter".to_string(), 60.0),
+            ("thought_provoking_discussion".to_string(), 0.0),
+        ],
+    );
+    let parsed_dir: serde_json::Value = serde_json::from_str(&dir_json).unwrap();
+    assert_eq!(parsed_dir["flow_mode"], "hybrid");
+    assert_eq!(parsed_dir["beat_interval_turns"], 3);
+    assert_eq!(parsed_dir["planned_beats"].as_array().unwrap().len(), 2);
+    assert_eq!(parsed_dir["event_weights"]["combat_encounter"], 60.0);
+    assert_eq!(
+        parsed_dir["event_weights"]["thought_provoking_discussion"],
+        0.0
+    );
 }

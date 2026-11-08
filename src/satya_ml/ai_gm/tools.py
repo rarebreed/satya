@@ -1245,9 +1245,27 @@ def roll_satya_d20_check(
     )
 
 
+from satya_ml.ai_gm.scenario_director import (
+    SCENARIO_DIRECTOR_TASKS,
+    compute_normalized_probabilities,
+    configure_scenario_director,
+    default_event_weights,
+    get_session_scenario_director,
+    normalize_event_weights,
+    resolve_task_slug,
+    select_next_scenario_beat,
+    set_session_scenario_director,
+    sync_scenario_director_from_memories,
+    trigger_scenario_beat,
+)
+
+
 @tool
 def whisper_to_player(session_id: str, target_user_id: str, content: str) -> dict[str, Any]:
-    """Send a private `PRIVATE` message from the AI GM to a single player (`target_user_id`)."""
+    """Send a private `PRIVATE` Markdown message from the AI GM to a single player (`target_user_id`).
+
+    `content` supports full Markdown rendering (`**bold**`, `*italics*`, `> ` blockquotes/alerts, `- ` lists, tables, inline code, and `$...$` math).
+    """
     payload = {
         "visibility": "PRIVATE",
         "recipient_user_ids": [target_user_id],
@@ -1278,7 +1296,10 @@ def narrate_to_session(
     channel: str = "IN_CHARACTER",
     is_hidden_cot: bool = False,
 ) -> dict[str, Any]:
-    """Publish AI GM narration to the session (`PUBLIC` in autonomous mode, or `PRIVATE` to Human GM in co-pilot mode)."""
+    """Publish AI GM Markdown narration to the session (`PUBLIC` in autonomous mode, or `PRIVATE` to Human GM in co-pilot mode).
+
+    `content` supports full Markdown rendering (`**bold**`, `*italics*`, `> ` blockquotes/alerts for comms intercepts, `- ` bullet lists for player choices, tables, inline code, and `$...$` math).
+    """
     mode = get_session_operating_mode(session_id)
     human_gm_id = get_session_human_gm(session_id)
     if mode == "co_pilot" or channel == "GM_WHISPER":
@@ -1338,6 +1359,8 @@ def get_builtin_gm_tools() -> list[Any]:
         roll_satya_d20_check,
         whisper_to_player,
         narrate_to_session,
+        configure_scenario_director,
+        trigger_scenario_beat,
     ]
 
 

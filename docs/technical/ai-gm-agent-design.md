@@ -2,28 +2,30 @@
 
 ## 1. Overview & Architectural Context
 
-Satya is a polyglot **Rust + Python** platform combining real-time WebRTC audio/video, targeted session chat, Satya d20 roll-under TTRPG mechanics, and an Apache Iggy + Apache Avro + PyLance event-streaming pipeline.
+Satya is a polyglot **Rust + Python** platform combining real-time WebRTC audio/video, Markdown-enabled targeted session chat, Satya Two-List Cascading ("Watershed") `2d20` Roll-Over TTRPG mechanics, and an Apache Iggy + Apache Avro + PyLance event-streaming pipeline.
 
-While the core signaling server (`satya-signaling`) and shared wire schemas (`satya-schema`) already model an autonomous AI Game Master participant via:
+The signaling server (`satya-signaling`) and shared wire schemas (`satya-schema`) model an autonomous or co-pilot AI Game Master participant via:
 - `ParticipantKind::AiAgent` and `SessionRole::AiGm`
 - `AiAgentInfo { model_id, persona_id, temperature }`
 - `MessageVisibility::GmOnly` and `ChannelContext::GmNarration`
 - `MechanicEventType::AiGmDecision` in `TtrpgMechanicsEvent`
 
-the current in-process handler (`trigger_ai_gm_chat_reply` in `crates/satya-signaling/src/lib.rs`) is a deterministic stub.
-
-This document specifies the design for replacing that stub with a **stateful, tool-calling AI Game Master Agent** built with **LangGraph**, **LangChain**, and local **Ollama** models (`langchain-ollama`) inside the Python `src/satya_ml/` package, connected to `satya-signaling` through a dedicated **Backend GM API**.
+The **stateful, tool-calling AI Game Master Agent** is implemented with **LangGraph**, **LangChain**, and local **Ollama** or hosted **BYOK** models (`src/satya_ml/ai_gm/`), connected to `satya-signaling` (`crates/satya-signaling/src/{gm_api.rs, ai_bridge.rs, gm_vault.rs}`) through the **Backend GM API**.
 
 ### Key Capabilities of the AI GM Agent
-1. **Stateful Multi-Step Workflows (LangGraph)**: Maintains per-session campaign state, scene context, active count-up combat clocks, and turn memory across player interactions.
-2. **Local LLM + Vision Inference (Ollama)**:
-   - **Reasoning & Tool-Calling Model** (e.g., `gemma4:12b`, `qwen3`, or `llama3.1`) for rules adjudication, NPC roleplay, and structured tool execution.
-   - **Multimodal Vision Model** (e.g., `llama3.2-vision` or `gemma4`) for inspecting tactical maps, room layouts, and token positions.
-3. **Rich Tool Execution (`@tool`)**:
-   - Reading and updating **NPC personalities, abilities, dispositions, and fatigue/wound states**.
-   - Querying **Satya TTRPG rules** (`docs/ttrpg/*.md`), **world lore** (`docs/story/**/*.md`), and **historical session logs** stored in PyLance (`data/lance/*.lance`).
+1. **Stateful 5-Node Workflow with Proactive Scenario Director (LangGraph)**:
+   - Maintains per-session campaign state, scene context, active count-up combat clocks, SQLite-backed GM Memory Vault notes, and turn memory across player interactions.
+   - Includes a dedicated **`scenario_director_node`** supporting **Scenario-Driven** (non-railroaded overarching plot adaptation), **Free-Form** (weighted probability sandbox), and **Hybrid** flows across **12 TTRPG scenario event sub-routines** with player/GM-tunable probability dials (`event_weights`).
+2. **Rich Markdown Session Chat Input & Output**:
+   - Both players (`#chat-input` multi-line Markdown `<textarea>`) and the AI GM (`narrate_to_session`, `whisper_to_player`, and `publish_gm_response`) compose and render rich Markdown via `satya_engine::render_rules_markdown_to_html` (bold/italics, `> ` comms/handout blockquotes and `[!WARNING]` alerts, bulleted action hooks, Markdown tables, inline code, LaTeX math `$...$`, and `mermaid` diagrams).
+3. **Local LLM + Hosted BYOK + Vision Inference**:
+   - **Reasoning & Tool-Calling Model** (local Ollama `gemma4:12b`/`qwen3`/`llama3.1`, or hosted BYOK `Gemini`, `OpenAI`, `Claude`) for rules adjudication, NPC roleplay, and structured tool execution.
+   - **Multimodal Vision Model** (`llama3.2-vision`, `gemma4`, or multimodal cloud models) for inspecting tactical maps, room layouts, and token positions.
+4. **Authoritative Tool Execution (`@tool`)**:
+   - Reading and updating **NPC personalities, abilities, dispositions, and fatigue/wound states**, plus generating new NPCs (`generate_npc_from_description`) and inspecting player character sheets (`lookup_character_sheet`).
+   - Querying **Satya TTRPG rules** (`docs/ttrpg/*.md`), **world lore** (`docs/story/**/*.md`), **SQLite GM Memory Vault** (`gm_vault.rs`), and **historical session logs** stored in PyLance (`data/lance/*.lance`).
    - **Generating, updating, and visually inspecting tactical maps** pushed to the session UI.
-   - Executing authoritative **Satya d20 roll-under task and combat checks** (`TtrpgMechanicsEvent`) and sending **public narrations** (`GM_NARRATION`), **NPC dialogue** (`IN_CHARACTER`), or **targeted private whispers** (`PRIVATE`) back to players via the backend API.
+   - Executing authoritative **Satya Watershed `2d20` roll-over task and combat checks** (`TtrpgMechanicsEvent`), advancing the count-up combat tracker (`advance_combat_tracker`), and sending **public Markdown narrations** (`GM_NARRATION`), **NPC dialogue** (`IN_CHARACTER`), or **targeted private whispers** (`PRIVATE`) back to players via the backend API.
 
 ### 1.1 Three TTRPG Operating Topologies: Autonomous AI GM vs. AI GM Assistant (Co-Pilot)
 
@@ -32,16 +34,16 @@ In addition to `MEETING` mode (`Host + Attendees`), Satya supports **three disti
 | Mode Option Value | UI Label | Human Roles Allowed | AI Participant Present? | AI Operating Behavior & Persona |
 | :--- | :--- | :--- | :--- | :--- |
 | `TTRPG` | **TTRPG Mode (GM + Players)** | `GM`, `PLAYER`, `OBSERVER` | No (`enable_ai_gm = false`) | Traditional human-run tabletop session; no AI agent in the roster. |
-| `TTRPG_GM_AI` | **TTRPG Mode (GM + AI + Players)** | `GM`, `PLAYER`, `OBSERVER` | Yes (`enable_ai_gm = true`, **Co-Pilot / MCP Assistant Mode**) | The **Human GM** is the primary storyteller and authority. The AI acts as a **GM Assistant & MCP Tool Operator**: it listens for whispered/directed commands from the Human GM (e.g., *"Look up Captain Vance's stats"*, *"Generate a 20x15 cargo bay map"*, *"Roll 3d20 for the two sentries"*), executes the corresponding MCP tools, and replies privately (`PRIVATE` / `GM_ONLY`) to the Human GM unless explicitly asked to broadcast to the table. |
-| `TTRPG_AI_GM` | **TTRPG Mode (AI GM + Players)** | `PLAYER`, `OBSERVER` *(no human GM)* | Yes (`enable_ai_gm = true`, **Autonomous Solo AI GM Mode**) | The **AI GM** is the sole Game Master at the table: it proactively adjudicates player actions and rolls, controls NPCs (`IN_CHARACTER`), narrates scenes publicly (`GM_NARRATION`), and sends private perception whispers (`PRIVATE`) to players. |
+| `TTRPG_GM_AI` | **TTRPG Mode (GM + AI + Players)** | `GM`, `PLAYER`, `OBSERVER` | Yes (`enable_ai_gm = true`, **Co-Pilot / MCP Assistant Mode**) | The **Human GM** is the primary storyteller and authority. The AI acts as a **GM Assistant & MCP Tool Operator**: it listens for whispered/directed commands from the Human GM (e.g., *"Look up Captain Vance's stats"*, *"Generate a 20x15 cargo bay map"*, *"Roll 2d20 for the two sentries"*), executes the corresponding MCP tools, and replies privately (`PRIVATE` / `GM_ONLY`) in Markdown to the Human GM unless explicitly asked to broadcast to the table. |
+| `TTRPG_AI_GM` | **TTRPG Mode (AI GM + Players)** | `PLAYER`, `OBSERVER` *(no human GM)* | Yes (`enable_ai_gm = true`, **Autonomous Solo AI GM Mode**) | The **AI GM** is the sole Game Master at the table: it proactively adjudicates player actions and rolls, drives scenario pacing via the **Scenario Director**, controls NPCs (`IN_CHARACTER`), narrates scenes publicly in Markdown (`GM_NARRATION`), and sends private perception whispers (`PRIVATE`) to players. |
 
 #### How LangGraph Switches Between `TTRPG_GM_AI` (Co-Pilot) and `TTRPG_AI_GM` (Autonomous)
-The LangGraph supervisor node inspects whether a human participant with `SessionRole::Gm` is present in `roster`:
+The LangGraph context and supervisor nodes inspect whether a human participant with `SessionRole::Gm` is present in `roster`:
 - **When a Human GM is present (`TTRPG_GM_AI`)**:
   - **Trigger Filter**: The AI Assistant only wakes up when directly addressed (`@satya_ai_gm` or `/msg @satya_ai_gm ...`) or when the Human GM sends a `GM_ONLY` / `PRIVATE` instruction. It does **not** interrupt or overwrite the Human GM on normal public player chat.
   - **Default Output Visibility**: Tool outputs (NPC stat lookups, lore summaries, hidden dice rolls, draft scene descriptions) default to **`MessageVisibility::Private` targeted only at the Human GM**, except when the Human GM asks the AI to perform a table-wide action (such as `generate_tactical_map`, `move_map_token`, or rolling public 3D `wgpu` dice).
 - **When no Human GM is present (`TTRPG_AI_GM`)**:
-  - **Trigger Filter**: The AI GM responds to all `IN_CHARACTER` player actions, `GM_ONLY` whispers, and `TtrpgMechanicsEvent` rolls.
+  - **Trigger Filter**: The AI GM responds to all `IN_CHARACTER` player actions, `GM_ONLY` whispers, `TtrpgMechanicsEvent` rolls, and proactive `SCENARIO_BEAT` triggers.
   - **Default Output Visibility**: World narration defaults to `MessageVisibility::Public` (`ChannelContext::GmNarration`), while secret character observations use `MessageVisibility::Private`.
 
 ---
@@ -51,9 +53,9 @@ The LangGraph supervisor node inspects whether a human participant with `Session
 ```mermaid
 flowchart TD
     subgraph Client["satya-web (Leptos SSR + Rust/Wasm CSR)"]
-        ChatUI["Session Chat & Whisper UI"]
-        RollUI["Satya d20 Task & Combat Drawer"]
-        MapUI["Tactical Map & Scene Canvas"]
+        ChatUI["Markdown Session Chat & Whisper UI\n(#chat-input textarea + render_rules_markdown_to_html)"]
+        RollUI["Satya 2d20 Task & Combat Drawer"]
+        MapUI["Tactical Map & 3D wgpu Dice Canvas"]
     end
 
     subgraph Contracts["satya-schema (Shared Domain & Avro Contracts)"]
@@ -63,9 +65,10 @@ flowchart TD
     end
 
     subgraph Signaling["satya-signaling (Rust Axum HTTP + WebSocket Server)"]
-        WsHub["/ws/session Live Session Hub"]
-        GmApi["Backend GM REST API\n(/api/gm/sessions/:id/*)"]
-        EventBridge["Async AI GM Event Dispatcher"]
+        WsHub["ws_hub.rs (/ws/session Live Session Hub)"]
+        GmApi["gm_api.rs (/api/gm/sessions/:id/*)"]
+        GmVault["gm_vault.rs (SQLite GM Memory & Document Vault)"]
+        EventBridge["ai_bridge.rs (Async AI GM Event Dispatcher)"]
     end
 
     subgraph Storage["satya-storage & PyLance Data Lake"]
@@ -74,11 +77,11 @@ flowchart TD
         LoreDocs[("Markdown Lore & Rules\ndocs/story/* & docs/ttrpg/*")]
     end
 
-    subgraph AiGmService["src/satya_ml/ai_gm (Python LangGraph + Ollama Runtime)"]
-        FastAPI["AI GM Worker / FastAPI Bridge"]
-        Graph["LangGraph StateGraph (Checkpointed per session_id)"]
-        Tools["LangChain @tool Suite\n(NPCs, Rules/Lore RAG, Map Gen/Vision, Rolls, Whispers)"]
-        Ollama[("Local Ollama Server\nChatOllama (Text/Tools + Vision)")]
+    subgraph AiGmService["src/satya_ml/ai_gm (Python LangGraph + Ollama/BYOK Runtime)"]
+        FastAPI["server.py (FastAPI Bridge: /events & /scenario-beat)"]
+        Graph["graph.py (5-Node StateGraph with Scenario Director)"]
+        Tools["tools.py (LangChain @tool Suite:\nNPCs, Rules/Lore, Vault, Maps, 2d20 Rolls, Director)"]
+        Models[("models.py\nOllama + Gemini / OpenAI / Claude")]
     end
 
     ChatUI <-->|"WS Packets"| WsHub
@@ -87,12 +90,13 @@ flowchart TD
     WsHub -->|"Logs Events"| AvroSink
     AvroSink -->|"lance_ingest.py"| LanceDB
     WsHub -->|"Player Chat / Roll Trigger"| EventBridge
-    EventBridge -->|"HTTP POST / Events"| FastAPI
+    EventBridge -->|"HTTP POST /internal/ai-gm/*"| FastAPI
     FastAPI --> Graph
-    Graph <--> Ollama
+    Graph <--> Models
     Graph --> Tools
-    Tools <-->|"Read Lore, Rules, History"| LoreDocs
+    Tools <-->|"Read Lore & Rules"| LoreDocs
     Tools <-->|"Vector / Table Query"| LanceDB
+    Tools <-->|"Search / Read / Upsert"| GmVault
     Tools -->|"REST Callbacks"| GmApi
     GmApi -->|"Broadcast / Whisper + Avro Log"| WsHub
     Contracts -.-> Client
@@ -101,140 +105,119 @@ flowchart TD
 
 | Layer / Component | Path | Responsibility |
 | :--- | :--- | :--- |
-| **Shared Schemas** | `crates/satya-schema/src/lib.rs` | Defines `Participant::ai_gm`, `AiAgentInfo`, `MechanicEventType::AiGmDecision`, and the REST request/response DTOs for `/api/gm/sessions/:id/*`. |
-| **Rust Signaling & GM API** | `crates/satya-signaling/src/lib.rs` | Exposes `/api/gm/sessions/:id/{context,chat,roll,map}`, authenticates the Python AI GM service, logs all AI GM actions to Apache Iggy / Avro, and routes frames over `/ws/session`. |
-| **LangGraph Agent Runtime** | `src/satya_ml/ai_gm/graph.py` | Defines `AiGmSessionState` and the LangGraph `StateGraph` orchestrating perception, retrieval, tool execution, and response synthesis. |
-| **LangChain Tool Suite** | `src/satya_ml/ai_gm/tools.py` | Implements `@tool` functions for NPC lookup, Satya rules/lore retrieval, tactical map generation & vision inspection, d20 rolls, and player whispers. |
-| **Ollama Model Provider** | `src/satya_ml/ai_gm/models.py` | Configures `ChatOllama` instances for tool-calling reasoning, structured JSON output, and multimodal map vision. |
+| **Shared Schemas** | `crates/satya-schema/src/{domain.rs,events.rs,gm_api.rs,character.rs,combat_tracker.rs}` | Defines `Participant::ai_gm`, `AiAgentInfo`, `MechanicEventType::AiGmDecision`, character sheets, combat tracker state, and REST DTOs for `/api/gm/sessions/:id/*`. |
+| **Rust Signaling, Vault & GM API** | `crates/satya-signaling/src/{gm_api.rs,ai_bridge.rs,gm_vault.rs,ws_hub.rs}` | Exposes `/api/gm/sessions/:id/{context,chat,roll,map,combat,memories,documents,trajectory}`, persists SQLite GM Vault notes, authenticates the Python AI GM service, logs all AI GM actions to Apache Iggy / Avro, and routes frames over `/ws/session`. |
+| **Web Client & Markdown Chat** | `crates/satya-web/src/{views_workspace.rs,wasm_client/chat_and_ttrpg.rs}` | Provides the multi-line Markdown `#chat-input` composer and renders incoming/outgoing Markdown chat bodies via `satya_engine::render_rules_markdown_to_html`. |
+| **LangGraph Agent Runtime** | `src/satya_ml/ai_gm/graph.py` | Defines `AiGmSessionState` and the 5-node LangGraph `StateGraph` (`sync_session_context -> scenario_director_node -> gm_supervisor_node <-> tool_execution_node -> publish_gm_response`). |
+| **LangChain Tool Suite** | `src/satya_ml/ai_gm/tools.py` | Implements `@tool` functions for NPC lookup/generation, Satya Watershed `2d20` rules/rolls, GM Memory Vault, tactical maps/vision, combat tracker, and the Scenario Director (`configure_scenario_director`, `trigger_scenario_beat`). |
+| **Model Provider Factory** | `src/satya_ml/ai_gm/models.py` | Configures `ChatOllama` and hosted BYOK (`ChatGoogleGenerativeAI`, `ChatOpenAI`, `ChatAnthropic`) instances for tool-calling reasoning and multimodal map vision. |
 
 ---
 
-## 3. LangGraph Workflow & State Design
+## 3. LangGraph Workflow, Scenario Director & State Design
 
-### 3.1 Per-Session Graph State (`AiGmSessionState`)
+### 3.1 Per-Session Graph State (`AiGmSessionState` & `ScenarioDirectorState`)
 
-Each active TTRPG session with `enable_ai_gm = true` maps to a LangGraph `thread_id` equal to `session_id`. Using a LangGraph checkpointer (`SqliteSaver` or `InMemorySaver`), the agent preserves state across turns:
+Each active TTRPG session with `enable_ai_gm = true` maps to a LangGraph `thread_id` equal to `session_id`:
 
 ```python
-from typing import Annotated, Literal, TypedDict
-from langchain_core.messages import AnyMessage
+from typing import Annotated, Any, Literal, TypedDict
+from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
-class NpcState(TypedDict):
-    npc_id: str
-    name: str
-    role: str
-    personality: str
-    attributes_tn: dict[str, int]
-    skills: dict[str, int]
-    preferred_stance: str          # e.g. "MANEUVER", "POWER", "RANGED_AIMED"
-    fatigue_level: int
-    wound_shock_index: float
-    disposition: str               # e.g. "hostile", "wary", "allied"
+class ScenarioDirectorState(TypedDict, total=False):
+    flow_mode: Literal["hybrid", "scenario_driven", "free_form"]
+    campaign_premise: str
+    player_desires: list[str]
+    planned_beats: list[str]
+    event_weights: dict[str, float]         # Task slug -> relative probability weight (0.0 disables the event)
+    beat_probability_per_turn: float        # 0.0..=1.0 chance of an emergent beat before beat_interval_turns
+    beat_interval_turns: int                # Hard turn ceiling before a world beat breaks a rabbit hole (default 3)
+    turns_since_last_beat: int
+    completed_beats: list[dict[str, Any]]
+    active_mandate: dict[str, Any] | None
 
-class TacticalMapState(TypedDict):
-    map_id: str
-    title: str
-    image_path: str                # Local path or URL to rendered PNG/SVG map
-    grid_width: int
-    grid_height: int
-    tokens: dict[str, tuple[int, int]]  # entity_id -> (x, y) coordinates
-    terrain_notes: str
-
-class AiGmSessionState(TypedDict):
+class AiGmSessionState(TypedDict, total=False):
     session_id: str
-    operating_mode: Literal["autonomous", "co_pilot"]  # "autonomous" (TTRPG_AI_GM) vs "co_pilot" (TTRPG_GM_AI)
-    human_gm_user_id: str | None                       # Populated in TTRPG_GM_AI so tools whisper back to the GM by default
-    messages: Annotated[list[AnyMessage], add_messages]
-    roster: list[dict]
+    session_mode: str
+    operating_mode: Literal["autonomous", "co_pilot"]
+    human_gm_user_id: str | None
+    messages: Annotated[list[BaseMessage], add_messages]
+    roster: list[dict[str, Any]]
     current_scene: str
     combat_active: bool
-    combat_tick_clock: dict[str, int]   # participant/npc_id -> current count-up tick
+    combat_tick_clock: dict[str, int]
     active_npcs: dict[str, NpcState]
     active_map: TacticalMapState | None
+    scenario_director: ScenarioDirectorState
+    active_director_mandate: str
+    trigger_event: dict[str, Any]
+    tool_invocations: list[dict[str, Any]]
+    turn_started_ms: float
+    final_reply: str
+    final_channel: str
+    trace_id: str
+    turn_logs: list[dict[str, Any]]
 ```
 
-### 3.2 LangGraph Node Topology
+### 3.2 Five-Node LangGraph Topology (`scenario_director_node`)
 
 ```mermaid
-flowchart LR
-    Start(["Incoming Session Event\n(Chat / Whisper / Roll)"]) --> ContextNode["1. sync_session_context\nFetch roster & recent state"]
-    ContextNode --> RouterNode["2. gm_supervisor_node\nChatOllama (Reasoning + Tools)"]
-    RouterNode -->|"Has tool_calls"| ToolNode["3. tool_execution_node\nRun LangChain @tools"]
-    ToolNode -->|"Tool results"| RouterNode
-    RouterNode -->|"Ready to narrate"| PublishNode["4. publish_gm_response\nPOST /api/gm/sessions/:id/chat"]
+flowchart TD
+    Start(["Incoming Session Event\n(Chat / Whisper / Roll / Proactive SCENARIO_BEAT)"]) --> ContextNode["1. sync_session_context\nFetch roster, compact GM Vault index, & turn state"]
+    ContextNode --> DirectorNode{"2. scenario_director_node\nEvaluate flow_mode, Turn Interval,\nPer-Turn Probability, & Event Weights"}
+    DirectorNode -->|"Normal Reactive Turn"| SupervisorNode["3. gm_supervisor_node\nBaseChatModel (Reasoning + @tools)"]
+    DirectorNode -->|"Beat Triggered!\n(Plot Adaptation or Weighted Sample)"| Mandate["Inject [SCENARIO DIRECTOR MANDATE]\n12 TTRPG Event Sub-Routines +\nAnti-Railroading Plot Guidance"]
+    Mandate --> SupervisorNode
+    SupervisorNode -->|"Has tool_calls"| ToolNode["4. tool_execution_node\nRun LangChain @tools"]
+    ToolNode -->|"Tool results"| SupervisorNode
+    SupervisorNode -->|"Ready to narrate (Markdown)"| PublishNode["5. publish_gm_response\nPOST /api/gm/sessions/:id/chat\n& emit AiGmTrajectoryEvent"]
     PublishNode --> End(["Turn Complete\n(Checkpoint Saved)"])
 ```
 
-1. **`sync_session_context` Node**: Pulls the latest session roster and recent events from `GET /api/gm/sessions/:id/context` and formats the triggering event (e.g., whether a player spoke `IN_CHARACTER`, sent a secret `GM_ONLY` message, or completed a `TtrpgMechanicsEvent` roll).
-2. **`gm_supervisor_node` (`ChatOllama`)**: Evaluates the player's action or roll outcome against the current scene, active NPCs, and tactical map. Decides whether to invoke one or more tools before speaking.
-3. **`tool_execution_node` (`ToolNode`)**: Executes tool calls (reading NPC sheets, querying Satya combat/task rules, inspecting or generating a map, rolling hidden/public NPC d20 checks, or sending private whispers to specific players) and feeds observations back to `gm_supervisor_node`.
-4. **`publish_gm_response` Node**: Posts the final in-world narration (`ChannelContext::GmNarration` or `InCharacter`) back to `POST /api/gm/sessions/:id/chat`.
+1. **`sync_session_context` Node**: Pulls the latest session roster and recent events from `GET /api/gm/sessions/:id/context`, builds a compact `[GM Vault & Session Index]` (listing document titles/IDs, character sheets, and pinned GM memories without dumping full text into the prompt), and formats the triggering event.
+2. **`scenario_director_node` (Proactive World Pacing & Rabbit-Hole Breaker)**:
+   - Prevents the AI GM from getting stuck indefinitely answering player prompts in a conversational loop while **never railroading player choices**.
+   - Supports three composable flow modes (`flow_mode`):
+     - **`"scenario_driven"` (Overarching Plot with Non-Railroaded Adaptation)**: Draws from authored `planned_beats` and `campaign_premise`. The mandate instructs the AI GM to **adapt the plot event to the player's actual choices and location** rather than forcing the player back onto a predetermined path.
+     - **`"free_form"` (Weighted Probability Sandbox)**: Samples emergent world events from `event_weights: dict[str, float]` where players or GMs can dial up favorite pillars (e.g., `combat_encounter: 50`, `dramatic_revelation: 30`) and dial down or zero out unwanted ones (`thought_provoking_discussion: 0`).
+     - **`"hybrid"` (Default)**: Alternates between adapting unplayed `planned_beats` to player actions and sampling emergent beats from `event_weights`.
+   - Fires automatically when `turns_since_last_beat >= beat_interval_turns` (default `3`), when a per-turn emergence check (`rng.random() < beat_probability_per_turn`) succeeds after turn 1, or when explicitly invoked via `trigger_kind == "SCENARIO_BEAT"` (`POST /internal/ai-gm/scenario-beat`).
+3. **`gm_supervisor_node` (`BaseChatModel`)**: Evaluates the player's action, roll outcome, and any active `[SCENARIO DIRECTOR MANDATE]` against the current scene, active NPCs, and tactical map.
+4. **`tool_execution_node`**: Executes tool calls (reading NPC sheets, querying Satya `2d20` rules, inspecting or generating a map, rolling NPC `2d20` checks, advancing combat ticks, or sending private whispers) and feeds observations back to `gm_supervisor_node`.
+5. **`publish_gm_response` Node**: Posts the final Markdown narration (`ChannelContext::GmNarration` or `InCharacter`) back to `POST /api/gm/sessions/:id/chat` and records the `AiGmTrajectoryEvent`.
 
-### 3.3 Multi-Provider Model Factory (`Ollama` + Hosted BYOK: `Gemini`, `OpenAI`, `Claude`)
+### 3.3 Built-In TTRPG Scenario Event Sub-Routines (`SCENARIO_DIRECTOR_TASKS`)
 
-Because the LangGraph `StateGraph` and `@tool` suite program against LangChain's unified `BaseChatModel` interface, the exact same AI GM workflow runs unmodified across **local Ollama models** and **player-supplied (Bring-Your-Own-Key / BYOK) hosted models** (`langchain-google-genai`, `langchain-openai`, `langchain-anthropic`, `langchain-ollama`):
+| Task Slug | Pillar / Category | Default Weight | World Event Behavior & Anti-Railroad Framing | Primary Tools |
+| :--- | :--- | :---: | :--- | :--- |
+| `combat_encounter` | `combat`, `action`, `tactical` | `20.0` | Hostile ambush, security breach, or patrol intercept erupts in the scene, demanding immediate tactical positioning. | `advance_combat_tracker`, `roll_satya_d20_check`, `generate_tactical_map` |
+| `mysterious_stranger` | `intrigue`, `mystery`, `espionage` | `15.0` | A covert informant, observer, or encrypted transmission cuts in with a veiled warning, leverage, or clue. | `lookup_npc_profile`, `whisper_to_player`, `upsert_gm_memory` |
+| `new_npc_arrives` | `social`, `npc`, `intrigue` | `15.0` | A new or recurring NPC physically enters the location with an urgent agenda, shifting the social dynamic. | `generate_npc_from_description`, `lookup_npc_profile`, `update_npc_state` |
+| `dramatic_revelation` | `drama`, `twist`, `emotional` | `15.0` | A sudden plot twist, betrayal, hidden identity reveal, or personal backstory collision raises the emotional stakes. | `lookup_npc_profile`, `search_gm_memory_and_docs`, `upsert_gm_memory` |
+| `thought_provoking_discussion` | `philosophy`, `psyche`, `roleplay` | `10.0` | An NPC poses an ethical or philosophical dilemma testing the character's 7 bipolar Psyche traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`). | `lookup_character_sheet`, `lookup_npc_profile`, `upsert_gm_memory` |
+| `discovery_or_clue` | `investigation`, `lore`, `mystery` | `10.0` | A physical clue, forensic trace, encrypted data-slate, or overheard secret surfaces, opening a new investigative lead. | `query_campaign_lore`, `whisper_to_player`, `upsert_gm_memory` |
+| `environmental_hazard` | `survival`, `exploration`, `hazard` | `10.0` | The environment turns volatile (depressurization, radiation spike, structural collapse, power failure), requiring immediate checks. | `roll_satya_d20_check`, `generate_tactical_map`, `narrate_to_session` |
+| `ticking_clock_escalation` | `pacing`, `tension`, `urgency` | `10.0` | An off-screen faction clock or threat visibly advances—reinforcements close in or a rival completes a phase of their plan. | `upsert_gm_memory`, `advance_combat_tracker`, `narrate_to_session` |
+| `heist_or_infiltration_complication` | `stealth`, `heist`, `tactical` | `10.0` | A patrol route shifts, a biometric lock cycles, or a sensor sweep nears the crew, demanding clever improvisation. | `roll_satya_d20_check`, `inspect_tactical_map`, `whisper_to_player` |
+| `moral_or_faction_dilemma` | `politics`, `factions`, `drama` | `10.0` | Two rival factions or allies make competing, mutually exclusive demands—helping one visibly alienates the other. | `lookup_npc_profile`, `update_npc_state`, `upsert_gm_memory` |
+| `resource_or_gear_windfall` | `loot`, `salvage`, `opportunity` | `5.0` | A high-value opportunity appears—an unguarded cache, prototype gear, or tactical vantage point—if the crew acts quickly. | `roll_satya_d20_check`, `upsert_gm_memory`, `narrate_to_session` |
+| `downtime_campfire_moment` | `bonding`, `spotlight`, `roleplay` | `5.0` | A quiet character-focused beat amidst tension where an ally tends to fatigue/wounds or asks a personal question. | `lookup_character_sheet`, `update_npc_state`, `narrate_to_session` |
+
+### 3.4 Multi-Provider Model Factory (`Ollama` + Hosted BYOK: `Gemini`, `OpenAI`, `Claude`)
+
+Because the LangGraph `StateGraph` and `@tool` suite program against LangChain's unified `BaseChatModel` interface, the exact same AI GM workflow runs unmodified across **local Ollama models** and **player-supplied (Bring-Your-Own-Key / BYOK) hosted models** (`src/satya_ml/ai_gm/models.py`):
 
 | Provider | LangChain Integration | Example Model IDs | Tool Calling + Vision in Single Model? |
 | :--- | :--- | :--- | :--- |
-| **Ollama (Local)** | `langchain-ollama` (`ChatOllama`) | `qwen2.5:14b`, `qwen3:14b`, `llama3.2-vision`, `gemma3:12b` | Yes (`gemma3` / `qwen2.5-vl`) or split reasoning + vision (`qwen2.5` + `llama3.2-vision`) |
+| **Ollama (Local)** | `langchain-ollama` (`ChatOllama`) | `gemma4:12b`, `qwen2.5:14b`, `qwen3:14b`, `llama3.2-vision` | Yes (`gemma4` / `qwen2.5-vl`) or split reasoning + vision (`qwen2.5` + `llama3.2-vision`) |
 | **Google Gemini (BYOK)** | `langchain-google-genai` (`ChatGoogleGenerativeAI`) | `gemini-2.5-pro`, `gemini-2.5-flash` | Yes (native multimodal + tool calling) |
 | **OpenAI (BYOK)** | `langchain-openai` (`ChatOpenAI`) | `gpt-4o`, `gpt-4.1`, `o4-mini` | Yes (native multimodal + tool calling) |
 | **Anthropic Claude (BYOK)** | `langchain-anthropic` (`ChatAnthropic`) | `claude-sonnet-4-20250514`, `claude-3-7-sonnet-latest` | Yes (native multimodal + tool calling) |
 
-```python
-from dataclasses import dataclass
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_ollama import ChatOllama
+### 3.5 Player-Supplied Credentials (BYOK) & Ephemeral Key Security
 
-@dataclass(frozen=True)
-class SessionLlmConfig:
-    provider: str               # "ollama", "google_genai", "openai", "anthropic"
-    model_id: str               # e.g. "qwen2.5:14b", "gemini-2.5-flash", "gpt-4o", "claude-sonnet-4-20250514"
-    vision_model_id: str | None = None
-    temperature: float = 0.35
-    api_key: str | None = None  # Ephemeral player-supplied API key (None for local Ollama)
-    base_url: str | None = None
-
-def build_gm_chat_model(cfg: SessionLlmConfig, for_vision: bool = False) -> BaseChatModel:
-    """Instantiates the per-session LangChain BaseChatModel for either local Ollama or a player's hosted API key."""
-    target_model = (cfg.vision_model_id or cfg.model_id) if for_vision else cfg.model_id
-    temp = 0.1 if for_vision else cfg.temperature
-
-    if cfg.provider == "ollama":
-        return ChatOllama(
-            base_url=cfg.base_url or "http://127.0.0.1:11434",
-            model=target_model,
-            temperature=temp,
-            num_ctx=16384,
-        )
-    elif cfg.provider == "google_genai":
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(
-            model=target_model,
-            google_api_key=cfg.api_key,
-            temperature=temp,
-        )
-    elif cfg.provider == "openai":
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model=target_model,
-            api_key=cfg.api_key,
-            temperature=temp,
-        )
-    elif cfg.provider == "anthropic":
-        from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(
-            model=target_model,
-            api_key=cfg.api_key,
-            temperature=temp,
-        )
-    raise ValueError(f"Unsupported AI GM provider: {cfg.provider}")
-```
-
-### 3.4 Player-Supplied Credentials (BYOK) & Ephemeral Key Security
-
-When a session uses a hosted LLM (`Google Gemini`, `OpenAI`, or `Anthropic Claude`) instead of local Ollama, any authenticated player in the session (typically the session creator in `#session-card` or via **Hamburger Menu -> Settings -> AI GM Provider**) can supply their API key to power the session's AI GM:
+When a session uses a hosted LLM (`Google Gemini`, `OpenAI`, or `Anthropic Claude`) instead of local Ollama, any authenticated player in the session can supply their API key to power the session's AI GM:
 
 1. **Ephemeral In-Memory Session Vault (Default)**:
    - The player submits `{ provider, model_id, api_key }` over HTTPS/localhost to `POST /api/sessions/create` or `POST /api/sessions/:id/gm-config`.
@@ -249,362 +232,114 @@ When a session uses a hosted LLM (`Google Gemini`, `OpenAI`, or `Anthropic Claud
 
 ## 4. Hybrid 3-Tier MCP Architecture (Hosted Table Primitives vs. Pluggable Game Rulesets & Local Lore)
 
-Different TTRPG systems have fundamentally different mechanics for skills, task resolution, damage, and combat sequencing (e.g., Satya's roll-under d20 pools and count-up tick clock vs. D&D 5e's `d20 + mod vs. DC` and cyclic initiative vs. Forged in the Dark's `d6` pools and progress clocks), while tabletop primitives like **3D dice physics on a `wgpu` canvas**, **tactical maps/tokens**, and **public/whisper chat routing** are universal across every game.
-
 By adopting the **Model Context Protocol (MCP)** via LangChain's `langchain-mcp-adapters` (`MultiServerMCPClient`), the LangGraph AI GM mounts tools from **three distinct tiers** simultaneously:
 
 ```mermaid
 flowchart TD
     subgraph LangGraphGM["AI GM Agent (LangGraph + MultiServerMCPClient)"]
-        Supervisor["LLM Supervisor\n(Local Ollama OR Hosted Gemini / OpenAI / Claude)"]
+        Supervisor["LLM Supervisor + Scenario Director\n(Local Ollama OR Hosted Gemini / OpenAI / Claude)"]
     end
 
-    subgraph Tier1["Tier 1: Satya Core Table MCP (Always Hosted in satya-signaling)"]
-        WgpuDice["roll_3d_dice_wgpu()\nBroadcasts physics seed + dice spec to all browsers"]
-        MapGrid["update_map_grid() / move_token()\nSyncs 2D/3D canvas state & fog of war"]
-        ChatWhisper["send_narration() / whisper_player()\nRoutes PUBLIC / PRIVATE / GM_ONLY frames"]
-        History["query_session_history()\nReads Avro / PyLance session log"]
+    subgraph Tier1["Tier 1: Satya Core Table MCP (Hosted in satya-signaling)"]
+        WgpuDice["roll_satya_d20_check()\nBroadcasts physics seed + 2d20 Watershed outcome"]
+        MapGrid["generate_tactical_map() / move_map_token()\nSyncs 2D/3D canvas state"]
+        CombatClock["get_combat_tracker_state() / advance_combat_tracker()\nCount-up initiative & fatigue clock"]
+        ChatWhisper["narrate_to_session() / whisper_to_player()\nRoutes Markdown PUBLIC / PRIVATE / GM_ONLY frames"]
     end
 
-    subgraph Tier2["Tier 2: Game Engine Ruleset MCP (Pluggable per Session)"]
-        SatyaRules["mcp-ruleset-satya\n(d20 roll-under pools, count-up tick clock, stances)"]
-        DndRules["mcp-ruleset-dnd5e\n(d20+mod vs DC/AC, cyclic initiative, spell slots)"]
-        FitdRules["mcp-ruleset-fitd\n(d6 pools, position/effect, progress clocks)"]
+    subgraph Tier2["Tier 2: Game Engine Ruleset & Actor MCP"]
+        SatyaRules["query_satya_rules()\n(Watershed 2d20 roll-over, stances, ballistics, wounds)"]
+        NpcChar["lookup_npc_profile() / generate_npc_from_description()\nlookup_character_sheet() / update_npc_state()"]
+        Director["configure_scenario_director() / trigger_scenario_beat()\n(Hybrid plot + weighted event probability dials)"]
     end
 
-    subgraph Tier3["Tier 3: Player-Local or Cloud Campaign MCP (Per Campaign)"]
-        LocalLore["Local Campaign MCP (Player's PC)\nReads local Markdown / PDFs / Ollama GPU"]
-        GWorkspace["Google Workspace & Gemini Cache MCP\nReads/Updates Google Drive, Docs & Sheets"]
+    subgraph Tier3["Tier 3: GM Memory Vault, Local Lore & Cloud Campaign MCP"]
+        GmVault["search_gm_memory_and_docs() / read_gm_documents()\nupsert_gm_memory() (SQLite FTS5 Vault)"]
+        LocalLore["query_campaign_lore()\nReads local Markdown & PyLance tables"]
+        GWorkspace["Google Workspace & Gemini Cache Sync\nReads/Updates Google Drive, Docs & Sheets"]
     end
 
-    Supervisor -->|"Streamable HTTP (Internal)"| Tier1
-    Supervisor -->|"Hosted Catalog OR Local WS Tunnel"| Tier2
-    Supervisor -->|"stdio / WS Tunnel / OAuth API"| Tier3
+    Supervisor --> Tier1
+    Supervisor --> Tier2
+    Supervisor --> Tier3
 ```
-
-### 4.1 Pros & Cons: Satya-Hosted MCP vs. Player-Local MCP
-
-| Dimension | Satya-Hosted MCP Server (Backend) | Player-Local MCP Server (Player's PC) |
-| :--- | :--- | :--- |
-| **Primary Role** | **Universal multiplayer table primitives**: 3D `wgpu` dice physics sync, tactical map/token canvas state, public/private chat routing, Avro telemetry. | **Custom game rulesets, private homebrew lore, & local GPU compute**: custom RPG ruleset servers, local markdown/PDF notes, local Ollama/image generation. |
-| **Pros** | • **Authoritative Shared State**: Directly mutates `SignalingAppState` and broadcasts to all browsers over `/ws/session` with zero NAT/firewall setup.<br>• **Zero Client Install**: Works immediately in any browser tab.<br>• **Guaranteed Avro Audit Trail**: Every roll, map update, and message is logged to Apache Iggy. | • **Pluggable Game Engines**: Any GM/developer can run a custom ruleset MCP without modifying or redeploying Satya's backend.<br>• **Private Lore**: Unreleased campaign modules and secret NPC files stay on the host player's disk.<br>• **Zero Server GPU Cost**: Offloads LLM/vision/image compute to the player's hardware. |
-| **Cons** | • **Static Built-in Catalog**: Adding a new built-in ruleset to the hosted server requires a backend deployment.<br>• **Compute Scaling**: Heavy image/vision generation costs server resources if hosted centrally. | • **Host Availability**: If the player hosting a local MCP disconnects, those local tools become unavailable.<br>• **Tunneling**: Requires routing `McpToolCallRequest` / `McpToolCallResponse` frames over the player's `/ws/session` WebSocket if the LangGraph orchestrator runs on the server. |
-
-### 4.2 How Tier 1 (`wgpu` 3D Dice) and Tier 2 (Game-Specific Ruleset MCP) Compose
-Separating **visual dice physics (Tier 1)** from **rules adjudication (Tier 2)** allows any game engine to drive Satya's 3D `wgpu` dice canvas:
-1. The AI GM calls a **Tier 2** game-specific tool—for example, `satya_resolve_task(skill="Trauma Surgery", tn=13, pool=3, diff=2, stance="MANEUVER")` (or in a D&D 5e session, `dnd5e_saving_throw(ability="DEX", dc=15, advantage=True)`).
-2. The Tier 2 tool invokes the **Tier 1** universal primitive `roll_3d_dice_wgpu(dice_expr="3d20", actor="Sara")`.
-3. `satya-signaling` generates a deterministic physics seed and RNG outcome (`[1, 11, 18]`) and broadcasts `ServerWsPacket::WgpuDiceRoll` to the room so every player's browser renders the exact same 3D dice tumbling across the `wgpu` canvas.
-4. The **Tier 2** ruleset MCP evaluates `[1, 11, 18]` according to its specific engine rules (in Satya: `1` = 2 successes, `11 <= 13` = 1 success -> `3 successes` vs. `diff 2` -> `Success`, adding `11 * 1.1 = 12 ticks` to the count-up action clock) and emits the `TtrpgMechanicsEvent`.
 
 ---
 
 ## 5. Cloud Campaign Lore & Structured State (Google Drive, Docs, Sheets & Gemini Context Caching)
 
-In addition to local markdown files (`docs/story/`, `docs/ttrpg/`) and PyLance tables (`data/lance/*.lance`), players and GMs frequently organize campaign worlds in **Google Drive**, **Google Docs**, **Google Sheets**, and notebook-style workspaces.
+In addition to local markdown files (`docs/story/`, `docs/ttrpg/`), the SQLite GM Memory Vault (`gm_vault.rs`), and PyLance tables (`data/lance/*.lance`), players and GMs can sync campaign worlds from **Google Drive**, **Google Docs**, and **Google Sheets** (`src/satya_ml/ai_gm/lore_sync.py`):
 
-### 5.1 Authentication Distinction: `GEMINI_API_KEY` vs. Google Workspace OAuth
-- **`GEMINI_API_KEY` (AI Studio Key)**: Authenticates requests to the Gemini API (`generativelanguage.googleapis.com`) for model inference, the **Gemini Files API**, and **Gemini Context Caching**. By itself, a raw API key cannot read a user's private Google Drive.
-- **Google OAuth 2.0 User Token (or Service Account / Workspace MCP)**: Granting scoped OAuth access (`drive.readonly`, `documents`, `spreadsheets`) allows Satya's AI GM tools (or attached Google Drive / Docs / Sheets MCP servers) to directly read and update the user's campaign documents and spreadsheets.
-
-### 5.2 Two Complementary Ways to Use Google Docs, Sheets & Drive in LangGraph
-
-```mermaid
-flowchart LR
-    subgraph GDrive["Player's Campaign Folder in Google Drive"]
-        GDocs["Google Docs\n(World Lore, NPC Bios, Session Logs)"]
-        GSheets["Google Sheets\n(NPC Stat Tables, Stances, Factions, Loot)"]
-        GMaps["Drive Images / PDFs\n(Tactical Maps, Handouts, Rulebooks)"]
-    end
-
-    subgraph PathA["Path A: Live Tool / MCP Access (Any LLM Provider)"]
-        SheetTool["read_npc_from_sheet() / update_sheet_cell()\nDeterministic structured state"]
-        DocTool["read_lore_doc() / append_session_recap_doc()\nLive campaign journal"]
-    end
-
-    subgraph PathB["Path B: 'NotebookLM-Style' Gemini Context Cache (Gemini API)"]
-        FilesAPI["Gemini Files API + Context Caching\n(1M-2M Token Pinning of Entire Campaign Folder)"]
-        LanceSync["Optional Sync to Local PyLance\n(data/lance/campaign-lore.lance for Offline Ollama)"]
-    end
-
-    GDocs --> DocTool
-    GSheets --> SheetTool
-    GDocs & GSheets & GMaps --> FilesAPI
-    GDocs & GSheets --> LanceSync
-    PathA --> LangGraph["LangGraph AI GM Supervisor"]
-    PathB --> LangGraph
-```
-
-#### Path A: Live Google Docs & Sheets as Structured GM Tools (Works with Ollama, Gemini, OpenAI, or Claude)
-1. **Google Sheets as Live World-State Tables (`spreadsheets`)**:
-   - Spreadsheets are ideal for structured TTRPG data: **NPC Rosters** (columns for Name, Faction, Personality, Attribute TNs, Preferred Stance, Current Fatigue, Disposition), **Equipment/Weapon Tables**, and **Faction Clocks**.
-   - The AI GM uses `@tool` functions (`lookup_npc_row_in_sheet`, `update_npc_fatigue_in_sheet`) to read and mutate rows in real time during combat or social encounters—giving human co-GMs or players a live spreadsheet view of campaign state.
-2. **Google Docs as Campaign Lore & Automated Session Journal (`documents`)**:
-   - The AI GM reads world-building docs on demand (`read_campaign_google_doc`) and, at the end of a session (`SESSION_ENDED`), can automatically append a narrative **Episode Recap** to the group's Campaign Journal Google Doc.
-3. **Google Drive Map & Handout Folder (`drive`)**:
-   - The AI GM lists images in a shared Drive folder (`Maps/`), downloads the relevant tactical map for the current scene, pushes it to the Satya UI (`POST /api/gm/sessions/:id/map`), and inspects it with its vision model.
-
-#### Path B: "NotebookLM-Style" Zero-Infrastructure RAG via Gemini Context Caching
-While consumer **NotebookLM** (`notebooklm.google.com`) does not expose a public consumer REST API (only *NotebookLM Enterprise* on Google Cloud Discovery Engine has an API), you can achieve the **exact same grounded "Notebook" behavior** using the **Gemini API's Context Caching (`client.caches.create`) + Files API**:
-1. **One-Click Campaign Folder Sync**:
-   - When a session starts, Satya exports the linked Google Docs (as Markdown/text), Google Sheets (as CSV), and Drive PDFs/maps and uploads them to the Gemini Files API (`client.files.upload`).
-2. **Pinned 1M+ Token Campaign Cache**:
-   - Those files are bundled into a Gemini `CachedContent` resource with a TTL matching the session duration (e.g., 4 hours).
-   - Because Gemini 2.5 Flash/Pro supports a **1M–2M token context window**, an entire multi-book campaign setting, ruleset, and every past session transcript fit directly in cached memory—eliminating chunking loss, embedding drift, and retrieval misses while reducing input token costs by ~75%.
-3. **Offline / Local Ollama Mirroring to PyLance**:
-   - The same Google Drive sync step can also write the exported Docs and Sheets into a local **PyLance** table (`data/lance/campaign-lore.lance`), so if the user switches from Gemini to a local **Ollama** model offline, the LangGraph agent seamlessly falls back to local vector/table search over the synced Drive content.
+1. **Live Google Docs & Sheets as Structured GM Tools**:
+   - **Google Sheets**: Structured NPC rosters, faction clocks, and loot tables.
+   - **Google Docs**: World lore and automated session recaps.
+2. **Gemini Context Caching + Offline PyLance Mirroring**:
+   - Exported Docs/Sheets can be pinned in a Gemini `CachedContent` resource and mirrored into `data/lance/campaign-lore.lance` for offline local Ollama retrieval.
 
 ---
 
-## 6. Concrete AI GM Tool Suite (`@tool` Specifications)
+## 6. Concrete AI GM Tool Suite (`@tool` Specifications in `src/satya_ml/ai_gm/tools.py`)
 
-### 6.1 Lore, Rules & NPC Knowledge Tools
+### 6.1 Lore, Rules, GM Vault & Character/NPC Knowledge Tools
 
 | Tool Name | Arguments | Data Source | Purpose |
 | :--- | :--- | :--- | :--- |
-| `lookup_npc_profile` | `npc_name: str` | Google Sheets / `data/npcs/*.toml` / LanceDB | Retrieves an NPC's personality traits, speech style, secret motives, attribute TNs (`1..=20`), skill pool levels, and preferred `CombatStance`. |
-| `update_npc_state` | `session_id: str, npc_id: str, fatigue_delta: int, wound_shock_delta: float, disposition: str \| None` | LangGraph `AiGmSessionState` (+ optional Google Sheet sync) | Updates an NPC's accumulated fatigue, wound shock index, or attitude during combat or social encounters. |
-| `query_satya_rules` | `query: str` | `docs/ttrpg/{tasks,combat,melee_combat,probability}.md` | Retrieves exact Satya mechanics (d20 roll-under pools, open-ended natural 1s/20s, count-up tick economy, stance `TC` costs, fatigue multipliers). |
-| `query_campaign_lore` | `query: str, session_id: str \| None` | Google Docs / `docs/story/**/*.md` / `data/lance/*.lance` | Searches setting lore (`preface.md`, `prologue.md`, `timeline/`, synced Google Docs) and prior session `.lance` tables for past player decisions and events. |
+| `lookup_npc_profile` | `npc_name: str, session_id: str = "default"` | `data/npcs/*.toml` / Session State | Retrieves an NPC's personality traits, archetype, attribute TNs, skill levels, disposition, and secrets. |
+| `generate_npc_from_description` | `session_id: str, name: str, description: str, role_or_archetype: str = "operative"` | `satya_ml.ai_gm.tools` | Generates a balanced Satya NPC with 7 attributes, skills, and Psyche traits from a natural-language description and registers them in the session. |
+| `update_npc_state` | `session_id: str, npc_id: str, fatigue_delta: int = 0, wound_shock_delta: int = 0, disposition: str \| None = None` | `AiGmSessionState` | Updates an NPC's accumulated fatigue, wound shock index, or attitude during combat or social encounters. |
+| `lookup_character_sheet` | `session_id: str, character_name_or_id: str` | `AiGmSessionState` / Signaling Context | Retrieves a player character's full Satya sheet (Triad attributes, `TN_P`/`TN_M`, 7 bipolar Psyche traits, skills, equipment, and wounds). |
+| `query_satya_rules` | `query: str` | `docs/ttrpg/*.md` | Retrieves authoritative Satya mechanics (Two-List Cascading "Watershed" `2d20` Roll-Over, `TN_eff = 31 - C + Delta_ext`, `+6` carry, count-up tick economy, ballistics, and medical trauma). |
+| `query_campaign_lore` | `query: str, session_id: str = "default"` | `docs/story/**/*.md` / `data/lance/*.lance` | Searches setting lore and prior session `.lance` tables for past player decisions and world events. |
+| `search_gm_memory_and_docs` | `session_id: str, query: str, category: str = ""` | `GET /api/gm/sessions/:id/memories` | Searches the SQLite FTS5 GM Memory Vault and session document headers without bloating the LLM context window. |
+| `read_gm_documents` | `session_id: str, doc_ids: list[str]` | `AiGmSessionState` / Signaling Vault | Reads specific `GM_ONLY` or untrusted player-submitted documents on demand (wrapping player docs in `<untrusted_player_document>` tags). |
+| `upsert_gm_memory` | `session_id: str, title: str, content: str, category: str = "WORLD_FACT", pinned: bool = False` | `POST /api/gm/sessions/:id/memories` | Creates or updates a persistent GM memory note (`NPC_STATE`, `PLOT_DECISION`, `QUEST_HOOK`, `WORLD_FACT`, `FACTION_CLOCK`) in SQLite. |
 
-### 6.2 Tactical Map Generation & Vision Inspection Tools
+### 6.2 Scenario Director & Proactive Pacing Tools
 
 | Tool Name | Arguments | Purpose |
 | :--- | :--- | :--- |
-| `generate_tactical_map` | `session_id: str, title: str, width: int, height: int, obstacles: list[dict], tokens: dict[str, list[int]]` | Renders a deterministic 2D tactical grid (SVG/PNG) with cover, doors, hazards, and character/NPC token coordinates, saves it under `data/maps/{session_id}/`, and publishes it to the session via `POST /api/gm/sessions/:id/map`. |
-| `move_map_token` | `session_id: str, entity_id: str, to_x: int, to_y: int` | Moves a player or NPC token on the active map grid, re-renders the map overlay, and pushes the updated map state to connected clients. |
-| `inspect_tactical_map` | `session_id: str, question: str` | Loads the active map image (and token coordinate metadata) and queries the session's multimodal vision model (`ChatOllama` vision or Gemini/OpenAI/Claude) to answer spatial questions such as line-of-sight, flanking angles, cover availability, or distance in grid squares. |
+| `configure_scenario_director` | `session_id: str, campaign_premise: str = "", flow_mode: str = "hybrid", player_desires: list[str] \| None = None, planned_beats: list[str] \| None = None, event_weights: dict[str, float] \| None = None, beat_probability_per_turn: float = 0.35, beat_interval_turns: int = 3` | Configures the session's Scenario Director flow mode (`"hybrid"`, `"scenario_driven"`, or `"free_form"`), overarching plot milestones (`planned_beats`), and relative event probability dials (`event_weights`, where `0` disables an event type and higher numbers increase its frequency), persisting the configuration in the GM Memory Vault. |
+| `trigger_scenario_beat` | `session_id: str, task_slug: str = "auto", custom_context: str = ""` | Immediately selects and activates a Scenario Director task sub-routine (either a specific `task_slug` from the 12 built-in TTRPG beats or `"auto"` using the session's `flow_mode` and weighted probability distribution) and returns its structured Task Playbook. |
 
-#### Example Vision Map Inspection Implementation
-
-```python
-import base64
-from pathlib import Path
-from langchain_core.messages import HumanMessage
-from langchain_core.tools import tool
-
-@tool
-def inspect_tactical_map(image_path: str, tactical_question: str) -> str:
-    """Inspect a tactical map image using the session's vision model to evaluate line-of-sight, cover, choke points, or token distances."""
-    raw_bytes = Path(image_path).read_bytes()
-    b64_img = base64.b64encode(raw_bytes).decode("utf-8")
-
-    msg = HumanMessage(
-        content=[
-            {
-                "type": "text",
-                "text": (
-                    "You are analyzing a Satya TTRPG tactical map. "
-                    f"Answer concisely with coordinates and cover details: {tactical_question}"
-                ),
-            },
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{b64_img}"},
-            },
-        ]
-    )
-    resp = gm_vision_llm.invoke([msg])
-    return str(resp.content)
-```
-
-### 6.3 Session Interaction & Mechanics Tools (Calling `satya-signaling`)
+### 6.3 Tactical Map, Combat Tracker & Session Interaction Tools
 
 | Tool Name | Arguments | Backend Endpoint Called | Purpose |
 | :--- | :--- | :--- | :--- |
-| `roll_satya_d20_check` | `session_id: str, actor_name: str, skill_name: str, attribute_tn: int, pool_size: int, difficulty_rating: int, combat_stance: str \| None, fatigue_level: int` | `POST /api/gm/sessions/:id/roll` | Executes an authoritative server-side Satya d20 roll-under evaluation (`TtrpgMechanicsEvent::evaluate_satya_task`), triggers synchronized 3D `wgpu` dice physics, logs to Apache Iggy (`ttrpg-mechanics`), broadcasts the roll to the session, and returns the structured outcome (`outcome_tier`, `successes_counted`, `action_count_cost`) to the LangGraph agent. |
-| `whisper_to_player` | `session_id: str, recipient_user_ids: list[str], body: str` | `POST /api/gm/sessions/:id/chat` | Sends a `MessageVisibility::Private` whisper from the AI GM to one or more specific players (e.g., secret perception notices, private cybernetic HUD readouts, or responses to `GM_ONLY` messages). |
-| `narrate_to_session` | `session_id: str, body: str, channel_context: str = "GM_NARRATION", speaker_override: str \| None = None` | `POST /api/gm/sessions/:id/chat` | Broadcasts a `MessageVisibility::Public` message as either `GM_NARRATION` (world description) or `IN_CHARACTER` (speaking as a specific NPC). |
+| `generate_tactical_map` | `session_id: str, title: str, width: int = 20, height: int = 15, obstacles: list[dict] \| None = None, tokens: list[dict] \| None = None` | `POST /api/gm/sessions/:id/map` | Renders a deterministic 2D tactical grid (SVG/PNG) with cover, doors, hazards, and token coordinates and publishes it to the session. |
+| `move_map_token` | `session_id: str, entity_id: str, to_x: int, to_y: int` | `POST /api/gm/sessions/:id/map` | Moves a player or NPC token on the active map grid and broadcasts the updated map state. |
+| `inspect_tactical_map` | `session_id: str, tactical_question: str` | Multimodal Vision LLM | Inspects the active tactical map image to evaluate line-of-sight, cover, choke points, or token distances. |
+| `get_combat_tracker_state` | `session_id: str` | `GET /api/gm/sessions/:id/combat` | Reads the active count-up tick initiative clock, combatants, stances, and conditions. |
+| `advance_combat_tracker` | `session_id: str, actor_id: str = "", tick_delta: int = 5, start_combat: bool = False, end_combat: bool = False` | `POST /api/gm/sessions/:id/combat` | Starts/ends combat or advances an actor's count-up tick position on the tactical clock. |
+| `roll_satya_d20_check` | `session_id: str, actor_name: str, skill_name: str, attribute_tn: int = 12, pool_size: int = 2, difficulty_rating: int = 1, combat_stance: str = "NEUTRAL", fatigue_level: int = 0` | `POST /api/gm/sessions/:id/roll` | Executes an authoritative server-side Satya Watershed `2d20` roll-over check, triggers synchronized 3D `wgpu` dice physics, logs to Apache Iggy (`ttrpg-mechanics`), and returns the structured outcome. |
+| `whisper_to_player` | `session_id: str, recipient_user_ids: list[str], body: str` | `POST /api/gm/sessions/:id/chat` | Sends a `MessageVisibility::Private` Markdown whisper from the AI GM to one or more specific players. |
+| `narrate_to_session` | `session_id: str, body: str, channel_context: str = "GM_NARRATION", speaker_override: str \| None = None` | `POST /api/gm/sessions/:id/chat` | Broadcasts a `MessageVisibility::Public` Markdown message as either `GM_NARRATION` or `IN_CHARACTER`. |
 
 ---
 
-## 7. Backend API Design (`satya-signaling`)
+## 7. Backend API Surface (`crates/satya-signaling/src/gm_api.rs` & `src/satya_ml/ai_gm/server.py`)
 
-To allow the Python LangGraph service (or any external MCP/agent process) to interact with active sessions safely and deterministically, `satya-signaling` exposes a scoped `/api/gm/*` REST surface alongside an asynchronous event webhook dispatcher.
+### 7.1 Rust Signaling GM Endpoints (`satya-signaling`)
+- `GET /api/gm/sessions/:session_id/context` — Returns session mode, AI GM participant info, active roster, character sheets, combat tracker state, and compact GM Vault headers.
+- `POST /api/gm/sessions/:session_id/chat` — Emits public Markdown narrations, NPC dialogue, or private whispers (`ChatMessageEvent`).
+- `POST /api/gm/sessions/:session_id/roll` — Evaluates authoritative Satya Watershed `2d20` checks (`TtrpgMechanicsEvent`) and broadcasts 3D `wgpu` dice physics seeds.
+- `POST /api/gm/sessions/:session_id/map` — Publishes tactical map updates (`TabletopCanvasEvent`).
+- `GET / POST /api/gm/sessions/:session_id/combat` — Reads or mutates the count-up combat tracker state.
+- `GET / POST /api/gm/sessions/:session_id/memories` — Searches or upserts persistent GM Memory Vault entries in SQLite (`gm_vault.rs`).
+- `POST /api/gm/sessions/:session_id/trajectory` — Logs `AiGmTrajectoryEvent` records to Topic 8 (`ai-gm-trajectories`).
 
-### 7.1 Service Authentication
-- Configured in `config/ai.toml` under an `[ai_gm]` section:
-  ```toml
-  [ai_gm]
-  enabled = true
-  service_url = "http://127.0.0.1:8090"
-  service_token = "satya_gm_secret_dev_token"
-  default_provider = "ollama"
-  ollama_base_url = "http://127.0.0.1:11434"
-  reasoning_model = "gemma4:12b"
-  vision_model = "gemma4:12b"
-  persona_id = "harsh-reality-arbiter"
-  temperature = 0.35
-  fail_fast_when_offline = true
-  ```
-- Requests from the Python LangGraph service to `satya-signaling` carry `Authorization: Bearer <service_token>` (verified by a `verify_gm_service_header` helper in `crates/satya-signaling/src/lib.rs`).
-
-### 7.2 Endpoints Exposed by `satya-signaling`
-
-#### 1. `GET /api/gm/sessions/:session_id/context`
-Returns the current session mode, active participant roster, and recent chat/mechanics context so the LangGraph agent has an authoritative view of the room.
-
-```json
-{
-  "session_id": "harsh-reality-ep1",
-  "session_mode": "TTRPG",
-  "ai_gm_participant": {
-    "user_id": "ai-gm-harsh-reality-ep1",
-    "username": "satya_ai_gm",
-    "display_name": "Satya AI Game Master",
-    "participant_kind": "AI_AGENT",
-    "role": "AI_GM",
-    "ai_agent_info": {
-      "model_id": "ollama/qwen2.5:14b",
-      "persona_id": "harsh-reality-arbiter",
-      "temperature": 0.35
-    }
-  },
-  "roster": [
-    {
-      "user_id": "u-demo-sara",
-      "username": "sara_valkyrie",
-      "display_name": "Sara (Valkyrie)",
-      "participant_kind": "HUMAN",
-      "role": "PLAYER"
-    }
-  ]
-}
-```
-
-#### 2. `POST /api/gm/sessions/:session_id/chat`
-Allows the AI GM to emit public narrations, NPC dialogue, or private whispers to targeted players.
-- **Request Body (`GmChatRequest`)**:
-  ```json
-  {
-    "visibility": "PRIVATE",
-    "recipient_user_ids": ["u-demo-sara"],
-    "channel_context": "GM_NARRATION",
-    "body": "[Thermal Optics] You spot two heat signatures crouching behind the bulkhead at (12, 4).",
-    "model_id": "ollama/qwen2.5:14b"
-  }
-  ```
-- **Server Behavior**:
-  1. Resolves target recipients via `SignalingAppState::resolve_message_targets`.
-  2. Constructs a `ChatMessageEvent` with `sender = Participant::ai_gm(...)` and logs it to the `chat-messages` Apache Iggy / Avro topic.
-  3. Sends `ServerWsPacket::ChatEvent` over `/ws/session` to `delivery_ids`.
-
-#### 3. `POST /api/gm/sessions/:session_id/roll`
-Allows the AI GM to execute Satya d20 rolls on behalf of NPCs, environmental hazards, or hidden checks.
-- **Request Body (`GmRollRequest`)**:
-  ```json
-  {
-    "actor_display_name": "Station SecOps Sentry",
-    "target_user_ids": ["u-demo-sara"],
-    "skill_name": "Suppressive Fire",
-    "attribute_tn": 13,
-    "pool_size": 3,
-    "difficulty_rating": 2,
-    "combat_stance": "RANGED_SNAP",
-    "fatigue_level": 1,
-    "wound_shock_index": 0.0,
-    "notes": "Sentry reacts to corridor movement"
-  }
-  ```
-- **Server Behavior**:
-  1. Generates `pool_size` random `d20` rolls and evaluates them via `TtrpgMechanicsEvent::evaluate_satya_task`.
-  2. Sets `mechanic_type = MechanicEventType::AiGmDecision` (or `CombatAction` / `TaskResolution`).
-  3. Logs the `TtrpgMechanicsEvent` to the `ttrpg-mechanics` Apache Iggy / Avro topic and broadcasts `ServerWsPacket::TtrpgMechanicsEvent` to the session.
-  4. Returns the serialized `TtrpgMechanicsEvent` JSON to the Python tool caller so the LLM can narrate the exact dice rolled and tick cost.
-
-#### 4. `POST /api/gm/sessions/:session_id/map`
-Publishes a new or updated tactical map to the session UI.
-- **Request Body (`GmMapUpdateRequest`)**:
-  ```json
-  {
-    "map_id": "sector-4-airlock",
-    "title": "Sector 4 Cargo Airlock",
-    "image_url": "/maps/harsh-reality-ep1/sector-4-airlock.svg",
-    "grid_width": 20,
-    "grid_height": 15,
-    "notes": "Low-gravity cargo bay; radiation leak near eastern vent."
-  }
-  ```
+### 7.2 Python LangGraph FastAPI Worker Endpoints (`src/satya_ml/ai_gm/server.py`)
+- `GET /health` — Health probe reporting active checkpointer and default LLM provider.
+- `POST /internal/ai-gm/events` — Invokes a reactive or event-driven turn (`CHAT`, `MECHANICS`, ` WHISPER`) on the per-session LangGraph `StateGraph`.
+- `POST /internal/ai-gm/scenario-beat` — Proactively triggers an out-of-band Scenario Director beat (`trigger_kind = "SCENARIO_BEAT"`), optionally accepting `task_slug`, `flow_mode`, `event_weights`, or `custom_context` overrides to advance the scenario and push an unprompted Markdown event to the session.
 
 ---
 
-## 8. End-to-End Multi-Tool Turn Sequence
+## 8. Hybrid Observability (OpenTelemetry) & Avro/PyLance Telemetry Loop
 
-The sequence below illustrates what happens when a player sends an in-character action (`"I peek through the airlock viewport to check for guards"`):
+> **Detailed Specification**: See [`docs/technical/observability-and-avro-telemetry-design.md`](./observability-and-avro-telemetry-design.md) and [`docs/technical/custom-ml-models-and-data-use-cases.md`](./custom-ml-models-and-data-use-cases.md).
 
-```mermaid
-sequenceDiagram
-    actor Player as Player (Sara)
-    participant Web as satya-web (Wasm UI)
-    participant Sig as satya-signaling (Rust)
-    participant Graph as LangGraph AI GM (Python)
-    participant LLM as Model Provider (Ollama / Gemini / OpenAI / Claude)
-    participant Storage as Apache Iggy / Avro
-
-    Player->>Web: Send Chat ("I peek through the airlock viewport...")
-    Web->>Sig: WS SendChat (PUBLIC, IN_CHARACTER)
-    Sig->>Storage: Log ChatMessageEvent (seq #41)
-    Sig-->>Web: Broadcast CHAT_EVENT to session
-    Sig->>Graph: POST /internal/ai-gm/events (Non-blocking tokio::spawn)
-
-    Graph->>LLM: Invoke gm_supervisor_node with session history
-    LLM-->>Graph: tool_call: inspect_tactical_map("sector-4-airlock", "Who is near the airlock?")
-    Graph->>LLM: Invoke Vision Model on map PNG
-    LLM-->>Graph: "Two SecOps sentries at (11,4) and (13,5) behind cargo crates."
-
-    Graph->>LLM: Feed map observation to gm_supervisor_node
-    LLM-->>Graph: tool_call: lookup_npc_profile("SecOps Sentry")
-    Graph-->>LLM: "TN 12 Perception, RANGED_SNAP preference, wary disposition"
-
-    LLM-->>Graph: tool_call: roll_satya_d20_check(skill="Perception", tn=12, pool=2, diff=2)
-    Graph->>Sig: POST /api/gm/sessions/:id/roll
-    Sig->>Storage: Log TtrpgMechanicsEvent (seq #42, rolls=[4, 15] -> 1 success -> PartialSuccess)
-    Sig-->>Web: Broadcast TTRPG_MECHANICS_EVENT (+ 3D wgpu dice seed)
-    Sig-->>Graph: Return TtrpgMechanicsEvent JSON (PartialSuccess, 1 success)
-
-    Graph->>LLM: Feed roll outcome to gm_supervisor_node
-    LLM-->>Graph: tool_call: whisper_to_player(["u-demo-sara"], "You spot two sentries before they fully lock onto you...")
-    Graph->>Sig: POST /api/gm/sessions/:id/chat (PRIVATE -> Sara)
-    Sig->>Storage: Log ChatMessageEvent (seq #43, PRIVATE)
-    Sig-->>Web: Deliver PRIVATE CHAT_EVENT to Sara only
-
-    LLM-->>Graph: Final Public Narration
-    Graph->>Sig: POST /api/gm/sessions/:id/chat (PUBLIC, GM_NARRATION)
-    Sig->>Storage: Log ChatMessageEvent (seq #44, PUBLIC, GM_NARRATION)
-    Sig-->>Web: Broadcast PUBLIC GM_NARRATION to all players
-```
-
----
-
-## 9. Hybrid Observability (OpenTelemetry) & Avro/PyLance Telemetry Loop
-
-> **Detailed Specification**: See [`docs/technical/observability-and-avro-telemetry-design.md`](./observability-and-avro-telemetry-design.md) for the complete OpenTelemetry span hierarchy, W3C `traceparent` propagation rules, `.avsc` schemas, and PyLance compaction/distillation schemas.
-
-Satya splits AI GM and MCP telemetry into two complementary layers joined by a shared 128-bit W3C **`trace_id`**:
-
-1. **OpenTelemetry Distributed Tracing ("The Plumbing")**:
-   - Captures low-level operational waterfalls across Rust (`satya-signaling` via `tracing-opentelemetry`) $\leftrightarrow$ Python (`FastAPI` + `LangGraph`) $\leftrightarrow$ LLM Providers (`gen_ai.*` semantic conventions) $\leftrightarrow$ Tier 1/2/3 MCP Servers (`mcp.*` spans).
-   - Propagates `traceparent` headers automatically across WebSocket-triggered dispatches, MCP JSON-RPC calls, and `/api/gm/sessions/:id/*` callbacks without polluting durable campaign history with low-level HTTP transport noise.
-2. **Apache Iggy + Avro + PyLance ("The World State, Logs & Training Trajectories")**:
-   - In addition to the 6 existing topics (`schema-registry`, `session-lifecycle`, `webrtc-telemetry`, `chat-messages`, `interaction-dynamics`, `ttrpg-mechanics`), three new versioned, `CRC-64-AVRO`-fingerprinted topics capture permanent tabletop state, high-level agent reasoning, and structured call-graph/data-lineage logs:
-     - **Topic 7 — `tabletop-canvas` (`com.satya.events.TabletopCanvasEvent`, `schema_id = 8`)**: Records durable visual tabletop mutations (`MAP_GENERATED`, `MAP_UPDATED`, `TOKEN_MOVED`, `FOG_UPDATED`, `WGPU_DICE_SPAWNED`) so tactical maps and 3D `wgpu` dice physics can be deterministically replayed alongside audio and chat.
-     - **Topic 8 — `ai-gm-trajectories` (`com.satya.events.AiGmTrajectoryEvent`, `schema_id = 9`)**: Emitted once per completed AI GM turn (`AUTONOMOUS` or `CO_PILOT`), capturing `trace_id`, `trigger_event_id`, `provider`, `model_id`, ordered `tool_invocations` across Tier 1/2/3 MCP servers, `rag_sources_used` (Google Docs/Sheets IDs, Gemini `CachedContent` ID, or local `.lance` paths), token counts (`prompt_tokens`, `completion_tokens`, `cached_tokens`), and `total_turn_latency_ms`.
-     - **Topic 9 — `system-logs` (`com.satya.events.SessionLogEvent`, `schema_id = 10`)**: Persists plain-text Rust (`tracing`) and Python (`logging`) log lines prefixed inline with `[session=...] [trace=... span=...<-...] [lineage=...<-...]` so they can be directly embedded into `data/lance/system-logs.lance`.
-3. **Zero-Copy Compaction to PyLance & Downstream Custom Models**:
-   - See [`docs/technical/custom-ml-models-and-data-use-cases.md`](./custom-ml-models-and-data-use-cases.md) for how these `.lance` tables power **Roleplay & Persona Fine-Tuning (LoRA/DPO)**, **Local Ollama Tool-Calling Distillation**, **Encounter Pacing Predictors**, and a **Call-Graph + Data-Lineage Variational Autoencoder (VAE)** for automated error triage.
-
----
-
-## 10. Implementation Roadmap
-
-1. **Phase 1 — Backend GM API & Ephemeral BYOK Vault in `satya-signaling`**:
-   - Add `GmChatRequest`, `GmRollRequest`, `GmMapUpdateRequest`, and `GmContextResponse` to `crates/satya-schema/src/lib.rs`.
-   - Implement `/api/gm/sessions/:id/{context,chat,roll,map}` and in-memory session BYOK credential storage in `crates/satya-signaling/src/lib.rs`, replacing the hardcoded body in `trigger_ai_gm_chat_reply` with an async HTTP dispatch to the Python AI GM service.
-2. **Phase 2 — Python LangGraph + Multi-Provider + MCP Package (`src/satya_ml/ai_gm/`)**:
-   - Add `langgraph`, `langchain-core`, `langchain-ollama`, `langchain-google-genai`, `langchain-openai`, `langchain-anthropic`, `langchain-mcp-adapters`, `fastapi`, `uvicorn`, and `httpx` to `pixi.toml`.
-   - Implement `models.py` (`build_gm_chat_model`), Tier 1 & Tier 2 MCP tools in `tools.py`, and `graph.py` (`StateGraph` with per-session checkpointing).
-3. **Phase 3 — Google Drive / Docs / Sheets Lore Sync & Gemini Context Caching**:
-   - Add optional Google Workspace sync and Gemini `CachedContent` pinning (`src/satya_ml/ai_gm/lore_sync.py`) alongside local PyLance indexing (`data/lance/campaign-lore.lance`).
-4. **Phase 4 — Tactical Map Generator, Vision Inspector & `wgpu` 3D Dice Canvas**:
-   - Add deterministic SVG/PNG tactical grid generation and `inspect_tactical_map` to `src/satya_ml/ai_gm/maps.py`.
-   - Add `ServerWsPacket::MapUpdated` and `ServerWsPacket::WgpuDiceRoll` to `crates/satya-web/` so players see live map updates and synchronized 3D dice physics alongside WebRTC video and chat.
+1. **OpenTelemetry Distributed Tracing**: Captures spans across `satya-signaling` $\leftrightarrow$ `FastAPI` + `LangGraph` (`sync_session_context`, `scenario_director_node`, `gm_supervisor_node`, `tool_execution_node`, `publish_gm_response`) $\leftrightarrow$ LLM Providers.
+2. **Apache Iggy + Avro + PyLance**:
+   - **Topic 7 — `tabletop-canvas` (`com.satya.events.TabletopCanvasEvent`)**
+   - **Topic 8 — `ai-gm-trajectories` (`com.satya.events.AiGmTrajectoryEvent`)**
+   - **Topic 9 — `system-logs` (`com.satya.events.SessionLogEvent`)**

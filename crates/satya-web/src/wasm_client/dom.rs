@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     Document, Element, Headers, HtmlButtonElement, HtmlElement, HtmlInputElement,
-    HtmlSelectElement, Request, RequestInit, Response, Window,
+    HtmlSelectElement, HtmlTextAreaElement, Request, RequestInit, Response, Window,
 };
 
 /// SVG icon markup for the "show password" (open eye) toggle state.
@@ -47,6 +47,9 @@ pub(crate) fn input_value(id: &str) -> String {
     if let Ok(inp) = el.clone().dyn_into::<HtmlInputElement>() {
         return inp.value();
     }
+    if let Ok(ta) = el.clone().dyn_into::<HtmlTextAreaElement>() {
+        return ta.value();
+    }
     js_sys::Reflect::get(&el, &JsValue::from_str("value"))
         .ok()
         .and_then(|v| v.as_string())
@@ -59,6 +62,8 @@ pub(crate) fn set_input_value(id: &str, val: &str) {
     };
     if let Ok(inp) = el.clone().dyn_into::<HtmlInputElement>() {
         inp.set_value(val);
+    } else if let Ok(ta) = el.clone().dyn_into::<HtmlTextAreaElement>() {
+        ta.set_value(val);
     } else {
         let _ = js_sys::Reflect::set(&el, &JsValue::from_str("value"), &JsValue::from_str(val));
     }

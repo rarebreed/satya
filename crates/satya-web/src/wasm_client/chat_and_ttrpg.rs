@@ -144,20 +144,21 @@ pub(crate) fn sync_gm_context_button_visibility(is_gm: bool) {
     }
 }
 
-/// Tracks chat composition start time on keydown, navigates input history on `ArrowUp` / `ArrowDown`,
-/// and sends the message when `Enter` is pressed.
+/// Tracks chat composition start time on keydown, navigates input history on `ArrowUp` / `ArrowDown`
+/// (when the draft is single-line), and sends the Markdown message when `Enter` (without `Shift`) is pressed.
+/// Pressing `Shift+Enter` inserts a newline in the Markdown composer.
 #[wasm_bindgen]
 pub fn satya_chat_keydown(ev: KeyboardEvent) {
     let key = ev.key();
-    if key == "ArrowUp" {
+    let current = input_value("chat-input");
+    if key == "ArrowUp" && !ev.shift_key() && !current.contains('\n') {
         ev.prevent_default();
-        let current = input_value("chat-input");
         if let Some(prev) = with_state_mut(|st| st.chat_history.navigate_up(&current)) {
             set_input_value("chat-input", &prev);
         }
         return;
     }
-    if key == "ArrowDown" {
+    if key == "ArrowDown" && !ev.shift_key() && !current.contains('\n') {
         ev.prevent_default();
         if let Some(next) = with_state_mut(|st| st.chat_history.navigate_down()) {
             set_input_value("chat-input", &next);
@@ -169,7 +170,8 @@ pub fn satya_chat_keydown(ev: KeyboardEvent) {
             st.typing_started_at_ms = Some(js_sys::Date::now());
         }
     });
-    if key == "Enter" {
+    if key == "Enter" && !ev.shift_key() {
+        ev.prevent_default();
         satya_send_chat();
     }
 }
@@ -891,8 +893,24 @@ pub fn format_timestamp_us(timestamp_us: i64) -> (String, String) {
     }
 }
 
+/// Renders a Markdown chat message body into sanitized, XSS-safe HTML via
+/// [`satya_engine::render_rules_markdown_to_html`], supporting bold, italic, inline/fenced code,
+/// bullet/numbered lists, blockquotes/callouts (`> [!NOTE]`), tables, links, LaTeX math (`$...$`),
+/// and Mermaid flowcharts while escaping raw HTML tags.
+pub fn format_chat_markdown_html(markdown: &str) -> String {
+    let trimmed = markdown.trim();
+    if trimmed.is_empty() {
+        return r#"<div class="chat-markdown-body"></div>"#.to_string();
+    }
+    format!(
+        r#"<div class="chat-markdown-body">{}</div>"#,
+        satya_engine::render_rules_markdown_to_html(trimmed)
+    )
+}
+
 /// Formats the inner HTML for a [`ChatMessageEvent`] card in `#chat-log`, including sender,
-/// role, channel context, `<time class="chat-timestamp">`, visibility/recipients, and schema version.
+/// role, channel context, `<time class="chat-timestamp">`, visibility/recipients, schema version,
+/// and rendered Markdown body.
 pub fn format_chat_event_html(ev: &ChatMessageEvent) -> String {
     let recip_names: Vec<String> = ev
         .recipients
@@ -916,7 +934,7 @@ pub fn format_chat_event_html(ev: &ChatMessageEvent) -> String {
             <span><strong>{}</strong> ({:?}) · {:?}</span>
             <span><time class="chat-timestamp" datetime="{}" title="{}">{}</time> · {} · schema v{}</span>
         </div>
-        <div>{}</div>"#,
+        {}"#,
         escape_html(&ev.sender.display_name),
         ev.sender.role,
         ev.channel_context,
@@ -925,7 +943,7 @@ pub fn format_chat_event_html(ev: &ChatMessageEvent) -> String {
         escape_html(&ts_short),
         escape_html(&vis_label),
         ev.metadata.schema_version,
-        escape_html(&ev.body)
+        format_chat_markdown_html(&ev.body)
     )
 }
 
@@ -1058,11 +1076,11 @@ pub fn append_system_notice(text: &str) {
     apply_msg_filter_to_element(&div, "SYSTEM");
     let (ts_short, ts_title) = format_timestamp_us(0);
     div.set_inner_html(&format!(
-        r#"<div class="chat-meta"><span>SYSTEM</span><span><time class="chat-timestamp" datetime="{}" title="{}">{}</time> · RUST/WASM</span></div><div>{}</div>"#,
+        r#"<div class="chat-meta"><span>SYSTEM</span><span><time class="chat-timestamp" datetime="{}" title="{}">{}</time> · RUST/WASM</span></div>{}"#,
         escape_html(&ts_title),
         escape_html(&ts_title),
         escape_html(&ts_short),
-        escape_html(text)
+        format_chat_markdown_html(text)
     ));
     let _ = log.append_child(&div);
     log.set_scroll_top(log.scroll_height());

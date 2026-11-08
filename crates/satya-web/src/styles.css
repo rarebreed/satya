@@ -1136,9 +1136,65 @@ input:focus, select:focus {
     align-items: center;
 }
 
-.chat-input-wrap input {
+.chat-input-wrap input,
+.chat-input-wrap textarea.chat-markdown-input {
     width: 100%;
     padding-right: 92px;
+}
+
+.chat-input-wrap textarea.chat-markdown-input {
+    min-height: 38px;
+    max-height: 140px;
+    resize: vertical;
+    field-sizing: content;
+    font-family: inherit;
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.chat-markdown-body > article {
+    gap: 5px;
+    font-size: 0.82rem;
+    line-height: 1.42;
+}
+
+.chat-markdown-body p {
+    margin: 0;
+}
+
+.chat-markdown-body ul,
+.chat-markdown-body ol {
+    margin: 2px 0;
+    padding-left: 18px;
+}
+
+.chat-markdown-body blockquote {
+    margin: 3px 0;
+    padding: 5px 8px;
+}
+
+.scenario-dial-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.scenario-dial-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.scenario-dial-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
 }
 
 .chat-ctx-toggles {

@@ -640,3 +640,110 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
         {"character_name_or_id": "Terry", "session_id": "npc-gen-session"}
     )
     assert bound_terry["character_name"] == "Terry"
+
+    # Test Scenario Director: 12 TTRPG event sub-routines, flow modes, probability dials (0% disable),
+    # automatic turn-interval rabbit-hole interruption, and POST /internal/ai-gm/scenario-beat
+    from satya_ml.ai_gm.server import ScenarioBeatRequestPayload, handle_scenario_beat
+    from satya_ml.ai_gm.tools import (
+        SCENARIO_DIRECTOR_TASKS,
+        configure_scenario_director,
+        select_next_scenario_beat,
+        trigger_scenario_beat,
+    )
+
+    assert len(SCENARIO_DIRECTOR_TASKS) == 12
+    assert "combat_encounter" in SCENARIO_DIRECTOR_TASKS
+    assert "mysterious_stranger" in SCENARIO_DIRECTOR_TASKS
+    assert "new_npc_arrives" in SCENARIO_DIRECTOR_TASKS
+    assert "dramatic_revelation" in SCENARIO_DIRECTOR_TASKS
+    assert "thought_provoking_discussion" in SCENARIO_DIRECTOR_TASKS
+
+    # Free-form mode with 0% weight on thought_provoking_discussion and high combat/drama weights
+    cfg_res = configure_scenario_director.invoke(
+        {
+            "session_id": "dir-freeform-ep1",
+            "flow_mode": "free_form",
+            "campaign_premise": "Border station blockade",
+            "event_weights": {
+                slug: (60.0 if slug == "combat_encounter" else (40.0 if slug == "dramatic_revelation" else 0.0))
+                for slug in SCENARIO_DIRECTOR_TASKS
+            },
+            "beat_interval_turns": 2,
+        }
+    )
+    assert cfg_res["flow_mode"] == "free_form"
+    assert cfg_res["normalized_probabilities"]["combat_encounter"] == 0.6
+    assert cfg_res["normalized_probabilities"]["dramatic_revelation"] == 0.4
+    assert cfg_res["normalized_probabilities"]["thought_provoking_discussion"] == 0.0
+
+    for seed in range(10):
+        sampled = select_next_scenario_beat("dir-freeform-ep1", rng_seed=seed)
+        assert sampled["task_slug"] in {"combat_encounter", "dramatic_revelation"}
+        assert sampled["task_slug"] != "thought_provoking_discussion"
+        assert "ANTI-RAILROADING RULE" in sampled["mandate_text"]
+
+    # Scenario-driven mode adapts planned_beats without railroading
+    configure_scenario_director.invoke(
+        {
+            "session_id": "dir-plot-ep1",
+            "flow_mode": "scenario_driven",
+            "campaign_premise": "Sector 4 quarantine",
+            "planned_beats": [
+                "Encrypted distress signal from Bio-Lab 3 reveals a hidden survivor.",
+                "Syndicate enforcer squad breaches the cargo bay.",
+            ],
+            "beat_interval_turns": 2,
+        }
+    )
+    beat1 = trigger_scenario_beat.invoke({"session_id": "dir-plot-ep1"})
+    assert beat1["beat_source"] == "planned_plot_milestone"
+    assert "Encrypted distress signal from Bio-Lab 3" in beat1["mandate_text"]
+    beat2 = trigger_scenario_beat.invoke({"session_id": "dir-plot-ep1"})
+    assert beat2["beat_source"] == "planned_plot_milestone"
+    assert beat2["task_slug"] == "combat_encounter"
+
+    # In-graph automatic rabbit-hole breaker on turn interval + out-of-band /scenario-beat endpoint
+    configure_scenario_director.invoke(
+        {
+            "session_id": "dir-graph-ep1",
+            "flow_mode": "hybrid",
+            "beat_interval_turns": 2,
+        }
+    )
+    set_chat_model_override(InspectingChatModel())
+    try:
+        # Turn 1: below beat_interval_turns=2 -> no mandate injected yet
+        res_t1 = handle_ai_gm_event(
+            AiGmTurnEventPayload(
+                session_id="dir-graph-ep1",
+                operating_mode="AUTONOMOUS",
+                context_text="I keep chatting with the bartender about the weather.",
+            ),
+            authorization="Bearer satya_gm_secret_dev_token",
+        )
+        assert res_t1["active_director_mandate"] == ""
+
+        # Turn 2: reaches beat_interval_turns=2 -> Scenario Director automatically injects a world beat!
+        res_t2 = handle_ai_gm_event(
+            AiGmTurnEventPayload(
+                session_id="dir-graph-ep1",
+                operating_mode="AUTONOMOUS",
+                context_text="I ask the bartender another question about his childhood.",
+            ),
+            authorization="Bearer satya_gm_secret_dev_token",
+        )
+        assert "[SCENARIO DIRECTOR MANDATE" in res_t2["active_director_mandate"]
+
+        # Out-of-band proactive beat via POST /internal/ai-gm/scenario-beat
+        res_proactive = handle_scenario_beat(
+            ScenarioBeatRequestPayload(
+                session_id="dir-graph-ep1",
+                task_slug="mysterious_stranger",
+                custom_context="A hooded courier slides a data-chip across the table.",
+            ),
+            authorization="Bearer satya_gm_secret_dev_token",
+        )
+        assert res_proactive["status"] == "ok"
+        assert "mysterious_stranger" in res_proactive["active_director_mandate"]
+    finally:
+        set_chat_model_override(None)

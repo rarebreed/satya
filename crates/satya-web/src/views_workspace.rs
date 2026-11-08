@@ -62,13 +62,14 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
 
                     <div class="chat-composer">
                         <div class="chat-input-wrap">
-                            <input
+                            <textarea
                                 id="chat-input"
-                                type="text"
-                                placeholder="Type message, /msg @user ..., or /roll 4d10|>hi(3)..."
+                                class="chat-markdown-input"
+                                rows="2"
+                                placeholder="Type Markdown (**bold**, *italic*, `code`, - lists, > quotes, $math$), /msg @user ..., or /roll 4d10|>hi(3)... (Enter to send, Shift+Enter for newline)"
                                 onkeydown="window.satyaChatKeydown(event)"
                                 on:keydown=wasm_client::satya_chat_keydown
-                            />
+                            ></textarea>
                             <div class="chat-ctx-toggles" role="group" aria-label="Message Channel Context">
                                 <button
                                     type="button"
