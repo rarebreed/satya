@@ -753,10 +753,12 @@ input:focus, select:focus {
 }
 
 .roster-title {
-    font-size: 0.74rem;
-    color: var(--text-muted);
+    font-size: 0.96rem;
+    font-weight: 700;
+    color: #f8fafc;
     display: block;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    line-height: 1.35;
 }
 
 .roster-chips {

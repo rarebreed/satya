@@ -225,7 +225,10 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
         "closest_miss",
     );
     assert!(c_pill.contains("TN_P: 19 vs TN_GM: 17"));
-    assert!(c_readout.contains("Contested (TN_P = 19"));
+    assert!(c_readout.contains("Your Target (TN_P = 19)"));
+    assert!(c_readout.contains("GM / Hazard Target (TN_GM = 17)"));
+    assert!(c_readout.contains("ttrpg-odds-stacked-bar"));
+    assert!(c_readout.contains("ttrpg-odds-table"));
 
     let (mech_ev, _) = satya_engine::evaluate_satya_cascade_task(
         chat_ev.metadata.clone(),
@@ -317,6 +320,15 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains(r#"id="ttrpg-wound-shock""#));
     assert!(html.contains(r#"id="ttrpg-odds-pill""#));
     assert!(html.contains(r#"id="ttrpg-odds-readout""#));
+    assert!(html.contains("ttrpg-odds-stacked-bar"));
+    assert!(html.contains("ttrpg-odds-table"));
+    let combat_pane_idx = html.find(r#"id="notebook-pane-combat""#).unwrap();
+    let rules_pane_idx = html.find(r#"id="notebook-pane-rules""#).unwrap();
+    let stance_idx = html.find(r#"id="ttrpg-stance""#).unwrap();
+    assert!(
+        stance_idx > combat_pane_idx && stance_idx < rules_pane_idx,
+        "ttrpg-stance should live inside notebook-pane-combat rather than ttrpg-drawer"
+    );
     assert!(html.contains("container: ttrpg-card / inline-size"));
     assert!(html.contains("@container ttrpg-card"));
     assert!(!html.contains(r#"id="ttrpg-tn""#));
@@ -388,6 +400,7 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains(r#"id="tab-btn-docs""#));
     assert!(html.contains(r#"id="notebook-pane-docs""#));
     assert!(html.contains(r#"id="gm-memories-count-pill""#));
+    assert!(html.contains("0. GM Archivist (information lookup)"));
     assert!(html.contains(r#"id="gm-omnisearch-input""#));
     assert!(html.contains(r#"id="gm-omnisearch-scope""#));
     assert!(html.contains(r#"id="btn-gm-omnisearch""#));

@@ -271,17 +271,6 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                             </select>
                         </label>
                         <label>
-                            <span>"Combat Stance (Count-Up TC)"</span>
-                            <select id="ttrpg-stance">
-                                <option value="">"Non-Combat Task (TC 10)"</option>
-                                <option value="MANEUVER">"Melee: Maneuver (TC 11)"</option>
-                                <option value="POWER">"Melee: Power (TC 14)"</option>
-                                <option value="STABILITY">"Melee: Stability (TC 9)"</option>
-                                <option value="RANGED_AIMED">"Ranged: Aimed (TC 12)"</option>
-                                <option value="RANGED_SNAP">"Ranged: Snap (TC 7)"</option>
-                            </select>
-                        </label>
-                        <label>
                             <span>"Fatigue Level"</span>
                             <input id="ttrpg-fatigue" type="number" value="1" min="0" max="10"/>
                         </label>
@@ -297,19 +286,20 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                             />
                         </label>
                     </div>
-                    <div id="ttrpg-odds-readout" class="ttrpg-odds-readout" aria-live="polite">
-                        {
-                            wasm_client::format_cascade_odds_summary(
-                                3,
-                                12,
-                                0,
-                                0,
-                                "markov_step",
-                                "closest_miss",
-                            )
-                            .1
-                        }
-                    </div>
+                    <div
+                        id="ttrpg-odds-readout"
+                        class="ttrpg-odds-readout"
+                        aria-live="polite"
+                        inner_html=wasm_client::format_cascade_odds_summary(
+                            3,
+                            12,
+                            0,
+                            0,
+                            "markov_step",
+                            "closest_miss",
+                        )
+                        .1
+                    ></div>
                     <div class="btn-row">
                         <button
                             type="button"

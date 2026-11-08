@@ -104,14 +104,161 @@
     background: var(--bg-0);
     border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
-    border-radius: 6px;
-    padding: 6px 7px;
-    margin-bottom: 7px;
+    border-radius: 8px;
+    padding: 8px 9px;
+    margin-bottom: 8px;
     font-size: 0.76rem;
-    font-family: monospace;
     color: var(--text-primary);
-    line-height: 1.45;
-    overflow-wrap: anywhere;
+    line-height: 1.4;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ttrpg-odds-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+    gap: 6px;
+}
+
+.ttrpg-odds-kpi {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.ttrpg-odds-kpi .kpi-label {
+    font-size: 0.69rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.ttrpg-odds-kpi strong {
+    font-size: 0.82rem;
+    color: var(--accent);
+    font-family: monospace;
+}
+
+.kpi-sub {
+    font-size: 0.71rem;
+    color: var(--text-muted);
+}
+
+.ttrpg-odds-stacked-wrap {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.ttrpg-odds-stacked-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    font-size: 0.74rem;
+}
+
+.ttrpg-odds-stacked-bar {
+    display: flex;
+    width: 100%;
+    height: 18px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+}
+
+.ttrpg-odds-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-family: monospace;
+    font-weight: 700;
+    color: #020617;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: width 0.2s ease;
+}
+
+.seg-extraordinary {
+    background: #10b981;
+}
+
+.seg-clean {
+    background: #38bdf8;
+}
+
+.seg-partial {
+    background: #f59e0b;
+}
+
+.seg-fail {
+    background: #64748b;
+    color: #f8fafc;
+}
+
+.seg-botch {
+    background: #f43f5e;
+    color: #fff;
+}
+
+.odds-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.ttrpg-odds-table th,
+.ttrpg-odds-table td {
+    padding: 4px 7px;
+    vertical-align: middle;
+}
+
+.ttrpg-odds-cell-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 105px;
+}
+
+.ttrpg-odds-cell-bar .mono {
+    min-width: 46px;
+    text-align: right;
+    font-size: 0.74rem;
+}
+
+.ttrpg-odds-mini-track {
+    flex: 1;
+    height: 7px;
+    background: var(--bg-2);
+    border-radius: 999px;
+    overflow: hidden;
+    min-width: 44px;
+}
+
+.ttrpg-odds-mini-fill {
+    height: 100%;
+    border-radius: 999px;
+}
+
+.ttrpg-odds-total-row td {
+    border-top: 1px solid var(--accent);
+    border-bottom: none;
+    background: rgba(56, 189, 248, 0.07);
 }
 
 /* ============================================================================
@@ -668,7 +815,7 @@
     flex-wrap: wrap;
     width: 100%;
     padding: 0 4px;
-    font-size: 0.84rem;
+    font-size: 0.96rem;
     font-weight: 700;
     color: #f8fafc;
 }

@@ -101,6 +101,12 @@ pub(crate) fn set_text(id: &str, text: &str) {
     }
 }
 
+pub(crate) fn set_html(id: &str, html: &str) {
+    if let Some(el) = get_element(id) {
+        el.set_inner_html(html);
+    }
+}
+
 pub(crate) fn set_class(id: &str, class_name: &str) {
     if let Some(el) = get_element(id) {
         el.set_class_name(class_name);

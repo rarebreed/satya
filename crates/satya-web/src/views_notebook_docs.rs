@@ -5,33 +5,38 @@
 use crate::wasm_client;
 use leptos::prelude::*;
 
-/// Static table of Combat Stance reference rows in the Combat Tracker (`(name, tc_label, windup_label, effect)`).
-const COMBAT_STANCE_TABLE_ROWS: &[(&str, &str, &str, &str)] = &[
+/// Static table of Combat Stance reference rows (`(code, name, tc_label, windup_label, effect)`).
+const COMBAT_STANCE_TABLE_ROWS: &[(&str, &str, &str, &str, &str)] = &[
     (
+        "MANEUVER",
         "Melee: Maneuver / Probe",
         "11 TC (4 decide + 7 act)",
         "8 wind-up · 2 floor",
         "INS/CRE/KIN; +1 defensive parry margin; D_cog & N>=4 compress TC_decide",
     ),
     (
+        "POWER",
         "Melee: Heavy Power Strike",
         "14 TC (3 decide + 11 act)",
         "9 wind-up · 2 floor",
         "FOR/SPD/MAS; +2 Wound Shock on hit; vulnerable to fast interrupts",
     ),
     (
+        "STABILITY",
         "Melee: Defensive Guard / Stability",
         "9 TC (3 decide + 6 act)",
         "6 wind-up · 2 floor",
         "KIN/INS/SPD; braced stance resists knockdown & boosts Guard Pool",
     ),
     (
+        "RANGED_AIMED",
         "Ranged: Aimed Single Shot",
         "12 TC (5 decide + 7 act)",
         "9 wind-up · 2 floor",
         "SIG/FOC/DEX; deliberate sight acquisition (-2 to -4 to TN)",
     ),
     (
+        "RANGED_SNAP",
         "Ranged: Snap Shot",
         "7 TC (2 decide + 5 act)",
         "5 wind-up · 2 floor",
@@ -79,8 +84,19 @@ pub fn NotebookReferencePanes() -> impl IntoView {
             style="display: none;"
         >
             <div class="pane-toolbar">
-                <div>
+                <div class="model-controls-row">
                     <span class="subtitle">"Satya Count-Up Tick Timeline (1 Tick = 0.5s) & Two-Component Action Economy"</span>
+                    <label class="inline-label" for="ttrpg-stance">
+                        <span>"Combat Stance"</span>
+                        <select id="ttrpg-stance">
+                            <option value="">"Non-Combat Task (TC 10)"</option>
+                            {COMBAT_STANCE_TABLE_ROWS
+                                .iter()
+                                .copied()
+                                .map(|(code, name, tc, _, _)| view! { <option value={code}>{format!("{name} ({tc})")}</option> })
+                                .collect_view()}
+                        </select>
+                    </label>
                 </div>
                 <div class="btn-row-compact">
                     <span id="combat-round-pill" class="pill pill-active">"Round 1 · Tick 0"</span>
@@ -130,7 +146,7 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                         {COMBAT_STANCE_TABLE_ROWS
                             .iter()
                             .copied()
-                            .map(|(stance_name, tc_label, windup, effect)| {
+                            .map(|(_, stance_name, tc_label, windup, effect)| {
                                 view! {
                                     <tr>
                                         <td><strong>{stance_name}</strong></td>
@@ -595,9 +611,9 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                 </div>
             </div>
 
-            // --- GM OMNISEARCH PANEL (RULES + PERSISTENT GM DOCS + GM MEMORIES + SHEETS + COMBAT + MAP) ---
+            // --- GM ARCHIVIST PANEL (RULES + PERSISTENT GM DOCS + GM MEMORIES + SHEETS + COMBAT + MAP) ---
             <div class="roster-bar">
-                <span class="roster-title">"0. GM Omnisearch (Unified Lookup Across Rules, Persistent GM Docs, GM Memory, Character Sheets, Combat & Map):"</span>
+                <span class="roster-title">"0. GM Archivist (information lookup)"</span>
                 <div class="form-grid">
                     <label>
                         <span>"Search Query (Rules, NPCs, Lore, Character Stats, Combat Tick, or GM Docs)"</span>

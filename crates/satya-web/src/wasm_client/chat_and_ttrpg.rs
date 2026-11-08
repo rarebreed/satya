@@ -3,7 +3,7 @@
 
 use crate::wasm_client::dom::{
     document, escape_html, get_element, input_value, roll_browser_die_i64, select_value, set_class,
-    set_display, set_input_checked, set_input_value, set_text,
+    set_display, set_html, set_input_checked, set_input_value, set_text,
 };
 use crate::wasm_client::notebook::render_wgpu_dice_roll;
 use crate::wasm_client::options::{parse_channel_context, parse_combat_stance};
@@ -358,39 +358,117 @@ pub fn format_contested_cascade_odds_summary(
     let p_win = c_odds.prob_total_win * 100.0;
     let p_succ = u_odds.prob_any_success * 100.0;
 
+    let c_extra = c_odds.prob_extraordinary_success * 100.0;
+    let c_clean = c_odds.prob_clean_success * 100.0;
+    let c_graze = c_odds.prob_grazing_tie_partial * 100.0;
+    let c_lucky = c_odds.prob_lucky_break_partial * 100.0;
+    let c_breach = c_odds.prob_floor_breach_partial * 100.0;
+    let c_partial = c_odds.prob_partial_success * 100.0;
+    let c_fail = c_odds.prob_clean_failure * 100.0;
+    let c_botch = c_odds.prob_botch_failure * 100.0;
+    let c_mean = c_odds.net_margin_stats.mean;
+
+    let u_comp = u_odds.prob_success_with_complication * 100.0;
+    let u_clean_succ = (p_succ - u_comp).max(0.0);
+    let u_fail = u_odds.prob_clean_failure * 100.0;
+    let u_botch = u_odds.prob_botch_failure * 100.0;
+    let u_mean = u_stats.mean;
+
     let pill_text = format!(
         "TN_P: {tn_p} vs TN_GM: {tn_gm} · P(Win): {p_win:.1}% · TN_eff: {tn_eff} · P(Succ≥1): {p_succ:.1}%"
     );
-    let readout_text = format!(
-        "Contested (TN_P = {} [31 - C {} + Δ_tool {:+}], TN_GM = {} [21 - Δ_ext {:+}]) · P(Win): {:.2}% (Extraord {:.1}%, Clean {:.1}%, GrazingTie {:.1}%, LuckyBreak {:.1}%, FloorBreach {:.1}%) · P(Botch): {:.2}% · E[ΔM]: {:+.2} | Uncontested TN_eff = {} (31 - C {} + Δ_ext {:+}) · Carry: +{} / -{} ({}, {}) | P(Succ ≥ 1): {:.2}% · P(CleanFail): {:.2}% · P(BotchFail): {:.2}% · P(Succ+Botch): {:.2}% · E[Margin]: {:+.2}",
-        tn_p,
-        c,
-        d_tool,
-        tn_gm,
-        d_ext,
-        p_win,
-        c_odds.prob_extraordinary_success * 100.0,
-        c_odds.prob_clean_success * 100.0,
-        c_odds.prob_grazing_tie_partial * 100.0,
-        c_odds.prob_lucky_break_partial * 100.0,
-        c_odds.prob_floor_breach_partial * 100.0,
-        c_odds.prob_botch_failure * 100.0,
-        c_odds.net_margin_stats.mean,
-        tn_eff,
-        c,
-        d_tool + d_ext,
-        uncontested.delta_over,
-        uncontested.effective_delta_under(),
-        uncontested.carry_mode,
-        uncontested.botch_rule,
-        p_succ,
-        u_odds.prob_clean_failure * 100.0,
-        u_odds.prob_botch_failure * 100.0,
-        u_odds.prob_success_with_complication * 100.0,
-        u_stats.mean
+
+    let seg = |cls: &str, label: &str, pct: f64| -> String {
+        if pct <= 0.05 {
+            return String::new();
+        }
+        let txt = if pct >= 8.0 {
+            format!("<span>{pct:.1}%</span>")
+        } else {
+            String::new()
+        };
+        format!(
+            r#"<div class="ttrpg-odds-seg {cls}" style="width:{pct:.2}%" title="{label}: {pct:.2}%">{txt}</div>"#
+        )
+    };
+    let bar_cell = |cls: &str, pct: f64| -> String {
+        let w = pct.clamp(0.0, 100.0);
+        format!(
+            r#"<div class="ttrpg-odds-cell-bar"><span class="mono">{pct:.2}%</span><div class="ttrpg-odds-mini-track"><div class="ttrpg-odds-mini-fill {cls}" style="width:{w:.1}%"></div></div></div>"#
+        )
+    };
+
+    let readout_html = format!(
+        concat!(
+            r#"<div class="ttrpg-odds-kpis">"#,
+            r#"<div class="ttrpg-odds-kpi"><span class="kpi-label">Your Target (TN_P = {tn_p})</span><strong>Roll {tn_p_min}+ on 2d20</strong><span class="kpi-sub">31 - C {c} + Δ_tool {d_tool:+}</span></div>"#,
+            r#"<div class="ttrpg-odds-kpi"><span class="kpi-label">GM / Hazard Target (TN_GM = {tn_gm})</span><strong>Roll {tn_gm_min}+ on 2d20</strong><span class="kpi-sub">21 - Δ_ext {d_ext:+} · Static TN_eff = {tn_eff}</span></div>"#,
+            r#"<div class="ttrpg-odds-kpi"><span class="kpi-label">Cascade Carry ({n} × 2d20)</span><strong>+{d_over} Hit / -{d_under} Miss</strong><span class="kpi-sub">{carry_label} · {botch_label} ({carry_code}, {botch_code})</span></div>"#,
+            r#"<div class="ttrpg-odds-kpi"><span class="kpi-label">Expected Net Margin</span><strong>E[ΔM]: {c_mean:+.2} vs GM</strong><span class="kpi-sub">Uncontested E[Margin]: {u_mean:+.2}</span></div>"#,
+            r#"</div>"#,
+            r#"<div class="ttrpg-odds-stacked-wrap">"#,
+            r#"<div class="ttrpg-odds-stacked-header"><span><strong>Outcome Distribution Graph</strong> (Contested P(Win): {p_win:.2}%)</span><span class="kpi-sub">Extraordinary {c_extra:.1}% · Clean {c_clean:.1}% · Partial {c_partial:.1}% · Fail {c_fail:.1}% · Botch {c_botch:.1}%</span></div>"#,
+            r#"<div class="ttrpg-odds-stacked-bar" role="img" aria-label="Outcome probability distribution bar">{seg_extra}{seg_clean}{seg_partial}{seg_fail}{seg_botch}</div>"#,
+            r#"</div>"#,
+            r#"<div class="metrics-table-wrap"><table class="metrics-table ttrpg-odds-table">"#,
+            r#"<thead><tr><th>Outcome Tier</th><th>What It Means</th><th>Contested (vs. GM)</th><th>Uncontested (Static TN)</th></tr></thead>"#,
+            r#"<tbody>"#,
+            r#"<tr><td><span class="odds-dot seg-extraordinary"></span><strong>Extraordinary Win</strong></td><td class="kpi-sub">Beat GM by ≥3 net successes (-15% time, -4 next TN)</td><td>{cell_c_extra}</td><td><span class="kpi-sub">Included in Clean</span></td></tr>"#,
+            r#"<tr><td><span class="odds-dot seg-clean"></span><strong>Clean Success</strong></td><td class="kpi-sub">Beat target cleanly with no complications</td><td>{cell_c_clean}</td><td>{cell_u_clean}</td></tr>"#,
+            r#"<tr><td><span class="odds-dot seg-partial"></span><strong>Partial / Costly Win</strong></td><td class="kpi-sub">GrazingTie {c_graze:.1}% · LuckyBreak {c_lucky:.1}% · FloorBreach {c_breach:.1}% (P(Succ+Botch): {u_comp:.2}%)</td><td>{cell_c_partial}</td><td>{cell_u_comp}</td></tr>"#,
+            r#"<tr><td><span class="odds-dot seg-fail"></span><strong>Clean Failure</strong></td><td class="kpi-sub">Miss target without triggering a botch (P(CleanFail): {u_fail:.2}%)</td><td>{cell_c_fail}</td><td>{cell_u_fail}</td></tr>"#,
+            r#"<tr><td><span class="odds-dot seg-botch"></span><strong>Botch / Critical Fail</strong></td><td class="kpi-sub">Severe miss or &lt;2 floor breach (P(BotchFail): {u_botch:.2}%)</td><td>{cell_c_botch}</td><td>{cell_u_botch}</td></tr>"#,
+            r#"</tbody>"#,
+            r#"<tfoot><tr class="ttrpg-odds-total-row"><td><strong>Total Success Rate</strong></td><td class="kpi-sub">All winning outcomes combined (P(Win): {p_win:.2}% · P(Succ ≥ 1): {p_succ:.2}%)</td><td><strong>{p_win:.2}%</strong> <span class="kpi-sub">(E[ΔM]: {c_mean:+.2})</span></td><td><strong>{p_succ:.2}%</strong> <span class="kpi-sub">(E[Margin]: {u_mean:+.2})</span></td></tr></tfoot>"#,
+            r#"</table></div>"#,
+        ),
+        tn_p = tn_p,
+        tn_p_min = (tn_p + 1).clamp(2, 40),
+        c = c,
+        d_tool = d_tool,
+        tn_gm = tn_gm,
+        tn_gm_min = (tn_gm + 1).clamp(2, 40),
+        d_ext = d_ext,
+        tn_eff = tn_eff,
+        n = n,
+        d_over = uncontested.delta_over,
+        d_under = uncontested.effective_delta_under(),
+        carry_label = uncontested.carry_mode.label(),
+        botch_label = uncontested.botch_rule.label(),
+        carry_code = uncontested.carry_mode,
+        botch_code = uncontested.botch_rule,
+        c_mean = c_mean,
+        u_mean = u_mean,
+        p_win = p_win,
+        p_succ = p_succ,
+        c_extra = c_extra,
+        c_clean = c_clean,
+        c_partial = c_partial,
+        c_graze = c_graze,
+        c_lucky = c_lucky,
+        c_breach = c_breach,
+        c_fail = c_fail,
+        c_botch = c_botch,
+        u_comp = u_comp,
+        u_fail = u_fail,
+        u_botch = u_botch,
+        seg_extra = seg("seg-extraordinary", "Extraordinary Win", c_extra),
+        seg_clean = seg("seg-clean", "Clean Success", c_clean),
+        seg_partial = seg("seg-partial", "Partial / Grazing Win", c_partial),
+        seg_fail = seg("seg-fail", "Clean Failure", c_fail),
+        seg_botch = seg("seg-botch", "Botch / Critical Failure", c_botch),
+        cell_c_extra = bar_cell("seg-extraordinary", c_extra),
+        cell_c_clean = bar_cell("seg-clean", c_clean),
+        cell_u_clean = bar_cell("seg-clean", u_clean_succ),
+        cell_c_partial = bar_cell("seg-partial", c_partial),
+        cell_u_comp = bar_cell("seg-partial", u_comp),
+        cell_c_fail = bar_cell("seg-fail", c_fail),
+        cell_u_fail = bar_cell("seg-fail", u_fail),
+        cell_c_botch = bar_cell("seg-botch", c_botch),
+        cell_u_botch = bar_cell("seg-botch", u_botch),
     );
 
-    (pill_text, readout_text)
+    (pill_text, readout_html)
 }
 
 /// Computes and formats the live exact Combinatorial & DP probability readout for the
@@ -468,7 +546,7 @@ pub fn satya_update_cascade_preview() {
         &botch_raw,
     );
     set_text("ttrpg-odds-pill", &pill_text);
-    set_text("ttrpg-odds-readout", &readout_text);
+    set_html("ttrpg-odds-readout", &readout_text);
 }
 
 /// Alias for [`satya_update_cascade_preview`] updating both `#ttrpg-odds-pill` and `#ttrpg-odds-readout`.
