@@ -27,6 +27,26 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                         <div class="webcam-frame-actions">
                             <button
                                 type="button"
+                                id="btn-export-chat-md"
+                                class="btn btn-sm btn-secondary"
+                                title="Export visibility-filtered session chat & task rolls as Markdown (.md)"
+                                onclick="window.satyaExportChatTranscript('md')"
+                                on:click=move |_| wasm_client::satya_export_chat_transcript("md".to_string())
+                            >
+                                "Export .md"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-export-chat-json"
+                                class="btn btn-sm btn-secondary"
+                                title="Export visibility-filtered session chat & task rolls as JSON (.json)"
+                                onclick="window.satyaExportChatTranscript('json')"
+                                on:click=move |_| wasm_client::satya_export_chat_transcript("json".to_string())
+                            >
+                                "Export .json"
+                            </button>
+                            <button
+                                type="button"
                                 id="btn-toggle-chat-drawer"
                                 class="btn btn-sm btn-secondary"
                                 title="Collapse Session Chat drawer to save workspace space"

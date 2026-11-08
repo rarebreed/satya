@@ -218,6 +218,11 @@ pub async fn create_session_handler(
                 let _ = state.storage.log_session_lifecycle(&ev).await;
             }
 
+            let history = state
+                .auth
+                .build_session_history_snapshot(&req.session_id, &self_participant)
+                .await;
+
             (
                 StatusCode::OK,
                 Json(json!(SessionEnterResponse {
@@ -226,6 +231,7 @@ pub async fn create_session_handler(
                     join_token,
                     self_participant,
                     roster,
+                    history: Some(history),
                 })),
             )
                 .into_response()
@@ -292,6 +298,11 @@ pub async fn join_session_handler(
                 let _ = state.storage.log_session_lifecycle(&ev).await;
             }
 
+            let history = state
+                .auth
+                .build_session_history_snapshot(&req.session_id, &self_participant)
+                .await;
+
             (
                 StatusCode::OK,
                 Json(json!(SessionEnterResponse {
@@ -300,6 +311,7 @@ pub async fn join_session_handler(
                     join_token,
                     self_participant,
                     roster,
+                    history: Some(history),
                 })),
             )
                 .into_response()

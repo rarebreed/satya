@@ -29,6 +29,7 @@ pub mod menu;
 pub mod notebook;
 pub mod npcs;
 pub mod options;
+pub mod session_persistence;
 pub mod state;
 pub mod telemetry;
 pub mod ttrpg_drawer_triad;
@@ -47,6 +48,7 @@ pub use menu::*;
 pub use notebook::*;
 pub use npcs::*;
 pub use options::*;
+pub use session_persistence::*;
 pub use state::*;
 pub use telemetry::*;
 pub use ttrpg_drawer_triad::*;
@@ -86,6 +88,7 @@ pub fn start_satya_wasm_client() {
     sync_chat_options_for_mode(mode);
     satya_visibility_changed();
     set_display("admin-inspector-card", "none");
+    restore_saved_auth_and_session();
 }
 
 /// Binds the Rust Wasm handlers onto `window` so both SSR HTML attributes and CSR/hydrated
@@ -108,6 +111,12 @@ pub fn register_window_bindings() {
         "satyaCreateSession" => satya_create_session(),
         "satyaJoinSession" => satya_join_session(),
         "satyaLeaveSession" => satya_leave_session(),
+        "satyaRefreshSavedSessions" => satya_refresh_saved_sessions(),
+        "satyaSelectSavedSession" => satya_select_saved_session(),
+        "satyaResumeSavedSession" => satya_resume_saved_session(),
+        "satyaExportSessionSnapshot" => satya_export_session_snapshot(),
+        "satyaImportSessionSnapshot" => satya_import_session_snapshot(),
+        "satyaExportChatTranscript" => satya_export_chat_transcript(String),
         "satyaTogglePassword" => satya_toggle_password(String, String),
         "satyaToggleHamburgerMenu" => satya_toggle_hamburger_menu(),
         "satyaToggleAuthPane" => satya_toggle_auth_pane(),

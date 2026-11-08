@@ -199,6 +199,10 @@ pub async fn gm_session_chat_handler(
     };
 
     let _ = state.storage.log_chat_message(&chat_event).await;
+    state
+        .auth
+        .record_chat_event_to_db(&session_id, &chat_event)
+        .await;
     let pkt_str = json!({
         "type": "CHAT_EVENT",
         "event": chat_event
@@ -396,6 +400,10 @@ pub async fn gm_session_roll_handler(
     .await;
 
     let _ = state.storage.log_ttrpg_mechanics(&mech_ev).await;
+    state
+        .auth
+        .record_mechanics_event_to_db(&session_id, &mech_ev)
+        .await;
 
     // Also emit Topic 7 (`tabletop-canvas`) WgpuDiceSpawned event & broadcast 3D dice seed
     let dice_spec = WgpuDiceSpec {
@@ -720,7 +728,7 @@ pub fn evaluate_roll_combat_action_and_triad(
 
     let tech_id = raw_tech
         .and_then(CombatTechniqueId::from_code_str)
-        .unwrap_or_else(|| match combat_stance {
+        .unwrap_or(match combat_stance {
             Some(CombatStance::Power) => CombatTechniqueId::Swing,
             Some(CombatStance::Maneuver) => CombatTechniqueId::Probe,
             Some(CombatStance::Stability) => CombatTechniqueId::Parry,
@@ -1245,6 +1253,7 @@ pub async fn trigger_ai_gm_chat_reply(
                         is_edited: false,
                     };
                     let _ = state.storage.log_chat_message(&ev).await;
+                    state.auth.record_chat_event_to_db(session_id, &ev).await;
                     let pkt_str = json!({
                         "type": "CHAT_EVENT",
                         "event": ev
@@ -1313,6 +1322,7 @@ pub async fn trigger_ai_gm_chat_reply(
             is_edited: false,
         };
         let _ = state.storage.log_chat_message(&ev).await;
+        state.auth.record_chat_event_to_db(session_id, &ev).await;
         let pkt_str = json!({
             "type": "CHAT_EVENT",
             "event": ev

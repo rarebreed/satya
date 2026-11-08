@@ -155,7 +155,7 @@ pub struct LeaveSessionRequest {
     pub reason: Option<String>,
 }
 
-/// HTTP response body returned when a user creates or joins a session.
+/// HTTP response body returned when a user creates, joins, or resumes a session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionEnterResponse {
     /// Identifier of the active session room.
@@ -168,6 +168,9 @@ pub struct SessionEnterResponse {
     pub self_participant: Participant,
     /// Current participant roster in the session.
     pub roster: Vec<Participant>,
+    /// Optional visibility-filtered session history snapshot (chat, mechanics rolls, active map, combat tracker, bound character).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history: Option<crate::session_persistence::SessionHistorySnapshot>,
 }
 
 /// Client-to-server WebSocket packet sent over `/ws/session`.

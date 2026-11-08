@@ -143,6 +143,10 @@ async fn handle_ws_client(
                     };
 
                     let _ = state.storage.log_chat_message(&chat_event).await;
+                    state
+                        .auth
+                        .record_chat_event_to_db(&session_id, &chat_event)
+                        .await;
                     let pkt_str = json!({
                         "type": "CHAT_EVENT",
                         "event": chat_event
@@ -532,6 +536,10 @@ async fn handle_ws_client(
                     .await;
 
                     let _ = state.storage.log_ttrpg_mechanics(&mech_ev).await;
+                    state
+                        .auth
+                        .record_mechanics_event_to_db(&session_id, &mech_ev)
+                        .await;
 
                     // Emit synchronized 3D `wgpu` physics dice roll for the `2d20` pairs
                     let dice_spec = WgpuDiceSpec {

@@ -6,14 +6,18 @@ use crate::wasm_client::chat_and_ttrpg::{
     sync_gm_context_button_visibility,
 };
 use crate::wasm_client::dom::{
-    document, escape_html, fetch_json, get_element, input_checked, input_value, select_value,
-    set_button_disabled, set_class, set_display, set_feedback, set_input_checked, set_input_value,
-    set_select_value, set_text,
+    document, escape_html, fetch_json, get_element, input_checked, input_value,
+    local_storage_remove, local_storage_set, select_value, set_button_disabled, set_class,
+    set_display, set_feedback, set_input_checked, set_input_value, set_select_value, set_text,
 };
 use crate::wasm_client::notebook::{render_combat_tracker, sync_google_auth_status_from_server};
 use crate::wasm_client::options::{
     default_model_for_provider, is_ai_gm_mode, parse_session_mode, parse_session_role,
     sync_chat_options_for_mode, sync_role_options_for_mode,
+};
+use crate::wasm_client::session_persistence::{
+    AUTH_TOKEN_STORAGE_KEY, ACTIVE_SESSION_STORAGE_KEY, PersistedActiveSessionRef,
+    replay_session_history_snapshot, satya_refresh_saved_sessions,
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
 use crate::wasm_client::telemetry::satya_refresh_metrics;
@@ -209,11 +213,13 @@ pub(crate) fn apply_auth_success(data: AuthSuccessResponse) {
         ));
     }
 
+    local_storage_set(AUTH_TOKEN_STORAGE_KEY, &data.auth_token);
     with_state_mut(|st| {
         st.auth_token = Some(data.auth_token.clone());
         st.user = Some(data);
     });
     sync_google_auth_status_from_server();
+    satya_refresh_saved_sessions();
 
     if is_admin {
         set_display("iggy-non-admin-notice", "none");
@@ -379,7 +385,7 @@ pub fn satya_join_session() {
     });
 }
 
-fn enter_session(data: SessionEnterResponse) {
+pub(crate) fn enter_session(data: SessionEnterResponse) {
     set_text(
         "session-status-pill",
         &format!(
@@ -396,8 +402,17 @@ fn enter_session(data: SessionEnterResponse) {
         ),
     );
 
+    if let Ok(active_json) = serde_json::to_string(&PersistedActiveSessionRef {
+        session_id: data.session_id.clone(),
+        join_token: Some(data.join_token.clone()),
+        role: Some(data.self_participant.role),
+    }) {
+        local_storage_set(ACTIVE_SESSION_STORAGE_KEY, &active_json);
+    }
+
     let session_mode = data.session_mode;
     let is_gm = data.self_participant.role == SessionRole::Gm;
+    let history = data.history;
     with_state_mut(|st| {
         st.session_id = Some(data.session_id);
         st.session_mode = session_mode;
@@ -430,7 +445,9 @@ fn enter_session(data: SessionEnterResponse) {
     );
     render_roster();
     set_session_buttons_enabled(true);
+    replay_session_history_snapshot(history);
     connect_signaling_websocket();
+    satya_refresh_saved_sessions();
     satya_refresh_metrics();
 }
 
@@ -533,7 +550,9 @@ pub fn satya_leave_session() {
             .await;
         }
 
+        local_storage_remove(ACTIVE_SESSION_STORAGE_KEY);
         cleanup_client_session_state();
+        satya_refresh_saved_sessions();
         set_display("session-card", "block");
         set_text("btn-menu-toggle-session-pane", "Hide Session Pane");
         set_feedback(
@@ -590,6 +609,8 @@ pub fn satya_logout() {
             fetch_json::<_, serde_json::Value>("POST", "/api/auth/logout", Some(&tok), Some(&req))
                 .await;
 
+        local_storage_remove(AUTH_TOKEN_STORAGE_KEY);
+        local_storage_remove(ACTIVE_SESSION_STORAGE_KEY);
         cleanup_client_session_state();
         with_state_mut(|st| {
             st.auth_token = None;

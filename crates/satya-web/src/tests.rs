@@ -755,4 +755,35 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains(r#"html[data-density="compact"]"#));
     assert!(html.contains(r#"html[data-corners="sharp"]"#));
     assert!(html.contains(r#"html[data-font="mono"]"#));
+
+    // Verify Saved Session Resume, .satyasession Snapshot Export/Import, and .md/.json Chat Transcript Export UI
+    assert!(html.contains(r#"id="saved-sessions-select""#));
+    assert!(html.contains(r#"id="btn-resume-saved-session""#));
+    assert!(html.contains(r#"id="btn-refresh-saved-sessions""#));
+    assert!(html.contains(r#"id="btn-export-session-snapshot""#));
+    assert!(html.contains(r#"id="session-import-file-input""#));
+    assert!(html.contains(r#"id="btn-import-session-snapshot""#));
+    assert!(html.contains(r#"id="btn-export-chat-md""#));
+    assert!(html.contains(r#"id="btn-export-chat-json""#));
+
+    let opts_html = wasm_client::format_saved_sessions_options_html(
+        &[satya_schema::SavedSessionSummary {
+            session_id: "harsh-reality-ep1".to_string(),
+            session_mode: satya_schema::SessionMode::Ttrpg,
+            role: satya_schema::SessionRole::Gm,
+            display_name: "Sean (GM)".to_string(),
+            host_user_id: "u-demo-gm-sean".to_string(),
+            campaign_tag: "harsh-reality-ep1".to_string(),
+            has_ai_gm: true,
+            character_id: None,
+            chat_event_count: 12,
+            mechanics_event_count: 4,
+            active_human_count: 2,
+            created_at_us: 1_700_000_000_000_000,
+            updated_at_us: 1_700_000_100_000_000,
+        }],
+        Some("harsh-reality-ep1"),
+    );
+    assert!(opts_html.contains(r#"value="harsh-reality-ep1" selected"#));
+    assert!(opts_html.contains("12 msgs, 4 rolls (2 live)"));
 }

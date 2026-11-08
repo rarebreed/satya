@@ -35,12 +35,13 @@ impl SignalingAppState {
     ) -> anyhow::Result<Arc<Self>> {
         let base_dir = base_dir.into();
         let auth = AuthAndSessionManager::new(&base_dir, &config.auth).await?;
+        let start_seq = auth.max_persisted_sequence_num().await.saturating_add(1);
         let storage = Arc::new(EventLogRouter::new(config, &base_dir).await?);
 
         Ok(Arc::new(Self {
             auth,
             storage,
-            sequence_counter: AtomicI64::new(1),
+            sequence_counter: AtomicI64::new(start_seq),
             active_sockets: RwLock::new(HashMap::new()),
         }))
     }

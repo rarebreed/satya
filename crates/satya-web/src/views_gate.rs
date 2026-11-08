@@ -527,8 +527,69 @@ pub fn AuthAndSessionGate() -> impl IntoView {
 
             <div id="session-card" class="card session-card" style="display: none;">
                 <div class="card-header">
-                    <h2>"2. Create or Join Password-Protected Session"</h2>
-                    <span class="subtitle">"TTRPG (GM / AI-GM / Players) or Meeting (Host / Participants)"</span>
+                    <h2>"2. Create, Join, or Resume Password-Protected Session"</h2>
+                    <span class="subtitle">"TTRPG (GM / AI-GM / Players) or Meeting (Host / Participants) · Auto-saves Chat, Rolls, Map & Combat State"</span>
+                </div>
+                <div class="form-grid" style="margin-bottom: 0.65rem;">
+                    <label style="grid-column: 1 / -1;">
+                        <span>"Saved & Resumable Sessions (SQLite Vault)"</span>
+                        <div class="btn-row" style="margin-top: 0.25rem; flex-wrap: wrap;">
+                            <select
+                                id="saved-sessions-select"
+                                style="flex: 1 1 260px;"
+                                onchange="window.satyaSelectSavedSession()"
+                                on:change=move |_| wasm_client::satya_select_saved_session()
+                            >
+                                <option value="">"No saved sessions yet — Create or Join a session below"</option>
+                            </select>
+                            <button
+                                type="button"
+                                id="btn-resume-saved-session"
+                                class="btn btn-primary"
+                                title="Resume the selected saved session and replay visibility-filtered chat & mechanics history"
+                                onclick="window.satyaResumeSavedSession()"
+                                on:click=move |_| wasm_client::satya_resume_saved_session()
+                            >
+                                "Resume Saved Session"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-refresh-saved-sessions"
+                                class="btn btn-secondary"
+                                title="Refresh saved sessions list from server"
+                                onclick="window.satyaRefreshSavedSessions()"
+                                on:click=move |_| wasm_client::satya_refresh_saved_sessions()
+                            >
+                                "Refresh List"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-export-session-snapshot"
+                                class="btn btn-secondary"
+                                title="Export a portable .satyasession snapshot file (without API keys)"
+                                onclick="window.satyaExportSessionSnapshot()"
+                                on:click=move |_| wasm_client::satya_export_session_snapshot()
+                            >
+                                "Export .satyasession"
+                            </button>
+                            <input
+                                id="session-import-file-input"
+                                type="file"
+                                accept=".satyasession,.json"
+                                style="max-width: 210px;"
+                            />
+                            <button
+                                type="button"
+                                id="btn-import-session-snapshot"
+                                class="btn btn-secondary"
+                                title="Import a portable .satyasession file and enter the restored session"
+                                onclick="window.satyaImportSessionSnapshot()"
+                                on:click=move |_| wasm_client::satya_import_session_snapshot()
+                            >
+                                "Import .satyasession"
+                            </button>
+                        </div>
+                    </label>
                 </div>
                 <div class="form-grid">
                     <label>

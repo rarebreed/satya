@@ -16,6 +16,7 @@ pub mod events;
 pub mod gdpr;
 pub mod protocol;
 pub mod registry;
+pub mod session_persistence;
 pub mod types;
 
 pub use character::*;
@@ -23,6 +24,7 @@ pub use events::*;
 pub use gdpr::*;
 pub use protocol::*;
 pub use registry::*;
+pub use session_persistence::*;
 pub use types::*;
 
 #[cfg(test)]
