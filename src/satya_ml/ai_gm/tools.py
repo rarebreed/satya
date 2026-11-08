@@ -131,6 +131,7 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> 
 
 
 from satya_ml.ai_gm.maps import (
+    ensure_or_sync_procedural_tactical_map_stub,
     generate_tactical_map,
     get_session_map,
     inspect_tactical_map,
@@ -913,19 +914,63 @@ def get_combat_tracker_state(session_id: str = "default") -> dict[str, Any]:
     return get_session_combat_tracker(session_id)
 
 
+def compute_character_tactical_envelope(char_sheet: dict[str, Any]) -> dict[str, int]:
+    """Compute a character's Satya Tactical Pool (`P_base`, `P_eff`, Neutral `B`, `T_max`, `C_max`, `F_max`, and OODA `starting_tick`)."""
+    chars = char_sheet.get("characteristics") or {}
+    apts = char_sheet.get("aptitudes") or {}
+    str_val = int(chars.get("str", chars.get("STR", 10)))
+    end_val = int(chars.get("end", chars.get("END", 10)))
+    agi_val = int(chars.get("agi", chars.get("AGI", 10)))
+    dex_val = int(chars.get("dex", chars.get("DEX", 10)))
+    per_val = int(chars.get("per", chars.get("PER", 10)))
+    wil_val = int(chars.get("wil", chars.get("WIL", 10)))
+    int_val = int(chars.get("int_attr", chars.get("INT", 10)))
+
+    coord = int(apts.get("coord", (agi_val + dex_val) // 2))
+    vig = int(apts.get("vig", (str_val + end_val) // 2))
+    focus = int(apts.get("focus", (per_val + wil_val) // 2))
+    ooda = int(apts.get("ooda", (per_val + int_val + agi_val) // 3))
+
+    skills = char_sheet.get("skills") or {}
+    skill_n = max([int(v) for v in skills.values() if isinstance(v, (int, float))] or [2])
+    delta_int = int(char_sheet.get("fatigue_tier", 0))
+
+    p_base = (coord + vig + focus) // 3 + skill_n
+    p_eff = max(0, p_base - delta_int)
+    neutral_b = p_base // 3
+    return {
+        "p_base": p_base,
+        "p_eff": p_eff,
+        "neutral_baseline": neutral_b,
+        "max_tempo": agi_val // 2 + skill_n,
+        "max_control": dex_val // 2 + skill_n,
+        "max_force": str_val // 2 + skill_n,
+        "ooda": ooda,
+        "starting_tick": max(1, 15 - ooda),
+    }
+
+
 @tool
 def advance_combat_tracker(
     tick_delta: int = 1,
     entity_id: str | None = None,
     active_stance: str | None = None,
+    next_action_tick: int | None = None,
+    grid_x: int | None = None,
+    grid_y: int | None = None,
+    zone_label: str | None = None,
     session_id: str = "default",
 ) -> dict[str, Any]:
-    """Advance (or reset when `tick_delta <= 0`) the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.5s`) or update a combatant's stance in `session_id`."""
+    """Advance (or reset when `tick_delta <= 0`) the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.5s`), update a combatant's stance/tick/position, and sync the stubbed Tactical Map."""
     payload: dict[str, Any] = {
         "tick_delta": int(tick_delta),
         "combat_active": True,
         "entity_id": entity_id,
         "active_stance": active_stance,
+        "next_action_tick": int(next_action_tick) if next_action_tick is not None else None,
+        "grid_x": int(grid_x) if grid_x is not None else None,
+        "grid_y": int(grid_y) if grid_y is not None else None,
+        "zone_label": zone_label,
     }
     remote_res = _http_post_json(
         f"{_signaling_base_url()}/api/gm/sessions/{session_id}/combat",
@@ -934,6 +979,10 @@ def advance_combat_tracker(
     )
     if remote_res is not None:
         set_session_combat_tracker(session_id, remote_res)
+        ensure_or_sync_procedural_tactical_map_stub(
+            session_id,
+            combatants=remote_res.get("combatants", []),
+        )
         return remote_res
 
     tracker = get_session_combat_tracker(session_id)
@@ -945,11 +994,67 @@ def advance_combat_tracker(
         tracker["tick"] = next_tick
         tracker["round"] = 1 + (next_tick // 20)
     tracker["combat_active"] = True
-    if entity_id and active_stance:
-        for comb in tracker.get("combatants", []):
+
+    combatants = list(tracker.get("combatants") or [])
+    if not combatants:
+        for idx, ch in enumerate(get_session_characters(session_id)):
+            env = compute_character_tactical_envelope(ch)
+            combatants.append(
+                {
+                    "entity_id": ch.get("character_id") or f"pc-{idx + 1}",
+                    "display_name": ch.get("character_name") or f"Operative {idx + 1}",
+                    "is_npc": False,
+                    "ooda_score": env["ooda"],
+                    "next_action_tick": env["starting_tick"],
+                    "active_stance": "NEUTRAL",
+                    "fatigue_tier": int(ch.get("fatigue_tier", 0)),
+                    "wound_shock_tier": 0,
+                    "grid_x": 3 + (idx * 2),
+                    "grid_y": 6,
+                    "zone_label": "Core Console Approach",
+                }
+            )
+    if entity_id:
+        matched = False
+        for comb in combatants:
             if comb.get("entity_id") == entity_id:
-                comb["active_stance"] = active_stance
+                matched = True
+                if active_stance:
+                    comb["active_stance"] = active_stance
+                if next_action_tick is not None:
+                    comb["next_action_tick"] = max(1, int(next_action_tick))
+                elif int(tick_delta) > 0:
+                    comb["next_action_tick"] = int(tracker["tick"]) + int(tick_delta)
+                if grid_x is not None:
+                    comb["grid_x"] = int(grid_x)
+                if grid_y is not None:
+                    comb["grid_y"] = int(grid_y)
+                if zone_label is not None:
+                    comb["zone_label"] = zone_label
+        if not matched:
+            combatants.append(
+                {
+                    "entity_id": entity_id,
+                    "display_name": entity_id,
+                    "is_npc": True,
+                    "ooda_score": 10,
+                    "next_action_tick": max(
+                        1,
+                        int(next_action_tick)
+                        if next_action_tick is not None
+                        else int(tracker.get("tick", 1)) + max(1, int(tick_delta)),
+                    ),
+                    "active_stance": active_stance or "NEUTRAL",
+                    "fatigue_tier": 0,
+                    "wound_shock_tier": 0,
+                    "grid_x": int(grid_x) if grid_x is not None else 11,
+                    "grid_y": int(grid_y) if grid_y is not None else 6,
+                    "zone_label": zone_label or "Entry Breach Sector",
+                }
+            )
+    tracker["combatants"] = combatants
     set_session_combat_tracker(session_id, tracker)
+    ensure_or_sync_procedural_tactical_map_stub(session_id, combatants=combatants)
     return tracker
 
 
@@ -1140,6 +1245,10 @@ def _local_satya_d20_fallback(
     combat_stance: str | None,
     note: str | None,
     internal_mod: int = 0,
+    combat_technique: str | None = None,
+    tempo_pool: int | None = None,
+    control_pool: int | None = None,
+    force_pool: int | None = None,
 ) -> dict[str, Any]:
     """Deterministic/local fallback for unit tests when satya-signaling HTTP server is not running."""
     rng = random.Random(
@@ -1203,6 +1312,10 @@ def _local_satya_d20_fallback(
         "margin": signed_margin,
         "degree_of_success": degree,
         "outcome_tier": degree,
+        "combat_technique": combat_technique,
+        "tempo_pool": tempo_pool,
+        "control_pool": control_pool,
+        "force_pool": force_pool,
         "wgpu_dice": {
             "dice_notation": f"{n_pairs}x2d20",
             "physics_seed": 424242,
@@ -1224,9 +1337,13 @@ def roll_satya_d20_check(
     internal_mod: int = 0,
     carry_mode: str = "markov_step",
     combat_stance: str | None = None,
+    combat_technique: str | None = None,
+    tempo_pool: int | None = None,
+    control_pool: int | None = None,
+    force_pool: int | None = None,
     note: str | None = None,
 ) -> dict[str, Any]:
-    """Execute a server-authoritative Satya Two-List Cascading (`2d20`) check via `POST /api/gm/sessions/:id/roll`."""
+    """Execute a server-authoritative Satya Two-List Cascading (`2d20`) check (with optional `combat_technique` and `tempo_pool` / `control_pool` / `force_pool` Tactical Triad split) via `POST /api/gm/sessions/:id/roll`."""
     n_pairs = max(1, min(10, int(skill_rank) if int(skill_rank) > 0 else 1))
     payload = {
         "actor_display_name": actor_name,
@@ -1238,6 +1355,10 @@ def roll_satya_d20_check(
         "internal_mod": int(internal_mod),
         "carry_mode": carry_mode,
         "combat_stance": combat_stance,
+        "combat_technique": combat_technique,
+        "tempo_pool": int(tempo_pool) if tempo_pool is not None else None,
+        "control_pool": int(control_pool) if control_pool is not None else None,
+        "force_pool": int(force_pool) if force_pool is not None else None,
         "fatigue_level": max(0, int(internal_mod)),
         "wound_shock_index": 0.0,
         "notes": note,
@@ -1259,6 +1380,10 @@ def roll_satya_d20_check(
         combat_stance=combat_stance,
         note=note,
         internal_mod=int(internal_mod),
+        combat_technique=combat_technique,
+        tempo_pool=int(tempo_pool) if tempo_pool is not None else None,
+        control_pool=int(control_pool) if control_pool is not None else None,
+        force_pool=int(force_pool) if force_pool is not None else None,
     )
 
 
@@ -1326,7 +1451,13 @@ def narrate_to_session(
     else:
         visibility = "PUBLIC"
         recipients = []
-        channel_ctx = "IN_CHARACTER" if channel == "IN_CHARACTER" else "GM_NARRATION"
+        norm_chan = (channel or "").strip().upper()
+        if norm_chan == "OUT_OF_CHARACTER":
+            channel_ctx = "OUT_OF_CHARACTER"
+        elif norm_chan == "IN_CHARACTER":
+            channel_ctx = "IN_CHARACTER"
+        else:
+            channel_ctx = "GM_NARRATION"
 
     payload = {
         "visibility": visibility,

@@ -272,7 +272,15 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                         </label>
                         <label>
                             <span>"Fatigue Level"</span>
-                            <input id="ttrpg-fatigue" type="number" value="1" min="0" max="10"/>
+                            <input
+                                id="ttrpg-fatigue"
+                                type="number"
+                                value="1"
+                                min="0"
+                                max="10"
+                                onchange="window.satyaUpdateCascadePreview()"
+                                oninput="window.satyaUpdateCascadePreview()"
+                            />
                         </label>
                         <label>
                             <span>"Wound Shock Index"</span>
@@ -283,9 +291,114 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                 value="0"
                                 min="0"
                                 max="10"
+                                onchange="window.satyaUpdateCascadePreview()"
+                                oninput="window.satyaUpdateCascadePreview()"
+                            />
+                        </label>
+                        <label>
+                            <span>"Action / Combat Technique"</span>
+                            <select
+                                id="ttrpg-action-technique"
+                                onchange="window.satyaOnDrawerTechniqueChange()"
+                                on:change=move |_| wasm_client::satya_on_drawer_technique_change()
+                            >
+                                <option value="non_combat" selected>"Non-Combat Task / General Skill"</option>
+                                <optgroup label="Strikes (Unarmed & Melee)">
+                                    <option value="punch">"Punch (Jab/Cross/Hook · Base 3 TC)"</option>
+                                    <option value="elbow">"Elbow Strike (Close · Base 3 TC)"</option>
+                                    <option value="knee">"Knee Strike (Clinch · Base 4 TC)"</option>
+                                    <option value="kick">"Kick (Teep/Roundhouse · Base 5 TC)"</option>
+                                    <option value="thrust">"Melee Thrust (Point/Lunge · Base 4 TC)"</option>
+                                    <option value="swing">"Melee Swing (Cleave/Cut · Base 6 TC)"</option>
+                                </optgroup>
+                                <optgroup label="Control & Grappling">
+                                    <option value="grab">"Grab (Clinch Entry · Base 4 TC)"</option>
+                                    <option value="push">"Push (Shove / Frame Break · Base 4 TC)"</option>
+                                    <option value="trap">"Trap (Limb / Weapon Bind · Base 4 TC)"</option>
+                                    <option value="disarm">"Disarm (Weapon Strip · Base 6 TC)"</option>
+                                    <option value="takedown">"Takedown (Leg Shoot / Sweep · Base 7 TC)"</option>
+                                    <option value="lock">"Joint Lock / Choke (Base 7 TC)"</option>
+                                    <option value="throw">"Throw (Kuzushi Projection · Base 8 TC)"</option>
+                                </optgroup>
+                                <optgroup label="Intercepts & Footwork Maneuvers">
+                                    <option value="parry">"Parry (Deflection · Base 3 TC)"</option>
+                                    <option value="block">"Block (Hard Frame / Shield · Base 3 TC)"</option>
+                                    <option value="dodge">"Dodge (Evasive Slip / Dive · Base 4 TC)"</option>
+                                    <option value="feint">"Feint (Deceptive Setup · Base 4 TC)"</option>
+                                    <option value="probe">"Probe (Range / Read Check · Base 3 TC)"</option>
+                                    <option value="root">"Root (Grounded Anchor · Base 4 TC)"</option>
+                                    <option value="escape">"Escape (Break Clinch / Disengage · Base 6 TC)"</option>
+                                </optgroup>
+                                <optgroup label="Ranged Fire & Maneuvers">
+                                    <option value="snap_shot">"Snap Shot (Point-Shoot · Base 4 TC · Δ_ext +2)"</option>
+                                    <option value="combat_sighted_shot">"Combat Sighted Shot (Flash Sight · Base 6 TC)"</option>
+                                    <option value="controlled_double_tap_burst">"Controlled Double-Tap / Burst (Base 7 TC · Δ_ext +1)"</option>
+                                    <option value="deliberate_aimed_shot">"Deliberate Aimed Shot (Base 10 TC · Δ_ext -2)"</option>
+                                    <option value="suppressive_full_auto">"Suppressive Full-Auto Zone (Base 8 TC · Δ_ext +3)"</option>
+                                    <option value="brace_weapon">"Brace / Rest Weapon (Bipod / Cover · Base 4 TC)"</option>
+                                    <option value="cover_peek_slice_pie">"Cover Peek / Slice the Pie (Base 5 TC)"</option>
+                                    <option value="bounding_shoot_on_move">"Bounding Fire / Shoot on Move (Base 7 TC)"</option>
+                                    <option value="overwatch_hold_sector">"Overwatch / Hold Sector (Base 5 TC)"</option>
+                                </optgroup>
+                            </select>
+                        </label>
+                        <label>
+                            <span>"Triad Allocation Preset"</span>
+                            <select
+                                id="ttrpg-triad-preset"
+                                onchange="window.satyaApplyTriadPreset()"
+                                on:change=move |_| wasm_client::satya_apply_triad_preset()
+                            >
+                                <option value="balanced" selected>"Balanced (B / B / B)"</option>
+                                <option value="blitz_tempo">"Blitz Tempo (Max T · Fast Tick)"</option>
+                                <option value="max_control">"Precision & Guard (Max C)"</option>
+                                <option value="heavy_force">"Heavy Force (Max F · Impact/Root/Recoil)"</option>
+                                <option value="custom">"Custom T / C / F Split"</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>"Tempo Pool T (Speed / -Ticks)"</span>
+                            <input
+                                id="ttrpg-pool-tempo"
+                                type="number"
+                                value="7"
+                                min="0"
+                                max="30"
+                                onchange="window.satyaUpdateDrawerTriadPreview()"
+                                oninput="window.satyaUpdateDrawerTriadPreview()"
+                            />
+                        </label>
+                        <label>
+                            <span>"Control Pool C (Guard / Kuzushi)"</span>
+                            <input
+                                id="ttrpg-pool-control"
+                                type="number"
+                                value="7"
+                                min="0"
+                                max="30"
+                                onchange="window.satyaUpdateDrawerTriadPreview()"
+                                oninput="window.satyaUpdateDrawerTriadPreview()"
+                            />
+                        </label>
+                        <label>
+                            <span>"Force Pool F (Impact / Root / Recoil)"</span>
+                            <input
+                                id="ttrpg-pool-force"
+                                type="number"
+                                value="7"
+                                min="0"
+                                max="30"
+                                onchange="window.satyaUpdateDrawerTriadPreview()"
+                                oninput="window.satyaUpdateDrawerTriadPreview()"
                             />
                         </label>
                     </div>
+                    <div
+                        id="ttrpg-triad-readout"
+                        class="ttrpg-odds-readout"
+                        aria-live="polite"
+                        inner_html=wasm_client::default_ttrpg_triad_readout_html()
+                    ></div>
                     <div
                         id="ttrpg-odds-readout"
                         class="ttrpg-odds-readout"

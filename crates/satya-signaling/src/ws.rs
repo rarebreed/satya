@@ -4,6 +4,7 @@
 use crate::{
     auth::JoinTokenClaims,
     gm_api::{
+        apply_combat_action_to_mechanics_and_tracker, evaluate_roll_combat_action_and_triad,
         should_trigger_ai_gm_for_chat, should_trigger_ai_gm_for_roll, trigger_ai_gm_chat_reply,
     },
     state::SignalingAppState,
@@ -23,9 +24,10 @@ use satya_engine::{
     GmResistanceMode, evaluate_satya_cascade_task, evaluate_satya_contested_cascade_task,
 };
 use satya_schema::{
-    CanvasEventType, ChatMessageEvent, ClientWsPacket, IceCandidateType, InteractionDynamicsEvent,
-    LifecycleEventType, MessageVisibility, ParticipantKind, ServerWsPacket, SessionMode,
-    SessionRole, TabletopCanvasEvent, WebRtcTelemetryEvent, WgpuDiceSpec, subjects,
+    CanvasEventType, ChannelContext, ChatMessageEvent, ClientWsPacket, IceCandidateType,
+    InteractionDynamicsEvent, LifecycleEventType, MessageVisibility, ParticipantKind,
+    ServerWsPacket, SessionMode, SessionRole, TabletopCanvasEvent, WebRtcTelemetryEvent,
+    WgpuDiceSpec, subjects,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -181,6 +183,7 @@ async fn handle_ws_client(
                                 &msg_id_clone,
                                 "CHAT",
                                 visibility,
+                                Some(channel_context),
                                 &body_clone,
                                 &roster_clone,
                             )
@@ -309,12 +312,29 @@ async fn handle_ws_client(
                 combat_stance,
                 fatigue_level,
                 wound_shock_index,
+                combat_technique,
+                tempo_pool,
+                control_pool,
+                force_pool,
             } => {
                 let n_pairs = skill_level.clamp(1, 10);
                 let c_val = control_c.clamp(1, 20);
                 let int_mod = internal_mod.clamp(-2, 10);
                 let tool_mod = known_tool_mod.clamp(-4, 12);
-                let ext_mod = external_mod.clamp(-10, 16);
+                let tech_delta_ext = evaluate_roll_combat_action_and_triad(
+                    combat_technique.as_deref(),
+                    tempo_pool,
+                    control_pool,
+                    force_pool,
+                    combat_stance,
+                    c_val,
+                    n_pairs,
+                    fatigue_level.max(0),
+                    wound_shock_index,
+                )
+                .map(|(res, _)| res.technique_delta_ext)
+                .unwrap_or(0);
+                let ext_mod = (external_mod + tech_delta_ext).clamp(-10, 16);
                 let parsed_tie_rule = match tie_rule.as_deref() {
                     Some("strict_signed_margin") => ContestedTieRule::StrictSignedMargin,
                     Some("active_player_wins_ties") => ContestedTieRule::ActivePlayerWinsTies,
@@ -365,7 +385,7 @@ async fn handle_ws_client(
                     &session_id,
                     session_mode,
                 ) {
-                    let mech_ev = if is_uncontested {
+                    let mut mech_ev = if is_uncontested {
                         let mut params =
                             CascadeTaskParams::new_k20(n_pairs, c_val, int_mod, tool_mod + ext_mod);
                         params.carry_mode = contested_params.player.carry_mode;
@@ -494,6 +514,23 @@ async fn handle_ws_client(
                         ev
                     };
 
+                    apply_combat_action_to_mechanics_and_tracker(
+                        &state,
+                        &session_id,
+                        &self_participant,
+                        combat_technique.as_deref(),
+                        tempo_pool,
+                        control_pool,
+                        force_pool,
+                        combat_stance,
+                        c_val,
+                        n_pairs,
+                        fatigue_level.max(0),
+                        wound_shock_index,
+                        &mut mech_ev,
+                    )
+                    .await;
+
                     let _ = state.storage.log_ttrpg_mechanics(&mech_ev).await;
 
                     // Emit synchronized 3D `wgpu` physics dice roll for the `2d20` pairs
@@ -578,6 +615,7 @@ async fn handle_ws_client(
                                 &ev_id_clone,
                                 "MECHANICS",
                                 MessageVisibility::Public,
+                                Some(ChannelContext::InCharacter),
                                 &narration,
                                 &roster_clone,
                             )

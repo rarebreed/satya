@@ -31,6 +31,7 @@ pub mod npcs;
 pub mod options;
 pub mod state;
 pub mod telemetry;
+pub mod ttrpg_drawer_triad;
 pub mod webrtc;
 pub mod wizard;
 pub mod wizard_views_lifepath;
@@ -48,6 +49,7 @@ pub use npcs::*;
 pub use options::*;
 pub use state::*;
 pub use telemetry::*;
+pub use ttrpg_drawer_triad::*;
 pub use webrtc::*;
 pub use wizard::*;
 
@@ -151,6 +153,9 @@ pub fn register_window_bindings() {
         "satyaToggleTtrpgSkillDropdown" => satya_toggle_ttrpg_skill_dropdown(),
         "satyaSelectTtrpgSkill" => satya_select_ttrpg_skill(String),
         "satyaTtrpgSkillKeydown" => satya_ttrpg_skill_keydown(KeyboardEvent),
+        "satyaOnDrawerTechniqueChange" => satya_on_drawer_technique_change(),
+        "satyaApplyTriadPreset" => satya_apply_triad_preset(),
+        "satyaUpdateDrawerTriadPreview" => satya_update_drawer_triad_preview(),
 
         // Tabbed Notebook, 3D Dice, 3D Model, Combat Tracker & Rules Book
         "satyaSelectNotebookTab" => satya_select_notebook_tab(String),

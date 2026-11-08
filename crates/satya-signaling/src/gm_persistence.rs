@@ -14,10 +14,10 @@ use axum::{
 use chrono::Utc;
 use satya_schema::{
     CharacterSheetRecord, CombatTrackerState, CombatantTickEntry, GmDocumentRecord,
-    GmDocumentSource, GmLookupHit, GmLookupSourceKind, GmMemoryCategory, GmMemoryNoteRecord,
-    GmOmnisearchResponse, MessageVisibility, Participant, ParticipantKind, ServerWsPacket,
-    SessionGmMemoriesResponse, SessionRole, ToggleGmDocumentPersistenceRequest,
-    UpdateCombatTrackerRequest, UpsertGmMemoryRequest,
+    GmDocumentSource, GmLookupHit, GmLookupSourceKind, GmMapUpdateRequest, GmMemoryCategory,
+    GmMemoryNoteRecord, GmOmnisearchResponse, MessageVisibility, Participant, ParticipantKind,
+    ServerWsPacket, SessionGmMemoriesResponse, SessionRole, ToggleGmDocumentPersistenceRequest,
+    TokenPlacement, UpdateCombatTrackerRequest, UpsertGmMemoryRequest,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -481,7 +481,64 @@ impl AuthAndSessionManager {
             active_stance: Some("NEUTRAL".to_string()),
             fatigue_level: 0,
             wound_shock: 0,
+            grid_x: Some(4 + (idx % 4) * 2),
+            grid_y: Some(6 + (idx / 4) * 2),
+            zone_label: Some("Core Sector".to_string()),
         });
+    }
+
+    /// Stubbed hook for future Procedural Environment & Tactical Map Generation.
+    ///
+    /// When Action Mode (`combat_active == true`) is active, initializes a stubbed `16x12`
+    /// tactical grid if `active_map` is `None` and synchronizes [`TokenPlacement`] coordinates
+    /// for all combatants on the [`CombatTrackerState`].
+    pub fn sync_or_generate_tactical_map_stub(
+        session_id: &str,
+        tracker: &CombatTrackerState,
+        active_map: &mut Option<GmMapUpdateRequest>,
+    ) -> Option<GmMapUpdateRequest> {
+        if !tracker.combat_active && active_map.is_none() {
+            return None;
+        }
+        let map = active_map.get_or_insert_with(|| GmMapUpdateRequest {
+            map_id: format!("map-action-stub-{session_id}"),
+            title: format!("Action Mode Tactical Grid ({session_id})"),
+            image_url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 240'><rect width='320' height='240' fill='%230b1322'/><g stroke='%231e293b' stroke-width='1'><path d='M0 40h320M0 80h320M0 120h320M0 160h320M0 200h320M40 0v240M80 0v240M120 0v240M160 0v240M200 0v240M240 0v240M280 0v240'/></g><rect x='20' y='80' width='60' height='80' fill='none' stroke='%2338bdf8' stroke-dasharray='4 2'/><text x='26' y='96' fill='%2338bdf8' font-family='monospace' font-size='9'>CORE CONSOLE</text><rect x='230' y='70' width='70' height='100' fill='none' stroke='%23f43f5e' stroke-dasharray='4 2'/><text x='236' y='86' fill='%23f43f5e' font-family='monospace' font-size='9'>ENTRY BULKHEAD</text></svg>".to_string(),
+            grid_width: 16,
+            grid_height: 12,
+            tokens: Vec::new(),
+            notes: Some(
+                "[PROCEDURAL MAP GENERATOR STUB] Zones: Core Console (x:1..4, y:4..8, Hard Cover DR 4), Central Choke Point (x:6..10, y:4..8), Entry Bulkhead (x:12..15, y:3..9)."
+                    .to_string(),
+            ),
+        });
+
+        for (idx, c) in tracker.combatants.iter().enumerate() {
+            let x = c.grid_x.unwrap_or(4 + ((idx as i32) % 4) * 2).clamp(0, map.grid_width - 1);
+            let y = c.grid_y.unwrap_or(5 + ((idx as i32) / 4) * 2).clamp(0, map.grid_height - 1);
+            let label = match c.zone_label.as_deref() {
+                Some(z) if !z.is_empty() => format!("{} [{}]", c.display_name, z),
+                _ => c.display_name.clone(),
+            };
+            if let Some(tok) = map
+                .tokens
+                .iter_mut()
+                .find(|t| t.entity_id == c.entity_id || t.label.starts_with(&c.display_name))
+            {
+                tok.x = x;
+                tok.y = y;
+                tok.label = label;
+            } else {
+                map.tokens.push(TokenPlacement {
+                    entity_id: c.entity_id.clone(),
+                    label,
+                    x,
+                    y,
+                    visibility: MessageVisibility::Public,
+                });
+            }
+        }
+        Some(map.clone())
     }
 
     /// Loads the persisted [`CombatTrackerState`] for `session_id` from SQLite, or initializes a new one.
@@ -558,33 +615,71 @@ impl AuthAndSessionManager {
                 if delta <= 0 {
                     tracker.round = 1;
                     tracker.tick = 1;
+                    if req.combat_active.is_none() {
+                        tracker.combat_active = true;
+                    }
                 } else {
                     tracker.tick += delta as u32;
                     tracker.round = 1 + (tracker.tick / 20);
                     tracker.combat_active = true;
                 }
             }
-            if let Some(ref eid) = req.entity_id
-                && let Some(entry) = tracker
+            if let Some(ref eid) = req.entity_id {
+                if let Some(entry) = tracker
                     .combatants
                     .iter_mut()
                     .find(|c| c.entity_id == *eid || c.display_name.eq_ignore_ascii_case(eid))
-            {
-                if let Some(ref st) = req.active_stance {
-                    entry.active_stance = Some(st.clone());
-                }
-                if let Some(nt) = req.next_action_tick {
-                    entry.next_action_tick = nt;
-                }
-                if let Some(fat) = req.fatigue_level {
-                    entry.fatigue_level = fat.max(0);
-                }
-                if let Some(ws) = req.wound_shock {
-                    entry.wound_shock = ws.max(0);
+                {
+                    if let Some(ref st) = req.active_stance {
+                        entry.active_stance = Some(st.clone());
+                    }
+                    if let Some(nt) = req.next_action_tick {
+                        entry.next_action_tick = nt;
+                    }
+                    if let Some(fat) = req.fatigue_level {
+                        entry.fatigue_level = fat.max(0);
+                    }
+                    if let Some(ws) = req.wound_shock {
+                        entry.wound_shock = ws.max(0);
+                    }
+                    if let Some(gx) = req.grid_x {
+                        entry.grid_x = Some(gx);
+                    }
+                    if let Some(gy) = req.grid_y {
+                        entry.grid_y = Some(gy);
+                    }
+                    if let Some(ref zl) = req.zone_label {
+                        entry.zone_label = Some(zl.clone());
+                    }
+                } else {
+                    let idx = tracker.combatants.len() as i32;
+                    let ooda = (12 - idx).clamp(8, 16);
+                    let start_tick =
+                        satya_engine::compute_starting_tick(ooda, 0, 0, ooda + 1, 12) as u32;
+                    tracker.combatants.push(CombatantTickEntry {
+                        entity_id: eid.clone(),
+                        display_name: eid.clone(),
+                        role_or_faction: "NPC".to_string(),
+                        ooda_score: ooda,
+                        next_action_tick: req
+                            .next_action_tick
+                            .unwrap_or_else(|| tracker.tick.max(start_tick)),
+                        active_stance: req.active_stance.clone().or_else(|| Some("NEUTRAL".to_string())),
+                        fatigue_level: req.fatigue_level.unwrap_or(0).max(0),
+                        wound_shock: req.wound_shock.unwrap_or(0).max(0),
+                        grid_x: req.grid_x.or(Some(12 - (idx % 3) * 2)),
+                        grid_y: req.grid_y.or(Some(5 + (idx / 3) * 2)),
+                        zone_label: req
+                            .zone_label
+                            .clone()
+                            .or_else(|| Some("Entry Bulkhead".to_string())),
+                    });
                 }
             }
             tracker.updated_at_us = now_us;
-            tracker.clone()
+            let snap = tracker.clone();
+            let _ = Self::sync_or_generate_tactical_map_stub(sid, &snap, &mut session.active_map);
+            snap
         };
 
         if let Ok(json_str) = serde_json::to_string(&updated) {
@@ -1129,7 +1224,16 @@ pub async fn update_session_combat_tracker_handler(
         .update_session_combat_tracker(&session_id, req)
         .await
     {
-        Ok(tracker) => (StatusCode::OK, Json(tracker)).into_response(),
+        Ok(tracker) => {
+            if let Some((ctx, _)) = state.auth.get_session_gm_context(&session_id).await
+                && let Some(map) = ctx.active_map
+                && let Ok(map_pkt) =
+                    serde_json::to_string(&ServerWsPacket::MapUpdated { map: Box::new(map) })
+            {
+                state.broadcast_to_session(&session_id, &map_pkt).await;
+            }
+            (StatusCode::OK, Json(tracker)).into_response()
+        }
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": e.to_string() })),

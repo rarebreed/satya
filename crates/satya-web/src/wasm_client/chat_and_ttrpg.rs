@@ -547,6 +547,7 @@ pub fn satya_update_cascade_preview() {
     );
     set_text("ttrpg-odds-pill", &pill_text);
     set_html("ttrpg-odds-readout", &readout_text);
+    crate::wasm_client::ttrpg_drawer_triad::satya_update_drawer_triad_preview();
 }
 
 /// Alias for [`satya_update_cascade_preview`] updating both `#ttrpg-odds-pill` and `#ttrpg-odds-readout`.
@@ -850,6 +851,24 @@ pub fn satya_roll_task() {
     let wound_shock_index = input_value("ttrpg-wound-shock")
         .parse::<f32>()
         .unwrap_or(0.0);
+    let tech_raw = select_value("ttrpg-action-technique");
+    let combat_technique = if tech_raw.trim().is_empty()
+        || tech_raw.eq_ignore_ascii_case("non_combat")
+        || tech_raw.eq_ignore_ascii_case("none")
+    {
+        None
+    } else {
+        Some(tech_raw)
+    };
+    let (tempo_pool, control_pool, force_pool) = if combat_technique.is_some() {
+        (
+            input_value("ttrpg-pool-tempo").parse::<i32>().ok(),
+            input_value("ttrpg-pool-control").parse::<i32>().ok(),
+            input_value("ttrpg-pool-force").parse::<i32>().ok(),
+        )
+    } else {
+        (None, None, None)
+    };
 
     satya_update_cascade_preview();
 
@@ -868,6 +887,10 @@ pub fn satya_roll_task() {
         combat_stance,
         fatigue_level,
         wound_shock_index,
+        combat_technique,
+        tempo_pool,
+        control_pool,
+        force_pool,
     });
 }
 

@@ -453,3 +453,104 @@ def inspect_tactical_map(session_id: str, question: str) -> str:
                 pass
 
     return geometric_summary
+
+
+def ensure_or_sync_procedural_tactical_map_stub(
+    session_id: str,
+    theme: str = "Action Mode Tactical Sector",
+    combatants: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Stubbed hook for future Procedural Environment & Tactical Map Generation.
+
+    When Action Mode (`combat_active == True`) is initiated or combatant coordinates update,
+    initializes a default 16x12 SVG tactical grid if no active map exists yet, and synchronizes
+    player and NPC token placements (`(grid_x, grid_y)` and tactical zone labels) with
+    `satya-signaling` (`POST /api/gm/sessions/:id/map`).
+    """
+    existing = get_session_map(session_id)
+    raw_combatants = list(combatants or [])
+    if existing is None:
+        initial_tokens: list[dict[str, Any]] = []
+        for idx, c in enumerate(raw_combatants):
+            role_str = str(c.get("role_or_faction") or "").lower()
+            is_hostile = "npc" in role_str or "hostile" in role_str or "enemy" in role_str
+            default_x = 12 - (idx % 3) * 2 if is_hostile else 3 + (idx % 3) * 2
+            default_y = 5 + (idx // 3) * 2
+            gx = int(c.get("grid_x") if c.get("grid_x") is not None else default_x)
+            gy = int(c.get("grid_y") if c.get("grid_y") is not None else default_y)
+            zone = str(c.get("zone_label") or ("Entry Bulkhead" if is_hostile else "Core Sector"))
+            initial_tokens.append(
+                {
+                    "token_id": str(c.get("entity_id") or f"comb-{idx}"),
+                    "entity_id": str(c.get("entity_id") or f"comb-{idx}"),
+                    "label": str(c.get("display_name") or f"Combatant {idx + 1}"),
+                    "grid_x": gx,
+                    "grid_y": gy,
+                    "color_hex": "#f87171" if is_hostile else "#38bdf8",
+                    "status_badges": [zone[:8]],
+                }
+            )
+        generated = dict(
+            generate_tactical_map.invoke(
+                {
+                    "session_id": session_id,
+                    "theme": theme,
+                    "width": 16,
+                    "height": 12,
+                    "initial_tokens": initial_tokens or None,
+                }
+            )
+        )
+        generated["procedural_generator_stub"] = True
+        set_session_map(session_id, generated)
+        return generated
+
+    tokens = [normalize_token(t) for t in existing.get("tokens", [])]
+    width = int(existing.get("grid_width", 16))
+    height = int(existing.get("grid_height", 12))
+    changed = not bool(existing.get("procedural_generator_stub"))
+    for idx, c in enumerate(raw_combatants):
+        eid = str(c.get("entity_id") or "")
+        dname = str(c.get("display_name") or eid or f"Combatant {idx + 1}")
+        gx = c.get("grid_x")
+        gy = c.get("grid_y")
+        matched = None
+        for tok in tokens:
+            if tok.get("token_id") == eid or str(tok.get("label", "")).lower() == dname.lower():
+                matched = tok
+                break
+        if matched is not None:
+            if gx is not None and int(gx) != matched.get("grid_x"):
+                matched["grid_x"] = max(0, min(width - 1, int(gx)))
+                matched["x"] = matched["grid_x"]
+                changed = True
+            if gy is not None and int(gy) != matched.get("grid_y"):
+                matched["grid_y"] = max(0, min(height - 1, int(gy)))
+                matched["y"] = matched["grid_y"]
+                changed = True
+        elif eid or dname:
+            role_str = str(c.get("role_or_faction") or "").lower()
+            is_hostile = bool(c.get("is_npc")) or "npc" in role_str or "hostile" in role_str
+            nx = max(0, min(width - 1, int(gx if gx is not None else (12 if is_hostile else 3))))
+            ny = max(0, min(height - 1, int(gy if gy is not None else (4 + idx % 5))))
+            tokens.append(
+                normalize_token(
+                    {
+                        "token_id": eid or f"tok-{idx}",
+                        "label": dname,
+                        "grid_x": nx,
+                        "grid_y": ny,
+                        "color_hex": "#f87171" if is_hostile else "#38bdf8",
+                    }
+                )
+            )
+            changed = True
+
+    if changed:
+        existing = dict(existing)
+        existing["tokens"] = tokens
+        existing["procedural_generator_stub"] = True
+        set_session_map(session_id, existing)
+        _sync_map_with_signaling(session_id, existing)
+    return existing
+

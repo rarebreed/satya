@@ -271,6 +271,18 @@ pub enum ClientWsPacket {
         /// Current character wound shock index (scales Action Time Factor).
         #[serde(default)]
         wound_shock_index: f32,
+        /// Optional canonical combat action/technique code from `COMBAT_TECHNIQUE_CATALOG` (e.g. `"punch"`, `"snap_shot"`, `"takedown"`).
+        #[serde(default)]
+        combat_technique: Option<String>,
+        /// Optional Tactical Triad Tempo (`T`) pool allocation.
+        #[serde(default)]
+        tempo_pool: Option<i32>,
+        /// Optional Tactical Triad Control (`C`) pool allocation.
+        #[serde(default)]
+        control_pool: Option<i32>,
+        /// Optional Tactical Triad Force (`F`) pool allocation.
+        #[serde(default)]
+        force_pool: Option<i32>,
     },
     /// Notifies the server that the participant is intentionally disconnecting from the session.
     LeaveSession {
@@ -553,6 +565,15 @@ pub struct CombatantTickEntry {
     pub fatigue_level: i32,
     #[serde(default)]
     pub wound_shock: i32,
+    /// Optional tactical map X grid coordinate stub (`0..grid_width`).
+    #[serde(default)]
+    pub grid_x: Option<i32>,
+    /// Optional tactical map Y grid coordinate stub (`0..grid_height`).
+    #[serde(default)]
+    pub grid_y: Option<i32>,
+    /// Optional named tactical zone or cover position stub (e.g. `"Core Console"`, `"Entry Bulkhead"`).
+    #[serde(default)]
+    pub zone_label: Option<String>,
 }
 
 /// Authoritative Satya Count-Up Tick Combat Tracker state for a session (`1 Tick = 0.5s`, `1 Window = 20 Ticks`).
@@ -598,6 +619,15 @@ pub struct UpdateCombatTrackerRequest {
     pub fatigue_level: Option<i32>,
     #[serde(default)]
     pub wound_shock: Option<i32>,
+    /// Optional tactical map X grid coordinate stub (`0..grid_width`).
+    #[serde(default)]
+    pub grid_x: Option<i32>,
+    /// Optional tactical map Y grid coordinate stub (`0..grid_height`).
+    #[serde(default)]
+    pub grid_y: Option<i32>,
+    /// Optional named tactical zone or cover position stub.
+    #[serde(default)]
+    pub zone_label: Option<String>,
 }
 
 /// Source domain of a unified GM Omnisearch hit (`GET /api/sessions/:session_id/lookup`).
@@ -763,6 +793,18 @@ pub struct GmRollRequest {
     /// Accumulated wound shock index of the acting NPC.
     #[serde(default)]
     pub wound_shock_index: f32,
+    /// Optional canonical combat action/technique code from `COMBAT_TECHNIQUE_CATALOG` (e.g. `"punch"`, `"snap_shot"`).
+    #[serde(default)]
+    pub combat_technique: Option<String>,
+    /// Optional Tactical Triad Tempo (`T`) pool allocation.
+    #[serde(default)]
+    pub tempo_pool: Option<i32>,
+    /// Optional Tactical Triad Control (`C`) pool allocation.
+    #[serde(default)]
+    pub control_pool: Option<i32>,
+    /// Optional Tactical Triad Force (`F`) pool allocation.
+    #[serde(default)]
+    pub force_pool: Option<i32>,
     /// Optional adjudication notes.
     #[serde(default)]
     pub notes: Option<String>,
@@ -809,6 +851,9 @@ pub struct AiGmTurnTriggerRequest {
     pub trigger_actor: Participant,
     /// Visibility of the triggering message (`PUBLIC`, `PRIVATE`, `GM_ONLY`).
     pub visibility: MessageVisibility,
+    /// Optional semantic channel context of the triggering message (`IN_CHARACTER`, `OUT_OF_CHARACTER`, etc.).
+    #[serde(default)]
+    pub channel_context: Option<ChannelContext>,
     /// Formatted text of the player's or GM's action/roll.
     pub context_text: String,
     /// Current session roster snapshot.

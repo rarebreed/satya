@@ -494,6 +494,32 @@ mod tests {
         ));
         assert!(!should_trigger_ai_gm_for_roll(&copilot_roster));
 
+        // In Autonomous Solo AI GM mode (no human GM in roster), BOTH InCharacter and OutOfCharacter trigger the AI GM
+        let autonomous_roster = vec![sara_part.clone(), ai_gm_part.clone()];
+        assert!(should_trigger_ai_gm_for_chat(
+            &autonomous_roster,
+            &ai_gm_part,
+            MessageVisibility::Public,
+            &[],
+            ChannelContext::OutOfCharacter,
+            "How do we do combat? Are we at tick 0 now? how do I use my Tempo, Control and Force pool here?",
+        ));
+        let (triad_res, triad_env) = crate::gm_api::evaluate_roll_combat_action_and_triad(
+            Some("snap_shot"),
+            Some(5),
+            Some(3),
+            Some(3),
+            Some(CombatStance::RangedSnap),
+            12,
+            3,
+            0,
+            0.0,
+        )
+        .expect("snap_shot with T/C/F should evaluate");
+        assert_eq!(triad_res.technique.as_str(), "snap_shot");
+        assert!(triad_res.effective_tc >= 1);
+        assert!(triad_env.p_eff > 0);
+
         // 2. Configure Ephemeral BYOK Credentials via POST /api/sessions/:id/gm-config
         let cfg_req = Request::builder()
             .method("POST")
@@ -586,6 +612,10 @@ mod tests {
                             carry_mode: Some("markov_step".to_string()),
                             botch_rule: None,
                             combat_stance: Some(CombatStance::RangedSnap),
+                            combat_technique: Some("snap_shot".to_string()),
+                            tempo_pool: Some(4),
+                            control_pool: Some(3),
+                            force_pool: Some(3),
                             fatigue_level: 1,
                             wound_shock_index: 0.0,
                             notes: Some("Sentry reacts to corridor movement".to_string()),
@@ -909,6 +939,7 @@ mod tests {
             "ev-trigger-1",
             "CHAT",
             MessageVisibility::GmOnly,
+            Some(ChannelContext::InCharacter),
             "Check Captain Vance's leadership TN",
             &roster,
         )

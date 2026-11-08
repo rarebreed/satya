@@ -133,7 +133,7 @@
         "3. How the Continuous Count-Up Clock Works",
         "3.1 Quick Reference: Engine Combat Stances (`CombatStance`)",
         "4. Base Action Time Costs (`Base TC = TC_decide + TC_act`) Reference Catalog",
-        "4.1 Unarmed, Melee & Ranged Combat Actions",
+        "4.1 Unarmed Martial Arts, Armed Melee & Ranged Combat Techniques (`CombatTechniqueId`)",
         "4.2 Weapon Handling, Gear Manipulation & Reloads",
         "4.3 Movement, Posture & Tactical Environment Actions",
         "4.4 Cognitive, Perceptual (`OODA`), & Communication Actions",
@@ -279,6 +279,7 @@
         "4.2 Characteristic Aspect Ceilings ($T_{\\max}, C_{\\max}, F_{\\max}$)",
         "4.3 Physical & Psychological Modifiers to the Pool",
         "4.4 Mechanical Resolution of Tempo, Control, and Force",
+        "4.5 Orthogonality: Technique Selection (*What You Do*) vs. Triad Allocation (*How You Execute It*)",
         "5. Companion Combat Chapters"
       ],
       "html_file": "tactical_triad.html"
@@ -295,8 +296,9 @@
         "2.1 Tempo *(Speed, Footwork & Reach)*",
         "2.2 Control *(Precision, Limb Traps & Guard)*",
         "2.3 Force *(Kinetic Impact & Grounded Root)*",
-        "3. Techniques & The Six Core Tactical Allocations",
-        "3.1 Paired Tactical Allocations (2 Primary Aspects, 1 Deliberate Vulnerability)",
+        "3. Canonical Unarmed Martial Arts & Armed Melee Techniques (`CombatTechniqueId`)",
+        "3.1 Unarmed & Armed Melee Technique Catalog (`Control`, `Strike`, `Intercept`, `Maneuver`)",
+        "3.2 The Six Core Tactical Triad Allocations (`TC`, `TF`, `CF`, `Pure T/C/F`)",
         "3.2 Focused Allocations (All-In Commitment)",
         "3.3 Starting Combat Modes",
         "4. Melee Weapons, Reach Tiers & Base Action Costs (`TC`)",
@@ -335,7 +337,7 @@
       "description": "Ranged fire modes & Recoil Ratings (R), Suppression vs. Morale, Armor Penetration (PR) vs. Behind-Armor Blunt Trauma (BABT), Weapon Reliability (Rel) & Malfunctions, and firefight walkthroughs.",
       "headings": [
         "2. Ranged Combat in the Tactical Triad (`Tempo`, `Control`, `Force`)",
-        "2.1 Ranged Fire Modes, Base `TC` & Recoil Bracing",
+        "2.1 Ranged Shot Actions (`5`) & Ranged Maneuvers / Bracing (`4`)",
         "6. Reliability ($\\text{Rel}$), Tolerances ($\\tau_{\\text{tol}}$), Jam Clearance & Strip Time",
         "6.1 The Accuracy\u2013Reliability Tolerance Trade-Off ($\\tau_{\\text{tol}}$)",
         "6.2 When Malfunctions Trigger, Clear Jam Time ($\\text{TC}_{\\text{clear}}$) & Strip Time ($\\text{TC}_{\\text{strip}}$)",

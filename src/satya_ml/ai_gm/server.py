@@ -129,6 +129,7 @@ class AiGmTurnEventPayload(BaseModel):
     trigger_actor: dict[str, Any] | None = None
     actor: dict[str, Any] = Field(default_factory=dict)
     visibility: str = "PUBLIC"
+    channel_context: str | None = None
     channel: str | None = None
     context_text: str | None = None
     content: str | None = None
@@ -312,6 +313,7 @@ def handle_ai_gm_event(
                 "trigger_kind": payload.trigger_kind,
                 "actor": effective_actor,
                 "channel": payload.channel or payload.visibility,
+                "channel_context": payload.channel_context,
                 "content": effective_content,
                 "roll_summary": payload.roll_summary,
                 "operating_mode": op_mode,

@@ -358,6 +358,9 @@ pub fn satya_advance_combat_tick(delta: i32) {
             next_action_tick: None,
             fatigue_level: None,
             wound_shock: None,
+            grid_x: None,
+            grid_y: None,
+            zone_label: None,
         };
         wasm_bindgen_futures::spawn_local(async move {
             let url = format!("/api/sessions/{sid}/combat");

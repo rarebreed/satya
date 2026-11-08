@@ -10,15 +10,19 @@ use axum::{
 };
 use rand::Rng;
 use satya_engine::{
-    CascadeTaskParams, ContestedCascadeTaskParams, ContestedTieRule, GmResistanceMode,
-    evaluate_satya_cascade_task, evaluate_satya_contested_cascade_task,
+    ActionTimeFactorParams, CascadeTaskParams, CombatDomain, CombatTechniqueId,
+    ContestedCascadeTaskParams, ContestedTieRule, GmResistanceMode, TacticalPoolEnvelope,
+    TacticalPoolParams, TechniqueTriadEvalParams, TechniqueTriadResolution, Triad,
+    compute_tactical_pool, evaluate_satya_cascade_task, evaluate_satya_contested_cascade_task,
+    evaluate_technique_with_triad,
 };
 use satya_schema::{
     AiGmOperatingMode, AiGmProviderConfig, AiGmTrajectoryEvent, AiGmTurnStatus,
-    AiGmTurnTriggerRequest, CanvasEventType, ChannelContext, ChatMessageEvent, GmChatRequest,
-    GmMapUpdateRequest, GmRollRequest, LogLevel, McpToolInvocationRecord, MechanicEventType,
-    MessageVisibility, Participant, ParticipantKind, ServerWsPacket, SessionLogEvent, SessionMode,
-    SessionRole, TabletopCanvasEvent, WgpuDiceSpec, subjects,
+    AiGmTurnTriggerRequest, CanvasEventType, ChannelContext, ChatMessageEvent, CombatStance,
+    GmChatRequest, GmMapUpdateRequest, GmRollRequest, LogLevel, McpToolInvocationRecord,
+    MechanicEventType, MessageVisibility, Participant, ParticipantKind, ServerWsPacket,
+    SessionLogEvent, SessionMode, SessionRole, TabletopCanvasEvent, TtrpgMechanicsEvent,
+    UpdateCombatTrackerRequest, WgpuDiceSpec, subjects,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -374,6 +378,23 @@ pub async fn gm_session_roll_handler(
         None => Some(base_note),
     };
 
+    apply_combat_action_to_mechanics_and_tracker(
+        &state,
+        &session_id,
+        &actor,
+        req.combat_technique.as_deref(),
+        req.tempo_pool,
+        req.control_pool,
+        req.force_pool,
+        req.combat_stance,
+        c_val,
+        n_pairs,
+        req.fatigue_level.max(0),
+        req.wound_shock_index,
+        &mut mech_ev,
+    )
+    .await;
+
     let _ = state.storage.log_ttrpg_mechanics(&mech_ev).await;
 
     // Also emit Topic 7 (`tabletop-canvas`) WgpuDiceSpawned event & broadcast 3D dice seed
@@ -675,12 +696,206 @@ pub async fn gm_session_trajectory_handler(
     (StatusCode::OK, Json(traj_ev)).into_response()
 }
 
+/// Evaluates a combat technique and Tactical Triad (`Tempo` / `Control` / `Force`) allocation
+/// when a roll specifies a `combat_technique`, `tempo_pool` / `control_pool` / `force_pool`, or `combat_stance`.
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_roll_combat_action_and_triad(
+    combat_technique: Option<&str>,
+    tempo_pool: Option<i32>,
+    control_pool: Option<i32>,
+    force_pool: Option<i32>,
+    combat_stance: Option<CombatStance>,
+    skill_c: i32,
+    skill_n: usize,
+    fatigue_level: i32,
+    wound_shock_index: f32,
+) -> Option<(TechniqueTriadResolution, TacticalPoolEnvelope)> {
+    let raw_tech = combat_technique
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("non_combat") && !s.eq_ignore_ascii_case("none"));
+    let has_triad = tempo_pool.is_some() || control_pool.is_some() || force_pool.is_some();
+    if raw_tech.is_none() && !has_triad && combat_stance.is_none() {
+        return None;
+    }
+
+    let tech_id = raw_tech
+        .and_then(CombatTechniqueId::from_code_str)
+        .unwrap_or_else(|| match combat_stance {
+            Some(CombatStance::Power) => CombatTechniqueId::Swing,
+            Some(CombatStance::Maneuver) => CombatTechniqueId::Probe,
+            Some(CombatStance::Stability) => CombatTechniqueId::Parry,
+            Some(CombatStance::RangedAimed) => CombatTechniqueId::DeliberateAimedShot,
+            Some(CombatStance::RangedSnap) => CombatTechniqueId::SnapShot,
+            None => CombatTechniqueId::Punch,
+        });
+    let spec = tech_id.spec();
+    let domain = if spec.allowed_ranged && !spec.allowed_unarmed {
+        CombatDomain::Ranged
+    } else if spec.allowed_armed_melee && !spec.allowed_unarmed {
+        CombatDomain::ArmedMelee
+    } else {
+        CombatDomain::UnarmedMartialArts
+    };
+
+    let mut pool_params = TacticalPoolParams {
+        skill_c: skill_c.clamp(1, 20),
+        skill_n: skill_n.clamp(1, 10),
+        is_ranged: domain == CombatDomain::Ranged,
+        fatigue_level: fatigue_level.max(0),
+        wound_shock_index: wound_shock_index.round() as i32,
+        ..Default::default()
+    };
+    pool_params.chars.spd = skill_c.clamp(6, 18);
+    pool_params.chars.for_stat = skill_c.clamp(6, 18);
+    pool_params.chars.dex = skill_c.clamp(6, 18);
+    pool_params.chars.ins = skill_c.clamp(6, 18);
+    pool_params.chars.foc = skill_c.clamp(6, 18);
+    let envelope = compute_tactical_pool(&pool_params);
+
+    let b = envelope.neutral_baseline_b;
+    let mut t = tempo_pool.unwrap_or(b).clamp(0, envelope.tempo_cap);
+    let mut c = control_pool.unwrap_or(b).clamp(0, envelope.control_cap);
+    let mut f = force_pool.unwrap_or(b).clamp(0, envelope.force_cap);
+    if !has_triad {
+        while t + c + f > envelope.p_eff && (t > 0 || c > 0 || f > 0) {
+            if f >= c && f >= t && f > 0 {
+                f -= 1;
+            } else if c >= t && c > 0 {
+                c -= 1;
+            } else if t > 0 {
+                t -= 1;
+            }
+        }
+    }
+
+    let eval_params = TechniqueTriadEvalParams {
+        technique: tech_id,
+        domain,
+        envelope: envelope.clone(),
+        alloc: Triad::new(t, c, f),
+        skill_level_n: skill_n.clamp(1, 10),
+        time_factor_params: ActionTimeFactorParams {
+            fatigue_level: fatigue_level.max(0),
+            wound_shock_index: f64::from(wound_shock_index.max(0.0)),
+            ..Default::default()
+        },
+        weapon_recoil_r: if domain == CombatDomain::Ranged { 4 } else { 0 },
+        ..Default::default()
+    };
+    let res = evaluate_technique_with_triad(&eval_params);
+    Some((res, envelope))
+}
+
+/// Applies a resolved [`TechniqueTriadResolution`] to a [`TtrpgMechanicsEvent`], activates/advances
+/// the session's Action Mode [`CombatTrackerState`], and synchronizes the Tactical Map stub.
+#[allow(clippy::too_many_arguments)]
+pub async fn apply_combat_action_to_mechanics_and_tracker(
+    state: &Arc<SignalingAppState>,
+    session_id: &str,
+    actor: &Participant,
+    combat_technique: Option<&str>,
+    tempo_pool: Option<i32>,
+    control_pool: Option<i32>,
+    force_pool: Option<i32>,
+    combat_stance: Option<CombatStance>,
+    skill_c: i32,
+    skill_n: usize,
+    fatigue_level: i32,
+    wound_shock_index: f32,
+    mech_ev: &mut TtrpgMechanicsEvent,
+) {
+    let Some((res, env)) = evaluate_roll_combat_action_and_triad(
+        combat_technique,
+        tempo_pool,
+        control_pool,
+        force_pool,
+        combat_stance,
+        skill_c,
+        skill_n,
+        fatigue_level,
+        wound_shock_index,
+    ) else {
+        return;
+    };
+
+    if mech_ev.mechanic_type == MechanicEventType::TaskResolution {
+        mech_ev.mechanic_type = MechanicEventType::CombatAction;
+    }
+    mech_ev.action_time_cost = Some(res.action_cost.base_total_tc);
+    mech_ev.action_count_cost = Some(res.effective_tc);
+
+    let cur_tick = state
+        .auth
+        .get_session_combat_tracker(session_id)
+        .await
+        .map(|t| t.tick.max(1))
+        .unwrap_or(1);
+    let next_tick = cur_tick + (res.effective_tc.max(1) as u32);
+    let stance_label = format!(
+        "{} (T{}/C{}/F{})",
+        res.technique.as_str().to_uppercase(),
+        res.alloc.tempo,
+        res.alloc.control,
+        res.alloc.force
+    );
+
+    if let Ok(_tracker) = state
+        .auth
+        .update_session_combat_tracker(
+            session_id,
+            UpdateCombatTrackerRequest {
+                tick_delta: None,
+                combat_active: Some(true),
+                entity_id: Some(actor.user_id.clone()),
+                active_stance: Some(stance_label),
+                next_action_tick: Some(next_tick),
+                fatigue_level: Some(fatigue_level.max(0)),
+                wound_shock: Some(wound_shock_index.round() as i32),
+                grid_x: None,
+                grid_y: None,
+                zone_label: None,
+            },
+        )
+        .await
+        && let Some((ctx, _)) = state.auth.get_session_gm_context(session_id).await
+        && let Some(map) = ctx.active_map
+        && let Ok(map_pkt) =
+            serde_json::to_string(&ServerWsPacket::MapUpdated { map: Box::new(map) })
+    {
+        state.broadcast_to_session(session_id, &map_pkt).await;
+    }
+
+    let triad_note = format!(
+        "combat_action(tech={}, cat={}, triad=T:{}/C:{}/F:{} [P_eff={}/P_base={}, B={}], tc={}->{}_ticks, next_tick={}, guard={}, root={:.1}, impact={:.1}, tech_delta_ext={:+}, exertion=+{})",
+        res.technique.as_str(),
+        res.category.as_str(),
+        res.alloc.tempo,
+        res.alloc.control,
+        res.alloc.force,
+        env.p_eff,
+        env.p_base,
+        env.neutral_baseline_b,
+        res.action_cost.base_total_tc,
+        res.effective_tc,
+        next_tick,
+        res.effective_guard,
+        res.effective_root,
+        res.strike_impact,
+        res.technique_delta_ext,
+        res.exertion_marks_gained
+    );
+    mech_ev.notes = match mech_ev.notes.take() {
+        Some(existing) if !existing.is_empty() => Some(format!("{existing} | {triad_note}")),
+        _ => Some(triad_note),
+    };
+}
+
 /// Evaluates whether a human chat message should trigger the AI GM according to the session's
 /// operating topology (`TTRPG_GM_AI` Co-Pilot vs. `TTRPG_AI_GM` Autonomous):
 /// - **Co-Pilot (`TTRPG_GM_AI`, human `SessionRole::Gm` present)**: Only triggers when directly addressed
 ///   (`@satya_ai_gm` / `@ai_gm`) or when a `GM_ONLY` or `PRIVATE` message targets the AI GM.
-/// - **Autonomous (`TTRPG_AI_GM`, no human `SessionRole::Gm`)**: Triggers on all `IN_CHARACTER` messages,
-///   `GM_ONLY` whispers, `PRIVATE` messages targeting the AI GM, or messages mentioning `gm`.
+/// - **Autonomous (`TTRPG_AI_GM`, no human `SessionRole::Gm`)**: Triggers on all `IN_CHARACTER` and
+///   `OUT_OF_CHARACTER` messages, `GM_ONLY` whispers, `PRIVATE` messages targeting the AI GM, or messages mentioning `gm`.
 pub fn should_trigger_ai_gm_for_chat(
     roster: &[Participant],
     ai_gm: &Participant,
@@ -701,10 +916,11 @@ pub fn should_trigger_ai_gm_for_chat(
         // Co-Pilot Mode (`TTRPG_GM_AI`): do not interrupt public player chat unless explicitly addressed
         visibility == MessageVisibility::GmOnly || targets_ai_privately || directly_mentions_ai
     } else {
-        // Autonomous Solo AI GM Mode (`TTRPG_AI_GM`)
+        // Autonomous Solo AI GM Mode (`TTRPG_AI_GM`): reply to both IN_CHARACTER actions and OUT_OF_CHARACTER rules/table questions
         visibility == MessageVisibility::GmOnly
             || targets_ai_privately
             || channel_context == ChannelContext::InCharacter
+            || channel_context == ChannelContext::OutOfCharacter
             || lower.contains("gm")
     }
 }
@@ -859,6 +1075,7 @@ pub async fn trigger_ai_gm_chat_reply(
     trigger_event_id: &str,
     trigger_kind: &str,
     visibility: MessageVisibility,
+    channel_context: Option<ChannelContext>,
     context_text: &str,
     roster: &[Participant],
 ) {
@@ -930,6 +1147,7 @@ pub async fn trigger_ai_gm_chat_reply(
         trigger_kind: trigger_kind.to_string(),
         trigger_actor: triggering_player.clone(),
         visibility,
+        channel_context,
         context_text: context_text.to_string(),
         roster: roster.to_vec(),
         provider,

@@ -876,5 +876,71 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
         assert "done_reason=stop" in perf_str
         assert "prompt_tokens=2000" in perf_str
         assert "eval_tokens=100" in perf_str
+
+        # Verify OOC rules query handling (`OUT_OF_CHARACTER` channel and rules questions do NOT advance story beats)
+        from satya_ml.ai_gm.graph import is_ooc_or_rules_query
+        from satya_ml.ai_gm.tools import get_session_combat_tracker, get_session_map
+
+        assert is_ooc_or_rules_query(
+            {
+                "channel_context": "OUT_OF_CHARACTER",
+                "content": "How do we do combat? Are we at tick 0 now? how do I use my Tempo, Control and Force pool here?",
+            }
+        )
+        assert is_ooc_or_rules_query(
+            {
+                "channel_context": "IN_CHARACTER",
+                "content": "How do we do combat? Are we at tick 0 now? how do I use my Tempo, Control and Force pool here?",
+            }
+        )
+
+        class RulesAndActionModeModel:
+            def bind_tools(self, _tools: list[Any]) -> RulesAndActionModeModel:
+                return self
+
+            def invoke(self, messages: list[Any]) -> AIMessage:
+                last_txt = str(getattr(messages[-1], "content", ""))
+                if "OUT_OF_CHARACTER RULES / TABLE QUESTION" in last_txt:
+                    return AIMessage(
+                        content="In Satya Action Mode, combat starts at Tick 1 (`Tick_start = max(1, 15 - OODA)`). Allocate your Tactical Pool `P_eff = T + C + F` in the Task Resolution & Action Pool drawer."
+                    )
+                return AIMessage(
+                    content="> **[ACTION MODE · Window 1 · Tick 1 (0.5s)]**\nSelect a Combat Technique (`Snap Shot [Base 3 TC]`) and your `Tempo / Control / Force` split."
+                )
+
+        set_chat_model_override(RulesAndActionModeModel())
+        ooc_res = handle_ai_gm_event(
+            AiGmTurnEventPayload(
+                session_id="ep-ooc-and-action-mode",
+                operating_mode="AUTONOMOUS",
+                channel_context="OUT_OF_CHARACTER",
+                context_text="How do we do combat? Are we at tick 0 now? how do I use my Tempo, Control and Force pool here?",
+            ),
+            authorization="Bearer satya_gm_secret_dev_token",
+        )
+        assert ooc_res["status"] == "ok"
+        assert ooc_res["final_channel"] == "OUT_OF_CHARACTER"
+        assert ooc_res["active_director_mandate"] == ""
+        assert "Tick_start = max(1, 15 - OODA)" in ooc_res["final_reply"]
+
+        # Triggering a `combat_encounter` scenario beat automatically initializes Action Mode & syncs the tactical map stub
+        combat_beat_res = handle_scenario_beat(
+            ScenarioBeatRequestPayload(
+                session_id="ep-ooc-and-action-mode",
+                task_slug="combat_encounter",
+                custom_context="Aegis breach team enters the Chrysalis core room.",
+            ),
+            authorization="Bearer satya_gm_secret_dev_token",
+        )
+        assert combat_beat_res["status"] == "ok"
+        assert "[ACTION MODE — TACTICAL CLOCK, MAP & T/C/F POOLS]" in combat_beat_res["active_director_mandate"]
+        tracker_after = get_session_combat_tracker("ep-ooc-and-action-mode")
+        assert tracker_after["combat_active"] is True
+        assert tracker_after["tick"] == 1
+        assert any(c.get("entity_id") == "secops_breach_lead" for c in tracker_after.get("combatants", []))
+        synced_map = get_session_map("ep-ooc-and-action-mode")
+        assert synced_map is not None
+        assert synced_map.get("procedural_generator_stub") is True
+        assert len(synced_map.get("tokens", [])) >= 1
     finally:
         set_chat_model_override(None)
