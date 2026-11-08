@@ -85,15 +85,30 @@ pub fn NotebookReferencePanes() -> impl IntoView {
         >
             <div class="pane-toolbar">
                 <div class="model-controls-row">
-                    <span class="subtitle">"Satya Count-Up Tick Timeline (1 Tick = 0.5s) & Two-Component Action Economy"</span>
+                    <span class="subtitle">"Satya Count-Up Tick Timeline (1 Tick = 0.5s) · 30 Combat Techniques × TCF Triad"</span>
                     <label class="inline-label" for="ttrpg-stance">
-                        <span>"Combat Stance"</span>
+                        <span>"Combat Action / Technique"</span>
                         <select id="ttrpg-stance">
                             <option value="">"Non-Combat Task (TC 10)"</option>
                             {COMBAT_STANCE_TABLE_ROWS
                                 .iter()
                                 .copied()
                                 .map(|(code, name, tc, _, _)| view! { <option value={code}>{format!("{name} ({tc})")}</option> })
+                                .collect_view()}
+                            {satya_engine::canonical_combat_technique_catalog()
+                                .iter()
+                                .map(|spec| {
+                                    let code = spec.id.as_str();
+                                    let label = format!(
+                                        "[{}] {} ({} TC = {}d + {}a)",
+                                        spec.category.label(),
+                                        spec.name,
+                                        spec.base_total_tc,
+                                        spec.base_tc_decide,
+                                        spec.base_tc_act,
+                                    );
+                                    view! { <option value={code}>{label}</option> }
+                                })
                                 .collect_view()}
                         </select>
                     </label>
@@ -136,10 +151,10 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                 <table class="metrics-table">
                     <thead>
                         <tr>
-                            <th>"Combat Stance / Action"</th>
+                            <th>"Category / Technique (What You Do)"</th>
                             <th>"Base TC (TC_decide + TC_act)"</th>
-                            <th>"Wind-Up / Floor"</th>
-                            <th>"Tactical & OODA Effect"</th>
+                            <th>"Floor / Impact"</th>
+                            <th>"TCF Triad Execution (Tempo / Control / Force)"</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -153,6 +168,33 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                                         <td><span class="mono">{tc_label}</span></td>
                                         <td>{windup}</td>
                                         <td>{effect}</td>
+                                    </tr>
+                                }
+                            })
+                            .collect_view()}
+                        {satya_engine::canonical_combat_technique_catalog()
+                            .iter()
+                            .map(|spec| {
+                                let name_col = format!("{}: {}", spec.category.label(), spec.name);
+                                let tc_col = format!(
+                                    "{} TC ({} decide + {} act)",
+                                    spec.base_total_tc,
+                                    spec.base_tc_decide,
+                                    spec.base_tc_act,
+                                );
+                                let floor_col = format!(
+                                    "{} floor · {:.2}× POW (Guard {:+}, Root {:+})",
+                                    spec.min_floor_ticks,
+                                    spec.pow_multiplier,
+                                    spec.guard_mod,
+                                    spec.root_mod,
+                                );
+                                view! {
+                                    <tr>
+                                        <td><strong>{name_col}</strong></td>
+                                        <td><span class="mono">{tc_col}</span></td>
+                                        <td>{floor_col}</td>
+                                        <td>{spec.tcf_interplay_notes}</td>
                                     </tr>
                                 }
                             })

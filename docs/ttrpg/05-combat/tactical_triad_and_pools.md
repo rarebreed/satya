@@ -1,6 +1,6 @@
 # Satya TTRPG Combat Architecture, Tactical Triad & Pools
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`TacticalPoolEnvelopeInput`, `TacticalPoolEnvelope`, `TacticalTriadAllocation`, `CombatPosture`, `compute_tactical_pool_envelope`, `validate_triad_allocation`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`TacticalPoolEnvelopeInput`, `TacticalPoolEnvelope`, `TacticalTriadAllocation`, `CombatPosture`, `compute_tactical_pool_envelope`, `validate_triad_allocation`) and [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain`, `CombatMoveCategory`, `CombatTechniqueId`, `COMBAT_TECHNIQUE_CATALOG`, `evaluate_technique_with_triad`, `resolve_technique_exchange`).
 
 Because simulation-style tactical agency is at the heart of **Satya**, combat is a deeply integrated extension of **[Cascading `2d20` Engine & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md)**. As in all Task Resolutions, every combat exchange—including ranged combat—is a contested system using the Two-List Cascading (`2d20`) Watershed Mechanic.
 
@@ -218,9 +218,18 @@ When splitting $P_{\text{eff}} = T + C + F$, no aspect may receive more points t
    - **Seizing the Initiative (Counter-Opening)**: If an attacker fails their attack roll against a defender with $C_{\text{def}} > C_{\text{att}}$, the defender traps, sweeps, or off-balances them—imposing **$(C_{\text{def}} - C_{\text{att}})$ extra recovery ticks** (or draining that many points from the attacker's next Tactical Pool)!
 3. **Force ($F$) $\to$ Impact Power, Recoil Bracing & Rooted Stability**:
    - **Melee Kinetic Impact**: Scales derived **Power ($\text{POW} = \frac{\text{FOR} \times \text{SPD}}{10}$)**:
-     $$\text{Strike Impact} = \text{POW} \times \left(\frac{F}{B}\right)$$
+     $$\text{Strike Impact} = \text{POW} \times \text{Multiplier}_{\text{tech}} \times \left(\frac{F}{B}\right)$$
    - **Block & Throw / Sweep Resistance (`Root`)**: Resisting a knockdown, throw, shove, or guard-crush uses **$F + \text{MMF}$** ($\text{MMF} = \frac{\text{MAS}}{70\text{ kg}} \times \text{SPD}$).
    - **Ranged Recoil & Burst Control**: In rapid or automatic fire (*Fully Automatic Weapons* `DEX/FOR`), each point of **Force ($F$)** above/below the weapon's recoil rating offsets or increases burst dispersion ($\Delta_{\text{ext}}$).
+
+### 4.5 Orthogonality: Technique Selection (*What You Do*) vs. Triad Allocation (*How You Execute It*)
+
+A crucial design principle in Satya is separating **which Combat Technique** a fighter declares (`Punch`, `Kick`, `Thrust`, `Swing`, `Grab`, `Throw`, `Block`, `Parry`, `Snap Shot`, `Aimed Shot`) from **how they allocate their Tactical Pool ($P_{\text{eff}} = T + C + F$)**:
+
+1. **The Technique (`CombatTechniqueId`) Defines the Biomechanical Baseline**:
+   Every move in the **30-Entry Canonical Combat Technique Catalog** has fixed anatomical or mechanical properties: its **Move Category** (`Control`, `Strike`, `Intercept`, `Maneuver`, `RangedShot`, `RangedManeuver`), **Engagement Reach Window**, **Two-Component Base Tick Cost ($\text{Base TC} = \text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$)**, **Power Multiplier**, and inherent **Guard / Root Posture Modifiers**.
+2. **The Triad Allocation (`T / C / F`) Shapes the Execution**:
+   A quick, guarded jab (`Tempo + Control`, low `Force`) and a wide-open knockout haymaker (`Force`, low `Tempo` and `Control`) are **both `Punch` strikes**. The technique sets the baseline hand-strike biomechanics (`Reach 1`, `Base TC 7`, `1.00× POW`, `Guard +0`), while your **Tactical Triad allotment** determines whether it finishes in `4 ticks` as a tight probe or winds up for `10 ticks` as a devastating finisher! Similarly, a `Kick` can be thrown as a fast range-finding teep (`Tempo + Control`) or a full-power roundhouse (`Force`), and any **Control Technique** (`Grab`, `Disarm`, `Takedown`, `Throw`, `Trap`, `Lock`, `Push`) uses **Tempo** for entry speed, **Control** for technical leverage/*Kuzushi* and Guard retention, and **Force** for uprooting power or joint torque.
 
 ---
 

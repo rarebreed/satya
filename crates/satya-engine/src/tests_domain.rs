@@ -823,3 +823,216 @@ fn test_marcus_vs_nadia_cognitive_dissonance_walkthrough() {
         assert_eq!((vac.vacuum_useful_consciousness_ticks, vac.vacuum_hlt_erosion), (48, 2));
         assert!(vac.vacuum_unconscious);
     }
+
+    #[test]
+    fn test_combat_techniques_catalog_and_tcf_orthogonality() {
+        assert_eq!(canonical_combat_technique_catalog().len(), 30);
+        assert_eq!(
+            combat_techniques_for_category(CombatMoveCategory::Control).len(),
+            7
+        );
+        assert_eq!(
+            combat_techniques_for_category(CombatMoveCategory::Strike).len(),
+            7
+        );
+        assert_eq!(
+            combat_techniques_for_category(CombatMoveCategory::Intercept).len(),
+            2
+        );
+        assert_eq!(
+            combat_techniques_for_category(CombatMoveCategory::Maneuver).len(),
+            5
+        );
+        assert_eq!(
+            combat_techniques_for_category(CombatMoveCategory::RangedShot).len(),
+            5
+        );
+        assert_eq!(
+            combat_techniques_for_category(CombatMoveCategory::RangedManeuver).len(),
+            4
+        );
+
+        // Armed Melee allows Disarm, Push, Trap (Control), Thrust, Swing (Strike), Block, Parry (Intercept), and all 5 Maneuvers
+        for allowed_armed in [
+            CombatTechniqueId::Disarm,
+            CombatTechniqueId::Push,
+            CombatTechniqueId::Trap,
+            CombatTechniqueId::Thrust,
+            CombatTechniqueId::Swing,
+            CombatTechniqueId::Block,
+            CombatTechniqueId::Parry,
+            CombatTechniqueId::Feint,
+            CombatTechniqueId::Dodge,
+            CombatTechniqueId::Escape,
+            CombatTechniqueId::Probe,
+            CombatTechniqueId::Root,
+        ] {
+            assert!(
+                is_technique_allowed_in_domain(allowed_armed, CombatDomain::ArmedMelee),
+                "{allowed_armed:?} should be allowed in ArmedMelee"
+            );
+        }
+        // Grab, Takedown, Throw, Lock, and unarmed strikes are disallowed in ArmedMelee
+        for unarmed_only in [
+            CombatTechniqueId::Grab,
+            CombatTechniqueId::Takedown,
+            CombatTechniqueId::Throw,
+            CombatTechniqueId::Lock,
+            CombatTechniqueId::Punch,
+            CombatTechniqueId::Elbow,
+            CombatTechniqueId::Knee,
+            CombatTechniqueId::Kick,
+            CombatTechniqueId::HeadButt,
+        ] {
+            assert!(
+                !is_technique_allowed_in_domain(unarmed_only, CombatDomain::ArmedMelee),
+                "{unarmed_only:?} should NOT be allowed in ArmedMelee"
+            );
+            assert!(
+                is_technique_allowed_in_domain(unarmed_only, CombatDomain::UnarmedMartialArts)
+            );
+        }
+
+        // Orthogonality: Same Technique (`Punch`), different TCF Triad Allocations -> Jab Probe vs. Knockout Haymaker
+        let env = compute_tactical_pool(&TacticalPoolParams {
+            chars: CharacterCharacteristics {
+                spd: 13,
+                kin: 13,
+                for_stat: 13,
+                ..Default::default()
+            },
+            skill_c: 13,
+            skill_n: 4,
+            ..Default::default()
+        });
+
+        let jab_punch = evaluate_technique_with_triad(&TechniqueTriadEvalParams {
+            technique: CombatTechniqueId::Punch,
+            domain: CombatDomain::UnarmedMartialArts,
+            envelope: env.clone(),
+            alloc: Triad::new(11, 10, 2),
+            skill_level_n: 4,
+            ..Default::default()
+        });
+        let haymaker_punch = evaluate_technique_with_triad(&TechniqueTriadEvalParams {
+            technique: CombatTechniqueId::Punch,
+            domain: CombatDomain::UnarmedMartialArts,
+            envelope: env.clone(),
+            alloc: Triad::new(3, 3, 13),
+            skill_level_n: 4,
+            ..Default::default()
+        });
+        assert!(jab_punch.valid && haymaker_punch.valid);
+        assert!(jab_punch.effective_tc < haymaker_punch.effective_tc);
+        assert!(jab_punch.effective_guard > haymaker_punch.effective_guard);
+        assert!(haymaker_punch.strike_impact > jab_punch.strike_impact * 4.0);
+
+        // Unarmed Strike Progression: HeadButt (TC 5), Elbow (TC 6, +1 Guard), Punch (TC 7), Knee (TC 7, 1.25x POW), Kick (TC 9, 1.35x POW, -1 Guard, -2 Root)
+        let balanced = Triad::new(7, 7, 7);
+        let elbow = evaluate_technique_with_triad(&TechniqueTriadEvalParams {
+            technique: CombatTechniqueId::Elbow,
+            domain: CombatDomain::UnarmedMartialArts,
+            envelope: env.clone(),
+            alloc: balanced,
+            skill_level_n: 4,
+            ..Default::default()
+        });
+        let kick = evaluate_technique_with_triad(&TechniqueTriadEvalParams {
+            technique: CombatTechniqueId::Kick,
+            domain: CombatDomain::UnarmedMartialArts,
+            envelope: env.clone(),
+            alloc: balanced,
+            skill_level_n: 4,
+            ..Default::default()
+        });
+        assert!(elbow.effective_tc < kick.effective_tc);
+        assert!(elbow.effective_guard > kick.effective_guard);
+        assert!(elbow.effective_root > kick.effective_root);
+        assert!(kick.strike_impact > elbow.strike_impact);
+
+        // Armed Melee: Thrust vs. Swing with Tactical Blade (Base TC 9, Guard +1, POW 1.15x)
+        let thrust = evaluate_technique_with_triad(&TechniqueTriadEvalParams {
+            technique: CombatTechniqueId::Thrust,
+            domain: CombatDomain::ArmedMelee,
+            envelope: env.clone(),
+            alloc: balanced,
+            skill_level_n: 4,
+            armed_weapon_base_tc: 9,
+            armed_weapon_pow_mult: 1.15,
+            weapon_guard_bonus: 1,
+            ..Default::default()
+        });
+        let swing = evaluate_technique_with_triad(&TechniqueTriadEvalParams {
+            technique: CombatTechniqueId::Swing,
+            domain: CombatDomain::ArmedMelee,
+            envelope: env.clone(),
+            alloc: balanced,
+            skill_level_n: 4,
+            armed_weapon_base_tc: 9,
+            armed_weapon_pow_mult: 1.15,
+            weapon_guard_bonus: 1,
+            ..Default::default()
+        });
+        assert!(thrust.valid && swing.valid);
+        assert!(thrust.effective_tc < swing.effective_tc);
+        assert_eq!(thrust.effective_guard, swing.effective_guard + 2);
+        assert_eq!(thrust.effective_pen_mod, 1);
+        assert!(swing.strike_impact > thrust.strike_impact);
+
+        // Intercept: Block vs. Parry against a missed low-Control Haymaker
+        let parry_def = evaluate_technique_with_triad(&TechniqueTriadEvalParams {
+            technique: CombatTechniqueId::Parry,
+            domain: CombatDomain::UnarmedMartialArts,
+            envelope: env.clone(),
+            alloc: Triad::new(8, 10, 4),
+            skill_level_n: 4,
+            ..Default::default()
+        });
+        let ex_parry = resolve_technique_exchange(
+            &haymaker_punch,
+            &parry_def,
+            &TechniqueExchangeContext {
+                attacker_net_successes: 0,
+                ..Default::default()
+            },
+        );
+        assert!(ex_parry.defender_seizes_initiative);
+        assert_eq!(
+            ex_parry.attacker_recovery_tick_penalty,
+            (parry_def.effective_guard - haymaker_punch.effective_guard) * 2
+        );
+
+        // Ranged: SnapShot vs. DeliberateAimedShot vs. Braced Shot
+        let snap = evaluate_technique_with_triad(&TechniqueTriadEvalParams {
+            technique: CombatTechniqueId::SnapShot,
+            domain: CombatDomain::Ranged,
+            envelope: env.clone(),
+            alloc: Triad::new(10, 8, 4),
+            skill_level_n: 4,
+            weapon_recoil_r: 5,
+            weapon_acc: 3,
+            weapon_is_braced: false,
+            ..Default::default()
+        });
+        let aimed_braced = evaluate_technique_with_triad(&TechniqueTriadEvalParams {
+            technique: CombatTechniqueId::DeliberateAimedShot,
+            domain: CombatDomain::Ranged,
+            envelope: env,
+            alloc: Triad::new(5, 12, 4),
+            skill_level_n: 4,
+            weapon_recoil_r: 5,
+            weapon_acc: 3,
+            weapon_is_braced: true,
+            ..Default::default()
+        });
+        assert!(snap.effective_tc < aimed_braced.effective_tc);
+        // SnapShot ignores positive Acc (+3 -> 0) and suffers +1 unbraced recoil (R=5 vs F=4) + +2 SnapShot mod = +3 delta_ext
+        assert_eq!(snap.ranged_effective_acc_bonus, 0);
+        assert_eq!(snap.ranged_unbraced_dispersion_delta_ext, 1);
+        assert_eq!(snap.technique_delta_ext, 3);
+        // DeliberateAimedShot while braced slashes R_eff from 5+1=6 down to 3 (so F=4 fully braces it!), applies full Acc=+3, -2 Aim mod, and -1 Brace mod = -6 delta_ext!
+        assert_eq!(aimed_braced.ranged_effective_recoil_r, 3);
+        assert_eq!(aimed_braced.ranged_unbraced_dispersion_delta_ext, 0);
+        assert_eq!(aimed_braced.ranged_effective_acc_bonus, 3);
+        assert_eq!(aimed_braced.technique_delta_ext, -6);
+    }

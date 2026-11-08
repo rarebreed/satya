@@ -37,7 +37,8 @@
 //! - [`psyche_social`] & [`social_combat`]: Psyche Friction Checks, Long-Term Psyche Drift, Conviction Surges,
 //!   Combat Morale, Argument Vectors, Social Composure, and Cognitive Dissonance resolution
 //!   (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §1–§4).
-//! - [`combat`], [`ranged_combat`] & [`ballistics`]: Tactical Triad ("Envelope & Fill" — `Tempo`, `Control`, `Force`),
+//! - [`combat`], [`combat_techniques`], [`ranged_combat`] & [`ballistics`]: Tactical Triad ("Envelope & Fill" — `Tempo`, `Control`, `Force`),
+//!   30-entry Canonical Combat Technique Catalog (`Control`, `Strike`, `Intercept`, `Maneuver`, `RangedShot`, `RangedManeuver`),
 //!   Melee Weapons, Reach & Clinch Polarity Flip, Kuzushi Throws, Granular Ballistics & Firearms Engineering
 //!   ($E_k, I_{\text{KE}}, I_{\text{cal}}, W_{\text{yaw}}, \text{Acc}, \text{Rel}$), Ranged Fire Modes, Recoil Bracing,
 //!   Suppression, Armor `PR` vs. `BABT`, and Weapon Malfunctions
@@ -58,6 +59,7 @@ pub mod ballistics;
 pub mod character_audit;
 pub mod characteristics;
 pub mod combat;
+pub mod combat_techniques;
 pub mod contested_cascade;
 pub mod dice_pools;
 pub mod dice_probabilities;

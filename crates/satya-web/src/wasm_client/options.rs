@@ -55,14 +55,36 @@ pub fn parse_channel_context(raw: &str) -> ChannelContext {
 }
 
 /// Parses a `<select>` option string into an optional Satya TTRPG [`CombatStance`].
+///
+/// Accepts both the 5 canonical [`CombatStance`] stance codes (`"MANEUVER"`, `"POWER"`,
+/// `"STABILITY"`, `"RANGED_AIMED"`, `"RANGED_SNAP"`) and any of the 30 canonical
+/// [`satya_engine::CombatTechniqueId`] technique codes (`"grab"`, `"punch"`, `"parry"`,
+/// `"feint"`, `"thrust"`, `"swing"`, `"snap_shot"`, `"deliberate_aimed_shot"`, etc.).
 pub fn parse_combat_stance(raw: &str) -> Option<CombatStance> {
     match raw {
-        "POWER" => Some(CombatStance::Power),
-        "MANEUVER" => Some(CombatStance::Maneuver),
-        "STABILITY" => Some(CombatStance::Stability),
-        "RANGED_AIMED" => Some(CombatStance::RangedAimed),
-        "RANGED_SNAP" => Some(CombatStance::RangedSnap),
-        _ => None,
+        "POWER" => return Some(CombatStance::Power),
+        "MANEUVER" => return Some(CombatStance::Maneuver),
+        "STABILITY" => return Some(CombatStance::Stability),
+        "RANGED_AIMED" => return Some(CombatStance::RangedAimed),
+        "RANGED_SNAP" => return Some(CombatStance::RangedSnap),
+        "" => return None,
+        _ => {}
+    }
+    let tech_id = satya_engine::CombatTechniqueId::from_code_str(raw)?;
+    let spec = satya_engine::get_combat_technique_spec(tech_id);
+    match spec.category {
+        satya_engine::CombatMoveCategory::Strike => Some(CombatStance::Power),
+        satya_engine::CombatMoveCategory::Intercept => Some(CombatStance::Stability),
+        satya_engine::CombatMoveCategory::Control
+        | satya_engine::CombatMoveCategory::Maneuver
+        | satya_engine::CombatMoveCategory::RangedManeuver => Some(CombatStance::Maneuver),
+        satya_engine::CombatMoveCategory::RangedShot => match tech_id {
+            satya_engine::CombatTechniqueId::SnapShot
+            | satya_engine::CombatTechniqueId::SuppressiveFullAuto => {
+                Some(CombatStance::RangedSnap)
+            }
+            _ => Some(CombatStance::RangedAimed),
+        },
     }
 }
 

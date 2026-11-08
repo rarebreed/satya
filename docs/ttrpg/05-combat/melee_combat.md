@@ -1,6 +1,6 @@
 # Satya TTRPG Melee Combat, Close-Quarters Tactics & The Tactical Triad
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`ReachBand`, `MeleeDamageType`, `MeleeWeaponProfile`, `TacticalAllocationArchetype`, `TacticalTriadContestInput`, `evaluate_tactical_triad_contest`, `resolve_grappling_or_throw`, `canonical_melee_weapons`) and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_viktor_vs_elena_melee`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`ReachBand`, `MeleeDamageType`, `MeleeWeaponProfile`, `TacticalAllocationArchetype`, `TacticalTriadContestInput`, `evaluate_tactical_triad_contest`, `resolve_grappling_or_throw`, `canonical_melee_weapons`), [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain`, `CombatMoveCategory`, `CombatTechniqueId`, `COMBAT_TECHNIQUE_CATALOG`, `evaluate_technique_with_triad`, `resolve_technique_exchange`), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_viktor_vs_elena_melee`).
 
 Melee combat in **Satya** is fundamentally different from ranged firefights—not only in its physical mechanics of reach, leverage, balance (`Root`), and structural defense (`Guard`), but also in its psychological immediacy. This chapter builds directly upon the core combat engine, **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**, **[Count-Up Action Clock](../02-core-mechanics/action_economy_and_ooda.md)**, **[Morale System](../04-psyche-and-social/psyche_morale_and_social_combat.md)**, and **["Envelope & Fill" Tactical Pool Architecture ($P_{\text{base}} = C_{\text{combat}} + 3N$)](tactical_triad_and_pools.md)**.
 
@@ -86,17 +86,64 @@ How quickly you pull off a maneuver and how rapidly you cover or yield ground is
 
 ---
 
-## 3. Techniques & The Six Core Tactical Allocations
+## 3. Canonical Unarmed Martial Arts & Armed Melee Techniques (`CombatTechniqueId`)
 
-Every combat exchange is defined by a technique and how the combatant distributes $P_{\text{eff}} = T + C + F$:
+In Satya, **what move you perform (`CombatTechniqueId`)** is orthogonal to **how you allocate your Tactical Pool ($P_{\text{eff}} = T + C + F$)**. Whether a `Punch` is a quick, guarded range-finding jab (`Tempo + Control`, low `Force`) or a wide-open knockout haymaker (`Force`, low `Tempo` and `Control`) is determined by your **Tactical Triad allotment**—while the **Technique** defines the move's biomechanical baseline (`Reach`, two-component `Base TC = TC_decide + TC_act`, `POW` leverage multiplier, and inherent `Guard` / `Root` modifiers):
+
+### 3.1 Unarmed & Armed Melee Technique Catalog (`Control`, `Strike`, `Intercept`, `Maneuver`)
+
+1. **`Control` Techniques (`Grab`, `Disarm`, `Takedown`, `Throw`, `Trap`, `Lock`, `Push`)**:
+   - **Unarmed Martial Arts & Grappling**: Uses all `7` Control techniques.
+   - **Armed Melee Combat**: Uses the weapon-applicable subset (**`Disarm`**, **`Push`**, and **`Trap` / Weapon Bind**), while `Grab`, `Takedown`, `Throw`, and `Lock` require unarmed/grappling hands.
+   - **How `Control` Moves Interplay with `TCF`**: Even on a `Control`-category move, **Tempo ($T$)** governs entry speed (`Effective TC`), **Control ($C$)** governs technical leverage (*Kuzushi* off-balancing, joint alignment, and centerline Guard), and **Force ($F$)** provides the physical power to uproot the opponent's `Effective Root` ($F_{\text{def}} + \text{MMF}_{\text{def}}$) or torque a joint.
+2. **`Strike` Techniques**:
+   - **Unarmed Martial Arts (`5` Strikes)**: **`Punch`** (baseline `1.00× POW`, `Reach 1`, `Base TC 7`), **`Elbow`** (`1.15× POW`, `Reach 0–1`, `Base TC 6`, `+1 Guard`), **`Knee`** (`1.25× POW`, `Reach 0–1`, `Base TC 7`, `+2` trauma in Clinch), **`Kick`** (`1.35× POW`, `Reach 1–2`, `Base TC 9`, `-1 Guard`, `-2 Root` while on one leg), and **`Head Butt`** (`0.95× POW`, `Reach 0` Clinch only, `Base TC 5`, `+2` facial daze $\Delta_{\text{int}}$).
+   - **Armed Melee (`2` Strikes)**: **`Thrust`** (linear point attack: `-1` faster `Base TC`, `+1 Guard`, `1.00×` weapon `POW`, `+1 Base Pen` vs. armor gaps) and **`Swing`** (arcing cut/bludgeon: `+1` `Base TC`, `-1 Guard`, `1.25×` weapon `POW` leverage).
+3. **`Intercept` Techniques (`Block`, `Parry`)**:
+   - **`Block`** (`Base TC 6`, `+2 Guard`, `+1 Root`): **Force + Control** hard structural frame or shield check; absorbs $\lfloor F_{\text{def}} / 2 \rfloor + \text{Weapon Block Bonus}$ incoming strike impact.
+   - **`Parry`** (`Base TC 6`, `+3 Guard`): **Control + Tempo** deflection off-line; adds `+3` (plus weapon Guard bonus) to $C_{\text{def}}$ and **doubles (`2×`) the recovery ticks** inflicted on the attacker when **Seizing the Initiative**!
+4. **`Maneuver` Techniques (`Feint`, `Dodge`, `Escape`, `Probe`, `Root`)**:
+   - **`Feint`** (`Base TC 7`: `4 Decide + 3 Act`, `+1 Guard`): Uses Quick Thinking ($D_{\text{cog}}$) + `Control` + `Tempo` to fake an attack vector; each net success strips **`-2` Guard (`Control`)** from the defender on the next exchange.
+   - **`Dodge`** (`Base TC 6`: `2 Decide + 4 Act`, `+1 Guard`, `-1 Root`): Uses `Tempo + Control` footwork to add $+\lfloor T_{\text{def}} / 2 \rfloor$ to attacker $\Delta_{\text{ext}}$ and shift engagement Reach by `±1`.
+   - **`Escape`** (`Base TC 7`: `2 Decide + 5 Act`, `+1 Guard`): Uses $\max(T_{\text{def}}, F_{\text{def}}) + C_{\text{def}}$ to break a `Grab`, `Trap`, `Lock`, or Clinch and open Reach by `+1` to `+2` steps.
+   - **`Probe`** (`Base TC 7`: `3 Decide + 4 Act`, `+2 Guard`, `0.35× POW`): Exploratory range-finding check ($D_{\text{cog}}$ compressed) that reveals the opponent's envelope/morale and grants `-2` $\Delta_{\text{ext}}$ on the next exchange.
+   - **`Root`** (`Base TC 6`: `1 Decide + 5 Act`, `+1 Guard`, **`+4 Root`**): Drops center of gravity (`Force + Control`), adding $+4 + \lfloor C / 2 \rfloor$ to `Effective Root` ($F + \text{MMF}$) to stuff incoming `Takedowns`, `Throws`, or `Pushes`.
+
+| Category | Technique (`CombatTechniqueId`) | Domain Availability | Reach | Base `TC` (`Decide + Act`) | `POW` Mult. | Guard / Root Mod | Primary `TCF` Interplay & Mechanical Effect |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Control** | **`Grab`** *(Clinch Entry)* | Unarmed | `0–1` | **`7`** (`1 + 6`) | `0.00×` | `Guard +0`, `Root +1` | Establishes Clinch & grip; imposes `-2` $T_{\max}$ on target until `Escape`/`Push`. |
+| **Control** | **`Disarm`** *(Weapon Strip)* | Unarmed & Armed | `0–2` | **`8`** (`2 + 6`) | `0.00×` | `Guard +0`, `Root +0` | Contests $C_{\text{att}} + \lfloor F_{\text{att}}/2 \rfloor$ vs. $C_{\text{def}} + F_{\text{def}}$ to strip held weapon. |
+| **Control** | **`Takedown`** *(Leg Shoot / Sweep)* | Unarmed | `1–2` | **`9`** (`2 + 7`) | `0.50×` | `Guard -1`, `Root +1` | Drives $F_{\text{att}} + \Delta T + \Delta C$ vs. $\text{Root}_{\text{def}} \to$ **Prone (`+6` ticks, `-4` $T_{\max}$)**. |
+| **Control** | **`Throw`** *(Kuzushi Projection)* | Unarmed | `0–1` | **`9`** (`2 + 7`) | `0.85×` | `Guard +1`, `Root +1` | Converts $\max(0, C_{\text{att}} - C_{\text{def, eff}})$ + blitz `Tempo` into throw leverage vs. `Root` $\to$ **Blunt + Prone**. |
+| **Control** | **`Trap`** *(Limb / Weapon Bind)* | Unarmed & Armed | `0–2` | **`7`** (`2 + 5`) | `0.00×` | `Guard +1`, `Root +0` | Binds limb/weapon for 1 exchange; slashes target `Control` cap by $\max(1, C_{\text{att}} - C_{\text{def}})$. |
+| **Control** | **`Lock`** *(Joint Lock / Choke)* | Unarmed | `0` | **`9`** (`2 + 7`) | `0.75×` | `Guard +0`, `Root +0` | Clinch/Ground submission; $C_{\text{att}}$ bypasses armor weave (`+4 Pen`) while $F_{\text{att}}$ slashes limb cap. |
+| **Control** | **`Push`** *(Shove / Frame Break)* | Unarmed & Armed | `0–1` | **`7`** (`1 + 6`) | `0.25×` | `Guard +0`, `Root +1` | Contests $\text{Root}_{\text{att}} + \Delta C$ vs. $\text{Root}_{\text{def}}$; breaks Clinch (`+1..+2` Reach) or shoves. |
+| **Strike** | **`Punch`** *(Jab / Cross / Hook)* | Unarmed | `1` | **`7`** (`1 + 6`) | **`1.00×`** | `Guard +0`, `Root +0` | Versatile hand strike: high `T` = fast jab (`4–5 ticks`); high `F` = knockout haymaker. |
+| **Strike** | **`Elbow`** *(Close / Clinch Slash)* | Unarmed | `0–1` | **`6`** (`1 + 5`) | **`1.15×`** | `Guard +1`, `Root +0` | Compact close/clinch strike (`+1 Guard`); olecranon bone inflicts `+1` laceration/daze on head hit. |
+| **Strike** | **`Knee`** *(Clinch / Step Piston)* | Unarmed | `0–1` | **`7`** (`1 + 6`) | **`1.25×`** | `Guard +0`, `Root -1` | Heavy piston strike (`+2` bonus trauma when kneeing in Clinch). |
+| **Strike** | **`Kick`** *(Teep / Calf / Roundhouse)* | Unarmed | `1–2` | **`9`** (`2 + 7`) | **`1.35×`** | `Guard -1`, `Root -2` | Longest unarmed reach (`Reach 2`) & power (`1.35×`), but single-leg stance costs `-1 Guard, -2 Root`. |
+| **Strike** | **`Head Butt`** *(Clinch Crown)* | Unarmed | `0` | **`5`** (`1 + 4`) | **`0.95×`** | `Guard +0`, `Root +1` | Fast Clinch-only (`Reach 0`) cranial strike; inflicts `+2` Daze $\Delta_{\text{int}}$; ignores hand traps. |
+| **Strike** | **`Thrust`** *(Linear Point / Stab)* | **Armed Melee** | `Wpn` | **`Wpn - 1`** (`1 + Act`) | **`1.00×`** | `Guard +1`, `Root +0` | `-1` faster `Base TC`, `+1` centerline Guard, and `+1 Base Pen` vs. armor/gaps. |
+| **Strike** | **`Swing`** *(Arcing Cut / Cleave)* | **Armed Melee** | `Wpn` | **`Wpn + 1`** (`2 + Act`) | **`1.25×`** | `Guard -1`, `Root +0` | `+1` `Base TC` and `-1 Guard`, but multiplies weapon `POW` by `1.25×` with `+1` guard-crush. |
+| **Intercept** | **`Block`** *(Structural Frame)* | Unarmed & Armed | `0–4` | **`6`** (`1 + 5`) | `0.00×` | `Guard +2`, `Root +1` | Absorbs $\lfloor F_{\text{def}} / 2 \rfloor + \text{Weapon Block Bonus}$ incoming strike trauma. |
+| **Intercept** | **`Parry`** *(Deflection / Redirect)* | Unarmed & Armed | `0–4` | **`6`** (`2 + 4`) | `0.00×` | `Guard +3`, `Root +0` | `+3 Guard` (plus weapon Guard) and **`2×` recovery ticks** inflicted when Seizing the Initiative! |
+| **Maneuver** | **`Feint`** *(Deceptive Setup)* | Unarmed & Armed | `1–4` | **`7`** (`4 + 3`) | `0.00×` | `Guard +1`, `Root +0` | $D_{\text{cog}}$ compresses `TC_decide = 4`; strips `-2 Guard` per net success on next exchange. |
+| **Maneuver** | **`Dodge`** *(Evasive Slip / Pivot)* | All Domains | `0–4` | **`6`** (`2 + 4`) | `0.00×` | `Guard +1`, `Root -1` | Adds $+\lfloor T_{\text{def}} / 2 \rfloor$ to attacker $\Delta_{\text{ext}}$ and shifts Reach by `±1`. |
+| **Maneuver** | **`Escape`** *(Break Clinch / Lock)* | Unarmed & Armed | `0–2` | **`7`** (`2 + 5`) | `0.00×` | `Guard +1`, `Root +0` | Contests $\max(T, F) + C$ vs. grappler to shed `Grab`/`Trap`/`Lock` and open Reach. |
+| **Maneuver** | **`Probe`** *(Range-Finding Read)* | Unarmed & Armed | `1–4` | **`7`** (`3 + 4`) | `0.35×` | `Guard +2`, `Root +0` | Reads opponent envelope/morale and grants `-2` $\Delta_{\text{ext}}$ on next exchange. |
+| **Maneuver** | **`Root`** *(Grounded Anchor)* | Unarmed & Armed | `0–4` | **`6`** (`1 + 5`) | `0.00×` | `Guard +1`, `Root +4` | Adds $+4 + \lfloor C / 2 \rfloor$ to `Effective Root` ($F + \text{MMF}$) against throws, takedowns & pushes. |
+
+### 3.2 The Six Core Tactical Triad Allocations (`TC`, `TF`, `CF`, `Pure T/C/F`)
+
+Once a fighter selects their **Technique** (`Punch`, `Kick`, `Thrust`, `Swing`, `Throw`, `Parry`, etc.), how they distribute $P_{\text{eff}} = T + C + F$ defines the execution archetype:
 
 | Action Domain | **Tempo** *(Speed & Mobility)* | **Control** *(Precision & Guard)* | **Force** *(Power & Root)* |
 | :--- | :--- | :--- | :--- |
-| **Melee Offense** *(Strike, Grab, Throw)* | Reduces Count-Up `TC`; interrupts slow wind-ups; closes/opens Reach; feints & flurries. | Targets vitals/armor gaps; secures joint locks; maintains **Guard** against counters. | Scales strike impact (`POW`); breaks through blocks; powers throws & knockdowns. |
-| **Reaction Defense** *(Parry, Block, Dodge, Trap)* | Reacts in time to fast strikes; slips/dodges blows; steps outside weapon arc. | Parries, deflects, disarms, or traps limbs; creates counter-openings against low-Control foes. | Hard-blocks heavy 2H weapons; **Roots** stance against charges, tackles, sweeps, or throws. |
-| **Maneuver & Clinch** *(Advance, Flank, Break)* | Sprints; closes into clinch or breaks contact in fewer ticks; evasive weaving. | Footwork to claim dominant angle/flank, pummel for underhooks, or establish guard. | Bull-rushes through lines; shoves opponents into walls/obstacles; sprawl weight. |
+| **Melee Offense** *(Strike, Control)* | Reduces Count-Up `TC`; interrupts slow wind-ups; closes/opens Reach; feints & flurries. | Targets vitals/armor gaps; secures joint locks & *Kuzushi*; maintains **Guard** against counters. | Scales strike impact (`POW`); breaks through blocks; powers throws, takedowns & shoves. |
+| **Intercept Defense** *(Block, Parry)* | Reacts in time to fast strikes; powers quick parry redirections. | Parries, deflects, or traps limbs; creates `2×` counter-openings against low-Control foes. | Absorbs heavy impact on a `Block` ($\lfloor F/2 \rfloor$); **Roots** stance against charges & sweeps. |
+| **Maneuver & Clinch** *(Feint, Dodge, Escape, Probe, Root)* | Powers `Dodge` evasion ($+\lfloor T/2 \rfloor$ $\Delta_{\text{ext}}$) and fast `Escape` / `Probe` footwork. | Drives `Feint` guard-stripping (`-2 Guard`/success), `Probe` reads, and `Root` stability ($+\lfloor C/2 \rfloor$). | Anchors `Root` stance ($F + \text{MMF} + 4$) and powers brute-force `Escape` breakouts. |
 
-### 3.1 Paired Tactical Allocations (2 Primary Aspects, 1 Deliberate Vulnerability)
+#### Paired Tactical Allocations (2 Primary Aspects, 1 Deliberate Vulnerability)
 
 1. **`TC` — Tempo + Control *(Low Force — The Probe / Counter-Riposte)***:
    - *Execution*: Fast, accurate, tightly guarded strike or defensive trap, but light impact and unrooted—e.g., a boxer's weaving jab, a fencer's stop-thrust, a Muay Thai teep/calf check, or an Aikido/Wing Chun parry-and-trap.
