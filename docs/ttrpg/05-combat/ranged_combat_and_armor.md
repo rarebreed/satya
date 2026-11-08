@@ -1,6 +1,6 @@
 # Satya TTRPG Ranged Combat, Granular Ballistics, Firearms Engineering & Armor
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/ranged_combat.rs`](../../../crates/satya-engine/src/ranged_combat.rs) (`RangedFireMode`, `ArmorProfileId`, `ArmorProfileSpec`, `evaluate_ranged_recoil_and_suppression`, `evaluate_oal_concealment_and_cqb`, `evaluate_weapon_malfunction`, `resolve_armor_penetration_and_babt`, `canonical_benchmark_firearms`, `canonical_armor_profiles`, `compare_akm_vs_creedmoor_at_400m`), [`crates/satya-engine/src/ballistics.rs`](../../../crates/satya-engine/src/ballistics.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_mateo_vs_vance_firefight`). Companion chapter to **[Granular Ballistics, Ammunition Physics & Firearm Engineering (`firearms_and_ballistics.md`)](firearms_and_ballistics.md)**.
+> **Rust Engine Implementation**: [`crates/satya-engine/src/ranged_combat.rs`](../../../crates/satya-engine/src/ranged_combat.rs) (`RangedFireMode`, `ArmorProfileId`, `ArmorProfileSpec`, `evaluate_ranged_recoil_and_suppression`, `evaluate_oal_concealment_and_cqb`, `evaluate_weapon_malfunction`, `resolve_armor_penetration_and_babt`, `canonical_benchmark_firearms`, `canonical_armor_profiles`, `compare_akm_vs_creedmoor_at_400m`), [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain::Ranged`, `CombatMoveCategory::RangedShot`, `CombatMoveCategory::RangedManeuver`, `CombatTechniqueId`, `evaluate_technique_with_triad`), [`crates/satya-engine/src/ballistics.rs`](../../../crates/satya-engine/src/ballistics.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_mateo_vs_vance_firefight`). Companion chapter to **[Granular Ballistics, Ammunition Physics & Firearm Engineering (`firearms_and_ballistics.md`)](firearms_and_ballistics.md)**.
 
 This chapter defines the canonical rules for **Ranged Firefights, Internal/External/Terminal Ballistics, Granular Firearm Engineering, Ammunition Physics, Weapon Reliability (`Rel`), and Body Armor (`PR` vs. Behind-Armor Blunt Trauma `BABT`)** in **Satya**. It builds directly upon:
 - **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for all mathematical variables and ballistics/combat symbols $E_k, m_{\text{proj}}, m_{\text{prop}}, L_{\text{bbl}}, \text{OAL}, M_{\text{wpn}}, \Delta_{\text{CoG}}, \tau_{\text{tol}}, \text{Acc}, W_{\text{yaw}}, \text{Pen}, R, \text{PR}_{\text{Edged}}, \text{PR}_{\text{Ballistic}}, \text{BABT}, \text{Rel}$),
@@ -18,21 +18,33 @@ Ranged combat uses the exact same **Tempo, Control, and Force** triad on the **[
 - **Control (`C` — Sight Alignment, Trigger Squeeze & Cover Exposure)**: Governs marksmanship precision (`DEX/SIG` or `DEX/FOC`), called shots to bypass armor, AND how much of your body is exposed out of cover while firing (`Guard`).
 - **Force (`F` — Stance, Recoil Bracing & Volume of Fire)**: Governs how rooted and braced your shooting platform is (`FOR`/`MAS`) to absorb the weapon's physical **Recoil Rating ($R$)** during rapid or automatic fire (*Fully Automatic Weapons* `DEX/FOR`) and project suppressive pressure.
 
-### 2.1 Ranged Fire Modes, Base `TC` & Recoil Bracing
+### 2.1 Ranged Shot Actions (`5`) & Ranged Maneuvers / Bracing (`4`)
 
-Unlike melee weapons where **Force** directly multiplies muscle impact, a firearm's projectile energy is propelled by chemical propellant (`grains` of powder), while the shooter's **Force ($F$)** braces against the weapon's **Effective Recoil Rating ($R_{\text{eff}}$)**:
+Unlike melee weapons where **Force** directly multiplies muscle impact, a firearm's projectile energy is propelled by chemical propellant (`grains` of powder), while the shooter's **Technique (`CombatTechniqueId`)** and **Tactical Triad (`Tempo`, `Control`, `Force`)** govern target acquisition speed (`Base TC = TC_decide + TC_act`), sight alignment (`Acc`), cover exposure (`Guard`), and **Recoil Bracing ($F \ge R_{\text{eff}}$)**:
 
-| Ranged Fire / Action Mode | Base `TC` | Mode Recoil Adder ($\Delta R_{\text{mode}}$) | Rounds Expended | How the Tactical Triad Governs the Shot |
-| :--- | :---: | :---: | :---: | :--- |
-| **Single Snap-Shot / Point-Shoot** | `7` *(+OAL/CoG mod)* | `+0` *(Base $R_{\text{wpn}}$)* | `1 rd` | Prioritizes **Tempo** (beating the target to the draw in CQB) + **Control** (point-aim & cover retention). |
-| **Deliberate Sighted / Aimed Shot** | `11–12` | `+1` *(Follow-through)* | `1 rd` | Prioritizes **Control** (sight alignment, breathing pause, trigger squeeze, called shots) at lower **Tempo**. Unlocks full positive **Weapon Accuracy ($\text{Acc}$)**. |
-| **Controlled Double-Tap / Short Burst** | `9` *(Semi/Burst)* | **`+2` to `+3`** | `2–3 rds` | Requires balanced **Force ($F \ge R_{\text{eff}}$)** to keep the second/third round on target alongside **Control** and **Tempo**. Each `+2` Net Successes lands an additional round! |
-| **Full-Auto Burst / Suppressive Fire** | `8–10` | **`+4` to `+6`** | `5–15 rds` | Demands heavy **Force** (`FOR`/`MAS`) to muscle down muzzle climb and project a beaten zone of **Suppression** ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$). |
-| **Bounding / Shooting on the Move** | `10` | **`+3` Unbraced** *(or Gait adder)* | `1–3 rds` | High **Tempo** covers ground quickly, but moving starves **Force** (recoil stability) or **Control** (sight picture). |
+#### A. Ranged `Shot` Actions (`RangedShot`)
+
+| Shot Technique (`CombatTechniqueId`) | Base `TC` (`Decide + Act`) | Mode Recoil Adder ($\Delta R_{\text{mode}}$) | Weapon `Acc` Applied? | Precision / Cover Mod | How the Tactical Triad (`TCF`) Interplays with the Shot |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **`Snap Shot`** *(Hip-Fire / Point-Shoot)* | **`6`** (`1 + 5`) | `+0` *(Base $R_{\text{wpn}}$)* | Negative `Acc` only *(ignores `+Acc`)* | **`+2` $\Delta_{\text{ext}}$**, `Guard +0` | Ultra-fast CQB point-shoot (`TC_decide = 1`). High **Tempo** beats the target to the draw at close range (`<= 15m`), but point-indexing adds `+2` $\Delta_{\text{ext}}$ and forfeits positive sight/optic `Acc`. |
+| **`Combat Sighted Shot`** *(Flash Sight Picture)* | **`9`** (`2 + 7`) | `+0` *(Base $R_{\text{wpn}}$)* | Up to **`+1` `Acc`** | **`+0` $\Delta_{\text{ext}}$**, `Guard +1` | Standard combat presentation: brings sights to eye level (`+1 Guard`), balances **Tempo**, **Control**, and **Force** ($F \ge R_{\text{wpn}}$). |
+| **`Deliberate Aimed Shot`** *(Precision Sighted)* | **`12`** (`4 + 8`) | `+1` *(Follow-through)* | **Full `Acc`** (`+Acc` + Optic) | **`-2` $\Delta_{\text{ext}}$** *(Aim)*, `Root +1` | Cognitive `TC_decide = 4` (compressed by $D_{\text{cog}}$). Prioritizes **Control** (sight alignment, breathing pause, trigger squeeze, called shots) at lower **Tempo**; unlocks full positive **Weapon Accuracy ($\text{Acc}$)** and `-2` $\Delta_{\text{ext}}$ aim bonus. |
+| **`Controlled Double-Tap / Short Burst`** | **`9`** (`2 + 7`) | **`+2` to `+3`** | Up to **`+1` `Acc`** | `2–3 rds` (`+1 hit` / `2` Net Successes) | Requires balanced **Force ($F \ge R_{\text{eff}}$)** to keep the second/third round on target alongside **Control** and **Tempo**. |
+| **`Suppressive Full-Auto Zone`** | **`9`** (`2 + 7`) | **`+4` to `+6`** | Negative `Acc` only | `5–15 rds`, `+2` $\Delta_{\text{ext}}$, `Guard -1` | Demands heavy **Force** (`FOR`/`MAS`) to muscle down muzzle climb and project a beaten zone of **Suppression** ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$). |
+
+#### B. Ranged `Maneuver` & Bracing Actions (`RangedManeuver`)
+
+| Ranged Maneuver (`CombatTechniqueId`) | Base `TC` (`Decide + Act`) | Recoil / Accuracy / Cover Mod | How the Tactical Triad (`TCF`) Interplays with the Maneuver |
+| :--- | :---: | :---: | :--- |
+| **`Brace / Rest Weapon`** *(Bipod / Barricade / Prone)* | **`5`** (`1 + 4`) | **`-3` $R_{\text{eff}}$**, **`-1` Wobble**, **`-1` $\Delta_{\text{ext}}$**, `Guard +2`, `Root +3` | Anchors the firearm on cover, a barricade, or a bipod (`Root` for ranged combat). Slashes Effective Recoil $R_{\text{eff}}$ by **`-3`** on subsequent shots—freeing points from **Force** so the shooter can pour their pool into **Control**! |
+| **`Cover Peek / Slice the Pie`** *(Micro-Exposure)* | **`8`** (`3 + 5`) | **`+3` Cover Guard ($C_{\text{def}}$)**, `Root +1` | Uses `D_cog` (`TC_decide = 3`) + **Control** to expose only eyes and muzzle around hard cover, adding **`+3` Guard** against return fire. |
+| **`Bounding Fire / Shoot on the Move`** | **`10`** (`2 + 8`) | **`+3` Unbraced $\Delta R_{\text{mode}}$**, `+1` $\Delta_{\text{ext}}$, `Root -2` | High **Tempo** covers ground across open space (`1–3 rds`), but moving demands extra **Force** (`+3` recoil adder) to keep rounds on target. |
+| **`Overwatch / Hold Sector`** *(Triggered Release)* | **`4`** (`2 + 2` setup, `1` trigger) | `Guard +2`, `Root +1`, Full `Acc` | Commits **Control** + `FOC/ITU` to lock down a doorway or lane; interrupts any target crossing the sector with a `1-Tick` reaction shot. |
 
 - **Resolving Recoil Bracing ($F$ vs. $R_{\text{eff}}$)**:
+  $$\text{Effective Recoil } (R_{\text{eff}}) = \max(0,\; R_{\text{wpn}} + \Delta R_{\text{mode}} - 3 \cdot \mathbb{I}_{\text{braced}})$$
   $$\text{Unbraced Dispersion Penalty } (\Delta_{\text{ext, recoil}}) = \max(0,\; R_{\text{eff}} - F)$$
-  If the shooter allocates $F \ge R_{\text{eff}}$, their stance absorbs the recoil impulse cleanly (`0` penalty). Every point by which allocated **Force ($F$)** falls short of $R_{\text{eff}}$ adds **`+1` to $\Delta_{\text{ext}}$** due to muzzle climb!
+  If the shooter allocates $F \ge R_{\text{eff}}$, their stance (and any active `Brace / Rest Weapon` support) absorbs the recoil impulse cleanly (`0` penalty). Every point by which allocated **Force ($F$)** falls short of $R_{\text{eff}}$ adds **`+1` to $\Delta_{\text{ext}}$** due to muzzle climb!
 
 ---
 

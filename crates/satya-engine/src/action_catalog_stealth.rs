@@ -147,6 +147,30 @@ pub const fn lookup_canonical_action(id: CanonicalActionId) -> &'static Canonica
     id.spec()
 }
 
+impl CanonicalActionId {
+    /// Maps combat-category entries in the 37-Action Reference Catalog (`§4.1`) to their
+    /// default [`crate::combat_techniques::CombatTechniqueId`] counterpart.
+    #[must_use]
+    pub const fn to_combat_technique_id(
+        self,
+    ) -> Option<crate::combat_techniques::CombatTechniqueId> {
+        use crate::combat_techniques::CombatTechniqueId;
+        match self {
+            Self::SnapShotPointBlank => Some(CombatTechniqueId::SnapShot),
+            Self::StandardMeleeStrikeLight => Some(CombatTechniqueId::Punch),
+            Self::StandardRangedFire => Some(CombatTechniqueId::CombatSightedShot),
+            Self::DefensiveGuardParryStance => Some(CombatTechniqueId::Parry),
+            Self::TacticalManeuverProbeFeint => Some(CombatTechniqueId::Probe),
+            Self::AimedShotSingle => Some(CombatTechniqueId::DeliberateAimedShot),
+            Self::HeavyPowerStrikeCleave => Some(CombatTechniqueId::Swing),
+            Self::SuppressiveFireBurstZone => Some(CombatTechniqueId::SuppressiveFullAuto),
+            Self::ActiveDodgeDiveForCover => Some(CombatTechniqueId::Dodge),
+            Self::OverwatchTriggeredRelease => Some(CombatTechniqueId::OverwatchHoldSector),
+            _ => None,
+        }
+    }
+}
+
 /// Movement gait during Stealth & Infiltration (§6.1, calibrated with `movement_vehicles_and_environment.md` §1.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

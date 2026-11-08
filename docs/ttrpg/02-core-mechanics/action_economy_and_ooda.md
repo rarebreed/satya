@@ -131,21 +131,26 @@ In `satya-engine` (`crates/satya-engine/src/dice_probabilities.rs`), six canonic
 
 ## 4. Base Action Time Costs (`Base TC = TC_decide + TC_act`) Reference Catalog
 
-### 4.1 Unarmed, Melee & Ranged Combat Actions
+### 4.1 Unarmed Martial Arts, Armed Melee & Ranged Combat Techniques (`CombatTechniqueId`)
 
-| Action / Maneuver | Category | Base `TC` (`Decide + Act`) | Real-Time Equiv. | Notes & Governing Mechanics |
+See **[Melee Combat (`melee_combat.md` §3)](../05-combat/melee_combat.md#3-canonical-unarmed-martial-arts--armed-melee-techniques-combattechniqueid)** and **[Ranged Combat (`ranged_combat_and_armor.md` §2.1)](../05-combat/ranged_combat_and_armor.md#21-ranged-shot-actions-5--ranged-maneuvers--bracing-4)** for the full 30-entry `COMBAT_TECHNIQUE_CATALOG` and how each move interacts with the **Tactical Triad (`Tempo`, `Control`, `Force`)**:
+
+| Action / Technique (`CombatTechniqueId`) | Category | Base `TC` (`Decide + Act`) | Real-Time Equiv. | Notes & Governing `TCF` Mechanics |
 | :--- | :--- | :---: | :---: | :--- |
 | **Drop Held Object / Release Grip** | Reflexive | **`1`** (`1 + 0`) | `0.25s` | Pure neural release; free of `action_time_factor` unless fingers are cramped. |
-| **Fast Jab / Knife Slash / Snap Kick** | Melee (`Reach 1`) | **`7–8`** (`1 + 6–7`) | `1.75–2.0s` | Drilled reflex (`TC_decide = 1`); high `Tempo` reduces to `4–5 ticks`. |
-| **Standard Melee Strike / Baton / Blade** | Melee (`Reach 2–3`) | **`8–9`** (`2 + 6–7`) | `2.0–2.25s` | Target selection (`2`) + swing/thrust (`6–7`); `N >= 4` shaves `1` decide tick. |
-| **Feint / Counter-Trap / Disarm / Joint Lock** | Tactical Melee | **`9`** (`3 + 6`) | `2.25s` | Requires reading opponent's guard (`TC_decide = 3`, reduced by `D_cog`). |
-| **Heavy Unarmed Haymaker / Takedown / Throw** | Melee / Grapple | **`10`** (`2 + 8`) | `2.5s` | Contests opponent's `Effective Root` ($F + \text{MMF}$). |
-| **Two-Handed Heavy Cleave / `POWER` Wind-Up** | Heavy Melee | **`12–14`** (`2 + 10–12`) | `3.0–3.5s` | High kinetic inertia (`TC_act = 10–12`); vulnerable to fast interrupts. |
-| **Ranged Snap-Shot / Point-Shoot (`RANGED_SNAP`)** | Ranged | **`7`** (`2 + 5`) | `1.75s` | Threat ID (`2`) + point-index & trigger break (`5`). |
-| **Controlled Double-Tap / Short Burst (`STABILITY`)** | Ranged | **`8–9`** (`2 + 6–7`) | `2.0–2.25s` | Fires `2–3` rounds; requires moderate `Force` for recoil recovery. |
-| **Full-Auto Suppressive Burst (5–15 rds)** | Ranged | **`8–10`** (`2 + 6–8`) | `2.0–2.5s` | High `Recoil` (`R = 8–12`); projects suppression morale zone. |
-| **Deliberate Sighted / Aimed Shot (`RANGED_AIMED`)** | Ranged | **`11–12`** (`4 + 7–8`) | `2.75–3.0s` | Lead/ballistic calculation (`TC_decide = 4`, reduced by `D_cog`) + sight alignment. |
-| **Dedicated Sniper Ballistic Solution & Squeeze** | Precision Ranged | **`16–20`** (`8 + 8–12`) | `4.0–5.0s` | Windage/elevation math (`ANA/FOC` reduces `TC_decide = 8`) + breath-hold squeeze. |
+| **Unarmed `Head Butt` (Clinch Crown)** | Unarmed Strike (`Reach 0`) | **`5`** (`1 + 4`) | `1.25s` | Clinch-only cranial strike (`0.95× POW`, `+1 Root`, `+2` facial Daze $\Delta_{\text{int}}$). |
+| **Unarmed `Elbow` Strike** | Unarmed Strike (`Reach 0–1`) | **`6`** (`1 + 5`) | `1.50s` | Compact close/clinch slash (`1.15× POW`, `+1 Guard`). |
+| **Unarmed `Punch` / `Knee` Strike** | Unarmed Strike (`Reach 0–1`) | **`7`** (`1 + 6`) | `1.75s` | `Punch` (`1.00× POW`, jab to haymaker via `TCF`); `Knee` (`1.25× POW`, `+2` trauma in Clinch). |
+| **Unarmed `Kick` (Teep / Calf / Roundhouse)** | Unarmed Strike (`Reach 1–2`) | **`9`** (`2 + 7`) | `2.25s` | Longest unarmed reach (`1.35× POW`, `-1 Guard`, `-2 Root` while on one leg). |
+| **Armed Melee `Thrust` vs. `Swing`** | Armed Strike (`Reach 1–4`) | **`Wpn - 1`** vs. **`Wpn + 1`** | `1.75–2.75s` | `Thrust`: `-1` `Base TC`, `+1 Guard`, `+1 Pen`; `Swing`: `+1` `Base TC`, `-1 Guard`, `1.25× POW`. |
+| **Control: `Grab` / `Trap` / `Push`** | Control (`Reach 0–2`) | **`7`** (`1–2 + 5–6`) | `1.75s` | `Grab` (Clinch entry, unarmed); `Trap` (limb/weapon bind, `+1 Guard`); `Push` (frame break vs. `Root`). |
+| **Control: `Disarm` / `Takedown` / `Throw` / `Lock`** | Control (`Reach 0–2`) | **`8–9`** (`2 + 6–7`) | `2.0–2.25s` | `Disarm` (`TC 8`, unarmed/armed); `Takedown`, `Throw` (*Kuzushi* vs. `Root`), `Lock` (submission) `TC 9`. |
+| **Intercept: `Block` vs. `Parry`** | Intercept (`Reach 0–4`) | **`6`** (`1–2 + 4–5`) | `1.50s` | `Block`: `+2 Guard`, absorbs $\lfloor F/2 \rfloor$ impact; `Parry`: `+3 Guard`, `2×` Seize Initiative ticks. |
+| **Maneuver: `Dodge` / `Root` / `Escape` / `Probe` / `Feint`** | Maneuver (`Reach 0–4`) | **`6–7`** (`1–4 + 3–5`) | `1.50–1.75s` | `Dodge` ($+\lfloor T/2 \rfloor$ evasion), `Root` (`+4 Root`), `Escape` (`TC 7`), `Probe` (`3+4`), `Feint` (`4+3`, `-2 Guard`/hit). |
+| **Ranged `Snap Shot` (Hip-Fire / Point-Shoot)** | Ranged Shot | **`6`** (`1 + 5`) | `1.50s` | Fast CQB reaction; ignores positive `Acc` and adds `+2` $\Delta_{\text{ext}}$ point-shoot penalty. |
+| **Ranged `Combat Sighted Shot` / `Double-Tap` / `Suppressive`** | Ranged Shot | **`9`** (`2 + 7`) | `2.25s` | Eye-level sight picture (`+0` $\Delta R$), `Double-Tap` (`+2` $\Delta R$), or `Suppressive Zone` (`+4` $\Delta R$, $\Delta_{\text{morale}} = \lfloor F/2 \rfloor$). |
+| **Ranged `Deliberate Aimed Shot`** | Ranged Shot | **`12`** (`4 + 8`) | `3.00s` | $D_{\text{cog}}$ compresses `TC_decide = 4`; unlocks full positive `Acc` + Optic and `-2` $\Delta_{\text{ext}}$ aim bonus. |
+| **Ranged `Brace / Rest Weapon` / `Cover Peek` / `Bounding` / `Overwatch`** | Ranged Maneuver | **`4–10`** | `1.00–2.50s` | `Brace` (`TC 5`, `-3` $R_{\text{eff}}$), `Cover Peek` (`TC 8`, `+3 Guard`), `Bounding` (`TC 10`, `+3` $\Delta R$), `Overwatch` (`TC 4`). |
 
 ### 4.2 Weapon Handling, Gear Manipulation & Reloads
 

@@ -37,6 +37,26 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
         wasm_client::parse_combat_stance("MANEUVER"),
         Some(CombatStance::Maneuver)
     );
+    assert_eq!(
+        wasm_client::parse_combat_stance("punch"),
+        Some(CombatStance::Power)
+    );
+    assert_eq!(
+        wasm_client::parse_combat_stance("grab"),
+        Some(CombatStance::Maneuver)
+    );
+    assert_eq!(
+        wasm_client::parse_combat_stance("parry"),
+        Some(CombatStance::Stability)
+    );
+    assert_eq!(
+        wasm_client::parse_combat_stance("snap_shot"),
+        Some(CombatStance::RangedSnap)
+    );
+    assert_eq!(
+        wasm_client::parse_combat_stance("deliberate_aimed_shot"),
+        Some(CombatStance::RangedAimed)
+    );
     assert_eq!(wasm_client::parse_combat_stance(""), None);
 
     let (ttrpg_vis, ttrpg_ctx) = wasm_client::chat_options_for_mode(SessionMode::Ttrpg);
@@ -329,6 +349,43 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
         stance_idx > combat_pane_idx && stance_idx < rules_pane_idx,
         "ttrpg-stance should live inside notebook-pane-combat rather than ttrpg-drawer"
     );
+    for tech_code in [
+        "grab",
+        "disarm",
+        "takedown",
+        "throw",
+        "trap",
+        "lock",
+        "push",
+        "punch",
+        "elbow",
+        "knee",
+        "kick",
+        "head_butt",
+        "thrust",
+        "swing",
+        "block",
+        "parry",
+        "feint",
+        "dodge",
+        "escape",
+        "probe",
+        "root",
+        "snap_shot",
+        "combat_sighted_shot",
+        "deliberate_aimed_shot",
+        "controlled_double_tap_burst",
+        "suppressive_full_auto",
+        "brace_weapon",
+        "cover_peek_slice_pie",
+        "bounding_shoot_on_move",
+        "overwatch_hold_sector",
+    ] {
+        assert!(
+            html.contains(&format!(r#"value="{tech_code}""#)),
+            "missing canonical combat technique option '{tech_code}' in SSR HTML"
+        );
+    }
     assert!(html.contains("container: ttrpg-card / inline-size"));
     assert!(html.contains("@container ttrpg-card"));
     assert!(!html.contains(r#"id="ttrpg-tn""#));

@@ -27,6 +27,7 @@ use crate::characteristics::{
 use crate::primitives::{ConditionImpact, StaticCatalog, Triad};
 use crate::{define_coded_enum, impl_static_catalog};
 
+pub use crate::combat_techniques::*;
 pub use crate::ranged_combat::*;
 // ============================================================================
 // Combat Tactical Pool ("Envelope & Fill" — Tempo, Control, Force) Calculator
@@ -692,6 +693,24 @@ pub const MELEE_WEAPON_CATALOG: [MeleeWeaponProfile; 6] = [
 ];
 
 impl_static_catalog!(MeleeWeaponId => MeleeWeaponProfile : MELEE_WEAPON_CATALOG);
+
+impl MeleeWeaponId {
+    /// Returns the default [`CombatDomain`] for this weapon profile (`UnarmedMartialArts` vs. `ArmedMelee`).
+    #[must_use]
+    pub const fn combat_domain(self) -> crate::combat_techniques::CombatDomain {
+        match self {
+            Self::UnarmedJabLowKickClinchKnee | Self::UnarmedHaymakerHighKickThrow => {
+                crate::combat_techniques::CombatDomain::UnarmedMartialArts
+            }
+            Self::CombatKnifeKarambitShiv
+            | Self::ExpandableBatonTonfaClub
+            | Self::MacheteWakizashiTacticalBlade
+            | Self::TwoHandedStaffSpearRiotShield => {
+                crate::combat_techniques::CombatDomain::ArmedMelee
+            }
+        }
+    }
+}
 
 #[must_use]
 pub const fn canonical_melee_weapon_catalog() -> &'static [MeleeWeaponProfile] {

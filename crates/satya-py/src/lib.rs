@@ -1931,6 +1931,191 @@ pub fn evaluate_movement_and_encumbrance(
     Ok(d.unbind())
 }
 
+/// Lists the canonical 30-move Combat Technique catalog (`combat_techniques.rs`), optionally filtered
+/// by `domain` (`"unarmed_martial_arts"`, `"armed_melee"`, `"ranged"`) and/or `category`
+/// (`"control"`, `"strike"`, `"intercept"`, `"maneuver"`, `"ranged_shot"`, `"ranged_maneuver"`).
+#[pyfunction]
+#[pyo3(signature = (domain=None, category=None))]
+pub fn list_combat_techniques(
+    py: Python<'_>,
+    domain: Option<&str>,
+    category: Option<&str>,
+) -> PyResult<Vec<Py<PyDict>>> {
+    let domain_filter = match domain.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(raw) => Some(satya_engine::CombatDomain::from_code_str(raw).ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown combat domain '{raw}'; expected 'unarmed_martial_arts', 'armed_melee', or 'ranged'"
+            ))
+        })?),
+        None => None,
+    };
+    let category_filter = match category.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(raw) => Some(
+            satya_engine::CombatMoveCategory::from_code_str(raw).ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(format!(
+                    "unknown combat move category '{raw}'; expected 'control', 'strike', 'intercept', 'maneuver', 'ranged_shot', or 'ranged_maneuver'"
+                ))
+            })?,
+        ),
+        None => None,
+    };
+
+    let mut out = Vec::new();
+    for spec in satya_engine::canonical_combat_technique_catalog() {
+        if let Some(dom) = domain_filter
+            && !satya_engine::is_technique_allowed_in_domain(spec.id, dom)
+        {
+            continue;
+        }
+        if let Some(cat) = category_filter
+            && spec.category != cat
+        {
+            continue;
+        }
+        let d = PyDict::new(py);
+        d.set_item("id", spec.id.as_str())?;
+        d.set_item("name", spec.name)?;
+        d.set_item("category", spec.category.as_str())?;
+        d.set_item("category_label", spec.category.label())?;
+        d.set_item("allowed_unarmed", spec.allowed_unarmed)?;
+        d.set_item("allowed_armed_melee", spec.allowed_armed_melee)?;
+        d.set_item("allowed_ranged", spec.allowed_ranged)?;
+        d.set_item("min_reach", spec.min_reach)?;
+        d.set_item("max_reach", spec.max_reach)?;
+        d.set_item("base_tc_decide", spec.base_tc_decide)?;
+        d.set_item("base_tc_act", spec.base_tc_act)?;
+        d.set_item("base_total_tc", spec.base_total_tc)?;
+        d.set_item("min_floor_ticks", spec.min_floor_ticks)?;
+        d.set_item("pow_multiplier", spec.pow_multiplier)?;
+        d.set_item("guard_mod", spec.guard_mod)?;
+        d.set_item("root_mod", spec.root_mod)?;
+        d.set_item("pen_mod", spec.pen_mod)?;
+        d.set_item("recoil_adder", spec.recoil_adder)?;
+        d.set_item("delta_ext_mod", spec.delta_ext_mod)?;
+        d.set_item("uses_full_weapon_acc", spec.uses_full_weapon_acc)?;
+        d.set_item("tcf_interplay_notes", spec.tcf_interplay_notes)?;
+        out.push(d.unbind());
+    }
+    Ok(out)
+}
+
+/// Evaluates a canonical Combat Technique combined with a concrete `Tempo + Control + Force` (`TCF`)
+/// Triad allocation, demonstrating the orthogonality between **What You Do** (Technique) and
+/// **How You Execute It** (`TCF` Triad).
+#[pyfunction]
+#[pyo3(signature = (
+    technique_id,
+    tempo,
+    control,
+    force,
+    domain="unarmed_martial_arts",
+    skill_level_n=3,
+    armed_weapon_base_tc=0,
+    armed_weapon_pow_mult=1.0,
+    weapon_guard_bonus=0,
+    weapon_block_force_bonus=0,
+    weapon_recoil_r=0,
+    weapon_acc=0,
+    weapon_is_braced=false,
+    fatigue_level=0,
+    wound_shock_index=0.0,
+    encumbrance_tier=1
+))]
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_combat_technique_triad(
+    py: Python<'_>,
+    technique_id: &str,
+    tempo: i32,
+    control: i32,
+    force: i32,
+    domain: &str,
+    skill_level_n: usize,
+    armed_weapon_base_tc: i32,
+    armed_weapon_pow_mult: f64,
+    weapon_guard_bonus: i32,
+    weapon_block_force_bonus: i32,
+    weapon_recoil_r: i32,
+    weapon_acc: i32,
+    weapon_is_braced: bool,
+    fatigue_level: i32,
+    wound_shock_index: f64,
+    encumbrance_tier: u8,
+) -> PyResult<Py<PyDict>> {
+    let tech_id = satya_engine::CombatTechniqueId::from_code_str(technique_id).ok_or_else(|| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "unknown combat technique '{technique_id}'"
+        ))
+    })?;
+    let dom = satya_engine::CombatDomain::from_code_str(domain).ok_or_else(|| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "unknown combat domain '{domain}'; expected 'unarmed_martial_arts', 'armed_melee', or 'ranged'"
+        ))
+    })?;
+    let envelope = satya_engine::compute_tactical_pool(&satya_engine::TacticalPoolParams {
+        skill_n: skill_level_n,
+        is_ranged: dom == satya_engine::CombatDomain::Ranged,
+        fatigue_level,
+        ..Default::default()
+    });
+    let res = satya_engine::evaluate_technique_with_triad(&satya_engine::TechniqueTriadEvalParams {
+        technique: tech_id,
+        domain: dom,
+        envelope,
+        alloc: satya_engine::Triad::new(tempo, control, force),
+        skill_level_n,
+        time_factor_params: satya_engine::ActionTimeFactorParams {
+            fatigue_level,
+            wound_shock_index,
+            encumbrance_tier: satya_engine::EncumbranceTier::from_tier_number(encumbrance_tier),
+            status_time_penalty: 0.0,
+            is_concussed_or_dazed: false,
+        },
+        armed_weapon_base_tc,
+        armed_weapon_pow_mult,
+        weapon_guard_bonus,
+        weapon_block_force_bonus,
+        weapon_recoil_r,
+        weapon_acc,
+        weapon_is_braced,
+    });
+    let d = PyDict::new(py);
+    d.set_item("technique_id", res.technique.as_str())?;
+    d.set_item("technique_name", res.technique.label())?;
+    d.set_item("category", res.category.as_str())?;
+    d.set_item("domain", res.domain.as_str())?;
+    d.set_item("tempo", res.alloc.tempo)?;
+    d.set_item("control", res.alloc.control)?;
+    d.set_item("force", res.alloc.force)?;
+    d.set_item("valid", res.valid)?;
+    d.set_item("violations", res.violations)?;
+    d.set_item("effective_tc_decide", res.action_cost.effective_tc_decide)?;
+    d.set_item("effective_tc_act", res.action_cost.effective_tc_act)?;
+    d.set_item("effective_total_tc", res.effective_tc)?;
+    d.set_item("wind_up_ticks", res.action_cost.wind_up_ticks)?;
+    d.set_item("recovery_ticks", res.action_cost.recovery_ticks)?;
+    d.set_item("effective_guard", res.effective_guard)?;
+    d.set_item("effective_root", res.effective_root)?;
+    d.set_item("strike_impact", res.strike_impact)?;
+    d.set_item("effective_pen_mod", res.effective_pen_mod)?;
+    d.set_item("block_damage_reduction", res.block_damage_reduction)?;
+    d.set_item("parry_counter_multiplier", res.parry_counter_multiplier)?;
+    d.set_item(
+        "feint_guard_strip_per_success",
+        res.feint_guard_strip_per_success,
+    )?;
+    d.set_item("dodge_evasion_delta_ext", res.dodge_evasion_delta_ext)?;
+    d.set_item("ranged_effective_recoil_r", res.ranged_effective_recoil_r)?;
+    d.set_item(
+        "ranged_unbraced_dispersion_delta_ext",
+        res.ranged_unbraced_dispersion_delta_ext,
+    )?;
+    d.set_item("ranged_effective_acc_bonus", res.ranged_effective_acc_bonus)?;
+    d.set_item("technique_delta_ext", res.technique_delta_ext)?;
+    d.set_item("exertion_marks_gained", res.exertion_marks_gained)?;
+    d.set_item("archetype_label", res.archetype_label)?;
+    Ok(d.unbind())
+}
+
 /// PyO3 module definition for `satya_py`.
 #[pymodule]
 pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1998,6 +2183,8 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(resolve_hit_location_d20, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_health_fatigue_and_bleed, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_movement_and_encumbrance, m)?)?;
+    m.add_function(wrap_pyfunction!(list_combat_techniques, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_combat_technique_triad, m)?)?;
 
     Ok(())
 }

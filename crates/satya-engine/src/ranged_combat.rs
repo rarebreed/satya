@@ -86,6 +86,21 @@ pub const RANGED_FIRE_MODES: [RangedFireModeProfile; 5] = [
 
 impl_static_catalog!(RangedFireModeId => RangedFireModeProfile : RANGED_FIRE_MODES);
 
+impl RangedFireModeId {
+    /// Maps this ranged fire mode to its corresponding [`crate::combat_techniques::CombatTechniqueId`].
+    #[must_use]
+    pub const fn to_combat_technique_id(self) -> crate::combat_techniques::CombatTechniqueId {
+        use crate::combat_techniques::CombatTechniqueId;
+        match self {
+            Self::SingleSnapShotPointShoot => CombatTechniqueId::SnapShot,
+            Self::DeliberateSightedAimedShot => CombatTechniqueId::DeliberateAimedShot,
+            Self::ControlledDoubleTapShortBurst => CombatTechniqueId::ControlledDoubleTapBurst,
+            Self::FullAutoBurstSuppressiveFire => CombatTechniqueId::SuppressiveFullAuto,
+            Self::BoundingShootingOnTheMove => CombatTechniqueId::BoundingShootOnMove,
+        }
+    }
+}
+
 #[must_use]
 pub const fn canonical_ranged_fire_modes() -> &'static [RangedFireModeProfile] {
     RangedFireModeId::CATALOG
