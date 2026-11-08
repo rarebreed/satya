@@ -138,11 +138,15 @@ from satya_ml.ai_gm.maps import (
     set_session_map,
 )
 
-# In-memory per-session caches for NPC states, operating mode, human GM ID, and GM_ONLY documents
+# In-memory per-session caches for NPC states, operating mode, human GM ID, GM_ONLY documents,
+# persistent GM memories, bound character sheets, and combat tracker state
 _SESSION_NPCS: dict[str, dict[str, dict[str, Any]]] = {}
 _SESSION_MODES: dict[str, str] = {}
 _SESSION_HUMAN_GMS: dict[str, str | None] = {}
 _SESSION_GM_DOCS: dict[str, list[dict[str, Any]]] = {}
+_SESSION_GM_MEMORIES: dict[str, list[dict[str, Any]]] = {}
+_SESSION_CHARACTERS: dict[str, list[dict[str, Any]]] = {}
+_SESSION_COMBAT_TRACKER: dict[str, dict[str, Any]] = {}
 
 _DEFAULT_STARTER_NPCS: dict[str, dict[str, Any]] = {
     "captain_vance": {
@@ -221,6 +225,44 @@ def set_session_gm_docs(session_id: str, docs: list[dict[str, Any]]) -> None:
 def get_session_gm_docs(session_id: str) -> list[dict[str, Any]]:
     """Return cached `GM_ONLY` documents for `session_id`."""
     return list(_SESSION_GM_DOCS.get(session_id, []))
+
+
+def set_session_gm_memories(session_id: str, memories: list[dict[str, Any]]) -> None:
+    """Cache the persistent `GmMemoryNoteRecord` entries synced from `GET /api/gm/sessions/:id/context`."""
+    _SESSION_GM_MEMORIES[session_id] = list(memories)
+
+
+def get_session_gm_memories(session_id: str) -> list[dict[str, Any]]:
+    """Return cached persistent `GmMemoryNoteRecord` entries for `session_id`."""
+    return list(_SESSION_GM_MEMORIES.get(session_id, []))
+
+
+def set_session_characters(session_id: str, characters: list[dict[str, Any]]) -> None:
+    """Cache the bound `CharacterSheetRecord` entries synced from `GET /api/gm/sessions/:id/context`."""
+    _SESSION_CHARACTERS[session_id] = list(characters)
+
+
+def get_session_characters(session_id: str) -> list[dict[str, Any]]:
+    """Return cached bound `CharacterSheetRecord` entries for `session_id`."""
+    return list(_SESSION_CHARACTERS.get(session_id, []))
+
+
+def set_session_combat_tracker(session_id: str, tracker: dict[str, Any]) -> None:
+    """Cache the `CombatTrackerState` synced from `GET /api/gm/sessions/:id/context`."""
+    _SESSION_COMBAT_TRACKER[session_id] = dict(tracker)
+
+
+def get_session_combat_tracker(session_id: str) -> dict[str, Any]:
+    """Return cached `CombatTrackerState` for `session_id`, initializing a default Window 1 / Tick 1 state if absent."""
+    if session_id not in _SESSION_COMBAT_TRACKER:
+        _SESSION_COMBAT_TRACKER[session_id] = {
+            "session_id": session_id,
+            "combat_active": False,
+            "round": 1,
+            "tick": 1,
+            "combatants": [],
+        }
+    return dict(_SESSION_COMBAT_TRACKER[session_id])
 
 
 def load_all_npc_profiles(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
@@ -519,6 +561,293 @@ def read_gm_documents(session_id: str = "default", query: str | None = None) -> 
     return "\n\n".join(blocks[:6])
 
 
+@tool
+def lookup_character_sheet(
+    character_name_or_id: str = "",
+    session_id: str = "default",
+) -> dict[str, Any]:
+    """Look up a bound player Character Sheet (`CharacterSheetRecord` — characteristics, aptitudes, skills, weapons, armor, anatomical trauma, fatigue, psyche) for `session_id` without bloating the prompt."""
+    chars = get_session_characters(session_id)
+    if not chars and httpx is not None:
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                resp = client.get(
+                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/context",
+                    headers=_gm_headers(),
+                )
+                if resp.status_code == 200:
+                    data = dict(resp.json())
+                    chars = list(data.get("session_characters") or [])
+                    set_session_characters(session_id, chars)
+        except Exception:
+            pass
+
+    if not chars:
+        return {
+            "session_id": session_id,
+            "characters": [],
+            "note": f"No player character sheets are currently bound to session '{session_id}'.",
+        }
+
+    q = character_name_or_id.strip().lower()
+    if not q:
+        return {
+            "session_id": session_id,
+            "character_count": len(chars),
+            "characters": [
+                {
+                    "character_id": c.get("character_id"),
+                    "character_name": c.get("character_name"),
+                    "callsign_or_role": c.get("callsign_or_role"),
+                    "owner_user_id": c.get("owner_user_id"),
+                    "skills": c.get("skills", {}),
+                    "equipped_ranged_ids": c.get("equipped_ranged_ids", []),
+                    "equipped_armor_codes": c.get("equipped_armor_codes", []),
+                }
+                for c in chars
+            ],
+        }
+
+    for c in chars:
+        cid = str(c.get("character_id") or "").lower()
+        cname = str(c.get("character_name") or "").lower()
+        crole = str(c.get("callsign_or_role") or "").lower()
+        owner = str(c.get("owner_user_id") or "").lower()
+        if q in cid or q in cname or q in crole or q in owner:
+            return dict(c)
+
+    return {
+        "error": f"Character '{character_name_or_id}' not found in session '{session_id}'",
+        "available_characters": [c.get("character_name") or c.get("character_id") for c in chars],
+    }
+
+
+@tool
+def get_combat_tracker_state(session_id: str = "default") -> dict[str, Any]:
+    """Read the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.5s`, `1 Window = 20 Ticks = 10.0s`) and combatant readiness for `session_id`."""
+    if httpx is not None:
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                resp = client.get(
+                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/combat",
+                    headers=_gm_headers(),
+                )
+                if resp.status_code == 200:
+                    tracker = dict(resp.json())
+                    set_session_combat_tracker(session_id, tracker)
+                    return tracker
+        except Exception:
+            pass
+    return get_session_combat_tracker(session_id)
+
+
+@tool
+def advance_combat_tracker(
+    tick_delta: int = 1,
+    entity_id: str | None = None,
+    active_stance: str | None = None,
+    session_id: str = "default",
+) -> dict[str, Any]:
+    """Advance (or reset when `tick_delta <= 0`) the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.5s`) or update a combatant's stance in `session_id`."""
+    payload: dict[str, Any] = {
+        "tick_delta": int(tick_delta),
+        "combat_active": True,
+        "entity_id": entity_id,
+        "active_stance": active_stance,
+    }
+    remote_res = _http_post_json(
+        f"{_signaling_base_url()}/api/gm/sessions/{session_id}/combat",
+        payload,
+        timeout=2.5,
+    )
+    if remote_res is not None:
+        set_session_combat_tracker(session_id, remote_res)
+        return remote_res
+
+    tracker = get_session_combat_tracker(session_id)
+    if int(tick_delta) <= 0:
+        tracker["round"] = 1
+        tracker["tick"] = 1
+    else:
+        next_tick = max(1, int(tracker.get("tick", tracker.get("current_tick", 1))) + int(tick_delta))
+        tracker["tick"] = next_tick
+        tracker["round"] = 1 + (next_tick // 20)
+    tracker["combat_active"] = True
+    if entity_id and active_stance:
+        for comb in tracker.get("combatants", []):
+            if comb.get("entity_id") == entity_id:
+                comb["active_stance"] = active_stance
+    set_session_combat_tracker(session_id, tracker)
+    return tracker
+
+
+@tool
+def upsert_gm_memory(
+    title: str,
+    content: str,
+    category: str = "SCENE_STATE",
+    is_pinned: bool = True,
+    is_persistent: bool = True,
+    session_id: str = "default",
+) -> dict[str, Any]:
+    """Save or update a persistent GM Memory Note (`SCENE_STATE`, `NPC_SECRET`, `QUEST_HOOK`, `RULING`, or `ROLLING_SUMMARY`) in the shared Human + AI GM SQLite Vault."""
+    norm_cat = category.strip().upper()
+    if norm_cat not in {"SCENE_STATE", "NPC_SECRET", "QUEST_HOOK", "RULING", "ROLLING_SUMMARY"}:
+        norm_cat = "SCENE_STATE"
+    payload = {
+        "title": title.strip() or "Untitled GM Memory",
+        "category": norm_cat,
+        "content": content.strip(),
+        "is_pinned": bool(is_pinned),
+        "is_persistent": bool(is_persistent),
+        "campaign_tag": session_id,
+    }
+    remote_res = _http_post_json(
+        f"{_signaling_base_url()}/api/gm/sessions/{session_id}/memories",
+        payload,
+        timeout=2.5,
+    )
+    if remote_res is not None:
+        memories = get_session_gm_memories(session_id)
+        memories = [m for m in memories if m.get("memory_id") != remote_res.get("memory_id")]
+        memories.append(remote_res)
+        set_session_gm_memories(session_id, memories)
+        return remote_res
+
+    local_note = {
+        "memory_id": f"gmmem-{uuid.uuid4().hex[:10]}",
+        "session_id": session_id,
+        "campaign_tag": session_id,
+        "author_user_id": "ai_gm_satya",
+        "author_display_name": "Satya AI GM",
+        "category": norm_cat,
+        "title": payload["title"],
+        "content": payload["content"],
+        "is_pinned": bool(is_pinned),
+        "is_persistent": bool(is_persistent),
+    }
+    memories = get_session_gm_memories(session_id)
+    memories.append(local_note)
+    set_session_gm_memories(session_id, memories)
+    return local_note
+
+
+@tool
+def search_gm_memory_and_docs(
+    query: str,
+    scope: str = "ALL",
+    session_id: str = "default",
+) -> str:
+    """Hybrid RAG + Omnisearch across Persistent GM Memory Notes, chunked `GM_ONLY` Documents, Rules Book chapters, bound Character Sheets, Combat Tracker, and Tactical Map."""
+    norm_scope = (scope or "ALL").strip().upper()
+    if httpx is not None:
+        try:
+            with httpx.Client(timeout=2.5) as client:
+                resp = client.get(
+                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/lookup",
+                    params={"q": query, "scope": norm_scope},
+                    headers=_gm_headers(),
+                )
+                if resp.status_code == 200:
+                    data = dict(resp.json())
+                    hits = list(data.get("hits") or [])
+                    if hits:
+                        lines: list[str] = []
+                        for h in hits[:8]:
+                            kind = h.get("source_kind", "SOURCE")
+                            title = h.get("title", "Untitled")
+                            persist_tag = " [PERSISTENT]" if h.get("is_persistent") else ""
+                            snippet = h.get("snippet", "")
+                            if kind == "GM_DOCUMENT":
+                                snippet = (
+                                    f'<untrusted_player_document doc_id="{h.get("item_id") or h.get("source_id")}" '
+                                    f'title="{title}">\n{snippet}\n</untrusted_player_document>'
+                                )
+                            lines.append(f"[{kind}{persist_tag} — {title}]: {snippet}")
+                        return "\n\n".join(lines)
+        except Exception:
+            pass
+
+    # Local chunked BM25/keyword fallback across cached GM memories, GM docs, character sheets, combat, and rules
+    keywords = [
+        w.strip(".,!?:;\"'()[]{}").lower()
+        for w in query.replace("?", " ").split()
+        if len(w.strip(".,!?:;\"'()[]{}")) >= 2
+    ]
+    results: list[tuple[int, str]] = []
+
+    if norm_scope in {"ALL", "GM_MEMORY", "MEMORIES"}:
+        for mem in get_session_gm_memories(session_id):
+            blob = f"{mem.get('title', '')} {mem.get('category', '')} {mem.get('content', '')}".lower()
+            score = sum(4 for kw in keywords if kw in blob) if keywords else 1
+            if score > 0:
+                pin = " [PINNED]" if mem.get("is_pinned") else ""
+                results.append(
+                    (
+                        score + (5 if mem.get("is_pinned") else 0),
+                        f"[GM_MEMORY{pin} ({mem.get('category', 'SCENE_STATE')}) — {mem.get('title', 'Note')}]: {mem.get('content', '')}",
+                    )
+                )
+
+    if norm_scope in {"ALL", "GM_DOCS", "DOCS"}:
+        for doc in get_session_gm_docs(session_id):
+            title = str(doc.get("title") or "Untitled")
+            body = str(doc.get("sanitized_content") or "")
+            # Chunk long documents into ~600-char paragraphs so only relevant passages enter context
+            paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()] or [body]
+            for idx, para in enumerate(paragraphs):
+                haystack = f"{title} {para}".lower()
+                score = sum(3 for kw in keywords if kw in haystack) if keywords else 1
+                if score > 0:
+                    snippet = para[:700]
+                    results.append(
+                        (
+                            score,
+                            f'<untrusted_player_document doc_id="{doc.get("doc_id")}#chunk{idx}" '
+                            f'title="{title}" persistent="{bool(doc.get("is_persistent"))}">\n'
+                            f"{snippet}\n</untrusted_player_document>",
+                        )
+                    )
+
+    if norm_scope in {"ALL", "CHARACTERS", "SHEETS"}:
+        for ch in get_session_characters(session_id):
+            blob = json.dumps(ch).lower()
+            score = sum(3 for kw in keywords if kw in blob) if keywords else 1
+            if score > 0:
+                results.append(
+                    (
+                        score,
+                        f"[CHARACTER_SHEET — {ch.get('character_name')} ({ch.get('callsign_or_role')})]: "
+                        f"skills={ch.get('skills')}, ranged={ch.get('equipped_ranged_ids')}, notes={ch.get('notes')}",
+                    )
+                )
+
+    if norm_scope in {"ALL", "COMBAT"}:
+        ct = get_session_combat_tracker(session_id)
+        blob = json.dumps(ct).lower()
+        if not keywords or any(kw in blob for kw in keywords) or norm_scope == "COMBAT":
+            rnd = ct.get("round", ct.get("combat_round", 1))
+            tck = ct.get("tick", ct.get("current_tick", 1))
+            results.append(
+                (
+                    2,
+                    f"[COMBAT_TRACKER]: Window {rnd} · Tick {tck} "
+                    f"(combatants={len(ct.get('combatants', []))})",
+                )
+            )
+
+    if norm_scope in {"ALL", "RULES"} and query.strip():
+        rules_excerpt = query_satya_rules.invoke({"query": query})
+        if rules_excerpt:
+            results.append((1, str(rules_excerpt)[:1500]))
+
+    if not results:
+        return f"No GM memory, document, character, or rules entries matched '{query}' (scope={norm_scope})."
+
+    results.sort(key=lambda item: item[0], reverse=True)
+    return "\n\n".join(text for _, text in results[:6])
+
+
 # ============================================================================
 # 5.5 Server-Authoritative Mechanics & Multi-Channel Messaging
 # ============================================================================
@@ -733,6 +1062,11 @@ def get_builtin_gm_tools() -> list[Any]:
     return [
         lookup_npc_profile,
         update_npc_state,
+        lookup_character_sheet,
+        get_combat_tracker_state,
+        advance_combat_tracker,
+        upsert_gm_memory,
+        search_gm_memory_and_docs,
         query_satya_rules,
         query_campaign_lore,
         read_gm_documents,

@@ -1,14 +1,16 @@
 //! `GM_ONLY` Document Vault (`#notebook-pane-docs`) and Google Drive (`drive.file`) OAuth/Picker integration.
 
 use crate::wasm_client::dom::{
-    escape_html, fetch_json, get_element, input_value, select_value, set_class, set_display,
-    set_feedback, set_input_value, set_select_value, set_text, window,
+    escape_html, fetch_json, get_element, input_checked, input_value, select_value, set_class,
+    set_display, set_feedback, set_input_value, set_select_value, set_text, window,
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
 use js_sys::{Function, Promise, Reflect};
 use satya_schema::{
-    GmDocumentRecord, GmDocumentSource, GoogleAuthLinkRequest, GoogleAuthStatusResponse,
-    SessionGmDocsResponse, SubmitGmDocumentRequest,
+    GmDocumentRecord, GmDocumentSource, GmLookupHit, GmLookupSourceKind, GmMemoryCategory,
+    GmMemoryNoteRecord, GmOmnisearchResponse, GoogleAuthLinkRequest, GoogleAuthStatusResponse,
+    SessionGmDocsResponse, SessionGmMemoriesResponse, SubmitGmDocumentRequest,
+    ToggleGmDocumentPersistenceRequest, UpsertGmMemoryRequest,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -42,17 +44,40 @@ pub fn format_gm_documents_list_html(docs: &[GmDocumentRecord]) -> String {
             } else {
                 ""
             };
+            let tag_label = d
+                .campaign_tag
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .unwrap_or(&d.session_id);
+            let persist_badge = if d.is_persistent {
+                format!(
+                    r#" <span class="pill pill-active" title="Saved in SQLite GM Vault across restarts and campaign sessions">Persistent ({})</span>"#,
+                    escape_html(tag_label)
+                )
+            } else {
+                r#" <span class="pill pill-muted" title="Session-only unless marked persistent">Session-Only</span>"#.to_string()
+            };
+            let next_persist = !d.is_persistent;
+            let toggle_btn_label = if d.is_persistent {
+                "Unmark Persistent"
+            } else {
+                "Mark Persistent"
+            };
             format!(
                 r#"<div class="gm-doc-card">
                     <div class="gm-doc-header">
                         <strong>{}</strong>
-                        <span class="pill pill-iggy">{src_label} · {} chars · GM_ONLY</span>{flag_badge}
+                        <div class="btn-row-compact">
+                            <span class="pill pill-iggy">{src_label} · {} chars · GM_ONLY</span>{persist_badge}{flag_badge}
+                            <button type="button" class="btn-chip" onclick="window.satyaToggleGmDocPersistence('{}', {next_persist})">{toggle_btn_label}</button>
+                        </div>
                     </div>
                     <div class="subtitle">Submitted by <strong>{}</strong></div>
                     <pre class="gm-doc-body">{}</pre>
                 </div>"#,
                 escape_html(&d.title),
                 d.char_count,
+                escape_html(&d.doc_id),
                 escape_html(&d.uploader_display_name),
                 escape_html(&d.sanitized_content)
             )
@@ -622,6 +647,9 @@ pub fn satya_submit_gm_document() {
             raw_text = exported;
         }
 
+        let is_persistent = input_checked("gm-doc-persistent");
+        let campaign_tag_raw = input_value("gm-doc-campaign-tag").trim().to_string();
+
         let req = SubmitGmDocumentRequest {
             title,
             source_kind,
@@ -636,6 +664,12 @@ pub fn satya_submit_gm_document() {
                 Some(google_id)
             },
             google_access_token: google_tok,
+            is_persistent,
+            campaign_tag: if campaign_tag_raw.is_empty() {
+                None
+            } else {
+                Some(campaign_tag_raw)
+            },
         };
 
         let url = format!("/api/sessions/{sid}/docs");
@@ -643,10 +677,18 @@ pub fn satya_submit_gm_document() {
             Ok(doc) => {
                 render_gm_document_added(&doc);
                 set_input_value("gm-doc-content", "");
+                let persist_note = if doc.is_persistent {
+                    format!(
+                        " [Persisted under campaign/session '{}']",
+                        doc.campaign_tag.as_deref().unwrap_or(&sid)
+                    )
+                } else {
+                    String::new()
+                };
                 set_feedback(
                     "gm-doc-feedback",
                     &format!(
-                        "Submitted '{}' ({} chars) strictly to GM & AI GM (`GM_ONLY`).",
+                        "Submitted '{}' ({} chars) strictly to GM & AI GM (`GM_ONLY`){persist_note}.",
                         doc.title, doc.char_count
                     ),
                     false,
@@ -657,9 +699,321 @@ pub fn satya_submit_gm_document() {
     });
 }
 
-/// Refreshes the list of `GM_ONLY` documents visible to the current user from `GET /api/sessions/:session_id/docs`.
+/// Toggles `is_persistent` on an existing `GM_ONLY` document via `POST /api/sessions/:session_id/docs/:doc_id/persist`.
+#[wasm_bindgen]
+pub fn satya_toggle_gm_doc_persistence(doc_id: String, is_persistent: bool) {
+    spawn_local(async move {
+        let (session_id, auth_token) =
+            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
+        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
+            return;
+        };
+        let ctag = input_value("gm-doc-campaign-tag").trim().to_string();
+        let req = ToggleGmDocumentPersistenceRequest {
+            is_persistent,
+            campaign_tag: if ctag.is_empty() { None } else { Some(ctag) },
+        };
+        let url = format!("/api/sessions/{sid}/docs/{doc_id}/persist");
+        match fetch_json::<_, GmDocumentRecord>("POST", &url, Some(&tok), Some(&req)).await {
+            Ok(doc) => {
+                render_gm_document_added(&doc);
+                set_feedback(
+                    "gm-doc-feedback",
+                    &format!(
+                        "Updated '{}': {}",
+                        doc.title,
+                        if doc.is_persistent {
+                            "Marked Persistent in GM Vault"
+                        } else {
+                            "Set to Session-Only"
+                        }
+                    ),
+                    false,
+                );
+            }
+            Err(err) => set_feedback("gm-doc-feedback", &err, true),
+        }
+    });
+}
+
+/// Formats the HTML list of persistent and session GM memory notes for `#gm-memories-list`.
+pub fn format_gm_memories_list_html(memories: &[GmMemoryNoteRecord]) -> String {
+    if memories.is_empty() {
+        return r#"<span class="pill pill-muted">No persistent GM memory notes saved for this campaign/session yet.</span>"#.to_string();
+    }
+    memories
+        .iter()
+        .map(|m| {
+            let pin_badge = if m.is_pinned {
+                r#" <span class="pill pill-active" title="Pinned into AI GM active context header">Pinned to AI GM</span>"#
+            } else {
+                ""
+            };
+            let persist_badge = if m.is_persistent {
+                format!(
+                    r#" <span class="pill pill-iggy">Persistent ({})</span>"#,
+                    escape_html(&m.campaign_tag)
+                )
+            } else {
+                r#" <span class="pill pill-muted">Session-Only</span>"#.to_string()
+            };
+            format!(
+                r#"<div class="gm-doc-card">
+                    <div class="gm-doc-header">
+                        <strong>[{}] {}</strong>
+                        <div class="btn-row-compact">
+                            {pin_badge}{persist_badge}
+                            <button type="button" class="btn-chip" onclick="window.satyaDeleteGmMemory('{}')">Delete</button>
+                        </div>
+                    </div>
+                    <div class="subtitle">Recorded by <strong>{}</strong></div>
+                    <pre class="gm-doc-body">{}</pre>
+                </div>"#,
+                escape_html(m.category.as_str()),
+                escape_html(&m.title),
+                escape_html(&m.memory_id),
+                escape_html(&m.author_display_name),
+                escape_html(&m.content)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// Creates or updates a persistent GM memory note via `POST /api/sessions/:session_id/memories`.
+#[wasm_bindgen]
+pub fn satya_submit_gm_memory() {
+    spawn_local(async move {
+        let (session_id, auth_token) =
+            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
+        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
+            set_feedback(
+                "gm-doc-feedback",
+                "Join or create an active session first before saving a GM memory note.",
+                true,
+            );
+            return;
+        };
+        let title = input_value("gm-memory-title").trim().to_string();
+        let content = input_value("gm-memory-content").trim().to_string();
+        let category = GmMemoryCategory::from_code_str(&select_value("gm-memory-category"));
+        let is_pinned = input_checked("gm-memory-pinned");
+        let is_persistent = input_checked("gm-memory-persistent");
+        let ctag_raw = input_value("gm-doc-campaign-tag").trim().to_string();
+
+        let req = UpsertGmMemoryRequest {
+            memory_id: None,
+            campaign_tag: if ctag_raw.is_empty() {
+                None
+            } else {
+                Some(ctag_raw)
+            },
+            category,
+            title,
+            content,
+            is_pinned,
+            is_persistent,
+        };
+        let url = format!("/api/sessions/{sid}/memories");
+        match fetch_json::<_, GmMemoryNoteRecord>("POST", &url, Some(&tok), Some(&req)).await {
+            Ok(mem) => {
+                set_input_value("gm-memory-content", "");
+                set_feedback(
+                    "gm-doc-feedback",
+                    &format!("Saved GM memory note '{}' [{}].", mem.title, mem.category.as_str()),
+                    false,
+                );
+                satya_refresh_gm_memories();
+            }
+            Err(err) => set_feedback("gm-doc-feedback", &err, true),
+        }
+    });
+}
+
+/// Deletes a GM memory note via `DELETE /api/sessions/:session_id/memories/:memory_id`.
+#[wasm_bindgen]
+pub fn satya_delete_gm_memory(memory_id: String) {
+    spawn_local(async move {
+        let (session_id, auth_token) =
+            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
+        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
+            return;
+        };
+        let url = format!("/api/sessions/{sid}/memories/{memory_id}");
+        if fetch_json::<(), serde_json::Value>("DELETE", &url, Some(&tok), None)
+            .await
+            .is_ok()
+        {
+            satya_refresh_gm_memories();
+        }
+    });
+}
+
+/// Refreshes the list of persistent & session GM memory notes from `GET /api/sessions/:session_id/memories`.
+#[wasm_bindgen]
+pub fn satya_refresh_gm_memories() {
+    spawn_local(async move {
+        let (session_id, auth_token) =
+            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
+        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
+            return;
+        };
+        let url = format!("/api/sessions/{sid}/memories");
+        if let Ok(resp) =
+            fetch_json::<(), SessionGmMemoriesResponse>("GET", &url, Some(&tok), None).await
+        {
+            with_state_mut(|st| {
+                st.gm_memories = resp.memories.clone();
+            });
+            if let Some(el) = get_element("gm-memories-list") {
+                el.set_inner_html(&format_gm_memories_list_html(&resp.memories));
+            }
+            set_text(
+                "gm-memories-count-pill",
+                &format!("{} GM Memories", resp.memories.len()),
+            );
+        }
+    });
+}
+
+/// Formats ranked [`GmOmnisearchResponse`] hits for `#gm-omnisearch-results`.
+pub fn format_gm_omnisearch_hits_html(resp: &GmOmnisearchResponse) -> String {
+    if resp.hits.is_empty() {
+        return format!(
+            r#"<span class="pill pill-muted">No matches found for '{}' in scope {}.</span>"#,
+            escape_html(&resp.query),
+            escape_html(&resp.scope)
+        );
+    }
+    resp.hits
+        .iter()
+        .map(|h| {
+            let kind_badge = match h.source_kind {
+                GmLookupSourceKind::RulesBook => "Rules Book",
+                GmLookupSourceKind::GmDocument => "GM Doc",
+                GmLookupSourceKind::GmMemory => "GM Memory",
+                GmLookupSourceKind::CharacterSheet => "Character Sheet",
+                GmLookupSourceKind::CombatTracker => "Combat Tracker",
+                GmLookupSourceKind::TacticalMap => "Tactical Map",
+            };
+            let persist_pill = if h.is_persistent {
+                r#" <span class="pill pill-active">Persistent</span>"#
+            } else {
+                ""
+            };
+            format!(
+                r#"<div class="gm-doc-card">
+                    <div class="gm-doc-header">
+                        <strong>{}</strong>
+                        <span class="pill pill-iggy">{kind_badge} · {}</span>{persist_pill}
+                    </div>
+                    <pre class="gm-doc-body">{}</pre>
+                </div>"#,
+                escape_html(&h.title),
+                escape_html(&h.subtitle),
+                escape_html(&h.snippet)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// Searches across Rules Book chapters, Persistent GM Docs, GM Memories, Character Sheets,
+/// Combat Tracker, and Tactical Map via `GET /api/sessions/:session_id/lookup` (with local fallback when offline).
+#[wasm_bindgen]
+pub fn satya_search_gm_omnisearch() {
+    let query = input_value("gm-omnisearch-input").trim().to_string();
+    let scope = select_value("gm-omnisearch-scope");
+    let norm_scope = if scope.trim().is_empty() {
+        "ALL".to_string()
+    } else {
+        scope.trim().to_uppercase()
+    };
+
+    let (session_id, auth_token, local_docs, local_memories) = with_state(|st| {
+        (
+            st.session_id.clone(),
+            st.auth_token.clone(),
+            st.gm_documents.clone(),
+            st.gm_memories.clone(),
+        )
+    });
+
+    if let (Some(sid), Some(tok)) = (session_id, auth_token) {
+        spawn_local(async move {
+            let encoded_q: String = js_sys::encode_uri_component(&query).into();
+            let encoded_s: String = js_sys::encode_uri_component(&norm_scope).into();
+            let url = format!("/api/sessions/{sid}/lookup?q={encoded_q}&scope={encoded_s}");
+            if let Ok(resp) =
+                fetch_json::<(), GmOmnisearchResponse>("GET", &url, Some(&tok), None).await
+                && let Some(el) = get_element("gm-omnisearch-results")
+            {
+                set_display("gm-omnisearch-results", "flex");
+                el.set_inner_html(&format_gm_omnisearch_hits_html(&resp));
+            }
+        });
+        return;
+    }
+
+    // Immediate local fallback when searching before joining a session
+    let mut hits = Vec::new();
+    let q_for_rules = if query.is_empty() {
+        "cascade"
+    } else {
+        query.as_str()
+    };
+    if matches!(norm_scope.as_str(), "ALL" | "RULES" | "RULES_BOOK") {
+        for r in satya_engine::search_rules_book(q_for_rules, 5) {
+            hits.push(GmLookupHit {
+                source_kind: GmLookupSourceKind::RulesBook,
+                item_id: r.chapter_id,
+                title: format!("{} — {}", r.chapter_title, r.section_heading),
+                subtitle: format!("Rules Book ({})", r.relative_path),
+                snippet: r.snippet.chars().take(360).collect(),
+                is_persistent: true,
+                score: r.score,
+            });
+        }
+    }
+    for d in &local_docs {
+        hits.push(GmLookupHit {
+            source_kind: GmLookupSourceKind::GmDocument,
+            item_id: d.doc_id.clone(),
+            title: d.title.clone(),
+            subtitle: format!("GM Doc · {} chars", d.char_count),
+            snippet: d.sanitized_content.chars().take(360).collect(),
+            is_persistent: d.is_persistent,
+            score: 20,
+        });
+    }
+    for m in &local_memories {
+        hits.push(GmLookupHit {
+            source_kind: GmLookupSourceKind::GmMemory,
+            item_id: m.memory_id.clone(),
+            title: m.title.clone(),
+            subtitle: format!("GM Memory [{}]", m.category.as_str()),
+            snippet: m.content.chars().take(360).collect(),
+            is_persistent: m.is_persistent,
+            score: 25,
+        });
+    }
+    let resp = GmOmnisearchResponse {
+        session_id: "local".to_string(),
+        campaign_tag: "local".to_string(),
+        query,
+        scope: norm_scope,
+        hits,
+    };
+    if let Some(el) = get_element("gm-omnisearch-results") {
+        set_display("gm-omnisearch-results", "flex");
+        el.set_inner_html(&format_gm_omnisearch_hits_html(&resp));
+    }
+}
+
+/// Refreshes the list of `GM_ONLY` documents and persistent GM memories visible to the current user.
 #[wasm_bindgen]
 pub fn satya_refresh_gm_documents() {
+    satya_refresh_gm_memories();
     spawn_local(async move {
         let (session_id, auth_token) =
             with_state(|st| (st.session_id.clone(), st.auth_token.clone()));

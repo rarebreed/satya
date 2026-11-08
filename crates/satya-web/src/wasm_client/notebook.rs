@@ -314,10 +314,10 @@ pub fn satya_load_skill_preset(skill_name: String, skill_level: i32, control_c: 
     satya_update_cascade_preview();
 }
 
-/// Advances (or resets when `delta == 0`) the Satya Count-Up Tick Timeline (`1 Tick = 0.5s`) in the `Combat Tracker` notebook tab.
+/// Advances (or resets when `delta == 0`) the Satya Count-Up Tick Timeline (`1 Tick = 0.5s`) in the `Combat Tracker` notebook tab and persists the updated state to SQLite when in a live session.
 #[wasm_bindgen]
 pub fn satya_advance_combat_tick(delta: i32) {
-    let (round, tick) = with_state_mut(|st| {
+    let (round, tick, session_opt, token_opt) = with_state_mut(|st| {
         if delta <= 0 {
             st.combat_round = 1;
             st.combat_tick = 1;
@@ -326,7 +326,12 @@ pub fn satya_advance_combat_tick(delta: i32) {
             st.combat_tick = next;
             st.combat_round = 1 + (next / 20);
         }
-        (st.combat_round, st.combat_tick)
+        (
+            st.combat_round,
+            st.combat_tick,
+            st.session_id.clone(),
+            st.auth_token.clone(),
+        )
     });
     let elapsed_sec = f64::from(tick) * 0.5;
     set_text(
@@ -334,6 +339,23 @@ pub fn satya_advance_combat_tick(delta: i32) {
         &format!("Window {round} · Tick {tick} ({elapsed_sec:.1}s)"),
     );
     render_combat_tracker();
+
+    if let (Some(sid), Some(token)) = (session_opt, token_opt) {
+        let req = satya_schema::UpdateCombatTrackerRequest {
+            tick_delta: Some(delta),
+            combat_active: Some(true),
+            entity_id: None,
+            active_stance: None,
+            next_action_tick: None,
+            fatigue_level: None,
+            wound_shock: None,
+        };
+        wasm_bindgen_futures::spawn_local(async move {
+            let url = format!("/api/sessions/{sid}/combat");
+            let _: Result<satya_schema::CombatTrackerState, _> =
+                crate::wasm_client::dom::fetch_json(&url, "POST", Some(&token), Some(&req)).await;
+        });
+    }
 }
 
 /// Formats the HTML chip list of active session combatants and their continuous Count-Up Tick readiness (`Tick_start = max(1, 15 - OODA - Awareness)`) for `#combat-tracker-list`.

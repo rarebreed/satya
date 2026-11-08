@@ -13,6 +13,7 @@ pub mod auth;
 pub mod characters;
 pub mod gm_api;
 pub mod gm_docs;
+pub mod gm_persistence;
 pub mod http_handlers;
 pub mod state;
 pub mod ws;
@@ -20,13 +21,14 @@ pub mod ws;
 pub use characters::*;
 pub use gm_api::*;
 pub use gm_docs::*;
+pub use gm_persistence::*;
 pub use http_handlers::*;
 pub use state::*;
 pub use ws::*;
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use std::sync::Arc;
 
@@ -57,8 +59,40 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             get(list_session_gm_docs_handler).post(submit_session_gm_doc_handler),
         )
         .route(
+            "/api/sessions/:session_id/docs/:doc_id/persist",
+            post(toggle_session_gm_doc_persistence_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/memories",
+            get(list_session_gm_memories_handler).post(upsert_session_gm_memory_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/memories/:memory_id",
+            delete(delete_session_gm_memory_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/combat",
+            get(get_session_combat_tracker_handler).post(update_session_combat_tracker_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/lookup",
+            get(gm_omnisearch_lookup_handler),
+        )
+        .route(
             "/api/gm/sessions/:session_id/context",
             get(gm_session_context_handler),
+        )
+        .route(
+            "/api/gm/sessions/:session_id/memories",
+            get(list_session_gm_memories_handler).post(upsert_session_gm_memory_handler),
+        )
+        .route(
+            "/api/gm/sessions/:session_id/combat",
+            get(get_session_combat_tracker_handler).post(update_session_combat_tracker_handler),
+        )
+        .route(
+            "/api/gm/sessions/:session_id/lookup",
+            get(gm_omnisearch_lookup_handler),
         )
         .route(
             "/api/gm/sessions/:session_id/chat",
@@ -1420,6 +1454,239 @@ mod tests {
             char_topic_metric.total_messages_ingested >= 6,
             "expected >= 6 events on character-sheets topic, got {}",
             char_topic_metric.total_messages_ingested
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_persistent_gm_docs_memories_combat_tracker_and_omnisearch() {
+        use axum::body::{Body, to_bytes};
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("satya_gm_persistence_test_{}", Uuid::now_v7()));
+        let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+            .await
+            .unwrap();
+        let app = build_router(state.clone());
+
+        let gm_auth = state
+            .auth
+            .authenticate_user("gm_sean", "satya-truth-2026")
+            .await
+            .unwrap();
+        let sara_auth = state
+            .auth
+            .authenticate_user("sara_valkyrie", "satya-truth-2026")
+            .await
+            .unwrap();
+
+        let gm_user = state
+            .auth
+            .verify_auth_token(&gm_auth.auth_token)
+            .await
+            .unwrap();
+        let sara_user = state
+            .auth
+            .verify_auth_token(&sara_auth.auth_token)
+            .await
+            .unwrap();
+
+        // 1. Create session and join
+        state
+            .auth
+            .create_session(
+                &gm_user,
+                "camp-persist-1",
+                "room-pw",
+                SessionMode::Ttrpg,
+                SessionRole::Gm,
+                None,
+                true,
+            )
+            .await
+            .unwrap();
+        state
+            .auth
+            .join_session(
+                &sara_user,
+                "camp-persist-1",
+                "room-pw",
+                SessionRole::Player,
+                None,
+            )
+            .await
+            .unwrap();
+
+        // 2. Submit a non-persistent GM doc and then toggle it to persistent
+        let doc_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/sessions/camp-persist-1/docs")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "title": "Orbital Relay Access Codes",
+                            "source_kind": "DIRECT_TEXT_UPLOAD",
+                            "raw_content": "Sub-channel 9B uses rotating cipher key Kestrel-42.",
+                            "is_persistent": false,
+                            "campaign_tag": "camp-persist-1"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(doc_res.status(), StatusCode::OK);
+        let doc_bytes = to_bytes(doc_res.into_body(), 32 * 1024).await.unwrap();
+        let doc_rec: satya_schema::GmDocumentRecord = serde_json::from_slice(&doc_bytes).unwrap();
+        assert!(!doc_rec.is_persistent);
+
+        let toggle_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!(
+                        "/api/sessions/camp-persist-1/docs/{}/persist",
+                        doc_rec.doc_id
+                    ))
+                    .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "is_persistent": true,
+                            "campaign_tag": "camp-persist-1"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(toggle_res.status(), StatusCode::OK);
+        let toggle_bytes = to_bytes(toggle_res.into_body(), 32 * 1024).await.unwrap();
+        let toggled_doc: satya_schema::GmDocumentRecord =
+            serde_json::from_slice(&toggle_bytes).unwrap();
+        assert!(toggled_doc.is_persistent);
+
+        // 3. Upsert a persistent pinned GM memory note
+        let mem_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/sessions/camp-persist-1/memories")
+                    .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "title": "Docking Bay 7 Ambush Trigger",
+                            "category": "NPC_SECRET",
+                            "content": "Commander Voss has 2 breach drones concealed in the overhead gantry.",
+                            "is_pinned": true,
+                            "is_persistent": true,
+                            "campaign_tag": "camp-persist-1"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(mem_res.status(), StatusCode::OK);
+
+        // 4. Advance persistent Combat Tracker by +6 ticks
+        let combat_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/sessions/camp-persist-1/combat")
+                    .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "tick_delta": 6,
+                            "combat_active": true
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(combat_res.status(), StatusCode::OK);
+        let combat_bytes = to_bytes(combat_res.into_body(), 32 * 1024).await.unwrap();
+        let combat_state: satya_schema::CombatTrackerState =
+            serde_json::from_slice(&combat_bytes).unwrap();
+        assert_eq!(combat_state.tick, 6);
+
+        // 5. Verify Omnisearch finds hits across GM Docs, GM Memories, Combat, and Rules
+        let search_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/sessions/camp-persist-1/lookup?q=Kestrel-42&scope=ALL")
+                    .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(search_res.status(), StatusCode::OK);
+        let search_bytes = to_bytes(search_res.into_body(), 64 * 1024).await.unwrap();
+        let search_resp: satya_schema::GmOmnisearchResponse =
+            serde_json::from_slice(&search_bytes).unwrap();
+        assert!(!search_resp.hits.is_empty());
+        assert_eq!(
+            search_resp.hits[0].source_kind,
+            satya_schema::GmLookupSourceKind::GmDocument
+        );
+
+        // 6. Both humans leave the session; re-creating the session hydrates persistent GM docs, memories & combat state!
+        state
+            .auth
+            .leave_session("camp-persist-1", &sara_user.user_id)
+            .await;
+        state
+            .auth
+            .leave_session("camp-persist-1", &gm_user.user_id)
+            .await;
+
+        state
+            .auth
+            .create_session(
+                &gm_user,
+                "camp-persist-1",
+                "room-pw",
+                SessionMode::Ttrpg,
+                SessionRole::Gm,
+                None,
+                true,
+            )
+            .await
+            .unwrap();
+
+        let (hydrated_ctx, _) = state
+            .auth
+            .get_session_gm_context("camp-persist-1")
+            .await
+            .unwrap();
+        assert_eq!(hydrated_ctx.gm_documents.len(), 1);
+        assert!(hydrated_ctx.gm_documents[0].is_persistent);
+        assert_eq!(hydrated_ctx.gm_memories.len(), 1);
+        assert!(hydrated_ctx.gm_memories[0].is_pinned);
+        assert_eq!(
+            hydrated_ctx.combat_tracker.unwrap().tick,
+            6
         );
 
         let _ = std::fs::remove_dir_all(&temp_dir);

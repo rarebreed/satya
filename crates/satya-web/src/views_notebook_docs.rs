@@ -255,19 +255,70 @@ pub fn NotebookReferencePanes() -> impl IntoView {
             <div class="pane-toolbar">
                 <div>
                     <span class="subtitle">
-                        "GM_ONLY Document Vault (`Player -> GM & AI GM Only` · Text/Table Extraction · Images & Scripts Stripped)"
+                        "GM_ONLY Document Vault, Persistent GM Memory & Omnisearch (`Player -> GM & AI GM Only` · Campaign/Session Persistence)"
                     </span>
                 </div>
                 <div class="btn-row-compact">
                     <span id="gm-docs-count-pill" class="pill pill-iggy">"0 GM Docs"</span>
+                    <span id="gm-memories-count-pill" class="pill pill-accent">"0 GM Memories"</span>
                     <button
                         type="button"
                         class="btn btn-sm btn-secondary"
-                        onclick="window.satyaRefreshGmDocuments()"
-                        on:click=move |_| wasm_client::satya_refresh_gm_documents()
+                        onclick="window.satyaRefreshGmDocuments(); window.satyaRefreshGmMemories();"
+                        on:click=move |_| {
+                            wasm_client::satya_refresh_gm_documents();
+                            wasm_client::satya_refresh_gm_memories();
+                        }
                     >
                         "Refresh"
                     </button>
+                </div>
+            </div>
+
+            // --- GM OMNISEARCH PANEL (RULES + PERSISTENT GM DOCS + GM MEMORIES + SHEETS + COMBAT + MAP) ---
+            <div class="roster-bar">
+                <span class="roster-title">"0. GM Omnisearch (Unified Lookup Across Rules, Persistent GM Docs, GM Memory, Character Sheets, Combat & Map):"</span>
+                <div class="form-grid">
+                    <label>
+                        <span>"Search Query (Rules, NPCs, Lore, Character Stats, Combat Tick, or GM Docs)"</span>
+                        <input
+                            id="gm-omnisearch-input"
+                            type="text"
+                            placeholder="e.g. Sara Valkyrie, bleeding trauma, tick timeline, or secret objective..."
+                            onchange="window.satyaSearchGmOmnisearch()"
+                            on:change=move |_| wasm_client::satya_search_gm_omnisearch()
+                        />
+                    </label>
+                    <label>
+                        <span>"Lookup Scope"</span>
+                        <select
+                            id="gm-omnisearch-scope"
+                            onchange="window.satyaSearchGmOmnisearch()"
+                            on:change=move |_| wasm_client::satya_search_gm_omnisearch()
+                        >
+                            <option value="ALL">"All Sources (Rules + Docs + Memories + Sheets + Combat + Map)"</option>
+                            <option value="RULES">"Rules Book & Mechanics Only"</option>
+                            <option value="GM_DOCS">"GM_ONLY Documents (Session & Persistent)"</option>
+                            <option value="GM_MEMORY">"GM Memory Notes & Pinned AI Facts"</option>
+                            <option value="CHARACTERS">"Bound Session Character Sheets"</option>
+                            <option value="COMBAT">"Combat Tracker & Tick Timeline"</option>
+                            <option value="MAP">"Tactical Map & Telemetry"</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="btn-row">
+                    <button
+                        type="button"
+                        id="btn-gm-omnisearch"
+                        class="btn btn-sm btn-primary"
+                        onclick="window.satyaSearchGmOmnisearch()"
+                        on:click=move |_| wasm_client::satya_search_gm_omnisearch()
+                    >
+                        "Search GM Vault & Rules"
+                    </button>
+                </div>
+                <div id="gm-omnisearch-results" class="gm-docs-list">
+                    <span class="pill pill-muted">"Enter a query above to search across Rules, Persistent GM Docs, GM Memory Notes, Character Sheets, Combat Tracker, and Map state."</span>
                 </div>
             </div>
 
@@ -325,6 +376,24 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                             <option value="GOOGLE_DOC">"Google Doc (drive.file Single-File Scope)"</option>
                             <option value="GOOGLE_SHEET">"Google Sheet (drive.file Single-File Scope)"</option>
                         </select>
+                    </label>
+                </div>
+                <div class="form-grid">
+                    <label class="checkbox-label">
+                        <input
+                            id="gm-doc-persistent"
+                            type="checkbox"
+                            checked=true
+                        />
+                        <span>"Persist across sessions (save to Campaign/Session SQLite GM Vault)"</span>
+                    </label>
+                    <label>
+                        <span>"Campaign Tag / Scope (defaults to current Session ID)"</span>
+                        <input
+                            id="gm-doc-campaign-tag"
+                            type="text"
+                            placeholder="Optional campaign tag (e.g. campaign-alpha)"
+                        />
                     </label>
                 </div>
                 <div id="gm-doc-google-row" class="form-grid" style="display: none;">
@@ -409,9 +478,75 @@ pub fn NotebookReferencePanes() -> impl IntoView {
             </div>
 
             <div class="roster-bar">
-                <span class="roster-title">"Session GM_ONLY Documents (Visible to GM/AI-GM & Uploader Only):"</span>
+                <span class="roster-title">"Session & Persistent GM_ONLY Documents (Visible to GM/AI-GM & Uploader Only):"</span>
                 <div id="gm-docs-list" class="gm-docs-list">
                     <span class="pill pill-muted">"No GM_ONLY documents submitted in this session yet."</span>
+                </div>
+            </div>
+
+            // --- PERSISTENT GM MEMORY NOTES & PINNED AI GM FACTS ---
+            <div class="roster-bar">
+                <span class="roster-title">"2. Persistent GM Memory Notes & Pinned AI GM Facts (Shared Human + AI GM Campaign Memory):"</span>
+                <div class="form-grid">
+                    <label>
+                        <span>"Memory Note Title / Fact Key"</span>
+                        <input
+                            id="gm-memory-title"
+                            type="text"
+                            placeholder="e.g. Dock 7 Ambush Trigger or Ruling: Zero-G Recoil"
+                        />
+                    </label>
+                    <label>
+                        <span>"Memory Category"</span>
+                        <select id="gm-memory-category">
+                            <option value="SCENE_STATE">"Scene State (`SCENE_STATE`)"</option>
+                            <option value="NPC_SECRET">"NPC Secret / Agenda (`NPC_SECRET`)"</option>
+                            <option value="QUEST_HOOK">"Quest Hook / Objective (`QUEST_HOOK`)"</option>
+                            <option value="RULING">"Table Ruling (`RULING`)"</option>
+                            <option value="ROLLING_SUMMARY">"Rolling Session Summary (`ROLLING_SUMMARY`)"</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="form-grid">
+                    <label class="checkbox-label">
+                        <input
+                            id="gm-memory-pinned"
+                            type="checkbox"
+                            checked=true
+                        />
+                        <span>"Pin to AI GM Core Working Memory (always visible in AI GM system header)"</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input
+                            id="gm-memory-persistent"
+                            type="checkbox"
+                            checked=true
+                        />
+                        <span>"Persist across sessions in Campaign/Session SQLite Vault"</span>
+                    </label>
+                </div>
+                <label>
+                    <span>"GM Memory Fact / Ruling / Scene Note (`<= 16 KB`)"</span>
+                    <textarea
+                        id="gm-memory-content"
+                        class="gm-doc-textarea"
+                        rows="3"
+                        placeholder="Record a persistent GM note, NPC secret, or table ruling that both Human and AI GMs will remember across sessions..."
+                    ></textarea>
+                </label>
+                <div class="btn-row">
+                    <button
+                        type="button"
+                        id="btn-submit-gm-memory"
+                        class="btn btn-sm btn-accent"
+                        onclick="window.satyaSubmitGmMemory()"
+                        on:click=move |_| wasm_client::satya_submit_gm_memory()
+                    >
+                        "Save GM Memory Note"
+                    </button>
+                </div>
+                <div id="gm-memories-list" class="gm-docs-list">
+                    <span class="pill pill-muted">"No persistent GM memory notes recorded in this session yet."</span>
                 </div>
             </div>
         </div>

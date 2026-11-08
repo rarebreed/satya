@@ -382,14 +382,21 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains(r#"id="webrtc-drag-header""#));
     assert!(html.contains(r#"class="video-grid cols-1""#));
 
-    // Verify Google OAuth (`drive.file`) & GM_ONLY Document Vault controls
+    // Verify Google OAuth (`drive.file`), GM_ONLY Document Vault, Persistent GM Memory & Omnisearch controls
     assert!(html.contains(r#"id="btn-google-auth""#));
     assert!(html.contains(r#"id="google-auth-status-pill""#));
     assert!(html.contains(r#"id="tab-btn-docs""#));
     assert!(html.contains(r#"id="notebook-pane-docs""#));
+    assert!(html.contains(r#"id="gm-memories-count-pill""#));
+    assert!(html.contains(r#"id="gm-omnisearch-input""#));
+    assert!(html.contains(r#"id="gm-omnisearch-scope""#));
+    assert!(html.contains(r#"id="btn-gm-omnisearch""#));
+    assert!(html.contains(r#"id="gm-omnisearch-results""#));
     assert!(html.contains(r#"id="gm-doc-file-input""#));
     assert!(html.contains(r#"id="gm-doc-title""#));
     assert!(html.contains(r#"id="gm-doc-source""#));
+    assert!(html.contains(r#"id="gm-doc-persistent""#));
+    assert!(html.contains(r#"id="gm-doc-campaign-tag""#));
     assert!(html.contains(r#"id="btn-google-picker""#));
     assert!(html.contains(r#"id="gm-google-oauth-config-row""#));
     assert!(html.contains(r#"id="gm-google-client-id""#));
@@ -397,6 +404,13 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains(r#"id="gm-doc-content""#));
     assert!(html.contains(r#"id="btn-submit-gm-doc""#));
     assert!(html.contains(r#"id="gm-docs-list""#));
+    assert!(html.contains(r#"id="gm-memory-title""#));
+    assert!(html.contains(r#"id="gm-memory-category""#));
+    assert!(html.contains(r#"id="gm-memory-pinned""#));
+    assert!(html.contains(r#"id="gm-memory-persistent""#));
+    assert!(html.contains(r#"id="gm-memory-content""#));
+    assert!(html.contains(r#"id="btn-submit-gm-memory""#));
+    assert!(html.contains(r#"id="gm-memories-list""#));
 
     assert_eq!(
         wasm_client::extract_google_drive_file_id_and_kind(

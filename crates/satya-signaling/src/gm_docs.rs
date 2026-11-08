@@ -507,6 +507,11 @@ pub async fn submit_session_gm_doc_handler(
         sanitized_content,
         char_count,
         safety_flagged,
+        is_persistent: req.is_persistent,
+        campaign_tag: req
+            .campaign_tag
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
         created_at_us: Utc::now().timestamp_micros(),
     };
 

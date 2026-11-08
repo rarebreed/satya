@@ -11,8 +11,12 @@ description: >-
 This document defines the universal architectural standards, file-size limits, modularity rules, and documentation conventions that apply across **every** crate in the Satya Rust workspace (`satya-schema`, `satya-engine`, `satya-web`, `satya-py`, `satya-signaling`).
 
 Crate-specific steering guides build on top of this document:
+- **Schemas, Wire Framing & GDPR (`crates/satya-schema`)**: [`crates/satya-schema/AGENTS.md`](../../crates/satya-schema/AGENTS.md)
 - **Game Engine & TTRPG Domain (`crates/satya-engine`)**: [`docs/technical/rust-engine-steering.md`](rust-engine-steering.md) & [`crates/satya-engine/AGENTS.md`](../../crates/satya-engine/AGENTS.md)
+- **Apache Iggy WAL & Avro Batch Storage (`crates/satya-storage`)**: [`crates/satya-storage/AGENTS.md`](../../crates/satya-storage/AGENTS.md)
+- **Axum Signaling, Auth, GM Vault & AI GM Bridge (`crates/satya-signaling`)**: [`crates/satya-signaling/AGENTS.md`](../../crates/satya-signaling/AGENTS.md)
 - **Full-Stack Leptos SSR + WebAssembly Client (`crates/satya-web`)**: [`docs/technical/rust-web-steering.md`](rust-web-steering.md) & [`crates/satya-web/AGENTS.md`](../../crates/satya-web/AGENTS.md)
+- **PyO3 Python Extension (`crates/satya-py`)**: [`crates/satya-py/AGENTS.md`](../../crates/satya-py/AGENTS.md)
 
 ---
 
@@ -56,6 +60,7 @@ Crate-specific steering guides build on top of this document:
 
 1. **Dedicated Test Modules (`src/tests*.rs`)**:
    - Keep large unit and integration test suites in dedicated `src/tests.rs` (and `src/tests_*.rs`) modules rather than appending 500+ lines of `#[cfg(test)]` to the bottom of production source files.
-2. **Windows Line-Ending & Escaping Discipline**:
-   - Keep source files normalized to LF (`\n`).
-   - On Windows, never use PowerShell double-quoted strings (`"..."`) to write Rust or Markdown containing backticks or `$` variables, as PowerShell strips backtick escapes and interpolates `$var`. Prefer structured file-editing tools or UTF-8 scripts with LF line endings.
+2. **Strict `LF` (`\n`) Line-Ending & Windows Escaping Discipline**:
+   - **Always write and save all repository files (`.rs`, `.py`, `.md`, `.css`, `.toml`, `.avsc`, `.json`, `.html`) with `LF` (`\n`) line endings — never `CRLF` (`\r\n`)**.
+   - Mixing `CRLF` and `LF` breaks exact string matching in `edit_file`, bloats diffs, and causes cross-platform hash/fingerprint mismatches. If an existing file on Windows contains `CRLF` (`\r\n`) line endings, normalize it to `LF` (`\n`) before or during editing (e.g. `path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n"))` or `newline="\n"` in Python).
+   - On Windows, never use PowerShell `Set-Content` / `Out-File` (which default to `CRLF`) or double-quoted strings (`"..."`) to write Rust or Markdown containing backticks or `$` variables, as PowerShell strips backtick escapes and interpolates `$var`. Prefer structured file-editing tools (`write_file` / `edit_file`) or UTF-8 scripts explicitly configured with `LF` (`\n`) line endings.

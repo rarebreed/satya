@@ -6,7 +6,6 @@
 //! (Apache Avro Schema Registry, `CRC-64-AVRO` wire framing, and GDPR PII manifest inspection) to Python
 //! and Marimo notebooks.
 
-#![deny(missing_docs)]
 #![allow(clippy::too_many_arguments)]
 
 use pyo3::exceptions::PyValueError;

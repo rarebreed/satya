@@ -2,7 +2,8 @@
 //! managed in Rust/WebAssembly across the session lifecycle.
 
 use satya_schema::{
-    AuthSuccessResponse, ChannelContext, GmDocumentRecord, Participant, SessionMode,
+    AuthSuccessResponse, ChannelContext, GmDocumentRecord, GmMemoryNoteRecord, Participant,
+    SessionMode,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -89,6 +90,8 @@ pub struct SatyaWasmState {
     pub google_picker_api_key: Option<String>,
     /// Cached `GM_ONLY` documents visible to the current user in the active session.
     pub gm_documents: Vec<GmDocumentRecord>,
+    /// Cached persistent and session-scoped GM memory notes for the active session/campaign.
+    pub gm_memories: Vec<GmMemoryNoteRecord>,
     /// Interactive state for the Character Creation Wizard notebook tab (`#notebook-pane-wizard`).
     pub wizard: crate::wasm_client::wizard::CharacterWizardState,
     /// Interactive state for the Character Sheet / Status notebook tab (`#notebook-pane-character`).
@@ -131,6 +134,7 @@ impl Default for SatyaWasmState {
             google_oauth_client_id: None,
             google_picker_api_key: None,
             gm_documents: Vec::new(),
+            gm_memories: Vec::new(),
             wizard: crate::wasm_client::wizard::CharacterWizardState::default(),
             character_sheet: crate::wasm_client::character_sheet::CharacterSheetState::default(),
         }

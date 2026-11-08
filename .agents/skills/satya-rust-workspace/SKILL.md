@@ -53,7 +53,16 @@ For crate-specific workflows and module maps, also activate:
 
 ---
 
-## 4. Verification Workflow
+## 4. Strict `LF` (`\n`) Line Endings & Windows Editing Discipline
+
+1. **Always Use `LF` (`\n`) — Never `CRLF` (`\r\n`)**:
+   - Every file created or modified in the repository (`.rs`, `.py`, `.md`, `.css`, `.toml`, `.avsc`, `.json`, `.html`) **must** be written with `LF` (`\n`) line endings, never `CRLF` (`\r\n`).
+   - `CRLF` line endings break `edit_file` target matching and cause cross-platform hash/diff issues. If you encounter a `CRLF` file on Windows, normalize it to `LF` (`\n`) (`path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n"))`).
+   - Never use PowerShell `Set-Content` / `Out-File` (which emit `CRLF` by default) or PowerShell double-quoted strings (`"..."`) containing backticks or `$` variables.
+
+---
+
+## 5. Verification Workflow
 
 After modifying any Rust crate, run its unit tests and Clippy:
 ```powershell

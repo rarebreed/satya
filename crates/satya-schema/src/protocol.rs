@@ -375,6 +375,12 @@ pub struct GmDocumentRecord {
     /// Whether prompt-injection tags or unsafe control sequences were scrubbed during ingestion.
     #[serde(default)]
     pub safety_flagged: bool,
+    /// Whether this document is persisted in the SQLite GM Vault across server restarts and campaign sessions.
+    #[serde(default)]
+    pub is_persistent: bool,
+    /// Optional campaign/session scope tag grouping persistent documents across sessions (defaults to `session_id`).
+    #[serde(default)]
+    pub campaign_tag: Option<String>,
     /// Ingestion timestamp in UTC microseconds since Unix epoch.
     pub created_at_us: i64,
 }
@@ -431,6 +437,201 @@ pub struct SubmitGmDocumentRequest {
     /// Optional single-use OAuth `drive.file` access token (never logged or persisted).
     #[serde(default)]
     pub google_access_token: Option<String>,
+    /// Whether to persist this document in SQLite across server restarts and matching `campaign_tag` / `session_id` sessions.
+    #[serde(default)]
+    pub is_persistent: bool,
+    /// Optional campaign tag scoping persistent documents (defaults to `session_id` when omitted).
+    #[serde(default)]
+    pub campaign_tag: Option<String>,
+}
+
+/// HTTP request body for `POST /api/sessions/:session_id/docs/:doc_id/persist` toggling persistence on a `GM_ONLY` document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToggleGmDocumentPersistenceRequest {
+    /// Target persistence state (`true` to persist in SQLite, `false` to keep session-ephemeral only).
+    pub is_persistent: bool,
+    /// Optional campaign/session tag override (defaults to the document's existing `campaign_tag` or `session_id`).
+    #[serde(default)]
+    pub campaign_tag: Option<String>,
+}
+
+/// Semantic category for a persistent Game Master memory note (`gm_memories` table).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GmMemoryCategory {
+    #[default]
+    SceneState,
+    NpcSecret,
+    QuestHook,
+    Ruling,
+    RollingSummary,
+}
+
+impl GmMemoryCategory {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SceneState => "SCENE_STATE",
+            Self::NpcSecret => "NPC_SECRET",
+            Self::QuestHook => "QUEST_HOOK",
+            Self::Ruling => "RULING",
+            Self::RollingSummary => "ROLLING_SUMMARY",
+        }
+    }
+
+    pub fn from_code_str(raw: &str) -> Self {
+        match raw.trim().to_uppercase().as_str() {
+            "NPC_SECRET" | "NPC" | "SECRET" => Self::NpcSecret,
+            "QUEST_HOOK" | "QUEST" | "HOOK" => Self::QuestHook,
+            "RULING" | "RULE" => Self::Ruling,
+            "ROLLING_SUMMARY" | "SUMMARY" => Self::RollingSummary,
+            _ => Self::SceneState,
+        }
+    }
+}
+
+/// Persistent Game Master memory note stored per `session_id` / `campaign_tag` for both Human GM and AI GM.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GmMemoryNoteRecord {
+    pub memory_id: String,
+    pub session_id: String,
+    pub campaign_tag: String,
+    pub author_user_id: String,
+    pub author_display_name: String,
+    #[serde(default)]
+    pub category: GmMemoryCategory,
+    pub title: String,
+    pub content: String,
+    /// When `true`, this concise fact is pinned directly into the AI GM's active turn context header.
+    #[serde(default)]
+    pub is_pinned: bool,
+    /// When `true`, persisted to SQLite (`gm_memories`) across restarts and campaign sessions.
+    #[serde(default = "default_true_flag")]
+    pub is_persistent: bool,
+    pub updated_at_us: i64,
+}
+
+fn default_true_flag() -> bool {
+    true
+}
+
+/// HTTP request body for `POST /api/sessions/:session_id/memories` (or `/api/gm/sessions/:session_id/memories`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpsertGmMemoryRequest {
+    #[serde(default)]
+    pub memory_id: Option<String>,
+    #[serde(default)]
+    pub campaign_tag: Option<String>,
+    #[serde(default)]
+    pub category: GmMemoryCategory,
+    pub title: String,
+    pub content: String,
+    #[serde(default)]
+    pub is_pinned: bool,
+    #[serde(default = "default_true_flag")]
+    pub is_persistent: bool,
+}
+
+/// HTTP response body for `GET /api/sessions/:session_id/memories`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionGmMemoriesResponse {
+    pub session_id: String,
+    pub campaign_tag: String,
+    pub memories: Vec<GmMemoryNoteRecord>,
+}
+
+/// Per-combatant readiness and stance entry on the Satya Count-Up Tick timeline (`1 Tick = 0.5s`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CombatantTickEntry {
+    pub entity_id: String,
+    pub display_name: String,
+    pub role_or_faction: String,
+    pub ooda_score: i32,
+    pub next_action_tick: u32,
+    #[serde(default)]
+    pub active_stance: Option<String>,
+    #[serde(default)]
+    pub fatigue_level: i32,
+    #[serde(default)]
+    pub wound_shock: i32,
+}
+
+/// Authoritative Satya Count-Up Tick Combat Tracker state for a session (`1 Tick = 0.5s`, `1 Window = 20 Ticks`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CombatTrackerState {
+    pub session_id: String,
+    pub combat_active: bool,
+    pub round: u32,
+    pub tick: u32,
+    #[serde(default)]
+    pub combatants: Vec<CombatantTickEntry>,
+    pub updated_at_us: i64,
+}
+
+impl Default for CombatTrackerState {
+    fn default() -> Self {
+        Self {
+            session_id: String::new(),
+            combat_active: false,
+            round: 1,
+            tick: 0,
+            combatants: Vec::new(),
+            updated_at_us: 0,
+        }
+    }
+}
+
+/// HTTP request body for `POST /api/sessions/:session_id/combat` (or `/api/gm/sessions/:session_id/combat`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateCombatTrackerRequest {
+    /// Tick delta to advance (`> 0` advances clock; `Some(0)` resets to Window 1, Tick 1; `None` keeps current tick).
+    #[serde(default)]
+    pub tick_delta: Option<i32>,
+    #[serde(default)]
+    pub combat_active: Option<bool>,
+    #[serde(default)]
+    pub entity_id: Option<String>,
+    #[serde(default)]
+    pub active_stance: Option<String>,
+    #[serde(default)]
+    pub next_action_tick: Option<u32>,
+    #[serde(default)]
+    pub fatigue_level: Option<i32>,
+    #[serde(default)]
+    pub wound_shock: Option<i32>,
+}
+
+/// Source domain of a unified GM Omnisearch hit (`GET /api/sessions/:session_id/lookup`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GmLookupSourceKind {
+    RulesBook,
+    GmDocument,
+    GmMemory,
+    CharacterSheet,
+    CombatTracker,
+    TacticalMap,
+}
+
+/// Single ranked search or state lookup hit returned by `GET /api/sessions/:session_id/lookup`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GmLookupHit {
+    pub source_kind: GmLookupSourceKind,
+    pub item_id: String,
+    pub title: String,
+    pub subtitle: String,
+    pub snippet: String,
+    pub is_persistent: bool,
+    pub score: usize,
+}
+
+/// Unified response returned by `GET /api/sessions/:session_id/lookup` for both Human GM Omnisearch and AI GM RAG/MCP lookup.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GmOmnisearchResponse {
+    pub session_id: String,
+    pub campaign_tag: String,
+    pub query: String,
+    pub scope: String,
+    pub hits: Vec<GmLookupHit>,
 }
 
 /// HTTP response body for `GET /api/sessions/:session_id/docs`.
@@ -462,6 +663,18 @@ pub struct GmContextResponse {
     /// Sanitized `GM_ONLY` documents submitted to the GM in this session.
     #[serde(default)]
     pub gm_documents: Vec<GmDocumentRecord>,
+    /// Persistent and session-scoped GM memory notes for this session/campaign.
+    #[serde(default)]
+    pub gm_memories: Vec<GmMemoryNoteRecord>,
+    /// Authoritative Satya Count-Up Tick Combat Tracker state (`round`, `tick`, `combatants`).
+    #[serde(default)]
+    pub combat_tracker: Option<CombatTrackerState>,
+    /// Character sheets currently bound to participants in this session.
+    #[serde(default)]
+    pub session_characters: Vec<crate::character::CharacterSheetRecord>,
+    /// Campaign tag grouping persistent GM documents and memories for this session.
+    #[serde(default)]
+    pub campaign_tag: Option<String>,
 }
 
 /// HTTP request body for `POST /api/gm/sessions/:session_id/chat`.

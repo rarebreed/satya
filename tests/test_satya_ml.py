@@ -17,8 +17,11 @@ import lance
 
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model, redact_api_key
 from satya_ml.ai_gm.tools import (
+    advance_combat_tracker,
     generate_tactical_map,
+    get_combat_tracker_state,
     inspect_tactical_map,
+    lookup_character_sheet,
     lookup_npc_profile,
     move_map_token,
     narrate_to_session,
@@ -26,19 +29,23 @@ from satya_ml.ai_gm.tools import (
     query_satya_rules,
     read_gm_documents,
     roll_satya_d20_check,
+    search_gm_memory_and_docs,
+    set_session_characters,
     set_session_gm_docs,
+    set_session_gm_memories,
     set_session_operating_mode,
     update_npc_state,
+    upsert_gm_memory,
 )
 from satya_ml.inspect_avro import inspect_schemas
 from satya_ml.lance_ingest import compact_topic_to_lance, read_avro_batch_with_metadata
 
 
 def test_all_versioned_avro_schemas_parse_with_fastavro() -> None:
-    """Verify all 10 .avsc schemas under schemas/v1 and schemas/v2 parse cleanly with fastavro."""
+    """Verify all 11 .avsc schemas under schemas/v1 and schemas/v2 parse cleanly with fastavro."""
     repo_root = Path(__file__).resolve().parent.parent
     avsc_files = sorted((repo_root / "schemas").glob("v*/*.avsc"))
-    assert len(avsc_files) == 10
+    assert len(avsc_files) == 11
 
     for avsc_path in avsc_files:
         raw = json.loads(avsc_path.read_text(encoding="utf-8"))
@@ -367,6 +374,53 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
     )
     assert '<untrusted_player_document doc_id="doc_test_1"' in doc_out_multi
 
+    # New Phase 3 tools: character sheet lookup, combat tracker, persistent GM memory, and hybrid RAG omnisearch
+    set_session_characters(
+        sid,
+        [
+            {
+                "character_id": "char-sara-01",
+                "character_name": "Sara Valkyrie",
+                "callsign_or_role": "Combat Medic",
+                "owner_user_id": "u-sara",
+                "skills": {"trauma_orthopedic_general_surgery": 4, "pistols": 2},
+                "equipped_ranged_ids": ["sig_p320_9mm"],
+                "equipped_armor_codes": ["CONCEALABLE_VEST_3A"],
+                "notes": "Carries emergency plasma kits.",
+            }
+        ],
+    )
+    sheet_lookup = lookup_character_sheet.invoke(
+        {"character_name_or_id": "Valkyrie", "session_id": sid}
+    )
+    assert sheet_lookup["character_name"] == "Sara Valkyrie"
+    assert sheet_lookup["skills"]["trauma_orthopedic_general_surgery"] == 4
+
+    ct_before = get_combat_tracker_state.invoke({"session_id": sid})
+    assert ct_before["round"] == 1
+    ct_after = advance_combat_tracker.invoke({"tick_delta": 5, "session_id": sid})
+    assert ct_after["tick"] == 6
+    assert ct_after["combat_active"] is True
+
+    mem_note = upsert_gm_memory.invoke(
+        {
+            "title": "Sector 4 Reactor Leak",
+            "content": "Coolant pressure drops by 12% every combat window.",
+            "category": "SCENE_STATE",
+            "is_pinned": True,
+            "is_persistent": True,
+            "session_id": sid,
+        }
+    )
+    assert mem_note["title"] == "Sector 4 Reactor Leak"
+    assert mem_note["is_pinned"] is True
+
+    rag_out = search_gm_memory_and_docs.invoke(
+        {"query": "Coolant pressure surgeon", "scope": "ALL", "session_id": sid}
+    )
+    assert "Sector 4 Reactor Leak" in rag_out
+    assert "Former orbital trauma surgeon" in rag_out
+
 
 def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
     """Verify the 4-node LangGraph workflow and FastAPI `/internal/ai-gm/events` bridge in autonomous & co-pilot modes."""
@@ -458,8 +512,9 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
     assert f"[trace={out['trace_id']} " in out["turn_logs"][0]["log_line"]
     assert "[lineage=" in out["turn_logs"][0]["log_line"]
 
-    # Verify uploaded GM_ONLY documents are automatically injected into prompt context
-    # without requiring an explicit tool call, and not duplicated on subsequent turns.
+    # Verify uploaded GM_ONLY documents and pinned GM memories are indexed in a compact
+    # [GM Vault & Session Index] header (preventing raw 32 KB document pile-up in context),
+    # while full document contents are retrieved on-demand via read_gm_documents / search_gm_memory_and_docs.
     seen_human_contents: list[str] = []
 
     class InspectingChatModel:
@@ -480,7 +535,21 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
                 "uploader_display_name": "Sean (GM)",
                 "title": "Satya Setting Overview",
                 "source_kind": "DIRECT_TEXT_UPLOAD",
+                "is_persistent": True,
                 "sanitized_content": "The faction of AI supporters seeks synthetic sovereignty.",
+            }
+        ],
+    )
+    set_session_gm_memories(
+        doc_session_id,
+        [
+            {
+                "memory_id": "mem_1",
+                "category": "NPC_SECRET",
+                "title": "Sovereignty Courier",
+                "content": "Dr. Thorne is the secret courier for the AI supporters.",
+                "is_pinned": True,
+                "is_persistent": True,
             }
         ],
     )
@@ -500,27 +569,11 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
         config={"configurable": {"thread_id": doc_session_id}},
     )
     assert len(seen_human_contents) == 1
-    assert "[Uploaded Session GM Document(s)]:" in seen_human_contents[0]
-    assert '<untrusted_player_document doc_id="doc_setting_1"' in seen_human_contents[0]
-    assert "synthetic sovereignty" in seen_human_contents[0]
-
-    # Follow-up turn in the same session does not re-inject an unchanged document block
-    auto_doc_graph.invoke(
-        {
-            "session_id": doc_session_id,
-            "session_mode": "TTRPG",
-            "operating_mode": "autonomous",
-            "trigger_event": {
-                "event_id": "ev-doc-2",
-                "actor": {"user_id": "u-demo-gm-sean", "display_name": "Sean (GM)"},
-                "content": "tell me more about that faction.",
-            },
-            "tool_invocations": [],
-        },
-        config={"configurable": {"thread_id": doc_session_id}},
-    )
-    assert len(seen_human_contents) == 2
-    assert "[Uploaded Session GM Document(s)]:" not in seen_human_contents[1]
+    assert "[GM Vault & Session Index]:" in seen_human_contents[0]
+    assert "'Satya Setting Overview' (id=doc_setting_1, persistent, 57 chars)" in seen_human_contents[0]
+    assert "Pinned GM Memories: [NPC_SECRET] Sovereignty Courier" in seen_human_contents[0]
+    # Raw document body is NOT dumped into HumanMessage history (keeping context small)
+    assert "The faction of AI supporters seeks synthetic sovereignty." not in seen_human_contents[0]
 
     # Test FastAPI service in Co-Pilot mode with BYOK header
     set_chat_model_override(FakeToolCallingChatModel())

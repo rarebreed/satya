@@ -13,7 +13,8 @@ use argon2::{
 use chrono::Utc;
 pub use satya_schema::{AccountRole, AuthSuccessResponse};
 use satya_schema::{
-    AiGmOperatingMode, AiGmProviderConfig, GmContextResponse, GmDocumentRecord, GmMapUpdateRequest,
+    AiGmOperatingMode, AiGmProviderConfig, CharacterSheetRecord, CombatTrackerState,
+    GmContextResponse, GmDocumentRecord, GmMapUpdateRequest, GmMemoryNoteRecord,
     GoogleAuthStatusResponse, Participant, ParticipantKind, SessionMode, SessionRole,
 };
 use satya_storage::AuthConfig;
@@ -91,6 +92,12 @@ pub struct ProtectedSession {
     pub active_map: Option<GmMapUpdateRequest>,
     /// Sanitized `GM_ONLY` documents submitted to the GM in this session.
     pub gm_documents: Vec<GmDocumentRecord>,
+    /// Campaign/session tag used to scope persistent GM documents and memories.
+    pub campaign_tag: String,
+    /// Persistent and session-scoped GM memory notes for this session/campaign.
+    pub gm_memories: Vec<GmMemoryNoteRecord>,
+    /// Authoritative Satya Count-Up Tick Combat Tracker state (`round`, `tick`, `combatants`).
+    pub combat_tracker: CombatTrackerState,
     /// Session creation timestamp in UTC microseconds since Unix epoch.
     pub created_at_us: i64,
 }
@@ -132,7 +139,7 @@ pub struct AuthAndSessionManager {
     users_by_username: RwLock<HashMap<String, UserAccount>>,
     auth_tokens: RwLock<HashMap<String, UserAccount>>,
     google_links: RwLock<HashMap<String, (String, Option<String>)>>,
-    sessions: RwLock<HashMap<String, ProtectedSession>>,
+    pub(crate) sessions: RwLock<HashMap<String, ProtectedSession>>,
     join_tokens: RwLock<HashMap<String, JoinTokenClaims>>,
 }
 
@@ -185,6 +192,40 @@ impl AuthAndSessionManager {
                 created_at_us INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_character_assets_char ON character_assets(character_id);
+            CREATE TABLE IF NOT EXISTS gm_documents (
+                doc_id                TEXT PRIMARY KEY NOT NULL,
+                session_id            TEXT NOT NULL,
+                campaign_tag          TEXT NOT NULL,
+                uploader_user_id      TEXT NOT NULL,
+                uploader_display_name TEXT NOT NULL,
+                title                 TEXT NOT NULL,
+                source_kind           TEXT NOT NULL,
+                google_file_id        TEXT,
+                sanitized_content     TEXT NOT NULL,
+                char_count            INTEGER NOT NULL,
+                safety_flagged        INTEGER NOT NULL DEFAULT 0,
+                created_at_us         INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_gm_docs_campaign ON gm_documents(campaign_tag, session_id);
+            CREATE TABLE IF NOT EXISTS gm_memories (
+                memory_id           TEXT PRIMARY KEY NOT NULL,
+                session_id          TEXT NOT NULL,
+                campaign_tag        TEXT NOT NULL,
+                author_user_id      TEXT NOT NULL,
+                author_display_name TEXT NOT NULL,
+                category            TEXT NOT NULL,
+                title               TEXT NOT NULL,
+                content             TEXT NOT NULL,
+                is_pinned           INTEGER NOT NULL DEFAULT 0,
+                is_persistent       INTEGER NOT NULL DEFAULT 1,
+                updated_at_us       INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_gm_memories_campaign ON gm_memories(campaign_tag, session_id);
+            CREATE TABLE IF NOT EXISTS session_combat_state (
+                session_id    TEXT PRIMARY KEY NOT NULL,
+                state_json    TEXT NOT NULL,
+                updated_at_us INTEGER NOT NULL
+            );
             "#,
         )
         .execute(&db_pool)
@@ -529,6 +570,11 @@ impl AuthAndSessionManager {
         }
 
         let roster_vec: Vec<Participant> = roster.values().cloned().collect();
+        let persisted_docs = self.load_persistent_gm_docs_from_db(sid).await;
+        let persisted_memories = self.load_persistent_gm_memories_from_db(sid).await;
+        let combat_tracker = self
+            .load_or_init_combat_tracker(sid, &roster_vec)
+            .await;
 
         {
             let mut sessions = self.sessions.write().await;
@@ -542,7 +588,10 @@ impl AuthAndSessionManager {
                     roster,
                     ai_gm_vault: None,
                     active_map: None,
-                    gm_documents: Vec::new(),
+                    gm_documents: persisted_docs,
+                    campaign_tag: sid.to_string(),
+                    gm_memories: persisted_memories,
+                    combat_tracker,
                     created_at_us: Utc::now().timestamp_micros(),
                 },
             );
@@ -590,6 +639,7 @@ impl AuthAndSessionManager {
         session
             .roster
             .insert(self_participant.user_id.clone(), self_participant.clone());
+        Self::sync_combatant_into_tracker(&mut session.combat_tracker, &self_participant);
         let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
         let mode = session.session_mode;
 
@@ -689,10 +739,32 @@ impl AuthAndSessionManager {
         session_id: &str,
     ) -> Option<(GmContextResponse, Option<SessionAiGmVault>)> {
         let sid = session_id.trim();
-        let guard = self.sessions.read().await;
-        let session = guard.get(sid)?;
+        let (
+            session_id_val,
+            session_mode,
+            roster,
+            active_map,
+            gm_documents,
+            gm_memories,
+            combat_tracker,
+            campaign_tag,
+            vault,
+        ) = {
+            let guard = self.sessions.read().await;
+            let session = guard.get(sid)?;
+            (
+                session.session_id.clone(),
+                session.session_mode,
+                session.roster.values().cloned().collect::<Vec<Participant>>(),
+                session.active_map.clone(),
+                session.gm_documents.clone(),
+                session.gm_memories.clone(),
+                session.combat_tracker.clone(),
+                session.campaign_tag.clone(),
+                session.ai_gm_vault.clone(),
+            )
+        };
 
-        let roster: Vec<Participant> = session.roster.values().cloned().collect();
         let human_gm_user_id = roster
             .iter()
             .find(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm)
@@ -703,19 +775,25 @@ impl AuthAndSessionManager {
             AiGmOperatingMode::Autonomous
         };
         let ai_gm_participant = roster.iter().find(|p| p.role == SessionRole::AiGm).cloned();
+        let session_characters: Vec<CharacterSheetRecord> =
+            self.load_session_characters_from_db(sid, &roster).await;
 
         let ctx = GmContextResponse {
-            session_id: session.session_id.clone(),
-            session_mode: session.session_mode,
+            session_id: session_id_val,
+            session_mode,
             operating_mode,
             ai_gm_participant,
             human_gm_user_id,
             roster,
-            active_map: session.active_map.clone(),
-            gm_documents: session.gm_documents.clone(),
+            active_map,
+            gm_documents,
+            gm_memories,
+            combat_tracker: Some(combat_tracker),
+            session_characters,
+            campaign_tag: Some(campaign_tag),
         };
 
-        Some((ctx, session.ai_gm_vault.clone()))
+        Some((ctx, vault))
     }
 
     /// Links a Google OIDC identity (`google_sub`) and optional ephemeral `drive.file` access token
@@ -803,7 +881,24 @@ impl AuthAndSessionManager {
 
         doc.uploader_user_id = uploader.user_id.clone();
         doc.uploader_display_name = uploader.display_name.clone();
-        session.gm_documents.push(doc.clone());
+        if doc
+            .campaign_tag
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
+        {
+            doc.campaign_tag = Some(session.campaign_tag.clone());
+        }
+        if let Some(existing) = session
+            .gm_documents
+            .iter_mut()
+            .find(|d| d.doc_id == doc.doc_id)
+        {
+            *existing = doc.clone();
+        } else {
+            session.gm_documents.push(doc.clone());
+        }
 
         let mut delivery_ids: Vec<String> = session
             .roster
@@ -817,6 +912,11 @@ impl AuthAndSessionManager {
             .collect();
         delivery_ids.sort();
         delivery_ids.dedup();
+        drop(guard);
+
+        if doc.is_persistent {
+            let _ = self.persist_gm_doc_to_db(&doc).await;
+        }
 
         Ok((doc, uploader, delivery_ids))
     }
@@ -886,10 +986,11 @@ impl AuthAndSessionManager {
                 .filter(|p| p.participant_kind == ParticipantKind::Human)
                 .count();
 
-            // Scrub ephemeral BYOK credentials when the sponsoring user leaves or no humans remain
+            // Scrub ephemeral BYOK credentials and non-persistent GM docs when the sponsoring user leaves or no humans remain
             if remaining_human_count == 0 {
                 session.ai_gm_vault = None;
-                session.gm_documents.clear();
+                session.gm_documents.retain(|d| d.is_persistent);
+                session.gm_memories.retain(|m| m.is_persistent);
             } else if let Some(vault) = session.ai_gm_vault.as_mut()
                 && vault.sponsor_user_id == user_id
             {

@@ -172,6 +172,11 @@ pub fn register_window_bindings() {
         "satyaLoadGmDocPreset" => satya_load_gm_doc_preset(String),
         "satyaSubmitGmDocument" => satya_submit_gm_document(),
         "satyaRefreshGmDocuments" => satya_refresh_gm_documents(),
+        "satyaToggleGmDocPersistence" => satya_toggle_gm_doc_persistence(String, bool),
+        "satyaSubmitGmMemory" => satya_submit_gm_memory(),
+        "satyaDeleteGmMemory" => satya_delete_gm_memory(String),
+        "satyaRefreshGmMemories" => satya_refresh_gm_memories(),
+        "satyaSearchGmOmnisearch" => satya_search_gm_omnisearch(),
 
         // 6-Step Character Creation Wizard
         "satyaWizardSetStep" => satya_wizard_set_step(u8),
