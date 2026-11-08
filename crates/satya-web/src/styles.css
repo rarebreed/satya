@@ -430,15 +430,15 @@ textarea {
     flex-shrink: 0;
 }
 
-.gate-container:not(:has(> :not([style*="display: none"]))) {
+.gate-container:not(:has(> :not([style*="display: none"]):not([style*="display:none"]))) {
     display: none;
     margin-bottom: 0;
 }
 
 .workspace-columns {
-    --col-left-track: minmax(420px, 1.38fr);
-    --col-center-track: minmax(340px, 1fr);
-    --col-right-track: minmax(240px, 0.62fr);
+    --col-left-track: minmax(420px, 1.32fr);
+    --col-center-track: minmax(360px, 1.08fr);
+    --col-right-track: minmax(240px, 0.6fr);
     display: grid;
     grid-template-columns: var(--col-left-track) var(--col-center-track) var(--col-right-track);
     grid-template-rows: minmax(0, 1fr);
@@ -449,7 +449,7 @@ textarea {
     min-height: max(680px, calc(100dvh - 76px));
 }
 
-.workspace-grid:has(.gate-container > :not([style*="display: none"])) .workspace-columns {
+.workspace-grid:has(.gate-container > :not([style*="display: none"]):not([style*="display:none"])) .workspace-columns {
     height: max(680px, calc(100dvh - 300px));
     min-height: max(680px, calc(100dvh - 300px));
 }
@@ -526,7 +526,7 @@ textarea {
     .workspace-columns.center-collapsed,
     .workspace-columns.ttrpg-collapsed,
     .workspace-columns.chat-collapsed,
-    .workspace-grid:has(.gate-container > :not([style*="display: none"])) .workspace-columns {
+    .workspace-grid:has(.gate-container > :not([style*="display: none"]):not([style*="display:none"])) .workspace-columns {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto;
         height: auto;
@@ -542,6 +542,18 @@ textarea {
     .notebook-body,
     .notebook-pane {
         height: auto;
+        overflow: visible;
+    }
+
+    .chat-card {
+        flex: 1 1 auto;
+        height: clamp(460px, 68dvh, 780px);
+        min-height: 420px;
+    }
+
+    .ttrpg-card {
+        flex: 0 0 auto;
+        max-height: none;
         overflow: visible;
     }
 
@@ -1008,11 +1020,18 @@ textarea:focus {
     container: ttrpg-card / inline-size;
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
+    flex: 1 1 0;
+    min-height: 180px;
+    max-height: 38%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
 }
 
 .workspace-columns.chat-collapsed .ttrpg-card {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    max-height: none;
 }
 
 .ttrpg-card #ttrpg-odds-pill {
@@ -1212,8 +1231,10 @@ textarea:focus {
 }
 
 .chat-recipient-list {
-    max-height: 110px;
+    max-height: 88px;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
     display: flex;
     flex-direction: column;
     gap: 3px;
@@ -1293,15 +1314,25 @@ textarea:focus {
 .chat-card {
     display: flex;
     flex-direction: column;
-    flex: 1 1 0;
-    min-height: 280px;
+    flex: 2.2 1 0;
+    min-height: clamp(360px, 48dvh, 560px);
+    overflow: hidden;
+    overflow: clip;
+}
+
+.chat-card > .card-header-inline,
+.chat-card > .recipient-selector-bar,
+.chat-card > .chat-composer {
+    flex-shrink: 0;
 }
 
 .chat-log {
     flex: 1 1 0;
-    min-height: 160px;
+    min-height: 120px;
     overflow-y: auto;
+    overflow-x: hidden;
     overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
     background: var(--bg-0);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -1313,6 +1344,10 @@ textarea:focus {
 }
 
 .chat-msg {
+    flex-shrink: 0;
+    min-inline-size: 0;
+    overflow-wrap: break-word;
+    word-break: break-word;
     padding: 6px 7px;
     border-radius: 6px;
     background: var(--bg-2);

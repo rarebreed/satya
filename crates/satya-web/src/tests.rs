@@ -515,6 +515,9 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains("Cascading 2d20 Engine &amp; Task Resolution"));
     assert!(html.contains(".rules-book-viewport"));
     assert!(html.contains("height: max(680px, calc(100dvh - 76px))"));
+    assert!(html.contains("min-height: clamp(360px, 48dvh, 560px)"));
+    assert!(html.contains(".chat-card > .chat-composer"));
+    assert!(html.contains("max-height: 38%"));
     let rules_css_idx = html.find(".satya-rules-article").unwrap();
     let wiz_css_idx = html.find(".wiz-shell").unwrap();
     assert!(!html[rules_css_idx..wiz_css_idx].contains("overscroll-behavior: contain"));

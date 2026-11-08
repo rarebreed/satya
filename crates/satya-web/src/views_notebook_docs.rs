@@ -658,7 +658,7 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                 <span class="roster-title">"0. GM Archivist (information lookup)"</span>
                 <div class="form-grid">
                     <label>
-                        <span>"Search Query (Rules, NPCs, Lore, Character Stats, Combat Tick, or GM Docs)"</span>
+                        <span>"Search Query"</span>
                         <input
                             id="gm-omnisearch-input"
                             type="text"
