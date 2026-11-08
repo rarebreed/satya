@@ -55,6 +55,7 @@
 pub mod action_catalog_stealth;
 pub mod action_economy;
 pub mod ballistics;
+pub mod character_audit;
 pub mod characteristics;
 pub mod combat;
 pub mod contested_cascade;
@@ -79,6 +80,7 @@ pub mod task_resolution;
 pub mod walkthroughs;
 
 pub use action_economy::*;
+pub use character_audit::*;
 pub use characteristics::*;
 pub use combat::*;
 pub use dice_pools::{SARLE_BIMODAL_THRESHOLD, try_median_gated_bimodal_pmf, try_order_statistic_pmf};

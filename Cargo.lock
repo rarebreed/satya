@@ -2932,6 +2932,7 @@ dependencies = [
  "axum",
  "chrono",
  "futures",
+ "hex",
  "rand 0.8.8",
  "satya-engine",
  "satya-schema",

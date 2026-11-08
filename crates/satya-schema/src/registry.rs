@@ -41,6 +41,9 @@ pub const AI_GM_TRAJECTORY_V1_AVSC: &str =
     include_str!("../../../schemas/v1/ai_gm_trajectory_event.avsc");
 /// Raw JSON schema definition (`v1`) for [`crate::events::SessionLogEvent`].
 pub const SESSION_LOG_V1_AVSC: &str = include_str!("../../../schemas/v1/session_log_event.avsc");
+/// Raw JSON schema definition (`v1`) for [`crate::character::CharacterSheetEvent`].
+pub const CHARACTER_SHEET_V1_AVSC: &str =
+    include_str!("../../../schemas/v1/character_sheet_event.avsc");
 
 /// Errors returned during Avro schema registration, wire header parsing, or payload serialization/deserialization.
 #[derive(Debug, Error)]
@@ -188,6 +191,21 @@ impl Default for SchemaRegistry {
     }
 }
 
+/// Built-in Avro schema catalog: `(schema_id, subject, topic, version, raw_avsc_json)`.
+pub const BUILTIN_SCHEMAS: &[(u32, &str, &str, u16, &str)] = &[
+    (1, subjects::SCHEMA_REGISTRY, topics::SCHEMA_REGISTRY, 1, SCHEMA_REGISTRY_V1_AVSC),
+    (2, subjects::SESSION_LIFECYCLE, topics::SESSION_LIFECYCLE, 1, SESSION_LIFECYCLE_V1_AVSC),
+    (3, subjects::WEBRTC_TELEMETRY, topics::WEBRTC_TELEMETRY, 1, WEBRTC_TELEMETRY_V1_AVSC),
+    (4, subjects::CHAT_MESSAGE, topics::CHAT_MESSAGE, 1, CHAT_MESSAGE_V1_AVSC),
+    (5, subjects::INTERACTION_DYNAMICS, topics::INTERACTION_DYNAMICS, 1, INTERACTION_DYNAMICS_V1_AVSC),
+    (6, subjects::TTRPG_MECHANICS, topics::TTRPG_MECHANICS, 1, TTRPG_MECHANICS_V1_AVSC),
+    (7, subjects::CHAT_MESSAGE, topics::CHAT_MESSAGE, 2, CHAT_MESSAGE_V2_AVSC),
+    (8, subjects::TABLETOP_CANVAS, topics::TABLETOP_CANVAS, 1, TABLETOP_CANVAS_V1_AVSC),
+    (9, subjects::AI_GM_TRAJECTORY, topics::AI_GM_TRAJECTORY, 1, AI_GM_TRAJECTORY_V1_AVSC),
+    (10, subjects::SESSION_LOG, topics::SYSTEM_LOGS, 1, SESSION_LOG_V1_AVSC),
+    (11, subjects::CHARACTER_SHEET, topics::CHARACTER_SHEETS, 1, CHARACTER_SHEET_V1_AVSC),
+];
+
 impl SchemaRegistry {
     /// Creates a [`SchemaRegistry`] pre-populated with all built-in Satya `v1` and `v2` Avro schemas.
     pub fn new_with_builtin_schemas() -> Result<Self, SchemaError> {
@@ -195,78 +213,9 @@ impl SchemaRegistry {
             by_id: HashMap::new(),
             by_subject_version: HashMap::new(),
         };
-
-        registry.register(
-            1,
-            subjects::SCHEMA_REGISTRY,
-            topics::SCHEMA_REGISTRY,
-            1,
-            SCHEMA_REGISTRY_V1_AVSC,
-        )?;
-        registry.register(
-            2,
-            subjects::SESSION_LIFECYCLE,
-            topics::SESSION_LIFECYCLE,
-            1,
-            SESSION_LIFECYCLE_V1_AVSC,
-        )?;
-        registry.register(
-            3,
-            subjects::WEBRTC_TELEMETRY,
-            topics::WEBRTC_TELEMETRY,
-            1,
-            WEBRTC_TELEMETRY_V1_AVSC,
-        )?;
-        registry.register(
-            4,
-            subjects::CHAT_MESSAGE,
-            topics::CHAT_MESSAGE,
-            1,
-            CHAT_MESSAGE_V1_AVSC,
-        )?;
-        registry.register(
-            5,
-            subjects::INTERACTION_DYNAMICS,
-            topics::INTERACTION_DYNAMICS,
-            1,
-            INTERACTION_DYNAMICS_V1_AVSC,
-        )?;
-        registry.register(
-            6,
-            subjects::TTRPG_MECHANICS,
-            topics::TTRPG_MECHANICS,
-            1,
-            TTRPG_MECHANICS_V1_AVSC,
-        )?;
-        registry.register(
-            7,
-            subjects::CHAT_MESSAGE,
-            topics::CHAT_MESSAGE,
-            2,
-            CHAT_MESSAGE_V2_AVSC,
-        )?;
-        registry.register(
-            8,
-            subjects::TABLETOP_CANVAS,
-            topics::TABLETOP_CANVAS,
-            1,
-            TABLETOP_CANVAS_V1_AVSC,
-        )?;
-        registry.register(
-            9,
-            subjects::AI_GM_TRAJECTORY,
-            topics::AI_GM_TRAJECTORY,
-            1,
-            AI_GM_TRAJECTORY_V1_AVSC,
-        )?;
-        registry.register(
-            10,
-            subjects::SESSION_LOG,
-            topics::SYSTEM_LOGS,
-            1,
-            SESSION_LOG_V1_AVSC,
-        )?;
-
+        for &(id, subject, topic, version, raw_json) in BUILTIN_SCHEMAS {
+            registry.register(id, subject, topic, version, raw_json)?;
+        }
         Ok(registry)
     }
 

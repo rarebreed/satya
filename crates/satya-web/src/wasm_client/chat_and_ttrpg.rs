@@ -475,6 +475,255 @@ pub fn satya_update_cascade_odds() {
     satya_update_cascade_preview();
 }
 
+/// Searches [`satya_engine::CANONICAL_SKILL_TREES`] by case-insensitive query tokens across skill name,
+/// ID, tree title/code, categories, and governing characteristics, ordering trained skills and name
+/// matches first.
+#[must_use]
+pub fn search_canonical_skills(
+    query: &str,
+    sheet: &crate::wasm_client::character_sheet::CharacterSheetState,
+) -> Vec<&'static satya_engine::SkillNodeSpec> {
+    use satya_engine::{CANONICAL_SKILL_TREES, SkillType};
+
+    let tokens: Vec<String> = query
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect();
+
+    let mut matched: Vec<(u8, &'static satya_engine::SkillNodeSpec)> = CANONICAL_SKILL_TREES
+        .iter()
+        .filter_map(|spec| {
+            let name_lc = spec.name.to_ascii_lowercase();
+            let id_lc = spec.id.to_ascii_lowercase();
+            let tree_lc = spec.tree.title().to_ascii_lowercase();
+            let tree_code_lc = spec.tree.short_code().to_ascii_lowercase();
+            let p_char_lc = spec.primary_char.as_str().to_ascii_lowercase();
+            let s_char_lc = spec
+                .secondary_char
+                .map(|c| c.as_str().to_ascii_lowercase())
+                .unwrap_or_default();
+
+            if !tokens.is_empty() {
+                let all_match = tokens.iter().all(|tok| {
+                    name_lc.contains(tok)
+                        || id_lc.contains(tok)
+                        || tree_lc.contains(tok)
+                        || tree_code_lc.contains(tok)
+                        || p_char_lc.contains(tok)
+                        || s_char_lc.contains(tok)
+                        || spec
+                            .categories
+                            .iter()
+                            .any(|cat| cat.label().to_ascii_lowercase().contains(tok))
+                });
+                if !all_match {
+                    return None;
+                }
+            }
+
+            let n = sheet.skills.get(spec.id).copied().unwrap_or(0);
+            let is_trained = (spec.skill_type != SkillType::Tal && n >= 1)
+                || (spec.skill_type == SkillType::Tal && n >= 2);
+            let name_hit = !tokens.is_empty() && tokens.iter().all(|tok| name_lc.contains(tok));
+            let prefix_hit = !tokens.is_empty() && name_lc.starts_with(&tokens[0]);
+
+            let rank = match (prefix_hit, name_hit, is_trained) {
+                (true, _, true) => 0,
+                (true, _, false) => 1,
+                (false, true, true) => 2,
+                (false, true, false) => 3,
+                (false, false, true) => 4,
+                (false, false, false) => 5,
+            };
+            Some((rank, spec))
+        })
+        .collect();
+
+    matched.sort_by_key(|&(rank, _)| rank);
+    matched.into_iter().map(|(_, spec)| spec).collect()
+}
+
+/// Formats the inner HTML option rows for `#ttrpg-skill-dropdown` based on a search query and active
+/// [`CharacterSheetState`](crate::wasm_client::character_sheet::CharacterSheetState).
+#[must_use]
+pub fn format_ttrpg_skill_dropdown_html(
+    query: &str,
+    sheet: &crate::wasm_client::character_sheet::CharacterSheetState,
+) -> String {
+    use satya_engine::SkillType;
+
+    let matches = search_canonical_skills(query, sheet);
+    if matches.is_empty() {
+        return format!(
+            r#"<div class="ttrpg-skill-empty">No canonical skills matched "{}"</div>"#,
+            escape_html(query.trim())
+        );
+    }
+
+    matches
+        .into_iter()
+        .map(|spec| {
+            let n = sheet.skills.get(spec.id).copied().unwrap_or(0);
+            let roll_n = n.max(1);
+            let ctrl = sheet
+                .characteristics
+                .compute_controller(spec.primary_char, spec.secondary_char);
+            let ctrl_formula = match spec.secondary_char {
+                Some(sec) => format!("{}/{}", spec.primary_char.as_str(), sec.as_str()),
+                None => spec.primary_char.as_str().to_string(),
+            };
+            let is_trained = (spec.skill_type != SkillType::Tal && n >= 1)
+                || (spec.skill_type == SkillType::Tal && n >= 2);
+            let trained_cls = if is_trained { " is-trained" } else { "" };
+            let level_badge = if n >= 1 {
+                format!(r#"<span class="pill pill-active">N={n} · C={ctrl}</span>"#)
+            } else {
+                format!(r#"<span class="pill pill-muted">N=0 (Roll {roll_n}d20) · C={ctrl}</span>"#)
+            };
+
+            format!(
+                r#"<button type="button" class="ttrpg-skill-option{trained_cls}" role="option" data-skill-id="{id}" onclick="window.satyaSelectTtrpgSkill('{id}')"><div class="ttrpg-skill-opt-main"><strong>{name}</strong><span class="stat-note">{tree_short} · T{tier} · {stype} ({ctrl_formula})</span></div>{level_badge}</button>"#,
+                id = spec.id,
+                name = escape_html(spec.name),
+                tree_short = spec.tree.short_code(),
+                tier = spec.tier,
+                stype = spec.skill_type.as_str(),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// Returns the initial SSR HTML for `#ttrpg-skill-dropdown` using the default character sheet.
+#[must_use]
+pub fn default_ttrpg_skill_dropdown_html() -> String {
+    format_ttrpg_skill_dropdown_html(
+        "",
+        &crate::wasm_client::character_sheet::CharacterSheetState::default(),
+    )
+}
+
+fn set_ttrpg_skill_dropdown_open(open: bool, query: &str) {
+    if open {
+        let html = with_state(|st| format_ttrpg_skill_dropdown_html(query, &st.character_sheet));
+        if let Some(dd) = get_element("ttrpg-skill-dropdown") {
+            dd.set_inner_html(&html);
+        }
+        set_display("ttrpg-skill-dropdown", "flex");
+    } else {
+        set_display("ttrpg-skill-dropdown", "none");
+    }
+    if let Some(inp) = get_element("ttrpg-skill") {
+        let _ = inp.set_attribute("aria-expanded", if open { "true" } else { "false" });
+    }
+}
+
+/// Filters `#ttrpg-skill-dropdown` live as the user types in `#ttrpg-skill`, and auto-syncs
+/// `N` and `C` if the typed text exactly matches a canonical skill name or ID.
+#[wasm_bindgen]
+pub fn satya_filter_ttrpg_skill_dropdown() {
+    let query = input_value("ttrpg-skill");
+    set_ttrpg_skill_dropdown_open(true, &query);
+
+    if let Some(spec) = satya_engine::lookup_skill_node(&query) {
+        let (n, ctrl) = with_state(|st| {
+            let n = st
+                .character_sheet
+                .skills
+                .get(spec.id)
+                .copied()
+                .unwrap_or(0)
+                .max(1);
+            let ctrl = st
+                .character_sheet
+                .characteristics
+                .compute_controller(spec.primary_char, spec.secondary_char);
+            (n, ctrl)
+        });
+        set_input_value("ttrpg-skill-level", &n.clamp(1, 10).to_string());
+        set_input_value("ttrpg-control-c", &ctrl.clamp(1, 20).to_string());
+        satya_update_cascade_preview();
+    }
+}
+
+/// Opens `#ttrpg-skill-dropdown` when `#ttrpg-skill` receives focus.
+#[wasm_bindgen]
+pub fn satya_open_ttrpg_skill_dropdown() {
+    let query = input_value("ttrpg-skill");
+    let effective_query = if satya_engine::lookup_skill_node(&query).is_some() {
+        ""
+    } else {
+        query.as_str()
+    };
+    set_ttrpg_skill_dropdown_open(true, effective_query);
+}
+
+/// Toggles `#ttrpg-skill-dropdown` open or closed when `#btn-toggle-ttrpg-skill-dropdown` is clicked.
+#[wasm_bindgen]
+pub fn satya_toggle_ttrpg_skill_dropdown() {
+    let is_open = get_element("ttrpg-skill-dropdown")
+        .and_then(|el| el.dyn_into::<HtmlElement>().ok())
+        .map(|el| el.style().get_property_value("display").unwrap_or_default() != "none")
+        .unwrap_or(false);
+    if is_open {
+        set_ttrpg_skill_dropdown_open(false, "");
+    } else {
+        set_ttrpg_skill_dropdown_open(true, "");
+    }
+}
+
+/// Selects a canonical skill from `#ttrpg-skill-dropdown` by its `skill_id`, populates `#ttrpg-skill`,
+/// `#ttrpg-skill-level` (`N`), and `#ttrpg-control-c` (`C`) from the active Character Sheet, and closes the dropdown.
+#[wasm_bindgen]
+pub fn satya_select_ttrpg_skill(skill_id: String) {
+    let Some(spec) = satya_engine::lookup_skill_node(&skill_id) else {
+        set_ttrpg_skill_dropdown_open(false, "");
+        return;
+    };
+    let (n, ctrl) = with_state(|st| {
+        let n = st
+            .character_sheet
+            .skills
+            .get(spec.id)
+            .copied()
+            .unwrap_or(0)
+            .max(1);
+        let ctrl = st
+            .character_sheet
+            .characteristics
+            .compute_controller(spec.primary_char, spec.secondary_char);
+        (n as i32, ctrl)
+    });
+    crate::wasm_client::notebook::satya_load_skill_preset(spec.name.to_string(), n, ctrl);
+    set_ttrpg_skill_dropdown_open(false, "");
+}
+
+/// Handles keyboard shortcuts (`Escape` to close, `ArrowDown` to open, `Enter` to select top match)
+/// inside `#ttrpg-skill`.
+#[wasm_bindgen]
+pub fn satya_ttrpg_skill_keydown(ev: KeyboardEvent) {
+    let key = ev.key();
+    if key == "Escape" {
+        set_ttrpg_skill_dropdown_open(false, "");
+    } else if key == "ArrowDown" {
+        set_ttrpg_skill_dropdown_open(true, &input_value("ttrpg-skill"));
+    } else if key == "Enter" {
+        ev.prevent_default();
+        let query = input_value("ttrpg-skill");
+        let top_id = with_state(|st| {
+            search_canonical_skills(&query, &st.character_sheet)
+                .first()
+                .map(|s| s.id.to_string())
+        });
+        if let Some(id) = top_id {
+            satya_select_ttrpg_skill(id);
+        } else {
+            set_ttrpg_skill_dropdown_open(false, "");
+        }
+    }
+}
+
 /// Evaluates and emits a Satya Two-List Cascading (`2d20`) TTRPG task resolution event (`ROLL_TTRPG_TASK`) over the WebSocket.
 #[wasm_bindgen]
 pub fn satya_roll_task() {

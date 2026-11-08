@@ -30,3 +30,4 @@ tracing-subscriber.workspace = true
 rand.workspace = true
 futures.workspace = true
 sqlx.workspace = true
+hex.workspace = true

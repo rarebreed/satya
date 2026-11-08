@@ -812,6 +812,107 @@ input:focus, select:focus {
     overflow-wrap: break-word;
 }
 
+.ttrpg-skill-combobox {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 4px;
+}
+
+.ttrpg-skill-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.ttrpg-skill-input-wrap input {
+    width: 100%;
+    padding-right: 30px;
+}
+
+.btn-skill-dropdown-toggle {
+    position: absolute;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-2);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-skill-dropdown-toggle:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.ttrpg-skill-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-inline-size: min(380px, 88dvw);
+    max-inline-size: min(460px, 92dvw);
+    max-block-size: 250px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 60;
+    background: var(--bg-1);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 5px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65);
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ttrpg-skill-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: var(--bg-0);
+    color: var(--text-primary);
+    font-size: 0.76rem;
+    cursor: pointer;
+}
+
+.ttrpg-skill-option:hover,
+.ttrpg-skill-option:focus-visible {
+    background: rgba(56, 189, 248, 0.14);
+    border-color: var(--accent);
+}
+
+.ttrpg-skill-option.is-trained {
+    border-left: 3px solid var(--accent);
+}
+
+.ttrpg-skill-opt-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.ttrpg-skill-empty {
+    padding: 8px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
 @container ttrpg-card (inline-size < 560px) {
     .ttrpg-card .card-header-inline {
         flex-direction: column;

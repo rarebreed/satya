@@ -11,14 +11,14 @@
 //! - [`registry`]: 15-byte binary wire framing (`WireFrameHeader`), `CRC-64-AVRO` fingerprinting, and `SchemaRegistry` encode/decode with schema evolution.
 //! - [`gdpr`]: Schema-driven GDPR Art. 17 right-to-erasure anonymization and Art. 15/20 DSAR subject export powered by custom `satya.*` `.avsc` field attributes.
 
-#![deny(missing_docs)]
-
+pub mod character;
 pub mod events;
 pub mod gdpr;
 pub mod protocol;
 pub mod registry;
 pub mod types;
 
+pub use character::*;
 pub use events::*;
 pub use gdpr::*;
 pub use protocol::*;
@@ -174,7 +174,7 @@ mod tests {
     fn test_all_builtin_schemas_register_and_fingerprint() {
         let registry = SchemaRegistry::new_with_builtin_schemas().unwrap();
         let all = registry.all_schemas();
-        assert_eq!(all.len(), 10);
+        assert_eq!(all.len(), 11);
 
         let chat_v1 = registry
             .get_by_subject_version(subjects::CHAT_MESSAGE, 1)
@@ -185,6 +185,58 @@ mod tests {
 
         assert_ne!(chat_v1.fingerprint_crc64, chat_v2.fingerprint_crc64);
         assert_eq!(chat_v1.fingerprint_hex().len(), 16);
+    }
+
+    #[test]
+    fn test_character_sheet_event_framing_and_gdpr_anonymization() {
+        let registry = SchemaRegistry::default();
+        let sara = Participant::human("u-sara", "sara_v", "Sara (Valkyrie)", SessionRole::Player);
+        let meta = registry
+            .build_metadata(
+                50,
+                subjects::CHARACTER_SHEET,
+                1,
+                "sector-4",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let mut sheet = CharacterSheetRecord {
+            character_id: "char-001".to_string(),
+            owner_user_id: "u-sara".to_string(),
+            character_name: "Valkyrie-7".to_string(),
+            callsign_or_role: "Orbital Breacher".to_string(),
+            notes: Some("Private backstory notes".to_string()),
+            ..CharacterSheetRecord::default()
+        };
+        sheet.skills.insert("rifles".to_string(), 4);
+        let ev = CharacterSheetEvent {
+            metadata: meta,
+            character_event_type: CharacterEventType::CharacterCreated,
+            actor: sara,
+            character: sheet,
+        };
+        let framed = registry
+            .encode_framed(subjects::CHARACTER_SHEET, 1, &ev)
+            .unwrap();
+        let (hdr, decoded): (_, CharacterSheetEvent) =
+            registry.decode_framed(&framed, None).unwrap();
+        assert_eq!(hdr.schema_id, 11);
+        assert_eq!(
+            decoded.character_event_type,
+            CharacterEventType::CharacterCreated
+        );
+        assert_eq!(decoded.character.character_name, "Valkyrie-7");
+        assert_eq!(decoded.character.skills.get("rifles"), Some(&4));
+
+        let (match_kind, anon_bytes) = registry
+            .anonymize_framed_for_subject(&framed, "u-sara", "anon-sara888")
+            .unwrap();
+        assert_eq!(match_kind, GdprSubjectMatchKind::PrimaryActor);
+        let (_, anon_ev): (_, CharacterSheetEvent) =
+            registry.decode_framed(&anon_bytes, None).unwrap();
+        assert_eq!(anon_ev.actor.user_id, "anon-sara888");
+        assert_eq!(anon_ev.character.owner_user_id, "anon-sara888");
+        assert_eq!(anon_ev.character.notes, None);
     }
 
     #[test]

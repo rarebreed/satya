@@ -23,6 +23,8 @@ pub mod subjects {
     pub const AI_GM_TRAJECTORY: &str = "com.satya.events.AiGmTrajectoryEvent";
     /// Subject name for [`super::SessionLogEvent`].
     pub const SESSION_LOG: &str = "com.satya.events.SessionLogEvent";
+    /// Subject name for [`crate::character::CharacterSheetEvent`].
+    pub const CHARACTER_SHEET: &str = "com.satya.events.CharacterSheetEvent";
 }
 
 /// Canonical Apache Iggy topic names corresponding to each Satya event stream.
@@ -45,6 +47,8 @@ pub mod topics {
     pub const AI_GM_TRAJECTORY: &str = "ai-gm-trajectories";
     /// Topic storing [`super::SessionLogEvent`] records.
     pub const SYSTEM_LOGS: &str = "system-logs";
+    /// Topic storing [`crate::character::CharacterSheetEvent`] records.
+    pub const CHARACTER_SHEETS: &str = "character-sheets";
 }
 
 /// Schema evolution compatibility policy enforced for a registered subject.

@@ -7,6 +7,7 @@
 use crate::wasm_client::character_sheet::{
     CANONICAL_FIELD_GEAR_PRESETS, CANONICAL_FIREARM_PRESETS, CharacterSheetState,
     format_character_notes_and_lifepath_html, format_character_status_and_hit_locations_html,
+    format_character_vault_and_assets_html, format_verification_badge_html,
 };
 use crate::wasm_client::dom::escape_html;
 use crate::wasm_client::wizard_views_skills::format_trained_skill_chips_html;
@@ -818,6 +819,7 @@ pub fn format_character_sheet_html(sheet: &CharacterSheetState) -> String {
 
     let sections = [
         ("ALL", "All Sections"),
+        ("VAULT", "Vault & .satyachar"),
         ("STATUS", "Status & Hit Locations"),
         ("STATS", "30 Characteristics & Aptitudes"),
         ("SKILLS", "Skills & Talents Tables"),
@@ -840,6 +842,11 @@ pub fn format_character_sheet_html(sheet: &CharacterSheetState) -> String {
         .join("");
 
     let show_all = sheet.section_filter == "ALL";
+    let vault_html = if show_all || sheet.section_filter == "VAULT" {
+        format_character_vault_and_assets_html(sheet)
+    } else {
+        String::new()
+    };
     let status_html = if show_all || sheet.section_filter == "STATUS" {
         format_character_status_and_hit_locations_html(sheet)
     } else {
@@ -865,12 +872,13 @@ pub fn format_character_sheet_html(sheet: &CharacterSheetState) -> String {
     } else {
         String::new()
     };
+    let badge_html = format_verification_badge_html(sheet);
 
     format!(
         r#"<div class="char-sheet-shell">
             <div class="char-dossier-banner">
                 <div>
-                    <div class="char-dossier-title">{name} <span class="pill pill-iggy">Age {age} · {origin}</span></div>
+                    <div class="char-dossier-title">{name} <span class="pill pill-iggy">Age {age} · {origin}</span> {badge_html}</div>
                     <div class="subtitle">{role}</div>
                 </div>
                 <div class="char-section-nav" role=" navigation" aria-label="Character Sheet Section Filter">
@@ -911,6 +919,7 @@ pub fn format_character_sheet_html(sheet: &CharacterSheetState) -> String {
                 </div>
             </div>
 
+            {vault_html}
             {status_html}
             {stats_html}
             {skills_html}

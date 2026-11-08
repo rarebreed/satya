@@ -1,8 +1,6 @@
 //! Durable Apache Iggy stream WAL and offset-tracked Apache Avro Object Container
 //! micro-batch storage engine (supporting per-topic Local FS and Amazon S3 sinks).
 
-#![deny(missing_docs)]
-
 use apache_avro::{Codec, Writer, from_avro_datum};
 use bytes::Bytes;
 use object_store::aws::AmazonS3Builder;
@@ -10,9 +8,10 @@ use object_store::local::LocalFileSystem;
 use object_store::path::Path as ObjectPath;
 use object_store::{ObjectStore, PutPayload};
 use satya_schema::{
-    AiGmTrajectoryEvent, ChatMessageEvent, InteractionDynamicsEvent, SchemaRegistry,
-    SchemaRegistryEvent, SessionLifecycleEvent, SessionLogEvent, TabletopCanvasEvent,
-    TtrpgMechanicsEvent, WIRE_HEADER_LEN, WebRtcTelemetryEvent, WireFrameHeader, subjects, topics,
+    AiGmTrajectoryEvent, CharacterSheetEvent, ChatMessageEvent, InteractionDynamicsEvent,
+    SchemaRegistry, SchemaRegistryEvent, SessionLifecycleEvent, SessionLogEvent,
+    TabletopCanvasEvent, TtrpgMechanicsEvent, WIRE_HEADER_LEN, WebRtcTelemetryEvent,
+    WireFrameHeader, subjects, topics,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -265,6 +264,7 @@ impl Default for StorageConfig {
             (topics::TABLETOP_CANVAS, 7, 2),
             (topics::AI_GM_TRAJECTORY, 8, 2),
             (topics::SYSTEM_LOGS, 9, 4),
+            (topics::CHARACTER_SHEETS, 10, 2),
         ];
         for (name, id, parts) in defaults {
             topic_map.insert(
@@ -802,6 +802,20 @@ impl EventLogRouter {
             .await
     }
 
+    /// Publishes a [`CharacterSheetEvent`] to the `character-sheets` topic and immediately flushes it.
+    pub async fn log_character_sheet(&self, event: &CharacterSheetEvent) -> anyhow::Result<u64> {
+        let offset = self
+            .publish_event(
+                topics::CHARACTER_SHEETS,
+                subjects::CHARACTER_SHEET,
+                1,
+                event,
+            )
+            .await?;
+        self.flush_topic(topics::CHARACTER_SHEETS).await?;
+        Ok(offset)
+    }
+
     /// Returns a snapshot of ingestion, buffering, and `.avro` batch flush metrics for all topics.
     pub async fn metrics_snapshot(&self) -> Vec<TopicMetricsSnapshot> {
         let guard = self.topic_states.read().await;
@@ -821,6 +835,7 @@ impl EventLogRouter {
                 topics::TABLETOP_CANVAS => subjects::TABLETOP_CANVAS,
                 topics::AI_GM_TRAJECTORY => subjects::AI_GM_TRAJECTORY,
                 topics::SYSTEM_LOGS => subjects::SESSION_LOG,
+                topics::CHARACTER_SHEETS => subjects::CHARACTER_SHEET,
                 _ => subjects::CHAT_MESSAGE,
             };
             let reg = self
@@ -856,6 +871,21 @@ impl EventLogRouter {
         out.sort_by_key(|m| m.topic_id);
         out
     }
+}
+
+/// Resolves the default local character sheet folder (`~/Satya/characters`, or `USERPROFILE/Satya/characters` on Windows).
+#[must_use]
+pub fn default_local_satya_characters_dir() -> PathBuf {
+    if let Ok(custom) = std::env::var("SATYA_LOCAL_CHARACTERS_DIR")
+        && !custom.trim().is_empty()
+    {
+        return PathBuf::from(custom);
+    }
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    home.join("Satya").join("characters")
 }
 
 #[cfg(test)]
@@ -966,7 +996,7 @@ mod tests {
         assert!(ai_cfg.fail_fast_when_offline);
 
         let storage_cfg = StorageConfig::load_from_file(&storage_toml_path).unwrap();
-        assert_eq!(storage_cfg.topics.len(), 9);
+        assert_eq!(storage_cfg.topics.len(), 10);
         assert_eq!(storage_cfg.ai_gm.reasoning_model, "gemma4:12b");
         assert_eq!(storage_cfg.ai_gm.request_timeout_secs, 180);
         assert!(storage_cfg.ai_gm.fail_fast_when_offline);

@@ -18,6 +18,7 @@
 pub mod auth_session;
 pub mod character_sheet;
 pub mod character_sheet_status_views;
+pub mod character_sheet_vault;
 pub mod character_sheet_views;
 pub mod chat_and_ttrpg;
 pub mod dice_3d;
@@ -138,6 +139,11 @@ pub fn register_window_bindings() {
         "satyaSelectChatContext" => satya_select_chat_context(String),
         "satyaUpdateCascadePreview" => satya_update_cascade_preview(),
         "satyaUpdateCascadeOdds" => satya_update_cascade_odds(),
+        "satyaFilterTtrpgSkillDropdown" => satya_filter_ttrpg_skill_dropdown(),
+        "satyaOpenTtrpgSkillDropdown" => satya_open_ttrpg_skill_dropdown(),
+        "satyaToggleTtrpgSkillDropdown" => satya_toggle_ttrpg_skill_dropdown(),
+        "satyaSelectTtrpgSkill" => satya_select_ttrpg_skill(String),
+        "satyaTtrpgSkillKeydown" => satya_ttrpg_skill_keydown(KeyboardEvent),
 
         // Tabbed Notebook, 3D Dice, 3D Model, Combat Tracker & Rules Book
         "satyaSelectNotebookTab" => satya_select_notebook_tab(String),
@@ -201,6 +207,13 @@ pub fn register_window_bindings() {
         "satyaCharSheetUpdateStatus" => satya_char_sheet_update_status(String, String),
         "satyaCharSheetModifyEquipment" => satya_char_sheet_modify_equipment(String, String),
         "satyaCharSheetSaveNotes" => satya_char_sheet_save_notes(String),
+        "satyaCharSheetSaveToVault" => satya_char_sheet_save_to_vault(),
+        "satyaCharSheetExportFile" => satya_char_sheet_export_file(),
+        "satyaCharSheetImportFile" => satya_char_sheet_import_file(),
+        "satyaCharSheetRefreshVault" => satya_char_sheet_refresh_vault(),
+        "satyaCharSheetLoadSaved" => satya_char_sheet_load_saved(String),
+        "satyaCharSheetBindSession" => satya_char_sheet_bind_session(),
+        "satyaCharSheetUploadAsset" => satya_char_sheet_upload_asset(),
     );
 
     let on_move = Closure::<dyn FnMut(web_sys::Event)>::new(move |ev: web_sys::Event| {

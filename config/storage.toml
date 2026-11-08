@@ -105,3 +105,12 @@ local_path = "data/topics/system-logs"
 s3_bucket = "satya-analytics-lake"
 s3_region = "us-east-1"
 s3_prefix = "raw/system-logs"
+
+[topics.character-sheets]
+topic_id = 10
+partitions = 2
+storage_backend = "local"
+local_path = "data/topics/character-sheets"
+s3_bucket = "satya-analytics-lake"
+s3_region = "us-east-1"
+s3_prefix = "raw/character-sheets"

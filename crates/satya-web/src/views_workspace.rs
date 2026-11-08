@@ -120,7 +120,7 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                 <div id="ttrpg-drawer" class="card ttrpg-card">
                     <div class="card-header-inline">
                         <div>
-                            <h2>"Satya TTRPG Task Resolution & Combat Economy"</h2>
+                            <h2>"Task Resolution & Action Pool"</h2>
                             <span class="subtitle">"Two-List Cascading (`2d20`) Roll-Over Engine · Logs TtrpgMechanicsEvent to Apache Iggy (`ttrpg-mechanics`)"</span>
                         </div>
                         <div class="webcam-frame-actions">
@@ -133,8 +133,8 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                 type="button"
                                 id="btn-toggle-ttrpg-drawer"
                                 class="btn btn-sm btn-secondary"
-                                title="Collapse Satya TTRPG Task Resolution drawer to save workspace space"
-                                aria-label="Collapse Satya TTRPG Task Resolution Drawer"
+                                title="Collapse Task Resolution & Action Pool drawer to save workspace space"
+                                aria-label="Collapse Task Resolution & Action Pool Drawer"
                                 aria-expanded="true"
                                 aria-controls="ttrpg-drawer"
                                 onclick="window.satyaToggleTtrpgDrawer()"
@@ -145,10 +145,49 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                         </div>
                     </div>
                     <div class="ttrpg-controls">
-                        <label>
-                            <span>"Skill Name"</span>
-                            <input id="ttrpg-skill" type="text" value="Trauma Surgery"/>
-                        </label>
+                        <div class="ttrpg-skill-combobox">
+                            <label for="ttrpg-skill">
+                                <span>"Skill Name"</span>
+                            </label>
+                            <div class="ttrpg-skill-input-wrap">
+                                <input
+                                    id="ttrpg-skill"
+                                    type="text"
+                                    value="Trauma Surgery"
+                                    placeholder="Search or select a skill..."
+                                    autocomplete="off"
+                                    role="combobox"
+                                    aria-autocomplete="list"
+                                    aria-expanded="false"
+                                    aria-controls="ttrpg-skill-dropdown"
+                                    oninput="window.satyaFilterTtrpgSkillDropdown()"
+                                    on:input=move |_| wasm_client::satya_filter_ttrpg_skill_dropdown()
+                                    onfocus="window.satyaOpenTtrpgSkillDropdown()"
+                                    on:focus=move |_| wasm_client::satya_open_ttrpg_skill_dropdown()
+                                    onkeydown="window.satyaTtrpgSkillKeydown(event)"
+                                    on:keydown=wasm_client::satya_ttrpg_skill_keydown
+                                />
+                                <button
+                                    type="button"
+                                    id="btn-toggle-ttrpg-skill-dropdown"
+                                    class="btn-skill-dropdown-toggle"
+                                    title="Browse & search canonical skills"
+                                    aria-label="Toggle Skill Dropdown"
+                                    onclick="window.satyaToggleTtrpgSkillDropdown()"
+                                    on:click=move |_| wasm_client::satya_toggle_ttrpg_skill_dropdown()
+                                >
+                                    "▾"
+                                </button>
+                            </div>
+                            <div
+                                id="ttrpg-skill-dropdown"
+                                class="ttrpg-skill-dropdown"
+                                role="listbox"
+                                aria-label="Canonical Satya Skills"
+                                style="display: none;"
+                                inner_html=wasm_client::default_ttrpg_skill_dropdown_html()
+                            ></div>
+                        </div>
                         <label>
                             <span>"Skill Level N (2d20 Pairs, 1-10)"</span>
                             <input
@@ -429,8 +468,8 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                             type="button"
                             id="btn-expand-ttrpg-drawer"
                             class="btn-webcam-drawer-tab"
-                            title="Slide out Satya TTRPG Task Resolution Drawer"
-                            aria-label="Expand Satya TTRPG Task Resolution Drawer"
+                            title="Slide out Task Resolution & Action Pool Drawer"
+                            aria-label="Expand Task Resolution & Action Pool Drawer"
                             aria-expanded="false"
                             aria-controls="ttrpg-drawer"
                             onclick="window.satyaToggleTtrpgDrawer()"

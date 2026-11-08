@@ -15,6 +15,7 @@ use crate::wasm_client::dom::{
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
 pub use crate::wasm_client::character_sheet_status_views::*;
+pub use crate::wasm_client::character_sheet_vault::*;
 pub use crate::wasm_client::character_sheet_views::*;
 use satya_engine::{
     AcuteMentalTraumaTier, AmmoCaliberId, AmmunitionProfile, AptitudeCode, ArmorProfileId,
@@ -246,6 +247,7 @@ pub const CANONICAL_FIELD_GEAR_PRESETS: &[(&str, &str, &str, f64, CarryErgonomic
 /// Complete state for the interactive Character Sheet / Status notebook pane (`#notebook-pane-character`).
 #[derive(Debug, Clone)]
 pub struct CharacterSheetState {
+    pub character_id: String,
     pub preset_id: String,
     pub character_name: String,
     pub callsign_or_role: String,
@@ -281,6 +283,12 @@ pub struct CharacterSheetState {
     pub psyche_drift_marks: i32,
     pub conviction_surge_active: bool,
     pub notes: String,
+    pub verification_status: satya_schema::CharacterVerificationStatus,
+    pub audit_violations: Vec<String>,
+    pub local_satya_file_path: Option<String>,
+    pub assets: Vec<satya_schema::CharacterAssetRef>,
+    pub saved_vault_list: Vec<satya_schema::CharacterSheetRecord>,
+    pub vault_feedback: String,
 }
 
 impl Default for CharacterSheetState {
@@ -343,6 +351,7 @@ impl CharacterSheetState {
                     skills.insert(id.to_string(), n);
                 }
                 Self {
+                    character_id: "char-sara_valkyrie".to_string(),
                     preset_id: "sara_valkyrie".to_string(),
                     character_name: "Sara \"Valkyrie\" Lin".to_string(),
                     callsign_or_role: "Orbital Med-Assault Operator (Valkyrie Exo-Rig)".to_string(),
@@ -384,6 +393,12 @@ impl CharacterSheetState {
                     psyche_drift_marks: 1,
                     conviction_surge_active: false,
                     notes: "Squad Med-Assault Lead — Sector 4 Orbital Airlock breach team.\n• Valkyrie Exo-Rig battery at 94% (+20.0 kg load offset).\n• Trauma Surgery Kit & 2x CAT tourniquets staged on chest rig.\n• Primary objective: secure decompression valve and extract VIP.".to_string(),
+                    verification_status: satya_schema::CharacterVerificationStatus::VerifiedOfficial,
+                    audit_violations: Vec::new(),
+                    local_satya_file_path: None,
+                    assets: Vec::new(),
+                    saved_vault_list: Vec::new(),
+                    vault_feedback: String::new(),
                 }
             }
         }
@@ -396,6 +411,7 @@ impl CharacterSheetState {
         gear_ids: &[&str], notes: &str,
     ) -> Self {
         Self {
+            character_id: format!("char-{preset_id}"),
             preset_id: preset_id.to_string(), character_name: lp.name, callsign_or_role: role.to_string(),
             age_years: lp.age_years, origin_label: lp.origin.label.to_string(),
             campaign_sqm: lp.campaign_sqm, operational_heat: lp.operational_heat,
@@ -410,6 +426,12 @@ impl CharacterSheetState {
             active_status_conditions: Vec::new(), morale_state: MoraleState::Steady,
             mental_trauma: None, social_composure_lost: 0, social_wound: None,
             psyche_drift_marks: 0, conviction_surge_active: false, notes: notes.to_string(),
+            verification_status: satya_schema::CharacterVerificationStatus::VerifiedOfficial,
+            audit_violations: Vec::new(),
+            local_satya_file_path: None,
+            assets: Vec::new(),
+            saved_vault_list: Vec::new(),
+            vault_feedback: String::new(),
         }
     }
 
@@ -601,6 +623,15 @@ pub fn apply_wizard_to_character_sheet(st: &mut crate::wasm_client::state::Satya
         &st.wizard.aptitudes,
     );
     let sheet = &mut st.character_sheet;
+    let slug: String = st
+        .wizard
+        .character_name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' })
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string();
+    sheet.character_id = format!("char-{}", if slug.is_empty() { "custom_wizard" } else { &slug });
     sheet.preset_id = "custom_wizard".to_string();
     sheet.character_name = st.wizard.character_name.clone();
     sheet.callsign_or_role = format!("Custom Lifepath Operator ({})", baseline.origin.label);
@@ -613,6 +644,9 @@ pub fn apply_wizard_to_character_sheet(st: &mut crate::wasm_client::state::Satya
     sheet.characteristics = st.wizard.characteristics.clone();
     sheet.aptitudes = st.wizard.aptitudes.clone();
     sheet.skills = st.wizard.skills.clone();
+    let rec = sheet.to_character_sheet_record("local-operator");
+    sheet.verification_status = rec.verification_status;
+    sheet.audit_violations = rec.audit_violations;
 }
 
 /// Loads a canonical operator preset (`"sara_valkyrie"`, `"mateo_vance"`, `"priya_nair"`, `"amara_okafor"`) into the Character Sheet.
@@ -628,8 +662,10 @@ pub fn satya_char_sheet_load_preset(preset_id: String) {
     } else {
         with_state_mut(|st| {
             let prev_filter = st.character_sheet.section_filter.clone();
+            let prev_vault = st.character_sheet.saved_vault_list.clone();
             st.character_sheet = CharacterSheetState::from_preset(&target);
             st.character_sheet.section_filter = prev_filter;
+            st.character_sheet.saved_vault_list = prev_vault;
         });
     }
     render_character_sheet();

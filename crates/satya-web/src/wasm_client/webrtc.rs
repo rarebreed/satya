@@ -210,7 +210,7 @@ pub fn satya_toggle_chat_drawer() {
     sync_workspace_drawers_dom();
 }
 
-/// Toggles the Satya TTRPG Task Resolution & Combat Economy container (`#ttrpg-drawer`) in `#center-column`
+/// Toggles the Task Resolution & Action Pool container (`#ttrpg-drawer`) in `#center-column`
 /// between expanded and a collapsed drawer rail tab (`#ttrpg-drawer-rail`) to reclaim vertical and horizontal room.
 #[wasm_bindgen]
 pub fn satya_toggle_ttrpg_drawer() {

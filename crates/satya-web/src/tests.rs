@@ -300,7 +300,14 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html[workspace_idx.saturating_sub(40)..workspace_idx + 80].contains("display: none"));
     assert!(html.contains("<h2>Session Chat</h2>"));
     assert!(!html.contains("Public &amp; Private Targeted Session Chat"));
+    assert!(html.contains("<h2>Task Resolution &amp; Action Pool</h2>"));
+    assert!(!html.contains("Satya TTRPG Task Resolution &amp; Combat Economy"));
     assert!(html.contains("Roll Satya Task"));
+    assert!(html.contains(r#"id="ttrpg-skill""#));
+    assert!(html.contains(r#"id="btn-toggle-ttrpg-skill-dropdown""#));
+    assert!(html.contains(r#"id="ttrpg-skill-dropdown""#));
+    assert!(html.contains("window.satyaFilterTtrpgSkillDropdown()"));
+    assert!(html.contains("window.satyaSelectTtrpgSkill("));
     assert!(html.contains(r#"id="ttrpg-skill-level""#));
     assert!(html.contains(r#"id="ttrpg-control-c""#));
     assert!(html.contains(r#"id="ttrpg-internal-mod""#));
@@ -509,4 +516,33 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(mateo_html.contains("Bleed G4"));
     assert!(mateo_html.contains("Kalashnikov AKM Assault Rifle"));
     assert!(mateo_html.contains("Concealable Soft Kevlar Vest"));
+    assert!(mateo_html.contains(r#"id="char-sheet-vault-bar""#));
+    assert!(mateo_html.contains(r#"id="char-sheet-verification-badge""#));
+    assert!(mateo_html.contains(r#"id="char-sheet-save-vault-btn""#));
+    assert!(mateo_html.contains(r#"id="char-sheet-export-btn""#));
+    assert!(mateo_html.contains(r#"id="char-sheet-import-file-input""#));
+    assert!(mateo_html.contains(r#"id="char-sheet-assets-table""#));
+
+    let record = sheet.to_character_sheet_record("usr-sara");
+    let mut restored = wasm_client::CharacterSheetState::default();
+    restored.apply_character_sheet_record(&record);
+    assert_eq!(restored.character_name, "Mateo Vance");
+    assert_eq!(restored.hit_zones[zone_idx].wound_tier, 3);
+    assert_eq!(
+        restored.hit_zones[zone_idx].bone_status,
+        wasm_client::BoneFractureStatus::CompleteFracture
+    );
+
+    // Searchable Skill Name dropdown in Task Resolution & Action Pool
+    let default_sheet = wasm_client::CharacterSheetState::default();
+    let surg_hits = wasm_client::search_canonical_skills("Trauma Surgery", &default_sheet);
+    assert_eq!(surg_hits.len(), 1);
+    assert_eq!(surg_hits[0].id, "trauma_orthopedic_general_surgery");
+
+    let dd_html = wasm_client::format_ttrpg_skill_dropdown_html("rotary", &default_sheet);
+    assert!(dd_html.contains("Piloting (Rotary-Wing / Helicopter &amp; VTOL)"));
+    assert!(dd_html.contains("window.satyaSelectTtrpgSkill('piloting_rotary_wing_helicopter')"));
+
+    let empty_dd = wasm_client::format_ttrpg_skill_dropdown_html("zzzz_nonexistent_skill", &default_sheet);
+    assert!(empty_dd.contains("No canonical skills matched"));
 }

@@ -286,9 +286,9 @@ pub async fn gm_session_roll_handler(
         contested_params.player.botch_rule = parsed_botch;
     }
 
-    let (rolled_pairs, gm_pairs, physics_seed): (Vec<(i32, i32)>, Vec<(i32, i32)>, i64) = {
+    let (rolled_pairs, gm_pairs, physics_seed) = {
         let mut rng = rand::thread_rng();
-        let pairs = (0..n_pairs)
+        let pairs: Vec<(i32, i32)> = (0..n_pairs)
             .map(|_| (rng.gen_range(1..=20), rng.gen_range(1..=20)))
             .collect();
         let gm = vec![(rng.gen_range(1..=20), rng.gen_range(1..=20))];

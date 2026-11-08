@@ -159,6 +159,32 @@ impl AuthAndSessionManager {
                 account_role  TEXT NOT NULL DEFAULT 'USER',
                 created_at_us INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS characters (
+                character_id        TEXT PRIMARY KEY NOT NULL,
+                owner_user_id       TEXT NOT NULL,
+                character_name      TEXT NOT NULL,
+                version             INTEGER NOT NULL DEFAULT 1,
+                verification_status TEXT NOT NULL DEFAULT 'VERIFIED_OFFICIAL',
+                content_sha256      TEXT NOT NULL,
+                signature_hex       TEXT,
+                sheet_json          TEXT NOT NULL,
+                created_at_us       INTEGER NOT NULL,
+                updated_at_us       INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_characters_owner ON characters(owner_user_id);
+            CREATE TABLE IF NOT EXISTS character_assets (
+                asset_id      TEXT PRIMARY KEY NOT NULL,
+                character_id  TEXT NOT NULL,
+                owner_user_id TEXT NOT NULL,
+                asset_kind    TEXT NOT NULL,
+                filename      TEXT NOT NULL,
+                mime_type     TEXT NOT NULL,
+                sha256_hex    TEXT NOT NULL,
+                size_bytes    INTEGER NOT NULL,
+                blob_data     BLOB NOT NULL,
+                created_at_us INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_character_assets_char ON character_assets(character_id);
             "#,
         )
         .execute(&db_pool)
@@ -921,5 +947,48 @@ impl AuthAndSessionManager {
         let mut sessions = self.sessions.write().await;
         self.join_tokens.write().await.clear();
         sessions.drain().map(|(_, s)| s).collect()
+    }
+
+    /// Returns a reference to the underlying SQLite connection pool.
+    pub fn db_pool(&self) -> &SqlitePool {
+        &self.db_pool
+    }
+
+    /// Binds `character_id` (and optionally updates `display_name`) on the caller's [`Participant`] record in `session_id`,
+    /// returning `(updated_participant, updated_roster)`.
+    pub async fn bind_character_to_session(
+        &self,
+        session_id: &str,
+        user_id: &str,
+        character_id: &str,
+        character_name: &str,
+    ) -> anyhow::Result<(Participant, Vec<Participant>)> {
+        let sid = session_id.trim();
+        let updated = {
+            let mut guard = self.sessions.write().await;
+            let session = guard
+                .get_mut(sid)
+                .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+            let part = session
+                .roster
+                .get_mut(user_id)
+                .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
+            part.character_id = Some(character_id.to_string());
+            if !character_name.trim().is_empty() {
+                part.display_name = character_name.trim().to_string();
+            }
+            let updated_part = part.clone();
+            let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
+            (updated_part, roster_vec)
+        };
+
+        let mut join_guard = self.join_tokens.write().await;
+        for claims in join_guard.values_mut() {
+            if claims.session_id == sid && claims.participant.user_id == user_id {
+                claims.participant = updated.0.clone();
+            }
+        }
+
+        Ok(updated)
     }
 }

@@ -507,6 +507,20 @@ pub(crate) fn format_summary_step_html(st: &CharacterWizardState) -> String {
                     >
                         "Apply Character to Active Sheet &amp; Task Roller"
                     </button>
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaWizardApplyToSheet(); window.satyaCharSheetSaveToVault();"
+                    >
+                        "Save to Vault &amp; ~/Satya"
+                    </button>
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaWizardApplyToSheet(); window.satyaCharSheetExportFile();"
+                    >
+                        "Export .satyachar File…"
+                    </button>
                 </div>
             </div>
             <div class="char-sheet-grid">

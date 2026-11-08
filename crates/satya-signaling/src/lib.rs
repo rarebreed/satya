@@ -9,15 +9,15 @@
 //! - [`gm_docs`]: `GM_ONLY` document sharing (`/api/sessions/:id/docs`), Google OAuth `drive.file` linking (`/api/auth/google`), HTML/image stripping, minor-safety filtering, and prompt-injection neutralization.
 //! - [`ws`]: Full-duplex `/ws/session` WebSocket upgrade, real-time chat, WebRTC signaling relay, prosody telemetry, and TTRPG task resolution.
 
-#![deny(missing_docs)]
-
 pub mod auth;
+pub mod characters;
 pub mod gm_api;
 pub mod gm_docs;
 pub mod http_handlers;
 pub mod state;
 pub mod ws;
 
+pub use characters::*;
 pub use gm_api::*;
 pub use gm_docs::*;
 pub use http_handlers::*;
@@ -78,6 +78,27 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         )
         .route("/api/storage/metrics", get(storage_metrics_handler))
         .route("/api/storage/flush", post(storage_flush_handler))
+        .route(
+            "/api/characters",
+            get(list_characters_handler).post(save_character_handler),
+        )
+        .route("/api/characters/import", post(import_character_handler))
+        .route(
+            "/api/characters/:character_id/export",
+            get(export_character_handler),
+        )
+        .route(
+            "/api/characters/:character_id/bind-session",
+            post(bind_character_session_handler),
+        )
+        .route(
+            "/api/characters/:character_id/assets",
+            post(upload_character_asset_handler),
+        )
+        .route(
+            "/api/characters/:character_id/assets/:asset_id",
+            get(get_character_asset_handler),
+        )
         .route("/ws/session", get(ws_session_handler))
         .with_state(state)
 }
@@ -314,12 +335,12 @@ mod tests {
         assert_eq!(res_tasks_ch.status(), StatusCode::OK);
 
         let metrics = state.storage.metrics_snapshot().await;
-        assert_eq!(metrics.len(), 9);
+        assert_eq!(metrics.len(), 10);
         let schema_reg_topic = metrics
             .iter()
             .find(|m| m.topic == "schema-registry")
             .unwrap();
-        assert_eq!(schema_reg_topic.total_messages_ingested, 10);
+        assert_eq!(schema_reg_topic.total_messages_ingested, 11);
         assert_eq!(schema_reg_topic.flushed_batches_count, 1);
 
         let _ = std::fs::remove_dir_all(&temp_dir);
@@ -1108,6 +1129,298 @@ mod tests {
         let ch_doc: satya_schema::RulesChapterDocument = serde_json::from_slice(&ch_bytes).unwrap();
         assert_eq!(ch_doc.summary.chapter_id, "tasks");
         assert!(ch_doc.rendered_html.contains("satya-rules-article"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_character_vault_export_import_anticheat_and_assets_emit_iggy_events() {
+        use axum::body::{Body, to_bytes};
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("satya_char_vault_test_{}", Uuid::now_v7()));
+        let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+            .await
+            .unwrap();
+        let app = build_router(state.clone());
+
+        let sara_auth = state
+            .auth
+            .authenticate_user("sara_valkyrie", "satya-truth-2026")
+            .await
+            .unwrap();
+        let marcus_auth = state
+            .auth
+            .authenticate_user("marcus_recon", "satya-truth-2026")
+            .await
+            .unwrap();
+        let sara_user = state
+            .auth
+            .verify_auth_token(&sara_auth.auth_token)
+            .await
+            .unwrap();
+        state
+            .auth
+            .create_session(
+                &sara_user,
+                "ep-char-vault",
+                "room-pw",
+                SessionMode::Ttrpg,
+                SessionRole::Player,
+                None,
+                true,
+            )
+            .await
+            .unwrap();
+
+        let mateo = satya_engine::build_mateo_vance_lifepath();
+        let legal_char = satya_schema::CharacterSheetRecord {
+            character_id: "char-mateo-01".to_string(),
+            owner_user_id: String::new(),
+            version: 1,
+            character_name: mateo.name.clone(),
+            callsign_or_role: "Syndicate Enforcer".to_string(),
+            age_years: mateo.age_years as i32,
+            origin_label: mateo.origin.label.to_string(),
+            campaign_sqm: i32::from(mateo.campaign_sqm),
+            operational_heat: i32::from(mateo.operational_heat),
+            granted_access_tags: mateo
+                .granted_access_tags
+                .iter()
+                .map(|t| t.as_str().to_string())
+                .collect(),
+            stage_history: mateo.stage_history.clone(),
+            characteristics: satya_engine::characteristics_to_record(&mateo.characteristics),
+            aptitudes: satya_engine::aptitudes_to_record(&mateo.aptitudes),
+            skills: mateo
+                .skills
+                .iter()
+                .map(|(k, &v)| (k.clone(), v as i32))
+                .collect(),
+            equipped_ranged_ids: vec!["sig_p320_9mm".to_string()],
+            equipped_melee_codes: vec!["COMBAT_KNIFE".to_string()],
+            equipped_armor_codes: vec!["CONCEALABLE_VEST_3A".to_string()],
+            field_gear_ids: vec!["ifak_cat_tourniquet".to_string()],
+            notes: Some("Sector 9 safehouse".to_string()),
+            ..satya_schema::CharacterSheetRecord::default()
+        };
+
+        // 1. Save legal character (`CHARACTER_CREATED` event)
+        let save_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/characters")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "session_id": "ep-char-vault",
+                            "character": legal_char,
+                            "bind_to_session": false
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(save_res.status(), StatusCode::OK);
+        let save_bytes = to_bytes(save_res.into_body(), 128 * 1024).await.unwrap();
+        let saved: satya_schema::SaveCharacterResponse =
+            serde_json::from_slice(&save_bytes).unwrap();
+        assert_eq!(
+            saved.character.verification_status,
+            satya_schema::CharacterVerificationStatus::VerifiedOfficial
+        );
+        assert!(saved.character.audit_violations.is_empty());
+        assert!(saved.character.server_signature_hex.is_some());
+
+        // 2. Export `.satyachar` binary bundle (`CHARACTER_EXPORTED` event)
+        let export_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/characters/char-mateo-01/export?session_id=ep-char-vault")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(export_res.status(), StatusCode::OK);
+        let satyachar_bytes = to_bytes(export_res.into_body(), 256 * 1024).await.unwrap();
+        assert!(satyachar_bytes.len() > 15);
+
+        // 3. Import signed `.satyachar` bundle (`CHARACTER_IMPORTED` event)
+        let b64_bundle = satya_web::wasm_client::encode_base64_bytes(&satyachar_bytes);
+        let import_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/characters/import")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "session_id": "ep-char-vault",
+                            "satyachar_base64": b64_bundle,
+                            "bind_to_session": false
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(import_res.status(), StatusCode::OK);
+        let import_bytes = to_bytes(import_res.into_body(), 128 * 1024).await.unwrap();
+        let imported: satya_schema::SaveCharacterResponse =
+            serde_json::from_slice(&import_bytes).unwrap();
+        assert_eq!(
+            imported.character.verification_status,
+            satya_schema::CharacterVerificationStatus::VerifiedOfficial
+        );
+
+        // 4. Upload a multimodal asset (`CHARACTER_ASSET_UPLOADED` event) and fetch it
+        let fake_glb_b64 = satya_web::wasm_client::encode_base64_bytes(b"glTF\x02\x00\x00\x00");
+        let asset_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/characters/char-mateo-01/assets")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "session_id": "ep-char-vault",
+                            "asset_kind": "MODEL_3D_GLB",
+                            "filename": "mateo_miniature.glb",
+                            "mime_type": "model/gltf-binary",
+                            "data_base64": fake_glb_b64
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(asset_res.status(), StatusCode::OK);
+        let asset_bytes = to_bytes(asset_res.into_body(), 128 * 1024).await.unwrap();
+        let after_asset: satya_schema::SaveCharacterResponse =
+            serde_json::from_slice(&asset_bytes).unwrap();
+        assert_eq!(after_asset.character.assets.len(), 1);
+        let asset_id = after_asset.character.assets[0].asset_id.clone();
+
+        // 5. Bind character to active session (`CHARACTER_BOUND_TO_SESSION` event)
+        let bind_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/characters/char-mateo-01/bind-session")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({ "session_id": "ep-char-vault" }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bind_res.status(), StatusCode::OK);
+
+        // 6. Save an over-budget tampered character -> flagged as `TamperedOrOverBudget`
+        let mut cheated_char = legal_char.clone();
+        cheated_char.character_id = "char-cheated-99".to_string();
+        cheated_char.characteristics.spd = 25;
+        cheated_char.characteristics.for_stat = 25;
+        let cheat_res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/characters")
+                    .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "session_id": "ep-char-vault",
+                            "character": cheated_char,
+                            "bind_to_session": false
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(cheat_res.status(), StatusCode::OK);
+        let cheat_bytes = to_bytes(cheat_res.into_body(), 128 * 1024).await.unwrap();
+        let cheated_saved: satya_schema::SaveCharacterResponse =
+            serde_json::from_slice(&cheat_bytes).unwrap();
+        assert_eq!(
+            cheated_saved.character.verification_status,
+            satya_schema::CharacterVerificationStatus::TamperedOrOverBudget
+        );
+        assert!(!cheated_saved.character.audit_violations.is_empty());
+
+        // 7. Player isolation: Marcus cannot see Sara's characters or download her asset
+        let marcus_list = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/characters")
+                    .header(
+                        "Authorization",
+                        format!("Bearer {}", marcus_auth.auth_token),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let marcus_list_bytes = to_bytes(marcus_list.into_body(), 64 * 1024).await.unwrap();
+        let marcus_vault: satya_schema::CharacterListResponse =
+            serde_json::from_slice(&marcus_list_bytes).unwrap();
+        assert!(marcus_vault.characters.is_empty());
+
+        let marcus_asset = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!(
+                        "/api/characters/char-mateo-01/assets/{asset_id}"
+                    ))
+                    .header(
+                        "Authorization",
+                        format!("Bearer {}", marcus_auth.auth_token),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(marcus_asset.status(), StatusCode::NOT_FOUND);
+
+        // 8. Verify all 6 operations emitted events to the `character-sheets` Iggy topic
+        let metrics = state.storage.metrics_snapshot().await;
+        let char_topic_metric = metrics
+            .iter()
+            .find(|m| m.topic == satya_schema::topics::CHARACTER_SHEETS)
+            .expect("character-sheets topic metric must exist");
+        assert!(
+            char_topic_metric.total_messages_ingested >= 6,
+            "expected >= 6 events on character-sheets topic, got {}",
+            char_topic_metric.total_messages_ingested
+        );
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

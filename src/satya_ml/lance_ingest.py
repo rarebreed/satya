@@ -1,13 +1,18 @@
-"""Incremental Avro-to-PyLance (Lance format) batch ingestor for Satya topics.
+"""Incremental Avro-to-PyLance (Lance format) batch ingestor for Satya topics and multimodal assets.
 
-Scans `data/topics/<topic>/schema_version=v*/partition=*/batch_*.avro`, inspects the
-embedded `satya.start_offset` and `satya.end_offset` Avro header metadata, converts
-nested Avro records (`Participant`, `EventMetadata`) into PyArrow tables, and appends
-only new offset ranges into `data/lance/<topic>.lance`.
+Scans `data/topics/<topic>/schema_version=v*/partition=*/batch_*.avro` (including `character-sheets`),
+inspects the embedded `satya.start_offset` and `satya.end_offset` Avro header metadata, converts
+nested Avro records (`Participant`, `EventMetadata`, `CharacterSheetRecord`) into PyArrow tables,
+and appends only new offset ranges into `data/lance/<topic>.lance`.
+
+Also compacts multimodal character assets (`data/characters/assets/<character_id>/<asset_id>_<filename>`)
+into `data/lance/character-assets.lance` with binary blob columns (`blob_bytes`) for vision, PDF/RAG,
+and 3D `.glb` ML workflows.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -75,9 +80,45 @@ def compact_topic_to_lance(
     return len(new_records)
 
 
+def compact_character_assets_to_lance(assets_root: Path, lance_root: Path) -> int:
+    if not assets_root.exists():
+        return 0
+    rows: list[dict[str, Any]] = []
+    for char_dir in sorted(assets_root.iterdir()):
+        if not char_dir.is_dir():
+            continue
+        character_id = char_dir.name
+        for asset_file in sorted(char_dir.iterdir()):
+            if not asset_file.is_file():
+                continue
+            blob = asset_file.read_bytes()
+            sha256_hex = hashlib.sha256(blob).hexdigest()
+            asset_id, _, filename = asset_file.name.partition("_")
+            rows.append(
+                {
+                    "asset_id": asset_id,
+                    "character_id": character_id,
+                    "filename": filename or asset_file.name,
+                    "size_bytes": len(blob),
+                    "sha256_hex": sha256_hex,
+                    "blob_bytes": blob,
+                }
+            )
+    if not rows:
+        return 0
+    arrow_table = pa.Table.from_pylist(rows)
+    lance_uri = lance_root / "character-assets.lance"
+    try:
+        lance.write_dataset(arrow_table, str(lance_uri), mode="overwrite")
+    except OSError:
+        lance.write_dataset(arrow_table, "memory://character-assets.lance", mode="overwrite")
+    return len(rows)
+
+
 def main() -> None:
     base_dir = Path.cwd()
     topics_root = base_dir / "data" / "topics"
+    assets_root = base_dir / "data" / "characters" / "assets"
     lance_root = base_dir / "data" / "lance"
     state_file = lance_root / "_watermarks.json"
 
@@ -93,6 +134,10 @@ def main() -> None:
             if count > 0:
                 print(f"[PyLance] Appended {count} events into {lance_root / (topic_dir.name + '.lance')}")
                 total_ingested += count
+
+    asset_count = compact_character_assets_to_lance(assets_root, lance_root)
+    if asset_count > 0:
+        print(f"[PyLance] Indexed {asset_count} multimodal character assets into {lance_root / 'character-assets.lance'}")
 
     print(f"[PyLance] Compaction complete. Total new events ingested: {total_ingested}")
 
