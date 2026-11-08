@@ -21,6 +21,7 @@ const THEME_SWATCH_SPECS: &[(&str, &str, &str, &str)] = &[
     ("cyberpunk", "Cyberpunk", "#080412", "#f43f5e"),
     ("ranger", "Ranger", "#080f0b", "#34d399"),
     ("dusk-orange", "Dusk Orange", "#110a08", "#fb923c"),
+    ("nebula", "Nebula", "#1a0f30", "#f97316"),
 ];
 
 /// Static table of quick-fill demo accounts for testing TTRPG and Meeting sessions.

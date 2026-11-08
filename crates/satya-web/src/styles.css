@@ -101,6 +101,23 @@ html[data-theme="dusk-orange"] {
     --brand-grad: linear-gradient(135deg, #ea580c, #9333ea);
 }
 
+html[data-theme="nebula"] {
+    --bg-0: #0f081d;
+    --bg-1: #1a0f30;
+    --bg-2: #281845;
+    --border: #5c3d2e;
+    --text-primary: #f5ebff;
+    --text-heading: #fff7ed;
+    --text-muted: #c49a7e;
+    --accent: #f97316;
+    --accent-strong: #c2410c;
+    --emerald: #34d399;
+    --amber: #d97706;
+    --rose: #fb7185;
+    --purple: #c084fc;
+    --brand-grad: linear-gradient(135deg, #7e22ce, #c2410c);
+}
+
 :root,
 html[data-density="default"] {
     --shell-pad-y: 10px;

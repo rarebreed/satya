@@ -2,32 +2,43 @@
  * Satya GM Document Vault (`#notebook-pane-docs`)
  * ============================================================================ */
 
+input[type="file"],
 .gm-doc-file-input {
-    width: 100%;
     background: var(--bg-0);
-    color: var(--text-secondary);
+    color: var(--text-muted);
     border: 1px dashed var(--border);
-    border-radius: 6px;
-    padding: 6px 8px;
+    border-radius: var(--control-radius);
+    padding: var(--control-pad-y) var(--control-pad-x);
     font-size: 0.78rem;
+    max-inline-size: 100%;
 }
 
+.gm-doc-file-input {
+    width: 100%;
+}
+
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button,
 .gm-doc-file-input::file-selector-button {
     background: var(--bg-2);
     color: var(--text-primary);
     border: 1px solid var(--accent);
-    border-radius: 5px;
+    border-radius: var(--control-radius);
     padding: 4px 10px;
     margin-right: 10px;
+    font-family: inherit;
     font-size: 0.76rem;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
+input[type="file"]::file-selector-button:hover,
+input[type="file"]::-webkit-file-upload-button:hover,
 .gm-doc-file-input::file-selector-button:hover {
-    background: var(--accent);
-    color: #020617;
+    background: var(--accent-strong);
+    border-color: var(--accent);
+    color: #fff;
 }
 
 .gm-doc-textarea {

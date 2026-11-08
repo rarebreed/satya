@@ -87,6 +87,7 @@ pub const APPEARANCE_THEME_OPTIONS: SelectOptionSlice = &[
     ("cyberpunk", "Cyberpunk Neon / Midnight Synth"),
     ("ranger", "Forest / Ranger Green"),
     ("dusk-orange", "Dusk Orange (Autumn & Purple)"),
+    ("nebula", "Cosmic Nebula (Purple, Orange & Bronze)"),
 ];
 
 /// Canonical UI density / spacing presets (`(density_id, label)`).

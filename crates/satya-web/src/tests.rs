@@ -664,6 +664,7 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
 
     // Verify Appearance & Theme settings in Hamburger Menu + option normalizers
     assert_eq!(wasm_client::normalize_theme_id("dusk-orange"), "dusk-orange");
+    assert_eq!(wasm_client::normalize_theme_id("nebula"), "nebula");
     assert_eq!(wasm_client::normalize_theme_id("parchment"), "parchment");
     assert_eq!(wasm_client::normalize_theme_id("unknown-theme"), "obsidian");
     assert_eq!(wasm_client::normalize_density_id("compact"), "compact");
@@ -689,6 +690,7 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains(r#"id="menu-font-select""#));
     assert!(html.contains(r#"id="btn-reset-appearance-defaults""#));
     assert!(html.contains(r#"html[data-theme="dusk-orange"]"#));
+    assert!(html.contains(r#"html[data-theme="nebula"]"#));
     assert!(html.contains(r#"html[data-theme="parchment"]"#));
     assert!(html.contains(r#"html[data-density="compact"]"#));
     assert!(html.contains(r#"html[data-corners="sharp"]"#));
