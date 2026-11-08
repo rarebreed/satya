@@ -15,6 +15,11 @@ from typing import Annotated, Any, Literal, TypedDict
 
 from satya_ml.ai_gm.maps import set_session_llm_config
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model
+from satya_ml.ai_gm.ollama_runner import (
+    drain_ollama_logs_since,
+    format_ollama_response_telemetry,
+    get_ollama_log_cursor,
+)
 from satya_ml.ai_gm.telemetry import (
     ensure_turn_context,
     get_current_emitted_event_ids,
@@ -179,6 +184,48 @@ def report_trajectory_to_rust(session_id: str, payload: dict[str, Any]) -> None:
         pass
 
 
+def _extract_ai_message_text(msg: BaseMessage) -> str:
+    """Extract visible text from an `AIMessage`, falling back to `reasoning_content` if `content` is empty."""
+    raw = getattr(msg, "content", None)
+    if isinstance(raw, str):
+        text = raw.strip()
+        if text:
+            return text
+    elif isinstance(raw, list):
+        parts: list[str] = []
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                parts.append(item.strip())
+            elif isinstance(item, dict):
+                txt = str(item.get("text") or item.get("content") or "").strip()
+                if txt:
+                    parts.append(txt)
+        if parts:
+            return "\n".join(parts)
+    elif raw is not None:
+        text = str(raw).strip()
+        if text:
+            return text
+
+    add_kw = getattr(msg, "additional_kwargs", None)
+    if isinstance(add_kw, dict):
+        reasoning_txt = str(add_kw.get("reasoning_content") or add_kw.get("thinking") or "").strip()
+        if reasoning_txt:
+            return reasoning_txt
+    return ""
+
+
+def _count_turn_tool_rounds(messages: list[BaseMessage]) -> int:
+    """Count how many tool-calling rounds have already executed in the current turn (since the last HumanMessage)."""
+    rounds = 0
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage):
+            break
+        if isinstance(msg, AIMessage) and (getattr(msg, "tool_calls", None) or []):
+            rounds += 1
+    return rounds
+
+
 def build_ai_gm_graph(
     llm_config: SessionLlmConfig | None = None,
     *,
@@ -320,8 +367,8 @@ def build_ai_gm_graph(
                 "active_npcs": npcs,  # type: ignore[typeddict-item]
                 "active_map": active_map,  # type: ignore[typeddict-item]
                 "messages": new_messages,
-                "tool_invocations": list(state.get("tool_invocations") or []),
-                "turn_started_ms": state.get("turn_started_ms") or (time.perf_counter() * 1000.0),
+                "tool_invocations": [],
+                "turn_started_ms": time.perf_counter() * 1000.0,
             }
 
     def scenario_director_node(state: AiGmSessionState) -> dict[str, Any]:
@@ -383,7 +430,17 @@ def build_ai_gm_graph(
     def gm_supervisor_node(state: AiGmSessionState) -> dict[str, Any]:
         session_id = state.get("session_id", "default")
         ensure_turn_context(session_id)
-        messages = list(state.get("messages") or [])
+        raw_messages = list(state.get("messages") or [])
+        # Filter out any historical empty AIMessages (0 chars and no tool_calls) so they never poison future prompts
+        messages = [
+            m
+            for m in raw_messages
+            if not (
+                isinstance(m, AIMessage)
+                and not (getattr(m, "tool_calls", None) or [])
+                and not _extract_ai_message_text(m)
+            )
+        ]
         if len(messages) > 16:
             sys_msgs = [m for m in messages[:2] if isinstance(m, SystemMessage)]
             older_msgs = [m for m in messages[:-12] if not isinstance(m, SystemMessage)]
@@ -400,20 +457,23 @@ def build_ai_gm_graph(
                 )
             )
             messages = sys_msgs + [rolling_summary] + recent_msgs
+        tool_rounds_this_turn = _count_turn_tool_rounds(messages)
+        allow_tools = bool(active_tools) and tool_rounds_this_turn < 3
         model: Any | None = None
         bound_model: Any | None = None
         with span_scope("gm_supervisor_node"):
             t0 = time.perf_counter()
+            ollama_cursor = get_ollama_log_cursor()
             logger.info(
                 "[gm_supervisor_node] Invoking %s/%s (messages=%d, tools=%d)...",
                 cfg.provider,
                 cfg.model_id,
                 len(messages),
-                len(active_tools),
+                len(active_tools) if allow_tools else 0,
             )
             try:
                 model = chat_model if chat_model is not None else build_gm_chat_model(cfg)
-                if hasattr(model, "bind_tools") and active_tools:
+                if hasattr(model, "bind_tools") and allow_tools:
                     bound_model = model.bind_tools(active_tools)
                 else:
                     bound_model = model
@@ -459,6 +519,16 @@ def build_ai_gm_graph(
             if not isinstance(response, BaseMessage):
                 response = AIMessage(content=str(response))
             llm_ms = int((time.perf_counter() - t0) * 1000.0)
+            ollama_perf = format_ollama_response_telemetry(response)
+            if ollama_perf:
+                logger.info(
+                    "[gm_supervisor_node] Ollama telemetry: %s",
+                    ollama_perf,
+                )
+            _, new_ollama_lines = drain_ollama_logs_since(ollama_cursor, high_signal_only=True)
+            for o_line in new_ollama_lines[-6:]:
+                if "truncated = 1" in o_line:
+                    logger.warning("[gm_supervisor_node] Ollama slot truncated: %s", o_line)
             tool_calls = getattr(response, "tool_calls", None) or []
             if tool_calls:
                 logger.info(
@@ -469,9 +539,46 @@ def build_ai_gm_graph(
                 )
                 logger.debug("[gm_supervisor_node] Raw tool_calls=%r", tool_calls)
             else:
+                extracted_text = _extract_ai_message_text(response)
+                if not extracted_text and model is not None:
+                    logger.warning(
+                        "[gm_supervisor_node] LLM returned 0 chars of visible content after %d ms; retrying direct synthesis without tools...",
+                        llm_ms,
+                    )
+                    try:
+                        synthesis_prompt = HumanMessage(
+                            content=(
+                                "[System Synthesis Directive]: Using the session context and any tool results "
+                                "gathered above, write your direct, complete Markdown response to the user now."
+                            )
+                        )
+                        retry_resp = model.invoke(messages + [synthesis_prompt])
+                        if not isinstance(retry_resp, BaseMessage):
+                            retry_resp = AIMessage(content=str(retry_resp))
+                        extracted_text = _extract_ai_message_text(retry_resp)
+                        if extracted_text:
+                            response = AIMessage(content=extracted_text)
+                    except Exception as retry_exc:
+                        logger.warning(
+                            "[gm_supervisor_node] Direct synthesis retry failed: %s",
+                            retry_exc,
+                        )
+                elif extracted_text and not str(getattr(response, "content", "") or "").strip():
+                    response = AIMessage(content=extracted_text)
+
+                if not _extract_ai_message_text(response):
+                    # Ensure we never append a 0-char AIMessage that leaves the turn without a reply
+                    trigger_summary = str((state.get("trigger_event") or {}).get("content") or "").strip()
+                    fallback_note = (
+                        f"*[AI GM Note ({cfg.provider}/{cfg.model_id})]*: "
+                        "The model reached its generation limit before completing a visible reply. "
+                        f"Please re-send or refine your prompt (`{trigger_summary[:80]}`)."
+                    )
+                    response = AIMessage(content=fallback_note)
+
                 logger.info(
                     "[gm_supervisor_node] LLM generated response in %d ms (%d chars)",
-                    llm_ms,
+                    int((time.perf_counter() - t0) * 1000.0),
                     len(str(response.content or "")),
                 )
                 logger.debug(
@@ -519,6 +626,23 @@ def build_ai_gm_graph(
                 "trigger_scenario_beat",
             }:
                 t_args["session_id"] = session_id
+
+            # Normalize list/non-string arguments emitted by local models (e.g. `query=[]`)
+            for str_key in (
+                "query",
+                "character_name_or_id",
+                "npc_id",
+                "scope",
+                "task_slug",
+                "custom_context",
+                "description",
+                "theme",
+                "question",
+            ):
+                if str_key in t_args and isinstance(t_args[str_key], list):
+                    t_args[str_key] = " ".join(
+                        str(item) for item in t_args[str_key] if item is not None
+                    )
 
             redacted_args_json = redact_sensitive_text(json.dumps(t_args))
             with span_scope(f"mcp.tool.{t_name}", new_lineage_id=f"tool-{t_id}") as tool_span_id:
@@ -617,11 +741,14 @@ def build_ai_gm_graph(
         messages = state.get("messages") or []
         reply_text = ""
         for msg in reversed(messages):
-            if isinstance(msg, AIMessage) and msg.content:
-                reply_text = (
-                    msg.content if isinstance(msg.content, str) else json.dumps(msg.content)
-                )
+            if isinstance(msg, HumanMessage):
+                # Never walk backwards past the current turn's HumanMessage boundary
                 break
+            if isinstance(msg, AIMessage):
+                candidate = _extract_ai_message_text(msg)
+                if candidate:
+                    reply_text = candidate
+                    break
 
         channel = "GM_WHISPER" if operating_mode == "co_pilot" else "IN_CHARACTER"
         invocations = list(state.get("tool_invocations") or [])

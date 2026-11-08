@@ -266,6 +266,9 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
         ollama_cfg = SessionLlmConfig(provider="ollama", model_id="gemma4:12b")
         ollama_model = build_gm_chat_model(ollama_cfg)
         assert getattr(ollama_model, "model", None) == "gemma4:12b"
+        assert getattr(ollama_model, "num_ctx", None) == 16384
+        assert getattr(ollama_model, "num_predict", None) == 2048
+        assert getattr(ollama_model, "reasoning", None) is False
     finally:
         if prev_ssl_cert is None:
             os.environ.pop("SSL_CERT_FILE", None)
@@ -373,6 +376,12 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
         {"session_id": sid, "query": "setting for satya valkyrie"}
     )
     assert '<untrusted_player_document doc_id="doc_test_1"' in doc_out_multi
+
+    # Local Ollama models passing `query=[]` or `query=["surgeon"]` succeed without Pydantic string_type error
+    doc_out_empty_list = read_gm_documents.invoke({"session_id": sid, "query": []})
+    assert '<untrusted_player_document doc_id="doc_test_1"' in doc_out_empty_list
+    doc_out_kw_list = read_gm_documents.invoke({"session_id": sid, "query": ["orbital", "surgeon"]})
+    assert '<untrusted_player_document doc_id="doc_test_1"' in doc_out_kw_list
 
     # New Phase 3 tools: character sheet lookup, combat tracker, persistent GM memory, and hybrid RAG omnisearch
     set_session_characters(
@@ -745,5 +754,127 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
         )
         assert res_proactive["status"] == "ok"
         assert "mysterious_stranger" in res_proactive["active_director_mandate"]
+
+        # Regression test: When a model calls `read_gm_documents` with `query=[]` and then
+        # emits a 0-char AIMessage on Turn 2, `gm_supervisor_node` retries synthesis without tools
+        # and `publish_gm_response` NEVER repeats Turn 1's stale reply.
+        class EmptyAfterToolModel:
+            def __init__(self) -> None:
+                self.bound = False
+
+            def bind_tools(self, _tools: list[Any]) -> EmptyAfterToolModel:
+                clone = EmptyAfterToolModel()
+                clone.bound = True
+                return clone
+
+            def invoke(self, messages: list[Any]) -> AIMessage:
+                last = messages[-1]
+                last_content = str(getattr(last, "content", ""))
+                if "Turn 1 greeting" in last_content:
+                    return AIMessage(content="Turn 1 initial reply: Welcome to the session.")
+                if "[System Synthesis Directive]" in last_content:
+                    return AIMessage(
+                        content="Turn 2 synthesized scenario: Satyang sanctuary under rival faction surveillance."
+                    )
+                if getattr(last, "type", "") == "human":
+                    return AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "read_gm_documents",
+                                "args": {"query": [], "session_id": "ep-stuck-regression"},
+                                "id": "call-empty-q",
+                            }
+                        ],
+                    )
+                # Simulate truncated 0-char response when tools are bound after ToolMessage
+                return AIMessage(content="")
+
+        set_session_gm_docs(
+            "ep-stuck-regression",
+            [
+                {
+                    "doc_id": "doc_satyang",
+                    "uploader_display_name": "Sean (GM)",
+                    "title": "Awakened Campaign Factions",
+                    "source_kind": "DIRECT_TEXT_UPLOAD",
+                    "is_persistent": True,
+                    "sanitized_content": "Satyang seeks embodied AGI with compassion and morality.",
+                }
+            ],
+        )
+        set_chat_model_override(EmptyAfterToolModel())
+        turn1_res = handle_ai_gm_event(
+            AiGmTurnEventPayload(
+                session_id="ep-stuck-regression",
+                operating_mode="AUTONOMOUS",
+                context_text="Turn 1 greeting",
+            ),
+            authorization="Bearer satya_gm_secret_dev_token",
+        )
+        assert turn1_res["final_reply"] == "Turn 1 initial reply: Welcome to the session."
+
+        turn2_res = handle_ai_gm_event(
+            AiGmTurnEventPayload(
+                session_id="ep-stuck-regression",
+                operating_mode="AUTONOMOUS",
+                context_text="Can you flesh out a Satyang sanctuary scenario with plot beats?",
+            ),
+            authorization="Bearer satya_gm_secret_dev_token",
+        )
+        assert turn2_res["final_reply"] != turn1_res["final_reply"]
+        assert "Satyang sanctuary under rival faction surveillance" in turn2_res["final_reply"]
+
+        # Verify Ollama supervisor env builder, log ring buffer, and /internal/ai-gm/ollama-logs endpoint
+        from satya_ml.ai_gm.ollama_runner import (
+            build_recommended_ollama_env,
+            drain_ollama_logs_since,
+            format_ollama_response_telemetry,
+            get_ollama_log_cursor,
+            record_ollama_log_line,
+        )
+        from satya_ml.ai_gm.server import get_ollama_logs_endpoint
+
+        _, applied_env = build_recommended_ollama_env({"num_ctx": 16384}, base_env={})
+        assert applied_env["OLLAMA_NUM_PARALLEL"] == "1"
+        assert applied_env["OLLAMA_FLASH_ATTENTION"] == "1"
+        assert applied_env["OLLAMA_KV_CACHE_TYPE"] == "q8_0"
+        assert applied_env["OLLAMA_CONTEXT_LENGTH"] == "16384"
+
+        cur0 = get_ollama_log_cursor()
+        record_ollama_log_line(
+            "slot   operator(): id  0 | task 719 | new prompt, n_ctx_slot = 16384, task.n_tokens = 2854"
+        )
+        record_ollama_log_line(
+            "slot      release: id  0 | task 719 | stop processing: n_tokens = 3210, truncated = 0"
+        )
+        _, high_sig = drain_ollama_logs_since(cur0, high_signal_only=True)
+        assert len(high_sig) == 2
+        assert "n_ctx_slot = 16384" in high_sig[0]
+
+        logs_resp = get_ollama_logs_endpoint(
+            lines=10,
+            high_signal_only=True,
+            authorization="Bearer satya_gm_secret_dev_token",
+        )
+        assert logs_resp["line_count"] >= 2
+        assert any("n_ctx_slot = 16384" in ln for ln in logs_resp["lines"])
+
+        perf_str = format_ollama_response_telemetry(
+            AIMessage(
+                content="ok",
+                response_metadata={
+                    "done_reason": "stop",
+                    "prompt_eval_count": 2000,
+                    "prompt_eval_duration": 2_000_000_000,
+                    "eval_count": 100,
+                    "eval_duration": 2_000_000_000,
+                },
+            )
+        )
+        assert perf_str is not None
+        assert "done_reason=stop" in perf_str
+        assert "prompt_tokens=2000" in perf_str
+        assert "eval_tokens=100" in perf_str
     finally:
         set_chat_model_override(None)

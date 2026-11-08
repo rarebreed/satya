@@ -58,6 +58,9 @@ class SessionLlmConfig:
     vision_model_id: str | None = "qwen2.5vl:7b"
     temperature: float = 0.35
     base_url: str | None = "http://127.0.0.1:11434"
+    num_ctx: int = 16384
+    num_predict: int = 2048
+    reasoning: bool | None = False
     # Ephemeral BYOK key injected per-turn from satya-signaling memory; excluded from repr().
     api_key: str | None = field(default=None, repr=False)
 
@@ -79,6 +82,9 @@ def build_gm_chat_model(cfg: SessionLlmConfig, *, for_vision: bool = False) -> A
             model=target_model,
             base_url=cfg.base_url or os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434"),
             temperature=cfg.temperature,
+            num_ctx=cfg.num_ctx,
+            num_predict=cfg.num_predict,
+            reasoning=cfg.reasoning,
         )
 
     if cfg.provider == "google_genai":

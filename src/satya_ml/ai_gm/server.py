@@ -14,6 +14,11 @@ from pydantic import BaseModel, Field
 
 from satya_ml.ai_gm.graph import build_ai_gm_graph
 from satya_ml.ai_gm.models import SessionLlmConfig, redact_api_key
+from satya_ml.ai_gm.ollama_runner import (
+    ensure_ollama_running_and_logged,
+    get_logs_dir,
+    get_recent_ollama_logs,
+)
 from satya_ml.ai_gm.telemetry import (
     SatyaContextLogFormatter,
     SatyaTurnLogBufferHandler,
@@ -29,7 +34,7 @@ logger = logging.getLogger("satya_ml.ai_gm.server")
 
 
 def configure_ai_gm_logging(level_override: str | None = None) -> str:
-    """Configure structured console logging and turn log buffering for the Satya AI GM LangGraph service.
+    """Configure structured console logging, `data/logs/ai-gm.log` file persistence, and turn log buffering.
 
     Precedence:
     1. Explicit `level_override` argument (e.g. from `--log-level` or `--debug`)
@@ -48,10 +53,15 @@ def configure_ai_gm_logging(level_override: str | None = None) -> str:
     satya_logger = logging.getLogger("satya_ml")
     satya_logger.setLevel(min(numeric_level, logging.INFO))
     has_stream = False
+    has_file = False
     has_buffer = False
     for h in satya_logger.handlers:
         if isinstance(h, SatyaTurnLogBufferHandler):
             has_buffer = True
+        elif isinstance(h, logging.FileHandler):
+            has_file = True
+            h.setLevel(numeric_level)
+            h.setFormatter(SatyaContextLogFormatter())
         elif isinstance(h, logging.StreamHandler):
             has_stream = True
             h.setLevel(numeric_level)
@@ -62,6 +72,16 @@ def configure_ai_gm_logging(level_override: str | None = None) -> str:
         stream_handler.setLevel(numeric_level)
         stream_handler.setFormatter(SatyaContextLogFormatter())
         satya_logger.addHandler(stream_handler)
+
+    if not has_file:
+        try:
+            ai_gm_log_path = get_logs_dir() / "ai-gm.log"
+            file_handler = logging.FileHandler(ai_gm_log_path, encoding="utf-8")
+            file_handler.setLevel(numeric_level)
+            file_handler.setFormatter(SatyaContextLogFormatter())
+            satya_logger.addHandler(file_handler)
+        except OSError:
+            pass
 
     if not has_buffer:
         satya_logger.addHandler(SatyaTurnLogBufferHandler())
@@ -157,6 +177,17 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "satya-ai-gm"}
 
 
+@app.get("/internal/ai-gm/ollama-logs")
+def get_ollama_logs_endpoint(
+    lines: int = 100,
+    high_signal_only: bool = False,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Return recent `ollama serve` logs collected into `data/logs/ollama.log` and the in-memory ring buffer."""
+    _verify_service_auth(authorization)
+    return get_recent_ollama_logs(limit=lines, high_signal_only=high_signal_only)
+
+
 @app.post("/internal/ai-gm/events")
 def handle_ai_gm_event(
     payload: AiGmTurnEventPayload,
@@ -203,6 +234,14 @@ def handle_ai_gm_event(
         or file_cfg.get("ollama_base_url")
         or "http://127.0.0.1:11434"
     )
+    num_ctx = int(p_cfg.get("num_ctx") or file_cfg.get("num_ctx") or 16384)
+    num_predict = int(p_cfg.get("num_predict") or file_cfg.get("num_predict") or 2048)
+    raw_reasoning = (
+        p_cfg.get("reasoning")
+        if "reasoning" in p_cfg
+        else file_cfg.get("reasoning", False)
+    )
+    reasoning: bool | None = bool(raw_reasoning) if raw_reasoning is not None else False
 
     effective_actor = payload.trigger_actor or payload.actor
     effective_content = payload.context_text if payload.context_text is not None else payload.content
@@ -219,6 +258,9 @@ def handle_ai_gm_event(
         vision_model_id=vision_model_id,
         temperature=temperature,
         base_url=base_url,
+        num_ctx=num_ctx,
+        num_predict=num_predict,
+        reasoning=reasoning,
         api_key=raw_provider_key,
     )
 
@@ -341,12 +383,16 @@ def handle_scenario_beat(
         set_session_scenario_director(payload.session_id, updates)
 
     file_cfg = load_ai_gm_toml_config()
+    raw_reasoning = file_cfg.get("reasoning", False)
     llm_cfg = SessionLlmConfig(
         provider=str(payload.provider or file_cfg.get("default_provider") or "ollama"),  # type: ignore[arg-type]
         model_id=str(payload.model_id or file_cfg.get("reasoning_model") or "gemma4:12b"),
         vision_model_id=str(file_cfg.get("vision_model") or "gemma4:12b"),
         temperature=float(file_cfg.get("temperature") or 0.35),
         base_url=str(file_cfg.get("ollama_base_url") or "http://127.0.0.1:11434"),
+        num_ctx=int(file_cfg.get("num_ctx") or 16384),
+        num_predict=int(file_cfg.get("num_predict") or 2048),
+        reasoning=bool(raw_reasoning) if raw_reasoning is not None else False,
         api_key=x_satya_provider_key if isinstance(x_satya_provider_key, str) else None,
     )
     graph = build_ai_gm_graph(
@@ -405,6 +451,16 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Explicit log level (debug, info, warning, error)",
     )
+    parser.add_argument(
+        "--restart-ollama",
+        action="store_true",
+        help="Restart any existing `ollama` process and launch a managed `ollama serve` capturing stdout/stderr into data/logs/ollama.log",
+    )
+    parser.add_argument(
+        "--no-manage-ollama",
+        action="store_true",
+        help="Disable automatic `ollama serve` detection/startup and log collection",
+    )
     args = parser.parse_args(argv)
     level_override = "DEBUG" if args.debug else args.log_level
     uvicorn_log_level = configure_ai_gm_logging(level_override)
@@ -412,12 +468,20 @@ def main(argv: list[str] | None = None) -> None:
     host = os.environ.get("SATYA_AI_GM_HOST", "127.0.0.1")
     port = int(os.environ.get("SATYA_AI_GM_PORT", "8090"))
     file_cfg = load_ai_gm_toml_config()
+    default_provider = str(file_cfg.get("default_provider", "ollama"))
+    if default_provider == "ollama" and not args.no_manage_ollama:
+        ollama_url = str(file_cfg.get("ollama_base_url") or os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434")
+        ensure_ollama_running_and_logged(
+            base_url=ollama_url,
+            file_cfg=file_cfg,
+            restart_if_running=bool(args.restart_ollama),
+        )
     logger.info(
         "Starting Satya AI GM server on http://%s:%d (log_level=%s, default_model=%s/%s)",
         host,
         port,
         uvicorn_log_level.upper(),
-        file_cfg.get("default_provider", "ollama"),
+        default_provider,
         file_cfg.get("reasoning_model", "gemma4:12b"),
     )
     uvicorn.run(

@@ -781,7 +781,10 @@ def format_gm_document_block(d: dict[str, Any]) -> str:
 
 
 @tool
-def read_gm_documents(session_id: str = "default", query: str | None = None) -> str:
+def read_gm_documents(
+    session_id: str = "default",
+    query: str | list[str] | None = None,
+) -> str:
     """Read sanitized `GM_ONLY` documents (character dossiers, backstories, Google Docs/Sheets) uploaded to the GM in this session."""
     docs = get_session_gm_docs(session_id)
     if not docs and httpx is not None:
@@ -801,7 +804,12 @@ def read_gm_documents(session_id: str = "default", query: str | None = None) -> 
     if not docs:
         return f"No GM_ONLY documents have been uploaded for session '{session_id}'."
 
-    kw = (query or "").strip().lower()
+    raw_query = (
+        " ".join(str(x) for x in query if x is not None)
+        if isinstance(query, list)
+        else str(query or "")
+    )
+    kw = raw_query.strip().lower()
     keywords = [
         w.strip(".,!?:;\"'()[]{}").lower()
         for w in kw.replace("?", " ").split()
@@ -819,7 +827,10 @@ def read_gm_documents(session_id: str = "default", query: str | None = None) -> 
 
     if not blocks:
         blocks = [format_gm_document_block(d) for d in docs]
-    return "\n\n".join(blocks[:6])
+    combined = "\n\n".join(blocks[:6])
+    if len(combined) > 3600:
+        return combined[:3600] + "\n...[truncated — call `search_gm_memory_and_docs` for specific sections]..."
+    return combined
 
 
 @tool
@@ -995,18 +1006,23 @@ def upsert_gm_memory(
 
 @tool
 def search_gm_memory_and_docs(
-    query: str,
+    query: str | list[str] = "",
     scope: str = "ALL",
     session_id: str = "default",
 ) -> str:
     """Hybrid RAG + Omnisearch across Persistent GM Memory Notes, chunked `GM_ONLY` Documents, Rules Book chapters, bound Character Sheets, Combat Tracker, and Tactical Map."""
+    query_str = (
+        " ".join(str(x) for x in query if x is not None)
+        if isinstance(query, list)
+        else str(query or "")
+    )
     norm_scope = (scope or "ALL").strip().upper()
     if httpx is not None:
         try:
             with httpx.Client(timeout=2.5) as client:
                 resp = client.get(
                     f"{_signaling_base_url()}/api/gm/sessions/{session_id}/lookup",
-                    params={"q": query, "scope": norm_scope},
+                    params={"q": query_str, "scope": norm_scope},
                     headers=_gm_headers(),
                 )
                 if resp.status_code == 200:
@@ -1014,25 +1030,26 @@ def search_gm_memory_and_docs(
                     hits = list(data.get("hits") or [])
                     if hits:
                         lines: list[str] = []
-                        for h in hits[:8]:
+                        for h in hits[:6]:
                             kind = h.get("source_kind", "SOURCE")
                             title = h.get("title", "Untitled")
                             persist_tag = " [PERSISTENT]" if h.get("is_persistent") else ""
-                            snippet = h.get("snippet", "")
+                            snippet = str(h.get("snippet", ""))[:600]
                             if kind == "GM_DOCUMENT":
                                 snippet = (
                                     f'<untrusted_player_document doc_id="{h.get("item_id") or h.get("source_id")}" '
                                     f'title="{title}">\n{snippet}\n</untrusted_player_document>'
                                 )
                             lines.append(f"[{kind}{persist_tag} — {title}]: {snippet}")
-                        return "\n\n".join(lines)
+                        joined = "\n\n".join(lines)
+                        return joined[:3200]
         except Exception:
             pass
 
     # Local chunked BM25/keyword fallback across cached GM memories, GM docs, character sheets, combat, and rules
     keywords = [
         w.strip(".,!?:;\"'()[]{}").lower()
-        for w in query.replace("?", " ").split()
+        for w in query_str.replace("?", " ").split()
         if len(w.strip(".,!?:;\"'()[]{}")) >= 2
     ]
     results: list[tuple[int, str]] = []
@@ -1097,16 +1114,16 @@ def search_gm_memory_and_docs(
                 )
             )
 
-    if norm_scope in {"ALL", "RULES"} and query.strip():
-        rules_excerpt = query_satya_rules.invoke({"query": query})
+    if norm_scope in {"ALL", "RULES"} and query_str.strip():
+        rules_excerpt = query_satya_rules.invoke({"query": query_str})
         if rules_excerpt:
             results.append((1, str(rules_excerpt)[:1500]))
 
     if not results:
-        return f"No GM memory, document, character, or rules entries matched '{query}' (scope={norm_scope})."
+        return f"No GM memory, document, character, or rules entries matched '{query_str}' (scope={norm_scope})."
 
     results.sort(key=lambda item: item[0], reverse=True)
-    return "\n\n".join(text for _, text in results[:6])
+    return "\n\n".join(text for _, text in results[:6])[:3200]
 
 
 # ============================================================================

@@ -11,6 +11,21 @@ reasoning_model = "gemma4:12b"
 vision_model = "gemma4:12b"
 persona_id = "harsh-reality-arbiter"
 temperature = 0.35
+# Ollama context window size (`num_ctx`) and max generated tokens (`num_predict`).
+# Ollama defaults `n_ctx_slot` to 4096 when `num_ctx` is omitted, which causes models like `gemma4:12b`
+# to hit `n_tokens = 4095, truncated = 1` inside their thinking trace after tool calls and emit 0 chars of content.
+num_ctx = 16384
+num_predict = 2048
+# Disable unbounded hidden thinking tokens (`think: false`) by default on local Ollama turns so `gemma4:12b`
+# emits tool calls and Markdown replies directly in `message.content` without starving the context window.
+reasoning = false
+# Tuned environment defaults applied when `pixi run serve-ai-gm` auto-starts a managed `ollama serve` subprocess
+# (ideal for 16 GB VRAM GPUs like the AMD Radeon RX 7800 XT; logs redirected to `data/logs/ollama.log`).
+ollama_num_parallel = 1
+ollama_max_loaded_models = 1
+ollama_flash_attention = 1
+ollama_kv_cache_type = "q8_0"
+ollama_keep_alive = "30m"
 # Logging verbosity for `satya_ml.ai_gm` ("debug", "info", "warning", or "error"; overridden by `SATYA_AI_GM_LOG_LEVEL` or `--debug`).
 log_level = "info"
 # TCP connect timeout (milliseconds) when `satya-signaling` connects to the FastAPI AI GM service.
