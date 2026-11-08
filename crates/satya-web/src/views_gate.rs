@@ -13,6 +13,16 @@ const CHAT_FILTER_SPECS: &[(&str, &str, &str)] = &[
     ("filter-msg-system", "SYSTEM", "System (RUST/WASM)"),
 ];
 
+/// Static table of visual theme swatch chips (`(theme_id, short_label, bg_hex, accent_hex)`).
+const THEME_SWATCH_SPECS: &[(&str, &str, &str, &str)] = &[
+    ("obsidian", "Obsidian", "#0b0e14", "#38bdf8"),
+    ("amber-hud", "Amber HUD", "#090806", "#f59e0b"),
+    ("parchment", "Parchment", "#f5efe2", "#b45309"),
+    ("cyberpunk", "Cyberpunk", "#080412", "#f43f5e"),
+    ("ranger", "Ranger", "#080f0b", "#34d399"),
+    ("dusk-orange", "Dusk Orange", "#110a08", "#fb923c"),
+];
+
 /// Static table of quick-fill demo accounts for testing TTRPG and Meeting sessions.
 const DEMO_ACCOUNT_SPECS: &[(&str, &str, &str, &str)] = &[
     ("gm_sean", "satya-truth-2026", "Sean (GM)", "GM: gm_sean"),
@@ -164,6 +174,137 @@ pub fn HeaderBar() -> impl IntoView {
                                 style="display: none;"
                             >
                                 <div class="menu-section-title">"Settings"</div>
+                                <button
+                                    type="button"
+                                    id="btn-menu-toggle-appearance-settings"
+                                    class="btn btn-sm btn-secondary"
+                                    onclick="window.satyaToggleAppearanceSettings()"
+                                    on:click=move |_| wasm_client::satya_toggle_appearance_settings()
+                                >
+                                    "Appearance & Theme"
+                                </button>
+                                <div
+                                    id="menu-appearance-settings-panel"
+                                    class="menu-chat-settings-panel"
+                                    style="display: none;"
+                                >
+                                    <span class="filter-label">"Theme Palette:"</span>
+                                    <div id="appearance-swatch-grid" class="theme-swatch-grid">
+                                        {THEME_SWATCH_SPECS
+                                            .iter()
+                                            .copied()
+                                            .map(|(theme_id, short_label, bg_hex, accent_hex)| {
+                                                let btn_id = format!("btn-theme-swatch-{theme_id}");
+                                                let is_default = theme_id == "obsidian";
+                                                let btn_class = if is_default {
+                                                    "theme-swatch-btn active"
+                                                } else {
+                                                    "theme-swatch-btn"
+                                                };
+                                                let pressed = if is_default { "true" } else { "false" };
+                                                let onclick_js =
+                                                    format!("window.satyaSelectThemePreset('{theme_id}')");
+                                                let dot_style = format!(
+                                                    "background: linear-gradient(135deg, {bg_hex} 50%, {accent_hex} 50%);"
+                                                );
+                                                view! {
+                                                    <button
+                                                        type="button"
+                                                        id=btn_id
+                                                        class=btn_class
+                                                        aria-pressed=pressed
+                                                        onclick=onclick_js
+                                                        on:click=move |_| {
+                                                            wasm_client::satya_select_theme_preset(
+                                                                theme_id.to_string(),
+                                                            )
+                                                        }
+                                                    >
+                                                        <span class="theme-swatch-dot" style=dot_style></span>
+                                                        <span>{short_label}</span>
+                                                    </button>
+                                                }
+                                            })
+                                            .collect_view()}
+                                    </div>
+                                    <label for="menu-theme-select">
+                                        <span>"Color Theme"</span>
+                                        <select
+                                            id="menu-theme-select"
+                                            name="menu_theme_select"
+                                            onchange="window.satyaApplyAppearanceSettings()"
+                                            on:change=move |_| wasm_client::satya_apply_appearance_settings()
+                                        >
+                                            {wasm_client::APPEARANCE_THEME_OPTIONS
+                                                .iter()
+                                                .copied()
+                                                .map(|(val, label)| {
+                                                    view! { <option value=val>{label}</option> }
+                                                })
+                                                .collect_view()}
+                                        </select>
+                                    </label>
+                                    <label for="menu-density-select">
+                                        <span>"UI Density & Border Padding"</span>
+                                        <select
+                                            id="menu-density-select"
+                                            name="menu_density_select"
+                                            onchange="window.satyaApplyAppearanceSettings()"
+                                            on:change=move |_| wasm_client::satya_apply_appearance_settings()
+                                        >
+                                            {wasm_client::APPEARANCE_DENSITY_OPTIONS
+                                                .iter()
+                                                .copied()
+                                                .map(|(val, label)| {
+                                                    view! { <option value=val>{label}</option> }
+                                                })
+                                                .collect_view()}
+                                        </select>
+                                    </label>
+                                    <label for="menu-corners-select">
+                                        <span>"Corner Radius"</span>
+                                        <select
+                                            id="menu-corners-select"
+                                            name="menu_corners_select"
+                                            onchange="window.satyaApplyAppearanceSettings()"
+                                            on:change=move |_| wasm_client::satya_apply_appearance_settings()
+                                        >
+                                            {wasm_client::APPEARANCE_CORNERS_OPTIONS
+                                                .iter()
+                                                .copied()
+                                                .map(|(val, label)| {
+                                                    view! { <option value=val>{label}</option> }
+                                                })
+                                                .collect_view()}
+                                        </select>
+                                    </label>
+                                    <label for="menu-font-select">
+                                        <span>"Font Family"</span>
+                                        <select
+                                            id="menu-font-select"
+                                            name="menu_font_select"
+                                            onchange="window.satyaApplyAppearanceSettings()"
+                                            on:change=move |_| wasm_client::satya_apply_appearance_settings()
+                                        >
+                                            {wasm_client::APPEARANCE_FONT_OPTIONS
+                                                .iter()
+                                                .copied()
+                                                .map(|(val, label)| {
+                                                    view! { <option value=val>{label}</option> }
+                                                })
+                                                .collect_view()}
+                                        </select>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        id="btn-reset-appearance-defaults"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaResetAppearanceSettings()"
+                                        on:click=move |_| wasm_client::satya_reset_appearance_settings()
+                                    >
+                                        "Reset Appearance Defaults"
+                                    </button>
+                                </div>
                                 <button
                                     type="button"
                                     id="btn-menu-toggle-chat-settings"

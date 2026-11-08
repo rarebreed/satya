@@ -24,11 +24,57 @@ pub use views_workspace::*;
 
 use leptos::prelude::*;
 
-/// Minimal 4-line ES module loader that boots the compiled `satya-web` Rust/Wasm module
-/// (`/pkg/satya_web.js` + `/pkg/satya_web_bg.wasm`), invoking `#[wasm_bindgen(start)]`.
+/// Minimal ES module loader that restores saved appearance attributes from `localStorage`,
+/// provides instant pre-hydration `window.satya*Appearance*` bindings, and boots `/pkg/satya_web.js`.
 const WASM_BOOTSTRAP_LOADER: &str = r#"
+const SATYA_APPEARANCE_SPEC = [
+    ["theme", "data-theme", "menu-theme-select", "obsidian"],
+    ["density", "data-density", "menu-density-select", "default"],
+    ["corners", "data-corners", "menu-corners-select", "default"],
+    ["font", "data-font", "menu-font-select", "sans"],
+];
+function satyaSyncAppearance(save) {
+    const r = document.documentElement;
+    for (const [k, attr, selId, defVal] of SATYA_APPEARANCE_SPEC) {
+        const el = document.getElementById(selId);
+        let val = save && el ? el.value : null;
+        if (!val) {
+            try { val = localStorage.getItem("satya.appearance." + k); } catch (_) {}
+        }
+        val = val || defVal;
+        r.setAttribute(attr, val);
+        if (el) el.value = val;
+        if (save) {
+            try { localStorage.setItem("satya.appearance." + k, val); } catch (_) {}
+        }
+    }
+    const activeTheme = r.getAttribute("data-theme") || "obsidian";
+    for (const btn of document.querySelectorAll(".theme-swatch-btn")) {
+        const isAct = btn.id === "btn-theme-swatch-" + activeTheme;
+        btn.classList.toggle("active", isAct);
+        btn.setAttribute("aria-pressed", isAct ? "true" : "false");
+    }
+}
+window.satyaToggleAppearanceSettings = () => {
+    const p = document.getElementById("menu-appearance-settings-panel");
+    if (p) p.style.display = p.style.display === "none" ? "flex" : "none";
+};
+window.satyaApplyAppearanceSettings = () => satyaSyncAppearance(true);
+window.satyaSelectThemePreset = (t) => {
+    const el = document.getElementById("menu-theme-select");
+    if (el) el.value = t;
+    satyaSyncAppearance(true);
+};
+window.satyaResetAppearanceSettings = () => {
+    for (const [, , selId, defVal] of SATYA_APPEARANCE_SPEC) {
+        const el = document.getElementById(selId);
+        if (el) el.value = defVal;
+    }
+    satyaSyncAppearance(true);
+};
+satyaSyncAppearance(false);
 import init from "/pkg/satya_web.js";
-init().catch((err) => console.warn("Satya Wasm module init:", err));
+init().then(() => satyaSyncAppearance(false)).catch((err) => console.warn("Satya Wasm module init:", err));
 "#;
 
 /// Renders the full-stack Leptos application shell for Satya WebRTC, Chat & Avro Telemetry.
@@ -47,7 +93,13 @@ pub fn SatyaApp() -> impl IntoView {
 
     view! {
         <!DOCTYPE html>
-        <html lang="en">
+        <html
+            lang="en"
+            data-theme="obsidian"
+            data-density="default"
+            data-corners="default"
+            data-font="sans"
+        >
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>

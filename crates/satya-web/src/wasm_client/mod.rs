@@ -77,6 +77,7 @@ macro_rules! bind_window_callbacks {
 #[wasm_bindgen(start)]
 pub fn start_satya_wasm_client() {
     register_window_bindings();
+    restore_saved_appearance_settings();
     let mode_raw = select_value("session-mode-select");
     let mode = parse_session_mode(&mode_raw);
     sync_role_options_for_mode(&mode_raw, None);
@@ -112,6 +113,10 @@ pub fn register_window_bindings() {
         "satyaToggleSettingsMenu" => satya_toggle_settings_menu(),
         "satyaToggleChatSettings" => satya_toggle_chat_settings(),
         "satyaToggleAiGmSettings" => satya_toggle_ai_gm_settings(),
+        "satyaToggleAppearanceSettings" => satya_toggle_appearance_settings(),
+        "satyaApplyAppearanceSettings" => satya_apply_appearance_settings(),
+        "satyaSelectThemePreset" => satya_select_theme_preset(String),
+        "satyaResetAppearanceSettings" => satya_reset_appearance_settings(),
         "satyaAiGmProviderChanged" => satya_ai_gm_provider_changed(),
         "satyaMenuAiGmProviderChanged" => satya_menu_ai_gm_provider_changed(),
         "satyaUpdateSessionGmConfig" => satya_update_session_gm_config(),

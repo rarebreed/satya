@@ -661,4 +661,36 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
         parsed_dir["event_weights"]["thought_provoking_discussion"],
         0.0
     );
+
+    // Verify Appearance & Theme settings in Hamburger Menu + option normalizers
+    assert_eq!(wasm_client::normalize_theme_id("dusk-orange"), "dusk-orange");
+    assert_eq!(wasm_client::normalize_theme_id("parchment"), "parchment");
+    assert_eq!(wasm_client::normalize_theme_id("unknown-theme"), "obsidian");
+    assert_eq!(wasm_client::normalize_density_id("compact"), "compact");
+    assert_eq!(wasm_client::normalize_density_id("spacious"), "spacious");
+    assert_eq!(wasm_client::normalize_density_id("invalid"), "default");
+    assert_eq!(wasm_client::normalize_corners_id("sharp"), "sharp");
+    assert_eq!(wasm_client::normalize_corners_id("rounded"), "rounded");
+    assert_eq!(wasm_client::normalize_corners_id("invalid"), "default");
+    assert_eq!(wasm_client::normalize_font_id("mono"), "mono");
+    assert_eq!(wasm_client::normalize_font_id("serif"), "serif");
+    assert_eq!(wasm_client::normalize_font_id("invalid"), "sans");
+
+    assert!(html.contains(r#"id="btn-menu-toggle-appearance-settings""#));
+    assert!(html.contains(r#"id="menu-appearance-settings-panel""#));
+    assert!(html.contains(r#"id="appearance-swatch-grid""#));
+    for (theme_id, _) in wasm_client::APPEARANCE_THEME_OPTIONS {
+        assert!(html.contains(&format!(r#"id="btn-theme-swatch-{theme_id}""#)));
+        assert!(html.contains(&format!(r#"value="{theme_id}""#)));
+    }
+    assert!(html.contains(r#"id="menu-theme-select""#));
+    assert!(html.contains(r#"id="menu-density-select""#));
+    assert!(html.contains(r#"id="menu-corners-select""#));
+    assert!(html.contains(r#"id="menu-font-select""#));
+    assert!(html.contains(r#"id="btn-reset-appearance-defaults""#));
+    assert!(html.contains(r#"html[data-theme="dusk-orange"]"#));
+    assert!(html.contains(r#"html[data-theme="parchment"]"#));
+    assert!(html.contains(r#"html[data-density="compact"]"#));
+    assert!(html.contains(r#"html[data-corners="sharp"]"#));
+    assert!(html.contains(r#"html[data-font="mono"]"#));
 }

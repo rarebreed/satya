@@ -2,10 +2,14 @@
 //! and ephemeral BYOK AI GM session configuration handlers.
 
 use crate::wasm_client::dom::{
-    EYE_OFF_SVG, EYE_OPEN_SVG, fetch_json, get_element, input_value, select_value, set_display,
-    set_feedback, set_input_value, set_text, toggle_element_display,
+    EYE_OFF_SVG, EYE_OPEN_SVG, fetch_json, get_element, input_value, local_storage_get,
+    local_storage_set, select_value, set_display, set_feedback, set_input_value,
+    set_root_data_attribute, set_select_value, set_text, toggle_element_display,
 };
-use crate::wasm_client::options::default_model_for_provider;
+use crate::wasm_client::options::{
+    APPEARANCE_THEME_OPTIONS, default_model_for_provider, normalize_corners_id,
+    normalize_density_id, normalize_font_id, normalize_theme_id,
+};
 use crate::wasm_client::state::with_state;
 use satya_schema::AiGmProviderConfig;
 use wasm_bindgen::JsCast;
@@ -81,6 +85,91 @@ pub fn satya_toggle_chat_settings() {
 #[wasm_bindgen]
 pub fn satya_toggle_ai_gm_settings() {
     let _ = toggle_element_display("menu-ai-gm-settings-panel", "flex");
+}
+
+/// Toggles the `Settings -> Appearance & Theme` sub-panel (`#menu-appearance-settings-panel`) inside the top-bar Hamburger Menu.
+#[wasm_bindgen]
+pub fn satya_toggle_appearance_settings() {
+    let _ = toggle_element_display("menu-appearance-settings-panel", "flex");
+}
+
+const STORAGE_KEY_THEME: &str = "satya.appearance.theme";
+const STORAGE_KEY_DENSITY: &str = "satya.appearance.density";
+const STORAGE_KEY_CORNERS: &str = "satya.appearance.corners";
+const STORAGE_KEY_FONT: &str = "satya.appearance.font";
+
+fn sync_theme_swatch_buttons(active_theme: &str) {
+    for (theme_id, _) in APPEARANCE_THEME_OPTIONS {
+        let btn_id = format!("btn-theme-swatch-{theme_id}");
+        if let Some(btn) = get_element(&btn_id) {
+            let is_active = *theme_id == active_theme;
+            btn.set_class_name(if is_active {
+                "theme-swatch-btn active"
+            } else {
+                "theme-swatch-btn"
+            });
+            let _ = btn.set_attribute("aria-pressed", if is_active { "true" } else { "false" });
+        }
+    }
+}
+
+fn apply_appearance_to_root(theme: &str, density: &str, corners: &str, font: &str) {
+    set_root_data_attribute("data-theme", theme);
+    set_root_data_attribute("data-density", density);
+    set_root_data_attribute("data-corners", corners);
+    set_root_data_attribute("data-font", font);
+    sync_theme_swatch_buttons(theme);
+}
+
+/// Restores saved appearance preferences (`theme`, `density`, `corners`, `font`) from browser
+/// `localStorage` onto `document.documentElement` and synchronizes the Hamburger Menu controls.
+pub fn restore_saved_appearance_settings() {
+    let theme = normalize_theme_id(&local_storage_get(STORAGE_KEY_THEME).unwrap_or_default());
+    let density = normalize_density_id(&local_storage_get(STORAGE_KEY_DENSITY).unwrap_or_default());
+    let corners = normalize_corners_id(&local_storage_get(STORAGE_KEY_CORNERS).unwrap_or_default());
+    let font = normalize_font_id(&local_storage_get(STORAGE_KEY_FONT).unwrap_or_default());
+
+    set_select_value("menu-theme-select", theme);
+    set_select_value("menu-density-select", density);
+    set_select_value("menu-corners-select", corners);
+    set_select_value("menu-font-select", font);
+    apply_appearance_to_root(theme, density, corners, font);
+}
+
+/// Reads `#menu-theme-select`, `#menu-density-select`, `#menu-corners-select`, and `#menu-font-select`,
+/// applies the normalized `data-*` attributes to `<html>`, and persists them to `localStorage`.
+#[wasm_bindgen]
+pub fn satya_apply_appearance_settings() {
+    let theme = normalize_theme_id(&select_value("menu-theme-select"));
+    let density = normalize_density_id(&select_value("menu-density-select"));
+    let corners = normalize_corners_id(&select_value("menu-corners-select"));
+    let font = normalize_font_id(&select_value("menu-font-select"));
+
+    local_storage_set(STORAGE_KEY_THEME, theme);
+    local_storage_set(STORAGE_KEY_DENSITY, density);
+    local_storage_set(STORAGE_KEY_CORNERS, corners);
+    local_storage_set(STORAGE_KEY_FONT, font);
+    apply_appearance_to_root(theme, density, corners, font);
+}
+
+/// Selects a color theme preset by ID (from a visual swatch chip), updates `#menu-theme-select`,
+/// and immediately applies and persists the updated appearance settings.
+#[wasm_bindgen]
+pub fn satya_select_theme_preset(theme_id: String) {
+    let theme = normalize_theme_id(&theme_id);
+    set_select_value("menu-theme-select", theme);
+    satya_apply_appearance_settings();
+}
+
+/// Resets color theme, UI density, corner radius, and font family to their canonical defaults
+/// (`obsidian`, `default`, `default`, `sans`) and persists the reset state.
+#[wasm_bindgen]
+pub fn satya_reset_appearance_settings() {
+    set_select_value("menu-theme-select", "obsidian");
+    set_select_value("menu-density-select", "default");
+    set_select_value("menu-corners-select", "default");
+    set_select_value("menu-font-select", "sans");
+    satya_apply_appearance_settings();
 }
 
 /// Updates `#ai-gm-model-input` with the recommended default model when `#ai-gm-provider-select` changes.

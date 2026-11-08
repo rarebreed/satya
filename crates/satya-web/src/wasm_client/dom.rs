@@ -40,6 +40,44 @@ pub(crate) fn get_element(id: &str) -> Option<Element> {
     document()?.get_element_by_id(id)
 }
 
+pub(crate) fn set_root_data_attribute(attr: &str, val: &str) {
+    if let Some(root) = document().and_then(|d| d.document_element()) {
+        let _ = root.set_attribute(attr, val);
+    }
+}
+
+pub(crate) fn local_storage_get(key: &str) -> Option<String> {
+    let win = window()?;
+    let storage = js_sys::Reflect::get(&win, &JsValue::from_str("localStorage")).ok()?;
+    if storage.is_null() || storage.is_undefined() {
+        return None;
+    }
+    let func = js_sys::Reflect::get(&storage, &JsValue::from_str("getItem"))
+        .ok()?
+        .dyn_into::<js_sys::Function>()
+        .ok()?;
+    func.call1(&storage, &JsValue::from_str(key))
+        .ok()
+        .and_then(|v| v.as_string())
+}
+
+pub(crate) fn local_storage_set(key: &str, val: &str) {
+    let Some(win) = window() else {
+        return;
+    };
+    let Ok(storage) = js_sys::Reflect::get(&win, &JsValue::from_str("localStorage")) else {
+        return;
+    };
+    if storage.is_null() || storage.is_undefined() {
+        return;
+    }
+    if let Ok(func) = js_sys::Reflect::get(&storage, &JsValue::from_str("setItem"))
+        .and_then(|v| v.dyn_into::<js_sys::Function>())
+    {
+        let _ = func.call2(&storage, &JsValue::from_str(key), &JsValue::from_str(val));
+    }
+}
+
 pub(crate) fn input_value(id: &str) -> String {
     let Some(el) = get_element(id) else {
         return String::new();

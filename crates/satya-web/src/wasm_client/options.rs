@@ -79,6 +79,66 @@ pub fn default_model_for_provider(provider: &str) -> &'static str {
 /// Static slice of `(value, label)` pairs used to populate `<select>` dropdown elements.
 pub type SelectOptionSlice = &'static [(&'static str, &'static str)];
 
+/// Canonical color theme options (`(theme_id, label)`) rendered in `Settings -> Appearance`.
+pub const APPEARANCE_THEME_OPTIONS: SelectOptionSlice = &[
+    ("obsidian", "Obsidian Default (Dark Slate & Cyan)"),
+    ("amber-hud", "Amber Terminal / Tactical HUD"),
+    ("parchment", "Solarized / Parchment Light"),
+    ("cyberpunk", "Cyberpunk Neon / Midnight Synth"),
+    ("ranger", "Forest / Ranger Green"),
+    ("dusk-orange", "Dusk Orange (Autumn & Purple)"),
+];
+
+/// Canonical UI density / spacing presets (`(density_id, label)`).
+pub const APPEARANCE_DENSITY_OPTIONS: SelectOptionSlice = &[
+    ("default", "Default Spacing"),
+    ("compact", "Compact (Tighter Padding & Gaps)"),
+    ("spacious", "Spacious (Generous Padding & Gaps)"),
+];
+
+/// Canonical corner radius style options (`(corners_id, label)`).
+pub const APPEARANCE_CORNERS_OPTIONS: SelectOptionSlice = &[
+    ("default", "Default Rounded (8–10px)"),
+    ("sharp", "Sharp / Tactical (2px)"),
+    ("rounded", "Soft / Pill-Edged (16px)"),
+];
+
+/// Canonical UI font family options (`(font_id, label)`).
+pub const APPEARANCE_FONT_OPTIONS: SelectOptionSlice = &[
+    ("sans", "Clean Sans-Serif (Inter / System)"),
+    ("mono", "Tactical Monospace (Consolas / Fira)"),
+    ("serif", "Editorial Serif (Georgia / Garamond)"),
+];
+
+/// Validates `raw` against `options`, returning the matching canonical key or `options[0].0`.
+fn normalize_from_options(raw: &str, options: SelectOptionSlice) -> &'static str {
+    let trimmed = raw.trim();
+    options
+        .iter()
+        .find_map(|(k, _)| (*k == trimmed).then_some(*k))
+        .unwrap_or(options[0].0)
+}
+
+/// Normalizes a theme identifier to one of [`APPEARANCE_THEME_OPTIONS`] (defaulting to `"obsidian"`).
+pub fn normalize_theme_id(raw: &str) -> &'static str {
+    normalize_from_options(raw, APPEARANCE_THEME_OPTIONS)
+}
+
+/// Normalizes a UI density identifier to one of [`APPEARANCE_DENSITY_OPTIONS`] (defaulting to `"default"`).
+pub fn normalize_density_id(raw: &str) -> &'static str {
+    normalize_from_options(raw, APPEARANCE_DENSITY_OPTIONS)
+}
+
+/// Normalizes a corner radius identifier to one of [`APPEARANCE_CORNERS_OPTIONS`] (defaulting to `"default"`).
+pub fn normalize_corners_id(raw: &str) -> &'static str {
+    normalize_from_options(raw, APPEARANCE_CORNERS_OPTIONS)
+}
+
+/// Normalizes a font family identifier to one of [`APPEARANCE_FONT_OPTIONS`] (defaulting to `"sans"`).
+pub fn normalize_font_id(raw: &str) -> &'static str {
+    normalize_from_options(raw, APPEARANCE_FONT_OPTIONS)
+}
+
 /// Returns the valid `(value, label)` option pairs for `#session-role-select`
 /// scoped to a given business mode option string (`"TTRPG"`, `"TTRPG_GM_AI"`, `"TTRPG_AI_GM"`, or `"MEETING"`).
 pub fn role_options_for_mode(mode_raw: &str) -> SelectOptionSlice {
