@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import threading
 import time
 from typing import Any
 
@@ -106,6 +107,18 @@ app = FastAPI(
 
 _SHARED_CHECKPOINTER = MemorySaver()
 _CHAT_MODEL_OVERRIDE: Any | None = None
+_SESSION_LOCKS_GUARD = threading.Lock()
+_SESSION_TURN_LOCKS: dict[str, threading.Lock] = {}
+
+
+def _get_session_lock(session_id: str) -> threading.Lock:
+    """Return a per-session lock so concurrent player events serialize cleanly against the checkpointer."""
+    with _SESSION_LOCKS_GUARD:
+        lock = _SESSION_TURN_LOCKS.get(session_id)
+        if lock is None:
+            lock = threading.Lock()
+            _SESSION_TURN_LOCKS[session_id] = lock
+        return lock
 
 
 def set_chat_model_override(model: Any | None) -> None:
@@ -134,6 +147,7 @@ class AiGmTurnEventPayload(BaseModel):
     context_text: str | None = None
     content: str | None = None
     roll_summary: str | None = None
+    force_resolve_turn: bool = False
     roster: list[dict[str, Any]] = Field(default_factory=list)
     provider: str | None = None
     model_id: str | None = None
@@ -316,6 +330,7 @@ def handle_ai_gm_event(
                 "channel_context": payload.channel_context,
                 "content": effective_content,
                 "roll_summary": payload.roll_summary,
+                "force_resolve_turn": payload.force_resolve_turn,
                 "operating_mode": op_mode,
                 "human_gm_user_id": payload.human_gm_user_id,
                 "trace_id": telemetry.trace_id,
@@ -325,17 +340,19 @@ def handle_ai_gm_event(
             "tool_invocations": [],
         }
 
-        result = graph.invoke(
-            initial_state,
-            config={"configurable": {"thread_id": payload.session_id}},
-        )
+        with _get_session_lock(payload.session_id):
+            result = graph.invoke(
+                initial_state,
+                config={"configurable": {"thread_id": payload.session_id}},
+            )
         elapsed_ms = int((time.perf_counter() - turn_t0) * 1000.0)
         tool_count = len(result.get("tool_invocations") or [])
         final_reply = result.get("final_reply") or ""
         logger.info(
-            "AI GM turn completed in %d ms: channel=%s tools_called=%d reply_chars=%d",
+            "AI GM turn completed in %d ms: channel=%s gate=%s tools_called=%d reply_chars=%d",
             elapsed_ms,
             result.get("final_channel"),
+            result.get("party_gate_status", "bypass"),
             tool_count,
             len(final_reply),
         )
@@ -348,6 +365,10 @@ def handle_ai_gm_event(
             "provider": llm_cfg.provider,
             "model_id": llm_cfg.model_id,
             "api_key_status": redact_api_key(x_satya_provider_key),
+            "party_gate_status": result.get("party_gate_status", "bypass"),
+            "awaiting_user_ids": list(result.get("awaiting_user_ids") or []),
+            "awaiting_display_names": list(result.get("awaiting_display_names") or []),
+            "npc_turn_summaries": list(result.get("npc_turn_summaries") or []),
             "final_channel": result.get("final_channel"),
             "final_reply": result.get("final_reply"),
             "active_director_mandate": result.get("active_director_mandate", ""),
@@ -422,10 +443,11 @@ def handle_scenario_beat(
             },
             "tool_invocations": [],
         }
-        result = graph.invoke(
-            initial_state,
-            config={"configurable": {"thread_id": payload.session_id}},
-        )
+        with _get_session_lock(payload.session_id):
+            result = graph.invoke(
+                initial_state,
+                config={"configurable": {"thread_id": payload.session_id}},
+            )
         return {
             "status": "ok",
             "session_id": payload.session_id,

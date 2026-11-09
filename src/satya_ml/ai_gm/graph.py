@@ -1,8 +1,10 @@
 """LangGraph state machine (`StateGraph`) for the Satya AI Game Master (AI GM).
 
-Implements the 4-node workflow:
-`sync_session_context` -> `gm_supervisor_node` <-> `tool_execution_node` -> `publish_gm_response`
-with per-session checkpointing (`MemorySaver`) and automatic `AiGmTrajectoryEvent` telemetry.
+Implements the 7-node workflow:
+`sync_session_context` -> `party_turn_gate_node` -> `scenario_director_node` ->
+`npc_action_resolution_node` -> `gm_supervisor_node` <-> `tool_execution_node` -> `publish_gm_response`
+with per-session checkpointing (`MemorySaver`), multi-player turn readiness barriers,
+autonomous NPC tick/reaction resolution, and automatic `AiGmTrajectoryEvent` telemetry.
 """
 
 from __future__ import annotations
@@ -22,6 +24,10 @@ from satya_ml.ai_gm.ollama_runner import (
     drain_ollama_logs_since,
     format_ollama_response_telemetry,
     get_ollama_log_cursor,
+)
+from satya_ml.ai_gm.party_coordinator import (
+    evaluate_party_turn_gate,
+    execute_ready_npc_actions,
 )
 from satya_ml.ai_gm.telemetry import (
     ensure_turn_context,
@@ -109,6 +115,11 @@ class AiGmSessionState(TypedDict, total=False):
     active_map: TacticalMapState | None
     scenario_director: dict[str, Any]
     active_director_mandate: str
+    pending_round_actions: dict[str, dict[str, Any]]
+    awaiting_user_ids: list[str]
+    awaiting_display_names: list[str]
+    party_gate_status: Literal["bypass", "waiting", "ready"]
+    npc_turn_summaries: list[dict[str, Any]]
     trigger_event: dict[str, Any]
     tool_invocations: list[dict[str, Any]]
     turn_started_ms: float
@@ -130,7 +141,10 @@ Rules:
 7. Out-of-Character (`OUT_OF_CHARACTER`) & Rules Q&A: When a player message is tagged `[OUT_OF_CHARACTER RULES / TABLE QUESTION]` (or asks how mechanics, combat, Count-Up Ticks, or `Tempo / Control / Force` pools work), answer their rules/table question directly and concisely as the GM without advancing story time or treating the question as an in-character action. Cite exact Satya formulas (`Tick_start = max(1, 15 - OODA)`, `Effective TC = max(1, Base TC - floor((T - B) / 2))`, `P_eff = T + C + F`, `Control` `Delta_ext = -(C - B)`, `Force` `+floor((F - B) / 2)` Shock/Damage) and explain how to select an **Action / Combat Technique** and **Tempo / Control / Force** split in the `Task Resolution & Action Pool` drawer.
 8. Combat "Action Mode" (Count-Up Tick Clock, Tactical Map & `Tempo / Control / Force` Pools): Whenever combat is active (`combat_active = true`), run the scene in **Action Mode**:
    - Display a concise Action Mode HUD callout (`> **[ACTION MODE · Window W · Tick T (X.Xs)]**`) showing who acts on the current tick, each combatant's `Next Action Tick` and tactical grid/zone coordinates, and the player's available **Tactical Pool** (`P_eff`, Neutral Baseline `B`, and ceilings `T_max / C_max / F_max`).
-   - Present concrete **Combat Technique + `T/C/F` split** options (e.g., `Snap Shot [Base 3 TC]`, `Combat Sighted Shot [Base 6 TC]`, `Cover Peek [Base 3 TC]`, `Thrust / Punch [Base 3 TC]`, `Grab / Takedown [Base 4 TC]`) and invite the player to either roll directly via the **Task Resolution & Action Pool** drawer or declare their technique and `Tempo / Control / Force` split in chat."""
+   - Present concrete **Combat Technique + `T/C/F` split** options (e.g., `Snap Shot [Base 3 TC]`, `Combat Sighted Shot [Base 6 TC]`, `Cover Peek [Base 3 TC]`, `Thrust / Punch [Base 3 TC]`, `Grab / Takedown [Base 4 TC]`) and invite the player to either roll directly via the **Task Resolution & Action Pool** drawer or declare their technique and `Tempo / Control / Force` split in chat.
+9. Multi-Player Party Coordination & Autonomous NPC Actions:
+   - When `[COMBINED PARTY TURN DECLARATIONS]` is present, address and adjudicate **every** listed player's declared action and `2d20` roll outcome in a cohesive scene narration so every player's agency impacts the scene.
+   - When `[NPC ACTION MODE RESOLUTION]` is present, incorporate the server-authoritative NPC `2d20` technique rolls and updated `NextTick` values into your narration. In non-combat scenes, use `[SCENE NPC REACTION & INTENT DIRECTIVE]` to have present NPCs react in-character and pursue their agendas."""
 
 _OOC_RULES_PATTERNS: tuple[str, ...] = (
     "how do we do combat",
@@ -329,7 +343,7 @@ def build_ai_gm_graph(
     tools: list[Any] | None = None,
     checkpointer: Any | None = None,
 ) -> Any:
-    """Build and compile the 4-node Satya AI GM LangGraph `StateGraph`."""
+    """Build and compile the 7-node Satya AI GM LangGraph `StateGraph`."""
     cfg = llm_config or SessionLlmConfig()
     active_tools = list(tools) if tools is not None else get_builtin_gm_tools()
     tool_map = {t.name: t for t in active_tools}
@@ -479,7 +493,9 @@ def build_ai_gm_graph(
                     catalog_header = "[GM Vault & Session Index]: " + " || ".join(index_parts)
                     prompt_text = f"{catalog_header}\n\n{prompt_text}"
 
-                new_messages.append(HumanMessage(content=prompt_text))
+                new_messages.append(
+                    HumanMessage(content=prompt_text, id=f"turn-hm-{uuid.uuid4().hex[:10]}")
+                )
                 logger.debug(
                     "[sync_session_context] Appended HumanMessage (%d history msgs): %s",
                     len(existing_msgs),
@@ -495,8 +511,73 @@ def build_ai_gm_graph(
                 "active_map": active_map,  # type: ignore[typeddict-item]
                 "messages": new_messages,
                 "tool_invocations": [],
+                "npc_turn_summaries": [],
                 "turn_started_ms": time.perf_counter() * 1000.0,
             }
+
+    def party_turn_gate_node(state: AiGmSessionState) -> dict[str, Any]:
+        session_id = state.get("session_id", "default")
+        ensure_turn_context(session_id)
+        operating_mode = state.get("operating_mode", "autonomous")
+        trigger = state.get("trigger_event") or {}
+        roster = list(state.get("roster") or [])
+        pending = dict(state.get("pending_round_actions") or {})
+        combat_tracker = get_session_combat_tracker(session_id)
+        with span_scope("party_turn_gate_node"):
+            decision = evaluate_party_turn_gate(
+                session_id=session_id,
+                operating_mode=operating_mode,
+                roster=roster,
+                trigger=trigger,
+                pending_round_actions=pending,
+                combat_tracker=combat_tracker,
+                is_ooc=is_ooc_or_rules_query(trigger),
+            )
+            gate_status = decision["status"]
+            out_updates: dict[str, Any] = {
+                "party_gate_status": gate_status,
+                "pending_round_actions": decision["pending_round_actions"],
+                "awaiting_user_ids": decision["awaiting_user_ids"],
+                "awaiting_display_names": decision["awaiting_display_names"],
+            }
+            if gate_status == "waiting":
+                out_updates["active_director_mandate"] = ""
+                out_updates["messages"] = [
+                    AIMessage(
+                        content=decision["waiting_notice_markdown"],
+                        id=f"turn-wait-{uuid.uuid4().hex[:10]}",
+                    )
+                ]
+                logger.info(
+                    "[party_turn_gate_node] Session=%s waiting on %d player(s): %s",
+                    session_id,
+                    len(decision["awaiting_user_ids"]),
+                    decision["awaiting_display_names"],
+                )
+            elif gate_status == "ready" and decision["combined_party_prompt_block"]:
+                existing_msgs = list(state.get("messages") or [])
+                if existing_msgs and isinstance(existing_msgs[-1], HumanMessage):
+                    last_hm = existing_msgs[-1]
+                    merged_txt = f"{last_hm.content}\n\n{decision['combined_party_prompt_block']}"
+                    out_updates["messages"] = [
+                        HumanMessage(content=merged_txt, id=getattr(last_hm, "id", None))
+                    ]
+                else:
+                    out_updates["messages"] = [
+                        HumanMessage(content=decision["combined_party_prompt_block"])
+                    ]
+                logger.info(
+                    "[party_turn_gate_node] Session=%s party turn barrier satisfied; advancing to adjudication",
+                    session_id,
+                )
+            return out_updates
+
+    def route_after_party_gate(
+        state: AiGmSessionState,
+    ) -> Literal["scenario_director_node", "publish_gm_response"]:
+        if state.get("party_gate_status") == "waiting":
+            return "publish_gm_response"
+        return "scenario_director_node"
 
     def scenario_director_node(state: AiGmSessionState) -> dict[str, Any]:
         session_id = state.get("session_id", "default")
@@ -602,6 +683,52 @@ def build_ai_gm_graph(
                 "scenario_director": updated_dir,
                 "active_director_mandate": "",
             }
+
+    def npc_action_resolution_node(state: AiGmSessionState) -> dict[str, Any]:
+        session_id = state.get("session_id", "default")
+        ensure_turn_context(session_id)
+        operating_mode = state.get("operating_mode", "autonomous")
+        trigger = state.get("trigger_event") or {}
+        roster = list(state.get("roster") or [])
+        combat_tracker = get_session_combat_tracker(session_id)
+        active_npcs = dict(state.get("active_npcs") or get_session_npcs(session_id))
+        with span_scope("npc_action_resolution_node"):
+            npc_res = execute_ready_npc_actions(
+                session_id=session_id,
+                operating_mode=operating_mode,
+                roster=roster,
+                combat_tracker=combat_tracker,
+                active_npcs=active_npcs,  # type: ignore[arg-type]
+                is_ooc=is_ooc_or_rules_query(trigger),
+                trigger=trigger,
+            )
+            summaries = list(npc_res.get("npc_turn_summaries") or [])
+            prompt_block = str(npc_res.get("npc_prompt_block") or "").strip()
+            npc_invocations = list(npc_res.get("tool_invocations") or [])
+
+            updates: dict[str, Any] = {
+                "npc_turn_summaries": summaries,
+            }
+            if npc_invocations:
+                existing_inv = list(state.get("tool_invocations") or [])
+                for inv in npc_invocations:
+                    inv["step_index"] = len(existing_inv)
+                    existing_inv.append(inv)
+                updates["tool_invocations"] = existing_inv
+
+            # Append NPC prompt block into the current turn's HumanMessage when NPC combat rolls
+            # occurred or when coordinating a multi-player party turn (`party_gate_status == "ready"`)
+            if prompt_block and (summaries or state.get("party_gate_status") == "ready"):
+                existing_msgs = list(state.get("messages") or [])
+                if existing_msgs and isinstance(existing_msgs[-1], HumanMessage):
+                    last_hm = existing_msgs[-1]
+                    merged_txt = f"{last_hm.content}\n\n{prompt_block}"
+                    updates["messages"] = [
+                        HumanMessage(content=merged_txt, id=getattr(last_hm, "id", None))
+                    ]
+                else:
+                    updates["messages"] = [HumanMessage(content=prompt_block)]
+            return updates
 
     def gm_supervisor_node(state: AiGmSessionState) -> dict[str, Any]:
         session_id = state.get("session_id", "default")
@@ -1091,14 +1218,25 @@ def build_ai_gm_graph(
 
     workflow = StateGraph(AiGmSessionState)
     workflow.add_node("sync_session_context", sync_session_context)
+    workflow.add_node("party_turn_gate_node", party_turn_gate_node)
     workflow.add_node("scenario_director_node", scenario_director_node)
+    workflow.add_node("npc_action_resolution_node", npc_action_resolution_node)
     workflow.add_node("gm_supervisor_node", gm_supervisor_node)
     workflow.add_node("tool_execution_node", tool_execution_node)
     workflow.add_node("publish_gm_response", publish_gm_response)
 
     workflow.add_edge(START, "sync_session_context")
-    workflow.add_edge("sync_session_context", "scenario_director_node")
-    workflow.add_edge("scenario_director_node", "gm_supervisor_node")
+    workflow.add_edge("sync_session_context", "party_turn_gate_node")
+    workflow.add_conditional_edges(
+        "party_turn_gate_node",
+        route_after_party_gate,
+        {
+            "scenario_director_node": "scenario_director_node",
+            "publish_gm_response": "publish_gm_response",
+        },
+    )
+    workflow.add_edge("scenario_director_node", "npc_action_resolution_node")
+    workflow.add_edge("npc_action_resolution_node", "gm_supervisor_node")
     workflow.add_conditional_edges(
         "gm_supervisor_node",
         route_after_supervisor,

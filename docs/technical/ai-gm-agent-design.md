@@ -13,8 +13,9 @@ The signaling server (`satya-signaling`) and shared wire schemas (`satya-schema`
 The **stateful, tool-calling AI Game Master Agent** is implemented with **LangGraph**, **LangChain**, and local **Ollama** or hosted **BYOK** models (`src/satya_ml/ai_gm/`), connected to `satya-signaling` (`crates/satya-signaling/src/{gm_api.rs, ai_bridge.rs, gm_vault.rs}`) through the **Backend GM API**.
 
 ### Key Capabilities of the AI GM Agent
-1. **Stateful 5-Node Workflow with Proactive Scenario Director (LangGraph)**:
+1. **Stateful 7-Node Workflow with Multi-Player Turn Barrier, Proactive Scenario Director, & Autonomous NPC Loop (LangGraph)**:
    - Maintains per-session campaign state, scene context, active count-up combat clocks, SQLite-backed GM Memory Vault notes, and turn memory across player interactions.
+   - Coordinates multi-player sessions via **`party_turn_gate_node`** (waiting until all active human `PLAYER`s in a Narrative round or at the lowest Action Mode tick declare their actions/rolls before invoking the LLM) and resolves NPC turns via **`npc_action_resolution_node`** (executing autonomous Count-Up Tick `2d20` technique + `T/C/F` rolls in Action Mode and injecting scene NPC reaction directives in Narrative Mode).
    - Includes a dedicated **`scenario_director_node`** supporting **Scenario-Driven** (non-railroaded overarching plot adaptation), **Free-Form** (weighted probability sandbox), and **Hybrid** flows across **12 TTRPG scenario event sub-routines** with player/GM-tunable probability dials (`event_weights`).
 2. **Rich Markdown Session Chat Input & Output**:
    - Both players (`#chat-input` multi-line Markdown `<textarea>`) and the AI GM (`narrate_to_session`, `whisper_to_player`, and `publish_gm_response`) compose and render rich Markdown via `satya_engine::render_rules_markdown_to_html` (bold/italics, `> ` comms/handout blockquotes and `[!WARNING]` alerts, bulleted action hooks, Markdown tables, inline code, LaTeX math `$...$`, and `mermaid` diagrams).
@@ -80,7 +81,7 @@ flowchart TD
 
     subgraph AiGmService["src/satya_ml/ai_gm (Python LangGraph + Ollama/BYOK Runtime)"]
         FastAPI["server.py (FastAPI Bridge: /events & /scenario-beat)"]
-        Graph["graph.py (5-Node StateGraph with Scenario Director)"]
+        Graph["graph.py + party_coordinator.py (7-Node StateGraph:\nParty Gate, Scenario Director & NPC Loop)"]
         Tools["tools.py (LangChain @tool Suite:\nNPCs, Rules/Lore, Vault, Maps, 2d20 Rolls, Director)"]
         Models[("models.py\nOllama + Gemini / OpenAI / Claude")]
     end
@@ -109,7 +110,7 @@ flowchart TD
 | **Shared Schemas** | `crates/satya-schema/src/protocol.rs` | Defines `Participant::ai_gm`, `AiAgentInfo`, `MechanicEventType::AiGmDecision`, `AiGmTurnTriggerRequest` (with `channel_context`), `RollTtrpgTask` / `GmRollRequest` (`combat_technique`, `tempo_pool`, `control_pool`, `force_pool`), and `CombatantTickEntry` / `UpdateCombatTrackerRequest` (`grid_x`, `grid_y`, `zone_label`). |
 | **Rust Signaling, Vault & GM API** | `crates/satya-signaling/src/{gm_api.rs,gm_persistence.rs,ws.rs}` | Exposes `/api/gm/sessions/:id/{context,chat,roll,map,combat,memories,documents,trajectory}`, evaluates Combat Technique + `Tempo / Control / Force` Triad rolls (`evaluate_roll_combat_action_and_triad`), synchronizes the Action Mode `CombatTrackerState` and Tactical Map stub (`sync_or_generate_tactical_map_stub`), and routes frames over `/ws/session`. |
 | **Web Client, Markdown Chat & Action Pool Drawer** | `crates/satya-web/src/{views_workspace.rs,wasm_client/{chat_and_ttrpg.rs,ttrpg_drawer_triad.rs}}` | Provides the multi-line Markdown `#chat-input` composer, renders Markdown chat bodies via `satya_engine::render_rules_markdown_to_html`, and hosts the `Task Resolution & Action Pool` (`#ttrpg-drawer`) Combat Technique selector (`#ttrpg-action-technique`) and `Tempo / Control / Force` (`T/C/F`) pool controls with live `Effective TC` preview. |
-| **LangGraph Agent Runtime** | `src/satya_ml/ai_gm/graph.py` | Defines `AiGmSessionState`, `is_ooc_or_rules_query`, `format_action_mode_hud_block`, and the 5-node LangGraph `StateGraph` (`sync_session_context -> scenario_director_node -> gm_supervisor_node <-> tool_execution_node -> publish_gm_response`). |
+| **LangGraph Agent Runtime & Party/NPC Coordinator** | `src/satya_ml/ai_gm/{graph.py,party_coordinator.py}` | Defines `AiGmSessionState`, `is_ooc_or_rules_query`, `format_action_mode_hud_block`, `evaluate_party_turn_gate`, `execute_ready_npc_actions`, and the 7-node LangGraph `StateGraph` (`sync_session_context -> party_turn_gate_node -> scenario_director_node -> npc_action_resolution_node -> gm_supervisor_node <-> tool_execution_node -> publish_gm_response`). |
 | **LangChain Tool Suite & Map Stubs** | `src/satya_ml/ai_gm/{tools.py,maps.py}` | Implements `@tool` functions for NPC lookup/generation, Satya Watershed `2d20` rules/rolls (with `combat_technique` & `T/C/F` pools), GM Memory Vault, tactical maps/vision, procedural tactical map stub synchronization (`ensure_or_sync_procedural_tactical_map_stub`), combat tracker, and the Scenario Director. |
 | **Model Provider Factory** | `src/satya_ml/ai_gm/models.py` | Configures `ChatOllama` and hosted BYOK (`ChatGoogleGenerativeAI`, `ChatOpenAI`, `ChatAnthropic`) instances for tool-calling reasoning and multimodal map vision. |
 
@@ -152,6 +153,11 @@ class AiGmSessionState(TypedDict, total=False):
     active_map: TacticalMapState | None
     scenario_director: ScenarioDirectorState
     active_director_mandate: str
+    pending_round_actions: dict[str, dict[str, Any]]
+    awaiting_user_ids: list[str]
+    awaiting_display_names: list[str]
+    party_gate_status: Literal["bypass", "waiting", "ready"]
+    npc_turn_summaries: list[dict[str, Any]]
     trigger_event: dict[str, Any]
     tool_invocations: list[dict[str, Any]]
     turn_started_ms: float
@@ -161,18 +167,21 @@ class AiGmSessionState(TypedDict, total=False):
     turn_logs: list[dict[str, Any]]
 ```
 
-### 3.2 Five-Node LangGraph Topology (`scenario_director_node`)
+### 3.2 Seven-Node LangGraph Topology (`party_turn_gate_node`, `scenario_director_node`, & `npc_action_resolution_node`)
 
 ```mermaid
 flowchart TD
     Start(["Incoming Session Event\n(Chat / Whisper / Roll / Proactive SCENARIO_BEAT)"]) --> ContextNode["1. sync_session_context\nFetch roster, compact GM Vault index, & turn state"]
-    ContextNode --> DirectorNode{"2. scenario_director_node\nEvaluate flow_mode, Turn Interval,\nPer-Turn Probability, & Event Weights"}
-    DirectorNode -->|"Normal Reactive Turn"| SupervisorNode["3. gm_supervisor_node\nBaseChatModel (Reasoning + @tools)"]
+    ContextNode --> GateNode{"2. party_turn_gate_node\nCheck active human players vs.\npending_round_actions & Tick Clock"}
+    GateNode -->|"Waiting on other players\n(0 LLM tokens, no beat increment)"| PublishNode["7. publish_gm_response\nPOST /api/gm/sessions/:id/chat\n& emit AiGmTrajectoryEvent"]
+    GateNode -->|"All active players declared\n(or 1-Player / OOC / Co-Pilot / Beat)"| DirectorNode{"3. scenario_director_node\nEvaluate flow_mode, Turn Interval,\nPer-Turn Probability, & Event Weights"}
+    DirectorNode -->|"Normal Reactive Turn"| NpcNode["4. npc_action_resolution_node\nExecute ready NPC Tick turns (Action Mode)\n& inject NPC Reaction Roster (Scene Mode)"]
     DirectorNode -->|"Beat Triggered!\n(Plot Adaptation or Weighted Sample)"| Mandate["Inject [SCENARIO DIRECTOR MANDATE]\n12 TTRPG Event Sub-Routines +\nAnti-Railroading Plot Guidance"]
-    Mandate --> SupervisorNode
-    SupervisorNode -->|"Has tool_calls"| ToolNode["4. tool_execution_node\nRun LangChain @tools"]
+    Mandate --> NpcNode
+    NpcNode --> SupervisorNode["5. gm_supervisor_node\nBaseChatModel (Reasoning + @tools)"]
+    SupervisorNode -->|"Has tool_calls"| ToolNode["6. tool_execution_node\nRun LangChain @tools"]
     ToolNode -->|"Tool results"| SupervisorNode
-    SupervisorNode -->|"Ready to narrate (Markdown)"| PublishNode["5. publish_gm_response\nPOST /api/gm/sessions/:id/chat\n& emit AiGmTrajectoryEvent"]
+    SupervisorNode -->|"Ready to narrate (Markdown)"| PublishNode
     PublishNode --> End(["Turn Complete\n(Checkpoint Saved)"])
 ```
 
@@ -180,7 +189,12 @@ flowchart TD
    - Pulls the latest session roster and recent events from `GET /api/gm/sessions/:id/context`, builds a compact `[GM Vault & Session Index]` (listing document titles/IDs, character sheets, and pinned GM memories without dumping full text into the prompt), and formats the triggering event.
    - **Out-of-Character & Rules Q&A Detection (`is_ooc_or_rules_query`)**: When `channel_context == "OUT_OF_CHARACTER"` or the player asks a meta/rules question (e.g., *"How do we do combat? Are we at tick 0 now? How do I use my Tempo, Control and Force pool here?"*), `sync_session_context` prefixes the prompt with `[OUT_OF_CHARACTER RULES / TABLE QUESTION]`, attaches a `query_satya_rules` reference excerpt, and includes the `[ACTION MODE — TACTICAL CLOCK, MAP & T/C/F POOLS]` status block so the AI GM answers directly using exact Satya formulas without advancing story time.
    - **Combat Action Mode HUD (`format_action_mode_hud_block`)**: Whenever `combat_tracker.combat_active` is `True`, injects `[ACTION MODE — TACTICAL CLOCK, MAP & T/C/F POOLS]` into the context header with `Window W · Tick T (X.Xs)`, each combatant's `Next Action Tick` and `(grid_x, grid_y)` / `[zone_label]`, and each bound character's `TacticalPoolEnvelope` (`P_eff / P_base`, Neutral Baseline `B`, and ceilings `T_max / C_max / F_max`).
-2. **`scenario_director_node` (Proactive World Pacing, OOC Bypass & Action Mode Activation)**:
+2. **`party_turn_gate_node` (Multi-Player Action Readiness Barrier & Tick Gate in `party_coordinator.py`)**:
+   - Ensures all active human `PLAYER`s in a multi-player session have a chance to declare their actions or roll `2d20` checks before the AI GM resolves the scene:
+     - **Narrative / Scene Mode (`combat_active == False`, `>= 2` human `PLAYER`s)**: Buffers each player's action/roll in `pending_round_actions` and computes `awaiting_user_ids`. While `awaiting_user_ids` is non-empty (and no player has sent `!resolve` / `force_resolve_turn`), routes directly to `publish_gm_response` (`party_gate_status = "waiting"`, **0 LLM tokens spent**, `turns_since_last_beat` unchanged) and emits a `[Party Turn Queue — X/N Players Ready]` Markdown notice. Once all players have declared (or sent `pass`/`hold`), synthesizes `[COMBINED PARTY TURN DECLARATIONS]` and proceeds to `scenario_director_node`.
+     - **Combat Action Mode (`combat_active == True`)**: Uses the Count-Up Tick Timeline—only the player(s) currently at the lowest `next_action_tick` are required to act next (queuing early declarations from higher-tick players for their upcoming tick).
+     - **Immediate Bypasses**: Single-player sessions (`len(players) <= 1`), `OUT_OF_CHARACTER` rules queries, `CO_PILOT` whispers, and `SCENARIO_BEAT` triggers bypass the barrier immediately without clearing `pending_round_actions`.
+3. **`scenario_director_node` (Proactive World Pacing, OOC Bypass & Action Mode Activation)**:
    - Prevents the AI GM from getting stuck indefinitely answering player prompts in a conversational loop while **never railroading player choices**.
    - **OOC / Rules Query Bypass**: When `is_ooc_or_rules_query(trigger)` is `True` (and `force_scenario_beat` is not set), `scenario_director_node` immediately returns without incrementing `turns_since_last_beat` or injecting a `[SCENARIO DIRECTOR MANDATE]`.
    - **Automatic Combat Action Mode & Tactical Map Stub Activation**: When a `combat_encounter` beat is selected, `scenario_director_node` automatically calls `advance_combat_tracker(tick_delta=0, ...)` and `ensure_or_sync_procedural_tactical_map_stub(...)` to initialize Action Mode at `Window 1 · Tick 1`, populate OODA starting ticks ($\text{Tick}_{\text{start}} = \max(1, 15 - \text{OODA})$), synchronize the `16x12` procedural tactical map stub, and append the `[ACTION MODE MANDATE]` to the turn prompt.
@@ -189,9 +203,12 @@ flowchart TD
      - **`"free_form"` (Weighted Probability Sandbox)**: Samples emergent world events from `event_weights: dict[str, float]` where players or GMs can dial up favorite pillars (e.g., `combat_encounter: 50`, `dramatic_revelation: 30`) and dial down or zero out unwanted ones (`thought_provoking_discussion: 0`).
      - **`"hybrid"` (Default)**: Alternates between adapting unplayed `planned_beats` to player actions and sampling emergent beats from `event_weights`.
    - Fires automatically when `turns_since_last_beat >= beat_interval_turns` (default `3`), when a per-turn emergence check (`rng.random() < beat_probability_per_turn`) succeeds after turn 1, or when explicitly invoked via `trigger_kind == "SCENARIO_BEAT"` (`POST /internal/ai-gm/scenario-beat`).
-3. **`gm_supervisor_node` (`BaseChatModel`)**: Evaluates the player's action, roll outcome, and any active `[SCENARIO DIRECTOR MANDATE]` against the current scene, active NPCs, and tactical map.
-4. **`tool_execution_node`**: Executes tool calls (reading NPC sheets, querying Satya `2d20` rules, inspecting or generating a map, rolling NPC `2d20` checks, advancing combat ticks, or sending private whispers) and feeds observations back to `gm_supervisor_node`.
-5. **`publish_gm_response` Node**: Posts the final Markdown narration (`ChannelContext::OutOfCharacter` for OOC/rules questions, or `ChannelContext::GmNarration` / `InCharacter` for story turns) back to `POST /api/gm/sessions/:id/chat` and records the `AiGmTrajectoryEvent`.
+4. **`npc_action_resolution_node` (Autonomous NPC Tick & Scene Reaction Loop in `party_coordinator.py`)**:
+   - **In Combat Action Mode (`combat_active == True`)**: Inspects `combat_tracker.combatants` for any NPC combatant (`is_npc == True` or `role_or_faction == "NPC"`) whose `next_action_tick` is due on the Count-Up Tick Clock, selects a canonical Satya Combat Technique + `Tempo / Control / Force` (`T/C/F`) Triad allocation from their profile, executes an authoritative `roll_satya_d20_check`, advances their `next_action_tick` via `advance_combat_tracker`, and injects `[NPC ACTION MODE RESOLUTION]` into the prompt.
+   - **In Narrative / Scene Mode (`combat_active == False`)**: Summarizes active session NPCs in `[SCENE NPC REACTION & INTENT DIRECTIVE]` so `gm_supervisor_node` voices and resolves NPC reactions to the combined party declarations.
+5. **`gm_supervisor_node` (`BaseChatModel`)**: Evaluates the party's combined declarations, roll outcomes, autonomous NPC rolls, and any active `[SCENARIO DIRECTOR MANDATE]` against the current scene, active NPCs, and tactical map.
+6. **`tool_execution_node`**: Executes tool calls (reading NPC sheets, querying Satya `2d20` rules, inspecting or generating a map, rolling additional `2d20` checks, advancing combat ticks, or sending private whispers) and feeds observations back to `gm_supervisor_node`.
+7. **`publish_gm_response` Node**: Posts the final Markdown narration (`ChannelContext::OutOfCharacter` for OOC/rules questions, or `ChannelContext::GmNarration` / `InCharacter` for story turns) back to `POST /api/gm/sessions/:id/chat` and records the `AiGmTrajectoryEvent`.
 
 ### 3.2.1 Combat "Action Mode", Tactical Triad (`Tempo / Control / Force`) Pools, & Procedural Tactical Map Stubs
 
@@ -359,7 +376,7 @@ In addition to local markdown files (`docs/story/`, `docs/ttrpg/`), the SQLite G
 
 > **Detailed Specification**: See [`docs/technical/observability-and-avro-telemetry-design.md`](./observability-and-avro-telemetry-design.md) and [`docs/technical/custom-ml-models-and-data-use-cases.md`](./custom-ml-models-and-data-use-cases.md).
 
-1. **OpenTelemetry Distributed Tracing**: Captures spans across `satya-signaling` $\leftrightarrow$ `FastAPI` + `LangGraph` (`sync_session_context`, `scenario_director_node`, `gm_supervisor_node`, `tool_execution_node`, `publish_gm_response`) $\leftrightarrow$ LLM Providers.
+1. **OpenTelemetry Distributed Tracing**: Captures spans across `satya-signaling` $\leftrightarrow$ `FastAPI` + `LangGraph` (`sync_session_context`, `party_turn_gate_node`, `scenario_director_node`, `npc_action_resolution_node`, `gm_supervisor_node`, `tool_execution_node`, `publish_gm_response`) $\leftrightarrow$ LLM Providers.
 2. **Apache Iggy + Avro + PyLance**:
    - **Topic 7 — `tabletop-canvas` (`com.satya.events.TabletopCanvasEvent`)**
    - **Topic 8 — `ai-gm-trajectories` (`com.satya.events.AiGmTrajectoryEvent`)**
