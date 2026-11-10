@@ -7,9 +7,7 @@
 use std::collections::BTreeMap;
 
 use crate::characteristics::{AptitudeCode, CharacterAptitudes, CharacterCharacteristics};
-use crate::lifepath_economy::{
-    LifepathCharacterProfile, RuralYouthArchetype, StreetGangArchetype,
-};
+use crate::lifepath_economy::{LifepathCharacterProfile, RuralYouthArchetype, StreetGangArchetype};
 use crate::skills_trees::SkillAccessTier;
 
 pub(crate) fn insert_skill_ranks(skills: &mut BTreeMap<String, usize>, ranks: &[(&str, usize)]) {

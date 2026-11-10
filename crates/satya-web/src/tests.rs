@@ -630,7 +630,8 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(dd_html.contains("Piloting (Rotary-Wing / Helicopter &amp; VTOL)"));
     assert!(dd_html.contains("window.satyaSelectTtrpgSkill('piloting_rotary_wing_helicopter')"));
 
-    let empty_dd = wasm_client::format_ttrpg_skill_dropdown_html("zzzz_nonexistent_skill", &default_sheet);
+    let empty_dd =
+        wasm_client::format_ttrpg_skill_dropdown_html("zzzz_nonexistent_skill", &default_sheet);
     assert!(empty_dd.contains("No canonical skills matched"));
 
     // Verify NPC List tab & Role-Filtered GM/Solo vs Player NPC card formatting
@@ -648,7 +649,9 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
         character_name: "Terry".to_string(),
         callsign_or_role: "General MD & Clinical Physician".to_string(),
         age_years: 26,
-        public_summary: "Terry — General MD & Clinical Physician (Age 26). Apparent demeanor: kind general MD.".to_string(),
+        public_summary:
+            "Terry — General MD & Clinical Physician (Age 26). Apparent demeanor: kind general MD."
+                .to_string(),
         apparent_condition: "Healthy & Alert".to_string(),
         is_persistent: true,
         gm_character: None,
@@ -723,7 +726,10 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     );
 
     // Verify Appearance & Theme settings in Hamburger Menu + option normalizers
-    assert_eq!(wasm_client::normalize_theme_id("dusk-orange"), "dusk-orange");
+    assert_eq!(
+        wasm_client::normalize_theme_id("dusk-orange"),
+        "dusk-orange"
+    );
     assert_eq!(wasm_client::normalize_theme_id("nebula"), "nebula");
     assert_eq!(wasm_client::normalize_theme_id("parchment"), "parchment");
     assert_eq!(wasm_client::normalize_theme_id("unknown-theme"), "obsidian");

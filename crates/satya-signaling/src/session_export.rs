@@ -13,8 +13,8 @@ use axum::{
 use chrono::{TimeZone, Utc};
 use satya_schema::{
     ImportSessionSnapshotRequest, MessageVisibility, Participant, SessionEnterResponse,
-    SessionHistorySnapshot, SessionMode, SessionRole, SessionSnapshotBundle,
-    SessionTranscriptItem, SessionTranscriptItemKind, SessionTranscriptResponse,
+    SessionHistorySnapshot, SessionMode, SessionRole, SessionSnapshotBundle, SessionTranscriptItem,
+    SessionTranscriptItemKind, SessionTranscriptResponse,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -83,7 +83,10 @@ impl AuthAndSessionManager {
             return Ok((mode, role, campaign_tag));
         }
 
-        anyhow::bail!("User '{}' is not a participant in session '{sid}'", user.username)
+        anyhow::bail!(
+            "User '{}' is not a participant in session '{sid}'",
+            user.username
+        )
     }
 
     /// Builds a chronological, visibility-filtered [`SessionTranscriptResponse`] for `user` in `session_id`.
@@ -468,7 +471,13 @@ impl AuthAndSessionManager {
             .build_session_history_snapshot(&target_sid, &self_participant)
             .await;
 
-        Ok((join_token, session_mode, self_participant, roster_vec, history))
+        Ok((
+            join_token,
+            session_mode,
+            self_participant,
+            roster_vec,
+            history,
+        ))
     }
 }
 
@@ -494,7 +503,11 @@ pub async fn export_session_transcript_handler(
             .into_response();
     };
 
-    match state.auth.build_session_transcript(&session_id, &user).await {
+    match state
+        .auth
+        .build_session_transcript(&session_id, &user)
+        .await
+    {
         Ok(transcript) => {
             let fmt = query
                 .format

@@ -17,6 +17,7 @@ pub mod gm_docs;
 pub mod gm_persistence;
 pub mod http_handlers;
 pub mod npcs;
+pub mod player_ai_api;
 pub mod session_export;
 pub mod session_persistence;
 pub mod state;
@@ -28,6 +29,7 @@ pub use gm_docs::*;
 pub use gm_persistence::*;
 pub use http_handlers::*;
 pub use npcs::*;
+pub use player_ai_api::*;
 pub use session_export::*;
 pub use session_persistence::*;
 pub use state::*;
@@ -60,7 +62,10 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route("/api/sessions/leave", post(leave_session_handler))
         .route("/api/sessions/saved", get(list_saved_sessions_handler))
         .route("/api/sessions/resume", post(resume_session_handler))
-        .route("/api/sessions/import", post(import_session_snapshot_handler))
+        .route(
+            "/api/sessions/import",
+            post(import_session_snapshot_handler),
+        )
         .route(
             "/api/sessions/:session_id/export",
             get(export_session_snapshot_handler),
@@ -144,6 +149,30 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route(
             "/api/gm/sessions/:session_id/trajectory",
             post(gm_session_trajectory_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/ai-players",
+            get(list_session_ai_players_handler).post(upsert_session_ai_player_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/ai-players/step",
+            post(step_session_ai_player_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/ai-players/:player_user_id",
+            delete(remove_session_ai_player_handler),
+        )
+        .route(
+            "/api/player-ai/sessions/:session_id/context",
+            get(player_ai_session_context_handler),
+        )
+        .route(
+            "/api/player-ai/sessions/:session_id/chat",
+            post(player_ai_session_chat_handler),
+        )
+        .route(
+            "/api/player-ai/sessions/:session_id/roll",
+            post(player_ai_session_roll_handler),
         )
         .route("/api/storage/metrics", get(storage_metrics_handler))
         .route("/api/storage/flush", post(storage_flush_handler))

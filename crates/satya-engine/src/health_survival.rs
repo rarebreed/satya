@@ -22,10 +22,10 @@ use crate::characteristics::compute_wound_shock_resistance_score;
 use crate::dice_probabilities::ContestedTieRule;
 pub use crate::environment_vehicles::*;
 use crate::impl_static_catalog;
-pub use crate::status_and_triage::*;
 use crate::primitives::{
     ConditionImpact, ConditionSource, ContestedCheck, StaticCatalog, TieredSaveEval, Triad,
 };
+pub use crate::status_and_triage::*;
 
 // ============================================================================
 // 1. Hit Locations & Called Shots (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.1–§1.2)
@@ -158,32 +158,136 @@ macro_rules! hl {
 
 /// Canonical 13-entry Master Anatomical Hit Location Table (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §1.2 Table).
 pub const HIT_LOCATION_TABLE: [HitLocationSpec; 13] = [
-    hl!(FootAnkle, 1, 1, "Foot / Ankle (L or R)", 4, (true, false, false), false,
-        "Mobility Anchor: Fractured tarsals or severed Achilles locks running/sprinting; -4 to Effective Root against sweeps."),
-    hl!(CalfShin, 2, 3, "Calf / Shin (Tibia/Fibula) (L or R)", 2, (true, false, false), false,
-        "Footwork Degradation: Muscle cramp or tibial fracture; Tier 3+ fracture prevents standing without support."),
-    hl!(KneeJoint, 4, 4, "Knee Joint (Patella/ACL) (L or R)", 4, (true, false, false), false,
-        "Joint Collapse: High susceptibility to Blunt/Leverage trauma (-4/-8/Locked 0 T_max & Root); Tier 2+ tear/dislocation forces immediate Prone check."),
-    hl!(ThighFemur, 5, 6, "Thigh (Femur / Femoral) (L or R)", 2, (true, false, true), true,
-        "Arterial Hazard: Deep Piercing/Slashing wounds risk Femoral Arterial Bleed; broken femur inflicts immediate Wound Shock +3."),
-    hl!(PelvisHipGroin, 7, 7, "Pelvis / Hip Girdle / Groin", 4, (true, false, true), true,
-        "Center of Mass Structural Lock: Pelvic fracture locks Tempo = 0 (cannot walk/stand) and inflicts excruciating neurogenic shock."),
-    hl!(AbdomenGutLiverSpleen, 8, 10, "Abdomen / Gut / Liver / Spleen", 2, (false, false, true), false,
-        "Visceral Shock & Nausea: Blunt liver/solar-plexus hit triggers Nausea / Winded; penetrating gut wound causes sepsis & internal bleed."),
-    hl!(ChestRibcageLungs, 11, 13, "Chest / Ribcage / Lungs", 2, (false, false, true), false,
-        "Respiratory Trauma: Cracked ribs slash Force Cap and impose -4 FIT (+1 Exertion Mark / 20 ticks); penetrating hit causes Pneumothorax."),
-    hl!(VitalThoracicHeartSpineAorta, 14, 14, "Vital Thoracic (Heart / Spine / Aorta)", 8, (true, true, true), true,
-        "Catastrophic Vitals: Penetrating trauma causes massive Arterial Hemorrhage; spinal hit causes immediate lower-body Paralysis."),
-    hl!(ShoulderClavicleScapula, 15, 15, "Shoulder / Clavicle / Scapula (L or R)", 4, (false, true, true), true,
-        "Shoulder Girdle Failure: Dislocated shoulder or broken collarbone disables lifting, two-handed bracing, and heavy swings with that arm."),
-    hl!(UpperArmElbowForearm, 16, 17, "Upper Arm / Elbow / Forearm (L or R)", 2, (false, true, true), true,
-        "Brachial & Lever Trauma: Slashes parry/aiming stability (Control) and striking power (Force); deep cuts risk Brachial Artery."),
-    hl!(WristHandFingers, 18, 18, "Wrist / Hand / Fingers (L or R)", 4, (false, true, false), false,
-        "Disarm & Manual Lock: Tier 2+ hit forces immediate FOR/DEX Disarm Check; fractured wrist/fingers prevent firing or gripping with that hand."),
-    hl!(NeckThroatCarotidCervical, 19, 19, "Neck / Throat / Carotid / Cervical", 8, (true, true, true), true,
-        "Lethal Vulnerability: Blunt strike crushes trachea (Asphyxiation + mutes speech ELO = 0); blade/bullet severs Carotid/Jugular or cervical spine."),
-    hl!(HeadCraniumFaceJawEyes, 20, 20, "Head (Cranium / Face / Jaw / Eyes)", 6, (false, true, false), false,
-        "Neurological & Sensory Apex: Blunt impact triggers Stunned / Concussed / Unconscious; eye hit causes Blinded; jaw hit impairs speech."),
+    hl!(
+        FootAnkle,
+        1,
+        1,
+        "Foot / Ankle (L or R)",
+        4,
+        (true, false, false),
+        false,
+        "Mobility Anchor: Fractured tarsals or severed Achilles locks running/sprinting; -4 to Effective Root against sweeps."
+    ),
+    hl!(
+        CalfShin,
+        2,
+        3,
+        "Calf / Shin (Tibia/Fibula) (L or R)",
+        2,
+        (true, false, false),
+        false,
+        "Footwork Degradation: Muscle cramp or tibial fracture; Tier 3+ fracture prevents standing without support."
+    ),
+    hl!(
+        KneeJoint,
+        4,
+        4,
+        "Knee Joint (Patella/ACL) (L or R)",
+        4,
+        (true, false, false),
+        false,
+        "Joint Collapse: High susceptibility to Blunt/Leverage trauma (-4/-8/Locked 0 T_max & Root); Tier 2+ tear/dislocation forces immediate Prone check."
+    ),
+    hl!(
+        ThighFemur,
+        5,
+        6,
+        "Thigh (Femur / Femoral) (L or R)",
+        2,
+        (true, false, true),
+        true,
+        "Arterial Hazard: Deep Piercing/Slashing wounds risk Femoral Arterial Bleed; broken femur inflicts immediate Wound Shock +3."
+    ),
+    hl!(
+        PelvisHipGroin,
+        7,
+        7,
+        "Pelvis / Hip Girdle / Groin",
+        4,
+        (true, false, true),
+        true,
+        "Center of Mass Structural Lock: Pelvic fracture locks Tempo = 0 (cannot walk/stand) and inflicts excruciating neurogenic shock."
+    ),
+    hl!(
+        AbdomenGutLiverSpleen,
+        8,
+        10,
+        "Abdomen / Gut / Liver / Spleen",
+        2,
+        (false, false, true),
+        false,
+        "Visceral Shock & Nausea: Blunt liver/solar-plexus hit triggers Nausea / Winded; penetrating gut wound causes sepsis & internal bleed."
+    ),
+    hl!(
+        ChestRibcageLungs,
+        11,
+        13,
+        "Chest / Ribcage / Lungs",
+        2,
+        (false, false, true),
+        false,
+        "Respiratory Trauma: Cracked ribs slash Force Cap and impose -4 FIT (+1 Exertion Mark / 20 ticks); penetrating hit causes Pneumothorax."
+    ),
+    hl!(
+        VitalThoracicHeartSpineAorta,
+        14,
+        14,
+        "Vital Thoracic (Heart / Spine / Aorta)",
+        8,
+        (true, true, true),
+        true,
+        "Catastrophic Vitals: Penetrating trauma causes massive Arterial Hemorrhage; spinal hit causes immediate lower-body Paralysis."
+    ),
+    hl!(
+        ShoulderClavicleScapula,
+        15,
+        15,
+        "Shoulder / Clavicle / Scapula (L or R)",
+        4,
+        (false, true, true),
+        true,
+        "Shoulder Girdle Failure: Dislocated shoulder or broken collarbone disables lifting, two-handed bracing, and heavy swings with that arm."
+    ),
+    hl!(
+        UpperArmElbowForearm,
+        16,
+        17,
+        "Upper Arm / Elbow / Forearm (L or R)",
+        2,
+        (false, true, true),
+        true,
+        "Brachial & Lever Trauma: Slashes parry/aiming stability (Control) and striking power (Force); deep cuts risk Brachial Artery."
+    ),
+    hl!(
+        WristHandFingers,
+        18,
+        18,
+        "Wrist / Hand / Fingers (L or R)",
+        4,
+        (false, true, false),
+        false,
+        "Disarm & Manual Lock: Tier 2+ hit forces immediate FOR/DEX Disarm Check; fractured wrist/fingers prevent firing or gripping with that hand."
+    ),
+    hl!(
+        NeckThroatCarotidCervical,
+        19,
+        19,
+        "Neck / Throat / Carotid / Cervical",
+        8,
+        (true, true, true),
+        true,
+        "Lethal Vulnerability: Blunt strike crushes trachea (Asphyxiation + mutes speech ELO = 0); blade/bullet severs Carotid/Jugular or cervical spine."
+    ),
+    hl!(
+        HeadCraniumFaceJawEyes,
+        20,
+        20,
+        "Head (Cranium / Face / Jaw / Eyes)",
+        6,
+        (false, true, false),
+        false,
+        "Neurological & Sensory Apex: Blunt impact triggers Stunned / Concussed / Unconscious; eye hit causes Blinded; jaw hit impairs speech."
+    ),
 ];
 
 impl_static_catalog!(HitLocationId => HitLocationSpec : HIT_LOCATION_TABLE);

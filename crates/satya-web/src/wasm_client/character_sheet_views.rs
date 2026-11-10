@@ -115,18 +115,91 @@ pub fn format_all_characteristics_and_aptitudes_html(sheet: &CharacterSheetState
     let c_study_bio = compute_academic_study_controller(c.dis, c.mem, a.apt_bio);
 
     let derived_cards = [
-        ("OODA Initiative", format!("{}", derived.ooda_initiative), format!("Start Tick = max(1, 15 - {}) = Tick {}", derived.ooda_initiative, (15 - derived.ooda_initiative).max(1))),
-        ("Quick Thinking (D_cog)", format!("{}", derived.d_cog_quick_thinking), format!("floor((max(ANA {}, CRE {}) + FOC {})/2)", c.ana, c.cre, c.foc)),
-        ("Striking Power (POW)", format!("{:.1}", derived.pow_striking_power), format!("(FOR {} × SPD {}) / 10.0", c.for_stat, c.spd)),
-        ("Momentum Factor (MMF)", format!("{:.1}", derived.mmf_momentum_factor), format!("({:.1} kg / 70.0) × SPD {}", c.mas_kg, c.spd)),
-        ("Melee Reach Index", format!("{:+}", derived.melee_reach_index), format!("HGT {:.2}m ({:+}) + KIN {} · Sprint {:.1} m/s", c.hgt_m, derived.height_reach_edge, c.kin, sprint.v_sprint_m_per_sec)),
-        ("General Awareness (AWR)", format!("{}", derived.awr_general_awareness), format!("floor((max(SIG {}, HEA {}) + FOC {} + ITU {})/3)", c.sig, c.hea, c.foc, c.itu)),
-        ("Fatigue Threshold (FT)", format!("{}", derived.ft_fatigue_threshold), format!("FIT {} + floor(DIS {}/2) · Exertion {}/{}", c.fit, c.dis, sheet.exertion_marks, derived.ft_fatigue_threshold)),
-        ("Wound Shock Res (WSR)", format!("{}", derived.wsr_wound_shock_resistance), format!("HLT {} + floor(DIS {}/2)", c.hlt, c.dis)),
-        ("Social Composure (CMP)", format!("{}", derived.cmp_social_composure_threshold), format!("floor((DIS {} + FOC {})/4) · Lost {}/{}", c.dis, c.foc, sheet.social_composure_lost, derived.cmp_social_composure_threshold)),
-        ("Academic Study (C_study)", format!("QNT {c_study_qnt} · LNG {c_study_lng}"), format!("BIO {c_study_bio} · Base {}", derived.base_c_study)),
-        ("Tactical Pool (P_eff / P_base)", format!("{} / {}", env.p_eff, env.p_base), format!("Neutral B={} · Time Factor {:.2}x", env.neutral_baseline_b, env.action_time_factor)),
-        ("Triad Ceilings (T / C / F)", format!("{} / {} / {}", env.tempo_cap, env.control_cap, env.force_cap), format!("Morale: {} · Live Caps", env.morale_state.label())),
+        (
+            "OODA Initiative",
+            format!("{}", derived.ooda_initiative),
+            format!(
+                "Start Tick = max(1, 15 - {}) = Tick {}",
+                derived.ooda_initiative,
+                (15 - derived.ooda_initiative).max(1)
+            ),
+        ),
+        (
+            "Quick Thinking (D_cog)",
+            format!("{}", derived.d_cog_quick_thinking),
+            format!(
+                "floor((max(ANA {}, CRE {}) + FOC {})/2)",
+                c.ana, c.cre, c.foc
+            ),
+        ),
+        (
+            "Striking Power (POW)",
+            format!("{:.1}", derived.pow_striking_power),
+            format!("(FOR {} × SPD {}) / 10.0", c.for_stat, c.spd),
+        ),
+        (
+            "Momentum Factor (MMF)",
+            format!("{:.1}", derived.mmf_momentum_factor),
+            format!("({:.1} kg / 70.0) × SPD {}", c.mas_kg, c.spd),
+        ),
+        (
+            "Melee Reach Index",
+            format!("{:+}", derived.melee_reach_index),
+            format!(
+                "HGT {:.2}m ({:+}) + KIN {} · Sprint {:.1} m/s",
+                c.hgt_m, derived.height_reach_edge, c.kin, sprint.v_sprint_m_per_sec
+            ),
+        ),
+        (
+            "General Awareness (AWR)",
+            format!("{}", derived.awr_general_awareness),
+            format!(
+                "floor((max(SIG {}, HEA {}) + FOC {} + ITU {})/3)",
+                c.sig, c.hea, c.foc, c.itu
+            ),
+        ),
+        (
+            "Fatigue Threshold (FT)",
+            format!("{}", derived.ft_fatigue_threshold),
+            format!(
+                "FIT {} + floor(DIS {}/2) · Exertion {}/{}",
+                c.fit, c.dis, sheet.exertion_marks, derived.ft_fatigue_threshold
+            ),
+        ),
+        (
+            "Wound Shock Res (WSR)",
+            format!("{}", derived.wsr_wound_shock_resistance),
+            format!("HLT {} + floor(DIS {}/2)", c.hlt, c.dis),
+        ),
+        (
+            "Social Composure (CMP)",
+            format!("{}", derived.cmp_social_composure_threshold),
+            format!(
+                "floor((DIS {} + FOC {})/4) · Lost {}/{}",
+                c.dis, c.foc, sheet.social_composure_lost, derived.cmp_social_composure_threshold
+            ),
+        ),
+        (
+            "Academic Study (C_study)",
+            format!("QNT {c_study_qnt} · LNG {c_study_lng}"),
+            format!("BIO {c_study_bio} · Base {}", derived.base_c_study),
+        ),
+        (
+            "Tactical Pool (P_eff / P_base)",
+            format!("{} / {}", env.p_eff, env.p_base),
+            format!(
+                "Neutral B={} · Time Factor {:.2}x",
+                env.neutral_baseline_b, env.action_time_factor
+            ),
+        ),
+        (
+            "Triad Ceilings (T / C / F)",
+            format!(
+                "{} / {} / {}",
+                env.tempo_cap, env.control_cap, env.force_cap
+            ),
+            format!("Morale: {} · Live Caps", env.morale_state.label()),
+        ),
     ];
 
     let derived_html: String = derived_cards
@@ -138,14 +211,57 @@ pub fn format_all_characteristics_and_aptitudes_html(sheet: &CharacterSheetState
     let hgt_scale = c.get_scale(CharacteristicCode::HGT);
     let mas_scale = c.get_scale(CharacteristicCode::MAS);
     let bmi = c.mas_kg / (c.hgt_m * c.hgt_m).max(1.0);
-    let std_hdrs = &["Characteristic", "Score", "Base / Eff TN", "Population Tier", "Roll"];
+    let std_hdrs = &[
+        "Characteristic",
+        "Score",
+        "Base / Eff TN",
+        "Population Tier",
+        "Roll",
+    ];
     let cards_html = [
-        render_table_card(&format!("Physical Characteristics (6 Scaled + HGT {:.2}m &amp; MAS {:.1}kg)", c.hgt_m, c.mas_kg), std_hdrs, &phys_rows),
-        render_table_card("Mental Characteristics (6 Cognitive &amp; Executive Scores)", std_hdrs, &ment_rows),
-        render_table_card("Sensory Characteristics (6 Perceptual Modalities)", std_hdrs, &sens_rows),
-        render_table_card("Social Characteristics (3 Interpersonal Scores)", std_hdrs, &soc_rows),
-        render_table_card("Psyche Profile (7 Bipolar Disposition Traits · Equilibrium = 10)", &["Psyche Trait", "Score", "Active Pole Descriptor", "Deviation &amp; Friction TN"], &psyche_rows),
-        render_table_card("9 Domain Aptitudes (APT-QNT .. APT-SOC · Range -2 to +3)", &["Domain Aptitude", "Mod", "Training Multiplier", "Prerequisite Relief"], &aptitude_rows),
+        render_table_card(
+            &format!(
+                "Physical Characteristics (6 Scaled + HGT {:.2}m &amp; MAS {:.1}kg)",
+                c.hgt_m, c.mas_kg
+            ),
+            std_hdrs,
+            &phys_rows,
+        ),
+        render_table_card(
+            "Mental Characteristics (6 Cognitive &amp; Executive Scores)",
+            std_hdrs,
+            &ment_rows,
+        ),
+        render_table_card(
+            "Sensory Characteristics (6 Perceptual Modalities)",
+            std_hdrs,
+            &sens_rows,
+        ),
+        render_table_card(
+            "Social Characteristics (3 Interpersonal Scores)",
+            std_hdrs,
+            &soc_rows,
+        ),
+        render_table_card(
+            "Psyche Profile (7 Bipolar Disposition Traits · Equilibrium = 10)",
+            &[
+                "Psyche Trait",
+                "Score",
+                "Active Pole Descriptor",
+                "Deviation &amp; Friction TN",
+            ],
+            &psyche_rows,
+        ),
+        render_table_card(
+            "9 Domain Aptitudes (APT-QNT .. APT-SOC · Range -2 to +3)",
+            &[
+                "Domain Aptitude",
+                "Mod",
+                "Training Multiplier",
+                "Prerequisite Relief",
+            ],
+            &aptitude_rows,
+        ),
     ]
     .join("");
 

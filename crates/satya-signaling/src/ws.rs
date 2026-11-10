@@ -7,6 +7,7 @@ use crate::{
         apply_combat_action_to_mechanics_and_tracker, evaluate_roll_combat_action_and_triad,
         should_trigger_ai_gm_for_chat, should_trigger_ai_gm_for_roll, trigger_ai_gm_chat_reply,
     },
+    player_ai_api::trigger_auto_ai_players_for_human_turn,
     state::SignalingAppState,
 };
 use axum::{
@@ -178,6 +179,7 @@ async fn handle_ws_client(
                         let body_clone = body.clone();
                         let roster_clone = current_roster.clone();
                         tokio::spawn(async move {
+                            state_clone.reset_ai_rally_counter(&session_id_clone).await;
                             trigger_ai_gm_chat_reply(
                                 &state_clone,
                                 &session_id_clone,
@@ -192,6 +194,17 @@ async fn handle_ws_client(
                                 &roster_clone,
                             )
                             .await;
+                            if visibility == MessageVisibility::Public
+                                && channel_context == ChannelContext::InCharacter
+                            {
+                                trigger_auto_ai_players_for_human_turn(
+                                    &state_clone,
+                                    &session_id_clone,
+                                    &self_part_clone,
+                                    &body_clone,
+                                )
+                                .await;
+                            }
                         });
                     }
                 }
@@ -614,6 +627,7 @@ async fn handle_ws_client(
                         let ev_id_clone = mech_ev.metadata.event_id.clone();
                         let roster_clone = current_roster.clone();
                         tokio::spawn(async move {
+                            state_clone.reset_ai_rally_counter(&session_id_clone).await;
                             trigger_ai_gm_chat_reply(
                                 &state_clone,
                                 &session_id_clone,
@@ -626,6 +640,13 @@ async fn handle_ws_client(
                                 Some(ChannelContext::InCharacter),
                                 &narration,
                                 &roster_clone,
+                            )
+                            .await;
+                            trigger_auto_ai_players_for_human_turn(
+                                &state_clone,
+                                &session_id_clone,
+                                &self_part_clone,
+                                &narration,
                             )
                             .await;
                         });

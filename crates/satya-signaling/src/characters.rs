@@ -44,8 +44,8 @@ const SHA256_K: [u32; 64] = [
 #[must_use]
 pub fn sha256_digest(data: &[u8]) -> [u8; 32] {
     let mut h: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
     ];
     let bit_len = (data.len() as u64).wrapping_mul(8);
     let mut padded = Vec::with_capacity(data.len() + 72);
@@ -693,8 +693,9 @@ pub async fn import_character_handler(
     let mut imported_record: CharacterSheetRecord = match state
         .storage
         .registry()
-        .decode_framed::<CharacterSheetEvent>(&raw_bytes, None)
-    {
+        .decode_framed::<CharacterSheetEvent>(
+        &raw_bytes, None,
+    ) {
         Ok((_, ev)) => ev.character,
         Err(_) => match serde_json::from_slice::<CharacterSheetRecord>(&raw_bytes) {
             Ok(rec) => rec,
@@ -809,14 +810,7 @@ pub async fn bind_character_session_handler(
             .into_response();
     }
 
-    maybe_bind_and_broadcast_session(
-        &state,
-        &user,
-        &record,
-        Some(&req.session_id),
-        true,
-    )
-    .await;
+    maybe_bind_and_broadcast_session(&state, &user, &record, Some(&req.session_id), true).await;
 
     (
         StatusCode::OK,
@@ -859,7 +853,9 @@ pub async fn upload_character_asset_handler(
     if record.owner_user_id != user.user_id {
         return (
             StatusCode::FORBIDDEN,
-            Json(json!({ "error": "Only the character owner can upload assets to this character" })),
+            Json(
+                json!({ "error": "Only the character owner can upload assets to this character" }),
+            ),
         )
             .into_response();
     }
@@ -940,7 +936,10 @@ pub async fn upload_character_asset_handler(
     // Also mirror binary asset to data/characters/assets/ for PyLance multimodal dataset compaction
     let assets_dir = PathBuf::from("data").join("characters").join("assets");
     if std::fs::create_dir_all(&assets_dir).is_ok() {
-        let _ = std::fs::write(assets_dir.join(format!("{asset_id}_{filename}")), &blob_data);
+        let _ = std::fs::write(
+            assets_dir.join(format!("{asset_id}_{filename}")),
+            &blob_data,
+        );
     }
 
     record.assets.push(asset_ref.clone());

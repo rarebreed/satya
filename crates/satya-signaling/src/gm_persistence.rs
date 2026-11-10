@@ -157,11 +157,10 @@ impl AuthAndSessionManager {
             let session = guard
                 .get_mut(sid)
                 .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
-            let caller = session
-                .roster
-                .get(caller_user_id)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
+            let caller =
+                session.roster.get(caller_user_id).cloned().ok_or_else(|| {
+                    anyhow::anyhow!("Caller is not an active participant in '{sid}'")
+                })?;
             let is_gm = matches!(caller.role, SessionRole::Gm | SessionRole::Host);
 
             if let Some(tag_override) = campaign_tag
@@ -185,7 +184,10 @@ impl AuthAndSessionManager {
             }
 
             doc.is_persistent = is_persistent;
-            if let Some(tag) = campaign_tag.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+            if let Some(tag) = campaign_tag
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+            {
                 doc.campaign_tag = Some(tag);
             } else if doc.campaign_tag.is_none() {
                 doc.campaign_tag = Some(session_ctag);
@@ -317,11 +319,9 @@ impl AuthAndSessionManager {
                     is_persistent: req.is_persistent,
                     updated_at_us: now_us,
                 };
-                if let Some(existing) = session
-                    .gm_memories
-                    .iter_mut()
-                    .find(|m| m.memory_id == rec.memory_id || m.title.eq_ignore_ascii_case(&rec.title))
-                {
+                if let Some(existing) = session.gm_memories.iter_mut().find(|m| {
+                    m.memory_id == rec.memory_id || m.title.eq_ignore_ascii_case(&rec.title)
+                }) {
                     *existing = rec.clone();
                 } else {
                     session.gm_memories.push(rec.clone());
@@ -466,7 +466,11 @@ impl AuthAndSessionManager {
 
     /// Synchronizes a [`Participant`] into a [`CombatTrackerState`] if not already listed.
     pub fn sync_combatant_into_tracker(tracker: &mut CombatTrackerState, part: &Participant) {
-        if tracker.combatants.iter().any(|c| c.entity_id == part.user_id) {
+        if tracker
+            .combatants
+            .iter()
+            .any(|c| c.entity_id == part.user_id)
+        {
             return;
         }
         let idx = tracker.combatants.len() as i32;
@@ -514,8 +518,14 @@ impl AuthAndSessionManager {
         });
 
         for (idx, c) in tracker.combatants.iter().enumerate() {
-            let x = c.grid_x.unwrap_or(4 + ((idx as i32) % 4) * 2).clamp(0, map.grid_width - 1);
-            let y = c.grid_y.unwrap_or(5 + ((idx as i32) / 4) * 2).clamp(0, map.grid_height - 1);
+            let x = c
+                .grid_x
+                .unwrap_or(4 + ((idx as i32) % 4) * 2)
+                .clamp(0, map.grid_width - 1);
+            let y = c
+                .grid_y
+                .unwrap_or(5 + ((idx as i32) / 4) * 2)
+                .clamp(0, map.grid_height - 1);
             let label = match c.zone_label.as_deref() {
                 Some(z) if !z.is_empty() => format!("{} [{}]", c.display_name, z),
                 _ => c.display_name.clone(),
@@ -664,7 +674,10 @@ impl AuthAndSessionManager {
                         next_action_tick: req
                             .next_action_tick
                             .unwrap_or_else(|| tracker.tick.max(start_tick)),
-                        active_stance: req.active_stance.clone().or_else(|| Some("NEUTRAL".to_string())),
+                        active_stance: req
+                            .active_stance
+                            .clone()
+                            .or_else(|| Some("NEUTRAL".to_string())),
                         fatigue_level: req.fatigue_level.unwrap_or(0).max(0),
                         wound_shock: req.wound_shock.unwrap_or(0).max(0),
                         grid_x: req.grid_x.or(Some(12 - (idx % 3) * 2)),
@@ -794,15 +807,7 @@ impl AuthAndSessionManager {
                 let docs = self.load_persistent_gm_docs_from_db(sid).await;
                 let mems = self.load_persistent_gm_memories_from_db(sid).await;
                 let tracker = self.load_or_init_combat_tracker(sid, &[]).await;
-                (
-                    sid.to_string(),
-                    Vec::new(),
-                    docs,
-                    mems,
-                    tracker,
-                    None,
-                    true,
-                )
+                (sid.to_string(), Vec::new(), docs, mems, tracker, None, true)
             } else {
                 anyhow::bail!("Session '{sid}' does not exist");
             }
@@ -861,7 +866,11 @@ impl AuthAndSessionManager {
                             "GM Doc by {} · {} chars{}",
                             doc.uploader_display_name,
                             doc.char_count,
-                            if doc.is_persistent { " · Persistent" } else { "" }
+                            if doc.is_persistent {
+                                " · Persistent"
+                            } else {
+                                ""
+                            }
                         ),
                         snippet: excerpt,
                         is_persistent: doc.is_persistent,
@@ -872,7 +881,11 @@ impl AuthAndSessionManager {
         }
 
         // 3. Persistent GM Memories
-        if caller_is_gm && matches!(norm_scope.as_str(), "ALL" | "MEMORY" | "MEMORIES" | "GM_MEMORY")
+        if caller_is_gm
+            && matches!(
+                norm_scope.as_str(),
+                "ALL" | "MEMORY" | "MEMORIES" | "GM_MEMORY"
+            )
         {
             for mem in &gm_memories {
                 let sc = score_text(&mem.content, &mem.title);
@@ -1142,10 +1155,7 @@ pub async fn upsert_session_gm_memory_handler(
     };
     let (author_id, author_name) = match user_opt {
         Some(u) => (u.user_id, u.display_name),
-        None => (
-            format!("ai-gm-{session_id}"),
-            "Satya AI GM".to_string(),
-        ),
+        None => (format!("ai-gm-{session_id}"), "Satya AI GM".to_string()),
     };
     match state
         .auth

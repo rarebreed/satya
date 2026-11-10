@@ -17,9 +17,7 @@ use crate::characteristics::{
 };
 use crate::economy_gear::compute_skill_allocation_sp_ledger;
 use crate::lifepath_economy::{LifepathBuildConfig, compute_lifepath_baseline_from_config};
-use crate::skills_trees::{
-    SkillAccessTier, lookup_skill_node, validate_skill_advancement,
-};
+use crate::skills_trees::{SkillAccessTier, lookup_skill_node, validate_skill_advancement};
 
 /// Convert [`CharacterCharacteristics`] into the serializable schema [`CharacterCharacteristicsRecord`].
 #[must_use]
@@ -256,7 +254,10 @@ pub fn verify_character_sheet_legality(record: &CharacterSheetRecord) -> Charact
         }
         if lookup_skill_node(sk_id).is_none() {
             dag_prereqs_valid = false;
-            violations.push(format!("Unknown skill '{}' not in canonical 8-tree registry.", sk_id));
+            violations.push(format!(
+                "Unknown skill '{}' not in canonical 8-tree registry.",
+                sk_id
+            ));
         } else {
             skills_usize.insert(sk_id.clone(), rank.clamp(0, 10) as usize);
         }
@@ -316,7 +317,8 @@ pub fn verify_character_sheet_legality(record: &CharacterSheetRecord) -> Charact
                         ledger.experience_sp_spent, ledger.experience_sp_budget
                     ));
                 }
-                baseline_skills_opt = Some((baseline.baseline_skills, baseline.academic_tree_frozen));
+                baseline_skills_opt =
+                    Some((baseline.baseline_skills, baseline.academic_tree_frozen));
             }
             Err(err) => {
                 sp_budget_valid = false;
@@ -335,10 +337,9 @@ pub fn verify_character_sheet_legality(record: &CharacterSheetRecord) -> Charact
             let Some(spec) = lookup_skill_node(sk_id) else {
                 continue;
             };
-            let floor_n = baseline_skills
-                .get(sk_id)
-                .copied()
-                .unwrap_or_else(|| usize::from(spec.skill_type == crate::skills_trees::SkillType::Tal));
+            let floor_n = baseline_skills.get(sk_id).copied().unwrap_or_else(|| {
+                usize::from(spec.skill_type == crate::skills_trees::SkillType::Tal)
+            });
 
             if cur_n > floor_n {
                 let mut skills_before_target = skills_usize.clone();
@@ -395,7 +396,8 @@ pub fn verify_character_sheet_legality(record: &CharacterSheetRecord) -> Charact
         }
     }
 
-    let is_legal = characteristics_valid && dag_prereqs_valid && sp_budget_valid && violations.is_empty();
+    let is_legal =
+        characteristics_valid && dag_prereqs_valid && sp_budget_valid && violations.is_empty();
 
     CharacterAuditReport {
         is_legal,

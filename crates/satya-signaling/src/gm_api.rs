@@ -718,9 +718,9 @@ pub fn evaluate_roll_combat_action_and_triad(
     fatigue_level: i32,
     wound_shock_index: f32,
 ) -> Option<(TechniqueTriadResolution, TacticalPoolEnvelope)> {
-    let raw_tech = combat_technique
-        .map(str::trim)
-        .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("non_combat") && !s.eq_ignore_ascii_case("none"));
+    let raw_tech = combat_technique.map(str::trim).filter(|s| {
+        !s.is_empty() && !s.eq_ignore_ascii_case("non_combat") && !s.eq_ignore_ascii_case("none")
+    });
     let has_triad = tempo_pool.is_some() || control_pool.is_some() || force_pool.is_some();
     if raw_tech.is_none() && !has_triad && combat_stance.is_none() {
         return None;

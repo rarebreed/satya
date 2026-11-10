@@ -14,8 +14,7 @@ use uuid::Uuid;
 
 #[tokio::test]
 async fn test_user_auth_session_password_and_private_message_isolation() {
-    let temp_dir =
-        std::env::temp_dir().join(format!("satya_signaling_test_{}", Uuid::new_v4()));
+    let temp_dir = std::env::temp_dir().join(format!("satya_signaling_test_{}", Uuid::new_v4()));
     let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
         .await
         .unwrap();
@@ -626,8 +625,7 @@ async fn test_session_leave_and_user_logout_emit_disconnect_events() {
     use axum::http::Request;
     use tower::ServiceExt;
 
-    let temp_dir =
-        std::env::temp_dir().join(format!("satya_disconnect_test_{}", Uuid::new_v4()));
+    let temp_dir = std::env::temp_dir().join(format!("satya_disconnect_test_{}", Uuid::new_v4()));
     let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
         .await
         .unwrap();
@@ -770,8 +768,7 @@ async fn test_ai_gm_fail_fast_when_offline_emits_system_log_and_notice() {
 
     let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
     let gm = Participant::human("u-gm-ff", "gm_sean", "Sean (GM)", SessionRole::Gm);
-    let ai_gm =
-        Participant::ai_gm("ep-failfast", "ollama/qwen2.5:14b", "harsh-reality-arbiter");
+    let ai_gm = Participant::ai_gm("ep-failfast", "ollama/qwen2.5:14b", "harsh-reality-arbiter");
     let roster = vec![gm.clone(), ai_gm.clone()];
 
     trigger_ai_gm_chat_reply(
@@ -795,6 +792,154 @@ async fn test_ai_gm_fail_fast_when_offline_emits_system_log_and_notice() {
 
     let chat_logs = metrics.iter().find(|m| m.topic == "chat-messages").unwrap();
     assert_eq!(chat_logs.total_messages_ingested, 1);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_ai_player_spawn_step_context_isolation_and_rally_budget() {
+    let mut cfg = StorageConfig::default();
+    let temp_dir = std::env::temp_dir().join(format!("satya_sig_ai_player_{}", Uuid::now_v7()));
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir
+        .join("users_ai_player.db")
+        .to_string_lossy()
+        .to_string();
+
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+    let app = build_router(state.clone());
+
+    let p1 = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let p1_user = state.auth.verify_auth_token(&p1.auth_token).await.unwrap();
+    let _enter = state
+        .auth
+        .create_session(
+            &p1_user,
+            "ep-ai-player-1",
+            "room-pass",
+            SessionMode::Ttrpg,
+            SessionRole::Player,
+            Some("Sara (Valkyrie)".to_string()),
+            true,
+        )
+        .await
+        .unwrap();
+
+    // Submit a GM_ONLY document that must NEVER leak into the AI Player's context
+    let _ = state
+        .auth
+        .add_session_gm_document(
+            "ep-ai-player-1",
+            &p1.user_id,
+            satya_schema::GmDocumentRecord {
+                doc_id: "doc-secret-1".to_string(),
+                session_id: "ep-ai-player-1".to_string(),
+                uploader_user_id: p1.user_id.clone(),
+                uploader_display_name: "Sara".to_string(),
+                title: "Secret Plot".to_string(),
+                source_kind: satya_schema::GmDocumentSource::DirectTextUpload,
+                google_file_id: None,
+                visibility: MessageVisibility::GmOnly,
+                sanitized_content: "TOP_SECRET_VANCE_CODE_991".to_string(),
+                char_count: 25,
+                safety_flagged: false,
+                is_persistent: false,
+                campaign_tag: Some("ep-ai-player-1".to_string()),
+                created_at_us: 1000,
+            },
+        )
+        .await
+        .unwrap();
+
+    // 1. Spawn an AI Player via POST /api/sessions/:id/ai-players
+    let spawn_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-ai-player-1/ai-players")
+        .header("Authorization", format!("Bearer {}", p1.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::AiPlayerConfig {
+                user_id: Some("ai-player-kaelen".to_string()),
+                display_name: Some("Kaelen Voss (AI Player)".to_string()),
+                character_id: None,
+                persona_prompt: Some("Recon scout".to_string()),
+                provider: Some("ollama".to_string()),
+                model_id: Some("gemma4:12b".to_string()),
+                service_url: None,
+                auto_respond: true,
+                max_rally_turns: 2,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let spawn_resp = tower::ServiceExt::oneshot(app.clone(), spawn_req)
+        .await
+        .unwrap();
+    assert_eq!(spawn_resp.status(), axum::http::StatusCode::OK);
+
+    // Verify the AI Player is in the session roster with SessionRole::Player and ParticipantKind::AiAgent
+    let roster = state.auth.get_session_roster("ep-ai-player-1").await;
+    assert!(roster.iter().any(|p| {
+        p.user_id == "ai-player-kaelen"
+            && p.role == SessionRole::Player
+            && p.participant_kind == satya_schema::ParticipantKind::AiAgent
+    }));
+
+    // 2. Query GET /api/player-ai/sessions/:id/context and verify strict GM_ONLY isolation
+    let ctx_req = axum::http::Request::builder()
+        .method("GET")
+        .uri("/api/player-ai/sessions/ep-ai-player-1/context?user_id=ai-player-kaelen")
+        .header(
+            "Authorization",
+            format!("Bearer {}", state.storage.config().ai_gm.service_token),
+        )
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let ctx_resp = tower::ServiceExt::oneshot(app.clone(), ctx_req)
+        .await
+        .unwrap();
+    assert_eq!(ctx_resp.status(), axum::http::StatusCode::OK);
+    let ctx_bytes = axum::body::to_bytes(ctx_resp.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let ctx_str = String::from_utf8_lossy(&ctx_bytes);
+    assert!(!ctx_str.contains("TOP_SECRET_VANCE_CODE_991"));
+    assert!(!ctx_str.contains("gm_documents"));
+
+    // 3. Step the AI Player turn and verify rally counter & chat ingestion
+    let step_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-ai-player-1/ai-players/step")
+        .header("Authorization", format!("Bearer {}", p1.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::StepAiPlayerRequest {
+                user_id: Some("ai-player-kaelen".to_string()),
+                prompt: Some("Advance to the airlock".to_string()),
+                auto_trigger_gm: true,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let step_resp = tower::ServiceExt::oneshot(app.clone(), step_req)
+        .await
+        .unwrap();
+    assert_eq!(step_resp.status(), axum::http::StatusCode::OK);
+
+    // Verify rally budget cap enforcement (`max_rally_turns = 2`: 1st already consumed by step)
+    assert!(state.try_consume_ai_rally_turn("ep-ai-player-1", 2).await);
+    assert!(!state.try_consume_ai_rally_turn("ep-ai-player-1", 2).await);
+    state.reset_ai_rally_counter("ep-ai-player-1").await;
+    assert!(state.try_consume_ai_rally_turn("ep-ai-player-1", 2).await);
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

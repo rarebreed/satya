@@ -275,7 +275,6 @@ pub const COMBAT_TECHNIQUE_CATALOG: [CombatTechniqueSpec; 30] = [
         focus: (false, true, true),
         "Contests F_att + MMF + max(0, C_att - C_def) vs. Root_def; breaks Clinch (+1..+2 Reach) or shoves into obstacle"
     ),
-
     // === 2. Unarmed Strike Techniques (5) ===
     tech!(
         Punch, Strike, "Punch (Jab / Cross / Hook / Uppercut)",
@@ -312,7 +311,6 @@ pub const COMBAT_TECHNIQUE_CATALOG: [CombatTechniqueSpec; 30] = [
         focus: (true, false, true),
         "Ultra-fast Clinch-only (Reach 0) cranial strike; inflicts +2 Daze/vision delta_int on facial hit; ignores hand traps"
     ),
-
     // === 3. Armed Melee Strike Techniques (2) ===
     tech!(
         Thrust, Strike, "Thrust (Linear Point / Lunge / Stab)",
@@ -328,7 +326,6 @@ pub const COMBAT_TECHNIQUE_CATALOG: [CombatTechniqueSpec; 30] = [
         focus: (true, true, true),
         "Arcing edge or blunt strike: +1 Base TC and -1 Guard, but multiplies weapon POW by 1.25x with +1 guard-crush"
     ),
-
     // === 4. Intercept Techniques (2) ===
     tech!(
         Block, Intercept, "Block (Hard Structural Frame / Shield Check)",
@@ -344,7 +341,6 @@ pub const COMBAT_TECHNIQUE_CATALOG: [CombatTechniqueSpec; 30] = [
         focus: (true, true, false),
         "Control + Tempo deflection: +3 Guard (plus weapon Guard) and 2x recovery ticks inflicted when Seizing the Initiative"
     ),
-
     // === 5. Maneuver Techniques (5) ===
     tech!(
         Feint, Maneuver, "Feint (Deceptive Setup / Second Intention)",
@@ -381,7 +377,6 @@ pub const COMBAT_TECHNIQUE_CATALOG: [CombatTechniqueSpec; 30] = [
         focus: (false, true, true),
         "Force + Control grounding: adds +4 + floor(C / 2) to Effective Root (F + MMF) to stuff Takedowns, Throws, and Pushes"
     ),
-
     // === 6. Ranged Shot Techniques (5) ===
     tech!(
         SnapShot, RangedShot, "Snap Shot (Hip-Fire / Point-Shoot)",
@@ -418,7 +413,6 @@ pub const COMBAT_TECHNIQUE_CATALOG: [CombatTechniqueSpec; 30] = [
         focus: (false, true, true),
         "Fires 5-15 rounds (Base TC 9, +4 Recoil adder): projects Suppression Morale Shock floor(F / 2) on beaten zone"
     ),
-
     // === 7. Ranged Maneuver & Bracing Techniques (4) ===
     tech!(
         BraceWeapon, RangedManeuver, "Brace / Rest Weapon (Bipod / Barricade / Prone)",
@@ -589,7 +583,9 @@ pub struct TechniqueTriadResolution {
 /// Evaluates how a [`CombatTechniqueId`] (What You Do) interacts with a `Tempo + Control + Force`
 /// [`Triad`] allocation (How You Execute It).
 #[must_use]
-pub fn evaluate_technique_with_triad(params: &TechniqueTriadEvalParams) -> TechniqueTriadResolution {
+pub fn evaluate_technique_with_triad(
+    params: &TechniqueTriadEvalParams,
+) -> TechniqueTriadResolution {
     let spec = params.technique.spec();
     let mut base_act = spec.base_tc_act;
     if params.domain == CombatDomain::ArmedMelee && params.armed_weapon_base_tc > 0 {
@@ -686,46 +682,47 @@ pub fn evaluate_technique_with_triad(params: &TechniqueTriadEvalParams) -> Techn
         0
     };
 
-    let is_braced =
-        params.weapon_is_braced || params.technique == CombatTechniqueId::BraceWeapon;
-    let (ranged_effective_recoil_r, ranged_unbraced_dispersion_delta_ext, ranged_effective_acc_bonus) =
-        if params.domain == CombatDomain::Ranged {
-            let brace_mod = if is_braced && params.technique != CombatTechniqueId::BraceWeapon {
-                -3
-            } else {
-                0
-            };
-            let r_eff = (params.weapon_recoil_r + spec.recoil_adder + brace_mod).max(0);
-            let unbraced = if spec.category == CombatMoveCategory::RangedShot
-                || params.technique == CombatTechniqueId::BoundingShootOnMove
-            {
-                (r_eff - params.alloc.force.max(0)).max(0)
-            } else {
-                0
-            };
-            let eff_acc = if spec.uses_full_weapon_acc {
-                params.weapon_acc
-            } else if matches!(
-                params.technique,
-                CombatTechniqueId::CombatSightedShot | CombatTechniqueId::ControlledDoubleTapBurst
-            ) {
-                params.weapon_acc.min(1)
-            } else {
-                // SnapShot and SuppressiveFullAuto suffer negative Acc (loose tolerances) but ignore positive sight Acc
-                params.weapon_acc.min(0)
-            };
-            (r_eff, unbraced, eff_acc)
+    let is_braced = params.weapon_is_braced || params.technique == CombatTechniqueId::BraceWeapon;
+    let (
+        ranged_effective_recoil_r,
+        ranged_unbraced_dispersion_delta_ext,
+        ranged_effective_acc_bonus,
+    ) = if params.domain == CombatDomain::Ranged {
+        let brace_mod = if is_braced && params.technique != CombatTechniqueId::BraceWeapon {
+            -3
         } else {
-            (0, 0, 0)
+            0
         };
+        let r_eff = (params.weapon_recoil_r + spec.recoil_adder + brace_mod).max(0);
+        let unbraced = if spec.category == CombatMoveCategory::RangedShot
+            || params.technique == CombatTechniqueId::BoundingShootOnMove
+        {
+            (r_eff - params.alloc.force.max(0)).max(0)
+        } else {
+            0
+        };
+        let eff_acc = if spec.uses_full_weapon_acc {
+            params.weapon_acc
+        } else if matches!(
+            params.technique,
+            CombatTechniqueId::CombatSightedShot | CombatTechniqueId::ControlledDoubleTapBurst
+        ) {
+            params.weapon_acc.min(1)
+        } else {
+            // SnapShot and SuppressiveFullAuto suffer negative Acc (loose tolerances) but ignore positive sight Acc
+            params.weapon_acc.min(0)
+        };
+        (r_eff, unbraced, eff_acc)
+    } else {
+        (0, 0, 0)
+    };
 
     let brace_aim_bonus = if is_braced && spec.category == CombatMoveCategory::RangedShot {
         -1
     } else {
         0
     };
-    let technique_delta_ext = spec.delta_ext_mod
-        + ranged_unbraced_dispersion_delta_ext
+    let technique_delta_ext = spec.delta_ext_mod + ranged_unbraced_dispersion_delta_ext
         - ranged_effective_acc_bonus
         + brace_aim_bonus;
 
@@ -892,10 +889,10 @@ pub fn resolve_technique_exchange(
         0
     } else {
         match attacker.technique {
-            CombatTechniqueId::Trap => (attacker.alloc.control - defender.alloc.control).clamp(1, 6),
-            CombatTechniqueId::Lock => {
-                (attacker.alloc.force.div_euclid(3) + net_s).clamp(2, 10)
+            CombatTechniqueId::Trap => {
+                (attacker.alloc.control - defender.alloc.control).clamp(1, 6)
             }
+            CombatTechniqueId::Lock => (attacker.alloc.force.div_euclid(3) + net_s).clamp(2, 10),
             CombatTechniqueId::Grab => 2,
             _ => 0,
         }
@@ -912,12 +909,12 @@ pub fn resolve_technique_exchange(
     };
 
     let net_impact_trauma = if attack_succeeded && attacker.strike_impact > 0.0 {
-        let clinched_knee_bonus =
-            if attacker.technique == CombatTechniqueId::Knee && ctx.in_clinch {
-                2.0
-            } else {
-                0.0
-            };
+        let clinched_knee_bonus = if attacker.technique == CombatTechniqueId::Knee && ctx.in_clinch
+        {
+            2.0
+        } else {
+            0.0
+        };
         let raw = attacker.strike_impact + clinched_knee_bonus + f64::from(net_s.div_euclid(2));
         let after_block = raw - f64::from(defender.block_damage_reduction);
         let after_armor = if attacker.technique == CombatTechniqueId::Lock {
@@ -938,10 +935,7 @@ pub fn resolve_technique_exchange(
             defender.effective_root
         )
     } else if target_disarmed {
-        format!(
-            "{} strips Defender's weapon!",
-            attacker.technique.label()
-        )
+        format!("{} strips Defender's weapon!", attacker.technique.label())
     } else if attacker.technique == CombatTechniqueId::Lock && attack_succeeded {
         format!(
             "Submission Lock applied -> -{target_control_cap_slash} Limb/Control Ceiling & {:.1} Joint Trauma",

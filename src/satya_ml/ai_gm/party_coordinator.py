@@ -79,7 +79,7 @@ class PartyGateDecision(TypedDict):
 
 
 def extract_active_human_players(roster: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """Return all connected human `PLAYER` participants from `roster` (excluding GM, AI_GM, and OBSERVER)."""
+    """Return all active `PLAYER` participants (`HUMAN` and `AI_AGENT` test players) from `roster` (excluding GM, AI_GM, and OBSERVER)."""
     if not roster:
         return []
     players: list[dict[str, Any]] = []
@@ -92,11 +92,14 @@ def extract_active_human_players(roster: list[dict[str, Any]] | None) -> list[di
             continue
         kind = str(p.get("participant_kind") or "HUMAN").strip().upper()
         role = str(p.get("role") or "PLAYER").strip().upper()
-        if kind != "HUMAN" or role != "PLAYER":
+        if role != "PLAYER" or kind not in {"HUMAN", "AI_AGENT"}:
             continue
         seen_uids.add(uid)
         players.append(p)
     return players
+
+
+extract_active_party_players = extract_active_human_players
 
 
 def _is_pass_or_hold_text(content: str) -> bool:

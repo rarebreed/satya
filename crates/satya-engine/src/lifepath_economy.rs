@@ -647,7 +647,8 @@ pub fn compute_lifepath_baseline_from_config(
             ));
         }
         Stage4Path::Path4AHighSchool => {
-            let hs_sqm = sqm - i32::from(cfg.stage4a_hs_track == HighSchoolTrack::ApHonorsStemMagnet);
+            let hs_sqm =
+                sqm - i32::from(cfg.stage4a_hs_track == HighSchoolTrack::ApHonorsStemMagnet);
             let hs_eval = evaluate_educational_advancement_with_override(
                 chars.dis,
                 chars.ana.max(chars.mem),

@@ -47,12 +47,7 @@ pub const NOTEBOOK_TAB_SPECS: &[(&str, &str, &str, &str)] = &[
         "notebook-pane-wizard",
         "Character Wizard",
     ),
-    (
-        "npcs",
-        "tab-btn-npcs",
-        "notebook-pane-npcs",
-        "NPC List",
-    ),
+    ("npcs", "tab-btn-npcs", "notebook-pane-npcs", "NPC List"),
     (
         "combat",
         "tab-btn-combat",

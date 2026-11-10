@@ -1,13 +1,13 @@
 //! Browser WebGPU (`wgpu`) Two-Pass Translucent Dice Pipeline, WGSL Shader, Orbit/Pan/Zoom Camera
 //! Matrix Builder, and DOM Slider/Canvas Event Synchronization.
 
-use crate::wasm_client::dice_3d::{DiceCameraConfig, DiceMaterialConfig, DicePhysicsScene};
 #[cfg(target_arch = "wasm32")]
 use crate::wasm_client::dice_3d::{
     ATLAS_HEIGHT, ATLAS_WIDTH, DieInstanceData, DieKind, DieVertex, SceneUniforms,
     build_polyhedral_mesh, compute_view_proj_matrix_with_camera, generate_dice_numeral_atlas_rgba8,
     pack_model_matrix, vec3_dot, vec3_sub,
 };
+use crate::wasm_client::dice_3d::{DiceCameraConfig, DiceMaterialConfig, DicePhysicsScene};
 use satya_schema::WgpuDiceSpec;
 use wasm_bindgen::JsCast;
 

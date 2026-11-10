@@ -131,6 +131,9 @@ pub fn register_window_bindings() {
         "satyaAiGmProviderChanged" => satya_ai_gm_provider_changed(),
         "satyaMenuAiGmProviderChanged" => satya_menu_ai_gm_provider_changed(),
         "satyaUpdateSessionGmConfig" => satya_update_session_gm_config(),
+        "satyaToggleAiPlayerSettings" => satya_toggle_ai_player_settings(),
+        "satyaSpawnSessionAiPlayer" => satya_spawn_session_ai_player(),
+        "satyaStepSessionAiPlayer" => satya_step_session_ai_player(),
 
         // WebRTC Media, Drawers & Telemetry
         "satyaStartCamera" => satya_start_camera(),

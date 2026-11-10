@@ -35,7 +35,12 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(3000);
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let host_ip: std::net::IpAddr = std::env::var("SATYA_HOST")
+        .or_else(|_| std::env::var("HOST"))
+        .ok()
+        .and_then(|s| s.trim().parse().ok())
+        .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+    let addr = SocketAddr::new(host_ip, port);
     info!("Satya WebRTC & Apache Iggy Event Server listening on http://{addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

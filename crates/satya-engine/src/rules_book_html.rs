@@ -458,7 +458,6 @@ pub fn render_latex_math_to_html(expr: &str, display: bool) -> String {
     }
 }
 
-
 fn find_closing_inline_math_dollar(chars: &[char], start: usize) -> Option<usize> {
     if start + 2 > chars.len() || chars[start] != '$' {
         return None;

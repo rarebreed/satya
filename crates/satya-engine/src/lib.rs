@@ -86,7 +86,9 @@ pub use action_economy::*;
 pub use character_audit::*;
 pub use characteristics::*;
 pub use combat::*;
-pub use dice_pools::{SARLE_BIMODAL_THRESHOLD, try_median_gated_bimodal_pmf, try_order_statistic_pmf};
+pub use dice_pools::{
+    SARLE_BIMODAL_THRESHOLD, try_median_gated_bimodal_pmf, try_order_statistic_pmf,
+};
 pub use dice_probabilities::*;
 pub use health_survival::*;
 pub use lifepath_economy::*;

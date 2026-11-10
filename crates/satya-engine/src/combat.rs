@@ -207,12 +207,11 @@ pub fn compute_tactical_pool(params: &TacticalPoolParams) -> TacticalPoolEnvelop
     let neutral_baseline_b = p_base.div_euclid(3).max(1);
 
     let morale_mod = params.morale_state.pool_modifier();
-    let p_eff = (p_base
-        - (2 * params.fatigue_level.max(0))
-        - (2 * params.wound_shock_index.max(0))
-        + morale_mod
-        + params.condition.tactical_pool_mod)
-        .max(0);
+    let p_eff =
+        (p_base - (2 * params.fatigue_level.max(0)) - (2 * params.wound_shock_index.max(0))
+            + morale_mod
+            + params.condition.tactical_pool_mod)
+            .max(0);
 
     let mastery_overflow = if n_i32 >= 5 {
         (n_i32 - 3).div_euclid(2)
@@ -684,12 +683,78 @@ macro_rules! mw {
 
 /// Canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`docs/ttrpg/05-combat/melee_combat.md` §4).
 pub const MELEE_WEAPON_CATALOG: [MeleeWeaponProfile; 6] = [
-    mw!(UnarmedJabLowKickClinchKnee, "Unarmed (Jab / Low Kick / Clinch Knee)", 1, 1, 8, 0, 1.0, 0, 0, false),
-    mw!(UnarmedHaymakerHighKickThrow, "Unarmed (Haymaker / High Kick / Throw)", 1, 2, 10, -1, 1.25, 0, 0, false),
-    mw!(CombatKnifeKarambitShiv, "Combat Knife / Karambit / Shiv", 1, 1, 7, -1, 1.0, 2, 0, false),
-    mw!(ExpandableBatonTonfaClub, "Expandable Baton / Tonfa / Club", 2, 2, 8, 2, 1.2, 0, 0, false),
-    mw!(MacheteWakizashiTacticalBlade, "Machete / Wakizashi / Tactical Blade", 2, 3, 9, 1, 1.15, 4, 0, false),
-    mw!(TwoHandedStaffSpearRiotShield, "Two-Handed Staff / Spear / Riot Shield", 4, 4, 10, 3, 1.2, 0, 2, true),
+    mw!(
+        UnarmedJabLowKickClinchKnee,
+        "Unarmed (Jab / Low Kick / Clinch Knee)",
+        1,
+        1,
+        8,
+        0,
+        1.0,
+        0,
+        0,
+        false
+    ),
+    mw!(
+        UnarmedHaymakerHighKickThrow,
+        "Unarmed (Haymaker / High Kick / Throw)",
+        1,
+        2,
+        10,
+        -1,
+        1.25,
+        0,
+        0,
+        false
+    ),
+    mw!(
+        CombatKnifeKarambitShiv,
+        "Combat Knife / Karambit / Shiv",
+        1,
+        1,
+        7,
+        -1,
+        1.0,
+        2,
+        0,
+        false
+    ),
+    mw!(
+        ExpandableBatonTonfaClub,
+        "Expandable Baton / Tonfa / Club",
+        2,
+        2,
+        8,
+        2,
+        1.2,
+        0,
+        0,
+        false
+    ),
+    mw!(
+        MacheteWakizashiTacticalBlade,
+        "Machete / Wakizashi / Tactical Blade",
+        2,
+        3,
+        9,
+        1,
+        1.15,
+        4,
+        0,
+        false
+    ),
+    mw!(
+        TwoHandedStaffSpearRiotShield,
+        "Two-Handed Staff / Spear / Riot Shield",
+        4,
+        4,
+        10,
+        3,
+        1.2,
+        0,
+        2,
+        true
+    ),
 ];
 
 impl_static_catalog!(MeleeWeaponId => MeleeWeaponProfile : MELEE_WEAPON_CATALOG);
@@ -798,8 +863,7 @@ pub fn resolve_contested_melee_exchange(
     );
 
     let strike_lands = ctx.attacker_net_successes > 0;
-    let defender_seizes_initiative =
-        !strike_lands && defender_effective_control > attacker.control;
+    let defender_seizes_initiative = !strike_lands && defender_effective_control > attacker.control;
     let initiative_seized_penalty = if defender_seizes_initiative {
         defender_effective_control - attacker.control
     } else {
@@ -849,4 +913,3 @@ pub fn check_melee_interrupt_before_impact(
         counter_land_tick < telegraphed_land_tick && counter_inflicts_shock_or_knockback;
     (interrupted, counter_land_tick)
 }
-

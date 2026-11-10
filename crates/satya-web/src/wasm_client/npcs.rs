@@ -143,7 +143,11 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
                         && !p.contains("Ambiverted")
                         && !p.contains("Adaptive")
                         && !p.contains("Measured");
-                    let cls = if is_polar { "pill pill-accent" } else { "pill pill-muted" };
+                    let cls = if is_polar {
+                        "pill pill-accent"
+                    } else {
+                        "pill pill-muted"
+                    };
                     format!(r#"<span class="{cls}">{}</span>"#, escape_html(p))
                 })
                 .collect::<Vec<_>>()
@@ -164,7 +168,19 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
             let c = &ch.characteristics;
             format!(
                 "SPD {} · FOR {} · DEX {} · HLT {} · FIT {} | MEM {} · ANA {} · INS {} · DIS {} · FOC {} | COM {} · PRE {} · ELO {}",
-                c.spd, c.for_stat, c.dex, c.hlt, c.fit, c.mem, c.ana, c.ins, c.dis, c.foc, c.com, c.pre, c.elo
+                c.spd,
+                c.for_stat,
+                c.dex,
+                c.hlt,
+                c.fit,
+                c.mem,
+                c.ana,
+                c.ins,
+                c.dis,
+                c.foc,
+                c.com,
+                c.pre,
+                c.elo
             )
         } else {
             "Stats loaded in GM Vault".to_string()
@@ -210,7 +226,10 @@ pub fn render_npcs_tab_dom() {
     ensure_default_demo_npc_if_empty();
     let can_see_gm = viewer_can_see_npc_gm_secrets();
 
-    set_display("npc-generator-panel", if can_see_gm { "block" } else { "none" });
+    set_display(
+        "npc-generator-panel",
+        if can_see_gm { "block" } else { "none" },
+    );
     set_text(
         "npc-list-visibility-badge",
         if can_see_gm {
@@ -278,8 +297,7 @@ pub fn satya_refresh_npcs_tab() {
 
     spawn_local(async move {
         let url = format!("/api/sessions/{sid}/npcs");
-        if let Ok(resp) =
-            fetch_json::<(), SessionNpcsResponse>("GET", &url, Some(&tok), None).await
+        if let Ok(resp) = fetch_json::<(), SessionNpcsResponse>("GET", &url, Some(&tok), None).await
         {
             with_state_mut(|st| {
                 st.viewer_can_see_gm_secrets = resp.viewer_can_see_gm_secrets;

@@ -77,11 +77,71 @@ macro_rules! fm {
 
 /// Canonical 5-entry Ranged Fire Mode catalog (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §2.1).
 pub const RANGED_FIRE_MODES: [RangedFireModeProfile; 5] = [
-    fm!(SingleSnapShotPointShoot, "Single Snap Shot (Point-Shoot)", 7, 7, 3, 4, 0, 0, 1, 1, 0),
-    fm!(DeliberateSightedAimedShot, "Deliberate Sighted / Aimed Shot", 11, 12, 4, 6, 1, 1, 1, 1, 0),
-    fm!(ControlledDoubleTapShortBurst, "Controlled Double-Tap / Short Burst", 9, 9, 6, 7, 2, 3, 2, 3, 0),
-    fm!(FullAutoBurstSuppressiveFire, "Full-Auto Burst / Suppressive Fire", 8, 10, 8, 12, 4, 6, 5, 15, 0),
-    fm!(BoundingShootingOnTheMove, "Bounding / Shooting on the Move", 10, 10, 6, 10, 3, 3, 1, 3, 3),
+    fm!(
+        SingleSnapShotPointShoot,
+        "Single Snap Shot (Point-Shoot)",
+        7,
+        7,
+        3,
+        4,
+        0,
+        0,
+        1,
+        1,
+        0
+    ),
+    fm!(
+        DeliberateSightedAimedShot,
+        "Deliberate Sighted / Aimed Shot",
+        11,
+        12,
+        4,
+        6,
+        1,
+        1,
+        1,
+        1,
+        0
+    ),
+    fm!(
+        ControlledDoubleTapShortBurst,
+        "Controlled Double-Tap / Short Burst",
+        9,
+        9,
+        6,
+        7,
+        2,
+        3,
+        2,
+        3,
+        0
+    ),
+    fm!(
+        FullAutoBurstSuppressiveFire,
+        "Full-Auto Burst / Suppressive Fire",
+        8,
+        10,
+        8,
+        12,
+        4,
+        6,
+        5,
+        15,
+        0
+    ),
+    fm!(
+        BoundingShootingOnTheMove,
+        "Bounding / Shooting on the Move",
+        10,
+        10,
+        6,
+        10,
+        3,
+        3,
+        1,
+        3,
+        3
+    ),
 ];
 
 impl_static_catalog!(RangedFireModeId => RangedFireModeProfile : RANGED_FIRE_MODES);
@@ -197,9 +257,7 @@ impl ArmorProfileId {
         match self {
             Self::HeavyLeatherSynthWeaveJacket => "HEAVY_LEATHER_SYNTH_WEAVE_JACKET",
             Self::ConcealableSoftKevlarVestNij3a => "CONCEALABLE_SOFT_KEVLAR_VEST_NIJ_3A",
-            Self::LightweightUhmwpePatrolCarrierNij3 => {
-                "LIGHTWEIGHT_UHMWPE_PATROL_CARRIER_NIJ_3"
-            }
+            Self::LightweightUhmwpePatrolCarrierNij3 => "LIGHTWEIGHT_UHMWPE_PATROL_CARRIER_NIJ_3",
             Self::TacticalPlateCarrierLevel4 => "TACTICAL_PLATE_CARRIER_LEVEL_4",
             Self::BallisticCombatHelmetVisor => "BALLISTIC_COMBAT_HELMET_VISOR",
             Self::FullRiotBreacherSuit => "FULL_RIOT_BREACHER_SUIT",
@@ -227,9 +285,7 @@ impl ArmorProfileId {
         match self {
             Self::HeavyLeatherSynthWeaveJacket => &["SYNTH_WEAVE_JACKET", "LEATHER_JACKET"],
             Self::ConcealableSoftKevlarVestNij3a => &["SOFT_KEVLAR_VEST", "NIJ_3A", "KEVLAR_3A"],
-            Self::LightweightUhmwpePatrolCarrierNij3 => {
-                &["UHMWPE_PATROL_CARRIER", "NIJ_3", "RF1"]
-            }
+            Self::LightweightUhmwpePatrolCarrierNij3 => &["UHMWPE_PATROL_CARRIER", "NIJ_3", "RF1"],
             Self::TacticalPlateCarrierLevel4 => &["PLATE_CARRIER", "LEVEL_4", "NIJ_4"],
             Self::BallisticCombatHelmetVisor => &["COMBAT_HELMET", "BALLISTIC_HELMET"],
             Self::FullRiotBreacherSuit => &["RIOT_SUIT", "BREACHER_SUIT"],
@@ -277,13 +333,104 @@ macro_rules! ar {
 
 /// Canonical 7-entry Armor Catalog (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.1).
 pub const ARMOR_CATALOG: [ArmorProfile; 7] = [
-    ar!(HeavyLeatherSynthWeaveJacket, "Heavy Leather / Synth-Weave Jacket", 2, 2, 1, 1, 1, 2.5, "Torso, Arms", 350, 0.0, 0),
-    ar!(ConcealableSoftKevlarVestNij3a, "Concealable Soft Kevlar Vest (NIJ IIIA)", 2, 1, 4, 4, 2, 2.2, "Torso (Concealed)", 800, 0.0, 0),
-    ar!(LightweightUhmwpePatrolCarrierNij3, "Lightweight UHMWPE Patrol Carrier (NIJ III / RF1)", 5, 5, 6, 6, 4, 4.8, "Torso (Vital Organs)", 1600, 0.0, 0),
-    ar!(TacticalPlateCarrierLevel4, "Tactical Plate Carrier (Level IV Ceramic)", 6, 6, 8, 8, 5, 8.5, "Torso (Vital Organs)", 2400, 0.0, 0),
-    ar!(BallisticCombatHelmetVisor, "Ballistic Combat Helmet + Visor", 5, 5, 4, 3, 4, 1.6, "Head, Neck, Face", 950, 0.0, 0),
-    ar!(FullRiotBreacherSuit, "Full Riot / Breacher Suit", 6, 5, 5, 5, 6, 16.0, "Full Body", 4500, 0.0, 6),
-    ar!(ValkyrieReconExoCarapace2035, "2035 \"Valkyrie\" Recon Exo-Carapace", 8, 8, 9, 9, 8, 18.5, "Full Body (Powered)", 45000, 20.0, 0),
+    ar!(
+        HeavyLeatherSynthWeaveJacket,
+        "Heavy Leather / Synth-Weave Jacket",
+        2,
+        2,
+        1,
+        1,
+        1,
+        2.5,
+        "Torso, Arms",
+        350,
+        0.0,
+        0
+    ),
+    ar!(
+        ConcealableSoftKevlarVestNij3a,
+        "Concealable Soft Kevlar Vest (NIJ IIIA)",
+        2,
+        1,
+        4,
+        4,
+        2,
+        2.2,
+        "Torso (Concealed)",
+        800,
+        0.0,
+        0
+    ),
+    ar!(
+        LightweightUhmwpePatrolCarrierNij3,
+        "Lightweight UHMWPE Patrol Carrier (NIJ III / RF1)",
+        5,
+        5,
+        6,
+        6,
+        4,
+        4.8,
+        "Torso (Vital Organs)",
+        1600,
+        0.0,
+        0
+    ),
+    ar!(
+        TacticalPlateCarrierLevel4,
+        "Tactical Plate Carrier (Level IV Ceramic)",
+        6,
+        6,
+        8,
+        8,
+        5,
+        8.5,
+        "Torso (Vital Organs)",
+        2400,
+        0.0,
+        0
+    ),
+    ar!(
+        BallisticCombatHelmetVisor,
+        "Ballistic Combat Helmet + Visor",
+        5,
+        5,
+        4,
+        3,
+        4,
+        1.6,
+        "Head, Neck, Face",
+        950,
+        0.0,
+        0
+    ),
+    ar!(
+        FullRiotBreacherSuit,
+        "Full Riot / Breacher Suit",
+        6,
+        5,
+        5,
+        5,
+        6,
+        16.0,
+        "Full Body",
+        4500,
+        0.0,
+        6
+    ),
+    ar!(
+        ValkyrieReconExoCarapace2035,
+        "2035 \"Valkyrie\" Recon Exo-Carapace",
+        8,
+        8,
+        9,
+        9,
+        8,
+        18.5,
+        "Full Body (Powered)",
+        45000,
+        20.0,
+        0
+    ),
 ];
 
 impl_static_catalog!(ArmorProfileId => ArmorProfile : ARMOR_CATALOG);

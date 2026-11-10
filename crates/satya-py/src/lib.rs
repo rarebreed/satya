@@ -2041,11 +2041,12 @@ pub fn evaluate_combat_technique_triad(
     wound_shock_index: f64,
     encumbrance_tier: u8,
 ) -> PyResult<Py<PyDict>> {
-    let tech_id = satya_engine::CombatTechniqueId::from_code_str(technique_id).ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err(format!(
-            "unknown combat technique '{technique_id}'"
-        ))
-    })?;
+    let tech_id =
+        satya_engine::CombatTechniqueId::from_code_str(technique_id).ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown combat technique '{technique_id}'"
+            ))
+        })?;
     let dom = satya_engine::CombatDomain::from_code_str(domain).ok_or_else(|| {
         pyo3::exceptions::PyValueError::new_err(format!(
             "unknown combat domain '{domain}'; expected 'unarmed_martial_arts', 'armed_melee', or 'ranged'"
@@ -2057,27 +2058,28 @@ pub fn evaluate_combat_technique_triad(
         fatigue_level,
         ..Default::default()
     });
-    let res = satya_engine::evaluate_technique_with_triad(&satya_engine::TechniqueTriadEvalParams {
-        technique: tech_id,
-        domain: dom,
-        envelope,
-        alloc: satya_engine::Triad::new(tempo, control, force),
-        skill_level_n,
-        time_factor_params: satya_engine::ActionTimeFactorParams {
-            fatigue_level,
-            wound_shock_index,
-            encumbrance_tier: satya_engine::EncumbranceTier::from_tier_number(encumbrance_tier),
-            status_time_penalty: 0.0,
-            is_concussed_or_dazed: false,
-        },
-        armed_weapon_base_tc,
-        armed_weapon_pow_mult,
-        weapon_guard_bonus,
-        weapon_block_force_bonus,
-        weapon_recoil_r,
-        weapon_acc,
-        weapon_is_braced,
-    });
+    let res =
+        satya_engine::evaluate_technique_with_triad(&satya_engine::TechniqueTriadEvalParams {
+            technique: tech_id,
+            domain: dom,
+            envelope,
+            alloc: satya_engine::Triad::new(tempo, control, force),
+            skill_level_n,
+            time_factor_params: satya_engine::ActionTimeFactorParams {
+                fatigue_level,
+                wound_shock_index,
+                encumbrance_tier: satya_engine::EncumbranceTier::from_tier_number(encumbrance_tier),
+                status_time_penalty: 0.0,
+                is_concussed_or_dazed: false,
+            },
+            armed_weapon_base_tc,
+            armed_weapon_pow_mult,
+            weapon_guard_bonus,
+            weapon_block_force_bonus,
+            weapon_recoil_r,
+            weapon_acc,
+            weapon_is_braced,
+        });
     let d = PyDict::new(py);
     d.set_item("technique_id", res.technique.as_str())?;
     d.set_item("technique_name", res.technique.label())?;

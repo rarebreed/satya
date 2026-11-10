@@ -437,10 +437,7 @@ pub(crate) fn format_summary_step_html(st: &CharacterWizardState) -> String {
         (
             "General Awareness (AWR)".to_string(),
             derived.awr_general_awareness.to_string(),
-            format!(
-                "floor((max(SIG {}, HEA {}) + FOC + ITU)/3)",
-                c.sig, c.hea
-            ),
+            format!("floor((max(SIG {}, HEA {}) + FOC + ITU)/3)", c.sig, c.hea),
         ),
         (
             "Fatigue Threshold (FT)".to_string(),

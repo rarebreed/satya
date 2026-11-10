@@ -43,9 +43,7 @@ pub enum TaskGateClass {
     /// **Class C — Hard-Gated Specialist Tasks (`N >= min_skill_n`, `[Locked]`)**:
     /// High-complexity specialist procedures. Strictly requires `trained_skill_n >= min_skill_n`
     /// (`1..=4`) AND appropriate tools if `[Tool: Mandatory]`. No Talent or sibling defaulting is permitted.
-    ClassC {
-        min_skill_n: usize,
-    },
+    ClassC { min_skill_n: usize },
 }
 
 impl TaskGateClass {
@@ -616,12 +614,42 @@ macro_rules! task_preset {
 
 /// Canonical worked examples from `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§7.1–§7.3) and the core rules book.
 pub static CANONICAL_TASK_PRESETS: &[CanonicalTaskPreset] = &[
-    task_preset!("sarah_lockpick", "Sarah's Lockpick (N=3, C=12, Δ_tool=0, Δ_int=+2, Δ_ext=+4)", "Mechanical Lockpicking (Sarah)", (3, 12, 2, 0, 4, 6)),
-    task_preset!("marcus_surgery", "Marcus's Trauma Surgery (N=4, C=14, Δ_tool=-2, Δ_int=-1, Δ_ext=+4)", "Trauma Surgery (Marcus)", (4, 14, -1, -2, 4, 6)),
-    task_preset!("elena_hack", "Elena's Intrusion Hack (N=3, C=15, Δ_tool=-2, Δ_int=0, Δ_ext=+2, δ_over=8)", "Intrusion & Exploitation (Elena)", (3, 15, 0, -2, 2, 8)),
-    task_preset!("elena_probe", "Elena's Sword Probe (N=5, C=16, Δ_tool=0, Δ_int=0, Δ_ext=+2)", "Arming Sword Probe (Elena)", (5, 16, 0, 0, 2, 6)),
-    task_preset!("viktor_cleave", "Viktor's Greatsword Cleave (N=4, C=13, Δ_tool=0, Δ_int=0, Δ_ext=+3)", "Greatsword Cleave (Viktor)", (4, 13, 0, 0, 3, 6)),
-    task_preset!("social_persuasion", "Counter-Interrogation Rhetoric (N=3, C=15, Δ_tool=0, Δ_int=+2, Δ_ext=+3)", "Counter-Interrogation Rhetoric", (3, 15, 2, 0, 3, 6)),
+    task_preset!(
+        "sarah_lockpick",
+        "Sarah's Lockpick (N=3, C=12, Δ_tool=0, Δ_int=+2, Δ_ext=+4)",
+        "Mechanical Lockpicking (Sarah)",
+        (3, 12, 2, 0, 4, 6)
+    ),
+    task_preset!(
+        "marcus_surgery",
+        "Marcus's Trauma Surgery (N=4, C=14, Δ_tool=-2, Δ_int=-1, Δ_ext=+4)",
+        "Trauma Surgery (Marcus)",
+        (4, 14, -1, -2, 4, 6)
+    ),
+    task_preset!(
+        "elena_hack",
+        "Elena's Intrusion Hack (N=3, C=15, Δ_tool=-2, Δ_int=0, Δ_ext=+2, δ_over=8)",
+        "Intrusion & Exploitation (Elena)",
+        (3, 15, 0, -2, 2, 8)
+    ),
+    task_preset!(
+        "elena_probe",
+        "Elena's Sword Probe (N=5, C=16, Δ_tool=0, Δ_int=0, Δ_ext=+2)",
+        "Arming Sword Probe (Elena)",
+        (5, 16, 0, 0, 2, 6)
+    ),
+    task_preset!(
+        "viktor_cleave",
+        "Viktor's Greatsword Cleave (N=4, C=13, Δ_tool=0, Δ_int=0, Δ_ext=+3)",
+        "Greatsword Cleave (Viktor)",
+        (4, 13, 0, 0, 3, 6)
+    ),
+    task_preset!(
+        "social_persuasion",
+        "Counter-Interrogation Rhetoric (N=3, C=15, Δ_tool=0, Δ_int=+2, Δ_ext=+3)",
+        "Counter-Interrogation Rhetoric",
+        (3, 15, 2, 0, 3, 6)
+    ),
 ];
 
 pub fn list_canonical_task_presets() -> &'static [CanonicalTaskPreset] {
@@ -697,28 +725,270 @@ macro_rules! task_benchmark {
 
 /// Complete 22-entry Master Task Requirements catalog from `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§8).
 pub static MASTER_TASK_BENCHMARKS: &[MasterTaskBenchmark] = &[
-    task_benchmark!("sprint_vault_gap", "Athletic", "Sprint & Vault Gap", "Acrobatics, Tumbling & Parkour", TaskGateClass::ClassA, (KIN, SPD), None, None, 0, "6 TC"),
-    task_benchmark!("free_climb_sheer_wet_rock", "Athletic", "Free-Climb Sheer Wet Rock", "Climbing & Scaling", TaskGateClass::ClassA, (FOR, KIN), Some((CharacteristicCode::FIT, 11)), Situational, 4, "15 TC / pitch"),
-    task_benchmark!("force_rusted_bulkhead_door", "Athletic", "Force Rusted Bulkhead Door", "Strength & Lifting", TaskGateClass::ClassA, (FOR, FIT), Some((CharacteristicCode::HLT, 12)), Situational, 2, "8 TC"),
-    task_benchmark!("zero_g_eva_thruster_stabilization", "Athletic", "Zero-G EVA Thruster Stabilization", "Zero-G / EVA Operations", TaskGateClass::ClassB, (KIN, FOC), Some((CharacteristicCode::KIN, 10)), Mandatory, 2, "5 TC"),
-    task_benchmark!("silent_infiltration_past_sentries", "Fieldcraft", "Silent Infiltration Past Sentries", "Stealth (Sneaking & Hiding)", TaskGateClass::ClassA, (KIN, ITU), Some((CharacteristicCode::DIS, 10)), None, 2, "10 TC"),
-    task_benchmark!("pick_high_security_pin_lock", "Fieldcraft", "Pick High-Security Pin Lock", "Lockpicking & Physical Intrusion", TaskGateClass::ClassB, (DEX, TAC), Some((CharacteristicCode::FOC, 9)), Mandatory, 4, "15 TC"),
-    task_benchmark!("bypass_biometric_capacitance_pad", "Cyber", "Bypass Biometric Capacitance Pad", "Lockpicking & Physical Intrusion", TaskGateClass::ClassC { min_skill_n: 2 }, (ANA, DEX), Some((CharacteristicCode::MEM, 12)), Mandatory, 4, "20 TC"),
-    task_benchmark!("disarm_shaped_charge_ied", "Technical", "Disarm Shaped-Charge IED", "Demolitions & Explosive Ordnance (EOD)", TaskGateClass::ClassC { min_skill_n: 2 }, (DEX, FOC), Some((CharacteristicCode::DIS, 13)), Mandatory, 4, "30 TC"),
-    task_benchmark!("staunch_arterial_bleed_in_combat", "Medical", "Staunch Arterial Bleed in Combat", "First Aid & Basic Life Support (BLS / CPR)", TaskGateClass::ClassA, (DEX, FOC), Some((CharacteristicCode::DIS, 11)), Situational, 2, "12 TC"),
-    task_benchmark!("field_extraction_of_fragment_near_spine", "Medical", "Field Extraction of Fragment Near Spine", "Trauma, Orthopedic & General Surgery", TaskGateClass::ClassC { min_skill_n: 2 }, (DEX, FOC), Some((CharacteristicCode::DIS, 12)), Mandatory, 4, "15 min"),
-    task_benchmark!("synthesize_antitoxin_from_tissue_sample", "Medical", "Synthesize Antitoxin from Tissue Sample", "Pharmacology & Toxicology", TaskGateClass::ClassC { min_skill_n: 2 }, (ANA, MEM), None, Mandatory, 4, "2 hrs / interval"),
-    task_benchmark!("patch_ruptured_hydraulic_line", "Technical", "Patch Ruptured Hydraulic Line", "Automotive & Small Engine Mechanics", TaskGateClass::ClassB, (DEX, ANA), Some((CharacteristicCode::FOR, 10)), Situational, 0, "5 min"),
-    task_benchmark!("reroute_damaged_micro_fission_coolant_loop", "Technical", "Reroute Damaged Micro-Fission Coolant Loop", "Thermodynamics & Fluid Dynamics", TaskGateClass::ClassC { min_skill_n: 3 }, (ANA, DEX), Some((CharacteristicCode::DIS, 13)), Mandatory, 6, "10 min / interval"),
-    task_benchmark!("fabricate_custom_suppressor_baffle", "Technical", "Fabricate Custom Suppressor Baffle", "Armourer & Gunsmithing", TaskGateClass::ClassB, (DEX, ANA), None, Mandatory, 2, "1 hr / interval"),
-    task_benchmark!("packet_sniff_local_unencrypted_subnet", "Cyber", "Packet-Sniff Local Unencrypted Subnet", "Cybersecurity & Network Intrusion", TaskGateClass::ClassB, (ANA, INS), None, Mandatory, 0, "10 TC"),
-    task_benchmark!("live_kernel_injection_on_air_gapped_node", "Cyber", "Live Kernel Injection on Air-Gapped Node", "Cybersecurity & Network Intrusion + Cryptography", TaskGateClass::ClassC { min_skill_n: 2 }, (ANA, CRE), Some((CharacteristicCode::MEM, 13)), Mandatory, 4, "15 TC"),
-    task_benchmark!("reconstruct_ballistic_trajectory_from_ricochets", "Science", "Reconstruct Ballistic Trajectory from Ricochets", "Forensics & Crime Scene Investigation", TaskGateClass::ClassB, (ANA, SIG), Some((CharacteristicCode::MEM, 11)), Situational, 2, "15 min"),
-    task_benchmark!("spot_ambush_in_dense_urban_ruins", "Fieldcraft", "Spot Ambush in Dense Urban Ruins", "Alertness (Visual & Auditory Situational Awareness)", TaskGateClass::ClassA, (SIG, HEA), None, None, 2, "6 TC"),
-    task_benchmark!("fast_talk_checkpoint_sentry", "Social", "Fast-Talk Checkpoint Sentry", "Deception & Bluff", TaskGateClass::ClassA, (ELO, CRE), Some((CharacteristicCode::DIS, 10)), None, 2, "10 TC"),
-    task_benchmark!("break_hostile_subject_in_interrogation", "Social", "Break Hostile Subject in Interrogation", "Interrogation & Counter-Interrogation", TaskGateClass::ClassB, (INS, PRE), Some((CharacteristicCode::DIS, 12)), None, 4, "30 min"),
-    task_benchmark!("rally_panicked_squad_under_artillery_fire", "Social", "Rally Panicked Squad Under Artillery Fire", "Leadership & Command", TaskGateClass::ClassB, (PRE, DIS), None, None, 4, "3 TC"),
-    task_benchmark!("navigate_magnetic_anomaly_storm_by_dead_reckoning", "Fieldcraft", "Navigate Magnetic Anomaly Storm by Dead Reckoning", "Land Navigation & Cartography", TaskGateClass::ClassB, (ANA, SIG), Some((CharacteristicCode::DIS, 11)), Situational, 4, "1 hr"),
+    task_benchmark!(
+        "sprint_vault_gap",
+        "Athletic",
+        "Sprint & Vault Gap",
+        "Acrobatics, Tumbling & Parkour",
+        TaskGateClass::ClassA,
+        (KIN, SPD),
+        None,
+        None,
+        0,
+        "6 TC"
+    ),
+    task_benchmark!(
+        "free_climb_sheer_wet_rock",
+        "Athletic",
+        "Free-Climb Sheer Wet Rock",
+        "Climbing & Scaling",
+        TaskGateClass::ClassA,
+        (FOR, KIN),
+        Some((CharacteristicCode::FIT, 11)),
+        Situational,
+        4,
+        "15 TC / pitch"
+    ),
+    task_benchmark!(
+        "force_rusted_bulkhead_door",
+        "Athletic",
+        "Force Rusted Bulkhead Door",
+        "Strength & Lifting",
+        TaskGateClass::ClassA,
+        (FOR, FIT),
+        Some((CharacteristicCode::HLT, 12)),
+        Situational,
+        2,
+        "8 TC"
+    ),
+    task_benchmark!(
+        "zero_g_eva_thruster_stabilization",
+        "Athletic",
+        "Zero-G EVA Thruster Stabilization",
+        "Zero-G / EVA Operations",
+        TaskGateClass::ClassB,
+        (KIN, FOC),
+        Some((CharacteristicCode::KIN, 10)),
+        Mandatory,
+        2,
+        "5 TC"
+    ),
+    task_benchmark!(
+        "silent_infiltration_past_sentries",
+        "Fieldcraft",
+        "Silent Infiltration Past Sentries",
+        "Stealth (Sneaking & Hiding)",
+        TaskGateClass::ClassA,
+        (KIN, ITU),
+        Some((CharacteristicCode::DIS, 10)),
+        None,
+        2,
+        "10 TC"
+    ),
+    task_benchmark!(
+        "pick_high_security_pin_lock",
+        "Fieldcraft",
+        "Pick High-Security Pin Lock",
+        "Lockpicking & Physical Intrusion",
+        TaskGateClass::ClassB,
+        (DEX, TAC),
+        Some((CharacteristicCode::FOC, 9)),
+        Mandatory,
+        4,
+        "15 TC"
+    ),
+    task_benchmark!(
+        "bypass_biometric_capacitance_pad",
+        "Cyber",
+        "Bypass Biometric Capacitance Pad",
+        "Lockpicking & Physical Intrusion",
+        TaskGateClass::ClassC { min_skill_n: 2 },
+        (ANA, DEX),
+        Some((CharacteristicCode::MEM, 12)),
+        Mandatory,
+        4,
+        "20 TC"
+    ),
+    task_benchmark!(
+        "disarm_shaped_charge_ied",
+        "Technical",
+        "Disarm Shaped-Charge IED",
+        "Demolitions & Explosive Ordnance (EOD)",
+        TaskGateClass::ClassC { min_skill_n: 2 },
+        (DEX, FOC),
+        Some((CharacteristicCode::DIS, 13)),
+        Mandatory,
+        4,
+        "30 TC"
+    ),
+    task_benchmark!(
+        "staunch_arterial_bleed_in_combat",
+        "Medical",
+        "Staunch Arterial Bleed in Combat",
+        "First Aid & Basic Life Support (BLS / CPR)",
+        TaskGateClass::ClassA,
+        (DEX, FOC),
+        Some((CharacteristicCode::DIS, 11)),
+        Situational,
+        2,
+        "12 TC"
+    ),
+    task_benchmark!(
+        "field_extraction_of_fragment_near_spine",
+        "Medical",
+        "Field Extraction of Fragment Near Spine",
+        "Trauma, Orthopedic & General Surgery",
+        TaskGateClass::ClassC { min_skill_n: 2 },
+        (DEX, FOC),
+        Some((CharacteristicCode::DIS, 12)),
+        Mandatory,
+        4,
+        "15 min"
+    ),
+    task_benchmark!(
+        "synthesize_antitoxin_from_tissue_sample",
+        "Medical",
+        "Synthesize Antitoxin from Tissue Sample",
+        "Pharmacology & Toxicology",
+        TaskGateClass::ClassC { min_skill_n: 2 },
+        (ANA, MEM),
+        None,
+        Mandatory,
+        4,
+        "2 hrs / interval"
+    ),
+    task_benchmark!(
+        "patch_ruptured_hydraulic_line",
+        "Technical",
+        "Patch Ruptured Hydraulic Line",
+        "Automotive & Small Engine Mechanics",
+        TaskGateClass::ClassB,
+        (DEX, ANA),
+        Some((CharacteristicCode::FOR, 10)),
+        Situational,
+        0,
+        "5 min"
+    ),
+    task_benchmark!(
+        "reroute_damaged_micro_fission_coolant_loop",
+        "Technical",
+        "Reroute Damaged Micro-Fission Coolant Loop",
+        "Thermodynamics & Fluid Dynamics",
+        TaskGateClass::ClassC { min_skill_n: 3 },
+        (ANA, DEX),
+        Some((CharacteristicCode::DIS, 13)),
+        Mandatory,
+        6,
+        "10 min / interval"
+    ),
+    task_benchmark!(
+        "fabricate_custom_suppressor_baffle",
+        "Technical",
+        "Fabricate Custom Suppressor Baffle",
+        "Armourer & Gunsmithing",
+        TaskGateClass::ClassB,
+        (DEX, ANA),
+        None,
+        Mandatory,
+        2,
+        "1 hr / interval"
+    ),
+    task_benchmark!(
+        "packet_sniff_local_unencrypted_subnet",
+        "Cyber",
+        "Packet-Sniff Local Unencrypted Subnet",
+        "Cybersecurity & Network Intrusion",
+        TaskGateClass::ClassB,
+        (ANA, INS),
+        None,
+        Mandatory,
+        0,
+        "10 TC"
+    ),
+    task_benchmark!(
+        "live_kernel_injection_on_air_gapped_node",
+        "Cyber",
+        "Live Kernel Injection on Air-Gapped Node",
+        "Cybersecurity & Network Intrusion + Cryptography",
+        TaskGateClass::ClassC { min_skill_n: 2 },
+        (ANA, CRE),
+        Some((CharacteristicCode::MEM, 13)),
+        Mandatory,
+        4,
+        "15 TC"
+    ),
+    task_benchmark!(
+        "reconstruct_ballistic_trajectory_from_ricochets",
+        "Science",
+        "Reconstruct Ballistic Trajectory from Ricochets",
+        "Forensics & Crime Scene Investigation",
+        TaskGateClass::ClassB,
+        (ANA, SIG),
+        Some((CharacteristicCode::MEM, 11)),
+        Situational,
+        2,
+        "15 min"
+    ),
+    task_benchmark!(
+        "spot_ambush_in_dense_urban_ruins",
+        "Fieldcraft",
+        "Spot Ambush in Dense Urban Ruins",
+        "Alertness (Visual & Auditory Situational Awareness)",
+        TaskGateClass::ClassA,
+        (SIG, HEA),
+        None,
+        None,
+        2,
+        "6 TC"
+    ),
+    task_benchmark!(
+        "fast_talk_checkpoint_sentry",
+        "Social",
+        "Fast-Talk Checkpoint Sentry",
+        "Deception & Bluff",
+        TaskGateClass::ClassA,
+        (ELO, CRE),
+        Some((CharacteristicCode::DIS, 10)),
+        None,
+        2,
+        "10 TC"
+    ),
+    task_benchmark!(
+        "break_hostile_subject_in_interrogation",
+        "Social",
+        "Break Hostile Subject in Interrogation",
+        "Interrogation & Counter-Interrogation",
+        TaskGateClass::ClassB,
+        (INS, PRE),
+        Some((CharacteristicCode::DIS, 12)),
+        None,
+        4,
+        "30 min"
+    ),
+    task_benchmark!(
+        "rally_panicked_squad_under_artillery_fire",
+        "Social",
+        "Rally Panicked Squad Under Artillery Fire",
+        "Leadership & Command",
+        TaskGateClass::ClassB,
+        (PRE, DIS),
+        None,
+        None,
+        4,
+        "3 TC"
+    ),
+    task_benchmark!(
+        "navigate_magnetic_anomaly_storm_by_dead_reckoning",
+        "Fieldcraft",
+        "Navigate Magnetic Anomaly Storm by Dead Reckoning",
+        "Land Navigation & Cartography",
+        TaskGateClass::ClassB,
+        (ANA, SIG),
+        Some((CharacteristicCode::DIS, 11)),
+        Situational,
+        4,
+        "1 hr"
+    ),
 ];
 
 pub fn list_master_task_benchmarks() -> &'static [MasterTaskBenchmark] {
@@ -766,7 +1036,5 @@ pub fn get_master_task_benchmark(id_or_name: &str) -> Option<&'static MasterTask
         }
         _ => return None,
     };
-    MASTER_TASK_BENCHMARKS
-        .iter()
-        .find(|b| b.id == canonical_id)
+    MASTER_TASK_BENCHMARKS.iter().find(|b| b.id == canonical_id)
 }

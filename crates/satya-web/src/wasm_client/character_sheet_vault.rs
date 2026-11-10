@@ -17,10 +17,9 @@ use satya_engine::{
 };
 use satya_schema::{
     AnatomicalZoneRecord, BindCharacterSessionRequest, CharacterAssetKind, CharacterEventType,
-    CharacterListResponse, CharacterSheetEvent, CharacterSheetRecord,
-    CharacterVerificationStatus, ImportCharacterRequest, Participant, SaveCharacterRequest,
-    SaveCharacterResponse, SchemaRegistry, SessionMode, SessionRole, UploadCharacterAssetRequest,
-    subjects,
+    CharacterListResponse, CharacterSheetEvent, CharacterSheetRecord, CharacterVerificationStatus,
+    ImportCharacterRequest, Participant, SaveCharacterRequest, SaveCharacterResponse,
+    SchemaRegistry, SessionMode, SessionRole, UploadCharacterAssetRequest, subjects,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -34,8 +33,16 @@ pub fn encode_base64_bytes(input: &[u8]) -> String {
     let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     for chunk in input.chunks(3) {
         let b0 = u32::from(chunk[0]);
-        let b1 = if chunk.len() > 1 { u32::from(chunk[1]) } else { 0 };
-        let b2 = if chunk.len() > 2 { u32::from(chunk[2]) } else { 0 };
+        let b1 = if chunk.len() > 1 {
+            u32::from(chunk[1])
+        } else {
+            0
+        };
+        let b2 = if chunk.len() > 2 {
+            u32::from(chunk[2])
+        } else {
+            0
+        };
         let triple = (b0 << 16) | (b1 << 8) | b2;
         out.push(B64_CHARS[((triple >> 18) & 0x3F) as usize] as char);
         out.push(B64_CHARS[((triple >> 12) & 0x3F) as usize] as char);
@@ -662,12 +669,20 @@ pub fn satya_char_sheet_save_to_vault() {
             session_id: session_id.clone(),
             bind_to_session: session_id.is_some(),
         };
-        match fetch_json::<_, SaveCharacterResponse>("POST", "/api/characters", Some(&tok), Some(&req)).await {
+        match fetch_json::<_, SaveCharacterResponse>(
+            "POST",
+            "/api/characters",
+            Some(&tok),
+            Some(&req),
+        )
+        .await
+        {
             Ok(resp) => {
                 let name = resp.character.character_name.clone();
                 let path_note = resp.local_file_path.clone();
                 with_state_mut(|st| {
-                    st.character_sheet.apply_character_sheet_record(&resp.character);
+                    st.character_sheet
+                        .apply_character_sheet_record(&resp.character);
                     st.character_sheet.local_satya_file_path = Some(resp.local_file_path);
                     st.character_sheet.vault_feedback = format!(
                         "Saved '{}' ({:?}) to Vault & {} · Emitted CharacterSheetEvent to Iggy topic `character-sheets`.",
@@ -681,7 +696,9 @@ pub fn satya_char_sheet_save_to_vault() {
                     {
                         *existing = resp.character;
                     } else {
-                        st.character_sheet.saved_vault_list.insert(0, resp.character);
+                        st.character_sheet
+                            .saved_vault_list
+                            .insert(0, resp.character);
                     }
                 });
                 append_system_notice(&format!(
@@ -722,7 +739,13 @@ pub fn satya_char_sheet_export_file() {
         let slug: String = record
             .character_name
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() {
+                    c.to_ascii_lowercase()
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>()
             .trim_matches('_')
             .to_string();
@@ -748,7 +771,8 @@ pub fn satya_char_sheet_export_file() {
             {
                 let cid = saved.character.character_id.clone();
                 with_state_mut(|st| {
-                    st.character_sheet.apply_character_sheet_record(&saved.character);
+                    st.character_sheet
+                        .apply_character_sheet_record(&saved.character);
                     st.character_sheet.local_satya_file_path = Some(saved.local_file_path);
                 });
                 if let Some(win) = window() {
@@ -779,13 +803,9 @@ pub fn satya_char_sheet_export_file() {
         let bytes = exported_bytes.unwrap_or_else(|| {
             let registry = SchemaRegistry::new_with_builtin_schemas().expect("builtin schemas");
             let sid = session_id.unwrap_or_else(|| "local-export".to_string());
-            let Ok(metadata) = registry.build_metadata(
-                1,
-                subjects::CHARACTER_SHEET,
-                1,
-                &sid,
-                SessionMode::Ttrpg,
-            ) else {
+            let Ok(metadata) =
+                registry.build_metadata(1, subjects::CHARACTER_SHEET, 1, &sid, SessionMode::Ttrpg)
+            else {
                 return Vec::new();
             };
             let mut actor = Participant::human(
@@ -828,7 +848,9 @@ pub fn satya_char_sheet_export_file() {
 #[wasm_bindgen]
 pub fn satya_char_sheet_import_file() {
     spawn_local(async move {
-        let Some((fname, _mime, bytes)) = read_first_file_bytes("char-sheet-import-file-input").await else {
+        let Some((fname, _mime, bytes)) =
+            read_first_file_bytes("char-sheet-import-file-input").await
+        else {
             return;
         };
         let (tok_opt, session_id): (Option<String>, Option<String>) =
@@ -852,7 +874,8 @@ pub fn satya_char_sheet_import_file() {
                     let name = resp.character.character_name.clone();
                     let status = resp.character.verification_status;
                     with_state_mut(|st| {
-                        st.character_sheet.apply_character_sheet_record(&resp.character);
+                        st.character_sheet
+                            .apply_character_sheet_record(&resp.character);
                         st.character_sheet.local_satya_file_path = Some(resp.local_file_path);
                         st.character_sheet.vault_feedback = format!(
                             "Imported '{}' from {} ({:?}) · Logged CHARACTER_IMPORTED to Iggy topic `character-sheets`.",
@@ -907,18 +930,15 @@ pub fn satya_char_sheet_refresh_vault() {
         let Some(tok) = tok_opt else {
             with_state_mut(|st| {
                 st.character_sheet.vault_feedback =
-                    "Log in to list your saved characters from SQLite and ~/Satya/characters/.".to_string();
+                    "Log in to list your saved characters from SQLite and ~/Satya/characters/."
+                        .to_string();
             });
             render_character_sheet();
             return;
         };
-        if let Ok(resp) = fetch_json::<(), CharacterListResponse>(
-            "GET",
-            "/api/characters",
-            Some(&tok),
-            None,
-        )
-        .await
+        if let Ok(resp) =
+            fetch_json::<(), CharacterListResponse>("GET", "/api/characters", Some(&tok), None)
+                .await
         {
             let count = resp.characters.len();
             let dir_note = resp.local_directory;
@@ -985,7 +1005,8 @@ pub fn satya_char_sheet_bind_session() {
         let (Some(tok), Some(session_id)) = (tok_opt, session_opt) else {
             with_state_mut(|st| {
                 st.character_sheet.vault_feedback =
-                    "Log in and join/create a session first to bind this character to the session.".to_string();
+                    "Log in and join/create a session first to bind this character to the session."
+                        .to_string();
             });
             render_character_sheet();
             return;
@@ -998,7 +1019,8 @@ pub fn satya_char_sheet_bind_session() {
         match fetch_json::<_, SaveCharacterResponse>("POST", &url, Some(&tok), Some(&req)).await {
             Ok(resp) => {
                 with_state_mut(|st| {
-                    st.character_sheet.apply_character_sheet_record(&resp.character);
+                    st.character_sheet
+                        .apply_character_sheet_record(&resp.character);
                     st.character_sheet.vault_feedback = format!(
                         "Bound '{}' to active session '{}' · Emitted CHARACTER_BOUND_TO_SESSION to Iggy.",
                         char_name, session_id
@@ -1025,10 +1047,13 @@ pub fn satya_char_sheet_bind_session() {
 #[wasm_bindgen]
 pub fn satya_char_sheet_upload_asset() {
     spawn_local(async move {
-        let Some((filename, mime_type, bytes)) = read_first_file_bytes("char-asset-file-input").await else {
+        let Some((filename, mime_type, bytes)) =
+            read_first_file_bytes("char-asset-file-input").await
+        else {
             with_state_mut(|st| {
                 st.character_sheet.vault_feedback =
-                    "Choose an image, PDF, or .glb file first before clicking '+ Upload Asset'.".to_string();
+                    "Choose an image, PDF, or .glb file first before clicking '+ Upload Asset'."
+                        .to_string();
             });
             render_character_sheet();
             return;
@@ -1053,7 +1078,8 @@ pub fn satya_char_sheet_upload_asset() {
         let Some(tok) = tok_opt else {
             with_state_mut(|st| {
                 st.character_sheet.vault_feedback =
-                    "Log in first to upload multimodal character assets to your dedicated Vault.".to_string();
+                    "Log in first to upload multimodal character assets to your dedicated Vault."
+                        .to_string();
             });
             render_character_sheet();
             return;
@@ -1083,7 +1109,8 @@ pub fn satya_char_sheet_upload_asset() {
         match fetch_json::<_, SaveCharacterResponse>("POST", &url, Some(&tok), Some(&req)).await {
             Ok(resp) => {
                 with_state_mut(|st| {
-                    st.character_sheet.apply_character_sheet_record(&resp.character);
+                    st.character_sheet
+                        .apply_character_sheet_record(&resp.character);
                     st.character_sheet.local_satya_file_path = Some(resp.local_file_path);
                     st.character_sheet.vault_feedback = format!(
                         "Uploaded asset '{}' ({} bytes) · Logged CHARACTER_ASSET_UPLOADED to Iggy `character-sheets`.",

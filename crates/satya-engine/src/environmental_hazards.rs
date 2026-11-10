@@ -437,13 +437,17 @@ pub struct SleepDeprivationEvaluation {
 #[must_use]
 pub const fn evaluate_sleep_deprivation(hours_awake: i32) -> SleepDeprivationEvaluation {
     let hrs = if hours_awake < 0 { 0 } else { hours_awake };
-    let (delta_int, mental_sensory_ooda_penalty, fatigue_level_floor, requires_microsleep_dis_check) =
-        match hrs {
-            72.. => (8, 6, 2, true),
-            48..=71 => (4, 3, 2, false),
-            24..=47 => (2, 1, 0, false),
-            _ => (0, 0, 0, false),
-        };
+    let (
+        delta_int,
+        mental_sensory_ooda_penalty,
+        fatigue_level_floor,
+        requires_microsleep_dis_check,
+    ) = match hrs {
+        72.. => (8, 6, 2, true),
+        48..=71 => (4, 3, 2, false),
+        24..=47 => (2, 1, 0, false),
+        _ => (0, 0, 0, false),
+    };
     SleepDeprivationEvaluation {
         hours_awake: hrs,
         delta_int,

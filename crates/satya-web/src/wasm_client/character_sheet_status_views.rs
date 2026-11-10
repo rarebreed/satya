@@ -6,8 +6,8 @@ use crate::wasm_client::character_sheet::{
 };
 use crate::wasm_client::dom::escape_html;
 use satya_engine::{
-    AcuteMentalTraumaTier, HIT_LOCATION_TABLE, HemorrhageGrade, HypovolemicShockClass,
-    MoraleState, PhysiologicalStatusCondition, SocialWoundKind, evaluate_blood_loss_progression,
+    AcuteMentalTraumaTier, HIT_LOCATION_TABLE, HemorrhageGrade, HypovolemicShockClass, MoraleState,
+    PhysiologicalStatusCondition, SocialWoundKind, evaluate_blood_loss_progression,
     evaluate_fatigue_level, evaluate_operational_heat, lookup_campaign_sqm, psyche_drift_threshold,
 };
 
@@ -294,7 +294,10 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
         (1, "Grade 1: Capillary Ooze (0.25 U/hr · 8t Bandage)"),
         (2, "Grade 2: Venous Hemorrhage (0.5 U/min · 20t Dressing)"),
         (3, "Grade 3: Major Venous / Visceral (1.0 U/5s · 20t Pack)"),
-        (4, "Grade 4: Arterial Severance (1.0 U/1s · 24t CAT Tourniquet)"),
+        (
+            4,
+            "Grade 4: Arterial Severance (1.0 U/1s · 24t CAT Tourniquet)",
+        ),
     ]
     .iter()
     .map(|&(g, lbl)| {
@@ -386,15 +389,51 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
     };
 
     let status_cond_specs = [
-        ("DAZZLED", "Dazzled (-5 SIG)", PhysiologicalStatusCondition::DazzledBlurredVision),
-        ("BLINDED", "Blinded (SIG=0)", PhysiologicalStatusCondition::Blinded),
-        ("TINNITUS", "Tinnitus (-6 HEA)", PhysiologicalStatusCondition::Tinnitus),
-        ("DEAFENED", "Deafened (HEA=0)", PhysiologicalStatusCondition::Deafened),
-        ("STUNNED", "Stunned (+8t Freeze)", PhysiologicalStatusCondition::StunnedDazed),
-        ("CONCUSSED", "Concussed (-4 Cog)", PhysiologicalStatusCondition::Concussed),
-        ("DIZZY", "Dizzy (-6 KIN)", PhysiologicalStatusCondition::DizzyVertigo),
-        ("NAUSEA", "Nausea (+4 Δ_int)", PhysiologicalStatusCondition::NauseaSickened),
-        ("PINNED", "Pinned (Tempo=0)", PhysiologicalStatusCondition::PinnedImmobilized),
+        (
+            "DAZZLED",
+            "Dazzled (-5 SIG)",
+            PhysiologicalStatusCondition::DazzledBlurredVision,
+        ),
+        (
+            "BLINDED",
+            "Blinded (SIG=0)",
+            PhysiologicalStatusCondition::Blinded,
+        ),
+        (
+            "TINNITUS",
+            "Tinnitus (-6 HEA)",
+            PhysiologicalStatusCondition::Tinnitus,
+        ),
+        (
+            "DEAFENED",
+            "Deafened (HEA=0)",
+            PhysiologicalStatusCondition::Deafened,
+        ),
+        (
+            "STUNNED",
+            "Stunned (+8t Freeze)",
+            PhysiologicalStatusCondition::StunnedDazed,
+        ),
+        (
+            "CONCUSSED",
+            "Concussed (-4 Cog)",
+            PhysiologicalStatusCondition::Concussed,
+        ),
+        (
+            "DIZZY",
+            "Dizzy (-6 KIN)",
+            PhysiologicalStatusCondition::DizzyVertigo,
+        ),
+        (
+            "NAUSEA",
+            "Nausea (+4 Δ_int)",
+            PhysiologicalStatusCondition::NauseaSickened,
+        ),
+        (
+            "PINNED",
+            "Pinned (Tempo=0)",
+            PhysiologicalStatusCondition::PinnedImmobilized,
+        ),
     ];
     let cond_buttons: String = status_cond_specs
         .iter()
@@ -436,8 +475,14 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
     let mt_opts: String = [
         ("NONE", "None (Mentally Composed)"),
         ("TIER_1", "Tier 1: Acute Mental Shock (OODA Freeze 9t)"),
-        ("TIER_2", "Tier 2: Panic / Fight-or-Flight (-4 Pool, -6 ANA/FOC)"),
-        ("TIER_3", "Tier 3: Dissociation / Shell Shock (-6 ITU/INS/FOC, +0.30x Time)"),
+        (
+            "TIER_2",
+            "Tier 2: Panic / Fight-or-Flight (-4 Pool, -6 ANA/FOC)",
+        ),
+        (
+            "TIER_3",
+            "Tier 3: Dissociation / Shell Shock (-6 ITU/INS/FOC, +0.30x Time)",
+        ),
         ("TIER_4", "Tier 4: Catatonia (Total Psychomotor Shutdown)"),
     ]
     .iter()
@@ -459,7 +504,10 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
         ("NONE", "None (Unshaken Conviction)"),
         ("STRAIN", "Rhetorical Strain (+1 Δ_int on Social)"),
         ("DOUBT", "Doubt (+2 Δ_int, Hesitation)"),
-        ("DISSONANCE", "Cognitive Dissonance (+4 Δ_int until resolved)"),
+        (
+            "DISSONANCE",
+            "Cognitive Dissonance (+4 Δ_int until resolved)",
+        ),
         ("EGO_WOUND", "Ego Wound (+2 Δ_int, Rash Provocation)"),
     ]
     .iter()

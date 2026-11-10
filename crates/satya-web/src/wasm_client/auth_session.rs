@@ -16,7 +16,7 @@ use crate::wasm_client::options::{
     sync_chat_options_for_mode, sync_role_options_for_mode,
 };
 use crate::wasm_client::session_persistence::{
-    AUTH_TOKEN_STORAGE_KEY, ACTIVE_SESSION_STORAGE_KEY, PersistedActiveSessionRef,
+    ACTIVE_SESSION_STORAGE_KEY, AUTH_TOKEN_STORAGE_KEY, PersistedActiveSessionRef,
     replay_session_history_snapshot, satya_refresh_saved_sessions,
 };
 use crate::wasm_client::state::{with_state, with_state_mut};

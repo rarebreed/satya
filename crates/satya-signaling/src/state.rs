@@ -2,6 +2,7 @@
 //! and session disconnect lifecycle processing for the Satya signaling server.
 
 use crate::auth::{AuthAndSessionManager, SessionDisconnectSummary};
+use crate::player_ai_api::SessionAiPlayerEntry;
 use satya_schema::{
     LifecycleEventType, MessageVisibility, Participant, ServerWsPacket, SessionLifecycleEvent,
     SessionRole, WebRtcEventKind, WebRtcTelemetryEvent, subjects,
@@ -25,6 +26,10 @@ pub struct SignalingAppState {
     pub sequence_counter: AtomicI64,
     /// Active WebSocket connections per `session_id -> (user_id -> tx)`.
     pub active_sockets: RwLock<HashMap<String, HashMap<String, mpsc::UnboundedSender<String>>>>,
+    /// Configured AI Player agents per `session_id -> (player_user_id -> SessionAiPlayerEntry)`.
+    pub ai_players: RwLock<HashMap<String, HashMap<String, SessionAiPlayerEntry>>>,
+    /// Per-session consecutive AI-to-AI rally turn counter (`session_id -> count`) to prevent infinite loops.
+    pub ai_rally_counters: RwLock<HashMap<String, u32>>,
 }
 
 impl SignalingAppState {
@@ -43,6 +48,8 @@ impl SignalingAppState {
             storage,
             sequence_counter: AtomicI64::new(start_seq),
             active_sockets: RwLock::new(HashMap::new()),
+            ai_players: RwLock::new(HashMap::new()),
+            ai_rally_counters: RwLock::new(HashMap::new()),
         }))
     }
 

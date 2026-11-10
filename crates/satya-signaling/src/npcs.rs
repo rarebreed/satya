@@ -348,7 +348,10 @@ pub async fn generate_session_npc_handler(
                     memory_id: Some(format!("mem_{}", character.character_id)),
                     campaign_tag: Some(campaign_tag.clone()),
                     category: GmMemoryCategory::NpcSecret,
-                    title: format!("NPC: {} ({})", character.character_name, character.callsign_or_role),
+                    title: format!(
+                        "NPC: {} ({})",
+                        character.character_name, character.callsign_or_role
+                    ),
                     content: full_dossier.clone(),
                     is_pinned: true,
                     is_persistent: true,
@@ -360,7 +363,8 @@ pub async fn generate_session_npc_handler(
         None
     };
 
-    let can_see_gm = can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
+    let can_see_gm =
+        can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
     let entry = redact_npc_entry_for_viewer(
         SessionNpcEntry {
             character_id: character.character_id.clone(),
@@ -409,7 +413,8 @@ pub async fn list_session_npcs_handler(
             .into_response();
     }
 
-    let can_see_gm = can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
+    let can_see_gm =
+        can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
 
     let rows = match sqlx::query(
         r#"

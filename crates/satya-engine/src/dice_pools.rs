@@ -440,7 +440,8 @@ impl MedianGateCtx {
         }
         self.recurse(face + 1, remaining, mult_denom);
         for c in 1..=remaining {
-            self.current_tuple.resize(self.current_tuple.len() + c, face);
+            self.current_tuple
+                .resize(self.current_tuple.len() + c, face);
             self.recurse(face + 1, remaining - c, mult_denom * factorial_u64(c));
             self.current_tuple.truncate(self.current_tuple.len() - c);
         }

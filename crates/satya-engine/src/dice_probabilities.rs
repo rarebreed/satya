@@ -530,11 +530,7 @@ define_coded_enum! {
 impl CascadeOutcomeKind {
     /// Classifies a roll outcome from `(total_successes, raw_botches, effective_botches)`.
     #[inline]
-    pub const fn classify(
-        total_successes: i32,
-        raw_botches: i32,
-        effective_botches: i32,
-    ) -> Self {
+    pub const fn classify(total_successes: i32, raw_botches: i32, effective_botches: i32) -> Self {
         if total_successes >= 1 {
             if raw_botches >= 1 {
                 Self::SuccessWithComplication
@@ -801,4 +797,3 @@ pub fn evaluate_satya_cascade_task(
     );
     (event, outcome)
 }
-

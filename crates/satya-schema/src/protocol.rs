@@ -1049,3 +1049,96 @@ pub struct SessionNpcsResponse {
     pub viewer_can_see_gm_secrets: bool,
     pub npcs: Vec<SessionNpcEntry>,
 }
+
+fn default_max_rally_turns() -> u32 {
+    2
+}
+
+/// Configuration for spawning or updating an autonomous AI Player (`satya_ml.ai_player`) in a session.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiPlayerConfig {
+    /// Unique `user_id` for the AI Player (e.g. `"ai-player-1"`).
+    #[serde(default)]
+    pub user_id: Option<String>,
+    /// Display or character name shown in the session roster and chat (`"Kaelen Voss (AI Player)"`).
+    #[serde(default)]
+    pub display_name: Option<String>,
+    /// Optional bound `character_id` from the session's character sheets.
+    #[serde(default)]
+    pub character_id: Option<String>,
+    /// Playstyle or persona directive guiding the AI Player's decisions.
+    #[serde(default)]
+    pub persona_prompt: Option<String>,
+    /// Optional LLM provider override (`"ollama"`, `"google_genai"`, `"openai"`, `"anthropic"`).
+    #[serde(default)]
+    pub provider: Option<String>,
+    /// Optional reasoning model override.
+    #[serde(default)]
+    pub model_id: Option<String>,
+    /// Optional custom service URL for the AI Player worker (defaults to `ai_gm.service_url` or `SATYA_AI_PLAYER_URL`).
+    #[serde(default)]
+    pub service_url: Option<String>,
+    /// Whether the AI Player automatically submits a turn when awaited by `party_turn_gate_node` or after a GM scene beat.
+    #[serde(default = "default_true_flag")]
+    pub auto_respond: bool,
+    /// Maximum consecutive AI Player <-> AI GM rally exchanges before pausing for human input (`default = 2`).
+    #[serde(default = "default_max_rally_turns")]
+    pub max_rally_turns: u32,
+}
+
+/// HTTP request body for `POST /api/sessions/:session_id/ai-players/step` to trigger an AI Player turn.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StepAiPlayerRequest {
+    /// Target AI Player `user_id` (or `"all"` / omitted to step the first active AI Player).
+    #[serde(default)]
+    pub user_id: Option<String>,
+    /// Optional custom prompt or tactical instruction for this step.
+    #[serde(default)]
+    pub prompt: Option<String>,
+    /// Whether this AI Player turn should also trigger the AI GM upon completion (`default = true`).
+    #[serde(default = "default_true_flag")]
+    pub auto_trigger_gm: bool,
+}
+
+/// HTTP request body for `POST /api/player-ai/sessions/:session_id/chat` called by `satya_ml.ai_player`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerAiChatRequest {
+    pub user_id: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    pub visibility: MessageVisibility,
+    #[serde(default)]
+    pub recipient_user_ids: Vec<String>,
+    pub channel_context: ChannelContext,
+    pub body: String,
+    #[serde(default = "default_true_flag")]
+    pub auto_trigger_gm: bool,
+}
+
+/// HTTP request body for `POST /api/player-ai/sessions/:session_id/roll` called by `satya_ml.ai_player`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayerAiRollRequest {
+    pub user_id: String,
+    #[serde(default)]
+    pub actor_display_name: Option<String>,
+    #[serde(alias = "skill_name")]
+    pub check_category: String,
+    #[serde(default = "default_control_c", alias = "control_c")]
+    pub attribute_tn: i32,
+    #[serde(default = "default_skill_level_n", alias = "pool_size")]
+    pub skill_rank: usize,
+    #[serde(default, alias = "external_mod")]
+    pub difficulty_mod: i32,
+    #[serde(default)]
+    pub internal_mod: i32,
+    #[serde(default)]
+    pub combat_technique: Option<String>,
+    #[serde(default)]
+    pub tempo_pool: Option<i32>,
+    #[serde(default)]
+    pub control_pool: Option<i32>,
+    #[serde(default)]
+    pub force_pool: Option<i32>,
+    #[serde(default)]
+    pub notes: Option<String>,
+}

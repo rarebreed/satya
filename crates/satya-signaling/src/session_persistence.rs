@@ -2,7 +2,9 @@
 //! chat/mechanics history replay, and session resume handlers (`GET /api/auth/me`,
 //! `GET /api/sessions/saved`, `POST /api/sessions/resume`).
 
-use crate::auth::{AuthAndSessionManager, JoinTokenClaims, ProtectedSession, SessionAiGmVault, UserAccount};
+use crate::auth::{
+    AuthAndSessionManager, JoinTokenClaims, ProtectedSession, SessionAiGmVault, UserAccount,
+};
 use crate::state::SignalingAppState;
 use axum::{
     Json,
@@ -38,14 +40,12 @@ struct PersistedAiGmMeta {
 impl AuthAndSessionManager {
     /// Returns the maximum `sequence_num` stored in `session_event_history` (`0` if empty).
     pub(crate) async fn max_persisted_sequence_num(&self) -> i64 {
-        sqlx::query_scalar::<_, Option<i64>>(
-            "SELECT MAX(sequence_num) FROM session_event_history",
-        )
-        .fetch_one(&self.db_pool)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or(0)
+        sqlx::query_scalar::<_, Option<i64>>("SELECT MAX(sequence_num) FROM session_event_history")
+            .fetch_one(&self.db_pool)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or(0)
     }
 
     /// Loads `(password_hash, active_map, created_at_us)` for an existing saved session if present.
@@ -112,11 +112,8 @@ impl AuthAndSessionManager {
             })
             .ok()
         });
-        let has_ai_gm = enable_ai_gm
-            || session
-                .roster
-                .values()
-                .any(|p| p.role == SessionRole::AiGm);
+        let has_ai_gm =
+            enable_ai_gm || session.roster.values().any(|p| p.role == SessionRole::AiGm);
 
         let _ = sqlx::query(
             r#"
@@ -410,8 +407,7 @@ impl AuthAndSessionManager {
         match ev.visibility {
             MessageVisibility::Public => true,
             MessageVisibility::Private => {
-                ev.sender.user_id == user_id
-                    || ev.recipients.iter().any(|r| r.user_id == user_id)
+                ev.sender.user_id == user_id || ev.recipients.iter().any(|r| r.user_id == user_id)
             }
             MessageVisibility::GmOnly => {
                 ev.sender.user_id == user_id
@@ -678,11 +674,7 @@ impl AuthAndSessionManager {
                 || saved_part_row.is_some()
                 || session.roster.contains_key(&user.user_id);
 
-            if let Some(pwd) = req
-                .session_password
-                .as_deref()
-                .filter(|s| !s.is_empty())
-            {
+            if let Some(pwd) = req.session_password.as_deref().filter(|s| !s.is_empty()) {
                 if !Self::verify_secret(pwd, &session.password_hash) {
                     anyhow::bail!("Invalid session password for session '{sid}'");
                 }
@@ -861,9 +853,7 @@ pub async fn resume_session_handler(
             if let Ok(sync_pkt) = serde_json::to_string(&ServerWsPacket::RosterSync {
                 roster: roster.clone(),
             }) {
-                state
-                    .broadcast_to_session(&req.session_id, &sync_pkt)
-                    .await;
+                state.broadcast_to_session(&req.session_id, &sync_pkt).await;
             }
 
             (

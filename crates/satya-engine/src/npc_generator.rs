@@ -103,7 +103,9 @@ impl NpcTemplateKind {
     #[must_use]
     pub const fn primary_career_track(self) -> CareerTermTrack {
         match self {
-            Self::Auto | Self::DetectiveInvestigator => CareerTermTrack::LawEnforcementSwatDetective,
+            Self::Auto | Self::DetectiveInvestigator => {
+                CareerTermTrack::LawEnforcementSwatDetective
+            }
             Self::MedicalDoctor => CareerTermTrack::MedicalSchoolAndResidency,
             Self::CombatSoldier => CareerTermTrack::MilitaryCombatArmsSpecOps,
             Self::SyndicateEnforcer => CareerTermTrack::OrganizedCrimeCartelSyndicate,
@@ -208,7 +210,11 @@ struct SplitMix64 {
 impl SplitMix64 {
     const fn new(seed: u64) -> Self {
         Self {
-            state: if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed },
+            state: if seed == 0 {
+                0x9E37_79B9_7F4A_7C15
+            } else {
+                seed
+            },
         }
     }
 
@@ -259,35 +265,120 @@ pub fn infer_npc_template_from_prompt(prompt: &str) -> NpcTemplateKind {
     const TEMPLATE_CUES: &[(NpcTemplateKind, &[&str])] = &[
         (
             NpcTemplateKind::MedicalDoctor,
-            &["md", "doctor", "physician", "surgeon", "medic", "nurse", "paramedic", "clinician", "psychiatrist", "pediatrician", "general md", "medical"],
+            &[
+                "md",
+                "doctor",
+                "physician",
+                "surgeon",
+                "medic",
+                "nurse",
+                "paramedic",
+                "clinician",
+                "psychiatrist",
+                "pediatrician",
+                "general md",
+                "medical",
+            ],
         ),
         (
             NpcTemplateKind::DetectiveInvestigator,
-            &["detective", "investigator", "police", "cop", "swat", "inspector", "marshal", "sheriff", "forensic"],
+            &[
+                "detective",
+                "investigator",
+                "police",
+                "cop",
+                "swat",
+                "inspector",
+                "marshal",
+                "sheriff",
+                "forensic",
+            ],
         ),
         (
             NpcTemplateKind::IntelligenceOperative,
-            &["spy", "intelligence", "operative", "handler", "undercover", "clandestine", "agent", "espionage"],
+            &[
+                "spy",
+                "intelligence",
+                "operative",
+                "handler",
+                "undercover",
+                "clandestine",
+                "agent",
+                "espionage",
+            ],
         ),
         (
             NpcTemplateKind::SyndicateEnforcer,
-            &["syndicate", "cartel", "gang", "enforcer", "fixer", "smuggler", "thief", "burglar", "hitman", "mob", "criminal"],
+            &[
+                "syndicate",
+                "cartel",
+                "gang",
+                "enforcer",
+                "fixer",
+                "smuggler",
+                "thief",
+                "burglar",
+                "hitman",
+                "mob",
+                "criminal",
+            ],
         ),
         (
             NpcTemplateKind::StemEngineer,
-            &["engineer", "scientist", "hacker", "programmer", "researcher", "robotics", "physicist", "chemist", "professor", "analyst"],
+            &[
+                "engineer",
+                "scientist",
+                "hacker",
+                "programmer",
+                "researcher",
+                "robotics",
+                "physicist",
+                "chemist",
+                "professor",
+                "analyst",
+            ],
         ),
         (
             NpcTemplateKind::BlueCollarTech,
-            &["mechanic", "technician", "pilot", "electrician", "machinist", "welder", "sailor", "trucker", "driver"],
+            &[
+                "mechanic",
+                "technician",
+                "pilot",
+                "electrician",
+                "machinist",
+                "welder",
+                "sailor",
+                "trucker",
+                "driver",
+            ],
         ),
         (
             NpcTemplateKind::FrontierRanger,
-            &["ranger", "scout", "hunter", "tracker", "herbalist", "farmer", "outrider", "survivalist", "guide"],
+            &[
+                "ranger",
+                "scout",
+                "hunter",
+                "tracker",
+                "herbalist",
+                "farmer",
+                "outrider",
+                "survivalist",
+                "guide",
+            ],
         ),
         (
             NpcTemplateKind::CombatSoldier,
-            &["soldier", "marine", "mercenary", "sniper", "infantry", "veteran", "bodyguard", "bouncer", "commando"],
+            &[
+                "soldier",
+                "marine",
+                "mercenary",
+                "sniper",
+                "infantry",
+                "veteran",
+                "bodyguard",
+                "bouncer",
+                "commando",
+            ],
         ),
     ];
 
@@ -307,15 +398,22 @@ pub fn extract_npc_name_from_prompt(prompt: &str, seed: u64) -> String {
         return fallback_npc_name(seed);
     }
 
-    for sep in [" is a ", " is an ", " is the ", " — ", " - ", ", a ", ", an ", ": "] {
+    for sep in [
+        " is a ", " is an ", " is the ", " — ", " - ", ", a ", ", an ", ": ",
+    ] {
         if let Some(idx) = trimmed.find(sep) {
             let candidate = trimmed[..idx].trim().trim_matches(['"', '\'']);
             let words: Vec<&str> = candidate.split_whitespace().collect();
             if !words.is_empty()
                 && words.len() <= 4
-                && words[0].chars().next().is_some_and(|c| c.is_ascii_uppercase())
-                && !["A", "An", "The", "This", "He", "She", "They", "Roll", "Create", "Generate"]
-                    .contains(&words[0])
+                && words[0]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase())
+                && ![
+                    "A", "An", "The", "This", "He", "She", "They", "Roll", "Create", "Generate",
+                ]
+                .contains(&words[0])
             {
                 return candidate.to_string();
             }
@@ -352,8 +450,18 @@ fn fallback_npc_name(seed: u64) -> String {
         "Rafael", "Miriam",
     ];
     const LAST: [&str; 12] = [
-        "Vance", "Rostova", "Okafor", "Chen", "Mercer", "Kowalski", "Alvarez", "Haddad", "Sato",
-        "Novak", "Lindqvist", "Solis",
+        "Vance",
+        "Rostova",
+        "Okafor",
+        "Chen",
+        "Mercer",
+        "Kowalski",
+        "Alvarez",
+        "Haddad",
+        "Sato",
+        "Novak",
+        "Lindqvist",
+        "Solis",
     ];
     format!(
         "{} {}",
@@ -414,7 +522,23 @@ fn apply_prompt_psyche_and_skill_cues(
         }
     }
 
-    if any_cue(&lower, &words, &["kind", "caring", "compassionate", "gentle", "altruistic", "selfless", "empathetic", "warm", "generous", "tender", "healer"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "kind",
+            "caring",
+            "compassionate",
+            "gentle",
+            "altruistic",
+            "selfless",
+            "empathetic",
+            "warm",
+            "generous",
+            "tender",
+            "healer",
+        ],
+    ) {
         chars.slf = 5;
         chars.agg = chars.agg.min(5);
         chars.ego = chars.ego.min(7);
@@ -427,51 +551,222 @@ fn apply_prompt_psyche_and_skill_cues(
             "psychology_behavioral_analysis_counseling",
         ]);
     }
-    if any_cue(&lower, &words, &["selfish", "greedy", "mercenary", "ruthless", "callous", "opportunistic", "self-serving", "cutthroat"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "selfish",
+            "greedy",
+            "mercenary",
+            "ruthless",
+            "callous",
+            "opportunistic",
+            "self-serving",
+            "cutthroat",
+        ],
+    ) {
         chars.slf = 16;
         chars.agg = chars.agg.max(15);
     }
-    if any_cue(&lower, &words, &["belong", "belongs", "belonging", "fit in", "acceptance", "accepted", "loyal", "tribal", "devoted", "team player", "pack", "family", "needs to feel like", "approval"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "belong",
+            "belongs",
+            "belonging",
+            "fit in",
+            "acceptance",
+            "accepted",
+            "loyal",
+            "tribal",
+            "devoted",
+            "team player",
+            "pack",
+            "family",
+            "needs to feel like",
+            "approval",
+        ],
+    ) {
         chars.blg = 16;
         priority_skills.extend_from_slice(&["empathy_social_perception", "persuasion_fast_talk"]);
     }
-    if any_cue(&lower, &words, &["loner", "lone wolf", "detached", "solitary", "independent", "outcast", "drifter", "aloof"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "loner",
+            "lone wolf",
+            "detached",
+            "solitary",
+            "independent",
+            "outcast",
+            "drifter",
+            "aloof",
+        ],
+    ) {
         chars.blg = 4;
     }
-    if any_cue(&lower, &words, &["arrogant", "proud", "narcissistic", "cocky", "vain", "egotistical", "grandiose", "haughty"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "arrogant",
+            "proud",
+            "narcissistic",
+            "cocky",
+            "vain",
+            "egotistical",
+            "grandiose",
+            "haughty",
+        ],
+    ) {
         chars.ego = 17;
     }
-    if any_cue(&lower, &words, &["humble", "modest", "unassuming", "meek", "self-effacing"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &["humble", "modest", "unassuming", "meek", "self-effacing"],
+    ) {
         chars.ego = 5;
     }
-    if any_cue(&lower, &words, &["curious", "open-minded", "imaginative", "inquisitive", "creative", "eccentric", "visionary"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "curious",
+            "open-minded",
+            "imaginative",
+            "inquisitive",
+            "creative",
+            "eccentric",
+            "visionary",
+        ],
+    ) {
         chars.opn = 16;
     }
-    if any_cue(&lower, &words, &["dogmatic", "rigid", "stubborn", "traditional", "closed-minded", "suspicious", "cynical"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "dogmatic",
+            "rigid",
+            "stubborn",
+            "traditional",
+            "closed-minded",
+            "suspicious",
+            "cynical",
+        ],
+    ) {
         chars.opn = 5;
     }
-    if any_cue(&lower, &words, &["extroverted", "outgoing", "charismatic", "gregarious", "talkative", "charming", "boisterous", "social"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "extroverted",
+            "outgoing",
+            "charismatic",
+            "gregarious",
+            "talkative",
+            "charming",
+            "boisterous",
+            "social",
+        ],
+    ) {
         chars.ext = 16;
         chars.pre = chars.pre.max(13);
         chars.elo = chars.elo.max(13);
     }
-    if any_cue(&lower, &words, &["shy", "quiet", "introverted", "reserved", "stoic", "taciturn", "withdrawn"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "shy",
+            "quiet",
+            "introverted",
+            "reserved",
+            "stoic",
+            "taciturn",
+            "withdrawn",
+        ],
+    ) {
         chars.ext = 5;
     }
-    if any_cue(&lower, &words, &["by-the-book", "orthodox", "obedient", "disciplined", "dutiful", "strict", "conformist", "bureaucratic"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "by-the-book",
+            "orthodox",
+            "obedient",
+            "disciplined",
+            "dutiful",
+            "strict",
+            "conformist",
+            "bureaucratic",
+        ],
+    ) {
         chars.cnf = 16;
     }
-    if any_cue(&lower, &words, &["rebel", "rebellious", "maverick", "iconoclast", "unconventional", "anti-authority", "rogue"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "rebel",
+            "rebellious",
+            "maverick",
+            "iconoclast",
+            "unconventional",
+            "anti-authority",
+            "rogue",
+        ],
+    ) {
         chars.cnf = 4;
     }
-    if any_cue(&lower, &words, &["aggressive", "violent", "fierce", "belligerent", "hot-headed", "brutal", "combative", "pugnacious"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "aggressive",
+            "violent",
+            "fierce",
+            "belligerent",
+            "hot-headed",
+            "brutal",
+            "combative",
+            "pugnacious",
+        ],
+    ) {
         chars.agg = 17;
     }
-    if any_cue(&lower, &words, &["pacifist", "peaceful", "nonviolent", "calm", "conflict-averse", "timid"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "pacifist",
+            "peaceful",
+            "nonviolent",
+            "calm",
+            "conflict-averse",
+            "timid",
+        ],
+    ) {
         chars.agg = 4;
     }
 
-    if any_cue(&lower, &words, &["general md", "md", "physician", "doctor", "diagnosis", "clinic"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &[
+            "general md",
+            "md",
+            "physician",
+            "doctor",
+            "diagnosis",
+            "clinic",
+        ],
+    ) {
         priority_skills.extend_from_slice(&[
             "clinical_diagnosis_internal_medicine",
             "first_aid_bls_cpr",
@@ -480,7 +775,11 @@ fn apply_prompt_psyche_and_skill_cues(
             "anatomy_physiology",
         ]);
     }
-    if any_cue(&lower, &words, &["surgeon", "surgery", "trauma", "orthopedic"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &["surgeon", "surgery", "trauma", "orthopedic"],
+    ) {
         priority_skills.extend_from_slice(&[
             "trauma_orthopedic_general_surgery",
             "clinical_diagnosis_internal_medicine",
@@ -540,7 +839,11 @@ pub fn generate_npc_from_prompt(params: &NpcGenerationParams) -> GeneratedNpcRes
     let soc_vals = roll_group(CharacteristicCategory::Social);
     let sen_vals = roll_group(CharacteristicCategory::Sensory);
     let psy_vals: Vec<i32> = (0..7)
-        .map(|_| roll_characteristic_method1(&mut |s| rng.roll_die(s)).total.clamp(7, 14))
+        .map(|_| {
+            roll_characteristic_method1(&mut |s| rng.roll_die(s))
+                .total
+                .clamp(7, 14)
+        })
         .collect();
 
     let mut chars = CharacterCharacteristics {
@@ -819,7 +1122,14 @@ pub fn generate_npc_from_prompt(params: &NpcGenerationParams) -> GeneratedNpcRes
         for &sk_id in &priority_skills {
             if let Some(spec) = lookup_skill_node(sk_id) {
                 for &(parent_id, _) in spec.parent_prereqs {
-                    try_advance_skill_legally(parent_id, &baseline, &cfg, &chars, &aptitudes, &mut skills);
+                    try_advance_skill_legally(
+                        parent_id,
+                        &baseline,
+                        &cfg,
+                        &chars,
+                        &aptitudes,
+                        &mut skills,
+                    );
                 }
             }
             try_advance_skill_legally(sk_id, &baseline, &cfg, &chars, &aptitudes, &mut skills);
@@ -1013,7 +1323,10 @@ mod tests {
 
         assert_eq!(res.character.character_name, "Terry");
         assert_eq!(res.inferred_template, NpcTemplateKind::MedicalDoctor);
-        assert_eq!(res.character.callsign_or_role, "General MD & Clinical Physician");
+        assert_eq!(
+            res.character.callsign_or_role,
+            "General MD & Clinical Physician"
+        );
 
         assert!(
             res.character.characteristics.slf <= 7,
@@ -1072,8 +1385,7 @@ mod tests {
             assert!(
                 audit.is_legal,
                 "Template {:?} failed legality audit: {:?}",
-                template,
-                audit.violations
+                template, audit.violations
             );
             assert!(res.character.characteristics.cnf <= 7);
         }

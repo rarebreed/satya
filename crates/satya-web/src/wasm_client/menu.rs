@@ -2,8 +2,8 @@
 //! and ephemeral BYOK AI GM session configuration handlers.
 
 use crate::wasm_client::dom::{
-    EYE_OFF_SVG, EYE_OPEN_SVG, fetch_json, get_element, input_value, local_storage_get,
-    local_storage_set, select_value, set_display, set_feedback, set_input_value,
+    EYE_OFF_SVG, EYE_OPEN_SVG, fetch_json, get_element, input_checked, input_value,
+    local_storage_get, local_storage_set, select_value, set_display, set_feedback, set_input_value,
     set_root_data_attribute, set_select_value, set_text, toggle_element_display,
 };
 use crate::wasm_client::options::{
@@ -11,7 +11,7 @@ use crate::wasm_client::options::{
     normalize_density_id, normalize_font_id, normalize_theme_id,
 };
 use crate::wasm_client::state::with_state;
-use satya_schema::AiGmProviderConfig;
+use satya_schema::{AiGmProviderConfig, AiPlayerConfig, StepAiPlayerRequest};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
@@ -85,6 +85,12 @@ pub fn satya_toggle_chat_settings() {
 #[wasm_bindgen]
 pub fn satya_toggle_ai_gm_settings() {
     let _ = toggle_element_display("menu-ai-gm-settings-panel", "flex");
+}
+
+/// Toggles the `Settings -> AI Player (Test Bot)` sub-panel (`#menu-ai-player-settings-panel`) inside the top-bar Hamburger Menu.
+#[wasm_bindgen]
+pub fn satya_toggle_ai_player_settings() {
+    let _ = toggle_element_display("menu-ai-player-settings-panel", "flex");
 }
 
 /// Toggles the `Settings -> Appearance & Theme` sub-panel (`#menu-appearance-settings-panel`) inside the top-bar Hamburger Menu.
@@ -237,6 +243,90 @@ pub fn satya_update_session_gm_config() {
             }
             Err(err) => {
                 set_feedback("menu-ai-gm-feedback", &err, true);
+            }
+        }
+    });
+}
+
+/// Spawns or updates an AI Player test agent in the active session via `POST /api/sessions/:id/ai-players`.
+#[wasm_bindgen]
+pub fn satya_spawn_session_ai_player() {
+    spawn_local(async move {
+        let (session_id, auth_token) =
+            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
+        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
+            set_feedback(
+                "menu-ai-player-feedback",
+                "Join or create an active session first.",
+                true,
+            );
+            return;
+        };
+        let display_name = input_value("menu-ai-player-name").trim().to_string();
+        let persona_prompt = input_value("menu-ai-player-persona").trim().to_string();
+        let auto_respond = input_checked("menu-ai-player-auto");
+
+        let cfg = AiPlayerConfig {
+            user_id: Some("ai-player-1".to_string()),
+            display_name: if display_name.is_empty() {
+                None
+            } else {
+                Some(display_name)
+            },
+            character_id: None,
+            persona_prompt: if persona_prompt.is_empty() {
+                None
+            } else {
+                Some(persona_prompt)
+            },
+            provider: None,
+            model_id: None,
+            service_url: None,
+            auto_respond,
+            max_rally_turns: 2,
+        };
+        let path = format!("/api/sessions/{sid}/ai-players");
+        match fetch_json::<_, serde_json::Value>("POST", &path, Some(&tok), Some(&cfg)).await {
+            Ok(_) => {
+                set_feedback(
+                    "menu-ai-player-feedback",
+                    "AI Player active in session roster.",
+                    false,
+                );
+            }
+            Err(err) => {
+                set_feedback("menu-ai-player-feedback", &err, true);
+            }
+        }
+    });
+}
+
+/// Triggers the active AI Player to take a turn via `POST /api/sessions/:id/ai-players/step`.
+#[wasm_bindgen]
+pub fn satya_step_session_ai_player() {
+    spawn_local(async move {
+        let (session_id, auth_token) =
+            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
+        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
+            set_feedback(
+                "menu-ai-player-feedback",
+                "Join or create an active session first.",
+                true,
+            );
+            return;
+        };
+        let req = StepAiPlayerRequest {
+            user_id: Some("ai-player-1".to_string()),
+            prompt: None,
+            auto_trigger_gm: true,
+        };
+        let path = format!("/api/sessions/{sid}/ai-players/step");
+        match fetch_json::<_, serde_json::Value>("POST", &path, Some(&tok), Some(&req)).await {
+            Ok(_) => {
+                set_feedback("menu-ai-player-feedback", "Stepped AI Player turn!", false);
+            }
+            Err(err) => {
+                set_feedback("menu-ai-player-feedback", &err, true);
             }
         }
     });

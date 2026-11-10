@@ -99,11 +99,14 @@ def configure_ai_gm_logging(level_override: str | None = None) -> str:
 configure_ai_gm_logging()
 
 
+from satya_ml.ai_player.server import router as ai_player_router
+
 app = FastAPI(
     title="Satya AI GM LangGraph Service",
     version="0.1.0",
-    description="Internal loopback bridge between satya-signaling (Rust) and LangGraph AI GM.",
+    description="Internal loopback bridge between satya-signaling (Rust) and LangGraph AI GM / AI Player.",
 )
+app.include_router(ai_player_router)
 
 _SHARED_CHECKPOINTER = MemorySaver()
 _CHAT_MODEL_OVERRIDE: Any | None = None

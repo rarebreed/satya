@@ -38,7 +38,9 @@ pub enum TemporalLayer {
 
 /// The 5 Canonical Encumbrance Tiers (`Tiers 0–4`) governing physical action speed, Tempo Cap, `KIN`,
 /// and stealth noise/silhouette (`action_economy_and_ooda.md` §5.1, §6.1; `movement_vehicles_and_environment.md` §2.3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum EncumbranceTier {
     /// **Tier 0: Unencumbered** ($\le 1.0 \times L_{\text{base}}$, `+0.00` physical time factor, `0` $T_{\max}$, `+0` stealth $\Delta_{\text{ext}}$).
@@ -600,4 +602,3 @@ pub fn evaluate_action_interrupt(
         resulting_actor_tick,
     }
 }
-

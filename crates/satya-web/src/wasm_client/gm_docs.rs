@@ -820,7 +820,11 @@ pub fn satya_submit_gm_memory() {
                 set_input_value("gm-memory-content", "");
                 set_feedback(
                     "gm-doc-feedback",
-                    &format!("Saved GM memory note '{}' [{}].", mem.title, mem.category.as_str()),
+                    &format!(
+                        "Saved GM memory note '{}' [{}].",
+                        mem.title,
+                        mem.category.as_str()
+                    ),
                     false,
                 );
                 satya_refresh_gm_memories();
@@ -851,39 +855,93 @@ pub fn satya_delete_gm_memory(memory_id: String) {
 
 /// Canonical 12 TTRPG Scenario Director event sub-routine dials (`(slug, label, pillar_hint, default_weight)`).
 pub const SCENARIO_DIRECTOR_DIAL_SPECS: &[(&str, &str, &str, u32)] = &[
-    ("combat_encounter", "Combat & Ambush", "Tactical / Action", 20),
-    ("mysterious_stranger", "Mysterious Stranger", "Intrigue / Espionage", 15),
-    ("new_npc_arrives", "New NPC Arrives", "Social / Dynamic Scene", 15),
-    ("dramatic_revelation", "Dramatic Revelation", "Drama / Plot Twist", 15),
+    (
+        "combat_encounter",
+        "Combat & Ambush",
+        "Tactical / Action",
+        20,
+    ),
+    (
+        "mysterious_stranger",
+        "Mysterious Stranger",
+        "Intrigue / Espionage",
+        15,
+    ),
+    (
+        "new_npc_arrives",
+        "New NPC Arrives",
+        "Social / Dynamic Scene",
+        15,
+    ),
+    (
+        "dramatic_revelation",
+        "Dramatic Revelation",
+        "Drama / Plot Twist",
+        15,
+    ),
     (
         "thought_provoking_discussion",
         "Thought-Provoking Discussion",
         "Philosophy / 7 Psyche Traits",
         10,
     ),
-    ("discovery_or_clue", "Discovery or Clue", "Investigation / Lore", 10),
-    ("environmental_hazard", "Environmental Hazard", "Survival / Exploration", 10),
-    ("ticking_clock_escalation", "Ticking Clock Escalation", "Pacing / Tension", 10),
+    (
+        "discovery_or_clue",
+        "Discovery or Clue",
+        "Investigation / Lore",
+        10,
+    ),
+    (
+        "environmental_hazard",
+        "Environmental Hazard",
+        "Survival / Exploration",
+        10,
+    ),
+    (
+        "ticking_clock_escalation",
+        "Ticking Clock Escalation",
+        "Pacing / Tension",
+        10,
+    ),
     (
         "heist_or_infiltration_complication",
         "Heist / Stealth Complication",
         "Infiltration / Improv",
         10,
     ),
-    ("moral_or_faction_dilemma", "Moral / Faction Dilemma", "Politics / Factions", 10),
-    ("resource_or_gear_windfall", "Resource / Gear Windfall", "Loot / Opportunity", 5),
-    ("downtime_campfire_moment", "Downtime / Campfire Beat", "Character Bonding", 5),
+    (
+        "moral_or_faction_dilemma",
+        "Moral / Faction Dilemma",
+        "Politics / Factions",
+        10,
+    ),
+    (
+        "resource_or_gear_windfall",
+        "Resource / Gear Windfall",
+        "Loot / Opportunity",
+        5,
+    ),
+    (
+        "downtime_campfire_moment",
+        "Downtime / Campfire Beat",
+        "Character Bonding",
+        5,
+    ),
 ];
 
 /// Updates the percentage readouts (`#scenario-dial-val-{slug}`) and normalized share summary pill
 /// (`#scenario-dials-summary-pill`) whenever a Scenario Director probability slider or preset changes.
 #[wasm_bindgen]
 pub fn satya_update_scenario_dial_readouts() {
-    let mut weights: Vec<(&str, &str, u32)> = Vec::with_capacity(SCENARIO_DIRECTOR_DIAL_SPECS.len());
+    let mut weights: Vec<(&str, &str, u32)> =
+        Vec::with_capacity(SCENARIO_DIRECTOR_DIAL_SPECS.len());
     let mut total: u32 = 0;
     for &(slug, label, _, default_w) in SCENARIO_DIRECTOR_DIAL_SPECS {
         let id = format!("scenario-dial-{slug}");
-        let w = input_value(&id).parse::<u32>().unwrap_or(default_w).min(100);
+        let w = input_value(&id)
+            .parse::<u32>()
+            .unwrap_or(default_w)
+            .min(100);
         total += w;
         weights.push((slug, label, w));
     }
@@ -902,13 +960,23 @@ pub fn satya_update_scenario_dial_readouts() {
             top_active.push(format!("{label}: {share_pct:.0}%"));
         }
     }
-    let prob = input_value("scenario-beat-prob").parse::<u32>().unwrap_or(35).min(100);
-    let interval = input_value("scenario-beat-interval").parse::<u32>().unwrap_or(3).max(1);
+    let prob = input_value("scenario-beat-prob")
+        .parse::<u32>()
+        .unwrap_or(35)
+        .min(100);
+    let interval = input_value("scenario-beat-interval")
+        .parse::<u32>()
+        .unwrap_or(3)
+        .max(1);
     set_text("scenario-beat-prob-val", &format!("{prob}% / turn"));
     let summary = if top_active.is_empty() {
         format!("All Emergent Dials Off (0%) · Max Interval: {interval} turns")
     } else {
-        let preview = top_active.into_iter().take(3).collect::<Vec<_>>().join(" · ");
+        let preview = top_active
+            .into_iter()
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(" · ");
         format!("Beat Odds: {prob}%/turn (Cap {interval}t) · Top: {preview}")
     };
     set_text("scenario-dials-summary-pill", &summary);
@@ -973,7 +1041,10 @@ pub fn apply_scenario_director_json_to_dom(raw_json: &str) {
             .join("\n");
         set_input_value("scenario-planned-beats", &joined);
     }
-    if let Some(prob) = val.get("beat_probability_per_turn").and_then(|v| v.as_f64()) {
+    if let Some(prob) = val
+        .get("beat_probability_per_turn")
+        .and_then(|v| v.as_f64())
+    {
         let pct = (prob * 100.0).round().clamp(0.0, 100.0) as u32;
         set_input_value("scenario-beat-prob", &pct.to_string());
     }
@@ -1035,8 +1106,14 @@ pub fn satya_save_scenario_director_config() {
     let flow_mode = select_value("scenario-flow-mode");
     let premise = input_value("scenario-premise");
     let planned_raw = input_value("scenario-planned-beats");
-    let prob_pct = input_value("scenario-beat-prob").parse::<u32>().unwrap_or(35).min(100);
-    let interval = input_value("scenario-beat-interval").parse::<u32>().unwrap_or(3).clamp(1, 20);
+    let prob_pct = input_value("scenario-beat-prob")
+        .parse::<u32>()
+        .unwrap_or(35)
+        .min(100);
+    let interval = input_value("scenario-beat-interval")
+        .parse::<u32>()
+        .unwrap_or(3)
+        .clamp(1, 20);
     let is_persistent = input_checked("scenario-persistent");
     let ctag_raw = input_value("gm-doc-campaign-tag").trim().to_string();
 
@@ -1121,7 +1198,8 @@ pub fn satya_refresh_gm_memories() {
                 && let Ok(ls) = Reflect::get(&win, &JsValue::from_str("localStorage"))
                 && let Ok(get_fn) = Reflect::get(&ls, &JsValue::from_str("getItem"))
                 && let Ok(func) = get_fn.dyn_into::<Function>()
-                && let Ok(val) = func.call1(&ls, &JsValue::from_str("satya_scenario_director_config"))
+                && let Ok(val) =
+                    func.call1(&ls, &JsValue::from_str("satya_scenario_director_config"))
                 && let Some(saved) = val.as_string()
             {
                 apply_scenario_director_json_to_dom(&saved);
@@ -1132,11 +1210,10 @@ pub fn satya_refresh_gm_memories() {
         if let Ok(resp) =
             fetch_json::<(), SessionGmMemoriesResponse>("GET", &url, Some(&tok), None).await
         {
-            if let Some(dir_mem) = resp
-                .memories
-                .iter()
-                .find(|m| m.memory_id == "mem-scenario-director" || m.title == "Scenario Director & Campaign Pacing Guide")
-            {
+            if let Some(dir_mem) = resp.memories.iter().find(|m| {
+                m.memory_id == "mem-scenario-director"
+                    || m.title == "Scenario Director & Campaign Pacing Guide"
+            }) {
                 apply_scenario_director_json_to_dom(&dir_mem.content);
             }
             with_state_mut(|st| {

@@ -451,10 +451,8 @@ impl CareerTermTrack {
                 let foraging = rank("foraging_campcraft");
                 let ag = rank("agriculture_agronomy_pastoralism");
                 let animal = rank("animal_handling_husbandry_riding");
-                let ok = foraging >= 2
-                    || ag >= 1
-                    || animal >= 1
-                    || (chars.fit >= 9 && chars.hlt >= 9);
+                let ok =
+                    foraging >= 2 || ag >= 1 || animal >= 1 || (chars.fit >= 9 && chars.hlt >= 9);
                 (
                     ok,
                     format!(

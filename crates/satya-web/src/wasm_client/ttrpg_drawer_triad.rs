@@ -2,9 +2,7 @@
 //! (`Task Resolution & Action Pool`).
 
 use crate::wasm_client::chat_and_ttrpg::satya_update_cascade_preview;
-use crate::wasm_client::dom::{
-    escape_html, input_value, select_value, set_html, set_input_value,
-};
+use crate::wasm_client::dom::{escape_html, input_value, select_value, set_html, set_input_value};
 use crate::wasm_client::state::with_state;
 use satya_engine::{
     ActionTimeFactorParams, CombatDomain, CombatTechniqueId, TacticalPoolEnvelope,

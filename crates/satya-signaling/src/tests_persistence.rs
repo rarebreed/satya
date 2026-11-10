@@ -280,8 +280,7 @@ async fn test_character_vault_export_import_anticheat_and_assets_emit_iggy_event
     use axum::http::Request;
     use tower::ServiceExt;
 
-    let temp_dir =
-        std::env::temp_dir().join(format!("satya_char_vault_test_{}", Uuid::now_v7()));
+    let temp_dir = std::env::temp_dir().join(format!("satya_char_vault_test_{}", Uuid::now_v7()));
     let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
         .await
         .unwrap();
@@ -371,8 +370,7 @@ async fn test_character_vault_export_import_anticheat_and_assets_emit_iggy_event
         .unwrap();
     assert_eq!(save_res.status(), StatusCode::OK);
     let save_bytes = to_bytes(save_res.into_body(), 128 * 1024).await.unwrap();
-    let saved: satya_schema::SaveCharacterResponse =
-        serde_json::from_slice(&save_bytes).unwrap();
+    let saved: satya_schema::SaveCharacterResponse = serde_json::from_slice(&save_bytes).unwrap();
     assert_eq!(
         saved.character.verification_status,
         satya_schema::CharacterVerificationStatus::VerifiedOfficial
@@ -537,9 +535,7 @@ async fn test_character_vault_export_import_anticheat_and_assets_emit_iggy_event
         .oneshot(
             Request::builder()
                 .method("GET")
-                .uri(format!(
-                    "/api/characters/char-mateo-01/assets/{asset_id}"
-                ))
+                .uri(format!("/api/characters/char-mateo-01/assets/{asset_id}"))
                 .header(
                     "Authorization",
                     format!("Bearer {}", marcus_auth.auth_token),
@@ -875,9 +871,9 @@ async fn test_session_save_resume_across_logout_restart_and_transcript_snapshot_
     use axum::body::{Body, to_bytes};
     use axum::http::Request;
     use satya_schema::{
-        AuthSuccessResponse, ChatMessageEvent, ImportSessionSnapshotRequest,
-        ResumeSessionRequest, SavedSessionsListResponse, SessionEnterResponse,
-        SessionSnapshotBundle, SessionTranscriptResponse, TokenPlacement,
+        AuthSuccessResponse, ChatMessageEvent, ImportSessionSnapshotRequest, ResumeSessionRequest,
+        SavedSessionsListResponse, SessionEnterResponse, SessionSnapshotBundle,
+        SessionTranscriptResponse, TokenPlacement,
     };
     use tower::ServiceExt;
 
@@ -1411,10 +1407,7 @@ async fn test_session_save_resume_across_logout_restart_and_transcript_snapshot_
     let imp_hist = imp_enter.history.unwrap();
     assert_eq!(imp_hist.chat_events.len(), 2);
     assert_eq!(imp_hist.mechanics_events.len(), 1);
-    assert_eq!(
-        imp_hist.active_map.as_ref().unwrap().map_id,
-        "sector-7-hub"
-    );
+    assert_eq!(imp_hist.active_map.as_ref().unwrap().map_id, "sector-7-hub");
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

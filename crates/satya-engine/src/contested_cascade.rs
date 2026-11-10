@@ -12,7 +12,9 @@ use satya_schema::{CombatStance, EventMetadata, OutcomeTier, Participant, TtrpgM
 use serde::{Deserialize, Serialize};
 
 use crate::define_coded_enum;
-use crate::dice_pools::{DistributionStats, Pmf, compute_stats, normalize_hash_pmf, sum_dice_pool_pmf};
+use crate::dice_pools::{
+    DistributionStats, Pmf, compute_stats, normalize_hash_pmf, sum_dice_pool_pmf,
+};
 use crate::dice_probabilities::{
     BotchRule, CarryMode, CascadeOutcomeKind, CascadeRollOutcome, CascadeStepTrace,
     CascadeTaskParams, MarginAggregation, build_cascade_mechanics_event, evaluate_cascade_roll,
@@ -124,9 +126,7 @@ impl ContestedOutcomeKind {
 pub enum GmResistanceMode {
     /// **1-Pair Tiered GM Resistance Roll (Default for Environmental / Technical Tasks)**:
     /// The GM rolls a single hidden `2d20` pair ($X_{GM} = A_{GM} + B_{GM}$) against $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$.
-    TieredSinglePair {
-        step_size: i32,
-    },
+    TieredSinglePair { step_size: i32 },
     /// **Full Multi-Pair Cascade (Used for Active NPC Opponents)**:
     /// The GM rolls an $N_{GM}$-pair sequential `2d20` cascade using the NPC's Skill Level $N_{GM}$ and Controlling Characteristic $C_{GM}$.
     FullCascade,

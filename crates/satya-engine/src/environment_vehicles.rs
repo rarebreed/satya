@@ -629,4 +629,3 @@ pub fn evaluate_collision_and_g_force(
         suffers_g_loc_unconscious,
     )
 }
-

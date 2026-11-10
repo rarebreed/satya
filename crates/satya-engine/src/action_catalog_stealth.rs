@@ -95,46 +95,268 @@ macro_rules! action_spec {
 
 const CANONICAL_ACTION_CATALOG_ARRAY: [CanonicalActionSpec; 37] = [
     // §4.1 Combat Actions (Attacks & Defenses)
-    action_spec!(SnapShotPointBlank, CombatAttackOrDefense, "Snap Shot / Point-Blank Reflex Strike", (2, 5, 2), "SPD, DEX, ITU; Pistols / Blades; -2 precision penalty"),
-    action_spec!(StandardMeleeStrikeLight, CombatAttackOrDefense, "Standard Melee Strike (Balanced / Light)", (3, 6, 2), "SPD, KIN; Melee Combat; modified by Weapon Balance (B)"),
-    action_spec!(StandardRangedFire, CombatAttackOrDefense, "Standard Ranged Fire (Combat Sight Picture)", (3, 7, 2), "DEX, SIG, FOC; Pistols / Long Guns"),
-    action_spec!(DefensiveGuardParryStance, CombatAttackOrDefense, "Defensive Guard / Active Parry Stance", (3, 6, 2), "KIN, INS, SPD; Melee / Martial Arts; boosts Guard Pool"),
-    action_spec!(TacticalManeuverProbeFeint, CombatAttackOrDefense, "Tactical Maneuver / Probe / Feint", (4, 7, 2), "INS, CRE, KIN; Tactician / Melee; +1 defensive parry margin"),
-    action_spec!(AimedShotSingle, CombatAttackOrDefense, "Aimed Shot (Deliberate Single Fire)", (5, 7, 2), "SIG, FOC, DEX; Precision Marksmanship; -2 to -4 to TN"),
-    action_spec!(HeavyPowerStrikeCleave, CombatAttackOrDefense, "Heavy Power Strike / Cleave", (3, 11, 2), "FOR, SPD, MAS; Heavy Weapons; +2 Wound Shock on hit"),
-    action_spec!(SuppressiveFireBurstZone, CombatAttackOrDefense, "Suppressive Fire (Burst / Automatic Zone)", (3, 9, 2), "FOR, DIS, FOC; Fully Automatic / Heavy Weapons"),
-    action_spec!(ActiveDodgeDiveForCover, CombatAttackOrDefense, "Active Dodge / Dive for Cover (Interrupt)", (2, 6, 2), "ITU, SPD, KIN; Evasion; advances actor's Current Tick by +8"),
-    action_spec!(OverwatchTriggeredRelease, CombatAttackOrDefense, "Overwatch / Held Trigger Release", (1, 2, 1), "FOC, ITU, SPD; fires when trigger condition is met"),
+    action_spec!(
+        SnapShotPointBlank,
+        CombatAttackOrDefense,
+        "Snap Shot / Point-Blank Reflex Strike",
+        (2, 5, 2),
+        "SPD, DEX, ITU; Pistols / Blades; -2 precision penalty"
+    ),
+    action_spec!(
+        StandardMeleeStrikeLight,
+        CombatAttackOrDefense,
+        "Standard Melee Strike (Balanced / Light)",
+        (3, 6, 2),
+        "SPD, KIN; Melee Combat; modified by Weapon Balance (B)"
+    ),
+    action_spec!(
+        StandardRangedFire,
+        CombatAttackOrDefense,
+        "Standard Ranged Fire (Combat Sight Picture)",
+        (3, 7, 2),
+        "DEX, SIG, FOC; Pistols / Long Guns"
+    ),
+    action_spec!(
+        DefensiveGuardParryStance,
+        CombatAttackOrDefense,
+        "Defensive Guard / Active Parry Stance",
+        (3, 6, 2),
+        "KIN, INS, SPD; Melee / Martial Arts; boosts Guard Pool"
+    ),
+    action_spec!(
+        TacticalManeuverProbeFeint,
+        CombatAttackOrDefense,
+        "Tactical Maneuver / Probe / Feint",
+        (4, 7, 2),
+        "INS, CRE, KIN; Tactician / Melee; +1 defensive parry margin"
+    ),
+    action_spec!(
+        AimedShotSingle,
+        CombatAttackOrDefense,
+        "Aimed Shot (Deliberate Single Fire)",
+        (5, 7, 2),
+        "SIG, FOC, DEX; Precision Marksmanship; -2 to -4 to TN"
+    ),
+    action_spec!(
+        HeavyPowerStrikeCleave,
+        CombatAttackOrDefense,
+        "Heavy Power Strike / Cleave",
+        (3, 11, 2),
+        "FOR, SPD, MAS; Heavy Weapons; +2 Wound Shock on hit"
+    ),
+    action_spec!(
+        SuppressiveFireBurstZone,
+        CombatAttackOrDefense,
+        "Suppressive Fire (Burst / Automatic Zone)",
+        (3, 9, 2),
+        "FOR, DIS, FOC; Fully Automatic / Heavy Weapons"
+    ),
+    action_spec!(
+        ActiveDodgeDiveForCover,
+        CombatAttackOrDefense,
+        "Active Dodge / Dive for Cover (Interrupt)",
+        (2, 6, 2),
+        "ITU, SPD, KIN; Evasion; advances actor's Current Tick by +8"
+    ),
+    action_spec!(
+        OverwatchTriggeredRelease,
+        CombatAttackOrDefense,
+        "Overwatch / Held Trigger Release",
+        (1, 2, 1),
+        "FOC, ITU, SPD; fires when trigger condition is met"
+    ),
     // §4.2 Weapon Handling, Reloads & Malfunctions
-    action_spec!(DropWeaponOrItem, WeaponHandlingAndReload, "Drop Weapon / Release Held Item", (1, 0, 1), "D_cog; Free reflex; 0 Ticks if combined with drawing sidearm"),
-    action_spec!(SwitchFireSelectorOrOptic, WeaponHandlingAndReload, "Switch Fire Selector / Toggle Optic Magnification", (1, 1, 1), "DEX; Firearms N >= 3 reduces to 1 Tick"),
-    action_spec!(ClearSimpleMalfunctionTapRack, WeaponHandlingAndReload, "Clear Simple Malfunction (Tap-Rack Drill)", (2, 3, 2), "DEX, TAC; Pistols / Long Guns; -1 Tick at N >= 3, -2 at N >= 5"),
-    action_spec!(DrawHolsteredSidearmOrBlade, WeaponHandlingAndReload, "Draw Holstered Sidearm / Sheathed Blade", (1, 3, 2), "SPD, DEX; Pistols / Blades; -1 Tick at N >= 3, -2 at N >= 5 (floor 2)"),
-    action_spec!(SlingTransitionRifleToSidearm, WeaponHandlingAndReload, "Sling Transition (Drop Primary on Sling -> Draw Sidearm)", (1, 3, 2), "SPD, DEX, KIN; requires tactical sling; -1 Tick at N >= 4"),
-    action_spec!(SpeedReloadDetachableMagDropEmpty, WeaponHandlingAndReload, "Speed Reload — Detachable Box Magazine (Drop Empty)", (1, 5, 3), "DEX, SPD, TAC; -1 Tick at N >= 3, -2 at N >= 5 (floor 3 Ticks = 1.5s)"),
-    action_spec!(TacticalReloadRetainPartialMag, WeaponHandlingAndReload, "Tactical Reload — Retain Partial Magazine in Pouch", (2, 7, 3), "DEX, TAC; -1 Tick at N >= 3, -2 at N >= 5"),
-    action_spec!(ClearComplexDoubleFeedOrBoltOverride, WeaponHandlingAndReload, "Clear Complex Malfunction (Double-Feed / Bolt Override)", (3, 9, 4), "DEX, TAC, FOC; Armourer / Firearms; requires tool or mag strip"),
-    action_spec!(LooseRoundReloadPerCartridge, WeaponHandlingAndReload, "Revolver / Tube Shotgun Reload (Loose Rounds, per cartridge)", (1, 2, 2), "+2 Ticks per additional shell; Speedloader / Violin-load reduces to 6 Ticks total"),
-    action_spec!(BeltFedMgLinkReload, WeaponHandlingAndReload, "Belt-Fed Machine Gun / Heavy Weapon Link Reload", (3, 13, 6), "DEX, FOR; Heavy Weapons; Dedicated Assistant Gunner reduces TC_act by -6 Ticks"),
+    action_spec!(
+        DropWeaponOrItem,
+        WeaponHandlingAndReload,
+        "Drop Weapon / Release Held Item",
+        (1, 0, 1),
+        "D_cog; Free reflex; 0 Ticks if combined with drawing sidearm"
+    ),
+    action_spec!(
+        SwitchFireSelectorOrOptic,
+        WeaponHandlingAndReload,
+        "Switch Fire Selector / Toggle Optic Magnification",
+        (1, 1, 1),
+        "DEX; Firearms N >= 3 reduces to 1 Tick"
+    ),
+    action_spec!(
+        ClearSimpleMalfunctionTapRack,
+        WeaponHandlingAndReload,
+        "Clear Simple Malfunction (Tap-Rack Drill)",
+        (2, 3, 2),
+        "DEX, TAC; Pistols / Long Guns; -1 Tick at N >= 3, -2 at N >= 5"
+    ),
+    action_spec!(
+        DrawHolsteredSidearmOrBlade,
+        WeaponHandlingAndReload,
+        "Draw Holstered Sidearm / Sheathed Blade",
+        (1, 3, 2),
+        "SPD, DEX; Pistols / Blades; -1 Tick at N >= 3, -2 at N >= 5 (floor 2)"
+    ),
+    action_spec!(
+        SlingTransitionRifleToSidearm,
+        WeaponHandlingAndReload,
+        "Sling Transition (Drop Primary on Sling -> Draw Sidearm)",
+        (1, 3, 2),
+        "SPD, DEX, KIN; requires tactical sling; -1 Tick at N >= 4"
+    ),
+    action_spec!(
+        SpeedReloadDetachableMagDropEmpty,
+        WeaponHandlingAndReload,
+        "Speed Reload — Detachable Box Magazine (Drop Empty)",
+        (1, 5, 3),
+        "DEX, SPD, TAC; -1 Tick at N >= 3, -2 at N >= 5 (floor 3 Ticks = 1.5s)"
+    ),
+    action_spec!(
+        TacticalReloadRetainPartialMag,
+        WeaponHandlingAndReload,
+        "Tactical Reload — Retain Partial Magazine in Pouch",
+        (2, 7, 3),
+        "DEX, TAC; -1 Tick at N >= 3, -2 at N >= 5"
+    ),
+    action_spec!(
+        ClearComplexDoubleFeedOrBoltOverride,
+        WeaponHandlingAndReload,
+        "Clear Complex Malfunction (Double-Feed / Bolt Override)",
+        (3, 9, 4),
+        "DEX, TAC, FOC; Armourer / Firearms; requires tool or mag strip"
+    ),
+    action_spec!(
+        LooseRoundReloadPerCartridge,
+        WeaponHandlingAndReload,
+        "Revolver / Tube Shotgun Reload (Loose Rounds, per cartridge)",
+        (1, 2, 2),
+        "+2 Ticks per additional shell; Speedloader / Violin-load reduces to 6 Ticks total"
+    ),
+    action_spec!(
+        BeltFedMgLinkReload,
+        WeaponHandlingAndReload,
+        "Belt-Fed Machine Gun / Heavy Weapon Link Reload",
+        (3, 13, 6),
+        "DEX, FOR; Heavy Weapons; Dedicated Assistant Gunner reduces TC_act by -6 Ticks"
+    ),
     // §4.3 Movement, Posture & Physical Interaction
-    action_spec!(FiveFootTacticalStep, MovementAndPosture, "5-Foot Tactical Step / Shift Weight (<= 1.5 m)", (1, 2, 2), "KIN, SPD; Balance & Footwork; can combine with melee stance"),
-    action_spec!(DropProneImmediate, MovementAndPosture, "Drop Prone (Immediate)", (1, 2, 2), "SPD, KIN; Acrobatics N >= 3 reduces to 2 Ticks"),
-    action_spec!(StandUpFromKneelingCrouch, MovementAndPosture, "Stand Up from Kneeling / Crouch", (1, 3, 2), "SPD, KIN; penalized by Encumbrance Tier"),
-    action_spec!(TacticalBound2To3m, MovementAndPosture, "Tactical Bound / Dash Between Cover (2–3 m)", (1, 4, 2), "SPD, FIT; Running & Sprinting; scales with SPD"),
-    action_spec!(StandUpFromProne, MovementAndPosture, "Stand Up from Prone", (1, 5, 3), "SPD, KIN, FOR; Acrobatics / Martial Arts N >= 3 reduces by -2 Ticks"),
-    action_spec!(VaultLowObstacleOrWindow, MovementAndPosture, "Vault Low Obstacle / Window Breach", (1, 5, 2), "SPD, KIN, FOR; Climbing / Parkour"),
-    action_spec!(OpenUnlockedDoorOrHatch, MovementAndPosture, "Open Unlocked Door / Manipulate Hatch Lever", (1, 3, 2), "DEX, FOR"),
-    action_spec!(BreachMechanicalKickRamDoor, MovementAndPosture, "Breach (Mechanical Kick / Battering Ram on Door)", (2, 6, 3), "FOR, MAS, SPD; Strength & Lifting / Demolitions"),
-    action_spec!(MountOrDismountVehicle, MovementAndPosture, "Mount / Dismount Vehicle or Saddle", (1, 5, 2), "KIN, SPD; Riding / Driving N >= 3 reduces by -2 Ticks"),
-    action_spec!(RetrieveOrStowPackItem, MovementAndPosture, "Retrieve / Stow Item from Backpack or Load-Bearing Rig", (2, 6, 2), "DEX, TAC; Chest-rig / quick-release pouch reduces to 4 Ticks"),
+    action_spec!(
+        FiveFootTacticalStep,
+        MovementAndPosture,
+        "5-Foot Tactical Step / Shift Weight (<= 1.5 m)",
+        (1, 2, 2),
+        "KIN, SPD; Balance & Footwork; can combine with melee stance"
+    ),
+    action_spec!(
+        DropProneImmediate,
+        MovementAndPosture,
+        "Drop Prone (Immediate)",
+        (1, 2, 2),
+        "SPD, KIN; Acrobatics N >= 3 reduces to 2 Ticks"
+    ),
+    action_spec!(
+        StandUpFromKneelingCrouch,
+        MovementAndPosture,
+        "Stand Up from Kneeling / Crouch",
+        (1, 3, 2),
+        "SPD, KIN; penalized by Encumbrance Tier"
+    ),
+    action_spec!(
+        TacticalBound2To3m,
+        MovementAndPosture,
+        "Tactical Bound / Dash Between Cover (2–3 m)",
+        (1, 4, 2),
+        "SPD, FIT; Running & Sprinting; scales with SPD"
+    ),
+    action_spec!(
+        StandUpFromProne,
+        MovementAndPosture,
+        "Stand Up from Prone",
+        (1, 5, 3),
+        "SPD, KIN, FOR; Acrobatics / Martial Arts N >= 3 reduces by -2 Ticks"
+    ),
+    action_spec!(
+        VaultLowObstacleOrWindow,
+        MovementAndPosture,
+        "Vault Low Obstacle / Window Breach",
+        (1, 5, 2),
+        "SPD, KIN, FOR; Climbing / Parkour"
+    ),
+    action_spec!(
+        OpenUnlockedDoorOrHatch,
+        MovementAndPosture,
+        "Open Unlocked Door / Manipulate Hatch Lever",
+        (1, 3, 2),
+        "DEX, FOR"
+    ),
+    action_spec!(
+        BreachMechanicalKickRamDoor,
+        MovementAndPosture,
+        "Breach (Mechanical Kick / Battering Ram on Door)",
+        (2, 6, 3),
+        "FOR, MAS, SPD; Strength & Lifting / Demolitions"
+    ),
+    action_spec!(
+        MountOrDismountVehicle,
+        MovementAndPosture,
+        "Mount / Dismount Vehicle or Saddle",
+        (1, 5, 2),
+        "KIN, SPD; Riding / Driving N >= 3 reduces by -2 Ticks"
+    ),
+    action_spec!(
+        RetrieveOrStowPackItem,
+        MovementAndPosture,
+        "Retrieve / Stow Item from Backpack or Load-Bearing Rig",
+        (2, 6, 2),
+        "DEX, TAC; Chest-rig / quick-release pouch reduces to 4 Ticks"
+    ),
     // §4.4 Cognitive, Perceptual & Communication Actions
-    action_spec!(QuickVisualGlanceReactionCheck, CognitivePerceptualAndComms, "Quick Visual Glance / Threat Reaction Check", (2, 0, 1), "SIG, ITU, D_cog; Alertness; reduced to 1 Tick if D_cog >= 14"),
-    action_spec!(TacticalCalloutShortCommand, CognitivePerceptualAndComms, "Tactical Callout / Short Verbal Command (<= 5 words)", (2, 1, 1), "D_cog, PRE, ELO; Leadership; 1 Tick if standard squad brevity code"),
-    action_spec!(ActiveScanRoomOrSectorSweep, CognitivePerceptualAndComms, "Active Scan (Deliberate Room / Sector Sweep)", (4, 2, 2), "SIG, HEA, FOC; Surveillance & Reconnaissance"),
-    action_spec!(AssessTacticalWeaknessAnalyzeTarget, CognitivePerceptualAndComms, "Assess Tactical Weakness / Analyze Target Pattern", (5, 1, 2), "ANA, INS, FOC; Tactician; compressed heavily by high D_cog"),
-    action_spec!(ComplexCommsRelayCoordTransmission, CognitivePerceptualAndComms, "Complex Comms Relay / Coordinate Data Transmission", (4, 4, 2), "ANA, MEM, ELO; Electronic Warfare / Comms"),
-    action_spec!(EmergencyFieldTriageTourniquet, CognitivePerceptualAndComms, "Emergency Field Triage / Apply Combat Tourniquet", (3, 9, 4), "ANA, DEX, FOC; First Aid / Paramedic; -2 Ticks at N >= 4"),
-    action_spec!(ImprovisedGadgetCyberdeckReset, CognitivePerceptualAndComms, "Improvised Gadget / Cyberdeck Quick-Deploy or Reset", (4, 4, 2), "CRE, ANA, DEX; Cybersecurity / Electronics"),
+    action_spec!(
+        QuickVisualGlanceReactionCheck,
+        CognitivePerceptualAndComms,
+        "Quick Visual Glance / Threat Reaction Check",
+        (2, 0, 1),
+        "SIG, ITU, D_cog; Alertness; reduced to 1 Tick if D_cog >= 14"
+    ),
+    action_spec!(
+        TacticalCalloutShortCommand,
+        CognitivePerceptualAndComms,
+        "Tactical Callout / Short Verbal Command (<= 5 words)",
+        (2, 1, 1),
+        "D_cog, PRE, ELO; Leadership; 1 Tick if standard squad brevity code"
+    ),
+    action_spec!(
+        ActiveScanRoomOrSectorSweep,
+        CognitivePerceptualAndComms,
+        "Active Scan (Deliberate Room / Sector Sweep)",
+        (4, 2, 2),
+        "SIG, HEA, FOC; Surveillance & Reconnaissance"
+    ),
+    action_spec!(
+        AssessTacticalWeaknessAnalyzeTarget,
+        CognitivePerceptualAndComms,
+        "Assess Tactical Weakness / Analyze Target Pattern",
+        (5, 1, 2),
+        "ANA, INS, FOC; Tactician; compressed heavily by high D_cog"
+    ),
+    action_spec!(
+        ComplexCommsRelayCoordTransmission,
+        CognitivePerceptualAndComms,
+        "Complex Comms Relay / Coordinate Data Transmission",
+        (4, 4, 2),
+        "ANA, MEM, ELO; Electronic Warfare / Comms"
+    ),
+    action_spec!(
+        EmergencyFieldTriageTourniquet,
+        CognitivePerceptualAndComms,
+        "Emergency Field Triage / Apply Combat Tourniquet",
+        (3, 9, 4),
+        "ANA, DEX, FOC; First Aid / Paramedic; -2 Ticks at N >= 4"
+    ),
+    action_spec!(
+        ImprovisedGadgetCyberdeckReset,
+        CognitivePerceptualAndComms,
+        "Improvised Gadget / Cyberdeck Quick-Deploy or Reset",
+        (4, 4, 2),
+        "CRE, ANA, DEX; Cybersecurity / Electronics"
+    ),
 ];
 
 impl_static_catalog!(CanonicalActionId => CanonicalActionSpec : CANONICAL_ACTION_CATALOG_ARRAY);

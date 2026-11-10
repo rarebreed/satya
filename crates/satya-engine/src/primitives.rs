@@ -294,11 +294,9 @@ impl ConditionSource for ConditionImpact {
 pub fn aggregate_condition_impacts<'a>(
     sources: impl IntoIterator<Item = &'a dyn ConditionSource>,
 ) -> ConditionImpact {
-    sources
-        .into_iter()
-        .fold(ConditionImpact::ZERO, |acc, src| {
-            acc.combine(src.to_condition_impact())
-        })
+    sources.into_iter().fold(ConditionImpact::ZERO, |acc, src| {
+        acc.combine(src.to_condition_impact())
+    })
 }
 
 /// Shared evaluation result for a 1-Pair Tiered GM Resistance check (`ContestedCascadeTaskParams::new_tiered_environment`).

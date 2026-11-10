@@ -107,6 +107,30 @@ impl Participant {
             }),
         }
     }
+
+    /// Constructs an autonomous AI Player [`Participant`] record (`ParticipantKind::AiAgent`, `SessionRole::Player`) for TTRPG testing.
+    pub fn ai_player(
+        user_id: impl Into<String>,
+        display_name: impl Into<String>,
+        character_id: Option<String>,
+        model_id: &str,
+        persona_id: &str,
+    ) -> Self {
+        let uid = user_id.into();
+        Self {
+            username: uid.clone(),
+            user_id: uid,
+            display_name: display_name.into(),
+            participant_kind: ParticipantKind::AiAgent,
+            role: SessionRole::Player,
+            character_id,
+            ai_agent_info: Some(AiAgentInfo {
+                model_id: model_id.to_string(),
+                persona_id: persona_id.to_string(),
+                temperature: 0.45,
+            }),
+        }
+    }
 }
 
 /// Nested `EventMetadata` envelope record embedded in every Satya event.

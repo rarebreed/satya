@@ -3,10 +3,10 @@
 //! and Markdown (`.md`) / JSON (`.json`) chat transcript export.
 
 use crate::wasm_client::auth_session::{apply_auth_success, enter_session, perform_login};
+use crate::wasm_client::character_sheet::render_character_sheet;
 use crate::wasm_client::character_sheet_vault::{
     prompt_save_satyachar_bytes, read_first_file_bytes,
 };
-use crate::wasm_client::character_sheet::render_character_sheet;
 use crate::wasm_client::chat_and_ttrpg::{
     append_system_notice, render_chat_event, render_mechanics_event_bubble_only,
 };
@@ -234,15 +234,16 @@ pub fn satya_refresh_saved_sessions() {
         let Some(token) = with_state(|st| st.auth_token.clone()) else {
             return;
         };
-        if let Ok(resp) =
-            fetch_json::<(), SavedSessionsListResponse>("GET", "/api/sessions/saved", Some(&token), None)
-                .await
+        if let Ok(resp) = fetch_json::<(), SavedSessionsListResponse>(
+            "GET",
+            "/api/sessions/saved",
+            Some(&token),
+            None,
+        )
+        .await
         {
             let current_sel = select_value("saved-sessions-select");
-            let html = format_saved_sessions_options_html(
-                &resp.sessions,
-                Some(current_sel.trim()),
-            );
+            let html = format_saved_sessions_options_html(&resp.sessions, Some(current_sel.trim()));
             set_html("saved-sessions-select", &html);
         }
     });
@@ -347,7 +348,11 @@ pub fn satya_resume_saved_session() {
 pub fn satya_export_session_snapshot() {
     spawn_local(async move {
         let Some(token) = with_state(|st| st.auth_token.clone()) else {
-            set_feedback("session-feedback", "Log in first to export a session.", true);
+            set_feedback(
+                "session-feedback",
+                "Log in first to export a session.",
+                true,
+            );
             return;
         };
         let active_sid = with_state(|st| st.session_id.clone()).unwrap_or_default();
@@ -452,7 +457,10 @@ pub fn satya_import_session_snapshot() {
                 set_input_value("session-id-input", &data.session_id);
                 set_feedback(
                     "session-feedback",
-                    &format!("Imported & resumed session '{}' from '{file_name}'", data.session_id),
+                    &format!(
+                        "Imported & resumed session '{}' from '{file_name}'",
+                        data.session_id
+                    ),
                     false,
                 );
                 enter_session(data);
@@ -474,7 +482,8 @@ pub fn satya_export_chat_transcript(format: String) {
             "json"
         };
 
-        let (auth_token, active_sid) = with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
+        let (auth_token, active_sid) =
+            with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
         let session_id = active_sid
             .or_else(|| {
                 let s = select_value("saved-sessions-select").trim().to_string();

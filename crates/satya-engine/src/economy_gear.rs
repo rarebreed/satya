@@ -917,10 +917,7 @@ mod tests {
         assert_eq!(sqm8.monthly_liquid_baseline_usd, 50_000);
 
         let sqm10 = lookup_campaign_sqm(10);
-        assert_eq!(
-            sqm10.tier_name,
-            "Ultra-High Net Worth / Sovereign Oligarch"
-        );
+        assert_eq!(sqm10.tier_name, "Ultra-High Net Worth / Sovereign Oligarch");
         assert_eq!(sqm10.monthly_liquid_baseline_usd, 500_000);
 
         let heat4 = evaluate_operational_heat(4);
@@ -953,9 +950,7 @@ mod tests {
             Some(&2)
         );
         assert_eq!(
-            amara
-                .skills
-                .get("herbalism_ethnobotany_natural_remedies"),
+            amara.skills.get("herbalism_ethnobotany_natural_remedies"),
             Some(&2)
         );
         assert_eq!(

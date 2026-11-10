@@ -70,9 +70,7 @@ pub enum SocialArgumentVector {
     /// **2. Group Consensus, Loyalty, Shared Identity** (*Persuasion* `ELO/INS` / *Charm* `PRE/ELO`):
     /// Resonates with High `BLG >= 13` ($-(\text{BLG}-10)$); clashes with Low `BLG <= 7` ($+(10-\text{BLG})$)
     /// or when asking a High `BLG >= 13` target to betray their group ($+(\text{BLG}-10)$).
-    GroupConsensusLoyaltySharedIdentity {
-        asks_to_betray_group: bool,
-    },
+    GroupConsensusLoyaltySharedIdentity { asks_to_betray_group: bool },
     /// **3. Flattery, Prestige, Legacy, Status** (*Charm* `PRE/ELO` / *Deception* `ELO/CRE`):
     /// Resonates with High `EGO >= 13` ($-(\text{EGO}-10)$); clashes when humiliating or demanding fault admission from `EGO >= 13` ($+(\text{EGO}-10)$).
     FlatteryPrestigeLegacyStatus {
@@ -87,15 +85,11 @@ pub enum SocialArgumentVector {
     /// **6. Rules, Law, Protocol, Chain of Command** (*Diplomacy* / *Command* `PRE/DIS`):
     /// Resonates with High `CNF >= 13` ($-(\text{CNF}-10)$); clashes with Low `CNF <= 7` ($+(10-\text{CNF})$)
     /// or when asking a High `CNF >= 13` target to break the law ($+(\text{CNF}-10)$).
-    RulesLawProtocolChainOfCommand {
-        asks_to_break_law_or_orders: bool,
-    },
+    RulesLawProtocolChainOfCommand { asks_to_break_law_or_orders: bool },
     /// **7. Dominance, Threat, Dare, Confrontation** (*Intimidation* `PRE/DIS`):
     /// Resonates with Low `AGG <= 7` ($-(10-\text{AGG})$ to yield) or High `AGG >= 13` ($-(\text{AGG}-10)$ to bait into fight);
     /// clashes with High `AGG >= 13` when forcing submission ($+(\text{AGG}-10)$).
-    DominanceThreatDareConfrontation {
-        aims_to_bait_into_fight: bool,
-    },
+    DominanceThreatDareConfrontation { aims_to_bait_into_fight: bool },
 }
 
 /// Evaluation of how a single or compound [`SocialArgumentVector`] interacts with a target's [`CharacterCharacteristics`](crate::characteristics::CharacterCharacteristics) Psyche profile
@@ -149,7 +143,12 @@ pub fn compute_single_vector_psyche_modifier(
         }
         SocialArgumentVector::GroupConsensusLoyaltySharedIdentity {
             asks_to_betray_group,
-        } => eval_trait_pole(p.blg, Belonging, !asks_to_betray_group, !asks_to_betray_group),
+        } => eval_trait_pole(
+            p.blg,
+            Belonging,
+            !asks_to_betray_group,
+            !asks_to_betray_group,
+        ),
         SocialArgumentVector::FlatteryPrestigeLegacyStatus {
             humiliates_or_demands_fault_admission,
         } => eval_trait_pole(p.ego, Ego, !humiliates_or_demands_fault_admission, false),
@@ -192,7 +191,8 @@ pub fn compute_argument_psyche_modifier(
     let mut high_pole_clashed = false;
 
     for &vec in vectors {
-        let (delta, res_t, cls_t, is_high_pole) = compute_single_vector_psyche_modifier(psyche, vec);
+        let (delta, res_t, cls_t, is_high_pole) =
+            compute_single_vector_psyche_modifier(psyche, vec);
         if delta < 0 {
             resonance_delta_ext += delta;
             resonated_trait = resonated_trait.or(res_t);
@@ -398,21 +398,15 @@ pub fn evaluate_social_exchange_wounds(
 pub enum DissonanceResolutionPath {
     /// **1. Conversion / Defection (Yielding to the New Truth)**:
     /// Clears `dissonance_index` to `0` and records `1` **Psyche Drift Mark** on the violated trait.
-    ConversionDefection {
-        violated_trait: PsycheTraitId,
-    },
+    ConversionDefection { violated_trait: PsycheTraitId },
     /// **2. Dogmatic Denial (Doubling Down)**:
     /// Requires a `DIS` check against $\text{TN} = 31 - \text{DIS} + 2 \times \text{Dissonance Index}$.
     /// On success, clears `dissonance_index` to `0`, penalizes `OPN` by `-4` for the scene, and shifts Morale to `Rage` or `High`.
-    DogmaticDenial {
-        dis_check_successes: i32,
-    },
+    DogmaticDenial { dis_check_successes: i32 },
     /// **3. Compartmentalization (Time & Rationalization)**:
     /// Spends `12 ticks` (or `1` quiet scene); reduces `dissonance_index` by `1` per `DIS` success,
     /// leaving a residual `+2` $\Delta_{\text{int}}$ until a full `8-hour` rest.
-    Compartmentalization {
-        dis_check_successes: i32,
-    },
+    Compartmentalization { dis_check_successes: i32 },
     /// **4. Emotional Lashing Out (Fight or Flight)**:
     /// Converts all `dissonance_index` stacks into immediate `Rage` (`+2` Tactical Pool, `Control` capped at $\lfloor P_{\text{eff}}/4\rfloor$).
     EmotionalLashingOut,
@@ -458,7 +452,8 @@ pub fn resolve_cognitive_dissonance(
         DissonanceResolutionPath::DogmaticDenial {
             dis_check_successes,
         } => {
-            out.dogmatic_denial_tn = Some(31 - dis.clamp(1, 20) + (2 * updated.dissonance_index.max(0)));
+            out.dogmatic_denial_tn =
+                Some(31 - dis.clamp(1, 20) + (2 * updated.dissonance_index.max(0)));
             if dis_check_successes > 0 {
                 updated.dissonance_index = 0;
                 out.openness_scene_penalty = -4;
@@ -468,7 +463,8 @@ pub fn resolve_cognitive_dissonance(
         DissonanceResolutionPath::Compartmentalization {
             dis_check_successes,
         } => {
-            updated.dissonance_index = (updated.dissonance_index - dis_check_successes.max(0)).max(0);
+            updated.dissonance_index =
+                (updated.dissonance_index - dis_check_successes.max(0)).max(0);
             updated.accumulated_delta_int = 2;
             out.residual_delta_int_until_rest = 2;
             out.ticks_spent = 12;

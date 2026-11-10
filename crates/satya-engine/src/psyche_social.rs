@@ -396,7 +396,11 @@ pub fn apply_psyche_drift_mark(
     PsycheDriftResult {
         previous_score,
         new_score: (previous_score + step).clamp(1, 20),
-        remaining_drift_marks: if shifted { total_marks - drift_threshold } else { total_marks },
+        remaining_drift_marks: if shifted {
+            total_marks - drift_threshold
+        } else {
+            total_marks
+        },
         drift_threshold,
         shifted,
     }
@@ -520,9 +524,7 @@ pub enum CombatMotivationKind {
     /// **Mercenary / Transactional Motive** (`SLF >= 14` and `BLG <= 8`), when wounded or odds turn against them.
     MercenaryTransactionalUnderFire,
     /// **Sworn Duty / Chain of Command** (`CNF >= 14`), with commanding officer present (`true`) or command broken (`false`).
-    SwornDutyChainOfCommand {
-        command_intact: bool,
-    },
+    SwornDutyChainOfCommand { command_intact: bool },
     /// Standard / neutral combat motivation.
     NeutralOrSurvival,
 }
@@ -581,9 +583,7 @@ pub fn evaluate_combat_motivation_modifier(
 pub enum EmotionalTriggerKind {
     /// **Being Wounded** (`wound_tier` $1..=4$): $\Delta_{\text{ext}} = +2 \times \text{Wound Tier}$
     /// (`+2` if `SLF >= 13`, `-2` if `AGG >= 14`).
-    BeingWounded {
-        wound_tier: i32,
-    },
+    BeingWounded { wound_tier: i32 },
     /// **Friend / Squadmate Wounded**: Relevant when `BLG >= 13` ($\Delta_{\text{ext}} = +2$).
     FriendOrSquadmateWounded,
     /// **Loved One Attacked / Wounded**: Relevant when `BLG >= 14` or `SLF <= 7` ($\Delta_{\text{ext}} = +4$).
@@ -792,9 +792,21 @@ pub fn compute_battlefield_morale_delta(situation: &BattlefieldMoraleSituation, 
         + outnumbered
         + leader
         + ammo_or_wpn
-        + if situation.position_overrun_flanked_or_ambushed { 6 } else { 0 }
-        + if situation.attacks_ineffective_against_heavy_armor { 6 } else { 0 }
-        + if situation.started_fatigued_or_sleep_deprived { 2 } else { 0 }
+        + if situation.position_overrun_flanked_or_ambushed {
+            6
+        } else {
+            0
+        }
+        + if situation.attacks_ineffective_against_heavy_armor {
+            6
+        } else {
+            0
+        }
+        + if situation.started_fatigued_or_sleep_deprived {
+            2
+        } else {
+            0
+        }
         + situation.additional_suppression_or_shock_delta.max(0)
 }
 
@@ -896,4 +908,3 @@ pub fn evaluate_combat_morale_roll(
         },
     )
 }
-

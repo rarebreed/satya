@@ -252,9 +252,17 @@ pub fn evaluate_acute_mental_trauma(
         AcuteMentalTraumaTier::Tier1AcuteMentalShockOodaFreeze => {
             (9, 0, 0, 0, 0.0, false, false, 0, 0)
         }
-        AcuteMentalTraumaTier::Tier2PanicFightOrFlight => {
-            (0, -4, 6, 0, 0.0, is_cornered && agg_score >= 13, false, 0, 0)
-        }
+        AcuteMentalTraumaTier::Tier2PanicFightOrFlight => (
+            0,
+            -4,
+            6,
+            0,
+            0.0,
+            is_cornered && agg_score >= 13,
+            false,
+            0,
+            0,
+        ),
         AcuteMentalTraumaTier::Tier3DissociationShellShock => {
             (0, 0, 0, 6, 0.30, false, false, 2, 4)
         }

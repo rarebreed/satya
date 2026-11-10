@@ -660,9 +660,7 @@ impl AuthAndSessionManager {
         let roster_vec: Vec<Participant> = roster.values().cloned().collect();
         let persisted_docs = self.load_persistent_gm_docs_from_db(sid).await;
         let persisted_memories = self.load_persistent_gm_memories_from_db(sid).await;
-        let combat_tracker = self
-            .load_or_init_combat_tracker(sid, &roster_vec)
-            .await;
+        let combat_tracker = self.load_or_init_combat_tracker(sid, &roster_vec).await;
 
         let session_obj = ProtectedSession {
             session_id: sid.to_string(),
@@ -867,7 +865,11 @@ impl AuthAndSessionManager {
             (
                 session.session_id.clone(),
                 session.session_mode,
-                session.roster.values().cloned().collect::<Vec<Participant>>(),
+                session
+                    .roster
+                    .values()
+                    .cloned()
+                    .collect::<Vec<Participant>>(),
                 session.active_map.clone(),
                 session.gm_documents.clone(),
                 session.gm_memories.clone(),

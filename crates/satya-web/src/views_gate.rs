@@ -407,6 +407,66 @@ pub fn HeaderBar() -> impl IntoView {
                                     </button>
                                     <div id="menu-ai-gm-feedback" class="feedback-box" aria-live="polite"></div>
                                 </div>
+                                <button
+                                    type="button"
+                                    id="btn-menu-toggle-ai-player-settings"
+                                    class="btn btn-sm btn-secondary"
+                                    onclick="window.satyaToggleAiPlayerSettings()"
+                                    on:click=move |_| wasm_client::satya_toggle_ai_player_settings()
+                                >
+                                    "AI Player (Test Bot)"
+                                </button>
+                                <div
+                                    id="menu-ai-player-settings-panel"
+                                    class="menu-chat-settings-panel"
+                                    style="display: none;"
+                                >
+                                    <label for="menu-ai-player-name">
+                                        <span>"AI Player Name"</span>
+                                        <input
+                                            id="menu-ai-player-name"
+                                            name="menu_ai_player_name"
+                                            type="text"
+                                            value="Kaelen Voss (AI Player)"
+                                        />
+                                    </label>
+                                    <label for="menu-ai-player-persona">
+                                        <span>"Playstyle / Persona"</span>
+                                        <input
+                                            id="menu-ai-player-persona"
+                                            name="menu_ai_player_persona"
+                                            type="text"
+                                            value="Tactical recon scout; favors disciplined Tempo/Control fire."
+                                        />
+                                    </label>
+                                    <label class="recip-option" for="menu-ai-player-auto">
+                                        <input
+                                            id="menu-ai-player-auto"
+                                            type="checkbox"
+                                            checked
+                                        />
+                                        <span>"Auto-Respond to Party Turn Gate"</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        id="btn-spawn-ai-player"
+                                        class="btn btn-sm btn-accent"
+                                        onclick="window.satyaSpawnSessionAiPlayer()"
+                                        on:click=move |_| wasm_client::satya_spawn_session_ai_player()
+                                    >
+                                        "Spawn / Update AI Player"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="btn-step-ai-player"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaStepSessionAiPlayer()"
+                                        on:click=move |_| wasm_client::satya_step_session_ai_player()
+                                    >
+                                        "Step AI Player Turn"
+                                    </button>
+                                    <div id="menu-ai-player-feedback" class="feedback-box" aria-live="polite"></div>
+                                </div>
                             </div>
                             <button
                                 type="button"

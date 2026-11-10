@@ -291,10 +291,7 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
             "../05-combat/firearms_and_ballistics.md",
             "firearms_and_ballistics.html",
         ),
-        (
-            "firearms_and_ballistics.md",
-            "firearms_and_ballistics.html",
-        ),
+        ("firearms_and_ballistics.md", "firearms_and_ballistics.html"),
         (
             "05-combat/ranged_combat_and_armor.md",
             "ranged_combat_and_armor.html",
