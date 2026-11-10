@@ -14,6 +14,19 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
         <section id="workspace-panel" class="workspace-columns" style="display: none;">
             <NotebookColumn/>
 
+            <div
+                id="workspace-col-splitter"
+                class="workspace-col-splitter"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize Notebook and Session Chat columns (double-click to reset)"
+                title="Drag to resize Notebook & Session Chat columns (double-click to reset)"
+                onmousedown="window.satyaStartColumnResize(event)"
+                ondblclick="window.satyaResetColumnResize()"
+            >
+                <span class="splitter-grip" aria-hidden="true"></span>
+            </div>
+
             // ================================================================
             // CENTER COLUMN: Chat Session Interface (Top) + Die Roller (Bottom)
             // ================================================================
@@ -142,7 +155,6 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                     <div class="card-header-inline">
                         <div>
                             <h2>"Task Resolution & Action Pool"</h2>
-                            <span class="subtitle">"Two-List Cascading (`2d20`) Roll-Over Engine · Logs TtrpgMechanicsEvent to Apache Iggy (`ttrpg-mechanics`)"</span>
                         </div>
                         <div class="webcam-frame-actions">
                             <span id="ttrpg-odds-pill" class="pill pill-active">

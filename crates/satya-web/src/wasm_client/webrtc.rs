@@ -5,7 +5,10 @@ use crate::wasm_client::auth_session::render_roster;
 use crate::wasm_client::chat_and_ttrpg::{
     append_system_notice, render_chat_event, render_mechanics_event,
 };
-use crate::wasm_client::dom::{document, escape_html, get_element, set_class, set_text, window};
+use crate::wasm_client::dom::{
+    document, escape_html, get_element, local_storage_get, local_storage_set, set_class, set_text,
+    window,
+};
 use crate::wasm_client::notebook::{
     render_gm_document_added, render_map_updated, render_wgpu_dice_roll,
 };
@@ -290,6 +293,85 @@ pub fn satya_start_webcam_drag(ev: web_sys::Event) {
     with_state_mut(|st| {
         st.webcam_drag_offset = Some((client_x - left, client_y - top));
     });
+}
+
+const STORAGE_KEY_NOTEBOOK_WIDTH_PCT: &str = "satya.workspace.notebook_width_pct";
+
+/// Restores a previously saved `#notebook-column` width percentage (`22.0..=72.0`) from `localStorage`
+/// onto `#workspace-panel`'s `--col-left-track` custom property.
+pub fn restore_saved_column_split() {
+    if let Some(raw) = local_storage_get(STORAGE_KEY_NOTEBOOK_WIDTH_PCT)
+        && let Ok(pct) = raw.trim().parse::<f64>()
+    {
+        apply_column_split_pct(pct.clamp(22.0, 72.0));
+    }
+}
+
+fn apply_column_split_pct(pct: f64) {
+    if let Some(ws) = get_element("workspace-panel").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        let _ = ws
+            .style()
+            .set_property("--col-left-track", &format!("minmax(320px, {pct:.1}%)"));
+        let _ = ws
+            .style()
+            .set_property("--col-center-track", "minmax(300px, 1fr)");
+    }
+}
+
+/// Begins resizing the division between `#notebook-column` and `#center-column` when the user
+/// presses on `#workspace-col-splitter`.
+#[wasm_bindgen]
+pub fn satya_start_column_resize(ev: web_sys::Event) {
+    ev.prevent_default();
+    with_state_mut(|st| {
+        st.column_resizing = true;
+    });
+    if let Some(splitter) = get_element("workspace-col-splitter") {
+        splitter.set_class_name("workspace-col-splitter is-dragging");
+    }
+}
+
+/// Resets the `#notebook-column` vs `#center-column` split back to the default responsive proportions
+/// when the user double-clicks `#workspace-col-splitter`.
+#[wasm_bindgen]
+pub fn satya_reset_column_resize() {
+    with_state_mut(|st| {
+        st.column_resizing = false;
+    });
+    local_storage_set(STORAGE_KEY_NOTEBOOK_WIDTH_PCT, "");
+    if let Some(ws) = get_element("workspace-panel").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    {
+        let _ = ws.style().remove_property("--col-left-track");
+        let _ = ws.style().remove_property("--col-center-track");
+    }
+    if let Some(splitter) = get_element("workspace-col-splitter") {
+        splitter.set_class_name("workspace-col-splitter");
+    }
+}
+
+pub(crate) fn handle_column_resize_move(ev: &web_sys::Event) {
+    if !with_state(|st| st.column_resizing) {
+        return;
+    }
+    let Some(client_x) = Reflect::get(ev, &JsValue::from_str("clientX"))
+        .ok()
+        .and_then(|v| v.as_f64())
+    else {
+        return;
+    };
+    let Some(ws) = get_element("workspace-panel").and_then(|e| e.dyn_into::<HtmlElement>().ok())
+    else {
+        return;
+    };
+    let total_w = ws.offset_width() as f64;
+    if total_w < 640.0 {
+        return;
+    }
+    let rel_x = (client_x - (ws.offset_left() as f64)).max(320.0);
+    let pct = ((rel_x / total_w) * 100.0).clamp(22.0, 72.0);
+    apply_column_split_pct(pct);
+    local_storage_set(STORAGE_KEY_NOTEBOOK_WIDTH_PCT, &format!("{pct:.1}"));
 }
 
 pub(crate) fn handle_webcam_drag_move(ev: &web_sys::Event) {

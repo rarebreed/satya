@@ -409,11 +409,13 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
         ttrpg_idx > chat_idx,
         "ttrpg-drawer should be rendered beneath chat-card"
     );
-    // Verify 3-column layout order: Left Notebook -> Center Chat+Die Roller -> Right Web Cams
+    // Verify 3-column layout order: Left Notebook -> Splitter -> Center Chat+Die Roller -> Right Web Cams
     let notebook_col_idx = html.find(r#"id="notebook-column""#).unwrap();
+    let splitter_idx = html.find(r#"id="workspace-col-splitter""#).unwrap();
     let center_col_idx = html.find(r#"id="center-column""#).unwrap();
     let webrtc_col_idx = html.find(r#"id="webrtc-dock-column""#).unwrap();
-    assert!(notebook_col_idx < center_col_idx);
+    assert!(notebook_col_idx < splitter_idx);
+    assert!(splitter_idx < center_col_idx);
     assert!(center_col_idx < webrtc_col_idx);
 
     // Verify all 9 Tabbed Notebook tabs & panes exist
@@ -731,8 +733,22 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
         "dusk-orange"
     );
     assert_eq!(wasm_client::normalize_theme_id("nebula"), "nebula");
+    assert_eq!(wasm_client::normalize_theme_id("navy-gold"), "navy-gold");
+    assert_eq!(
+        wasm_client::normalize_theme_id("marine-corps"),
+        "marine-corps"
+    );
+    assert_eq!(wasm_client::normalize_theme_id("lcars"), "lcars");
+    assert_eq!(wasm_client::normalize_theme_id("mil-spec"), "mil-spec");
+    assert_eq!(wasm_client::normalize_theme_id("pulp-1930s"), "pulp-1930s");
+    assert_eq!(wasm_client::normalize_theme_id("wehrmacht"), "wehrmacht");
     assert_eq!(wasm_client::normalize_theme_id("parchment"), "parchment");
     assert_eq!(wasm_client::normalize_theme_id("unknown-theme"), "obsidian");
+    assert_eq!(wasm_client::normalize_style_id("mil-spec"), "mil-spec");
+    assert_eq!(wasm_client::normalize_style_id("lcars"), "lcars");
+    assert_eq!(wasm_client::normalize_style_id("pulp"), "pulp");
+    assert_eq!(wasm_client::normalize_style_id("wehrmacht"), "wehrmacht");
+    assert_eq!(wasm_client::normalize_style_id("invalid"), "default");
     assert_eq!(wasm_client::normalize_density_id("compact"), "compact");
     assert_eq!(wasm_client::normalize_density_id("spacious"), "spacious");
     assert_eq!(wasm_client::normalize_density_id("invalid"), "default");
@@ -741,7 +757,15 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert_eq!(wasm_client::normalize_corners_id("invalid"), "default");
     assert_eq!(wasm_client::normalize_font_id("mono"), "mono");
     assert_eq!(wasm_client::normalize_font_id("serif"), "serif");
+    assert_eq!(wasm_client::normalize_font_id("lcars"), "lcars");
+    assert_eq!(wasm_client::normalize_font_id("military"), "military");
+    assert_eq!(wasm_client::normalize_font_id("stencil"), "stencil");
+    assert_eq!(wasm_client::normalize_font_id("pulp"), "pulp");
     assert_eq!(wasm_client::normalize_font_id("invalid"), "sans");
+    assert_eq!(wasm_client::normalize_font_size_id("sm"), "sm");
+    assert_eq!(wasm_client::normalize_font_size_id("lg"), "lg");
+    assert_eq!(wasm_client::normalize_font_size_id("xl"), "xl");
+    assert_eq!(wasm_client::normalize_font_size_id("invalid"), "default");
 
     assert!(html.contains(r#"id="btn-menu-toggle-appearance-settings""#));
     assert!(html.contains(r#"id="menu-appearance-settings-panel""#));
@@ -751,16 +775,32 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
         assert!(html.contains(&format!(r#"value="{theme_id}""#)));
     }
     assert!(html.contains(r#"id="menu-theme-select""#));
+    assert!(html.contains(r#"id="menu-style-select""#));
     assert!(html.contains(r#"id="menu-density-select""#));
     assert!(html.contains(r#"id="menu-corners-select""#));
     assert!(html.contains(r#"id="menu-font-select""#));
+    assert!(html.contains(r#"id="menu-font-size-select""#));
     assert!(html.contains(r#"id="btn-reset-appearance-defaults""#));
     assert!(html.contains(r#"html[data-theme="dusk-orange"]"#));
     assert!(html.contains(r#"html[data-theme="nebula"]"#));
+    assert!(html.contains(r#"html[data-theme="navy-gold"]"#));
+    assert!(html.contains(r#"html[data-theme="marine-corps"]"#));
+    assert!(html.contains(r#"html[data-theme="lcars"]"#));
+    assert!(html.contains(r#"html[data-theme="mil-spec"]"#));
+    assert!(html.contains(r#"html[data-theme="pulp-1930s"]"#));
+    assert!(html.contains(r#"html[data-theme="wehrmacht"]"#));
     assert!(html.contains(r#"html[data-theme="parchment"]"#));
+    assert!(html.contains(r#"[data-style="mil-spec"]"#));
+    assert!(html.contains(r#"[data-style="lcars"]"#));
     assert!(html.contains(r#"html[data-density="compact"]"#));
     assert!(html.contains(r#"html[data-corners="sharp"]"#));
     assert!(html.contains(r#"html[data-font="mono"]"#));
+    assert!(html.contains(r#"html[data-font="lcars"]"#));
+    assert!(html.contains(r#"html[data-font="military"]"#));
+    assert!(html.contains(r#"html[data-font="stencil"]"#));
+    assert!(html.contains(r#"html[data-font="pulp"]"#));
+    assert!(html.contains(r#"html[data-font-size="lg"]"#));
+    assert!(html.contains(r#"html[data-font-size="xl"]"#));
 
     // Verify Saved Session Resume, .satyasession Snapshot Export/Import, and .md/.json Chat Transcript Export UI
     assert!(html.contains(r#"id="saved-sessions-select""#));

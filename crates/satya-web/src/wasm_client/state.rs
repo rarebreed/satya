@@ -76,6 +76,8 @@ pub struct SatyaWasmState {
     pub webcam_columns: u8,
     /// Active drag offset `(offset_x, offset_y)` while dragging the floating Web Cams frame.
     pub webcam_drag_offset: Option<(f64, f64)>,
+    /// Whether the user is currently dragging `#workspace-col-splitter` to resize `#notebook-column` vs `#center-column`.
+    pub column_resizing: bool,
     /// Current Satya combat round counter in the Combat Tracker tab.
     pub combat_round: u32,
     /// Current Satya Action-Count (Tick) clock in the Combat Tracker tab.
@@ -133,6 +135,7 @@ impl Default for SatyaWasmState {
             ttrpg_collapsed: false,
             webcam_columns: 1,
             webcam_drag_offset: None,
+            column_resizing: false,
             combat_round: 1,
             combat_tick: 0,
             google_linked: false,

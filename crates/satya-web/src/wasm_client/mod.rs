@@ -57,7 +57,7 @@ pub use wizard::*;
 
 use crate::wasm_client::dom::{select_value, set_display, window};
 use crate::wasm_client::options::{sync_chat_options_for_mode, sync_role_options_for_mode};
-use crate::wasm_client::webrtc::handle_webcam_drag_move;
+use crate::wasm_client::webrtc::{handle_column_resize_move, handle_webcam_drag_move};
 use js_sys::Reflect;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -82,6 +82,7 @@ macro_rules! bind_window_callbacks {
 pub fn start_satya_wasm_client() {
     register_window_bindings();
     restore_saved_appearance_settings();
+    restore_saved_column_split();
     let mode_raw = select_value("session-mode-select");
     let mode = parse_session_mode(&mode_raw);
     sync_role_options_for_mode(&mode_raw, None);
@@ -146,6 +147,8 @@ pub fn register_window_bindings() {
         "satyaToggleTtrpgDrawer" => satya_toggle_ttrpg_drawer(),
         "satyaToggleWebcamColumns" => satya_toggle_webcam_columns(),
         "satyaStartWebcamDrag" => satya_start_webcam_drag(web_sys::Event),
+        "satyaStartColumnResize" => satya_start_column_resize(web_sys::Event),
+        "satyaResetColumnResize" => satya_reset_column_resize(),
         "satyaRefreshMetrics" => satya_refresh_metrics(),
         "satyaFlushBatches" => satya_flush_batches(),
 
@@ -254,14 +257,21 @@ pub fn register_window_bindings() {
 
     let on_move = Closure::<dyn FnMut(web_sys::Event)>::new(move |ev: web_sys::Event| {
         handle_webcam_drag_move(&ev);
+        handle_column_resize_move(&ev);
     });
     let _ = win.add_event_listener_with_callback("mousemove", on_move.as_ref().unchecked_ref());
     on_move.forget();
 
     let on_up = Closure::<dyn FnMut(web_sys::Event)>::new(move |_ev: web_sys::Event| {
-        with_state_mut(|st| {
+        let was_resizing = with_state_mut(|st| {
             st.webcam_drag_offset = None;
+            let r = st.column_resizing;
+            st.column_resizing = false;
+            r
         });
+        if was_resizing && let Some(splitter) = crate::wasm_client::dom::get_element("workspace-col-splitter") {
+            splitter.set_class_name("workspace-col-splitter");
+        }
     });
     let _ = win.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
     on_up.forget();

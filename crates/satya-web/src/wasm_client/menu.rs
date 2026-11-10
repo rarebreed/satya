@@ -8,7 +8,8 @@ use crate::wasm_client::dom::{
 };
 use crate::wasm_client::options::{
     APPEARANCE_THEME_OPTIONS, default_model_for_provider, normalize_corners_id,
-    normalize_density_id, normalize_font_id, normalize_theme_id,
+    normalize_density_id, normalize_font_id, normalize_font_size_id, normalize_style_id,
+    normalize_theme_id,
 };
 use crate::wasm_client::state::with_state;
 use satya_schema::{AiGmProviderConfig, AiPlayerConfig, StepAiPlayerRequest};
@@ -100,9 +101,11 @@ pub fn satya_toggle_appearance_settings() {
 }
 
 const STORAGE_KEY_THEME: &str = "satya.appearance.theme";
+const STORAGE_KEY_STYLE: &str = "satya.appearance.style";
 const STORAGE_KEY_DENSITY: &str = "satya.appearance.density";
 const STORAGE_KEY_CORNERS: &str = "satya.appearance.corners";
 const STORAGE_KEY_FONT: &str = "satya.appearance.font";
+const STORAGE_KEY_FONT_SIZE: &str = "satya.appearance.font_size";
 
 fn sync_theme_swatch_buttons(active_theme: &str) {
     for (theme_id, _) in APPEARANCE_THEME_OPTIONS {
@@ -119,43 +122,61 @@ fn sync_theme_swatch_buttons(active_theme: &str) {
     }
 }
 
-fn apply_appearance_to_root(theme: &str, density: &str, corners: &str, font: &str) {
+fn apply_appearance_to_root(
+    theme: &str,
+    style: &str,
+    density: &str,
+    corners: &str,
+    font: &str,
+    font_size: &str,
+) {
     set_root_data_attribute("data-theme", theme);
+    set_root_data_attribute("data-style", style);
     set_root_data_attribute("data-density", density);
     set_root_data_attribute("data-corners", corners);
     set_root_data_attribute("data-font", font);
+    set_root_data_attribute("data-font-size", font_size);
     sync_theme_swatch_buttons(theme);
 }
 
-/// Restores saved appearance preferences (`theme`, `density`, `corners`, `font`) from browser
+/// Restores saved appearance preferences (`theme`, `style`, `density`, `corners`, `font`, `font_size`) from browser
 /// `localStorage` onto `document.documentElement` and synchronizes the Hamburger Menu controls.
 pub fn restore_saved_appearance_settings() {
     let theme = normalize_theme_id(&local_storage_get(STORAGE_KEY_THEME).unwrap_or_default());
+    let style = normalize_style_id(&local_storage_get(STORAGE_KEY_STYLE).unwrap_or_default());
     let density = normalize_density_id(&local_storage_get(STORAGE_KEY_DENSITY).unwrap_or_default());
     let corners = normalize_corners_id(&local_storage_get(STORAGE_KEY_CORNERS).unwrap_or_default());
     let font = normalize_font_id(&local_storage_get(STORAGE_KEY_FONT).unwrap_or_default());
+    let font_size =
+        normalize_font_size_id(&local_storage_get(STORAGE_KEY_FONT_SIZE).unwrap_or_default());
 
     set_select_value("menu-theme-select", theme);
+    set_select_value("menu-style-select", style);
     set_select_value("menu-density-select", density);
     set_select_value("menu-corners-select", corners);
     set_select_value("menu-font-select", font);
-    apply_appearance_to_root(theme, density, corners, font);
+    set_select_value("menu-font-size-select", font_size);
+    apply_appearance_to_root(theme, style, density, corners, font, font_size);
 }
 
-/// Reads `#menu-theme-select`, `#menu-density-select`, `#menu-corners-select`, and `#menu-font-select`,
-/// applies the normalized `data-*` attributes to `<html>`, and persists them to `localStorage`.
+/// Reads `#menu-theme-select`, `#menu-style-select`, `#menu-density-select`, `#menu-corners-select`, `#menu-font-select`,
+/// and `#menu-font-size-select`, applies the normalized `data-*` attributes to `<html>`, and persists them to `localStorage`.
 #[wasm_bindgen]
 pub fn satya_apply_appearance_settings() {
     let theme = normalize_theme_id(&select_value("menu-theme-select"));
+    let style = normalize_style_id(&select_value("menu-style-select"));
     let density = normalize_density_id(&select_value("menu-density-select"));
     let corners = normalize_corners_id(&select_value("menu-corners-select"));
     let font = normalize_font_id(&select_value("menu-font-select"));
+    let font_size = normalize_font_size_id(&select_value("menu-font-size-select"));
 
     local_storage_set(STORAGE_KEY_THEME, theme);
+    local_storage_set(STORAGE_KEY_STYLE, style);
     local_storage_set(STORAGE_KEY_DENSITY, density);
     local_storage_set(STORAGE_KEY_CORNERS, corners);
     local_storage_set(STORAGE_KEY_FONT, font);
-    apply_appearance_to_root(theme, density, corners, font);
+    local_storage_set(STORAGE_KEY_FONT_SIZE, font_size);
+    apply_appearance_to_root(theme, style, density, corners, font, font_size);
 }
 
 /// Selects a color theme preset by ID (from a visual swatch chip), updates `#menu-theme-select`,
@@ -167,14 +188,16 @@ pub fn satya_select_theme_preset(theme_id: String) {
     satya_apply_appearance_settings();
 }
 
-/// Resets color theme, UI density, corner radius, and font family to their canonical defaults
-/// (`obsidian`, `default`, `default`, `sans`) and persists the reset state.
+/// Resets color theme, panel frame style, UI density, corner radius, font family, and font size to their canonical defaults
+/// (`obsidian`, `default`, `default`, `default`, `sans`, `default`) and persists the reset state.
 #[wasm_bindgen]
 pub fn satya_reset_appearance_settings() {
     set_select_value("menu-theme-select", "obsidian");
+    set_select_value("menu-style-select", "default");
     set_select_value("menu-density-select", "default");
     set_select_value("menu-corners-select", "default");
     set_select_value("menu-font-select", "sans");
+    set_select_value("menu-font-size-select", "default");
     satya_apply_appearance_settings();
 }
 

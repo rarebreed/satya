@@ -29,9 +29,11 @@ use leptos::prelude::*;
 const WASM_BOOTSTRAP_LOADER: &str = r#"
 const SATYA_APPEARANCE_SPEC = [
     ["theme", "data-theme", "menu-theme-select", "obsidian"],
+    ["style", "data-style", "menu-style-select", "default"],
     ["density", "data-density", "menu-density-select", "default"],
     ["corners", "data-corners", "menu-corners-select", "default"],
     ["font", "data-font", "menu-font-select", "sans"],
+    ["font_size", "data-font-size", "menu-font-size-select", "default"],
 ];
 function satyaSyncAppearance(save) {
     const r = document.documentElement;
@@ -96,14 +98,22 @@ pub fn SatyaApp() -> impl IntoView {
         <html
             lang="en"
             data-theme="obsidian"
+            data-style="default"
             data-density="default"
             data-corners="default"
             data-font="sans"
+            data-font-size="default"
         >
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <title>"SATYA // WebRTC, TTRPG & Meeting Event Streaming Platform"</title>
+                <link rel="preconnect" href="https://fonts.googleapis.com"/>
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
+                <link
+                    rel="stylesheet"
+                    href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;600;700&family=Black+Ops+One&family=Chakra+Petch:wght@400;600;700&family=Courier+Prime:wght@400;700&family=Limelight&family=Share+Tech+Mono&display=swap"
+                />
                 <style inner_html=app_styles></style>
             </head>
             <body>

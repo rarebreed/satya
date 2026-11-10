@@ -740,7 +740,7 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                             id="gm-doc-title"
                             type="text"
                             placeholder="e.g. Character Backstory or Gear Sheet"
-                            value="Sara Valkyrie Medical Dossier"
+                            value=""
                         />
                     </label>
                     <label>

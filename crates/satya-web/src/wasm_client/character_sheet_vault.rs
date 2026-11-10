@@ -451,7 +451,6 @@ pub fn format_character_vault_and_assets_html(sheet: &CharacterSheetState) -> St
             <div class="char-section-header">
                 <div>
                     <h3>Character Vault, Portable <code>.satyachar</code> Export/Import &amp; Multimodal Assets</h3>
-                    <span class="subtitle">Persists to SQLite + <code>~/Satya/characters/</code> (local mode) and streams signed <code>CharacterSheetEvent</code> records to Apache Iggy topic <code>character-sheets</code> &rarr; PyLance.</span>
                 </div>
                 <div class="btn-row-compact">
                     {badge_html}
@@ -502,7 +501,7 @@ pub fn format_character_vault_and_assets_html(sheet: &CharacterSheetState) -> St
 
                 <div class="char-table-card">
                     <div class="char-table-title">
-                        <span>Multimodal Character Assets (Portrait, Token, Dossier PDF, 3D <code>.glb</code>)</span>
+                        <span>Character Assets</span>
                         <span class="pill pill-muted">{asset_count} Attached</span>
                     </div>
                     <div class="model-controls-row">

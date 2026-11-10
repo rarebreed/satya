@@ -22,6 +22,12 @@ const THEME_SWATCH_SPECS: &[(&str, &str, &str, &str)] = &[
     ("ranger", "Ranger", "#080f0b", "#34d399"),
     ("dusk-orange", "Dusk Orange", "#110a08", "#fb923c"),
     ("nebula", "Nebula", "#1a0f30", "#f97316"),
+    ("navy-gold", "Navy & Gold", "#0b192e", "#facc15"),
+    ("marine-corps", "USMC", "#15241a", "#9f1239"),
+    ("lcars", "TNG LCARS", "#000000", "#ff9900"),
+    ("mil-spec", "MIL-SPEC C4ISR", "#0e120c", "#a3e635"),
+    ("pulp-1930s", "1930s Pulp", "#1e150f", "#d97706"),
+    ("wehrmacht", "Feldgrau", "#181b19", "#dc2626"),
 ];
 
 /// Static table of quick-fill demo accounts for testing TTRPG and Meeting sessions.
@@ -245,6 +251,23 @@ pub fn HeaderBar() -> impl IntoView {
                                                 .collect_view()}
                                         </select>
                                     </label>
+                                    <label for="menu-style-select">
+                                        <span>"Panel & Frame Style"</span>
+                                        <select
+                                            id="menu-style-select"
+                                            name="menu_style_select"
+                                            onchange="window.satyaApplyAppearanceSettings()"
+                                            on:change=move |_| wasm_client::satya_apply_appearance_settings()
+                                        >
+                                            {wasm_client::APPEARANCE_STYLE_OPTIONS
+                                                .iter()
+                                                .copied()
+                                                .map(|(val, label)| {
+                                                    view! { <option value=val>{label}</option> }
+                                                })
+                                                .collect_view()}
+                                        </select>
+                                    </label>
                                     <label for="menu-density-select">
                                         <span>"UI Density & Border Padding"</span>
                                         <select
@@ -288,6 +311,23 @@ pub fn HeaderBar() -> impl IntoView {
                                             on:change=move |_| wasm_client::satya_apply_appearance_settings()
                                         >
                                             {wasm_client::APPEARANCE_FONT_OPTIONS
+                                                .iter()
+                                                .copied()
+                                                .map(|(val, label)| {
+                                                    view! { <option value=val>{label}</option> }
+                                                })
+                                                .collect_view()}
+                                        </select>
+                                    </label>
+                                    <label for="menu-font-size-select">
+                                        <span>"Font Size"</span>
+                                        <select
+                                            id="menu-font-size-select"
+                                            name="menu_font_size_select"
+                                            onchange="window.satyaApplyAppearanceSettings()"
+                                            on:change=move |_| wasm_client::satya_apply_appearance_settings()
+                                        >
+                                            {wasm_client::APPEARANCE_FONT_SIZE_OPTIONS
                                                 .iter()
                                                 .copied()
                                                 .map(|(val, label)| {

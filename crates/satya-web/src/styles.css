@@ -118,6 +118,109 @@ html[data-theme="nebula"] {
     --brand-grad: linear-gradient(135deg, #7e22ce, #c2410c);
 }
 
+html[data-theme="navy-gold"] {
+    --bg-0: #050c1a;
+    --bg-1: #0b192e;
+    --bg-2: #122645;
+    --border: #23406b;
+    --text-primary: #e8eef7;
+    --text-heading: #fef9c3;
+    --text-muted: #93a8c7;
+    --accent: #facc15;
+    --accent-strong: #ca8a04;
+    --emerald: #34d399;
+    --amber: #eab308;
+    --rose: #f87171;
+    --purple: #60a5fa;
+    --brand-grad: linear-gradient(135deg, #1d4ed8, #ca8a04);
+}
+
+html[data-theme="marine-corps"] {
+    --bg-0: #0d1610;
+    --bg-1: #15241a;
+    --bg-2: #1f3326;
+    --border: #3a5241;
+    --text-primary: #e6efe8;
+    --text-heading: #fef2f2;
+    --text-muted: #97b09d;
+    --accent: #e11d48;
+    --accent-strong: #881337;
+    --emerald: #4ade80;
+    --amber: #eab308;
+    --rose: #f43f5e;
+    --purple: #fb7185;
+    --brand-grad: linear-gradient(135deg, #881337, #ca8a04);
+}
+
+html[data-theme="lcars"] {
+    --bg-0: #000000;
+    --bg-1: #07080d;
+    --bg-2: #141624;
+    --border: #ff9900;
+    --text-primary: #ffcc99;
+    --text-heading: #ff9900;
+    --text-muted: #9999ff;
+    --accent: #ff9900;
+    --accent-strong: #cc6699;
+    --emerald: #99ccff;
+    --amber: #ffcc66;
+    --rose: #cc6666;
+    --purple: #cc99cc;
+    --brand-grad: linear-gradient(90deg, #ff9900 0%, #ff9900 62%, #cc99cc 62%, #cc99cc 100%);
+    --font-body: 'Antonio', 'Arial Narrow', 'Bahnschrift Condensed', 'Impact', sans-serif;
+}
+
+html[data-theme="mil-spec"] {
+    --bg-0: #0b0e0a;
+    --bg-1: #131811;
+    --bg-2: #1c2419;
+    --border: #3d4d35;
+    --text-primary: #d9e5cf;
+    --text-heading: #e4f0d5;
+    --text-muted: #96a888;
+    --accent: #a3e635;
+    --accent-strong: #4d7c0f;
+    --emerald: #84cc16;
+    --amber: #eab308;
+    --rose: #ef4444;
+    --purple: #d97706;
+    --brand-grad: linear-gradient(135deg, #3f6212, #a16207);
+}
+
+html[data-theme="pulp-1930s"] {
+    --bg-0: #140e0a;
+    --bg-1: #1f1610;
+    --bg-2: #2d2017;
+    --border: #785532;
+    --text-primary: #f5e6cc;
+    --text-heading: #fbbf24;
+    --text-muted: #bfa37c;
+    --accent: #f59e0b;
+    --accent-strong: #b91c1c;
+    --emerald: #34d399;
+    --amber: #fbbf24;
+    --rose: #ef4444;
+    --purple: #d97706;
+    --brand-grad: linear-gradient(135deg, #b91c1c, #d97706);
+}
+
+html[data-theme="wehrmacht"] {
+    --bg-0: #0c0d0c;
+    --bg-1: #161816;
+    --bg-2: #222623;
+    --border: #444b45;
+    --text-primary: #e2e5e2;
+    --text-heading: #f8fafc;
+    --text-muted: #9aa39b;
+    --accent: #dc2626;
+    --accent-strong: #991b1b;
+    --emerald: #84cc16;
+    --amber: #eab308;
+    --rose: #ef4444;
+    --purple: #cbd5e1;
+    --brand-grad: linear-gradient(135deg, #1f2421, #991b1b);
+}
+
 :root,
 html[data-density="default"] {
     --shell-pad-y: 10px;
@@ -176,6 +279,50 @@ html[data-font="mono"] {
 
 html[data-font="serif"] {
     --font-body: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', serif;
+}
+
+html[data-font="lcars"],
+html[data-theme="lcars"][data-font="sans"],
+html[data-style="lcars"][data-font="sans"] {
+    --font-body: 'Antonio', 'Arial Narrow', 'Bahnschrift Condensed', 'Impact', sans-serif;
+}
+
+html[data-font="military"],
+html[data-theme="mil-spec"][data-font="sans"],
+html[data-style="mil-spec"][data-font="sans"] {
+    --font-body: 'Chakra Petch', 'Share Tech Mono', 'Bahnschrift', 'Consolas', sans-serif;
+}
+
+html[data-font="stencil"] {
+    --font-body: 'Black Ops One', 'Chakra Petch', 'Impact', sans-serif;
+}
+
+html[data-font="pulp"],
+html[data-theme="pulp-1930s"][data-font="sans"],
+html[data-style="pulp"][data-font="sans"] {
+    --font-body: 'Courier Prime', 'Courier New', Georgia, serif;
+}
+
+html[data-theme="wehrmacht"][data-font="sans"],
+html[data-style="wehrmacht"][data-font="sans"] {
+    --font-body: 'Chakra Petch', 'Bahnschrift', 'Arial Narrow', sans-serif;
+}
+
+:root,
+html[data-font-size="default"] {
+    font-size: 100%;
+}
+
+html[data-font-size="sm"] {
+    font-size: 90%;
+}
+
+html[data-font-size="lg"] {
+    font-size: 110%;
+}
+
+html[data-font-size="xl"] {
+    font-size: 120%;
 }
 
 * {
@@ -440,7 +587,7 @@ textarea {
     --col-center-track: minmax(360px, 1.08fr);
     --col-right-track: minmax(240px, 0.6fr);
     display: grid;
-    grid-template-columns: var(--col-left-track) var(--col-center-track) var(--col-right-track);
+    grid-template-columns: var(--col-left-track) 8px var(--col-center-track) var(--col-right-track);
     grid-template-rows: minmax(0, 1fr);
     gap: var(--workspace-gap);
     align-items: stretch;
@@ -465,17 +612,56 @@ textarea {
     grid-template-columns: var(--col-left-track) var(--col-right-track);
 }
 
+.workspace-columns.center-collapsed > .workspace-col-splitter {
+    display: none;
+}
+
 .workspace-columns.webcam-collapsed {
     --col-left-track: minmax(460px, 1.4fr);
     --col-right-track: auto;
 }
 
 .workspace-columns.webcam-undocked {
-    grid-template-columns: var(--col-left-track) var(--col-center-track);
+    grid-template-columns: var(--col-left-track) 8px var(--col-center-track);
 }
 
 .workspace-columns.center-collapsed.webcam-undocked {
     grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-col-splitter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 8px;
+    margin-inline: -4px;
+    cursor: col-resize;
+    user-select: none;
+    touch-action: none;
+    position: relative;
+    z-index: 20;
+    border-radius: 999px;
+    transition: background 0.15s ease;
+}
+
+.workspace-col-splitter:hover,
+.workspace-col-splitter.is-dragging {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.splitter-grip {
+    width: 2px;
+    height: 44px;
+    border-radius: 999px;
+    background: var(--border);
+    transition: background 0.15s ease, height 0.15s ease, width 0.15s ease;
+}
+
+.workspace-col-splitter:hover .splitter-grip,
+.workspace-col-splitter.is-dragging .splitter-grip {
+    width: 3px;
+    height: 76px;
+    background: var(--accent);
 }
 
 .workspace-columns.webcam-undocked .col-webcams {
@@ -531,6 +717,10 @@ textarea {
         grid-template-rows: auto;
         height: auto;
         min-height: 0;
+    }
+
+    .workspace-col-splitter {
+        display: none;
     }
 
     .col-notebook,
@@ -786,8 +976,8 @@ textarea:focus {
 
 .right-drawer-rails {
     display: none;
-    flex-direction: row;
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: flex-end;
     align-self: flex-start;
     gap: 8px;
     position: sticky;
@@ -1991,4 +2181,650 @@ input[type="range"].dice-opacity-slider:focus-visible {
 .dice-cube.crit-twenty {
     border-color: #f43f5e;
     color: #f43f5e;
+}
+
+/* ============================================================================
+ * Star Trek: The Next Generation — LCARS Okudagram Structural Theme
+ * (Activates on `data-theme="lcars"` OR `data-style="lcars"` with any color palette)
+ * ============================================================================ */
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) body {
+    letter-spacing: 0.035em;
+    font-variant-numeric: tabular-nums;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .top-bar {
+    background: var(--bg-0);
+    border: none;
+    border-left: 28px solid var(--accent);
+    border-bottom: 6px solid var(--accent);
+    border-top: 2px solid var(--purple);
+    border-right: 12px solid var(--purple);
+    border-radius: 26px 999px 999px 26px;
+    padding: 8px 18px 8px 14px;
+    position: relative;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .brand-badge {
+    background: var(--accent);
+    color: var(--bg-0);
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .top-bar h1 {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    color: var(--amber);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .top-bar h1::after {
+    content: " // LCARS 4711.4";
+    font-size: 0.78rem;
+    color: var(--purple);
+    margin-left: 8px;
+    letter-spacing: 0.1em;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .card {
+    background: var(--bg-1);
+    border: 2px solid var(--accent);
+    border-left-width: 18px;
+    border-top-width: 5px;
+    border-radius: 22px 12px 12px 22px;
+    box-shadow: inset 0 0 0 2px var(--bg-0);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) #notebook-column .card,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) #auth-card {
+    border-color: var(--accent);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) #chat-card,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) #session-card {
+    border-color: var(--purple);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) #ttrpg-drawer {
+    border-color: var(--emerald);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) #webrtc-card {
+    border-color: var(--accent-strong);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .card h2,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .roster-title,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .wiz-legend,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .char-section-header h3,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .char-table-title {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .card-header,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .card-header-inline,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .notebook-header {
+    border-bottom: 3px solid var(--purple);
+    padding-bottom: 6px;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .btn,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .btn-chip,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .notebook-tab,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .wiz-step-btn {
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    padding-inline: 13px;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .btn-primary {
+    background: var(--accent);
+    color: var(--bg-0);
+    border: none;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .btn-secondary {
+    background: var(--emerald);
+    color: var(--bg-0);
+    border: none;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .btn-accent {
+    background: var(--purple);
+    color: var(--bg-0);
+    border: none;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .btn-danger {
+    background: var(--rose);
+    color: var(--bg-0);
+    border: none;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .btn-chip {
+    background: var(--bg-2);
+    color: var(--amber);
+    border: 1px solid var(--accent);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .notebook-tab {
+    background: var(--bg-2);
+    color: var(--emerald);
+    border: none;
+    border-left: 8px solid var(--emerald);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .notebook-tab:nth-child(3n+1) {
+    border-left-color: var(--accent);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .notebook-tab:nth-child(3n+2) {
+    border-left-color: var(--purple);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .notebook-tab.active {
+    background: var(--accent);
+    color: var(--bg-0);
+    border-left-color: var(--amber);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .pill {
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+    background: var(--amber);
+    color: var(--bg-0);
+    border: none;
+    font-weight: 700;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .pill-muted {
+    background: var(--bg-2);
+    color: var(--emerald);
+    border: 1px solid var(--emerald);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .pill-active {
+    background: var(--emerald);
+    color: var(--bg-0);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) input[type="text"],
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) input[type="password"],
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) input[type="number"],
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) input[type="search"],
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) select,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) textarea {
+    background: var(--bg-0);
+    color: var(--amber);
+    border: 2px solid var(--emerald);
+    border-left: 10px solid var(--accent);
+    border-radius: 12px 999px 999px 12px;
+    padding-inline: 10px;
+    font-variant-numeric: tabular-nums;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) textarea {
+    border-radius: 14px;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .mono,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .stat-value,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .chat-timestamp,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .ttrpg-odds-kpi strong,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .wiz-char-code {
+    font-family: 'Antonio', 'Arial Narrow', 'Bahnschrift Condensed', monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.07em;
+    color: var(--amber);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .roster-bar,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .ttrpg-odds-readout,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .char-sheet-section,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .wiz-fieldset,
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .gm-doc-card {
+    background: var(--bg-0);
+    border: 1px solid var(--purple);
+    border-left: 12px solid var(--purple);
+    border-radius: 16px 8px 8px 16px;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .chat-msg {
+    background: var(--bg-2);
+    border-left: 10px solid var(--accent);
+    border-radius: 14px 8px 8px 14px;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .chat-msg.ai-gm {
+    border-left-color: var(--purple);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .chat-msg.mechanics {
+    border-left-color: var(--emerald);
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .btn-webcam-drawer-tab {
+    background: var(--accent);
+    color: var(--bg-0);
+    border: none;
+    border-radius: 18px 4px 4px 18px;
+}
+
+html:is([data-theme="lcars"][data-style="default"], [data-style="lcars"]) .btn-webcam-drawer-tab .drawer-tab-chevron {
+    color: var(--bg-0);
+}
+
+/* ============================================================================
+ * MIL-SPEC C4ISR — Ruggedized Field Terminal & Stencil Frame Style
+ * (Activates on `data-theme="mil-spec"` OR `data-style="mil-spec"` with Navy, USMC, etc.)
+ * ============================================================================ */
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) body {
+    letter-spacing: 0.025em;
+    font-variant-numeric: tabular-nums;
+    background-image:
+        linear-gradient(color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px),
+        linear-gradient(90deg, color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .top-bar {
+    background: var(--bg-1);
+    border: 2px solid var(--border);
+    border-left: 8px solid var(--accent);
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .brand-badge {
+    font-family: 'Black Ops One', 'Chakra Petch', 'Impact', sans-serif;
+    background: var(--accent-strong);
+    color: var(--text-heading);
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .top-bar h1 {
+    font-family: 'Black Ops One', 'Chakra Petch', 'Impact', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-heading);
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .top-bar h1::after {
+    content: " // MIL-STD-2525 C4ISR";
+    font-family: 'Share Tech Mono', 'Consolas', monospace;
+    font-size: 0.74rem;
+    color: var(--amber);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    border-radius: 2px;
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, 0.65),
+        0 4px 14px rgba(0, 0, 0, 0.55);
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .card h2,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .roster-title,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .wiz-legend,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .char-section-header h3,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .char-table-title,
+html[data-font="stencil"] .card h2,
+html[data-font="stencil"] .top-bar h1 {
+    font-family: 'Black Ops One', 'Chakra Petch', 'Impact', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-weight: 400;
+    color: var(--accent);
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .card-header,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .card-header-inline,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .notebook-header {
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 6px;
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .btn,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .btn-chip,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .notebook-tab,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .wiz-step-btn {
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-family: 'Chakra Petch', 'Share Tech Mono', sans-serif;
+    font-weight: 700;
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .btn-primary {
+    background: var(--accent-strong);
+    color: var(--text-heading);
+    border: 1px solid var(--accent);
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .btn-secondary {
+    background: var(--bg-2);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .btn-accent {
+    background: var(--brand-grad);
+    color: var(--text-heading);
+    border: 1px solid var(--amber);
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .notebook-tab.active {
+    background: var(--bg-2);
+    color: var(--accent);
+    border-color: var(--accent);
+    border-bottom: 3px solid var(--accent);
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .pill {
+    border-radius: 2px;
+    font-family: 'Share Tech Mono', 'Consolas', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) input[type="text"],
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) input[type="password"],
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) input[type="number"],
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) input[type="search"],
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) select,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) textarea {
+    background: var(--bg-0);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 2px;
+    font-family: 'Share Tech Mono', 'Chakra Petch', monospace;
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .mono,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .stat-value,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .chat-timestamp,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .ttrpg-odds-kpi strong,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .wiz-char-code {
+    font-family: 'Share Tech Mono', 'Consolas', monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+}
+
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .roster-bar,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .ttrpg-odds-readout,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .char-sheet-section,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .wiz-fieldset,
+html:is([data-theme="mil-spec"][data-style="default"], [data-style="mil-spec"]) .gm-doc-card {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 2px;
+}
+
+/* ============================================================================
+ * 1920s/1930s Pulp Noir — Art Deco Brass & Detective Dossier Frame Style
+ * (Activates on `data-theme="pulp-1930s"` OR `data-style="pulp"` with any color palette)
+ * ============================================================================ */
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .top-bar {
+    background: var(--bg-1);
+    border: 3px double var(--border);
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .brand-badge {
+    font-family: 'Limelight', Georgia, serif;
+    background: var(--accent-strong);
+    color: var(--text-heading);
+    border: 1px solid var(--accent);
+    border-radius: 2px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .top-bar h1 {
+    font-family: 'Limelight', Georgia, serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-heading);
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .top-bar h1::after {
+    content: " // 1934 DIME DETECTIVE EDITION";
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .card {
+    background: var(--bg-1);
+    border: 3px double var(--border);
+    border-radius: 4px;
+    box-shadow:
+        inset 0 0 24px rgba(0, 0, 0, 0.55),
+        0 6px 18px rgba(0, 0, 0, 0.6);
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .card h2,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .roster-title,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .wiz-legend,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .char-section-header h3,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .char-table-title,
+html[data-font="pulp"] .card h2,
+html[data-font="pulp"] .top-bar h1 {
+    font-family: 'Limelight', Georgia, serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 400;
+    color: var(--text-heading);
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .card-header,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .card-header-inline,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .notebook-header {
+    border-bottom: 3px double var(--border);
+    padding-bottom: 6px;
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .btn,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .btn-chip,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .notebook-tab,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .wiz-step-btn {
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .btn-primary {
+    background: var(--accent-strong);
+    color: var(--text-heading);
+    border: 1px solid var(--accent);
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .btn-secondary {
+    background: var(--bg-2);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .notebook-tab.active {
+    background: var(--accent-strong);
+    color: var(--text-heading);
+    border-color: var(--accent);
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) input[type="text"],
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) input[type="password"],
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) input[type="number"],
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) input[type="search"],
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) select,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) textarea {
+    background: var(--bg-0);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent-strong);
+    border-radius: 2px;
+    font-family: 'Courier Prime', 'Courier New', monospace;
+}
+
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .roster-bar,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .ttrpg-odds-readout,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .char-sheet-section,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .wiz-fieldset,
+html:is([data-theme="pulp-1930s"][data-style="default"], [data-style="pulp"]) .gm-doc-card {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-left: 4px double var(--accent);
+    border-radius: 3px;
+}
+
+/* ============================================================================
+ * WW2 Wehrmacht (Heer) — Command Bunker Frame Style
+ * (Activates on `data-theme="wehrmacht"` OR `data-style="wehrmacht"` with any color palette)
+ * ============================================================================ */
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) body {
+    letter-spacing: 0.03em;
+    font-variant-numeric: tabular-nums;
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .top-bar {
+    background: var(--bg-1);
+    border: 2px solid var(--border);
+    border-left: 10px solid var(--accent);
+    border-right: 4px solid var(--text-primary);
+    border-radius: 2px;
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .brand-badge {
+    font-family: 'Black Ops One', 'Chakra Petch', sans-serif;
+    background: var(--accent-strong);
+    color: var(--text-heading);
+    border: 1px solid var(--text-heading);
+    border-radius: 2px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .top-bar h1 {
+    font-family: 'Black Ops One', 'Chakra Petch', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-heading);
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .top-bar h1::after {
+    content: " // OKH FELDGRAU NR. 3";
+    font-family: 'Share Tech Mono', 'Consolas', monospace;
+    font-size: 0.74rem;
+    color: var(--accent);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--accent);
+    border-left: 4px solid var(--border);
+    border-radius: 2px;
+    box-shadow:
+        inset 0 0 0 1px var(--bg-0),
+        0 4px 14px rgba(0, 0, 0, 0.65);
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .card h2,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .roster-title,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .wiz-legend,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .char-section-header h3,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .char-table-title {
+    font-family: 'Black Ops One', 'Chakra Petch', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 400;
+    color: var(--text-heading);
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .card-header,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .card-header-inline,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .notebook-header {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 6px;
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .btn,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .btn-chip,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .notebook-tab,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .wiz-step-btn {
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .btn-primary {
+    background: var(--accent-strong);
+    color: var(--text-heading);
+    border: 1px solid var(--accent);
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .btn-secondary {
+    background: var(--bg-2);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .notebook-tab.active {
+    background: var(--accent-strong);
+    color: var(--text-heading);
+    border-color: var(--text-heading);
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) input[type="text"],
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) input[type="password"],
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) input[type="number"],
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) input[type="search"],
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) select,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) textarea {
+    background: var(--bg-0);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 2px;
+}
+
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .roster-bar,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .ttrpg-odds-readout,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .char-sheet-section,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .wiz-fieldset,
+html:is([data-theme="wehrmacht"][data-style="default"], [data-style="wehrmacht"]) .gm-doc-card {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 2px;
 }

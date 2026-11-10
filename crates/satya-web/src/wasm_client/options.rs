@@ -110,6 +110,24 @@ pub const APPEARANCE_THEME_OPTIONS: SelectOptionSlice = &[
     ("ranger", "Forest / Ranger Green"),
     ("dusk-orange", "Dusk Orange (Autumn & Purple)"),
     ("nebula", "Cosmic Nebula (Purple, Orange & Bronze)"),
+    ("navy-gold", "US Navy (Deep Navy & Gold)"),
+    ("marine-corps", "US Marine Corps (Forest Green & Maroon)"),
+    ("lcars", "Star Trek: TNG (LCARS Okudagram)"),
+    ("mil-spec", "MIL-SPEC C4ISR (Olive Drab, Stencil & NVG)"),
+    ("pulp-1930s", "1930s Pulp Noir (Art Deco, Sepia & Crimson)"),
+    (
+        "wehrmacht",
+        "WW2 Wehrmacht (Feldgrau, Panzer Grey & Crimson)",
+    ),
+];
+
+/// Canonical panel frame / structural layout style options (`(style_id, label)`).
+pub const APPEARANCE_STYLE_OPTIONS: SelectOptionSlice = &[
+    ("default", "Theme Default Frame"),
+    ("mil-spec", "MIL-SPEC C4ISR (Stencil, Grid & Bezel)"),
+    ("lcars", "Starfleet LCARS (Sweep Elbows & Pills)"),
+    ("pulp", "1930s Pulp Dossier (Art Deco Double-Rule)"),
+    ("wehrmacht", "Command Bunker (Stark Trim & Top-Bar)"),
 ];
 
 /// Canonical UI density / spacing presets (`(density_id, label)`).
@@ -131,6 +149,21 @@ pub const APPEARANCE_FONT_OPTIONS: SelectOptionSlice = &[
     ("sans", "Clean Sans-Serif (Inter / System)"),
     ("mono", "Tactical Monospace (Consolas / Fira)"),
     ("serif", "Editorial Serif (Georgia / Garamond)"),
+    ("lcars", "Starfleet Condensed (Antonio / LCARS)"),
+    ("military", "Military Field HUD (Chakra Petch / Stencil)"),
+    ("stencil", "Ordnance Stencil (Black Ops One)"),
+    (
+        "pulp",
+        "1930s Pulp Typewriter (Courier Prime / Art Deco)",
+    ),
+];
+
+/// Canonical UI font size / scale options (`(font_size_id, label)`).
+pub const APPEARANCE_FONT_SIZE_OPTIONS: SelectOptionSlice = &[
+    ("default", "Default (100% · 16px)"),
+    ("sm", "Small (90% · 14.4px)"),
+    ("lg", "Large (110% · 17.6px)"),
+    ("xl", "Extra Large (120% · 19.2px)"),
 ];
 
 /// Validates `raw` against `options`, returning the matching canonical key or `options[0].0`.
@@ -147,6 +180,11 @@ pub fn normalize_theme_id(raw: &str) -> &'static str {
     normalize_from_options(raw, APPEARANCE_THEME_OPTIONS)
 }
 
+/// Normalizes a structural panel style identifier to one of [`APPEARANCE_STYLE_OPTIONS`] (defaulting to `"default"`).
+pub fn normalize_style_id(raw: &str) -> &'static str {
+    normalize_from_options(raw, APPEARANCE_STYLE_OPTIONS)
+}
+
 /// Normalizes a UI density identifier to one of [`APPEARANCE_DENSITY_OPTIONS`] (defaulting to `"default"`).
 pub fn normalize_density_id(raw: &str) -> &'static str {
     normalize_from_options(raw, APPEARANCE_DENSITY_OPTIONS)
@@ -160,6 +198,11 @@ pub fn normalize_corners_id(raw: &str) -> &'static str {
 /// Normalizes a font family identifier to one of [`APPEARANCE_FONT_OPTIONS`] (defaulting to `"sans"`).
 pub fn normalize_font_id(raw: &str) -> &'static str {
     normalize_from_options(raw, APPEARANCE_FONT_OPTIONS)
+}
+
+/// Normalizes a font size identifier to one of [`APPEARANCE_FONT_SIZE_OPTIONS`] (defaulting to `"default"`).
+pub fn normalize_font_size_id(raw: &str) -> &'static str {
+    normalize_from_options(raw, APPEARANCE_FONT_SIZE_OPTIONS)
 }
 
 /// Returns the valid `(value, label)` option pairs for `#session-role-select`
