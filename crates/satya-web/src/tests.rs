@@ -160,6 +160,7 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
             visibility: satya_schema::MessageVisibility::GmOnly,
         }],
         notes: Some("Cover bulkhead at (5, 4)".to_string()),
+        ..Default::default()
     };
     let tokens_html = wasm_client::format_tactical_tokens_html(&map_req);
     assert!(tokens_html.contains("Capt. Vance (5, 4)"));
@@ -291,6 +292,15 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains("menu-ai-gm-settings-panel"));
     assert!(html.contains("tabletop-canvas-card"));
     assert!(html.contains("tabletop-map-viewport"));
+    assert!(html.contains("wgpu-map-canvas"));
+    assert!(html.contains("map-preset-select"));
+    assert!(html.contains("btn-map-toggle-proj"));
+    assert!(html.contains("btn-map-wall-cutaway"));
+    assert!(html.contains("btn-map-apply-cover"));
+    assert!(html.contains("tabletop-map-los-hud"));
+    assert!(html.contains("wgpu-model-canvas"));
+    assert!(html.contains("model-glb-file-input"));
+    assert!(html.contains("btn-export-glb-model"));
     assert!(html.contains("wgpu-dice-tray"));
     assert!(html.contains("wgpu-dice-canvas"));
     assert!(html.contains("dice-material-preset"));

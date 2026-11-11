@@ -16,6 +16,7 @@ pub mod gm_api;
 pub mod gm_docs;
 pub mod gm_persistence;
 pub mod http_handlers;
+pub mod map_handlers;
 pub mod npcs;
 pub mod player_ai_api;
 pub mod session_export;
@@ -28,6 +29,7 @@ pub use gm_api::*;
 pub use gm_docs::*;
 pub use gm_persistence::*;
 pub use http_handlers::*;
+pub use map_handlers::*;
 pub use npcs::*;
 pub use player_ai_api::*;
 pub use session_export::*;
@@ -97,6 +99,14 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route(
             "/api/sessions/:session_id/combat",
             get(get_session_combat_tracker_handler).post(update_session_combat_tracker_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/map",
+            get(get_session_map_handler).post(session_generate_or_edit_map_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/map/move",
+            post(session_move_map_token_handler),
         )
         .route(
             "/api/sessions/:session_id/lookup",

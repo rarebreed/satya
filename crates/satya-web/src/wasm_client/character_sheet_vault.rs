@@ -450,7 +450,7 @@ pub fn format_character_vault_and_assets_html(sheet: &CharacterSheetState) -> St
         r#"<section id="char-sheet-vault-bar" class="char-sheet-section" aria-label="Character Persistence Vault, .satyachar Export/Import &amp; Multimodal Assets">
             <div class="char-section-header">
                 <div>
-                    <h3>Character Vault, Portable <code>.satyachar</code> Export/Import &amp; Multimodal Assets</h3>
+                    <h3>Character Vault</h3>
                 </div>
                 <div class="btn-row-compact">
                     {badge_html}
@@ -463,7 +463,7 @@ pub fn format_character_vault_and_assets_html(sheet: &CharacterSheetState) -> St
             <div class="char-tables-two-col">
                 <div class="char-table-card">
                     <div class="char-table-title">
-                        <span>Save, Export &amp; Import (<code>.satyachar</code> Binary Wire Format)</span>
+                        <span>Save, Export &amp; Import</span>
                         <span class="pill pill-muted">Schema ID 11 · CRC-64-AVRO + HMAC-SHA256</span>
                     </div>
                     <div class="model-controls-row">

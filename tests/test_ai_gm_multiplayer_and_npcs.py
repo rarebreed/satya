@@ -375,3 +375,77 @@ def test_action_mode_tick_barrier_and_autonomous_npc_resolution() -> None:
         assert sentry_entry["next_action_tick"] == npc_turn["next_action_tick"]
     finally:
         set_chat_model_override(None)
+
+
+def test_tactical_map_1m_tiles_wall_collision_and_los_cover() -> None:
+    """Verify `1.0m` structured `tiles`, wall occupancy collision, and LoS cover `Δ_ext` in `maps.py`."""
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parent.parent
+    src_dir = str(repo_root / "src")
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+
+    from satya_ml.ai_gm.maps import (
+        ensure_or_sync_procedural_tactical_map_stub,
+        generate_tactical_map,
+        inspect_tactical_map,
+        move_map_token,
+    )
+
+    sid = "t-map-1m-suite"
+    m = generate_tactical_map.invoke(
+        {"session_id": sid, "theme": "Sector 4 Docking Bay", "width": 12, "height": 10}
+    )
+    svg_file = repo_root / "data" / "maps" / f"{sid}_{m['map_id']}.svg"
+    assert m["cell_size_cm"] == 100
+    assert m["theme_preset"] == "docking_bay"
+    assert len(m["tiles"]) == 120
+    assert svg_file.exists()
+
+    try:
+        mv = move_map_token.invoke(
+            {"session_id": sid, "token_id": "tok-vance", "to_x": 5, "to_y": 4}
+        )
+        vance_tok = next(t for t in mv["tokens"] if t["token_id"] == "tok-vance")
+        assert vance_tok["grid_x"] == 5
+        assert vance_tok["grid_y"] == 4
+
+        wall = move_map_token.invoke(
+            {"session_id": sid, "token_id": "tok-vance", "to_x": 0, "to_y": 0}
+        )
+        assert "error" in wall
+
+        oob = move_map_token.invoke(
+            {"session_id": sid, "token_id": "tok-vance", "to_x": 99, "to_y": 4}
+        )
+        assert "error" in oob
+
+        insp = inspect_tactical_map.invoke(
+            {"session_id": sid, "question": "Where is Captain Vance relative to cover?"}
+        )
+        assert "Capt. Vance" in insp
+        assert "(5, 4)" in insp
+        assert "[PARTIAL COVER / OBSTRUCTED]" in insp
+        assert "Δ_ext +4" in insp
+
+        svg_text = svg_file.read_text(encoding="utf-8")
+        assert ">COVER</text>" in svg_text
+        assert 'cx="264" cy="216"' in svg_text
+    finally:
+        svg_file.unlink(missing_ok=True)
+
+    stub = ensure_or_sync_procedural_tactical_map_stub(
+        "t-stub-sync-suite",
+        theme="Sector 4 Med-Lab",
+        combatants=[
+            {"entity_id": "u-sara", "display_name": "Sara", "role_or_faction": "PLAYER", "grid_x": 3, "grid_y": 6},
+            {"entity_id": "npc-1", "display_name": "Sentry", "role_or_faction": "NPC", "grid_x": 12, "grid_y": 6},
+        ],
+    )
+    stub_svg = repo_root / "data" / "maps" / f"t-stub-sync-suite_{stub['map_id']}.svg"
+    stub_svg.unlink(missing_ok=True)
+    assert stub["theme_preset"] == "med_lab"
+    assert len(stub["tiles"]) == 16 * 12
+

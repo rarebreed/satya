@@ -494,6 +494,7 @@ async fn test_gm_backend_api_byok_vault_and_copilot_vs_autonomous_modes() {
                             visibility: MessageVisibility::Public,
                         }],
                         notes: Some("Low-gravity cargo bay".to_string()),
+                        ..Default::default()
                     })
                     .unwrap(),
                 ))
@@ -940,6 +941,263 @@ async fn test_ai_player_spawn_step_context_isolation_and_rally_budget() {
     assert!(!state.try_consume_ai_rally_turn("ep-ai-player-1", 2).await);
     state.reset_ai_rally_counter("ep-ai-player-1").await;
     assert!(state.try_consume_ai_rally_turn("ep-ai-player-1", 2).await);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filtering() {
+    let mut cfg = StorageConfig::default();
+    let temp_dir = std::env::temp_dir().join(format!("satya_sig_map3d_{}", Uuid::now_v7()));
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir
+        .join("users_map3d.db")
+        .to_string_lossy()
+        .to_string();
+
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+    let app = build_router(state.clone());
+
+    let gm_auth = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
+    let _ = state
+        .auth
+        .create_session(
+            &gm_user,
+            "ep-map-3d",
+            "room-pass",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            Some("Sean (GM)".to_string()),
+            false,
+        )
+        .await
+        .unwrap();
+
+    let p1_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let p1_user = state
+        .auth
+        .verify_auth_token(&p1_auth.auth_token)
+        .await
+        .unwrap();
+    let _ = state
+        .auth
+        .join_session(
+            &p1_user,
+            "ep-map-3d",
+            "room-pass",
+            SessionRole::Player,
+            Some("Sara (Valkyrie)".to_string()),
+        )
+        .await
+        .unwrap();
+
+    // 1. GM generates a 20x14 1.0m procedural Docking Bay sector map
+    let gen_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map")
+        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                preset: "docking_bay".to_string(),
+                title: Some("Aethelgard Bay 7".to_string()),
+                grid_width: 20,
+                grid_height: 14,
+                cell_size_cm: 100,
+                seed: Some(77),
+                populate_roster_tokens: true,
+                edit_cell_x: None,
+                edit_cell_y: None,
+                set_tile_kind: None,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let gen_resp = tower::ServiceExt::oneshot(app.clone(), gen_req)
+        .await
+        .unwrap();
+    assert_eq!(gen_resp.status(), axum::http::StatusCode::OK);
+    let gen_bytes = axum::body::to_bytes(gen_resp.into_body(), 128 * 1024)
+        .await
+        .unwrap();
+    let generated_map: GmMapUpdateRequest = serde_json::from_slice(&gen_bytes).unwrap();
+    assert_eq!(generated_map.grid_width, 20);
+    assert_eq!(generated_map.grid_height, 14);
+    assert_eq!(generated_map.cell_size_cm, 100);
+    assert_eq!(generated_map.tiles.len(), 280);
+    assert!(
+        generated_map
+            .tokens
+            .iter()
+            .any(|t| t.entity_id == p1_auth.user_id)
+    );
+
+    // 2. Player attempting to step into outer perimeter FullWall (0, 0) gets 400 BAD_REQUEST
+    let wall_move_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map/move")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::MoveMapTokenRequest {
+                entity_id: p1_auth.user_id.clone(),
+                label: None,
+                to_x: 0,
+                to_y: 0,
+                facing_deg: None,
+                model_preset: None,
+                color_hex: None,
+                stance_pose: None,
+                visibility: None,
+                remove: false,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let wall_resp = tower::ServiceExt::oneshot(app.clone(), wall_move_req)
+        .await
+        .unwrap();
+    assert_eq!(wall_resp.status(), axum::http::StatusCode::BAD_REQUEST);
+
+    // 3. Player attempting to move the SecOps NPC while a Human GM leads gets 403 FORBIDDEN
+    let npc_move_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map/move")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::MoveMapTokenRequest {
+                entity_id: "npc-secops-1".to_string(),
+                label: None,
+                to_x: 4,
+                to_y: 7,
+                facing_deg: None,
+                model_preset: None,
+                color_hex: None,
+                stance_pose: None,
+                visibility: None,
+                remove: false,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let npc_resp = tower::ServiceExt::oneshot(app.clone(), npc_move_req)
+        .await
+        .unwrap();
+    assert_eq!(npc_resp.status(), axum::http::StatusCode::FORBIDDEN);
+
+    // 4. Player moves their own miniature to unblocked floor cell (3, 7) -> 200 OK
+    let ok_move_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map/move")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::MoveMapTokenRequest {
+                entity_id: p1_auth.user_id.clone(),
+                label: None,
+                to_x: 3,
+                to_y: 7,
+                facing_deg: None,
+                model_preset: Some("valkyrie_rig".to_string()),
+                color_hex: Some("#38bdf8".to_string()),
+                stance_pose: None,
+                visibility: None,
+                remove: false,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let ok_resp = tower::ServiceExt::oneshot(app.clone(), ok_move_req)
+        .await
+        .unwrap();
+    assert_eq!(ok_resp.status(), axum::http::StatusCode::OK);
+
+    // 5. GM spawns a hidden `GM_ONLY` ambush sentry; GM sees it on GET, Player does NOT see it!
+    let ambush_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map/move")
+        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::MoveMapTokenRequest {
+                entity_id: "npc-ambush-stalker".to_string(),
+                label: Some("Cloaked Stalker".to_string()),
+                to_x: 15,
+                to_y: 7,
+                facing_deg: Some(270),
+                model_preset: Some("secops_sentry".to_string()),
+                color_hex: Some("#f43f5e".to_string()),
+                stance_pose: None,
+                visibility: Some(MessageVisibility::GmOnly),
+                remove: false,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let ambush_resp = tower::ServiceExt::oneshot(app.clone(), ambush_req)
+        .await
+        .unwrap();
+    assert_eq!(ambush_resp.status(), axum::http::StatusCode::OK);
+
+    let gm_get_req = axum::http::Request::builder()
+        .method("GET")
+        .uri("/api/sessions/ep-map-3d/map")
+        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let gm_get_resp = tower::ServiceExt::oneshot(app.clone(), gm_get_req)
+        .await
+        .unwrap();
+    let gm_map_bytes = axum::body::to_bytes(gm_get_resp.into_body(), 128 * 1024)
+        .await
+        .unwrap();
+    let gm_map: GmMapUpdateRequest = serde_json::from_slice(&gm_map_bytes).unwrap();
+    assert!(
+        gm_map
+            .tokens
+            .iter()
+            .any(|t| t.entity_id == "npc-ambush-stalker")
+    );
+
+    let p1_get_req = axum::http::Request::builder()
+        .method("GET")
+        .uri("/api/sessions/ep-map-3d/map")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let p1_get_resp = tower::ServiceExt::oneshot(app.clone(), p1_get_req)
+        .await
+        .unwrap();
+    let p1_map_bytes = axum::body::to_bytes(p1_get_resp.into_body(), 128 * 1024)
+        .await
+        .unwrap();
+    let p1_map: GmMapUpdateRequest = serde_json::from_slice(&p1_map_bytes).unwrap();
+    assert!(
+        !p1_map
+            .tokens
+            .iter()
+            .any(|t| t.entity_id == "npc-ambush-stalker"),
+        "GM_ONLY ambush token must be stripped from non-GM Player map view"
+    );
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

@@ -24,8 +24,12 @@ pub mod chat_and_ttrpg;
 pub mod dice_3d;
 pub mod dice_3d_wgpu;
 pub mod dom;
+pub mod glb_model;
 pub mod gm_docs;
+pub mod map_3d;
+pub mod map_3d_wgpu;
 pub mod menu;
+pub mod model_3d_wgpu;
 pub mod notebook;
 pub mod npcs;
 pub mod options;
@@ -44,7 +48,10 @@ pub use character_sheet::*;
 pub use chat_and_ttrpg::*;
 pub use dice_3d::*;
 pub use dom::*;
+pub use glb_model::*;
+pub use map_3d::*;
 pub use menu::*;
+pub use model_3d_wgpu::*;
 pub use notebook::*;
 pub use npcs::*;
 pub use options::*;
@@ -89,6 +96,7 @@ pub fn start_satya_wasm_client() {
     sync_chat_options_for_mode(mode);
     satya_visibility_changed();
     set_display("admin-inspector-card", "none");
+    refresh_map_dom_and_wgpu();
     restore_saved_auth_and_session();
 }
 
@@ -181,6 +189,18 @@ pub fn register_window_bindings() {
         "satyaPanDiceCamera" => satya_pan_dice_camera(f32, f32),
         "satyaResetDiceCamera" => satya_reset_dice_camera(),
         "satyaUpdate3dModelView" => satya_update_3d_model_view(),
+        "satyaResetModelCamera" => satya_reset_model_camera(),
+        "satyaImportCustomGlbModel" => satya_import_custom_glb_model(),
+        "satyaExportCurrentGlbModel" => satya_export_current_glb_model(),
+        "satyaSelectMapToken" => satya_select_map_token(String),
+        "satyaClickMapCell" => satya_click_map_cell(i32, i32),
+        "satyaGenerateProceduralMap" => satya_generate_procedural_map(),
+        "satyaUpdateMapTacticalControls" => satya_update_map_tactical_controls(),
+        "satyaUpdateSelectedTokenVisual" => satya_update_selected_token_visual(),
+        "satyaApplyMapCoverToRoller" => satya_apply_map_cover_to_roller(),
+        "satyaToggleMapProjection" => satya_toggle_map_projection(),
+        "satyaToggleMapWallCutaway" => satya_toggle_map_wall_cutaway(),
+        "satyaResetMapCamera" => satya_reset_map_camera(),
         "satyaLoadSkillPreset" => satya_load_skill_preset(String, i32, i32),
         "satyaAdvanceCombatTick" => satya_advance_combat_tick(i32),
         "satyaSelectRulesChapter" => satya_select_rules_chapter(String),

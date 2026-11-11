@@ -515,6 +515,16 @@ impl AuthAndSessionManager {
                 "[PROCEDURAL MAP GENERATOR STUB] Zones: Core Console (x:1..4, y:4..8, Hard Cover DR 4), Central Choke Point (x:6..10, y:4..8), Entry Bulkhead (x:12..15, y:3..9)."
                     .to_string(),
             ),
+            cell_size_cm: 100,
+            theme_preset: Some("orbital_airlock".to_string()),
+            seed: Some(42),
+            tiles: satya_engine::tactical_map::generate_procedural_tactical_grid(
+                satya_engine::tactical_map::SectorPreset::OrbitalAirlock,
+                16,
+                12,
+                42,
+            ),
+            token_visuals: Vec::new(),
         });
 
         for (idx, c) in tracker.combatants.iter().enumerate() {
@@ -1237,10 +1247,14 @@ pub async fn update_session_combat_tracker_handler(
         Ok(tracker) => {
             if let Some((ctx, _)) = state.auth.get_session_gm_context(&session_id).await
                 && let Some(map) = ctx.active_map
-                && let Ok(map_pkt) =
-                    serde_json::to_string(&ServerWsPacket::MapUpdated { map: Box::new(map) })
             {
-                state.broadcast_to_session(&session_id, &map_pkt).await;
+                crate::map_handlers::broadcast_role_filtered_map(
+                    &state,
+                    &session_id,
+                    &ctx.roster,
+                    &map,
+                )
+                .await;
             }
             (StatusCode::OK, Json(tracker)).into_response()
         }

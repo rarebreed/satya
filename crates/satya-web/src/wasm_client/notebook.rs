@@ -112,7 +112,11 @@ pub fn satya_select_notebook_tab(tab_id: String) {
         );
     }
 
-    if target == "iggy" {
+    if target == "maps" {
+        crate::wasm_client::map_3d::refresh_map_dom_and_wgpu();
+    } else if target == "model" {
+        crate::wasm_client::model_3d_wgpu::sync_3d_model_viewer_from_dom();
+    } else if target == "iggy" {
         satya_refresh_metrics();
     } else if target == "combat" {
         render_combat_tracker();
@@ -232,11 +236,23 @@ pub fn format_3d_model_stage_html(preset: &str, render_mode: &str) -> (String, S
             "2.10m · Armored Bipedal",
             "Sensor Dome (DR 5) · Reactive Plating (DR 7) · Servo Joints (DR 3)",
         ),
+        "operative_light" => (
+            "Light Tactical Operative",
+            "9.6k tris",
+            "1.78m · Agile Recon",
+            "Tactical Headset (DR 2) · Kevlar Rig (DR 3) · Mobility Greaves (DR 2)",
+        ),
         "sector4_airlock" => (
             "Sector 4 Orbital Airlock",
             "26.0k tris",
             "20m x 15m · Zero-G Chamber",
             "Inner Bulkhead · Decompression Valve · Mag-Rail Crane",
+        ),
+        "custom_glb" => (
+            "Custom glTF 2.0 (.glb) Asset",
+            "User Mesh",
+            "1.0m Metric Scale",
+            "Imported glTF 2.0 Submeshes & Anatomical Height-Band Hit Zones",
         ),
         _ => (
             "Valkyrie Exo-Rig (Sara)",
@@ -252,6 +268,7 @@ pub fn format_3d_model_stage_html(preset: &str, render_mode: &str) -> (String, S
         _ => "#38bdf8",
     };
     let mode_badge = match render_mode {
+        "pbr" => "PBR-SHADED",
         "hit_zones" => "HIT-ZONES",
         "thermal" => "THERMAL-IR",
         _ => "WIREFRAME+PBR",
@@ -287,7 +304,7 @@ pub fn format_3d_model_stage_html(preset: &str, render_mode: &str) -> (String, S
     (html, pill)
 }
 
-/// Updates the `3D Model` notebook tab stage when `#model-preset-select` or `#model-render-mode` changes.
+/// Updates the `3D Model` notebook tab stage when `#model-preset-select`, `#model-render-mode`, or `#model-tint-color` changes.
 #[wasm_bindgen]
 pub fn satya_update_3d_model_view() {
     let preset = select_value("model-preset-select");
@@ -297,6 +314,7 @@ pub fn satya_update_3d_model_view() {
     if let Some(stage) = get_element("model-preview-stage") {
         stage.set_inner_html(&html);
     }
+    crate::wasm_client::model_3d_wgpu::sync_3d_model_viewer_from_dom();
 }
 
 /// Populates the Center-Bottom Die Roller (`#ttrpg-drawer`) with a skill preset clicked in the
@@ -425,28 +443,9 @@ pub fn format_tactical_tokens_html(map: &GmMapUpdateRequest) -> String {
         .join(" ")
 }
 
-/// Renders an incoming [`GmMapUpdateRequest`] into the `#tabletop-canvas-card` SVG battlemap viewport and token bar.
+/// Renders an incoming [`GmMapUpdateRequest`] into the `#tabletop-canvas-card` 3D/2D WebGPU diorama, SVG fallback, and token bar.
 pub fn render_map_updated(map: &GmMapUpdateRequest) {
-    set_text(
-        "canvas-map-pill",
-        &format!("{} ({}x{})", map.title, map.grid_width, map.grid_height),
-    );
-    set_class("canvas-map-pill", "pill pill-active");
-    set_display("tabletop-map-placeholder", "none");
-    if let Some(img) = get_element("tabletop-map-img") {
-        let _ = img.set_attribute("src", &map.image_url);
-        let _ = img.set_attribute(
-            "alt",
-            &format!(
-                "Tactical map {} ({}x{})",
-                map.title, map.grid_width, map.grid_height
-            ),
-        );
-    }
-    set_display("tabletop-map-img", "block");
-    if let Some(list) = get_element("tabletop-token-list") {
-        list.set_inner_html(&format_tactical_tokens_html(map));
-    }
+    crate::wasm_client::map_3d::apply_incoming_map_update(map);
 }
 
 /// Formats an HTML snippet of 3D physics dice cubes and roll notation for `#wgpu-dice-readout`.

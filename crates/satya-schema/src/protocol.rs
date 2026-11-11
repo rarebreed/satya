@@ -4,6 +4,7 @@ use crate::events::{
     AiGmOperatingMode, ChannelContext, ChatMessageEvent, CombatStance, InteractionTurnType,
     MessageVisibility, TokenPlacement, TtrpgMechanicsEvent, WebRtcEventKind, WgpuDiceSpec,
 };
+pub use crate::tactical_map_dto::*;
 use crate::types::{Participant, SessionMode, SessionRole};
 use serde::{Deserialize, Serialize};
 
@@ -813,18 +814,18 @@ pub struct GmRollRequest {
     pub notes: Option<String>,
 }
 
-/// HTTP request body for `POST /api/gm/sessions/:session_id/map`.
+/// HTTP request body for `POST /api/gm/sessions/:session_id/map` (and `ServerWsPacket::MapUpdated` state).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GmMapUpdateRequest {
     /// Unique identifier for the tactical map.
     pub map_id: String,
     /// Human-readable map title.
     pub title: String,
-    /// URL or relative path to the rendered SVG/PNG map image.
+    /// URL or `data:image/svg+xml` fallback URI for the tactical map.
     pub image_url: String,
-    /// Tactical grid width in cells.
+    /// Tactical grid width in cells (`1 cell = 1.0m` by default).
     pub grid_width: i32,
-    /// Tactical grid height in cells.
+    /// Tactical grid height in cells (`1 cell = 1.0m` by default).
     pub grid_height: i32,
     /// Active character and NPC token coordinates on the grid.
     #[serde(default)]
@@ -832,6 +833,69 @@ pub struct GmMapUpdateRequest {
     /// Optional terrain, cover, or environmental hazard notes.
     #[serde(default)]
     pub notes: Option<String>,
+    /// Physical cell edge scale in centimeters (`100 cm = 1.00 m`).
+    #[serde(default = "default_cell_size_cm")]
+    pub cell_size_cm: i32,
+    /// Optional procedural sector preset identifier (`"orbital_airlock"`, `"docking_bay"`, etc.).
+    #[serde(default)]
+    pub theme_preset: Option<String>,
+    /// Optional deterministic procedural generation seed.
+    #[serde(default)]
+    pub seed: Option<i64>,
+    /// Optional row-major `grid_width * grid_height` terrain, cover, bulkhead, door, and hazard tiles.
+    #[serde(default)]
+    pub tiles: Vec<TacticalTileKind>,
+    /// Optional 3D `.glb` miniature model, color, facing, and pose overrides per `entity_id`.
+    #[serde(default)]
+    pub token_visuals: Vec<TokenVisualSpec>,
+}
+
+impl Default for GmMapUpdateRequest {
+    fn default() -> Self {
+        Self {
+            map_id: "map-default".to_string(),
+            title: "Tactical Sector".to_string(),
+            image_url: String::new(),
+            grid_width: 20,
+            grid_height: 14,
+            tokens: Vec::new(),
+            notes: None,
+            cell_size_cm: default_cell_size_cm(),
+            theme_preset: None,
+            seed: None,
+            tiles: Vec::new(),
+            token_visuals: Vec::new(),
+        }
+    }
+}
+
+impl GmMapUpdateRequest {
+    /// Physical tactical grid cell size in meters (`1.0` default).
+    #[must_use]
+    pub fn cell_size_m(&self) -> f32 {
+        (self.cell_size_cm.max(25) as f32) / 100.0
+    }
+
+    /// Looks up the [`TacticalTileKind`] at `(x, y)` (`Floor` when `tiles` is empty or out of range).
+    #[must_use]
+    pub fn tile_at(&self, x: i32, y: i32) -> TacticalTileKind {
+        if x < 0 || y < 0 || x >= self.grid_width || y >= self.grid_height {
+            return TacticalTileKind::FullWall;
+        }
+        let idx = (y * self.grid_width + x) as usize;
+        self.tiles
+            .get(idx)
+            .copied()
+            .unwrap_or(TacticalTileKind::Floor)
+    }
+
+    /// Looks up the [`TokenVisualSpec`] for `entity_id`, if present.
+    #[must_use]
+    pub fn visual_for(&self, entity_id: &str) -> Option<&TokenVisualSpec> {
+        self.token_visuals
+            .iter()
+            .find(|v| v.entity_id == entity_id)
+    }
 }
 
 /// Webhook payload dispatched from `satya-signaling` to the Python LangGraph service

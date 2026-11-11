@@ -79,6 +79,7 @@ pub mod skills_catalog;
 pub mod skills_trees;
 pub mod social_combat;
 pub mod status_and_triage;
+pub mod tactical_map;
 pub mod task_resolution;
 pub mod walkthroughs;
 
@@ -97,6 +98,7 @@ pub use primitives::*;
 pub use psyche_social::*;
 pub use rules_book::*;
 pub use skills_trees::*;
+pub use tactical_map::*;
 pub use task_resolution::*;
 
 #[cfg(test)]

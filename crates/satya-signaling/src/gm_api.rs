@@ -457,7 +457,7 @@ pub async fn gm_session_map_handler(
     State(state): State<Arc<SignalingAppState>>,
     Path(session_id): Path<String>,
     headers: HeaderMap,
-    Json(req): Json<GmMapUpdateRequest>,
+    Json(mut req): Json<GmMapUpdateRequest>,
 ) -> impl IntoResponse {
     if let Err(err_resp) = verify_gm_service_header(&state, &headers) {
         return err_resp.into_response();
@@ -469,6 +469,24 @@ pub async fn gm_session_map_handler(
         )
             .into_response();
     };
+
+    if req.cell_size_cm <= 0 {
+        req.cell_size_cm = 100;
+    }
+    if req.tiles.is_empty() && req.grid_width >= 4 && req.grid_height >= 4 {
+        let preset = req
+            .theme_preset
+            .as_deref()
+            .or(Some(req.title.as_str()))
+            .and_then(satya_engine::tactical_map::SectorPreset::from_code_str)
+            .unwrap_or(satya_engine::tactical_map::SectorPreset::OrbitalAirlock);
+        req.tiles = satya_engine::tactical_map::generate_procedural_tactical_grid(
+            preset,
+            req.grid_width,
+            req.grid_height,
+            req.seed.unwrap_or(42),
+        );
+    }
 
     let _ = state
         .auth
@@ -520,9 +538,7 @@ pub async fn gm_session_map_handler(
     };
     let _ = state.storage.log_tabletop_canvas(&canvas_ev).await;
 
-    if let Ok(map_pkt) = serde_json::to_string(&ServerWsPacket::MapUpdated { map: Box::new(req) }) {
-        state.broadcast_to_session(&session_id, &map_pkt).await;
-    }
+    crate::map_handlers::broadcast_role_filtered_map(&state, &session_id, &ctx.roster, &req).await;
 
     (StatusCode::OK, Json(canvas_ev)).into_response()
 }

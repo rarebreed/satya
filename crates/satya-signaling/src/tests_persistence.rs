@@ -1127,6 +1127,7 @@ async fn test_session_save_resume_across_logout_restart_and_transcript_snapshot_
                             visibility: MessageVisibility::Public,
                         }],
                         notes: Some("Dim emergency lighting".to_string()),
+                        ..Default::default()
                     })
                     .unwrap(),
                 ))

@@ -504,7 +504,12 @@ impl AuthAndSessionManager {
         let (active_map, combat_tracker) = {
             let guard = self.sessions.read().await;
             if let Some(s) = guard.get(sid) {
-                (s.active_map.clone(), Some(s.combat_tracker.clone()))
+                (
+                    s.active_map.as_ref().map(|m| {
+                        crate::map_handlers::filter_map_for_role(m, participant.role)
+                    }),
+                    Some(s.combat_tracker.clone()),
+                )
             } else {
                 (None, None)
             }

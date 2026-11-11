@@ -534,7 +534,7 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
         r#"<section class="char-sheet-section" aria-label="Status Tracker for Damage, Fatigue, Psyche, and Human-Shaped Hit Locations">
             <div class="char-section-header">
                 <div>
-                    <h3>4. Status Tracker: Anatomical Hit Locations, Damage/Bleed, Fatigue &amp; Psyche</h3>
+                    <h3 title="Anatomical Hit Locations, Damage/Bleed, Fatigue &amp; Psyche">4. Status Tracker</h3>
                     <span class="subtitle">Track localized broken bones, arterial/venous bleeding, systemic Wound Shock (`WSR`), Fatigue (`FT`), and Psyche/Morale.</span>
                 </div>
                 <div class="btn-row-compact">

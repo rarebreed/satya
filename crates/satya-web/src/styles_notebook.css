@@ -1285,3 +1285,89 @@ input[type="file"]::-webkit-file-upload-button:hover,
     font-size: 0.8rem;
     line-height: 1.45;
 }
+
+/* ============================================================================
+ * 3D/2D WebGPU Tactical Map Diorama (`#notebook-pane-maps`) & `.glb` Viewer
+ * ========================================================================== */
+
+.map-tactical-toolbar,
+.map-tactical-subbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.map-ticks-input {
+    width: 58px;
+    padding: 3px 6px;
+}
+
+.wgpu-map-canvas-wrap {
+    width: 100%;
+    height: clamp(320px, 44dvh, 520px);
+    background: #070b14;
+    border-radius: 7px;
+    overflow: hidden;
+    position: relative;
+}
+
+.wgpu-map-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.tabletop-map-svg-fallback {
+    width: 100%;
+    overflow: auto;
+    background: #090d16;
+    border-radius: 7px;
+}
+
+.tabletop-map-svg-fallback svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.map-los-hud {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font-size: 0.8rem;
+}
+
+.wgpu-model-canvas-wrap {
+    width: 100%;
+    height: clamp(280px, 38dvh, 420px);
+    background: #070b14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.wgpu-model-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
+    touch-action: none;
+}
+
+.wgpu-model-canvas:active {
+    cursor: grabbing;
+}
+
+.model-glb-upload-label {
+    cursor: pointer;
+    margin: 0;
+}

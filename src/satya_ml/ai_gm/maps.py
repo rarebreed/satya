@@ -1,14 +1,14 @@
-"""Procedural 2D Tactical Map SVG Generator, Token Movement, and Multimodal Vision Inspector.
+"""Procedural `1.0m` Tactical Map Generator, Token Movement, Cover/LoS Raycaster, and VLM Inspector.
 
-Implements Phase 3 of the Satya AI GM architecture:
-- `generate_tactical_map`: Generates a coordinate-labeled top-down SVG battlemap under `data/maps/`
-  with cover bulkheads, airlock doors, hazard zones, and token badges, and broadcasts `MAP_UPDATED`
-  via `POST /api/gm/sessions/:id/map`.
-- `move_map_token`: Validates grid bounds, updates token `(grid_x, grid_y)` coordinates, re-renders
-  the SVG battlemap on disk, and broadcasts `MAP_UPDATED`.
-- `inspect_tactical_map`: Evaluates spatial geometry, pairwise distances, and cover lines of sight,
-  and optionally invokes the session's multimodal vision model (`build_gm_chat_model(cfg, for_vision=True)`)
-  when a vision model endpoint is reachable.
+Implements the AI GM tactical spatial pipeline synchronized with `satya-engine` and `satya-web` (`wgpu` 3D/2D diorama):
+- `generate_tactical_map`: Generates a `1.0m`-per-cell structured tactical grid (`tiles`, `token_visuals`,
+  `cell_size_cm = 100`) alongside a coordinate-labeled top-down SVG battlemap under `data/maps/`,
+  and broadcasts `MAP_UPDATED` via `POST /api/gm/sessions/:id/map`.
+- `move_map_token`: Validates grid bounds and wall/closed-door occupancy, updates token `(grid_x, grid_y)`
+  and facing orientation, re-renders the SVG battlemap on disk, and broadcasts `MAP_UPDATED`.
+- `inspect_tactical_map`: Evaluates `1.0m` metric pairwise distances, supercover raycast lines of sight,
+  and cover `Δ_ext` (`+0` Clear, `+4` Low Cover, `+6` High Cover, `+16` Blocked), and optionally invokes
+  the session's multimodal vision model (`build_gm_chat_model(cfg, for_vision=True)`).
 """
 
 from __future__ import annotations
@@ -56,6 +56,9 @@ except ImportError:  # pragma: no cover
 _SESSION_MAPS: dict[str, dict[str, Any]] = {}
 _SESSION_LLM_CONFIGS: dict[str, SessionLlmConfig] = {}
 
+_BLOCKING_TILES = {"FULL_WALL", "DOOR_CLOSED"}
+_COVER_TILES = {"HALF_COVER", "FULL_WALL", "DOOR_CLOSED"}
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent
@@ -99,22 +102,146 @@ def get_session_llm_config(session_id: str) -> SessionLlmConfig | None:
     return _SESSION_LLM_CONFIGS.get(session_id)
 
 
+def infer_sector_preset(theme: str) -> str:
+    """Map a free-text scene theme to one of the 5 canonical `satya-engine` `SectorPreset` codes."""
+    low = (theme or "").lower()
+    if any(k in low for k in ("dock", "cargo", "hangar", "bay")):
+        return "docking_bay"
+    if any(k in low for k in ("med", "trauma", "lab", "clinic", "ward")):
+        return "med_lab"
+    if any(k in low for k in ("urban", "street", "road", "city", "crossroad")):
+        return "urban_crossroads"
+    if any(k in low for k in ("corridor", "derelict", "breach", "tunnel")):
+        return "derelict_corridor"
+    return "orbital_airlock"
+
+
+def build_procedural_tiles(width: int, height: int, preset: str = "orbital_airlock") -> list[str]:
+    """Generate a row-major `width * height` `1.0m` `TacticalTileKind` array matching `satya-engine` conventions."""
+    tiles = ["FLOOR"] * (width * height)
+
+    def set_tile(gx: int, gy: int, kind: str) -> None:
+        if 0 <= gx < width and 0 <= gy < height:
+            tiles[gy * width + gx] = kind
+
+    # Outer bulkhead perimeter with West/East airlock doors
+    if width >= 8 and height >= 8:
+        for gx in range(width):
+            set_tile(gx, 0, "FULL_WALL")
+            set_tile(gx, height - 1, "FULL_WALL")
+        for gy in range(height):
+            set_tile(0, gy, "FULL_WALL")
+            set_tile(width - 1, gy, "FULL_WALL")
+        door_y = height // 2
+        set_tile(0, door_y, "DOOR_OPEN")
+        set_tile(width - 1, door_y, "DOOR_CLOSED")
+
+    # Central tactical cover cluster (`HALF_COVER` so miniatures can brace at `(mid_x, mid_y)`)
+    mid_x = max(2, width // 2 - 1)
+    mid_y = max(2, height // 2 - 1)
+    set_tile(mid_x, mid_y, "HALF_COVER")
+    if mid_x + 1 < width - 1:
+        set_tile(mid_x + 1, mid_y, "HALF_COVER")
+
+    # Preset-specific secondary tactical features (flanking cover, bulkheads, hazard zones)
+    if width >= 10 and height >= 8:
+        if preset == "docking_bay":
+            set_tile(max(2, width // 3), max(2, height - 3), "HALF_COVER")
+            set_tile(min(width - 3, (width * 2) // 3), 2, "HAZARD_ZONE")
+        elif preset == "med_lab":
+            set_tile(max(2, width // 3), 2, "FULL_WALL")
+            set_tile(max(2, width // 3), 3, "DOOR_CLOSED")
+            set_tile(min(width - 3, (width * 2) // 3), max(2, height - 3), "HAZARD_ZONE")
+        elif preset == "urban_crossroads":
+            set_tile(2, 2, "ELEVATED_PLATFORM")
+            set_tile(width - 3, height - 3, "HALF_COVER")
+        elif preset == "derelict_corridor":
+            set_tile(min(width - 3, width // 2 + 2), max(2, height - 3), "HAZARD_ZONE")
+        else:
+            set_tile(max(2, width // 3), 2, "HALF_COVER")
+            set_tile(min(width - 3, (width * 2) // 3), max(2, height - 3), "HALF_COVER")
+
+    return tiles
+
+
+def _infer_model_preset(label: str, is_hidden: bool = False) -> str:
+    low = label.lower()
+    if "valkyrie" in low or "sara" in low:
+        return "valkyrie_rig"
+    if "recon" in low or "marcus" in low or "vance" in low:
+        return "recon_mk4"
+    if is_hidden or "sentry" in low or "secops" in low or "hostile" in low:
+        return "secops_sentry"
+    return "operative_light"
+
+
 def normalize_token(tok: dict[str, Any]) -> dict[str, Any]:
-    """Normalize a token placement dictionary to include both `grid_x`/`grid_y` and `x`/`y` keys."""
+    """Normalize a token placement dictionary to include both `grid_x`/`grid_y`, `x`/`y`, and 3D `.glb` fields."""
     gx = int(tok.get("grid_x", tok.get("x", 0)))
     gy = int(tok.get("grid_y", tok.get("y", 0)))
+    tid = str(tok.get("token_id", tok.get("entity_id", f"tok-{uuid.uuid4().hex[:6]}")))
+    lbl = str(tok.get("label", tid))
+    hidden = bool(tok.get("is_hidden", False))
     return {
-        "token_id": str(tok.get("token_id", f"tok-{uuid.uuid4().hex[:6]}")),
-        "label": str(tok.get("label", tok.get("token_id", "Token"))),
+        "token_id": tid,
+        "entity_id": str(tok.get("entity_id", tid)),
+        "label": lbl,
         "actor": tok.get("actor"),
         "grid_x": gx,
         "grid_y": gy,
         "x": gx,
         "y": gy,
         "color_hex": str(tok.get("color_hex", "#38bdf8")),
-        "is_hidden": bool(tok.get("is_hidden", False)),
+        "model_preset": str(tok.get("model_preset") or _infer_model_preset(lbl, hidden)),
+        "facing_deg": int(tok.get("facing_deg", 270 if "sentry" in lbl.lower() else 90)),
+        "is_hidden": hidden,
         "status_badges": list(tok.get("status_badges", [])),
     }
+
+
+def _evaluate_pair_los_and_cover(
+    tiles: list[str],
+    width: int,
+    height: int,
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+) -> tuple[float, str, int]:
+    """Supercover raycast returning `(distance_m, cover_tag, recommended_delta_ext)` on a `1.0m` grid."""
+    dist_m = round(math.hypot(x1 - x2, y1 - y2), 1)
+    if (x1, y1) == (x2, y2):
+        return (0.0, " [CLEAR LOS]", 0)
+
+    steps = max(abs(x2 - x1), abs(y2 - y1)) * 4
+    blocked = False
+    low_cover = False
+    for step in range(1, steps):
+        t = step / float(steps)
+        rx = x1 + 0.5 + (x2 - x1) * t
+        ry = y1 + 0.5 + (y2 - y1) * t
+        gx = int(math.floor(rx))
+        gy = int(math.floor(ry))
+        if (gx, gy) in {(x1, y1), (x2, y2)}:
+            continue
+        if 0 <= gx < width and 0 <= gy < height:
+            kind = tiles[gy * width + gx]
+            if kind in _BLOCKING_TILES:
+                blocked = True
+                break
+            if kind == "HALF_COVER":
+                low_cover = True
+
+    # Also treat standing directly on or behind a HALF_COVER cell toward the opponent as partial cover
+    for cx, cy in ((x1, y1), (x2, y2)):
+        if 0 <= cx < width and 0 <= cy < height and tiles[cy * width + cx] == "HALF_COVER":
+            low_cover = True
+
+    if blocked:
+        return (dist_m, " [PARTIAL COVER / OBSTRUCTED] (Blocked LoS Δ_ext +16)", 16)
+    if low_cover:
+        return (dist_m, " [PARTIAL COVER / OBSTRUCTED] (Low Cover Δ_ext +4)", 4)
+    return (dist_m, " [CLEAR LOS]", 0)
 
 
 def render_tactical_svg(
@@ -123,6 +250,7 @@ def render_tactical_svg(
     width: int,
     height: int,
     tokens: list[dict[str, Any]],
+    tiles: list[str] | None = None,
 ) -> str:
     """Render a coordinate-labeled 2D tactical battlemap SVG with cover obstacles, airlocks, and token badges."""
     cell_px = 48
@@ -141,6 +269,27 @@ def render_tactical_svg(
         f'  <rect x="3" y="3" width="{svg_w - 6}" height="{svg_h - 6}" fill="none" stroke="#334155" stroke-width="3"/>',
     ]
 
+    if tiles and len(tiles) == width * height:
+        for gy in range(height):
+            for gx in range(width):
+                kind = tiles[gy * width + gx]
+                if kind == "FLOOR":
+                    continue
+                px = gx * cell_px
+                py = gy * cell_px
+                if kind == "FULL_WALL":
+                    lines.append(
+                        f'  <rect x="{px}" y="{py}" width="{cell_px}" height="{cell_px}" fill="#1e293b" stroke="#475569" stroke-width="1"/>'
+                    )
+                elif kind == "HALF_COVER":
+                    lines.append(
+                        f'  <rect x="{px + 4}" y="{py + 4}" width="{cell_px - 8}" height="{cell_px - 8}" fill="#1e3a5f" stroke="#38bdf8" stroke-width="1.5" rx="3"/>'
+                    )
+                elif kind == "HAZARD_ZONE":
+                    lines.append(
+                        f'  <rect x="{px + 2}" y="{py + 2}" width="{cell_px - 4}" height="{cell_px - 4}" fill="#4c0519" fill-opacity="0.65" stroke="#f43f5e" stroke-width="1"/>'
+                    )
+
     # Coordinate axis labels along top row and left column
     for gx in range(width):
         cx = gx * cell_px + cell_px // 2
@@ -153,7 +302,7 @@ def render_tactical_svg(
             f'  <text x="10" y="{cy}" text-anchor="middle" fill="#475569" font-family="monospace" font-size="9">{gy}</text>'
         )
 
-    # Procedural central cover bulkhead
+    # Central cover bulkhead label (`COVER`)
     mid_x = max(2, width // 2 - 1) * cell_px
     mid_y = max(2, height // 2 - 1) * cell_px
     lines.append(
@@ -174,7 +323,6 @@ def render_tactical_svg(
         f'  <rect x="{svg_w - 10}" y="{door_y + 8}" width="8" height="{cell_px - 16}" fill="#f59e0b" rx="2"/>'
     )
 
-    # Map title banner
     safe_theme = (
         theme[:48]
         .replace("&", "&amp;")
@@ -183,7 +331,7 @@ def render_tactical_svg(
     )
     lines.append(
         f'  <text x="20" y="{svg_h - 10}" fill="#94a3b8" font-family="monospace" font-size="12">'
-        f"SATYA TACTICAL GRID [{map_id}] // {safe_theme} ({width}x{height})</text>"
+        f"SATYA TACTICAL GRID [{map_id}] // {safe_theme} ({width}m x {height}m · 1.0m/cell)</text>"
     )
 
     for tok in tokens:
@@ -230,13 +378,29 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
         }
         for t in map_state.get("tokens", [])
     ]
+    wire_visuals = [
+        {
+            "entity_id": str(t.get("entity_id", t.get("token_id", "tok"))),
+            "model_preset": str(t.get("model_preset") or _infer_model_preset(t["label"])),
+            "color_hex": str(t.get("color_hex", "#38bdf8")),
+            "facing_deg": int(t.get("facing_deg", 90)),
+            "elevation_cm": 0,
+            "stance_pose": "aimed",
+        }
+        for t in map_state.get("tokens", [])
+    ]
     wire_payload = {
         "map_id": map_state["map_id"],
         "title": map_state.get("title", map_state.get("theme", "Tactical Map")),
         "image_url": map_state.get("image_url", map_state.get("map_image_url", "")),
         "grid_width": int(map_state["grid_width"]),
         "grid_height": int(map_state["grid_height"]),
+        "cell_size_cm": int(map_state.get("cell_size_cm", 100)),
+        "theme_preset": map_state.get("theme_preset", infer_sector_preset(str(map_state.get("theme", "")))),
+        "seed": int(map_state.get("seed", 42)),
+        "tiles": list(map_state.get("tiles", [])),
         "tokens": wire_tokens,
+        "token_visuals": wire_visuals,
         "notes": map_state.get("notes"),
     }
     url = f"{_signaling_base_url()}/api/gm/sessions/{session_id}/map"
@@ -269,10 +433,13 @@ def generate_tactical_map(
     height: int = 12,
     initial_tokens: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Generate a top-down tactical SVG battlemap (`data/maps/`) and broadcast `MAP_UPDATED` to the session."""
+    """Generate a `1.0m`-per-cell 3D/2D tactical battlemap (`tiles` + `data/maps/*.svg`) and broadcast `MAP_UPDATED`."""
     width = max(4, min(int(width), 32))
     height = max(4, min(int(height), 32))
     map_id = f"map-{uuid.uuid4().hex[:8]}"
+    preset = infer_sector_preset(theme)
+    tiles = build_procedural_tiles(width, height, preset)
+
     raw_tokens = list(initial_tokens or [])
     if not raw_tokens:
         raw_tokens = [
@@ -282,6 +449,8 @@ def generate_tactical_map(
                 "grid_x": 2,
                 "grid_y": height // 2,
                 "color_hex": "#38bdf8",
+                "model_preset": "recon_mk4",
+                "facing_deg": 90,
             },
             {
                 "token_id": "tok-secops-1",
@@ -289,6 +458,8 @@ def generate_tactical_map(
                 "grid_x": width - 3,
                 "grid_y": height // 2,
                 "color_hex": "#f87171",
+                "model_preset": "secops_sentry",
+                "facing_deg": 270,
             },
         ]
     tokens = [normalize_token(t) for t in raw_tokens]
@@ -297,19 +468,26 @@ def generate_tactical_map(
     maps_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{session_id}_{map_id}.svg"
     svg_path = maps_dir / filename
-    svg_path.write_text(render_tactical_svg(map_id, theme, width, height, tokens), encoding="utf-8")
+    svg_path.write_text(
+        render_tactical_svg(map_id, theme, width, height, tokens, tiles),
+        encoding="utf-8",
+    )
 
     map_state: dict[str, Any] = {
         "event_type": "MAP_GENERATED",
         "map_id": map_id,
         "title": theme,
         "theme": theme,
+        "theme_preset": preset,
+        "cell_size_cm": 100,
+        "seed": 42,
+        "tiles": tiles,
         "image_url": f"/maps/{filename}",
         "map_image_url": f"/maps/{filename}",
         "grid_width": width,
         "grid_height": height,
         "tokens": tokens,
-        "notes": f"Procedural SVG battlemap for {theme}",
+        "notes": f"1.0m Tactical Diorama & SVG battlemap for {theme} ({preset})",
     }
     set_session_map(session_id, map_state)
     _sync_map_with_signaling(session_id, map_state)
@@ -323,26 +501,40 @@ def move_map_token(
     to_x: int,
     to_y: int,
 ) -> dict[str, Any]:
-    """Move a token to `(to_x, to_y)` on the session's active tactical map, re-render the SVG, and broadcast `MAP_UPDATED`."""
+    """Move a token to `(to_x, to_y)` on the session's `1.0m` tactical map, validating bounds and walls."""
     map_state = get_session_map(session_id)
     if map_state is None:
         return {"error": f"No active tactical map for session '{session_id}'."}
 
     grid_w = int(map_state.get("grid_width", 16))
     grid_h = int(map_state.get("grid_height", 12))
-    if not (0 <= int(to_x) < grid_w and 0 <= int(to_y) < grid_h):
+    tx = int(to_x)
+    ty = int(to_y)
+    if not (0 <= tx < grid_w and 0 <= ty < grid_h):
         return {
             "error": f"Target coordinates ({to_x}, {to_y}) out of bounds for {grid_w}x{grid_h} grid."
         }
+
+    tiles = list(map_state.get("tiles") or [])
+    if len(tiles) == grid_w * grid_h:
+        dest_kind = tiles[ty * grid_w + tx]
+        if dest_kind in _BLOCKING_TILES:
+            return {
+                "error": f"Target cell ({tx}, {ty}) is blocked by {dest_kind}."
+            }
 
     tokens = [normalize_token(t) for t in map_state.get("tokens", [])]
     found = False
     for tok in tokens:
         if tok.get("token_id") == token_id or str(tok.get("label", "")).lower() == token_id.lower():
-            tok["grid_x"] = int(to_x)
-            tok["grid_y"] = int(to_y)
-            tok["x"] = int(to_x)
-            tok["y"] = int(to_y)
+            old_x = int(tok.get("grid_x", tx))
+            old_y = int(tok.get("grid_y", ty))
+            if (old_x, old_y) != (tx, ty):
+                tok["facing_deg"] = int(round(math.degrees(math.atan2(tx - old_x, -(ty - old_y))))) % 360
+            tok["grid_x"] = tx
+            tok["grid_y"] = ty
+            tok["x"] = tx
+            tok["y"] = ty
             found = True
             break
 
@@ -352,8 +544,8 @@ def move_map_token(
                 {
                     "token_id": token_id,
                     "label": token_id,
-                    "grid_x": int(to_x),
-                    "grid_y": int(to_y),
+                    "grid_x": tx,
+                    "grid_y": ty,
                     "color_hex": "#a78bfa",
                 }
             )
@@ -367,7 +559,7 @@ def move_map_token(
     if maps_dir.exists():
         try:
             svg_path.write_text(
-                render_tactical_svg(map_id, theme, grid_w, grid_h, tokens),
+                render_tactical_svg(map_id, theme, grid_w, grid_h, tokens, tiles or None),
                 encoding="utf-8",
             )
         except OSError:
@@ -383,7 +575,7 @@ def move_map_token(
 
 @tool
 def inspect_tactical_map(session_id: str, question: str) -> str:
-    """Inspect the active tactical map geometry, token positions, distances, cover lines of sight, and optional VLM analysis."""
+    """Inspect the active `1.0m` tactical map geometry, token positions, metric distances, cover `Δ_ext`, and optional VLM analysis."""
     map_state = get_session_map(session_id)
     if map_state is None:
         return f"No active tactical map for session '{session_id}'."
@@ -391,8 +583,18 @@ def inspect_tactical_map(session_id: str, question: str) -> str:
     width = int(map_state.get("grid_width", 16))
     height = int(map_state.get("grid_height", 12))
     tokens = map_state.get("tokens", [])
+    preset = str(map_state.get("theme_preset") or infer_sector_preset(str(map_state.get("theme", ""))))
+    tiles = list(map_state.get("tiles") or [])
+    if len(tiles) != width * height:
+        tiles = build_procedural_tiles(width, height, preset)
+
     obstacle_x_range = (max(2, width // 2 - 1), max(2, width // 2))
     obstacle_y = max(2, height // 2 - 1)
+    cover_cells = [
+        f"({ idx % width }, { idx // width }):{kind}"
+        for idx, kind in enumerate(tiles)
+        if kind in {"HALF_COVER", "DOOR_CLOSED", "HAZARD_ZONE", "ELEVATED_PLATFORM"}
+    ][:12]
 
     token_summaries = [
         f"- {t.get('label', t.get('token_id'))} (`{t.get('token_id')}`) at ({t.get('grid_x', t.get('x'))}, {t.get('grid_y', t.get('y'))})"
@@ -406,27 +608,21 @@ def inspect_tactical_map(session_id: str, question: str) -> str:
             y1 = int(t1.get("grid_y", t1.get("y", 0)))
             x2 = int(t2.get("grid_x", t2.get("x", 0)))
             y2 = int(t2.get("grid_y", t2.get("y", 0)))
-            dist = round(math.hypot(x1 - x2, y1 - y2), 1)
-            # Check if central bulkhead lies between the two tokens
-            crosses_cover = (
-                min(x1, x2) <= obstacle_x_range[0]
-                and max(x1, x2) >= obstacle_x_range[1]
-                and min(y1, y2) <= obstacle_y <= max(y1, y2)
+            dist_m, los_tag, _delta = _evaluate_pair_los_and_cover(
+                tiles, width, height, x1, y1, x2, y2
             )
-            los_tag = " [PARTIAL COVER / OBSTRUCTED]" if crosses_cover else " [CLEAR LOS]"
             pairwise.append(
-                f"{t1.get('label', t1.get('token_id'))} <-> {t2.get('label', t2.get('token_id'))}: {dist} cells{los_tag}"
+                f"{t1.get('label', t1.get('token_id'))} <-> {t2.get('label', t2.get('token_id'))}: {dist_m}m ({dist_m} cells){los_tag}"
             )
 
     geometric_summary = (
-        f"Map '{map_state.get('map_id')}' ({width}x{height} grid, url={map_state.get('image_url', map_state.get('map_image_url'))}):\n"
-        f"Central cover bulkhead at x={obstacle_x_range[0]}..{obstacle_x_range[1]}, y={obstacle_y}.\n"
+        f"Map '{map_state.get('map_id')}' ({width}x{height} 1.0m grid, preset={preset}, url={map_state.get('image_url', map_state.get('map_image_url'))}):\n"
+        f"Central cover bulkhead at x={obstacle_x_range[0]}..{obstacle_x_range[1]}, y={obstacle_y}. Tactical features: {', '.join(cover_cells)}.\n"
         f"Tokens:\n" + "\n".join(token_summaries) + "\n"
         f"Pairwise Distances & Line of Sight: {', '.join(pairwise) if pairwise else 'N/A'}\n"
         f"Query context: {question}"
     )
 
-    # Optional VLM invocation when a session vision model is configured and a raster PNG/JPEG is present
     cfg = get_session_llm_config(session_id)
     if cfg is not None and cfg.vision_model_id and HumanMessage is not None:
         img_rel = str(map_state.get("image_url", "")).lstrip("/")
@@ -460,12 +656,8 @@ def ensure_or_sync_procedural_tactical_map_stub(
     theme: str = "Action Mode Tactical Sector",
     combatants: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Stubbed hook for future Procedural Environment & Tactical Map Generation.
-
-    When Action Mode (`combat_active == True`) is initiated or combatant coordinates update,
-    initializes a default 16x12 SVG tactical grid if no active map exists yet, and synchronizes
-    player and NPC token placements (`(grid_x, grid_y)` and tactical zone labels) with
-    `satya-signaling` (`POST /api/gm/sessions/:id/map`).
+    """Ensure a `1.0m` procedural tactical grid is active during Action Mode (`combat_active == True`)
+    and synchronize player and NPC combatant placements with `satya-signaling`.
     """
     existing = get_session_map(session_id)
     raw_combatants = list(combatants or [])
@@ -484,8 +676,8 @@ def ensure_or_sync_procedural_tactical_map_stub(
                     "token_id": str(c.get("entity_id") or f"comb-{idx}"),
                     "entity_id": str(c.get("entity_id") or f"comb-{idx}"),
                     "label": str(c.get("display_name") or f"Combatant {idx + 1}"),
-                    "grid_x": gx,
-                    "grid_y": gy,
+                    "grid_x": max(1, min(14, gx)),
+                    "grid_y": max(1, min(10, gy)),
                     "color_hex": "#f87171" if is_hostile else "#38bdf8",
                     "status_badges": [zone[:8]],
                 }
@@ -521,18 +713,18 @@ def ensure_or_sync_procedural_tactical_map_stub(
                 break
         if matched is not None:
             if gx is not None and int(gx) != matched.get("grid_x"):
-                matched["grid_x"] = max(0, min(width - 1, int(gx)))
+                matched["grid_x"] = max(1, min(width - 2, int(gx)))
                 matched["x"] = matched["grid_x"]
                 changed = True
             if gy is not None and int(gy) != matched.get("grid_y"):
-                matched["grid_y"] = max(0, min(height - 1, int(gy)))
+                matched["grid_y"] = max(1, min(height - 2, int(gy)))
                 matched["y"] = matched["grid_y"]
                 changed = True
         elif eid or dname:
             role_str = str(c.get("role_or_faction") or "").lower()
             is_hostile = bool(c.get("is_npc")) or "npc" in role_str or "hostile" in role_str
-            nx = max(0, min(width - 1, int(gx if gx is not None else (12 if is_hostile else 3))))
-            ny = max(0, min(height - 1, int(gy if gy is not None else (4 + idx % 5))))
+            nx = max(1, min(width - 2, int(gx if gx is not None else (12 if is_hostile else 3))))
+            ny = max(1, min(height - 2, int(gy if gy is not None else (4 + idx % 5))))
             tokens.append(
                 normalize_token(
                     {
@@ -553,4 +745,3 @@ def ensure_or_sync_procedural_tactical_map_stub(
         set_session_map(session_id, existing)
         _sync_map_with_signaling(session_id, existing)
     return existing
-

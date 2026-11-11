@@ -701,7 +701,7 @@ pub fn NotebookReferencePanes() -> impl IntoView {
             </div>
 
             <div class="roster-bar">
-                <span class="roster-title">"1. Specify File: Upload Local File, Pick from Google Drive (`drive.file`), or Load Demo Preset:"</span>
+                <span class="roster-title">"1. Specify File: Upload Local File, from Google Drive, or Load Demo Preset:"</span>
                 <div class="preset-users">
                     <button
                         type="button"
@@ -856,7 +856,7 @@ pub fn NotebookReferencePanes() -> impl IntoView {
             </div>
 
             <div class="roster-bar">
-                <span class="roster-title">"Session & Persistent GM_ONLY Documents (Visible to GM/AI-GM & Uploader Only):"</span>
+                <span class="roster-title">"Session & Persistent GM_ONLY Documents:"</span>
                 <div id="gm-docs-list" class="gm-docs-list">
                     <span class="pill pill-muted">"No GM_ONLY documents submitted in this session yet."</span>
                 </div>

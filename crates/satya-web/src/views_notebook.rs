@@ -78,11 +78,163 @@ pub fn NotebookColumn() -> impl IntoView {
                         data-notebook-pane="maps"
                         class="notebook-pane active"
                     >
-                        <div class="pane-toolbar">
-                            <span class="subtitle">"Live SVG Battlemap (`MAP_UPDATED`) & Tactical Grid Coordinates"</span>
+                        <div class="pane-toolbar map-tactical-toolbar">
+                            <div class="model-controls-row">
+                                <label class="inline-label" for="map-preset-select">
+                                    <span>"Sector"</span>
+                                    <select id="map-preset-select">
+                                        {satya_engine::SectorPreset::ALL
+                                            .iter()
+                                            .map(|preset| {
+                                                let code = preset.as_str();
+                                                let label = preset.label();
+                                                view! {
+                                                    <option value=code>{label}</option>
+                                                }
+                                            })
+                                            .collect_view()}
+                                    </select>
+                                </label>
+                                <button
+                                    type="button"
+                                    id="btn-map-generate"
+                                    class="btn btn-sm btn-accent"
+                                    onclick="window.satyaGenerateProceduralMap()"
+                                    on:click=move |_| wasm_client::satya_generate_procedural_map()
+                                >
+                                    "Generate Sector"
+                                </button>
+                                <button
+                                    type="button"
+                                    id="btn-map-toggle-proj"
+                                    class="btn btn-sm btn-secondary"
+                                    title="Switch between 3D Perspective Diorama and 2D Top-Down Orthographic Grid"
+                                    onclick="window.satyaToggleMapProjection()"
+                                    on:click=move |_| wasm_client::satya_toggle_map_projection()
+                                >
+                                    "View: 3D Diorama"
+                                </button>
+                                <button
+                                    type="button"
+                                    id="btn-map-wall-cutaway"
+                                    class="btn btn-sm btn-secondary"
+                                    title="Toggle full 2.4m bulkheads vs. 0.6m cutaway walls"
+                                    onclick="window.satyaToggleMapWallCutaway()"
+                                    on:click=move |_| wasm_client::satya_toggle_map_wall_cutaway()
+                                >
+                                    "Walls: Cutaway"
+                                </button>
+                                <button
+                                    type="button"
+                                    id="btn-map-reset-cam"
+                                    class="btn btn-sm btn-secondary"
+                                    title="Reset camera angle, pan, and zoom (or double-click canvas)"
+                                    onclick="window.satyaResetMapCamera()"
+                                    on:click=move |_| wasm_client::satya_reset_map_camera()
+                                >
+                                    "Reset View"
+                                </button>
+                            </div>
                         </div>
+
+                        <div class="dice-material-toolbar map-tactical-subbar" role="group" aria-label="Tactical Movement, Cover & Miniature Controls">
+                            <label class="inline-label" for="map-gait-select">
+                                <span>"Gait"</span>
+                                <select
+                                    id="map-gait-select"
+                                    onchange="window.satyaUpdateMapTacticalControls()"
+                                    on:change=move |_| wasm_client::satya_update_map_tactical_controls()
+                                >
+                                    <option value="combat_glide">"Combat Glide (Walk)"</option>
+                                    <option value="prone_crawl">"Prone Low Crawl"</option>
+                                    <option value="stealth_creep">"Stealth Creep"</option>
+                                    <option value="bounding_run">"Bounding Run"</option>
+                                    <option value="all_out_sprint">"All-Out Sprint"</option>
+                                </select>
+                            </label>
+                            <label class="inline-label" for="map-ticks-input">
+                                <span>"Ticks"</span>
+                                <input
+                                    type="number"
+                                    id="map-ticks-input"
+                                    class="map-ticks-input"
+                                    min="1"
+                                    max="40"
+                                    value="8"
+                                    onchange="window.satyaUpdateMapTacticalControls()"
+                                    on:change=move |_| wasm_client::satya_update_map_tactical_controls()
+                                />
+                            </label>
+                            <label class="inline-label" for="map-click-mode">
+                                <span>"Click"</span>
+                                <select
+                                    id="map-click-mode"
+                                    onchange="window.satyaUpdateMapTacticalControls()"
+                                    on:change=move |_| wasm_client::satya_update_map_tactical_controls()
+                                >
+                                    <option value="move_or_select">"Select / Move / Door"</option>
+                                    <option value="measure_los">"Measure Range & Cover"</option>
+                                    <option value="edit_terrain">"Paint Cover / Wall"</option>
+                                </select>
+                            </label>
+                            <label class="inline-label" for="map-token-model-select">
+                                <span>"Mini"</span>
+                                <select
+                                    id="map-token-model-select"
+                                    onchange="window.satyaUpdateSelectedTokenVisual()"
+                                    on:change=move |_| wasm_client::satya_update_selected_token_visual()
+                                >
+                                    <option value="valkyrie_rig">"Valkyrie Rig"</option>
+                                    <option value="recon_mk4">"Recon Mk-IV"</option>
+                                    <option value="secops_sentry">"SecOps Sentry"</option>
+                                    <option value="operative_light">"Light Operative"</option>
+                                    <option value="custom_glb">"Custom .glb"</option>
+                                </select>
+                            </label>
+                            <label class="inline-label" for="map-token-color">
+                                <span>"Tint"</span>
+                                <input
+                                    type="color"
+                                    id="map-token-color"
+                                    class="dice-color-input"
+                                    value="#38bdf8"
+                                    oninput="window.satyaUpdateSelectedTokenVisual()"
+                                    on:input=move |_| wasm_client::satya_update_selected_token_visual()
+                                />
+                            </label>
+                            <button
+                                type="button"
+                                id="btn-map-apply-cover"
+                                class="btn btn-sm btn-secondary"
+                                title="Send evaluated Cover Δ_ext into the Task Resolution 2d20 drawer"
+                                onclick="window.satyaApplyMapCoverToRoller()"
+                                on:click=move |_| wasm_client::satya_apply_map_cover_to_roller()
+                            >
+                                "Send Cover Δ_ext → 2d20"
+                            </button>
+                        </div>
+
                         <div id="tabletop-map-viewport" class="tabletop-map-viewport">
-                            <div id="tabletop-map-placeholder" class="tabletop-map-placeholder">
+                            <div id="wgpu-map-canvas-wrap" class="wgpu-map-canvas-wrap">
+                                <canvas
+                                    id="wgpu-map-canvas"
+                                    class="wgpu-map-canvas"
+                                    width="720"
+                                    height="420"
+                                    aria-label="3D/2D WebGPU Tactical Diorama Battlemap (1.0m Grid)"
+                                ></canvas>
+                            </div>
+                            <div
+                                id="tabletop-map-svg-fallback"
+                                class="tabletop-map-svg-fallback"
+                                style="display: none;"
+                                inner_html=wasm_client::default_tactical_map_svg_html()
+                            ></div>
+                            <div
+                                id="tabletop-map-placeholder"
+                                class="tabletop-map-placeholder"
+                                style="display: none;"
+                            >
                                 "Awaiting tactical map generation (`generate_tactical_map`) or GM map update..."
                             </div>
                             <img
@@ -92,11 +244,19 @@ pub fn NotebookColumn() -> impl IntoView {
                                 style="display: none;"
                             />
                         </div>
+                        <div
+                            id="tabletop-map-los-hud"
+                            class="map-los-hud"
+                            aria-live="polite"
+                            inner_html=wasm_client::default_tactical_map_hud_html()
+                        ></div>
                         <div class="roster-bar">
-                            <span class="roster-title">"Grid Tokens & Coordinates:"</span>
-                            <div id="tabletop-token-list" class="roster-chips">
-                                <span class="pill pill-muted">"No active tokens"</span>
-                            </div>
+                            <span class="roster-title">"Miniatures (`1.0m` Grid · Drag: Orbit · Shift/Right-Drag: Pan · Wheel: Zoom · Click: Move/Select):"</span>
+                            <div
+                                id="tabletop-token-list"
+                                class="roster-chips"
+                                inner_html=wasm_client::default_tactical_map_tokens_html()
+                            ></div>
                         </div>
                     </div>
 
@@ -344,7 +504,7 @@ pub fn NotebookColumn() -> impl IntoView {
                     >
                         <div class="pane-toolbar">
                             <div class="model-controls-row">
-                                <label class="inline-label">
+                                <label class="inline-label" for="model-preset-select">
                                     <span>"3D Asset"</span>
                                     <select
                                         id="model-preset-select"
@@ -354,10 +514,12 @@ pub fn NotebookColumn() -> impl IntoView {
                                         <option value="valkyrie_rig">"Valkyrie Exo-Rig (Sara)"</option>
                                         <option value="recon_mk4">"Recon Suit Mk-IV (Marcus)"</option>
                                         <option value="secops_sentry">"SecOps Heavy Sentry"</option>
+                                        <option value="operative_light">"Light Tactical Operative"</option>
                                         <option value="sector4_airlock">"Sector 4 Orbital Airlock"</option>
+                                        <option value="custom_glb">"Custom Imported (.glb)"</option>
                                     </select>
                                 </label>
-                                <label class="inline-label">
+                                <label class="inline-label" for="model-render-mode">
                                     <span>"Shader Mode"</span>
                                     <select
                                         id="model-render-mode"
@@ -365,12 +527,66 @@ pub fn NotebookColumn() -> impl IntoView {
                                         on:change=move |_| wasm_client::satya_update_3d_model_view()
                                     >
                                         <option value="wireframe_pbr">"Wireframe + PBR"</option>
+                                        <option value="pbr">"Clean PBR Armor"</option>
                                         <option value="hit_zones">"Anatomical Hit Zones"</option>
                                         <option value="thermal">"Thermal / IR Sensor"</option>
                                     </select>
                                 </label>
+                                <label class="inline-label" for="model-tint-color">
+                                    <span>"Armor Tint"</span>
+                                    <input
+                                        type="color"
+                                        id="model-tint-color"
+                                        class="dice-color-input"
+                                        value="#0ea5e9"
+                                        oninput="window.satyaUpdate3dModelView()"
+                                        on:input=move |_| wasm_client::satya_update_3d_model_view()
+                                    />
+                                </label>
+                                <button
+                                    type="button"
+                                    id="btn-reset-model-camera"
+                                    class="btn btn-sm btn-secondary"
+                                    onclick="window.satyaResetModelCamera()"
+                                    on:click=move |_| wasm_client::satya_reset_model_camera()
+                                >
+                                    "Reset View"
+                                </button>
+                                <label class="btn btn-sm btn-secondary model-glb-upload-label" for="model-glb-file-input">
+                                    "Load .glb"
+                                </label>
+                                <input
+                                    type="file"
+                                    id="model-glb-file-input"
+                                    accept=".glb,model/gltf-binary"
+                                    style="display: none;"
+                                    onchange="window.satyaImportCustomGlbModel()"
+                                    on:change=move |_| wasm_client::satya_import_custom_glb_model()
+                                />
+                                <button
+                                    type="button"
+                                    id="btn-export-glb-model"
+                                    class="btn btn-sm btn-accent"
+                                    title="Download spec-compliant glTF 2.0 binary (.glb) to edit in Blender"
+                                    onclick="window.satyaExportCurrentGlbModel()"
+                                    on:click=move |_| wasm_client::satya_export_current_glb_model()
+                                >
+                                    "Download .glb"
+                                </button>
                             </div>
-                            <span id="model-telemetry-pill" class="pill pill-iggy">"Mesh: Valkyrie Exo-Rig · 14.2k tris"</span>
+                            <div class="btn-row-compact">
+                                <span id="model-telemetry-pill" class="pill pill-iggy">"Mesh: Valkyrie Exo-Rig · 14.2k tris"</span>
+                                <span id="model-wgpu-status-pill" class="pill pill-muted">"WebGPU glTF 2.0 (.glb) Turntable"</span>
+                            </div>
+                        </div>
+                        <div id="wgpu-model-canvas-wrap" class="wgpu-model-canvas-wrap">
+                            <canvas
+                                id="wgpu-model-canvas"
+                                class="wgpu-model-canvas"
+                                width="640"
+                                height="340"
+                                aria-label="Rotatable 3D WebGPU glTF 2.0 (.glb) Character Model Stage"
+                            ></canvas>
                         </div>
                         <div
                             id="model-preview-stage"
