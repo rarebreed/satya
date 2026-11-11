@@ -4,10 +4,160 @@
 use crate::wasm_client::dom::escape_html;
 use crate::wasm_client::wizard::CharacterWizardState;
 use satya_engine::{
-    CANONICAL_SKILL_TREES, CareerTermTrack, EducationalAdvancementResult, HighSchoolTrack,
-    LifepathBaselineResult, RuralYouthArchetype, SkillType, SocioeconomicClass, Stage4Path,
-    StreetGangArchetype, resolve_socioeconomic_origin,
+    CANONICAL_SKILL_TREES, CareerTermConfig, CareerTermTrack, EducationalAdvancementResult,
+    HighSchoolTrack, LifepathBaselineResult, LifepathBuildConfig, RuralYouthArchetype, SkillType,
+    SocioeconomicClass, Stage4Path, StreetGangArchetype, lookup_skill_node,
+    resolve_socioeconomic_origin,
 };
+
+fn roll_2d20_pairs_with<F: FnMut(i32) -> i32>(rng: &mut F) -> [(i32, i32); 2] {
+    [(rng(20), rng(20)), (rng(20), rng(20))]
+}
+
+/// Rolls one Lifepath stage (`1..=5`) in `lp` using `rng` and clears any manual override on that stage.
+pub(crate) fn roll_lifepath_stage_in_config<F: FnMut(i32) -> i32>(
+    lp: &mut LifepathBuildConfig,
+    stage_num: u8,
+    rng: &mut F,
+) {
+    match stage_num {
+        1 => {
+            lp.origin_roll_2d20 = rng(20) + rng(20);
+            let orig = resolve_socioeconomic_origin(lp.origin_roll_2d20);
+            if let Some(&first_tal) = orig.early_environment_bonus_talents.first() {
+                lp.stage1_early_talent = first_tal.to_string();
+            }
+        }
+        2 => {
+            lp.stage2_lit_pairs = roll_2d20_pairs_with(rng);
+            lp.stage2_lit_override = None;
+            lp.stage2_math_pairs = roll_2d20_pairs_with(rng);
+            lp.stage2_math_override = None;
+        }
+        3 => {
+            lp.stage3_math_pairs = roll_2d20_pairs_with(rng);
+            lp.stage3_math_override = None;
+            lp.stage3_sci_pairs = roll_2d20_pairs_with(rng);
+            lp.stage3_sci_override = None;
+            lp.stage3_hum_pairs = roll_2d20_pairs_with(rng);
+            lp.stage3_hum_override = None;
+            lp.age15_crisis_roll_2d20 = rng(20) + rng(20);
+            lp.age15_dropout_override = None;
+            lp.stage4_path_override = None;
+        }
+        4 => {
+            lp.stage4a_hs_pairs = roll_2d20_pairs_with(rng);
+            lp.stage4a_hs_override = None;
+        }
+        5 => {
+            for term in &mut lp.career_terms {
+                term.term_roll_pairs = roll_2d20_pairs_with(rng);
+                term.override_successes = None;
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Applies a field or override edit onto `lp` for Step 4 Lifepath controls.
+pub(crate) fn apply_lifepath_field_in_config<F: FnMut(i32) -> i32>(
+    lp: &mut LifepathBuildConfig,
+    field: &str,
+    val: &str,
+    rng: &mut F,
+) {
+    let parsed_ov = val.parse::<usize>().ok().map(|n| n.min(2));
+    match field {
+        "origin_class" => {
+            if let Some(cls) = SocioeconomicClass::from_code_str(val) {
+                lp.origin_roll_2d20 = cls.representative_roll_2d20();
+                let orig = resolve_socioeconomic_origin(lp.origin_roll_2d20);
+                if let Some(&first_tal) = orig.early_environment_bonus_talents.first() {
+                    lp.stage1_early_talent = first_tal.to_string();
+                }
+            }
+        }
+        "stage1_talent" if lookup_skill_node(val).is_some() => {
+            lp.stage1_early_talent = val.to_string();
+        }
+        "stage2_lit_override" => lp.stage2_lit_override = parsed_ov,
+        "stage2_math_override" => lp.stage2_math_override = parsed_ov,
+        "stage2_talent" if lookup_skill_node(val).is_some() => {
+            lp.stage2_playground_talent = val.to_string();
+        }
+        "stage3_math_override" => lp.stage3_math_override = parsed_ov,
+        "stage3_sci_override" => lp.stage3_sci_override = parsed_ov,
+        "stage3_hum_override" => lp.stage3_hum_override = parsed_ov,
+        "age15_path" => {
+            let code = val.to_ascii_uppercase();
+            lp.stage4_path_override = Stage4Path::from_code_str(&code);
+            lp.age15_dropout_override = match code.as_str() {
+                "STAY_4A" => Some(false),
+                "DROPOUT_4B" | "RURAL_4C" => Some(true),
+                _ => None,
+            };
+        }
+        "stage4a_track" => {
+            if let Some(trk) = HighSchoolTrack::from_code_str(val) {
+                lp.stage4a_hs_track = trk;
+            }
+        }
+        "stage4a_hs_override" => lp.stage4a_hs_override = parsed_ov,
+        "stage4b_archetype" => {
+            if let Some(arch) = StreetGangArchetype::from_code_str(val) {
+                lp.stage4b_gang_archetype = arch;
+            }
+        }
+        "stage4c_archetype" => {
+            if let Some(arch) = RuralYouthArchetype::from_code_str(val) {
+                lp.stage4c_rural_archetype = arch;
+            }
+        }
+        "num_career_terms" => {
+            let target_len = val.parse::<usize>().unwrap_or(1).min(4);
+            while lp.career_terms.len() < target_len {
+                lp.career_terms.push(CareerTermConfig {
+                    track: CareerTermTrack::MilitaryCombatArmsSpecOps,
+                    term_roll_pairs: roll_2d20_pairs_with(rng),
+                    override_successes: None,
+                    waiver_override: true,
+                });
+            }
+            lp.career_terms.truncate(target_len);
+        }
+        "adult_ged_waiver" => {
+            lp.adult_ged_waiver = val.eq_ignore_ascii_case("true") || val == "1";
+        }
+        _ => {}
+    }
+}
+
+/// Applies a Stage 5 Career Term (`0..4`) track, override, or re-roll mutation onto `lp`.
+pub(crate) fn apply_career_term_in_config<F: FnMut(i32) -> i32>(
+    lp: &mut LifepathBuildConfig,
+    term_idx: usize,
+    field: &str,
+    val: &str,
+    rng: &mut F,
+) {
+    if let Some(term) = lp.career_terms.get_mut(term_idx) {
+        match field {
+            "track" => {
+                if let Some(trk) = CareerTermTrack::from_code_str(val) {
+                    term.track = trk;
+                }
+            }
+            "override_successes" => {
+                term.override_successes = val.parse::<usize>().ok().map(|n| n.min(2));
+            }
+            "roll" => {
+                term.term_roll_pairs = roll_2d20_pairs_with(rng);
+                term.override_successes = None;
+            }
+            _ => {}
+        }
+    }
+}
 
 /// Formats the unlocked `[Access: ...]` gate pills and optional `[Academic Tree FROZEN]` pill for `baseline`.
 pub fn format_access_gates_pills_html(baseline: &LifepathBaselineResult) -> String {
@@ -106,6 +256,35 @@ fn format_k12_subject_card_html(
         </div>"#,
         succ = eval.successes,
         tn = eval.tn_edu,
+    )
+}
+
+fn format_archetype_radio_card_html(
+    ids: (&str, &str, &str),
+    copy: (&str, &str, &str),
+    is_checked: bool,
+) -> String {
+    let (radio_prefix, radio_name, field_name) = ids;
+    let (code, label, subtitle) = copy;
+    let checked = if is_checked { " checked" } else { "" };
+    let radio_id = format!("{radio_prefix}-{}", code.to_ascii_lowercase());
+    format!(
+        r#"<label class="wiz-radio-card" for="{radio_id}">
+            <input
+                id="{radio_id}"
+                type="radio"
+                name="{radio_name}"
+                value="{code}"
+                {checked}
+                onchange="window.satyaWizardUpdateLifepathField('{field_name}', '{code}')"
+            />
+            <div>
+                <strong>{label}</strong>
+                <div class="subtitle">{sub}</div>
+            </div>
+        </label>"#,
+        label = escape_html(label),
+        sub = escape_html(subtitle),
     )
 }
 
@@ -210,30 +389,10 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
             let gang_cards: String = StreetGangArchetype::ALL
                 .iter()
                 .map(|&arch| {
-                    let checked = if cfg.stage4b_gang_archetype == arch {
-                        " checked"
-                    } else {
-                        ""
-                    };
-                    let code = arch.as_str();
-                    let radio_id = format!("wiz-gang-arch-{}", code.to_ascii_lowercase());
-                    format!(
-                        r#"<label class="wiz-radio-card" for="{radio_id}">
-                            <input
-                                id="{radio_id}"
-                                type="radio"
-                                name="wiz_stage4b_archetype"
-                                value="{code}"
-                                {checked}
-                                onchange="window.satyaWizardUpdateLifepathField('stage4b_archetype', '{code}')"
-                            />
-                            <div>
-                                <strong>{label}</strong>
-                                <div class="subtitle">{sub}</div>
-                            </div>
-                        </label>"#,
-                        label = escape_html(arch.label()),
-                        sub = escape_html(arch.subtitle()),
+                    format_archetype_radio_card_html(
+                        ("wiz-gang-arch", "wiz_stage4b_archetype", "stage4b_archetype"),
+                        (arch.as_str(), arch.label(), arch.subtitle()),
+                        cfg.stage4b_gang_archetype == arch,
                     )
                 })
                 .collect::<Vec<_>>()
@@ -256,30 +415,10 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
             let rural_cards: String = RuralYouthArchetype::ALL
                 .iter()
                 .map(|&arch| {
-                    let checked = if cfg.stage4c_rural_archetype == arch {
-                        " checked"
-                    } else {
-                        ""
-                    };
-                    let code = arch.as_str();
-                    let radio_id = format!("wiz-rural-arch-{}", code.to_ascii_lowercase());
-                    format!(
-                        r#"<label class="wiz-radio-card" for="{radio_id}">
-                            <input
-                                id="{radio_id}"
-                                type="radio"
-                                name="wiz_stage4c_archetype"
-                                value="{code}"
-                                {checked}
-                                onchange="window.satyaWizardUpdateLifepathField('stage4c_archetype', '{code}')"
-                            />
-                            <div>
-                                <strong>{label}</strong>
-                                <div class="subtitle">{sub}</div>
-                            </div>
-                        </label>"#,
-                        label = escape_html(arch.label()),
-                        sub = escape_html(arch.subtitle()),
+                    format_archetype_radio_card_html(
+                        ("wiz-rural-arch", "wiz_stage4c_archetype", "stage4c_archetype"),
+                        (arch.as_str(), arch.label(), arch.subtitle()),
+                        cfg.stage4c_rural_archetype == arch,
                     )
                 })
                 .collect::<Vec<_>>()

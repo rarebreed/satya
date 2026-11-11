@@ -1,10 +1,10 @@
-//! Slash-command parser and `/roll` pipe (`|>`) mini-DSL evaluator for the Session Chat input box.
+//! Slash-command parser and `/roll` (`/r`) pipe (`|>`) mini-DSL evaluator for the Session Chat input box.
 //!
 //! Supported commands:
-//! - `/msg @recipient1 @recipient2 {message}` — sends a targeted private message to the specified session participants.
+//! - `/msg` (aliases: `/w`, `/whisper`) `@recipient1 @recipient2 {message}` — sends a targeted private message to the specified session participants.
 //! - `/msg @broadcast {message}` — sends a public broadcast message to all participants in the session.
-//! - `/roll <expr>` — evaluates a dice expression and optional `|>` pipeline:
-//!   - `/roll 2d10` (defaults to `2d10|>sum`)
+//! - `/roll <expr>` (alias: `/r <expr>`) — evaluates a dice expression and optional `|>` pipeline:
+//!   - `/roll 2d10` or `/r d20` (defaults to `<dice>|>sum`, with bare `d<sides>` defaulting to `1d<sides>`)
 //!   - `/roll 2d10|>sum`
 //!   - `/roll 4d10|>hi(3)` or `/roll 5d20|>3` (take `n` highest)
 //!   - `/roll 6d6|>lo(3)` (take `n` lowest)
@@ -156,19 +156,20 @@ pub fn parse_chat_command(input: &str) -> Result<Option<ChatCommand>, String> {
             };
             Ok(Some(build_help_command(topic.as_deref())))
         }
-        "/msg" => {
+        "/msg" | "/w" | "/whisper" => {
             if is_help_flag(rest) {
                 return Ok(Some(build_help_command(Some("msg"))));
             }
             parse_msg_command(rest).map(Some)
         }
-        "/roll" => {
+        "/roll" | "/r" => {
             if is_help_flag(rest) {
                 return Ok(Some(build_help_command(Some("roll"))));
             }
             if rest.is_empty() {
                 return Err(
-                    "Usage: /roll <dice>[|>stage...] (try '/roll --help' for examples)".to_string(),
+                    "Usage: /roll <dice>[|>stage...] (alias: /r; try '/roll --help' for examples)"
+                        .to_string(),
                 );
             }
             let pipeline = parse_roll_pipeline(rest)?;
@@ -178,7 +179,7 @@ pub fn parse_chat_command(input: &str) -> Result<Option<ChatCommand>, String> {
             }))
         }
         other => Err(format!(
-            "Unknown command '{other}'. Type '/help' or '--help' to see supported commands (/msg, /roll)."
+            "Unknown command '{other}'. Type '/help' or '--help' to see supported commands (/msg, /w, /whisper, /roll, /r)."
         )),
     }
 }
@@ -190,12 +191,12 @@ fn is_help_flag(rest: &str) -> bool {
     )
 }
 
-/// Builds a [`ChatCommand::Help`] response for the requested topic (`None`, `Some("msg")`, or `Some("roll")`).
+/// Builds a [`ChatCommand::Help`] response for the requested topic (`None`, `Some("msg")` / `"w"` / `"whisper"`, or `Some("roll")` / `"r"`).
 pub fn build_help_command(topic: Option<&str>) -> ChatCommand {
-    let msg_help = "/msg @recipient1 [@recipient2 ...] <message> — Send a private message to specific session participants.\n\
+    let msg_help = "/msg (aliases: /w, /whisper) @recipient1 [@recipient2 ...] <message> — Send a private message to specific session participants.\n\
                     /msg @broadcast <message> — Broadcast a public message to all participants.";
-    let roll_help = "/roll <count>d<sides>[e[(<thresh>)]][|>stage...] — Roll dice through a pipe (|>) mini-DSL:\n\
-                     • /roll 2d10 or /roll 2d10|>sum (sum dice; default when no pipe is given)\n\
+    let roll_help = "/roll (alias: /r) <count>d<sides>[e[(<thresh>)]][|>stage...] — Roll dice through a pipe (|>) mini-DSL:\n\
+                     • /roll 2d10, /r d20, or /roll 2d10|>sum (sum dice; default when no pipe is given)\n\
                      • /roll 4d10|>hi(3) or /roll 5d20|>3 (keep 3 highest rolls)\n\
                      • /roll 6d6|>lo(3) (keep 3 lowest rolls)\n\
                      • /roll 4d10|>gte(8) (keep rolls >= 8) | /roll 5d6|>lte(3) (keep rolls <= 3)\n\
@@ -203,13 +204,13 @@ pub fn build_help_command(topic: Option<&str>) -> ChatCommand {
                      • /roll 4d10e|>gte(8) (explode on max face) | /roll 4d10e(9) (explode on >= 9)";
 
     match topic {
-        Some("msg") => ChatCommand::Help {
+        Some("msg" | "w" | "whisper") => ChatCommand::Help {
             topic: Some("msg".to_string()),
-            help_text: format!("[HELP: /msg]\n{msg_help}"),
+            help_text: format!("[HELP: /msg (/w, /whisper)]\n{msg_help}"),
         },
-        Some("roll") => ChatCommand::Help {
+        Some("roll" | "r") => ChatCommand::Help {
             topic: Some("roll".to_string()),
-            help_text: format!("[HELP: /roll]\n{roll_help}"),
+            help_text: format!("[HELP: /roll (/r)]\n{roll_help}"),
         },
         _ => ChatCommand::Help {
             topic: None,
@@ -792,106 +793,49 @@ mod tests {
         assert_eq!(parse_chat_command("normal chat message").unwrap(), None);
     }
 
-    #[test]
-    fn test_roll_dsl_hi_lo_and_shorthand() {
-        // /roll 4d10|>hi(3)
-        let p_hi = parse_roll_pipeline("4d10|>hi(3)").unwrap();
-        let seq = [3, 9, 6, 8];
+    fn eval_seq(expr: &str, seq: &[i64]) -> (RollPipeline, RollOutcome) {
+        let p = parse_roll_pipeline(expr).unwrap();
         let mut idx = 0;
-        let out_hi = p_hi
-            .evaluate_with_roller("4d10|>hi(3)", |_| {
+        let out = p
+            .evaluate_with_roller(expr, |_| {
                 let v = seq[idx];
                 idx += 1;
                 v
             })
             .unwrap();
+        (p, out)
+    }
+
+    #[test]
+    fn test_roll_dsl_hi_lo_and_shorthand() {
+        let (_, out_hi) = eval_seq("4d10|>hi(3)", &[3, 9, 6, 8]);
         assert_eq!(out_hi.final_value, RollValue::List(vec![9, 8, 6]));
         assert!(out_hi.summary.contains("hi(3): [9, 8, 6]"));
 
-        // /roll 6d6|>lo(3)
-        let p_lo = parse_roll_pipeline("6d6|>lo(3)").unwrap();
-        let seq6 = [5, 2, 6, 1, 4, 3];
-        let mut idx6 = 0;
-        let out_lo = p_lo
-            .evaluate_with_roller("6d6|>lo(3)", |_| {
-                let v = seq6[idx6];
-                idx6 += 1;
-                v
-            })
-            .unwrap();
+        let (_, out_lo) = eval_seq("6d6|>lo(3)", &[5, 2, 6, 1, 4, 3]);
         assert_eq!(out_lo.final_value, RollValue::List(vec![1, 2, 3]));
         assert!(out_lo.summary.contains("lo(3): [1, 2, 3]"));
 
-        // /roll 5d20|>3 (shorthand for hi(3))
-        let p_short = parse_roll_pipeline("5d20|>3").unwrap();
+        let (p_short, out_short) = eval_seq("5d20|>3", &[4, 19, 12, 7, 15]);
         assert_eq!(p_short.stages, vec![PipeStage::Hi(3)]);
-        let seq5 = [4, 19, 12, 7, 15];
-        let mut idx5 = 0;
-        let out_short = p_short
-            .evaluate_with_roller("5d20|>3", |_| {
-                let v = seq5[idx5];
-                idx5 += 1;
-                v
-            })
-            .unwrap();
         assert_eq!(out_short.final_value, RollValue::List(vec![19, 15, 12]));
     }
 
     #[test]
     fn test_roll_dsl_gte_lte_and_sum_pipelines() {
-        // /roll 4d10|>gte(8)
-        let p_gte = parse_roll_pipeline("4d10|>gte(8)").unwrap();
-        let seq = [8, 3, 10, 7];
-        let mut i = 0;
-        let out_gte = p_gte
-            .evaluate_with_roller("4d10|>gte(8)", |_| {
-                let v = seq[i];
-                i += 1;
-                v
-            })
-            .unwrap();
+        let (_, out_gte) = eval_seq("4d10|>gte(8)", &[8, 3, 10, 7]);
         assert_eq!(out_gte.final_value, RollValue::List(vec![8, 10]));
 
-        // /roll 5d6|>lte(3)
-        let p_lte = parse_roll_pipeline("5d6|>lte(3)").unwrap();
-        let seq2 = [4, 2, 6, 3, 1];
-        let mut i2 = 0;
-        let out_lte = p_lte
-            .evaluate_with_roller("5d6|>lte(3)", |_| {
-                let v = seq2[i2];
-                i2 += 1;
-                v
-            })
-            .unwrap();
+        let (_, out_lte) = eval_seq("5d6|>lte(3)", &[4, 2, 6, 3, 1]);
         assert_eq!(out_lte.final_value, RollValue::List(vec![2, 3, 1]));
 
-        // /roll 2d10 and /roll 2d10|>sum
-        let p_default = parse_roll_pipeline("2d10").unwrap();
+        let (p_default, out_default) = eval_seq("2d10", &[7, 6]);
         assert!(p_default.implicit_sum);
         assert_eq!(p_default.stages, vec![PipeStage::Sum]);
-        let seq3 = [7, 6];
-        let mut i3 = 0;
-        let out_default = p_default
-            .evaluate_with_roller("2d10", |_| {
-                let v = seq3[i3];
-                i3 += 1;
-                v
-            })
-            .unwrap();
         assert_eq!(out_default.final_value, RollValue::Scalar(13));
         assert!(out_default.summary.contains("Sum: 13"));
 
-        // /roll 3d6|>sum|>gte(11)
-        let p_sum_gte = parse_roll_pipeline("3d6|>sum|>gte(11)").unwrap();
-        let seq4 = [4, 5, 3];
-        let mut i4 = 0;
-        let out_sum_gte = p_sum_gte
-            .evaluate_with_roller("3d6|>sum|>gte(11)", |_| {
-                let v = seq4[i4];
-                i4 += 1;
-                v
-            })
-            .unwrap();
+        let (_, out_sum_gte) = eval_seq("3d6|>sum|>gte(11)", &[4, 5, 3]);
         assert_eq!(
             out_sum_gte.final_value,
             RollValue::Check {
@@ -903,17 +847,7 @@ mod tests {
         );
         assert!(out_sum_gte.summary.contains("PASSED (12 >= 11)"));
 
-        // /roll 3d6|>sum|>lte(11)
-        let p_sum_lte = parse_roll_pipeline("3d6|>sum|>lte(11)").unwrap();
-        let seq5 = [4, 5, 3];
-        let mut i5 = 0;
-        let out_sum_lte = p_sum_lte
-            .evaluate_with_roller("3d6|>sum|>lte(11)", |_| {
-                let v = seq5[i5];
-                i5 += 1;
-                v
-            })
-            .unwrap();
+        let (_, out_sum_lte) = eval_seq("3d6|>sum|>lte(11)", &[4, 5, 3]);
         assert_eq!(
             out_sum_lte.final_value,
             RollValue::Check {
@@ -928,39 +862,17 @@ mod tests {
 
     #[test]
     fn test_roll_dsl_exploding_dice() {
-        // /roll 4d10e|>gte(8) — explodes on 10
-        let p_exp = parse_roll_pipeline("4d10e|>gte(8)").unwrap();
+        let (p_exp, out_exp) = eval_seq("4d10e|>gte(8)", &[10, 8, 4, 9, 2]);
         assert_eq!(p_exp.dice.explode_at, Some(10));
-        // Die 1 rolls 10 (explodes -> rolls 8), Die 2 rolls 4, Die 3 rolls 9, Die 4 rolls 2
-        let seq = [10, 8, 4, 9, 2];
-        let mut i = 0;
-        let out_exp = p_exp
-            .evaluate_with_roller("4d10e|>gte(8)", |_| {
-                let v = seq[i];
-                i += 1;
-                v
-            })
-            .unwrap();
         assert_eq!(out_exp.initial_dice.len(), 5);
         assert!(out_exp.initial_dice[0].exploded);
         assert!(out_exp.initial_dice[1].is_bonus_explosion);
         assert_eq!(out_exp.final_value, RollValue::List(vec![10, 8, 9]));
         assert!(out_exp.summary.contains("10!, +8"));
 
-        // /roll 4d10e(9) — explodes on >= 9 and defaults to |>sum
-        let p_exp9 = parse_roll_pipeline("4d10e(9)").unwrap();
+        let (p_exp9, out_exp9) = eval_seq("4d10e(9)", &[9, 5, 3, 10, 4, 2]);
         assert_eq!(p_exp9.dice.explode_at, Some(9));
         assert_eq!(p_exp9.stages, vec![PipeStage::Sum]);
-        // Die 1 rolls 9 (explodes -> rolls 5), Die 2 rolls 3, Die 3 rolls 10 (explodes -> rolls 4), Die 4 rolls 2
-        let seq9 = [9, 5, 3, 10, 4, 2];
-        let mut i9 = 0;
-        let out_exp9 = p_exp9
-            .evaluate_with_roller("4d10e(9)", |_| {
-                let v = seq9[i9];
-                i9 += 1;
-                v
-            })
-            .unwrap();
         assert_eq!(out_exp9.initial_dice.len(), 6);
         assert_eq!(out_exp9.final_value, RollValue::Scalar(33));
     }
@@ -1009,5 +921,135 @@ mod tests {
         assert_eq!(hist.navigate_down(), Some("/msg @sara Ready?".to_string()));
         assert_eq!(hist.navigate_down(), Some("in-progress text".to_string()));
         assert_eq!(hist.navigate_down(), None);
+    }
+
+    #[test]
+    fn test_command_aliases_r_w_whisper_and_help_topics() {
+        let r_cmd = parse_chat_command("/r d20").unwrap().unwrap();
+        assert_eq!(
+            r_cmd,
+            ChatCommand::Roll {
+                expr_raw: "d20".to_string(),
+                pipeline: RollPipeline {
+                    dice: DiceSpec {
+                        count: 1,
+                        sides: 20,
+                        explode_at: None,
+                    },
+                    stages: vec![PipeStage::Sum],
+                    implicit_sum: true,
+                },
+            }
+        );
+
+        let w_cmd = parse_chat_command("/w @sara Eyes on the bulkhead")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            w_cmd,
+            ChatCommand::MsgPrivate {
+                targets: vec!["sara".to_string()],
+                body: "Eyes on the bulkhead".to_string(),
+            }
+        );
+
+        let whisper_cmd = parse_chat_command("/whisper @marcus @sara Cut comms")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            whisper_cmd,
+            ChatCommand::MsgPrivate {
+                targets: vec!["marcus".to_string(), "sara".to_string()],
+                body: "Cut comms".to_string(),
+            }
+        );
+
+        for (raw, expected_topic) in [
+            ("/r --help", Some("roll")),
+            ("/help r", Some("roll")),
+            ("/w --help", Some("msg")),
+            ("/whisper -h", Some("msg")),
+            ("/help w", Some("msg")),
+            ("/help whisper", Some("msg")),
+        ] {
+            match parse_chat_command(raw).unwrap() {
+                Some(ChatCommand::Help { topic, help_text }) => {
+                    assert_eq!(topic.as_deref(), expected_topic, "mismatch for '{raw}'");
+                    assert!(!help_text.is_empty());
+                }
+                other => panic!("expected Help for '{raw}', got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_explosion_cap_history_eviction_self_exclusion_and_malformed_errors() {
+        // MAX_EXPLOSIONS cap terminates cleanly even when die always rolls max face
+        let p_inf = parse_roll_pipeline("1d6e").unwrap();
+        let out_inf = p_inf.evaluate_with_roller("1d6e", |_| 6).unwrap();
+        assert_eq!(out_inf.initial_dice.len(), 1 + MAX_EXPLOSIONS);
+        assert!(out_inf.initial_dice[0].exploded);
+        assert!(out_inf.initial_dice[MAX_EXPLOSIONS - 1].exploded);
+        assert!(!out_inf.initial_dice[MAX_EXPLOSIONS].exploded);
+        assert!(out_inf.initial_dice[MAX_EXPLOSIONS].is_bonus_explosion);
+        assert_eq!(
+            out_inf.final_value,
+            RollValue::Scalar(6 * (1 + MAX_EXPLOSIONS as i64))
+        );
+
+        // MAX_CHAT_HISTORY ring buffer evicts oldest entries past 100
+        let mut hist = ChatInputHistory::new();
+        for idx in 0..(MAX_CHAT_HISTORY + 5) {
+            hist.record_sent(&format!("entry-{idx}"));
+        }
+        let mut oldest = String::new();
+        for _ in 0..(MAX_CHAT_HISTORY + 2) {
+            oldest = hist.navigate_up("").unwrap();
+        }
+        assert_eq!(oldest, "entry-5");
+
+        // Self exclusion + unresolved handles in resolve_msg_recipients
+        let roster = make_roster();
+        let targets = vec![
+            "gm_sean".to_string(),
+            "sara".to_string(),
+            "ghost_operator".to_string(),
+        ];
+        let (matched, unresolved) = resolve_msg_recipients(
+            &targets,
+            &roster,
+            Some("11111111-aaaa-bbbb-cccc-000000000001"),
+        );
+        assert_eq!(
+            matched,
+            vec!["22222222-aaaa-bbbb-cccc-000000000002".to_string()]
+        );
+        assert_eq!(
+            unresolved,
+            vec!["gm_sean".to_string(), "ghost_operator".to_string()]
+        );
+
+        // Malformed dice specs and pipelines return Err(...)
+        for bad_expr in ["0d6", "101d6", "2d1", "4d6|>hi(0)", "4d6|>"] {
+            assert!(
+                parse_roll_pipeline(bad_expr).is_err(),
+                "expected parse error for '{bad_expr}'"
+            );
+        }
+
+        // Runtime type errors in pipeline evaluation: scalar |> hi(1), and check |> sum
+        let scalar_into_hi = parse_roll_pipeline("4d6|>sum|>hi(1)").unwrap();
+        assert!(
+            scalar_into_hi
+                .evaluate_with_roller("4d6|>sum|>hi(1)", |_| 4)
+                .is_err()
+        );
+
+        let after_check = parse_roll_pipeline("3d6|>sum|>gte(10)|>sum").unwrap();
+        assert!(
+            after_check
+                .evaluate_with_roller("3d6|>sum|>gte(10)|>sum", |_| 4)
+                .is_err()
+        );
     }
 }

@@ -211,78 +211,218 @@ pub fn set_feedback(id: &str, text: &str, is_error: bool) {
     }
 }
 
-/// Escapes `&`, `<`, and `>` characters in `raw` for safe HTML text interpolation.
+/// Escapes `&`, `<`, `>`, `"`, and `'` characters in `raw` for safe HTML text and attribute interpolation.
 pub fn escape_html(raw: &str) -> String {
     raw.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
-pub(crate) async fn fetch_json<Req: Serialize, Resp: DeserializeOwned>(
-    method: &str,
-    url: &str,
-    auth_token: Option<&str>,
-    body: Option<&Req>,
-) -> Result<Resp, String> {
-    let win = window().ok_or_else(|| "No browser Window available".to_string())?;
-    let opts = RequestInit::new();
-    opts.set_method(method);
+/// Escapes `raw` for safe interpolation inside a single-quoted JS string literal embedded in a
+/// double-quoted HTML attribute (e.g. `onclick="window.satyaFoo('{escaped}')"`).
+pub fn escape_js_single_quoted_attr(raw: &str) -> String {
+    let js_escaped = raw
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('\n', "\\n")
+        .replace('\r', "");
+    js_escaped
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
 
-    let headers = Headers::new().map_err(|_| "Failed to construct Headers".to_string())?;
-    let _ = headers.set("Content-Type", "application/json");
-    if let Some(tok) = auth_token {
-        let _ = headers.set("Authorization", &format!("Bearer {tok}"));
-    }
-    opts.set_headers(&headers);
-
-    if let Some(payload) = body {
-        let json_str = serde_json::to_string(payload).map_err(|e| e.to_string())?;
-        opts.set_body(&JsValue::from_str(&json_str));
-    }
-
-    let request =
-        Request::new_with_str_and_init(url, &opts).map_err(|_| "Invalid Request".to_string())?;
-    let resp_val = JsFuture::from(win.fetch_with_request(&request))
-        .await
-        .map_err(|_| "Network fetch failed".to_string())?;
-    let resp: Response = resp_val
-        .dyn_into()
-        .map_err(|_| "Invalid Response cast".to_string())?;
-
-    let text_promise = resp
-        .text()
-        .map_err(|_| "Failed to read response text".to_string())?;
-    let text_val = JsFuture::from(text_promise)
-        .await
-        .map_err(|_| "Failed awaiting response text".to_string())?;
-    let text = text_val.as_string().unwrap_or_default();
-
-    if !resp.ok() {
-        if let Ok(err_val) = serde_json::from_str::<serde_json::Value>(&text)
-            && let Some(msg) = err_val.get("error").and_then(|v| v.as_str())
-        {
-            return Err(msg.to_string());
+/// Normalizes an arbitrary display name into a lowercase ASCII `a-z0-9-` slug.
+pub fn slugify_identifier(raw: &str, fallback: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut prev_dash = false;
+    for ch in raw.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            prev_dash = false;
+        } else if !prev_dash && !out.is_empty() {
+            out.push('-');
+            prev_dash = true;
         }
-        return Err(format!("HTTP {}: {}", resp.status(), text));
     }
-
-    serde_json::from_str::<Resp>(&text).map_err(|e| format!("JSON decode error: {e}"))
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        fallback.to_string()
+    } else {
+        out
+    }
 }
 
-pub(crate) async fn fetch_text(
+/// Returns `(session_id, auth_token)` from [`crate::wasm_client::state::SatyaWasmState`], or writes
+/// an error message into `#feedback_id` when no authenticated session is active.
+pub(crate) fn active_session_and_token_or_feedback(
+    feedback_id: &str,
+    missing_msg: &str,
+) -> Option<(String, String)> {
+    let pair = crate::wasm_client::state::with_state(|st| {
+        st.session_id.clone().zip(st.auth_token.clone())
+    });
+    if pair.is_none() && !feedback_id.is_empty() {
+        set_feedback(feedback_id, missing_msg, true);
+    }
+    pair
+}
+
+const B64_CHARS: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/// Pure Rust standard Base64 encoder for `.satyachar` and multimodal asset payloads.
+#[must_use]
+pub fn encode_base64_bytes(input: &[u8]) -> String {
+    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
+    for chunk in input.chunks(3) {
+        let b0 = u32::from(chunk[0]);
+        let b1 = if chunk.len() > 1 {
+            u32::from(chunk[1])
+        } else {
+            0
+        };
+        let b2 = if chunk.len() > 2 {
+            u32::from(chunk[2])
+        } else {
+            0
+        };
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        out.push(B64_CHARS[((triple >> 18) & 0x3F) as usize] as char);
+        out.push(B64_CHARS[((triple >> 12) & 0x3F) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            B64_CHARS[((triple >> 6) & 0x3F) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            B64_CHARS[(triple & 0x3F) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
+}
+
+/// Reads `(filename, mime_type, bytes)` from the first selected file in `<input type="file" id="{input_id}">`.
+pub(crate) async fn read_first_file_bytes(input_id: &str) -> Option<(String, String, Vec<u8>)> {
+    let el = get_element(input_id)?;
+    let files = js_sys::Reflect::get(&el, &JsValue::from_str("files")).ok()?;
+    let file = js_sys::Reflect::get(&files, &JsValue::from_f64(0.0)).ok()?;
+    if file.is_undefined() || file.is_null() {
+        return None;
+    }
+    let name = js_sys::Reflect::get(&file, &JsValue::from_str("name"))
+        .ok()
+        .and_then(|v| v.as_string())
+        .unwrap_or_else(|| "upload.bin".to_string());
+    let mime = js_sys::Reflect::get(&file, &JsValue::from_str("type"))
+        .ok()
+        .and_then(|v| v.as_string())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "application/octet-stream".to_string());
+    let buf_fn = js_sys::Reflect::get(&file, &JsValue::from_str("arrayBuffer"))
+        .ok()?
+        .dyn_into::<js_sys::Function>()
+        .ok()?;
+    let promise = buf_fn.call0(&file).ok()?.dyn_into::<js_sys::Promise>().ok()?;
+    let buf_val = JsFuture::from(promise).await.ok()?;
+    let bytes = js_sys::Uint8Array::new(&buf_val).to_vec();
+    Some((name, mime, bytes))
+}
+
+/// Saves `bytes` to disk via `window.showSaveFilePicker` when supported, falling back to an `<a download>` data URL.
+pub(crate) async fn prompt_save_bytes(suggested_name: &str, bytes: &[u8]) -> bool {
+    let Some(win) = window() else {
+        return false;
+    };
+    let u8_arr = js_sys::Uint8Array::from(bytes);
+
+    if let Ok(picker_val) = js_sys::Reflect::get(&win, &JsValue::from_str("showSaveFilePicker"))
+        && let Ok(picker_fn) = picker_val.dyn_into::<js_sys::Function>()
+    {
+        let opts = js_sys::Object::new();
+        let _ = js_sys::Reflect::set(
+            &opts,
+            &JsValue::from_str("suggestedName"),
+            &JsValue::from_str(suggested_name),
+        );
+        if let Ok(handle_prom_val) = picker_fn.call1(&win, &opts)
+            && let Ok(handle_prom) = handle_prom_val.dyn_into::<js_sys::Promise>()
+            && let Ok(handle) = JsFuture::from(handle_prom).await
+            && let Ok(create_w_val) =
+                js_sys::Reflect::get(&handle, &JsValue::from_str("createWritable"))
+            && let Ok(create_w_fn) = create_w_val.dyn_into::<js_sys::Function>()
+            && let Ok(w_prom_val) = create_w_fn.call0(&handle)
+            && let Ok(w_prom) = w_prom_val.dyn_into::<js_sys::Promise>()
+            && let Ok(writable) = JsFuture::from(w_prom).await
+        {
+            if let Ok(write_fn_val) = js_sys::Reflect::get(&writable, &JsValue::from_str("write"))
+                && let Ok(write_fn) = write_fn_val.dyn_into::<js_sys::Function>()
+                && let Ok(wp) = write_fn.call1(&writable, &u8_arr)
+                && let Ok(wp_prom) = wp.dyn_into::<js_sys::Promise>()
+            {
+                let _ = JsFuture::from(wp_prom).await;
+            }
+            if let Ok(close_fn_val) = js_sys::Reflect::get(&writable, &JsValue::from_str("close"))
+                && let Ok(close_fn) = close_fn_val.dyn_into::<js_sys::Function>()
+                && let Ok(cp) = close_fn.call0(&writable)
+                && let Ok(cp_prom) = cp.dyn_into::<js_sys::Promise>()
+            {
+                let _ = JsFuture::from(cp_prom).await;
+            }
+            return true;
+        }
+    }
+
+    trigger_browser_download_bytes(suggested_name, bytes)
+}
+
+/// Triggers an immediate browser file download for `bytes` using an `<a download>` Base64 data URL.
+pub(crate) fn trigger_browser_download_bytes(suggested_name: &str, bytes: &[u8]) -> bool {
+    if let Some(doc) = document()
+        && let Ok(a_el) = doc.create_element("a")
+    {
+        let data_url = format!(
+            "data:application/octet-stream;base64,{}",
+            encode_base64_bytes(bytes)
+        );
+        let _ = a_el.set_attribute("href", &data_url);
+        let _ = a_el.set_attribute("download", suggested_name);
+        if let Ok(html_a) = a_el.dyn_into::<HtmlElement>() {
+            html_a.click();
+            return true;
+        }
+    }
+    false
+}
+
+async fn fetch_raw_text(
     method: &str,
     url: &str,
     auth_token: Option<&str>,
+    json_body: Option<&str>,
 ) -> Result<String, String> {
     let win = window().ok_or_else(|| "No browser Window available".to_string())?;
     let opts = RequestInit::new();
     opts.set_method(method);
 
     let headers = Headers::new().map_err(|_| "Failed to construct Headers".to_string())?;
+    if json_body.is_some() {
+        let _ = headers.set("Content-Type", "application/json");
+    }
     if let Some(tok) = auth_token {
         let _ = headers.set("Authorization", &format!("Bearer {tok}"));
     }
     opts.set_headers(&headers);
+
+    if let Some(json_str) = json_body {
+        opts.set_body(&JsValue::from_str(json_str));
+    }
 
     let request =
         Request::new_with_str_and_init(url, &opts).map_err(|_| "Invalid Request".to_string())?;
@@ -311,4 +451,26 @@ pub(crate) async fn fetch_text(
     }
 
     Ok(text)
+}
+
+pub(crate) async fn fetch_json<Req: Serialize, Resp: DeserializeOwned>(
+    method: &str,
+    url: &str,
+    auth_token: Option<&str>,
+    body: Option<&Req>,
+) -> Result<Resp, String> {
+    let body_str = match body {
+        Some(payload) => Some(serde_json::to_string(payload).map_err(|e| e.to_string())?),
+        None => None,
+    };
+    let text = fetch_raw_text(method, url, auth_token, body_str.as_deref()).await?;
+    serde_json::from_str::<Resp>(&text).map_err(|e| format!("JSON decode error: {e}"))
+}
+
+pub(crate) async fn fetch_text(
+    method: &str,
+    url: &str,
+    auth_token: Option<&str>,
+) -> Result<String, String> {
+    fetch_raw_text(method, url, auth_token, None).await
 }

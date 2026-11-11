@@ -1,111 +1,46 @@
 //! Interactive Character Sheet & Anatomical/Physiological/Psyche Status Tracker state and
 //! `#[wasm_bindgen]` handlers for the `#notebook-pane-character` tab.
 //!
-//! HTML rendering is modularized into:
+//! Companion modules re-exported flatly here:
 //! - [`crate::wasm_client::character_sheet_views`]: Top summary, all 30 Characteristics, 9 Domain Aptitudes,
-//!   10 Derived Metrics, Tactical Pool Envelope, Innate Talents Table, Trained Skills Table, and Equipment Loadout.
+//!   10 Derived Metrics, Tactical Pool Envelope, Innate Talents Table, and Trained Skills Table.
+//! - [`crate::wasm_client::character_sheet_equip_views`]: Ranged Firearms (with live Ballistics),
+//!   Melee Weapons, Armor Profiles, and Field Gear / Ergonomic Encumbrance tables.
 //! - [`crate::wasm_client::character_sheet_status_views`]: Human-shaped Anatomical Hit Location SVG diagram,
 //!   13-zone physical status editor, Damage/Fatigue/Psyche trackers, and writable Operator Field Notes.
+//! - [`crate::wasm_client::character_sheet_record`]: `CharacterSheetRecord` conversion & offline `.satyachar` framing.
+//! - [`crate::wasm_client::character_sheet_vault`]: Vault API sync, `.satyachar` file picker, and multimodal assets.
 
 use std::collections::BTreeMap;
 
+pub use crate::wasm_client::character_sheet_equip_views::*;
+pub use crate::wasm_client::character_sheet_record::*;
 pub use crate::wasm_client::character_sheet_status_views::*;
 pub use crate::wasm_client::character_sheet_vault::*;
 pub use crate::wasm_client::character_sheet_views::*;
 use crate::wasm_client::chat_and_ttrpg::{append_system_notice, satya_update_cascade_preview};
 use crate::wasm_client::dom::{
     get_element, input_value, roll_browser_die_i32, select_value, set_input_value, set_text,
+    slugify_identifier,
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
+pub use satya_engine::{
+    BoneFractureStatus, CANONICAL_FIELD_GEAR_PRESETS, CANONICAL_FIREARM_PRESETS, FieldGearItem,
+    lookup_field_gear_preset, lookup_firearm_preset,
+};
 use satya_engine::{
-    AcuteMentalTraumaTier, AmmoCaliberId, AmmunitionProfile, AptitudeCode, ArmorProfileId,
-    BarrelMountingType, CarriedLoadItem, CarryErgonomicMethod, CenterOfGravityProfile,
+    AcuteMentalTraumaTier, AptitudeCode, ArmorProfileId, CarriedLoadItem, CarryErgonomicMethod,
     CharacterAptitudes, CharacterCharacteristics, CharacteristicCode, ConditionImpact,
-    ConditionSource, FirearmActionType, GranularFirearmSpec, HemorrhageGrade, HitLocationId,
-    MeleeWeaponId, MoraleState, MuzzleDeviceType, PhysiologicalStatusCondition, SkillAccessTier,
-    SocialWoundKind, StructuralWoundTier, TacticalPoolEnvelope, TacticalPoolParams, Triad,
-    WeaponFeedType, accumulate_exertion_marks, build_amara_okafor_lifepath,
-    build_mateo_vance_lifepath, build_priya_nair_lifepath, compute_lifepath_baseline_from_config,
-    compute_tactical_pool, evaluate_acute_mental_trauma, evaluate_blood_loss_progression,
-    evaluate_encumbrance_load, evaluate_fatigue_level, evaluate_physiological_status_conditions,
-    initialize_universal_talents, resolve_hit_location_d20,
+    ConditionSource, HemorrhageGrade, HitLocationId, MeleeWeaponId, MoraleState,
+    PhysiologicalStatusCondition, SkillAccessTier, SocialWoundKind, StructuralWoundTier,
+    TacticalPoolEnvelope, TacticalPoolParams, Triad, accumulate_exertion_marks,
+    build_amara_okafor_lifepath, build_mateo_vance_lifepath, build_priya_nair_lifepath,
+    compute_lifepath_baseline_from_config, compute_tactical_pool, evaluate_acute_mental_trauma,
+    evaluate_blood_loss_progression, evaluate_encumbrance_load, evaluate_fatigue_level,
+    evaluate_physiological_status_conditions, initialize_universal_talents,
+    resolve_hit_location_d20,
 };
 use wasm_bindgen::prelude::*;
-
-/// Fracture or joint integrity state for an anatomical hit location (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum BoneFractureStatus {
-    #[default]
-    Intact,
-    HairlineFracture,
-    DislocatedJoint,
-    CompleteFracture,
-    CompoundShattered,
-}
-
-impl BoneFractureStatus {
-    pub const ALL: [Self; 5] = [
-        Self::Intact,
-        Self::HairlineFracture,
-        Self::DislocatedJoint,
-        Self::CompleteFracture,
-        Self::CompoundShattered,
-    ];
-
-    #[must_use]
-    pub const fn code(self) -> &'static str {
-        match self {
-            Self::Intact => "INTACT",
-            Self::HairlineFracture => "HAIRLINE",
-            Self::DislocatedJoint => "DISLOCATED",
-            Self::CompleteFracture => "FRACTURED",
-            Self::CompoundShattered => "SHATTERED",
-        }
-    }
-
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Intact => "Intact",
-            Self::HairlineFracture => "Hairline Fracture (Risk T3 under >50% Cap)",
-            Self::DislocatedJoint => "Dislocated Joint (-10 Cap until reduced)",
-            Self::CompleteFracture => "Broken / Complete Fracture (Limb Disabled)",
-            Self::CompoundShattered => "Compound / Shattered (Cap Locked 0)",
-        }
-    }
-
-    #[must_use]
-    pub const fn short_badge(self) -> &'static str {
-        match self {
-            Self::Intact => "Intact",
-            Self::HairlineFracture => "Hairline Fx",
-            Self::DislocatedJoint => "Dislocated",
-            Self::CompleteFracture => "Broken Bone",
-            Self::CompoundShattered => "Shattered",
-        }
-    }
-
-    #[must_use]
-    pub fn from_code(s: &str) -> Self {
-        match s.trim().to_ascii_uppercase().as_str() {
-            "HAIRLINE" => Self::HairlineFracture,
-            "DISLOCATED" => Self::DislocatedJoint,
-            "FRACTURED" | "BROKEN" => Self::CompleteFracture,
-            "SHATTERED" | "COMPOUND" => Self::CompoundShattered,
-            _ => Self::Intact,
-        }
-    }
-
-    #[must_use]
-    pub const fn extra_cap_penalty(self) -> i32 {
-        match self {
-            Self::Intact => 0,
-            Self::HairlineFracture => 2,
-            Self::DislocatedJoint | Self::CompleteFracture => 10,
-            Self::CompoundShattered => 20,
-        }
-    }
-}
 
 /// Per-zone physical trauma state for one of the 13 canonical [`HitLocationId`] regions.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,356 +86,6 @@ impl AnatomicalZoneState {
     }
 }
 
-/// Carried field equipment item on the Character Sheet.
-#[derive(Debug, Clone, PartialEq)]
-pub struct FieldGearItem {
-    pub id: String,
-    pub name: String,
-    pub category: String,
-    pub mass_kg: f64,
-    pub carry_method: CarryErgonomicMethod,
-    pub tool_mod: i32,
-    pub notes: String,
-}
-
-macro_rules! firearm_preset {
-    (
-        $id:literal, $name:literal,
-        ($cal:ident, $aname:literal, $mm:expr, $b_gr:expr, $p_gr:expr, $opt_cm:expr, $e_j:expr, $dec_m:expr, $exp:expr, $sd:expr, $aq:expr, $spitz:expr),
-        ($feed:ident, $cap:expr, $act:ident, $u_kg:expr, $l_kg:expr, $oal_cm:expr, $bbl_cm:expr, $bq:expr, $mnt:ident, $muz:ident, $cog:ident, $tau:expr, $mq:expr, $j_min:expr, $j_maj:expr, $strp:expr, $cost:expr)
-    ) => {
-        (
-            $id,
-            GranularFirearmSpec {
-                name: $name,
-                ammo: AmmunitionProfile {
-                    caliber_id: AmmoCaliberId::$cal,
-                    name: $aname,
-                    caliber_mm: $mm,
-                    bullet_mass_grains: $b_gr,
-                    powder_charge_grains: $p_gr,
-                    optimal_barrel_cm: $opt_cm,
-                    reference_muzzle_energy_j: $e_j,
-                    energy_decay_scale_m: $dec_m,
-                    expansion_factor: $exp,
-                    sectional_density_pen_bonus: $sd,
-                    ammo_quality_q: $aq,
-                    is_spitzer_early_yaw: $spitz,
-                },
-                feed_type: WeaponFeedType::$feed,
-                capacity_rounds: $cap,
-                action_type: FirearmActionType::$act,
-                unloaded_weight_kg: $u_kg,
-                loaded_weight_kg: $l_kg,
-                overall_length_cm: $oal_cm,
-                barrel_length_cm: $bbl_cm,
-                barrel_quality_q: $bq,
-                barrel_mounting: BarrelMountingType::$mnt,
-                muzzle_device: MuzzleDeviceType::$muz,
-                center_of_gravity: CenterOfGravityProfile::$cog,
-                tolerance_tau: $tau,
-                manufacturing_quality_q: $mq,
-                clear_jam_minor_ticks: $j_min,
-                clear_jam_major_ticks: $j_maj,
-                strip_time_ticks: $strp,
-                cost_usd: $cost,
-            },
-        )
-    };
-}
-
-/// Canonical preset ranged firearms for the Character Sheet Equipment section.
-pub const CANONICAL_FIREARM_PRESETS: &[(&str, GranularFirearmSpec)] = &[
-    firearm_preset!(
-        "hk416_carbine_556",
-        "HK416A5 Tactical Carbine (5.56x45mm)",
-        (
-            Nato556x45,
-            "5.56x45mm NATO M855A1",
-            5.56,
-            62.0,
-            27.0,
-            50.8,
-            1795.0,
-            520.0,
-            1.15,
-            2,
-            0.5,
-            true
-        ),
-        (
-            DetachableBoxMagazine,
-            30,
-            ShortStrokeGasPiston,
-            3.12,
-            3.60,
-            80.5,
-            36.8,
-            1.0,
-            FreeFloating,
-            FlashHider,
-            ChamberNeutral,
-            0.5,
-            2,
-            6,
-            18,
-            36,
-            2800
-        )
-    ),
-    firearm_preset!(
-        "sig_p320_9mm",
-        "SIG P320 / M18 Sidearm (9x19mm)",
-        (
-            Parabellum9x19,
-            "9x19mm +P JHP (124 gr)",
-            9.0,
-            124.0,
-            5.2,
-            12.0,
-            515.0,
-            180.0,
-            1.5,
-            0,
-            0.5,
-            false
-        ),
-        (
-            DetachableBoxMagazine,
-            17,
-            StrikerFired,
-            0.76,
-            0.98,
-            18.8,
-            9.9,
-            0.5,
-            StandardPistolMount,
-            BareCrown,
-            ChamberNeutral,
-            0.0,
-            1,
-            5,
-            14,
-            20,
-            750
-        )
-    ),
-    firearm_preset!(
-        "mp7_pdw_57",
-        "MP7A2 / P90 Suppressed PDW (5.7x28mm)",
-        (
-            Fn57x28,
-            "5.7x28mm SS190 AP",
-            5.7,
-            40.0,
-            7.2,
-            26.0,
-            540.0,
-            260.0,
-            1.0,
-            3,
-            0.5,
-            true
-        ),
-        (
-            DetachableBoxMagazine,
-            40,
-            ShortStrokeGasPiston,
-            1.90,
-            2.30,
-            41.5,
-            18.0,
-            1.0,
-            FreeFloating,
-            SoundSuppressor,
-            RearBullpup,
-            0.5,
-            2,
-            6,
-            16,
-            30,
-            2200
-        )
-    ),
-    firearm_preset!(
-        "akm_762x39",
-        "Kalashnikov AKM Assault Rifle (7.62x39mm)",
-        (
-            Soviet762x39,
-            "7.62x39mm M43 FMJ",
-            7.62,
-            123.0,
-            25.5,
-            41.5,
-            2100.0,
-            420.0,
-            1.0,
-            2,
-            0.0,
-            false
-        ),
-        (
-            DetachableBoxMagazine,
-            30,
-            LongStrokeGasPiston,
-            3.30,
-            4.10,
-            88.0,
-            41.5,
-            0.0,
-            ClampedNonFreeFloated,
-            BareCrown,
-            ModerateForward,
-            -1.0,
-            1,
-            8,
-            20,
-            32,
-            950
-        )
-    ),
-    firearm_preset!(
-        "benelli_m4_12ga",
-        "Benelli M4 Combat Shotgun (12-Gauge)",
-        (
-            Gauge12,
-            "12-Gauge 00 Buck / Breaching Slug",
-            18.5,
-            437.0,
-            32.0,
-            51.0,
-            3150.0,
-            140.0,
-            1.35,
-            1,
-            0.5,
-            false
-        ),
-        (
-            TubularMagazine,
-            7,
-            ShortStrokeGasPiston,
-            3.82,
-            4.25,
-            88.5,
-            47.0,
-            0.5,
-            ClampedNonFreeFloated,
-            BareCrown,
-            ModerateForward,
-            0.0,
-            2,
-            7,
-            18,
-            40,
-            1950
-        )
-    ),
-    firearm_preset!(
-        "ai_atx_65cm",
-        "Accuracy Int'l AT-X Precision Rifle (6.5mm CM)",
-        (
-            Creedmoor65,
-            "6.5mm Creedmoor 140gr Match OTM",
-            6.72,
-            140.0,
-            42.5,
-            56.0,
-            3165.0,
-            950.0,
-            1.4,
-            3,
-            1.0,
-            false
-        ),
-        (
-            DetachableBoxMagazine,
-            10,
-            BoltAction,
-            5.40,
-            5.80,
-            112.0,
-            61.0,
-            1.5,
-            FreeFloating,
-            MuzzleBrakeCompensator,
-            ChamberNeutral,
-            1.0,
-            2,
-            6,
-            20,
-            80,
-            5200
-        )
-    ),
-];
-
-/// Canonical preset field gear items (`(id, name, category, mass_kg, carry_method, tool_mod, notes)`).
-pub const CANONICAL_FIELD_GEAR_PRESETS: &[(
-    &str,
-    &str,
-    &str,
-    f64,
-    CarryErgonomicMethod,
-    i32,
-    &str,
-)] = &[
-    (
-        "trauma_kit_pro",
-        "Trauma & Vascular Surgery Field Kit",
-        "Medical",
-        3.2,
-        CarryErgonomicMethod::BalancedWebbingOrRucksack,
-        -1,
-        "Class B surgical kit · Δ_tool -1 · Stops Grade 3–4 arterial bleeds",
-    ),
-    (
-        "ifak_cat_tourniquet",
-        "IFAK + 2x CAT Tourniquets & Hemostatic Gauze",
-        "Medical",
-        0.8,
-        CarryErgonomicMethod::TailoredArmorOrDutyBelt,
-        0,
-        "20–24 Ticks field stabilization · Morphine auto-injector (-1 Shock)",
-    ),
-    (
-        "comms_tac_mesh",
-        "Encrypted Multi-Band Tactical Comms & HUD Link",
-        "Comms/Optics",
-        0.6,
-        CarryErgonomicMethod::TailoredArmorOrDutyBelt,
-        -1,
-        "Zero-latency squad telemetry · Δ_tool -1 on SIGINT/Coordination",
-    ),
-    (
-        "nvg_thermal_binocs",
-        "Multi-Spectral NVG / Thermal Fusion Optics",
-        "Comms/Optics",
-        0.9,
-        CarryErgonomicMethod::TailoredArmorOrDutyBelt,
-        -2,
-        "Negates darkness Δ_ext · Thermal/IR signature overlay",
-    ),
-    (
-        "cyber_deck_analyzer",
-        "Ruggedized Cyber-Deck & RF Logic Analyzer",
-        "Technical",
-        1.8,
-        CarryErgonomicMethod::BalancedWebbingOrRucksack,
-        -1,
-        "Class B hardware interface · Δ_tool -1 on Cyber/Avionics",
-    ),
-    (
-        "eva_mag_thruster_pack",
-        "Zero-G EVA Cold-Gas Thruster & Mag-Tether Rig",
-        "Survival/EVA",
-        4.5,
-        CarryErgonomicMethod::BalancedWebbingOrRucksack,
-        -1,
-        "Prevents Zero-G Adrift state · 120 m/s delta-v reserve",
-    ),
-];
-
 /// Complete state for the interactive Character Sheet / Status notebook pane (`#notebook-pane-character`).
 #[derive(Debug, Clone)]
 pub struct CharacterSheetState {
@@ -514,6 +99,7 @@ pub struct CharacterSheetState {
     pub operational_heat: u8,
     pub granted_access_tags: Vec<SkillAccessTier>,
     pub stage_history: Vec<String>,
+    pub lifepath_config_json: Option<String>,
     pub section_filter: String,
     pub skill_tree_filter: String,
     pub skills_trained_only: bool,
@@ -673,13 +259,16 @@ impl CharacterSheetState {
                     campaign_sqm: 6,
                     operational_heat: 1,
                     granted_access_tags: vec![
-                        SkillAccessTier::Universal, SkillAccessTier::Academic,
-                        SkillAccessTier::VocationalLicensed, SkillAccessTier::Restricted,
+                        SkillAccessTier::Universal,
+                        SkillAccessTier::Academic,
+                        SkillAccessTier::VocationalLicensed,
+                        SkillAccessTier::Restricted,
                     ],
                     stage_history: vec![
                         "Stage 4A: STEM Magnet High School -> B.S. Pre-Med & Combat Trauma Residency.".to_string(),
                         "Stage 5: 2 Terms Orbital SpecOps Pararescue & Med-Assault (Zero-G EVA N=4, Trauma Surgery N=3, Small-Unit Tactics N=4).".to_string(),
                     ],
+                    lifepath_config_json: None,
                     section_filter: "ALL".to_string(),
                     skill_tree_filter: "ALL".to_string(),
                     skills_trained_only: true,
@@ -688,9 +277,20 @@ impl CharacterSheetState {
                     skills,
                     equipped_ranged_ids: vec!["hk416_carbine_556".to_string(), "sig_p320_9mm".to_string()],
                     ballistic_range_m: 25.0,
-                    equipped_melee: vec![MeleeWeaponId::CombatKnifeKarambitShiv, MeleeWeaponId::UnarmedJabLowKickClinchKnee],
-                    equipped_armor: vec![ArmorProfileId::ValkyrieReconExoCarapace2035, ArmorProfileId::BallisticCombatHelmetVisor],
-                    field_gear: Self::gear_from_ids(&["trauma_kit_pro", "ifak_cat_tourniquet", "comms_tac_mesh", "eva_mag_thruster_pack"]),
+                    equipped_melee: vec![
+                        MeleeWeaponId::CombatKnifeKarambitShiv,
+                        MeleeWeaponId::UnarmedJabLowKickClinchKnee,
+                    ],
+                    equipped_armor: vec![
+                        ArmorProfileId::ValkyrieReconExoCarapace2035,
+                        ArmorProfileId::BallisticCombatHelmetVisor,
+                    ],
+                    field_gear: Self::gear_from_ids(&[
+                        "trauma_kit_pro",
+                        "ifak_cat_tourniquet",
+                        "comms_tac_mesh",
+                        "eva_mag_thruster_pack",
+                    ]),
                     hit_zones: HitLocationId::ALL.map(AnatomicalZoneState::new_healthy),
                     selected_hit_zone: HitLocationId::ChestRibcageLungs as usize,
                     last_hit_location_roll_d20: None,
@@ -739,6 +339,7 @@ impl CharacterSheetState {
             operational_heat: lp.operational_heat,
             granted_access_tags: lp.granted_access_tags,
             stage_history: lp.stage_history,
+            lifepath_config_json: None,
             section_filter: "ALL".to_string(),
             skill_tree_filter: "ALL".to_string(),
             skills_trained_only: true,
@@ -776,22 +377,7 @@ impl CharacterSheetState {
 
     pub(crate) fn gear_from_ids(ids: &[&str]) -> Vec<FieldGearItem> {
         ids.iter()
-            .filter_map(|&id| {
-                CANONICAL_FIELD_GEAR_PRESETS
-                    .iter()
-                    .find(|(pid, ..)| *pid == id)
-                    .map(
-                        |&(pid, name, cat, mass_kg, carry_method, tool_mod, notes)| FieldGearItem {
-                            id: pid.to_string(),
-                            name: name.to_string(),
-                            category: cat.to_string(),
-                            mass_kg,
-                            carry_method,
-                            tool_mod,
-                            notes: notes.to_string(),
-                        },
-                    )
-            })
+            .filter_map(|&id| lookup_field_gear_preset(id))
             .collect()
     }
 
@@ -857,10 +443,7 @@ impl CharacterSheetState {
     pub fn compute_encumbrance(&self) -> satya_engine::EncumbranceEvaluation {
         let mut items = Vec::new();
         for r_id in &self.equipped_ranged_ids {
-            if let Some((_, spec)) = CANONICAL_FIREARM_PRESETS
-                .iter()
-                .find(|(id, _)| *id == r_id.as_str())
-            {
+            if let Some(spec) = lookup_firearm_preset(r_id) {
                 items.push(CarriedLoadItem {
                     mass_kg: spec.loaded_weight_kg,
                     carry_method: CarryErgonomicMethod::BalancedWebbingOrRucksack,
@@ -868,14 +451,7 @@ impl CharacterSheetState {
             }
         }
         for &m_id in &self.equipped_melee {
-            let mass_kg = match m_id {
-                MeleeWeaponId::UnarmedJabLowKickClinchKnee
-                | MeleeWeaponId::UnarmedHaymakerHighKickThrow => 0.0,
-                MeleeWeaponId::CombatKnifeKarambitShiv => 0.35,
-                MeleeWeaponId::ExpandableBatonTonfaClub => 0.65,
-                MeleeWeaponId::MacheteWakizashiTacticalBlade => 0.95,
-                MeleeWeaponId::TwoHandedStaffSpearRiotShield => 3.40,
-            };
+            let mass_kg = m_id.mass_kg();
             if mass_kg > 0.0 {
                 items.push(CarriedLoadItem {
                     mass_kg,
@@ -919,11 +495,7 @@ impl CharacterSheetState {
             );
         }
         if let Some(sw) = self.social_wound {
-            combined.delta_int += match sw {
-                SocialWoundKind::RhetoricalStrain => 1,
-                SocialWoundKind::Doubt | SocialWoundKind::EgoWound => 2,
-                SocialWoundKind::CognitiveDissonance => 4,
-            };
+            combined.delta_int += sw.delta_int();
         }
         if self.conviction_surge_active {
             combined.delta_int = (combined.delta_int - 6).max(-2);
@@ -995,6 +567,178 @@ impl CharacterSheetState {
             self.total_task_delta_int()
         )
     }
+
+    /// Applies a pure anatomical hit-zone mutation (`"wound_tier"`, `"bone_status"`, `"bleed_grade"`,
+    /// `"stabilize_bleeds"`, or `"clear_all"`).
+    pub fn apply_zone_mutation(&mut self, zone_idx: usize, field: &str, value: &str) {
+        let f = field.trim().to_ascii_lowercase();
+        let v = value.trim();
+        if f == "clear_all" {
+            self.hit_zones = HitLocationId::ALL.map(AnatomicalZoneState::new_healthy);
+            self.wound_shock_index = 0;
+            self.blood_units_lost = 0.0;
+            return;
+        }
+        if f == "stabilize_bleeds" {
+            for z in &mut self.hit_zones {
+                z.bleed_grade = HemorrhageGrade::Grade0None;
+            }
+            return;
+        }
+        let Some(zone) = self.hit_zones.get_mut(zone_idx) else {
+            return;
+        };
+        self.selected_hit_zone = zone_idx;
+        match f.as_str() {
+            "wound_tier" => zone.wound_tier = v.parse::<u8>().unwrap_or(0).min(5),
+            "bone_status" => zone.bone_status = BoneFractureStatus::from_code(v),
+            "bleed_grade" => {
+                zone.bleed_grade = HemorrhageGrade::from_grade_number(v.parse::<i32>().unwrap_or(0));
+            }
+            _ => {}
+        }
+    }
+
+    /// Applies a pure physiological, fatigue, blood-loss, morale, or psyche mutation onto `self`.
+    pub fn apply_status_mutation(&mut self, field: &str, value: &str) {
+        let f = field.trim().to_ascii_lowercase();
+        let v = value.trim();
+        let derived = self.characteristics.compute_derived(0);
+        match f.as_str() {
+            "fatigue_delta" => {
+                self.fatigue_level =
+                    (self.fatigue_level + v.parse::<i32>().unwrap_or(0)).clamp(0, 5);
+            }
+            "exertion_delta" => {
+                let d = v.parse::<i32>().unwrap_or(0);
+                if d <= -99 {
+                    self.exertion_marks = 0;
+                } else if d > 0 {
+                    let prog = accumulate_exertion_marks(
+                        self.exertion_marks,
+                        d,
+                        self.fatigue_level,
+                        derived.ft_fatigue_threshold,
+                    );
+                    self.exertion_marks = prog.remaining_exertion_marks;
+                    self.fatigue_level = prog.new_fatigue_level.clamp(0, 5);
+                } else {
+                    self.exertion_marks = (self.exertion_marks + d).max(0);
+                }
+            }
+            "wound_shock_delta" => {
+                self.wound_shock_index =
+                    (self.wound_shock_index + v.parse::<i32>().unwrap_or(0)).clamp(0, 5);
+            }
+            "blood_loss_delta" => {
+                self.blood_units_lost =
+                    (self.blood_units_lost + v.parse::<f64>().unwrap_or(0.0)).clamp(0.0, 10.0);
+            }
+            "advance_bleed_ticks" => {
+                let ticks = v.parse::<i32>().unwrap_or(20).max(1);
+                let out = evaluate_blood_loss_progression(
+                    self.blood_units_lost,
+                    &self.active_bleeds(),
+                    ticks,
+                );
+                self.blood_units_lost = out.total_units_lost;
+            }
+            "morale_state" => {
+                if let Some(m) = MoraleState::from_code_str(v) {
+                    self.morale_state = m;
+                }
+            }
+            "mental_trauma" => {
+                self.mental_trauma = AcuteMentalTraumaTier::from_code_str(v);
+            }
+            "social_wound" => {
+                self.social_wound = SocialWoundKind::from_code_str(v);
+            }
+            "composure_delta" => {
+                self.social_composure_lost = (self.social_composure_lost
+                    + v.parse::<i32>().unwrap_or(0))
+                .clamp(0, derived.cmp_social_composure_threshold);
+            }
+            "drift_delta" => {
+                self.psyche_drift_marks =
+                    (self.psyche_drift_marks + v.parse::<i32>().unwrap_or(0)).clamp(0, 10);
+            }
+            "toggle_surge" => self.conviction_surge_active = !self.conviction_surge_active,
+            "toggle_condition" => {
+                if let Some(cond) = PhysiologicalStatusCondition::from_code_str(v) {
+                    if let Some(pos) = self
+                        .active_status_conditions
+                        .iter()
+                        .position(|&c| c == cond)
+                    {
+                        self.active_status_conditions.remove(pos);
+                    } else {
+                        self.active_status_conditions.push(cond);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Applies a pure equipment loadout mutation (`"set_range"`, `"add_ranged"`, `"remove_ranged"`,
+    /// `"add_melee"`, `"remove_melee"`, `"add_armor"`, `"remove_armor"`, `"add_gear"`, `"remove_gear"`).
+    pub fn apply_equipment_mutation(&mut self, action: &str, item_id: &str) {
+        let act = action.trim().to_ascii_lowercase();
+        let id = item_id.trim();
+        match act.as_str() {
+            "set_range" => {
+                self.ballistic_range_m = id.parse::<f64>().unwrap_or(25.0).clamp(5.0, 1000.0);
+            }
+            "add_ranged" => {
+                if lookup_firearm_preset(id).is_some()
+                    && !self.equipped_ranged_ids.iter().any(|x| x == id)
+                {
+                    self.equipped_ranged_ids.push(id.to_string());
+                }
+            }
+            "remove_ranged" => self.equipped_ranged_ids.retain(|x| x != id),
+            "add_melee" => {
+                if let Ok(idx) = id.parse::<usize>()
+                    && let Some(&mw) = MeleeWeaponId::ALL.get(idx)
+                    && !self.equipped_melee.contains(&mw)
+                {
+                    self.equipped_melee.push(mw);
+                }
+            }
+            "remove_melee" => {
+                if let Ok(idx) = id.parse::<usize>()
+                    && let Some(&mw) = MeleeWeaponId::ALL.get(idx)
+                {
+                    self.equipped_melee.retain(|&x| x != mw);
+                }
+            }
+            "add_armor" => {
+                if let Ok(idx) = id.parse::<usize>()
+                    && let Some(&ar) = ArmorProfileId::ALL.get(idx)
+                    && !self.equipped_armor.contains(&ar)
+                {
+                    self.equipped_armor.push(ar);
+                }
+            }
+            "remove_armor" => {
+                if let Ok(idx) = id.parse::<usize>()
+                    && let Some(&ar) = ArmorProfileId::ALL.get(idx)
+                {
+                    self.equipped_armor.retain(|&x| x != ar);
+                }
+            }
+            "add_gear" => {
+                if !self.field_gear.iter().any(|g| g.id == id)
+                    && let Some(item) = lookup_field_gear_preset(id)
+                {
+                    self.field_gear.push(item);
+                }
+            }
+            "remove_gear" => self.field_gear.retain(|g| g.id != id),
+            _ => {}
+        }
+    }
 }
 
 /// Re-renders `#char-sheet-stage-container` and `#char-sheet-status-pill` from thread-local state.
@@ -1028,28 +772,8 @@ pub fn apply_wizard_to_character_sheet(st: &mut crate::wasm_client::state::Satya
         &st.wizard.aptitudes,
     );
     let sheet = &mut st.character_sheet;
-    let slug: String = st
-        .wizard
-        .character_name
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('_')
-        .to_string();
-    sheet.character_id = format!(
-        "char-{}",
-        if slug.is_empty() {
-            "custom_wizard"
-        } else {
-            &slug
-        }
-    );
+    let slug = slugify_identifier(&st.wizard.character_name, "custom-wizard");
+    sheet.character_id = format!("char-{slug}");
     sheet.preset_id = "custom_wizard".to_string();
     sheet.character_name = st.wizard.character_name.clone();
     sheet.callsign_or_role = format!("Custom Lifepath Operator ({})", baseline.origin.label);
@@ -1059,6 +783,7 @@ pub fn apply_wizard_to_character_sheet(st: &mut crate::wasm_client::state::Satya
     sheet.operational_heat = baseline.operational_heat;
     sheet.granted_access_tags = baseline.granted_access_tags.clone();
     sheet.stage_history = baseline.stage_history.clone();
+    sheet.lifepath_config_json = serde_json::to_string(&st.wizard.lifepath).ok();
     sheet.characteristics = st.wizard.characteristics.clone();
     sheet.aptitudes = st.wizard.aptitudes.clone();
     sheet.skills = st.wizard.skills.clone();
@@ -1138,39 +863,8 @@ pub fn satya_char_sheet_roll_hit_location() {
 /// Updates the physical trauma state (`"wound_tier"`, `"bone_status"`, `"bleed_grade"`, `"stabilize_bleeds"`, `"clear_all"`) of an anatomical hit zone.
 #[wasm_bindgen]
 pub fn satya_char_sheet_update_zone(zone_idx: usize, field: String, value: String) {
-    let f = field.trim().to_ascii_lowercase();
-    let v = value.trim();
     with_state_mut(|st| {
-        if f == "clear_all" {
-            st.character_sheet.hit_zones = HitLocationId::ALL.map(AnatomicalZoneState::new_healthy);
-            st.character_sheet.wound_shock_index = 0;
-            st.character_sheet.blood_units_lost = 0.0;
-            return;
-        }
-        if f == "stabilize_bleeds" {
-            for z in &mut st.character_sheet.hit_zones {
-                z.bleed_grade = HemorrhageGrade::Grade0None;
-            }
-            return;
-        }
-        let Some(zone) = st.character_sheet.hit_zones.get_mut(zone_idx) else {
-            return;
-        };
-        st.character_sheet.selected_hit_zone = zone_idx;
-        match f.as_str() {
-            "wound_tier" => zone.wound_tier = v.parse::<u8>().unwrap_or(0).min(5),
-            "bone_status" => zone.bone_status = BoneFractureStatus::from_code(v),
-            "bleed_grade" => {
-                zone.bleed_grade = match v.parse::<u8>().unwrap_or(0) {
-                    1 => HemorrhageGrade::Grade1Capillary,
-                    2 => HemorrhageGrade::Grade2Venous,
-                    3 => HemorrhageGrade::Grade3MajorVenousVisceral,
-                    4 => HemorrhageGrade::Grade4ArterialSeverance,
-                    _ => HemorrhageGrade::Grade0None,
-                };
-            }
-            _ => {}
-        }
+        st.character_sheet.apply_zone_mutation(zone_idx, &field, &value);
     });
     render_character_sheet();
 }
@@ -1178,118 +872,21 @@ pub fn satya_char_sheet_update_zone(zone_idx: usize, field: String, value: Strin
 /// Adjusts or sets Damage, Fatigue, Exertion, Blood Loss, Morale, or Psyche status fields on the Character Sheet.
 #[wasm_bindgen]
 pub fn satya_char_sheet_update_status(field: String, value: String) {
-    let f = field.trim().to_ascii_lowercase();
-    let v = value.trim();
-    with_state_mut(|st| {
-        let sheet = &mut st.character_sheet;
-        let derived = sheet.characteristics.compute_derived(0);
-        match f.as_str() {
-            "fatigue_delta" => {
-                sheet.fatigue_level =
-                    (sheet.fatigue_level + v.parse::<i32>().unwrap_or(0)).clamp(0, 5);
-            }
-            "exertion_delta" => {
-                let d = v.parse::<i32>().unwrap_or(0);
-                if d <= -99 {
-                    sheet.exertion_marks = 0;
-                } else if d > 0 {
-                    let prog = accumulate_exertion_marks(
-                        sheet.exertion_marks,
-                        d,
-                        sheet.fatigue_level,
-                        derived.ft_fatigue_threshold,
-                    );
-                    sheet.exertion_marks = prog.remaining_exertion_marks;
-                    sheet.fatigue_level = prog.new_fatigue_level.clamp(0, 5);
-                } else {
-                    sheet.exertion_marks = (sheet.exertion_marks + d).max(0);
-                }
-            }
-            "wound_shock_delta" => {
-                sheet.wound_shock_index =
-                    (sheet.wound_shock_index + v.parse::<i32>().unwrap_or(0)).clamp(0, 5);
-            }
-            "blood_loss_delta" => {
-                sheet.blood_units_lost =
-                    (sheet.blood_units_lost + v.parse::<f64>().unwrap_or(0.0)).clamp(0.0, 10.0);
-            }
-            "advance_bleed_ticks" => {
-                let ticks = v.parse::<i32>().unwrap_or(20).max(1);
-                let out = evaluate_blood_loss_progression(
-                    sheet.blood_units_lost,
-                    &sheet.active_bleeds(),
-                    ticks,
-                );
-                sheet.blood_units_lost = out.total_units_lost;
-            }
-            "morale_state" => {
-                if let Some(m) = MoraleState::from_code_str(v) {
-                    sheet.morale_state = m;
-                }
-            }
-            "mental_trauma" => {
-                sheet.mental_trauma = match v {
-                    "TIER_1" => Some(AcuteMentalTraumaTier::Tier1AcuteMentalShockOodaFreeze),
-                    "TIER_2" => Some(AcuteMentalTraumaTier::Tier2PanicFightOrFlight),
-                    "TIER_3" => Some(AcuteMentalTraumaTier::Tier3DissociationShellShock),
-                    "TIER_4" => Some(AcuteMentalTraumaTier::Tier4Catatonia),
-                    _ => None,
-                };
-            }
-            "social_wound" => {
-                sheet.social_wound = match v {
-                    "STRAIN" => Some(SocialWoundKind::RhetoricalStrain),
-                    "DOUBT" => Some(SocialWoundKind::Doubt),
-                    "DISSONANCE" => Some(SocialWoundKind::CognitiveDissonance),
-                    "EGO_WOUND" => Some(SocialWoundKind::EgoWound),
-                    _ => None,
-                };
-            }
-            "composure_delta" => {
-                sheet.social_composure_lost = (sheet.social_composure_lost
-                    + v.parse::<i32>().unwrap_or(0))
-                .clamp(0, derived.cmp_social_composure_threshold);
-            }
-            "drift_delta" => {
-                sheet.psyche_drift_marks =
-                    (sheet.psyche_drift_marks + v.parse::<i32>().unwrap_or(0)).clamp(0, 10);
-            }
-            "toggle_surge" => sheet.conviction_surge_active = !sheet.conviction_surge_active,
-            "toggle_condition" => {
-                let cond_opt = match v {
-                    "DAZZLED" => Some(PhysiologicalStatusCondition::DazzledBlurredVision),
-                    "BLINDED" => Some(PhysiologicalStatusCondition::Blinded),
-                    "TINNITUS" => Some(PhysiologicalStatusCondition::Tinnitus),
-                    "DEAFENED" => Some(PhysiologicalStatusCondition::Deafened),
-                    "STUNNED" => Some(PhysiologicalStatusCondition::StunnedDazed),
-                    "CONCUSSED" => Some(PhysiologicalStatusCondition::Concussed),
-                    "DIZZY" => Some(PhysiologicalStatusCondition::DizzyVertigo),
-                    "NAUSEA" => Some(PhysiologicalStatusCondition::NauseaSickened),
-                    "PINNED" => Some(PhysiologicalStatusCondition::PinnedImmobilized),
-                    _ => None,
-                };
-                if let Some(cond) = cond_opt {
-                    if let Some(pos) = sheet
-                        .active_status_conditions
-                        .iter()
-                        .position(|&c| c == cond)
-                    {
-                        sheet.active_status_conditions.remove(pos);
-                    } else {
-                        sheet.active_status_conditions.push(cond);
-                    }
-                }
-            }
-            "sync_to_roller" => {
-                let delta_int = sheet.total_task_delta_int();
-                let shock = sheet.effective_wound_shock_index();
-                set_input_value("ttrpg-internal-mod", &delta_int.to_string());
-                set_input_value("ttrpg-wound-shock", &shock.to_string());
-                satya_update_cascade_preview();
-            }
-            _ => {}
-        }
+    let is_sync = field.trim().eq_ignore_ascii_case("sync_to_roller");
+    let roller_vals = with_state_mut(|st| {
+        st.character_sheet.apply_status_mutation(&field, &value);
+        is_sync.then(|| {
+            (
+                st.character_sheet.total_task_delta_int(),
+                st.character_sheet.effective_wound_shock_index(),
+            )
+        })
     });
+    if let Some((delta_int, shock)) = roller_vals {
+        set_input_value("ttrpg-internal-mod", &delta_int.to_string());
+        set_input_value("ttrpg-wound-shock", &shock.to_string());
+        satya_update_cascade_preview();
+    }
     render_character_sheet();
 }
 
@@ -1297,83 +894,20 @@ pub fn satya_char_sheet_update_status(field: String, value: String) {
 #[wasm_bindgen]
 pub fn satya_char_sheet_modify_equipment(action: String, item_id: String) {
     let act = action.trim().to_ascii_lowercase();
-    let id = item_id.trim();
-    with_state_mut(|st| {
-        let sheet = &mut st.character_sheet;
+    let resolved_id = if item_id.trim().is_empty() {
         match act.as_str() {
-            "set_range" => {
-                sheet.ballistic_range_m = id.parse::<f64>().unwrap_or(25.0).clamp(5.0, 1000.0)
-            }
-            "add_ranged" => {
-                let target = if id.is_empty() {
-                    select_value("char-add-ranged-select")
-                } else {
-                    id.to_string()
-                };
-                if CANONICAL_FIREARM_PRESETS
-                    .iter()
-                    .any(|(pid, _)| *pid == target.as_str())
-                    && !sheet.equipped_ranged_ids.contains(&target)
-                {
-                    sheet.equipped_ranged_ids.push(target);
-                }
-            }
-            "remove_ranged" => sheet.equipped_ranged_ids.retain(|x| x != id),
-            "add_melee" => {
-                let target = if id.is_empty() {
-                    select_value("char-add-melee-select")
-                } else {
-                    id.to_string()
-                };
-                if let Ok(idx) = target.parse::<usize>()
-                    && let Some(&mw) = MeleeWeaponId::ALL.get(idx)
-                    && !sheet.equipped_melee.contains(&mw)
-                {
-                    sheet.equipped_melee.push(mw);
-                }
-            }
-            "remove_melee" => {
-                if let Ok(idx) = id.parse::<usize>()
-                    && let Some(&mw) = MeleeWeaponId::ALL.get(idx)
-                {
-                    sheet.equipped_melee.retain(|&x| x != mw);
-                }
-            }
-            "add_armor" => {
-                let target = if id.is_empty() {
-                    select_value("char-add-armor-select")
-                } else {
-                    id.to_string()
-                };
-                if let Ok(idx) = target.parse::<usize>()
-                    && let Some(&ar) = ArmorProfileId::ALL.get(idx)
-                    && !sheet.equipped_armor.contains(&ar)
-                {
-                    sheet.equipped_armor.push(ar);
-                }
-            }
-            "remove_armor" => {
-                if let Ok(idx) = id.parse::<usize>()
-                    && let Some(&ar) = ArmorProfileId::ALL.get(idx)
-                {
-                    sheet.equipped_armor.retain(|&x| x != ar);
-                }
-            }
-            "add_gear" => {
-                let target = if id.is_empty() {
-                    select_value("char-add-gear-select")
-                } else {
-                    id.to_string()
-                };
-                if !sheet.field_gear.iter().any(|g| g.id == target) {
-                    sheet
-                        .field_gear
-                        .extend(CharacterSheetState::gear_from_ids(&[&target]));
-                }
-            }
-            "remove_gear" => sheet.field_gear.retain(|g| g.id != id),
-            _ => {}
+            "add_ranged" => select_value("char-add-ranged-select"),
+            "add_melee" => select_value("char-add-melee-select"),
+            "add_armor" => select_value("char-add-armor-select"),
+            "add_gear" => select_value("char-add-gear-select"),
+            _ => String::new(),
         }
+    } else {
+        item_id.trim().to_string()
+    };
+    with_state_mut(|st| {
+        st.character_sheet
+            .apply_equipment_mutation(&act, &resolved_id);
     });
     render_character_sheet();
 }

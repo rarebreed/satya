@@ -643,6 +643,18 @@ impl MeleeWeaponId {
         Self::MacheteWakizashiTacticalBlade,
         Self::TwoHandedStaffSpearRiotShield,
     ];
+
+    /// Canonical carried physical mass in kilograms (`kg`) for encumbrance calculations.
+    #[must_use]
+    pub const fn mass_kg(self) -> f64 {
+        match self {
+            Self::UnarmedJabLowKickClinchKnee | Self::UnarmedHaymakerHighKickThrow => 0.0,
+            Self::CombatKnifeKarambitShiv => 0.35,
+            Self::ExpandableBatonTonfaClub => 0.65,
+            Self::MacheteWakizashiTacticalBlade => 0.95,
+            Self::TwoHandedStaffSpearRiotShield => 3.40,
+        }
+    }
 }
 
 /// Canonical profile for a Melee Weapon or Unarmed Attack (`docs/ttrpg/05-combat/melee_combat.md` §4).

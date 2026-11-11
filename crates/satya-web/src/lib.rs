@@ -2,21 +2,28 @@
 //! and Apache Iggy Event Streaming Platform.
 //!
 //! ## Module Map
-//! - [`chat_cmd`]: Chat slash-command parser (`/msg`, `/roll`, `/r`) and dice pipeline evaluator.
-//! - [`views_gate`]: Top navigation bar (`HeaderBar`) and pre-session auth/session gate (`AuthAndSessionGate`).
-//! - [`views_notebook`]: Left-column Tabbed Tabletop Notebook (`NotebookColumn`) with 9 interactive panes.
+//! - [`chat_cmd`]: Chat slash-command parser (`/msg`, `/w`, `/whisper`, `/roll`, `/r`) and dice pipeline evaluator.
+//! - [`views_header`]: Top navigation bar (`HeaderBar`), Hamburger Menu, BYOK AI GM & Appearance panels.
+//! - [`views_gate`]: Pre-session authentication and session create/join/resume gate (`AuthAndSessionGate`).
+//! - [`views_notebook`]: Left-column Tabbed Tabletop Notebook (`NotebookColumn`) with 10 interactive panes.
+//! - [`views_notebook_gm`]: `NPCs` roster/generator and `GM Docs` Vault / Memory / Scenario Director panes.
+//! - [`views_notebook_docs`]: `Rules Book` viewer and hidden `Apache Iggy` Avro telemetry inspector panes.
 //! - [`views_workspace`]: Active 3-column session workspace (`ActiveSessionWorkspace`) combining Notebook, Chat/Task Roller, and WebRTC Web Cams.
 //! - [`wasm_client`]: Browser `wasm-bindgen` / `web-sys` / `wgpu` client runtime and `window.satya*` bindings.
 
 pub mod chat_cmd;
 pub mod views_gate;
+pub mod views_header;
 pub mod views_notebook;
 pub mod views_notebook_docs;
+pub mod views_notebook_gm;
 pub mod views_workspace;
 pub mod wasm_client;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_contracts;
 
 pub use views_gate::*;
 pub use views_notebook::*;
@@ -26,7 +33,7 @@ use leptos::prelude::*;
 
 /// Minimal ES module loader that restores saved appearance attributes from `localStorage`,
 /// provides instant pre-hydration `window.satya*Appearance*` bindings, and boots `/pkg/satya_web.js`.
-const WASM_BOOTSTRAP_LOADER: &str = r#"
+pub const WASM_BOOTSTRAP_LOADER: &str = r#"
 const SATYA_APPEARANCE_SPEC = [
     ["theme", "data-theme", "menu-theme-select", "obsidian"],
     ["style", "data-style", "menu-style-select", "default"],
@@ -88,7 +95,11 @@ pub fn render_satya_app_html() -> String {
 #[component]
 pub fn SatyaApp() -> impl IntoView {
     let app_styles = concat!(
+        include_str!("styles_themes.css"),
+        "\n",
         include_str!("styles.css"),
+        "\n",
+        include_str!("styles_stages.css"),
         "\n",
         include_str!("styles_notebook.css")
     );

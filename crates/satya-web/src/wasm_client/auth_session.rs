@@ -1,14 +1,12 @@
 //! User registration, login, logout, demo presets, password-protected session create/join/leave
 //! lifecycle, and session participant roster rendering.
 
-use crate::wasm_client::chat_and_ttrpg::{
-    append_system_notice, satya_select_broadcast, satya_toggle_recipient,
-    sync_gm_context_button_visibility,
-};
+use crate::wasm_client::chat_and_ttrpg::{append_system_notice, sync_gm_context_button_visibility};
 use crate::wasm_client::dom::{
-    document, escape_html, fetch_json, get_element, input_checked, input_value,
+    escape_html, escape_js_single_quoted_attr, fetch_json, get_element, input_checked, input_value,
     local_storage_remove, local_storage_set, select_value, set_button_disabled, set_class,
-    set_display, set_feedback, set_input_checked, set_input_value, set_select_value, set_text,
+    set_display, set_feedback, set_html, set_input_checked, set_input_value, set_select_value,
+    set_text, window,
 };
 use crate::wasm_client::notebook::{render_combat_tracker, sync_google_auth_status_from_server};
 use crate::wasm_client::options::{
@@ -21,16 +19,19 @@ use crate::wasm_client::session_persistence::{
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
 use crate::wasm_client::telemetry::satya_refresh_metrics;
-use crate::wasm_client::webrtc::{connect_signaling_websocket, send_ws_packet};
+use crate::wasm_client::webrtc::{
+    connect_signaling_websocket, send_ws_packet, teardown_prosody_monitor,
+};
 use satya_schema::{
     AccountRole, AiGmProviderConfig, AuthSuccessResponse, ClientWsPacket, CreateSessionRequest,
-    JoinSessionRequest, LeaveSessionRequest, LoginRequest, LogoutRequest, ParticipantKind,
-    RegisterRequest, SessionEnterResponse, SessionMode, SessionRole, WebRtcEventKind,
+    JoinSessionRequest, LeaveSessionRequest, LoginRequest, LogoutRequest, Participant,
+    ParticipantKind, RegisterRequest, SessionEnterResponse, SessionMode, SessionRole,
+    WebRtcEventKind,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{HtmlInputElement, HtmlVideoElement};
+use web_sys::HtmlVideoElement;
 
 /// Populates the login form inputs and default session mode/role for a preset demo account.
 #[wasm_bindgen]
@@ -451,9 +452,10 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
     satya_refresh_metrics();
 }
 
-/// Closes all active WebRTC peer connections, DataChannels, local media tracks, and signaling WebSockets,
-/// resetting the client's active session state and UI controls.
+/// Closes all active WebRTC peer connections, DataChannels, local media tracks, prosody timers,
+/// and signaling WebSockets, resetting the client's active session state and UI controls.
 pub fn cleanup_client_session_state() {
+    teardown_prosody_monitor();
     let remote_ids: Vec<String> = with_state_mut(|st| {
         let ids: Vec<String> = st.peers.keys().cloned().collect();
         for (_, peer) in st.peers.drain() {
@@ -615,10 +617,25 @@ pub fn satya_logout() {
         with_state_mut(|st| {
             st.auth_token = None;
             st.user = None;
+            st.google_access_token = None;
+            st.google_linked = false;
         });
+        if let Some(win) = window() {
+            let _ = js_sys::Reflect::set(
+                &win,
+                &JsValue::from_str("_satyaGoogleAccessToken"),
+                &JsValue::NULL,
+            );
+            let _ = js_sys::Reflect::delete_property(
+                &win,
+                &JsValue::from_str("_satyaGoogleAccessToken"),
+            );
+        }
 
         set_text("auth-status-pill", "Not Logged In");
         set_class("auth-status-pill", "pill pill-muted");
+        set_text("google-auth-status-pill", "Google Unlinked (drive.file)");
+        set_class("google-auth-status-pill", "pill pill-muted");
         set_button_disabled("btn-logout", true);
         set_button_disabled("btn-menu-logout", true);
         set_display("auth-card", "block");
@@ -646,20 +663,63 @@ pub fn satya_logout() {
     });
 }
 
+/// Formats `(roster_chips_html, recipient_checkboxes_html)` for `#roster-list` and `#recipient-checkboxes`
+/// without allocating per-sync JS closures.
+#[must_use]
+pub fn format_roster_and_recipients_html(
+    roster: &[Participant],
+    self_user_id: Option<&str>,
+    selected_recipients: &[String],
+) -> (String, String) {
+    let mut roster_html = String::with_capacity(roster.len() * 112);
+    let broadcast_checked = selected_recipients.is_empty();
+    let b_row_cls = if broadcast_checked {
+        "recip-row broadcast-row selected"
+    } else {
+        "recip-row broadcast-row"
+    };
+    let b_chk_attr = if broadcast_checked { " checked" } else { "" };
+
+    let mut recip_html = format!(
+        r#"<label id="recipient-row-broadcast" class="{b_row_cls}"><input id="recipient-cb-broadcast" type="checkbox" value="BROADCAST"{b_chk_attr} onchange="window.satyaSelectBroadcast()" /><span class="recip-name broadcast-tag">BROADCAST (All Participants)</span></label>"#
+    );
+
+    for p in roster {
+        let chip_cls = if p.participant_kind == ParticipantKind::AiAgent {
+            "participant-chip ai"
+        } else {
+            "participant-chip"
+        };
+        let short_id: String = p.user_id.chars().take(8).collect();
+        roster_html.push_str(&format!(
+            r#"<span class="{chip_cls}">{} [{:?}] ({})</span>"#,
+            escape_html(&p.display_name),
+            p.role,
+            escape_html(&short_id),
+        ));
+
+        if self_user_id != Some(p.user_id.as_str()) {
+            let is_checked = selected_recipients.iter().any(|id| id == &p.user_id);
+            let row_cls = if is_checked {
+                "recip-row selected"
+            } else {
+                "recip-row"
+            };
+            let chk_attr = if is_checked { " checked" } else { "" };
+            let uid_attr = escape_html(&p.user_id);
+            let uid_js = escape_js_single_quoted_attr(&p.user_id);
+            recip_html.push_str(&format!(
+                r#"<label class="{row_cls}" data-recipient-row-uid="{uid_attr}"><input type="checkbox" class="recipient-user-cb" value="{uid_attr}" data-recipient-uid="{uid_attr}"{chk_attr} onchange="window.satyaToggleRecipient('{uid_js}')" /><span class="recip-name">{} ({:?})</span></label>"#,
+                escape_html(&p.display_name),
+                p.role,
+            ));
+        }
+    }
+
+    (roster_html, recip_html)
+}
+
 pub(crate) fn render_roster() {
-    let Some(doc) = document() else {
-        return;
-    };
-    let (Some(list_el), Some(recip_el)) = (
-        get_element("roster-list"),
-        get_element("recipient-checkboxes"),
-    ) else {
-        return;
-    };
-
-    list_el.set_inner_html("");
-    recip_el.set_inner_html("");
-
     let (roster, self_uid, selected_recips) = with_state_mut(|st| {
         let self_id = st.self_participant.as_ref().map(|p| p.user_id.clone());
         st.selected_recipients.retain(|uid| {
@@ -668,95 +728,49 @@ pub(crate) fn render_roster() {
         (st.roster.clone(), self_id, st.selected_recipients.clone())
     });
 
-    let broadcast_checked = selected_recips.is_empty();
-    if let Ok(b_label) = doc.create_element("label") {
-        b_label.set_id("recipient-row-broadcast");
-        b_label.set_class_name(if broadcast_checked {
-            "recip-row broadcast-row selected"
-        } else {
-            "recip-row broadcast-row"
-        });
-        if let Ok(cb_el) = doc.create_element("input")
-            && let Ok(cb) = cb_el.dyn_into::<HtmlInputElement>()
-        {
-            cb.set_id("recipient-cb-broadcast");
-            cb.set_type("checkbox");
-            cb.set_value("BROADCAST");
-            cb.set_checked(broadcast_checked);
-            let _ = cb.set_attribute("onchange", "window.satyaSelectBroadcast()");
-            let on_chg = Closure::<dyn FnMut()>::new(move || {
-                satya_select_broadcast();
-            });
-            cb.set_onchange(Some(on_chg.as_ref().unchecked_ref()));
-            on_chg.forget();
-            let _ = b_label.append_child(&cb);
-        }
-        if let Ok(span) = doc.create_element("span") {
-            span.set_class_name("recip-name broadcast-tag");
-            span.set_text_content(Some("BROADCAST (All Participants)"));
-            let _ = b_label.append_child(&span);
-        }
-        let _ = recip_el.append_child(&b_label);
-    }
+    let (roster_html, recip_html) =
+        format_roster_and_recipients_html(&roster, self_uid.as_deref(), &selected_recips);
+    set_html("roster-list", &roster_html);
+    set_html("recipient-checkboxes", &recip_html);
 
     let roster_count = roster.len().max(1);
     set_text("webcam-drawer-count-badge", &roster_count.to_string());
-
-    for p in roster {
-        if let Ok(chip) = doc.create_element("span") {
-            let class_name = if p.participant_kind == ParticipantKind::AiAgent {
-                "participant-chip ai"
-            } else {
-                "participant-chip"
-            };
-            chip.set_class_name(class_name);
-            let short_id: String = p.user_id.chars().take(8).collect();
-            chip.set_text_content(Some(&format!(
-                "{} [{:?}] ({short_id})",
-                p.display_name, p.role
-            )));
-            let _ = list_el.append_child(&chip);
-        }
-
-        if self_uid.as_deref() != Some(p.user_id.as_str())
-            && let Ok(label) = doc.create_element("label")
-        {
-            let is_checked = selected_recips.contains(&p.user_id);
-            label.set_class_name(if is_checked {
-                "recip-row selected"
-            } else {
-                "recip-row"
-            });
-            let _ = label.set_attribute("data-recipient-row-uid", &p.user_id);
-            if let Ok(cb_el) = doc.create_element("input")
-                && let Ok(cb) = cb_el.dyn_into::<HtmlInputElement>()
-            {
-                let uid_for_attr = p.user_id.clone();
-                let uid_for_cb = p.user_id.clone();
-                cb.set_type("checkbox");
-                cb.set_class_name("recipient-user-cb");
-                cb.set_value(&p.user_id);
-                cb.set_checked(is_checked);
-                let _ = cb.set_attribute("data-recipient-uid", &p.user_id);
-                let _ = cb.set_attribute(
-                    "onchange",
-                    &format!("window.satyaToggleRecipient('{uid_for_attr}')"),
-                );
-                let on_chg = Closure::<dyn FnMut()>::new(move || {
-                    satya_toggle_recipient(uid_for_cb.clone());
-                });
-                cb.set_onchange(Some(on_chg.as_ref().unchecked_ref()));
-                on_chg.forget();
-                let _ = label.append_child(&cb);
-            }
-            if let Ok(span) = doc.create_element("span") {
-                span.set_class_name("recip-name");
-                span.set_text_content(Some(&format!("{} ({:?})", p.display_name, p.role)));
-                let _ = label.append_child(&span);
-            }
-            let _ = recip_el.append_child(&label);
-        }
-    }
-
     render_combat_tracker();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_roster_and_recipients_html_broadcast_vs_targeted_and_escaping() {
+        let roster = vec![
+            Participant::human("u-sean-01", "gm_sean", "Sean (GM)", SessionRole::Gm),
+            Participant::human("u-sara'02", "sara", "Sara <Valkyrie>", SessionRole::Player),
+            Participant::ai_gm("sector-4", "gemma4:12b", "harsh-reality-arbiter"),
+        ];
+
+        // 1. Empty selected_recipients => Broadcast row selected, self excluded from recipient list
+        let (roster_html, recip_html) =
+            format_roster_and_recipients_html(&roster, Some("u-sean-01"), &[]);
+        assert!(roster_html.contains("Sean (GM) [Gm] (u-sean-0)"));
+        assert!(roster_html.contains("Sara &lt;Valkyrie&gt; [Player]"));
+        assert!(roster_html.contains(r#"class="participant-chip ai""#));
+
+        assert!(recip_html.contains(r#"id="recipient-row-broadcast" class="recip-row broadcast-row selected""#));
+        assert!(recip_html.contains(r#"onchange="window.satyaSelectBroadcast()""#));
+        assert!(!recip_html.contains(r#"data-recipient-uid="u-sean-01""#));
+        assert!(recip_html.contains(r#"window.satyaToggleRecipient('u-sara\'02')"#));
+
+        // 2. Selecting Sara unchecks broadcast and marks Sara's row selected
+        let (_, recip_sel) = format_roster_and_recipients_html(
+            &roster,
+            Some("u-sean-01"),
+            &["u-sara'02".to_string()],
+        );
+        assert!(recip_sel.contains(r#"id="recipient-row-broadcast" class="recip-row broadcast-row""#));
+        assert!(!recip_sel.contains(r#"id="recipient-cb-broadcast" type="checkbox" value="BROADCAST" checked"#));
+        assert!(recip_sel.contains(r#"class="recip-row selected" data-recipient-row-uid="u-sara&#39;02""#));
+        assert!(recip_sel.contains(r#"data-recipient-uid="u-sara&#39;02" checked"#));
+    }
 }

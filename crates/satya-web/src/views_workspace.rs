@@ -6,6 +6,137 @@
 use crate::views_notebook::NotebookColumn;
 use crate::wasm_client;
 use leptos::prelude::*;
+use satya_engine::CombatMoveCategory;
+
+/// Specification for a numeric `<input type="number">` control in `#ttrpg-drawer`:
+/// `(input_id, label, default_val, min, max, optional_step)`.
+type DrawerNumberInputSpec = (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    Option<&'static str>,
+);
+
+const CASCADE_MAIN_NUMBER_INPUTS: &[DrawerNumberInputSpec] = &[
+    (
+        "ttrpg-skill-level",
+        "Skill Level N (2d20 Pairs, 1-10)",
+        "3",
+        "1",
+        "10",
+        None,
+    ),
+    (
+        "ttrpg-control-c",
+        "Control Characteristic C (1-20)",
+        "12",
+        "1",
+        "20",
+        None,
+    ),
+    (
+        "ttrpg-internal-mod",
+        "Internal Mod Δ_int (-2 to +10)",
+        "0",
+        "-2",
+        "10",
+        None,
+    ),
+    (
+        "ttrpg-tool-mod",
+        "Tool Mod Δ_tool (-4 to +12)",
+        "0",
+        "-4",
+        "12",
+        None,
+    ),
+    (
+        "ttrpg-external-mod",
+        "External Mod Δ_ext (-10 to +16)",
+        "0",
+        "-10",
+        "16",
+        None,
+    ),
+];
+
+const CASCADE_CONDITION_NUMBER_INPUTS: &[DrawerNumberInputSpec] = &[
+    ("ttrpg-fatigue", "Fatigue Level", "1", "0", "10", None),
+    (
+        "ttrpg-wound-shock",
+        "Wound Shock Index",
+        "0",
+        "0",
+        "10",
+        Some("0.5"),
+    ),
+];
+
+const TRIAD_POOL_NUMBER_INPUTS: &[DrawerNumberInputSpec] = &[
+    (
+        "ttrpg-pool-tempo",
+        "Tempo Pool T (Speed / -Ticks)",
+        "7",
+        "0",
+        "30",
+        None,
+    ),
+    (
+        "ttrpg-pool-control",
+        "Control Pool C (Guard / Kuzushi)",
+        "7",
+        "0",
+        "30",
+        None,
+    ),
+    (
+        "ttrpg-pool-force",
+        "Force Pool F (Impact / Root / Recoil)",
+        "7",
+        "0",
+        "30",
+        None,
+    ),
+];
+
+/// Canonical `<optgroup>` category ordering for `#ttrpg-action-technique`.
+const DRAWER_TECHNIQUE_CATEGORIES: &[CombatMoveCategory] = &[
+    CombatMoveCategory::Control,
+    CombatMoveCategory::Strike,
+    CombatMoveCategory::Intercept,
+    CombatMoveCategory::Maneuver,
+    CombatMoveCategory::RangedShot,
+    CombatMoveCategory::RangedManeuver,
+];
+
+fn render_drawer_number_inputs(
+    specs: &'static [DrawerNumberInputSpec],
+    handler_js: &'static str,
+) -> impl IntoView {
+    specs
+        .iter()
+        .copied()
+        .map(|(input_id, label, default_val, min, max, step)| {
+            view! {
+                <label>
+                    <span>{label}</span>
+                    <input
+                        id=input_id
+                        type="number"
+                        step=step
+                        value=default_val
+                        min=min
+                        max=max
+                        onchange=handler_js
+                        oninput=handler_js
+                    />
+                </label>
+            }
+        })
+        .collect_view()
+}
 
 /// Active 3-column session workspace (`#workspace-panel`).
 #[component]
@@ -221,66 +352,10 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                 inner_html=wasm_client::default_ttrpg_skill_dropdown_html()
                             ></div>
                         </div>
-                        <label>
-                            <span>"Skill Level N (2d20 Pairs, 1-10)"</span>
-                            <input
-                                id="ttrpg-skill-level"
-                                type="number"
-                                value="3"
-                                min="1"
-                                max="10"
-                                onchange="window.satyaUpdateCascadePreview()"
-                                oninput="window.satyaUpdateCascadePreview()"
-                            />
-                        </label>
-                        <label>
-                            <span>"Control Characteristic C (1-20)"</span>
-                            <input
-                                id="ttrpg-control-c"
-                                type="number"
-                                value="12"
-                                min="1"
-                                max="20"
-                                onchange="window.satyaUpdateCascadePreview()"
-                                oninput="window.satyaUpdateCascadePreview()"
-                            />
-                        </label>
-                        <label>
-                            <span>"Internal Mod Δ_int (-2 to +10)"</span>
-                            <input
-                                id="ttrpg-internal-mod"
-                                type="number"
-                                value="0"
-                                min="-2"
-                                max="10"
-                                onchange="window.satyaUpdateCascadePreview()"
-                                oninput="window.satyaUpdateCascadePreview()"
-                            />
-                        </label>
-                        <label>
-                            <span>"Tool Mod Δ_tool (-4 to +12)"</span>
-                            <input
-                                id="ttrpg-tool-mod"
-                                type="number"
-                                value="0"
-                                min="-4"
-                                max="12"
-                                onchange="window.satyaUpdateCascadePreview()"
-                                oninput="window.satyaUpdateCascadePreview()"
-                            />
-                        </label>
-                        <label>
-                            <span>"External Mod Δ_ext (-10 to +16)"</span>
-                            <input
-                                id="ttrpg-external-mod"
-                                type="number"
-                                value="0"
-                                min="-10"
-                                max="16"
-                                onchange="window.satyaUpdateCascadePreview()"
-                                oninput="window.satyaUpdateCascadePreview()"
-                            />
-                        </label>
+                        {render_drawer_number_inputs(
+                            CASCADE_MAIN_NUMBER_INPUTS,
+                            "window.satyaUpdateCascadePreview()",
+                        )}
                         <label>
                             <span>"Cascade Carry Mode"</span>
                             <select
@@ -302,31 +377,10 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                 <option value="ceiling_breach">"Floor Breach (<2 Complication)"</option>
                             </select>
                         </label>
-                        <label>
-                            <span>"Fatigue Level"</span>
-                            <input
-                                id="ttrpg-fatigue"
-                                type="number"
-                                value="1"
-                                min="0"
-                                max="10"
-                                onchange="window.satyaUpdateCascadePreview()"
-                                oninput="window.satyaUpdateCascadePreview()"
-                            />
-                        </label>
-                        <label>
-                            <span>"Wound Shock Index"</span>
-                            <input
-                                id="ttrpg-wound-shock"
-                                type="number"
-                                step="0.5"
-                                value="0"
-                                min="0"
-                                max="10"
-                                onchange="window.satyaUpdateCascadePreview()"
-                                oninput="window.satyaUpdateCascadePreview()"
-                            />
-                        </label>
+                        {render_drawer_number_inputs(
+                            CASCADE_CONDITION_NUMBER_INPUTS,
+                            "window.satyaUpdateCascadePreview()",
+                        )}
                         <label>
                             <span>"Action / Combat Technique"</span>
                             <select
@@ -335,43 +389,35 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                 on:change=move |_| wasm_client::satya_on_drawer_technique_change()
                             >
                                 <option value="non_combat" selected>"Non-Combat Task / General Skill"</option>
-                                <optgroup label="Strikes (Unarmed & Melee)">
-                                    <option value="punch">"Punch (Jab/Cross/Hook · Base 3 TC)"</option>
-                                    <option value="elbow">"Elbow Strike (Close · Base 3 TC)"</option>
-                                    <option value="knee">"Knee Strike (Clinch · Base 4 TC)"</option>
-                                    <option value="kick">"Kick (Teep/Roundhouse · Base 5 TC)"</option>
-                                    <option value="thrust">"Melee Thrust (Point/Lunge · Base 4 TC)"</option>
-                                    <option value="swing">"Melee Swing (Cleave/Cut · Base 6 TC)"</option>
-                                </optgroup>
-                                <optgroup label="Control & Grappling">
-                                    <option value="grab">"Grab (Clinch Entry · Base 4 TC)"</option>
-                                    <option value="push">"Push (Shove / Frame Break · Base 4 TC)"</option>
-                                    <option value="trap">"Trap (Limb / Weapon Bind · Base 4 TC)"</option>
-                                    <option value="disarm">"Disarm (Weapon Strip · Base 6 TC)"</option>
-                                    <option value="takedown">"Takedown (Leg Shoot / Sweep · Base 7 TC)"</option>
-                                    <option value="lock">"Joint Lock / Choke (Base 7 TC)"</option>
-                                    <option value="throw">"Throw (Kuzushi Projection · Base 8 TC)"</option>
-                                </optgroup>
-                                <optgroup label="Intercepts & Footwork Maneuvers">
-                                    <option value="parry">"Parry (Deflection · Base 3 TC)"</option>
-                                    <option value="block">"Block (Hard Frame / Shield · Base 3 TC)"</option>
-                                    <option value="dodge">"Dodge (Evasive Slip / Dive · Base 4 TC)"</option>
-                                    <option value="feint">"Feint (Deceptive Setup · Base 4 TC)"</option>
-                                    <option value="probe">"Probe (Range / Read Check · Base 3 TC)"</option>
-                                    <option value="root">"Root (Grounded Anchor · Base 4 TC)"</option>
-                                    <option value="escape">"Escape (Break Clinch / Disengage · Base 6 TC)"</option>
-                                </optgroup>
-                                <optgroup label="Ranged Fire & Maneuvers">
-                                    <option value="snap_shot">"Snap Shot (Point-Shoot · Base 4 TC · Δ_ext +2)"</option>
-                                    <option value="combat_sighted_shot">"Combat Sighted Shot (Flash Sight · Base 6 TC)"</option>
-                                    <option value="controlled_double_tap_burst">"Controlled Double-Tap / Burst (Base 7 TC · Δ_ext +1)"</option>
-                                    <option value="deliberate_aimed_shot">"Deliberate Aimed Shot (Base 10 TC · Δ_ext -2)"</option>
-                                    <option value="suppressive_full_auto">"Suppressive Full-Auto Zone (Base 8 TC · Δ_ext +3)"</option>
-                                    <option value="brace_weapon">"Brace / Rest Weapon (Bipod / Cover · Base 4 TC)"</option>
-                                    <option value="cover_peek_slice_pie">"Cover Peek / Slice the Pie (Base 5 TC)"</option>
-                                    <option value="bounding_shoot_on_move">"Bounding Fire / Shoot on Move (Base 7 TC)"</option>
-                                    <option value="overwatch_hold_sector">"Overwatch / Hold Sector (Base 5 TC)"</option>
-                                </optgroup>
+                                {DRAWER_TECHNIQUE_CATEGORIES
+                                    .iter()
+                                    .copied()
+                                    .map(|cat| {
+                                        let group_label = cat.label();
+                                        let options = satya_engine::canonical_combat_technique_catalog()
+                                            .iter()
+                                            .filter(move |spec| spec.category == cat)
+                                            .map(|spec| {
+                                                let code = spec.id.as_str();
+                                                let option_label = if spec.delta_ext_mod != 0 {
+                                                    format!(
+                                                        "{} (Base {} TC · Δ_ext {:+})",
+                                                        spec.name,
+                                                        spec.base_total_tc,
+                                                        spec.delta_ext_mod,
+                                                    )
+                                                } else {
+                                                    format!(
+                                                        "{} (Base {} TC)",
+                                                        spec.name, spec.base_total_tc,
+                                                    )
+                                                };
+                                                view! { <option value=code>{option_label}</option> }
+                                            })
+                                            .collect_view();
+                                        view! { <optgroup label=group_label>{options}</optgroup> }
+                                    })
+                                    .collect_view()}
                             </select>
                         </label>
                         <label>
@@ -388,42 +434,10 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                 <option value="custom">"Custom T / C / F Split"</option>
                             </select>
                         </label>
-                        <label>
-                            <span>"Tempo Pool T (Speed / -Ticks)"</span>
-                            <input
-                                id="ttrpg-pool-tempo"
-                                type="number"
-                                value="7"
-                                min="0"
-                                max="30"
-                                onchange="window.satyaUpdateDrawerTriadPreview()"
-                                oninput="window.satyaUpdateDrawerTriadPreview()"
-                            />
-                        </label>
-                        <label>
-                            <span>"Control Pool C (Guard / Kuzushi)"</span>
-                            <input
-                                id="ttrpg-pool-control"
-                                type="number"
-                                value="7"
-                                min="0"
-                                max="30"
-                                onchange="window.satyaUpdateDrawerTriadPreview()"
-                                oninput="window.satyaUpdateDrawerTriadPreview()"
-                            />
-                        </label>
-                        <label>
-                            <span>"Force Pool F (Impact / Root / Recoil)"</span>
-                            <input
-                                id="ttrpg-pool-force"
-                                type="number"
-                                value="7"
-                                min="0"
-                                max="30"
-                                onchange="window.satyaUpdateDrawerTriadPreview()"
-                                oninput="window.satyaUpdateDrawerTriadPreview()"
-                            />
-                        </label>
+                        {render_drawer_number_inputs(
+                            TRIAD_POOL_NUMBER_INPUTS,
+                            "window.satyaUpdateDrawerTriadPreview()",
+                        )}
                     </div>
                     <div
                         id="ttrpg-triad-readout"

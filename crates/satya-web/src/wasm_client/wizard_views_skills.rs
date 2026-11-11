@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::wasm_client::dom::escape_html;
+use crate::wasm_client::dom::{escape_html, escape_js_single_quoted_attr};
 use crate::wasm_client::wizard::CharacterWizardState;
 use crate::wasm_client::wizard_views_lifepath::format_lifepath_step_html;
 use crate::wasm_client::wizard_views_stats::{
@@ -32,7 +32,7 @@ pub(crate) fn format_trained_skill_chips_html(
                 return None;
             }
             let ctrl = chars.compute_controller(spec.primary_char, spec.secondary_char);
-            let escaped_name_js = spec.name.replace('\'', "\\'");
+            let escaped_name_js = escape_js_single_quoted_attr(spec.name);
             Some(format!(
                 r#"<button type="button" class="btn-chip" onclick="window.satyaLoadSkillPreset('{escaped_name_js}', {n}, {ctrl})">{name} (N={n}, C={ctrl})</button>"#,
                 name = escape_html(spec.name),
@@ -244,7 +244,7 @@ pub(crate) fn format_skills_step_html(st: &CharacterWizardState) -> String {
                     let minus_disabled = if can_reduce { "" } else { " disabled" };
                     let plus_disabled = if can_advance { "" } else { " disabled" };
                     let roll_n = cur_n.max(1);
-                    let escaped_name_js = spec.name.replace('\'', "\\'");
+                    let escaped_name_js = escape_js_single_quoted_attr(spec.name);
 
                     Some(format!(
                         r#"<div class="wiz-char-assign-card">

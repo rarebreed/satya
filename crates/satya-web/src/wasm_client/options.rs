@@ -276,40 +276,6 @@ pub fn chat_options_for_mode(mode: SessionMode) -> (SelectOptionSlice, SelectOpt
     }
 }
 
-pub(crate) fn sync_chat_options_for_mode(mode: SessionMode) {
-    let (vis_opts, ctx_opts) = chat_options_for_mode(mode);
-
-    if let Some(vis_sel) =
-        get_element("chat-visibility").and_then(|el| el.dyn_into::<HtmlSelectElement>().ok())
-    {
-        let prev = vis_sel.value();
-        let html: String = vis_opts
-            .iter()
-            .map(|(val, label)| format!(r#"<option value="{val}">{label}</option>"#))
-            .collect();
-        vis_sel.set_inner_html(&html);
-        if vis_opts.iter().any(|(val, _)| *val == prev) {
-            vis_sel.set_value(&prev);
-        } else {
-            vis_sel.set_value(vis_opts[0].0);
-        }
-    }
-
-    if let Some(ctx_sel) =
-        get_element("chat-context").and_then(|el| el.dyn_into::<HtmlSelectElement>().ok())
-    {
-        let prev = ctx_sel.value();
-        let html: String = ctx_opts
-            .iter()
-            .map(|(val, label)| format!(r#"<option value="{val}">{label}</option>"#))
-            .collect();
-        ctx_sel.set_inner_html(&html);
-        if ctx_opts.iter().any(|(val, _)| *val == prev) {
-            ctx_sel.set_value(&prev);
-        } else {
-            ctx_sel.set_value(ctx_opts[0].0);
-        }
-    }
-
+pub(crate) fn sync_chat_options_for_mode(_mode: SessionMode) {
     satya_visibility_changed();
 }

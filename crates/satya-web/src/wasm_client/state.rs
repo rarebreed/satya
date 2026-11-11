@@ -1,5 +1,17 @@
 //! Thread-local client state (`SatyaWasmState`) and WebRTC peer entries (`PeerEntry`)
 //! managed in Rust/WebAssembly across the session lifecycle.
+//!
+//! ## Complete Browser `thread_local!` Topology
+//! 1. **`CLIENT_STATE` ([`SatyaWasmState`], this file)**: Auth/session tokens, roster, WebSocket,
+//!    WebRTC peers, prosody audio sampler, chat history/recipients, drawer geometry, combat clock,
+//!    Google Drive/GM Vault caches, NPCs, [`CharacterWizardState`](crate::wasm_client::wizard::CharacterWizardState),
+//!    and [`CharacterSheetState`](crate::wasm_client::character_sheet::CharacterSheetState).
+//! 2. **`MAP_UI_STATE` ([`crate::wasm_client::map_3d`])**: Tactical Map grid, tokens, gait reach,
+//!    and LoS/Cover overlay state (`with_map_ui` / `with_map_ui_mut`).
+//! 3. **`CUSTOM_GLB_MODEL` ([`crate::wasm_client::model_3d_wgpu`])**: User-imported or vault-loaded
+//!    binary glTF 2.0 (`.glb`) mesh & raw bytes shared by the 3D Model tab and Tactical Map tokens.
+//! 4. **WebGPU Canvas Controllers (`wasm32` only)**: `MAP_CTRL` (`map_3d_wgpu.rs`), `DICE_CONTROLLER`
+//!    (`dice_3d_wgpu.rs`), and `MODEL_CTRL` (`model_3d_wgpu.rs`).
 
 use satya_schema::{
     AuthSuccessResponse, ChannelContext, GmDocumentRecord, GmMemoryNoteRecord, Participant,
@@ -8,7 +20,10 @@ use satya_schema::{
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use web_sys::{MediaStream, RtcDataChannel, RtcPeerConnection, WebSocket};
+use web_sys::{AudioContext, MediaStream, RtcDataChannel, RtcPeerConnection, WebSocket};
+
+/// Canonical temporal granularity across the UI and engine (`1 Tick = 0.25s`, `20 Ticks = 5.0s`).
+pub const SECONDS_PER_TICK: f64 = 0.25;
 
 /// Active WebRTC peer connection and optional `satya-chat-dc` DataChannel for a remote participant.
 pub struct PeerEntry {
@@ -56,13 +71,17 @@ pub struct SatyaWasmState {
     pub rms_sum: f32,
     /// Number of WebAudio RMS energy samples collected during the current window.
     pub rms_samples: u32,
+    /// Active browser `AudioContext` driving the `250ms` WebAudio RMS prosody sampler.
+    pub prosody_audio_ctx: Option<AudioContext>,
+    /// Active `window.setInterval` handle (`i32`) for the `250ms` prosody sampler.
+    pub prosody_interval_id: Option<i32>,
     /// Up/Down arrow history buffer for the Session Chat input box (`#chat-input`).
     pub chat_history: crate::chat_cmd::ChatInputHistory,
     /// Selected private recipient `user_id`s in the vertical chat user list (empty = `BROADCAST` selected).
     pub selected_recipients: Vec<String>,
     /// Currently selected mutually exclusive [`ChannelContext`] toggle in the chat input bar.
     pub active_channel_context: ChannelContext,
-    /// Currently active tab slug in the Left Tabbed Notebook (`"maps"`, `"dice"`, `"model"`, `"character"`, `"combat"`, `"iggy"`).
+    /// Currently active tab slug in the 10-tab Left Tabletop Notebook (`"maps"`, `"dice"`, `"model"`, `"character"`, `"wizard"`, `"npcs"`, `"combat"`, `"rules"`, `"docs"`, `"iggy"`).
     pub active_notebook_tab: String,
     /// Whether the Web Cams pane (`#webrtc-card`) is currently detached as a floating frame.
     pub webcam_floating: bool,
@@ -125,6 +144,8 @@ impl Default for SatyaWasmState {
             rms_peak: 0.0,
             rms_sum: 0.0,
             rms_samples: 0,
+            prosody_audio_ctx: None,
+            prosody_interval_id: None,
             chat_history: crate::chat_cmd::ChatInputHistory::new(),
             selected_recipients: Vec::new(),
             active_channel_context: ChannelContext::InCharacter,

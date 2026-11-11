@@ -6,6 +6,8 @@
 //! all re-exported here for flat access.
 
 pub use crate::wasm_client::dice_3d_wgpu::*;
+
+use crate::wasm_client::wgpu_shared::{cross3, dot3, mul_mat4_cols, normalize3};
 use bytemuck::{Pod, Zeroable};
 use satya_schema::WgpuDiceSpec;
 
@@ -20,25 +22,18 @@ pub const ATLAS_WIDTH: u32 = ATLAS_CELL_SIZE * ATLAS_COLS;
 /// Total height in pixels of the procedural numeral texture atlas (`512`).
 pub const ATLAS_HEIGHT: u32 = ATLAS_CELL_SIZE * ATLAS_ROWS;
 
-/// Supported polyhedral RPG die shapes.
+/// Supported polyhedral RPG die shapes (`d4`, `d6`, `d8`, `d10`, `d12`, `d20`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DieKind {
-    /// 4-sided regular tetrahedron (`1..=4`).
     D4,
-    /// 6-sided regular hexahedron / cube (`1..=6`).
     D6,
-    /// 8-sided regular octahedron (`1..=8`).
     D8,
-    /// 10-sided pentagonal trapezohedron (`1..=10`).
     D10,
-    /// 12-sided regular dodecahedron (`1..=12`).
     D12,
-    /// 20-sided regular icosahedron (`1..=20`), primary die for Satya `2d20` cascades.
     D20,
 }
 
 impl DieKind {
-    /// Returns the number of faces on this polyhedral die.
     pub const fn sides(self) -> i32 {
         match self {
             Self::D4 => 4,
@@ -50,7 +45,6 @@ impl DieKind {
         }
     }
 
-    /// Maps an arbitrary side count (`4, 6, 8, 10, 12, 20`) to the closest [`DieKind`].
     pub const fn from_sides(sides: i32) -> Self {
         match sides {
             4 => Self::D4,
@@ -62,7 +56,6 @@ impl DieKind {
         }
     }
 
-    /// Short label for UI telemetry pills (`"d4"`, `"d6"`, `"d8"`, `"d10"`, `"d12"`, `"d20"`).
     pub const fn label(self) -> &'static str {
         match self {
             Self::D4 => "d4",
@@ -75,43 +68,32 @@ impl DieKind {
     }
 }
 
-/// GPU vertex structure for a polyhedral die facet triangle.
+/// GPU vertex structure for a polyhedral die facet triangle (`44` bytes).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
 pub struct DieVertex {
-    /// 3D model-space vertex position.
     pub position: [f32; 3],
-    /// Outward unit normal vector of the facet.
     pub normal: [f32; 3],
-    /// Atlas UV coordinates mapping the face's numeral (`[0.0..1.0, 0.0..1.0]`).
     pub uv: [f32; 2],
-    /// Barycentric/edge coordinates (`x`: distance to polygon edge in `[0, 1]`, `y`: face index, `z`: reserved).
+    /// `x`: distance to polygon edge in `[0, 1]`, `y`: face index, `z`: reserved.
     pub edge_factors: [f32; 3],
 }
 
 /// CPU-side procedural mesh for a polyhedral die, including face normals for outcome alignment.
 #[derive(Debug, Clone)]
 pub struct PolyhedralMesh {
-    /// Die shape represented by this mesh.
     pub kind: DieKind,
-    /// Interleaved triangle vertices (`3` per triangle) ready for upload to a `wgpu::Buffer`.
     pub vertices: Vec<DieVertex>,
-    /// Outward unit normal vector for each numbered face (`index 0` = face `1`, ..., `index N-1` = face `N`).
     pub face_normals: Vec<[f32; 3]>,
 }
 
 /// User-customizable color, ink, and translucency settings for the 3D WebGPU dice renderer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DiceMaterialConfig {
-    /// Hex color string (`"#RRGGBB"`) for the translucent or opaque die body.
     pub base_color_hex: String,
-    /// Linear/sRGB `[r, g, b]` (`0.0..=1.0`) for the die body.
     pub base_rgb: [f32; 3],
-    /// Hex color string (`"#RRGGBB"`) for the engraved face numerals.
     pub ink_color_hex: String,
-    /// Linear/sRGB `[r, g, b]` (`0.0..=1.0`) for the engraved face numerals.
     pub ink_rgb: [f32; 3],
-    /// Alpha opacity (`0.08` glass translucent to `1.0` solid opaque).
     pub opacity: f32,
 }
 
@@ -191,14 +173,9 @@ pub fn parse_dice_notation_kind(notation: &str, outcome_count: usize) -> (DieKin
         };
         (DieKind::from_sides(sides), final_count)
     } else {
-        let final_count = outcome_count.clamp(1, 24);
-        (DieKind::D20, final_count)
+        (DieKind::D20, outcome_count.clamp(1, 24))
     }
 }
-
-// ============================================================================
-// Pure-Rust 3D Vector & Matrix Math Helpers
-// ============================================================================
 
 #[inline]
 pub(crate) fn vec3_add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
@@ -217,31 +194,22 @@ pub(crate) fn vec3_scale(v: [f32; 3], s: f32) -> [f32; 3] {
 
 #[inline]
 pub(crate) fn vec3_dot(a: [f32; 3], b: [f32; 3]) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    dot3(a, b)
 }
 
 #[inline]
 pub(crate) fn vec3_cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
+    cross3(a, b)
 }
 
 #[inline]
 pub(crate) fn vec3_len(v: [f32; 3]) -> f32 {
-    vec3_dot(v, v).sqrt()
+    dot3(v, v).sqrt()
 }
 
 #[inline]
 pub(crate) fn vec3_normalize(v: [f32; 3]) -> [f32; 3] {
-    let l = vec3_len(v);
-    if l > 1e-6 {
-        [v[0] / l, v[1] / l, v[2] / l]
-    } else {
-        [0.0, 1.0, 0.0]
-    }
+    normalize3(v)
 }
 
 /// Returns the UV bounding rectangle `(u0, v0, u1, v1)` in the `5x4` numeral atlas for `face_number` (`1..=20`).
@@ -283,7 +251,6 @@ fn append_polygon_face(
     }
     face_normals_out.push(normal);
 
-    // Construct an orthonormal tangent frame (tangent_u, tangent_v) in the face plane
     let up_ref = if normal[1].abs() < 0.92 {
         [0.0, 1.0, 0.0]
     } else {
@@ -294,17 +261,12 @@ fn append_polygon_face(
 
     let mut max_r = 1e-4_f32;
     for &p in poly {
-        let r = vec3_len(vec3_sub(p, centroid));
-        if r > max_r {
-            max_r = r;
-        }
+        max_r = max_r.max(vec3_len(vec3_sub(p, centroid)));
     }
 
     let (u0, v0, u1, v1) = atlas_uv_bounds(face_number);
-    let u_mid = 0.5 * (u0 + u1);
-    let v_mid = 0.5 * (v0 + v1);
-    let u_half = 0.5 * (u1 - u0) * uv_radius_scale;
-    let v_half = 0.5 * (v1 - v0) * uv_radius_scale;
+    let (u_mid, v_mid) = (0.5 * (u0 + u1), 0.5 * (v0 + v1));
+    let (u_half, v_half) = (0.5 * (u1 - u0) * uv_radius_scale, 0.5 * (v1 - v0) * uv_radius_scale);
 
     let project_uv = |p: [f32; 3]| -> [f32; 2] {
         let rel = vec3_sub(p, centroid);
@@ -320,9 +282,7 @@ fn append_polygon_face(
     // and 0.0 along every outer polygon edge (giving uniform chamfer bevels on triangles, quads, and pentagons).
     for i in 0..n_verts {
         let next = (i + 1) % n_verts;
-        let mut p_a = poly[i];
-        let mut p_b = poly[next];
-        // Ensure counter-clockwise winding around outward normal
+        let (mut p_a, mut p_b) = (poly[i], poly[next]);
         let tri_n = vec3_cross(vec3_sub(p_a, centroid), vec3_sub(p_b, centroid));
         if vec3_dot(tri_n, normal) < 0.0 {
             std::mem::swap(&mut p_a, &mut p_b);
@@ -357,15 +317,12 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
         DieKind::D4 => {
             let s = 1.0 / 3.0_f32.sqrt();
             let v = [[s, s, s], [s, -s, -s], [-s, s, -s], [-s, -s, s]];
-            let faces = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
-            for (idx, f) in faces.iter().enumerate() {
-                let poly = [v[f[0]], v[f[1]], v[f[2]]];
-                append_polygon_face(&mut vertices, &mut face_normals, &poly, idx + 1, 0.82);
+            for (idx, f) in [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]].iter().enumerate() {
+                append_polygon_face(&mut vertices, &mut face_normals, &[v[f[0]], v[f[1]], v[f[2]]], idx + 1, 0.82);
             }
         }
         DieKind::D6 => {
             let h = 0.68_f32;
-            // Opposite faces sum to 7: (1: +Y, 6: -Y, 2: +Z, 5: -Z, 3: +X, 4: -X)
             let faces: [([[f32; 3]; 4], usize); 6] = [
                 ([[-h, h, h], [h, h, h], [h, h, -h], [-h, h, -h]], 1),
                 ([[-h, -h, h], [h, -h, h], [h, h, h], [-h, h, h]], 2),
@@ -380,32 +337,19 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
         }
         DieKind::D8 => {
             let r = 1.05_f32;
-            let top = [0.0, r, 0.0];
-            let bot = [0.0, -r, 0.0];
-            let px = [r, 0.0, 0.0];
-            let nx = [-r, 0.0, 0.0];
-            let pz = [0.0, 0.0, r];
-            let nz = [0.0, 0.0, -r];
+            let (top, bot) = ([0.0, r, 0.0], [0.0, -r, 0.0]);
+            let (px, nx, pz, nz) = ([r, 0.0, 0.0], [-r, 0.0, 0.0], [0.0, 0.0, r], [0.0, 0.0, -r]);
             let faces = [
-                [top, pz, px],
-                [top, px, nz],
-                [top, nz, nx],
-                [top, nx, pz],
-                [bot, px, pz],
-                [bot, nz, px],
-                [bot, nx, nz],
-                [bot, pz, nx],
+                [top, pz, px], [top, px, nz], [top, nz, nx], [top, nx, pz],
+                [bot, px, pz], [bot, nz, px], [bot, nx, nz], [bot, pz, nx],
             ];
             for (idx, poly) in faces.iter().enumerate() {
                 append_polygon_face(&mut vertices, &mut face_normals, poly, idx + 1, 0.84);
             }
         }
         DieKind::D10 => {
-            // Pentagonal trapezohedron: 2 apices + 2 staggered rings of 5 vertices
-            let apex_top = [0.0, 1.05_f32, 0.0];
-            let apex_bot = [0.0, -1.05_f32, 0.0];
-            let h_ring = 0.19_f32;
-            let r_ring = 0.96_f32;
+            let (apex_top, apex_bot) = ([0.0, 1.05_f32, 0.0], [0.0, -1.05_f32, 0.0]);
+            let (h_ring, r_ring) = (0.19_f32, 0.96_f32);
             let mut upper = [[0.0_f32; 3]; 5];
             let mut lower = [[0.0_f32; 3]; 5];
             for i in 0..5 {
@@ -416,17 +360,13 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
             }
             for i in 0..5 {
                 let next = (i + 1) % 5;
-                let kite_top = [apex_top, upper[i], lower[i], upper[next]];
-                append_polygon_face(&mut vertices, &mut face_normals, &kite_top, i * 2 + 1, 0.82);
-                let kite_bot = [apex_bot, lower[i], upper[next], lower[next]];
-                append_polygon_face(&mut vertices, &mut face_normals, &kite_bot, i * 2 + 2, 0.82);
+                append_polygon_face(&mut vertices, &mut face_normals, &[apex_top, upper[i], lower[i], upper[next]], i * 2 + 1, 0.82);
+                append_polygon_face(&mut vertices, &mut face_normals, &[apex_bot, lower[i], upper[next], lower[next]], i * 2 + 2, 0.82);
             }
         }
         DieKind::D12 => {
-            // Regular dodecahedron constructed as the dual of the regular icosahedron
             let ico = raw_icosahedron_triangles();
             let ico_verts = raw_icosahedron_vertices();
-            // Each vertex of the icosahedron corresponds to a pentagonal face of the dodecahedron
             for (v_idx, &v_dir) in ico_verts.iter().enumerate() {
                 let mut incident_centers = Vec::with_capacity(5);
                 for tri in &ico {
@@ -438,37 +378,22 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
                         incident_centers.push(vec3_scale(c, 1.02));
                     }
                 }
-                // Sort the 5 centers counter-clockwise around v_dir
                 let n = vec3_normalize(v_dir);
-                let up_ref = if n[1].abs() < 0.9 {
-                    [0.0, 1.0, 0.0]
-                } else {
-                    [1.0, 0.0, 0.0]
-                };
+                let up_ref = if n[1].abs() < 0.9 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
                 let tu = vec3_normalize(vec3_cross(up_ref, n));
                 let tv = vec3_normalize(vec3_cross(n, tu));
                 incident_centers.sort_by(|a, b| {
                     let ang_a = vec3_dot(*a, tv).atan2(vec3_dot(*a, tu));
                     let ang_b = vec3_dot(*b, tv).atan2(vec3_dot(*b, tu));
-                    ang_a
-                        .partial_cmp(&ang_b)
-                        .unwrap_or(std::cmp::Ordering::Equal)
+                    ang_a.partial_cmp(&ang_b).unwrap_or(std::cmp::Ordering::Equal)
                 });
-                append_polygon_face(
-                    &mut vertices,
-                    &mut face_normals,
-                    &incident_centers,
-                    v_idx + 1,
-                    0.88,
-                );
+                append_polygon_face(&mut vertices, &mut face_normals, &incident_centers, v_idx + 1, 0.88);
             }
         }
         DieKind::D20 => {
             let v = raw_icosahedron_vertices();
-            let tris = raw_icosahedron_triangles();
-            for (idx, tri) in tris.iter().enumerate() {
-                let poly = [v[tri[0]], v[tri[1]], v[tri[2]]];
-                append_polygon_face(&mut vertices, &mut face_normals, &poly, idx + 1, 0.85);
+            for (idx, tri) in raw_icosahedron_triangles().iter().enumerate() {
+                append_polygon_face(&mut vertices, &mut face_normals, &[v[tri[0]], v[tri[1]], v[tri[2]]], idx + 1, 0.85);
             }
         }
     }
@@ -483,18 +408,9 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
 fn raw_icosahedron_vertices() -> [[f32; 3]; 12] {
     let phi = 0.5 * (1.0 + 5.0_f32.sqrt());
     let raw = [
-        [-1.0, phi, 0.0],
-        [1.0, phi, 0.0],
-        [-1.0, -phi, 0.0],
-        [1.0, -phi, 0.0],
-        [0.0, -1.0, phi],
-        [0.0, 1.0, phi],
-        [0.0, -1.0, -phi],
-        [0.0, 1.0, -phi],
-        [phi, 0.0, -1.0],
-        [phi, 0.0, 1.0],
-        [-phi, 0.0, -1.0],
-        [-phi, 0.0, 1.0],
+        [-1.0, phi, 0.0], [1.0, phi, 0.0], [-1.0, -phi, 0.0], [1.0, -phi, 0.0],
+        [0.0, -1.0, phi], [0.0, 1.0, phi], [0.0, -1.0, -phi], [0.0, 1.0, -phi],
+        [phi, 0.0, -1.0], [phi, 0.0, 1.0], [-phi, 0.0, -1.0], [-phi, 0.0, 1.0],
     ];
     let mut out = [[0.0_f32; 3]; 12];
     for (i, r) in raw.iter().enumerate() {
@@ -505,26 +421,10 @@ fn raw_icosahedron_vertices() -> [[f32; 3]; 12] {
 
 fn raw_icosahedron_triangles() -> [[usize; 3]; 20] {
     [
-        [0, 11, 5],
-        [0, 5, 1],
-        [0, 1, 7],
-        [0, 7, 10],
-        [0, 10, 11],
-        [1, 5, 9],
-        [5, 11, 4],
-        [11, 10, 2],
-        [10, 7, 6],
-        [7, 1, 8],
-        [3, 9, 4],
-        [3, 4, 2],
-        [3, 2, 6],
-        [3, 6, 8],
-        [3, 8, 9],
-        [4, 9, 5],
-        [2, 4, 11],
-        [6, 2, 10],
-        [8, 6, 7],
-        [9, 8, 1],
+        [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
+        [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+        [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+        [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
     ]
 }
 
@@ -534,56 +434,38 @@ fn raw_icosahedron_triangles() -> [[usize; 3]; 20] {
 
 /// Generates an anti-aliased RGBA8 texture (`ATLAS_WIDTH x ATLAS_HEIGHT`) containing crisp vector
 /// numerals `1..=20` across a `5x4` grid of `128x128` cells.
-///
-/// The alpha channel (`a`) encodes the numeral stroke coverage (`0..=255`) so the WGSL shader can
-/// tint the numerals dynamically using any user-selected `ink_rgb` color without regenerating the texture.
 pub fn generate_dice_numeral_atlas_rgba8() -> Vec<u8> {
     let mut pixels = vec![0_u8; (ATLAS_WIDTH * ATLAS_HEIGHT * 4) as usize];
 
     for face_num in 1..=20_u32 {
         let cell_idx = face_num - 1;
-        let col = cell_idx % ATLAS_COLS;
-        let row = cell_idx / ATLAS_COLS;
-        let base_x = col * ATLAS_CELL_SIZE;
-        let base_y = row * ATLAS_CELL_SIZE;
-
-        let digits: Vec<u8> = if face_num >= 10 {
-            vec![(face_num / 10) as u8, (face_num % 10) as u8]
-        } else {
-            vec![face_num as u8]
-        };
+        let base_x = (cell_idx % ATLAS_COLS) * ATLAS_CELL_SIZE;
+        let base_y = (cell_idx / ATLAS_COLS) * ATLAS_CELL_SIZE;
         let needs_underline = face_num == 6 || face_num == 9;
 
         for py in 0..ATLAS_CELL_SIZE {
             for px in 0..ATLAS_CELL_SIZE {
-                // Normalized cell coordinates in [-1.0, 1.0]
                 let nx = ((px as f32 + 0.5) / (ATLAS_CELL_SIZE as f32)) * 2.0 - 1.0;
                 let ny = ((py as f32 + 0.5) / (ATLAS_CELL_SIZE as f32)) * 2.0 - 1.0;
 
-                let mut min_dist = 10.0_f32;
-                if digits.len() == 1 {
-                    min_dist = min_dist.min(digit_sdf(digits[0], nx / 0.20, ny / 0.23));
+                let mut min_dist = if face_num < 10 {
+                    digit_sdf(face_num as u8, nx / 0.20, ny / 0.23)
                 } else {
-                    let d0 = digit_sdf(digits[0], (nx + 0.135) / 0.15, ny / 0.21);
-                    let d1 = digit_sdf(digits[1], (nx - 0.135) / 0.15, ny / 0.21);
-                    min_dist = min_dist.min(d0).min(d1);
-                }
+                    let d0 = digit_sdf((face_num / 10) as u8, (nx + 0.135) / 0.15, ny / 0.21);
+                    let d1 = digit_sdf((face_num % 10) as u8, (nx - 0.135) / 0.15, ny / 0.21);
+                    d0.min(d1)
+                };
 
                 if needs_underline {
-                    let ul = segment_sdf(nx, ny, -0.12, 0.27, 0.12, 0.27) - 0.025;
-                    min_dist = min_dist.min(ul);
+                    min_dist = min_dist.min(segment_sdf(nx, ny, -0.12, 0.27, 0.12, 0.27) - 0.025);
                 }
 
-                // Smooth anti-aliased stroke coverage
                 let edge_softness = 0.028_f32;
                 let alpha_f = ((edge_softness - min_dist) / (2.0 * edge_softness)).clamp(0.0, 1.0);
                 if alpha_f > 0.0 {
                     let a = (alpha_f * 255.0).round() as u8;
                     let idx = (((base_y + py) * ATLAS_WIDTH + (base_x + px)) * 4) as usize;
-                    pixels[idx] = 255;
-                    pixels[idx + 1] = 255;
-                    pixels[idx + 2] = 255;
-                    pixels[idx + 3] = a;
+                    pixels[idx..idx + 4].copy_from_slice(&[255, 255, 255, a]);
                 }
             }
         }
@@ -593,111 +475,52 @@ pub fn generate_dice_numeral_atlas_rgba8() -> Vec<u8> {
 }
 
 fn segment_sdf(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
-    let pax = px - ax;
-    let pay = py - ay;
-    let bax = bx - ax;
-    let bay = by - ay;
+    let (pax, pay) = (px - ax, py - ay);
+    let (bax, bay) = (bx - ax, by - ay);
     let h = ((pax * bax + pay * bay) / (bax * bax + bay * bay).max(1e-6)).clamp(0.0, 1.0);
-    let dx = pax - bax * h;
-    let dy = pay - bay * h;
+    let (dx, dy) = (pax - bax * h, pay - bay * h);
     (dx * dx + dy * dy).sqrt()
 }
 
-/// Evaluates the signed distance to crisp vector strokes for a digit `0..=9` in local `[-1, 1]` space.
 fn digit_sdf(digit: u8, x: f32, y: f32) -> f32 {
-    let stroke_r = 0.125_f32;
-    // Standard 7-segment + diagonal coordinates in [-0.55..0.55, -0.75..0.75]
-    let l = -0.50_f32;
-    let r = 0.50_f32;
-    let t = -0.72_f32;
-    let m = 0.00_f32;
-    let b = 0.72_f32;
-
+    let (l, r, t, m, b) = (-0.50_f32, 0.50_f32, -0.72_f32, 0.00_f32, 0.72_f32);
     let segs: &[([f32; 2], [f32; 2])] = match digit {
-        0 => &[
-            ([l, t], [r, t]),
-            ([r, t], [r, b]),
-            ([r, b], [l, b]),
-            ([l, b], [l, t]),
-        ],
-        1 => &[
-            ([-0.22, -0.42], [0.05, t]),
-            ([0.05, t], [0.05, b]),
-            ([-0.30, b], [0.38, b]),
-        ],
-        2 => &[
-            ([l, t], [r, t]),
-            ([r, t], [r, m]),
-            ([r, m], [l, m]),
-            ([l, m], [l, b]),
-            ([l, b], [r, b]),
-        ],
-        3 => &[
-            ([l, t], [r, t]),
-            ([r, t], [r, b]),
-            ([l, m], [r, m]),
-            ([l, b], [r, b]),
-        ],
+        0 => &[([l, t], [r, t]), ([r, t], [r, b]), ([r, b], [l, b]), ([l, b], [l, t])],
+        1 => &[([-0.22, -0.42], [0.05, t]), ([0.05, t], [0.05, b]), ([-0.30, b], [0.38, b])],
+        2 => &[([l, t], [r, t]), ([r, t], [r, m]), ([r, m], [l, m]), ([l, m], [l, b]), ([l, b], [r, b])],
+        3 => &[([l, t], [r, t]), ([r, t], [r, b]), ([l, m], [r, m]), ([l, b], [r, b])],
         4 => &[([l, t], [l, m]), ([l, m], [r, m]), ([r, t], [r, b])],
-        5 => &[
-            ([r, t], [l, t]),
-            ([l, t], [l, m]),
-            ([l, m], [r, m]),
-            ([r, m], [r, b]),
-            ([r, b], [l, b]),
-        ],
-        6 => &[
-            ([r, t], [l, t]),
-            ([l, t], [l, b]),
-            ([l, b], [r, b]),
-            ([r, b], [r, m]),
-            ([r, m], [l, m]),
-        ],
+        5 => &[([r, t], [l, t]), ([l, t], [l, m]), ([l, m], [r, m]), ([r, m], [r, b]), ([r, b], [l, b])],
+        6 => &[([r, t], [l, t]), ([l, t], [l, b]), ([l, b], [r, b]), ([r, b], [r, m]), ([r, m], [l, m])],
         7 => &[([l, t], [r, t]), ([r, t], [-0.10, b])],
-        8 => &[
-            ([l, t], [r, t]),
-            ([r, t], [r, b]),
-            ([r, b], [l, b]),
-            ([l, b], [l, t]),
-            ([l, m], [r, m]),
-        ],
-        9 => &[
-            ([l, m], [l, t]),
-            ([l, t], [r, t]),
-            ([r, t], [r, b]),
-            ([r, b], [l, b]),
-            ([l, m], [r, m]),
-        ],
+        8 => &[([l, t], [r, t]), ([r, t], [r, b]), ([r, b], [l, b]), ([l, b], [l, t]), ([l, m], [r, m])],
+        9 => &[([l, m], [l, t]), ([l, t], [r, t]), ([r, t], [r, b]), ([r, b], [l, b]), ([l, m], [r, m])],
         _ => &[],
     };
-
     let mut d = 10.0_f32;
     for &(a, b_pt) in segs {
         d = d.min(segment_sdf(x, y, a[0], a[1], b_pt[0], b_pt[1]));
     }
-    d - stroke_r
+    d - 0.125
 }
 
 // ============================================================================
 // Deterministic 3D Physics Trajectory & Outcome Alignment
 // ============================================================================
 
-/// Deterministic SplitMix64 pseudo-random number generator used to synchronize 3D dice physics
-/// across all peers from [`WgpuDiceSpec::physics_seed`].
+/// Deterministic SplitMix64 PRNG synchronizing 3D dice physics across peers from `physics_seed`.
 #[derive(Debug, Clone)]
 pub struct DeterministicPrng {
     state: u64,
 }
 
 impl DeterministicPrng {
-    /// Creates a new [`DeterministicPrng`] from a signed 64-bit seed.
     pub fn new(seed: i64) -> Self {
         Self {
             state: (seed as u64) ^ 0x9E37_79B9_7F4A_7C15,
         }
     }
 
-    /// Generates the next pseudo-random `u64`.
     pub fn next_u64(&mut self) -> u64 {
         self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.state;
@@ -706,19 +529,16 @@ impl DeterministicPrng {
         z ^ (z >> 31)
     }
 
-    /// Generates a uniform `f32` in `[0.0, 1.0)`.
     pub fn next_f32(&mut self) -> f32 {
         ((self.next_u64() >> 40) as u32) as f32 / ((1_u32 << 24) as f32)
     }
 
-    /// Generates a uniform `f32` in `[min_val, max_val)`.
     pub fn range_f32(&mut self, min_val: f32, max_val: f32) -> f32 {
         min_val + (max_val - min_val) * self.next_f32()
     }
 }
 
-/// Computes a 3x3 column-major rotation matrix that rotates `from_unit` onto `[0.0, 1.0, 0.0]` (`+Y`),
-/// followed by an azimuthal yaw rotation `yaw_rad` around `+Y`.
+/// Computes a 3x3 column-major rotation matrix rotating `from_unit` onto `+Y` (`[0, 1, 0]`) plus yaw `yaw_rad`.
 pub fn rotation_aligning_normal_to_up(from_unit: [f32; 3], yaw_rad: f32) -> [[f32; 3]; 3] {
     let f = vec3_normalize(from_unit);
     let to = [0.0_f32, 1.0, 0.0];
@@ -727,16 +547,11 @@ pub fn rotation_aligning_normal_to_up(from_unit: [f32; 3], yaw_rad: f32) -> [[f3
     let align_mat = if dot > 0.9999 {
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
     } else if dot < -0.9999 {
-        // 180-degree flip around X axis
         [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]]
     } else {
-        let axis = vec3_normalize(vec3_cross(f, to));
-        let angle = dot.acos();
-        axis_angle_matrix(axis, angle)
+        axis_angle_matrix(vec3_normalize(vec3_cross(f, to)), dot.acos())
     };
-
-    let yaw_mat = axis_angle_matrix([0.0, 1.0, 0.0], yaw_rad);
-    mat3_mul(yaw_mat, align_mat)
+    mat3_mul(axis_angle_matrix([0.0, 1.0, 0.0], yaw_rad), align_mat)
 }
 
 /// Constructs a 3x3 column-major rotation matrix from a unit `axis` and `angle_rad`.
@@ -774,37 +589,25 @@ pub fn mat3_mul_vec3(m: [[f32; 3]; 3], v: [f32; 3]) -> [f32; 3] {
 /// Per-die deterministic trajectory state inside a [`DicePhysicsScene`].
 #[derive(Debug, Clone)]
 pub struct SimulatedDie {
-    /// Polyhedral shape of this die.
     pub kind: DieKind,
-    /// Authoritative face outcome (`1..=sides`) that lands facing `+Y` when settled.
     pub outcome: i32,
-    /// Starting 3D position at `t = 0.0`.
     pub start_pos: [f32; 3],
-    /// Final resting 3D position on the tray floor at `t = 1.0`.
     pub target_pos: [f32; 3],
-    /// Unit spin axis during the throw tumble.
     pub spin_axis: [f32; 3],
-    /// Total radians of tumble spin before settling.
     pub total_spin_rad: f32,
-    /// Final resting 3x3 rotation matrix that places `outcome`'s face normal pointing straight up (`+Y`).
     pub resting_rotation: [[f32; 3]; 3],
 }
 
 /// Active multi-die physics scene driven by a [`WgpuDiceSpec`].
 #[derive(Debug, Clone)]
 pub struct DicePhysicsScene {
-    /// Deterministic seed used to generate this roll.
     pub physics_seed: i64,
-    /// Original dice notation string.
     pub dice_notation: String,
-    /// Individual simulated dice in the tray.
     pub dice: Vec<SimulatedDie>,
-    /// Normalized animation progress `t` in `[0.0, 1.0]` (`1.0` = settled at final outcomes).
     pub progress: f32,
 }
 
 impl DicePhysicsScene {
-    /// Constructs a deterministic [`DicePhysicsScene`] from a [`WgpuDiceSpec`].
     pub fn from_spec(spec: &WgpuDiceSpec) -> Self {
         let outcomes = if spec.outcomes.is_empty() {
             vec![1, 20]
@@ -828,14 +631,14 @@ impl DicePhysicsScene {
         let mut dice = Vec::with_capacity(count);
         for i in 0..count {
             let outcome = outcomes.get(i).copied().unwrap_or(1).clamp(1, kind.sides());
-            let col = i % cols;
-            let row = i / cols;
+            let (col, row) = (i % cols, i / cols);
             let grid_x = ((col as f32) - ((cols.saturating_sub(1)) as f32) * 0.5) * spacing;
             let grid_z = ((row as f32) - ((rows.saturating_sub(1)) as f32) * 0.5) * spacing;
-            let jitter_x = rng.range_f32(-0.18, 0.18);
-            let jitter_z = rng.range_f32(-0.18, 0.18);
-
-            let target_pos = [grid_x + jitter_x, 0.0, grid_z + jitter_z];
+            let target_pos = [
+                grid_x + rng.range_f32(-0.18, 0.18),
+                0.0,
+                grid_z + rng.range_f32(-0.18, 0.18),
+            ];
             let start_pos = [
                 grid_x * 0.55 + rng.range_f32(-2.2, -1.1),
                 rng.range_f32(2.6, 3.8),
@@ -848,7 +651,6 @@ impl DicePhysicsScene {
             ]);
             let total_spin_rad = std::f32::consts::TAU * rng.range_f32(2.0, 4.0);
             let yaw = rng.range_f32(-0.35, 0.35);
-
             let face_normal = mesh
                 .face_normals
                 .get((outcome - 1) as usize)
@@ -884,12 +686,10 @@ impl DicePhysicsScene {
             );
         };
         let u = t.clamp(0.0, 1.0);
-        // Cubic ease-out for horizontal travel
         let ease = 1.0 - (1.0 - u).powi(3);
         let x = die.start_pos[0] + (die.target_pos[0] - die.start_pos[0]) * ease;
         let z = die.start_pos[2] + (die.target_pos[2] - die.start_pos[2]) * ease;
 
-        // Multi-bounce vertical trajectory damping to 0.0 at u = 1.0
         let y = if u < 0.45 {
             let local = u / 0.45;
             die.start_pos[1] * (1.0 - local * local)
@@ -904,16 +704,13 @@ impl DicePhysicsScene {
             0.08 * 4.0 * local * (1.0 - local)
         };
 
-        // Decaying tumble rotation that converges smoothly to `die.resting_rotation` at u = 1.0
         let remaining_spin = die.total_spin_rad * (1.0 - u).powi(2);
         let tumble = axis_angle_matrix(die.spin_axis, remaining_spin);
-        let rot = mat3_mul(tumble, die.resting_rotation);
-
-        ([x, y, z], rot)
+        ([x, y, z], mat3_mul(tumble, die.resting_rotation))
     }
 }
 
-/// Scene-wide uniform buffer uploaded once per frame (`144` bytes, 16-byte aligned).
+/// Scene-wide uniform buffer uploaded once per frame (`112` bytes, 16-byte aligned).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct SceneUniforms {
@@ -951,7 +748,6 @@ impl Default for DiceCameraConfig {
 }
 
 impl DiceCameraConfig {
-    /// Orbits the camera viewing angle by `(delta_yaw_deg, delta_pitch_deg)`.
     pub fn orbit_by(&mut self, delta_yaw_deg: f32, delta_pitch_deg: f32) {
         let mut y = (self.yaw_deg + delta_yaw_deg) % 360.0;
         if y > 180.0 {
@@ -963,7 +759,6 @@ impl DiceCameraConfig {
         self.pitch_deg = (self.pitch_deg + delta_pitch_deg).clamp(12.0, 88.0);
     }
 
-    /// Pans the camera look-at target across the XZ tray floor relative to `yaw_deg`.
     pub fn pan_by_screen_delta(&mut self, right_delta: f32, forward_delta: f32) {
         let (sin_y, cos_y) = self.yaw_deg.to_radians().sin_cos();
         let inv_zoom = 1.0 / self.zoom.clamp(0.40, 2.50);
@@ -973,12 +768,10 @@ impl DiceCameraConfig {
         self.pan[1] = (self.pan[1] + dz).clamp(-6.0, 6.0);
     }
 
-    /// Multiplies the camera zoom factor by `factor` and clamps within `[0.40, 2.50]`.
     pub fn zoom_by_factor(&mut self, factor: f32) {
         self.zoom = (self.zoom * factor).clamp(0.40, 2.50);
     }
 
-    /// Resets orbit angle, zoom, and pan to their default tabletop view.
     pub fn reset(&mut self) {
         *self = Self::default();
     }
@@ -1036,16 +829,7 @@ pub fn compute_view_proj_matrix_with_camera(
         [0.0, 0.0, z_far / (z_near - z_far), -1.0],
         [0.0, 0.0, (z_near * z_far) / (z_near - z_far), 0.0],
     ];
-    let mut out = [[0.0_f32; 4]; 4];
-    for c in 0..4 {
-        for r in 0..4 {
-            out[c][r] = proj[0][r] * view[c][0]
-                + proj[1][r] * view[c][1]
-                + proj[2][r] * view[c][2]
-                + proj[3][r] * view[c][3];
-        }
-    }
-    (out, eye)
+    (mul_mat4_cols(proj, view), eye)
 }
 
 /// Packs a 3D translation `pos` and 3x3 rotation `rot` into a 4x4 column-major model matrix.
@@ -1111,10 +895,8 @@ mod tests {
                         non_zero_alpha += 1;
                         let nx = ((px as f32 + 0.5) / (ATLAS_CELL_SIZE as f32)) * 2.0 - 1.0;
                         let ny = ((py as f32 + 0.5) / (ATLAS_CELL_SIZE as f32)) * 2.0 - 1.0;
-                        let r = (nx * nx + ny * ny).sqrt();
-                        if r > max_radius_from_center {
-                            max_radius_from_center = r;
-                        }
+                        max_radius_from_center =
+                            max_radius_from_center.max((nx * nx + ny * ny).sqrt());
                     }
                 }
             }
@@ -1144,23 +926,12 @@ mod tests {
         for i in 0..3 {
             let (pos_a, rot_a) = scene_a.sample_die_transform(i, 1.0);
             let (pos_b, rot_b) = scene_b.sample_die_transform(i, 1.0);
-            assert_eq!(
-                pos_a, pos_b,
-                "Same physics_seed must produce identical resting positions"
-            );
-            assert_eq!(
-                rot_a, rot_b,
-                "Same physics_seed must produce identical resting rotations"
-            );
-            assert!(
-                pos_a[1].abs() < 1e-5,
-                "Resting die must sit on the tray floor (y = 0)"
-            );
+            assert_eq!(pos_a, pos_b);
+            assert_eq!(rot_a, rot_b);
+            assert!(pos_a[1].abs() < 1e-5);
 
-            // Verify the outcome face normal points straight up (+Y = [0, 1, 0]) at t = 1.0
             let outcome = spec.outcomes[i] as usize;
-            let local_n = mesh.face_normals[outcome - 1];
-            let world_n = mat3_mul_vec3(rot_a, local_n);
+            let world_n = mat3_mul_vec3(rot_a, mesh.face_normals[outcome - 1]);
             assert!(
                 (world_n[1] - 1.0).abs() < 1e-4,
                 "Outcome {outcome} face normal must point straight up (+Y) at t=1.0, got {world_n:?}"
@@ -1171,11 +942,7 @@ mod tests {
     #[test]
     fn test_material_config_and_camera_orbit_pan_zoom() {
         let def = DiceMaterialConfig::default();
-        assert!(
-            def.opacity <= 0.45,
-            "Default dice material should be genuinely translucent (got {})",
-            def.opacity
-        );
+        assert!(def.opacity <= 0.45);
 
         let mat = DiceMaterialConfig::from_hex_and_opacity("#38BDF8", "#FDE047", 0.35);
         assert_eq!(mat.base_color_hex, "#38bdf8");
@@ -1190,10 +957,7 @@ mod tests {
         let (_, eye_default) = compute_view_proj_matrix_with_camera(2.0, 2, &cam);
         cam.zoom_by_factor(1.5);
         let (_, eye_zoomed) = compute_view_proj_matrix_with_camera(2.0, 2, &cam);
-        assert!(
-            vec3_len(eye_zoomed) < vec3_len(eye_default),
-            "Zooming in must bring the camera eye closer to the tray"
-        );
+        assert!(vec3_len(eye_zoomed) < vec3_len(eye_default));
 
         cam.orbit_by(90.0, 15.0);
         assert!((cam.yaw_deg - 90.0).abs() < 1e-4);

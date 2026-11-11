@@ -2977,6 +2977,7 @@ dependencies = [
  "bytemuck",
  "js-sys",
  "leptos",
+ "naga",
  "satya-engine",
  "satya-schema",
  "serde",

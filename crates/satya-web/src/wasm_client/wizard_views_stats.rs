@@ -43,6 +43,67 @@ pub fn format_single_char_roll_badge_html(idx: usize, roll: &SingleCharacteristi
     )
 }
 
+pub(crate) trait PoolCodeLabel: Copy {
+    fn code_label(self) -> &'static str;
+}
+
+impl PoolCodeLabel for CharacteristicCode {
+    fn code_label(self) -> &'static str {
+        self.as_str()
+    }
+}
+
+impl PoolCodeLabel for AptitudeCode {
+    fn code_label(self) -> &'static str {
+        self.as_str()
+    }
+}
+
+/// Formats `<option>` tags for assigning or swapping a rolled pool slot across Characteristics, Psyche, or Aptitudes.
+pub(crate) fn format_pool_slot_options_html<C: PoolCodeLabel>(
+    slots: &[Option<usize>],
+    cur_idx: usize,
+    codes: &[C],
+    none_label: &str,
+    pool_len: usize,
+    format_slot_prefix: impl Fn(usize) -> String,
+) -> String {
+    let mut opts = Vec::with_capacity(pool_len + 1);
+    let cur_selected = slots.get(cur_idx).copied().flatten();
+    let none_selected = if cur_selected.is_none() {
+        " selected"
+    } else {
+        ""
+    };
+    opts.push(format!(r#"<option value=""{none_selected}>{none_label}</option>"#));
+    let cur_code = codes.get(cur_idx).map_or("?", |c| c.code_label());
+    for slot_idx in 0..pool_len {
+        let sel_attr = if cur_selected == Some(slot_idx) {
+            " selected"
+        } else {
+            ""
+        };
+        let holder = slots
+            .iter()
+            .position(|&s| s == Some(slot_idx))
+            .and_then(|other_idx| {
+                if other_idx == cur_idx {
+                    Some(format!("Assigned to {cur_code}"))
+                } else {
+                    codes
+                        .get(other_idx)
+                        .map(|other_c| format!("Swap w/ {}", other_c.code_label()))
+                }
+            })
+            .unwrap_or_else(|| "Available".to_string());
+        let prefix = format_slot_prefix(slot_idx);
+        opts.push(format!(
+            r#"<option value="{slot_idx}"{sel_attr}>{prefix} ({holder})</option>"#
+        ));
+    }
+    opts.join("")
+}
+
 /// Formats a domain group card (`Physical`, `Mental`, `Sensory`, or `Social`) in Step 1 of the Wizard.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn format_group_pool_section_html(
@@ -124,37 +185,14 @@ pub(crate) fn format_group_pool_section_html(
             let select_id = format!("wiz-slot-{group_slug}-{}", code.as_str().to_ascii_lowercase());
 
             let options_html = if let Some(p) = pool {
-                let mut opts = Vec::with_capacity(p.kept_values.len() + 1);
-                let none_selected = if slots.get(c_idx).copied().flatten().is_none() {
-                    " selected"
-                } else {
-                    ""
-                };
-                opts.push(format!(
-                    r#"<option value=""{none_selected}>-- Choose Pool Slot --</option>"#
-                ));
-                for (slot_idx, &val) in p.kept_values.iter().enumerate() {
-                    let is_sel = slots.get(c_idx).copied().flatten() == Some(slot_idx);
-                    let sel_attr = if is_sel { " selected" } else { "" };
-                    let holder = slots
-                        .iter()
-                        .position(|&s| s == Some(slot_idx))
-                        .and_then(|other_idx| {
-                            if other_idx == c_idx {
-                                Some(format!("Assigned to {}", code.as_str()))
-                            } else {
-                                codes
-                                    .get(other_idx)
-                                    .map(|other_c| format!("Swap w/ {}", other_c.as_str()))
-                            }
-                        })
-                        .unwrap_or_else(|| "Available".to_string());
-                    opts.push(format!(
-                        r#"<option value="{slot_idx}"{sel_attr}>Slot #{}: Score {val} ({holder})</option>"#,
-                        slot_idx + 1
-                    ));
-                }
-                opts.join("")
+                format_pool_slot_options_html(
+                    slots,
+                    c_idx,
+                    codes,
+                    "-- Choose Pool Slot --",
+                    p.kept_values.len(),
+                    |slot_idx| format!("Slot #{}: Score {}", slot_idx + 1, p.kept_values[slot_idx]),
+                )
             } else {
                 format!(r#"<option value="" selected>Default (C = {cur_val}) — Roll Pool First</option>"#)
             };
@@ -367,46 +405,21 @@ pub(crate) fn format_psyche_step_html(st: &CharacterWizardState) -> String {
             let slot_id = format!("wiz-slot-psyche-{code_lower}");
 
             let slot_select_html = if let Some(ref pool) = st.psyche_pool {
-                let mut opts = Vec::with_capacity(pool.len() + 1);
-                let none_sel = if st.psyche_slots[p_idx].is_none() {
-                    " selected"
-                } else {
-                    ""
-                };
-                opts.push(format!(
-                    r#"<option value=""{none_sel}>-- Manual / Custom Score ({val}) --</option>"#
-                ));
-                for (slot_idx, r) in pool.iter().enumerate() {
-                    let is_sel = st.psyche_slots[p_idx] == Some(slot_idx);
-                    let sel_attr = if is_sel { " selected" } else { "" };
-                    let holder = st
-                        .psyche_slots
-                        .iter()
-                        .position(|&s| s == Some(slot_idx))
-                        .and_then(|other_idx| {
-                            if other_idx == p_idx {
-                                Some(format!("Assigned to {}", code.as_str()))
-                            } else {
-                                CharacteristicCode::PSYCHE_ALL
-                                    .get(other_idx)
-                                    .map(|c| format!("Swap w/ {}", c.as_str()))
-                            }
-                        })
-                        .unwrap_or_else(|| "Available".to_string());
-                    opts.push(format!(
-                        r#"<option value="{slot_idx}"{sel_attr}>Roll #{}: {} ({holder})</option>"#,
-                        slot_idx + 1,
-                        r.total
-                    ));
-                }
+                let opts_html = format_pool_slot_options_html(
+                    &st.psyche_slots,
+                    p_idx,
+                    &CharacteristicCode::PSYCHE_ALL,
+                    &format!("-- Manual / Custom Score ({val}) --"),
+                    pool.len(),
+                    |slot_idx| format!("Roll #{}: {}", slot_idx + 1, pool[slot_idx].total),
+                );
                 format!(
                     r#"<label for="{slot_id}">
                         <span>Assign from Rolled Psyche Pool</span>
                         <select id="{slot_id}" name="{slot_id}" onchange="window.satyaWizardAssignSlot('psyche', {p_idx})">
-                            {}
+                            {opts_html}
                         </select>
-                    </label>"#,
-                    opts.join("")
+                    </label>"#
                 )
             } else {
                 String::new()
@@ -584,38 +597,20 @@ pub(crate) fn format_aptitudes_step_html(st: &CharacterWizardState) -> String {
             );
 
             let options_html = if let Some(ref pool) = st.aptitude_pool {
-                let mut opts = Vec::with_capacity(pool.kept_values.len() + 1);
-                let none_sel = if st.aptitude_slots[a_idx].is_none() {
-                    " selected"
-                } else {
-                    ""
-                };
-                opts.push(format!(
-                    r#"<option value=""{none_sel}>-- Choose Aptitude Slot --</option>"#
-                ));
-                for (slot_idx, &v) in pool.kept_values.iter().enumerate() {
-                    let is_sel = st.aptitude_slots[a_idx] == Some(slot_idx);
-                    let sel_attr = if is_sel { " selected" } else { "" };
-                    let holder = st
-                        .aptitude_slots
-                        .iter()
-                        .position(|&s| s == Some(slot_idx))
-                        .and_then(|other_idx| {
-                            if other_idx == a_idx {
-                                Some(format!("Assigned to {}", code.as_str()))
-                            } else {
-                                AptitudeCode::ALL
-                                    .get(other_idx)
-                                    .map(|c| format!("Swap w/ {}", c.as_str()))
-                            }
-                        })
-                        .unwrap_or_else(|| "Available".to_string());
-                    opts.push(format!(
-                        r#"<option value="{slot_idx}"{sel_attr}>Slot #{}: Aptitude {v:+} ({holder})</option>"#,
-                        slot_idx + 1
-                    ));
-                }
-                opts.join("")
+                format_pool_slot_options_html(
+                    &st.aptitude_slots,
+                    a_idx,
+                    &AptitudeCode::ALL,
+                    "-- Choose Aptitude Slot --",
+                    pool.kept_values.len(),
+                    |slot_idx| {
+                        format!(
+                            "Slot #{}: Aptitude {:+}",
+                            slot_idx + 1,
+                            pool.kept_values[slot_idx]
+                        )
+                    },
+                )
             } else {
                 format!(r#"<option value="" selected>Baseline ({val:+}) — Roll Pool First</option>"#)
             };

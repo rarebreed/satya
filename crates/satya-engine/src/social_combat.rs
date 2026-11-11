@@ -240,6 +240,55 @@ pub enum SocialWoundKind {
     EgoWound,
 }
 
+impl SocialWoundKind {
+    pub const ALL: [Self; 4] = [
+        Self::RhetoricalStrain,
+        Self::Doubt,
+        Self::CognitiveDissonance,
+        Self::EgoWound,
+    ];
+
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::RhetoricalStrain => "STRAIN",
+            Self::Doubt => "DOUBT",
+            Self::CognitiveDissonance => "DISSONANCE",
+            Self::EgoWound => "EGO_WOUND",
+        }
+    }
+
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::RhetoricalStrain => "Rhetorical Strain (-1 CMP, +2 Δ_int)",
+            Self::Doubt => "Doubt Fracture (-1 Skill Pair N)",
+            Self::CognitiveDissonance => "Cognitive Dissonance (+4 Δ_int bleed)",
+            Self::EgoWound => "Ego Wound (-3 FOC / Provoked)",
+        }
+    }
+
+    #[must_use]
+    pub const fn delta_int(self) -> i32 {
+        match self {
+            Self::RhetoricalStrain | Self::EgoWound => 2,
+            Self::Doubt => 1,
+            Self::CognitiveDissonance => 4,
+        }
+    }
+
+    #[must_use]
+    pub fn from_code_str(code: &str) -> Option<Self> {
+        match code.trim().to_ascii_uppercase().as_str() {
+            "STRAIN" | "RHETORICAL_STRAIN" => Some(Self::RhetoricalStrain),
+            "DOUBT" => Some(Self::Doubt),
+            "DISSONANCE" | "COGNITIVE_DISSONANCE" => Some(Self::CognitiveDissonance),
+            "EGO_WOUND" => Some(Self::EgoWound),
+            _ => None,
+        }
+    }
+}
+
 /// Tracked psychological composure, Doubt fractures, and Cognitive Dissonance state of a character in Social Combat (`§4.3–§4.4`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SocialComposureState {

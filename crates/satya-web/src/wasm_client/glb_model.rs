@@ -6,6 +6,7 @@
 //! [`parse_glb_bytes`], exercising the exact same codepath used when importing external `.glb` files
 //! from Blender, Quaternius, Kenney, or KayKit.
 
+use crate::wasm_client::wgpu_shared::{cross3, normalize3};
 use bytemuck::{Pod, Zeroable};
 use serde_json::{Value, json};
 
@@ -30,36 +31,16 @@ impl HitZoneTag {
     #[must_use]
     pub fn from_name(name: &str) -> Self {
         let low = name.to_ascii_lowercase();
-        if low.contains("head")
-            || low.contains("helm")
-            || low.contains("visor")
-            || low.contains("dome")
-        {
+        let has = |keys: &[&str]| keys.iter().any(|k| low.contains(k));
+        if has(&["head", "helm", "visor", "dome"]) {
             Self::HeadOptics
-        } else if low.contains("pack") || low.contains("thrust") || low.contains("crane") {
+        } else if has(&["pack", "thrust", "crane"]) {
             Self::PackThrusters
-        } else if low.contains("arm")
-            || low.contains("hand")
-            || low.contains("weapon")
-            || low.contains("rifle")
-            || low.contains("gun")
-            || low.contains("valve")
-        {
+        } else if has(&["arm", "hand", "weapon", "rifle", "gun", "valve"]) {
             Self::ArmsWeapon
-        } else if low.contains("leg")
-            || low.contains("boot")
-            || low.contains("thigh")
-            || low.contains("shin")
-            || low.contains("foot")
-        {
+        } else if has(&["leg", "boot", "thigh", "shin", "foot"]) {
             Self::LegsBoots
-        } else if low.contains("torso")
-            || low.contains("chest")
-            || low.contains("pelvis")
-            || low.contains("body")
-            || low.contains("door")
-            || low.contains("plate")
-        {
+        } else if has(&["torso", "chest", "pelvis", "body", "door", "plate"]) {
             Self::TorsoCarapace
         } else {
             Self::BaseOrProp
@@ -124,24 +105,15 @@ impl LoadedGlbModel {
     }
 }
 
-fn mat4_identity() -> [f32; 16] {
-    [
-        1.0, 0.0, 0.0, 0.0, //
-        0.0, 1.0, 0.0, 0.0, //
-        0.0, 0.0, 1.0, 0.0, //
-        0.0, 0.0, 0.0, 1.0,
-    ]
-}
+const MAT4_IDENTITY: [f32; 16] = [
+    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+];
 
 fn mat4_mul(a: [f32; 16], b: [f32; 16]) -> [f32; 16] {
     let mut out = [0.0_f32; 16];
     for col in 0..4 {
         for row in 0..4 {
-            let mut sum = 0.0;
-            for k in 0..4 {
-                sum += a[k * 4 + row] * b[col * 4 + k];
-            }
-            out[col * 4 + row] = sum;
+            out[col * 4 + row] = (0..4).map(|k| a[k * 4 + row] * b[col * 4 + k]).sum();
         }
     }
     out
@@ -181,15 +153,6 @@ fn transform_point(m: &[f32; 16], p: [f32; 3]) -> [f32; 3] {
     ]
 }
 
-fn normalize3(v: [f32; 3]) -> [f32; 3] {
-    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-    if len > 1e-6 {
-        [v[0] / len, v[1] / len, v[2] / len]
-    } else {
-        [0.0, 1.0, 0.0]
-    }
-}
-
 fn transform_normal(m: &[f32; 16], n: [f32; 3]) -> [f32; 3] {
     normalize3([
         m[0] * n[0] + m[4] * n[1] + m[8] * n[2],
@@ -201,16 +164,12 @@ fn transform_normal(m: &[f32; 16], n: [f32; 3]) -> [f32; 3] {
 fn compute_face_normal(a: [f32; 3], b: [f32; 3], c: [f32; 3]) -> [f32; 3] {
     let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    normalize3([
-        u[1] * v[2] - u[2] * v[1],
-        u[2] * v[0] - u[0] * v[2],
-        u[0] * v[1] - u[1] * v[0],
-    ])
+    normalize3(cross3(u, v))
 }
 
 fn read_u32_le(bytes: &[u8], offset: usize) -> Option<u32> {
-    let slice = bytes.get(offset..offset + 4)?;
-    Some(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
+    let s = bytes.get(offset..offset + 4)?;
+    Some(u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
 }
 
 fn read_f32_le(bytes: &[u8], offset: usize) -> Option<f32> {
@@ -218,15 +177,15 @@ fn read_f32_le(bytes: &[u8], offset: usize) -> Option<f32> {
 }
 
 fn read_u16_le(bytes: &[u8], offset: usize) -> Option<u16> {
-    let slice = bytes.get(offset..offset + 2)?;
-    Some(u16::from_le_bytes([slice[0], slice[1]]))
+    let s = bytes.get(offset..offset + 2)?;
+    Some(u16::from_le_bytes([s[0], s[1]]))
 }
 
-fn read_accessor_vec3_f32(
+fn accessor_buffer_offset_and_stride(
     gltf: &Value,
-    bin: &[u8],
     acc_idx: usize,
-) -> Result<Vec<[f32; 3]>, String> {
+    min_stride: usize,
+) -> Result<(usize, u64, usize, usize), String> {
     let acc = gltf
         .get("accessors")
         .and_then(Value::as_array)
@@ -234,9 +193,6 @@ fn read_accessor_vec3_f32(
         .ok_or_else(|| format!("Missing accessor {acc_idx}"))?;
     let count = acc.get("count").and_then(Value::as_u64).unwrap_or(0) as usize;
     let comp_type = acc.get("componentType").and_then(Value::as_u64).unwrap_or(0);
-    if comp_type != 5126 {
-        return Err(format!("Unsupported VEC3 componentType {comp_type} (expected 5126 FLOAT)"));
-    }
     let bv_idx = acc
         .get("bufferView")
         .and_then(Value::as_u64)
@@ -251,9 +207,20 @@ fn read_accessor_vec3_f32(
     let stride = bv
         .get("byteStride")
         .and_then(Value::as_u64)
-        .unwrap_or(12)
-        .max(12) as usize;
+        .unwrap_or(min_stride as u64)
+        .max(min_stride as u64) as usize;
+    Ok((count, comp_type, base_offset, stride))
+}
 
+fn read_accessor_vec3_f32(
+    gltf: &Value,
+    bin: &[u8],
+    acc_idx: usize,
+) -> Result<Vec<[f32; 3]>, String> {
+    let (count, comp_type, base_offset, stride) = accessor_buffer_offset_and_stride(gltf, acc_idx, 12)?;
+    if comp_type != 5126 {
+        return Err(format!("Unsupported VEC3 componentType {comp_type} (expected 5126 FLOAT)"));
+    }
     let mut out = Vec::with_capacity(count);
     for i in 0..count {
         let off = base_offset + i * stride;
@@ -266,25 +233,7 @@ fn read_accessor_vec3_f32(
 }
 
 fn read_accessor_indices(gltf: &Value, bin: &[u8], acc_idx: usize) -> Result<Vec<u32>, String> {
-    let acc = gltf
-        .get("accessors")
-        .and_then(Value::as_array)
-        .and_then(|a| a.get(acc_idx))
-        .ok_or_else(|| format!("Missing index accessor {acc_idx}"))?;
-    let count = acc.get("count").and_then(Value::as_u64).unwrap_or(0) as usize;
-    let comp_type = acc.get("componentType").and_then(Value::as_u64).unwrap_or(0);
-    let bv_idx = acc
-        .get("bufferView")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| format!("Index accessor {acc_idx} missing bufferView"))? as usize;
-    let bv = gltf
-        .get("bufferViews")
-        .and_then(Value::as_array)
-        .and_then(|b| b.get(bv_idx))
-        .ok_or_else(|| format!("Missing index bufferView {bv_idx}"))?;
-    let base_offset = (bv.get("byteOffset").and_then(Value::as_u64).unwrap_or(0)
-        + acc.get("byteOffset").and_then(Value::as_u64).unwrap_or(0)) as usize;
-
+    let (count, comp_type, base_offset, _) = accessor_buffer_offset_and_stride(gltf, acc_idx, 1)?;
     let mut out = Vec::with_capacity(count);
     match comp_type {
         5121 => {
@@ -296,7 +245,7 @@ fn read_accessor_indices(gltf: &Value, bin: &[u8], acc_idx: usize) -> Result<Vec
             }
         }
         5123 => {
-            let stride = bv.get("byteStride").and_then(Value::as_u64).unwrap_or(2).max(2) as usize;
+            let (_, _, _, stride) = accessor_buffer_offset_and_stride(gltf, acc_idx, 2)?;
             for i in 0..count {
                 let v = read_u16_le(bin, base_offset + i * stride)
                     .ok_or_else(|| "Truncated u16 index buffer".to_string())?;
@@ -304,16 +253,14 @@ fn read_accessor_indices(gltf: &Value, bin: &[u8], acc_idx: usize) -> Result<Vec
             }
         }
         5125 => {
-            let stride = bv.get("byteStride").and_then(Value::as_u64).unwrap_or(4).max(4) as usize;
+            let (_, _, _, stride) = accessor_buffer_offset_and_stride(gltf, acc_idx, 4)?;
             for i in 0..count {
                 let v = read_u32_le(bin, base_offset + i * stride)
                     .ok_or_else(|| "Truncated u32 index buffer".to_string())?;
                 out.push(v);
             }
         }
-        other => {
-            return Err(format!("Unsupported glTF index componentType {other}"));
-        }
+        other => return Err(format!("Unsupported glTF index componentType {other}")),
     }
     Ok(out)
 }
@@ -328,31 +275,21 @@ fn node_local_matrix(node: &Value) -> [f32; 16] {
         }
         return m;
     }
-    let mut t = [0.0_f32; 3];
-    if let Some(arr) = node.get("translation").and_then(Value::as_array)
-        && arr.len() == 3
-    {
-        for i in 0..3 {
-            t[i] = arr[i].as_f64().unwrap_or(0.0) as f32;
+    let read_arr = |key: &str, def: [f32; 4], len: usize| -> [f32; 4] {
+        let mut out = def;
+        if let Some(arr) = node.get(key).and_then(Value::as_array)
+            && arr.len() == len
+        {
+            for i in 0..len {
+                out[i] = arr[i].as_f64().unwrap_or(f64::from(def[i])) as f32;
+            }
         }
-    }
-    let mut r = [0.0_f32, 0.0, 0.0, 1.0];
-    if let Some(arr) = node.get("rotation").and_then(Value::as_array)
-        && arr.len() == 4
-    {
-        for i in 0..4 {
-            r[i] = arr[i].as_f64().unwrap_or(0.0) as f32;
-        }
-    }
-    let mut s = [1.0_f32; 3];
-    if let Some(arr) = node.get("scale").and_then(Value::as_array)
-        && arr.len() == 3
-    {
-        for i in 0..3 {
-            s[i] = arr[i].as_f64().unwrap_or(1.0) as f32;
-        }
-    }
-    mat4_from_trs(t, r, s)
+        out
+    };
+    let t = read_arr("translation", [0.0; 4], 3);
+    let r = read_arr("rotation", [0.0, 0.0, 0.0, 1.0], 4);
+    let s = read_arr("scale", [1.0; 4], 3);
+    mat4_from_trs([t[0], t[1], t[2]], r, [s[0], s[1], s[2]])
 }
 
 /// Parses a spec-compliant glTF 2.0 Binary (`.glb`) file into GPU-ready triangles and submeshes.
@@ -360,8 +297,7 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
     if bytes.len() < 20 {
         return Err("File is too small to be a valid .glb binary".to_string());
     }
-    let magic = read_u32_le(bytes, 0).unwrap_or(0);
-    if magic != GLB_MAGIC {
+    if read_u32_le(bytes, 0).unwrap_or(0) != GLB_MAGIC {
         return Err("Invalid .glb header magic (expected 'glTF')".to_string());
     }
     let version = read_u32_le(bytes, 4).unwrap_or(0);
@@ -392,23 +328,10 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
     let gltf: Value =
         serde_json::from_slice(raw_json).map_err(|e| format!("Invalid glTF JSON chunk: {e}"))?;
 
-    let nodes = gltf
-        .get("nodes")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let meshes = gltf
-        .get("meshes")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let materials = gltf
-        .get("materials")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let nodes = gltf.get("nodes").and_then(Value::as_array).cloned().unwrap_or_default();
+    let meshes = gltf.get("meshes").and_then(Value::as_array).cloned().unwrap_or_default();
+    let materials = gltf.get("materials").and_then(Value::as_array).cloned().unwrap_or_default();
 
-    // Determine root nodes from active scene (or all unparented nodes)
     let root_indices: Vec<usize> = if let Some(scenes) = gltf.get("scenes").and_then(Value::as_array)
         && !scenes.is_empty()
     {
@@ -418,11 +341,7 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
             .or_else(|| scenes.first())
             .and_then(|s| s.get("nodes"))
             .and_then(Value::as_array)
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_u64().map(|u| u as usize))
-                    .collect()
-            })
+            .map(|arr| arr.iter().filter_map(|v| v.as_u64().map(|u| u as usize)).collect())
             .unwrap_or_default()
     } else {
         (0..nodes.len()).collect()
@@ -432,7 +351,7 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
     let mut stack: Vec<(usize, [f32; 16])> = root_indices
         .into_iter()
         .rev()
-        .map(|idx| (idx, mat4_identity()))
+        .map(|idx| (idx, MAT4_IDENTITY))
         .collect();
 
     while let Some((node_idx, parent_mat)) = stack.pop() {
@@ -449,16 +368,12 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
         if let Some(mesh_idx) = node.get("mesh").and_then(Value::as_u64)
             && let Some(mesh) = meshes.get(mesh_idx as usize)
         {
-            let mesh_name = mesh
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or(&node_name);
+            let mesh_name = mesh.get("name").and_then(Value::as_str).unwrap_or(&node_name);
             let combined_name = format!("{node_name}_{mesh_name}");
             if let Some(prims) = mesh.get("primitives").and_then(Value::as_array) {
                 for prim in prims {
-                    let mode = prim.get("mode").and_then(Value::as_u64).unwrap_or(4);
-                    if mode != 4 {
-                        continue; // Only TRIANGLES (mode 4)
+                    if prim.get("mode").and_then(Value::as_u64).unwrap_or(4) != 4 {
+                        continue;
                     }
                     let Some(pos_acc) = prim
                         .get("attributes")
@@ -471,15 +386,11 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                     if raw_pos.is_empty() {
                         continue;
                     }
-                    let raw_norm = if let Some(n_acc) = prim
+                    let raw_norm = prim
                         .get("attributes")
                         .and_then(|a| a.get("NORMAL"))
                         .and_then(Value::as_u64)
-                    {
-                        read_accessor_vec3_f32(&gltf, bin_slice, n_acc as usize).ok()
-                    } else {
-                        None
-                    };
+                        .and_then(|n_acc| read_accessor_vec3_f32(&gltf, bin_slice, n_acc as usize).ok());
                     let indices = if let Some(i_acc) = prim.get("indices").and_then(Value::as_u64) {
                         read_accessor_indices(&gltf, bin_slice, i_acc as usize)?
                     } else {
@@ -495,14 +406,9 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                     if let Some(mat_idx) = prim.get("material").and_then(Value::as_u64)
                         && let Some(mat) = materials.get(mat_idx as usize)
                     {
-                        mat_name = mat
-                            .get("name")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string();
-                        if mat_name.to_ascii_lowercase().contains("tint")
-                            || mat_name.to_ascii_lowercase().contains("primary")
-                        {
+                        mat_name = mat.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+                        let low_mat = mat_name.to_ascii_lowercase();
+                        if low_mat.contains("tint") || low_mat.contains("primary") {
                             tintable = true;
                         }
                         if let Some(pbr) = mat.get("pbrMetallicRoughness") {
@@ -527,20 +433,13 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                     let world_norm: Vec<[f32; 3]> = if let Some(rn) = raw_norm
                         && rn.len() == world_pos.len()
                     {
-                        rn.iter()
-                            .map(|&n| transform_normal(&world_mat, n))
-                            .collect()
+                        rn.iter().map(|&n| transform_normal(&world_mat, n)).collect()
                     } else {
                         let mut gen_nrms = vec![[0.0_f32, 1.0, 0.0]; world_pos.len()];
                         for &[raw0, raw1, raw2] in indices.as_chunks::<3>().0 {
                             let (i0, i1, i2) = (raw0 as usize, raw1 as usize, raw2 as usize);
-                            if i0 < world_pos.len() && i1 < world_pos.len() && i2 < world_pos.len()
-                            {
-                                let fnrm = compute_face_normal(
-                                    world_pos[i0],
-                                    world_pos[i1],
-                                    world_pos[i2],
-                                );
+                            if i0 < world_pos.len() && i1 < world_pos.len() && i2 < world_pos.len() {
+                                let fnrm = compute_face_normal(world_pos[i0], world_pos[i1], world_pos[i2]);
                                 gen_nrms[i0] = fnrm;
                                 gen_nrms[i1] = fnrm;
                                 gen_nrms[i2] = fnrm;
@@ -598,9 +497,7 @@ fn assemble_loaded_model(
     }
 
     if ground_and_center_xz && bmin[0].is_finite() {
-        let cx = 0.5 * (bmin[0] + bmax[0]);
-        let cz = 0.5 * (bmin[2] + bmax[2]);
-        let min_y = bmin[1];
+        let (cx, cz, min_y) = (0.5 * (bmin[0] + bmax[0]), 0.5 * (bmin[2] + bmax[2]), bmin[1]);
         for sm in &mut submeshes {
             for p in &mut sm.positions {
                 p[0] -= cx;
@@ -619,16 +516,19 @@ fn assemble_loaded_model(
     let bary = [[1.0_f32, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
     let mut vertices = Vec::new();
     for sm in &submeshes {
-        let tint_flag = if sm.tintable { 1.0 } else { 0.0 };
-        let col = [sm.base_color[0], sm.base_color[1], sm.base_color[2], tint_flag];
+        let col = [
+            sm.base_color[0],
+            sm.base_color[1],
+            sm.base_color[2],
+            if sm.tintable { 1.0 } else { 0.0 },
+        ];
         let zf = sm.zone.as_f32();
         for &[raw0, raw1, raw2] in sm.indices.as_chunks::<3>().0 {
             let (i0, i1, i2) = (raw0 as usize, raw1 as usize, raw2 as usize);
             if i0 >= sm.positions.len() || i1 >= sm.positions.len() || i2 >= sm.positions.len() {
                 continue;
             }
-            let idxs = [i0, i1, i2];
-            for (corner, &vi) in idxs.iter().enumerate() {
+            for (corner, &vi) in [i0, i1, i2].iter().enumerate() {
                 let b = bary[corner];
                 vertices.push(GlbVertex {
                     position: sm.positions[vi],
@@ -667,13 +567,9 @@ pub fn encode_glb_bytes(submeshes: &[GlbSubmesh]) -> Vec<u8> {
         if sm.positions.is_empty() || sm.indices.is_empty() {
             continue;
         }
-        let mat_name = if sm.tintable {
-            format!("{}_primary_tint", sm.name)
-        } else {
-            format!("{}_mat", sm.name)
-        };
+        let mat_suffix = if sm.tintable { "primary_tint" } else { "mat" };
         materials.push(json!({
-            "name": mat_name,
+            "name": format!("{}_{mat_suffix}", sm.name),
             "pbrMetallicRoughness": {
                 "baseColorFactor": sm.base_color,
                 "metallicFactor": sm.metallic,
@@ -682,7 +578,6 @@ pub fn encode_glb_bytes(submeshes: &[GlbSubmesh]) -> Vec<u8> {
         }));
         let mat_idx = materials.len() - 1;
 
-        // 1. Positions VEC3
         while !bin.len().is_multiple_of(4) {
             bin.push(0);
         }
@@ -696,86 +591,44 @@ pub fn encode_glb_bytes(submeshes: &[GlbSubmesh]) -> Vec<u8> {
                 bin.extend_from_slice(&p[k].to_le_bytes());
             }
         }
-        let pos_len = bin.len() - pos_off;
         let pos_bv = buffer_views.len();
-        buffer_views.push(json!({
-            "buffer": 0,
-            "byteOffset": pos_off,
-            "byteLength": pos_len,
-            "target": 34962
-        }));
+        buffer_views.push(json!({ "buffer": 0, "byteOffset": pos_off, "byteLength": bin.len() - pos_off, "target": 34962 }));
         let pos_acc = accessors.len();
         accessors.push(json!({
-            "bufferView": pos_bv,
-            "componentType": 5126,
-            "count": sm.positions.len(),
-            "type": "VEC3",
-            "min": pmin,
-            "max": pmax
+            "bufferView": pos_bv, "componentType": 5126, "count": sm.positions.len(),
+            "type": "VEC3", "min": pmin, "max": pmax
         }));
 
-        // 2. Normals VEC3
         let norm_off = bin.len();
         for n in &sm.normals {
             for &comp in n {
                 bin.extend_from_slice(&comp.to_le_bytes());
             }
         }
-        let norm_len = bin.len() - norm_off;
         let norm_bv = buffer_views.len();
-        buffer_views.push(json!({
-            "buffer": 0,
-            "byteOffset": norm_off,
-            "byteLength": norm_len,
-            "target": 34962
-        }));
+        buffer_views.push(json!({ "buffer": 0, "byteOffset": norm_off, "byteLength": bin.len() - norm_off, "target": 34962 }));
         let norm_acc = accessors.len();
-        accessors.push(json!({
-            "bufferView": norm_bv,
-            "componentType": 5126,
-            "count": sm.normals.len(),
-            "type": "VEC3"
-        }));
+        accessors.push(json!({ "bufferView": norm_bv, "componentType": 5126, "count": sm.normals.len(), "type": "VEC3" }));
 
-        // 3. Indices SCALAR u32
         let idx_off = bin.len();
         for &ix in &sm.indices {
             bin.extend_from_slice(&ix.to_le_bytes());
         }
-        let idx_len = bin.len() - idx_off;
         let idx_bv = buffer_views.len();
-        buffer_views.push(json!({
-            "buffer": 0,
-            "byteOffset": idx_off,
-            "byteLength": idx_len,
-            "target": 34963
-        }));
+        buffer_views.push(json!({ "buffer": 0, "byteOffset": idx_off, "byteLength": bin.len() - idx_off, "target": 34963 }));
         let idx_acc = accessors.len();
-        accessors.push(json!({
-            "bufferView": idx_bv,
-            "componentType": 5125,
-            "count": sm.indices.len(),
-            "type": "SCALAR"
-        }));
+        accessors.push(json!({ "bufferView": idx_bv, "componentType": 5125, "count": sm.indices.len(), "type": "SCALAR" }));
 
         let mesh_idx = meshes.len();
         meshes.push(json!({
             "name": format!("{}_mesh_{idx}", sm.name),
             "primitives": [{
-                "attributes": {
-                    "POSITION": pos_acc,
-                    "NORMAL": norm_acc
-                },
-                "indices": idx_acc,
-                "material": mat_idx,
-                "mode": 4
+                "attributes": { "POSITION": pos_acc, "NORMAL": norm_acc },
+                "indices": idx_acc, "material": mat_idx, "mode": 4
             }]
         }));
         let node_idx = nodes.len();
-        nodes.push(json!({
-            "name": sm.name,
-            "mesh": mesh_idx
-        }));
+        nodes.push(json!({ "name": sm.name, "mesh": mesh_idx }));
         scene_nodes.push(node_idx);
     }
 
@@ -784,10 +637,7 @@ pub fn encode_glb_bytes(submeshes: &[GlbSubmesh]) -> Vec<u8> {
     }
 
     let root_json = json!({
-        "asset": {
-            "version": "2.0",
-            "generator": "satya-web-glb-encoder"
-        },
+        "asset": { "version": "2.0", "generator": "satya-web-glb-encoder" },
         "scene": 0,
         "scenes": [{ "name": "SatyaAsset", "nodes": scene_nodes }],
         "nodes": nodes,
@@ -808,11 +658,9 @@ pub fn encode_glb_bytes(submeshes: &[GlbSubmesh]) -> Vec<u8> {
     out.extend_from_slice(&GLB_MAGIC.to_le_bytes());
     out.extend_from_slice(&GLB_VERSION_2.to_le_bytes());
     out.extend_from_slice(&total_len.to_le_bytes());
-
     out.extend_from_slice(&(json_bytes.len() as u32).to_le_bytes());
     out.extend_from_slice(&CHUNK_JSON.to_le_bytes());
     out.extend_from_slice(&json_bytes);
-
     out.extend_from_slice(&(bin.len() as u32).to_le_bytes());
     out.extend_from_slice(&CHUNK_BIN.to_le_bytes());
     out.extend_from_slice(&bin);
@@ -847,7 +695,6 @@ impl SubmeshBuilder {
             .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
     }
 
-    /// Adds a tapered rectangular box / limb segment between `y0..y1` centered at `(cx, cz)`.
     #[allow(clippy::too_many_arguments)]
     fn add_tapered_box(
         &mut self,
@@ -869,15 +716,14 @@ impl SubmeshBuilder {
         let t2 = [cx + hx_top, y1, cz + hz_top];
         let t3 = [cx - hx_top, y1, cz + hz_top];
 
-        self.add_quad(b3, b2, t2, t3); // +Z front
-        self.add_quad(b1, b0, t0, t1); // -Z back
-        self.add_quad(b2, b1, t1, t2); // +X right
-        self.add_quad(b0, b3, t3, t0); // -X left
-        self.add_quad(t3, t2, t1, t0); // +Y top
-        self.add_quad(b0, b1, b2, b3); // -Y bottom
+        self.add_quad(b3, b2, t2, t3);
+        self.add_quad(b1, b0, t0, t1);
+        self.add_quad(b2, b1, t1, t2);
+        self.add_quad(b0, b3, t3, t0);
+        self.add_quad(t3, t2, t1, t0);
+        self.add_quad(b0, b1, b2, b3);
     }
 
-    /// Adds an `n`-sided vertical cylinder/frustum (ideal for bases, sensor domes, barrels, limbs).
     #[allow(clippy::too_many_arguments)]
     fn add_frustum(
         &mut self,
@@ -892,31 +738,23 @@ impl SubmeshBuilder {
         let n = sides.max(4);
         let step = std::f32::consts::TAU / (n as f32);
         for i in 0..n {
-            let a0 = (i as f32) * step;
-            let a1 = ((i + 1) as f32) * step;
-            let (s0, c0) = a0.sin_cos();
-            let (s1, c1) = a1.sin_cos();
+            let (s0, c0) = ((i as f32) * step).sin_cos();
+            let (s1, c1) = (((i + 1) as f32) * step).sin_cos();
             let b0 = [cx + r_bot * c0, y0, cz + r_bot * s0];
             let b1 = [cx + r_bot * c1, y0, cz + r_bot * s1];
             let t1 = [cx + r_top * c1, y1, cz + r_top * s1];
             let t0 = [cx + r_top * c0, y1, cz + r_top * s0];
             self.add_quad(b1, b0, t0, t1);
 
-            // Top cap triangle
-            let tc = [cx, y1, cz];
             let base_idx = self.positions.len() as u32;
-            self.positions.extend_from_slice(&[tc, t0, t1]);
-            let up = [0.0, 1.0, 0.0];
-            self.normals.extend_from_slice(&[up, up, up]);
+            self.positions.extend_from_slice(&[[cx, y1, cz], t0, t1]);
+            self.normals.extend_from_slice(&[[0.0, 1.0, 0.0]; 3]);
             self.indices
                 .extend_from_slice(&[base_idx, base_idx + 1, base_idx + 2]);
 
-            // Bottom cap triangle
-            let bc = [cx, y0, cz];
             let b_idx = self.positions.len() as u32;
-            self.positions.extend_from_slice(&[bc, b1, b0]);
-            let dn = [0.0, -1.0, 0.0];
-            self.normals.extend_from_slice(&[dn, dn, dn]);
+            self.positions.extend_from_slice(&[[cx, y0, cz], b1, b0]);
+            self.normals.extend_from_slice(&[[0.0, -1.0, 0.0]; 3]);
             self.indices
                 .extend_from_slice(&[b_idx, b_idx + 1, b_idx + 2]);
         }
@@ -958,106 +796,43 @@ struct HumanoidProfile {
 
 fn build_humanoid_submeshes(p: &HumanoidProfile) -> Vec<GlbSubmesh> {
     let s = p.scale_h;
-    // 1. Tabletop miniature beveled disc base (`0.76m` diameter, forward notch on `-Z`)
     let mut base = SubmeshBuilder::new();
     base.add_frustum(0.0, 0.0, 0.0, 0.055, 0.38, 0.35, 14);
     base.add_tapered_box(0.0, -0.34, 0.02, 0.075, 0.05, 0.05, 0.03, 0.03);
 
-    // 2. Legs & armored boots (`y = 0.055 .. 0.88 * s`)
     let mut legs = SubmeshBuilder::new();
     for sign in [-1.0_f32, 1.0] {
-        let lx = sign * 0.115 * s;
-        let z_off = sign * 0.03;
-        legs.add_tapered_box(lx, z_off - 0.03, 0.055, 0.18 * s, 0.075, 0.11, 0.065, 0.085); // Boot
-        legs.add_tapered_box(lx, z_off, 0.18 * s, 0.50 * s, 0.065, 0.075, 0.075, 0.080); // Greave
-        legs.add_tapered_box(lx, z_off * 0.5, 0.50 * s, 0.86 * s, 0.078, 0.082, 0.088, 0.092); // Thigh
+        let (lx, z_off) = (sign * 0.115 * s, sign * 0.03);
+        legs.add_tapered_box(lx, z_off - 0.03, 0.055, 0.18 * s, 0.075, 0.11, 0.065, 0.085);
+        legs.add_tapered_box(lx, z_off, 0.18 * s, 0.50 * s, 0.065, 0.075, 0.075, 0.080);
+        legs.add_tapered_box(lx, z_off * 0.5, 0.50 * s, 0.86 * s, 0.078, 0.082, 0.088, 0.092);
     }
 
-    // 3. Pelvis & Torso Carapace (`y = 0.84 * s .. 1.44 * s`, tintable primary faction armor)
     let mut torso = SubmeshBuilder::new();
     torso.add_tapered_box(0.0, 0.0, 0.82 * s, 0.98 * s, 0.17 * s, 0.11, 0.15 * s, 0.10);
-    torso.add_tapered_box(
-        0.0,
-        0.0,
-        0.98 * s,
-        1.43 * s,
-        0.155 * s,
-        p.chest_depth * 0.82,
-        p.shoulder_w,
-        p.chest_depth,
-    );
-    // Shoulder pauldrons
+    torso.add_tapered_box(0.0, 0.0, 0.98 * s, 1.43 * s, 0.155 * s, p.chest_depth * 0.82, p.shoulder_w, p.chest_depth);
     for sign in [-1.0_f32, 1.0] {
-        torso.add_tapered_box(
-            sign * (p.shoulder_w + 0.055),
-            0.0,
-            1.30 * s,
-            1.46 * s,
-            0.075,
-            0.105,
-            0.055,
-            0.085,
-        );
+        torso.add_tapered_box(sign * (p.shoulder_w + 0.055), 0.0, 1.30 * s, 1.46 * s, 0.075, 0.105, 0.055, 0.085);
     }
 
-    // 4. Backpack / Thruster / Med-Rig (`+Z` back)
     let mut pack = SubmeshBuilder::new();
-    pack.add_tapered_box(
-        0.0,
-        p.chest_depth + 0.075,
-        1.02 * s,
-        1.42 * s,
-        0.13 * s,
-        0.075,
-        0.11 * s,
-        0.065,
-    );
+    pack.add_tapered_box(0.0, p.chest_depth + 0.075, 1.02 * s, 1.42 * s, 0.13 * s, 0.075, 0.11 * s, 0.065);
     if p.has_thruster_fins {
         for sign in [-1.0_f32, 1.0] {
-            pack.add_tapered_box(
-                sign * 0.15 * s,
-                p.chest_depth + 0.11,
-                1.18 * s,
-                1.56 * s,
-                0.03,
-                0.05,
-                0.018,
-                0.035,
-            );
+            pack.add_tapered_box(sign * 0.15 * s, p.chest_depth + 0.11, 1.18 * s, 1.56 * s, 0.03, 0.05, 0.018, 0.035);
         }
     }
 
-    // 5. Arms & Forward Carbine / Rifle (`-Z` forward = `0 deg` facing)
     let mut arms = SubmeshBuilder::new();
     for sign in [-1.0_f32, 1.0] {
         let ax = sign * (p.shoulder_w + 0.045);
         arms.add_tapered_box(ax, -0.02, 1.10 * s, 1.34 * s, 0.055, 0.058, 0.062, 0.062);
-        arms.add_tapered_box(
-            ax * 0.72,
-            -0.16,
-            1.04 * s,
-            1.16 * s,
-            0.048,
-            0.13,
-            0.048,
-            0.11,
-        );
+        arms.add_tapered_box(ax * 0.72, -0.16, 1.04 * s, 1.16 * s, 0.048, 0.13, 0.048, 0.11);
     }
     if p.rifle_len > 0.05 {
-        // Receiver + barrel pointing forward along `-Z`
-        arms.add_tapered_box(
-            0.05,
-            -0.28 - p.rifle_len * 0.35,
-            1.06 * s,
-            1.16 * s,
-            0.032,
-            p.rifle_len * 0.5,
-            0.026,
-            p.rifle_len * 0.48,
-        );
+        arms.add_tapered_box(0.05, -0.28 - p.rifle_len * 0.35, 1.06 * s, 1.16 * s, 0.032, p.rifle_len * 0.5, 0.026, p.rifle_len * 0.48);
     }
 
-    // 6. Ballistic Helmet & Illuminated Visor
     let mut head = SubmeshBuilder::new();
     if p.heavy_dome {
         head.add_frustum(0.0, -0.01, 1.43 * s, 1.66 * s, 0.145 * s, 0.105 * s, 10);
@@ -1081,10 +856,10 @@ fn build_humanoid_submeshes(p: &HumanoidProfile) -> Vec<GlbSubmesh> {
 
 fn build_sector4_airlock_submeshes() -> Vec<GlbSubmesh> {
     let mut frame = SubmeshBuilder::new();
-    frame.add_tapered_box(0.0, 0.0, 0.0, 0.10, 1.35, 0.95, 1.32, 0.92); // Deck plate
-    frame.add_tapered_box(-1.05, 0.0, 0.10, 2.05, 0.16, 0.26, 0.14, 0.24); // Left bulkhead post
-    frame.add_tapered_box(1.05, 0.0, 0.10, 2.05, 0.16, 0.26, 0.14, 0.24); // Right bulkhead post
-    frame.add_tapered_box(0.0, 0.0, 1.85, 2.18, 1.22, 0.28, 1.14, 0.24); // Header lintel
+    frame.add_tapered_box(0.0, 0.0, 0.0, 0.10, 1.35, 0.95, 1.32, 0.92);
+    frame.add_tapered_box(-1.05, 0.0, 0.10, 2.05, 0.16, 0.26, 0.14, 0.24);
+    frame.add_tapered_box(1.05, 0.0, 0.10, 2.05, 0.16, 0.26, 0.14, 0.24);
+    frame.add_tapered_box(0.0, 0.0, 1.85, 2.18, 1.22, 0.28, 1.14, 0.24);
 
     let mut doors = SubmeshBuilder::new();
     doors.add_tapered_box(-0.44, 0.0, 0.10, 1.85, 0.42, 0.09, 0.42, 0.09);

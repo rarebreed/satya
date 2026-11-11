@@ -4,44 +4,62 @@
 use crate::wasm_client::character_sheet::render_character_sheet;
 use crate::wasm_client::chat_and_ttrpg::append_system_notice;
 use crate::wasm_client::dom::{
-    escape_html, fetch_json, get_element, input_checked, input_value, select_value, set_display,
-    set_text,
+    active_session_and_token_or_feedback, escape_html, fetch_json, get_element, input_checked,
+    input_value, select_value, set_display, set_html, set_text,
 };
 use crate::wasm_client::notebook::satya_select_notebook_tab;
 use crate::wasm_client::state::{with_state, with_state_mut};
 use satya_engine::{NpcGenerationParams, NpcTemplateKind, generate_npc_from_prompt};
 use satya_schema::{
-    GenerateNpcRequest, GenerateNpcResponse, ParticipantKind, SessionNpcEntry, SessionNpcsResponse,
-    SessionRole,
+    GenerateNpcRequest, GenerateNpcResponse, Participant, ParticipantKind, SessionNpcEntry,
+    SessionNpcsResponse, SessionRole,
 };
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
-/// Determines whether the local viewer is allowed to see GM-only NPC secrets, Psyche traits, and full skill ranks.
+/// Pure role-and-roster policy determining whether a viewer can inspect GM-only NPC secrets,
+/// Psyche scores, Characteristics, and full Skill ranks.
 ///
 /// Returns `true` when:
-/// - The user is in local/solo mode (not connected to a multi-player session), OR
-/// - The user's session role is `SessionRole::Gm`, OR
-/// - The session has no human `SessionRole::Gm` (e.g. Solo / Autonomous AI-GM mode).
+/// - `session_id` is `None` (offline / local Solo mode), OR
+/// - `self_part` has `role == SessionRole::Gm` (Human or AI GM), OR
+/// - `roster` is non-empty and contains **no** `ParticipantKind::Human` with `SessionRole::Gm`
+///   (e.g. Solo / Co-op Autonomous AI-GM session), OR
+/// - `roster` is not yet populated and `fallback` (`viewer_can_see_gm_secrets` from the server) is `true`.
+#[must_use]
+pub fn can_viewer_see_npc_secrets(
+    session_id: Option<&str>,
+    self_part: Option<&Participant>,
+    roster: &[Participant],
+    fallback: bool,
+) -> bool {
+    if session_id.is_none() {
+        return true;
+    }
+    if let Some(me) = self_part
+        && me.role == SessionRole::Gm
+    {
+        return true;
+    }
+    if !roster.is_empty() {
+        let has_human_gm = roster
+            .iter()
+            .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm);
+        return !has_human_gm;
+    }
+    fallback
+}
+
+/// Determines whether the local viewer is allowed to see GM-only NPC secrets, Psyche traits, and full skill ranks.
 #[must_use]
 pub fn viewer_can_see_npc_gm_secrets() -> bool {
     with_state(|st| {
-        if st.session_id.is_none() {
-            return true;
-        }
-        if let Some(me) = &st.self_participant
-            && me.role == SessionRole::Gm
-        {
-            return true;
-        }
-        if !st.roster.is_empty() {
-            let has_human_gm = st
-                .roster
-                .iter()
-                .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm);
-            return !has_human_gm;
-        }
-        st.viewer_can_see_gm_secrets
+        can_viewer_see_npc_secrets(
+            st.session_id.as_deref(),
+            st.self_participant.as_ref(),
+            &st.roster,
+            st.viewer_can_see_gm_secrets,
+        )
     })
 }
 
@@ -253,34 +271,31 @@ pub fn render_npcs_tab_dom() {
 
     set_text("npc-roster-count-pill", &format!("{} NPCs", npcs.len()));
 
-    if let Some(sel_el) = get_element("npc-roster-select") {
-        let mut opts_html = String::new();
-        for n in &npcs {
-            let is_sel = Some(&n.character_id) == selected_id.as_ref();
-            opts_html.push_str(&format!(
-                r#"<option value="{}"{}>{} — {} (Age {})</option>"#,
-                escape_html(&n.character_id),
-                if is_sel { " selected" } else { "" },
-                escape_html(&n.character_name),
-                escape_html(&n.callsign_or_role),
-                n.age_years
-            ));
-        }
-        sel_el.set_inner_html(&opts_html);
+    let mut opts_html = String::new();
+    for n in &npcs {
+        let is_sel = Some(&n.character_id) == selected_id.as_ref();
+        opts_html.push_str(&format!(
+            r#"<option value="{}"{}>{} — {} (Age {})</option>"#,
+            escape_html(&n.character_id),
+            if is_sel { " selected" } else { "" },
+            escape_html(&n.character_name),
+            escape_html(&n.callsign_or_role),
+            n.age_years
+        ));
     }
+    set_html("npc-roster-select", &opts_html);
 
-    if let Some(card_el) = get_element("npc-selected-card-container") {
-        if let Some(active_npc) = npcs
+    if get_element("npc-selected-card-container").is_some() {
+        let card_html = if let Some(active_npc) = npcs
             .iter()
             .find(|n| Some(&n.character_id) == selected_id.as_ref())
             .or_else(|| npcs.first())
         {
-            card_el.set_inner_html(&format_npc_card_html(active_npc, can_see_gm));
+            format_npc_card_html(active_npc, can_see_gm)
         } else {
-            card_el.set_inner_html(
-                r#"<span class="pill pill-muted">No NPCs in this session yet.</span>"#,
-            );
-        }
+            r#"<span class="pill pill-muted">No NPCs in this session yet.</span>"#.to_string()
+        };
+        set_html("npc-selected-card-container", &card_html);
     }
 }
 
@@ -290,8 +305,7 @@ pub fn render_npcs_tab_dom() {
 pub fn satya_refresh_npcs_tab() {
     render_npcs_tab_dom();
 
-    let (sid_opt, tok_opt) = with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
-    let (Some(sid), Some(tok)) = (sid_opt, tok_opt) else {
+    let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
         return;
     };
 
@@ -412,8 +426,7 @@ pub fn satya_generate_npc_from_prompt() {
     ));
 
     // 2. If connected to a signaling session, persist to SQLite (`session_npcs`, `characters`, `gm_memories`)
-    let (sid_opt, tok_opt) = with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
-    let (Some(sid), Some(tok)) = (sid_opt, tok_opt) else {
+    let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
         return;
     };
 
@@ -478,4 +491,105 @@ pub fn satya_load_selected_npc_to_sheet() {
         "Loaded NPC '{}' into Character Sheet/Status tab.",
         sheet.character_name
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_viewer_see_npc_secrets_solo_gm_and_player_modes() {
+        let human_gm = Participant::human("u-gm", "sean", "Sean (GM)", SessionRole::Gm);
+        let human_player = Participant::human("u-p1", "sara", "Sara", SessionRole::Player);
+        let ai_gm = Participant::ai_gm("sess-1", "gemma4:12b", "harsh-reality-arbiter");
+
+        // 1. Offline / Solo mode (no session_id) -> always true
+        assert!(can_viewer_see_npc_secrets(
+            None,
+            Some(&human_player),
+            &[human_gm.clone(), human_player.clone()],
+            false,
+        ));
+
+        // 2. Active session where viewer is Human GM -> true
+        assert!(can_viewer_see_npc_secrets(
+            Some("sess-1"),
+            Some(&human_gm),
+            &[human_gm.clone(), human_player.clone()],
+            false,
+        ));
+
+        // 3. Active session where viewer is Player and a Human GM is present -> false (secrets redacted!)
+        assert!(!can_viewer_see_npc_secrets(
+            Some("sess-1"),
+            Some(&human_player),
+            &[human_gm, human_player.clone()],
+            true,
+        ));
+
+        // 4. Active session where viewer is Player with ONLY an AI GM (Solo/Co-op AI-GM) -> true
+        assert!(can_viewer_see_npc_secrets(
+            Some("sess-1"),
+            Some(&human_player),
+            &[ai_gm, human_player.clone()],
+            false,
+        ));
+
+        // 5. Empty roster before initial ROSTER_SYNC -> defers to server fallback flag
+        assert!(!can_viewer_see_npc_secrets(
+            Some("sess-1"),
+            Some(&human_player),
+            &[],
+            false,
+        ));
+        assert!(can_viewer_see_npc_secrets(
+            Some("sess-1"),
+            Some(&human_player),
+            &[],
+            true,
+        ));
+    }
+
+    #[test]
+    fn test_format_npc_card_html_gm_visibility_vs_player_redaction() {
+        let gen_res = generate_npc_from_prompt(&NpcGenerationParams {
+            prompt: "Dr. Lin <Trauma> is a methodical field surgeon hiding a syndicate debt"
+                .to_string(),
+            name_override: Some("Dr. Lin <Trauma>".to_string()),
+            template: NpcTemplateKind::Auto,
+            career_terms: 2,
+            seed: 7,
+            owner_user_id: "gm_npc".to_string(),
+        });
+        let entry = SessionNpcEntry {
+            character_id: gen_res.character.character_id.clone(),
+            character_name: gen_res.character.character_name.clone(),
+            callsign_or_role: gen_res.character.callsign_or_role.clone(),
+            age_years: gen_res.character.age_years,
+            public_summary: "Calm bedside manner under fire.".to_string(),
+            apparent_condition: "Fatigued".to_string(),
+            is_persistent: true,
+            gm_character: Some(gen_res.character),
+            psyche_summary: vec!["EMP 17 (Compassionate)".to_string()],
+            top_skills: vec!["Trauma Surgery (N=4)".to_string()],
+            gm_secret_dossier: Some("Owes 40,000 cr to Black Sun brokers.".to_string()),
+        };
+
+        let gm_html = format_npc_card_html(&entry, true);
+        assert!(gm_html.contains("Dr. Lin &lt;Trauma&gt;"));
+        assert!(gm_html.contains("Calm bedside manner under fire."));
+        assert!(gm_html.contains("EMP 17 (Compassionate)"));
+        assert!(gm_html.contains("Trauma Surgery (N=4)"));
+        assert!(gm_html.contains("Owes 40,000 cr to Black Sun brokers."));
+        assert!(gm_html.contains("satyaLoadSelectedNpcToSheet()"));
+
+        let player_html = format_npc_card_html(&entry, false);
+        assert!(player_html.contains("Dr. Lin &lt;Trauma&gt;"));
+        assert!(player_html.contains("Calm bedside manner under fire."));
+        assert!(player_html.contains("Player View: GM-only Characteristics"));
+        assert!(!player_html.contains("EMP 17 (Compassionate)"));
+        assert!(!player_html.contains("Trauma Surgery (N=4)"));
+        assert!(!player_html.contains("Owes 40,000 cr to Black Sun brokers."));
+        assert!(!player_html.contains("satyaLoadSelectedNpcToSheet()"));
+    }
 }

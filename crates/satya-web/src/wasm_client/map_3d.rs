@@ -7,7 +7,7 @@
 pub use crate::wasm_client::map_3d_wgpu::*;
 
 use crate::wasm_client::dom::{
-    escape_html, fetch_json, get_element, set_class, set_display, set_input_value,
+    escape_html, fetch_json, get_element, set_class, set_display, set_html, set_input_value,
     set_select_value, set_text,
 };
 use crate::wasm_client::state::with_state;
@@ -22,6 +22,7 @@ use satya_schema::{
     MoveMapTokenRequest, TacticalTileKind, TokenPlacement, TokenVisualSpec,
 };
 use std::cell::RefCell;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 /// Client-side interactive state for the `Maps` notebook tab.
@@ -402,6 +403,12 @@ pub fn satya_click_map_cell(gx: i32, gy: i32) {
 
 /// Synchronizes all DOM elements inside `#notebook-pane-maps` (pill, token chips, LoS HUD, SVG fallback, and `wgpu` canvas).
 pub fn refresh_map_dom_and_wgpu() {
+    let svg_host = get_element("tabletop-map-svg-fallback");
+    let svg_visible = svg_host
+        .as_ref()
+        .and_then(|e| e.clone().dyn_into::<web_sys::HtmlElement>().ok())
+        .is_some_and(|h| h.style().get_property_value("display").unwrap_or_default() != "none");
+
     let (pill_txt, tokens_html, hud_html, svg_markup, sel_preset, sel_color) = with_map_ui(|ui| {
         let pill = format!(
             "{} ({}m × {}m · 1.0m Grid)",
@@ -409,7 +416,7 @@ pub fn refresh_map_dom_and_wgpu() {
         );
         let chips = format_selectable_token_chips_html(&ui.map, ui.selected_entity_id.as_deref());
         let hud = format_map_tactical_hud_html(ui);
-        let svg = format_tactical_map_svg_markup(ui);
+        let svg = svg_visible.then(|| format_tactical_map_svg_markup(ui));
         let (preset, color) = ui
             .selected_entity_id
             .as_deref()
@@ -427,15 +434,11 @@ pub fn refresh_map_dom_and_wgpu() {
     set_display("tabletop-map-placeholder", "none");
     set_select_value("map-token-model-select", &sel_preset);
     set_input_value("map-token-color", &sel_color);
+    set_html("tabletop-map-los-hud", &hud_html);
+    set_html("tabletop-token-list", &tokens_html);
 
-    if let Some(hud_el) = get_element("tabletop-map-los-hud") {
-        hud_el.set_inner_html(&hud_html);
-    }
-    if let Some(list) = get_element("tabletop-token-list") {
-        list.set_inner_html(&tokens_html);
-    }
-    if let Some(svg_host) = get_element("tabletop-map-svg-fallback") {
-        svg_host.set_inner_html(&svg_markup);
+    if let (Some(host), Some(svg)) = (svg_host, svg_markup) {
+        host.set_inner_html(&svg);
     }
     refresh_map_wgpu_if_active();
 }

@@ -2,16 +2,16 @@
 //! and ephemeral BYOK AI GM session configuration handlers.
 
 use crate::wasm_client::dom::{
-    EYE_OFF_SVG, EYE_OPEN_SVG, fetch_json, get_element, input_checked, input_value,
-    local_storage_get, local_storage_set, select_value, set_display, set_feedback, set_input_value,
-    set_root_data_attribute, set_select_value, set_text, toggle_element_display,
+    EYE_OFF_SVG, EYE_OPEN_SVG, active_session_and_token_or_feedback, fetch_json, get_element,
+    input_checked, input_value, local_storage_get, local_storage_set, select_value, set_display,
+    set_feedback, set_input_value, set_root_data_attribute, set_select_value, set_text,
+    toggle_element_display,
 };
 use crate::wasm_client::options::{
     APPEARANCE_THEME_OPTIONS, default_model_for_provider, normalize_corners_id,
     normalize_density_id, normalize_font_id, normalize_font_size_id, normalize_style_id,
     normalize_theme_id,
 };
-use crate::wasm_client::state::with_state;
 use satya_schema::{AiGmProviderConfig, AiPlayerConfig, StepAiPlayerRequest};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -220,14 +220,10 @@ pub fn satya_menu_ai_gm_provider_changed() {
 #[wasm_bindgen]
 pub fn satya_update_session_gm_config() {
     spawn_local(async move {
-        let (session_id, auth_token) =
-            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
-        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
-            set_feedback(
-                "menu-ai-gm-feedback",
-                "Join or create an active session as GM first.",
-                true,
-            );
+        let Some((sid, tok)) = active_session_and_token_or_feedback(
+            "menu-ai-gm-feedback",
+            "Join or create an active session as GM first.",
+        ) else {
             return;
         };
         let provider = select_value("menu-ai-gm-provider");
@@ -275,14 +271,10 @@ pub fn satya_update_session_gm_config() {
 #[wasm_bindgen]
 pub fn satya_spawn_session_ai_player() {
     spawn_local(async move {
-        let (session_id, auth_token) =
-            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
-        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
-            set_feedback(
-                "menu-ai-player-feedback",
-                "Join or create an active session first.",
-                true,
-            );
+        let Some((sid, tok)) = active_session_and_token_or_feedback(
+            "menu-ai-player-feedback",
+            "Join or create an active session first.",
+        ) else {
             return;
         };
         let display_name = input_value("menu-ai-player-name").trim().to_string();
@@ -328,14 +320,10 @@ pub fn satya_spawn_session_ai_player() {
 #[wasm_bindgen]
 pub fn satya_step_session_ai_player() {
     spawn_local(async move {
-        let (session_id, auth_token) =
-            with_state(|st| (st.session_id.clone(), st.auth_token.clone()));
-        let (Some(sid), Some(tok)) = (session_id, auth_token) else {
-            set_feedback(
-                "menu-ai-player-feedback",
-                "Join or create an active session first.",
-                true,
-            );
+        let Some((sid, tok)) = active_session_and_token_or_feedback(
+            "menu-ai-player-feedback",
+            "Join or create an active session first.",
+        ) else {
             return;
         };
         let req = StepAiPlayerRequest {

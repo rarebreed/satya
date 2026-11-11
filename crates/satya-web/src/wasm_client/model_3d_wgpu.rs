@@ -1,426 +1,34 @@
-//! Shared Orbit/Pan/Zoom + Orthographic Camera, Ray-Plane Unprojection, Unified PBR/Wireframe/HitZone
-//! WGSL Shader, and Browser WebGPU (`wgpu`) 3D Character & `.glb` Turntable Viewer (`#notebook-pane-model`).
+//! Browser WebGPU (`wgpu`) 3D Character & `.glb` Turntable Viewer (`#notebook-pane-model`),
+//! Shared Custom `.glb` Session Asset Registry, and Pedestal Geometry Builder.
+
+pub use crate::wasm_client::wgpu_shared::*;
 
 use crate::wasm_client::dice_3d::parse_hex_color;
-use crate::wasm_client::glb_model::{LoadedGlbModel, load_preset_glb_model, parse_glb_bytes};
-#[cfg(target_arch = "wasm32")]
-use crate::wasm_client::glb_model::{GlbVertex, build_preset_glb_bytes, encode_glb_bytes};
-use bytemuck::{Pod, Zeroable};
+use crate::wasm_client::glb_model::{
+    GlbVertex, LoadedGlbModel, build_preset_glb_bytes, encode_glb_bytes, load_preset_glb_model,
+    parse_glb_bytes,
+};
+use std::cell::{Cell, RefCell};
 use wasm_bindgen::prelude::*;
-
-/// Unified WGSL shader used by both `#wgpu-model-canvas` (Tab 3) and `#wgpu-map-canvas` (Tab 1).
-///
-/// `scene.mode_params.x`:
-/// - `0.0`: Clean PBR + Rim Lighting
-/// - `1.0`: Wireframe + PBR (`fwidth` anti-aliased barycentric edges)
-/// - `2.0`: Anatomical Hit Zones (`Head`, `Torso`, `Arms/Weapon`, `Legs`, `Pack`)
-/// - `3.0`: Thermal / FLIR Sensor
-pub const SHARED_GLB_DIORAMA_WGSL: &str = r#"
-struct DioramaUniforms {
-    view_proj: mat4x4<f32>,
-    camera_pos: vec4<f32>,
-    mode_params: vec4<f32>,
-};
-
-@group(0) @binding(0)
-var<uniform> scene: DioramaUniforms;
-
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) color: vec4<f32>,
-    @location(3) bary_zone: vec4<f32>,
-    @location(4) model_0: vec4<f32>,
-    @location(5) model_1: vec4<f32>,
-    @location(6) model_2: vec4<f32>,
-    @location(7) model_3: vec4<f32>,
-    @location(8) inst_tint: vec4<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) clip_pos: vec4<f32>,
-    @location(0) world_pos: vec3<f32>,
-    @location(1) world_normal: vec3<f32>,
-    @location(2) base_rgb: vec3<f32>,
-    @location(3) alpha: f32,
-    @location(4) bary: vec3<f32>,
-    @location(5) zone_id: f32,
-};
-
-@vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
-    let model = mat4x4<f32>(in.model_0, in.model_1, in.model_2, in.model_3);
-    let world_p = model * vec4<f32>(in.position, 1.0);
-    let rot_m = mat3x3<f32>(in.model_0.xyz, in.model_1.xyz, in.model_2.xyz);
-
-    // Blend tintable armor submeshes (`in.color.a > 0.5`) toward instance primary color
-    let tinted = mix(in.color.rgb, in.inst_tint.rgb, in.color.a);
-
-    var out: VertexOutput;
-    out.clip_pos = scene.view_proj * world_p;
-    out.world_pos = world_p.xyz;
-    out.world_normal = normalize(rot_m * in.normal);
-    out.base_rgb = tinted;
-    out.alpha = in.inst_tint.a;
-    out.bary = in.bary_zone.xyz;
-    out.zone_id = in.bary_zone.w;
-    return out;
-}
-
-fn zone_palette(zone_id: f32, fallback: vec3<f32>) -> vec3<f32> {
-    let z = i32(round(zone_id));
-    if z == 1 {
-        return vec3<f32>(0.20, 0.92, 0.62); // Head / Optics (DR 3-5)
-    }
-    if z == 2 {
-        return vec3<f32>(0.22, 0.74, 0.98); // Torso Carapace (DR 4-7)
-    }
-    if z == 3 {
-        return vec3<f32>(0.98, 0.72, 0.18); // Arms & Weapon
-    }
-    if z == 4 {
-        return vec3<f32>(0.52, 0.58, 0.98); // Legs & Mag-Boots
-    }
-    if z == 5 {
-        return vec3<f32>(0.88, 0.42, 0.96); // Backpack / Thruster Rig
-    }
-    return fallback;
-}
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let n = normalize(in.world_normal);
-    let v = normalize(scene.camera_pos.xyz - in.world_pos);
-    let key_l = normalize(vec3<f32>(0.48, 0.84, 0.36));
-    let fill_l = normalize(vec3<f32>(-0.62, 0.42, -0.52));
-
-    let ndl = max(dot(n, key_l), 0.0);
-    let fill = max(dot(n, fill_l), 0.0) * 0.32;
-    let hemi = mix(vec3<f32>(0.07, 0.10, 0.16), vec3<f32>(0.22, 0.28, 0.38), n.y * 0.5 + 0.5);
-    let h = normalize(key_l + v);
-    let spec = pow(max(dot(n, h), 0.0), 38.0) * 0.42;
-    let fresnel = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.28;
-
-    let mode = i32(round(scene.mode_params.x));
-    var albedo = in.base_rgb;
-    if mode == 2 {
-        albedo = zone_palette(in.zone_id, in.base_rgb * 0.65);
-    }
-
-    // Subtle 1.0m minor / 5.0m major tactical grid lines on deck tiles (`zone_id < -0.5`)
-    var grid_boost = vec3<f32>(0.0);
-    if in.zone_id < -0.5 {
-        let cell_scale = max(scene.mode_params.y, 0.25);
-        let uv1 = fract(in.world_pos.xz / cell_scale + vec2<f32>(0.5, 0.5));
-        let d1 = min(min(uv1.x, 1.0 - uv1.x), min(uv1.y, 1.0 - uv1.y));
-        let line1 = 1.0 - smoothstep(0.0, 0.038, d1);
-        let uv5 = fract((in.world_pos.xz / cell_scale + vec2<f32>(0.5, 0.5)) * 0.2);
-        let d5 = min(min(uv5.x, 1.0 - uv5.x), min(uv5.y, 1.0 - uv5.y));
-        let line5 = 1.0 - smoothstep(0.0, 0.016, d5);
-        grid_boost = vec3<f32>(0.09, 0.22, 0.36) * line1 + vec3<f32>(0.14, 0.38, 0.58) * line5;
-    }
-
-    var rgb = hemi * albedo + albedo * (0.76 * ndl + fill) + vec3<f32>(0.85, 0.93, 1.0) * (spec + fresnel * 0.5) + grid_boost;
-
-    if mode == 3 {
-        // Thermal / IR false-color sensor view
-        let heat = clamp(0.25 + 0.45 * max(dot(n, v), 0.0) + 0.28 * clamp(in.world_pos.y * 0.55, 0.0, 1.0), 0.0, 1.0);
-        let cold_c = vec3<f32>(0.08, 0.12, 0.48);
-        let mid_c = vec3<f32>(0.88, 0.20, 0.38);
-        let hot_c = vec3<f32>(1.0, 0.88, 0.22);
-        rgb = select(mix(mid_c, hot_c, (heat - 0.5) * 2.0), mix(cold_c, mid_c, heat * 2.0), heat < 0.5);
-    }
-
-    if mode == 1 || mode == 2 {
-        let fw = fwidth(in.bary);
-        let edge_d = min(min(in.bary.x / max(fw.x, 1e-4), in.bary.y / max(fw.y, 1e-4)), in.bary.z / max(fw.z, 1e-4));
-        let wire = 1.0 - smoothstep(0.35, 1.25, edge_d);
-        let wire_col = select(vec3<f32>(0.22, 0.78, 0.98), vec3<f32>(0.98, 0.32, 0.46), mode == 2);
-        rgb = mix(rgb, wire_col, wire * scene.mode_params.z);
-    }
-
-    return vec4<f32>(rgb, in.alpha);
-}
-"#;
-
-/// Uniform buffer (`80` bytes) bound at `@group(0) @binding(0)` for [`SHARED_GLB_DIORAMA_WGSL`].
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct DioramaUniforms {
-    pub view_proj: [[f32; 4]; 4],
-    pub camera_pos: [f32; 4],
-    /// `[shader_mode, cell_size_m, wire_strength, reserved]`
-    pub mode_params: [f32; 4],
-}
-
-/// Per-instance transform + tint (`80` bytes) bound as vertex buffer slot `1`.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct GlbInstanceData {
-    pub model: [[f32; 4]; 4],
-    pub tint_rgba: [f32; 4],
-}
-
-impl GlbInstanceData {
-    #[must_use]
-    pub fn from_trs_and_tint(
-        translation: [f32; 3],
-        yaw_deg: f32,
-        scale: [f32; 3],
-        tint_rgba: [f32; 4],
-    ) -> Self {
-        let rad = yaw_deg.to_radians();
-        let (s, c) = rad.sin_cos();
-        Self {
-            model: [
-                [c * scale[0], 0.0, -s * scale[0], 0.0],
-                [0.0, scale[1], 0.0, 0.0],
-                [s * scale[2], 0.0, c * scale[2], 0.0],
-                [translation[0], translation[1], translation[2], 1.0],
-            ],
-            tint_rgba,
-        }
-    }
-}
-
-/// Shared Orbit / Pan / Zoom + Top-Down Orthographic camera used by both the `3D Model` turntable
-/// and the `Maps` tactical diorama.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct OrbitOrthoCamera {
-    pub yaw_deg: f32,
-    pub pitch_deg: f32,
-    pub zoom: f32,
-    pub pan: [f32; 2],
-    pub target_y: f32,
-    pub base_distance: f32,
-    pub orthographic: bool,
-}
-
-/// World-space `(eye, target, right_vec, true_up_vec, forward_vec)` basis returned by [`OrbitOrthoCamera::basis_vectors`].
-pub type CameraBasisVectors = ([f32; 3], [f32; 3], [f32; 3], [f32; 3], [f32; 3]);
-
-impl OrbitOrthoCamera {
-    #[must_use]
-    pub const fn turntable_default() -> Self {
-        Self {
-            yaw_deg: 26.0,
-            pitch_deg: 22.0,
-            zoom: 1.0,
-            pan: [0.0, 0.0],
-            target_y: 0.92,
-            base_distance: 3.35,
-            orthographic: false,
-        }
-    }
-
-    #[must_use]
-    pub const fn tactical_map_default() -> Self {
-        Self {
-            yaw_deg: -24.0,
-            pitch_deg: 52.0,
-            zoom: 1.0,
-            pan: [0.0, 0.0],
-            target_y: 0.0,
-            base_distance: 19.5,
-            orthographic: false,
-        }
-    }
-
-    pub fn orbit_by(&mut self, dyaw_deg: f32, dpitch_deg: f32) {
-        self.yaw_deg += dyaw_deg;
-        while self.yaw_deg > 180.0 {
-            self.yaw_deg -= 360.0;
-        }
-        while self.yaw_deg < -180.0 {
-            self.yaw_deg += 360.0;
-        }
-        self.pitch_deg = (self.pitch_deg + dpitch_deg).clamp(8.0, 88.5);
-    }
-
-    pub fn pan_by_screen_delta(&mut self, right_delta: f32, forward_delta: f32, limit: f32) {
-        let yaw_rad = self.yaw_deg.to_radians();
-        let (sy, cy) = yaw_rad.sin_cos();
-        // Camera right = `[cy, -sy]` in `(x, z)` when eye sits at `[sin(yaw), cos(yaw)]`
-        let rx = cy;
-        let rz = -sy;
-        let fx = -sy;
-        let fz = -cy;
-        let scale = 1.0 / self.zoom.max(0.35);
-        self.pan[0] = (self.pan[0] + (rx * right_delta + fx * forward_delta) * scale)
-            .clamp(-limit, limit);
-        self.pan[1] = (self.pan[1] + (rz * right_delta + fz * forward_delta) * scale)
-            .clamp(-limit, limit);
-    }
-
-    pub fn zoom_by_factor(&mut self, factor: f32) {
-        self.zoom = (self.zoom * factor).clamp(0.35, 3.5);
-    }
-
-    /// Computes `(eye, target, right_vec, true_up_vec, forward_vec)` in world space.
-    #[must_use]
-    pub fn basis_vectors(&self) -> CameraBasisVectors {
-        let dist = self.base_distance / self.zoom.max(0.25);
-        let pitch_eff = if self.orthographic {
-            88.5_f32.to_radians()
-        } else {
-            self.pitch_deg.clamp(8.0, 88.5).to_radians()
-        };
-        let yaw_rad = self.yaw_deg.to_radians();
-        let horiz = dist * pitch_eff.cos();
-        let target = [self.pan[0], self.target_y, self.pan[1]];
-        let eye = [
-            target[0] + horiz * yaw_rad.sin(),
-            target[1] + dist * pitch_eff.sin(),
-            target[2] + horiz * yaw_rad.cos(),
-        ];
-        let fwd = normalize3([
-            target[0] - eye[0],
-            target[1] - eye[1],
-            target[2] - eye[2],
-        ]);
-        let world_up = [0.0_f32, 1.0, 0.0];
-        let right = normalize3(cross3(fwd, world_up));
-        let up = normalize3(cross3(right, fwd));
-        (eye, target, right, up, fwd)
-    }
-
-    /// Builds column-major `4x4` `view_proj` (`wgpu` depth `0..1`) and `eye` world position.
-    #[must_use]
-    pub fn build_view_proj_and_eye(&self, aspect: f32) -> ([[f32; 4]; 4], [f32; 3]) {
-        let asp = aspect.max(0.2);
-        let (eye, _target, right, up, fwd) = self.basis_vectors();
-        let view = [
-            [right[0], up[0], -fwd[0], 0.0],
-            [right[1], up[1], -fwd[1], 0.0],
-            [right[2], up[2], -fwd[2], 0.0],
-            [
-                -dot3(right, eye),
-                -dot3(up, eye),
-                dot3(fwd, eye),
-                1.0,
-            ],
-        ];
-
-        let proj = if self.orthographic {
-            let half_h = (self.base_distance * 0.46) / self.zoom.max(0.25);
-            let half_w = half_h * asp;
-            let near = 0.1_f32;
-            let far = 120.0_f32;
-            [
-                [1.0 / half_w, 0.0, 0.0, 0.0],
-                [0.0, 1.0 / half_h, 0.0, 0.0],
-                [0.0, 0.0, -1.0 / (far - near), 0.0],
-                [0.0, 0.0, -near / (far - near), 1.0],
-            ]
-        } else {
-            let fov_y = 42.0_f32.to_radians();
-            let f = 1.0 / (0.5 * fov_y).tan();
-            let near = 0.1_f32;
-            let far = 140.0_f32;
-            [
-                [f / asp, 0.0, 0.0, 0.0],
-                [0.0, f, 0.0, 0.0],
-                [0.0, 0.0, far / (near - far), -1.0],
-                [0.0, 0.0, (near * far) / (near - far), 0.0],
-            ]
-        };
-
-        (mul_mat4_cols(proj, view), eye)
-    }
-
-    /// Intersects a Normalized Device Coordinate (`ndc_x, ndc_y` in `-1.0..=1.0`, `+Y` up) ray
-    /// with the horizontal plane `y = plane_y`, returning world `[x, z]`.
-    #[must_use]
-    pub fn screen_ndc_to_plane_xz(
-        &self,
-        ndc_x: f32,
-        ndc_y: f32,
-        aspect: f32,
-        plane_y: f32,
-    ) -> Option<[f32; 2]> {
-        let asp = aspect.max(0.2);
-        let (eye, _target, right, up, fwd) = self.basis_vectors();
-        let (ray_origin, ray_dir) = if self.orthographic {
-            let half_h = (self.base_distance * 0.46) / self.zoom.max(0.25);
-            let half_w = half_h * asp;
-            let ox = eye[0] + right[0] * (ndc_x * half_w) + up[0] * (ndc_y * half_h);
-            let oy = eye[1] + right[1] * (ndc_x * half_w) + up[1] * (ndc_y * half_h);
-            let oz = eye[2] + right[2] * (ndc_x * half_w) + up[2] * (ndc_y * half_h);
-            ([ox, oy, oz], fwd)
-        } else {
-            let tan_half = (0.5 * 42.0_f32.to_radians()).tan();
-            let dx = fwd[0] + right[0] * (ndc_x * asp * tan_half) + up[0] * (ndc_y * tan_half);
-            let dy = fwd[1] + right[1] * (ndc_x * asp * tan_half) + up[1] * (ndc_y * tan_half);
-            let dz = fwd[2] + right[2] * (ndc_x * asp * tan_half) + up[2] * (ndc_y * tan_half);
-            (eye, normalize3([dx, dy, dz]))
-        };
-
-        if ray_dir[1].abs() < 1e-4 {
-            return None;
-        }
-        let t = (plane_y - ray_origin[1]) / ray_dir[1];
-        if t <= 0.0 {
-            return None;
-        }
-        Some([
-            ray_origin[0] + ray_dir[0] * t,
-            ray_origin[2] + ray_dir[2] * t,
-        ])
-    }
-}
-
-fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-fn cross3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-fn normalize3(v: [f32; 3]) -> [f32; 3] {
-    let l = dot3(v, v).sqrt();
-    if l > 1e-6 {
-        [v[0] / l, v[1] / l, v[2] / l]
-    } else {
-        [0.0, 1.0, 0.0]
-    }
-}
-
-fn mul_mat4_cols(a: [[f32; 4]; 4], b: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
-    let mut out = [[0.0_f32; 4]; 4];
-    for c in 0..4 {
-        for r in 0..4 {
-            out[c][r] =
-                a[0][r] * b[c][0] + a[1][r] * b[c][1] + a[2][r] * b[c][2] + a[3][r] * b[c][3];
-        }
-    }
-    out
-}
-
-pub fn shader_mode_code(mode_str: &str) -> f32 {
-    match mode_str.trim() {
-        "pbr" => 0.0,
-        "hit_zones" => 2.0,
-        "thermal" => 3.0,
-        _ => 1.0, // "wireframe_pbr"
-    }
-}
 
 // ============================================================================
 // Shared Custom `.glb` Asset Registry (Accessible by Both Tab 3 and Tab 1)
 // ============================================================================
 
 thread_local! {
-    static CUSTOM_GLB_MODEL: std::cell::RefCell<Option<(LoadedGlbModel, Vec<u8>)>> =
-        const { std::cell::RefCell::new(None) };
+    static CUSTOM_GLB_MODEL: RefCell<Option<(LoadedGlbModel, Vec<u8>, u64)>> =
+        const { RefCell::new(None) };
+    static CUSTOM_GLB_GEN: Cell<u64> = const { Cell::new(0) };
 }
 
-/// Stores user-imported `.glb` bytes in the browser session so both the `3D Model` viewer
-/// and `"custom_glb"` miniatures on the Tactical Map can render it immediately.
+/// Returns the monotonic generation counter for user-imported `"custom_glb"` assets (`0` when unset).
+#[must_use]
+pub fn custom_glb_generation() -> u64 {
+    CUSTOM_GLB_MODEL.with(|cell| cell.borrow().as_ref().map_or(0, |(_, _, g)| *g))
+}
+
+/// Stores user-imported `.glb` bytes in the browser session (incrementing [`custom_glb_generation`])
+/// so both the `3D Model` viewer and `"custom_glb"` miniatures on the Tactical Map render it.
 pub fn set_custom_glb_asset(name: &str, raw_bytes: Vec<u8>) -> Result<(String, usize, f32), String> {
     let parsed = parse_glb_bytes(&raw_bytes, name)?;
     let summary = (
@@ -428,8 +36,13 @@ pub fn set_custom_glb_asset(name: &str, raw_bytes: Vec<u8>) -> Result<(String, u
         parsed.triangle_count,
         parsed.height_m(),
     );
+    let next_gen = CUSTOM_GLB_GEN.with(|g| {
+        let n = g.get().wrapping_add(1).max(1);
+        g.set(n);
+        n
+    });
     CUSTOM_GLB_MODEL.with(|cell| {
-        *cell.borrow_mut() = Some((parsed, raw_bytes));
+        *cell.borrow_mut() = Some((parsed, raw_bytes, next_gen));
     });
     Ok(summary)
 }
@@ -440,11 +53,40 @@ pub fn set_custom_glb_asset(name: &str, raw_bytes: Vec<u8>) -> Result<(String, u
 pub fn resolve_glb_model(preset: &str) -> LoadedGlbModel {
     if preset.trim() == "custom_glb"
         && let Some(custom) =
-            CUSTOM_GLB_MODEL.with(|cell| cell.borrow().as_ref().map(|(m, _)| m.clone()))
+            CUSTOM_GLB_MODEL.with(|cell| cell.borrow().as_ref().map(|(m, _, _)| m.clone()))
     {
         return custom;
     }
     load_preset_glb_model(preset)
+}
+
+/// Builds the `3.2m x 3.2m` (`[-1.6, 1.6]`) gridded turntable pedestal quad (`6` vertices,
+/// `zone_id = -1.0`) followed by all triangle vertices of `model`.
+#[must_use]
+pub fn build_pedestal_and_model_vertices(model: &LoadedGlbModel) -> Vec<GlbVertex> {
+    let mut verts = Vec::with_capacity(model.vertices.len() + 6);
+    let r = 1.6_f32;
+    let col = [0.07_f32, 0.11, 0.18, 0.0];
+    let n = [0.0_f32, 1.0, 0.0];
+    let corners = [
+        [-r, -0.002, -r],
+        [-r, -0.002, r],
+        [r, -0.002, r],
+        [r, -0.002, -r],
+    ];
+    let bary = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+    for tri in [[0_usize, 1, 2], [0, 2, 3]] {
+        for (ci, &vi) in tri.iter().enumerate() {
+            verts.push(GlbVertex {
+                position: corners[vi],
+                normal: n,
+                color: col,
+                bary_zone: [bary[ci][0], bary[ci][1], bary[ci][2], -1.0],
+            });
+        }
+    }
+    verts.extend_from_slice(&model.vertices);
+    verts
 }
 
 // ============================================================================
@@ -454,10 +96,9 @@ pub fn resolve_glb_model(preset: &str) -> LoadedGlbModel {
 #[cfg(target_arch = "wasm32")]
 mod model_wgpu_runtime {
     use super::*;
-    use std::cell::RefCell;
     use wasm_bindgen::JsCast;
     use wasm_bindgen_futures::spawn_local;
-    use web_sys::{HtmlCanvasElement, MouseEvent, WheelEvent};
+    use web_sys::{MouseEvent, WheelEvent};
 
     pub struct ModelViewerPipeline {
         device: wgpu::Device,
@@ -516,51 +157,6 @@ mod model_wgpu_runtime {
         MODEL_CTRL.with(|c| f(&mut c.borrow_mut()))
     }
 
-    fn create_depth_view(device: &wgpu::Device, w: u32, h: u32) -> wgpu::TextureView {
-        let tex = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("satya-model-depth"),
-            size: wgpu::Extent3d {
-                width: w.max(1),
-                height: h.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth24Plus,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        tex.create_view(&wgpu::TextureViewDescriptor::default())
-    }
-
-    fn build_pedestal_and_model_vertices(model: &LoadedGlbModel) -> Vec<GlbVertex> {
-        let mut verts = Vec::with_capacity(model.vertices.len() + 6);
-        // 3m x 3m turntable floor quad (`zone_id = -1.0` activates 1.0m shader grid lines)
-        let r = 1.6_f32;
-        let col = [0.07_f32, 0.11, 0.18, 0.0];
-        let n = [0.0_f32, 1.0, 0.0];
-        let corners = [
-            [-r, -0.002, -r],
-            [-r, -0.002, r],
-            [r, -0.002, r],
-            [r, -0.002, -r],
-        ];
-        let bary = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
-        for tri in [[0_usize, 1, 2], [0, 2, 3]] {
-            for (ci, &vi) in tri.iter().enumerate() {
-                verts.push(GlbVertex {
-                    position: corners[vi],
-                    normal: n,
-                    color: col,
-                    bary_zone: [bary[ci][0], bary[ci][1], bary[ci][2], -1.0],
-                });
-            }
-        }
-        verts.extend_from_slice(&model.vertices);
-        verts
-    }
-
     fn upload_active_mesh(ctrl: &mut ModelViewerController) {
         let model = resolve_glb_model(&ctrl.active_preset);
         let h = model.height_m().clamp(0.4, 6.0);
@@ -593,20 +189,14 @@ mod model_wgpu_runtime {
             return;
         };
 
-        if let Some(el) = crate::wasm_client::dom::get_element("wgpu-model-canvas")
-            && let Ok(canvas) = el.dyn_into::<HtmlCanvasElement>()
-        {
-            let cw = canvas.client_width().max(320) as u32;
-            let ch = canvas.client_height().max(260) as u32;
-            if cw != pipe.surface_config.width || ch != pipe.surface_config.height {
-                canvas.set_width(cw);
-                canvas.set_height(ch);
-                pipe.surface_config.width = cw;
-                pipe.surface_config.height = ch;
-                pipe.surface.configure(&pipe.device, &pipe.surface_config);
-                pipe.depth_view = create_depth_view(&pipe.device, cw, ch);
-            }
-        }
+        resize_canvas_surface_if_needed(
+            "wgpu-model-canvas",
+            &pipe.device,
+            &pipe.surface,
+            &mut pipe.surface_config,
+            &mut pipe.depth_view,
+            "satya-model-depth",
+        );
 
         let aspect =
             (pipe.surface_config.width as f32) / (pipe.surface_config.height.max(1) as f32);
@@ -741,8 +331,7 @@ mod model_wgpu_runtime {
                     return;
                 };
                 let (cx, cy) = (ev.client_x(), ev.client_y());
-                let dx = (cx - lx) as f32;
-                let dy = (cy - ly) as f32;
+                let (dx, dy) = ((cx - lx) as f32, (cy - ly) as f32);
                 if dx.abs() < 0.5 && dy.abs() < 0.5 {
                     return;
                 }
@@ -805,146 +394,16 @@ mod model_wgpu_runtime {
     }
 
     async fn init_model_pipeline() -> Result<ModelViewerPipeline, String> {
-        let Some(el) = crate::wasm_client::dom::get_element("wgpu-model-canvas") else {
-            return Err("Canvas #wgpu-model-canvas not found".to_string());
-        };
-        let canvas: HtmlCanvasElement = el
-            .dyn_into::<HtmlCanvasElement>()
-            .map_err(|_| "Not a canvas".to_string())?;
-        let width = canvas.client_width().max(320) as u32;
-        let height = canvas.client_height().max(260) as u32;
-        canvas.set_width(width);
-        canvas.set_height(height);
-
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::BROWSER_WEBGPU,
-            ..Default::default()
-        });
-        let surface = instance
-            .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
-            .map_err(|e| format!("WebGPU surface error: {e}"))?;
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .ok_or_else(|| "WebGPU unavailable (showing SVG fallback)".to_string())?;
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("satya-model-device"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                        .using_resolution(adapter.limits()),
-                    memory_hints: wgpu::MemoryHints::Performance,
-                },
-                None,
-            )
-            .await
-            .map_err(|e| format!("WebGPU device error: {e}"))?;
-
-        let caps = surface.get_capabilities(&adapter);
-        let format = caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| !f.is_srgb())
-            .or_else(|| caps.formats.first().copied())
-            .ok_or_else(|| "No surface format".to_string())?;
-        let alpha_mode = caps
-            .alpha_modes
-            .first()
-            .copied()
-            .unwrap_or(wgpu::CompositeAlphaMode::Auto);
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format,
-            width,
-            height,
-            present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode,
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-        surface.configure(&device, &surface_config);
-        let depth_view = create_depth_view(&device, width, height);
-
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("satya-model-uniforms"),
-            size: std::mem::size_of::<DioramaUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("satya-model-bgl"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("satya-model-bg"),
-            layout: &bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-        });
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("satya-model-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(SHARED_GLB_DIORAMA_WGSL.into()),
-        });
-        let playout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("satya-model-playout"),
-            bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
-        });
-
-        let vbuffers = shared_glb_vertex_buffer_layouts();
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("satya-model-pipeline"),
-            layout: Some(&playout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &vbuffers,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                cull_mode: None,
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth24Plus,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::LessEqual,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
+        let (_canvas, surface, device, queue, surface_config) =
+            init_wgpu_canvas_context("wgpu-model-canvas").await?;
+        let depth_view = create_depth_view(
+            &device,
+            surface_config.width,
+            surface_config.height,
+            "satya-model-depth",
+        );
+        let (uniform_buffer, bind_group, render_pipeline) =
+            create_shared_diorama_pipeline(&device, surface_config.format, "satya-model");
 
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("satya-model-empty-vb"),
@@ -974,71 +433,6 @@ mod model_wgpu_runtime {
             instance_count: 1,
         })
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-pub fn shared_glb_vertex_buffer_layouts() -> [wgpu::VertexBufferLayout<'static>; 2] {
-    const V_ATTRS: [wgpu::VertexAttribute; 4] = [
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x3,
-            offset: 0,
-            shader_location: 0,
-        },
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x3,
-            offset: 12,
-            shader_location: 1,
-        },
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x4,
-            offset: 24,
-            shader_location: 2,
-        },
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x4,
-            offset: 40,
-            shader_location: 3,
-        },
-    ];
-    const I_ATTRS: [wgpu::VertexAttribute; 5] = [
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x4,
-            offset: 0,
-            shader_location: 4,
-        },
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x4,
-            offset: 16,
-            shader_location: 5,
-        },
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x4,
-            offset: 32,
-            shader_location: 6,
-        },
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x4,
-            offset: 48,
-            shader_location: 7,
-        },
-        wgpu::VertexAttribute {
-            format: wgpu::VertexFormat::Float32x4,
-            offset: 64,
-            shader_location: 8,
-        },
-    ];
-    [
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<GlbVertex>() as u64,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &V_ATTRS,
-        },
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<GlbInstanceData>() as u64,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &I_ATTRS,
-        },
-    ]
 }
 
 /// Synchronizes `#model-preset-select`, `#model-render-mode`, and `#model-tint-color` into the
@@ -1099,69 +493,62 @@ pub fn satya_reset_model_camera() {
 #[wasm_bindgen]
 pub fn satya_import_custom_glb_model() {
     #[cfg(target_arch = "wasm32")]
-    {
-        use js_sys::{Function, Promise, Reflect, Uint8Array};
-        use wasm_bindgen::JsCast;
-        use wasm_bindgen_futures::{JsFuture, spawn_local};
-
-        let Some(input_el) = crate::wasm_client::dom::get_element("model-glb-file-input") else {
+    wasm_bindgen_futures::spawn_local(async move {
+        let Some((file_name, _mime, bytes)) =
+            crate::wasm_client::dom::read_first_file_bytes("model-glb-file-input").await
+        else {
+            crate::wasm_client::dom::set_text(
+                "model-telemetry-pill",
+                "Failed to read .glb file bytes",
+            );
             return;
         };
-        let Ok(files) = Reflect::get(&input_el, &JsValue::from_str("files")) else {
-            return;
-        };
-        let Ok(file) = Reflect::get(&files, &JsValue::from_f64(0.0)) else {
-            return;
-        };
-        if file.is_null() || file.is_undefined() {
-            return;
-        }
-        let file_name = Reflect::get(&file, &JsValue::from_str("name"))
-            .ok()
-            .and_then(|v| v.as_string())
-            .unwrap_or_else(|| "custom_model.glb".to_string());
-        let Ok(ab_fn_val) = Reflect::get(&file, &JsValue::from_str("arrayBuffer")) else {
-            return;
-        };
-        let Ok(ab_fn) = ab_fn_val.dyn_into::<Function>() else {
-            return;
-        };
-        let Ok(promise_val) = ab_fn.call0(&file) else {
-            return;
-        };
-        let promise = Promise::from(promise_val);
-
-        spawn_local(async move {
-            let Ok(buf_val) = JsFuture::from(promise).await else {
+        match set_custom_glb_asset(&file_name, bytes) {
+            Ok((name, tris, h_m)) => {
+                crate::wasm_client::dom::set_select_value("model-preset-select", "custom_glb");
                 crate::wasm_client::dom::set_text(
                     "model-telemetry-pill",
-                    "Failed to read .glb file bytes",
+                    &format!("Custom GLB: {name} · {tris} tris ({h_m:.2}m)"),
                 );
-                return;
-            };
-            let bytes = Uint8Array::new(&buf_val).to_vec();
-            match set_custom_glb_asset(&file_name, bytes) {
-                Ok((name, tris, h_m)) => {
-                    crate::wasm_client::dom::set_select_value("model-preset-select", "custom_glb");
-                    crate::wasm_client::dom::set_text(
-                        "model-telemetry-pill",
-                        &format!("Custom GLB: {name} · {tris} tris ({h_m:.2}m)"),
-                    );
-                    model_wgpu_runtime::with_model_ctrl(|c| {
-                        c.active_preset = "custom_glb".to_string();
-                        c.mesh_dirty = true;
-                    });
-                    model_wgpu_runtime::ensure_model_viewer_initialized_and_render();
-                    crate::wasm_client::map_3d::refresh_map_wgpu_if_active();
-                }
-                Err(err) => {
-                    crate::wasm_client::dom::set_text(
-                        "model-telemetry-pill",
-                        &format!("GLB Error: {err}"),
-                    );
-                }
+                model_wgpu_runtime::with_model_ctrl(|c| {
+                    c.active_preset = "custom_glb".to_string();
+                    c.mesh_dirty = true;
+                });
+                model_wgpu_runtime::ensure_model_viewer_initialized_and_render();
+                crate::wasm_client::map_3d::refresh_map_wgpu_if_active();
             }
-        });
+            Err(err) => {
+                crate::wasm_client::dom::set_text(
+                    "model-telemetry-pill",
+                    &format!("GLB Error: {err}"),
+                );
+            }
+        }
+    });
+}
+
+/// Serializes the `.glb` binary payload for `preset` (using raw or re-encoded bytes for `"custom_glb"`).
+#[must_use]
+pub fn export_glb_bytes_for_preset(preset: &str) -> Vec<u8> {
+    let p_slug = if preset.trim().is_empty() {
+        "valkyrie_rig"
+    } else {
+        preset.trim()
+    };
+    if p_slug == "custom_glb" {
+        CUSTOM_GLB_MODEL
+            .with(|c| {
+                c.borrow().as_ref().map(|(m, raw, _)| {
+                    if raw.is_empty() {
+                        encode_glb_bytes(&m.submeshes)
+                    } else {
+                        raw.clone()
+                    }
+                })
+            })
+            .unwrap_or_else(|| build_preset_glb_bytes("valkyrie_rig"))
+    } else {
+        build_preset_glb_bytes(p_slug)
     }
 }
 
@@ -1169,87 +556,15 @@ pub fn satya_import_custom_glb_model() {
 /// so it can be opened and sculpted in Blender (`File -> Import -> glTF 2.0`).
 #[wasm_bindgen]
 pub fn satya_export_current_glb_model() {
-    #[cfg(target_arch = "wasm32")]
-    {
-        use js_sys::{Array, Function, Object, Reflect, Uint8Array};
-        use wasm_bindgen::JsCast;
-
-        let preset = crate::wasm_client::dom::select_value("model-preset-select");
-        let p_slug = if preset.is_empty() {
-            "valkyrie_rig"
-        } else {
-            preset.as_str()
-        };
-        let bytes = if p_slug == "custom_glb" {
-            CUSTOM_GLB_MODEL
-                .with(|c| {
-                    c.borrow()
-                        .as_ref()
-                        .map(|(m, raw)| {
-                            if raw.is_empty() {
-                                encode_glb_bytes(&m.submeshes)
-                            } else {
-                                raw.clone()
-                            }
-                        })
-                })
-                .unwrap_or_else(|| build_preset_glb_bytes("valkyrie_rig"))
-        } else {
-            build_preset_glb_bytes(p_slug)
-        };
-
-        let Some(win) = crate::wasm_client::dom::window() else {
-            return;
-        };
-        let Some(doc) = crate::wasm_client::dom::document() else {
-            return;
-        };
-        let u8_arr = Uint8Array::from(bytes.as_slice());
-        let parts = Array::of1(&u8_arr);
-        let opts = Object::new();
-        let _ = Reflect::set(
-            &opts,
-            &JsValue::from_str("type"),
-            &JsValue::from_str("model/gltf-binary"),
-        );
-        let Ok(blob_ctor) = Reflect::get(&win, &JsValue::from_str("Blob")) else {
-            return;
-        };
-        let Ok(blob_fn) = blob_ctor.dyn_into::<Function>() else {
-            return;
-        };
-        let Ok(blob) = Reflect::construct(&blob_fn, &Array::of2(&parts, &opts)) else {
-            return;
-        };
-        let Ok(url_obj) = Reflect::get(&win, &JsValue::from_str("URL")) else {
-            return;
-        };
-        let Ok(create_fn_val) = Reflect::get(&url_obj, &JsValue::from_str("createObjectURL")) else {
-            return;
-        };
-        let Ok(create_fn) = create_fn_val.dyn_into::<Function>() else {
-            return;
-        };
-        let Ok(href_val) = create_fn.call1(&url_obj, &blob) else {
-            return;
-        };
-        let Some(href) = href_val.as_string() else {
-            return;
-        };
-
-        if let Ok(a_el) = doc.create_element("a") {
-            let _ = a_el.set_attribute("href", &href);
-            let _ = a_el.set_attribute("download", &format!("{p_slug}.glb"));
-            if let Ok(html_a) = a_el.dyn_into::<web_sys::HtmlElement>() {
-                html_a.click();
-            }
-        }
-        if let Ok(rev_val) = Reflect::get(&url_obj, &JsValue::from_str("revokeObjectURL"))
-            && let Ok(rev_fn) = rev_val.dyn_into::<Function>()
-        {
-            let _ = rev_fn.call1(&url_obj, &JsValue::from_str(&href));
-        }
-    }
+    let preset = crate::wasm_client::dom::select_value("model-preset-select");
+    let p_slug = if preset.is_empty() {
+        "valkyrie_rig"
+    } else {
+        preset.as_str()
+    };
+    let bytes = export_glb_bytes_for_preset(p_slug);
+    let filename = format!("{p_slug}.glb");
+    let _ = crate::wasm_client::dom::trigger_browser_download_bytes(&filename, &bytes);
 }
 
 #[cfg(test)]
@@ -1257,20 +572,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_orbit_ortho_camera_ray_plane_unprojection_perspective_and_ortho() {
-        let mut cam = OrbitOrthoCamera::tactical_map_default();
-        // Center of screen `(0.0, 0.0)` must hit camera pan target `(0.0, 0.0)` on ground `y = 0`
-        let hit_persp = cam
-            .screen_ndc_to_plane_xz(0.0, 0.0, 1.6, 0.0)
-            .expect("Perspective center ray should hit ground");
-        assert!(hit_persp[0].abs() < 1e-3 && hit_persp[1].abs() < 1e-3);
+    fn test_custom_glb_generation_counter_and_export_roundtrip() {
+        let gen_before = custom_glb_generation();
+        let sample_bytes = build_preset_glb_bytes("recon_mk4");
+        let (name, tris, h_m) =
+            set_custom_glb_asset("custom_recon.glb", sample_bytes.clone()).expect("valid glb");
+        assert_eq!(name, "custom_recon.glb");
+        assert!(tris >= 60);
+        assert!(h_m > 1.2);
+        let gen_after_first = custom_glb_generation();
+        assert!(gen_after_first > gen_before);
 
-        cam.pan = [3.5, -2.0];
-        cam.orthographic = true;
-        let hit_ortho = cam
-            .screen_ndc_to_plane_xz(0.0, 0.0, 1.6, 0.0)
-            .expect("Ortho center ray should hit pan target");
-        assert!((hit_ortho[0] - 3.5).abs() < 1e-2);
-        assert!((hit_ortho[1] + 2.0).abs() < 1e-2);
+        let _ = set_custom_glb_asset("custom_recon_v2.glb", sample_bytes.clone())
+            .expect("second upload valid");
+        let gen_after_second = custom_glb_generation();
+        assert_eq!(gen_after_second, gen_after_first + 1);
+
+        let resolved = resolve_glb_model("custom_glb");
+        assert_eq!(resolved.name, "custom_recon_v2.glb");
+        assert_eq!(export_glb_bytes_for_preset("custom_glb"), sample_bytes);
     }
 }

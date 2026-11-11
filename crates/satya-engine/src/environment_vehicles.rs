@@ -392,6 +392,102 @@ pub struct CarriedLoadItem {
     pub carry_method: CarryErgonomicMethod,
 }
 
+/// Carried field equipment item on an operator's loadout with mass, [`CarryErgonomicMethod`], and tool modifier.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FieldGearItem {
+    pub id: String,
+    pub name: String,
+    pub category: String,
+    pub mass_kg: f64,
+    pub carry_method: CarryErgonomicMethod,
+    pub tool_mod: i32,
+    pub notes: String,
+}
+
+/// Canonical preset field gear items (`(id, name, category, mass_kg, carry_method, tool_mod, notes)`).
+pub const CANONICAL_FIELD_GEAR_PRESETS: &[(
+    &str,
+    &str,
+    &str,
+    f64,
+    CarryErgonomicMethod,
+    i32,
+    &str,
+)] = &[
+    (
+        "trauma_kit_pro",
+        "Trauma & Vascular Surgery Field Kit",
+        "Medical",
+        3.2,
+        CarryErgonomicMethod::BalancedWebbingOrRucksack,
+        -1,
+        "Class B surgical kit · Δ_tool -1 · Stops Grade 3–4 arterial bleeds",
+    ),
+    (
+        "ifak_cat_tourniquet",
+        "IFAK + 2x CAT Tourniquets & Hemostatic Gauze",
+        "Medical",
+        0.8,
+        CarryErgonomicMethod::TailoredArmorOrDutyBelt,
+        0,
+        "20–24 Ticks field stabilization · Morphine auto-injector (-1 Shock)",
+    ),
+    (
+        "comms_tac_mesh",
+        "Encrypted Multi-Band Tactical Comms & HUD Link",
+        "Comms/Optics",
+        0.6,
+        CarryErgonomicMethod::TailoredArmorOrDutyBelt,
+        -1,
+        "Zero-latency squad telemetry · Δ_tool -1 on SIGINT/Coordination",
+    ),
+    (
+        "nvg_thermal_binocs",
+        "Multi-Spectral NVG / Thermal Fusion Optics",
+        "Comms/Optics",
+        0.9,
+        CarryErgonomicMethod::TailoredArmorOrDutyBelt,
+        -2,
+        "Negates darkness Δ_ext · Thermal/IR signature overlay",
+    ),
+    (
+        "cyber_deck_analyzer",
+        "Ruggedized Cyber-Deck & RF Logic Analyzer",
+        "Technical",
+        1.8,
+        CarryErgonomicMethod::BalancedWebbingOrRucksack,
+        -1,
+        "Class B hardware interface · Δ_tool -1 on Cyber/Avionics",
+    ),
+    (
+        "eva_mag_thruster_pack",
+        "Zero-G EVA Cold-Gas Thruster & Mag-Tether Rig",
+        "Survival/EVA",
+        4.5,
+        CarryErgonomicMethod::BalancedWebbingOrRucksack,
+        -1,
+        "Prevents Zero-G Adrift state · 120 m/s delta-v reserve",
+    ),
+];
+
+/// Instantiates a [`FieldGearItem`] from [`CANONICAL_FIELD_GEAR_PRESETS`] by slug ID.
+#[must_use]
+pub fn lookup_field_gear_preset(id: &str) -> Option<FieldGearItem> {
+    CANONICAL_FIELD_GEAR_PRESETS.iter().find_map(
+        |(pid, name, cat, mass_kg, carry_method, tool_mod, notes)| {
+            (*pid == id).then(|| FieldGearItem {
+                id: (*pid).to_string(),
+                name: (*name).to_string(),
+                category: (*cat).to_string(),
+                mass_kg: *mass_kg,
+                carry_method: *carry_method,
+                tool_mod: *tool_mod,
+                notes: (*notes).to_string(),
+            })
+        },
+    )
+}
+
 /// The 5 Canonical Encumbrance Tiers (`Tiers 0–4`) from `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.3 Table,
 /// unified with [`crate::action_economy::EncumbranceTier`].
 pub type LoadEncumbranceTier = EncumbranceTier;

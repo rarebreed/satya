@@ -9,22 +9,20 @@ use std::collections::BTreeMap;
 
 use crate::wasm_client::chat_and_ttrpg::{append_system_notice, satya_update_cascade_preview};
 use crate::wasm_client::dom::{
-    escape_html, get_element, input_value, roll_browser_die_i32, select_value, set_feedback,
-    set_input_value, set_text,
+    get_element, input_value, roll_browser_die_i32, select_value, set_feedback, set_input_value,
+    set_text,
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
 pub use crate::wasm_client::wizard_views_lifepath::*;
 pub use crate::wasm_client::wizard_views_skills::*;
 pub use crate::wasm_client::wizard_views_stats::*;
 use satya_engine::{
-    AptitudeCode, AptitudePoolRoll, CareerTermConfig, CareerTermTrack, CharacterAptitudes,
-    CharacterCharacteristics, CharacteristicCategory, CharacteristicCode, CharacteristicGroupPool,
-    CharacteristicRollMethod, CorrelatedHeightMassRoll, HighSchoolTrack, LifepathBaselineResult,
-    LifepathBuildConfig, RuralYouthArchetype, SingleCharacteristicRoll, SocioeconomicClass,
-    Stage4Path, StreetGangArchetype, auto_allocate_career_and_elective_skills,
+    AptitudeCode, AptitudePoolRoll, CharacterAptitudes, CharacterCharacteristics,
+    CharacteristicCategory, CharacteristicCode, CharacteristicGroupPool, CharacteristicRollMethod,
+    CorrelatedHeightMassRoll, LifepathBaselineResult, LifepathBuildConfig,
+    SingleCharacteristicRoll, auto_allocate_career_and_elective_skills,
     compute_correlated_height_mass, compute_lifepath_baseline_from_config,
-    compute_skill_allocation_sp_ledger, evaluate_operational_heat, lookup_campaign_sqm,
-    lookup_skill_node, preview_next_skill_step_sp, resolve_socioeconomic_origin,
+    compute_skill_allocation_sp_ledger, lookup_skill_node, preview_next_skill_step_sp,
     roll_aptitude_pool_11_drop_2, roll_characteristic_2d4_2d5, roll_characteristic_group_pool,
     roll_correlated_height_mass, validate_skill_advancement,
 };
@@ -33,53 +31,31 @@ use wasm_bindgen::prelude::*;
 /// Client-side state for the step-by-step Character Creation Wizard tab (`#notebook-pane-wizard`).
 #[derive(Debug, Clone)]
 pub struct CharacterWizardState {
-    /// Active wizard step (`1` = Primary/Sensory, `2` = Psyche, `3` = Aptitudes, `4` = Lifepath, `5` = Skills, `6` = Review & Apply).
+    /// Active wizard step (`1` = Primary/Sensory .. `6` = Review & Apply).
     pub active_step: u8,
-    /// Character name or callsign being created.
     pub character_name: String,
-    /// Selected dice generation method for Physical, Mental, Sensory, and Social pools.
     pub roll_method: CharacteristicRollMethod,
-    /// Rolled pool for the 6 Physical characteristics (`SPD`, `FOR`, `DEX`, `KIN`, `HLT`, `FIT`).
     pub physical_pool: Option<CharacteristicGroupPool>,
-    /// Assigned pool slot index (`0..6`) for each of `CharacteristicCode::PHYSICAL_SCALED`.
     pub physical_slots: [Option<usize>; 6],
-    /// Correlated Height (`m`) and Mass (`kg`) roll state.
     pub height_mass_roll: Option<CorrelatedHeightMassRoll>,
-    /// True if the player manually edited Height or Mass via input controls.
     pub height_mass_manual_override: bool,
-    /// Rolled pool for the 6 Mental characteristics (`MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`).
     pub mental_pool: Option<CharacteristicGroupPool>,
-    /// Assigned pool slot index (`0..6`) for each of `CharacteristicCode::MENTAL_ALL`.
     pub mental_slots: [Option<usize>; 6],
-    /// Rolled pool for the 6 Sensory characteristics (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`).
     pub sensory_pool: Option<CharacteristicGroupPool>,
-    /// Assigned pool slot index (`0..6`) for each of `CharacteristicCode::SENSORY_ALL`.
     pub sensory_slots: [Option<usize>; 6],
-    /// Rolled pool for the 3 Social characteristics (`COM`, `PRE`, `ELO`).
     pub social_pool: Option<CharacteristicGroupPool>,
-    /// Assigned pool slot index (`0..3`) for each of `CharacteristicCode::SOCIAL_ALL`.
     pub social_slots: [Option<usize>; 3],
-    /// Mode for Psyche traits (`"CHOOSE"` = manual sliders, `"ROLL_DIRECT"` = `2d4+2d5` in order, `"ROLL_POOL"` = `7 x 2d4+2d5` pool).
+    /// Psyche generation mode (`"CHOOSE"`, `"ROLL_DIRECT"`, or `"ROLL_POOL"`).
     pub psyche_mode: String,
-    /// Optional 7-roll pool for Psyche traits (`2d4 + 2d5`).
     pub psyche_pool: Option<Vec<SingleCharacteristicRoll>>,
-    /// Assigned pool slot index (`0..7`) for each of `CharacteristicCode::PSYCHE_ALL` when using `ROLL_POOL` or `ROLL_DIRECT`.
     pub psyche_slots: [Option<usize>; 7],
-    /// Rolled `11 x 3d6 (drop 2 lowest -> 9 kept)` pool for Domain Aptitudes.
     pub aptitude_pool: Option<AptitudePoolRoll>,
-    /// Assigned pool slot index (`0..9`) for each of `AptitudeCode::ALL`.
     pub aptitude_slots: [Option<usize>; 9],
-    /// Current working `CharacterCharacteristics` assembled by the wizard.
     pub characteristics: CharacterCharacteristics,
-    /// Current working `CharacterAptitudes` assembled by the wizard.
     pub aptitudes: CharacterAptitudes,
-    /// Step 4: Chronological 5-Stage Lifepath configuration & rolls.
     pub lifepath: LifepathBuildConfig,
-    /// Step 5: Current skill levels (`N`) across all 8 Hierarchical Skill Trees.
     pub skills: BTreeMap<String, usize>,
-    /// Step 5: Tree filter (`"ALL"` or `"TREE_1"` .. `"TREE_8"`).
     pub skill_tree_filter: String,
-    /// Step 5: View filter (`"ALL"`, `"TRAINED"`, or `"UNLOCKABLE"`).
     pub skill_view_mode: String,
 }
 
@@ -119,13 +95,6 @@ impl Default for CharacterWizardState {
             skill_view_mode: "ALL".to_string(),
         }
     }
-}
-
-fn roll_2d20_pairs() -> [(i32, i32); 2] {
-    [
-        (roll_browser_die_i32(20), roll_browser_die_i32(20)),
-        (roll_browser_die_i32(20), roll_browser_die_i32(20)),
-    ]
 }
 
 impl CharacterWizardState {
@@ -255,6 +224,141 @@ impl CharacterWizardState {
         }
         self.sync_lifepath_skills();
     }
+
+    /// Assigns or swaps `new_slot` for `char_idx` within `group_slug` and synchronizes characteristics/aptitudes.
+    pub fn assign_slot(&mut self, group_slug: &str, char_idx: usize, new_slot: Option<usize>) {
+        if let Some(slots) = self.slots_mut(group_slug) {
+            assign_or_swap_slot(slots, char_idx, new_slot);
+        }
+        self.sync_from_slots();
+    }
+
+    /// Applies a manual Height (`1.40..=2.20 m`) and Mass (`40.0..=160.0 kg`) override.
+    pub fn set_manual_height_mass(&mut self, hgt_m: f64, mas_kg: f64) {
+        self.height_mass_manual_override = true;
+        self.characteristics.hgt_m = hgt_m.clamp(1.40, 2.20);
+        self.characteristics.mas_kg = mas_kg.clamp(40.0, 160.0);
+    }
+
+    /// Rolls a single characteristic group pool (`"physical"`, `"mental"`, `"sensory"`, or `"social"`) using `rng`,
+    /// sorts kept scores descending, assigns sequential slots, and synchronizes characteristics.
+    pub fn roll_group_with<F: FnMut(i32) -> i32>(&mut self, group_slug: &str, rng: &mut F) {
+        let cat = match group_slug {
+            "physical" => CharacteristicCategory::Physical,
+            "mental" => CharacteristicCategory::Mental,
+            "sensory" => CharacteristicCategory::Sensory,
+            "social" => CharacteristicCategory::Social,
+            _ => return,
+        };
+        let mut pool = roll_characteristic_group_pool(cat, self.roll_method, rng);
+        pool.kept_values.sort_by(|a, b| b.cmp(a));
+        match group_slug {
+            "physical" => self.physical_pool = Some(pool),
+            "mental" => self.mental_pool = Some(pool),
+            "sensory" => self.sensory_pool = Some(pool),
+            "social" => self.social_pool = Some(pool),
+            _ => {}
+        }
+        self.assign_slots_in_order(group_slug);
+        self.sync_from_slots();
+    }
+
+    /// Rolls correlated Height (`m`) and Mass (`kg`) using `rng`, clearing any manual override.
+    pub fn roll_height_mass_with<F: FnMut(i32) -> i32>(&mut self, rng: &mut F) {
+        self.height_mass_manual_override = false;
+        let hm = roll_correlated_height_mass(self.characteristics.for_stat, rng);
+        self.characteristics.hgt_m = hm.height_m;
+        self.characteristics.mas_kg = hm.mass_kg;
+        self.height_mass_roll = Some(hm);
+    }
+
+    /// Pure, host-testable Step 5 skill adjustment (`delta < 0` reduces by 1 down to Stage 1–4 school floor;
+    /// `delta > 0` advances by 1 after validating `N <= 6`, all 4 DAG prerequisite gates, post-school term cap,
+    /// and 5-factor Skill Point affordability).
+    pub fn try_adjust_skill(&mut self, skill_id: &str, delta: i32) -> Result<usize, String> {
+        let sk = skill_id.trim();
+        if lookup_skill_node(sk).is_none() {
+            return Err(format!("Unknown skill '{sk}'."));
+        }
+        let baseline = self.compute_lifepath_baseline();
+        let cur_n = self.skills.get(sk).copied().unwrap_or(0);
+        let floor_n = baseline.baseline_skills.get(sk).copied().unwrap_or(0);
+
+        if delta == 0 {
+            return Ok(cur_n);
+        }
+        if delta < 0 {
+            if cur_n <= floor_n {
+                return Err(format!(
+                    "Cannot reduce '{sk}' below Stage 1–4 Lifepath floor (N={floor_n})."
+                ));
+            }
+            let new_n = cur_n - 1;
+            if new_n == 0 {
+                self.skills.remove(sk);
+            } else {
+                self.skills.insert(sk.to_string(), new_n);
+            }
+            return Ok(new_n);
+        }
+
+        let target_n = cur_n + 1;
+        if target_n > 6 {
+            return Err(format!("Skill '{sk}' cannot exceed maximum level N=6."));
+        }
+        let val = validate_skill_advancement(
+            sk,
+            target_n,
+            &self.skills,
+            &self.characteristics,
+            &self.aptitudes,
+            &baseline.granted_access_tags,
+            baseline.academic_tree_frozen,
+        );
+        if !val.is_valid {
+            let err_str = val
+                .failures
+                .iter()
+                .map(|f| format!("{}: {}", f.code, f.detail))
+                .collect::<Vec<_>>()
+                .join(" | ");
+            return Err(err_str);
+        }
+        let gained_post_school = cur_n.saturating_sub(floor_n);
+        if gained_post_school >= baseline.max_post_school_gain_per_skill {
+            return Err(format!(
+                "Skill '{sk}' has reached the maximum post-school gain cap (+{} levels).",
+                baseline.max_post_school_gain_per_skill
+            ));
+        }
+        let ledger = compute_skill_allocation_sp_ledger(
+            &baseline,
+            &self.lifepath,
+            &self.characteristics,
+            &self.aptitudes,
+            &self.skills,
+        );
+        let (step_bd, sp_affordable) = preview_next_skill_step_sp(
+            sk,
+            target_n,
+            &self.lifepath,
+            &ledger,
+            &self.characteristics,
+            &self.aptitudes,
+        );
+        if !sp_affordable {
+            return Err(format!(
+                "Advancing '{sk}' to N={target_n} costs {} SP ({}), but only {} SP remains (Formal {} SP, Experience {} SP).",
+                step_bd.final_sp_cost,
+                step_bd.training_mode.as_label(),
+                ledger.total_sp_remaining,
+                ledger.formal_sp_remaining,
+                ledger.experience_sp_remaining
+            ));
+        }
+        self.skills.insert(sk.to_string(), target_n);
+        Ok(target_n)
+    }
 }
 
 /// Assigns `new_slot` to `target_idx` within `slots`, swapping with any other item that already held `new_slot`.
@@ -334,33 +438,12 @@ pub fn satya_wizard_set_method(method_str: String) {
     render_character_wizard();
 }
 
-fn roll_single_group_in_state(st: &mut CharacterWizardState, group_slug: &str) {
-    let cat = match group_slug {
-        "physical" => CharacteristicCategory::Physical,
-        "mental" => CharacteristicCategory::Mental,
-        "sensory" => CharacteristicCategory::Sensory,
-        "social" => CharacteristicCategory::Social,
-        _ => return,
-    };
-    let mut pool = roll_characteristic_group_pool(cat, st.roll_method, &mut roll_browser_die_i32);
-    pool.kept_values.sort_by(|a, b| b.cmp(a));
-    match group_slug {
-        "physical" => st.physical_pool = Some(pool),
-        "mental" => st.mental_pool = Some(pool),
-        "sensory" => st.sensory_pool = Some(pool),
-        "social" => st.social_pool = Some(pool),
-        _ => {}
-    }
-    st.assign_slots_in_order(group_slug);
-    st.sync_from_slots();
-}
-
 /// Rolls a single characteristic group pool (`"physical"`, `"mental"`, `"sensory"`, or `"social"`).
 #[wasm_bindgen]
 pub fn satya_wizard_roll_group(group_slug: String) {
     let slug = group_slug.trim().to_ascii_lowercase();
     with_state_mut(|st| {
-        roll_single_group_in_state(&mut st.wizard, &slug);
+        st.wizard.roll_group_with(&slug, &mut roll_browser_die_i32);
     });
     render_character_wizard();
     set_feedback(
@@ -377,16 +460,9 @@ pub fn satya_wizard_roll_group(group_slug: String) {
 pub fn satya_wizard_roll_all_groups() {
     with_state_mut(|st| {
         for slug in ["physical", "mental", "sensory", "social"] {
-            roll_single_group_in_state(&mut st.wizard, slug);
+            st.wizard.roll_group_with(slug, &mut roll_browser_die_i32);
         }
-        st.wizard.height_mass_manual_override = false;
-        let hm = roll_correlated_height_mass(
-            st.wizard.characteristics.for_stat,
-            &mut roll_browser_die_i32,
-        );
-        st.wizard.characteristics.hgt_m = hm.height_m;
-        st.wizard.characteristics.mas_kg = hm.mass_kg;
-        st.wizard.height_mass_roll = Some(hm);
+        st.wizard.roll_height_mass_with(&mut roll_browser_die_i32);
     });
     render_character_wizard();
     set_feedback(
@@ -411,40 +487,36 @@ pub fn satya_wizard_auto_assign_group(group_slug: String) {
 #[wasm_bindgen]
 pub fn satya_wizard_assign_slot(group_slug: String, char_idx: usize) {
     let slug = group_slug.trim().to_ascii_lowercase();
-    let select_id = match slug.as_str() {
+    let code_opt = match slug.as_str() {
         "physical" => CharacteristicCode::PHYSICAL_SCALED
             .get(char_idx)
-            .map(|c| format!("wiz-slot-physical-{}", c.as_str().to_ascii_lowercase())),
+            .map(|c| c.as_str()),
         "mental" => CharacteristicCode::MENTAL_ALL
             .get(char_idx)
-            .map(|c| format!("wiz-slot-mental-{}", c.as_str().to_ascii_lowercase())),
+            .map(|c| c.as_str()),
         "sensory" => CharacteristicCode::SENSORY_ALL
             .get(char_idx)
-            .map(|c| format!("wiz-slot-sensory-{}", c.as_str().to_ascii_lowercase())),
+            .map(|c| c.as_str()),
         "social" => CharacteristicCode::SOCIAL_ALL
             .get(char_idx)
-            .map(|c| format!("wiz-slot-social-{}", c.as_str().to_ascii_lowercase())),
+            .map(|c| c.as_str()),
         "psyche" => CharacteristicCode::PSYCHE_ALL
             .get(char_idx)
-            .map(|c| format!("wiz-slot-psyche-{}", c.as_str().to_ascii_lowercase())),
-        "aptitude" => AptitudeCode::ALL.get(char_idx).map(|c| {
-            format!(
-                "wiz-slot-aptitude-{}",
-                c.as_str().to_ascii_lowercase().replace('-', "_")
-            )
-        }),
+            .map(|c| c.as_str()),
+        "aptitude" => AptitudeCode::ALL.get(char_idx).map(|c| c.as_str()),
         _ => None,
     };
-    let Some(sel_id) = select_id else {
+    let Some(code_str) = code_opt else {
         return;
     };
+    let sel_id = format!(
+        "wiz-slot-{slug}-{}",
+        code_str.to_ascii_lowercase().replace('-', "_")
+    );
     let parsed_slot = select_value(&sel_id).trim().parse::<usize>().ok();
 
     with_state_mut(|st| {
-        if let Some(slots) = st.wizard.slots_mut(&slug) {
-            assign_or_swap_slot(slots, char_idx, parsed_slot);
-        }
-        st.wizard.sync_from_slots();
+        st.wizard.assign_slot(&slug, char_idx, parsed_slot);
     });
     render_character_wizard();
 }
@@ -453,14 +525,7 @@ pub fn satya_wizard_assign_slot(group_slug: String, char_idx: usize) {
 #[wasm_bindgen]
 pub fn satya_wizard_roll_height_mass() {
     with_state_mut(|st| {
-        st.wizard.height_mass_manual_override = false;
-        let hm = roll_correlated_height_mass(
-            st.wizard.characteristics.for_stat,
-            &mut roll_browser_die_i32,
-        );
-        st.wizard.characteristics.hgt_m = hm.height_m;
-        st.wizard.characteristics.mas_kg = hm.mass_kg;
-        st.wizard.height_mass_roll = Some(hm);
+        st.wizard.roll_height_mass_with(&mut roll_browser_die_i32);
     });
     render_character_wizard();
     set_feedback(
@@ -476,17 +541,13 @@ pub fn satya_wizard_update_height_mass() {
     let hgt_val = input_value("wiz-input-hgt-m")
         .trim()
         .parse::<f64>()
-        .unwrap_or(1.75)
-        .clamp(1.40, 2.20);
+        .unwrap_or(1.75);
     let mas_val = input_value("wiz-input-mas-kg")
         .trim()
         .parse::<f64>()
-        .unwrap_or(70.0)
-        .clamp(40.0, 160.0);
+        .unwrap_or(70.0);
     with_state_mut(|st| {
-        st.wizard.height_mass_manual_override = true;
-        st.wizard.characteristics.hgt_m = hgt_val;
-        st.wizard.characteristics.mas_kg = mas_val;
+        st.wizard.set_manual_height_mass(hgt_val, mas_val);
     });
     render_character_wizard();
 }
@@ -566,30 +627,8 @@ pub fn satya_wizard_roll_aptitudes() {
 #[wasm_bindgen]
 pub fn satya_wizard_roll_complete_lifepath() {
     with_state_mut(|st| {
-        let lp = &mut st.wizard.lifepath;
-        lp.origin_roll_2d20 = roll_browser_die_i32(20) + roll_browser_die_i32(20);
-        let orig = resolve_socioeconomic_origin(lp.origin_roll_2d20);
-        if let Some(&first_tal) = orig.early_environment_bonus_talents.first() {
-            lp.stage1_early_talent = first_tal.to_string();
-        }
-        lp.stage2_lit_pairs = roll_2d20_pairs();
-        lp.stage2_lit_override = None;
-        lp.stage2_math_pairs = roll_2d20_pairs();
-        lp.stage2_math_override = None;
-        lp.stage3_math_pairs = roll_2d20_pairs();
-        lp.stage3_math_override = None;
-        lp.stage3_sci_pairs = roll_2d20_pairs();
-        lp.stage3_sci_override = None;
-        lp.stage3_hum_pairs = roll_2d20_pairs();
-        lp.stage3_hum_override = None;
-        lp.age15_crisis_roll_2d20 = roll_browser_die_i32(20) + roll_browser_die_i32(20);
-        lp.age15_dropout_override = None;
-        lp.stage4_path_override = None;
-        lp.stage4a_hs_pairs = roll_2d20_pairs();
-        lp.stage4a_hs_override = None;
-        for term in &mut lp.career_terms {
-            term.term_roll_pairs = roll_2d20_pairs();
-            term.override_successes = None;
+        for stage in 1..=5 {
+            roll_lifepath_stage_in_config(&mut st.wizard.lifepath, stage, &mut roll_browser_die_i32);
         }
         st.wizard.rebuild_and_auto_allocate_skills();
     });
@@ -605,44 +644,7 @@ pub fn satya_wizard_roll_complete_lifepath() {
 #[wasm_bindgen]
 pub fn satya_wizard_roll_lifepath_stage(stage_num: u8) {
     with_state_mut(|st| {
-        let lp = &mut st.wizard.lifepath;
-        match stage_num {
-            1 => {
-                lp.origin_roll_2d20 = roll_browser_die_i32(20) + roll_browser_die_i32(20);
-                let orig = resolve_socioeconomic_origin(lp.origin_roll_2d20);
-                if let Some(&first_tal) = orig.early_environment_bonus_talents.first() {
-                    lp.stage1_early_talent = first_tal.to_string();
-                }
-            }
-            2 => {
-                lp.stage2_lit_pairs = roll_2d20_pairs();
-                lp.stage2_lit_override = None;
-                lp.stage2_math_pairs = roll_2d20_pairs();
-                lp.stage2_math_override = None;
-            }
-            3 => {
-                lp.stage3_math_pairs = roll_2d20_pairs();
-                lp.stage3_math_override = None;
-                lp.stage3_sci_pairs = roll_2d20_pairs();
-                lp.stage3_sci_override = None;
-                lp.stage3_hum_pairs = roll_2d20_pairs();
-                lp.stage3_hum_override = None;
-                lp.age15_crisis_roll_2d20 = roll_browser_die_i32(20) + roll_browser_die_i32(20);
-                lp.age15_dropout_override = None;
-                lp.stage4_path_override = None;
-            }
-            4 => {
-                lp.stage4a_hs_pairs = roll_2d20_pairs();
-                lp.stage4a_hs_override = None;
-            }
-            5 => {
-                for term in &mut lp.career_terms {
-                    term.term_roll_pairs = roll_2d20_pairs();
-                    term.override_successes = None;
-                }
-            }
-            _ => {}
-        }
+        roll_lifepath_stage_in_config(&mut st.wizard.lifepath, stage_num, &mut roll_browser_die_i32);
         st.wizard.rebuild_and_auto_allocate_skills();
     });
     render_character_wizard();
@@ -658,77 +660,8 @@ pub fn satya_wizard_roll_lifepath_stage(stage_num: u8) {
 pub fn satya_wizard_update_lifepath_field(field_name: String, raw_value: String) {
     let field = field_name.trim().to_ascii_lowercase();
     let val = raw_value.trim();
-    let parsed_ov = val.parse::<usize>().ok().map(|n| n.min(2));
-
     with_state_mut(|st| {
-        let lp = &mut st.wizard.lifepath;
-        match field.as_str() {
-            "origin_class" => {
-                if let Some(cls) = SocioeconomicClass::from_code_str(val) {
-                    lp.origin_roll_2d20 = cls.representative_roll_2d20();
-                    let orig = resolve_socioeconomic_origin(lp.origin_roll_2d20);
-                    if let Some(&first_tal) = orig.early_environment_bonus_talents.first() {
-                        lp.stage1_early_talent = first_tal.to_string();
-                    }
-                }
-            }
-            "stage1_talent" => {
-                if lookup_skill_node(val).is_some() {
-                    lp.stage1_early_talent = val.to_string();
-                }
-            }
-            "stage2_lit_override" => lp.stage2_lit_override = parsed_ov,
-            "stage2_math_override" => lp.stage2_math_override = parsed_ov,
-            "stage2_talent" => {
-                if lookup_skill_node(val).is_some() {
-                    lp.stage2_playground_talent = val.to_string();
-                }
-            }
-            "stage3_math_override" => lp.stage3_math_override = parsed_ov,
-            "stage3_sci_override" => lp.stage3_sci_override = parsed_ov,
-            "stage3_hum_override" => lp.stage3_hum_override = parsed_ov,
-            "age15_path" => {
-                let code = val.to_ascii_uppercase();
-                lp.stage4_path_override = Stage4Path::from_code_str(&code);
-                lp.age15_dropout_override = match code.as_str() {
-                    "STAY_4A" => Some(false),
-                    "DROPOUT_4B" | "RURAL_4C" => Some(true),
-                    _ => None,
-                };
-            }
-            "stage4a_track" => {
-                if let Some(trk) = HighSchoolTrack::from_code_str(val) {
-                    lp.stage4a_hs_track = trk;
-                }
-            }
-            "stage4a_hs_override" => lp.stage4a_hs_override = parsed_ov,
-            "stage4b_archetype" => {
-                if let Some(arch) = StreetGangArchetype::from_code_str(val) {
-                    lp.stage4b_gang_archetype = arch;
-                }
-            }
-            "stage4c_archetype" => {
-                if let Some(arch) = RuralYouthArchetype::from_code_str(val) {
-                    lp.stage4c_rural_archetype = arch;
-                }
-            }
-            "num_career_terms" => {
-                let target_len = val.parse::<usize>().unwrap_or(1).min(4);
-                while lp.career_terms.len() < target_len {
-                    lp.career_terms.push(CareerTermConfig {
-                        track: CareerTermTrack::MilitaryCombatArmsSpecOps,
-                        term_roll_pairs: roll_2d20_pairs(),
-                        override_successes: None,
-                        waiver_override: true,
-                    });
-                }
-                lp.career_terms.truncate(target_len);
-            }
-            "adult_ged_waiver" => {
-                lp.adult_ged_waiver = val.eq_ignore_ascii_case("true") || val == "1";
-            }
-            _ => {}
-        }
+        apply_lifepath_field_in_config(&mut st.wizard.lifepath, &field, val, &mut roll_browser_die_i32);
         st.wizard.rebuild_and_auto_allocate_skills();
     });
     render_character_wizard();
@@ -740,23 +673,7 @@ pub fn satya_wizard_update_career_term(term_idx: usize, field: String, raw_value
     let f = field.trim().to_ascii_lowercase();
     let v = raw_value.trim();
     with_state_mut(|st| {
-        if let Some(term) = st.wizard.lifepath.career_terms.get_mut(term_idx) {
-            match f.as_str() {
-                "track" => {
-                    if let Some(trk) = CareerTermTrack::from_code_str(v) {
-                        term.track = trk;
-                    }
-                }
-                "override_successes" => {
-                    term.override_successes = v.parse::<usize>().ok().map(|n| n.min(2));
-                }
-                "roll" => {
-                    term.term_roll_pairs = roll_2d20_pairs();
-                    term.override_successes = None;
-                }
-                _ => {}
-            }
-        }
+        apply_career_term_in_config(&mut st.wizard.lifepath, term_idx, &f, v, &mut roll_browser_die_i32);
         st.wizard.rebuild_and_auto_allocate_skills();
     });
     render_character_wizard();
@@ -777,47 +694,12 @@ pub fn satya_wizard_set_skill_filter(tree_code: String, view_mode: String) {
 #[wasm_bindgen]
 pub fn satya_wizard_adjust_skill(skill_id: String, delta: i32) {
     let sk = skill_id.trim();
-    let mut feedback_msg: Option<(String, bool)> = None;
-
-    with_state_mut(|st| {
-        let baseline = st.wizard.compute_lifepath_baseline();
-        let cur_n = st.wizard.skills.get(sk).copied().unwrap_or(0);
-        let floor_n = baseline.baseline_skills.get(sk).copied().unwrap_or(0);
-
-        if delta < 0 {
-            if cur_n > floor_n {
-                let new_n = cur_n - 1;
-                if new_n == 0 {
-                    st.wizard.skills.remove(sk);
-                } else {
-                    st.wizard.skills.insert(sk.to_string(), new_n);
-                }
-                let new_ledger = compute_skill_allocation_sp_ledger(
-                    &baseline,
-                    &st.wizard.lifepath,
-                    &st.wizard.characteristics,
-                    &st.wizard.aptitudes,
-                    &st.wizard.skills,
-                );
-                feedback_msg = Some((
-                    format!(
-                        "Reduced '{sk}' to N={new_n} (Remaining: {} SP — Formal {}/{} SP, Experience {}/{} SP).",
-                        new_ledger.total_sp_remaining,
-                        new_ledger.formal_sp_spent,
-                        new_ledger.formal_sp_budget,
-                        new_ledger.experience_sp_spent,
-                        new_ledger.experience_sp_budget
-                    ),
-                    false,
-                ));
-            } else {
-                feedback_msg = Some((
-                    format!("Cannot reduce '{sk}' below Stage 1–4 Lifepath floor (N={floor_n})."),
-                    true,
-                ));
-            }
-        } else if delta > 0 {
-            let target_n = cur_n + 1;
+    if delta == 0 {
+        return;
+    }
+    let (msg, is_err) = with_state_mut(|st| match st.wizard.try_adjust_skill(sk, delta) {
+        Ok(new_n) => {
+            let baseline = st.wizard.compute_lifepath_baseline();
             let ledger = compute_skill_allocation_sp_ledger(
                 &baseline,
                 &st.wizard.lifepath,
@@ -825,82 +707,25 @@ pub fn satya_wizard_adjust_skill(skill_id: String, delta: i32) {
                 &st.wizard.aptitudes,
                 &st.wizard.skills,
             );
-            let (step_bd, sp_affordable) = preview_next_skill_step_sp(
-                sk,
-                target_n,
-                &st.wizard.lifepath,
-                &ledger,
-                &st.wizard.characteristics,
-                &st.wizard.aptitudes,
-            );
-            let gained_post_school = cur_n.saturating_sub(floor_n);
-            if !sp_affordable {
-                feedback_msg = Some((
-                    format!(
-                        "Advancing '{sk}' to N={target_n} costs {} SP ({}), but only {} SP remains (Formal {} SP, Experience {} SP).",
-                        step_bd.final_sp_cost,
-                        step_bd.training_mode.as_label(),
-                        ledger.total_sp_remaining,
-                        ledger.formal_sp_remaining,
-                        ledger.experience_sp_remaining
-                    ),
-                    true,
-                ));
-            } else if gained_post_school >= baseline.max_post_school_gain_per_skill {
-                feedback_msg = Some((
-                    format!(
-                        "Skill '{sk}' has reached the maximum post-school gain cap (+{} levels).",
-                        baseline.max_post_school_gain_per_skill
-                    ),
-                    true,
-                ));
-            } else {
-                let val = validate_skill_advancement(
-                    sk,
-                    target_n,
-                    &st.wizard.skills,
-                    &st.wizard.characteristics,
-                    &st.wizard.aptitudes,
-                    &baseline.granted_access_tags,
-                    baseline.academic_tree_frozen,
-                );
-                if val.is_valid {
-                    st.wizard.skills.insert(sk.to_string(), target_n);
-                    let new_ledger = compute_skill_allocation_sp_ledger(
-                        &baseline,
-                        &st.wizard.lifepath,
-                        &st.wizard.characteristics,
-                        &st.wizard.aptitudes,
-                        &st.wizard.skills,
-                    );
-                    feedback_msg = Some((
-                        format!(
-                            "Advanced '{}' to N={target_n} for {} SP ({} · Diff {}/5). Remaining: {} SP.",
-                            val.skill_name,
-                            step_bd.final_sp_cost,
-                            step_bd.training_mode.as_label(),
-                            step_bd.difficulty_rating,
-                            new_ledger.total_sp_remaining
-                        ),
-                        false,
-                    ));
-                } else {
-                    let err_str = val
-                        .failures
-                        .iter()
-                        .map(|f| format!("{}: {}", f.code, f.detail))
-                        .collect::<Vec<_>>()
-                        .join(" | ");
-                    feedback_msg = Some((err_str, true));
-                }
-            }
+            let name = lookup_skill_node(sk).map_or(sk, |spec| spec.name);
+            let verb = if delta < 0 { "Reduced" } else { "Advanced" };
+            (
+                format!(
+                    "{verb} '{name}' to N={new_n} (Remaining: {} SP — Formal {}/{} SP, Experience {}/{} SP).",
+                    ledger.total_sp_remaining,
+                    ledger.formal_sp_spent,
+                    ledger.formal_sp_budget,
+                    ledger.experience_sp_spent,
+                    ledger.experience_sp_budget
+                ),
+                false,
+            )
         }
+        Err(err) => (err, true),
     });
 
     render_character_wizard();
-    if let Some((msg, is_err)) = feedback_msg {
-        set_feedback("wizard-feedback", &msg, is_err);
-    }
+    set_feedback("wizard-feedback", &msg, is_err);
 }
 
 /// Auto-allocates all remaining Career & Elective skill budget across eligible career and staple skills.
@@ -960,54 +785,6 @@ pub fn satya_wizard_apply_to_sheet() {
 
     let control_dex_tac =
         chars.compute_controller(CharacteristicCode::DEX, Some(CharacteristicCode::TAC));
-    set_text("char-stat-control", &control_dex_tac.to_string());
-    set_text("char-stat-spd", &chars.spd.to_string());
-    set_text("char-stat-kin", &chars.kin.to_string());
-    set_text("char-stat-ana", &chars.ana.to_string());
-    set_text("char-stat-dis", &chars.dis.to_string());
-    set_text(
-        "char-sheet-status-pill",
-        &format!(
-            "{} (Age {}) · OODA {} · D_cog {} · FT {} · WSR {} · POW {:.1} · SQM {}",
-            name,
-            baseline.age_years,
-            derived.ooda_initiative,
-            derived.d_cog_quick_thinking,
-            derived.ft_fatigue_threshold,
-            derived.wsr_wound_shock_resistance,
-            derived.pow_striking_power,
-            baseline.campaign_sqm
-        ),
-    );
-
-    if let Some(chips_el) = get_element("char-sheet-skills-chips") {
-        let chips_html = format_trained_skill_chips_html(&chars, &skills);
-        if !chips_html.is_empty() {
-            chips_el.set_inner_html(&chips_html);
-        }
-    }
-
-    if let Some(lp_el) = get_element("char-sheet-lifepath-summary") {
-        let sqm_spec = lookup_campaign_sqm(baseline.campaign_sqm);
-        let heat_spec = evaluate_operational_heat(baseline.operational_heat);
-        let access_gates_html = format_access_gates_pills_html(&baseline);
-        lp_el.set_inner_html(&format!(
-            r#"<span class="roster-title">Lifepath, [Access] Gates &amp; Economy:</span>
-            <div class="roster-chips">
-                <span class="pill pill-iggy">Origin: {orig}</span>
-                <span class="pill pill-iggy">SQM {sqm}: ${usd}/mo ({tier_name})</span>
-                <span class="pill pill-iggy">Heat {heat}/10 (+{h_delta} Δ_ext)</span>
-                {access_gates_html}
-            </div>"#,
-            orig = escape_html(baseline.origin.label),
-            sqm = sqm_spec.sqm_tier,
-            usd = sqm_spec.monthly_liquid_baseline_usd,
-            tier_name = escape_html(sqm_spec.tier_name),
-            heat = heat_spec.heat_score,
-            h_delta = heat_spec.public_check_delta_ext,
-        ));
-    }
-
     set_input_value("ttrpg-control-c", &control_dex_tac.to_string());
     satya_update_cascade_preview();
 
@@ -1034,4 +811,135 @@ pub fn satya_wizard_apply_to_sheet() {
     );
     set_feedback("wizard-feedback", &notice, false);
     append_system_notice(&notice);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use satya_engine::{CANONICAL_SKILL_TREES, SkillType};
+
+    fn make_cycling_die() -> impl FnMut(i32) -> i32 {
+        let mut idx = 0usize;
+        let seq = [1, 4, 2, 5, 3, 1, 2, 4, 5, 3, 4, 4, 5, 5, 5];
+        move |sides: i32| {
+            let v = seq[idx % seq.len()].clamp(1, sides.max(1));
+            idx += 1;
+            v
+        }
+    }
+
+    #[test]
+    fn wizard_slot_assignment_and_swapping_updates_characteristics() {
+        let mut wiz = CharacterWizardState::default();
+        let mut rng = make_cycling_die();
+        wiz.roll_group_with("physical", &mut rng);
+
+        assert_eq!(
+            wiz.physical_slots,
+            [Some(0), Some(1), Some(2), Some(3), Some(4), Some(5)]
+        );
+        let kept = wiz.physical_pool.as_ref().unwrap().kept_values.clone();
+        assert!(kept[0] > kept[5]);
+        assert_eq!(wiz.characteristics.spd, kept[0]);
+        assert_eq!(wiz.characteristics.fit, kept[5]);
+
+        // Swap SPD (index 0) with slot 5 (currently held by FIT at index 5)
+        wiz.assign_slot("physical", 0, Some(5));
+        assert_eq!(wiz.physical_slots[0], Some(5));
+        assert_eq!(wiz.physical_slots[5], Some(0));
+        assert_eq!(wiz.characteristics.spd, kept[5]);
+        assert_eq!(wiz.characteristics.fit, kept[0]);
+    }
+
+    #[test]
+    fn wizard_height_mass_auto_recalc_vs_manual_override() {
+        let mut wiz = CharacterWizardState::default();
+        let mut rng = make_cycling_die();
+        wiz.roll_group_with("physical", &mut rng);
+        let kept = wiz.physical_pool.as_ref().unwrap().kept_values.clone();
+        assert!(kept[0] > kept[5]);
+
+        // Assign FOR (index 1) to lowest slot (5), then roll correlated Height/Mass
+        wiz.assign_slot("physical", 1, Some(5));
+        wiz.roll_height_mass_with(&mut |sides| (sides / 2).max(1));
+        assert!(!wiz.height_mass_manual_override);
+        let base_hgt = wiz.characteristics.hgt_m;
+        let low_for_mass = wiz.characteristics.mas_kg;
+
+        // Swapping FOR to highest slot (0) auto-recalculates Mass upward while preserving stature
+        wiz.assign_slot("physical", 1, Some(0));
+        assert!((wiz.characteristics.hgt_m - base_hgt).abs() < 1e-9);
+        assert!(wiz.characteristics.mas_kg > low_for_mass);
+
+        // Manual override locks Height/Mass against subsequent FOR slot changes and clamps bounds
+        wiz.set_manual_height_mass(1.91, 94.5);
+        assert!(wiz.height_mass_manual_override);
+        assert!((wiz.characteristics.hgt_m - 1.91).abs() < 1e-9);
+        assert!((wiz.characteristics.mas_kg - 94.5).abs() < 1e-9);
+
+        wiz.assign_slot("physical", 1, Some(5));
+        assert!((wiz.characteristics.hgt_m - 1.91).abs() < 1e-9);
+        assert!((wiz.characteristics.mas_kg - 94.5).abs() < 1e-9);
+
+        wiz.set_manual_height_mass(2.90, 20.0);
+        assert!((wiz.characteristics.hgt_m - 2.20).abs() < 1e-9);
+        assert!((wiz.characteristics.mas_kg - 40.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn wizard_try_adjust_skill_enforces_floor_dag_term_cap_and_sp_budget() {
+        let mut wiz = CharacterWizardState::default();
+        wiz.lifepath.career_terms.truncate(1);
+        let baseline = wiz.compute_lifepath_baseline();
+        wiz.skills = baseline.baseline_skills.clone();
+
+        // 1. Stage 1–4 school floor cannot be reduced
+        let floor_err = wiz
+            .try_adjust_skill("native_language_speech", -1)
+            .unwrap_err();
+        assert!(floor_err.contains("Stage 1–4 Lifepath floor"));
+
+        // 2. High-tier gated skills fail 4-gate DAG validation when prerequisites are missing
+        assert!(
+            wiz.try_adjust_skill("trauma_orthopedic_general_surgery", 1)
+                .is_err()
+        );
+        assert!(
+            wiz.try_adjust_skill("piloting_rotary_wing_helicopter", 1)
+                .is_err()
+        );
+
+        // 3. Valid +1 advancement up to post-school term cap, cap rejection, and -1 step-back
+        let root_talent_id = CANONICAL_SKILL_TREES
+            .iter()
+            .find(|s| {
+                s.skill_type == SkillType::Tal
+                    && baseline.baseline_skills.get(s.id).copied() == Some(1)
+            })
+            .expect("at least one N=1 root talent")
+            .id;
+        let max_gain = baseline.max_post_school_gain_per_skill;
+        for step_idx in 1..=max_gain {
+            assert_eq!(wiz.try_adjust_skill(root_talent_id, 1), Ok(1 + step_idx));
+        }
+        let cap_err = wiz.try_adjust_skill(root_talent_id, 1).unwrap_err();
+        assert!(cap_err.contains("post-school gain cap"));
+        for step_idx in (1..=max_gain).rev() {
+            assert_eq!(wiz.try_adjust_skill(root_talent_id, -1), Ok(step_idx));
+        }
+        assert!(wiz.try_adjust_skill(root_talent_id, -1).is_err());
+
+        // 4. SP budget exhaustion rejects further advancement once remaining SP is insufficient
+        let mut sp_exhausted_err = None;
+        for spec in CANONICAL_SKILL_TREES.iter().filter(|s| {
+            s.skill_type == SkillType::Tal && baseline.baseline_skills.get(s.id).copied() == Some(1)
+        }) {
+            if let Err(err) = wiz.try_adjust_skill(spec.id, 1) {
+                sp_exhausted_err = Some(err);
+                break;
+            }
+        }
+        let err_msg = sp_exhausted_err.expect("Experience SP budget must exhaust across talents");
+        assert!(err_msg.contains("SP remains"));
+    }
 }

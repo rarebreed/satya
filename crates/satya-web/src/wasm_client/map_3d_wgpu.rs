@@ -1,32 +1,17 @@
 //! Browser WebGPU (`wgpu`) 2.5D/3D Tactical Map Diorama & 2D Top-Down Orthographic Renderer
 //! (`#wgpu-map-canvas`), Procedural Terrain/Cover/Cutaway-Bulkhead Geometry, and `.glb` Miniatures.
 
-#[cfg(target_arch = "wasm32")]
-use crate::wasm_client::dice_3d::parse_hex_color;
+pub use crate::wasm_client::wgpu_shared::*;
+
 use crate::wasm_client::glb_model::GlbVertex;
-#[cfg(target_arch = "wasm32")]
-use crate::wasm_client::map_3d::{
-    TacticalMapUiState, format_map_tactical_hud_html, grid_cell_to_world_xz,
-    handle_map_grid_cell_clicked, resolve_token_visual, with_map_ui, with_map_ui_mut,
-    world_xz_to_grid_cell,
-};
-#[cfg(target_arch = "wasm32")]
-use crate::wasm_client::model_3d_wgpu::{
-    DioramaUniforms, GlbInstanceData, OrbitOrthoCamera, SHARED_GLB_DIORAMA_WGSL,
-    resolve_glb_model, shared_glb_vertex_buffer_layouts,
-};
-#[cfg(target_arch = "wasm32")]
-use satya_schema::{CoverGrade, MessageVisibility, TacticalTileKind};
+use crate::wasm_client::map_3d::{TacticalMapUiState, grid_cell_to_world_xz};
+use satya_schema::{CoverGrade, TacticalTileKind};
 use wasm_bindgen::prelude::*;
 
 fn push_quad(verts: &mut Vec<GlbVertex>, p: [[f32; 3]; 4], col: [f32; 4], zone_id: f32) {
     let u = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
     let v = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
-    let nx = u[1] * v[2] - u[2] * v[1];
-    let ny = u[2] * v[0] - u[0] * v[2];
-    let nz = u[0] * v[1] - u[1] * v[0];
-    let len = (nx * nx + ny * ny + nz * nz).sqrt().max(1e-6);
-    let n = [nx / len, ny / len, nz / len];
+    let n = normalize3(cross3(u, v));
     let bary = [[1.0_f32, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
     for tri in [[0_usize, 1, 2], [0, 2, 3]] {
         for (ci, &vi) in tri.iter().enumerate() {
@@ -68,8 +53,7 @@ pub fn push_box(
     push_quad(verts, [t3, t2, t1, t0], col, zone_id);
 }
 
-#[cfg(target_arch = "wasm32")]
-fn push_beam(
+pub(crate) fn push_beam(
     verts: &mut Vec<GlbVertex>,
     start_xz: [f32; 2],
     end_xz: [f32; 2],
@@ -93,8 +77,8 @@ fn push_beam(
 }
 
 /// Builds the static/overlay tactical diorama vertex list for `ui`.
-#[cfg(target_arch = "wasm32")]
-fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex> {
+#[must_use]
+pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex> {
     let w = ui.map.grid_width.max(4);
     let h = ui.map.grid_height.max(4);
     let cell_m = ui.map.cell_size_m();
@@ -232,12 +216,20 @@ fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex> {
 #[cfg(target_arch = "wasm32")]
 mod map_wgpu_runtime {
     use super::*;
+    use crate::wasm_client::dice_3d::parse_hex_color;
     use crate::wasm_client::glb_model::LoadedGlbModel;
+    use crate::wasm_client::map_3d::{
+        format_map_tactical_hud_html, format_tactical_map_svg_markup,
+        handle_map_grid_cell_clicked, resolve_token_visual, with_map_ui, with_map_ui_mut,
+        world_xz_to_grid_cell,
+    };
+    use crate::wasm_client::model_3d_wgpu::{custom_glb_generation, resolve_glb_model};
+    use satya_schema::MessageVisibility;
     use std::cell::RefCell;
     use std::collections::HashMap;
     use wasm_bindgen::JsCast;
     use wasm_bindgen_futures::spawn_local;
-    use web_sys::{HtmlCanvasElement, MouseEvent, WheelEvent};
+    use web_sys::{MouseEvent, WheelEvent};
 
     struct GpuMeshSlice {
         vertex_buffer: wgpu::Buffer,
@@ -257,6 +249,7 @@ mod map_wgpu_runtime {
         diorama_vcount: u32,
         diorama_ib: wgpu::Buffer,
         miniature_meshes: HashMap<String, GpuMeshSlice>,
+        cached_custom_glb_gen: u64,
         miniature_ib: wgpu::Buffer,
     }
 
@@ -297,26 +290,15 @@ mod map_wgpu_runtime {
         MAP_CTRL.with(|c| f(&mut c.borrow_mut()))
     }
 
-    fn create_depth_view(device: &wgpu::Device, w: u32, h: u32) -> wgpu::TextureView {
-        let tex = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("satya-map-depth"),
-            size: wgpu::Extent3d {
-                width: w.max(1),
-                height: h.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth24Plus,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        tex.create_view(&wgpu::TextureViewDescriptor::default())
-    }
-
     fn ensure_miniature_gpu_mesh(pipe: &mut MapDioramaPipeline, preset: &str) {
-        if preset != "custom_glb" && pipe.miniature_meshes.contains_key(preset) {
+        let cur_gen = custom_glb_generation();
+        if preset == "custom_glb" {
+            if pipe.miniature_meshes.contains_key(preset)
+                && pipe.cached_custom_glb_gen == cur_gen
+            {
+                return;
+            }
+        } else if pipe.miniature_meshes.contains_key(preset) {
             return;
         }
         let model: LoadedGlbModel = resolve_glb_model(preset);
@@ -335,6 +317,9 @@ mod map_wgpu_runtime {
                 vertex_count: model.vertices.len() as u32,
             },
         );
+        if preset == "custom_glb" {
+            pipe.cached_custom_glb_gen = cur_gen;
+        }
     }
 
     fn pick_grid_cell_from_mouse(ev: &MouseEvent, cam: &OrbitOrthoCamera) -> Option<(i32, i32)> {
@@ -366,27 +351,17 @@ mod map_wgpu_runtime {
             return;
         };
 
-        if let Some(el) = crate::wasm_client::dom::get_element("wgpu-map-canvas")
-            && let Ok(canvas) = el.dyn_into::<HtmlCanvasElement>()
-        {
-            let cw = canvas.client_width().max(320) as u32;
-            let ch = canvas.client_height().max(280) as u32;
-            if cw != pipe.surface_config.width || ch != pipe.surface_config.height {
-                canvas.set_width(cw);
-                canvas.set_height(ch);
-                pipe.surface_config.width = cw;
-                pipe.surface_config.height = ch;
-                pipe.surface.configure(&pipe.device, &pipe.surface_config);
-                pipe.depth_view = create_depth_view(&pipe.device, cw, ch);
-            }
-        }
+        resize_canvas_surface_if_needed(
+            "wgpu-map-canvas",
+            &pipe.device,
+            &pipe.surface,
+            &mut pipe.surface_config,
+            &mut pipe.depth_view,
+            "satya-map-depth",
+        );
 
         if ctrl.scene_dirty {
-            let verts = with_map_ui(|ui| {
-                let max_dim = ui.map.grid_width.max(ui.map.grid_height) as f32 * ui.map.cell_size_m();
-                let _ = max_dim;
-                build_tactical_diorama_vertices(ui)
-            });
+            let verts = with_map_ui(build_tactical_diorama_vertices);
             let bytes: &[u8] = bytemuck::cast_slice(&verts);
             let vb = pipe.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("satya-map-diorama-vb"),
@@ -461,7 +436,7 @@ mod map_wgpu_runtime {
         let aspect =
             (pipe.surface_config.width as f32) / (pipe.surface_config.height.max(1) as f32);
         let (view_proj, eye) = ctrl.camera.build_view_proj_and_eye(aspect);
-        let mode_f = crate::wasm_client::model_3d_wgpu::shader_mode_code(&ctrl.shader_mode);
+        let mode_f = shader_mode_code(&ctrl.shader_mode);
         let uniforms = DioramaUniforms {
             view_proj,
             camera_pos: [eye[0], eye[1], eye[2], 1.0],
@@ -606,9 +581,7 @@ mod map_wgpu_runtime {
             });
             if changed {
                 let hud = with_map_ui(format_map_tactical_hud_html);
-                if let Some(el) = crate::wasm_client::dom::get_element("tabletop-map-los-hud") {
-                    el.set_inner_html(&hud);
-                }
+                crate::wasm_client::dom::set_html("tabletop-map-los-hud", &hud);
                 with_map_ctrl(|c| {
                     c.scene_dirty = true;
                     render_map_frame(c);
@@ -628,8 +601,7 @@ mod map_wgpu_runtime {
                 if (cx - sx).abs() > 4 || (cy - sy).abs() > 4 {
                     moved = true;
                 }
-                let dx = (cx - lx) as f32;
-                let dy = (cy - ly) as f32;
+                let (dx, dy) = ((cx - lx) as f32, (cy - ly) as f32);
                 c.drag_state = Some((is_pan, sx, sy, cx, cy, moved));
                 if !moved || (dx.abs() < 0.5 && dy.abs() < 0.5) {
                     return;
@@ -695,6 +667,8 @@ mod map_wgpu_runtime {
                     Err(_err) => {
                         crate::wasm_client::dom::set_display("wgpu-map-canvas-wrap", "none");
                         crate::wasm_client::dom::set_display("tabletop-map-svg-fallback", "block");
+                        let svg = with_map_ui(format_tactical_map_svg_markup);
+                        crate::wasm_client::dom::set_html("tabletop-map-svg-fallback", &svg);
                     }
                 }
             });
@@ -702,144 +676,16 @@ mod map_wgpu_runtime {
     }
 
     async fn init_map_pipeline() -> Result<MapDioramaPipeline, String> {
-        let Some(el) = crate::wasm_client::dom::get_element("wgpu-map-canvas") else {
-            return Err("Canvas #wgpu-map-canvas not found".to_string());
-        };
-        let canvas: HtmlCanvasElement = el
-            .dyn_into::<HtmlCanvasElement>()
-            .map_err(|_| "Not a canvas".to_string())?;
-        let width = canvas.client_width().max(320) as u32;
-        let height = canvas.client_height().max(280) as u32;
-        canvas.set_width(width);
-        canvas.set_height(height);
-
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::BROWSER_WEBGPU,
-            ..Default::default()
-        });
-        let surface = instance
-            .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
-            .map_err(|e| format!("WebGPU surface error: {e}"))?;
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .ok_or_else(|| "WebGPU unavailable".to_string())?;
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("satya-map-device"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                        .using_resolution(adapter.limits()),
-                    memory_hints: wgpu::MemoryHints::Performance,
-                },
-                None,
-            )
-            .await
-            .map_err(|e| format!("WebGPU device error: {e}"))?;
-
-        let caps = surface.get_capabilities(&adapter);
-        let format = caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| !f.is_srgb())
-            .or_else(|| caps.formats.first().copied())
-            .ok_or_else(|| "No surface format".to_string())?;
-        let alpha_mode = caps
-            .alpha_modes
-            .first()
-            .copied()
-            .unwrap_or(wgpu::CompositeAlphaMode::Auto);
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format,
-            width,
-            height,
-            present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode,
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-        surface.configure(&device, &surface_config);
-        let depth_view = create_depth_view(&device, width, height);
-
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("satya-map-uniforms"),
-            size: std::mem::size_of::<DioramaUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("satya-map-bgl"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("satya-map-bg"),
-            layout: &bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-        });
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("satya-map-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(SHARED_GLB_DIORAMA_WGSL.into()),
-        });
-        let playout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("satya-map-playout"),
-            bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
-        });
-        let vbuffers = shared_glb_vertex_buffer_layouts();
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("satya-map-pipeline"),
-            layout: Some(&playout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &vbuffers,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                cull_mode: None,
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth24Plus,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::LessEqual,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
+        let (_canvas, surface, device, queue, surface_config) =
+            init_wgpu_canvas_context("wgpu-map-canvas").await?;
+        let depth_view = create_depth_view(
+            &device,
+            surface_config.width,
+            surface_config.height,
+            "satya-map-depth",
+        );
+        let (uniform_buffer, bind_group, render_pipeline) =
+            create_shared_diorama_pipeline(&device, surface_config.format, "satya-map");
 
         let diorama_vb = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("satya-map-empty-vb"),
@@ -873,6 +719,7 @@ mod map_wgpu_runtime {
             diorama_vcount: 0,
             diorama_ib,
             miniature_meshes: HashMap::new(),
+            cached_custom_glb_gen: 0,
             miniature_ib,
         })
     }
@@ -936,4 +783,77 @@ pub fn satya_reset_map_camera() {
         }
         map_wgpu_runtime::render_map_frame(c);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::wasm_client::glb_model::load_preset_glb_model;
+    use crate::wasm_client::model_3d_wgpu::build_pedestal_and_model_vertices;
+
+    #[test]
+    fn test_build_tactical_diorama_vertices_cutaway_and_elevated_platform() {
+        let mut ui = TacticalMapUiState {
+            wall_cutaway: true,
+            ..Default::default()
+        };
+        let verts_cut = build_tactical_diorama_vertices(&ui);
+        assert!(!verts_cut.is_empty());
+        assert!(verts_cut.len().is_multiple_of(3));
+
+        ui.wall_cutaway = false;
+        let verts_full = build_tactical_diorama_vertices(&ui);
+        assert_eq!(verts_cut.len(), verts_full.len());
+
+        let max_y_cut = verts_cut
+            .iter()
+            .map(|v| v.position[1])
+            .fold(f32::NEG_INFINITY, f32::max);
+        let max_y_full = verts_full
+            .iter()
+            .map(|v| v.position[1])
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            max_y_cut < max_y_full,
+            "Cutaway walls (0.58m) must reduce max Y ({max_y_cut}) below full bulkheads (2.35m -> {max_y_full})"
+        );
+        assert!((max_y_full - 2.39).abs() < 1e-3);
+
+        // Verify isolated cutaway wall height (0.58m + 0.04m cap = 0.62m) and elevated platform (1.48m)
+        ui.map.tiles = vec![TacticalTileKind::Floor; (ui.map.grid_width * ui.map.grid_height) as usize];
+        ui.map.tokens.clear();
+        ui.reachable_cells.clear();
+        ui.hovered_cell = None;
+        ui.last_los = None;
+
+        ui.map.tiles[0] = TacticalTileKind::FullWall;
+        ui.wall_cutaway = true;
+        let wall_cut_verts = build_tactical_diorama_vertices(&ui);
+        let wall_cut_max_y = wall_cut_verts
+            .iter()
+            .map(|v| v.position[1])
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!((wall_cut_max_y - 0.62).abs() < 1e-3);
+
+        ui.map.tiles[0] = TacticalTileKind::ElevatedPlatform;
+        let plat_verts = build_tactical_diorama_vertices(&ui);
+        assert!(
+            plat_verts
+                .iter()
+                .any(|v| (v.position[1] - 1.48).abs() < 1e-4 && (v.bary_zone[3] + 1.0).abs() < 1e-4),
+            "ElevatedPlatform must emit 1.48m gridded catwalk top geometry"
+        );
+    }
+
+    #[test]
+    fn test_build_pedestal_and_model_vertices_prepends_gridded_turntable_quad() {
+        let model = load_preset_glb_model("valkyrie_rig");
+        let combined = build_pedestal_and_model_vertices(&model);
+        assert_eq!(combined.len(), model.vertices.len() + 6);
+        for v in &combined[0..6] {
+            assert!((v.position[1] + 0.002).abs() < 1e-5);
+            assert!((v.bary_zone[3] + 1.0).abs() < 1e-5);
+        }
+        assert_eq!(&combined[6..], model.vertices.as_slice());
+    }
 }

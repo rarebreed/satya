@@ -603,6 +603,58 @@ pub enum HemorrhageGrade {
 }
 
 impl HemorrhageGrade {
+    pub const ALL: [Self; 5] = [
+        Self::Grade0None,
+        Self::Grade1Capillary,
+        Self::Grade2Venous,
+        Self::Grade3MajorVenousVisceral,
+        Self::Grade4ArterialSeverance,
+    ];
+
+    #[must_use]
+    pub const fn grade_number(self) -> i32 {
+        match self {
+            Self::Grade0None => 0,
+            Self::Grade1Capillary => 1,
+            Self::Grade2Venous => 2,
+            Self::Grade3MajorVenousVisceral => 3,
+            Self::Grade4ArterialSeverance => 4,
+        }
+    }
+
+    #[must_use]
+    pub const fn from_grade_number(val: i32) -> Self {
+        match val {
+            1 => Self::Grade1Capillary,
+            2 => Self::Grade2Venous,
+            3 => Self::Grade3MajorVenousVisceral,
+            4 => Self::Grade4ArterialSeverance,
+            _ => Self::Grade0None,
+        }
+    }
+
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Grade0None => "Grade 0 — None",
+            Self::Grade1Capillary => "Grade 1 — Capillary Ooze (0.25 U/hr)",
+            Self::Grade2Venous => "Grade 2 — Venous Bleed (0.5 U/min)",
+            Self::Grade3MajorVenousVisceral => "Grade 3 — Major Venous / Visceral (1 U / 20t)",
+            Self::Grade4ArterialSeverance => "Grade 4 — Arterial Severance (1 U / 4t)",
+        }
+    }
+
+    #[must_use]
+    pub const fn short_badge(self) -> &'static str {
+        match self {
+            Self::Grade0None => "G0 None",
+            Self::Grade1Capillary => "G1 Ooze",
+            Self::Grade2Venous => "G2 Venous",
+            Self::Grade3MajorVenousVisceral => "G3 Visceral",
+            Self::Grade4ArterialSeverance => "G4 Arterial",
+        }
+    }
+
     /// Blood volume lost per Tick (`1 Tick = 0.25s`, `240 Ticks = 1 min`, `14,400 Ticks = 1 hr`) in Units (`10.0 Units` baseline,
     /// `docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.3 Table).
     #[must_use]

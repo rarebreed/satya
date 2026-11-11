@@ -1,13 +1,15 @@
-//! Left Tabbed Notebook UI (`Maps`, `3D Dice`, `3D Model`, `Character Sheet/Status`,
-//! `Character Wizard`, `Combat Tracker`, `Rules Book`, `GM Docs`, and `Apache Iggy`) handlers and HTML formatters.
+//! Left 10-Pane Tabbed Notebook UI (`Maps`, `3D Dice`, `3D Model`, `Character Sheet/Status`,
+//! `Character Wizard`, `NPC List`, `Combat Tracker`, `Rules Book`, `GM Docs`, and `Apache Iggy`)
+//! handlers and HTML formatters.
 
 use crate::wasm_client::chat_and_ttrpg::{append_system_notice, satya_update_cascade_preview};
 use crate::wasm_client::dom::{
-    document, escape_html, get_element, input_value, roll_browser_die_i64, select_value, set_class,
-    set_display, set_input_value, set_select_value, set_text,
+    document, escape_html, escape_js_single_quoted_attr, fetch_json, get_element, input_value,
+    roll_browser_die_i64, select_value, set_class, set_display, set_input_value, set_select_value,
+    set_text,
 };
 pub use crate::wasm_client::gm_docs::*;
-use crate::wasm_client::state::{with_state, with_state_mut};
+use crate::wasm_client::state::{SECONDS_PER_TICK, with_state, with_state_mut};
 use crate::wasm_client::telemetry::satya_refresh_metrics;
 use crate::wasm_client::webrtc::{send_ws_packet, sync_workspace_drawers_dom};
 use satya_schema::{
@@ -74,8 +76,8 @@ pub const NOTEBOOK_TAB_SPECS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
-/// Switches the active view inside the Left Tabbed Notebook (`#tabletop-canvas-card`) between
-/// `"maps"`, `"dice"`, `"model"`, `"character"`, `"wizard"`, `"combat"`, `"rules"`, `"docs"`, and `"iggy"`.
+/// Switches the active view inside the 10-pane Left Tabbed Notebook (`#tabletop-canvas-card`) between
+/// `"maps"`, `"dice"`, `"model"`, `"character"`, `"wizard"`, `"npcs"`, `"combat"`, `"rules"`, `"docs"`, and `"iggy"`.
 #[wasm_bindgen]
 pub fn satya_select_notebook_tab(tab_id: String) {
     let target = if NOTEBOOK_TABS.iter().any(|(slug, _, _)| *slug == tab_id) {
@@ -223,43 +225,23 @@ pub fn default_3d_model_stage_html() -> String {
 
 /// Formats `(stage_html, telemetry_pill_text)` for a selected 3D asset preset and shader mode in the `3D Model` notebook tab.
 pub fn format_3d_model_stage_html(preset: &str, render_mode: &str) -> (String, String) {
-    let (title, tris, scale, hit_zones) = match preset {
-        "recon_mk4" => (
-            "Recon Suit Mk-IV (Marcus)",
-            "11.8k tris",
-            "1.85m · Light EVA",
-            "Optics Visor (DR 3) · Chest Carapace (DR 4) · Thruster Pack (DR 2)",
-        ),
-        "secops_sentry" => (
-            "SecOps Heavy Sentry",
-            "18.4k tris",
-            "2.10m · Armored Bipedal",
-            "Sensor Dome (DR 5) · Reactive Plating (DR 7) · Servo Joints (DR 3)",
-        ),
-        "operative_light" => (
-            "Light Tactical Operative",
-            "9.6k tris",
-            "1.78m · Agile Recon",
-            "Tactical Headset (DR 2) · Kevlar Rig (DR 3) · Mobility Greaves (DR 2)",
-        ),
-        "sector4_airlock" => (
-            "Sector 4 Orbital Airlock",
-            "26.0k tris",
-            "20m x 15m · Zero-G Chamber",
-            "Inner Bulkhead · Decompression Valve · Mag-Rail Crane",
-        ),
-        "custom_glb" => (
+    let trimmed = preset.trim();
+    let (title, scale, hit_zones) = if trimmed == "custom_glb" {
+        (
             "Custom glTF 2.0 (.glb) Asset",
-            "User Mesh",
             "1.0m Metric Scale",
             "Imported glTF 2.0 Submeshes & Anatomical Height-Band Hit Zones",
-        ),
-        _ => (
-            "Valkyrie Exo-Rig (Sara)",
-            "14.2k tris",
-            "1.92m · Med-Assault Exo",
-            "Ballistic Helm (DR 4) · Trauma Auto-Injector · Mag-Boots (DR 4)",
-        ),
+        )
+    } else {
+        crate::wasm_client::glb_model::preset_model_metadata(trimmed)
+    };
+    let tris = match trimmed {
+        "recon_mk4" => "11.8k tris",
+        "secops_sentry" => "18.4k tris",
+        "operative_light" => "9.6k tris",
+        "sector4_airlock" => "26.0k tris",
+        "custom_glb" => "User Mesh",
+        _ => "14.2k tris",
     };
 
     let stroke_color = match render_mode {
@@ -275,9 +257,12 @@ pub fn format_3d_model_stage_html(preset: &str, render_mode: &str) -> (String, S
     };
 
     let pill = format!("Mesh: {title} · {tris}");
+    let safe_title = escape_html(title);
+    let safe_scale = escape_html(scale);
+    let safe_zones = escape_html(hit_zones);
     let html = format!(
         r##"<div class="model-stage-inner">
-            <svg viewBox="0 0 360 210" class="model-wireframe-svg" role="img" aria-label="{title}">
+            <svg viewBox="0 0 360 210" class="model-wireframe-svg" role="img" aria-label="{safe_title}">
                 <defs>
                     <radialGradient id="modelGlow" cx="50%" cy="50%" r="50%">
                         <stop offset="0%" stop-color="{stroke_color}" stop-opacity="0.22"/>
@@ -293,11 +278,11 @@ pub fn format_3d_model_stage_html(preset: &str, render_mode: &str) -> (String, S
                 <line x1="152" y1="136" x2="208" y2="136" stroke="{stroke_color}" stroke-width="1.2"/>
                 <circle cx="180" cy="46" r="10" fill="none" stroke="#34d399" stroke-width="1.5"/>
                 <text x="14" y="22" fill="#94a3b8" font-family="monospace" font-size="11">{mode_badge} // {tris}</text>
-                <text x="14" y="196" fill="#e2e8f0" font-family="monospace" font-size="11">{title} ({scale})</text>
+                <text x="14" y="196" fill="#e2e8f0" font-family="monospace" font-size="11">{safe_title} ({safe_scale})</text>
             </svg>
             <div class="model-hit-zones">
                 <span class="roster-title">Hit Locations &amp; Subsystem Mesh:</span>
-                <span class="mono">{hit_zones}</span>
+                <span class="mono">{safe_zones}</span>
             </div>
         </div>"##,
     );
@@ -336,7 +321,7 @@ pub fn satya_load_skill_preset(skill_name: String, skill_level: i32, control_c: 
     satya_update_cascade_preview();
 }
 
-/// Advances (or resets when `delta == 0`) the Satya Count-Up Tick Timeline (`1 Tick = 0.5s`) in the `Combat Tracker` notebook tab and persists the updated state to SQLite when in a live session.
+/// Advances (or resets when `delta == 0`) the Satya Count-Up Tick Timeline (`1 Tick = 0.25s`, `20 Ticks = 5.0s`) in the `Combat Tracker` notebook tab and persists the updated state to SQLite when in a live session.
 #[wasm_bindgen]
 pub fn satya_advance_combat_tick(delta: i32) {
     let (round, tick, session_opt, token_opt) = with_state_mut(|st| {
@@ -355,10 +340,10 @@ pub fn satya_advance_combat_tick(delta: i32) {
             st.auth_token.clone(),
         )
     });
-    let elapsed_sec = f64::from(tick) * 0.5;
+    let elapsed_sec = f64::from(tick) * SECONDS_PER_TICK;
     set_text(
         "combat-round-pill",
-        &format!("Window {round} · Tick {tick} ({elapsed_sec:.1}s)"),
+        &format!("Window {round} · Tick {tick} ({elapsed_sec:.2}s)"),
     );
     render_combat_tracker();
 
@@ -378,12 +363,12 @@ pub fn satya_advance_combat_tick(delta: i32) {
         wasm_bindgen_futures::spawn_local(async move {
             let url = format!("/api/sessions/{sid}/combat");
             let _: Result<satya_schema::CombatTrackerState, _> =
-                crate::wasm_client::dom::fetch_json(&url, "POST", Some(&token), Some(&req)).await;
+                fetch_json("POST", &url, Some(&token), Some(&req)).await;
         });
     }
 }
 
-/// Formats the HTML chip list of active session combatants and their continuous Count-Up Tick readiness (`Tick_start = max(1, 15 - OODA - Awareness)`) for `#combat-tracker-list`.
+/// Formats the HTML chip list of active session combatants and their continuous Count-Up Tick readiness (`1 Tick = 0.25s`, `Tick_start = max(1, 15 - OODA - Awareness)`) for `#combat-tracker-list`.
 pub fn format_combat_tracker_html(roster: &[Participant], round: u32, tick: u32) -> String {
     if roster.is_empty() {
         return r#"<span class="pill pill-muted">Join or create a session to populate active combatants.</span>"#.to_string();
@@ -395,13 +380,14 @@ pub fn format_combat_tracker_html(roster: &[Participant], round: u32, tick: u32)
             let ooda = (13 - (idx as i32)).clamp(8, 16);
             let start_tick = satya_engine::compute_starting_tick(ooda, 0, 0, ooda + 1, 12) as u32;
             let actor_tick = tick.max(start_tick) + (idx as u32) * 2;
+            let actor_sec = f64::from(actor_tick) * SECONDS_PER_TICK;
             let badge_cls = if p.participant_kind == ParticipantKind::AiAgent {
                 "participant-chip ai"
             } else {
                 "participant-chip"
             };
             format!(
-                r#"<div class="{badge_cls}"><strong>{}</strong> [{:?}] · OODA {ooda} · Next Action @ Tick {actor_tick} (W{round})</div>"#,
+                r#"<div class="{badge_cls}"><strong>{}</strong> [{:?}] · OODA {ooda} · Next Action @ Tick {actor_tick} ({actor_sec:.2}s · W{round})</div>"#,
                 escape_html(&p.display_name),
                 p.role
             )
@@ -547,7 +533,7 @@ pub fn satya_search_rules_book() {
         .map(|hit| {
             format!(
                 r#"<div class="gm-doc-card rules-search-hit"><div class="gm-doc-header"><button type="button" class="btn-chip" onclick="window.satyaSelectRulesChapter('{}')">{}</button><span class="mono">{}</span></div><div class="gm-doc-preview">{}</div></div>"#,
-                escape_html(&hit.chapter_id),
+                escape_js_single_quoted_attr(&hit.chapter_id),
                 escape_html(&hit.chapter_title),
                 escape_html(&hit.section_heading),
                 escape_html(&hit.snippet),

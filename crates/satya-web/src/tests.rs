@@ -1,4 +1,6 @@
 //! Unit and SSR HTML parity tests for `satya-web`.
+//!
+//! Companion automated SSR↔Wasm DOM/callback/theme contract tests live in [`crate::tests_contracts`].
 
 use super::*;
 use satya_schema::{CombatStance, MessageVisibility, SessionMode, SessionRole, TopicMetricsView};
@@ -109,7 +111,6 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
     assert!(table_html.contains("session-lifecycle"));
     assert!(table_html.contains("last offset: 3"));
 
-    // Initial mesh uses deterministic tie-breaking; camera/mic renegotiation always initiates
     assert!(wasm_client::should_initiate_peer_connection(
         "u-demo-gm-sean",
         "u-demo-sara",
@@ -131,7 +132,6 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
         true
     ));
 
-    // Phase 3: AI GM provider default models & tabletop canvas HTML formatters
     assert_eq!(
         wasm_client::default_model_for_provider("google_genai"),
         "gemini-2.5-flash"
@@ -145,7 +145,10 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
         wasm_client::default_model_for_provider("ollama"),
         "gemma4:12b"
     );
+}
 
+#[test]
+fn test_chat_events_and_cascade_task_formatters() {
     let map_req = satya_schema::GmMapUpdateRequest {
         map_id: "map-docking-bay".to_string(),
         title: "Sector 4 Docking Bay".to_string(),
@@ -185,8 +188,6 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
     assert!(dice_html.contains(r#"<span class="dice-cube">3</span>"#));
     assert!(dice_html.contains(r#"<span class="dice-cube">19</span>"#));
 
-    // Chat timestamp formatting & ChatMessageEvent HTML rendering
-    // 2026-11-02T18:42:15.123000Z = 1_793_644_935_123_000 microseconds
     let (ts_short, ts_iso) = wasm_client::format_timestamp_us_utc(1_793_644_935_123_000);
     assert_eq!(ts_short, "18:42:15");
     assert_eq!(ts_iso, "2026-11-02T18:42:15.123Z");
@@ -222,7 +223,6 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
     assert!(chat_html.contains("2026-11-02T18:42:15.123Z"));
     assert!(chat_html.contains("Checking comms!"));
 
-    // satya-engine Four-Factor Cascade preview & mechanics HTML rendering
     let params = satya_engine::CascadeTaskParams::new_k20(3, 12, 0, 0);
     let preview_str = wasm_client::format_cascade_odds_preview(&params);
     assert!(preview_str.contains("TN_eff 19"));
@@ -270,7 +270,7 @@ fn test_wasm_client_enum_parsers_and_metrics_table_render() {
 }
 
 #[test]
-fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
+fn test_ssr_shell_workspace_columns_and_combat_techniques() {
     let html = render_satya_app_html();
     assert!(html.contains("/pkg/satya_web.js"));
     assert!(html.contains("Satya // Engine"));
@@ -278,53 +278,58 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(!html.contains("SATYA // ENGINE (RUST + WASM)"));
     assert!(!html.contains("Apache Iggy + Avro v1/v2 Ready"));
     assert!(!html.contains("WebRTC + Durable Avro Event Stream"));
-    assert!(html.contains("TTRPG Mode (GM + Players)"));
-    assert!(html.contains("TTRPG Mode (GM + AI + Players)"));
-    assert!(html.contains("TTRPG Mode (AI GM + Players)"));
-    assert!(html.contains("btn-toggle-auth-password"));
-    assert!(html.contains("btn-toggle-session-password"));
-    assert!(html.contains("btn-toggle-ai-gm-key"));
-    assert!(html.contains("ai-gm-config-fields"));
-    assert!(html.contains("ai-gm-provider-select"));
-    assert!(html.contains("ai-gm-model-input"));
-    assert!(html.contains("ai-gm-api-key-input"));
-    assert!(html.contains("btn-menu-toggle-ai-gm-settings"));
-    assert!(html.contains("menu-ai-gm-settings-panel"));
-    assert!(html.contains("tabletop-canvas-card"));
-    assert!(html.contains("tabletop-map-viewport"));
-    assert!(html.contains("wgpu-map-canvas"));
-    assert!(html.contains("map-preset-select"));
-    assert!(html.contains("btn-map-toggle-proj"));
-    assert!(html.contains("btn-map-wall-cutaway"));
-    assert!(html.contains("btn-map-apply-cover"));
-    assert!(html.contains("tabletop-map-los-hud"));
-    assert!(html.contains("wgpu-model-canvas"));
-    assert!(html.contains("model-glb-file-input"));
-    assert!(html.contains("btn-export-glb-model"));
-    assert!(html.contains("wgpu-dice-tray"));
-    assert!(html.contains("wgpu-dice-canvas"));
-    assert!(html.contains("dice-material-preset"));
-    assert!(html.contains("dice-base-color"));
-    assert!(html.contains("dice-ink-color"));
-    assert!(html.contains("dice-opacity-slider"));
-    assert!(html.contains("38% opacity"));
-    assert!(html.contains("dice-camera-yaw"));
-    assert!(html.contains("dice-camera-pitch"));
-    assert!(html.contains("dice-camera-zoom"));
-    assert!(html.contains("btn-dice-pan-left"));
-    assert!(html.contains("btn-reset-dice-camera"));
-    assert!(html.contains("wgpu-dice-readout"));
-    assert!(html.contains("btn-hamburger-menu"));
-    assert!(html.contains("hamburger-menu-dropdown"));
-    assert!(html.contains("btn-menu-toggle-auth-pane"));
-    assert!(html.contains("btn-menu-toggle-session-pane"));
-    assert!(html.contains("btn-menu-toggle-settings"));
-    assert!(html.contains("btn-menu-toggle-chat-settings"));
-    assert!(html.contains("menu-chat-settings-panel"));
-    assert!(html.contains("filter-checkboxes-vertical"));
-    assert!(html.contains(r#"id="auth-card""#));
-    assert!(html.contains(r#"id="session-card""#));
-    assert!(html.contains(r#"id="workspace-panel""#));
+    for snippet in [
+        "TTRPG Mode (GM + Players)",
+        "TTRPG Mode (GM + AI + Players)",
+        "TTRPG Mode (AI GM + Players)",
+        "btn-toggle-auth-password",
+        "btn-toggle-session-password",
+        "btn-toggle-ai-gm-key",
+        "ai-gm-config-fields",
+        "ai-gm-provider-select",
+        "ai-gm-model-input",
+        "ai-gm-api-key-input",
+        "btn-menu-toggle-ai-gm-settings",
+        "menu-ai-gm-settings-panel",
+        "tabletop-canvas-card",
+        "tabletop-map-viewport",
+        "wgpu-map-canvas",
+        "map-preset-select",
+        "btn-map-toggle-proj",
+        "btn-map-wall-cutaway",
+        "btn-map-apply-cover",
+        "tabletop-map-los-hud",
+        "wgpu-model-canvas",
+        "model-glb-file-input",
+        "btn-export-glb-model",
+        "wgpu-dice-tray",
+        "wgpu-dice-canvas",
+        "dice-material-preset",
+        "dice-base-color",
+        "dice-ink-color",
+        "dice-opacity-slider",
+        "38% opacity",
+        "dice-camera-yaw",
+        "dice-camera-pitch",
+        "dice-camera-zoom",
+        "btn-dice-pan-left",
+        "btn-reset-dice-camera",
+        "wgpu-dice-readout",
+        "btn-hamburger-menu",
+        "hamburger-menu-dropdown",
+        "btn-menu-toggle-auth-pane",
+        "btn-menu-toggle-session-pane",
+        "btn-menu-toggle-settings",
+        "btn-menu-toggle-chat-settings",
+        "menu-chat-settings-panel",
+        "filter-checkboxes-vertical",
+        "btn-logout",
+        "btn-leave-session",
+        "btn-workspace-disconnect",
+    ] {
+        assert!(html.contains(snippet), "missing SSR snippet: {snippet}");
+    }
+
     let session_card_idx = html.find(r#"id="session-card""#).unwrap();
     assert!(
         html[session_card_idx.saturating_sub(40)..session_card_idx + 80].contains("display: none")
@@ -336,64 +341,56 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains("<h2>Task Resolution &amp; Action Pool</h2>"));
     assert!(!html.contains("Satya TTRPG Task Resolution &amp; Combat Economy"));
     assert!(html.contains("Roll Satya Task"));
-    assert!(html.contains(r#"id="ttrpg-skill""#));
-    assert!(html.contains(r#"id="btn-toggle-ttrpg-skill-dropdown""#));
-    assert!(html.contains(r#"id="ttrpg-skill-dropdown""#));
-    assert!(html.contains("window.satyaFilterTtrpgSkillDropdown()"));
-    assert!(html.contains("window.satyaSelectTtrpgSkill("));
-    assert!(html.contains(r#"id="ttrpg-skill-level""#));
-    assert!(html.contains(r#"id="ttrpg-control-c""#));
-    assert!(html.contains(r#"id="ttrpg-internal-mod""#));
-    assert!(html.contains(r#"id="ttrpg-external-mod""#));
-    assert!(html.contains(r#"id="ttrpg-carry-mode""#));
-    assert!(html.contains(r#"id="ttrpg-botch-rule""#));
-    assert!(html.contains(r#"id="ttrpg-wound-shock""#));
-    assert!(html.contains(r#"id="ttrpg-odds-pill""#));
-    assert!(html.contains(r#"id="ttrpg-odds-readout""#));
-    assert!(html.contains("ttrpg-odds-stacked-bar"));
-    assert!(html.contains("ttrpg-odds-table"));
+
+    for id in [
+        "auth-card",
+        "ttrpg-skill",
+        "btn-toggle-ttrpg-skill-dropdown",
+        "ttrpg-skill-dropdown",
+        "ttrpg-skill-level",
+        "ttrpg-control-c",
+        "ttrpg-internal-mod",
+        "ttrpg-external-mod",
+        "ttrpg-carry-mode",
+        "ttrpg-botch-rule",
+        "ttrpg-wound-shock",
+        "ttrpg-odds-pill",
+        "ttrpg-odds-readout",
+        "right-drawer-rails",
+        "btn-toggle-webcam-cols",
+        "btn-toggle-webcam-float",
+        "btn-toggle-webcam-drawer",
+        "btn-expand-webcam-drawer",
+        "webcam-drawer-rail",
+        "btn-menu-toggle-webcam-pane",
+        "chat-card",
+        "chat-drawer-rail",
+        "btn-toggle-chat-drawer",
+        "btn-expand-chat-drawer",
+        "btn-menu-toggle-chat-pane",
+        "ttrpg-drawer-rail",
+        "btn-toggle-ttrpg-drawer",
+        "btn-expand-ttrpg-drawer",
+        "btn-menu-toggle-ttrpg-pane",
+        "webrtc-drag-header",
+        "admin-inspector-card",
+    ] {
+        assert!(
+            html.contains(&format!(r#"id="{id}""#)),
+            "missing SSR id=\"{id}\""
+        );
+    }
+
     let combat_pane_idx = html.find(r#"id="notebook-pane-combat""#).unwrap();
     let rules_pane_idx = html.find(r#"id="notebook-pane-rules""#).unwrap();
     let stance_idx = html.find(r#"id="ttrpg-stance""#).unwrap();
-    assert!(
-        stance_idx > combat_pane_idx && stance_idx < rules_pane_idx,
-        "ttrpg-stance should live inside notebook-pane-combat rather than ttrpg-drawer"
-    );
-    for tech_code in [
-        "grab",
-        "disarm",
-        "takedown",
-        "throw",
-        "trap",
-        "lock",
-        "push",
-        "punch",
-        "elbow",
-        "knee",
-        "kick",
-        "head_butt",
-        "thrust",
-        "swing",
-        "block",
-        "parry",
-        "feint",
-        "dodge",
-        "escape",
-        "probe",
-        "root",
-        "snap_shot",
-        "combat_sighted_shot",
-        "deliberate_aimed_shot",
-        "controlled_double_tap_burst",
-        "suppressive_full_auto",
-        "brace_weapon",
-        "cover_peek_slice_pie",
-        "bounding_shoot_on_move",
-        "overwatch_hold_sector",
-    ] {
+    assert!(stance_idx > combat_pane_idx && stance_idx < rules_pane_idx);
+
+    for spec in satya_engine::canonical_combat_technique_catalog() {
+        let code = spec.id.as_str();
         assert!(
-            html.contains(&format!(r#"value="{tech_code}""#)),
-            "missing canonical combat technique option '{tech_code}' in SSR HTML"
+            html.contains(&format!(r#"value="{code}""#)),
+            "missing canonical combat technique option '{code}' in SSR HTML"
         );
     }
     assert!(html.contains("container: ttrpg-card / inline-size"));
@@ -413,13 +410,13 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(!html.contains("MEETING_PUBLIC"));
     assert!(!html.contains(r#"<option value="HOST">Meeting Host</option>"#));
     assert!(!html.contains(r#"<option value="PARTICIPANT">Meeting Participant</option>"#));
+    assert!(!html.contains("center-drawer-rail"));
+    assert!(html.contains(r#"class="video-grid cols-1""#));
+
     let chat_idx = html.find(r#"class="card chat-card""#).unwrap();
     let ttrpg_idx = html.find(r#"id="ttrpg-drawer""#).unwrap();
-    assert!(
-        ttrpg_idx > chat_idx,
-        "ttrpg-drawer should be rendered beneath chat-card"
-    );
-    // Verify 3-column layout order: Left Notebook -> Splitter -> Center Chat+Die Roller -> Right Web Cams
+    assert!(ttrpg_idx > chat_idx);
+
     let notebook_col_idx = html.find(r#"id="notebook-column""#).unwrap();
     let splitter_idx = html.find(r#"id="workspace-col-splitter""#).unwrap();
     let center_col_idx = html.find(r#"id="center-column""#).unwrap();
@@ -428,30 +425,11 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(splitter_idx < center_col_idx);
     assert!(center_col_idx < webrtc_col_idx);
 
-    // Verify all 9 Tabbed Notebook tabs & panes exist
     for (_, btn_id, pane_id) in wasm_client::NOTEBOOK_TABS {
         assert!(html.contains(&format!(r#"id="{btn_id}""#)));
         assert!(html.contains(&format!(r#"id="{pane_id}""#)));
     }
 
-    // Verify Web Cams, Session Chat, and Task Roller collapsible drawer controls
-    assert!(html.contains(r#"id="right-drawer-rails""#));
-    assert!(html.contains(r#"id="btn-toggle-webcam-cols""#));
-    assert!(html.contains(r#"id="btn-toggle-webcam-float""#));
-    assert!(html.contains(r#"id="btn-toggle-webcam-drawer""#));
-    assert!(html.contains(r#"id="btn-expand-webcam-drawer""#));
-    assert!(html.contains(r#"id="webcam-drawer-rail""#));
-    assert!(html.contains(r#"id="btn-menu-toggle-webcam-pane""#));
-    assert!(html.contains(r#"id="chat-card""#));
-    assert!(html.contains(r#"id="chat-drawer-rail""#));
-    assert!(html.contains(r#"id="btn-toggle-chat-drawer""#));
-    assert!(html.contains(r#"id="btn-expand-chat-drawer""#));
-    assert!(html.contains(r#"id="btn-menu-toggle-chat-pane""#));
-    assert!(html.contains(r#"id="ttrpg-drawer-rail""#));
-    assert!(html.contains(r#"id="btn-toggle-ttrpg-drawer""#));
-    assert!(html.contains(r#"id="btn-expand-ttrpg-drawer""#));
-    assert!(html.contains(r#"id="btn-menu-toggle-ttrpg-pane""#));
-    assert!(!html.contains("center-drawer-rail"));
     let right_rails_idx = html.find(r#"id="right-drawer-rails""#).unwrap();
     let chat_rail_idx = html.find(r#"id="chat-drawer-rail""#).unwrap();
     let ttrpg_rail_idx = html.find(r#"id="ttrpg-drawer-rail""#).unwrap();
@@ -460,39 +438,72 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(chat_rail_idx > right_rails_idx);
     assert!(ttrpg_rail_idx > chat_rail_idx);
     assert!(webcam_rail_idx > ttrpg_rail_idx);
-    assert!(html.contains(r#"id="webrtc-drag-header""#));
-    assert!(html.contains(r#"class="video-grid cols-1""#));
+}
 
-    // Verify Google OAuth (`drive.file`), GM_ONLY Document Vault, Persistent GM Memory & Omnisearch controls
-    assert!(html.contains(r#"id="btn-google-auth""#));
-    assert!(html.contains(r#"id="google-auth-status-pill""#));
-    assert!(html.contains(r#"id="tab-btn-docs""#));
-    assert!(html.contains(r#"id="notebook-pane-docs""#));
-    assert!(html.contains(r#"id="gm-memories-count-pill""#));
+#[test]
+fn test_ssr_gm_vault_rules_book_npcs_and_markdown_chat() {
+    let html = render_satya_app_html();
+    for id in [
+        "btn-google-auth",
+        "google-auth-status-pill",
+        "tab-btn-docs",
+        "notebook-pane-docs",
+        "gm-memories-count-pill",
+        "gm-omnisearch-input",
+        "gm-omnisearch-scope",
+        "btn-gm-omnisearch",
+        "gm-omnisearch-results",
+        "gm-doc-file-input",
+        "gm-doc-title",
+        "gm-doc-source",
+        "gm-doc-persistent",
+        "gm-doc-campaign-tag",
+        "btn-google-picker",
+        "gm-google-oauth-config-row",
+        "gm-google-client-id",
+        "gm-google-api-key",
+        "gm-doc-content",
+        "btn-submit-gm-doc",
+        "gm-docs-list",
+        "gm-memory-title",
+        "gm-memory-category",
+        "gm-memory-pinned",
+        "gm-memory-persistent",
+        "gm-memory-content",
+        "btn-submit-gm-memory",
+        "gm-memories-list",
+        "tab-btn-rules",
+        "notebook-pane-rules",
+        "rules-chapter-select",
+        "rules-search-input",
+        "rules-book-viewport",
+        "tab-btn-npcs",
+        "notebook-pane-npcs",
+        "npc-roster-select",
+        "npc-selected-card-container",
+        "npc-generator-panel",
+        "npc-gen-prompt",
+        "npc-gen-template",
+        "btn-generate-npc",
+        "chat-input",
+        "scenario-director-designer-panel",
+        "scenario-flow-mode",
+        "scenario-premise",
+        "scenario-planned-beats",
+        "scenario-beat-prob",
+        "scenario-beat-interval",
+        "scenario-dial-combat_encounter",
+        "scenario-dial-thought_provoking_discussion",
+        "scenario-dial-dramatic_revelation",
+        "btn-save-scenario-director",
+    ] {
+        assert!(
+            html.contains(&format!(r#"id="{id}""#)),
+            "missing SSR id=\"{id}\""
+        );
+    }
     assert!(html.contains("0. GM Archivist (information lookup)"));
-    assert!(html.contains(r#"id="gm-omnisearch-input""#));
-    assert!(html.contains(r#"id="gm-omnisearch-scope""#));
-    assert!(html.contains(r#"id="btn-gm-omnisearch""#));
-    assert!(html.contains(r#"id="gm-omnisearch-results""#));
-    assert!(html.contains(r#"id="gm-doc-file-input""#));
-    assert!(html.contains(r#"id="gm-doc-title""#));
-    assert!(html.contains(r#"id="gm-doc-source""#));
-    assert!(html.contains(r#"id="gm-doc-persistent""#));
-    assert!(html.contains(r#"id="gm-doc-campaign-tag""#));
-    assert!(html.contains(r#"id="btn-google-picker""#));
-    assert!(html.contains(r#"id="gm-google-oauth-config-row""#));
-    assert!(html.contains(r#"id="gm-google-client-id""#));
-    assert!(html.contains(r#"id="gm-google-api-key""#));
-    assert!(html.contains(r#"id="gm-doc-content""#));
-    assert!(html.contains(r#"id="btn-submit-gm-doc""#));
-    assert!(html.contains(r#"id="gm-docs-list""#));
-    assert!(html.contains(r#"id="gm-memory-title""#));
-    assert!(html.contains(r#"id="gm-memory-category""#));
-    assert!(html.contains(r#"id="gm-memory-pinned""#));
-    assert!(html.contains(r#"id="gm-memory-persistent""#));
-    assert!(html.contains(r#"id="gm-memory-content""#));
-    assert!(html.contains(r#"id="btn-submit-gm-memory""#));
-    assert!(html.contains(r#"id="gm-memories-list""#));
+    assert!(html.contains(r#"class="chat-markdown-input""#));
 
     assert_eq!(
         wasm_client::extract_google_drive_file_id_and_kind(
@@ -515,15 +526,14 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(model_html.contains("Recon Suit Mk-IV"));
     assert!(model_pill.contains("11.8k tris"));
 
-    assert!(html.contains(r#"id="tab-btn-rules""#));
-    assert!(html.contains(r#"id="notebook-pane-rules""#));
-    assert!(html.contains(r#"id="rules-chapter-select""#));
-    assert!(html.contains(r#"value="notation_glossary""#));
-    assert!(html.contains(r#"value="task_requirements_catalog""#));
-    assert!(html.contains(r#"value="skills_trees_tactical_and_social""#));
-    assert!(html.contains(r#"value="firearms_and_ballistics""#));
-    assert!(html.contains(r#"id="rules-search-input""#));
-    assert!(html.contains(r#"id="rules-book-viewport""#));
+    for chapter_val in [
+        "notation_glossary",
+        "task_requirements_catalog",
+        "skills_trees_tactical_and_social",
+        "firearms_and_ballistics",
+    ] {
+        assert!(html.contains(&format!(r#"value="{chapter_val}""#)));
+    }
     assert!(html.contains("Cascading 2d20 Engine &amp; Task Resolution"));
     assert!(html.contains(".rules-book-viewport"));
     assert!(html.contains("height: max(680px, calc(100dvh - 76px))"));
@@ -541,17 +551,92 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(!html.contains(r"\text{TN}_P"));
     assert!(!html.contains("&amp;amp;"));
 
-    assert!(html.contains("btn-logout"));
-    assert!(html.contains("btn-leave-session"));
-    assert!(html.contains("btn-workspace-disconnect"));
-    assert!(html.contains(r#"id="admin-inspector-card""#));
-    assert!(html.contains("display: none"));
+    let terry_entry = satya_schema::SessionNpcEntry {
+        character_id: "npc_terry".to_string(),
+        character_name: "Terry".to_string(),
+        callsign_or_role: "General MD & Clinical Physician".to_string(),
+        age_years: 26,
+        public_summary:
+            "Terry — General MD & Clinical Physician (Age 26). Apparent demeanor: kind general MD."
+                .to_string(),
+        apparent_condition: "Healthy & Alert".to_string(),
+        is_persistent: true,
+        gm_character: None,
+        psyche_summary: vec![
+            "SLF 5 (Altruistic / Self-Sacrificing)".to_string(),
+            "BLG 16 (Tribal / Group-Dependent)".to_string(),
+        ],
+        top_skills: vec!["Clinical Diagnosis & Internal Medicine (N=3)".to_string()],
+        gm_secret_dossier: Some("Secretly treating wounded couriers for free.".to_string()),
+    };
+    let gm_card_html = wasm_client::format_npc_card_html(&terry_entry, true);
+    assert!(gm_card_html.contains("BLG 16 (Tribal / Group-Dependent)"));
+    assert!(gm_card_html.contains("Clinical Diagnosis &amp; Internal Medicine (N=3)"));
+    assert!(gm_card_html.contains("Secretly treating wounded couriers for free."));
 
-    // Verify Character Creation Wizard tab & all 6 steps
-    assert!(html.contains(r#"id="tab-btn-wizard""#));
-    assert!(html.contains(r#"id="notebook-pane-wizard""#));
-    assert!(html.contains(r#"id="wiz-char-name-input""#));
-    assert!(html.contains(r#"id="wizard-stage-container""#));
+    let player_card_html = wasm_client::format_npc_card_html(&terry_entry, false);
+    assert!(player_card_html.contains("Terry"));
+    assert!(player_card_html.contains("General MD &amp; Clinical Physician"));
+    assert!(!player_card_html.contains("BLG 16"));
+    assert!(!player_card_html.contains("Secretly treating wounded couriers for free."));
+    assert!(player_card_html.contains("Player View: GM-only Characteristics"));
+
+    let md_html = wasm_client::format_chat_markdown_html(
+        "**Vance** whispers *urgent* telemetry:\n\n> **[COMMS INTERCEPT]** Lockdown in `Sector 4`\n\n- Breach airlock\n- Negotiate with $\\text{TN}_P = 19$\n\n<script>alert('xss')</script>",
+    );
+    assert!(md_html.contains(r#"class="chat-markdown-body""#));
+    assert!(md_html.contains("<strong>Vance</strong>"));
+    assert!(md_html.contains("<em>urgent</em>"));
+    assert!(md_html.contains("<blockquote"));
+    assert!(md_html.contains(">Sector 4</code>"));
+    assert!(md_html.contains("<li>Breach airlock</li>"));
+    assert!(md_html.contains("rules-math-inline"));
+    assert!(!md_html.contains("<script>"));
+    assert!(md_html.contains("&lt;script&gt;"));
+
+    let dir_json = wasm_client::build_scenario_director_config_json(
+        "hybrid",
+        "Orbital quarantine",
+        "Beat 1: Distress signal\nBeat 2: Enforcer lockdown",
+        40,
+        3,
+        &[
+            ("combat_encounter".to_string(), 60.0),
+            ("thought_provoking_discussion".to_string(), 0.0),
+        ],
+    );
+    let parsed_dir: serde_json::Value = serde_json::from_str(&dir_json).unwrap();
+    assert_eq!(parsed_dir["flow_mode"], "hybrid");
+    assert_eq!(parsed_dir["beat_interval_turns"], 3);
+    assert_eq!(parsed_dir["planned_beats"].as_array().unwrap().len(), 2);
+    assert_eq!(parsed_dir["event_weights"]["combat_encounter"], 60.0);
+    assert_eq!(
+        parsed_dir["event_weights"]["thought_provoking_discussion"],
+        0.0
+    );
+}
+
+#[test]
+fn test_character_wizard_and_sheet_roundtrip() {
+    let html = render_satya_app_html();
+    for id in [
+        "tab-btn-wizard",
+        "notebook-pane-wizard",
+        "wiz-char-name-input",
+        "wizard-stage-container",
+        "char-sheet-preset-select",
+        "char-sheet-stage-container",
+        "char-human-hit-svg",
+        "char-sheet-skills-table",
+        "char-sheet-talents-table",
+        "char-sheet-ranged-table",
+        "char-sheet-melee-table",
+        "char-sheet-armor-table",
+        "char-sheet-gear-table",
+        "char-sheet-notes-textarea",
+    ] {
+        assert!(html.contains(&format!(r#"id="{id}""#)));
+    }
     assert!(html.contains("Method 1: Roll 2d4 + 3d5 (Drop Lowest d5)"));
     assert!(html.contains("Method 2: Roll 2d4 + 2d5 Pool (Keep Highest)"));
     assert!(html.contains("Physical Dimensions: Height (HGT) &amp; Mass (MAS)"));
@@ -589,20 +674,6 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(step6_html.contains("Striking Power (POW)"));
     assert!(step6_html.contains("OODA Initiative"));
 
-    // Verify Complete Character Sheet / Status pane (All 30 Characteristics, 9 Aptitudes,
-    // Talents & Skills tables, Weapons/Armor/Gear tables, Human-Shaped Hit Location SVG,
-    // Damage/Fatigue/Psyche trackers, and Writable Notes)
-    assert!(html.contains(r#"id="char-sheet-preset-select""#));
-    assert!(html.contains(r#"id="char-sheet-stage-container""#));
-    assert!(html.contains(r#"id="char-human-hit-svg""#));
-    assert!(html.contains(r#"id="char-sheet-skills-table""#));
-    assert!(html.contains(r#"id="char-sheet-talents-table""#));
-    assert!(html.contains(r#"id="char-sheet-ranged-table""#));
-    assert!(html.contains(r#"id="char-sheet-melee-table""#));
-    assert!(html.contains(r#"id="char-sheet-armor-table""#));
-    assert!(html.contains(r#"id="char-sheet-gear-table""#));
-    assert!(html.contains(r#"id="char-sheet-notes-textarea""#));
-
     let mut sheet = wasm_client::CharacterSheetState::from_preset("mateo_vance");
     assert_eq!(sheet.character_name, "Mateo Vance");
     let zone_idx = satya_engine::HitLocationId::ChestRibcageLungs as usize;
@@ -615,12 +686,16 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(mateo_html.contains("Bleed G4"));
     assert!(mateo_html.contains("Kalashnikov AKM Assault Rifle"));
     assert!(mateo_html.contains("Concealable Soft Kevlar Vest"));
-    assert!(mateo_html.contains(r#"id="char-sheet-vault-bar""#));
-    assert!(mateo_html.contains(r#"id="char-sheet-verification-badge""#));
-    assert!(mateo_html.contains(r#"id="char-sheet-save-vault-btn""#));
-    assert!(mateo_html.contains(r#"id="char-sheet-export-btn""#));
-    assert!(mateo_html.contains(r#"id="char-sheet-import-file-input""#));
-    assert!(mateo_html.contains(r#"id="char-sheet-assets-table""#));
+    for vault_id in [
+        "char-sheet-vault-bar",
+        "char-sheet-verification-badge",
+        "char-sheet-save-vault-btn",
+        "char-sheet-export-btn",
+        "char-sheet-import-file-input",
+        "char-sheet-assets-table",
+    ] {
+        assert!(mateo_html.contains(&format!(r#"id="{vault_id}""#)));
+    }
 
     let record = sheet.to_character_sheet_record("usr-sara");
     let mut restored = wasm_client::CharacterSheetState::default();
@@ -632,7 +707,6 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
         wasm_client::BoneFractureStatus::CompleteFracture
     );
 
-    // Searchable Skill Name dropdown in Task Resolution & Action Pool
     let default_sheet = wasm_client::CharacterSheetState::default();
     let surg_hits = wasm_client::search_canonical_skills("Trauma Surgery", &default_sheet);
     assert_eq!(surg_hits.len(), 1);
@@ -645,119 +719,29 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     let empty_dd =
         wasm_client::format_ttrpg_skill_dropdown_html("zzzz_nonexistent_skill", &default_sheet);
     assert!(empty_dd.contains("No canonical skills matched"));
+}
 
-    // Verify NPC List tab & Role-Filtered GM/Solo vs Player NPC card formatting
-    assert!(html.contains(r#"id="tab-btn-npcs""#));
-    assert!(html.contains(r#"id="notebook-pane-npcs""#));
-    assert!(html.contains(r#"id="npc-roster-select""#));
-    assert!(html.contains(r#"id="npc-selected-card-container""#));
-    assert!(html.contains(r#"id="npc-generator-panel""#));
-    assert!(html.contains(r#"id="npc-gen-prompt""#));
-    assert!(html.contains(r#"id="npc-gen-template""#));
-    assert!(html.contains(r#"id="btn-generate-npc""#));
-
-    let terry_entry = satya_schema::SessionNpcEntry {
-        character_id: "npc_terry".to_string(),
-        character_name: "Terry".to_string(),
-        callsign_or_role: "General MD & Clinical Physician".to_string(),
-        age_years: 26,
-        public_summary:
-            "Terry — General MD & Clinical Physician (Age 26). Apparent demeanor: kind general MD."
-                .to_string(),
-        apparent_condition: "Healthy & Alert".to_string(),
-        is_persistent: true,
-        gm_character: None,
-        psyche_summary: vec![
-            "SLF 5 (Altruistic / Self-Sacrificing)".to_string(),
-            "BLG 16 (Tribal / Group-Dependent)".to_string(),
-        ],
-        top_skills: vec!["Clinical Diagnosis & Internal Medicine (N=3)".to_string()],
-        gm_secret_dossier: Some("Secretly treating wounded couriers for free.".to_string()),
-    };
-
-    let gm_card_html = wasm_client::format_npc_card_html(&terry_entry, true);
-    assert!(gm_card_html.contains("BLG 16 (Tribal / Group-Dependent)"));
-    assert!(gm_card_html.contains("Clinical Diagnosis &amp; Internal Medicine (N=3)"));
-    assert!(gm_card_html.contains("Secretly treating wounded couriers for free."));
-
-    let player_card_html = wasm_client::format_npc_card_html(&terry_entry, false);
-    assert!(player_card_html.contains("Terry"));
-    assert!(player_card_html.contains("General MD &amp; Clinical Physician"));
-    assert!(!player_card_html.contains("BLG 16"));
-    assert!(!player_card_html.contains("Secretly treating wounded couriers for free."));
-    assert!(player_card_html.contains("Player View: GM-only Characteristics"));
-
-    // Verify Markdown Chat Composer (<textarea>) & Scenario Director Designer UI in SSR HTML
-    assert!(html.contains(r#"id="chat-input""#));
-    assert!(html.contains(r#"class="chat-markdown-input""#));
-    assert!(html.contains(r#"id="scenario-director-designer-panel""#));
-    assert!(html.contains(r#"id="scenario-flow-mode""#));
-    assert!(html.contains(r#"id="scenario-premise""#));
-    assert!(html.contains(r#"id="scenario-planned-beats""#));
-    assert!(html.contains(r#"id="scenario-beat-prob""#));
-    assert!(html.contains(r#"id="scenario-beat-interval""#));
-    assert!(html.contains(r#"id="scenario-dial-combat_encounter""#));
-    assert!(html.contains(r#"id="scenario-dial-thought_provoking_discussion""#));
-    assert!(html.contains(r#"id="scenario-dial-dramatic_revelation""#));
-    assert!(html.contains(r#"id="btn-save-scenario-director""#));
-
-    // Verify Markdown rendering in Session Chat (bold, italics, lists, blockquotes, code, math, XSS safety)
-    let md_html = wasm_client::format_chat_markdown_html(
-        "**Vance** whispers *urgent* telemetry:\n\n> **[COMMS INTERCEPT]** Lockdown in `Sector 4`\n\n- Breach airlock\n- Negotiate with $\\text{TN}_P = 19$\n\n<script>alert('xss')</script>",
-    );
-    assert!(md_html.contains(r#"class="chat-markdown-body""#));
-    assert!(md_html.contains("<strong>Vance</strong>"));
-    assert!(md_html.contains("<em>urgent</em>"));
-    assert!(md_html.contains("<blockquote"));
-    assert!(md_html.contains(">Sector 4</code>"));
-    assert!(md_html.contains("<li>Breach airlock</li>"));
-    assert!(md_html.contains("rules-math-inline"));
-    assert!(!md_html.contains("<script>"));
-    assert!(md_html.contains("&lt;script&gt;"));
-
-    // Verify Scenario Director JSON serialization from UI controls
-    let dir_json = wasm_client::build_scenario_director_config_json(
-        "hybrid",
-        "Orbital quarantine",
-        "Beat 1: Distress signal\nBeat 2: Enforcer lockdown",
-        40,
-        3,
-        &[
-            ("combat_encounter".to_string(), 60.0),
-            ("thought_provoking_discussion".to_string(), 0.0),
-        ],
-    );
-    let parsed_dir: serde_json::Value = serde_json::from_str(&dir_json).unwrap();
-    assert_eq!(parsed_dir["flow_mode"], "hybrid");
-    assert_eq!(parsed_dir["beat_interval_turns"], 3);
-    assert_eq!(parsed_dir["planned_beats"].as_array().unwrap().len(), 2);
-    assert_eq!(parsed_dir["event_weights"]["combat_encounter"], 60.0);
-    assert_eq!(
-        parsed_dir["event_weights"]["thought_provoking_discussion"],
-        0.0
-    );
-
-    // Verify Appearance & Theme settings in Hamburger Menu + option normalizers
-    assert_eq!(
-        wasm_client::normalize_theme_id("dusk-orange"),
-        "dusk-orange"
-    );
-    assert_eq!(wasm_client::normalize_theme_id("nebula"), "nebula");
-    assert_eq!(wasm_client::normalize_theme_id("navy-gold"), "navy-gold");
-    assert_eq!(
-        wasm_client::normalize_theme_id("marine-corps"),
-        "marine-corps"
-    );
-    assert_eq!(wasm_client::normalize_theme_id("lcars"), "lcars");
-    assert_eq!(wasm_client::normalize_theme_id("mil-spec"), "mil-spec");
-    assert_eq!(wasm_client::normalize_theme_id("pulp-1930s"), "pulp-1930s");
-    assert_eq!(wasm_client::normalize_theme_id("wehrmacht"), "wehrmacht");
-    assert_eq!(wasm_client::normalize_theme_id("parchment"), "parchment");
+#[test]
+fn test_appearance_normalizers_and_saved_sessions() {
+    let html = render_satya_app_html();
+    for theme in [
+        "dusk-orange",
+        "nebula",
+        "navy-gold",
+        "marine-corps",
+        "lcars",
+        "mil-spec",
+        "pulp-1930s",
+        "wehrmacht",
+        "parchment",
+    ] {
+        assert_eq!(wasm_client::normalize_theme_id(theme), theme);
+        assert!(html.contains(&format!(r#"html[data-theme="{theme}"]"#)));
+    }
     assert_eq!(wasm_client::normalize_theme_id("unknown-theme"), "obsidian");
-    assert_eq!(wasm_client::normalize_style_id("mil-spec"), "mil-spec");
-    assert_eq!(wasm_client::normalize_style_id("lcars"), "lcars");
-    assert_eq!(wasm_client::normalize_style_id("pulp"), "pulp");
-    assert_eq!(wasm_client::normalize_style_id("wehrmacht"), "wehrmacht");
+    for style in ["mil-spec", "lcars", "pulp", "wehrmacht"] {
+        assert_eq!(wasm_client::normalize_style_id(style), style);
+    }
     assert_eq!(wasm_client::normalize_style_id("invalid"), "default");
     assert_eq!(wasm_client::normalize_density_id("compact"), "compact");
     assert_eq!(wasm_client::normalize_density_id("spacious"), "spacious");
@@ -765,41 +749,37 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert_eq!(wasm_client::normalize_corners_id("sharp"), "sharp");
     assert_eq!(wasm_client::normalize_corners_id("rounded"), "rounded");
     assert_eq!(wasm_client::normalize_corners_id("invalid"), "default");
-    assert_eq!(wasm_client::normalize_font_id("mono"), "mono");
-    assert_eq!(wasm_client::normalize_font_id("serif"), "serif");
-    assert_eq!(wasm_client::normalize_font_id("lcars"), "lcars");
-    assert_eq!(wasm_client::normalize_font_id("military"), "military");
-    assert_eq!(wasm_client::normalize_font_id("stencil"), "stencil");
-    assert_eq!(wasm_client::normalize_font_id("pulp"), "pulp");
+    for font in ["mono", "serif", "lcars", "military", "stencil", "pulp"] {
+        assert_eq!(wasm_client::normalize_font_id(font), font);
+    }
     assert_eq!(wasm_client::normalize_font_id("invalid"), "sans");
-    assert_eq!(wasm_client::normalize_font_size_id("sm"), "sm");
-    assert_eq!(wasm_client::normalize_font_size_id("lg"), "lg");
-    assert_eq!(wasm_client::normalize_font_size_id("xl"), "xl");
+    for sz in ["sm", "lg", "xl"] {
+        assert_eq!(wasm_client::normalize_font_size_id(sz), sz);
+    }
     assert_eq!(wasm_client::normalize_font_size_id("invalid"), "default");
 
-    assert!(html.contains(r#"id="btn-menu-toggle-appearance-settings""#));
-    assert!(html.contains(r#"id="menu-appearance-settings-panel""#));
-    assert!(html.contains(r#"id="appearance-swatch-grid""#));
-    for (theme_id, _) in wasm_client::APPEARANCE_THEME_OPTIONS {
-        assert!(html.contains(&format!(r#"id="btn-theme-swatch-{theme_id}""#)));
-        assert!(html.contains(&format!(r#"value="{theme_id}""#)));
+    for id in [
+        "btn-menu-toggle-appearance-settings",
+        "menu-appearance-settings-panel",
+        "appearance-swatch-grid",
+        "menu-theme-select",
+        "menu-style-select",
+        "menu-density-select",
+        "menu-corners-select",
+        "menu-font-select",
+        "menu-font-size-select",
+        "btn-reset-appearance-defaults",
+        "saved-sessions-select",
+        "btn-resume-saved-session",
+        "btn-refresh-saved-sessions",
+        "btn-export-session-snapshot",
+        "session-import-file-input",
+        "btn-import-session-snapshot",
+        "btn-export-chat-md",
+        "btn-export-chat-json",
+    ] {
+        assert!(html.contains(&format!(r#"id="{id}""#)));
     }
-    assert!(html.contains(r#"id="menu-theme-select""#));
-    assert!(html.contains(r#"id="menu-style-select""#));
-    assert!(html.contains(r#"id="menu-density-select""#));
-    assert!(html.contains(r#"id="menu-corners-select""#));
-    assert!(html.contains(r#"id="menu-font-select""#));
-    assert!(html.contains(r#"id="menu-font-size-select""#));
-    assert!(html.contains(r#"id="btn-reset-appearance-defaults""#));
-    assert!(html.contains(r#"html[data-theme="dusk-orange"]"#));
-    assert!(html.contains(r#"html[data-theme="nebula"]"#));
-    assert!(html.contains(r#"html[data-theme="navy-gold"]"#));
-    assert!(html.contains(r#"html[data-theme="marine-corps"]"#));
-    assert!(html.contains(r#"html[data-theme="lcars"]"#));
-    assert!(html.contains(r#"html[data-theme="mil-spec"]"#));
-    assert!(html.contains(r#"html[data-theme="pulp-1930s"]"#));
-    assert!(html.contains(r#"html[data-theme="wehrmacht"]"#));
-    assert!(html.contains(r#"html[data-theme="parchment"]"#));
     assert!(html.contains(r#"[data-style="mil-spec"]"#));
     assert!(html.contains(r#"[data-style="lcars"]"#));
     assert!(html.contains(r#"html[data-density="compact"]"#));
@@ -811,16 +791,6 @@ fn test_leptos_app_renders_wasm_bootstrap_and_disconnect_controls() {
     assert!(html.contains(r#"html[data-font="pulp"]"#));
     assert!(html.contains(r#"html[data-font-size="lg"]"#));
     assert!(html.contains(r#"html[data-font-size="xl"]"#));
-
-    // Verify Saved Session Resume, .satyasession Snapshot Export/Import, and .md/.json Chat Transcript Export UI
-    assert!(html.contains(r#"id="saved-sessions-select""#));
-    assert!(html.contains(r#"id="btn-resume-saved-session""#));
-    assert!(html.contains(r#"id="btn-refresh-saved-sessions""#));
-    assert!(html.contains(r#"id="btn-export-session-snapshot""#));
-    assert!(html.contains(r#"id="session-import-file-input""#));
-    assert!(html.contains(r#"id="btn-import-session-snapshot""#));
-    assert!(html.contains(r#"id="btn-export-chat-md""#));
-    assert!(html.contains(r#"id="btn-export-chat-json""#));
 
     let opts_html = wasm_client::format_saved_sessions_options_html(
         &[satya_schema::SavedSessionSummary {

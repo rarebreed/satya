@@ -683,29 +683,52 @@ pub fn satya_toggle_video() {
     });
 }
 
+/// Stops any active `250ms` prosody `setInterval` timer and closes any active WebAudio `AudioContext`.
+pub(crate) fn teardown_prosody_monitor() {
+    let (interval_id, audio_ctx) = with_state_mut(|st| {
+        (st.prosody_interval_id.take(), st.prosody_audio_ctx.take())
+    });
+    if let Some(id) = interval_id
+        && let Some(win) = window()
+    {
+        win.clear_interval_with_handle(id);
+    }
+    if let Some(ctx) = audio_ctx {
+        let _ = ctx.close();
+    }
+}
+
 fn start_audio_prosody_monitor(stream: &MediaStream) {
+    teardown_prosody_monitor();
+    let Some(win) = window() else {
+        return;
+    };
     let Ok(ctx) = AudioContext::new() else {
         return;
     };
     let Ok(source) = ctx.create_media_stream_source(stream) else {
+        let _ = ctx.close();
         return;
     };
     let Ok(analyser) = ctx.create_analyser() else {
+        let _ = ctx.close();
         return;
     };
     analyser.set_fft_size(512);
     let _ = source.connect_with_audio_node(&analyser);
 
-    let Some(win) = window() else {
-        return;
-    };
     let analyser_rc = Rc::new(analyser);
     let tick = Closure::<dyn FnMut()>::new(move || {
         sample_analyser_rms(&analyser_rc);
     });
-    let _ = win
-        .set_interval_with_callback_and_timeout_and_arguments_0(tick.as_ref().unchecked_ref(), 250);
+    let interval_id = win
+        .set_interval_with_callback_and_timeout_and_arguments_0(tick.as_ref().unchecked_ref(), 250)
+        .ok();
     tick.forget();
+    with_state_mut(|st| {
+        st.prosody_audio_ctx = Some(ctx);
+        st.prosody_interval_id = interval_id;
+    });
 }
 
 fn sample_analyser_rms(analyser: &AnalyserNode) {

@@ -1,24 +1,26 @@
 # `satya-web` Agent Coding & Architecture Rules
 
-When reading, adding, or refactoring code in `crates/satya-web`, activate the [`satya-rust-web`](../../.agents/skills/satya-rust-web/SKILL.md) and [`satya-rust-workspace`](../../.agents/skills/satya-rust-workspace/SKILL.md) skills and follow these mandatory architectural rules (full guide in [`docs/technical/rust-web-steering.md`](../../docs/technical/rust-web-steering.md) and [`docs/technical/rust-workspace-steering.md`](../../docs/technical/rust-workspace-steering.md)):
+When reading, adding, or refactoring code in `crates/satya-web`, activate [`satya-rust-web`](../../.agents/skills/satya-rust-web/SKILL.md) and [`satya-rust-workspace`](../../.agents/skills/satya-rust-workspace/SKILL.md).
 
-1. **Hard File Size Ceiling (`<= 45 KB` / `< 46,080` bytes) & Flat Re-Exports**:
-   - Every `.rs` and `.css` file in `crates/satya-web/src/` MUST remain under `45 KB` (~1,000 lines) so it fits inside a single AI agent `read_file` call without truncation.
-   - Keep SSR views split across `lib.rs` (app shell), `views_gate.rs` (header + auth/session gate), `views_notebook.rs` + `views_notebook_docs.rs` (left 10-tab Tabletop Notebook including `NPC List`), `views_workspace.rs` (center chat/task roller + right WebRTC dock), and `tests.rs`.
-   - Keep large `wasm_client/` domains split into companion modules (`notebook.rs` + `gm_docs.rs` + `npcs.rs`, `dice_3d.rs` + `dice_3d_wgpu.rs`, `wizard.rs` + `wizard_views_stats.rs` + `wizard_views_lifepath.rs` + `wizard_views_skills.rs`) and re-export `pub use companion::*;` in both the parent module and `wasm_client/mod.rs`.
-   - Keep CSS split between `styles.css` (core layout, gate, chat, WebRTC, 3D dice/model) and `styles_notebook.css` (GM Docs, Rules Book `.satya-rules-article`, and Character Wizard `.wiz-*`).
+## Technical Documentation Suite (`docs/technical/satya-web/`)
+Read only the specific chapter relevant to your task instead of scanning the entire crate:
+- [`docs/technical/satya-web/README.md`](../../docs/technical/satya-web/README.md): One-shot SSR + Wasm execution model, complete `thread_local!` & `localStorage` state map, REST/WS contract index, and fast-path file router.
+- [`01-ssr-shell-and-theming.md`](../../docs/technical/satya-web/01-ssr-shell-and-theming.md): SSR component tree, collapsible/floating/resizable drawers, and 6-axis CSS theming (`styles_themes.css`, `styles.css`, `styles_stages.css`, `styles_notebook.css`).
+- [`02-3d-tactical-map-diorama.md`](../../docs/technical/satya-web/02-3d-tactical-map-diorama.md): 3D Tactical Map (`map_3d.rs`, `map_3d_wgpu.rs`, `wgpu_shared.rs`), `1.0m` grid/elevation/cutaway geometry, gait reach, LoS/Cover laser, `.glb` tokens, ray-plane picking, and SVG fallback.
+- [`03-3d-dice-and-glb-stage.md`](../../docs/technical/satya-web/03-3d-dice-and-glb-stage.md): 3D Polyhedral Dice (`dice_3d.rs`, `dice_3d_wgpu.rs`, SDF atlas, `SplitMix64` trajectory, 2-pass glass WGSL) & Binary glTF 2.0 (`.glb`) codec/stage (`glb_model.rs`, `model_3d_wgpu.rs`).
+- [`04-character-wizard-sheet-and-vault.md`](../../docs/technical/satya-web/04-character-wizard-sheet-and-vault.md): 6-step Character Wizard (`wizard*.rs`), 13-zone SVG Character Sheet (`character_sheet*.rs`), and `.satyachar` Avro Vault (`character_sheet_vault.rs`, `character_sheet_record.rs`).
+- [`05-session-webrtc-chat-and-gm-vault.md`](../../docs/technical/satya-web/05-session-webrtc-chat-and-gm-vault.md): Auth/Session snapshots (`auth_session.rs`, `session_persistence.rs`), WebRTC mesh & RMS prosody (`webrtc.rs`), `/roll` DSL (`chat_cmd.rs`), `2d20` Cascade/Triad drawer (`chat_and_ttrpg.rs`, `ttrpg_drawer_cascade.rs`, `ttrpg_drawer_triad.rs`), GM Vault (`gm_docs.rs`, `gm_memories_and_director.rs`), NPCs (`npcs.rs`), and Telemetry (`telemetry.rs`).
 
+## Mandatory Architectural Invariants
+
+1. **Single-Read File Size Budget (`< 40 KB` & `< 780` Lines) + Flat `pub use` Re-Exports**:
+   - Keep every `.rs`, `.css`, and `.md` file compact enough to fit inside a single `read_file` tool call (`800`-line / `46,080`-byte limit) without multi-part reads.
+   - Always re-export `pub use companion::*;` in parent modules and `wasm_client/mod.rs` when splitting files.
 2. **Declarative `window.satya*` Registration (`bind_window_callbacks!`)**:
-   - Register all `window.satya*` browser callbacks via a single 1-line entry in the `bind_window_callbacks!` macro inside `src/wasm_client/mod.rs`. Never hand-write `Closure::new` + `bind` + `forget` blocks.
-
-3. **Single Source of Truth with `satya-engine` & Static UI Tables**:
-   - Drive Notebook tab buttons (`views_notebook.rs`) and tab switching (`wasm_client/notebook.rs`) from `NOTEBOOK_TAB_SPECS` / `NOTEBOOK_TABS`.
-   - Drive Rules Book `<select id="rules-chapter-select">` options directly from `satya_engine::rules_book_catalog()`.
-   - Never duplicate `satya-engine` formulas or catalogs in `satya-web`; always call `satya_engine` functions (`evaluate_satya_cascade_task`, `compute_exact_cascade_distribution`, `compute_d_cog_score`, `compute_ooda_score`, `compute_pow_striking_power`, `format_rules_markdown_to_html`, etc.).
-
-4. **Shared DOM, Drawer & RNG Helpers (`wasm_client/dom.rs` & `webrtc.rs`)**:
-   - Use `toggle_element_display`, `set_display`, `set_text`, `set_html`, `input_value`, `select_value`, `roll_browser_die_i32`, and `roll_browser_die_i64` in `wasm_client/dom.rs` rather than raw `web_sys` chains or inline `js_sys::Math::random()` math.
-   - Use `sync_drawer_rail_and_aria` and `sync_center_drawer_card` in `wasm_client/webrtc.rs` for collapsible drawer state synchronization.
-
-5. **Pure Host-Testable HTML Formatters**:
-   - Keep complex HTML generation in pure functions (`format_*_html(...) -> String`) separate from DOM event handlers so all UI views and state transitions can be tested via `cargo test -p satya-web`.
+   - `SatyaApp` renders one-shot SSR HTML (`SatyaApp().to_html()`). Browser interactivity binds via `bind_window_callbacks!` in `src/wasm_client/mod.rs` (which also populates `REGISTERED_WINDOW_CALLBACKS`, verified against SSR HTML in `cargo test`). Never hand-write `Closure::new` + `Reflect::set` + `forget` blocks.
+3. **Single Source of Truth with `satya-engine` (`1 Tick = 0.25s`)**:
+   - Consume `satya-engine` catalogs and types (`NOTEBOOK_TAB_SPECS` [10 tabs], `rules_book_catalog()`, `canonical_combat_technique_catalog()` [30 techniques], `CANONICAL_FIREARM_PRESETS`, `CANONICAL_FIELD_GEAR_PRESETS`, `BoneFractureStatus`, `SECONDS_PER_TICK = 0.25`) — never duplicate domain math or tables in `satya-web`.
+4. **Shared `dom.rs` & `wgpu_shared.rs` Helpers**:
+   - Use `dom.rs` (`escape_html`, `escape_js_single_quoted_attr`, `fetch_json`, `fetch_text`, `local_storage_*`, `read_first_file_bytes`, `prompt_save_bytes`, `active_session_and_token_or_feedback`) and `wgpu_shared.rs` (`OrbitOrthoCamera`, `init_wgpu_canvas_context`, `create_depth_view`, `SHARED_GLB_DIORAMA_WGSL`).
+5. **Host-Testable Formatters, State Transitions & Offline `naga` Shader Validation**:
+   - Keep HTML formatters (`format_*_html -> String`), CPU 3D mesh builders (`build_tactical_diorama_vertices`), and WGSL shaders (`naga` dev-dependency) host-testable via `cargo test --offline -p satya-web`.

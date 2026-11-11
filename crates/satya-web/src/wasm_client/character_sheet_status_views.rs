@@ -43,26 +43,6 @@ fn zone_colors(z: &AnatomicalZoneState, is_selected: bool) -> (&'static str, &'s
     (fill, stroke)
 }
 
-fn bleed_short_label(g: HemorrhageGrade) -> &'static str {
-    match g {
-        HemorrhageGrade::Grade0None => "No Bleed",
-        HemorrhageGrade::Grade1Capillary => "G1 Capillary (0.25 U/hr)",
-        HemorrhageGrade::Grade2Venous => "G2 Venous (0.5 U/min)",
-        HemorrhageGrade::Grade3MajorVenousVisceral => "G3 Major Venous (1 U/5s)",
-        HemorrhageGrade::Grade4ArterialSeverance => "G4 Arterial (1 U/1s)",
-    }
-}
-
-fn bleed_grade_num(g: HemorrhageGrade) -> u8 {
-    match g {
-        HemorrhageGrade::Grade0None => 0,
-        HemorrhageGrade::Grade1Capillary => 1,
-        HemorrhageGrade::Grade2Venous => 2,
-        HemorrhageGrade::Grade3MajorVenousVisceral => 3,
-        HemorrhageGrade::Grade4ArterialSeverance => 4,
-    }
-}
-
 /// Renders an interactive human-shaped anatomical SVG silhouette (`viewBox="0 0 320 430"`)
 /// with all 13 canonical `1d20` hit zones, fracture/bleed status callouts, and click-to-select handlers.
 #[must_use]
@@ -84,7 +64,7 @@ pub fn format_human_hit_location_svg(sheet: &CharacterSheetState) -> String {
     let (f_calf, s_calf) = c(1);
     let (f_foot, s_foot) = c(0);
 
-    // Collect active injury callouts to display along the right margin of the SVG
+    // Collect active injury callouts to display along the bottom margin of the SVG
     let mut callouts = Vec::new();
     for (idx, z) in sheet.hit_zones.iter().enumerate() {
         if z.is_injured() {
@@ -97,7 +77,7 @@ pub fn format_human_hit_location_svg(sheet: &CharacterSheetState) -> String {
                 tags.push(z.bone_status.short_badge().to_string());
             }
             if z.bleed_grade != HemorrhageGrade::Grade0None {
-                tags.push(format!("Bleed G{}", bleed_grade_num(z.bleed_grade)));
+                tags.push(format!("Bleed G{}", z.bleed_grade.grade_number()));
             }
             callouts.push(format!(
                 "[d20 {}] {}: {}",
@@ -265,11 +245,7 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
     ]
     .iter()
     .map(|&(t, lbl)| {
-        let s = if sel_zone.wound_tier == t {
-            " selected"
-        } else {
-            ""
-        };
+        let s = if sel_zone.wound_tier == t { " selected" } else { "" };
         format!(r#"<option value="{t}"{s}>{lbl}</option>"#)
     })
     .collect::<Vec<_>>()
@@ -278,34 +254,24 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
     let bone_opts: String = BoneFractureStatus::ALL
         .iter()
         .map(|&b| {
-            let s = if sel_zone.bone_status == b {
-                " selected"
-            } else {
-                ""
-            };
+            let s = if sel_zone.bone_status == b { " selected" } else { "" };
             format!(r#"<option value="{}"{s}>{}</option>"#, b.code(), b.label())
         })
         .collect::<Vec<_>>()
         .join("");
 
-    let cur_bleed_num = bleed_grade_num(sel_zone.bleed_grade);
-    let bleed_opts: String = [
-        (0u8, "Grade 0: No Active Bleed"),
-        (1, "Grade 1: Capillary Ooze (0.25 U/hr · 8t Bandage)"),
-        (2, "Grade 2: Venous Hemorrhage (0.5 U/min · 20t Dressing)"),
-        (3, "Grade 3: Major Venous / Visceral (1.0 U/5s · 20t Pack)"),
-        (
-            4,
-            "Grade 4: Arterial Severance (1.0 U/1s · 24t CAT Tourniquet)",
-        ),
-    ]
-    .iter()
-    .map(|&(g, lbl)| {
-        let s = if cur_bleed_num == g { " selected" } else { "" };
-        format!(r#"<option value="{g}"{s}>{lbl}</option>"#)
-    })
-    .collect::<Vec<_>>()
-    .join("");
+    let bleed_opts: String = HemorrhageGrade::ALL
+        .iter()
+        .map(|&g| {
+            let s = if sel_zone.bleed_grade == g { " selected" } else { "" };
+            format!(
+                r#"<option value="{}"{s}>{}</option>"#,
+                g.grade_number(),
+                escape_html(g.label())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
 
     let hit_table_rows: String = HIT_LOCATION_TABLE
         .iter()
@@ -339,18 +305,12 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
             let b_badge = if z.bone_status == BoneFractureStatus::Intact {
                 r#"<span class="stat-note">Intact</span>"#.to_string()
             } else {
-                format!(
-                    r#"<span class="pill pill-danger">{}</span>"#,
-                    z.bone_status.short_badge()
-                )
+                format!(r#"<span class="pill pill-danger">{}</span>"#, z.bone_status.short_badge())
             };
             let bl_badge = if z.bleed_grade == HemorrhageGrade::Grade0None {
                 r#"<span class="stat-note">None</span>"#.to_string()
             } else {
-                format!(
-                    r#"<span class="pill pill-danger">{}</span>"#,
-                    bleed_short_label(z.bleed_grade)
-                )
+                format!(r#"<span class="pill pill-danger">{}</span>"#, z.bleed_grade.short_badge())
             };
             let row_cls = if idx == sel_idx {
                 r#" class="char-row-selected""#
@@ -388,60 +348,15 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
         }
     };
 
-    let status_cond_specs = [
-        (
-            "DAZZLED",
-            "Dazzled (-5 SIG)",
-            PhysiologicalStatusCondition::DazzledBlurredVision,
-        ),
-        (
-            "BLINDED",
-            "Blinded (SIG=0)",
-            PhysiologicalStatusCondition::Blinded,
-        ),
-        (
-            "TINNITUS",
-            "Tinnitus (-6 HEA)",
-            PhysiologicalStatusCondition::Tinnitus,
-        ),
-        (
-            "DEAFENED",
-            "Deafened (HEA=0)",
-            PhysiologicalStatusCondition::Deafened,
-        ),
-        (
-            "STUNNED",
-            "Stunned (+8t Freeze)",
-            PhysiologicalStatusCondition::StunnedDazed,
-        ),
-        (
-            "CONCUSSED",
-            "Concussed (-4 Cog)",
-            PhysiologicalStatusCondition::Concussed,
-        ),
-        (
-            "DIZZY",
-            "Dizzy (-6 KIN)",
-            PhysiologicalStatusCondition::DizzyVertigo,
-        ),
-        (
-            "NAUSEA",
-            "Nausea (+4 Δ_int)",
-            PhysiologicalStatusCondition::NauseaSickened,
-        ),
-        (
-            "PINNED",
-            "Pinned (Tempo=0)",
-            PhysiologicalStatusCondition::PinnedImmobilized,
-        ),
-    ];
-    let cond_buttons: String = status_cond_specs
+    let cond_buttons: String = PhysiologicalStatusCondition::ALL
         .iter()
-        .map(|&(code, lbl, cond)| {
+        .map(|&cond| {
             let active = sheet.active_status_conditions.contains(&cond);
             let cls = if active { "btn-chip active-cond" } else { "btn-chip" };
             format!(
-                r#"<button type="button" class="{cls}" onclick="window.satyaCharSheetUpdateStatus('toggle_condition', '{code}')">{lbl}</button>"#
+                r#"<button type="button" class="{cls}" onclick="window.satyaCharSheetUpdateStatus('toggle_condition', '{code}')">{lbl}</button>"#,
+                code = cond.code(),
+                lbl = escape_html(cond.short_label()),
             )
         })
         .collect::<Vec<_>>()
@@ -450,11 +365,7 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
     let morale_opts: String = MoraleState::ALL
         .iter()
         .map(|&m| {
-            let s = if sheet.morale_state == m {
-                " selected"
-            } else {
-                ""
-            };
+            let s = if sheet.morale_state == m { " selected" } else { "" };
             format!(
                 r#"<option value="{}"{s}>{} ({:+} Pool)</option>"#,
                 m.as_str(),
@@ -465,63 +376,36 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
         .collect::<Vec<_>>()
         .join("");
 
-    let cur_mt = match sheet.mental_trauma {
-        Some(AcuteMentalTraumaTier::Tier1AcuteMentalShockOodaFreeze) => "TIER_1",
-        Some(AcuteMentalTraumaTier::Tier2PanicFightOrFlight) => "TIER_2",
-        Some(AcuteMentalTraumaTier::Tier3DissociationShellShock) => "TIER_3",
-        Some(AcuteMentalTraumaTier::Tier4Catatonia) => "TIER_4",
-        None => "NONE",
-    };
-    let mt_opts: String = [
-        ("NONE", "None (Mentally Composed)"),
-        ("TIER_1", "Tier 1: Acute Mental Shock (OODA Freeze 9t)"),
-        (
-            "TIER_2",
-            "Tier 2: Panic / Fight-or-Flight (-4 Pool, -6 ANA/FOC)",
-        ),
-        (
-            "TIER_3",
-            "Tier 3: Dissociation / Shell Shock (-6 ITU/INS/FOC, +0.30x Time)",
-        ),
-        ("TIER_4", "Tier 4: Catatonia (Total Psychomotor Shutdown)"),
-    ]
-    .iter()
-    .map(|&(code, lbl)| {
-        let s = if cur_mt == code { " selected" } else { "" };
-        format!(r#"<option value="{code}"{s}>{lbl}</option>"#)
-    })
-    .collect::<Vec<_>>()
-    .join("");
+    let cur_mt = sheet.mental_trauma.map_or("NONE", AcuteMentalTraumaTier::code);
+    let mt_opts: String = std::iter::once(("NONE", "None (Mentally Composed)"))
+        .chain(AcuteMentalTraumaTier::ALL.iter().map(|&t| (t.code(), t.label())))
+        .map(|(code, lbl)| {
+            let s = if cur_mt == code { " selected" } else { "" };
+            format!(r#"<option value="{code}"{s}>{}</option>"#, escape_html(lbl))
+        })
+        .collect::<Vec<_>>()
+        .join("");
 
-    let cur_sw = match sheet.social_wound {
-        Some(SocialWoundKind::RhetoricalStrain) => "STRAIN",
-        Some(SocialWoundKind::Doubt) => "DOUBT",
-        Some(SocialWoundKind::CognitiveDissonance) => "DISSONANCE",
-        Some(SocialWoundKind::EgoWound) => "EGO_WOUND",
-        _ => "NONE",
-    };
-    let sw_opts: String = [
-        ("NONE", "None (Unshaken Conviction)"),
-        ("STRAIN", "Rhetorical Strain (+1 Δ_int on Social)"),
-        ("DOUBT", "Doubt (+2 Δ_int, Hesitation)"),
-        (
-            "DISSONANCE",
-            "Cognitive Dissonance (+4 Δ_int until resolved)",
-        ),
-        ("EGO_WOUND", "Ego Wound (+2 Δ_int, Rash Provocation)"),
-    ]
-    .iter()
-    .map(|&(code, lbl)| {
-        let s = if cur_sw == code { " selected" } else { "" };
-        format!(r#"<option value="{code}"{s}>{lbl}</option>"#)
-    })
-    .collect::<Vec<_>>()
-    .join("");
+    let cur_sw = sheet.social_wound.map_or("NONE", SocialWoundKind::code);
+    let sw_opts: String = std::iter::once(("NONE", "None (Unshaken Conviction)"))
+        .chain(SocialWoundKind::ALL.iter().map(|&w| (w.code(), w.label())))
+        .map(|(code, lbl)| {
+            let s = if cur_sw == code { " selected" } else { "" };
+            format!(r#"<option value="{code}"{s}>{}</option>"#, escape_html(lbl))
+        })
+        .collect::<Vec<_>>()
+        .join("");
 
     let drift_thresh = psyche_drift_threshold(c.dis);
     let last_roll_badge = match sheet.last_hit_location_roll_d20 {
-        Some(r) => format!(r#"<span class="pill pill-active">Last 1d20 Hit Roll: {r} ({})</span>"#, sel_spec.name),
-        None => r#"<span class="pill pill-muted">Click "Roll 1d20 Hit Location" or any body region</span>"#.to_string(),
+        Some(r) => format!(
+            r#"<span class="pill pill-active">Last 1d20 Hit Roll: {r} ({})</span>"#,
+            sel_spec.name
+        ),
+        None => {
+            r#"<span class="pill pill-muted">Click "Roll 1d20 Hit Location" or any body region</span>"#
+                .to_string()
+        }
     };
     let surge_lbl = if sheet.conviction_surge_active {
         "Conviction Surge: ACTIVE (-6 Δ_int, +2 Pool)"
@@ -563,30 +447,15 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
                         <div class="char-zone-controls-grid">
                             <label class="inline-label" for="char-zone-wound-select">
                                 <span>Structural Wound Tier</span>
-                                <select
-                                    id="char-zone-wound-select"
-                                    onchange="window.satyaCharSheetUpdateZone({sel_idx}, 'wound_tier', this.value)"
-                                >
-                                    {wound_tier_opts}
-                                </select>
+                                <select id="char-zone-wound-select" onchange="window.satyaCharSheetUpdateZone({sel_idx}, 'wound_tier', this.value)">{wound_tier_opts}</select>
                             </label>
                             <label class="inline-label" for="char-zone-bone-select">
                                 <span>Bone / Joint Status</span>
-                                <select
-                                    id="char-zone-bone-select"
-                                    onchange="window.satyaCharSheetUpdateZone({sel_idx}, 'bone_status', this.value)"
-                                >
-                                    {bone_opts}
-                                </select>
+                                <select id="char-zone-bone-select" onchange="window.satyaCharSheetUpdateZone({sel_idx}, 'bone_status', this.value)">{bone_opts}</select>
                             </label>
                             <label class="inline-label" for="char-zone-bleed-select">
                                 <span>Bleeding / Hemorrhage</span>
-                                <select
-                                    id="char-zone-bleed-select"
-                                    onchange="window.satyaCharSheetUpdateZone({sel_idx}, 'bleed_grade', this.value)"
-                                >
-                                    {bleed_opts}
-                                </select>
+                                <select id="char-zone-bleed-select" onchange="window.satyaCharSheetUpdateZone({sel_idx}, 'bleed_grade', this.value)">{bleed_opts}</select>
                             </label>
                         </div>
                     </div>

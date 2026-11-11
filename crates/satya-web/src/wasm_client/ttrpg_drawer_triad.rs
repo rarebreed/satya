@@ -3,7 +3,7 @@
 
 use crate::wasm_client::chat_and_ttrpg::satya_update_cascade_preview;
 use crate::wasm_client::dom::{escape_html, input_value, select_value, set_html, set_input_value};
-use crate::wasm_client::state::with_state;
+use crate::wasm_client::state::{SECONDS_PER_TICK, with_state};
 use satya_engine::{
     ActionTimeFactorParams, CombatDomain, CombatTechniqueId, TacticalPoolEnvelope,
     TacticalPoolParams, TechniqueTriadEvalParams, Triad, compute_tactical_pool,
@@ -174,7 +174,7 @@ pub fn format_drawer_triad_readout(
     };
     let res = evaluate_technique_with_triad(&eval_params);
     let spec = tech_id.spec();
-    let eff_secs = f64::from(res.effective_tc) * 0.25;
+    let eff_secs = f64::from(res.effective_tc) * SECONDS_PER_TICK;
 
     let status_html = if res.valid {
         format!(
@@ -325,4 +325,56 @@ pub fn satya_update_drawer_triad_preview() {
         wound_shock,
     );
     set_html("ttrpg-triad-readout", &html);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_preset_triad_allocation_respects_caps_and_p_eff() {
+        let mut env = compute_active_drawer_envelope(12, 3, false, 0, 0.0);
+        for preset in ["balanced", "blitz_tempo", "max_control", "heavy_force"] {
+            let (t, c, f) = compute_preset_triad_allocation(&env, preset);
+            assert!(t >= 0 && t <= env.tempo_cap, "tempo cap violated for {preset}");
+            assert!(
+                c >= 0 && c <= env.control_cap,
+                "control cap violated for {preset}"
+            );
+            assert!(f >= 0 && f <= env.force_cap, "force cap violated for {preset}");
+            assert!(
+                t + c + f <= env.p_eff,
+                "sum {} exceeded p_eff {} for {preset}",
+                t + c + f,
+                env.p_eff
+            );
+        }
+
+        // Verify tight fatigue/wound-shock clamping when 3 * neutral_baseline_b > p_eff
+        env.p_eff = 8;
+        env.tempo_cap = 5;
+        env.control_cap = 6;
+        env.force_cap = 4;
+        env.neutral_baseline_b = 5;
+        let (tb, cb, fb) = compute_preset_triad_allocation(&env, "balanced");
+        assert!(tb <= 5 && cb <= 6 && fb <= 4);
+        assert_eq!(tb + cb + fb, 8);
+    }
+
+    #[test]
+    fn test_format_drawer_triad_readout_non_combat_and_technique_modes() {
+        let non_combat = format_drawer_triad_readout("non_combat", 7, 7, 7, 12, 3, 0, 0.0);
+        assert!(non_combat.contains("Non-Combat Task"));
+        assert!(non_combat.contains("Tactical Pool P_eff"));
+
+        let env = compute_active_drawer_envelope(12, 3, false, 0, 0.0);
+        let (t, c, f) = compute_preset_triad_allocation(&env, "balanced");
+        let punch_ok = format_drawer_triad_readout("punch", t, c, f, 12, 3, 0, 0.0);
+        assert!(punch_ok.contains("Valid T/C/F"));
+        assert!(punch_ok.contains("Effective"));
+        assert!(punch_ok.contains("Ticks ("));
+
+        let punch_over = format_drawer_triad_readout("punch", 30, 30, 30, 12, 3, 0, 0.0);
+        assert!(punch_over.contains("Pool Violation"));
+    }
 }

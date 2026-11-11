@@ -464,6 +464,287 @@ pub fn evaluate_granular_firearm_ballistics(
     }
 }
 
+macro_rules! firearm_preset {
+    (
+        $id:literal, $name:literal,
+        ($cal:ident, $aname:literal, $mm:expr, $b_gr:expr, $p_gr:expr, $opt_cm:expr, $e_j:expr, $dec_m:expr, $exp:expr, $sd:expr, $aq:expr, $spitz:expr),
+        ($feed:ident, $cap:expr, $act:ident, $u_kg:expr, $l_kg:expr, $oal_cm:expr, $bbl_cm:expr, $bq:expr, $mnt:ident, $muz:ident, $cog:ident, $tau:expr, $mq:expr, $j_min:expr, $j_maj:expr, $strp:expr, $cost:expr)
+    ) => {
+        (
+            $id,
+            GranularFirearmSpec {
+                name: $name,
+                ammo: AmmunitionProfile {
+                    caliber_id: AmmoCaliberId::$cal,
+                    name: $aname,
+                    caliber_mm: $mm,
+                    bullet_mass_grains: $b_gr,
+                    powder_charge_grains: $p_gr,
+                    optimal_barrel_cm: $opt_cm,
+                    reference_muzzle_energy_j: $e_j,
+                    energy_decay_scale_m: $dec_m,
+                    expansion_factor: $exp,
+                    sectional_density_pen_bonus: $sd,
+                    ammo_quality_q: $aq,
+                    is_spitzer_early_yaw: $spitz,
+                },
+                feed_type: WeaponFeedType::$feed,
+                capacity_rounds: $cap,
+                action_type: FirearmActionType::$act,
+                unloaded_weight_kg: $u_kg,
+                loaded_weight_kg: $l_kg,
+                overall_length_cm: $oal_cm,
+                barrel_length_cm: $bbl_cm,
+                barrel_quality_q: $bq,
+                barrel_mounting: BarrelMountingType::$mnt,
+                muzzle_device: MuzzleDeviceType::$muz,
+                center_of_gravity: CenterOfGravityProfile::$cog,
+                tolerance_tau: $tau,
+                manufacturing_quality_q: $mq,
+                clear_jam_minor_ticks: $j_min,
+                clear_jam_major_ticks: $j_maj,
+                strip_time_ticks: $strp,
+                cost_usd: $cost,
+            },
+        )
+    };
+}
+
+/// Canonical preset ranged firearms for operator equipment loadouts and ballistics benchmarks.
+pub const CANONICAL_FIREARM_PRESETS: &[(&str, GranularFirearmSpec)] = &[
+    firearm_preset!(
+        "hk416_carbine_556",
+        "HK416A5 Tactical Carbine (5.56x45mm)",
+        (
+            Nato556x45,
+            "5.56x45mm NATO M855A1",
+            5.56,
+            62.0,
+            27.0,
+            50.8,
+            1795.0,
+            520.0,
+            1.15,
+            2,
+            0.5,
+            true
+        ),
+        (
+            DetachableBoxMagazine,
+            30,
+            ShortStrokeGasPiston,
+            3.12,
+            3.60,
+            80.5,
+            36.8,
+            1.0,
+            FreeFloating,
+            FlashHider,
+            ChamberNeutral,
+            0.5,
+            2,
+            6,
+            18,
+            36,
+            2800
+        )
+    ),
+    firearm_preset!(
+        "sig_p320_9mm",
+        "SIG P320 / M18 Sidearm (9x19mm)",
+        (
+            Parabellum9x19,
+            "9x19mm +P JHP (124 gr)",
+            9.0,
+            124.0,
+            5.2,
+            12.0,
+            515.0,
+            180.0,
+            1.5,
+            0,
+            0.5,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            17,
+            StrikerFired,
+            0.76,
+            0.98,
+            18.8,
+            9.9,
+            0.5,
+            StandardPistolMount,
+            BareCrown,
+            ChamberNeutral,
+            0.0,
+            1,
+            5,
+            14,
+            20,
+            750
+        )
+    ),
+    firearm_preset!(
+        "mp7_pdw_57",
+        "MP7A2 / P90 Suppressed PDW (5.7x28mm)",
+        (
+            Fn57x28,
+            "5.7x28mm SS190 AP",
+            5.7,
+            40.0,
+            7.2,
+            26.0,
+            540.0,
+            260.0,
+            1.0,
+            3,
+            0.5,
+            true
+        ),
+        (
+            DetachableBoxMagazine,
+            40,
+            ShortStrokeGasPiston,
+            1.90,
+            2.30,
+            41.5,
+            18.0,
+            1.0,
+            FreeFloating,
+            SoundSuppressor,
+            RearBullpup,
+            0.5,
+            2,
+            6,
+            16,
+            30,
+            2200
+        )
+    ),
+    firearm_preset!(
+        "akm_762x39",
+        "Kalashnikov AKM Assault Rifle (7.62x39mm)",
+        (
+            Soviet762x39,
+            "7.62x39mm M43 FMJ",
+            7.62,
+            123.0,
+            25.5,
+            41.5,
+            2100.0,
+            420.0,
+            1.0,
+            2,
+            0.0,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            30,
+            LongStrokeGasPiston,
+            3.30,
+            4.10,
+            88.0,
+            41.5,
+            0.0,
+            ClampedNonFreeFloated,
+            BareCrown,
+            ModerateForward,
+            -1.0,
+            1,
+            8,
+            20,
+            32,
+            950
+        )
+    ),
+    firearm_preset!(
+        "benelli_m4_12ga",
+        "Benelli M4 Combat Shotgun (12-Gauge)",
+        (
+            Gauge12,
+            "12-Gauge 00 Buck / Breaching Slug",
+            18.5,
+            437.0,
+            32.0,
+            51.0,
+            3150.0,
+            140.0,
+            1.35,
+            1,
+            0.5,
+            false
+        ),
+        (
+            TubularMagazine,
+            7,
+            ShortStrokeGasPiston,
+            3.82,
+            4.25,
+            88.5,
+            47.0,
+            0.5,
+            ClampedNonFreeFloated,
+            BareCrown,
+            ModerateForward,
+            0.0,
+            2,
+            7,
+            18,
+            40,
+            1950
+        )
+    ),
+    firearm_preset!(
+        "ai_atx_65cm",
+        "Accuracy Int'l AT-X Precision Rifle (6.5mm CM)",
+        (
+            Creedmoor65,
+            "6.5mm Creedmoor 140gr Match OTM",
+            6.72,
+            140.0,
+            42.5,
+            56.0,
+            3165.0,
+            950.0,
+            1.4,
+            3,
+            1.0,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            10,
+            BoltAction,
+            5.40,
+            5.80,
+            112.0,
+            61.0,
+            1.5,
+            FreeFloating,
+            MuzzleBrakeCompensator,
+            ChamberNeutral,
+            1.0,
+            2,
+            6,
+            20,
+            80,
+            5200
+        )
+    ),
+];
+
+/// Looks up a canonical firearm preset by its slug ID (`"hk416_carbine_556"`, `"sig_p320_9mm"`, etc.).
+#[must_use]
+pub fn lookup_firearm_preset(id: &str) -> Option<&'static GranularFirearmSpec> {
+    CANONICAL_FIREARM_PRESETS
+        .iter()
+        .find(|(pid, _)| *pid == id)
+        .map(|(_, spec)| spec)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,21 +4,19 @@
 
 use crate::wasm_client::auth_session::{apply_auth_success, enter_session, perform_login};
 use crate::wasm_client::character_sheet::render_character_sheet;
-use crate::wasm_client::character_sheet_vault::{
-    prompt_save_satyachar_bytes, read_first_file_bytes,
-};
 use crate::wasm_client::chat_and_ttrpg::{
     append_system_notice, render_chat_event, render_mechanics_event_bubble_only,
 };
 use crate::wasm_client::dom::{
     escape_html, fetch_json, fetch_text, get_element, input_value, local_storage_get,
-    local_storage_remove, select_value, set_feedback, set_html, set_input_value,
+    local_storage_remove, prompt_save_bytes, read_first_file_bytes, select_value, set_feedback,
+    set_html, set_input_value, set_text,
 };
 use crate::wasm_client::gm_docs::{satya_refresh_gm_documents, satya_refresh_gm_memories};
 use crate::wasm_client::notebook::{render_combat_tracker, render_map_updated};
 use crate::wasm_client::npcs::satya_refresh_npcs_tab;
 use crate::wasm_client::options::parse_session_role;
-use crate::wasm_client::state::{with_state, with_state_mut};
+use crate::wasm_client::state::{SECONDS_PER_TICK, with_state, with_state_mut};
 use satya_schema::{
     AuthSuccessResponse, ChatMessageEvent, ImportSessionSnapshotRequest, ResumeSessionRequest,
     SavedSessionSummary, SavedSessionsListResponse, SessionEnterResponse, SessionHistorySnapshot,
@@ -48,18 +46,42 @@ pub struct PersistedActiveSessionRef {
     pub role: Option<SessionRole>,
 }
 
-enum HistoryReplayItem<'a> {
+/// Interleaved chronological item in a replayed [`SessionHistorySnapshot`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum HistoryReplayItem<'a> {
+    /// Persisted chat message (`ChatMessageEvent`).
     Chat(&'a ChatMessageEvent),
+    /// Persisted TTRPG task/mechanics roll (`TtrpgMechanicsEvent`).
     Mechanics(&'a TtrpgMechanicsEvent),
 }
 
 impl<'a> HistoryReplayItem<'a> {
-    fn sequence_num(&self) -> i64 {
+    /// Monotonic session event `sequence_num` used for deterministic replay ordering.
+    #[must_use]
+    pub fn sequence_num(&self) -> i64 {
         match self {
             Self::Chat(ev) => ev.metadata.sequence_num,
             Self::Mechanics(ev) => ev.metadata.sequence_num,
         }
     }
+}
+
+/// Merges a snapshot's `chat_events` and `mechanics_events` into a single vector sorted by
+/// ascending `metadata.sequence_num`.
+#[must_use]
+pub fn merge_history_events_by_sequence(
+    history: &SessionHistorySnapshot,
+) -> Vec<HistoryReplayItem<'_>> {
+    let mut merged: Vec<HistoryReplayItem<'_>> =
+        Vec::with_capacity(history.chat_events.len() + history.mechanics_events.len());
+    for ev in &history.chat_events {
+        merged.push(HistoryReplayItem::Chat(ev));
+    }
+    for ev in &history.mechanics_events {
+        merged.push(HistoryReplayItem::Mechanics(ev));
+    }
+    merged.sort_by_key(HistoryReplayItem::sequence_num);
+    merged
 }
 
 /// Formats `<option>` elements for `#saved-sessions-select` from a slice of [`SavedSessionSummary`] records.
@@ -171,17 +193,7 @@ pub(crate) fn replay_session_history_snapshot(history: Option<SessionHistorySnap
     if let Some(hist) = history {
         set_html("chat-log", "");
 
-        let mut merged: Vec<HistoryReplayItem<'_>> =
-            Vec::with_capacity(hist.chat_events.len() + hist.mechanics_events.len());
-        for ev in &hist.chat_events {
-            merged.push(HistoryReplayItem::Chat(ev));
-        }
-        for ev in &hist.mechanics_events {
-            merged.push(HistoryReplayItem::Mechanics(ev));
-        }
-        merged.sort_by_key(HistoryReplayItem::sequence_num);
-
-        for item in merged {
+        for item in merge_history_events_by_sequence(&hist) {
             match item {
                 HistoryReplayItem::Chat(ev) => render_chat_event(ev),
                 HistoryReplayItem::Mechanics(ev) => render_mechanics_event_bubble_only(ev),
@@ -198,10 +210,10 @@ pub(crate) fn replay_session_history_snapshot(history: Option<SessionHistorySnap
                 st.combat_tick = tick;
                 st.combat_round = round;
             });
-            let elapsed_sec = f64::from(tick) * 0.5;
-            crate::wasm_client::dom::set_text(
+            let elapsed_sec = f64::from(tick) * SECONDS_PER_TICK;
+            set_text(
                 "combat-round-pill",
-                &format!("Window {round} · Tick {tick} ({elapsed_sec:.1}s)"),
+                &format!("Window {round} · Tick {tick} ({elapsed_sec:.2}s)"),
             );
             render_combat_tracker();
         }
@@ -379,7 +391,7 @@ pub fn satya_export_session_snapshot() {
             Ok(bundle) => {
                 if let Ok(pretty_bytes) = serde_json::to_vec_pretty(&bundle) {
                     let filename = format!("{session_id}.satyasession");
-                    let _ = prompt_save_satyachar_bytes(&filename, &pretty_bytes).await;
+                    let _ = prompt_save_bytes(&filename, &pretty_bytes).await;
                     set_feedback(
                         "session-feedback",
                         &format!("Exported session snapshot '{filename}'"),
@@ -500,7 +512,7 @@ pub fn satya_export_chat_transcript(format: String) {
             if fmt == "md" {
                 if let Ok(md_text) = fetch_text("GET", &url, Some(&tok)).await {
                     let filename = format!("{session_id}-transcript.md");
-                    let _ = prompt_save_satyachar_bytes(&filename, md_text.as_bytes()).await;
+                    let _ = prompt_save_bytes(&filename, md_text.as_bytes()).await;
                     append_system_notice(&format!(
                         "Exported Markdown session transcript `{filename}`."
                     ));
@@ -511,7 +523,7 @@ pub fn satya_export_chat_transcript(format: String) {
                 && let Ok(pretty_bytes) = serde_json::to_vec_pretty(&tx_resp)
             {
                 let filename = format!("{session_id}-transcript.json");
-                let _ = prompt_save_satyachar_bytes(&filename, &pretty_bytes).await;
+                let _ = prompt_save_bytes(&filename, &pretty_bytes).await;
                 append_system_notice(&format!(
                     "Exported JSON session transcript `{filename}` ({} items).",
                     tx_resp.total_items
@@ -530,7 +542,7 @@ pub fn satya_export_chat_transcript(format: String) {
                 dom_text.trim()
             );
             let filename = format!("{session_id}-transcript.md");
-            let _ = prompt_save_satyachar_bytes(&filename, md.as_bytes()).await;
+            let _ = prompt_save_bytes(&filename, md.as_bytes()).await;
         } else {
             let fallback_json = serde_json::json!({
                 "session_id": session_id,
@@ -538,8 +550,96 @@ pub fn satya_export_chat_transcript(format: String) {
             });
             if let Ok(bytes) = serde_json::to_vec_pretty(&fallback_json) {
                 let filename = format!("{session_id}-transcript.json");
-                let _ = prompt_save_satyachar_bytes(&filename, &bytes).await;
+                let _ = prompt_save_bytes(&filename, &bytes).await;
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use satya_schema::{ChannelContext, EventMetadata, MessageVisibility, Participant};
+
+    fn dummy_meta(seq: i64) -> EventMetadata {
+        EventMetadata {
+            event_id: format!("ev-{seq}"),
+            sequence_num: seq,
+            client_timestamp_us: 1_793_644_935_000_000 + seq * 1_000,
+            ingest_timestamp_us: 1_793_644_935_000_000 + seq * 1_000,
+            timezone_offset_min: 0,
+            schema_subject: "io.satya.events.v1.ChatMessageEvent".to_string(),
+            schema_version: 1,
+            schema_fingerprint_crc64: vec![0; 8],
+            session_id: "sector-4".to_string(),
+            session_mode: SessionMode::Ttrpg,
+        }
+    }
+
+    #[test]
+    fn test_merge_history_events_by_sequence_interleaves_chat_and_mechanics() {
+        let sara = Participant::human("u-sara", "sara", "Sara", SessionRole::Player);
+        let chat_1 = ChatMessageEvent {
+            metadata: dummy_meta(1),
+            message_id: "m-1".to_string(),
+            sender: sara.clone(),
+            visibility: MessageVisibility::Public,
+            recipients: vec![],
+            channel_context: ChannelContext::InCharacter,
+            reply_to_message_id: None,
+            body: "Slicing the airlock keypad...".to_string(),
+            char_count: 29,
+            word_count: 4,
+            composition_time_ms: 400,
+            is_edited: false,
+        };
+        let chat_4 = ChatMessageEvent {
+            metadata: dummy_meta(4),
+            message_id: "m-4".to_string(),
+            body: "We're through!".to_string(),
+            ..chat_1.clone()
+        };
+        let mech_2 = TtrpgMechanicsEvent::evaluate_satya_task(
+            dummy_meta(2),
+            sara.clone(),
+            vec![],
+            "Intrusion".to_string(),
+            13,
+            2,
+            vec![8, 12],
+            None,
+            0,
+            0.0,
+        );
+        let mech_3 = TtrpgMechanicsEvent::evaluate_satya_task(
+            dummy_meta(3),
+            sara,
+            vec![],
+            "Athletics".to_string(),
+            12,
+            2,
+            vec![15, 9],
+            None,
+            0,
+            0.0,
+        );
+
+        let snap = SessionHistorySnapshot {
+            chat_events: vec![chat_4, chat_1],
+            mechanics_events: vec![mech_3, mech_2],
+            ..Default::default()
+        };
+
+        let merged = merge_history_events_by_sequence(&snap);
+        let seqs: Vec<(i64, bool)> = merged
+            .iter()
+            .map(|item| {
+                (
+                    item.sequence_num(),
+                    matches!(item, HistoryReplayItem::Chat(_)),
+                )
+            })
+            .collect();
+        assert_eq!(seqs, vec![(1, true), (2, false), (3, false), (4, true)]);
+    }
 }

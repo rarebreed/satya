@@ -81,8 +81,9 @@ fn fs_back(in: VertexOutput) -> @location(0) vec4<f32> {
     let grid_line = (1.0 - smoothstep(0.0, 0.06, min(grid_uv.x, 1.0 - grid_uv.x)))
         + (1.0 - smoothstep(0.0, 0.06, min(grid_uv.y, 1.0 - grid_uv.y)));
     let tray_refract = vec3<f32>(0.08, 0.18, 0.30) * clamp(grid_line, 0.0, 1.0) * (1.0 - scene.base_color.a);
+    let view_tint = max(dot(-n, v), 0.0) * 0.04;
 
-    let body_rgb = scene.base_color.rgb * (0.30 + 0.38 * ndl)
+    let body_rgb = scene.base_color.rgb * (0.30 + 0.38 * ndl + view_tint)
         + mix(scene.base_color.rgb, vec3<f32>(1.0, 1.0, 1.0), 0.38) * edge_highlight * 0.44
         + tray_refract;
     let mixed_rgb = mix(body_rgb, scene.ink_color.rgb * 0.72, ink_mask * 0.52);
@@ -112,8 +113,6 @@ fn fs_front(in: VertexOutput) -> @location(0) vec4<f32> {
         + mix(scene.base_color.rgb, vec3<f32>(1.0, 1.0, 1.0), 0.55) * (fresnel * 0.40 + edge_bevel * 0.28);
 
     let final_rgb = mix(lit_body, scene.ink_color.rgb, ink_mask);
-    // Keep front-surface glass transmission low when translucent so back-facing facets and
-    // refracted edges shine clearly through the die body, while still reaching 1.0 when opaque.
     let glass_base = mix(scene.base_color.a * 0.50, 1.0, pow(scene.base_color.a, 3.2));
     let body_alpha = clamp(glass_base + fresnel * 0.16 + spec * 0.35 + edge_bevel * 0.14, 0.06, 1.0);
     let final_alpha = max(body_alpha, ink_mask * 0.96);
@@ -128,31 +127,16 @@ fn fs_front(in: VertexOutput) -> @location(0) vec4<f32> {
 #[cfg(target_arch = "wasm32")]
 mod webgpu_runtime {
     use super::*;
+    use crate::wasm_client::wgpu_shared::{
+        create_depth_view, init_wgpu_canvas_context, resize_canvas_surface_if_needed,
+    };
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::rc::Rc;
     use wasm_bindgen::JsCast;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen_futures::spawn_local;
-    use web_sys::{HtmlCanvasElement, MouseEvent, WheelEvent};
-
-    #[cfg(target_arch = "wasm32")]
-    fn create_canvas_surface(
-        instance: &wgpu::Instance,
-        canvas: HtmlCanvasElement,
-    ) -> Result<wgpu::Surface<'static>, String> {
-        instance
-            .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
-            .map_err(|e| format!("WebGPU surface error: {e}"))
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn create_canvas_surface(
-        _instance: &wgpu::Instance,
-        _canvas: HtmlCanvasElement,
-    ) -> Result<wgpu::Surface<'static>, String> {
-        Err("Browser WebGPU canvas surface requires wasm32 target".to_string())
-    }
+    use web_sys::{MouseEvent, WheelEvent};
 
     struct GpuMeshBuffer {
         vertex_buffer: wgpu::Buffer,
@@ -202,24 +186,6 @@ mod webgpu_runtime {
         F: FnOnce(&mut DiceRendererController) -> R,
     {
         DICE_CONTROLLER.with(|cell| f(&mut cell.borrow_mut()))
-    }
-
-    fn create_depth_view(device: &wgpu::Device, width: u32, height: u32) -> wgpu::TextureView {
-        let tex = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("satya-dice-depth"),
-            size: wgpu::Extent3d {
-                width: width.max(1),
-                height: height.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth24Plus,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        tex.create_view(&wgpu::TextureViewDescriptor::default())
     }
 
     pub fn attach_canvas_camera_listeners_if_needed() {
@@ -302,21 +268,15 @@ mod webgpu_runtime {
                 let Some((mode, last_x, last_y)) = ctrl.active_drag else {
                     return;
                 };
-                let cx = ev.client_x();
-                let cy = ev.client_y();
-                let dx = (cx - last_x) as f32;
-                let dy = (cy - last_y) as f32;
+                let (cx, cy) = (ev.client_x(), ev.client_y());
+                let (dx, dy) = ((cx - last_x) as f32, (cy - last_y) as f32);
                 if dx.abs() < 0.5 && dy.abs() < 0.5 {
                     return;
                 }
                 ctrl.active_drag = Some((mode, cx, cy));
                 match mode {
-                    CanvasDragMode::Orbit => {
-                        ctrl.camera.orbit_by(-dx * 0.45, dy * 0.35);
-                    }
-                    CanvasDragMode::Pan => {
-                        ctrl.camera.pan_by_screen_delta(-dx * 0.015, -dy * 0.015);
-                    }
+                    CanvasDragMode::Orbit => ctrl.camera.orbit_by(-dx * 0.45, dy * 0.35),
+                    CanvasDragMode::Pan => ctrl.camera.pan_by_screen_delta(-dx * 0.015, -dy * 0.015),
                 }
                 super::sync_camera_dom_from_config(&ctrl.camera);
                 render_current_frame(ctrl);
@@ -326,9 +286,7 @@ mod webgpu_runtime {
         on_move.forget();
 
         let on_up = Closure::<dyn FnMut(MouseEvent)>::new(move |_ev: MouseEvent| {
-            with_dice_controller(|ctrl| {
-                ctrl.active_drag = None;
-            });
+            with_dice_controller(|ctrl| ctrl.active_drag = None);
         });
         let _ = win.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
         on_up.forget();
@@ -347,7 +305,6 @@ mod webgpu_runtime {
                 true
             }
         });
-
         if !should_init {
             return;
         }
@@ -386,83 +343,76 @@ mod webgpu_runtime {
         });
     }
 
-    async fn init_webgpu_pipeline() -> Result<WebGpuDicePipeline, String> {
-        let Some(el) = crate::wasm_client::dom::get_element("wgpu-dice-canvas") else {
-            return Err("Canvas #wgpu-dice-canvas not found".to_string());
-        };
-        let canvas: HtmlCanvasElement = el
-            .dyn_into::<HtmlCanvasElement>()
-            .map_err(|_| "Element is not an HtmlCanvasElement".to_string())?;
-
-        let width = canvas.client_width().max(320) as u32;
-        let height = canvas.client_height().max(260) as u32;
-        canvas.set_width(width);
-        canvas.set_height(height);
-
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::BROWSER_WEBGPU,
-            ..Default::default()
-        });
-
-        let surface = create_canvas_surface(&instance, canvas)?;
-
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-            .await
-            .ok_or_else(|| "WebGPU adapter unavailable in this browser".to_string())?;
-
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("satya-dice-device"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                        .using_resolution(adapter.limits()),
-                    memory_hints: wgpu::MemoryHints::Performance,
-                },
-                None,
+    fn create_dice_pass_pipeline(
+        device: &wgpu::Device,
+        layout: &wgpu::PipelineLayout,
+        shader: &wgpu::ShaderModule,
+        format: wgpu::TextureFormat,
+        vertex_buffers: &[wgpu::VertexBufferLayout<'_>],
+        is_front_pass: bool,
+    ) -> wgpu::RenderPipeline {
+        let (label, fs_entry, cull_mode, depth_write_enabled) = if is_front_pass {
+            (
+                "satya-dice-front-pipeline",
+                "fs_front",
+                Some(wgpu::Face::Back),
+                true,
             )
-            .await
-            .map_err(|e| format!("WebGPU device error: {e}"))?;
-
-        let caps = surface.get_capabilities(&adapter);
-        let format = caps
-            .formats
-            .iter()
-            .copied()
-            .find(|f| !f.is_srgb())
-            .or_else(|| caps.formats.first().copied())
-            .ok_or_else(|| "No supported WebGPU surface format".to_string())?;
-
-        let alpha_mode = if caps
-            .alpha_modes
-            .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
-        {
-            wgpu::CompositeAlphaMode::PreMultiplied
         } else {
-            caps.alpha_modes
-                .first()
-                .copied()
-                .unwrap_or(wgpu::CompositeAlphaMode::Auto)
+            (
+                "satya-dice-back-pipeline",
+                "fs_back",
+                Some(wgpu::Face::Front),
+                false,
+            )
         };
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(layout),
+            vertex: wgpu::VertexState {
+                module: shader,
+                entry_point: Some("vs_main"),
+                buffers: vertex_buffers,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: shader,
+                entry_point: Some(fs_entry),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode,
+                front_face: wgpu::FrontFace::Ccw,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24Plus,
+                depth_write_enabled,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        })
+    }
 
-        let surface_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format,
-            width,
-            height,
-            present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode,
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-        surface.configure(&device, &surface_config);
-
-        let depth_view = create_depth_view(&device, width, height);
+    async fn init_webgpu_pipeline() -> Result<WebGpuDicePipeline, String> {
+        let (_canvas, surface, device, queue, surface_config) =
+            init_wgpu_canvas_context("wgpu-dice-canvas").await?;
+        let depth_view = create_depth_view(
+            &device,
+            surface_config.width,
+            surface_config.height,
+            "satya-dice-depth",
+        );
 
         // Upload procedural 5x4 numeral texture atlas (faces 1..=20)
         let atlas_rgba = generate_dice_numeral_atlas_rgba8();
@@ -512,7 +462,6 @@ mod webgpu_runtime {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("satya-dice-instances"),
             size: (std::mem::size_of::<DieInstanceData>() * 24) as u64,
@@ -575,7 +524,6 @@ mod webgpu_runtime {
             label: Some("satya-dice-wgsl"),
             source: wgpu::ShaderSource::Wgsl(DICE_WGSL_SHADER.into()),
         });
-
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("satya-dice-pipeline-layout"),
             bind_group_layouts: &[&bind_group_layout],
@@ -637,83 +585,24 @@ mod webgpu_runtime {
             },
         ];
 
-        // Pass 1: Back-facing interior facets (`CullMode::Front`, depth write off, alpha blend)
-        let back_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("satya-dice-back-pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &vertex_buffers,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_back"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                cull_mode: Some(wgpu::Face::Front),
-                front_face: wgpu::FrontFace::Ccw,
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth24Plus,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::LessEqual,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
+        let format = surface_config.format;
+        let back_pipeline = create_dice_pass_pipeline(
+            &device,
+            &pipeline_layout,
+            &shader,
+            format,
+            &vertex_buffers,
+            false,
+        );
+        let front_pipeline = create_dice_pass_pipeline(
+            &device,
+            &pipeline_layout,
+            &shader,
+            format,
+            &vertex_buffers,
+            true,
+        );
 
-        // Pass 2: Front-facing exterior facets + numerals (`CullMode::Back`, depth write on, alpha blend)
-        let front_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("satya-dice-front-pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &vertex_buffers,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_front"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                cull_mode: Some(wgpu::Face::Back),
-                front_face: wgpu::FrontFace::Ccw,
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth24Plus,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::LessEqual,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-
-        // Upload all 6 polyhedral meshes (`d4`, `d6`, `d8`, `d10`, `d12`, `d20`)
         let mut meshes = HashMap::new();
         for kind in [
             DieKind::D4,
@@ -764,21 +653,14 @@ mod webgpu_runtime {
             return;
         };
 
-        // Resize surface if canvas dimensions changed
-        if let Some(el) = crate::wasm_client::dom::get_element("wgpu-dice-canvas")
-            && let Ok(canvas) = el.dyn_into::<HtmlCanvasElement>()
-        {
-            let cw = (canvas.client_width().max(320)) as u32;
-            let ch = (canvas.client_height().max(260)) as u32;
-            if cw != pipe.surface_config.width || ch != pipe.surface_config.height {
-                canvas.set_width(cw);
-                canvas.set_height(ch);
-                pipe.surface_config.width = cw;
-                pipe.surface_config.height = ch;
-                pipe.surface.configure(&pipe.device, &pipe.surface_config);
-                pipe.depth_view = create_depth_view(&pipe.device, cw, ch);
-            }
-        }
+        resize_canvas_surface_if_needed(
+            "wgpu-dice-canvas",
+            &pipe.device,
+            &pipe.surface,
+            &mut pipe.surface_config,
+            &mut pipe.depth_view,
+            "satya-dice-depth",
+        );
 
         let aspect =
             (pipe.surface_config.width as f32) / (pipe.surface_config.height.max(1) as f32);
@@ -877,12 +759,10 @@ mod webgpu_runtime {
             rpass.set_vertex_buffer(1, pipe.instance_buffer.slice(..));
 
             let inst_count = instances.len() as u32;
-            // Pass 1: Back faces (translucent interior depth & facets)
             if ctrl.material.opacity < 0.99 {
                 rpass.set_pipeline(&pipe.back_pipeline);
                 rpass.draw(0..gpu_mesh.vertex_count, 0..inst_count);
             }
-            // Pass 2: Front faces (lit exterior facets, specular, and numeral ink)
             rpass.set_pipeline(&pipe.front_pipeline);
             rpass.draw(0..gpu_mesh.vertex_count, 0..inst_count);
         }
@@ -907,8 +787,7 @@ mod webgpu_runtime {
             let keep_going = with_dice_controller(|ctrl| {
                 let now = js_sys::Date::now();
                 let elapsed_ms = (now - ctrl.anim_start_ms).max(0.0);
-                let duration_ms = 1250.0;
-                let t = (elapsed_ms / duration_ms).clamp(0.0, 1.0) as f32;
+                let t = (elapsed_ms / 1250.0).clamp(0.0, 1.0) as f32;
                 if let Some(sc) = ctrl.scene.as_mut() {
                     sc.progress = t;
                 }
