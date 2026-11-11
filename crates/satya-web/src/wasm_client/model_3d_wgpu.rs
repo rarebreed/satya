@@ -458,7 +458,7 @@ pub fn sync_3d_model_viewer_from_dom() {
         let p_eff = if preset.is_empty() {
             "valkyrie_rig".to_string()
         } else {
-            preset.clone()
+            preset
         };
         let m_eff = if mode.is_empty() {
             "wireframe_pbr".to_string()
@@ -475,6 +475,7 @@ pub fn sync_3d_model_viewer_from_dom() {
         });
         model_wgpu_runtime::ensure_model_viewer_initialized_and_render();
     }
+    #[cfg(not(target_arch = "wasm32"))]
     let _ = (preset, mode, tint_rgb);
 }
 

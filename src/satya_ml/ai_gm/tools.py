@@ -11,6 +11,7 @@ import json
 import math
 import os
 import random
+import re
 import tomllib
 import urllib.request
 import uuid
@@ -1454,6 +1455,13 @@ def narrate_to_session(
         norm_chan = (channel or "").strip().upper()
         if norm_chan == "OUT_OF_CHARACTER":
             channel_ctx = "OUT_OF_CHARACTER"
+            content = re.sub(
+                r"^\s*\[OUT_OF_CHARACTER[^\]]*\]\s*\n*",
+                "",
+                content,
+                count=1,
+                flags=re.IGNORECASE,
+            ).strip()
         elif norm_chan == "IN_CHARACTER":
             channel_ctx = "IN_CHARACTER"
         else:

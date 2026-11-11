@@ -878,10 +878,20 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
         assert "eval_tokens=100" in perf_str
 
         # Verify OOC rules query handling (`OUT_OF_CHARACTER` channel and rules questions do NOT advance story beats)
-        from satya_ml.ai_gm.graph import is_ooc_or_rules_query
+        from satya_ml.ai_gm.graph import (
+            is_mechanics_rules_query,
+            is_ooc_or_rules_query,
+            strip_leaked_ooc_header,
+        )
         from satya_ml.ai_gm.tools import get_session_combat_tracker, get_session_map
 
         assert is_ooc_or_rules_query(
+            {
+                "channel_context": "OUT_OF_CHARACTER",
+                "content": "How do we do combat? Are we at tick 0 now? how do I use my Tempo, Control and Force pool here?",
+            }
+        )
+        assert is_mechanics_rules_query(
             {
                 "channel_context": "OUT_OF_CHARACTER",
                 "content": "How do we do combat? Are we at tick 0 now? how do I use my Tempo, Control and Force pool here?",
@@ -893,6 +903,21 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
                 "content": "How do we do combat? Are we at tick 0 now? how do I use my Tempo, Control and Force pool here?",
             }
         )
+        # Non-mechanics OOC lore/NPC questions are OOC, NOT mechanics/rules queries
+        non_rules_ooc_event = {
+            "channel_context": "OUT_OF_CHARACTER",
+            "content": "what are the names of our physical security operative and cyber operative? I want to get them on the intercom",
+        }
+        assert is_ooc_or_rules_query(non_rules_ooc_event) is True
+        assert is_mechanics_rules_query(non_rules_ooc_event) is False
+        assert (
+            strip_leaked_ooc_header(
+                "[OUT_OF_CHARACTER TABLE QUESTION]\n\nPhysical Security: Kaelen Vance"
+            )
+            == "Physical Security: Kaelen Vance"
+        )
+
+        seen_ooc_prompts: list[str] = []
 
         class RulesAndActionModeModel:
             def bind_tools(self, _tools: list[Any]) -> RulesAndActionModeModel:
@@ -900,6 +925,11 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
 
             def invoke(self, messages: list[Any]) -> AIMessage:
                 last_txt = str(getattr(messages[-1], "content", ""))
+                seen_ooc_prompts.append(last_txt)
+                if "OUT_OF_CHARACTER TABLE QUESTION" in last_txt:
+                    return AIMessage(
+                        content="[OUT_OF_CHARACTER TABLE QUESTION]\n\nThe operatives are **Kaelen 'Brick' Vance** and **Sloane 'Ghost' Vane**."
+                    )
                 if "OUT_OF_CHARACTER RULES / TABLE QUESTION" in last_txt:
                     return AIMessage(
                         content="In Satya Action Mode, combat starts at Tick 1 (`Tick_start = max(1, 15 - OODA)`). Allocate your Tactical Pool `P_eff = T + C + F` in the Task Resolution & Action Pool drawer."
@@ -909,6 +939,24 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
                 )
 
         set_chat_model_override(RulesAndActionModeModel())
+        lore_ooc_res = handle_ai_gm_event(
+            AiGmTurnEventPayload(
+                session_id="ep-ooc-and-action-mode",
+                operating_mode="AUTONOMOUS",
+                channel_context="OUT_OF_CHARACTER",
+                context_text="what are the names of our physical security operative and cyber operative? I want to get them on the intercom",
+            ),
+            authorization="Bearer satya_gm_secret_dev_token",
+        )
+        assert lore_ooc_res["status"] == "ok"
+        assert lore_ooc_res["final_channel"] == "OUT_OF_CHARACTER"
+        assert lore_ooc_res["active_director_mandate"] == ""
+        assert "[OUT_OF_CHARACTER" not in lore_ooc_res["final_reply"]
+        assert "Kaelen 'Brick' Vance" in lore_ooc_res["final_reply"]
+        assert "[Satya Rules Reference Excerpt]" not in seen_ooc_prompts[-1]
+        assert "[ACTION MODE — TACTICAL CLOCK" not in seen_ooc_prompts[-1]
+        assert "Tick_start = max(1, 15 - OODA)" not in seen_ooc_prompts[-1]
+
         ooc_res = handle_ai_gm_event(
             AiGmTurnEventPayload(
                 session_id="ep-ooc-and-action-mode",
