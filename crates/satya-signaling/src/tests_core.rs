@@ -1027,6 +1027,7 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
                 edit_cell_x: None,
                 edit_cell_y: None,
                 set_tile_kind: None,
+                ..Default::default()
             })
             .unwrap(),
         ))

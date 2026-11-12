@@ -1,5 +1,9 @@
 //! Tactical `1.0m` Grid Terrain Tiles, Cover Grades, 3D Miniature Visual Specs,
 //! and Interactive Map Generation / Token Movement REST DTOs.
+//!
+//! Edge walls, multi-cell props, and material classes live in [`crate::tactical_map_dressing_dto`].
+
+pub use crate::tactical_map_dressing_dto::*;
 
 use crate::events::MessageVisibility;
 use serde::{Deserialize, Serialize};
@@ -240,6 +244,15 @@ pub struct GenerateSessionMapRequest {
     /// Target [`TacticalTileKind`] when `edit_cell_x` and `edit_cell_y` are provided (`None` toggles doors/cover).
     #[serde(default)]
     pub set_tile_kind: Option<TacticalTileKind>,
+    /// Optional single **edge** mutation on the existing active map (door toggle or GM wall painting).
+    #[serde(default)]
+    pub edit_edge: Option<MapEdgeRef>,
+    /// Target [`WallEdgeKind`] for `edit_edge` (`None` toggles a door open/closed).
+    #[serde(default)]
+    pub set_edge_kind: Option<WallEdgeKind>,
+    /// When `true` with `edit_edge`, removes the edge entirely (GM only).
+    #[serde(default)]
+    pub clear_edge: bool,
 }
 
 fn default_sector_preset() -> String {
@@ -259,6 +272,9 @@ impl Default for GenerateSessionMapRequest {
             edit_cell_x: None,
             edit_cell_y: None,
             set_tile_kind: None,
+            edit_edge: None,
+            set_edge_kind: None,
+            clear_edge: false,
         }
     }
 }

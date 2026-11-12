@@ -7,24 +7,57 @@
 //!   (`distance_m`), [`CoverGrade`] (`Clear`, `LowCover`, `HighCover`, `Blocked`), and recommended $\Delta_{\text{ext}}$.
 //! - **Metric Gait Movement Envelope**: [`compute_reachable_grid_cells`] coupling [`CombatMovementGait`] and
 //!   [`compute_stride_and_sprint_velocity`] directly to `1.0m` 8-directional Dijkstra pathing.
+//! - **Edge Walls & Multi-Cell Props**: [`TacticalGridView`] pairs the tile grid with a
+//!   [`WallEdgeIndex`] so LoS ([`evaluate_los_on_grid`]) and reach ([`compute_reachable_on_grid`]) respect thin
+//!   walls, doors, and windows. Furnished modern-day presets come from [`crate::map_interior_gen`], and prop
+//!   catalogs from [`crate::map_dressing`].
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use satya_schema::{
-    CoverGrade, GmMapUpdateRequest, MessageVisibility, TacticalTileKind, TokenPlacement,
-    TokenVisualSpec,
+    CoverGrade, GmMapUpdateRequest, MapPropPlacement, MapWallEdge, MessageVisibility,
+    TacticalTileKind, TokenPlacement, TokenVisualSpec, WallEdgeKind,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::define_coded_enum;
 use crate::environment_vehicles::{CombatMovementGait, compute_stride_and_sprint_velocity};
+use crate::map_interior_gen::{InteriorStyle, generate_furnished_interior};
+pub use crate::tactical_map_edges::{EdgeObstruction, WallEdgeIndex};
+
+/// Borrowed view of everything spatial rules need: row-major tiles plus the thin edge-wall index.
+#[derive(Debug, Clone, Copy)]
+pub struct TacticalGridView<'a> {
+    pub tiles: &'a [TacticalTileKind],
+    pub width: i32,
+    pub height: i32,
+    pub edges: &'a WallEdgeIndex,
+}
+
+impl TacticalGridView<'_> {
+    fn tile(&self, x: i32, y: i32) -> TacticalTileKind {
+        if x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return TacticalTileKind::FullWall;
+        }
+        self.tiles
+            .get((y * self.width + x) as usize)
+            .copied()
+            .unwrap_or(TacticalTileKind::Floor)
+    }
+}
+
+/// Builds the [`WallEdgeIndex`] for a wire map (empty for legacy cell-wall maps).
+#[must_use]
+pub fn wall_edge_index_for_map(map: &GmMapUpdateRequest) -> WallEdgeIndex {
+    WallEdgeIndex::from_edges(map.grid_width, map.grid_height, &map.wall_edges)
+}
 
 define_coded_enum! {
     /// Canonical procedural sector layout presets for `1.0m` tactical battlemaps.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
-    pub enum SectorPreset [count = 5] {
+    pub enum SectorPreset [count = 7] {
         #[default]
         OrbitalAirlock => {
             code: "orbital_airlock",
@@ -55,6 +88,50 @@ define_coded_enum! {
             label: "Breached Derelict Corridor",
             subtitle: "Segmented bulkhead passage with collapsed conduits & vacuum breach",
             aliases: ["corridor", "derelict", "breach"],
+        },
+        ResidentialApartment => {
+            code: "residential_apartment",
+            label: "Residential Apartment",
+            subtitle: "Furnished multi-room apartment with drywall partitions, doors & windows",
+            aliases: ["apartment", "flat", "house", "residential"],
+        },
+        CornerBar => {
+            code: "corner_bar",
+            label: "Corner Bar",
+            subtitle: "Neighborhood bar with a long counter, booths, pool table & back rooms",
+            aliases: ["bar", "pub", "tavern", "saloon"],
+        },
+    }
+}
+
+impl SectorPreset {
+    /// Furnished edge-wall interior style for modern-day presets (`None` for legacy cell-wall sectors).
+    #[must_use]
+    pub const fn interior_style(self) -> Option<InteriorStyle> {
+        match self {
+            Self::ResidentialApartment => Some(InteriorStyle::Apartment),
+            Self::CornerBar => Some(InteriorStyle::Bar),
+            _ => None,
+        }
+    }
+}
+
+/// Complete procedural sector: stamped tiles, thin edge walls, and multi-cell props.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProceduralSector {
+    pub tiles: Vec<TacticalTileKind>,
+    pub wall_edges: Vec<MapWallEdge>,
+    pub props: Vec<MapPropPlacement>,
+}
+
+/// Generates the full [`ProceduralSector`] for `preset` (edge walls and props are empty for legacy presets).
+#[must_use]
+pub fn generate_procedural_sector(preset: SectorPreset, width: i32, height: i32, seed: i64) -> ProceduralSector {
+    match preset.interior_style() {
+        Some(style) => generate_furnished_interior(style, width.clamp(8, 48), height.clamp(8, 48), seed),
+        None => ProceduralSector {
+            tiles: generate_procedural_tactical_grid(preset, width, height, seed),
+            ..Default::default()
         },
     }
 }
@@ -100,6 +177,9 @@ pub fn generate_procedural_tactical_grid(
     height: i32,
     seed: i64,
 ) -> Vec<TacticalTileKind> {
+    if let Some(style) = preset.interior_style() {
+        return generate_furnished_interior(style, width.clamp(8, 48), height.clamp(8, 48), seed).tiles;
+    }
     let w = width.clamp(8, 48);
     let h = height.clamp(8, 48);
     let mut tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
@@ -209,6 +289,8 @@ pub fn generate_procedural_tactical_grid(
                 set_tile(&mut tiles, w, h, cx, cy, TacticalTileKind::HalfCover);
             }
         }
+        // Furnished edge-wall interiors returned early above
+        SectorPreset::ResidentialApartment | SectorPreset::CornerBar => {}
         SectorPreset::DerelictCorridor => {
             // Narrowed corridor walls top/bottom + segmented airlocks + vacuum breach
             for x in 1..(w - 1) {
@@ -297,13 +379,12 @@ pub fn trace_supercover_segment_cells(
 }
 
 fn eval_single_ray(
-    tiles: &[TacticalTileKind],
-    w: i32,
-    h: i32,
+    grid: &TacticalGridView<'_>,
     start_pos: (f32, f32),
     end_pos: (f32, f32),
     attacker_xy: (i32, i32),
 ) -> (bool, bool, Vec<(i32, i32)>) {
+    let (w, h) = (grid.width, grid.height);
     let target_xy = (end_pos.0.floor() as i32, end_pos.1.floor() as i32);
     let cells = trace_supercover_segment_cells(start_pos, end_pos, attacker_xy, target_xy);
     let mut blocked = false;
@@ -313,10 +394,7 @@ fn eval_single_ray(
             blocked = true;
             break;
         }
-        let tile = tiles
-            .get((cy * w + cx) as usize)
-            .copied()
-            .unwrap_or(TacticalTileKind::Floor);
+        let tile = grid.tile(cx, cy);
         if tile.blocks_full_los() {
             blocked = true;
             break;
@@ -331,11 +409,16 @@ fn eval_single_ray(
             }
         }
     }
+    if !blocked {
+        let edge = grid.edges.trace_obstruction(start_pos, end_pos, attacker_xy);
+        blocked = edge.blocked;
+        half_cover |= edge.half_cover;
+    }
     (blocked, half_cover, cells)
 }
 
 /// Evaluates metric distance, supercover Line of Sight, corner-peeking, and [`CoverGrade`]
-/// between `attacker_xy` and `target_xy` on a `width * height` grid (`cell_size_m` meters per cell).
+/// between `attacker_xy` and `target_xy` on a legacy cell-wall grid (no edge walls).
 #[must_use]
 pub fn evaluate_tactical_los_and_cover(
     tiles: &[TacticalTileKind],
@@ -345,6 +428,20 @@ pub fn evaluate_tactical_los_and_cover(
     attacker_xy: (i32, i32),
     target_xy: (i32, i32),
 ) -> TacticalLosEvaluation {
+    let edges = WallEdgeIndex::default();
+    let grid = TacticalGridView { tiles, width, height, edges: &edges };
+    evaluate_los_on_grid(&grid, cell_size_m, attacker_xy, target_xy)
+}
+
+/// Edge-aware LoS / cover evaluation: tiles **and** thin walls, closed doors, and windows on `grid`.
+#[must_use]
+pub fn evaluate_los_on_grid(
+    grid: &TacticalGridView<'_>,
+    cell_size_m: f32,
+    attacker_xy: (i32, i32),
+    target_xy: (i32, i32),
+) -> TacticalLosEvaluation {
+    let (width, height) = (grid.width, grid.height);
     let scale_m = cell_size_m.max(0.25);
     let dx = (target_xy.0 - attacker_xy.0) as f32;
     let dy = (target_xy.1 - attacker_xy.1) as f32;
@@ -365,7 +462,7 @@ pub fn evaluate_tactical_los_and_cover(
     let a_center = (attacker_xy.0 as f32 + 0.5, attacker_xy.1 as f32 + 0.5);
     let t_center = (target_xy.0 as f32 + 0.5, target_xy.1 as f32 + 0.5);
     let (center_blocked, center_half_cover, primary_cells) =
-        eval_single_ray(tiles, width, height, a_center, t_center, attacker_xy);
+        eval_single_ray(grid, a_center, t_center, attacker_xy);
 
     if !center_blocked {
         let grade = if center_half_cover {
@@ -390,21 +487,19 @@ pub fn evaluate_tactical_los_and_cover(
     for &(ox, oy) in &offsets {
         let a_peek = (a_center.0 + ox, a_center.1 + oy);
         let ax_cell = (a_peek.0.floor() as i32, a_peek.1.floor() as i32);
-        let peek_origin_clear = ax_cell == attacker_xy
-            || (ax_cell.0 >= 0
-                && ax_cell.1 >= 0
-                && ax_cell.0 < width
-                && ax_cell.1 < height
-                && !tiles
-                    .get((ax_cell.1 * width + ax_cell.0) as usize)
-                    .copied()
-                    .unwrap_or(TacticalTileKind::Floor)
-                    .blocks_full_los());
+        // Leaning must not pass through a thin wall or closed door bounding the attacker's own cell.
+        let lean_through_wall = grid.edges.trace_obstruction(a_center, a_peek, attacker_xy).blocked;
+        let peek_origin_clear = !lean_through_wall
+            && (ax_cell == attacker_xy
+                || (ax_cell.0 >= 0
+                    && ax_cell.1 >= 0
+                    && ax_cell.0 < width
+                    && ax_cell.1 < height
+                    && !grid.tile(ax_cell.0, ax_cell.1).blocks_full_los()));
         if !peek_origin_clear {
             continue;
         }
-        let (peek_blocked, _, peek_cells) =
-            eval_single_ray(tiles, width, height, a_peek, t_center, attacker_xy);
+        let (peek_blocked, _, peek_cells) = eval_single_ray(grid, a_peek, t_center, attacker_xy);
         if !peek_blocked {
             return TacticalLosEvaluation {
                 attacker_xy,
@@ -481,7 +576,8 @@ pub struct GaitReachQuery {
 }
 
 /// Computes all unblocked `(x, y)` cells reachable within `query.tick_budget` using 8-directional
-/// metric Dijkstra pathing (`1.0m` orthogonal, `1.414m` diagonal, `2.0x` hazard/vaulting).
+/// metric Dijkstra pathing (`1.0m` orthogonal, `1.414m` diagonal, `2.0x` hazard/vaulting) on a legacy
+/// cell-wall grid (no edge walls).
 #[must_use]
 pub fn compute_reachable_grid_cells(
     tiles: &[TacticalTileKind],
@@ -490,6 +586,20 @@ pub fn compute_reachable_grid_cells(
     occupied_cells: &[(i32, i32)],
     query: GaitReachQuery,
 ) -> Vec<ReachableCell> {
+    let edges = WallEdgeIndex::default();
+    let grid = TacticalGridView { tiles, width, height, edges: &edges };
+    compute_reachable_on_grid(&grid, occupied_cells, query)
+}
+
+/// Edge-aware gait reach: thin walls, closed doors, and windows block steps; diagonal steps through
+/// wall junctions are rejected via [`WallEdgeIndex::step_blocked`].
+#[must_use]
+pub fn compute_reachable_on_grid(
+    grid: &TacticalGridView<'_>,
+    occupied_cells: &[(i32, i32)],
+    query: GaitReachQuery,
+) -> Vec<ReachableCell> {
+    let (width, height) = (grid.width, grid.height);
     if width <= 0 || height <= 0 {
         return Vec::new();
     }
@@ -538,26 +648,20 @@ pub fn compute_reachable_grid_cells(
             if nx < 0 || ny < 0 || nx >= width || ny >= height {
                 continue;
             }
-            let tile = tiles
-                .get((ny * width + nx) as usize)
-                .copied()
-                .unwrap_or(TacticalTileKind::Floor);
+            let tile = grid.tile(nx, ny);
             if matches!(tile, TacticalTileKind::FullWall | TacticalTileKind::DoorClosed) {
                 continue;
             }
             // Disallow squeezing diagonally between two solid wall/closed-door corners
             if is_diag {
-                let adj1 = tiles
-                    .get((node.y * width + nx) as usize)
-                    .copied()
-                    .unwrap_or(TacticalTileKind::Floor);
-                let adj2 = tiles
-                    .get((ny * width + node.x) as usize)
-                    .copied()
-                    .unwrap_or(TacticalTileKind::Floor);
+                let adj1 = grid.tile(nx, node.y);
+                let adj2 = grid.tile(node.x, ny);
                 if adj1.blocks_full_los() && adj2.blocks_full_los() {
                     continue;
                 }
+            }
+            if grid.edges.step_blocked((node.x, node.y), dx, dy, WallEdgeKind::blocks_movement) {
+                continue;
             }
 
             let step_base_mm = if is_diag { diag_mm } else { cell_mm };
@@ -590,10 +694,7 @@ pub fn compute_reachable_grid_cells(
             if c_mm == i32::MAX || (x == sx && y == sy) {
                 continue;
             }
-            let tile = tiles
-                .get((y * width + x) as usize)
-                .copied()
-                .unwrap_or(TacticalTileKind::Floor);
+            let tile = grid.tile(x, y);
             if tile.blocks_occupancy() {
                 continue;
             }
@@ -626,7 +727,7 @@ pub fn build_procedural_map_request(
 ) -> GmMapUpdateRequest {
     let w = width.clamp(8, 48);
     let h = height.clamp(8, 48);
-    let tiles = generate_procedural_tactical_grid(preset, w, h, seed);
+    let ProceduralSector { tiles, wall_edges, props } = generate_procedural_sector(preset, w, h, seed);
     let mid_y = h / 2;
     let title = title_override
         .map(str::trim)
@@ -703,6 +804,8 @@ pub fn build_procedural_map_request(
         seed: Some(seed),
         tiles,
         token_visuals,
+        wall_edges,
+        props,
     }
 }
 

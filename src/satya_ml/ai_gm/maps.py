@@ -103,8 +103,12 @@ def get_session_llm_config(session_id: str) -> SessionLlmConfig | None:
 
 
 def infer_sector_preset(theme: str) -> str:
-    """Map a free-text scene theme to one of the 5 canonical `satya-engine` `SectorPreset` codes."""
+    """Map a free-text scene theme to one of the 7 canonical `satya-engine` `SectorPreset` codes."""
     low = (theme or "").lower()
+    if any(k in low for k in ("bar", "pub", "tavern", "club", "lounge", "saloon")):
+        return "corner_bar"
+    if any(k in low for k in ("apartment", "flat", "safehouse", "house", "home", "residential", "motel", "office")):
+        return "residential_apartment"
     if any(k in low for k in ("dock", "cargo", "hangar", "bay")):
         return "docking_bay"
     if any(k in low for k in ("med", "trauma", "lab", "clinic", "ward")):
@@ -399,6 +403,8 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
         "theme_preset": map_state.get("theme_preset", infer_sector_preset(str(map_state.get("theme", "")))),
         "seed": int(map_state.get("seed", 42)),
         "tiles": list(map_state.get("tiles", [])),
+        "wall_edges": list(map_state.get("wall_edges", [])),
+        "props": list(map_state.get("props", [])),
         "tokens": wire_tokens,
         "token_visuals": wire_visuals,
         "notes": map_state.get("notes"),

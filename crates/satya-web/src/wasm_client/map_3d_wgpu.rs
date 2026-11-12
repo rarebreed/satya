@@ -122,6 +122,12 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
             if tile == TacticalTileKind::Floor {
                 continue;
             }
+            // Multi-cell props draw their own footprint geometry (see `map_3d_dressing_geom`).
+            if matches!(tile, TacticalTileKind::HalfCover | TacticalTileKind::FullWall)
+                && satya_engine::map_dressing::solid_prop_at(&ui.map.props, gx, gy).is_some()
+            {
+                continue;
+            }
             let [wx, wz] = grid_cell_to_world_xz(gx, gy, w, h, cell_m);
             let hc = cell_m * 0.48;
             match tile {
@@ -150,6 +156,9 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
             }
         }
     }
+
+    // 2b. Thin edge walls / doors / windows and multi-cell props
+    crate::wasm_client::map_3d_dressing_geom::push_dressing_geometry(&mut verts, ui, wall_h, door_h);
 
     // 3. Movement gait reachable cell pads (`y = 0.018m`)
     for r in &ui.reachable_cells {
@@ -219,9 +228,8 @@ mod map_wgpu_runtime {
     use crate::wasm_client::dice_3d::parse_hex_color;
     use crate::wasm_client::glb_model::LoadedGlbModel;
     use crate::wasm_client::map_3d::{
-        format_map_tactical_hud_html, format_tactical_map_svg_markup,
-        handle_map_grid_cell_clicked, resolve_token_visual, with_map_ui, with_map_ui_mut,
-        world_xz_to_grid_cell,
+        format_map_tactical_hud_html, handle_map_grid_cell_clicked, resolve_token_visual,
+        with_map_ui, with_map_ui_mut, world_xz_to_grid_cell,
     };
     use crate::wasm_client::model_3d_wgpu::{custom_glb_generation, resolve_glb_model};
     use satya_schema::MessageVisibility;
@@ -323,6 +331,12 @@ mod map_wgpu_runtime {
     }
 
     fn pick_grid_cell_from_mouse(ev: &MouseEvent, cam: &OrbitOrthoCamera) -> Option<(i32, i32)> {
+        let (fx, fy) = pick_grid_point_from_mouse(ev, cam)?;
+        Some((fx.floor() as i32, fy.floor() as i32))
+    }
+
+    /// Continuous cell-space `(fx, fy)` under the pointer on the `y = 0` deck plane (inside the board).
+    fn pick_grid_point_from_mouse(ev: &MouseEvent, cam: &OrbitOrthoCamera) -> Option<(f32, f32)> {
         let el = crate::wasm_client::dom::get_element("wgpu-map-canvas")?;
         let rect = el.get_bounding_client_rect();
         let rw = rect.width().max(1.0) as f32;
@@ -336,13 +350,10 @@ mod map_wgpu_runtime {
         let ndc_y = 1.0 - (local_y / rh) * 2.0;
         let [wx, wz] = cam.screen_ndc_to_plane_xz(ndc_x, ndc_y, rw / rh, 0.0)?;
         with_map_ui(|ui| {
-            world_xz_to_grid_cell(
-                wx,
-                wz,
-                ui.map.grid_width,
-                ui.map.grid_height,
-                ui.map.cell_size_m(),
-            )
+            let (w, h) = (ui.map.grid_width, ui.map.grid_height);
+            world_xz_to_grid_cell(wx, wz, w, h, ui.map.cell_size_m())?;
+            let s = ui.map.cell_size_m().max(0.25);
+            Some((wx / s + w as f32 * 0.5, wz / s + h as f32 * 0.5))
         })
     }
 
@@ -627,9 +638,9 @@ mod map_wgpu_runtime {
                 }
             });
             if let Some(cam) = clicked_cam
-                && let Some((gx, gy)) = pick_grid_cell_from_mouse(&ev, &cam)
+                && let Some((fx, fy)) = pick_grid_point_from_mouse(&ev, &cam)
             {
-                handle_map_grid_cell_clicked(gx, gy);
+                crate::wasm_client::map_edge_edit::satya_click_map_point(fx, fy);
             }
         });
         let _ = win.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
@@ -660,15 +671,17 @@ mod map_wgpu_runtime {
                     Ok(pipe) => {
                         c.pipeline = Some(pipe);
                         c.scene_dirty = true;
-                        crate::wasm_client::dom::set_display("wgpu-map-canvas-wrap", "block");
-                        crate::wasm_client::dom::set_display("tabletop-map-svg-fallback", "none");
-                        render_map_frame(c);
+                        // The user may have switched to `Mode: 2D Battlemap` while the adapter was initializing.
+                        if !with_map_ui(|ui| ui.view_battlemap) {
+                            crate::wasm_client::dom::set_display("wgpu-map-canvas-wrap", "block");
+                            crate::wasm_client::dom::set_display("tabletop-map-svg-fallback", "none");
+                            render_map_frame(c);
+                        }
                     }
                     Err(_err) => {
                         crate::wasm_client::dom::set_display("wgpu-map-canvas-wrap", "none");
                         crate::wasm_client::dom::set_display("tabletop-map-svg-fallback", "block");
-                        let svg = with_map_ui(format_tactical_map_svg_markup);
-                        crate::wasm_client::dom::set_html("tabletop-map-svg-fallback", &svg);
+                        crate::wasm_client::map_2d_art::sync_battlemap_svg_host();
                     }
                 }
             });
@@ -732,7 +745,9 @@ pub fn mark_map_wgpu_dirty() {
 
 pub fn refresh_map_wgpu_if_active() {
     #[cfg(target_arch = "wasm32")]
-    if crate::wasm_client::dom::window().is_some() {
+    if crate::wasm_client::dom::window().is_some()
+        && !crate::wasm_client::map_3d::with_map_ui(|ui| ui.view_battlemap)
+    {
         map_wgpu_runtime::ensure_map_wgpu_initialized_and_render();
     }
 }

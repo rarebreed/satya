@@ -50,6 +50,9 @@
 //!   Survival (`docs/ttrpg/06-health-and-survival/health_and_trauma.md`, `movement_vehicles_and_environment.md`).
 //! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
 //!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
+//! - [`tactical_map`], [`tactical_map_edges`], [`map_dressing`] & [`map_interior_gen`]: `1.0m` tactical grid,
+//!   supercover LoS/cover, gait reach, thin edge walls/doors/windows, the multi-cell prop catalog with material
+//!   classes, and furnished modern-day interior generation (apartment, corner bar).
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor)
 //!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3).
 
@@ -69,6 +72,8 @@ pub mod environmental_hazards;
 pub mod health_survival;
 pub mod lifepath_catalog;
 pub mod lifepath_economy;
+pub mod map_dressing;
+pub mod map_interior_gen;
 pub mod npc_generator;
 pub mod primitives;
 pub mod psyche_social;
@@ -80,6 +85,7 @@ pub mod skills_trees;
 pub mod social_combat;
 pub mod status_and_triage;
 pub mod tactical_map;
+pub mod tactical_map_edges;
 pub mod task_resolution;
 pub mod walkthroughs;
 
@@ -93,6 +99,7 @@ pub use dice_pools::{
 pub use dice_probabilities::*;
 pub use health_survival::*;
 pub use lifepath_economy::*;
+pub use map_dressing::*;
 pub use npc_generator::*;
 pub use primitives::*;
 pub use psyche_social::*;

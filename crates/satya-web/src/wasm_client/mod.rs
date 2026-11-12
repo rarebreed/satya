@@ -33,8 +33,14 @@ pub mod dom;
 pub mod glb_model;
 pub mod gm_docs;
 pub mod gm_memories_and_director;
+pub mod map_2d_art;
+pub mod map_2d_art_furniture;
+pub mod map_2d_art_props;
+pub mod map_2d_art_walls;
 pub mod map_3d;
 pub mod map_3d_wgpu;
+pub mod map_3d_dressing_geom;
+pub mod map_edge_edit;
 pub mod menu;
 pub mod model_3d_wgpu;
 pub mod notebook;
@@ -167,6 +173,10 @@ macro_rules! for_all_window_callbacks {
             "satyaExportCurrentGlbModel" => satya_export_current_glb_model(),
             "satyaSelectMapToken" => satya_select_map_token(String),
             "satyaClickMapCell" => satya_click_map_cell(i32, i32),
+            "satyaClickMapPoint" => satya_click_map_point(f32, f32),
+            "satyaHoverMapCell" => satya_hover_map_cell(i32, i32),
+            "satyaToggleBattlemapView" => satya_toggle_battlemap_view(),
+            "satyaToggleBattlemapGrid" => satya_toggle_battlemap_grid(),
             "satyaGenerateProceduralMap" => satya_generate_procedural_map(),
             "satyaUpdateMapTacticalControls" => satya_update_map_tactical_controls(),
             "satyaUpdateSelectedTokenVisual" => satya_update_selected_token_visual(),

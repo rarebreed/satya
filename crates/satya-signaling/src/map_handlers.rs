@@ -12,10 +12,10 @@ use satya_engine::tactical_map::{
     SectorPreset, build_procedural_map_request, generate_procedural_tactical_grid,
 };
 use satya_schema::{
-    CanvasEventType, GenerateSessionMapRequest, GmMapUpdateRequest, MessageVisibility,
-    MoveMapTokenRequest, Participant, ParticipantKind, ServerWsPacket, SessionRole,
-    TabletopCanvasEvent, TacticalTileKind, TokenPlacement, TokenVisualSpec,
-    UpdateCombatTrackerRequest, subjects,
+    CanvasEventType, EdgeSide, GenerateSessionMapRequest, GmMapUpdateRequest, MapWallEdge,
+    MaterialClass, MessageVisibility, MoveMapTokenRequest, Participant, ParticipantKind,
+    ServerWsPacket, SessionRole, TabletopCanvasEvent, TacticalTileKind, TokenPlacement,
+    TokenVisualSpec, UpdateCombatTrackerRequest, WallEdgeKind, subjects,
 };
 use serde_json::json;
 use std::collections::HashSet;
@@ -249,6 +249,87 @@ pub async fn session_generate_or_edit_map_handler(
     });
     let caller_is_gm_or_solo =
         matches!(caller_part.role, SessionRole::Gm | SessionRole::Host) || !has_human_gm;
+
+    // Branch A0: Single edge-wall edit (door toggle by anyone, or GM wall/window painting)
+    if let Some(edge_ref) = req.edit_edge {
+        let Some(mut map) = ctx.active_map.clone() else {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({ "error": "No active map to edit" })),
+            )
+                .into_response();
+        };
+        let in_bounds = match edge_ref.side {
+            EdgeSide::North => {
+                (0..map.grid_width).contains(&edge_ref.x) && (0..=map.grid_height).contains(&edge_ref.y)
+            }
+            EdgeSide::West => {
+                (0..=map.grid_width).contains(&edge_ref.x) && (0..map.grid_height).contains(&edge_ref.y)
+            }
+        };
+        if !in_bounds {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "Edge out of grid bounds" })),
+            )
+                .into_response();
+        }
+        let existing = map
+            .wall_edges
+            .iter()
+            .position(|e| e.x == edge_ref.x && e.y == edge_ref.y && e.side == edge_ref.side);
+        let current_kind = existing.map(|i| map.wall_edges[i].kind);
+        let is_door_toggle = !req.clear_edge
+            && matches!(current_kind, Some(WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen))
+            && matches!(
+                req.set_edge_kind,
+                None | Some(WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen)
+            );
+        if !caller_is_gm_or_solo && !is_door_toggle {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Only the Game Master can paint walls and windows" })),
+            )
+                .into_response();
+        }
+        let next_kind = if req.clear_edge {
+            None
+        } else {
+            req.set_edge_kind.or(match current_kind {
+                Some(WallEdgeKind::DoorClosed) => Some(WallEdgeKind::DoorOpen),
+                Some(WallEdgeKind::DoorOpen) => Some(WallEdgeKind::DoorClosed),
+                other => other,
+            })
+        };
+        match (existing, next_kind) {
+            (Some(i), Some(kind)) => map.wall_edges[i].kind = kind,
+            (Some(i), None) => {
+                map.wall_edges.remove(i);
+            }
+            (None, Some(kind)) => map.wall_edges.push(MapWallEdge {
+                x: edge_ref.x,
+                y: edge_ref.y,
+                side: edge_ref.side,
+                kind,
+                material: if kind == WallEdgeKind::Window {
+                    MaterialClass::Glass
+                } else {
+                    MaterialClass::Drywall
+                },
+            }),
+            (None, None) => {}
+        }
+        let _ = state
+            .auth
+            .set_session_active_map(&session_id, map.clone())
+            .await;
+        broadcast_role_filtered_map(&state, &session_id, &ctx.roster, &map).await;
+        return (
+            StatusCode::OK,
+            Json(filter_map_for_role(&map, caller_part.role)),
+        )
+            .into_response();
+    }
 
     // Branch A: Single-cell edit (door toggle or terrain paint)
     if let (Some(ex), Some(ey)) = (req.edit_cell_x, req.edit_cell_y) {

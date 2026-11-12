@@ -1,10 +1,15 @@
 //! Interactive `1.0m` Tactical Map State, Grid Coordinate Math, LoS/Cover & Gait Reach Overlays,
-//! Server REST Synchronization, and Tile-Accurate 2D SVG Fallback (`#notebook-pane-maps`).
+//! and Server REST Synchronization (`#notebook-pane-maps`).
 //!
-//! Companion module [`crate::wasm_client::map_3d_wgpu`] drives the live `wgpu` 3D Diorama / 2D Ortho
-//! canvas (`#wgpu-map-canvas`) and `.glb` character miniatures.
+//! Companion modules:
+//! - [`crate::wasm_client::map_3d_wgpu`] drives the live `wgpu` 3D Diorama / 2D Ortho canvas
+//!   (`#wgpu-map-canvas`) and `.glb` character miniatures.
+//! - [`crate::wasm_client::map_2d_art`] renders the illustrated 2D battlemap (`#tabletop-map-svg-fallback`),
+//!   which is both the user-selectable `Mode: 2D Battlemap` view and the automatic no-WebGPU fallback.
 
+pub use crate::wasm_client::map_2d_art::*;
 pub use crate::wasm_client::map_3d_wgpu::*;
+pub use crate::wasm_client::map_edge_edit::*;
 
 use crate::wasm_client::dom::{
     escape_html, fetch_json, get_element, set_class, set_display, set_html, set_input_value,
@@ -12,10 +17,11 @@ use crate::wasm_client::dom::{
 };
 use crate::wasm_client::state::with_state;
 use satya_engine::environment_vehicles::CombatMovementGait;
+use satya_engine::map_dressing::{prop_spec, solid_prop_at};
 use satya_engine::tactical_map::{
-    GaitReachQuery, ReachableCell, SectorPreset, TacticalLosEvaluation,
-    build_procedural_map_request, compute_reachable_grid_cells, evaluate_tactical_los_and_cover,
-    generate_procedural_tactical_grid,
+    GaitReachQuery, ReachableCell, SectorPreset, TacticalGridView, TacticalLosEvaluation,
+    build_procedural_map_request, compute_reachable_on_grid, evaluate_los_on_grid,
+    generate_procedural_tactical_grid, wall_edge_index_for_map,
 };
 use satya_schema::{
     CoverGrade, GenerateSessionMapRequest, GmMapUpdateRequest, MessageVisibility,
@@ -39,6 +45,10 @@ pub struct TacticalMapUiState {
     pub last_los: Option<TacticalLosEvaluation>,
     pub reachable_cells: Vec<ReachableCell>,
     pub seed_counter: i64,
+    /// `true` shows the illustrated 2D battlemap instead of the WebGPU diorama (`#btn-map-view-mode`).
+    pub view_battlemap: bool,
+    /// Draws the `1.0m` / `5.0m` grid overlay on the 2D battlemap (`#btn-map-grid-overlay`).
+    pub show_grid_overlay: bool,
 }
 
 impl Default for TacticalMapUiState {
@@ -63,6 +73,8 @@ impl Default for TacticalMapUiState {
             last_los: None,
             reachable_cells: Vec::new(),
             seed_counter: 42,
+            view_battlemap: false,
+            show_grid_overlay: true,
         };
         st.recompute_overlays();
         st
@@ -111,10 +123,15 @@ impl TacticalMapUiState {
                 .filter(|t| t.entity_id != sel_id)
                 .map(|t| (t.x, t.y))
                 .collect();
-            self.reachable_cells = compute_reachable_grid_cells(
-                &self.map.tiles,
-                self.map.grid_width,
-                self.map.grid_height,
+            let edges = wall_edge_index_for_map(&self.map);
+            let grid = TacticalGridView {
+                tiles: &self.map.tiles,
+                width: self.map.grid_width,
+                height: self.map.grid_height,
+                edges: &edges,
+            };
+            self.reachable_cells = compute_reachable_on_grid(
+                &grid,
                 &occupied,
                 GaitReachQuery {
                     start_xy: (sel_tok.x, sel_tok.y),
@@ -133,16 +150,9 @@ impl TacticalMapUiState {
                     .find(|t| t.entity_id != sel_id)
                     .map(|t| (t.x, t.y))
             });
-            self.last_los = target_xy.map(|txy| {
-                evaluate_tactical_los_and_cover(
-                    &self.map.tiles,
-                    self.map.grid_width,
-                    self.map.grid_height,
-                    cell_m,
-                    (sel_tok.x, sel_tok.y),
-                    txy,
-                )
-            });
+            let last_los = target_xy
+                .map(|txy| evaluate_los_on_grid(&grid, cell_m, (sel_tok.x, sel_tok.y), txy));
+            self.last_los = last_los;
         } else {
             self.reachable_cells.clear();
             self.last_los = None;
@@ -264,8 +274,15 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
         .find(|t| (t.x, t.y) == los.target_xy)
         .map(|t| format!("{} @ ({}, {})", escape_html(&t.label), t.x, t.y))
         .unwrap_or_else(|| {
-            let tile = ui.map.tile_at(los.target_xy.0, los.target_xy.1);
-            format!("Cell ({}, {}) [{}]", los.target_xy.0, los.target_xy.1, tile.label())
+            let (tx, ty) = los.target_xy;
+            match solid_prop_at(&ui.map.props, tx, ty) {
+                Some(p) => format!(
+                    "Cell ({tx}, {ty}) [{} · {}]",
+                    p.kind.label(),
+                    prop_spec(p.kind).material.label()
+                ),
+                None => format!("Cell ({tx}, {ty}) [{}]", ui.map.tile_at(tx, ty).label()),
+            }
         });
 
     let pill_cls = match los.cover_grade {
@@ -285,95 +302,6 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
         los.distance_m,
         los.cover_grade.label()
     )
-}
-
-/// Renders a tile-accurate 2D tactical SVG data URI (`data:image/svg+xml;utf8,...`) for `#tabletop-map-img`
-/// so non-WebGPU browsers and SSR snapshots display walls, half-cover, doors, hazards, reach, and LoS rays.
-#[must_use]
-pub fn format_tactical_map_svg_markup(ui: &TacticalMapUiState) -> String {
-    let w = ui.map.grid_width.max(4);
-    let h = ui.map.grid_height.max(4);
-    let cell = 32_i32;
-    let svg_w = w * cell;
-    let svg_h = h * cell;
-    let mut out = format!(
-        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {svg_w} {svg_h}" width="{svg_w}" height="{svg_h}"><rect width="{svg_w}" height="{svg_h}" fill="#090d16"/>"##
-    );
-
-    // Terrain & cover tiles
-    for y in 0..h {
-        for x in 0..w {
-            let px = x * cell;
-            let py = y * cell;
-            let tile = ui.map.tile_at(x, y);
-            let fill = match tile {
-                TacticalTileKind::Floor => "#0d1524",
-                TacticalTileKind::HalfCover => "#1e3a5f",
-                TacticalTileKind::FullWall => "#334155",
-                TacticalTileKind::DoorClosed => "#b45309",
-                TacticalTileKind::DoorOpen => "#064e3b",
-                TacticalTileKind::HazardZone => "#4c0519",
-                TacticalTileKind::ElevatedPlatform => "#1e293b",
-            };
-            out.push_str(&format!(
-                r##"<rect x="{px}" y="{py}" width="{cell}" height="{cell}" fill="{fill}" stroke="#1e293b" stroke-width="1" style="cursor:pointer" onclick="window.satyaClickMapCell({x},{y})"/>"##
-            ));
-            if tile == TacticalTileKind::HalfCover {
-                out.push_str(&format!(
-                    r##"<rect x="{}" y="{}" width="{}" height="{}" fill="none" stroke="#38bdf8" stroke-width="1.5"/>"##,
-                    px + 4,
-                    py + 4,
-                    cell - 8,
-                    cell - 8
-                ));
-            }
-        }
-    }
-
-    // Reachable gait envelope highlights
-    for r in &ui.reachable_cells {
-        let px = r.x * cell + 2;
-        let py = r.y * cell + 2;
-        let sz = cell - 4;
-        out.push_str(&format!(
-            r##"<rect x="{px}" y="{py}" width="{sz}" height="{sz}" fill="#10b981" fill-opacity="0.18" stroke="#10b981" stroke-opacity="0.45" stroke-width="1"/>"##
-        ));
-    }
-
-    // Active LoS ray
-    if let Some(los) = ui.last_los.as_ref() {
-        let x1 = los.attacker_xy.0 * cell + cell / 2;
-        let y1 = los.attacker_xy.1 * cell + cell / 2;
-        let x2 = los.target_xy.0 * cell + cell / 2;
-        let y2 = los.target_xy.1 * cell + cell / 2;
-        let stroke = match los.cover_grade {
-            CoverGrade::Clear => "#22d3ee",
-            CoverGrade::LowCover => "#fbbf24",
-            CoverGrade::HighCover => "#fb923c",
-            CoverGrade::Blocked => "#f43f5e",
-        };
-        out.push_str(&format!(
-            r##"<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{stroke}" stroke-width="2.2" stroke-dasharray="4 3"/>"##
-        ));
-    }
-
-    // Tokens
-    for tok in &ui.map.tokens {
-        let cx = tok.x * cell + cell / 2;
-        let cy = tok.y * cell + cell / 2;
-        let (_, col, _) = resolve_token_visual(&ui.map, tok);
-        let is_sel = ui.selected_entity_id.as_deref() == Some(tok.entity_id.as_str());
-        let ring = if is_sel { "#facc15" } else { "#f8fafc" };
-        let rw = if is_sel { "2.8" } else { "1.6" };
-        let short: String = tok.label.chars().take(3).collect();
-        out.push_str(&format!(
-            r##"<circle cx="{cx}" cy="{cy}" r="11" fill="{col}" stroke="{ring}" stroke-width="{rw}"/><text x="{cx}" y="{}" text-anchor="middle" fill="#090d16" font-family="monospace" font-weight="bold" font-size="8">{}</text>"##,
-            cy + 3,
-            escape_html(&short)
-        ));
-    }
-    out.push_str("</svg>");
-    out
 }
 
 /// Default SSR tactical SVG battlemap markup (`20m x 14m` Sector 4 Orbital Airlock).
@@ -401,22 +329,21 @@ pub fn satya_click_map_cell(gx: i32, gy: i32) {
     handle_map_grid_cell_clicked(gx, gy);
 }
 
-/// Synchronizes all DOM elements inside `#notebook-pane-maps` (pill, token chips, LoS HUD, SVG fallback, and `wgpu` canvas).
+/// Synchronizes all DOM elements inside `#notebook-pane-maps` (pill, token chips, LoS HUD, 2D battlemap,
+/// and `wgpu` canvas). In `Mode: 2D Battlemap` the WebGPU diorama is not rendered.
 pub fn refresh_map_dom_and_wgpu() {
-    let svg_host = get_element("tabletop-map-svg-fallback");
-    let svg_visible = svg_host
-        .as_ref()
-        .and_then(|e| e.clone().dyn_into::<web_sys::HtmlElement>().ok())
+    ensure_battlemap_view_pref_loaded();
+    let svg_visible = get_element("tabletop-map-svg-fallback")
+        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
         .is_some_and(|h| h.style().get_property_value("display").unwrap_or_default() != "none");
 
-    let (pill_txt, tokens_html, hud_html, svg_markup, sel_preset, sel_color) = with_map_ui(|ui| {
+    let (pill_txt, tokens_html, hud_html, battlemap_on, sel_preset, sel_color) = with_map_ui(|ui| {
         let pill = format!(
             "{} ({}m × {}m · 1.0m Grid)",
             ui.map.title, ui.map.grid_width, ui.map.grid_height
         );
         let chips = format_selectable_token_chips_html(&ui.map, ui.selected_entity_id.as_deref());
         let hud = format_map_tactical_hud_html(ui);
-        let svg = svg_visible.then(|| format_tactical_map_svg_markup(ui));
         let (preset, color) = ui
             .selected_entity_id
             .as_deref()
@@ -426,7 +353,7 @@ pub fn refresh_map_dom_and_wgpu() {
                 (p, c)
             })
             .unwrap_or_else(|| ("valkyrie_rig".to_string(), "#38bdf8".to_string()));
-        (pill, chips, hud, svg, preset, color)
+        (pill, chips, hud, ui.view_battlemap, preset, color)
     });
 
     set_text("canvas-map-pill", &pill_txt);
@@ -437,10 +364,12 @@ pub fn refresh_map_dom_and_wgpu() {
     set_html("tabletop-map-los-hud", &hud_html);
     set_html("tabletop-token-list", &tokens_html);
 
-    if let (Some(host), Some(svg)) = (svg_host, svg_markup) {
-        host.set_inner_html(&svg);
+    if battlemap_on || svg_visible {
+        sync_battlemap_svg_host();
     }
-    refresh_map_wgpu_if_active();
+    if !battlemap_on {
+        refresh_map_wgpu_if_active();
+    }
 }
 
 /// Formats clickable token chips for `#tabletop-token-list` allowing 1-click selection of any miniature.
@@ -603,6 +532,7 @@ fn post_generate_map_if_in_session(
         edit_cell_x: cell_edit.map(|(x, _, _)| x),
         edit_cell_y: cell_edit.map(|(_, y, _)| y),
         set_tile_kind: cell_edit.and_then(|(_, _, k)| k),
+        ..Default::default()
     };
     wasm_bindgen_futures::spawn_local(async move {
         if let Ok(updated) = fetch_json::<_, GmMapUpdateRequest>(
@@ -898,7 +828,7 @@ mod tests {
         let hud = format_map_tactical_hud_html(&ui);
         assert!(hud.contains("Sara (Valkyrie)"));
         let svg = format_tactical_map_svg_markup(&ui);
-        assert!(svg.starts_with("<svg"));
-        assert!(svg.contains("</svg>"));
+        assert!(svg.starts_with(r#"<div class="battlemap-stack">"#));
+        assert!(svg.ends_with("</svg></div>"));
     }
 }

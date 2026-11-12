@@ -17,6 +17,7 @@ pub mod gdpr;
 pub mod protocol;
 pub mod registry;
 pub mod session_persistence;
+pub mod tactical_map_dressing_dto;
 pub mod tactical_map_dto;
 pub mod types;
 

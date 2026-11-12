@@ -525,6 +525,7 @@ impl AuthAndSessionManager {
                 42,
             ),
             token_visuals: Vec::new(),
+            ..Default::default()
         });
 
         for (idx, c) in tracker.combatants.iter().enumerate() {

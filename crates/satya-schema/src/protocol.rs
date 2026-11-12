@@ -848,6 +848,12 @@ pub struct GmMapUpdateRequest {
     /// Optional 3D `.glb` miniature model, color, facing, and pose overrides per `entity_id`.
     #[serde(default)]
     pub token_visuals: Vec<TokenVisualSpec>,
+    /// Thin walls, doors, and windows on cell-boundary edges (empty for legacy cell-wall maps).
+    #[serde(default)]
+    pub wall_edges: Vec<MapWallEdge>,
+    /// Multi-cell props whose mechanical footprint is already stamped into `tiles`.
+    #[serde(default)]
+    pub props: Vec<MapPropPlacement>,
 }
 
 impl Default for GmMapUpdateRequest {
@@ -865,6 +871,8 @@ impl Default for GmMapUpdateRequest {
             seed: None,
             tiles: Vec::new(),
             token_visuals: Vec::new(),
+            wall_edges: Vec::new(),
+            props: Vec::new(),
         }
     }
 }

@@ -228,6 +228,27 @@ fn NotebookMapPane() -> impl IntoView {
                     </button>
                     <button
                         type="button"
+                        id="btn-map-view-mode"
+                        class="btn btn-sm btn-accent"
+                        title="Switch between the WebGPU 3D diorama and the illustrated 2D battlemap"
+                        onclick="window.satyaToggleBattlemapView()"
+                        on:click=move |_| wasm_client::satya_toggle_battlemap_view()
+                    >
+                        "Mode: 3D Diorama"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-map-grid-overlay"
+                        class="btn btn-sm btn-secondary"
+                        title="Show or hide the 1.0m / 5.0m grid overlay on the 2D battlemap"
+                        style="display: none;"
+                        onclick="window.satyaToggleBattlemapGrid()"
+                        on:click=move |_| wasm_client::satya_toggle_battlemap_grid()
+                    >
+                        "Grid: On"
+                    </button>
+                    <button
+                        type="button"
                         id="btn-map-wall-cutaway"
                         class="btn btn-sm btn-secondary"
                         title="Toggle full 2.4m bulkheads vs. 0.6m cutaway walls"
