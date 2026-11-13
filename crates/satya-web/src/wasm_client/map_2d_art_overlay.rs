@@ -10,7 +10,7 @@ use crate::wasm_client::dom::{
     set_display, set_select_value, set_text,
 };
 use crate::wasm_client::map_2d_art::{
-    BATTLEMAP_CELL_PX, BATTLEMAP_PAD_PX, battlemap_art_cache_key, battlemap_theme_for_preset,
+    BATTLEMAP_CELL_PX, battlemap_art_cache_key, battlemap_theme_for_preset,
     format_battlemap_art_layer,
 };
 use crate::wasm_client::map_2d_tokens::{
@@ -225,18 +225,11 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
 /// Full layered battlemap markup for `#tabletop-map-svg-fallback` (static art and interactive overlay).
 #[must_use]
 pub fn format_tactical_map_svg_markup(ui: &TacticalMapUiState) -> String {
-    let (w, h) = (ui.map.grid_width.max(1), ui.map.grid_height.max(1));
-    let (vw, vh) = (w * BATTLEMAP_CELL_PX, h * BATTLEMAP_CELL_PX);
-    let (pad, c) = (BATTLEMAP_PAD_PX, BATTLEMAP_CELL_PX);
-    let (tw, th) = (vw + 2 * pad, vh + 2 * pad);
-    let view_box = format!("-{pad} -{pad} {tw} {th}");
+    let (bw_m, bh_m) = ui.map.board_size_m();
+    let view_box = ui.camera_2d.view_box_attr((bw_m, bh_m), ui.map.cell_size_m());
     let key = battlemap_art_cache_key(ui);
-    let cell_m = ui.map.cell_size_m();
-    let pick_js = format!(
-        "var r=this.getBoundingClientRect(),fx=((event.clientX-r.left)*{tw}/r.width-{pad})/{c}*{cell_m:.4},fy=((event.clientY-r.top)*{th}/r.height-{pad})/{c}*{cell_m:.4}"
-    );
     format!(
-        r#"<div class="battlemap-stack"><svg id="battlemap-art" class="battlemap-art" data-art-key="{key}" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" aria-hidden="true">{art}</svg><svg id="battlemap-overlay" class="battlemap-overlay" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" role="img" aria-label="Illustrated 2D tactical battlemap ({w}m x {h}m)" onclick="{pick_js};window.satyaClickMapPoint(fx,fy)" onmousemove="{pick_js};window.satyaHoverMapPoint(fx,fy,event.clientX,event.clientY)" onmouseleave="window.satyaLeaveMapHover()">{overlay}</svg></div>"#,
+        r#"<div class="battlemap-stack"><svg id="battlemap-art" class="battlemap-art" data-art-key="{key}" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">{art}</svg><svg id="battlemap-overlay" class="battlemap-overlay" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Illustrated 2D tactical battlemap ({bw_m:.0}m x {bh_m:.0}m)" onwheel="event.preventDefault();window.satyaBattlemapWheel(event.deltaY,event.clientX,event.clientY)" onmousedown="window.satyaBattlemapMouseDown(event.button,event.clientX,event.clientY)" onmousemove="window.satyaBattlemapMouseMove(event.buttons,event.clientX,event.clientY)" onmouseup="window.satyaBattlemapMouseUp(event.button,event.clientX,event.clientY)" onmouseleave="window.satyaBattlemapMouseLeave()" ondblclick="window.satyaResetMapCamera()" oncontextmenu="event.preventDefault()">{overlay}</svg></div>"#,
         art = format_battlemap_art_layer(ui),
         overlay = format_battlemap_overlay_inner(ui),
     )
@@ -253,9 +246,11 @@ pub fn sync_battlemap_svg_host() {
         && let Some(overlay) = get_element("battlemap-overlay")
     {
         overlay.set_inner_html(&with_map_ui(format_battlemap_overlay_inner));
+        crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
         return;
     }
     host.set_inner_html(&with_map_ui(format_tactical_map_svg_markup));
+    crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
 }
 
 fn apply_battlemap_view_chrome(battlemap_on: bool) {
@@ -263,7 +258,7 @@ fn apply_battlemap_view_chrome(battlemap_on: bool) {
         "btn-map-view-mode",
         if battlemap_on { "Mode: 2D Battlemap" } else { "Mode: 3D Diorama" },
     );
-    for id in ["btn-map-toggle-proj", "btn-map-wall-cutaway", "btn-map-reset-cam"] {
+    for id in ["btn-map-toggle-proj", "btn-map-wall-cutaway"] {
         set_button_disabled(id, battlemap_on);
     }
     set_display("btn-map-grid-overlay", if battlemap_on { "inline-flex" } else { "none" });
@@ -277,6 +272,7 @@ fn apply_battlemap_view_chrome(battlemap_on: bool) {
         set_display("tabletop-map-svg-fallback", "none");
         set_display("wgpu-map-canvas-wrap", "block");
     }
+    crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
 }
 
 thread_local! {

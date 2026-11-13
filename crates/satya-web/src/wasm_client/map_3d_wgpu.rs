@@ -540,6 +540,7 @@ mod map_wgpu_runtime {
                 c.camera.zoom_by_factor(factor);
                 render_map_frame(c);
             });
+            crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
         });
         let _ = canvas.add_event_listener_with_callback("wheel", on_wheel.as_ref().unchecked_ref());
         on_wheel.forget();
@@ -578,9 +579,9 @@ mod map_wgpu_runtime {
         on_canvas_leave.forget();
 
         let on_win_move = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
-            with_map_ctrl(|c| {
+            let panned = with_map_ctrl(|c| {
                 let Some((is_pan, sx, sy, lx, ly, mut moved)) = c.drag_state else {
-                    return;
+                    return false;
                 };
                 let (cx, cy) = (ev.client_x(), ev.client_y());
                 if (cx - sx).abs() > 4 || (cy - sy).abs() > 4 {
@@ -589,15 +590,24 @@ mod map_wgpu_runtime {
                 let (dx, dy) = ((cx - lx) as f32, (cy - ly) as f32);
                 c.drag_state = Some((is_pan, sx, sy, cx, cy, moved));
                 if !moved || (dx.abs() < 0.5 && dy.abs() < 0.5) {
-                    return;
+                    return false;
                 }
                 if is_pan || c.camera.orthographic {
-                    c.camera.pan_by_screen_delta(-dx * 0.032, dy * 0.032, 24.0);
-                } else {
-                    c.camera.orbit_by(-dx * 0.42, dy * 0.32);
+                    let max_pan = crate::wasm_client::map_3d::with_map_ui(|ui| {
+                        let (w, h) = ui.map.board_size_m();
+                        w.max(h) * 0.55 + 6.0
+                    });
+                    c.camera.pan_by_screen_delta(-dx * 0.032, dy * 0.032, max_pan);
+                    render_map_frame(c);
+                    return true;
                 }
+                c.camera.orbit_by(-dx * 0.42, dy * 0.32);
                 render_map_frame(c);
+                false
             });
+            if panned {
+                crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
+            }
         });
         let _ =
             win.add_event_listener_with_callback("mousemove", on_win_move.as_ref().unchecked_ref());
@@ -759,9 +769,72 @@ pub fn satya_toggle_map_wall_cutaway() {
     refresh_map_wgpu_if_active();
 }
 
-/// Resets the tactical map camera orbit, pan, and zoom to the centered overview angle.
+/// Returns `(zoom, pan_xz)` for the live WebGPU tactical camera (`(1.0, [0.0, 0.0])` on host targets).
+#[must_use]
+pub fn current_3d_map_zoom_and_pan() -> (f32, [f32; 2]) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        map_wgpu_runtime::with_map_ctrl(|c| (c.camera.zoom, c.camera.pan))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        (1.0, [0.0, 0.0])
+    }
+}
+
+/// Applies multiplicative zoom factor to the WebGPU 3D/Ortho tactical map camera and re-renders.
+pub fn zoom_3d_map_camera_by(factor: f32) {
+    #[cfg(target_arch = "wasm32")]
+    map_wgpu_runtime::with_map_ctrl(|c| {
+        c.camera.zoom_by_factor(factor);
+        map_wgpu_runtime::render_map_frame(c);
+    });
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = factor;
+}
+
+/// Shifts the 3D/Ortho camera pan offset when a continuation strip is stitched so world view stays anchored.
+pub fn shift_3d_camera_on_stitch(
+    old_size_m: (f32, f32),
+    new_size_m: (f32, f32),
+    dir: satya_schema::MapContinuationDir,
+    nudge_into_new: bool,
+) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let added_w = (new_size_m.0 - old_size_m.0).max(0.0);
+        let added_h = (new_size_m.1 - old_size_m.1).max(0.0);
+        let (shift_x, shift_z) = match dir {
+            satya_schema::MapContinuationDir::West => (added_w, 0.0),
+            satya_schema::MapContinuationDir::North => (0.0, added_h),
+            _ => (0.0, 0.0),
+        };
+        let (nudge_x, nudge_z) = if nudge_into_new {
+            let (ux, uy) = dir.unit_step();
+            (ux as f32 * 5.5, uy as f32 * 4.5)
+        } else {
+            (0.0, 0.0)
+        };
+        let max_pan = (new_size_m.0.max(new_size_m.1) * 0.55 + 6.0).max(24.0);
+        map_wgpu_runtime::with_map_ctrl(|c| {
+            c.camera.pan[0] = (c.camera.pan[0] + shift_x + 0.5 * (old_size_m.0 - new_size_m.0) + nudge_x)
+                .clamp(-max_pan, max_pan);
+            c.camera.pan[1] = (c.camera.pan[1] + shift_z + 0.5 * (old_size_m.1 - new_size_m.1) + nudge_z)
+                .clamp(-max_pan, max_pan);
+            map_wgpu_runtime::render_map_frame(c);
+        });
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = (old_size_m, new_size_m, dir, nudge_into_new);
+}
+
+/// Resets the tactical map camera orbit, pan, and zoom (both 2D SVG and 3D WebGPU) to overview framing.
 #[wasm_bindgen]
 pub fn satya_reset_map_camera() {
+    crate::wasm_client::map_3d::with_map_ui_mut(|ui| {
+        let board = ui.map.board_size_m();
+        ui.camera_2d.reset_for_board(board);
+    });
     #[cfg(target_arch = "wasm32")]
     map_wgpu_runtime::with_map_ctrl(|c| {
         let ortho = c.camera.orthographic;
@@ -772,6 +845,7 @@ pub fn satya_reset_map_camera() {
         }
         map_wgpu_runtime::render_map_frame(c);
     });
+    crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
 }
 
 #[cfg(test)]

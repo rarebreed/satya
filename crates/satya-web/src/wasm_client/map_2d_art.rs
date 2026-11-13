@@ -19,6 +19,7 @@ pub use crate::wasm_client::map_2d_art_overlay::*;
 pub use crate::wasm_client::map_2d_art_props::*;
 pub use crate::wasm_client::map_2d_art_surfaces::*;
 pub use crate::wasm_client::map_2d_art_walls::*;
+pub use crate::wasm_client::map_2d_camera::*;
 pub use crate::wasm_client::map_2d_tokens::*;
 
 use satya_engine::map_dressing::prop_spec;
@@ -558,9 +559,13 @@ mod tests {
         let svg = format_tactical_map_svg_markup(&ui);
         assert!(svg.starts_with(r#"<div class="battlemap-stack">"#));
         assert!(svg.contains(r#"id="battlemap-art""#) && svg.contains(r#"id="battlemap-overlay""#));
-        assert!(svg.contains("window.satyaClickMapPoint(fx,fy)"));
-        assert!(svg.contains("window.satyaHoverMapPoint(fx,fy,event.clientX,event.clientY)"));
-        assert!(svg.contains("window.satyaLeaveMapHover()"));
+        assert!(svg.contains(r#"preserveAspectRatio="xMidYMid meet""#));
+        assert!(svg.contains("window.satyaBattlemapWheel(event.deltaY,event.clientX,event.clientY)"));
+        assert!(svg.contains("window.satyaBattlemapMouseDown(event.button,event.clientX,event.clientY)"));
+        assert!(svg.contains("window.satyaBattlemapMouseMove(event.buttons,event.clientX,event.clientY)"));
+        assert!(svg.contains("window.satyaBattlemapMouseUp(event.button,event.clientX,event.clientY)"));
+        assert!(svg.contains("window.satyaBattlemapMouseLeave()"));
+        assert!(svg.ends_with("</svg></div>"));
         assert_eq!(svg.matches("<svg").count(), 2);
         assert!(!svg.contains("onclick=\"window.satyaClickMapCell(0,0)\""), "no per-cell handlers");
 

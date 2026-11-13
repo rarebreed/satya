@@ -302,7 +302,7 @@ impl OrbitOrthoCamera {
         let (sy, cy) = self.yaw_deg.to_radians().sin_cos();
         let (rx, rz) = (cy, -sy);
         let (fx, fz) = (-sy, -cy);
-        let scale = 1.0 / self.zoom.max(0.35);
+        let scale = 1.0 / self.zoom.max(0.15);
         self.pan[0] =
             (self.pan[0] + (rx * right_delta + fx * forward_delta) * scale).clamp(-limit, limit);
         self.pan[1] =
@@ -310,13 +310,13 @@ impl OrbitOrthoCamera {
     }
 
     pub fn zoom_by_factor(&mut self, factor: f32) {
-        self.zoom = (self.zoom * factor).clamp(0.35, 3.5);
+        self.zoom = (self.zoom * factor).clamp(0.18, 4.0);
     }
 
     /// Computes `(eye, target, right_vec, true_up_vec, forward_vec)` in world space.
     #[must_use]
     pub fn basis_vectors(&self) -> CameraBasisVectors {
-        let dist = self.base_distance / self.zoom.max(0.25);
+        let dist = self.base_distance / self.zoom.max(0.15);
         let pitch_eff = if self.orthographic {
             88.5_f32.to_radians()
         } else {
@@ -353,9 +353,9 @@ impl OrbitOrthoCamera {
         ];
 
         let proj = if self.orthographic {
-            let half_h = (self.base_distance * 0.46) / self.zoom.max(0.25);
+            let half_h = (self.base_distance * 0.46) / self.zoom.max(0.15);
             let half_w = half_h * asp;
-            let (near, far) = (0.1_f32, 120.0_f32);
+            let (near, far) = (0.1_f32, 240.0_f32);
             [
                 [1.0 / half_w, 0.0, 0.0, 0.0],
                 [0.0, 1.0 / half_h, 0.0, 0.0],
@@ -364,7 +364,7 @@ impl OrbitOrthoCamera {
             ]
         } else {
             let f = 1.0 / (0.5 * 42.0_f32.to_radians()).tan();
-            let (near, far) = (0.1_f32, 140.0_f32);
+            let (near, far) = (0.1_f32, 240.0_f32);
             [
                 [f / asp, 0.0, 0.0, 0.0],
                 [0.0, f, 0.0, 0.0],
@@ -389,7 +389,7 @@ impl OrbitOrthoCamera {
         let asp = aspect.max(0.2);
         let (eye, _target, right, up, fwd) = self.basis_vectors();
         let (ray_origin, ray_dir) = if self.orthographic {
-            let half_h = (self.base_distance * 0.46) / self.zoom.max(0.25);
+            let half_h = (self.base_distance * 0.46) / self.zoom.max(0.15);
             let half_w = half_h * asp;
             let ox = eye[0] + right[0] * (ndc_x * half_w) + up[0] * (ndc_y * half_h);
             let oy = eye[1] + right[1] * (ndc_x * half_w) + up[1] * (ndc_y * half_h);

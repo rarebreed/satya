@@ -1,6 +1,6 @@
 # 02 — 3D Tactical Map Diorama, Continuous Vector Geometry, LoS & Hover Inspector
 
-This document is the authoritative technical reference for the **Tactical Map (`#notebook-pane-maps`)** in [`crates/satya-web`](../../../crates/satya-web), covering end-to-end state synchronization, tile-free continuous metric coordinates (`pos_x_cm`/`pos_y_cm` & `metric_to_world_xz`), procedural sector generation (`wall_edges` + `360°` rotated OBB/circle `props`), diorama 3D mesh synthesis, `1 Tick = 0.25s` 16-directional `ReachableField` movement (`0.25m` sampling), analytical 2D segment/OBB Line-of-Sight & `barrier_ballistics`, the Object & Ground Hover Inspector (`#map-hover-status-bar` + `[Alt / I]` `#map-hover-tooltip`), the `2d20` Cascade roller bridge, instanced `.glb` miniature rendering on WebGPU (`wgpu`), `OrbitOrthoCamera` ray-plane picking, and synchronized 2D `<svg>` rendering.
+This document is the authoritative technical reference for the **Tactical Map (`#notebook-pane-maps`)** in [`crates/satya-web`](../../../crates/satya-web), covering end-to-end state synchronization, tile-free continuous metric coordinates (`pos_x_cm`/`pos_y_cm` & `metric_to_world_xz`), procedural sector generation (`wall_edges` + `360°` rotated OBB/circle `props`) and seamless edge continuation (`map_continuation.rs`), diorama 3D mesh synthesis, `1 Tick = 0.25s` 16-directional `ReachableField` movement (`0.25m` sampling), analytical 2D segment/OBB Line-of-Sight & `barrier_ballistics`, the docked Object & Ground Hover Inspector (`[Alt / I]` `#map-hover-tooltip` + fixed `#map-hover-coords-pill`), the `2d20` Cascade roller bridge, instanced `.glb` miniature rendering on WebGPU (`wgpu`), `OrbitOrthoCamera` ray-plane picking, and zoomable/pannable 2D `<svg>` rendering.
 
 - **Web Client Modules**: [`wasm_client/map_3d.rs`](../../../crates/satya-web/src/wasm_client/map_3d.rs), [`wasm_client/map_3d_wgpu.rs`](../../../crates/satya-web/src/wasm_client/map_3d_wgpu.rs), [`wasm_client/map_3d_dressing_geom.rs`](../../../crates/satya-web/src/wasm_client/map_3d_dressing_geom.rs), [`wasm_client/map_hover_inspect.rs`](../../../crates/satya-web/src/wasm_client/map_hover_inspect.rs), [`wasm_client/map_edge_edit.rs`](../../../crates/satya-web/src/wasm_client/map_edge_edit.rs), [`wasm_client/map_2d_art.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art.rs), [`wasm_client/map_2d_art_surfaces.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_surfaces.rs), [`wasm_client/map_2d_art_overlay.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_overlay.rs), [`wasm_client/map_2d_art_walls.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_walls.rs), [`wasm_client/map_2d_art_furniture.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_furniture.rs), [`wasm_client/map_2d_art_props.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_props.rs), [`wasm_client/wgpu_shared.rs`](../../../crates/satya-web/src/wasm_client/wgpu_shared.rs), [`wasm_client/glb_model.rs`](../../../crates/satya-web/src/wasm_client/glb_model.rs), [`wasm_client/model_3d_wgpu.rs`](../../../crates/satya-web/src/wasm_client/model_3d_wgpu.rs)
 - **Deterministic Engine & Wire DTOs**: [`satya-engine/src/tactical_map_geom.rs`](../../../crates/satya-engine/src/tactical_map_geom.rs), [`satya-engine/src/tactical_map.rs`](../../../crates/satya-engine/src/tactical_map.rs), [`satya-engine/src/tactical_map_edges.rs`](../../../crates/satya-engine/src/tactical_map_edges.rs), [`satya-engine/src/map_dressing.rs`](../../../crates/satya-engine/src/map_dressing.rs), [`satya-engine/src/barrier_ballistics.rs`](../../../crates/satya-engine/src/barrier_ballistics.rs), [`satya-engine/src/map_interior_gen.rs`](../../../crates/satya-engine/src/map_interior_gen.rs), [`satya-engine/src/map_outdoor_gen.rs`](../../../crates/satya-engine/src/map_outdoor_gen.rs), [`satya-engine/src/map_outdoor_natural.rs`](../../../crates/satya-engine/src/map_outdoor_natural.rs), [`satya-engine/src/map_sector_gen.rs`](../../../crates/satya-engine/src/map_sector_gen.rs), [`satya-engine/src/environment_vehicles.rs`](../../../crates/satya-engine/src/environment_vehicles.rs), [`satya-schema/src/tactical_map_dto.rs`](../../../crates/satya-schema/src/tactical_map_dto.rs), [`satya-schema/src/tactical_map_dressing_dto.rs`](../../../crates/satya-schema/src/tactical_map_dressing_dto.rs), [`satya-schema/src/protocol.rs`](../../../crates/satya-schema/src/protocol.rs)
@@ -14,9 +14,9 @@ All deterministic spatial rules — procedural sector generation (`tiles: []`), 
 
 ```mermaid
 flowchart TD
-    DOM["#notebook-pane-maps Controls & Canvas\n(#map-preset-select, #map-gait-select, #map-click-mode-select,\n#wgpu-map-canvas, #tabletop-map-svg-fallback, #map-hover-status-bar, #map-hover-tooltip)"]
-    UI["map_3d.rs :: MAP_UI_STATE (TacticalMapUiState)\nmap (GmMapUpdateRequest) · selected_entity_id · hovered_point_m\nhover_inspection · inspect_mode · snap_to_grid · reachable_strips · last_los"]
-    Eng["satya_engine::{tactical_map, tactical_map_geom}\nresolve_token_destination_cm · compute_reachable_field_continuous\nevaluate_los_continuous · inspect_map_point"]
+    DOM["#notebook-pane-maps Controls & Canvas\n(#map-preset-select, #map-gait-select, #map-click-mode-select,\n#wgpu-map-canvas, #tabletop-map-svg-fallback, #map-hover-tooltip,\n#btn-map-continue-north/south/west/east)"]
+    UI["map_3d.rs :: MAP_UI_STATE (TacticalMapUiState)\nmap (GmMapUpdateRequest) · selected_entity_id · hovered_point_m\nhover_inspection · inspect_mode · camera_2d · reachable_strips · last_los"]
+    Eng["satya_engine::{tactical_map, tactical_map_geom, map_continuation}\nresolve_token_destination_cm · compute_reachable_field_continuous\nevaluate_los_continuous · inspect_map_point · continue_procedural_map"]
     Geom["map_3d_wgpu.rs :: build_tactical_diorama_vertices\nDeck Floor (zone_id = -1.0) · Thin Wall Edges · 360deg OBB Props\nEmerald Reach Strips · Gold Selection Ring · Cyan Hover · y=1.05m LoS Beam"]
     GPU["wgpu_shared.rs + MapDioramaPipeline (SHARED_GLB_DIORAMA_WGSL)\nPass 1: Static Diorama VBO/IBO (1 Identity Instance)\nPass 2: Instanced .glb Miniatures (miniature_meshes Cache)"]
     Rest["satya-signaling REST & /ws/session\nPOST /api/sessions/:id/map · POST /api/sessions/:id/map/move\nServerWsPacket::MapUpdated + Apache Iggy WAL"]
@@ -26,7 +26,7 @@ flowchart TD
     UI <-->|"Continuous Pathing, LoS & Hover Inspect"| Eng
     UI -->|"refresh_map_dom_and_wgpu()"| Geom
     Geom -->|"render_map_frame() (Zero Idle rAF)"| GPU
-    UI -->|"64px/m SVG Stack + Status/Tooltip"| DOM
+    UI -->|"64px/m SVG Stack + Docked Inspect Card"| DOM
     UI -->|"HTTP JSON Mutation"| Rest
     Rest -->|"Broadcast MapUpdated"| UI
     UI -->|"#btn-map-apply-cover"| Roller
@@ -41,8 +41,9 @@ flowchart TD
 | `map` | `GmMapUpdateRequest` | `"residential_apartment"`, `20m × 14m`, seed `42` | Canonical wire DTO holding `grid_width`, `grid_height`, visual `cell_size_cm` (`100`), `tiles: []` (legacy compat), thin `wall_edges`, `360°` continuous `props` (`center_x_cm`, `center_y_cm`, `rotation_deg`), `tokens: Vec<MapTokenPlacement>`, and `token_visuals: Vec<TokenVisualSpec>` (`pos_x_cm`, `pos_y_cm`). |
 | `selected_entity_id` | `Option<String>` | First token (`"pc-1"`) | Active token acting as the origin for gait reachability, LoS measurements, point-and-click movement, and miniature visual customization. |
 | `hovered_point_m` | `Option<(f32, f32)>` | `None` | Continuous metric cursor coordinate `(x_m, y_m)` under `#wgpu-map-canvas` or `#battlemap-overlay` (drives cyan hover reticle, `#map-hover-coords-pill`, and brush ghost preview). |
-| `hover_inspection` | `Option<MapHoverInspection>` | `None` | Topmost entity/ground classification under `hovered_point_m` (drives `#map-hover-status-bar` & `[Alt / I]` `#map-hover-tooltip`). |
+| `hover_inspection` | `Option<MapHoverInspection>` | `None` | Topmost entity/ground classification under `hovered_point_m` (drives docked top-right `[Alt / I]` `#map-hover-tooltip`). |
 | `inspect_mode` / `alt_inspect_held` | `bool` | `false` | Sticky (`I` / `#btn-map-inspect-toggle`) and momentary (`Alt` key) triggers revealing `#map-hover-tooltip`. |
+| `camera_2d` | `BattlemapCamera2d` | `pan_m: (0,0), zoom: 1.0` | Drives 2D SVG `viewBox` zoom (`0.25x..6.0x`), drag-pan, `>= 120px` boundary overscroll, and `Continue [Dir]` triggers (`map_2d_camera.rs`). |
 | `prop_brush_rotation_deg` / `snap_to_grid` | `i32` / `bool` | `0` / `false` | Free `360°` (`0..359°`) rotation angle for GM prop placement (`+15°` steps or `#map-prop-rot-deg`) and optional `0.50m` placement snap toggle (`#btn-map-snap-toggle`). |
 | `gait` | `CombatMovementGait` | `CombatGlideTacticalWalk` (`35%`) | Active movement gait (`crawl`, `creep`, `glide`, `hustle`, `sprint`) fed into `GaitReachQuery`. |
 | `tick_budget` | `u8` | `8` (`2.00s`) | Movement duration in combat ticks (`1..=40`, `1 Tick = 0.25s`) fed into `GaitReachQuery`. |
@@ -201,7 +202,7 @@ Whenever `selected_entity_id`, `gait`, `tick_budget`, or `map` changes, `recompu
 
 LoS from `attacker_m` to `target_m` is computed analytically against `WallEdgeIndex` segments (`tactical_map_edges.rs`) and `360°` rotated OBBs + trunk/foliage circles (`prop_ray_intersect_t` in `tactical_map_geom.rs`):
 1. **Center-to-Center Exact Ray & Lean Peek (`±0.80m`)**: Directly intersects `Wall`/`DoorClosed`/`Window` segments and rotated prop volumes along `[0, 1]` parameter `t` — testing symmetric perpendicular peek origins when blocked to detect **High Cover (`+6` $\Delta_{\text{ext}}$)** corner leans.
-2. **Continuous Hover Inspector (`map_hover_inspect.rs`)**: `satyaHoverMapPoint(x_m, y_m)` calls `inspect_map_point(&map, theme_name, x_m, y_m)` to populate both the persistent `#map-hover-status-bar` and the `[Alt`-hold / `I`-toggle / `#btn-map-inspect-toggle]` floating `#map-hover-tooltip` card across tokens, wall/door edges, sub-zone props (`Car` engine vs. cabin, `LargeTree` trunk vs. canopy), surface props, and ground material.
+2. **Continuous Hover Inspector (`map_hover_inspect.rs`)**: `satyaHoverMapPoint(x_m, y_m, client_x, client_y)` calls `inspect_map_point(&map, theme_name, x_m, y_m)` to update fixed-width `#map-hover-coords-pill` and populate the `[Alt`-hold / `I`-toggle / `#btn-map-inspect-toggle]` docked top-right `#map-hover-tooltip` pane across tokens, wall/door edges, sub-zone props (`Car` engine vs. cabin, `LargeTree` trunk vs. canopy), surface props, and ground material.
 
 | `CoverGrade` | `has_line_of_sight` | `recommended_delta_ext` ($\Delta_{\text{ext}}$) | `push_beam` Laser RGB (`y = 1.05m`, width `0.09m`) | HUD Badge & Tactical Meaning |
 | :--- | :---: | :---: | :--- | :--- |
@@ -260,11 +261,11 @@ Clicking **Apply `Δ_ext` to Roller (`#btn-map-apply-cover`)** inside `#map-tact
 
 `MapDioramaController` (`MAP_CTRL`) binds pointer and wheel listeners onto `#wgpu-map-canvas`:
 - **3D Perspective vs. 2D Orthographic (`OrbitOrthoCamera`)**:
-  - *3D Isometric Default*: `yaw_deg = -24.0°`, `pitch_deg = 52.0°` (`8.0°..=88.5°`), `base_distance = 19.5m`, `zoom = 1.0` (`0.35..=3.5`), `fov_y = 42.0°`, `near = 0.1m`, `far = 140.0m`.
-  - *2D Top-Down Orthographic*: `orthographic = true`, `yaw_deg = 0.0°` (North up), effective pitch `88.5°`, `half_h = (base_distance * 0.46) / zoom`, `half_w = half_h * aspect`, `near = 0.1m`, `far = 120.0m`.
+  - *3D Isometric Default*: `yaw_deg = -24.0°`, `pitch_deg = 52.0°` (`8.0°..=88.5°`), `base_distance = 19.5m`, `zoom = 1.0` (`0.18..=4.0`), `fov_y = 42.0°`, `near = 0.1m`, `far = 240.0m`.
+  - *2D Top-Down Orthographic*: `orthographic = true`, `yaw_deg = 0.0°` (North up), effective pitch `88.5°`, `half_h = (base_distance * 0.46) / zoom`, `half_w = half_h * aspect`, `near = 0.1m`, `far = 240.0m`.
 - **Orbit, Pan, Zoom & `4px` Drag Threshold**:
-  - `mousedown` sets `drag_start = (cx, cy)` and `moved = false`. Travel `> 4px` (`|cx - sx| > 4 || |cy - sy| > 4`) sets `moved = true`: left-drag in 3D orbits (`dyaw = -dx * 0.42°`, `dpitch = dy * 0.32°`), `Shift`/Middle/Right drag (or any drag in 2D ortho) pans (`limit = ±24.0m`), and `wheel` zooms by `1.12×` / `1/1.12×`.
-  - `mouseup` invokes `satya_click_map_point(x_m, y_m)` **only when `!moved`**; `mousemove` invokes `satya_hover_map_point(x_m, y_m)` to update `#map-hover-status-bar`, `[Alt / I]` `#map-hover-tooltip`, and 3D/2D brush previews.
+  - `mousedown` sets `drag_start = (cx, cy)` and `moved = false`. Travel `> 4px` (`|cx - sx| > 4 || |cy - sy| > 4`) sets `moved = true`: left-drag in 3D orbits (`dyaw = -dx * 0.42°`, `dpitch = dy * 0.32°`), `Shift`/Middle/Right drag (or any drag in 2D ortho) pans (`max_pan = board_max * 0.55 + 6.0m`), and `wheel` zooms by `1.12×` / `1/1.12×` (also controllable via `#btn-map-zoom-out` / `#map-zoom-readout` / `#btn-map-zoom-in`).
+  - `mouseup` invokes `satya_click_map_point(x_m, y_m)` **only when `!moved`**; `mousemove` invokes `satya_hover_map_point(x_m, y_m, ...)` to update fixed-width `#map-hover-coords-pill`, `[Alt / I]` docked top-right `#map-hover-tooltip`, and 3D/2D brush previews without changing viewport height.
 - **Ray-Plane Unprojection (`screen_ndc_to_plane_xz`)**:
   For canvas CSS coordinates $(x_{\text{css}}, y_{\text{css}})$ inside $(W_{\text{css}}, H_{\text{css}})$:
   $$\text{ndc}_x = \frac{2 x_{\text{css}}}{W_{\text{css}}} - 1, \qquad \text{ndc}_y = 1 - \frac{2 y_{\text{css}}}{H_{\text{css}}}$$
@@ -279,19 +280,20 @@ Clicking **Apply `Δ_ext` to Roller (`#btn-map-apply-cover`)** inside `#map-tact
 - **Zero Idle GPU Power Draw**: `#wgpu-map-canvas` has **no** continuous `requestAnimationFrame` loop; `render_map_frame` fires strictly on pointer orbit/pan/hover point changes, wheel zoom, toolbar actions, `maps` tab activation, or `ServerWsPacket::MapUpdated`. Backing resolution clamps `(css_w * dpr)` to `320..=2048` and `(css_h * dpr)` to `220..=1440`.
 - **Automatic Interactive 2D Battlemap Fallback (`#tabletop-map-svg-fallback`)**: If `navigator.gpu` or `request_adapter` / `request_device` is unavailable (or when toggled via `#btn-map-view-mode`), the illustrated 2D battlemap (§6.5) displays automatically.
 
-### 6.5 Illustrated 2D Battlemap, Thin Edge Walls, 360° Props & Hover Inspector
+### 6.5 Illustrated 2D Battlemap, Boundary Continuation, & Docked Hover Inspector
 
-See **[`06-2d-battlemap-art.md`](06-2d-battlemap-art.md)** for the full illustrated 2D `<svg>` pipeline (`map_2d_art*.rs`, `map_2d_tokens.rs`), paper/ink filter styles (`#map-ink-style-select`), continuous token portrait discs, GM `360°` prop-brush (`#map-prop-brush-select`, `#btn-map-prop-rotate`, `#map-prop-rot-deg`, `#btn-map-snap-toggle`) controls, and Object & Ground Hover Inspector (`#map-hover-status-bar` + `[Alt / I]` `#map-hover-tooltip`).
+See **[`06-2d-battlemap-art.md`](06-2d-battlemap-art.md)** for the full illustrated 2D `<svg>` pipeline (`map_2d_art*.rs`, `map_2d_tokens.rs`), `BattlemapCamera2d` zoom/pan & edge-matched procedural continuation (`map_2d_camera.rs` + `satya_engine::map_continuation`), paper/ink filter styles (`#map-ink-style-select`), continuous token portrait discs, GM `360°` prop-brush (`#map-prop-brush-select`, `#btn-map-prop-rotate`, `#map-prop-rot-deg`, `#btn-map-snap-toggle`) controls, and docked top-right Object & Ground Hover Inspector (`[Alt / I]` `#map-hover-tooltip` + fixed-width `#map-hover-coords-pill`).
 
 ---
 
 ## 7. Host Unit Test Coverage
 
-All spatial math, SVG/HUD formatters, procedural layouts, continuous reachability, analytical LoS, hover inspection, and camera unprojection invariants run offline on the host target without a browser:
+All spatial math, SVG/HUD formatters, procedural layouts, seamless sector stitching, continuous reachability, analytical LoS, hover inspection, and 2D/3D camera unprojection invariants run offline on the host target without a browser:
 
 ```bash
 cargo test --offline -p satya-engine tactical_map
+cargo test --offline -p satya-engine map_continuation
 cargo test --offline -p satya-web map_
 ```
 
-Key verified invariants include `world_and_metric_coordinate_roundtrip_and_continuous_move`, `continuous_move_slides_around_wall_and_blocks_solid_props`, `hover_inspector_identifies_tokens_walls_car_parts_trees_surfaces_and_ground`, `free_360_brush_rotation_and_continuous_prop_placement_erase`, and `test_orbit_ortho_camera_ray_plane_unprojection_perspective_and_ortho`.
+Key verified invariants include `world_and_metric_coordinate_roundtrip_and_continuous_move`, `continuous_move_slides_around_wall_and_blocks_solid_props`, `hover_inspector_identifies_tokens_walls_car_parts_trees_surfaces_and_ground`, `free_360_brush_rotation_and_continuous_prop_placement_erase`, `unproject_inverts_letterboxed_aspect_ratios_and_cursor_zoom_preserves_anchor`, `continue_all_presets_across_all_four_cardinal_edges`, and `test_orbit_ortho_camera_ray_plane_unprojection_perspective_and_ortho`.

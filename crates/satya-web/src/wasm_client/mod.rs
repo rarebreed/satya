@@ -40,6 +40,7 @@ pub mod map_2d_art_overlay;
 pub mod map_2d_art_props;
 pub mod map_2d_art_surfaces;
 pub mod map_2d_art_walls;
+pub mod map_2d_camera;
 pub mod map_2d_tokens;
 pub mod map_3d;
 pub mod map_3d_dressing_geom;
@@ -185,6 +186,14 @@ macro_rules! for_all_window_callbacks {
             "satyaHoverMapCell" => satya_hover_map_cell(i32, i32),
             "satyaHoverMapPoint" => satya_hover_map_point(f32, f32, f32, f32),
             "satyaLeaveMapHover" => satya_leave_map_hover(),
+            "satyaBattlemapWheel" => satya_battlemap_wheel(f32, f32, f32),
+            "satyaBattlemapMouseDown" => satya_battlemap_mouse_down(i32, f32, f32),
+            "satyaBattlemapMouseMove" => satya_battlemap_mouse_move(i32, f32, f32),
+            "satyaBattlemapMouseUp" => satya_battlemap_mouse_up(i32, f32, f32),
+            "satyaBattlemapMouseLeave" => satya_battlemap_mouse_leave(),
+            "satyaZoomMapIn" => satya_zoom_map_in(),
+            "satyaZoomMapOut" => satya_zoom_map_out(),
+            "satyaContinueMapDir" => satya_continue_map_dir(String),
             "satyaToggleMapInspectMode" => satya_toggle_map_inspect_mode(),
             "satyaToggleBattlemapView" => satya_toggle_battlemap_view(),
             "satyaToggleBattlemapGrid" => satya_toggle_battlemap_grid(),
@@ -337,6 +346,9 @@ pub fn register_window_bindings() {
     on_move.forget();
 
     let on_up = Closure::<dyn FnMut(web_sys::Event)>::new(move |_ev: web_sys::Event| {
+        with_map_ui_mut(|ui| {
+            ui.camera_2d.clear_drag();
+        });
         let was_resizing = with_state_mut(|st| {
             st.webcam_drag_offset = None;
             let r = st.column_resizing;

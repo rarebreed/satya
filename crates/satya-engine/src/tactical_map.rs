@@ -27,6 +27,7 @@ use crate::map_dressing::{prop_spec, PropObstruction};
 use crate::map_interior_gen::{InteriorStyle, generate_furnished_interior};
 use crate::map_outdoor_gen::{OutdoorStyle, generate_outdoor_sector};
 use crate::map_sector_gen::{FacilitySectorStyle, generate_facility_sector};
+pub use crate::map_continuation::*;
 pub use crate::tactical_map_edges::{EdgeObstruction, WallEdgeIndex};
 use crate::tactical_map_geom::{
     circle_collides_obstacles, intersect_segment_edge, intersect_segment_prop, prop_contains_point,
@@ -543,12 +544,28 @@ pub fn compute_reachable_continuous(
     let mut walkable = vec![false; total];
     let mut cost_mult = vec![1.0_f32; total];
 
+    let sx = ((query.start_m.0 / step_m).floor() as isize).clamp(0, cols as isize - 1) as usize;
+    let sy = ((query.start_m.1 / step_m).floor() as isize).clamp(0, rows as isize - 1) as usize;
+    let max_reach_m = (max_budget_mm as f32 / 800.0) + 1.5;
+    let ix_min = (((query.start_m.0 - max_reach_m) / step_m).floor() as isize)
+        .clamp(0, cols as isize - 1) as usize;
+    let ix_max = (((query.start_m.0 + max_reach_m) / step_m).ceil() as isize)
+        .clamp(0, cols as isize - 1) as usize;
+    let iy_min = (((query.start_m.1 - max_reach_m) / step_m).floor() as isize)
+        .clamp(0, rows as isize - 1) as usize;
+    let iy_max = (((query.start_m.1 + max_reach_m) / step_m).ceil() as isize)
+        .clamp(0, rows as isize - 1) as usize;
+    let ix_min = ix_min.min(sx);
+    let ix_max = ix_max.max(sx);
+    let iy_min = iy_min.min(sy);
+    let iy_max = iy_max.max(sy);
+
     let node_pos = |ix: usize, iy: usize| -> (f32, f32) {
         ((ix as f32 + 0.5) * step_m, (iy as f32 + 0.5) * step_m)
     };
 
-    for iy in 0..rows {
-        for ix in 0..cols {
+    for iy in iy_min..=iy_max {
+        for ix in ix_min..=ix_max {
             let (px, py) = node_pos(ix, iy);
             let occupied = occupied_tokens_m
                 .iter()
@@ -571,8 +588,6 @@ pub fn compute_reachable_continuous(
         }
     }
 
-    let sx = ((query.start_m.0 / step_m).floor() as isize).clamp(0, cols as isize - 1) as usize;
-    let sy = ((query.start_m.1 / step_m).floor() as isize).clamp(0, rows as isize - 1) as usize;
     let mut cost_mm = vec![i32::MAX; total];
     cost_mm[sy * cols + sx] = 0;
 

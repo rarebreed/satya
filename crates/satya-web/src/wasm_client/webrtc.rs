@@ -470,6 +470,7 @@ fn handle_server_packet(pkt: ServerWsPacket) {
                 st.roster = roster;
             });
             render_roster();
+            crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
             initiate_webrtc_mesh(false);
             satya_refresh_metrics();
         }

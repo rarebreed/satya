@@ -117,6 +117,9 @@ pub fn satya_generate_procedural_map() {
                 pos_y_cm: Some(ny_cm),
             });
         }
+        ui.camera_2d.reset_for_board(built.board_size_m());
+        ui.pending_stitch_nudge = None;
+        ui.continuation_in_flight = false;
         ui.map = built;
         ui.hovered_point_m = None;
         ui.hover_inspection = None;
@@ -127,6 +130,77 @@ pub fn satya_generate_procedural_map() {
     mark_map_wgpu_dirty();
     refresh_map_dom_and_wgpu();
     post_generate_map_if_in_session(preset.as_str(), seed);
+}
+
+/// Continues the active tactical arena seamlessly past the given cardinal boundary (`NORTH`/`SOUTH`/`EAST`/`WEST`).
+pub fn continue_session_map_in_direction(dir: satya_schema::MapContinuationDir) {
+    if !crate::wasm_client::map_2d_camera::local_user_can_author_map() {
+        return;
+    }
+    let (auth_token, session_id) = with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
+    let has_session = auth_token.is_some() && session_id.is_some();
+
+    let next_action = with_map_ui_mut(|ui| {
+        if ui.continuation_in_flight || !satya_engine::tactical_map::can_continue_map(&ui.map, dir) {
+            return None;
+        }
+        ui.seed_counter = ui.seed_counter.wrapping_add(193);
+        let seed = ui.seed_counter;
+        let preset = ui
+            .map
+            .theme_preset
+            .clone()
+            .unwrap_or_else(|| SectorPreset::default().as_str().to_string());
+        if has_session {
+            ui.continuation_in_flight = true;
+            ui.pending_stitch_nudge = Some(dir);
+            Some((seed, preset, None))
+        } else {
+            let outcome =
+                satya_engine::tactical_map::continue_procedural_map(&ui.map, dir, Some(seed))
+                    .ok()?;
+            ui.pending_stitch_nudge = Some(dir);
+            Some((seed, preset, Some(outcome.map)))
+        }
+    });
+
+    let Some((seed, preset, offline_map)) = next_action else {
+        return;
+    };
+    if let Some(stitched) = offline_map {
+        apply_incoming_map_update(&stitched);
+        return;
+    }
+
+    crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
+    let (Some(token), Some(sid)) = (auth_token, session_id) else {
+        return;
+    };
+    let req = GenerateSessionMapRequest {
+        preset,
+        seed: Some(seed),
+        continue_direction: Some(dir),
+        ..Default::default()
+    };
+    wasm_bindgen_futures::spawn_local(async move {
+        match fetch_json::<_, GmMapUpdateRequest>(
+            "POST",
+            &format!("/api/sessions/{sid}/map"),
+            Some(&token),
+            Some(&req),
+        )
+        .await
+        {
+            Ok(updated) => apply_incoming_map_update(&updated),
+            Err(_) => {
+                with_map_ui_mut(|ui| {
+                    ui.continuation_in_flight = false;
+                    ui.pending_stitch_nudge = None;
+                });
+                crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
+            }
+        }
+    });
 }
 
 pub(crate) fn post_generate_map_if_in_session(preset_code: &str, seed: i64) {

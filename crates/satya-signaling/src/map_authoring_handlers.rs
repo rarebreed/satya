@@ -348,6 +348,68 @@ pub async fn session_generate_or_edit_map_handler(
             .into_response();
     }
 
+    // Branch B2: Seamless edge-matched procedural continuation stitching onto active map
+    if let Some(dir) = req.continue_direction {
+        if !caller_is_gm_or_solo {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Only the Game Master can continue the tactical sector while a Human GM leads the session" })),
+            )
+                .into_response();
+        }
+        let mut base_map = ctx.active_map.clone().unwrap_or_else(|| {
+            if req.preset.trim().is_empty() {
+                satya_engine::tactical_map::default_starter_vector_map(req.seed.unwrap_or(1337))
+            } else {
+                let preset = SectorPreset::from_code_str(&req.preset).unwrap_or_default();
+                build_procedural_map_request(
+                    &format!("map-{}", preset.as_str()),
+                    preset,
+                    req.title.as_deref(),
+                    satya_engine::tactical_map::CONTINUATION_STRIP_W,
+                    satya_engine::tactical_map::CONTINUATION_STRIP_H,
+                    req.seed.unwrap_or(1337),
+                )
+            }
+        });
+        ensure_vector_map_ready(&mut base_map);
+        if base_map.theme_preset.is_none() && !req.preset.trim().is_empty() {
+            base_map.theme_preset = Some(req.preset.clone());
+        }
+        let map = match satya_engine::tactical_map::continue_procedural_map(
+            &base_map,
+            dir,
+            req.seed,
+        ) {
+            Ok(outcome) => outcome.map,
+            Err(err) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": err }))).into_response();
+            }
+        };
+
+        let _ = state
+            .auth
+            .set_session_active_map(&session_id, map.clone())
+            .await;
+
+        log_map_canvas_event(
+            &state,
+            &session_id,
+            ctx.session_mode,
+            CanvasEventType::MapUpdated,
+            &caller_part,
+            &map,
+        )
+        .await;
+
+        broadcast_role_filtered_map(&state, &session_id, &ctx.roster, &map).await;
+        return (
+            StatusCode::OK,
+            Json(filter_map_for_role(&map, caller_part.role)),
+        )
+            .into_response();
+    }
+
     // Branch B: Full procedural `1.0m` sector generation
     if !caller_is_gm_or_solo {
         return (

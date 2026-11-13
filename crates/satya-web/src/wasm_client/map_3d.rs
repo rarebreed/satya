@@ -71,6 +71,12 @@ pub struct TacticalMapUiState {
     pub edit_prop_brush: String,
     /// Clockwise placement rotation (`0..=359°`, `+15°` steps or direct numeric input) when placing props.
     pub edit_prop_rotation_deg: i32,
+    /// 2D SVG battlemap viewport zoom/pan camera and drag state.
+    pub camera_2d: crate::wasm_client::map_2d_camera::BattlemapCamera2d,
+    /// Direction of an in-flight local continuation click/overscroll so the incoming map nudges into the new area.
+    pub pending_stitch_nudge: Option<satya_schema::MapContinuationDir>,
+    /// True while a `/map` procedural continuation POST request is in flight.
+    pub continuation_in_flight: bool,
 }
 
 impl Default for TacticalMapUiState {
@@ -84,6 +90,7 @@ impl Default for TacticalMapUiState {
             42,
         );
         let selected = map.tokens.first().map(|t| t.entity_id.clone());
+        let camera_2d = crate::wasm_client::map_2d_camera::BattlemapCamera2d::default();
         let mut st = Self {
             map,
             selected_entity_id: selected,
@@ -108,6 +115,9 @@ impl Default for TacticalMapUiState {
             ink_style: crate::wasm_client::map_2d_tokens::BattlemapInkStyle::default(),
             edit_prop_brush: String::new(),
             edit_prop_rotation_deg: 0,
+            camera_2d,
+            pending_stitch_nudge: None,
+            continuation_in_flight: false,
         };
         st.recompute_overlays();
         st
@@ -331,7 +341,7 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
 
     let Some(los) = ui.last_los.as_ref() else {
         return format!(
-            r#"<span><strong>Selected:</strong> {sel_label} · <strong>Reach ({ticks}t):</strong> Free metric point-and-click · Hover or click anywhere to move or measure Range &amp; Cover.</span>"#,
+            r#"<span class="map-los-hud-main"><strong>Selected:</strong> {sel_label} · <strong>Reach ({ticks}t):</strong> Free metric point-and-click · Hover or click anywhere to move or measure Range &amp; Cover.</span>"#,
             ticks = ui.tick_budget
         );
     };
@@ -345,14 +355,7 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
         .map(|(t, (px, py))| format!("{} @ ({px:.2}m, {py:.2}m)", escape_html(&t.label)))
         .unwrap_or_else(|| {
             let (tx, ty) = los.target_m;
-            match crate::wasm_client::map_hover_inspect::compute_hover_inspection(ui, tx, ty) {
-                Some(ins) => format!(
-                    "Point ({tx:.2}m, {ty:.2}m) [{} · {}]",
-                    escape_html(&ins.title),
-                    escape_html(&ins.material_label)
-                ),
-                None => format!("Point ({tx:.2}m, {ty:.2}m)"),
-            }
+            format!("Point ({tx:.2}m, {ty:.2}m)")
         });
 
     let pill_cls = match los.cover_grade {
@@ -378,12 +381,12 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
                 BarrierPenetrationVerdict::PenetratesWithLoss => "pill pill-iggy",
                 BarrierPenetrationVerdict::StoppedByBarrier => "pill pill-muted",
             };
-            format!(r#" <span class="{b_cls}">{}</span>"#, escape_html(&b.summary_label))
+            format!(r#"<span class="{b_cls}">{}</span>"#, escape_html(&b.summary_label))
         })
         .unwrap_or_default();
 
     format!(
-        r#"<span><strong>{sel_label}</strong> → <strong>{target_name}</strong> · Range: <span class="mono">{:.2}m</span>{reach_note}</span> <span class="{pill_cls}">{}</span>{bal_html}"#,
+        r#"<span class="map-los-hud-main"><strong>{sel_label}</strong> → <strong>{target_name}</strong> · Range: <span class="mono">{:.2}m</span>{reach_note}</span><span class="map-los-hud-pills"><span class="{pill_cls}">{}</span>{bal_html}</span>"#,
         los.distance_m,
         los.cover_grade.label()
     )
@@ -420,7 +423,6 @@ pub fn refresh_map_dom_and_wgpu() {
         pill_txt,
         tokens_html,
         hud_html,
-        hover_bar_html,
         battlemap_on,
         sel_preset,
         sel_color,
@@ -435,7 +437,6 @@ pub fn refresh_map_dom_and_wgpu() {
         let pill = format!("{} ({bw_m:.0}m × {bh_m:.0}m · Free Metric)", ui.map.title);
         let chips = format_selectable_token_chips_html(&ui.map, ui.selected_entity_id.as_deref());
         let hud = format_map_tactical_hud_html(ui);
-        let hover_bar = crate::wasm_client::map_hover_inspect::format_map_hover_status_bar_html(ui);
         let (preset, color) = ui
             .selected_entity_id
             .as_deref()
@@ -449,7 +450,6 @@ pub fn refresh_map_dom_and_wgpu() {
             pill,
             chips,
             hud,
-            hover_bar,
             ui.view_battlemap,
             preset,
             color,
@@ -489,8 +489,8 @@ pub fn refresh_map_dom_and_wgpu() {
         },
     );
     set_html("tabletop-map-los-hud", &hud_html);
-    set_html("map-hover-status-bar", &hover_bar_html);
     set_html("tabletop-token-list", &tokens_html);
+    crate::wasm_client::map_hover_inspect::refresh_inspect_popup_if_visible();
 
     if battlemap_on || svg_visible {
         sync_battlemap_svg_host();
@@ -498,6 +498,7 @@ pub fn refresh_map_dom_and_wgpu() {
     if !battlemap_on {
         refresh_map_wgpu_if_active();
     }
+    crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
 }
 
 /// Formats clickable token chips for `#tabletop-token-list` allowing 1-click selection of any miniature.
@@ -544,10 +545,31 @@ pub fn format_selectable_token_chips_html(
 
 /// Ingests an authoritative [`GmMapUpdateRequest`] from `ServerWsPacket::MapUpdated` or REST history.
 pub fn apply_incoming_map_update(incoming: &GmMapUpdateRequest) {
-    with_map_ui_mut(|ui| {
+    let stitch_info = with_map_ui_mut(|ui| {
+        let old_size = ui.map.board_size_m();
+        let new_size = incoming.board_size_m();
+        let size_changed =
+            incoming.grid_width != ui.map.grid_width || incoming.grid_height != ui.map.grid_height;
+        let explicit_nudge = ui.pending_stitch_nudge.take();
+        ui.continuation_in_flight = false;
+        let stitch_dir = crate::wasm_client::map_2d_camera::detect_map_stitch_dir(
+            &ui.map,
+            incoming,
+            explicit_nudge,
+        );
+        if let Some(dir) = stitch_dir {
+            ui.camera_2d
+                .adjust_after_stitch(old_size, new_size, dir, explicit_nudge.is_some());
+        } else if size_changed {
+            ui.camera_2d.reset_for_board(new_size);
+        }
         ui.map = incoming.clone();
         ui.recompute_overlays();
+        stitch_dir.map(|dir| (old_size, new_size, dir, explicit_nudge.is_some()))
     });
+    if let Some((old_size, new_size, dir, nudge)) = stitch_info {
+        crate::wasm_client::map_3d_wgpu::shift_3d_camera_on_stitch(old_size, new_size, dir, nudge);
+    }
     mark_map_wgpu_dirty();
     if !incoming.image_url.is_empty()
         && incoming.tiles.is_empty()

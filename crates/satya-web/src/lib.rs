@@ -17,6 +17,7 @@ pub mod views_header;
 pub mod views_notebook;
 pub mod views_notebook_docs;
 pub mod views_notebook_gm;
+pub mod views_notebook_map;
 pub mod views_workspace;
 pub mod wasm_client;
 

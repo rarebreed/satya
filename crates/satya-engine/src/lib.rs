@@ -50,8 +50,8 @@
 //!   Survival (`docs/ttrpg/06-health-and-survival/health_and_trauma.md`, `movement_vehicles_and_environment.md`).
 //! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
 //!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
-//! - [`tactical_map`], [`tactical_map_geom`], [`tactical_map_inspect`], [`tactical_map_edges`], [`map_dressing`], [`barrier_ballistics`], [`map_interior_gen`],
-//!   [`map_outdoor_gen`], [`map_outdoor_natural`] & [`map_sector_gen`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, LoS/cover, hover inspection, thin
+//! - [`tactical_map`], [`map_continuation`], [`tactical_map_geom`], [`tactical_map_inspect`], [`tactical_map_edges`], [`map_dressing`], [`barrier_ballistics`], [`map_interior_gen`],
+//!   [`map_outdoor_gen`], [`map_outdoor_natural`] & [`map_sector_gen`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, seamless edge-matched procedural continuation, LoS/cover, hover inspection, thin
 //!   edge walls/doors/windows, multi-cell prop catalog with per-material ballistic penetration vs. concealment
 //!   grading, and dressed procedural sectors across all 12 presets.
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor)
@@ -74,6 +74,7 @@ pub mod environmental_hazards;
 pub mod health_survival;
 pub mod lifepath_catalog;
 pub mod lifepath_economy;
+pub mod map_continuation;
 pub mod map_dressing;
 pub mod map_interior_gen;
 pub mod map_outdoor_gen;

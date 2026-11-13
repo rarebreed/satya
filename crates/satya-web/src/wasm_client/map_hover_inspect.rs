@@ -1,14 +1,13 @@
-//! Object & Ground Hover Inspector (`#map-hover-status-bar` + `[Alt / I]` floating `#map-hover-tooltip`).
+//! Docked Object & Ground Hover Inspector (`[Alt / I]` `#map-hover-tooltip` overlay pane).
 //!
 //! Translates continuous pointer coordinates `(x_m, y_m)` on either the 2D SVG battlemap or the
 //! 3D WebGPU diorama into deterministic [`MapHoverInspection`] metadata (tokens, walls/doors/windows,
-//! multi-part vehicles & trees, furniture, floor surfaces, and base ground), keeping the persistent
-//! status bar live and showing the floating tooltip card on `Alt`-hold or pinned `I` inspect toggle.
+//! multi-part vehicles & trees, furniture, floor surfaces, and base ground), displaying a
+//! fixed-position docked pop-up pane inside `#tabletop-map-viewport` when Inspect mode is active
+//! (`Alt`-hold, `I` hotkey, or `#btn-map-inspect-toggle`) so map layout never jumps or reflows.
 
-use crate::wasm_client::dom::{escape_html, get_element, set_html, set_text};
-use crate::wasm_client::dom_tooltip::{
-    TooltipClampSpec, is_keyboard_typing_target, sync_floating_tooltip_dom,
-};
+use crate::wasm_client::dom::{escape_html, get_element, set_class, set_display, set_html, set_text};
+use crate::wasm_client::dom_tooltip::is_keyboard_typing_target;
 use crate::wasm_client::map_2d_art::battlemap_theme_for_preset;
 use crate::wasm_client::map_2d_art_overlay::sync_battlemap_svg_host;
 use crate::wasm_client::map_3d::{
@@ -56,52 +55,7 @@ const fn category_badge(cat: MapHoverCategory) -> (&'static str, &'static str) {
     }
 }
 
-/// Formats the persistent 1-line status bar beneath the tactical map viewport (`#map-hover-status-bar`).
-#[must_use]
-pub fn format_map_hover_status_bar_html(ui: &TacticalMapUiState) -> String {
-    let hint = if ui.inspect_mode_pinned {
-        "Inspect Pinned [I] · click I or Alt to close card"
-    } else {
-        "Hold Alt or press I for ballistic details"
-    };
-    let Some(ins) = ui.hover_inspection.as_ref() else {
-        let ground = escape_html(ground_surface_label_for_preset(
-            ui.map.theme_preset.as_deref(),
-        ));
-        return format!(
-            r#"<span class="map-hover-badge map-hover-badge-ground">MAP</span> <span>Base surface: <strong>{ground}</strong> · Move pointer over any token, wall, prop, or floor spot.</span> <span class="muted">{hint}</span>"#
-        );
-    };
-    let (badge, cls) = category_badge(ins.category);
-    let rot_note = ins
-        .rotation_deg
-        .map(|d| format!(" · {d}°"))
-        .unwrap_or_default();
-    let h_note = if ins.height_cm > 0 {
-        format!(" · {}cm", ins.height_cm)
-    } else {
-        String::new()
-    };
-    format!(
-        r#"<span class="map-hover-badge {cls}">{badge}</span> <strong>{}</strong> <span class="mono">({:.2}m, {:.2}m)</span> · <span>{}{}</span> · <span>{}{}</span> · <span class="muted">{} · {hint}</span>"#,
-        escape_html(&ins.title),
-        ins.world_x_m,
-        ins.world_y_m,
-        escape_html(&ins.material_label),
-        h_note,
-        escape_html(&ins.cover_label),
-        rot_note,
-        escape_html(&ins.subtitle),
-    )
-}
-
-/// Default SSR HTML for `#map-hover-status-bar`.
-#[must_use]
-pub fn default_map_hover_status_bar_html() -> String {
-    format_map_hover_status_bar_html(&TacticalMapUiState::default())
-}
-
-/// Formats the floating detailed object/ground card (`#map-hover-tooltip`).
+/// Formats the detailed object/ground/ballistic card shown in the docked `#map-hover-tooltip` pane.
 #[must_use]
 pub fn format_map_hover_tooltip_html(ins: &MapHoverInspection) -> String {
     let (badge, cls) = category_badge(ins.category);
@@ -137,73 +91,92 @@ pub fn format_map_hover_tooltip_html(ins: &MapHoverInspection) -> String {
     )
 }
 
-fn sync_hover_tooltip_dom(client_x: Option<f32>, client_y: Option<f32>) {
-    let (pinned, alt_held, ins_opt, coords_txt) = with_map_ui(|ui| {
+/// Formats the complete docked top-right Inspector pane HTML (`#map-hover-tooltip`) from `ui`,
+/// including idle sector guidance when the cursor is not over the map and active weapon ballistics.
+#[must_use]
+pub fn format_map_inspect_popup_html(ui: &TacticalMapUiState) -> String {
+    let foot = if ui.inspect_mode_pinned {
+        "Inspect Pinned [I] · press I or click Inspect to close"
+    } else {
+        "Holding [Alt] · release Alt to hide"
+    };
+    let Some(ins) = ui.hover_inspection.as_ref() else {
+        let ground = escape_html(ground_surface_label_for_preset(
+            ui.map.theme_preset.as_deref(),
+        ));
+        return format!(
+            r#"<div class="map-hover-tip-head"><span class="map-hover-badge map-hover-badge-ground">INSPECT</span> <strong>{ground}</strong></div>
+<div class="map-hover-tip-sub">Move pointer over any token, wall, door, prop, or floor spot to inspect material, cover, and ballistics.</div>
+<div class="map-hover-tip-foot muted">{foot}</div>"#
+        );
+    };
+    let base = format_map_hover_tooltip_html(ins);
+    let bal_row = ui
+        .last_ballistic
+        .as_ref()
+        .map(|b| {
+            format!(
+                r#"<div class="map-hover-tip-ballistic"><span class="muted">Active Shot vs. Ray:</span> {}</div>"#,
+                escape_html(&b.summary_label)
+            )
+        })
+        .unwrap_or_default();
+    format!(r#"{base}{bal_row}<div class="map-hover-tip-foot muted">{foot}</div>"#)
+}
+
+/// Refreshes the docked Inspector pop-up pane and coordinate readout pill when visible.
+pub fn refresh_inspect_popup_if_visible() {
+    sync_hover_tooltip_dom();
+}
+
+fn sync_hover_tooltip_dom() {
+    let (pinned, alt_held, coords_txt, popup_html) = with_map_ui(|ui| {
         let coords = ui
             .hovered_point_m
-            .map(|(x, y)| format!("Cursor ({x:.2}m, {y:.2}m)"))
+            .map(|(x, y)| format!("{x:05.2}m, {y:05.2}m"))
             .unwrap_or_else(|| "Hover: --".to_string());
-        (
-            ui.inspect_mode_pinned,
-            ui.alt_inspect_held,
-            ui.hover_inspection.clone(),
-            coords,
-        )
+        let visible = ui.inspect_mode_pinned || ui.alt_inspect_held;
+        let html = if visible {
+            format_map_inspect_popup_html(ui)
+        } else {
+            String::new()
+        };
+        (ui.inspect_mode_pinned, ui.alt_inspect_held, coords, html)
     });
     set_text("map-hover-coords-pill", &coords_txt);
     set_text(
         "btn-map-inspect-toggle",
         if pinned { "Inspect: ON [I]" } else { "Inspect [Alt/I]" },
     );
-    set_html(
-        "map-hover-status-bar",
-        &with_map_ui(format_map_hover_status_bar_html),
+    set_class(
+        "btn-map-inspect-toggle",
+        if pinned || alt_held {
+            "btn btn-sm btn-accent"
+        } else {
+            "btn btn-sm btn-secondary"
+        },
     );
 
-    let show_tip = (pinned || alt_held) && ins_opt.is_some();
-    if let Some(ins) = ins_opt.filter(|_| show_tip) {
-        let html = format_map_hover_tooltip_html(&ins);
-        let spec = TooltipClampSpec {
-            offset_x_px: 14.0,
-            offset_y_px: 14.0,
-            est_width_px: 250.0,
-            est_height_px: 120.0,
-            margin_px: 8.0,
-        };
-        sync_floating_tooltip_dom(
-            "map-hover-tooltip",
-            "tabletop-map-viewport",
-            true,
-            client_x.unwrap_or(0.0) as f64,
-            client_y.unwrap_or(0.0) as f64,
-            &html,
-            spec,
-        );
+    if pinned || alt_held {
+        set_html("map-hover-tooltip", &popup_html);
+        set_display("map-hover-tooltip", "block");
     } else {
-        sync_floating_tooltip_dom(
-            "map-hover-tooltip",
-            "tabletop-map-viewport",
-            false,
-            0.0,
-            0.0,
-            "",
-            TooltipClampSpec::default(),
-        );
+        set_display("map-hover-tooltip", "none");
     }
 }
 
-/// Toggles persistent Inspect Tooltip mode (`#btn-map-inspect-toggle` / `I` key).
+/// Toggles persistent docked Inspect pop-up mode (`#btn-map-inspect-toggle` / `I` key).
 #[wasm_bindgen]
 pub fn satya_toggle_map_inspect_mode() {
     with_map_ui_mut(|ui| {
         ui.inspect_mode_pinned = !ui.inspect_mode_pinned;
     });
-    sync_hover_tooltip_dom(None, None);
+    sync_hover_tooltip_dom();
 }
 
-/// Updates continuous hover inspection at `(x_m, y_m)` and client viewport `(client_x, client_y)`.
+/// Updates continuous hover inspection at `(x_m, y_m)`.
 #[wasm_bindgen]
-pub fn satya_hover_map_point(x_m: f32, y_m: f32, client_x: f32, client_y: f32) {
+pub fn satya_hover_map_point(x_m: f32, y_m: f32, _client_x: f32, _client_y: f32) {
     let (redraw_overlay, redraw_wgpu) = with_map_ui_mut(|ui| {
         let (bw, bh) = ui.map.board_size_m();
         if !x_m.is_finite() || !y_m.is_finite() || x_m < 0.0 || y_m < 0.0 || x_m > bw || y_m > bh {
@@ -242,7 +215,7 @@ pub fn satya_hover_map_point(x_m: f32, y_m: f32, client_x: f32, client_y: f32) {
         (significant || !ui.view_battlemap, significant && !ui.view_battlemap)
     });
 
-    sync_hover_tooltip_dom(Some(client_x), Some(client_y));
+    sync_hover_tooltip_dom();
     if redraw_overlay {
         set_html("tabletop-map-los-hud", &with_map_ui(format_map_tactical_hud_html));
         sync_battlemap_svg_host();
@@ -266,7 +239,7 @@ pub fn satya_leave_map_hover() {
         }
         had
     });
-    sync_hover_tooltip_dom(None, None);
+    sync_hover_tooltip_dom();
     if changed {
         set_html("tabletop-map-los-hud", &with_map_ui(format_map_tactical_hud_html));
         sync_battlemap_svg_host();
@@ -303,7 +276,7 @@ pub fn handle_map_global_keydown(ev: &web_sys::KeyboardEvent) {
     if ev.key() == "Alt" {
         if is_maps_pane_active() {
             with_map_ui_mut(|ui| ui.alt_inspect_held = true);
-            sync_hover_tooltip_dom(None, None);
+            sync_hover_tooltip_dom();
         }
         return;
     }
@@ -342,7 +315,7 @@ pub fn handle_map_global_keyup(ev: &web_sys::KeyboardEvent) {
             prev
         });
         if was_held {
-            sync_hover_tooltip_dom(None, None);
+            sync_hover_tooltip_dom();
         }
     }
 }
@@ -411,10 +384,13 @@ mod tests {
         assert_eq!(ground.category, MapHoverCategory::Ground);
         assert!(ground.title.contains("Asphalt Roadway"));
 
+        let idle_popup = format_map_inspect_popup_html(&ui);
+        assert!(idle_popup.contains("INSPECT") && idle_popup.contains("Asphalt Roadway"));
+
         ui.hover_inspection = Some(eng_pt.clone());
-        let bar = format_map_hover_status_bar_html(&ui);
+        let popup = format_map_inspect_popup_html(&ui);
         let tip = format_map_hover_tooltip_html(&eng_pt);
-        assert!(bar.contains("OBJECT") && bar.contains("map-hover-badge"));
+        assert!(popup.contains("OBJECT") && popup.contains("map-hover-badge"));
         assert!(tip.contains("Armor") || tip.contains("Car"));
     }
 }

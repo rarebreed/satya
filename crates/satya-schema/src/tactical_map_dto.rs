@@ -262,6 +262,46 @@ pub struct GenerateSessionMapRequest {
     /// Optional GM prop removal at continuous centimeter point `(x_cm, y_cm)`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_prop_at_cm: Option<(i32, i32)>,
+    /// Optional cardinal boundary (`NORTH`, `SOUTH`, `EAST`, `WEST`) to seamlessly expand and stitch
+    /// onto the active tactical map using edge-matched procedural generation (GM or Solo AI-GM only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continue_direction: Option<MapContinuationDir>,
+}
+
+crate::define_wire_enum! {
+    /// Cardinal boundary direction across which procedural map continuation expands.
+    #[derive(Default)]
+    pub enum MapContinuationDir [count = 4] {
+        #[default]
+        North => ("NORTH", "North"),
+        South => ("SOUTH", "South"),
+        East => ("EAST", "East"),
+        West => ("WEST", "West"),
+    }
+}
+
+impl MapContinuationDir {
+    /// Opposite cardinal direction (`North <-> South`, `East <-> West`).
+    #[must_use]
+    pub const fn opposite(self) -> Self {
+        match self {
+            Self::North => Self::South,
+            Self::South => Self::North,
+            Self::East => Self::West,
+            Self::West => Self::East,
+        }
+    }
+
+    /// Signed 2D cell-step unit vector `(dx, dy)` in screen/map coordinates (`+Y` South, `+X` East).
+    #[must_use]
+    pub const fn unit_step(self) -> (i32, i32) {
+        match self {
+            Self::North => (0, -1),
+            Self::South => (0, 1),
+            Self::East => (1, 0),
+            Self::West => (-1, 0),
+        }
+    }
 }
 
 fn default_sector_preset() -> String {
@@ -287,6 +327,7 @@ impl Default for GenerateSessionMapRequest {
             edit_prop: None,
             clear_prop_at: None,
             clear_prop_at_cm: None,
+            continue_direction: None,
         }
     }
 }
@@ -362,5 +403,30 @@ mod tests {
         ] {
             assert_eq!(sanitize_portrait_url(bad), None, "expected reject for {bad}");
         }
+    }
+
+    #[test]
+    fn map_continuation_dir_and_request_roundtrip() {
+        assert_eq!(MapContinuationDir::North.opposite(), MapContinuationDir::South);
+        assert_eq!(MapContinuationDir::South.opposite(), MapContinuationDir::North);
+        assert_eq!(MapContinuationDir::East.opposite(), MapContinuationDir::West);
+        assert_eq!(MapContinuationDir::West.opposite(), MapContinuationDir::East);
+        assert_eq!(MapContinuationDir::East.unit_step(), (1, 0));
+        assert_eq!(MapContinuationDir::West.label(), "West");
+        assert_eq!(MapContinuationDir::from_code_str("south"), Some(MapContinuationDir::South));
+
+        let req = GenerateSessionMapRequest {
+            continue_direction: Some(MapContinuationDir::East),
+            seed: Some(777),
+            ..Default::default()
+        };
+        let encoded = serde_json::to_string(&req).unwrap();
+        assert!(encoded.contains(r#""continue_direction":"EAST""#));
+        let decoded: GenerateSessionMapRequest = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, req);
+
+        // Omitted continue_direction defaults to None cleanly for older clients.
+        let legacy: GenerateSessionMapRequest = serde_json::from_str("{}").unwrap();
+        assert_eq!(legacy.continue_direction, None);
     }
 }

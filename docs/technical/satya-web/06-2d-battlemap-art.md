@@ -15,20 +15,23 @@
 | **`map_2d_art_props.rs`** | Deterministic cell hashing / blob path helpers for terrain scatter and legacy prop fallback contours. |
 | **`map_2d_tokens.rs`** | Phase 4 `BattlemapInkStyle` filter finishes (`vellum`, `clean`, `blueprint`, `sketch`), `satya_set_battlemap_ink_style`, and `push_token_portrait_disc_svg` placed at continuous `(pos_x_cm, pos_y_cm)` coordinates. |
 | **`map_2d_art_overlay.rs`** | Dynamic `#battlemap-overlay` (optional `1.0m`/`5.0m` visual metric grid, continuous `reachable_strips` contour runs, hover reticle + OBB/edge highlight, `360°` prop brush preview, analytical LoS ray, portrait discs) and `sync_battlemap_svg_host`. |
-| **`map_hover_inspect.rs`** | Continuous Object & Ground Hover Inspector (`satyaHoverMapPoint`, `satyaLeaveMapHover`, `satyaToggleMapInspectMode`), persistent `#map-hover-status-bar`, and `Alt`-hold / `I`-toggle / `#btn-map-inspect-toggle` `#map-hover-tooltip` card. |
+| **`map_2d_camera.rs`** | `BattlemapCamera2d` cursor-centered SVG `viewBox` zoom (`0.25x..6.0x`) & drag-pan, `preserveAspectRatio="xMidYMid meet"` client-to-metric unprojection, deliberate `>= 120px` boundary overscroll & `Continue [Dir]` overlay triggers, and GM/solo authoring permission checks. |
+| **`map_hover_inspect.rs`** | Continuous Object & Ground Hover Inspector (`satyaHoverMapPoint`, `satyaLeaveMapHover`, `satyaToggleMapInspectMode`), fixed-width `#map-hover-coords-pill`, and docked top-right `#map-hover-tooltip` overlay pane (`Alt`-hold / `I`-toggle / `#btn-map-inspect-toggle`) with zero map relayout. |
 | **`map_edge_edit.rs`** | Continuous metric pointer picking (`satyaClickMapPoint(fx, fy)`), `PROP_BRUSH_GROUPS` (`52` variants + Wall Edge + Eraser), GM `360°` prop placement/rotation/snap (`satyaRotateMapPropBrush` `+15°`, `satyaSetMapPropRotationDeg`, `satyaToggleMapGridSnap`), and server REST sync. |
 
 ---
 
-## 2. Two-Layer SVG Stack & Cache Invalidation
+## 2. Two-Layer SVG Stack, Camera Zoom/Pan & Boundary Continuation
 
-`#tabletop-map-svg-fallback` contains `.battlemap-stack`, stacking two `<svg>` elements over an identical `-12 -12 (w*64 + 24) (h*64 + 24)` `viewBox`:
+`#tabletop-map-svg-fallback` fills `#tabletop-map-viewport` (`100% × 100%`) and contains `.battlemap-stack`, stacking two `<svg>` elements over an identical synchronized `viewBox` (`preserveAspectRatio="xMidYMid meet"`):
 
 1. **`#battlemap-art` (Static Art Layer)**:
    - Keyed by `data-art-key="{battlemap_art_cache_key(ui)}"`, an FNV-1a digest over `grid_width`, `grid_height`, `seed`, `theme.id`, `ink_style.as_str()`, `wall_edges`, and `props` (continuous geometry, independent of any legacy tile array).
    - `sync_battlemap_svg_host()` skips regenerating `#battlemap-art` whenever `data-art-key` matches, replacing only `#battlemap-overlay.innerHTML` on pointer hover, token selection, token movement, or grid-toggle events.
+   - Wheel zoom and drag-pan mutate only the `viewBox` attribute on `#battlemap-art` and `#battlemap-overlay` via `sync_map_camera_and_edge_controls_dom()` with zero DOM rebuilds (`#btn-map-zoom-out`, `#map-zoom-readout`, `#btn-map-zoom-in`, and `#btn-map-reset-cam` / double-click).
 2. **`#battlemap-overlay` (Dynamic Interaction Layer)**:
-   - Binds single pointer handlers on `<svg id="battlemap-overlay">` converting client pixels to continuous metric/grid units `(fx, fy)` (`window.satyaClickMapPoint(fx, fy)`, `window.satyaHoverMapPoint(fx, fy)`, `window.satyaLeaveMapHover()`) with zero per-cell DOM listeners.
+   - Routes `onwheel`, `onmousedown`, `onmousemove`, `onmouseup`, and `onmouseleave` into `map_2d_camera.rs` (`satyaBattlemapWheel`, `satyaBattlemapMouse*`), unprojecting client pixels into continuous metric coordinates `(fx, fy)` across any zoom/pan or container aspect ratio.
+   - When an authorized user (Human GM/Host, solo player in an AI GM session, or offline user) pans to a cardinal boundary or overscrolls `>= 120px` past it, directional `#btn-map-continue-{north,south,west,east}` controls trigger edge-matched procedural stitching (`satya_engine::tactical_map::continue_procedural_map`, up to `80m × 56m`).
 
 ---
 
@@ -66,11 +69,11 @@ When `#map-click-mode` is `"edit_terrain"`, the subbar reveals `#map-prop-brush-
 
 ## 6. Object & Ground Hover Inspector (`map_hover_inspect.rs`)
 
-Moving the pointer anywhere over `#battlemap-overlay` or `#wgpu-map-canvas` dispatches `satyaHoverMapPoint(fx, fy)` into `compute_hover_inspection` (`satya_engine::tactical_map_geom::inspect_map_point`), classifying the topmost entity in priority order:
+Moving the pointer anywhere over `#battlemap-overlay` or `#wgpu-map-canvas` dispatches `satyaHoverMapPoint(fx, fy, clientX, clientY)` into `compute_hover_inspection` (`satya_engine::tactical_map_geom::inspect_map_point`), classifying the topmost entity in priority order:
 1. **Tokens** (`0.42m` pick radius): label, stance pose, visibility, facing degrees, and metric coordinates.
 2. **Wall / Door / Window Edges**: `MaterialClass` (`Brick`, `Drywall`, `ConcreteBlock`, `Glass`, etc.) + cover/breach rating.
 3. **3D / Solid Props (incl. Sub-Zones)**: distinguishes `Car` / `UtilityVan` front `Engine Block` (`ArmorSteel` hard cover) from cabin, and `LargeTree` / `MediumTree` solid `Trunk` (`LiveWood`) from overhead `Canopy` (`Foliage`, `2.10m` elevation).
 4. **Surface / Catwalk / Hazard Props**: `ElevatedCatwalk`, `HazardSpill`, `StonePath`, `GravelPath`, `DirtPath`, `MulchBed`, `CreekWater`, `Rug`, etc. with move-cost multipliers.
 5. **Base Ground / Floor**: theme-aware roadway, grass, concrete slab, or interior decking.
 
-Results appear simultaneously in the persistent `#map-hover-status-bar` beneath the viewport and — when holding `Alt`, pressing `I`, or toggling `#btn-map-inspect-toggle` — in the floating `#map-hover-tooltip` card (`SatyaTooltip` pattern).
+Coordinates render inside the fixed-width toolbar pill `#map-hover-coords-pill` (`136px` monospace tabular-nums) and `#tabletop-map-los-hud` stays locked to a single non-wrapping row, while full material, cover, and active-shot ballistic details appear in the **docked top-right `#map-hover-tooltip` overlay pane** inside `#tabletop-map-viewport` whenever Inspect mode is active (`Alt`-hold, `I` hotkey, or `#btn-map-inspect-toggle`) — eliminating all hover-induced vertical/horizontal layout shifts.
