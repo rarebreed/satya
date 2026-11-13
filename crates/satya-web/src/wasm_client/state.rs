@@ -13,6 +13,7 @@
 //! 4. **WebGPU Canvas Controllers (`wasm32` only)**: `MAP_CTRL` (`map_3d_wgpu.rs`), `DICE_CONTROLLER`
 //!    (`dice_3d_wgpu.rs`), and `MODEL_CTRL` (`model_3d_wgpu.rs`).
 
+use crate::wasm_client::workspace_drawers::FloatingPaneKind;
 use satya_schema::{
     AuthSuccessResponse, ChannelContext, GmDocumentRecord, GmMemoryNoteRecord, Participant,
     SessionMode, SessionNpcEntry,
@@ -85,6 +86,10 @@ pub struct SatyaWasmState {
     pub active_notebook_tab: String,
     /// Whether the Web Cams pane (`#webrtc-card`) is currently detached as a floating frame.
     pub webcam_floating: bool,
+    /// Whether the Session Chat pane (`#chat-card`) is currently detached as a floating frame.
+    pub chat_floating: bool,
+    /// Whether the Satya TTRPG Task Resolution pane (`#ttrpg-drawer`) is currently detached as a floating frame.
+    pub ttrpg_floating: bool,
     /// Whether the Web Cams column/drawer (`#webrtc-dock-column` / `#webrtc-card`) is collapsed to the right-edge rail.
     pub webcam_collapsed: bool,
     /// Whether the Session Chat drawer (`#chat-card`) in `#center-column` is collapsed.
@@ -93,8 +98,16 @@ pub struct SatyaWasmState {
     pub ttrpg_collapsed: bool,
     /// Number of vertical columns in `#video-grid` (`1` or `2` — capped at most 2 columns).
     pub webcam_columns: u8,
-    /// Active drag offset `(offset_x, offset_y)` while dragging the floating Web Cams frame.
-    pub webcam_drag_offset: Option<(f64, f64)>,
+    /// Active pointer drag `(pane, offset_x_px, offset_y_px)` while dragging a floating pane header.
+    pub active_pane_drag: Option<(FloatingPaneKind, f64, f64)>,
+    /// Saved viewport-clamped `(left_px, top_px)` position while Session Chat is floating.
+    pub chat_float_pos_px: Option<(f64, f64)>,
+    /// Saved viewport-clamped `(left_px, top_px)` position while Task Resolution is floating.
+    pub ttrpg_float_pos_px: Option<(f64, f64)>,
+    /// Saved viewport-clamped `(left_px, top_px)` position while Web Cams is floating.
+    pub webcam_float_pos_px: Option<(f64, f64)>,
+    /// Stacking z-order of floating workspace panes (`index 2` = topmost, rendered at `z-index: 97`).
+    pub floating_z_order: [FloatingPaneKind; 3],
     /// Whether the user is currently dragging `#workspace-col-splitter` to resize `#notebook-column` vs `#center-column`.
     pub column_resizing: bool,
     /// Current Satya combat round counter in the Combat Tracker tab.
@@ -151,11 +164,21 @@ impl Default for SatyaWasmState {
             active_channel_context: ChannelContext::InCharacter,
             active_notebook_tab: "maps".to_string(),
             webcam_floating: false,
+            chat_floating: false,
+            ttrpg_floating: false,
             webcam_collapsed: false,
             chat_collapsed: false,
             ttrpg_collapsed: false,
             webcam_columns: 1,
-            webcam_drag_offset: None,
+            active_pane_drag: None,
+            chat_float_pos_px: None,
+            ttrpg_float_pos_px: None,
+            webcam_float_pos_px: None,
+            floating_z_order: [
+                FloatingPaneKind::Chat,
+                FloatingPaneKind::Ttrpg,
+                FloatingPaneKind::Webcam,
+            ],
             column_resizing: false,
             combat_round: 1,
             combat_tick: 0,

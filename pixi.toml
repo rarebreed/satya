@@ -33,10 +33,11 @@ pyrefly = ">=0.15.0"
 [tasks]
 # --- Build & Quality ---
 check = { cmd = "cargo check --workspace", description = "Type-check all Rust crates in the workspace" }
+check-wasm = { cmd = "cargo clippy -p satya-web --target wasm32-unknown-unknown -- -D warnings", description = "Type-check + lint satya-web wasm32-only code (cfg(target_arch = \"wasm32\")) skipped by host builds" }
 fmt = { cmd = "cargo fmt --all", description = "Format all Rust code in the workspace" }
 lint = { cmd = "cargo clippy --workspace --all-targets", description = "Run Clippy lints across all Rust crates" }
-prep = { depends-on = ["fmt", "lint"] }
-prepc = { cmd = "git commit -m ",  depends-on = ["check", "fmt", "lint"] }
+prep = { depends-on = ["fmt", "lint", "check-wasm"] }
+prepc = { cmd = "git commit -m ",  depends-on = ["check", "check-wasm", "fmt", "lint"] }
 build = { cmd = "cargo build --workspace", description = "Build debug binaries for the workspace" }
 build-release = { cmd = "cargo build --workspace --release", description = "Build optimized release binaries" }
 build-py = { cmd = "cargo build -p satya-py --release && cp target/release/satya_py.dll src/satya_py.pyd", description = "Compile the satya-py PyO3 Rust extension and install satya_py.pyd into src/" }
@@ -46,10 +47,10 @@ build-wasm = { cmd = "wasm-pack build crates/satya-web --target web --out-dir ..
 test-schema = { cmd = "cargo test -p satya-schema", description = "Run Avro schema, CRC-64 fingerprint, and v1->v2 evolution tests" }
 test-storage = { cmd = "cargo test -p satya-storage", description = "Run Apache Iggy & offset-tracked Avro micro-batching tests" }
 test-signaling = { cmd = "cargo test -p satya-signaling", description = "Run Argon2 auth, session password, disconnect, and private routing tests" }
-test-web = { cmd = "cargo test -p satya-web", description = "Run Leptos SSR and Rust/Wasm client unit tests" }
+test-web = { cmd = "cargo test -p satya-web", depends-on = ["check-wasm"], description = "Run Leptos SSR and Rust/Wasm client unit tests (after wasm32 compile gate)" }
 test-rust = { cmd = "cargo test --workspace", description = "Run all Rust unit, integration, and doc tests" }
 test-py = { cmd = "pytest tests", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Run Python Avro & PyLance ML pipeline unit tests" }
-test = { depends-on = ["test-rust", "test-py"], description = "Run the full polyglot (Rust + Python) test suite" }
+test = { depends-on = ["check-wasm", "test-rust", "test-py"], description = "Run the full polyglot (Rust + Python) test suite, gated on the satya-web wasm32 compile check" }
 
 # --- Server & Runtime ---
 serve = { cmd = "cargo run -p satya-signaling --bin satya-server", depends-on = ["build-wasm"], env = { RUST_LOG = "info,satya_signaling=debug,satya_storage=debug" }, description = "Build Wasm frontend and start the Satya WebRTC, Chat & Apache Iggy Event Server on port 3000" }

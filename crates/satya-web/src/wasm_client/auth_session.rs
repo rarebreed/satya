@@ -428,14 +428,7 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
     set_display("session-card", "none");
     set_display("hamburger-menu-dropdown", "none");
     set_text("btn-menu-toggle-session-pane", "Show Session Pane");
-    set_display(
-        "ttrpg-drawer",
-        if session_mode == SessionMode::Meeting {
-            "none"
-        } else {
-            "flex"
-        },
-    );
+    crate::wasm_client::workspace_drawers::sync_workspace_drawers_dom();
     set_display(
         "tabletop-canvas-card",
         if session_mode == SessionMode::Meeting {

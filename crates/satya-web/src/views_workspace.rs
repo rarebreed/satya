@@ -163,7 +163,12 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
             // ================================================================
             <div id="center-column" class="col-center">
                 <div id="chat-card" class="card chat-card">
-                    <div class="card-header-inline">
+                    <div
+                        id="chat-drag-header"
+                        class="card-header-inline pane-drag-header"
+                        onmousedown="window.satyaStartChatDrag(event)"
+                        onkeydown="window.satyaFloatingHeaderKeydown('chat', event)"
+                    >
                         <div>
                             <h2>"Session Chat"</h2>
                             <span class="subtitle">"Broadcast publicly or whisper privately to selected Participant(s)"</span>
@@ -188,6 +193,18 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                 on:click=move |_| wasm_client::satya_export_chat_transcript("json".to_string())
                             >
                                 "Export .json"
+                            </button>
+                            <button
+                                type="button"
+                                id="btn-toggle-chat-float"
+                                class="btn btn-sm btn-secondary"
+                                title="Detach Session Chat into a floating draggable frame or dock back into column"
+                                aria-label="Float Session Chat"
+                                aria-pressed="false"
+                                onclick="window.satyaToggleChatFloat()"
+                                on:click=move |_| wasm_client::satya_toggle_chat_float()
+                            >
+                                "Float"
                             </button>
                             <button
                                 type="button"
@@ -283,7 +300,12 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                 </div>
 
                 <div id="ttrpg-drawer" class="card ttrpg-card">
-                    <div class="card-header-inline">
+                    <div
+                        id="ttrpg-drag-header"
+                        class="card-header-inline pane-drag-header"
+                        onmousedown="window.satyaStartTtrpgDrag(event)"
+                        onkeydown="window.satyaFloatingHeaderKeydown('ttrpg', event)"
+                    >
                         <div>
                             <h2>"Task Resolution & Action Pool"</h2>
                         </div>
@@ -293,6 +315,18 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                     &satya_engine::CascadeTaskParams::new_k20(3, 12, 0, 0),
                                 )}
                             </span>
+                            <button
+                                type="button"
+                                id="btn-toggle-ttrpg-float"
+                                class="btn btn-sm btn-secondary"
+                                title="Detach Task Resolution into a floating draggable frame or dock back into column"
+                                aria-label="Float Task Resolution"
+                                aria-pressed="false"
+                                onclick="window.satyaToggleTtrpgFloat()"
+                                on:click=move |_| wasm_client::satya_toggle_ttrpg_float()
+                            >
+                                "Float"
+                            </button>
                             <button
                                 type="button"
                                 id="btn-toggle-ttrpg-drawer"
@@ -480,8 +514,9 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                 <div id="webrtc-card" class="card webrtc-card">
                     <div
                         id="webrtc-drag-header"
-                        class="webrtc-header"
+                        class="webrtc-header pane-drag-header"
                         onmousedown="window.satyaStartWebcamDrag(event)"
+                        onkeydown="window.satyaFloatingHeaderKeydown('webcam', event)"
                     >
                         <div class="webrtc-title-wrap">
                             <h2>"Web Cams"</h2>
@@ -503,6 +538,8 @@ pub fn ActiveSessionWorkspace() -> impl IntoView {
                                 id="btn-toggle-webcam-float"
                                 class="btn btn-sm btn-secondary"
                                 title="Detach Web Cams into a floating draggable frame or dock back into column"
+                                aria-label="Float Web Cams"
+                                aria-pressed="false"
                                 onclick="window.satyaToggleWebcamFloat()"
                                 on:click=move |_| wasm_client::satya_toggle_webcam_float()
                             >

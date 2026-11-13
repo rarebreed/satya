@@ -1,0 +1,58 @@
+# Satya CI: host + wasm32 quality gates and the full polyglot test suite.
+#
+# Mirrors the local pixi tasks so CI and dev machines run identical commands:
+#   - `cargo fmt --check`     : formatting (non-mutating variant of `pixi run fmt`)
+#   - `pixi run lint`         : host Clippy across the workspace
+#   - `pixi run check-wasm`   : satya-web `cfg(target_arch = "wasm32")` code skipped by host builds
+#   - `pixi run test`         : Rust workspace tests + Python tests (builds satya-py first)
+#   - `pixi run build-wasm`   : the real `wasm-pack` bundle `pixi run serve` depends on
+#
+# `pixi.toml` only declares `win-64`, so jobs run on `windows-latest`.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  checks:
+    name: Lint, wasm32 gate & tests
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          cache: true
+          locked: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: true
+          cache-all-crates: true
+
+      - name: Format check
+        run: pixi run cargo fmt --all -- --check
+
+      - name: Host Clippy
+        run: pixi run lint
+
+      - name: wasm32 Clippy gate (satya-web)
+        run: pixi run check-wasm
+
+      - name: Full test suite (Rust + Python)
+        run: pixi run test
+
+      - name: Build wasm bundle (wasm-pack)
+        run: pixi run build-wasm
