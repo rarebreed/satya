@@ -83,8 +83,8 @@ Both SSR tab rendering (`views_notebook.rs`) and Wasm tab switching (`notebook::
 ### 1.4 Center & Right Workspace Columns (`views_workspace.rs`)
 
 - **Center Column (`#center-column.col-center`)**:
-  - **Top (`#chat-card.card.chat-card`)**: Header with `.md`/`.json` transcript export buttons (`#btn-export-chat-{md,json}`) and `#btn-toggle-chat-drawer`; `#recipient-checkboxes` (`BROADCAST` + per-peer checkboxes); scrolling `#chat-log`; and `.chat-composer` containing multi-line Markdown `<textarea id="chat-input">` (`field-sizing: content`) plus mutually exclusive channel-context icon buttons (`#btn-ctx-ic`, `#btn-ctx-ooc`, and GM-gated `#btn-ctx-gm`).
-  - **Bottom (`#ttrpg-drawer.card.ttrpg-card`)**: Header with live `#ttrpg-odds-pill` and `#btn-toggle-ttrpg-drawer`; `.ttrpg-controls` grid (searchable `#ttrpg-skill` combobox + `#ttrpg-skill-dropdown`, `N`, `C`, `Δ_int`, `Δ_tool`, `Δ_ext`, carry mode, botch rule, Fatigue, Wound Shock, 30-technique `#ttrpg-action-technique`, `#ttrpg-triad-preset`, and `T / C / F` pool inputs); `#ttrpg-triad-readout`; `#ttrpg-odds-readout`; and `Roll Satya Task`.
+  - **Top (`#chat-card.card.chat-card`)**: Draggable `#chat-drag-header`, `.md`/`.json` transcript export buttons (`#btn-export-chat-{md,json}`), Float/Dock toggle (`#btn-toggle-chat-float`), and `#btn-toggle-chat-drawer`; `#recipient-checkboxes` (`BROADCAST` + per-peer checkboxes); scrolling `#chat-log`; and `.chat-composer` containing multi-line Markdown `<textarea id="chat-input">` (`field-sizing: content`) plus mutually exclusive channel-context icon buttons (`#btn-ctx-ic`, `#btn-ctx-ooc`, and GM-gated `#btn-ctx-gm`).
+  - **Bottom (`#ttrpg-drawer.card.ttrpg-card`)**: Draggable `#ttrpg-drag-header`, live `#ttrpg-odds-pill`, Float/Dock toggle (`#btn-toggle-ttrpg-float`), and `#btn-toggle-ttrpg-drawer`; `.ttrpg-controls` grid (searchable `#ttrpg-skill` combobox + `#ttrpg-skill-dropdown`, `N`, `C`, `Δ_int`, `Δ_tool`, `Δ_ext`, carry mode, botch rule, Fatigue, Wound Shock, 30-technique `#ttrpg-action-technique`, `#ttrpg-triad-preset`, and `T / C / F` pool inputs); `#ttrpg-triad-readout`; `#ttrpg-odds-readout`; and `Roll Satya Task`.
 - **Right Column (`#webrtc-dock-column.col-webcams`)**:
   - **`#webrtc-card.card.webrtc-card`**: Draggable `#webrtc-drag-header` (`#btn-toggle-webcam-cols`, `#btn-toggle-webcam-float`, `#btn-toggle-webcam-drawer`), `.media-controls` (`Enable Cam/Mic`, `#btn-mute-audio`, `#btn-mute-video`, `Log VAD Turn`, `#btn-workspace-disconnect`), `#video-grid.cols-1` (`#local-video`, `#vad-energy-readout`, plus dynamic remote `<video>` tiles), and `#roster-list`.
   - **`#right-drawer-rails`**: Sticky vertical tab dock (`position: sticky; top: 12px;`) holding `#chat-drawer-rail`, `#ttrpg-drawer-rail`, and `#webcam-drawer-rail` (with live `#webcam-drawer-count-badge`).
@@ -117,39 +117,34 @@ On desktop viewports (`> 1240px`), `#workspace-panel.workspace-columns` defines 
 
 Users can continuously resize the Left Notebook vs. Center Chat/Roller split:
 1. **Start (`satya_start_column_resize`)**: Sets `st.column_resizing = true` and adds `.is-dragging` to `#workspace-col-splitter` (widening `.splitter-grip` from `2px × 44px` to `3px × 76px` in `var(--accent)`).
-2. **Move (`handle_column_resize_move` in `webrtc.rs`)**: Computes pointer horizontal offset relative to `#workspace-panel.getBoundingClientRect()`, clamps `pct` strictly to **`22.0% ..= 72.0%`**, sets inline `--col-left-track: minmax(320px, {pct:.1}%)` and `--col-center-track: minmax(300px, 1fr)`, and persists `satya.workspace.notebook_width_pct` to `localStorage`. Because the 3D WebGPU canvases inspect `canvas.client_width()` / `client_height()` on redraw, resizing smoothly adapts canvas aspect ratios.
+2. **Move (`handle_column_resize_move` in `workspace_drawers.rs`)**: Computes pointer horizontal offset relative to `#workspace-panel.getBoundingClientRect()`, clamps `pct` strictly to **`22.0% ..= 72.0%`**, sets inline `--col-left-track: minmax(320px, {pct:.1}%)` and `--col-center-track: minmax(300px, 1fr)`, and persists `satya.workspace.notebook_width_pct` to `localStorage`. Because the 3D WebGPU canvases inspect `canvas.client_width()` / `client_height()` on redraw, resizing (and collapsing/floating) calls `refresh_active_notebook_stage_on_layout_change()` to adapt canvas dimensions immediately.
 3. **Reset (`satya_reset_column_resize`)**: Double-clicking `#workspace-col-splitter` removes the inline `--col-left-track` / `--col-center-track` overrides and deletes `satya.workspace.notebook_width_pct` from `localStorage`.
 
-### 2.3 Collapsible & Floating Drawer State Machine (`webrtc.rs`)
+### 2.3 Collapsible & Floating Drawer State Machine (`workspace_drawers.rs`)
 
-Three workspace cards (`#chat-card`, `#ttrpg-drawer`, `#webrtc-card`) can be independently collapsed to vertical right-edge tabs, and `#webrtc-card` can additionally be undocked into a floating Picture-in-Picture overlay. All transitions converge through a single idempotent reconciler: **`sync_workspace_drawers_dom()`**.
+All three workspace cards (`#chat-card`, `#ttrpg-drawer`, `#webrtc-card`) can be independently collapsed to vertical right-edge tabs **or** detached into floating, draggable, resizable Picture-in-Picture overlays (`Float` / `Dock`). All 27 `{Docked, Floating, Collapsed}^3` transitions converge through a single idempotent reconciler: **`sync_workspace_drawers_dom()`** backed by pure host-testable **`compute_workspace_layout_classes()`**.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Docked3Col: Default Session Start
 
-    state "Web Cams (#webrtc-card)" as CamState {
-        CamDocked: Docked in #webrtc-dock-column\n(cols-1 or cols-2 max)
-        CamFloating: Floating Overlay (.is-floating)\n(position: fixed, draggable, resizable)
-        CamCollapsed: Collapsed to #webcam-drawer-rail\n(inert, display: none)
+    state "Each Workspace Pane (Chat / Task / Web Cams)" as PaneState {
+        PaneDocked: Docked in Column
+        PaneFloating: Floating Overlay (.is-floating)\n(position: fixed, draggable, resizable, z 95-97)
+        PaneCollapsed: Collapsed to Right Rail\n(inert, display: none)
 
-        CamDocked --> CamFloating: satyaToggleWebcamFloat()
-        CamFloating --> CamDocked: satyaToggleWebcamFloat()
-        CamDocked --> CamCollapsed: satyaToggleWebcamDrawer()
-        CamFloating --> CamCollapsed: satyaToggleWebcamDrawer()
-        CamCollapsed --> CamDocked: Expand (webcam_floating == false)
-        CamCollapsed --> CamFloating: Expand (webcam_floating == true)
+        PaneDocked --> PaneFloating: satyaToggle*Float()
+        PaneFloating --> PaneDocked: satyaToggle*Float()
+        PaneDocked --> PaneCollapsed: satyaToggle*Drawer()
+        PaneFloating --> PaneCollapsed: satyaToggle*Drawer()
+        PaneCollapsed --> PaneDocked: Expand (floating == false)
+        PaneCollapsed --> PaneFloating: Expand (floating == true)
     }
 
-    state "Center Stack (#center-column)" as CenterState {
-        BothOpen: Chat + Task Roller Expanded
-        OneCollapsed: Chat OR Roller Collapsed\n(Single card expands to 100% column height)
-        BothCollapsed: Center Column Hidden (.center-collapsed)\n(Notebook expands to 1.8fr; splitter hidden)
-
-        BothOpen --> OneCollapsed: Toggle Chat or TTRPG Drawer
-        OneCollapsed --> BothOpen: Expand Collapsed Drawer
-        OneCollapsed --> BothCollapsed: Collapse Remaining Center Card
-        BothCollapsed --> OneCollapsed: Expand Chat or TTRPG Rail
+    state "Center & Right Columns" as ColState {
+        ColDocked: Docked (display: flex)
+        ColUndocked: All children floating (.is-undocked)\n(display: contents, 0 grid tracks)
+        ColCollapsed: All children collapsed (.is-collapsed)\n(center: display: none; notebook fills up to 1fr)
     }
 ```
 
@@ -157,10 +152,11 @@ stateDiagram-v2
 
 | Helper / Target | Exact Mutation Rules |
 | :--- | :--- |
-| `sync_center_drawer_card(card_id, base_class, collapsed)` | When `collapsed == true`: adds `.is-collapsed`, sets HTML `inert=""` (preventing keyboard tab traps inside hidden controls), and sets `style.display = "none"`. When `false`: restores `base_class`, removes `inert`, and sets `style.display = "flex"`. |
-| `sync_drawer_rail_and_aria(...)` | Shows/hides `#<name>-drawer-rail` inside `#right-drawer-rails`, synchronizes `aria-expanded="true\|false"` across **all three** buttons (`#btn-toggle-<name>-drawer`, `#btn-expand-<name>-drawer`, and `#btn-menu-toggle-<name>-pane`), and updates button labels (`"Collapse ▸"` vs. `"◂ <Title>"`, `"Hide <Title>"` vs. `"Show <Title>"`). |
-| `#workspace-panel` classes | Recomputes `.workspace-columns` modifier classes (`webcam-collapsed`, `webcam-undocked`, `chat-collapsed`, `ttrpg-collapsed`, `center-collapsed`) so CSS Grid tracks automatically redistribute freed width to `#notebook-column` (up to `minmax(0, 1fr)` full-bleed when `center-collapsed.webcam-undocked`). |
-| Floating `#webrtc-card.is-floating` | Detaches from grid flow (`position: fixed; top: 78px; right: 24px; width: 340px; z-index: 95; resize: both;`). Pressing `#webrtc-drag-header` (`satya_start_webcam_drag`, ignoring clicks on `<button>` children) records `(offset_x, offset_y)` and updates `left`/`top` on window `mousemove`. `#video-grid` is strictly capped at `1` (`cols-1`) or `2` (`cols-2`) columns via `satya_toggle_webcam_columns`. |
+| `sync_pane_card_and_header(...)` | **Collapsed**: adds `.is-collapsed`, sets HTML `inert=""`, sets `display: none`, strips header drag `tabindex`. **Floating**: adds `.is-floating`, removes `inert`, sets `display: flex`, `z-index` (`95..97`), restores saved `(left_px, top_px)` (or CSS staggered defaults), and makes `#*-drag-header` focusable (`tabindex="0"`) for arrow-key positioning. **Docked**: restores `base_class`, clears inline `left/top/right/width/height/z-index`. |
+| `sync_drawer_rail_and_aria(...)` | Shows/hides `#<name>-drawer-rail` inside `#right-drawer-rails`, synchronizes `aria-expanded="true\|false"` across **all three** buttons (`#btn-toggle-<name>-drawer`, `#btn-expand-<name>-drawer`, and `#btn-menu-toggle-<name>-pane`), and updates labels + `#btn-toggle-<name>-float` (`aria-pressed` + `"Float <Title>"` / `"Dock <Title>"`). |
+| `#center-column` & `#webrtc-dock-column` | When a column has zero docked panes because its child(ren) are floating (with no rail for `#webrtc-dock-column`), applies `.is-undocked` (`display: contents`) instead of `display: none`, keeping `position: fixed` floating panes visible while emitting zero grid items. |
+| `#workspace-panel` classes | Recomputes `.workspace-columns` modifier classes (`webcam-collapsed`, `webcam-undocked`, `ttrpg-collapsed`, `ttrpg-undocked`, `chat-collapsed`, `chat-undocked`, `center-collapsed`). Both `.center-collapsed.webcam-collapsed` (`grid-template-columns: minmax(0, 1fr) auto;`) and `.center-collapsed.webcam-undocked` (`grid-template-columns: minmax(0, 1fr);`) explicitly bypass inline `--col-left-track` percentages so `#notebook-column` expands to fill 100% of available space. |
+| Drag, Keyboard Move & Stage Redraw | Dragging `#chat-drag-header`, `#ttrpg-drag-header`, or `#webrtc-drag-header` (ignoring primary-button misses & interactive children) or pressing Arrow keys while focused (`satyaFloatingHeaderKeydown`) updates viewport-clamped `left`/`top` via `clamp_floating_pane_position()` and brings the active pane to front. `#video-grid` remains capped at `1` (`cols-1`) or `2` (`cols-2`) columns. |
 
 ### 2.4 CSS Container Queries (`@container ttrpg-card`)
 

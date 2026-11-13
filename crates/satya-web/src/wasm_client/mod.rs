@@ -15,7 +15,8 @@
 //! - [`glb_model`] & [`model_3d_wgpu`]: Binary glTF 2.0 (`.glb`) parser/exporter, procedural humanoid rigs, and 3D Model Stage renderer.
 //! - [`wizard`], [`wizard_views_stats`], [`wizard_views_lifepath`], & [`wizard_views_skills`]: Interactive 6-step Character Creation Wizard.
 //! - [`character_sheet`], [`character_sheet_views`], [`character_sheet_equip_views`], [`character_sheet_status_views`], [`character_sheet_record`], & [`character_sheet_vault`]: Operator Character Sheet, 13-zone SVG trauma tracker, `.satyachar` framing, and Vault sync.
-//! - [`webrtc`]: WebSocket signaling, P2P WebRTC Audio/Video + DataChannel mesh, prosody telemetry, and floating/column Webcam controls.
+//! - [`webrtc`]: WebSocket signaling, P2P WebRTC Audio/Video + DataChannel mesh, and prosody telemetry.
+//! - [`workspace_drawers`]: Collapsible drawers, floating Chat/Task/Webcam frames, and column splitter resize.
 //! - [`chat_and_ttrpg`], [`ttrpg_drawer_cascade`], & [`ttrpg_drawer_triad`]: Targeted Session Chat, slash-command/roll execution, `2d20` Cascade odds, and Triad Combat Pool.
 //! - [`telemetry`]: Apache Iggy Topic & Avro Schema Inspector (`#admin-inspector-card`).
 
@@ -64,6 +65,7 @@ pub mod wizard;
 pub mod wizard_views_lifepath;
 pub mod wizard_views_skills;
 pub mod wizard_views_stats;
+pub mod workspace_drawers;
 
 pub use auth_session::*;
 pub use character_sheet::*;
@@ -88,7 +90,9 @@ pub use wizard::*;
 
 use crate::wasm_client::dom::{select_value, set_display, window};
 use crate::wasm_client::options::{sync_chat_options_for_mode, sync_role_options_for_mode};
-use crate::wasm_client::webrtc::{handle_column_resize_move, handle_webcam_drag_move};
+use crate::wasm_client::workspace_drawers::{
+    end_workspace_pointer_interactions, handle_column_resize_move, handle_floating_pane_drag_move,
+};
 use js_sys::Reflect;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
@@ -138,11 +142,16 @@ macro_rules! for_all_window_callbacks {
             "satyaToggleVideo" => satya_toggle_video(),
             "satyaEmitProsodySample" => satya_emit_prosody_sample(),
             "satyaToggleWebcamFloat" => satya_toggle_webcam_float(),
+            "satyaToggleChatFloat" => satya_toggle_chat_float(),
+            "satyaToggleTtrpgFloat" => satya_toggle_ttrpg_float(),
             "satyaToggleWebcamDrawer" => satya_toggle_webcam_drawer(),
             "satyaToggleChatDrawer" => satya_toggle_chat_drawer(),
             "satyaToggleTtrpgDrawer" => satya_toggle_ttrpg_drawer(),
             "satyaToggleWebcamColumns" => satya_toggle_webcam_columns(),
             "satyaStartWebcamDrag" => satya_start_webcam_drag(web_sys::Event),
+            "satyaStartChatDrag" => satya_start_chat_drag(web_sys::Event),
+            "satyaStartTtrpgDrag" => satya_start_ttrpg_drag(web_sys::Event),
+            "satyaFloatingHeaderKeydown" => satya_floating_header_keydown(String, KeyboardEvent),
             "satyaStartColumnResize" => satya_start_column_resize(web_sys::Event),
             "satyaResetColumnResize" => satya_reset_column_resize(),
             "satyaRefreshMetrics" => satya_refresh_metrics(),
@@ -339,7 +348,7 @@ pub fn register_window_bindings() {
     for_all_window_callbacks!(bind_window_callbacks, bind);
 
     let on_move = Closure::<dyn FnMut(web_sys::Event)>::new(move |ev: web_sys::Event| {
-        handle_webcam_drag_move(&ev);
+        handle_floating_pane_drag_move(&ev);
         handle_column_resize_move(&ev);
     });
     let _ = win.add_event_listener_with_callback("mousemove", on_move.as_ref().unchecked_ref());
@@ -349,15 +358,7 @@ pub fn register_window_bindings() {
         with_map_ui_mut(|ui| {
             ui.camera_2d.clear_drag();
         });
-        let was_resizing = with_state_mut(|st| {
-            st.webcam_drag_offset = None;
-            let r = st.column_resizing;
-            st.column_resizing = false;
-            r
-        });
-        if was_resizing && let Some(splitter) = crate::wasm_client::dom::get_element("workspace-col-splitter") {
-            splitter.set_class_name("workspace-col-splitter");
-        }
+        end_workspace_pointer_interactions();
     });
     let _ = win.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
     on_up.forget();

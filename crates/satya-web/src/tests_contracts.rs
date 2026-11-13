@@ -216,3 +216,37 @@ fn test_combat_tracker_quarter_second_tick_granularity_and_rules_chapters() {
     assert!(chapter_html.contains("satya-rules-article"));
     assert!(!chapter_pill.is_empty());
 }
+
+#[test]
+fn test_workspace_float_controls_and_collapsed_grid_contracts() {
+    let html = render_satya_app_html();
+
+    for id in [
+        "chat-drag-header",
+        "btn-toggle-chat-float",
+        "ttrpg-drag-header",
+        "btn-toggle-ttrpg-float",
+        "webrtc-drag-header",
+        "btn-toggle-webcam-float",
+    ] {
+        assert!(
+            html.contains(&format!(r#"id="{id}""#)),
+            "missing workspace float DOM id '{id}'"
+        );
+    }
+
+    for css_fragment in [
+        ".workspace-columns.center-collapsed.webcam-collapsed",
+        "minmax(0, 1fr) auto",
+        ".workspace-columns.center-collapsed.webcam-undocked",
+        ".col-center.is-undocked, .col-webcams.is-undocked",
+        ".chat-card.is-floating",
+        ".ttrpg-card.is-floating",
+        ".is-floating > .pane-drag-header",
+    ] {
+        assert!(
+            html.contains(css_fragment),
+            "missing CSS layout rule fragment '{css_fragment}'"
+        );
+    }
+}
