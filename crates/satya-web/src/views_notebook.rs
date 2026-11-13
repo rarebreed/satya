@@ -271,6 +271,23 @@ fn NotebookMapPane() -> impl IntoView {
             </div>
 
             <div class="dice-material-toolbar map-tactical-subbar" role="group" aria-label="Tactical Movement, Cover & Miniature Controls">
+                <label class="inline-label" for="map-weapon-select">
+                    <span>"Weapon"</span>
+                    <select
+                        id="map-weapon-select"
+                        title="Active firearm used to grade cover penetration vs. concealment"
+                        onchange="window.satyaUpdateMapTacticalControls()"
+                        on:change=move |_| wasm_client::satya_update_map_tactical_controls()
+                    >
+                        <option value="hk416_carbine_556">"5.56mm HK416 (Pen 6)"</option>
+                        <option value="sig_p320_9mm">"9mm P320 JHP (Pen 2)"</option>
+                        <option value="mp7_pdw_57">"5.7mm MP7 AP (Pen 6)"</option>
+                        <option value="benelli_m4_12ga">"12-Ga Benelli (Pen 4)"</option>
+                        <option value="akm_762x39">"7.62×39 AKM (Pen 5)"</option>
+                        <option value="scar_h_762x51">"7.62 NATO SCAR-H (Pen 7)"</option>
+                        <option value="ai_atx_65cm">"6.5 CM AT-X (Pen 8)"</option>
+                    </select>
+                </label>
                 <label class="inline-label" for="map-gait-select">
                     <span>"Gait"</span>
                     <select

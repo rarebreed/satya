@@ -88,18 +88,33 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
         let rgb = spec.albedo_rgb;
         match p.kind {
             PropKind::Rug => push_box(verts, cx, cz, 0.002, 0.012, hx, hz, rgb, 0.0),
+            PropKind::StonePath | PropKind::AsphaltDrive => {
+                let full_hx = (x1 - x0) * 0.5;
+                let full_hz = (z1 - z0) * 0.5;
+                push_box(verts, cx, cz, 0.002, 0.014, full_hx, full_hz, rgb, -1.0);
+            }
             PropKind::LargeTree => {
                 push_box(verts, cx, cz, 0.0, top.min(2.2), hx * 0.45, hz * 0.45, rgb, 0.0);
                 if !cutaway {
                     push_box(verts, cx, cz, 2.0, 4.6, hx * 1.9, hz * 1.9, [0.24, 0.42, 0.20], 0.0);
                 }
             }
+            PropKind::MediumTree => {
+                push_box(verts, cx, cz, 0.0, top.min(1.9), hx * 0.40, hz * 0.40, rgb, 0.0);
+                if !cutaway {
+                    push_box(verts, cx, cz, 1.75, 3.85, hx * 2.1, hz * 2.1, [0.22, 0.45, 0.22], 0.0);
+                }
+            }
             PropKind::Car => {
                 push_box(verts, cx, cz, 0.15, 0.85, hx, hz, rgb, 0.0);
                 push_box(verts, cx, cz, 0.85, top, hx * 0.86, hz * 0.55, [0.20, 0.24, 0.30], 0.0);
             }
-            PropKind::BarStool | PropKind::Planter => {
-                push_box(verts, cx, cz, 0.0, top, hx * 0.55, hz * 0.55, rgb, 0.0);
+            PropKind::UtilityVan => {
+                push_box(verts, cx, cz, 0.16, 0.92, hx, hz, rgb, 0.0);
+                push_box(verts, cx, cz, 0.92, top, hx * 0.90, hz * 0.78, lighten(rgb, 0.92), 0.0);
+            }
+            PropKind::BarStool | PropKind::Planter | PropKind::Bush => {
+                push_box(verts, cx, cz, 0.0, top, hx * 0.62, hz * 0.62, rgb, 0.0);
             }
             _ => {
                 let cap = (top * 0.08).clamp(0.02, 0.06);

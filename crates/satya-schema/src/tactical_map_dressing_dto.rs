@@ -78,8 +78,8 @@ define_wire_enum! {
 }
 
 define_wire_enum! {
-    /// Physical construction material of a wall edge or prop. Phase 2b grades protection per
-    /// material vs. projectile caliber/energy; Phase 2a stores it for rendering and HUD labels.
+    /// Physical construction material of a wall edge or prop, graded against projectile caliber,
+    /// impact energy, and penetration in `satya_engine::barrier_ballistics` (`0 PR` concealment through `10 PR` armor steel).
     #[derive(Default)]
     pub enum MaterialClass [count = 16] {
         #[default]
@@ -105,7 +105,7 @@ define_wire_enum! {
 define_wire_enum! {
     /// Catalog of placeable multi-cell props. Footprints, stamped tiles, heights, and materials are in
     /// `satya_engine::map_dressing::prop_spec`.
-    pub enum PropKind [count = 28] {
+    pub enum PropKind [count = 39] {
         Sofa => ("SOFA", "Sofa (3-seat)"),
         Loveseat => ("LOVESEAT", "Loveseat"),
         Armchair => ("ARMCHAIR", "Armchair"),
@@ -134,6 +134,17 @@ define_wire_enum! {
         SteelShelving => ("STEEL_SHELVING", "Steel shelving"),
         LargeTree => ("LARGE_TREE", "Large tree"),
         Car => ("CAR", "Sedan"),
+        MediumTree => ("MEDIUM_TREE", "Tree"),
+        Hedge => ("HEDGE", "Trimmed hedge"),
+        Bush => ("BUSH", "Shrub / bush"),
+        Boulder => ("BOULDER", "Granite boulder"),
+        ParkBench => ("PARK_BENCH", "Park bench"),
+        PicnicTable => ("PICNIC_TABLE", "Picnic table"),
+        Dumpster => ("DUMPSTER", "Commercial dumpster"),
+        JerseyBarrier => ("JERSEY_BARRIER", "Concrete Jersey barrier"),
+        UtilityVan => ("UTILITY_VAN", "Utility van / SUV"),
+        StonePath => ("STONE_PATH", "Flagstone path"),
+        AsphaltDrive => ("ASPHALT_DRIVE", "Asphalt road / drive"),
     }
 }
 

@@ -25,12 +25,13 @@ fn default_true() -> bool {
     true
 }
 
-/// Terrain, cover, obstacle, and elevation classification for a `1.0m` cell on a Satya tactical map.
+/// Terrain, cover, concealment, obstacle, and elevation classification for a `1.0m` cell on a Satya tactical map.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TacticalTileKind {
     #[default]
     Floor,
+    Concealment,
     HalfCover,
     FullWall,
     DoorClosed,
@@ -40,8 +41,9 @@ pub enum TacticalTileKind {
 }
 
 impl TacticalTileKind {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Floor,
+        Self::Concealment,
         Self::HalfCover,
         Self::FullWall,
         Self::DoorClosed,
@@ -54,6 +56,7 @@ impl TacticalTileKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Floor => "FLOOR",
+            Self::Concealment => "CONCEALMENT",
             Self::HalfCover => "HALF_COVER",
             Self::FullWall => "FULL_WALL",
             Self::DoorClosed => "DOOR_CLOSED",
@@ -67,6 +70,7 @@ impl TacticalTileKind {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Floor => "Open Deck (0.0m)",
+            Self::Concealment => "Foliage / Concealment (1.2m, +3 Δ_ext, 0 PR)",
             Self::HalfCover => "Half Cover Crate/Console (0.9m, +4 Δ_ext)",
             Self::FullWall => "Full Bulkhead/Pillar (2.4m, Blocks LoS)",
             Self::DoorClosed => "Closed Airlock Door (2.4m, Blocks LoS)",
@@ -79,6 +83,7 @@ impl TacticalTileKind {
     #[must_use]
     pub fn from_code_str(raw: &str) -> Self {
         match raw.trim().to_ascii_uppercase().as_str() {
+            "CONCEALMENT" | "FOLIAGE" | "HEDGE" | "BUSH" | "SMOKE" => Self::Concealment,
             "HALF_COVER" | "CRATE" | "LOW_COVER" | "COVER" => Self::HalfCover,
             "FULL_WALL" | "WALL" | "BULKHEAD" | "PILLAR" => Self::FullWall,
             "DOOR_CLOSED" | "DOOR" | "AIRLOCK_CLOSED" => Self::DoorClosed,
@@ -89,18 +94,19 @@ impl TacticalTileKind {
         }
     }
 
-    /// Physical obstacle or deck elevation height in centimeters (`0`, `90`, `150`, or `240`).
+    /// Physical obstacle or deck elevation height in centimeters (`0`, `90`, `120`, `150`, or `240`).
     #[must_use]
     pub const fn height_cm(self) -> i32 {
         match self {
             Self::Floor | Self::DoorOpen | Self::HazardZone => 0,
             Self::HalfCover => 90,
+            Self::Concealment => 120,
             Self::ElevatedPlatform => 150,
             Self::FullWall | Self::DoorClosed => 240,
         }
     }
 
-    /// Physical obstacle or deck elevation height in meters (`0.0`, `0.9`, `1.5`, or `2.4`).
+    /// Physical obstacle or deck elevation height in meters (`0.0`, `0.9`, `1.2`, `1.5`, or `2.4`).
     #[must_use]
     pub fn height_m(self) -> f32 {
         self.height_cm() as f32 / 100.0
@@ -118,41 +124,50 @@ impl TacticalTileKind {
         matches!(self, Self::FullWall | Self::DoorClosed)
     }
 
+    /// Whether this cell obscures visual sightlines (`+3 Δ_ext` Concealment) without providing ballistic protection (`0 PR`).
+    #[must_use]
+    pub const fn provides_concealment(self) -> bool {
+        matches!(self, Self::Concealment)
+    }
+
     /// Whether an intervening ray crossing this cell imposes Low/Half Cover (`+4 Δ_ext`).
     #[must_use]
     pub const fn provides_half_cover(self) -> bool {
         matches!(self, Self::HalfCover)
     }
 
-    /// Movement cost multiplier (`1.0` normal deck, `2.0` hazard/difficult or vaulting).
+    /// Movement cost multiplier (`1.0` normal deck, `2.0` brush/hazard/difficult or vaulting).
     #[must_use]
     pub const fn move_cost_multiplier(self) -> f64 {
         match self {
-            Self::HazardZone => 2.0,
+            Self::HazardZone | Self::Concealment => 2.0,
             Self::ElevatedPlatform => 1.25,
             _ => 1.0,
         }
     }
 }
 
-/// Evaluated Line-of-Sight and tactical cover classification between two cells on the `1.0m` grid.
+/// Evaluated Line-of-Sight, visual concealment, and tactical cover classification between two cells on the `1.0m` grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CoverGrade {
     #[default]
     Clear,
+    Concealment,
     LowCover,
     HighCover,
     Blocked,
 }
 
 impl CoverGrade {
-    /// Canonical Satya Ranged External Modifier (`Δ_ext`) imposed by this cover state:
-    /// `+0` Clear, `+4` Low/Half Cover (`0.9m`), `+6` High/Corner Cover (`2.4m` edge peek), or `+16` Blocked.
+    /// Canonical Satya Ranged External Modifier (`Δ_ext`) imposed by this sight/cover state:
+    /// `+0` Clear, `+3` Concealment (visual obscurement only, `0 PR`), `+4` Low/Half Cover (`0.9m`),
+    /// `+6` High/Corner Cover (`2.4m` edge peek), or `+16` Blocked.
     #[must_use]
     pub const fn recommended_delta_ext(self) -> i32 {
         match self {
             Self::Clear => 0,
+            Self::Concealment => 3,
             Self::LowCover => 4,
             Self::HighCover => 6,
             Self::Blocked => 16,
@@ -163,6 +178,7 @@ impl CoverGrade {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Clear => "Clear LoS (+0 Δ_ext)",
+            Self::Concealment => "Concealment (+3 Δ_ext, 0 PR)",
             Self::LowCover => "Low Cover (+4 Δ_ext)",
             Self::HighCover => "High / Corner Cover (+6 Δ_ext)",
             Self::Blocked => "Blocked (No LoS)",

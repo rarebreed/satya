@@ -1,12 +1,9 @@
 //! # Multi-Cell Prop Catalog & Footprint Stamping (`map_dressing`)
 //!
 //! Each [`PropKind`] has a [`PropSpec`] giving its canonical footprint (back facing North), the
-//! mechanical [`TacticalTileKind`] stamped into every covered cell, its [`MaterialClass`], height, and
-//! albedo. Stamping keeps the existing LoS/cover/reach rules in [`crate::tactical_map`] authoritative, so
-//! clients that only read `tiles` still behave correctly.
-//!
-//! Phase 2b will replace the coarse stamp (`HalfCover` / `FullWall`) with per-material penetration
-//! grading against projectile energy and caliber (see `MaterialClass`).
+//! mechanical [`TacticalTileKind`] stamped into every covered cell (`Concealment`, `HalfCover`, `FullWall`),
+//! its [`MaterialClass`], height, and albedo. Per-material ballistic penetration vs. concealment grading
+//! lives in [`crate::barrier_ballistics`].
 
 use satya_schema::{MapPropPlacement, MaterialClass, PropKind, TacticalTileKind};
 
@@ -80,6 +77,17 @@ prop_catalog! {
     SteelShelving: 2 x 1, FullWall, SheetSteel, 200 cm, [0.48, 0.52, 0.55];
     LargeTree: 2 x 2, FullWall, LiveWood, 600 cm, [0.36, 0.26, 0.18];
     Car: 2 x 5, HalfCover, VehicleBody, 145 cm, [0.30, 0.38, 0.52];
+    MediumTree: 1 x 1, FullWall, LiveWood, 480 cm, [0.34, 0.25, 0.17];
+    Hedge: 1 x 1, Concealment, Foliage, 130 cm, [0.22, 0.44, 0.20], stretch;
+    Bush: 1 x 1, Concealment, Foliage, 105 cm, [0.27, 0.48, 0.23];
+    Boulder: 2 x 1, HalfCover, ReinforcedConcrete, 115 cm, [0.52, 0.51, 0.49];
+    ParkBench: 2 x 1, HalfCover, WoodFurniture, 85 cm, [0.52, 0.37, 0.24];
+    PicnicTable: 2 x 2, HalfCover, SolidWood, 78 cm, [0.58, 0.42, 0.27];
+    Dumpster: 2 x 1, HalfCover, SheetSteel, 135 cm, [0.20, 0.36, 0.26];
+    JerseyBarrier: 2 x 1, HalfCover, ReinforcedConcrete, 95 cm, [0.66, 0.65, 0.62], stretch;
+    UtilityVan: 2 x 5, HalfCover, VehicleBody, 188 cm, [0.78, 0.79, 0.80];
+    StonePath: 1 x 1, Floor, Ceramic, 2 cm, [0.74, 0.70, 0.63], stretch, floor;
+    AsphaltDrive: 1 x 1, Floor, ReinforcedConcrete, 2 cm, [0.33, 0.35, 0.37], stretch, floor;
 }
 
 /// Catalog entry for `kind`.
@@ -112,9 +120,10 @@ const fn tile_rank(t: TacticalTileKind) -> u8 {
         TacticalTileKind::Floor => 0,
         TacticalTileKind::HazardZone | TacticalTileKind::ElevatedPlatform => 1,
         TacticalTileKind::DoorOpen => 2,
-        TacticalTileKind::HalfCover => 3,
-        TacticalTileKind::DoorClosed => 4,
-        TacticalTileKind::FullWall => 5,
+        TacticalTileKind::Concealment => 3,
+        TacticalTileKind::HalfCover => 4,
+        TacticalTileKind::DoorClosed => 5,
+        TacticalTileKind::FullWall => 6,
     }
 }
 
@@ -136,10 +145,46 @@ pub fn stamp_props_into_tiles(tiles: &mut [TacticalTileKind], width: i32, height
     }
 }
 
+/// Index and reference of the solid (non-decal) prop covering `(x, y)`, if any.
+#[must_use]
+pub fn solid_prop_index_at(props: &[MapPropPlacement], x: i32, y: i32) -> Option<(usize, &MapPropPlacement)> {
+    props
+        .iter()
+        .enumerate()
+        .find(|(_, p)| !prop_spec(p.kind).floor_layer && p.covers(x, y))
+}
+
 /// The solid (non-decal) prop covering `(x, y)`, if any.
 #[must_use]
 pub fn solid_prop_at(props: &[MapPropPlacement], x: i32, y: i32) -> Option<&MapPropPlacement> {
-    props.iter().find(|p| !prop_spec(p.kind).floor_layer && p.covers(x, y))
+    solid_prop_index_at(props, x, y).map(|(_, p)| p)
+}
+
+/// Whether cell `(gx, gy)` inside a [`PropKind::Car`] or [`PropKind::UtilityVan`] covers the front
+/// hood / engine-block row (matching the headlight end in `map_2d_art_furniture`).
+#[must_use]
+pub const fn vehicle_cell_is_engine_bay(p: &MapPropPlacement, gx: i32, gy: i32) -> bool {
+    if !matches!(p.kind, PropKind::Car | PropKind::UtilityVan) || !p.covers(gx, gy) {
+        return false;
+    }
+    match p.rotation_deg.rem_euclid(360) {
+        0 => gy == p.y + p.h_cells - 1,
+        90 => gx == p.x,
+        180 => gy == p.y,
+        270 => gx == p.x + p.w_cells - 1,
+        _ => false,
+    }
+}
+
+/// Effective [`MaterialClass`] of `p` at cell `(gx, gy)` (upgrades a vehicle's front hood cell from
+/// thin [`MaterialClass::VehicleBody`] sheet metal to [`MaterialClass::ArmorSteel`] engine block).
+#[must_use]
+pub const fn prop_effective_material_at(p: &MapPropPlacement, gx: i32, gy: i32) -> MaterialClass {
+    if vehicle_cell_is_engine_bay(p, gx, gy) {
+        MaterialClass::ArmorSteel
+    } else {
+        prop_spec(p.kind).material
+    }
 }
 
 #[cfg(test)]

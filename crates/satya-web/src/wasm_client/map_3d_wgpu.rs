@@ -88,6 +88,11 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
     let mut verts = Vec::with_capacity((w * h * 18) as usize);
 
     // 1. Continuous 1.0m-gridded tactical deck floor (`zone_id = -1.0` enables WGSL 1m/5m grid lines)
+    let deck_rgba = match ui.map.theme_preset.as_deref().unwrap_or_default() {
+        "wooded_park" | "garden_estate" | "park_grounds" => [0.16, 0.27, 0.14, 0.0],
+        "residential_apartment" | "corner_bar" | "modern_interior" | "bar_interior" => [0.23, 0.17, 0.12, 0.0],
+        _ => [0.075, 0.115, 0.185, 0.0],
+    };
     push_quad(
         &mut verts,
         [
@@ -96,7 +101,7 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
             [half_w_m, 0.0, half_h_m],
             [half_w_m, 0.0, -half_h_m],
         ],
-        [0.075, 0.115, 0.185, 0.0],
+        deck_rgba,
         -1.0,
     );
     // Subtle outer table rim
@@ -123,8 +128,12 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
                 continue;
             }
             // Multi-cell props draw their own footprint geometry (see `map_3d_dressing_geom`).
-            if matches!(tile, TacticalTileKind::HalfCover | TacticalTileKind::FullWall)
-                && satya_engine::map_dressing::solid_prop_at(&ui.map.props, gx, gy).is_some()
+            if matches!(
+                tile,
+                TacticalTileKind::Concealment
+                    | TacticalTileKind::HalfCover
+                    | TacticalTileKind::FullWall
+            ) && satya_engine::map_dressing::solid_prop_at(&ui.map.props, gx, gy).is_some()
             {
                 continue;
             }
@@ -132,6 +141,10 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
             let hc = cell_m * 0.48;
             match tile {
                 TacticalTileKind::Floor => {}
+                TacticalTileKind::Concealment => {
+                    push_box(&mut verts, wx, wz, 0.0, 1.05, hc * 0.80, hc * 0.80, [0.22, 0.46, 0.21], 0.0);
+                    push_box(&mut verts, wx, wz, 1.05, 1.18, hc * 0.64, hc * 0.64, [0.30, 0.56, 0.27], 0.0);
+                }
                 TacticalTileKind::HalfCover => {
                     push_box(&mut verts, wx, wz, 0.0, 0.86, hc * 0.86, hc * 0.86, [0.16, 0.34, 0.52], 0.0);
                     push_box(&mut verts, wx, wz, 0.86, 0.91, hc * 0.90, hc * 0.90, [0.22, 0.68, 0.92], 0.0);
@@ -210,10 +223,16 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
     {
         let a_xz = grid_cell_to_world_xz(los.attacker_xy.0, los.attacker_xy.1, w, h, cell_m);
         let t_xz = grid_cell_to_world_xz(los.target_xy.0, los.target_xy.1, w, h, cell_m);
+        let blind_pen = ui
+            .last_ballistic
+            .as_ref()
+            .is_some_and(|b| b.is_blind_fire && b.can_reach_target);
         let beam_rgb = match los.cover_grade {
             CoverGrade::Clear => [0.14, 0.86, 0.96],
+            CoverGrade::Concealment => [0.18, 0.80, 0.38],
             CoverGrade::LowCover => [0.98, 0.76, 0.14],
             CoverGrade::HighCover => [0.98, 0.48, 0.16],
+            CoverGrade::Blocked if blind_pen => [0.68, 0.32, 0.96],
             CoverGrade::Blocked => [0.96, 0.22, 0.36],
         };
         push_beam(&mut verts, a_xz, t_xz, 1.05, 0.045, beam_rgb);
@@ -818,7 +837,12 @@ mod tests {
 
         ui.wall_cutaway = false;
         let verts_full = build_tactical_diorama_vertices(&ui);
-        assert_eq!(verts_cut.len(), verts_full.len());
+        assert!(
+            verts_full.len() >= verts_cut.len(),
+            "Full walls emit window lintel geometry above cutaway height ({} vs {})",
+            verts_full.len(),
+            verts_cut.len()
+        );
 
         let max_y_cut = verts_cut
             .iter()
@@ -832,10 +856,15 @@ mod tests {
             max_y_cut < max_y_full,
             "Cutaway walls (0.58m) must reduce max Y ({max_y_cut}) below full bulkheads (2.35m -> {max_y_full})"
         );
-        assert!((max_y_full - 2.39).abs() < 1e-3);
+        assert!(
+            (2.375..=2.405).contains(&max_y_full),
+            "Full edge/cell walls must reach 2.38m..2.39m (got {max_y_full})"
+        );
 
         // Verify isolated cutaway wall height (0.58m + 0.04m cap = 0.62m) and elevated platform (1.48m)
         ui.map.tiles = vec![TacticalTileKind::Floor; (ui.map.grid_width * ui.map.grid_height) as usize];
+        ui.map.wall_edges.clear();
+        ui.map.props.clear();
         ui.map.tokens.clear();
         ui.reachable_cells.clear();
         ui.hovered_cell = None;

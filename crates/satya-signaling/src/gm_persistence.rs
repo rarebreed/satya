@@ -504,28 +504,18 @@ impl AuthAndSessionManager {
         if !tracker.combat_active && active_map.is_none() {
             return None;
         }
-        let map = active_map.get_or_insert_with(|| GmMapUpdateRequest {
-            map_id: format!("map-action-stub-{session_id}"),
-            title: format!("Action Mode Tactical Grid ({session_id})"),
-            image_url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 240'><rect width='320' height='240' fill='%230b1322'/><g stroke='%231e293b' stroke-width='1'><path d='M0 40h320M0 80h320M0 120h320M0 160h320M0 200h320M40 0v240M80 0v240M120 0v240M160 0v240M200 0v240M240 0v240M280 0v240'/></g><rect x='20' y='80' width='60' height='80' fill='none' stroke='%2338bdf8' stroke-dasharray='4 2'/><text x='26' y='96' fill='%2338bdf8' font-family='monospace' font-size='9'>CORE CONSOLE</text><rect x='230' y='70' width='70' height='100' fill='none' stroke='%23f43f5e' stroke-dasharray='4 2'/><text x='236' y='86' fill='%23f43f5e' font-family='monospace' font-size='9'>ENTRY BULKHEAD</text></svg>".to_string(),
-            grid_width: 16,
-            grid_height: 12,
-            tokens: Vec::new(),
-            notes: Some(
-                "[PROCEDURAL MAP GENERATOR STUB] Zones: Core Console (x:1..4, y:4..8, Hard Cover DR 4), Central Choke Point (x:6..10, y:4..8), Entry Bulkhead (x:12..15, y:3..9)."
-                    .to_string(),
-            ),
-            cell_size_cm: 100,
-            theme_preset: Some("orbital_airlock".to_string()),
-            seed: Some(42),
-            tiles: satya_engine::tactical_map::generate_procedural_tactical_grid(
-                satya_engine::tactical_map::SectorPreset::OrbitalAirlock,
+        let map = active_map.get_or_insert_with(|| {
+            let mut built = satya_engine::tactical_map::build_procedural_map_request(
+                &format!("map-action-stub-{session_id}"),
+                satya_engine::tactical_map::SectorPreset::default(),
+                Some(&format!("Action Mode Tactical Grid ({session_id})")),
                 16,
                 12,
                 42,
-            ),
-            token_visuals: Vec::new(),
-            ..Default::default()
+            );
+            built.tokens.clear();
+            built.token_visuals.clear();
+            built
         });
 
         for (idx, c) in tracker.combatants.iter().enumerate() {

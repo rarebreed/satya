@@ -14,7 +14,13 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 
 const fn is_heavy(m: MaterialClass) -> bool {
-    matches!(m, MaterialClass::Brick | MaterialClass::ConcreteBlock | MaterialClass::ReinforcedConcrete)
+    matches!(
+        m,
+        MaterialClass::Brick
+            | MaterialClass::ConcreteBlock
+            | MaterialClass::ReinforcedConcrete
+            | MaterialClass::ArmorSteel
+    )
 }
 
 /// Appends edge walls/doors/windows for a `w × h` board at `cell` SVG units per cell.

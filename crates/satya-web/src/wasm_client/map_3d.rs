@@ -16,12 +16,16 @@ use crate::wasm_client::dom::{
     set_select_value, set_text,
 };
 use crate::wasm_client::state::with_state;
+use satya_engine::ballistics::lookup_firearm_preset;
+use satya_engine::barrier_ballistics::{
+    BallisticShotEvaluation, BallisticShotQuery, BarrierPenetrationVerdict, evaluate_ballistic_shot,
+};
 use satya_engine::environment_vehicles::CombatMovementGait;
-use satya_engine::map_dressing::{prop_spec, solid_prop_at};
+use satya_engine::map_dressing::{prop_effective_material_at, solid_prop_at};
 use satya_engine::tactical_map::{
-    GaitReachQuery, ReachableCell, SectorPreset, TacticalGridView, TacticalLosEvaluation,
-    build_procedural_map_request, compute_reachable_on_grid, evaluate_los_on_grid,
-    generate_procedural_tactical_grid, wall_edge_index_for_map,
+    GaitReachQuery, ProceduralSector, ReachableCell, SectorPreset, TacticalGridView,
+    TacticalLosEvaluation, build_procedural_map_request, compute_reachable_on_grid,
+    evaluate_los_on_grid, generate_procedural_sector, wall_edge_index_for_map,
 };
 use satya_schema::{
     CoverGrade, GenerateSessionMapRequest, GmMapUpdateRequest, MessageVisibility,
@@ -41,8 +45,10 @@ pub struct TacticalMapUiState {
     pub tick_budget: u32,
     /// `"move_or_select"`, `"measure_los"`, or `"edit_terrain"`.
     pub interaction_mode: String,
+    pub selected_weapon_id: String,
     pub wall_cutaway: bool,
     pub last_los: Option<TacticalLosEvaluation>,
+    pub last_ballistic: Option<BallisticShotEvaluation>,
     pub reachable_cells: Vec<ReachableCell>,
     pub seed_counter: i64,
     /// `true` shows the illustrated 2D battlemap instead of the WebGPU diorama (`#btn-map-view-mode`).
@@ -54,8 +60,8 @@ pub struct TacticalMapUiState {
 impl Default for TacticalMapUiState {
     fn default() -> Self {
         let map = build_procedural_map_request(
-            "map-sector4-starter",
-            SectorPreset::OrbitalAirlock,
+            "map-starter",
+            SectorPreset::default(),
             None,
             20,
             14,
@@ -69,8 +75,10 @@ impl Default for TacticalMapUiState {
             gait: CombatMovementGait::CombatGlideTacticalWalk,
             tick_budget: 8,
             interaction_mode: "move_or_select".to_string(),
+            selected_weapon_id: "hk416_carbine_556".to_string(),
             wall_cutaway: true,
             last_los: None,
+            last_ballistic: None,
             reachable_cells: Vec::new(),
             seed_counter: 42,
             view_battlemap: false,
@@ -90,13 +98,20 @@ impl TacticalMapUiState {
                 .theme_preset
                 .as_deref()
                 .and_then(SectorPreset::from_code_str)
-                .unwrap_or(SectorPreset::OrbitalAirlock);
-            self.map.tiles = generate_procedural_tactical_grid(
+                .unwrap_or_default();
+            let ProceduralSector { tiles, wall_edges, props } = generate_procedural_sector(
                 preset,
                 self.map.grid_width.max(8),
                 self.map.grid_height.max(8),
                 self.map.seed.unwrap_or(42),
             );
+            self.map.tiles = tiles;
+            if self.map.wall_edges.is_empty() {
+                self.map.wall_edges = wall_edges;
+            }
+            if self.map.props.is_empty() {
+                self.map.props = props;
+            }
         }
     }
 
@@ -152,10 +167,25 @@ impl TacticalMapUiState {
             });
             let last_los = target_xy
                 .map(|txy| evaluate_los_on_grid(&grid, cell_m, (sel_tok.x, sel_tok.y), txy));
+            let firearm = lookup_firearm_preset(&self.selected_weapon_id)
+                .or_else(|| lookup_firearm_preset("hk416_carbine_556"));
+            self.last_ballistic = target_xy.zip(firearm).map(|(txy, f)| {
+                evaluate_ballistic_shot(BallisticShotQuery {
+                    grid: &grid,
+                    props: &self.map.props,
+                    cell_size_m: cell_m,
+                    attacker_xy: (sel_tok.x, sel_tok.y),
+                    target_xy: txy,
+                    firearm: f,
+                    net_successes: 0,
+                    hit_frame_or_stud: false,
+                })
+            });
             self.last_los = last_los;
         } else {
             self.reachable_cells.clear();
             self.last_los = None;
+            self.last_ballistic = None;
         }
     }
 }
@@ -279,7 +309,7 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
                 Some(p) => format!(
                     "Cell ({tx}, {ty}) [{} · {}]",
                     p.kind.label(),
-                    prop_spec(p.kind).material.label()
+                    prop_effective_material_at(p, tx, ty).label()
                 ),
                 None => format!("Cell ({tx}, {ty}) [{}]", ui.map.tile_at(tx, ty).label()),
             }
@@ -287,7 +317,7 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
 
     let pill_cls = match los.cover_grade {
         CoverGrade::Clear => "pill pill-active",
-        CoverGrade::LowCover | CoverGrade::HighCover => "pill pill-iggy",
+        CoverGrade::Concealment | CoverGrade::LowCover | CoverGrade::HighCover => "pill pill-iggy",
         CoverGrade::Blocked => "pill pill-muted",
     };
     let reach_note = ui
@@ -297,8 +327,23 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
         .map(|r| format!(" · Move: {:.1}m ({}t)", r.distance_cost_m, r.ticks_required))
         .unwrap_or_default();
 
+    let bal_html = ui
+        .last_ballistic
+        .as_ref()
+        .map(|b| {
+            let b_cls = match b.verdict {
+                BarrierPenetrationVerdict::Unobstructed
+                | BarrierPenetrationVerdict::ConcealmentOnly
+                | BarrierPenetrationVerdict::OvermatchedCover => "pill pill-active",
+                BarrierPenetrationVerdict::PenetratesWithLoss => "pill pill-iggy",
+                BarrierPenetrationVerdict::StoppedByBarrier => "pill pill-muted",
+            };
+            format!(r#" <span class="{b_cls}">{}</span>"#, escape_html(&b.summary_label))
+        })
+        .unwrap_or_default();
+
     format!(
-        r#"<span><strong>{sel_label}</strong> → <strong>{target_name}</strong> · Range: <span class="mono">{:.2}m</span>{reach_note}</span> <span class="{pill_cls}">{}</span>"#,
+        r#"<span><strong>{sel_label}</strong> → <strong>{target_name}</strong> · Range: <span class="mono">{:.2}m</span>{reach_note}</span> <span class="{pill_cls}">{}</span>{bal_html}"#,
         los.distance_m,
         los.cover_grade.label()
     )
@@ -337,28 +382,30 @@ pub fn refresh_map_dom_and_wgpu() {
         .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
         .is_some_and(|h| h.style().get_property_value("display").unwrap_or_default() != "none");
 
-    let (pill_txt, tokens_html, hud_html, battlemap_on, sel_preset, sel_color) = with_map_ui(|ui| {
-        let pill = format!(
-            "{} ({}m × {}m · 1.0m Grid)",
-            ui.map.title, ui.map.grid_width, ui.map.grid_height
-        );
-        let chips = format_selectable_token_chips_html(&ui.map, ui.selected_entity_id.as_deref());
-        let hud = format_map_tactical_hud_html(ui);
-        let (preset, color) = ui
-            .selected_entity_id
-            .as_deref()
-            .and_then(|id| ui.map.tokens.iter().find(|t| t.entity_id == id))
-            .map(|tok| {
-                let (p, c, _) = resolve_token_visual(&ui.map, tok);
-                (p, c)
-            })
-            .unwrap_or_else(|| ("valkyrie_rig".to_string(), "#38bdf8".to_string()));
-        (pill, chips, hud, ui.view_battlemap, preset, color)
-    });
+    let (pill_txt, tokens_html, hud_html, battlemap_on, sel_preset, sel_color, sel_wpn) =
+        with_map_ui(|ui| {
+            let pill = format!(
+                "{} ({}m × {}m · 1.0m Grid)",
+                ui.map.title, ui.map.grid_width, ui.map.grid_height
+            );
+            let chips = format_selectable_token_chips_html(&ui.map, ui.selected_entity_id.as_deref());
+            let hud = format_map_tactical_hud_html(ui);
+            let (preset, color) = ui
+                .selected_entity_id
+                .as_deref()
+                .and_then(|id| ui.map.tokens.iter().find(|t| t.entity_id == id))
+                .map(|tok| {
+                    let (p, c, _) = resolve_token_visual(&ui.map, tok);
+                    (p, c)
+                })
+                .unwrap_or_else(|| ("valkyrie_rig".to_string(), "#38bdf8".to_string()));
+            (pill, chips, hud, ui.view_battlemap, preset, color, ui.selected_weapon_id.clone())
+        });
 
     set_text("canvas-map-pill", &pill_txt);
     set_class("canvas-map-pill", "pill pill-active");
     set_display("tabletop-map-placeholder", "none");
+    set_select_value("map-weapon-select", &sel_wpn);
     set_select_value("map-token-model-select", &sel_preset);
     set_input_value("map-token-color", &sel_color);
     set_html("tabletop-map-los-hud", &hud_html);
@@ -440,7 +487,7 @@ pub fn satya_select_map_token(entity_id: String) {
 #[wasm_bindgen]
 pub fn satya_generate_procedural_map() {
     let raw_preset = crate::wasm_client::dom::select_value("map-preset-select");
-    let preset = SectorPreset::from_code_str(&raw_preset).unwrap_or(SectorPreset::OrbitalAirlock);
+    let preset = SectorPreset::from_code_str(&raw_preset).unwrap_or_default();
 
     let seed = with_map_ui_mut(|ui| {
         ui.seed_counter = ui.seed_counter.wrapping_add(137);
@@ -465,11 +512,20 @@ pub fn satya_generate_procedural_map() {
                 {
                     continue;
                 }
-                let gy = (mid_y - 2 + (idx as i32) * 2).clamp(1, built.grid_height - 2);
+                let pref_y = (mid_y - 2 + (idx as i32) * 2).clamp(1, built.grid_height - 2);
+                let (gx, gy) = if built.tile_at(2, pref_y).blocks_occupancy() {
+                    (1..built.grid_width - 1)
+                        .flat_map(|x| (1..built.grid_height - 1).map(move |y| (x, y)))
+                        .filter(|&(x, y)| !built.tile_at(x, y).blocks_occupancy())
+                        .min_by_key(|&(x, y)| (x - 2).abs() + (y - pref_y).abs())
+                        .unwrap_or((2, mid_y))
+                } else {
+                    (2, pref_y)
+                };
                 built.tokens.push(TokenPlacement {
                     entity_id: p.user_id.clone(),
                     label: p.display_name.clone(),
-                    x: 2,
+                    x: gx,
                     y: gy,
                     visibility: MessageVisibility::Public,
                 });
@@ -567,9 +623,11 @@ fn post_move_token_if_in_session(req: MoveMapTokenRequest) {
     });
 }
 
-/// Updates movement gait (`#map-gait-select`), tick budget (`#map-ticks-input`), or click mode (`#map-click-mode`).
+/// Updates weapon (`#map-weapon-select`), movement gait (`#map-gait-select`), tick budget (`#map-ticks-input`),
+/// or click mode (`#map-click-mode`).
 #[wasm_bindgen]
 pub fn satya_update_map_tactical_controls() {
+    let wpn_str = crate::wasm_client::dom::select_value("map-weapon-select");
     let gait_str = crate::wasm_client::dom::select_value("map-gait-select");
     let mode_str = crate::wasm_client::dom::select_value("map-click-mode");
     let ticks = crate::wasm_client::dom::input_value("map-ticks-input")
@@ -577,6 +635,9 @@ pub fn satya_update_map_tactical_controls() {
         .unwrap_or(8)
         .clamp(1, 40);
     with_map_ui_mut(|ui| {
+        if !wpn_str.is_empty() && lookup_firearm_preset(&wpn_str).is_some() {
+            ui.selected_weapon_id = wpn_str;
+        }
         if !gait_str.is_empty() {
             ui.gait = parse_movement_gait_code(&gait_str);
         }
@@ -653,15 +714,18 @@ pub fn satya_update_selected_token_visual() {
     }
 }
 
-/// Pushes the active map Cover $\Delta_{\text{ext}}$ (`+0`, `+4` Low Cover, or `+6` High Cover)
+/// Pushes the active map Cover / Concealment / Overmatch $\Delta_{\text{ext}}$ (`+0` Clear, `+2` Overmatched
+/// Furniture, `+3` Concealment, `+4` Low Cover, `+6` High Cover / Penetrable Blind Fire, `+16` Blocked)
 /// directly into `#ttrpg-external-mod` in the Center-Bottom `2d20` Task Resolution drawer.
 #[wasm_bindgen]
 pub fn satya_apply_map_cover_to_roller() {
     let delta_ext = with_map_ui(|ui| {
-        ui.last_los
+        ui.last_ballistic
             .as_ref()
-            .map(|l| l.recommended_delta_ext.clamp(-10, 16))
+            .map(|b| b.effective_delta_ext)
+            .or_else(|| ui.last_los.as_ref().map(|l| l.recommended_delta_ext))
             .unwrap_or(0)
+            .clamp(-10, 16)
     });
     set_input_value("ttrpg-external-mod", &delta_ext.to_string());
     crate::wasm_client::chat_and_ttrpg::satya_update_cascade_preview();
@@ -689,7 +753,8 @@ pub fn handle_map_grid_cell_clicked(gx: i32, gy: i32) {
         if ui.interaction_mode == "edit_terrain" {
             let idx = (gy * ui.map.grid_width + gx) as usize;
             let next = match ui.map.tiles[idx] {
-                TacticalTileKind::Floor => TacticalTileKind::HalfCover,
+                TacticalTileKind::Floor => TacticalTileKind::Concealment,
+                TacticalTileKind::Concealment => TacticalTileKind::HalfCover,
                 TacticalTileKind::HalfCover => TacticalTileKind::FullWall,
                 TacticalTileKind::FullWall => TacticalTileKind::DoorClosed,
                 TacticalTileKind::DoorClosed => TacticalTileKind::DoorOpen,
@@ -824,11 +889,22 @@ mod tests {
                 assert_eq!(world_xz_to_grid_cell(wx, wz, 20, 14, 1.0), Some((gx, gy)));
             }
         }
-        let ui = TacticalMapUiState::default();
+        let mut ui = TacticalMapUiState::default();
         let hud = format_map_tactical_hud_html(&ui);
         assert!(hud.contains("Sara (Valkyrie)"));
         let svg = format_tactical_map_svg_markup(&ui);
         assert!(svg.starts_with(r#"<div class="battlemap-stack">"#));
         assert!(svg.ends_with("</svg></div>"));
+
+        // Verify weapon-graded barrier HUD across Apartment drywall/furniture & Estate masonry/foliage
+        ui.map = build_procedural_map_request("apt", SectorPreset::ResidentialApartment, None, 20, 14, 42);
+        ui.selected_weapon_id = "sig_p320_9mm".to_string();
+        ui.recompute_overlays();
+        assert!(ui.last_ballistic.is_some());
+        let hud_9mm = format_map_tactical_hud_html(&ui);
+        ui.selected_weapon_id = "scar_h_762x51".to_string();
+        ui.recompute_overlays();
+        let hud_762 = format_map_tactical_hud_html(&ui);
+        assert_ne!(hud_9mm, hud_762);
     }
 }

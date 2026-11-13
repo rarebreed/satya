@@ -698,6 +698,43 @@ pub const CANONICAL_FIREARM_PRESETS: &[(&str, GranularFirearmSpec)] = &[
         )
     ),
     firearm_preset!(
+        "scar_h_762x51",
+        "FN SCAR-H / Mk17 Battle Rifle (7.62x51mm)",
+        (
+            Nato762x51,
+            "7.62x51mm NATO M80A1 EPR (147 gr)",
+            7.62,
+            147.0,
+            45.0,
+            56.0,
+            3350.0,
+            820.0,
+            1.15,
+            2,
+            0.5,
+            true
+        ),
+        (
+            DetachableBoxMagazine,
+            20,
+            ShortStrokeGasPiston,
+            3.72,
+            4.35,
+            96.5,
+            50.8,
+            1.0,
+            FreeFloating,
+            FlashHider,
+            ChamberNeutral,
+            0.5,
+            2,
+            6,
+            18,
+            34,
+            3400
+        )
+    ),
+    firearm_preset!(
         "ai_atx_65cm",
         "Accuracy Int'l AT-X Precision Rifle (6.5mm CM)",
         (

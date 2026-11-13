@@ -15,30 +15,21 @@
 //! composer. Prop glyphs live in [`crate::wasm_client::map_2d_art_props`].
 
 pub use crate::wasm_client::map_2d_art_furniture::*;
+pub use crate::wasm_client::map_2d_art_overlay::*;
 pub use crate::wasm_client::map_2d_art_props::*;
 pub use crate::wasm_client::map_2d_art_walls::*;
 
-use satya_engine::map_dressing::{prop_spec, solid_prop_at};
+use satya_engine::map_dressing::{make_prop, prop_spec, solid_prop_at};
 
-use crate::wasm_client::dom::{
-    escape_html, get_element, local_storage_get, local_storage_set, set_button_disabled,
-    set_display, set_html, set_text,
-};
-use crate::wasm_client::map_3d::{
-    TacticalMapUiState, format_map_tactical_hud_html, mark_map_wgpu_dirty,
-    refresh_map_wgpu_if_active, resolve_token_visual, with_map_ui, with_map_ui_mut,
-};
-use satya_schema::{CoverGrade, MessageVisibility, TacticalTileKind};
-use std::cell::Cell;
+use crate::wasm_client::map_3d::TacticalMapUiState;
+use satya_schema::{PropKind, TacticalTileKind};
 use std::fmt::Write as _;
-use wasm_bindgen::prelude::*;
 
 /// SVG user units per `1.0m` grid cell.
 pub const BATTLEMAP_CELL_PX: i32 = 64;
 /// Exterior margin around the board so perimeter edge walls are not clipped.
 pub const BATTLEMAP_PAD_PX: i32 = 12;
 const CELL_F: f32 = BATTLEMAP_CELL_PX as f32;
-const VIEW_PREF_KEY: &str = "satya.map.view_mode";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BattlemapFloorPattern {
@@ -47,6 +38,7 @@ pub enum BattlemapFloorPattern {
     VinylTile,
     Asphalt,
     StainedConcrete,
+    Grass,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,7 +84,7 @@ pub struct BattlemapArtTheme {
 pub const BATTLEMAP_ART_THEMES: &[BattlemapArtTheme] = &[
     BattlemapArtTheme {
         id: "modern_interior",
-        label: "Modern Interior (Office / Apartment)",
+        label: "Modern Interior (Apartment / Condo)",
         floor: BattlemapFloorPattern::Hardwood,
         floor_base: "#c8a57e",
         floor_line: "#8a6a4a",
@@ -113,6 +105,29 @@ pub const BATTLEMAP_ART_THEMES: &[BattlemapArtTheme] = &[
             BattlemapPropKind::KitchenIsland,
             BattlemapPropKind::Planter,
             BattlemapPropKind::StorageCabinet,
+        ],
+    },
+    BattlemapArtTheme {
+        id: "office_interior",
+        label: "Corporate Office Suite",
+        floor: BattlemapFloorPattern::VinylTile,
+        floor_base: "#d4d8dc",
+        floor_line: "#aeb5bc",
+        wall_style: BattlemapWallStyle::Poche,
+        wall_fill: "#363b42",
+        wall_hatch: "#525963",
+        door_fill: "#7c8b99",
+        platform_fill: "#8e969c",
+        hazard: BattlemapHazardStyle::WaterLeak,
+        apron_fill: None,
+        lane_markings: false,
+        floor_stains: false,
+        grid_ink: "#1c2026",
+        cover_props: &[
+            BattlemapPropKind::OfficeDesk,
+            BattlemapPropKind::StorageCabinet,
+            BattlemapPropKind::Sofa,
+            BattlemapPropKind::Planter,
         ],
     },
     BattlemapArtTheme {
@@ -231,6 +246,29 @@ pub const BATTLEMAP_ART_THEMES: &[BattlemapArtTheme] = &[
             BattlemapPropKind::WoodCrate,
         ],
     },
+    BattlemapArtTheme {
+        id: "park_grounds",
+        label: "Park / Estate Grounds",
+        floor: BattlemapFloorPattern::Grass,
+        floor_base: "#7d9a5a",
+        floor_line: "#5c7840",
+        wall_style: BattlemapWallStyle::Poche,
+        wall_fill: "#5b554e",
+        wall_hatch: "#787168",
+        door_fill: "#4a4e52",
+        platform_fill: "#8f897e",
+        hazard: BattlemapHazardStyle::Fire,
+        apron_fill: None,
+        lane_markings: false,
+        floor_stains: false,
+        grid_ink: "#1c2214",
+        cover_props: &[
+            BattlemapPropKind::Planter,
+            BattlemapPropKind::StreetBench,
+            BattlemapPropKind::WoodCrate,
+            BattlemapPropKind::JerseyBarrier,
+        ],
+    },
 ];
 
 /// Maps engine `SectorPreset` codes onto modern-day art themes until presets carry an explicit theme.
@@ -241,7 +279,10 @@ const PRESET_ART_THEME_MAP: &[(&str, &str)] = &[
     ("urban_crossroads", "urban_street"),
     ("derelict_corridor", "derelict_industrial"),
     ("residential_apartment", "modern_interior"),
+    ("office_floor", "office_interior"),
     ("corner_bar", "bar_interior"),
+    ("wooded_park", "park_grounds"),
+    ("garden_estate", "park_grounds"),
 ];
 
 /// Resolves a theme from a `theme_preset` that is either a theme `id` or a mapped `SectorPreset` code.
@@ -314,7 +355,7 @@ pub fn battlemap_boundary_path(w: i32, h: i32, inside: impl Fn(i32, i32) -> bool
 }
 
 /// Union of axis-aligned cell squares (`d`) for every cell where `inside(x, y)` is true.
-fn cell_rects_path(w: i32, h: i32, inside: impl Fn(i32, i32) -> bool) -> String {
+pub(crate) fn battlemap_cell_rects_path(w: i32, h: i32, inside: impl Fn(i32, i32) -> bool) -> String {
     let c = BATTLEMAP_CELL_PX;
     let mut d = String::new();
     for y in 0..h {
@@ -384,6 +425,12 @@ fn push_floor_pattern_def(out: &mut String, t: &BattlemapArtTheme) {
                 r##"<pattern id="bm-floor" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="{base}"/><circle cx="7" cy="9" r="1" fill="#fff" opacity=".12"/><circle cx="31" cy="22" r="1.2" fill="#fff" opacity=".1"/><circle cx="18" cy="40" r=".9" fill="#000" opacity=".25"/><circle cx="42" cy="4" r="1" fill="{line}" opacity=".6"/></pattern>"##
             );
         }
+        BattlemapFloorPattern::Grass => {
+            let _ = write!(
+                out,
+                r##"<pattern id="bm-floor" width="96" height="96" patternUnits="userSpaceOnUse"><rect width="96" height="96" fill="{base}"/><rect width="96" height="48" fill="#fff" opacity=".045"/><path d="M12 18l3-5m26 19l-2-6m38-4l3-5M22 66l-3-5m35 16l3-6m24-12l-2-5" stroke="{line}" stroke-width="1.3" stroke-linecap="round" opacity=".55"/><circle cx="44" cy="14" r="1.5" fill="#98b46e" opacity=".55"/><circle cx="80" cy="78" r="1.6" fill="#638044" opacity=".5"/></pattern>"##
+            );
+        }
     }
 }
 
@@ -392,7 +439,7 @@ fn push_defs(out: &mut String, t: &BattlemapArtTheme) {
     push_floor_pattern_def(out, t);
     let _ = write!(
         out,
-        r##"<pattern id="bm-hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="9" height="9" fill="{wall}"/><path d="M0 0V9" stroke="{hatch}" stroke-width="2.2"/></pattern><pattern id="bm-grate" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="{plat}"/><path d="M0 4H8M4 0V8" stroke="#000" stroke-opacity=".24" stroke-width="1.2"/></pattern>"##,
+        r##"<pattern id="bm-hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="9" height="9" fill="{wall}"/><path d="M0 0V9" stroke="{hatch}" stroke-width="2.2"/></pattern><pattern id="bm-grate" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="{plat}"/><path d="M0 4H8M4 0V8" stroke="#000" stroke-opacity=".24" stroke-width="1.2"/></pattern><pattern id="bm-paver" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#cfc7b8"/><rect x="2" y="2" width="28" height="28" rx="3" fill="#dbd4c6" opacity=".6"/><rect x="34" y="34" width="28" height="28" rx="3" fill="#c3baa9" opacity=".55"/><path d="M0 32H64M32 0V32M16 32V64M48 32V64M0 0H64M0 0V64" stroke="#938a7a" stroke-width="1.3" opacity=".65"/></pattern><pattern id="bm-tarmac" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#55585c"/><circle cx="9" cy="11" r="1" fill="#fff" opacity=".12"/><circle cx="33" cy="24" r="1.2" fill="#fff" opacity=".1"/><circle cx="19" cy="39" r=".9" fill="#000" opacity=".28"/></pattern>"##,
         wall = t.wall_fill,
         hatch = t.wall_hatch,
         plat = t.platform_fill,
@@ -490,7 +537,30 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
         vw + 2 * pad,
         vh + 2 * pad
     );
-    for p in ui.map.props.iter().filter(|p| prop_spec(p.kind).floor_layer) {
+
+    // 1b. Merged paved roadways (`AsphaltDrive`), walkways/plazas (`StonePath`), and rugs
+    let has_surf = |kind: PropKind, x: i32, y: i32| {
+        ui.map.props.iter().any(|p| p.kind == kind && p.covers(x, y))
+    };
+    let tarmac_d = battlemap_cell_rects_path(w, h, |x, y| has_surf(PropKind::AsphaltDrive, x, y));
+    if !tarmac_d.is_empty() {
+        let curb_d = battlemap_boundary_path(w, h, |x, y| has_surf(PropKind::AsphaltDrive, x, y));
+        let _ = write!(
+            out,
+            r##"<path d="{tarmac_d}" fill="url(#bm-tarmac)"/><path d="{curb_d}" fill="none" stroke="#c5c0b5" stroke-width="6"/><path d="{curb_d}" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.8" filter="url(#bm-ink)"/>"##
+        );
+    }
+    let stone_d = battlemap_cell_rects_path(w, h, |x, y| has_surf(PropKind::StonePath, x, y));
+    if !stone_d.is_empty() {
+        let border_d = battlemap_boundary_path(w, h, |x, y| has_surf(PropKind::StonePath, x, y));
+        let _ = write!(
+            out,
+            r##"<path d="{stone_d}" fill="url(#bm-paver)"/><path d="{border_d}" fill="none" stroke="#8b8273" stroke-width="3.2" filter="url(#bm-ink)"/><path d="{border_d}" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.4" filter="url(#bm-ink)"/>"##
+        );
+    }
+    for p in ui.map.props.iter().filter(|p| {
+        prop_spec(p.kind).floor_layer && !matches!(p.kind, PropKind::StonePath | PropKind::AsphaltDrive)
+    }) {
         push_furniture_glyph(&mut out, p, CELL_F);
     }
 
@@ -509,7 +579,7 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
         let near_wall = |x: i32, y: i32| {
             !wall(x, y) && (-1..=1).any(|dy| (-1..=1).any(|dx| wall(x + dx, y + dy)))
         };
-        let d = cell_rects_path(w, h, near_wall);
+        let d = battlemap_cell_rects_path(w, h, near_wall);
         let curb = battlemap_boundary_path(w, h, |x, y| near_wall(x, y) || wall(x, y));
         let _ = write!(
             out,
@@ -550,7 +620,7 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
 
     // 4. Raised platforms / mezzanine grating with safety-yellow rails
     let plat = |x: i32, y: i32| is_tile(ui, x, y, TacticalTileKind::ElevatedPlatform);
-    let plat_d = cell_rects_path(w, h, plat);
+    let plat_d = battlemap_cell_rects_path(w, h, plat);
     if !plat_d.is_empty() {
         let rail = battlemap_boundary_path(w, h, plat);
         let _ = write!(
@@ -560,7 +630,7 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     }
 
     // 5. Walls (poché or rooftops) + hand-inked outline with a light sketch echo
-    let wall_d = cell_rects_path(w, h, wall);
+    let wall_d = battlemap_cell_rects_path(w, h, wall);
     let outline = battlemap_boundary_path(w, h, wall);
     match t.wall_style {
         BattlemapWallStyle::Poche => {
@@ -610,6 +680,11 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
             match tile_or_none(ui, x, y) {
                 Some(TacticalTileKind::DoorClosed) => push_door(&mut out, ui, t, x, y, false),
                 Some(TacticalTileKind::DoorOpen) => push_door(&mut out, ui, t, x, y, true),
+                Some(TacticalTileKind::Concealment) if !covered(x, y) => {
+                    let hh = battlemap_cell_hash(seed, x, y, 0xF011);
+                    let bush = make_prop(PropKind::Bush, x, y, 0, None, hh as u32);
+                    push_furniture_glyph(&mut out, &bush, CELL_F);
+                }
                 Some(TacticalTileKind::HalfCover) if !t.cover_props.is_empty() && !covered(x, y) => {
                     let hh = battlemap_cell_hash(seed, x, y, 0xC0FE);
                     let kind = t.cover_props[(hh % t.cover_props.len() as u64) as usize];
@@ -622,265 +697,21 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     }
     out.push_str("</g>");
 
+    // 8b. Overhanging tree canopies (drawn above ground props/walls so foliage drapes naturally)
+    if ui.map.props.iter().any(|p| matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree)) {
+        out.push_str(r#"<g filter="url(#bm-prop)">"#);
+        for p in &ui.map.props {
+            push_tree_canopy_glyph(&mut out, p, CELL_F);
+        }
+        out.push_str("</g>");
+    }
+
     // 9. Paper grain over everything
     let _ = write!(
         out,
         r##"<rect width="{vw}" height="{vh}" filter="url(#bm-grain)" opacity=".7" style="mix-blend-mode:multiply"/>"##
     );
     out
-}
-
-fn token_initials(label: &str) -> String {
-    let mut s: String = label
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|p| !p.is_empty())
-        .take(2)
-        .filter_map(|p| p.chars().next())
-        .flat_map(char::to_uppercase)
-        .collect();
-    if s.is_empty() {
-        s.push('?');
-    }
-    s
-}
-
-/// Dynamic tactical overlay (inner markup of `#battlemap-overlay`): grid, reach, hover, LoS, tokens.
-#[must_use]
-pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
-    let t = battlemap_theme_for_preset(ui.map.theme_preset.as_deref());
-    let (w, h) = grid_dims(ui);
-    let c = BATTLEMAP_CELL_PX;
-    let (vw, vh) = (w * c, h * c);
-    let mut out = String::with_capacity(16 * 1024);
-    let _ = write!(out, r##"<rect width="{vw}" height="{vh}" fill="#000" fill-opacity="0"/>"##);
-
-    if ui.show_grid_overlay {
-        let ink = t.grid_ink;
-        let _ = write!(
-            out,
-            r##"<defs><pattern id="bmo-grid" width="{c}" height="{c}" patternUnits="userSpaceOnUse"><path d="M{c} 0H0V{c}" fill="none" stroke="{ink}" stroke-opacity=".24" stroke-width="1.1"/></pattern><pattern id="bmo-grid5" width="{c5}" height="{c5}" patternUnits="userSpaceOnUse"><path d="M{c5} 0H0V{c5}" fill="none" stroke="{ink}" stroke-opacity=".42" stroke-width="1.8"/></pattern></defs><rect width="{vw}" height="{vh}" fill="url(#bmo-grid)" pointer-events="none"/><rect width="{vw}" height="{vh}" fill="url(#bmo-grid5)" pointer-events="none"/><rect width="{vw}" height="{vh}" fill="none" stroke="{ink}" stroke-opacity=".42" stroke-width="2" pointer-events="none"/>"##,
-            c5 = c * 5
-        );
-    }
-
-    // Gait reach envelope: soft fill + dashed outer boundary (origin included so there's no hole)
-    let sel_xy = ui
-        .selected_entity_id
-        .as_deref()
-        .and_then(|id| ui.map.tokens.iter().find(|tk| tk.entity_id == id))
-        .map(|tk| (tk.x, tk.y));
-    if !ui.reachable_cells.is_empty() {
-        let mut mask = vec![false; (w * h) as usize];
-        for r in &ui.reachable_cells {
-            if r.x >= 0 && r.y >= 0 && r.x < w && r.y < h {
-                mask[(r.y * w + r.x) as usize] = true;
-            }
-        }
-        if let Some((sx, sy)) = sel_xy.filter(|&(sx, sy)| sx >= 0 && sy >= 0 && sx < w && sy < h) {
-            mask[(sy * w + sx) as usize] = true;
-        }
-        let inside = |x: i32, y: i32| mask[(y * w + x) as usize];
-        let fill_d = cell_rects_path(w, h, inside);
-        let edge_d = battlemap_boundary_path(w, h, inside);
-        let _ = write!(
-            out,
-            r##"<g pointer-events="none"><path d="{fill_d}" fill="#10b981" fill-opacity=".16"/><path d="{edge_d}" fill="none" stroke="#047857" stroke-width="2.6" stroke-dasharray="7 5" stroke-linecap="round"/></g>"##
-        );
-    }
-
-    if let Some((hx, hy)) = ui.hovered_cell.filter(|&(hx, hy)| hx >= 0 && hy >= 0 && hx < w && hy < h) {
-        let _ = write!(
-            out,
-            r##"<rect x="{}" y="{}" width="{}" height="{}" rx="7" fill="#0ea5e9" fill-opacity=".12" stroke="#0284c7" stroke-width="2.6" pointer-events="none"/>"##,
-            hx * c + 3,
-            hy * c + 3,
-            c - 6,
-            c - 6
-        );
-    }
-
-    if let Some(los) = ui.last_los.as_ref() {
-        let half = c / 2;
-        let (x1, y1) = (los.attacker_xy.0 * c + half, los.attacker_xy.1 * c + half);
-        let (x2, y2) = (los.target_xy.0 * c + half, los.target_xy.1 * c + half);
-        let stroke = match los.cover_grade {
-            CoverGrade::Clear => "#0891b2",
-            CoverGrade::LowCover => "#d97706",
-            CoverGrade::HighCover => "#ea580c",
-            CoverGrade::Blocked => "#e11d48",
-        };
-        let (mx, my) = ((x1 + x2) / 2, (y1 + y2) / 2);
-        let _ = write!(
-            out,
-            r##"<g pointer-events="none"><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#fff" stroke-opacity=".7" stroke-width="8" stroke-linecap="round"/><line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{stroke}" stroke-width="4" stroke-dasharray="11 7" stroke-linecap="round"/><circle cx="{x2}" cy="{y2}" r="13" fill="none" stroke="{stroke}" stroke-width="3"/><path d="M{x2} {}v10M{x2} {}v10M{} {y2}h10M{} {y2}h10" stroke="{stroke}" stroke-width="2.4"/>"##,
-            y2 - 20,
-            y2 + 10,
-            x2 - 20,
-            x2 + 10,
-        );
-        // Range label offset perpendicular to the ray, skipped for adjacent cells so it never hides tokens
-        if los.distance_m >= 2.5 {
-            let (dx, dy) = ((x2 - x1) as f32, (y2 - y1) as f32);
-            let len = (dx * dx + dy * dy).sqrt().max(1.0);
-            let (nx, ny) = (-dy / len * 22.0, dx / len * 22.0);
-            let (nx, ny) = if ny > 0.0 { (-nx, -ny) } else { (nx, ny) };
-            let _ = write!(
-                out,
-                r##"<text x="{:.0}" y="{:.0}" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-weight="700" font-size="17" fill="{stroke}" stroke="#fff" stroke-width="4.5" paint-order="stroke">{:.1}m · {}</text>"##,
-                mx as f32 + nx,
-                my as f32 + ny + 6.0,
-                los.distance_m,
-                escape_html(los.cover_grade.label()),
-            );
-        }
-        out.push_str("</g>");
-    }
-
-    // Top-down tokens: shadow, faction ring, paper face, initials, facing wedge, selection halo
-    for tok in &ui.map.tokens {
-        let (cx, cy) = (tok.x * c + c / 2, tok.y * c + c / 2);
-        let (_, col, facing) = resolve_token_visual(&ui.map, tok);
-        let col = escape_html(&col);
-        let is_sel = ui.selected_entity_id.as_deref() == Some(tok.entity_id.as_str());
-        let op = if tok.visibility == MessageVisibility::GmOnly { ".55" } else { "1" };
-        let _ = write!(
-            out,
-            r##"<g opacity="{op}" pointer-events="none"><ellipse cx="{}" cy="{}" rx="23" ry="21" fill="#120d08" fill-opacity=".35"/>"##,
-            cx + 3,
-            cy + 4
-        );
-        if is_sel {
-            let _ = write!(
-                out,
-                r##"<circle cx="{cx}" cy="{cy}" r="29" fill="none" stroke="#f5b301" stroke-width="3.5" stroke-dasharray="6 4"/>"##
-            );
-        }
-        let _ = write!(
-            out,
-            r##"<g transform="rotate({facing:.0} {cx} {cy})"><path d="M{cx} {}l-8 10h16z" fill="{col}" stroke="{BATTLEMAP_INK}" stroke-width="1.6" stroke-linejoin="round"/></g><circle cx="{cx}" cy="{cy}" r="21" fill="{col}" stroke="{BATTLEMAP_INK}" stroke-width="2"/><circle cx="{cx}" cy="{cy}" r="15.5" fill="#fbfaf7" stroke="{BATTLEMAP_INK}" stroke-width="1.2"/><text x="{cx}" y="{}" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-weight="800" font-size="14" fill="{BATTLEMAP_INK}">{}</text></g>"##,
-            cy - 33,
-            cy + 5,
-            escape_html(&token_initials(&tok.label)),
-        );
-    }
-    out
-}
-
-/// Full layered battlemap markup for `#tabletop-map-svg-fallback` (static art and interactive overlay).
-#[must_use]
-pub fn format_tactical_map_svg_markup(ui: &TacticalMapUiState) -> String {
-    let (w, h) = grid_dims(ui);
-    let (vw, vh) = (w * BATTLEMAP_CELL_PX, h * BATTLEMAP_CELL_PX);
-    let (pad, c) = (BATTLEMAP_PAD_PX, BATTLEMAP_CELL_PX);
-    let (tw, th) = (vw + 2 * pad, vh + 2 * pad);
-    let view_box = format!("-{pad} -{pad} {tw} {th}");
-    let key = battlemap_art_cache_key(ui);
-    // Continuous cell-space pointer coordinates (fx, fy) accounting for the exterior margin.
-    let pick_js = format!(
-        "var r=this.getBoundingClientRect(),fx=((event.clientX-r.left)*{tw}/r.width-{pad})/{c},fy=((event.clientY-r.top)*{th}/r.height-{pad})/{c},x=Math.floor(fx),y=Math.floor(fy)"
-    );
-    format!(
-        r#"<div class="battlemap-stack"><svg id="battlemap-art" class="battlemap-art" data-art-key="{key}" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" aria-hidden="true">{art}</svg><svg id="battlemap-overlay" class="battlemap-overlay" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" role="img" aria-label="Illustrated 2D tactical battlemap ({w}m x {h}m, 1.0m grid)" onclick="{pick_js};window.satyaClickMapPoint(fx,fy)" onmousemove="{pick_js},k=x+','+y;this.dataset.hc!==k&amp;&amp;(this.dataset.hc=k,window.satyaHoverMapCell(x,y))" onmouseleave="this.dataset.hc='';window.satyaHoverMapCell(-1,-1)">{overlay}</svg></div>"#,
-        art = format_battlemap_art_layer(ui),
-        overlay = format_battlemap_overlay_inner(ui),
-    )
-}
-
-/// Syncs `#tabletop-map-svg-fallback`, rebuilding the static art only when `data-art-key` changes.
-pub fn sync_battlemap_svg_host() {
-    let Some(host) = get_element("tabletop-map-svg-fallback") else {
-        return;
-    };
-    let key = with_map_ui(battlemap_art_cache_key);
-    let current_key = get_element("battlemap-art").and_then(|e| e.get_attribute("data-art-key"));
-    if current_key.as_deref() == Some(key.as_str())
-        && let Some(overlay) = get_element("battlemap-overlay")
-    {
-        overlay.set_inner_html(&with_map_ui(format_battlemap_overlay_inner));
-        return;
-    }
-    host.set_inner_html(&with_map_ui(format_tactical_map_svg_markup));
-}
-
-fn apply_battlemap_view_chrome(battlemap_on: bool) {
-    set_text(
-        "btn-map-view-mode",
-        if battlemap_on { "Mode: 2D Battlemap" } else { "Mode: 3D Diorama" },
-    );
-    for id in ["btn-map-toggle-proj", "btn-map-wall-cutaway", "btn-map-reset-cam"] {
-        set_button_disabled(id, battlemap_on);
-    }
-    set_display("btn-map-grid-overlay", if battlemap_on { "inline-flex" } else { "none" });
-    if battlemap_on {
-        set_display("wgpu-map-canvas-wrap", "none");
-        set_display("tabletop-map-svg-fallback", "block");
-    } else {
-        set_display("tabletop-map-svg-fallback", "none");
-        set_display("wgpu-map-canvas-wrap", "block");
-    }
-}
-
-thread_local! {
-    static VIEW_PREF_LOADED: Cell<bool> = const { Cell::new(false) };
-}
-
-/// Applies the persisted `localStorage` view mode (`"battlemap"` / `"diorama"`) once per page load.
-pub fn ensure_battlemap_view_pref_loaded() {
-    if VIEW_PREF_LOADED.with(|c| c.replace(true)) {
-        return;
-    }
-    if local_storage_get(VIEW_PREF_KEY).as_deref() == Some("battlemap") {
-        with_map_ui_mut(|ui| ui.view_battlemap = true);
-        apply_battlemap_view_chrome(true);
-    }
-}
-
-/// Toggles between the WebGPU 3D diorama and the illustrated 2D battlemap (`#btn-map-view-mode`).
-#[wasm_bindgen]
-pub fn satya_toggle_battlemap_view() {
-    ensure_battlemap_view_pref_loaded();
-    let on = with_map_ui_mut(|ui| {
-        ui.view_battlemap = !ui.view_battlemap;
-        ui.view_battlemap
-    });
-    local_storage_set(VIEW_PREF_KEY, if on { "battlemap" } else { "diorama" });
-    apply_battlemap_view_chrome(on);
-    if on {
-        sync_battlemap_svg_host();
-    } else {
-        mark_map_wgpu_dirty();
-        refresh_map_wgpu_if_active();
-    }
-}
-
-/// Toggles the `1.0m` / `5.0m` grid overlay on the 2D battlemap (`#btn-map-grid-overlay`).
-#[wasm_bindgen]
-pub fn satya_toggle_battlemap_grid() {
-    let on = with_map_ui_mut(|ui| {
-        ui.show_grid_overlay = !ui.show_grid_overlay;
-        ui.show_grid_overlay
-    });
-    set_text("btn-map-grid-overlay", if on { "Grid: On" } else { "Grid: Off" });
-    sync_battlemap_svg_host();
-}
-
-/// Pointer hover over battlemap cell `(gx, gy)` (`-1, -1` on leave): updates hover reticle, auto-LoS and HUD.
-#[wasm_bindgen]
-pub fn satya_hover_map_cell(gx: i32, gy: i32) {
-    let changed = with_map_ui_mut(|ui| {
-        let cell = (gx >= 0 && gy >= 0 && gx < ui.map.grid_width && gy < ui.map.grid_height)
-            .then_some((gx, gy));
-        if ui.hovered_cell == cell {
-            return false;
-        }
-        ui.hovered_cell = cell;
-        ui.recompute_overlays();
-        true
-    });
-    if changed {
-        set_html("tabletop-map-los-hud", &with_map_ui(format_map_tactical_hud_html));
-        sync_battlemap_svg_host();
-    }
 }
 
 #[cfg(test)]
@@ -949,20 +780,47 @@ mod tests {
     #[test]
     fn furnished_presets_render_edge_walls_and_multi_cell_props() {
         use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
-        for preset in [SectorPreset::ResidentialApartment, SectorPreset::CornerBar] {
+        for preset in SectorPreset::ALL {
             let mut ui = TacticalMapUiState {
                 map: build_procedural_map_request("t", preset, None, 20, 14, 42),
                 ..Default::default()
             };
             ui.recompute_overlays();
-            assert!(!ui.map.wall_edges.is_empty() && !ui.map.props.is_empty());
+            if preset != SectorPreset::WoodedPark {
+                assert!(!ui.map.wall_edges.is_empty(), "{preset:?}: missing wall_edges");
+            }
+            assert!(!ui.map.props.is_empty(), "{preset:?}: missing props");
             let art = format_battlemap_art_layer(&ui);
-            assert!(art.contains("stroke-linecap=\"square\""), "{preset:?}: merged edge-wall runs");
-            assert!(art.contains("#d6ebf5"), "{preset:?}: windows");
+            if preset != SectorPreset::WoodedPark {
+                assert!(art.contains("stroke-linecap=\"square\""), "{preset:?}: merged edge-wall runs");
+            }
             assert_eq!(art.matches("<g").count(), art.matches("</g>").count(), "{preset:?}");
             let key = battlemap_art_cache_key(&ui);
-            ui.map.wall_edges.pop();
-            assert_ne!(key, battlemap_art_cache_key(&ui), "edge edits bust the art cache");
+            if !ui.map.wall_edges.is_empty() {
+                ui.map.wall_edges.pop();
+                assert_ne!(key, battlemap_art_cache_key(&ui), "edge edits bust the art cache");
+            }
+        }
+        for preset in [
+            SectorPreset::ResidentialApartment,
+            SectorPreset::OfficeFloor,
+            SectorPreset::CornerBar,
+        ] {
+            let ui = TacticalMapUiState {
+                map: build_procedural_map_request("t", preset, None, 20, 14, 42),
+                ..Default::default()
+            };
+            assert!(format_battlemap_art_layer(&ui).contains("#d6ebf5"), "{preset:?}: windows");
+        }
+        for preset in [SectorPreset::WoodedPark, SectorPreset::GardenEstate] {
+            let mut ui = TacticalMapUiState {
+                map: build_procedural_map_request("t", preset, None, 20, 14, 42),
+                ..Default::default()
+            };
+            ui.recompute_overlays();
+            let art = format_battlemap_art_layer(&ui);
+            assert!(art.contains("url(#bm-paver)"), "{preset:?}: merged flagstone paths");
+            assert!(art.contains("url(#bm-tarmac)"), "{preset:?}: merged asphalt road/driveway");
         }
     }
 }

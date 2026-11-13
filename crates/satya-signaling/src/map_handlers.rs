@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 use satya_engine::tactical_map::{
-    SectorPreset, build_procedural_map_request, generate_procedural_tactical_grid,
+    SectorPreset, build_procedural_map_request, generate_procedural_sector,
 };
 use satya_schema::{
     CanvasEventType, EdgeSide, GenerateSessionMapRequest, GmMapUpdateRequest, MapWallEdge,
@@ -350,13 +350,20 @@ pub async fn session_generate_or_edit_map_handler(
                 .theme_preset
                 .as_deref()
                 .and_then(SectorPreset::from_code_str)
-                .unwrap_or(SectorPreset::OrbitalAirlock);
-            map.tiles = generate_procedural_tactical_grid(
+                .unwrap_or_default();
+            let sec = generate_procedural_sector(
                 p,
                 map.grid_width.max(8),
                 map.grid_height.max(8),
                 map.seed.unwrap_or(42),
             );
+            map.tiles = sec.tiles;
+            if map.wall_edges.is_empty() {
+                map.wall_edges = sec.wall_edges;
+            }
+            if map.props.is_empty() {
+                map.props = sec.props;
+            }
         }
         if ex < 0 || ey < 0 || ex >= map.grid_width || ey >= map.grid_height {
             return (
@@ -622,13 +629,20 @@ pub async fn session_move_map_token_handler(
             .theme_preset
             .as_deref()
             .and_then(SectorPreset::from_code_str)
-            .unwrap_or(SectorPreset::OrbitalAirlock);
-        map.tiles = generate_procedural_tactical_grid(
+            .unwrap_or_default();
+        let sec = generate_procedural_sector(
             p,
             map.grid_width.max(8),
             map.grid_height.max(8),
             map.seed.unwrap_or(42),
         );
+        map.tiles = sec.tiles;
+        if map.wall_edges.is_empty() {
+            map.wall_edges = sec.wall_edges;
+        }
+        if map.props.is_empty() {
+            map.props = sec.props;
+        }
     }
 
     if req.remove {

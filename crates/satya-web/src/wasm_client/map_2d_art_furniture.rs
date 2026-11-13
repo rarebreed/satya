@@ -15,6 +15,9 @@ use std::fmt::Write as _;
 const FABRICS: &[&str] = &["#7d8e9b", "#a0705a", "#6d7f68", "#8c7f9e", "#b49a6a", "#5f6b78"];
 const WOODS: &[&str] = &["#a47b55", "#c4a27c", "#7a5c43", "#b8926a"];
 const BOTTLES: &[&str] = &["#3f7a3a", "#8a5a2b", "#d9c38a", "#6b2f2f", "#2f5a7a", "#c9c9c0"];
+const CANOPY_OUTER: &[&str] = &["#3f6b35", "#355e3b", "#4a6f35", "#4f6a2f", "#2f5838"];
+const CANOPY_MID: &[&str] = &["#5d8c47", "#4f814e", "#6b9348", "#6d8b3d", "#48784c"];
+const CANOPY_SUN: &[&str] = &["#84ad5c", "#74a468", "#93b560", "#95ad57", "#699a64"];
 
 fn pick(seed: u32, opts: &[&'static str]) -> &'static str {
     opts[(battlemap_mix_u64(u64::from(seed)) % opts.len() as u64) as usize]
@@ -236,31 +239,167 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             rect(out, [-14.0, -t + 5.0, 28.0, 11.0], 3.0, "#f4f4f2", "");
             let _ = write!(out, r##"<ellipse cx="0" cy="{:.1}" rx="11" ry="14" fill="#f4f4f2"/><ellipse cx="0" cy="{:.1}" rx="6" ry="8" fill="#cfe3ee" stroke-width="1"/>"##, -t + 31.0, -t + 32.0);
         }
-        PropKind::LargeTree => {
-            let r = lw.min(lh) * 0.22;
-            circle(out, 0.0, 0.0, r, "#6b4a2f", "");
-            let canopy = battlemap_blob_path(0.0, 0.0, lw.max(lh) * 0.85, 11, 0.18, u64::from(v));
-            let inner = battlemap_blob_path(-lw * 0.12, -lh * 0.12, lw.max(lh) * 0.5, 9, 0.22, u64::from(v) ^ 0x55);
-            let _ = write!(out, r##"<path d="{canopy}" fill="#3f6b35" fill-opacity=".82"/><path d="{inner}" fill="#6f9b4f" fill-opacity=".7" stroke="none"/>"##);
+        PropKind::LargeTree | PropKind::MediumTree => {
+            let big = p.kind == PropKind::LargeTree;
+            let r = if big { lw.min(lh) * 0.24 } else { lw.min(lh) * 0.26 };
+            let flare = battlemap_blob_path(0.0, 0.0, r * 1.38, 7, 0.24, u64::from(v) ^ 0x77);
+            let _ = write!(out, r##"<path d="{flare}" fill="#593d26"/>"##);
+            circle(out, 0.0, 0.0, r, "#6e4d32", "");
+            circle(out, -r * 0.14, -r * 0.14, r * 0.55, "#8a6646", r#"stroke-width="1""#);
         }
-        PropKind::Car => {
-            let body = pick(v, &["#4b6a8f", "#8f2f2f", "#d8d4cc", "#2f3337", "#6b7a5a"]);
-            rect(out, [-l + 8.0, -t + 6.0, lw - 16.0, lh - 12.0], 22.0, body, "");
-            rect(out, [-l + 16.0, -t + lh * 0.30, lw - 32.0, lh * 0.38], 10.0, "#000", r#"fill-opacity=".12""#);
+        PropKind::Hedge => {
+            let outer = pick(v, CANOPY_OUTER);
+            let inner = pick(v, CANOPY_MID);
+            let sun = pick(v, CANOPY_SUN);
+            let cells = (lw / cell_px).round().max(1.0) as i32;
+            let r_base = lh * 0.42;
+            rect(out, [-l + 4.0, -t + 8.0, lw - 8.0, lh - 16.0], r_base * 0.75, outer, "");
+            for i in 0..(cells * 2) {
+                let frac = (i as f32 + 0.5) / (cells * 2) as f32;
+                let hx = -l + 10.0 + frac * (lw - 20.0);
+                let hy = ((battlemap_mix_u64(u64::from(v) + i as u64 * 13) % 9) as f32 - 4.0) * 1.1;
+                let blob = battlemap_blob_path(hx, hy, r_base * 0.78, 7, 0.18, u64::from(v).wrapping_add(i as u64 * 29));
+                let _ = write!(out, r#"<path d="{blob}" fill="{inner}" stroke-width="1.3"/>"#);
+                circle(out, hx - 3.0, hy - 3.0, r_base * 0.30, sun, r#"stroke="none" fill-opacity=".65""#);
+            }
+        }
+        PropKind::Bush => {
+            let outer = pick(v, CANOPY_OUTER);
+            let mid = pick(v, CANOPY_MID);
+            let sun = pick(v, CANOPY_SUN);
+            let b0 = battlemap_blob_path(0.0, 1.0, l * 0.78, 9, 0.24, u64::from(v));
+            let b1 = battlemap_blob_path(-5.0, -4.0, l * 0.54, 7, 0.22, u64::from(v) ^ 0x3A);
+            let b2 = battlemap_blob_path(7.0, 4.0, l * 0.42, 7, 0.20, u64::from(v) ^ 0x91);
+            let _ = write!(
+                out,
+                r#"<path d="{b0}" fill="{outer}"/><path d="{b1}" fill="{mid}" stroke-width="1.2"/><path d="{b2}" fill="{sun}" stroke="none" fill-opacity=".75"/>"#
+            );
+        }
+        PropKind::Boulder => {
+            let rock = battlemap_blob_path(0.0, 0.0, lw.min(lh) * 0.46, 7, 0.20, u64::from(v));
+            // Scale elongated boulder across its 2x1 footprint
+            let sx = (lw / lh.max(1.0)) * 0.92;
+            let _ = write!(
+                out,
+                r##"<g transform="scale({sx:.2} 0.88)"><path d="{rock}" fill="#7b7972"/><path d="{}" fill="#9e9b93" stroke="none" fill-opacity=".82"/><path d="M{:.1} -2L-4 -6L8 3L{:.1} 1" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.3" stroke-opacity=".65"/></g>"##,
+                battlemap_blob_path(-3.0, -4.0, lw.min(lh) * 0.28, 6, 0.18, u64::from(v) ^ 0x4C),
+                -lw.min(lh) * 0.30,
+                lw.min(lh) * 0.28,
+            );
+        }
+        PropKind::ParkBench => {
+            let wd = pick(v, WOODS);
+            rect(out, [-l + 6.0, -t + 10.0, lw - 12.0, lh - 22.0], 3.0, wd, "");
+            rect(out, [-l + 6.0, -t + 8.0, lw - 12.0, 9.0], 2.5, "#6b4c32", "");
+            let _ = write!(
+                out,
+                r#"<path d="M{x0:.1} {y1:.1}H{x1:.1}M{x0:.1} {y2:.1}H{x1:.1}" {thin}/>"#,
+                x0 = -l + 7.0,
+                x1 = l - 7.0,
+                y1 = -t + 25.0,
+                y2 = -t + 34.0
+            );
+            rect(out, [-l + 4.0, -t + 9.0, 6.0, lh - 18.0], 2.0, "#2f3337", "");
+            rect(out, [l - 10.0, -t + 9.0, 6.0, lh - 18.0], 2.0, "#2f3337", "");
+        }
+        PropKind::PicnicTable => {
+            let wd = pick(v, WOODS);
+            rect(out, [-l + 8.0, -t + 6.0, lw - 16.0, 16.0], 3.0, wd, "");
+            rect(out, [-l + 8.0, t - 22.0, lw - 16.0, 16.0], 3.0, wd, "");
+            rect(out, [-l + 6.0, -t + 28.0, lw - 12.0, lh - 56.0], 4.0, wd, "");
+            let _ = write!(
+                out,
+                r#"<path d="M{x0:.1} -8H{x1:.1}M{x0:.1} 8H{x1:.1}" {thin}/>"#,
+                x0 = -l + 8.0,
+                x1 = l - 8.0
+            );
+        }
+        PropKind::Dumpster => {
+            let body = pick(v, &["#2f5d41", "#2f4b69", "#524a3e"]);
+            rect(out, [-l + 5.0, -t + 6.0, lw - 10.0, lh - 12.0], 3.0, body, "");
+            rect(out, [-l + 9.0, -t + 10.0, l - 11.0, lh - 20.0], 2.0, "#2b2e31", "");
+            rect(out, [2.0, -t + 10.0, l - 11.0, lh - 20.0], 2.0, "#2b2e31", "");
+            let _ = write!(
+                out,
+                r#"<path d="M{:.1} 0H{:.1}M2 0H{:.1}" {thin}/>"#,
+                -l + 11.0,
+                -3.0,
+                l - 11.0
+            );
+            rect(out, [-l + 1.0, -6.0, 4.0, 12.0], 1.0, body, r#"stroke-width="1.3""#);
+            rect(out, [l - 5.0, -6.0, 4.0, 12.0], 1.0, body, r#"stroke-width="1.3""#);
+        }
+        PropKind::JerseyBarrier => {
+            rect(out, [-l + 2.0, -t + 14.0, lw - 4.0, lh - 28.0], 3.0, "#b8b5ad", "");
+            rect(out, [-l + 4.0, -6.0, lw - 8.0, 12.0], 2.0, "#d5d2ca", r#"stroke-width="1.2""#);
+            rect(out, [-l + 4.0, -5.0, 8.0, 10.0], 1.0, "#e0a92e", r#"stroke-width="1""#);
+            rect(out, [l - 12.0, -5.0, 8.0, 10.0], 1.0, "#e0a92e", r#"stroke-width="1""#);
+        }
+        PropKind::Car | PropKind::UtilityVan => {
+            let van = p.kind == PropKind::UtilityVan;
+            let body = if van {
+                pick(v, &["#e2e4e6", "#3d4f60", "#586257", "#2c3034", "#8a3b32"])
+            } else {
+                pick(v, &["#4b6a8f", "#8f2f2f", "#d8d4cc", "#2f3337", "#6b7a5a"])
+            };
+            let corner_rx = if van { 14.0 } else { 22.0 };
+            rect(out, [-l + 7.0, -t + 6.0, lw - 14.0, lh - 12.0], corner_rx, body, "");
+            let (roof_y0, roof_h) = if van { (-t + 18.0, lh * 0.56) } else { (-t + lh * 0.30, lh * 0.38) };
+            rect(out, [-l + 15.0, roof_y0, lw - 30.0, roof_h], 9.0, "#000", r#"fill-opacity=".12""#);
+            if van {
+                for ry in [roof_y0 + roof_h * 0.28, roof_y0 + roof_h * 0.72] {
+                    rect(out, [-l + 13.0, ry, lw - 26.0, 4.0], 1.5, "#3a3f45", r#"stroke-width="1""#);
+                }
+            }
             let _ = write!(
                 out,
                 r##"<path d="M{:.1} {:.1}L{:.1} {:.1}L{:.1} {:.1}L{:.1} {:.1}Z" fill="#2c3e50" fill-opacity=".85"/><path d="M{:.1} {:.1}L{:.1} {:.1}L{:.1} {:.1}L{:.1} {:.1}Z" fill="#2c3e50" fill-opacity=".85"/>"##,
-                -l + 18.0, t - lh * 0.30, l - 18.0, t - lh * 0.30, l - 24.0, t - lh * 0.20, -l + 24.0, t - lh * 0.20,
-                -l + 20.0, -t + lh * 0.30, l - 20.0, -t + lh * 0.30, l - 26.0, -t + lh * 0.22, -l + 26.0, -t + lh * 0.22,
+                -l + 17.0, t - lh * 0.28, l - 17.0, t - lh * 0.28, l - 23.0, t - lh * 0.18, -l + 23.0, t - lh * 0.18,
+                -l + 19.0, roof_y0, l - 19.0, roof_y0, l - 24.0, roof_y0 - 14.0, -l + 24.0, roof_y0 - 14.0,
             );
             circle(out, -l + 22.0, t - 12.0, 5.0, "#f6e7a1", r#"stroke-width="1""#);
             circle(out, l - 22.0, t - 12.0, 5.0, "#f6e7a1", r#"stroke-width="1""#);
-            rect(out, [-l + 2.0, t - lh * 0.33, 7.0, 10.0], 2.0, body, r#"stroke-width="1.2""#);
-            rect(out, [l - 9.0, t - lh * 0.33, 7.0, 10.0], 2.0, body, r#"stroke-width="1.2""#);
+            rect(out, [-l + 16.0, -t + 7.0, 14.0, 4.5], 1.5, "#b83232", r#"stroke-width="1""#);
+            rect(out, [l - 30.0, -t + 7.0, 14.0, 4.5], 1.5, "#b83232", r#"stroke-width="1""#);
+            rect(out, [-l + 2.0, t - lh * 0.31, 7.0, 10.0], 2.0, body, r#"stroke-width="1.2""#);
+            rect(out, [l - 9.0, t - lh * 0.31, 7.0, 10.0], 2.0, body, r#"stroke-width="1.2""#);
+        }
+        PropKind::StonePath => {
+            rect(out, [-l, -t, lw, lh], 2.0, "#cfc7b8", r#"stroke-width="1" opacity=".9""#);
+        }
+        PropKind::AsphaltDrive => {
+            rect(out, [-l, -t, lw, lh], 0.0, "#55585c", r#"stroke-width="1" opacity=".95""#);
         }
         PropKind::Armchair | PropKind::Planter | PropKind::WoodCrate | PropKind::DrumCluster => {}
     }
     out.push_str("</g>");
+}
+
+/// Appends an overhanging, semi-translucent leafy crown for [`PropKind::LargeTree`] and
+/// [`PropKind::MediumTree`] so canopies layer naturally above paths, benches, hedges, and walls while
+/// keeping tokens and the `1.0m` grid overlay fully legible above `#battlemap-art`.
+pub fn push_tree_canopy_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32) {
+    if !matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree) {
+        return;
+    }
+    let (fw, fh) = (p.w_cells as f32 * cell_px, p.h_cells as f32 * cell_px);
+    let (cx, cy) = (p.x as f32 * cell_px + fw * 0.5, p.y as f32 * cell_px + fh * 0.5);
+    let v = p.variant_seed;
+    let r = if p.kind == PropKind::LargeTree {
+        fw.max(fh) * 0.92
+    } else {
+        cell_px * 1.12
+    };
+    let outer = pick(v, CANOPY_OUTER);
+    let mid = pick(v, CANOPY_MID);
+    let sun = pick(v, CANOPY_SUN);
+    let d_outer = battlemap_blob_path(cx, cy, r, 13, 0.17, u64::from(v));
+    let d_mid = battlemap_blob_path(cx - r * 0.08, cy - r * 0.08, r * 0.72, 11, 0.20, u64::from(v) ^ 0x55);
+    let d_sun = battlemap_blob_path(cx - r * 0.20, cy - r * 0.20, r * 0.40, 8, 0.22, u64::from(v) ^ 0xAA);
+    let _ = write!(
+        out,
+        r##"<g stroke="{BATTLEMAP_INK}" stroke-linejoin="round"><path d="{d_outer}" fill="{outer}" fill-opacity=".82" stroke-width="2.2"/><path d="{d_mid}" fill="{mid}" fill-opacity=".76" stroke-width="1.2" stroke-opacity=".45"/><path d="{d_sun}" fill="{sun}" fill-opacity=".68" stroke="none"/></g>"##
+    );
 }
 
 #[cfg(test)]

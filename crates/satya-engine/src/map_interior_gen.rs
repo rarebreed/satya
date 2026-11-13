@@ -1,13 +1,12 @@
 //! # Furnished Modern-Day Interior Generator (`map_interior_gen`)
 //!
 //! Deterministic, seeded generator for edge-walled interiors ([`InteriorStyle::Apartment`],
-//! [`InteriorStyle::Bar`]):
-//! 1. **Shell**: brick perimeter edge walls with West/East entry doors and seeded exterior windows.
-//! 2. **Rooms**: the apartment uses a BSP split into drywall rooms, with one door per partition (which
-//!    guarantees connectivity). The bar is a large hall plus a strip of back rooms, each with its own hall door.
-//! 3. **Roles & furnishing**: rooms get roles (living, kitchen, bedroom, bar hall, storage…) and
-//!    rule-based multi-cell props (a sofa against a wall with a coffee table in front, a long bar counter
-//!    with a bottle shelf, bartender aisle and stools, booths along the wall, and so on).
+//! [`InteriorStyle::Bar`], [`InteriorStyle::Office`]):
+//! 1. **Shell**: masonry perimeter edge walls with West/East entry doors and seeded exterior windows.
+//! 2. **Rooms**: the apartment uses a BSP split into drywall rooms; the bar has a large hall plus back rooms;
+//!    the office has an open bullpen, reception lounge, glass-walled conference room, breakroom & server closet.
+//! 3. **Roles & furnishing**: rooms get roles and rule-based multi-cell props (sofas, coffee tables, desks,
+//!    conference tables, kitchen counters, bar counters, bookshelves, steel shelving, lockers).
 //! 4. **Safety**: door thresholds and spawn pads stay clear. If a tall prop ever disconnects the floor,
 //!    tall props are removed until every open cell is reachable again.
 //!
@@ -28,6 +27,7 @@ use crate::tactical_map_edges::WallEdgeIndex;
 pub enum InteriorStyle {
     Apartment,
     Bar,
+    Office,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -75,6 +75,10 @@ enum Role {
     Storage,
     Restroom,
     BackKitchen,
+    Bullpen,
+    ConferenceRoom,
+    Breakroom,
+    ServerCloset,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,34 +132,56 @@ impl Shell {
         if self.rng.chance(1, 2) { WallEdgeKind::DoorOpen } else { WallEdgeKind::DoorClosed }
     }
 
+    /// Styled vertical partition on West edges of column `x` for rows `y0..y1`, with doors at `door_rows`.
+    fn partition_v_styled(&mut self, x: i32, y0: i32, y1: i32, door_rows: &[i32], wall: (WallEdgeKind, MaterialClass)) {
+        for y in y0..y1 {
+            if door_rows.contains(&y) {
+                let kind = self.door_kind();
+                self.put(x, y, EdgeSide::West, kind, MaterialClass::Drywall);
+            } else {
+                self.put(x, y, EdgeSide::West, wall.0, wall.1);
+            }
+        }
+    }
+
+    /// Styled horizontal partition on North edges of row `y` for columns `x0..x1`, with doors at `door_cols`.
+    fn partition_h_styled(&mut self, y: i32, x0: i32, x1: i32, door_cols: &[i32], wall: (WallEdgeKind, MaterialClass)) {
+        for x in x0..x1 {
+            if door_cols.contains(&x) {
+                let kind = self.door_kind();
+                self.put(x, y, EdgeSide::North, kind, MaterialClass::Drywall);
+            } else {
+                self.put(x, y, EdgeSide::North, wall.0, wall.1);
+            }
+        }
+    }
+
     /// Drywall partition on West edges of column `x` for rows `y0..y1`, with doors at `door_rows`.
     fn partition_v(&mut self, x: i32, y0: i32, y1: i32, door_rows: &[i32]) {
-        for y in y0..y1 {
-            let kind = if door_rows.contains(&y) { self.door_kind() } else { WallEdgeKind::Wall };
-            self.put(x, y, EdgeSide::West, kind, MaterialClass::Drywall);
-        }
+        self.partition_v_styled(x, y0, y1, door_rows, (WallEdgeKind::Wall, MaterialClass::Drywall));
     }
 
     /// Drywall partition on North edges of row `y` for columns `x0..x1`, with doors at `door_cols`.
     fn partition_h(&mut self, y: i32, x0: i32, x1: i32, door_cols: &[i32]) {
-        for x in x0..x1 {
-            let kind = if door_cols.contains(&x) { self.door_kind() } else { WallEdgeKind::Wall };
-            self.put(x, y, EdgeSide::North, kind, MaterialClass::Drywall);
-        }
+        self.partition_h_styled(y, x0, x1, door_cols, (WallEdgeKind::Wall, MaterialClass::Drywall));
     }
 
-    fn perimeter(&mut self) {
+    fn perimeter_mat(&mut self, wall_mat: MaterialClass) {
         let (w, h, mid_y) = (self.w, self.h, self.h / 2);
         for x in 0..w {
-            self.put(x, 0, EdgeSide::North, WallEdgeKind::Wall, MaterialClass::Brick);
-            self.put(x, h, EdgeSide::North, WallEdgeKind::Wall, MaterialClass::Brick);
+            self.put(x, 0, EdgeSide::North, WallEdgeKind::Wall, wall_mat);
+            self.put(x, h, EdgeSide::North, WallEdgeKind::Wall, wall_mat);
         }
         for y in 0..h {
-            self.put(0, y, EdgeSide::West, WallEdgeKind::Wall, MaterialClass::Brick);
-            self.put(w, y, EdgeSide::West, WallEdgeKind::Wall, MaterialClass::Brick);
+            self.put(0, y, EdgeSide::West, WallEdgeKind::Wall, wall_mat);
+            self.put(w, y, EdgeSide::West, WallEdgeKind::Wall, wall_mat);
         }
         self.put(0, mid_y, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::SolidWood);
         self.put(w, mid_y, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::SolidWood);
+    }
+
+    fn perimeter(&mut self) {
+        self.perimeter_mat(MaterialClass::Brick);
     }
 
     /// Seeded exterior windows on perimeter walls, keeping clear of corners, doors, and partition junctions.
@@ -371,6 +397,53 @@ impl Furnisher {
                 let _ = self.against_any_wall(P::DrumCluster, r, None);
             }
             Role::BarHall => self.furnish_bar_hall(r),
+            Role::Bullpen => {
+                let side = if self.rng.chance(1, 2) { Side::North } else { Side::South };
+                let lounge = self
+                    .against_wall(P::Sofa, r, side, None)
+                    .or_else(|| self.against_wall(P::Loveseat, r, side, None));
+                if let Some(s) = lounge {
+                    let _ = self.in_front(s, P::Rug, 0, r);
+                    let _ = self
+                        .in_front(s, P::CoffeeTable, 1, r)
+                        .or_else(|| self.in_front(s, P::CoffeeTable, 0, r));
+                }
+                let desk_count = ((r.area() / 18).clamp(2, 6)) as usize;
+                self.scatter(P::Desk, r, desk_count, 0);
+                let _ = self.against_any_wall(P::Desk, r, None);
+                let _ = self.against_any_wall(P::Bookshelf, r, None);
+                let _ = self.against_any_wall(P::Planter, r, None);
+            }
+            Role::ConferenceRoom => {
+                let cx = r.x0 + (r.w() - 2) / 2;
+                let cy = r.y0 + (r.h() - 2) / 2;
+                if r.w() >= 6 && r.h() >= 5 {
+                    let _ = self.try_place(P::DiningTable, cx - 1, cy, 0, None, r);
+                    let _ = self.try_place(P::DiningTable, cx + 1, cy, 0, None, r);
+                } else {
+                    let _ = self.try_place(P::DiningTable, cx, cy, 0, None, r);
+                }
+                let _ = self.against_any_wall(P::Bookshelf, r, None);
+                let _ = self.against_any_wall(P::Planter, r, None);
+            }
+            Role::Breakroom => {
+                let side = if r.w() >= r.h() { Side::North } else { Side::East };
+                let run = match side {
+                    Side::North | Side::South => r.w(),
+                    _ => r.h(),
+                };
+                let _ = self.against_wall(P::KitchenCounter, r, side, Some((run - 2).clamp(2, 4)));
+                let _ = self
+                    .against_wall(P::Fridge, r, side, None)
+                    .or_else(|| self.against_any_wall(P::Fridge, r, None));
+                self.scatter(P::RoundTable, r, 2, 0);
+            }
+            Role::ServerCloset => {
+                let _ = self.against_any_wall(P::SteelShelving, r, None);
+                let _ = self.against_any_wall(P::SteelShelving, r, None);
+                let _ = self.against_any_wall(P::Desk, r, None);
+                let _ = self.against_any_wall(P::WoodCrate, r, None);
+            }
         }
     }
 
@@ -437,9 +510,13 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
     let salt = match style {
         InteriorStyle::Apartment => 0xA9A7,
         InteriorStyle::Bar => 0xBA77,
+        InteriorStyle::Office => 0x0FF1,
     };
     let mut shell = Shell { w, h, rng: Rng((seed as u64) ^ salt), edges: Vec::new() };
-    shell.perimeter();
+    match style {
+        InteriorStyle::Office => shell.perimeter_mat(MaterialClass::ConcreteBlock),
+        InteriorStyle::Apartment | InteriorStyle::Bar => shell.perimeter(),
+    }
 
     let whole = Room { x0: 0, y0: 0, x1: w, y1: h };
     let mut rooms_roles: Vec<(Room, Role)> = Vec::new();
@@ -483,6 +560,46 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
             }
             shell.partition_v(sx, 0, h, &doors);
             rooms_roles.insert(0, (Room { x0: 0, y0: 0, x1: sx, y1: h }, Role::BarHall));
+            shell.windows(3);
+        }
+        InteriorStyle::Office => {
+            if w >= 12 {
+                let sx = (w * 6 / 10).clamp(6, w - 4);
+                let n_east: usize = if h >= 12 { 3 } else { 2 };
+                let mut cuts = vec![0];
+                for i in 1..n_east {
+                    let base = h * i as i32 / n_east as i32;
+                    cuts.push((base + shell.rng.range(-1, 2)).clamp(3, h - 3));
+                }
+                cuts.push(h);
+                const EAST_ROLES: [Role; 3] = [Role::ConferenceRoom, Role::Breakroom, Role::ServerCloset];
+                for i in 0..n_east {
+                    let (y0, y1) = (cuts[i], cuts[i + 1]);
+                    let door = shell.rng.range(y0 + 1, (y1 - 1).max(y0 + 2));
+                    if i > 0 {
+                        shell.partition_h_styled(y0, sx, w, &[], (WallEdgeKind::Wall, MaterialClass::Drywall));
+                    }
+                    if i == 0 {
+                        // Glass-walled conference suite overlooking the bullpen with drywall corners & door.
+                        shell.partition_v_styled(sx, y0, y1, &[door], (WallEdgeKind::Window, MaterialClass::Glass));
+                        shell.put(sx, y0, EdgeSide::West, WallEdgeKind::Wall, MaterialClass::Drywall);
+                        if y1 - y0 >= 3 {
+                            let kind = if door == y1 - 1 { WallEdgeKind::DoorOpen } else { WallEdgeKind::Wall };
+                            shell.put(sx, y1 - 1, EdgeSide::West, kind, MaterialClass::Drywall);
+                        }
+                    } else {
+                        shell.partition_v(sx, y0, y1, &[door]);
+                    }
+                    rooms_roles.push((Room { x0: sx, y0, x1: w, y1 }, EAST_ROLES[i % EAST_ROLES.len()]));
+                }
+                rooms_roles.insert(0, (Room { x0: 0, y0: 0, x1: sx, y1: h }, Role::Bullpen));
+            } else {
+                let sx = (w / 2).clamp(4, w - 3);
+                let door = mid_y.clamp(1, h - 2);
+                shell.partition_v(sx, 0, h, &[door]);
+                rooms_roles.push((Room { x0: 0, y0: 0, x1: sx, y1: h }, Role::Bullpen));
+                rooms_roles.push((Room { x0: sx, y0: 0, x1: w, y1: h }, Role::ServerCloset));
+            }
             shell.windows(3);
         }
     }
@@ -541,7 +658,7 @@ mod tests {
 
     #[test]
     fn interiors_are_deterministic_furnished_and_fully_connected() {
-        for style in [InteriorStyle::Apartment, InteriorStyle::Bar] {
+        for style in [InteriorStyle::Apartment, InteriorStyle::Bar, InteriorStyle::Office] {
             for seed in [1_i64, 42, 179, 9001] {
                 let a = generate_furnished_interior(style, 20, 14, seed);
                 assert_eq!(a, generate_furnished_interior(style, 20, 14, seed), "{style:?} deterministic");
@@ -569,6 +686,9 @@ mod tests {
         let bar = generate_furnished_interior(InteriorStyle::Bar, 20, 14, 42);
         let counter = bar.props.iter().find(|p| p.kind == PropKind::BarCounter).expect("bar counter");
         assert!(counter.w_cells >= 3, "multi-cell bar counter: {counter:?}");
+        let office = generate_furnished_interior(InteriorStyle::Office, 20, 14, 42);
+        assert!(office.props.iter().any(|p| p.kind == PropKind::Desk), "office workstations");
+        assert!(office.wall_edges.iter().any(|e| e.kind == WallEdgeKind::Window && e.x > 0 && e.x < 20), "glass conference wall");
         // Gait reach from the West spawn is bounded by interior walls (not the whole board).
         let idx = WallEdgeIndex::from_edges(20, 14, &bar.wall_edges);
         let grid = TacticalGridView { tiles: &bar.tiles, width: 20, height: 14, edges: &idx };

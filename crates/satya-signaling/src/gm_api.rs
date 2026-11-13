@@ -479,13 +479,20 @@ pub async fn gm_session_map_handler(
             .as_deref()
             .or(Some(req.title.as_str()))
             .and_then(satya_engine::tactical_map::SectorPreset::from_code_str)
-            .unwrap_or(satya_engine::tactical_map::SectorPreset::OrbitalAirlock);
-        req.tiles = satya_engine::tactical_map::generate_procedural_tactical_grid(
+            .unwrap_or_default();
+        let sec = satya_engine::tactical_map::generate_procedural_sector(
             preset,
             req.grid_width,
             req.grid_height,
             req.seed.unwrap_or(42),
         );
+        req.tiles = sec.tiles;
+        if req.wall_edges.is_empty() {
+            req.wall_edges = sec.wall_edges;
+        }
+        if req.props.is_empty() {
+            req.props = sec.props;
+        }
     }
 
     let _ = state

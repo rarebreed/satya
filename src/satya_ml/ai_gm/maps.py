@@ -103,13 +103,19 @@ def get_session_llm_config(session_id: str) -> SessionLlmConfig | None:
 
 
 def infer_sector_preset(theme: str) -> str:
-    """Map a free-text scene theme to one of the 7 canonical `satya-engine` `SectorPreset` codes."""
+    """Map a free-text scene theme to one of the 10 canonical `satya-engine` `SectorPreset` codes."""
     low = (theme or "").lower()
+    if any(k in low for k in ("estate", "compound", "courtyard", "garden", "yard", "villa", "mansion")):
+        return "garden_estate"
+    if any(k in low for k in ("park", "woods", "forest", "trail", "clearing", "grove")):
+        return "wooded_park"
     if any(k in low for k in ("bar", "pub", "tavern", "club", "lounge", "saloon")):
         return "corner_bar"
-    if any(k in low for k in ("apartment", "flat", "safehouse", "house", "home", "residential", "motel", "office")):
+    if any(k in low for k in ("office", "corporate", "agency", "cubicle", "suite", "commercial")):
+        return "office_floor"
+    if any(k in low for k in ("apartment", "flat", "safehouse", "house", "home", "residential", "motel")):
         return "residential_apartment"
-    if any(k in low for k in ("dock", "cargo", "hangar", "bay")):
+    if any(k in low for k in ("dock", "cargo", "hangar", "bay", "warehouse", "factory", "plant")):
         return "docking_bay"
     if any(k in low for k in ("med", "trauma", "lab", "clinic", "ward")):
         return "med_lab"
@@ -220,6 +226,7 @@ def _evaluate_pair_los_and_cover(
     steps = max(abs(x2 - x1), abs(y2 - y1)) * 4
     blocked = False
     low_cover = False
+    concealment = False
     for step in range(1, steps):
         t = step / float(steps)
         rx = x1 + 0.5 + (x2 - x1) * t
@@ -235,16 +242,24 @@ def _evaluate_pair_los_and_cover(
                 break
             if kind == "HALF_COVER":
                 low_cover = True
+            elif kind == "CONCEALMENT":
+                concealment = True
 
-    # Also treat standing directly on or behind a HALF_COVER cell toward the opponent as partial cover
+    # Also treat standing directly on or behind a HALF_COVER / CONCEALMENT cell toward the opponent
     for cx, cy in ((x1, y1), (x2, y2)):
-        if 0 <= cx < width and 0 <= cy < height and tiles[cy * width + cx] == "HALF_COVER":
-            low_cover = True
+        if 0 <= cx < width and 0 <= cy < height:
+            ckind = tiles[cy * width + cx]
+            if ckind == "HALF_COVER":
+                low_cover = True
+            elif ckind == "CONCEALMENT":
+                concealment = True
 
     if blocked:
         return (dist_m, " [PARTIAL COVER / OBSTRUCTED] (Blocked LoS Δ_ext +16)", 16)
     if low_cover:
         return (dist_m, " [PARTIAL COVER / OBSTRUCTED] (Low Cover Δ_ext +4)", 4)
+    if concealment:
+        return (dist_m, " [CONCEALMENT] (Foliage/Screen Δ_ext +3)", 3)
     return (dist_m, " [CLEAR LOS]", 0)
 
 

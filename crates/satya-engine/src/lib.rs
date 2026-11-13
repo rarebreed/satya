@@ -50,15 +50,17 @@
 //!   Survival (`docs/ttrpg/06-health-and-survival/health_and_trauma.md`, `movement_vehicles_and_environment.md`).
 //! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
 //!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
-//! - [`tactical_map`], [`tactical_map_edges`], [`map_dressing`] & [`map_interior_gen`]: `1.0m` tactical grid,
-//!   supercover LoS/cover, gait reach, thin edge walls/doors/windows, the multi-cell prop catalog with material
-//!   classes, and furnished modern-day interior generation (apartment, corner bar).
+//! - [`tactical_map`], [`tactical_map_edges`], [`map_dressing`], [`barrier_ballistics`], [`map_interior_gen`],
+//!   [`map_outdoor_gen`] & [`map_sector_gen`]: `1.0m` tactical grid, supercover LoS/cover, gait reach, thin
+//!   edge walls/doors/windows, multi-cell prop catalog with per-material ballistic penetration vs. concealment
+//!   grading, and dressed procedural sectors across all 10 presets.
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor)
 //!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3).
 
 pub mod action_catalog_stealth;
 pub mod action_economy;
 pub mod ballistics;
+pub mod barrier_ballistics;
 pub mod character_audit;
 pub mod characteristics;
 pub mod combat;
@@ -74,6 +76,8 @@ pub mod lifepath_catalog;
 pub mod lifepath_economy;
 pub mod map_dressing;
 pub mod map_interior_gen;
+pub mod map_outdoor_gen;
+pub mod map_sector_gen;
 pub mod npc_generator;
 pub mod primitives;
 pub mod psyche_social;
@@ -90,6 +94,7 @@ pub mod task_resolution;
 pub mod walkthroughs;
 
 pub use action_economy::*;
+pub use barrier_ballistics::*;
 pub use character_audit::*;
 pub use characteristics::*;
 pub use combat::*;

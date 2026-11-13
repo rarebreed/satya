@@ -35,6 +35,7 @@ pub mod gm_docs;
 pub mod gm_memories_and_director;
 pub mod map_2d_art;
 pub mod map_2d_art_furniture;
+pub mod map_2d_art_overlay;
 pub mod map_2d_art_props;
 pub mod map_2d_art_walls;
 pub mod map_3d;

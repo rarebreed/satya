@@ -1,16 +1,18 @@
 //! # Tactical `1.0m` Map Grid, Procedural Sector Generator, Supercover LoS/Cover & Gait Reach
 //!
 //! Deterministic spatial geometry engine shared across `satya-engine`, `satya-signaling`, and `satya-web`:
-//! - **Procedural `1.0m` Sector Templates**: [`SectorPreset`] (`OrbitalAirlock`, `DockingBay`, `MedLabSector`,
-//!   `UrbanCrossroads`, `DerelictCorridor`) with seeded cover/hazard variation.
+//! - **Procedural `1.0m` Sector Templates**: [`SectorPreset`] (`ResidentialApartment`, `OfficeFloor`,
+//!   `CornerBar`, `UrbanCrossroads`, `WoodedPark`, `GardenEstate`, `DockingBay`, `MedLabSector`,
+//!   `DerelictCorridor`, `OrbitalAirlock`) — all emitting thin [`MapWallEdge`]s and multi-cell props.
 //! - **Supercover Raycast & Corner-Peek Cover**: [`evaluate_tactical_los_and_cover`] computing metric range
-//!   (`distance_m`), [`CoverGrade`] (`Clear`, `LowCover`, `HighCover`, `Blocked`), and recommended $\Delta_{\text{ext}}$.
+//!   (`distance_m`), [`CoverGrade`] (`Clear`, `Concealment`, `LowCover`, `HighCover`, `Blocked`), and
+//!   recommended $\Delta_{\text{ext}}$.
 //! - **Metric Gait Movement Envelope**: [`compute_reachable_grid_cells`] coupling [`CombatMovementGait`] and
 //!   [`compute_stride_and_sprint_velocity`] directly to `1.0m` 8-directional Dijkstra pathing.
 //! - **Edge Walls & Multi-Cell Props**: [`TacticalGridView`] pairs the tile grid with a
 //!   [`WallEdgeIndex`] so LoS ([`evaluate_los_on_grid`]) and reach ([`compute_reachable_on_grid`]) respect thin
-//!   walls, doors, and windows. Furnished modern-day presets come from [`crate::map_interior_gen`], and prop
-//!   catalogs from [`crate::map_dressing`].
+//!   walls, doors, and windows. Generators live in [`crate::map_interior_gen`], [`crate::map_outdoor_gen`],
+//!   and [`crate::map_sector_gen`], with prop catalogs in [`crate::map_dressing`].
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -24,6 +26,8 @@ use serde::{Deserialize, Serialize};
 use crate::define_coded_enum;
 use crate::environment_vehicles::{CombatMovementGait, compute_stride_and_sprint_velocity};
 use crate::map_interior_gen::{InteriorStyle, generate_furnished_interior};
+use crate::map_outdoor_gen::{OutdoorStyle, generate_outdoor_sector};
+use crate::map_sector_gen::{FacilitySectorStyle, generate_facility_sector};
 pub use crate::tactical_map_edges::{EdgeObstruction, WallEdgeIndex};
 
 /// Borrowed view of everything spatial rules need: row-major tiles plus the thin edge-wall index.
@@ -36,7 +40,8 @@ pub struct TacticalGridView<'a> {
 }
 
 impl TacticalGridView<'_> {
-    fn tile(&self, x: i32, y: i32) -> TacticalTileKind {
+    #[must_use]
+    pub fn tile(&self, x: i32, y: i32) -> TacticalTileKind {
         if x < 0 || y < 0 || x >= self.width || y >= self.height {
             return TacticalTileKind::FullWall;
         }
@@ -57,60 +62,102 @@ define_coded_enum! {
     /// Canonical procedural sector layout presets for `1.0m` tactical battlemaps.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
-    pub enum SectorPreset [count = 7] {
+    pub enum SectorPreset [count = 10] {
         #[default]
-        OrbitalAirlock => {
-            code: "orbital_airlock",
-            label: "Sector 4 Orbital Airlock",
-            subtitle: "Pressurized transfer chamber with blast shields & dual airlocks",
-            aliases: ["airlock", "sector4_airlock", "station"],
-        },
-        DockingBay => {
-            code: "docking_bay",
-            label: "Aethelgard Cargo Docking Bay",
-            subtitle: "Wide cargo deck with elevated catwalk, crate clusters & fuel hazard",
-            aliases: ["cargo", "hangar", "bay"],
-        },
-        MedLabSector => {
-            code: "med_lab",
-            label: "Sector 4 Trauma & Med-Lab",
-            subtitle: "Partitioned surgical ward with quarantine doors & bio-spill hazard",
-            aliases: ["medlab", "medical", "lab"],
-        },
-        UrbanCrossroads => {
-            code: "urban_crossroads",
-            label: "Rain-Slick Urban Crossroads",
-            subtitle: "Four-way transit intersection with corner buildings & vehicle cover",
-            aliases: ["urban", "street", "city"],
-        },
-        DerelictCorridor => {
-            code: "derelict_corridor",
-            label: "Breached Derelict Corridor",
-            subtitle: "Segmented bulkhead passage with collapsed conduits & vacuum breach",
-            aliases: ["corridor", "derelict", "breach"],
-        },
         ResidentialApartment => {
             code: "residential_apartment",
             label: "Residential Apartment",
             subtitle: "Furnished multi-room apartment with drywall partitions, doors & windows",
             aliases: ["apartment", "flat", "house", "residential"],
         },
+        OfficeFloor => {
+            code: "office_floor",
+            label: "Corporate Office Suite",
+            subtitle: "Open-plan office bullpen with glass conference room, reception lounge & server closet",
+            aliases: ["office", "corporate", "agency", "commercial", "suite"],
+        },
         CornerBar => {
             code: "corner_bar",
-            label: "Corner Bar",
+            label: "Neighborhood Corner Bar",
             subtitle: "Neighborhood bar with a long counter, booths, pool table & back rooms",
             aliases: ["bar", "pub", "tavern", "saloon"],
+        },
+        UrbanCrossroads => {
+            code: "urban_crossroads",
+            label: "Urban Street Crossroads",
+            subtitle: "Four-way city intersection with furnished corner storefronts, sidewalks & vehicle cover",
+            aliases: ["urban", "street", "city", "crossroads"],
+        },
+        WoodedPark => {
+            code: "wooded_park",
+            label: "Wooded Park & Trail",
+            subtitle: "Tree-lined municipal park with flagstone plaza, hedges, boulders & roadside pullout",
+            aliases: ["park", "woods", "forest", "trail", "clearing"],
+        },
+        GardenEstate => {
+            code: "garden_estate",
+            label: "Walled Estate & Courtyard",
+            subtitle: "Gated compound with driveway vehicles, landscaped courtyard, hedges & furnished pavilion",
+            aliases: ["estate", "compound", "courtyard", "garden", "yard", "villa"],
+        },
+        DockingBay => {
+            code: "docking_bay",
+            label: "Industrial Logistics & Loading Bay",
+            subtitle: "Warehouse cargo deck with elevated catwalk, shipping office, utility van & hazmat spill",
+            aliases: ["cargo", "hangar", "bay", "warehouse", "industrial", "plant"],
+        },
+        MedLabSector => {
+            code: "med_lab",
+            label: "Trauma Clinic & Bio-Containment Lab",
+            subtitle: "Partitioned triage ward, surgical bay & quarantine containment lab with bio-spill",
+            aliases: ["medlab", "medical", "lab", "clinic", "hospital"],
+        },
+        DerelictCorridor => {
+            code: "derelict_corridor",
+            label: "Breached Utility Tunnel & Sub-Level",
+            subtitle: "Segmented concrete service spine with flanking conduit bays, blast doors & chemical rupture",
+            aliases: ["corridor", "derelict", "breach", "tunnel", "bunker"],
+        },
+        OrbitalAirlock => {
+            code: "orbital_airlock",
+            label: "Pressurized Transfer Airlock",
+            subtitle: "Armored transfer chamber with dual airlock vestibules, security booths & vent hazard",
+            aliases: ["airlock", "sector4_airlock", "station"],
         },
     }
 }
 
 impl SectorPreset {
-    /// Furnished edge-wall interior style for modern-day presets (`None` for legacy cell-wall sectors).
+    /// Furnished edge-wall interior style (`None` for outdoor/facility presets).
     #[must_use]
     pub const fn interior_style(self) -> Option<InteriorStyle> {
         match self {
             Self::ResidentialApartment => Some(InteriorStyle::Apartment),
+            Self::OfficeFloor => Some(InteriorStyle::Office),
             Self::CornerBar => Some(InteriorStyle::Bar),
+            _ => None,
+        }
+    }
+
+    /// Multi-cell outdoor / compound style (`None` for indoor/facility presets).
+    #[must_use]
+    pub const fn outdoor_style(self) -> Option<OutdoorStyle> {
+        match self {
+            Self::WoodedPark => Some(OutdoorStyle::WoodedPark),
+            Self::GardenEstate => Some(OutdoorStyle::GardenEstate),
+            _ => None,
+        }
+    }
+
+    /// Upgraded facility / clinical / transit / urban sector style (`None` for residential/outdoor presets).
+    #[must_use]
+    pub const fn facility_style(self) -> Option<FacilitySectorStyle> {
+        match self {
+            Self::UrbanCrossroads => Some(FacilitySectorStyle::UrbanCrossroads),
+            Self::DockingBay => Some(FacilitySectorStyle::DockingBay),
+            Self::MedLabSector => Some(FacilitySectorStyle::MedLab),
+            Self::DerelictCorridor => Some(FacilitySectorStyle::DerelictCorridor),
+            Self::OrbitalAirlock => Some(FacilitySectorStyle::OrbitalAirlock),
             _ => None,
         }
     }
@@ -124,48 +171,20 @@ pub struct ProceduralSector {
     pub props: Vec<MapPropPlacement>,
 }
 
-/// Generates the full [`ProceduralSector`] for `preset` (edge walls and props are empty for legacy presets).
+/// Generates the complete [`ProceduralSector`] for `preset`, emitting stamped tiles, thin edge walls, and props.
 #[must_use]
 pub fn generate_procedural_sector(preset: SectorPreset, width: i32, height: i32, seed: i64) -> ProceduralSector {
-    match preset.interior_style() {
-        Some(style) => generate_furnished_interior(style, width.clamp(8, 48), height.clamp(8, 48), seed),
-        None => ProceduralSector {
-            tiles: generate_procedural_tactical_grid(preset, width, height, seed),
-            ..Default::default()
-        },
+    let (w, h) = (width.clamp(8, 48), height.clamp(8, 48));
+    if let Some(style) = preset.interior_style() {
+        return generate_furnished_interior(style, w, h, seed);
     }
-}
-
-/// Deterministic `SplitMix64` helper used for seeded procedural prop/cover scattering.
-#[derive(Debug, Clone, Copy)]
-struct SplitMix64(u64);
-
-impl SplitMix64 {
-    const fn new(seed: i64) -> Self {
-        Self((seed as u64).wrapping_add(0x9E37_79B9_7F4A_7C15))
+    if let Some(style) = preset.outdoor_style() {
+        return generate_outdoor_sector(style, w, h, seed);
     }
-
-    fn next_u64(&mut self) -> u64 {
-        let mut z = self.0;
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
+    if let Some(style) = preset.facility_style() {
+        return generate_facility_sector(style, w, h, seed);
     }
-
-    fn range_i32(&mut self, lo_inclusive: i32, hi_exclusive: i32) -> i32 {
-        if hi_exclusive <= lo_inclusive {
-            return lo_inclusive;
-        }
-        let span = (hi_exclusive - lo_inclusive) as u64;
-        lo_inclusive + (self.next_u64() % span) as i32
-    }
-}
-
-fn set_tile(tiles: &mut [TacticalTileKind], w: i32, h: i32, x: i32, y: i32, kind: TacticalTileKind) {
-    if x >= 0 && y >= 0 && x < w && y < h {
-        tiles[(y * w + x) as usize] = kind;
-    }
+    ProceduralSector::default()
 }
 
 /// Generates a deterministic `width * height` row-major array of [`TacticalTileKind`] (`1 cell = 1.0m`)
@@ -177,162 +196,7 @@ pub fn generate_procedural_tactical_grid(
     height: i32,
     seed: i64,
 ) -> Vec<TacticalTileKind> {
-    if let Some(style) = preset.interior_style() {
-        return generate_furnished_interior(style, width.clamp(8, 48), height.clamp(8, 48), seed).tiles;
-    }
-    let w = width.clamp(8, 48);
-    let h = height.clamp(8, 48);
-    let mut tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
-    let mut rng = SplitMix64::new(seed);
-
-    // Outer perimeter bulkheads for indoor sectors, with West/East airlock thresholds
-    if preset != SectorPreset::UrbanCrossroads {
-        for x in 0..w {
-            set_tile(&mut tiles, w, h, x, 0, TacticalTileKind::FullWall);
-            set_tile(&mut tiles, w, h, x, h - 1, TacticalTileKind::FullWall);
-        }
-        for y in 0..h {
-            set_tile(&mut tiles, w, h, 0, y, TacticalTileKind::FullWall);
-            set_tile(&mut tiles, w, h, w - 1, y, TacticalTileKind::FullWall);
-        }
-        let mid_y = h / 2;
-        set_tile(&mut tiles, w, h, 0, mid_y, TacticalTileKind::DoorClosed);
-        set_tile(&mut tiles, w, h, 0, (mid_y - 1).max(1), TacticalTileKind::DoorOpen);
-        set_tile(&mut tiles, w, h, w - 1, mid_y, TacticalTileKind::DoorClosed);
-    }
-
-    let mid_x = w / 2;
-    let mid_y = h / 2;
-
-    match preset {
-        SectorPreset::OrbitalAirlock => {
-            // Structural Mag-Rail pillars + central blast-shield half-cover + plasma vent hazard
-            for &(px, py) in &[
-                (mid_x - 4, 3),
-                (mid_x + 3, 3),
-                (mid_x - 4, h - 4),
-                (mid_x + 3, h - 4),
-            ] {
-                set_tile(&mut tiles, w, h, px, py, TacticalTileKind::FullWall);
-            }
-            for dy in -1..=1 {
-                set_tile(&mut tiles, w, h, mid_x - 1, mid_y + dy, TacticalTileKind::HalfCover);
-            }
-            set_tile(&mut tiles, w, h, 4, 3, TacticalTileKind::HalfCover);
-            set_tile(&mut tiles, w, h, 4, h - 4, TacticalTileKind::HalfCover);
-            set_tile(&mut tiles, w, h, w - 5, 3, TacticalTileKind::HalfCover);
-            set_tile(&mut tiles, w, h, w - 5, h - 4, TacticalTileKind::HalfCover);
-            set_tile(&mut tiles, w, h, mid_x + 1, mid_y - 2, TacticalTileKind::HazardZone);
-            set_tile(&mut tiles, w, h, mid_x + 2, mid_y - 2, TacticalTileKind::HazardZone);
-        }
-        SectorPreset::DockingBay => {
-            // North elevated catwalk + asymmetric cargo crate clusters + fuel spill
-            for x in 3..(w - 3) {
-                set_tile(&mut tiles, w, h, x, 2, TacticalTileKind::ElevatedPlatform);
-            }
-            for &(cx, cy) in &[
-                (5, mid_y - 2),
-                (5, mid_y - 1),
-                (mid_x - 2, mid_y + 1),
-                (mid_x - 1, mid_y + 1),
-                (mid_x + 2, mid_y - 1),
-                (mid_x + 2, mid_y),
-                (w - 6, mid_y + 2),
-            ] {
-                set_tile(&mut tiles, w, h, cx, cy, TacticalTileKind::HalfCover);
-            }
-            set_tile(&mut tiles, w, h, mid_x, 4, TacticalTileKind::FullWall);
-            set_tile(&mut tiles, w, h, mid_x, h - 4, TacticalTileKind::FullWall);
-            set_tile(&mut tiles, w, h, mid_x - 1, h - 3, TacticalTileKind::HazardZone);
-            set_tile(&mut tiles, w, h, mid_x, h - 3, TacticalTileKind::HazardZone);
-        }
-        SectorPreset::MedLabSector => {
-            // Central quarantine bulkhead with doors + auto-doc beds + bio-hazard spill
-            for y in 1..(h - 1) {
-                let kind = if y == mid_y || y == 2 {
-                    TacticalTileKind::DoorOpen
-                } else if y == h - 3 {
-                    TacticalTileKind::DoorClosed
-                } else {
-                    TacticalTileKind::FullWall
-                };
-                set_tile(&mut tiles, w, h, mid_x, y, kind);
-            }
-            for &(bx, by) in &[(4, 3), (6, 3), (4, h - 4), (mid_x + 3, 4), (mid_x + 3, h - 5)] {
-                set_tile(&mut tiles, w, h, bx, by, TacticalTileKind::HalfCover);
-            }
-            set_tile(&mut tiles, w, h, mid_x + 2, mid_y + 1, TacticalTileKind::HazardZone);
-            set_tile(&mut tiles, w, h, mid_x + 2, mid_y + 2, TacticalTileKind::HazardZone);
-        }
-        SectorPreset::UrbanCrossroads => {
-            // 4 corner building blocks + street jersey barriers / vehicles
-            let bw = (w / 4).max(2);
-            let bh = (h / 4).max(2);
-            for y in 0..bh {
-                for x in 0..bw {
-                    set_tile(&mut tiles, w, h, x, y, TacticalTileKind::FullWall);
-                    set_tile(&mut tiles, w, h, w - 1 - x, y, TacticalTileKind::FullWall);
-                    set_tile(&mut tiles, w, h, x, h - 1 - y, TacticalTileKind::FullWall);
-                    set_tile(&mut tiles, w, h, w - 1 - x, h - 1 - y, TacticalTileKind::FullWall);
-                }
-            }
-            set_tile(&mut tiles, w, h, bw - 1, bh / 2, TacticalTileKind::DoorClosed);
-            set_tile(&mut tiles, w, h, w - bw, h - 1 - bh / 2, TacticalTileKind::DoorOpen);
-            for &(cx, cy) in &[
-                (mid_x - 3, mid_y - 1),
-                (mid_x - 2, mid_y - 1),
-                (mid_x + 2, mid_y + 1),
-                (mid_x + 3, mid_y + 1),
-                (mid_x, bh + 1),
-                (mid_x - 1, h - bh - 2),
-            ] {
-                set_tile(&mut tiles, w, h, cx, cy, TacticalTileKind::HalfCover);
-            }
-        }
-        // Furnished edge-wall interiors returned early above
-        SectorPreset::ResidentialApartment | SectorPreset::CornerBar => {}
-        SectorPreset::DerelictCorridor => {
-            // Narrowed corridor walls top/bottom + segmented airlocks + vacuum breach
-            for x in 1..(w - 1) {
-                if x % 5 != 0 {
-                    set_tile(&mut tiles, w, h, x, 1, TacticalTileKind::FullWall);
-                    set_tile(&mut tiles, w, h, x, h - 2, TacticalTileKind::FullWall);
-                }
-            }
-            for &door_x in &[w / 3, (2 * w) / 3] {
-                for y in 2..(h - 2) {
-                    let kind = if y == mid_y {
-                        TacticalTileKind::DoorOpen
-                    } else if y == mid_y - 1 {
-                        TacticalTileKind::DoorClosed
-                    } else {
-                        TacticalTileKind::FullWall
-                    };
-                    set_tile(&mut tiles, w, h, door_x, y, kind);
-                }
-            }
-            set_tile(&mut tiles, w, h, mid_x - 1, mid_y + 2, TacticalTileKind::HazardZone);
-            set_tile(&mut tiles, w, h, mid_x, mid_y + 2, TacticalTileKind::HazardZone);
-            set_tile(&mut tiles, w, h, mid_x + 1, mid_y - 2, TacticalTileKind::HalfCover);
-        }
-    }
-
-    // Deterministic seed-driven extra tactical cover crates (avoiding West/East spawn zones)
-    let extra_crates = 2 + (rng.next_u64() % 3) as usize;
-    for _ in 0..extra_crates {
-        let rx = rng.range_i32(4, (w - 4).max(5));
-        let ry = rng.range_i32(2, (h - 2).max(3));
-        if rx != mid_x && tiles[(ry * w + rx) as usize] == TacticalTileKind::Floor {
-            set_tile(&mut tiles, w, h, rx, ry, TacticalTileKind::HalfCover);
-        }
-    }
-
-    // Guarantee clear West `(2, mid_y)` and East `(w - 3, mid_y)` deployment pads
-    for &(sx, sy) in &[(2, mid_y), (2, (mid_y - 1).max(1)), (w - 3, mid_y), (w - 3, (mid_y + 1).min(h - 2))] {
-        set_tile(&mut tiles, w, h, sx, sy, TacticalTileKind::Floor);
-    }
-
-    tiles
+    generate_procedural_sector(preset, width, height, seed).tiles
 }
 
 /// Complete Line-of-Sight, metric range, and cover evaluation between two tactical grid cells.
@@ -378,43 +242,55 @@ pub fn trace_supercover_segment_cells(
     visited
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct RayObstruction {
+    blocked: bool,
+    half_cover: bool,
+    concealment: bool,
+}
+
 fn eval_single_ray(
     grid: &TacticalGridView<'_>,
     start_pos: (f32, f32),
     end_pos: (f32, f32),
     attacker_xy: (i32, i32),
-) -> (bool, bool, Vec<(i32, i32)>) {
+) -> (RayObstruction, Vec<(i32, i32)>) {
     let (w, h) = (grid.width, grid.height);
     let target_xy = (end_pos.0.floor() as i32, end_pos.1.floor() as i32);
     let cells = trace_supercover_segment_cells(start_pos, end_pos, attacker_xy, target_xy);
-    let mut blocked = false;
-    let mut half_cover = false;
+    let mut obs = RayObstruction::default();
     for &(cx, cy) in &cells {
         if cx < 0 || cy < 0 || cx >= w || cy >= h {
-            blocked = true;
+            obs.blocked = true;
             break;
         }
         let tile = grid.tile(cx, cy);
         if tile.blocks_full_los() {
-            blocked = true;
+            obs.blocked = true;
             break;
         }
-        if tile.provides_half_cover() {
+        let adj_to_attacker = (cx - attacker_xy.0).abs() <= 1 && (cy - attacker_xy.1).abs() <= 1;
+        if tile.provides_half_cover() && !adj_to_attacker {
             // An attacker braced directly against an adjacent (`<= 1` Chebyshev step) half-cover crate
             // shoots over it without penalizing their own outgoing shot.
-            let adj_to_attacker =
-                (cx - attacker_xy.0).abs() <= 1 && (cy - attacker_xy.1).abs() <= 1;
-            if !adj_to_attacker {
-                half_cover = true;
-            }
+            obs.half_cover = true;
+        } else if tile.provides_concealment() && !adj_to_attacker {
+            obs.concealment = true;
         }
     }
-    if !blocked {
-        let edge = grid.edges.trace_obstruction(start_pos, end_pos, attacker_xy);
-        blocked = edge.blocked;
-        half_cover |= edge.half_cover;
+    if !obs.blocked && target_xy.0 >= 0 && target_xy.1 >= 0 && target_xy.0 < w && target_xy.1 < h {
+        let adj_target =
+            (target_xy.0 - attacker_xy.0).abs() <= 1 && (target_xy.1 - attacker_xy.1).abs() <= 1;
+        if !adj_target && grid.tile(target_xy.0, target_xy.1).provides_concealment() {
+            obs.concealment = true;
+        }
     }
-    (blocked, half_cover, cells)
+    if !obs.blocked {
+        let edge = grid.edges.trace_obstruction(start_pos, end_pos, attacker_xy);
+        obs.blocked = edge.blocked;
+        obs.half_cover |= edge.half_cover;
+    }
+    (obs, cells)
 }
 
 /// Evaluates metric distance, supercover Line of Sight, corner-peeking, and [`CoverGrade`]
@@ -461,12 +337,13 @@ pub fn evaluate_los_on_grid(
 
     let a_center = (attacker_xy.0 as f32 + 0.5, attacker_xy.1 as f32 + 0.5);
     let t_center = (target_xy.0 as f32 + 0.5, target_xy.1 as f32 + 0.5);
-    let (center_blocked, center_half_cover, primary_cells) =
-        eval_single_ray(grid, a_center, t_center, attacker_xy);
+    let (center_obs, primary_cells) = eval_single_ray(grid, a_center, t_center, attacker_xy);
 
-    if !center_blocked {
-        let grade = if center_half_cover {
+    if !center_obs.blocked {
+        let grade = if center_obs.half_cover {
             CoverGrade::LowCover
+        } else if center_obs.concealment {
+            CoverGrade::Concealment
         } else {
             CoverGrade::Clear
         };
@@ -499,8 +376,8 @@ pub fn evaluate_los_on_grid(
         if !peek_origin_clear {
             continue;
         }
-        let (peek_blocked, _, peek_cells) = eval_single_ray(grid, a_peek, t_center, attacker_xy);
-        if !peek_blocked {
+        let (peek_obs, peek_cells) = eval_single_ray(grid, a_peek, t_center, attacker_xy);
+        if !peek_obs.blocked {
             return TacticalLosEvaluation {
                 attacker_xy,
                 target_xy,
@@ -816,13 +693,17 @@ mod tests {
     #[test]
     fn test_procedural_sector_presets_and_los_cover_math() {
         for preset in SectorPreset::ALL {
-            let tiles = generate_procedural_tactical_grid(preset, 20, 14, 42);
-            assert_eq!(tiles.len(), 20 * 14);
-            assert!(tiles.contains(&TacticalTileKind::HalfCover));
-            assert!(tiles.contains(&TacticalTileKind::FullWall));
+            let sec = generate_procedural_sector(preset, 20, 14, 42);
+            assert_eq!(sec.tiles.len(), 20 * 14);
+            if preset != SectorPreset::WoodedPark {
+                assert!(!sec.wall_edges.is_empty(), "{preset:?} missing wall_edges");
+            }
+            assert!(!sec.props.is_empty(), "{preset:?} missing props");
+            assert!(sec.tiles.contains(&TacticalTileKind::HalfCover), "{preset:?} HalfCover");
+            assert!(sec.tiles.contains(&TacticalTileKind::FullWall), "{preset:?} FullWall");
             // West and East deployment pads must remain clear floor
-            assert_eq!(tiles[(7 * 20 + 2) as usize], TacticalTileKind::Floor);
-            assert_eq!(tiles[(7 * 20 + 17) as usize], TacticalTileKind::Floor);
+            assert_eq!(sec.tiles[(7 * 20 + 2) as usize], TacticalTileKind::Floor);
+            assert_eq!(sec.tiles[(7 * 20 + 17) as usize], TacticalTileKind::Floor);
         }
 
         // Verify Clear LoS vs. LowCover (+4) vs. adjacent attacker brace vs. HighCover corner peek vs. Blocked

@@ -1,6 +1,6 @@
 # Satya TTRPG Ranged Combat, Granular Ballistics, Firearms Engineering & Armor
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/ranged_combat.rs`](../../../crates/satya-engine/src/ranged_combat.rs) (`RangedFireMode`, `ArmorProfileId`, `ArmorProfileSpec`, `evaluate_ranged_recoil_and_suppression`, `evaluate_oal_concealment_and_cqb`, `evaluate_weapon_malfunction`, `resolve_armor_penetration_and_babt`, `canonical_benchmark_firearms`, `canonical_armor_profiles`, `compare_akm_vs_creedmoor_at_400m`), [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain::Ranged`, `CombatMoveCategory::RangedShot`, `CombatMoveCategory::RangedManeuver`, `CombatTechniqueId`, `evaluate_technique_with_triad`), [`crates/satya-engine/src/ballistics.rs`](../../../crates/satya-engine/src/ballistics.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_mateo_vs_vance_firefight`). Companion chapter to **[Granular Ballistics, Ammunition Physics & Firearm Engineering (`firearms_and_ballistics.md`)](firearms_and_ballistics.md)**.
+> **Rust Engine Implementation**: [`crates/satya-engine/src/ranged_combat.rs`](../../../crates/satya-engine/src/ranged_combat.rs) (`RangedFireModeId`, `ArmorProfileId`, `ArmorProfile`, `evaluate_ranged_recoil_and_suppression`, `resolve_armor_impact`, `canonical_armor_catalog`), [`crates/satya-engine/src/barrier_ballistics.rs`](../../../crates/satya-engine/src/barrier_ballistics.rs) (`MATERIAL_BALLISTIC_PROFILES`, `evaluate_ballistic_shot`, `collect_ray_barriers`, `BarrierPenetrationVerdict`), [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain::Ranged`, `CombatMoveCategory::RangedShot`, `CombatMoveCategory::RangedManeuver`, `CombatTechniqueId`, `evaluate_technique_with_triad`), [`crates/satya-engine/src/ballistics.rs`](../../../crates/satya-engine/src/ballistics.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_mateo_vs_vance_firefight`). Companion chapter to **[Granular Ballistics, Ammunition Physics & Firearm Engineering (`firearms_and_ballistics.md`)](firearms_and_ballistics.md)**.
 
 This chapter defines the canonical rules for **Ranged Firefights, Internal/External/Terminal Ballistics, Granular Firearm Engineering, Ammunition Physics, Weapon Reliability (`Rel`), and Body Armor (`PR` vs. Behind-Armor Blunt Trauma `BABT`)** in **Satya**. It builds directly upon:
 - **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for all mathematical variables and ballistics/combat symbols $E_k, m_{\text{proj}}, m_{\text{prop}}, L_{\text{bbl}}, \text{OAL}, M_{\text{wpn}}, \Delta_{\text{CoG}}, \tau_{\text{tol}}, \text{Acc}, W_{\text{yaw}}, \text{Pen}, R, \text{PR}_{\text{Edged}}, \text{PR}_{\text{Ballistic}}, \text{BABT}, \text{Rel}$),
@@ -170,6 +170,33 @@ When an attack hits an armored Hit Location with $\text{Net Successes } \Delta M
      The projectile punches through the armor with reduced energy:
      $$\text{Penetrating Trauma} = \max(0,\; \text{Effective Raw Impact} - \text{PR})$$
      - This inflicts a **penetrating Structural Wound & Hemorrhage (`Grades 1–4`)** and degrades the struck armor zone's `PR` by **`-1`** (or **`-2`** if $\text{Effective Pen} - \text{PR} \ge 4$).
+
+---
+
+### 8.3 Tactical Concealment vs. Structural Cover & Barrier Penetration ($\text{PR}_{\text{barrier}}$)
+
+Most indoor furniture, interior partitions, and vehicle body panels conceal a target's exact silhouette without reliably stopping rifle fire. Satya separates **visual obscurement** (`CoverGrade`) from **material ballistic resistance** (`MaterialClass` $\to \text{PR}_{\text{barrier}} \in [0, 10]$ in `barrier_ballistics.rs`):
+
+1. **Concealment (`CoverGrade::Concealment`, `+3` $\Delta_{\text{ext}}$, $\text{PR}_{\text{barrier}} = 0$)**:
+   - Trimmed hedges, dense bushes, tall grass, curtains, and smoke obscure aim (`+3` $\Delta_{\text{ext}}$ when $> 1\text{ m}$ from the shooter) while shedding negligible energy (`0` Penetration or Impact loss).
+2. **Sequential Barrier Perforation & Granular Momentum Loss**:
+   - Each traversed wall edge or deduplicated prop applies its active $\text{PR}_{\text{barrier}}$ (for granular masonry/earth/live wood, ultra-light $< 60\text{ gr}$ / $< 900\text{ J}$ PDW darts suffer `-2` Penetration against the barrier):
+     $$\text{Pen}_{\text{res}} = \text{Pen}_{\text{eff}} - \text{PR}_{\text{barrier}}, \qquad \text{Impact}_{\text{res}} = \max(1,\; \text{Impact}_{\text{eff}} - \text{PR}_{\text{barrier}})$$
+   - If $\text{Pen}_{\text{eff}} \le \text{PR}_{\text{barrier}}$, the barrier **stops** the projectile (`0` through-cover trauma; shooter must hit an exposed zone at full `+4` Low / `+6` High Cover $\Delta_{\text{ext}}$, or `+16` Blocked if no LoS exists).
+   - **Overmatched Cover (`Pen - ΣPR >= 3`)**: When long-arm ammunition (`5.56mm` `Pen 6`, `7.62 NATO` `Pen 7`) fires into soft furniture (`Sofa` `PR 1`, `Desk` `PR 2`, `Car` cabin door `PR 3`), Low Cover degrades from `+4` to **`+2` $\Delta_{\text{ext}}$** because the shooter can fire straight through the cover into the crouched silhouette.
+   - **Blind Partition Fire (`!has_los` + Perforates)**: Firing through an opaque `Drywall` wall (`9mm` or rifle) or `Brick` wall (`7.62×51mm NATO` `Pen 7 > PR 6`) is permitted as a **`+6` $\Delta_{\text{ext}}$** blind/known-cell shot, chaining $(\text{Pen}_{\text{res}}, \text{Impact}_{\text{res}})$ directly into the target's worn body armor (§8.2).
+
+| Material Class (`MaterialClass`) | Representative Map Edges & Props | $\text{PR}_{\text{barrier}}$ *(Stud / Sub-Zone)* | Ballistic Reality Across Calibers |
+| :--- | :--- | :---: | :--- |
+| **`Foliage`** | `Hedge`, `Bush`, brush | **`0`** | Pure concealment (`+3` $\Delta_{\text{ext}}$); stops nothing. |
+| **`Glass` / `Upholstery`** | `Window` pane; `Sofa`, `Loveseat`, `Armchair`, `Booth`, `Bed` | **`1`** | Shaves `-1` off `9mm` (`Pen 2 -> Res Impact 5`); negligible vs. rifles. |
+| **`Drywall`** | Interior partition wall | **`1`** *(**`3`** on `10%` `2×4` wood stud)* | Gypsum cavity is punched by `9mm` & rifles; hitting a wood stud (`PR 3`) stops `9mm` (`Pen 2`) while `5.56mm` (`Pen 6`) punches straight through. |
+| **`WoodFurniture` / `Ceramic`** | `Desk`, `DiningTable`, `Bookshelf`, `Wardrobe`, `WoodCrate`; `Toilet` | **`2`** | Stops standard `9mm` JHP (`Pen 2 <= 2`); completely overmatched by `5.56mm` / `7.62mm` rifles (`+2` $\Delta_{\text{ext}}$). |
+| **`SolidWood` / `SheetSteel` / `Appliance`** | `BarCounter`, `PicnicTable`; `Dumpster`, `DrumCluster`; `Fridge` | **`3`** *(**`5`** on `25%` compressor)* | Stops standard handguns (`Pen 1–3`); perforated by shotguns (`Pen 4`) and rifles (`Pen 5–8`). |
+| **`VehicleBody`** | `Car`, `UtilityVan` cabin & doors *(vs. front hood)* | **`3`** *(**`9`** engine block)* | Rifles punch cleanly through car doors (`PR 3`), whereas the front engine-bay cell (`PR 9`) stops `5.56mm` and `7.62 NATO`. |
+| **`Brick` / `ConcreteBlock`** | Exterior brick masonry & CMU compound walls | **`6`** *(Granular)* | Stops pistols, `12-Ga` (`Pen 4`), `7.62×39mm` (`Pen 5`), `5.7mm` (`eff 4`), and `5.56mm` (`Pen 6`); **defeated by `7.62×51mm NATO` (`Pen 7`) and `6.5mm CM` (`Pen 8`)**. |
+| **`Earth` / `LiveWood`** | Soil-filled `Planter`, `MediumTree` *(vs. `LargeTree`)* | **`7`** *(**`9`** `2×2` trunk)* | Packed soil and mature trunks stop `7.62×51mm NATO` (`Pen 7 <= 7`). |
+| **`ReinforcedConcrete` / `ArmorSteel`** | `JerseyBarrier`, `Boulder`, structural bulkhead / blast door | **`9` / `10`** | Stops all service rifles (`Pen 5–8`); defeated only by `.338` AP / `.50 BMG` (`Pen 10–12`). |
 
 ---
 
