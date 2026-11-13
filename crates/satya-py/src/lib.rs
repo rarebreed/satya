@@ -8,6 +8,9 @@
 
 #![allow(clippy::too_many_arguments)]
 
+pub mod tactical_map_py;
+pub use tactical_map_py::*;
+
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -2187,6 +2190,7 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_movement_and_encumbrance, m)?)?;
     m.add_function(wrap_pyfunction!(list_combat_techniques, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_combat_technique_triad, m)?)?;
+    tactical_map_py::register_tactical_map_functions(m)?;
 
     Ok(())
 }

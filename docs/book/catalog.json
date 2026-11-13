@@ -345,6 +345,7 @@
         "8. Granular Armor Engineering, Penetration (`PR`) vs. `BABT` & Degradation",
         "8.1 Armor Engineering Properties & Material Physics",
         "8.2 Resolving Armor vs. Incoming Hits (`Penetration` vs. `BABT`)",
+        "8.3 Tactical Concealment vs. Structural Cover & Barrier Penetration ($\\text{PR}_{\\text{barrier}}$)",
         "9. Complete Worked Examples",
         "9.1 Worked Example 1: Ranged Firefight (Alley Ambush \u2014 Sear-Modified Drum Pistol vs. Duty Service Pistol)",
         "9.2 Worked Example 2: Engineering Comparison \u2014 Loose-Tolerance `7.62\u00d739mm` AKM vs. Free-Floated Bolt-Action `6.5mm Creedmoor` at 400 Meters"

@@ -1,26 +1,34 @@
 //! # Procedural Outdoor & Compound Battlemap Generator (`map_outdoor_gen`)
 //!
-//! Deterministic, seeded `1.0m`-grid outdoor generator supporting two modern-day presets:
-//! - [`OutdoorStyle::WoodedPark`]: Winding flagstone trail (`StonePath`), octagonal central plaza with
-//!   benches and centerpiece planter/oak, roadside asphalt pullout with parked `2×5` vehicles, trimmed
-//!   hedges, picnic lawn, granite boulders, and minimum-spaced `2×2` / `1×1` trees + undergrowth.
+//! Deterministic, seeded `1.0m`-grid outdoor generator supporting four modern-day presets:
+//! - [`OutdoorStyle::WoodedPark`]: Meandering flagstone trail (`StonePath`), octagonal central plaza with
+//!   benches and centerpiece planter/oak, roadside asphalt pullout, garden beds/edging, mulch rings,
+//!   diagonal fallen logs, granite boulders, and `2×2` / `1×1` trees + undergrowth.
 //! - [`OutdoorStyle::GardenEstate`]: Paved West street/driveway with parked vehicles, thin masonry
-//!   compound perimeter (`MapWallEdge`) with iron gates, landscaped courtyard (stone walks, trimmed
-//!   hedges, patio seating, trees), and a windowed, furnished East pavilion/gatehouse.
+//!   compound perimeter (`MapWallEdge`) with iron gates, landscaped courtyard (meandering walks, garden beds,
+//!   edging, mulch, hedges, patio seating, trees), and a windowed, furnished East pavilion/gatehouse.
+//! - [`OutdoorStyle::WoodlandCreek`] & [`OutdoorStyle::RoadsideDitch`]: Implemented in companion module
+//!   [`crate::map_outdoor_natural`].
 //!
-//! Walkable ground surfaces (`StonePath`, `AsphaltDrive`) are emitted as row-run floor-layer
-//! [`MapPropPlacement`]s so both the 2D SVG composer (which merges contiguous regions seamlessly) and
-//! the 3D WebGPU diorama render them from the existing `props` array without extra wire fields.
+//! Walkable ground surfaces (`StonePath`, `AsphaltDrive`, `GravelPath`, `DirtPath`, `MulchBed`,
+//! `CreekWater`, `DrainageDitch`) are emitted as row-run floor-layer [`MapPropPlacement`]s so both
+//! the 2D SVG composer and the 3D WebGPU diorama render them seamlessly without extra wire fields.
 
 use satya_schema::{
-    EdgeSide, MapPropPlacement, MapWallEdge, MaterialClass, PropKind, TacticalTileKind,
-    WallEdgeKind,
+    EdgeSide, MapPropPlacement, MapWallEdge, MaterialClass, PropKind, WallEdgeKind,
 };
 use serde::{Deserialize, Serialize};
+use std::f32::consts::PI;
 
-use crate::map_dressing::{make_prop, prop_spec, stamp_props_into_tiles};
+use crate::map_dressing::{make_prop, prop_spec};
+#[cfg(test)]
+use crate::map_dressing::props_share_covered_cell;
+use crate::map_outdoor_natural::{build_roadside_ditch, build_woodland_creek};
 use crate::tactical_map::ProceduralSector;
 use crate::tactical_map_edges::WallEdgeIndex;
+use crate::tactical_map_geom::all_walkable_areas_connected;
+#[cfg(test)]
+use crate::tactical_map_geom::{TOKEN_RADIUS_M, circle_collides_obstacles};
 
 /// Outdoor tactical layout family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -28,17 +36,24 @@ use crate::tactical_map_edges::WallEdgeIndex;
 pub enum OutdoorStyle {
     WoodedPark,
     GardenEstate,
+    WoodlandCreek,
+    RoadsideDitch,
 }
 
-const SURF_TURF: u8 = 0;
-const SURF_STONE: u8 = 1;
-const SURF_ASPHALT: u8 = 2;
+pub(crate) const SURF_TURF: u8 = 0;
+pub(crate) const SURF_STONE: u8 = 1;
+pub(crate) const SURF_ASPHALT: u8 = 2;
+pub(crate) const SURF_GRAVEL: u8 = 3;
+pub(crate) const SURF_DIRT: u8 = 4;
+pub(crate) const SURF_MULCH: u8 = 5;
+pub(crate) const SURF_CREEK: u8 = 6;
+pub(crate) const SURF_DITCH: u8 = 7;
 
 #[derive(Debug, Clone, Copy)]
-struct Rng(u64);
+pub(crate) struct Rng(pub(crate) u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    pub(crate) fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -46,7 +61,7 @@ impl Rng {
         z ^ (z >> 31)
     }
 
-    fn range(&mut self, lo: i32, hi_excl: i32) -> i32 {
+    pub(crate) fn range(&mut self, lo: i32, hi_excl: i32) -> i32 {
         if hi_excl <= lo {
             lo
         } else {
@@ -54,29 +69,29 @@ impl Rng {
         }
     }
 
-    fn chance(&mut self, num: u64, den: u64) -> bool {
+    pub(crate) fn chance(&mut self, num: u64, den: u64) -> bool {
         self.next() % den < num
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Rect {
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
+pub(crate) struct Rect {
+    pub(crate) x0: i32,
+    pub(crate) y0: i32,
+    pub(crate) x1: i32,
+    pub(crate) y1: i32,
 }
 
-struct OutdoorBuilder {
-    w: i32,
-    h: i32,
-    rng: Rng,
-    surface: Vec<u8>,
-    edges: Vec<MapWallEdge>,
-    edge_idx: WallEdgeIndex,
-    blocked: Vec<bool>,
-    props: Vec<MapPropPlacement>,
-    tree_centers: Vec<(i32, i32)>,
+pub(crate) struct OutdoorBuilder {
+    pub(crate) w: i32,
+    pub(crate) h: i32,
+    pub(crate) rng: Rng,
+    pub(crate) surface: Vec<u8>,
+    pub(crate) edges: Vec<MapWallEdge>,
+    pub(crate) edge_idx: WallEdgeIndex,
+    pub(crate) blocked: Vec<bool>,
+    pub(crate) props: Vec<MapPropPlacement>,
+    pub(crate) tree_centers: Vec<(i32, i32)>,
 }
 
 impl OutdoorBuilder {
@@ -94,17 +109,17 @@ impl OutdoorBuilder {
         }
     }
 
-    fn in_bounds(&self, x: i32, y: i32) -> bool {
+    pub(crate) fn in_bounds(&self, x: i32, y: i32) -> bool {
         x >= 0 && y >= 0 && x < self.w && y < self.h
     }
 
-    fn set_surf(&mut self, x: i32, y: i32, s: u8) {
+    pub(crate) fn set_surf(&mut self, x: i32, y: i32, s: u8) {
         if self.in_bounds(x, y) {
             self.surface[(y * self.w + x) as usize] = s;
         }
     }
 
-    fn surf_at(&self, x: i32, y: i32) -> u8 {
+    pub(crate) fn surf_at(&self, x: i32, y: i32) -> u8 {
         if self.in_bounds(x, y) {
             self.surface[(y * self.w + x) as usize]
         } else {
@@ -112,7 +127,7 @@ impl OutdoorBuilder {
         }
     }
 
-    fn paint_rect(&mut self, r: Rect, s: u8) {
+    pub(crate) fn paint_rect(&mut self, r: Rect, s: u8) {
         for y in r.y0.max(0)..r.y1.min(self.h) {
             for x in r.x0.max(0)..r.x1.min(self.w) {
                 self.surface[(y * self.w + x) as usize] = s;
@@ -120,21 +135,51 @@ impl OutdoorBuilder {
         }
     }
 
-    /// Paints a `2`-cell-wide stepped stone walkway between `a` and `b`.
-    fn paint_walkway(&mut self, a: (i32, i32), b: (i32, i32)) {
-        let steps = (b.0 - a.0).abs().max((b.1 - a.1).abs()).max(1);
+    /// Paints a smooth organically meandering ribbon (`surf`, width `1..=2` cells) from `a` to `b`
+    /// with a perpendicular sinusoidal bow of `bow_cells`.
+    pub(crate) fn paint_meandering_ribbon(
+        &mut self,
+        a: (i32, i32),
+        b: (i32, i32),
+        surf: u8,
+        bow_cells: f32,
+        thick_2: bool,
+        only_on_turf: bool,
+    ) {
+        let dx = (b.0 - a.0) as f32;
+        let dy = (b.1 - a.1) as f32;
+        let dist = dx.hypot(dy).max(1.0);
+        let nx = -dy / dist;
+        let ny = dx / dist;
+        let steps = (dist * 3.0).ceil() as i32;
+        let horiz_major = dx.abs() >= dy.abs();
         for i in 0..=steps {
-            let x = a.0 + (b.0 - a.0) * i / steps;
-            let y = a.1 + (b.1 - a.1) * i / steps;
-            for dy in 0..2 {
-                if self.surf_at(x, y + dy) == SURF_TURF {
-                    self.set_surf(x, y + dy, SURF_STONE);
+            let t = i as f32 / steps.max(1) as f32;
+            let curve = (t * PI).sin() * bow_cells + (t * 2.0 * PI).sin() * (bow_cells * 0.25);
+            let fx = a.0 as f32 + dx * t + nx * curve;
+            let fy = a.1 as f32 + dy * t + ny * curve;
+            let cx = fx.round() as i32;
+            let cy = fy.round() as i32;
+            let offsets: &[(i32, i32)] = match (thick_2, horiz_major) {
+                (true, true) => &[(0, 0), (0, 1)],
+                (true, false) => &[(0, 0), (1, 0)],
+                (false, _) => &[(0, 0)],
+            };
+            for &(ox, oy) in offsets {
+                let (px, py) = (cx + ox, cy + oy);
+                if self.in_bounds(px, py) && (!only_on_turf || self.surf_at(px, py) == SURF_TURF) {
+                    self.set_surf(px, py, surf);
                 }
             }
         }
     }
 
-    fn put_edge(&mut self, x: i32, y: i32, side: EdgeSide, kind: WallEdgeKind, material: MaterialClass) {
+    /// Paints an organically meandering `2`-cell-wide stone walkway between `a` and `b`.
+    pub(crate) fn paint_walkway(&mut self, a: (i32, i32), b: (i32, i32), bow_cells: f32) {
+        self.paint_meandering_ribbon(a, b, SURF_STONE, bow_cells, true, true);
+    }
+
+    pub(crate) fn put_edge(&mut self, x: i32, y: i32, side: EdgeSide, kind: WallEdgeKind, material: MaterialClass) {
         let e = MapWallEdge { x, y, side, kind, material };
         match self.edges.iter_mut().find(|o| o.x == x && o.y == y && o.side == side) {
             Some(o) => *o = e,
@@ -142,13 +187,13 @@ impl OutdoorBuilder {
         }
     }
 
-    fn reserve(&mut self, x: i32, y: i32) {
+    pub(crate) fn reserve(&mut self, x: i32, y: i32) {
         if self.in_bounds(x, y) {
             self.blocked[(y * self.w + x) as usize] = true;
         }
     }
 
-    fn reserve_spawns_and_doors(&mut self) {
+    pub(crate) fn reserve_spawns_and_doors(&mut self) {
         let mid_y = self.h / 2;
         for &(sx, sy) in &[
             (2, mid_y),
@@ -158,6 +203,10 @@ impl OutdoorBuilder {
             (self.w - 3, (mid_y + 1).min(self.h - 2)),
         ] {
             self.reserve(sx, sy);
+            // Guarantee deployment pads are never standing inside creek/ditch hazard water.
+            if matches!(self.surf_at(sx, sy), SURF_CREEK | SURF_DITCH) {
+                self.set_surf(sx, sy, SURF_TURF);
+            }
         }
         let edges = self.edges.clone();
         for e in &edges {
@@ -177,22 +226,43 @@ impl OutdoorBuilder {
         self.edge_idx = WallEdgeIndex::from_edges(self.w, self.h, &self.edges);
     }
 
-    /// Checks that `[x, x + fw) × [y, y + fh)` fits inside `bounds`, has no blocked cells, and is not
-    /// split internally by any thin wall/door/window edge.
-    fn can_place(&self, pos: (i32, i32), size: (i32, i32), bounds: Rect) -> bool {
-        let ((x, y), (fw, fh)) = (pos, size);
-        if x < bounds.x0 || y < bounds.y0 || x + fw > bounds.x1 || y + fh > bounds.y1 {
+    /// Checks that every physically covered cell of `p` fits inside `bounds`, is unblocked, and has no
+    /// internal thin wall/door/window crossing inside the bounding box.
+    fn can_place_prop(&self, p: &MapPropPlacement, bounds: Rect) -> bool {
+        if p.x < bounds.x0 || p.y < bounds.y0 || p.x + p.w_cells > bounds.x1 || p.y + p.h_cells > bounds.y1 {
             return false;
         }
-        for yy in y..y + fh {
-            for xx in x..x + fw {
+        for yy in p.y..p.y + p.h_cells {
+            for xx in p.x..p.x + p.w_cells {
+                if !p.covers(xx, yy) {
+                    continue;
+                }
                 if !self.in_bounds(xx, yy) || self.blocked[(yy * self.w + xx) as usize] {
                     return false;
                 }
-                if xx > x && self.edge_idx.get(xx, yy, EdgeSide::West).is_some() {
+                if xx > p.x && p.covers(xx - 1, yy) && self.edge_idx.get(xx, yy, EdgeSide::West).is_some() {
                     return false;
                 }
-                if yy > y && self.edge_idx.get(xx, yy, EdgeSide::North).is_some() {
+                if yy > p.y && p.covers(xx, yy - 1) && self.edge_idx.get(xx, yy, EdgeSide::North).is_some() {
+                    return false;
+                }
+            }
+        }
+        if prop_spec(p.kind).obstruction.blocks_movement() {
+            let mid_y = self.h / 2;
+            for &(sx, sy) in &[
+                (2, mid_y),
+                (2, (mid_y - 1).max(1)),
+                (2, (mid_y + 1).min(self.h - 2)),
+                (self.w - 3, mid_y),
+                (self.w - 3, (mid_y + 1).min(self.h - 2)),
+            ] {
+                if crate::tactical_map_geom::prop_intersects_circle(
+                    p,
+                    sx as f32 + 0.5,
+                    sy as f32 + 0.5,
+                    crate::tactical_map_geom::TOKEN_RADIUS_M + 0.02,
+                ) {
                     return false;
                 }
             }
@@ -200,7 +270,7 @@ impl OutdoorBuilder {
         true
     }
 
-    fn try_place(
+    pub(crate) fn try_place(
         &mut self,
         kind: PropKind,
         pos: (i32, i32),
@@ -215,7 +285,7 @@ impl OutdoorBuilder {
         let ok = if decal {
             x >= bounds.x0 && y >= bounds.y0 && x + p.w_cells <= bounds.x1 && y + p.h_cells <= bounds.y1
         } else {
-            self.can_place((x, y), (p.w_cells, p.h_cells), bounds)
+            self.can_place_prop(&p, bounds)
         };
         if !ok {
             return None;
@@ -223,7 +293,9 @@ impl OutdoorBuilder {
         if !decal {
             for yy in y..y + p.h_cells {
                 for xx in x..x + p.w_cells {
-                    self.blocked[(yy * self.w + xx) as usize] = true;
+                    if p.covers(xx, yy) {
+                        self.blocked[(yy * self.w + xx) as usize] = true;
+                    }
                 }
             }
         }
@@ -238,7 +310,7 @@ impl OutdoorBuilder {
             .all(|&(tx, ty)| (cx - tx) * (cx - tx) + (cy - ty) * (cy - ty) >= d2)
     }
 
-    fn scatter_trees(&mut self, kind: PropKind, count: i32, min_dist_cells: i32, bounds: Rect) {
+    pub(crate) fn scatter_trees(&mut self, kind: PropKind, count: i32, min_dist_cells: i32, bounds: Rect) {
         let spec = prop_spec(kind);
         let (fw, fh) = (spec.base_w_cells, spec.base_h_cells);
         let mut placed = 0;
@@ -248,8 +320,10 @@ impl OutdoorBuilder {
             }
             let x = self.rng.range(bounds.x0, bounds.x1 - fw + 1);
             let y = self.rng.range(bounds.y0, bounds.y1 - fh + 1);
-            let on_paved = (y..y + fh).any(|yy| (x..x + fw).any(|xx| self.surf_at(xx, yy) != SURF_TURF));
-            if on_paved || !self.tree_clear(x + fw / 2, y + fh / 2, min_dist_cells) {
+            let on_non_turf = (y..y + fh).any(|yy| {
+                (x..x + fw).any(|xx| !matches!(self.surf_at(xx, yy), SURF_TURF | SURF_MULCH))
+            });
+            if on_non_turf || !self.tree_clear(x + fw / 2, y + fh / 2, min_dist_cells) {
                 continue;
             }
             let rot_deg = self.rng.range(0, 4) * 90;
@@ -260,19 +334,29 @@ impl OutdoorBuilder {
         }
     }
 
-    fn scatter_turf_prop(&mut self, kind: PropKind, count: i32, bounds: Rect) {
+    pub(crate) fn scatter_turf_prop_rot(&mut self, kind: PropKind, count: i32, rot_step_deg: i32, bounds: Rect) {
+        let step = rot_step_deg.max(45);
+        let choices = 360 / step;
         let mut placed = 0;
-        for _ in 0..(count * 20).max(24) {
+        for _ in 0..(count * 22).max(28) {
             if placed >= count {
                 break;
             }
-            let rot_deg = self.rng.range(0, 4) * 90;
+            let rot_deg = self.rng.range(0, choices) * step;
             let probe = make_prop(kind, 0, 0, rot_deg, None, 0);
+            if bounds.x1 - probe.w_cells < bounds.x0 || bounds.y1 - probe.h_cells < bounds.y0 {
+                continue;
+            }
             let x = self.rng.range(bounds.x0, bounds.x1 - probe.w_cells + 1);
             let y = self.rng.range(bounds.y0, bounds.y1 - probe.h_cells + 1);
-            let on_paved = (y..y + probe.h_cells)
-                .any(|yy| (x..x + probe.w_cells).any(|xx| self.surf_at(xx, yy) != SURF_TURF));
-            if on_paved {
+            let probe_placed = make_prop(kind, x, y, rot_deg, None, 0);
+            let bad_surf = (y..y + probe_placed.h_cells).any(|yy| {
+                (x..x + probe_placed.w_cells).any(|xx| {
+                    probe_placed.covers(xx, yy)
+                        && !matches!(self.surf_at(xx, yy), SURF_TURF | SURF_MULCH | SURF_DIRT)
+                })
+            });
+            if bad_surf {
                 continue;
             }
             if self.try_place(kind, (x, y), rot_deg, None, bounds).is_some() {
@@ -281,10 +365,34 @@ impl OutdoorBuilder {
         }
     }
 
+    pub(crate) fn scatter_turf_prop(&mut self, kind: PropKind, count: i32, bounds: Rect) {
+        self.scatter_turf_prop_rot(kind, count, 90, bounds);
+    }
+
+    /// Paints an irregular mulch circle around `(cx, cy)` on existing turf cells.
+    pub(crate) fn paint_mulch_patch(&mut self, cx: i32, cy: i32, radius_cells: i32) {
+        let r2 = radius_cells * radius_cells;
+        for dy in -radius_cells..=radius_cells {
+            for dx in -radius_cells..=radius_cells {
+                if dx * dx + dy * dy <= r2 && self.surf_at(cx + dx, cy + dy) == SURF_TURF {
+                    self.set_surf(cx + dx, cy + dy, SURF_MULCH);
+                }
+            }
+        }
+    }
+
     /// Compresses `self.surface` into horizontal row-run floor props prepended before solid props.
     fn emit_surface_props(&mut self) {
         let mut decals = Vec::new();
-        for (surf_code, kind) in [(SURF_ASPHALT, PropKind::AsphaltDrive), (SURF_STONE, PropKind::StonePath)] {
+        for (surf_code, kind) in [
+            (SURF_ASPHALT, PropKind::AsphaltDrive),
+            (SURF_GRAVEL, PropKind::GravelPath),
+            (SURF_DIRT, PropKind::DirtPath),
+            (SURF_MULCH, PropKind::MulchBed),
+            (SURF_DITCH, PropKind::DrainageDitch),
+            (SURF_CREEK, PropKind::CreekWater),
+            (SURF_STONE, PropKind::StonePath),
+        ] {
             for y in 0..self.h {
                 let mut x = 0;
                 while x < self.w {
@@ -335,13 +443,13 @@ fn build_wooded_park(b: &mut OutdoorBuilder) {
     }
     let wy1 = (mid_y - 1 + b.rng.range(-1, 2)).clamp(turf_y0 + 1, (turf_y1 - 3).max(turf_y0 + 1));
     let wy2 = (mid_y - 1 + b.rng.range(-1, 2)).clamp(turf_y0 + 1, (turf_y1 - 3).max(turf_y0 + 1));
-    b.paint_walkway((0, (mid_y - 1).max(0)), (w / 4, wy1));
-    b.paint_walkway((w / 4, wy1), (px, py - 1));
-    b.paint_walkway((px, py - 1), (3 * w / 4, wy2));
-    b.paint_walkway((3 * w / 4, wy2), (w - 1, (mid_y - 1).max(0)));
+    b.paint_walkway((0, (mid_y - 1).max(0)), (w / 4, wy1), 1.0);
+    b.paint_walkway((w / 4, wy1), (px, py - 1), -1.1);
+    b.paint_walkway((px, py - 1), (3 * w / 4, wy2), 1.1);
+    b.paint_walkway((3 * w / 4, wy2), (w - 1, (mid_y - 1).max(0)), -0.9);
     if has_road {
         let spur_y = if north_road { 2 } else { h - 3 };
-        b.paint_walkway((px, py), (px, spur_y));
+        b.paint_walkway((px, py), (px, spur_y), 0.7);
     }
 
     b.reserve_spawns_and_doors();
@@ -379,8 +487,13 @@ fn build_wooded_park(b: &mut OutdoorBuilder) {
     let _ = b.try_place(PropKind::ParkBench, (px - 1, py - 3), 0, None, whole);
     let _ = b.try_place(PropKind::ParkBench, (px - 1, py + 3), 180, None, whole);
 
-    // 5. Picnic grove, woodland trees, boulders & shrubs
+    // 5. Picnic grove, decorative garden beds, diagonal fallen logs, woodland trees, boulders & shrubs
     let turf = Rect { x0: 1, y0: turf_y0.max(1), x1: w - 1, y1: turf_y1.min(h - 1) };
+    b.paint_mulch_patch(px - 2, py + 2, 1);
+    b.paint_mulch_patch(px + 2, py - 2, 1);
+    let _ = b.try_place(PropKind::GardenBed, (px + 2, (py - 2).max(turf.y0)), 0, None, turf);
+    let _ = b.try_place(PropKind::GardenEdging, (px - 2, (py + 2).min(turf.y1 - 1)), 0, Some(2), turf);
+    b.scatter_turf_prop_rot(PropKind::FallenLog, if w * h >= 220 { 2 } else { 1 }, 45, turf);
     b.scatter_turf_prop(PropKind::PicnicTable, if w * h >= 320 { 2 } else { 1 }, turf);
     b.scatter_turf_prop(PropKind::ParkBench, 2, turf);
     b.scatter_trees(PropKind::LargeTree, ((w * h) / 68).clamp(2, 7), 5, turf);
@@ -492,8 +605,9 @@ fn build_garden_estate(b: &mut OutdoorBuilder) {
 
     // 4. Courtyard stone walkways connecting main gate -> pavilion / East gate & side gate
     let walk_end_x = pav.map_or(cx1 - 1, |p| p.x0 - 1);
-    b.paint_walkway((cx0, gate_y2), (walk_end_x, gate_y2));
-    b.paint_walkway((side_gate_x, cy0), (side_gate_x, gate_y2));
+    b.paint_walkway((cx0, gate_y2), (walk_end_x, gate_y2), 1.1);
+    b.paint_walkway((side_gate_x, cy0), (side_gate_x, gate_y2), 0.9);
+    b.paint_meandering_ribbon((cx0 + 1, cy1 - 2), (walk_end_x, cy1 - 2), SURF_GRAVEL, -0.7, false, true);
 
     b.reserve_spawns_and_doors();
 
@@ -535,6 +649,9 @@ fn build_garden_estate(b: &mut OutdoorBuilder) {
         let _ = b.try_place(PropKind::Planter, (p.x0 - 1, (mid_y + 2).min(cy1 - 1)), 0, None, yard);
         let _ = b.try_place(PropKind::RoundTable, ((p.x0 - 2).max(cx0), (mid_y + 1).min(cy1 - 1)), 0, None, yard);
     }
+    b.paint_mulch_patch(cx0 + 2, cy1 - 2, 1);
+    let _ = b.try_place(PropKind::GardenBed, (cx0 + 1, (cy1 - 2).max(cy0)), 0, None, yard);
+    let _ = b.try_place(PropKind::GardenEdging, (cx0 + 1, (cy1 - 3).max(cy0)), 0, Some(2), yard);
     b.scatter_turf_prop(PropKind::PicnicTable, 1, yard);
     b.scatter_turf_prop(PropKind::ParkBench, 2, yard);
     b.scatter_trees(PropKind::LargeTree, ((yard.x1 - yard.x0) * (cy1 - cy0) / 55).clamp(1, 3), 5, yard);
@@ -542,65 +659,35 @@ fn build_garden_estate(b: &mut OutdoorBuilder) {
     b.scatter_turf_prop(PropKind::Bush, ((yard.x1 - yard.x0) * (cy1 - cy0) / 22).clamp(3, 8), yard);
 }
 
-fn all_walkable_connected(
-    w: i32,
-    h: i32,
-    tiles: &[TacticalTileKind],
-    edges: &WallEdgeIndex,
-    start: (i32, i32),
-) -> bool {
-    let walkable = |x: i32, y: i32| !tiles[(y * w + x) as usize].blocks_occupancy();
-    if !walkable(start.0, start.1) {
-        return false;
-    }
-    let mut seen = vec![false; (w * h) as usize];
-    let mut stack = vec![start];
-    seen[(start.1 * w + start.0) as usize] = true;
-    while let Some((x, y)) = stack.pop() {
-        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-            let (nx, ny) = (x + dx, y + dy);
-            if nx < 0 || ny < 0 || nx >= w || ny >= h || seen[(ny * w + nx) as usize] || !walkable(nx, ny) {
-                continue;
-            }
-            if edges.step_blocked((x, y), dx, dy, |k| matches!(k, WallEdgeKind::Wall | WallEdgeKind::Window)) {
-                continue;
-            }
-            seen[(ny * w + nx) as usize] = true;
-            stack.push((nx, ny));
-        }
-    }
-    (0..h).all(|y| (0..w).all(|x| !walkable(x, y) || seen[(y * w + x) as usize]))
-}
-
-/// Generates a deterministic outdoor or walled-compound sector (`width × height` cells, `1.0m` scale).
+/// Generates a deterministic outdoor or walled-compound sector (`width × height` meters).
 #[must_use]
 pub fn generate_outdoor_sector(style: OutdoorStyle, width: i32, height: i32, seed: i64) -> ProceduralSector {
     let (w, h) = (width.clamp(8, 48), height.clamp(8, 48));
     let salt = match style {
         OutdoorStyle::WoodedPark => 0x50A7_C177,
         OutdoorStyle::GardenEstate => 0xE57A_7E01,
+        OutdoorStyle::WoodlandCreek => 0xC4EE_4B17,
+        OutdoorStyle::RoadsideDitch => 0xD17C_40A1,
     };
     let mut b = OutdoorBuilder::new(w, h, (seed as u64) ^ salt);
     match style {
         OutdoorStyle::WoodedPark => build_wooded_park(&mut b),
         OutdoorStyle::GardenEstate => build_garden_estate(&mut b),
+        OutdoorStyle::WoodlandCreek => build_woodland_creek(&mut b),
+        OutdoorStyle::RoadsideDitch => build_roadside_ditch(&mut b),
     }
     b.emit_surface_props();
 
-    let idx = WallEdgeIndex::from_edges(w, h, &b.edges);
     let mut props = b.props;
-    let start = (2.min(w - 1), h / 2);
     loop {
-        let mut tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
-        stamp_props_into_tiles(&mut tiles, w, h, &props);
-        if all_walkable_connected(w, h, &tiles, &idx, start) {
-            return ProceduralSector { tiles, wall_edges: b.edges, props };
+        if all_walkable_areas_connected(w, h, &b.edges, &props) {
+            return ProceduralSector { wall_edges: b.edges, props };
         }
         match props.iter().rposition(|p| !prop_spec(p.kind).floor_layer) {
             Some(i) => {
                 props.remove(i);
             }
-            None => return ProceduralSector { tiles, wall_edges: b.edges, props },
+            None => return ProceduralSector { wall_edges: b.edges, props },
         }
     }
 }
@@ -611,22 +698,42 @@ mod tests {
 
     #[test]
     fn outdoor_presets_are_deterministic_non_overlapping_and_fully_connected() {
-        for style in [OutdoorStyle::WoodedPark, OutdoorStyle::GardenEstate] {
+        for style in [
+            OutdoorStyle::WoodedPark,
+            OutdoorStyle::GardenEstate,
+            OutdoorStyle::WoodlandCreek,
+            OutdoorStyle::RoadsideDitch,
+        ] {
             for &(w, h) in &[(8, 8), (14, 10), (20, 14), (28, 20)] {
                 for seed in [1_i64, 42, 179, 316, 9001] {
                     let s = generate_outdoor_sector(style, w, h, seed);
                     assert_eq!(s, generate_outdoor_sector(style, w, h, seed), "{style:?} {w}x{h}/{seed}");
-                    assert_eq!(s.tiles.len(), (w * h) as usize);
-                    assert!(s.props.iter().any(|p| p.kind == PropKind::StonePath), "stone walkway");
-                    let idx = WallEdgeIndex::from_edges(w, h, &s.wall_edges);
                     assert!(
-                        all_walkable_connected(w, h, &s.tiles, &idx, (2, h / 2)),
-                        "{style:?} {w}x{h}/{seed} must keep every walkable cell connected"
+                        s.props.iter().any(|p| matches!(
+                            p.kind,
+                            PropKind::StonePath | PropKind::GravelPath | PropKind::DirtPath
+                        )),
+                        "walkway or surface path"
+                    );
+                    assert!(
+                        all_walkable_areas_connected(w, h, &s.wall_edges, &s.props),
+                        "{style:?} {w}x{h}/{seed} must keep every walkable area connected"
                     );
                     if w >= 12 && h >= 10 {
                         let mid_y = h / 2;
                         for &(sx, sy) in &[(2, mid_y), (2, mid_y - 1), (w - 3, mid_y), (w - 3, mid_y + 1)] {
-                            assert_eq!(s.tiles[(sy * w + sx) as usize], TacticalTileKind::Floor, "spawn ({sx},{sy})");
+                            assert!(
+                                !circle_collides_obstacles(
+                                    w as f32,
+                                    h as f32,
+                                    &s.wall_edges,
+                                    &s.props,
+                                    sx as f32 + 0.5,
+                                    sy as f32 + 0.5,
+                                    TOKEN_RADIUS_M,
+                                ),
+                                "spawn ({sx},{sy}) blocked"
+                            );
                         }
                     }
                     for (i, p) in s.props.iter().enumerate() {
@@ -635,11 +742,10 @@ mod tests {
                             if prop_spec(p.kind).floor_layer || prop_spec(q.kind).floor_layer {
                                 continue;
                             }
-                            let overlap = p.x < q.x + q.w_cells
-                                && q.x < p.x + p.w_cells
-                                && p.y < q.y + q.h_cells
-                                && q.y < p.y + p.h_cells;
-                            assert!(!overlap, "{style:?} {w}x{h}/{seed}: {p:?} overlaps {q:?}");
+                            assert!(
+                                !props_share_covered_cell(p, q),
+                                "{style:?} {w}x{h}/{seed}: {p:?} overlaps {q:?}"
+                            );
                         }
                     }
                 }
@@ -655,5 +761,18 @@ mod tests {
         assert!(!estate.wall_edges.is_empty(), "estate has compound + pavilion thin walls");
         assert!(estate.wall_edges.iter().any(|e| e.kind == WallEdgeKind::Window));
         assert!(estate.props.iter().any(|p| p.kind == PropKind::AsphaltDrive));
+
+        let creek = generate_outdoor_sector(OutdoorStyle::WoodlandCreek, 20, 14, 42);
+        assert!(creek.wall_edges.is_empty(), "natural woodland creek has no structural walls");
+        assert!(creek.props.iter().any(|p| p.kind == PropKind::CreekWater));
+        assert!(creek.props.iter().any(|p| p.kind == PropKind::GravelPath));
+        assert!(creek.props.iter().any(|p| p.kind == PropKind::DirtPath));
+        assert!(creek.props.iter().any(|p| p.kind == PropKind::FallenLog && p.rotation_deg % 90 == 45));
+
+        let ditch = generate_outdoor_sector(OutdoorStyle::RoadsideDitch, 20, 14, 42);
+        assert!(!ditch.wall_edges.is_empty(), "roadside ditch has culvert headwalls and garden fence");
+        assert!(ditch.props.iter().any(|p| p.kind == PropKind::DrainageDitch));
+        assert!(ditch.props.iter().any(|p| p.kind == PropKind::GravelPath));
+        assert!(ditch.props.iter().any(|p| matches!(p.kind, PropKind::GardenBed | PropKind::GardenEdging)));
     }
 }

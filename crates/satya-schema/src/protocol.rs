@@ -842,8 +842,8 @@ pub struct GmMapUpdateRequest {
     /// Optional deterministic procedural generation seed.
     #[serde(default)]
     pub seed: Option<i64>,
-    /// Optional row-major `grid_width * grid_height` terrain, cover, bulkhead, door, and hazard tiles.
-    #[serde(default)]
+    /// Optional legacy row-major terrain/cover tiles (empty for tile-free continuous vector maps).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tiles: Vec<TacticalTileKind>,
     /// Optional 3D `.glb` miniature model, color, facing, and pose overrides per `entity_id`.
     #[serde(default)]
@@ -878,13 +878,27 @@ impl Default for GmMapUpdateRequest {
 }
 
 impl GmMapUpdateRequest {
-    /// Physical tactical grid cell size in meters (`1.0` default).
+    /// Physical tactical scale unit in meters (`1.0` default).
     #[must_use]
     pub fn cell_size_m(&self) -> f32 {
         (self.cell_size_cm.max(25) as f32) / 100.0
     }
 
-    /// Looks up the [`TacticalTileKind`] at `(x, y)` (`Floor` when `tiles` is empty or out of range).
+    /// Physical board width and height in centimeters.
+    #[must_use]
+    pub fn board_size_cm(&self) -> (i32, i32) {
+        let s = self.cell_size_cm.max(25);
+        (self.grid_width.max(1) * s, self.grid_height.max(1) * s)
+    }
+
+    /// Physical board width and height in meters.
+    #[must_use]
+    pub fn board_size_m(&self) -> (f32, f32) {
+        let (w_cm, h_cm) = self.board_size_cm();
+        (w_cm as f32 / 100.0, h_cm as f32 / 100.0)
+    }
+
+    /// Looks up the legacy [`TacticalTileKind`] at `(x, y)` (`Floor` when `tiles` is empty or out of range).
     #[must_use]
     pub fn tile_at(&self, x: i32, y: i32) -> TacticalTileKind {
         if x < 0 || y < 0 || x >= self.grid_width || y >= self.grid_height {
@@ -903,6 +917,58 @@ impl GmMapUpdateRequest {
         self.token_visuals
             .iter()
             .find(|v| v.entity_id == entity_id)
+    }
+
+    /// Authoritative continuous center coordinate `(x_cm, y_cm)` for `tok`, falling back to the
+    /// center of `(tok.x, tok.y)` when no sub-meter coordinate override is set on its visual spec.
+    #[must_use]
+    pub fn token_pos_cm(&self, tok: &TokenPlacement) -> (i32, i32) {
+        let cell_cm = self.cell_size_cm.max(25);
+        let vis = self.visual_for(&tok.entity_id);
+        let x_cm = vis
+            .and_then(|v| v.pos_x_cm)
+            .unwrap_or(tok.x * cell_cm + cell_cm / 2);
+        let y_cm = vis
+            .and_then(|v| v.pos_y_cm)
+            .unwrap_or(tok.y * cell_cm + cell_cm / 2);
+        (x_cm, y_cm)
+    }
+
+    /// Authoritative continuous center coordinate `(x_m, y_m)` in meters for `tok`.
+    #[must_use]
+    pub fn token_pos_m(&self, tok: &TokenPlacement) -> (f32, f32) {
+        let (x_cm, y_cm) = self.token_pos_cm(tok);
+        (x_cm as f32 / 100.0, y_cm as f32 / 100.0)
+    }
+
+    /// Synchronizes both continuous centimeter coordinates (`pos_x_cm`, `pos_y_cm` on
+    /// [`TokenVisualSpec`]) and legacy integer meter indices (`tok.x`, `tok.y` on [`TokenPlacement`])
+    /// for `entity_id` so Avro v1 logs and UI stay consistent.
+    pub fn set_token_pos_cm(&mut self, entity_id: &str, x_cm: i32, y_cm: i32) {
+        let cell_cm = self.cell_size_cm.max(25);
+        let max_gx = (self.grid_width - 1).max(0);
+        let max_gy = (self.grid_height - 1).max(0);
+        let gx = (x_cm / cell_cm).clamp(0, max_gx);
+        let gy = (y_cm / cell_cm).clamp(0, max_gy);
+        if let Some(tok) = self.tokens.iter_mut().find(|t| t.entity_id == entity_id) {
+            tok.x = gx;
+            tok.y = gy;
+        }
+        if let Some(vis) = self
+            .token_visuals
+            .iter_mut()
+            .find(|v| v.entity_id == entity_id)
+        {
+            vis.pos_x_cm = Some(x_cm);
+            vis.pos_y_cm = Some(y_cm);
+        } else {
+            self.token_visuals.push(TokenVisualSpec {
+                entity_id: entity_id.to_string(),
+                pos_x_cm: Some(x_cm),
+                pos_y_cm: Some(y_cm),
+                ..Default::default()
+            });
+        }
     }
 }
 

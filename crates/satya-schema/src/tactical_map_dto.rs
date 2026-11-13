@@ -25,73 +25,27 @@ fn default_true() -> bool {
     true
 }
 
-/// Terrain, cover, concealment, obstacle, and elevation classification for a `1.0m` cell on a Satya tactical map.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum TacticalTileKind {
-    #[default]
-    Floor,
-    Concealment,
-    HalfCover,
-    FullWall,
-    DoorClosed,
-    DoorOpen,
-    HazardZone,
-    ElevatedPlatform,
+crate::define_wire_enum! {
+    /// Terrain, cover, concealment, obstacle, and elevation classification for a `1.0m` cell on a Satya tactical map.
+    #[derive(Default)]
+    pub enum TacticalTileKind [count = 8] {
+        #[default]
+        Floor => ("FLOOR", "Open Deck (0.0m)"),
+        Concealment => ("CONCEALMENT", "Foliage / Concealment (1.2m, +3 Δ_ext, 0 PR)", aliases: ["FOLIAGE", "HEDGE", "BUSH", "SMOKE"]),
+        HalfCover => ("HALF_COVER", "Half Cover Crate/Console (0.9m, +4 Δ_ext)", aliases: ["CRATE", "LOW_COVER", "COVER"]),
+        FullWall => ("FULL_WALL", "Full Bulkhead/Pillar (2.4m, Blocks LoS)", aliases: ["WALL", "BULKHEAD", "PILLAR"]),
+        DoorClosed => ("DOOR_CLOSED", "Closed Airlock Door (2.4m, Blocks LoS)", aliases: ["DOOR", "AIRLOCK_CLOSED"]),
+        DoorOpen => ("DOOR_OPEN", "Open Airlock Threshold (0.0m)", aliases: ["AIRLOCK_OPEN"]),
+        HazardZone => ("HAZARD_ZONE", "Environmental Hazard (×2 Move Cost)", aliases: ["HAZARD", "DIFFICULT"]),
+        ElevatedPlatform => ("ELEVATED_PLATFORM", "Elevated Catwalk (+1.5m)", aliases: ["ELEVATED", "PLATFORM", "CATWALK"]),
+    }
 }
 
 impl TacticalTileKind {
-    pub const ALL: [Self; 8] = [
-        Self::Floor,
-        Self::Concealment,
-        Self::HalfCover,
-        Self::FullWall,
-        Self::DoorClosed,
-        Self::DoorOpen,
-        Self::HazardZone,
-        Self::ElevatedPlatform,
-    ];
-
+    /// Parses a legacy/loose wire string into [`TacticalTileKind`], defaulting unknown tokens to `Floor`.
     #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Floor => "FLOOR",
-            Self::Concealment => "CONCEALMENT",
-            Self::HalfCover => "HALF_COVER",
-            Self::FullWall => "FULL_WALL",
-            Self::DoorClosed => "DOOR_CLOSED",
-            Self::DoorOpen => "DOOR_OPEN",
-            Self::HazardZone => "HAZARD_ZONE",
-            Self::ElevatedPlatform => "ELEVATED_PLATFORM",
-        }
-    }
-
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Floor => "Open Deck (0.0m)",
-            Self::Concealment => "Foliage / Concealment (1.2m, +3 Δ_ext, 0 PR)",
-            Self::HalfCover => "Half Cover Crate/Console (0.9m, +4 Δ_ext)",
-            Self::FullWall => "Full Bulkhead/Pillar (2.4m, Blocks LoS)",
-            Self::DoorClosed => "Closed Airlock Door (2.4m, Blocks LoS)",
-            Self::DoorOpen => "Open Airlock Threshold (0.0m)",
-            Self::HazardZone => "Environmental Hazard (×2 Move Cost)",
-            Self::ElevatedPlatform => "Elevated Catwalk (+1.5m)",
-        }
-    }
-
-    #[must_use]
-    pub fn from_code_str(raw: &str) -> Self {
-        match raw.trim().to_ascii_uppercase().as_str() {
-            "CONCEALMENT" | "FOLIAGE" | "HEDGE" | "BUSH" | "SMOKE" => Self::Concealment,
-            "HALF_COVER" | "CRATE" | "LOW_COVER" | "COVER" => Self::HalfCover,
-            "FULL_WALL" | "WALL" | "BULKHEAD" | "PILLAR" => Self::FullWall,
-            "DOOR_CLOSED" | "DOOR" | "AIRLOCK_CLOSED" => Self::DoorClosed,
-            "DOOR_OPEN" | "AIRLOCK_OPEN" => Self::DoorOpen,
-            "HAZARD_ZONE" | "HAZARD" | "DIFFICULT" => Self::HazardZone,
-            "ELEVATED_PLATFORM" | "ELEVATED" | "PLATFORM" | "CATWALK" => Self::ElevatedPlatform,
-            _ => Self::Floor,
-        }
+    pub fn from_code_str_or_floor(raw: &str) -> Self {
+        Self::from_code_str(raw).unwrap_or(Self::Floor)
     }
 
     /// Physical obstacle or deck elevation height in centimeters (`0`, `90`, `120`, `150`, or `240`).
@@ -147,16 +101,17 @@ impl TacticalTileKind {
     }
 }
 
-/// Evaluated Line-of-Sight, visual concealment, and tactical cover classification between two cells on the `1.0m` grid.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum CoverGrade {
-    #[default]
-    Clear,
-    Concealment,
-    LowCover,
-    HighCover,
-    Blocked,
+crate::define_wire_enum! {
+    /// Evaluated Line-of-Sight, visual concealment, and tactical cover classification between two positions.
+    #[derive(Default)]
+    pub enum CoverGrade [count = 5] {
+        #[default]
+        Clear => ("CLEAR", "Clear LoS (+0 Δ_ext)"),
+        Concealment => ("CONCEALMENT", "Concealment (+3 Δ_ext, 0 PR)"),
+        LowCover => ("LOW_COVER", "Low Cover (+4 Δ_ext)"),
+        HighCover => ("HIGH_COVER", "High / Corner Cover (+6 Δ_ext)"),
+        Blocked => ("BLOCKED", "Blocked (No LoS)"),
+    }
 }
 
 impl CoverGrade {
@@ -171,17 +126,6 @@ impl CoverGrade {
             Self::LowCover => 4,
             Self::HighCover => 6,
             Self::Blocked => 16,
-        }
-    }
-
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Clear => "Clear LoS (+0 Δ_ext)",
-            Self::Concealment => "Concealment (+3 Δ_ext, 0 PR)",
-            Self::LowCover => "Low Cover (+4 Δ_ext)",
-            Self::HighCover => "High / Corner Cover (+6 Δ_ext)",
-            Self::Blocked => "Blocked (No LoS)",
         }
     }
 }
@@ -208,6 +152,12 @@ pub struct TokenVisualSpec {
     /// Optional safe portrait image URL/path rendered inside the 2D battlemap token disc.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub portrait_url: Option<String>,
+    /// Authoritative continuous X center coordinate in centimeters (`None` falls back to `(tok.x * cell_size_cm) + cell_size_cm / 2`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pos_x_cm: Option<i32>,
+    /// Authoritative continuous Y center coordinate in centimeters (`None` falls back to `(tok.y * cell_size_cm) + cell_size_cm / 2`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pos_y_cm: Option<i32>,
 }
 
 /// Validates and normalizes an optional character/NPC token portrait URL, rejecting script vectors
@@ -260,12 +210,14 @@ impl Default for TokenVisualSpec {
             elevation_cm: 0,
             stance_pose: default_token_pose(),
             portrait_url: None,
+            pos_x_cm: None,
+            pos_y_cm: None,
         }
     }
 }
 
 /// HTTP request body for `POST /api/sessions/:session_id/map` generating a procedural tactical sector
-/// or editing individual terrain/door tiles on the active session map.
+/// or editing walls, doors, windows, and continuous props on the active session map.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GenerateSessionMapRequest {
     /// Sector generator preset (`"orbital_airlock"`, `"docking_bay"`, `"med_lab"`, `"urban_crossroads"`, `"derelict_corridor"`).
@@ -283,13 +235,13 @@ pub struct GenerateSessionMapRequest {
     pub seed: Option<i64>,
     #[serde(default = "default_true")]
     pub populate_roster_tokens: bool,
-    /// Optional single-cell terrain/door mutation X coordinate (`0..grid_width`) on the existing active map.
+    /// Optional single-cell mutation X coordinate (`0..grid_width`, legacy door toggle fallback).
     #[serde(default)]
     pub edit_cell_x: Option<i32>,
-    /// Optional single-cell terrain/door mutation Y coordinate (`0..grid_height`) on the existing active map.
+    /// Optional single-cell mutation Y coordinate (`0..grid_height`, legacy door toggle fallback).
     #[serde(default)]
     pub edit_cell_y: Option<i32>,
-    /// Target [`TacticalTileKind`] when `edit_cell_x` and `edit_cell_y` are provided (`None` toggles doors/cover).
+    /// Legacy tile override field retained for wire compatibility.
     #[serde(default)]
     pub set_tile_kind: Option<TacticalTileKind>,
     /// Optional single **edge** mutation on the existing active map (door toggle or GM wall painting).
@@ -301,12 +253,15 @@ pub struct GenerateSessionMapRequest {
     /// When `true` with `edit_edge`, removes the edge entirely (GM only).
     #[serde(default)]
     pub clear_edge: bool,
-    /// Optional GM multi-cell prop placement/replacement on the existing active map.
+    /// Optional GM continuous prop placement/replacement on the existing active map.
     #[serde(default)]
     pub edit_prop: Option<MapPropPlacement>,
-    /// Optional GM prop removal covering cell `(x, y)` on the existing active map.
+    /// Optional GM prop removal covering integer cell `(x, y)` on the existing active map.
     #[serde(default)]
     pub clear_prop_at: Option<(i32, i32)>,
+    /// Optional GM prop removal at continuous centimeter point `(x_cm, y_cm)`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear_prop_at_cm: Option<(i32, i32)>,
 }
 
 fn default_sector_preset() -> String {
@@ -331,19 +286,26 @@ impl Default for GenerateSessionMapRequest {
             clear_edge: false,
             edit_prop: None,
             clear_prop_at: None,
+            clear_prop_at_cm: None,
         }
     }
 }
 
 /// HTTP request body for `POST /api/sessions/:session_id/map/move` moving, orienting, spawning,
-/// or removing a character/NPC miniature on the active `1.0m` tactical grid.
+/// or removing a character/NPC miniature continuously on the active tactical map.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct MoveMapTokenRequest {
     pub entity_id: String,
     #[serde(default)]
     pub label: Option<String>,
+    #[serde(default)]
     pub to_x: i32,
+    #[serde(default)]
     pub to_y: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_x_cm: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_y_cm: Option<i32>,
     #[serde(default)]
     pub facing_deg: Option<i32>,
     #[serde(default)]
@@ -358,6 +320,18 @@ pub struct MoveMapTokenRequest {
     pub visibility: Option<MessageVisibility>,
     #[serde(default)]
     pub remove: bool,
+}
+
+impl MoveMapTokenRequest {
+    /// Returns requested destination in centimeters, preferring `to_x_cm`/`to_y_cm` over cell center `(to_x, to_y)`.
+    #[must_use]
+    pub fn target_cm(&self, cell_size_cm: i32) -> (i32, i32) {
+        let s = cell_size_cm.max(25);
+        (
+            self.to_x_cm.unwrap_or(self.to_x * s + s / 2),
+            self.to_y_cm.unwrap_or(self.to_y * s + s / 2),
+        )
+    }
 }
 
 #[cfg(test)]

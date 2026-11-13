@@ -518,6 +518,7 @@ impl AuthAndSessionManager {
             built
         });
 
+        let cell_cm = map.cell_size_cm.max(25);
         for (idx, c) in tracker.combatants.iter().enumerate() {
             let x = c
                 .grid_x
@@ -531,14 +532,20 @@ impl AuthAndSessionManager {
                 Some(z) if !z.is_empty() => format!("{} [{}]", c.display_name, z),
                 _ => c.display_name.clone(),
             };
-            if let Some(tok) = map
+            let existing_id = map
                 .tokens
-                .iter_mut()
+                .iter()
                 .find(|t| t.entity_id == c.entity_id || t.label.starts_with(&c.display_name))
-            {
-                tok.x = x;
-                tok.y = y;
-                tok.label = label;
+                .map(|t| (t.entity_id.clone(), t.x, t.y));
+            if let Some((eid, prev_x, prev_y)) = existing_id {
+                if let Some(tok) = map.tokens.iter_mut().find(|t| t.entity_id == eid) {
+                    tok.x = x;
+                    tok.y = y;
+                    tok.label = label;
+                }
+                if prev_x != x || prev_y != y {
+                    map.set_token_pos_cm(&eid, x * cell_cm + cell_cm / 2, y * cell_cm + cell_cm / 2);
+                }
             } else {
                 map.tokens.push(TokenPlacement {
                     entity_id: c.entity_id.clone(),
@@ -547,6 +554,11 @@ impl AuthAndSessionManager {
                     y,
                     visibility: MessageVisibility::Public,
                 });
+                map.set_token_pos_cm(
+                    &c.entity_id,
+                    x * cell_cm + cell_cm / 2,
+                    y * cell_cm + cell_cm / 2,
+                );
             }
         }
         Some(map.clone())

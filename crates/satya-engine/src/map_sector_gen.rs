@@ -6,14 +6,14 @@
 //! multi-cell [`MapPropPlacement`]s, while preserving elevated catwalks, hazard zones, and spawn pads.
 
 use satya_schema::{
-    EdgeSide, MapPropPlacement, MapWallEdge, MaterialClass, PropKind, TacticalTileKind,
-    WallEdgeKind,
+    EdgeSide, MapPropPlacement, MapWallEdge, MaterialClass, PropKind, WallEdgeKind,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::map_dressing::{make_prop, prop_spec, stamp_props_into_tiles};
+use crate::map_dressing::{PropObstruction, make_prop, prop_spec};
 use crate::tactical_map::ProceduralSector;
 use crate::tactical_map_edges::WallEdgeIndex;
+use crate::tactical_map_geom::{TOKEN_RADIUS_M, all_walkable_areas_connected, circle_collides_obstacles};
 
 /// Upgraded facility / urban layout family corresponding to the five classic sector presets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -29,6 +29,8 @@ pub enum FacilitySectorStyle {
 const SURF_BASE: u8 = 0;
 const SURF_STONE: u8 = 1;
 const SURF_ASPHALT: u8 = 2;
+const SURF_CATWALK: u8 = 3;
+const SURF_HAZARD: u8 = 4;
 
 #[derive(Debug, Clone, Copy)]
 struct Rng(u64);
@@ -89,7 +91,6 @@ struct SectorBuilder {
     w: i32,
     h: i32,
     rng: Rng,
-    tiles: Vec<TacticalTileKind>,
     surf: Vec<u8>,
     edges: Vec<MapWallEdge>,
     edge_idx: WallEdgeIndex,
@@ -103,7 +104,6 @@ impl SectorBuilder {
             w,
             h,
             rng: Rng(seed),
-            tiles: vec![TacticalTileKind::Floor; (w * h) as usize],
             surf: vec![SURF_BASE; (w * h) as usize],
             edges: Vec::new(),
             edge_idx: WallEdgeIndex::from_edges(w, h, &[]),
@@ -120,9 +120,17 @@ impl SectorBuilder {
         x >= 0 && y >= 0 && x < self.w && y < self.h
     }
 
-    fn set_tile(&mut self, x: i32, y: i32, kind: TacticalTileKind) {
+    fn set_surf(&mut self, x: i32, y: i32, code: u8) {
         if self.in_bounds(x, y) {
-            self.tiles[(y * self.w + x) as usize] = kind;
+            self.surf[(y * self.w + x) as usize] = code;
+        }
+    }
+
+    fn add_pillar(&mut self, x: i32, y: i32) {
+        if self.in_bounds(x, y) && !self.blocked[(y * self.w + x) as usize] {
+            let vseed = self.rng.next() as u32;
+            self.blocked[(y * self.w + x) as usize] = true;
+            self.props.push(make_prop(PropKind::StructuralPillar, x, y, 0, None, vseed));
         }
     }
 
@@ -161,7 +169,7 @@ impl SectorBuilder {
 
     fn add_corner_pilasters(&mut self) {
         for &(px, py) in &[(0, 0), (self.w - 1, 0), (0, self.h - 1), (self.w - 1, self.h - 1)] {
-            self.set_tile(px, py, TacticalTileKind::FullWall);
+            self.add_pillar(px, py);
         }
     }
 
@@ -239,13 +247,6 @@ impl SectorBuilder {
                         self.reserve(e.x, e.y - 1);
                         self.reserve(e.x, e.y);
                     }
-                }
-            }
-        }
-        for y in 0..self.h {
-            for x in 0..self.w {
-                if self.tiles[(y * self.w + x) as usize] != TacticalTileKind::Floor {
-                    self.reserve(x, y);
                 }
             }
         }
@@ -345,7 +346,12 @@ impl SectorBuilder {
 
     fn emit_surface_props(&mut self) {
         let mut decals = Vec::new();
-        for (code, kind) in [(SURF_ASPHALT, PropKind::AsphaltDrive), (SURF_STONE, PropKind::StonePath)] {
+        for (code, kind) in [
+            (SURF_ASPHALT, PropKind::AsphaltDrive),
+            (SURF_STONE, PropKind::StonePath),
+            (SURF_CATWALK, PropKind::ElevatedCatwalk),
+            (SURF_HAZARD, PropKind::HazardSpill),
+        ] {
             for y in 0..self.h {
                 let mut x = 0;
                 while x < self.w {
@@ -367,7 +373,6 @@ impl SectorBuilder {
 
     fn finalize(mut self) -> ProceduralSector {
         self.emit_surface_props();
-        let base_tiles = self.tiles.clone();
         let (w, h, mid_y) = (self.w, self.h, self.h / 2);
         let pads = [
             (2, mid_y),
@@ -375,47 +380,26 @@ impl SectorBuilder {
             (w - 3, mid_y),
             (w - 3, (mid_y + 1).min(h - 2)),
         ];
+        self.props.retain(|p| {
+            prop_spec(p.kind).floor_layer
+                || !pads.iter().any(|&(px, py)| p.covers(px, py))
+        });
         loop {
-            let mut tiles = base_tiles.clone();
-            stamp_props_into_tiles(&mut tiles, w, h, &self.props);
-            for &(px, py) in &pads {
-                tiles[(py * w + px) as usize] = TacticalTileKind::Floor;
+            if all_walkable_areas_connected(w, h, &self.edges, &self.props) {
+                return ProceduralSector { wall_edges: self.edges, props: self.props };
             }
-            if reachable_all(w, h, &tiles, &self.edge_idx, (2, mid_y)) {
-                return ProceduralSector { tiles, wall_edges: self.edges, props: self.props };
-            }
-            match self.props.iter().rposition(|p| prop_spec(p.kind).stamp == TacticalTileKind::FullWall) {
+            match self
+                .props
+                .iter()
+                .rposition(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle)
+            {
                 Some(i) => {
                     self.props.remove(i);
                 }
-                None => return ProceduralSector { tiles, wall_edges: self.edges, props: self.props },
+                None => return ProceduralSector { wall_edges: self.edges, props: self.props },
             }
         }
     }
-}
-
-fn reachable_all(w: i32, h: i32, tiles: &[TacticalTileKind], edges: &WallEdgeIndex, start: (i32, i32)) -> bool {
-    let passable = |x: i32, y: i32| tiles[(y * w + x) as usize] != TacticalTileKind::FullWall;
-    if !passable(start.0, start.1) {
-        return false;
-    }
-    let mut seen = vec![false; (w * h) as usize];
-    let mut stack = vec![start];
-    seen[(start.1 * w + start.0) as usize] = true;
-    while let Some((x, y)) = stack.pop() {
-        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-            let (nx, ny) = (x + dx, y + dy);
-            if nx < 0 || ny < 0 || nx >= w || ny >= h || seen[(ny * w + nx) as usize] || !passable(nx, ny) {
-                continue;
-            }
-            if edges.step_blocked((x, y), dx, dy, |k| matches!(k, WallEdgeKind::Wall | WallEdgeKind::Window)) {
-                continue;
-            }
-            seen[(ny * w + nx) as usize] = true;
-            stack.push((nx, ny));
-        }
-    }
-    (0..h).all(|y| (0..w).all(|x| !passable(x, y) || seen[(y * w + x) as usize]))
 }
 
 fn build_urban_crossroads(b: &mut SectorBuilder) {
@@ -491,10 +475,10 @@ fn build_docking_bay(b: &mut SectorBuilder) {
     // Elevated steel catwalk along North gantry + industrial fuel/chemical hazard spill
     let cat_y = if h >= 12 { 2 } else { 1 };
     for x in 3..(w - 3) {
-        b.set_tile(x, cat_y, TacticalTileKind::ElevatedPlatform);
+        b.set_surf(x, cat_y, SURF_CATWALK);
     }
-    b.set_tile(mid_x - 1, (h - 3).max(cat_y + 2), TacticalTileKind::HazardZone);
-    b.set_tile(mid_x, (h - 3).max(cat_y + 2), TacticalTileKind::HazardZone);
+    b.set_surf(mid_x - 1, (h - 3).max(cat_y + 2), SURF_HAZARD);
+    b.set_surf(mid_x, (h - 3).max(cat_y + 2), SURF_HAZARD);
 
     // East loading apron + glazed SW shipping/dispatch booth
     if w >= 16 && h >= 12 {
@@ -560,8 +544,8 @@ fn build_med_lab(b: &mut SectorBuilder) {
             };
             b.put_edge((x2, y), EdgeSide::West, kind, mat);
         }
-        b.set_tile(x2 + 1, (mid_y + 1).min(h - 2), TacticalTileKind::HazardZone);
-        b.set_tile((x2 + 2).min(w - 2), (mid_y + 1).min(h - 2), TacticalTileKind::HazardZone);
+        b.set_surf(x2 + 1, (mid_y + 1).min(h - 2), SURF_HAZARD);
+        b.set_surf((x2 + 2).min(w - 2), (mid_y + 1).min(h - 2), SURF_HAZARD);
         b.add_perimeter_windows(4);
         b.reserve_spawns_and_doors();
 
@@ -585,7 +569,7 @@ fn build_med_lab(b: &mut SectorBuilder) {
             let kind = if y == mid_y { WallEdgeKind::DoorClosed } else { WallEdgeKind::Wall };
             b.put_edge((sx, y), EdgeSide::West, kind, MaterialClass::ConcreteBlock);
         }
-        b.set_tile(sx + 1, (mid_y + 1).min(h - 2), TacticalTileKind::HazardZone);
+        b.set_surf(sx + 1, (mid_y + 1).min(h - 2), SURF_HAZARD);
         b.add_perimeter_windows(3);
         b.reserve_spawns_and_doors();
         let whole = b.whole();
@@ -637,8 +621,8 @@ fn build_derelict_corridor(b: &mut SectorBuilder) {
         }
     }
 
-    b.set_tile((mid_x - 1).max(1), (mid_y + 1).min(h - 2), TacticalTileKind::HazardZone);
-    b.set_tile(mid_x, (mid_y + 1).min(h - 2), TacticalTileKind::HazardZone);
+    b.set_surf((mid_x - 1).max(1), (mid_y + 1).min(h - 2), SURF_HAZARD);
+    b.set_surf(mid_x, (mid_y + 1).min(h - 2), SURF_HAZARD);
     b.reserve_spawns_and_doors();
 
     let whole = b.whole();
@@ -655,18 +639,18 @@ fn build_orbital_airlock(b: &mut SectorBuilder) {
     let (w, h, mid_x, mid_y) = (b.w, b.h, b.w / 2, b.h / 2);
     b.perimeter(MaterialClass::ArmorSteel, MaterialClass::ArmorSteel);
 
-    // 4 structural Mag-Rail blast columns (`FullWall` pilasters for structural poché & corner-peeking)
+    // 4 structural Mag-Rail blast columns (`StructuralPillar`s for corner-peeking)
     if w >= 14 && h >= 10 {
         for &(px, py) in &[(mid_x - 4, 3), (mid_x + 3, 3), (mid_x - 4, h - 4), (mid_x + 3, h - 4)] {
-            b.set_tile(px, py, TacticalTileKind::FullWall);
+            b.add_pillar(px, py);
         }
     } else {
         b.add_corner_pilasters();
     }
 
     // Elevated gantry pads & plasma vent hazard strip
-    b.set_tile(mid_x + 1, (mid_y - 2).max(1), TacticalTileKind::HazardZone);
-    b.set_tile((mid_x + 2).min(w - 2), (mid_y - 2).max(1), TacticalTileKind::HazardZone);
+    b.set_surf(mid_x + 1, (mid_y - 2).max(1), SURF_HAZARD);
+    b.set_surf((mid_x + 2).min(w - 2), (mid_y - 2).max(1), SURF_HAZARD);
 
     let mut booths = Vec::new();
     if w >= 14 && h >= 12 {
@@ -685,7 +669,7 @@ fn build_orbital_airlock(b: &mut SectorBuilder) {
         booths.push(north_booth);
         booths.push(south_booth);
         for x in (bx0 + 1)..(bx1 - 1) {
-            b.set_tile(x, 3, TacticalTileKind::ElevatedPlatform);
+            b.set_surf(x, 3, SURF_CATWALK);
         }
     }
 
@@ -745,21 +729,53 @@ pub fn generate_facility_sector(
     }
     let mut sector = b.finalize();
 
-    // Defensive minimum guarantees on tiny 8x8 boards: ensure at least one HalfCover and one FullWall.
-    let (mid_y, whole) = (h / 2, Rect { x0: 0, y0: 0, x1: w, y1: h });
-    if !sector.tiles.contains(&TacticalTileKind::HalfCover)
-        && let Some(p) = (0..w).find_map(|x| {
+    // Defensive minimum guarantees on tiny 8x8 boards: ensure at least one HalfCover and one FullObstacle.
+    let mid_y = h / 2;
+    let has_half_cover = sector
+        .props
+        .iter()
+        .any(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover);
+    if !has_half_cover
+        && let Some(p) = (1..w - 1).find_map(|x| {
             let y = 1;
-            let blocked_pad = (x == 2 || x == 3 || x == w - 3 || x == w - 5) && (y - mid_y).abs() <= 1;
-            (!blocked_pad && sector.tiles[(y * w + x) as usize] == TacticalTileKind::Floor && x >= whole.x0)
-                .then(|| make_prop(PropKind::WoodCrate, x, y, 0, None, 1))
+            let blocked_pad =
+                (x == 2 || x == 3 || x == w - 3 || x == w - 5) && (y - mid_y).abs() <= 1;
+            (!blocked_pad
+                && !circle_collides_obstacles(
+                    w as f32,
+                    h as f32,
+                    &sector.wall_edges,
+                    &sector.props,
+                    x as f32 + 0.5,
+                    y as f32 + 0.5,
+                    TOKEN_RADIUS_M,
+                ))
+            .then(|| make_prop(PropKind::WoodCrate, x, y, 0, None, 1))
         })
     {
-        stamp_props_into_tiles(&mut sector.tiles, w, h, &[p]);
         sector.props.push(p);
     }
-    if !sector.tiles.contains(&TacticalTileKind::FullWall) {
-        sector.tiles[0] = TacticalTileKind::FullWall;
+    let has_full_obstacle = sector
+        .props
+        .iter()
+        .any(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle);
+    if !has_full_obstacle
+        && let Some((px, py)) = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+            .into_iter()
+            .chain((1..w - 1).map(|x| (x, 0)))
+            .find(|&(x, y)| {
+                !circle_collides_obstacles(
+                    w as f32,
+                    h as f32,
+                    &sector.wall_edges,
+                    &sector.props,
+                    x as f32 + 0.5,
+                    y as f32 + 0.5,
+                    TOKEN_RADIUS_M,
+                )
+            })
+    {
+        sector.props.push(make_prop(PropKind::StructuralPillar, px, py, 0, None, 1));
     }
     sector
 }
@@ -783,18 +799,36 @@ mod tests {
                 for seed in [1_i64, 42, 77, 179, 9001] {
                     let s = generate_facility_sector(style, w, h, seed);
                     assert_eq!(s, generate_facility_sector(style, w, h, seed), "{style:?} deterministic");
-                    assert_eq!(s.tiles.len(), (w * h) as usize);
                     assert!(!s.wall_edges.is_empty(), "{style:?} ({w}x{h}/{seed}) missing wall_edges");
                     assert!(!s.props.is_empty(), "{style:?} ({w}x{h}/{seed}) missing props");
-                    assert!(s.tiles.contains(&TacticalTileKind::HalfCover), "{style:?} ({w}x{h}/{seed}) HalfCover");
-                    assert!(s.tiles.contains(&TacticalTileKind::FullWall), "{style:?} ({w}x{h}/{seed}) FullWall");
+                    assert!(
+                        s.props.iter().any(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover),
+                        "{style:?} ({w}x{h}/{seed}) HalfCover"
+                    );
+                    assert!(
+                        s.props.iter().any(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle),
+                        "{style:?} ({w}x{h}/{seed}) FullObstacle"
+                    );
 
                     let mid_y = h / 2;
                     for &(px, py) in &[(2, mid_y), (2, (mid_y - 1).max(1)), (w - 3, mid_y), (w - 3, (mid_y + 1).min(h - 2))] {
-                        assert_eq!(s.tiles[(py * w + px) as usize], TacticalTileKind::Floor, "{style:?} ({w}x{h}) pad ({px},{py})");
+                        assert!(
+                            !circle_collides_obstacles(
+                                w as f32,
+                                h as f32,
+                                &s.wall_edges,
+                                &s.props,
+                                px as f32 + 0.5,
+                                py as f32 + 0.5,
+                                TOKEN_RADIUS_M,
+                            ),
+                            "{style:?} ({w}x{h}) pad ({px},{py}) blocked"
+                        );
                     }
-                    let idx = WallEdgeIndex::from_edges(w, h, &s.wall_edges);
-                    assert!(reachable_all(w, h, &s.tiles, &idx, (2, mid_y)), "{style:?} ({w}x{h}/{seed}) disconnected");
+                    assert!(
+                        all_walkable_areas_connected(w, h, &s.wall_edges, &s.props),
+                        "{style:?} ({w}x{h}/{seed}) disconnected"
+                    );
 
                     for (i, p) in s.props.iter().enumerate() {
                         for q in &s.props[i + 1..] {
@@ -811,9 +845,18 @@ mod tests {
 
         // Preserve docking_bay (20x14) boundary and spawn checks exercised by signaling tests
         let bay = generate_facility_sector(FacilitySectorStyle::DockingBay, 20, 14, 77);
-        assert!(bay.tiles[0].blocks_occupancy(), "(0,0) corner pilaster must block");
-        assert!(!bay.tiles[7 * 20 + 3].blocks_occupancy(), "(3,7) open for move test");
-        assert!(!bay.tiles[7 * 20 + 15].blocks_occupancy(), "(15,7) open for ambush test");
-        assert!(bay.tiles.contains(&TacticalTileKind::ElevatedPlatform));
+        assert!(
+            circle_collides_obstacles(20.0, 14.0, &bay.wall_edges, &bay.props, 0.5, 0.5, TOKEN_RADIUS_M),
+            "(0,0) corner pilaster must block"
+        );
+        assert!(
+            !circle_collides_obstacles(20.0, 14.0, &bay.wall_edges, &bay.props, 3.5, 7.5, TOKEN_RADIUS_M),
+            "(3,7) open for move test"
+        );
+        assert!(
+            !circle_collides_obstacles(20.0, 14.0, &bay.wall_edges, &bay.props, 15.5, 7.5, TOKEN_RADIUS_M),
+            "(15,7) open for ambush test"
+        );
+        assert!(bay.props.iter().any(|p| p.kind == PropKind::ElevatedCatwalk));
     }
 }

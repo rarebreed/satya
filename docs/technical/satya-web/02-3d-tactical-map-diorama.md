@@ -1,32 +1,32 @@
-# 02 — 3D Tactical Map Diorama, LoS/Cover & Movement Overlays
+# 02 — 3D Tactical Map Diorama, Continuous Vector Geometry, LoS & Hover Inspector
 
-This document is the authoritative technical reference for the **3D Tactical Map (`#notebook-pane-maps`)** in [`crates/satya-web`](../../../crates/satya-web), covering end-to-end state synchronization, `1.0m` metric world-to-grid math, procedural sector generation, diorama 3D mesh synthesis, `1 Tick = 0.25s` movement reachability, supercover Line-of-Sight (LoS) + corner-peek cover grading, the `2d20` Cascade roller bridge, instanced `.glb` miniature rendering on WebGPU (`wgpu`), `OrbitOrthoCamera` ray-plane picking, and graceful 2D `<svg>` degradation.
+This document is the authoritative technical reference for the **Tactical Map (`#notebook-pane-maps`)** in [`crates/satya-web`](../../../crates/satya-web), covering end-to-end state synchronization, tile-free continuous metric coordinates (`pos_x_cm`/`pos_y_cm` & `metric_to_world_xz`), procedural sector generation (`wall_edges` + `360°` rotated OBB/circle `props`), diorama 3D mesh synthesis, `1 Tick = 0.25s` 16-directional `ReachableField` movement (`0.25m` sampling), analytical 2D segment/OBB Line-of-Sight & `barrier_ballistics`, the Object & Ground Hover Inspector (`#map-hover-status-bar` + `[Alt / I]` `#map-hover-tooltip`), the `2d20` Cascade roller bridge, instanced `.glb` miniature rendering on WebGPU (`wgpu`), `OrbitOrthoCamera` ray-plane picking, and synchronized 2D `<svg>` rendering.
 
-- **Web Client Modules**: [`wasm_client/map_3d.rs`](../../../crates/satya-web/src/wasm_client/map_3d.rs), [`wasm_client/map_3d_wgpu.rs`](../../../crates/satya-web/src/wasm_client/map_3d_wgpu.rs), [`wasm_client/map_3d_dressing_geom.rs`](../../../crates/satya-web/src/wasm_client/map_3d_dressing_geom.rs), [`wasm_client/map_edge_edit.rs`](../../../crates/satya-web/src/wasm_client/map_edge_edit.rs), [`wasm_client/map_2d_art.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art.rs), [`wasm_client/map_2d_art_overlay.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_overlay.rs), [`wasm_client/map_2d_art_walls.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_walls.rs), [`wasm_client/map_2d_art_furniture.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_furniture.rs), [`wasm_client/map_2d_art_props.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_props.rs), [`wasm_client/wgpu_shared.rs`](../../../crates/satya-web/src/wasm_client/wgpu_shared.rs), [`wasm_client/glb_model.rs`](../../../crates/satya-web/src/wasm_client/glb_model.rs), [`wasm_client/model_3d_wgpu.rs`](../../../crates/satya-web/src/wasm_client/model_3d_wgpu.rs)
-- **Deterministic Engine & Wire DTOs**: [`satya-engine/src/tactical_map.rs`](../../../crates/satya-engine/src/tactical_map.rs), [`satya-engine/src/tactical_map_edges.rs`](../../../crates/satya-engine/src/tactical_map_edges.rs), [`satya-engine/src/map_dressing.rs`](../../../crates/satya-engine/src/map_dressing.rs), [`satya-engine/src/barrier_ballistics.rs`](../../../crates/satya-engine/src/barrier_ballistics.rs), [`satya-engine/src/map_interior_gen.rs`](../../../crates/satya-engine/src/map_interior_gen.rs), [`satya-engine/src/map_outdoor_gen.rs`](../../../crates/satya-engine/src/map_outdoor_gen.rs), [`satya-engine/src/map_sector_gen.rs`](../../../crates/satya-engine/src/map_sector_gen.rs), [`satya-engine/src/environment_vehicles.rs`](../../../crates/satya-engine/src/environment_vehicles.rs), [`satya-schema/src/tactical_map_dto.rs`](../../../crates/satya-schema/src/tactical_map_dto.rs), [`satya-schema/src/tactical_map_dressing_dto.rs`](../../../crates/satya-schema/src/tactical_map_dressing_dto.rs), [`satya-schema/src/protocol.rs`](../../../crates/satya-schema/src/protocol.rs)
+- **Web Client Modules**: [`wasm_client/map_3d.rs`](../../../crates/satya-web/src/wasm_client/map_3d.rs), [`wasm_client/map_3d_wgpu.rs`](../../../crates/satya-web/src/wasm_client/map_3d_wgpu.rs), [`wasm_client/map_3d_dressing_geom.rs`](../../../crates/satya-web/src/wasm_client/map_3d_dressing_geom.rs), [`wasm_client/map_hover_inspect.rs`](../../../crates/satya-web/src/wasm_client/map_hover_inspect.rs), [`wasm_client/map_edge_edit.rs`](../../../crates/satya-web/src/wasm_client/map_edge_edit.rs), [`wasm_client/map_2d_art.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art.rs), [`wasm_client/map_2d_art_surfaces.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_surfaces.rs), [`wasm_client/map_2d_art_overlay.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_overlay.rs), [`wasm_client/map_2d_art_walls.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_walls.rs), [`wasm_client/map_2d_art_furniture.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_furniture.rs), [`wasm_client/map_2d_art_props.rs`](../../../crates/satya-web/src/wasm_client/map_2d_art_props.rs), [`wasm_client/wgpu_shared.rs`](../../../crates/satya-web/src/wasm_client/wgpu_shared.rs), [`wasm_client/glb_model.rs`](../../../crates/satya-web/src/wasm_client/glb_model.rs), [`wasm_client/model_3d_wgpu.rs`](../../../crates/satya-web/src/wasm_client/model_3d_wgpu.rs)
+- **Deterministic Engine & Wire DTOs**: [`satya-engine/src/tactical_map_geom.rs`](../../../crates/satya-engine/src/tactical_map_geom.rs), [`satya-engine/src/tactical_map.rs`](../../../crates/satya-engine/src/tactical_map.rs), [`satya-engine/src/tactical_map_edges.rs`](../../../crates/satya-engine/src/tactical_map_edges.rs), [`satya-engine/src/map_dressing.rs`](../../../crates/satya-engine/src/map_dressing.rs), [`satya-engine/src/barrier_ballistics.rs`](../../../crates/satya-engine/src/barrier_ballistics.rs), [`satya-engine/src/map_interior_gen.rs`](../../../crates/satya-engine/src/map_interior_gen.rs), [`satya-engine/src/map_outdoor_gen.rs`](../../../crates/satya-engine/src/map_outdoor_gen.rs), [`satya-engine/src/map_outdoor_natural.rs`](../../../crates/satya-engine/src/map_outdoor_natural.rs), [`satya-engine/src/map_sector_gen.rs`](../../../crates/satya-engine/src/map_sector_gen.rs), [`satya-engine/src/environment_vehicles.rs`](../../../crates/satya-engine/src/environment_vehicles.rs), [`satya-schema/src/tactical_map_dto.rs`](../../../crates/satya-schema/src/tactical_map_dto.rs), [`satya-schema/src/tactical_map_dressing_dto.rs`](../../../crates/satya-schema/src/tactical_map_dressing_dto.rs), [`satya-schema/src/protocol.rs`](../../../crates/satya-schema/src/protocol.rs)
 - **SSR Markup & Styles**: [`views_notebook.rs`](../../../crates/satya-web/src/views_notebook.rs), [`styles_stages.css`](../../../crates/satya-web/src/styles_stages.css)
 
 ---
 
 ## 1. End-to-End Architecture & State Topology
 
-All deterministic spatial rules — procedural bulkhead layout, 8-directional millimeter Dijkstra reachability, and supercover corner-peek LoS — execute in pure, host-testable Rust inside `satya_engine::tactical_map`. `wasm_client/map_3d.rs` owns the client UI state (`TacticalMapUiState`), synchronizes edits over REST/WebSocket, and drives both the event-driven WebGPU diorama (`map_3d_wgpu.rs`) and the synchronized 2D `<svg>` fallback (`#tabletop-map-svg-fallback`).
+All deterministic spatial rules — procedural sector generation (`tiles: []`), `0.30m` token-disc collision with `<= 0.35m` slide/snap clamping, 16-directional `0.25m` Dijkstra reachability (`ReachableField`), analytical 2D segment/OBB raycasting LoS, and cursor hover inspection (`inspect_map_point`) — execute in pure, host-testable Rust inside `satya_engine::{tactical_map, tactical_map_geom}`. `wasm_client/map_3d.rs` owns `TacticalMapUiState`, synchronizes edits over REST/WebSocket, and drives both the event-driven WebGPU diorama (`map_3d_wgpu.rs`) and the synchronized 2D `<svg>` battlemap (`#tabletop-map-svg-fallback`).
 
 ```mermaid
 flowchart TD
-    DOM["#notebook-pane-maps Controls & Canvas\n(#map-preset-select, #map-gait-select, #map-click-mode-select,\n#wgpu-map-canvas, #tabletop-map-svg-fallback)"]
-    UI["map_3d.rs :: MAP_UI_STATE (TacticalMapUiState)\nmap (GmMapUpdateRequest) · selected_entity_id · hovered_cell\ngait · tick_budget · interaction_mode · wall_cutaway · last_los · reachable_cells"]
-    Eng["satya_engine::tactical_map (Pure Deterministic Engine)\ngenerate_procedural_tactical_grid · compute_reachable_grid_cells\ntrace_supercover_segment_cells · evaluate_tactical_los_and_cover"]
-    Geom["map_3d_wgpu.rs :: build_tactical_diorama_vertices\nDeck Floor (zone_id = -1.0) · 7 TacticalTileKind Meshes\nEmerald Gait Pads · Gold Selection Ring · Cyan Hover · y=1.05m LoS Beam"]
+    DOM["#notebook-pane-maps Controls & Canvas\n(#map-preset-select, #map-gait-select, #map-click-mode-select,\n#wgpu-map-canvas, #tabletop-map-svg-fallback, #map-hover-status-bar, #map-hover-tooltip)"]
+    UI["map_3d.rs :: MAP_UI_STATE (TacticalMapUiState)\nmap (GmMapUpdateRequest) · selected_entity_id · hovered_point_m\nhover_inspection · inspect_mode · snap_to_grid · reachable_strips · last_los"]
+    Eng["satya_engine::{tactical_map, tactical_map_geom}\nresolve_token_destination_cm · compute_reachable_field_continuous\nevaluate_los_continuous · inspect_map_point"]
+    Geom["map_3d_wgpu.rs :: build_tactical_diorama_vertices\nDeck Floor (zone_id = -1.0) · Thin Wall Edges · 360deg OBB Props\nEmerald Reach Strips · Gold Selection Ring · Cyan Hover · y=1.05m LoS Beam"]
     GPU["wgpu_shared.rs + MapDioramaPipeline (SHARED_GLB_DIORAMA_WGSL)\nPass 1: Static Diorama VBO/IBO (1 Identity Instance)\nPass 2: Instanced .glb Miniatures (miniature_meshes Cache)"]
     Rest["satya-signaling REST & /ws/session\nPOST /api/sessions/:id/map · POST /api/sessions/:id/map/move\nServerWsPacket::MapUpdated + Apache Iggy WAL"]
     Roller["Center 2d20 Cascade Drawer (#ttrpg-drawer)\nsatya_apply_map_cover_to_roller -> #ttrpg-external-mod (Delta_ext)"]
 
-    DOM -->|"Pointer / Toolbar Events"| UI
-    UI <-->|"Reachability, LoS & Preset Grid"| Eng
-    UI -->|"sync_map_ui_and_diorama()"| Geom
+    DOM -->|"Pointer / Key / Toolbar Events"| UI
+    UI <-->|"Continuous Pathing, LoS & Hover Inspect"| Eng
+    UI -->|"refresh_map_dom_and_wgpu()"| Geom
     Geom -->|"render_map_frame() (Zero Idle rAF)"| GPU
-    UI -->|"32px/cell SVG Markup"| DOM
+    UI -->|"64px/m SVG Stack + Status/Tooltip"| DOM
     UI -->|"HTTP JSON Mutation"| Rest
     Rest -->|"Broadcast MapUpdated"| UI
     UI -->|"#btn-map-apply-cover"| Roller
@@ -38,73 +38,74 @@ flowchart TD
 
 | Field | Rust Type | Default Value | Responsibility |
 | :--- | :--- | :--- | :--- |
-| `map` | `GmMapUpdateRequest` | `"residential_apartment"`, `20 × 14`, seed `42` | Canonical wire DTO holding `grid_width`, `grid_height`, `cell_size_cm` (`100`), row-major `tiles: Vec<TacticalTileKind>`, thin `wall_edges`, multi-cell `props`, `tokens: Vec<MapTokenPlacement>`, and `token_visuals: Vec<TokenVisualSpec>`. |
-| `selected_entity_id` | `Option<String>` | First token (`"pc-1"`) | Active token acting as the origin for gait reachability pads, LoS measurements, movement commands, and miniature visual customization. |
-| `hovered_cell` | `Option<(i32, i32)>` | `None` | Grid cell currently under the pointer on `#wgpu-map-canvas` (drives cyan hover reticle and `#map-hover-coords-pill`). |
+| `map` | `GmMapUpdateRequest` | `"residential_apartment"`, `20m × 14m`, seed `42` | Canonical wire DTO holding `grid_width`, `grid_height`, visual `cell_size_cm` (`100`), `tiles: []` (legacy compat), thin `wall_edges`, `360°` continuous `props` (`center_x_cm`, `center_y_cm`, `rotation_deg`), `tokens: Vec<MapTokenPlacement>`, and `token_visuals: Vec<TokenVisualSpec>` (`pos_x_cm`, `pos_y_cm`). |
+| `selected_entity_id` | `Option<String>` | First token (`"pc-1"`) | Active token acting as the origin for gait reachability, LoS measurements, point-and-click movement, and miniature visual customization. |
+| `hovered_point_m` | `Option<(f32, f32)>` | `None` | Continuous metric cursor coordinate `(x_m, y_m)` under `#wgpu-map-canvas` or `#battlemap-overlay` (drives cyan hover reticle, `#map-hover-coords-pill`, and brush ghost preview). |
+| `hover_inspection` | `Option<MapHoverInspection>` | `None` | Topmost entity/ground classification under `hovered_point_m` (drives `#map-hover-status-bar` & `[Alt / I]` `#map-hover-tooltip`). |
+| `inspect_mode` / `alt_inspect_held` | `bool` | `false` | Sticky (`I` / `#btn-map-inspect-toggle`) and momentary (`Alt` key) triggers revealing `#map-hover-tooltip`. |
+| `prop_brush_rotation_deg` / `snap_to_grid` | `i32` / `bool` | `0` / `false` | Free `360°` (`0..359°`) rotation angle for GM prop placement (`+15°` steps or `#map-prop-rot-deg`) and optional `0.50m` placement snap toggle (`#btn-map-snap-toggle`). |
 | `gait` | `CombatMovementGait` | `CombatGlideTacticalWalk` (`35%`) | Active movement gait (`crawl`, `creep`, `glide`, `hustle`, `sprint`) fed into `GaitReachQuery`. |
 | `tick_budget` | `u8` | `8` (`2.00s`) | Movement duration in combat ticks (`1..=40`, `1 Tick = 0.25s`) fed into `GaitReachQuery`. |
 | `interaction_mode` | `String` | `"move_or_select"` | Active canvas click tool: `"move_or_select"`, `"measure_los"`, or `"edit_terrain"`. |
-| `wall_cutaway` | `bool` | `true` | Lowers `FullWall` (`2.35m` $\rightarrow$ `0.58m`) and `DoorClosed` (`2.25m` $\rightarrow$ `0.68m`) geometry so interior corridors remain visible from angled 3D isometric views. |
+| `wall_cutaway` | `bool` | `true` | Lowers `Wall` / `DoorClosed` (`2.35m` $\rightarrow$ `0.58m`) geometry so interior corridors remain visible from angled 3D isometric views. |
 | `last_los` | `Option<(String, String, TacticalLosEvaluation)>` | Auto-computed vs. nearest non-self token | Cached `(attacker_label, target_label, TacticalLosEvaluation)` driving `#map-tactical-hud-bar` and the 3D chest-height laser beam. |
-| `reachable_cells` | `Vec<ReachableCell>` | Computed on boot | Cached output of `compute_reachable_grid_cells` (`x`, `y`, `distance_m`, `ticks_required`). |
+| `reachable_field` / `reachable_strips` | `Option<ReachableField>` / `Vec<ReachableStrip>` | Computed on boot | `0.25m` 16-directional continuous gait reachability field + merged horizontal runs (`merged_row_runs()`). |
 | `seed_counter` | `u64` | `42` | Monotonic procedural generation seed (`wrapping_add(137)` on each click of `#btn-map-generate`). |
 
 ### 1.2 Toolbar Controls & Window Callbacks (`#notebook-pane-maps`)
 
 | DOM `id` | Callback (`window.*`) | Rust Entrypoint | Effect |
 | :--- | :--- | :--- | :--- |
-| `#map-preset-select`, `#map-grid-size-select`, `#btn-map-generate` | `satyaGenerateProceduralMap` | `satya_generate_procedural_map` | Advances `seed_counter += 137`, builds a seeded sector with live roster West-side spawns + hostile East sentry, renders immediately, and `POST`s `/api/sessions/:id/map`. |
+| `#map-preset-select`, `#map-grid-size-select`, `#btn-map-generate` | `satyaGenerateProceduralMap` | `satya_generate_procedural_map` | Advances `seed_counter += 137`, builds a continuous vector sector with live roster West-side spawns + hostile East sentry, renders immediately, and `POST`s `/api/sessions/:id/map`. |
 | `#btn-map-proj-toggle` | `satyaToggleMapProjection` | `satya_toggle_map_projection` | Toggles `OrbitOrthoCamera.orthographic` between `3D Isometric` (`42°` perspective) and `2D Top-Down` (`88.5°` pitch orthographic, `yaw = 0°`). |
 | `#btn-map-cutaway-toggle` | `satyaToggleMapWallCutaway` | `satya_toggle_map_wall_cutaway` | Toggles `wall_cutaway` (`Cutaway: ON` vs `Full Walls`) and rebuilds the static diorama VBO/IBO. |
 | `#btn-map-cam-reset` | `satyaResetMapCamera` | `satya_reset_map_camera` | Resets `OrbitOrthoCamera` to `tactical_map_default()` (`yaw = -24°`, `pitch = 52°`, `zoom = 1.0`, `pan = [0, 0]`). |
-| `#map-click-mode-select`, `#map-gait-select`, `#map-tick-budget-input` | `satyaUpdateMapTacticalControls` | `satya_update_map_tactical_controls` | Updates `interaction_mode`, `gait`, and clamped `tick_budget` (`1..=40`), recomputes `reachable_cells` & `last_los`, and redraws. |
+| `#btn-map-inspect-toggle` | `satyaToggleMapInspectMode` | `satya_toggle_map_inspect_mode` | Toggles sticky Object & Ground Hover Tooltip (`#map-hover-tooltip`, also bound to keyboard `I` and momentary `Alt`-hold). |
+| `#btn-map-prop-rotate`, `#map-prop-rot-deg`, `#btn-map-snap-toggle` | `satyaRotateMapPropBrush`, `satyaSetMapPropRotationDeg`, `satyaToggleMapGridSnap` | `map_edge_edit.rs` | Steps prop rotation by `+15°` (or sets `0..359°` directly) and toggles optional `0.50m` snap vs. free continuous placement. |
+| `#map-click-mode-select`, `#map-gait-select`, `#map-tick-budget-input` | `satyaUpdateMapTacticalControls` | `satya_update_map_tactical_controls` | Updates `interaction_mode`, `gait`, and clamped `tick_budget` (`1..=40`), recomputes `reachable_field` & `last_los`, and redraws. |
 | `#map-token-chip-bar` buttons | `satyaSelectMapToken(id)` | `satya_select_map_token` | Switches `selected_entity_id`, syncs `#map-token-model-select` / `#map-token-color-input`, and recomputes gait reach + auto-LoS. |
 | `#map-token-model-select`, `#map-token-color-input` | `satyaUpdateSelectedTokenVisual` | `satya_update_selected_token_visual` | Updates `TokenVisualSpec` (`model_preset`, `color_hex`) for `selected_entity_id` and broadcasts full map state if in a session. |
 | `#btn-map-apply-cover` | `satyaApplyMapCoverToRoller` | `satya_apply_map_cover_to_roller` | Bridges `last_los.recommended_delta_ext` into `#ttrpg-external-mod` ($\Delta_{\text{ext}}$) and refreshes the `2d20` Cascade odds preview. |
 
 ---
 
-## 2. World-vs-Grid Coordinate System & Compass Bearings
+## 2. Continuous Metric World Coordinates & Compass Bearings
 
-Every tactical sector uses a metric **`1.0m × 1.0m` square cell** (`cell_size_cm = 100`, `cell_size_m = 1.0`) lying on the horizontal deck plane $y = 0.0$ in a right-handed WebGPU world coordinate frame (`+X` East, `+Y` Up, `-Z` North, `+Z` South). Grid indices `(gx, gy)` are zero-based integers (`0 <= gx < grid_w`, `0 <= gy < grid_h`) stored in row-major order (`idx = gy * grid_w + gx`), with `(0, 0)` at the **North-West** corner and the entire `grid_w × grid_h` rectangle centered symmetrically around world origin `(0.0, 0.0, 0.0)`.
+Every tactical sector defines a metric viewport of physical size $(W_{\text{m}}, H_{\text{m}}) = (\text{grid\_w} \cdot s,\; \text{grid\_h} \cdot s)$ where $s = \max(\text{cell\_size\_m}, 0.25)$ (`1.0m` reference scale) lying on horizontal deck plane $y = 0.0$ in right-handed WebGPU world space (`+X` East, `+Y` Up, `-Z` North, `+Z` South), with `(0.0m, 0.0m)` at the **North-West** corner and the board centered symmetrically around `(0.0, 0.0, 0.0)`:
 
 ```mermaid
 flowchart LR
-    Grid["Grid Cell Indices (gx, gy)\n0 <= gx < grid_w (West -> East)\n0 <= gy < grid_h (North -> South)\nRow-major idx = gy * grid_w + gx"]
-    World["Right-Handed World Space (wx, y, wz)\nDeck Plane y = 0.0m (Catwalk y = 1.48m)\nOrigin (0, 0, 0) at Map Center\n-Z = North (0 deg) · +X = East (90 deg)\n+Z = South (180 deg) · -X = West (270 deg)"]
+    Metric["Continuous Metric Space (x_m, y_m)\nAuthoritative TokenVisualSpec (pos_x_cm, pos_y_cm)\n0 <= x_m <= W_m · 0 <= y_m <= H_m"]
+    World["Right-Handed World Space (wx, y, wz)\nDeck Plane y = 0.0m (ElevatedCatwalk y = 1.48m)\nOrigin (0, 0, 0) at Map Center\n-Z = North (0 deg) · +X = East (90 deg)"]
     GLB["Instanced .glb Model Matrix\nAsset Forward = -Z (North at yaw = 0)\nGPU Yaw = -facing_deg around +Y"]
 
-    Grid -->|"grid_cell_to_world_xz()"| World
-    World -->|"world_xz_to_grid_cell()"| Grid
-    World -->|"atan2(dx, -dy) -> facing_deg"| GLB
+    Metric -->|"metric_to_world_xz()"| World
+    World -->|"world_xz_to_metric()"| Metric
+    Metric -->|"atan2(dx, -dy) -> facing_deg"| GLB
 ```
 
-### 2.1 Exact Coordinate Bijection (`map_3d.rs`)
+### 2.1 Continuous Bijection (`map_3d.rs`)
 
-Given grid dimensions $(W, H) = (\text{grid\_w}, \text{grid\_h})$ and cell scale $s = \max(\text{cell\_size\_m}, 0.25)$ (`1.0m` standard):
+Given board dimensions $(W_{\text{m}}, H_{\text{m}})$:
 
-- **Grid Cell Center $\rightarrow$ World $(w_x, w_z)$** (`grid_cell_to_world_xz`):
-  $$w_x = \left((g_x + 0.5) - \frac{W}{2}\right) \cdot s, \qquad w_z = \left((g_y + 0.5) - \frac{H}{2}\right) \cdot s$$
-  For the default `20 × 14` (`20m × 14m`) airlock, cell `(0, 0)` maps to `(-9.5m, -6.5m)` and cell `(19, 13)` maps to `(+9.5m, +6.5m)`.
-
-- **World $(w_x, w_z)$ $\rightarrow$ Grid Cell $(g_x, g_y)$** (`world_xz_to_grid_cell`):
-  $$g_x = \left\lfloor \frac{w_x}{s} + \frac{W}{2} \right\rfloor, \qquad g_y = \left\lfloor \frac{w_z}{s} + \frac{H}{2} \right\rfloor$$
-  Returns `Some((gx, gy))` if and only if $0 \le g_x < W$ and $0 \le g_y < H$, otherwise `None` (off-board ray hit).
+- **Metric $(x_{\text{m}}, y_{\text{m}}) \rightarrow$ World $(w_x, w_z)$** (`metric_to_world_xz`):
+  $$w_x = x_{\text{m}} - \frac{W_{\text{m}}}{2}, \qquad w_z = y_{\text{m}} - \frac{H_{\text{m}}}{2}$$
+- **World $(w_x, w_z) \rightarrow$ Metric $(x_{\text{m}}, y_{\text{m}})$** (`world_xz_to_metric`):
+  $$x_{\text{m}} = w_x + \frac{W_{\text{m}}}{2}, \qquad y_{\text{m}} = w_z + \frac{H_{\text{m}}}{2}$$
+  Returns `Some((x_m, y_m))` iff $0 \le x_{\text{m}} \le W_{\text{m}}$ and $0 \le y_{\text{m}} \le H_{\text{m}}$, otherwise `None` (off-board ray hit). Token placement enforces a circular body radius of `TOKEN_RADIUS_M = 0.30m` with gentle outward wall/cover slide-snap clamping up to `COVER_SNAP_MAX_M = 0.35m` (`resolve_token_destination_cm`).
 
 ### 2.2 Compass Bearings & `.glb` Miniature Yaw Convention
 
 Token facing (`TokenVisualSpec.facing_deg` in `0..360`) follows standard tabletop/nautical compass bearings:
 
-| Compass Direction | Grid Step $(\Delta g_x, \Delta g_y)$ | World Vector $(\Delta w_x, \Delta w_z)$ | `facing_deg` | GPU Instance `yaw_deg` (`-facing_deg`) |
+| Compass Direction | Metric Delta $(\Delta x_{\text{m}}, \Delta y_{\text{m}})$ | World Vector $(\Delta w_x, \Delta w_z)$ | `facing_deg` | GPU Instance `yaw_deg` (`-facing_deg`) |
 | :--- | :---: | :---: | :---: | :---: |
 | **North** | `(0, -1)` | `(0, -1)` | `0°` | `0°` |
 | **East** | `(+1, 0)` | `(+1, 0)` | `90°` | `-90°` |
 | **South** | `(0, +1)` | `(0, +1)` | `180°` | `-180°` |
 | **West** | `(-1, 0)` | `(-1, 0)` | `270°` | `-270°` |
 
-When a token moves by $(\Delta x, \Delta y) = (g_x' - g_x,\; g_y' - g_y)$ in `move_or_select` mode, `handle_map_grid_cell_clicked` computes its new compass heading via:
-$$\text{facing\_deg} = \left(\operatorname{round}\!\big(\operatorname{atan2}(\Delta x, -\Delta y) \cdot \tfrac{180}{\pi}\big) + 360\right) \bmod 360$$
-Because procedural `.glb` miniatures in `glb_model.rs` are authored facing `-Z` (North) at identity rotation, a right-handed rotation of $+\theta$ around `+Y` (`[x', z'] = [x cos θ + z sin θ, -x sin θ + z cos θ]`) rotates `-Z` toward `-X` (West). Therefore `map_3d_wgpu.rs` passes `yaw_deg = -(vis.facing_deg as f32)` into `GlbInstanceData::from_trs_and_tint`, aligning `+90°` (`-90°` right-hand yaw) cleanly with `+X` (East).
+When a token moves continuously by $(\Delta x_{\text{m}}, \Delta y_{\text{m}})$ in `move_or_select` mode, `handle_map_point_clicked` computes its heading via `atan2(dx, -dy)` and dispatches `{ to_x_cm, to_y_cm }` to `POST /api/sessions/:id/map/move`. Because procedural `.glb` miniatures in `glb_model.rs` face `-Z` at identity rotation, `map_3d_wgpu.rs` passes `yaw_deg = -(vis.facing_deg as f32)` into `GlbInstanceData::from_trs_and_tint`.
 
 ---
 
@@ -112,16 +113,18 @@ Because procedural `.glb` miniatures in `glb_model.rs` are authored facing `-Z` 
 
 ### 3.1 Deterministic `SectorPreset` Catalog (`satya_engine::tactical_map`)
 
-`generate_procedural_sector(preset, width, height, seed)` clamps sector dimensions to `8..=48` cells (`8m..=48m`) and dispatches across `map_interior_gen`, `map_outdoor_gen`, and `map_sector_gen` so **all 10** presets emit thin [`MapWallEdge`](../../../crates/satya-schema/src/tactical_map_dressing_dto.rs) architecture (except open-woods `WoodedPark`) and multi-cell [`MapPropPlacement`](../../../crates/satya-schema/src/tactical_map_dressing_dto.rs) props carrying per-material ballistic ratings, while clearing four guaranteed `Floor` spawn pads at `(2, mid_y)`, `(2, mid_y - 1)`, `(w - 3, mid_y)`, and `(w - 3, mid_y + 1)` and verifying full BFS walkability across doors.
+`generate_procedural_sector(preset, width, height, seed)` clamps sector dimensions to `8m..=48m` (`tiles: Vec::new()`) and dispatches across `map_interior_gen`, `map_outdoor_gen`, `map_outdoor_natural`, and `map_sector_gen` so **all 12** presets emit thin [`MapWallEdge`](../../../crates/satya-schema/src/tactical_map_dressing_dto.rs) architecture (except open natural terrain `WoodedPark` and `WoodlandCreek`) and continuous `360°`-oriented [`MapPropPlacement`](../../../crates/satya-schema/src/tactical_map_dressing_dto.rs) props (all `52` variants including `StructuralPillar`, `ElevatedCatwalk`, and `HazardSpill`) carrying per-material ballistic ratings, while verifying continuous `0.50m`-sample connectivity across doors (`verify_sector_connectivity_continuous`).
 
 | `SectorPreset` (`code()`) | Default Label | Perimeter | Signature Structural Features |
 | :--- | :--- | :--- | :--- |
-| `ResidentialApartment` (`"residential_apartment"`) | `Residential Apartment` | Thin `Brick` `MapWallEdge` perimeter + exterior `Window`s + W/E doors | Seeded BSP room partition (`Drywall` `MapWallEdge`s + swinging doors) furnished by room role (`Living`, `Kitchen`, `Bedroom`, `Bathroom`, `Office`) with multi-cell `Sofa` (`3×1`), `Rug`, `CoffeeTable`, `DiningTable` (`2×2`), `Bed` (`2×2`), `KitchenCounter`, `Fridge`, `Stove`, `Bathtub`, `Toilet`, `Desk`, and `Bookshelf`. |
-| `OfficeFloor` (`"office_floor"`) | `Corporate Office Suite` | Thin `ConcreteBlock` `MapWallEdge` shell + curtain `Window`s + W/E doors | Open-plan West workstation bullpen (`Desk` clusters, `Sofa`/`Rug`/`CoffeeTable` reception lounge, `Bookshelf`), glass-walled `ConferenceRoom` (`DiningTable` `2×2` + interior `Window`s), `Breakroom` (`KitchenCounter`, `Fridge`, `RoundTable`), and `ServerCloset` (`SteelShelving`). |
+| `ResidentialApartment` (`"residential_apartment"`) | `Residential Apartment` | Thin `Brick` `MapWallEdge` perimeter + exterior `Window`s + W/E doors | Seeded BSP room partition (`Drywall` `MapWallEdge`s + swinging doors) furnished by room role (`Living`, `Kitchen`, `Bedroom`, `Bathroom`, `Office`) with multi-cell `Sofa` (`3×1`), `Rug`, `CoffeeTable`, `DiningTable` (`2×2`), `Bed` (`2×2`), `KitchenCounter`, `Fridge`, `Stove`, `Bathtub`, `Toilet`, `Desk`, `DeskL`, and `Bookshelf`. |
+| `OfficeFloor` (`"office_floor"`) | `Corporate Office Suite` | Thin `ConcreteBlock` `MapWallEdge` shell + curtain `Window`s + W/E doors | Open-plan West workstation bullpen (`Desk`, `DeskL`, `DeskT` clusters, `Sofa`/`Rug`/`CoffeeTable` reception lounge, `Bookshelf`), glass-walled `ConferenceRoom` (`DiningTable` `2×2` + interior `Window`s), `Breakroom` (`KitchenCounter`, `Fridge`, `RoundTable`), and `ServerCloset` (`SteelShelving`). |
 | `CornerBar` (`"corner_bar"`) | `Neighborhood Corner Bar` | Thin `Brick` `MapWallEdge` perimeter + storefront `Window`s + W/E doors | Public taproom (`>= 55%` West span) with stretchable `BarCounter` (`4..8×1`), `BackBarShelf`, bartender aisle, `BarStool` row, `Booth`s, `PoolTable` (`3×2`), `RoundTable`s, plus East-side `Drywall` restrooms, kitchen prep room, and crate/drum storeroom. |
 | `UrbanCrossroads` (`"urban_crossroads"`) | `Urban Street Crossroads` | Open street edges + 4 corner `Brick`/`ConcreteBlock` buildings | Flagstone `StonePath` corner sidewalks surrounding furnished corner storefronts (café, hardware shop, agency office, bodega) with storefront `Window`s + street doors, parked `Car` & `UtilityVan` (`2×5`), `JerseyBarrier`s, `Dumpster`, `ParkBench`, `Planter`s, and sidewalk `MediumTree`s. |
-| `WoodedPark` (`"wooded_park"`) | `Wooded Park & Trail` | Open natural edges + roadside `AsphaltDrive` pullout | Winding `2m` `StonePath` trail through an octagonal central plaza (`Planter` / `LargeTree` + inward `ParkBench`es), roadside parked `Car` / `UtilityVan` (`2×5`) + `Hedge` borders, picnic lawn (`PicnicTable` `2×2`), granite `Boulder`s (`2×1`), and minimum-spaced `LargeTree` (`2×2`) + `MediumTree` (`1×1` trunk with overhanging crown) + `Bush` scatter. |
-| `GardenEstate` (`"garden_estate"`) | `Walled Estate & Courtyard` | West `AsphaltDrive` approach + `Brick`/`ConcreteBlock` `MapWallEdge` compound + iron gates | Driveway parked `Car` / `UtilityVan`, landscaped courtyard (`StonePath` walks, `Hedge` rows, `PicnicTable`, `ParkBench`, `LargeTree`, `MediumTree`, `Bush`, service `Dumpster`), and a windowed East brick/drywall pavilion furnished with `Rug`, `Sofa`, `Desk`, `Bookshelf`, and `SteelShelving`. |
+| `WoodedPark` (`"wooded_park"`) | `Wooded Park & Trail` | Open natural edges + roadside `AsphaltDrive` pullout | Meandering `2m` `StonePath` trail through an octagonal central plaza (`Planter` / `LargeTree` + inward `ParkBench`es), roadside parked `Car` / `UtilityVan` (`2×5`) + `Hedge` borders, `GardenBed` / `GardenEdging`, `MulchBed` pockets, diagonal `FallenLog`s, `PicnicTable` (`2×2`), `Boulder`s, and `LargeTree` / `MediumTree` + `Bush` scatter. |
+| `GardenEstate` (`"garden_estate"`) | `Walled Estate & Courtyard` | West `AsphaltDrive` approach + `Brick`/`ConcreteBlock` `MapWallEdge` compound + iron gates | Driveway parked `Car` / `UtilityVan`, landscaped courtyard (`StonePath` & `GravelPath` walks, `GardenBed` / `GardenEdging`, `MulchBed`, `Hedge` rows, `PicnicTable`, `ParkBench`, `LargeTree`, `MediumTree`, `Bush`, service `Dumpster`), and a windowed East brick/drywall pavilion furnished with `Rug`, `Sofa`, `Desk`, `Bookshelf`, and `SteelShelving`. |
+| `WoodlandCreek` (`"woodland_creek"`) | `Woodland Creek & Ford` | Open natural woodland edges | Meandering `CreekWater` stream (`HazardZone` wading penalty) flanked by `GravelPath` shoals, a `StonePath` stepping-stone ford, winding `DirtPath` trails, `MulchBed` pockets, diagonal `45°/135°` `FallenLog`s, granite `Boulder`s, and multi-lobed `LargeTree` / `MediumTree` + `Bush` canopy. |
+| `RoadsideDitch` (`"roadside_ditch"`) | `Country Lane & Ditch` | Open lane verges + culvert concrete headwalls + fenced cottage garden (`DoorOpen` gate) | East–West `GravelPath` lane with `DirtPath` verges, parallel `DrainageDitch` trench, masonry `StonePath` culvert crossing, cottage garden (`GardenBed`, `GardenEdging`, `MulchBed`, `ParkBench`), diagonal `FallenLog`s, `Boulder`s, and roadside trees. |
 | `DockingBay` (`"docking_bay"`) | `Industrial Logistics & Loading Bay` | Thin `ConcreteBlock` + `SheetSteel` bay doors + corner pilasters | North `ElevatedPlatform` catwalk (`y = 2`), glazed SW `Drywall` shipping booth (`Desk`, `SteelShelving`), East `AsphaltDrive` loading apron with `UtilityVan` (`2×5`), `SteelShelving` racks, `WoodCrate` / `DrumCluster` / `JerseyBarrier` cover, and central chemical/fuel `HazardZone` spill. |
 | `MedLabSector` (`"med_lab"`) | `Trauma Clinic & Bio-Containment Lab` | Thin `ConcreteBlock` + exterior `Window`s + W/E doors | Three clinical zones split by a `Drywall`/glass triage partition and a `ReinforcedConcrete`/steel quarantine bulkhead, furnished with waiting `Loveseat`, `Desk`s, trauma `Bed`s (`2×2`), `Fridge`s, `KitchenCounter`, `SteelShelving`, `DrumCluster`s, and east bio-spill `HazardZone`. |
 | `DerelictCorridor` (`"derelict_corridor"`) | `Breached Utility Tunnel & Sub-Level` | Thin `ReinforcedConcrete` outer shell + `SheetSteel` service doors | Longitudinal `ConcreteBlock` flanking conduit bays with `SheetSteel` sub-rooms and transverse `ReinforcedConcrete` blast bulkheads, dressed with `Boulder` rubble slabs, `SteelShelving`, ruptured `DrumCluster`s, `WoodCrate`s, maintenance `Desk`, and chemical `HazardZone` pools. |
@@ -147,81 +150,66 @@ sequenceDiagram
         Sig->>Sig: Validate session + persist to SQLite & Apache Iggy WAL
         Sig-->>C2: Broadcast ServerWsPacket::MapUpdated { map }
         C2->>C2: apply_incoming_map_update(map) -> rebuild diorama + SVG + HUD
-    else Single Token Move / Facing Update (Canvas Click)
-        C1->>C1: Optimistic local token move + facing_deg = atan2(dx, -dy)
-        C1->>Sig: POST /api/sessions/:id/map/move (MoveMapTokenRequest)
-        Sig->>Sig: Update authoritative token coords/facing_deg & append WAL
+    else Single Token Move / Facing Update (Point-and-Click)
+        C1->>C1: Optimistic local move + slide/snap <= 0.35m + facing_deg = atan2(dx, -dy)
+        C1->>Sig: POST /api/sessions/:id/map/move (MoveMapTokenRequest w/ to_x_cm, to_y_cm)
+        Sig->>Sig: resolve_token_destination_cm & append WAL
         Sig-->>C2: Broadcast ServerWsPacket::MapUpdated { map }
-        C2->>C2: apply_incoming_map_update(map) -> re-sync ReachableCells & LoS
+        C2->>C2: apply_incoming_map_update(map) -> re-sync ReachableField & LoS
     end
 ```
 
 > [!NOTE]
-> **Door & Terrain Edits**: Toggling a blast door (`DoorClosed` $\leftrightarrow$ `DoorOpen`) in `move_or_select` mode or cycling tiles in `edit_terrain` mode mutates `map.tiles` and dispatches the full `GmMapUpdateRequest` to `POST /api/sessions/:id/map` (`broadcast_full_map = true`), whereas pure token movement uses the lightweight `POST /api/sessions/:id/map/move` (`MoveMapTokenRequest`) route.
+> **Door, Edge & 360° Prop Edits**: Toggling a door (`DoorClosed` $\leftrightarrow$ `DoorOpen`), painting edges, or placing/erasing `360°` props (`place_prop_on_map` / `remove_prop_at_point`) mutates `map.wall_edges` / `map.props` (`tiles: []`) and dispatches `GmMapUpdateRequest` to `POST /api/sessions/:id/map`, whereas pure token movement uses `POST /api/sessions/:id/map/move` (`MoveMapTokenRequest` with `to_x_cm`/`to_y_cm`).
 
 ---
 
 ## 4. Diorama 3D Geometry Builder (`build_tactical_diorama_vertices`)
 
-`build_tactical_diorama_vertices(ui)` in [`map_3d_wgpu.rs`](../../../crates/satya-web/src/wasm_client/map_3d_wgpu.rs) synthesizes a single indexed `GlbVertex` triangle mesh (`Vec<GlbVertex>`, `Vec<u32>`) every time terrain, selection, hover, gait budget, cutaway state, or LoS changes. Using `hc = cell_m * 0.48` (`0.48m` half-cell width, leaving a subtle `0.04m` architectural seam between adjacent blocks), the builder emits geometry in three layers:
+`build_tactical_diorama_vertices(ui)` in [`map_3d_wgpu.rs`](../../../crates/satya-web/src/wasm_client/map_3d_wgpu.rs) synthesizes a single indexed `GlbVertex` triangle mesh (`Vec<GlbVertex>`, `Vec<u32>`) from continuous `wall_edges`, `360°`-rotated `props` (`push_obb`), `reachable_strips`, selection/hover rings, and LoS beams every time scene geometry or overlays change:
 
-### 4.1 Deck Floor, Table Rim & `7` `TacticalTileKind` Variants
+### 4.1 Deck Floor, Structural Props & Thin Wall Edges
 
-| Layer / `TacticalTileKind` | Footprint Half-Extents `(hx, hz)` | Elevation Range `y0 .. y1` (m) | `zone_id` (`bary_zone.w`) | Base Albedo RGB | Engine Rules (`blocks_occupancy` / `blocks_full_los` / `move_cost_multiplier`) |
+| Layer / Entity | Footprint / Scale Geometry | Elevation Range `y0 .. y1` (m) | `zone_id` (`bary_zone.w`) | Base Albedo / Visual | Engine Rules (`tactical_map_geom.rs`) |
 | :--- | :--- | :--- | :---: | :--- | :--- |
-| **Continuous Deck Floor** | `half_w_m × half_h_m` (full board) | `y = 0.000` (`push_quad`) | `-1.0` | `[0.075, 0.115, 0.185]` | Procedural `1.0m` minor (`[0.09, 0.22, 0.36]`) + `5.0m` major (`[0.14, 0.38, 0.58]`) grid lines in WGSL. |
+| **Continuous Deck Floor** | `half_w_m × half_h_m` (full board) | `y = 0.000` (`push_quad`) | `-1.0` (when `show_grid_overlay`) | `[0.075, 0.115, 0.185]` | Procedural `1.0m` minor + `5.0m` major scale lines toggleable via `#btn-map-grid-overlay`. |
 | **Outer Diorama Rim** | `(half_w_m + 0.12) × (half_h_m + 0.12)` | `-0.140 .. -0.005` | `0.0` | `[0.05, 0.08, 0.13]` | Framing plinth beneath deck level so angled isometric views have a solid tabletop silhouette. |
-| `Floor` (`0`) | *(uses continuous deck floor)* | `0.000` | `-1.0` | Deck slate | Open (`false` / `false` / `1.0×`). |
-| `HalfCover` (`1`) | Body: `0.86·hc` (`0.413m`)<br>Cap: `0.90·hc` (`0.432m`) | Body: `0.000 .. 0.860`<br>Cap: `0.860 .. 0.910` | `0.0` | Body `[0.16, 0.34, 0.52]`<br>Cyan cap `[0.22, 0.68, 0.92]` | Waist-high `0.91m` ballistic crate (`true` / `false` / `2.0×` vault cost); grants **Low Cover (`+4` $\Delta_{\text{ext}}$)**. |
-| `FullWall` (`2`) | Body: `1.00·hc` (`0.480m`)<br>Cap: `0.94·hc` (`0.451m`) | Cutaway: `0.00 .. 0.58` (`+0.04` cap)<br>Full: `0.00 .. 2.35` (`+0.04` cap) | `0.0` | Body `[0.23, 0.29, 0.38]`<br>Trim `[0.36, 0.45, 0.58]` | Structural bulkhead (`true` / `true` / impassable `99.0×`). Blocks center-ray LoS; corner-peekable if adjacent cell is open. |
-| `DoorClosed` (`3`) | `0.92·hc × 0.42·hc` (`0.442m × 0.202m`) | Cutaway: `0.000 .. 0.680`<br>Full: `0.000 .. 2.250` | `0.0` | Amber `[0.78, 0.42, 0.09]` | Sealed airlock (`true` / `true` / `99.0×`). Clicking in `move_or_select` toggles to `DoorOpen`. |
-| `DoorOpen` (`4`) | Twin jambs at `wx ± 0.78·hc`, each `0.16·hc × 0.45·hc` | `0.000 .. 0.350` | `0.0` | Emerald `[0.12, 0.65, 0.48]` | Unsealed threshold (`false` / `false` / `1.0×`). Clicking an unoccupied `DoorOpen` seals it back to `DoorClosed`. |
-| `HazardZone` (`5`) | `0.92·hc × 0.92·hc` (`0.442m`) | `0.004 .. 0.032` | `0.0` | Crimson `[0.68, 0.14, 0.24]` | Fire / radiation / vacuum floor pad (`false` / `false` / `2.0×` movement penalty). |
-| `ElevatedPlatform` (`6`) | `1.00·hc × 1.00·hc` (`0.480m`) | `0.000 .. 1.480` | `-1.0` | Catwalk `[0.15, 0.21, 0.31]` | `1.48m` raised gantry (`false` / `false` / `1.25×` climb/step cost). `zone_id = -1.0` renders `1m/5m` grid lines across the top deck; tokens, selection rings, hover reticles, and gait pads automatically step up onto `y = 1.48m..1.50m`. |
+| **`MapWallEdge` (`Wall`, `Door*`, `Window`)** | Coalesced segment (`0.08m` thick) | Cutaway: `0.00 .. 0.58` (`+0.03` cap)<br>Full: `0.00 .. 2.35` (`+0.03` cap) | `0.0` | Drywall/Brick/CMU/Steel/Glass palette | Analytical segment blocking (`Wall`, `DoorClosed`), sill cover (`Window`), and passable swing frame (`DoorOpen`). |
+| **`StructuralPillar`** (`360°` OBB) | Per `span_w_cm × span_h_cm` (`90×90 cm` default) | Cutaway: `0.00 .. 0.61`<br>Full: `0.00 .. 2.38` | `0.0` | `[0.30, 0.36, 0.44]` | Solid rotated OBB (`FullObstacle`); blocks movement and sightlines cleanly. |
+| **`ElevatedCatwalk`** (`360°` OBB) | Per prop center & rotation | `0.000 .. 1.480` | `-1.0` / `0.0` | `[0.15, 0.21, 0.31]` | Walkable `1.48m` raised gantry (`1.25×` climb cost); tokens & rings inside catwalk OBB lift to `y = 1.48m`. |
+| **`HazardSpill`** (`360°` OBB) | Per prop center & rotation | `0.004 .. 0.032` | `0.0` | Crimson `[0.68, 0.14, 0.24]` | Chemical / radiation floor hazard (`2.0×` movement cost penalty). |
+| **Furnishings, Cover & Foliage (`PropKind`, `52` total)** | Continuous `(center_x_cm, center_y_cm)` at any `0..359°` angle (`push_obb`) | `0.00 .. height_m` (`VehicleBody`, `LiveWood`, `Foliage`, etc.) | `0.0` / `-0.25` (canopy foliage) | Per-material PBR palette | Hover inspector distinguishes `Car`/`UtilityVan` `Engine Block` vs cabin and `Tree` `Trunk` vs `Canopy`. |
 
-### 4.2 Procedural `1.0m` Minor / `5.0m` Major Grid Shader (`SHARED_GLB_DIORAMA_WGSL`)
+### 4.2 Procedural `1.0m` Minor / `5.0m` Major Visual Scale Grid & Materials (`SHARED_GLB_DIORAMA_WGSL`)
 
-Any triangle tagged with `zone_id < -0.5` (`-1.0` on the main deck quad and `ElevatedPlatform` catwalks) activates resolution-independent procedural grid lines inside `fs_main` using `scene.mode_params.y = cell_size_m`:
-- **`1.0m` Minor Cell Lines**: `uv1 = fract(world_pos.xz / cell_scale + 0.5)` measures fractional distance to the nearest `1.0m` cell border (`+0.5` shifts grid lines from cell centers onto integer half-meter boundaries when $W, H$ are even, matching `(gx + 0.5) - W/2`), adding `vec3(0.09, 0.22, 0.36) * (1.0 - smoothstep(0.0, 0.038, d1))`.
-- **`5.0m` Major Sector Lines**: `uv5 = fract((world_pos.xz / cell_scale + 0.5) * 0.2)` highlights every `5.0m` tactical zone boundary with `vec3(0.14, 0.38, 0.58) * (1.0 - smoothstep(0.0, 0.016, d5))`.
-- **Anti-Aliased Barycentric Wireframe (`mode == 1 || mode == 2`)**: Every triangle emitted by `push_quad`, `push_box`, and `glb_model.rs` carries per-vertex barycentric coordinates `(1,0,0)`, `(0,1,0)`, `(0,0,1)` in `bary_zone.xyz`, allowing `fwidth(in.bary)` screen-space derivative edge detection when inspecting meshes.
+Triangles tagged with `zone_id < -0.5` (`-1.0` on the deck when `#btn-map-grid-overlay` is enabled) render resolution-independent visual reference lines in `fs_main`; disabling `#btn-map-grid-overlay` sets `deck zone_id = 0.0` for a pure ungridded terrain surface while keeping procedural Grass (`-2.0`), Gravel (`-3.0`), Packed Dirt (`-4.0`), Bark Mulch (`-5.0`), Creek Water (`-6.0`), and Leaf Canopy (`-0.25`) shaders active.
 
 ---
 
-## 5. Live Tactical Overlays & `2d20` Cascade Roller Bridge
+## 5. Live Continuous Overlays, Analytical LoS & Hover Inspector
 
-### 5.1 `1 Tick = 0.25s` Gait Reachability Overlay (`GaitReachQuery`)
+### 5.1 `1 Tick = 0.25s` 16-Directional Continuous Reachability (`ReachableField`)
 
-Whenever `selected_entity_id`, `gait`, `tick_budget`, or `map` changes, `recompute_reach_and_auto_los` invokes `compute_reachable_grid_cells(&map, &GaitReachQuery)` (`spd_eff = 11`, `hgt_m = 1.80`, `tick_budget` in `1..=40`):
+Whenever `selected_entity_id`, `gait`, `tick_budget`, or `map` changes, `recompute_reach_and_auto_los` invokes `compute_reachable_field_continuous(&map, &GaitReachQuery)` (`spd_eff = 11`, `hgt_m = 1.80`, `tick_budget` in `1..=40`):
 
 1. **Physical Sprint & Per-Tick Velocity** ([`environment_vehicles.rs`](../../../crates/satya-engine/src/environment_vehicles.rs)):
    $$V_{\text{sprint}} = \big(4.0 + 0.35 \cdot \text{SPD}_{\text{eff}}\big) \cdot \frac{\text{HGT}_{\text{m}}}{1.75}\;\text{m/s}, \qquad d_{\text{budget}} = \frac{V_{\text{sprint}}}{4.0} \cdot f_{\text{gait}} \cdot N_{\text{ticks}}\;\text{m}$$
-   For baseline `SPD_eff = 11`, `HGT = 1.80m`, $V_{\text{sprint}} = 7.85 \times 1.0286 \approx 8.074\;\text{m/s}$ (`2.019 m/tick` at all-out sprint):
+   Gait speed profiles (`crawl 8%`, `creep 18%`, `glide 35%`, `hustle 65%`, `sprint 100%`) govern reachable metric distance.
+2. **16-Directional `0.25m` Sampling & Strip Merging**: `compute_reachable_field_continuous` steps `0.25m` lattice nodes in millimeters with 16 directional vectors (`(±1,0)`, `(±1,±1)`, `(±2,±1)` knight-dirs) validating `TOKEN_RADIUS_M = 0.30m` clearance along every segment and surface move-cost multipliers (`HazardSpill`, `CreekWater`, `ElevatedCatwalk`), then exports `merged_row_runs()` (`Vec<ReachableStrip>`) for crisp, low-triangle emerald pads in 3D WebGPU and contoured movement envelopes in 2D SVG.
 
-   | `CombatMovementGait` | UI Option Value | Sprint Fraction $f_{\text{gait}}$ | Speed at `SPD 11` (`m/tick`) | Max Reach in `8 Ticks` (`2.00s`) | Tactical Profile |
-   | :--- | :--- | :---: | :---: | :---: | :--- |
-   | `ProneLowCrawl` | `"crawl"` | `8%` (`0.08`) | `0.16 m/tick` | `1.29 m` (`1` cell) | Maximizes low-profile concealment; high exertion. |
-   | `StealthCreepCrouchWalk` | `"creep"` | `18%` (`0.18`) | `0.36 m/tick` | `2.91 m` (`2` cells) | Silent breach approach; preserves weapon readiness. |
-   | `CombatGlideTacticalWalk` | `"glide"` *(default)* | `35%` (`0.35`) | `0.71 m/tick` | `5.65 m` (`5` cells) | Stabilized weapon platform; zero gunnery gait penalty. |
-   | `BoundingRunHustle` | `"hustle"` | `65%` (`0.65`) | `1.31 m/tick` | `10.50 m` (`10` cells) | Rapid cover-to-cover bound; moderate fire penalty. |
-   | `AllOutSprint` | `"sprint"` | `100%` (`1.00`) | `2.02 m/tick` | `16.15 m` (`16` cells) | Maximum dash speed; cannot maintain sighted fire. |
+### 5.2 Analytical 2D Raycast LoS & `barrier_ballistics` (`evaluate_los_continuous`)
 
-2. **8-Directional Millimeter Dijkstra**: `compute_reachable_grid_cells` converts $d_{\text{budget}}$ to integer millimeters (`budget_mm = round(max_dist_m * 1000)`) so priority-queue ordering is bit-identical across WASM and x86_64. Orthogonal steps cost `1000 mm × move_cost_multiplier()` and diagonals cost `1414 mm × move_cost_multiplier()`. Impassable tiles (`blocks_occupancy()`), occupied cells, and **diagonal corner-cuts** adjacent to any `blocks_full_los()` shoulder (`(cx + dx, cy)` or `(cx, cy + dy)`) are rejected.
-3. **3D Diorama Overlays**: Reachable cells emit emerald pads (`RGB [0.09, 0.58, 0.42]`, half-extent `0.41m`, `y = 0.016..0.034m` on deck / `1.490..1.508m` on `ElevatedPlatform`); `selected_entity_id` emits a gold plinth ring (`[0.96, 0.78, 0.14]`, `y = 0.022..0.046m`); `hovered_cell` emits a cyan reticle (`[0.22, 0.78, 0.98]`, `y = 0.025..0.047m`).
-
-### 5.2 Supercover LoS, Corner-Peek Cover & Chest-Height Laser (`evaluate_tactical_los_and_cover`)
-
-LoS from `(ax, ay)` to `(tx, ty)` is computed by `evaluate_tactical_los_and_cover`:
-1. **Center-to-Center Supercover Ray**: `trace_supercover_segment_cells` samples $N = \lceil \max(|\Delta x|, |\Delta y|) \times 6 \rceil$ points from `(ax + 0.5, ay + 0.5)` to `(tx + 0.5, ty + 0.5)`. Intermediate `blocks_full_los()` tiles (`FullWall`, `DoorClosed`) block the direct ray. Intermediate `HalfCover` tiles with Chebyshev distance `> 1` from the **attacker** (`max(|cx - ax|, |cy - ay|) > 1`) flag low cover — an attacker immediately behind an adjacent crate braces over it without self-penalty, while mid-field or defender-side crates shield the target.
-2. **Orthogonal Corner-Peek Fallback (`HighCover`)**: When the center ray is blocked, four `0.80m` orthogonal lean origins `(ax + 0.5 + ox, ay + 0.5 + oy)` with $(o_x, o_y) \in \{(\pm 0.8, 0), (0, \pm 0.8)\}$ into unblocked adjacent cells are tested. If any lean ray clears `blocks_full_los()`, the shot succeeds at **High Cover (`+6` $\Delta_{\text{ext}}$)**.
+LoS from `attacker_m` to `target_m` is computed analytically against `WallEdgeIndex` segments (`tactical_map_edges.rs`) and `360°` rotated OBBs + trunk/foliage circles (`prop_ray_intersect_t` in `tactical_map_geom.rs`):
+1. **Center-to-Center Exact Ray & Lean Peek (`±0.80m`)**: Directly intersects `Wall`/`DoorClosed`/`Window` segments and rotated prop volumes along `[0, 1]` parameter `t` — testing symmetric perpendicular peek origins when blocked to detect **High Cover (`+6` $\Delta_{\text{ext}}$)** corner leans.
+2. **Continuous Hover Inspector (`map_hover_inspect.rs`)**: `satyaHoverMapPoint(x_m, y_m)` calls `inspect_map_point(&map, theme_name, x_m, y_m)` to populate both the persistent `#map-hover-status-bar` and the `[Alt`-hold / `I`-toggle / `#btn-map-inspect-toggle]` floating `#map-hover-tooltip` card across tokens, wall/door edges, sub-zone props (`Car` engine vs. cabin, `LargeTree` trunk vs. canopy), surface props, and ground material.
 
 | `CoverGrade` | `has_line_of_sight` | `recommended_delta_ext` ($\Delta_{\text{ext}}$) | `push_beam` Laser RGB (`y = 1.05m`, width `0.09m`) | HUD Badge & Tactical Meaning |
 | :--- | :---: | :---: | :--- | :--- |
-| `Clear` | `true` | `+0` | Cyan `[0.14, 0.86, 0.96]` | Unobstructed sightline (or attacker bracing over adjacent crate/sill). |
-| `Concealment` | `true` | `+3` | Emerald `[0.18, 0.80, 0.38]` | Foliage (`Hedge`, `Bush`) obscuring silhouette (`0 PR` — zero trauma loss). |
-| `LowCover` | `true` | `+4` *(or `+2` overmatched)* | Amber `[0.98, 0.76, 0.14]` | `0.90m` cover or `Window` sill; degrades to `+2` when overmatched by active firearm (`barrier_ballistics.rs`). |
-| `HighCover` | `true` | `+6` | Orange `[0.98, 0.48, 0.16]` | Direct ray blocked by bulkhead, but `±0.80m` corner-peek ray clears. |
-| `Blocked` | `false` | `+16` *(or `+6` blind wall-bang)* | Rose `[0.96, 0.22, 0.36]` *(Violet `[0.68, 0.32, 0.96]` if penetrable)* | Solid wall/door; if `#map-weapon-select` perforates all barriers (e.g. `5.56mm` vs `Drywall` or `7.62 NATO` vs `Brick`), allows `+6` blind fire. |
+| `Clear` | `true` | `+0` | Cyan `[0.14, 0.86, 0.96]` | Unobstructed sightline. |
+| `Concealment` | `true` | `+3` | Emerald `[0.18, 0.80, 0.38]` | Foliage (`Hedge`, `Bush`, tree canopy) obscuring silhouette (`0 PR` — zero trauma loss). |
+| `LowCover` | `true` | `+4` *(or `+2` overmatched)* | Amber `[0.98, 0.76, 0.14]` | Low cover or `Window` sill; degrades to `+2` when overmatched by active firearm (`barrier_ballistics.rs`). |
+| `HighCover` | `true` | `+6` | Orange `[0.98, 0.48, 0.16]` | Direct ray blocked, but perpendicular corner-peek ray clears. |
+| `Blocked` | `false` | `+16` *(or `+6` blind wall-bang)* | Rose `[0.96, 0.22, 0.36]` *(Violet `[0.68, 0.32, 0.96]` if penetrable)* | Solid wall/door/pillar; if `#map-weapon-select` perforates all barriers, allows `+6` blind fire. |
 
 ### 5.3 One-Click Roller Bridge (`satya_apply_map_cover_to_roller`)
 
@@ -276,39 +264,34 @@ Clicking **Apply `Δ_ext` to Roller (`#btn-map-apply-cover`)** inside `#map-tact
   - *2D Top-Down Orthographic*: `orthographic = true`, `yaw_deg = 0.0°` (North up), effective pitch `88.5°`, `half_h = (base_distance * 0.46) / zoom`, `half_w = half_h * aspect`, `near = 0.1m`, `far = 120.0m`.
 - **Orbit, Pan, Zoom & `4px` Drag Threshold**:
   - `mousedown` sets `drag_start = (cx, cy)` and `moved = false`. Travel `> 4px` (`|cx - sx| > 4 || |cy - sy| > 4`) sets `moved = true`: left-drag in 3D orbits (`dyaw = -dx * 0.42°`, `dpitch = dy * 0.32°`), `Shift`/Middle/Right drag (or any drag in 2D ortho) pans (`limit = ±24.0m`), and `wheel` zooms by `1.12×` / `1/1.12×`.
-  - `mouseup` invokes `handle_map_grid_cell_clicked(gx, gy)` **only when `!moved`**.
+  - `mouseup` invokes `satya_click_map_point(x_m, y_m)` **only when `!moved`**; `mousemove` invokes `satya_hover_map_point(x_m, y_m)` to update `#map-hover-status-bar`, `[Alt / I]` `#map-hover-tooltip`, and 3D/2D brush previews.
 - **Ray-Plane Unprojection (`screen_ndc_to_plane_xz`)**:
   For canvas CSS coordinates $(x_{\text{css}}, y_{\text{css}})$ inside $(W_{\text{css}}, H_{\text{css}})$:
   $$\text{ndc}_x = \frac{2 x_{\text{css}}}{W_{\text{css}}} - 1, \qquad \text{ndc}_y = 1 - \frac{2 y_{\text{css}}}{H_{\text{css}}}$$
-  `screen_ndc_to_plane_xz(ndc_x, ndc_y, aspect, 0.0)` forms either a perspective ray from `eye` along $\operatorname{normalize}(\mathbf{f} + \mathbf{r}\cdot \text{ndc}_x \cdot \text{aspect}\cdot\tan 21^\circ + \mathbf{u}\cdot \text{ndc}_y \cdot \tan 21^\circ)$ or an orthographic ray from $\mathbf{e} + \mathbf{r}(\text{ndc}_x w_{1/2}) + \mathbf{u}(\text{ndc}_y h_{1/2})$ along $\mathbf{f}$, intersects $y = 0.0$ at $t = -O_y / D_y$ ($t > 0,\; |D_y| \ge 10^{-4}$), and maps $(O_x + t D_x,\; O_z + t D_z)$ via `world_xz_to_grid_cell`.
-- **Three Canvas Click Modes (`handle_map_grid_cell_clicked`)**:
-  1. **`move_or_select` *(default)***: Clicking an occupied cell selects that token; clicking an unoccupied `DoorClosed`/`DoorOpen` toggles the door and `POST`s full map; clicking any passable cell moves `selected_entity_id` to `(gx, gy)`, sets `facing_deg = atan2(dx, -dy)`, and `POST`s `/api/sessions/:id/map/move`.
-  2. **`measure_los`**: Evaluates `evaluate_tactical_los_and_cover` from the selected token to `(gx, gy)` and renders the `y = 1.05m` `CoverGrade` beam without moving tokens.
-  3. **`edit_terrain`**: Cycles `(gx, gy)` across all 7 `TacticalTileKind` variants (`Floor` $\rightarrow$ `HalfCover` $\rightarrow$ `FullWall` $\rightarrow$ `DoorClosed` $\rightarrow$ `DoorOpen` $\rightarrow$ `HazardZone` $\rightarrow$ `ElevatedPlatform` $\rightarrow$ `Floor`) and broadcasts the map.
+  `screen_ndc_to_plane_xz(ndc_x, ndc_y, aspect, 0.0)` forms either a perspective ray or orthographic ray, intersects $y = 0.0$, and maps $(O_x + t D_x,\; O_z + t D_z)$ via `world_xz_to_metric`.
+- **Three Canvas Click Modes (`handle_map_point_clicked`)**:
+  1. **`move_or_select` *(default)***: Clicking within `0.42m` of a token selects it; clicking an unoccupied `DoorClosed`/`DoorOpen` edge toggles the door and `POST`s full map; clicking any point moves `selected_entity_id` via `resolve_token_destination_cm` (applying `<= 0.35m` slide/snap clamping), sets `facing_deg = atan2(dx, -dy)`, and `POST`s `/api/sessions/:id/map/move` (`to_x_cm`, `to_y_cm`).
+  2. **`measure_los`**: Evaluates `evaluate_los_continuous` from the selected token to `(x_m, y_m)` and renders the `y = 1.05m` `CoverGrade` beam without moving tokens.
+  3. **`edit_terrain`**: Places the active `#map-prop-brush-select` (`52` `PropKind`s at free `0..359°` `prop_brush_rotation_deg`, or `EdgeWall` cycle, or `__erase__`) via `place_prop_on_map` / `remove_prop_at_point` and broadcasts the map (`tiles: []`).
 
-### 6.4 Event-Driven Rendering (Zero Idle `rAF`) & Automatic 2D `<svg>` Fallback
+### 6.4 Event-Driven Rendering (Zero Idle `rAF`) & Synchronized 2D SVG Battlemap
 
-- **Zero Idle GPU Power Draw**: `#wgpu-map-canvas` has **no** continuous `requestAnimationFrame` loop; `render_map_frame` fires strictly on pointer orbit/pan/hover cell changes, wheel zoom, toolbar actions, `maps` tab activation, or `ServerWsPacket::MapUpdated`. Backing resolution clamps `(css_w * dpr)` to `320..=2048` and `(css_h * dpr)` to `220..=1440`.
-- **Automatic Interactive 2D Battlemap Fallback (`#tabletop-map-svg-fallback`)**: If `navigator.gpu` or `request_adapter` / `request_device` is unavailable, `#wgpu-map-canvas-wrap` hides and the illustrated 2D battlemap (§6.5) displays automatically.
+- **Zero Idle GPU Power Draw**: `#wgpu-map-canvas` has **no** continuous `requestAnimationFrame` loop; `render_map_frame` fires strictly on pointer orbit/pan/hover point changes, wheel zoom, toolbar actions, `maps` tab activation, or `ServerWsPacket::MapUpdated`. Backing resolution clamps `(css_w * dpr)` to `320..=2048` and `(css_h * dpr)` to `220..=1440`.
+- **Automatic Interactive 2D Battlemap Fallback (`#tabletop-map-svg-fallback`)**: If `navigator.gpu` or `request_adapter` / `request_device` is unavailable (or when toggled via `#btn-map-view-mode`), the illustrated 2D battlemap (§6.5) displays automatically.
 
-### 6.5 Illustrated 2D Battlemap, Thin Edge Walls & Multi-Cell Props
+### 6.5 Illustrated 2D Battlemap, Thin Edge Walls, 360° Props & Hover Inspector
 
-See **[`06-2d-battlemap-art.md`](06-2d-battlemap-art.md)** for the full illustrated 2D `<svg>` pipeline (`map_2d_art*.rs`, `map_2d_tokens.rs`), paper/ink filter styles (`#map-ink-style-select`), clipped token portrait discs, and GM prop-brush (`#map-prop-brush-select` + `#btn-map-prop-rotate`) controls.
-
-In summary across both renderers:
-- **Thin Cell-Boundary Walls (`MapWallEdge` in `tactical_map_edges.rs`)**: Walls, closed/open doors, and `Window`s sit on `1.0m` cell boundaries (`EdgeSide::North` / `West`) with `MaterialClass` (`Drywall`, `Brick`, `ConcreteBlock`, `Glass`, etc.) and Amanatides–Woo supercover traversal in `WallEdgeIndex`.
-- **Multi-Cell Props (`MapPropPlacement` & `PROP_CATALOG` in `map_dressing.rs`)**: `39` `PropKind`s (`Sofa`, `BarCounter`, `Car`, `UtilityVan`, `LargeTree`, etc.) stamp cover/concealment tiles via `stamp_props_into_tiles`, `place_prop_on_grid`, and `remove_prop_at_on_grid` identically across 2D SVG (`map_2d_art_furniture.rs`) and 3D WebGPU (`map_3d_dressing_geom.rs`).
-- **Fractional Edge & Prop Picking (`satyaClickMapPoint(fx, fy)` in `map_edge_edit.rs`)**: Both `#battlemap-overlay` and `#wgpu-map-canvas` dispatch continuous cell coordinates to `map_edge_edit.rs` — handling prop-brush placement/erasure first in `edit_terrain` mode, then `0.20`-cell edge door toggles / wall painting, and falling back to `handle_map_grid_cell_clicked` for token movement and cell tile cycling.
+See **[`06-2d-battlemap-art.md`](06-2d-battlemap-art.md)** for the full illustrated 2D `<svg>` pipeline (`map_2d_art*.rs`, `map_2d_tokens.rs`), paper/ink filter styles (`#map-ink-style-select`), continuous token portrait discs, GM `360°` prop-brush (`#map-prop-brush-select`, `#btn-map-prop-rotate`, `#map-prop-rot-deg`, `#btn-map-snap-toggle`) controls, and Object & Ground Hover Inspector (`#map-hover-status-bar` + `[Alt / I]` `#map-hover-tooltip`).
 
 ---
 
 ## 7. Host Unit Test Coverage
 
-All spatial math, SVG/HUD formatters, procedural layouts, reachability budgets, LoS corner-peeking, and camera unprojection invariants run offline on the host target without a browser:
+All spatial math, SVG/HUD formatters, procedural layouts, continuous reachability, analytical LoS, hover inspection, and camera unprojection invariants run offline on the host target without a browser:
 
 ```bash
 cargo test --offline -p satya-engine tactical_map
-cargo test --offline -p satya-web map_3d
+cargo test --offline -p satya-web map_
 ```
 
-Key verified invariants include `world_and_grid_coordinate_roundtrip_is_exact` (exact bijection across all `20 × 14` cells), `camera_ray_plane_unprojection_hits_origin_for_center_ndc` (perspective + orthographic ray-plane accuracy `< 0.05m`), `diorama_geometry_builder_emits_deck_walls_and_los_beam`, and `supercover_los_detects_clear_low_cover_corner_peek_and_blocked_rays`.
+Key verified invariants include `world_and_metric_coordinate_roundtrip_and_continuous_move`, `continuous_move_slides_around_wall_and_blocks_solid_props`, `hover_inspector_identifies_tokens_walls_car_parts_trees_surfaces_and_ground`, `free_360_brush_rotation_and_continuous_prop_placement_erase`, and `test_orbit_ortho_camera_ray_plane_unprojection_perspective_and_ortho`.

@@ -8,13 +8,15 @@
 
 | Module | Responsibility |
 | :--- | :--- |
-| **`map_2d_art.rs`** | `BATTLEMAP_CELL_PX` (`64`), `BATTLEMAP_PAD_PX` (`12`), `BATTLEMAP_ART_THEMES` (`8` material themes + `PRESET_ART_THEME_MAP`), FNV-1a `battlemap_art_cache_key`, boundary/rect path mergers, and `format_battlemap_art_layer`. |
-| **`map_2d_art_walls.rs`** | Coalesced `MapWallEdge` orthogonal segments (`Wall`, `DoorClosed`, `DoorOpen` swing arcs, `Window` sills/glazing) rendered cleanly on grid boundaries. |
-| **`map_2d_art_furniture.rs`** | All `39` multi-cell `PropKind` vector glyphs (`Sofa`, `BarCounter`, `PoolTable`, `Car`, `UtilityVan`, `LargeTree` / `MediumTree` overhanging canopies, etc.). |
-| **`map_2d_art_props.rs`** | Legacy single-cell fallback cover props (`BattlemapPropKind`) and deterministic cell hashing / blob path helpers. |
-| **`map_2d_tokens.rs`** | Phase 4 `BattlemapInkStyle` filter finishes (`vellum`, `clean`, `blueprint`, `sketch`), `satya_set_battlemap_ink_style`, and `push_token_portrait_disc_svg` (portrait medallions + preset busts). |
-| **`map_2d_art_overlay.rs`** | Dynamic `#battlemap-overlay` (`1.0m`/`5.0m` grid, reach envelope, hover reticle / prop footprint preview, LoS ray, portrait discs) and `sync_battlemap_svg_host`. |
-| **`map_edge_edit.rs`** | Fractional cell-space picking (`satyaClickMapPoint`), `PROP_BRUSH_GROUPS`, GM prop placement/rotation/erasure (`satyaUpdateMapPropBrush`, `satyaRotateMapPropBrush`), and server REST sync. |
+| **`map_2d_art.rs`** | `BATTLEMAP_CELL_PX` (`64`), `BATTLEMAP_PAD_PX` (`12`), `BATTLEMAP_ART_THEMES` (`8` material themes + `PRESET_ART_THEME_MAP` covering all `12` presets), FNV-1a `battlemap_art_cache_key`, boundary/rect path mergers, and `format_battlemap_art_layer` (renders continuous `wall_edges`, surfaces, and `360°` props with `tiles == []`). |
+| **`map_2d_art_surfaces.rs`** | Floor `<pattern>` defs (`Grass` multi-tone turf, `Hardwood`, etc.), landscaping `<pattern>`s (`#bm-gravel`, `#bm-dirt`, `#bm-mulch`, `#bm-creek`, `#bm-ditch`, `#bm-leaf-tex`), and Chaikin corner-smoothed contour extraction (`battlemap_smooth_region_path`) for meandering creeks, ditches, gravel bars, dirt trails, mulch beds, and flagstones. |
+| **`map_2d_art_walls.rs`** | Coalesced `MapWallEdge` orthogonal segments (`Wall`, `DoorClosed`, `DoorOpen` swing arcs, `Window` sills/glazing) rendered cleanly along wall coordinates. |
+| **`map_2d_art_furniture.rs`** | All `52` `PropKind` vector glyphs rendered at continuous `(center_x_cm, center_y_cm)` and full `360°` (`0..359°`) rotation (`Sofa`, `BarCounter`, `PoolTable`, `Car`, `UtilityVan`, `GardenBed`, `GardenEdging`, `StructuralPillar`, `ElevatedCatwalk`, `HazardSpill`, leaf-textured `LargeTree` / `MediumTree` canopies, etc.). |
+| **`map_2d_art_props.rs`** | Deterministic cell hashing / blob path helpers for terrain scatter and legacy prop fallback contours. |
+| **`map_2d_tokens.rs`** | Phase 4 `BattlemapInkStyle` filter finishes (`vellum`, `clean`, `blueprint`, `sketch`), `satya_set_battlemap_ink_style`, and `push_token_portrait_disc_svg` placed at continuous `(pos_x_cm, pos_y_cm)` coordinates. |
+| **`map_2d_art_overlay.rs`** | Dynamic `#battlemap-overlay` (optional `1.0m`/`5.0m` visual metric grid, continuous `reachable_strips` contour runs, hover reticle + OBB/edge highlight, `360°` prop brush preview, analytical LoS ray, portrait discs) and `sync_battlemap_svg_host`. |
+| **`map_hover_inspect.rs`** | Continuous Object & Ground Hover Inspector (`satyaHoverMapPoint`, `satyaLeaveMapHover`, `satyaToggleMapInspectMode`), persistent `#map-hover-status-bar`, and `Alt`-hold / `I`-toggle / `#btn-map-inspect-toggle` `#map-hover-tooltip` card. |
+| **`map_edge_edit.rs`** | Continuous metric pointer picking (`satyaClickMapPoint(fx, fy)`), `PROP_BRUSH_GROUPS` (`52` variants + Wall Edge + Eraser), GM `360°` prop placement/rotation/snap (`satyaRotateMapPropBrush` `+15°`, `satyaSetMapPropRotationDeg`, `satyaToggleMapGridSnap`), and server REST sync. |
 
 ---
 
@@ -23,10 +25,10 @@
 `#tabletop-map-svg-fallback` contains `.battlemap-stack`, stacking two `<svg>` elements over an identical `-12 -12 (w*64 + 24) (h*64 + 24)` `viewBox`:
 
 1. **`#battlemap-art` (Static Art Layer)**:
-   - Keyed by `data-art-key="{battlemap_art_cache_key(ui)}"`, an FNV-1a digest over `grid_width`, `grid_height`, `seed`, `theme.id`, `ink_style.as_str()`, `tiles`, `wall_edges`, and `props`.
+   - Keyed by `data-art-key="{battlemap_art_cache_key(ui)}"`, an FNV-1a digest over `grid_width`, `grid_height`, `seed`, `theme.id`, `ink_style.as_str()`, `wall_edges`, and `props` (continuous geometry, independent of any legacy tile array).
    - `sync_battlemap_svg_host()` skips regenerating `#battlemap-art` whenever `data-art-key` matches, replacing only `#battlemap-overlay.innerHTML` on pointer hover, token selection, token movement, or grid-toggle events.
 2. **`#battlemap-overlay` (Dynamic Interaction Layer)**:
-   - Binds single pointer handlers on `<svg id="battlemap-overlay">` converting client pixels to fractional cell coordinates `(fx, fy)` (`window.satyaClickMapPoint(fx, fy)`, `window.satyaHoverMapCell(x, y)`) with zero per-cell DOM listeners.
+   - Binds single pointer handlers on `<svg id="battlemap-overlay">` converting client pixels to continuous metric/grid units `(fx, fy)` (`window.satyaClickMapPoint(fx, fy)`, `window.satyaHoverMapPoint(fx, fy)`, `window.satyaLeaveMapHover()`) with zero per-cell DOM listeners.
 
 ---
 
@@ -54,8 +56,21 @@ Each token in `ui.map.tokens` renders as a layered medallion inside `#battlemap-
 
 ---
 
-## 5. GM Multi-Cell Prop Placement, Rotation & Eraser
+## 5. GM 360° Prop Placement, Rotation, Grid Snap & Eraser
 
-When `#map-click-mode` is `"edit_terrain"`, the subbar reveals `#map-prop-brush-select` (`PROP_BRUSH_GROUPS` covering all `39` `PropKind` variants, `"Tile / Wall Cycle"`, and `"__erase__"`) plus `#btn-map-prop-rotate` (`0° → 90° → 180° → 270°`):
-- **Hover Footprint Preview**: `#battlemap-overlay` draws a dashed rectangle across `(p.x..p.x + p.w_cells, p.y..p.y + p.h_cells)` (`#0ea5e9` when in bounds, `#e11d48` when out of bounds or erasing a prop).
-- **Single-Source Tile Stamping (`satya_engine::map_dressing`)**: Both the optimistic Wasm handler (`handle_map_prop_brush_click`) and `POST /api/sessions/:id/map` (`satya-signaling::map_handlers` Branch A0b, GM-only guarded) invoke `place_prop_on_grid` / `remove_prop_at_on_grid`. Removing or replacing a prop cleanly resets old `FullWall` / `HalfCover` / `Concealment` stamps to `Floor` before re-stamping remaining props, and refreshes both 2D SVG and 3D WebGPU geometry.
+When `#map-click-mode` is `"edit_terrain"`, the subbar reveals `#map-prop-brush-select` (`PROP_BRUSH_GROUPS` covering all `52` `PropKind` variants including `StructuralPillar`, `ElevatedCatwalk`, `HazardSpill`, `Landscaping & Terrain`, `"Wall / Door / Window Edge"`, and `"__erase__"`) plus `#btn-map-prop-rotate` (`+15°` steps across full `0..359°`), `#map-prop-rot-deg` numeric degree input (`satyaSetMapPropRotationDeg`), and `#btn-map-snap-toggle` (`satyaToggleMapGridSnap`):
+- **Continuous Ghost Preview**: `#battlemap-overlay` renders the rotated OBB or circle silhouette centered at `hovered_point_m` (snapped to `0.50m` only when snap is enabled, otherwise free continuous meters; `#0ea5e9` when valid, `#e11d48` when out of bounds, colliding, or erasing a prop).
+- **Vector Scene Mutation (`satya_engine::tactical_map_geom`)**: Both the optimistic Wasm handler (`handle_map_point_clicked`) and `POST /api/sessions/:id/map` (`satya-signaling::map_handlers`, GM-only guarded) invoke `place_prop_on_map` / `remove_prop_at_point` with `tiles: []`. Updating or removing a prop immediately refreshes `#battlemap-art`, `#battlemap-overlay`, `ReachableField`, LoS, and 3D WebGPU geometry.
+
+---
+
+## 6. Object & Ground Hover Inspector (`map_hover_inspect.rs`)
+
+Moving the pointer anywhere over `#battlemap-overlay` or `#wgpu-map-canvas` dispatches `satyaHoverMapPoint(fx, fy)` into `compute_hover_inspection` (`satya_engine::tactical_map_geom::inspect_map_point`), classifying the topmost entity in priority order:
+1. **Tokens** (`0.42m` pick radius): label, stance pose, visibility, facing degrees, and metric coordinates.
+2. **Wall / Door / Window Edges**: `MaterialClass` (`Brick`, `Drywall`, `ConcreteBlock`, `Glass`, etc.) + cover/breach rating.
+3. **3D / Solid Props (incl. Sub-Zones)**: distinguishes `Car` / `UtilityVan` front `Engine Block` (`ArmorSteel` hard cover) from cabin, and `LargeTree` / `MediumTree` solid `Trunk` (`LiveWood`) from overhead `Canopy` (`Foliage`, `2.10m` elevation).
+4. **Surface / Catwalk / Hazard Props**: `ElevatedCatwalk`, `HazardSpill`, `StonePath`, `GravelPath`, `DirtPath`, `MulchBed`, `CreekWater`, `Rug`, etc. with move-cost multipliers.
+5. **Base Ground / Floor**: theme-aware roadway, grass, concrete slab, or interior decking.
+
+Results appear simultaneously in the persistent `#map-hover-status-bar` beneath the viewport and — when holding `Alt`, pressing `I`, or toggling `#btn-map-inspect-toggle` — in the floating `#map-hover-tooltip` card (`SatyaTooltip` pattern).

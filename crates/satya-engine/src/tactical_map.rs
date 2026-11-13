@@ -1,58 +1,63 @@
-//! # Tactical `1.0m` Map Grid, Procedural Sector Generator, Supercover LoS/Cover & Gait Reach
+//! # Continuous Metric Tactical Map, Procedural Sectors, Analytical LoS/Cover & Gait Reach
 //!
 //! Deterministic spatial geometry engine shared across `satya-engine`, `satya-signaling`, and `satya-web`:
-//! - **Procedural `1.0m` Sector Templates**: [`SectorPreset`] (`ResidentialApartment`, `OfficeFloor`,
-//!   `CornerBar`, `UrbanCrossroads`, `WoodedPark`, `GardenEstate`, `DockingBay`, `MedLabSector`,
-//!   `DerelictCorridor`, `OrbitalAirlock`) — all emitting thin [`MapWallEdge`]s and multi-cell props.
-//! - **Supercover Raycast & Corner-Peek Cover**: [`evaluate_tactical_los_and_cover`] computing metric range
+//! - **Procedural Metric Sector Templates**: [`SectorPreset`] (`ResidentialApartment`, `OfficeFloor`,
+//!   `CornerBar`, `UrbanCrossroads`, `WoodedPark`, `GardenEstate`, `WoodlandCreek`, `RoadsideDitch`,
+//!   `DockingBay`, `MedLabSector`, `DerelictCorridor`, `OrbitalAirlock`) — all emitting thin
+//!   [`MapWallEdge`]s and `360°` oriented multi-cell props (no tile matrix).
+//! - **Analytical Raycast & Corner-Peek Cover**: [`evaluate_los_continuous`] computing metric range
 //!   (`distance_m`), [`CoverGrade`] (`Clear`, `Concealment`, `LowCover`, `HighCover`, `Blocked`), and
 //!   recommended $\Delta_{\text{ext}}$.
-//! - **Metric Gait Movement Envelope**: [`compute_reachable_grid_cells`] coupling [`CombatMovementGait`] and
-//!   [`compute_stride_and_sprint_velocity`] directly to `1.0m` 8-directional Dijkstra pathing.
-//! - **Edge Walls & Multi-Cell Props**: [`TacticalGridView`] pairs the tile grid with a
-//!   [`WallEdgeIndex`] so LoS ([`evaluate_los_on_grid`]) and reach ([`compute_reachable_on_grid`]) respect thin
-//!   walls, doors, and windows. Generators live in [`crate::map_interior_gen`], [`crate::map_outdoor_gen`],
-//!   and [`crate::map_sector_gen`], with prop catalogs in [`crate::map_dressing`].
+//! - **Continuous `0.25m` Any-Angle Gait Reachability**: [`compute_reachable_continuous`] coupling
+//!   [`CombatMovementGait`] and [`compute_stride_and_sprint_velocity`] to `16`-directional `0.25m`
+//!   Dijkstra pathing merged into smooth [`ReachableStrip`] contours.
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use satya_schema::{
     CoverGrade, GmMapUpdateRequest, MapPropPlacement, MapWallEdge, MessageVisibility,
-    TacticalTileKind, TokenPlacement, TokenVisualSpec, WallEdgeKind,
+    TokenPlacement, TokenVisualSpec, WallEdgeKind,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::define_coded_enum;
 use crate::environment_vehicles::{CombatMovementGait, compute_stride_and_sprint_velocity};
+use crate::map_dressing::{prop_spec, PropObstruction};
 use crate::map_interior_gen::{InteriorStyle, generate_furnished_interior};
 use crate::map_outdoor_gen::{OutdoorStyle, generate_outdoor_sector};
 use crate::map_sector_gen::{FacilitySectorStyle, generate_facility_sector};
 pub use crate::tactical_map_edges::{EdgeObstruction, WallEdgeIndex};
+use crate::tactical_map_geom::{
+    circle_collides_obstacles, intersect_segment_edge, intersect_segment_prop, prop_contains_point,
+    prop_intersects_circle, NAV_STEP_M, TOKEN_RADIUS_M,
+};
 
-/// Borrowed view of everything spatial rules need: row-major tiles plus the thin edge-wall index.
+/// Borrowed view of everything continuous spatial rules need: board extents in meters,
+/// thin wall/door/window edges, and `360°` oriented props.
 #[derive(Debug, Clone, Copy)]
-pub struct TacticalGridView<'a> {
-    pub tiles: &'a [TacticalTileKind],
-    pub width: i32,
-    pub height: i32,
-    pub edges: &'a WallEdgeIndex,
+pub struct TacticalSceneView<'a> {
+    pub width_m: f32,
+    pub height_m: f32,
+    pub edges: &'a [MapWallEdge],
+    pub props: &'a [MapPropPlacement],
 }
 
-impl TacticalGridView<'_> {
+impl<'a> TacticalSceneView<'a> {
+    /// Constructs a [`TacticalSceneView`] from a wire [`GmMapUpdateRequest`].
     #[must_use]
-    pub fn tile(&self, x: i32, y: i32) -> TacticalTileKind {
-        if x < 0 || y < 0 || x >= self.width || y >= self.height {
-            return TacticalTileKind::FullWall;
+    pub fn from_map(map: &'a GmMapUpdateRequest) -> Self {
+        let (width_m, height_m) = map.board_size_m();
+        Self {
+            width_m,
+            height_m,
+            edges: &map.wall_edges,
+            props: &map.props,
         }
-        self.tiles
-            .get((y * self.width + x) as usize)
-            .copied()
-            .unwrap_or(TacticalTileKind::Floor)
     }
 }
 
-/// Builds the [`WallEdgeIndex`] for a wire map (empty for legacy cell-wall maps).
+/// Builds the [`WallEdgeIndex`] for legacy helpers needing per-cell edge lookups.
 #[must_use]
 pub fn wall_edge_index_for_map(map: &GmMapUpdateRequest) -> WallEdgeIndex {
     WallEdgeIndex::from_edges(map.grid_width, map.grid_height, &map.wall_edges)
@@ -62,7 +67,7 @@ define_coded_enum! {
     /// Canonical procedural sector layout presets for `1.0m` tactical battlemaps.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
-    pub enum SectorPreset [count = 10] {
+    pub enum SectorPreset [count = 12] {
         #[default]
         ResidentialApartment => {
             code: "residential_apartment",
@@ -99,6 +104,18 @@ define_coded_enum! {
             label: "Walled Estate & Courtyard",
             subtitle: "Gated compound with driveway vehicles, landscaped courtyard, hedges & furnished pavilion",
             aliases: ["estate", "compound", "courtyard", "garden", "yard", "villa"],
+        },
+        WoodlandCreek => {
+            code: "woodland_creek",
+            label: "Woodland Creek & Ravine",
+            subtitle: "Meandering forest creek with gravel shoals, fallen-log & stone crossings, boulders & dense canopy",
+            aliases: ["creek", "stream", "brook", "river", "ravine"],
+        },
+        RoadsideDitch => {
+            code: "roadside_ditch",
+            label: "Country Lane & Drainage Ditch",
+            subtitle: "Gravel country lane bordered by a sunken drainage ditch, culvert bridge, garden beds & timber cover",
+            aliases: ["ditch", "trench", "lane", "country_road", "culvert"],
         },
         DockingBay => {
             code: "docking_bay",
@@ -145,8 +162,16 @@ impl SectorPreset {
         match self {
             Self::WoodedPark => Some(OutdoorStyle::WoodedPark),
             Self::GardenEstate => Some(OutdoorStyle::GardenEstate),
+            Self::WoodlandCreek => Some(OutdoorStyle::WoodlandCreek),
+            Self::RoadsideDitch => Some(OutdoorStyle::RoadsideDitch),
             _ => None,
         }
+    }
+
+    /// Whether this preset generates architectural [`MapWallEdge`] boundaries.
+    #[must_use]
+    pub const fn has_structural_wall_edges(self) -> bool {
+        !matches!(self, Self::WoodedPark | Self::WoodlandCreek)
     }
 
     /// Upgraded facility / clinical / transit / urban sector style (`None` for residential/outdoor presets).
@@ -163,15 +188,14 @@ impl SectorPreset {
     }
 }
 
-/// Complete procedural sector: stamped tiles, thin edge walls, and multi-cell props.
+/// Complete procedural sector: thin edge walls and `360°` oriented props (zero tile array).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProceduralSector {
-    pub tiles: Vec<TacticalTileKind>,
     pub wall_edges: Vec<MapWallEdge>,
     pub props: Vec<MapPropPlacement>,
 }
 
-/// Generates the complete [`ProceduralSector`] for `preset`, emitting stamped tiles, thin edge walls, and props.
+/// Generates the complete [`ProceduralSector`] for `preset`, emitting thin edge walls and props.
 #[must_use]
 pub fn generate_procedural_sector(preset: SectorPreset, width: i32, height: i32, seed: i64) -> ProceduralSector {
     let (w, h) = (width.clamp(8, 48), height.clamp(8, 48));
@@ -187,59 +211,19 @@ pub fn generate_procedural_sector(preset: SectorPreset, width: i32, height: i32,
     ProceduralSector::default()
 }
 
-/// Generates a deterministic `width * height` row-major array of [`TacticalTileKind`] (`1 cell = 1.0m`)
-/// for the requested [`SectorPreset`] and `seed`.
-#[must_use]
-pub fn generate_procedural_tactical_grid(
-    preset: SectorPreset,
-    width: i32,
-    height: i32,
-    seed: i64,
-) -> Vec<TacticalTileKind> {
-    generate_procedural_sector(preset, width, height, seed).tiles
-}
-
-/// Complete Line-of-Sight, metric range, and cover evaluation between two tactical grid cells.
+/// Complete Line-of-Sight, metric range, and cover evaluation between two continuous points in meters.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TacticalLosEvaluation {
-    pub attacker_xy: (i32, i32),
-    pub target_xy: (i32, i32),
-    /// Center-to-center Euclidean distance in meters (`1 cell = 1.0m` default).
+    pub attacker_m: (f32, f32),
+    pub target_m: (f32, f32),
+    /// Euclidean distance in meters.
     pub distance_m: f32,
     pub has_los: bool,
     pub cover_grade: CoverGrade,
-    /// Recommended Satya Ranged External Modifier (`+0`, `+4`, `+6`, or `+16` when blocked).
+    /// Recommended Satya Ranged External Modifier (`+0`, `+3`, `+4`, `+6`, or `+16` when blocked).
     pub recommended_delta_ext: i32,
-    /// Intervening grid cells traversed along the primary supercover ray.
-    pub ray_cells: Vec<(i32, i32)>,
-}
-
-/// Returns all interior cells intersected by a segment `(x0, y0) -> (x1, y1)` in continuous cell-space
-/// using Amanatides-Woo / supercover grid traversal (excluding the start and end cells themselves).
-#[must_use]
-pub fn trace_supercover_segment_cells(
-    start_pos: (f32, f32),
-    end_pos: (f32, f32),
-    start_cell: (i32, i32),
-    end_cell: (i32, i32),
-) -> Vec<(i32, i32)> {
-    let mut visited = Vec::new();
-    let dx = end_pos.0 - start_pos.0;
-    let dy = end_pos.1 - start_pos.1;
-    let steps = (dx.abs().max(dy.abs()) * 6.0).ceil() as i32;
-    if steps <= 0 {
-        return visited;
-    }
-    for step in 1..steps {
-        let t = (step as f32) / (steps as f32);
-        let px = (start_pos.0 + dx * t).floor() as i32;
-        let py = (start_pos.1 + dy * t).floor() as i32;
-        let cell = (px, py);
-        if cell != start_cell && cell != end_cell && visited.last().copied() != Some(cell) {
-            visited.push(cell);
-        }
-    }
-    visited
+    /// Sampled sightline segment `(start_m, target_m)` for 2D/3D overlay drawing.
+    pub ray_points_m: Vec<(f32, f32)>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -249,177 +233,258 @@ struct RayObstruction {
     concealment: bool,
 }
 
-fn eval_single_ray(
-    grid: &TacticalGridView<'_>,
-    start_pos: (f32, f32),
-    end_pos: (f32, f32),
-    attacker_xy: (i32, i32),
-) -> (RayObstruction, Vec<(i32, i32)>) {
-    let (w, h) = (grid.width, grid.height);
-    let target_xy = (end_pos.0.floor() as i32, end_pos.1.floor() as i32);
-    let cells = trace_supercover_segment_cells(start_pos, end_pos, attacker_xy, target_xy);
+fn eval_continuous_ray(
+    scene: &TacticalSceneView<'_>,
+    origin_m: (f32, f32),
+    target_m: (f32, f32),
+) -> RayObstruction {
     let mut obs = RayObstruction::default();
-    for &(cx, cy) in &cells {
-        if cx < 0 || cy < 0 || cx >= w || cy >= h {
-            obs.blocked = true;
-            break;
-        }
-        let tile = grid.tile(cx, cy);
-        if tile.blocks_full_los() {
-            obs.blocked = true;
-            break;
-        }
-        let adj_to_attacker = (cx - attacker_xy.0).abs() <= 1 && (cy - attacker_xy.1).abs() <= 1;
-        if tile.provides_half_cover() && !adj_to_attacker {
-            // An attacker braced directly against an adjacent (`<= 1` Chebyshev step) half-cover crate
-            // shoots over it without penalizing their own outgoing shot.
-            obs.half_cover = true;
-        } else if tile.provides_concealment() && !adj_to_attacker {
-            obs.concealment = true;
+    let dx = target_m.0 - origin_m.0;
+    let dy = target_m.1 - origin_m.1;
+    let seg_len = (dx * dx + dy * dy).sqrt();
+    if seg_len <= 1e-4 {
+        return obs;
+    }
+
+    for edge in scene.edges {
+        if let Some(t) = intersect_segment_edge(origin_m, target_m, edge) {
+            let hit_dist = t * seg_len;
+            match edge.kind {
+                WallEdgeKind::Wall | WallEdgeKind::DoorClosed => {
+                    obs.blocked = true;
+                    return obs;
+                }
+                WallEdgeKind::Window => {
+                    if hit_dist > 0.85 {
+                        obs.half_cover = true;
+                    }
+                }
+                WallEdgeKind::DoorOpen => {}
+            }
         }
     }
-    if !obs.blocked && target_xy.0 >= 0 && target_xy.1 >= 0 && target_xy.0 < w && target_xy.1 < h {
-        let adj_target =
-            (target_xy.0 - attacker_xy.0).abs() <= 1 && (target_xy.1 - attacker_xy.1).abs() <= 1;
-        if !adj_target && grid.tile(target_xy.0, target_xy.1).provides_concealment() {
-            obs.concealment = true;
+
+    for p in scene.props {
+        if let Some(hit) = intersect_segment_prop(p, origin_m, target_m) {
+            let enter_dist = hit.t_enter * seg_len;
+            let braced_skip = hit.obstruction != PropObstruction::FullObstacle
+                && enter_dist <= 0.85
+                && hit.t_exit < 0.99;
+            if braced_skip {
+                continue;
+            }
+            match hit.obstruction {
+                PropObstruction::FullObstacle => {
+                    obs.blocked = true;
+                    return obs;
+                }
+                PropObstruction::HalfCover => obs.half_cover = true,
+                PropObstruction::Concealment => obs.concealment = true,
+                PropObstruction::FloorLayer => {}
+            }
         }
     }
-    if !obs.blocked {
-        let edge = grid.edges.trace_obstruction(start_pos, end_pos, attacker_xy);
-        obs.blocked = edge.blocked;
-        obs.half_cover |= edge.half_cover;
-    }
-    (obs, cells)
+    obs
 }
 
-/// Evaluates metric distance, supercover Line of Sight, corner-peeking, and [`CoverGrade`]
-/// between `attacker_xy` and `target_xy` on a legacy cell-wall grid (no edge walls).
+/// Analytical continuous Line-of-Sight, corner-peek, and cover evaluation between `attacker_m` and `target_m`.
 #[must_use]
-pub fn evaluate_tactical_los_and_cover(
-    tiles: &[TacticalTileKind],
-    width: i32,
-    height: i32,
-    cell_size_m: f32,
-    attacker_xy: (i32, i32),
-    target_xy: (i32, i32),
+pub fn evaluate_los_continuous(
+    scene: &TacticalSceneView<'_>,
+    attacker_m: (f32, f32),
+    target_m: (f32, f32),
 ) -> TacticalLosEvaluation {
-    let edges = WallEdgeIndex::default();
-    let grid = TacticalGridView { tiles, width, height, edges: &edges };
-    evaluate_los_on_grid(&grid, cell_size_m, attacker_xy, target_xy)
-}
+    let dx = target_m.0 - attacker_m.0;
+    let dy = target_m.1 - attacker_m.1;
+    let raw_dist = (dx * dx + dy * dy).sqrt();
+    let distance_m = (raw_dist * 100.0).round() / 100.0;
 
-/// Edge-aware LoS / cover evaluation: tiles **and** thin walls, closed doors, and windows on `grid`.
-#[must_use]
-pub fn evaluate_los_on_grid(
-    grid: &TacticalGridView<'_>,
-    cell_size_m: f32,
-    attacker_xy: (i32, i32),
-    target_xy: (i32, i32),
-) -> TacticalLosEvaluation {
-    let (width, height) = (grid.width, grid.height);
-    let scale_m = cell_size_m.max(0.25);
-    let dx = (target_xy.0 - attacker_xy.0) as f32;
-    let dy = (target_xy.1 - attacker_xy.1) as f32;
-    let distance_m = ((dx * dx + dy * dy).sqrt() * scale_m * 100.0).round() / 100.0;
-
-    if attacker_xy == target_xy {
+    if raw_dist <= 0.05 {
         return TacticalLosEvaluation {
-            attacker_xy,
-            target_xy,
+            attacker_m,
+            target_m,
             distance_m: 0.0,
             has_los: true,
             cover_grade: CoverGrade::Clear,
             recommended_delta_ext: 0,
-            ray_cells: Vec::new(),
+            ray_points_m: Vec::new(),
         };
     }
 
-    let a_center = (attacker_xy.0 as f32 + 0.5, attacker_xy.1 as f32 + 0.5);
-    let t_center = (target_xy.0 as f32 + 0.5, target_xy.1 as f32 + 0.5);
-    let (center_obs, primary_cells) = eval_single_ray(grid, a_center, t_center, attacker_xy);
-
-    if !center_obs.blocked {
-        let grade = if center_obs.half_cover {
+    let primary_obs = eval_continuous_ray(scene, attacker_m, target_m);
+    if !primary_obs.blocked {
+        let grade = if primary_obs.half_cover {
             CoverGrade::LowCover
-        } else if center_obs.concealment {
+        } else if primary_obs.concealment {
             CoverGrade::Concealment
         } else {
             CoverGrade::Clear
         };
         return TacticalLosEvaluation {
-            attacker_xy,
-            target_xy,
+            attacker_m,
+            target_m,
             distance_m,
             has_los: true,
             cover_grade: grade,
             recommended_delta_ext: grade.recommended_delta_ext(),
-            ray_cells: primary_cells,
+            ray_points_m: vec![attacker_m, target_m],
         };
     }
 
-    // Check orthogonal tactical lean / step-out rays (±0.80m into an adjacent unblocked cell):
-    // if leaning out from cover clears full bulkheads, the shot has High/Corner Cover (+6 Δ_ext).
-    let offsets: [(f32, f32); 4] = [(-0.80, 0.0), (0.80, 0.0), (0.0, -0.80), (0.0, 0.80)];
-    for &(ox, oy) in &offsets {
-        let a_peek = (a_center.0 + ox, a_center.1 + oy);
-        let ax_cell = (a_peek.0.floor() as i32, a_peek.1.floor() as i32);
-        // Leaning must not pass through a thin wall or closed door bounding the attacker's own cell.
-        let lean_through_wall = grid.edges.trace_obstruction(a_center, a_peek, attacker_xy).blocked;
-        let peek_origin_clear = !lean_through_wall
-            && (ax_cell == attacker_xy
-                || (ax_cell.0 >= 0
-                    && ax_cell.1 >= 0
-                    && ax_cell.0 < width
-                    && ax_cell.1 < height
-                    && !grid.tile(ax_cell.0, ax_cell.1).blocks_full_los()));
-        if !peek_origin_clear {
+    // Perpendicular ±0.65m / ±0.85m step-out lean rays (plus fallback orthogonal ±0.65m).
+    let ux = dx / raw_dist;
+    let uy = dy / raw_dist;
+    let leans = [
+        (-uy * 0.65, ux * 0.65),
+        (uy * 0.65, -ux * 0.65),
+        (-uy * 0.85, ux * 0.85),
+        (uy * 0.85, -ux * 0.85),
+        (-0.65, 0.0),
+        (0.65, 0.0),
+        (0.0, -0.65),
+        (0.0, 0.65),
+    ];
+    for &(ox, oy) in &leans {
+        let peek = (attacker_m.0 + ox, attacker_m.1 + oy);
+        if circle_collides_obstacles(scene.width_m, scene.height_m, scene.edges, scene.props, peek.0, peek.1, 0.18) {
             continue;
         }
-        let (peek_obs, peek_cells) = eval_single_ray(grid, a_peek, t_center, attacker_xy);
-        if !peek_obs.blocked {
+        let lean_clear = !eval_continuous_ray(scene, attacker_m, peek).blocked;
+        if !lean_clear {
+            continue;
+        }
+        if !eval_continuous_ray(scene, peek, target_m).blocked {
             return TacticalLosEvaluation {
-                attacker_xy,
-                target_xy,
+                attacker_m,
+                target_m,
                 distance_m,
                 has_los: true,
                 cover_grade: CoverGrade::HighCover,
                 recommended_delta_ext: CoverGrade::HighCover.recommended_delta_ext(),
-                ray_cells: peek_cells,
+                ray_points_m: vec![peek, target_m],
             };
         }
     }
 
     TacticalLosEvaluation {
-        attacker_xy,
-        target_xy,
+        attacker_m,
+        target_m,
         distance_m,
         has_los: false,
         cover_grade: CoverGrade::Blocked,
         recommended_delta_ext: CoverGrade::Blocked.recommended_delta_ext(),
-        ray_cells: primary_cells,
+        ray_points_m: vec![attacker_m, target_m],
     }
 }
 
-/// Single reachable destination cell and its minimum movement cost in meters and ticks.
+/// Merged horizontal reachable contour strip (`0.25m` band) for crisp SVG and WebGPU overlays.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct ReachableCell {
-    pub x: i32,
-    pub y: i32,
-    pub distance_cost_m: f32,
-    pub ticks_required: u32,
+pub struct ReachableStrip {
+    pub y_m: f32,
+    pub x_min_m: f32,
+    pub x_max_m: f32,
+    pub step_m: f32,
+    pub min_ticks: u32,
+}
+
+/// Continuous `0.25m` Dijkstra gait reachability scalar field.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReachableField {
+    pub step_m: f32,
+    pub cols: usize,
+    pub rows: usize,
+    pub m_per_tick: f32,
+    /// Geodesic travel distance in millimeters (`i32::MAX` when unreachable).
+    pub cost_mm: Vec<i32>,
+}
+
+impl ReachableField {
+    /// Ticks required to reach `(x_m, y_m)`, or `None` if outside the movement envelope.
+    #[must_use]
+    pub fn ticks_at_m(&self, x_m: f32, y_m: f32) -> Option<u32> {
+        let dist_m = self.distance_m_at(x_m, y_m)?;
+        Some((f64::from(dist_m) / f64::from(self.m_per_tick)).ceil().max(1.0) as u32)
+    }
+
+    /// Geodesic travel distance in meters at `(x_m, y_m)`, or `None` if unreachable.
+    #[must_use]
+    pub fn distance_m_at(&self, x_m: f32, y_m: f32) -> Option<f32> {
+        if self.cols == 0 || self.rows == 0 || x_m < 0.0 || y_m < 0.0 {
+            return None;
+        }
+        let ix = (x_m / self.step_m).floor() as usize;
+        let iy = (y_m / self.step_m).floor() as usize;
+        if ix >= self.cols || iy >= self.rows {
+            return None;
+        }
+        let c_mm = self.cost_mm[iy * self.cols + ix];
+        if c_mm == i32::MAX {
+            None
+        } else {
+            Some(((c_mm as f32 / 1000.0) * 100.0).round() / 100.0)
+        }
+    }
+
+    /// Merges horizontally contiguous reachable strips sharing the same tick tier for fast vector drawing.
+    #[must_use]
+    pub fn merged_row_runs(&self) -> Vec<ReachableStrip> {
+        let mut strips = Vec::new();
+        for iy in 0..self.rows {
+            let y_m = iy as f32 * self.step_m;
+            let mut active: Option<(f32, f32, u32)> = None;
+            for ix in 0..self.cols {
+                let c_mm = self.cost_mm[iy * self.cols + ix];
+                let ticks = if c_mm == i32::MAX || c_mm == 0 {
+                    None
+                } else {
+                    Some(((f64::from(c_mm) / 1000.0) / f64::from(self.m_per_tick)).ceil().max(1.0) as u32)
+                };
+                match (active, ticks) {
+                    (Some((x0, x1, t_cur)), Some(t)) if t == t_cur => {
+                        active = Some((x0, x1 + self.step_m, t_cur));
+                    }
+                    (Some((x0, x1, t_cur)), next_t) => {
+                        strips.push(ReachableStrip {
+                            y_m,
+                            x_min_m: x0,
+                            x_max_m: x1,
+                            step_m: self.step_m,
+                            min_ticks: t_cur,
+                        });
+                        let x_start = ix as f32 * self.step_m;
+                        active = next_t.map(|t| (x_start, x_start + self.step_m, t));
+                    }
+                    (None, Some(t)) => {
+                        let x_start = ix as f32 * self.step_m;
+                        active = Some((x_start, x_start + self.step_m, t));
+                    }
+                    (None, None) => {}
+                }
+            }
+            if let Some((x0, x1, t_cur)) = active {
+                strips.push(ReachableStrip {
+                    y_m,
+                    x_min_m: x0,
+                    x_max_m: x1,
+                    step_m: self.step_m,
+                    min_ticks: t_cur,
+                });
+            }
+        }
+        strips
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 struct DijkstraNode {
     cost_mm: i32,
-    x: i32,
-    y: i32,
+    ix: usize,
+    iy: usize,
 }
 
 impl PartialEq for DijkstraNode {
     fn eq(&self, other: &Self) -> bool {
-        self.cost_mm == other.cost_mm && self.x == other.x && self.y == other.y
+        self.cost_mm == other.cost_mm && self.ix == other.ix && self.iy == other.iy
     }
 }
 
@@ -430,8 +495,8 @@ impl Ord for DijkstraNode {
         other
             .cost_mm
             .cmp(&self.cost_mm)
-            .then_with(|| self.y.cmp(&other.y))
-            .then_with(|| self.x.cmp(&other.x))
+            .then_with(|| self.iy.cmp(&other.iy))
+            .then_with(|| self.ix.cmp(&other.ix))
     }
 }
 
@@ -441,158 +506,153 @@ impl PartialOrd for DijkstraNode {
     }
 }
 
-/// Context parameters for computing a character's reachable movement envelope on the tactical grid.
+/// Context parameters for computing a character's continuous any-angle reachable movement envelope.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GaitReachQuery {
-    pub start_xy: (i32, i32),
-    pub cell_size_m: f32,
+    pub start_m: (f32, f32),
     pub spd_eff: i32,
     pub hgt_m: f64,
     pub gait: CombatMovementGait,
     pub tick_budget: u32,
 }
 
-/// Computes all unblocked `(x, y)` cells reachable within `query.tick_budget` using 8-directional
-/// metric Dijkstra pathing (`1.0m` orthogonal, `1.414m` diagonal, `2.0x` hazard/vaulting) on a legacy
-/// cell-wall grid (no edge walls).
+/// Computes a smooth `0.25m` 16-directional metric [`ReachableField`] around `query.start_m`.
 #[must_use]
-pub fn compute_reachable_grid_cells(
-    tiles: &[TacticalTileKind],
-    width: i32,
-    height: i32,
-    occupied_cells: &[(i32, i32)],
+pub fn compute_reachable_continuous(
+    scene: &TacticalSceneView<'_>,
+    occupied_tokens_m: &[(f32, f32)],
     query: GaitReachQuery,
-) -> Vec<ReachableCell> {
-    let edges = WallEdgeIndex::default();
-    let grid = TacticalGridView { tiles, width, height, edges: &edges };
-    compute_reachable_on_grid(&grid, occupied_cells, query)
-}
-
-/// Edge-aware gait reach: thin walls, closed doors, and windows block steps; diagonal steps through
-/// wall junctions are rejected via [`WallEdgeIndex::step_blocked`].
-#[must_use]
-pub fn compute_reachable_on_grid(
-    grid: &TacticalGridView<'_>,
-    occupied_cells: &[(i32, i32)],
-    query: GaitReachQuery,
-) -> Vec<ReachableCell> {
-    let (width, height) = (grid.width, grid.height);
-    if width <= 0 || height <= 0 {
-        return Vec::new();
-    }
+) -> ReachableField {
+    let step_m = NAV_STEP_M;
+    let cols = (scene.width_m / step_m).floor().max(0.0) as usize;
+    let rows = (scene.height_m / step_m).floor().max(0.0) as usize;
     let sprint = compute_stride_and_sprint_velocity(query.spd_eff, query.hgt_m);
-    let m_per_tick = (sprint.v_sprint_m_per_tick * query.gait.sprint_fraction()).max(0.05);
-    let max_budget_m = m_per_tick * f64::from(query.tick_budget);
-    let max_budget_mm = (max_budget_m * 1000.0).round() as i32;
-    let cell_mm = (f64::from(query.cell_size_m.max(0.25)) * 1000.0).round() as i32;
-    let diag_mm = (f64::from(query.cell_size_m.max(0.25)) * std::f64::consts::SQRT_2 * 1000.0)
-        .round() as i32;
-
-    let total = (width * height) as usize;
-    let mut dist_mm = vec![i32::MAX; total];
-    let mut heap = BinaryHeap::new();
-
-    let (sx, sy) = query.start_xy;
-    if sx < 0 || sy < 0 || sx >= width || sy >= height {
-        return Vec::new();
+    let m_per_tick = (sprint.v_sprint_m_per_tick * query.gait.sprint_fraction()).max(0.05) as f32;
+    if cols == 0 || rows == 0 {
+        return ReachableField {
+            step_m,
+            cols,
+            rows,
+            m_per_tick,
+            cost_mm: Vec::new(),
+        };
     }
-    dist_mm[(sy * width + sx) as usize] = 0;
-    heap.push(DijkstraNode {
-        cost_mm: 0,
-        x: sx,
-        y: sy,
-    });
 
-    let dirs: [(i32, i32, bool); 8] = [
-        (1, 0, false),
-        (-1, 0, false),
-        (0, 1, false),
-        (0, -1, false),
-        (1, 1, true),
-        (1, -1, true),
-        (-1, 1, true),
-        (-1, -1, true),
+    let max_budget_mm = (f64::from(m_per_tick) * f64::from(query.tick_budget) * 1000.0).round() as i32;
+    let total = cols * rows;
+    let mut walkable = vec![false; total];
+    let mut cost_mult = vec![1.0_f32; total];
+
+    let node_pos = |ix: usize, iy: usize| -> (f32, f32) {
+        ((ix as f32 + 0.5) * step_m, (iy as f32 + 0.5) * step_m)
+    };
+
+    for iy in 0..rows {
+        for ix in 0..cols {
+            let (px, py) = node_pos(ix, iy);
+            let occupied = occupied_tokens_m
+                .iter()
+                .any(|&(tx, ty)| (px - tx).powi(2) + (py - ty).powi(2) < (TOKEN_RADIUS_M * 1.65).powi(2));
+            let blocked_prop = scene.props.iter().any(|p| {
+                prop_spec(p.kind).obstruction.blocks_movement() && prop_intersects_circle(p, px, py, 0.22)
+            });
+            let idx = iy * cols + ix;
+            walkable[idx] = !occupied && !blocked_prop && !circle_collides_obstacles(scene.width_m, scene.height_m, scene.edges, &[], px, py, 0.20);
+            if walkable[idx] {
+                let mut m = 1.0_f32;
+                for p in scene.props {
+                    let sp = prop_spec(p.kind);
+                    if sp.move_cost_mult > m && prop_contains_point(p, px, py, false) {
+                        m = sp.move_cost_mult;
+                    }
+                }
+                cost_mult[idx] = m;
+            }
+        }
+    }
+
+    let sx = ((query.start_m.0 / step_m).floor() as isize).clamp(0, cols as isize - 1) as usize;
+    let sy = ((query.start_m.1 / step_m).floor() as isize).clamp(0, rows as isize - 1) as usize;
+    let mut cost_mm = vec![i32::MAX; total];
+    cost_mm[sy * cols + sx] = 0;
+
+    let mut heap = BinaryHeap::new();
+    heap.push(DijkstraNode { cost_mm: 0, ix: sx, iy: sy });
+
+    // 16-directional lattice neighborhood: axial (250mm), diagonal (354mm), knight (559mm).
+    let neighbors: [(isize, isize, i32); 16] = [
+        (1, 0, 250),
+        (-1, 0, 250),
+        (0, 1, 250),
+        (0, -1, 250),
+        (1, 1, 354),
+        (1, -1, 354),
+        (-1, 1, 354),
+        (-1, -1, 354),
+        (2, 1, 559),
+        (2, -1, 559),
+        (-2, 1, 559),
+        (-2, -1, 559),
+        (1, 2, 559),
+        (-1, 2, 559),
+        (1, -2, 559),
+        (-1, -2, 559),
     ];
 
+    let blocking_edges: Vec<&MapWallEdge> = scene
+        .edges
+        .iter()
+        .filter(|e| WallEdgeKind::blocks_movement(e.kind))
+        .collect();
+
     while let Some(node) = heap.pop() {
-        let cur_idx = (node.y * width + node.x) as usize;
-        if node.cost_mm > dist_mm[cur_idx] {
+        let cur_idx = node.iy * cols + node.ix;
+        if node.cost_mm > cost_mm[cur_idx] {
             continue;
         }
-        for &(dx, dy, is_diag) in &dirs {
-            let nx = node.x + dx;
-            let ny = node.y + dy;
-            if nx < 0 || ny < 0 || nx >= width || ny >= height {
+        let a = node_pos(node.ix, node.iy);
+        for &(dx, dy, base_mm) in &neighbors {
+            let nx_i = node.ix as isize + dx;
+            let ny_i = node.iy as isize + dy;
+            if nx_i < 0 || ny_i < 0 || nx_i >= cols as isize || ny_i >= rows as isize {
                 continue;
             }
-            let tile = grid.tile(nx, ny);
-            if matches!(tile, TacticalTileKind::FullWall | TacticalTileKind::DoorClosed) {
+            let (nx, ny) = (nx_i as usize, ny_i as usize);
+            let nidx = ny * cols + nx;
+            if !walkable[nidx] {
                 continue;
             }
-            // Disallow squeezing diagonally between two solid wall/closed-door corners
-            if is_diag {
-                let adj1 = grid.tile(nx, node.y);
-                let adj2 = grid.tile(node.x, ny);
-                if adj1.blocks_full_los() && adj2.blocks_full_los() {
+            if dx.abs() == 2 || dy.abs() == 2 {
+                let mx = (node.ix as isize + dx / 2) as usize;
+                let my = (node.iy as isize + dy / 2) as usize;
+                if !walkable[my * cols + mx] {
                     continue;
                 }
             }
-            if grid.edges.step_blocked((node.x, node.y), dx, dy, WallEdgeKind::blocks_movement) {
+            let b = node_pos(nx, ny);
+            if blocking_edges
+                .iter()
+                .any(|e| intersect_segment_edge(a, b, e).is_some())
+            {
                 continue;
             }
-
-            let step_base_mm = if is_diag { diag_mm } else { cell_mm };
-            let mult = if tile == TacticalTileKind::HalfCover {
-                // Vaulting across a 0.9m crate costs 2x movement
-                2.0
-            } else {
-                tile.move_cost_multiplier()
-            };
-            let next_cost_mm = node.cost_mm + ((f64::from(step_base_mm) * mult).round() as i32);
-            if next_cost_mm > max_budget_mm {
+            let step_cost = ((base_mm as f32) * cost_mult[nidx]).round() as i32;
+            let next_cost = node.cost_mm + step_cost;
+            if next_cost > max_budget_mm {
                 continue;
             }
-            let n_idx = (ny * width + nx) as usize;
-            if next_cost_mm < dist_mm[n_idx] {
-                dist_mm[n_idx] = next_cost_mm;
-                heap.push(DijkstraNode {
-                    cost_mm: next_cost_mm,
-                    x: nx,
-                    y: ny,
-                });
+            if next_cost < cost_mm[nidx] {
+                cost_mm[nidx] = next_cost;
+                heap.push(DijkstraNode { cost_mm: next_cost, ix: nx, iy: ny });
             }
         }
     }
 
-    let mut out = Vec::new();
-    for y in 0..height {
-        for x in 0..width {
-            let c_mm = dist_mm[(y * width + x) as usize];
-            if c_mm == i32::MAX || (x == sx && y == sy) {
-                continue;
-            }
-            let tile = grid.tile(x, y);
-            if tile.blocks_occupancy() {
-                continue;
-            }
-            if occupied_cells.contains(&(x, y)) {
-                continue;
-            }
-            let dist_m = (c_mm as f32) / 1000.0;
-            let ticks = ((f64::from(c_mm) / 1000.0) / m_per_tick).ceil().max(1.0) as u32;
-            out.push(ReachableCell {
-                x,
-                y,
-                distance_cost_m: (dist_m * 100.0).round() / 100.0,
-                ticks_required: ticks,
-            });
-        }
-    }
-    out
+    ReachableField { step_m, cols, rows, m_per_tick, cost_mm }
 }
 
-/// Builds a complete [`GmMapUpdateRequest`] with procedural `1.0m` tiles, default starter miniatures
-/// when `starter_tokens` is empty, and an inline SVG data-URI fallback.
+/// Builds a complete vector [`GmMapUpdateRequest`] with continuous centimeter token coordinates,
+/// thin structural [`MapWallEdge`]s, `360°` oriented props, and `tiles: Vec::new()`.
 #[must_use]
 pub fn build_procedural_map_request(
     map_id: &str,
@@ -604,7 +664,7 @@ pub fn build_procedural_map_request(
 ) -> GmMapUpdateRequest {
     let w = width.clamp(8, 48);
     let h = height.clamp(8, 48);
-    let ProceduralSector { tiles, wall_edges, props } = generate_procedural_sector(preset, w, h, seed);
+    let ProceduralSector { wall_edges, props } = generate_procedural_sector(preset, w, h, seed);
     let mid_y = h / 2;
     let title = title_override
         .map(str::trim)
@@ -612,12 +672,13 @@ pub fn build_procedural_map_request(
         .unwrap_or_else(|| preset.full_name())
         .to_string();
 
+    let sara_y = (mid_y - 1).max(1);
     let tokens = vec![
         TokenPlacement {
             entity_id: "tok-sara".to_string(),
             label: "Sara (Valkyrie)".to_string(),
             x: 2,
-            y: (mid_y - 1).max(1),
+            y: sara_y,
             visibility: MessageVisibility::Public,
         },
         TokenPlacement {
@@ -644,6 +705,8 @@ pub fn build_procedural_map_request(
             elevation_cm: 0,
             stance_pose: "aimed".to_string(),
             portrait_url: None,
+            pos_x_cm: Some(250),
+            pos_y_cm: Some(sara_y * 100 + 50),
         },
         TokenVisualSpec {
             entity_id: "tok-marcus".to_string(),
@@ -653,6 +716,8 @@ pub fn build_procedural_map_request(
             elevation_cm: 0,
             stance_pose: "idle".to_string(),
             portrait_url: None,
+            pos_x_cm: Some(250),
+            pos_y_cm: Some(mid_y * 100 + 50),
         },
         TokenVisualSpec {
             entity_id: "tok-secops-1".to_string(),
@@ -662,6 +727,8 @@ pub fn build_procedural_map_request(
             elevation_cm: 0,
             stance_pose: "aimed".to_string(),
             portrait_url: None,
+            pos_x_cm: Some((w - 3) * 100 + 50),
+            pos_y_cm: Some(mid_y * 100 + 50),
         },
     ];
 
@@ -673,7 +740,7 @@ pub fn build_procedural_map_request(
         grid_height: h,
         tokens,
         notes: Some(format!(
-            "{} · 1.0m Tactical Grid ({}m x {}m, Seed {})",
+            "{} · Continuous Metric Arena ({}m x {}m, Seed {})",
             preset.subtitle(),
             w,
             h,
@@ -682,7 +749,7 @@ pub fn build_procedural_map_request(
         cell_size_cm: 100,
         theme_preset: Some(preset.as_str().to_string()),
         seed: Some(seed),
-        tiles,
+        tiles: Vec::new(),
         token_visuals,
         wall_edges,
         props,
@@ -692,94 +759,100 @@ pub fn build_procedural_map_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::map_dressing::{PropObstruction, make_prop};
+    use crate::tactical_map_geom::all_walkable_areas_connected;
+    use satya_schema::{EdgeSide, MaterialClass, PropKind};
 
     #[test]
-    fn test_procedural_sector_presets_and_los_cover_math() {
+    fn test_procedural_sector_presets_and_continuous_los_cover() {
         for preset in SectorPreset::ALL {
             let sec = generate_procedural_sector(preset, 20, 14, 42);
-            assert_eq!(sec.tiles.len(), 20 * 14);
-            if preset != SectorPreset::WoodedPark {
+            if preset.has_structural_wall_edges() {
                 assert!(!sec.wall_edges.is_empty(), "{preset:?} missing wall_edges");
             }
             assert!(!sec.props.is_empty(), "{preset:?} missing props");
-            assert!(sec.tiles.contains(&TacticalTileKind::HalfCover), "{preset:?} HalfCover");
-            assert!(sec.tiles.contains(&TacticalTileKind::FullWall), "{preset:?} FullWall");
-            // West and East deployment pads must remain clear floor
-            assert_eq!(sec.tiles[(7 * 20 + 2) as usize], TacticalTileKind::Floor);
-            assert_eq!(sec.tiles[(7 * 20 + 17) as usize], TacticalTileKind::Floor);
+            assert!(
+                sec.props.iter().any(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover),
+                "{preset:?} missing half cover prop"
+            );
+            assert!(
+                all_walkable_areas_connected(20, 14, &sec.wall_edges, &sec.props),
+                "{preset:?} disconnected walkable area"
+            );
+            // West and East deployment pads must remain clear of blocking obstacles.
+            assert!(!circle_collides_obstacles(20.0, 14.0, &sec.wall_edges, &sec.props, 2.5, 7.5, TOKEN_RADIUS_M));
+            assert!(!circle_collides_obstacles(20.0, 14.0, &sec.wall_edges, &sec.props, 17.5, 7.5, TOKEN_RADIUS_M));
         }
 
-        // Verify Clear LoS vs. LowCover (+4) vs. adjacent attacker brace vs. HighCover corner peek vs. Blocked
-        let w = 12;
-        let h = 8;
-        let mut tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
-        // Clear shot
-        let clear = evaluate_tactical_los_and_cover(&tiles, w, h, 1.0, (2, 4), (9, 4));
+        // Clear LoS
+        let empty = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[] };
+        let clear = evaluate_los_continuous(&empty, (2.5, 4.5), (9.5, 4.5));
         assert!(clear.has_los);
         assert_eq!(clear.cover_grade, CoverGrade::Clear);
         assert_eq!(clear.recommended_delta_ext, 0);
         assert!((clear.distance_m - 7.0).abs() < 0.01);
 
-        // Place HalfCover at (6, 4) mid-field -> imposes LowCover (+4)
-        tiles[(4 * w + 6) as usize] = TacticalTileKind::HalfCover;
-        let low = evaluate_tactical_los_and_cover(&tiles, w, h, 1.0, (2, 4), (9, 4));
-        assert!(low.has_los);
-        assert_eq!(low.cover_grade, CoverGrade::LowCover);
-        assert_eq!(low.recommended_delta_ext, 4);
+        // Mid-field JerseyBarrier -> LowCover (+4)
+        let barrier = make_prop(PropKind::JerseyBarrier, 6, 4, 90, Some(1), 0);
+        let low_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[barrier] };
+        let low = evaluate_los_continuous(&low_scene, (2.5, 4.5), (9.5, 4.5));
+        assert!(low.has_los && low.cover_grade == CoverGrade::LowCover && low.recommended_delta_ext == 4);
 
-        // Attacker braced directly behind (6, 4) at (5, 4) shooting East -> Clear outgoing shot!
-        let braced = evaluate_tactical_los_and_cover(&tiles, w, h, 1.0, (5, 4), (9, 4));
+        // Braced right behind barrier -> Clear outgoing shot!
+        let braced = evaluate_los_continuous(&low_scene, (5.8, 4.5), (9.5, 4.5));
         assert_eq!(braced.cover_grade, CoverGrade::Clear);
 
-        // Single FullWall pillar at (6, 4) with open cells at (6, 3) and (6, 5):
-        // Attacker at (5, 4) can corner-peek around the 1m pillar -> HighCover (+6)
-        tiles[(4 * w + 6) as usize] = TacticalTileKind::FullWall;
-        let corner = evaluate_tactical_los_and_cover(&tiles, w, h, 1.0, (5, 4), (9, 4));
-        assert!(corner.has_los);
-        assert_eq!(corner.cover_grade, CoverGrade::HighCover);
-        assert_eq!(corner.recommended_delta_ext, 6);
+        // Single StructuralPillar with open sides -> corner-peek HighCover (+6)
+        let pillar = make_prop(PropKind::StructuralPillar, 6, 4, 0, None, 0);
+        let pillar_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[pillar] };
+        let corner = evaluate_los_continuous(&pillar_scene, (5.6, 4.5), (9.5, 4.5));
+        assert!(corner.has_los && corner.cover_grade == CoverGrade::HighCover && corner.recommended_delta_ext == 6);
 
-        // Solid bulkhead wall across y=0..8 at x=6 -> completely Blocked
-        for y in 0..h {
-            tiles[(y * w + 6) as usize] = TacticalTileKind::FullWall;
-        }
-        let blocked = evaluate_tactical_los_and_cover(&tiles, w, h, 1.0, (2, 4), (9, 4));
-        assert!(!blocked.has_los);
-        assert_eq!(blocked.cover_grade, CoverGrade::Blocked);
+        // Continuous brick wall across y=0..8 at x=6 -> completely Blocked
+        let wall: Vec<MapWallEdge> = (0..8)
+            .map(|y| MapWallEdge {
+                x: 6,
+                y,
+                side: EdgeSide::West,
+                kind: WallEdgeKind::Wall,
+                material: MaterialClass::Brick,
+            })
+            .collect();
+        let blocked_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &wall, props: &[] };
+        let blocked = evaluate_los_continuous(&blocked_scene, (2.5, 4.5), (9.5, 4.5));
+        assert!(!blocked.has_los && blocked.cover_grade == CoverGrade::Blocked);
     }
 
     #[test]
-    fn test_metric_gait_reach_scales_with_combat_movement_gait() {
-        let tiles = vec![TacticalTileKind::Floor; 20 * 14];
-        let walk = compute_reachable_grid_cells(
-            &tiles,
-            20,
-            14,
+    fn test_metric_gait_reach_scales_continuously() {
+        let scene = TacticalSceneView { width_m: 20.0, height_m: 14.0, edges: &[], props: &[] };
+        let walk = compute_reachable_continuous(
+            &scene,
             &[],
             GaitReachQuery {
-                start_xy: (5, 7),
-                cell_size_m: 1.0,
+                start_m: (5.5, 7.5),
                 spd_eff: 10,
                 hgt_m: 1.75,
                 gait: CombatMovementGait::CombatGlideTacticalWalk,
                 tick_budget: 8,
             },
         );
-        let sprint = compute_reachable_grid_cells(
-            &tiles,
-            20,
-            14,
+        let sprint = compute_reachable_continuous(
+            &scene,
             &[],
             GaitReachQuery {
-                start_xy: (5, 7),
-                cell_size_m: 1.0,
+                start_m: (5.5, 7.5),
                 spd_eff: 10,
                 hgt_m: 1.75,
                 gait: CombatMovementGait::AllOutSprint,
                 tick_budget: 8,
             },
         );
-        assert!(!walk.is_empty());
-        assert!(sprint.len() > walk.len());
+        let walk_count = walk.cost_mm.iter().filter(|&&c| c < i32::MAX).count();
+        let sprint_count = sprint.cost_mm.iter().filter(|&&c| c < i32::MAX).count();
+        assert!(walk_count > 16);
+        assert!(sprint_count > walk_count);
+        assert!(!walk.merged_row_runs().is_empty());
+        assert!(walk.ticks_at_m(6.0, 7.5).is_some());
     }
 }

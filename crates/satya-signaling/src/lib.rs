@@ -16,6 +16,7 @@ pub mod gm_api;
 pub mod gm_docs;
 pub mod gm_persistence;
 pub mod http_handlers;
+pub mod map_authoring_handlers;
 pub mod map_handlers;
 pub mod npcs;
 pub mod player_ai_api;
@@ -213,5 +214,7 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
 
 #[cfg(test)]
 mod tests_core;
+#[cfg(test)]
+mod tests_map;
 #[cfg(test)]
 mod tests_persistence;

@@ -4,11 +4,11 @@
 pub use crate::wasm_client::wgpu_shared::*;
 
 use crate::wasm_client::glb_model::GlbVertex;
-use crate::wasm_client::map_3d::{TacticalMapUiState, grid_cell_to_world_xz};
-use satya_schema::{CoverGrade, TacticalTileKind};
+use crate::wasm_client::map_3d::{TacticalMapUiState, metric_to_world_xz};
+use satya_schema::{CoverGrade, PropKind};
 use wasm_bindgen::prelude::*;
 
-fn push_quad(verts: &mut Vec<GlbVertex>, p: [[f32; 3]; 4], col: [f32; 4], zone_id: f32) {
+pub(crate) fn push_quad(verts: &mut Vec<GlbVertex>, p: [[f32; 3]; 4], col: [f32; 4], zone_id: f32) {
     let u = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
     let v = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
     let n = normalize3(cross3(u, v));
@@ -87,12 +87,17 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
 
     let mut verts = Vec::with_capacity((w * h * 18) as usize);
 
-    // 1. Continuous 1.0m-gridded tactical deck floor (`zone_id = -1.0` enables WGSL 1m/5m grid lines)
-    let deck_rgba = match ui.map.theme_preset.as_deref().unwrap_or_default() {
-        "wooded_park" | "garden_estate" | "park_grounds" => [0.16, 0.27, 0.14, 0.0],
-        "residential_apartment" | "corner_bar" | "modern_interior" | "bar_interior" => [0.23, 0.17, 0.12, 0.0],
-        _ => [0.075, 0.115, 0.185, 0.0],
+    // 1. Continuous 1.0m-gridded tactical deck floor (`zone_id = -2.0` grass / `-1.0` interior deck)
+    let (deck_rgba, deck_zone_id) = match ui.map.theme_preset.as_deref().unwrap_or_default() {
+        "wooded_park" | "garden_estate" | "woodland_creek" | "roadside_ditch" | "park_grounds" => {
+            ([0.24, 0.36, 0.17, 0.0], -2.0_f32)
+        }
+        "residential_apartment" | "corner_bar" | "modern_interior" | "bar_interior" => {
+            ([0.23, 0.17, 0.12, 0.0], -1.0_f32)
+        }
+        _ => ([0.075, 0.115, 0.185, 0.0], -1.0_f32),
     };
+    let floor_zone_id = if ui.show_grid_overlay { deck_zone_id } else { 0.0 };
     push_quad(
         &mut verts,
         [
@@ -102,7 +107,7 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
             [half_w_m, 0.0, -half_h_m],
         ],
         deck_rgba,
-        -1.0,
+        floor_zone_id,
     );
     // Subtle outer table rim
     push_box(
@@ -119,110 +124,67 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
 
     let wall_h = if ui.wall_cutaway { 0.58 } else { 2.35 };
     let door_h = if ui.wall_cutaway { 0.68 } else { 2.25 };
-
-    // 2. Per-cell terrain, cover crates (`0.90m`), bulkheads, doors, hazards, and elevated catwalks
-    for gy in 0..h {
-        for gx in 0..w {
-            let tile = ui.map.tile_at(gx, gy);
-            if tile == TacticalTileKind::Floor {
-                continue;
-            }
-            // Multi-cell props draw their own footprint geometry (see `map_3d_dressing_geom`).
-            if matches!(
-                tile,
-                TacticalTileKind::Concealment
-                    | TacticalTileKind::HalfCover
-                    | TacticalTileKind::FullWall
-            ) && satya_engine::map_dressing::solid_prop_at(&ui.map.props, gx, gy).is_some()
-            {
-                continue;
-            }
-            let [wx, wz] = grid_cell_to_world_xz(gx, gy, w, h, cell_m);
-            let hc = cell_m * 0.48;
-            match tile {
-                TacticalTileKind::Floor => {}
-                TacticalTileKind::Concealment => {
-                    push_box(&mut verts, wx, wz, 0.0, 1.05, hc * 0.80, hc * 0.80, [0.22, 0.46, 0.21], 0.0);
-                    push_box(&mut verts, wx, wz, 1.05, 1.18, hc * 0.64, hc * 0.64, [0.30, 0.56, 0.27], 0.0);
-                }
-                TacticalTileKind::HalfCover => {
-                    push_box(&mut verts, wx, wz, 0.0, 0.86, hc * 0.86, hc * 0.86, [0.16, 0.34, 0.52], 0.0);
-                    push_box(&mut verts, wx, wz, 0.86, 0.91, hc * 0.90, hc * 0.90, [0.22, 0.68, 0.92], 0.0);
-                }
-                TacticalTileKind::FullWall => {
-                    push_box(&mut verts, wx, wz, 0.0, wall_h, hc, hc, [0.23, 0.29, 0.38], 0.0);
-                    push_box(&mut verts, wx, wz, wall_h, wall_h + 0.04, hc * 0.94, hc * 0.94, [0.36, 0.45, 0.58], 0.0);
-                }
-                TacticalTileKind::DoorClosed => {
-                    push_box(&mut verts, wx, wz, 0.0, door_h, hc * 0.92, hc * 0.42, [0.78, 0.42, 0.09], 0.0);
-                }
-                TacticalTileKind::DoorOpen => {
-                    push_box(&mut verts, wx - hc * 0.78, wz, 0.0, 0.35, hc * 0.16, hc * 0.45, [0.12, 0.65, 0.48], 0.0);
-                    push_box(&mut verts, wx + hc * 0.78, wz, 0.0, 0.35, hc * 0.16, hc * 0.45, [0.12, 0.65, 0.48], 0.0);
-                }
-                TacticalTileKind::HazardZone => {
-                    push_box(&mut verts, wx, wz, 0.004, 0.032, hc * 0.92, hc * 0.92, [0.68, 0.14, 0.24], 0.0);
-                }
-                TacticalTileKind::ElevatedPlatform => {
-                    push_box(&mut verts, wx, wz, 0.0, 1.48, hc, hc, [0.15, 0.21, 0.31], -1.0);
-                }
-            }
+    let (bw_m, bh_m) = (half_w_m * 2.0, half_h_m * 2.0);
+    let catwalk_elevation = |xm: f32, ym: f32| -> f32 {
+        if ui.map.props.iter().any(|p| {
+            p.kind == PropKind::ElevatedCatwalk
+                && satya_engine::tactical_map_geom::prop_contains_point(p, xm, ym, false)
+        }) {
+            1.48
+        } else {
+            0.0
         }
-    }
+    };
 
-    // 2b. Thin edge walls / doors / windows and multi-cell props
+    // 2. Vector walls / doors / windows and 360°-rotated 3D props
     crate::wasm_client::map_3d_dressing_geom::push_dressing_geometry(&mut verts, ui, wall_h, door_h);
 
-    // 3. Movement gait reachable cell pads (`y = 0.018m`)
-    for r in &ui.reachable_cells {
-        let [wx, wz] = grid_cell_to_world_xz(r.x, r.y, w, h, cell_m);
-        let base_y = if ui.map.tile_at(r.x, r.y) == TacticalTileKind::ElevatedPlatform {
-            1.49
-        } else {
-            0.016
-        };
-        let pad = cell_m * 0.41;
+    // 3. Continuous 0.25m gait reach strips (`y = 0.016m`)
+    for s in &ui.reachable_strips {
+        let mid_x_m = (s.x_min_m + s.x_max_m) * 0.5;
+        let [wx, wz] = metric_to_world_xz(mid_x_m, s.y_m, bw_m, bh_m);
+        let hx = ((s.x_max_m - s.x_min_m) * 0.5).max(0.05);
+        let hz = (s.step_m * 0.46).max(0.05);
+        let base_y = catwalk_elevation(mid_x_m, s.y_m).max(0.016);
         push_box(
             &mut verts,
             wx,
             wz,
             base_y,
             base_y + 0.018,
-            pad,
-            pad,
+            hx,
+            hz,
             [0.09, 0.58, 0.42],
             0.0,
         );
     }
 
-    // 4. Selected miniature ring & hovered cell reticle
+    // 4. Selected miniature ring & continuous cursor hover reticle
     if let Some(sel_id) = ui.selected_entity_id.as_deref()
         && let Some(tok) = ui.map.tokens.iter().find(|t| t.entity_id == sel_id)
     {
-        let [sx, sz] = grid_cell_to_world_xz(tok.x, tok.y, w, h, cell_m);
-        let sy = if ui.map.tile_at(tok.x, tok.y) == TacticalTileKind::ElevatedPlatform {
-            1.49
-        } else {
-            0.022
-        };
-        push_box(&mut verts, sx, sz, sy, sy + 0.024, cell_m * 0.46, cell_m * 0.46, [0.96, 0.78, 0.14], 0.0);
+        let (tx_m, ty_m) = ui.map.token_pos_m(tok);
+        let [sx, sz] = metric_to_world_xz(tx_m, ty_m, bw_m, bh_m);
+        let sy = catwalk_elevation(tx_m, ty_m) + 0.022;
+        push_box(&mut verts, sx, sz, sy, sy + 0.024, 0.42, 0.42, [0.96, 0.78, 0.14], 0.0);
     }
-    if let Some((hx, hy)) = ui.hovered_cell {
-        let [wx, wz] = grid_cell_to_world_xz(hx, hy, w, h, cell_m);
-        let hy_m = if ui.map.tile_at(hx, hy) == TacticalTileKind::ElevatedPlatform {
-            1.50
+    if let Some((hx_m, hy_m)) = ui.hovered_point_m {
+        let [wx, wz] = metric_to_world_xz(hx_m, hy_m, bw_m, bh_m);
+        let hy_m = catwalk_elevation(hx_m, hy_m) + 0.025;
+        let col = if ui.interaction_mode == "edit_terrain" && ui.edit_prop_brush == "__erase__" {
+            [0.95, 0.25, 0.38]
         } else {
-            0.025
+            [0.22, 0.78, 0.98]
         };
-        push_box(&mut verts, wx, wz, hy_m, hy_m + 0.022, cell_m * 0.44, cell_m * 0.44, [0.22, 0.78, 0.98], 0.0);
+        push_box(&mut verts, wx, wz, hy_m, hy_m + 0.022, 0.34, 0.34, col, 0.0);
     }
 
     // 5. 3D Line-of-Sight & Cover laser ribbon (`y = 1.05m` chest/rifle sightline)
     if let Some(los) = ui.last_los.as_ref()
         && los.distance_m > 0.05
     {
-        let a_xz = grid_cell_to_world_xz(los.attacker_xy.0, los.attacker_xy.1, w, h, cell_m);
-        let t_xz = grid_cell_to_world_xz(los.target_xy.0, los.target_xy.1, w, h, cell_m);
+        let a_xz = metric_to_world_xz(los.attacker_m.0, los.attacker_m.1, bw_m, bh_m);
+        let t_xz = metric_to_world_xz(los.target_m.0, los.target_m.1, bw_m, bh_m);
         let blind_pen = ui
             .last_ballistic
             .as_ref()
@@ -247,8 +209,7 @@ mod map_wgpu_runtime {
     use crate::wasm_client::dice_3d::parse_hex_color;
     use crate::wasm_client::glb_model::LoadedGlbModel;
     use crate::wasm_client::map_3d::{
-        format_map_tactical_hud_html, handle_map_grid_cell_clicked, resolve_token_visual,
-        with_map_ui, with_map_ui_mut, world_xz_to_grid_cell,
+        resolve_token_visual, with_map_ui, world_xz_to_metric,
     };
     use crate::wasm_client::model_3d_wgpu::{custom_glb_generation, resolve_glb_model};
     use satya_schema::MessageVisibility;
@@ -349,13 +310,8 @@ mod map_wgpu_runtime {
         }
     }
 
-    fn pick_grid_cell_from_mouse(ev: &MouseEvent, cam: &OrbitOrthoCamera) -> Option<(i32, i32)> {
-        let (fx, fy) = pick_grid_point_from_mouse(ev, cam)?;
-        Some((fx.floor() as i32, fy.floor() as i32))
-    }
-
-    /// Continuous cell-space `(fx, fy)` under the pointer on the `y = 0` deck plane (inside the board).
-    fn pick_grid_point_from_mouse(ev: &MouseEvent, cam: &OrbitOrthoCamera) -> Option<(f32, f32)> {
+    /// Continuous metric `(x_m, y_m)` under the pointer on the `y = 0` deck plane (inside the board).
+    fn pick_metric_point_from_mouse(ev: &MouseEvent, cam: &OrbitOrthoCamera) -> Option<(f32, f32)> {
         let el = crate::wasm_client::dom::get_element("wgpu-map-canvas")?;
         let rect = el.get_bounding_client_rect();
         let rw = rect.width().max(1.0) as f32;
@@ -369,10 +325,8 @@ mod map_wgpu_runtime {
         let ndc_y = 1.0 - (local_y / rh) * 2.0;
         let [wx, wz] = cam.screen_ndc_to_plane_xz(ndc_x, ndc_y, rw / rh, 0.0)?;
         with_map_ui(|ui| {
-            let (w, h) = (ui.map.grid_width, ui.map.grid_height);
-            world_xz_to_grid_cell(wx, wz, w, h, ui.map.cell_size_m())?;
-            let s = ui.map.cell_size_m().max(0.25);
-            Some((wx / s + w as f32 * 0.5, wz / s + h as f32 * 0.5))
+            let (bw_m, bh_m) = ui.map.board_size_m();
+            world_xz_to_metric(wx, wz, bw_m, bh_m)
         })
     }
 
@@ -412,21 +366,23 @@ mod map_wgpu_runtime {
         // Gather token miniature draw calls grouped in order
         let (cell_m, draws): (f32, Vec<(String, GlbInstanceData)>) = with_map_ui(|ui| {
             let cm = ui.map.cell_size_m();
+            let (bw_m, bh_m) = ui.map.board_size_m();
             let mut list = Vec::with_capacity(ui.map.tokens.len());
             for tok in &ui.map.tokens {
                 let (preset, hex_col, facing_deg) = resolve_token_visual(&ui.map, tok);
                 let (_, rgb) = parse_hex_color(&hex_col, [0.22, 0.74, 0.98]);
-                let [wx, wz] = grid_cell_to_world_xz(
-                    tok.x,
-                    tok.y,
-                    ui.map.grid_width,
-                    ui.map.grid_height,
-                    cm,
-                );
-                let base_y = if ui.map.tile_at(tok.x, tok.y) == TacticalTileKind::ElevatedPlatform {
+                let (tx_m, ty_m) = ui.map.token_pos_m(tok);
+                let [wx, wz] = metric_to_world_xz(tx_m, ty_m, bw_m, bh_m);
+                let on_catwalk = ui.map.props.iter().any(|p| {
+                    p.kind == PropKind::ElevatedCatwalk
+                        && satya_engine::tactical_map_geom::prop_contains_point(p, tx_m, ty_m, false)
+                });
+                let base_y = if on_catwalk {
                     1.48
                 } else {
-                    0.0
+                    ui.map
+                        .visual_for(&tok.entity_id)
+                        .map_or(0.0, |v| v.elevation_cm as f32 / 100.0)
                 };
                 let alpha = if tok.visibility == MessageVisibility::GmOnly {
                     0.55
@@ -599,28 +555,27 @@ mod map_wgpu_runtime {
             let Some(cam) = cam_opt else {
                 return;
             };
-            let cell = pick_grid_cell_from_mouse(&ev, &cam);
-            let changed = with_map_ui_mut(|ui| {
-                if ui.hovered_cell != cell {
-                    ui.hovered_cell = cell;
-                    ui.recompute_overlays();
-                    true
-                } else {
-                    false
-                }
-            });
-            if changed {
-                let hud = with_map_ui(format_map_tactical_hud_html);
-                crate::wasm_client::dom::set_html("tabletop-map-los-hud", &hud);
-                with_map_ctrl(|c| {
-                    c.scene_dirty = true;
-                    render_map_frame(c);
-                });
+            if let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam) {
+                crate::wasm_client::map_hover_inspect::satya_hover_map_point(
+                    mx,
+                    my,
+                    ev.client_x() as f32,
+                    ev.client_y() as f32,
+                );
+            } else {
+                crate::wasm_client::map_hover_inspect::satya_leave_map_hover();
             }
         });
         let _ = canvas
             .add_event_listener_with_callback("mousemove", on_canvas_hover.as_ref().unchecked_ref());
         on_canvas_hover.forget();
+
+        let on_canvas_leave = Closure::<dyn FnMut(MouseEvent)>::new(move |_ev: MouseEvent| {
+            crate::wasm_client::map_hover_inspect::satya_leave_map_hover();
+        });
+        let _ = canvas
+            .add_event_listener_with_callback("mouseleave", on_canvas_leave.as_ref().unchecked_ref());
+        on_canvas_leave.forget();
 
         let on_win_move = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
             with_map_ctrl(|c| {
@@ -657,9 +612,9 @@ mod map_wgpu_runtime {
                 }
             });
             if let Some(cam) = clicked_cam
-                && let Some((fx, fy)) = pick_grid_point_from_mouse(&ev, &cam)
+                && let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam)
             {
-                crate::wasm_client::map_edge_edit::satya_click_map_point(fx, fy);
+                crate::wasm_client::map_edge_edit::satya_click_map_point(mx, my);
             }
         });
         let _ = win.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
@@ -861,31 +816,45 @@ mod tests {
             "Full edge/cell walls must reach 2.38m..2.39m (got {max_y_full})"
         );
 
-        // Verify isolated cutaway wall height (0.58m + 0.04m cap = 0.62m) and elevated platform (1.48m)
-        ui.map.tiles = vec![TacticalTileKind::Floor; (ui.map.grid_width * ui.map.grid_height) as usize];
+        // Verify isolated cutaway edge wall height (0.58m + 0.03m cap = 0.61m) and elevated catwalk (1.48m)
+        ui.map.tiles.clear();
         ui.map.wall_edges.clear();
         ui.map.props.clear();
         ui.map.tokens.clear();
-        ui.reachable_cells.clear();
-        ui.hovered_cell = None;
+        ui.reachable_strips.clear();
+        ui.hovered_point_m = None;
         ui.last_los = None;
 
-        ui.map.tiles[0] = TacticalTileKind::FullWall;
+        ui.map.wall_edges.push(satya_schema::MapWallEdge {
+            x: 0,
+            y: 0,
+            side: satya_schema::EdgeSide::North,
+            kind: satya_schema::WallEdgeKind::Wall,
+            material: satya_schema::MaterialClass::Drywall,
+        });
         ui.wall_cutaway = true;
         let wall_cut_verts = build_tactical_diorama_vertices(&ui);
         let wall_cut_max_y = wall_cut_verts
             .iter()
             .map(|v| v.position[1])
             .fold(f32::NEG_INFINITY, f32::max);
-        assert!((wall_cut_max_y - 0.62).abs() < 1e-3);
+        assert!((wall_cut_max_y - 0.61).abs() < 1e-3);
 
-        ui.map.tiles[0] = TacticalTileKind::ElevatedPlatform;
+        ui.map.wall_edges.clear();
+        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
+            satya_schema::PropKind::ElevatedCatwalk,
+            200,
+            200,
+            0,
+            None,
+            1,
+        ));
         let plat_verts = build_tactical_diorama_vertices(&ui);
         assert!(
             plat_verts
                 .iter()
                 .any(|v| (v.position[1] - 1.48).abs() < 1e-4 && (v.bary_zone[3] + 1.0).abs() < 1e-4),
-            "ElevatedPlatform must emit 1.48m gridded catwalk top geometry"
+            "ElevatedCatwalk must emit 1.48m gridded catwalk top geometry"
         );
     }
 

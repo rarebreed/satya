@@ -1,19 +1,11 @@
 # `satya-py` Agent Coding & Architecture Rules
 
-When reading, adding, or refactoring code in `crates/satya-py` (or Python consumers in `src/satya_ml/` and `notebooks/`), activate the [`satya-rust-workspace`](../../.agents/skills/satya-rust-workspace/SKILL.md) and [`satya-rust-engine`](../../.agents/skills/satya-rust-engine/SKILL.md) skills and follow these architectural rules (full guide in [`docs/technical/rust-workspace-steering.md`](../../docs/technical/rust-workspace-steering.md) and [`docs/technical/rust-engine-steering.md`](../../docs/technical/rust-engine-steering.md)):
+Activate [`satya-rust-workspace`](../../.agents/skills/satya-rust-workspace/SKILL.md) and [`satya-rust-engine`](../../.agents/skills/satya-rust-engine/SKILL.md) when modifying `crates/satya-py` or Python consumers in `src/satya_ml/` and `notebooks/`.
 
-1. **Thin PyO3 Wrapper Over `satya-engine` & `satya-schema` (Zero Duplicate Math)**:
-   - `satya-py` is a thin PyO3 (`abi3-py312`) binding layer exposing `satya-engine` and `satya-schema` to Python (`satya_ml`) and Marimo notebooks (`notebooks/`).
-   - Never implement probability distributions, `2d20` cascade resolution, Tactical Pool math, character creation auditing, or Avro `CRC-64-AVRO` fingerprinting inside `crates/satya-py`; always delegate to `satya-engine` and `satya-schema` functions and convert results via `From` / `Into`.
-
-2. **Pragmatic File Size Ceiling (`<= 45 KB`) & Companion Submodules**:
-   - Aim to keep `.rs` files in `crates/satya-py/src/` under `45 KB` (`< 46,080` bytes) by splitting large PyO3 class/function groups (e.g. dice/cascade wrappers, combat/character wrappers, schema/rules wrappers) into companion modules with flat `pub use` re-exports registered on the root `#[pymodule] fn satya_py`.
-
-3. **Canonical Sign Conventions & Parameter Naming**:
-   - Preserve exact parameter names and sign conventions from `satya-engine` (`skill_level`, `control_c`, `internal_mod` / `delta_int`, `known_tool_mod` / `delta_tool`, `external_mod` / `delta_ext`) and encode physical/time units in identifiers (`_ms`, `_us`, `_deg`, `_m`, `_kg`, `_grains`, `_joules`).
-
-4. **High-Signal Docstrings (No `#![deny(missing_docs)]`)**:
-   - Do not enable `#![deny(missing_docs)]`. Provide concise `//!` module headers and `///` docstrings on exported `#[pyclass]` and `#[pyfunction]` items so Python `help(satya_py)` and IDE hover tooltips remain informative without boilerplate on internal plumbing.
-
-5. **AI Game Master (`src/satya_ml/ai_gm/`) Persona, Markdown & Scenario Director Rules**:
-   - When modifying the Python LangGraph AI GM (`src/satya_ml/ai_gm/`), follow [`src/satya_ml/ai_gm/AGENTS.md`](../../src/satya_ml/ai_gm/AGENTS.md) and [`docs/technical/ai-gm-agent-design.md`](../../docs/technical/ai-gm-agent-design.md).
+1. **Thin PyO3 (`abi3-py312`) Bridge — Zero Duplicate Math or Spatial Geometry**:
+   - Module layout: `src/lib.rs` (Cascade, Triad, Rules Book, Avro/GDPR) and `src/tactical_map_py.rs` (`check_tactical_token_collision`, `resolve_tactical_token_destination_cm`, `evaluate_tactical_los_and_cover`, `inspect_tactical_map_point`, `generate_procedural_tactical_sector_json`).
+   - Always delegate dice/cascade math, tactical map collision/LoS/hover geometry, and Avro `CRC-64-AVRO` checks to `satya-engine` and `satya-schema`. Never mutate locked `v1` structs to accommodate flexible Python dicts; normalize inputs inside `tactical_map_py.rs`.
+2. **Windows Offline Build, `PYO3_PYTHON`, & `src\satya_py.pyd` Sync**:
+   - Set `$env:PYO3_PYTHON = 'C:\Users\hapah\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\python.exe'`.
+   - Run `cargo clippy --offline --no-default-features -p satya-py --all-targets -- -D warnings` and `cargo test --offline --no-default-features -p satya-py` (no Python link errors in test binaries), then `cargo build --offline -p satya-py` and copy `target\debug\satya_py.dll` to `src\satya_py.pyd`.
+3. **AI GM Consumers**: Follow [`src/satya_ml/ai_gm/AGENTS.md`](../../src/satya_ml/ai_gm/AGENTS.md) and [`docs/technical/ai-gm-agent-design.md`](../../docs/technical/ai-gm-agent-design.md).

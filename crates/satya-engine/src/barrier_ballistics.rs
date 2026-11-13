@@ -15,21 +15,16 @@
 //!   perforated by full-power `7.62×51mm NATO` (`Pen 7`) and `6.5mm Creedmoor` (`Pen 8`)**. `ReinforcedConcrete`
 //!   (`9 PR`) and `ArmorSteel` (`10 PR`) require anti-materiel calibres (`.338 Lapua` AP / `.50 BMG`).
 
-use satya_schema::{
-    CoverGrade, MapPropPlacement, MaterialClass, PropKind, TacticalTileKind, WallEdgeKind,
-};
+use satya_schema::{CoverGrade, MaterialClass, PropKind, WallEdgeKind};
 use serde::{Deserialize, Serialize};
 
 use crate::ballistics::{GranularFirearmSpec, evaluate_granular_firearm_ballistics};
-use crate::map_dressing::{
-    prop_effective_material_at, prop_spec, solid_prop_index_at, vehicle_cell_is_engine_bay,
-};
+use crate::map_dressing::{PropObstruction, prop_spec};
 use crate::ranged_combat::{
     ArmorImpactOutcome, ArmorProfile, WeaponDamageType, resolve_armor_impact,
 };
-use crate::tactical_map::{
-    TacticalGridView, evaluate_los_on_grid, trace_supercover_segment_cells,
-};
+use crate::tactical_map::{TacticalSceneView, evaluate_los_continuous};
+use crate::tactical_map_geom::{PropRayHit, intersect_segment_edge, intersect_segment_prop};
 
 /// Static ballistic resistance profile for one [`MaterialClass`] (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.3).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -133,14 +128,12 @@ impl BarrierPenetrationVerdict {
     }
 }
 
-/// Spatial and weapon inputs for evaluating a firearm shot across tactical map cover and barriers.
+/// Spatial and weapon inputs for evaluating a firearm shot across continuous tactical map cover and barriers.
 #[derive(Debug, Clone, Copy)]
 pub struct BallisticShotQuery<'a> {
-    pub grid: &'a TacticalGridView<'a>,
-    pub props: &'a [MapPropPlacement],
-    pub cell_size_m: f32,
-    pub attacker_xy: (i32, i32),
-    pub target_xy: (i32, i32),
+    pub scene: &'a TacticalSceneView<'a>,
+    pub attacker_m: (f32, f32),
+    pub target_m: (f32, f32),
     pub firearm: &'a GranularFirearmSpec,
     pub net_successes: i32,
     pub hit_frame_or_stud: bool,
@@ -214,108 +207,87 @@ fn edge_barrier_entry(kind: WallEdgeKind, material: MaterialClass) -> Intercepte
     }
 }
 
-fn prop_barrier_entry(p: &MapPropPlacement, gx: i32, gy: i32) -> InterceptedBarrier {
-    let spec = prop_spec(p.kind);
-    let engine_hit = vehicle_cell_is_engine_bay(p, gx, gy);
-    let mat = prop_effective_material_at(p, gx, gy);
-    let prof = material_ballistic_profile(mat);
-    let (pr, label) = if engine_hit {
-        (9, format!("{} (engine block)", p.kind.label()))
-    } else if p.kind == PropKind::LargeTree {
-        (prof.barrier_pr + 2, format!("{} (massive trunk)", p.kind.label()))
+fn prop_barrier_entry(kind: PropKind, hit: PropRayHit) -> InterceptedBarrier {
+    let prof = material_ballistic_profile(hit.material);
+    let (pr, label) = if hit.is_engine_bay {
+        (9, format!("{} (engine block)", kind.label()))
+    } else if kind == PropKind::LargeTree && hit.is_tree_trunk {
+        (prof.barrier_pr + 2, format!("{} (massive trunk)", kind.label()))
     } else {
-        (prof.barrier_pr, p.kind.label().to_string())
+        (prof.barrier_pr, kind.label().to_string())
     };
     InterceptedBarrier {
         label,
-        material: mat,
+        material: hit.material,
         barrier_pr: pr,
         stud_or_frame_pr: prof.stud_or_frame_pr,
         stud_hit_chance_pct: prof.stud_hit_chance_pct,
-        blocks_sight: spec.stamp.blocks_full_los(),
+        blocks_sight: hit.obstruction == PropObstruction::FullObstacle,
     }
 }
 
-/// Collects all thin edge barriers, multi-cell props (deduplicated per prop placement, keeping the strongest
-/// sub-cell hit such as a vehicle engine block), and legacy cell obstacles crossed from `attacker_xy` to `target_xy`.
+/// Collects all thin edge barriers and oriented `360°` props intersected analytically along
+/// `attacker_m -> target_m`, sorted from muzzle to target.
 #[must_use]
 pub fn collect_ray_barriers(
-    grid: &TacticalGridView<'_>,
-    props: &[MapPropPlacement],
-    attacker_xy: (i32, i32),
-    target_xy: (i32, i32),
+    scene: &TacticalSceneView<'_>,
+    attacker_m: (f32, f32),
+    target_m: (f32, f32),
 ) -> Vec<InterceptedBarrier> {
-    if attacker_xy == target_xy {
+    let seg_len = ((target_m.0 - attacker_m.0).powi(2) + (target_m.1 - attacker_m.1).powi(2)).sqrt();
+    if seg_len <= 0.05 {
         return Vec::new();
     }
-    let a_center = (attacker_xy.0 as f32 + 0.5, attacker_xy.1 as f32 + 0.5);
-    let t_center = (target_xy.0 as f32 + 0.5, target_xy.1 as f32 + 0.5);
 
-    let mut out: Vec<InterceptedBarrier> = grid
-        .edges
-        .trace_ray_barriers(a_center, t_center, attacker_xy)
-        .1
-        .into_iter()
-        .map(|(k, m)| edge_barrier_entry(k, m))
-        .collect();
-
-    let mut seen_props: Vec<(usize, usize)> = Vec::new();
-    let mut cells = trace_supercover_segment_cells(a_center, t_center, attacker_xy, target_xy);
-    cells.push(target_xy);
-
-    for (cx, cy) in cells {
-        if cx < 0 || cy < 0 || cx >= grid.width || cy >= grid.height {
+    type OrderedBarrierHit = (f32, Option<(WallEdgeKind, MaterialClass)>, InterceptedBarrier);
+    let mut ordered: Vec<OrderedBarrierHit> = Vec::new();
+    for edge in scene.edges {
+        if matches!(edge.kind, WallEdgeKind::DoorOpen) {
             continue;
         }
-        let adj_to_attacker = (cx - attacker_xy.0).abs() <= 1 && (cy - attacker_xy.1).abs() <= 1;
-        if let Some((p_idx, p)) = solid_prop_index_at(props, cx, cy) {
-            let spec = prop_spec(p.kind);
-            let braced_skip = adj_to_attacker
-                && !spec.stamp.blocks_full_los()
-                && ((cx, cy) != target_xy || !spec.stamp.blocks_occupancy());
-            if braced_skip || spec.stamp == TacticalTileKind::Floor {
+        if let Some(t) = intersect_segment_edge(attacker_m, target_m, edge) {
+            let dist_m = t * seg_len;
+            if matches!(edge.kind, WallEdgeKind::Window) && dist_m <= 0.85 {
                 continue;
             }
-            let entry = prop_barrier_entry(p, cx, cy);
-            if let Some(&(_, out_idx)) = seen_props.iter().find(|&&(pi, _)| pi == p_idx) {
-                if entry.barrier_pr > out[out_idx].barrier_pr {
-                    out[out_idx] = entry;
-                }
-            } else {
-                seen_props.push((p_idx, out.len()));
-                out.push(entry);
-            }
-            continue;
+            ordered.push((
+                dist_m,
+                Some((edge.kind, edge.material)),
+                edge_barrier_entry(edge.kind, edge.material),
+            ));
         }
+    }
 
-        let tile = grid.tile(cx, cy);
-        let braced_tile_skip = adj_to_attacker
-            && !tile.blocks_full_los()
-            && ((cx, cy) != target_xy || !tile.blocks_occupancy());
-        if braced_tile_skip {
-            continue;
+    for p in scene.props {
+        if let Some(hit) = intersect_segment_prop(p, attacker_m, target_m) {
+            let enter_m = hit.t_enter * seg_len;
+            let braced_skip = hit.obstruction != PropObstruction::FullObstacle
+                && enter_m <= 0.85
+                && hit.t_exit < 0.99;
+            if braced_skip {
+                continue;
+            }
+            let _ = prop_spec(p.kind);
+            ordered.push((enter_m, None, prop_barrier_entry(p.kind, hit)));
         }
-        let legacy = match tile {
-            TacticalTileKind::Concealment => Some(("Foliage / Concealment", MaterialClass::Foliage, false)),
-            TacticalTileKind::HalfCover => Some(("Cover Crate / Console", MaterialClass::SheetSteel, false)),
-            TacticalTileKind::DoorClosed => Some(("Closed Airlock Door", MaterialClass::ArmorSteel, true)),
-            TacticalTileKind::FullWall => Some(("Structural Bulkhead", MaterialClass::ReinforcedConcrete, true)),
-            TacticalTileKind::Floor
-            | TacticalTileKind::DoorOpen
-            | TacticalTileKind::HazardZone
-            | TacticalTileKind::ElevatedPlatform => None,
-        };
-        if let Some((lbl, mat, blocks)) = legacy {
-            let prof = material_ballistic_profile(mat);
-            out.push(InterceptedBarrier {
-                label: lbl.to_string(),
-                material: mat,
-                barrier_pr: prof.barrier_pr,
-                stud_or_frame_pr: prof.stud_or_frame_pr,
-                stud_hit_chance_pct: prof.stud_hit_chance_pct,
-                blocks_sight: blocks,
-            });
+    }
+
+    ordered.sort_by(|a, b| a.0.total_cmp(&b.0));
+
+    let mut out = Vec::with_capacity(ordered.len());
+    let mut last_edge: Option<(f32, WallEdgeKind, MaterialClass)> = None;
+    for (dist_m, edge_tag, entry) in ordered {
+        if let Some((ek, em)) = edge_tag {
+            if let Some((prev_d, pk, pm)) = last_edge
+                && (dist_m - prev_d).abs() < 0.08
+                && pk == ek
+                && pm == em
+            {
+                continue;
+            }
+            last_edge = Some((dist_m, ek, em));
         }
+        out.push(entry);
     }
     out
 }
@@ -324,12 +296,7 @@ pub fn collect_ray_barriers(
 /// terminal impact for `query`.
 #[must_use]
 pub fn evaluate_ballistic_shot(query: BallisticShotQuery<'_>) -> BallisticShotEvaluation {
-    let los = evaluate_los_on_grid(
-        query.grid,
-        query.cell_size_m,
-        query.attacker_xy,
-        query.target_xy,
-    );
+    let los = evaluate_los_continuous(query.scene, query.attacker_m, query.target_m);
     let bal = evaluate_granular_firearm_ballistics(query.firearm, f64::from(los.distance_m));
     let bonus_margin = query.net_successes.max(0).div_euclid(2);
     let initial_pen = bal.base_armor_pen + bonus_margin;
@@ -339,7 +306,7 @@ pub fn evaluate_ballistic_shot(query: BallisticShotQuery<'_>) -> BallisticShotEv
     let barriers = if los.cover_grade == CoverGrade::HighCover {
         Vec::new()
     } else {
-        collect_ray_barriers(query.grid, query.props, query.attacker_xy, query.target_xy)
+        collect_ray_barriers(query.scene, query.attacker_m, query.target_m)
     };
 
     let mut cur_pen = initial_pen;
@@ -464,24 +431,18 @@ pub fn evaluate_ballistic_shot(query: BallisticShotQuery<'_>) -> BallisticShotEv
 mod tests {
     use super::*;
     use crate::ballistics::lookup_firearm_preset;
-    use crate::map_dressing::{make_prop, stamp_props_into_tiles};
+    use crate::map_dressing::{make_prop, make_prop_at_cm};
     use crate::ranged_combat::{ArmorProfileId, canonical_armor_catalog};
-    use crate::tactical_map::WallEdgeIndex;
     use satya_schema::{EdgeSide, MapWallEdge};
 
     fn shot_across_prop(kind: PropKind, rot_deg: i32, target_xy: (i32, i32), weapon_id: &str) -> BallisticShotEvaluation {
-        let (w, h) = (14, 10);
-        let mut tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
         let prop = make_prop(kind, 6, 4, rot_deg, None, 0);
-        stamp_props_into_tiles(&mut tiles, w, h, &[prop]);
-        let edges = WallEdgeIndex::default();
-        let grid = TacticalGridView { tiles: &tiles, width: w, height: h, edges: &edges };
+        let props = [prop];
+        let scene = TacticalSceneView { width_m: 14.0, height_m: 10.0, edges: &[], props: &props };
         evaluate_ballistic_shot(BallisticShotQuery {
-            grid: &grid,
-            props: &[prop],
-            cell_size_m: 1.0,
-            attacker_xy: (2, 4),
-            target_xy,
+            scene: &scene,
+            attacker_m: (2.5, 4.5),
+            target_m: (target_xy.0 as f32 + 0.5, target_xy.1 as f32 + 0.5),
             firearm: lookup_firearm_preset(weapon_id).expect(weapon_id),
             net_successes: 0,
             hit_frame_or_stud: false,
@@ -523,9 +484,7 @@ mod tests {
         assert_eq!(sofa_556.residual_impact, 5);
 
         // Thin Drywall partition (PR 1 cavity vs. PR 3 2x4 wood stud):
-        let (w, h) = (12, 8);
-        let tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
-        let wall_edges: Vec<MapWallEdge> = (0..h)
+        let wall_edges: Vec<MapWallEdge> = (0..8)
             .map(|y| MapWallEdge {
                 x: 6,
                 y,
@@ -534,13 +493,12 @@ mod tests {
                 material: MaterialClass::Drywall,
             })
             .collect();
-        let edges = WallEdgeIndex::from_edges(w, h, &wall_edges);
-        let grid = TacticalGridView { tiles: &tiles, width: w, height: h, edges: &edges };
+        let scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &wall_edges, props: &[] };
         let p320 = lookup_firearm_preset("sig_p320_9mm").unwrap();
         let hk416 = lookup_firearm_preset("hk416_carbine_556").unwrap();
 
         let cavity_9mm = evaluate_ballistic_shot(BallisticShotQuery {
-            grid: &grid, props: &[], cell_size_m: 1.0, attacker_xy: (2, 4), target_xy: (9, 4),
+            scene: &scene, attacker_m: (2.5, 4.5), target_m: (9.5, 4.5),
             firearm: p320, net_successes: 0, hit_frame_or_stud: false,
         });
         assert!(cavity_9mm.is_blind_fire && cavity_9mm.can_reach_target);
@@ -549,13 +507,13 @@ mod tests {
         assert_eq!(cavity_9mm.stud_stop_risk_pct, 10);
 
         let stud_9mm = evaluate_ballistic_shot(BallisticShotQuery {
-            grid: &grid, props: &[], cell_size_m: 1.0, attacker_xy: (2, 4), target_xy: (9, 4),
+            scene: &scene, attacker_m: (2.5, 4.5), target_m: (9.5, 4.5),
             firearm: p320, net_successes: 0, hit_frame_or_stud: true,
         });
         assert!(!stud_9mm.can_reach_target && stud_9mm.residual_impact == 0);
 
         let stud_556 = evaluate_ballistic_shot(BallisticShotQuery {
-            grid: &grid, props: &[], cell_size_m: 1.0, attacker_xy: (2, 4), target_xy: (9, 4),
+            scene: &scene, attacker_m: (2.5, 4.5), target_m: (9.5, 4.5),
             firearm: hk416, net_successes: 0, hit_frame_or_stud: true,
         });
         assert!(stud_556.can_reach_target && stud_556.residual_impact == 3);
@@ -563,9 +521,7 @@ mod tests {
 
     #[test]
     fn brick_walls_stop_556_and_handguns_but_are_defeated_by_762_nato_and_65_cm() {
-        let (w, h) = (12, 8);
-        let tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
-        let brick_edges: Vec<MapWallEdge> = (0..h)
+        let brick_edges: Vec<MapWallEdge> = (0..8)
             .map(|y| MapWallEdge {
                 x: 6,
                 y,
@@ -574,15 +530,12 @@ mod tests {
                 material: MaterialClass::Brick,
             })
             .collect();
-        let edges = WallEdgeIndex::from_edges(w, h, &brick_edges);
-        let grid = TacticalGridView { tiles: &tiles, width: w, height: h, edges: &edges };
+        let scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &brick_edges, props: &[] };
         let eval = |wid: &str| {
             evaluate_ballistic_shot(BallisticShotQuery {
-                grid: &grid,
-                props: &[],
-                cell_size_m: 1.0,
-                attacker_xy: (2, 4),
-                target_xy: (9, 4),
+                scene: &scene,
+                attacker_m: (2.5, 4.5),
+                target_m: (9.5, 4.5),
                 firearm: lookup_firearm_preset(wid).unwrap(),
                 net_successes: 0,
                 hit_frame_or_stud: false,
@@ -598,7 +551,6 @@ mod tests {
         let nato_762 = eval("scar_h_762x51");
         assert_eq!(nato_762.verdict, BarrierPenetrationVerdict::PenetratesWithLoss);
         assert!(nato_762.can_reach_target && nato_762.residual_impact == 3 && nato_762.residual_pen == 1);
-        // Chained into NIJ IIIA soft vest behind the brick wall: PR 4 stops spent Res Pen 1 -> BABT 1!
         let vest = &canonical_armor_catalog()[ArmorProfileId::ConcealableSoftKevlarVestNij3a as usize];
         let armor_out = nato_762.resolve_against_target_armor(vest, false).unwrap();
         assert!(!armor_out.penetrated && armor_out.babt_trauma == 1);
@@ -606,40 +558,48 @@ mod tests {
         let cm_65 = eval("ai_atx_65cm");
         assert!(cm_65.can_reach_target && cm_65.residual_pen == 2);
 
-        // ReinforcedConcrete JerseyBarrier (PR 9) stops 7.62x51mm NATO!
         let jersey_762 = shot_across_prop(PropKind::JerseyBarrier, 90, (10, 4), "scar_h_762x51");
         assert_eq!(jersey_762.verdict, BarrierPenetrationVerdict::StoppedByBarrier);
     }
 
     #[test]
     fn vehicle_cabin_doors_perforate_under_rifle_fire_while_engine_block_stops_762_nato() {
-        let (w, h) = (14, 12);
-        let mut tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
-        // Car at (6, 3), rot 0 -> 2x5 spanning y = 3..=7; South row y = 7 is the front hood / engine block!
         let car = make_prop(PropKind::Car, 6, 3, 0, None, 0);
-        stamp_props_into_tiles(&mut tiles, w, h, &[car]);
-        let edges = WallEdgeIndex::default();
-        let grid = TacticalGridView { tiles: &tiles, width: w, height: h, edges: &edges };
+        let props = [car];
+        let scene = TacticalSceneView { width_m: 14.0, height_m: 12.0, edges: &[], props: &props };
 
         let door_9mm = evaluate_ballistic_shot(BallisticShotQuery {
-            grid: &grid, props: &[car], cell_size_m: 1.0, attacker_xy: (2, 5), target_xy: (11, 5),
+            scene: &scene, attacker_m: (2.5, 5.5), target_m: (11.5, 5.5),
             firearm: lookup_firearm_preset("sig_p320_9mm").unwrap(), net_successes: 0, hit_frame_or_stud: false,
         });
         assert_eq!(door_9mm.verdict, BarrierPenetrationVerdict::StoppedByBarrier);
 
         let door_556 = evaluate_ballistic_shot(BallisticShotQuery {
-            grid: &grid, props: &[car], cell_size_m: 1.0, attacker_xy: (2, 5), target_xy: (11, 5),
+            scene: &scene, attacker_m: (2.5, 5.5), target_m: (11.5, 5.5),
             firearm: lookup_firearm_preset("hk416_carbine_556").unwrap(), net_successes: 0, hit_frame_or_stud: false,
         });
         assert_eq!(door_556.verdict, BarrierPenetrationVerdict::OvermatchedCover);
-        assert_eq!(door_556.barriers.len(), 1, "2-cell-wide car cabin deduplicates to 1 prop hit");
+        assert_eq!(door_556.barriers.len(), 1);
         assert_eq!(door_556.residual_impact, 3);
 
         let engine_762 = evaluate_ballistic_shot(BallisticShotQuery {
-            grid: &grid, props: &[car], cell_size_m: 1.0, attacker_xy: (2, 7), target_xy: (11, 7),
+            scene: &scene, attacker_m: (2.5, 7.5), target_m: (11.5, 7.5),
             firearm: lookup_firearm_preset("scar_h_762x51").unwrap(), net_successes: 0, hit_frame_or_stud: false,
         });
         assert_eq!(engine_762.verdict, BarrierPenetrationVerdict::StoppedByBarrier);
         assert_eq!(engine_762.barriers[0].barrier_pr, 9);
+
+        // Angled 30° parked car still identifies ArmorSteel engine bay accurately.
+        let angled_car = make_prop_at_cm(PropKind::Car, 700, 600, 30, None, 0);
+        let angled_props = [angled_car];
+        let angled_scene = TacticalSceneView { width_m: 14.0, height_m: 12.0, edges: &[], props: &angled_props };
+        let rad = 30.0_f32.to_radians();
+        let ey = 6.0 + rad.cos() * 2.0;
+        let angled_engine = evaluate_ballistic_shot(BallisticShotQuery {
+            scene: &angled_scene, attacker_m: (2.0, ey), target_m: (12.0, ey),
+            firearm: lookup_firearm_preset("scar_h_762x51").unwrap(), net_successes: 0, hit_frame_or_stud: false,
+        });
+        assert_eq!(angled_engine.verdict, BarrierPenetrationVerdict::StoppedByBarrier);
+        assert_eq!(angled_engine.barriers[0].barrier_pr, 9);
     }
 }

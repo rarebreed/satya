@@ -377,8 +377,8 @@ def test_action_mode_tick_barrier_and_autonomous_npc_resolution() -> None:
         set_chat_model_override(None)
 
 
-def test_tactical_map_1m_tiles_wall_collision_and_los_cover() -> None:
-    """Verify `1.0m` structured `tiles`, wall occupancy collision, and LoS cover `Δ_ext` in `maps.py`."""
+def test_tactical_map_vector_wall_collision_and_los_cover() -> None:
+    """Verify continuous vector scene (`tiles == []`), 360-deg OBB prop collision, sub-meter movement, and LoS cover `Δ_ext` in `maps.py`."""
     import sys
     from pathlib import Path
 
@@ -401,21 +401,40 @@ def test_tactical_map_1m_tiles_wall_collision_and_los_cover() -> None:
     svg_file = repo_root / "data" / "maps" / f"{sid}_{m['map_id']}.svg"
     assert m["cell_size_cm"] == 100
     assert m["theme_preset"] == "docking_bay"
-    assert len(m["tiles"]) == 120
+    assert m["tiles"] == []
+    assert len(m["wall_edges"]) > 0
+    assert len(m["props"]) > 0
     assert svg_file.exists()
 
     try:
+        # Move to integer cell center -> pos_x_cm = 550, pos_y_cm = 450
         mv = move_map_token.invoke(
             {"session_id": sid, "token_id": "tok-vance", "to_x": 5, "to_y": 4}
         )
         vance_tok = next(t for t in mv["tokens"] if t["token_id"] == "tok-vance")
         assert vance_tok["grid_x"] == 5
         assert vance_tok["grid_y"] == 4
+        assert vance_tok["pos_x_cm"] == 550
+        assert vance_tok["pos_y_cm"] == 450
 
-        wall = move_map_token.invoke(
+        # Sub-meter continuous move
+        mv_sub = move_map_token.invoke(
+            {"session_id": sid, "token_id": "tok-vance", "to_x_cm": 425, "to_y_cm": 460}
+        )
+        vance_sub = next(t for t in mv_sub["tokens"] if t["token_id"] == "tok-vance")
+        assert vance_sub["pos_x_cm"] == 425
+        assert vance_sub["pos_y_cm"] == 460
+
+        # Return to (550, 450) for LoS check across central angled cover
+        move_map_token.invoke(
+            {"session_id": sid, "token_id": "tok-vance", "to_x_cm": 550, "to_y_cm": 450}
+        )
+
+        # Reject solid obstacle overlap (corner pillar at (50cm, 50cm)) and out-of-bounds
+        pillar_hit = move_map_token.invoke(
             {"session_id": sid, "token_id": "tok-vance", "to_x": 0, "to_y": 0}
         )
-        assert "error" in wall
+        assert "error" in pillar_hit
 
         oob = move_map_token.invoke(
             {"session_id": sid, "token_id": "tok-vance", "to_x": 99, "to_y": 4}
@@ -433,6 +452,7 @@ def test_tactical_map_1m_tiles_wall_collision_and_los_cover() -> None:
         svg_text = svg_file.read_text(encoding="utf-8")
         assert ">COVER</text>" in svg_text
         assert 'cx="264" cy="216"' in svg_text
+        assert "rotate(" in svg_text
     finally:
         svg_file.unlink(missing_ok=True)
 
@@ -447,5 +467,7 @@ def test_tactical_map_1m_tiles_wall_collision_and_los_cover() -> None:
     stub_svg = repo_root / "data" / "maps" / f"t-stub-sync-suite_{stub['map_id']}.svg"
     stub_svg.unlink(missing_ok=True)
     assert stub["theme_preset"] == "med_lab"
-    assert len(stub["tiles"]) == 16 * 12
+    assert stub["tiles"] == []
+    assert len(stub["wall_edges"]) > 0
+    assert len(stub["props"]) > 0
 

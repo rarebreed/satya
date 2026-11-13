@@ -8,13 +8,14 @@
 //!   (GM only on the server).
 //! - Any other click falls through to [`crate::wasm_client::map_3d::handle_map_grid_cell_clicked`].
 
-use crate::wasm_client::dom::{fetch_json, select_value};
+use crate::wasm_client::dom::{fetch_json, input_value, select_value};
 use crate::wasm_client::map_3d::{
-    apply_incoming_map_update, handle_map_grid_cell_clicked, mark_map_wgpu_dirty,
+    apply_incoming_map_update, handle_map_point_clicked, mark_map_wgpu_dirty,
     refresh_map_dom_and_wgpu, with_map_ui_mut,
 };
 use crate::wasm_client::state::with_state;
-use satya_engine::map_dressing::{make_prop, place_prop_on_grid, remove_prop_at_on_grid};
+use satya_engine::map_dressing::{make_prop_at_cm, normalize_prop_rotation_deg};
+use satya_engine::tactical_map_geom::{place_prop_on_map, remove_prop_at_point};
 use satya_schema::{
     EdgeSide, GenerateSessionMapRequest, GmMapUpdateRequest, MapEdgeRef, MapPropPlacement,
     MapWallEdge, MaterialClass, PropKind, WallEdgeKind,
@@ -36,6 +37,8 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::Booth,
             PropKind::Bed,
             PropKind::Desk,
+            PropKind::DeskL,
+            PropKind::DeskT,
             PropKind::Bookshelf,
             PropKind::Wardrobe,
             PropKind::Bathtub,
@@ -64,6 +67,8 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::SteelShelving,
             PropKind::Dumpster,
             PropKind::JerseyBarrier,
+            PropKind::StructuralPillar,
+            PropKind::ElevatedCatwalk,
         ],
     ),
     (
@@ -74,12 +79,26 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::Hedge,
             PropKind::Bush,
             PropKind::Boulder,
+            PropKind::FallenLog,
             PropKind::ParkBench,
             PropKind::PicnicTable,
             PropKind::Car,
             PropKind::UtilityVan,
+        ],
+    ),
+    (
+        "Landscaping & Terrain",
+        &[
+            PropKind::GardenBed,
+            PropKind::GardenEdging,
             PropKind::StonePath,
+            PropKind::GravelPath,
+            PropKind::DirtPath,
+            PropKind::MulchBed,
+            PropKind::CreekWater,
+            PropKind::DrainageDitch,
             PropKind::AsphaltDrive,
+            PropKind::HazardSpill,
         ],
     ),
 ];
@@ -146,114 +165,164 @@ pub const fn next_painted_edge(cur: Option<WallEdgeKind>) -> Option<WallEdgeKind
     }
 }
 
-/// Updates `#map-prop-brush-select` in `edit_terrain` mode (`""` cycle, `"__erase__"`, or `PropKind`).
+/// Computes the next clockwise brush rotation (`+15°` increments across full `0..=359°`).
+#[must_use]
+pub fn next_brush_rotation_deg(_brush: &str, current_deg: i32) -> i32 {
+    (current_deg.rem_euclid(360) + 15) % 360
+}
+
+/// Updates `#map-prop-brush-select` in `edit_terrain` mode (`"__wall_edge__"`/`""` edge paint, `"__erase__"`, or `PropKind`).
 #[wasm_bindgen]
 pub fn satya_update_map_prop_brush() {
     let raw = select_value("map-prop-brush-select");
     with_map_ui_mut(|ui| {
+        if let Some(kind) = PropKind::from_code_str(&raw) {
+            ui.edit_prop_rotation_deg = normalize_prop_rotation_deg(kind, ui.edit_prop_rotation_deg);
+        }
         ui.edit_prop_brush = raw;
     });
     refresh_map_dom_and_wgpu();
 }
 
-/// Rotates the active prop brush placement clockwise by `90°` (`0 → 90 → 180 → 270`).
+/// Rotates the active prop brush placement clockwise by `+15°` (full `0..359°` orientation).
 #[wasm_bindgen]
 pub fn satya_rotate_map_prop_brush() {
     with_map_ui_mut(|ui| {
-        ui.edit_prop_rotation_deg = (ui.edit_prop_rotation_deg + 90) % 360;
+        ui.edit_prop_rotation_deg =
+            next_brush_rotation_deg(&ui.edit_prop_brush, ui.edit_prop_rotation_deg);
     });
     refresh_map_dom_and_wgpu();
 }
 
-/// Applies the active prop brush (`__erase__` or `PropKind`) at cell `(gx, gy)` in both 2D & 3D views.
-pub fn handle_map_prop_brush_click(gx: i32, gy: i32) {
+/// Applies an exact numeric `0..=359°` rotation from `#map-prop-rot-deg`.
+#[wasm_bindgen]
+pub fn satya_set_map_prop_rotation_deg() {
+    let raw = input_value("map-prop-rot-deg");
+    let parsed = raw.trim().parse::<i32>().unwrap_or(0).rem_euclid(360);
+    with_map_ui_mut(|ui| {
+        ui.edit_prop_rotation_deg = parsed;
+    });
+    refresh_map_dom_and_wgpu();
+}
+
+/// Toggles optional `0.50m` snap vs. free continuous prop placement (`#btn-map-snap-toggle`).
+#[wasm_bindgen]
+pub fn satya_toggle_map_grid_snap() {
+    with_map_ui_mut(|ui| {
+        ui.snap_to_half_meter = !ui.snap_to_half_meter;
+    });
+    refresh_map_dom_and_wgpu();
+}
+
+/// Applies the active prop brush (`__erase__` or `PropKind`) at continuous point `(fx_m, fy_m)`.
+pub fn handle_map_prop_brush_point(fx_m: f32, fy_m: f32) {
     struct PendingPropEdit {
         preset: String,
         edit_prop: Option<MapPropPlacement>,
-        clear_prop_at: Option<(i32, i32)>,
+        clear_prop_at_cm: Option<(i32, i32)>,
     }
     let pending = with_map_ui_mut(|ui| {
-        if gx < 0 || gy < 0 || gx >= ui.map.grid_width || gy >= ui.map.grid_height {
+        let (bw_m, bh_m) = ui.map.board_size_m();
+        if !fx_m.is_finite() || !fy_m.is_finite() || fx_m < 0.0 || fy_m < 0.0 || fx_m >= bw_m || fy_m >= bh_m {
             return None;
         }
-        ui.ensure_tiles_populated();
+        ui.ensure_vector_scene_populated();
         let preset = ui
             .map
             .theme_preset
             .clone()
             .unwrap_or_else(|| "orbital_airlock".to_string());
         if ui.edit_prop_brush == "__erase__" {
-            let (w, h) = (ui.map.grid_width, ui.map.grid_height);
-            remove_prop_at_on_grid(&mut ui.map.tiles, &mut ui.map.props, w, h, gx, gy)?;
+            remove_prop_at_point(&mut ui.map.props, fx_m, fy_m)?;
             ui.recompute_overlays();
-            return Some(PendingPropEdit { preset, edit_prop: None, clear_prop_at: Some((gx, gy)) });
+            let cx_cm = (fx_m * 100.0).round() as i32;
+            let cy_cm = (fy_m * 100.0).round() as i32;
+            return Some(PendingPropEdit {
+                preset,
+                edit_prop: None,
+                clear_prop_at_cm: Some((cx_cm, cy_cm)),
+            });
         }
         let kind = PropKind::from_code_str(&ui.edit_prop_brush)?;
-        let occupied: Vec<(i32, i32)> = ui.map.tokens.iter().map(|t| (t.x, t.y)).collect();
+        let (px_m, py_m) = if ui.snap_to_half_meter {
+            ((fx_m * 2.0).round() * 0.5, (fy_m * 2.0).round() * 0.5)
+        } else {
+            (fx_m, fy_m)
+        };
+        let cx_cm = (px_m * 100.0).round() as i32;
+        let cy_cm = (py_m * 100.0).round() as i32;
+        let occupied: Vec<(f32, f32)> = ui.map.tokens.iter().map(|t| ui.map.token_pos_m(t)).collect();
         let seed = (ui.map.seed.unwrap_or(42) as u32)
             .wrapping_mul(31)
-            .wrapping_add((gx as u32) * 17 + (gy as u32) * 53);
-        let prop = make_prop(kind, gx, gy, ui.edit_prop_rotation_deg, None, seed);
-        let (w, h) = (ui.map.grid_width, ui.map.grid_height);
-        let placed = place_prop_on_grid(
-            &mut ui.map.tiles,
+            .wrapping_add((cx_cm as u32).wrapping_mul(17) ^ (cy_cm as u32).wrapping_mul(53));
+        let prop = make_prop_at_cm(kind, cx_cm, cy_cm, ui.edit_prop_rotation_deg, None, seed);
+        let placed = place_prop_on_map(
             &mut ui.map.props,
+            &ui.map.wall_edges,
             &occupied,
-            w,
-            h,
+            (bw_m, bh_m),
             prop,
         )
         .ok()?;
         ui.recompute_overlays();
-        Some(PendingPropEdit { preset, edit_prop: Some(placed), clear_prop_at: None })
+        Some(PendingPropEdit {
+            preset,
+            edit_prop: Some(placed),
+            clear_prop_at_cm: None,
+        })
     });
     if let Some(p) = pending {
         mark_map_wgpu_dirty();
         refresh_map_dom_and_wgpu();
-        post_prop_edit_if_in_session(p.preset, p.edit_prop, p.clear_prop_at);
+        post_prop_edit_if_in_session(p.preset, p.edit_prop, p.clear_prop_at_cm);
     }
 }
 
-/// Handles a pointer click at continuous cell-space `(fx, fy)` (prop brush, edge action, or cell click fallback).
+/// Applies the active prop brush at cell center `(gx, gy)`.
+pub fn handle_map_prop_brush_click(gx: i32, gy: i32) {
+    handle_map_prop_brush_point(gx as f32 + 0.5, gy as f32 + 0.5);
+}
+
+/// Handles a pointer click at continuous metric `(fx_m, fy_m)` (prop brush, edge action, or free point click).
 #[wasm_bindgen]
-pub fn satya_click_map_point(fx: f32, fy: f32) {
-    let use_prop_brush = crate::wasm_client::map_3d::with_map_ui(|ui| {
-        ui.interaction_mode == "edit_terrain" && !ui.edit_prop_brush.is_empty()
+pub fn satya_click_map_point(fx_m: f32, fy_m: f32) {
+    let (is_edit, brush) = crate::wasm_client::map_3d::with_map_ui(|ui| {
+        (ui.interaction_mode == "edit_terrain", ui.edit_prop_brush.clone())
     });
-    if use_prop_brush {
-        handle_map_prop_brush_click(fx.floor() as i32, fy.floor() as i32);
+    if is_edit && !brush.is_empty() && brush != "__wall_edge__" {
+        handle_map_prop_brush_point(fx_m, fy_m);
+        return;
+    }
+    if !is_edit {
+        handle_map_point_clicked(fx_m, fy_m);
         return;
     }
     let action = with_map_ui_mut(|ui| {
-        let r = nearest_edge_at(fx, fy, ui.map.grid_width, ui.map.grid_height, EDGE_PICK_TOLERANCE_CELLS)?;
+        let cell_m = ui.map.cell_size_m().max(0.25);
+        let r = nearest_edge_at(
+            fx_m / cell_m,
+            fy_m / cell_m,
+            ui.map.grid_width,
+            ui.map.grid_height,
+            EDGE_PICK_TOLERANCE_CELLS,
+        )?;
         let cur = edge_kind_at(&ui.map, r);
-        let next = match ui.interaction_mode.as_str() {
-            "edit_terrain" => next_painted_edge(cur),
-            "move_or_select" => match cur {
-                Some(WallEdgeKind::DoorClosed) => Some(WallEdgeKind::DoorOpen),
-                Some(WallEdgeKind::DoorOpen) => Some(WallEdgeKind::DoorClosed),
-                _ => return None,
-            },
-            _ => return None,
-        };
+        let next = next_painted_edge(cur);
         apply_edge_kind(&mut ui.map, r, next);
         ui.recompute_overlays();
         Some((r, next, ui.map.theme_preset.clone().unwrap_or_default()))
     });
-    match action {
-        Some((r, next, preset)) => {
-            mark_map_wgpu_dirty();
-            refresh_map_dom_and_wgpu();
-            post_edge_edit_if_in_session(preset, r, next);
-        }
-        None => handle_map_grid_cell_clicked(fx.floor() as i32, fy.floor() as i32),
+    if let Some((r, next, preset)) = action {
+        mark_map_wgpu_dirty();
+        refresh_map_dom_and_wgpu();
+        post_edge_edit_if_in_session(preset, r, next);
     }
 }
 
 fn post_prop_edit_if_in_session(
     preset: String,
     edit_prop: Option<MapPropPlacement>,
-    clear_prop_at: Option<(i32, i32)>,
+    clear_prop_at_cm: Option<(i32, i32)>,
 ) {
     let (auth_token, session_id) = with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
     let (Some(token), Some(sid)) = (auth_token, session_id) else {
@@ -263,7 +332,7 @@ fn post_prop_edit_if_in_session(
         preset,
         populate_roster_tokens: false,
         edit_prop,
-        clear_prop_at,
+        clear_prop_at_cm,
         ..Default::default()
     };
     wasm_bindgen_futures::spawn_local(async move {
@@ -280,7 +349,7 @@ fn post_prop_edit_if_in_session(
     });
 }
 
-fn post_edge_edit_if_in_session(preset: String, r: MapEdgeRef, next: Option<WallEdgeKind>) {
+pub(crate) fn post_edge_edit_if_in_session(preset: String, r: MapEdgeRef, next: Option<WallEdgeKind>) {
     let (auth_token, session_id) = with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
     let (Some(token), Some(sid)) = (auth_token, session_id) else {
         return;
@@ -344,5 +413,28 @@ mod tests {
             PropKind::ALL.len(),
             "PROP_BRUSH_GROUPS must include all PropKind variants"
         );
+    }
+
+    #[test]
+    fn free_360_brush_rotation_and_continuous_prop_placement_erase() {
+        assert_eq!(next_brush_rotation_deg("FALLEN_LOG", 0), 15);
+        assert_eq!(next_brush_rotation_deg("SOFA", 33), 48);
+        assert_eq!(next_brush_rotation_deg("DESK_L", 345), 0);
+        assert_eq!(next_brush_rotation_deg("DESK_T", 180), 195);
+
+        let mut props = Vec::new();
+        let placed = place_prop_on_map(
+            &mut props,
+            &[],
+            &[],
+            (20.0, 14.0),
+            make_prop_at_cm(PropKind::Sofa, 640, 520, 33, None, 7),
+        )
+        .expect("33-degree continuous placement succeeds");
+        assert_eq!(placed.rotation_deg, 33);
+        assert_eq!(props.len(), 1);
+        let removed = remove_prop_at_point(&mut props, 6.40, 5.20);
+        assert!(removed.is_some());
+        assert!(props.is_empty());
     }
 }

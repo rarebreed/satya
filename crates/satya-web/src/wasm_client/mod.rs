@@ -30,6 +30,7 @@ pub mod chat_and_ttrpg;
 pub mod dice_3d;
 pub mod dice_3d_wgpu;
 pub mod dom;
+pub mod dom_tooltip;
 pub mod glb_model;
 pub mod gm_docs;
 pub mod gm_memories_and_director;
@@ -37,12 +38,15 @@ pub mod map_2d_art;
 pub mod map_2d_art_furniture;
 pub mod map_2d_art_overlay;
 pub mod map_2d_art_props;
+pub mod map_2d_art_surfaces;
 pub mod map_2d_art_walls;
 pub mod map_2d_tokens;
 pub mod map_3d;
-pub mod map_3d_wgpu;
 pub mod map_3d_dressing_geom;
+pub mod map_3d_input;
+pub mod map_3d_wgpu;
 pub mod map_edge_edit;
+pub mod map_hover_inspect;
 pub mod menu;
 pub mod model_3d_wgpu;
 pub mod notebook;
@@ -65,8 +69,10 @@ pub use character_sheet::*;
 pub use chat_and_ttrpg::*;
 pub use dice_3d::*;
 pub use dom::*;
+pub use dom_tooltip::*;
 pub use glb_model::*;
 pub use map_3d::*;
+pub use map_hover_inspect::*;
 pub use menu::*;
 pub use model_3d_wgpu::*;
 pub use notebook::*;
@@ -177,11 +183,16 @@ macro_rules! for_all_window_callbacks {
             "satyaClickMapCell" => satya_click_map_cell(i32, i32),
             "satyaClickMapPoint" => satya_click_map_point(f32, f32),
             "satyaHoverMapCell" => satya_hover_map_cell(i32, i32),
+            "satyaHoverMapPoint" => satya_hover_map_point(f32, f32, f32, f32),
+            "satyaLeaveMapHover" => satya_leave_map_hover(),
+            "satyaToggleMapInspectMode" => satya_toggle_map_inspect_mode(),
             "satyaToggleBattlemapView" => satya_toggle_battlemap_view(),
             "satyaToggleBattlemapGrid" => satya_toggle_battlemap_grid(),
             "satyaSetBattlemapInkStyle" => satya_set_battlemap_ink_style(),
             "satyaUpdateMapPropBrush" => satya_update_map_prop_brush(),
             "satyaRotateMapPropBrush" => satya_rotate_map_prop_brush(),
+            "satyaSetMapPropRotationDeg" => satya_set_map_prop_rotation_deg(),
+            "satyaToggleMapGridSnap" => satya_toggle_map_grid_snap(),
             "satyaGenerateProceduralMap" => satya_generate_procedural_map(),
             "satyaUpdateMapTacticalControls" => satya_update_map_tactical_controls(),
             "satyaUpdateSelectedTokenVisual" => satya_update_selected_token_visual(),
@@ -338,4 +349,16 @@ pub fn register_window_bindings() {
     });
     let _ = win.add_event_listener_with_callback("mouseup", on_up.as_ref().unchecked_ref());
     on_up.forget();
+
+    let on_keydown = Closure::<dyn FnMut(KeyboardEvent)>::new(move |ev: KeyboardEvent| {
+        handle_map_global_keydown(&ev);
+    });
+    let _ = win.add_event_listener_with_callback("keydown", on_keydown.as_ref().unchecked_ref());
+    on_keydown.forget();
+
+    let on_keyup = Closure::<dyn FnMut(KeyboardEvent)>::new(move |ev: KeyboardEvent| {
+        handle_map_global_keyup(&ev);
+    });
+    let _ = win.add_event_listener_with_callback("keyup", on_keyup.as_ref().unchecked_ref());
+    on_keyup.forget();
 }

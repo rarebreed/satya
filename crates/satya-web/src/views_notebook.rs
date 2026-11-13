@@ -240,12 +240,22 @@ fn NotebookMapPane() -> impl IntoView {
                         type="button"
                         id="btn-map-grid-overlay"
                         class="btn btn-sm btn-secondary"
-                        title="Show or hide the 1.0m / 5.0m grid overlay on the 2D battlemap"
+                        title="Show or hide the 1.0m / 5.0m visual reference grid on the 2D battlemap"
                         style="display: none;"
                         onclick="window.satyaToggleBattlemapGrid()"
                         on:click=move |_| wasm_client::satya_toggle_battlemap_grid()
                     >
                         "Grid: On"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-map-inspect-toggle"
+                        class="btn btn-sm btn-secondary"
+                        title="Pin the floating Object & Ground Inspector card (or hold Alt / press I while hovering)"
+                        onclick="window.satyaToggleMapInspectMode()"
+                        on:click=move |_| wasm_client::satya_toggle_map_inspect_mode()
+                    >
+                        "Inspect [Alt/I]"
                     </button>
                     <label
                         id="map-ink-style-wrap"
@@ -361,7 +371,7 @@ fn NotebookMapPane() -> impl IntoView {
                         onchange="window.satyaUpdateMapPropBrush()"
                         on:change=move |_| wasm_client::satya_update_map_prop_brush()
                     >
-                        <option value="">"Tile / Wall Cycle"</option>
+                        <option value="">"Wall / Door / Window Edge"</option>
                         <option value="__erase__">"Erase Prop"</option>
                         {wasm_client::PROP_BRUSH_GROUPS
                             .iter()
@@ -384,12 +394,42 @@ fn NotebookMapPane() -> impl IntoView {
                     type="button"
                     id="btn-map-prop-rotate"
                     class="btn btn-sm btn-secondary"
-                    title="Rotate prop brush clockwise by 90°"
+                    title="Rotate prop brush clockwise by +15° (full 360° orientation; hotkey R)"
                     style="display: none;"
                     onclick="window.satyaRotateMapPropBrush()"
                     on:click=move |_| wasm_client::satya_rotate_map_prop_brush()
                 >
-                    "Rot: 0°"
+                    "Rot +15°"
+                </button>
+                <label
+                    id="map-prop-rot-wrap"
+                    class="inline-label"
+                    for="map-prop-rot-deg"
+                    style="display: none;"
+                >
+                    <span>"Deg"</span>
+                    <input
+                        type="number"
+                        id="map-prop-rot-deg"
+                        class="map-ticks-input"
+                        min="0"
+                        max="359"
+                        step="5"
+                        value="0"
+                        title="Exact 0..359° prop orientation angle"
+                        onchange="window.satyaSetMapPropRotationDeg()"
+                        on:change=move |_| wasm_client::satya_set_map_prop_rotation_deg()
+                    />
+                </label>
+                <button
+                    type="button"
+                    id="btn-map-snap-toggle"
+                    class="btn btn-sm btn-secondary"
+                    title="Toggle free continuous placement vs. 0.50m increment snapping"
+                    onclick="window.satyaToggleMapGridSnap()"
+                    on:click=move |_| wasm_client::satya_toggle_map_grid_snap()
+                >
+                    "Snap: Free"
                 </button>
                 <label class="inline-label" for="map-token-model-select">
                     <span>"Mini"</span>
@@ -460,7 +500,19 @@ fn NotebookMapPane() -> impl IntoView {
                     alt="Tactical Battlemap"
                     style="display: none;"
                 />
+                <div
+                    id="map-hover-tooltip"
+                    class="map-hover-tooltip"
+                    role="status"
+                    style="display: none;"
+                ></div>
             </div>
+            <div
+                id="map-hover-status-bar"
+                class="map-hover-status-bar"
+                aria-live="polite"
+                inner_html=wasm_client::default_map_hover_status_bar_html()
+            ></div>
             <div
                 id="tabletop-map-los-hud"
                 class="map-los-hud"

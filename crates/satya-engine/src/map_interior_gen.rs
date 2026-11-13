@@ -10,16 +10,21 @@
 //! 4. **Safety**: door thresholds and spawn pads stay clear. If a tall prop ever disconnects the floor,
 //!    tall props are removed until every open cell is reachable again.
 //!
-//! Props are stamped into `tiles` via [`crate::map_dressing::stamp_props_into_tiles`].
+//! Props are emitted as continuous [`MapPropPlacement`] footprints with analytical collision and cover.
 
 use satya_schema::{
-    EdgeSide, MapPropPlacement, MapWallEdge, MaterialClass, PropKind, TacticalTileKind, WallEdgeKind,
+    EdgeSide, MapPropPlacement, MapWallEdge, MaterialClass, PropKind, WallEdgeKind,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::map_dressing::{make_prop, prop_spec, stamp_props_into_tiles};
+use crate::map_dressing::{PropObstruction, make_prop, prop_spec};
+#[cfg(test)]
+use crate::map_dressing::props_share_covered_cell;
 use crate::tactical_map::ProceduralSector;
 use crate::tactical_map_edges::WallEdgeIndex;
+use crate::tactical_map_geom::all_walkable_areas_connected;
+#[cfg(test)]
+use crate::tactical_map_geom::{TOKEN_RADIUS_M, circle_collides_obstacles};
 
 /// Furnished interior layout family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -263,6 +268,16 @@ impl Furnisher {
             && (y..y + fh).all(|yy| (x..x + fw).all(|xx| !self.blocked[(yy * self.w + xx) as usize]))
     }
 
+    fn free_prop(&self, p: &MapPropPlacement, r: Room) -> bool {
+        p.x >= r.x0
+            && p.y >= r.y0
+            && p.x + p.w_cells <= r.x1
+            && p.y + p.h_cells <= r.y1
+            && (p.y..p.y + p.h_cells).all(|yy| {
+                (p.x..p.x + p.w_cells).all(|xx| !p.covers(xx, yy) || !self.blocked[(yy * self.w + xx) as usize])
+            })
+    }
+
     fn try_place(&mut self, kind: PropKind, x: i32, y: i32, rot: i32, len: Option<i32>, r: Room) -> Option<MapPropPlacement> {
         let seed = self.rng.next() as u32;
         let p = make_prop(kind, x, y, rot, len, seed);
@@ -270,7 +285,7 @@ impl Furnisher {
         let fits = if decal {
             x >= r.x0 && y >= r.y0 && x + p.w_cells <= r.x1 && y + p.h_cells <= r.y1
         } else {
-            self.free(x, y, p.w_cells, p.h_cells, r)
+            self.free_prop(&p, r)
         };
         if !fits {
             return None;
@@ -278,7 +293,9 @@ impl Furnisher {
         if !decal {
             for yy in y..y + p.h_cells {
                 for xx in x..x + p.w_cells {
-                    self.blocked[(yy * self.w + xx) as usize] = true;
+                    if p.covers(xx, yy) {
+                        self.blocked[(yy * self.w + xx) as usize] = true;
+                    }
                 }
             }
         }
@@ -375,7 +392,9 @@ impl Furnisher {
                 let _ = self.against_any_wall(P::Desk, r, None);
             }
             Role::Office => {
-                let _ = self.against_any_wall(P::Desk, r, None);
+                let _ = self
+                    .against_any_wall(P::DeskL, r, None)
+                    .or_else(|| self.against_any_wall(P::Desk, r, None));
                 let _ = self.against_any_wall(P::Desk, r, None);
                 let _ = self.against_any_wall(P::Bookshelf, r, None);
                 let _ = self.against_any_wall(P::Planter, r, None);
@@ -408,7 +427,10 @@ impl Furnisher {
                         .in_front(s, P::CoffeeTable, 1, r)
                         .or_else(|| self.in_front(s, P::CoffeeTable, 0, r));
                 }
-                let desk_count = ((r.area() / 18).clamp(2, 6)) as usize;
+                self.scatter(P::DeskT, r, if r.area() >= 60 { 2 } else { 1 }, 0);
+                let _ = self.against_any_wall(P::DeskL, r, None);
+                let _ = self.against_any_wall(P::DeskL, r, None);
+                let desk_count = ((r.area() / 22).clamp(1, 4)) as usize;
                 self.scatter(P::Desk, r, desk_count, 0);
                 let _ = self.against_any_wall(P::Desk, r, None);
                 let _ = self.against_any_wall(P::Bookshelf, r, None);
@@ -478,28 +500,6 @@ impl Furnisher {
         let _ = self.against_any_wall(P::Jukebox, r, None);
         let _ = self.against_any_wall(P::Planter, r, None);
     }
-}
-
-fn reachable_all(w: i32, h: i32, tiles: &[TacticalTileKind], edges: &WallEdgeIndex, start: (i32, i32)) -> bool {
-    let passable = |x: i32, y: i32| tiles[(y * w + x) as usize] != TacticalTileKind::FullWall;
-    let mut seen = vec![false; (w * h) as usize];
-    let mut stack = vec![start];
-    seen[(start.1 * w + start.0) as usize] = true;
-    while let Some((x, y)) = stack.pop() {
-        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-            let (nx, ny) = (x + dx, y + dy);
-            if nx < 0 || ny < 0 || nx >= w || ny >= h || seen[(ny * w + nx) as usize] || !passable(nx, ny) {
-                continue;
-            }
-            // Doors (open or closed) are traversable for connectivity; walls and windows are not.
-            if edges.step_blocked((x, y), dx, dy, |k| matches!(k, WallEdgeKind::Wall | WallEdgeKind::Window)) {
-                continue;
-            }
-            seen[(ny * w + nx) as usize] = true;
-            stack.push((nx, ny));
-        }
-    }
-    (0..h).all(|y| (0..w).all(|x| !passable(x, y) || seen[(y * w + x) as usize]))
 }
 
 /// Generates a furnished edge-walled interior sector (`width × height` cells, already clamped by caller).
@@ -605,7 +605,6 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
     }
 
     // Reserve spawn pads and both sides of every door so thresholds stay walkable.
-    let idx = WallEdgeIndex::from_edges(w, h, &shell.edges);
     let mut furn = Furnisher { w, h, blocked: vec![false; (w * h) as usize], props: Vec::new(), rng: Rng(shell.rng.next()) };
     let reserve = |f: &mut Furnisher, x: i32, y: i32| {
         if x >= 0 && y >= 0 && x < f.w && y < f.h {
@@ -633,19 +632,20 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
         furn.furnish(role, r);
     }
 
-    // Connectivity safeguard: drop tall props (newest first) until every open cell is reachable.
+    // Connectivity safeguard: drop solid obstacles (tallest/newest first) until every open area is reachable.
     let mut props = furn.props;
     loop {
-        let mut tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
-        stamp_props_into_tiles(&mut tiles, w, h, &props);
-        if reachable_all(w, h, &tiles, &idx, (2, mid_y)) {
-            return ProceduralSector { tiles, wall_edges: shell.edges, props };
+        if all_walkable_areas_connected(w, h, &shell.edges, &props) {
+            return ProceduralSector { wall_edges: shell.edges, props };
         }
-        match props.iter().rposition(|p| prop_spec(p.kind).stamp == TacticalTileKind::FullWall) {
+        match props
+            .iter()
+            .rposition(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle)
+        {
             Some(i) => {
                 props.remove(i);
             }
-            None => return ProceduralSector { tiles, wall_edges: shell.edges, props },
+            None => return ProceduralSector { wall_edges: shell.edges, props },
         }
     }
 }
@@ -653,7 +653,7 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tactical_map::{GaitReachQuery, TacticalGridView, compute_reachable_on_grid};
+    use crate::tactical_map::{GaitReachQuery, TacticalSceneView, compute_reachable_continuous};
     use crate::environment_vehicles::CombatMovementGait;
 
     #[test]
@@ -662,14 +662,23 @@ mod tests {
             for seed in [1_i64, 42, 179, 9001] {
                 let a = generate_furnished_interior(style, 20, 14, seed);
                 assert_eq!(a, generate_furnished_interior(style, 20, 14, seed), "{style:?} deterministic");
-                assert_eq!(a.tiles.len(), 20 * 14);
                 assert!(a.props.len() >= 5, "{style:?}/{seed}: only {} props", a.props.len());
                 assert!(a.wall_edges.iter().any(|e| e.kind == WallEdgeKind::Window));
                 assert!(a.wall_edges.iter().any(|e| e.material == MaterialClass::Drywall));
-                let idx = WallEdgeIndex::from_edges(20, 14, &a.wall_edges);
-                assert!(reachable_all(20, 14, &a.tiles, &idx, (2, 7)));
+                assert!(all_walkable_areas_connected(20, 14, &a.wall_edges, &a.props));
                 for &(x, y) in &[(2, 7), (2, 6), (17, 7), (17, 8)] {
-                    assert_eq!(a.tiles[(y * 20 + x) as usize], TacticalTileKind::Floor, "spawn pad ({x},{y})");
+                    assert!(
+                        !circle_collides_obstacles(
+                            20.0,
+                            14.0,
+                            &a.wall_edges,
+                            &a.props,
+                            x as f32 + 0.5,
+                            y as f32 + 0.5,
+                            TOKEN_RADIUS_M,
+                        ),
+                        "spawn pad ({x},{y})"
+                    );
                 }
                 // No two solid props overlap.
                 for (i, p) in a.props.iter().enumerate() {
@@ -677,7 +686,7 @@ mod tests {
                         if prop_spec(p.kind).floor_layer || prop_spec(q.kind).floor_layer {
                             continue;
                         }
-                        let overlap = p.x < q.x + q.w_cells && q.x < p.x + p.w_cells && p.y < q.y + q.h_cells && q.y < p.y + p.h_cells;
+                        let overlap = props_share_covered_cell(p, q);
                         assert!(!overlap, "{style:?}/{seed}: {p:?} overlaps {q:?}");
                     }
                 }
@@ -690,12 +699,18 @@ mod tests {
         assert!(office.props.iter().any(|p| p.kind == PropKind::Desk), "office workstations");
         assert!(office.wall_edges.iter().any(|e| e.kind == WallEdgeKind::Window && e.x > 0 && e.x < 20), "glass conference wall");
         // Gait reach from the West spawn is bounded by interior walls (not the whole board).
-        let idx = WallEdgeIndex::from_edges(20, 14, &bar.wall_edges);
-        let grid = TacticalGridView { tiles: &bar.tiles, width: 20, height: 14, edges: &idx };
-        let reach = compute_reachable_on_grid(&grid, &[], GaitReachQuery {
-            start_xy: (2, 7), cell_size_m: 1.0, spd_eff: 11, hgt_m: 1.8,
+        let scene = TacticalSceneView {
+            width_m: 20.0,
+            height_m: 14.0,
+            edges: &bar.wall_edges,
+            props: &bar.props,
+        };
+        let reach = compute_reachable_continuous(&scene, &[], GaitReachQuery {
+            start_m: (2.5, 7.5), spd_eff: 11, hgt_m: 1.8,
             gait: CombatMovementGait::AllOutSprint, tick_budget: 40,
         });
-        assert!(!reach.iter().any(|c| c.x < 0 || c.x >= 20));
+        let strips = reach.merged_row_runs();
+        assert!(!strips.is_empty());
+        assert!(!strips.iter().any(|s| s.x_min_m < 0.0 || s.x_max_m > 20.01));
     }
 }

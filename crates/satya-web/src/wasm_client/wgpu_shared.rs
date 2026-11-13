@@ -89,11 +89,75 @@ fn zone_palette(zone_id: f32, fallback: vec3<f32>) -> vec3<f32> {
     return fallback;
 }
 
+fn hash21(p: vec2<f32>) -> f32 {
+    let h = dot(p, vec2<f32>(127.1, 311.7));
+    return fract(sin(h) * 43758.5453123);
+}
+
+fn vnoise2(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    let a = hash21(i);
+    let b = hash21(i + vec2<f32>(1.0, 0.0));
+    let c = hash21(i + vec2<f32>(0.0, 1.0));
+    let d = hash21(i + vec2<f32>(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let n = normalize(in.world_normal);
+    var n = normalize(in.world_normal);
     let v = normalize(scene.camera_pos.xyz - in.world_pos);
     let fw = fwidth(in.bary);
+    let mode = i32(round(scene.mode_params.x));
+    var albedo = in.base_rgb;
+    var spec_scale = 1.0;
+
+    if mode == 2 {
+        albedo = zone_palette(in.zone_id, in.base_rgb * 0.65);
+    } else {
+        let wp = in.world_pos.xz;
+        if abs(in.zone_id - (-2.0)) < 0.1 {
+            let g_patch = vnoise2(wp * 2.2);
+            let g_fine = vnoise2(wp * 11.5);
+            let g_blade = hash21(floor(wp * 26.0));
+            albedo = mix(in.base_rgb * 0.78, in.base_rgb * 1.24, g_patch)
+                + vec3<f32>(0.02, 0.05, 0.01) * (g_fine - 0.5)
+                + vec3<f32>(0.03, 0.06, 0.02) * (g_blade - 0.5);
+            n = normalize(n + vec3<f32>((g_fine - 0.5) * 0.14, 0.0, (g_patch - 0.5) * 0.14));
+            spec_scale = 0.28;
+        } else if abs(in.zone_id - (-3.0)) < 0.1 {
+            let pebbles = vnoise2(wp * 18.0);
+            let grit = hash21(floor(wp * 30.0));
+            albedo = albedo * (0.78 + 0.36 * pebbles + 0.14 * (grit - 0.5));
+            n = normalize(n + vec3<f32>((grit - 0.5) * 0.18, 0.0, (pebbles - 0.5) * 0.18));
+            spec_scale = 0.45;
+        } else if abs(in.zone_id - (-4.0)) < 0.1 {
+            let loam = vnoise2(wp * 4.5);
+            let sand = vnoise2(wp * 16.0);
+            albedo = albedo * (0.80 + 0.30 * loam) + vec3<f32>(0.03, 0.02, 0.01) * (sand - 0.5);
+            spec_scale = 0.22;
+        } else if abs(in.zone_id - (-5.0)) < 0.1 {
+            let bark = vnoise2(vec2<f32>(wp.x * 20.0, wp.y * 9.0));
+            let chip = hash21(floor(vec2<f32>(wp.x * 16.0, wp.y * 28.0)));
+            albedo = albedo * (0.72 + 0.45 * bark + 0.16 * (chip - 0.5));
+            n = normalize(n + vec3<f32>((chip - 0.5) * 0.16, 0.0, (bark - 0.5) * 0.16));
+            spec_scale = 0.25;
+        } else if abs(in.zone_id - (-6.0)) < 0.1 {
+            let rip = sin(wp.x * 9.0 + wp.y * 3.5 + vnoise2(wp * 4.0) * 4.5);
+            albedo = mix(albedo * 0.86, albedo * 1.28, rip * 0.5 + 0.5);
+            n = normalize(n + vec3<f32>(rip * 0.08, 0.0, cos(wp.y * 8.0) * 0.06));
+            spec_scale = 2.2;
+        } else if abs(in.zone_id - (-0.25)) < 0.1 {
+            let l_clump = vnoise2(wp * 7.5 + in.world_pos.y * 3.1);
+            let l_leaf = vnoise2(wp * 19.0 - in.world_pos.y * 5.0);
+            albedo = albedo * (0.72 + 0.48 * l_clump) + vec3<f32>(0.04, 0.07, 0.01) * l_leaf;
+            n = normalize(n + vec3<f32>((l_leaf - 0.5) * 0.24, 0.0, (l_clump - 0.5) * 0.24));
+            spec_scale = 0.35;
+        }
+    }
+
     let key_l = normalize(vec3<f32>(0.48, 0.84, 0.36));
     let fill_l = normalize(vec3<f32>(-0.62, 0.42, -0.52));
 
@@ -101,14 +165,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let fill = max(dot(n, fill_l), 0.0) * 0.32;
     let hemi = mix(vec3<f32>(0.07, 0.10, 0.16), vec3<f32>(0.22, 0.28, 0.38), n.y * 0.5 + 0.5);
     let h = normalize(key_l + v);
-    let spec = pow(max(dot(n, h), 0.0), 38.0) * 0.42;
-    let fresnel = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.28;
-
-    let mode = i32(round(scene.mode_params.x));
-    var albedo = in.base_rgb;
-    if mode == 2 {
-        albedo = zone_palette(in.zone_id, in.base_rgb * 0.65);
-    }
+    let spec = pow(max(dot(n, h), 0.0), 38.0) * 0.42 * spec_scale;
+    let fresnel = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.28 * spec_scale;
 
     // Subtle 1.0m minor / 5.0m major tactical grid lines on deck tiles (`zone_id < -0.5`)
     var grid_boost = vec3<f32>(0.0);
@@ -120,7 +178,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let uv5 = fract((in.world_pos.xz / cell_scale + vec2<f32>(0.5, 0.5)) * 0.2);
         let d5 = min(min(uv5.x, 1.0 - uv5.x), min(uv5.y, 1.0 - uv5.y));
         let line5 = 1.0 - smoothstep(0.0, 0.016, d5);
-        grid_boost = vec3<f32>(0.09, 0.22, 0.36) * line1 + vec3<f32>(0.14, 0.38, 0.58) * line5;
+        let minor_c = select(vec3<f32>(0.09, 0.22, 0.36), vec3<f32>(0.04, 0.06, 0.04), in.zone_id < -1.5);
+        let major_c = select(vec3<f32>(0.14, 0.38, 0.58), vec3<f32>(0.07, 0.11, 0.06), in.zone_id < -1.5);
+        grid_boost = minor_c * line1 + major_c * line5;
     }
 
     var rgb = hemi * albedo + albedo * (0.76 * ndl + fill) + vec3<f32>(0.85, 0.93, 1.0) * (spec + fresnel * 0.5) + grid_boost;

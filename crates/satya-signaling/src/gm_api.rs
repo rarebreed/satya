@@ -473,7 +473,16 @@ pub async fn gm_session_map_handler(
     if req.cell_size_cm <= 0 {
         req.cell_size_cm = 100;
     }
-    if req.tiles.is_empty() && req.grid_width >= 4 && req.grid_height >= 4 {
+    if !req.tiles.is_empty() {
+        satya_engine::tactical_map_geom::migrate_legacy_tiles_to_vector(
+            &req.tiles,
+            req.grid_width.max(1),
+            req.grid_height.max(1),
+            &mut req.wall_edges,
+            &mut req.props,
+        );
+        req.tiles.clear();
+    } else if req.wall_edges.is_empty() && req.props.is_empty() && req.grid_width >= 4 && req.grid_height >= 4 {
         let preset = req
             .theme_preset
             .as_deref()
@@ -486,13 +495,8 @@ pub async fn gm_session_map_handler(
             req.grid_height,
             req.seed.unwrap_or(42),
         );
-        req.tiles = sec.tiles;
-        if req.wall_edges.is_empty() {
-            req.wall_edges = sec.wall_edges;
-        }
-        if req.props.is_empty() {
-            req.props = sec.props;
-        }
+        req.wall_edges = sec.wall_edges;
+        req.props = sec.props;
     }
 
     let _ = state

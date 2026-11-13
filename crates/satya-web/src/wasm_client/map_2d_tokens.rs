@@ -232,13 +232,14 @@ fn push_preset_portrait_silhouette(out: &mut String, cx: i32, cy: i32, preset: &
     }
 }
 
-/// Renders one interactive token **portrait disc** into `#battlemap-overlay` with `<clipPath>` framing,
-/// optional allowlisted `portrait_url` `<image>`, preset bust fallback, facing wedge, and initials pill.
+/// Renders one interactive token **portrait disc** into `#battlemap-overlay` at metric `pos_m` with `<clipPath>`
+/// framing, optional allowlisted `portrait_url` `<image>`, preset bust fallback, facing wedge, and initials pill.
 #[allow(clippy::too_many_arguments)]
 pub fn push_token_portrait_disc_svg(
     out: &mut String,
     idx: usize,
     tok: &TokenPlacement,
+    pos_m: (f32, f32),
     preset: &str,
     color_hex: &str,
     facing_deg: f32,
@@ -246,7 +247,8 @@ pub fn push_token_portrait_disc_svg(
     is_selected: bool,
     cell_px: i32,
 ) {
-    let (cx, cy) = (tok.x * cell_px + cell_px / 2, tok.y * cell_px + cell_px / 2);
+    let cf = cell_px as f32;
+    let (cx, cy) = ((pos_m.0 * cf).round() as i32, (pos_m.1 * cf).round() as i32);
     let col = escape_html(color_hex);
     let op = if tok.visibility == MessageVisibility::GmOnly { ".55" } else { "1" };
     let clip_id = format!("bm-tok-clip-{idx}");

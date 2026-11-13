@@ -10,7 +10,7 @@ description: >-
 
 # Satya Rust Game Engine Steering Skill (`satya-rust-engine`)
 
-Use this skill alongside [`satya-rust-workspace`](../satya-rust-workspace/SKILL.md) whenever reading, adding, or refactoring code in [`crates/satya-engine`](../../../crates/satya-engine) or TTRPG design chapters in [`docs/ttrpg/`](../../../docs/ttrpg). Full reference: [`docs/technical/rust-engine-steering.md`](../../../docs/technical/rust-engine-steering.md).
+Use this skill alongside [`satya-rust-workspace`](../satya-rust-workspace/SKILL.md) whenever reading, adding, or refactoring code in [`crates/satya-engine`](../../../crates/satya-engine) or TTRPG design chapters in [`docs/ttrpg/`](../../../docs/ttrpg).
 
 ---
 
@@ -20,7 +20,7 @@ Always build on the shared primitives in [`crates/satya-engine/src/primitives.rs
 - **Tactical Triad (`Triad<T>`)**: Use `Triad<T>` (`tempo`, `control`, `force`) for allocations (`Triad<i32>`), ceiling caps (`Triad<i32>`), and limb-slash flags (`Triad<bool>`). Never pass `(att_t, att_c, att_f, def_t, def_c, def_f)` as 6 separate integers when `Triad<i32>` applies.
 - **Contested Saves (`ContestedCheck<D>` & `TieredSaveEval`)**: All 1-Pair Tiered GM Resistance checks (`ContestedCascadeTaskParams::new_tiered_environment`, where $\text{TN}_P = 31 - C_P + \Delta_{\text{tool}}$ vs. $\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$) must use `TieredSaveEval::evaluate` + `classify_4way` and return `ContestedCheck<D>` (`#[serde(flatten)] pub effect: D` + `Deref<Target = D>`).
 - **Conditions (`ConditionSource` & `ConditionImpact`)**: Implement `ConditionSource` (`fn to_condition_impact(&self) -> ConditionImpact`) on every status, fatigue, encumbrance, or environmental evaluation struct, and combine them via `ConditionImpact::combine` or `aggregate_condition_impacts`.
-- **Coded Enums (`define_coded_enum!`)**: Declare domain enums with `define_coded_enum!` to generate `ALL`, `as_str`, `label`, `full_name`, `subtitle`, `Display`, and alias-aware `from_code_str`.
+- **Coded Enums (`define_coded_enum!`)**: Declare domain enums with `define_coded_enum!` to generate `ALL`, `as_str`, `label`, `full_name`, `subtitle`, `Display`, and alias-aware `from_code_str` (use `satya_schema::define_wire_enum!` for `SCREAMING_SNAKE_CASE` wire enums).
 
 ---
 
@@ -33,7 +33,15 @@ Always build on the shared primitives in [`crates/satya-engine/src/primitives.rs
 
 ---
 
-## 3. Canonical Sign Conventions ($\Delta_{\text{int}}$ vs. $\Delta_{\text{ext}}$ / $\Delta_{\text{tool}}$ vs. Characteristic Penalties)
+## 3. Continuous Metric Tactical Maps & Geometry
+
+- **Spatial Modules**: `tactical_map.rs` (procedural sectors, `evaluate_los_continuous`, `compute_reachable_continuous`), `tactical_map_geom.rs` (circle/OBB/segment math, continuous destination resolution), `tactical_map_inspect.rs` (`migrate_legacy_tiles_to_vector`, `all_walkable_areas_connected`, `inspect_map_point`), `tactical_map_edges.rs`, `map_dressing.rs`, `barrier_ballistics.rs`, `map_interior_gen.rs`, `map_outdoor_gen.rs`, and `map_sector_gen.rs`.
+- **Metric Units (`_m` / `_cm`) & `PropFootprintM`**: Use `f32` meters (`_m`) for all raycast/OBB/circle math and `i32` centimeters (`_cm`) on wire DTOs (`GmMapUpdateRequest`, `TokenVisualSpec`, `MapPropPlacement`). Extract OBB center/half-extents/rotation directly via `p.footprint_m()` (`satya_schema::PropFootprintM`) rather than re-implementing rotation transforms.
+- **`EdgeSide` Canonical Representation**: `EdgeSide` has **only** `North` and `West` variants (`South` of cell `(x, y)` is `(x, y + 1, EdgeSide::North)`, and `East` of cell `(x, y)` is `(x + 1, y, EdgeSide::West)`).
+
+---
+
+## 4. Canonical Sign Conventions ($\Delta_{\text{int}}$ vs. $\Delta_{\text{ext}}$ / $\Delta_{\text{tool}}$ vs. Characteristic Penalties)
 
 - **Internal Failure-Carry / Strain Modifiers ($\Delta_{\text{int}}$ in `ConditionImpact::delta_int` and `CascadeTaskParams::internal_mod`)** adjust the failure-carry stumble magnitude ($\delta_{\text{under}} = \max(0, 6 + \Delta_{\text{int}})$):
   - **Positive** (`+2` per Fatigue level, `+4` Nausea, `+2` Ego Wound) = **Penalty** (widens failure stumble).
@@ -46,7 +54,7 @@ Always build on the shared primitives in [`crates/satya-engine/src/primitives.rs
 
 ---
 
-## 4. Bidirectional `docs/ttrpg/` <-> `satya-engine` Synchronization Checklist
+## 5. Bidirectional `docs/ttrpg/` <-> `satya-engine` Synchronization Checklist
 
 Whenever adding, renaming, or splitting a `docs/ttrpg/` markdown chapter or changing a canonical formula:
 1. Update [`docs/ttrpg/SUMMARY.md`](../../../docs/ttrpg/SUMMARY.md) (Table of Contents + Reciprocal Rust Engine Module Index) and ensure the chapter has a `> **Rust Engine Implementation**:` callout at the top.
