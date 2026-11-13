@@ -18,6 +18,7 @@ pub use crate::wasm_client::map_2d_art_furniture::*;
 pub use crate::wasm_client::map_2d_art_overlay::*;
 pub use crate::wasm_client::map_2d_art_props::*;
 pub use crate::wasm_client::map_2d_art_walls::*;
+pub use crate::wasm_client::map_2d_tokens::*;
 
 use satya_engine::map_dressing::{make_prop, prop_spec, solid_prop_at};
 
@@ -382,6 +383,9 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
     for b in theme.id.bytes() {
         acc = fnv(acc, u64::from(b));
     }
+    for b in ui.ink_style.as_str().bytes() {
+        acc = fnv(acc, u64::from(b));
+    }
     for t in &ui.map.tiles {
         acc = fnv(acc, *t as u64);
     }
@@ -434,7 +438,7 @@ fn push_floor_pattern_def(out: &mut String, t: &BattlemapArtTheme) {
     }
 }
 
-fn push_defs(out: &mut String, t: &BattlemapArtTheme) {
+fn push_defs(out: &mut String, t: &BattlemapArtTheme, style: BattlemapInkStyle) {
     out.push_str("<defs>");
     push_floor_pattern_def(out, t);
     let _ = write!(
@@ -444,14 +448,8 @@ fn push_defs(out: &mut String, t: &BattlemapArtTheme) {
         hatch = t.wall_hatch,
         plat = t.platform_fill,
     );
-    out.push_str(concat!(
-        r##"<filter id="bm-ink" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3.5" xChannelSelector="R" yChannelSelector="G"/></filter>"##,
-        r##"<filter id="bm-prop" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.5" xChannelSelector="R" yChannelSelector="G" result="d"/><feDropShadow in="d" dx="3" dy="4" stdDeviation="2.5" flood-color="#1a140c" flood-opacity=".38"/></filter>"##,
-        r##"<filter id="bm-shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="2.5" dy="3.5" stdDeviation="3" flood-color="#120d08" flood-opacity=".42"/></filter>"##,
-        r##"<filter id="bm-grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="11" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .16 0 0 0 0 .13 0 0 0 0 .1 0 0 0 .55 -.18"/></filter>"##,
-        r##"<filter id="bm-mottle" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="5"/><feColorMatrix values="0 0 0 0 .1 0 0 0 0 .08 0 0 0 0 .05 .42 0 0 0 -.19"/></filter>"##,
-        "</defs>"
-    ));
+    push_ink_style_filters(out, style);
+    out.push_str("</defs>");
 }
 
 /// Orientation (`rot_deg`) so a prop's back (`-y`) rests against an adjacent wall, else a hashed quarter-turn.
@@ -520,6 +518,7 @@ fn push_door(out: &mut String, ui: &TacticalMapUiState, t: &BattlemapArtTheme, x
 #[must_use]
 pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     let t = battlemap_theme_for_preset(ui.map.theme_preset.as_deref());
+    let style = ui.ink_style;
     let (w, h) = grid_dims(ui);
     let (vw, vh) = (w * BATTLEMAP_CELL_PX, h * BATTLEMAP_CELL_PX);
     let seed = ui.map.seed.unwrap_or(42);
@@ -527,15 +526,23 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     let covered = |x: i32, y: i32| solid_prop_at(&ui.map.props, x, y).is_some();
     let wall = |x: i32, y: i32| is_tile(ui, x, y, TacticalTileKind::FullWall) && !covered(x, y);
     let mut out = String::with_capacity(48 * 1024);
-    push_defs(&mut out, t);
+    push_defs(&mut out, t, style);
 
     // 1. Exterior margin, floor material + large-scale tonal mottling
     let pad = BATTLEMAP_PAD_PX;
     let _ = write!(
         out,
-        r##"<rect x="-{pad}" y="-{pad}" width="{}" height="{}" fill="#2b2723"/><rect width="{vw}" height="{vh}" fill="url(#bm-floor)"/><rect width="{vw}" height="{vh}" filter="url(#bm-mottle)"/>"##,
+        r##"<rect x="-{pad}" y="-{pad}" width="{}" height="{}" fill="{}"/>"##,
         vw + 2 * pad,
-        vh + 2 * pad
+        vh + 2 * pad,
+        style.margin_fill(),
+    );
+    if style.uses_color_tint() {
+        out.push_str(r#"<g filter="url(#bm-tint)">"#);
+    }
+    let _ = write!(
+        out,
+        r##"<rect width="{vw}" height="{vh}" fill="url(#bm-floor)"/><rect width="{vw}" height="{vh}" filter="url(#bm-mottle)"/>"##,
     );
 
     // 1b. Merged paved roadways (`AsphaltDrive`), walkways/plazas (`StonePath`), and rugs
@@ -706,11 +713,11 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
         out.push_str("</g>");
     }
 
-    // 9. Paper grain over everything
-    let _ = write!(
-        out,
-        r##"<rect width="{vw}" height="{vh}" filter="url(#bm-grain)" opacity=".7" style="mix-blend-mode:multiply"/>"##
-    );
+    // 9. Paper grain / ink finish + optional color-matrix group close
+    if style.uses_color_tint() {
+        out.push_str("</g>");
+    }
+    push_ink_style_finish(&mut out, style, vw, vh);
     out
 }
 
@@ -821,6 +828,85 @@ mod tests {
             let art = format_battlemap_art_layer(&ui);
             assert!(art.contains("url(#bm-paver)"), "{preset:?}: merged flagstone paths");
             assert!(art.contains("url(#bm-tarmac)"), "{preset:?}: merged asphalt road/driveway");
+        }
+    }
+
+    #[test]
+    fn phase4_ink_styles_portrait_discs_and_prop_hover_preview() {
+        use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+
+        let mut ui = TacticalMapUiState {
+            map: build_procedural_map_request("p4", SectorPreset::ResidentialApartment, None, 20, 14, 42),
+            ..Default::default()
+        };
+        let key_vellum = battlemap_art_cache_key(&ui);
+        for style in BattlemapInkStyle::ALL {
+            ui.ink_style = style;
+            let art = format_battlemap_art_layer(&ui);
+            assert_eq!(art.matches("<g").count(), art.matches("</g>").count(), "{style:?}: balanced <g>");
+            if style != BattlemapInkStyle::ModernVellum {
+                assert_ne!(battlemap_art_cache_key(&ui), key_vellum, "{style:?} should bust cache");
+            }
+            if style.uses_color_tint() {
+                assert!(art.contains(r#"id="bm-tint""#) && art.contains(r#"filter="url(#bm-tint)""#));
+            }
+        }
+        ui.ink_style = BattlemapInkStyle::CleanVector;
+        assert!(format_battlemap_art_layer(&ui).contains(r#"<feOffset dx="0" dy="0"/>"#));
+
+        // Token portrait discs: custom allowlisted portrait URL vs unsafe rejected + preset silhouettes
+        if let Some(vis) = ui.map.token_visuals.first_mut() {
+            vis.portrait_url = Some("/api/characters/sara/assets/portrait".to_string());
+        }
+        if let Some(vis) = ui.map.token_visuals.get_mut(1) {
+            vis.portrait_url = Some("javascript:alert(1)".to_string());
+        }
+        let overlay = format_battlemap_overlay_inner(&ui);
+        assert!(overlay.contains(r#"<clipPath id="bm-tok-clip-0""#));
+        assert!(overlay.contains(r#"href="/api/characters/sara/assets/portrait""#));
+        assert!(!overlay.contains("javascript:alert(1)"));
+
+        // Prop brush hover preview
+        ui.interaction_mode = "edit_terrain".to_string();
+        ui.edit_prop_brush = "BAR_COUNTER".to_string();
+        ui.hovered_cell = Some((5, 5));
+        let brush_ov = format_battlemap_overlay_inner(&ui);
+        assert!(brush_ov.contains(r#"stroke-dasharray="7 4""#));
+    }
+
+    #[test]
+    #[ignore]
+    fn export_phase4_showcase_svgs() {
+        use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+        let Ok(out_dir) = std::env::var("SATYA_SVG_PREVIEW_DIR") else {
+            return;
+        };
+        let mut ui = TacticalMapUiState {
+            map: build_procedural_map_request("p4-demo", SectorPreset::ResidentialApartment, None, 20, 14, 42),
+            ..Default::default()
+        };
+        let occupied: Vec<(i32, i32)> = ui.map.tokens.iter().map(|t| (t.x, t.y)).collect();
+        let _ = satya_engine::map_dressing::place_prop_on_grid(
+            &mut ui.map.tiles,
+            &mut ui.map.props,
+            &occupied,
+            ui.map.grid_width,
+            ui.map.grid_height,
+            make_prop(PropKind::PoolTable, 11, 5, 0, None, 7),
+        );
+        ui.recompute_overlays();
+        let (w, h) = grid_dims(&ui);
+        let (tw, th) = (w * BATTLEMAP_CELL_PX + 2 * BATTLEMAP_PAD_PX, h * BATTLEMAP_CELL_PX + 2 * BATTLEMAP_PAD_PX);
+        let vb = format!("-{BATTLEMAP_PAD_PX} -{BATTLEMAP_PAD_PX} {tw} {th}");
+        for style in BattlemapInkStyle::ALL {
+            ui.ink_style = style;
+            let doc = format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{}{}</svg>"#,
+                format_battlemap_art_layer(&ui),
+                format_battlemap_overlay_inner(&ui),
+            );
+            let path = std::path::Path::new(&out_dir).join(format!("phase4_style_{}.svg", style.as_str()));
+            std::fs::write(path, doc).expect("write phase4 svg");
         }
     }
 }

@@ -643,6 +643,7 @@ pub fn build_procedural_map_request(
             facing_deg: 90,
             elevation_cm: 0,
             stance_pose: "aimed".to_string(),
+            portrait_url: None,
         },
         TokenVisualSpec {
             entity_id: "tok-marcus".to_string(),
@@ -651,6 +652,7 @@ pub fn build_procedural_map_request(
             facing_deg: 90,
             elevation_cm: 0,
             stance_pose: "idle".to_string(),
+            portrait_url: None,
         },
         TokenVisualSpec {
             entity_id: "tok-secops-1".to_string(),
@@ -659,6 +661,7 @@ pub fn build_procedural_map_request(
             facing_deg: 270,
             elevation_cm: 0,
             stance_pose: "aimed".to_string(),
+            portrait_url: None,
         },
     ];
 

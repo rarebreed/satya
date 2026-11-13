@@ -205,6 +205,37 @@ pub struct TokenVisualSpec {
     /// Miniature pose tag (`"idle"`, `"aimed"`, `"crouched"`, `"prone"`).
     #[serde(default = "default_token_pose")]
     pub stance_pose: String,
+    /// Optional safe portrait image URL/path rendered inside the 2D battlemap token disc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub portrait_url: Option<String>,
+}
+
+/// Validates and normalizes an optional character/NPC token portrait URL, rejecting script vectors
+/// (`javascript:`, `data:image/svg+xml`, control chars, quotes, and protocol-relative `//` URLs).
+#[must_use]
+pub fn sanitize_portrait_url(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.len() > 4096 {
+        return None;
+    }
+    if trimmed
+        .bytes()
+        .any(|b| b.is_ascii_control() || b.is_ascii_whitespace() || matches!(b, b'<' | b'>' | b'"' | b'\''))
+    {
+        return None;
+    }
+    let low = trimmed.to_ascii_lowercase();
+    let is_safe_same_origin = (trimmed.starts_with("/api/characters/")
+        || trimmed.starts_with("/maps/")
+        || trimmed.starts_with("/pkg/")
+        || trimmed.starts_with("/assets/"))
+        && !trimmed.starts_with("//")
+        && !trimmed.contains("..");
+    let is_safe_https = low.starts_with("https://") && trimmed.len() > "https://".len();
+    let is_safe_raster_data = low.starts_with("data:image/png;base64,")
+        || low.starts_with("data:image/jpeg;base64,")
+        || low.starts_with("data:image/webp;base64,");
+    (is_safe_same_origin || is_safe_https || is_safe_raster_data).then(|| trimmed.to_string())
 }
 
 fn default_token_model_preset() -> String {
@@ -228,6 +259,7 @@ impl Default for TokenVisualSpec {
             facing_deg: 0,
             elevation_cm: 0,
             stance_pose: default_token_pose(),
+            portrait_url: None,
         }
     }
 }
@@ -269,6 +301,12 @@ pub struct GenerateSessionMapRequest {
     /// When `true` with `edit_edge`, removes the edge entirely (GM only).
     #[serde(default)]
     pub clear_edge: bool,
+    /// Optional GM multi-cell prop placement/replacement on the existing active map.
+    #[serde(default)]
+    pub edit_prop: Option<MapPropPlacement>,
+    /// Optional GM prop removal covering cell `(x, y)` on the existing active map.
+    #[serde(default)]
+    pub clear_prop_at: Option<(i32, i32)>,
 }
 
 fn default_sector_preset() -> String {
@@ -291,6 +329,8 @@ impl Default for GenerateSessionMapRequest {
             edit_edge: None,
             set_edge_kind: None,
             clear_edge: false,
+            edit_prop: None,
+            clear_prop_at: None,
         }
     }
 }
@@ -312,8 +352,41 @@ pub struct MoveMapTokenRequest {
     pub color_hex: Option<String>,
     #[serde(default)]
     pub stance_pose: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub portrait_url: Option<String>,
     #[serde(default)]
     pub visibility: Option<MessageVisibility>,
     #[serde(default)]
     pub remove: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_portrait_url_allows_safe_origins_and_rejects_scripts() {
+        assert_eq!(
+            sanitize_portrait_url(" /api/characters/sara/assets/p1 "),
+            Some("/api/characters/sara/assets/p1".to_string())
+        );
+        assert_eq!(
+            sanitize_portrait_url("https://cdn.example.com/portraits/sara.webp"),
+            Some("https://cdn.example.com/portraits/sara.webp".to_string())
+        );
+        assert_eq!(
+            sanitize_portrait_url("data:image/png;base64,iVBORw0KGgo="),
+            Some("data:image/png;base64,iVBORw0KGgo=".to_string())
+        );
+        for bad in [
+            "",
+            "javascript:alert(1)",
+            "data:image/svg+xml;base64,PHN2Zz4=",
+            "//evil.example.com/x.png",
+            "/api/characters/../etc/passwd",
+            "https://cdn.example.com/a\"b.png",
+        ] {
+            assert_eq!(sanitize_portrait_url(bad), None, "expected reject for {bad}");
+        }
+    }
 }

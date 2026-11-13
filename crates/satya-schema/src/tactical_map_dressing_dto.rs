@@ -35,6 +35,13 @@ macro_rules! define_wire_enum {
             pub const fn label(self) -> &'static str {
                 match self { $(Self::$Variant => $label),+ }
             }
+
+            /// Parses a case-insensitive wire code (e.g. `"SOFA"`, `"sofa"`) into the enum variant.
+            #[must_use]
+            pub fn from_code_str(raw: &str) -> Option<Self> {
+                let up = raw.trim();
+                Self::ALL.into_iter().find(|v| v.as_str().eq_ignore_ascii_case(up))
+            }
         }
     };
 }
@@ -214,7 +221,10 @@ mod tests {
         assert!(!WallEdgeKind::DoorOpen.blocks_movement());
         for k in PropKind::ALL {
             assert_eq!(serde_json::to_string(&k).unwrap(), format!("\"{}\"", k.as_str()));
+            assert_eq!(PropKind::from_code_str(&k.as_str().to_ascii_lowercase()), Some(k));
         }
+        assert_eq!(PropKind::from_code_str("sofa"), Some(PropKind::Sofa));
+        assert_eq!(PropKind::from_code_str("nonexistent_prop"), None);
         let p = MapPropPlacement {
             kind: PropKind::BarCounter,
             x: 2,

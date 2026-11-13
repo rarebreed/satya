@@ -7,18 +7,21 @@
 
 use crate::wasm_client::dom::{
     escape_html, get_element, local_storage_get, local_storage_set, set_button_disabled,
-    set_display, set_html, set_text,
+    set_display, set_html, set_select_value, set_text,
 };
 use crate::wasm_client::map_2d_art::{
     BATTLEMAP_CELL_PX, BATTLEMAP_PAD_PX, battlemap_art_cache_key, battlemap_boundary_path,
     battlemap_cell_rects_path, battlemap_theme_for_preset, format_battlemap_art_layer,
 };
-use crate::wasm_client::map_2d_art_props::BATTLEMAP_INK;
+use crate::wasm_client::map_2d_tokens::{
+    load_persisted_ink_style_pref, push_token_portrait_disc_svg,
+};
 use crate::wasm_client::map_3d::{
     TacticalMapUiState, format_map_tactical_hud_html, mark_map_wgpu_dirty,
     refresh_map_wgpu_if_active, resolve_token_visual, with_map_ui, with_map_ui_mut,
 };
-use satya_schema::{CoverGrade, MessageVisibility};
+use satya_engine::map_dressing::{make_prop, solid_prop_at};
+use satya_schema::{CoverGrade, PropKind};
 use std::cell::Cell;
 use std::fmt::Write as _;
 use wasm_bindgen::prelude::*;
@@ -50,7 +53,7 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
     let _ = write!(out, r##"<rect width="{vw}" height="{vh}" fill="#000" fill-opacity="0"/>"##);
 
     if ui.show_grid_overlay {
-        let ink = t.grid_ink;
+        let ink = ui.ink_style.grid_ink_override().unwrap_or(t.grid_ink);
         let _ = write!(
             out,
             r##"<defs><pattern id="bmo-grid" width="{c}" height="{c}" patternUnits="userSpaceOnUse"><path d="M{c} 0H0V{c}" fill="none" stroke="{ink}" stroke-opacity=".24" stroke-width="1.1"/></pattern><pattern id="bmo-grid5" width="{c5}" height="{c5}" patternUnits="userSpaceOnUse"><path d="M{c5} 0H0V{c5}" fill="none" stroke="{ink}" stroke-opacity=".42" stroke-width="1.8"/></pattern></defs><rect width="{vw}" height="{vh}" fill="url(#bmo-grid)" pointer-events="none"/><rect width="{vw}" height="{vh}" fill="url(#bmo-grid5)" pointer-events="none"/><rect width="{vw}" height="{vh}" fill="none" stroke="{ink}" stroke-opacity=".42" stroke-width="2" pointer-events="none"/>"##,
@@ -84,14 +87,42 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
     }
 
     if let Some((hx, hy)) = ui.hovered_cell.filter(|&(hx, hy)| hx >= 0 && hy >= 0 && hx < w && hy < h) {
-        let _ = write!(
-            out,
-            r##"<rect x="{}" y="{}" width="{}" height="{}" rx="7" fill="#0ea5e9" fill-opacity=".12" stroke="#0284c7" stroke-width="2.6" pointer-events="none"/>"##,
-            hx * c + 3,
-            hy * c + 3,
-            c - 6,
-            c - 6
-        );
+        if ui.interaction_mode == "edit_terrain" && ui.edit_prop_brush == "__erase__" {
+            let (px, py, pw, ph) = solid_prop_at(&ui.map.props, hx, hy)
+                .or_else(|| ui.map.props.iter().rev().find(|p| p.covers(hx, hy)))
+                .map_or((hx, hy, 1, 1), |p| (p.x, p.y, p.w_cells, p.h_cells));
+            let _ = write!(
+                out,
+                r##"<rect x="{}" y="{}" width="{}" height="{}" rx="7" fill="#f43f5e" fill-opacity=".2" stroke="#e11d48" stroke-width="3" stroke-dasharray="7 4" pointer-events="none"/>"##,
+                px * c + 2,
+                py * c + 2,
+                pw * c - 4,
+                ph * c - 4
+            );
+        } else if ui.interaction_mode == "edit_terrain"
+            && let Some(kind) = PropKind::from_code_str(&ui.edit_prop_brush)
+        {
+            let p = make_prop(kind, hx, hy, ui.edit_prop_rotation_deg, None, 0);
+            let in_bounds = p.x >= 0 && p.y >= 0 && p.x + p.w_cells <= w && p.y + p.h_cells <= h;
+            let (fill, stroke) = if in_bounds { ("#0ea5e9", "#0284c7") } else { ("#f43f5e", "#e11d48") };
+            let _ = write!(
+                out,
+                r##"<rect x="{}" y="{}" width="{}" height="{}" rx="7" fill="{fill}" fill-opacity=".18" stroke="{stroke}" stroke-width="2.8" stroke-dasharray="7 4" pointer-events="none"/>"##,
+                p.x * c + 3,
+                p.y * c + 3,
+                p.w_cells * c - 6,
+                p.h_cells * c - 6
+            );
+        } else {
+            let _ = write!(
+                out,
+                r##"<rect x="{}" y="{}" width="{}" height="{}" rx="7" fill="#0ea5e9" fill-opacity=".12" stroke="#0284c7" stroke-width="2.6" pointer-events="none"/>"##,
+                hx * c + 3,
+                hy * c + 3,
+                c - 6,
+                c - 6
+            );
+        }
     }
 
     if let Some(los) = ui.last_los.as_ref() {
@@ -148,30 +179,23 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
         out.push_str("</g>");
     }
 
-    for tok in &ui.map.tokens {
-        let (cx, cy) = (tok.x * c + c / 2, tok.y * c + c / 2);
-        let (_, col, facing) = resolve_token_visual(&ui.map, tok);
-        let col = escape_html(&col);
+    for (idx, tok) in ui.map.tokens.iter().enumerate() {
+        let (preset, col, facing) = resolve_token_visual(&ui.map, tok);
+        let portrait_url = ui
+            .map
+            .visual_for(&tok.entity_id)
+            .and_then(|v| v.portrait_url.as_deref());
         let is_sel = ui.selected_entity_id.as_deref() == Some(tok.entity_id.as_str());
-        let op = if tok.visibility == MessageVisibility::GmOnly { ".55" } else { "1" };
-        let _ = write!(
-            out,
-            r##"<g opacity="{op}" pointer-events="none"><ellipse cx="{}" cy="{}" rx="23" ry="21" fill="#120d08" fill-opacity=".35"/>"##,
-            cx + 3,
-            cy + 4
-        );
-        if is_sel {
-            let _ = write!(
-                out,
-                r##"<circle cx="{cx}" cy="{cy}" r="29" fill="none" stroke="#f5b301" stroke-width="3.5" stroke-dasharray="6 4"/>"##
-            );
-        }
-        let _ = write!(
-            out,
-            r##"<g transform="rotate({facing:.0} {cx} {cy})"><path d="M{cx} {}l-8 10h16z" fill="{col}" stroke="{BATTLEMAP_INK}" stroke-width="1.6" stroke-linejoin="round"/></g><circle cx="{cx}" cy="{cy}" r="21" fill="{col}" stroke="{BATTLEMAP_INK}" stroke-width="2"/><circle cx="{cx}" cy="{cy}" r="15.5" fill="#fbfaf7" stroke="{BATTLEMAP_INK}" stroke-width="1.2"/><text x="{cx}" y="{}" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-weight="800" font-size="14" fill="{BATTLEMAP_INK}">{}</text></g>"##,
-            cy - 33,
-            cy + 5,
-            escape_html(&token_initials(&tok.label)),
+        push_token_portrait_disc_svg(
+            &mut out,
+            idx,
+            tok,
+            &preset,
+            &col,
+            facing,
+            portrait_url,
+            is_sel,
+            c,
         );
     }
     out
@@ -221,7 +245,10 @@ fn apply_battlemap_view_chrome(battlemap_on: bool) {
         set_button_disabled(id, battlemap_on);
     }
     set_display("btn-map-grid-overlay", if battlemap_on { "inline-flex" } else { "none" });
+    set_display("map-ink-style-wrap", if battlemap_on { "inline-flex" } else { "none" });
     if battlemap_on {
+        let style = with_map_ui(|ui| ui.ink_style);
+        set_select_value("map-ink-style-select", style.as_str());
         set_display("wgpu-map-canvas-wrap", "none");
         set_display("tabletop-map-svg-fallback", "block");
     } else {
@@ -234,11 +261,16 @@ thread_local! {
     static VIEW_PREF_LOADED: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Applies the persisted `localStorage` view mode (`"battlemap"` / `"diorama"`) once per page load.
+/// Applies the persisted `localStorage` view mode (`"battlemap"` / `"diorama"`) and paper/ink style once per page load.
 pub fn ensure_battlemap_view_pref_loaded() {
     if VIEW_PREF_LOADED.with(|c| c.replace(true)) {
         return;
     }
+    let ink = load_persisted_ink_style_pref();
+    with_map_ui_mut(|ui| {
+        ui.ink_style = ink;
+    });
+    set_select_value("map-ink-style-select", ink.as_str());
     if local_storage_get(VIEW_PREF_KEY).as_deref() == Some("battlemap") {
         with_map_ui_mut(|ui| ui.view_battlemap = true);
         apply_battlemap_view_chrome(true);

@@ -8,6 +8,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
+use satya_engine::map_dressing::{place_prop_on_grid, remove_prop_at_on_grid};
 use satya_engine::tactical_map::{
     SectorPreset, build_procedural_map_request, generate_procedural_sector,
 };
@@ -15,7 +16,7 @@ use satya_schema::{
     CanvasEventType, EdgeSide, GenerateSessionMapRequest, GmMapUpdateRequest, MapWallEdge,
     MaterialClass, MessageVisibility, MoveMapTokenRequest, Participant, ParticipantKind,
     ServerWsPacket, SessionRole, TabletopCanvasEvent, TacticalTileKind, TokenPlacement,
-    TokenVisualSpec, UpdateCombatTrackerRequest, WallEdgeKind, subjects,
+    TokenVisualSpec, UpdateCombatTrackerRequest, WallEdgeKind, sanitize_portrait_url, subjects,
 };
 use serde_json::json;
 use std::collections::HashSet;
@@ -331,6 +332,106 @@ pub async fn session_generate_or_edit_map_handler(
             .into_response();
     }
 
+    // Branch A0b: GM prop placement or removal on active map (`edit_prop` / `clear_prop_at`)
+    if req.edit_prop.is_some() || req.clear_prop_at.is_some() {
+        let Some(mut map) = ctx.active_map.clone() else {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({ "error": "No active map to edit" })),
+            )
+                .into_response();
+        };
+        if !caller_is_gm_or_solo {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Only the Game Master can place or remove map props" })),
+            )
+                .into_response();
+        }
+        let expected = (map.grid_width.max(1) * map.grid_height.max(1)) as usize;
+        if map.tiles.len() != expected {
+            let p = map
+                .theme_preset
+                .as_deref()
+                .and_then(SectorPreset::from_code_str)
+                .unwrap_or_default();
+            let sec = generate_procedural_sector(
+                p,
+                map.grid_width.max(8),
+                map.grid_height.max(8),
+                map.seed.unwrap_or(42),
+            );
+            map.tiles = sec.tiles;
+            if map.wall_edges.is_empty() {
+                map.wall_edges = sec.wall_edges;
+            }
+            if map.props.is_empty() {
+                map.props = sec.props;
+            }
+        }
+        if let Some((cx, cy)) = req.clear_prop_at {
+            if cx < 0 || cy < 0 || cx >= map.grid_width || cy >= map.grid_height {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": format!("Cell ({cx}, {cy}) out of grid bounds") })),
+                )
+                    .into_response();
+            }
+            remove_prop_at_on_grid(
+                &mut map.tiles,
+                &mut map.props,
+                map.grid_width,
+                map.grid_height,
+                cx,
+                cy,
+            );
+        } else if let Some(prop) = req.edit_prop {
+            let occupied: Vec<(i32, i32)> = map.tokens.iter().map(|t| (t.x, t.y)).collect();
+            if let Err(msg) = place_prop_on_grid(
+                &mut map.tiles,
+                &mut map.props,
+                &occupied,
+                map.grid_width,
+                map.grid_height,
+                prop,
+            ) {
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+            }
+        }
+        let _ = state
+            .auth
+            .set_session_active_map(&session_id, map.clone())
+            .await;
+        if let Ok(canvas_meta) = state.storage.registry().build_metadata(
+            state.next_seq(),
+            subjects::TABLETOP_CANVAS,
+            1,
+            &session_id,
+            ctx.session_mode,
+        ) {
+            let ev = TabletopCanvasEvent {
+                metadata: canvas_meta,
+                canvas_event_type: CanvasEventType::MapUpdated,
+                actor: caller_part.clone(),
+                map_id: Some(map.map_id.clone()),
+                map_title: Some(map.title.clone()),
+                image_url: Some(map.image_url.clone()),
+                grid_width: Some(map.grid_width),
+                grid_height: Some(map.grid_height),
+                token_placements: map.tokens.clone(),
+                wgpu_dice_roll: None,
+                terrain_notes: map.notes.clone(),
+            };
+            let _ = state.storage.log_tabletop_canvas(&ev).await;
+        }
+        broadcast_role_filtered_map(&state, &session_id, &ctx.roster, &map).await;
+        return (
+            StatusCode::OK,
+            Json(filter_map_for_role(&map, caller_part.role)),
+        )
+            .into_response();
+    }
+
     // Branch A: Single-cell edit (door toggle or terrain paint)
     if let (Some(ex), Some(ey)) = (req.edit_cell_x, req.edit_cell_y) {
         let mut map = ctx.active_map.clone().unwrap_or_else(|| {
@@ -483,6 +584,7 @@ pub async fn session_generate_or_edit_map_handler(
                 facing_deg: 90,
                 elevation_cm: 0,
                 stance_pose: "aimed".to_string(),
+                portrait_url: None,
             });
         }
         let (hx, hy) =
@@ -501,6 +603,7 @@ pub async fn session_generate_or_edit_map_handler(
             facing_deg: 270,
             elevation_cm: 0,
             stance_pose: "aimed".to_string(),
+            portrait_url: None,
         });
     } else if let Some(prev) = ctx.active_map.as_ref() {
         let mut occupied = Vec::new();
@@ -765,6 +868,13 @@ pub async fn session_move_map_token_handler(
             {
                 vis_spec.stance_pose = sp.to_string();
             }
+            if let Some(raw_url) = req.portrait_url.as_deref() {
+                vis_spec.portrait_url = if raw_url.trim().is_empty() {
+                    None
+                } else {
+                    sanitize_portrait_url(raw_url)
+                };
+            }
         } else {
             map.token_visuals.push(TokenVisualSpec {
                 entity_id: req.entity_id.clone(),
@@ -775,6 +885,7 @@ pub async fn session_move_map_token_handler(
                 facing_deg: auto_facing.unwrap_or(90).rem_euclid(360),
                 elevation_cm: 0,
                 stance_pose: req.stance_pose.unwrap_or_else(|| "idle".to_string()),
+                portrait_url: req.portrait_url.as_deref().and_then(sanitize_portrait_url),
             });
         }
 

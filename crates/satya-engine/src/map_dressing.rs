@@ -160,6 +160,116 @@ pub fn solid_prop_at(props: &[MapPropPlacement], x: i32, y: i32) -> Option<&MapP
     solid_prop_index_at(props, x, y).map(|(_, p)| p)
 }
 
+fn clear_prop_footprint_from_tiles(tiles: &mut [TacticalTileKind], width: i32, height: i32, prop: &MapPropPlacement) {
+    let stamp = prop_spec(prop.kind).stamp;
+    if stamp == TacticalTileKind::Floor {
+        return;
+    }
+    for y in prop.y.max(0)..(prop.y + prop.h_cells).min(height) {
+        for x in prop.x.max(0)..(prop.x + prop.w_cells).min(width) {
+            let idx = (y * width + x) as usize;
+            if let Some(cell) = tiles.get_mut(idx)
+                && *cell == stamp
+            {
+                *cell = TacticalTileKind::Floor;
+            }
+        }
+    }
+}
+
+/// Removes the solid prop (or topmost floor decal) covering `(gx, gy)`, resets its stamped tiles back
+/// to [`TacticalTileKind::Floor`], and re-stamps remaining props so overlaps remain consistent.
+pub fn remove_prop_at_on_grid(
+    tiles: &mut [TacticalTileKind],
+    props: &mut Vec<MapPropPlacement>,
+    width: i32,
+    height: i32,
+    gx: i32,
+    gy: i32,
+) -> Option<MapPropPlacement> {
+    let idx = solid_prop_index_at(props, gx, gy)
+        .map(|(i, _)| i)
+        .or_else(|| props.iter().rposition(|p| p.covers(gx, gy)))?;
+    let removed = props.remove(idx);
+    clear_prop_footprint_from_tiles(tiles, width, height, &removed);
+    stamp_props_into_tiles(tiles, width, height, props);
+    Some(removed)
+}
+
+/// Validates and places (or replaces overlapping props with) a prop on the tactical grid,
+/// stamping its mechanical cover/obstruction tiles cleanly.
+pub fn place_prop_on_grid(
+    tiles: &mut [TacticalTileKind],
+    props: &mut Vec<MapPropPlacement>,
+    occupied_tokens: &[(i32, i32)],
+    width: i32,
+    height: i32,
+    placement: MapPropPlacement,
+) -> Result<MapPropPlacement, &'static str> {
+    if width <= 0 || height <= 0 || tiles.len() < (width * height) as usize {
+        return Err("Grid dimensions are invalid for prop placement");
+    }
+    let spec = prop_spec(placement.kind);
+    let rot = placement.rotation_deg.rem_euclid(360) / 90 * 90;
+    let stretch_len = if spec.stretchable {
+        let raw = if rot % 180 == 90 { placement.h_cells } else { placement.w_cells };
+        Some(raw.clamp(1, width.max(height).max(1)))
+    } else {
+        None
+    };
+    let norm = make_prop(placement.kind, placement.x, placement.y, rot, stretch_len, placement.variant_seed);
+
+    if norm.x < 0 || norm.y < 0 || norm.x + norm.w_cells > width || norm.y + norm.h_cells > height {
+        return Err("Prop footprint extends outside grid bounds");
+    }
+    if spec.stamp.blocks_occupancy()
+        && occupied_tokens.iter().any(|&(tx, ty)| norm.covers(tx, ty))
+    {
+        return Err("Prop footprint overlaps an occupied miniature cell");
+    }
+    if !spec.floor_layer {
+        for cy in norm.y..norm.y + norm.h_cells {
+            for cx in norm.x..norm.x + norm.w_cells {
+                let tile = tiles[(cy * width + cx) as usize];
+                if matches!(tile, TacticalTileKind::FullWall | TacticalTileKind::DoorClosed)
+                    && solid_prop_at(props, cx, cy).is_none()
+                {
+                    return Err("Prop footprint collides with a structural wall or closed door");
+                }
+            }
+        }
+    }
+
+    if !spec.floor_layer {
+        let mut kept = Vec::with_capacity(props.len() + 1);
+        for existing in props.drain(..) {
+            let overlaps = existing.x < norm.x + norm.w_cells
+                && norm.x < existing.x + existing.w_cells
+                && existing.y < norm.y + norm.h_cells
+                && norm.y < existing.y + existing.h_cells;
+            if !prop_spec(existing.kind).floor_layer && overlaps {
+                clear_prop_footprint_from_tiles(tiles, width, height, &existing);
+            } else {
+                kept.push(existing);
+            }
+        }
+        *props = kept;
+    } else {
+        props.retain(|p| {
+            !(prop_spec(p.kind).floor_layer
+                && p.kind == norm.kind
+                && p.x == norm.x
+                && p.y == norm.y
+                && p.w_cells == norm.w_cells
+                && p.h_cells == norm.h_cells)
+        });
+    }
+
+    props.push(norm);
+    stamp_props_into_tiles(tiles, width, height, props);
+    Ok(norm)
+}
+
 /// Whether cell `(gx, gy)` inside a [`PropKind::Car`] or [`PropKind::UtilityVan`] covers the front
 /// hood / engine-block row (matching the headlight end in `map_2d_art_furniture`).
 #[must_use]
@@ -215,5 +325,39 @@ mod tests {
         assert_eq!(tiles[0], TacticalTileKind::Floor, "rugs never stamp");
         assert_eq!(solid_prop_at(&[rug, sofa], 2, 2).map(|p| p.kind), Some(PropKind::Sofa));
         assert!(solid_prop_at(&[rug], 0, 0).is_none());
+    }
+
+    #[test]
+    fn place_and_remove_prop_on_grid_enforces_constraints_and_restamps() {
+        let (w, h) = (10, 8);
+        let mut tiles = vec![TacticalTileKind::Floor; (w * h) as usize];
+        tiles[0] = TacticalTileKind::FullWall;
+        let mut props = Vec::new();
+        let occupied = [(5, 5)];
+
+        // Bounds and collision checks
+        assert!(place_prop_on_grid(&mut tiles, &mut props, &occupied, w, h, make_prop(PropKind::Sofa, 8, 1, 0, None, 1)).is_err());
+        assert!(place_prop_on_grid(&mut tiles, &mut props, &occupied, w, h, make_prop(PropKind::Sofa, 4, 5, 0, None, 1)).is_err());
+        assert!(place_prop_on_grid(&mut tiles, &mut props, &occupied, w, h, make_prop(PropKind::Sofa, 0, 0, 0, None, 1)).is_err());
+
+        // Valid placement stamps Bookshelf FullWall across (2..4, 2)
+        let shelf = place_prop_on_grid(&mut tiles, &mut props, &occupied, w, h, make_prop(PropKind::Bookshelf, 2, 2, 0, None, 9)).unwrap();
+        assert_eq!((shelf.w_cells, shelf.h_cells), (2, 1));
+        assert_eq!(tiles[(2 * w + 2) as usize], TacticalTileKind::FullWall);
+        assert_eq!(tiles[(2 * w + 3) as usize], TacticalTileKind::FullWall);
+
+        // Replacing overlapping solid prop downgrades previous FullWall stamp to Sofa HalfCover
+        let sofa = place_prop_on_grid(&mut tiles, &mut props, &occupied, w, h, make_prop(PropKind::Sofa, 2, 2, 0, None, 3)).unwrap();
+        assert_eq!((sofa.w_cells, sofa.h_cells), (3, 1));
+        assert_eq!(props.len(), 1);
+        assert_eq!(tiles[(2 * w + 2) as usize], TacticalTileKind::HalfCover);
+        assert_eq!(tiles[(2 * w + 4) as usize], TacticalTileKind::HalfCover);
+
+        // Removing the Sofa clears stamped tiles back to Floor
+        let removed = remove_prop_at_on_grid(&mut tiles, &mut props, w, h, 3, 2).unwrap();
+        assert_eq!(removed.kind, PropKind::Sofa);
+        assert!(props.is_empty());
+        assert_eq!(tiles[(2 * w + 2) as usize], TacticalTileKind::Floor);
+        assert_eq!(tiles[(2 * w + 4) as usize], TacticalTileKind::Floor);
     }
 }

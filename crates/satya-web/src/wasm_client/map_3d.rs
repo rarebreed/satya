@@ -55,6 +55,12 @@ pub struct TacticalMapUiState {
     pub view_battlemap: bool,
     /// Draws the `1.0m` / `5.0m` grid overlay on the 2D battlemap (`#btn-map-grid-overlay`).
     pub show_grid_overlay: bool,
+    /// Paper/ink SVG filter style for the 2D battlemap (`#map-ink-style-select`).
+    pub ink_style: crate::wasm_client::map_2d_tokens::BattlemapInkStyle,
+    /// Active prop-brush selection in `edit_terrain` mode (`""` = tile/wall cycle, `"__erase__"` = eraser, else `PropKind`).
+    pub edit_prop_brush: String,
+    /// Clockwise placement rotation (`0`, `90`, `180`, `270`) when placing multi-cell props.
+    pub edit_prop_rotation_deg: i32,
 }
 
 impl Default for TacticalMapUiState {
@@ -83,6 +89,9 @@ impl Default for TacticalMapUiState {
             seed_counter: 42,
             view_battlemap: false,
             show_grid_overlay: true,
+            ink_style: crate::wasm_client::map_2d_tokens::BattlemapInkStyle::default(),
+            edit_prop_brush: String::new(),
+            edit_prop_rotation_deg: 0,
         };
         st.recompute_overlays();
         st
@@ -382,7 +391,7 @@ pub fn refresh_map_dom_and_wgpu() {
         .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
         .is_some_and(|h| h.style().get_property_value("display").unwrap_or_default() != "none");
 
-    let (pill_txt, tokens_html, hud_html, battlemap_on, sel_preset, sel_color, sel_wpn) =
+    let (pill_txt, tokens_html, hud_html, battlemap_on, sel_preset, sel_color, sel_wpn, edit_on, prop_brush, prop_rot) =
         with_map_ui(|ui| {
             let pill = format!(
                 "{} ({}m × {}m · 1.0m Grid)",
@@ -399,7 +408,18 @@ pub fn refresh_map_dom_and_wgpu() {
                     (p, c)
                 })
                 .unwrap_or_else(|| ("valkyrie_rig".to_string(), "#38bdf8".to_string()));
-            (pill, chips, hud, ui.view_battlemap, preset, color, ui.selected_weapon_id.clone())
+            (
+                pill,
+                chips,
+                hud,
+                ui.view_battlemap,
+                preset,
+                color,
+                ui.selected_weapon_id.clone(),
+                ui.interaction_mode == "edit_terrain",
+                ui.edit_prop_brush.clone(),
+                ui.edit_prop_rotation_deg,
+            )
         });
 
     set_text("canvas-map-pill", &pill_txt);
@@ -408,6 +428,11 @@ pub fn refresh_map_dom_and_wgpu() {
     set_select_value("map-weapon-select", &sel_wpn);
     set_select_value("map-token-model-select", &sel_preset);
     set_input_value("map-token-color", &sel_color);
+    set_display("map-prop-brush-wrap", if edit_on { "inline-flex" } else { "none" });
+    set_select_value("map-prop-brush-select", &prop_brush);
+    let show_rot = edit_on && satya_schema::PropKind::from_code_str(&prop_brush).is_some();
+    set_display("btn-map-prop-rotate", if show_rot { "inline-flex" } else { "none" });
+    set_text("btn-map-prop-rotate", &format!("Rot: {prop_rot}°"));
     set_html("tabletop-map-los-hud", &hud_html);
     set_html("tabletop-token-list", &tokens_html);
 
@@ -540,6 +565,7 @@ pub fn satya_generate_procedural_map() {
                     facing_deg: 90,
                     elevation_cm: 0,
                     stance_pose: "aimed".to_string(),
+                    portrait_url: None,
                 });
             }
             built.tokens.push(TokenPlacement {
@@ -556,6 +582,7 @@ pub fn satya_generate_procedural_map() {
                 facing_deg: 270,
                 elevation_cm: 0,
                 stance_pose: "aimed".to_string(),
+                portrait_url: None,
             });
         }
         ui.map = built;
@@ -675,6 +702,7 @@ pub fn satya_update_selected_token_visual() {
         } else {
             color_hex.clone()
         };
+        let mut existing_portrait: Option<String> = None;
         if let Some(vis) = ui
             .map
             .token_visuals
@@ -683,6 +711,7 @@ pub fn satya_update_selected_token_visual() {
         {
             vis.model_preset = p_eff.clone();
             vis.color_hex = c_eff.clone();
+            existing_portrait = vis.portrait_url.clone();
         } else {
             ui.map.token_visuals.push(TokenVisualSpec {
                 entity_id: sel_id.clone(),
@@ -691,6 +720,7 @@ pub fn satya_update_selected_token_visual() {
                 facing_deg: 90,
                 elevation_cm: 0,
                 stance_pose: "idle".to_string(),
+                portrait_url: None,
             });
         }
         sync_req = Some(MoveMapTokenRequest {
@@ -702,6 +732,7 @@ pub fn satya_update_selected_token_visual() {
             model_preset: Some(p_eff),
             color_hex: Some(c_eff),
             stance_pose: None,
+            portrait_url: existing_portrait,
             visibility: Some(tok.visibility),
             remove: false,
         });
@@ -734,6 +765,14 @@ pub fn satya_apply_map_cover_to_roller() {
 /// Handles left-clicking a `(gx, gy)` cell on the tactical map canvas (selecting tokens, moving
 /// the selected miniature with automatic facing rotation, measuring LoS, or toggling airlock doors/cover).
 pub fn handle_map_grid_cell_clicked(gx: i32, gy: i32) {
+    let use_prop_brush = with_map_ui(|ui| {
+        ui.interaction_mode == "edit_terrain" && !ui.edit_prop_brush.is_empty()
+    });
+    if use_prop_brush {
+        crate::wasm_client::map_edge_edit::handle_map_prop_brush_click(gx, gy);
+        return;
+    }
+
     type PendingTileEdit = (String, i64, (i32, i32, Option<TacticalTileKind>));
     let mut move_req: Option<MoveMapTokenRequest> = None;
     let mut tile_edit: Option<PendingTileEdit> = None;
@@ -830,14 +869,14 @@ pub fn handle_map_grid_cell_clicked(gx: i32, gy: i32) {
         let label = ui.map.tokens[tok_idx].label.clone();
         let vis = ui.map.tokens[tok_idx].visibility;
 
-        let (preset, color) = if let Some(v) = ui
+        let (preset, color, existing_portrait) = if let Some(v) = ui
             .map
             .token_visuals
             .iter_mut()
             .find(|v| v.entity_id == sel_id)
         {
             v.facing_deg = facing;
-            (v.model_preset.clone(), v.color_hex.clone())
+            (v.model_preset.clone(), v.color_hex.clone(), v.portrait_url.clone())
         } else {
             let (p, c, _) = resolve_token_visual(&ui.map, &ui.map.tokens[tok_idx]);
             ui.map.token_visuals.push(TokenVisualSpec {
@@ -847,8 +886,9 @@ pub fn handle_map_grid_cell_clicked(gx: i32, gy: i32) {
                 facing_deg: facing,
                 elevation_cm: 0,
                 stance_pose: "idle".to_string(),
+                portrait_url: None,
             });
-            (p, c)
+            (p, c, None)
         };
 
         ui.hovered_cell = Some((gx, gy));
@@ -862,6 +902,7 @@ pub fn handle_map_grid_cell_clicked(gx: i32, gy: i32) {
             model_preset: Some(preset),
             color_hex: Some(color),
             stance_pose: None,
+            portrait_url: existing_portrait,
             visibility: Some(vis),
             remove: false,
         });

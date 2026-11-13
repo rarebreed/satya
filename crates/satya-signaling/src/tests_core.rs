@@ -1067,6 +1067,7 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
                 model_preset: None,
                 color_hex: None,
                 stance_pose: None,
+                portrait_url: None,
                 visibility: None,
                 remove: false,
             })
@@ -1094,6 +1095,7 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
                 model_preset: None,
                 color_hex: None,
                 stance_pose: None,
+                portrait_url: None,
                 visibility: None,
                 remove: false,
             })
@@ -1121,6 +1123,7 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
                 model_preset: Some("valkyrie_rig".to_string()),
                 color_hex: Some("#38bdf8".to_string()),
                 stance_pose: None,
+                portrait_url: None,
                 visibility: None,
                 remove: false,
             })
@@ -1148,6 +1151,7 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
                 model_preset: Some("secops_sentry".to_string()),
                 color_hex: Some("#f43f5e".to_string()),
                 stance_pose: None,
+                portrait_url: None,
                 visibility: Some(MessageVisibility::GmOnly),
                 remove: false,
             })
@@ -1198,6 +1202,167 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
             .iter()
             .any(|t| t.entity_id == "npc-ambush-stalker"),
         "GM_ONLY ambush token must be stripped from non-GM Player map view"
+    );
+
+    // 6. Phase 4: GM prop placement & removal via POST /api/sessions/:id/map + portrait URL sanitization
+    let free_y = (2..p1_map.grid_height - 3)
+        .find(|&yy| {
+            (0..3).all(|dy| {
+                !p1_map.tile_at(10, yy + dy).blocks_occupancy()
+                    && !p1_map.tokens.iter().any(|t| t.x == 10 && t.y == yy + dy)
+            })
+        })
+        .expect("interior 1x3 floor strip for Sofa");
+    let sofa = satya_schema::MapPropPlacement {
+        kind: satya_schema::PropKind::Sofa,
+        x: 10,
+        y: free_y,
+        w_cells: 1,
+        h_cells: 3,
+        rotation_deg: 90,
+        variant_seed: 12,
+    };
+    let p_prop_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                edit_prop: Some(sofa),
+                ..Default::default()
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let p_prop_resp = tower::ServiceExt::oneshot(app.clone(), p_prop_req)
+        .await
+        .unwrap();
+    assert_eq!(p_prop_resp.status(), axum::http::StatusCode::FORBIDDEN);
+
+    let gm_prop_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map")
+        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                edit_prop: Some(sofa),
+                ..Default::default()
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let gm_prop_resp = tower::ServiceExt::oneshot(app.clone(), gm_prop_req)
+        .await
+        .unwrap();
+    assert_eq!(gm_prop_resp.status(), axum::http::StatusCode::OK);
+    let prop_bytes = axum::body::to_bytes(gm_prop_resp.into_body(), 128 * 1024)
+        .await
+        .unwrap();
+    let prop_map: GmMapUpdateRequest = serde_json::from_slice(&prop_bytes).unwrap();
+    assert_eq!(prop_map.tile_at(10, free_y + 1), satya_schema::TacticalTileKind::HalfCover);
+
+    let gm_clear_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map")
+        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                clear_prop_at: Some((10, free_y + 1)),
+                ..Default::default()
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let gm_clear_resp = tower::ServiceExt::oneshot(app.clone(), gm_clear_req)
+        .await
+        .unwrap();
+    assert_eq!(gm_clear_resp.status(), axum::http::StatusCode::OK);
+    let cleared_bytes = axum::body::to_bytes(gm_clear_resp.into_body(), 128 * 1024)
+        .await
+        .unwrap();
+    let cleared_map: GmMapUpdateRequest = serde_json::from_slice(&cleared_bytes).unwrap();
+    assert_eq!(cleared_map.tile_at(10, free_y + 1), satya_schema::TacticalTileKind::Floor);
+
+    // Portrait URL sanitization on token move
+    let bad_url_move = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map/move")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::MoveMapTokenRequest {
+                entity_id: p1_auth.user_id.clone(),
+                label: None,
+                to_x: 3,
+                to_y: 7,
+                facing_deg: None,
+                model_preset: None,
+                color_hex: None,
+                stance_pose: None,
+                portrait_url: Some("javascript:alert(1)".to_string()),
+                visibility: None,
+                remove: false,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let bad_url_resp = tower::ServiceExt::oneshot(app.clone(), bad_url_move)
+        .await
+        .unwrap();
+    assert_eq!(bad_url_resp.status(), axum::http::StatusCode::OK);
+    let bad_url_map: GmMapUpdateRequest = serde_json::from_slice(
+        &axum::body::to_bytes(bad_url_resp.into_body(), 128 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        bad_url_map
+            .visual_for(&p1_auth.user_id)
+            .and_then(|v| v.portrait_url.as_deref()),
+        None
+    );
+
+    let ok_url_move = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map/move")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::MoveMapTokenRequest {
+                entity_id: p1_auth.user_id.clone(),
+                label: None,
+                to_x: 3,
+                to_y: 7,
+                facing_deg: None,
+                model_preset: None,
+                color_hex: None,
+                stance_pose: None,
+                portrait_url: Some("/api/characters/char-1/assets/asset-1".to_string()),
+                visibility: None,
+                remove: false,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let ok_url_resp = tower::ServiceExt::oneshot(app.clone(), ok_url_move)
+        .await
+        .unwrap();
+    assert_eq!(ok_url_resp.status(), axum::http::StatusCode::OK);
+    let ok_url_map: GmMapUpdateRequest = serde_json::from_slice(
+        &axum::body::to_bytes(ok_url_resp.into_body(), 128 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        ok_url_map
+            .visual_for(&p1_auth.user_id)
+            .and_then(|v| v.portrait_url.as_deref()),
+        Some("/api/characters/char-1/assets/asset-1")
     );
 
     let _ = std::fs::remove_dir_all(&temp_dir);

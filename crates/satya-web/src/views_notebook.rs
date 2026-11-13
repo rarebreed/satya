@@ -247,6 +247,27 @@ fn NotebookMapPane() -> impl IntoView {
                     >
                         "Grid: On"
                     </button>
+                    <label
+                        id="map-ink-style-wrap"
+                        class="inline-label"
+                        for="map-ink-style-select"
+                        style="display: none;"
+                    >
+                        <span>"Style"</span>
+                        <select
+                            id="map-ink-style-select"
+                            title="2D SVG battlemap paper and ink filter finish"
+                            onchange="window.satyaSetBattlemapInkStyle()"
+                            on:change=move |_| wasm_client::satya_set_battlemap_ink_style()
+                        >
+                            {wasm_client::BattlemapInkStyle::ALL
+                                .iter()
+                                .map(|style| {
+                                    view! { <option value=style.as_str()>{style.label()}</option> }
+                                })
+                                .collect_view()}
+                        </select>
+                    </label>
                     <button
                         type="button"
                         id="btn-map-wall-cutaway"
@@ -324,9 +345,52 @@ fn NotebookMapPane() -> impl IntoView {
                     >
                         <option value="move_or_select">"Select / Move / Door"</option>
                         <option value="measure_los">"Measure Range & Cover"</option>
-                        <option value="edit_terrain">"Paint Cover / Wall"</option>
+                        <option value="edit_terrain">"Paint Cover / Wall / Prop"</option>
                     </select>
                 </label>
+                <label
+                    id="map-prop-brush-wrap"
+                    class="inline-label"
+                    for="map-prop-brush-select"
+                    style="display: none;"
+                >
+                    <span>"Brush"</span>
+                    <select
+                        id="map-prop-brush-select"
+                        title="Choose Tile/Wall cycle, Erase Prop, or a multi-cell prop to place in Paint mode"
+                        onchange="window.satyaUpdateMapPropBrush()"
+                        on:change=move |_| wasm_client::satya_update_map_prop_brush()
+                    >
+                        <option value="">"Tile / Wall Cycle"</option>
+                        <option value="__erase__">"Erase Prop"</option>
+                        {wasm_client::PROP_BRUSH_GROUPS
+                            .iter()
+                            .map(|&(group_label, kinds)| {
+                                view! {
+                                    <optgroup label=group_label>
+                                        {kinds
+                                            .iter()
+                                            .map(|kind| {
+                                                view! { <option value=kind.as_str()>{kind.label()}</option> }
+                                            })
+                                            .collect_view()}
+                                    </optgroup>
+                                }
+                            })
+                            .collect_view()}
+                    </select>
+                </label>
+                <button
+                    type="button"
+                    id="btn-map-prop-rotate"
+                    class="btn btn-sm btn-secondary"
+                    title="Rotate prop brush clockwise by 90°"
+                    style="display: none;"
+                    onclick="window.satyaRotateMapPropBrush()"
+                    on:click=move |_| wasm_client::satya_rotate_map_prop_brush()
+                >
+                    "Rot: 0°"
+                </button>
                 <label class="inline-label" for="map-token-model-select">
                     <span>"Mini"</span>
                     <select

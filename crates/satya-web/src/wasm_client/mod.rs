@@ -38,6 +38,7 @@ pub mod map_2d_art_furniture;
 pub mod map_2d_art_overlay;
 pub mod map_2d_art_props;
 pub mod map_2d_art_walls;
+pub mod map_2d_tokens;
 pub mod map_3d;
 pub mod map_3d_wgpu;
 pub mod map_3d_dressing_geom;
@@ -178,6 +179,9 @@ macro_rules! for_all_window_callbacks {
             "satyaHoverMapCell" => satya_hover_map_cell(i32, i32),
             "satyaToggleBattlemapView" => satya_toggle_battlemap_view(),
             "satyaToggleBattlemapGrid" => satya_toggle_battlemap_grid(),
+            "satyaSetBattlemapInkStyle" => satya_set_battlemap_ink_style(),
+            "satyaUpdateMapPropBrush" => satya_update_map_prop_brush(),
+            "satyaRotateMapPropBrush" => satya_rotate_map_prop_brush(),
             "satyaGenerateProceduralMap" => satya_generate_procedural_map(),
             "satyaUpdateMapTacticalControls" => satya_update_map_tactical_controls(),
             "satyaUpdateSelectedTokenVisual" => satya_update_selected_token_visual(),
