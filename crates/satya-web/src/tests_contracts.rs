@@ -258,4 +258,8 @@ fn test_tactical_map_scale_selector_is_rendered() {
         html.contains(r#"id="map-scale-select""#),
         "missing #map-scale-select in tactical map toolbar SSR HTML"
     );
+    assert!(
+        html.contains(r#"id="map-floor-switcher""#) && html.contains(".map-floor-switcher"),
+        "missing #map-floor-switcher container or CSS rule in SSR HTML"
+    );
 }

@@ -123,6 +123,7 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
                         color_hex,
                         facing_deg,
                         elevation_cm: 0,
+                        floor_index: 0,
                         stance_pose: "idle".to_string(),
                         portrait_url: None,
                         pos_x_cm,

@@ -44,6 +44,7 @@ pub mod map_2d_art_walls;
 pub mod map_2d_camera;
 pub mod map_2d_tokens;
 pub mod map_3d;
+pub mod map_3d_diorama_mesh;
 pub mod map_3d_dressing_geom;
 pub mod map_3d_input;
 pub mod map_3d_surfaces_geom;
@@ -191,6 +192,8 @@ macro_rules! for_all_window_callbacks {
             "satyaImportCustomGlbModel" => satya_import_custom_glb_model(),
             "satyaExportCurrentGlbModel" => satya_export_current_glb_model(),
             "satyaSelectMapToken" => satya_select_map_token(String),
+            "satyaSelectMapFloor" => satya_select_map_floor(i32),
+            "satyaMoveTokenToFloor" => satya_move_token_to_floor(i32),
             "satyaClickMapCell" => satya_click_map_cell(i32, i32),
             "satyaClickMapPoint" => satya_click_map_point(f32, f32),
             "satyaHoverMapCell" => satya_hover_map_cell(i32, i32),

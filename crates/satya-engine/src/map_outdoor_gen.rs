@@ -19,7 +19,7 @@ use crate::map_estate_grammars::build_garden_estate;
 use crate::map_outdoor_natural::{build_roadside_ditch, build_wooded_park, build_woodland_creek};
 use crate::map_surface_geom::{
     along_tangent_rot_deg, point_near_protected_surface_m, ribbon_point_and_tangent_at_fraction,
-    surface_contains_point_m, vehicle_forward_rot_deg,
+    surface_contains_point_m, topmost_surface_at_m, vehicle_forward_rot_deg,
 };
 use crate::tactical_map::ProceduralSector;
 use crate::tactical_map_edges::WallEdgeIndex;
@@ -87,7 +87,7 @@ pub(crate) struct OutdoorBuilder {
 }
 
 impl OutdoorBuilder {
-    fn new(w: i32, h: i32, seed: i64) -> Self {
+    pub(crate) fn new(w: i32, h: i32, seed: i64) -> Self {
         let mid_y = (h / 2) as f32;
         let sara_y = (h / 2 - 1).max(1) as f32;
         let spawn_pads_m = vec![
@@ -474,6 +474,63 @@ impl OutdoorBuilder {
         let rot = (base_rot + self.rng.range(-jitter_deg, jitter_deg + 1)).rem_euclid(360);
         self.try_place_cm(kind, Self::cm(cx_m), Self::cm(cy_m), rot, None, allow_on_pavement)
     }
+    /// Places a street/plaza prop on pavement or turf while refusing asphalt, water channels, or interiors.
+    pub(crate) fn try_place_off_road_cm(
+        &mut self,
+        kind: PropKind,
+        cx_cm: i32,
+        cy_cm: i32,
+        rot_deg: i32,
+        length_cm: Option<i32>,
+    ) -> bool {
+        let cx_m = cx_cm as f32 / 100.0;
+        let cy_m = cy_cm as f32 / 100.0;
+        if let Some(top) = topmost_surface_at_m(&self.surfaces, cx_m, cy_m)
+            && (matches!(
+                top.kind,
+                SurfaceFeatureKind::AsphaltRoad
+                    | SurfaceFeatureKind::InteriorFloor
+                    | SurfaceFeatureKind::GravelRoad
+            ) || top.kind.is_water_or_channel())
+        {
+            return false;
+        }
+        self.try_place_cm(kind, cx_cm, cy_cm, rot_deg, length_cm, true)
+    }
+
+    /// Prunes completely occluded surfaces and trims excess blocking props until 100% connected.
+    pub(crate) fn finalize_connected(mut self) -> ProceduralSector {
+        crate::map_surface_queries::prune_occluded_surfaces(&mut self.surfaces, self.w, self.h);
+        loop {
+            if all_walkable_areas_connected(self.w, self.h, &self.edges, &self.props) {
+                return ProceduralSector {
+                    wall_edges: self.edges,
+                    props: self.props,
+                    surfaces: self.surfaces,
+                    floors: Vec::new(),
+                    active_floor: 0,
+                };
+            }
+            match self
+                .props
+                .iter()
+                .rposition(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle)
+            {
+                Some(i) => {
+                    self.props.remove(i);
+                }
+                None => {
+                    return ProceduralSector {
+                        wall_edges: self.edges,
+                        props: self.props,
+                        surfaces: self.surfaces,
+                        floors: Vec::new(),
+                        active_floor: 0,
+                    };
+                }
+            }
+        }
+    }
 }
 
 /// Generates an outdoor tactical [`ProceduralSector`] with smooth vector terrain surfaces and `360°` props.
@@ -495,31 +552,7 @@ pub fn generate_outdoor_sector(
         OutdoorStyle::RoadsideDitch => build_roadside_ditch(&mut b),
     }
 
-    let mut props = b.props;
-    loop {
-        if all_walkable_areas_connected(w, h, &b.edges, &props) {
-            return ProceduralSector {
-                wall_edges: b.edges,
-                props,
-                surfaces: b.surfaces,
-            };
-        }
-        match props
-            .iter()
-            .rposition(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle)
-        {
-            Some(i) => {
-                props.remove(i);
-            }
-            None => {
-                return ProceduralSector {
-                    wall_edges: b.edges,
-                    props,
-                    surfaces: b.surfaces,
-                };
-            }
-        }
-    }
+    b.finalize_connected()
 }
 
 #[cfg(test)]

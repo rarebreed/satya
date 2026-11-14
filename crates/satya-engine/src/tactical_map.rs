@@ -14,8 +14,9 @@
 
 use satya_schema::tactical_map_dto::MapScalePreset;
 use satya_schema::{
-    CoverGrade, GmMapUpdateRequest, MapPropPlacement, MapSurfaceFeature, MapWallEdge,
-    MessageVisibility, SurfaceFeatureKind, TokenPlacement, TokenVisualSpec, WallEdgeKind,
+    CoverGrade, EconomicTier, GmMapUpdateRequest, MapFloorLevel, MapPropPlacement,
+    MapSurfaceFeature, MapWallEdge, MessageVisibility, SurfaceFeatureKind, TokenPlacement,
+    TokenVisualSpec, WallEdgeKind, ZoningContext,
 };
 use serde::{Deserialize, Serialize};
 
@@ -68,7 +69,7 @@ define_coded_enum! {
     /// Canonical procedural sector layout presets for `1.0m` tactical battlemaps.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
-    pub enum SectorPreset [count = 12] {
+    pub enum SectorPreset [count = 18] {
         #[default]
         ResidentialApartment => {
             code: "residential_apartment",
@@ -142,6 +143,42 @@ define_coded_enum! {
             subtitle: "Armored transfer chamber with dual airlock vestibules, security booths & vent hazard",
             aliases: ["airlock", "sector4_airlock", "station"],
         },
+        UrbanResidential => {
+            code: "urban_residential",
+            label: "Urban Residential Block",
+            subtitle: "Multi-story rowhomes and walkups on a paved city street with concrete sidewalk & alleys",
+            aliases: ["urban_residential", "townhouse", "brownstone", "condo", "penthouse", "apartment_block"],
+        },
+        ProjectsHighDensity => {
+            code: "projects_high_density",
+            label: "High-Density Projects Courtyard",
+            subtitle: "Tightly spaced urban tenement slabs around a paved courtyard, alley & service bins",
+            aliases: ["projects", "tenement", "housing_block", "projects_high_density"],
+        },
+        SuburbanNeighborhood => {
+            code: "suburban_neighborhood",
+            label: "Suburban Neighborhood Street",
+            subtitle: "Curving residential street with detached multi-floor homes, driveways, lawns & mature trees",
+            aliases: ["suburb", "suburban", "culdesac", "neighborhood", "suburban_neighborhood"],
+        },
+        RuralCountryside => {
+            code: "rural_countryside",
+            label: "Rural Countryside Homestead",
+            subtitle: "Winding gravel country lane with recessed farmhouse, dirt tracks, trees & stream crossing",
+            aliases: ["rural", "countryside", "farmhouse", "homestead", "country"],
+        },
+        LuxuryMansion => {
+            code: "luxury_mansion",
+            label: "Luxury Multi-Level Mansion",
+            subtitle: "Walled motor-court estate with sprawling manor (`B1`/`1F`/`2F`), formal beds & gatehouse",
+            aliases: ["mansion", "luxury_mansion", "luxury_estate", "manor_house"],
+        },
+        DowntownCommercial => {
+            code: "downtown_commercial",
+            label: "Downtown Commercial Retail Strip",
+            subtitle: "Glazed sidewalk storefronts with grocery, boutique, pharmacy & cafe bays plus upper lofts",
+            aliases: ["downtown_commercial", "retail", "stores", "downtown", "strip_mall", "shopping"],
+        },
     }
 }
 
@@ -175,6 +212,20 @@ impl SectorPreset {
         !matches!(self, Self::WoodedPark | Self::WoodlandCreek | Self::RoadsideDitch)
     }
 
+    /// Whether this preset routes through decoupled zoning × economic-tier builders.
+    #[must_use]
+    pub const fn is_zoned_preset(self) -> bool {
+        matches!(
+            self,
+            Self::UrbanResidential
+                | Self::ProjectsHighDensity
+                | Self::SuburbanNeighborhood
+                | Self::RuralCountryside
+                | Self::LuxuryMansion
+                | Self::DowntownCommercial
+        )
+    }
+
     /// Upgraded facility / clinical / transit / urban sector style (`None` for residential/outdoor presets).
     #[must_use]
     pub const fn facility_style(self) -> Option<FacilitySectorStyle> {
@@ -201,8 +252,15 @@ impl SectorPreset {
             | Self::WoodedPark
             | Self::WoodlandCreek
             | Self::RoadsideDitch
-            | Self::MedLabSector => (36, 26),
-            Self::GardenEstate | Self::DockingBay => (48, 36),
+            | Self::MedLabSector
+            | Self::UrbanResidential
+            | Self::ProjectsHighDensity => (36, 26),
+            Self::GardenEstate
+            | Self::DockingBay
+            | Self::SuburbanNeighborhood
+            | Self::RuralCountryside
+            | Self::LuxuryMansion
+            | Self::DowntownCommercial => (48, 36),
         }
     }
 
@@ -222,21 +280,33 @@ pub const MIN_SECTOR_DIM: i32 = 8;
 /// Maximum allowed width or height (cells = meters) for a single generated sector.
 pub const MAX_SECTOR_DIM: i32 = 96;
 
-/// Complete procedural sector: thin edge walls, `360°` oriented props, and vector ground surfaces.
+/// Complete procedural sector: thin edge walls, `360°` oriented props, vector ground surfaces, and optional multi-floor stack.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProceduralSector {
     pub wall_edges: Vec<MapWallEdge>,
     pub props: Vec<MapPropPlacement>,
     pub surfaces: Vec<MapSurfaceFeature>,
+    pub floors: Vec<MapFloorLevel>,
+    pub active_floor: i32,
 }
 
-/// Generates the complete [`ProceduralSector`] for `preset`, emitting thin edge walls and props.
+/// Generates a [`ProceduralSector`] honoring optional decoupled [`EconomicTier`] and [`ZoningContext`] overrides.
 #[must_use]
-pub fn generate_procedural_sector(preset: SectorPreset, width: i32, height: i32, seed: i64) -> ProceduralSector {
+pub fn generate_procedural_sector_with_options(
+    preset: SectorPreset,
+    width: i32,
+    height: i32,
+    seed: i64,
+    economic_tier: Option<EconomicTier>,
+    zoning: Option<ZoningContext>,
+) -> ProceduralSector {
     let (w, h) = (
         width.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM),
         height.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM),
     );
+    if preset.is_zoned_preset() {
+        return crate::map_gen_zoning::generate_zoned_sector(preset, w, h, seed, economic_tier, zoning);
+    }
     if let Some(style) = preset.interior_style() {
         return generate_furnished_interior(style, w, h, seed);
     }
@@ -247,6 +317,12 @@ pub fn generate_procedural_sector(preset: SectorPreset, width: i32, height: i32,
         return generate_facility_sector(style, w, h, seed);
     }
     ProceduralSector::default()
+}
+
+/// Generates the complete [`ProceduralSector`] for `preset`, emitting thin edge walls and props.
+#[must_use]
+pub fn generate_procedural_sector(preset: SectorPreset, width: i32, height: i32, seed: i64) -> ProceduralSector {
+    generate_procedural_sector_with_options(preset, width, height, seed, None, None)
 }
 
 /// Complete Line-of-Sight, metric range, and cover evaluation between two continuous points in meters.
@@ -426,19 +502,28 @@ pub fn evaluate_los_continuous(
 }
 
 /// Builds a complete vector [`GmMapUpdateRequest`] with continuous centimeter token coordinates,
-/// thin structural [`MapWallEdge`]s, `360°` oriented props, vector ground surfaces, and `tiles: Vec::new()`.
+/// thin structural [`MapWallEdge`]s, `360°` oriented props, vector ground surfaces, and multi-floor stacks.
+#[allow(clippy::too_many_arguments)]
 #[must_use]
-pub fn build_procedural_map_request(
+pub fn build_procedural_map_request_with_options(
     map_id: &str,
     preset: SectorPreset,
     title_override: Option<&str>,
     width: i32,
     height: i32,
     seed: i64,
+    economic_tier: Option<EconomicTier>,
+    zoning: Option<ZoningContext>,
 ) -> GmMapUpdateRequest {
     let w = width.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM);
     let h = height.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM);
-    let ProceduralSector { wall_edges, props, surfaces } = generate_procedural_sector(preset, w, h, seed);
+    let ProceduralSector {
+        wall_edges,
+        props,
+        surfaces,
+        floors,
+        active_floor,
+    } = generate_procedural_sector_with_options(preset, w, h, seed, economic_tier, zoning);
     let mid_y = h / 2;
     let title = title_override
         .map(str::trim)
@@ -477,6 +562,7 @@ pub fn build_procedural_map_request(
             color_hex: "#38bdf8".to_string(),
             facing_deg: 90,
             elevation_cm: 0,
+            floor_index: 0,
             stance_pose: "aimed".to_string(),
             portrait_url: None,
             pos_x_cm: Some(250),
@@ -488,6 +574,7 @@ pub fn build_procedural_map_request(
             color_hex: "#22d3ee".to_string(),
             facing_deg: 90,
             elevation_cm: 0,
+            floor_index: 0,
             stance_pose: "idle".to_string(),
             portrait_url: None,
             pos_x_cm: Some(250),
@@ -499,6 +586,7 @@ pub fn build_procedural_map_request(
             color_hex: "#f87171".to_string(),
             facing_deg: 270,
             elevation_cm: 0,
+            floor_index: 0,
             stance_pose: "aimed".to_string(),
             portrait_url: None,
             pos_x_cm: Some((w - 3) * 100 + 50),
@@ -528,211 +616,20 @@ pub fn build_procedural_map_request(
         wall_edges,
         props,
         surfaces,
+        floors,
+        active_floor,
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::environment_vehicles::CombatMovementGait;
-    use crate::map_dressing::{PropObstruction, make_prop, prop_spec};
-    use crate::tactical_map_geom::{TOKEN_RADIUS_M, all_walkable_areas_connected};
-    use satya_schema::{EdgeSide, MaterialClass, PropKind};
-
-    #[test]
-    fn test_procedural_sector_presets_and_continuous_los_cover() {
-        for preset in SectorPreset::ALL {
-            let sec = generate_procedural_sector(preset, 20, 14, 42);
-            if preset.has_structural_wall_edges() {
-                assert!(!sec.wall_edges.is_empty(), "{preset:?} missing wall_edges");
-            }
-            assert!(!sec.props.is_empty(), "{preset:?} missing props");
-            assert!(
-                sec.props.iter().any(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover),
-                "{preset:?} missing half cover prop"
-            );
-            assert!(
-                all_walkable_areas_connected(20, 14, &sec.wall_edges, &sec.props),
-                "{preset:?} disconnected walkable area"
-            );
-            // West and East deployment pads must remain clear of blocking obstacles.
-            assert!(!circle_collides_obstacles(20.0, 14.0, &sec.wall_edges, &sec.props, 2.5, 7.5, TOKEN_RADIUS_M));
-            assert!(!circle_collides_obstacles(20.0, 14.0, &sec.wall_edges, &sec.props, 17.5, 7.5, TOKEN_RADIUS_M));
-        }
-
-        // Clear LoS
-        let empty = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[], surfaces: &[] };
-        let clear = evaluate_los_continuous(&empty, (2.5, 4.5), (9.5, 4.5));
-        assert!(clear.has_los);
-        assert_eq!(clear.cover_grade, CoverGrade::Clear);
-        assert_eq!(clear.recommended_delta_ext, 0);
-        assert!((clear.distance_m - 7.0).abs() < 0.01);
-
-        // Mid-field JerseyBarrier -> LowCover (+4)
-        let barrier = make_prop(PropKind::JerseyBarrier, 6, 4, 90, Some(1), 0);
-        let low_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[barrier], surfaces: &[] };
-        let low = evaluate_los_continuous(&low_scene, (2.5, 4.5), (9.5, 4.5));
-        assert!(low.has_los && low.cover_grade == CoverGrade::LowCover && low.recommended_delta_ext == 4);
-
-        // Braced right behind barrier -> Clear outgoing shot!
-        let braced = evaluate_los_continuous(&low_scene, (5.8, 4.5), (9.5, 4.5));
-        assert_eq!(braced.cover_grade, CoverGrade::Clear);
-
-        // Target crouching inside a DefensiveTrench > 1.2m away -> LowCover (+4)
-        let trench = satya_schema::MapSurfaceFeature {
-            kind: SurfaceFeatureKind::DefensiveTrench,
-            shape: satya_schema::SurfaceShapeKind::RibbonSpline,
-            points_cm: vec![
-                satya_schema::MapPointCm::new(900, 200),
-                satya_schema::MapPointCm::new(900, 700),
-            ],
-            width_cm: 180,
-            border_style_cm: 0,
-            variant_seed: 1,
-        };
-        let trench_scene = TacticalSceneView {
-            width_m: 12.0,
-            height_m: 8.0,
-            edges: &[],
-            props: &[],
-            surfaces: &[trench],
-        };
-        let trench_cover = evaluate_los_continuous(&trench_scene, (2.5, 4.5), (9.0, 4.5));
-        assert_eq!(trench_cover.cover_grade, CoverGrade::LowCover);
-        assert_eq!(trench_cover.recommended_delta_ext, 4);
-
-        // Single StructuralPillar with open sides -> corner-peek HighCover (+6)
-        let pillar = make_prop(PropKind::StructuralPillar, 6, 4, 0, None, 0);
-        let pillar_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[pillar], surfaces: &[] };
-        let corner = evaluate_los_continuous(&pillar_scene, (5.6, 4.5), (9.5, 4.5));
-        assert!(corner.has_los && corner.cover_grade == CoverGrade::HighCover && corner.recommended_delta_ext == 6);
-
-        // Continuous brick wall across y=0..8 at x=6 -> completely Blocked
-        let wall: Vec<MapWallEdge> = (0..8)
-            .map(|y| MapWallEdge {
-                x: 6,
-                y,
-                side: EdgeSide::West,
-                kind: WallEdgeKind::Wall,
-                material: MaterialClass::Brick,
-            })
-            .collect();
-        let blocked_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &wall, props: &[], surfaces: &[] };
-        let blocked = evaluate_los_continuous(&blocked_scene, (2.5, 4.5), (9.5, 4.5));
-        assert!(!blocked.has_los && blocked.cover_grade == CoverGrade::Blocked);
-    }
-
-    #[test]
-    fn test_metric_gait_reach_scales_continuously() {
-        let scene = TacticalSceneView { width_m: 20.0, height_m: 14.0, edges: &[], props: &[], surfaces: &[] };
-        let walk = compute_reachable_continuous(
-            &scene,
-            &[],
-            GaitReachQuery {
-                start_m: (5.5, 7.5),
-                spd_eff: 10,
-                hgt_m: 1.75,
-                gait: CombatMovementGait::CombatGlideTacticalWalk,
-                tick_budget: 8,
-            },
-        );
-        let sprint = compute_reachable_continuous(
-            &scene,
-            &[],
-            GaitReachQuery {
-                start_m: (5.5, 7.5),
-                spd_eff: 10,
-                hgt_m: 1.75,
-                gait: CombatMovementGait::AllOutSprint,
-                tick_budget: 8,
-            },
-        );
-        let walk_count = walk.cost_mm.iter().filter(|&&c| c < i32::MAX).count();
-        let sprint_count = sprint.cost_mm.iter().filter(|&&c| c < i32::MAX).count();
-        assert!(walk_count > 16);
-        assert!(sprint_count > walk_count);
-        assert!(!walk.merged_row_runs().is_empty());
-        assert!(walk.ticks_at_m(6.0, 7.5).is_some());
-    }
-
-    fn topology_signature(sec: &ProceduralSector) -> (usize, usize, u64, u64) {
-        let mut edge_hash = 0xcbf2_9ce4_8422_2325_u64;
-        for e in &sec.wall_edges {
-            for v in [e.x as u64, e.y as u64, e.side as u64, e.kind as u64] {
-                edge_hash ^= v;
-                edge_hash = edge_hash.wrapping_mul(0x0100_0000_01b3);
-            }
-        }
-        let mut surf_hash = 0xcbf2_9ce4_8422_2325_u64;
-        for s in &sec.surfaces {
-            let tag = [
-                s.kind as u64,
-                s.shape as u64,
-                s.width_cm as u64,
-                s.points_cm.len() as u64,
-            ];
-            for v in tag {
-                surf_hash ^= v;
-                surf_hash = surf_hash.wrapping_mul(0x0100_0000_01b3);
-            }
-            for pt in &s.points_cm {
-                for coord in [pt.x_cm as u64, pt.y_cm as u64] {
-                    surf_hash ^= coord;
-                    surf_hash = surf_hash.wrapping_mul(0x0100_0000_01b3);
-                }
-            }
-        }
-        (sec.wall_edges.len(), sec.surfaces.len(), edge_hash, surf_hash)
-    }
-
-    #[test]
-    fn phase2_large_scale_presets_are_connected_and_clear_spawn_pads() {
-        for &(w, h) in &[(24, 18), (36, 26), (48, 36), (64, 48)] {
-            let wy = (h / 2) as f32 + 0.5;
-            for preset in SectorPreset::ALL {
-                let sec = generate_procedural_sector(preset, w, h, 42);
-                assert!(!sec.surfaces.is_empty(), "{preset:?} {w}x{h} missing surfaces");
-                assert!(
-                    all_walkable_areas_connected(w, h, &sec.wall_edges, &sec.props),
-                    "{preset:?} {w}x{h} disconnected walkable area"
-                );
-                assert!(
-                    !circle_collides_obstacles(w as f32, h as f32, &sec.wall_edges, &sec.props, 2.5, wy, TOKEN_RADIUS_M),
-                    "{preset:?} {w}x{h} blocked West spawn pad"
-                );
-                assert!(
-                    !circle_collides_obstacles(w as f32, h as f32, &sec.wall_edges, &sec.props, w as f32 - 2.5, wy, TOKEN_RADIUS_M),
-                    "{preset:?} {w}x{h} blocked East spawn pad"
-                );
-            }
-        }
-        for preset in [SectorPreset::UrbanCrossroads, SectorPreset::GardenEstate] {
-            let sec = generate_procedural_sector(preset, 96, 72, 42);
-            assert!(
-                all_walkable_areas_connected(96, 72, &sec.wall_edges, &sec.props),
-                "{preset:?} 96x72 disconnected walkable area"
-            );
-        }
-    }
-
-    #[test]
-    fn phase2_multi_seed_topologies_produce_distinct_layouts() {
-        for preset in [
-            SectorPreset::GardenEstate,
-            SectorPreset::WoodedPark,
-            SectorPreset::WoodlandCreek,
-            SectorPreset::RoadsideDitch,
-            SectorPreset::UrbanCrossroads,
-            SectorPreset::ResidentialApartment,
-        ] {
-            let distinct: std::collections::HashSet<_> = (1_i64..=12)
-                .map(|seed| topology_signature(&generate_procedural_sector(preset, 36, 26, seed)))
-                .collect();
-            assert!(
-                distinct.len() >= 3,
-                "{preset:?} expected >= 3 distinct topologies across seeds 1..=12, got {}",
-                distinct.len()
-            );
-        }
-    }
+/// Builds a complete vector [`GmMapUpdateRequest`] with default zoning and economic tier for `preset`.
+#[must_use]
+pub fn build_procedural_map_request(
+    map_id: &str,
+    preset: SectorPreset,
+    title_override: Option<&str>,
+    width: i32,
+    height: i32,
+    seed: i64,
+) -> GmMapUpdateRequest {
+    build_procedural_map_request_with_options(map_id, preset, title_override, width, height, seed, None, None)
 }

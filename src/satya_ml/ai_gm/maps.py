@@ -87,6 +87,7 @@ _NON_SOLID_PROP_KINDS = {
     "STONE_PATH",
     "ASPHALT_DRIVE",
     "ELEVATED_CATWALK",
+    "STAIRWELL",
     "HAZARD_SPILL",
 }
 _CONCEALMENT_PROP_KINDS = {"BUSH", "MEDIUM_TREE", "LARGE_TREE"}
@@ -135,12 +136,35 @@ def get_session_llm_config(session_id: str) -> SessionLlmConfig | None:
 
 
 def infer_sector_preset(theme: str) -> str:
-    """Map a free-text scene theme to one of the 12 canonical `satya-engine` `SectorPreset` codes."""
+    """Map a free-text scene theme to one of the 18 canonical `satya-engine` `SectorPreset` codes."""
     low = (theme or "").lower()
     if any(k in low for k in ("creek", "stream", "brook", "river", "ravine")):
         return "woodland_creek"
     if any(k in low for k in ("ditch", "trench", "culvert", "country lane")):
         return "roadside_ditch"
+    if any(k in low for k in ("luxury mansion", "luxury_mansion", "manor", "penthouse estate")):
+        return "luxury_mansion"
+    if any(k in low for k in ("projects_high_density", "projects", "public housing", "tenement", "housing block")):
+        return "projects_high_density"
+    if any(k in low for k in ("suburban_neighborhood", "suburb", "suburban", "cul-de-sac", "neighborhood")):
+        return "suburban_neighborhood"
+    if any(k in low for k in ("rural_countryside", "rural", "countryside", "farmhouse", "homestead")):
+        return "rural_countryside"
+    if any(
+        k in low
+        for k in (
+            "downtown_commercial",
+            "downtown commercial",
+            "retail strip",
+            "shopping strip",
+            "storefront",
+            "strip mall",
+            "commercial center",
+        )
+    ):
+        return "downtown_commercial"
+    if any(k in low for k in ("urban_residential", "urban residential", "townhouse", "brownstone", "rowhouse", "condo")):
+        return "urban_residential"
     if any(k in low for k in ("estate", "compound", "courtyard", "garden", "yard", "villa", "mansion")):
         return "garden_estate"
     if any(k in low for k in ("park", "woods", "forest", "trail", "clearing", "grove")):

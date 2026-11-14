@@ -124,7 +124,7 @@ pub(crate) fn ensure_vector_map_ready(map: &mut GmMapUpdateRequest) {
         map.tiles.clear();
         return;
     }
-    if map.wall_edges.is_empty() && map.props.is_empty() {
+    if map.wall_edges.is_empty() && map.props.is_empty() && map.floors.is_empty() {
         let p = map
             .theme_preset
             .as_deref()
@@ -138,6 +138,13 @@ pub(crate) fn ensure_vector_map_ready(map: &mut GmMapUpdateRequest) {
         );
         map.wall_edges = sec.wall_edges;
         map.props = sec.props;
+        if map.surfaces.is_empty() {
+            map.surfaces = sec.surfaces;
+        }
+        if map.floors.is_empty() && !sec.floors.is_empty() {
+            map.floors = sec.floors;
+            map.active_floor = sec.active_floor;
+        }
     }
 }
 
@@ -382,12 +389,25 @@ pub async fn session_move_map_token_handler(
             )
                 .into_response();
         }
-        let (final_x_cm, final_y_cm) = match resolve_token_destination_cm(
-            &map,
-            &req.entity_id,
-            req_x_cm,
-            req_y_cm,
-        ) {
+        if let Some(tf) = req.to_floor
+            && !map.has_floor(tf)
+        {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": format!("Floor {tf} does not exist on active map") })),
+            )
+                .into_response();
+        }
+        let target_floor = req
+            .to_floor
+            .unwrap_or_else(|| map.token_floor(&req.entity_id));
+        let (final_x_cm, final_y_cm) = match if target_floor == map.active_floor {
+            resolve_token_destination_cm(&map, &req.entity_id, req_x_cm, req_y_cm)
+        } else {
+            let mut floor_view = map.clone();
+            floor_view.switch_active_floor(target_floor);
+            resolve_token_destination_cm(&floor_view, &req.entity_id, req_x_cm, req_y_cm)
+        } {
             Ok(coords) => coords,
             Err(msg) => {
                 return (
@@ -454,6 +474,7 @@ pub async fn session_move_map_token_handler(
             });
         }
 
+        let target_elev_cm = map.floor_elevation_cm(target_floor);
         if let Some(vis_spec) = map
             .token_visuals
             .iter_mut()
@@ -461,6 +482,10 @@ pub async fn session_move_map_token_handler(
         {
             vis_spec.pos_x_cm = Some(final_x_cm);
             vis_spec.pos_y_cm = Some(final_y_cm);
+            if req.to_floor.is_some() {
+                vis_spec.floor_index = target_floor;
+                vis_spec.elevation_cm = target_elev_cm;
+            }
             if let Some(f) = auto_facing {
                 vis_spec.facing_deg = f.rem_euclid(360);
             }
@@ -503,7 +528,8 @@ pub async fn session_move_map_token_handler(
                     .unwrap_or_else(|| "valkyrie_rig".to_string()),
                 color_hex: req.color_hex.unwrap_or_else(|| "#38bdf8".to_string()),
                 facing_deg: auto_facing.unwrap_or(90).rem_euclid(360),
-                elevation_cm: 0,
+                elevation_cm: target_elev_cm,
+                floor_index: target_floor,
                 stance_pose: req.stance_pose.unwrap_or_else(|| "idle".to_string()),
                 portrait_url: req.portrait_url.as_deref().and_then(sanitize_portrait_url),
                 pos_x_cm: Some(final_x_cm),

@@ -415,6 +415,12 @@ pub fn NotebookMapPane() -> impl IntoView {
                     "Continue East ▶"
                 </button>
                 <div
+                    id="map-floor-switcher"
+                    class="map-floor-switcher"
+                    style="display: none;"
+                    aria-label="Floor Level Switcher"
+                ></div>
+                <div
                     id="map-hover-tooltip"
                     class="map-hover-tooltip"
                     role="status"

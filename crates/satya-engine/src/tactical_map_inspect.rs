@@ -274,9 +274,12 @@ pub fn inspect_map_point(
         return None;
     }
 
-    // 1. Living / placed tokens.
+    // 1. Living / placed tokens (restricted to active floor).
     let mut best_tok: Option<(&TokenPlacement, f32)> = None;
     for tok in &req.tokens {
+        if req.token_floor(&tok.entity_id) != req.active_floor {
+            continue;
+        }
         let (tx, ty) = req.token_pos_m(tok);
         let d = ((x_m - tx).powi(2) + (y_m - ty).powi(2)).sqrt();
         if d <= TOKEN_PICK_RADIUS_M && best_tok.is_none_or(|(_, bd)| d < bd) {
@@ -454,7 +457,9 @@ pub fn inspect_map_point(
         if !spec.floor_layer || !prop_contains_point(p, x_m, y_m, false) {
             continue;
         }
-        let (subtitle, cover_label, elevation_cm) = if p.kind == PropKind::ElevatedCatwalk {
+        let (subtitle, cover_label, elevation_cm) = if p.kind == PropKind::Stairwell {
+            ("Vertical Transit · Connects Adjacent Floors".to_owned(), "Stairwell Access".to_owned(), 0)
+        } else if p.kind == PropKind::ElevatedCatwalk {
             ("Elevated Walkway (+15 cm)".to_owned(), "Elevated Surface".to_owned(), 15)
         } else if spec.move_cost_mult > 1.1 {
             (
@@ -585,6 +590,7 @@ mod tests {
                 color_hex: "#38bdf8".to_owned(),
                 facing_deg: 90,
                 elevation_cm: 0,
+                floor_index: 0,
                 stance_pose: "aimed".to_owned(),
                 portrait_url: None,
                 pos_x_cm: Some(450),

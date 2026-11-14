@@ -520,6 +520,7 @@ impl SectorBuilder {
                     wall_edges: self.edges,
                     props: self.props,
                     surfaces: self.surfaces,
+                    ..ProceduralSector::default()
                 };
             }
             match self
@@ -535,6 +536,7 @@ impl SectorBuilder {
                         wall_edges: self.edges,
                         props: self.props,
                         surfaces: self.surfaces,
+                        ..ProceduralSector::default()
                     };
                 }
             }
