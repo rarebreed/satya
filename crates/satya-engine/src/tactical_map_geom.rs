@@ -549,7 +549,9 @@ pub fn resolve_token_destination_cm(
     Ok(((x * 100.0).round() as i32, (y * 100.0).round() as i32))
 }
 
-fn props_overlap_continuous(a: &MapPropPlacement, b: &MapPropPlacement) -> bool {
+/// Returns `true` when two prop footprints overlap in continuous XZ ground coordinates.
+#[must_use]
+pub fn props_overlap_continuous(a: &MapPropPlacement, b: &MapPropPlacement) -> bool {
     let afp = a.footprint_m();
     let (ahw, ahh) = rotated_aabb_half_extents_cm(
         (afp.span_w_m * 100.0) as i32,
@@ -589,6 +591,18 @@ fn props_overlap_continuous(a: &MapPropPlacement, b: &MapPropPlacement) -> bool 
         }
     }
     false
+}
+
+/// Returns `true` if `prop` slices across any structural wall or closed door segment.
+#[must_use]
+pub fn prop_crosses_wall_edge(prop: &MapPropPlacement, edges: &[MapWallEdge]) -> bool {
+    edges
+        .iter()
+        .filter(|e| matches!(e.kind, WallEdgeKind::Wall | WallEdgeKind::DoorClosed))
+        .any(|e| {
+            let (a, b) = edge_endpoints_m(e);
+            intersect_segment_prop(prop, a, b).is_some_and(|hit| hit.thickness_m > 0.25)
+        })
 }
 
 /// Validates and places a continuous `360°` prop placement onto `props` without touching any tile grid.

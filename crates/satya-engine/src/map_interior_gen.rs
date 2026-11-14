@@ -1,16 +1,9 @@
 //! # Furnished Modern-Day Interior Generator (`map_interior_gen`)
 //!
-//! Deterministic, seeded generator for edge-walled interiors ([`InteriorStyle::Apartment`],
-//! [`InteriorStyle::Bar`], [`InteriorStyle::Office`]):
-//! 1. **Shell**: masonry perimeter edge walls with West/East entry doors and seeded exterior windows.
-//! 2. **Rooms**: the apartment uses a BSP split into drywall rooms; the bar has a large hall plus back rooms;
-//!    the office has an open bullpen, reception lounge, glass-walled conference room, breakroom & server closet.
-//! 3. **Roles & furnishing**: rooms get roles and rule-based multi-cell props (sofas, coffee tables, desks,
-//!    conference tables, kitchen counters, bar counters, bookshelves, steel shelving, lockers).
-//! 4. **Safety**: door thresholds and spawn pads stay clear. If a tall prop ever disconnects the floor,
-//!    tall props are removed until every open cell is reachable again.
-//!
-//! Props are emitted as continuous [`MapPropPlacement`] footprints with analytical collision and cover.
+//! Deterministic, seeded generator for edge-walled interiors (`Apartment`, `Bar`, `Office`):
+//! 1. **Shell**: masonry perimeter edge walls with West/East entry doors and exterior windows.
+//! 2. **Rooms & Props**: BSP split / partitioned rooms with rule-based continuous `[0, 360°)` props;
+//!    door thresholds and spawn pads stay clear while tall props preserve full connectivity.
 
 use satya_schema::{
     EdgeSide, MapPropPlacement, MapWallEdge, MaterialClass, PropKind, WallEdgeKind,
@@ -341,19 +334,29 @@ impl Furnisher {
         self.try_place(kind, x, y, rot, None, r)
     }
 
-    /// Scatters up to `count` props with a one-cell clearance ring inside `r`.
+    /// Scatters up to `count` props with a one-cell clearance ring inside `r` and natural `1°` jitter.
     fn scatter(&mut self, kind: PropKind, r: Room, count: usize, rot: i32) {
-        let probe = make_prop(kind, 0, 0, rot, None, 0);
+        let jitter_range = match kind {
+            PropKind::RoundTable | PropKind::Armchair | PropKind::CoffeeTable | PropKind::WoodCrate => 8,
+            PropKind::PoolTable => 2,
+            _ => 0,
+        };
         let mut placed = 0;
         for _ in 0..(count * 12) {
             if placed >= count {
                 break;
             }
+            let rot_deg = if jitter_range > 0 {
+                (rot + self.rng.range(-jitter_range, jitter_range + 1)).rem_euclid(360)
+            } else {
+                rot
+            };
+            let probe = make_prop(kind, 0, 0, rot_deg, None, 0);
             let x = self.rng.range(r.x0 + 1, r.x1 - probe.w_cells);
             let y = self.rng.range(r.y0 + 1, r.y1 - probe.h_cells);
             let ring = Room { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 };
             if self.free(x - 1, y - 1, probe.w_cells + 2, probe.h_cells + 2, ring)
-                && self.try_place(kind, x, y, rot, None, r).is_some()
+                && self.try_place(kind, x, y, rot_deg, None, r).is_some()
             {
                 placed += 1;
             }
@@ -634,9 +637,28 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
 
     // Connectivity safeguard: drop solid obstacles (tallest/newest first) until every open area is reachable.
     let mut props = furn.props;
+    let floor_poly = vec![
+        satya_schema::MapSurfaceFeature {
+            kind: satya_schema::SurfaceFeatureKind::InteriorFloor,
+            shape: satya_schema::SurfaceShapeKind::Polygon,
+            points_cm: vec![
+                satya_schema::MapPointCm::new(0, 0),
+                satya_schema::MapPointCm::new(w * 100, 0),
+                satya_schema::MapPointCm::new(w * 100, h * 100),
+                satya_schema::MapPointCm::new(0, h * 100),
+            ],
+            width_cm: 0,
+            border_style_cm: 0,
+            variant_seed: (seed as u32).wrapping_add(7),
+        },
+    ];
     loop {
         if all_walkable_areas_connected(w, h, &shell.edges, &props) {
-            return ProceduralSector { wall_edges: shell.edges, props };
+            return ProceduralSector {
+                wall_edges: shell.edges,
+                props,
+                surfaces: floor_poly,
+            };
         }
         match props
             .iter()
@@ -645,7 +667,13 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
             Some(i) => {
                 props.remove(i);
             }
-            None => return ProceduralSector { wall_edges: shell.edges, props },
+            None => {
+                return ProceduralSector {
+                    wall_edges: shell.edges,
+                    props,
+                    surfaces: floor_poly,
+                };
+            }
         }
     }
 }
@@ -704,6 +732,7 @@ mod tests {
             height_m: 14.0,
             edges: &bar.wall_edges,
             props: &bar.props,
+            surfaces: &bar.surfaces,
         };
         let reach = compute_reachable_continuous(&scene, &[], GaitReachQuery {
             start_m: (2.5, 7.5), spd_eff: 11, hgt_m: 1.8,

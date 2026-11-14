@@ -2,18 +2,27 @@
 //!
 //! Upgrades the five classic `SectorPreset`s ([`FacilitySectorStyle`]: `UrbanCrossroads`, `DockingBay`,
 //! `MedLab`, `DerelictCorridor`, `OrbitalAirlock`) from bare cell blocks into full [`ProceduralSector`]
-//! layouts emitting thin architectural [`MapWallEdge`]s with realistic ballistic [`MaterialClass`]es and
-//! multi-cell [`MapPropPlacement`]s, while preserving elevated catwalks, hazard zones, and spawn pads.
+//! layouts emitting thin architectural [`MapWallEdge`]s, continuous vector [`MapSurfaceFeature`]s
+//! (`AsphaltRoad`, `ConcreteWalk`, `InteriorFloor`), elevated catwalks, hazard spills, and
+//! continuously oriented props.
+//!
+//! Sci-fi & clinical bay builders live in [`crate::map_sector_scifi`].
 
 use satya_schema::{
-    EdgeSide, MapPropPlacement, MapWallEdge, MaterialClass, PropKind, WallEdgeKind,
+    EdgeSide, MapPointCm, MapPropPlacement, MapSurfaceFeature, MapWallEdge, MaterialClass,
+    PropKind, SurfaceFeatureKind, SurfaceShapeKind, WallEdgeKind,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::map_dressing::{PropObstruction, make_prop, prop_spec};
+use crate::map_sector_scifi::{
+    build_derelict_corridor, build_docking_bay, build_med_lab, build_orbital_airlock,
+};
 use crate::tactical_map::ProceduralSector;
 use crate::tactical_map_edges::WallEdgeIndex;
-use crate::tactical_map_geom::{TOKEN_RADIUS_M, all_walkable_areas_connected, circle_collides_obstacles};
+use crate::tactical_map_geom::{
+    all_walkable_areas_connected, prop_crosses_wall_edge, props_overlap_continuous,
+};
 
 /// Upgraded facility / urban layout family corresponding to the five classic sector presets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -26,17 +35,15 @@ pub enum FacilitySectorStyle {
     OrbitalAirlock,
 }
 
-const SURF_BASE: u8 = 0;
-const SURF_STONE: u8 = 1;
-const SURF_ASPHALT: u8 = 2;
-const SURF_CATWALK: u8 = 3;
-const SURF_HAZARD: u8 = 4;
+pub(crate) const SURF_BASE: u8 = 0;
+pub(crate) const SURF_CATWALK: u8 = 3;
+pub(crate) const SURF_HAZARD: u8 = 4;
 
 #[derive(Debug, Clone, Copy)]
-struct Rng(u64);
+pub(crate) struct Rng(pub(crate) u64);
 
 impl Rng {
-    fn next(&mut self) -> u64 {
+    pub(crate) fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -44,7 +51,7 @@ impl Rng {
         z ^ (z >> 31)
     }
 
-    fn range(&mut self, lo: i32, hi_excl: i32) -> i32 {
+    pub(crate) fn range(&mut self, lo: i32, hi_excl: i32) -> i32 {
         if hi_excl <= lo {
             lo
         } else {
@@ -54,21 +61,21 @@ impl Rng {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Rect {
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
+pub(crate) struct Rect {
+    pub(crate) x0: i32,
+    pub(crate) y0: i32,
+    pub(crate) x1: i32,
+    pub(crate) y1: i32,
 }
 
 impl Rect {
-    const fn h(self) -> i32 {
+    pub(crate) const fn h(self) -> i32 {
         self.y1 - self.y0
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Side {
+pub(crate) enum Side {
     North,
     East,
     South,
@@ -87,15 +94,16 @@ impl Side {
     }
 }
 
-struct SectorBuilder {
-    w: i32,
-    h: i32,
-    rng: Rng,
+pub(crate) struct SectorBuilder {
+    pub(crate) w: i32,
+    pub(crate) h: i32,
+    pub(crate) rng: Rng,
     surf: Vec<u8>,
     edges: Vec<MapWallEdge>,
     edge_idx: WallEdgeIndex,
     blocked: Vec<bool>,
     props: Vec<MapPropPlacement>,
+    surfaces: Vec<MapSurfaceFeature>,
 }
 
 impl SectorBuilder {
@@ -109,10 +117,11 @@ impl SectorBuilder {
             edge_idx: WallEdgeIndex::from_edges(w, h, &[]),
             blocked: vec![false; (w * h) as usize],
             props: Vec::new(),
+            surfaces: Vec::new(),
         }
     }
 
-    const fn whole(&self) -> Rect {
+    pub(crate) const fn whole(&self) -> Rect {
         Rect { x0: 0, y0: 0, x1: self.w, y1: self.h }
     }
 
@@ -120,13 +129,53 @@ impl SectorBuilder {
         x >= 0 && y >= 0 && x < self.w && y < self.h
     }
 
-    fn set_surf(&mut self, x: i32, y: i32, code: u8) {
+    pub(crate) fn set_surf(&mut self, x: i32, y: i32, code: u8) {
         if self.in_bounds(x, y) {
             self.surf[(y * self.w + x) as usize] = code;
         }
     }
 
-    fn add_pillar(&mut self, x: i32, y: i32) {
+    pub(crate) fn add_polygon_surface(
+        &mut self,
+        kind: SurfaceFeatureKind,
+        pts_m: &[(f32, f32)],
+        corner_radius_cm: i32,
+        variant_seed: u32,
+    ) {
+        self.surfaces.push(MapSurfaceFeature {
+            kind,
+            shape: SurfaceShapeKind::Polygon,
+            points_cm: pts_m
+                .iter()
+                .map(|&(x, y)| MapPointCm::new((x * 100.0).round() as i32, (y * 100.0).round() as i32))
+                .collect(),
+            width_cm: 0,
+            border_style_cm: corner_radius_cm,
+            variant_seed,
+        });
+    }
+
+    pub(crate) fn add_ribbon_spline(
+        &mut self,
+        kind: SurfaceFeatureKind,
+        ctrl_m: &[(f32, f32)],
+        width_cm: i32,
+        variant_seed: u32,
+    ) {
+        self.surfaces.push(MapSurfaceFeature {
+            kind,
+            shape: SurfaceShapeKind::RibbonSpline,
+            points_cm: ctrl_m
+                .iter()
+                .map(|&(x, y)| MapPointCm::new((x * 100.0).round() as i32, (y * 100.0).round() as i32))
+                .collect(),
+            width_cm,
+            border_style_cm: 0,
+            variant_seed,
+        });
+    }
+
+    pub(crate) fn add_pillar(&mut self, x: i32, y: i32) {
         if self.in_bounds(x, y) && !self.blocked[(y * self.w + x) as usize] {
             let vseed = self.rng.next() as u32;
             self.blocked[(y * self.w + x) as usize] = true;
@@ -134,15 +183,7 @@ impl SectorBuilder {
         }
     }
 
-    fn paint_surf(&mut self, r: Rect, code: u8) {
-        for y in r.y0.max(0)..r.y1.min(self.h) {
-            for x in r.x0.max(0)..r.x1.min(self.w) {
-                self.surf[(y * self.w + x) as usize] = code;
-            }
-        }
-    }
-
-    fn put_edge(&mut self, pos: (i32, i32), side: EdgeSide, kind: WallEdgeKind, material: MaterialClass) {
+    pub(crate) fn put_edge(&mut self, pos: (i32, i32), side: EdgeSide, kind: WallEdgeKind, material: MaterialClass) {
         let e = MapWallEdge { x: pos.0, y: pos.1, side, kind, material };
         match self.edges.iter_mut().find(|o| o.x == e.x && o.y == e.y && o.side == e.side) {
             Some(o) => *o = e,
@@ -150,7 +191,7 @@ impl SectorBuilder {
         }
     }
 
-    fn perimeter(&mut self, wall_mat: MaterialClass, door_mat: MaterialClass) {
+    pub(crate) fn perimeter(&mut self, wall_mat: MaterialClass, door_mat: MaterialClass) {
         let (w, h, mid_y) = (self.w, self.h, self.h / 2);
         for x in 0..w {
             self.put_edge((x, 0), EdgeSide::North, WallEdgeKind::Wall, wall_mat);
@@ -167,13 +208,13 @@ impl SectorBuilder {
         self.put_edge((w, mid_y), EdgeSide::West, WallEdgeKind::DoorClosed, door_mat);
     }
 
-    fn add_corner_pilasters(&mut self) {
+    pub(crate) fn add_corner_pilasters(&mut self) {
         for &(px, py) in &[(0, 0), (self.w - 1, 0), (0, self.h - 1), (self.w - 1, self.h - 1)] {
             self.add_pillar(px, py);
         }
     }
 
-    fn add_perimeter_windows(&mut self, spacing: i32) {
+    pub(crate) fn add_perimeter_windows(&mut self, spacing: i32) {
         let idx = WallEdgeIndex::from_edges(self.w, self.h, &self.edges);
         let (w, h, mid_y) = (self.w, self.h, self.h / 2);
         let off = self.rng.range(0, spacing.max(2));
@@ -205,7 +246,7 @@ impl SectorBuilder {
         }
     }
 
-    fn enclose_rect(&mut self, r: Rect, wall_mat: MaterialClass) {
+    pub(crate) fn enclose_rect(&mut self, r: Rect, wall_mat: MaterialClass) {
         for x in r.x0..r.x1 {
             self.put_edge((x, r.y0), EdgeSide::North, WallEdgeKind::Wall, wall_mat);
             self.put_edge((x, r.y1), EdgeSide::North, WallEdgeKind::Wall, wall_mat);
@@ -222,7 +263,7 @@ impl SectorBuilder {
         }
     }
 
-    fn reserve_spawns_and_doors(&mut self) {
+    pub(crate) fn reserve_spawns_and_doors(&mut self) {
         let mid_y = self.h / 2;
         for &(sx, sy) in &[
             (2, mid_y),
@@ -274,7 +315,7 @@ impl SectorBuilder {
         true
     }
 
-    fn try_place(
+    pub(crate) fn try_place(
         &mut self,
         kind: PropKind,
         pos: (i32, i32),
@@ -288,6 +329,14 @@ impl SectorBuilder {
             return None;
         }
         if !prop_spec(kind).floor_layer {
+            if prop_crosses_wall_edge(&p, &self.edges) {
+                return None;
+            }
+            for existing in &self.props {
+                if !prop_spec(existing.kind).floor_layer && props_overlap_continuous(&p, existing) {
+                    return None;
+                }
+            }
             for yy in p.y..p.y + p.h_cells {
                 for xx in p.x..p.x + p.w_cells {
                     self.blocked[(yy * self.w + xx) as usize] = true;
@@ -298,7 +347,7 @@ impl SectorBuilder {
         Some(p)
     }
 
-    fn against_wall(&mut self, kind: PropKind, r: Rect, side: Side, len: Option<i32>) -> Option<MapPropPlacement> {
+    pub(crate) fn against_wall(&mut self, kind: PropKind, r: Rect, side: Side, len: Option<i32>) -> Option<MapPropPlacement> {
         let rot = side.rot();
         let probe = make_prop(kind, 0, 0, rot, len, 0);
         let (fw, fh) = (probe.w_cells, probe.h_cells);
@@ -317,18 +366,20 @@ impl SectorBuilder {
             .find_map(|pos| self.try_place(kind, pos, rot, len, r))
     }
 
-    fn against_any_wall(&mut self, kind: PropKind, r: Rect, len: Option<i32>) -> Option<MapPropPlacement> {
+    pub(crate) fn against_any_wall(&mut self, kind: PropKind, r: Rect, len: Option<i32>) -> Option<MapPropPlacement> {
         let start = self.rng.range(0, 4) as usize;
         (0..4).find_map(|i| self.against_wall(kind, r, Side::ALL[(start + i) % 4], len))
     }
 
-    fn scatter_in(&mut self, kind: PropKind, bounds: Rect, count: usize, clear_ring: bool) {
+    pub(crate) fn scatter_in(&mut self, kind: PropKind, bounds: Rect, count: usize, clear_ring: bool) {
         let mut placed = 0;
         for _ in 0..(count * 16).max(16) {
             if placed >= count {
                 break;
             }
-            let rot = self.rng.range(0, 4) * 90;
+            let base_rot = self.rng.range(0, 4) * 90;
+            let jitter = if clear_ring { self.rng.range(-14, 15) } else { self.rng.range(-6, 7) };
+            let rot = (base_rot + jitter).rem_euclid(360);
             let probe = make_prop(kind, 0, 0, rot, None, 0);
             let pad = i32::from(clear_ring);
             let x = self.rng.range(bounds.x0 + pad, bounds.x1 - probe.w_cells - pad + 1);
@@ -347,8 +398,6 @@ impl SectorBuilder {
     fn emit_surface_props(&mut self) {
         let mut decals = Vec::new();
         for (code, kind) in [
-            (SURF_ASPHALT, PropKind::AsphaltDrive),
-            (SURF_STONE, PropKind::StonePath),
             (SURF_CATWALK, PropKind::ElevatedCatwalk),
             (SURF_HAZARD, PropKind::HazardSpill),
         ] {
@@ -386,7 +435,11 @@ impl SectorBuilder {
         });
         loop {
             if all_walkable_areas_connected(w, h, &self.edges, &self.props) {
-                return ProceduralSector { wall_edges: self.edges, props: self.props };
+                return ProceduralSector {
+                    wall_edges: self.edges,
+                    props: self.props,
+                    surfaces: self.surfaces,
+                };
             }
             match self
                 .props
@@ -396,7 +449,13 @@ impl SectorBuilder {
                 Some(i) => {
                     self.props.remove(i);
                 }
-                None => return ProceduralSector { wall_edges: self.edges, props: self.props },
+                None => {
+                    return ProceduralSector {
+                        wall_edges: self.edges,
+                        props: self.props,
+                        surfaces: self.surfaces,
+                    };
+                }
             }
         }
     }
@@ -411,20 +470,62 @@ fn build_urban_crossroads(b: &mut SectorBuilder) {
     let sw = Rect { x0: 0, y0: h - bh, x1: bw, y1: h };
     let se = Rect { x0: w - bw, y0: h - bh, x1: w, y1: h };
 
-    // Corner buildings + 1m concrete sidewalks around their street-facing sides
-    for &(bx0, by0, bx1, by1) in &[
+    // Continuous asphalt street corridors across N-S and E-W intersection.
+    let ew_road_y = (bh as f32 + (h - bh) as f32) * 0.5;
+    let ew_road_w_cm = ((h - 2 * bh).max(4) * 100).clamp(400, 900);
+    b.add_ribbon_spline(
+        SurfaceFeatureKind::AsphaltRoad,
+        &[(0.0, ew_road_y), (w as f32 * 0.5, ew_road_y), (w as f32, ew_road_y)],
+        ew_road_w_cm,
+        11,
+    );
+    let ns_road_x = (bw as f32 + (w - bw) as f32) * 0.5;
+    let ns_road_w_cm = ((w - 2 * bw).max(4) * 100).clamp(400, 1000);
+    b.add_ribbon_spline(
+        SurfaceFeatureKind::AsphaltRoad,
+        &[(ns_road_x, 0.0), (ns_road_x, h as f32 * 0.5), (ns_road_x, h as f32)],
+        ns_road_w_cm,
+        12,
+    );
+
+    // Corner concrete sidewalks with filleted corners (ConcreteWalk priority 45 yields to InteriorFloor 60 & AsphaltRoad 50,
+    // wait: sidewalks stand alongside streets so ConcreteWalk priority is 45 < AsphaltRoad 50? Let's inset sidewalks along building aprons!).
+    for (idx, &(bx0, by0, bx1, by1)) in [
         (0, 0, (bw + 1).min(mid_x), (bh + 1).min(mid_y)),
         ((w - bw - 1).max(mid_x), 0, w, (bh + 1).min(mid_y)),
         (0, (h - bh - 1).max(mid_y + 1), (bw + 1).min(mid_x), h),
         ((w - bw - 1).max(mid_x), (h - bh - 1).max(mid_y + 1), w, h),
-    ] {
-        b.paint_surf(Rect { x0: bx0, y0: by0, x1: bx1, y1: by1 }, SURF_STONE);
+    ]
+    .iter()
+    .enumerate()
+    {
+        b.add_polygon_surface(
+            SurfaceFeatureKind::ConcreteWalk,
+            &[
+                (bx0 as f32, by0 as f32),
+                (bx1 as f32, by0 as f32),
+                (bx1 as f32, by1 as f32),
+                (bx0 as f32, by1 as f32),
+            ],
+            28,
+            20 + idx as u32,
+        );
     }
 
     for (i, r) in [nw, ne, sw, se].into_iter().enumerate() {
+        b.add_polygon_surface(
+            SurfaceFeatureKind::InteriorFloor,
+            &[
+                (r.x0 as f32, r.y0 as f32),
+                (r.x1 as f32, r.y0 as f32),
+                (r.x1 as f32, r.y1 as f32),
+                (r.x0 as f32, r.y1 as f32),
+            ],
+            0,
+            40 + i as u32,
+        );
         let mat = if i % 2 == 0 { MaterialClass::Brick } else { MaterialClass::ConcreteBlock };
         b.enclose_rect(r, mat);
-        // Street-facing entrance and storefront display windows
         let door_kind = if i == 0 || i == 3 { WallEdgeKind::DoorOpen } else { WallEdgeKind::DoorClosed };
         let door_y = r.y0 + r.h() / 2;
         let door_x = if i % 2 == 0 { r.x1 } else { r.x0 };
@@ -438,10 +539,13 @@ fn build_urban_crossroads(b: &mut SectorBuilder) {
     }
 
     b.reserve_spawns_and_doors();
-    // Sidewalk trees and corner interior furnishing
     let whole = b.whole();
-    let _ = b.try_place(PropKind::MediumTree, (bw, bh), 0, None, whole)
-        .or_else(|| b.try_place(PropKind::MediumTree, (mid_x - 2, bh), 0, None, whole));
+    let t1_rot = b.rng.range(0, 360);
+    let _ = b.try_place(PropKind::MediumTree, (bw, bh), t1_rot, None, whole)
+        .or_else(|| b.try_place(PropKind::MediumTree, (mid_x - 2, bh), t1_rot, None, whole))
+        .or_else(|| b.try_place(PropKind::MediumTree, (bw + 1, h - 2), t1_rot, None, whole))
+        .or_else(|| b.try_place(PropKind::MediumTree, (w - bw - 2, h - 2), t1_rot, None, whole))
+        .or_else(|| b.try_place(PropKind::MediumTree, (bw, bh), 0, None, whole));
     if bw >= 3 && bh >= 3 {
         let _ = b.against_any_wall(PropKind::KitchenCounter, nw, Some(2));
         b.scatter_in(PropKind::RoundTable, nw, 2, false);
@@ -453,257 +557,28 @@ fn build_urban_crossroads(b: &mut SectorBuilder) {
         let _ = b.against_any_wall(PropKind::DrumCluster, se, None);
     }
 
-    // Parked street vehicles & urban cover
     if w >= 16 && h >= 12 {
         let lane_x = (mid_x - 3).max(bw + 1);
-        let _ = b.try_place(PropKind::Car, (lane_x, bh.max(2)), 180, None, whole);
-        let _ = b.try_place(PropKind::UtilityVan, (w - bw - 5, mid_y + 1), 90, None, whole);
+        let car_rot = 180 + b.rng.range(-3, 4);
+        let van_rot = 90 + b.rng.range(-3, 4);
+        let _ = b.try_place(PropKind::Car, (lane_x, bh.max(2)), car_rot, None, whole)
+            .or_else(|| b.try_place(PropKind::Car, (lane_x, bh.max(2)), 180, None, whole));
+        let _ = b.try_place(PropKind::UtilityVan, (w - bw - 5, mid_y + 1), van_rot, None, whole)
+            .or_else(|| b.try_place(PropKind::UtilityVan, (w - bw - 5, mid_y + 1), 90, None, whole));
     }
-    let _ = b.try_place(PropKind::JerseyBarrier, (mid_x - 3, mid_y - 1), 0, Some(2), whole);
-    let _ = b.try_place(PropKind::JerseyBarrier, (mid_x + 1, mid_y + 1), 0, Some(2), whole);
+    let jb1 = b.rng.range(-4, 5).rem_euclid(360);
+    let jb2 = b.rng.range(-4, 5).rem_euclid(360);
+    let _ = b.try_place(PropKind::JerseyBarrier, (mid_x - 3, mid_y - 1), jb1, Some(2), whole)
+        .or_else(|| b.try_place(PropKind::JerseyBarrier, (mid_x - 3, mid_y - 1), 0, Some(2), whole));
+    let _ = b.try_place(PropKind::JerseyBarrier, (mid_x + 1, mid_y + 1), jb2, Some(2), whole)
+        .or_else(|| b.try_place(PropKind::JerseyBarrier, (mid_x + 1, mid_y + 1), 0, Some(2), whole));
     let _ = b.try_place(PropKind::Dumpster, (w - bw - 3, 1), 0, None, whole);
     let _ = b.try_place(PropKind::ParkBench, (bw + 1, h - bh - 1), 0, None, whole);
     b.scatter_in(PropKind::Planter, Rect { x0: bw, y0: bh, x1: w - bw, y1: h - bh }, 2, true);
     b.scatter_in(PropKind::WoodCrate, whole, 2, true);
 }
 
-fn build_docking_bay(b: &mut SectorBuilder) {
-    let (w, h, mid_x, mid_y) = (b.w, b.h, b.w / 2, b.h / 2);
-    b.perimeter(MaterialClass::ConcreteBlock, MaterialClass::SheetSteel);
-    b.add_corner_pilasters();
-
-    // Elevated steel catwalk along North gantry + industrial fuel/chemical hazard spill
-    let cat_y = if h >= 12 { 2 } else { 1 };
-    for x in 3..(w - 3) {
-        b.set_surf(x, cat_y, SURF_CATWALK);
-    }
-    b.set_surf(mid_x - 1, (h - 3).max(cat_y + 2), SURF_HAZARD);
-    b.set_surf(mid_x, (h - 3).max(cat_y + 2), SURF_HAZARD);
-
-    // East loading apron + glazed SW shipping/dispatch booth
-    if w >= 16 && h >= 12 {
-        b.paint_surf(Rect { x0: w - 6, y0: 3, x1: w - 1, y1: h - 1 }, SURF_ASPHALT);
-    }
-    let office = if w >= 14 && h >= 11 {
-        let r = Rect { x0: 1, y0: h - 4, x1: 6, y1: h };
-        b.enclose_rect(r, MaterialClass::Drywall);
-        for x in 2..5 {
-            b.put_edge((x, r.y0), EdgeSide::North, WallEdgeKind::Window, MaterialClass::Glass);
-        }
-        b.put_edge((r.x1, h - 2), EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SolidWood);
-        Some(r)
-    } else {
-        None
-    };
-    b.add_perimeter_windows(4);
-    b.reserve_spawns_and_doors();
-
-    let whole = b.whole();
-    if let Some(off) = office {
-        let _ = b.against_wall(PropKind::Desk, off, Side::West, None);
-        let _ = b.against_wall(PropKind::SteelShelving, off, Side::South, None);
-    }
-    if w >= 16 && h >= 14 {
-        let _ = b.try_place(PropKind::UtilityVan, (w - 6, 4), 90, None, whole);
-    }
-    let _ = b.try_place(PropKind::SteelShelving, (mid_x - 1, 4), 0, None, whole)
-        .or_else(|| b.try_place(PropKind::SteelShelving, (4, 1), 0, None, whole));
-    let _ = b.try_place(PropKind::SteelShelving, (mid_x + 1, h - 2), 0, None, whole);
-    let _ = b.try_place(PropKind::JerseyBarrier, (mid_x - 4, mid_y + 1), 90, Some(2), whole);
-    b.scatter_in(PropKind::WoodCrate, Rect { x0: 3, y0: cat_y + 1, x1: w - 3, y1: h - 1 }, 5, true);
-    b.scatter_in(PropKind::DrumCluster, Rect { x0: 4, y0: cat_y + 1, x1: w - 3, y1: h - 1 }, 3, true);
-}
-
-fn build_med_lab(b: &mut SectorBuilder) {
-    let (w, h, mid_y) = (b.w, b.h, b.h / 2);
-    b.perimeter(MaterialClass::ConcreteBlock, MaterialClass::SolidWood);
-    b.add_corner_pilasters();
-
-    if w >= 12 {
-        let x1 = (w / 3).clamp(3, w - 5);
-        let x2 = (2 * w / 3).clamp(x1 + 2, w - 3);
-        // West drywall partition: intake triage ward -> main surgical bay
-        for y in 0..h {
-            let (kind, mat) = if y == mid_y || y == 2 {
-                (WallEdgeKind::DoorOpen, MaterialClass::Drywall)
-            } else if (y - mid_y).abs() == 1 {
-                (WallEdgeKind::Window, MaterialClass::Glass)
-            } else {
-                (WallEdgeKind::Wall, MaterialClass::Drywall)
-            };
-            b.put_edge((x1, y), EdgeSide::West, kind, mat);
-        }
-        // East reinforced bio-containment bulkhead
-        for y in 0..h {
-            let (kind, mat) = if y == mid_y || y == (h - 3).max(1) {
-                (WallEdgeKind::DoorClosed, MaterialClass::SheetSteel)
-            } else if y == 3 || y == (h - 4).max(4) {
-                (WallEdgeKind::Window, MaterialClass::Glass)
-            } else {
-                (WallEdgeKind::Wall, MaterialClass::ReinforcedConcrete)
-            };
-            b.put_edge((x2, y), EdgeSide::West, kind, mat);
-        }
-        b.set_surf(x2 + 1, (mid_y + 1).min(h - 2), SURF_HAZARD);
-        b.set_surf((x2 + 2).min(w - 2), (mid_y + 1).min(h - 2), SURF_HAZARD);
-        b.add_perimeter_windows(4);
-        b.reserve_spawns_and_doors();
-
-        let triage = Rect { x0: 0, y0: 0, x1, y1: h };
-        let trauma = Rect { x0: x1, y0: 0, x1: x2, y1: h };
-        let lab = Rect { x0: x2, y0: 0, x1: w, y1: h };
-
-        let _ = b.against_any_wall(PropKind::Desk, triage, None);
-        let _ = b.against_any_wall(PropKind::Loveseat, triage, None);
-        let _ = b.against_any_wall(PropKind::Planter, triage, None);
-        let _ = b.against_any_wall(PropKind::Fridge, trauma, None);
-        let _ = b.against_any_wall(PropKind::SteelShelving, trauma, None);
-        let _ = b.against_any_wall(PropKind::KitchenCounter, trauma, Some(3));
-        b.scatter_in(PropKind::Bed, trauma, 2, true);
-        let _ = b.against_any_wall(PropKind::Fridge, lab, None);
-        let _ = b.against_any_wall(PropKind::Desk, lab, None);
-        b.scatter_in(PropKind::DrumCluster, lab, 2, true);
-    } else {
-        let sx = w / 2;
-        for y in 0..h {
-            let kind = if y == mid_y { WallEdgeKind::DoorClosed } else { WallEdgeKind::Wall };
-            b.put_edge((sx, y), EdgeSide::West, kind, MaterialClass::ConcreteBlock);
-        }
-        b.set_surf(sx + 1, (mid_y + 1).min(h - 2), SURF_HAZARD);
-        b.add_perimeter_windows(3);
-        b.reserve_spawns_and_doors();
-        let whole = b.whole();
-        b.scatter_in(PropKind::Bed, whole, 1, false);
-        let _ = b.against_any_wall(PropKind::Fridge, whole, None);
-    }
-}
-
-fn build_derelict_corridor(b: &mut SectorBuilder) {
-    let (w, h, mid_x, mid_y) = (b.w, b.h, b.w / 2, b.h / 2);
-    b.perimeter(MaterialClass::ReinforcedConcrete, MaterialClass::SheetSteel);
-    b.add_corner_pilasters();
-
-    let y_top = (h / 4).clamp(2, 4);
-    let y_bot = (h - y_top).max(y_top + 3);
-    if w >= 12 && h >= 10 {
-        // Side conduit-bay partitions along North & South flanks with hatches & breached grilles
-        for x in 0..w {
-            let top_door = x == 2 || x == mid_x || x == w - 3;
-            let bot_door = x == 3 || x == mid_x - 1 || x == w - 4;
-            let top_kind = if top_door { WallEdgeKind::DoorOpen } else if x % 4 == 1 { WallEdgeKind::Window } else { WallEdgeKind::Wall };
-            let bot_kind = if bot_door { WallEdgeKind::DoorClosed } else if x % 4 == 2 { WallEdgeKind::Window } else { WallEdgeKind::Wall };
-            b.put_edge((x, y_top), EdgeSide::North, top_kind, MaterialClass::ConcreteBlock);
-            b.put_edge((x, y_bot), EdgeSide::North, bot_kind, MaterialClass::ConcreteBlock);
-        }
-        for &div_x in &[w / 3, (2 * w) / 3] {
-            for y in 0..y_top {
-                b.put_edge((div_x, y), EdgeSide::West, WallEdgeKind::Wall, MaterialClass::SheetSteel);
-            }
-            for y in y_bot..h {
-                b.put_edge((div_x, y), EdgeSide::West, WallEdgeKind::Wall, MaterialClass::SheetSteel);
-            }
-            // Transverse blast doors dividing the main spine into 3 airlock segments
-            for y in y_top..y_bot {
-                let kind = if y == mid_y {
-                    WallEdgeKind::DoorOpen
-                } else if y == (mid_y - 1).max(y_top) {
-                    WallEdgeKind::DoorClosed
-                } else {
-                    WallEdgeKind::Wall
-                };
-                b.put_edge((div_x, y), EdgeSide::West, kind, MaterialClass::ReinforcedConcrete);
-            }
-        }
-    } else {
-        for y in 0..h {
-            let kind = if y == mid_y { WallEdgeKind::DoorOpen } else { WallEdgeKind::Wall };
-            b.put_edge((mid_x, y), EdgeSide::West, kind, MaterialClass::ReinforcedConcrete);
-        }
-    }
-
-    b.set_surf((mid_x - 1).max(1), (mid_y + 1).min(h - 2), SURF_HAZARD);
-    b.set_surf(mid_x, (mid_y + 1).min(h - 2), SURF_HAZARD);
-    b.reserve_spawns_and_doors();
-
-    let whole = b.whole();
-    let spine = Rect { x0: 1, y0: y_top.min(h - 2), x1: w - 1, y1: y_bot.min(h - 1).max(y_top + 1) };
-    let _ = b.against_any_wall(PropKind::SteelShelving, Rect { x0: 1, y0: 0, x1: w - 1, y1: y_top }, None)
-        .or_else(|| b.against_any_wall(PropKind::SteelShelving, whole, None));
-    let _ = b.against_any_wall(PropKind::Desk, Rect { x0: 1, y0: y_bot, x1: w - 1, y1: h }, None);
-    b.scatter_in(PropKind::Boulder, spine, 2, true);
-    b.scatter_in(PropKind::DrumCluster, whole, 4, true);
-    b.scatter_in(PropKind::WoodCrate, whole, 4, true);
-}
-
-fn build_orbital_airlock(b: &mut SectorBuilder) {
-    let (w, h, mid_x, mid_y) = (b.w, b.h, b.w / 2, b.h / 2);
-    b.perimeter(MaterialClass::ArmorSteel, MaterialClass::ArmorSteel);
-
-    // 4 structural Mag-Rail blast columns (`StructuralPillar`s for corner-peeking)
-    if w >= 14 && h >= 10 {
-        for &(px, py) in &[(mid_x - 4, 3), (mid_x + 3, 3), (mid_x - 4, h - 4), (mid_x + 3, h - 4)] {
-            b.add_pillar(px, py);
-        }
-    } else {
-        b.add_corner_pilasters();
-    }
-
-    // Elevated gantry pads & plasma vent hazard strip
-    b.set_surf(mid_x + 1, (mid_y - 2).max(1), SURF_HAZARD);
-    b.set_surf((mid_x + 2).min(w - 2), (mid_y - 2).max(1), SURF_HAZARD);
-
-    let mut booths = Vec::new();
-    if w >= 14 && h >= 12 {
-        let bx0 = (mid_x - 3).max(4);
-        let bx1 = (mid_x + 3).min(w - 4);
-        let north_booth = Rect { x0: bx0, y0: 0, x1: bx1, y1: 3 };
-        let south_booth = Rect { x0: bx0, y0: h - 3, x1: bx1, y1: h };
-        b.enclose_rect(north_booth, MaterialClass::SheetSteel);
-        b.enclose_rect(south_booth, MaterialClass::SheetSteel);
-        for x in (bx0 + 1)..(bx1 - 1) {
-            b.put_edge((x, 3), EdgeSide::North, WallEdgeKind::Window, MaterialClass::Glass);
-            b.put_edge((x, h - 3), EdgeSide::North, WallEdgeKind::Window, MaterialClass::Glass);
-        }
-        b.put_edge((bx0, 1), EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
-        b.put_edge((bx1, h - 2), EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::SheetSteel);
-        booths.push(north_booth);
-        booths.push(south_booth);
-        for x in (bx0 + 1)..(bx1 - 1) {
-            b.set_surf(x, 3, SURF_CATWALK);
-        }
-    }
-
-    if w >= 16 && h >= 10 {
-        for &vx in &[4, w - 4] {
-            for y in 2..(h - 2) {
-                let (kind, mat) = if y == mid_y {
-                    (WallEdgeKind::DoorOpen, MaterialClass::ArmorSteel)
-                } else if y == mid_y - 1 {
-                    (WallEdgeKind::DoorClosed, MaterialClass::ArmorSteel)
-                } else if (y - mid_y).abs() == 2 {
-                    (WallEdgeKind::Window, MaterialClass::Glass)
-                } else {
-                    (WallEdgeKind::Wall, MaterialClass::ArmorSteel)
-                };
-                b.put_edge((vx, y), EdgeSide::West, kind, mat);
-            }
-        }
-    }
-
-    b.reserve_spawns_and_doors();
-    let whole = b.whole();
-    for booth in booths {
-        let _ = b.against_any_wall(PropKind::Desk, booth, None);
-        let _ = b.against_any_wall(PropKind::Wardrobe, booth, None);
-    }
-    let _ = b.try_place(PropKind::JerseyBarrier, (mid_x - 1, (mid_y - 1).max(3)), 90, Some(2), whole);
-    let _ = b.try_place(PropKind::SteelShelving, (mid_x, h - 4), 0, None, whole)
-        .or_else(|| b.against_any_wall(PropKind::SteelShelving, whole, None));
-    b.scatter_in(PropKind::WoodCrate, Rect { x0: 4, y0: 3, x1: (w - 4).max(5), y1: (h - 3).max(4) }, 4, true);
-    b.scatter_in(PropKind::DrumCluster, Rect { x0: 4, y0: 3, x1: (w - 4).max(5), y1: (h - 3).max(4) }, 2, true);
-}
-
-/// Generates an upgraded [`ProceduralSector`] with thin [`MapWallEdge`]s and multi-cell props.
+/// Generates an upgraded [`ProceduralSector`] with thin [`MapWallEdge`]s, vector surfaces, and props.
 #[must_use]
 pub fn generate_facility_sector(
     style: FacilitySectorStyle,
@@ -727,62 +602,13 @@ pub fn generate_facility_sector(
         FacilitySectorStyle::DerelictCorridor => build_derelict_corridor(&mut b),
         FacilitySectorStyle::OrbitalAirlock => build_orbital_airlock(&mut b),
     }
-    let mut sector = b.finalize();
-
-    // Defensive minimum guarantees on tiny 8x8 boards: ensure at least one HalfCover and one FullObstacle.
-    let mid_y = h / 2;
-    let has_half_cover = sector
-        .props
-        .iter()
-        .any(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover);
-    if !has_half_cover
-        && let Some(p) = (1..w - 1).find_map(|x| {
-            let y = 1;
-            let blocked_pad =
-                (x == 2 || x == 3 || x == w - 3 || x == w - 5) && (y - mid_y).abs() <= 1;
-            (!blocked_pad
-                && !circle_collides_obstacles(
-                    w as f32,
-                    h as f32,
-                    &sector.wall_edges,
-                    &sector.props,
-                    x as f32 + 0.5,
-                    y as f32 + 0.5,
-                    TOKEN_RADIUS_M,
-                ))
-            .then(|| make_prop(PropKind::WoodCrate, x, y, 0, None, 1))
-        })
-    {
-        sector.props.push(p);
-    }
-    let has_full_obstacle = sector
-        .props
-        .iter()
-        .any(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle);
-    if !has_full_obstacle
-        && let Some((px, py)) = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
-            .into_iter()
-            .chain((1..w - 1).map(|x| (x, 0)))
-            .find(|&(x, y)| {
-                !circle_collides_obstacles(
-                    w as f32,
-                    h as f32,
-                    &sector.wall_edges,
-                    &sector.props,
-                    x as f32 + 0.5,
-                    y as f32 + 0.5,
-                    TOKEN_RADIUS_M,
-                )
-            })
-    {
-        sector.props.push(make_prop(PropKind::StructuralPillar, px, py, 0, None, 1));
-    }
-    sector
+    b.finalize()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tactical_map_geom::{TOKEN_RADIUS_M, circle_collides_obstacles};
 
     const ALL_STYLES: [FacilitySectorStyle; 5] = [
         FacilitySectorStyle::UrbanCrossroads,
@@ -801,6 +627,11 @@ mod tests {
                     assert_eq!(s, generate_facility_sector(style, w, h, seed), "{style:?} deterministic");
                     assert!(!s.wall_edges.is_empty(), "{style:?} ({w}x{h}/{seed}) missing wall_edges");
                     assert!(!s.props.is_empty(), "{style:?} ({w}x{h}/{seed}) missing props");
+                    assert!(!s.surfaces.is_empty(), "{style:?} ({w}x{h}/{seed}) missing vector surfaces");
+                    assert!(
+                        !s.props.iter().any(|p| matches!(p.kind, PropKind::AsphaltDrive | PropKind::StonePath)),
+                        "{style:?} ({w}x{h}/{seed}) emitted legacy asphalt/stone floor strip"
+                    );
                     assert!(
                         s.props.iter().any(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover),
                         "{style:?} ({w}x{h}/{seed}) HalfCover"
@@ -835,7 +666,7 @@ mod tests {
                             if prop_spec(p.kind).floor_layer || prop_spec(q.kind).floor_layer {
                                 continue;
                             }
-                            let overlap = p.x < q.x + q.w_cells && q.x < p.x + p.w_cells && p.y < q.y + q.h_cells && q.y < p.y + p.h_cells;
+                            let overlap = props_overlap_continuous(p, q);
                             assert!(!overlap, "{style:?} ({w}x{h}/{seed}): {p:?} overlaps {q:?}");
                         }
                     }

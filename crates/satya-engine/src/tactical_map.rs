@@ -12,36 +12,34 @@
 //!   [`CombatMovementGait`] and [`compute_stride_and_sprint_velocity`] to `16`-directional `0.25m`
 //!   Dijkstra pathing merged into smooth [`ReachableStrip`] contours.
 
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-
 use satya_schema::{
-    CoverGrade, GmMapUpdateRequest, MapPropPlacement, MapWallEdge, MessageVisibility,
-    TokenPlacement, TokenVisualSpec, WallEdgeKind,
+    CoverGrade, GmMapUpdateRequest, MapPropPlacement, MapSurfaceFeature, MapWallEdge,
+    MessageVisibility, SurfaceFeatureKind, TokenPlacement, TokenVisualSpec, WallEdgeKind,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::define_coded_enum;
-use crate::environment_vehicles::{CombatMovementGait, compute_stride_and_sprint_velocity};
-use crate::map_dressing::{prop_spec, PropObstruction};
+use crate::map_dressing::PropObstruction;
 use crate::map_interior_gen::{InteriorStyle, generate_furnished_interior};
 use crate::map_outdoor_gen::{OutdoorStyle, generate_outdoor_sector};
 use crate::map_sector_gen::{FacilitySectorStyle, generate_facility_sector};
+use crate::map_surface_geom::topmost_surface_at_m;
 pub use crate::map_continuation::*;
 pub use crate::tactical_map_edges::{EdgeObstruction, WallEdgeIndex};
 use crate::tactical_map_geom::{
-    circle_collides_obstacles, intersect_segment_edge, intersect_segment_prop, prop_contains_point,
-    prop_intersects_circle, NAV_STEP_M, TOKEN_RADIUS_M,
+    circle_collides_obstacles, intersect_segment_edge, intersect_segment_prop,
 };
+pub use crate::tactical_map_reach::*;
 
 /// Borrowed view of everything continuous spatial rules need: board extents in meters,
-/// thin wall/door/window edges, and `360°` oriented props.
+/// thin wall/door/window edges, `360°` oriented props, and vector ground surfaces.
 #[derive(Debug, Clone, Copy)]
 pub struct TacticalSceneView<'a> {
     pub width_m: f32,
     pub height_m: f32,
     pub edges: &'a [MapWallEdge],
     pub props: &'a [MapPropPlacement],
+    pub surfaces: &'a [MapSurfaceFeature],
 }
 
 impl<'a> TacticalSceneView<'a> {
@@ -54,6 +52,7 @@ impl<'a> TacticalSceneView<'a> {
             height_m,
             edges: &map.wall_edges,
             props: &map.props,
+            surfaces: &map.surfaces,
         }
     }
 }
@@ -172,7 +171,7 @@ impl SectorPreset {
     /// Whether this preset generates architectural [`MapWallEdge`] boundaries.
     #[must_use]
     pub const fn has_structural_wall_edges(self) -> bool {
-        !matches!(self, Self::WoodedPark | Self::WoodlandCreek)
+        !matches!(self, Self::WoodedPark | Self::WoodlandCreek | Self::RoadsideDitch)
     }
 
     /// Upgraded facility / clinical / transit / urban sector style (`None` for residential/outdoor presets).
@@ -189,11 +188,12 @@ impl SectorPreset {
     }
 }
 
-/// Complete procedural sector: thin edge walls and `360°` oriented props (zero tile array).
+/// Complete procedural sector: thin edge walls, `360°` oriented props, and vector ground surfaces.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProceduralSector {
     pub wall_edges: Vec<MapWallEdge>,
     pub props: Vec<MapPropPlacement>,
+    pub surfaces: Vec<MapSurfaceFeature>,
 }
 
 /// Generates the complete [`ProceduralSector`] for `preset`, emitting thin edge walls and props.
@@ -284,6 +284,16 @@ fn eval_continuous_ray(
                 PropObstruction::FloorLayer => {}
             }
         }
+    }
+
+    if !obs.half_cover
+        && seg_len > 1.2
+        && topmost_surface_at_m(scene.surfaces, target_m.0, target_m.1)
+            .is_some_and(|s| s.kind == SurfaceFeatureKind::DefensiveTrench)
+        && !topmost_surface_at_m(scene.surfaces, origin_m.0, origin_m.1)
+            .is_some_and(|s| s.kind == SurfaceFeatureKind::DefensiveTrench)
+    {
+        obs.half_cover = true;
     }
     obs
 }
@@ -378,296 +388,8 @@ pub fn evaluate_los_continuous(
     }
 }
 
-/// Merged horizontal reachable contour strip (`0.25m` band) for crisp SVG and WebGPU overlays.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct ReachableStrip {
-    pub y_m: f32,
-    pub x_min_m: f32,
-    pub x_max_m: f32,
-    pub step_m: f32,
-    pub min_ticks: u32,
-}
-
-/// Continuous `0.25m` Dijkstra gait reachability scalar field.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ReachableField {
-    pub step_m: f32,
-    pub cols: usize,
-    pub rows: usize,
-    pub m_per_tick: f32,
-    /// Geodesic travel distance in millimeters (`i32::MAX` when unreachable).
-    pub cost_mm: Vec<i32>,
-}
-
-impl ReachableField {
-    /// Ticks required to reach `(x_m, y_m)`, or `None` if outside the movement envelope.
-    #[must_use]
-    pub fn ticks_at_m(&self, x_m: f32, y_m: f32) -> Option<u32> {
-        let dist_m = self.distance_m_at(x_m, y_m)?;
-        Some((f64::from(dist_m) / f64::from(self.m_per_tick)).ceil().max(1.0) as u32)
-    }
-
-    /// Geodesic travel distance in meters at `(x_m, y_m)`, or `None` if unreachable.
-    #[must_use]
-    pub fn distance_m_at(&self, x_m: f32, y_m: f32) -> Option<f32> {
-        if self.cols == 0 || self.rows == 0 || x_m < 0.0 || y_m < 0.0 {
-            return None;
-        }
-        let ix = (x_m / self.step_m).floor() as usize;
-        let iy = (y_m / self.step_m).floor() as usize;
-        if ix >= self.cols || iy >= self.rows {
-            return None;
-        }
-        let c_mm = self.cost_mm[iy * self.cols + ix];
-        if c_mm == i32::MAX {
-            None
-        } else {
-            Some(((c_mm as f32 / 1000.0) * 100.0).round() / 100.0)
-        }
-    }
-
-    /// Merges horizontally contiguous reachable strips sharing the same tick tier for fast vector drawing.
-    #[must_use]
-    pub fn merged_row_runs(&self) -> Vec<ReachableStrip> {
-        let mut strips = Vec::new();
-        for iy in 0..self.rows {
-            let y_m = iy as f32 * self.step_m;
-            let mut active: Option<(f32, f32, u32)> = None;
-            for ix in 0..self.cols {
-                let c_mm = self.cost_mm[iy * self.cols + ix];
-                let ticks = if c_mm == i32::MAX || c_mm == 0 {
-                    None
-                } else {
-                    Some(((f64::from(c_mm) / 1000.0) / f64::from(self.m_per_tick)).ceil().max(1.0) as u32)
-                };
-                match (active, ticks) {
-                    (Some((x0, x1, t_cur)), Some(t)) if t == t_cur => {
-                        active = Some((x0, x1 + self.step_m, t_cur));
-                    }
-                    (Some((x0, x1, t_cur)), next_t) => {
-                        strips.push(ReachableStrip {
-                            y_m,
-                            x_min_m: x0,
-                            x_max_m: x1,
-                            step_m: self.step_m,
-                            min_ticks: t_cur,
-                        });
-                        let x_start = ix as f32 * self.step_m;
-                        active = next_t.map(|t| (x_start, x_start + self.step_m, t));
-                    }
-                    (None, Some(t)) => {
-                        let x_start = ix as f32 * self.step_m;
-                        active = Some((x_start, x_start + self.step_m, t));
-                    }
-                    (None, None) => {}
-                }
-            }
-            if let Some((x0, x1, t_cur)) = active {
-                strips.push(ReachableStrip {
-                    y_m,
-                    x_min_m: x0,
-                    x_max_m: x1,
-                    step_m: self.step_m,
-                    min_ticks: t_cur,
-                });
-            }
-        }
-        strips
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct DijkstraNode {
-    cost_mm: i32,
-    ix: usize,
-    iy: usize,
-}
-
-impl PartialEq for DijkstraNode {
-    fn eq(&self, other: &Self) -> bool {
-        self.cost_mm == other.cost_mm && self.ix == other.ix && self.iy == other.iy
-    }
-}
-
-impl Eq for DijkstraNode {}
-
-impl Ord for DijkstraNode {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .cost_mm
-            .cmp(&self.cost_mm)
-            .then_with(|| self.iy.cmp(&other.iy))
-            .then_with(|| self.ix.cmp(&other.ix))
-    }
-}
-
-impl PartialOrd for DijkstraNode {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-/// Context parameters for computing a character's continuous any-angle reachable movement envelope.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct GaitReachQuery {
-    pub start_m: (f32, f32),
-    pub spd_eff: i32,
-    pub hgt_m: f64,
-    pub gait: CombatMovementGait,
-    pub tick_budget: u32,
-}
-
-/// Computes a smooth `0.25m` 16-directional metric [`ReachableField`] around `query.start_m`.
-#[must_use]
-pub fn compute_reachable_continuous(
-    scene: &TacticalSceneView<'_>,
-    occupied_tokens_m: &[(f32, f32)],
-    query: GaitReachQuery,
-) -> ReachableField {
-    let step_m = NAV_STEP_M;
-    let cols = (scene.width_m / step_m).floor().max(0.0) as usize;
-    let rows = (scene.height_m / step_m).floor().max(0.0) as usize;
-    let sprint = compute_stride_and_sprint_velocity(query.spd_eff, query.hgt_m);
-    let m_per_tick = (sprint.v_sprint_m_per_tick * query.gait.sprint_fraction()).max(0.05) as f32;
-    if cols == 0 || rows == 0 {
-        return ReachableField {
-            step_m,
-            cols,
-            rows,
-            m_per_tick,
-            cost_mm: Vec::new(),
-        };
-    }
-
-    let max_budget_mm = (f64::from(m_per_tick) * f64::from(query.tick_budget) * 1000.0).round() as i32;
-    let total = cols * rows;
-    let mut walkable = vec![false; total];
-    let mut cost_mult = vec![1.0_f32; total];
-
-    let sx = ((query.start_m.0 / step_m).floor() as isize).clamp(0, cols as isize - 1) as usize;
-    let sy = ((query.start_m.1 / step_m).floor() as isize).clamp(0, rows as isize - 1) as usize;
-    let max_reach_m = (max_budget_mm as f32 / 800.0) + 1.5;
-    let ix_min = (((query.start_m.0 - max_reach_m) / step_m).floor() as isize)
-        .clamp(0, cols as isize - 1) as usize;
-    let ix_max = (((query.start_m.0 + max_reach_m) / step_m).ceil() as isize)
-        .clamp(0, cols as isize - 1) as usize;
-    let iy_min = (((query.start_m.1 - max_reach_m) / step_m).floor() as isize)
-        .clamp(0, rows as isize - 1) as usize;
-    let iy_max = (((query.start_m.1 + max_reach_m) / step_m).ceil() as isize)
-        .clamp(0, rows as isize - 1) as usize;
-    let ix_min = ix_min.min(sx);
-    let ix_max = ix_max.max(sx);
-    let iy_min = iy_min.min(sy);
-    let iy_max = iy_max.max(sy);
-
-    let node_pos = |ix: usize, iy: usize| -> (f32, f32) {
-        ((ix as f32 + 0.5) * step_m, (iy as f32 + 0.5) * step_m)
-    };
-
-    for iy in iy_min..=iy_max {
-        for ix in ix_min..=ix_max {
-            let (px, py) = node_pos(ix, iy);
-            let occupied = occupied_tokens_m
-                .iter()
-                .any(|&(tx, ty)| (px - tx).powi(2) + (py - ty).powi(2) < (TOKEN_RADIUS_M * 1.65).powi(2));
-            let blocked_prop = scene.props.iter().any(|p| {
-                prop_spec(p.kind).obstruction.blocks_movement() && prop_intersects_circle(p, px, py, 0.22)
-            });
-            let idx = iy * cols + ix;
-            walkable[idx] = !occupied && !blocked_prop && !circle_collides_obstacles(scene.width_m, scene.height_m, scene.edges, &[], px, py, 0.20);
-            if walkable[idx] {
-                let mut m = 1.0_f32;
-                for p in scene.props {
-                    let sp = prop_spec(p.kind);
-                    if sp.move_cost_mult > m && prop_contains_point(p, px, py, false) {
-                        m = sp.move_cost_mult;
-                    }
-                }
-                cost_mult[idx] = m;
-            }
-        }
-    }
-
-    let mut cost_mm = vec![i32::MAX; total];
-    cost_mm[sy * cols + sx] = 0;
-
-    let mut heap = BinaryHeap::new();
-    heap.push(DijkstraNode { cost_mm: 0, ix: sx, iy: sy });
-
-    // 16-directional lattice neighborhood: axial (250mm), diagonal (354mm), knight (559mm).
-    let neighbors: [(isize, isize, i32); 16] = [
-        (1, 0, 250),
-        (-1, 0, 250),
-        (0, 1, 250),
-        (0, -1, 250),
-        (1, 1, 354),
-        (1, -1, 354),
-        (-1, 1, 354),
-        (-1, -1, 354),
-        (2, 1, 559),
-        (2, -1, 559),
-        (-2, 1, 559),
-        (-2, -1, 559),
-        (1, 2, 559),
-        (-1, 2, 559),
-        (1, -2, 559),
-        (-1, -2, 559),
-    ];
-
-    let blocking_edges: Vec<&MapWallEdge> = scene
-        .edges
-        .iter()
-        .filter(|e| WallEdgeKind::blocks_movement(e.kind))
-        .collect();
-
-    while let Some(node) = heap.pop() {
-        let cur_idx = node.iy * cols + node.ix;
-        if node.cost_mm > cost_mm[cur_idx] {
-            continue;
-        }
-        let a = node_pos(node.ix, node.iy);
-        for &(dx, dy, base_mm) in &neighbors {
-            let nx_i = node.ix as isize + dx;
-            let ny_i = node.iy as isize + dy;
-            if nx_i < 0 || ny_i < 0 || nx_i >= cols as isize || ny_i >= rows as isize {
-                continue;
-            }
-            let (nx, ny) = (nx_i as usize, ny_i as usize);
-            let nidx = ny * cols + nx;
-            if !walkable[nidx] {
-                continue;
-            }
-            if dx.abs() == 2 || dy.abs() == 2 {
-                let mx = (node.ix as isize + dx / 2) as usize;
-                let my = (node.iy as isize + dy / 2) as usize;
-                if !walkable[my * cols + mx] {
-                    continue;
-                }
-            }
-            let b = node_pos(nx, ny);
-            if blocking_edges
-                .iter()
-                .any(|e| intersect_segment_edge(a, b, e).is_some())
-            {
-                continue;
-            }
-            let step_cost = ((base_mm as f32) * cost_mult[nidx]).round() as i32;
-            let next_cost = node.cost_mm + step_cost;
-            if next_cost > max_budget_mm {
-                continue;
-            }
-            if next_cost < cost_mm[nidx] {
-                cost_mm[nidx] = next_cost;
-                heap.push(DijkstraNode { cost_mm: next_cost, ix: nx, iy: ny });
-            }
-        }
-    }
-
-    ReachableField { step_m, cols, rows, m_per_tick, cost_mm }
-}
-
 /// Builds a complete vector [`GmMapUpdateRequest`] with continuous centimeter token coordinates,
-/// thin structural [`MapWallEdge`]s, `360°` oriented props, and `tiles: Vec::new()`.
+/// thin structural [`MapWallEdge`]s, `360°` oriented props, vector ground surfaces, and `tiles: Vec::new()`.
 #[must_use]
 pub fn build_procedural_map_request(
     map_id: &str,
@@ -679,7 +401,7 @@ pub fn build_procedural_map_request(
 ) -> GmMapUpdateRequest {
     let w = width.clamp(8, 48);
     let h = height.clamp(8, 48);
-    let ProceduralSector { wall_edges, props } = generate_procedural_sector(preset, w, h, seed);
+    let ProceduralSector { wall_edges, props, surfaces } = generate_procedural_sector(preset, w, h, seed);
     let mid_y = h / 2;
     let title = title_override
         .map(str::trim)
@@ -768,14 +490,16 @@ pub fn build_procedural_map_request(
         token_visuals,
         wall_edges,
         props,
+        surfaces,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map_dressing::{PropObstruction, make_prop};
-    use crate::tactical_map_geom::all_walkable_areas_connected;
+    use crate::environment_vehicles::CombatMovementGait;
+    use crate::map_dressing::{PropObstruction, make_prop, prop_spec};
+    use crate::tactical_map_geom::{TOKEN_RADIUS_M, all_walkable_areas_connected};
     use satya_schema::{EdgeSide, MaterialClass, PropKind};
 
     #[test]
@@ -800,7 +524,7 @@ mod tests {
         }
 
         // Clear LoS
-        let empty = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[] };
+        let empty = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[], surfaces: &[] };
         let clear = evaluate_los_continuous(&empty, (2.5, 4.5), (9.5, 4.5));
         assert!(clear.has_los);
         assert_eq!(clear.cover_grade, CoverGrade::Clear);
@@ -809,7 +533,7 @@ mod tests {
 
         // Mid-field JerseyBarrier -> LowCover (+4)
         let barrier = make_prop(PropKind::JerseyBarrier, 6, 4, 90, Some(1), 0);
-        let low_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[barrier] };
+        let low_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[barrier], surfaces: &[] };
         let low = evaluate_los_continuous(&low_scene, (2.5, 4.5), (9.5, 4.5));
         assert!(low.has_los && low.cover_grade == CoverGrade::LowCover && low.recommended_delta_ext == 4);
 
@@ -817,9 +541,32 @@ mod tests {
         let braced = evaluate_los_continuous(&low_scene, (5.8, 4.5), (9.5, 4.5));
         assert_eq!(braced.cover_grade, CoverGrade::Clear);
 
+        // Target crouching inside a DefensiveTrench > 1.2m away -> LowCover (+4)
+        let trench = satya_schema::MapSurfaceFeature {
+            kind: SurfaceFeatureKind::DefensiveTrench,
+            shape: satya_schema::SurfaceShapeKind::RibbonSpline,
+            points_cm: vec![
+                satya_schema::MapPointCm::new(900, 200),
+                satya_schema::MapPointCm::new(900, 700),
+            ],
+            width_cm: 180,
+            border_style_cm: 0,
+            variant_seed: 1,
+        };
+        let trench_scene = TacticalSceneView {
+            width_m: 12.0,
+            height_m: 8.0,
+            edges: &[],
+            props: &[],
+            surfaces: &[trench],
+        };
+        let trench_cover = evaluate_los_continuous(&trench_scene, (2.5, 4.5), (9.0, 4.5));
+        assert_eq!(trench_cover.cover_grade, CoverGrade::LowCover);
+        assert_eq!(trench_cover.recommended_delta_ext, 4);
+
         // Single StructuralPillar with open sides -> corner-peek HighCover (+6)
         let pillar = make_prop(PropKind::StructuralPillar, 6, 4, 0, None, 0);
-        let pillar_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[pillar] };
+        let pillar_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &[], props: &[pillar], surfaces: &[] };
         let corner = evaluate_los_continuous(&pillar_scene, (5.6, 4.5), (9.5, 4.5));
         assert!(corner.has_los && corner.cover_grade == CoverGrade::HighCover && corner.recommended_delta_ext == 6);
 
@@ -833,14 +580,14 @@ mod tests {
                 material: MaterialClass::Brick,
             })
             .collect();
-        let blocked_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &wall, props: &[] };
+        let blocked_scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &wall, props: &[], surfaces: &[] };
         let blocked = evaluate_los_continuous(&blocked_scene, (2.5, 4.5), (9.5, 4.5));
         assert!(!blocked.has_los && blocked.cover_grade == CoverGrade::Blocked);
     }
 
     #[test]
     fn test_metric_gait_reach_scales_continuously() {
-        let scene = TacticalSceneView { width_m: 20.0, height_m: 14.0, edges: &[], props: &[] };
+        let scene = TacticalSceneView { width_m: 20.0, height_m: 14.0, edges: &[], props: &[], surfaces: &[] };
         let walk = compute_reachable_continuous(
             &scene,
             &[],

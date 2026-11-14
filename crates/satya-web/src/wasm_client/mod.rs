@@ -46,6 +46,7 @@ pub mod map_2d_tokens;
 pub mod map_3d;
 pub mod map_3d_dressing_geom;
 pub mod map_3d_input;
+pub mod map_3d_surfaces_geom;
 pub mod map_3d_wgpu;
 pub mod map_edge_edit;
 pub mod map_hover_inspect;

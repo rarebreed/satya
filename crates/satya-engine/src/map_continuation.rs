@@ -10,7 +10,7 @@
 
 use satya_schema::{
     EdgeSide, GmMapUpdateRequest, MapContinuationDir, MapPropPlacement, MapWallEdge,
-    MaterialClass, PropKind, WallEdgeKind,
+    MaterialClass, WallEdgeKind,
 };
 
 use crate::map_dressing::{PropObstruction, make_prop_at_cm, prop_spec};
@@ -97,25 +97,10 @@ pub fn partition_span_into_chunks(total_cells: i32, target_chunk: i32) -> Vec<(i
     out
 }
 
-const fn is_continuous_ribbon_prop(kind: PropKind) -> bool {
-    matches!(
-        kind,
-        PropKind::CreekWater
-            | PropKind::DrainageDitch
-            | PropKind::AsphaltDrive
-            | PropKind::GravelPath
-            | PropKind::StonePath
-            | PropKind::DirtPath
-            | PropKind::ElevatedCatwalk
-    )
-}
-
-#[derive(Debug, Clone)]
-struct RibbonAnchor {
-    kind: PropKind,
-    local_t_m: f32,
-    span_m: f32,
-}
+use crate::map_continuation_ribbons::{
+    RibbonAnchor, align_chunk_ribbons, clear_props_near, extract_seam_ribbons,
+    mirror_sector_surfaces,
+};
 
 #[derive(Debug, Clone)]
 struct BoundarySeamSlice {
@@ -158,7 +143,6 @@ fn extract_seam_slice(
     let (w, h) = (map.grid_width, map.grid_height);
     let mut edges = Vec::with_capacity(t_len as usize);
     let mut src_clear = Vec::with_capacity(t_len as usize);
-    let mut ribbons = Vec::new();
 
     for dt in 0..t_len {
         let t = t0 + dt;
@@ -176,33 +160,7 @@ fn extract_seam_slice(
         src_clear.push(!blocked);
     }
 
-    // Detect surface ribbons touching the exited boundary inside [t0..t0 + t_len].
-    for p in &map.props {
-        if !is_continuous_ribbon_prop(p.kind) {
-            continue;
-        }
-        let fp = p.footprint_m();
-        let (norm_dist, tang_coord) = match dir {
-            MapContinuationDir::North => (fp.cy_m - fp.hy_m.max(0.5), fp.cx_m),
-            MapContinuationDir::South => (h as f32 - (fp.cy_m + fp.hy_m.max(0.5)), fp.cx_m),
-            MapContinuationDir::West => (fp.cx_m - fp.hx_m.max(0.5), fp.cy_m),
-            MapContinuationDir::East => (w as f32 - (fp.cx_m + fp.hx_m.max(0.5)), fp.cy_m),
-        };
-        if norm_dist <= 1.25 && tang_coord >= t0 as f32 - 0.5 && tang_coord <= (t0 + t_len) as f32 + 0.5 {
-            let local_t_m = (tang_coord - t0 as f32).clamp(0.5, t_len as f32 - 0.5);
-            let tang_span = match dir {
-                MapContinuationDir::North | MapContinuationDir::South => (fp.hx_m * 2.0).clamp(1.0, 5.0),
-                MapContinuationDir::East | MapContinuationDir::West => (fp.hy_m * 2.0).clamp(1.0, 5.0),
-            };
-            let dup = ribbons.iter().any(|r: &RibbonAnchor| {
-                r.kind == p.kind && (r.local_t_m - local_t_m).abs() < 1.25
-            });
-            if !dup {
-                ribbons.push(RibbonAnchor { kind: p.kind, local_t_m, span_m: tang_span });
-            }
-        }
-    }
-
+    let ribbons = extract_seam_ribbons(map, dir, t0, t_len);
     BoundarySeamSlice { t0, t_len, edges, src_clear, ribbons }
 }
 
@@ -246,106 +204,7 @@ fn mirror_sector(sec: &mut ProceduralSector, cw: i32, ch: i32, horizontal_flip: 
     for p in &mut sec.props {
         *p = mirror_prop_axis(*p, cw, ch, horizontal_flip);
     }
-}
-
-fn find_chunk_entry_ribbon_coord(
-    sec: &ProceduralSector,
-    kind: PropKind,
-    cw: i32,
-    ch: i32,
-    entry_dir: MapContinuationDir,
-) -> Option<f32> {
-    let horizontal_seam = matches!(entry_dir, MapContinuationDir::North | MapContinuationDir::South);
-    sec.props
-        .iter()
-        .filter(|p| p.kind == kind)
-        .filter_map(|p| {
-            let fp = p.footprint_m();
-            let norm_dist = match entry_dir {
-                MapContinuationDir::South => ch as f32 - (fp.cy_m + fp.hy_m.max(0.5)),
-                MapContinuationDir::North => fp.cy_m - fp.hy_m.max(0.5),
-                MapContinuationDir::East => cw as f32 - (fp.cx_m + fp.hx_m.max(0.5)),
-                MapContinuationDir::West => fp.cx_m - fp.hx_m.max(0.5),
-            };
-            (norm_dist <= 1.25).then_some(if horizontal_seam { fp.cx_m } else { fp.cy_m })
-        })
-        .next()
-}
-
-fn clear_props_near(props: &mut Vec<MapPropPlacement>, px_m: f32, py_m: f32, radius_m: f32) {
-    props.retain(|p| {
-        prop_spec(p.kind).floor_layer || !prop_intersects_circle(p, px_m, py_m, radius_m)
-    });
-}
-
-fn align_chunk_ribbons(
-    sec: &mut ProceduralSector,
-    preset: SectorPreset,
-    slice: &BoundarySeamSlice,
-    cw: i32,
-    ch: i32,
-    dir: MapContinuationDir,
-) {
-    if slice.ribbons.is_empty() {
-        return;
-    }
-    let horizontal_seam = matches!(dir, MapContinuationDir::North | MapContinuationDir::South);
-    let entry_side = dir.opposite();
-    let allow_mirror = preset.outdoor_style().is_some() || preset == SectorPreset::UrbanCrossroads;
-
-    // Optional tangent reflection if it brings the primary linear ribbon into closer alignment.
-    if allow_mirror
-        && let Some(primary) = slice.ribbons.first()
-        && let Some(dst_t) = find_chunk_entry_ribbon_coord(sec, primary.kind, cw, ch, entry_side)
-    {
-        let span_max = if horizontal_seam { cw as f32 } else { ch as f32 };
-        let flipped_t = span_max - dst_t;
-        if (flipped_t - primary.local_t_m).abs() + 0.5 < (dst_t - primary.local_t_m).abs() {
-            mirror_sector(sec, cw, ch, horizontal_seam);
-        }
-    }
-
-    // Stamp smooth connecting surface tiles from the seam entry into the chunk's matching ribbon (or 2m inward).
-    let mut additions = Vec::new();
-    for anchor in &slice.ribbons {
-        let dst_t = find_chunk_entry_ribbon_coord(sec, anchor.kind, cw, ch, entry_side)
-            .unwrap_or(anchor.local_t_m);
-        let seam_cell_n = match entry_side {
-            MapContinuationDir::North => 0.5,
-            MapContinuationDir::South => ch as f32 - 0.5,
-            MapContinuationDir::West => 0.5,
-            MapContinuationDir::East => cw as f32 - 0.5,
-        };
-        let inward = match entry_side {
-            MapContinuationDir::North | MapContinuationDir::West => 1.0,
-            MapContinuationDir::South | MapContinuationDir::East => -1.0,
-        };
-        let steps = ((dst_t - anchor.local_t_m).abs().ceil() as i32 + 2).clamp(2, 6);
-        for i in 0..steps {
-            let frac = i as f32 / (steps - 1).max(1) as f32;
-            let tang = anchor.local_t_m + (dst_t - anchor.local_t_m) * frac;
-            let norm = seam_cell_n + inward * (frac * 1.5);
-            let (wx, wy) = if horizontal_seam { (tang, norm) } else { (norm, tang) };
-            let rot = if horizontal_seam { 0 } else { 90 };
-            let len_cm = (anchor.span_m * 100.0).round() as i32;
-            additions.push(make_prop_at_cm(
-                anchor.kind,
-                (wx * 100.0).round() as i32,
-                (wy * 100.0).round() as i32,
-                rot,
-                Some(len_cm.clamp(100, 500)),
-                0,
-            ));
-            clear_props_near(&mut sec.props, wx, wy, 0.75);
-        }
-    }
-    // Insert surface decals before solid props so furniture/trees render on top.
-    let insert_at = sec
-        .props
-        .iter()
-        .position(|p| !prop_spec(p.kind).floor_layer)
-        .unwrap_or(sec.props.len());
-    sec.props.splice(insert_at..insert_at, additions);
+    mirror_sector_surfaces(&mut sec.surfaces, cw, ch, horizontal_flip);
 }
 
 #[derive(Clone, Copy)]
@@ -631,6 +490,9 @@ pub fn continue_procedural_map(
     for p in &mut base.props {
         *p = translate_prop(*p, dx_cells, dy_cells, cell_cm);
     }
+    for s in &mut base.surfaces {
+        *s = s.translated(dx_cells * cell_cm, dy_cells * cell_cm);
+    }
     for (entity_id, old_x_cm, old_y_cm) in prev_token_cm {
         base.set_token_pos_cm(
             &entity_id,
@@ -650,7 +512,7 @@ pub fn continue_procedural_map(
             MapContinuationDir::North => (slice.t0, 0, slice.t_len, CONTINUATION_STRIP_H),
         };
         let mut sec = generate_procedural_sector(preset, cw, ch, chunk_seed);
-        align_chunk_ribbons(&mut sec, preset, slice, cw, ch, dir);
+        align_chunk_ribbons(&mut sec, preset, &slice.ribbons, cw, ch, dir, mirror_sector);
         reconcile_chunk_entry_seam(
             &mut sec,
             preset,
@@ -670,6 +532,9 @@ pub fn continue_procedural_map(
             e.x += x_off;
             e.y += y_off;
             upsert_edge(&mut base.wall_edges, e);
+        }
+        for s in sec.surfaces {
+            base.surfaces.push(s.translated(x_off * 100, y_off * 100));
         }
         for p in sec.props {
             let shifted = translate_prop(p, x_off, y_off, 100);
@@ -810,21 +675,29 @@ mod tests {
 
         let creek = build_procedural_map_request("creek", SectorPreset::WoodlandCreek, None, 20, 14, 42);
         let creek_s = continue_procedural_map(&creek, MapContinuationDir::South, None).unwrap();
-        let crosses_south_seam = creek_s.map.props.iter().any(|p| {
-            p.kind == PropKind::CreekWater
-                && p.center_m().1 >= 13.0
-                && p.center_m().1 <= 15.6
+        let crosses_south_seam = creek_s.map.surfaces.iter().any(|s| {
+            s.kind == satya_schema::SurfaceFeatureKind::CreekChannel
+                && (1..20).any(|gx| {
+                    let xm = gx as f32;
+                    crate::map_surface_geom::surface_contains_point_m(s, xm, 14.0)
+                        || (crate::map_surface_geom::surface_contains_point_m(s, xm, 13.6)
+                            && crate::map_surface_geom::surface_contains_point_m(s, xm, 14.4))
+                })
         });
         assert!(crosses_south_seam, "WoodlandCreek South continuation should bridge creek across y=14");
 
         let park = build_procedural_map_request("park", SectorPreset::WoodedPark, None, 20, 14, 42);
         let park_e = continue_procedural_map(&park, MapContinuationDir::East, None).unwrap();
-        let bridges_east_stone = park_e.map.props.iter().any(|p| {
-            p.kind == PropKind::StonePath
-                && p.center_m().0 >= 19.0
-                && p.center_m().0 <= 21.8
+        let bridges_east_trail = park_e.map.surfaces.iter().any(|s| {
+            s.kind == satya_schema::SurfaceFeatureKind::DirtTrail
+                && (1..14).any(|gy| {
+                    let ym = gy as f32;
+                    crate::map_surface_geom::surface_contains_point_m(s, 20.0, ym)
+                        || (crate::map_surface_geom::surface_contains_point_m(s, 19.6, ym)
+                            && crate::map_surface_geom::surface_contains_point_m(s, 20.4, ym))
+                })
         });
-        assert!(bridges_east_stone, "WoodedPark East continuation should bridge stone trail across x=20");
+        assert!(bridges_east_trail, "WoodedPark East continuation should bridge winding trail across x=20");
     }
 
     #[test]

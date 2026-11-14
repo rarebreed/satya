@@ -97,7 +97,6 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
         }
         _ => ([0.075, 0.115, 0.185, 0.0], -1.0_f32),
     };
-    let floor_zone_id = if ui.show_grid_overlay { deck_zone_id } else { 0.0 };
     push_quad(
         &mut verts,
         [
@@ -107,7 +106,7 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
             [half_w_m, 0.0, -half_h_m],
         ],
         deck_rgba,
-        floor_zone_id,
+        deck_zone_id,
     );
     // Subtle outer table rim
     push_box(
@@ -131,6 +130,12 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
                 && satya_engine::tactical_map_geom::prop_contains_point(p, xm, ym, false)
         }) {
             1.48
+        } else if matches!(
+            satya_engine::map_surface_geom::topmost_surface_at_m(&ui.map.surfaces, xm, ym)
+                .map(|s| s.kind),
+            Some(satya_schema::SurfaceFeatureKind::BridgeDeck)
+        ) {
+            0.12
         } else {
             0.0
         }
@@ -364,7 +369,7 @@ mod map_wgpu_runtime {
         }
 
         // Gather token miniature draw calls grouped in order
-        let (cell_m, draws): (f32, Vec<(String, GlbInstanceData)>) = with_map_ui(|ui| {
+        let (cell_m, show_grid, draws): (f32, bool, Vec<(String, GlbInstanceData)>) = with_map_ui(|ui| {
             let cm = ui.map.cell_size_m();
             let (bw_m, bh_m) = ui.map.board_size_m();
             let mut list = Vec::with_capacity(ui.map.tokens.len());
@@ -377,8 +382,16 @@ mod map_wgpu_runtime {
                     p.kind == PropKind::ElevatedCatwalk
                         && satya_engine::tactical_map_geom::prop_contains_point(p, tx_m, ty_m, false)
                 });
+                let on_bridge = !on_catwalk
+                    && matches!(
+                        satya_engine::map_surface_geom::topmost_surface_at_m(&ui.map.surfaces, tx_m, ty_m)
+                            .map(|s| s.kind),
+                        Some(satya_schema::SurfaceFeatureKind::BridgeDeck)
+                    );
                 let base_y = if on_catwalk {
                     1.48
+                } else if on_bridge {
+                    0.12
                 } else {
                     ui.map
                         .visual_for(&tok.entity_id)
@@ -398,7 +411,7 @@ mod map_wgpu_runtime {
                 );
                 list.push((preset, inst));
             }
-            (cm, list)
+            (cm, ui.show_grid_overlay, list)
         });
 
         for (preset, _) in &draws {
@@ -426,7 +439,7 @@ mod map_wgpu_runtime {
         let uniforms = DioramaUniforms {
             view_proj,
             camera_pos: [eye[0], eye[1], eye[2], 1.0],
-            mode_params: [mode_f, cell_m, 0.42, 0.0],
+            mode_params: [mode_f, cell_m, 0.42, if show_grid { 1.0 } else { 0.0 }],
         };
         pipe.queue
             .write_buffer(&pipe.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));

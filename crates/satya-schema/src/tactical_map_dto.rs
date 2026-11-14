@@ -1,9 +1,11 @@
 //! Tactical `1.0m` Grid Terrain Tiles, Cover Grades, 3D Miniature Visual Specs,
 //! and Interactive Map Generation / Token Movement REST DTOs.
 //!
-//! Edge walls, multi-cell props, and material classes live in [`crate::tactical_map_dressing_dto`].
+//! Edge walls, multi-cell props, vector surfaces, and material classes live in
+//! [`crate::tactical_map_dressing_dto`] and [`crate::tactical_map_surfaces_dto`].
 
 pub use crate::tactical_map_dressing_dto::*;
+pub use crate::tactical_map_surfaces_dto::*;
 
 use crate::events::MessageVisibility;
 use serde::{Deserialize, Serialize};

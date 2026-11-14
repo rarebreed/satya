@@ -64,6 +64,7 @@ fn lighten(c: [f32; 3], k: f32) -> [f32; 3] {
 
 /// Appends edge-wall and prop geometry for `ui` (`wall_h_m` / `door_h_m` honor the cutaway toggle).
 pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiState, wall_h_m: f32, door_h_m: f32) {
+    crate::wasm_client::map_3d_surfaces_geom::push_vector_surfaces_3d(verts, ui);
     let (w, h) = (ui.map.grid_width.max(1), ui.map.grid_height.max(1));
     let s = ui.map.cell_size_m();
     // Grid lattice point `(gx, gy)` -> world `(wx, wz)`.
@@ -108,7 +109,24 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
 
     let cutaway = wall_h_m < 1.0;
     let (bw_m, bh_m) = ui.map.board_size_m();
+    let has_vector_surfaces = !ui.map.surfaces.is_empty();
     for p in &ui.map.props {
+        if has_vector_surfaces
+            && matches!(
+                p.kind,
+                PropKind::AsphaltDrive
+                    | PropKind::StonePath
+                    | PropKind::GravelPath
+                    | PropKind::DirtPath
+                    | PropKind::MulchBed
+                    | PropKind::CreekWater
+                    | PropKind::DrainageDitch
+                    | PropKind::GardenBed
+                    | PropKind::GardenEdging
+            )
+        {
+            continue;
+        }
         let spec = prop_spec(p.kind);
         let fp = p.footprint_m();
         let [cx, cz] = metric_to_world_xz(fp.cx_m, fp.cy_m, bw_m, bh_m);

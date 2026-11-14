@@ -443,7 +443,26 @@ pub fn inspect_map_point(
         });
     }
 
-    // 4. Floor-layer surfaces (catwalks, spills, paths, creeks, rugs).
+    // 4. Elevated bridge decks override underlying ground channels; then floor-layer props; then vector surfaces.
+    let top_surf = crate::map_surface_geom::topmost_surface_at_m(&req.surfaces, x_m, y_m);
+    if let Some(surf) = top_surf
+        && surf.kind == satya_schema::SurfaceFeatureKind::BridgeDeck
+    {
+        return Some(MapHoverInspection {
+            category: MapHoverCategory::SurfaceProp,
+            title: surf.kind.label().to_owned(),
+            subtitle: "Elevated Bridge / Overpass (+15 cm)".to_owned(),
+            material_label: surf.kind.material().label().to_owned(),
+            cover_label: "Walkable Surface".to_owned(),
+            height_cm: 15,
+            elevation_cm: 15,
+            rotation_deg: None,
+            world_x_m: x_m,
+            world_y_m: y_m,
+            target_ref: "surface:bridge".to_owned(),
+        });
+    }
+
     for (idx, p) in req.props.iter().enumerate().rev() {
         let spec = prop_spec(p.kind);
         if !spec.floor_layer || !prop_contains_point(p, x_m, y_m, false) {
@@ -472,6 +491,43 @@ pub fn inspect_map_point(
             world_x_m: x_m,
             world_y_m: y_m,
             target_ref: format!("prop:{idx}"),
+        });
+    }
+
+    if let Some(surf) = top_surf {
+        let kind = surf.kind;
+        let cost = kind.move_cost_mult();
+        let (subtitle, cover_label, elevation_cm) = match kind {
+            satya_schema::SurfaceFeatureKind::DefensiveTrench => (
+                format!("Excavated Trench ({cost:.1}x Move Cost)"),
+                "Low Cover (Trench)".to_owned(),
+                -40,
+            ),
+            satya_schema::SurfaceFeatureKind::CreekChannel
+            | satya_schema::SurfaceFeatureKind::DrainageDitch => (
+                format!("Difficult Ground ({cost:.1}x Move Cost)"),
+                "Hazardous Footing".to_owned(),
+                -25,
+            ),
+            satya_schema::SurfaceFeatureKind::GardenBedZone => (
+                format!("Planted Soil ({cost:.2}x Move Cost)"),
+                "Soft Ground".to_owned(),
+                8,
+            ),
+            _ => ("Vector Surface Layer".to_owned(), "Walkable Surface".to_owned(), 0),
+        };
+        return Some(MapHoverInspection {
+            category: MapHoverCategory::SurfaceProp,
+            title: kind.label().to_owned(),
+            subtitle,
+            material_label: kind.material().label().to_owned(),
+            cover_label,
+            height_cm: 0,
+            elevation_cm,
+            rotation_deg: None,
+            world_x_m: x_m,
+            world_y_m: y_m,
+            target_ref: format!("surface:{}", kind.as_str()),
         });
     }
 

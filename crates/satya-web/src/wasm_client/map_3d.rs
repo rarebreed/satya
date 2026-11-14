@@ -168,6 +168,7 @@ impl TacticalMapUiState {
                 height_m: board_h_m,
                 edges: &self.map.wall_edges,
                 props: &self.map.props,
+                surfaces: &self.map.surfaces,
             };
             let field = compute_reachable_continuous(
                 &scene,

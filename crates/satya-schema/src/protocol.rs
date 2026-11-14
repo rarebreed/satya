@@ -854,6 +854,9 @@ pub struct GmMapUpdateRequest {
     /// Multi-cell props whose mechanical footprint is already stamped into `tiles`.
     #[serde(default)]
     pub props: Vec<MapPropPlacement>,
+    /// Smooth continuous vector ground splines and organic polygons (`AsphaltRoad`, `CreekChannel`, `MulchZone`, `GardenBedZone`, etc.).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub surfaces: Vec<MapSurfaceFeature>,
 }
 
 impl Default for GmMapUpdateRequest {
@@ -873,6 +876,7 @@ impl Default for GmMapUpdateRequest {
             token_visuals: Vec::new(),
             wall_edges: Vec::new(),
             props: Vec::new(),
+            surfaces: Vec::new(),
         }
     }
 }

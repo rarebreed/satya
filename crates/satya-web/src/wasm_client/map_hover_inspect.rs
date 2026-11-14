@@ -330,6 +330,7 @@ mod tests {
     fn hover_inspector_identifies_tokens_walls_car_parts_trees_surfaces_and_ground() {
         let mut ui = TacticalMapUiState::default();
         ui.map.theme_preset = Some("urban_crossroads".to_string());
+        ui.map.surfaces.clear();
         ui.map.wall_edges = vec![MapWallEdge {
             x: 4,
             y: 4,

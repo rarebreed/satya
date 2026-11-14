@@ -155,6 +155,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             albedo = albedo * (0.72 + 0.48 * l_clump) + vec3<f32>(0.04, 0.07, 0.01) * l_leaf;
             n = normalize(n + vec3<f32>((l_leaf - 0.5) * 0.24, 0.0, (l_clump - 0.5) * 0.24));
             spec_scale = 0.35;
+        } else if abs(in.zone_id - (-7.0)) < 0.1 {
+            let grain = hash21(floor(wp * 26.0));
+            let wear = vnoise2(wp * 2.8);
+            albedo = albedo * (0.88 + 0.14 * wear + 0.12 * (grain - 0.5));
+            n = normalize(n + vec3<f32>((grain - 0.5) * 0.10, 0.0, (wear - 0.5) * 0.10));
+            spec_scale = 0.30;
         }
     }
 
@@ -170,7 +176,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Subtle 1.0m minor / 5.0m major tactical grid lines on deck tiles (`zone_id < -0.5`)
     var grid_boost = vec3<f32>(0.0);
-    if in.zone_id < -0.5 {
+    if in.zone_id < -0.5 && scene.mode_params.w > 0.5 {
         let cell_scale = max(scene.mode_params.y, 0.25);
         let uv1 = fract(in.world_pos.xz / cell_scale + vec2<f32>(0.5, 0.5));
         let d1 = min(min(uv1.x, 1.0 - uv1.x), min(uv1.y, 1.0 - uv1.y));

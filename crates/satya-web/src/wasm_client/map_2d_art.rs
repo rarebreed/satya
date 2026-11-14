@@ -398,6 +398,21 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
             acc = fnv(acc, v);
         }
     }
+    for s in &ui.map.surfaces {
+        for v in [
+            s.kind as u64,
+            s.shape as u64,
+            s.width_cm as u64,
+            s.border_style_cm as u64,
+            u64::from(s.variant_seed),
+        ] {
+            acc = fnv(acc, v);
+        }
+        for pt in &s.points_cm {
+            acc = fnv(acc, pt.x_cm as u64);
+            acc = fnv(acc, pt.y_cm as u64);
+        }
+    }
     format!("{acc:016x}")
 }
 
@@ -445,11 +460,12 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     );
 
     // 1b. Merged paved roadways, organic landscaping surfaces, rugs, catwalks, and hazard spills
+    let has_vector_surfaces = !ui.map.surfaces.is_empty();
     push_landscaping_surfaces_svg(&mut out, ui, w, h, seed);
     for p in ui.map.props.iter().filter(|p| {
         prop_spec(p.kind).floor_layer
-            && (p.rotation_deg.rem_euclid(90) != 0
-                || !matches!(
+            && (if has_vector_surfaces {
+                !matches!(
                     p.kind,
                     PropKind::StonePath
                         | PropKind::AsphaltDrive
@@ -458,48 +474,30 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
                         | PropKind::MulchBed
                         | PropKind::CreekWater
                         | PropKind::DrainageDitch
-                ))
+                        | PropKind::GardenBed
+                        | PropKind::GardenEdging
+                )
+            } else {
+                p.rotation_deg.rem_euclid(90) != 0
+                    || !matches!(
+                        p.kind,
+                        PropKind::StonePath
+                            | PropKind::AsphaltDrive
+                            | PropKind::GravelPath
+                            | PropKind::DirtPath
+                            | PropKind::MulchBed
+                            | PropKind::CreekWater
+                            | PropKind::DrainageDitch
+                    )
+            })
     }) {
         push_furniture_glyph(&mut out, p, CELL_F);
     }
 
-    // 2. Ground dressing: stains and roadway centerlines
-    if t.floor_stains {
-        for i in 0..((w * h) / 16).max(3) {
-            let hh = battlemap_cell_hash(seed, i, 0, 0x57A1);
-            let sx = battlemap_unit_f32(hh) * vw as f32;
-            let sy = battlemap_unit_f32(hh ^ 0x3C) * vh as f32;
-            let r = CELL_F * (0.4 + battlemap_unit_f32(hh ^ 0x91) * 0.8);
-            let d = battlemap_blob_path(sx, sy, r, 8, 0.3, hh);
-            let _ = write!(out, r##"<path d="{d}" fill="#5b4a36" fill-opacity=".14"/>"##);
-        }
-    }
-    if t.lane_markings {
-        let on_road = |x: i32, y: i32| {
-            ui.map
-                .props
-                .iter()
-                .any(|p| p.kind == PropKind::AsphaltDrive && p.covers(x, y))
-        };
-        let (my, mx) = (h / 2, w / 2);
-        let mut d = String::new();
-        for x in 0..w {
-            if on_road(x, my - 1) && on_road(x, my) {
-                let _ = write!(d, "M{} {}h{}", x * BATTLEMAP_CELL_PX, my * BATTLEMAP_CELL_PX, BATTLEMAP_CELL_PX);
-            }
-        }
-        for y in 0..h {
-            if on_road(mx - 1, y) && on_road(mx, y) && !(y == my - 1 || y == my) {
-                let _ = write!(d, "M{} {}v{}", mx * BATTLEMAP_CELL_PX, y * BATTLEMAP_CELL_PX, BATTLEMAP_CELL_PX);
-            }
-        }
-        if !d.is_empty() {
-            let _ = write!(
-                out,
-                r##"<path d="{d}" fill="none" stroke="#efe9d2" stroke-width="3.5" stroke-dasharray="20 14" stroke-opacity=".8"/>"##
-            );
-        }
-    }
+    // 2. Ground dressing: stains and roadway centerlines (roads, sidewalks & channels protected from dirt stains)
+    crate::wasm_client::map_2d_art_surfaces::push_ground_dressing_and_lanes_svg(
+        &mut out, ui, t, w, h, seed,
+    );
 
     // 3. Solid 360°-rotated furniture, vehicles, pillars & tree trunks under the shared wobbly-ink shadow filter
     out.push_str(r#"<g filter="url(#bm-prop)">"#);

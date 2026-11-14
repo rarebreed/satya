@@ -438,7 +438,7 @@ mod tests {
     fn shot_across_prop(kind: PropKind, rot_deg: i32, target_xy: (i32, i32), weapon_id: &str) -> BallisticShotEvaluation {
         let prop = make_prop(kind, 6, 4, rot_deg, None, 0);
         let props = [prop];
-        let scene = TacticalSceneView { width_m: 14.0, height_m: 10.0, edges: &[], props: &props };
+        let scene = TacticalSceneView { width_m: 14.0, height_m: 10.0, edges: &[], props: &props, surfaces: &[] };
         evaluate_ballistic_shot(BallisticShotQuery {
             scene: &scene,
             attacker_m: (2.5, 4.5),
@@ -493,7 +493,7 @@ mod tests {
                 material: MaterialClass::Drywall,
             })
             .collect();
-        let scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &wall_edges, props: &[] };
+        let scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &wall_edges, props: &[], surfaces: &[] };
         let p320 = lookup_firearm_preset("sig_p320_9mm").unwrap();
         let hk416 = lookup_firearm_preset("hk416_carbine_556").unwrap();
 
@@ -530,7 +530,7 @@ mod tests {
                 material: MaterialClass::Brick,
             })
             .collect();
-        let scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &brick_edges, props: &[] };
+        let scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &brick_edges, props: &[], surfaces: &[] };
         let eval = |wid: &str| {
             evaluate_ballistic_shot(BallisticShotQuery {
                 scene: &scene,
@@ -566,7 +566,7 @@ mod tests {
     fn vehicle_cabin_doors_perforate_under_rifle_fire_while_engine_block_stops_762_nato() {
         let car = make_prop(PropKind::Car, 6, 3, 0, None, 0);
         let props = [car];
-        let scene = TacticalSceneView { width_m: 14.0, height_m: 12.0, edges: &[], props: &props };
+        let scene = TacticalSceneView { width_m: 14.0, height_m: 12.0, edges: &[], props: &props, surfaces: &[] };
 
         let door_9mm = evaluate_ballistic_shot(BallisticShotQuery {
             scene: &scene, attacker_m: (2.5, 5.5), target_m: (11.5, 5.5),
@@ -592,7 +592,7 @@ mod tests {
         // Angled 30° parked car still identifies ArmorSteel engine bay accurately.
         let angled_car = make_prop_at_cm(PropKind::Car, 700, 600, 30, None, 0);
         let angled_props = [angled_car];
-        let angled_scene = TacticalSceneView { width_m: 14.0, height_m: 12.0, edges: &[], props: &angled_props };
+        let angled_scene = TacticalSceneView { width_m: 14.0, height_m: 12.0, edges: &[], props: &angled_props, surfaces: &[] };
         let rad = 30.0_f32.to_radians();
         let ey = 6.0 + rad.cos() * 2.0;
         let angled_engine = evaluate_ballistic_shot(BallisticShotQuery {

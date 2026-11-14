@@ -10,7 +10,11 @@
 
 use std::fmt::Write as _;
 
-use satya_schema::PropKind;
+use satya_engine::map_surface_geom::{
+    extrude_surface_ribbon_m, point_masked_by_higher_surface, sample_open_catmull_rom_m,
+    sampled_closed_ring_m,
+};
+use satya_schema::{MapSurfaceFeature, PropKind, SurfaceFeatureKind, SurfaceShapeKind};
 
 use crate::wasm_client::map_2d_art::{
     BATTLEMAP_CELL_PX, BattlemapArtTheme, BattlemapFloorPattern, battlemap_boundary_path,
@@ -205,8 +209,227 @@ pub fn battlemap_smooth_region_path(
     path
 }
 
-/// Renders all floor-layer ground surfaces (`AsphaltDrive`, `DirtPath`, `GravelPath`, `MulchBed`,
-/// `DrainageDitch`, `CreekWater`, `StonePath`) with organic Chaikin shoreline contours and patterns.
+fn push_ring_d(out: &mut String, ring_m: &[(f32, f32)], cell_px: f32) {
+    if let Some(&(x0, y0)) = ring_m.first() {
+        let _ = write!(out, "M{:.1} {:.1}", x0 * cell_px, y0 * cell_px);
+        for &(x, y) in &ring_m[1..] {
+            let _ = write!(out, "L{:.1} {:.1}", x * cell_px, y * cell_px);
+        }
+        out.push('Z');
+    }
+}
+
+fn emit_vector_surfaces_svg(out: &mut String, ui: &TacticalMapUiState, cell_px: f32) {
+    let (bw_m, bh_m) = ui.map.board_size_m();
+    let theme_id = ui.map.theme_preset.as_deref().unwrap_or_default();
+    let indoor_theme = matches!(
+        theme_id,
+        "residential_apartment"
+            | "office_floor"
+            | "corner_bar"
+            | "modern_interior"
+            | "office"
+            | "bar"
+            | "bar_interior"
+            | "docking_bay"
+            | "med_lab"
+            | "derelict_corridor"
+            | "orbital_airlock"
+            | "clinic"
+            | "industrial"
+            | "station"
+    );
+
+    let mut order: Vec<(usize, &MapSurfaceFeature)> = ui.map.surfaces.iter().enumerate().collect();
+    order.sort_by_key(|(idx, s)| (s.kind.layer_priority(), *idx));
+
+    // Pre-pass: paint concrete curbs beneath intersecting AsphaltRoads so crossroads merge seamlessly.
+    let mut road_curb_d = String::new();
+    for (_, s) in &order {
+        if s.kind == SurfaceFeatureKind::AsphaltRoad {
+            let ring = match s.shape {
+                SurfaceShapeKind::RibbonSpline => extrude_surface_ribbon_m(s, bw_m, bh_m).to_closed_ring_m(),
+                _ => sampled_closed_ring_m(s),
+            };
+            push_ring_d(&mut road_curb_d, &ring, cell_px);
+        }
+    }
+    if !road_curb_d.is_empty() {
+        let _ = write!(
+            out,
+            r##"<path d="{road_curb_d}" fill="none" stroke="#c5c0b5" stroke-width="6.5" stroke-linejoin="round"/><path d="{road_curb_d}" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="2" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+        );
+    }
+
+    for &(_, s) in &order {
+        let ring = match s.shape {
+            SurfaceShapeKind::RibbonSpline => extrude_surface_ribbon_m(s, bw_m, bh_m).to_closed_ring_m(),
+            _ => sampled_closed_ring_m(s),
+        };
+        if ring.len() < 3 {
+            continue;
+        }
+        let mut d = String::with_capacity(ring.len() * 14);
+        push_ring_d(&mut d, &ring, cell_px);
+
+        match s.kind {
+            SurfaceFeatureKind::AsphaltRoad => {
+                let _ = write!(out, r##"<path d="{d}" fill="url(#bm-tarmac)"/>"##);
+            }
+            SurfaceFeatureKind::ConcreteWalk => {
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="#cac6bc" stroke="#9e988c" stroke-width="2" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::StoneWalk => {
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="none" stroke="#8b8273" stroke-width="3.6" stroke-linejoin="round" opacity=".55"/><path d="{d}" fill="url(#bm-paver)" stroke="{BATTLEMAP_INK}" stroke-width="1.4" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                );
+            }
+            SurfaceFeatureKind::GravelRoad => {
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="none" stroke="#938b7d" stroke-width="4.2" stroke-linejoin="round" opacity=".55"/><path d="{d}" fill="url(#bm-gravel)" stroke="#6a6358" stroke-width="1.2" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                );
+            }
+            SurfaceFeatureKind::DirtTrail => {
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="none" stroke="#7d6447" stroke-width="4.5" stroke-linejoin="round" opacity=".55"/><path d="{d}" fill="url(#bm-dirt)" stroke="#59452e" stroke-width="1.2" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                );
+            }
+            SurfaceFeatureKind::MulchZone => {
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="none" stroke="#442e1f" stroke-width="3.5" stroke-linejoin="round" opacity=".55"/><path d="{d}" fill="url(#bm-mulch)" stroke="#2f1e13" stroke-width="1.3" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                );
+            }
+            SurfaceFeatureKind::GardenBedZone => {
+                let edge_attr = if s.border_style_cm > 0 {
+                    r##" stroke="#a69a88" stroke-width="4.2" stroke-dasharray="10 3""##
+                } else {
+                    r##" stroke="#365425" stroke-width="1.4""##
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="url(#bm-mulch)"/><path d="{d}" fill="url(#bm-leaf-tex)" fill-opacity=".86"{edge_attr} stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                );
+                let cx = ring.iter().map(|p| p.0).sum::<f32>() / ring.len() as f32;
+                let cy = ring.iter().map(|p| p.1).sum::<f32>() / ring.len() as f32;
+                let blooms = ["#e05770", "#f2c247", "#a875e0", "#f08552"];
+                for (bi, pt) in ring.iter().step_by((ring.len() / 6).max(1)).take(6).enumerate() {
+                    let fx = (cx + (pt.0 - cx) * 0.54) * cell_px;
+                    let fy = (cy + (pt.1 - cy) * 0.54) * cell_px;
+                    let col = blooms[(bi + s.variant_seed as usize) % blooms.len()];
+                    let _ = write!(out, r##"<circle cx="{fx:.1}" cy="{fy:.1}" r="4.5" fill="{col}" stroke="{BATTLEMAP_INK}" stroke-width=".9"/>"##);
+                }
+            }
+            SurfaceFeatureKind::CreekChannel => {
+                if s.shape == SurfaceShapeKind::RibbonSpline {
+                    let mut bank = s.clone();
+                    bank.width_cm += 70;
+                    let bank_ring = extrude_surface_ribbon_m(&bank, bw_m, bh_m).to_closed_ring_m();
+                    let mut bd = String::with_capacity(bank_ring.len() * 14);
+                    push_ring_d(&mut bd, &bank_ring, cell_px);
+                    let _ = write!(out, r##"<path d="{bd}" fill="url(#bm-gravel)" stroke="#7d7563" stroke-width="1.4" stroke-linejoin="round"/>"##);
+                }
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="url(#bm-creek)" stroke="#2a5d73" stroke-width="1.8" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                );
+                if s.shape == SurfaceShapeKind::RibbonSpline {
+                    let ctrl_m: Vec<(f32, f32)> = s.points_cm.iter().map(|p| p.to_m()).collect();
+                    let cl = sample_open_catmull_rom_m(&ctrl_m, 12);
+                    if cl.len() >= 2 {
+                        let _ = write!(out, r##"<path d="M{:.1} {:.1}"##, cl[0].0 * cell_px, cl[0].1 * cell_px);
+                        for pt in &cl[1..] {
+                            let _ = write!(out, "L{:.1} {:.1}", pt.0 * cell_px, pt.1 * cell_px);
+                        }
+                        out.push_str(r##"" fill="none" stroke="#c7eff9" stroke-width="2" stroke-dasharray="14 10" stroke-linecap="round" opacity=".55"/>"##);
+                    }
+                }
+            }
+            SurfaceFeatureKind::DrainageDitch | SurfaceFeatureKind::DefensiveTrench => {
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="none" stroke="#3c4a39" stroke-width="6" stroke-linejoin="round" opacity=".55"/><path d="{d}" fill="url(#bm-ditch)" stroke="#242e23" stroke-width="1.6" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                );
+                if s.shape == SurfaceShapeKind::RibbonSpline {
+                    let mesh = extrude_surface_ribbon_m(s, bw_m, bh_m);
+                    let min_prio = s.kind.layer_priority() + 1;
+                    let mut hd = String::new();
+                    for (ci, edge) in [&mesh.left, &mesh.right].iter().enumerate() {
+                        let sign = if ci == 0 { -1.0 } else { 1.0 };
+                        for i in (1..edge.len()).step_by(3) {
+                            let p = edge[i];
+                            let prev = edge[i - 1];
+                            if point_masked_by_higher_surface(&ui.map.surfaces, min_prio, p.0, p.1) {
+                                continue;
+                            }
+                            let dx = p.0 - prev.0;
+                            let dy = p.1 - prev.1;
+                            let len = dx.hypot(dy).max(1e-4);
+                            let (nx, ny) = ((-dy / len) * sign * 0.22, (dx / len) * sign * 0.22);
+                            let _ = write!(
+                                hd,
+                                "M{:.1} {:.1}L{:.1} {:.1}",
+                                p.0 * cell_px,
+                                p.1 * cell_px,
+                                (p.0 + nx) * cell_px,
+                                (p.1 + ny) * cell_px
+                            );
+                        }
+                    }
+                    if !hd.is_empty() {
+                        let _ = write!(out, r##"<path d="{hd}" fill="none" stroke="#3b2f22" stroke-width="1.4" opacity=".65"/>"##);
+                    }
+                }
+            }
+            SurfaceFeatureKind::InteriorFloor => {
+                if !indoor_theme {
+                    let _ = write!(
+                        out,
+                        r##"<path d="{d}" fill="#9b7854" stroke="#664b30" stroke-width="1.5" stroke-linejoin="round"/>"##
+                    );
+                }
+            }
+            SurfaceFeatureKind::BridgeDeck => {
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="#8c623d" stroke="{BATTLEMAP_INK}" stroke-width="2" stroke-linejoin="round" filter="url(#bm-prop)"/>"##
+                );
+                if s.points_cm.len() == 4 {
+                    let p = [
+                        s.points_cm[0].to_m(),
+                        s.points_cm[1].to_m(),
+                        s.points_cm[2].to_m(),
+                        s.points_cm[3].to_m(),
+                    ];
+                    let planks = 7;
+                    let mut pd = String::new();
+                    for k in 1..planks {
+                        let t = k as f32 / planks as f32;
+                        let ax = p[0].0 + (p[1].0 - p[0].0) * t;
+                        let ay = p[0].1 + (p[1].1 - p[0].1) * t;
+                        let bx = p[3].0 + (p[2].0 - p[3].0) * t;
+                        let by = p[3].1 + (p[2].1 - p[3].1) * t;
+                        let _ = write!(pd, "M{:.1} {:.1}L{:.1} {:.1}", ax * cell_px, ay * cell_px, bx * cell_px, by * cell_px);
+                    }
+                    let _ = write!(
+                        out,
+                        r##"<path d="{pd}" fill="none" stroke="#5c3e24" stroke-width="1.3"/><path d="M{:.1} {:.1}L{:.1} {:.1}M{:.1} {:.1}L{:.1} {:.1}" fill="none" stroke="#3f2713" stroke-width="4" stroke-linecap="round"/>"##,
+                        p[0].0 * cell_px, p[0].1 * cell_px, p[1].0 * cell_px, p[1].1 * cell_px,
+                        p[2].0 * cell_px, p[2].1 * cell_px, p[3].0 * cell_px, p[3].1 * cell_px
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Renders all floor-layer ground surfaces with vector curves/polygons when present, or legacy Chaikin contours.
 pub(crate) fn push_landscaping_surfaces_svg(
     out: &mut String,
     ui: &TacticalMapUiState,
@@ -214,6 +437,11 @@ pub(crate) fn push_landscaping_surfaces_svg(
     h: i32,
     seed: i64,
 ) {
+    if !ui.map.surfaces.is_empty() {
+        emit_vector_surfaces_svg(out, ui, BATTLEMAP_CELL_PX as f32);
+        return;
+    }
+
     let has_surf = |kind: PropKind, x: i32, y: i32| {
         ui.map
             .props
@@ -249,9 +477,116 @@ pub(crate) fn push_landscaping_surfaces_svg(
     }
 }
 
+/// Emits floor stain blobs (strictly masked off roads/pavement/water) and curved/legacy road lane markings.
+pub(crate) fn push_ground_dressing_and_lanes_svg(
+    out: &mut String,
+    ui: &TacticalMapUiState,
+    t: &BattlemapArtTheme,
+    w: i32,
+    h: i32,
+    seed: i64,
+) {
+    let cell_f = BATTLEMAP_CELL_PX as f32;
+    let (vw, vh) = (w as f32 * cell_f, h as f32 * cell_f);
+    let has_vector_surfaces = !ui.map.surfaces.is_empty();
+
+    if t.floor_stains {
+        for i in 0..((w * h) / 16).max(3) {
+            let hh = battlemap_cell_hash(seed, i, 0, 0x57A1);
+            let sx = battlemap_unit_f32(hh) * vw;
+            let sy = battlemap_unit_f32(hh ^ 0x3C) * vh;
+            let r = cell_f * (0.4 + battlemap_unit_f32(hh ^ 0x91) * 0.8);
+            let (xm, ym, rm) = (sx / cell_f, sy / cell_f, (r / cell_f) * 0.55);
+            let blocked_by_surface = has_vector_surfaces
+                && [(0.0, 0.0), (rm, 0.0), (-rm, 0.0), (0.0, rm), (0.0, -rm)]
+                    .into_iter()
+                    .any(|(dx, dy)| {
+                        satya_engine::map_surface_geom::topmost_surface_at_m(
+                            &ui.map.surfaces,
+                            xm + dx,
+                            ym + dy,
+                        )
+                        .is_some_and(|s| s.kind.is_road_or_pavement() || s.kind.is_water_or_channel())
+                    });
+            if blocked_by_surface {
+                continue;
+            }
+            let d = crate::wasm_client::map_2d_art_props::battlemap_blob_path(sx, sy, r, 8, 0.3, hh);
+            let _ = write!(out, r##"<path d="{d}" fill="#5b4a36" fill-opacity=".14"/>"##);
+        }
+    }
+
+    if t.lane_markings {
+        let mut d = String::new();
+        if has_vector_surfaces {
+            let roads: Vec<&MapSurfaceFeature> = ui
+                .map
+                .surfaces
+                .iter()
+                .filter(|s| {
+                    s.kind == SurfaceFeatureKind::AsphaltRoad
+                        && s.shape == SurfaceShapeKind::RibbonSpline
+                        && s.width_cm >= 320
+                        && s.points_cm.len() >= 2
+                })
+                .collect();
+            for (r_idx, road) in roads.iter().enumerate() {
+                let ctrl_m: Vec<(f32, f32)> = road.points_cm.iter().map(|p| p.to_m()).collect();
+                let line = sample_open_catmull_rom_m(&ctrl_m, 14);
+                let min_prio = road.kind.layer_priority() + 1;
+                let mut pen_down = false;
+                for pt in line {
+                    let masked = point_masked_by_higher_surface(&ui.map.surfaces, min_prio, pt.0, pt.1)
+                        || roads[..r_idx]
+                            .iter()
+                            .any(|prev| satya_engine::map_surface_geom::surface_contains_point_m(prev, pt.0, pt.1));
+                    if masked {
+                        pen_down = false;
+                        continue;
+                    }
+                    let (px, py) = (pt.0 * cell_f, pt.1 * cell_f);
+                    if pen_down {
+                        let _ = write!(d, "L{px:.1} {py:.1}");
+                    } else {
+                        let _ = write!(d, "M{px:.1} {py:.1}");
+                        pen_down = true;
+                    }
+                }
+            }
+        } else {
+            let on_road = |x: i32, y: i32| {
+                ui.map
+                    .props
+                    .iter()
+                    .any(|p| p.kind == PropKind::AsphaltDrive && p.covers(x, y))
+            };
+            let (my, mx) = (h / 2, w / 2);
+            for x in 0..w {
+                if on_road(x, my - 1) && on_road(x, my) {
+                    let _ = write!(d, "M{} {}h{}", x * BATTLEMAP_CELL_PX, my * BATTLEMAP_CELL_PX, BATTLEMAP_CELL_PX);
+                }
+            }
+            for y in 0..h {
+                if on_road(mx - 1, y) && on_road(mx, y) && !(y == my - 1 || y == my) {
+                    let _ = write!(d, "M{} {}v{}", mx * BATTLEMAP_CELL_PX, y * BATTLEMAP_CELL_PX, BATTLEMAP_CELL_PX);
+                }
+            }
+        }
+        if !d.is_empty() {
+            let _ = write!(
+                out,
+                r##"<path d="{d}" fill="none" stroke="#efe9d2" stroke-width="3.5" stroke-dasharray="20 14" stroke-opacity=".8"/>"##
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wasm_client::map_2d_art::{battlemap_art_cache_key, format_battlemap_art_layer};
+    use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+    use satya_schema::MapPointCm;
 
     #[test]
     fn smooth_region_traces_diagonal_band_and_holes_cleanly() {
@@ -265,5 +600,55 @@ mod tests {
         assert!(d.starts_with('M'));
         assert!(d.matches('Z').count() >= 2, "outer band plus interior island hole");
         assert!(!d.contains("NaN"));
+    }
+
+    #[test]
+    fn vector_surfaces_svg_cache_bridges_and_road_stain_protection() {
+        let mut ui = TacticalMapUiState {
+            map: build_procedural_map_request("v2d", SectorPreset::RoadsideDitch, None, 20, 14, 42),
+            ..Default::default()
+        };
+        let art = format_battlemap_art_layer(&ui);
+        assert!(art.contains("url(#bm-tarmac)"));
+        assert!(art.contains("url(#bm-ditch)"));
+        assert!(art.contains(r##"stroke="#3f2713""##), "culvert BridgeDeck rails must render");
+        assert!(!art.contains("NaN"));
+
+        let key_before = battlemap_art_cache_key(&ui);
+        ui.map.surfaces.push(MapSurfaceFeature {
+            kind: SurfaceFeatureKind::MulchZone,
+            shape: SurfaceShapeKind::OrganicClosed,
+            points_cm: vec![
+                MapPointCm::new(200, 200),
+                MapPointCm::new(350, 200),
+                MapPointCm::new(350, 350),
+                MapPointCm::new(200, 350),
+            ],
+            width_cm: 0,
+            border_style_cm: 18,
+            variant_seed: 9,
+        });
+        assert_ne!(key_before, battlemap_art_cache_key(&ui), "surface edits bust art cache");
+
+        // Full-board AsphaltRoad protects every stain sample under urban_crossroads theme.
+        let mut road_ui = TacticalMapUiState {
+            map: build_procedural_map_request("road", SectorPreset::UrbanCrossroads, None, 12, 10, 42),
+            ..Default::default()
+        };
+        road_ui.map.surfaces = vec![MapSurfaceFeature {
+            kind: SurfaceFeatureKind::AsphaltRoad,
+            shape: SurfaceShapeKind::Polygon,
+            points_cm: vec![
+                MapPointCm::new(0, 0),
+                MapPointCm::new(1200, 0),
+                MapPointCm::new(1200, 1000),
+                MapPointCm::new(0, 1000),
+            ],
+            width_cm: 0,
+            border_style_cm: 0,
+            variant_seed: 1,
+        }];
+        let road_art = format_battlemap_art_layer(&road_ui);
+        assert!(!road_art.contains(r##"fill="#5b4a36""##), "dirt stains must never appear on AsphaltRoad");
     }
 }

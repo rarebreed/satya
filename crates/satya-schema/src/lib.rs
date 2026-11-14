@@ -9,7 +9,7 @@
 //! - [`types`]: Shared core identity and envelope types (`SessionMode`, `ParticipantKind`, `SessionRole`, `AiAgentInfo`, `Participant`, `EventMetadata`).
 //! - [`events`]: Apache Iggy topic/subject constants and Avro domain event structs (`SchemaRegistryEvent`, `SessionLifecycleEvent`, `WebRtcTelemetryEvent`, `ChatMessageEvent`, `ChatMessageEventV2`, `InteractionDynamicsEvent`, `TtrpgMechanicsEvent`).
 //! - [`protocol`]: REST API request/response payloads and WebSocket signaling envelopes (`ClientWsPacket`, `ServerWsPacket`, `StorageMetricsViewResponse`, AI GM, Vault, and NPC DTOs).
-//! - [`tactical_map_dto`] & [`tactical_map_dressing_dto`]: Continuous tactical map DTOs, `WallEdgeKind`, `EdgeSide`, `MaterialClass`, `PropKind`, `PropFootprintM`, `TacticalTileKind`, `CoverGrade`, and `TokenVisualSpec`.
+//! - [`tactical_map_dto`], [`tactical_map_dressing_dto`], & [`tactical_map_surfaces_dto`]: Continuous tactical map DTOs, `WallEdgeKind`, `EdgeSide`, `MaterialClass`, `PropKind`, `PropFootprintM`, `SurfaceFeatureKind`, `MapSurfaceFeature`, `TacticalTileKind`, `CoverGrade`, and `TokenVisualSpec`.
 //! - [`character`] & [`session_persistence`]: Character sheet records (`.satyachar`) and portable session snapshot bundles (`.satyasession`).
 //! - [`registry`]: 15-byte binary wire framing (`WireFrameHeader`), `CRC-64-AVRO` fingerprinting, and `SchemaRegistry` encode/decode with schema evolution.
 //! - [`gdpr`]: Schema-driven GDPR Art. 17 right-to-erasure anonymization and Art. 15/20 DSAR subject export powered by custom `satya.*` `.avsc` field attributes.
@@ -22,6 +22,7 @@ pub mod registry;
 pub mod session_persistence;
 pub mod tactical_map_dressing_dto;
 pub mod tactical_map_dto;
+pub mod tactical_map_surfaces_dto;
 pub mod types;
 pub mod wire_enum;
 
