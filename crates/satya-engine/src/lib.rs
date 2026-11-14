@@ -51,9 +51,9 @@
 //! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
 //!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
 //! - [`tactical_map`], [`map_continuation`], [`tactical_map_geom`], [`tactical_map_inspect`], [`tactical_map_edges`], [`map_dressing`], [`barrier_ballistics`], [`map_interior_gen`],
-//!   [`map_outdoor_gen`], [`map_outdoor_natural`] & [`map_sector_gen`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, seamless edge-matched procedural continuation, LoS/cover, hover inspection, thin
+//!   [`map_outdoor_gen`], [`map_outdoor_natural`], [`map_sector_gen`], [`map_gen_residential`], [`map_gen_commercial`] & [`map_gen_zoning`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, seamless edge-matched procedural continuation, multi-level floor stacks (`B1`/`1F`/`2F`), LoS/cover, hover inspection, thin
 //!   edge walls/doors/windows, multi-cell prop catalog with per-material ballistic penetration vs. concealment
-//!   grading, and dressed procedural sectors across all 12 presets.
+//!   grading, and dressed procedural sectors across all 18 presets.
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor)
 //!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3).
 
@@ -78,6 +78,9 @@ pub mod map_continuation;
 pub mod map_continuation_ribbons;
 pub mod map_dressing;
 pub mod map_estate_grammars;
+pub mod map_gen_commercial;
+pub mod map_gen_residential;
+pub mod map_gen_zoning;
 pub mod map_interior_gen;
 pub mod map_interior_topologies;
 pub mod map_outdoor_gen;
@@ -132,3 +135,5 @@ pub use task_resolution::*;
 mod tests;
 #[cfg(test)]
 mod tests_domain;
+#[cfg(test)]
+mod tests_tactical_map;

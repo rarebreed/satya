@@ -5,10 +5,11 @@
 //! when doing so reduces offset, and stitches smooth bridge `RibbonSpline` curves across seams.
 
 use satya_schema::{
-    GmMapUpdateRequest, MapContinuationDir, MapPointCm, MapPropPlacement, MapSurfaceFeature,
-    PropKind, SurfaceFeatureKind, SurfaceShapeKind,
+    GmMapUpdateRequest, MapContinuationDir, MapFloorLevel, MapPointCm, MapPropPlacement,
+    MapSurfaceFeature, PropKind, SurfaceFeatureKind, SurfaceShapeKind,
 };
 
+use crate::map_continuation::{mirror_edge_axis, mirror_prop_axis, translate_prop, upsert_edge};
 use crate::map_dressing::{make_prop_at_cm, prop_spec};
 use crate::map_surface_geom::surface_contains_point_m;
 use crate::tactical_map::{ProceduralSector, SectorPreset};
@@ -301,5 +302,105 @@ pub(crate) fn align_chunk_ribbons(
             .position(|p| !prop_spec(p.kind).floor_layer)
             .unwrap_or(sec.props.len());
         sec.props.splice(insert_at..insert_at, legacy_additions);
+    }
+}
+
+/// Shifts every floor level (`wall_edges`, `props`, `surfaces`) by `(dx_cells, dy_cells)`.
+pub(crate) fn translate_floor_levels(
+    floors: &mut [MapFloorLevel],
+    dx_cells: i32,
+    dy_cells: i32,
+    cell_cm: i32,
+) {
+    if dx_cells == 0 && dy_cells == 0 {
+        return;
+    }
+    for fl in floors {
+        for e in &mut fl.wall_edges {
+            e.x += dx_cells;
+            e.y += dy_cells;
+        }
+        for p in &mut fl.props {
+            *p = translate_prop(*p, dx_cells, dy_cells, cell_cm);
+        }
+        for s in &mut fl.surfaces {
+            *s = s.translated(dx_cells * cell_cm, dy_cells * cell_cm);
+        }
+    }
+}
+
+/// Mirrors additional vertical floor levels (`B1`, `1F`, `2F`) identically alongside ground geometry.
+pub(crate) fn mirror_floor_levels(
+    floors: &mut [MapFloorLevel],
+    cw: i32,
+    ch: i32,
+    horizontal_flip: bool,
+) {
+    for fl in floors {
+        for e in &mut fl.wall_edges {
+            mirror_edge_axis(e, cw, ch, horizontal_flip);
+        }
+        for p in &mut fl.props {
+            *p = mirror_prop_axis(*p, cw, ch, horizontal_flip);
+        }
+        mirror_sector_surfaces(&mut fl.surfaces, cw, ch, horizontal_flip);
+    }
+}
+
+/// Merges non-ground floor levels (`B1`, `2F`, etc.) from a newly continued sector chunk into `base.floors`.
+pub(crate) fn stitch_continued_floors(
+    base: &mut GmMapUpdateRequest,
+    sec_floors: &[MapFloorLevel],
+    x_off: i32,
+    y_off: i32,
+    cell_cm: i32,
+) {
+    for src in sec_floors {
+        if src.floor_index == 0 {
+            continue;
+        }
+        if base.floors.is_empty() {
+            base.floors.push(MapFloorLevel {
+                floor_index: 0,
+                label: "1F · Ground".to_string(),
+                elevation_cm: 0,
+                wall_edges: base.wall_edges.clone(),
+                props: base.props.clone(),
+                surfaces: base.surfaces.clone(),
+            });
+        }
+        if let Some(dst) = base.floors.iter_mut().find(|f| f.floor_index == src.floor_index) {
+            for e in &src.wall_edges {
+                let mut shifted = *e;
+                shifted.x += x_off;
+                shifted.y += y_off;
+                upsert_edge(&mut dst.wall_edges, shifted);
+            }
+            let mut floor_props = Vec::new();
+            let mut solid_props = Vec::new();
+            for &p in &src.props {
+                let sp = translate_prop(p, x_off, y_off, cell_cm);
+                if prop_spec(sp.kind).floor_layer {
+                    floor_props.push(sp);
+                } else {
+                    solid_props.push(sp);
+                }
+            }
+            let first_solid = dst
+                .props
+                .iter()
+                .position(|p| !prop_spec(p.kind).floor_layer)
+                .unwrap_or(dst.props.len());
+            dst.props.splice(first_solid..first_solid, floor_props);
+            dst.props.extend(solid_props);
+            for s in &src.surfaces {
+                dst.surfaces.push(s.translated(x_off * cell_cm, y_off * cell_cm));
+            }
+        } else {
+            let mut added = src.clone();
+            translate_floor_levels(std::slice::from_mut(&mut added), x_off, y_off, cell_cm);
+            base.floors.push(added);
+            base.floors.sort_by_key(|f| f.floor_index);
+        }
     }
 }

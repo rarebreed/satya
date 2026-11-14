@@ -150,12 +150,19 @@ impl TacticalMapUiState {
                 .iter()
                 .any(|t| Some(&t.entity_id) == self.selected_entity_id.as_ref())
         {
-            self.selected_entity_id = self.map.tokens.first().map(|t| t.entity_id.clone());
+            self.selected_entity_id = self
+                .map
+                .tokens
+                .iter()
+                .find(|t| self.map.token_floor(&t.entity_id) == self.map.active_floor)
+                .or_else(|| self.map.tokens.first())
+                .map(|t| t.entity_id.clone());
         }
 
         let (board_w_m, board_h_m) = self.map.board_size_m();
         let cell_m = self.map.cell_size_m();
         if let Some(sel_id) = self.selected_entity_id.as_deref()
+            && self.map.token_floor(sel_id) == self.map.active_floor
             && let Some(sel_tok) = self.map.tokens.iter().find(|t| t.entity_id == sel_id)
         {
             let start_m = self.map.token_pos_m(sel_tok);
@@ -163,7 +170,10 @@ impl TacticalMapUiState {
                 .map
                 .tokens
                 .iter()
-                .filter(|t| t.entity_id != sel_id)
+                .filter(|t| {
+                    t.entity_id != sel_id
+                        && self.map.token_floor(&t.entity_id) == self.map.active_floor
+                })
                 .map(|t| self.map.token_pos_m(t))
                 .collect();
             let scene = TacticalSceneView {
@@ -197,7 +207,10 @@ impl TacticalMapUiState {
                     self.map
                         .tokens
                         .iter()
-                        .find(|t| t.entity_id != sel_id)
+                        .find(|t| {
+                            t.entity_id != sel_id
+                                && self.map.token_floor(&t.entity_id) == self.map.active_floor
+                        })
                         .map(|t| self.map.token_pos_m(t))
                 });
             let last_los = target_m.map(|tm| evaluate_los_continuous(&scene, start_m, tm));
@@ -436,11 +449,15 @@ pub fn refresh_map_dom_and_wgpu() {
         prop_rot,
         snap_on,
         inspect_pinned,
+        floor_html,
+        has_multi_floors,
     ) = with_map_ui(|ui| {
         let (bw_m, bh_m) = ui.map.board_size_m();
         let pill = format!("{} ({bw_m:.0}m × {bh_m:.0}m · Free Metric)", ui.map.title);
         let chips = format_selectable_token_chips_html(&ui.map, ui.selected_entity_id.as_deref());
         let hud = format_map_tactical_hud_html(ui);
+        let floor_bar =
+            format_map_floor_switcher_html(&ui.map, ui.selected_entity_id.as_deref());
         let (preset, color) = ui
             .selected_entity_id
             .as_deref()
@@ -463,12 +480,19 @@ pub fn refresh_map_dom_and_wgpu() {
             ui.edit_prop_rotation_deg,
             ui.snap_to_half_meter,
             ui.inspect_mode_pinned,
+            floor_bar,
+            ui.map.has_multiple_floors(),
         )
     });
 
     set_text("canvas-map-pill", &pill_txt);
     set_class("canvas-map-pill", "pill pill-active");
     set_display("tabletop-map-placeholder", "none");
+    set_html("map-floor-switcher", &floor_html);
+    set_display(
+        "map-floor-switcher",
+        if has_multi_floors { "flex" } else { "none" },
+    );
     set_select_value("map-weapon-select", &sel_wpn);
     set_select_value("map-token-model-select", &sel_preset);
     set_input_value("map-token-color", &sel_color);
@@ -505,6 +529,63 @@ pub fn refresh_map_dom_and_wgpu() {
     crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
 }
 
+/// Formats the floating floor switcher pill bar + cross-floor move buttons for multi-floor maps.
+#[must_use]
+pub fn format_map_floor_switcher_html(map: &GmMapUpdateRequest, selected_id: Option<&str>) -> String {
+    if !map.has_multiple_floors() {
+        return String::new();
+    }
+    let mut levels = map.floors.clone();
+    levels.sort_by_key(|f| f.floor_index);
+    let mut out = String::new();
+    for fl in &levels {
+        let count = map
+            .tokens
+            .iter()
+            .filter(|t| map.token_floor(&t.entity_id) == fl.floor_index)
+            .count();
+        let active_cls = if fl.floor_index == map.active_floor {
+            " active"
+        } else {
+            ""
+        };
+        let badge = escape_html(&fl.short_badge());
+        let label = escape_html(&fl.label);
+        let count_txt = if count > 0 {
+            format!(" · {count}")
+        } else {
+            String::new()
+        };
+        let _ = std::fmt::Write::write_fmt(
+            &mut out,
+            format_args!(
+                r#"<button type="button" class="map-floor-pill{active_cls}" title="{label}" onclick="window.satyaSelectMapFloor({})">{badge}{count_txt}</button>"#,
+                fl.floor_index
+            ),
+        );
+    }
+    if let Some(sel_id) = selected_id
+        && map.tokens.iter().any(|t| t.entity_id == sel_id)
+    {
+        let cur_fl = map.token_floor(sel_id);
+        for fl in &levels {
+            if fl.floor_index == cur_fl {
+                continue;
+            }
+            let badge = escape_html(&fl.short_badge());
+            let label = escape_html(&fl.label);
+            let _ = std::fmt::Write::write_fmt(
+                &mut out,
+                format_args!(
+                    r#"<button type="button" class="map-floor-move-btn" title="Move selected miniature to {label}" onclick="window.satyaMoveTokenToFloor({})">Move → {badge}</button>"#,
+                    fl.floor_index
+                ),
+            );
+        }
+    }
+    out
+}
+
 /// Formats clickable token chips for `#tabletop-token-list` allowing 1-click selection of any miniature.
 #[must_use]
 pub fn format_selectable_token_chips_html(
@@ -514,6 +595,7 @@ pub fn format_selectable_token_chips_html(
     if map.tokens.is_empty() {
         return r#"<span class="pill pill-muted">No tokens on map</span>"#.to_string();
     }
+    let multi_floor = map.has_multiple_floors();
     map.tokens
         .iter()
         .map(|tok| {
@@ -536,11 +618,14 @@ pub fn format_selectable_token_chips_html(
             } else {
                 format!("({:.2}m, {:.2}m)", px_cm as f32 / 100.0, py_cm as f32 / 100.0)
             };
+            let floor_prefix = if multi_floor {
+                format!("[{}] ", satya_schema::default_floor_badge(map.token_floor(&tok.entity_id)))
+            } else {
+                String::new()
+            };
             format!(
-                r#"<button type="button" class="btn-chip {active_cls}" onclick="window.satyaSelectMapToken('{safe_id}')">{} {}{}</button>"#,
+                r#"<button type="button" class="btn-chip {active_cls}" onclick="window.satyaSelectMapToken('{safe_id}')">{floor_prefix}{} {coord_label}{vis_suffix}</button>"#,
                 escape_html(&tok.label),
-                coord_label,
-                vis_suffix
             )
         })
         .collect::<Vec<_>>()
@@ -632,5 +717,14 @@ mod tests {
         ui.recompute_overlays();
         let hud_762 = format_map_tactical_hud_html(&ui);
         assert_ne!(hud_9mm, hud_762);
+
+        // Verify multi-floor Luxurious Mansion formats #map-floor-switcher & token badges
+        let mansion = build_procedural_map_request("mansion", SectorPreset::LuxuryMansion, None, 24, 18, 42);
+        let sel_id = mansion.tokens.first().map(|t| t.entity_id.as_str());
+        let switcher_html = format_map_floor_switcher_html(&mansion, sel_id);
+        assert!(switcher_html.contains("satyaSelectMapFloor("), "{switcher_html}");
+        assert!(switcher_html.contains("satyaMoveTokenToFloor("), "{switcher_html}");
+        let chips_html = format_selectable_token_chips_html(&mansion, sel_id);
+        assert!(chips_html.contains("[1F]"), "{chips_html}");
     }
 }

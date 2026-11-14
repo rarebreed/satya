@@ -289,7 +289,22 @@ const PRESET_ART_THEME_MAP: &[(&str, &str)] = &[
     ("garden_estate", "park_grounds"),
     ("woodland_creek", "park_grounds"),
     ("roadside_ditch", "park_grounds"),
+    ("urban_residential", "urban_street"),
+    ("projects_high_density", "urban_street"),
+    ("suburban_neighborhood", "park_grounds"),
+    ("rural_countryside", "park_grounds"),
+    ("luxury_mansion", "park_grounds"),
+    ("downtown_commercial", "urban_street"),
 ];
+
+pub fn battlemap_theme_for_map(map: &satya_schema::GmMapUpdateRequest) -> &'static BattlemapArtTheme {
+    if map.active_floor < 0 {
+        return battlemap_theme_for_preset(Some("industrial"));
+    } else if map.active_floor > 0 {
+        return battlemap_theme_for_preset(Some("modern_interior"));
+    }
+    battlemap_theme_for_preset(map.theme_preset.as_deref())
+}
 
 /// Resolves a theme from a `theme_preset` that is either a theme `id` or a mapped `SectorPreset` code.
 /// Falls back to `modern_interior`.
@@ -369,10 +384,11 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
         (h ^ b).wrapping_mul(0x0100_0000_01B3)
     }
     let (w, h) = grid_dims(ui);
-    let theme = battlemap_theme_for_preset(ui.map.theme_preset.as_deref());
+    let theme = battlemap_theme_for_map(&ui.map);
     let mut acc = fnv(0xCBF2_9CE4_8422_2325, w as u64);
     acc = fnv(acc, h as u64);
     acc = fnv(acc, ui.map.seed.unwrap_or(0) as u64);
+    acc = fnv(acc, ui.map.active_floor as u64);
     for b in theme.id.bytes() {
         acc = fnv(acc, u64::from(b));
     }
@@ -435,7 +451,7 @@ fn push_defs(
 /// Static illustrated art layer (inner markup of `#battlemap-art`).
 #[must_use]
 pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
-    let t = battlemap_theme_for_preset(ui.map.theme_preset.as_deref());
+    let t = battlemap_theme_for_map(&ui.map);
     let style = ui.ink_style;
     let tex_mode = ui.texture_mode;
     let (w, h) = grid_dims(ui);
@@ -696,42 +712,5 @@ mod tests {
         ui.hovered_point_m = Some((5.5, 5.5));
         let brush_ov = format_battlemap_overlay_inner(&ui);
         assert!(brush_ov.contains(r#"stroke-dasharray="7 4""#));
-    }
-
-    #[test]
-    #[ignore]
-    fn export_phase4_showcase_svgs() {
-        use satya_engine::map_dressing::make_prop_at_cm;
-        use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
-        let Ok(out_dir) = std::env::var("SATYA_SVG_PREVIEW_DIR") else {
-            return;
-        };
-        let mut ui = TacticalMapUiState {
-            map: build_procedural_map_request("p4-demo", SectorPreset::ResidentialApartment, None, 20, 14, 42),
-            ..Default::default()
-        };
-        let occupied: Vec<(f32, f32)> = ui.map.tokens.iter().map(|t| ui.map.token_pos_m(t)).collect();
-        let (bw_m, bh_m) = ui.map.board_size_m();
-        let _ = satya_engine::tactical_map_geom::place_prop_on_map(
-            &mut ui.map.props,
-            &ui.map.wall_edges,
-            &occupied,
-            (bw_m, bh_m),
-            make_prop_at_cm(PropKind::PoolTable, 1150, 550, 30, None, 7),
-        );
-        ui.recompute_overlays();
-        let (w, h) = grid_dims(&ui);
-        let (tw, th) = (w * BATTLEMAP_CELL_PX + 2 * BATTLEMAP_PAD_PX, h * BATTLEMAP_CELL_PX + 2 * BATTLEMAP_PAD_PX);
-        let vb = format!("-{BATTLEMAP_PAD_PX} -{BATTLEMAP_PAD_PX} {tw} {th}");
-        for style in BattlemapInkStyle::ALL {
-            ui.ink_style = style;
-            let doc = format!(
-                r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{}{}</svg>"#,
-                format_battlemap_art_layer(&ui),
-                format_battlemap_overlay_inner(&ui),
-            );
-            let path = std::path::Path::new(&out_dir).join(format!("phase4_style_{}.svg", style.as_str()));
-            std::fs::write(path, doc).expect("write phase4 svg");
-        }
     }
 }

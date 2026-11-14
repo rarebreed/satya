@@ -16,7 +16,9 @@ use axum::{
     response::IntoResponse,
 };
 use satya_engine::map_dressing::make_prop;
-use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+use satya_engine::tactical_map::{
+    SectorPreset, build_procedural_map_request, build_procedural_map_request_with_options,
+};
 use satya_engine::tactical_map_geom::{place_prop_on_map, remove_prop_at_point};
 use satya_schema::{
     CanvasEventType, EdgeSide, GenerateSessionMapRequest, MapWallEdge, MaterialClass,
@@ -71,6 +73,44 @@ pub async fn session_generate_or_edit_map_handler(
     });
     let caller_is_gm_or_solo =
         matches!(caller_part.role, SessionRole::Gm | SessionRole::Host) || !has_human_gm;
+
+    // Branch A0-Floor: Switch active multi-floor level snapshot (`B1` / `1F` / `2F`, ...)
+    if let Some(target_floor) = req.set_active_floor {
+        let Some(mut map) = ctx.active_map.clone() else {
+            return (
+                StatusCode::CONFLICT,
+                Json(json!({ "error": "No active map to switch floors on" })),
+            )
+                .into_response();
+        };
+        ensure_vector_map_ready(&mut map);
+        if !map.switch_active_floor(target_floor) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": format!("Floor {target_floor} does not exist on active map") })),
+            )
+                .into_response();
+        }
+        let _ = state
+            .auth
+            .set_session_active_map(&session_id, map.clone())
+            .await;
+        log_map_canvas_event(
+            &state,
+            &session_id,
+            ctx.session_mode,
+            CanvasEventType::MapUpdated,
+            &caller_part,
+            &map,
+        )
+        .await;
+        broadcast_role_filtered_map(&state, &session_id, &ctx.roster, &map).await;
+        return (
+            StatusCode::OK,
+            Json(filter_map_for_role(&map, caller_part.role)),
+        )
+            .into_response();
+    }
 
     // Branch A0: Single edge-wall edit (door toggle by anyone, or GM wall/window painting)
     if let Some(edge_ref) = req.edit_edge {
@@ -142,6 +182,7 @@ pub async fn session_generate_or_edit_map_handler(
             }),
             (None, None) => {}
         }
+        map.sync_active_floor_snapshot();
         let _ = state
             .auth
             .set_session_active_map(&session_id, map.clone())
@@ -192,8 +233,12 @@ pub async fn session_generate_or_edit_map_handler(
             }
             remove_prop_at_point(&mut map.props, cx as f32 + 0.5, cy as f32 + 0.5);
         } else if let Some(prop) = req.edit_prop {
-            let occupied_m: Vec<(f32, f32)> =
-                map.tokens.iter().map(|t| map.token_pos_m(t)).collect();
+            let occupied_m: Vec<(f32, f32)> = map
+                .tokens
+                .iter()
+                .filter(|t| map.token_floor(&t.entity_id) == map.active_floor)
+                .map(|t| map.token_pos_m(t))
+                .collect();
             if let Err(msg) = place_prop_on_map(
                 &mut map.props,
                 &map.wall_edges,
@@ -204,6 +249,7 @@ pub async fn session_generate_or_edit_map_handler(
                 return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
             }
         }
+        map.sync_active_floor_snapshot();
         let _ = state
             .auth
             .set_session_active_map(&session_id, map.clone())
@@ -290,8 +336,12 @@ pub async fn session_generate_or_edit_map_handler(
             };
         } else if let Some(kind) = req.set_tile_kind {
             let (board_w_m, board_h_m) = map.board_size_m();
-            let occupied_m: Vec<(f32, f32)> =
-                map.tokens.iter().map(|t| map.token_pos_m(t)).collect();
+            let occupied_m: Vec<(f32, f32)> = map
+                .tokens
+                .iter()
+                .filter(|t| map.token_floor(&t.entity_id) == map.active_floor)
+                .map(|t| map.token_pos_m(t))
+                .collect();
             let seed = (ex * 73 + ey * 139) as u32;
             match kind {
                 TacticalTileKind::Floor => {
@@ -336,6 +386,7 @@ pub async fn session_generate_or_edit_map_handler(
                 _ => {}
             }
         }
+        map.sync_active_floor_snapshot();
         let _ = state
             .auth
             .set_session_active_map(&session_id, map.clone())
@@ -444,13 +495,15 @@ pub async fn session_generate_or_edit_map_handler(
         satya_engine::tactical_map::MAX_SECTOR_DIM,
     );
     let seed = req.seed.unwrap_or(42);
-    let mut map = build_procedural_map_request(
+    let mut map = build_procedural_map_request_with_options(
         &format!("map-{}-{}", preset.as_str(), Uuid::now_v7()),
         preset,
         req.title.as_deref(),
         width,
         height,
         seed,
+        req.economic_tier,
+        req.zoning,
     );
     map.cell_size_cm = req.cell_size_cm.clamp(50, 250);
     let cell_cm = map.cell_size_cm;
@@ -488,7 +541,8 @@ pub async fn session_generate_or_edit_map_handler(
                 },
                 color_hex: "#38bdf8".to_string(),
                 facing_deg: 90,
-                elevation_cm: 0,
+                elevation_cm: map.floor_elevation_cm(map.active_floor),
+                floor_index: map.active_floor,
                 stance_pose: "aimed".to_string(),
                 portrait_url: None,
                 pos_x_cm: Some(sx_cm),
@@ -513,7 +567,8 @@ pub async fn session_generate_or_edit_map_handler(
             model_preset: "secops_sentry".to_string(),
             color_hex: "#f87171".to_string(),
             facing_deg: 270,
-            elevation_cm: 0,
+            elevation_cm: map.floor_elevation_cm(map.active_floor),
+            floor_index: map.active_floor,
             stance_pose: "aimed".to_string(),
             portrait_url: None,
             pos_x_cm: Some(hx_cm),

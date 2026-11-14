@@ -576,6 +576,54 @@ pub fn push_furniture_glyph_with_mode(
                 in_op = if painted { ".28" } else { ".55" },
             );
         }
+        PropKind::Stairwell => {
+            rect(
+                out,
+                [-l + 2.0, -t + 2.0, lw - 4.0, lh - 4.0],
+                3.0,
+                if painted { "url(#bm-concrete)" } else { "#c8ccd2" },
+                "",
+            );
+            let steps = ((lh / 16.0).round() as i32).clamp(5, 10);
+            let step_h = (lh - 8.0) / steps as f32;
+            for i in 0..steps {
+                let sy = -t + 4.0 + i as f32 * step_h;
+                let shade = if i % 2 == 0 { "#b8bdc4" } else { "#d5d9df" };
+                rect(out, [-l + 5.0, sy, lw - 10.0, (step_h - 1.5).max(3.0)], 1.0, shade, r#"stroke-width="1""#);
+            }
+            let _ = write!(
+                out,
+                r##"<line x1="0" y1="{:.1}" x2="0" y2="{:.1}" stroke="#1f2937" stroke-width="2.2"/><path d="M-7 {:.1}L0 {:.1}L7 {:.1}" fill="none" stroke="#1f2937" stroke-width="2.2"/><line x1="{:.1}" y1="{:.1}" x2="{:.1}" y2="{:.1}" stroke="#64748b" stroke-width="3"/><line x1="{:.1}" y1="{:.1}" x2="{:.1}" y2="{:.1}" stroke="#64748b" stroke-width="3"/>"##,
+                t - 9.0, -t + 11.0, -t + 18.0, -t + 9.0, -t + 18.0, -l + 4.0, -t + 5.0, -l + 4.0, t - 5.0, l - 4.0, -t + 5.0, l - 4.0, t - 5.0,
+            );
+        }
+        PropKind::DisplayRack => {
+            rect(
+                out,
+                [-l + 3.0, -t + 3.0, lw - 6.0, lh - 6.0],
+                3.0,
+                if painted { "url(#bm-steel)" } else { "#7c8794" },
+                "",
+            );
+            let bays = ((lw - 10.0) / 22.0).round().max(2.0) as i32;
+            let bw = (lw - 12.0) / bays as f32;
+            const PKGS: &[&str] = &["#d97757", "#4f86b6", "#6da665", "#d9b44a", "#9674b8"];
+            for b in 0..bays {
+                let bx = -l + 6.0 + b as f32 * bw;
+                let c1 = pick(v.wrapping_add(b as u32 * 5), PKGS);
+                let c2 = pick(v.wrapping_add(b as u32 * 9 + 3), PKGS);
+                rect(out, [bx + 2.0, -t + 5.0, (bw - 4.0).max(5.0), (t - 7.0).max(4.0)], 1.5, c1, r#"stroke-width="1""#);
+                rect(out, [bx + 2.0, 2.0, (bw - 4.0).max(5.0), (t - 7.0).max(4.0)], 1.5, c2, r#"stroke-width="1""#);
+            }
+            let _ = write!(out, r##"<line x1="{:.1}" y1="0" x2="{:.1}" y2="0" stroke="#2d343d" stroke-width="2.4"/>"##, -l + 4.0, l - 4.0);
+        }
+        PropKind::CheckoutCounter => {
+            let wd = wd_for(v);
+            rect(out, [-l + 3.0, -t + 4.0, lw - 6.0, lh - 8.0], 3.0, wd, "");
+            rect(out, [-l + 10.0, -t + 8.0, (lw * 0.46).max(16.0), lh - 16.0], 2.0, "#31363f", r#"stroke-width="1.2""#);
+            rect(out, [l - 34.0, -t + 9.0, 22.0, 16.0], 2.0, "#dce4ec", r#"stroke-width="1.2""#);
+            rect(out, [l - 30.0, -t + 12.0, 14.0, 7.0], 1.0, "#38bdf8", r#"stroke="none" fill-opacity=".8""#);
+        }
         PropKind::Armchair | PropKind::Planter | PropKind::WoodCrate | PropKind::DrumCluster => {}
     }
     out.push_str("</g>");

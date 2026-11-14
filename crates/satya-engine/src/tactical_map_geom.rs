@@ -478,7 +478,7 @@ pub fn resolve_token_destination_cm(
 
     // Reject if clicked squarely onto another occupying token (center within 0.58m).
     for tok in &req.tokens {
-        if tok.entity_id == moving_entity_id {
+        if tok.entity_id == moving_entity_id || req.token_floor(&tok.entity_id) != req.active_floor {
             continue;
         }
         let (tx, ty) = req.token_pos_m(tok);
@@ -538,7 +538,7 @@ pub fn resolve_token_destination_cm(
         return Err("Insufficient miniature clearance at target destination");
     }
     for tok in &req.tokens {
-        if tok.entity_id == moving_entity_id {
+        if tok.entity_id == moving_entity_id || req.token_floor(&tok.entity_id) != req.active_floor {
             continue;
         }
         let (tx, ty) = req.token_pos_m(tok);

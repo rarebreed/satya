@@ -26,17 +26,162 @@ pub fn satya_click_map_cell(gx: i32, gy: i32) {
     handle_map_grid_cell_clicked(gx, gy);
 }
 
-/// Selects a token miniature by `entity_id` and updates movement reach and LoS overlays.
+fn post_set_active_floor_if_in_session(floor_idx: i32) {
+    let (auth_token, session_id) = with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
+    let (Some(token), Some(sid)) = (auth_token, session_id) else {
+        return;
+    };
+    let req = GenerateSessionMapRequest {
+        set_active_floor: Some(floor_idx),
+        populate_roster_tokens: false,
+        ..Default::default()
+    };
+    wasm_bindgen_futures::spawn_local(async move {
+        if let Ok(updated) = fetch_json::<_, GmMapUpdateRequest>(
+            "POST",
+            &format!("/api/sessions/{sid}/map"),
+            Some(&token),
+            Some(&req),
+        )
+        .await
+        {
+            apply_incoming_map_update(&updated);
+        }
+    });
+}
+
+/// Selects a token miniature by `entity_id`, switching active floors if needed, and updates overlays.
 #[wasm_bindgen]
 pub fn satya_select_map_token(entity_id: String) {
+    let mut switched_floor: Option<i32> = None;
     with_map_ui_mut(|ui| {
         if ui.map.tokens.iter().any(|t| t.entity_id == entity_id) {
-            ui.selected_entity_id = Some(entity_id);
+            ui.selected_entity_id = Some(entity_id.clone());
+            let tok_floor = ui.map.token_floor(&entity_id);
+            if ui.map.has_multiple_floors()
+                && tok_floor != ui.map.active_floor
+                && ui.map.switch_active_floor(tok_floor)
+            {
+                switched_floor = Some(tok_floor);
+            }
             ui.recompute_overlays();
         }
     });
     mark_map_wgpu_dirty();
     refresh_map_dom_and_wgpu();
+    if let Some(fl) = switched_floor {
+        post_set_active_floor_if_in_session(fl);
+    }
+}
+
+/// Switches the active tactical floor level (`-1` = B1, `0` = 1F, `1` = 2F) and syncs with session.
+#[wasm_bindgen]
+pub fn satya_select_map_floor(floor_idx: i32) {
+    let changed = with_map_ui_mut(|ui| {
+        if ui.map.switch_active_floor(floor_idx) {
+            ui.recompute_overlays();
+            true
+        } else {
+            false
+        }
+    });
+    if !changed {
+        return;
+    }
+    mark_map_wgpu_dirty();
+    refresh_map_dom_and_wgpu();
+    post_set_active_floor_if_in_session(floor_idx);
+}
+
+/// Moves the currently selected miniature to `floor_idx` (preferring an aligned stairwell landing).
+#[wasm_bindgen]
+pub fn satya_move_token_to_floor(floor_idx: i32) {
+    let mut move_req: Option<MoveMapTokenRequest> = None;
+    with_map_ui_mut(|ui| {
+        let Some(sel_id) = ui.selected_entity_id.clone() else {
+            return;
+        };
+        if !ui.map.has_floor(floor_idx) || !ui.map.switch_active_floor(floor_idx) {
+            return;
+        }
+        let Some(prev_tok) = ui.map.tokens.iter().find(|t| t.entity_id == sel_id).cloned() else {
+            return;
+        };
+        let (pref_x_cm, pref_y_cm) = ui
+            .map
+            .props
+            .iter()
+            .find(|p| p.kind == satya_schema::PropKind::Stairwell)
+            .map(|p| p.center_cm())
+            .unwrap_or_else(|| ui.map.token_pos_cm(&prev_tok));
+        let (nx_cm, ny_cm) =
+            resolve_token_destination_cm(&ui.map, &sel_id, pref_x_cm, pref_y_cm)
+                .unwrap_or((pref_x_cm, pref_y_cm));
+        let nx_cell = (nx_cm / 100).clamp(0, ui.map.grid_width - 1);
+        let ny_cell = (ny_cm / 100).clamp(0, ui.map.grid_height - 1);
+        if let Some(tok) = ui.map.tokens.iter_mut().find(|t| t.entity_id == sel_id) {
+            tok.x = nx_cell;
+            tok.y = ny_cell;
+        }
+        ui.map.set_token_pos_cm(&sel_id, nx_cm, ny_cm);
+        ui.map.set_token_floor(&sel_id, floor_idx);
+        let (preset, color, _) = resolve_token_visual(&ui.map, &prev_tok);
+        let existing_portrait = ui
+            .map
+            .visual_for(&sel_id)
+            .and_then(|v| v.portrait_url.clone());
+        ui.recompute_overlays();
+        move_req = Some(MoveMapTokenRequest {
+            entity_id: sel_id,
+            label: Some(prev_tok.label),
+            to_x: nx_cell,
+            to_y: ny_cell,
+            to_x_cm: Some(nx_cm),
+            to_y_cm: Some(ny_cm),
+            to_floor: Some(floor_idx),
+            facing_deg: None,
+            model_preset: Some(preset),
+            color_hex: Some(color),
+            stance_pose: None,
+            portrait_url: existing_portrait,
+            visibility: Some(prev_tok.visibility),
+            remove: false,
+        });
+    });
+    if let Some(req) = move_req {
+        mark_map_wgpu_dirty();
+        refresh_map_dom_and_wgpu();
+        let (auth_token, session_id) =
+            with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
+        if let (Some(token), Some(sid)) = (auth_token, session_id) {
+            let floor_req = GenerateSessionMapRequest {
+                set_active_floor: Some(floor_idx),
+                populate_roster_tokens: false,
+                ..Default::default()
+            };
+            wasm_bindgen_futures::spawn_local(async move {
+                let move_res = fetch_json::<_, GmMapUpdateRequest>(
+                    "POST",
+                    &format!("/api/sessions/{sid}/map/move"),
+                    Some(&token),
+                    Some(&req),
+                )
+                .await;
+                if let Ok(updated) = fetch_json::<_, GmMapUpdateRequest>(
+                    "POST",
+                    &format!("/api/sessions/{sid}/map"),
+                    Some(&token),
+                    Some(&floor_req),
+                )
+                .await
+                {
+                    apply_incoming_map_update(&updated);
+                } else if let Ok(updated) = move_res {
+                    apply_incoming_map_update(&updated);
+                }
+            });
+        }
+    }
 }
 
 /// Generates a new procedural continuous vector tactical sector from `#map-preset-select` (syncing if in a session).
@@ -90,7 +235,8 @@ pub fn satya_generate_procedural_map() {
                     },
                     color_hex: "#38bdf8".to_string(),
                     facing_deg: 90,
-                    elevation_cm: 0,
+                    elevation_cm: built.floor_elevation_cm(built.active_floor),
+                    floor_index: built.active_floor,
                     stance_pose: "aimed".to_string(),
                     portrait_url: None,
                     pos_x_cm: Some(px_cm),
@@ -114,7 +260,8 @@ pub fn satya_generate_procedural_map() {
                 model_preset: "secops_sentry".to_string(),
                 color_hex: "#f87171".to_string(),
                 facing_deg: 270,
-                elevation_cm: 0,
+                elevation_cm: built.floor_elevation_cm(built.active_floor),
+                floor_index: built.active_floor,
                 stance_pose: "aimed".to_string(),
                 portrait_url: None,
                 pos_x_cm: Some(nx_cm),
@@ -329,12 +476,14 @@ pub fn satya_update_selected_token_visual() {
             vis.pos_y_cm = Some(py_cm);
             existing_portrait = vis.portrait_url.clone();
         } else {
+            let tok_fl = ui.map.token_floor(&sel_id);
             ui.map.token_visuals.push(TokenVisualSpec {
                 entity_id: sel_id.clone(),
                 model_preset: p_eff.clone(),
                 color_hex: c_eff.clone(),
                 facing_deg: 90,
-                elevation_cm: 0,
+                elevation_cm: ui.map.floor_elevation_cm(tok_fl),
+                floor_index: tok_fl,
                 stance_pose: "idle".to_string(),
                 portrait_url: None,
                 pos_x_cm: Some(px_cm),
@@ -348,6 +497,7 @@ pub fn satya_update_selected_token_visual() {
             to_y: tok.y,
             to_x_cm: Some(px_cm),
             to_y_cm: Some(py_cm),
+            to_floor: None,
             facing_deg: None,
             model_preset: Some(p_eff),
             color_hex: Some(c_eff),
@@ -428,6 +578,7 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
             .map
             .tokens
             .iter()
+            .filter(|t| ui.map.token_floor(&t.entity_id) == ui.map.active_floor)
             .filter_map(|t| {
                 let (px, py) = ui.map.token_pos_m(t);
                 let d = (px - x_m).hypot(py - y_m);
@@ -516,7 +667,8 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
                 model_preset: p_default.clone(),
                 color_hex: c_default.clone(),
                 facing_deg: facing,
-                elevation_cm: 0,
+                elevation_cm: ui.map.floor_elevation_cm(ui.map.active_floor),
+                floor_index: ui.map.active_floor,
                 stance_pose: "idle".to_string(),
                 portrait_url: None,
                 pos_x_cm: Some(nx_cm),
@@ -538,6 +690,7 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
             to_y: ny_cell,
             to_x_cm: Some(nx_cm),
             to_y_cm: Some(ny_cm),
+            to_floor: None,
             facing_deg: Some(facing),
             model_preset: Some(preset),
             color_hex: Some(color),

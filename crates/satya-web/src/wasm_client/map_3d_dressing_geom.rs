@@ -275,6 +275,38 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
             PropKind::BarStool | PropKind::Planter => {
                 push_obb(verts, cx, cz, 0.0, top, hx * 0.62, hz * 0.62, rot, rgb, 0.0);
             }
+            PropKind::Stairwell => {
+                let stair_h = if cutaway { top.min(0.68) } else { top.min(0.84) };
+                push_obb(verts, cx, cz, 0.0, 0.04, full_hx * 0.96, full_hz * 0.96, rot, [0.22, 0.24, 0.28], 0.0);
+                let steps = 6;
+                let step_d = (full_hz * 1.84) / steps as f32;
+                for i in 0..steps {
+                    let frac = (i as f32 + 0.5) / steps as f32 - 0.5;
+                    let h = 0.08 + ((i + 1) as f32 / steps as f32) * (stair_h - 0.08);
+                    let (tx, tz) = rot_pt(0.0, frac * (full_hz * 1.84));
+                    let col = if i % 2 == 0 { rgb } else { lighten(rgb, 1.12) };
+                    push_obb(verts, tx, tz, 0.04, h, hx * 0.86, (step_d * 0.46).max(0.06), rot, col, 0.0);
+                }
+                for sx in [-(full_hx * 0.90), full_hx * 0.90] {
+                    let (rx, rz) = rot_pt(sx, 0.0);
+                    push_obb(verts, rx, rz, 0.04, stair_h + 0.14, 0.04, full_hz * 0.92, rot, [0.58, 0.62, 0.68], 0.0);
+                }
+            }
+            PropKind::DisplayRack => {
+                push_obb(verts, cx, cz, 0.0, 0.12, hx, hz, rot, [0.24, 0.27, 0.32], 0.0);
+                push_obb(verts, cx, cz, 0.12, top, hx * 0.96, (hz * 0.18).max(0.04), rot, [0.34, 0.38, 0.44], 0.0);
+                for frac in [0.36_f32, 0.68, 0.96] {
+                    let y1 = (top * frac).max(0.16);
+                    push_obb(verts, cx, cz, (y1 - 0.05).max(0.12), y1, hx, hz * 0.92, rot, rgb, 0.0);
+                }
+            }
+            PropKind::CheckoutCounter => {
+                let cap = (top * 0.10).clamp(0.03, 0.08);
+                push_obb(verts, cx, cz, 0.0, top - cap, hx, hz, rot, rgb, 0.0);
+                push_obb(verts, cx, cz, top - cap, top, hx * 0.99, hz * 0.99, rot, lighten(rgb, 1.18), 0.0);
+                let (px, pz) = rot_pt(-hx * 0.48, 0.0);
+                push_obb(verts, px, pz, top, (top + 0.24).min(1.05), 0.14, 0.10, rot, [0.16, 0.19, 0.24], 0.0);
+            }
             _ => {
                 let cap = (top * 0.08).clamp(0.02, 0.06);
                 push_obb(verts, cx, cz, 0.0, top - cap, hx, hz, rot, rgb, 0.0);

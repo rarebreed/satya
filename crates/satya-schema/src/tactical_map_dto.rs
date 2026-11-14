@@ -1,10 +1,12 @@
 //! Tactical `1.0m` Grid Terrain Tiles, Cover Grades, 3D Miniature Visual Specs,
 //! and Interactive Map Generation / Token Movement REST DTOs.
 //!
-//! Edge walls, multi-cell props, vector surfaces, and material classes live in
-//! [`crate::tactical_map_dressing_dto`] and [`crate::tactical_map_surfaces_dto`].
+//! Edge walls, multi-cell props, vector surfaces, multi-floor DTOs, and material classes live in
+//! [`crate::tactical_map_dressing_dto`], [`crate::tactical_map_floors_dto`], and
+//! [`crate::tactical_map_surfaces_dto`].
 
 pub use crate::tactical_map_dressing_dto::*;
+pub use crate::tactical_map_floors_dto::*;
 pub use crate::tactical_map_surfaces_dto::*;
 
 use crate::events::MessageVisibility;
@@ -160,6 +162,9 @@ pub struct TokenVisualSpec {
     /// Authoritative continuous Y center coordinate in centimeters (`None` falls back to `(tok.y * cell_size_cm) + cell_size_cm / 2`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pos_y_cm: Option<i32>,
+    /// Signed architectural floor index occupied by this miniature (`0` = `1F`, `-1` = `B1`, `1` = `2F`).
+    #[serde(default)]
+    pub floor_index: i32,
 }
 
 /// Validates and normalizes an optional character/NPC token portrait URL, rejecting script vectors
@@ -214,6 +219,7 @@ impl Default for TokenVisualSpec {
             portrait_url: None,
             pos_x_cm: None,
             pos_y_cm: None,
+            floor_index: 0,
         }
     }
 }
@@ -314,6 +320,15 @@ pub struct GenerateSessionMapRequest {
     /// onto the active tactical map using edge-matched procedural generation (GM or Solo AI-GM only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub continue_direction: Option<MapContinuationDir>,
+    /// Switches the active floor level (`-1` = `B1`, `0` = `1F`, `1` = `2F`) on the existing session map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_active_floor: Option<i32>,
+    /// Optional residential architectural economic tier override for composable home presets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub economic_tier: Option<EconomicTier>,
+    /// Optional macro zoning wrapper override for composable building presets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zoning: Option<ZoningContext>,
 }
 
 crate::define_wire_enum! {
@@ -377,6 +392,9 @@ impl Default for GenerateSessionMapRequest {
             clear_prop_at: None,
             clear_prop_at_cm: None,
             continue_direction: None,
+            set_active_floor: None,
+            economic_tier: None,
+            zoning: None,
         }
     }
 }
@@ -396,6 +414,9 @@ pub struct MoveMapTokenRequest {
     pub to_x_cm: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to_y_cm: Option<i32>,
+    /// Optional target floor index when traversing a stairwell/elevator across floors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_floor: Option<i32>,
     #[serde(default)]
     pub facing_deg: Option<i32>,
     #[serde(default)]

@@ -81,7 +81,7 @@ define_wire_enum! {
 define_wire_enum! {
     /// Catalog of placeable continuous props & surface zones. Dimensions, heights, and materials are in
     /// `satya_engine::map_dressing::prop_spec`.
-    pub enum PropKind [count = 52] {
+    pub enum PropKind [count = 55] {
         Sofa => ("SOFA", "Sofa (3-seat)"),
         Loveseat => ("LOVESEAT", "Loveseat"),
         Armchair => ("ARMCHAIR", "Armchair"),
@@ -134,6 +134,9 @@ define_wire_enum! {
         StructuralPillar => ("STRUCTURAL_PILLAR", "Structural bulkhead / pillar"),
         ElevatedCatwalk => ("ELEVATED_CATWALK", "Elevated gantry / catwalk"),
         HazardSpill => ("HAZARD_SPILL", "Chemical / plasma hazard spill"),
+        Stairwell => ("STAIRWELL", "Stairwell"),
+        DisplayRack => ("DISPLAY_RACK", "Retail display gondola"),
+        CheckoutCounter => ("CHECKOUT_COUNTER", "Checkout counter"),
     }
 }
 

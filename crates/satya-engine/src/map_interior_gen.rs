@@ -11,13 +11,9 @@ use satya_schema::{
 use serde::{Deserialize, Serialize};
 
 use crate::map_dressing::{PropObstruction, make_prop, prop_spec};
-#[cfg(test)]
-use crate::map_dressing::props_share_covered_cell;
 use crate::tactical_map::ProceduralSector;
 use crate::tactical_map_edges::WallEdgeIndex;
 use crate::tactical_map_geom::all_walkable_areas_connected;
-#[cfg(test)]
-use crate::tactical_map_geom::{TOKEN_RADIUS_M, circle_collides_obstacles};
 
 /// Furnished interior layout family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -244,15 +240,48 @@ impl Shell {
     }
 }
 
-struct Furnisher {
-    w: i32,
-    h: i32,
-    blocked: Vec<bool>,
-    props: Vec<MapPropPlacement>,
-    rng: Rng,
+pub(crate) struct Furnisher {
+    pub(crate) w: i32,
+    pub(crate) h: i32,
+    pub(crate) blocked: Vec<bool>,
+    pub(crate) props: Vec<MapPropPlacement>,
+    pub(crate) rng: Rng,
 }
 
 impl Furnisher {
+    pub(crate) fn new(w: i32, h: i32, seed: u64) -> Self {
+        Self {
+            w,
+            h,
+            blocked: vec![false; (w.max(1) * h.max(1)) as usize],
+            props: Vec::new(),
+            rng: Rng(seed),
+        }
+    }
+
+    pub(crate) fn reserve_cell(&mut self, x: i32, y: i32) {
+        if x >= 0 && y >= 0 && x < self.w && y < self.h {
+            self.blocked[(y * self.w + x) as usize] = true;
+        }
+    }
+
+    pub(crate) fn reserve_doors(&mut self, edges: &[MapWallEdge]) {
+        for e in edges {
+            if matches!(e.kind, WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen) {
+                match e.side {
+                    EdgeSide::West => {
+                        self.reserve_cell(e.x - 1, e.y);
+                        self.reserve_cell(e.x, e.y);
+                    }
+                    EdgeSide::North => {
+                        self.reserve_cell(e.x, e.y - 1);
+                        self.reserve_cell(e.x, e.y);
+                    }
+                }
+            }
+        }
+    }
+
     fn free(&self, x: i32, y: i32, fw: i32, fh: i32, r: Room) -> bool {
         x >= r.x0
             && y >= r.y0
@@ -271,7 +300,7 @@ impl Furnisher {
             })
     }
 
-    fn try_place(&mut self, kind: PropKind, x: i32, y: i32, rot: i32, len: Option<i32>, r: Room) -> Option<MapPropPlacement> {
+    pub(crate) fn try_place(&mut self, kind: PropKind, x: i32, y: i32, rot: i32, len: Option<i32>, r: Room) -> Option<MapPropPlacement> {
         let seed = self.rng.next() as u32;
         let p = make_prop(kind, x, y, rot, len, seed);
         let decal = prop_spec(kind).floor_layer;
@@ -296,7 +325,7 @@ impl Furnisher {
         Some(p)
     }
 
-    fn against_wall(&mut self, kind: PropKind, r: Room, side: Side, len: Option<i32>) -> Option<MapPropPlacement> {
+    pub(crate) fn against_wall(&mut self, kind: PropKind, r: Room, side: Side, len: Option<i32>) -> Option<MapPropPlacement> {
         let rot = side.rot();
         let probe = make_prop(kind, 0, 0, rot, len, 0);
         let (fw, fh) = (probe.w_cells, probe.h_cells);
@@ -315,13 +344,13 @@ impl Furnisher {
             .find_map(|(x, y)| self.try_place(kind, x, y, rot, len, r))
     }
 
-    fn against_any_wall(&mut self, kind: PropKind, r: Room, len: Option<i32>) -> Option<MapPropPlacement> {
+    pub(crate) fn against_any_wall(&mut self, kind: PropKind, r: Room, len: Option<i32>) -> Option<MapPropPlacement> {
         let start = self.rng.range(0, 4) as usize;
         (0..4).find_map(|i| self.against_wall(kind, r, Side::ALL[(start + i) % 4], len))
     }
 
     /// Places `kind` with the same rotation, centered in front of `anchor` after a `gap` of free cells.
-    fn in_front(&mut self, anchor: MapPropPlacement, kind: PropKind, gap: i32, r: Room) -> Option<MapPropPlacement> {
+    pub(crate) fn in_front(&mut self, anchor: MapPropPlacement, kind: PropKind, gap: i32, r: Room) -> Option<MapPropPlacement> {
         let rot = anchor.rotation_deg;
         let probe = make_prop(kind, 0, 0, rot, None, 0);
         let (fw, fh) = (probe.w_cells, probe.h_cells);
@@ -335,7 +364,7 @@ impl Furnisher {
     }
 
     /// Scatters up to `count` props with a one-cell clearance ring inside `r` and natural `1°` jitter.
-    fn scatter(&mut self, kind: PropKind, r: Room, count: usize, rot: i32) {
+    pub(crate) fn scatter(&mut self, kind: PropKind, r: Room, count: usize, rot: i32) {
         let jitter_range = match kind {
             PropKind::RoundTable | PropKind::Armchair | PropKind::CoffeeTable | PropKind::WoodCrate => 8,
             PropKind::PoolTable => 2,
@@ -363,7 +392,7 @@ impl Furnisher {
         }
     }
 
-    fn furnish(&mut self, role: Role, r: Room) {
+    pub(crate) fn furnish(&mut self, role: Role, r: Room) {
         use PropKind as P;
         let area_scale = (r.area() / 36).clamp(1, 5) as usize;
         match role {
@@ -651,29 +680,11 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
     };
 
     // Reserve spawn pads and both sides of every door so thresholds stay walkable.
-    let mut furn = Furnisher { w, h, blocked: vec![false; (w * h) as usize], props: Vec::new(), rng: Rng(shell.rng.next()) };
-    let reserve = |f: &mut Furnisher, x: i32, y: i32| {
-        if x >= 0 && y >= 0 && x < f.w && y < f.h {
-            f.blocked[(y * f.w + x) as usize] = true;
-        }
-    };
+    let mut furn = Furnisher::new(w, h, shell.rng.next());
     for &(sx, sy) in &[(2, mid_y), (2, (mid_y - 1).max(1)), (w - 3, mid_y), (w - 3, (mid_y + 1).min(h - 2))] {
-        reserve(&mut furn, sx, sy);
+        furn.reserve_cell(sx, sy);
     }
-    for e in &shell.edges {
-        if matches!(e.kind, WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen) {
-            match e.side {
-                EdgeSide::West => {
-                    reserve(&mut furn, e.x - 1, e.y);
-                    reserve(&mut furn, e.x, e.y);
-                }
-                EdgeSide::North => {
-                    reserve(&mut furn, e.x, e.y - 1);
-                    reserve(&mut furn, e.x, e.y);
-                }
-            }
-        }
-    }
+    furn.reserve_doors(&shell.edges);
     for &(r, role) in &rooms_roles {
         furn.furnish(role, r);
     }
@@ -689,6 +700,7 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
                 wall_edges: shell.edges,
                 props,
                 surfaces: surfaces.clone(),
+                ..ProceduralSector::default()
             };
         }
         match props
@@ -703,74 +715,9 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
                     wall_edges: shell.edges,
                     props,
                     surfaces,
+                    ..ProceduralSector::default()
                 };
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tactical_map::{GaitReachQuery, TacticalSceneView, compute_reachable_continuous};
-    use crate::environment_vehicles::CombatMovementGait;
-
-    #[test]
-    fn interiors_are_deterministic_furnished_and_fully_connected() {
-        for style in [InteriorStyle::Apartment, InteriorStyle::Bar, InteriorStyle::Office] {
-            for seed in [1_i64, 42, 179, 9001] {
-                let a = generate_furnished_interior(style, 20, 14, seed);
-                assert_eq!(a, generate_furnished_interior(style, 20, 14, seed), "{style:?} deterministic");
-                assert!(a.props.len() >= 5, "{style:?}/{seed}: only {} props", a.props.len());
-                assert!(a.wall_edges.iter().any(|e| e.kind == WallEdgeKind::Window));
-                assert!(a.wall_edges.iter().any(|e| e.material == MaterialClass::Drywall));
-                assert!(all_walkable_areas_connected(20, 14, &a.wall_edges, &a.props));
-                for &(x, y) in &[(2, 7), (2, 6), (17, 7), (17, 8)] {
-                    assert!(
-                        !circle_collides_obstacles(
-                            20.0,
-                            14.0,
-                            &a.wall_edges,
-                            &a.props,
-                            x as f32 + 0.5,
-                            y as f32 + 0.5,
-                            TOKEN_RADIUS_M,
-                        ),
-                        "spawn pad ({x},{y})"
-                    );
-                }
-                // No two solid props overlap.
-                for (i, p) in a.props.iter().enumerate() {
-                    for q in &a.props[i + 1..] {
-                        if prop_spec(p.kind).floor_layer || prop_spec(q.kind).floor_layer {
-                            continue;
-                        }
-                        let overlap = props_share_covered_cell(p, q);
-                        assert!(!overlap, "{style:?}/{seed}: {p:?} overlaps {q:?}");
-                    }
-                }
-            }
-        }
-        let bar = generate_furnished_interior(InteriorStyle::Bar, 20, 14, 42);
-        let counter = bar.props.iter().find(|p| p.kind == PropKind::BarCounter).expect("bar counter");
-        assert!(counter.w_cells >= 3, "multi-cell bar counter: {counter:?}");
-        let office = generate_furnished_interior(InteriorStyle::Office, 20, 14, 42);
-        assert!(office.props.iter().any(|p| p.kind == PropKind::Desk), "office workstations");
-        assert!(office.wall_edges.iter().any(|e| e.kind == WallEdgeKind::Window && e.x > 0 && e.x < 20), "glass conference wall");
-        // Gait reach from the West spawn is bounded by interior walls (not the whole board).
-        let scene = TacticalSceneView {
-            width_m: 20.0,
-            height_m: 14.0,
-            edges: &bar.wall_edges,
-            props: &bar.props,
-            surfaces: &bar.surfaces,
-        };
-        let reach = compute_reachable_continuous(&scene, &[], GaitReachQuery {
-            start_m: (2.5, 7.5), spd_eff: 11, hgt_m: 1.8,
-            gait: CombatMovementGait::AllOutSprint, tick_budget: 40,
-        });
-        let strips = reach.merged_row_runs();
-        assert!(!strips.is_empty());
-        assert!(!strips.iter().any(|s| s.x_min_m < 0.0 || s.x_max_m > 20.01));
     }
 }

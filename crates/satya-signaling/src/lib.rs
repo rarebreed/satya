@@ -232,6 +232,8 @@ mod tests_core;
 #[cfg(test)]
 mod tests_map;
 #[cfg(test)]
+mod tests_map_floors;
+#[cfg(test)]
 mod tests_persistence;
 
 #[cfg(test)]

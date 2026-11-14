@@ -201,6 +201,9 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
     }
 
     for (idx, tok) in ui.map.tokens.iter().enumerate() {
+        if ui.map.token_floor(&tok.entity_id) != ui.map.active_floor {
+            continue;
+        }
         let (preset, col, facing) = resolve_token_visual(&ui.map, tok);
         let portrait_url = ui
             .map
@@ -329,4 +332,103 @@ pub fn satya_toggle_battlemap_grid() {
     });
     set_text("btn-map-grid-overlay", if on { "Grid: On" } else { "Grid: Off" });
     sync_battlemap_svg_host();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+    use satya_schema::{MessageVisibility, TokenPlacement};
+
+    #[test]
+    fn multi_floor_2d_art_cache_key_and_overlay_token_filter() {
+        let mut ui = TacticalMapUiState {
+            map: build_procedural_map_request(
+                "mansion-2d",
+                SectorPreset::LuxuryMansion,
+                None,
+                24,
+                18,
+                42,
+            ),
+            ..Default::default()
+        };
+        assert!(ui.map.has_multiple_floors(), "LuxuryMansion must have >= 2 floors");
+        ui.map.tokens.push(TokenPlacement {
+            entity_id: "tok-mansion-1".to_string(),
+            label: "Quantum Knight".to_string(),
+            x: 4,
+            y: 4,
+            visibility: MessageVisibility::Public,
+        });
+        ui.map.set_token_floor("tok-mansion-1", 0);
+
+        let key_1f = battlemap_art_cache_key(&ui);
+        let ov_1f = format_battlemap_overlay_inner(&ui);
+        assert!(ov_1f.contains(">QK<"), "1F overlay should render floor-0 token");
+
+        assert!(ui.map.switch_active_floor(1), "switch to 2F must succeed");
+        let key_2f = battlemap_art_cache_key(&ui);
+        assert_ne!(key_1f, key_2f, "cache key must change on floor switch");
+        let ov_2f_before = format_battlemap_overlay_inner(&ui);
+        assert!(
+            !ov_2f_before.contains(">QK<"),
+            "2F overlay must hide floor-0 token"
+        );
+
+        ui.map.set_token_floor("tok-mansion-1", 1);
+        let ov_2f_after = format_battlemap_overlay_inner(&ui);
+        assert!(
+            ov_2f_after.contains(">QK<"),
+            "2F overlay must show token after moving to floor 1"
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn export_phase4_showcase_svgs() {
+        use crate::wasm_client::map_2d_art::{BATTLEMAP_PAD_PX, BattlemapInkStyle};
+        use satya_engine::map_dressing::make_prop_at_cm;
+        let Ok(out_dir) = std::env::var("SATYA_SVG_PREVIEW_DIR") else {
+            return;
+        };
+        let mut ui = TacticalMapUiState {
+            map: build_procedural_map_request(
+                "p4-demo",
+                SectorPreset::ResidentialApartment,
+                None,
+                20,
+                14,
+                42,
+            ),
+            ..Default::default()
+        };
+        let occupied: Vec<(f32, f32)> = ui.map.tokens.iter().map(|t| ui.map.token_pos_m(t)).collect();
+        let (bw_m, bh_m) = ui.map.board_size_m();
+        let _ = satya_engine::tactical_map_geom::place_prop_on_map(
+            &mut ui.map.props,
+            &ui.map.wall_edges,
+            &occupied,
+            (bw_m, bh_m),
+            make_prop_at_cm(PropKind::PoolTable, 1150, 550, 30, None, 7),
+        );
+        ui.recompute_overlays();
+        let (w, h) = (ui.map.grid_width.max(1), ui.map.grid_height.max(1));
+        let (tw, th) = (
+            w * BATTLEMAP_CELL_PX + 2 * BATTLEMAP_PAD_PX,
+            h * BATTLEMAP_CELL_PX + 2 * BATTLEMAP_PAD_PX,
+        );
+        let vb = format!("-{BATTLEMAP_PAD_PX} -{BATTLEMAP_PAD_PX} {tw} {th}");
+        for style in BattlemapInkStyle::ALL {
+            ui.ink_style = style;
+            let doc = format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{}{}</svg>"#,
+                format_battlemap_art_layer(&ui),
+                format_battlemap_overlay_inner(&ui),
+            );
+            let path =
+                std::path::Path::new(&out_dir).join(format!("phase4_style_{}.svg", style.as_str()));
+            std::fs::write(path, doc).expect("write phase4 svg");
+        }
+    }
 }

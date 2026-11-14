@@ -57,6 +57,8 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::BarStool,
             PropKind::PoolTable,
             PropKind::Jukebox,
+            PropKind::DisplayRack,
+            PropKind::CheckoutCounter,
         ],
     ),
     (
@@ -69,6 +71,7 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::JerseyBarrier,
             PropKind::StructuralPillar,
             PropKind::ElevatedCatwalk,
+            PropKind::Stairwell,
         ],
     ),
     (

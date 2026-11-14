@@ -59,22 +59,31 @@ pub fn surface_contains_point_m(surface: &MapSurfaceFeature, px_m: f32, py_m: f3
     if surface.points_cm.is_empty() {
         return false;
     }
+    let (mut min_x_cm, mut min_y_cm, mut max_x_cm, mut max_y_cm) =
+        (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
+    for pt in &surface.points_cm {
+        min_x_cm = min_x_cm.min(pt.x_cm);
+        min_y_cm = min_y_cm.min(pt.y_cm);
+        max_x_cm = max_x_cm.max(pt.x_cm);
+        max_y_cm = max_y_cm.max(pt.y_cm);
+    }
+    let half_w = (surface.width_cm.max(10) as f32) / 200.0;
+    let quick_pad_m = match surface.shape {
+        SurfaceShapeKind::RibbonSpline => half_w + 1.5,
+        SurfaceShapeKind::OrganicClosed => 1.5,
+        SurfaceShapeKind::Polygon => 0.1,
+    };
+    if px_m < min_x_cm as f32 / 100.0 - quick_pad_m
+        || px_m > max_x_cm as f32 / 100.0 + quick_pad_m
+        || py_m < min_y_cm as f32 / 100.0 - quick_pad_m
+        || py_m > max_y_cm as f32 / 100.0 + quick_pad_m
+    {
+        return false;
+    }
+
     let raw: Vec<(f32, f32)> = surface.points_cm.iter().map(|p| p.to_m()).collect();
     match surface.shape {
         SurfaceShapeKind::RibbonSpline => {
-            let half_w = (surface.width_cm.max(10) as f32) / 200.0;
-            let (mut min_x, mut min_y, mut max_x, mut max_y) =
-                (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
-            for &(x, y) in &raw {
-                min_x = min_x.min(x);
-                min_y = min_y.min(y);
-                max_x = max_x.max(x);
-                max_y = max_y.max(y);
-            }
-            let pad = half_w + 1.5;
-            if px_m < min_x - pad || px_m > max_x + pad || py_m < min_y - pad || py_m > max_y + pad {
-                return false;
-            }
             let cl = sample_open_catmull_rom_m(&raw, 6);
             distance_point_to_polyline_m(px_m, py_m, &cl) <= half_w
         }
@@ -154,6 +163,59 @@ pub fn point_near_protected_surface_m(
                 .iter()
                 .any(|&(dx, dy)| surface_contains_point_m(s, px_m + dx * pad_m, py_m + dy * pad_m))
     })
+}
+
+/// Drops any surface patch that has zero exposed `0.25m` sample points inside `[0, w] x [0, h]`
+/// (for instance, a cramped decorative bed completely covered by a higher-priority building slab).
+pub fn prune_occluded_surfaces(surfaces: &mut Vec<MapSurfaceFeature>, w: i32, h: i32) {
+    let max_gx = (w * 4 - 1).max(1);
+    let max_gy = (h * 4 - 1).max(1);
+    let mut keep = vec![false; surfaces.len()];
+    for (idx, s) in surfaces.iter().enumerate() {
+        let Some((mut min_x_cm, mut min_y_cm, mut max_x_cm, mut max_y_cm)) = s
+            .points_cm
+            .first()
+            .map(|p| (p.x_cm, p.y_cm, p.x_cm, p.y_cm))
+        else {
+            continue;
+        };
+        for p in &s.points_cm[1..] {
+            min_x_cm = min_x_cm.min(p.x_cm);
+            min_y_cm = min_y_cm.min(p.y_cm);
+            max_x_cm = max_x_cm.max(p.x_cm);
+            max_y_cm = max_y_cm.max(p.y_cm);
+        }
+        let pad_cm = s.width_cm / 2 + 150;
+        let gx_min = (((min_x_cm - pad_cm) as f32 / 25.0).floor() as i32).clamp(1, max_gx);
+        let gx_max = (((max_x_cm + pad_cm) as f32 / 25.0).ceil() as i32).clamp(gx_min, max_gx);
+        let gy_min = (((min_y_cm - pad_cm) as f32 / 25.0).floor() as i32).clamp(1, max_gy);
+        let gy_max = (((max_y_cm + pad_cm) as f32 / 25.0).ceil() as i32).clamp(gy_min, max_gy);
+
+        let mut exposed = false;
+        for gy in gy_min..=gy_max {
+            let py = gy as f32 * 0.25;
+            for gx in gx_min..=gx_max {
+                let px = gx as f32 * 0.25;
+                if surface_contains_point_m(s, px, py)
+                    && let Some(top) = topmost_surface_at_m(surfaces, px, py)
+                    && top.kind == s.kind
+                {
+                    exposed = true;
+                    break;
+                }
+            }
+            if exposed {
+                break;
+            }
+        }
+        keep[idx] = exposed;
+    }
+    let mut i = 0;
+    surfaces.retain(|_| {
+        let k = keep[i];
+        i += 1;
+        k
+    });
 }
 
 #[cfg(test)]
@@ -308,6 +370,12 @@ mod tests {
                             | crate::tactical_map::SectorPreset::GardenEstate
                             | crate::tactical_map::SectorPreset::WoodlandCreek
                             | crate::tactical_map::SectorPreset::RoadsideDitch
+                            | crate::tactical_map::SectorPreset::UrbanResidential
+                            | crate::tactical_map::SectorPreset::ProjectsHighDensity
+                            | crate::tactical_map::SectorPreset::SuburbanNeighborhood
+                            | crate::tactical_map::SectorPreset::RuralCountryside
+                            | crate::tactical_map::SectorPreset::LuxuryMansion
+                            | crate::tactical_map::SectorPreset::DowntownCommercial
                     ) {
                         for p in &sec.props {
                             let (cx, cy) = p.center_m();
@@ -346,6 +414,30 @@ mod tests {
                                     p.kind
                                 );
                             }
+                        }
+                    }
+
+                    for fl in &sec.floors {
+                        let fl_emitted: HashSet<SurfaceFeatureKind> =
+                            fl.surfaces.iter().map(|s| s.kind).collect();
+                        let mut fl_exposed: HashSet<SurfaceFeatureKind> = HashSet::new();
+                        for gy in 1..(h * 4) {
+                            for gx in 1..(w * 4) {
+                                if let Some(top) = topmost_surface_at_m(
+                                    &fl.surfaces,
+                                    gx as f32 * 0.25,
+                                    gy as f32 * 0.25,
+                                ) {
+                                    fl_exposed.insert(top.kind);
+                                }
+                            }
+                        }
+                        for &kind in &fl_emitted {
+                            assert!(
+                                fl_exposed.contains(&kind),
+                                "{preset:?} {w}x{h} seed {seed} floor {}: emitted {kind:?} 100% occluded",
+                                fl.floor_index
+                            );
                         }
                     }
                 }

@@ -10,4 +10,4 @@ Activate [`satya-rust-workspace`](../../.agents/skills/satya-rust-workspace/SKIL
    - Use `MapPropPlacement::footprint_m()` (`PropFootprintM`) for rotated continuous metric prop transforms rather than re-deriving center/half-extents/rotation in downstream crates.
    - Register builtin Avro schemas in `BUILTIN_SCHEMAS` (`src/registry.rs`).
 3. **Complete Module Inventory (`crates/satya-schema/src/`)**:
-   - `wire_enum.rs`, `types.rs`, `events.rs`, `protocol.rs`, `tactical_map_dto.rs`, `tactical_map_dressing_dto.rs`, `character.rs`, `session_persistence.rs`, `registry.rs`, `gdpr.rs`.
+   - `wire_enum.rs`, `types.rs`, `events.rs`, `protocol.rs`, `protocol_map_ai.rs`, `tactical_map_dto.rs`, `tactical_map_dressing_dto.rs`, `tactical_map_surfaces_dto.rs`, `tactical_map_floors_dto.rs`, `character.rs`, `session_persistence.rs`, `registry.rs`, `gdpr.rs`.

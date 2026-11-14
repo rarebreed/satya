@@ -144,6 +144,9 @@ prop_catalog! {
     StructuralPillar: 1 x 1, FullObstacle, ReinforcedConcrete, 300 cm, [0.56, 0.56, 0.58];
     ElevatedCatwalk: 1 x 1, FloorLayer, SheetSteel, 12 cm, [0.46, 0.50, 0.54], stretch, floor;
     HazardSpill: 1 x 1, FloorLayer, Ceramic, 2 cm, [0.78, 0.62, 0.16], stretch, floor, hazard;
+    Stairwell: 2 x 3, FloorLayer, ReinforcedConcrete, 110 cm, [0.50, 0.52, 0.56], floor;
+    DisplayRack: 2 x 1, HalfCover, SheetSteel, 135 cm, [0.38, 0.42, 0.48], stretch;
+    CheckoutCounter: 2 x 1, HalfCover, WoodFurniture, 95 cm, [0.46, 0.48, 0.52], stretch;
 }
 
 /// Catalog entry for `kind`.

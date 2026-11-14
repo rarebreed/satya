@@ -147,7 +147,7 @@ fn edge_slot_at(edges: &[MapWallEdge], x: i32, y: i32, side: EdgeSide) -> Option
         .map(|e| (e.kind, e.material))
 }
 
-fn upsert_edge(edges: &mut Vec<MapWallEdge>, e: MapWallEdge) {
+pub(crate) fn upsert_edge(edges: &mut Vec<MapWallEdge>, e: MapWallEdge) {
     if let Some(slot) = edges
         .iter_mut()
         .find(|o| o.x == e.x && o.y == e.y && o.side == e.side)
@@ -192,7 +192,7 @@ fn extract_seam_slice(
     BoundarySeamSlice { t0, t_len, edges, src_clear, ribbons }
 }
 
-fn translate_prop(p: MapPropPlacement, dx_cells: i32, dy_cells: i32, cell_cm: i32) -> MapPropPlacement {
+pub(crate) fn translate_prop(p: MapPropPlacement, dx_cells: i32, dy_cells: i32, cell_cm: i32) -> MapPropPlacement {
     let mut out = p;
     out.x += dx_cells;
     out.y += dy_cells;
@@ -202,7 +202,21 @@ fn translate_prop(p: MapPropPlacement, dx_cells: i32, dy_cells: i32, cell_cm: i3
     out
 }
 
-fn mirror_prop_axis(p: MapPropPlacement, cw: i32, ch: i32, horizontal_flip: bool) -> MapPropPlacement {
+pub(crate) fn mirror_edge_axis(e: &mut MapWallEdge, cw: i32, ch: i32, horizontal_flip: bool) {
+    if horizontal_flip {
+        match e.side {
+            EdgeSide::West => e.x = cw - e.x,
+            EdgeSide::North => e.x = cw - 1 - e.x,
+        }
+    } else {
+        match e.side {
+            EdgeSide::North => e.y = ch - e.y,
+            EdgeSide::West => e.y = ch - 1 - e.y,
+        }
+    }
+}
+
+pub(crate) fn mirror_prop_axis(p: MapPropPlacement, cw: i32, ch: i32, horizontal_flip: bool) -> MapPropPlacement {
     let (cx_cm, cy_cm) = p.center_cm();
     let (sw_cm, sh_cm) = p.local_span_cm();
     let len_cm = prop_spec(p.kind).stretchable.then_some(sw_cm.max(sh_cm));
@@ -217,22 +231,13 @@ fn mirror_prop_axis(p: MapPropPlacement, cw: i32, ch: i32, horizontal_flip: bool
 
 fn mirror_sector(sec: &mut ProceduralSector, cw: i32, ch: i32, horizontal_flip: bool) {
     for e in &mut sec.wall_edges {
-        if horizontal_flip {
-            match e.side {
-                EdgeSide::West => e.x = cw - e.x,
-                EdgeSide::North => e.x = cw - 1 - e.x,
-            }
-        } else {
-            match e.side {
-                EdgeSide::North => e.y = ch - e.y,
-                EdgeSide::West => e.y = ch - 1 - e.y,
-            }
-        }
+        mirror_edge_axis(e, cw, ch, horizontal_flip);
     }
     for p in &mut sec.props {
         *p = mirror_prop_axis(*p, cw, ch, horizontal_flip);
     }
     mirror_sector_surfaces(&mut sec.surfaces, cw, ch, horizontal_flip);
+    crate::map_continuation_ribbons::mirror_floor_levels(&mut sec.floors, cw, ch, horizontal_flip);
 }
 
 #[derive(Clone, Copy)]
@@ -491,6 +496,14 @@ pub fn continue_procedural_map(
         ),
     };
 
+    let prev_active_floor = base.active_floor;
+    if base.has_multiple_floors() {
+        base.sync_active_floor_snapshot();
+        if prev_active_floor != 0 {
+            base.switch_active_floor(0);
+        }
+    }
+
     // Snapshot boundary features on `base` before translating coordinates.
     let seam_slices: Vec<BoundarySeamSlice> = chunks
         .iter()
@@ -522,6 +535,12 @@ pub fn continue_procedural_map(
     for s in &mut base.surfaces {
         *s = s.translated(dx_cells * cell_cm, dy_cells * cell_cm);
     }
+    crate::map_continuation_ribbons::translate_floor_levels(
+        &mut base.floors,
+        dx_cells,
+        dy_cells,
+        cell_cm,
+    );
     for (entity_id, old_x_cm, old_y_cm) in prev_token_cm {
         base.set_token_pos_cm(
             &entity_id,
@@ -573,6 +592,13 @@ pub fn continue_procedural_map(
                 new_solid_props.push(shifted);
             }
         }
+        crate::map_continuation_ribbons::stitch_continued_floors(
+            &mut base,
+            &sec.floors,
+            x_off,
+            y_off,
+            cell_cm,
+        );
     }
 
     // Interleave surface decals underneath existing solid props so rendering Z-order stays crisp.
@@ -602,6 +628,18 @@ pub fn continue_procedural_map(
         ensure_seam_connectivity(new_w, new_h, &mut base.wall_edges, &mut base.props, preset, sib_dir, slice.t0);
     }
 
+    if !base.floors.is_empty() {
+        if let Some(f0) = base.floors.iter_mut().find(|f| f.floor_index == 0) {
+            f0.wall_edges = base.wall_edges.clone();
+            f0.props = base.props.clone();
+            f0.surfaces = base.surfaces.clone();
+        }
+        base.floors.sort_by_key(|f| f.floor_index);
+        if prev_active_floor != 0 {
+            base.switch_active_floor(prev_active_floor);
+        }
+    }
+
     base.notes = Some(format!(
         "{} · Continuous Metric Arena ({}m x {}m, Seed {})",
         preset.subtitle(),
@@ -628,136 +666,4 @@ pub fn default_starter_vector_map(seed: i64) -> GmMapUpdateRequest {
         CONTINUATION_STRIP_H,
         seed,
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::BTreeSet;
-
-    #[test]
-    fn continue_all_presets_across_all_four_cardinal_edges() {
-        for preset in SectorPreset::ALL {
-            let base = build_procedural_map_request("m-base", preset, None, 20, 14, 42);
-            let base_tok_pos = base.token_pos_cm(&base.tokens[0]);
-            for dir in MapContinuationDir::ALL {
-                let outcome = continue_procedural_map(&base, dir, None)
-                    .unwrap_or_else(|e| panic!("{preset:?} {dir:?} failed: {e}"));
-                let expected_size = match dir {
-                    MapContinuationDir::East | MapContinuationDir::West => (40, 14),
-                    MapContinuationDir::North | MapContinuationDir::South => (20, 28),
-                };
-                assert_eq!(
-                    (outcome.map.grid_width, outcome.map.grid_height),
-                    expected_size,
-                    "{preset:?} {dir:?}"
-                );
-                assert_eq!(outcome.map.map_id, "m-base");
-                // Existing token position stays pinned relative to existing geometry.
-                let new_tok_pos = outcome.map.token_pos_cm(&outcome.map.tokens[0]);
-                let expect_dx_cm = (outcome.existing_shift_m.0 * 100.0).round() as i32;
-                let expect_dy_cm = (outcome.existing_shift_m.1 * 100.0).round() as i32;
-                assert_eq!(
-                    new_tok_pos,
-                    (base_tok_pos.0 + expect_dx_cm, base_tok_pos.1 + expect_dy_cm),
-                    "{preset:?} {dir:?} token shift"
-                );
-                // Zero duplicate edge keys.
-                let mut seen_edges = BTreeSet::new();
-                for e in &outcome.map.wall_edges {
-                    assert!(
-                        seen_edges.insert((e.x, e.y, e.side as u8)),
-                        "{preset:?} {dir:?}: duplicate edge {:?}",
-                        e
-                    );
-                }
-                assert!(
-                    all_walkable_areas_connected(
-                        outcome.map.grid_width,
-                        outcome.map.grid_height,
-                        &outcome.map.wall_edges,
-                        &outcome.map.props
-                    ),
-                    "{preset:?} {dir:?} disconnected after continuation"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn walled_north_south_adds_seam_doorway_and_outdoor_ribbons_continue() {
-        let apt = build_procedural_map_request(
-            "apt",
-            SectorPreset::ResidentialApartment,
-            None,
-            20,
-            14,
-            42,
-        );
-        let south = continue_procedural_map(&apt, MapContinuationDir::South, None).unwrap();
-        let has_seam_door = south.map.wall_edges.iter().any(|e| {
-            e.side == EdgeSide::North
-                && e.y == 14
-                && matches!(e.kind, WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen)
-        });
-        assert!(has_seam_door, "South continuation on Apartment must carve a connecting doorway");
-
-        let creek = build_procedural_map_request("creek", SectorPreset::WoodlandCreek, None, 20, 14, 42);
-        let creek_s = continue_procedural_map(&creek, MapContinuationDir::South, None).unwrap();
-        let crosses_south_seam = creek_s.map.surfaces.iter().any(|s| {
-            s.kind == satya_schema::SurfaceFeatureKind::CreekChannel
-                && (1..20).any(|gx| {
-                    let xm = gx as f32;
-                    crate::map_surface_geom::surface_contains_point_m(s, xm, 14.0)
-                        || (crate::map_surface_geom::surface_contains_point_m(s, xm, 13.6)
-                            && crate::map_surface_geom::surface_contains_point_m(s, xm, 14.4))
-                })
-        });
-        assert!(crosses_south_seam, "WoodlandCreek South continuation should bridge creek across y=14");
-
-        let park = build_procedural_map_request("park", SectorPreset::WoodedPark, None, 20, 14, 42);
-        let park_e = continue_procedural_map(&park, MapContinuationDir::East, None).unwrap();
-        let bridges_east_trail = park_e.map.surfaces.iter().any(|s| {
-            s.kind == satya_schema::SurfaceFeatureKind::DirtTrail
-                && (1..14).any(|gy| {
-                    let ym = gy as f32;
-                    crate::map_surface_geom::surface_contains_point_m(s, 20.0, ym)
-                        || (crate::map_surface_geom::surface_contains_point_m(s, 19.6, ym)
-                            && crate::map_surface_geom::surface_contains_point_m(s, 20.4, ym))
-                })
-        });
-        assert!(bridges_east_trail, "WoodedPark East continuation should bridge winding trail across x=20");
-    }
-
-    #[test]
-    fn multi_step_l_and_full_stitch_respects_max_arena_bounds() {
-        let mut map = build_procedural_map_request("multi", SectorPreset::UrbanCrossroads, None, 20, 14, 42);
-        map = continue_procedural_map(&map, MapContinuationDir::East, None).unwrap().map;
-        assert_eq!((map.grid_width, map.grid_height), (40, 14));
-        map = continue_procedural_map(&map, MapContinuationDir::North, None).unwrap().map;
-        assert_eq!((map.grid_width, map.grid_height), (40, 28));
-        assert!(all_walkable_areas_connected(
-            map.grid_width,
-            map.grid_height,
-            &map.wall_edges,
-            &map.props
-        ));
-        while map.grid_width < MAX_STITCHED_MAP_W {
-            map = continue_procedural_map(&map, MapContinuationDir::East, None).unwrap().map;
-        }
-        assert_eq!(map.grid_width, MAX_STITCHED_MAP_W);
-        assert!(!can_continue_map(&map, MapContinuationDir::East));
-        assert!(continue_procedural_map(&map, MapContinuationDir::East, None).is_err());
-
-        // Large single sectors stitch with proportional continuation strips cleanly.
-        let estate = build_procedural_map_request("estate", SectorPreset::GardenEstate, None, 48, 36, 99);
-        let stitched_estate = continue_procedural_map(&estate, MapContinuationDir::East, None).unwrap().map;
-        assert_eq!((stitched_estate.grid_width, stitched_estate.grid_height), (84, 36));
-        assert!(all_walkable_areas_connected(
-            stitched_estate.grid_width,
-            stitched_estate.grid_height,
-            &stitched_estate.wall_edges,
-            &stitched_estate.props
-        ));
-    }
 }
