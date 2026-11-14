@@ -8,9 +8,10 @@
 
 | Module | Responsibility |
 | :--- | :--- |
-| **`map_2d_art.rs`** | `BATTLEMAP_CELL_PX` (`64`), `BATTLEMAP_PAD_PX` (`12`), `BATTLEMAP_ART_THEMES` (`8` material themes + `PRESET_ART_THEME_MAP` covering all `12` presets), FNV-1a `battlemap_art_cache_key`, boundary/rect path mergers, and `format_battlemap_art_layer` (renders continuous `wall_edges`, surfaces, and `360°` props with `tiles == []`). |
-| **`map_2d_art_surfaces.rs`** | Floor `<pattern>` defs (`Grass` multi-tone turf, `Hardwood`, etc.), landscaping `<pattern>`s (`#bm-gravel`, `#bm-dirt`, `#bm-mulch`, `#bm-creek`, `#bm-ditch`, `#bm-leaf-tex`), and Chaikin corner-smoothed contour extraction (`battlemap_smooth_region_path`) for meandering creeks, ditches, gravel bars, dirt trails, mulch beds, and flagstones. |
-| **`map_2d_art_walls.rs`** | Coalesced `MapWallEdge` orthogonal segments (`Wall`, `DoorClosed`, `DoorOpen` swing arcs, `Window` sills/glazing) rendered cleanly along wall coordinates. |
+| **`map_2d_art.rs`** | `BATTLEMAP_CELL_PX` (`64`), `BATTLEMAP_PAD_PX` (`12`), `BATTLEMAP_ART_THEMES` (`8` material themes + `PRESET_ART_THEME_MAP` covering all `12` presets), FNV-1a `battlemap_art_cache_key` (including `ink_style` and `texture_mode`), boundary/rect path mergers, and `format_battlemap_art_layer` (renders continuous `wall_edges`, surfaces, and `360°` props with `tiles == []`). |
+| **`map_2d_art_textures.rs`** | `BattlemapTextureMode` (`Painted` / `ProceduralVector`), `BATTLEMAP_TEXTURE_SPECS` (`21` seamless `512×512` WebP `<pattern>` defs served from `/assets/textures/map2d/*.webp`), `TEXTURE_MODE_PREF_KEY` (`satya.map.texture_mode`), and `satya_toggle_battlemap_textures` (`#btn-map-tex-mode`). |
+| **`map_2d_art_surfaces.rs`** | Floor `<pattern>` defs (`Grass`, `Hardwood`, `ConcreteSlab`, etc.), landscaping `<pattern>`s (`#bm-gravel`, `#bm-dirt`, `#bm-mulch`, `#bm-creek`, `#bm-ditch`, `#bm-leaf-tex`), and Chaikin corner-smoothed contour extraction (`battlemap_smooth_region_path`) for meandering creeks, ditches, gravel bars, dirt trails, mulch beds, and flagstones. |
+| **`map_2d_art_walls.rs`** | Coalesced `MapWallEdge` orthogonal segments (`Wall`, `DoorClosed`, `DoorOpen` swing arcs, `Window` sills/glazing) rendered cleanly along wall coordinates, with `push_edge_walls_svg_with_mode` applying masonry, rooftop gravel, and wood door fills in `Painted` mode. |
 | **`map_2d_art_furniture.rs`** | All `52` `PropKind` vector glyphs rendered at continuous `(center_x_cm, center_y_cm)` and full `360°` (`0..359°`) rotation (`Sofa`, `BarCounter`, `PoolTable`, `Car`, `UtilityVan`, `GardenBed`, `GardenEdging`, `StructuralPillar`, `ElevatedCatwalk`, `HazardSpill`, leaf-textured `LargeTree` / `MediumTree` canopies, etc.). |
 | **`map_2d_art_props.rs`** | Deterministic cell hashing / blob path helpers for terrain scatter and legacy prop fallback contours. |
 | **`map_2d_tokens.rs`** | Phase 4 `BattlemapInkStyle` filter finishes (`vellum`, `clean`, `blueprint`, `sketch`), `satya_set_battlemap_ink_style`, and `push_token_portrait_disc_svg` placed at continuous `(pos_x_cm, pos_y_cm)` coordinates. |
@@ -26,7 +27,7 @@
 `#tabletop-map-svg-fallback` fills `#tabletop-map-viewport` (`100% × 100%`) and contains `.battlemap-stack`, stacking two `<svg>` elements over an identical synchronized `viewBox` (`preserveAspectRatio="xMidYMid meet"`):
 
 1. **`#battlemap-art` (Static Art Layer)**:
-   - Keyed by `data-art-key="{battlemap_art_cache_key(ui)}"`, an FNV-1a digest over `grid_width`, `grid_height`, `seed`, `theme.id`, `ink_style.as_str()`, `wall_edges`, and `props` (continuous geometry, independent of any legacy tile array).
+   - Keyed by `data-art-key="{battlemap_art_cache_key(ui)}"`, an FNV-1a digest over `grid_width`, `grid_height`, `seed`, `theme.id`, `ink_style.as_str()`, `texture_mode.as_str()`, `wall_edges`, and `props` (continuous geometry, independent of any legacy tile array).
    - `sync_battlemap_svg_host()` skips regenerating `#battlemap-art` whenever `data-art-key` matches, replacing only `#battlemap-overlay.innerHTML` on pointer hover, token selection, token movement, or grid-toggle events.
    - Wheel zoom and drag-pan mutate only the `viewBox` attribute on `#battlemap-art` and `#battlemap-overlay` via `sync_map_camera_and_edge_controls_dom()` with zero DOM rebuilds (`#btn-map-zoom-out`, `#map-zoom-readout`, `#btn-map-zoom-in`, and `#btn-map-reset-cam` / double-click).
 2. **`#battlemap-overlay` (Dynamic Interaction Layer)**:
@@ -35,7 +36,7 @@
 
 ---
 
-## 3. Paper / Ink Filter Styles (`BattlemapInkStyle`)
+## 3. Paper / Ink Filter Styles (`BattlemapInkStyle`) & Seamless Textures (`BattlemapTextureMode`)
 
 Selectable via `#map-ink-style-select` (visible in 2D Battlemap mode, persisted in `localStorage["satya.map.ink_style"]`), `BattlemapInkStyle` reconfigures SVG `<defs>` filters and finishing layers without touching `satya-engine` mechanics:
 
@@ -45,6 +46,11 @@ Selectable via `#map-ink-style-select` (visible in 2D Battlemap mode, persisted 
 | **`clean`** | Crisp Vector | `0.0` (`<feOffset/>`) | Zero displacement wobble, crisp vector shadows, no paper grain overlay. |
 | **`blueprint`** | Tactical Blueprint | `0.8` | Prussian-blue `feColorMatrix` (`#bm-tint`), `#dbeafe` grid lines, and double drafting border. |
 | **`sketch`** | Aged Field Sketch | `4.8` | Heavy hand-drawn displacement, warm sepia `feColorMatrix`, `#f0dfb8` multiply wash, and `0.85` tooth grain. |
+
+Alongside the ink filter, `#btn-map-tex-mode` toggles `BattlemapTextureMode` (`Textures: Painted` *(default)* vs. `Textures: Vector`, persisted in `localStorage["satya.map.texture_mode"]`):
+- **`Painted`**: `push_battlemap_material_defs()` emits `<pattern>` definitions wrapping the `21` seamless `512×512` WebP tiles in `assets/textures/map2d/*.webp` (served statically from `/assets` by `satya-signaling`) across floors, curved paths/waterways, walls/doors, and `360°` props (`#bm-grass`, `#bm-gravel`, `#bm-tarmac`, `#bm-oak`, `#bm-dirt`, `#bm-mulch`, `#bm-creek`, `#bm-ditch`, `#bm-paver`, `#bm-concrete`, `#bm-stained-conc`, `#bm-hardwood`, `#bm-vinyl`, `#bm-leaf-tex`, `#bm-rock`, `#bm-fabric`, `#bm-steel`, `#bm-roof-gravel`, `#bm-ceramic`, `#bm-brick`, `#bm-spill`).
+- **`ProceduralVector`**: falls back to compact inline SVG `<pattern>` fills with zero external bitmap fetches.
+- **Asset Generation & Verification**: regenerate or seam-check the WebP tiles offline via `pixi run gen-textures` and `pixi run verify-textures` (`src/satya_ml/texture_gen/`).
 
 ---
 

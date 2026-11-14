@@ -23,6 +23,7 @@ use crate::wasm_client::map_2d_art::{
 use crate::wasm_client::map_2d_art_props::{
     BATTLEMAP_INK, battlemap_cell_hash, battlemap_unit_f32,
 };
+use crate::wasm_client::map_2d_art_textures::BattlemapTextureMode;
 use crate::wasm_client::map_3d::TacticalMapUiState;
 
 /// Emits the primary `#bm-floor` `<pattern>` matching `t.floor`.
@@ -219,7 +220,13 @@ fn push_ring_d(out: &mut String, ring_m: &[(f32, f32)], cell_px: f32) {
     }
 }
 
-fn emit_vector_surfaces_svg(out: &mut String, ui: &TacticalMapUiState, cell_px: f32) {
+fn emit_vector_surfaces_svg(
+    out: &mut String,
+    ui: &TacticalMapUiState,
+    cell_px: f32,
+    tex_mode: BattlemapTextureMode,
+) {
+    let painted = tex_mode.is_painted();
     let (bw_m, bh_m) = ui.map.board_size_m();
     let theme_id = ui.map.theme_preset.as_deref().unwrap_or_default();
     let indoor_theme = matches!(
@@ -277,9 +284,10 @@ fn emit_vector_surfaces_svg(out: &mut String, ui: &TacticalMapUiState, cell_px: 
                 let _ = write!(out, r##"<path d="{d}" fill="url(#bm-tarmac)"/>"##);
             }
             SurfaceFeatureKind::ConcreteWalk => {
+                let fill = if painted { "url(#bm-concrete)" } else { "#cac6bc" };
                 let _ = write!(
                     out,
-                    r##"<path d="{d}" fill="#cac6bc" stroke="#9e988c" stroke-width="2" stroke-linejoin="round"/>"##
+                    r##"<path d="{d}" fill="{fill}" stroke="#9e988c" stroke-width="2" stroke-linejoin="round"/>"##
                 );
             }
             SurfaceFeatureKind::StoneWalk => {
@@ -392,16 +400,18 @@ fn emit_vector_surfaces_svg(out: &mut String, ui: &TacticalMapUiState, cell_px: 
             }
             SurfaceFeatureKind::InteriorFloor => {
                 if !indoor_theme {
+                    let fill = if painted { "url(#bm-hardwood)" } else { "#9b7854" };
                     let _ = write!(
                         out,
-                        r##"<path d="{d}" fill="#9b7854" stroke="#664b30" stroke-width="1.5" stroke-linejoin="round"/>"##
+                        r##"<path d="{d}" fill="{fill}" stroke="#664b30" stroke-width="1.5" stroke-linejoin="round"/>"##
                     );
                 }
             }
             SurfaceFeatureKind::BridgeDeck => {
+                let fill = if painted { "url(#bm-oak)" } else { "#8c623d" };
                 let _ = write!(
                     out,
-                    r##"<path d="{d}" fill="#8c623d" stroke="{BATTLEMAP_INK}" stroke-width="2" stroke-linejoin="round" filter="url(#bm-prop)"/>"##
+                    r##"<path d="{d}" fill="{fill}" stroke="{BATTLEMAP_INK}" stroke-width="2" stroke-linejoin="round" filter="url(#bm-prop)"/>"##
                 );
                 if s.points_cm.len() == 4 {
                     let p = [
@@ -439,9 +449,10 @@ pub(crate) fn push_landscaping_surfaces_svg(
     w: i32,
     h: i32,
     seed: i64,
+    tex_mode: BattlemapTextureMode,
 ) {
     if !ui.map.surfaces.is_empty() {
-        emit_vector_surfaces_svg(out, ui, BATTLEMAP_CELL_PX as f32);
+        emit_vector_surfaces_svg(out, ui, BATTLEMAP_CELL_PX as f32, tex_mode);
         return;
     }
 

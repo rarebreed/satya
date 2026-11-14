@@ -29,6 +29,7 @@ httpx = ">=0.28.0"
 plotly = ">=6.0.0"
 marimo = ">=0.11.0"
 pyrefly = ">=0.15.0"
+pillow = ">=11.0.0"
 
 [tasks]
 # --- Build & Quality ---
@@ -74,3 +75,5 @@ notebook-rules = { cmd = "marimo edit notebooks/satya_rules_book.py", depends-on
 notebook-rules-app = { cmd = "marimo run notebooks/satya_rules_book.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Alias for rules-book-app: launch the Satya TTRPG Rules Book Marimo web app" }
 build-book = { cmd = "python -m satya_ml.build_rules_book", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Generate static HTML Rules Book pages and catalog.json into docs/book/" }
 check-py-ext = { cmd = "cargo check -p satya-py", description = "Type-check the satya-py PyO3 Python extension crate" }
+gen-textures = { cmd = "python -m satya_ml.texture_gen", env = { PYTHONPATH = "src" }, description = "Generate and seam-heal 2D battlemap WebP textures via Gemini Nano Banana" }
+verify-textures = { cmd = "python -m satya_ml.texture_gen --verify-only", env = { PYTHONPATH = "src" }, description = "Verify 2D battlemap WebP tiles exist and pass seamless wrap checks" }

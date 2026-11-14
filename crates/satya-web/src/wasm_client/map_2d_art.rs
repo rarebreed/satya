@@ -18,6 +18,7 @@ pub use crate::wasm_client::map_2d_art_furniture::*;
 pub use crate::wasm_client::map_2d_art_overlay::*;
 pub use crate::wasm_client::map_2d_art_props::*;
 pub use crate::wasm_client::map_2d_art_surfaces::*;
+pub use crate::wasm_client::map_2d_art_textures::*;
 pub use crate::wasm_client::map_2d_art_walls::*;
 pub use crate::wasm_client::map_2d_camera::*;
 pub use crate::wasm_client::map_2d_tokens::*;
@@ -378,6 +379,9 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
     for b in ui.ink_style.as_str().bytes() {
         acc = fnv(acc, u64::from(b));
     }
+    for b in ui.texture_mode.as_str().bytes() {
+        acc = fnv(acc, u64::from(b));
+    }
     for e in &ui.map.wall_edges {
         for v in [e.x as u64, e.y as u64, e.side as u64, e.kind as u64, e.material as u64] {
             acc = fnv(acc, v);
@@ -416,17 +420,14 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
     format!("{acc:016x}")
 }
 
-fn push_defs(out: &mut String, t: &BattlemapArtTheme, style: BattlemapInkStyle) {
+fn push_defs(
+    out: &mut String,
+    t: &BattlemapArtTheme,
+    style: BattlemapInkStyle,
+    tex_mode: BattlemapTextureMode,
+) {
     out.push_str("<defs>");
-    push_floor_pattern_def(out, t);
-    push_surface_pattern_defs(out);
-    let _ = write!(
-        out,
-        r##"<pattern id="bm-hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="9" height="9" fill="{wall}"/><path d="M0 0V9" stroke="{hatch}" stroke-width="2.2"/></pattern><pattern id="bm-grate" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="{plat}"/><path d="M0 4H8M4 0V8" stroke="#000" stroke-opacity=".24" stroke-width="1.2"/></pattern><pattern id="bm-paver" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#cfc7b8"/><rect x="2" y="2" width="28" height="28" rx="3" fill="#dbd4c6" opacity=".6"/><rect x="34" y="34" width="28" height="28" rx="3" fill="#c3baa9" opacity=".55"/><path d="M0 32H64M32 0V32M16 32V64M48 32V64M0 0H64M0 0V64" stroke="#938a7a" stroke-width="1.3" opacity=".65"/></pattern><pattern id="bm-tarmac" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#55585c"/><circle cx="9" cy="11" r="1" fill="#fff" opacity=".12"/><circle cx="33" cy="24" r="1.2" fill="#fff" opacity=".1"/><circle cx="19" cy="39" r=".9" fill="#000" opacity=".28"/></pattern>"##,
-        wall = t.wall_fill,
-        hatch = t.wall_hatch,
-        plat = t.platform_fill,
-    );
+    push_battlemap_material_defs(out, t, tex_mode);
     push_ink_style_filters(out, style);
     out.push_str("</defs>");
 }
@@ -436,11 +437,12 @@ fn push_defs(out: &mut String, t: &BattlemapArtTheme, style: BattlemapInkStyle) 
 pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     let t = battlemap_theme_for_preset(ui.map.theme_preset.as_deref());
     let style = ui.ink_style;
+    let tex_mode = ui.texture_mode;
     let (w, h) = grid_dims(ui);
     let (vw, vh) = (w * BATTLEMAP_CELL_PX, h * BATTLEMAP_CELL_PX);
     let seed = ui.map.seed.unwrap_or(42);
     let mut out = String::with_capacity(48 * 1024);
-    push_defs(&mut out, t, style);
+    push_defs(&mut out, t, style, tex_mode);
 
     // 1. Exterior margin, floor material + large-scale tonal mottling
     let pad = BATTLEMAP_PAD_PX;
@@ -461,7 +463,7 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
 
     // 1b. Merged paved roadways, organic landscaping surfaces, rugs, catwalks, and hazard spills
     let has_vector_surfaces = !ui.map.surfaces.is_empty();
-    push_landscaping_surfaces_svg(&mut out, ui, w, h, seed);
+    push_landscaping_surfaces_svg(&mut out, ui, w, h, seed, tex_mode);
     for p in ui.map.props.iter().filter(|p| {
         prop_spec(p.kind).floor_layer
             && (if has_vector_surfaces {
@@ -491,7 +493,7 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
                     )
             })
     }) {
-        push_furniture_glyph(&mut out, p, CELL_F);
+        push_furniture_glyph_with_mode(&mut out, p, CELL_F, tex_mode);
     }
 
     // 2. Ground dressing: stains and roadway centerlines (roads, sidewalks & channels protected from dirt stains)
@@ -502,18 +504,18 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     // 3. Solid 360°-rotated furniture, vehicles, pillars & tree trunks under the shared wobbly-ink shadow filter
     out.push_str(r#"<g filter="url(#bm-prop)">"#);
     for p in ui.map.props.iter().filter(|p| !prop_spec(p.kind).floor_layer) {
-        push_furniture_glyph(&mut out, p, CELL_F);
+        push_furniture_glyph_with_mode(&mut out, p, CELL_F, tex_mode);
     }
     out.push_str("</g>");
 
     // 4. Architectural vector walls, doors & windows
-    push_edge_walls_svg(&mut out, &ui.map.wall_edges, w, h, t.wall_fill, t.door_fill, CELL_F);
+    push_edge_walls_svg_with_mode(&mut out, &ui.map.wall_edges, (w, h), t, tex_mode, CELL_F);
 
     // 5. Overhanging tree canopies (drawn above ground props/walls so foliage drapes naturally)
     if ui.map.props.iter().any(|p| matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree)) {
         out.push_str(r#"<g filter="url(#bm-prop)">"#);
         for p in &ui.map.props {
-            push_tree_canopy_glyph(&mut out, p, CELL_F);
+            push_tree_canopy_glyph_with_mode(&mut out, p, CELL_F, tex_mode);
         }
         out.push_str("</g>");
     }

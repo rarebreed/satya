@@ -67,6 +67,8 @@ pub struct TacticalMapUiState {
     pub show_grid_overlay: bool,
     /// Paper/ink SVG filter style for the 2D battlemap (`#map-ink-style-select`).
     pub ink_style: crate::wasm_client::map_2d_tokens::BattlemapInkStyle,
+    /// Ground & prop material mode (`Painted` WebP tiles vs. `ProceduralVector` SVG fills).
+    pub texture_mode: crate::wasm_client::map_2d_art_textures::BattlemapTextureMode,
     /// Active brush selection in `edit_terrain` mode (`"__wall_edge__"`/`""` = edge cycle, `"__erase__"` = eraser, else `PropKind`).
     pub edit_prop_brush: String,
     /// Clockwise placement rotation (`0..=359°`, `+15°` steps or direct numeric input) when placing props.
@@ -113,6 +115,7 @@ impl Default for TacticalMapUiState {
             view_battlemap: false,
             show_grid_overlay: true,
             ink_style: crate::wasm_client::map_2d_tokens::BattlemapInkStyle::default(),
+            texture_mode: crate::wasm_client::map_2d_art_textures::BattlemapTextureMode::default(),
             edit_prop_brush: String::new(),
             edit_prop_rotation_deg: 0,
             camera_2d,

@@ -7,8 +7,10 @@
 //! [`crate::wasm_client::map_2d_art_props::push_battlemap_prop`].
 
 use crate::wasm_client::map_2d_art_props::{
-    BATTLEMAP_INK, BattlemapPropKind, battlemap_blob_path, battlemap_mix_u64, push_battlemap_prop,
+    BATTLEMAP_INK, BattlemapPropKind, battlemap_blob_path, battlemap_mix_u64,
+    push_battlemap_prop_with_mode,
 };
+use crate::wasm_client::map_2d_art_textures::BattlemapTextureMode;
 use satya_schema::{MapPropPlacement, PropKind};
 use std::f32::consts::TAU;
 use std::fmt::Write as _;
@@ -33,12 +35,33 @@ fn rect(out: &mut String, [x, y, w, h]: [f32; 4], rx: f32, fill: &str, extra: &s
     );
 }
 
+fn fabric_overlay(out: &mut String, [x, y, w, h]: [f32; 4], rx: f32) {
+    rect(
+        out,
+        [x, y, w, h],
+        rx,
+        "url(#bm-fabric)",
+        r#"fill-opacity=".38" style="mix-blend-mode:multiply" stroke="none""#,
+    );
+}
+
 fn circle(out: &mut String, cx: f32, cy: f32, r: f32, fill: &str, extra: &str) {
     let _ = write!(out, r#"<circle cx="{cx:.1}" cy="{cy:.1}" r="{r:.1}" fill="{fill}" {extra}/>"#);
 }
 
 /// Appends the footprint-scaled glyph for `p` (`cell_px` SVG units per `1.0m` meter).
 pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32) {
+    push_furniture_glyph_with_mode(out, p, cell_px, BattlemapTextureMode::Painted);
+}
+
+/// Mode-aware variant of [`push_furniture_glyph`] applying WebP material patterns in painted mode.
+pub fn push_furniture_glyph_with_mode(
+    out: &mut String,
+    p: &MapPropPlacement,
+    cell_px: f32,
+    tex_mode: BattlemapTextureMode,
+) {
+    let painted = tex_mode.is_painted();
     let fp = p.footprint_m();
     let (cx, cy) = (fp.cx_m * cell_px, fp.cy_m * cell_px);
     let (lw, lh) = (fp.span_w_m * cell_px, fp.span_h_m * cell_px);
@@ -51,12 +74,13 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
         _ => None,
     };
     if let Some(kind) = legacy {
-        push_battlemap_prop(out, kind, cx, cy, rot as u16, u64::from(p.variant_seed));
+        push_battlemap_prop_with_mode(out, kind, cx, cy, rot as u16, u64::from(p.variant_seed), tex_mode);
         return;
     }
     let (l, t) = (lw * 0.5, lh * 0.5);
     let v = p.variant_seed;
     let thin = r#"stroke-width="1.1" stroke-opacity=".55""#;
+    let wd_for = |seed: u32| if painted { "url(#bm-oak)" } else { pick(seed, WOODS) };
     let _ = write!(
         out,
         r#"<g transform="translate({cx:.1} {cy:.1}) rotate({rot})" stroke="{BATTLEMAP_INK}" stroke-width="2" stroke-linejoin="round">"#
@@ -69,6 +93,9 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             rect(out, [-l + 5.0, -t + 10.0, lw - 10.0, 11.0], 5.0, "#000", r#"fill-opacity=".16" stroke="none""#);
             rect(out, [-l + 3.0, -t + 14.0, 12.0, lh - 20.0], 5.0, f, "");
             rect(out, [l - 15.0, -t + 14.0, 12.0, lh - 20.0], 5.0, f, "");
+            if painted {
+                fabric_overlay(out, [-l + 3.0, -t + 8.0, lw - 6.0, lh - 14.0], 8.0);
+            }
             let seats = p.w_cells.max(p.h_cells).max(2);
             let span = lw - 30.0;
             for i in 1..seats {
@@ -77,14 +104,16 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             }
         }
         PropKind::CoffeeTable => {
-            let wd = pick(v, WOODS);
-            rect(out, [-l + 10.0, -t + 14.0, lw - 20.0, lh - 28.0], 5.0, wd, "");
+            rect(out, [-l + 10.0, -t + 14.0, lw - 20.0, lh - 28.0], 5.0, wd_for(v), "");
             rect(out, [-l + 22.0, -t + 22.0, 16.0, 11.0], 1.0, "#e9e3d6", r#"stroke-width="1""#);
             circle(out, l - 26.0, 0.0, 5.0, "#f4f1ea", r#"stroke-width="1.2""#);
         }
         PropKind::Rug => {
             let c = pick(v, &["#9b3d33", "#3d5a80", "#6b5b3e", "#4f6d5a"]);
             rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 2.0, c, r#"stroke-width="1.2" opacity=".85""#);
+            if painted {
+                fabric_overlay(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 2.0);
+            }
             rect(out, [-l + 12.0, -t + 12.0, lw - 24.0, lh - 24.0], 1.0, "none", r##"stroke="#f1e6cf" stroke-width="2" opacity=".7""##);
             let _ = write!(
                 out,
@@ -96,42 +125,47 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             );
         }
         PropKind::DiningTable => {
-            let wd = pick(v, WOODS);
             for (x, y) in [(-l * 0.45, -t + 6.0), (l * 0.45 - 16.0, -t + 6.0), (-l * 0.45, t - 20.0), (l * 0.45 - 16.0, t - 20.0)] {
                 rect(out, [x, y, 16.0, 14.0], 4.0, "#5b4a3a", "");
             }
             for (x, y) in [(-l + 4.0, -8.0), (l - 18.0, -8.0)] {
                 rect(out, [x, y, 14.0, 16.0], 4.0, "#5b4a3a", "");
             }
-            rect(out, [-l + 20.0, -t + 18.0, lw - 40.0, lh - 36.0], 4.0, wd, "");
+            rect(out, [-l + 20.0, -t + 18.0, lw - 40.0, lh - 36.0], 4.0, wd_for(v), "");
             circle(out, 0.0, 0.0, 7.0, "#f4f1ea", r#"stroke-width="1.2""#);
         }
         PropKind::RoundTable => {
             circle(out, -21.0, 0.0, 7.5, "#3d4247", "");
             circle(out, 21.0, 0.0, 7.5, "#3d4247", "");
-            circle(out, 0.0, 0.0, 15.0, pick(v, WOODS), "");
+            circle(out, 0.0, 0.0, 15.0, wd_for(v), "");
             circle(out, 4.0, -3.0, 3.5, "#d9a441", r#"stroke-width="1""#);
         }
         PropKind::Booth => {
             let f = pick(v, &["#8b2e2e", "#2f4f6b", "#5a3d2b"]);
             rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, 24.0], 6.0, f, "");
             rect(out, [-l + 4.0, t - 28.0, lw - 8.0, 24.0], 6.0, f, "");
+            if painted {
+                fabric_overlay(out, [-l + 4.0, -t + 4.0, lw - 8.0, 24.0], 6.0);
+                fabric_overlay(out, [-l + 4.0, t - 28.0, lw - 8.0, 24.0], 6.0);
+            }
             rect(out, [-l + 6.0, -t + 4.0, lw - 12.0, 8.0], 3.0, "#000", r#"fill-opacity=".2" stroke="none""#);
             rect(out, [-l + 6.0, t - 12.0, lw - 12.0, 8.0], 3.0, "#000", r#"fill-opacity=".2" stroke="none""#);
-            rect(out, [-l + 14.0, -t + 34.0, lw - 28.0, lh - 68.0], 3.0, pick(v ^ 7, WOODS), "");
+            rect(out, [-l + 14.0, -t + 34.0, lw - 28.0, lh - 68.0], 3.0, wd_for(v ^ 7), "");
         }
         PropKind::Bed => {
             let duvet = pick(v, &["#8fb3c9", "#c9b8d6", "#d8cbb0", "#9fb8a0"]);
             rect(out, [-l + 6.0, -t + 4.0, lw - 12.0, lh - 8.0], 5.0, "#e8e4dc", "");
-            rect(out, [-l + 6.0, -t + 4.0, lw - 12.0, 10.0], 3.0, pick(v ^ 3, WOODS), "");
+            rect(out, [-l + 6.0, -t + 4.0, lw - 12.0, 10.0], 3.0, wd_for(v ^ 3), "");
             rect(out, [-l + 14.0, -t + 18.0, l - 20.0, 18.0], 7.0, "#fbfbf8", "");
             rect(out, [6.0, -t + 18.0, l - 20.0, 18.0], 7.0, "#fbfbf8", "");
             rect(out, [-l + 6.0, -t + 44.0, lw - 12.0, lh - 48.0], 4.0, duvet, "");
+            if painted {
+                fabric_overlay(out, [-l + 6.0, -t + 44.0, lw - 12.0, lh - 48.0], 4.0);
+            }
             let _ = write!(out, r#"<path d="M{:.1} {:.1}H{:.1}" {thin}/>"#, -l + 6.0, -t + 54.0, l - 6.0);
         }
         PropKind::Desk => {
-            let wd = pick(v, WOODS);
-            rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh * 0.5], 2.0, wd, "");
+            rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh * 0.5], 2.0, wd_for(v), "");
             rect(out, [-14.0, -t + 8.0, 28.0, 5.0], 1.0, "#2f3439", "");
             rect(out, [-11.0, -t + 18.0, 22.0, 6.0], 1.0, "#e8e6e1", r#"stroke-width="1""#);
             rect(out, [l - 26.0, -t + 10.0, 12.0, 14.0], 0.0, "#f4f1ea", r#"stroke-width="1" transform="rotate(10)""#);
@@ -140,7 +174,11 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
         }
         PropKind::Bookshelf | PropKind::SteelShelving => {
             let steel = p.kind == PropKind::SteelShelving;
-            let body = if steel { "#7f878d" } else { pick(v, WOODS) };
+            let body = if steel {
+                if painted { "url(#bm-steel)" } else { "#7f878d" }
+            } else {
+                wd_for(v)
+            };
             let depth = lh * 0.48;
             rect(out, [-l + 3.0, -t + 3.0, lw - 6.0, depth], 1.5, body, "");
             let n = (lw / 9.0) as i32;
@@ -152,36 +190,44 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
         }
         PropKind::Wardrobe => {
             let depth = lh * 0.55;
-            rect(out, [-l + 3.0, -t + 3.0, lw - 6.0, depth], 2.0, pick(v, WOODS), "");
+            rect(out, [-l + 3.0, -t + 3.0, lw - 6.0, depth], 2.0, wd_for(v), "");
             let _ = write!(out, r#"<path d="M0 {:.1}V{:.1}" {thin}/>"#, -t + 3.0, -t + 3.0 + depth);
             circle(out, -4.0, -t + depth - 6.0, 1.8, BATTLEMAP_INK, "");
             circle(out, 4.0, -t + depth - 6.0, 1.8, BATTLEMAP_INK, "");
         }
         PropKind::KitchenCounter => {
             let depth = lh * 0.62;
-            rect(out, [-l + 1.0, -t + 2.0, lw - 2.0, depth], 1.5, "#d9d4ca", "");
+            let top = if painted { "url(#bm-ceramic)" } else { "#d9d4ca" };
+            let sink = if painted { "url(#bm-steel)" } else { "#b7c1c7" };
+            rect(out, [-l + 1.0, -t + 2.0, lw - 2.0, depth], 1.5, top, "");
             let _ = write!(out, r#"<path d="M{:.1} {:.1}H{:.1}" {thin}/>"#, -l + 1.0, -t + 7.0, l - 1.0);
             if p.w_cells.max(p.h_cells) >= 2 {
-                rect(out, [-12.0, -t + 10.0, 24.0, depth - 14.0], 4.0, "#b7c1c7", "");
+                rect(out, [-12.0, -t + 10.0, 24.0, depth - 14.0], 4.0, sink, "");
                 circle(out, 0.0, -t + 8.0, 2.2, "#8b959b", r#"stroke-width="1""#);
             }
             circle(out, -l + 14.0, -t + depth * 0.55, 4.5, "#c9502f", r#"stroke-width="1""#);
         }
         PropKind::Stove => {
             let depth = lh * 0.62;
-            rect(out, [-l + 2.0, -t + 2.0, lw - 4.0, depth], 2.0, "#3a3d41", "");
+            rect(out, [-l + 2.0, -t + 2.0, lw - 4.0, depth], 2.0, if painted { "url(#bm-steel)" } else { "#3a3d41" }, "");
+            if painted {
+                rect(out, [-l + 2.0, -t + 2.0, lw - 4.0, depth], 2.0, "#1f2226", r#"fill-opacity=".55" stroke="none""#);
+            }
             for (x, y) in [(-12.0, -t + 12.0), (12.0, -t + 12.0), (-12.0, -t + depth - 9.0), (12.0, -t + depth - 9.0)] {
                 circle(out, x, y, 6.5, "none", r##"stroke="#9aa0a6" stroke-width="1.6""##);
             }
         }
         PropKind::Fridge => {
-            rect(out, [-l + 6.0, -t + 3.0, lw - 12.0, lh * 0.72], 3.0, "#e9ebec", "");
+            rect(out, [-l + 6.0, -t + 3.0, lw - 12.0, lh * 0.72], 3.0, if painted { "url(#bm-steel)" } else { "#e9ebec" }, "");
             let _ = write!(out, r#"<path d="M{:.1} {:.1}H{:.1}" {thin}/>"#, -l + 6.0, -t + lh * 0.3, l - 6.0);
             rect(out, [l - 14.0, -t + 10.0, 3.0, 12.0], 1.0, "#9aa0a6", r#"stroke-width=".8""#);
         }
         PropKind::BarCounter => {
-            rect(out, [-l + 1.0, -t + 10.0, lw - 2.0, lh - 20.0], 3.0, "#5a3a24", "");
-            rect(out, [-l + 1.0, t - 18.0, lw - 2.0, 8.0], 3.0, "#8a6a48", r#"stroke-width="1.4""#);
+            rect(out, [-l + 1.0, -t + 10.0, lw - 2.0, lh - 20.0], 3.0, if painted { "url(#bm-oak)" } else { "#5a3a24" }, "");
+            if painted {
+                rect(out, [-l + 1.0, -t + 10.0, lw - 2.0, lh - 20.0], 3.0, "#2a1608", r#"fill-opacity=".35" stroke="none""#);
+            }
+            rect(out, [-l + 1.0, t - 18.0, lw - 2.0, 8.0], 3.0, if painted { "url(#bm-oak)" } else { "#8a6a48" }, r#"stroke-width="1.4""#);
             let n = p.w_cells.max(p.h_cells);
             for i in 0..n {
                 let x = -l + cell_px * (i as f32 + 0.5);
@@ -194,7 +240,7 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
         }
         PropKind::BackBarShelf => {
             let depth = lh * 0.45;
-            rect(out, [-l + 1.0, -t + 2.0, lw - 2.0, depth], 1.0, "#3e2a1b", "");
+            rect(out, [-l + 1.0, -t + 2.0, lw - 2.0, depth], 1.0, if painted { "url(#bm-oak)" } else { "#3e2a1b" }, "");
             let n = (lw / 7.0) as i32;
             for i in 0..n {
                 let c = pick(v.wrapping_add(i as u32 * 17), BOTTLES);
@@ -206,8 +252,11 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             circle(out, 0.0, 0.0, 7.0, "#7a2f2f", r#"stroke-width="1""#);
         }
         PropKind::PoolTable => {
-            rect(out, [-l + 8.0, -t + 8.0, lw - 16.0, lh - 16.0], 8.0, "#5a3a24", "");
+            rect(out, [-l + 8.0, -t + 8.0, lw - 16.0, lh - 16.0], 8.0, if painted { "url(#bm-oak)" } else { "#5a3a24" }, "");
             rect(out, [-l + 18.0, -t + 18.0, lw - 36.0, lh - 36.0], 2.0, "#1f6b3e", r#"stroke-width="1.4""#);
+            if painted {
+                fabric_overlay(out, [-l + 18.0, -t + 18.0, lw - 36.0, lh - 36.0], 2.0);
+            }
             for (x, y) in [(-l + 16.0, -t + 16.0), (0.0, -t + 14.0), (l - 16.0, -t + 16.0), (-l + 16.0, t - 16.0), (0.0, t - 14.0), (l - 16.0, t - 16.0)] {
                 circle(out, x, y, 5.5, "#111", r#"stroke="none""#);
             }
@@ -232,7 +281,7 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             );
         }
         PropKind::Bathtub => {
-            rect(out, [-l + 4.0, -t + 6.0, lw - 8.0, lh - 12.0], 14.0, "#f1f2f3", "");
+            rect(out, [-l + 4.0, -t + 6.0, lw - 8.0, lh - 12.0], 14.0, if painted { "url(#bm-ceramic)" } else { "#f1f2f3" }, "");
             rect(out, [-l + 12.0, -t + 13.0, lw - 24.0, lh - 26.0], 12.0, "#cfe3ee", r#"stroke-width="1.2""#);
             circle(out, l - 22.0, 0.0, 2.5, "#8b959b", r#"stroke-width="1""#);
         }
@@ -254,13 +303,13 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             let sun = pick(v, CANOPY_SUN);
             let cells = (lw / cell_px).round().max(1.0) as i32;
             let r_base = lh * 0.42;
-            rect(out, [-l + 4.0, -t + 8.0, lw - 8.0, lh - 16.0], r_base * 0.75, outer, "");
+            rect(out, [-l + 4.0, -t + 8.0, lw - 8.0, lh - 16.0], r_base * 0.75, if painted { "url(#bm-leaf-tex)" } else { outer }, "");
             for i in 0..(cells * 2) {
                 let frac = (i as f32 + 0.5) / (cells * 2) as f32;
                 let hx = -l + 10.0 + frac * (lw - 20.0);
                 let hy = ((battlemap_mix_u64(u64::from(v) + i as u64 * 13) % 9) as f32 - 4.0) * 1.1;
                 let blob = battlemap_blob_path(hx, hy, r_base * 0.78, 7, 0.18, u64::from(v).wrapping_add(i as u64 * 29));
-                let _ = write!(out, r#"<path d="{blob}" fill="{inner}" stroke-width="1.3"/>"#);
+                let _ = write!(out, r#"<path d="{blob}" fill="{inner}" fill-opacity="{op}" stroke-width="1.3"/>"#, op = if painted { ".6" } else { "1" });
                 circle(out, hx - 3.0, hy - 3.0, r_base * 0.30, sun, r#"stroke="none" fill-opacity=".65""#);
             }
         }
@@ -271,9 +320,10 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             let b0 = battlemap_blob_path(0.0, 1.0, l * 0.78, 9, 0.24, u64::from(v));
             let b1 = battlemap_blob_path(-5.0, -4.0, l * 0.54, 7, 0.22, u64::from(v) ^ 0x3A);
             let b2 = battlemap_blob_path(7.0, 4.0, l * 0.42, 7, 0.20, u64::from(v) ^ 0x91);
+            let leaf_op = if painted { ".82" } else { ".68" };
             let _ = write!(
                 out,
-                r##"<path d="{b0}" fill="{outer}"/><path d="{b0}" fill="url(#bm-leaf-tex)" fill-opacity=".68" stroke="none"/><path d="{b1}" fill="{mid}" fill-opacity=".75" stroke-width="1.2"/><path d="{b2}" fill="{sun}" stroke="none" fill-opacity=".72"/>"##
+                r##"<path d="{b0}" fill="{outer}"/><path d="{b0}" fill="url(#bm-leaf-tex)" fill-opacity="{leaf_op}" stroke="none"/><path d="{b1}" fill="{mid}" fill-opacity=".65" stroke-width="1.2"/><path d="{b2}" fill="{sun}" stroke="none" fill-opacity=".65"/>"##
             );
             for i in 0..5 {
                 let a = (i as f32 / 5.0) * TAU + (v as f32 * 0.2);
@@ -287,19 +337,19 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
         }
         PropKind::Boulder => {
             let rock = battlemap_blob_path(0.0, 0.0, lw.min(lh) * 0.46, 7, 0.20, u64::from(v));
-            // Scale elongated boulder across its 2x1 footprint
             let sx = (lw / lh.max(1.0)) * 0.92;
+            let fill = if painted { "url(#bm-rock)" } else { "#7b7972" };
             let _ = write!(
                 out,
-                r##"<g transform="scale({sx:.2} 0.88)"><path d="{rock}" fill="#7b7972"/><path d="{}" fill="#9e9b93" stroke="none" fill-opacity=".82"/><path d="M{:.1} -2L-4 -6L8 3L{:.1} 1" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.3" stroke-opacity=".65"/></g>"##,
+                r##"<g transform="scale({sx:.2} 0.88)"><path d="{rock}" fill="{fill}"/><path d="{}" fill="#9e9b93" stroke="none" fill-opacity="{hi_op}"/><path d="M{:.1} -2L-4 -6L8 3L{:.1} 1" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.3" stroke-opacity=".65"/></g>"##,
                 battlemap_blob_path(-3.0, -4.0, lw.min(lh) * 0.28, 6, 0.18, u64::from(v) ^ 0x4C),
                 -lw.min(lh) * 0.30,
                 lw.min(lh) * 0.28,
+                hi_op = if painted { ".38" } else { ".82" },
             );
         }
         PropKind::ParkBench => {
-            let wd = pick(v, WOODS);
-            rect(out, [-l + 6.0, -t + 10.0, lw - 12.0, lh - 22.0], 3.0, wd, "");
+            rect(out, [-l + 6.0, -t + 10.0, lw - 12.0, lh - 22.0], 3.0, wd_for(v), "");
             rect(out, [-l + 6.0, -t + 8.0, lw - 12.0, 9.0], 2.5, "#6b4c32", "");
             let _ = write!(
                 out,
@@ -313,7 +363,7 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             rect(out, [l - 10.0, -t + 9.0, 6.0, lh - 18.0], 2.0, "#2f3337", "");
         }
         PropKind::PicnicTable => {
-            let wd = pick(v, WOODS);
+            let wd = wd_for(v);
             rect(out, [-l + 8.0, -t + 6.0, lw - 16.0, 16.0], 3.0, wd, "");
             rect(out, [-l + 8.0, t - 22.0, lw - 16.0, 16.0], 3.0, wd, "");
             rect(out, [-l + 6.0, -t + 28.0, lw - 12.0, lh - 56.0], 4.0, wd, "");
@@ -327,6 +377,9 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
         PropKind::Dumpster => {
             let body = pick(v, &["#2f5d41", "#2f4b69", "#524a3e"]);
             rect(out, [-l + 5.0, -t + 6.0, lw - 10.0, lh - 12.0], 3.0, body, "");
+            if painted {
+                rect(out, [-l + 5.0, -t + 6.0, lw - 10.0, lh - 12.0], 3.0, "url(#bm-steel)", r#"fill-opacity=".35" style="mix-blend-mode:multiply" stroke="none""#);
+            }
             rect(out, [-l + 9.0, -t + 10.0, l - 11.0, lh - 20.0], 2.0, "#2b2e31", "");
             rect(out, [2.0, -t + 10.0, l - 11.0, lh - 20.0], 2.0, "#2b2e31", "");
             let _ = write!(
@@ -340,8 +393,8 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             rect(out, [l - 5.0, -6.0, 4.0, 12.0], 1.0, body, r#"stroke-width="1.3""#);
         }
         PropKind::JerseyBarrier => {
-            rect(out, [-l + 2.0, -t + 14.0, lw - 4.0, lh - 28.0], 3.0, "#b8b5ad", "");
-            rect(out, [-l + 4.0, -6.0, lw - 8.0, 12.0], 2.0, "#d5d2ca", r#"stroke-width="1.2""#);
+            rect(out, [-l + 2.0, -t + 14.0, lw - 4.0, lh - 28.0], 3.0, if painted { "url(#bm-concrete)" } else { "#b8b5ad" }, "");
+            rect(out, [-l + 4.0, -6.0, lw - 8.0, 12.0], 2.0, "#d5d2ca", r#"stroke-width="1.2" fill-opacity=".6""#);
             rect(out, [-l + 4.0, -5.0, 8.0, 10.0], 1.0, "#e0a92e", r#"stroke-width="1""#);
             rect(out, [l - 12.0, -5.0, 8.0, 10.0], 1.0, "#e0a92e", r#"stroke-width="1""#);
         }
@@ -375,10 +428,10 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             rect(out, [l - 9.0, t - lh * 0.31, 7.0, 10.0], 2.0, body, r#"stroke-width="1.2""#);
         }
         PropKind::StonePath => {
-            rect(out, [-l, -t, lw, lh], 2.0, "#cfc7b8", r#"stroke-width="1" opacity=".9""#);
+            rect(out, [-l, -t, lw, lh], 2.0, if painted { "url(#bm-paver)" } else { "#cfc7b8" }, r#"stroke-width="1" opacity=".9""#);
         }
         PropKind::AsphaltDrive => {
-            rect(out, [-l, -t, lw, lh], 0.0, "#55585c", r#"stroke-width="1" opacity=".95""#);
+            rect(out, [-l, -t, lw, lh], 0.0, if painted { "url(#bm-tarmac)" } else { "#55585c" }, r#"stroke-width="1" opacity=".95""#);
         }
         PropKind::GravelPath => {
             rect(out, [-l, -t, lw, lh], 3.0, "url(#bm-gravel)", r#"stroke-width="1""#);
@@ -396,7 +449,7 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             rect(out, [-l, -t, lw, lh], 3.0, "url(#bm-ditch)", r##"stroke="#354032" stroke-width="1.2""##);
         }
         PropKind::DeskL => {
-            let wd = pick(v, WOODS);
+            let wd = wd_for(v);
             let x0 = -l + 4.0;
             let y0 = -t + 5.0;
             let x1 = l - 4.0;
@@ -407,20 +460,18 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
                 out,
                 r##"<path d="M{x0:.1} {y0:.1}H{x1:.1}V{ym:.1}H{xm:.1}V{y1:.1}H{x0:.1}Z" fill="{wd}"/>"##
             );
-            // Corner monitor + keyboard in NW vertex
             let _ = write!(
                 out,
                 r##"<rect x="{:.1}" y="{:.1}" width="24" height="5" rx="1.5" transform="rotate(-35 {:.1} {:.1})" fill="#2a3038"/><rect x="{:.1}" y="{:.1}" width="18" height="7" rx="1.5" transform="rotate(-35 {:.1} {:.1})" fill="#3b424c" stroke-width="1"/>"##,
                 x0 + 14.0, y0 + 16.0, x0 + 26.0, y0 + 18.0,
                 x0 + 24.0, y0 + 26.0, x0 + 33.0, y0 + 29.0,
             );
-            // Tucked swivel chair in open SE bay
             let (sx, sy) = (cell_px * 0.45, cell_px * 0.45);
             circle(out, sx, sy, 13.0, "#35393f", r#"stroke-width="1.5""#);
             rect(out, [sx - 10.0, sy + 6.0, 20.0, 6.0], 3.0, "#24272b", r#"stroke-width="1""#);
         }
         PropKind::DeskT => {
-            let wd = pick(v, WOODS);
+            let wd = wd_for(v);
             let x0 = -l + 4.0;
             let x1 = l - 4.0;
             let y0 = -t + 5.0;
@@ -432,7 +483,6 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
                 out,
                 r##"<path d="M{x0:.1} {y0:.1}H{x1:.1}V{ym:.1}H{sx1:.1}V{y1:.1}H{sx0:.1}V{ym:.1}H{x0:.1}Z" fill="{wd}"/>"##
             );
-            // Dual workstation monitors along top bar + chair in SW & SE open bays
             rect(out, [-cell_px * 0.72, y0 + 5.0, 22.0, 5.0], 1.5, "#2a3038", r#"stroke-width="1""#);
             rect(out, [cell_px * 0.72 - 22.0, y0 + 5.0, 22.0, 5.0], 1.5, "#2a3038", r#"stroke-width="1""#);
             rect(out, [-10.0, 2.0, 20.0, 12.0], 2.0, "#dce4ec", r#"stroke-width="1""#);
@@ -447,18 +497,16 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             let bh = (lh * 0.50).max(20.0);
             let bx0 = -bw * 0.5;
             let by0 = -bh * 0.5;
-            // Broken branch stub + bark cylinder
             rect(out, [-bw * 0.15, -bh * 0.85, 9.0, bh * 0.55], 3.0, "#5e432b", r#"stroke-width="1.4""#);
             rect(out, [bx0, by0, bw, bh], 7.0, "#6d4e33", "");
-            // Heartwood end-grain ellipses
+            let grain_end = if painted { "url(#bm-oak)" } else { "#c9a578" };
             let _ = write!(
                 out,
-                r##"<ellipse cx="{:.1}" cy="0" rx="5.5" ry="{:.1}" fill="#c9a578"/><ellipse cx="{:.1}" cy="0" rx="2.6" ry="{:.1}" fill="#8a623f" stroke="none"/><ellipse cx="{:.1}" cy="0" rx="5.5" ry="{:.1}" fill="#c9a578"/>"##,
+                r##"<ellipse cx="{:.1}" cy="0" rx="5.5" ry="{:.1}" fill="{grain_end}"/><ellipse cx="{:.1}" cy="0" rx="2.6" ry="{:.1}" fill="#8a623f" stroke="none"/><ellipse cx="{:.1}" cy="0" rx="5.5" ry="{:.1}" fill="{grain_end}"/>"##,
                 bx0 + 4.0, bh * 0.44,
                 bx0 + 4.0, bh * 0.22,
                 bx0 + bw - 4.0, bh * 0.44,
             );
-            // Bark grain striations + moss cushions
             let _ = write!(
                 out,
                 r#"<path d="M{:.1} -5H{:.1}M{:.1} 4H{:.1}" {thin}/>"#,
@@ -472,8 +520,8 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             );
         }
         PropKind::GardenBed => {
-            rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 4.0, "#755034", "");
-            rect(out, [-l + 10.0, -t + 10.0, lw - 20.0, lh - 20.0], 2.0, "#47301e", r#"stroke-width="1.2""#);
+            rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 4.0, if painted { "url(#bm-brick)" } else { "#755034" }, "");
+            rect(out, [-l + 10.0, -t + 10.0, lw - 20.0, lh - 20.0], 2.0, if painted { "url(#bm-mulch)" } else { "#47301e" }, r#"stroke-width="1.2""#);
             let cols = ((lw - 20.0) / 28.0).round().max(2.0) as i32;
             let rows = ((lh - 20.0) / 24.0).round().max(2.0) as i32;
             const BLOOMS: &[&str] = &["#e25b70", "#f2c14e", "#a27ce0", "#f58a51"];
@@ -494,14 +542,14 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             const STONES: &[&str] = &["#beb6a6", "#a8a090", "#cfc8ba", "#9c9486"];
             for i in 0..stones {
                 let sx = -l + 3.0 + i as f32 * sw;
-                let col = pick(v.wrapping_add(i as u32 * 11), STONES);
+                let col = if painted { "url(#bm-rock)" } else { pick(v.wrapping_add(i as u32 * 11), STONES) };
                 let h_var = if i % 2 == 0 { 15.0 } else { 13.0 };
                 rect(out, [sx, -h_var * 0.5, (sw - 1.5).max(8.0), h_var], 5.0, col, r#"stroke-width="1.3""#);
             }
         }
         PropKind::StructuralPillar => {
-            rect(out, [-l + 3.0, -t + 3.0, lw - 6.0, lh - 6.0], 3.0, "#6c737c", "");
-            rect(out, [-l + 8.0, -t + 8.0, lw - 16.0, lh - 16.0], 2.0, "#949ca6", r#"stroke-width="1.2""#);
+            rect(out, [-l + 3.0, -t + 3.0, lw - 6.0, lh - 6.0], 3.0, if painted { "url(#bm-steel)" } else { "#6c737c" }, "");
+            rect(out, [-l + 8.0, -t + 8.0, lw - 16.0, lh - 16.0], 2.0, if painted { "url(#bm-concrete)" } else { "#949ca6" }, r#"stroke-width="1.2""#);
             let _ = write!(
                 out,
                 r#"<path d="M{:.1} {:.1}L{:.1} {:.1}M{:.1} {:.1}L{:.1} {:.1}" {thin}/>"#,
@@ -510,7 +558,7 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
             );
         }
         PropKind::ElevatedCatwalk => {
-            rect(out, [-l + 1.0, -t + 1.0, lw - 2.0, lh - 2.0], 3.0, "#75808b", r#"fill-opacity=".92""#);
+            rect(out, [-l + 1.0, -t + 1.0, lw - 2.0, lh - 2.0], 3.0, if painted { "url(#bm-steel)" } else { "#75808b" }, r#"fill-opacity=".92""#);
             rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 2.0, "none", r##"stroke="#d4dbe2" stroke-width="1.4" stroke-dasharray="6 4""##);
             let rungs = ((lw / 20.0).round() as i32).max(2);
             for i in 1..rungs {
@@ -521,9 +569,11 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
         PropKind::HazardSpill => {
             let spill = battlemap_blob_path(0.0, 0.0, lw.min(lh) * 0.48, 11, 0.24, u64::from(v));
             let inner = battlemap_blob_path(3.0, -2.0, lw.min(lh) * 0.28, 7, 0.20, u64::from(v) ^ 0x4B);
+            let fill = if painted { "url(#bm-spill)" } else { "#c6d832" };
             let _ = write!(
                 out,
-                r##"<path d="{spill}" fill="#c6d832" fill-opacity=".68" stroke="#6d7812" stroke-width="1.6"/><path d="{inner}" fill="#e6f74a" fill-opacity=".55" stroke="none"/>"##
+                r##"<path d="{spill}" fill="{fill}" fill-opacity=".76" stroke="#6d7812" stroke-width="1.6"/><path d="{inner}" fill="#e6f74a" fill-opacity="{in_op}" stroke="none"/>"##,
+                in_op = if painted { ".28" } else { ".55" },
             );
         }
         PropKind::Armchair | PropKind::Planter | PropKind::WoodCrate | PropKind::DrumCluster => {}
@@ -535,9 +585,20 @@ pub fn push_furniture_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32
 /// [`PropKind::MediumTree`] so canopies layer naturally above paths, benches, hedges, and walls while
 /// keeping tokens and the visual `1.0m` scale grid legible above `#battlemap-art`.
 pub fn push_tree_canopy_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32) {
+    push_tree_canopy_glyph_with_mode(out, p, cell_px, BattlemapTextureMode::Painted);
+}
+
+/// Mode-aware variant of [`push_tree_canopy_glyph`] accentuating painterly foliage leaf textures.
+pub fn push_tree_canopy_glyph_with_mode(
+    out: &mut String,
+    p: &MapPropPlacement,
+    cell_px: f32,
+    tex_mode: BattlemapTextureMode,
+) {
     if !matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree) {
         return;
     }
+    let painted = tex_mode.is_painted();
     let (cx_m, cy_m) = p.center_m();
     let (cx, cy) = (cx_m * cell_px, cy_m * cell_px);
     let (sw_m, sh_m) = p.local_span_m();
@@ -554,9 +615,10 @@ pub fn push_tree_canopy_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f
     let d_outer = battlemap_blob_path(cx, cy, r, 15, 0.19, u64::from(v));
     let d_mid = battlemap_blob_path(cx - r * 0.08, cy - r * 0.08, r * 0.72, 11, 0.21, u64::from(v) ^ 0x55);
     let d_sun = battlemap_blob_path(cx - r * 0.20, cy - r * 0.20, r * 0.42, 8, 0.22, u64::from(v) ^ 0xAA);
+    let leaf_op = if painted { ".78" } else { ".62" };
     let _ = write!(
         out,
-        r##"<g stroke="{BATTLEMAP_INK}" stroke-linejoin="round"><path d="{d_outer}" fill="{outer}" fill-opacity=".84" stroke-width="2.2"/><path d="{d_outer}" fill="url(#bm-leaf-tex)" fill-opacity=".62" stroke="none"/>"##
+        r##"<g stroke="{BATTLEMAP_INK}" stroke-linejoin="round"><path d="{d_outer}" fill="{outer}" fill-opacity=".84" stroke-width="2.2"/><path d="{d_outer}" fill="url(#bm-leaf-tex)" fill-opacity="{leaf_op}" stroke="none"/>"##
     );
     // Satellite leaf lobes around crown perimeter for organic silhouette
     for i in 0..6 {
@@ -566,11 +628,11 @@ pub fn push_tree_canopy_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f
         let ly = cy + ang.sin() * r * 0.58;
         let lobe = battlemap_blob_path(lx, ly, r * 0.36, 7, 0.18, h);
         let col = if i < 3 { mid } else { outer };
-        let _ = write!(out, r#"<path d="{lobe}" fill="{col}" fill-opacity=".68" stroke-width="1.1" stroke-opacity=".5"/>"#);
+        let _ = write!(out, r#"<path d="{lobe}" fill="{col}" fill-opacity=".55" stroke-width="1.1" stroke-opacity=".5"/>"#);
     }
     let _ = write!(
         out,
-        r#"<path d="{d_mid}" fill="{mid}" fill-opacity=".72" stroke-width="1.2" stroke-opacity=".4"/><path d="{d_sun}" fill="{sun}" fill-opacity=".68" stroke="none"/>"#
+        r#"<path d="{d_mid}" fill="{mid}" fill-opacity=".52" stroke-width="1.2" stroke-opacity=".4"/><path d="{d_sun}" fill="{sun}" fill-opacity=".52" stroke="none"/>"#
     );
     // Individual sunlit leaf clusters for crisp top-down botanical texture
     for i in 0..10 {

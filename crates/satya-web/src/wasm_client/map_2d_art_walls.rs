@@ -8,42 +8,89 @@
 //!   the owning cell with a dashed swing arc.
 //! - **Windows**: a double-line frame with a pale glass core.
 
+use crate::wasm_client::map_2d_art::{BattlemapArtTheme, BattlemapWallStyle};
 use crate::wasm_client::map_2d_art_props::BATTLEMAP_INK;
+use crate::wasm_client::map_2d_art_textures::BattlemapTextureMode;
 use satya_schema::{EdgeSide, MapWallEdge, MaterialClass, WallEdgeKind};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-const fn is_heavy(m: MaterialClass) -> bool {
-    matches!(
-        m,
-        MaterialClass::Brick
-            | MaterialClass::ConcreteBlock
-            | MaterialClass::ReinforcedConcrete
-            | MaterialClass::ArmorSteel
-    )
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WallRunClass {
+    Light,
+    Heavy,
+    BrickMasonry,
+}
+
+const fn classify_wall(m: MaterialClass) -> WallRunClass {
+    match m {
+        MaterialClass::Brick => WallRunClass::BrickMasonry,
+        MaterialClass::ConcreteBlock
+        | MaterialClass::ReinforcedConcrete
+        | MaterialClass::ArmorSteel => WallRunClass::Heavy,
+        _ => WallRunClass::Light,
+    }
 }
 
 /// Appends edge walls/doors/windows for a `w × h` board at `cell` SVG units per cell.
 pub fn push_edge_walls_svg(out: &mut String, edges: &[MapWallEdge], w: i32, h: i32, wall_fill: &str, door_fill: &str, cell: f32) {
+    push_edge_walls_impl(
+        out,
+        edges,
+        (w, h),
+        (wall_fill, door_fill, BattlemapWallStyle::Poche),
+        BattlemapTextureMode::ProceduralVector,
+        cell,
+    );
+}
+
+/// Mode-aware variant of [`push_edge_walls_svg`] applying brick/rooftop/wood WebP patterns when painted.
+pub fn push_edge_walls_svg_with_mode(
+    out: &mut String,
+    edges: &[MapWallEdge],
+    board_dims: (i32, i32),
+    t: &BattlemapArtTheme,
+    tex_mode: BattlemapTextureMode,
+    cell: f32,
+) {
+    push_edge_walls_impl(
+        out,
+        edges,
+        board_dims,
+        (t.wall_fill, t.door_fill, t.wall_style),
+        tex_mode,
+        cell,
+    );
+}
+
+fn push_edge_walls_impl(
+    out: &mut String,
+    edges: &[MapWallEdge],
+    (w, h): (i32, i32),
+    (wall_fill, door_fill, wall_style): (&str, &str, BattlemapWallStyle),
+    tex_mode: BattlemapTextureMode,
+    cell: f32,
+) {
     if edges.is_empty() {
         return;
     }
+    let painted = tex_mode.is_painted();
     let by_addr: HashMap<(i32, i32, bool), &MapWallEdge> =
         edges.iter().map(|e| ((e.x, e.y, e.side == EdgeSide::North), e)).collect();
-    let wall_class = |x: i32, y: i32, north: bool| -> Option<bool> {
+    let wall_class = |x: i32, y: i32, north: bool| -> Option<WallRunClass> {
         by_addr
             .get(&(x, y, north))
             .filter(|e| e.kind == WallEdgeKind::Wall)
-            .map(|e| is_heavy(e.material))
+            .map(|e| classify_wall(e.material))
     };
 
-    // Merged wall runs per weight class
-    for heavy in [true, false] {
+    // Merged wall runs per weight/material class
+    for cls in [WallRunClass::BrickMasonry, WallRunClass::Heavy, WallRunClass::Light] {
         let mut d = String::new();
         for y in 0..=h {
             let mut run: Option<i32> = None;
             for x in 0..=w {
-                let on = x < w && wall_class(x, y, true) == Some(heavy);
+                let on = x < w && wall_class(x, y, true) == Some(cls);
                 match (on, run) {
                     (true, None) => run = Some(x),
                     (false, Some(x0)) => {
@@ -57,7 +104,7 @@ pub fn push_edge_walls_svg(out: &mut String, edges: &[MapWallEdge], w: i32, h: i
         for x in 0..=w {
             let mut run: Option<i32> = None;
             for y in 0..=h {
-                let on = y < h && wall_class(x, y, false) == Some(heavy);
+                let on = y < h && wall_class(x, y, false) == Some(cls);
                 match (on, run) {
                     (true, None) => run = Some(y),
                     (false, Some(y0)) => {
@@ -71,12 +118,26 @@ pub fn push_edge_walls_svg(out: &mut String, edges: &[MapWallEdge], w: i32, h: i
         if d.is_empty() {
             continue;
         }
-        let (outer, inner) = if heavy { (15.0, 10.0) } else { (10.5, 6.0) };
+        let (outer, inner) = match cls {
+            WallRunClass::BrickMasonry | WallRunClass::Heavy => (15.0, 10.0),
+            WallRunClass::Light => (10.5, 6.0),
+        };
+        let core_stroke = if painted {
+            match (cls, wall_style) {
+                (_, BattlemapWallStyle::Rooftop) => "url(#bm-roof-gravel)",
+                (WallRunClass::BrickMasonry, _) => "url(#bm-brick)",
+                _ => wall_fill,
+            }
+        } else {
+            wall_fill
+        };
         let _ = write!(
             out,
-            r#"<g filter="url(#bm-ink)" stroke-linecap="square" fill="none"><path d="{d}" stroke="{BATTLEMAP_INK}" stroke-width="{outer}"/><path d="{d}" stroke="{wall_fill}" stroke-width="{inner}"/></g>"#
+            r#"<g filter="url(#bm-ink)" stroke-linecap="square" fill="none"><path d="{d}" stroke="{BATTLEMAP_INK}" stroke-width="{outer}"/><path d="{d}" stroke="{core_stroke}" stroke-width="{inner}"/></g>"#
         );
     }
+
+    let eff_door_fill = if painted { "url(#bm-oak)" } else { door_fill };
 
     // Doors and windows
     out.push_str(r#"<g filter="url(#bm-prop)">"#);
@@ -105,7 +166,7 @@ pub fn push_edge_walls_svg(out: &mut String, edges: &[MapWallEdge], w: i32, h: i
                     let (rx, ry, rw, rh) = if north { (ax + 3.0, ay - 4.0, leaf, 8.0) } else { (ax - 4.0, ay + 3.0, 8.0, leaf) };
                     let _ = write!(
                         out,
-                        r#"<rect x="{rx:.1}" y="{ry:.1}" width="{rw:.1}" height="{rh:.1}" fill="{door_fill}" stroke="{BATTLEMAP_INK}" stroke-width="1.6"/>"#
+                        r#"<rect x="{rx:.1}" y="{ry:.1}" width="{rw:.1}" height="{rh:.1}" fill="{eff_door_fill}" stroke="{BATTLEMAP_INK}" stroke-width="1.6"/>"#
                     );
                 } else {
                     // Hinge at the edge start; the leaf swings into the owning cell (+y for North, +x for West).
@@ -116,7 +177,7 @@ pub fn push_edge_walls_svg(out: &mut String, edges: &[MapWallEdge], w: i32, h: i
                     };
                     let _ = write!(
                         out,
-                        r#"<path d="{arc}" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.3" stroke-dasharray="4 3" stroke-opacity=".7"/><rect x="{lx:.1}" y="{ly:.1}" width="{lw:.1}" height="{lh:.1}" fill="{door_fill}" stroke="{BATTLEMAP_INK}" stroke-width="1.6"/>"#
+                        r#"<path d="{arc}" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.3" stroke-dasharray="4 3" stroke-opacity=".7"/><rect x="{lx:.1}" y="{ly:.1}" width="{lw:.1}" height="{lh:.1}" fill="{eff_door_fill}" stroke="{BATTLEMAP_INK}" stroke-width="1.6"/>"#
                     );
                 }
             }

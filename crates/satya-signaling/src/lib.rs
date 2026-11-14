@@ -44,7 +44,15 @@ use axum::{
 };
 use std::sync::Arc;
 
-/// Constructs the Axum [`Router`] with all HTTP REST endpoints, static `/pkg` and `/maps` asset serving,
+fn resolve_static_dir(rel: &'static str, manifest_fallback: &'static str) -> &'static str {
+    if std::path::Path::new(rel).exists() {
+        rel
+    } else {
+        manifest_fallback
+    }
+}
+
+/// Constructs the Axum [`Router`] with all HTTP REST endpoints, static `/pkg`, `/maps`, `/book`, and `/assets` serving,
 /// Backend GM REST endpoints (`/api/gm/sessions/:id/*`), and the `/ws/session` WebSocket upgrade route.
 pub fn build_router(state: Arc<SignalingAppState>) -> Router {
     Router::new()
@@ -52,6 +60,13 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .nest_service("/pkg", tower_http::services::ServeDir::new("pkg"))
         .nest_service("/maps", tower_http::services::ServeDir::new("data/maps"))
         .nest_service("/book", tower_http::services::ServeDir::new("docs/book"))
+        .nest_service(
+            "/assets",
+            tower_http::services::ServeDir::new(resolve_static_dir(
+                "assets",
+                concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets"),
+            )),
+        )
         .route("/api/rules", get(list_rules_handler))
         .route("/api/rules/:chapter_id", get(get_rules_chapter_handler))
         .route("/api/auth/register", post(register_handler))
@@ -218,3 +233,42 @@ mod tests_core;
 mod tests_map;
 #[cfg(test)]
 mod tests_persistence;
+
+#[cfg(test)]
+mod router_assets_tests {
+    use super::*;
+    use axum::body::{Body, to_bytes};
+    use axum::http::{Request, StatusCode};
+    use satya_storage::StorageConfig;
+    use tower::ServiceExt;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn static_assets_route_serves_baked_battlemap_webp_textures() {
+        let mut cfg = StorageConfig::default();
+        let temp_dir = std::env::temp_dir().join(format!("satya_assets_{}", Uuid::now_v7()));
+        for topic_cfg in cfg.topics.values_mut() {
+            topic_cfg.local_path = temp_dir
+                .join(&topic_cfg.local_path)
+                .to_string_lossy()
+                .to_string();
+        }
+        cfg.auth.database_url = temp_dir.join("users_assets.db").to_string_lossy().to_string();
+        let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+        let app = build_router(state);
+
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .uri("/assets/textures/map2d/grass_meadow.webp")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let bytes = to_bytes(res.into_body(), 2 * 1024 * 1024).await.unwrap();
+        assert!(bytes.len() > 128 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+}

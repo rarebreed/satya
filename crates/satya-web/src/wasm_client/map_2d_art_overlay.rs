@@ -13,6 +13,7 @@ use crate::wasm_client::map_2d_art::{
     BATTLEMAP_CELL_PX, battlemap_art_cache_key, battlemap_theme_for_preset,
     format_battlemap_art_layer,
 };
+use crate::wasm_client::map_2d_art_textures::load_persisted_texture_mode_pref;
 use crate::wasm_client::map_2d_tokens::{
     load_persisted_ink_style_pref, push_token_portrait_disc_svg,
 };
@@ -262,10 +263,12 @@ fn apply_battlemap_view_chrome(battlemap_on: bool) {
         set_button_disabled(id, battlemap_on);
     }
     set_display("btn-map-grid-overlay", if battlemap_on { "inline-flex" } else { "none" });
+    set_display("btn-map-tex-mode", if battlemap_on { "inline-flex" } else { "none" });
     set_display("map-ink-style-wrap", if battlemap_on { "inline-flex" } else { "none" });
     if battlemap_on {
-        let style = with_map_ui(|ui| ui.ink_style);
+        let (style, tex_mode) = with_map_ui(|ui| (ui.ink_style, ui.texture_mode));
         set_select_value("map-ink-style-select", style.as_str());
+        set_text("btn-map-tex-mode", tex_mode.button_label());
         set_display("wgpu-map-canvas-wrap", "none");
         set_display("tabletop-map-svg-fallback", "block");
     } else {
@@ -279,16 +282,20 @@ thread_local! {
     static VIEW_PREF_LOADED: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Applies the persisted `localStorage` view mode (`"battlemap"` / `"diorama"`) and paper/ink style once per page load.
+/// Applies the persisted `localStorage` view mode (`"battlemap"` / `"diorama"`), paper/ink style,
+/// and painted/vector texture mode once per page load.
 pub fn ensure_battlemap_view_pref_loaded() {
     if VIEW_PREF_LOADED.with(|c| c.replace(true)) {
         return;
     }
     let ink = load_persisted_ink_style_pref();
+    let tex_mode = load_persisted_texture_mode_pref();
     with_map_ui_mut(|ui| {
         ui.ink_style = ink;
+        ui.texture_mode = tex_mode;
     });
     set_select_value("map-ink-style-select", ink.as_str());
+    set_text("btn-map-tex-mode", tex_mode.button_label());
     if local_storage_get(VIEW_PREF_KEY).as_deref() == Some("battlemap") {
         with_map_ui_mut(|ui| ui.view_battlemap = true);
         apply_battlemap_view_chrome(true);

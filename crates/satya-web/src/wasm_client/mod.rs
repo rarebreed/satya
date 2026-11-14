@@ -40,6 +40,7 @@ pub mod map_2d_art_furniture;
 pub mod map_2d_art_overlay;
 pub mod map_2d_art_props;
 pub mod map_2d_art_surfaces;
+pub mod map_2d_art_textures;
 pub mod map_2d_art_walls;
 pub mod map_2d_camera;
 pub mod map_2d_tokens;
@@ -207,6 +208,7 @@ macro_rules! for_all_window_callbacks {
             "satyaToggleMapInspectMode" => satya_toggle_map_inspect_mode(),
             "satyaToggleBattlemapView" => satya_toggle_battlemap_view(),
             "satyaToggleBattlemapGrid" => satya_toggle_battlemap_grid(),
+            "satyaToggleBattlemapTextures" => satya_toggle_battlemap_textures(),
             "satyaSetBattlemapInkStyle" => satya_set_battlemap_ink_style(),
             "satyaUpdateMapPropBrush" => satya_update_map_prop_brush(),
             "satyaRotateMapPropBrush" => satya_rotate_map_prop_brush(),

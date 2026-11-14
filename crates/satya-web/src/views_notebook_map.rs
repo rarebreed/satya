@@ -84,6 +84,17 @@ pub fn NotebookMapPane() -> impl IntoView {
                     </button>
                     <button
                         type="button"
+                        id="btn-map-tex-mode"
+                        class="btn btn-sm btn-secondary"
+                        title="Toggle painterly Gemini Nano Banana WebP textures vs. flat vector patterns"
+                        style="display: none;"
+                        onclick="window.satyaToggleBattlemapTextures()"
+                        on:click=move |_| wasm_client::satya_toggle_battlemap_textures()
+                    >
+                        "Textures: Painted"
+                    </button>
+                    <button
+                        type="button"
                         id="btn-map-inspect-toggle"
                         class="btn btn-sm btn-secondary"
                         title="Pin the docked Object & Ground Inspector pane (or hold Alt / press I while hovering)"
