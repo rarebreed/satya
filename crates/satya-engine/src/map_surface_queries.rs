@@ -270,4 +270,86 @@ mod tests {
         let dir_diag = fp_diag.local_dir_to_world(1.0, 0.0);
         assert!((dir_diag.0 - 0.8).abs() < 0.02 && (dir_diag.1 - 0.6).abs() < 0.02);
     }
+
+    #[test]
+    fn all_presets_expose_every_emitted_surface_kind_and_keep_street_props_off_asphalt() {
+        use satya_schema::PropKind;
+        use std::collections::HashSet;
+
+        for preset in crate::tactical_map::SectorPreset::ALL {
+            for &(w, h) in &[(20, 14), (24, 18), (36, 26)] {
+                for seed in 1_i64..=12 {
+                    let sec = crate::tactical_map::generate_procedural_sector(preset, w, h, seed);
+                    let emitted: HashSet<SurfaceFeatureKind> =
+                        sec.surfaces.iter().map(|s| s.kind).collect();
+                    let mut exposed: HashSet<SurfaceFeatureKind> = HashSet::new();
+                    for gy in 1..(h * 4) {
+                        for gx in 1..(w * 4) {
+                            if let Some(top) = topmost_surface_at_m(
+                                &sec.surfaces,
+                                gx as f32 * 0.25,
+                                gy as f32 * 0.25,
+                            ) {
+                                exposed.insert(top.kind);
+                            }
+                        }
+                    }
+                    for &kind in &emitted {
+                        assert!(
+                            exposed.contains(&kind),
+                            "{preset:?} {w}x{h} seed {seed}: emitted {kind:?} is 100% occluded under topmost_surface_at_m"
+                        );
+                    }
+
+                    if matches!(
+                        preset,
+                        crate::tactical_map::SectorPreset::UrbanCrossroads
+                            | crate::tactical_map::SectorPreset::WoodedPark
+                            | crate::tactical_map::SectorPreset::GardenEstate
+                            | crate::tactical_map::SectorPreset::WoodlandCreek
+                            | crate::tactical_map::SectorPreset::RoadsideDitch
+                    ) {
+                        for p in &sec.props {
+                            let (cx, cy) = p.center_m();
+                            let top_kind =
+                                topmost_surface_at_m(&sec.surfaces, cx, cy).map(|s| s.kind);
+                            if matches!(
+                                p.kind,
+                                PropKind::LargeTree
+                                    | PropKind::MediumTree
+                                    | PropKind::Bush
+                                    | PropKind::Hedge
+                                    | PropKind::ParkBench
+                                    | PropKind::Dumpster
+                            ) {
+                                assert_ne!(
+                                    top_kind,
+                                    Some(SurfaceFeatureKind::AsphaltRoad),
+                                    "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed on AsphaltRoad",
+                                    p.kind
+                                );
+                                assert_ne!(
+                                    top_kind,
+                                    Some(SurfaceFeatureKind::InteriorFloor),
+                                    "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed inside InteriorFloor",
+                                    p.kind
+                                );
+                            }
+                            if matches!(
+                                p.kind,
+                                PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier
+                            ) {
+                                assert_ne!(
+                                    top_kind,
+                                    Some(SurfaceFeatureKind::InteriorFloor),
+                                    "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed inside InteriorFloor",
+                                    p.kind
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

@@ -13,6 +13,7 @@ use crate::wasm_client::state::with_state;
 use satya_engine::ballistics::lookup_firearm_preset;
 use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
 use satya_engine::tactical_map_geom::{TOKEN_PICK_RADIUS_M, resolve_token_destination_cm};
+use satya_schema::tactical_map_dto::MapScalePreset;
 use satya_schema::{
     GenerateSessionMapRequest, GmMapUpdateRequest, MessageVisibility, MoveMapTokenRequest,
     TokenPlacement, TokenVisualSpec,
@@ -43,6 +44,9 @@ pub fn satya_select_map_token(entity_id: String) {
 pub fn satya_generate_procedural_map() {
     let raw_preset = select_value("map-preset-select");
     let preset = SectorPreset::from_code_str(&raw_preset).unwrap_or_default();
+    let raw_scale = select_value("map-scale-select");
+    let scale = MapScalePreset::parse_loose(&raw_scale);
+    let (w, h) = preset.resolve_scale_dimensions(scale);
 
     let seed = with_map_ui_mut(|ui| {
         ui.seed_counter = ui.seed_counter.wrapping_add(137);
@@ -51,8 +55,8 @@ pub fn satya_generate_procedural_map() {
             &format!("map-{}-{s}", preset.as_str()),
             preset,
             None,
-            20,
-            14,
+            w,
+            h,
             s,
         );
         // Bind live session roster participants if connected
@@ -129,7 +133,8 @@ pub fn satya_generate_procedural_map() {
 
     mark_map_wgpu_dirty();
     refresh_map_dom_and_wgpu();
-    post_generate_map_if_in_session(preset.as_str(), seed);
+    crate::wasm_client::map_3d_wgpu::reset_3d_map_camera_for_board((w as f32, h as f32));
+    post_generate_map_if_in_session(preset.as_str(), seed, w, h, scale);
 }
 
 /// Continues the active tactical arena seamlessly past the given cardinal boundary (`NORTH`/`SOUTH`/`EAST`/`WEST`).
@@ -203,7 +208,13 @@ pub fn continue_session_map_in_direction(dir: satya_schema::MapContinuationDir) 
     });
 }
 
-pub(crate) fn post_generate_map_if_in_session(preset_code: &str, seed: i64) {
+pub(crate) fn post_generate_map_if_in_session(
+    preset_code: &str,
+    seed: i64,
+    grid_width: i32,
+    grid_height: i32,
+    scale: MapScalePreset,
+) {
     let (auth_token, session_id) = with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
     let (Some(token), Some(sid)) = (auth_token, session_id) else {
         return;
@@ -211,8 +222,9 @@ pub(crate) fn post_generate_map_if_in_session(preset_code: &str, seed: i64) {
     let req = GenerateSessionMapRequest {
         preset: preset_code.to_string(),
         title: None,
-        grid_width: 20,
-        grid_height: 14,
+        grid_width,
+        grid_height,
+        scale: Some(scale),
         cell_size_cm: 100,
         seed: Some(seed),
         populate_roster_tokens: true,

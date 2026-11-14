@@ -250,3 +250,12 @@ fn test_workspace_float_controls_and_collapsed_grid_contracts() {
         );
     }
 }
+
+#[test]
+fn test_tactical_map_scale_selector_is_rendered() {
+    let html = render_satya_app_html();
+    assert!(
+        html.contains(r#"id="map-scale-select""#),
+        "missing #map-scale-select in tactical map toolbar SSR HTML"
+    );
+}

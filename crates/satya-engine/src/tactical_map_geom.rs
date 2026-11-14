@@ -9,6 +9,7 @@
 //! Legacy tile migration, connectivity checks, and hover inspection live in [`crate::tactical_map_inspect`].
 
 pub use crate::tactical_map_inspect::*;
+pub use crate::tactical_map_spatial::*;
 
 use satya_schema::{
     EdgeSide, GmMapUpdateRequest, MapPropPlacement, MapWallEdge, MaterialClass, PropKind,

@@ -13,12 +13,12 @@ use satya_schema::{
     MessageVisibility, PropKind, TacticalTileKind, TokenPlacement, WallEdgeKind,
 };
 
-use crate::map_dressing::{make_prop, prop_spec, PropObstruction};
+use crate::map_dressing::{make_prop, prop_spec};
 use crate::tactical_map_geom::{
-    circle_collides_with_filter, distance_point_to_segment, edge_endpoints_m,
-    intersect_segment_edge, prop_contains_point, prop_intersects_circle,
+    distance_point_to_segment, edge_endpoints_m, prop_contains_point,
     vehicle_point_is_engine_bay, EDGE_PICK_HALF_THICK_M, TOKEN_PICK_RADIUS_M, TOKEN_RADIUS_M,
 };
+use crate::tactical_map_spatial::{SpatialObstacleIndex, SpatialWallFilter};
 
 /// High-level map object class reported by [`inspect_map_point`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,27 +160,20 @@ pub fn all_walkable_areas_connected(
     if width <= 0 || height <= 0 {
         return false;
     }
+    let bw = width as f32;
+    let bh = height as f32;
+    let spatial = SpatialObstacleIndex::new(bw, bh, edges, props);
     let cols = (width * 2) as usize;
     let rows = (height * 2) as usize;
     let node_pos = |ix: usize, iy: usize| -> (f32, f32) {
         ((ix as f32 + 0.5) * 0.5, (iy as f32 + 0.5) * 0.5)
-    };
-    let is_wall_only = |a: (f32, f32), b: (f32, f32)| -> bool {
-        edges
-            .iter()
-            .filter(|e| matches!(e.kind, WallEdgeKind::Wall | WallEdgeKind::Window))
-            .any(|e| intersect_segment_edge(a, b, e).is_some())
     };
     let mut open = vec![false; cols * rows];
     let mut first = None;
     for iy in 0..rows {
         for ix in 0..cols {
             let (px, py) = node_pos(ix, iy);
-            let blocked_prop = props.iter().any(|p| {
-                prop_spec(p.kind).obstruction == PropObstruction::FullObstacle
-                    && prop_intersects_circle(p, px, py, 0.20)
-            });
-            if !blocked_prop {
+            if !spatial.any_full_obstacle_prop_intersects_circle(px, py, 0.20) {
                 open[iy * cols + ix] = true;
                 if first.is_none() {
                     first = Some((ix, iy));
@@ -203,7 +196,6 @@ pub fn all_walkable_areas_connected(
     visited[start.1 * cols + start.0] = true;
     queue.push_back(start);
     while let Some((cx, cy)) = queue.pop_front() {
-        let a = node_pos(cx, cy);
         for (dx, dy) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
             let nx = cx as isize + dx;
             let ny = cy as isize + dy;
@@ -215,26 +207,20 @@ pub fn all_walkable_areas_connected(
             if !open[nidx] || visited[nidx] {
                 continue;
             }
-            let b = node_pos(ux, uy);
-            if is_wall_only(a, b) {
+            if spatial.half_meter_step_blocked_by_wall_or_window(cx, cy, ux, uy) {
                 continue;
             }
             visited[nidx] = true;
             queue.push_back((ux, uy));
         }
     }
-    let bw = width as f32;
-    let bh = height as f32;
-    let door_free_edges: Vec<MapWallEdge> = edges
-        .iter()
-        .copied()
-        .filter(|e| matches!(e.kind, WallEdgeKind::Wall | WallEdgeKind::Window))
-        .collect();
     for gy in 0..height {
         for gx in 0..width {
             let cx = gx as f32 + 0.5;
             let cy = gy as f32 + 0.5;
-            if circle_collides_with_filter((bw, bh), &door_free_edges, props, (cx, cy), TOKEN_RADIUS_M, true) {
+            if spatial.circle_hits_wall(cx, cy, TOKEN_RADIUS_M, SpatialWallFilter::WallsAndWindowsOnly)
+                || spatial.any_full_obstacle_prop_intersects_circle(cx, cy, TOKEN_RADIUS_M - 1e-4)
+            {
                 continue;
             }
             let bx = (gx * 2) as usize;

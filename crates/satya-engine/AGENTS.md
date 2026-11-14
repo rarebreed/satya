@@ -8,5 +8,6 @@ Activate [`satya-rust-engine`](../../.agents/skills/satya-rust-engine/SKILL.md) 
 2. **Continuous Metric Tactical Maps (`tactical_map*` & `EdgeSide`)**:
    - Spatial modules: `tactical_map.rs`, `tactical_map_geom.rs`, `tactical_map_inspect.rs`, `tactical_map_edges.rs`, `map_dressing.rs`, `barrier_ballistics.rs`, `map_interior_gen.rs`, `map_outdoor_gen.rs`, `map_sector_gen.rs`.
    - Use `f32` meters (`_m`) and `MapPropPlacement::footprint_m()` (`PropFootprintM`) for geometry, and `EdgeSide::North` / `EdgeSide::West` only (South = `(x, y + 1, North)`, East = `(x + 1, y, West)`).
+   - Vector surfaces resolve by `SurfaceFeatureKind::layer_priority()`, never insertion order: never place lower-priority surfaces (`GardenBedZone`, `CreekChannel`, `AsphaltRoad`) inside solid higher-priority polygons (`StoneWalk`, `InteriorFloor`), verify non-zero exposed area via `topmost_surface_at_m` in generator tests, and keep non-vehicle street props off `AsphaltRoad` surfaces.
 3. **Bidirectional `docs/ttrpg/` <-> `satya-engine` Sync (5 Registries)**:
    - When adding, renaming, or splitting any `docs/ttrpg/` chapter, update `docs/ttrpg/SUMMARY.md`, `rules_book.rs` + `rules_book_html.rs`, `bin/build_rules_book.rs`, `src/satya_ml/build_rules_book.py` + `notebooks/satya_rules_book.py`, and `src/satya_ml/ai_gm/tools.py`, then run `cargo test --offline -p satya-engine`.

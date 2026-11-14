@@ -523,8 +523,8 @@ def _evaluate_pair_los_and_cover(
                     "map_id": "los",
                     "title": "los",
                     "image_url": "",
-                    "grid_width": 48,
-                    "grid_height": 48,
+                    "grid_width": max(240, int(max(x1_m, x2_m)) + 8),
+                    "grid_height": max(180, int(max(y1_m, y2_m)) + 8),
                     "wall_edges": wall_edges,
                     "props": props,
                 }

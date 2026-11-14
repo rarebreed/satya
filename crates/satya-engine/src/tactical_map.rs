@@ -12,6 +12,7 @@
 //!   [`CombatMovementGait`] and [`compute_stride_and_sprint_velocity`] to `16`-directional `0.25m`
 //!   Dijkstra pathing merged into smooth [`ReachableStrip`] contours.
 
+use satya_schema::tactical_map_dto::MapScalePreset;
 use satya_schema::{
     CoverGrade, GmMapUpdateRequest, MapPropPlacement, MapSurfaceFeature, MapWallEdge,
     MessageVisibility, SurfaceFeatureKind, TokenPlacement, TokenVisualSpec, WallEdgeKind,
@@ -186,7 +187,40 @@ impl SectorPreset {
             _ => None,
         }
     }
+
+    /// Natural default battlemap dimensions `(width_m, height_m)` for this sector type when [`MapScalePreset::Auto`] is selected.
+    #[must_use]
+    pub const fn default_dimensions(self) -> (i32, i32) {
+        match self {
+            Self::ResidentialApartment
+            | Self::CornerBar
+            | Self::DerelictCorridor
+            | Self::OrbitalAirlock => (24, 18),
+            Self::OfficeFloor
+            | Self::UrbanCrossroads
+            | Self::WoodedPark
+            | Self::WoodlandCreek
+            | Self::RoadsideDitch
+            | Self::MedLabSector => (36, 26),
+            Self::GardenEstate | Self::DockingBay => (48, 36),
+        }
+    }
+
+    /// Resolves clamped single-sector `(width_m, height_m)` for `scale` (`Auto` delegates to [`Self::default_dimensions`]).
+    #[must_use]
+    pub fn resolve_scale_dimensions(self, scale: MapScalePreset) -> (i32, i32) {
+        let (w, h) = scale.resolve_dimensions(self.default_dimensions());
+        (
+            w.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM),
+            h.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM),
+        )
+    }
 }
+
+/// Minimum allowed width or height (cells = meters) for a single generated sector.
+pub const MIN_SECTOR_DIM: i32 = 8;
+/// Maximum allowed width or height (cells = meters) for a single generated sector.
+pub const MAX_SECTOR_DIM: i32 = 96;
 
 /// Complete procedural sector: thin edge walls, `360°` oriented props, and vector ground surfaces.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -199,7 +233,10 @@ pub struct ProceduralSector {
 /// Generates the complete [`ProceduralSector`] for `preset`, emitting thin edge walls and props.
 #[must_use]
 pub fn generate_procedural_sector(preset: SectorPreset, width: i32, height: i32, seed: i64) -> ProceduralSector {
-    let (w, h) = (width.clamp(8, 48), height.clamp(8, 48));
+    let (w, h) = (
+        width.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM),
+        height.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM),
+    );
     if let Some(style) = preset.interior_style() {
         return generate_furnished_interior(style, w, h, seed);
     }
@@ -399,8 +436,8 @@ pub fn build_procedural_map_request(
     height: i32,
     seed: i64,
 ) -> GmMapUpdateRequest {
-    let w = width.clamp(8, 48);
-    let h = height.clamp(8, 48);
+    let w = width.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM);
+    let h = height.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM);
     let ProceduralSector { wall_edges, props, surfaces } = generate_procedural_sector(preset, w, h, seed);
     let mid_y = h / 2;
     let title = title_override
@@ -616,5 +653,86 @@ mod tests {
         assert!(sprint_count > walk_count);
         assert!(!walk.merged_row_runs().is_empty());
         assert!(walk.ticks_at_m(6.0, 7.5).is_some());
+    }
+
+    fn topology_signature(sec: &ProceduralSector) -> (usize, usize, u64, u64) {
+        let mut edge_hash = 0xcbf2_9ce4_8422_2325_u64;
+        for e in &sec.wall_edges {
+            for v in [e.x as u64, e.y as u64, e.side as u64, e.kind as u64] {
+                edge_hash ^= v;
+                edge_hash = edge_hash.wrapping_mul(0x0100_0000_01b3);
+            }
+        }
+        let mut surf_hash = 0xcbf2_9ce4_8422_2325_u64;
+        for s in &sec.surfaces {
+            let tag = [
+                s.kind as u64,
+                s.shape as u64,
+                s.width_cm as u64,
+                s.points_cm.len() as u64,
+            ];
+            for v in tag {
+                surf_hash ^= v;
+                surf_hash = surf_hash.wrapping_mul(0x0100_0000_01b3);
+            }
+            for pt in &s.points_cm {
+                for coord in [pt.x_cm as u64, pt.y_cm as u64] {
+                    surf_hash ^= coord;
+                    surf_hash = surf_hash.wrapping_mul(0x0100_0000_01b3);
+                }
+            }
+        }
+        (sec.wall_edges.len(), sec.surfaces.len(), edge_hash, surf_hash)
+    }
+
+    #[test]
+    fn phase2_large_scale_presets_are_connected_and_clear_spawn_pads() {
+        for &(w, h) in &[(24, 18), (36, 26), (48, 36), (64, 48)] {
+            let wy = (h / 2) as f32 + 0.5;
+            for preset in SectorPreset::ALL {
+                let sec = generate_procedural_sector(preset, w, h, 42);
+                assert!(!sec.surfaces.is_empty(), "{preset:?} {w}x{h} missing surfaces");
+                assert!(
+                    all_walkable_areas_connected(w, h, &sec.wall_edges, &sec.props),
+                    "{preset:?} {w}x{h} disconnected walkable area"
+                );
+                assert!(
+                    !circle_collides_obstacles(w as f32, h as f32, &sec.wall_edges, &sec.props, 2.5, wy, TOKEN_RADIUS_M),
+                    "{preset:?} {w}x{h} blocked West spawn pad"
+                );
+                assert!(
+                    !circle_collides_obstacles(w as f32, h as f32, &sec.wall_edges, &sec.props, w as f32 - 2.5, wy, TOKEN_RADIUS_M),
+                    "{preset:?} {w}x{h} blocked East spawn pad"
+                );
+            }
+        }
+        for preset in [SectorPreset::UrbanCrossroads, SectorPreset::GardenEstate] {
+            let sec = generate_procedural_sector(preset, 96, 72, 42);
+            assert!(
+                all_walkable_areas_connected(96, 72, &sec.wall_edges, &sec.props),
+                "{preset:?} 96x72 disconnected walkable area"
+            );
+        }
+    }
+
+    #[test]
+    fn phase2_multi_seed_topologies_produce_distinct_layouts() {
+        for preset in [
+            SectorPreset::GardenEstate,
+            SectorPreset::WoodedPark,
+            SectorPreset::WoodlandCreek,
+            SectorPreset::RoadsideDitch,
+            SectorPreset::UrbanCrossroads,
+            SectorPreset::ResidentialApartment,
+        ] {
+            let distinct: std::collections::HashSet<_> = (1_i64..=12)
+                .map(|seed| topology_signature(&generate_procedural_sector(preset, 36, 26, seed)))
+                .collect();
+            assert!(
+                distinct.len() >= 3,
+                "{preset:?} expected >= 3 distinct topologies across seeds 1..=12, got {}",
+                distinct.len()
+            );
+        }
     }
 }

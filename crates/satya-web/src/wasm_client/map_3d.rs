@@ -546,7 +546,7 @@ pub fn format_selectable_token_chips_html(
 
 /// Ingests an authoritative [`GmMapUpdateRequest`] from `ServerWsPacket::MapUpdated` or REST history.
 pub fn apply_incoming_map_update(incoming: &GmMapUpdateRequest) {
-    let stitch_info = with_map_ui_mut(|ui| {
+    let (old_size, new_size, stitch_dir, nudge, size_changed) = with_map_ui_mut(|ui| {
         let old_size = ui.map.board_size_m();
         let new_size = incoming.board_size_m();
         let size_changed =
@@ -566,10 +566,18 @@ pub fn apply_incoming_map_update(incoming: &GmMapUpdateRequest) {
         }
         ui.map = incoming.clone();
         ui.recompute_overlays();
-        stitch_dir.map(|dir| (old_size, new_size, dir, explicit_nudge.is_some()))
+        (
+            old_size,
+            new_size,
+            stitch_dir,
+            explicit_nudge.is_some(),
+            size_changed,
+        )
     });
-    if let Some((old_size, new_size, dir, nudge)) = stitch_info {
+    if let Some(dir) = stitch_dir {
         crate::wasm_client::map_3d_wgpu::shift_3d_camera_on_stitch(old_size, new_size, dir, nudge);
+    } else if size_changed {
+        crate::wasm_client::map_3d_wgpu::reset_3d_map_camera_for_board(new_size);
     }
     mark_map_wgpu_dirty();
     if !incoming.image_url.is_empty()

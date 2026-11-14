@@ -20,8 +20,8 @@ use satya_schema::{
 };
 use wasm_bindgen::prelude::*;
 
-/// Minimum 2D battlemap zoom factor (`0.25x` fits up to `80m x 56m` stitched arenas).
-pub const MIN_ZOOM_2D: f32 = 0.25;
+/// Minimum 2D battlemap zoom factor (`0.075x` fits up to `240m x 180m` stitched arenas).
+pub const MIN_ZOOM_2D: f32 = 0.075;
 /// Maximum 2D battlemap zoom factor (`6.0x` close-up inspection).
 pub const MAX_ZOOM_2D: f32 = 6.0;
 /// Reference single-sector width in meters (`zoom = 1.0` matches `20m x 14m` sector scale).
@@ -670,8 +670,15 @@ mod tests {
     fn viewbox_default_matches_legacy_20x14_and_fit_zoom_covers_80x56() {
         let cam = BattlemapCamera2d::default();
         assert_eq!(cam.view_box_tuple((20.0, 14.0), 1.0), (-12.0, -12.0, 1304.0, 920.0));
-        let fit_max = BattlemapCamera2d::fit_zoom_for_board((80.0, 56.0));
-        assert!((fit_max - 0.25).abs() < 1e-4, "expected 0.25x for 80x56, got {fit_max}");
+        let fit_80x56 = BattlemapCamera2d::fit_zoom_for_board((80.0, 56.0));
+        assert!((fit_80x56 - 0.25).abs() < 1e-4, "expected 0.25x for 80x56, got {fit_80x56}");
+        let fit_64x48 = BattlemapCamera2d::fit_zoom_for_board((64.0, 48.0));
+        assert!((fit_64x48 - (14.0 / 48.0)).abs() < 1e-4, "expected 14/48 for 64x48, got {fit_64x48}");
+        let fit_240x180 = BattlemapCamera2d::fit_zoom_for_board((240.0, 180.0));
+        assert!(
+            fit_240x180 >= MIN_ZOOM_2D && (fit_240x180 - (14.0 / 180.0)).abs() < 1e-4,
+            "expected >= MIN_ZOOM_2D for 240x180, got {fit_240x180}"
+        );
     }
 
     #[test]

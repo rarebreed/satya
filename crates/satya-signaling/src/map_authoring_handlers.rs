@@ -229,12 +229,22 @@ pub async fn session_generate_or_edit_map_handler(
     if let (Some(ex), Some(ey)) = (req.edit_cell_x, req.edit_cell_y) {
         let mut map = ctx.active_map.clone().unwrap_or_else(|| {
             let p = SectorPreset::from_code_str(&req.preset).unwrap_or(SectorPreset::OrbitalAirlock);
+            let (raw_w, raw_h) = req
+                .scale
+                .map(|s| p.resolve_scale_dimensions(s))
+                .unwrap_or((req.grid_width, req.grid_height));
             build_procedural_map_request(
                 &format!("map-{}", Uuid::now_v7()),
                 p,
                 req.title.as_deref(),
-                req.grid_width.clamp(8, 40),
-                req.grid_height.clamp(8, 40),
+                raw_w.clamp(
+                    satya_engine::tactical_map::MIN_SECTOR_DIM,
+                    satya_engine::tactical_map::MAX_SECTOR_DIM,
+                ),
+                raw_h.clamp(
+                    satya_engine::tactical_map::MIN_SECTOR_DIM,
+                    satya_engine::tactical_map::MAX_SECTOR_DIM,
+                ),
                 req.seed.unwrap_or(42),
             )
         });
@@ -421,8 +431,18 @@ pub async fn session_generate_or_edit_map_handler(
 
     let preset =
         SectorPreset::from_code_str(&req.preset).unwrap_or(SectorPreset::OrbitalAirlock);
-    let width = req.grid_width.clamp(8, 40);
-    let height = req.grid_height.clamp(8, 40);
+    let (raw_w, raw_h) = req
+        .scale
+        .map(|s| preset.resolve_scale_dimensions(s))
+        .unwrap_or((req.grid_width, req.grid_height));
+    let width = raw_w.clamp(
+        satya_engine::tactical_map::MIN_SECTOR_DIM,
+        satya_engine::tactical_map::MAX_SECTOR_DIM,
+    );
+    let height = raw_h.clamp(
+        satya_engine::tactical_map::MIN_SECTOR_DIM,
+        satya_engine::tactical_map::MAX_SECTOR_DIM,
+    );
     let seed = req.seed.unwrap_or(42);
     let mut map = build_procedural_map_request(
         &format!("map-{}-{}", preset.as_str(), Uuid::now_v7()),

@@ -841,24 +841,51 @@ pub fn shift_3d_camera_on_stitch(
     let _ = (old_size_m, new_size_m, dir, nudge_into_new);
 }
 
-/// Resets the tactical map camera orbit, pan, and zoom (both 2D SVG and 3D WebGPU) to overview framing.
-#[wasm_bindgen]
-pub fn satya_reset_map_camera() {
-    crate::wasm_client::map_3d::with_map_ui_mut(|ui| {
-        let board = ui.map.board_size_m();
-        ui.camera_2d.reset_for_board(board);
-    });
+/// Resets the 3D tactical map camera to overview-fit `board_size_m` while preserving ortho mode.
+pub fn reset_3d_map_camera_for_board(board_size_m: (f32, f32)) {
+    let fit_zoom = OrbitOrthoCamera::fit_zoom_for_board(board_size_m);
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = fit_zoom;
     #[cfg(target_arch = "wasm32")]
     map_wgpu_runtime::with_map_ctrl(|c| {
         let ortho = c.camera.orthographic;
         c.camera = OrbitOrthoCamera::tactical_map_default();
+        c.camera.zoom = fit_zoom;
         c.camera.orthographic = ortho;
         if ortho {
             c.camera.yaw_deg = 0.0;
         }
         map_wgpu_runtime::render_map_frame(c);
     });
+}
+
+/// Resets the tactical map camera orbit, pan, and zoom (both 2D SVG and 3D WebGPU) to overview framing.
+#[wasm_bindgen]
+pub fn satya_reset_map_camera() {
+    let board = crate::wasm_client::map_3d::with_map_ui_mut(|ui| {
+        let board = ui.map.board_size_m();
+        ui.camera_2d.reset_for_board(board);
+        board
+    });
+    reset_3d_map_camera_for_board(board);
     crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
+}
+
+#[cfg(test)]
+mod scale_camera_tests {
+    use super::OrbitOrthoCamera;
+
+    #[test]
+    fn orbit_ortho_fit_zoom_scales_from_legacy_to_massive_stitched_boards() {
+        assert!((OrbitOrthoCamera::fit_zoom_for_board((20.0, 14.0)) - 1.0).abs() < 1e-6);
+        let z_64x48 = OrbitOrthoCamera::fit_zoom_for_board((64.0, 48.0));
+        assert!((z_64x48 - (14.0 / 48.0)).abs() < 1e-5, "z_64x48={z_64x48}");
+        let z_240x180 = OrbitOrthoCamera::fit_zoom_for_board((240.0, 180.0));
+        assert!(
+            (z_240x180 - (14.0 / 180.0)).abs() < 1e-5 && z_240x180 >= 0.07,
+            "z_240x180={z_240x180}"
+        );
+    }
 }
 
 #[cfg(test)]

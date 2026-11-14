@@ -33,17 +33,17 @@ define_wire_enum! {
 }
 
 impl SurfaceFeatureKind {
-    /// Deterministic compositing & masking z-priority (`BridgeDeck > InteriorFloor > AsphaltRoad > ... > MulchZone`).
+    /// Deterministic compositing & masking z-priority (`BridgeDeck > InteriorFloor > AsphaltRoad > ConcreteWalk > StoneWalk > CreekChannel > DrainageDitch > GravelRoad > DefensiveTrench > DirtTrail > GardenBedZone > MulchZone`).
     #[must_use]
     pub const fn layer_priority(self) -> u8 {
         match self {
             Self::MulchZone => 14,
             Self::GardenBedZone => 16,
             Self::DirtTrail => 24,
-            Self::DrainageDitch => 28,
-            Self::DefensiveTrench => 29,
-            Self::CreekChannel => 30,
-            Self::GravelRoad => 34,
+            Self::DefensiveTrench => 28,
+            Self::GravelRoad => 30,
+            Self::DrainageDitch => 32,
+            Self::CreekChannel => 34,
             Self::StoneWalk => 38,
             Self::ConcreteWalk => 45,
             Self::AsphaltRoad => 50,
@@ -234,6 +234,22 @@ mod tests {
         assert!(
             SurfaceFeatureKind::AsphaltRoad.layer_priority()
                 > SurfaceFeatureKind::CreekChannel.layer_priority()
+        );
+        assert!(
+            SurfaceFeatureKind::CreekChannel.layer_priority()
+                > SurfaceFeatureKind::DrainageDitch.layer_priority()
+        );
+        assert!(
+            SurfaceFeatureKind::DrainageDitch.layer_priority()
+                > SurfaceFeatureKind::GravelRoad.layer_priority()
+        );
+        assert!(
+            SurfaceFeatureKind::GravelRoad.layer_priority()
+                > SurfaceFeatureKind::DefensiveTrench.layer_priority()
+        );
+        assert!(
+            SurfaceFeatureKind::DefensiveTrench.layer_priority()
+                > SurfaceFeatureKind::DirtTrail.layer_priority()
         );
         assert!(
             SurfaceFeatureKind::CreekChannel.layer_priority()

@@ -247,21 +247,24 @@ fn push_road_details_3d(
     }
 }
 
-/// Emits raised earthen berms along drainage ditches and trenches (masked beneath bridges/roads).
+#[derive(Clone, Copy)]
+struct ChannelBermStyle {
+    height_m: f32,
+    rgb: [f32; 3],
+    zone_id: f32,
+}
+
+/// Emits raised berms or inner rocky cutbanks along a channel spline (masked beneath bridges/roads).
 fn push_channel_berms_3d(
     verts: &mut Vec<GlbVertex>,
     surface: &MapSurfaceFeature,
     all_surfaces: &[MapSurfaceFeature],
     y: f32,
-    bw_m: f32,
-    bh_m: f32,
+    board_m: (f32, f32),
+    style: ChannelBermStyle,
 ) {
+    let (bw_m, bh_m) = board_m;
     let mesh = extrude_surface_ribbon_m(surface, bw_m, bh_m);
-    let berm_h = if surface.kind == SurfaceFeatureKind::DefensiveTrench {
-        0.18
-    } else {
-        0.09
-    };
     let min_mask_prio = surface.kind.layer_priority() + 1;
     for edge in [&mesh.left, &mesh.right] {
         for seg in edge.windows(2) {
@@ -278,11 +281,11 @@ fn push_channel_berms_3d(
                 seg[1].1,
                 0.11,
                 y,
-                y + berm_h,
+                y + style.height_m,
                 bw_m,
                 bh_m,
-                [0.37, 0.30, 0.21],
-                -4.0,
+                style.rgb,
+                style.zone_id,
             );
         }
     }
@@ -414,7 +417,7 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
 
     for (rank, &(orig_idx, s)) in order.iter().enumerate() {
         let prio = s.kind.layer_priority();
-        let y = 0.004 + (prio as f32) * 0.00025 + (rank as f32) * 0.00004;
+        let y = 0.003 + (prio as f32) * 0.00032 + (rank as f32) * 0.00004;
         let (rgb, zone_id) = surface_style(s.kind);
 
         if s.kind == SurfaceFeatureKind::BridgeDeck {
@@ -425,8 +428,22 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
         match s.shape {
             SurfaceShapeKind::RibbonSpline => {
                 if s.kind == SurfaceFeatureKind::CreekChannel {
-                    push_ribbon_surface_fill(verts, s, 0.35, y - 0.002, [0.46, 0.45, 0.42], -4.0, (bw_m, bh_m));
-                    push_ribbon_surface_fill(verts, s, 0.0, y + 0.004, rgb, zone_id, (bw_m, bh_m));
+                    push_ribbon_surface_fill(verts, s, 0.42, y, [0.46, 0.45, 0.42], -3.0, (bw_m, bh_m));
+                    push_ribbon_surface_fill(verts, s, 0.0, y + 0.0045, rgb, zone_id, (bw_m, bh_m));
+                    let mut bank = s.clone();
+                    bank.width_cm += 84;
+                    push_channel_berms_3d(
+                        verts,
+                        &bank,
+                        &ui.map.surfaces,
+                        y,
+                        (bw_m, bh_m),
+                        ChannelBermStyle {
+                            height_m: 0.09,
+                            rgb: [0.42, 0.39, 0.34],
+                            zone_id: -3.0,
+                        },
+                    );
                 } else {
                     push_ribbon_surface_fill(verts, s, 0.0, y, rgb, zone_id, (bw_m, bh_m));
                 }
@@ -436,7 +453,23 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
                     s.kind,
                     SurfaceFeatureKind::DrainageDitch | SurfaceFeatureKind::DefensiveTrench
                 ) {
-                    push_channel_berms_3d(verts, s, &ui.map.surfaces, y, bw_m, bh_m);
+                    let height_m = if s.kind == SurfaceFeatureKind::DefensiveTrench {
+                        0.18
+                    } else {
+                        0.09
+                    };
+                    push_channel_berms_3d(
+                        verts,
+                        s,
+                        &ui.map.surfaces,
+                        y,
+                        (bw_m, bh_m),
+                        ChannelBermStyle {
+                            height_m,
+                            rgb: [0.37, 0.30, 0.21],
+                            zone_id: -4.0,
+                        },
+                    );
                 }
             }
             SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon => {

@@ -5,6 +5,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+# Disable Binaryen's redundant `wasm-opt` post-pass: its Precompute pass crashes
+# (exit 0xc0000409 at Precompute.cpp:838) on Rust 1.99+ LLVM-optimized Wasm output.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.profiling]
+wasm-opt = false
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

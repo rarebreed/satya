@@ -15,9 +15,8 @@ use satya_schema::{
 use crate::map_dressing::{
     PropObstruction, make_prop_at_cm, normalize_prop_rotation_deg, prop_spec,
 };
-use crate::map_outdoor_natural::{
-    build_garden_estate, build_roadside_ditch, build_wooded_park, build_woodland_creek,
-};
+use crate::map_estate_grammars::build_garden_estate;
+use crate::map_outdoor_natural::{build_roadside_ditch, build_wooded_park, build_woodland_creek};
 use crate::map_surface_geom::{
     along_tangent_rot_deg, point_near_protected_surface_m, ribbon_point_and_tangent_at_fraction,
     surface_contains_point_m, vehicle_forward_rot_deg,
@@ -136,6 +135,24 @@ impl OutdoorBuilder {
             Some(existing) => *existing = edge,
             None => self.edges.push(edge),
         }
+    }
+
+    /// Removes any structural edge at `(x, y, side)` (open compound gate or breezeway).
+    pub(crate) fn remove_edge(&mut self, x: i32, y: i32, side: EdgeSide) {
+        self.edge_idx.set(x, y, side, None);
+        self.edges.retain(|o| !(o.x == x && o.y == y && o.side == side));
+    }
+
+    /// Appends a smooth Catmull-Rom [`SurfaceShapeKind::RibbonSpline`] with an RNG-derived seed.
+    pub(crate) fn add_ribbon(&mut self, kind: SurfaceFeatureKind, ctrl_m: &[(f32, f32)], width_cm: i32) -> usize {
+        let s = (self.rng.next() & 0xffff_ffff) as u32;
+        self.add_ribbon_spline(kind, ctrl_m, width_cm, s)
+    }
+
+    /// Appends a corner-rounded polygon [`SurfaceFeatureKind`] with an RNG-derived seed.
+    pub(crate) fn add_poly(&mut self, kind: SurfaceFeatureKind, poly_m: &[(f32, f32)], corner_radius_cm: i32) -> usize {
+        let s = (self.rng.next() & 0xffff_ffff) as u32;
+        self.add_polygon_surface(kind, poly_m, corner_radius_cm, s)
     }
 
     /// Appends a smooth Catmull-Rom [`SurfaceShapeKind::RibbonSpline`] feature.
@@ -268,7 +285,12 @@ impl OutdoorBuilder {
             return true;
         }
         self.surfaces.iter().any(|s| {
-            s.kind == SurfaceFeatureKind::InteriorFloor && surface_contains_point_m(s, px, py)
+            matches!(
+                s.kind,
+                SurfaceFeatureKind::InteriorFloor
+                    | SurfaceFeatureKind::MulchZone
+                    | SurfaceFeatureKind::GardenBedZone
+            ) && surface_contains_point_m(s, px, py)
         })
     }
 
@@ -462,8 +484,8 @@ pub fn generate_outdoor_sector(
     height: i32,
     seed: i64,
 ) -> ProceduralSector {
-    let w = width.clamp(8, 48);
-    let h = height.clamp(8, 48);
+    let w = width.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
+    let h = height.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
     let mut b = OutdoorBuilder::new(w, h, seed);
 
     match style {
@@ -594,6 +616,48 @@ mod tests {
                         p.kind
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn woodland_creek_exposes_topmost_creek_water_and_ravine_across_seeds_and_scales() {
+        for &(w, h) in &[(20, 14), (36, 26), (48, 36)] {
+            for seed in 1..=12 {
+                let sec = generate_outdoor_sector(OutdoorStyle::WoodlandCreek, w, h, seed);
+                let mut creek_hits = 0usize;
+                let mut ravine_hits = 0usize;
+                let mut bridge_hits = 0usize;
+                for gy in 1..(h * 2) {
+                    for gx in 1..(w * 2) {
+                        let px = gx as f32 * 0.5;
+                        let py = gy as f32 * 0.5;
+                        if let Some(top) = topmost_surface_at_m(&sec.surfaces, px, py) {
+                            match top.kind {
+                                SurfaceFeatureKind::CreekChannel => creek_hits += 1,
+                                SurfaceFeatureKind::DefensiveTrench => ravine_hits += 1,
+                                SurfaceFeatureKind::BridgeDeck => bridge_hits += 1,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                assert!(
+                    creek_hits >= 15,
+                    "{w}x{h} seed {seed}: expected >= 15 exposed CreekChannel samples, got {creek_hits}"
+                );
+                assert!(
+                    ravine_hits >= 15,
+                    "{w}x{h} seed {seed}: expected >= 15 exposed DefensiveTrench ravine samples, got {ravine_hits}"
+                );
+                assert!(
+                    bridge_hits >= 4,
+                    "{w}x{h} seed {seed}: expected >= 4 exposed BridgeDeck samples, got {bridge_hits}"
+                );
+                assert!(
+                    all_walkable_areas_connected(w, h, &sec.wall_edges, &sec.props),
+                    "{w}x{h} seed {seed}: WoodlandCreek disconnected"
+                );
             }
         }
     }

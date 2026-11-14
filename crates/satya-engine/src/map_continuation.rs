@@ -22,14 +22,55 @@ use crate::tactical_map_geom::{
     TOKEN_RADIUS_M,
 };
 
-/// Default added width (cells = meters) when continuing East or West.
+/// Default added width (cells = meters) when continuing East or West for compact `20x14` maps.
 pub const CONTINUATION_STRIP_W: i32 = 20;
-/// Default added height (cells = meters) when continuing North or South.
+/// Default added height (cells = meters) when continuing North or South for compact `20x14` maps.
 pub const CONTINUATION_STRIP_H: i32 = 14;
 /// Maximum stitched arena width in cells (`1 cell = 1.0m` default).
-pub const MAX_STITCHED_MAP_W: i32 = 80;
+pub const MAX_STITCHED_MAP_W: i32 = 240;
 /// Maximum stitched arena height in cells (`1 cell = 1.0m` default).
-pub const MAX_STITCHED_MAP_H: i32 = 56;
+pub const MAX_STITCHED_MAP_H: i32 = 180;
+
+/// Computes the strip thickness (cells) added when continuing `map` along `dir`,
+/// preserving `20`/`14` increments on compact `20x14` grids and scaling proportionally on larger sectors.
+#[must_use]
+pub fn continuation_strip_depth(map: &GmMapUpdateRequest, dir: MapContinuationDir) -> i32 {
+    let remaining = match dir {
+        MapContinuationDir::East | MapContinuationDir::West => {
+            (MAX_STITCHED_MAP_W - map.grid_width).max(0)
+        }
+        MapContinuationDir::North | MapContinuationDir::South => {
+            (MAX_STITCHED_MAP_H - map.grid_height).max(0)
+        }
+    };
+    if remaining < crate::tactical_map::MIN_SECTOR_DIM {
+        return 0;
+    }
+    let desired = if map.grid_width % CONTINUATION_STRIP_W == 0
+        && map.grid_height % CONTINUATION_STRIP_H == 0
+    {
+        match dir {
+            MapContinuationDir::East | MapContinuationDir::West => CONTINUATION_STRIP_W,
+            MapContinuationDir::North | MapContinuationDir::South => CONTINUATION_STRIP_H,
+        }
+    } else {
+        match dir {
+            MapContinuationDir::East | MapContinuationDir::West => {
+                (map.grid_height * 4 / 3).clamp(24, 36)
+            }
+            MapContinuationDir::North | MapContinuationDir::South => {
+                (map.grid_width * 3 / 4).clamp(18, 28)
+            }
+        }
+    };
+    desired.min(remaining)
+}
+
+/// Returns `true` when extending `map` along `dir` stays within [`MAX_STITCHED_MAP_W`] × [`MAX_STITCHED_MAP_H`].
+#[must_use]
+pub fn can_continue_map(map: &GmMapUpdateRequest, dir: MapContinuationDir) -> bool {
+    continuation_strip_depth(map, dir) >= crate::tactical_map::MIN_SECTOR_DIM
+}
 
 /// Result of stitching a procedurally generated continuation onto an existing battlemap.
 #[derive(Debug, Clone, PartialEq)]
@@ -40,19 +81,6 @@ pub struct MapContinuationOutcome {
     pub existing_shift_m: (f32, f32),
     /// Dimensions `(added_w_cells, added_h_cells)` of the newly generated region.
     pub added_size_cells: (i32, i32),
-}
-
-/// Returns whether `map` can expand further in `dir` within the stitched arena cap.
-#[must_use]
-pub fn can_continue_map(map: &GmMapUpdateRequest, dir: MapContinuationDir) -> bool {
-    match dir {
-        MapContinuationDir::East | MapContinuationDir::West => {
-            map.grid_width + CONTINUATION_STRIP_W <= MAX_STITCHED_MAP_W
-        }
-        MapContinuationDir::North | MapContinuationDir::South => {
-            map.grid_height + CONTINUATION_STRIP_H <= MAX_STITCHED_MAP_H
-        }
-    }
 }
 
 /// Deterministic SplitMix64 seed derivation for sequential edge continuations.
@@ -78,10 +106,10 @@ pub fn next_continuation_seed(
     (z ^ (z >> 31)) as i64
 }
 
-/// Partitions a tangential boundary span of `total_cells` into natural sector chunks (`<= 28` cells each).
+/// Partitions a tangential boundary span of `total_cells` into natural sector chunks (`<= 48` cells each).
 #[must_use]
 pub fn partition_span_into_chunks(total_cells: i32, target_chunk: i32) -> Vec<(i32, i32)> {
-    if total_cells <= 28 {
+    if total_cells <= 48 {
         return vec![(0, total_cells)];
     }
     let count = ((total_cells + target_chunk / 2) / target_chunk).max(2);
@@ -435,30 +463,31 @@ pub fn continue_procedural_map(
     let cell_cm = base.cell_size_cm.max(25);
     let cell_m = cell_cm as f32 / 100.0;
 
+    let strip_depth = continuation_strip_depth(existing, dir);
     let ((new_w, new_h), (dx_cells, dy_cells), (added_w, added_h), chunks) = match dir {
         MapContinuationDir::East => (
-            (old_w + CONTINUATION_STRIP_W, old_h),
+            (old_w + strip_depth, old_h),
             (0, 0),
-            (CONTINUATION_STRIP_W, old_h),
-            partition_span_into_chunks(old_h, CONTINUATION_STRIP_H),
+            (strip_depth, old_h),
+            partition_span_into_chunks(old_h, 26),
         ),
         MapContinuationDir::West => (
-            (old_w + CONTINUATION_STRIP_W, old_h),
-            (CONTINUATION_STRIP_W, 0),
-            (CONTINUATION_STRIP_W, old_h),
-            partition_span_into_chunks(old_h, CONTINUATION_STRIP_H),
+            (old_w + strip_depth, old_h),
+            (strip_depth, 0),
+            (strip_depth, old_h),
+            partition_span_into_chunks(old_h, 26),
         ),
         MapContinuationDir::South => (
-            (old_w, old_h + CONTINUATION_STRIP_H),
+            (old_w, old_h + strip_depth),
             (0, 0),
-            (old_w, CONTINUATION_STRIP_H),
-            partition_span_into_chunks(old_w, CONTINUATION_STRIP_W),
+            (old_w, strip_depth),
+            partition_span_into_chunks(old_w, 32),
         ),
         MapContinuationDir::North => (
-            (old_w, old_h + CONTINUATION_STRIP_H),
-            (0, CONTINUATION_STRIP_H),
-            (old_w, CONTINUATION_STRIP_H),
-            partition_span_into_chunks(old_w, CONTINUATION_STRIP_W),
+            (old_w, old_h + strip_depth),
+            (0, strip_depth),
+            (old_w, strip_depth),
+            partition_span_into_chunks(old_w, 32),
         ),
     };
 
@@ -506,10 +535,10 @@ pub fn continue_procedural_map(
     for (idx, slice) in seam_slices.iter().enumerate() {
         let chunk_seed = next_continuation_seed(seed, idx as i32 + 1, slice.t_len, dir);
         let (x_off, y_off, cw, ch) = match dir {
-            MapContinuationDir::East => (old_w, slice.t0, CONTINUATION_STRIP_W, slice.t_len),
-            MapContinuationDir::West => (0, slice.t0, CONTINUATION_STRIP_W, slice.t_len),
-            MapContinuationDir::South => (slice.t0, old_h, slice.t_len, CONTINUATION_STRIP_H),
-            MapContinuationDir::North => (slice.t0, 0, slice.t_len, CONTINUATION_STRIP_H),
+            MapContinuationDir::East => (old_w, slice.t0, strip_depth, slice.t_len),
+            MapContinuationDir::West => (0, slice.t0, strip_depth, slice.t_len),
+            MapContinuationDir::South => (slice.t0, old_h, slice.t_len, strip_depth),
+            MapContinuationDir::North => (slice.t0, 0, slice.t_len, strip_depth),
         };
         let mut sec = generate_procedural_sector(preset, cw, ch, chunk_seed);
         align_chunk_ribbons(&mut sec, preset, &slice.ribbons, cw, ch, dir, mirror_sector);
@@ -557,9 +586,9 @@ pub fn continue_procedural_map(
 
     let seam_coord = match dir {
         MapContinuationDir::East => old_w,
-        MapContinuationDir::West => CONTINUATION_STRIP_W,
+        MapContinuationDir::West => strip_depth,
         MapContinuationDir::South => old_h,
-        MapContinuationDir::North => CONTINUATION_STRIP_H,
+        MapContinuationDir::North => strip_depth,
     };
     ensure_seam_connectivity(new_w, new_h, &mut base.wall_edges, &mut base.props, preset, dir, seam_coord);
 
@@ -713,10 +742,22 @@ mod tests {
             &map.wall_edges,
             &map.props
         ));
-        map = continue_procedural_map(&map, MapContinuationDir::East, None).unwrap().map;
-        map = continue_procedural_map(&map, MapContinuationDir::East, None).unwrap().map;
-        assert_eq!(map.grid_width, 80);
+        while map.grid_width < MAX_STITCHED_MAP_W {
+            map = continue_procedural_map(&map, MapContinuationDir::East, None).unwrap().map;
+        }
+        assert_eq!(map.grid_width, MAX_STITCHED_MAP_W);
         assert!(!can_continue_map(&map, MapContinuationDir::East));
         assert!(continue_procedural_map(&map, MapContinuationDir::East, None).is_err());
+
+        // Large single sectors stitch with proportional continuation strips cleanly.
+        let estate = build_procedural_map_request("estate", SectorPreset::GardenEstate, None, 48, 36, 99);
+        let stitched_estate = continue_procedural_map(&estate, MapContinuationDir::East, None).unwrap().map;
+        assert_eq!((stitched_estate.grid_width, stitched_estate.grid_height), (84, 36));
+        assert!(all_walkable_areas_connected(
+            stitched_estate.grid_width,
+            stitched_estate.grid_height,
+            &stitched_estate.wall_edges,
+            &stitched_estate.props
+        ));
     }
 }

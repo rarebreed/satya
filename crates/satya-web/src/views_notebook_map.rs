@@ -31,6 +31,17 @@ pub fn NotebookMapPane() -> impl IntoView {
                                 .collect_view()}
                         </select>
                     </label>
+                    <label class="inline-label" for="map-scale-select">
+                        <span>"Scale"</span>
+                        <select id="map-scale-select">
+                            {satya_schema::tactical_map_dto::MapScalePreset::ALL
+                                .iter()
+                                .map(|scale| {
+                                    view! { <option value=scale.as_str()>{scale.label()}</option> }
+                                })
+                                .collect_view()}
+                        </select>
+                    </label>
                     <button
                         type="button"
                         id="btn-map-generate"

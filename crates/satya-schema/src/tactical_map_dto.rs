@@ -218,6 +218,49 @@ impl Default for TokenVisualSpec {
     }
 }
 
+crate::define_wire_enum! {
+    /// Selectable procedural tactical battlemap arena scale tier.
+    #[derive(Default)]
+    pub enum MapScalePreset [count = 5] {
+        #[default]
+        Auto => ("AUTO", "Auto (Sector Default)", aliases: ["DEFAULT"]),
+        Compact => ("COMPACT", "Compact (24m × 18m)", aliases: ["SMALL", "24X18", "24_18"]),
+        Standard => ("STANDARD", "Standard (36m × 26m)", aliases: ["MEDIUM", "36X26", "36_26"]),
+        Large => ("LARGE", "Large (48m × 36m)", aliases: ["48X36", "48_36"]),
+        Massive => ("MASSIVE", "Massive (64m × 48m)", aliases: ["XL", "HUGE", "64X48", "64_48"]),
+    }
+}
+
+impl MapScalePreset {
+    /// Fixed grid dimensions `(width_m, height_m)` for explicit scale tiers, or `None` for `Auto`.
+    #[must_use]
+    pub const fn fixed_dimensions(self) -> Option<(i32, i32)> {
+        match self {
+            Self::Auto => None,
+            Self::Compact => Some((24, 18)),
+            Self::Standard => Some((36, 26)),
+            Self::Large => Some((48, 36)),
+            Self::Massive => Some((64, 48)),
+        }
+    }
+
+    /// Resolves `(width_m, height_m)` using `preset_default` when `self == MapScalePreset::Auto`.
+    #[must_use]
+    pub const fn resolve_dimensions(self, preset_default: (i32, i32)) -> (i32, i32) {
+        match self.fixed_dimensions() {
+            Some(dims) => dims,
+            None => preset_default,
+        }
+    }
+
+    /// Loose case-insensitive parser accepting UI strings, aliases, or dimension tokens (`"36x26"`),
+    /// defaulting to [`Self::Auto`].
+    #[must_use]
+    pub fn parse_loose(raw: &str) -> Self {
+        Self::from_code_str(raw).unwrap_or_default()
+    }
+}
+
 /// HTTP request body for `POST /api/sessions/:session_id/map` generating a procedural tactical sector
 /// or editing walls, doors, windows, and continuous props on the active session map.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -231,6 +274,9 @@ pub struct GenerateSessionMapRequest {
     pub grid_width: i32,
     #[serde(default = "default_map_height")]
     pub grid_height: i32,
+    /// Optional arena scale tier (`Auto`, `Compact 24×18`, `Standard 36×26`, `Large 48×36`, `Massive 64×48`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale: Option<MapScalePreset>,
     #[serde(default = "default_cell_size_cm")]
     pub cell_size_cm: i32,
     #[serde(default)]
@@ -317,6 +363,7 @@ impl Default for GenerateSessionMapRequest {
             title: None,
             grid_width: default_map_width(),
             grid_height: default_map_height(),
+            scale: None,
             cell_size_cm: default_cell_size_cm(),
             seed: None,
             populate_roster_tokens: true,
@@ -427,8 +474,29 @@ mod tests {
         let decoded: GenerateSessionMapRequest = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, req);
 
-        // Omitted continue_direction defaults to None cleanly for older clients.
+        // Omitted continue_direction and scale default to None cleanly for older clients.
         let legacy: GenerateSessionMapRequest = serde_json::from_str("{}").unwrap();
         assert_eq!(legacy.continue_direction, None);
+        assert_eq!(legacy.scale, None);
+        assert_eq!((legacy.grid_width, legacy.grid_height), (20, 14));
+
+        // MapScalePreset roundtrip & resolution
+        assert_eq!(MapScalePreset::Auto.resolve_dimensions((36, 26)), (36, 26));
+        assert_eq!(MapScalePreset::Compact.resolve_dimensions((36, 26)), (24, 18));
+        assert_eq!(MapScalePreset::Standard.resolve_dimensions((48, 36)), (36, 26));
+        assert_eq!(MapScalePreset::Large.resolve_dimensions((24, 18)), (48, 36));
+        assert_eq!(MapScalePreset::Massive.resolve_dimensions((24, 18)), (64, 48));
+        assert_eq!(MapScalePreset::parse_loose("standard"), MapScalePreset::Standard);
+        assert_eq!(MapScalePreset::parse_loose("64x48"), MapScalePreset::Massive);
+        assert_eq!(MapScalePreset::parse_loose("unknown"), MapScalePreset::Auto);
+
+        let scaled_req = GenerateSessionMapRequest {
+            scale: Some(MapScalePreset::Massive),
+            ..Default::default()
+        };
+        let scaled_json = serde_json::to_string(&scaled_req).unwrap();
+        assert!(scaled_json.contains(r#""scale":"MASSIVE""#));
+        let scaled_dec: GenerateSessionMapRequest = serde_json::from_str(&scaled_json).unwrap();
+        assert_eq!(scaled_dec.scale, Some(MapScalePreset::Massive));
     }
 }

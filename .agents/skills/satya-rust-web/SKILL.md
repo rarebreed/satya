@@ -57,7 +57,12 @@ Read **only** the specific source file(s) and companion doc for your task (every
      ```powershell
      $env:PATH = 'c:\Users\hapah\Projects\satya\.pixi\envs\default\Library\bin;' + $env:PATH; cargo clippy --offline -p satya-web --target wasm32-unknown-unknown -- -D warnings
      ```
-   - `pixi` is not on the sandbox `PATH`; prepend the pixi env `Library\bin` so `cargo`/`rustc` resolve to the toolchain that has `rust-std-wasm32-unknown-unknown`. Do not use `wasm-pack build` / `pixi run build-wasm` for sandbox verification: it downloads `wasm-bindgen-cli` over the network and fails offline.
+   - `pixi` is not on the sandbox `PATH`; prepend `.pixi\envs\default\Library\bin` so `cargo`/`rustc` resolve to the toolchain with `rust-std-wasm32-unknown-unknown`. `wasm-pack build` cannot run inside the standard sandbox because `%LOCALAPPDATA%\.wasm-pack` is outside workspace sandbox permissions; however, `cargo clippy` skips LLVM `--release` codegen, `wasm-bindgen`, and `wasm-opt`. When changing `Cargo.toml`, Wasm exports/imports, or large procedural/3D modules, also verify release codegen offline in the sandbox:
+     ```powershell
+     $env:PATH = 'c:\Users\hapah\Projects\satya\.pixi\envs\default\Library\bin;' + $env:PATH; cargo build --offline --release -p satya-web --target wasm32-unknown-unknown
+     ```
+     When modifying `pixi.toml` (`build-wasm` / `serve`) or `[package.metadata.wasm-pack]`, run `pixi run build-wasm` with `BypassSandbox: true` (user approval) to verify the full `wasm-bindgen` packaging step.
+   - **Keep `wasm-opt` Disabled on Rust `1.99+`**: Binaryen's `wasm-opt -O` (`Precompute.cpp:838`) crashes (`0xc0000409`) on Rust `1.99+` LLVM-optimized Wasm binaries. Preserve **both** `wasm-opt = false` under `[package.metadata.wasm-pack.profile.release]` / `profiling` in `crates/satya-web/Cargo.toml` and `--no-opt` on `build-wasm` in `pixi.toml`.
    - **New `web-sys` APIs require Cargo features**: when calling a new DOM API (e.g. `Element::get_bounding_client_rect` → `DomRect`, `MouseEvent`, `WheelEvent`, `UiEvent`), add every type it touches to `[workspace.dependencies] web-sys` features in the root [`Cargo.toml`](../../../Cargo.toml).
    - **Gate host-only unused-binding suppressions**: when values are moved inside a `#[cfg(target_arch = "wasm32")]` block, write the host silencer as `#[cfg(not(target_arch = "wasm32"))] let _ = (a, b, c);`. An unconditional `let _ = ...` after the block causes `E0382` (use after move) on wasm only.
 7. **Thin `wasm32` Shells, Host-Testable Cores**:

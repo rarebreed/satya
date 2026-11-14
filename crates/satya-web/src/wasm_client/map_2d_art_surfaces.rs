@@ -329,11 +329,14 @@ fn emit_vector_surfaces_svg(out: &mut String, ui: &TacticalMapUiState, cell_px: 
             SurfaceFeatureKind::CreekChannel => {
                 if s.shape == SurfaceShapeKind::RibbonSpline {
                     let mut bank = s.clone();
-                    bank.width_cm += 70;
+                    bank.width_cm += 90;
                     let bank_ring = extrude_surface_ribbon_m(&bank, bw_m, bh_m).to_closed_ring_m();
                     let mut bd = String::with_capacity(bank_ring.len() * 14);
                     push_ring_d(&mut bd, &bank_ring, cell_px);
-                    let _ = write!(out, r##"<path d="{bd}" fill="url(#bm-gravel)" stroke="#7d7563" stroke-width="1.4" stroke-linejoin="round"/>"##);
+                    let _ = write!(
+                        out,
+                        r##"<path d="{bd}" fill="none" stroke="#384736" stroke-width="4.5" stroke-linejoin="round" opacity=".48"/><path d="{bd}" fill="url(#bm-gravel)" stroke="#7d7563" stroke-width="1.4" stroke-linejoin="round"/>"##
+                    );
                 }
                 let _ = write!(
                     out,
@@ -650,5 +653,22 @@ mod tests {
         }];
         let road_art = format_battlemap_art_layer(&road_ui);
         assert!(!road_art.contains(r##"fill="#5b4a36""##), "dirt stains must never appear on AsphaltRoad");
+    }
+
+    #[test]
+    fn woodland_creek_svg_paints_creek_water_above_ravine_and_gravel_shoals() {
+        let ui = TacticalMapUiState {
+            map: build_procedural_map_request("creek2d", SectorPreset::WoodlandCreek, None, 36, 26, 42),
+            ..Default::default()
+        };
+        let art = format_battlemap_art_layer(&ui);
+        assert!(art.contains("url(#bm-creek)"), "WoodlandCreek SVG missing creek water fill");
+        assert!(art.contains("url(#bm-ditch)"), "WoodlandCreek SVG missing ravine hachured trench fill");
+        let last_creek = art.rfind("url(#bm-creek)").unwrap();
+        let first_ravine = art.find("url(#bm-ditch)").unwrap();
+        assert!(last_creek > first_ravine, "creek water must draw after ravine banks");
+        if let Some(last_gravel) = art.rfind("url(#bm-gravel)") {
+            assert!(last_creek > last_gravel, "creek water must draw above gravel shoals");
+        }
     }
 }

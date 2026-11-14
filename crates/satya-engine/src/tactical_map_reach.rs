@@ -8,20 +8,17 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use satya_schema::{
-    MapSurfaceFeature, MapWallEdge, SurfaceFeatureKind, SurfaceShapeKind, WallEdgeKind,
+    MapSurfaceFeature, SurfaceFeatureKind, SurfaceShapeKind,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::environment_vehicles::{CombatMovementGait, compute_stride_and_sprint_velocity};
-use crate::map_dressing::prop_spec;
 use crate::map_surface_geom::{
     distance_point_to_polyline_m, point_in_ring_m, sample_open_catmull_rom_m, sampled_closed_ring_m,
 };
 use crate::tactical_map::TacticalSceneView;
-use crate::tactical_map_geom::{
-    NAV_STEP_M, TOKEN_RADIUS_M, circle_collides_obstacles, intersect_segment_edge,
-    prop_contains_point, prop_intersects_circle,
-};
+use crate::tactical_map_geom::{NAV_STEP_M, TOKEN_RADIUS_M};
+use crate::tactical_map_spatial::{SpatialObstacleIndex, SpatialWallFilter};
 
 /// Merged horizontal reachable contour strip (`0.25m` band) for crisp SVG and WebGPU overlays.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -296,6 +293,7 @@ pub fn compute_reachable_continuous(
     let node_pos = |ix: usize, iy: usize| -> (f32, f32) {
         ((ix as f32 + 0.5) * step_m, (iy as f32 + 0.5) * step_m)
     };
+    let spatial = SpatialObstacleIndex::new(scene.width_m, scene.height_m, scene.edges, scene.props);
 
     for iy in iy_min..=iy_max {
         for ix in ix_min..=ix_max {
@@ -303,13 +301,10 @@ pub fn compute_reachable_continuous(
             let occupied = occupied_tokens_m
                 .iter()
                 .any(|&(tx, ty)| (px - tx).powi(2) + (py - ty).powi(2) < (TOKEN_RADIUS_M * 1.65).powi(2));
-            let blocked_prop = scene.props.iter().any(|p| {
-                prop_spec(p.kind).obstruction.blocks_movement() && prop_intersects_circle(p, px, py, 0.22)
-            });
             let idx = iy * cols + ix;
             walkable[idx] = !occupied
-                && !blocked_prop
-                && !circle_collides_obstacles(scene.width_m, scene.height_m, scene.edges, &[], px, py, 0.20);
+                && !spatial.any_move_blocking_prop_intersects_circle(px, py, 0.22)
+                && !spatial.circle_hits_wall(px, py, 0.20, SpatialWallFilter::MovementBlocking);
             if walkable[idx] {
                 let mut best_surf: Option<SurfaceFeatureKind> = None;
                 let mut best_prio = 0u8;
@@ -321,12 +316,7 @@ pub fn compute_reachable_continuous(
                 }
                 let mut m = best_surf.map_or(1.0, SurfaceFeatureKind::move_cost_mult);
                 if best_surf != Some(SurfaceFeatureKind::BridgeDeck) {
-                    for p in scene.props {
-                        let sp = prop_spec(p.kind);
-                        if sp.move_cost_mult > m && prop_contains_point(p, px, py, false) {
-                            m = sp.move_cost_mult;
-                        }
-                    }
+                    m = spatial.max_prop_move_cost_at(px, py, m);
                 }
                 cost_mult[idx] = m;
             }
@@ -359,12 +349,6 @@ pub fn compute_reachable_continuous(
         (-1, -2, 559),
     ];
 
-    let blocking_edges: Vec<&MapWallEdge> = scene
-        .edges
-        .iter()
-        .filter(|e| WallEdgeKind::blocks_movement(e.kind))
-        .collect();
-
     while let Some(node) = heap.pop() {
         let cur_idx = node.iy * cols + node.ix;
         if node.cost_mm > cost_mm[cur_idx] {
@@ -390,10 +374,7 @@ pub fn compute_reachable_continuous(
                 }
             }
             let b = node_pos(nx, ny);
-            if blocking_edges
-                .iter()
-                .any(|e| intersect_segment_edge(a, b, e).is_some())
-            {
+            if spatial.segment_hits_movement_wall(a, b) {
                 continue;
             }
             let step_cost = ((base_mm as f32) * cost_mult[nidx]).round() as i32;
