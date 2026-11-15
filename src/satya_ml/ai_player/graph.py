@@ -46,6 +46,7 @@ from satya_ml.ai_player.tools import (
     get_player_session_context,
     set_player_session_context,
 )
+from satya_ml.campaign_config import get_pack_default_ai_player
 
 logger = logging.getLogger("satya_ml.ai_player.graph")
 
@@ -88,7 +89,8 @@ Rules:
 def _format_player_context_header(ctx: dict[str, Any]) -> str:
     sheet = ctx.get("character_sheet") or {}
     env = ctx.get("tactical_envelope") or compute_character_tactical_envelope(sheet)
-    cname = sheet.get("character_name") or ctx.get("player_display_name") or "Kaelen Voss"
+    default_name = str(get_pack_default_ai_player().get("character_name") or "Mateo Vance")
+    cname = sheet.get("character_name") or ctx.get("player_display_name") or default_name
     role = sheet.get("callsign_or_role") or sheet.get("archetype") or "Operative"
     skills = sheet.get("skills") or {}
     skills_str = ", ".join(f"{k}(N={v})" for k, v in list(skills.items())[:5])
@@ -351,7 +353,8 @@ def build_ai_player_graph(
     def publish_player_turn(state: AiPlayerSessionState) -> dict[str, Any]:
         session_id = state.get("session_id", "default")
         player_user_id = state.get("player_user_id", "ai-player-1")
-        display_name = state.get("player_display_name", "Kaelen Voss (AI Player)")
+        default_name = str(get_pack_default_ai_player().get("character_name") or "Mateo Vance")
+        display_name = state.get("player_display_name", f"{default_name} (AI Player)")
         ensure_turn_context(session_id)
 
         messages = state.get("messages") or []

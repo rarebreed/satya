@@ -467,7 +467,7 @@ pub struct GenerateNpcRequest {
 /// Players receive only the public fields (`character_id`, `character_name`, `callsign_or_role`,
 /// `age_years`, `public_summary`, `apparent_condition`), whereas Game Masters and Solo-Mode players
 /// also receive `gm_character`, `psyche_summary`, `top_skills`, and `gm_secret_dossier`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SessionNpcEntry {
     pub character_id: String,
     pub character_name: String,
@@ -489,6 +489,36 @@ pub struct SessionNpcEntry {
     /// Populated only for `GM` or in Solo / AI-GM mode.
     #[serde(default)]
     pub gm_secret_dossier: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disposition: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub faction_id: Option<String>,
+    /// Populated only for `GM` or in Solo / AI-GM mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub immediate_agenda: Option<String>,
+    /// Populated only for `GM` or in Solo / AI-GM mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub core_drive: Option<String>,
+    /// Populated only for `GM` or in Solo / AI-GM mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dual_psyche_wedge_hint: Option<String>,
+}
+
+/// Request body to patch an existing NPC's live disposition, condition, or notes.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct UpdateSessionNpcRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disposition: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub apparent_condition: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub immediate_agenda: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gm_secret_dossier_append: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_persistent: Option<bool>,
 }
 
 /// HTTP response body for `POST /api/sessions/:session_id/npcs/generate`.

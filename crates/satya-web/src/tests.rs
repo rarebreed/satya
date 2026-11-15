@@ -568,6 +568,7 @@ fn test_ssr_gm_vault_rules_book_npcs_and_markdown_chat() {
         ],
         top_skills: vec!["Clinical Diagnosis & Internal Medicine (N=3)".to_string()],
         gm_secret_dossier: Some("Secretly treating wounded couriers for free.".to_string()),
+                ..Default::default()
     };
     let gm_card_html = wasm_client::format_npc_card_html(&terry_entry, true);
     assert!(gm_card_html.contains("BLG 16 (Tribal / Group-Dependent)"));

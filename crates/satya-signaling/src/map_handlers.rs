@@ -354,7 +354,7 @@ pub async fn session_move_map_token_handler(
     let mut map = ctx.active_map.unwrap_or_else(|| {
         build_procedural_map_request(
             &format!("map-{}", Uuid::now_v7()),
-            SectorPreset::OrbitalAirlock,
+            crate::campaign_lore::resolve_pack_defaults(None).default_sector_preset,
             None,
             20,
             14,

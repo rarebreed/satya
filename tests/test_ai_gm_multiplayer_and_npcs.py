@@ -6,8 +6,25 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 
-def test_multiplayer_party_turn_barrier_and_ooc_bypass() -> None:
+from satya_ml.campaign_config import set_campaign_pack_override
+from satya_ml.ai_gm.tools import reset_session_npcs
+
+
+@pytest.fixture
+def space_opera_pack() -> Any:
+    """Temporarily activate the optional `space_opera` pack for Space Opera regression tests."""
+    set_campaign_pack_override("space_opera")
+    reset_session_npcs()
+    try:
+        yield
+    finally:
+        set_campaign_pack_override(None)
+        reset_session_npcs()
+
+
+def test_multiplayer_party_turn_barrier_and_ooc_bypass(space_opera_pack: Any) -> None:
     """Verify that in a multi-player session, the AI GM waits until all active human players
     have declared their actions (or passed/forced) before invoking the LLM or advancing the
     Scenario Director, while allowing OOC rules queries to bypass immediately without losing queued actions.
@@ -202,7 +219,7 @@ def test_multiplayer_party_turn_barrier_and_ooc_bypass() -> None:
         set_chat_model_override(None)
 
 
-def test_action_mode_tick_barrier_and_autonomous_npc_resolution() -> None:
+def test_action_mode_tick_barrier_and_autonomous_npc_resolution(space_opera_pack: Any) -> None:
     """Verify Combat Action Mode (`combat_active = true`) tick-ordered player gating
     and autonomous NPC Count-Up Tick execution (`npc_action_resolution_node`).
     """
@@ -377,7 +394,7 @@ def test_action_mode_tick_barrier_and_autonomous_npc_resolution() -> None:
         set_chat_model_override(None)
 
 
-def test_tactical_map_vector_wall_collision_and_los_cover() -> None:
+def test_tactical_map_vector_wall_collision_and_los_cover(space_opera_pack: Any) -> None:
     """Verify continuous vector scene (`tiles == []`), 360-deg OBB prop collision, sub-meter movement, and LoS cover `Δ_ext` in `maps.py`."""
     import sys
     from pathlib import Path

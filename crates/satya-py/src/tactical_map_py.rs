@@ -5,13 +5,19 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use satya_engine::map_narrative_manifest::{
+    SpatialSensoryPin, evaluate_passive_movement_perceptions, extract_sector_narrative_manifest,
+};
 use satya_engine::tactical_map::{
-    SectorPreset, TacticalSceneView, build_procedural_map_request, continue_procedural_map,
-    evaluate_los_continuous,
+    SectorPreset, TacticalSceneView, build_procedural_map_request_with_options,
+    continue_procedural_map, evaluate_los_continuous,
 };
 use satya_engine::tactical_map_geom::{circle_collides_obstacles, resolve_token_destination_cm};
 use satya_engine::tactical_map_inspect::{MapHoverCategory, inspect_map_point};
-use satya_schema::{GmMapUpdateRequest, MapContinuationDir, TokenVisualSpec};
+use satya_schema::{
+    CharacterSheetRecord, EconomicTier, GmMapUpdateRequest, MapContinuationDir, MapScalePreset,
+    TokenVisualSpec, ZoningContext,
+};
 use serde_json::{Map, Value, json};
 
 fn to_py_err(msg: impl Into<String>) -> PyErr {
@@ -254,17 +260,30 @@ pub fn inspect_tactical_map_point(
 
 /// Generates a procedural vector tactical sector serialized as [`GmMapUpdateRequest`] JSON.
 #[pyfunction]
-#[pyo3(signature = (map_id, preset_or_theme, title=None, width=16, height=12, seed=42))]
+#[pyo3(signature = (map_id, preset_or_theme, title=None, width=None, height=None, seed=42, economic_tier=None, zoning=None, scale=None))]
 pub fn generate_procedural_tactical_sector_json(
     map_id: &str,
     preset_or_theme: &str,
     title: Option<&str>,
-    width: i32,
-    height: i32,
+    width: Option<i32>,
+    height: Option<i32>,
     seed: i64,
+    economic_tier: Option<&str>,
+    zoning: Option<&str>,
+    scale: Option<&str>,
 ) -> PyResult<String> {
     let preset = SectorPreset::from_code_str(preset_or_theme).unwrap_or_default();
-    let req = build_procedural_map_request(map_id, preset, title, width, height, seed);
+    let tier_opt = economic_tier.and_then(EconomicTier::from_code_str);
+    let zoning_opt = zoning.and_then(ZoningContext::from_code_str);
+    let (default_w, default_h) = match scale.map(MapScalePreset::parse_loose) {
+        Some(s) => preset.resolve_scale_dimensions(s),
+        None => (16, 12),
+    };
+    let w = width.unwrap_or(default_w);
+    let h = height.unwrap_or(default_h);
+    let req = build_procedural_map_request_with_options(
+        map_id, preset, title, w, h, seed, tier_opt, zoning_opt,
+    );
     serde_json::to_string(&req).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
@@ -283,6 +302,55 @@ pub fn continue_procedural_tactical_map_json(
     serde_json::to_string(&outcome.map).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
+/// Switches `active_floor` on a multi-floor procedural sector and syncs top-level wall/prop/surface mirrors.
+#[pyfunction]
+pub fn switch_tactical_map_floor_json(
+    map_json: &str,
+    target_floor_index: i32,
+) -> PyResult<String> {
+    let mut map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    if !map.switch_active_floor(target_floor_index) {
+        return Err(to_py_err(format!(
+            "Floor {target_floor_index} not present on tactical map '{}'",
+            map.map_id
+        )));
+    }
+    serde_json::to_string(&map).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
+/// Extracts a semantic [`satya_engine::SectorNarrativeManifest`] JSON overview from a tactical map.
+#[pyfunction]
+pub fn extract_sector_narrative_manifest_json(map_json: &str) -> PyResult<String> {
+    let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let manifest = extract_sector_narrative_manifest(&map);
+    serde_json::to_string(&manifest).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
+/// Evaluates passive movement perceptions (`SIG`/`HEA`/`OLF`/`ITU`) triggered by moving `moved_entity_id`.
+#[pyfunction]
+#[pyo3(signature = (map_json, moved_entity_id, observers_json, pins_json=None))]
+pub fn evaluate_passive_movement_perceptions_json(
+    map_json: &str,
+    moved_entity_id: &str,
+    observers_json: &str,
+    pins_json: Option<&str>,
+) -> PyResult<String> {
+    let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let observers: Vec<CharacterSheetRecord> = if observers_json.trim().is_empty() {
+        Vec::new()
+    } else {
+        serde_json::from_str(observers_json)
+            .map_err(|e| to_py_err(format!("Invalid observers JSON: {e}")))?
+    };
+    let pins: Vec<SpatialSensoryPin> = match pins_json {
+        Some(raw) if !raw.trim().is_empty() => serde_json::from_str(raw)
+            .map_err(|e| to_py_err(format!("Invalid sensory pins JSON: {e}")))?,
+        _ => Vec::new(),
+    };
+    let whispers = evaluate_passive_movement_perceptions(&map, moved_entity_id, &observers, &pins);
+    serde_json::to_string(&whispers).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
 /// Registers tactical map spatial bindings on the `satya_py` Python module.
 pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(check_tactical_token_collision, m)?)?;
@@ -291,6 +359,9 @@ pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(inspect_tactical_map_point, m)?)?;
     m.add_function(wrap_pyfunction!(generate_procedural_tactical_sector_json, m)?)?;
     m.add_function(wrap_pyfunction!(continue_procedural_tactical_map_json, m)?)?;
+    m.add_function(wrap_pyfunction!(switch_tactical_map_floor_json, m)?)?;
+    m.add_function(wrap_pyfunction!(extract_sector_narrative_manifest_json, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_passive_movement_perceptions_json, m)?)?;
     Ok(())
 }
 
@@ -304,11 +375,37 @@ mod tests {
             "map-py-1",
             "docking_bay",
             Some("Bay 4"),
-            12,
-            10,
+            Some(12),
+            Some(10),
             42,
+            None,
+            None,
+            None,
         )
         .unwrap();
+        let manifest_json = extract_sector_narrative_manifest_json(&sector_json).unwrap();
+        let manifest_val: Value = serde_json::from_str(&manifest_json).unwrap();
+        assert_eq!(manifest_val["cardinal_exits"].as_array().unwrap().len(), 4);
+        assert!(!manifest_val["walkable_anchors"].as_array().unwrap().is_empty());
+
+        let hosp_json = generate_procedural_tactical_sector_json(
+            "map-hosp",
+            "hospital",
+            Some("St. Jude Hospital"),
+            None,
+            None,
+            77,
+            None,
+            None,
+            Some("STANDARD"),
+        )
+        .unwrap();
+        let hosp_val: Value = serde_json::from_str(&hosp_json).unwrap();
+        assert!(hosp_val["floors"].as_array().unwrap().len() >= 2);
+        let switched_json = switch_tactical_map_floor_json(&hosp_json, 1).unwrap();
+        let switched_val: Value = serde_json::from_str(&switched_json).unwrap();
+        assert_eq!(switched_val["active_floor"], 1);
+
         let mut parsed = parse_flexible_map_json(&sector_json).unwrap();
         assert_eq!(parsed.grid_width, 12);
         assert_eq!(parsed.world_sectors.len(), 1);

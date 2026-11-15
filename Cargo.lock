@@ -2943,6 +2943,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.21",
  "tokio",
+ "toml 0.8.23",
  "tower",
  "tower-http",
  "tracing",

@@ -98,6 +98,7 @@ fn ensure_default_demo_npc_if_empty() {
         psyche_summary,
         top_skills,
         gm_secret_dossier: Some(gen_res.gm_secret_dossier),
+            ..Default::default()
     };
     with_state_mut(|st| {
         st.selected_npc_id = Some(demo_entry.character_id.clone());
@@ -411,6 +412,7 @@ pub fn satya_generate_npc_from_prompt() {
         psyche_summary,
         top_skills,
         gm_secret_dossier: Some(full_dossier),
+            ..Default::default()
     };
 
     with_state_mut(|st| {
@@ -573,6 +575,7 @@ mod tests {
             psyche_summary: vec!["EMP 17 (Compassionate)".to_string()],
             top_skills: vec!["Trauma Surgery (N=4)".to_string()],
             gm_secret_dossier: Some("Owes 40,000 cr to Black Sun brokers.".to_string()),
+            ..Default::default()
         };
 
         let gm_html = format_npc_card_html(&entry, true);

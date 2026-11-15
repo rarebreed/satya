@@ -6,13 +6,15 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from langchain_core.messages import AIMessage
 
+from satya_ml.campaign_config import set_campaign_pack_override
 from satya_ml.ai_gm.graph import build_ai_gm_graph
 from satya_ml.ai_gm.models import SessionLlmConfig
 from satya_ml.ai_gm.party_coordinator import extract_active_human_players
 from satya_ml.ai_gm.server import set_chat_model_override
-from satya_ml.ai_gm.tools import _gm_service_token
+from satya_ml.ai_gm.tools import _gm_service_token, reset_session_npcs
 from satya_ml.ai_player.graph import build_ai_player_graph
 from satya_ml.ai_player.server import (
     AiPlayerTurnEventPayload,
@@ -21,8 +23,23 @@ from satya_ml.ai_player.server import (
 )
 from satya_ml.ai_player.tools import (
     read_my_character_sheet,
+    reset_player_session_context,
     set_player_session_context,
 )
+
+
+@pytest.fixture
+def space_opera_pack() -> Any:
+    """Temporarily activate the optional `space_opera` pack for Space Opera regression tests."""
+    set_campaign_pack_override("space_opera")
+    reset_session_npcs()
+    reset_player_session_context()
+    try:
+        yield
+    finally:
+        set_campaign_pack_override(None)
+        reset_session_npcs()
+        reset_player_session_context()
 
 
 class _FakePlayerChatModel:
@@ -82,7 +99,7 @@ class _FakeGmChatModel:
         )
 
 
-def test_player_context_sanitization_strips_gm_only_and_other_private_whispers() -> None:
+def test_player_context_sanitization_strips_gm_only_and_other_private_whispers(space_opera_pack: Any) -> None:
     raw_ctx = {
         "session_id": "ep-iso-1",
         "gm_documents": [
@@ -138,7 +155,7 @@ def test_player_context_sanitization_strips_gm_only_and_other_private_whispers()
     assert sheet_res["tactical_pool_envelope"]["p_eff"] >= 9
 
 
-def test_ai_player_graph_executes_combat_triad_roll_and_pairs_with_7_node_ai_gm() -> None:
+def test_ai_player_graph_executes_combat_triad_roll_and_pairs_with_7_node_ai_gm(space_opera_pack: Any) -> None:
     session_id = "ep-party-gate-ai-player"
     roster = [
         {
@@ -245,7 +262,7 @@ def test_ai_player_graph_executes_combat_triad_roll_and_pairs_with_7_node_ai_gm(
     assert "Sara" in turn_2["final_reply"] and "Kaelen Voss" in turn_2["final_reply"]
 
 
-def test_fastapi_ai_player_endpoint_executes_isolated_turn() -> None:
+def test_fastapi_ai_player_endpoint_executes_isolated_turn(space_opera_pack: Any) -> None:
     set_player_chat_model_override(_FakePlayerChatModel())
     try:
         body = handle_ai_player_event(

@@ -274,7 +274,9 @@ pub async fn session_generate_or_edit_map_handler(
     // Branch A: Single-cell edit (door toggle or terrain paint)
     if let (Some(ex), Some(ey)) = (req.edit_cell_x, req.edit_cell_y) {
         let mut map = ctx.active_map.clone().unwrap_or_else(|| {
-            let p = SectorPreset::from_code_str(&req.preset).unwrap_or(SectorPreset::OrbitalAirlock);
+            let p = SectorPreset::from_code_str(&req.preset).unwrap_or_else(|| {
+    crate::campaign_lore::resolve_pack_defaults(None).default_sector_preset
+});
             let (raw_w, raw_h) = req
                 .scale
                 .map(|s| p.resolve_scale_dimensions(s))
@@ -480,8 +482,8 @@ pub async fn session_generate_or_edit_map_handler(
             .into_response();
     }
 
-    let preset =
-        SectorPreset::from_code_str(&req.preset).unwrap_or(SectorPreset::OrbitalAirlock);
+    let preset = SectorPreset::from_code_str(&req.preset)
+        .unwrap_or_else(|| crate::campaign_lore::resolve_pack_defaults(None).default_sector_preset);
     let (raw_w, raw_h) = req
         .scale
         .map(|s| preset.resolve_scale_dimensions(s))
@@ -557,7 +559,7 @@ pub async fn session_generate_or_edit_map_handler(
         );
         map.tokens.push(TokenPlacement {
             entity_id: "npc-secops-1".to_string(),
-            label: "SecOps Sentry".to_string(),
+            label: crate::campaign_lore::resolve_pack_defaults(None).hostile_token_label,
             x: (hx_cm / cell_cm).clamp(0, width - 1),
             y: (hy_cm / cell_cm).clamp(0, height - 1),
             visibility: MessageVisibility::Public,

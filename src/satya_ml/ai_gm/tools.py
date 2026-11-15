@@ -13,6 +13,7 @@ import os
 import random
 import re
 import tomllib
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -131,13 +132,46 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> 
     return None
 
 
+def _http_get_json(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
+    """GET JSON from `url` with GM service headers, returning parsed JSON on 200 OK or None on failure."""
+    headers = _gm_headers()
+    if httpx is not None:
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                resp = client.get(url, headers=headers)
+                if resp.status_code == 200:
+                    return dict(resp.json())
+        except Exception:
+            return None
+        return None
+
+    try:
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                return dict(json.loads(resp.read().decode("utf-8")))
+    except Exception:
+        return None
+    return None
+
+
 from satya_ml.ai_gm.maps import (
+    _load_satya_py,
+    continue_tactical_map,
     ensure_or_sync_procedural_tactical_map_stub,
     generate_tactical_map,
     get_session_map,
     inspect_tactical_map,
     move_map_token,
+    register_spatial_clue_pin,
     set_session_map,
+    switch_tactical_map_floor,
+)
+from satya_ml.campaign_config import (
+    get_active_campaign_pack_name,
+    get_pack_lore_dirs,
+    get_pack_starter_npcs,
+    get_pack_zone_labels,
 )
 
 # In-memory per-session caches for NPC states, operating mode, human GM ID, GM_ONLY documents,
@@ -149,53 +183,6 @@ _SESSION_GM_DOCS: dict[str, list[dict[str, Any]]] = {}
 _SESSION_GM_MEMORIES: dict[str, list[dict[str, Any]]] = {}
 _SESSION_CHARACTERS: dict[str, list[dict[str, Any]]] = {}
 _SESSION_COMBAT_TRACKER: dict[str, dict[str, Any]] = {}
-
-_DEFAULT_STARTER_NPCS: dict[str, dict[str, Any]] = {
-    "captain_vance": {
-        "npc_id": "captain_vance",
-        "name": "Captain Elena Vance",
-        "archetype": "Veteran Aethelgard Fleet Commander",
-        "faction": "Aethelgard Colonial Navy",
-        "attribute_tns": {"STR": 13, "DEX": 12, "INT": 11, "WIL": 10},
-        "skills": {"astrogation": 3, "command": 3, "tactics": 2},
-        "combat_stance": "DEFENSIVE",
-        "fatigue": 1,
-        "wound_shock": 0,
-        "disposition": "wary",
-        "notes": "Commands the orbital relay station over Aethelgard Sector 4.",
-        "secrets": [
-            "Possesses the encrypted Aethelgard nav-log detailing the Ghost Drift anomaly."
-        ],
-    },
-    "secops_sentry": {
-        "npc_id": "secops_sentry",
-        "name": "Station SecOps Sentry",
-        "archetype": "Armored Bulkhead Patrol Guard",
-        "faction": "Sector 4 Security Operations",
-        "attribute_tns": {"STR": 11, "DEX": 12, "INT": 14, "WIL": 13},
-        "skills": {"small_arms": 2, "close_combat": 2, "surveillance": 1},
-        "combat_stance": "NEUTRAL",
-        "fatigue": 0,
-        "wound_shock": 0,
-        "disposition": "suspicious",
-        "notes": "Patrols the Sector 4 Docking Bay airlocks.",
-        "secrets": ["Keycard overrides the West Bulkhead containment lock."],
-    },
-    "dr_aris_thorne": {
-        "npc_id": "dr_aris_thorne",
-        "name": "Dr. Aris Thorne",
-        "archetype": "Xenobiology & Telemetry Specialist",
-        "faction": "Aethelgard Science Directorate",
-        "attribute_tns": {"STR": 15, "DEX": 13, "INT": 10, "WIL": 11},
-        "skills": {"xenobiology": 3, "sensor_analysis": 3, "medicine": 2},
-        "combat_stance": "DEFENSIVE",
-        "fatigue": 2,
-        "wound_shock": 0,
-        "disposition": "cooperative",
-        "notes": "Investigating signal harmonics from the Aethelgard deep-core relay.",
-        "secrets": ["Secretly transmitted telemetry samples to an off-world courier."],
-    },
-}
 
 
 def set_session_operating_mode(
@@ -267,38 +254,75 @@ def get_session_combat_tracker(session_id: str) -> dict[str, Any]:
     return dict(_SESSION_COMBAT_TRACKER[session_id])
 
 
-def load_all_npc_profiles(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
-    """Load all NPC definitions from `data/npcs/*.toml`, falling back to built-in Sector 4 starter NPCs."""
-    root = repo_root or _repo_root()
-    npcs_dir = root / "data" / "npcs"
-    profiles: dict[str, dict[str, Any]] = {
-        npc_id: {
-            **data,
-            "attribute_tns": dict(data.get("attribute_tns", {})),
-            "skills": dict(data.get("skills", {})),
-            "secrets": list(data.get("secrets", [])),
-        }
-        for npc_id, data in _DEFAULT_STARTER_NPCS.items()
-    }
-    if not npcs_dir.exists():
-        return profiles
+_SESSION_NPC_PACKS: dict[str, str] = {}
 
-    for toml_path in sorted(npcs_dir.glob("*.toml")):
-        try:
-            raw = tomllib.loads(toml_path.read_text(encoding="utf-8"))
-            for key, npc_data in raw.get("npcs", {}).items():
-                npc_id = str(npc_data.get("npc_id", key))
-                profiles[npc_id] = dict(npc_data)
-        except OSError:
-            continue
-    return profiles
+
+def reset_session_npcs(session_id: str | None = None) -> None:
+    """Clear cached NPC state for `session_id` (or all sessions when omitted)."""
+    if session_id is None:
+        _SESSION_NPCS.clear()
+        _SESSION_NPC_PACKS.clear()
+    else:
+        _SESSION_NPCS.pop(session_id, None)
+        _SESSION_NPC_PACKS.pop(session_id, None)
+
+
+def _normalize_remote_npc_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Convert a signaling `SessionNpcEntry` wire object into the flat AI GM NPC profile shape."""
+    cid = str(entry.get("character_id") or entry.get("npc_id") or "").strip().lower()
+    gm_char = entry.get("gm_character") if isinstance(entry.get("gm_character"), dict) else {}
+    return {
+        "npc_id": cid,
+        "name": str(entry.get("character_name") or entry.get("name") or cid),
+        "archetype": str(entry.get("callsign_or_role") or entry.get("archetype") or "NPC"),
+        "faction": str(entry.get("faction_id") or entry.get("faction") or "Independent"),
+        "disposition": str(entry.get("disposition") or "wary"),
+        "public_summary": str(entry.get("public_summary") or ""),
+        "apparent_condition": str(entry.get("apparent_condition") or "Healthy & Alert"),
+        "notes": str(entry.get("public_summary") or ""),
+        "secrets": [str(entry["gm_secret_dossier"])] if entry.get("gm_secret_dossier") else [],
+        "psyche_summary": list(entry.get("psyche_summary") or []),
+        "top_skills": list(entry.get("top_skills") or []),
+        "skills": dict(gm_char.get("skills") or {}),
+        "attribute_tns": dict(gm_char.get("attribute_tns") or {}),
+        "combat_stance": str(gm_char.get("combat_stance") or "NEUTRAL"),
+        "fatigue": int(gm_char.get("fatigue_level", 0) or 0),
+        "wound_shock": int(gm_char.get("wound_shock_index", 0) or 0),
+        "immediate_agenda": entry.get("immediate_agenda"),
+        "core_drive": entry.get("core_drive"),
+        "dual_psyche_wedge_hint": entry.get("dual_psyche_wedge_hint"),
+    }
+
+
+def load_all_npc_profiles(repo_root: Path | None = None) -> dict[str, dict[str, Any]]:
+    """Load canonical starter NPCs for the active campaign pack (`config/campaign.toml` + `data/npcs/*.toml`)."""
+    del repo_root  # campaign_config resolves repo root and active pack TOMLs
+    return get_pack_starter_npcs()
 
 
 def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
-    """Return the mutable NPC state dictionary for `session_id`, seeding from disk if needed."""
-    if session_id not in _SESSION_NPCS:
+    """Return the mutable NPC state dictionary for `session_id`, synced with the active pack & signaling SQLite."""
+    active_pack = get_active_campaign_pack_name()
+    if session_id not in _SESSION_NPCS or _SESSION_NPC_PACKS.get(session_id) != active_pack:
         _SESSION_NPCS[session_id] = load_all_npc_profiles()
-    return _SESSION_NPCS[session_id]
+        _SESSION_NPC_PACKS[session_id] = active_pack
+    npcs = _SESSION_NPCS[session_id]
+    if httpx is not None:
+        try:
+            with httpx.Client(timeout=1.5) as client:
+                resp = client.get(
+                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/npcs",
+                    headers=_gm_headers(),
+                )
+                if resp.status_code == 200:
+                    data = dict(resp.json())
+                    for raw_entry in data.get("npcs") or []:
+                        if isinstance(raw_entry, dict) and raw_entry.get("character_id"):
+                            norm = _normalize_remote_npc_entry(raw_entry)
+                            npcs[norm["npc_id"]] = norm
+        except Exception:
+            pass
+    return npcs
 
 
 # ============================================================================
@@ -308,7 +332,7 @@ def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
 
 @tool
 def lookup_npc_profile(npc_id: str, session_id: str = "default") -> dict[str, Any]:
-    """Read an NPC's Satya d20 profile, attribute TNs, skills, combat stance, fatigue, wound shock, and secrets."""
+    """Read an NPC's Satya d20 profile, attribute TNs, skills, psyche, agenda, combat stance, and secrets."""
     npcs = get_session_npcs(session_id)
     key = npc_id.strip().lower()
     if key in npcs:
@@ -329,9 +353,10 @@ def update_npc_state(
     wound_shock_delta: int = 0,
     combat_stance: str | None = None,
     disposition: str | None = None,
+    immediate_agenda: str | None = None,
     session_id: str = "default",
 ) -> dict[str, Any]:
-    """Update an NPC's fatigue, wound shock, combat stance, or disposition in the active session."""
+    """Update an NPC's fatigue, wound shock, combat stance, disposition, or agenda and persist to signaling when online."""
     npcs = get_session_npcs(session_id)
     key = npc_id.strip().lower()
     target_key = key if key in npcs else None
@@ -350,7 +375,30 @@ def update_npc_state(
         npc["combat_stance"] = combat_stance.upper()
     if disposition is not None:
         npc["disposition"] = disposition
+    if immediate_agenda is not None:
+        npc["immediate_agenda"] = immediate_agenda
     npcs[target_key] = npc
+
+    if httpx is not None:
+        patch_body: dict[str, Any] = {}
+        if disposition is not None:
+            patch_body["disposition"] = disposition
+        if immediate_agenda is not None:
+            patch_body["immediate_agenda"] = immediate_agenda
+        if fatigue_delta or wound_shock_delta or combat_stance is not None:
+            patch_body["apparent_condition"] = (
+                f"{npc.get('disposition', 'steady')} · Fat {npc['fatigue']}/Shock {npc['wound_shock']}"
+            )
+        if patch_body:
+            try:
+                with httpx.Client(timeout=1.5) as client:
+                    client.patch(
+                        f"{_signaling_base_url()}/api/gm/sessions/{session_id}/npcs/{target_key}",
+                        headers=_gm_headers(),
+                        json=patch_body,
+                    )
+            except Exception:
+                pass
     return npc
 
 
@@ -364,7 +412,7 @@ def generate_npc_from_description(
     is_persistent: bool = True,
     session_id: str = "default",
 ) -> dict[str, Any]:
-    """Roll up a complete Satya NPC (Characteristics, 7 bipolar Psyche traits, 5-Stage Lifepath, and Skills) from a short natural-language description (e.g., 'Terry is a kind general MD, but needs to feel like she belongs') and/or template ('AUTO', 'MEDICAL_DOCTOR', 'COMBAT_SOLDIER', 'DETECTIVE_INVESTIGATOR', 'SYNDICATE_ENFORCER', 'STEM_ENGINEER', 'INTELLIGENCE_OPERATIVE', 'BLUE_COLLAR_TECH', 'FRONTIER_RANGER')."""
+    """Roll up a complete Satya NPC (Characteristics, 7 bipolar Psyche traits, 5-Stage Lifepath, Skills, and Motivational Profile) from a short natural-language description (e.g., 'Terry is a kind general MD, but needs to feel like she belongs') and/or template ('AUTO', 'MEDICAL_DOCTOR', 'COMBAT_SOLDIER', 'DETECTIVE_INVESTIGATOR', 'SYNDICATE_ENFORCER', 'STEM_ENGINEER', 'INTELLIGENCE_OPERATIVE', 'BLUE_COLLAR_TECH', 'FRONTIER_RANGER')."""
     payload = {
         "prompt": description,
         "name_override": name_override,
@@ -382,6 +430,9 @@ def generate_npc_from_description(
     )
     if remote_res is not None and isinstance(remote_res.get("npc"), dict):
         npc_entry = dict(remote_res["npc"])
+        _SESSION_NPCS.setdefault(session_id, {})[str(npc_entry.get("character_id", "")).lower()] = (
+            _normalize_remote_npc_entry(npc_entry)
+        )
         gm_char = npc_entry.get("gm_character")
         if isinstance(gm_char, dict):
             chars = get_session_characters(session_id)
@@ -390,7 +441,66 @@ def generate_npc_from_description(
             set_session_characters(session_id, chars)
         return remote_res
 
-    # Local deterministic fallback when signaling server is offline
+    satya_py_mod = _load_satya_py()
+    if satya_py_mod is not None and hasattr(satya_py_mod, "generate_npc_profile_json"):
+        try:
+            raw_json = satya_py_mod.generate_npc_profile_json(
+                description,
+                template,
+                name_override,
+                max(1, min(4, int(career_terms))),
+                42,
+                get_active_campaign_pack_name(),
+            )
+            gen_res = json.loads(raw_json)
+            ch = dict(gen_res.get("character") or {})
+            motiv = dict(gen_res.get("motivation") or {})
+            dossier = str(gen_res.get("gm_secret_dossier") or "")
+            if gm_secret_notes and gm_secret_notes.strip():
+                dossier = f"{dossier}\nGM Secret Notes: {gm_secret_notes.strip()}".strip()
+                ch["notes"] = dossier
+            npc_entry = {
+                "character_id": ch.get("character_id", f"npc-{uuid.uuid4().hex[:8]}"),
+                "character_name": ch.get("character_name", name_override or "Generated Contact"),
+                "callsign_or_role": ch.get("callsign_or_role", "Specialist"),
+                "age_years": int(ch.get("age_years", 34)),
+                "public_summary": str(gen_res.get("public_summary") or ""),
+                "apparent_condition": "Healthy & Alert",
+                "is_persistent": bool(is_persistent),
+                "gm_character": ch,
+                "psyche_summary": [
+                    f"{p.get('code')} {p.get('score')} ({p.get('descriptor')})"
+                    for p in (gen_res.get("psyche_traits") or [])
+                ],
+                "top_skills": [
+                    f"{item[0]} — {item[1]} (N={item[2]})"
+                    for item in (gen_res.get("top_skills") or [])
+                    if isinstance(item, (list, tuple)) and len(item) >= 3
+                ],
+                "gm_secret_dossier": dossier,
+                "disposition": "wary",
+                "immediate_agenda": motiv.get("immediate_agenda"),
+                "core_drive": motiv.get("core_drive"),
+                "dual_psyche_wedge_hint": motiv.get("dual_psyche_wedge"),
+            }
+            _SESSION_NPCS.setdefault(session_id, {})[str(npc_entry["character_id"]).lower()] = (
+                _normalize_remote_npc_entry(npc_entry)
+            )
+            if ch:
+                chars = get_session_characters(session_id)
+                chars = [c for c in chars if c.get("character_id") != ch.get("character_id")]
+                chars.append(ch)
+                set_session_characters(session_id, chars)
+            return {
+                "npc": npc_entry,
+                "motivation": motiv,
+                "offline_fallback": False,
+                "engine_backed": True,
+            }
+        except Exception:
+            pass
+
+    # Local deterministic fallback when signaling server and satya_py are offline
     desc_clean = description.strip()
     lower = desc_clean.lower()
     npc_name = (name_override or "").strip()
@@ -733,20 +843,101 @@ def query_satya_rules(query: str) -> str:
 
 @tool
 def query_campaign_lore(query: str, session_id: str | None = None) -> str:
-    """Search campaign NPC lore (`data/npcs/*.toml`) and archived PyLance session history (`data/lance/chat-events.lance`)."""
-    keywords = [w.lower() for w in query.replace("?", " ").split() if len(w) >= 3]
+    """Search campaign Markdown lore (`lore_dirs`), active-pack & DB NPC dossiers, Signaling Omnisearch (`scope=LORE`), and archived PyLance chat history."""
+    q_clean = query.strip()
+    q_low = q_clean.lower()
+    keywords = [w.lower() for w in re.split(r"[^a-zA-Z0-9_-]+", q_clean) if len(w) >= 3]
     matches: list[str] = []
 
-    for npc_id, profile in load_all_npc_profiles().items():
-        blob = f"{npc_id} {profile.get('name', '')} {profile.get('archetype', '')} {profile.get('faction', '')} {' '.join(profile.get('secrets', []))} {profile.get('notes', '')}"
-        if not keywords or any(kw in blob.lower() for kw in keywords):
+    if session_id:
+        encoded_q = urllib.parse.quote(q_clean)
+        remote_lookup = _http_get_json(
+            f"{_signaling_base_url()}/api/gm/sessions/{urllib.parse.quote(session_id)}/lookup?q={encoded_q}&scope=LORE",
+            timeout=2.0,
+        )
+        if isinstance(remote_lookup, dict):
+            for hit in remote_lookup.get("hits") or []:
+                if not isinstance(hit, dict):
+                    continue
+                title = str(hit.get("title") or "Entry")
+                subtitle = str(hit.get("subtitle") or hit.get("source_kind") or "Lore")
+                snippet = str(hit.get("snippet") or "").strip()
+                if snippet:
+                    matches.append(f"[Omnisearch · {subtitle} — {title}]: {snippet}")
+
+    for npc_id, profile in load_all_npc_profiles(session_id).items():
+        agenda = str(profile.get("immediate_agenda") or "").strip()
+        drive = str(profile.get("core_drive") or "").strip()
+        wedge = str(profile.get("dual_psyche_wedge_hint") or "").strip()
+        blob = " ".join(
+            [
+                npc_id,
+                str(profile.get("name") or ""),
+                str(profile.get("archetype") or ""),
+                str(profile.get("faction") or ""),
+                str(profile.get("public_summary") or ""),
+                " ".join(str(s) for s in (profile.get("secrets") or [])),
+                str(profile.get("notes") or ""),
+                agenda,
+                drive,
+                wedge,
+            ]
+        )
+        if not keywords or (q_low and q_low in blob.lower()) or any(kw in blob.lower() for kw in keywords):
+            extra_parts: list[str] = []
+            if agenda:
+                extra_parts.append(f"Agenda: {agenda}")
+            if drive:
+                extra_parts.append(f"Core Drive: {drive}")
+            if wedge:
+                extra_parts.append(f"Wedge: {wedge}")
+            extra_suffix = f" ({'; '.join(extra_parts)})" if extra_parts else ""
             matches.append(
                 f"[NPC {profile.get('name', npc_id)} ({profile.get('faction', 'Unknown')})]: "
                 f"{profile.get('archetype', '')}. Notes: {profile.get('notes', '')} "
-                f"Secrets: {'; '.join(profile.get('secrets', []))}"
+                f"Secrets: {'; '.join(profile.get('secrets', []))}{extra_suffix}"
             )
 
-    lance_chat = _repo_root() / "data" / "lance" / "chat-events.lance"
+    root = _repo_root()
+    scored_md: list[tuple[int, str, str]] = []
+    for lore_dir in get_pack_lore_dirs():
+        for md_path in sorted(lore_dir.rglob("*.md")):
+            try:
+                content = md_path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            rel_posix = md_path.relative_to(root).as_posix()
+            for sec_idx, section in enumerate(content.split("\n## ")):
+                body = section.strip() if sec_idx == 0 else f"## {section.strip()}"
+                if not body:
+                    continue
+                heading = body.splitlines()[0].lstrip("#").strip() or rel_posix
+                heading_low = heading.lower()
+                body_low = body.lower()
+                score = 0
+                if not q_low:
+                    score = 1
+                else:
+                    if q_low in heading_low:
+                        score += 20
+                    if q_low in body_low:
+                        score += 12
+                    for kw in keywords:
+                        if kw in heading_low:
+                            score += 8
+                        elif kw in body_low:
+                            score += 4
+                if score > 0:
+                    snippet = body[:420].replace("\n", " ").strip()
+                    scored_md.append(
+                        (score, rel_posix, f"[Campaign Lore — `{rel_posix}` · {heading}]: {snippet}")
+                    )
+
+    scored_md.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    for _, _, formatted_md in scored_md[:4]:
+        matches.append(formatted_md)
+
+    lance_chat = root / "data" / "lance" / "chat-events.lance"
     if lance_chat.exists():
         try:
             import lance
@@ -997,6 +1188,7 @@ def advance_combat_tracker(
     tracker["combat_active"] = True
 
     combatants = list(tracker.get("combatants") or [])
+    hostile_zone, player_zone = get_pack_zone_labels()
     if not combatants:
         for idx, ch in enumerate(get_session_characters(session_id)):
             env = compute_character_tactical_envelope(ch)
@@ -1012,7 +1204,7 @@ def advance_combat_tracker(
                     "wound_shock_tier": 0,
                     "grid_x": 3 + (idx * 2),
                     "grid_y": 6,
-                    "zone_label": "Core Console Approach",
+                    "zone_label": player_zone,
                 }
             )
     if entity_id:
@@ -1050,7 +1242,7 @@ def advance_combat_tracker(
                     "wound_shock_tier": 0,
                     "grid_x": int(grid_x) if grid_x is not None else 11,
                     "grid_y": int(grid_y) if grid_y is not None else 6,
-                    "zone_label": zone_label or "Entry Breach Sector",
+                    "zone_label": zone_label or hostile_zone,
                 }
             )
     tracker["combatants"] = combatants
@@ -1510,6 +1702,9 @@ def get_builtin_gm_tools() -> list[Any]:
         query_campaign_lore,
         read_gm_documents,
         generate_tactical_map,
+        continue_tactical_map,
+        switch_tactical_map_floor,
+        register_spatial_clue_pin,
         move_map_token,
         inspect_tactical_map,
         roll_satya_d20_check,

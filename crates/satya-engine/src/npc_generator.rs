@@ -27,6 +27,9 @@ use crate::economy_gear::{
     auto_allocate_career_and_elective_skills, compute_skill_allocation_sp_ledger,
     preview_next_skill_step_sp,
 };
+use crate::hook_weaver::{
+    NpcMotivationalProfile, apply_prompt_psyche_and_skill_cues, derive_npc_motivational_profile,
+};
 use crate::lifepath_catalog::{
     CareerTermTrack, HighSchoolTrack, RuralYouthArchetype, Stage4Path, StreetGangArchetype,
 };
@@ -201,6 +204,9 @@ pub struct GeneratedNpcResult {
     pub public_summary: String,
     /// GM-only full narrative & mechanical dossier (includes Psyche scores, motivations, top skills, and secrets).
     pub gm_secret_dossier: String,
+    /// Canonical structured motivational profile (`core_drive`, `underlying_fear`, `negotiation_lever`, `dual_psyche_wedge`).
+    #[serde(default)]
+    pub motivation: NpcMotivationalProfile,
 }
 
 struct SplitMix64 {
@@ -243,7 +249,7 @@ fn fnv1a_hash(text: &str) -> u64 {
     hash
 }
 
-fn any_cue(haystack_lower: &str, words: &[&str], cues: &[&str]) -> bool {
+pub(crate) fn any_cue(haystack_lower: &str, words: &[&str], cues: &[&str]) -> bool {
     cues.iter().any(|&cue| {
         if cue.contains(' ') {
             haystack_lower.contains(cue)
@@ -470,330 +476,19 @@ fn fallback_npc_name(seed: u64) -> String {
     )
 }
 
-fn apply_prompt_psyche_and_skill_cues(
-    prompt: &str,
-    template: NpcTemplateKind,
-    chars: &mut CharacterCharacteristics,
-) -> Vec<&'static str> {
-    let lower = prompt.to_ascii_lowercase();
-    let words: Vec<&str> = lower
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|s| !s.is_empty())
-        .collect();
-    let mut priority_skills: Vec<&'static str> = Vec::new();
-
-    match template {
-        NpcTemplateKind::MedicalDoctor => {
-            chars.slf = 7;
-            chars.opn = 13;
-            chars.cnf = 12;
-        }
-        NpcTemplateKind::CombatSoldier => {
-            chars.blg = 14;
-            chars.cnf = 13;
-            chars.agg = 14;
-        }
-        NpcTemplateKind::DetectiveInvestigator => {
-            chars.opn = 13;
-            chars.cnf = 12;
-            chars.agg = 11;
-        }
-        NpcTemplateKind::SyndicateEnforcer => {
-            chars.slf = 14;
-            chars.cnf = 6;
-            chars.agg = 15;
-        }
-        NpcTemplateKind::StemEngineer => {
-            chars.opn = 15;
-            chars.ext = 8;
-        }
-        NpcTemplateKind::IntelligenceOperative => {
-            chars.blg = 6;
-            chars.opn = 13;
-            chars.ext = 9;
-        }
-        NpcTemplateKind::BlueCollarTech => {
-            chars.ego = 8;
-            chars.blg = 12;
-        }
-        NpcTemplateKind::FrontierRanger | NpcTemplateKind::Auto => {
-            chars.blg = 7;
-            chars.opn = 12;
-        }
-    }
-
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "kind",
-            "caring",
-            "compassionate",
-            "gentle",
-            "altruistic",
-            "selfless",
-            "empathetic",
-            "warm",
-            "generous",
-            "tender",
-            "healer",
-        ],
-    ) {
-        chars.slf = 5;
-        chars.agg = chars.agg.min(5);
-        chars.ego = chars.ego.min(7);
-        chars.opn = chars.opn.max(14);
-        chars.com = chars.com.max(13);
-        priority_skills.extend_from_slice(&[
-            "empathy_social_perception",
-            "nursing_patient_care",
-            "first_aid_bls_cpr",
-            "psychology_behavioral_analysis_counseling",
-        ]);
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "selfish",
-            "greedy",
-            "mercenary",
-            "ruthless",
-            "callous",
-            "opportunistic",
-            "self-serving",
-            "cutthroat",
-        ],
-    ) {
-        chars.slf = 16;
-        chars.agg = chars.agg.max(15);
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "belong",
-            "belongs",
-            "belonging",
-            "fit in",
-            "acceptance",
-            "accepted",
-            "loyal",
-            "tribal",
-            "devoted",
-            "team player",
-            "pack",
-            "family",
-            "needs to feel like",
-            "approval",
-        ],
-    ) {
-        chars.blg = 16;
-        priority_skills.extend_from_slice(&["empathy_social_perception", "persuasion_fast_talk"]);
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "loner",
-            "lone wolf",
-            "detached",
-            "solitary",
-            "independent",
-            "outcast",
-            "drifter",
-            "aloof",
-        ],
-    ) {
-        chars.blg = 4;
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "arrogant",
-            "proud",
-            "narcissistic",
-            "cocky",
-            "vain",
-            "egotistical",
-            "grandiose",
-            "haughty",
-        ],
-    ) {
-        chars.ego = 17;
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &["humble", "modest", "unassuming", "meek", "self-effacing"],
-    ) {
-        chars.ego = 5;
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "curious",
-            "open-minded",
-            "imaginative",
-            "inquisitive",
-            "creative",
-            "eccentric",
-            "visionary",
-        ],
-    ) {
-        chars.opn = 16;
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "dogmatic",
-            "rigid",
-            "stubborn",
-            "traditional",
-            "closed-minded",
-            "suspicious",
-            "cynical",
-        ],
-    ) {
-        chars.opn = 5;
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "extroverted",
-            "outgoing",
-            "charismatic",
-            "gregarious",
-            "talkative",
-            "charming",
-            "boisterous",
-            "social",
-        ],
-    ) {
-        chars.ext = 16;
-        chars.pre = chars.pre.max(13);
-        chars.elo = chars.elo.max(13);
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "shy",
-            "quiet",
-            "introverted",
-            "reserved",
-            "stoic",
-            "taciturn",
-            "withdrawn",
-        ],
-    ) {
-        chars.ext = 5;
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "by-the-book",
-            "orthodox",
-            "obedient",
-            "disciplined",
-            "dutiful",
-            "strict",
-            "conformist",
-            "bureaucratic",
-        ],
-    ) {
-        chars.cnf = 16;
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "rebel",
-            "rebellious",
-            "maverick",
-            "iconoclast",
-            "unconventional",
-            "anti-authority",
-            "rogue",
-        ],
-    ) {
-        chars.cnf = 4;
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "aggressive",
-            "violent",
-            "fierce",
-            "belligerent",
-            "hot-headed",
-            "brutal",
-            "combative",
-            "pugnacious",
-        ],
-    ) {
-        chars.agg = 17;
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "pacifist",
-            "peaceful",
-            "nonviolent",
-            "calm",
-            "conflict-averse",
-            "timid",
-        ],
-    ) {
-        chars.agg = 4;
-    }
-
-    if any_cue(
-        &lower,
-        &words,
-        &[
-            "general md",
-            "md",
-            "physician",
-            "doctor",
-            "diagnosis",
-            "clinic",
-        ],
-    ) {
-        priority_skills.extend_from_slice(&[
-            "clinical_diagnosis_internal_medicine",
-            "first_aid_bls_cpr",
-            "nursing_patient_care",
-            "pharmacology_toxicology",
-            "anatomy_physiology",
-        ]);
-    }
-    if any_cue(
-        &lower,
-        &words,
-        &["surgeon", "surgery", "trauma", "orthopedic"],
-    ) {
-        priority_skills.extend_from_slice(&[
-            "trauma_orthopedic_general_surgery",
-            "clinical_diagnosis_internal_medicine",
-            "anatomy_physiology",
-            "first_aid_bls_cpr",
-        ]);
-    }
-
-    priority_skills
-}
-
-/// Generate a complete, rules-legal NPC (`CharacterSheetRecord` + public/GM summaries) from a prompt and/or template.
+/// Generate a complete, rules-legal NPC (`CharacterSheetRecord` + public/GM summaries + motivation)
+/// from a prompt and/or template, using the default `"awakened"` campaign pack framing.
 #[must_use]
 pub fn generate_npc_from_prompt(params: &NpcGenerationParams) -> GeneratedNpcResult {
+    generate_npc_from_prompt_with_pack(params, "awakened")
+}
+
+/// Generate a complete, rules-legal NPC scoped to a specific campaign pack (`"awakened"` or `"space_opera"`).
+#[must_use]
+pub fn generate_npc_from_prompt_with_pack(
+    params: &NpcGenerationParams,
+    pack_id: &str,
+) -> GeneratedNpcResult {
     let effective_seed = if params.seed != 0 {
         params.seed
     } else {
@@ -1205,17 +900,41 @@ pub fn generate_npc_from_prompt(params: &NpcGenerationParams) -> GeneratedNpcRes
         }
     );
 
+    let chars_rec = characteristics_to_record(&chars);
+    let access_tags: Vec<String> = baseline
+        .granted_access_tags
+        .iter()
+        .map(|t| t.as_str().to_string())
+        .collect();
+    let motivation = derive_npc_motivational_profile(
+        &chars_rec,
+        inferred_template,
+        &params.prompt,
+        &access_tags,
+        pack_id,
+    );
+
     let gm_secret_dossier = format!(
         "NPC Dossier: {npc_name} ({role_title}, Age {age_years}, Origin: {})\n\
          Prompt / Concept: {}\n\
          Psyche Profile: {psyche_line}\n\
-         Key Skills: {top_skills_line}",
+         Key Skills: {top_skills_line}\n\
+         Core Drive: {}\n\
+         Underlying Fear: {}\n\
+         Immediate Agenda: {}\n\
+         Negotiation Lever: {}\n\
+         {}",
         baseline.origin.label,
         if params.prompt.trim().is_empty() {
             role_title.as_str()
         } else {
             params.prompt.trim()
-        }
+        },
+        motivation.core_drive,
+        motivation.underlying_fear,
+        motivation.immediate_agenda,
+        motivation.negotiation_lever,
+        motivation.dual_psyche_wedge,
     );
 
     let lifepath_config_json = serde_json::to_string(&cfg).ok();
@@ -1230,13 +949,9 @@ pub fn generate_npc_from_prompt(params: &NpcGenerationParams) -> GeneratedNpcRes
         origin_label: baseline.origin.label.to_string(),
         campaign_sqm: i32::from(baseline.campaign_sqm),
         operational_heat: i32::from(baseline.operational_heat),
-        granted_access_tags: baseline
-            .granted_access_tags
-            .iter()
-            .map(|t| t.as_str().to_string())
-            .collect(),
+        granted_access_tags: access_tags,
         stage_history: baseline.stage_history,
-        characteristics: characteristics_to_record(&chars),
+        characteristics: chars_rec,
         aptitudes: aptitudes_to_record(&aptitudes),
         skills: skills_i32,
         notes: Some(gm_secret_dossier.clone()),
@@ -1257,6 +972,7 @@ pub fn generate_npc_from_prompt(params: &NpcGenerationParams) -> GeneratedNpcRes
         top_skills,
         public_summary,
         gm_secret_dossier,
+        motivation,
     }
 }
 

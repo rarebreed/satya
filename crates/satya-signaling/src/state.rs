@@ -22,6 +22,8 @@ pub struct SignalingAppState {
     pub auth: AuthAndSessionManager,
     /// Multi-topic Apache Iggy and Avro container batch storage router.
     pub storage: Arc<EventLogRouter>,
+    /// Active default campaign pack configured via `config/ai.toml` / `config/campaign.toml`.
+    pub campaign_pack: String,
     /// Monotonically increasing sequence counter for emitted Avro event envelopes.
     pub sequence_counter: AtomicI64,
     /// Active WebSocket connections per `session_id -> (user_id -> tx)`.
@@ -39,6 +41,7 @@ impl SignalingAppState {
         base_dir: impl Into<PathBuf>,
     ) -> anyhow::Result<Arc<Self>> {
         let base_dir = base_dir.into();
+        let campaign_pack = config.ai_gm.campaign_pack.clone();
         let auth = AuthAndSessionManager::new(&base_dir, &config.auth).await?;
         let start_seq = auth.max_persisted_sequence_num().await.saturating_add(1);
         let storage = Arc::new(EventLogRouter::new(config, &base_dir).await?);
@@ -46,6 +49,7 @@ impl SignalingAppState {
         Ok(Arc::new(Self {
             auth,
             storage,
+            campaign_pack,
             sequence_counter: AtomicI64::new(start_seq),
             active_sockets: RwLock::new(HashMap::new()),
             ai_players: RwLock::new(HashMap::new()),

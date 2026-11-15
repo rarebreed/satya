@@ -309,6 +309,7 @@ def _default_director_state() -> dict[str, Any]:
         "event_weights": weights,
         "normalized_probabilities": compute_normalized_probabilities(weights),
         "beat_probability_per_turn": 0.35,
+        "probability_gate_active": False,
         "beat_interval_turns": 3,
         "turns_since_last_beat": 0,
         "completed_beats": [],
@@ -337,6 +338,7 @@ def set_session_scenario_director(session_id: str, state: dict[str, Any]) -> dic
     merged["beat_probability_per_turn"] = max(
         0.0, min(1.0, float(merged.get("beat_probability_per_turn", 0.35)))
     )
+    merged["probability_gate_active"] = bool(merged.get("probability_gate_active", False))
     weights = normalize_event_weights(
         merged.get("event_weights"),
         merged.get("player_desires"),
@@ -399,13 +401,99 @@ def _match_task_for_planned_beat(beat_text: str, weights: dict[str, float]) -> s
     return best_slug
 
 
+_HOOK_CATEGORY_TO_DIRECTOR_SLUGS: dict[str, tuple[str, ...]] = {
+    "IDENTITY_PSYCHE": ("thought_provoking_discussion", "moral_or_faction_dilemma", "dramatic_revelation"),
+    "SKILL_SPOTLIGHT": ("discovery_or_clue", "heist_or_infiltration_complication"),
+    "CREDENTIAL_ACCESS": ("heist_or_infiltration_complication", "mysterious_stranger"),
+    "OPERATIONAL_HEAT": ("ticking_clock_escalation", "combat_encounter", "heist_or_infiltration_complication"),
+    "LIFEPATH_DEBT": ("mysterious_stranger", "dramatic_revelation", "moral_or_faction_dilemma"),
+    "CONDITION_STRAIN": ("downtime_campfire_moment", "environmental_hazard"),
+    "PARTY_FRICTION": ("moral_or_faction_dilemma", "thought_provoking_discussion"),
+}
+
+
+def _collect_hook_and_manifest_context(
+    party_hooks: dict[str, Any] | None,
+    narrative_manifest: dict[str, Any] | None,
+) -> tuple[set[str], dict[str, dict[str, Any]], dict[str, Any] | None, str]:
+    """Derive boosted director slugs, per-slug top hooks, and concise tactical zone/exit context."""
+    boosted_slugs: set[str] = set()
+    best_hook_for_slug: dict[str, dict[str, Any]] = {}
+    top_hook: dict[str, Any] | None = None
+
+    if isinstance(party_hooks, dict):
+        hooks = sorted(
+            [dict(h) for h in (party_hooks.get("hooks") or []) if isinstance(h, dict)],
+            key=lambda h: float(h.get("salience", 0.0)),
+            reverse=True,
+        )
+        if hooks:
+            top_hook = hooks[0]
+        for h in hooks:
+            cat = str(h.get("category") or "").strip().upper()
+            mapped_slugs = list(_HOOK_CATEGORY_TO_DIRECTOR_SLUGS.get(cat, ()))
+            for extra in h.get("recommended_director_slugs") or []:
+                slug = resolve_task_slug(str(extra))
+                if slug:
+                    mapped_slugs.append(slug)
+            for slug in mapped_slugs:
+                boosted_slugs.add(slug)
+                best_hook_for_slug.setdefault(slug, h)
+
+        entanglements = sorted(
+            [dict(e) for e in (party_hooks.get("party_entanglements") or []) if isinstance(e, dict)],
+            key=lambda e: float(e.get("salience", 0.0)),
+            reverse=True,
+        )
+        for ent in entanglements:
+            boosted_slugs.add("moral_or_faction_dilemma")
+            boosted_slugs.add("thought_provoking_discussion")
+            pseudo_card = {
+                "category": "PARTY_FRICTION",
+                "title": str(ent.get("title") or "Party Friction"),
+                "setup": str(ent.get("shared_scene_prompt") or ""),
+                "emotional_stake": str(ent.get("tension_axis") or "Competing party values"),
+                "salience": float(ent.get("salience", 0.75)),
+            }
+            best_hook_for_slug.setdefault("moral_or_faction_dilemma", pseudo_card)
+            if top_hook is None or float(pseudo_card["salience"]) > float(top_hook.get("salience", 0.0)):
+                top_hook = pseudo_card
+
+    manifest_summary = ""
+    if isinstance(narrative_manifest, dict) and narrative_manifest:
+        zones = [z for z in (narrative_manifest.get("zones") or []) if isinstance(z, dict)]
+        exits = [e for e in (narrative_manifest.get("cardinal_exits") or []) if isinstance(e, dict)]
+        if len(zones) >= 2:
+            boosted_slugs.add("discovery_or_clue")
+            boosted_slugs.add("heist_or_infiltration_complication")
+        zone_labels = [str(z.get("label") or z.get("category") or "").strip() for z in zones[:4]]
+        zone_labels = [z for z in zone_labels if z]
+        exit_labels = [
+            f"{e.get('direction')}: {e.get('preview_label')}"
+            for e in exits[:4]
+            if e.get("direction") and e.get("preview_label")
+        ]
+        parts: list[str] = []
+        if zone_labels:
+            parts.append(f"Zones: {', '.join(zone_labels)}")
+        if exit_labels:
+            parts.append(f"Exits: {', '.join(exit_labels)}")
+        if not parts and narrative_manifest.get("concise_brief"):
+            parts.append(str(narrative_manifest["concise_brief"])[:280])
+        manifest_summary = " | ".join(parts)
+
+    return boosted_slugs, best_hook_for_slug, top_hook, manifest_summary
+
+
 def select_next_scenario_beat(
     session_id: str,
     task_slug: str = "auto",
     custom_context: str = "",
     rng_seed: int | None = None,
+    party_hooks: dict[str, Any] | None = None,
+    narrative_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Select the next Scenario Director beat according to `flow_mode`, `planned_beats`, and `event_weights`.
+    """Select the next Scenario Director beat according to `flow_mode`, `planned_beats`, `event_weights`, PC hooks, and sector layout.
 
     - In `"scenario_driven"` mode, prioritizes unconsumed `planned_beats` adapted to player actions without railroading.
     - In `"free_form"` mode, samples purely from the player/GM's `event_weights` probability dials (`w_i > 0`).
@@ -422,6 +510,11 @@ def select_next_scenario_beat(
     remaining_planned = [b for b in planned_beats if b not in completed_plot_texts]
     last_task = str(completed[-1].get("task_slug", "")) if completed else ""
 
+    boosted_slugs, best_hook_for_slug, top_hook, manifest_summary = _collect_hook_and_manifest_context(
+        party_hooks,
+        narrative_manifest,
+    )
+
     explicit = resolve_task_slug(task_slug) if task_slug and task_slug.lower() != "auto" else None
     planned_beat_used: str | None = None
     beat_source = "weighted_probability"
@@ -437,7 +530,7 @@ def select_next_scenario_beat(
         chosen_slug = _match_task_for_planned_beat(planned_beat_used, weights)
         beat_source = "planned_plot_milestone"
     else:
-        # Weighted probability sample across all tasks with weight > 0
+        # Weighted probability sample across all tasks with weight > 0 (0.0 stays strictly excluded)
         positive_items = [
             (slug, float(w))
             for slug, w in weights.items()
@@ -449,10 +542,12 @@ def select_next_scenario_beat(
         elif len(positive_items) == 1:
             chosen_slug = positive_items[0][0]
         else:
-            # Apply a 0.25x cooldown multiplier on the immediately preceding task to avoid repetition
+            # Apply 0.25x cooldown on preceding task and +25% salience boost for active PC hooks / sector affordances
             adjusted: list[tuple[str, float]] = []
             for slug, w in positive_items:
                 adj_w = w * 0.25 if slug == last_task else w
+                if slug in boosted_slugs:
+                    adj_w *= 1.25
                 adjusted.append((slug, adj_w))
             total_w = sum(w for _, w in adjusted)
             rng = random.Random(rng_seed) if rng_seed is not None else random
@@ -466,6 +561,8 @@ def select_next_scenario_beat(
                     break
 
     spec = SCENARIO_DIRECTOR_TASKS[chosen_slug]
+    matched_hook = best_hook_for_slug.get(chosen_slug) or top_hook
+    matched_hook_title = str(matched_hook.get("title") or "").strip() if isinstance(matched_hook, dict) else ""
     premise = str(state.get("campaign_premise") or "").strip()
     anti_railroad_note = (
         "ANTI-RAILROADING RULE: Do NOT invalidate player choices or force them down a predetermined track. "
@@ -479,10 +576,22 @@ def select_next_scenario_beat(
     )
     premise_line = f"\n- Campaign Premise: {premise}" if premise else ""
     custom_line = f"\n- Additional Director Context: {custom_context.strip()}" if custom_context.strip() else ""
+    hook_line = ""
+    if isinstance(matched_hook, dict) and matched_hook_title:
+        hook_line = (
+            f"\n- Active PC Motivational Hook to Pull: [{matched_hook.get('category', 'HOOK')}] "
+            f"{matched_hook_title} — {str(matched_hook.get('setup') or '').strip()} "
+            f"(Stake: {str(matched_hook.get('emotional_stake') or '').strip()})"
+        )
+    sector_line = (
+        f"\n- Tactical Sector Affordances: {manifest_summary}"
+        if manifest_summary
+        else ""
+    )
 
     mandate_text = (
         f"[SCENARIO DIRECTOR MANDATE — {spec['title'].upper()} (`{chosen_slug}` | mode=`{flow_mode}` | source=`{beat_source}`)]"
-        f"{premise_line}{plot_line}{custom_line}\n"
+        f"{premise_line}{plot_line}{custom_line}{hook_line}{sector_line}\n"
         f"- World Beat Objective: {spec['summary']}\n"
         f"- Director Playbook: {spec['playbook']}\n"
         f"- Suggested Tools: {', '.join(spec['suggested_tools'])}\n"
@@ -497,6 +606,7 @@ def select_next_scenario_beat(
         "beat_source": beat_source,
         "planned_beat_text": planned_beat_used,
         "custom_context": custom_context.strip(),
+        "matched_hook_title": matched_hook_title or None,
         "suggested_tools": list(spec["suggested_tools"]),
         "mandate_text": mandate_text,
     }
@@ -516,7 +626,7 @@ def configure_scenario_director(
     player_desires: list[str] | None = None,
     planned_beats: list[str] | None = None,
     event_weights: dict[str, float] | None = None,
-    beat_probability_per_turn: float = 0.35,
+    beat_probability_per_turn: float | None = None,
     beat_interval_turns: int = 3,
 ) -> dict[str, Any]:
     """Configure the session's Scenario Director (`flow_mode`, `campaign_premise`, `planned_beats`, and tunable `event_weights` probability dials).
@@ -538,6 +648,8 @@ def configure_scenario_director(
                     base_weights[slug] = max(0.0, float(v))
                 except (TypeError, ValueError):
                     pass
+    prob_gate_active = beat_probability_per_turn is not None
+    effective_prob = 0.35 if beat_probability_per_turn is None else float(beat_probability_per_turn)
     updated = set_session_scenario_director(
         session_id,
         {
@@ -546,7 +658,8 @@ def configure_scenario_director(
             "player_desires": player_desires if player_desires is not None else current.get("player_desires", []),
             "planned_beats": planned_beats if planned_beats is not None else current.get("planned_beats", []),
             "event_weights": base_weights,
-            "beat_probability_per_turn": beat_probability_per_turn,
+            "beat_probability_per_turn": effective_prob,
+            "probability_gate_active": prob_gate_active,
             "beat_interval_turns": beat_interval_turns,
         },
     )

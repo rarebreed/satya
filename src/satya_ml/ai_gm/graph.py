@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 import time
 import uuid
@@ -18,9 +19,15 @@ from typing import Annotated, Any, Literal, TypedDict
 
 from satya_ml.ai_gm.maps import (
     ensure_or_sync_procedural_tactical_map_stub,
+    get_session_map,
     set_session_llm_config,
 )
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model
+from satya_ml.ai_gm.hooks import (
+    compile_player_motivational_hooks,
+    format_party_hooks_for_prompt,
+)
+from satya_ml.campaign_config import get_pack_combat_spawn
 from satya_ml.ai_gm.ollama_runner import (
     drain_ollama_logs_since,
     format_ollama_response_telemetry,
@@ -547,6 +554,18 @@ def build_ai_gm_graph(
                         for m in pinned_memories[:6]
                     )
                     index_parts.append(f"Pinned GM Memories: {pinned_str}")
+                if session_chars and not ooc_turn and not mechanics_rules_q:
+                    active_loc = (
+                        str(active_map.get("title") or active_map.get("theme") or "")
+                        if isinstance(active_map, dict)
+                        else ""
+                    ) or None
+                    party_manifest = compile_player_motivational_hooks(
+                        session_chars, active_location=active_loc
+                    )
+                    hooks_digest = format_party_hooks_for_prompt(party_manifest, max_hooks=4)
+                    if hooks_digest:
+                        index_parts.append(hooks_digest)
 
                 if index_parts:
                     catalog_header = "[GM Vault & Session Index]: " + " || ".join(index_parts)
@@ -670,32 +689,66 @@ def build_ai_gm_graph(
 
             turns_since = int(dir_state.get("turns_since_last_beat", 0)) + 1
             interval = max(1, int(dir_state.get("beat_interval_turns", 3)))
+            prob = max(0.0, min(1.0, float(dir_state.get("beat_probability_per_turn", 0.35))))
+            prob_gate_active = bool(dir_state.get("probability_gate_active", False))
 
             should_inject = False
             if trigger_kind == "SCENARIO_BEAT" or bool(trigger.get("force_scenario_beat")):
                 should_inject = True
-            elif operating_mode == "autonomous" and turns_since >= interval:
-                should_inject = True
+            elif operating_mode == "autonomous":
+                if prob_gate_active:
+                    if prob <= 0.0:
+                        should_inject = False
+                    elif prob >= 1.0 or turns_since >= interval * 2:
+                        should_inject = True
+                    else:
+                        rng = (
+                            random.Random(trigger.get("rng_seed"))
+                            if trigger.get("rng_seed") is not None
+                            else random
+                        )
+                        should_inject = rng.random() < prob
+                elif turns_since >= interval:
+                    should_inject = True
 
             if should_inject:
+                active_map = state.get("active_map") or get_session_map(session_id)
+                session_chars = get_session_characters(session_id)
+                active_loc = (
+                    str(active_map.get("title") or active_map.get("theme") or "")
+                    if isinstance(active_map, dict)
+                    else ""
+                ) or None
+                party_hooks = (
+                    compile_player_motivational_hooks(session_chars, active_location=active_loc)
+                    if session_chars
+                    else None
+                )
+                narrative_manifest = (
+                    active_map.get("narrative_manifest")
+                    if isinstance(active_map, dict)
+                    else None
+                )
                 beat = select_next_scenario_beat(
                     session_id=session_id,
                     task_slug=str(trigger.get("task_slug") or "auto"),
                     custom_context=str(trigger.get("custom_context") or trigger.get("content") or ""),
                     rng_seed=trigger.get("rng_seed"),
+                    party_hooks=party_hooks,
+                    narrative_manifest=narrative_manifest,
                 )
                 mandate_text = str(beat["mandate_text"])
-                active_map = state.get("active_map") or get_session_map(session_id)
                 if beat.get("task_slug") == "combat_encounter":
+                    spawn = get_pack_combat_spawn()
                     tracker = advance_combat_tracker.invoke(
                         {
                             "tick_delta": 0,
-                            "entity_id": "secops_breach_lead",
-                            "active_stance": "AGGRESSIVE",
-                            "next_action_tick": 5,
+                            "entity_id": str(spawn.get("entity_id") or "daise_breach_lead"),
+                            "active_stance": str(spawn.get("active_stance") or "AGGRESSIVE"),
+                            "next_action_tick": int(spawn.get("next_action_tick") or 5),
                             "grid_x": 11,
                             "grid_y": 6,
-                            "zone_label": "Entry Breach Chokepoint",
+                            "zone_label": str(spawn.get("zone_label") or "Crosswalk Bottleneck"),
                             "session_id": session_id,
                         }
                     )

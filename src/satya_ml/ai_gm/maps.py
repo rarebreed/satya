@@ -25,6 +25,11 @@ from pathlib import Path
 from typing import Any
 
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model
+from satya_ml.campaign_config import (
+    get_active_campaign_pack,
+    get_pack_default_tokens,
+    get_pack_zone_labels,
+)
 
 try:
     import httpx
@@ -215,7 +220,9 @@ def infer_sector_preset(theme: str) -> str:
         return "urban_crossroads"
     if any(k in low for k in ("corridor", "derelict", "breach", "tunnel")):
         return "derelict_corridor"
-    return "orbital_airlock"
+    if any(k in low for k in ("orbital", "airlock", "station")):
+        return "orbital_airlock"
+    return str(get_active_campaign_pack().get("default_sector_preset") or "urban_crossroads")
 
 
 def _make_prop(
@@ -255,9 +262,10 @@ def _make_prop(
 def build_procedural_vector_scene(
     width: int,
     height: int,
-    preset: str = "orbital_airlock",
+    preset: str = "",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Generate thin perimeter/partition `wall_edges` and 360°-oriented `props` (zero tile grid)."""
+    preset = preset or str(get_active_campaign_pack().get("default_sector_preset") or "urban_crossroads")
     wall_edges: list[dict[str, Any]] = []
     props: list[dict[str, Any]] = []
 
@@ -882,55 +890,270 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
         pass
 
 
-@tool
-def generate_tactical_map(
-    session_id: str,
-    theme: str,
-    width: int = 16,
-    height: int = 12,
-    initial_tokens: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Generate a continuous vector 3D/2D tactical battlemap (`wall_edges` + 360° `props` + `data/maps/*.svg`) and broadcast `MAP_UPDATED`."""
-    width = max(4, min(int(width), 32))
-    height = max(4, min(int(height), 32))
-    map_id = f"map-{uuid.uuid4().hex[:8]}"
-    preset = infer_sector_preset(theme)
-    wall_edges, props = build_procedural_vector_scene(width, height, preset)
-    tiles: list[str] = []
+_SESSION_SPATIAL_PINS: dict[str, list[dict[str, Any]]] = {}
 
-    raw_tokens = list(initial_tokens or [])
-    if not raw_tokens:
-        raw_tokens = [
-            {
-                "token_id": "tok-vance",
-                "label": "Capt. Vance",
-                "grid_x": 2,
-                "grid_y": height // 2,
-                "color_hex": "#38bdf8",
-                "model_preset": "recon_mk4",
-                "facing_deg": 90,
-            },
-            {
-                "token_id": "tok-secops-1",
-                "label": "SecOps Sentry",
-                "grid_x": width - 3,
-                "grid_y": height // 2,
-                "color_hex": "#f87171",
-                "model_preset": "secops_sentry",
-                "facing_deg": 270,
-            },
-        ]
-    tokens = [normalize_token(t) for t in raw_tokens]
+_CHANNEL_ALIAS_MAP: dict[str, str] = {
+    "SIG": "SIGHT",
+    "SIGHT": "SIGHT",
+    "VISUAL": "SIGHT",
+    "HEA": "HEARING",
+    "HEARING": "HEARING",
+    "SOUND": "HEARING",
+    "AUDITORY": "HEARING",
+    "OLF": "OLFACTION",
+    "OLFACTION": "OLFACTION",
+    "SMELL": "OLFACTION",
+    "SCENT": "OLFACTION",
+    "ITU": "INTUITION",
+    "INTUITION": "INTUITION",
+    "INSTINCT": "INTUITION",
+}
+
+
+def get_session_spatial_pins(session_id: str) -> list[dict[str, Any]]:
+    """Return all registered spatial sensory clue pins for `session_id`."""
+    return list(_SESSION_SPATIAL_PINS.get(session_id, []))
+
+
+def clear_session_spatial_pins(session_id: str) -> None:
+    """Clear spatial clue pins for `session_id`."""
+    _SESSION_SPATIAL_PINS.pop(session_id, None)
+
+
+def _build_rust_map_json(map_state: dict[str, Any]) -> str:
+    """Build a canonical `GmMapUpdateRequest`-compatible JSON string from a Python map state."""
+    grid_w = int(map_state.get("grid_width", 16))
+    grid_h = int(map_state.get("grid_height", 12))
+    active_floor = int(map_state.get("active_floor", 0))
+    tokens = list(map_state.get("tokens") or [])
+    wire_tokens = [
+        {
+            "entity_id": str(t.get("entity_id") or t.get("token_id") or f"tok-{i}"),
+            "label": str(t.get("label") or t.get("token_id") or f"Token {i}"),
+            "x": int(t.get("grid_x", t.get("x", 0))),
+            "y": int(t.get("grid_y", t.get("y", 0))),
+            "visibility": "GM_ONLY"
+            if t.get("is_hidden", False)
+            else str(t.get("visibility") or "PUBLIC"),
+        }
+        for i, t in enumerate(tokens)
+    ]
+    wire_visuals = [
+        {
+            "entity_id": str(t.get("entity_id") or t.get("token_id") or f"tok-{i}"),
+            "model_preset": str(t.get("model_preset") or _infer_model_preset(str(t.get("label", "")))),
+            "color_hex": str(t.get("color_hex") or "#38bdf8"),
+            "facing_deg": int(t.get("facing_deg", 90)),
+            "elevation_cm": int(t.get("elevation_cm", 0)),
+            "floor_index": int(t.get("floor_index", active_floor)),
+            "stance_pose": str(t.get("stance_pose") or "aimed"),
+            "portrait_url": t.get("portrait_url"),
+            "pos_x_cm": int(t.get("pos_x_cm", int(t.get("grid_x", t.get("x", 0))) * 100 + 50)),
+            "pos_y_cm": int(t.get("pos_y_cm", int(t.get("grid_y", t.get("y", 0))) * 100 + 50)),
+        }
+        for i, t in enumerate(tokens)
+    ]
+    payload: dict[str, Any] = {
+        "map_id": str(map_state.get("map_id", "map")),
+        "title": str(map_state.get("title", map_state.get("theme", "Tactical Map"))),
+        "image_url": str(map_state.get("image_url", map_state.get("map_image_url", ""))),
+        "grid_width": grid_w,
+        "grid_height": grid_h,
+        "cell_size_cm": int(map_state.get("cell_size_cm", 100)),
+        "theme_preset": str(map_state.get("theme_preset", "urban_crossroads")),
+        "seed": int(map_state.get("seed", 42)),
+        "tiles": list(map_state.get("tiles") or []),
+        "wall_edges": list(map_state.get("wall_edges") or []),
+        "props": list(map_state.get("props") or []),
+        "tokens": wire_tokens,
+        "token_visuals": wire_visuals,
+        "notes": map_state.get("notes"),
+        "active_floor": active_floor,
+    }
+    for opt_key in ("surfaces", "floors", "world_sectors"):
+        if opt_key in map_state and map_state[opt_key] is not None:
+            payload[opt_key] = map_state[opt_key]
+    return json.dumps(payload)
+
+
+def _extract_narrative_manifest(map_state: dict[str, Any]) -> dict[str, Any]:
+    """Compute semantic `SectorNarrativeManifest` dict via `satya_py` when available."""
+    if _SATYA_PY is not None and hasattr(_SATYA_PY, "extract_sector_narrative_manifest_json"):
+        try:
+            raw = _SATYA_PY.extract_sector_narrative_manifest_json(_build_rust_map_json(map_state))
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+    return {}
+
+
+def _find_unblocked_token_pos_cm(
+    map_json_str: str,
+    grid_w: int,
+    grid_h: int,
+    pref_x_cm: int,
+    pref_y_cm: int,
+) -> tuple[int, int]:
+    """Adjust `(pref_x_cm, pref_y_cm)` to a collision-free continuous coordinate inside the sector."""
+    if _SATYA_PY is None or not hasattr(_SATYA_PY, "check_tactical_token_collision"):
+        return pref_x_cm, pref_y_cm
+    min_cm = 55
+    max_x = max(min_cm + 10, grid_w * 100 - 55)
+    max_y = max(min_cm + 10, grid_h * 100 - 55)
+    px = max(min_cm, min(max_x, int(pref_x_cm)))
+    py = max(min_cm, min(max_y, int(pref_y_cm)))
+    try:
+        if not _SATYA_PY.check_tactical_token_collision(map_json_str, px / 100.0, py / 100.0, _TOKEN_RADIUS_M):
+            return px, py
+        for radius_steps in range(1, max(grid_w, grid_h) * 2):
+            delta = radius_steps * 50
+            for dx, dy in (
+                (delta, 0), (-delta, 0), (0, delta), (0, -delta),
+                (delta, delta), (-delta, delta), (delta, -delta), (-delta, -delta),
+            ):
+                cx = max(min_cm, min(max_x, px + dx))
+                cy = max(min_cm, min(max_y, py + dy))
+                if not _SATYA_PY.check_tactical_token_collision(map_json_str, cx / 100.0, cy / 100.0, _TOKEN_RADIUS_M):
+                    return cx, cy
+    except Exception:
+        pass
+    return px, py
+
+
+def _write_and_sync_map_state(session_id: str, map_state: dict[str, Any]) -> dict[str, Any]:
+    """Write SVG preview on disk, attach narrative manifest, cache in memory, and sync signaling."""
+    grid_w = int(map_state.get("grid_width", 16))
+    grid_h = int(map_state.get("grid_height", 12))
+    map_id = str(map_state.get("map_id", "map"))
+    theme = str(map_state.get("theme", map_state.get("title", "Tactical Map")))
+    tokens = list(map_state.get("tokens") or [])
+    tiles = list(map_state.get("tiles") or [])
+    wall_edges = list(map_state.get("wall_edges") or [])
+    props = list(map_state.get("props") or [])
 
     maps_dir = _repo_root() / "data" / "maps"
     maps_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{session_id}_{map_id}.svg"
     svg_path = maps_dir / filename
-    svg_path.write_text(
-        render_tactical_svg(map_id, theme, width, height, tokens, tiles, wall_edges, props),
-        encoding="utf-8",
+    try:
+        svg_path.write_text(
+            render_tactical_svg(map_id, theme, grid_w, grid_h, tokens, tiles, wall_edges, props),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+    manifest = _extract_narrative_manifest(map_state)
+    if manifest:
+        map_state["narrative_manifest"] = manifest
+    set_session_map(session_id, map_state)
+    _sync_map_with_signaling(session_id, map_state)
+    return map_state
+
+
+@tool
+def generate_tactical_map(
+    session_id: str,
+    theme: str,
+    width: int | None = None,
+    height: int | None = None,
+    initial_tokens: list[dict[str, Any]] | None = None,
+    seed: int = 42,
+    economic_tier: str | None = None,
+    zoning: str | None = None,
+    scale: str | None = None,
+) -> dict[str, Any]:
+    """Generate a continuous vector 3D/2D tactical battlemap (backed by `satya-engine` 25-preset procedural multi-floor sectors) and broadcast `MAP_UPDATED`."""
+    map_id = f"map-{uuid.uuid4().hex[:8]}"
+    preset = infer_sector_preset(theme)
+    use_legacy_small = (
+        width is not None
+        and height is not None
+        and (int(width) < 16 or int(height) < 16)
+        and scale is None
     )
 
+    surfaces: list[dict[str, Any]] = []
+    floors: list[dict[str, Any]] = []
+    active_floor = 0
+    world_sectors: list[dict[str, Any]] = []
+    used_rust_procedural = False
+    notes = f"Continuous Vector Tactical Diorama & SVG battlemap for {theme} ({preset})"
+
+    if (
+        not use_legacy_small
+        and _SATYA_PY is not None
+        and hasattr(_SATYA_PY, "generate_procedural_tactical_sector_json")
+    ):
+        req_w = int(width) if width is not None else (24 if scale is None else None)
+        req_h = int(height) if height is not None else (20 if scale is None else None)
+        try:
+            raw_json = _SATYA_PY.generate_procedural_tactical_sector_json(
+                map_id,
+                preset,
+                theme,
+                req_w,
+                req_h,
+                int(seed),
+                economic_tier,
+                zoning,
+                scale,
+            )
+            engine_map = json.loads(raw_json)
+            w = int(engine_map.get("grid_width", req_w or 24))
+            h = int(engine_map.get("grid_height", req_h or 20))
+            wall_edges = list(engine_map.get("wall_edges") or [])
+            props = list(engine_map.get("props") or [])
+            surfaces = list(engine_map.get("surfaces") or [])
+            floors = list(engine_map.get("floors") or [])
+            active_floor = int(engine_map.get("active_floor", 0))
+            world_sectors = list(engine_map.get("world_sectors") or [])
+            notes = str(engine_map.get("notes") or notes)
+            used_rust_procedural = True
+        except Exception:
+            used_rust_procedural = False
+
+    if not used_rust_procedural:
+        w = max(4, min(int(width if width is not None else 16), 32))
+        h = max(4, min(int(height if height is not None else 12), 32))
+        wall_edges, props = build_procedural_vector_scene(w, h, preset)
+
+    tiles: list[str] = []
+    raw_tokens = list(initial_tokens or [])
+    if not raw_tokens:
+        raw_tokens = get_pack_default_tokens(w, h)
+    tokens = [normalize_token(t) for t in raw_tokens]
+
+    if used_rust_procedural:
+        probe_json = _build_rust_map_json(
+            {
+                "map_id": map_id,
+                "title": theme,
+                "grid_width": w,
+                "grid_height": h,
+                "wall_edges": wall_edges,
+                "props": props,
+                "surfaces": surfaces,
+                "floors": floors,
+                "active_floor": active_floor,
+                "tokens": [],
+            }
+        )
+        for tok in tokens:
+            px_cm = int(tok.get("pos_x_cm", 250))
+            py_cm = int(tok.get("pos_y_cm", 250))
+            nx_cm, ny_cm = _find_unblocked_token_pos_cm(probe_json, w, h, px_cm, py_cm)
+            tok["pos_x_cm"] = nx_cm
+            tok["pos_y_cm"] = ny_cm
+            tok["grid_x"] = max(0, min(w - 1, nx_cm // 100))
+            tok["grid_y"] = max(0, min(h - 1, ny_cm // 100))
+            tok["x"] = tok["grid_x"]
+            tok["y"] = tok["grid_y"]
+            tok.setdefault("entity_id", tok.get("token_id"))
+
+    filename = f"{session_id}_{map_id}.svg"
     map_state: dict[str, Any] = {
         "event_type": "MAP_GENERATED",
         "map_id": map_id,
@@ -938,20 +1161,130 @@ def generate_tactical_map(
         "theme": theme,
         "theme_preset": preset,
         "cell_size_cm": 100,
-        "seed": 42,
+        "seed": int(seed),
         "tiles": tiles,
         "wall_edges": wall_edges,
         "props": props,
+        "surfaces": surfaces,
+        "floors": floors,
+        "active_floor": active_floor,
+        "world_sectors": world_sectors,
         "image_url": f"/maps/{filename}",
         "map_image_url": f"/maps/{filename}",
-        "grid_width": width,
-        "grid_height": height,
+        "grid_width": w,
+        "grid_height": h,
         "tokens": tokens,
-        "notes": f"Continuous Vector Tactical Diorama & SVG battlemap for {theme} ({preset})",
+        "notes": notes,
     }
-    set_session_map(session_id, map_state)
-    _sync_map_with_signaling(session_id, map_state)
-    return map_state
+    return _write_and_sync_map_state(session_id, map_state)
+
+
+@tool
+def continue_tactical_map(
+    session_id: str,
+    direction: str,
+    preset_override: str | None = None,
+    seed: int = 0,
+) -> dict[str, Any]:
+    """Continue the active macro-world tactical map seamlessly into the neighboring NORTH, SOUTH, EAST, or WEST sector."""
+    cur = get_session_map(session_id)
+    if cur is None:
+        return {"error": f"No active tactical map for session '{session_id}'."}
+    if _SATYA_PY is None or not hasattr(_SATYA_PY, "continue_procedural_tactical_map_json"):
+        return {"error": "Compiled satya_py continuation engine is unavailable."}
+    working = dict(cur)
+    if preset_override and preset_override.strip():
+        working["theme_preset"] = infer_sector_preset(preset_override)
+    try:
+        raw_json = _SATYA_PY.continue_procedural_tactical_map_json(
+            _build_rust_map_json(working),
+            direction.strip().upper(),
+            int(seed) if seed else None,
+        )
+        cont = json.loads(raw_json)
+    except Exception as exc:
+        return {"error": f"Failed to continue map '{direction}': {exc}"}
+
+    updated = dict(cur)
+    updated["event_type"] = "MAP_CONTINUED"
+    updated["grid_width"] = int(cont.get("grid_width", cur.get("grid_width", 24)))
+    updated["grid_height"] = int(cont.get("grid_height", cur.get("grid_height", 20)))
+    updated["wall_edges"] = list(cont.get("wall_edges") or [])
+    updated["props"] = list(cont.get("props") or [])
+    updated["surfaces"] = list(cont.get("surfaces") or [])
+    updated["floors"] = list(cont.get("floors") or [])
+    updated["active_floor"] = int(cont.get("active_floor", 0))
+    updated["world_sectors"] = list(cont.get("world_sectors") or [])
+    updated["theme_preset"] = str(cont.get("theme_preset") or cur.get("theme_preset", "urban_crossroads"))
+    updated["notes"] = str(cont.get("notes") or cur.get("notes", ""))
+    return _write_and_sync_map_state(session_id, updated)
+
+
+@tool
+def switch_tactical_map_floor(session_id: str, target_floor_index: int) -> dict[str, Any]:
+    """Switch the active vertical floor (`floor_index` such as `-1`, `0`, `1`) on a multi-story procedural map."""
+    cur = get_session_map(session_id)
+    if cur is None:
+        return {"error": f"No active tactical map for session '{session_id}'."}
+    if _SATYA_PY is None or not hasattr(_SATYA_PY, "switch_tactical_map_floor_json"):
+        return {"error": "Compiled satya_py floor-switching engine is unavailable."}
+    try:
+        raw_json = _SATYA_PY.switch_tactical_map_floor_json(
+            _build_rust_map_json(cur),
+            int(target_floor_index),
+        )
+        switched = json.loads(raw_json)
+    except Exception as exc:
+        return {"error": f"Failed to switch floor to {target_floor_index}: {exc}"}
+
+    updated = dict(cur)
+    updated["event_type"] = "FLOOR_SWITCHED"
+    updated["active_floor"] = int(switched.get("active_floor", target_floor_index))
+    updated["wall_edges"] = list(switched.get("wall_edges") or [])
+    updated["props"] = list(switched.get("props") or [])
+    updated["surfaces"] = list(switched.get("surfaces") or [])
+    updated["floors"] = list(switched.get("floors") or [])
+    return _write_and_sync_map_state(session_id, updated)
+
+
+@tool
+def register_spatial_clue_pin(
+    session_id: str,
+    pin_id: str,
+    channel: str,
+    pos_x_m: float,
+    pos_y_m: float,
+    radius_m: float,
+    whisper_text: str,
+    base_difficulty_mod: int = 0,
+    floor_index: int = 0,
+    requires_los: bool = False,
+    one_shot: bool = True,
+) -> dict[str, Any]:
+    """Place a hidden spatial sensory clue (`SIG`/`HEA`/`OLF`/`ITU`) that whispers automatically during token movement."""
+    norm_channel = _CHANNEL_ALIAS_MAP.get(str(channel or "SIGHT").strip().upper(), "SIGHT")
+    pin = {
+        "pin_id": str(pin_id).strip() or f"pin-{uuid.uuid4().hex[:6]}",
+        "x_m": float(pos_x_m),
+        "y_m": float(pos_y_m),
+        "floor_index": int(floor_index),
+        "channel": norm_channel,
+        "difficulty_tn": max(2, 10 + int(base_difficulty_mod)),
+        "max_range_m": max(1.0, float(radius_m)),
+        "whisper_text": str(whisper_text),
+        "revealed_to": [],
+        "requires_los": bool(requires_los),
+        "one_shot": bool(one_shot),
+    }
+    pins = [p for p in _SESSION_SPATIAL_PINS.get(session_id, []) if p.get("pin_id") != pin["pin_id"]]
+    pins.append(pin)
+    _SESSION_SPATIAL_PINS[session_id] = pins
+    return {
+        "status": "ok",
+        "session_id": session_id,
+        "pin": pin,
+        "pin_count": len(pins),
+    }
 
 
 @tool
@@ -962,8 +1295,9 @@ def move_map_token(
     to_y: int = 0,
     to_x_cm: int | None = None,
     to_y_cm: int | None = None,
+    sensory_tns: dict[str, int] | None = None,
 ) -> dict[str, Any]:
-    """Move a token continuously to `(to_x_cm, to_y_cm)` (or cell `(to_x, to_y)` center) validating bounds, walls, and OBB obstacles."""
+    """Move a token continuously to `(to_x_cm, to_y_cm)` (or cell `(to_x, to_y)` center) validating bounds, walls, OBB obstacles, and passive sensory clue whispers."""
     map_state = get_session_map(session_id)
     if map_state is None:
         return {"error": f"No active tactical map for session '{session_id}'."}
@@ -983,13 +1317,14 @@ def move_map_token(
     ty_m = ty_cm / 100.0
     wall_edges = list(map_state.get("wall_edges") or [])
     props = list(map_state.get("props") or [])
+    rust_map_json = _build_rust_map_json(map_state)
 
     py_checked = False
     if using_satya_py_map_backend():
         try:
             collides = bool(
                 _SATYA_PY.check_tactical_token_collision(
-                    json.dumps(map_state), tx_m, ty_m, _TOKEN_RADIUS_M
+                    rust_map_json, tx_m, ty_m, _TOKEN_RADIUS_M
                 )
             )
             py_checked = True
@@ -1023,8 +1358,9 @@ def move_map_token(
     ty_cell = max(0, min(grid_h - 1, ty_cm // 100))
     tokens = [normalize_token(t) for t in map_state.get("tokens", [])]
     found = False
+    moved_entity_id = token_id
     for tok in tokens:
-        if tok.get("token_id") == token_id or str(tok.get("label", "")).lower() == token_id.lower():
+        if tok.get("token_id") == token_id or tok.get("entity_id") == token_id or str(tok.get("label", "")).lower() == token_id.lower():
             old_x_cm = int(tok.get("pos_x_cm", tx_cm))
             old_y_cm = int(tok.get("pos_y_cm", ty_cm))
             if (old_x_cm, old_y_cm) != (tx_cm, ty_cm):
@@ -1035,6 +1371,7 @@ def move_map_token(
             tok["grid_y"] = ty_cell
             tok["x"] = tx_cell
             tok["y"] = ty_cell
+            moved_entity_id = str(tok.get("entity_id") or tok.get("token_id") or token_id)
             found = True
             break
 
@@ -1043,6 +1380,7 @@ def move_map_token(
             normalize_token(
                 {
                     "token_id": token_id,
+                    "entity_id": token_id,
                     "label": token_id,
                     "pos_x_cm": tx_cm,
                     "pos_y_cm": ty_cm,
@@ -1069,8 +1407,53 @@ def move_map_token(
             pass
 
     updated = dict(map_state)
+    updated.pop("passive_whispers", None)
     updated["event_type"] = "TOKEN_MOVED"
     updated["tokens"] = tokens
+
+    pins = list(_SESSION_SPATIAL_PINS.get(session_id) or [])
+    if _SATYA_PY is not None and hasattr(_SATYA_PY, "evaluate_passive_movement_perceptions_json"):
+        try:
+            from satya_ml.ai_gm.hooks import normalize_character_sheet_record
+            from satya_ml.ai_gm.tools import get_session_characters
+
+            raw_chars = get_session_characters(session_id)
+            observers = [normalize_character_sheet_record(c, i) for i, c in enumerate(raw_chars)]
+            if sensory_tns:
+                matched_obs = next((o for o in observers if o["character_id"] == moved_entity_id), None)
+                if matched_obs is None:
+                    matched_obs = normalize_character_sheet_record({"character_id": moved_entity_id, "character_name": moved_entity_id})
+                    observers.append(matched_obs)
+                for sk, sv in sensory_tns.items():
+                    sk_low = str(sk).lower()
+                    if sk_low in matched_obs["characteristics"] and isinstance(sv, (int, float)):
+                        matched_obs["characteristics"][sk_low] = int(sv)
+
+            updated_rust_json = _build_rust_map_json(updated)
+            pins_json = json.dumps(pins) if pins else None
+            try:
+                raw_whispers = _SATYA_PY.evaluate_passive_movement_perceptions_json(
+                    updated_rust_json, moved_entity_id, json.dumps(observers), pins_json
+                )
+            except Exception:
+                raw_whispers = _SATYA_PY.evaluate_passive_movement_perceptions_json(
+                    updated_rust_json, moved_entity_id, "[]", pins_json
+                )
+            whispers = json.loads(raw_whispers)
+            if isinstance(whispers, list) and whispers:
+                updated["passive_whispers"] = whispers
+                triggered_ids = {str(w.get("pin_id")): str(w.get("observer_id")) for w in whispers}
+                for pin in _SESSION_SPATIAL_PINS.get(session_id, []):
+                    pid = str(pin.get("pin_id"))
+                    if pid in triggered_ids and pin.get("one_shot", True):
+                        obs_id = triggered_ids[pid]
+                        rev = list(pin.get("revealed_to") or [])
+                        if obs_id not in rev:
+                            rev.append(obs_id)
+                            pin["revealed_to"] = rev
+        except Exception:
+            pass
+
     set_session_map(session_id, updated)
     _sync_map_with_signaling(session_id, updated)
     return updated
@@ -1078,7 +1461,7 @@ def move_map_token(
 
 @tool
 def inspect_tactical_map(session_id: str, question: str) -> str:
-    """Inspect the active continuous tactical map geometry, token positions, metric distances, cover `Δ_ext`, and optional VLM analysis."""
+    """Inspect the active continuous tactical map geometry, floors, zones, exits, token positions, metric distances, cover `Δ_ext`, and optional VLM analysis."""
     map_state = get_session_map(session_id)
     if map_state is None:
         return f"No active tactical map for session '{session_id}'."
@@ -1116,11 +1499,27 @@ def inspect_tactical_map(session_id: str, question: str) -> str:
                 f"{t1.get('label', t1.get('token_id'))} <-> {t2.get('label', t2.get('token_id'))}: {dist_m}m{los_tag}"
             )
 
+    manifest = dict(map_state.get("narrative_manifest") or {})
+    if not manifest:
+        manifest = _extract_narrative_manifest(map_state)
+    floor_count = len(map_state.get("floors") or [])
+    active_floor = int(map_state.get("active_floor", 0))
+    sector_count = len(map_state.get("world_sectors") or [])
+    extra_lines: list[str] = []
+    if floor_count > 1 or sector_count > 1:
+        extra_lines.append(
+            f"Floors: active={active_floor} (total={max(1, floor_count)}) | Linked World Sectors: {max(1, sector_count)}"
+        )
+    if manifest.get("concise_brief"):
+        extra_lines.append(f"Narrative Manifest: {manifest['concise_brief']}")
+    extra_block = ("\n" + "\n".join(extra_lines)) if extra_lines else ""
+
     geometric_summary = (
         f"Map '{map_state.get('map_id')}' ({width}m x {height}m continuous vector, preset={preset}, url={map_state.get('image_url', map_state.get('map_image_url'))}):\n"
         f"Walls: {len(wall_edges)} edges. Tactical props: {', '.join(prop_notes)}.\n"
         f"Tokens:\n" + "\n".join(token_summaries) + "\n"
-        f"Pairwise Distances & Line of Sight: {', '.join(pairwise) if pairwise else 'N/A'}\n"
+        f"Pairwise Distances & Line of Sight: {', '.join(pairwise) if pairwise else 'N/A'}"
+        f"{extra_block}\n"
         f"Query context: {question}"
     )
 
@@ -1162,18 +1561,19 @@ def ensure_or_sync_procedural_tactical_map_stub(
     """
     existing = get_session_map(session_id)
     raw_combatants = list(combatants or [])
+    hostile_zone, player_zone = get_pack_zone_labels()
     if existing is None:
         initial_tokens: list[dict[str, Any]] = []
         for idx, c in enumerate(raw_combatants):
             role_str = str(c.get("role_or_faction") or "").lower()
-            is_hostile = "npc" in role_str or "hostile" in role_str or "enemy" in role_str
+            is_hostile = bool(c.get("is_npc")) or "npc" in role_str or "hostile" in role_str or "enemy" in role_str
             default_x = 12 - (idx % 3) * 2 if is_hostile else 3 + (idx % 3) * 2
             default_y = 5 + (idx // 3) * 2
             gx = max(1, min(14, int(c.get("grid_x") if c.get("grid_x") is not None else default_x)))
-            gy = max(1, min(10, int(c.get("grid_y") if c.get("grid_y") is not None else default_y)))
+            gy = max(1, min(14, int(c.get("grid_y") if c.get("grid_y") is not None else default_y)))
             px_cm = int(c.get("pos_x_cm") if c.get("pos_x_cm") is not None else gx * 100 + 50)
             py_cm = int(c.get("pos_y_cm") if c.get("pos_y_cm") is not None else gy * 100 + 50)
-            zone = str(c.get("zone_label") or ("Entry Bulkhead" if is_hostile else "Core Sector"))
+            zone = str(c.get("zone_label") or (hostile_zone if is_hostile else player_zone))
             initial_tokens.append(
                 {
                     "token_id": str(c.get("entity_id") or f"comb-{idx}"),
@@ -1193,7 +1593,7 @@ def ensure_or_sync_procedural_tactical_map_stub(
                     "session_id": session_id,
                     "theme": theme,
                     "width": 16,
-                    "height": 12,
+                    "height": 16,
                     "initial_tokens": initial_tokens or None,
                 }
             )

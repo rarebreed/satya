@@ -503,6 +503,8 @@ pub fn format_gm_omnisearch_hits_html(resp: &GmOmnisearchResponse) -> String {
                 GmLookupSourceKind::CharacterSheet => "Character Sheet",
                 GmLookupSourceKind::CombatTracker => "Combat Tracker",
                 GmLookupSourceKind::TacticalMap => "Tactical Map",
+                GmLookupSourceKind::CampaignLore => "Campaign Lore",
+                GmLookupSourceKind::SessionNpc => "Session NPC",
             };
             let persist_pill = if h.is_persistent {
                 r#" <span class="pill pill-active">Persistent</span>"#

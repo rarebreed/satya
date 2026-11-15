@@ -646,6 +646,8 @@ pub enum GmLookupSourceKind {
     CharacterSheet,
     CombatTracker,
     TacticalMap,
+    CampaignLore,
+    SessionNpc,
 }
 
 /// Single ranked search or state lookup hit returned by `GET /api/sessions/:session_id/lookup`.

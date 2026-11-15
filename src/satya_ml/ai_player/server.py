@@ -22,6 +22,7 @@ from satya_ml.ai_gm.models import SessionLlmConfig, redact_api_key
 from satya_ml.ai_gm.telemetry import turn_telemetry_scope
 from satya_ml.ai_gm.tools import _gm_service_token, load_ai_gm_toml_config
 from satya_ml.ai_player.graph import build_ai_player_graph
+from satya_ml.campaign_config import get_pack_default_ai_player
 
 logger = logging.getLogger("satya_ml.ai_player.server")
 
@@ -54,7 +55,9 @@ class AiPlayerTurnEventPayload(BaseModel):
 
     session_id: str
     player_user_id: str = "ai-player-1"
-    player_display_name: str = "Kaelen Voss (AI Player)"
+    player_display_name: str = Field(
+        default_factory=lambda: f"{get_pack_default_ai_player().get('character_name', 'Mateo Vance')} (AI Player)"
+    )
     persona_prompt: str = ""
     character_sheet: dict[str, Any] | None = None
     combat_tracker: dict[str, Any] | None = None

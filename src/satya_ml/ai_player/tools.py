@@ -36,66 +36,26 @@ def _http_get_json(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
         return None
     return None
 
+from satya_ml.campaign_config import get_pack_default_ai_player
+
 try:
     import satya_py
 except ImportError:  # pragma: no cover
     satya_py = None  # type: ignore[assignment]
 
 
-_DEFAULT_AI_PLAYER_CHARACTER: dict[str, Any] = {
-    "character_id": "char-ai-kaelen-voss",
-    "character_name": "Kaelen Voss",
-    "callsign_or_role": "Recon & Electronic Warfare Specialist",
-    "archetype": "Void-Recon Scout",
-    "faction": "Free Horizon Flotilla",
-    "characteristics": {
-        "for_stat": 11,
-        "end": 12,
-        "agi": 14,
-        "dex": 15,
-        "per": 14,
-        "int_stat": 13,
-        "wil": 13,
-        "cha": 10,
-    },
-    "attribute_tns": {
-        "STR": 11,
-        "DEX": 15,
-        "INT": 13,
-        "WIL": 13,
-    },
-    "skills": {
-        "small_arms": 3,
-        "stealth_infiltration": 3,
-        "sensor_operations": 2,
-        "close_combat": 2,
-        "athletics": 2,
-    },
-    "psyche_traits": {
-        "altruism_egoism": 1,
-        "conformity_rebellion": -2,
-        "trust_suspicion": -1,
-        "idealism_cynicism": 0,
-        "compassion_ruthlessness": 1,
-        "caution_audacity": 2,
-        "calm_volatility": -1,
-    },
-    "combat_stance": "NEUTRAL",
-    "fatigue_level": 0,
-    "wound_shock_index": 0.0,
-    "loadout": [
-        "VX-9 Suppressed Flechette Carbine",
-        "Light Recon Void-Suit (Guard +1)",
-        "Multi-Spectrum Signal Splicer",
-    ],
-    "biography": (
-        "Former deep-space telemetry scout who relies on high OODA initiative, "
-        "covert sensor sweeps, and disciplined Tempo/Control fire."
-    ),
-}
-
 # Strict player-scoped context cache keyed by `f"{session_id}:{player_user_id}"`
 _PLAYER_CONTEXT_CACHE: dict[str, dict[str, Any]] = {}
+
+
+def reset_player_session_context(session_id: str | None = None) -> None:
+    """Clear cached player-visible session contexts for `session_id` (or all sessions)."""
+    if session_id is None:
+        _PLAYER_CONTEXT_CACHE.clear()
+        return
+    prefix = f"{session_id.strip() or 'default'}:"
+    for key in [k for k in _PLAYER_CONTEXT_CACHE if k.startswith(prefix)]:
+        _PLAYER_CONTEXT_CACHE.pop(key, None)
 
 
 def _player_cache_key(session_id: str, player_user_id: str) -> str:
@@ -129,7 +89,7 @@ def sanitize_player_visible_context(raw_ctx: dict[str, Any], player_user_id: str
             own_char = dict(bound_chars[0])
     if own_char is None:
         own_char = {
-            **_DEFAULT_AI_PLAYER_CHARACTER,
+            **get_pack_default_ai_player(),
             "owner_user_id": player_user_id,
         }
 
@@ -183,13 +143,14 @@ def sanitize_player_visible_context(raw_ctx: dict[str, Any], player_user_id: str
         "combatants": [],
     })
 
+    default_name = str(get_pack_default_ai_player().get("character_name") or "Mateo Vance")
     return {
         "session_id": str(raw_ctx.get("session_id") or "default"),
         "player_user_id": player_user_id,
         "player_display_name": str(
             raw_ctx.get("player_display_name")
             or own_char.get("character_name")
-            or "Kaelen Voss (AI Player)"
+            or f"{default_name} (AI Player)"
         ),
         "persona_prompt": str(raw_ctx.get("persona_prompt") or ""),
         "roster": roster,
@@ -248,7 +209,7 @@ def read_my_character_sheet(
 ) -> dict[str, Any]:
     """Read your own bound Satya character sheet, Attribute TNs, Skill ranks, 7 Bipolar Psyche traits, Loadout, and Tactical Pool Envelope (`P_eff`, Neutral `B`, `T_max/C_max/F_max`)."""
     ctx = get_player_session_context(session_id, player_user_id)
-    sheet = dict(ctx.get("character_sheet") or _DEFAULT_AI_PLAYER_CHARACTER)
+    sheet = dict(ctx.get("character_sheet") or get_pack_default_ai_player())
     envelope = compute_character_tactical_envelope(sheet)
     return {
         "session_id": session_id,
@@ -289,12 +250,14 @@ def roll_player_d20_action(
 ) -> dict[str, Any]:
     """Execute an authoritative Satya Two-List Cascading (`2d20`) skill check or Combat Technique + `Tempo / Control / Force` (`T/C/F`) roll as your Player Character."""
     ctx = get_player_session_context(session_id, player_user_id)
-    sheet = dict(ctx.get("character_sheet") or _DEFAULT_AI_PLAYER_CHARACTER)
+    default_sheet = get_pack_default_ai_player()
+    sheet = dict(ctx.get("character_sheet") or default_sheet)
     env = compute_character_tactical_envelope(sheet)
     display_name = str(
         ctx.get("player_display_name")
         or sheet.get("character_name")
-        or "Kaelen Voss"
+        or default_sheet.get("character_name")
+        or "Mateo Vance"
     )
 
     tech_clean = combat_technique.strip().lower()
@@ -400,7 +363,8 @@ def send_player_chat(
 ) -> dict[str, Any]:
     """Send an `IN_CHARACTER` action/dialogue message, `OUT_OF_CHARACTER` question, or `GM_ONLY` whisper as the AI Player."""
     ctx = get_player_session_context(session_id, player_user_id)
-    display_name = str(ctx.get("player_display_name") or "Kaelen Voss (AI Player)")
+    default_name = str(get_pack_default_ai_player().get("character_name") or "Mateo Vance")
+    display_name = str(ctx.get("player_display_name") or f"{default_name} (AI Player)")
     payload = {
         "user_id": player_user_id,
         "display_name": display_name,

@@ -14,7 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import fastavro
 import lance
+import pytest
 
+from satya_ml.campaign_config import set_campaign_pack_override
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model, redact_api_key
 from satya_ml.ai_gm.tools import (
     advance_combat_tracker,
@@ -28,6 +30,7 @@ from satya_ml.ai_gm.tools import (
     query_campaign_lore,
     query_satya_rules,
     read_gm_documents,
+    reset_session_npcs,
     roll_satya_d20_check,
     search_gm_memory_and_docs,
     set_session_characters,
@@ -38,6 +41,18 @@ from satya_ml.ai_gm.tools import (
     upsert_gm_memory,
 )
 from satya_ml.inspect_avro import inspect_schemas
+
+
+@pytest.fixture
+def space_opera_pack() -> Any:
+    """Temporarily activate the optional `space_opera` pack for Space Opera regression tests."""
+    set_campaign_pack_override("space_opera")
+    reset_session_npcs()
+    try:
+        yield
+    finally:
+        set_campaign_pack_override(None)
+        reset_session_npcs()
 from satya_ml.lance_ingest import compact_topic_to_lance, read_avro_batch_with_metadata
 
 
@@ -238,7 +253,7 @@ def test_topics_7_to_9_avro_to_lance_compaction() -> None:
         shutil.rmtree(tmp_path, ignore_errors=True)
 
 
-def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
+def test_ai_gm_tools_npc_rules_map_and_byok_config(space_opera_pack: Any) -> None:
     """Verify AI GM tools (NPC lookup/update, rules/lore query, SVG map generation, token bounds, BYOK redaction)."""
     cfg = SessionLlmConfig(
         provider="google_genai",
@@ -431,7 +446,7 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config() -> None:
     assert "Former orbital trauma surgeon" in rag_out
 
 
-def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
+def test_ai_gm_langgraph_and_fastapi_bridge(space_opera_pack: Any) -> None:
     """Verify the 4-node LangGraph workflow and FastAPI `/internal/ai-gm/events` bridge in autonomous & co-pilot modes."""
     try:
         from fastapi import HTTPException
@@ -644,7 +659,8 @@ def test_ai_gm_langgraph_and_fastapi_bridge() -> None:
     assert terry_res["npc"]["callsign_or_role"] == "General MD & Clinical Physician"
     assert any("BLG 16" in s for s in terry_res["npc"]["psyche_summary"])
     assert any("SLF 5" in s for s in terry_res["npc"]["psyche_summary"])
-    assert any("clinical_diagnosis_internal_medicine" in s for s in terry_res["npc"]["top_skills"])
+    assert terry_res["npc"]["gm_character"]["skills"].get("clinical_diagnosis_internal_medicine", 0) >= 1
+    assert any("first_aid_bls_cpr" in s or "nursing_patient_care" in s for s in terry_res["npc"]["top_skills"])
     bound_terry = lookup_character_sheet.invoke(
         {"character_name_or_id": "Terry", "session_id": "npc-gen-session"}
     )

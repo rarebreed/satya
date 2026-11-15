@@ -162,6 +162,9 @@ pub struct AiGmConfig {
     pub vision_model: String,
     /// Default persona profile ID (e.g. `"harsh-reality-arbiter"`).
     pub persona_id: String,
+    /// Active campaign setting pack (`"awakened"` default, or `"space_opera"` legacy setting).
+    #[serde(default = "default_campaign_pack")]
+    pub campaign_pack: String,
     /// Default sampling temperature (`0.35`).
     #[serde(default = "default_ai_gm_temp")]
     pub temperature: f32,
@@ -213,6 +216,10 @@ fn default_ai_gm_request_timeout_secs() -> u64 {
     180
 }
 
+fn default_campaign_pack() -> String {
+    "awakened".to_string()
+}
+
 impl Default for AiGmConfig {
     fn default() -> Self {
         Self {
@@ -224,6 +231,7 @@ impl Default for AiGmConfig {
             reasoning_model: "qwen2.5:14b".to_string(),
             vision_model: "llama3.2-vision".to_string(),
             persona_id: "harsh-reality-arbiter".to_string(),
+            campaign_pack: default_campaign_pack(),
             temperature: 0.35,
             connect_timeout_ms: default_ai_gm_connect_timeout_ms(),
             request_timeout_secs: default_ai_gm_request_timeout_secs(),

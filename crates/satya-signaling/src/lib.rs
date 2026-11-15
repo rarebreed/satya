@@ -11,6 +11,7 @@
 //! - [`ws`]: Full-duplex `/ws/session` WebSocket upgrade, real-time chat, WebRTC signaling relay, prosody telemetry, and TTRPG task resolution.
 
 pub mod auth;
+pub mod campaign_lore;
 pub mod characters;
 pub mod gm_api;
 pub mod gm_docs;
@@ -40,7 +41,7 @@ pub use ws::*;
 
 use axum::{
     Router,
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 use std::sync::Arc;
 
@@ -137,6 +138,10 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             post(generate_session_npc_handler),
         )
         .route(
+            "/api/sessions/:session_id/npcs/:character_id",
+            patch(update_session_npc_handler),
+        )
+        .route(
             "/api/gm/sessions/:session_id/context",
             get(gm_session_context_handler),
         )
@@ -159,6 +164,10 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route(
             "/api/gm/sessions/:session_id/npcs/generate",
             post(generate_session_npc_handler),
+        )
+        .route(
+            "/api/gm/sessions/:session_id/npcs/:character_id",
+            patch(update_session_npc_handler),
         )
         .route(
             "/api/gm/sessions/:session_id/chat",

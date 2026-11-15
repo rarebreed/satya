@@ -1290,12 +1290,26 @@ pub async fn gm_omnisearch_lookup_handler(
         Err(err_resp) => return err_resp.into_response(),
     };
     let uid = user_opt.as_ref().map(|u| u.user_id.as_str());
+    let is_gm_caller =
+        crate::npcs::can_caller_view_gm_secrets(&state, &session_id, user_opt.as_ref(), is_gm_service)
+            .await;
     match state
         .auth
         .search_session_gm_omnisearch(&session_id, uid, is_gm_service, &params.q, &params.scope)
         .await
     {
-        Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
+        Ok(mut resp) => {
+            crate::campaign_lore::append_omnisearch_lore_and_npc_hits(
+                &state,
+                &session_id,
+                is_gm_caller,
+                &params.q,
+                &params.scope,
+                &mut resp.hits,
+            )
+            .await;
+            (StatusCode::OK, Json(resp)).into_response()
+        }
         Err(e) => (
             StatusCode::FORBIDDEN,
             Json(json!({ "error": e.to_string() })),
