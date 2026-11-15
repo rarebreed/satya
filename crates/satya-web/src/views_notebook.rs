@@ -511,6 +511,7 @@ fn NotebookModelAndCharacterPanes() -> impl IntoView {
                             <option value="mateo_vance">"Mateo Vance (Syndicate Enforcer)"</option>
                             <option value="priya_nair">"Dr. Priya Nair (AI & Robotics Lead)"</option>
                             <option value="amara_okafor">"Amara Okafor (Frontier Recon Ranger)"</option>
+                            <option value="linnea_cho">"Linnea Cho (Satyang Ethicist & Mediator)"</option>
                             <option value="custom_wizard">"Custom Character (From Character Wizard)"</option>
                         </select>
                     </label>

@@ -58,6 +58,7 @@ pub(crate) fn resolve_markdown_link_chapter_id(url: &str) -> Option<&'static str
         "skills_and_trees.md" | "skill-design.md" => Some("skills_and_trees"),
         "skills_trees_tactical_and_social.md" => Some("skills_trees_tactical_and_social"),
         "lifepaths_and_economy.md" => Some("lifepaths_and_economy"),
+        "lifepath_events_hobbies_and_factions.md" => Some("lifepath_events_hobbies_and_factions"),
         "psyche_morale_and_social_combat.md"
         | "social_interactions.md"
         | "psyche_and_social.md" => Some("psyche_and_social"),

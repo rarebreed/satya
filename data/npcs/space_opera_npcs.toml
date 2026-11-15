@@ -12,7 +12,7 @@ fatigue = 1
 wound_shock = 0
 attribute_tns = { STR = 13, DEX = 12, INT = 11, WIL = 10 }
 skills = { astrogation = 3, command = 3, tactics = 2 }
-psyche = { opn = 12, slf = 8, blg = 14, agg = 12, ego = 13, cnf = 14, ext = 10 }
+psyche = { opn = 12, slf = 8, blg = 14, agg = 12, ego = 13, cnf = 14, ext = 10, trs = 8, cps = 13 }
 public_summary = "Veteran fleet officer in scorched pressure-weave fatigues holding the bridge access locker."
 notes = "Commands the orbital relay station over Aethelgard Sector 4."
 secrets = [
@@ -33,7 +33,7 @@ fatigue = 0
 wound_shock = 0
 attribute_tns = { STR = 11, DEX = 12, INT = 14, WIL = 13 }
 skills = { small_arms = 2, close_combat = 2, surveillance = 1 }
-psyche = { opn = 7, slf = 11, blg = 13, agg = 13, ego = 10, cnf = 15, ext = 8 }
+psyche = { opn = 7, slf = 11, blg = 13, agg = 13, ego = 10, cnf = 15, ext = 8, trs = 6, cps = 9 }
 public_summary = "Armored orbital security patrol standing guard beside the West Bulkhead lock."
 notes = "Patrols the Sector 4 Docking Bay airlocks."
 secrets = [
@@ -53,7 +53,7 @@ fatigue = 2
 wound_shock = 0
 attribute_tns = { STR = 15, DEX = 13, INT = 10, WIL = 11 }
 skills = { xenobiology = 3, sensor_analysis = 3, medicine = 2 }
-psyche = { opn = 16, slf = 12, blg = 7, agg = 6, ego = 14, cnf = 6, ext = 9 }
+psyche = { opn = 16, slf = 12, blg = 7, agg = 6, ego = 14, cnf = 6, ext = 9, trs = 9, cps = 12 }
 public_summary = "Harried science officer carrying a shielded telemetry slate."
 notes = "Investigating signal harmonics from the Aethelgard deep-core relay."
 secrets = [

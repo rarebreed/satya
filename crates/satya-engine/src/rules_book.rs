@@ -1,5 +1,5 @@
 //! Canonical Satya TTRPG Rules Book catalog and multi-chapter search engine
-//! (`docs/ttrpg/SUMMARY.md`, Parts I–VI, Chapters 1–17).
+//! (`docs/ttrpg/SUMMARY.md`, Parts I–VI, Chapters 1–18).
 
 use satya_schema::{
     RulesBookCatalogResponse, RulesChapterDocument, RulesChapterSummary, RulesSearchHit,
@@ -84,7 +84,7 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
         part: "Part III: Character Architecture, Skills, Lifepaths & Economy",
         title: "Characteristics, Senses, Psyche & Aptitudes",
         relative_path: "03-character/characteristics_and_aptitudes.md",
-        description: "Physical, Mental, Social, Sensory, and Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG) characteristics on the 1-20 Controlling Scale, derived metrics, and domain Aptitudes (A in [-2, +3]).",
+        description: "Physical, Mental, Social, Sensory, and 9 Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG, TRS, CPS) characteristics on the 1-20 Controlling Scale, derived metrics, and domain Aptitudes (A in [-2, +3]).",
         embedded_markdown: include_str!(
             "../../../docs/ttrpg/03-character/characteristics_and_aptitudes.md"
         ),
@@ -112,9 +112,19 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
         part: "Part III: Character Architecture, Skills, Lifepaths & Economy",
         title: "Lifepath Character Creation, Socioeconomic Upkeep & Heat",
         relative_path: "03-character/lifepaths_and_economy.md",
-        description: "Chronological Lifepath education & career progression (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
+        description: "Chronological Lifepath education & 14 career tracks (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
         embedded_markdown: include_str!(
             "../../../docs/ttrpg/03-character/lifepaths_and_economy.md"
+        ),
+    },
+    StaticChapterSpec {
+        chapter_id: "lifepath_events_hobbies_and_factions",
+        part: "Part III: Character Architecture, Skills, Lifepaths & Economy",
+        title: "Lifepath Hobbies, Formative Life Events, Faction Templates & Walkthroughs",
+        relative_path: "03-character/lifepath_events_hobbies_and_factions.md",
+        description: "12 Personal Hobbies/Clubs (Experience SP), 2d20 Formative Life Events Table, 5 Awakened Faction Psyche & Lifepath Templates (TRS/CPS), and 4 Worked Walkthroughs.",
+        embedded_markdown: include_str!(
+            "../../../docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md"
         ),
     },
     StaticChapterSpec {

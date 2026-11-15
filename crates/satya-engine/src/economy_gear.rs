@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 use crate::characteristics::{CharacterAptitudes, CharacterCharacteristics};
 use crate::define_coded_enum;
 use crate::lifepath_economy::{LifepathBaselineResult, LifepathBuildConfig};
+use crate::lifepath_hobbies_events::{
+    HOBBY_CLUB_DISCOUNT_MAX_LEVEL, HOBBY_CLUB_EXPERIENCE_DISCOUNT_MULTIPLIER, PersonalHobbyId,
+    is_hobby_club_discounted_skill,
+};
 use crate::skills_trees::{
     SkillStepCostBreakdown, SkillTrainingMode, compute_skill_step_sp_cost,
     validate_skill_advancement,
@@ -425,10 +429,56 @@ pub struct SkillAllocationSpLedger {
 ///   `Experience SP` (using [`SkillTrainingMode::Experience`]).
 /// - Non-career elective/hobby skills draw directly from `Experience SP` (using [`SkillTrainingMode::Experience`]),
 ///   or from `Formal SP` if `Experience SP` is exhausted.
+fn apply_hobby_club_sp_discount(
+    skill_id: &str,
+    target_level: usize,
+    training_mode: SkillTrainingMode,
+    hobbies: &[PersonalHobbyId],
+    mut bd: SkillStepCostBreakdown,
+) -> SkillStepCostBreakdown {
+    if training_mode == SkillTrainingMode::Experience
+        && target_level <= HOBBY_CLUB_DISCOUNT_MAX_LEVEL
+        && is_hobby_club_discounted_skill(skill_id, hobbies)
+    {
+        bd.training_mode_multiplier *= HOBBY_CLUB_EXPERIENCE_DISCOUNT_MULTIPLIER;
+        let raw_sp = (bd.base_level_sp as f64)
+            * bd.difficulty_multiplier
+            * bd.controller_multiplier
+            * bd.aptitude_multiplier
+            * bd.training_mode_multiplier;
+        bd.final_sp_cost = (raw_sp.round().max(3.0)) as usize;
+    }
+    bd
+}
+
+/// Computes the deterministic Skill Point (`SP`) expenditure ledger for a post-lifepath skill map
+/// relative to `baseline` using any hobbies recorded in `cfg` (`FormalTraining` vs `Experience`, `§1.7`).
 #[must_use]
 pub fn compute_skill_allocation_sp_ledger(
     baseline: &LifepathBaselineResult,
     cfg: &LifepathBuildConfig,
+    chars: &CharacterCharacteristics,
+    aptitudes: &CharacterAptitudes,
+    skills: &BTreeMap<String, usize>,
+) -> SkillAllocationSpLedger {
+    let hobbies = cfg.collected_hobbies();
+    compute_skill_allocation_sp_ledger_with_hobbies(
+        baseline,
+        cfg,
+        &hobbies,
+        chars,
+        aptitudes,
+        skills,
+    )
+}
+
+/// Computes the deterministic Skill Point (`SP`) expenditure ledger with an explicit slice of
+/// active [`PersonalHobbyId`] clubs (`-15%` Experience SP discount on signature skills `N <= 3`).
+#[must_use]
+pub fn compute_skill_allocation_sp_ledger_with_hobbies(
+    baseline: &LifepathBaselineResult,
+    cfg: &LifepathBuildConfig,
+    hobbies: &[PersonalHobbyId],
     chars: &CharacterCharacteristics,
     aptitudes: &CharacterAptitudes,
     skills: &BTreeMap<String, usize>,
@@ -462,24 +512,36 @@ pub fn compute_skill_allocation_sp_ledger(
                         formal_sp_spent += formal_cost;
                         sk_spent += formal_cost;
                     } else {
-                        let exp_cost = compute_skill_step_sp_cost(
+                        let exp_cost = apply_hobby_club_sp_discount(
                             sk_id,
                             step_n,
                             SkillTrainingMode::Experience,
-                            chars,
-                            aptitudes,
+                            hobbies,
+                            compute_skill_step_sp_cost(
+                                sk_id,
+                                step_n,
+                                SkillTrainingMode::Experience,
+                                chars,
+                                aptitudes,
+                            ),
                         )
                         .final_sp_cost;
                         experience_sp_spent += exp_cost;
                         sk_spent += exp_cost;
                     }
                 } else {
-                    let exp_cost = compute_skill_step_sp_cost(
+                    let exp_cost = apply_hobby_club_sp_discount(
                         sk_id,
                         step_n,
                         SkillTrainingMode::Experience,
-                        chars,
-                        aptitudes,
+                        hobbies,
+                        compute_skill_step_sp_cost(
+                            sk_id,
+                            step_n,
+                            SkillTrainingMode::Experience,
+                            chars,
+                            aptitudes,
+                        ),
                     )
                     .final_sp_cost;
                     if experience_sp_spent + exp_cost <= experience_sp_budget {
@@ -528,6 +590,29 @@ pub fn preview_next_skill_step_sp(
     chars: &CharacterCharacteristics,
     aptitudes: &CharacterAptitudes,
 ) -> (SkillStepCostBreakdown, bool) {
+    let hobbies = cfg.collected_hobbies();
+    preview_next_skill_step_sp_with_hobbies(
+        skill_id,
+        target_level,
+        cfg,
+        &hobbies,
+        ledger,
+        chars,
+        aptitudes,
+    )
+}
+
+/// Preview the [`SkillStepCostBreakdown`] with an explicit slice of active [`PersonalHobbyId`] clubs.
+#[must_use]
+pub fn preview_next_skill_step_sp_with_hobbies(
+    skill_id: &str,
+    target_level: usize,
+    cfg: &LifepathBuildConfig,
+    hobbies: &[PersonalHobbyId],
+    ledger: &SkillAllocationSpLedger,
+    chars: &CharacterCharacteristics,
+    aptitudes: &CharacterAptitudes,
+) -> (SkillStepCostBreakdown, bool) {
     if is_career_formal_skill(skill_id, cfg) {
         let formal_bd = compute_skill_step_sp_cost(
             skill_id,
@@ -539,24 +624,36 @@ pub fn preview_next_skill_step_sp(
         if formal_bd.final_sp_cost <= ledger.formal_sp_remaining {
             return (formal_bd, true);
         }
-        let exp_bd = compute_skill_step_sp_cost(
+        let exp_bd = apply_hobby_club_sp_discount(
             skill_id,
             target_level,
             SkillTrainingMode::Experience,
-            chars,
-            aptitudes,
+            hobbies,
+            compute_skill_step_sp_cost(
+                skill_id,
+                target_level,
+                SkillTrainingMode::Experience,
+                chars,
+                aptitudes,
+            ),
         );
         if exp_bd.final_sp_cost <= ledger.experience_sp_remaining {
             return (exp_bd, true);
         }
         (formal_bd, false)
     } else {
-        let exp_bd = compute_skill_step_sp_cost(
+        let exp_bd = apply_hobby_club_sp_discount(
             skill_id,
             target_level,
             SkillTrainingMode::Experience,
-            chars,
-            aptitudes,
+            hobbies,
+            compute_skill_step_sp_cost(
+                skill_id,
+                target_level,
+                SkillTrainingMode::Experience,
+                chars,
+                aptitudes,
+            ),
         );
         let affordable = exp_bd.final_sp_cost <= ledger.experience_sp_remaining
             || exp_bd.final_sp_cost <= ledger.formal_sp_remaining;
@@ -565,9 +662,9 @@ pub fn preview_next_skill_step_sp(
 }
 
 /// Automatically allocates available `career_skill_budget` (`Formal SP`) and `elective_skill_budget` (`Experience SP`)
-/// across the character's Career Track `recommended_skills()` and universal electives, strictly respecting all 4 canonical
-/// DAG gates (`validate_skill_advancement`), the 5-factor SP step cost, and `max_post_school_gain_per_skill`
-/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6–§1.7).
+/// across the character's Career Track `recommended_skills()`, hobby signature skills, and universal electives,
+/// strictly respecting all 4 canonical DAG gates (`validate_skill_advancement`), the 5-factor SP step cost,
+/// and `max_post_school_gain_per_skill` (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.6–§1.7).
 pub fn auto_allocate_career_and_elective_skills(
     baseline: &LifepathBaselineResult,
     cfg: &LifepathBuildConfig,
@@ -582,9 +679,17 @@ pub fn auto_allocate_career_and_elective_skills(
         }
     }
 
+    let hobbies = cfg.collected_hobbies();
     let mut all_candidates: Vec<&'static str> = Vec::new();
     for term in cfg.career_terms.iter().take(4) {
         for &sk_id in term.track.recommended_skills() {
+            if !all_candidates.contains(&sk_id) {
+                all_candidates.push(sk_id);
+            }
+        }
+    }
+    for &hobby in &hobbies {
+        for &sk_id in hobby.spec().signature_skill_ids {
             if !all_candidates.contains(&sk_id) {
                 all_candidates.push(sk_id);
             }
@@ -758,12 +863,14 @@ mod tests {
                     term_roll_pairs: [(14, 12), (13, 11)],
                     override_successes: Some(2),
                     waiver_override: false,
+                    ..Default::default()
                 },
                 CareerTermConfig {
                     track: CareerTermTrack::MilitaryCombatArmsSpecOps,
                     term_roll_pairs: [(13, 10), (12, 9)],
                     override_successes: Some(1),
                     waiver_override: false,
+                    ..Default::default()
                 },
             ],
             ..Default::default()

@@ -1,5 +1,5 @@
 //! Canonical Character Sheet, Multimodal Asset, Anti-Cheat Provenance, and Avro Event types
-//! (`com.satya.events.CharacterSheetEvent`, `schema_id = 11`, topic `character-sheets`).
+//! (`com.satya.events.CharacterSheetEvent`, `schema_id = 11` v1 / `schema_id = 12` v2, topic `character-sheets`).
 
 use crate::types::{EventMetadata, Participant};
 use serde::{Deserialize, Serialize};
@@ -97,7 +97,8 @@ impl CharacterVerificationStatus {
     }
 }
 
-/// Serializable 30-characteristic profile (`1..=20` scale, plus `hgt_m` and `mas_kg`) stored inside [`CharacterSheetRecord`].
+/// Serializable 32-characteristic profile (`1..=20` scale including `trs` & `cps`, plus `hgt_m` and `mas_kg`)
+/// stored inside [`CharacterSheetRecord`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CharacterCharacteristicsRecord {
     pub spd: i32,
@@ -130,6 +131,16 @@ pub struct CharacterCharacteristicsRecord {
     pub ext: i32,
     pub cnf: i32,
     pub agg: i32,
+    /// Trust (`1..=20`, equilibrium `10`: Zero-Trust/Suspicious vs. Open-Handed/Trusting).
+    #[serde(default = "default_ten")]
+    pub trs: i32,
+    /// Compassion (`1..=20`, equilibrium `10`: Utilitarian/Ruthless vs. Merciful/Pacifistic).
+    #[serde(default = "default_ten")]
+    pub cps: i32,
+}
+
+fn default_ten() -> i32 {
+    10
 }
 
 impl Default for CharacterCharacteristicsRecord {
@@ -165,6 +176,8 @@ impl Default for CharacterCharacteristicsRecord {
             ext: 10,
             cnf: 10,
             agg: 10,
+            trs: 10,
+            cps: 10,
         }
     }
 }
@@ -243,6 +256,12 @@ pub struct CharacterSheetRecord {
     pub server_signature_hex: Option<String>,
     #[serde(default)]
     pub updated_at_us: i64,
+    /// Optional canonical faction identifier (e.g., `"SATYANG"`, `"BIG_TECH"`, `"HUMANIS_PRIMARIS"`, `"GOVERNMENT_DAISE"`, `"ROGUE_AI"`).
+    #[serde(default)]
+    pub faction_id: Option<String>,
+    /// Optional canonical faction sub-archetype code (e.g., `"SATYANG_MANJUSRI"`, `"BIG_TECH_EXECUTIVE_HAWK"`).
+    #[serde(default)]
+    pub faction_archetype: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -291,11 +310,13 @@ impl Default for CharacterSheetRecord {
             content_sha256: String::new(),
             server_signature_hex: None,
             updated_at_us: 0,
+            faction_id: None,
+            faction_archetype: None,
         }
     }
 }
 
-/// Avro event (`schema_id = 11`) emitted to the `character-sheets` topic on every character create,
+/// Avro event (`schema_id = 11` v1 / `schema_id = 12` v2) emitted to the `character-sheets` topic on every character create,
 /// update, export, import, session bind, and multimodal asset upload.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CharacterSheetEvent {

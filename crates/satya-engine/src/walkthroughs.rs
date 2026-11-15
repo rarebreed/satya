@@ -37,6 +37,8 @@ pub fn build_mateo_vance_lifepath() -> LifepathCharacterProfile {
         itu: 13,
         pre: 12,
         elo: 10,
+        trs: 5,
+        cps: 12,
         ..Default::default()
     };
     let mut aptitudes = CharacterAptitudes::default();
@@ -107,6 +109,8 @@ pub fn build_priya_nair_lifepath() -> LifepathCharacterProfile {
         kin: 9,
         elo: 12,
         pre: 11,
+        trs: 11,
+        cps: 14,
         ..Default::default()
     };
     let mut aptitudes = CharacterAptitudes::default();
@@ -171,6 +175,8 @@ pub fn build_amara_okafor_lifepath() -> LifepathCharacterProfile {
         dis: 12,
         mem: 12,
         ana: 10,
+        trs: 7,
+        cps: 15,
         ..Default::default()
     };
     let mut aptitudes = CharacterAptitudes::default();
@@ -225,3 +231,87 @@ pub fn build_amara_okafor_lifepath() -> LifepathCharacterProfile {
 
     amara
 }
+
+/// Build the canonical walkthrough profile for **Linnea Cho — Ex-*Altruist* Ethicist Turned *Satyang* (*Manjusri / Avalokitesvara*)**
+/// (`docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md` §4.4).
+#[must_use]
+pub fn build_linnea_cho_lifepath() -> LifepathCharacterProfile {
+    let chars = CharacterCharacteristics {
+        mem: 14,
+        ana: 13,
+        ins: 15,
+        cre: 12,
+        dis: 13,
+        foc: 13,
+        com: 11,
+        pre: 12,
+        elo: 15,
+        itu: 14,
+        ego: 8,
+        slf: 5,
+        opn: 16,
+        blg: 12,
+        ext: 11,
+        cnf: 6,
+        agg: 5,
+        trs: 12,
+        cps: 17,
+        ..Default::default()
+    };
+    let mut aptitudes = CharacterAptitudes::default();
+    aptitudes[AptitudeCode::AptLng] = 2;
+    aptitudes[AptitudeCode::AptSoc] = 2;
+    aptitudes[AptitudeCode::AptCmp] = 1;
+
+    let mut linnea = LifepathCharacterProfile::new_with_stage2_baseline(
+        "Linnea Cho",
+        30,
+        "empathy_social_perception",
+        chars,
+        aptitudes,
+    );
+    linnea
+        .granted_access_tags
+        .push(SkillAccessTier::VocationalLicensed);
+    linnea.age_years = 29;
+    linnea.campaign_sqm = 6;
+    linnea.operational_heat = 1;
+
+    insert_skill_ranks(
+        &mut linnea.skills,
+        &[
+            ("reading_comprehension", 3),
+            ("writing_composition", 3),
+            ("arithmetic", 2),
+            ("elementary_algebra_geometry", 2),
+            ("statistics_probability", 2),
+            ("digital_ai_literacy", 2),
+            ("programming_scripting", 2),
+            ("cybersecurity_network_intrusion", 2),
+            ("persuasion_fast_talk", 3),
+            ("rhetoric_oratory_debate", 3),
+            ("history_political_science", 2),
+            ("philosophy_formal_logic_ethics", 3),
+            ("foreign_language_specific", 2),
+            ("empathy_social_perception", 3),
+            ("psychology_behavioral_analysis_counseling", 2),
+            ("negotiation_diplomacy", 2),
+            ("first_aid_bls_cpr", 1),
+        ],
+    );
+    linnea.stage_history.push(
+        "Adolescence & College (2d20=7 Bereavement + Debate/TTRPG Club): Ethics & hospice inquiry (+1 CPS); Rhetoric N=3 & Writing N=3.".to_string(),
+    );
+    linnea.stage_history.push(
+        "Stage 5 Term 1 (Ages 18–22): University Humanities, Philosophy & Ethics (B.A.) + Contemplative Sangha Hobby.".to_string(),
+    );
+    linnea.stage_history.push(
+        "Stage 5 Term 2 (Ages 22–26): Altruist Character & Welfare Liaison — Whistleblower Crossroads (2d20=35): Blew the whistle on calm-vector clamping (+1 Heat, -2 CNF, +2 CPS -> 17).".to_string(),
+    );
+    linnea.stage_history.push(
+        "Stage 5 Term 3 (Ages 26–29): Grassroots Organizing & Citizen OSINT (Satyang Manjusri / Avalokitesvara bridge — Empathy N=3, Negotiation N=2, Cybersecurity N=2).".to_string(),
+    );
+
+    linnea
+}
+

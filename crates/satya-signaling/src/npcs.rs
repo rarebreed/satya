@@ -21,7 +21,7 @@ use axum::{
 };
 use chrono::Utc;
 use satya_engine::{
-    NpcGenerationParams, NpcTemplateKind, generate_npc_from_prompt_with_pack,
+    FactionArchetypeId, NpcGenerationParams, NpcTemplateKind, generate_npc_from_prompt_with_pack,
 };
 use satya_schema::{
     CharacterSheetRecord, GenerateNpcRequest, GenerateNpcResponse, GmMemoryCategory,
@@ -203,11 +203,18 @@ pub async fn generate_session_npc_handler(
         .map(|u| u.display_name.clone())
         .unwrap_or_else(|| "Satya AI GM".to_string());
 
-    let template = req
+    let faction_archetype = req
         .template
         .as_deref()
-        .and_then(NpcTemplateKind::from_code_str)
-        .unwrap_or(NpcTemplateKind::Auto);
+        .and_then(FactionArchetypeId::from_code_str);
+    let template = if faction_archetype.is_some() {
+        NpcTemplateKind::Auto
+    } else {
+        req.template
+            .as_deref()
+            .and_then(NpcTemplateKind::from_code_str)
+            .unwrap_or(NpcTemplateKind::Auto)
+    };
 
     let seed = if req.seed != 0 {
         req.seed
@@ -226,6 +233,7 @@ pub async fn generate_session_npc_handler(
             prompt: req.prompt.clone(),
             name_override: req.name_override.clone(),
             template,
+            faction_archetype,
             career_terms: req.career_terms.clamp(1, 4),
             seed,
             owner_user_id: owner_uid.clone(),
@@ -239,7 +247,9 @@ pub async fn generate_session_npc_handler(
 
     let disposition = if character.characteristics.agg >= 14 {
         "guarded".to_string()
-    } else if character.characteristics.slf <= 7 {
+    } else if character.characteristics.trs <= 4 && character.characteristics.cps <= 6 {
+        "suspicious".to_string()
+    } else if character.characteristics.cps >= 14 || character.characteristics.slf <= 7 {
         "compassionate".to_string()
     } else {
         "wary".to_string()

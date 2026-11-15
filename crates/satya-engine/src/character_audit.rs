@@ -53,6 +53,8 @@ pub fn characteristics_to_record(c: &CharacterCharacteristics) -> CharacterChara
         ext: c.ext,
         cnf: c.cnf,
         agg: c.agg,
+        trs: c.trs,
+        cps: c.cps,
     }
 }
 
@@ -90,6 +92,8 @@ pub fn characteristics_from_record(r: &CharacterCharacteristicsRecord) -> Charac
         ext: r.ext.clamp(1, 20),
         cnf: r.cnf.clamp(1, 20),
         agg: r.agg.clamp(1, 20),
+        trs: r.trs.clamp(1, 20),
+        cps: r.cps.clamp(1, 20),
     }
 }
 
@@ -130,7 +134,7 @@ pub fn aptitudes_from_record(r: &CharacterAptitudesRecord) -> CharacterAptitudes
 pub struct CharacterAuditReport {
     /// Whether the character passes all characteristic, aptitude, DAG prerequisite, and SP budget checks.
     pub is_legal: bool,
-    /// Whether all 28 scaled characteristics are in `1..=20` and height/mass/aptitudes are in range.
+    /// Whether all 30 scaled characteristics are in `1..=20` and height/mass/aptitudes are in range.
     pub characteristics_valid: bool,
     /// Whether all trained skills satisfy `[Access]`, `Min C`, parent prerequisite, and Foundation Ceiling gates.
     pub dag_prereqs_valid: bool,
@@ -149,7 +153,7 @@ pub struct CharacterAuditReport {
 }
 
 /// Deterministically audits a [`CharacterSheetRecord`] against all Satya character creation and advancement rules:
-/// 1. All 28 scaled Characteristics in `1..=20`, `hgt_m` in `0.5..=3.0`, `mas_kg` in `20.0..=300.0`, and all 9 Domain Aptitudes in `-2..=+3`.
+/// 1. All 30 scaled Characteristics in `1..=20`, `hgt_m` in `0.5..=3.0`, `mas_kg` in `20.0..=300.0`, and all 9 Domain Aptitudes in `-2..=+3`.
 /// 2. All skill ranks in `0..=10` (`TAL` innate talents $\ge 1$) and valid canonical skill slugs.
 /// 3. All 4 canonical Skill Tree DAG gates (`[Access]`, `Min C`, Parent Prerequisite, and Foundation Ceiling $N_{\text{child}} \le N_{\text{parent}} + 2$).
 /// 4. If `lifepath_config_json` is provided, recomputes the Stage 1–5 lifepath baseline and 5-Factor SP Ledger and verifies
@@ -191,6 +195,8 @@ pub fn verify_character_sheet_legality(record: &CharacterSheetRecord) -> Charact
         (CharacteristicCode::EXT, c_rec.ext),
         (CharacteristicCode::CNF, c_rec.cnf),
         (CharacteristicCode::AGG, c_rec.agg),
+        (CharacteristicCode::TRS, c_rec.trs),
+        (CharacteristicCode::CPS, c_rec.cps),
     ];
     for (code, val) in raw_scaled {
         if !(1..=20).contains(&val) {

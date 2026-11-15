@@ -328,7 +328,7 @@ async fn emit_character_sheet_event(
     let meta = state.storage.registry().build_metadata(
         state.next_seq(),
         subjects::CHARACTER_SHEET,
-        1,
+        2,
         sid,
         SessionMode::Ttrpg,
     )?;
@@ -349,7 +349,7 @@ async fn emit_character_sheet_event(
     let framed = state
         .storage
         .registry()
-        .encode_framed(subjects::CHARACTER_SHEET, 1, &ev)?;
+        .encode_framed(subjects::CHARACTER_SHEET, 2, &ev)?;
     state.storage.log_character_sheet(&ev).await?;
     Ok(framed)
 }

@@ -130,8 +130,8 @@ pub fn NotebookGmAndNpcPanes() -> impl IntoView {
                             "Terry — General MD & Clinical Physician (Age 26). Apparent demeanor: Terry is a kind general MD, but needs to feel like she belongs."
                         </div>
                         <div class="gm-doc-meta">
-                            <strong>"GM / Solo Only — 7 Bipolar Psyche Highlights:"</strong>
-                            " SLF 5 (Altruistic / Self-Sacrificing) · AGG 5 (Passive / Conflict-Averse / Gentle) · EGO 7 (Humble / Self-Effacing) · BLG 16 (Tribal / Group-Dependent) · OPN 14 (Curious / Open-Minded)"
+                            <strong>"GM / Solo Only — 9 Bipolar Psyche Highlights:"</strong>
+                            " SLF 5 (Altruistic / Self-Sacrificing) · AGG 5 (Passive / Conflict-Averse / Gentle) · EGO 7 (Humble / Self-Effacing) · BLG 16 (Tribal / Group-Dependent) · OPN 14 (Curious / Open-Minded) · TRS 11 (Trusting) · CPS 16 (Empathetic)"
                         </div>
                     </div>
                 </div>
@@ -160,6 +160,17 @@ pub fn NotebookGmAndNpcPanes() -> impl IntoView {
                                 .copied()
                                 .map(|(code, label)| view! { <option value=code>{label}</option> })
                                 .collect_view()}
+                            <optgroup label="Awakened Campaign Faction Archetypes">
+                                {satya_engine::FactionArchetypeId::ALL
+                                    .iter()
+                                    .copied()
+                                    .map(|arch| {
+                                        view! {
+                                            <option value=arch.as_str()>{arch.label()}</option>
+                                        }
+                                    })
+                                    .collect_view()}
+                            </optgroup>
                         </select>
                     </label>
                     <label>

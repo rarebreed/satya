@@ -57,10 +57,10 @@ from satya_ml.lance_ingest import compact_topic_to_lance, read_avro_batch_with_m
 
 
 def test_all_versioned_avro_schemas_parse_with_fastavro() -> None:
-    """Verify all 11 .avsc schemas under schemas/v1 and schemas/v2 parse cleanly with fastavro."""
+    """Verify all 12 .avsc schemas under schemas/v1 and schemas/v2 parse cleanly with fastavro."""
     repo_root = Path(__file__).resolve().parent.parent
     avsc_files = sorted((repo_root / "schemas").glob("v*/*.avsc"))
-    assert len(avsc_files) == 11
+    assert len(avsc_files) == 12
 
     for avsc_path in avsc_files:
         raw = json.loads(avsc_path.read_text(encoding="utf-8"))

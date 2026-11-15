@@ -369,7 +369,7 @@ pub(crate) fn format_height_mass_section_html(st: &CharacterWizardState) -> Stri
     )
 }
 
-/// Formats Step 2: Psyche Characteristics (`7` bipolar traits: `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`).
+/// Formats Step 2: Psyche Characteristics (`9` bipolar traits: `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`).
 pub(crate) fn format_psyche_step_html(st: &CharacterWizardState) -> String {
     let pool_html = if let Some(ref pool) = st.psyche_pool {
         let badges: String = pool
@@ -380,7 +380,7 @@ pub(crate) fn format_psyche_step_html(st: &CharacterWizardState) -> String {
             .join(" ");
         format!(
             r#"<div class="wiz-pool-readout">
-                <div class="wiz-raw-rolls-row"><span class="roster-title">Rolled Psyche Pool (7 × 2d4+2d5):</span> {badges}</div>
+                <div class="wiz-raw-rolls-row"><span class="roster-title">Rolled Psyche Pool (9 × 2d4+2d5):</span> {badges}</div>
             </div>"#
         )
     } else {
@@ -478,7 +478,7 @@ pub(crate) fn format_psyche_step_html(st: &CharacterWizardState) -> String {
     format!(
         r#"<fieldset class="wiz-fieldset">
             <legend class="wiz-legend">
-                <span>Step 2: Psyche Characteristics (The 7 Invisible Behavioral Traits)</span>
+                <span>Step 2: Psyche Characteristics (The 9 Invisible Behavioral Traits)</span>
                 <span class="pill pill-iggy">Roll 2d4 + 2d5 Randomly OR Choose Freely (1–20)</span>
             </legend>
             <div class="pane-toolbar">
@@ -489,7 +489,7 @@ pub(crate) fn format_psyche_step_html(st: &CharacterWizardState) -> String {
                         class="btn btn-sm btn-accent"
                         onclick="window.satyaWizardRollPsychePool()"
                     >
-                        "Roll 7 × (2d4 + 2d5) Pool"
+                        "Roll 9 × (2d4 + 2d5) Pool"
                     </button>
                     <button
                         type="button"

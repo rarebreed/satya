@@ -22,7 +22,7 @@
 //! - [`action_economy`] & [`action_catalog_stealth`]: Temporal calibration (`1 Tick = 0.25s`), OODA Loop &
 //!   Quick Thinking ($D_{\text{cog}}$), Count-Up Tick Clock, `CANONICAL_ACTION_CATALOG`, `action_time_factor`,
 //!   and Multi-Sensory Stealth & Detection (`docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md` §1–§6).
-//! - [`characteristics`]: All 30 Physical, Mental, Social, Sensory, and Psyche characteristics on the `1–20`
+//! - [`characteristics`]: All 32 Physical, Mental, Social, Sensory, and 9 Psyche characteristics on the `1–20`
 //!   Controlling Scale, 10 derived metrics (`POW`, `MMF`, `OODA`, `D_cog`, `AWR`, `FT`, `WSR`, `CMP`, `C_study`),
 //!   and 9 Domain Aptitudes ($A \in [-2, +3]$)
 //!   (`docs/ttrpg/03-character/characteristics_and_aptitudes.md` §1–§10).
@@ -30,10 +30,11 @@
 //!   the 8 Hierarchical Skill Trees (`CANONICAL_SKILL_TREES`), tree defaulting, and the 5-Factor Skill Point (`SP`)
 //!   step cost formula (`docs/ttrpg/03-character/skills_and_trees.md` §1–§3,
 //!   `docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7).
-//! - [`lifepath_economy`], [`lifepath_catalog`] & [`economy_gear`]: Chronological Lifepath creation (Stages 1–5),
-//!   School Quality (`SQM`), `DIS + Mental + APT` advancement rolls, Socioeconomic Upkeep (`SQM 1–10`),
+//! - [`lifepath_economy`], [`lifepath_catalog`], [`lifepath_hobbies_events`], [`faction_templates`], & [`economy_gear`]: Chronological Lifepath creation (Stages 1–5),
+//!   School Quality (`SQM`), `DIS + Mental + APT` advancement rolls, `12` Hobbies (`-15%` Experience SP club discount),
+//!   `12` `2d20` Formative Life Events, `5` *Awakened* Faction Blueprints (`14` Archetypes), Socioeconomic Upkeep (`SQM 1–10`),
 //!   Black-Market `[Access]` procurement, and Operational `Heat`
-//!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1–§3).
+//!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1–§3, `lifepath_events_hobbies_and_factions.md` §1–§3).
 //! - [`psyche_social`] & [`social_combat`]: Psyche Friction Checks, Long-Term Psyche Drift, Conviction Surges,
 //!   Combat Morale, Argument Vectors, Social Composure, and Cognitive Dissonance resolution
 //!   (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §1–§4).
@@ -54,8 +55,8 @@
 //!   [`map_outdoor_gen`], [`map_sector_gen`], [`map_gen_residential`], [`map_gen_commercial`], [`map_gen_zoning`], [`map_gen_civic_retail`], [`map_gen_agro_industrial`], [`map_world_graph`] & [`map_world_transitions`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, seamless edge-matched procedural continuation, multi-level floor stacks (`B1`/`1F`/`2F`), LoS/cover, hover inspection, thin
 //!   edge walls/doors/windows, multi-cell prop catalog with per-material ballistic penetration vs. concealment
 //!   grading, and dressed procedural sectors across all 25 presets.
-//! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor)
-//!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3).
+//! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor, Linnea Cho)
+//!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3, `lifepath_events_hobbies_and_factions.md` §4).
 
 pub mod action_catalog_stealth;
 pub mod action_economy;
@@ -71,10 +72,12 @@ pub mod dice_probabilities;
 pub mod economy_gear;
 pub mod environment_vehicles;
 pub mod environmental_hazards;
+pub mod faction_templates;
 pub mod health_survival;
 pub mod hook_weaver;
 pub mod lifepath_catalog;
 pub mod lifepath_economy;
+pub mod lifepath_hobbies_events;
 pub mod map_continuation;
 pub mod map_continuation_ribbons;
 pub mod map_dressing;
@@ -124,9 +127,11 @@ pub use dice_pools::{
     SARLE_BIMODAL_THRESHOLD, try_median_gated_bimodal_pmf, try_order_statistic_pmf,
 };
 pub use dice_probabilities::*;
+pub use faction_templates::*;
 pub use health_survival::*;
 pub use hook_weaver::*;
 pub use lifepath_economy::*;
+pub use lifepath_hobbies_events::*;
 pub use map_dressing::*;
 pub use map_narrative_manifest::*;
 pub use map_surface_geom::*;
@@ -145,5 +150,7 @@ mod tests;
 mod tests_domain;
 #[cfg(test)]
 mod tests_map_world;
+#[cfg(test)]
+mod tests_phase2;
 #[cfg(test)]
 mod tests_tactical_map;

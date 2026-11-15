@@ -1,7 +1,7 @@
 {
   "book_title": "Satya: A Grounded Tabletop Role-Playing System",
   "using_satya_py": true,
-  "chapter_count": 17,
+  "chapter_count": 18,
   "chapters": [
     {
       "chapter_id": "design_philosophy",
@@ -154,7 +154,7 @@
       "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
       "title": "Characteristics, Senses, Psyche & Aptitudes",
       "relative_path": "03-character/characteristics_and_aptitudes.md",
-      "description": "Physical, Mental, Social, Sensory, and Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG) characteristics on the 1-20 Controlling Scale, derived metrics, and domain Aptitudes (A in [-2, +3]).",
+      "description": "Physical, Mental, Social, Sensory, and 9 Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG, TRS, CPS) characteristics on the 1-20 Controlling Scale, derived metrics, and domain Aptitudes (A in [-2, +3]).",
       "headings": [
         "1. Architectural Overview & Taxonomy",
         "2. Characteristic Scales: Spectrum (`0.0\u2013100.0`) & `2d20` Controlling Scale (`1\u201320`)",
@@ -167,7 +167,7 @@
         "6. Sensory Characteristics",
         "7. Psyche: The Invisible Traits & Behavioral Architecture",
         "7.1 Design Philosophy: Quantifying `Role` Playing & NPC Agency",
-        "7.2 The Seven Core Psyche Characteristics",
+        "7.2 The Nine Core Psyche Characteristics",
         "7.3 Emergent Personality Archetypes (PC & NPC Examples)",
         "8. Secondary & Derived Characteristics",
         "9. Domain Aptitudes ($A \\in [-2, +3]$, Human Baseline `0`)",
@@ -217,7 +217,7 @@
       "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
       "title": "Lifepath Character Creation, Socioeconomic Upkeep & Heat",
       "relative_path": "03-character/lifepaths_and_economy.md",
-      "description": "Chronological Lifepath education & career progression (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
+      "description": "Chronological Lifepath education & 14 career tracks (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
       "headings": [
         "1. Chronological Lifepath Architecture",
         "1.1 Stage 1: Socioeconomic Origin & School Quality (Ages 0\u20135)",
@@ -227,15 +227,34 @@
         "1.5 Stage 4: Ages 15\u201318 \u2014 High School Track vs. Urban Street Gang vs. Rural / Developing-Region Youth",
         "1.6 Stage 5: Adult Career & Higher Education Terms (Ages 18+, 4-Year Terms)",
         "1.7 Per-Term Skill Point (`SP`) Budgets & The 5-Factor Skill Cost Formula",
-        "2. Complete Worked Lifepath Walkthroughs",
-        "2.1 Walkthrough A: Mateo Vance \u2014 The Gifted Dropout & Gang Enforcer",
-        "2.2 Walkthrough B: Dr. Priya Nair \u2014 Corporate AI & Robotics Scientist (Why She Cannot Take Full-Auto)",
-        "2.3 Walkthrough C: Amara Okafor \u2014 Rural Bush Tracker, Herbalist & Anti-Poaching Ranger",
-        "3. Campaign Economy, Upkeep (`SQM 1\u201310`), `[Access]` Procurement & `Heat`",
+        "2. Campaign Economy, Upkeep (`SQM 1\u201310`), `[Access]` Procurement & `Heat`",
         "3.1 Socioeconomic Tier (`SQM 1\u201310`) & Lifestyle Upkeep",
         "3.2 Black-Market Procurement (`[Access]` Gates) & Law Enforcement `Heat`"
       ],
       "html_file": "lifepaths_and_economy.html"
+    },
+    {
+      "chapter_id": "lifepath_events_hobbies_and_factions",
+      "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
+      "title": "Lifepath Hobbies, Formative Life Events, Faction Templates & Walkthroughs",
+      "relative_path": "03-character/lifepath_events_hobbies_and_factions.md",
+      "description": "12 Personal Hobbies/Clubs (Experience SP), 2d20 Formative Life Events Table, 5 Awakened Faction Psyche & Lifepath Templates (TRS/CPS), and 4 Worked Walkthroughs.",
+      "headings": [
+        "1. Beyond School & Work: Personal Hobbies, Clubs & Subcultures",
+        "1.1 Hobby Acquisition Mechanics (`Experience SP`)",
+        "1.2 Master Catalog of 12 Canonical Hobbies & Subcultures",
+        "2. Formative Life Events (`2d20` Table \u2014 Tragedy, Love, Crisis & Awakening)",
+        "2.1 `2d20` Formative Life Events Table",
+        "3. Tailoring Lifepaths, 9-Trait Psyche & NPC Templates to the 5 *Awakened* Factions",
+        "3.1 Master 5-Faction Psyche Profile Matrix (`1\u201320` Scale, `10` = Neutral)",
+        "3.2 Faction Lifepath & Career Blueprints (Quick NPC & PC Generation)",
+        "4. Complete Worked Lifepath Walkthroughs",
+        "4.1 Walkthrough A: Mateo Vance \u2014 The Gifted Dropout & Gang Enforcer",
+        "4.2 Walkthrough B: Dr. Priya Nair \u2014 Corporate AI & Robotics Scientist",
+        "4.3 Walkthrough C: Amara Okafor \u2014 Rural Bush Tracker, Herbalist & Anti-Poaching Ranger",
+        "4.4 Walkthrough D: Linnea Cho \u2014 Ex-*Altruist* Ethicist Turned *Satyang* (*Manjusri / Avalokitesvara*)"
+      ],
+      "html_file": "lifepath_events_hobbies_and_factions.html"
     },
     {
       "chapter_id": "psyche_and_social",
@@ -258,7 +277,8 @@
         "4.1 Reading the Target (`Empathy & Read Person` Setup)",
         "4.2 Psyche Resonance vs. Resistance ($\\Delta_{\\text{ext}}$ Modifiers)",
         "4.3 The Four Social \"Wound\" Types: Composure, Doubt, Cognitive Dissonance & Ego Wounds",
-        "4.4 Worked Example of Cognitive Dissonance: High `Openness` vs. High `Belongingness`"
+        "4.4 Worked Example of Cognitive Dissonance: High `Openness` vs. High `Belongingness`",
+        "4.5 Awakened Faction Social Combat Wedges (GM Reference)"
       ],
       "html_file": "psyche_and_social.html"
     },

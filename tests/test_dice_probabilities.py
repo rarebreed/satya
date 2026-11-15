@@ -285,11 +285,11 @@ def test_rules_book_builder_and_tactical_pool_bridge() -> None:
         search_rules_book_python,
     )
 
-    assert len(BOOK_CHAPTER_SPECS) == 17
+    assert len(BOOK_CHAPTER_SPECS) == 18
     summary = build_static_rules_book()
-    assert summary["chapter_count"] == 17
+    assert summary["chapter_count"] == 18
     assert summary["using_satya_py"] is True
-    assert len(summary["generated_files"]) == 19  # 17 chapters + index.html + catalog.json
+    assert len(summary["generated_files"]) == 20  # 18 chapters + index.html + catalog.json
 
     hits_melee = search_rules_book_python("Tactical Triad Tempo Control Force", max_results=3)
     assert hits_melee
@@ -371,7 +371,7 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
 
     # Build static HTML book into tmp_path and into docs/book
     summary = build_rules_book(output_dir=tmp_path)
-    assert summary["chapter_count"] == 17
+    assert summary["chapter_count"] == 18
     assert summary["using_satya_py"] is True
     assert summary["total_words"] > 10_000
     assert (tmp_path / "index.html").exists()
@@ -387,6 +387,7 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
     assert "&amp;amp;" not in tasks_html
     assert (tmp_path / "skills_and_trees.html").exists()
     assert (tmp_path / "lifepaths_and_economy.html").exists()
+    assert (tmp_path / "lifepath_events_hobbies_and_factions.html").exists()
     assert (tmp_path / "psyche_and_social.html").exists()
     assert (tmp_path / "tactical_triad.html").exists()
     assert (tmp_path / "melee_combat.html").exists()

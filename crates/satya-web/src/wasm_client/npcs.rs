@@ -9,7 +9,9 @@ use crate::wasm_client::dom::{
 };
 use crate::wasm_client::notebook::satya_select_notebook_tab;
 use crate::wasm_client::state::{with_state, with_state_mut};
-use satya_engine::{NpcGenerationParams, NpcTemplateKind, generate_npc_from_prompt};
+use satya_engine::{
+    FactionArchetypeId, NpcGenerationParams, NpcTemplateKind, generate_npc_from_prompt,
+};
 use satya_schema::{
     GenerateNpcRequest, GenerateNpcResponse, Participant, ParticipantKind, SessionNpcEntry,
     SessionNpcsResponse, SessionRole,
@@ -72,6 +74,7 @@ fn ensure_default_demo_npc_if_empty() {
         prompt: "Terry is a kind general MD, but needs to feel like she belongs".to_string(),
         name_override: None,
         template: NpcTemplateKind::Auto,
+        faction_archetype: None,
         career_terms: 2,
         seed: 42,
         owner_user_id: "gm_npc".to_string(),
@@ -110,7 +113,7 @@ fn ensure_default_demo_npc_if_empty() {
 ///
 /// When `can_see_gm_secrets == false` (Player view in a human-GM session), only the public fields
 /// (`character_name`, `callsign_or_role`, `age_years`, `apparent_condition`, `public_summary`) are rendered.
-/// When `can_see_gm_secrets == true` (GM or Solo mode), the 7 bipolar Psyche traits, key characteristics,
+/// When `can_see_gm_secrets == true` (GM or Solo mode), the 9 bipolar Psyche traits, key characteristics,
 /// top trained skills, and GM-only secret dossier are also displayed.
 #[must_use]
 pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> String {
@@ -161,7 +164,10 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
                         && !p.contains("Cooperative")
                         && !p.contains("Ambiverted")
                         && !p.contains("Adaptive")
-                        && !p.contains("Measured");
+                        && !p.contains("Adaptable")
+                        && !p.contains("Measured")
+                        && !p.contains("Discerning")
+                        && !p.contains("Humane");
                     let cls = if is_polar {
                         "pill pill-accent"
                     } else {
@@ -212,7 +218,7 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
 
         html.push_str(&format!(
             r#"<div class="gm-doc-meta" style="margin-top:8px; border-top:1px solid rgba(148,163,184,0.2); padding-top:8px;">
-                <div><strong>GM / Solo Only — 7 Bipolar Psyche Traits (1–20):</strong></div>
+                <div><strong>GM / Solo Only — 9 Bipolar Psyche Traits (1–20):</strong></div>
                 <div class="roster-chips" style="margin:4px 0 8px 0;">{psyche_chips}</div>
                 <div><strong>GM / Solo Only — Key Characteristics (1–20):</strong> <span class="mono">{stats_line}</span></div>
                 <div style="margin-top:6px;"><strong>GM / Solo Only — Top Trained Skills:</strong></div>
@@ -359,7 +365,12 @@ pub fn satya_generate_npc_from_prompt() {
         Some(name_ovr_raw.trim().to_string())
     };
     let tmpl_str = select_value("npc-gen-template");
-    let template = NpcTemplateKind::from_code_str(&tmpl_str).unwrap_or(NpcTemplateKind::Auto);
+    let faction_archetype = FactionArchetypeId::from_code_str(&tmpl_str);
+    let template = if faction_archetype.is_some() {
+        NpcTemplateKind::Auto
+    } else {
+        NpcTemplateKind::from_code_str(&tmpl_str).unwrap_or(NpcTemplateKind::Auto)
+    };
     let career_terms = select_value("npc-gen-terms")
         .trim()
         .parse::<usize>()
@@ -378,6 +389,7 @@ pub fn satya_generate_npc_from_prompt() {
         prompt: prompt.clone(),
         name_override: name_override.clone(),
         template,
+        faction_archetype,
         career_terms,
         seed: 0,
         owner_user_id: "gm_npc".to_string(),
@@ -423,7 +435,7 @@ pub fn satya_generate_npc_from_prompt() {
     });
     render_npcs_tab_dom();
     append_system_notice(&format!(
-        "Rolled up NPC '{}' ({}) with rules-legal 5-Stage Lifepath, Skills, and 7 Psyche traits.",
+        "Rolled up NPC '{}' ({}) with rules-legal 5-Stage Lifepath, Skills, and 9 Psyche traits.",
         local_entry.character_name, local_entry.callsign_or_role
     ));
 
@@ -435,7 +447,11 @@ pub fn satya_generate_npc_from_prompt() {
     let req_body = GenerateNpcRequest {
         prompt,
         name_override,
-        template: Some(template.as_str().to_string()),
+        template: Some(
+            faction_archetype
+                .map(|a| a.as_str().to_string())
+                .unwrap_or_else(|| template.as_str().to_string()),
+        ),
         career_terms,
         seed: 0,
         gm_secret_notes,
@@ -559,6 +575,7 @@ mod tests {
                 .to_string(),
             name_override: Some("Dr. Lin <Trauma>".to_string()),
             template: NpcTemplateKind::Auto,
+            faction_archetype: None,
             career_terms: 2,
             seed: 7,
             owner_user_id: "gm_npc".to_string(),

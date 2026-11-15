@@ -122,14 +122,14 @@ During Junior High (Grades 7–9, ages 12–14), students build on their Element
    - **Literacy & Social Studies Roll (`DIS/MEM + APT-LNG`)**:
      - `1+` Successes: Raises *Reading* or *Writing* by `+1` (up to `N = 3`) and grants *History & Civics* `N = 1`.
 2. **Adolescent Life Event Check (Age 14–15)**:
-   Roll `2d20` against the character's Socioeconomic Class **Dropout / Crisis Risk Threshold** (or choose deliberately):
-   - If the roll falls within the Crisis range (e.g., `2–13` for Working Poor, or `2–16` for Underclass), a **Disruptive Life Event** occurs at age 15 (such as family eviction, incarceration of a parent, school expulsion, or neighborhood gang war), forcing or pressuring the character out of formal schooling!
+   Roll `2d20` against the character's Socioeconomic Class **Dropout / Crisis Risk Threshold** (or choose deliberately)—and roll on the full **`2d20` Formative Life Events Table** and choose an **Adolescent Hobby / Club** in [Lifepath Hobbies, Formative Life Events & Factions](lifepath_events_hobbies_and_factions.md):
+   - If the crisis check falls within the Crisis range (e.g., `2–13` for Working Poor, or `2–16` for Underclass), a **Disruptive Life Event** occurs at age 15 (such as family eviction, incarceration of a parent, school expulsion, or neighborhood gang war), forcing or pressuring the character out of formal schooling!
 
 ---
 
 ### 1.5 Stage 4: Ages 15–18 — High School Track vs. Urban Street Gang vs. Rural / Developing-Region Youth
 
-At age 15, the character's lifepath branches into one of three distinct adolescent paths depending on whether they remain in formal secondary education, drop out into an urban street gang, or transition into rural, agrarian, pastoral, or developing-region field work.
+At age 15, the character's lifepath branches into one of three distinct adolescent paths depending on whether they remain in formal secondary education, drop out into an urban street gang, or transition into rural, agrarian, pastoral, or developing-region field work—all shaped further by the character's chosen **Hobby / Club** and **Life Events** ([Lifepath Hobbies, Life Events & Factions](lifepath_events_hobbies_and_factions.md)).
 
 #### Path 4A: Formal High School (Ages 15–18)
 Students who remain in High School select (or qualify for) one of three sub-tracks:
@@ -186,14 +186,20 @@ Not every adolescent who leaves formal schooling at age 15 is an urban gang memb
 
 ### 1.6 Stage 5: Adult Career & Higher Education Terms (Ages 18+, 4-Year Terms)
 
-Each 4-year adult term grants skill advancements strictly bounded by the career's `[Access]` tags and the character's existing Skill Tree prerequisites:
+Each 4-year adult term grants skill advancements strictly bounded by the career's `[Access]` tags and the character's existing Skill Tree prerequisites. Notice that all `14` canonical adult tracks fall into four broad clusters: **Academia & Applied Professions**, **Civic, Media & Contemplative Organizing**, **Restricted Security & State Enforcement**, and **Vocational, Rural & Clandestine Underground**:
 
 | Career / Institution Path | Entry Prerequisites | `[Access]` Tags Granted | Skills Taught & Advanced (Max $N$ per 4-yr Term: `+1` to `+2`) |
 | :--- | :--- | :--- | :--- |
-| **University — STEM / Engineering (B.S. / M.S. / Ph.D.)** | High School Diploma, *Trigonometry* $\ge 2$, `ANA >= 11`, `DIS >= 10` | `[Access: Academic]` | *Calculus & Linear Algebra*, *Differential Equations*, *Applied Statistics*, *Classical Physics*, *Organic Chemistry*, *Mechanical/Electrical/Aerospace/Chemical Engineering*, *Machine Learning*, *Biotechnology*. **Zero Combat Skills.** |
+| **University — STEM / Engineering (B.S. / M.S. / Ph.D.)** | High School Diploma, *Trigonometry* $\ge 2$, `ANA >= 11`, `DIS >= 10` | `[Access: Academic]` | *Calculus & Linear Algebra*, *Differential Equations*, *Applied Statistics*, *Classical Physics*, *Organic Chemistry*, *Mechanical/Electrical/Aerospace/Chemical Engineering*, *Machine Learning & AI 2.0*, *Biotechnology*. **Zero Combat Skills.** |
 | **Medical School & Surgical Residency** | B.S. Pre-Med (*General Biology* $\ge 3$, *Organic Chemistry* $\ge 2$, `MEM >= 12, ANA >= 11, DIS >= 12`) | `[Access: Academic]`, `[Access: Licensed]` | *Human Anatomy*, *Pharmacology*, *Clinical Diagnostics*, *Paramedicine*, *Trauma & General Surgery*, *Neurosurgery & Cyber-Implants*, *Forensic Pathology*. **Zero Combat Skills.** |
+| **University — Humanities, Law, Philosophy & Ethics (B.A. / J.D. / Ph.D.)** | High School Diploma, *Reading* $\ge 3$, *Writing* $\ge 2$, `MEM >= 10, INS >= 10` | `[Access: Academic]` *(J.D. Bar adds `[Access: Licensed]`)* | *History & Civics*, *Philosophy, Ethics & Contemplative Theology*, *Constitutional & Corporate Law*, *Foreign Languages*, *Writing & Composition*, *Persuasion & Rhetoric*, *Investigative Research*. **Zero Combat Skills.** |
+| **Corporate Management, Quantitative Finance & Policy** | University Degree or Business Honors (*Algebra* $\ge 2$, `ANA >= 11, ELO >= 10`) | `[Access: Academic]`, `[Access: Licensed]` | *Applied Statistics*, *Economics & Corporate Finance*, *Etiquette & Corporate Protocol*, *Negotiation*, *Command & Leadership*, *Bureaucracy & Regulatory Compliance*, *AI 2.0 Business Orchestration*. |
+| **Journalism, Media, PR & Performing Arts** | High School Diploma or Portfolio (*Writing* $\ge 2$ or Artistic Talent, `CRE >= 10` or `ELO >= 10`) | `[Access: Vocational]` | *Investigative Elicitation*, *Writing & Composition*, *Persuasion & Rhetoric*, *Charm & Rapport*, *Deception / PsyOps & Synth-Media Verification*, *Photography & Audio-Visual Production*, *Musical Instruments / Acting*. |
+| **Grassroots Activism, Humanitarian NGO & Contemplative Ministry** | Any Origin (*Empathy* $\ge 1$ or *Persuasion* $\ge 1$, `INS >= 10` or `CPS >= 12`) | `[Access: Vocational]` | *Empathy & Read Person*, *Persuasion & Rhetoric*, *First Aid (BLS / CPR)*, *Community Organizing & Streetwise*, *Crisis De-Escalation*, *Foreign Languages*, *Contemplative / Counseling Practice* (`DIS`/`FOC` training). |
+| **Cybersecurity, AI Red-Teaming & Underground Collective** | *Programming* $\ge 2$ or Self-Taught Hack Waiver (`ANA >= 11, CRE >= 10`) | `[Access: Vocational]`, `[Access: Illicit]` | *Programming & Scripting*, *Digital OS & Network Administration*, *Network Exploitation & Penetration Testing*, *Cryptography & Steganography*, *AI 2.0 Probe Evasion & Orchestration*, *Electronic Counter-Surveillance*. |
 | **Military Service — Combat Arms (Infantry / Armor / Special Ops)** | Age 18+, Physical Exam (`FOR >= 9, FIT >= 10, HLT >= 10`), clean record or moral waiver | **`[Access: Restricted]`** | *Long Guns*, *Pistols*, ***Fully Automatic Weapons***, ***Heavy Weapons (ATGM/MANPADS)***, *Tactical Carbine*, *Grenades*, *Military Demolitions*, *Precision Rifle* (if *Trigonometry* $\ge 2$ & `SIG >= 12`), *Small-Unit Tactics*, *Paramedicine (TCCC)*, *Lethal CQC*. |
 | **Law Enforcement / SWAT / Federal Agent** | High School/College, clean criminal record (`DIS >= 10, SIG >= 10, INS >= 10`) | **`[Access: Restricted]`**, `[Access: Licensed]` | *Pistols*, *Tactical Handgun*, *Long Guns*, *Riot Batons*, *Arrest Grappling*, *Criminal Law*, *Interrogation*, *Surveillance*, *Digital/Physical Forensics*. *(SWAT adds *Tactical Carbine*, *Fully Automatic Weapons*, *Precision Rifle*).* |
+| **Corporate SecOps & Private Military / Executive Protection** | Military/Police vet or SecOps Academy (`FOR >= 10, DIS >= 11, SIG >= 11`) | **`[Access: Restricted]`**, `[Access: Licensed]` | *Pistols & Tactical Handgun*, *Long Guns & Tactical Carbine*, *Arrest Grappling & Bodyguard Escort*, *Electronic Surveillance & Threat Assessment*, *High-Speed Evasive Driving*, *Tactical Recon Drones*, *First Aid (TCCC)*. |
 | **Intelligence Service / Clandestine Operations** | University Degree or Special Ops recruitment (`INS >= 11, DIS >= 11, ELO >= 10`) | **`[Access: Restricted]`**, `[Access: Illicit]` | *Surveillance & Counter-Surveillance*, *Interrogation & Elicitation*, *Foreign Languages*, *Strategic Intelligence*, *Forgery & Identity Washing*, *Concealed Draw*, *Lockpicking*, *Network Exploitation*, *Tactical Recon Drones*. |
 | **Organized Crime / Cartel / Street Syndicate** | Juvenile Gang background or underworld recruitment | **`[Access: Illicit]`** | *Streetwise*, *Pistols*, *Concealed Draw*, ***Fully Automatic Weapons***, *Knife Fighting*, *Street Fighting*, *Black Market Logistics*, *Extortion/Intimidation*, *Hotwiring*, *Lockpicking*, *Clandestine Narcotics Synthesis*, *Forgery*. |
 | **Blue-Collar Trades / Industrial Technician** | Vocational High School or Apprenticeship (*Arithmetic* $\ge 2$) | `[Access: Vocational]` | *Automotive & EV Mechanics*, *Metalworking & Welding*, *CNC & Robotics Repair*, *Basic Electronics*, *Heavy Commercial Vehicles*, *Gunsmithing*. |
@@ -206,10 +212,10 @@ Each 4-year adult term grants skill advancements strictly bounded by the career'
 Rather than treating every skill rank as a flat 1-for-1 point purchase—which would make learning to fly a helicopter (`Difficulty 5`) cost the same as learning to swim (`Difficulty 1`)—Stage 5 Career Terms and Post-School Advancement use a **Multi-Factor Skill Point (`SP`) Cost & Budget System**:
 
 1. **Per-Term Skill Point (`SP`) Budgets**:
-   - **Youth / Young-Adult Experience Pool**: Every character begins Stage 5 with **`40 Experience SP`** representing personal hobbies, street practice, and self-directed youth experience.
+   - **Youth / Young-Adult Experience Pool**: Every character begins Stage 5 with **`40 Experience SP`** representing **Adolescent Hobbies, Clubs & Subcultures**, street practice, and formative youth experience (see [Lifepath Hobbies, Life Events & Factions](lifepath_events_hobbies_and_factions.md)).
    - **Per 4-Year Adult Career Term (`1` to `4` Terms)**:
      - **Formal Training SP (`FOC + INS` Pool)**: **`120 Formal SP`** base per 4-year term + **`+20 Formal SP` per Term Advancement Roll success** (`0` successes = **`120 Formal SP`**, `1` success = **`140 Formal SP`**, `2` successes / Honors = **`160 Formal SP`**). Spent on the active Career Track's formal curriculum (`recommended_skills()`).
-     - **Practical Experience SP (`INS` Pool)**: **`+40 Experience SP`** per 4-year term for on-the-job, elective, or off-duty skills.
+     - **Practical Experience SP (`INS` Pool)**: **`+40 Experience SP`** per 4-year term for on-the-job, **Off-Duty Hobby / Club**, or **Formative Life Event** skills.
 2. **The 5-Factor Skill Step Cost Formula ($\text{SP}(s, N)$)**:
    Advancing a skill $s$ by `1` level from $N - 1 \to N$ costs:
    $$\text{SP}(s, N) = \max\!\Big(3,\; \text{round}\big(\text{Base}(N) \times M_{\text{diff}}(s) \times M_{\text{ctrl}}(C_{\text{eff}}) \times M_{\text{apt}}(A) \times M_{\text{train}}(\text{mode}, \text{FOC}, \text{INS})\big)\Big)$$
@@ -242,105 +248,13 @@ Rather than treating every skill rank as a flat 1-for-1 point purchase—which w
 
 ---
 
-## 2. Complete Worked Lifepath Walkthroughs
-
-### 2.1 Walkthrough A: Mateo Vance — The Gifted Dropout & Gang Enforcer
-
-This walkthrough demonstrates a bright, disciplined youth from a poor background who drops out at age 15 and joins a street gang.
-
-1. **Stage 1: Origin & Characteristics (Born 2013, Current Year 2033, Age 20)**:
-   - **Socioeconomic Class**: **Working Poor** (Overcrowded Low-Income Public School, **`SQM = +2`**; Crisis/Dropout Risk `2–13` on `2d20`).
-   - **Physical Primary Characteristics**: `SPD 13`, `FOR 11`, `DEX 13`, `KIN 12`, `HLT 11`, `FIT 12`, `Mass 76.0 kg`, `Height 1.78 m` (`Power = (11 * 13)/10 = 14.3`).
-   - **Mental Primary Characteristics**: `MEM 12`, `ANA 13` *(Sharp analytical mind)*, `INS 12`, `CRE 11`, `DIS 13` *(High mental fortitude & study diligence)*, `FOC 12`.
-   - **Social Primary Characteristics**: `COM 10`, `PRE 12` *(Street magnetism)*, `ELO 10`.
-   - **Sensory Characteristics**: `SIG 12`, `HEA 11`, `TAC 12`, `OLF 10`, `TAS 10`, `ITU 13` *(Strong street danger sense)*.
-   - **Psyche Characteristics**: `EGO 12`, `SLF 7` *(Protective of family)*, `OPN 14` *(Intellectually curious)*, `BLG 15` *(Deep need for crew/family belonging)*, `EXT 11`, `CNF 6` *(Distrusts authority)*, `AGG 13` *(Stands his ground)*.
-   - **Aptitudes**: **Quantitative (`APT-QNT = +2`)**, **Kinesthetic (`APT-KIN = +1`)**, **Interpersonal/Street (`APT-SOC = +1`)**.
-   - **Composite Math Study Stat ($C_{\text{study, math}}$)**:
-     $$C_{\text{study, math}} = \left\lfloor \frac{\text{DIS } 13 + \text{ANA } 13}{2} \right\rfloor + \text{APT-QNT } (+2) = 13 + 2 = \mathbf{15}$$
-   - **Effective School Target Number ($\text{TN}_{\text{edu}}$)**:
-     $$\text{TN}_{\text{edu}} = 31 - 15 + \text{SQM } (+2) = \mathbf{18}$$
-2. **Stage 2: Elementary School (Ages 6–11)**:
-   - Base Grants: *Reading* `N = 1`, *Writing* `N = 1`, *Arithmetic* `N = 1`, *Digital Literacy* `N = 1`.
-   - **Math Roll (`2d20` cascade vs. $\text{TN}_{\text{edu}} = 18$)**: Mateo rolls Pair 1 = `22` (Success! Carry `+6`) and Pair 2 = `19 + 6 = 25` (Success! **2 Successes**).
-     - Because he scored `2` successes, his **Arithmetic** jumps to **`N = 3`** and he unlocks **Algebra & Geometry** at **`N = 1`** early despite his underfunded school!
-   - **Literacy Roll (`DIS/MEM` vs. $\text{TN}_{\text{edu}} = 21$)**: Scores `1` success $\to$ *Reading* `N = 2`, *Writing* `N = 2`.
-   - **Playground Talent**: *Brawling* (`FOR/SPD`) advances to `N = 2`.
-3. **Stage 3: Junior High / Middle School (Ages 12–14)**:
-   - **Math Roll (`2d20` cascade vs. $\text{TN}_{\text{edu}} = 18$)**: Mateo scores **2 Successes** again!
-     - His **Algebra & Geometry** advances to **`N = 2`**, and his high `ANA 13`, `DIS 13`, and `APT-QNT +2` allow him to unlock **Trigonometry & Pre-Calculus** at **`N = 2`** by age 14!
-   - **General Science Roll**: Scores `1` success $\to$ *General Physical Science* `N = 1`, *General Biology* `N = 1`.
-   - **Life Event Roll at Age 15 (`2d20`)**: Rolls **`9`** (within the `2–13` Working Poor Crisis range). Mateo's older brother is imprisoned and his family faces eviction; Mateo **drops out of school at age 15** and joins a local street gang to bring in cash.
-4. **Stage 4: Dropout & Street Gang (Ages 15–18) + Adult Gang Term (Ages 18–20)**:
-   - **What Is Locked Out**:
-     - Mateo never attends High School AP Calculus or University. His **Calculus & Linear Algebra** is **`N = 0`**, and his **Differential Equations** is **`N = 0`**.
-     - Consequently, despite having `ANA 13` and `APT-QNT +2`, Mateo **cannot learn** *Mechanical Engineering*, *Electrical Engineering*, *Aerospace Engineering*, *Machine Learning*, *Organic Chemistry*, or *Clinical Medicine*.
-     - However, because he *did* reach **Trigonometry & Pre-Calculus (`N = 2`)** before dropping out, he can rapidly calculate angles, street trajectories, accounting margins for contraband, or—if he ever later enlisted in the military—qualify for *Precision Rifle* (`DEX/FOC`, since he also has `SIG 12` and `DIS 13`) or *Indirect Fire / Mortars* (`ANA/FOC`)!
-   - **What the Gang Lifepath Unlocks (`[Access: Illicit]`)**:
-     - **Streetwise & Gang Protocol** (`INS/PRE`): `N = 3`
-     - **Pistols & Revolvers** (`DEX/SIG`): `N = 3`
-     - **Concealed Draw & Street Shooting** (`SPD/DEX`): `N = 2`
-     - **Fully Automatic Weapons** (`DEX/FOR`): `N = 2` *(Unlocked via `[Access: Illicit]` gang enforcer role + `FOR 11 >= 10` and `Pistols >= 2`—experienced with sear-modified machine pistols and compact SMGs).*
-     - **Knife Fighting & Close Blades** (`SPD/DEX`): `N = 2` (from *Simple Melee Weapons* `N = 2`)
-     - **Vehicle Hotwiring & Transponder Spoofing** (`DEX/ANA`): `N = 2`
-     - **Lockpicking & Physical Security Bypass** (`DEX/TAC`): `N = 2` (supported by his `DEX 13, TAC 12`)
-     - **Black Market Logistics & Fencing** (`INS/ELO`): `N = 2` (boosted by his *Arithmetic* `N = 3` and *Algebra* `N = 2`!)
+> [!TIP]
+> **Hobbies, Formative Life Events, 5-Faction Templates & Complete Walkthroughs**:
+> Life is more than school and a résumé. For **Personal Hobbies & Subcultures** (`12` archetypes funded by `Experience SP`), the **`2d20` Formative Life Events Table** (injury, family bereavement, romance, AI layoff shock, whistleblower crossroads), **5-Faction Psyche & NPC Templates** (*Satyang, Big Tech, Humanis Primaris, DAISE, Rogue AI*), and the complete worked walkthroughs of **Mateo Vance**, **Dr. Priya Nair**, **Amara Okafor**, and **Linnea Cho**, proceed to [Lifepath Hobbies, Formative Life Events & Factions](lifepath_events_hobbies_and_factions.md).
 
 ---
 
-### 2.2 Walkthrough B: Dr. Priya Nair — Corporate AI & Robotics Scientist (Why She Cannot Take Full-Auto)
-
-1. **Origin & Schooling (Ages 0–26)**:
-   - Born to **Upper-Middle Class** parents (`SQM = -4`).
-   - **Physical Primary Characteristics**: `SPD 9`, `FOR 8`, `DEX 11`, `KIN 9`, `HLT 10`, `FIT 9`, `Mass 56.0 kg`, `Height 1.63 m`.
-   - **Mental Primary Characteristics**: `MEM 13`, `ANA 15`, `INS 14`, `CRE 13`, `DIS 14`, `FOC 14`.
-   - **Social Primary Characteristics**: `COM 11`, `PRE 10`, `ELO 12`.
-   - **Sensory Characteristics**: `SIG 11`, `HEA 10`, `TAC 11`, `OLF 10`, `TAS 10`, `ITU 10`.
-   - **Psyche Characteristics**: `EGO 13` *(Proud of her research)*, `SLF 9`, `OPN 16` *(Driven by scientific truth)*, `BLG 13` *(Attached to her lab peers)*, `EXT 8` *(Introverted researcher)*, `CNF 14` *(By-the-book institutionalist)*, `AGG 5` *(Conflict-averse)*.
-   - **Aptitudes**: `APT-QNT +2`, `APT-CMP +2`, `APT-MEC +1`.
-   - Completes Elementary, Junior High, and **AP STEM High School** with `2` successes per stage:
-     - *Arithmetic* `N = 4`, *Algebra & Geometry* `N = 4`, *Trigonometry* `N = 3`, *Calculus & Linear Algebra* `N = 2`, *Classical Physics* `N = 2`, *Programming Fundamentals* `N = 2`.
-   - Completes a **4-Year B.S. in Computer Science & Engineering** and a **4-Year Ph.D. in AI & Mechatronics**:
-     - Advances *Calculus & Linear Algebra* (`ANA/FOC`) to `N = 4`, *Differential Equations* (`ANA/FOC`) to `N = 3`, *Applied Statistics* (`ANA/INS`) to `N = 4`, *Discrete Math* (`ANA/INS`) to `N = 3`.
-     - Unlocks and advances **Software Engineering** (`ANA/INS`, `N = 4`), **Machine Learning & Neural Architecture** (`ANA/INS`, `N = 5`), **Electrical Engineering** (`ANA/FOC`, `N = 3`), and **Aerospace, Robotics & Mechatronics Engineering** (`ANA/CRE`, `N = 4`).
-2. **Weapon & Combat Audit**:
-   - **Can Dr. Nair learn *Fully Automatic Weapons*?**
-     - **No (`N = 0`, Locked)**:
-       1. None of her Lifepath stages (STEM Prep School, University B.S., Ph.D. Lab) grant `[Access: Restricted]` or `[Access: Illicit]`.
-       2. She lacks the parent prerequisite (*Pistols* $\ge 2$ or *Long Guns* $\ge 2$; both are `N = 0`).
-       3. Her **Force (`FOR 8`)** is below the **`FOR >= 10`** minimum Controlling Characteristic floor for *Fully Automatic Weapons* (`DEX/FOR`).
-   - Even if she visits a civilian gun range as a weekend hobby, the maximum she can acquire via `[Access: Universal / Licensed]` is **Pistols & Revolvers (`N = 1`)** or semi-automatic **Long Guns (`N = 1`)** (`DEX/SIG`). If she picks up a fully automatic rifle during a crisis in-game, she must roll an untrained default (`N = 1`) with a severe **`+8` External Difficulty Penalty** ($\Delta_{\text{ext}} = +6$ untrained full-auto + $+2$ under-force recoil penalty), giving her a high probability of missing Pair 1 and triggering a cascade failure or complication.
-
----
-
-### 2.3 Walkthrough C: Amara Okafor — Rural Bush Tracker, Herbalist & Anti-Poaching Ranger
-
-This walkthrough illustrates **Path 4C (Rural, Agrarian & Developing-Region Youth)** and the **Stage 5 Rural, Agrarian, Wilderness Guide & Frontier Ranger** career track—demonstrating how a character raised in an underdeveloped rural savanna/bush region becomes a master tracker, ethnobotanist, livestock handler, and rifle markswoman without urban street-gang `Heat` or university `Calculus`.
-
-1. **Stage 1: Origin & Characteristics (Age 22)**:
-   - **Socioeconomic Class**: **Destitute / Underdeveloped Rural Frontier** (Village Primary School, **`SQM = +4`**; Early Environment Bonus Talent: **Foraging & Campcraft** `N = 2`).
-   - **Physical & Sensory Characteristics**: `FOR 11`, `DEX 12`, `KIN 12`, `FIT 13`, `HLT 13`, `SIG 14` *(Sharp bush sight)*, `HRG 13`, `OLF 12` *(Acute scent/plant recognition)*.
-   - **Mental Characteristics**: `INS 14` *(Exceptional ecological & animal intuition)*, `MEM 12`, `DIS 12`, `ANA 10`.
-   - **Aptitudes**: **Biological & Medical (`APT-BIO = +2`)**, **Kinesthetic (`APT-KIN = +1`)**, **Fine Motor (`APT-FIN = +1`)**.
-2. **Stages 2–3: Village Primary & Middle School (Ages 6–15)**:
-   - Acquires functional literacy and numeracy (*Reading* `N = 2`, *Writing* `N = 1`, *Arithmetic* `N = 2`) plus *General Biology & Natural History* `N = 2`, *First Aid* `N = 1`, and *Stealth* `N = 2`.
-   - At age 15, because the nearest secondary school is 90 km away and her family homestead depends on her labor, she transitions into **Path 4C: Rural, Agrarian & Developing-Region Youth** (*Subsistence Hunter, Trapper & Bush Guide*).
-3. **Stage 4C (Ages 15–18) & Stage 5 Frontier Ranger Term (Ages 18–22)**:
-   - **What Is Locked Out**:
-     - Leaving formal schooling at 15 triggers the **Academic Tree Freeze** on `[Access: Academic]` university courses (*Organic & Analytical Chemistry*, *Calculus*, *Differential Equations*).
-   - **What Path 4C & Frontier Ranger Service Unlock (`[Access: Vocational/Licensed]`, `Heat = 0`)**:
-     - **Hunting, Trapping & Field Butchery** (`SIG/INS`): `N = 4`
-     - **Wilderness Survival (Biome-Specific)** (`INS/HLT`): `N = 3`
-     - **Long Guns (Rifles, Carbines & Shotguns)** (`DEX/SIG`): `N = 3`
-     - **Animal Handling, Husbandry & Riding** (`INS/KIN`): `N = 2`
-     - **Veterinary Medicine & Livestock Care** (`INS/DEX`): `N = 2`
-     - **Herbalism, Ethnobotany & Field Remedies** (`MEM/OLF`): `N = 2`
-     - **Agriculture, Agronomy & Crop Husbandry** (`INS/FOR`): `N = 1`
-     - **Land Navigation & Cartography** (`ANA/SIG`): `N = 2` and **Camouflage & Concealment** (`INS/SIG`): `N = 2`
-
----
-
-## 3. Campaign Economy, Upkeep (`SQM 1–10`), `[Access]` Procurement & `Heat`
+## 2. Campaign Economy, Upkeep (`SQM 1–10`), `[Access]` Procurement & `Heat`
 
 Rather than forcing players to track every cup of coffee while ignoring how a street operative acquires a military-grade anti-materiel rifle, Satya uses a two-tier economic model anchored by the character's post-Lifepath **Socioeconomic / Material Tier (`SQM 1–10`)**:
 

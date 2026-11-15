@@ -14,8 +14,8 @@ use satya_engine::{
     CANONICAL_SKILL_TREES, CharacterCharacteristics, CharacteristicCode, CharacteristicRollMethod,
     PopulationTier, PrerequisiteMode, SkillTrainingMode, SkillTreeId, SkillType,
     compute_academic_study_controller, compute_skill_allocation_sp_ledger,
-    evaluate_operational_heat, is_career_formal_skill, lookup_campaign_sqm,
-    preview_next_skill_step_sp, resolve_skill_tree_default, skills_in_tree,
+    evaluate_operational_heat, is_career_formal_skill, is_hobby_club_discounted_skill,
+    lookup_campaign_sqm, preview_next_skill_step_sp, resolve_skill_tree_default, skills_in_tree,
     validate_skill_advancement,
 };
 
@@ -90,6 +90,7 @@ pub(crate) fn format_skills_step_html(st: &CharacterWizardState) -> String {
     .join("");
 
     let selected_tree_filter = SkillTreeId::from_code(&st.skill_tree_filter);
+    let hobbies = st.lifepath.collected_hobbies();
 
     let trees_html: String = SkillTreeId::ALL
         .iter()
@@ -185,6 +186,14 @@ pub(crate) fn format_skills_step_html(st: &CharacterWizardState) -> String {
                         tr_m = step_cost_bd.training_mode_multiplier,
                     );
 
+                    let hobby_badge = if !is_career_rec
+                        && cur_n < 3
+                        && is_hobby_club_discounted_skill(spec.id, &hobbies)
+                    {
+                        r#" <span class="pill pill-iggy">[Hobby Club -15% SP]</span>"#
+                    } else {
+                        ""
+                    };
                     let status_note = if cur_n >= 1 {
                         let career_tag = if is_career_rec {
                             format!(" · [Career Curriculum · {sk_sp_invested} SP Invested]")
@@ -194,16 +203,17 @@ pub(crate) fn format_skills_step_html(st: &CharacterWizardState) -> String {
                             String::new()
                         };
                         format!(
-                            "Trained N={cur_n} (Floor N={floor_n}, Post-School +{gained_post_school}) · Roll {cur_n} Pair(s) vs Base TN {base_tn}{career_tag}"
+                            "Trained N={cur_n} (Floor N={floor_n}, Post-School +{gained_post_school}) · Roll {cur_n} Pair(s) vs Base TN {base_tn}{career_tag}{hobby_badge}"
                         )
                     } else {
                         let def_res = resolve_skill_tree_default(spec.id, &st.skills);
                         if def_res.can_attempt {
-                            escape_html(&def_res.reason)
+                            format!("{}{}", escape_html(&def_res.reason), hobby_badge)
                         } else {
                             format!(
-                                "[No Default / Gated at N=0] {}",
-                                escape_html(&def_res.reason)
+                                "[No Default / Gated at N=0] {}{}",
+                                escape_html(&def_res.reason),
+                                hobby_badge
                             )
                         }
                     };

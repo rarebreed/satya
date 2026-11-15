@@ -186,7 +186,7 @@ mod tests {
     fn test_all_builtin_schemas_register_and_fingerprint() {
         let registry = SchemaRegistry::new_with_builtin_schemas().unwrap();
         let all = registry.all_schemas();
-        assert_eq!(all.len(), 11);
+        assert_eq!(all.len(), 12);
 
         let chat_v1 = registry
             .get_by_subject_version(subjects::CHAT_MESSAGE, 1)
@@ -197,6 +197,14 @@ mod tests {
 
         assert_ne!(chat_v1.fingerprint_crc64, chat_v2.fingerprint_crc64);
         assert_eq!(chat_v1.fingerprint_hex().len(), 16);
+
+        let char_v1 = registry
+            .get_by_subject_version(subjects::CHARACTER_SHEET, 1)
+            .unwrap();
+        let char_v2 = registry
+            .get_by_subject_version(subjects::CHARACTER_SHEET, 2)
+            .unwrap();
+        assert_ne!(char_v1.fingerprint_crc64, char_v2.fingerprint_crc64);
     }
 
     #[test]
@@ -224,15 +232,94 @@ mod tests {
         let ev = CharacterSheetEvent {
             metadata: meta,
             character_event_type: CharacterEventType::CharacterCreated,
-            actor: sara,
-            character: sheet,
+            actor: sara.clone(),
+            character: sheet.clone(),
         };
-        let framed = registry
-            .encode_framed(subjects::CHARACTER_SHEET, 1, &ev)
+        let char_v1_reg = registry
+            .get_by_subject_version(subjects::CHARACTER_SHEET, 1)
             .unwrap();
+        let mut raw_v1_val = apache_avro::to_value(&ev).unwrap();
+        if let apache_avro::types::Value::Record(ref mut top_fields) = raw_v1_val {
+            for (k, v) in top_fields.iter_mut() {
+                if k == "character"
+                    && let apache_avro::types::Value::Record(char_fields) = v
+                {
+                    char_fields.retain(|(cf, _)| {
+                        cf != "faction_id" && cf != "faction_archetype"
+                    });
+                    for (ck, cv) in char_fields.iter_mut() {
+                        if ck == "characteristics"
+                            && let apache_avro::types::Value::Record(stat_fields) = cv
+                        {
+                            stat_fields.retain(|(sf, _)| sf != "trs" && sf != "cps");
+                        }
+                    }
+                }
+            }
+        }
+        let avro_v1_bytes = apache_avro::to_avro_datum(&char_v1_reg.avro_schema, raw_v1_val).unwrap();
+        let hdr_v1_wire = WireFrameHeader {
+            magic_byte: WIRE_MAGIC_BYTE,
+            schema_id: char_v1_reg.schema_id,
+            schema_version: char_v1_reg.version,
+            fingerprint_crc64: char_v1_reg.fingerprint_crc64,
+        };
+        let mut framed = Vec::with_capacity(WIRE_HEADER_LEN + avro_v1_bytes.len());
+        framed.extend_from_slice(&hdr_v1_wire.to_bytes());
+        framed.extend_from_slice(&avro_v1_bytes);
+
         let (hdr, decoded): (_, CharacterSheetEvent) =
             registry.decode_framed(&framed, None).unwrap();
         assert_eq!(hdr.schema_id, 11);
+        assert_eq!(decoded.character.characteristics.trs, 10);
+        assert_eq!(decoded.character.characteristics.cps, 10);
+        assert_eq!(decoded.character.faction_id, None);
+        assert_eq!(decoded.character.faction_archetype, None);
+
+        // Evolve v1 character record cleanly into v2 reader schema
+        let (hdr_evolved, evolved_v2): (_, CharacterSheetEvent) =
+            registry.decode_framed(&framed, Some(2)).unwrap();
+        assert_eq!(hdr_evolved.schema_version, 1);
+        assert_eq!(evolved_v2.character.characteristics.trs, 10);
+        assert_eq!(evolved_v2.character.characteristics.cps, 10);
+        assert_eq!(evolved_v2.character.faction_archetype, None);
+
+        // v2 encoding preserves non-equilibrium TRS/CPS and optional faction fields
+        let mut sheet_v2 = sheet;
+        sheet_v2.characteristics.trs = 12;
+        sheet_v2.characteristics.cps = 17;
+        sheet_v2.faction_id = Some("SATYANG".to_string());
+        sheet_v2.faction_archetype = Some("SATYANG_MANJUSRI".to_string());
+        let meta_v2 = registry
+            .build_metadata(
+                51,
+                subjects::CHARACTER_SHEET,
+                2,
+                "sector-4",
+                SessionMode::Ttrpg,
+            )
+            .unwrap();
+        let ev_v2 = CharacterSheetEvent {
+            metadata: meta_v2,
+            character_event_type: CharacterEventType::CharacterCreated,
+            actor: sara,
+            character: sheet_v2,
+        };
+        let framed_v2 = registry
+            .encode_framed(subjects::CHARACTER_SHEET, 2, &ev_v2)
+            .unwrap();
+        let (hdr_v2, decoded_v2): (_, CharacterSheetEvent) =
+            registry.decode_framed(&framed_v2, None).unwrap();
+        assert_eq!(hdr_v2.schema_id, 12);
+        assert_eq!(hdr_v2.schema_version, 2);
+        assert_eq!(decoded_v2.character.characteristics.trs, 12);
+        assert_eq!(decoded_v2.character.characteristics.cps, 17);
+        assert_eq!(decoded_v2.character.faction_id.as_deref(), Some("SATYANG"));
+        assert_eq!(
+            decoded_v2.character.faction_archetype.as_deref(),
+            Some("SATYANG_MANJUSRI")
+        );
+
         assert_eq!(
             decoded.character_event_type,
             CharacterEventType::CharacterCreated

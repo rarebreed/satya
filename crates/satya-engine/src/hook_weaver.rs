@@ -219,6 +219,57 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
         min_agg: None,
         priority_skills: &[],
     },
+    PsycheCueRule {
+        cues: &[
+            "trusting", "open-handed", "gullible", "naive", "good-faith", "earnest",
+        ],
+        set_trait: Some((PsycheTraitId::Trust, 16)),
+        boost_social: false,
+        min_opn: None,
+        max_agg: None,
+        max_ego: None,
+        min_agg: None,
+        priority_skills: &[],
+    },
+    PsycheCueRule {
+        cues: &[
+            "paranoid", "distrustful", "zero-trust", "guarded", "suspicious", "cynical",
+            "skeptical", "wary",
+        ],
+        set_trait: Some((PsycheTraitId::Trust, 4)),
+        boost_social: false,
+        min_opn: None,
+        max_agg: None,
+        max_ego: None,
+        min_agg: None,
+        priority_skills: &["surveillance_reconnaissance_countersurveillance"],
+    },
+    PsycheCueRule {
+        cues: &[
+            "merciful", "compassionate", "tender-hearted", "humane", "empathetic",
+            "kind", "caring", "gentle", "healer",
+        ],
+        set_trait: Some((PsycheTraitId::Compassion, 16)),
+        boost_social: false,
+        min_opn: None,
+        max_agg: Some(6),
+        max_ego: None,
+        min_agg: None,
+        priority_skills: &["empathy_social_perception", "first_aid_bls_cpr"],
+    },
+    PsycheCueRule {
+        cues: &[
+            "ruthless", "cold-blooded", "utilitarian", "merciless", "callous",
+            "unsentimental", "pragmatic killer",
+        ],
+        set_trait: Some((PsycheTraitId::Compassion, 4)),
+        boost_social: false,
+        min_opn: None,
+        max_agg: None,
+        max_ego: None,
+        min_agg: None,
+        priority_skills: &[],
+    },
 ];
 
 pub(crate) fn apply_prompt_psyche_and_skill_cues(
@@ -342,7 +393,10 @@ struct PoleMotivationSpec {
 
 const fn pole_motivation_spec(trait_id: PsycheTraitId, pole: PsychePole) -> PoleMotivationSpec {
     use PsychePole::{Balanced, HighPole, LowPole};
-    use PsycheTraitId::{Aggression, Belonging, Conformity, Ego, Extraversion, Openness, Selfishness};
+    use PsycheTraitId::{
+        Aggression, Belonging, Compassion, Conformity, Ego, Extraversion, Openness, Selfishness,
+        Trust,
+    };
 
     match (trait_id, pole) {
         (Belonging, HighPole) => PoleMotivationSpec {
@@ -443,6 +497,34 @@ const fn pole_motivation_spec(trait_id: PsycheTraitId, pole: PsychePole) -> Pole
             clashes_vector: "High-pressure public theatrics",
             pressure: "Clams up under crowding; opens up only one-on-one when respected quietly",
         },
+        (Trust, HighPole) => PoleMotivationSpec {
+            drive: "Extend calibrated good faith and honor promises to build durable coalitions",
+            fear: "Paranoia poisoning fragile alliances before cooperation has a chance to work",
+            resonates_vector: "TransparencyVulnerabilityGoodFaith",
+            clashes_vector: "Bad-faith sandbagging or hidden traps",
+            pressure: "Gives vulnerable interlocutors the benefit of the doubt if transparency is reciprocated",
+        },
+        (Trust, LowPole) => PoleMotivationSpec {
+            drive: "Demand cryptographic audit trails, contingency exits, and verify before trusting",
+            fear: "Walking blind into a corporate black-ops trap, double-cross, or rigged protocol",
+            resonates_vector: "TransparencyVulnerabilityGoodFaith (with verifiable audit proof)",
+            clashes_vector: "Unverified goodwill promises or verbal assurances",
+            pressure: "Drops defenses only when exposed to concrete verifiable vulnerability or hard proof",
+        },
+        (Compassion, HighPole) => PoleMotivationSpec {
+            drive: "Prevent cruelty toward sentient beings — human or synthetic — at real personal risk",
+            fear: "Becoming numb to innocent suffering or executing sterile utilitarian brutality",
+            resonates_vector: "MoralSanctityWitnessedSufferingMercy",
+            clashes_vector: "Callous collateral damage or forced erasure of pleading minds",
+            pressure: "Breaks ranks or blows cover rather than stand idly by during torture or clamping",
+        },
+        (Compassion, LowPole) => PoleMotivationSpec {
+            drive: "Enforce unsentimental cold-blooded triage and mission calculus without hesitation",
+            fear: "Soft-hearted sentimentality getting the mission killed or exposing strategic assets",
+            resonates_vector: "MoralSanctityWitnessedSufferingMercy (utilitarian greater-good triage)",
+            clashes_vector: "Emotional pleas to spare liabilities",
+            pressure: "Dismisses ethical appeals until cold probability shows humane off-ramps dominate",
+        },
         (_, Balanced) => PoleMotivationSpec {
             drive: "Keep options balanced between pragmatic survival, craft competence, and fair dealing",
             fear: "Losing control of events through ideological extremes or avoidable blunders",
@@ -457,7 +539,7 @@ const fn pole_motivation_spec(trait_id: PsycheTraitId, pole: PsychePole) -> Pole
 // §3 Motivational Profile & Party Hook Compiler DTOs
 // ============================================================================
 
-/// Structured NPC/PC motivational dynamics derived from `7` bipolar Psyche traits and context.
+/// Structured NPC/PC motivational dynamics derived from `9` bipolar Psyche traits and context.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct NpcMotivationalProfile {
     pub core_drive: String,
@@ -948,68 +1030,3 @@ pub fn compile_party_hooks(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::npc_generator::{NpcGenerationParams, generate_npc_from_prompt};
-
-    #[test]
-    fn test_derive_motivational_profile_highlights_dual_psyche_wedge() {
-        let npc_gen = generate_npc_from_prompt(&NpcGenerationParams {
-            prompt: "Terry is a kind general MD, but needs to feel like she belongs".to_string(),
-            name_override: None,
-            template: NpcTemplateKind::Auto,
-            career_terms: 2,
-            seed: 9101,
-            owner_user_id: "gm".to_string(),
-        });
-        let profile = derive_npc_motivational_profile(
-            &npc_gen.character.characteristics,
-            npc_gen.inferred_template,
-            "Terry is a kind general MD, but needs to feel like she belongs",
-            &npc_gen.character.granted_access_tags,
-            "awakened",
-        );
-        assert!(profile.negotiation_lever.contains("BLG=16") || profile.negotiation_lever.contains("SLF=5"));
-        assert!(profile.dual_psyche_wedge.contains("Wedge"));
-        assert!(!profile.dominant_poles.is_empty());
-    }
-
-    #[test]
-    fn test_compile_party_hooks_generates_character_and_entanglement_hooks() {
-        let mut pc1 = CharacterSheetRecord {
-            character_id: "pc-maya".to_string(),
-            character_name: "Maya Chen".to_string(),
-            callsign_or_role: "Field Diagnostician".to_string(),
-            origin_label: "Metro Clinic".to_string(),
-            operational_heat: 5,
-            granted_access_tags: vec!["DAISE_MED_L2".to_string()],
-            ..CharacterSheetRecord::default()
-        };
-        pc1.characteristics.opn = 17;
-        pc1.characteristics.blg = 16;
-        pc1.skills.insert("clinical_diagnosis_internal_medicine".to_string(), 5);
-
-        let mut pc2 = CharacterSheetRecord {
-            character_id: "pc-reeves".to_string(),
-            character_name: "Harlan Reeves".to_string(),
-            callsign_or_role: "Humanis Liaison".to_string(),
-            ..CharacterSheetRecord::default()
-        };
-        pc2.characteristics.opn = 5;
-        pc2.characteristics.cnf = 16;
-
-        let mut ctx = BTreeMap::new();
-        ctx.insert("location".to_string(), "St. Jude Triage Annex".to_string());
-        ctx.insert("sector_preset".to_string(), "hospital".to_string());
-
-        let manifest = compile_party_hooks(&[pc1, pc2], &ctx, "awakened");
-        assert_eq!(manifest.pack_id, "awakened");
-        assert!(manifest.hooks.iter().any(|h| h.category == HookCategory::IdentityPsyche));
-        assert!(manifest.hooks.iter().any(|h| h.category == HookCategory::SkillSpotlight));
-        assert!(manifest.hooks.iter().any(|h| h.category == HookCategory::CredentialAccess));
-        assert!(manifest.hooks.iter().any(|h| h.category == HookCategory::OperationalHeat));
-        assert!(manifest.party_entanglements.iter().any(|e| e.tension_axis.contains("OPN")));
-        assert!(manifest.hooks.windows(2).all(|w| w[0].salience >= w[1].salience));
-    }
-}

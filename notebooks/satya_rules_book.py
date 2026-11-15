@@ -116,45 +116,51 @@ def _():
             "03-character/lifepaths_and_economy.md",
         ),
         (
+            "lifepath_events_hobbies_and_factions",
+            "Part III: Character Architecture, Skills, Lifepaths & Economy",
+            "11. Lifepath Hobbies, Formative Life Events, Faction Templates & Walkthroughs",
+            "03-character/lifepath_events_hobbies_and_factions.md",
+        ),
+        (
             "psyche_and_social",
             "Part IV: Psyche, Morale & Social Combat",
-            "11. Psyche, Morale & Social Combat",
+            "12. Psyche, Morale & Social Combat",
             "04-psyche-and-social/psyche_morale_and_social_combat.md",
         ),
         (
             "tactical_triad",
             "Part V: Combat Architecture, Close Quarters & Firefights",
-            "12. Combat Architecture, Tactical Triad & Pools",
+            "13. Combat Architecture, Tactical Triad & Pools",
             "05-combat/tactical_triad_and_pools.md",
         ),
         (
             "melee_combat",
             "Part V: Combat Architecture, Close Quarters & Firefights",
-            "13. Melee Combat, Close-Quarters Tactics & The Tactical Triad",
+            "14. Melee Combat, Close-Quarters Tactics & The Tactical Triad",
             "05-combat/melee_combat.md",
         ),
         (
             "firearms_and_ballistics",
             "Part V: Combat Architecture, Close Quarters & Firefights",
-            "14. Firearm Engineering & Internal/External/Terminal Ballistics",
+            "15. Firearm Engineering & Internal/External/Terminal Ballistics",
             "05-combat/firearms_and_ballistics.md",
         ),
         (
             "ranged_combat_and_armor",
             "Part V: Combat Architecture, Close Quarters & Firefights",
-            "15. Ranged Combat, Suppression, Armor & Weapon Reliability",
+            "16. Ranged Combat, Suppression, Armor & Weapon Reliability",
             "05-combat/ranged_combat_and_armor.md",
         ),
         (
             "health_and_trauma",
             "Part VI: Health, Trauma, Movement, Vehicles & Survival",
-            "16. Health, Anatomical Trauma, Fatigue & Mental Conditions",
+            "17. Health, Anatomical Trauma, Fatigue & Mental Conditions",
             "06-health-and-survival/health_and_trauma.md",
         ),
         (
             "movement_and_environment",
             "Part VI: Health, Trauma, Movement, Vehicles & Survival",
-            "17. Movement, Encumbrance, Vehicles & Environmental Survival",
+            "18. Movement, Encumbrance, Vehicles & Environmental Survival",
             "06-health-and-survival/movement_vehicles_and_environment.md",
         ),
     ]
@@ -202,7 +208,7 @@ def _(CHAPTER_SPECS, chapters_by_id, mo, using_satya_py_backend):
     chapter_options = {
         f"{spec[2]} ({spec[1]})": spec[0] for spec in CHAPTER_SPECS
     }
-    chapter_options["All 17 Chapters (Complete Rules Compendium)"] = "ALL"
+    chapter_options["All 18 Chapters (Complete Rules Compendium)"] = "ALL"
 
     chapter_dropdown = mo.ui.dropdown(
         options=chapter_options,
@@ -211,7 +217,7 @@ def _(CHAPTER_SPECS, chapters_by_id, mo, using_satya_py_backend):
     )
     search_input = mo.ui.text(
         value="",
-        placeholder="Search across all 17 chapters (e.g., TN_eff, Tempo, Kuzushi, Dissonance)...",
+        placeholder="Search across all 18 chapters (e.g., TN_eff, Tempo, Kuzushi, Dissonance)...",
         label="Search Rules Book",
     )
 
@@ -220,7 +226,7 @@ def _(CHAPTER_SPECS, chapters_by_id, mo, using_satya_py_backend):
             mo.md(
                 f"""
                 # Satya TTRPG Rules Book & Interactive Mechanics Compendium
-                **17 Canonical Chapters · {total_words:,} Words · Engine Backend: `{backend_badge}`**
+                **18 Canonical Chapters · {total_words:,} Words · Engine Backend: `{backend_badge}`**
 
                 Browse individual chapters from `docs/ttrpg/` below, search across the entire ruleset, or experiment directly with the four interactive mechanics laboratories (**2d20 Watershed Cascade**, **Lifepath Skill Progression**, **Combat Tactical Pool & Melee Triad**, and **Social Cognitive Dissonance**).
                 """

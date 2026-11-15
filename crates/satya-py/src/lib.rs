@@ -1670,7 +1670,7 @@ pub fn evaluate_educational_advancement_roll(
     Ok(d.unbind())
 }
 
-/// Audits a skill unlock attempt against a canonical Lifepath preset (`"mateo_vance"`, `"priya_nair"`, or `"amara_okafor"`, `lifepaths_and_economy.md` §2.1–§2.3).
+/// Audits a skill unlock attempt against a canonical Lifepath preset (`"mateo_vance"`, `"priya_nair"`, `"amara_okafor"`, or `"linnea_cho"`, `lifepaths_and_economy.md` §2.1–§2.3 & `lifepath_events_hobbies_and_factions.md` §4.4).
 #[pyfunction]
 pub fn audit_canonical_lifepath_character(
     preset_name: &str,
@@ -1681,9 +1681,10 @@ pub fn audit_canonical_lifepath_character(
         "mateo" | "mateo_vance" => satya_engine::build_mateo_vance_lifepath(),
         "priya" | "priya_nair" | "dr_priya_nair" => satya_engine::build_priya_nair_lifepath(),
         "amara" | "amara_okafor" => satya_engine::build_amara_okafor_lifepath(),
+        "linnea" | "linnea_cho" => satya_engine::build_linnea_cho_lifepath(),
         other => {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "unknown lifepath preset '{other}'; expected 'mateo_vance', 'priya_nair', or 'amara_okafor'"
+                "unknown lifepath preset '{other}'; expected 'mateo_vance', 'priya_nair', 'amara_okafor', or 'linnea_cho'"
             )));
         }
     };
@@ -2251,7 +2252,7 @@ mod tests {
         assert!(triad.valid);
 
         let chapters = list_rules_chapters();
-        assert_eq!(chapters.len(), 17);
+        assert_eq!(chapters.len(), 18);
 
         let hits = search_rules_book("Tactical Triad", 3);
         assert!(!hits.is_empty());

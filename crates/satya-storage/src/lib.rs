@@ -810,13 +810,13 @@ impl EventLogRouter {
             .await
     }
 
-    /// Publishes a [`CharacterSheetEvent`] to the `character-sheets` topic and immediately flushes it.
+    /// Publishes a [`CharacterSheetEvent`] to the `character-sheets` topic (`v2`) and immediately flushes it.
     pub async fn log_character_sheet(&self, event: &CharacterSheetEvent) -> anyhow::Result<u64> {
         let offset = self
             .publish_event(
                 topics::CHARACTER_SHEETS,
                 subjects::CHARACTER_SHEET,
-                1,
+                2,
                 event,
             )
             .await?;
@@ -846,9 +846,15 @@ impl EventLogRouter {
                 topics::CHARACTER_SHEETS => subjects::CHARACTER_SHEET,
                 _ => subjects::CHAT_MESSAGE,
             };
+            let target_version = if subject == subjects::CHARACTER_SHEET {
+                2
+            } else {
+                1
+            };
             let reg = self
                 .registry
-                .get_by_subject_version(subject, 1)
+                .get_by_subject_version(subject, target_version)
+                .or_else(|_| self.registry.get_by_subject_version(subject, 1))
                 .expect("Registered schema exists");
 
             let destination_uri = match cfg.storage_backend {

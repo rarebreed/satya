@@ -1,4 +1,4 @@
-//! CLI utility (`cargo run -p satya-engine --bin build-rules-book`) that compiles all 17 canonical
+//! CLI utility (`cargo run -p satya-engine --bin build-rules-book`) that compiles all 18 canonical
 //! chapters of the Satya TTRPG Rules Book (`docs/ttrpg/`) into static HTML pages and `catalog.json`
 //! inside `docs/book/`.
 
@@ -259,6 +259,18 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
             "lifepaths_and_economy.html",
         ),
         ("lifepaths_and_economy.md", "lifepaths_and_economy.html"),
+        (
+            "03-character/lifepath_events_hobbies_and_factions.md",
+            "lifepath_events_hobbies_and_factions.html",
+        ),
+        (
+            "../03-character/lifepath_events_hobbies_and_factions.md",
+            "lifepath_events_hobbies_and_factions.html",
+        ),
+        (
+            "lifepath_events_hobbies_and_factions.md",
+            "lifepath_events_hobbies_and_factions.html",
+        ),
         (
             "04-psyche-and-social/psyche_morale_and_social_combat.md",
             "psyche_and_social.html",

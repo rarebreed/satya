@@ -28,7 +28,7 @@ pub enum CharacteristicCategory {
 
 define_coded_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-    pub enum CharacteristicCode [count = 30] {
+    pub enum CharacteristicCode [count = 32] {
         SPD => { code: "SPD", label: "Speed" },
         FOR => { code: "FOR", label: "Force" },
         DEX => { code: "DEX", label: "Dexterity" },
@@ -68,6 +68,10 @@ define_coded_enum! {
         CNF => { code: "CNF", label: "Conformity" },
         /// Aggressiveness (`AGG`, Psyche §7.2: Passive / Conflict-Averse vs. Combative / Dominant).
         AGG => { code: "AGG", label: "Aggressiveness", aliases: ["AGGRESSION"] },
+        /// Trust (`TRS`, Psyche §7.2: Cynical / Zero-Trust vs. Trusting / Open-Handed).
+        TRS => { code: "TRS", label: "Trust", aliases: ["TRUSTING"] },
+        /// Compassion (`CPS`, Psyche §7.2: Ruthless / Utilitarian vs. Merciful / Tender-Hearted).
+        CPS => { code: "CPS", label: "Compassion" },
     }
 }
 
@@ -90,9 +94,15 @@ impl CharacteristicCode {
             Self::SIG | Self::HEA | Self::TAC | Self::OLF | Self::TAS | Self::ITU => {
                 CharacteristicCategory::Sensory
             }
-            Self::EGO | Self::SLF | Self::OPN | Self::BLG | Self::EXT | Self::CNF | Self::AGG => {
-                CharacteristicCategory::Psyche
-            }
+            Self::EGO
+            | Self::SLF
+            | Self::OPN
+            | Self::BLG
+            | Self::EXT
+            | Self::CNF
+            | Self::AGG
+            | Self::TRS
+            | Self::CPS => CharacteristicCategory::Psyche,
         }
     }
 }
@@ -245,6 +255,18 @@ pub const fn psyche_pole_descriptor(code: CharacteristicCode, score: i32) -> &'s
             "Combative / Dominant / Hyper-Competitive"
         }
 
+        (CharacteristicCode::TRS, PsychePole::LowPole) => "Cynical / Zero-Trust / Paranoid",
+        (CharacteristicCode::TRS, PsychePole::Balanced) => "Discerning / Verify-Then-Trust",
+        (CharacteristicCode::TRS, PsychePole::HighPole) => "Trusting / Open-Handed / Gullible",
+
+        (CharacteristicCode::CPS, PsychePole::LowPole) => {
+            "Ruthless / Utilitarian / Cold-Blooded"
+        }
+        (CharacteristicCode::CPS, PsychePole::Balanced) => "Humane / Proportionate",
+        (CharacteristicCode::CPS, PsychePole::HighPole) => {
+            "Merciful / Tender-Hearted / Pacifistic"
+        }
+
         _ => "Non-Psyche Characteristic",
     }
 }
@@ -347,9 +369,13 @@ const SCALE_TABLE: [i32; 21] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 ];
 
+fn default_char_ten() -> i32 {
+    10
+}
+
 macro_rules! impl_characteristics_struct {
     ($($(#[$meta:meta])* $Variant:ident => $field:ident),+ $(,)?) => {
-        /// Complete canonical 30-characteristic profile (`1..=20` controlling scale for 28 attributes, plus `mas_kg` and `hgt_m`; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §3–§7).
+        /// Complete canonical 32-characteristic profile (`1..=20` controlling scale for 30 attributes, plus `mas_kg` and `hgt_m`; `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §3–§7).
         #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
         pub struct CharacterCharacteristics {
             $(
@@ -446,6 +472,10 @@ impl_characteristics_struct! {
     EXT => ext,
     CNF => cnf,
     AGG => agg,
+    #[serde(default = "default_char_ten")]
+    TRS => trs,
+    #[serde(default = "default_char_ten")]
+    CPS => cps,
 }
 
 /// Compute Quick Thinking ($D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$)
@@ -660,7 +690,7 @@ impl CharacteristicCode {
 
     pub const SOCIAL_ALL: [Self; 3] = [Self::COM, Self::PRE, Self::ELO];
 
-    pub const PSYCHE_ALL: [Self; 7] = [
+    pub const PSYCHE_ALL: [Self; 9] = [
         Self::EGO,
         Self::SLF,
         Self::OPN,
@@ -668,6 +698,8 @@ impl CharacteristicCode {
         Self::EXT,
         Self::CNF,
         Self::AGG,
+        Self::TRS,
+        Self::CPS,
     ];
 }
 
