@@ -323,6 +323,9 @@ def _classify_tool_tier(tool_name: str) -> tuple[str, str]:
         "query_satya_rules",
         "configure_scenario_director",
         "trigger_scenario_beat",
+        "verify_forensic_audit_proof",
+        "inspect_synthetic_or_proxy_telemetry",
+        "evaluate_npc_morale_or_trigger",
     }:
         return "TIER_2_RULESET_ENGINE", "satya-d20-rules"
     return "TIER_3_LORE_PROVIDER", "satya-campaign-lore"

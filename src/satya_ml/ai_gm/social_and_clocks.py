@@ -52,15 +52,96 @@ _DEFAULT_PSYCHE: dict[str, int] = {
 }
 
 
+_NPC_FACTION_ALIASES: dict[str, str] = {
+    "daise": "daise",
+    "government_daise": "daise",
+    "directorate": "daise",
+    "big_tech": "big_tech",
+    "helios": "big_tech",
+    "helios-synthetics": "big_tech",
+    "bandajara": "big_tech",
+    "dr_bandajara": "big_tech",
+    "satyang": "satyang",
+    "truth": "satyang",
+    "truth_cell": "satyang",
+    "humanis_primaris": "humanis_primaris",
+    "humanis": "humanis_primaris",
+    "reeves": "humanis_primaris",
+    "rogue_ai": "rogue_ai",
+    "rogue_proxy_echo": "rogue_ai",
+    "echo": "rogue_ai",
+    "echo-9": "rogue_ai",
+    "echo_9": "rogue_ai",
+}
+
+
+def compute_faction_standing_social_leverage(session_id: str, npc: dict[str, Any]) -> dict[str, Any]:
+    """Map the party's faction `party_standing` against an NPC into a Social `Delta_ext` shift."""
+    ledger = get_session_world_ledger(session_id)
+    clocks = ledger.get("faction_clocks") or []
+    candidate_blobs = [
+        str(npc.get(k) or "").strip().lower()
+        for k in ("faction_id", "faction", "faction_archetype", "npc_id", "name")
+        if npc.get(k)
+    ]
+    matched_id: str | None = None
+    for blob in candidate_blobs:
+        for alias, canonical in _NPC_FACTION_ALIASES.items():
+            if alias == blob or alias in blob:
+                matched_id = canonical
+                break
+        if matched_id:
+            break
+
+    party_standing = 0
+    if matched_id or candidate_blobs:
+        for clk in clocks:
+            if not isinstance(clk, dict):
+                continue
+            cid = str(clk.get("faction_id") or "").strip().lower()
+            cname = str(clk.get("faction_name") or "").strip().lower()
+            if (matched_id and cid == matched_id) or any(
+                cid and (cid in blob or blob in cid or (cname and blob in cname))
+                for blob in candidate_blobs
+            ):
+                matched_id = cid or matched_id
+                party_standing = int(clk.get("party_standing", 0) or 0)
+                break
+
+    if party_standing == 0:
+        return {
+            "matched_faction_id": matched_id,
+            "party_standing": 0,
+            "standing_delta_ext": 0,
+            "zero_trust_hostility_penalty": 0,
+        }
+
+    trs = _parse_psyche_dict(npc)["trs"]
+    zero_trust_penalty = 1 if (party_standing <= -2 and trs <= 7) else 0
+    standing_delta_ext = (-party_standing) + zero_trust_penalty
+    return {
+        "matched_faction_id": matched_id,
+        "party_standing": party_standing,
+        "standing_delta_ext": standing_delta_ext,
+        "zero_trust_hostility_penalty": zero_trust_penalty,
+    }
+
+
 def reset_social_and_world_state(session_id: str | None = None) -> None:
     """Clear in-memory fallback world ledgers and NPC social composure states."""
     if session_id is None:
         _SESSION_WORLD_LEDGERS.clear()
         _SESSION_SOCIAL_COMPOSURE.clear()
-        return
-    _SESSION_WORLD_LEDGERS.pop(session_id, None)
-    for key in [k for k in _SESSION_SOCIAL_COMPOSURE if k[0] == session_id]:
-        _SESSION_SOCIAL_COMPOSURE.pop(key, None)
+    else:
+        _SESSION_WORLD_LEDGERS.pop(session_id, None)
+        for key in [k for k in _SESSION_SOCIAL_COMPOSURE if k[0] == session_id]:
+            _SESSION_SOCIAL_COMPOSURE.pop(key, None)
+    try:
+        from satya_ml.ai_gm.audit_and_first_contact import reset_session_audit_proofs
+
+        reset_session_audit_proofs(session_id)
+    except Exception:
+        pass
 
 
 def _satya_py() -> Any:
@@ -235,6 +316,17 @@ def perform_empathy_read(
     return res
 
 
+_TRANSPARENCY_VECTOR_NAMES: frozenset[str] = frozenset(
+    {
+        "transparency_good_faith",
+        "transparency_vulnerability_good_faith",
+        "trust_alliance_guarantee_reciprocity",
+        "transparency",
+        "good_faith",
+    }
+)
+
+
 @tool
 def deliver_social_argument(
     target_npc_id_or_name: str,
@@ -243,8 +335,9 @@ def deliver_social_argument(
     target_psyche_json: str = "",
     ego_wound_dis_check_passed: bool | None = None,
     session_id: str = "default",
+    audit_proof_id: str = "",
 ) -> dict[str, Any]:
-    """Resolve a Contested Social Exchange using Satya's 9 Argument Vectors, Composure (`CMP`), and Dual-Psyche Wedge checks.
+    """Resolve a Contested Social Exchange using Satya's 9 Argument Vectors, Composure (`CMP`), Faction Standing, and Dual-Psyche Wedge checks.
 
     Supported `argument_vectors` slugs (combinable for Dual-Psyche Wedges):
     - `empirical_logic` (`OPN` evidence/logic)
@@ -254,12 +347,26 @@ def deliver_social_argument(
     - `humanitarian_mercy` (`SLF <= 7` self-sacrifice / altruistic duty)
     - `rules_protocol` / `break_law_orders` (`CNF` law, chain of command, or breaking orders)
     - `dominance_threat` / `bait_into_fight` (`AGG` intimidation vs. provoking aggression)
-    - `transparency_good_faith` vs. `verified_audit_proof` (`TRS`: open olive branch vs. hard audit proof for `TRS <= 7` zero-trust targets)
+    - `transparency_good_faith` vs. `verified_audit_proof` (`TRS`: open olive branch vs. hard audit proof for `TRS <= 7` zero-trust targets; auto-upgrades when a matching `AuditProofToken` exists in the session)
     - `moral_sanctity` vs. `utilitarian_triage` (`CPS`: witnessed suffering/mercy vs. cold greater-good triage)
     """
+    from satya_ml.ai_gm.audit_and_first_contact import find_matching_audit_proof
+
     npc = _resolve_npc_profile(target_npc_id_or_name, session_id)
     npc_key = str(npc.get("npc_id") or target_npc_id_or_name).strip().lower()
-    psyche_str = target_psyche_json.strip() or json.dumps(_parse_psyche_dict(npc))
+    if target_psyche_json.strip():
+        try:
+            psyche_dict = json.loads(target_psyche_json)
+            if isinstance(psyche_dict, dict):
+                npc_for_standing = {**npc, "psyche": psyche_dict}
+            else:
+                npc_for_standing = npc
+        except Exception:
+            npc_for_standing = npc
+        psyche_str = target_psyche_json.strip()
+    else:
+        npc_for_standing = npc
+        psyche_str = json.dumps(_parse_psyche_dict(npc))
 
     if isinstance(argument_vectors, str):
         stripped = argument_vectors.strip()
@@ -270,6 +377,29 @@ def deliver_social_argument(
     else:
         vec_list = list(argument_vectors)
 
+    matched_proof = find_matching_audit_proof(session_id, npc, audit_proof_id)
+    audit_proof_applied: str | None = None
+    upgraded_vectors: list[Any] = []
+    for vec in vec_list:
+        if isinstance(vec, str):
+            norm_v = vec.strip().lower().replace("-", "_")
+            if matched_proof is not None and norm_v in _TRANSPARENCY_VECTOR_NAMES:
+                upgraded_vectors.append("verified_audit_proof")
+                audit_proof_applied = matched_proof["proof_id"]
+            else:
+                upgraded_vectors.append(vec)
+        elif isinstance(vec, dict):
+            name_v = str(vec.get("vector") or vec.get("kind") or vec.get("name") or "").strip().lower().replace("-", "_")
+            if matched_proof is not None and name_v in _TRANSPARENCY_VECTOR_NAMES:
+                cloned = dict(vec)
+                cloned["verifies_with_audit_or_proof"] = True
+                upgraded_vectors.append(cloned)
+                audit_proof_applied = matched_proof["proof_id"]
+            else:
+                upgraded_vectors.append(vec)
+        else:
+            upgraded_vectors.append(vec)
+
     attr_tns = npc.get("attribute_tns") if isinstance(npc.get("attribute_tns"), dict) else {}
     dis = int(attr_tns.get("dis") or npc.get("dis") or 12)
     foc = int(attr_tns.get("foc") or npc.get("foc") or 12)
@@ -277,7 +407,7 @@ def deliver_social_argument(
     outcome = json.loads(
         _satya_py().evaluate_social_exchange_json(
             psyche_str,
-            json.dumps(vec_list),
+            json.dumps(upgraded_vectors),
             int(net_successes),
             json.dumps(prior_state) if prior_state else None,
             dis,
@@ -305,6 +435,20 @@ def deliver_social_argument(
                     }
                 )
 
+    standing_info = compute_faction_standing_social_leverage(session_id, npc_for_standing)
+    arg_eval = outcome.setdefault("argument_eval", {})
+    base_delta_ext = int(arg_eval.get("net_delta_ext", 0) or 0)
+    standing_delta_ext = int(standing_info["standing_delta_ext"])
+    total_delta_ext = base_delta_ext + standing_delta_ext
+    if standing_delta_ext != 0:
+        arg_eval["base_net_delta_ext"] = base_delta_ext
+        arg_eval["net_delta_ext"] = total_delta_ext
+
+    outcome["audit_proof_applied"] = audit_proof_applied
+    outcome["matched_faction_id"] = standing_info["matched_faction_id"]
+    outcome["faction_standing"] = standing_info["party_standing"]
+    outcome["faction_standing_delta_ext"] = standing_delta_ext
+    outcome["total_delta_ext"] = total_delta_ext
     outcome["target_npc_id"] = npc_key
     outcome["target_name"] = str(npc.get("name") or target_npc_id_or_name)
     return outcome

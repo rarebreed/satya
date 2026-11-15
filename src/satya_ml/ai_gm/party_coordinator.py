@@ -595,8 +595,11 @@ def execute_ready_npc_actions(
                         matched_prof = prof
                         break
 
-            skill_name, technique, control_c, skill_n, t_pool, c_pool, f_pool = (
-                _select_npc_combat_technique_and_triad(matched_prof, npc_comb)
+            from satya_ml.ai_gm.npc_psyche_combat import modulate_npc_combat_selection
+
+            base_selection = _select_npc_combat_technique_and_triad(matched_prof, npc_comb)
+            skill_name, technique, control_c, skill_n, t_pool, c_pool, f_pool, psyche_meta = (
+                modulate_npc_combat_selection(matched_prof, base_selection)
             )
             base_tc = 6
             neutral_b = 3
@@ -604,24 +607,40 @@ def execute_ready_npc_actions(
             next_tick = act_tick + eff_tc
 
             t0 = time.perf_counter()
-            roll_args = {
-                "session_id": session_id,
-                "actor_name": dname,
-                "check_category": skill_name,
-                "attribute_tn": control_c,
-                "skill_rank": skill_n,
-                "difficulty_mod": 0,
-                "internal_mod": fatigue,
-                "combat_technique": technique,
-                "tempo_pool": t_pool,
-                "control_pool": c_pool,
-                "force_pool": f_pool,
-                "note": f"Autonomous NPC Action Mode turn at Tick {act_tick}",
-            }
-            roll_res = roll_satya_d20_check.invoke(roll_args)
+            if psyche_meta["retreat_or_surrender"]:
+                roll_res = {
+                    "degree_of_success": "DISENGAGED_DEFENSIVELY",
+                    "successes_counted": 0,
+                    "signed_margin": 0,
+                    "effective_tn": 31 - control_c,
+                    "rolled_pairs": [],
+                    "non_attack_action": True,
+                }
+            else:
+                roll_args = {
+                    "session_id": session_id,
+                    "actor_name": dname,
+                    "check_category": skill_name,
+                    "attribute_tn": control_c,
+                    "skill_rank": skill_n,
+                    "difficulty_mod": 0,
+                    "internal_mod": fatigue,
+                    "combat_technique": technique,
+                    "tempo_pool": t_pool,
+                    "control_pool": c_pool,
+                    "force_pool": f_pool,
+                    "note": (
+                        f"Autonomous NPC Action Mode turn at Tick {act_tick}"
+                        + (" [NON-LETHAL RESTRAINT]" if psyche_meta["non_lethal_restraint"] else "")
+                    ),
+                }
+                roll_res = roll_satya_d20_check.invoke(roll_args)
             dur_ms = int(max(1.0, (time.perf_counter() - t0) * 1000.0))
 
-            stance_str = f"{technique.upper()} (T{t_pool}/C{c_pool}/F{f_pool})"
+            stance_str = (
+                f"{technique.upper()} (T{t_pool}/C{c_pool}/F{f_pool}, "
+                f"MORALE={psyche_meta['morale_state'].upper()})"
+            )
             tick_advance = max(0, act_tick - current_tick)
             tracker = advance_combat_tracker.invoke(
                 {
@@ -658,21 +677,33 @@ def execute_ready_npc_actions(
                 "successes_counted": succ,
                 "signed_margin": margin,
                 "degree_of_success": deg,
+                "morale_state": psyche_meta["morale_state"],
+                "retreat_or_surrender": psyche_meta["retreat_or_surrender"],
+                "non_lethal_restraint": psyche_meta["non_lethal_restraint"],
+                "trs": psyche_meta["trs"],
+                "cps": psyche_meta["cps"],
             }
             summaries.append(npc_summary)
-            summary_lines.append(
-                f"- **{dname}** (`{eid}`) acted on **Tick {act_tick}** using `{technique}` "
-                f"(`{skill_name}` N={skill_n}, C={control_c}, Triad `T={t_pool}/C={c_pool}/F={f_pool}`, `Effective TC = {eff_tc} ticks` -> `NextTick = {next_tick}`): "
-                f"rolled `{pairs}` vs `TN_eff = {tn_eff}` -> **{deg}** (`{succ}` successes, signed margin `{margin:+d}`)."
-            )
+            morale_upper = psyche_meta["morale_state"].upper()
+            if psyche_meta["retreat_or_surrender"]:
+                summary_lines.append(
+                    f"- **{dname}** (`{eid}`) acted on **Tick {act_tick}** — Morale `{morale_upper}` triggered defensive disengagement (`{technique}`, no attack roll, Triad `T={t_pool}/C={c_pool}/F={f_pool}`, `Effective TC = {eff_tc} ticks` -> `NextTick = {next_tick}`)."
+                )
+            else:
+                restraint_note = f", Non-Lethal Restraint (`CPS={psyche_meta['cps']}`)" if psyche_meta["non_lethal_restraint"] else ""
+                summary_lines.append(
+                    f"- **{dname}** (`{eid}`) acted on **Tick {act_tick}** using `{technique}` "
+                    f"(`{skill_name}` N={skill_n}, C={control_c}, Triad `T={t_pool}/C={c_pool}/F={f_pool}`, Morale `{morale_upper}`{restraint_note}, `Effective TC = {eff_tc} ticks` -> `NextTick = {next_tick}`): "
+                    f"rolled `{pairs}` vs `TN_eff = {tn_eff}` -> **{deg}** (`{succ}` successes, signed margin `{margin:+d}`)."
+                )
             invocations.append(
                 {
                     "step_index": len(invocations),
                     "span_id": uuid.uuid4().hex[:16],
                     "mcp_tier": "TIER_1_SATYA_CORE",
                     "server_id": "satya-core",
-                    "tool_name": "roll_satya_d20_check",
-                    "arguments_json": f'{{"actor_name": "{dname}", "combat_technique": "{technique}", "triad": "T{t_pool}/C{c_pool}/F{f_pool}"}}',
+                    "tool_name": "advance_combat_tracker" if psyche_meta["retreat_or_surrender"] else "roll_satya_d20_check",
+                    "arguments_json": f'{{"actor_name": "{dname}", "combat_technique": "{technique}", "triad": "T{t_pool}/C{c_pool}/F{f_pool}", "morale": "{morale_upper}"}}',
                     "result_summary_json": f"{deg} (successes={succ}, margin={margin:+d}, next_tick={next_tick})",
                     "is_error": False,
                     "duration_ms": dur_ms,
@@ -715,6 +746,9 @@ def execute_ready_npc_actions(
             "tool_invocations": [],
         }
 
+    from satya_ml.ai_gm.npc_psyche_combat import format_npc_psyche_combat_tag
+    from satya_ml.ai_gm.social_and_clocks import compute_faction_standing_social_leverage
+
     npc_roster_lines: list[str] = []
     for npc_id, prof in list(npcs.items())[:5]:
         name = str(prof.get("name") or npc_id)
@@ -724,9 +758,11 @@ def execute_ready_npc_actions(
         fat = int(prof.get("fatigue", 0))
         ws = int(prof.get("wound_shock", 0))
         skills_str = ", ".join(f"{k}:{v}" for k, v in list((prof.get("skills") or {}).items())[:3])
+        standing = int(compute_faction_standing_social_leverage(session_id, prof).get("party_standing", 0))
+        psyche_tag = format_npc_psyche_combat_tag(prof, standing)
         npc_roster_lines.append(
             f"- **{name}** (`{npc_id}`, {arch}) — Disposition: `{disp}`, Stance: `{stance}`, "
-            f"Fatigue: `{fat}`, Wound Shock: `{ws}`, Top Skills: `{skills_str}`"
+            f"Fatigue: `{fat}`, Wound Shock: `{ws}`, Top Skills: `{skills_str}`, {psyche_tag}"
         )
 
     narrative_directive = (

@@ -4,10 +4,13 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use satya_engine::{
-    ConvictionPrincipleArchetype, DissonanceResolutionPath, PsycheProfile, PsycheTraitId,
+    BattlefieldMoraleSituation, CombatMotivationKind, ConvictionPrincipleArchetype,
+    DissonanceResolutionPath, EmotionalTriggerKind, MoraleState, PsycheProfile, PsycheTraitId,
     SocialArgumentVector, SocialComposureState, apply_psyche_drift_mark, apply_world_ledger_update,
-    evaluate_conviction_surge, evaluate_empathy_read, evaluate_social_exchange_wounds,
-    resolve_cognitive_dissonance, seed_default_world_ledger,
+    compute_battlefield_morale_delta, evaluate_combat_morale_roll,
+    evaluate_combat_motivation_modifier, evaluate_conviction_surge, evaluate_emotional_trigger,
+    evaluate_empathy_read, evaluate_social_exchange_wounds, resolve_cognitive_dissonance,
+    seed_default_world_ledger,
 };
 use satya_schema::{
     EconomicTier, SessionWorldLedger, UpdateWorldLedgerRequest, WorldLedgerUpdateResponse,
@@ -416,6 +419,209 @@ pub fn seed_or_update_world_ledger_json(
     .map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
+fn parse_morale_state_code(raw: &str) -> MoraleState {
+    MoraleState::from_code_str(raw).unwrap_or(MoraleState::Steady)
+}
+
+fn parse_combat_motivation_kind(raw: &str, command_intact: bool) -> CombatMotivationKind {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "fighting_for_crew_family_homeland" | "crew_loyalty" | "family" | "homeland" => {
+            CombatMotivationKind::FightingForCrewFamilyHomeland
+        }
+        "shielding_innocents_sanctity_of_life" | "shielding_innocents" | "sanctity_of_life" => {
+            CombatMotivationKind::ShieldingInnocentsSanctityOfLife
+        }
+        "mercenary_transactional_under_fire" | "mercenary" | "transactional" => {
+            CombatMotivationKind::MercenaryTransactionalUnderFire
+        }
+        "sworn_duty_chain_of_command" | "sworn_duty" | "chain_of_command" => {
+            CombatMotivationKind::SwornDutyChainOfCommand { command_intact }
+        }
+        _ => CombatMotivationKind::NeutralOrSurvival,
+    }
+}
+
+fn parse_emotional_trigger_kind(raw: &str, wound_tier: i32) -> PyResult<EmotionalTriggerKind> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "being_wounded" | "wounded" => Ok(EmotionalTriggerKind::BeingWounded {
+            wound_tier: wound_tier.clamp(1, 4),
+        }),
+        "friend_or_squadmate_wounded" | "squadmate_wounded" | "ally_wounded" => {
+            Ok(EmotionalTriggerKind::FriendOrSquadmateWounded)
+        }
+        "loved_one_attacked_or_wounded" | "loved_one_attacked" | "loved_one_wounded" => {
+            Ok(EmotionalTriggerKind::LovedOneAttackedOrWounded)
+        }
+        "betrayed_by_trusted_ally" | "betrayed" | "trap_sprung" => {
+            Ok(EmotionalTriggerKind::BetrayedByTrustedAlly)
+        }
+        "insulted_or_taunted" | "taunted_or_insulted" | "insulted" | "taunted" => {
+            Ok(EmotionalTriggerKind::InsultedOrTaunted)
+        }
+        "publicly_humiliated" | "humiliated" => Ok(EmotionalTriggerKind::PubliclyHumiliated),
+        "seeing_innocent_suffering" | "innocent_suffering" => {
+            Ok(EmotionalTriggerKind::SeeingInnocentSuffering)
+        }
+        _ => Err(to_py_err(format!("Unknown emotional trigger '{raw}'"))),
+    }
+}
+
+fn parse_roll_pairs(raw: Option<&str>, fallback: Vec<(i32, i32)>) -> PyResult<Vec<(i32, i32)>> {
+    match raw {
+        Some(s) if !s.trim().is_empty() => serde_json::from_str::<Vec<(i32, i32)>>(s)
+            .map_err(|e| to_py_err(format!("Invalid roll_pairs JSON: {e}"))),
+        _ => Ok(fallback),
+    }
+}
+
+fn parse_battlefield_morale_situation(raw: &str) -> PyResult<BattlefieldMoraleSituation> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(BattlefieldMoraleSituation::default());
+    }
+    let val: serde_json::Value = serde_json::from_str(trimmed)
+        .map_err(|e| to_py_err(format!("Invalid situation JSON: {e}")))?;
+    let mut sit = BattlefieldMoraleSituation::default();
+    if let Some(obj) = val.as_object() {
+        if let Some(v) = obj.get("ally_casualty_ratio").and_then(|v| v.as_f64()) {
+            sit.ally_casualty_ratio = v;
+        }
+        if let Some(v) = obj.get("outnumbered_ratio").and_then(|v| v.as_f64()) {
+            sit.outnumbered_ratio = v;
+        }
+        if let Some(v) = obj
+            .get("leader_incapacitated_or_comms_cut")
+            .and_then(|v| v.as_bool())
+        {
+            sit.leader_incapacitated_or_comms_cut = v;
+        }
+        if let Some(v) = obj
+            .get("position_overrun_flanked_or_ambushed")
+            .and_then(|v| v.as_bool())
+        {
+            sit.position_overrun_flanked_or_ambushed = v;
+        }
+        if let Some(v) = obj.get("ammo_fraction_remaining").and_then(|v| v.as_f64()) {
+            sit.ammo_fraction_remaining = v;
+        }
+        if let Some(v) = obj.get("tracks_ammo").and_then(|v| v.as_bool()) {
+            sit.tracks_ammo = v;
+        }
+        if let Some(v) = obj.get("primary_weapon_compromised").and_then(|v| v.as_bool()) {
+            sit.primary_weapon_compromised = v;
+        }
+        if let Some(v) = obj
+            .get("attacks_ineffective_against_heavy_armor")
+            .and_then(|v| v.as_bool())
+        {
+            sit.attacks_ineffective_against_heavy_armor = v;
+        }
+        if let Some(v) = obj
+            .get("started_fatigued_or_sleep_deprived")
+            .and_then(|v| v.as_bool())
+        {
+            sit.started_fatigued_or_sleep_deprived = v;
+        }
+        if let Some(v) = obj
+            .get("additional_suppression_or_shock_delta")
+            .and_then(|v| v.as_i64())
+        {
+            sit.additional_suppression_or_shock_delta = v as i32;
+        }
+    }
+    Ok(sit)
+}
+
+/// Evaluates [`evaluate_combat_motivation_modifier`] (`§3.2`) for an NPC/PC Psyche profile.
+#[pyfunction]
+#[pyo3(signature = (target_psyche_json, motivation_kind, command_intact=true))]
+pub fn evaluate_combat_motivation_json(
+    target_psyche_json: &str,
+    motivation_kind: &str,
+    command_intact: bool,
+) -> PyResult<String> {
+    let psyche = parse_psyche_profile_json(target_psyche_json)?;
+    let kind = parse_combat_motivation_kind(motivation_kind, command_intact);
+    let mod_res = evaluate_combat_motivation_modifier(&psyche, kind);
+    serde_json::to_string(&mod_res).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
+/// Evaluates a `DIS` Composure check against a canonical [`EmotionalTriggerKind`] (`§3.3`).
+#[pyfunction]
+#[pyo3(signature = (target_psyche_json, dis, current_morale, current_delta_int, trigger_kind, wound_tier=1, roll_pairs_json=None))]
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_emotional_trigger_json(
+    target_psyche_json: &str,
+    dis: i32,
+    current_morale: &str,
+    current_delta_int: i32,
+    trigger_kind: &str,
+    wound_tier: i32,
+    roll_pairs_json: Option<&str>,
+) -> PyResult<String> {
+    let psyche = parse_psyche_profile_json(target_psyche_json)?;
+    let morale = parse_morale_state_code(current_morale);
+    let trigger = parse_emotional_trigger_kind(trigger_kind, wound_tier)?;
+    let pairs = parse_roll_pairs(roll_pairs_json, vec![(11, 10)])?;
+    let outcome = evaluate_emotional_trigger(
+        &psyche,
+        dis,
+        morale,
+        current_delta_int,
+        trigger,
+        &pairs,
+    );
+    serde_json::to_string(&outcome).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
+/// Evaluates a Contested Combat Morale Roll (`§3.4`) combining motivation & battlefield penalties.
+#[pyfunction]
+#[pyo3(signature = (target_psyche_json, dis, motivation_kind, command_intact, delta_int, situation_json, is_veteran_or_sere, current_morale, player_pairs_json, gm_pair_json))]
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_combat_morale_roll_json(
+    target_psyche_json: &str,
+    dis: i32,
+    motivation_kind: &str,
+    command_intact: bool,
+    delta_int: i32,
+    situation_json: &str,
+    is_veteran_or_sere: bool,
+    current_morale: &str,
+    player_pairs_json: &str,
+    gm_pair_json: &str,
+) -> PyResult<String> {
+    let psyche = parse_psyche_profile_json(target_psyche_json)?;
+    let mot = parse_combat_motivation_kind(motivation_kind, command_intact);
+    let mot_mod = evaluate_combat_motivation_modifier(&psyche, mot);
+    let sit = parse_battlefield_morale_situation(situation_json)?;
+    let delta_morale =
+        compute_battlefield_morale_delta(&sit, psyche.cnf) + mot_mod.command_breakdown_morale_shock;
+    let morale = parse_morale_state_code(current_morale);
+    let player_pairs: Vec<(i32, i32)> = serde_json::from_str(player_pairs_json)
+        .map_err(|e| to_py_err(format!("Invalid player_pairs JSON: {e}")))?;
+    let gm_pair: (i32, i32) = serde_json::from_str(gm_pair_json)
+        .map_err(|e| to_py_err(format!("Invalid gm_pair JSON: {e}")))?;
+
+    let roll_outcome = evaluate_combat_morale_roll(
+        dis,
+        mot_mod.delta_mot,
+        delta_int,
+        delta_morale,
+        is_veteran_or_sere,
+        morale,
+        &player_pairs,
+        gm_pair,
+    );
+    let payload = serde_json::json!({
+        "delta_mot": mot_mod.delta_mot,
+        "delta_morale": delta_morale,
+        "command_breakdown_morale_shock": mot_mod.command_breakdown_morale_shock,
+        "conviction_surge_pool_bonus": mot_mod.conviction_surge_pool_bonus,
+        "roll_outcome": roll_outcome,
+    });
+    serde_json::to_string(&payload).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
 /// Registers social combat, psyche, and world-clock helpers on the `satya_py` module.
 pub fn register_psyche_social_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_empathy_read_json, m)?)?;
@@ -424,6 +630,9 @@ pub fn register_psyche_social_functions(m: &Bound<'_, PyModule>) -> PyResult<()>
     m.add_function(wrap_pyfunction!(evaluate_conviction_surge_json, m)?)?;
     m.add_function(wrap_pyfunction!(apply_psyche_drift_mark_json, m)?)?;
     m.add_function(wrap_pyfunction!(seed_or_update_world_ledger_json, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_combat_motivation_json, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_emotional_trigger_json, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_combat_morale_roll_json, m)?)?;
     Ok(())
 }
 
@@ -495,5 +704,91 @@ mod tests {
         let ledger_val: serde_json::Value = serde_json::from_str(&ledger_json).unwrap();
         assert_eq!(ledger_val["ledger"]["operational_heat"], 4);
         assert!(!ledger_val["triggered_events"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_combat_motivation_triggers_and_morale_roll_roundtrip() {
+        let high_trust_compassionate = r#"{"trs": 16, "cps": 16, "blg": 12, "cnf": 14}"#;
+        let hardened_low_trust = r#"{"trs": 4, "cps": 6, "blg": 8, "cnf": 10}"#;
+
+        let mot_val: serde_json::Value = serde_json::from_str(
+            &evaluate_combat_motivation_json(
+                high_trust_compassionate,
+                "shielding_innocents_sanctity_of_life",
+                true,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(mot_val["delta_mot"], 2);
+
+        let betray_high: serde_json::Value = serde_json::from_str(
+            &evaluate_emotional_trigger_json(
+                high_trust_compassionate,
+                10,
+                "steady",
+                0,
+                "betrayed_by_trusted_ally",
+                1,
+                Some("[[5, 5]]"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(betray_high["susceptible"], true);
+        assert_eq!(betray_high["new_morale_state"], "wavering");
+        assert_eq!(betray_high["delta_int_inflicted"], 2);
+
+        let betray_low: serde_json::Value = serde_json::from_str(
+            &evaluate_emotional_trigger_json(
+                hardened_low_trust,
+                10,
+                "steady",
+                0,
+                "betrayed_by_trusted_ally",
+                1,
+                Some("[[5, 5]]"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(betray_low["susceptible"], false);
+
+        let mercy_trig: serde_json::Value = serde_json::from_str(
+            &evaluate_emotional_trigger_json(
+                high_trust_compassionate,
+                12,
+                "rage",
+                0,
+                "seeing_innocent_suffering",
+                1,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(mercy_trig["susceptible"], true);
+        assert_eq!(mercy_trig["new_morale_state"], "steady");
+        assert_eq!(mercy_trig["unlocks_protective_conviction"], true);
+
+        let morale_roll: serde_json::Value = serde_json::from_str(
+            &evaluate_combat_morale_roll_json(
+                high_trust_compassionate,
+                10,
+                "shielding_innocents_sanctity_of_life",
+                true,
+                0,
+                r#"{"ally_casualty_ratio": 0.6, "outnumbered_ratio": 2.5}"#,
+                false,
+                "steady",
+                "[[4, 3]]",
+                "[19, 18]",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(morale_roll["delta_mot"], 2);
+        assert_eq!(morale_roll["delta_morale"], 6);
+        assert!(morale_roll["roll_outcome"]["new_morale"].is_string());
     }
 }

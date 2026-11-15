@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::character_audit::characteristics_from_record;
-use crate::characteristics::{CharacterCharacteristics, CharacteristicCode, PsychePole, psyche_pole_descriptor};
+use crate::characteristics::{CharacterCharacteristics, PsychePole, psyche_pole_descriptor};
 use crate::npc_generator::{NpcTemplateKind, any_cue};
 use crate::psyche_social::{HasPsyche, PsycheTraitId};
 use crate::skills_trees::lookup_skill_node;
@@ -564,6 +564,9 @@ pub enum HookCategory {
     LifepathDebt,
     ConditionStrain,
     PartyFriction,
+    FactionWedge,
+    HobbyContact,
+    FormativeAnchor,
 }
 
 /// Single actionable story beat tailored to a specific character's sheet & Psyche.
@@ -580,6 +583,8 @@ pub struct MotivationalHookCard {
     pub preferred_vectors: Vec<String>,
     pub pressure_lever: String,
     pub salience: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_clock_hint: Option<String>,
 }
 
 /// Pairwise or crew-wide moral/tactical tension across multiple PCs in the same party.
@@ -817,6 +822,7 @@ pub fn compile_character_hooks(
             preferred_vectors: vectors,
             pressure_lever: spec.pressure.to_string(),
             salience,
+            target_clock_hint: None,
         });
     }
 
@@ -845,6 +851,7 @@ pub fn compile_character_hooks(
             preferred_vectors: vec!["EmpiricalEvidenceLogicNovelIdeas".to_string()],
             pressure_lever: "Time pressure or witness reluctance forces them to stake credibility on their diagnosis/read.".to_string(),
             salience,
+            target_clock_hint: None,
         });
     }
 
@@ -870,6 +877,7 @@ pub fn compile_character_hooks(
             preferred_vectors: vec!["RulesLawProtocolChainOfCommand".to_string()],
             pressure_lever: "Use official access cleanly (leaving logs) or burn cover/allies to keep team off-grid.".to_string(),
             salience: 0.72,
+            target_clock_hint: None,
         });
     }
 
@@ -896,6 +904,7 @@ pub fn compile_character_hooks(
             preferred_vectors: vec!["DominanceThreatDareConfrontation".to_string(), "PersonalProfitImmunitySelfInterest".to_string()],
             pressure_lever: "Spend favor/credibility to scrub the trail now, or accept tightening pursuit later.".to_string(),
             salience,
+            target_clock_hint: None,
         });
     }
 
@@ -919,6 +928,7 @@ pub fn compile_character_hooks(
             preferred_vectors: vec!["GroupConsensusLoyaltySharedIdentity".to_string()],
             pressure_lever: "Old favor demands repayment at an inconvenient operational moment.".to_string(),
             salience: 0.60,
+            target_clock_hint: None,
         });
     }
 
@@ -938,8 +948,18 @@ pub fn compile_character_hooks(
             preferred_vectors: vec!["SelfSacrificeHumanitarianDutyMercy".to_string()],
             pressure_lever: "Refusing rest risks acute slip-up; accepting aid creates intimacy or leverage.".to_string(),
             salience: 0.68,
+            target_clock_hint: None,
         });
     }
+
+    // 7. Lifepath Hobbies, Formative Life Events & Faction Archetype Wedge
+    cards.extend(
+        crate::hook_weaver_lifepath::compile_lifepath_and_faction_hooks(
+            record,
+            active_location,
+            pack_id,
+        ),
+    );
 
     cards.sort_by(|a, b| b.salience.total_cmp(&a.salience).then_with(|| a.hook_id.cmp(&b.hook_id)));
     cards
@@ -955,6 +975,7 @@ pub fn compile_party_hooks(
     let active_location = scene_context
         .get("location")
         .or_else(|| scene_context.get("sector_title"))
+        .or_else(|| scene_context.get("active_location"))
         .cloned();
     let loc_ref = active_location.as_deref();
     let active_preset = scene_context.get("sector_preset").map(String::as_str).unwrap_or("");
@@ -975,48 +996,11 @@ pub fn compile_party_hooks(
         hooks.extend(member_hooks);
     }
 
-    let mut party_entanglements = Vec::new();
-    for i in 0..party.len() {
-        for j in (i + 1)..party.len() {
-            let a = &party[i];
-            let b = &party[j];
-            let chars_a = characteristics_from_record(&a.characteristics);
-            let chars_b = characteristics_from_record(&b.characteristics);
-            let mut best_gap: Option<(CharacteristicCode, i32, i32, i32)> = None;
-            for code in CharacteristicCode::PSYCHE_ALL {
-                let va = chars_a.get_scale(code);
-                let vb = chars_b.get_scale(code);
-                let diff = (va - vb).abs();
-                if diff >= 6 && best_gap.map(|(_, _, _, best)| diff > best).unwrap_or(true) {
-                    best_gap = Some((code, va, vb, diff));
-                }
-            }
-            if let Some((code, va, vb, diff)) = best_gap {
-                party_entanglements.push(PartyEntanglementHook {
-                    hook_id: format!(
-                        "entangle_{}_{}_{}",
-                        a.character_id,
-                        b.character_id,
-                        code.as_str().to_ascii_lowercase()
-                    ),
-                    title: format!("{} vs {}: {} Polarity", a.character_name, b.character_name, code.as_str()),
-                    participant_ids: vec![a.character_id.clone(), b.character_id.clone()],
-                    participant_names: vec![a.character_name.clone(), b.character_name.clone()],
-                    tension_axis: format!("{}={va} vs {}={vb} (gap {diff})", code.as_str(), code.as_str()),
-                    shared_scene_prompt: format!(
-                        "Stage an immediate decision where {} ({}={va}: {}) and {} ({}={vb}: {}) must agree on one course of action.",
-                        a.character_name,
-                        code.as_str(),
-                        psyche_pole_descriptor(code, va),
-                        b.character_name,
-                        code.as_str(),
-                        psyche_pole_descriptor(code, vb),
-                    ),
-                    salience: (0.64 + (diff as f32 * 0.03)).min(0.97),
-                });
-            }
-        }
-    }
+    let mut party_entanglements =
+        crate::hook_weaver_lifepath::compile_psyche_polarity_entanglements(party);
+    party_entanglements.extend(
+        crate::hook_weaver_lifepath::compile_faction_entanglements(party, pack_id),
+    );
 
     hooks.sort_by(|a, b| b.salience.total_cmp(&a.salience).then_with(|| a.hook_id.cmp(&b.hook_id)));
     party_entanglements.sort_by(|a, b| b.salience.total_cmp(&a.salience).then_with(|| a.hook_id.cmp(&b.hook_id)));

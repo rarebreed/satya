@@ -204,12 +204,18 @@ def ensure_or_sync_motivation_ledger(
             )
     extremes.sort(key=lambda x: abs(int(x["score"]) - 10), reverse=True)
 
+    from satya_ml.ai_player.psyche_anchors import (
+        format_9axis_and_lifepath_prompt_lines,
+        sync_character_9axis_and_lifepath_anchors,
+    )
+
     existing = _PLAYER_MOTIVATION_LEDGERS.get(key)
     if existing is not None:
         existing["character_name"] = cname
         existing["psyche_scores"] = psyche_scores
         if extremes:
             existing["psyche_extremes"] = extremes
+        sync_character_9axis_and_lifepath_anchors(existing, character_sheet)
         return copy.deepcopy(existing)
 
     bg_goal = str((character_sheet or {}).get("background_summary") or "").strip()
@@ -242,6 +248,7 @@ def ensure_or_sync_motivation_ledger(
         "psyche_strain_notes": [],
         "known_npc_reads": {},
     }
+    sync_character_9axis_and_lifepath_anchors(ledger, character_sheet)
     _PLAYER_MOTIVATION_LEDGERS[key] = ledger
     return copy.deepcopy(ledger)
 
@@ -267,6 +274,9 @@ def format_motivation_ledger_for_prompt(ledger: dict[str, Any] | None) -> str:
     if reads:
         read_parts = [f"{npc}: {', '.join(str(t) for t in traits[:3])}" for npc, traits in list(reads.items())[:4]]
         lines.append(f"- Known NPC Empathy Reads: {'; '.join(read_parts)}")
+    from satya_ml.ai_player.psyche_anchors import format_9axis_and_lifepath_prompt_lines as _fmt_9axis
+
+    lines.extend(_fmt_9axis(ledger))
     return "\n".join(lines)
 
 
@@ -683,7 +693,19 @@ def perform_player_empathy_read(
     res = json.loads(satya_py.evaluate_empathy_read_json(json.dumps(psyche), eff_successes))
     ledger = ensure_or_sync_motivation_ledger(session_id, player_user_id, sheet)
     trait_labels = [f"{t['code']}={t['score']}" for t in res.get("revealed_traits") or []]
-    _PLAYER_MOTIVATION_LEDGERS[(session_id, player_user_id)]["known_npc_reads"][target_npc_name] = trait_labels
+    mutable_ledger = _PLAYER_MOTIVATION_LEDGERS[(session_id, player_user_id)]
+    mutable_ledger["known_npc_reads"][target_npc_name] = trait_labels
+    from satya_ml.ai_player.psyche_anchors import (
+        apply_npc_trust_journal_entry,
+        record_empathy_trust_observation,
+    )
+
+    record_empathy_trust_observation(
+        mutable_ledger,
+        target_npc_name,
+        list(res.get("revealed_traits") or []),
+        bool(res.get("detects_psyche_wedge_tension", False)),
+    )
     res["target_npc"] = target_npc_name
     if roll_res is not None:
         res["roll"] = roll_res
@@ -700,8 +722,9 @@ def update_my_motivation_journal(
     psyche_reflection: str = "",
     session_id: str = "default",
     player_user_id: str = "ai-player-1",
+    npc_trust_update: str = "",
 ) -> dict[str, Any]:
-    """Record a discovered clue, update your immediate goal, or log a party bond in your `MotivationLedger`."""
+    """Record a discovered clue, update your immediate goal, log a party bond, or record an NPC trust stance (`npc_id:stance`) in your `MotivationLedger`."""
     from satya_ml.ai_player.tools import get_player_session_context
 
     ctx = get_player_session_context(session_id, player_user_id)
@@ -731,4 +754,8 @@ def update_my_motivation_journal(
         ledger["party_bonds_and_tensions"].append(party_bond_note.strip())
     if psyche_reflection.strip():
         ledger["psyche_strain_notes"].append(psyche_reflection.strip())
+    if npc_trust_update.strip():
+        from satya_ml.ai_player.psyche_anchors import apply_npc_trust_journal_entry
+
+        apply_npc_trust_journal_entry(ledger, npc_trust_update)
     return copy.deepcopy(ledger)

@@ -1279,8 +1279,9 @@ def register_spatial_clue_pin(
     floor_index: int = 0,
     requires_los: bool = False,
     one_shot: bool = True,
+    grants_audit_proof_tag: str = "",
 ) -> dict[str, Any]:
-    """Place a hidden spatial sensory clue (`SIG`/`HEA`/`OLF`/`ITU`) that whispers automatically during token movement."""
+    """Place a hidden spatial sensory clue (`SIG`/`HEA`/`OLF`/`ITU`) that whispers automatically during token movement (and optionally mints a verified `AuditProofToken`)."""
     norm_channel = _CHANNEL_ALIAS_MAP.get(str(channel or "SIGHT").strip().upper(), "SIGHT")
     pin = {
         "pin_id": str(pin_id).strip() or f"pin-{uuid.uuid4().hex[:6]}",
@@ -1294,6 +1295,7 @@ def register_spatial_clue_pin(
         "revealed_to": [],
         "requires_los": bool(requires_los),
         "one_shot": bool(one_shot),
+        "grants_audit_proof_tag": str(grants_audit_proof_tag or "").strip(),
     }
     pins = [p for p in _SESSION_SPATIAL_PINS.get(session_id, []) if p.get("pin_id") != pin["pin_id"]]
     pins.append(pin)
@@ -1462,6 +1464,26 @@ def move_map_token(
             if isinstance(whispers, list) and whispers:
                 updated["passive_whispers"] = whispers
                 triggered_ids = {str(w.get("pin_id")): str(w.get("observer_id")) for w in whispers}
+                pin_by_id = {str(p.get("pin_id")): p for p in _SESSION_SPATIAL_PINS.get(session_id, [])}
+                for w in whispers:
+                    pin = pin_by_id.get(str(w.get("pin_id")))
+                    proof_tag = str(pin.get("grants_audit_proof_tag") or "").strip() if pin else ""
+                    if proof_tag and pin is not None:
+                        existing_pid = str(pin.get("minted_audit_proof_id") or "").strip()
+                        if not existing_pid:
+                            from satya_ml.ai_gm.audit_and_first_contact import record_audit_proof_token
+
+                            token = record_audit_proof_token(
+                                session_id=session_id,
+                                subject_or_faction=proof_tag,
+                                summary=str(w.get("whisper_text") or pin.get("whisper_text") or proof_tag),
+                                source_kind="spatial_pin_discovery",
+                                pin_id=str(pin.get("pin_id")),
+                            )
+                            existing_pid = token["proof_id"]
+                            pin["minted_audit_proof_id"] = existing_pid
+                        w["minted_audit_proof_id"] = existing_pid
+                        w["grants_audit_proof_tag"] = proof_tag
                 for pin in _SESSION_SPATIAL_PINS.get(session_id, []):
                     pid = str(pin.get("pin_id"))
                     if pid in triggered_ids and pin.get("one_shot", True):

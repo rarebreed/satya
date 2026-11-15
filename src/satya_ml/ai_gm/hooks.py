@@ -142,6 +142,25 @@ def normalize_character_sheet_record(raw: dict[str, Any], index: int = 0) -> dic
     }
     cid = str(raw.get("character_id") or f"pc-{index}")
     cname = str(raw.get("character_name") or cid)
+    lifepath_json = raw.get("lifepath_config_json")
+    if not lifepath_json:
+        if isinstance(raw.get("lifepath_config"), dict):
+            lifepath_json = json.dumps(raw["lifepath_config"])
+        else:
+            lp_keys = (
+                "youth_hobby",
+                "personal_hobbies",
+                "formative_events",
+                "career_terms",
+                "adolescent_life_event_roll_2d20",
+                "adolescent_life_event_choice",
+                "faction_archetype",
+                "faction_id",
+            )
+            extracted_lp = {k: raw[k] for k in lp_keys if k in raw and raw[k] is not None}
+            if extracted_lp:
+                lifepath_json = json.dumps(extracted_lp)
+
     return {
         "character_id": cid,
         "owner_user_id": str(raw.get("owner_user_id") or cid),
@@ -173,7 +192,7 @@ def normalize_character_sheet_record(raw: dict[str, Any], index: int = 0) -> dic
         "social_wound": raw.get("social_wound"),
         "psyche_drift_marks": int(raw.get("psyche_drift_marks", 0)),
         "notes": raw.get("notes"),
-        "lifepath_config_json": raw.get("lifepath_config_json"),
+        "lifepath_config_json": lifepath_json,
         "faction_id": raw.get("faction_id") or None,
         "faction_archetype": raw.get("faction_archetype") or None,
     }
@@ -203,7 +222,11 @@ def compile_player_motivational_hooks(
     mod = _load_satya_py()
     if mod is not None and hasattr(mod, "compile_party_motivational_hooks_json"):
         try:
-            scene_ctx = {"active_location": str(active_location)} if active_location else {}
+            scene_ctx = (
+                {"location": str(active_location), "active_location": str(active_location)}
+                if active_location
+                else {}
+            )
             raw_json = mod.compile_party_motivational_hooks_json(
                 json.dumps(clean_chars),
                 json.dumps(scene_ctx) if scene_ctx else None,

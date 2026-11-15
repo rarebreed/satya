@@ -5,7 +5,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use satya_engine::{
     FactionArchetypeId, NpcGenerationParams, NpcTemplateKind, compile_party_hooks,
-    generate_npc_from_prompt_with_pack,
+    extract_character_lifepath_anchors, generate_npc_from_prompt_with_pack,
 };
 use satya_schema::CharacterSheetRecord;
 use std::collections::BTreeMap;
@@ -77,10 +77,22 @@ pub fn generate_npc_profile_json(
     serde_json::to_string(&result).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
+/// Extracts canonical Faction, Personal Hobby Contacts & Formative Life Event anchors from a
+/// JSON-encoded [`CharacterSheetRecord`] for the AI GM and Embodied AI Player.
+#[pyfunction]
+#[pyo3(signature = (character_json))]
+pub fn extract_character_lifepath_anchors_json(character_json: &str) -> PyResult<String> {
+    let record: CharacterSheetRecord = serde_json::from_str(character_json)
+        .map_err(|e| to_py_err(format!("Invalid character JSON: {e}")))?;
+    let anchors = extract_character_lifepath_anchors(&record);
+    serde_json::to_string(&anchors).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
 /// Registers motivational hook and NPC generator helpers on the `satya_py` module.
 pub fn register_hooks_and_npc_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_party_motivational_hooks_json, m)?)?;
     m.add_function(wrap_pyfunction!(generate_npc_profile_json, m)?)?;
+    m.add_function(wrap_pyfunction!(extract_character_lifepath_anchors_json, m)?)?;
     Ok(())
 }
 
@@ -136,5 +148,14 @@ mod tests {
             satyang_val["character"]["faction_archetype"],
             "SATYANG_MANJUSRI"
         );
+
+        let anchors_raw = extract_character_lifepath_anchors_json(
+            &serde_json::to_string(&satyang_val["character"]).unwrap(),
+        )
+        .unwrap();
+        let anchors_val: serde_json::Value = serde_json::from_str(&anchors_raw).unwrap();
+        assert_eq!(anchors_val["faction_id"], "SATYANG");
+        assert_eq!(anchors_val["faction_archetype"], "SATYANG_MANJUSRI");
+        assert!(!anchors_val["hobby_contacts"].as_array().unwrap().is_empty());
     }
 }

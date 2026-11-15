@@ -299,13 +299,26 @@ def compute_normalized_probabilities(weights: dict[str, float]) -> dict[str, flo
     }
 
 
+def _load_starter_scenario_defaults() -> tuple[str, list[str], str]:
+    from satya_ml.campaign_config import get_active_campaign_pack_name, get_pack_starter_scenario
+
+    active_pack = get_active_campaign_pack_name()
+    starter = get_pack_starter_scenario(active_pack)
+    premise = str(starter.get("campaign_premise") or "")
+    beats = [str(b) for b in (starter.get("planned_beats") or []) if str(b).strip()]
+    return premise, beats, active_pack
+
+
 def _default_director_state() -> dict[str, Any]:
     weights = default_event_weights()
+    starter_premise, starter_beats, active_pack = _load_starter_scenario_defaults()
     return {
         "flow_mode": "hybrid",
-        "campaign_premise": "",
+        "campaign_premise": starter_premise,
         "player_desires": ["intrigue", "combat", "thought_provoking_discussions"],
-        "planned_beats": [],
+        "planned_beats": starter_beats,
+        "auto_seeded_starter": bool(starter_premise or starter_beats),
+        "seeded_pack": active_pack,
         "event_weights": weights,
         "normalized_probabilities": compute_normalized_probabilities(weights),
         "beat_probability_per_turn": 0.35,
@@ -319,8 +332,15 @@ def _default_director_state() -> dict[str, Any]:
 
 def get_session_scenario_director(session_id: str) -> dict[str, Any]:
     """Return the Scenario Director state dictionary for `session_id`, initializing defaults if absent."""
+    from satya_ml.campaign_config import get_active_campaign_pack_name
+
     sid = session_id or "default"
-    if sid not in _SESSION_SCENARIO_DIRECTORS:
+    cur = _SESSION_SCENARIO_DIRECTORS.get(sid)
+    if cur is None or (
+        cur.get("auto_seeded_starter")
+        and not cur.get("completed_beats")
+        and cur.get("seeded_pack") != get_active_campaign_pack_name()
+    ):
         _SESSION_SCENARIO_DIRECTORS[sid] = _default_director_state()
     return dict(_SESSION_SCENARIO_DIRECTORS[sid])
 
@@ -409,6 +429,9 @@ _HOOK_CATEGORY_TO_DIRECTOR_SLUGS: dict[str, tuple[str, ...]] = {
     "LIFEPATH_DEBT": ("mysterious_stranger", "dramatic_revelation", "moral_or_faction_dilemma"),
     "CONDITION_STRAIN": ("downtime_campfire_moment", "environmental_hazard"),
     "PARTY_FRICTION": ("moral_or_faction_dilemma", "thought_provoking_discussion"),
+    "FACTION_WEDGE": ("moral_or_faction_dilemma", "ticking_clock_escalation", "dramatic_revelation"),
+    "HOBBY_CONTACT": ("mysterious_stranger", "thought_provoking_discussion", "downtime_campfire_moment"),
+    "FORMATIVE_ANCHOR": ("dramatic_revelation", "moral_or_faction_dilemma", "downtime_campfire_moment"),
 }
 
 
@@ -691,11 +714,20 @@ def configure_scenario_director(
                     pass
     prob_gate_active = beat_probability_per_turn is not None
     effective_prob = 0.35 if beat_probability_per_turn is None else float(beat_probability_per_turn)
+    custom_premise_only = bool(campaign_premise.strip()) and not seed_pack_starter and planned_beats is None
     resolved_premise = campaign_premise or starter_premise or current.get("campaign_premise", "")
-    resolved_beats = (
-        planned_beats
-        if planned_beats is not None
-        else (starter_beats if seed_pack_starter and starter_beats else current.get("planned_beats", []))
+    if planned_beats is not None:
+        resolved_beats = list(planned_beats)
+    elif seed_pack_starter and starter_beats:
+        resolved_beats = list(starter_beats)
+    elif custom_premise_only:
+        resolved_beats = []
+    else:
+        resolved_beats = list(current.get("planned_beats", []))
+    auto_seeded = (
+        False
+        if (custom_premise_only or seed_pack_starter or planned_beats is not None)
+        else bool(current.get("auto_seeded_starter", False))
     )
     updated = set_session_scenario_director(
         session_id,
@@ -704,6 +736,7 @@ def configure_scenario_director(
             "campaign_premise": resolved_premise,
             "player_desires": player_desires if player_desires is not None else current.get("player_desires", []),
             "planned_beats": resolved_beats,
+            "auto_seeded_starter": auto_seeded,
             "event_weights": base_weights,
             "beat_probability_per_turn": effective_prob,
             "probability_gate_active": prob_gate_active,

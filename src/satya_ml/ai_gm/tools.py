@@ -316,11 +316,13 @@ def _normalize_remote_npc_entry(entry: dict[str, Any]) -> dict[str, Any]:
         "skills": dict(gm_char.get("skills") or {}),
         "attribute_tns": dict(gm_char.get("attribute_tns") or {}),
         "combat_stance": str(gm_char.get("combat_stance") or "NEUTRAL"),
+        "morale_state": str(entry.get("morale_state") or gm_char.get("morale_state") or "steady").lower(),
         "fatigue": int(gm_char.get("fatigue_level", 0) or 0),
         "wound_shock": int(gm_char.get("wound_shock_index", 0) or 0),
         "immediate_agenda": entry.get("immediate_agenda"),
         "core_drive": entry.get("core_drive"),
         "dual_psyche_wedge_hint": entry.get("dual_psyche_wedge_hint"),
+        "social_combat_wedge_hint": entry.get("social_combat_wedge_hint") or entry.get("dual_psyche_wedge_hint"),
     }
 
 
@@ -505,10 +507,20 @@ def generate_npc_from_description(
                     if isinstance(item, (list, tuple)) and len(item) >= 3
                 ],
                 "gm_secret_dossier": dossier,
-                "disposition": "wary",
+                "disposition": (
+                    "hostile"
+                    if int(compute_faction_standing_social_leverage(session_id, ch).get("party_standing", 0)) <= -2
+                    else (
+                        "receptive"
+                        if int(compute_faction_standing_social_leverage(session_id, ch).get("party_standing", 0)) >= 2
+                        else "wary"
+                    )
+                ),
+                "morale_state": "steady",
                 "immediate_agenda": motiv.get("immediate_agenda"),
                 "core_drive": motiv.get("core_drive"),
                 "dual_psyche_wedge_hint": motiv.get("dual_psyche_wedge"),
+                "social_combat_wedge_hint": motiv.get("dual_psyche_wedge"),
             }
             _SESSION_NPCS.setdefault(session_id, {})[str(npc_entry["character_id"]).lower()] = (
                 _normalize_remote_npc_entry(npc_entry)
@@ -715,11 +727,22 @@ def generate_npc_from_description(
     }
 
     npcs = get_session_npcs(session_id)
+    standing_info = compute_faction_standing_social_leverage(
+        session_id,
+        {"npc_id": cid, "name": npc_name, "psyche": psyche, "description": desc_clean},
+    )
+    init_disp = (
+        "hostile"
+        if int(standing_info.get("party_standing", 0)) <= -2
+        else ("receptive" if int(standing_info.get("party_standing", 0)) >= 2 else "wary")
+    )
     npcs[cid] = {
         "npc_id": cid,
         "name": npc_name,
         "archetype": role_title,
         "template": tmpl,
+        "disposition": init_disp,
+        "morale_state": "steady",
         "psyche": psyche,
         "psyche_summary": psyche_summary,
         "skills": skills,
@@ -1615,8 +1638,14 @@ from satya_ml.ai_gm.scenario_director import (
     sync_scenario_director_from_memories,
     trigger_scenario_beat,
 )
+from satya_ml.ai_gm.audit_and_first_contact import (
+    inspect_synthetic_or_proxy_telemetry,
+    verify_forensic_audit_proof,
+)
+from satya_ml.ai_gm.npc_psyche_combat import evaluate_npc_morale_or_trigger
 from satya_ml.ai_gm.social_and_clocks import (
     advance_faction_or_heat_clock,
+    compute_faction_standing_social_leverage,
     deliver_social_argument,
     format_world_ledger_for_prompt,
     get_session_world_ledger,
@@ -1748,6 +1777,9 @@ def get_builtin_gm_tools() -> list[Any]:
         perform_empathy_read,
         deliver_social_argument,
         resolve_psyche_dissonance_or_surge,
+        verify_forensic_audit_proof,
+        inspect_synthetic_or_proxy_telemetry,
+        evaluate_npc_morale_or_trigger,
         get_world_clocks_and_heat,
         advance_faction_or_heat_clock,
     ]
