@@ -227,7 +227,7 @@ define_coded_enum! {
 define_coded_enum! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-    pub enum CareerTermTrack [count = 8] {
+    pub enum CareerTermTrack [count = 14] {
         UniversityUndergraduateStem => {
             code: "UNIVERSITY_STEM",
             label: "University — STEM / Engineering (B.S. / M.S. / Ph.D.)",
@@ -238,6 +238,31 @@ define_coded_enum! {
             label: "Medical School & Surgical Residency",
             aliases: ["MEDICAL_SCHOOL_AND_RESIDENCY"],
         },
+        UniversityHumanitiesLawEthics => {
+            code: "UNIV_HUMANITIES",
+            label: "University — Humanities, Law, Philosophy & Ethics (B.A. / J.D. / Ph.D.)",
+            aliases: ["UNIVERSITY_HUMANITIES_LAW_ETHICS"],
+        },
+        CorporateManagementFinancePolicy => {
+            code: "CORPORATE_POLICY",
+            label: "Corporate Management, Quantitative Finance & Policy",
+            aliases: ["CORPORATE_MANAGEMENT_FINANCE_POLICY"],
+        },
+        JournalismMediaPerformingArts => {
+            code: "JOURNALISM_MEDIA",
+            label: "Journalism, Media, PR & Performing Arts",
+            aliases: ["JOURNALISM_MEDIA_PERFORMING_ARTS"],
+        },
+        GrassrootsActivismHumanitarianNgo => {
+            code: "GRASSROOTS_NGO",
+            label: "Grassroots Activism, Humanitarian NGO & Contemplative Ministry",
+            aliases: ["GRASSROOTS_ACTIVISM_HUMANITARIAN_NGO"],
+        },
+        CybersecurityAiRedTeaming => {
+            code: "CYBER_RED_TEAM",
+            label: "Cybersecurity, AI Red-Teaming & Underground Collective",
+            aliases: ["CYBERSECURITY_AI_RED_TEAMING"],
+        },
         MilitaryCombatArmsSpecOps => {
             code: "MILITARY_COMBAT_ARMS",
             label: "Military Service — Combat Arms / Special Operations",
@@ -247,6 +272,11 @@ define_coded_enum! {
             code: "LAW_ENFORCEMENT_SWAT",
             label: "Law Enforcement / SWAT / Detective Bureau",
             aliases: ["LAW_ENFORCEMENT_SWAT_DETECTIVE"],
+        },
+        CorporateSecOpsExecutiveProtection => {
+            code: "CORPORATE_SECOPS",
+            label: "Corporate SecOps, Private Military & Executive Protection",
+            aliases: ["CORPORATE_SEC_OPS_EXECUTIVE_PROTECTION"],
         },
         IntelligenceServiceClandestine => {
             code: "INTELLIGENCE_CLANDESTINE",
@@ -277,11 +307,16 @@ impl CareerTermTrack {
     #[must_use]
     pub const fn granted_access_tags(self) -> &'static [SkillAccessTier] {
         match self {
-            Self::UniversityUndergraduateStem | Self::MedicalSchoolAndResidency => &[
+            Self::UniversityUndergraduateStem
+            | Self::MedicalSchoolAndResidency
+            | Self::UniversityHumanitiesLawEthics
+            | Self::CorporateManagementFinancePolicy => &[
                 SkillAccessTier::Academic,
                 SkillAccessTier::VocationalLicensed,
             ],
-            Self::MilitaryCombatArmsSpecOps | Self::LawEnforcementSwatDetective => &[
+            Self::MilitaryCombatArmsSpecOps
+            | Self::LawEnforcementSwatDetective
+            | Self::CorporateSecOpsExecutiveProtection => &[
                 SkillAccessTier::Restricted,
                 SkillAccessTier::VocationalLicensed,
             ],
@@ -290,10 +325,15 @@ impl CareerTermTrack {
                 SkillAccessTier::Illicit,
                 SkillAccessTier::VocationalLicensed,
             ],
+            Self::CybersecurityAiRedTeaming => &[
+                SkillAccessTier::VocationalLicensed,
+                SkillAccessTier::Illicit,
+            ],
             Self::OrganizedCrimeCartelSyndicate => &[SkillAccessTier::Illicit],
-            Self::BlueCollarTradesMerchantMarine | Self::RuralAgrarianFrontierRanger => {
-                &[SkillAccessTier::VocationalLicensed]
-            }
+            Self::JournalismMediaPerformingArts
+            | Self::GrassrootsActivismHumanitarianNgo
+            | Self::BlueCollarTradesMerchantMarine
+            | Self::RuralAgrarianFrontierRanger => &[SkillAccessTier::VocationalLicensed],
         }
     }
 
@@ -317,6 +357,26 @@ impl CareerTermTrack {
                 (chars.ana, aptitudes.apt_qnt.max(aptitudes.apt_cmp))
             }
             Self::MedicalSchoolAndResidency => (chars.mem.max(chars.ana), aptitudes.apt_bio),
+            Self::UniversityHumanitiesLawEthics => (
+                chars.mem.max(chars.ins),
+                aptitudes.apt_lng.max(aptitudes.apt_soc),
+            ),
+            Self::CorporateManagementFinancePolicy => (
+                chars.ana.max(chars.elo),
+                aptitudes.apt_qnt.max(aptitudes.apt_soc),
+            ),
+            Self::JournalismMediaPerformingArts => (
+                chars.cre.max(chars.elo),
+                aptitudes.apt_lng.max(aptitudes.apt_soc).max(aptitudes.apt_aud),
+            ),
+            Self::GrassrootsActivismHumanitarianNgo => (
+                chars.ins.max(chars.elo),
+                aptitudes.apt_soc.max(aptitudes.apt_bio),
+            ),
+            Self::CybersecurityAiRedTeaming => (
+                chars.ana.max(chars.cre),
+                aptitudes.apt_cmp.max(aptitudes.apt_qnt),
+            ),
             Self::MilitaryCombatArmsSpecOps => (
                 chars.for_stat.max(chars.dex),
                 aptitudes.apt_fin.max(aptitudes.apt_kin),
@@ -324,6 +384,10 @@ impl CareerTermTrack {
             Self::LawEnforcementSwatDetective => (
                 chars.ins.max(chars.sig),
                 aptitudes.apt_soc.max(aptitudes.apt_fin),
+            ),
+            Self::CorporateSecOpsExecutiveProtection => (
+                chars.dis.max(chars.sig),
+                aptitudes.apt_fin.max(aptitudes.apt_soc),
             ),
             Self::IntelligenceServiceClandestine => (
                 chars.ins.max(chars.elo),
@@ -351,8 +415,26 @@ impl CareerTermTrack {
             Self::MedicalSchoolAndResidency => {
                 "General Biology >= 2, General Chemistry >= 2, MEM >= 12, ANA >= 11, DIS >= 12"
             }
+            Self::UniversityHumanitiesLawEthics => {
+                "High School Diploma (or GED), Reading >= 2, Writing >= 2, MEM >= 10, INS >= 10"
+            }
+            Self::CorporateManagementFinancePolicy => {
+                "High School Diploma (or University), Algebra >= 2, ANA >= 11, ELO >= 10"
+            }
+            Self::JournalismMediaPerformingArts => {
+                "Writing >= 2 (or Artistic Portfolio), CRE >= 10 or ELO >= 10"
+            }
+            Self::GrassrootsActivismHumanitarianNgo => {
+                "Any Origin (Empathy >= 1 or Persuasion >= 1, INS >= 10 or CPS >= 12)"
+            }
+            Self::CybersecurityAiRedTeaming => {
+                "Programming >= 1 or Digital Literacy >= 1, ANA >= 11, CRE >= 10"
+            }
             Self::MilitaryCombatArmsSpecOps => "FOR >= 9, FIT >= 10, HLT >= 10",
             Self::LawEnforcementSwatDetective => "DIS >= 10, SIG >= 10, INS >= 10",
+            Self::CorporateSecOpsExecutiveProtection => {
+                "Military/Police Vet or Academy (FOR >= 10, DIS >= 11, SIG >= 11)"
+            }
             Self::IntelligenceServiceClandestine => "INS >= 11, DIS >= 11, ELO >= 10",
             Self::OrganizedCrimeCartelSyndicate => {
                 "Underworld recruitment or Juvenile Gang background (PRE >= 9 or INS >= 9)"
@@ -403,6 +485,68 @@ impl CareerTermTrack {
                     ),
                 )
             }
+            Self::UniversityHumanitiesLawEthics => {
+                let reading = rank("reading_comprehension");
+                let writing = rank("writing_composition");
+                let ok = !academic_tree_frozen
+                    && reading >= 2
+                    && writing >= 2
+                    && chars.mem >= 10
+                    && chars.ins >= 10;
+                (
+                    ok,
+                    format!(
+                        "Academic Unfrozen: {}, Reading N={reading} (req >=2), Writing N={writing} (req >=2), MEM {} (req >=10), INS {} (req >=10)",
+                        !academic_tree_frozen, chars.mem, chars.ins
+                    ),
+                )
+            }
+            Self::CorporateManagementFinancePolicy => {
+                let alg = rank("elementary_algebra_geometry");
+                let ok = !academic_tree_frozen && alg >= 2 && chars.ana >= 11 && chars.elo >= 10;
+                (
+                    ok,
+                    format!(
+                        "Academic Unfrozen: {}, Algebra N={alg} (req >=2), ANA {} (req >=11), ELO {} (req >=10)",
+                        !academic_tree_frozen, chars.ana, chars.elo
+                    ),
+                )
+            }
+            Self::JournalismMediaPerformingArts => {
+                let writing = rank("writing_composition");
+                let ok = writing >= 2 && (chars.cre >= 10 || chars.elo >= 10);
+                (
+                    ok,
+                    format!(
+                        "Writing N={writing} (req >=2), CRE {} / ELO {} (req >=10)",
+                        chars.cre, chars.elo
+                    ),
+                )
+            }
+            Self::GrassrootsActivismHumanitarianNgo => {
+                let emp = rank("empathy_social_perception");
+                let pers = rank("persuasion_fast_talk");
+                let ok = (emp >= 1 || pers >= 1) && (chars.ins >= 10 || chars.cps >= 12);
+                (
+                    ok,
+                    format!(
+                        "Empathy N={emp} / Persuasion N={pers} (req >=1), INS {} (req >=10) or CPS {} (req >=12)",
+                        chars.ins, chars.cps
+                    ),
+                )
+            }
+            Self::CybersecurityAiRedTeaming => {
+                let prog = rank("programming_scripting");
+                let lit = rank("digital_ai_literacy");
+                let ok = (prog >= 1 || lit >= 1) && chars.ana >= 11 && chars.cre >= 10;
+                (
+                    ok,
+                    format!(
+                        "Programming N={prog} / Digital Lit N={lit} (req >=1), ANA {} (req >=11), CRE {} (req >=10)",
+                        chars.ana, chars.cre
+                    ),
+                )
+            }
             Self::MilitaryCombatArmsSpecOps => {
                 let ok = chars.for_stat >= 9 && chars.fit >= 10 && chars.hlt >= 10;
                 (
@@ -420,6 +564,16 @@ impl CareerTermTrack {
                     format!(
                         "DIS {} (req >=10), SIG {} (req >=10), INS {} (req >=10)",
                         chars.dis, chars.sig, chars.ins
+                    ),
+                )
+            }
+            Self::CorporateSecOpsExecutiveProtection => {
+                let ok = chars.for_stat >= 10 && chars.dis >= 11 && chars.sig >= 11;
+                (
+                    ok,
+                    format!(
+                        "FOR {} (req >=10), DIS {} (req >=11), SIG {} (req >=11)",
+                        chars.for_stat, chars.dis, chars.sig
                     ),
                 )
             }
@@ -502,6 +656,71 @@ impl CareerTermTrack {
                 "psychology_behavioral_analysis_counseling",
                 "genetics_biotech_cyber_implantation",
             ],
+            Self::UniversityHumanitiesLawEthics => &[
+                "reading_comprehension",
+                "writing_composition",
+                "persuasion_fast_talk",
+                "history_political_science",
+                "rhetoric_oratory_debate",
+                "philosophy_formal_logic_ethics",
+                "research_archival_science",
+                "foreign_language_specific",
+                "law_jurisprudence",
+                "statistics_probability",
+            ],
+            Self::CorporateManagementFinancePolicy => &[
+                "elementary_algebra_geometry",
+                "digital_ai_literacy",
+                "statistics_probability",
+                "economics_finance_accounting",
+                "persuasion_fast_talk",
+                "negotiation_diplomacy",
+                "leadership_command",
+                "rhetoric_oratory_debate",
+                "law_jurisprudence",
+            ],
+            Self::JournalismMediaPerformingArts => &[
+                "writing_composition",
+                "persuasion_fast_talk",
+                "charm_rapport",
+                "deception_bluff",
+                "empathy_social_perception",
+                "sketching_doodling",
+                "digital_ai_literacy",
+                "photography_cinematography_digital_media",
+                "singing_vocal_rhythm",
+                "musical_instrument_specific",
+                "acting_stagecraft_mimicry",
+                "research_archival_science",
+                "rhetoric_oratory_debate",
+            ],
+            Self::GrassrootsActivismHumanitarianNgo => &[
+                "empathy_social_perception",
+                "persuasion_fast_talk",
+                "first_aid_bls_cpr",
+                "deception_bluff",
+                "streetwise_underworld_etiquette",
+                "negotiation_diplomacy",
+                "foreign_language_specific",
+                "psychology_behavioral_analysis_counseling",
+                "rhetoric_oratory_debate",
+                "philosophy_formal_logic_ethics",
+            ],
+            Self::CybersecurityAiRedTeaming => &[
+                "digital_ai_literacy",
+                "elementary_algebra_geometry",
+                "statistics_probability",
+                "programming_scripting",
+                "algorithms_systems_architecture",
+                "cybersecurity_network_intrusion",
+                "cryptography_quantum_computing",
+                "machine_learning_ai_engineering",
+                "alertness_situational_awareness",
+                "stealth_sneaking_hiding",
+                "surveillance_reconnaissance_countersurveillance",
+                "manual_dexterity_tinkering",
+                "lockpicking_physical_intrusion",
+            ],
             Self::MilitaryCombatArmsSpecOps => &[
                 "manual_dexterity_tinkering",
                 "brawling_unarmed_striking",
@@ -547,6 +766,23 @@ impl CareerTermTrack {
                 "fully_automatic_burst_weapons",
                 "forensics_crime_scene_investigation",
                 "law_jurisprudence",
+            ],
+            Self::CorporateSecOpsExecutiveProtection => &[
+                "manual_dexterity_tinkering",
+                "alertness_situational_awareness",
+                "stealth_sneaking_hiding",
+                "brawling_unarmed_striking",
+                "balance_footwork",
+                "first_aid_bls_cpr",
+                "pistols_handguns",
+                "long_guns_rifles_carbines_shotguns",
+                "tactical_carbine_cqb",
+                "grappling_wrestling_submissions",
+                "surveillance_reconnaissance_countersurveillance",
+                "driving_wheeled_tracked",
+                "high_speed_pursuit_evasive_driving",
+                "paramedic_combat_trauma_care",
+                "small_unit_tactics_cqb_doctrine",
             ],
             Self::IntelligenceServiceClandestine => &[
                 "alertness_situational_awareness",

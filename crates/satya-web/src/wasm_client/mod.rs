@@ -67,6 +67,7 @@ pub mod webrtc;
 pub mod wgpu_shared;
 pub mod wizard;
 pub mod wizard_views_lifepath;
+pub mod wizard_views_lifepath_extras;
 pub mod wizard_views_skills;
 pub mod wizard_views_stats;
 pub mod workspace_drawers;
@@ -271,6 +272,7 @@ macro_rules! for_all_window_callbacks {
             "satyaWizardSetPsyche" => satya_wizard_set_psyche(String, String),
             "satyaWizardRollAptitudes" => satya_wizard_roll_aptitudes(),
             "satyaWizardRollCompleteLifepath" => satya_wizard_roll_complete_lifepath(),
+            "satyaWizardApplyFactionTemplate" => satya_wizard_apply_faction_template(String),
             "satyaWizardRollLifepathStage" => satya_wizard_roll_lifepath_stage(u8),
             "satyaWizardUpdateLifepathField" => satya_wizard_update_lifepath_field(String, String),
             "satyaWizardUpdateCareerTerm" => satya_wizard_update_career_term(usize, String, String),

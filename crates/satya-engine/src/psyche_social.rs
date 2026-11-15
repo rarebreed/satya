@@ -33,12 +33,12 @@ pub use crate::social_combat::*;
 // ============================================================================
 
 define_coded_enum! {
-    /// The 7 canonical Bipolar Psyche Traits (`1..=20`, neutral equilibrium `10`)
+    /// The 9 canonical Bipolar Psyche Traits (`1..=20`, neutral equilibrium `10`)
     /// from `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §7.2 and
     /// `docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §1.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "snake_case")]
-    pub enum PsycheTraitId [count = 7] {
+    pub enum PsycheTraitId [count = 9] {
         /// **Openness (`OPN`)**: Low (`1–7`) Dogmatic / Rigid / Closed-Minded vs. High (`13–20`) Curious / Receptive / Open-Minded.
         Openness => { code: "OPN", label: "Openness" },
         /// **Selfishness (`SLF`)**: Low (`1–7`) Altruistic / Self-Sacrificing vs. High (`13–20`) Entitled / Mercenary / Acquisitive.
@@ -53,6 +53,10 @@ define_coded_enum! {
         Conformity => { code: "CNF", label: "Conformity" },
         /// **Extraversion (`EXT`)**: Low (`1–7`) Introverted / Solitary / Guarded vs. High (`13–20`) Gregarious / Thrill-Seeking.
         Extraversion => { code: "EXT", label: "Extraversion" },
+        /// **Trust (`TRS`)**: Low (`1–7`) Cynical / Zero-Trust / Paranoid vs. High (`13–20`) Trusting / Open-Handed / Gullible.
+        Trust => { code: "TRS", label: "Trust", aliases: ["TRUSTING"] },
+        /// **Compassion (`CPS`)**: Low (`1–7`) Ruthless / Utilitarian / Cold-Blooded vs. High (`13–20`) Merciful / Tender-Hearted / Pacifistic.
+        Compassion => { code: "CPS", label: "Compassion" },
     }
 }
 
@@ -72,6 +76,8 @@ impl PsycheTraitId {
             Self::Ego => CharacteristicCode::EGO,
             Self::Conformity => CharacteristicCode::CNF,
             Self::Extraversion => CharacteristicCode::EXT,
+            Self::Trust => CharacteristicCode::TRS,
+            Self::Compassion => CharacteristicCode::CPS,
         }
     }
 }
@@ -86,12 +92,17 @@ pub enum PsycheViolationPole {
     LowPole,
 }
 
+fn default_psyche_ten() -> i32 {
+    10
+}
+
 macro_rules! impl_psyche_profile {
-    ($($Variant:ident => $field:ident),+ $(,)?) => {
-        /// A character's 6-trait Psyche profile (`1..=20`, default `10` for all traits).
+    ($($(#[$meta:meta])* $Variant:ident => $field:ident),+ $(,)?) => {
+        /// A character's 9-trait Psyche profile (`1..=20`, default `10` for all traits).
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         pub struct PsycheProfile {
             $(
+                $(#[$meta])*
                 pub $field: i32,
             )+
         }
@@ -178,9 +189,13 @@ impl_psyche_profile! {
     Ego => ego,
     Conformity => cnf,
     Extraversion => ext,
+    #[serde(default = "default_psyche_ten")]
+    Trust => trs,
+    #[serde(default = "default_psyche_ten")]
+    Compassion => cps,
 }
 
-/// Trait implemented by any type that exposes the 7 canonical Psyche scores ([`PsycheProfile`] and [`CharacterCharacteristics`]).
+/// Trait implemented by any type that exposes the 9 canonical Psyche scores ([`PsycheProfile`] and [`CharacterCharacteristics`]).
 pub trait HasPsyche: Index<PsycheTraitId, Output = i32> {
     fn as_psyche_profile(&self) -> PsycheProfile;
 }
@@ -416,6 +431,8 @@ pub fn apply_psyche_drift_mark(
 pub enum ConvictionPrincipleArchetype {
     /// **Altruistic / Tribal Sacrifice** (`BLG >= 15` or `SLF <= 5`): Holding a doorway or taking a bullet for the crew.
     AltruisticOrTribalSacrifice,
+    /// **Boundless Compassion** (`CPS >= 15`): Stepping into lethal danger or burning cover to shield helpless innocents, whistleblowers, or an enslaved sentient mind.
+    BoundlessCompassion,
     /// **Unbowed Defiance** (`AGG >= 15` or `EGO >= 15`): Refusing to kneel or yield to an overwhelming adversary.
     UnbowedDefiance,
     /// **Iconoclastic Truth** (`OPN >= 15` or `CNF <= 5`): Exposing a conspiracy or defying corrupt authority at personal risk.
@@ -472,6 +489,7 @@ pub fn evaluate_conviction_surge(
     let check = |arch: ConvictionPrincipleArchetype| -> bool {
         match arch {
             ConvictionPrincipleArchetype::AltruisticOrTribalSacrifice => p.blg >= 15 || p.slf <= 5,
+            ConvictionPrincipleArchetype::BoundlessCompassion => p.cps >= 15,
             ConvictionPrincipleArchetype::UnbowedDefiance => p.agg >= 15 || p.ego >= 15,
             ConvictionPrincipleArchetype::IconoclasticTruth => p.opn >= 15 || p.cnf <= 5,
             ConvictionPrincipleArchetype::ExtremeTraitEmbodiment(t) => p[t] >= 15 || p[t] <= 6,
@@ -482,6 +500,7 @@ pub fn evaluate_conviction_surge(
         Some(arch) => check(arch).then_some(arch),
         None => [
             ConvictionPrincipleArchetype::AltruisticOrTribalSacrifice,
+            ConvictionPrincipleArchetype::BoundlessCompassion,
             ConvictionPrincipleArchetype::UnbowedDefiance,
             ConvictionPrincipleArchetype::IconoclasticTruth,
         ]
@@ -521,6 +540,8 @@ pub fn evaluate_conviction_surge(
 pub enum CombatMotivationKind {
     /// **Fighting for Crew, Family, or Homeland** (`BLG >= 14` or `SLF <= 6`).
     FightingForCrewFamilyHomeland,
+    /// **Shielding Innocents / Sanctity of Life** (`CPS >= 14` gains `+2` morale bolster; `CPS <= 6` suffers `-1` alienation friction).
+    ShieldingInnocentsSanctityOfLife,
     /// **Mercenary / Transactional Motive** (`SLF >= 14` and `BLG <= 8`), when wounded or odds turn against them.
     MercenaryTransactionalUnderFire,
     /// **Sworn Duty / Chain of Command** (`CNF >= 14`), with commanding officer present (`true`) or command broken (`false`).
@@ -552,6 +573,22 @@ pub fn evaluate_combat_motivation_modifier(
                 delta_mot: if p.blg >= 16 || p.slf <= 4 { 4 } else { 2 },
                 command_breakdown_morale_shock: 0,
                 conviction_surge_pool_bonus: 2,
+            }
+        }
+        CombatMotivationKind::ShieldingInnocentsSanctityOfLife => {
+            if p.cps >= 14 {
+                CombatMotivationModifier {
+                    delta_mot: 2,
+                    command_breakdown_morale_shock: 0,
+                    conviction_surge_pool_bonus: 2,
+                }
+            } else if p.cps <= 6 {
+                CombatMotivationModifier {
+                    delta_mot: -1,
+                    ..Default::default()
+                }
+            } else {
+                CombatMotivationModifier::default()
             }
         }
         CombatMotivationKind::MercenaryTransactionalUnderFire if p.slf >= 14 && p.blg <= 8 => {
@@ -586,13 +623,15 @@ pub enum EmotionalTriggerKind {
     BeingWounded { wound_tier: i32 },
     /// **Friend / Squadmate Wounded**: Relevant when `BLG >= 13` ($\Delta_{\text{ext}} = +2$).
     FriendOrSquadmateWounded,
-    /// **Loved One Attacked / Wounded**: Relevant when `BLG >= 14` or `SLF <= 7` ($\Delta_{\text{ext}} = +4$).
+    /// **Loved One Attacked / Wounded**: Relevant when `BLG >= 14`, `CPS >= 14`, or `SLF <= 7` ($\Delta_{\text{ext}} = +4$).
     LovedOneAttackedOrWounded,
+    /// **Betrayed by a Trusted Ally / Trap Sprung**: High `TRS >= 14` suffers $+4$ shock; `TRS <= 6` is hardened (`0` shock); balanced `7..=13` suffers $+2$.
+    BetrayedByTrustedAlly,
     /// **Insulted / Taunted**: Relevant when `EGO >= 13` or `AGG >= 13` ($\Delta_{\text{ext}} = \max(|\text{EGO}-10|, |\text{AGG}-10|)$).
     InsultedOrTaunted,
     /// **Publicly Humiliated / Outclassed**: Relevant when `EGO >= 14` ($\Delta_{\text{ext}} = +4$).
     PubliclyHumiliated,
-    /// **Seeing Innocent Suffering**: Relevant when `SLF <= 7` (lessens aggression toward surrendering foes or triggers protective resolve).
+    /// **Seeing Innocent Suffering**: Relevant when `CPS >= 14` or `SLF <= 7` (unless callous `CPS <= 6` or `SLF >= 14`).
     SeeingInnocentSuffering,
 }
 
@@ -695,10 +734,19 @@ pub fn evaluate_emotional_trigger(
             roll_outcome(2, false, current_morale, (fail_st, 0))
         }
         EmotionalTriggerKind::LovedOneAttackedOrWounded => {
-            if !(p.blg >= 14 || p.slf <= 7) {
+            if !(p.blg >= 14 || p.slf <= 7 || p.cps >= 14) {
                 return EmotionalTriggerOutcome::not_susceptible(current_morale);
             }
             roll_outcome(4, true, MoraleState::High, (MoraleState::Rage, 0))
+        }
+        EmotionalTriggerKind::BetrayedByTrustedAlly => {
+            if p.trs <= 6 {
+                return EmotionalTriggerOutcome::not_susceptible(current_morale);
+            }
+            let base_delta_ext = if p.trs >= 14 { 4 } else { 2 };
+            let fail_state = step_morale_condition(current_morale, -1);
+            let fail_int = if p.trs >= 14 { 2 } else { 0 };
+            roll_outcome(base_delta_ext, false, current_morale, (fail_state, fail_int))
         }
         EmotionalTriggerKind::InsultedOrTaunted => {
             if !(p.ego >= 13 || p.agg >= 13) {
@@ -721,7 +769,7 @@ pub fn evaluate_emotional_trigger(
             roll_outcome(4, false, current_morale, (fail_st, 2))
         }
         EmotionalTriggerKind::SeeingInnocentSuffering => {
-            let susceptible = p.slf <= 7;
+            let susceptible = (p.slf <= 7 || p.cps >= 14) && p.cps > 6 && p.slf < 14;
             EmotionalTriggerOutcome {
                 susceptible,
                 delta_ext: 0,

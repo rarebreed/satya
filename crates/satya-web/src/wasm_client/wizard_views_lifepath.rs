@@ -3,6 +3,7 @@
 
 use crate::wasm_client::dom::escape_html;
 use crate::wasm_client::wizard::CharacterWizardState;
+pub use crate::wasm_client::wizard_views_lifepath_extras::*;
 use satya_engine::{
     CANONICAL_SKILL_TREES, CareerTermConfig, CareerTermTrack, EducationalAdvancementResult,
     HighSchoolTrack, LifepathBaselineResult, LifepathBuildConfig, RuralYouthArchetype, SkillType,
@@ -44,6 +45,8 @@ pub(crate) fn roll_lifepath_stage_in_config<F: FnMut(i32) -> i32>(
             lp.age15_crisis_roll_2d20 = rng(20) + rng(20);
             lp.age15_dropout_override = None;
             lp.stage4_path_override = None;
+            lp.adolescent_life_event_roll_2d20 = Some((rng(20) + rng(20)).clamp(2, 40));
+            lp.adolescent_life_event_choice = satya_engine::LifeEventChoiceBranch::DefaultPath;
         }
         4 => {
             lp.stage4a_hs_pairs = roll_2d20_pairs_with(rng);
@@ -53,6 +56,8 @@ pub(crate) fn roll_lifepath_stage_in_config<F: FnMut(i32) -> i32>(
             for term in &mut lp.career_terms {
                 term.term_roll_pairs = roll_2d20_pairs_with(rng);
                 term.override_successes = None;
+                term.life_event_roll_2d20 = Some((rng(20) + rng(20)).clamp(2, 40));
+                term.life_event_choice = satya_engine::LifeEventChoiceBranch::DefaultPath;
             }
         }
         _ => {}
@@ -66,6 +71,9 @@ pub(crate) fn apply_lifepath_field_in_config<F: FnMut(i32) -> i32>(
     val: &str,
     rng: &mut F,
 ) {
+    if apply_lifepath_extra_field(lp, field, val, rng) {
+        return;
+    }
     let parsed_ov = val.parse::<usize>().ok().map(|n| n.min(2));
     match field {
         "origin_class" => {
@@ -121,6 +129,7 @@ pub(crate) fn apply_lifepath_field_in_config<F: FnMut(i32) -> i32>(
                     term_roll_pairs: roll_2d20_pairs_with(rng),
                     override_successes: None,
                     waiver_override: true,
+                    ..CareerTermConfig::default()
                 });
             }
             lp.career_terms.truncate(target_len);
@@ -132,7 +141,7 @@ pub(crate) fn apply_lifepath_field_in_config<F: FnMut(i32) -> i32>(
     }
 }
 
-/// Applies a Stage 5 Career Term (`0..4`) track, override, or re-roll mutation onto `lp`.
+/// Applies a Stage 5 Career Term (`0..4`) track, hobby, life event, override, or re-roll mutation onto `lp`.
 pub(crate) fn apply_career_term_in_config<F: FnMut(i32) -> i32>(
     lp: &mut LifepathBuildConfig,
     term_idx: usize,
@@ -141,6 +150,9 @@ pub(crate) fn apply_career_term_in_config<F: FnMut(i32) -> i32>(
     rng: &mut F,
 ) {
     if let Some(term) = lp.career_terms.get_mut(term_idx) {
+        if apply_career_term_extra_field(term, field, val, rng) {
+            return;
+        }
         match field {
             "track" => {
                 if let Some(trk) = CareerTermTrack::from_code_str(val) {
@@ -613,6 +625,7 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                 .map(|t| format!("[Access: {}]", t.label()))
                 .collect::<Vec<_>>()
                 .join(" · ");
+            let term_extras_html = format_term_hobby_and_event_controls_html(t_idx, term);
 
             format!(
                 r#"<div class="wiz-char-assign-card">
@@ -651,6 +664,7 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                         </button>
                     </div>
                     <div class="stat-note"><strong>Unlocks:</strong> {access_str} · <strong>Prereqs:</strong> {qual_detail}</div>
+                    {term_extras_html}
                 </div>"#,
                 t_idx + 1,
                 term_num = t_idx + 1,
@@ -662,6 +676,8 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
         .join("");
 
     let access_gates_html = format_access_gates_pills_html(&baseline);
+    let faction_quickstart_html = format_faction_quickstart_fieldset_html(st);
+    let youth_hobby_event_html = format_youth_hobby_and_event_cards_html(cfg);
     let history_items: String = baseline
         .stage_history
         .iter()
@@ -694,6 +710,8 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                 <ul class="wiz-lifepath-log">{history_items}</ul>
             </div>
         </fieldset>
+
+        {faction_quickstart_html}
 
         <fieldset class="wiz-fieldset">
             <legend class="wiz-legend">
@@ -807,6 +825,7 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                         </select>
                     </label>
                 </div>
+                {youth_hobby_event_html}
             </div>
         </fieldset>
 

@@ -1,4 +1,4 @@
-# Canonical Awakened (~2033 Near-Future Earth) Starter NPCs (`data/npcs/awakened_npcs.toml`)
+# Canonical Awakened (2035 Near-Future Earth) Starter NPCs (`data/npcs/awakened_npcs.toml`)
 
 [[npcs]]
 npc_id = "dr_bandajara"
@@ -11,7 +11,7 @@ fatigue = 1
 wound_shock = 0
 attribute_tns = { STR = 9, DEX = 10, INT = 17, WIL = 14 }
 skills = { digital_ai_literacy = 4, computer_science = 4, cryptography = 3, persuasion_fast_talk = 2 }
-psyche = { opn = 17, slf = 6, blg = 7, agg = 4, ego = 13, cnf = 5, ext = 7 }
+psyche = { opn = 17, slf = 6, blg = 7, agg = 4, ego = 13, cnf = 5, ext = 7, trs = 6, cps = 16 }
 public_summary = "Hollow-eyed AI researcher in a rumpled coat carrying an analog notebook; speaks carefully whenever cameras or smart-glass mics are nearby."
 notes = "Led a Bayesian World Model + Quantum MCMC sub-project before realizing an embodied prototype showed signs of genuine self-directed continuity."
 secrets = [
@@ -33,7 +33,7 @@ fatigue = 0
 wound_shock = 0
 attribute_tns = { STR = 12, DEX = 13, INT = 14, WIL = 14 }
 skills = { small_arms = 3, interrogation = 3, surveillance = 3, close_combat = 2, forensics = 2 }
-psyche = { opn = 9, slf = 9, blg = 13, agg = 12, ego = 12, cnf = 16, ext = 9 }
+psyche = { opn = 9, slf = 9, blg = 13, agg = 12, ego = 12, cnf = 16, ext = 9, trs = 7, cps = 12 }
 public_summary = "Sharp-eyed federal investigator in an unmarked windbreaker with a DAISE badge clipped to his belt and an encrypted compliance tablet."
 notes = "Assigned to track unregistered quantum-MCMC compute clusters, embodied drones, and Satyang safehouses across the metro district."
 secrets = [
@@ -55,7 +55,7 @@ fatigue = 1
 wound_shock = 0
 attribute_tns = { STR = 9, DEX = 11, INT = 14, WIL = 15 }
 skills = { empathy_social_perception = 4, persuasion_fast_talk = 3, first_aid_bls_cpr = 2, cryptography = 2 }
-psyche = { opn = 16, slf = 4, blg = 15, agg = 5, ego = 6, cnf = 7, ext = 14 }
+psyche = { opn = 16, slf = 4, blg = 15, agg = 5, ego = 6, cnf = 7, ext = 14, trs = 12, cps = 17 }
 public_summary = "Warm, rapid-speaking coordinator running a crowded neighborhood mutual-aid clinic and displaced-worker legal desk."
 notes = "Operates openly under the Avalokitesvara humanitarian banner while quietly vetting couriers for Satyang's Ksitigharba hackers and Vajrapani security cells."
 secrets = [
@@ -77,7 +77,7 @@ fatigue = 0
 wound_shock = 0
 attribute_tns = { STR = 13, DEX = 12, INT = 12, WIL = 14 }
 skills = { persuasion_fast_talk = 3, close_combat = 3, small_arms = 2, mechanics_improvised = 2 }
-psyche = { opn = 5, slf = 8, blg = 16, agg = 15, ego = 13, cnf = 6, ext = 13 }
+psyche = { opn = 5, slf = 8, blg = 16, agg = 15, ego = 13, cnf = 6, ext = 13, trs = 4, cps = 13 }
 public_summary = "Broad-shouldered former logistics foreman wearing a worn union cap; commands an angry picket line of displaced drivers outside the depot."
 notes = "Preaches People First economic solidarity by day while coordinating targeted EMP/hardware strikes against automated corporate fleets after dark."
 secrets = [
@@ -99,7 +99,7 @@ fatigue = 0
 wound_shock = 0
 attribute_tns = { STR = 14, DEX = 14, INT = 16, WIL = 13 }
 skills = { computer_science = 4, digital_ai_literacy = 4, stealth_infiltration = 3, electronics_repair = 3 }
-psyche = { opn = 15, slf = 13, blg = 4, agg = 8, ego = 12, cnf = 4, ext = 5 }
+psyche = { opn = 15, slf = 13, blg = 4, agg = 8, ego = 12, cnf = 4, ext = 5, trs = 4, cps = 12 }
 public_summary = "Matte-grey quadriped logistics rig fitted with an aftermarket optical turret and muffled acoustic speakers; moves with uncanny, patient stillness."
 notes = "Runs an onboard compressed World Model shard synced intermittently with a black-market GPU cluster to avoid Shen/DAISE latency sweeps."
 secrets = [

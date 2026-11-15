@@ -73,7 +73,7 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
         "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
         "title": "Characteristics, Senses, Psyche & Aptitudes",
         "relative_path": "03-character/characteristics_and_aptitudes.md",
-        "description": "Physical, Mental, Social, Sensory, and Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG) characteristics on the 1-20 Controlling Scale, derived metrics, and domain Aptitudes (A in [-2, +3]).",
+        "description": "Physical, Mental, Social, Sensory, and 9 Psyche (EGO, SLF, OPN, BLG, EXT, CNF, AGG, TRS, CPS) characteristics on the 1-20 Controlling Scale, derived metrics, and domain Aptitudes (A in [-2, +3]).",
     },
     {
         "chapter_id": "skills_and_trees",
@@ -94,7 +94,14 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
         "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
         "title": "Lifepath Character Creation, Socioeconomic Upkeep & Heat",
         "relative_path": "03-character/lifepaths_and_economy.md",
-        "description": "Chronological Lifepath education & career progression (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
+        "description": "Chronological Lifepath education & 14 career tracks (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
+    },
+    {
+        "chapter_id": "lifepath_events_hobbies_and_factions",
+        "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
+        "title": "Lifepath Hobbies, Formative Life Events, Faction Templates & Walkthroughs",
+        "relative_path": "03-character/lifepath_events_hobbies_and_factions.md",
+        "description": "12 Personal Hobbies/Clubs (Experience SP), 2d20 Formative Life Events Table, 5 Awakened Faction Psyche & Lifepath Templates (TRS/CPS), and 4 Worked Walkthroughs.",
     },
     {
         "chapter_id": "psyche_and_social",
@@ -229,7 +236,7 @@ def search_rules_book_python(
     max_results: int = 5,
     repo_root: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Search across all 17 canonical Satya Rules Book chapters and return ranked section dicts."""
+    """Search across all 18 canonical Satya Rules Book chapters and return ranked section dicts."""
     if _satya_py is not None:
         try:
             if len(_satya_py.list_rules_chapters()) == len(BOOK_CHAPTER_SPECS):
@@ -850,6 +857,9 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         "03-character/lifepaths_and_economy.md": "lifepaths_and_economy.html",
         "../03-character/lifepaths_and_economy.md": "lifepaths_and_economy.html",
         "lifepaths_and_economy.md": "lifepaths_and_economy.html",
+        "03-character/lifepath_events_hobbies_and_factions.md": "lifepath_events_hobbies_and_factions.html",
+        "../03-character/lifepath_events_hobbies_and_factions.md": "lifepath_events_hobbies_and_factions.html",
+        "lifepath_events_hobbies_and_factions.md": "lifepath_events_hobbies_and_factions.html",
         "04-psyche-and-social/psyche_morale_and_social_combat.md": "psyche_and_social.html",
         "../04-psyche-and-social/psyche_morale_and_social_combat.md": "psyche_and_social.html",
         "psyche_morale_and_social_combat.md": "psyche_and_social.html",
@@ -1299,7 +1309,7 @@ def build_static_rules_book(
     output_dir: Path | None = None,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Compile all 17 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
+    """Compile all 18 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
     root = repo_root or _default_repo_root()
     out_dir = output_dir or (root / "docs" / "book")
     out_dir.mkdir(parents=True, exist_ok=True)

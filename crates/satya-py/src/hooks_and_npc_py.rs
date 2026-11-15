@@ -4,7 +4,8 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use satya_engine::{
-    NpcGenerationParams, NpcTemplateKind, compile_party_hooks, generate_npc_from_prompt_with_pack,
+    FactionArchetypeId, NpcGenerationParams, NpcTemplateKind, compile_party_hooks,
+    generate_npc_from_prompt_with_pack,
 };
 use satya_schema::CharacterSheetRecord;
 use std::collections::BTreeMap;
@@ -49,9 +50,14 @@ pub fn generate_npc_profile_json(
     seed: u64,
     pack_id: Option<&str>,
 ) -> PyResult<String> {
-    let parsed_template = template
-        .and_then(NpcTemplateKind::from_code_str)
-        .unwrap_or(NpcTemplateKind::Auto);
+    let parsed_faction_archetype = template.and_then(FactionArchetypeId::from_code_str);
+    let parsed_template = if parsed_faction_archetype.is_some() {
+        NpcTemplateKind::Auto
+    } else {
+        template
+            .and_then(NpcTemplateKind::from_code_str)
+            .unwrap_or(NpcTemplateKind::Auto)
+    };
     let effective_pack = pack_id
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -61,6 +67,7 @@ pub fn generate_npc_profile_json(
             prompt: prompt.to_string(),
             name_override: name_override.map(str::to_string),
             template: parsed_template,
+            faction_archetype: parsed_faction_archetype,
             career_terms,
             seed,
             owner_user_id: "ai-gm".to_string(),
@@ -112,5 +119,22 @@ mod tests {
         let hooks_val: serde_json::Value = serde_json::from_str(&hooks_json).unwrap();
         assert_eq!(hooks_val["pack_id"], "awakened");
         assert!(!hooks_val["hooks"].as_array().unwrap().is_empty());
+
+        let satyang_json = generate_npc_profile_json(
+            "Archivist monitoring clinic power draws",
+            Some("SATYANG_MANJUSRI"),
+            Some("Linnea Cho"),
+            3,
+            303,
+            Some("awakened"),
+        )
+        .unwrap();
+        let satyang_val: serde_json::Value = serde_json::from_str(&satyang_json).unwrap();
+        assert_eq!(satyang_val["psyche_traits"].as_array().unwrap().len(), 9);
+        assert_eq!(satyang_val["character"]["faction_id"], "SATYANG");
+        assert_eq!(
+            satyang_val["character"]["faction_archetype"],
+            "SATYANG_MANJUSRI"
+        );
     }
 }

@@ -44,6 +44,10 @@ pub const SESSION_LOG_V1_AVSC: &str = include_str!("../../../schemas/v1/session_
 /// Raw JSON schema definition (`v1`) for [`crate::character::CharacterSheetEvent`].
 pub const CHARACTER_SHEET_V1_AVSC: &str =
     include_str!("../../../schemas/v1/character_sheet_event.avsc");
+/// Evolved raw JSON schema definition (`v2`, adding 9-trait Psyche `trs`/`cps` and faction identity)
+/// for [`crate::character::CharacterSheetEvent`].
+pub const CHARACTER_SHEET_V2_AVSC: &str =
+    include_str!("../../../schemas/v2/character_sheet_event.avsc");
 
 /// Errors returned during Avro schema registration, wire header parsing, or payload serialization/deserialization.
 #[derive(Debug, Error)]
@@ -269,6 +273,13 @@ pub const BUILTIN_SCHEMAS: &[(u32, &str, &str, u16, &str)] = &[
         topics::CHARACTER_SHEETS,
         1,
         CHARACTER_SHEET_V1_AVSC,
+    ),
+    (
+        12,
+        subjects::CHARACTER_SHEET,
+        topics::CHARACTER_SHEETS,
+        2,
+        CHARACTER_SHEET_V2_AVSC,
     ),
 ];
 

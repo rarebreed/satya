@@ -235,7 +235,7 @@ async fn test_axum_http_endpoints_and_leptos_render() {
         .iter()
         .find(|m| m.topic == "schema-registry")
         .unwrap();
-    assert_eq!(schema_reg_topic.total_messages_ingested, 11);
+    assert_eq!(schema_reg_topic.total_messages_ingested, 12);
     assert_eq!(schema_reg_topic.flushed_batches_count, 1);
 
     let _ = std::fs::remove_dir_all(&temp_dir);

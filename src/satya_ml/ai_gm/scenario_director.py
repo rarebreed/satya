@@ -98,7 +98,7 @@ SCENARIO_DIRECTOR_TASKS: dict[str, dict[str, Any]] = {
         "default_weight": 10.0,
         "summary": (
             "An NPC or situation confronts the player with a hard ethical, ideological, or existential question "
-            "testing their 7 bipolar Psyche traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`)."
+            "testing their 9 bipolar Psyche traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`)."
         ),
         "playbook": (
             "Have an NPC challenge the player's worldview or values with a concrete moral/philosophical question "
@@ -658,13 +658,24 @@ def configure_scenario_director(
     event_weights: dict[str, float] | None = None,
     beat_probability_per_turn: float | None = None,
     beat_interval_turns: int = 3,
+    seed_pack_starter: bool = False,
 ) -> dict[str, Any]:
     """Configure the session's Scenario Director (`flow_mode`, `campaign_premise`, `planned_beats`, and tunable `event_weights` probability dials).
 
     - `flow_mode`: `"hybrid"` (plot milestones + probability dials), `"scenario_driven"` (non-railroaded plot adaptation), or `"free_form"` (pure probability dials).
     - `event_weights`: Dict mapping any of the 12 TTRPG event slugs (or shorthand pillar names like `"combat"`, `"drama"`, `"intrigue"`, `"thought_provoking_discussion"`) to weights `>= 0.0`. Setting a weight to `0` disables that event completely; higher numbers increase its relative probability.
+    - `seed_pack_starter`: When `True`, populates `campaign_premise` and `planned_beats` from the active campaign pack's `starter_scenario` whenever explicit overrides are omitted.
     """
     current = get_session_scenario_director(session_id)
+    starter_premise = ""
+    starter_beats: list[str] = []
+    if seed_pack_starter:
+        from satya_ml.campaign_config import get_pack_starter_scenario
+
+        starter = get_pack_starter_scenario()
+        starter_premise = str(starter.get("campaign_premise") or "")
+        starter_beats = list(starter.get("planned_beats") or [])
+
     base_weights = (
         dict(current.get("event_weights") or default_event_weights())
         if event_weights is None and player_desires is None
@@ -680,13 +691,19 @@ def configure_scenario_director(
                     pass
     prob_gate_active = beat_probability_per_turn is not None
     effective_prob = 0.35 if beat_probability_per_turn is None else float(beat_probability_per_turn)
+    resolved_premise = campaign_premise or starter_premise or current.get("campaign_premise", "")
+    resolved_beats = (
+        planned_beats
+        if planned_beats is not None
+        else (starter_beats if seed_pack_starter and starter_beats else current.get("planned_beats", []))
+    )
     updated = set_session_scenario_director(
         session_id,
         {
             "flow_mode": flow_mode,
-            "campaign_premise": campaign_premise or current.get("campaign_premise", ""),
+            "campaign_premise": resolved_premise,
             "player_desires": player_desires if player_desires is not None else current.get("player_desires", []),
-            "planned_beats": planned_beats if planned_beats is not None else current.get("planned_beats", []),
+            "planned_beats": resolved_beats,
             "event_weights": base_weights,
             "beat_probability_per_turn": effective_prob,
             "probability_gate_active": prob_gate_active,

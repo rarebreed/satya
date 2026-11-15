@@ -17,6 +17,7 @@ if SRC_DIR not in sys.path:
 from satya_ml.ai_gm.hooks import (
     compile_player_motivational_hooks,
     format_party_hooks_for_prompt,
+    normalize_character_sheet_record,
 )
 from satya_ml.ai_gm.maps import (
     clear_session_spatial_pins,
@@ -35,6 +36,7 @@ from satya_ml.ai_gm.scenario_director import (
 )
 from satya_ml.ai_gm.tools import (
     _gm_service_token,
+    generate_npc_from_description,
     load_all_npc_profiles,
     lookup_npc_profile,
     query_campaign_lore,
@@ -46,6 +48,7 @@ from satya_ml.campaign_config import (
     get_active_campaign_pack_name,
     get_pack_combat_spawn,
     get_pack_default_ai_player,
+    get_pack_starter_scenario,
     set_campaign_pack_override,
 )
 
@@ -394,3 +397,91 @@ def test_hook_weaver_and_scenario_director_gating_and_conditioning() -> None:
         clear_session_spatial_pins(sid)
         _cleanup_session_svgs(sid)
         _cleanup_session_svgs(f"{sid}-prob1")
+
+
+def test_phase2_python_ai_gm_9_psyche_factions_and_starter_scenario() -> None:
+    set_campaign_pack_override(None)
+    sid = f"phase2-py-{uuid.uuid4().hex[:6]}"
+    try:
+        # 1. Normalization preserves 9-trait Psyche (`trs`, `cps`) + optional faction tags
+        norm = normalize_character_sheet_record(
+            {
+                "character_id": "pc-linnea",
+                "character_name": "Linnea Cho",
+                "faction_id": "SATYANG",
+                "faction_archetype": "SATYANG_MANJUSRI",
+                "characteristics": {
+                    "opn": 16,
+                    "slf": 5,
+                    "cnf": 6,
+                    "trs": 4,
+                    "cps": 17,
+                    "ana": 14,
+                    "ins": 15,
+                },
+                "skills": {"philosophy_formal_logic_ethics": 3, "empathy_social_perception": 3},
+            }
+        )
+        assert norm["characteristics"]["trs"] == 4
+        assert norm["characteristics"]["cps"] == 17
+        assert norm["faction_id"] == "SATYANG"
+        assert norm["faction_archetype"] == "SATYANG_MANJUSRI"
+
+        manifest = compile_player_motivational_hooks([norm], active_location="St. Jude Annex")
+        assert manifest["pack_id"] == "awakened"
+        assert manifest["hooks"]
+        linnea_prof = manifest["character_profiles"].get("pc-linnea") or {}
+        if linnea_prof:
+            dom_poles = linnea_prof.get("dominant_poles") or []
+            assert any("CPS=17" in p for p in dom_poles)
+            assert any("TRS=4" in p for p in dom_poles)
+
+        # 2. generate_npc_from_description advertises 9 Psyche traits & 14 Faction Archetypes
+        tool_desc = str(getattr(generate_npc_from_description, "description", ""))
+        assert "9 bipolar Psyche traits" in tool_desc
+        assert "SATYANG_MANJUSRI" in tool_desc
+
+        npc_res = generate_npc_from_description.invoke(
+            {
+                "description": "Archivist auditing black-site compute telemetry",
+                "template": "SATYANG_MANJUSRI",
+                "name_override": "Linnea Archive",
+                "career_terms": 2,
+                "is_persistent": False,
+                "session_id": sid,
+            }
+        )
+        npc = npc_res["npc"]
+        assert npc["faction_id"] == "SATYANG"
+        assert npc["faction_archetype"] == "SATYANG_MANJUSRI"
+        assert len(npc["psyche_summary"]) == 9
+        assert any(s.startswith("TRS ") for s in npc["psyche_summary"])
+        assert any(s.startswith("CPS ") for s in npc["psyche_summary"])
+
+        # 3. Starter Scenario + Preface/Breakdown lore discovery
+        starter = get_pack_starter_scenario("awakened")
+        assert "Cold Storage at St. Jude Annex" in starter["title"]
+        assert len(starter["planned_beats"]) == 5
+
+        cfg = configure_scenario_director.invoke(
+            {
+                "session_id": f"{sid}-ep1",
+                "flow_mode": "scenario_driven",
+                "seed_pack_starter": True,
+            }
+        )
+        assert "St. Jude Mutual-Aid Clinic" in cfg["campaign_premise"]
+        assert len(cfg["planned_beats"]) == 5
+
+        preface_hit = query_campaign_lore.invoke(
+            {"query": "Preface Truth Mathematics Compassion", "session_id": sid}
+        )
+        assert "preface.md" in preface_hit
+
+        arc3_hit = query_campaign_lore.invoke(
+            {"query": "Arc 3 Awakening Moral Horizon Cascade Fracture", "session_id": sid}
+        )
+        assert "breakdown.md" in arc3_hit
+    finally:
+        set_session_characters(sid, [])
+        reset_session_npcs(sid)

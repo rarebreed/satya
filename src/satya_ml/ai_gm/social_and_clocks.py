@@ -47,6 +47,8 @@ _DEFAULT_PSYCHE: dict[str, int] = {
     "ego": 10,
     "cnf": 10,
     "ext": 10,
+    "trs": 10,
+    "cps": 10,
 }
 
 
@@ -66,7 +68,7 @@ def _satya_py() -> Any:
 
 
 def _parse_psyche_dict(raw_npc: dict[str, Any]) -> dict[str, int]:
-    """Extract normalized `1..=20` 7-axis Psyche traits from an NPC or character dictionary."""
+    """Extract normalized `1..=20` 9-axis Psyche traits from an NPC or character dictionary."""
     out = dict(_DEFAULT_PSYCHE)
     for bucket_key in ("psyche", "characteristics", "psyche_traits"):
         bucket = raw_npc.get(bucket_key)
@@ -81,7 +83,7 @@ def _parse_psyche_dict(raw_npc: dict[str, Any]) -> dict[str, int]:
     summary = raw_npc.get("psyche_summary")
     if isinstance(summary, list):
         for entry in summary:
-            for match in re.finditer(r"\b(OPN|SLF|BLG|AGG|EGO|CNF|EXT)\s*[:=]\s*(\d+)", str(entry), re.I):
+            for match in re.finditer(r"\b(OPN|SLF|BLG|AGG|EGO|CNF|EXT|TRS|CPS)(?:\s*[:=]\s*|\s+)(\d+)", str(entry), re.I):
                 out[match.group(1).lower()] = max(1, min(20, int(match.group(2))))
     return out
 
@@ -224,7 +226,7 @@ def perform_empathy_read(
     target_psyche_json: str = "",
     session_id: str = "default",
 ) -> dict[str, Any]:
-    """Reveal `1..=20` Psyche traits (`1` trait at 1 success, `2` + wedge tension at 2, full 7 + `-2 Delta_ext` leverage at 3+)."""
+    """Reveal `1..=20` Psyche traits (`1` trait at 1 success, `2` + wedge tension at 2, full 9 + `-2 Delta_ext` leverage at 3+)."""
     npc = _resolve_npc_profile(target_npc_id_or_name, session_id)
     psyche_str = target_psyche_json.strip() or json.dumps(_parse_psyche_dict(npc))
     res = json.loads(_satya_py().evaluate_empathy_read_json(psyche_str, int(net_successes)))

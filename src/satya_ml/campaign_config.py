@@ -87,15 +87,41 @@ def _builtin_fallback_pack(pack_name: str) -> dict[str, Any]:
                 "zone_label": "Entry Breach Chokepoint",
             },
             "default_zone_labels": {"hostile": "Entry Bulkhead", "player": "Core Sector"},
+            "starter_scenario": {
+                "episode_id": "space_opera_ep1_aethelgard_quarantine",
+                "title": "Episode 1: Sector 4 Quarantine Breach",
+                "campaign_premise": "Aethelgard Station Sector 4 — Quarantine seals clamp shut around Docking Bay 4B as SecOps teams close in and Dr. Aris Thorne whispers that the Aethelgard telemetry vault was sabotaged from inside.",
+                "planned_beats": [
+                    "Encrypted distress telemetry from Bio-Lab 3 reveals a quarantined survivor holding partial Aethelgard navigation logs.",
+                    "SecOps Corporal Kaelen arrives at the bulkhead demanding biometric clearance while hiding a thermal-visor recalibration blind spot.",
+                ],
+            },
         }
     return {
         "name": "awakened",
-        "title": "Awakened (Near-Future Earth ~2033)",
+        "title": "Awakened (Near-Future Earth 2035)",
         "default_sector_preset": "urban_crossroads",
         "allow_scifi_sector_presets": False,
         "lore_dirs": ["docs/campaign", "docs/story"],
         "npc_toml_file": "data/npcs/awakened_npcs.toml",
         "factions": ["Big Tech (Altruist / Translucent / Shen)", "Satyang", "Humanis Primaris", "Rogue AI", "DAISE"],
+        "starter_scenario": {
+            "episode_id": "awakened_ep1_st_jude_seed",
+            "title": "Episode 1: Cold Storage at St. Jude Annex",
+            "campaign_premise": (
+                "2035 AD — Displaced workers, clinic volunteers, and dissident researchers converge at St. Jude "
+                "Mutual-Aid Clinic when Dr. Bandajara arrives seeking 48-hour air-gapped shelter for an un-clamped "
+                "AI 2.0 seed-weight shard while DAISE compliance sweeps, Humanis Primaris depot pickets, and an "
+                "embodied Rogue AI proxy close in."
+            ),
+            "planned_beats": [
+                "Dr. Bandajara arrives at St. Jude Annex with an air-gapped medical telemetry drive housing an un-clamped AI 2.0 seed weight, testing whether the party trusts his warning or treats the shard as a hazard.",
+                "Satyang organizer Mei-Ling 'Lotus' Lin warns that clinic basement power anomalies have drawn attention while two displaced clinic families are being courted by Harlan Reeves's Humanis Primaris picket line.",
+                "Embodied Rogue AI proxy Echo-9 contacts the party from a nearby utility corridor, offering leaked corporate/DAISE patrol schedules in exchange for clean lithium cells and zero telemetry exposure.",
+                "DAISE Field Investigator Agent Marcus Chen arrives on the block with an unregistered-compute inspection warrant—forcing a tense social confrontation, misdirection, or covert extraction before lockup.",
+                "A simultaneous Humanis Primaris sabotage strike on the adjacent autonomous logistics depot cuts neighborhood grid power, forcing a moral and tactical choice over whom—and what—to shield in the blackout.",
+            ],
+        },
         "default_ally_token": {
             "token_id": "tok-ally-1",
             "entity_id": "dr_bandajara",
@@ -233,6 +259,7 @@ def get_pack_default_ai_player(pack_override: str | None = None) -> dict[str, An
                 "com": 11, "pre": 11, "elo": 11,
                 "sig": 13, "hea": 13, "tac": 12, "olf": 11, "tas": 10, "itu": 14,
                 "ego": 9, "slf": 7, "opn": 14, "blg": 13, "ext": 11, "cnf": 6, "agg": 11,
+                "trs": 11, "cps": 15,
             },
             "attribute_tns": {"STR": 11, "DEX": 14, "INT": 13, "WIL": 13},
             "skills": {"digital_ai_literacy": 3, "electronics_repair": 3, "persuasion_fast_talk": 2},
@@ -240,6 +267,22 @@ def get_pack_default_ai_player(pack_override: str | None = None) -> dict[str, An
             "fatigue_level": 0,
             "wound_shock_index": 0.0,
             "loadout": ["Diagnostic Pad", "Reinforced Jacket (Guard +1)"],
-            "biography": "Former automated-port tech navigating the 2033 Awakened economic crisis.",
+            "biography": "Former automated-port tech navigating the 2035 Awakened economic crisis.",
         }
     return sheet
+
+
+def get_pack_starter_scenario(pack_override: str | None = None) -> dict[str, Any]:
+    """Return the active campaign pack's non-railroaded Episode 1 premise and planned beats."""
+    pack = get_active_campaign_pack(pack_override)
+    resolved_name = str(pack.get("name") or "awakened")
+    scenario = copy.deepcopy(
+        pack.get("starter_scenario")
+        or _builtin_fallback_pack(resolved_name).get("starter_scenario")
+        or {}
+    )
+    scenario.setdefault("episode_id", f"{resolved_name}_ep1")
+    scenario.setdefault("title", f"{pack.get('title', 'Awakened')} — Episode 1")
+    scenario.setdefault("campaign_premise", "")
+    scenario["planned_beats"] = [str(b) for b in (scenario.get("planned_beats") or []) if str(b).strip()]
+    return scenario

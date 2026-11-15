@@ -208,7 +208,7 @@ def read_my_character_sheet(
     session_id: str = "default",
     player_user_id: str = "ai-player-1",
 ) -> dict[str, Any]:
-    """Read your own bound Satya character sheet, Attribute TNs, Skill ranks, 7 Bipolar Psyche traits, Loadout, and Tactical Pool Envelope (`P_eff`, Neutral `B`, `T_max/C_max/F_max`)."""
+    """Read your own bound Satya character sheet, Attribute TNs, Skill ranks, 9 Bipolar Psyche traits (EGO, SLF, OPN, BLG, EXT, CNF, AGG, TRS, CPS), Loadout, and Tactical Pool Envelope (`P_eff`, Neutral `B`, `T_max/C_max/F_max`)."""
     ctx = get_player_session_context(session_id, player_user_id)
     sheet = dict(ctx.get("character_sheet") or get_pack_default_ai_player())
     envelope = compute_character_tactical_envelope(sheet)

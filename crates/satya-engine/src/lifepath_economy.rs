@@ -16,14 +16,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::characteristics::{CharacterAptitudes, CharacterCharacteristics};
 pub use crate::economy_gear::*;
+use crate::faction_templates::FactionArchetypeId;
 pub use crate::lifepath_catalog::*;
+use crate::lifepath_hobbies_events::{
+    LifeEventChoiceBranch, PersonalHobbyId, resolve_formative_life_event,
+};
 use crate::skills_trees::{
     SkillAccessTier, SkillAdvancementValidation, initialize_universal_talents,
     validate_skill_advancement,
 };
 use crate::walkthroughs::insert_skill_ranks;
 pub use crate::walkthroughs::{
-    build_amara_okafor_lifepath, build_mateo_vance_lifepath, build_priya_nair_lifepath,
+    build_amara_okafor_lifepath, build_linnea_cho_lifepath, build_mateo_vance_lifepath,
+    build_priya_nair_lifepath,
 };
 
 /// Complete Lifepath Character Profile produced by the 5-Stage Chronological Lifepath Engine
@@ -312,6 +317,12 @@ pub struct CareerTermConfig {
     pub term_roll_pairs: [(i32, i32); 2],
     pub override_successes: Option<usize>,
     pub waiver_override: bool,
+    #[serde(default)]
+    pub off_duty_hobby: Option<PersonalHobbyId>,
+    #[serde(default)]
+    pub life_event_roll_2d20: Option<i32>,
+    #[serde(default)]
+    pub life_event_choice: LifeEventChoiceBranch,
 }
 
 impl Default for CareerTermConfig {
@@ -321,6 +332,9 @@ impl Default for CareerTermConfig {
             term_roll_pairs: [(12, 11), (13, 10)],
             override_successes: None,
             waiver_override: true,
+            off_duty_hobby: None,
+            life_event_roll_2d20: None,
+            life_event_choice: LifeEventChoiceBranch::DefaultPath,
         }
     }
 }
@@ -355,6 +369,14 @@ pub struct LifepathBuildConfig {
     pub career_terms: Vec<CareerTermConfig>,
     pub campaign_sqm_override: Option<u8>,
     pub operational_heat_override: Option<u8>,
+    #[serde(default)]
+    pub youth_hobby: Option<PersonalHobbyId>,
+    #[serde(default)]
+    pub adolescent_life_event_roll_2d20: Option<i32>,
+    #[serde(default)]
+    pub adolescent_life_event_choice: LifeEventChoiceBranch,
+    #[serde(default)]
+    pub faction_archetype: Option<FactionArchetypeId>,
 }
 
 impl Default for LifepathBuildConfig {
@@ -385,7 +407,30 @@ impl Default for LifepathBuildConfig {
             career_terms: vec![CareerTermConfig::default()],
             campaign_sqm_override: None,
             operational_heat_override: None,
+            youth_hobby: None,
+            adolescent_life_event_roll_2d20: None,
+            adolescent_life_event_choice: LifeEventChoiceBranch::DefaultPath,
+            faction_archetype: None,
         }
+    }
+}
+
+impl LifepathBuildConfig {
+    /// Collects all unique youth and adult off-duty hobbies selected across this lifepath.
+    #[must_use]
+    pub fn collected_hobbies(&self) -> Vec<PersonalHobbyId> {
+        let mut hobbies = Vec::new();
+        if let Some(hobby) = self.youth_hobby {
+            hobbies.push(hobby);
+        }
+        for term in &self.career_terms {
+            if let Some(hobby) = term.off_duty_hobby
+                && !hobbies.contains(&hobby)
+            {
+                hobbies.push(hobby);
+            }
+        }
+        hobbies
     }
 }
 
@@ -728,7 +773,26 @@ pub fn compute_lifepath_baseline_from_config(
 
     let mut career_skill_budget = 0usize;
     let mut elective_skill_budget = 40usize;
+    let mut sqm_delta_acc = 0i32;
+    let mut heat_delta_acc = 0i32;
     let mut term_evals = Vec::with_capacity(cfg.career_terms.len());
+
+    if let Some(hobby) = cfg.youth_hobby {
+        let hspec = hobby.spec();
+        stage_history.push(format!(
+            "Stage 4 Adolescent Hobby: {} (-15% Experience SP club discount on signature skills N<=3; Contact: {})",
+            hspec.label, hspec.grounded_contact_role
+        ));
+    }
+    if let Some(roll) = cfg.adolescent_life_event_roll_2d20 {
+        let outcome =
+            resolve_formative_life_event(roll, cfg.adolescent_life_event_choice, false);
+        elective_skill_budget += outcome.experience_sp_grant;
+        career_skill_budget += outcome.formal_sp_grant;
+        sqm_delta_acc += i32::from(outcome.sqm_delta);
+        heat_delta_acc += i32::from(outcome.heat_delta);
+        stage_history.push(format!("Stage 4 {}", outcome.summary_line));
+    }
 
     for (t_idx, term) in cfg.career_terms.iter().take(4).enumerate() {
         for &tag in term.track.granted_access_tags() {
@@ -766,6 +830,23 @@ pub fn compute_lifepath_baseline_from_config(
             t_eval.tn_edu,
             term_formal_sp
         ));
+        if let Some(hobby) = term.off_duty_hobby {
+            let hspec = hobby.spec();
+            stage_history.push(format!(
+                "Stage 5 Term {} Off-Duty Hobby: {} (-15% Experience SP N<=3; Contact: {})",
+                t_idx + 1,
+                hspec.label,
+                hspec.grounded_contact_role
+            ));
+        }
+        if let Some(roll) = term.life_event_roll_2d20 {
+            let outcome = resolve_formative_life_event(roll, term.life_event_choice, true);
+            elective_skill_budget += outcome.experience_sp_grant;
+            career_skill_budget += outcome.formal_sp_grant;
+            sqm_delta_acc += i32::from(outcome.sqm_delta);
+            heat_delta_acc += i32::from(outcome.heat_delta);
+            stage_history.push(format!("Stage 5 Term {} {}", t_idx + 1, outcome.summary_line));
+        }
         term_evals.push(t_eval);
     }
 
@@ -773,8 +854,8 @@ pub fn compute_lifepath_baseline_from_config(
     let age_years = 18 + (num_terms as u32) * 4;
     let max_post_school_gain_per_skill = (2 * num_terms.max(1)).max(2);
 
-    let default_sqm = origin.class.default_campaign_sqm();
-    let default_heat: u8 = if cfg
+    let default_sqm = (i32::from(origin.class.default_campaign_sqm()) + sqm_delta_acc).clamp(1, 10) as u8;
+    let base_heat: i32 = if cfg
         .career_terms
         .iter()
         .any(|t| t.track == CareerTermTrack::OrganizedCrimeCartelSyndicate)
@@ -788,6 +869,7 @@ pub fn compute_lifepath_baseline_from_config(
     } else {
         0
     };
+    let default_heat = (base_heat + heat_delta_acc).clamp(0, 10) as u8;
 
     LifepathBaselineResult {
         age_years,

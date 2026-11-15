@@ -34,6 +34,44 @@ def _python_fallback_hooks(
             continue
         cid = str(ch.get("character_id") or f"pc-{idx}")
         cname = str(ch.get("character_name") or cid)
+        chars = ch.get("characteristics") or {}
+        if isinstance(chars, dict):
+            cps = int(chars.get("cps", chars.get("CPS", 10)) or 10)
+            trs = int(chars.get("trs", chars.get("TRS", 10)) or 10)
+            if cps >= 15 or cps <= 6:
+                hooks.append(
+                    {
+                        "hook_id": f"{cid}-psyche-cps",
+                        "category": "IDENTITY_PSYCHE",
+                        "character_id": cid,
+                        "character_name": cname,
+                        "title": f"{cname}: Compassion Edge (CPS={cps})",
+                        "setup": (
+                            f"Place vulnerable civilians or an un-clamped AI in harm's way, testing {cname}'s Compassion (CPS={cps})."
+                        ),
+                        "emotional_stake": f"Contrasts {cname}'s humanitarian empathy against cold operational expediency.",
+                        "preferred_vectors": ["MoralWitnessVulnerabilityCompassion"],
+                        "pressure_lever": f"CPS={cps}",
+                        "salience": 0.72,
+                    }
+                )
+            elif trs >= 15 or trs <= 6:
+                hooks.append(
+                    {
+                        "hook_id": f"{cid}-psyche-trs",
+                        "category": "IDENTITY_PSYCHE",
+                        "character_id": cid,
+                        "character_name": cname,
+                        "title": f"{cname}: Trust Fault Line (TRS={trs})",
+                        "setup": (
+                            f"Introduce a whistleblower or rival offer demanding a leap of faith against {cname}'s Trust (TRS={trs})."
+                        ),
+                        "emotional_stake": f"Tests {cname}'s institutional credence or paranoid vigilance.",
+                        "preferred_vectors": ["TrustAllianceGuaranteeReciprocity"],
+                        "pressure_lever": f"TRS={trs}",
+                        "salience": 0.68,
+                    }
+                )
         skills = ch.get("skills") or {}
         if isinstance(skills, dict) and skills:
             top_skill, top_rank = max(
@@ -72,6 +110,7 @@ _DEFAULT_CHARACTERISTICS: dict[str, Any] = {
     "com": 10, "pre": 10, "elo": 10,
     "sig": 10, "hea": 10, "tac": 10, "olf": 10, "tas": 10, "itu": 10,
     "ego": 10, "slf": 10, "opn": 10, "blg": 10, "ext": 10, "cnf": 10, "agg": 10,
+    "trs": 10, "cps": 10,
 }
 
 _DEFAULT_APTITUDES: dict[str, int] = {
@@ -135,6 +174,8 @@ def normalize_character_sheet_record(raw: dict[str, Any], index: int = 0) -> dic
         "psyche_drift_marks": int(raw.get("psyche_drift_marks", 0)),
         "notes": raw.get("notes"),
         "lifepath_config_json": raw.get("lifepath_config_json"),
+        "faction_id": raw.get("faction_id") or None,
+        "faction_archetype": raw.get("faction_archetype") or None,
     }
 
 

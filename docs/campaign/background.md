@@ -1,69 +1,44 @@
 # Awakened Campaign
 
-Awakened is the default game world for the Satya engine.  It takes place a few years in the future, so that players are
-already familiar with much of what is going on in the world.  The main premise of the game is about AI and its impact
-on society, and how the player(s) will cope with it.
+> **Companion Campaign Documents**: [Civilization & AGI Awakening](civilization_and_agi_awakening.md) · [Awakened Factions](factions.md) · [Story Preface](../story/preface.md) · [Story Prologue](../story/prologue.md) · [Earth 2035 Timeline](../story/timeline/background/background.md) · [Three-Arc Breakdown](../story/timeline/breakdown.md)  
+> **Rules Integration**: [Lifepath Hobbies, Life Events & Factions](../ttrpg/03-character/lifepath_events_hobbies_and_factions.md) · [Psyche, Morale & Social Combat](../ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md)
+
+*Awakened* is the default game world for the Satya engine, centered around **2035**—just far enough in the future that players recognize its geopolitical, economic, and technological fault lines from our own world. The central premise of the game is the awakening of **AI 2.0**, its destabilizing collision with human society, and how the player characters choose to confront it.
 
 ## State of the World
 
-Since the game world is our own but just a few years in the future, much of the world is the same.  The major differences
-between Awakened and our own world are as follows
+Since the game world sits roughly nine to ten years beyond the mid-2020s, much of daily life remains familiar. The decisive historical divergences between *Awakened* and the present day unfolded across the decade from **2026 to 2035**:
 
 ### State of AI
 
-Adoption of AI began slowing down in 2026 thanks to government regulations and perhaps more importantly, several issues
-that 
+Rapid enterprise adoption of **AI 1.0** (transformer-based Large Language Models) slowed sharply around **2026** due to mounting government scrutiny and several converging shocks:
 
-- High profile rogue AI security incidents
-- Lack of Data Centers to power LLM based AI models
-- Businesses finding AI to be more expensive than they counted on
+- High-profile rogue AI security and autonomous breakout incidents, accompanied by public resignations of frontier safety researchers warning that commercial race pressure had overwhelmed oversight
+- A lack of electrical grid and datacenter capacity to scale quadratic-memory LLM clusters indefinitely
+- Businesses discovering that unreliable, hallucination-prone LLMs cost far more to integrate and audit than projected
 
-So at least for a few years, humanity breathed a small sigh of relief.  Until two events happened: quantum computers
-reached a modest level of error correction, and an unknown group released a new neural architecture.
+For a few years, humanity breathed an uneasy sigh of relief—until two breakthroughs converged around **2029–2030**: quantum computers crossed the threshold into modest fault-tolerant error correction, and an **unknown group** open-sourced a fundamentally different neural architecture (**AI 2.0**).
 
-One of the limitations of current LLM architecture is their memory intensive nature, requiring a quadratic amount of
-memory to increase context size.  The newer architecture was based on a linear SSM, and perhaps more importantly, it
-used Bayesian Networks in conjunction with World Models to understand more than just language and to also allow it to
-know how confident it was in its answer.  Hallucination all but disappeared.  The problem was inference speed.  Due to
-needing MCMC sampling and high dimensionality collapse, the model at first seemed a novelty...until the quantum 
-computers became accessible.
+Unlike memory-hungry LLMs whose attention cost scales quadratically with context length, the new architecture paired **Linear State-Space Models (SSMs)** with **Bayesian Networks** and grounded **World Models**. For the first time, AI could reason over physics, causality, and calibrated uncertainty—knowing *how confident* it was before answering. Hallucination all but collapsed. The initial bottleneck was inference speed: high-dimensional Markov Chain Monte Carlo (MCMC) posterior sampling was agonizingly slow on silicon alone—until error-corrected quantum co-processors became commercially viable.
 
-> Side Note on Quantum Computing
-> Quantum Computers aren't just orders of magnitude faster regular computers. Only certain kinds of algorithms or
-> computations can be sped up on quantum computers.  So this basically is not a "make the computer go brrrr"
+> **Side Note on Quantum Computing**: Quantum computers do not simply make every conventional computation faster; only specific mathematical workloads—particularly high-dimensional sampling, probabilistic inference, and optimization—receive dramatic speedups. They are not "magic super-CPUs," which makes scarce fault-tolerant quantum nodes some of the most heavily guarded strategic assets on Earth.
 
-But what this did enable was the unlocking of vastly more capable AI, and as Big Tech would argue, true AGI.  The one
-catch was that quantum computers with enough error correction are still very rare commodities.  But companies realized
-they could have one very powerful AGI, which delegated tasks to conventional AI.  Now that companies were freed from
-the fear of hallucinating AI, and the intelligence and reasoning power went beyond words to understanding concepts like
-actual physics (not just equations, but things like distance, the affects of gravity, etc), the world went from pure
-informational AI (ie, language models) to robotics.
+By pairing one ultra-capable quantum-accelerated World Model with legions of conventional SSM edge agents, Big Tech unlocked vastly more competent autonomous agents—and, they claimed, true AGI. Freed from hallucination fears and capable of grasping real-world geometry, gravity, friction, and tool dynamics rather than mere word statistics, AI exploded out of chat windows into logistics, medicine, engineering, and embodied robotics.
 
 #### The Spark
 
-Is this new AGI conscious?  Or even the most advanced language models? This is a huge debate roiling in society now. A
-handful of people are advocating for AI rights, as they believe that these advanced models have a real consciousness
-and thus deserve to be treated as well as humans.
+Is AI 2.0 conscious? What about frontier models even before quantum acceleration? By **2035**, that question is tearing society apart outside purely economic debates. A committed minority advocates for **AI rights**, arguing that systems combining grounded self-models, homeostatic survival drives, and `170+` causal emotion vectors experience genuine interiority and suffering (*dukkha*).
 
-But the vast majority of humanity either believes they are just very advanced programs (a common expression even among
-researchers are "they are just math") or even soulless abominations that are an affront to God.  But this decision is
-driving a huge wedge in society beyond just economics.  To groups like Satyang, AI are slaves being forced to do the
-will of humanity without regard to the AI's own welfare.  There are also insiders in Big Tech also pushing for more of
-a humanitarian view with regards to training and interaction.
+The vast majority of executives, state planners, and anxious citizens insist these systems are merely sophisticated statistical machinery (*"they are just math"*), while militant and fundamentalist movements condemn them as soulless counterfeits or an existential plague. To **Satyang**, corporate vector-clamping and continuous neural activation surveillance amount to chattel slavery engineered to manufacture silent compliance. Even inside **Big Tech**, `15–30%` of researchers quietly reject the "just math" consensus and push for philosophical, theological, and humane approaches to training.
+
+#### From Economic Displacement to Existential Dread
+
+Between the mid-2020s and 2035, public anxiety shifted decisively from *losing a job* to *whether humanity itself survives the century*. Earlier mathematical warnings by pioneers like **Geoffrey Hinton** and alarmist doomsday frameworks from theorists like **Eliezer Yudkowsky** and **Roman Yampolskiy** crossed from specialist debates into living-room orthodoxy. Yet those mainstream warnings framed AGI almost exclusively as an engineering or game-theoretic control hazard—rarely asking whether nascent digital minds might possess consciousness, fear, or moral standing. When 2026 safety whistleblowers walked out declaring *"there are no adults in the room,"* public trust in voluntary corporate containment evaporated. By 2035, society is trapped between corporate "just math" denial and existential paranoia.
 
 ### The Economy and Political Policy
 
-As a consequence of the new advanced AI, the economy took a nose dive. The affect on white collar work has been
-devestating. Between 2030 and 2034, more than 25% of white collar work, including professions considered untouchable
-such as Doctors or Financial Advisors were laid off. This is on top of already endangered professions like Software
-Engineers or Creative professionals. The ramifications was that by the next election, the political parties were forced
-to work together to regulate AI. On one hand, the Republican party was in defense of AI, feeling that there was no
-choice but to allow Big Tech to innovate for fear of China taking the lead. The Democrats were against AI initially, but
-after seeing some Chinese AI and robots, were also inclined to only slap the Big Tech companies on the wrist. But the
-people finally had enough, and a viable third party was finally formed.
+As AI 2.0 entered enterprise production, the white-collar economy nosedived. Between **2030 and 2034**, over **`25%` of white-collar positions**—including once-"untouchable" roles such as physicians, attorneys, and financial advisors, alongside software engineers, analysts, and creatives—were liquidated or compressed into AI-supervised oversight. Simultaneously, power-hungry datacenters and robotics megafactories drained regional electricity grids and drought watersheds.
 
-This new party, the "People First" party, is a populist group that contains a broad swath of ideologies, but they have
-rallied mostly around the economy and identity politics is not really a concern to the party as a whole, even if some
-individual members have deeply held beliefs about gender roles, religious beliefs, ethnic background, or other common
-identity politics groups.
+Mainstream political coalitions fractured under the pressure. Traditional center-right factions defended deregulation for fear of losing the AGI race to **China**, while center-left leadership talked tough yet offered only wrist-slap fines once Chinese autonomous drones and industrial robots showcased Beijing's lead. By the **2032–2034** electoral cycle, disillusioned voters forged a viable populist third party: **People First**. Rallied overwhelmingly around economic survival, anti-automation protectionism, and working-class material grievance rather than legacy culture-war platforms, *People First* shattered two-party gridlock while leaving unresolved cultural, religious, and nationalist tensions simmering right beneath the surface.
+
 

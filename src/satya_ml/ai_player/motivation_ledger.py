@@ -50,6 +50,8 @@ _PSYCHE_POLE_HINTS: dict[str, tuple[str, str, str]] = {
     "ego": ("EGO (Pride/Status)", "Self-Effacing / Humble", "Proud / Legacy- and Reputation-Driven"),
     "cnf": ("CNF (Conformity)", "Iconoclastic / Anti-Authoritarian Rebel", "Protocol-Bound / Dutifully Lawful"),
     "ext": ("EXT (Extraversion)", "Reserved / Guarded Observer", "Expressive / Socially Energized"),
+    "trs": ("TRS (Trust)", "Cynical / Zero-Trust / Paranoid", "Trusting / Open-Handed"),
+    "cps": ("CPS (Compassion)", "Ruthless / Utilitarian", "Merciful / Tender-Hearted Protector"),
 }
 
 
@@ -626,7 +628,7 @@ def _lookup_npc_psyche_only_for_empathy(
                 if lk in out and isinstance(v, (int, float)):
                     out[lk] = max(1, min(20, int(v)))
     for entry in matched.get("psyche_summary") or []:
-        for m in re.finditer(r"\b(OPN|SLF|BLG|AGG|EGO|CNF|EXT)\s*[:=]\s*(\d+)", str(entry), re.I):
+        for m in re.finditer(r"\b(OPN|SLF|BLG|AGG|EGO|CNF|EXT|TRS|CPS)(?:\s*[:=]\s*|\s+)(\d+)", str(entry), re.I):
             out[m.group(1).lower()] = max(1, min(20, int(m.group(2))))
     return out
 

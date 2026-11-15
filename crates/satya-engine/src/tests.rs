@@ -308,7 +308,7 @@ fn test_probability_md_k20_calibration_and_game_engine_evaluator() {
 #[test]
 fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
     let chapters = list_rules_chapters();
-    assert_eq!(chapters.len(), 17);
+    assert_eq!(chapters.len(), 18);
     assert!(chapters.iter().any(|c| c.chapter_id == "design_philosophy"));
     assert!(chapters.iter().any(|c| c.chapter_id == "notation_glossary"));
     assert!(chapters.iter().any(|c| c.chapter_id == "tasks"));
@@ -327,6 +327,11 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
         chapters
             .iter()
             .any(|c| c.chapter_id == "lifepaths_and_economy")
+    );
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "lifepath_events_hobbies_and_factions")
     );
     assert!(chapters.iter().any(|c| c.chapter_id == "psyche_and_social"));
     assert!(chapters.iter().any(|c| c.chapter_id == "tactical_triad"));

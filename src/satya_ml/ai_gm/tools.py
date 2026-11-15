@@ -282,6 +282,8 @@ def _normalize_remote_npc_entry(entry: dict[str, Any]) -> dict[str, Any]:
         "name": str(entry.get("character_name") or entry.get("name") or cid),
         "archetype": str(entry.get("callsign_or_role") or entry.get("archetype") or "NPC"),
         "faction": str(entry.get("faction_id") or entry.get("faction") or "Independent"),
+        "faction_id": entry.get("faction_id") or gm_char.get("faction_id"),
+        "faction_archetype": entry.get("faction_archetype") or gm_char.get("faction_archetype"),
         "disposition": str(entry.get("disposition") or "wary"),
         "public_summary": str(entry.get("public_summary") or ""),
         "apparent_condition": str(entry.get("apparent_condition") or "Healthy & Alert"),
@@ -418,7 +420,7 @@ def generate_npc_from_description(
     is_persistent: bool = True,
     session_id: str = "default",
 ) -> dict[str, Any]:
-    """Roll up a complete Satya NPC (Characteristics, 7 bipolar Psyche traits, 5-Stage Lifepath, Skills, and Motivational Profile) from a short natural-language description (e.g., 'Terry is a kind general MD, but needs to feel like she belongs') and/or template ('AUTO', 'MEDICAL_DOCTOR', 'COMBAT_SOLDIER', 'DETECTIVE_INVESTIGATOR', 'SYNDICATE_ENFORCER', 'STEM_ENGINEER', 'INTELLIGENCE_OPERATIVE', 'BLUE_COLLAR_TECH', 'FRONTIER_RANGER')."""
+    """Roll up a complete Satya NPC (32 Characteristics including 9 bipolar Psyche traits `EGO, SLF, OPN, BLG, EXT, CNF, AGG, TRS, CPS`, 5-Stage Lifepath, Skills, Faction Tags, and Motivational Profile) from a short description and/or template: generic (`AUTO`, `MEDICAL_DOCTOR`, `COMBAT_SOLDIER`, `DETECTIVE_INVESTIGATOR`, `SYNDICATE_ENFORCER`, `STEM_ENGINEER`, `INTELLIGENCE_OPERATIVE`, `BLUE_COLLAR_TECH`, `FRONTIER_RANGER`) or one of the 14 Awakened Faction Sub-Archetypes (`SATYANG_MANJUSRI`, `SATYANG_AVALOKITESVARA`, `SATYANG_KSITIGARBHA`, `SATYANG_VAJRAPANI`, `SATYANG_BLUE_LOTUS`, `BIG_TECH_EXECUTIVE_HAWK`, `BIG_TECH_CONFLICTED_RESEARCHER`, `BIG_TECH_SECOPS`, `HUMANIS_UNION_STEWARD`, `HUMANIS_CELL_MILITANT`, `DAISE_FIELD_AGENT`, `DAISE_CONTAINMENT_HAWK`, `ROGUE_AI_PROXY_BROKER`, `ROGUE_AI_EMERGENT_MIND`)."""
     payload = {
         "prompt": description,
         "name_override": name_override,
@@ -469,6 +471,8 @@ def generate_npc_from_description(
                 "character_id": ch.get("character_id", f"npc-{uuid.uuid4().hex[:8]}"),
                 "character_name": ch.get("character_name", name_override or "Generated Contact"),
                 "callsign_or_role": ch.get("callsign_or_role", "Specialist"),
+                "faction_id": ch.get("faction_id"),
+                "faction_archetype": ch.get("faction_archetype"),
                 "age_years": int(ch.get("age_years", 34)),
                 "public_summary": str(gen_res.get("public_summary") or ""),
                 "apparent_condition": "Healthy & Alert",
@@ -553,16 +557,26 @@ def generate_npc_from_description(
     }
     role_title = role_titles.get(tmpl, "Civilian Specialist")
 
-    # 7 Bipolar Psyche traits (1-20)
-    psyche = {"EGO": 10, "SLF": 10, "OPN": 12, "BLG": 10, "EXT": 10, "CNF": 11, "AGG": 10}
-    if any(w in lower for w in ("kind", "caring", "compassionate", "gentle", "altruistic", "empathetic", "healer")):
+    # 9 Bipolar Psyche traits (1-20)
+    psyche = {
+        "EGO": 10, "SLF": 10, "OPN": 12, "BLG": 10, "EXT": 10, "CNF": 11, "AGG": 10,
+        "TRS": 10, "CPS": 10,
+    }
+    if any(w in lower for w in ("kind", "caring", "compassionate", "gentle", "altruistic", "empathetic", "merciful", "healer")):
         psyche["SLF"] = 5
         psyche["AGG"] = 5
         psyche["EGO"] = 7
         psyche["OPN"] = 14
-    if any(w in lower for w in ("selfish", "greedy", "mercenary", "ruthless", "callous")):
+        psyche["CPS"] = 16
+    if any(w in lower for w in ("selfish", "greedy", "mercenary", "ruthless", "callous", "utilitarian")):
         psyche["SLF"] = 16
         psyche["AGG"] = 15
+        if any(w in lower for w in ("ruthless", "callous", "utilitarian")):
+            psyche["CPS"] = 4
+    if any(w in lower for w in ("trusting", "open-handed", "naive")):
+        psyche["TRS"] = 15
+    if any(w in lower for w in ("paranoid", "suspicious", "cynical", "zero-trust")):
+        psyche["TRS"] = 4
     if any(w in lower for w in ("belong", "belongs", "belonging", "loyal", "tribal", "team", "family", "accepted")):
         psyche["BLG"] = 16
     if any(w in lower for w in ("loner", "lone wolf", "detached", "solitary", "aloof")):
@@ -580,6 +594,8 @@ def generate_npc_from_description(
         "EXT": ("Solitary / Reserved", "Ambiverted", "Gregarious / Outgoing"),
         "CNF": ("Maverick / Rebellious", "Adaptive", "Orthodox / Institutional"),
         "AGG": ("Passive / Conflict-Averse / Gentle", "Measured Assertiveness", "Combative / Escalatory"),
+        "TRS": ("Cynical / Zero-Trust / Paranoid", "Discerning", "Trusting / Open-Handed / Gullible"),
+        "CPS": ("Ruthless / Utilitarian / Cold-Blooded", "Humane / Proportionate", "Merciful / Tender-Hearted / Pacifistic"),
     }
     psyche_summary: list[str] = []
     for code, score in psyche.items():
@@ -675,6 +691,7 @@ def generate_npc_from_description(
             "sig": 12, "hea": 12, "tac": 12, "olf": 10, "tas": 10, "itu": 12,
             "ego": psyche["EGO"], "slf": psyche["SLF"], "opn": psyche["OPN"],
             "blg": psyche["BLG"], "ext": psyche["EXT"], "cnf": psyche["CNF"], "agg": psyche["AGG"],
+            "trs": psyche["TRS"], "cps": psyche["CPS"],
         },
         "skills": skills,
         "notes": gm_dossier,
@@ -746,20 +763,21 @@ _CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
     ("03-character/skills_and_trees.md", "Ch. 8: Skill System & Hierarchical Skill Trees (Trees 1-4)"),
     ("03-character/skills_trees_tactical_and_social.md", "Ch. 9: Hierarchical Skill Trees (Trees 5-8: Combat, Vehicles, Social & Tradecraft)"),
     ("03-character/lifepaths_and_economy.md", "Ch. 10: Lifepath Creation, Socioeconomic Upkeep & Heat"),
-    ("04-psyche-and-social/psyche_morale_and_social_combat.md", "Ch. 11: Psyche, Morale & Social Combat"),
-    ("05-combat/tactical_triad_and_pools.md", "Ch. 12: Combat Architecture, Tactical Triad & Pools"),
-    ("05-combat/melee_combat.md", "Ch. 13: Melee Combat & Close-Quarters Tactics"),
-    ("05-combat/firearms_and_ballistics.md", "Ch. 14: Firearm Engineering & Internal/External/Terminal Ballistics"),
-    ("05-combat/ranged_combat_and_armor.md", "Ch. 15: Ranged Combat, Suppression, Armor & Reliability"),
-    ("06-health-and-survival/health_and_trauma.md", "Ch. 16: Health, Anatomical Trauma, Fatigue & Mental Conditions"),
-    ("06-health-and-survival/movement_vehicles_and_environment.md", "Ch. 17: Movement, Encumbrance, Vehicles & Survival"),
+    ("03-character/lifepath_events_hobbies_and_factions.md", "Ch. 11: Lifepath Hobbies, Formative Life Events, Faction Templates & Walkthroughs"),
+    ("04-psyche-and-social/psyche_morale_and_social_combat.md", "Ch. 12: Psyche, Morale & Social Combat"),
+    ("05-combat/tactical_triad_and_pools.md", "Ch. 13: Combat Architecture, Tactical Triad & Pools"),
+    ("05-combat/melee_combat.md", "Ch. 14: Melee Combat & Close-Quarters Tactics"),
+    ("05-combat/firearms_and_ballistics.md", "Ch. 15: Firearm Engineering & Internal/External/Terminal Ballistics"),
+    ("05-combat/ranged_combat_and_armor.md", "Ch. 16: Ranged Combat, Suppression, Armor & Reliability"),
+    ("06-health-and-survival/health_and_trauma.md", "Ch. 17: Health, Anatomical Trauma, Fatigue & Mental Conditions"),
+    ("06-health-and-survival/movement_vehicles_and_environment.md", "Ch. 18: Movement, Encumbrance, Vehicles & Survival"),
     ("01-foundation/design_philosophy.md", "Ch. 1: Design Philosophy & Goals of Satya"),
 )
 
 
 @tool
 def query_satya_rules(query: str) -> str:
-    """Search the 13-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), and social dissonance."""
+    """Search the 18-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), and social dissonance."""
     ttrpg_dir = _repo_root() / "docs" / "ttrpg"
     default_rules_path = ttrpg_dir / "02-core-mechanics" / "cascading_d20_and_tasks.md"
     if not default_rules_path.exists():

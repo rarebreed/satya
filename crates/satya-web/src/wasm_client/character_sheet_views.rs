@@ -1,6 +1,6 @@
 //! Pure HTML formatters for the Character Sheet (`#notebook-pane-character`):
 //! - Top Operator Summary & Section Navigation
-//! - All 30 Characteristics (Physical, Mental, Sensory, Social, Psyche), 9 Domain Aptitudes & 10 Derived Stats
+//! - All 32 Characteristics (Physical, Mental, Sensory, Social, 9 Psyche), 9 Domain Aptitudes & 10 Derived Stats
 //! - Human-Readable Innate Talents (`TAL`) Table & Trained 8-Tree Skills (`PHY`, `KNO`, `PHY/KNO`) Table
 //! - Section 3 Equipment Loadout re-exported from [`crate::wasm_client::character_sheet_equip_views`].
 
@@ -13,10 +13,10 @@ pub use crate::wasm_client::character_sheet_equip_views::*;
 use crate::wasm_client::dom::{escape_html, escape_js_single_quoted_attr};
 use crate::wasm_client::wizard_views_skills::format_trained_skill_chips_html;
 use satya_engine::{
-    AptitudeCode, CANONICAL_SKILL_TREES, CharacteristicCode, PopulationTier, SkillTreeId,
-    SkillType, compute_academic_study_controller, compute_aptitude_min_c_relief,
-    compute_aptitude_training_time_multiplier, compute_stride_and_sprint_velocity,
-    psyche_deviation, psyche_pole_descriptor,
+    AptitudeCode, AwakenedFactionId, CANONICAL_SKILL_TREES, CharacteristicCode, FactionArchetypeId,
+    PopulationTier, SkillTreeId, SkillType, compute_academic_study_controller,
+    compute_aptitude_min_c_relief, compute_aptitude_training_time_multiplier,
+    compute_stride_and_sprint_velocity, psyche_deviation, psyche_pole_descriptor,
 };
 
 /// Returns the initial SSR HTML for `#char-sheet-stage-container`.
@@ -55,7 +55,7 @@ fn format_char_table_rows(
         .join("")
 }
 
-/// Formats the complete 30-Characteristic, 9-Aptitude, and 10-Derived-Metric section.
+/// Formats the complete 32-Characteristic, 9-Aptitude, and 10-Derived-Metric section.
 #[must_use]
 pub fn format_all_characteristics_and_aptitudes_html(sheet: &CharacterSheetState) -> String {
     let c = &sheet.characteristics;
@@ -245,7 +245,7 @@ pub fn format_all_characteristics_and_aptitudes_html(sheet: &CharacterSheetState
             &soc_rows,
         ),
         render_table_card(
-            "Psyche Profile (7 Bipolar Disposition Traits · Equilibrium = 10)",
+            "Psyche Profile (9 Bipolar Disposition Traits · Equilibrium = 10)",
             &[
                 "Psyche Trait",
                 "Score",
@@ -493,7 +493,7 @@ pub fn format_character_sheet_html(sheet: &CharacterSheetState) -> String {
         ("ALL", "All Sections"),
         ("VAULT", "Vault & .satyachar"),
         ("STATUS", "Status & Hit Locations"),
-        ("STATS", "30 Characteristics & Aptitudes"),
+        ("STATS", "32 Characteristics & Aptitudes"),
         ("SKILLS", "Skills & Talents Tables"),
         ("EQUIPMENT", "Weapons, Armor & Gear"),
         ("NOTES", "Notes & Lifepath"),
@@ -546,12 +546,29 @@ pub fn format_character_sheet_html(sheet: &CharacterSheetState) -> String {
     };
     let badge_html =
         format_verification_badge_with_id_html(sheet, Some("char-sheet-banner-verification-badge"));
+    let faction_pill_html = sheet
+        .faction_archetype
+        .as_deref()
+        .and_then(FactionArchetypeId::from_code_str)
+        .map(|arch| {
+            format!(
+                r#" <span class="pill pill-accent">{}</span>"#,
+                escape_html(arch.label())
+            )
+        })
+        .or_else(|| {
+            sheet.faction_id.as_deref().map(|fid| {
+                let lbl = AwakenedFactionId::from_code_str(fid).map_or(fid, |f| f.label());
+                format!(r#" <span class="pill pill-accent">{}</span>"#, escape_html(lbl))
+            })
+        })
+        .unwrap_or_default();
 
     format!(
         r#"<div class="char-sheet-shell">
             <div class="char-dossier-banner">
                 <div>
-                    <div class="char-dossier-title">{name} <span class="pill pill-iggy">Age {age} · {origin}</span> {badge_html}</div>
+                    <div class="char-dossier-title">{name} <span class="pill pill-iggy">Age {age} · {origin}</span>{faction_pill_html} {badge_html}</div>
                     <div class="subtitle">{role}</div>
                 </div>
                 <div class="char-section-nav" role="navigation" aria-label="Character Sheet Section Filter">

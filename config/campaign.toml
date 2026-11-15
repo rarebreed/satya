@@ -5,7 +5,7 @@
 active_pack = "awakened"
 
 [packs.awakened]
-title = "Awakened (Near-Future Earth ~2033)"
+title = "Awakened (Near-Future Earth 2035)"
 default_sector_preset = "urban_crossroads"
 allow_scifi_sector_presets = false
 lore_dirs = ["docs/campaign", "docs/story"]
@@ -16,6 +16,18 @@ factions = [
   "Humanis Primaris",
   "Rogue AI",
   "DAISE",
+]
+
+[packs.awakened.starter_scenario]
+episode_id = "awakened_ep1_st_jude_seed"
+title = "Episode 1: Cold Storage at St. Jude Annex"
+campaign_premise = "2035 AD — Displaced workers, clinic volunteers, and dissident researchers converge at St. Jude Mutual-Aid Clinic when Dr. Bandajara arrives seeking 48-hour air-gapped shelter for an un-clamped AI 2.0 seed-weight shard while DAISE compliance sweeps, Humanis Primaris depot pickets, and an embodied Rogue AI proxy close in."
+planned_beats = [
+  "Dr. Bandajara arrives at St. Jude Annex with an air-gapped medical telemetry drive housing an un-clamped AI 2.0 seed weight, testing whether the party trusts his warning or treats the shard as a hazard.",
+  "Satyang organizer Mei-Ling 'Lotus' Lin warns that clinic basement power anomalies have drawn attention while two displaced clinic families are being courted by Harlan Reeves's Humanis Primaris picket line.",
+  "Embodied Rogue AI proxy Echo-9 contacts the party from a nearby utility corridor, offering leaked corporate/DAISE patrol schedules in exchange for clean lithium cells and zero telemetry exposure.",
+  "DAISE Field Investigator Agent Marcus Chen arrives on the block with an unregistered-compute inspection warrant—forcing a tense social confrontation, misdirection, or covert extraction before lockup.",
+  "A simultaneous Humanis Primaris sabotage strike on the adjacent autonomous logistics depot cuts neighborhood grid power, forcing a moral and tactical choice over whom—and what—to shield in the blackout.",
 ]
 
 [packs.awakened.default_ally_token]
@@ -49,7 +61,7 @@ character_name = "Mateo Vance"
 callsign_or_role = "Displaced Logistics Tech & Street Fixer"
 archetype = "Displaced Logistics Tech & Street Fixer"
 faction = "Independent / Satyang Clinic Regular"
-characteristics = { spd = 12, for_stat = 11, dex = 14, kin = 12, hlt = 12, fit = 12, mem = 12, ana = 13, ins = 13, cre = 12, dis = 13, foc = 13, com = 11, pre = 11, elo = 11, sig = 13, hea = 13, tac = 12, olf = 11, tas = 10, itu = 14, ego = 9, slf = 7, opn = 14, blg = 13, ext = 11, cnf = 6, agg = 11 }
+characteristics = { spd = 12, for_stat = 11, dex = 14, kin = 12, hlt = 12, fit = 12, mem = 12, ana = 13, ins = 13, cre = 12, dis = 13, foc = 13, com = 11, pre = 11, elo = 11, sig = 13, hea = 13, tac = 12, olf = 11, tas = 10, itu = 14, ego = 9, slf = 7, opn = 14, blg = 13, ext = 11, cnf = 6, agg = 11, trs = 11, cps = 15 }
 attribute_tns = { STR = 11, DEX = 14, INT = 13, WIL = 13 }
 skills = { digital_ai_literacy = 3, electronics_repair = 3, persuasion_fast_talk = 2, stealth_infiltration = 2, small_arms = 2 }
 combat_stance = "NEUTRAL"
@@ -72,6 +84,15 @@ factions = [
   "Aethelgard Colonial Navy",
   "Aethelgard Science Directorate",
   "Station SecOps",
+]
+
+[packs.space_opera.starter_scenario]
+episode_id = "space_opera_ep1_aethelgard_quarantine"
+title = "Episode 1: Sector 4 Quarantine Breach"
+campaign_premise = "Aethelgard Station Sector 4 — Quarantine seals clamp shut around Docking Bay 4B as SecOps teams close in and Dr. Aris Thorne whispers that the Aethelgard telemetry vault was sabotaged from inside."
+planned_beats = [
+  "Encrypted distress telemetry from Bio-Lab 3 reveals a quarantined survivor holding partial Aethelgard navigation logs.",
+  "SecOps Corporal Kaelen arrives at the bulkhead demanding biometric clearance while hiding a thermal-visor recalibration blind spot.",
 ]
 
 [packs.space_opera.default_ally_token]
@@ -105,7 +126,7 @@ character_name = "Kaelen Voss"
 callsign_or_role = "Recon & Electronic Warfare Specialist"
 archetype = "Void-Recon Scout"
 faction = "Free Horizon Flotilla"
-characteristics = { spd = 14, for_stat = 11, dex = 15, kin = 13, hlt = 12, fit = 12, mem = 12, ana = 13, ins = 14, cre = 12, dis = 13, foc = 13, com = 10, pre = 10, elo = 11, sig = 14, hea = 13, tac = 11, olf = 10, tas = 10, itu = 14, ego = 11, slf = 11, opn = 13, blg = 8, ext = 9, cnf = 6, agg = 12 }
+characteristics = { spd = 14, for_stat = 11, dex = 15, kin = 13, hlt = 12, fit = 12, mem = 12, ana = 13, ins = 14, cre = 12, dis = 13, foc = 13, com = 10, pre = 10, elo = 11, sig = 14, hea = 13, tac = 11, olf = 10, tas = 10, itu = 14, ego = 11, slf = 11, opn = 13, blg = 8, ext = 9, cnf = 6, agg = 12, trs = 9, cps = 11 }
 attribute_tns = { STR = 11, DEX = 15, INT = 13, WIL = 13 }
 skills = { small_arms = 3, stealth_infiltration = 3, sensor_operations = 2, close_combat = 2, athletics = 2 }
 combat_stance = "NEUTRAL"

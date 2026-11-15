@@ -5,7 +5,7 @@
 //! Converts a natural-language NPC description (e.g., `"Terry is a kind general MD, but needs to feel like she belongs"`)
 //! and/or an archetype template (`NpcTemplateKind`) into:
 //! 1. A 100% rules-legal [`satya_schema::CharacterSheetRecord`] passing [`crate::verify_character_sheet_legality`],
-//!    complete with 30 Characteristics, 7 bipolar Psyche traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`),
+//!    complete with 32 Characteristics, 9 bipolar Psyche traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`),
 //!    9 Domain Aptitudes, 5-Stage Lifepath history, and 8-Tree skills.
 //! 2. A public player-safe summary (`public_summary`) vs. GM-only secret/psyche dossier (`gm_secret_dossier`).
 
@@ -27,6 +27,7 @@ use crate::economy_gear::{
     auto_allocate_career_and_elective_skills, compute_skill_allocation_sp_ledger,
     preview_next_skill_step_sp,
 };
+use crate::faction_templates::{FactionArchetypeId, infer_faction_archetype_from_prompt};
 use crate::hook_weaver::{
     NpcMotivationalProfile, apply_prompt_psyche_and_skill_cues, derive_npc_motivational_profile,
 };
@@ -147,6 +148,9 @@ pub struct NpcGenerationParams {
     /// Optional explicit template (`NpcTemplateKind::Auto` infers from `prompt`).
     #[serde(default)]
     pub template: NpcTemplateKind,
+    /// Optional *Awakened* Faction Sub-Archetype blueprint (`FactionArchetypeId`).
+    #[serde(default)]
+    pub faction_archetype: Option<FactionArchetypeId>,
     /// Number of 4-year adult career terms (`1..=4`; defaults to `2` = Age 26).
     #[serde(default = "default_career_terms")]
     pub career_terms: usize,
@@ -172,6 +176,7 @@ impl Default for NpcGenerationParams {
             prompt: String::new(),
             name_override: None,
             template: NpcTemplateKind::Auto,
+            faction_archetype: None,
             career_terms: 2,
             seed: 0,
             owner_user_id: "gm_npc".to_string(),
@@ -179,7 +184,7 @@ impl Default for NpcGenerationParams {
     }
 }
 
-/// Breakdown of one of the 7 bipolar Psyche traits (`1..=20`) for an NPC.
+/// Breakdown of one of the 9 bipolar Psyche traits (`1..=20`) for an NPC.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NpcPsycheTraitSummary {
     pub code: String,
@@ -196,7 +201,7 @@ pub struct GeneratedNpcResult {
     pub character: CharacterSheetRecord,
     /// Archetype template used (`MedicalDoctor`, `CombatSoldier`, etc.).
     pub inferred_template: NpcTemplateKind,
-    /// All 7 bipolar Psyche traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`) with pole labels.
+    /// All 9 bipolar Psyche traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`) with pole labels.
     pub psyche_traits: Vec<NpcPsycheTraitSummary>,
     /// Top trained skills `(skill_id, display_name, rank_n)` sorted descending by rank.
     pub top_skills: Vec<(String, String, i32)>,
@@ -489,8 +494,23 @@ pub fn generate_npc_from_prompt_with_pack(
     params: &NpcGenerationParams,
     pack_id: &str,
 ) -> GeneratedNpcResult {
+    let faction_arch = params.faction_archetype.or_else(|| {
+        (pack_id == "awakened")
+            .then(|| infer_faction_archetype_from_prompt(&params.prompt))
+            .flatten()
+    });
+    let spec_opt = faction_arch.map(FactionArchetypeId::spec);
+
     let effective_seed = if params.seed != 0 {
         params.seed
+    } else if let Some(arch) = params.faction_archetype {
+        fnv1a_hash(&format!(
+            "{}|{}|{}|{}",
+            params.prompt.trim(),
+            params.template.as_str(),
+            params.career_terms,
+            arch.as_str()
+        ))
     } else {
         fnv1a_hash(&format!(
             "{}|{}|{}",
@@ -501,10 +521,12 @@ pub fn generate_npc_from_prompt_with_pack(
     };
     let mut rng = SplitMix64::new(effective_seed);
 
-    let inferred_template = if params.template == NpcTemplateKind::Auto {
-        infer_npc_template_from_prompt(&params.prompt)
-    } else {
+    let inferred_template = if params.template != NpcTemplateKind::Auto {
         params.template
+    } else if let Some(spec) = &spec_opt {
+        spec.id.suggested_npc_template()
+    } else {
+        infer_npc_template_from_prompt(&params.prompt)
     };
 
     let npc_name = params
@@ -533,7 +555,7 @@ pub fn generate_npc_from_prompt_with_pack(
     let men_vals = roll_group(CharacteristicCategory::Mental);
     let soc_vals = roll_group(CharacteristicCategory::Social);
     let sen_vals = roll_group(CharacteristicCategory::Sensory);
-    let psy_vals: Vec<i32> = (0..7)
+    let psy_vals: Vec<i32> = (0..9)
         .map(|_| {
             roll_characteristic_method1(&mut |s| rng.roll_die(s))
                 .total
@@ -541,15 +563,32 @@ pub fn generate_npc_from_prompt_with_pack(
         })
         .collect();
 
-    let mut chars = CharacterCharacteristics {
-        ego: psy_vals[0],
-        slf: psy_vals[1],
-        opn: psy_vals[2],
-        blg: psy_vals[3],
-        ext: psy_vals[4],
-        cnf: psy_vals[5],
-        agg: psy_vals[6],
-        ..Default::default()
+    let mut chars = if let Some(spec) = &spec_opt {
+        CharacterCharacteristics {
+            ego: spec.psyche.ego,
+            slf: spec.psyche.slf,
+            opn: spec.psyche.opn,
+            blg: spec.psyche.blg,
+            ext: spec.psyche.ext,
+            cnf: spec.psyche.cnf,
+            agg: spec.psyche.agg,
+            trs: spec.psyche.trs,
+            cps: spec.psyche.cps,
+            ..Default::default()
+        }
+    } else {
+        CharacterCharacteristics {
+            ego: psy_vals[0],
+            slf: psy_vals[1],
+            opn: psy_vals[2],
+            blg: psy_vals[3],
+            ext: psy_vals[4],
+            cnf: psy_vals[5],
+            agg: psy_vals[6],
+            trs: psy_vals[7],
+            cps: psy_vals[8],
+            ..Default::default()
+        }
     };
 
     let mut aptitudes = CharacterAptitudes::default();
@@ -748,45 +787,73 @@ pub fn generate_npc_from_prompt_with_pack(
 
     let num_terms = params.career_terms.clamp(1, 4);
     let track = inferred_template.primary_career_track();
-    let (origin_roll, stage4_path, hs_track, stage1_talent) = match inferred_template {
-        NpcTemplateKind::MedicalDoctor | NpcTemplateKind::StemEngineer => (
-            30,
-            Some(Stage4Path::Path4AHighSchool),
-            HighSchoolTrack::ApHonorsStemMagnet,
-            "counting_basic_numeracy",
-        ),
-        NpcTemplateKind::SyndicateEnforcer => (
-            10,
-            Some(Stage4Path::Path4BStreetGang),
-            HighSchoolTrack::StandardCollegePrep,
-            "alertness_situational_awareness",
-        ),
-        NpcTemplateKind::FrontierRanger => (
-            12,
-            Some(Stage4Path::Path4CRuralAgrarian),
-            HighSchoolTrack::VocationalTechnical,
-            "foraging_campcraft",
-        ),
-        NpcTemplateKind::BlueCollarTech => (
-            20,
-            Some(Stage4Path::Path4AHighSchool),
-            HighSchoolTrack::VocationalTechnical,
-            "manual_dexterity_tinkering",
-        ),
-        _ => (
-            22,
-            Some(Stage4Path::Path4AHighSchool),
-            HighSchoolTrack::StandardCollegePrep,
-            "empathy_social_perception",
-        ),
+    let (origin_roll, stage4_path, hs_track, stage1_talent) = if let Some(spec) = &spec_opt {
+        (
+            spec.origin_roll_2d20,
+            Some(spec.stage4_path),
+            spec.stage4a_hs_track
+                .unwrap_or(HighSchoolTrack::StandardCollegePrep),
+            match inferred_template {
+                NpcTemplateKind::MedicalDoctor | NpcTemplateKind::StemEngineer => {
+                    "counting_basic_numeracy"
+                }
+                NpcTemplateKind::CombatSoldier => "alertness_situational_awareness",
+                _ => "empathy_social_perception",
+            },
+        )
+    } else {
+        match inferred_template {
+            NpcTemplateKind::MedicalDoctor | NpcTemplateKind::StemEngineer => (
+                30,
+                Some(Stage4Path::Path4AHighSchool),
+                HighSchoolTrack::ApHonorsStemMagnet,
+                "counting_basic_numeracy",
+            ),
+            NpcTemplateKind::SyndicateEnforcer => (
+                10,
+                Some(Stage4Path::Path4BStreetGang),
+                HighSchoolTrack::StandardCollegePrep,
+                "alertness_situational_awareness",
+            ),
+            NpcTemplateKind::FrontierRanger => (
+                12,
+                Some(Stage4Path::Path4CRuralAgrarian),
+                HighSchoolTrack::VocationalTechnical,
+                "foraging_campcraft",
+            ),
+            NpcTemplateKind::BlueCollarTech => (
+                20,
+                Some(Stage4Path::Path4AHighSchool),
+                HighSchoolTrack::VocationalTechnical,
+                "manual_dexterity_tinkering",
+            ),
+            _ => (
+                22,
+                Some(Stage4Path::Path4AHighSchool),
+                HighSchoolTrack::StandardCollegePrep,
+                "empathy_social_perception",
+            ),
+        }
     };
 
     let career_terms = (0..num_terms)
-        .map(|_| CareerTermConfig {
-            track,
+        .map(|term_idx| CareerTermConfig {
+            track: spec_opt
+                .as_ref()
+                .map(|s| s.career_tracks[term_idx % s.career_tracks.len()])
+                .unwrap_or(track),
             term_roll_pairs: [(13, 11), (12, 10)],
             override_successes: Some(2),
             waiver_override: true,
+            off_duty_hobby: spec_opt
+                .as_ref()
+                .and_then(|s| s.preferred_hobbies.get(term_idx + 1).copied()),
+            life_event_roll_2d20: if term_idx == 0 {
+                spec_opt.as_ref().map(|s| s.recommended_life_event_roll_2d20)
+            } else {
+                None
+            },
+            ..CareerTermConfig::default()
         })
         .collect();
 
@@ -807,6 +874,11 @@ pub fn generate_npc_from_prompt_with_pack(
         stage4c_rural_archetype: RuralYouthArchetype::PastoralHerderOutrider,
         adult_ged_waiver: false,
         career_terms,
+        youth_hobby: spec_opt
+            .as_ref()
+            .and_then(|s| s.preferred_hobbies.first().copied()),
+        adolescent_life_event_roll_2d20: None,
+        faction_archetype: faction_arch,
         ..LifepathBuildConfig::default()
     };
 
@@ -838,7 +910,7 @@ pub fn generate_npc_from_prompt_with_pack(
         skills_i32.insert(k.clone(), *v as i32);
     }
 
-    let mut psyche_traits = Vec::with_capacity(7);
+    let mut psyche_traits = Vec::with_capacity(9);
     for code in CharacteristicCode::PSYCHE_ALL {
         let score = chars.get_scale(code);
         let pole = match PsychePole::from_score(score) {
@@ -874,7 +946,7 @@ pub fn generate_npc_from_prompt_with_pack(
         .map(|p| format!("{}={} ({})", p.code, p.score, p.descriptor))
         .collect();
     let psyche_line = if notable_psyche.is_empty() {
-        "Balanced temperament across all 7 Psyche axes".to_string()
+        "Balanced temperament across all 9 Psyche axes".to_string()
     } else {
         notable_psyche.join("; ")
     };
@@ -887,7 +959,10 @@ pub fn generate_npc_from_prompt_with_pack(
         .join(", ");
 
     let age_years = baseline.age_years as i32;
-    let role_title = inferred_template.default_role_title().to_string();
+    let role_title = spec_opt.as_ref().map_or_else(
+        || inferred_template.default_role_title().to_string(),
+        |s| s.default_callsign_or_role.to_string(),
+    );
 
     let public_summary = format!(
         "{npc_name} — {role_title} (Age {age_years}, {:.2}m / {:.1}kg). Apparent demeanor: {}.",
@@ -956,6 +1031,8 @@ pub fn generate_npc_from_prompt_with_pack(
         skills: skills_i32,
         notes: Some(gm_secret_dossier.clone()),
         lifepath_config_json,
+        faction_id: spec_opt.as_ref().map(|s| s.faction.as_str().to_string()),
+        faction_archetype: faction_arch.map(|a| a.as_str().to_string()),
         verification_status: CharacterVerificationStatus::VerifiedOfficial,
         ..CharacterSheetRecord::default()
     };
@@ -1031,11 +1108,13 @@ mod tests {
             prompt: "Terry is a kind general MD, but needs to feel like she belongs".to_string(),
             name_override: None,
             template: NpcTemplateKind::Auto,
+            faction_archetype: None,
             career_terms: 2,
             seed: 42,
             owner_user_id: "gm_user".to_string(),
         };
         let res = generate_npc_from_prompt(&params);
+        assert_eq!(res.psyche_traits.len(), 9);
 
         assert_eq!(res.character.character_name, "Terry");
         assert_eq!(res.inferred_template, NpcTemplateKind::MedicalDoctor);
@@ -1092,6 +1171,7 @@ mod tests {
                 prompt: "Veteran specialist with a rebellious streak".to_string(),
                 name_override: Some(format!("Agent {}", template.as_str())),
                 template,
+                faction_archetype: None,
                 career_terms: 2,
                 seed: 100,
                 owner_user_id: "gm_user".to_string(),

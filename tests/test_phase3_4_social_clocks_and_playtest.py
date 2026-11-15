@@ -56,7 +56,7 @@ def test_phase3_social_combat_empathy_read_and_conviction_surge() -> None:
     assert r2["detects_psyche_wedge_tension"] is True
 
     r3 = perform_empathy_read.invoke({"target_npc_id_or_name": "daise_agent_chen", "net_successes": 3, "session_id": sid})
-    assert len(r3["revealed_traits"]) == 7
+    assert len(r3["revealed_traits"]) == 9
     assert r3["leverage_delta_ext_bonus"] == -2
 
     # 2. Contested Social Exchange hitting Agent Chen's BLG (13) vs CNF (16) Dual-Psyche Wedge

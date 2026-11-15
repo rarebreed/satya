@@ -50,6 +50,8 @@ fn parse_psyche_profile_json(raw: &str) -> PyResult<PsycheProfile> {
         ego: read_i32(map, &["ego", "EGO"], 10),
         cnf: read_i32(map, &["cnf", "CNF", "conformity"], 10),
         ext: read_i32(map, &["ext", "EXT", "extraversion"], 10),
+        trs: read_i32(map, &["trs", "TRS", "trust", "trusting"], 10),
+        cps: read_i32(map, &["cps", "CPS", "compassion"], 10),
     })
 }
 
@@ -103,6 +105,31 @@ fn map_vector_code(raw: &str, flags: Option<&serde_json::Map<String, serde_json:
         "bait_into_fight" => Ok(SocialArgumentVector::DominanceThreatDareConfrontation {
             aims_to_bait_into_fight: true,
         }),
+        "transparency_good_faith"
+        | "transparency_vulnerability_good_faith"
+        | "trust_alliance_guarantee_reciprocity"
+        | "transparency"
+        | "good_faith" => Ok(SocialArgumentVector::TransparencyVulnerabilityGoodFaith {
+            verifies_with_audit_or_proof: flag("verifies_with_audit_or_proof"),
+        }),
+        "audit_proof" | "verified_audit_proof" => {
+            Ok(SocialArgumentVector::TransparencyVulnerabilityGoodFaith {
+                verifies_with_audit_or_proof: true,
+            })
+        }
+        "moral_sanctity"
+        | "moral_sanctity_witnessed_suffering_mercy"
+        | "moral_witness_vulnerability_compassion"
+        | "sanctity"
+        | "witnessed_suffering"
+        | "compassion" => Ok(SocialArgumentVector::MoralSanctityWitnessedSufferingMercy {
+            utilitarian_greater_good_triage: flag("utilitarian_greater_good_triage"),
+        }),
+        "utilitarian_triage" | "greater_good_triage" => {
+            Ok(SocialArgumentVector::MoralSanctityWitnessedSufferingMercy {
+                utilitarian_greater_good_triage: true,
+            })
+        }
         _ => Err(to_py_err(format!("Unknown social argument vector '{raw}'"))),
     }
 }
@@ -261,6 +288,7 @@ pub fn evaluate_conviction_surge_json(
             "altruistic_or_tribal_sacrifice" | "altruistic" | "sacrifice" => {
                 Some(ConvictionPrincipleArchetype::AltruisticOrTribalSacrifice)
             }
+            "boundless_compassion" => Some(ConvictionPrincipleArchetype::BoundlessCompassion),
             "unbowed_defiance" | "defiance" => Some(ConvictionPrincipleArchetype::UnbowedDefiance),
             "iconoclastic_truth" | "truth" => Some(ConvictionPrincipleArchetype::IconoclasticTruth),
             _ => Some(ConvictionPrincipleArchetype::ExtremeTraitEmbodiment(parse_trait_id(raw)?)),
@@ -364,11 +392,15 @@ mod tests {
 
     #[test]
     fn test_psyche_social_and_world_clock_py_roundtrip() {
-        let npc_psyche = r#"{"opn": 16, "slf": 5, "blg": 16, "agg": 7, "ego": 10, "cnf": 14, "ext": 11}"#;
+        let npc_psyche = r#"{"opn": 16, "slf": 5, "blg": 16, "agg": 7, "ego": 10, "cnf": 14, "ext": 11, "trs": 6, "cps": 16}"#;
         let emp_json = evaluate_empathy_read_json(npc_psyche, 2).unwrap();
         let emp_val: serde_json::Value = serde_json::from_str(&emp_json).unwrap();
         assert_eq!(emp_val["revealed_traits"].as_array().unwrap().len(), 2);
         assert_eq!(emp_val["detects_psyche_wedge_tension"], true);
+
+        let emp3_json = evaluate_empathy_read_json(npc_psyche, 3).unwrap();
+        let emp3_val: serde_json::Value = serde_json::from_str(&emp3_json).unwrap();
+        assert_eq!(emp3_val["revealed_traits"].as_array().unwrap().len(), 9);
 
         let ex_json = evaluate_social_exchange_json(
             npc_psyche,
@@ -383,6 +415,19 @@ mod tests {
         let ex_val: serde_json::Value = serde_json::from_str(&ex_json).unwrap();
         assert_eq!(ex_val["argument_eval"]["triggers_dual_psyche_wedge"], true);
         assert_eq!(ex_val["dissonance_stacks_added"], 2);
+
+        let ex_9axis_json = evaluate_social_exchange_json(
+            npc_psyche,
+            r#"["moral_sanctity", "transparency_good_faith"]"#,
+            2,
+            None,
+            12,
+            12,
+            None,
+        )
+        .unwrap();
+        let ex_9axis_val: serde_json::Value = serde_json::from_str(&ex_9axis_json).unwrap();
+        assert_eq!(ex_9axis_val["argument_eval"]["triggers_dual_psyche_wedge"], true);
 
         let ledger_json = seed_or_update_world_ledger_json(
             "sess-py-wc",

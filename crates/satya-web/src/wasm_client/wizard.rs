@@ -48,7 +48,7 @@ pub struct CharacterWizardState {
     /// Psyche generation mode (`"CHOOSE"`, `"ROLL_DIRECT"`, or `"ROLL_POOL"`).
     pub psyche_mode: String,
     pub psyche_pool: Option<Vec<SingleCharacteristicRoll>>,
-    pub psyche_slots: [Option<usize>; 7],
+    pub psyche_slots: [Option<usize>; 9],
     pub aptitude_pool: Option<AptitudePoolRoll>,
     pub aptitude_slots: [Option<usize>; 9],
     pub characteristics: CharacterCharacteristics,
@@ -84,7 +84,7 @@ impl Default for CharacterWizardState {
             social_slots: [None; 3],
             psyche_mode: "CHOOSE".to_string(),
             psyche_pool: None,
-            psyche_slots: [None; 7],
+            psyche_slots: [None; 9],
             aptitude_pool: None,
             aptitude_slots: [None; 9],
             characteristics: chars,
@@ -552,11 +552,11 @@ pub fn satya_wizard_update_height_mass() {
     render_character_wizard();
 }
 
-/// Rolls a 7-value `2d4 + 2d5` pool for the 7 Psyche characteristics and assigns them in order (swap-enabled).
+/// Rolls a 9-value `2d4 + 2d5` pool for the 9 Psyche characteristics and assigns them in order (swap-enabled).
 #[wasm_bindgen]
 pub fn satya_wizard_roll_psyche_pool() {
     with_state_mut(|st| {
-        let mut rolls: Vec<SingleCharacteristicRoll> = (0..7)
+        let mut rolls: Vec<SingleCharacteristicRoll> = (0..9)
             .map(|_| roll_characteristic_2d4_2d5(&mut roll_browser_die_i32))
             .collect();
         rolls.sort_by_key(|a| std::cmp::Reverse(a.total));
@@ -568,17 +568,17 @@ pub fn satya_wizard_roll_psyche_pool() {
     render_character_wizard();
     set_feedback(
         "wizard-feedback",
-        "Rolled 7 × (2d4 + 2d5) Psyche scores. Swap pool slots or drag any slider (1–20) to customize.",
+        "Rolled 9 × (2d4 + 2d5) Psyche scores. Swap pool slots or drag any slider (1–20) to customize.",
         false,
     );
 }
 
-/// Resets all 7 Psyche characteristics to Balanced (`10`).
+/// Resets all 9 Psyche characteristics to Balanced (`10`).
 #[wasm_bindgen]
 pub fn satya_wizard_reset_psyche_balanced() {
     with_state_mut(|st| {
         st.wizard.psyche_mode = "CHOOSE".to_string();
-        st.wizard.psyche_slots = [None; 7];
+        st.wizard.psyche_slots = [None; 9];
         for code in CharacteristicCode::PSYCHE_ALL {
             st.wizard.characteristics.set_scale(code, 10);
         }
@@ -586,7 +586,7 @@ pub fn satya_wizard_reset_psyche_balanced() {
     render_character_wizard();
 }
 
-/// Sets a specific Psyche characteristic (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`) to a player-chosen value (`1–20`).
+/// Sets a specific Psyche characteristic (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`) to a player-chosen value (`1–20`).
 #[wasm_bindgen]
 pub fn satya_wizard_set_psyche(code_str: String, raw_value: String) {
     let Some(code) = CharacteristicCode::from_code_str(&code_str) else {

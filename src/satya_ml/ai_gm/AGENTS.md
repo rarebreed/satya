@@ -19,7 +19,7 @@ When working on or operating the Satya Autonomous / Co-Pilot AI Game Master (`sr
      2. `mysterious_stranger` (covert informant / encrypted transmission)
      3. `new_npc_arrives` (social dynamic shift / urgent arrival)
      4. `dramatic_revelation` (plot twist, betrayal, or backstory collision)
-     5. `thought_provoking_discussion` (philosophical/ethical dilemma testing the 7 bipolar Psyche traits)
+     5. `thought_provoking_discussion` (philosophical/ethical dilemma testing the 9 bipolar Psyche traits: `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`)
      6. `discovery_or_clue` (physical clue, forensic trace, or secret)
      7. `environmental_hazard` (depressurization, radiation spike, structural collapse)
      8. `ticking_clock_escalation` (off-screen faction clock advancing)

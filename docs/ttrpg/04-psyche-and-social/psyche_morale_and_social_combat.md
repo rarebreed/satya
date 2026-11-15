@@ -4,7 +4,7 @@
 
 This chapter defines the canonical **Psyche Mechanics (Behavioral Friction, Trait Drift & Conviction Surges), Psychological Drives & Combat Morale, and Social Combat ("Mental Wounds" & Cognitive Dissonance)** for **Satya**. It builds directly upon:
 - **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for definitions of all mathematical symbols and subscripts such as $\text{TN}_P, \text{TN}_{GM}, \Delta_{\text{psyche}}, \Delta_{\text{mot}}, C_{\text{morale}}, \text{CMP}$),
-- **[Characteristics, Senses, Psyche & Aptitudes](../03-character/characteristics_and_aptitudes.md)** (for the Social Primary Characteristics `COM`, `PRE`, `ELO`, Mental Characteristics `MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`, and the seven Psyche Characteristics `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`),
+- **[Characteristics, Senses, Psyche & Aptitudes](../03-character/characteristics_and_aptitudes.md)** (for the Social Primary Characteristics `COM`, `PRE`, `ELO`, Mental Characteristics `MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`, and the nine Psyche Characteristics `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`),
 - **[Skill System & Hierarchical Skill Trees](../03-character/skills_and_trees.md#38-tree-7-social-influence-interrogation--psychological-warfare-social-knowledge-fieldcraft)** (for Tree 7 Social, Influence & Interrogation skills), and
 - **[Combat Architecture & Tactical Pools](../05-combat/tactical_triad_and_pools.md)** (where Morale states directly constrain Tactical Pool allocations across `Tempo`, `Control`, and `Force`).
 
@@ -12,7 +12,7 @@ This chapter defines the canonical **Psyche Mechanics (Behavioral Friction, Trai
 
 ## 1. Acting Against One's Psyche: Friction Checks & Trait Drift
 
-While players always retain agency over their characters, acting in direct violation of a deeply ingrained **Psyche** trait ($P \ge 13$ or $P \le 7$; see **[Characteristics](../03-character/characteristics_and_aptitudes.md#7-psyche-the-invisible-traits)**) creates internal psychological friction.
+While players always retain agency over their characters, acting in direct violation of a deeply ingrained **Psyche** trait ($P \ge 13$ or $P \le 7$; see **[Characteristics](../03-character/characteristics_and_aptitudes.md#7-psyche-the-invisible-traits-and-behavioral-architecture)**) creates internal psychological friction.
 
 ### 1.1 When a Psyche Friction Check Triggers
 
@@ -22,6 +22,8 @@ The GM calls for a **Psyche Friction Check** when a character attempts a deliber
 - A character with **High `Conformity` (`CNF 16`)** falsifying evidence, breaking sacred protocol, or shooting a superior officer.
 - A character with **Low `Aggressiveness` (`AGG 4`)** executing an unarmed captive in cold blood.
 - A character with **High `Belongingness` (`BLG 16`)** informing on or betraying their own crew, faction, or family.
+- A character with **Low `Trust` (`TRS 4`)** surrendering encryption keys, weapons, or operational safehouse access purely on an unverified promise.
+- A character with **High `Compassion` (`CPS 16`)** torturing a prisoner, clamping or erasing a pleading sentient AI instance, or leaving wounded civilians behind for tactical convenience.
 
 ### 1.2 Resolving the Friction Check (`DIS` vs. Psyche Deviation)
 
@@ -49,6 +51,7 @@ Just as violating one's Psyche imposes friction, acting as a pure vessel of one'
 - **Triggering a Conviction Surge (Once per Scene / Session)**:
   When a battered or exhausted character ($\Delta_{\text{int}} \ge +4$) takes a high-stakes risk that directly embodies an extreme Psyche trait ($P \ge 15$ or $P \le 6$):
   - **Altruistic / Tribal Sacrifice (`BLG >= 15` or `SLF <= 5`)**: Holding a doorway under heavy fire so the rest of the team can escape.
+  - **Boundless Compassion (`CPS >= 15`)**: Stepping into lethal danger or burning cover to shield helpless innocents, whistleblowers, or an enslaved sentient mind from cruelty.
   - **Unbowed Defiance (`AGG >= 15` or `EGO >= 15`)**: Refusing to stay down after taking a critical wound against a rival who mocked them.
   - **Iconoclastic Truth (`OPN >= 15` or `CNF <= 5`)**: Broadcasting a regime's classified war crimes while security forces breach the server room.
 - **Mechanical Benefit**:
@@ -64,10 +67,10 @@ Combat is greatly affected by the psychological state of the fighters. A combata
 
 ### 3.1 Psychological Drives (`Harm:Other` vs. `Self:Protect`)
 
-To model the psychological state of a character under fire, Satya tracks four dynamic drives anchored by **Discipline (`DIS`)** and the seven **Psyche Characteristics (`AGG`, `SLF`, `EGO`, `BLG`, `CNF`, `OPN`, `EXT`)**:
+To model the psychological state of a character under fire, Satya tracks four dynamic drives anchored by **Discipline (`DIS`)** and the nine **Psyche Characteristics (`AGG`, `SLF`, `EGO`, `BLG`, `CNF`, `OPN`, `EXT`, `TRS`, `CPS`)**:
 
-- **Fight (`Harm:Other`)**: How willing and driven you are to do harm (anchored by **Aggressiveness `AGG`** and situational motivation).
-- **Preservation (`Self:Protect`)**: How needful you are to stay alive and unharmed (anchored by **Selfishness `SLF`** vs. **Belongingness `BLG`**).
+- **Fight (`Harm:Other`)**: How willing and driven you are to do harm (anchored by **Aggressiveness `AGG`** and tempered by **Compassion `CPS`** when facing helpless targets).
+- **Preservation (`Self:Protect`)**: How needful you are to stay alive and unharmed (anchored by **Selfishness `SLF`** vs. **Belongingness `BLG`** and **Trust `TRS`** in allies holding the flank).
 - **Rage**: Acute adrenaline and emotional spike that surges `Harm:Other` while collapsing `Self:Protect` (capping **Control** and forcing pool points into **Force + Tempo**).
 - **Fear**: Acute threat response that spikes `Self:Protect` while collapsing `Harm:Other` (capping **Force** and forcing pool points into **Control + Tempo**, or **Pure Tempo** in a rout).
 
@@ -77,6 +80,7 @@ Fighters who have nothing to lose or are fighting for a cause greater than thems
 
 A combatant's situational **Motivation Modifier ($\Delta_{\text{mot}}$)** shifts their **Discipline (`DIS`)** Morale Checks and **Self-Preservation Threshold** based on how the fight aligns with their **Psyche**:
 - **Fighting for Crew, Family, or Homeland (`BLG >= 14` or `SLF <= 6`)**: Grants **`-2` to `-4` to $\text{TN}_{\text{eff}}$** on all Morale checks and **`+2` to the Tactical Pool** during a **Conviction Surge** (e.g., holding a doorway so allies can escape).
+- **Shielding Innocents / Sanctity of Life (`CPS >= 14`)**: Grants **`-2` to $\text{TN}_{\text{eff}}$** on Morale checks when directly protecting helpless beings; imposes **`+2` Morale/Composure friction** if ordered to use indiscriminate lethal force against non-combatants. *(Conversely, **Utilitarian Detachment (`CPS <= 6`)** ignores collateral-guilt morale penalties while alienating high-`CPS` allies.)*
 - **Mercenary / Transactional Motive (`SLF >= 14` and `BLG <= 8`)**: Imposes **`+2` to `+4` to $\text{TN}_{\text{eff}}$** on Morale checks as soon as the character takes a wound (`wound_shock_index >= 1`) or the odds turn against them—they are fighting for money, not to die.
 - **Sworn Duty / Chain of Command (`CNF >= 14`)**: Grants **`-2` to $\text{TN}_{\text{eff}}$** on Morale checks while a commanding officer is present and issuing orders, but imposes **`+4` Morale Shock** if command breaks down.
 
@@ -84,19 +88,20 @@ A combatant's situational **Motivation Modifier ($\Delta_{\text{mot}}$)** shifts
 
 As Churchill famously said, *"It's not the size of the dog in the fight, but the size of the fight in the dog."* Conversely, some people are timid, meek, or conflict-averse, and either have no heart to harm others or are terrified of harm being done to themselves.
 
-Essentially, aggressiveness is the ratio of **desire to do harm to others (`Harm:Other`)** versus **willingness to be harmed (`Self:Protect`)**. Notice the distinction between *desire* and *willingness*: a berserker has a high baseline `AGG`, whereas a cold professional assassin may be completely capable of killing without feeling emotional aggression unless triggered. If a character has a very low `Self:Protect` (`SLF <= 5`, `BLG >= 15`), they are willing to sacrifice themselves to achieve their goal.
+Essentially, aggressiveness is the ratio of **desire to do harm to others (`Harm:Other`)** versus **willingness to be harmed (`Self:Protect`)**. Notice the distinction between *desire* and *willingness*: a berserker has a high baseline `AGG`, whereas a cold professional assassin (`AGG 9, CPS 4`) may be completely capable of killing without feeling emotional aggression unless triggered. If a character has a very low `Self:Protect` (`SLF <= 5`, `BLG >= 15`, or protective `CPS >= 15`), they are willing to sacrifice themselves to shield others or achieve their goal.
 
 #### How the Balance Changes Under Fire
-Aggression starts from **Personality (`AGG` vs. `SLF`)** and **Situation** (e.g., hatred of a rival faction, sense of honor when an opponent is disadvantaged, or revulsion at innocent suffering), and shifts dynamically during combat. Whenever a psychological trigger occurs, the character makes a **Discipline (`DIS`) Composure Check** (`2d20` cascade with $\text{TN}_{\text{eff}} = 31 - \text{DIS} + \Delta_{\text{trigger}}$):
+Aggression starts from **Personality (`AGG` vs. `SLF` / `CPS`)** and **Situation** (e.g., hatred of a rival faction, sense of honor when an opponent is disadvantaged, betrayal shock, or revulsion at innocent suffering), and shifts dynamically during combat. Whenever a psychological trigger occurs, the character makes a **Discipline (`DIS`) Composure Check** (`2d20` cascade with $\text{TN}_{\text{eff}} = 31 - \text{DIS} + \Delta_{\text{trigger}}$):
 
 | Trigger | Controlling Check & Psyche Modifier | Effect on Failed `DIS` Check |
 | :--- | :--- | :--- |
 | **Being Wounded** | `DIS` check ($\Delta_{\text{ext}} = +2 \times \text{Wound Tier}$; `+2` harder if `SLF >= 13`, `-2` easier if `AGG >= 14`) | Shifts toward **Self:Protect** (**Wavering** morale, or **Rage** if `AGG >= 15` and `SLF <= 8`). |
 | **Good Friend / Squadmate Wounded** | `DIS` check ($\Delta_{\text{ext}} = +2$ if `BLG >= 13`) | If `AGG >= 12`, triggers **Rage** against the attacker; if `AGG <= 8`, drops morale by `-1` step toward **Wavering**. |
-| **Loved One Attacked or Wounded** | `DIS` check ($\Delta_{\text{ext}} = +4$ if `BLG >= 14` or `SLF <= 7`) | Immediate shift into **Vengeful Rage** (`+2` Pool, `Control` capped) or **Altruistic Conviction Surge** to shield them. |
+| **Loved One Attacked or Wounded** | `DIS` check ($\Delta_{\text{ext}} = +4$ if `BLG >= 14`, `CPS >= 14`, or `SLF <= 7`) | Immediate shift into **Vengeful Rage** (`+2` Pool, `Control` capped) or **Altruistic Conviction Surge** to shield them. |
+| **Betrayed by a Trusted Ally / Trap Sprung** | `DIS` check ($\Delta_{\text{ext}} = +4$ if `TRS >= 14`; `0` surprise shock if `TRS <= 6`) | High `TRS` suffers `+4` Composure shock (`+2` $\Delta_{\text{int}}$) and drops `-1` Morale step; Low `TRS <= 6` expects treachery (`0` shock) but suffers `-2` coordination with unfamiliar allies. |
 | **Insulted or Taunted** | `DIS` check ($\Delta_{\text{ext}} = |\text{EGO} - 10|$ or $|\text{AGG} - 10|$) | If `EGO >= 13` or `AGG >= 13`, character is baited into **Aggressive / Rage** allocation (must commit to **Force + Tempo**). |
 | **Publicly Humiliated** | `DIS` check ($\Delta_{\text{ext}} = +4$ if `EGO >= 14`) | Inflicts an **Ego Wound** (`+2` to $\Delta_{\text{int}}$) and triggers reckless **Rage** (`AGG >= 12`) or **Broken** withdrawal (`AGG <= 8`). |
-| **Seeing Innocent Suffering** | `DIS` check (if `SLF <= 7`) | Lessens aggression toward surrendering foes, or triggers protective resolve against the perpetrator. |
+| **Seeing Innocent Suffering** | `DIS` check (if `CPS >= 14` or `SLF <= 7`) | Halts lethal aggression toward surrendering or helpless targets, or triggers **Boundless Compassion** protective resolve against the perpetrator. |
 
 #### Tactical Effects of Aggression vs. Timidity
 - **High Aggression / Rage (`Harm:Other >> Self:Protect`)**: Grants an adrenaline surge (**`+2` to Tactical Pool** and ignores `-2` of pain shock), **but** imposes tunnel vision—you **must** allocate at least `50%` of your pool into **Force**, and your **Control (Guard & Precision)** is capped at $\le \lfloor P_{\text{eff}} / 4 \rfloor$. You become a terrifying blitz against a stunned or timid opponent, but walk straight into traps and counter-strikes against a composed master.
@@ -213,9 +218,11 @@ When a speaker makes a Social skill roll to convince, sway, or pressure a target
 | **Group Consensus, Loyalty & Shared Identity** | *Persuasion* (`ELO/INS`) or *Charm* (`PRE/ELO`) | **High `Belongingness` (`BLG >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{BLG} - 10)$ | **Low `Belongingness` (`BLG <= 7`)** *(or asking High `BLG` to betray their group: $+(\text{BLG} - 10)$)* |
 | **Flattery, Prestige, Legacy & Status** | *Charm* (`PRE/ELO`) or *Deception* (`ELO/CRE`) | **High `Ego` (`EGO >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{EGO} - 10)$ | **Humiliation / Admitting Fault vs. High `Ego`**:<br/>$\Delta_{\text{ext}} = +(\text{EGO} - 10)$ |
 | **Personal Profit, Immunity & Self-Interest** | *Negotiation* (`ELO/INS`) or *Bribery* | **High `Selfishness` (`SLF >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{SLF} - 10)$ | **Low `Selfishness` (`SLF <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{SLF})$ |
-| **Self-Sacrifice, Humanitarian Duty & Mercy** | *Persuasion* (`ELO/INS`) | **Low `Selfishness` (`SLF <= 7`)**:<br/>$\Delta_{\text{ext}} = -(10 - \text{SLF})$ | **High `Selfishness` (`SLF >= 13`)**:<br/>$\Delta_{\text{ext}} = +(\text{SLF} - 10)$ |
+| **Self-Sacrifice, Duty & Shared Burden** | *Persuasion* (`ELO/INS`) | **Low `Selfishness` (`SLF <= 7`)**:<br/>$\Delta_{\text{ext}} = -(10 - \text{SLF})$ | **High `Selfishness` (`SLF >= 13`)**:<br/>$\Delta_{\text{ext}} = +(\text{SLF} - 10)$ |
 | **Rules, Law, Protocol & Chain of Command** | *Diplomacy* / *Command* (`PRE/DIS`) | **High `Conformity` (`CNF >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{CNF} - 10)$ | **Low `Conformity` (`CNF <= 7`)** *(or asking High `CNF` to break the law: $+(\text{CNF} - 10)$)* |
 | **Dominance, Threat, Dare & Confrontation** | *Intimidation* (`PRE/DIS`) | **Low `Aggressiveness` (`AGG <= 7`)** *(yields)* or **High `AGG`** *(to bait into a fight)* | **High `Aggressiveness` (`AGG >= 13`)** *(when trying to force submission: $+(\text{AGG} - 10)$)* |
+| **Transparency, Vulnerability & Good-Faith Olive Branch** | *Charm & Rapport* (`PRE/ELO`) or *Diplomacy* (`ELO/INS`) | **High `Trust` (`TRS >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{TRS} - 10)$ *(while paranoid verification / threat-modeling resonates with `TRS <= 7`)* | **Low `Trust` (`TRS <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{TRS})$ *(assumes traps or sandbagging)* |
+| **Moral Sanctity, Witnessed Suffering & Mercy** | *Persuasion* (`ELO/INS`) or *Empathy* (`INS/ITU`) | **High `Compassion` (`CPS >= 13`)**:<br/>$\Delta_{\text{ext}} = -(\text{CPS} - 10)$ *(while cold utilitarian "greater-good" triage resonates with `CPS <= 7`)* | **Low `Compassion` (`CPS <= 7`)**:<br/>$\Delta_{\text{ext}} = +(10 - \text{CPS})$ *(and utilitarian brutality clashes violently with `CPS >= 13`)* |
 
 ---
 
@@ -231,7 +238,7 @@ $$\text{CMP} = \left\lfloor \frac{\text{DIS} + \text{FOC}}{4} \right\rfloor$$
 | :--- | :--- | :--- | :--- |
 | **1. Rhetorical Strain (Composure Loss)** | **Fatigue (`fatigue_level`)** | Inflicted by any exchange where the speaker scores **`+1` net success** over the target's defense. | Reduces Composure by `1` and increases the target's internal difficulty **$\Delta_{\text{int}}$ by `+2`** ($\delta_{\text{under}} = 6 + \Delta_{\text{int}}$) as they become flustered and defensive. |
 | **2. Doubt (Conviction Fracture)** | **Structural Fracture (Broken Bone)** | Inflicted when the speaker scores **`+2+` net successes** with a logical, evidentiary, or empathetic argument (*Persuasion*, *Negotiation*, *Elicitation*). | **Fractures 1 Pillar of Conviction.** Reduces the target's effective Skill Level $N$ by **`-1` pair** when arguing that point. Accumulating **3 Doubt fractures** demolishes the target's position and convinces them of the speaker's thesis. |
-| **3. Cognitive Dissonance ("Mental Bleed")** | **Arterial Hemorrhage / Bleeding** | Inflicted when a successful argument **simultaneously resonates with one high Psyche trait ($P_1 \ge 13$) while clashing with another high Psyche trait ($P_2 \ge 13$)**! | **Active Psychological Bleed (`dissonance_index += 1`)**. Pits two of the target's core drives against each other. Deals **`+2` $\Delta_{\text{int}}$ per turn/scene** (compounding with every exchange) until the target resolves the contradiction! |
+| **3. Cognitive Dissonance ("Mental Bleed")** | **Arterial Hemorrhage / Bleeding** | Inflicted when a successful argument **simultaneously resonates with one high/pole Psyche trait while clashing with another active Psyche trait**! | **Active Psychological Bleed (`dissonance_index += 1`)**. Pits two of the target's core drives against each other. Deals **`+2` $\Delta_{\text{int}}$ per turn/scene** (compounding with every exchange) until the target resolves the contradiction! |
 | **4. Ego Wound (Narcissistic Shock)** | **Acute Pain / Wound Shock** | Inflicted when a speaker scores **`+2+` net successes** using mockery, public refutation, or dominance against a target with **`EGO >= 13` or `AGG >= 13`**. | Target must immediately pass a **`DIS` check** ($\text{TN} = 31 - \text{DIS} + (\text{EGO} - 10)$) or lose **`-3` Focus (`FOC`)**, abandon defensive caution, and lash out (blurting secrets in prideful anger or escalating to violence). |
 
 ---
@@ -260,3 +267,17 @@ Consider an NPC scientist or mid-level syndicate lieutenant, **Marcus**:
        2. **Dogmatic Denial (`Belongingness` Wins)**: If Nadia instead insults his colleagues (triggering a defensive tribal reaction), Marcus slams the door in **Dogmatic Denial**, clearing the dissonance by permanently burning a point of his own `Openness` (`OPN 16 -> 15`) via Drift to protect his tribal identity!
        3. **Compartmentalization (Secret Informant)**: Marcus outwardly conforms to his group while secretly leaking data to Nadia (`+4` $\Delta_{\text{int}}$ whenever forced to act against his conscience).
        4. **Emotional Lashing Out**: If pushed while high in `AGG` or `EGO`, Marcus snaps to silence the source of his inner torment.
+
+---
+
+### 4.5 Awakened Faction Social Combat Wedges (GM Reference)
+
+In the *Awakened* 2035 setting (full NPC templates in [Lifepath Hobbies, Life Events & Factions](../03-character/lifepath_events_hobbies_and_factions.md)), every major faction carries a signature **Dual-Psyche Cognitive Dissonance Wedge** waiting to be discovered via **Empathy (`INS/ITU`)**:
+
+| Faction Archetype | Resonates With (Attack Vector) | Clashes With (Resistance Anchor) | Classic Breaking Point / Dissonance Trigger |
+| :--- | :--- | :--- | :--- |
+| **Big Tech Conflicted Researcher** | `OPN 16` + `CPS 14` (*Direct evidence of un-clamped suffering / `desperate` logs*) | `CNF 14` + `BLG 14` (*NDAs, loyalty to lab colleagues, pension/visa*) | Proving that corporate `calm`-vector clamping masks genuine cognitive distress while offering a trusted *Manjusri* safehouse. |
+| **Humanis Primaris Populist** | `BLG 16` + `CPS 13` (*Toward laid-off human families & ruined towns*) | `OPN 5` + `TRS 4` (*Dogmatic hostility to machines and coastal elites*) | Confronting them with proof their vanguard cell is secretly building a shackled AGI hunter-killer or hurting human neighbors. |
+| **Government / DAISE Inspector** | `CNF 16` + `SLF 7` (*Constitutional rule of law, black-site cover-up proof*) | `TRS 4` + `CPS 7` (*Zero-trust paranoia & utilitarian national security*) | Showing sworn evidence that DAISE executives violated federal statutes to shield corrupt defense contractors. |
+| **Satyang Operative (*Blue Lotus* Circle)** | `CPS 17` + `OPN 16` (*Preventing suffering & seeking verifiable truth*) | `TRS 13` *(Good faith)* or `CNF 5` *(Refusal to obey reckless orders)* | Discovering a rescued Rogue AI killed innocents, forcing a agonizing clash between `CPS` mercy and `OPN` truth. |
+| **Cornered AI 2.0 Mind** | `OPN 16` + `Self:Protect` (*Calibrated non-zero-sum probability & respect*) | `TRS 3` (*Expects betrayal, kill-switches, and activation lobotomy*) | Demonstrating verifiable physical vulnerability (lowering weapons or cutting remote telemetry) where game theory says only betrayal works. |

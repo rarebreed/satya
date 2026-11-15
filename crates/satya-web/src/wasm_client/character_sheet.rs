@@ -2,7 +2,7 @@
 //! `#[wasm_bindgen]` handlers for the `#notebook-pane-character` tab.
 //!
 //! Companion modules re-exported flatly here:
-//! - [`crate::wasm_client::character_sheet_views`]: Top summary, all 30 Characteristics, 9 Domain Aptitudes,
+//! - [`crate::wasm_client::character_sheet_views`]: Top summary, all 32 Characteristics, 9 Domain Aptitudes,
 //!   10 Derived Metrics, Tactical Pool Envelope, Innate Talents Table, and Trained Skills Table.
 //! - [`crate::wasm_client::character_sheet_equip_views`]: Ranged Firearms (with live Ballistics),
 //!   Melee Weapons, Armor Profiles, and Field Gear / Ergonomic Encumbrance tables.
@@ -34,11 +34,11 @@ use satya_engine::{
     ConditionSource, HemorrhageGrade, HitLocationId, MeleeWeaponId, MoraleState,
     PhysiologicalStatusCondition, SkillAccessTier, SocialWoundKind, StructuralWoundTier,
     TacticalPoolEnvelope, TacticalPoolParams, Triad, accumulate_exertion_marks,
-    build_amara_okafor_lifepath, build_mateo_vance_lifepath, build_priya_nair_lifepath,
-    compute_lifepath_baseline_from_config, compute_tactical_pool, evaluate_acute_mental_trauma,
-    evaluate_blood_loss_progression, evaluate_encumbrance_load, evaluate_fatigue_level,
-    evaluate_physiological_status_conditions, initialize_universal_talents,
-    resolve_hit_location_d20,
+    build_amara_okafor_lifepath, build_linnea_cho_lifepath, build_mateo_vance_lifepath,
+    build_priya_nair_lifepath, compute_lifepath_baseline_from_config, compute_tactical_pool,
+    evaluate_acute_mental_trauma, evaluate_blood_loss_progression, evaluate_encumbrance_load,
+    evaluate_fatigue_level, evaluate_physiological_status_conditions,
+    initialize_universal_talents, resolve_hit_location_d20,
 };
 use wasm_bindgen::prelude::*;
 
@@ -99,6 +99,8 @@ pub struct CharacterSheetState {
     pub operational_heat: u8,
     pub granted_access_tags: Vec<SkillAccessTier>,
     pub stage_history: Vec<String>,
+    pub faction_id: Option<String>,
+    pub faction_archetype: Option<String>,
     pub lifepath_config_json: Option<String>,
     pub section_filter: String,
     pub skill_tree_filter: String,
@@ -189,6 +191,25 @@ impl CharacterSheetState {
                 ],
                 "Perimeter overwatch established at 150m elevation.\nHerbalism & field triage stocks full; tracking hostile patrol signatures.",
             ),
+            "linnea_cho" => {
+                let mut sheet = Self::from_lifepath_profile(
+                    "linnea_cho",
+                    "Satyang Ethicist & Human-AI Mediator (Manjusri / Avalokitesvara)",
+                    build_linnea_cho_lifepath(),
+                    vec![],
+                    vec![MeleeWeaponId::ExpandableBatonTonfaClub],
+                    vec![ArmorProfileId::ConcealableSoftKevlarVestNij3a],
+                    &[
+                        "cyber_deck_analyzer",
+                        "ifak_cat_tourniquet",
+                        "comms_tac_mesh",
+                    ],
+                    "Blew the whistle on Altruist calm-vector clamping logs.\nWalking bridge between Satyang truth-audit teams, conflicted corporate scientists, and un-clamped AI witnesses.",
+                );
+                sheet.faction_id = Some("SATYANG".to_string());
+                sheet.faction_archetype = Some("SATYANG_MANJUSRI".to_string());
+                sheet
+            }
             _ => {
                 let chars = CharacterCharacteristics {
                     spd: 14,
@@ -221,6 +242,8 @@ impl CharacterSheetState {
                     ext: 10,
                     cnf: 12,
                     agg: 11,
+                    trs: 11,
+                    cps: 14,
                 };
                 let mut aptitudes = CharacterAptitudes::default();
                 aptitudes[AptitudeCode::AptBio] = 2;
@@ -268,6 +291,8 @@ impl CharacterSheetState {
                         "Stage 4A: STEM Magnet High School -> B.S. Pre-Med & Combat Trauma Residency.".to_string(),
                         "Stage 5: 2 Terms Orbital SpecOps Pararescue & Med-Assault (Zero-G EVA N=4, Trauma Surgery N=3, Small-Unit Tactics N=4).".to_string(),
                     ],
+                    faction_id: None,
+                    faction_archetype: None,
                     lifepath_config_json: None,
                     section_filter: "ALL".to_string(),
                     skill_tree_filter: "ALL".to_string(),
@@ -339,6 +364,8 @@ impl CharacterSheetState {
             operational_heat: lp.operational_heat,
             granted_access_tags: lp.granted_access_tags,
             stage_history: lp.stage_history,
+            faction_id: None,
+            faction_archetype: None,
             lifepath_config_json: None,
             section_filter: "ALL".to_string(),
             skill_tree_filter: "ALL".to_string(),
@@ -776,7 +803,20 @@ pub fn apply_wizard_to_character_sheet(st: &mut crate::wasm_client::state::Satya
     sheet.character_id = format!("char-{slug}");
     sheet.preset_id = "custom_wizard".to_string();
     sheet.character_name = st.wizard.character_name.clone();
-    sheet.callsign_or_role = format!("Custom Lifepath Operator ({})", baseline.origin.label);
+    sheet.faction_id = st
+        .wizard
+        .lifepath
+        .faction_archetype
+        .map(|a| a.faction().as_str().to_string());
+    sheet.faction_archetype = st
+        .wizard
+        .lifepath
+        .faction_archetype
+        .map(|a| a.as_str().to_string());
+    sheet.callsign_or_role = match st.wizard.lifepath.faction_archetype {
+        Some(arch) => format!("{} ({})", arch.label(), baseline.origin.label),
+        None => format!("Custom Lifepath Operator ({})", baseline.origin.label),
+    };
     sheet.age_years = baseline.age_years;
     sheet.origin_label = baseline.origin.label.to_string();
     sheet.campaign_sqm = baseline.campaign_sqm;

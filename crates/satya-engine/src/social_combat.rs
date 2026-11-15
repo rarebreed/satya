@@ -90,6 +90,14 @@ pub enum SocialArgumentVector {
     /// Resonates with Low `AGG <= 7` ($-(10-\text{AGG})$ to yield) or High `AGG >= 13` ($-(\text{AGG}-10)$ to bait into fight);
     /// clashes with High `AGG >= 13` when forcing submission ($+(\text{AGG}-10)$).
     DominanceThreatDareConfrontation { aims_to_bait_into_fight: bool },
+    /// **8. Transparency, Vulnerability & Good-Faith Olive Branch** (*Charm & Rapport* / *Diplomacy*):
+    /// When `verifies_with_audit_or_proof == false`, resonates with High `TRS >= 13` ($-(\text{TRS}-10)$) and clashes with Low `TRS <= 7` ($+(10-\text{TRS})$).
+    /// When `verifies_with_audit_or_proof == true`, resonates with Low `TRS <= 7` paranoid threat-modeling ($-(10-\text{TRS})$).
+    TransparencyVulnerabilityGoodFaith { verifies_with_audit_or_proof: bool },
+    /// **9. Moral Sanctity, Witnessed Suffering & Mercy** (*Persuasion* `ELO/INS` / *Empathy* `INS/ITU`):
+    /// When `utilitarian_greater_good_triage == false`, resonates with High `CPS >= 13` ($-(\text{CPS}-10)$) and clashes with Low `CPS <= 7` ($+(10-\text{CPS})$).
+    /// When `utilitarian_greater_good_triage == true`, resonates with Low `CPS <= 7` utilitarian triage ($-(10-\text{CPS})$) and clashes violently with High `CPS >= 13` ($+(\text{CPS}-10)$).
+    MoralSanctityWitnessedSufferingMercy { utilitarian_greater_good_triage: bool },
 }
 
 /// Evaluation of how a single or compound [`SocialArgumentVector`] interacts with a target's [`CharacterCharacteristics`](crate::characteristics::CharacterCharacteristics) Psyche profile
@@ -121,9 +129,9 @@ fn eval_trait_pole(
         }
     } else if allow_low_pole && score <= 7 {
         if high_pole_resonates {
-            (10 - score, None, Some(trait_id), false)
+            (10 - score, None, Some(trait_id), true)
         } else {
-            (-(10 - score), Some(trait_id), None, false)
+            (-(10 - score), Some(trait_id), None, true)
         }
     } else {
         (0, None, None, false)
@@ -136,7 +144,9 @@ pub fn compute_single_vector_psyche_modifier(
     vector: SocialArgumentVector,
 ) -> (i32, Option<PsycheTraitId>, Option<PsycheTraitId>, bool) {
     let p = psyche.as_psyche_profile();
-    use PsycheTraitId::{Aggression, Belonging, Conformity, Ego, Openness, Selfishness};
+    use PsycheTraitId::{
+        Aggression, Belonging, Compassion, Conformity, Ego, Openness, Selfishness, Trust,
+    };
     match vector {
         SocialArgumentVector::EmpiricalEvidenceLogicNovelIdeas => {
             eval_trait_pole(p.opn, Openness, true, true)
@@ -173,6 +183,25 @@ pub fn compute_single_vector_psyche_modifier(
             Aggression,
             aims_to_bait_into_fight,
             !aims_to_bait_into_fight,
+        ),
+        SocialArgumentVector::TransparencyVulnerabilityGoodFaith {
+            verifies_with_audit_or_proof,
+        } => {
+            if !verifies_with_audit_or_proof {
+                eval_trait_pole(p.trs, Trust, true, true)
+            } else if p.trs <= 7 {
+                (-(10 - p.trs), Some(Trust), None, true)
+            } else {
+                (0, None, None, false)
+            }
+        }
+        SocialArgumentVector::MoralSanctityWitnessedSufferingMercy {
+            utilitarian_greater_good_triage,
+        } => eval_trait_pole(
+            p.cps,
+            Compassion,
+            !utilitarian_greater_good_triage,
+            true,
         ),
     }
 }
@@ -391,6 +420,8 @@ pub fn evaluate_social_exchange_wounds(
                 | SocialArgumentVector::SelfSacrificeHumanitarianDutyMercy
                 | SocialArgumentVector::RulesLawProtocolChainOfCommand { .. }
                 | SocialArgumentVector::GroupConsensusLoyaltySharedIdentity { .. }
+                | SocialArgumentVector::TransparencyVulnerabilityGoodFaith { .. }
+                | SocialArgumentVector::MoralSanctityWitnessedSufferingMercy { .. }
         )
     });
 

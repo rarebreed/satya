@@ -55,6 +55,8 @@ impl CharacterSheetState {
                 .map(|t| t.as_str().to_string())
                 .collect(),
             stage_history: self.stage_history.clone(),
+            faction_id: self.faction_id.clone(),
+            faction_archetype: self.faction_archetype.clone(),
             characteristics: characteristics_to_record(&self.characteristics),
             aptitudes: aptitudes_to_record(&self.aptitudes),
             skills: self
@@ -129,6 +131,8 @@ impl CharacterSheetState {
             .filter_map(|c| SkillAccessTier::from_code_str(c))
             .collect();
         self.stage_history = rec.stage_history.clone();
+        self.faction_id = rec.faction_id.clone();
+        self.faction_archetype = rec.faction_archetype.clone();
         self.characteristics = characteristics_from_record(&rec.characteristics);
         self.aptitudes = aptitudes_from_record(&rec.aptitudes);
         self.skills = rec
@@ -203,7 +207,7 @@ impl CharacterSheetState {
 }
 
 /// Encodes a [`CharacterSheetRecord`] into a framed `.satyachar` Avro binary payload
-/// (`Schema ID 11`, CRC-64-AVRO single-object framing) for offline local export.
+/// (`Schema ID 12`, `v2` CRC-64-AVRO single-object framing) for offline local export.
 pub fn encode_offline_satyachar_bytes(
     record: &CharacterSheetRecord,
     session_id: Option<&str>,
@@ -213,7 +217,7 @@ pub fn encode_offline_satyachar_bytes(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or("local-export");
     let metadata = registry
-        .build_metadata(1, subjects::CHARACTER_SHEET, 1, sid, SessionMode::Ttrpg)
+        .build_metadata(1, subjects::CHARACTER_SHEET, 2, sid, SessionMode::Ttrpg)
         .map_err(|e| e.to_string())?;
     let mut actor = Participant::human(
         &record.owner_user_id,
@@ -229,7 +233,7 @@ pub fn encode_offline_satyachar_bytes(
         character: record.clone(),
     };
     registry
-        .encode_framed(subjects::CHARACTER_SHEET, 1, &event)
+        .encode_framed(subjects::CHARACTER_SHEET, 2, &event)
         .map_err(|e| e.to_string())
 }
 

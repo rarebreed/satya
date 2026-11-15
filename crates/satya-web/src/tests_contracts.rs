@@ -110,10 +110,13 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
     // Append representative outputs from dynamic HTML formatters so inline onclick/onchange
     // callbacks generated at runtime are also verified against REGISTERED_WINDOW_CALLBACKS.
     for step in 1..=6 {
-        let wiz = wasm_client::CharacterWizardState {
+        let mut wiz = wasm_client::CharacterWizardState {
             active_step: step,
             ..Default::default()
         };
+        if step == 4 {
+            wasm_client::apply_faction_template_to_wizard(&mut wiz, "SATYANG_MANJUSRI");
+        }
         combined_html.push('\n');
         combined_html.push_str(&wasm_client::format_character_wizard_html(&wiz));
     }
@@ -262,4 +265,68 @@ fn test_tactical_map_scale_selector_is_rendered() {
         html.contains(r#"id="map-floor-switcher""#) && html.contains(".map-floor-switcher"),
         "missing #map-floor-switcher container or CSS rule in SSR HTML"
     );
+}
+
+#[test]
+fn test_phase2_psyche_9_linnea_cho_and_faction_templates() {
+    let mut sheet = wasm_client::CharacterSheetState::from_preset("linnea_cho");
+    assert_eq!(sheet.character_name, "Linnea Cho");
+    assert_eq!(sheet.characteristics.trs, 12);
+    assert_eq!(sheet.characteristics.cps, 17);
+    assert_eq!(sheet.faction_id.as_deref(), Some("SATYANG"));
+    assert_eq!(
+        sheet.faction_archetype.as_deref(),
+        Some("SATYANG_MANJUSRI")
+    );
+    let sheet_html = wasm_client::format_character_sheet_html(&sheet);
+    assert!(sheet_html.contains("Satyang"));
+    assert!(sheet_html.contains("Psyche Profile (9 Bipolar Disposition Traits"));
+    assert!(sheet_html.contains("Trust"));
+    assert!(sheet_html.contains("Compassion"));
+
+    let record = sheet.to_character_sheet_record("usr-linnea");
+    assert!(record.sp_budget_valid, "violations: {:?}", record.audit_violations);
+    assert!(record.dag_prereqs_valid, "violations: {:?}", record.audit_violations);
+    let bytes = wasm_client::encode_offline_satyachar_bytes(&record, Some("sess-linnea"))
+        .expect("v2 .satyachar encode must succeed");
+    let decoded = wasm_client::decode_offline_satyachar_bytes(&bytes)
+        .expect("v2 .satyachar decode must succeed");
+    assert_eq!(decoded.characteristics.trs, 12);
+    assert_eq!(decoded.characteristics.cps, 17);
+    assert_eq!(decoded.faction_id.as_deref(), Some("SATYANG"));
+    assert_eq!(
+        decoded.faction_archetype.as_deref(),
+        Some("SATYANG_MANJUSRI")
+    );
+
+    sheet.faction_id = None;
+    sheet.faction_archetype = None;
+    sheet.apply_character_sheet_record(&decoded);
+    assert_eq!(sheet.characteristics.trs, 12);
+    assert_eq!(sheet.characteristics.cps, 17);
+    assert_eq!(sheet.faction_id.as_deref(), Some("SATYANG"));
+
+    let mut wiz = wasm_client::CharacterWizardState::default();
+    let spec = wasm_client::apply_faction_template_to_wizard(&mut wiz, "SATYANG_MANJUSRI")
+        .expect("valid faction archetype code");
+    assert_eq!(
+        wiz.lifepath.faction_archetype,
+        Some(satya_engine::FactionArchetypeId::SatyangManjusri)
+    );
+    assert_eq!(wiz.characteristics.opn, spec.psyche.opn);
+    assert_eq!(wiz.characteristics.cps, spec.psyche.cps);
+    wiz.active_step = 2;
+    let step2_html = wasm_client::format_character_wizard_html(&wiz);
+    assert!(step2_html.contains("The 9 Invisible Behavioral Traits"));
+    assert!(step2_html.contains("wiz-psyche-range-trs"));
+    assert!(step2_html.contains("wiz-psyche-range-cps"));
+    wiz.active_step = 4;
+    let step4_html = wasm_client::format_character_wizard_html(&wiz);
+    assert!(step4_html.contains(r#"id="wiz-s4-faction-archetype""#));
+    assert!(step4_html.contains(r#"id="wiz-s3-youth-hobby""#));
+    assert!(step4_html.contains(r#"id="wiz-s3-life-event-choice""#));
+
+    let ssr = render_satya_app_html();
+    assert!(ssr.contains(r#"value="linnea_cho""#));
+    assert!(ssr.contains(r#"value="SATYANG_MANJUSRI""#));
 }
