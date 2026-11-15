@@ -8,6 +8,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
+pub mod awakened_systems_py;
 pub mod hooks_and_npc_py;
 pub mod psyche_social_py;
 pub mod tactical_map_py;
@@ -2197,6 +2198,7 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tactical_map_py::register_tactical_map_functions(m)?;
     hooks_and_npc_py::register_hooks_and_npc_functions(m)?;
     psyche_social_py::register_psyche_social_functions(m)?;
+    awakened_systems_py::register_awakened_systems_functions(m)?;
 
     Ok(())
 }

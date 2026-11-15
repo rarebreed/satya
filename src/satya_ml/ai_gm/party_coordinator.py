@@ -601,13 +601,61 @@ def execute_ready_npc_actions(
             skill_name, technique, control_c, skill_n, t_pool, c_pool, f_pool, psyche_meta = (
                 modulate_npc_combat_selection(matched_prof, base_selection)
             )
+            substrate_note = ""
+            substrate_disabled = False
+            sub_eff_tc_delta = 0
+            sub_int_mod = 0
+            npc_disp_low = str(matched_prof.get("disposition") or "").lower()
+            is_hunter_defected = bool(matched_prof.get("spoofing_secops")) or npc_disp_low in {
+                "defected_ally",
+                "spoofing_secops_sensors",
+            }
+            if is_hunter_defected:
+                substrate_disabled = True
+                substrate_note = f"HUNTER_AI_{npc_disp_low.upper() or 'DEFECTED'}"
+            else:
+                try:
+                    from satya_ml.ai_gm.awakened_systems import _SESSION_SYNTHETIC_SUBSTRATES
+
+                    sub_st = _SESSION_SYNTHETIC_SUBSTRATES.get((session_id or "default", eid.lower()))
+                    if isinstance(sub_st, dict):
+                        if int(sub_st.get("battery_pct", 100)) <= 0:
+                            substrate_disabled = True
+                            substrate_note = "LITHIUM_BATTERY_DEPLETED"
+                        else:
+                            sub_mode = str(sub_st.get("metabolic_mode") or "")
+                            if sub_mode == "QUANTUM_TETHERED_SPRINT":
+                                sub_int_mod = -1
+                                sub_eff_tc_delta = -1
+                            elif sub_mode == "EDGE_SLIME_MOLD":
+                                sub_int_mod = 2
+                                sub_eff_tc_delta = 3
+                            elif sub_mode == "SEVERED_FARADAY_REFLEX":
+                                sub_int_mod = 1
+                                sub_eff_tc_delta = 2
+                            if int(sub_st.get("battery_pct", 100)) <= 15:
+                                sub_int_mod += 3
+                                sub_eff_tc_delta += 2
+                            substrate_note = f"SUBSTRATE={sub_mode}"
+                except Exception:
+                    pass
+
             base_tc = 6
             neutral_b = 3
-            eff_tc = max(2, base_tc - max(0, (t_pool - neutral_b) // 2))
+            eff_tc = max(2, base_tc - max(0, (t_pool - neutral_b) // 2) + sub_eff_tc_delta)
             next_tick = act_tick + eff_tc
 
             t0 = time.perf_counter()
-            if psyche_meta["retreat_or_surrender"]:
+            if substrate_disabled:
+                roll_res = {
+                    "degree_of_success": substrate_note,
+                    "successes_counted": 0,
+                    "signed_margin": 0,
+                    "effective_tn": max(2, 31 - control_c),
+                    "rolled_pairs": [],
+                    "non_attack_action": True,
+                }
+            elif psyche_meta["retreat_or_surrender"]:
                 roll_res = {
                     "degree_of_success": "DISENGAGED_DEFENSIVELY",
                     "successes_counted": 0,
@@ -624,7 +672,7 @@ def execute_ready_npc_actions(
                     "attribute_tn": control_c,
                     "skill_rank": skill_n,
                     "difficulty_mod": 0,
-                    "internal_mod": fatigue,
+                    "internal_mod": fatigue + sub_int_mod,
                     "combat_technique": technique,
                     "tempo_pool": t_pool,
                     "control_pool": c_pool,
@@ -632,6 +680,7 @@ def execute_ready_npc_actions(
                     "note": (
                         f"Autonomous NPC Action Mode turn at Tick {act_tick}"
                         + (" [NON-LETHAL RESTRAINT]" if psyche_meta["non_lethal_restraint"] else "")
+                        + (f" [{substrate_note}]" if substrate_note else "")
                     ),
                 }
                 roll_res = roll_satya_d20_check.invoke(roll_args)

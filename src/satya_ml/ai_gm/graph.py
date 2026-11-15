@@ -27,7 +27,7 @@ from satya_ml.ai_gm.hooks import (
     compile_player_motivational_hooks,
     format_party_hooks_for_prompt,
 )
-from satya_ml.campaign_config import get_pack_combat_spawn
+from satya_ml.campaign_config import get_active_campaign_pack_name, get_pack_combat_spawn
 from satya_ml.ai_gm.ollama_runner import (
     drain_ollama_logs_since,
     format_ollama_response_telemetry,
@@ -321,11 +321,17 @@ def _classify_tool_tier(tool_name: str) -> tuple[str, str]:
         "generate_npc_from_description",
         "lookup_character_sheet",
         "query_satya_rules",
+        "query_engine_and_rules_rag",
         "configure_scenario_director",
         "trigger_scenario_beat",
         "verify_forensic_audit_proof",
         "inspect_synthetic_or_proxy_telemetry",
         "evaluate_npc_morale_or_trigger",
+        "manage_synthetic_substrate_and_embodiment",
+        "intervene_ai_cage_or_hunter_ai",
+        "update_campaign_arc_and_conspiracies",
+        "manage_polycrisis_grid_and_strain",
+        "transmit_via_tradecraft_channel",
     }:
         return "TIER_2_RULESET_ENGINE", "satya-d20-rules"
     return "TIER_3_LORE_PROVIDER", "satya-campaign-lore"
@@ -595,6 +601,15 @@ def build_ai_gm_graph(
                 world_digest = format_world_ledger_for_prompt(world_ledger)
                 if world_digest:
                     index_parts.append(world_digest)
+                if get_active_campaign_pack_name() == "awakened":
+                    try:
+                        from satya_ml.ai_gm.awakened_systems import format_awakened_systems_for_prompt
+
+                        awk_digest = format_awakened_systems_for_prompt(session_id)
+                        if awk_digest:
+                            index_parts.append(awk_digest)
+                    except Exception:
+                        pass
 
                 if index_parts:
                     catalog_header = "[GM Vault & Session Index]: " + " || ".join(index_parts)

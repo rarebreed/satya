@@ -17,7 +17,7 @@ use satya_schema::{
     ZoningContext,
 };
 
-fn to_py_err(msg: impl Into<String>) -> PyErr {
+pub(crate) fn to_py_err(msg: impl Into<String>) -> PyErr {
     PyValueError::new_err(msg.into())
 }
 
@@ -32,7 +32,7 @@ fn read_i32(map: &serde_json::Map<String, serde_json::Value>, keys: &[&str], def
     default
 }
 
-fn parse_psyche_profile_json(raw: &str) -> PyResult<PsycheProfile> {
+pub(crate) fn parse_psyche_profile_json(raw: &str) -> PyResult<PsycheProfile> {
     let val: serde_json::Value =
         serde_json::from_str(raw).map_err(|e| to_py_err(format!("Invalid psyche JSON: {e}")))?;
     let root = val

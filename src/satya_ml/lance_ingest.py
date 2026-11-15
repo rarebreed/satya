@@ -140,6 +140,13 @@ def main() -> None:
         print(f"[PyLance] Indexed {asset_count} multimodal character assets into {lance_root / 'character-assets.lance'}")
 
     print(f"[PyLance] Compaction complete. Total new events ingested: {total_ingested}")
+    try:
+        from satya_ml.rag.hybrid_index import get_satya_rag_index
+
+        rag_idx = get_satya_rag_index(force_rebuild=True)
+        print(f"[PyLance] Knowledge RAG refreshed: {rag_idx.stats().get('total_chunks', 0)} chunks.")
+    except Exception as exc:
+        print(f"[PyLance] Knowledge RAG refresh skipped: {exc}")
 
 
 if __name__ == "__main__":

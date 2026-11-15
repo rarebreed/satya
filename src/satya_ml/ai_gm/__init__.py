@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from satya_ml.ai_gm.awakened_systems import (
+    intervene_ai_cage_or_hunter_ai,
+    manage_polycrisis_grid_and_strain,
+    manage_synthetic_substrate_and_embodiment,
+    query_engine_and_rules_rag,
+    reset_awakened_systems_state,
+    transmit_via_tradecraft_channel,
+    update_campaign_arc_and_conspiracies,
+)
 from satya_ml.ai_gm.audit_and_first_contact import (
     inspect_synthetic_or_proxy_telemetry,
     verify_forensic_audit_proof,
@@ -33,9 +42,16 @@ __all__ = [
     "get_session_map",
     "inspect_synthetic_or_proxy_telemetry",
     "inspect_tactical_map",
+    "intervene_ai_cage_or_hunter_ai",
+    "manage_polycrisis_grid_and_strain",
+    "manage_synthetic_substrate_and_embodiment",
     "move_map_token",
+    "query_engine_and_rules_rag",
     "redact_api_key",
     "render_tactical_svg",
+    "reset_awakened_systems_state",
     "set_session_map",
+    "transmit_via_tradecraft_channel",
+    "update_campaign_arc_and_conspiracies",
     "verify_forensic_audit_proof",
 ]

@@ -142,6 +142,12 @@ def reset_social_and_world_state(session_id: str | None = None) -> None:
         reset_session_audit_proofs(session_id)
     except Exception:
         pass
+    try:
+        from satya_ml.ai_gm.awakened_systems import reset_awakened_systems_state
+
+        reset_awakened_systems_state(session_id)
+    except Exception:
+        pass
 
 
 def _satya_py() -> Any:

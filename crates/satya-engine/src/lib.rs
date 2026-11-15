@@ -57,9 +57,15 @@
 //!   grading, and dressed procedural sectors across all 25 presets.
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor, Linnea Cho)
 //!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3, `lifepath_events_hobbies_and_factions.md` §4).
+//! - [`awakened_ai_substrate`] & [`awakened_campaign_arcs`]: *Awakened* 2035 split-brain AI 2.0 substrates,
+//!   `L0`/`L1` probe/clamp liberation, captive hunter-AI defection, Bayesian sentience ambiguity,
+//!   Three-Arc conspiracy horizons, polycrisis grid/water strain, tradecraft channels, and `30%/15%/30%`
+//!   corporate dissent / proxy hooks (`docs/campaign/`, `docs/story/`).
 
 pub mod action_catalog_stealth;
 pub mod action_economy;
+pub mod awakened_ai_substrate;
+pub mod awakened_campaign_arcs;
 pub mod ballistics;
 pub mod barrier_ballistics;
 pub mod character_audit;
@@ -121,6 +127,8 @@ pub mod walkthroughs;
 pub mod world_clocks;
 
 pub use action_economy::*;
+pub use awakened_ai_substrate::*;
+pub use awakened_campaign_arcs::*;
 pub use barrier_ballistics::*;
 pub use character_audit::*;
 pub use characteristics::*;

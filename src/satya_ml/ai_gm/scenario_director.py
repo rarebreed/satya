@@ -641,10 +641,22 @@ def select_next_scenario_beat(
         if world_summary
         else ""
     )
+    awakened_line = ""
+    try:
+        from satya_ml.campaign_config import get_active_campaign_pack_name
+
+        if get_active_campaign_pack_name() == "awakened":
+            from satya_ml.ai_gm.awakened_systems import format_awakened_systems_for_prompt
+
+            awk_digest = format_awakened_systems_for_prompt(session_id or "default")
+            if awk_digest:
+                awakened_line = f"\n- Awakened Conspiracy Horizon & Polycrisis Strain: {awk_digest}"
+    except Exception:
+        pass
 
     mandate_text = (
         f"[SCENARIO DIRECTOR MANDATE — {spec['title'].upper()} (`{chosen_slug}` | mode=`{flow_mode}` | source=`{beat_source}`)]"
-        f"{premise_line}{plot_line}{custom_line}{hook_line}{sector_line}{world_line}\n"
+        f"{premise_line}{plot_line}{custom_line}{hook_line}{sector_line}{world_line}{awakened_line}\n"
         f"- World Beat Objective: {spec['summary']}\n"
         f"- Director Playbook: {spec['playbook']}\n"
         f"- Suggested Tools: {', '.join(spec['suggested_tools'])}\n"

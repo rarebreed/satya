@@ -607,6 +607,37 @@ def lookup_public_lore_and_npcs(
                         "snippet": str(clk.get("public_rumor") or ""),
                     }
                 )
+        try:
+            from satya_ml.campaign_config import get_active_campaign_pack_name
+            from satya_ml.rag.hybrid_index import get_satya_rag_index
+
+            if get_active_campaign_pack_name() == "awakened" and q_low:
+                rag_corpora = (
+                    ["campaign_lore", "ttrpg_rules"]
+                    if norm_scope == "ALL"
+                    else ["campaign_lore"]
+                )
+                for rag_hit in get_satya_rag_index().search(
+                    query,
+                    corpora=rag_corpora,
+                    caller_role="player",
+                    top_k=4,
+                ):
+                    if rag_hit.get("visibility") != "PUBLIC":
+                        continue
+                    hits.append(
+                        {
+                            "source_kind": "PUBLIC_RAG_LORE"
+                            if rag_hit.get("corpus") == "campaign_lore"
+                            else "RULES_BOOK",
+                            "item_id": str(rag_hit.get("chunk_id") or ""),
+                            "title": str(rag_hit.get("breadcrumb") or rag_hit.get("symbol_or_section") or "Lore"),
+                            "subtitle": f"{rag_hit.get('source_path')} (PUBLIC)",
+                            "snippet": str(rag_hit.get("content") or "")[:450],
+                        }
+                    )
+        except Exception:
+            pass
 
     return {"session_id": session_id, "query": query, "scope": norm_scope, "hits": hits[:12]}
 

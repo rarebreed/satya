@@ -4,8 +4,9 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use satya_engine::{
-    FactionArchetypeId, NpcGenerationParams, NpcTemplateKind, compile_party_hooks,
-    extract_character_lifepath_anchors, generate_npc_from_prompt_with_pack,
+    AwakenedFactionId, FactionArchetypeId, NpcGenerationParams, NpcTemplateKind,
+    compile_party_hooks, derive_dissenter_or_proxy_hook, extract_character_lifepath_anchors,
+    generate_npc_from_prompt_with_pack,
 };
 use satya_schema::CharacterSheetRecord;
 use std::collections::BTreeMap;
@@ -74,7 +75,27 @@ pub fn generate_npc_profile_json(
         },
         effective_pack,
     );
-    serde_json::to_string(&result).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    let mut payload =
+        serde_json::to_value(&result).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))?;
+    if effective_pack.eq_ignore_ascii_case("awakened")
+        && let Some(obj) = payload.as_object_mut()
+    {
+        let char_faction = obj
+            .get("character")
+            .and_then(|c| c.get("faction_id"))
+            .and_then(|v| v.as_str())
+            .and_then(AwakenedFactionId::from_code_str);
+        let char_arch = obj
+            .get("character")
+            .and_then(|c| c.get("faction_archetype"))
+            .and_then(|v| v.as_str())
+            .and_then(FactionArchetypeId::from_code_str);
+        let origin_hook = derive_dissenter_or_proxy_hook(char_faction, char_arch, prompt, seed);
+        if let Ok(hook_val) = serde_json::to_value(&origin_hook) {
+            obj.insert("awakened_social_origin_hook".to_string(), hook_val);
+        }
+    }
+    serde_json::to_string(&payload).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
 /// Extracts canonical Faction, Personal Hobby Contacts & Formative Life Event anchors from a
@@ -148,6 +169,7 @@ mod tests {
             satyang_val["character"]["faction_archetype"],
             "SATYANG_MANJUSRI"
         );
+        assert!(satyang_val["awakened_social_origin_hook"]["hook_kind"].is_string());
 
         let anchors_raw = extract_character_lifepath_anchors_json(
             &serde_json::to_string(&satyang_val["character"]).unwrap(),

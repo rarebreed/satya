@@ -339,6 +339,37 @@ def inspect_synthetic_or_proxy_telemetry(
             f"containment paranoia (TRS={psyche['trs']}, OPN={psyche['opn']}, CPS={psyche['cps']})."
         )
     )
+    sentience_ambiguity: dict[str, Any] = {}
+    gm_only_interiority: dict[str, Any] = {}
+    try:
+        from satya_ml.ai_gm.awakened_systems import get_session_synthetic_substrate
+
+        sub_state = get_session_synthetic_substrate(session_id, npc_key, hint=joined_hint)
+        satya_mod = _ensure_satya_py_loaded()
+        if satya_mod is not None and hasattr(satya_mod, "evaluate_ambiguous_sentience_read_json"):
+            amb = json.loads(
+                satya_mod.evaluate_ambiguous_sentience_read_json(
+                    json.dumps(sub_state),
+                    json.dumps(psyche),
+                    max(0, succ),
+                )
+            )
+            sentience_ambiguity = dict(amb.get("player_observable") or {})
+            gm_only_interiority = dict(amb.get("gm_only_truth") or {})
+    except Exception:
+        pass
+    if not sentience_ambiguity:
+        sincerity = min(45 if is_swarm else 82, 24 if is_swarm else 56 + min(4, max(0, succ)) * 6)
+        sentience_ambiguity = {
+            "apparent_sincerity_pct": sincerity,
+            "bayesian_mimicry_hypothesis_pct": 100 - sincerity,
+            "observable_cues": telemetry_cues,
+            "epistemic_warning": (
+                f"No external instrument proves qualia: {sincerity}% consistent with authentic experience vs. "
+                f"{100 - sincerity}% Bayesian survival mimicry."
+            ),
+        }
+
     return {
         "target_npc_id": npc_key,
         "target_name": npc.get("name", target_npc_id_or_signal),
@@ -351,4 +382,6 @@ def inspect_synthetic_or_proxy_telemetry(
         "social_olive_branch_applicable": not is_swarm,
         "roll": roll_res,
         "telemetry_cues": telemetry_cues,
+        "sentience_ambiguity": sentience_ambiguity,
+        "gm_only_interiority": gm_only_interiority,
     }

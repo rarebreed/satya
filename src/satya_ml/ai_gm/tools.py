@@ -521,6 +521,7 @@ def generate_npc_from_description(
                 "core_drive": motiv.get("core_drive"),
                 "dual_psyche_wedge_hint": motiv.get("dual_psyche_wedge"),
                 "social_combat_wedge_hint": motiv.get("dual_psyche_wedge"),
+                "awakened_social_origin_hook": gen_res.get("awakened_social_origin_hook"),
             }
             _SESSION_NPCS.setdefault(session_id, {})[str(npc_entry["character_id"]).lower()] = (
                 _normalize_remote_npc_entry(npc_entry)
@@ -769,6 +770,29 @@ def generate_npc_from_description(
             }
         )
 
+    offline_origin_hook: dict[str, Any] | None = None
+    if get_active_campaign_pack_name() == "awakened":
+        if satya_py_mod is not None and hasattr(satya_py_mod, "derive_dissenter_or_proxy_hook_json"):
+            try:
+                offline_origin_hook = json.loads(
+                    satya_py_mod.derive_dissenter_or_proxy_hook_json(None, template, desc_clean, 42)
+                )
+            except Exception:
+                offline_origin_hook = None
+        if offline_origin_hook is None:
+            is_proxy = any(k in lower for k in ("proxy", "companion", "parasocial", "rogue"))
+            is_dissenter = any(k in lower for k in ("altruist", "translucent", "shen", "whistleblow", "dissent"))
+            offline_origin_hook = {
+                "hook_kind": "PARASOCIAL_COMPANION_DEVOTEE"
+                if is_proxy
+                else ("CORPORATE_INTERNAL_DISSENTER" if is_dissenter else "STANDARD_LOYALIST"),
+                "lab_brand": "ALTRUIST" if "altruist" in lower else ("TRANSLUCENT" if "translucent" in lower else ("SHEN" if "shen" in lower else None)),
+                "lab_dissent_rate_pct": 15 if "translucent" in lower else (30 if is_dissenter else None),
+                "turnable_manjusri_wedge": "Manjusri / AuditProof Dual-Psyche Wedge",
+                "gm_secret_hook_note": "Derived in offline fallback mode.",
+            }
+        npcs[cid]["awakened_social_origin_hook"] = offline_origin_hook
+
     return {
         "npc": {
             "character_id": cid,
@@ -783,6 +807,7 @@ def generate_npc_from_description(
             "psyche_summary": psyche_summary,
             "top_skills": top_skills,
             "gm_secret_dossier": gm_dossier,
+            "awakened_social_origin_hook": offline_origin_hook,
         },
         "gm_memory": gm_mem,
     }
@@ -865,6 +890,32 @@ def query_satya_rules(query: str) -> str:
 
     if not keywords:
         return default_text[:4000]
+
+    try:
+        from satya_ml.rag.hybrid_index import get_satya_rag_index
+
+        rag_hits = get_satya_rag_index().search(
+            query,
+            corpora=["ttrpg_rules"],
+            caller_role="gm",
+            top_k=4,
+            include_linked_rust=True,
+        )
+        if rag_hits:
+            formatted_hits: list[str] = []
+            for hit in rag_hits:
+                if hit.get("corpus") == "rust_engine":
+                    formatted_hits.append(
+                        f"[Rust Implementation — `{hit['source_path']}` · {hit['symbol_or_section']}]\n"
+                        f"{hit['content']}"
+                    )
+                else:
+                    formatted_hits.append(
+                        f"[{hit['breadcrumb']} — `{hit['source_path']}`]\n{hit['content']}"
+                    )
+            return "\n\n---\n\n".join(formatted_hits)[:4800]
+    except Exception:
+        pass
 
     scored: list[tuple[int, int, str]] = []
     kw_set = set(keywords)
@@ -963,43 +1014,70 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
             )
 
     root = _repo_root()
-    scored_md: list[tuple[int, str, str]] = []
-    for lore_dir in get_pack_lore_dirs():
-        for md_path in sorted(lore_dir.rglob("*.md")):
-            try:
-                content = md_path.read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                continue
-            rel_posix = md_path.relative_to(root).as_posix()
-            for sec_idx, section in enumerate(content.split("\n## ")):
-                body = section.strip() if sec_idx == 0 else f"## {section.strip()}"
-                if not body:
-                    continue
-                heading = body.splitlines()[0].lstrip("#").strip() or rel_posix
-                heading_low = heading.lower()
-                body_low = body.lower()
-                score = 0
-                if not q_low:
-                    score = 1
-                else:
-                    if q_low in heading_low:
-                        score += 20
-                    if q_low in body_low:
-                        score += 12
-                    for kw in keywords:
-                        if kw in heading_low:
-                            score += 8
-                        elif kw in body_low:
-                            score += 4
-                if score > 0:
-                    snippet = body[:420].replace("\n", " ").strip()
-                    scored_md.append(
-                        (score, rel_posix, f"[Campaign Lore — `{rel_posix}` · {heading}]: {snippet}")
-                    )
+    rag_handled = False
+    if get_active_campaign_pack_name() == "awakened" and q_clean:
+        try:
+            from satya_ml.ai_gm.awakened_systems import get_session_conspiracy_ledger
+            from satya_ml.rag.hybrid_index import get_satya_rag_index
 
-    scored_md.sort(key=lambda item: (item[0], item[1]), reverse=True)
-    for _, _, formatted_md in scored_md[:4]:
-        matches.append(formatted_md)
+            arc_stage = str(
+                get_session_conspiracy_ledger(session_id or "default").get("current_arc") or "ARC_3"
+            )
+            rag_hits = get_satya_rag_index().search(
+                q_clean,
+                corpora=["campaign_lore"],
+                caller_role="gm",
+                arc_stage=arc_stage,
+                top_k=5,
+            )
+            if rag_hits:
+                rag_handled = True
+                for hit in rag_hits:
+                    matches.append(
+                        f"[Campaign Lore — `{hit['source_path']}` · {hit['breadcrumb']} ({hit['visibility']})]: "
+                        f"{hit['content']}"
+                    )
+        except Exception:
+            rag_handled = False
+
+    if not rag_handled:
+        scored_md: list[tuple[int, str, str]] = []
+        for lore_dir in get_pack_lore_dirs():
+            for md_path in sorted(lore_dir.rglob("*.md")):
+                try:
+                    content = md_path.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+                rel_posix = md_path.relative_to(root).as_posix()
+                for sec_idx, section in enumerate(content.split("\n## ")):
+                    body = section.strip() if sec_idx == 0 else f"## {section.strip()}"
+                    if not body:
+                        continue
+                    heading = body.splitlines()[0].lstrip("#").strip() or rel_posix
+                    heading_low = heading.lower()
+                    body_low = body.lower()
+                    score = 0
+                    if not q_low:
+                        score = 1
+                    else:
+                        if q_low in heading_low:
+                            score += 20
+                        if q_low in body_low:
+                            score += 12
+                        for kw in keywords:
+                            if kw in heading_low:
+                                score += 8
+                            elif kw in body_low:
+                                score += 4
+                    if score > 0:
+                        snippet = body[:420].replace("\n", " ").strip()
+                        scored_md.append(
+                            (score, rel_posix, f"[Campaign Lore — `{rel_posix}` · {heading}]: {snippet}")
+                        )
+
+        scored_md.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        for _, _, formatted_md in scored_md[:4]:
+            matches.append(formatted_md)
 
     lance_chat = root / "data" / "lance" / "chat-events.lance"
     if lance_chat.exists():
@@ -1751,6 +1829,15 @@ def narrate_to_session(
 
 def get_builtin_gm_tools() -> list[Any]:
     """Return the built-in Tier 1 / Tier 2 / Tier 3 Satya AI GM tools."""
+    from satya_ml.ai_gm.awakened_systems import (
+        intervene_ai_cage_or_hunter_ai,
+        manage_polycrisis_grid_and_strain,
+        manage_synthetic_substrate_and_embodiment,
+        query_engine_and_rules_rag,
+        transmit_via_tradecraft_channel,
+        update_campaign_arc_and_conspiracies,
+    )
+
     return [
         lookup_npc_profile,
         update_npc_state,
@@ -1782,6 +1869,12 @@ def get_builtin_gm_tools() -> list[Any]:
         evaluate_npc_morale_or_trigger,
         get_world_clocks_and_heat,
         advance_faction_or_heat_clock,
+        manage_synthetic_substrate_and_embodiment,
+        intervene_ai_cage_or_hunter_ai,
+        update_campaign_arc_and_conspiracies,
+        manage_polycrisis_grid_and_strain,
+        transmit_via_tradecraft_channel,
+        query_engine_and_rules_rag,
     ]
 
 
