@@ -50,7 +50,7 @@ def _python_fallback_hooks(
                             f"Place vulnerable civilians or an un-clamped AI in harm's way, testing {cname}'s Compassion (CPS={cps})."
                         ),
                         "emotional_stake": f"Contrasts {cname}'s humanitarian empathy against cold operational expediency.",
-                        "preferred_vectors": ["MoralWitnessVulnerabilityCompassion"],
+                        "preferred_vectors": ["MoralSanctityWitnessedSufferingMercy"],
                         "pressure_lever": f"CPS={cps}",
                         "salience": 0.72,
                     }
@@ -67,7 +67,7 @@ def _python_fallback_hooks(
                             f"Introduce a whistleblower or rival offer demanding a leap of faith against {cname}'s Trust (TRS={trs})."
                         ),
                         "emotional_stake": f"Tests {cname}'s institutional credence or paranoid vigilance.",
-                        "preferred_vectors": ["TrustAllianceGuaranteeReciprocity"],
+                        "preferred_vectors": ["TransparencyVulnerabilityGoodFaith"],
                         "pressure_lever": f"TRS={trs}",
                         "salience": 0.68,
                     }

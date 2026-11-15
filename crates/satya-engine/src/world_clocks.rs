@@ -8,6 +8,7 @@ use satya_schema::{
 };
 
 use crate::economy_gear::evaluate_operational_heat;
+use crate::faction_templates::AwakenedFactionId;
 
 /// Seeds default faction clocks, `Heat = 0` status, and jurisdiction response profile for `pack_id`.
 #[must_use]
@@ -277,8 +278,16 @@ pub fn apply_world_ledger_update(
 
     if let Some(raw_fid) = req.faction_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         let needle = raw_fid.to_ascii_lowercase();
+        let canonical_clock_id = AwakenedFactionId::from_code_str(raw_fid).map(|f| match f {
+            AwakenedFactionId::Satyang => "satyang",
+            AwakenedFactionId::BigTech => "big_tech",
+            AwakenedFactionId::HumanisPrimaris => "humanis_primaris",
+            AwakenedFactionId::GovernmentDaise => "daise",
+            AwakenedFactionId::RogueAi => "rogue_ai",
+        });
         let existing_idx = ledger.faction_clocks.iter().position(|c| {
-            c.faction_id.eq_ignore_ascii_case(raw_fid)
+            canonical_clock_id.is_some_and(|cid| c.faction_id == cid)
+                || c.faction_id.eq_ignore_ascii_case(raw_fid)
                 || c.faction_name.to_ascii_lowercase().contains(&needle)
         });
 
@@ -451,5 +460,73 @@ mod tests {
 
         let player_view = filter_world_ledger_for_viewer(&projects, false);
         assert!(player_view.faction_clocks.iter().all(|c| c.gm_secret_agenda.is_none()));
+    }
+
+    #[test]
+    fn test_faction_id_aliases_update_seeded_clocks_in_place() {
+        let mut ledger = seed_default_world_ledger(
+            "sess-aliases",
+            "camp-aliases",
+            "awakened",
+            EconomicTier::LowIncome,
+            ZoningContext::ProjectsHighDensity,
+        );
+        let initial_clock_count = ledger.faction_clocks.len();
+        assert_eq!(initial_clock_count, 5);
+        let initial_daise_progress = ledger
+            .faction_clocks
+            .iter()
+            .find(|c| c.faction_id == "daise")
+            .unwrap()
+            .progress;
+
+        let daise_alerts = apply_world_ledger_update(
+            &mut ledger,
+            &UpdateWorldLedgerRequest {
+                faction_id: Some("GOVERNMENT_DAISE".to_string()),
+                clock_delta: Some(2),
+                standing_delta: Some(-1),
+                ..Default::default()
+            },
+        );
+        assert_eq!(ledger.faction_clocks.len(), 5);
+        assert!(!daise_alerts.is_empty());
+        let daise = ledger
+            .faction_clocks
+            .iter()
+            .find(|c| c.faction_id == "daise")
+            .unwrap();
+        assert_eq!(
+            daise.progress,
+            ((initial_daise_progress as i32) + 2).clamp(0, daise.segments as i32) as u8
+        );
+        assert_eq!(daise.party_standing, -1);
+
+        let initial_bt_progress = ledger
+            .faction_clocks
+            .iter()
+            .find(|c| c.faction_id == "big_tech")
+            .unwrap()
+            .progress;
+        let _ = apply_world_ledger_update(
+            &mut ledger,
+            &UpdateWorldLedgerRequest {
+                faction_id: Some("ALTRUIST".to_string()),
+                clock_delta: Some(1),
+                standing_delta: Some(2),
+                ..Default::default()
+            },
+        );
+        assert_eq!(ledger.faction_clocks.len(), 5);
+        let big_tech = ledger
+            .faction_clocks
+            .iter()
+            .find(|c| c.faction_id == "big_tech")
+            .unwrap();
+        assert_eq!(
+            big_tech.progress,
+            ((initial_bt_progress as i32) + 1).clamp(0, big_tech.segments as i32) as u8
+        );
+        assert_eq!(big_tech.party_standing, 2);
     }
 }

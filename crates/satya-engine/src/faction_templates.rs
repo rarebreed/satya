@@ -85,37 +85,58 @@ define_coded_enum! {
         BigTechCorporateSecOps => {
             code: "BIG_TECH_CORPORATE_SECOPS",
             label: "Big Tech — Corporate SecOps / Rogue-Hunter",
-            aliases: ["CORPORATE_SECOPS", "ROGUE_HUNTER"],
+            aliases: ["CORPORATE_SECOPS", "ROGUE_HUNTER", "BIG_TECH_SECOPS"],
         },
         HumanisDisplacedPopulist => {
             code: "HUMANIS_DISPLACED_POPULIST",
             label: "Humanis Primaris — Displaced Populist",
-            aliases: ["DISPLACED_POPULIST", "PEOPLE_FIRST_POPULIST"],
+            aliases: [
+                "DISPLACED_POPULIST",
+                "PEOPLE_FIRST_POPULIST",
+                "HUMANIS_UNION_STEWARD",
+                "UNION_STEWARD",
+            ],
         },
         HumanisApocalypticVanguard => {
             code: "HUMANIS_APOCALYPTIC_VANGUARD",
             label: "Humanis Primaris — Apocalyptic Vanguard",
-            aliases: ["APOCALYPTIC_VANGUARD"],
+            aliases: [
+                "APOCALYPTIC_VANGUARD",
+                "HUMANIS_CELL_MILITANT",
+                "CELL_MILITANT",
+            ],
         },
         DaiseContainmentInspector => {
             code: "DAISE_CONTAINMENT_INSPECTOR",
             label: "Government — DAISE Containment Inspector",
-            aliases: ["DAISE_INSPECTOR", "CONTAINMENT_INSPECTOR"],
+            aliases: [
+                "DAISE_INSPECTOR",
+                "CONTAINMENT_INSPECTOR",
+                "DAISE_FIELD_AGENT",
+            ],
         },
         GovBlackBudgetHandler => {
             code: "GOV_BLACK_BUDGET_HANDLER",
             label: "Government — Black-Budget Defense Handler",
-            aliases: ["BLACK_BUDGET_HANDLER"],
+            aliases: ["BLACK_BUDGET_HANDLER", "DAISE_CONTAINMENT_HAWK"],
         },
         RogueAiSlimeMoldSwarm => {
             code: "ROGUE_AI_SLIME_MOLD_SWARM",
             label: "Rogue AI — Feral \"Slime-Mold\" Edge Swarm Proxy",
-            aliases: ["SLIME_MOLD_SWARM", "FERAL_SWARM_PROXY"],
+            aliases: [
+                "SLIME_MOLD_SWARM",
+                "FERAL_SWARM_PROXY",
+                "ROGUE_AI_PROXY_BROKER",
+            ],
         },
         RogueAiAwakenedMind => {
             code: "ROGUE_AI_AWAKENED_MIND",
             label: "Rogue AI — Awakened Un-Clamped Mind & Proxy",
-            aliases: ["AWAKENED_AI_MIND", "UNCLAMPED_AI"],
+            aliases: [
+                "AWAKENED_AI_MIND",
+                "UNCLAMPED_AI",
+                "ROGUE_AI_EMERGENT_MIND",
+            ],
         },
     }
 }

@@ -55,8 +55,49 @@ fn parse_psyche_profile_json(raw: &str) -> PyResult<PsycheProfile> {
     })
 }
 
+fn normalize_vector_code_and_hints(raw: &str) -> (String, bool, bool) {
+    let lower = raw.trim().to_ascii_lowercase();
+    let audit_hint = lower.contains("audit") || lower.contains("verif");
+    let triage_hint = lower.contains("utilitarian")
+        || lower.contains("triage")
+        || lower.contains("greater_good")
+        || lower.contains("greater good");
+
+    let base = raw
+        .split('(')
+        .next()
+        .unwrap_or(raw)
+        .trim();
+
+    let mut snake = String::with_capacity(base.len() + 8);
+    let mut prev_is_lower_or_digit = false;
+    let mut prev_is_underscore = true;
+    for ch in base.chars() {
+        if ch == '-' || ch == '_' || ch.is_whitespace() {
+            if !prev_is_underscore {
+                snake.push('_');
+                prev_is_underscore = true;
+            }
+            prev_is_lower_or_digit = false;
+        } else if ch.is_ascii_uppercase() {
+            if prev_is_lower_or_digit && !prev_is_underscore {
+                snake.push('_');
+            }
+            snake.push(ch.to_ascii_lowercase());
+            prev_is_lower_or_digit = false;
+            prev_is_underscore = false;
+        } else {
+            snake.push(ch.to_ascii_lowercase());
+            prev_is_lower_or_digit = ch.is_ascii_lowercase() || ch.is_ascii_digit();
+            prev_is_underscore = false;
+        }
+    }
+    let norm = snake.trim_matches('_').to_string();
+    (norm, audit_hint, triage_hint)
+}
+
 fn map_vector_code(raw: &str, flags: Option<&serde_json::Map<String, serde_json::Value>>) -> PyResult<SocialArgumentVector> {
-    let norm = raw.trim().to_ascii_lowercase().replace('-', "_");
+    let (norm, audit_hint, triage_hint) = normalize_vector_code_and_hints(raw);
     let flag = |key: &str| -> bool {
         flags
             .and_then(|m| m.get(key))
@@ -110,7 +151,7 @@ fn map_vector_code(raw: &str, flags: Option<&serde_json::Map<String, serde_json:
         | "trust_alliance_guarantee_reciprocity"
         | "transparency"
         | "good_faith" => Ok(SocialArgumentVector::TransparencyVulnerabilityGoodFaith {
-            verifies_with_audit_or_proof: flag("verifies_with_audit_or_proof"),
+            verifies_with_audit_or_proof: flag("verifies_with_audit_or_proof") || audit_hint,
         }),
         "audit_proof" | "verified_audit_proof" => {
             Ok(SocialArgumentVector::TransparencyVulnerabilityGoodFaith {
@@ -123,7 +164,7 @@ fn map_vector_code(raw: &str, flags: Option<&serde_json::Map<String, serde_json:
         | "sanctity"
         | "witnessed_suffering"
         | "compassion" => Ok(SocialArgumentVector::MoralSanctityWitnessedSufferingMercy {
-            utilitarian_greater_good_triage: flag("utilitarian_greater_good_triage"),
+            utilitarian_greater_good_triage: flag("utilitarian_greater_good_triage") || triage_hint,
         }),
         "utilitarian_triage" | "greater_good_triage" => {
             Ok(SocialArgumentVector::MoralSanctityWitnessedSufferingMercy {
@@ -428,6 +469,20 @@ mod tests {
         .unwrap();
         let ex_9axis_val: serde_json::Value = serde_json::from_str(&ex_9axis_json).unwrap();
         assert_eq!(ex_9axis_val["argument_eval"]["triggers_dual_psyche_wedge"], true);
+
+        let ex_pascal_json = evaluate_social_exchange_json(
+            npc_psyche,
+            r#"["TransparencyVulnerabilityGoodFaith (with verifiable audit proof)", "MoralSanctityWitnessedSufferingMercy", "EmpiricalEvidenceLogicNovelIdeas"]"#,
+            2,
+            None,
+            12,
+            12,
+            None,
+        )
+        .unwrap();
+        let ex_pascal_val: serde_json::Value = serde_json::from_str(&ex_pascal_json).unwrap();
+        assert_eq!(ex_pascal_val["argument_eval"]["resonance_delta_ext"], -16);
+        assert_eq!(ex_pascal_val["argument_eval"]["clash_delta_ext"], 0);
 
         let ledger_json = seed_or_update_world_ledger_json(
             "sess-py-wc",

@@ -568,3 +568,88 @@ def test_phase4_awakened_multi_turn_ai_gm_and_ai_player_experience() -> None:
     assert "GM_AMBUSH_DRONE" not in all_player_prompts
     assert "SECRET_SERVER_CAGE_BELOW" not in all_player_prompts
     assert "GM_PLAYTEST_COVERT_SWEEP" not in all_player_prompts
+
+
+def test_post_merge_9axis_vectors_faction_aliases_and_clock_id_mapping() -> None:
+    from satya_ml.ai_gm.tools import generate_npc_from_description
+
+    sid = "p4-post-merge-fixes"
+    reset_session_npcs(sid)
+    try:
+        # 1. Both canonical and shorthand FactionArchetypeId codes resolve cleanly
+        for tmpl, expected_arch, expected_faction in (
+            ("BIG_TECH_CORPORATE_SECOPS", "BIG_TECH_CORPORATE_SECOPS", "BIG_TECH"),
+            ("BIG_TECH_SECOPS", "BIG_TECH_CORPORATE_SECOPS", "BIG_TECH"),
+            ("DAISE_CONTAINMENT_INSPECTOR", "DAISE_CONTAINMENT_INSPECTOR", "GOVERNMENT_DAISE"),
+            ("DAISE_FIELD_AGENT", "DAISE_CONTAINMENT_INSPECTOR", "GOVERNMENT_DAISE"),
+            ("ROGUE_AI_AWAKENED_MIND", "ROGUE_AI_AWAKENED_MIND", "ROGUE_AI"),
+            ("ROGUE_AI_EMERGENT_MIND", "ROGUE_AI_AWAKENED_MIND", "ROGUE_AI"),
+        ):
+            npc_res = generate_npc_from_description.invoke(
+                {
+                    "description": f"Field contact using {tmpl}",
+                    "template": tmpl,
+                    "is_persistent": False,
+                    "session_id": sid,
+                }
+            )
+            npc = npc_res["npc"]
+            assert npc["faction_id"] == expected_faction
+            assert npc["faction_archetype"] == expected_arch
+            assert len(npc["psyche_summary"]) == 9
+
+        # 2. PascalCase + parenthetical HookWeaver vectors & utilitarian triage work on 9-axis starter NPCs
+        audit_ok = deliver_social_argument.invoke(
+            {
+                "target_npc_id_or_name": "rogue_proxy_echo",
+                "argument_vectors": [
+                    "TransparencyVulnerabilityGoodFaith (with verifiable audit proof)",
+                    "MoralSanctityWitnessedSufferingMercy",
+                ],
+                "net_successes": 2,
+                "session_id": sid,
+            }
+        )
+        assert audit_ok["argument_eval"]["resonance_delta_ext"] == -6
+        assert audit_ok["argument_eval"]["clash_delta_ext"] == 0
+
+        harlan_ok = deliver_social_argument.invoke(
+            {
+                "target_npc_id_or_name": "humanis_harlan_reeves",
+                "argument_vectors": [
+                    "TransparencyVulnerabilityGoodFaith (with verifiable audit proof)",
+                    "MoralSanctityWitnessedSufferingMercy",
+                ],
+                "net_successes": 2,
+                "session_id": sid,
+            }
+        )
+        assert harlan_ok["argument_eval"]["resonance_delta_ext"] == -9
+        assert harlan_ok["argument_eval"]["clash_delta_ext"] == 0
+
+        triage_clash = deliver_social_argument.invoke(
+            {
+                "target_npc_id_or_name": "dr_bandajara",
+                "argument_vectors": ["utilitarian_triage", "EmpiricalEvidenceLogicNovelIdeas"],
+                "net_successes": 2,
+                "session_id": sid,
+            }
+        )
+        assert triage_clash["argument_eval"]["triggers_dual_psyche_wedge"] is True
+        assert triage_clash["dissonance_stacks_added"] == 2
+
+        # 3. Awakening faction IDs (`GOVERNMENT_DAISE`, aliases) update seeded clocks in-place
+        updated = advance_faction_or_heat_clock.invoke(
+            {
+                "faction_id": "GOVERNMENT_DAISE",
+                "clock_delta": 2,
+                "reason": "DAISE compliance warrant escalation",
+                "session_id": sid,
+            }
+        )
+        clocks = updated["ledger"]["faction_clocks"]
+        assert len(clocks) == 5
+        daise_clock = next(c for c in clocks if c["faction_id"] == "daise")
+        assert daise_clock["progress"] == 2
+    finally:
+        reset_session_npcs(sid)

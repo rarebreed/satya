@@ -244,7 +244,19 @@ def deliver_social_argument(
     ego_wound_dis_check_passed: bool | None = None,
     session_id: str = "default",
 ) -> dict[str, Any]:
-    """Resolve a Contested Social Exchange using Satya argument vectors, Composure (`CMP`), and Dual-Psyche Wedge checks."""
+    """Resolve a Contested Social Exchange using Satya's 9 Argument Vectors, Composure (`CMP`), and Dual-Psyche Wedge checks.
+
+    Supported `argument_vectors` slugs (combinable for Dual-Psyche Wedges):
+    - `empirical_logic` (`OPN` evidence/logic)
+    - `group_loyalty` / `betray_group` (`BLG` shared identity vs. betrayal)
+    - `flattery_prestige` / `humiliate_fault` (`EGO` status vs. Ego Wound provocation)
+    - `personal_profit` (`SLF >= 13` self-interest / immunity)
+    - `humanitarian_mercy` (`SLF <= 7` self-sacrifice / altruistic duty)
+    - `rules_protocol` / `break_law_orders` (`CNF` law, chain of command, or breaking orders)
+    - `dominance_threat` / `bait_into_fight` (`AGG` intimidation vs. provoking aggression)
+    - `transparency_good_faith` vs. `verified_audit_proof` (`TRS`: open olive branch vs. hard audit proof for `TRS <= 7` zero-trust targets)
+    - `moral_sanctity` vs. `utilitarian_triage` (`CPS`: witnessed suffering/mercy vs. cold greater-good triage)
+    """
     npc = _resolve_npc_profile(target_npc_id_or_name, session_id)
     npc_key = str(npc.get("npc_id") or target_npc_id_or_name).strip().lower()
     psyche_str = target_psyche_json.strip() or json.dumps(_parse_psyche_dict(npc))
@@ -313,7 +325,7 @@ def resolve_psyche_dissonance_or_surge(
     marks_added: int = 1,
     session_id: str = "default",
 ) -> dict[str, Any]:
-    """Resolve Cognitive Dissonance paths (`dissonance`), dramatic `Conviction Surge` (`conviction_surge`), or `Psyche Drift Marks` (`drift_mark`)."""
+    """Resolve Cognitive Dissonance paths (`dissonance`: `conversion_defection`, `dogmatic_denial`, `compartmentalization`, `emotional_lashing_out` across the 9 Psyche traits `EGO, SLF, OPN, BLG, EXT, CNF, AGG, TRS, CPS`), dramatic `Conviction Surge` (`conviction_surge`: `altruistic_or_tribal_sacrifice`, `boundless_compassion` for `CPS >= 15`, `unbowed_defiance`, `iconoclastic_truth`), or `Psyche Drift Marks` (`drift_mark`)."""
     norm_mode = mode.strip().lower().replace("-", "_")
     npc_key = target_id.strip().lower()
     if norm_mode == "dissonance":
