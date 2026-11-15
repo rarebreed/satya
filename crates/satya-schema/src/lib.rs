@@ -28,6 +28,7 @@ pub mod tactical_map_surfaces_dto;
 pub mod tactical_map_world_dto;
 pub mod types;
 pub mod wire_enum;
+pub mod world_clocks_dto;
 
 pub use character::*;
 pub use events::*;

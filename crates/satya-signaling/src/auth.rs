@@ -265,6 +265,12 @@ impl AuthAndSessionManager {
             );
             CREATE INDEX IF NOT EXISTS idx_session_event_history_sid
                 ON session_event_history(session_id, sequence_num);
+
+            CREATE TABLE IF NOT EXISTS session_world_ledger (
+                session_id    TEXT PRIMARY KEY,
+                ledger_json   TEXT NOT NULL,
+                updated_at_us INTEGER NOT NULL
+            );
             "#,
         )
         .execute(&db_pool)

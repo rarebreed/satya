@@ -9,6 +9,7 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod hooks_and_npc_py;
+pub mod psyche_social_py;
 pub mod tactical_map_py;
 pub use hooks_and_npc_py::*;
 pub use tactical_map_py::*;
@@ -2194,6 +2195,7 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_combat_technique_triad, m)?)?;
     tactical_map_py::register_tactical_map_functions(m)?;
     hooks_and_npc_py::register_hooks_and_npc_functions(m)?;
+    psyche_social_py::register_psyche_social_functions(m)?;
 
     Ok(())
 }

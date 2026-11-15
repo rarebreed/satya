@@ -258,13 +258,19 @@ _SESSION_NPC_PACKS: dict[str, str] = {}
 
 
 def reset_session_npcs(session_id: str | None = None) -> None:
-    """Clear cached NPC state for `session_id` (or all sessions when omitted)."""
+    """Clear cached NPC state and world/social state for `session_id` (or all sessions when omitted)."""
     if session_id is None:
         _SESSION_NPCS.clear()
         _SESSION_NPC_PACKS.clear()
     else:
         _SESSION_NPCS.pop(session_id, None)
         _SESSION_NPC_PACKS.pop(session_id, None)
+    try:
+        from satya_ml.ai_gm.social_and_clocks import reset_social_and_world_state
+
+        reset_social_and_world_state(session_id)
+    except Exception:
+        pass
 
 
 def _normalize_remote_npc_entry(entry: dict[str, Any]) -> dict[str, Any]:
@@ -1593,6 +1599,17 @@ from satya_ml.ai_gm.scenario_director import (
     sync_scenario_director_from_memories,
     trigger_scenario_beat,
 )
+from satya_ml.ai_gm.social_and_clocks import (
+    advance_faction_or_heat_clock,
+    deliver_social_argument,
+    format_world_ledger_for_prompt,
+    get_session_world_ledger,
+    get_world_clocks_and_heat,
+    perform_empathy_read,
+    reset_social_and_world_state,
+    resolve_psyche_dissonance_or_surge,
+    update_session_world_ledger,
+)
 
 
 @tool
@@ -1712,6 +1729,11 @@ def get_builtin_gm_tools() -> list[Any]:
         narrate_to_session,
         configure_scenario_director,
         trigger_scenario_beat,
+        perform_empathy_read,
+        deliver_social_argument,
+        resolve_psyche_dissonance_or_surge,
+        get_world_clocks_and_heat,
+        advance_faction_or_heat_clock,
     ]
 
 

@@ -7,6 +7,7 @@ use crate::events::{
 use crate::protocol_map_ai::{default_control_c, default_skill_level_n};
 pub use crate::protocol_map_ai::*;
 pub use crate::tactical_map_dto::*;
+pub use crate::world_clocks_dto::*;
 use crate::types::{Participant, SessionMode, SessionRole};
 use serde::{Deserialize, Serialize};
 

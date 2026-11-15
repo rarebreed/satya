@@ -37,13 +37,15 @@ pub struct SessionAiPlayerEntry {
     pub max_rally_turns: u32,
 }
 
+pub use crate::player_ai_spatial::*;
+
 #[derive(Debug, Deserialize)]
 pub struct PlayerAiContextQuery {
     #[serde(default = "default_ai_player_uid")]
     pub user_id: String,
 }
 
-fn default_ai_player_uid() -> String {
+pub(crate) fn default_ai_player_uid() -> String {
     "ai-player-1".to_string()
 }
 
@@ -443,6 +445,29 @@ pub async fn player_ai_session_context_handler(
         })
         .cloned();
 
+    let filtered_active_map = gm_ctx
+        .active_map
+        .as_ref()
+        .map(|m| crate::map_handlers::filter_map_for_role(m, SessionRole::Player));
+
+    let mut seen_npc_ids = std::collections::BTreeSet::new();
+    let mut public_npcs = Vec::new();
+    for npc in crate::npcs::load_session_npcs_for_omnisearch(&state.auth, sid, false)
+        .await
+        .into_iter()
+        .chain(crate::campaign_lore::load_pack_starter_npcs(
+            Some(state.campaign_pack.as_str()),
+            false,
+        ))
+    {
+        if seen_npc_ids.insert(npc.character_id.clone()) {
+            public_npcs.push(npc);
+        }
+    }
+
+    let raw_ledger = crate::world_clocks::get_or_init_world_ledger(&state, sid).await;
+    let filtered_world_ledger = satya_engine::filter_world_ledger_for_viewer(&raw_ledger, false);
+
     (
         StatusCode::OK,
         Json(json!({
@@ -459,7 +484,9 @@ pub async fn player_ai_session_context_handler(
             "roster": gm_ctx.roster,
             "character_sheet": bound_sheet,
             "combat_tracker": gm_ctx.combat_tracker,
-            "active_map": gm_ctx.active_map,
+            "active_map": filtered_active_map,
+            "public_npcs": public_npcs,
+            "world_ledger": filtered_world_ledger,
             "recent_messages": recent_messages,
         })),
     )

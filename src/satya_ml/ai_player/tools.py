@@ -4,6 +4,11 @@ Strictly isolates player state per `(session_id, player_user_id)` and exposes on
 capabilities:
 - `read_my_character_sheet`: Read the AI Player's bound `CharacterSheetRecord` and `TacticalPoolEnvelope`.
 - `inspect_public_tactical_map`: Read public battlemap tokens and `CombatTrackerState`.
+- `move_player_map_token`: Move ONLY your own character miniature with wall-collision enforcement.
+- `inspect_surroundings`: Inspect walkable zones, exits, nearby tokens/furniture, and cover/LoS.
+- `lookup_public_lore_and_npcs`: Search public lore, factions, and public NPC bios (never secrets).
+- `perform_player_empathy_read`: Run an `INS / ITU` check to unlock an NPC's Psyche motivations on net success.
+- `update_my_motivation_journal`: Persist private player goals, unresolved clues, and party bonds.
 - `query_satya_rules`: Search the canonical Satya `2d20` rules book (`docs/ttrpg/`).
 - `roll_player_d20_action`: Execute an authoritative Satya `2d20` skill check or Combat Technique + `T/C/F` roll.
 - `send_player_chat`: Emit an `IN_CHARACTER`, `OUT_OF_CHARACTER`, or `GM_ONLY` message as the AI Player.
@@ -11,32 +16,35 @@ capabilities:
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
-
-import httpx
 
 from satya_ml.ai_gm.tools import (
     _gm_headers,
+    _http_get_json,
     _http_post_json,
     _signaling_base_url,
     compute_character_tactical_envelope,
     query_satya_rules,
     tool,
 )
-
-
-def _http_get_json(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
-    """GET JSON from `url` with GM/Player service headers, returning parsed JSON on 200 OK or None on failure."""
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.get(url, headers=_gm_headers())
-            if resp.status_code == 200:
-                return dict(resp.json())
-    except Exception:
-        return None
-    return None
-
+from satya_ml.ai_player.motivation_ledger import (
+    ensure_or_sync_motivation_ledger,
+    format_motivation_ledger_for_prompt,
+    inspect_surroundings,
+    lookup_public_lore_and_npcs,
+    move_player_map_token,
+    perform_player_empathy_read,
+    redact_public_npc_entry,
+    redact_world_ledger_for_player,
+    reset_player_motivation_ledgers,
+    sanitize_map_dict_for_player,
+    summarize_public_map_for_player,
+    update_my_motivation_journal,
+)
 from satya_ml.campaign_config import get_pack_default_ai_player
+from satya_ml.dice_probabilities import _ensure_satya_py_loaded
+
 
 try:
     import satya_py
@@ -49,7 +57,8 @@ _PLAYER_CONTEXT_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def reset_player_session_context(session_id: str | None = None) -> None:
-    """Clear cached player-visible session contexts for `session_id` (or all sessions)."""
+    """Clear cached player-visible session contexts and `MotivationLedger` states."""
+    reset_player_motivation_ledgers(session_id)
     if session_id is None:
         _PLAYER_CONTEXT_CACHE.clear()
         return
@@ -112,28 +121,18 @@ def sanitize_player_visible_context(raw_ctx: dict[str, Any], player_user_id: str
         elif vis == "GM_ONLY" and sender_uid == player_user_id:
             visible_messages.append(dict(msg))
 
-    # Sanitize tactical map (keep only public token positions)
+    # Sanitize tactical map (preserve geometry/exits while strictly removing GM_ONLY tokens & spatial_pins)
     raw_map = raw_ctx.get("active_map")
-    public_map: dict[str, Any] | None = None
-    if isinstance(raw_map, dict) and raw_map.get("map_id"):
-        public_tokens = [
-            {
-                "token_id": t.get("token_id"),
-                "label": t.get("label"),
-                "grid_x": t.get("grid_x"),
-                "grid_y": t.get("grid_y"),
-                "faction": t.get("faction", "NEUTRAL"),
-            }
-            for t in (raw_map.get("tokens") or [])
-            if isinstance(t, dict) and not t.get("hidden") and not t.get("gm_only")
-        ]
-        public_map = {
-            "map_id": raw_map.get("map_id"),
-            "map_image_url": raw_map.get("map_image_url", ""),
-            "grid_width": int(raw_map.get("grid_width", 20)),
-            "grid_height": int(raw_map.get("grid_height", 20)),
-            "tokens": public_tokens,
-        }
+    public_map = sanitize_map_dict_for_player(raw_map)
+    if isinstance(public_map, dict) and isinstance(raw_map, dict):
+        public_map.setdefault("map_image_url", raw_map.get("map_image_url", ""))
+
+    public_npcs = [
+        redact_public_npc_entry(npc)
+        for npc in (raw_ctx.get("public_npcs") or [])
+        if isinstance(npc, dict)
+    ]
+    world_ledger = redact_world_ledger_for_player(raw_ctx.get("world_ledger"))
 
     combat_tracker = dict(raw_ctx.get("combat_tracker") or {
         "session_id": raw_ctx.get("session_id", "default"),
@@ -158,6 +157,8 @@ def sanitize_player_visible_context(raw_ctx: dict[str, Any], player_user_id: str
         "tactical_envelope": compute_character_tactical_envelope(own_char),
         "combat_tracker": combat_tracker,
         "active_map": public_map,
+        "public_npcs": public_npcs,
+        "world_ledger": world_ledger,
         "recent_messages": visible_messages[-16:],
     }
 
@@ -292,31 +293,92 @@ def roll_player_d20_action(
     if isinstance(remote, dict) and not remote.get("error"):
         return remote
 
-    # Deterministic local fallback using `satya_py` when running offline unit tests
-    c_stat = max(1, min(30, int(attribute_tn) - int(internal_mod)))
+    # Deterministic local fallback using compiled Rust `satya_py` when running offline unit tests
+    satya_lib = _ensure_satya_py_loaded()
+    c_stat = max(1, min(30, int(attribute_tn)))
     n_pairs = max(1, min(10, int(skill_rank)))
     b_val = int(env.get("neutral_baseline", 4))
     control_delta = -(c_alloc - b_val) if tech_clean else 0
-    delta_ext = int(difficulty_mod) + control_delta
-    tn_eff = max(2, min(39, 31 - c_stat + delta_ext))
-
-    rolled_pairs: list[list[int]] = []
-    successes = 0
-    carry = 0
-    for idx in range(n_pairs):
-        d1 = ((hash((session_id, player_user_id, check_category, idx, 1)) % 20) + 1)
-        d2 = ((hash((session_id, player_user_id, check_category, idx, 2)) % 20) + 1)
-        rolled_pairs.append([d1, d2])
-        pair_sum = d1 + d2 + carry
-        if pair_sum >= tn_eff:
-            successes += 1
-            carry = 6
-        else:
-            carry = -(tn_eff - pair_sum)
-
     base_tc = 3 if tech_clean in {"snap_shot", "cover_peek", "thrust", "punch"} else 6
     eff_tc = max(1, base_tc - max(0, (t_alloc - b_val) // 2)) if tech_clean else None
-    degree = "CRITICAL_SUCCESS" if successes >= n_pairs and n_pairs >= 2 else ("SUCCESS" if successes > 0 else "FAILURE")
+    if tech_clean and hasattr(satya_lib, "evaluate_combat_technique_triad"):
+        dom = (
+            "ranged"
+            if tech_clean
+            in {
+                "snap_shot",
+                "aimed_shot",
+                "braced_shot",
+                "full_auto",
+                "suppressive_fire",
+                "cover_peek",
+                "combat_sighted_shot",
+            }
+            else (
+                "unarmed_martial_arts"
+                if tech_clean in {"punch", "kick", "grab", "throw", "tackle"}
+                else "armed_melee"
+            )
+        )
+        try:
+            triad_eval = satya_lib.evaluate_combat_technique_triad(
+                tech_clean,
+                t_alloc,
+                c_alloc,
+                f_alloc,
+                dom,
+                n_pairs,
+            )
+            if isinstance(triad_eval, dict):
+                if triad_eval.get("effective_total_tc") is not None:
+                    eff_tc = int(triad_eval["effective_total_tc"])
+                if triad_eval.get("technique_delta_ext") is not None:
+                    control_delta = int(triad_eval["technique_delta_ext"])
+        except Exception:
+            pass
+
+    delta_ext = int(difficulty_mod) + control_delta
+    if hasattr(satya_lib, "CascadeTaskParams"):
+        tn_eff = int(
+            satya_lib.CascadeTaskParams(
+                n_pairs,
+                c_stat,
+                int(internal_mod),
+                delta_ext,
+                "markov_step",
+                "closest_miss",
+            ).tn_eff()
+        )
+    else:
+        tn_eff = max(2, min(39, 31 - c_stat + delta_ext))
+
+    rolled_pairs: list[list[int]] = []
+    pair_tuples: list[tuple[int, int]] = []
+    for idx in range(n_pairs):
+        digest = hashlib.sha256(
+            f"{session_id}|{player_user_id}|{check_category}|{idx}".encode("utf-8")
+        ).digest()
+        d1 = (int.from_bytes(digest[0:4], "big") % 20) + 1
+        d2 = (int.from_bytes(digest[4:8], "big") % 20) + 1
+        rolled_pairs.append([d1, d2])
+        pair_tuples.append((d1, d2))
+
+    outcome = satya_lib.evaluate_cascade_roll(
+        n_pairs,
+        c_stat,
+        int(internal_mod),
+        delta_ext,
+        pair_tuples,
+        "markov_step",
+        "closest_miss",
+    )
+    successes = int(outcome.total_successes)
+    outcome_tier = str(outcome.outcome_tier)
+    degree = (
+        "CRITICAL_SUCCESS"
+        if successes >= n_pairs and n_pairs >= 2
+        else ("SUCCESS" if successes > 0 else "FAILURE")
+    )
 
     # Advance local cached combat tracker tick for this player if in Combat Action Mode
     tracker = dict(ctx.get("combat_tracker") or {})
@@ -347,7 +409,9 @@ def roll_player_d20_action(
         "next_action_tick": next_tick,
         "effective_tn": tn_eff,
         "rolled_pairs": rolled_pairs,
+        "total_successes": successes,
         "successes_counted": successes,
+        "outcome_tier": outcome_tier,
         "degree_of_success": degree,
     }
 
@@ -396,6 +460,11 @@ def get_builtin_player_tools() -> list[Any]:
     return [
         read_my_character_sheet,
         inspect_public_tactical_map,
+        move_player_map_token,
+        inspect_surroundings,
+        lookup_public_lore_and_npcs,
+        perform_player_empathy_read,
+        update_my_motivation_journal,
         query_satya_rules,
         roll_player_d20_action,
         send_player_chat,

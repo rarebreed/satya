@@ -415,8 +415,9 @@ _HOOK_CATEGORY_TO_DIRECTOR_SLUGS: dict[str, tuple[str, ...]] = {
 def _collect_hook_and_manifest_context(
     party_hooks: dict[str, Any] | None,
     narrative_manifest: dict[str, Any] | None,
-) -> tuple[set[str], dict[str, dict[str, Any]], dict[str, Any] | None, str]:
-    """Derive boosted director slugs, per-slug top hooks, and concise tactical zone/exit context."""
+    world_ledger: dict[str, Any] | None = None,
+) -> tuple[set[str], dict[str, dict[str, Any]], dict[str, Any] | None, str, str]:
+    """Derive boosted director slugs, per-slug top hooks, tactical zone/exit context, and world-heat summary."""
     boosted_slugs: set[str] = set()
     best_hook_for_slug: dict[str, dict[str, Any]] = {}
     top_hook: dict[str, Any] | None = None
@@ -482,7 +483,29 @@ def _collect_hook_and_manifest_context(
             parts.append(str(narrative_manifest["concise_brief"])[:280])
         manifest_summary = " | ".join(parts)
 
-    return boosted_slugs, best_hook_for_slug, top_hook, manifest_summary
+    world_summary = ""
+    if isinstance(world_ledger, dict) and world_ledger:
+        heat = int(world_ledger.get("operational_heat", 0) or 0)
+        tier_code = str(world_ledger.get("heat_tier_code") or "UNNOTICED")
+        econ = str(world_ledger.get("active_economic_tier") or "MiddleClass")
+        if heat >= 3:
+            boosted_slugs.add("ticking_clock_escalation")
+            boosted_slugs.add("heist_or_infiltration_complication")
+            boosted_slugs.add("combat_encounter")
+        urgent_clocks: list[str] = []
+        for clk in world_ledger.get("faction_clocks") or []:
+            if not isinstance(clk, dict):
+                continue
+            prog = int(clk.get("progress", 0) or 0)
+            segs = max(1, int(clk.get("segments", 6) or 6))
+            if prog >= max(1, segs - 1):
+                boosted_slugs.add("ticking_clock_escalation")
+                boosted_slugs.add("moral_or_faction_dilemma")
+            urgent_clocks.append(f"{clk.get('faction_id')} {prog}/{segs}")
+        clocks_str = f" | Clocks: {', '.join(urgent_clocks[:4])}" if urgent_clocks else ""
+        world_summary = f"Heat {heat}/10 ({tier_code}, {econ}){clocks_str}"
+
+    return boosted_slugs, best_hook_for_slug, top_hook, manifest_summary, world_summary
 
 
 def select_next_scenario_beat(
@@ -492,8 +515,9 @@ def select_next_scenario_beat(
     rng_seed: int | None = None,
     party_hooks: dict[str, Any] | None = None,
     narrative_manifest: dict[str, Any] | None = None,
+    world_ledger: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Select the next Scenario Director beat according to `flow_mode`, `planned_beats`, `event_weights`, PC hooks, and sector layout.
+    """Select the next Scenario Director beat according to `flow_mode`, `planned_beats`, `event_weights`, PC hooks, sector layout, and world heat/clocks.
 
     - In `"scenario_driven"` mode, prioritizes unconsumed `planned_beats` adapted to player actions without railroading.
     - In `"free_form"` mode, samples purely from the player/GM's `event_weights` probability dials (`w_i > 0`).
@@ -510,9 +534,10 @@ def select_next_scenario_beat(
     remaining_planned = [b for b in planned_beats if b not in completed_plot_texts]
     last_task = str(completed[-1].get("task_slug", "")) if completed else ""
 
-    boosted_slugs, best_hook_for_slug, top_hook, manifest_summary = _collect_hook_and_manifest_context(
+    boosted_slugs, best_hook_for_slug, top_hook, manifest_summary, world_summary = _collect_hook_and_manifest_context(
         party_hooks,
         narrative_manifest,
+        world_ledger,
     )
 
     explicit = resolve_task_slug(task_slug) if task_slug and task_slug.lower() != "auto" else None
@@ -588,10 +613,15 @@ def select_next_scenario_beat(
         if manifest_summary
         else ""
     )
+    world_line = (
+        f"\n- World Clocks & Heat: {world_summary}"
+        if world_summary
+        else ""
+    )
 
     mandate_text = (
         f"[SCENARIO DIRECTOR MANDATE — {spec['title'].upper()} (`{chosen_slug}` | mode=`{flow_mode}` | source=`{beat_source}`)]"
-        f"{premise_line}{plot_line}{custom_line}{hook_line}{sector_line}\n"
+        f"{premise_line}{plot_line}{custom_line}{hook_line}{sector_line}{world_line}\n"
         f"- World Beat Objective: {spec['summary']}\n"
         f"- Director Playbook: {spec['playbook']}\n"
         f"- Suggested Tools: {', '.join(spec['suggested_tools'])}\n"

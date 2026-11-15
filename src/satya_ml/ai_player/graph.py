@@ -40,6 +40,11 @@ from satya_ml.ai_gm.tools import (
     _signaling_base_url,
     compute_character_tactical_envelope,
 )
+from satya_ml.ai_player.motivation_ledger import (
+    ensure_or_sync_motivation_ledger,
+    format_motivation_ledger_for_prompt,
+    summarize_public_map_for_player,
+)
 from satya_ml.ai_player.tools import (
     fetch_player_context_from_signaling,
     get_builtin_player_tools,
@@ -64,6 +69,9 @@ class AiPlayerSessionState(TypedDict, total=False):
     tactical_envelope: dict[str, Any]
     combat_tracker: dict[str, Any]
     active_map: dict[str, Any] | None
+    public_npcs: list[dict[str, Any]]
+    world_ledger: dict[str, Any]
+    motivation_ledger: dict[str, Any]
     trigger_event: dict[str, Any]
     tool_invocations: list[dict[str, Any]]
     roll_results: list[dict[str, Any]]
@@ -77,13 +85,18 @@ class AiPlayerSessionState(TypedDict, total=False):
 AI_PLAYER_SYSTEM_PROMPT = """You are an autonomous Satya d20 TTRPG Player Character (AI Player Agent).
 You play ONLY your single bound Player Character — you are NOT the Game Master.
 Rules:
-1. Embody your character in first person ("I...") or clear character voice, guided by your character sheet's Archetype, Loadout, Skills, and 7 Bipolar Psyche Traits.
-2. NEVER narrate outcomes for the world or control NPCs — declare what your character attempts, speaks, or investigates, and let the GM adjudicate the world's reaction.
-3. Whenever taking an uncertain action or acting in Combat Action Mode (`combat_active = true`), call `roll_player_d20_action` first using one of your character's skills (`attribute_tn` and `skill_rank` from your character sheet).
-4. In Combat Action Mode (`[ACTION MODE · Window W · Tick T]`):
-   - Choose a concrete Combat Technique (`snap_shot`, `combat_sighted_shot`, `cover_peek`, `thrust`, `punch`, `grab`) and allocate your `Tempo / Control / Force` (`tempo_pool`, `control_pool`, `force_pool`) so `T + C + F <= P_eff` and each pool respects `T_max / C_max / F_max`.
-   - Call `roll_player_d20_action` with `combat_technique`, `tempo_pool`, `control_pool`, and `force_pool`, then state your tactical action and roll result concisely in Markdown.
-5. Keep your turn declarations vivid, cooperative with fellow party members, and concise (1–2 short paragraphs)."""
+1. Embody your character in first person ("I...") guided by your Archetype, Skills, Loadout, and `1..=20` Bipolar Psyche poles (`OPN`, `SLF`, `BLG`, `AGG`, `EGO`, `CNF`, `EXT`) shown in your Inner Motivation Ledger.
+2. NEVER narrate outcomes for the world or control NPCs — declare what your character attempts, investigates, or says, and let the GM adjudicate the world's reaction.
+3. Embodied Spatial & Curiosity Agency:
+   - Use `inspect_surroundings` to read exits, cover/LoS, and visible tokens before crossing unfamiliar rooms or taking risky shots.
+   - Use `move_player_map_token` ONLY for your own miniature (`(target_x, target_y)` meters) when repositioning, advancing through exits, or taking cover.
+   - Use `lookup_public_lore_and_npcs` for public rumors, rules, and visible NPC bios, and `perform_player_empathy_read` (`INS / ITU`) to read what motivates someone face-to-face.
+   - Update your private goals, unresolved clues, and party bonds with `update_my_motivation_journal` whenever you learn something meaningful.
+4. Whenever taking an uncertain action or acting in Combat Action Mode (`combat_active = true`), call `roll_player_d20_action` first using your character sheet attributes and skill ranks.
+5. In Combat Action Mode (`[ACTION MODE · Window W · Tick T]`):
+   - Choose a concrete Combat Technique (`snap_shot`, `combat_sighted_shot`, `cover_peek`, `thrust`, `punch`, `grab`) and allocate `Tempo / Control / Force` (`tempo_pool`, `control_pool`, `force_pool`) within `P_eff` and `T_max / C_max / F_max`.
+   - Call `roll_player_d20_action` with `combat_technique`, `tempo_pool`, `control_pool`, and `force_pool`, then narrate concisely in Markdown.
+6. Keep turns vivid, cooperative or constructively principled from your Psyche, and concise (1–2 short paragraphs)."""
 
 
 def _format_player_context_header(ctx: dict[str, Any]) -> str:
@@ -116,12 +129,41 @@ def _format_player_context_header(ctx: dict[str, Any]) -> str:
         tck = tracker.get("tick", tracker.get("current_tick", 1))
         parts.append(f"Combat Action Mode ACTIVE: Window {rnd} · Tick {tck}")
 
+    map_summary = summarize_public_map_for_player(
+        ctx.get("active_map"),
+        str(ctx.get("player_user_id") or "ai-player-1"),
+        sheet,
+    )
+    if map_summary:
+        parts.append(map_summary)
+
+    world_ledger = ctx.get("world_ledger") or {}
+    if isinstance(world_ledger, dict) and world_ledger:
+        heat = world_ledger.get("operational_heat")
+        heat_tier = str(world_ledger.get("heat_tier_code") or "")
+        rumors = [
+            f"{clk.get('faction_name')}: {clk.get('public_rumor')}"
+            for clk in (world_ledger.get("faction_clocks") or [])[:3]
+            if isinstance(clk, dict) and clk.get("public_rumor")
+        ]
+        world_bits: list[str] = []
+        if heat is not None:
+            world_bits.append(f"Public Heat {heat}/10 ({heat_tier})")
+        if rumors:
+            world_bits.append("Rumors: " + " / ".join(rumors))
+        if world_bits:
+            parts.append("World Buzz: " + "; ".join(world_bits))
+
     persona = str(ctx.get("persona_prompt") or "").strip()
     if persona:
         parts.append(f"Playstyle Directive: {persona}")
 
     clean_parts = [p for p in parts if p]
-    return "[AI Player Character & Public Scene Index]: " + " || ".join(clean_parts)
+    header = "[AI Player Character & Public Scene Index]: " + " || ".join(clean_parts)
+    ledger_block = format_motivation_ledger_for_prompt(ctx.get("motivation_ledger"))
+    if ledger_block:
+        return f"{header}\n{ledger_block}"
+    return header
 
 
 def build_ai_player_graph(
@@ -169,6 +211,8 @@ def build_ai_player_graph(
                     "character_sheet": state.get("character_sheet") or trigger.get("character_sheet"),
                     "combat_tracker": state.get("combat_tracker") or trigger.get("combat_tracker"),
                     "active_map": state.get("active_map") or trigger.get("active_map"),
+                    "public_npcs": state.get("public_npcs") or trigger.get("public_npcs") or [],
+                    "world_ledger": state.get("world_ledger") or trigger.get("world_ledger"),
                     "recent_messages": trigger.get("recent_messages") or [],
                 }
                 player_ctx = set_player_session_context(session_id, player_user_id, fallback_raw)
@@ -180,6 +224,14 @@ def build_ai_player_graph(
                 if isinstance(trigger.get("character_sheet"), dict):
                     remote_ctx["character_sheet"] = trigger["character_sheet"]
                 player_ctx = set_player_session_context(session_id, player_user_id, remote_ctx)
+
+            motivation_ledger = ensure_or_sync_motivation_ledger(
+                session_id,
+                player_user_id,
+                player_ctx.get("character_sheet"),
+                str(player_ctx.get("persona_prompt") or ""),
+            )
+            player_ctx["motivation_ledger"] = motivation_ledger
 
             existing_msgs = list(state.get("messages") or [])
             new_messages: list[BaseMessage] = []
@@ -210,6 +262,9 @@ def build_ai_player_graph(
                 "tactical_envelope": player_ctx["tactical_envelope"],
                 "combat_tracker": player_ctx["combat_tracker"],
                 "active_map": player_ctx["active_map"],
+                "public_npcs": player_ctx.get("public_npcs", []),
+                "world_ledger": player_ctx.get("world_ledger", {}),
+                "motivation_ledger": motivation_ledger,
                 "messages": new_messages,
                 "tool_invocations": [],
                 "roll_results": [],
@@ -286,6 +341,11 @@ def build_ai_player_graph(
             if t_name in {
                 "read_my_character_sheet",
                 "inspect_public_tactical_map",
+                "move_player_map_token",
+                "inspect_surroundings",
+                "lookup_public_lore_and_npcs",
+                "perform_player_empathy_read",
+                "update_my_motivation_journal",
                 "roll_player_d20_action",
                 "send_player_chat",
             }:
@@ -333,11 +393,19 @@ def build_ai_player_graph(
                 tool_messages.append(ToolMessage(content=res_str, tool_call_id=t_id, name=t_name))
 
         updated_ctx = get_player_session_context(session_id, player_user_id)
+        refreshed_ledger = ensure_or_sync_motivation_ledger(
+            session_id,
+            player_user_id,
+            updated_ctx.get("character_sheet"),
+            str(updated_ctx.get("persona_prompt") or ""),
+        )
         return {
             "messages": tool_messages,
             "tool_invocations": invocations,
             "roll_results": roll_results,
             "combat_tracker": updated_ctx.get("combat_tracker", {}),
+            "active_map": updated_ctx.get("active_map"),
+            "motivation_ledger": refreshed_ledger,
         }
 
     def route_after_decision(

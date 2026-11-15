@@ -114,6 +114,7 @@ pub mod tactical_map_reach;
 pub mod tactical_map_spatial;
 pub mod task_resolution;
 pub mod walkthroughs;
+pub mod world_clocks;
 
 pub use action_economy::*;
 pub use barrier_ballistics::*;
@@ -138,6 +139,7 @@ pub use skills_trees::*;
 pub use tactical_map::*;
 pub use tactical_map_geom::*;
 pub use task_resolution::*;
+pub use world_clocks::*;
 
 #[cfg(test)]
 mod tests;

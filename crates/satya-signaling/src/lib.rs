@@ -12,6 +12,8 @@
 
 pub mod auth;
 pub mod campaign_lore;
+pub mod world_clocks;
+pub use world_clocks::*;
 pub mod characters;
 pub mod gm_api;
 pub mod gm_docs;
@@ -21,6 +23,7 @@ pub mod map_authoring_handlers;
 pub mod map_handlers;
 pub mod npcs;
 pub mod player_ai_api;
+pub mod player_ai_spatial;
 pub mod session_export;
 pub mod session_persistence;
 pub mod state;
@@ -170,6 +173,14 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             patch(update_session_npc_handler),
         )
         .route(
+            "/api/sessions/:session_id/world-ledger",
+            get(get_session_world_ledger_handler).post(update_session_world_ledger_handler),
+        )
+        .route(
+            "/api/gm/sessions/:session_id/world-ledger",
+            get(get_session_world_ledger_handler).post(update_session_world_ledger_handler),
+        )
+        .route(
             "/api/gm/sessions/:session_id/chat",
             post(gm_session_chat_handler),
         )
@@ -208,6 +219,14 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route(
             "/api/player-ai/sessions/:session_id/roll",
             post(player_ai_session_roll_handler),
+        )
+        .route(
+            "/api/player-ai/sessions/:session_id/map/move",
+            post(player_ai_move_map_token_handler),
+        )
+        .route(
+            "/api/player-ai/sessions/:session_id/lookup",
+            get(player_ai_public_lookup_handler),
         )
         .route("/api/storage/metrics", get(storage_metrics_handler))
         .route("/api/storage/flush", post(storage_flush_handler))

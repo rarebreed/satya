@@ -471,6 +471,92 @@ pub async fn append_omnisearch_lore_and_npc_hits(
         }
     }
 
+    let include_world_clocks = matches!(
+        norm_scope.as_str(),
+        "ALL" | "LORE" | "CAMPAIGN" | "CLOCKS" | "FACTIONS" | "WORLD" | "HEAT"
+    );
+    if include_world_clocks {
+        let raw_ledger = crate::world_clocks::get_or_init_world_ledger(state, session_id).await;
+        let ledger = satya_engine::filter_world_ledger_for_viewer(&raw_ledger, is_gm);
+        for clock in &ledger.faction_clocks {
+            let mut body = format!(
+                "{} {}/{} standing {:+} {}",
+                clock.faction_id,
+                clock.progress,
+                clock.segments,
+                clock.party_standing,
+                clock.public_rumor
+            );
+            if is_gm && let Some(agenda) = &clock.gm_secret_agenda {
+                body.push_str(&format!(" Agenda: {agenda}"));
+            }
+            let title = format!("{} — {}", clock.faction_name, clock.clock_title);
+            let mut score = score_text_match(&q_low, &keywords, &title, &body);
+            if matches!(norm_scope.as_str(), "CLOCKS" | "FACTIONS" | "WORLD") && score == 0 && q_low.is_empty() {
+                score = 5;
+            }
+            if score > 0 {
+                let mut snippet = format!(
+                    "Progress: {}/{} · Party Standing: {:+}\nRumor: {}",
+                    clock.progress, clock.segments, clock.party_standing, clock.public_rumor
+                );
+                if is_gm && let Some(agenda) = &clock.gm_secret_agenda {
+                    snippet.push_str(&format!("\nGM Secret Agenda: {agenda}"));
+                }
+                hits.push(GmLookupHit {
+                    source_kind: GmLookupSourceKind::CampaignLore,
+                    item_id: format!("faction-clock:{}", clock.faction_id),
+                    title,
+                    subtitle: format!(
+                        "Faction Clock ({}/{}) · Standing {:+}",
+                        clock.progress, clock.segments, clock.party_standing
+                    ),
+                    snippet: snippet.chars().take(420).collect(),
+                    is_persistent: true,
+                    score,
+                });
+            }
+        }
+
+        let heat_title = format!(
+            "Operational Heat {}/10 ({})",
+            ledger.operational_heat, ledger.heat_tier_code
+        );
+        let heat_body = format!(
+            "operational heat jurisdiction {} {} {} black market police delta_ext {}",
+            ledger.active_economic_tier.as_str(),
+            ledger.active_zoning.as_str(),
+            ledger.jurisdiction_response_profile,
+            ledger.heat_description
+        );
+        let mut heat_score = score_text_match(&q_low, &keywords, &heat_title, &heat_body);
+        if matches!(norm_scope.as_str(), "HEAT" | "WORLD" | "CLOCKS") && heat_score == 0 && q_low.is_empty() {
+            heat_score = 5;
+        }
+        if heat_score > 0 {
+            hits.push(GmLookupHit {
+                source_kind: GmLookupSourceKind::CampaignLore,
+                item_id: "world-operational-heat".to_string(),
+                title: heat_title,
+                subtitle: "World Ledger · Jurisdiction & Heat".to_string(),
+                snippet: format!(
+                    "Tier: {} ({}) · Public Delta_ext: {:+} · Accounts Frozen: {} · Black Market Delta_ext: {:+}\nResponse: {}",
+                    ledger.active_economic_tier.as_str(),
+                    ledger.active_zoning.as_str(),
+                    ledger.heat_public_check_delta_ext,
+                    ledger.legal_bank_accounts_frozen,
+                    ledger.black_market_delta_ext_mod,
+                    ledger.jurisdiction_response_profile
+                )
+                .chars()
+                .take(420)
+                .collect(),
+                is_persistent: true,
+                score: heat_score,
+            });
+        }
+    }
+
     hits.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.title.cmp(&b.title)));
     hits.truncate(20);
 }

@@ -449,8 +449,11 @@ def normalize_token(tok: dict[str, Any]) -> dict[str, Any]:
     gy = py_cm // 100
     tid = str(tok.get("token_id", tok.get("entity_id", f"tok-{uuid.uuid4().hex[:6]}")))
     lbl = str(tok.get("label", tid))
-    hidden = bool(tok.get("is_hidden", False))
-    return {
+    vis = str(tok.get("visibility") or ("GM_ONLY" if tok.get("gm_only") else "PUBLIC")).upper()
+    hidden = bool(tok.get("is_hidden") or tok.get("hidden") or tok.get("gm_only") or vis == "GM_ONLY")
+    if hidden:
+        vis = "GM_ONLY"
+    out: dict[str, Any] = {
         "token_id": tid,
         "entity_id": str(tok.get("entity_id", tid)),
         "label": lbl,
@@ -465,8 +468,13 @@ def normalize_token(tok: dict[str, Any]) -> dict[str, Any]:
         "model_preset": str(tok.get("model_preset") or _infer_model_preset(lbl, hidden)),
         "facing_deg": int(tok.get("facing_deg", 270 if "sentry" in lbl.lower() else 90)),
         "is_hidden": hidden,
+        "gm_only": bool(tok.get("gm_only") or hidden),
+        "visibility": vis,
         "status_badges": list(tok.get("status_badges", [])),
     }
+    if tok.get("faction") is not None:
+        out["faction"] = str(tok.get("faction"))
+    return out
 
 
 def _wall_edge_segment_m(edge: dict[str, Any]) -> tuple[float, float, float, float]:
