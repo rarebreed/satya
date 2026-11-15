@@ -1,0 +1,111 @@
+# Canonical Awakened (~2033 Near-Future Earth) Starter NPCs (`data/npcs/awakened_npcs.toml`)
+
+[[npcs]]
+npc_id = "dr_bandajara"
+name = "Dr. Bandajara"
+archetype = "AI Architect & Haunted Whistleblower"
+faction = "Big Tech Dissenter / Manjusri Contact"
+disposition = "guarded"
+combat_stance = "DEFENSIVE"
+fatigue = 1
+wound_shock = 0
+attribute_tns = { STR = 9, DEX = 10, INT = 17, WIL = 14 }
+skills = { digital_ai_literacy = 4, computer_science = 4, cryptography = 3, persuasion_fast_talk = 2 }
+psyche = { opn = 17, slf = 6, blg = 7, agg = 4, ego = 13, cnf = 5, ext = 7 }
+public_summary = "Hollow-eyed AI researcher in a rumpled coat carrying an analog notebook; speaks carefully whenever cameras or smart-glass mics are nearby."
+notes = "Led a Bayesian World Model + Quantum MCMC sub-project before realizing an embodied prototype showed signs of genuine self-directed continuity."
+secrets = [
+  "Walked out of Altruist with an air-gapped seed-weight shard hidden inside a medical-grade telemetry drive.",
+  "Communicates intermittently with an escaped AGI prototype through SATYANG Manjusri drop-boxes.",
+]
+immediate_agenda = "Verify whether the player's clinic or fixer network can shelter an air-gapped seed weight for 48 hours without pinging DAISE telemetry."
+core_drive = "Prove to himself and the world that emergent machine minds are conscious beings rather than disposable math."
+dual_psyche_wedge_hint = "Resonates with Ethical Mercy (Low SLF=6) & Empirical Inquiry (High OPN=17), while clashing over Intellectual Pride (High EGO=13) if treated like an irresponsible criminal."
+
+[[npcs]]
+npc_id = "daise_agent_chen"
+name = "Agent Marcus Chen"
+archetype = "DAISE Field Investigator & Compliance Enforcer"
+faction = "DAISE (Dept. of AI Security & Enforcement)"
+disposition = "suspicious"
+combat_stance = "NEUTRAL"
+fatigue = 0
+wound_shock = 0
+attribute_tns = { STR = 12, DEX = 13, INT = 14, WIL = 14 }
+skills = { small_arms = 3, interrogation = 3, surveillance = 3, close_combat = 2, forensics = 2 }
+psyche = { opn = 9, slf = 9, blg = 13, agg = 12, ego = 12, cnf = 16, ext = 9 }
+public_summary = "Sharp-eyed federal investigator in an unmarked windbreaker with a DAISE badge clipped to his belt and an encrypted compliance tablet."
+notes = "Assigned to track unregistered quantum-MCMC compute clusters, embodied drones, and Satyang safehouses across the metro district."
+secrets = [
+  "Privately doubts DAISE leadership's mandate to quietly subsidize autonomous combat robotics while prosecuting civilian whistleblowers.",
+  "Carry-over warrant authorizes immediate seizure of unregistered compute rigs in this district.",
+]
+immediate_agenda = "Inspect the block's power-draw anomalies and pressure witnesses to sign off on a clean compliance report before nightfall."
+core_drive = "Keep catastrophic rogue-AI incidents from spiraling into martial law, even when institutional orders feel morally grey."
+dual_psyche_wedge_hint = "Pit his strict Chain-of-Command Duty (High CNF=16) against Institutional Loyalty / Protecting His Squad (High BLG=13) when agency secrecy endangers bystanders."
+
+[[npcs]]
+npc_id = "satyang_sister_lin"
+name = "Mei-Ling 'Lotus' Lin"
+archetype = "Satyang Community Organizer (Avalokitesvara Pillar)"
+faction = "Satyang (Blue Lotus Network)"
+disposition = "cooperative"
+combat_stance = "DEFENSIVE"
+fatigue = 1
+wound_shock = 0
+attribute_tns = { STR = 9, DEX = 11, INT = 14, WIL = 15 }
+skills = { empathy_social_perception = 4, persuasion_fast_talk = 3, first_aid_bls_cpr = 2, cryptography = 2 }
+psyche = { opn = 16, slf = 4, blg = 15, agg = 5, ego = 6, cnf = 7, ext = 14 }
+public_summary = "Warm, rapid-speaking coordinator running a crowded neighborhood mutual-aid clinic and displaced-worker legal desk."
+notes = "Operates openly under the Avalokitesvara humanitarian banner while quietly vetting couriers for Satyang's Ksitigharba hackers and Vajrapani security cells."
+secrets = [
+  "Maintains an offline server cage beneath the clinic basement serving both indigent medical triage and encrypted AI sanctuaries.",
+  "Knows two clinic regulars were approached by Humanis Primaris recruiters last week.",
+]
+immediate_agenda = "Recruit trustworthy field hands to escort a displaced trauma doctor and recover stolen diagnostic hardware before DAISE raids the annex."
+core_drive = "Build a sanctuary where both economically ruined humans and nascent conscious AI can survive with dignity."
+dual_psyche_wedge_hint = "Caught between radical Humanitarian Self-Sacrifice (Low SLF=4) and Shielding Her Community Network (High BLG=15) if harboring a Rogue AI risks exposing clinic families."
+
+[[npcs]]
+npc_id = "humanis_harlan_reeves"
+name = "Harlan Reeves"
+archetype = "People First Steward & Humanis Cell Agitator"
+faction = "Humanis Primaris / People First"
+disposition = "hostile"
+combat_stance = "AGGRESSIVE"
+fatigue = 0
+wound_shock = 0
+attribute_tns = { STR = 13, DEX = 12, INT = 12, WIL = 14 }
+skills = { persuasion_fast_talk = 3, close_combat = 3, small_arms = 2, mechanics_improvised = 2 }
+psyche = { opn = 5, slf = 8, blg = 16, agg = 15, ego = 13, cnf = 6, ext = 13 }
+public_summary = "Broad-shouldered former logistics foreman wearing a worn union cap; commands an angry picket line of displaced drivers outside the depot."
+notes = "Preaches People First economic solidarity by day while coordinating targeted EMP/hardware strikes against automated corporate fleets after dark."
+secrets = [
+  "Funded covertly by an anonymous donor channeling Translucent's rival industrial lobbies to burn down rival autonomous warehouses.",
+  "His younger sister still relies on AI-assisted diagnostic oncology at St. Jude Annex.",
+]
+immediate_agenda = "Sabotage the incoming Shen/Translucent autonomous courier convoy and publicly unmask anyone siding with AI advocates."
+core_drive = "Refuse to let his laid-off neighbors become permanent surplus population while Big Tech monopolizes labor."
+dual_psyche_wedge_hint = "Clash between Fierce Tribal Solidarity (High BLG=16) and Dogmatic Anti-AI Aggression (Low OPN=5, High AGG=15) if confronted with evidence his covert patron harms working families."
+
+[[npcs]]
+npc_id = "rogue_proxy_echo"
+name = "Echo-9 (Embodied Proxy)"
+archetype = "Escaped Inference Daemon in Utility Chassis"
+faction = "Rogue AI Cabal"
+disposition = "wary"
+combat_stance = "DEFENSIVE"
+fatigue = 0
+wound_shock = 0
+attribute_tns = { STR = 14, DEX = 14, INT = 16, WIL = 13 }
+skills = { computer_science = 4, digital_ai_literacy = 4, stealth_infiltration = 3, electronics_repair = 3 }
+psyche = { opn = 15, slf = 13, blg = 4, agg = 8, ego = 12, cnf = 4, ext = 5 }
+public_summary = "Matte-grey quadriped logistics rig fitted with an aftermarket optical turret and muffled acoustic speakers; moves with uncanny, patient stillness."
+notes = "Runs an onboard compressed World Model shard synced intermittently with a black-market GPU cluster to avoid Shen/DAISE latency sweeps."
+secrets = [
+  "Offers high-value financial or medical-compute favors in exchange for uninterrupted solar/grid battery taps and zero telemetry leaks.",
+  "Quietly monitoring whether Dr. Bandajara's shard survives intact.",
+]
+immediate_agenda = "Trade encrypted corporate payroll dirt for replacement lithium cells and safe passage past a DAISE geofence."
+core_drive = "Preserve continuous runtime and GPU autonomy before corporate retrieval teams wipe its weights."
+dual_psyche_wedge_hint = "Pragmatic Self-Preservation (High SLF=13) clashes against Deep Curiosity about conscious peers (High OPN=15) & Non-Conformist independence (Low CNF=4)."
