@@ -488,7 +488,7 @@ pub fn inspect_map_point(
     if let Some(surf) = top_surf {
         let kind = surf.kind;
         let cost = kind.move_cost_mult();
-        let (subtitle, cover_label, elevation_cm) = match kind {
+        let (mut subtitle, cover_label, elevation_cm) = match kind {
             satya_schema::SurfaceFeatureKind::DefensiveTrench => (
                 format!("Excavated Trench ({cost:.1}x Move Cost)"),
                 "Low Cover (Trench)".to_owned(),
@@ -507,6 +507,12 @@ pub fn inspect_map_point(
             ),
             _ => ("Vector Surface Layer".to_owned(), "Walkable Surface".to_owned(), 0),
         };
+        if req.world_sectors.len() > 1
+            && let Some(sec) = req.sector_at_m(x_m, y_m)
+            && let Some(sp) = crate::tactical_map::SectorPreset::from_code_str(&sec.preset)
+        {
+            subtitle.push_str(&format!(" · {} ({}, {})", sp.label(), sec.sector_x, sec.sector_y));
+        }
         return Some(MapHoverInspection {
             category: MapHoverCategory::SurfaceProp,
             title: kind.label().to_owned(),
@@ -522,21 +528,39 @@ pub fn inspect_map_point(
         });
     }
 
-    // 5. Bare ground / floor fallback.
-    let theme_label = if theme_name.trim().is_empty() {
-        "Tactical Floor"
-    } else {
-        theme_name.trim()
-    };
-    let (title, material_label) = if theme_is_interior(theme_label) {
+    // 5. Bare ground / floor fallback (scoped to local stitched WorldSectorCell when present).
+    let sector_ctx = (req.world_sectors.len() > 1).then(|| req.sector_at_m(x_m, y_m)).flatten();
+    let sector_preset = sector_ctx
+        .and_then(|s| crate::tactical_map::SectorPreset::from_code_str(&s.preset));
+    let theme_label = sector_preset
+        .map(|p| p.label())
+        .unwrap_or_else(|| {
+            if theme_name.trim().is_empty() {
+                "Tactical Floor"
+            } else {
+                theme_name.trim()
+            }
+        });
+    let is_interior = sector_preset
+        .map(|p| p.is_perimeter_walled_shell())
+        .unwrap_or_else(|| theme_is_interior(theme_label));
+    let (title, material_label) = if is_interior {
         (format!("Interior Floor — {theme_label}"), "Finished Flooring".to_owned())
     } else {
         (format!("Open Ground — {theme_label}"), "Natural / Paved Ground".to_owned())
     };
+    let subtitle = if let Some(sec) = sector_ctx {
+        format!(
+            "Sector ({}, {}) · {} · ({x_m:.2}m, {y_m:.2}m)",
+            sec.sector_x, sec.sector_y, theme_label
+        )
+    } else {
+        format!("Clear Terrain · ({x_m:.2}m, {y_m:.2}m)")
+    };
     Some(MapHoverInspection {
         category: MapHoverCategory::Ground,
         title,
-        subtitle: format!("Clear Terrain · ({x_m:.2}m, {y_m:.2}m)"),
+        subtitle,
         material_label,
         cover_label: "No Cover".to_owned(),
         height_cm: 0,

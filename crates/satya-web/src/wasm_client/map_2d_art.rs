@@ -295,6 +295,13 @@ const PRESET_ART_THEME_MAP: &[(&str, &str)] = &[
     ("rural_countryside", "park_grounds"),
     ("luxury_mansion", "park_grounds"),
     ("downtown_commercial", "urban_street"),
+    ("hospital", "clinic"),
+    ("shopping_plaza", "urban_street"),
+    ("shopping_mall", "office_interior"),
+    ("farms", "park_grounds"),
+    ("botanical_garden", "park_grounds"),
+    ("manufacturing_plant", "industrial"),
+    ("warehouse", "industrial"),
 ];
 
 pub fn battlemap_theme_for_map(map: &satya_schema::GmMapUpdateRequest) -> &'static BattlemapArtTheme {

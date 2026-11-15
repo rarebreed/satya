@@ -307,6 +307,69 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
                 let (px, pz) = rot_pt(-hx * 0.48, 0.0);
                 push_obb(verts, px, pz, top, (top + 0.24).min(1.05), 0.14, 0.10, rot, [0.16, 0.19, 0.24], 0.0);
             }
+            PropKind::HospitalBed => {
+                push_obb(verts, cx, cz, 0.14, 0.56, hx, hz, rot, [0.76, 0.80, 0.85], 0.0);
+                push_obb(verts, cx, cz, 0.56, 0.78, hx * 0.94, hz * 0.88, rot, [0.92, 0.95, 0.98], 0.0);
+                let (px, pz) = rot_pt(-hx * 0.62, 0.0);
+                push_obb(verts, px, pz, 0.78, 0.92, hx * 0.22, hz * 0.74, rot, [0.97, 0.98, 1.0], 0.0);
+            }
+            PropKind::SurgicalTable => {
+                push_obb(verts, cx, cz, 0.0, 0.72, hx * 0.28, hz * 0.36, rot, [0.58, 0.64, 0.70], 0.0);
+                push_obb(verts, cx, cz, 0.72, top, hx * 0.92, hz * 0.82, rot, [0.64, 0.88, 0.84], 0.0);
+            }
+            PropKind::ImagingScanner => {
+                push_obb(verts, cx, cz, 0.0, top * 0.38, hx * 0.85, hz * 0.92, rot, [0.88, 0.91, 0.94], 0.0);
+                for sx in [-hx * 0.58, hx * 0.58] {
+                    let (px, pz) = rot_pt(sx, 0.0);
+                    push_obb(verts, px, pz, 0.25, top, hx * 0.30, hz * 0.84, rot, [0.93, 0.95, 0.97], 0.0);
+                }
+                push_obb(verts, cx, cz, top * 0.72, top, hx * 0.86, hz * 0.84, rot, [0.82, 0.88, 0.93], 0.0);
+            }
+            PropKind::PrivacyCurtain => {
+                let c_top = if cutaway { top.min(0.68) } else { top };
+                push_obb(verts, cx, cz, 0.06, c_top, hx * 0.98, (hz * 0.22).max(0.05), rot, rgb, -0.20);
+            }
+            PropKind::MallKiosk => {
+                push_obb(verts, cx, cz, 0.0, top * 0.88, hx * 0.96, hz * 0.96, rot, rgb, 0.0);
+                push_obb(verts, cx, cz, top * 0.88, top, hx * 0.98, hz * 0.98, rot, [0.65, 0.82, 0.95], 0.0);
+            }
+            PropKind::ConveyorBelt => {
+                push_obb(verts, cx, cz, 0.0, top * 0.78, hx, hz * 0.92, rot, [0.36, 0.41, 0.47], 0.0);
+                push_obb(verts, cx, cz, top * 0.78, top, hx * 0.98, hz * 0.74, rot, [0.18, 0.19, 0.22], 0.0);
+            }
+            PropKind::IndustrialPress => {
+                push_obb(verts, cx, cz, 0.0, top * 0.42, hx, hz, rot, [0.32, 0.35, 0.39], 0.0);
+                push_obb(verts, cx, cz, top * 0.42, top, hx * 0.82, hz * 0.78, rot, rgb, 0.0);
+            }
+            PropKind::PalletRack => {
+                let rack_h = if cutaway { top.min(0.82) } else { top };
+                for sx in [-hx * 0.88, hx * 0.88] {
+                    let (px, pz) = rot_pt(sx, 0.0);
+                    push_obb(verts, px, pz, 0.0, rack_h, 0.09, hz * 0.90, rot, [0.86, 0.36, 0.12], 0.0);
+                }
+                for frac in [0.36_f32, 0.74] {
+                    let y0 = rack_h * frac;
+                    push_obb(verts, cx, cz, y0, (y0 + 0.22).min(rack_h), hx * 0.86, hz * 0.86, rot, [0.74, 0.56, 0.34], 0.0);
+                }
+            }
+            PropKind::Forklift => {
+                let fork_h = if cutaway { top.min(0.84) } else { top };
+                push_obb(verts, cx - 0.18, cz, 0.14, (fork_h * 0.55).min(0.95), hx * 0.65, hz * 0.88, rot, rgb, 0.0);
+                push_obb(verts, cx, cz, 0.55, fork_h, hx * 0.42, hz * 0.74, rot, [0.20, 0.22, 0.25], 0.0);
+            }
+            PropKind::ShippingContainer => {
+                let hull_h = if cutaway { top.min(0.85) } else { top };
+                push_obb(verts, cx, cz, 0.0, hull_h, hx, hz, rot, rgb, 0.0);
+                push_obb(verts, cx, cz, (hull_h - 0.08).max(0.05), hull_h + 0.02, hx * 0.96, hz * 0.94, rot, lighten(rgb, 1.14), 0.0);
+            }
+            PropKind::CropRow => {
+                push_obb(verts, cx, cz, 0.0, 0.14, hx * 0.96, hz * 0.82, rot, [0.36, 0.25, 0.16], 0.0);
+                push_obb(verts, cx, cz, 0.14, top, hx * 0.90, hz * 0.68, rot, rgb, -0.25);
+            }
+            PropKind::PlanterTable => {
+                push_obb(verts, cx, cz, 0.0, top * 0.78, hx * 0.94, hz * 0.92, rot, rgb, 0.0);
+                push_obb(verts, cx, cz, top * 0.78, top, hx * 0.88, hz * 0.80, rot, [0.24, 0.48, 0.22], -0.20);
+            }
             _ => {
                 let cap = (top * 0.08).clamp(0.02, 0.06);
                 push_obb(verts, cx, cz, 0.0, top - cap, hx, hz, rot, rgb, 0.0);

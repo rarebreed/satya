@@ -51,9 +51,9 @@
 //! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
 //!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
 //! - [`tactical_map`], [`map_continuation`], [`tactical_map_geom`], [`tactical_map_inspect`], [`tactical_map_edges`], [`map_dressing`], [`barrier_ballistics`], [`map_interior_gen`],
-//!   [`map_outdoor_gen`], [`map_outdoor_natural`], [`map_sector_gen`], [`map_gen_residential`], [`map_gen_commercial`] & [`map_gen_zoning`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, seamless edge-matched procedural continuation, multi-level floor stacks (`B1`/`1F`/`2F`), LoS/cover, hover inspection, thin
+//!   [`map_outdoor_gen`], [`map_sector_gen`], [`map_gen_residential`], [`map_gen_commercial`], [`map_gen_zoning`], [`map_gen_civic_retail`], [`map_gen_agro_industrial`], [`map_world_graph`] & [`map_world_transitions`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, seamless edge-matched procedural continuation, multi-level floor stacks (`B1`/`1F`/`2F`), LoS/cover, hover inspection, thin
 //!   edge walls/doors/windows, multi-cell prop catalog with per-material ballistic penetration vs. concealment
-//!   grading, and dressed procedural sectors across all 18 presets.
+//!   grading, and dressed procedural sectors across all 25 presets.
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor)
 //!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3).
 
@@ -78,6 +78,8 @@ pub mod map_continuation;
 pub mod map_continuation_ribbons;
 pub mod map_dressing;
 pub mod map_estate_grammars;
+pub mod map_gen_agro_industrial;
+pub mod map_gen_civic_retail;
 pub mod map_gen_commercial;
 pub mod map_gen_residential;
 pub mod map_gen_zoning;
@@ -90,6 +92,8 @@ pub mod map_sector_scifi;
 pub mod map_surface_geom;
 pub mod map_surface_queries;
 pub mod map_urban_grammars;
+pub mod map_world_graph;
+pub mod map_world_transitions;
 pub mod npc_generator;
 pub mod primitives;
 pub mod psyche_social;
@@ -135,5 +139,7 @@ pub use task_resolution::*;
 mod tests;
 #[cfg(test)]
 mod tests_domain;
+#[cfg(test)]
+mod tests_map_world;
 #[cfg(test)]
 mod tests_tactical_map;

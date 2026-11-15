@@ -81,7 +81,7 @@ define_wire_enum! {
 define_wire_enum! {
     /// Catalog of placeable continuous props & surface zones. Dimensions, heights, and materials are in
     /// `satya_engine::map_dressing::prop_spec`.
-    pub enum PropKind [count = 55] {
+    pub enum PropKind [count = 67] {
         Sofa => ("SOFA", "Sofa (3-seat)"),
         Loveseat => ("LOVESEAT", "Loveseat"),
         Armchair => ("ARMCHAIR", "Armchair"),
@@ -137,6 +137,18 @@ define_wire_enum! {
         Stairwell => ("STAIRWELL", "Stairwell"),
         DisplayRack => ("DISPLAY_RACK", "Retail display gondola"),
         CheckoutCounter => ("CHECKOUT_COUNTER", "Checkout counter"),
+        HospitalBed => ("HOSPITAL_BED", "Hospital ward bed"),
+        SurgicalTable => ("SURGICAL_TABLE", "Surgical operating table"),
+        ImagingScanner => ("IMAGING_SCANNER", "MRI / CT diagnostic scanner"),
+        PrivacyCurtain => ("PRIVACY_CURTAIN", "Medical privacy curtain"),
+        MallKiosk => ("MALL_KIOSK", "Mall kiosk island"),
+        ConveyorBelt => ("CONVEYOR_BELT", "Assembly conveyor belt"),
+        IndustrialPress => ("INDUSTRIAL_PRESS", "Hydraulic industrial press"),
+        PalletRack => ("PALLET_RACK", "High-bay pallet rack"),
+        Forklift => ("FORKLIFT", "Warehouse forklift"),
+        ShippingContainer => ("SHIPPING_CONTAINER", "ISO shipping container"),
+        CropRow => ("CROP_ROW", "Field crop row"),
+        PlanterTable => ("PLANTER_TABLE", "Conservatory planter bench"),
     }
 }
 
@@ -412,10 +424,15 @@ mod tests {
             assert_eq!(serde_json::to_string(&k).unwrap(), format!("\"{}\"", k.as_str()));
             assert_eq!(PropKind::from_code_str(&k.as_str().to_ascii_lowercase()), Some(k));
         }
+        assert_eq!(PropKind::ALL.len(), 67);
         assert_eq!(PropKind::from_code_str("sofa"), Some(PropKind::Sofa));
         assert_eq!(PropKind::from_code_str("structural_pillar"), Some(PropKind::StructuralPillar));
         assert_eq!(PropKind::from_code_str("elevated_catwalk"), Some(PropKind::ElevatedCatwalk));
         assert_eq!(PropKind::from_code_str("hazard_spill"), Some(PropKind::HazardSpill));
+        assert_eq!(PropKind::from_code_str("hospital_bed"), Some(PropKind::HospitalBed));
+        assert_eq!(PropKind::from_code_str("shipping_container"), Some(PropKind::ShippingContainer));
+        assert_eq!(PropKind::from_code_str("crop_row"), Some(PropKind::CropRow));
+        assert_eq!(PropKind::from_code_str("planter_table"), Some(PropKind::PlanterTable));
         assert_eq!(PropKind::from_code_str("nonexistent_prop"), None);
         let p = mk_prop(PropKind::BarCounter, 2, 1, 5, 1, 0);
         assert!(p.covers(6, 1) && !p.covers(7, 1) && !p.covers(2, 2));

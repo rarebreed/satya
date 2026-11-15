@@ -471,3 +471,20 @@ def test_tactical_map_vector_wall_collision_and_los_cover() -> None:
     assert len(stub["wall_edges"]) > 0
     assert len(stub["props"]) > 0
 
+
+def test_infer_sector_preset_phase5_and_regression_aliases():
+    from satya_ml.ai_gm.maps import infer_sector_preset
+
+    assert infer_sector_preset("City General Hospital ER") == "hospital"
+    assert infer_sector_preset("Outdoor Shopping Plaza Promenade") == "shopping_plaza"
+    assert infer_sector_preset("Two-Story Enclosed Shopping Mall") == "shopping_mall"
+    assert infer_sector_preset("Family Corn Farm and Barn") == "farms"
+    assert infer_sector_preset("Glass Conservatory Botanical Garden") == "botanical_garden"
+    assert infer_sector_preset("Heavy Stamping Manufacturing Plant") == "manufacturing_plant"
+    assert infer_sector_preset("Logistics Pallet Warehouse") == "warehouse"
+    # Existing Phase 1-4 alias regressions
+    assert infer_sector_preset("Sector 4 Docking Bay") == "docking_bay"
+    assert infer_sector_preset("Sector 4 Med-Lab") == "med_lab"
+    assert infer_sector_preset("Old Farmhouse") == "rural_countryside"
+
+

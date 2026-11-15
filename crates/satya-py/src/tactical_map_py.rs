@@ -6,11 +6,12 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use satya_engine::tactical_map::{
-    SectorPreset, TacticalSceneView, build_procedural_map_request, evaluate_los_continuous,
+    SectorPreset, TacticalSceneView, build_procedural_map_request, continue_procedural_map,
+    evaluate_los_continuous,
 };
 use satya_engine::tactical_map_geom::{circle_collides_obstacles, resolve_token_destination_cm};
 use satya_engine::tactical_map_inspect::{MapHoverCategory, inspect_map_point};
-use satya_schema::{GmMapUpdateRequest, TokenVisualSpec};
+use satya_schema::{GmMapUpdateRequest, MapContinuationDir, TokenVisualSpec};
 use serde_json::{Map, Value, json};
 
 fn to_py_err(msg: impl Into<String>) -> PyErr {
@@ -267,6 +268,21 @@ pub fn generate_procedural_tactical_sector_json(
     serde_json::to_string(&req).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
+/// Stitches an adjacent macro-world neighbor sector in `direction` (`NORTH`/`SOUTH`/`EAST`/`WEST`).
+#[pyfunction]
+#[pyo3(signature = (map_json, direction, seed=None))]
+pub fn continue_procedural_tactical_map_json(
+    map_json: &str,
+    direction: &str,
+    seed: Option<i64>,
+) -> PyResult<String> {
+    let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let dir = MapContinuationDir::from_code_str(direction)
+        .ok_or_else(|| to_py_err(format!("Invalid continuation direction '{direction}'")))?;
+    let outcome = continue_procedural_map(&map, dir, seed).map_err(to_py_err)?;
+    serde_json::to_string(&outcome.map).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
 /// Registers tactical map spatial bindings on the `satya_py` Python module.
 pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(check_tactical_token_collision, m)?)?;
@@ -274,6 +290,7 @@ pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(evaluate_tactical_los_and_cover, m)?)?;
     m.add_function(wrap_pyfunction!(inspect_tactical_map_point, m)?)?;
     m.add_function(wrap_pyfunction!(generate_procedural_tactical_sector_json, m)?)?;
+    m.add_function(wrap_pyfunction!(continue_procedural_tactical_map_json, m)?)?;
     Ok(())
 }
 
@@ -294,8 +311,14 @@ mod tests {
         .unwrap();
         let mut parsed = parse_flexible_map_json(&sector_json).unwrap();
         assert_eq!(parsed.grid_width, 12);
+        assert_eq!(parsed.world_sectors.len(), 1);
         assert!(!parsed.wall_edges.is_empty());
         assert!(!parsed.props.is_empty());
+
+        let east_json = continue_procedural_tactical_map_json(&sector_json, "EAST", Some(99)).unwrap();
+        let east_map = parse_flexible_map_json(&east_json).unwrap();
+        assert_eq!(east_map.world_sectors.len(), 2);
+        assert!(east_map.grid_width > 12);
 
         // Python map dict flexibility: token_id/grid_x/grid_y without top-level image_url.
         let py_dict_json = serde_json::json!({

@@ -137,6 +137,9 @@ pub struct GmMapUpdateRequest {
     /// Currently active floor index (`0` = Ground / `1F`, `-1` = `B1`, `1` = `2F`).
     #[serde(default)]
     pub active_floor: i32,
+    /// Macro-world stitched sector cells (`(sector_x, sector_y)`, bounds, zoning & `N/S/E/W` border profiles).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub world_sectors: Vec<WorldSectorCell>,
 }
 
 impl Default for GmMapUpdateRequest {
@@ -159,6 +162,7 @@ impl Default for GmMapUpdateRequest {
             surfaces: Vec::new(),
             floors: Vec::new(),
             active_floor: 0,
+            world_sectors: Vec::new(),
         }
     }
 }
@@ -255,6 +259,36 @@ impl GmMapUpdateRequest {
                 ..Default::default()
             });
         }
+    }
+
+    /// Resolves the stitched [`WorldSectorCell`] covering continuous coordinate `(x_cm, y_cm)`.
+    #[must_use]
+    pub fn sector_at_cm(&self, x_cm: i32, y_cm: i32) -> Option<&WorldSectorCell> {
+        if self.world_sectors.is_empty() {
+            return None;
+        }
+        let (bw_cm, bh_cm) = self.board_size_cm();
+        if x_cm < 0 || y_cm < 0 || x_cm > bw_cm || y_cm > bh_cm {
+            return None;
+        }
+        let clamped_x = x_cm.min(bw_cm.saturating_sub(1)).max(0);
+        let clamped_y = y_cm.min(bh_cm.saturating_sub(1)).max(0);
+        let cell_cm = self.cell_size_cm.max(25);
+        self.world_sectors
+            .iter()
+            .rev()
+            .find(|c| c.contains_cm(clamped_x, clamped_y, cell_cm))
+    }
+
+    /// Resolves the stitched [`WorldSectorCell`] covering metric position `(x_m, y_m)`.
+    #[must_use]
+    pub fn sector_at_m(&self, x_m: f32, y_m: f32) -> Option<&WorldSectorCell> {
+        if !x_m.is_finite() || !y_m.is_finite() {
+            return None;
+        }
+        let x_cm = (x_m * 100.0).floor() as i32;
+        let y_cm = (y_m * 100.0).floor() as i32;
+        self.sector_at_cm(x_cm, y_cm)
     }
 }
 

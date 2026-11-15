@@ -23,10 +23,19 @@ pub fn NotebookMapPane() -> impl IntoView {
                     <label class="inline-label" for="map-preset-select">
                         <span>"Sector"</span>
                         <select id="map-preset-select">
-                            {satya_engine::SectorPreset::ALL
+                            {satya_engine::SECTOR_PRESET_GROUPS
                                 .iter()
-                                .map(|preset| {
-                                    view! { <option value=preset.as_str()>{preset.label()}</option> }
+                                .map(|grp| {
+                                    view! {
+                                        <optgroup label=grp.label>
+                                            {grp.presets
+                                                .iter()
+                                                .map(|preset| {
+                                                    view! { <option value=preset.as_str()>{preset.label()}</option> }
+                                                })
+                                                .collect_view()}
+                                        </optgroup>
+                                    }
                                 })
                                 .collect_view()}
                         </select>

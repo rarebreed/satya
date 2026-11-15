@@ -59,6 +59,16 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::Jukebox,
             PropKind::DisplayRack,
             PropKind::CheckoutCounter,
+            PropKind::MallKiosk,
+        ],
+    ),
+    (
+        "Medical & Scientific",
+        &[
+            PropKind::HospitalBed,
+            PropKind::SurgicalTable,
+            PropKind::ImagingScanner,
+            PropKind::PrivacyCurtain,
         ],
     ),
     (
@@ -72,6 +82,11 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::StructuralPillar,
             PropKind::ElevatedCatwalk,
             PropKind::Stairwell,
+            PropKind::ConveyorBelt,
+            PropKind::IndustrialPress,
+            PropKind::PalletRack,
+            PropKind::Forklift,
+            PropKind::ShippingContainer,
         ],
     ),
     (
@@ -85,6 +100,8 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
             PropKind::FallenLog,
             PropKind::ParkBench,
             PropKind::PicnicTable,
+            PropKind::CropRow,
+            PropKind::PlanterTable,
             PropKind::Car,
             PropKind::UtilityVan,
         ],

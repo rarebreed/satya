@@ -147,6 +147,18 @@ prop_catalog! {
     Stairwell: 2 x 3, FloorLayer, ReinforcedConcrete, 110 cm, [0.50, 0.52, 0.56], floor;
     DisplayRack: 2 x 1, HalfCover, SheetSteel, 135 cm, [0.38, 0.42, 0.48], stretch;
     CheckoutCounter: 2 x 1, HalfCover, WoodFurniture, 95 cm, [0.46, 0.48, 0.52], stretch;
+    HospitalBed: 2 x 1, HalfCover, SheetSteel, 95 cm, [0.86, 0.89, 0.93];
+    SurgicalTable: 2 x 1, HalfCover, SheetSteel, 95 cm, [0.76, 0.84, 0.88];
+    ImagingScanner: 2 x 2, FullObstacle, ArmorSteel, 210 cm, [0.88, 0.90, 0.92];
+    PrivacyCurtain: 2 x 1, Concealment, Upholstery, 205 cm, [0.68, 0.82, 0.86], stretch;
+    MallKiosk: 3 x 2, HalfCover, SheetSteel, 115 cm, [0.32, 0.50, 0.66];
+    ConveyorBelt: 3 x 1, HalfCover, SheetSteel, 90 cm, [0.36, 0.40, 0.45], stretch;
+    IndustrialPress: 2 x 2, FullObstacle, ArmorSteel, 245 cm, [0.76, 0.46, 0.16];
+    PalletRack: 3 x 1, FullObstacle, ArmorSteel, 320 cm, [0.80, 0.42, 0.14], stretch;
+    Forklift: 2 x 1, FullObstacle, ArmorSteel, 205 cm, [0.88, 0.66, 0.14];
+    ShippingContainer: 6 x 2, FullObstacle, SheetSteel, 260 cm, [0.20, 0.42, 0.56], stretch;
+    CropRow: 3 x 1, Concealment, Foliage, 155 cm, [0.34, 0.58, 0.22], stretch;
+    PlanterTable: 2 x 1, HalfCover, SolidWood, 95 cm, [0.56, 0.40, 0.26], stretch;
 }
 
 /// Catalog entry for `kind`.

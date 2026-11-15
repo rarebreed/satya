@@ -376,6 +376,12 @@ mod tests {
                             | crate::tactical_map::SectorPreset::RuralCountryside
                             | crate::tactical_map::SectorPreset::LuxuryMansion
                             | crate::tactical_map::SectorPreset::DowntownCommercial
+                            | crate::tactical_map::SectorPreset::Hospital
+                            | crate::tactical_map::SectorPreset::ShoppingPlaza
+                            | crate::tactical_map::SectorPreset::Farms
+                            | crate::tactical_map::SectorPreset::BotanicalGarden
+                            | crate::tactical_map::SectorPreset::ManufacturingPlant
+                            | crate::tactical_map::SectorPreset::Warehouse
                     ) {
                         for p in &sec.props {
                             let (cx, cy) = p.center_m();

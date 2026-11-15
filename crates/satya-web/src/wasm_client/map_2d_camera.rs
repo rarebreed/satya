@@ -14,7 +14,7 @@ use crate::wasm_client::map_3d_input::{continue_session_map_in_direction, handle
 use crate::wasm_client::map_3d_wgpu::{current_3d_map_zoom_and_pan, zoom_3d_map_camera_by};
 use crate::wasm_client::map_hover_inspect::{satya_hover_map_point, satya_leave_map_hover};
 use crate::wasm_client::state::with_state;
-use satya_engine::tactical_map::can_continue_map;
+use satya_engine::tactical_map::{can_continue_map, preview_continuation_tooltip};
 use satya_schema::{
     GmMapUpdateRequest, MapContinuationDir, Participant, ParticipantKind, SessionRole,
 };
@@ -455,13 +455,13 @@ fn overlay_rect_dims() -> Option<ClientRect2d> {
     }
 }
 
-/// Synchronizes the 2D `viewBox` attributes, `#map-zoom-readout` badge, and edge continuation buttons.
+/// Synchronizes the 2D `viewBox` attributes, `#map-zoom-readout` badge, and edge continuation buttons/tooltips.
 pub fn sync_map_camera_and_edge_controls_dom() {
     let rect_aspect = overlay_rect_dims().map(|r| r.width / r.height);
     let can_author = local_user_can_author_map();
     let (zoom_3d, pan_3d) = current_3d_map_zoom_and_pan();
 
-    let (view_box, zoom_pct, battlemap_on, dirs) = with_map_ui(|ui| {
+    let (view_box, zoom_pct, battlemap_on, dirs, tooltips) = with_map_ui(|ui| {
         let board = ui.map.board_size_m();
         let vb = ui.camera_2d.view_box_attr(board, ui.map.cell_size_m());
         let zoom_val = if ui.view_battlemap { ui.camera_2d.zoom } else { zoom_3d };
@@ -472,7 +472,9 @@ pub fn sync_map_camera_and_edge_controls_dom() {
         } else {
             active_panned_continuation_dirs_3d(pan_3d, &ui.map)
         };
-        (vb, (zoom_val * 100.0).round() as i32, ui.view_battlemap, dirs)
+        let tooltips: Vec<(MapContinuationDir, String)> =
+            dirs.iter().map(|&d| (d, preview_continuation_tooltip(&ui.map, d))).collect();
+        (vb, (zoom_val * 100.0).round() as i32, ui.view_battlemap, dirs, tooltips)
     });
 
     if battlemap_on {
@@ -491,30 +493,27 @@ pub fn sync_map_camera_and_edge_controls_dom() {
         (MapContinuationDir::West, "btn-map-continue-west"),
         (MapContinuationDir::East, "btn-map-continue-east"),
     ] {
-        set_display(id, if dirs.contains(&dir) { "inline-flex" } else { "none" });
+        let visible = dirs.contains(&dir);
+        set_display(id, if visible { "inline-flex" } else { "none" });
+        if visible
+            && let Some((_, tip)) = tooltips.iter().find(|(d, _)| *d == dir)
+            && let Some(el) = get_element(id)
+        {
+            let _ = el.set_attribute("title", tip);
+        }
     }
 }
 
 /// Handles mouse-wheel zoom centered on cursor inside the 2D SVG battlemap.
 #[wasm_bindgen]
 pub fn satya_battlemap_wheel(delta_y: f32, client_x: f32, client_y: f32) {
-    let factor = if delta_y < 0.0 {
-        WHEEL_ZOOM_STEP
-    } else {
-        1.0 / WHEEL_ZOOM_STEP
-    };
+    let factor = if delta_y < 0.0 { WHEEL_ZOOM_STEP } else { 1.0 / WHEEL_ZOOM_STEP };
     let rect = overlay_rect_dims();
     with_map_ui_mut(|ui| {
         let board = ui.map.board_size_m();
         let cell_m = ui.map.cell_size_m();
         if let Some(r) = rect {
-            ui.camera_2d.zoom_around_client_point(
-                factor,
-                (client_x, client_y),
-                r,
-                board,
-                cell_m,
-            );
+            ui.camera_2d.zoom_around_client_point(factor, (client_x, client_y), r, board, cell_m);
         } else {
             ui.camera_2d.zoom = (ui.camera_2d.zoom * factor).clamp(MIN_ZOOM_2D, MAX_ZOOM_2D);
         }
@@ -553,25 +552,25 @@ pub fn satya_battlemap_mouse_move(buttons: i32, client_x: f32, client_y: f32) {
         if ui.camera_2d.dragging {
             let (sx, sy) = ui.camera_2d.drag_start_client;
             if !ui.camera_2d.drag_moved
-                && ((client_x - sx).abs() > DRAG_THRESHOLD_PX
-                    || (client_y - sy).abs() > DRAG_THRESHOLD_PX)
+                && ((client_x - sx).abs() > DRAG_THRESHOLD_PX || (client_y - sy).abs() > DRAG_THRESHOLD_PX)
             {
                 ui.camera_2d.drag_moved = true;
             }
             if ui.camera_2d.drag_moved {
                 let (lx, ly) = ui.camera_2d.drag_last_client;
-                let dx = client_x - lx;
-                let dy = client_y - ly;
                 ui.camera_2d.drag_last_client = (client_x, client_y);
-                let dir = ui
-                    .camera_2d
-                    .pan_by_client_delta(dx, dy, rect.width, rect.height, board, cell_m);
+                let dir = ui.camera_2d.pan_by_client_delta(
+                    client_x - lx,
+                    client_y - ly,
+                    rect.width,
+                    rect.height,
+                    board,
+                    cell_m,
+                );
                 return (true, dir.filter(|_| can_author), None);
             }
         }
-        let metric = ui
-            .camera_2d
-            .unproject_client_to_metric(client_x, client_y, rect, board, cell_m);
+        let metric = ui.camera_2d.unproject_client_to_metric(client_x, client_y, rect, board, cell_m);
         (false, None, metric)
     });
 
@@ -590,17 +589,14 @@ pub fn satya_battlemap_mouse_move(buttons: i32, client_x: f32, client_y: f32) {
 pub fn satya_battlemap_mouse_up(button: i32, client_x: f32, client_y: f32) {
     let rect = overlay_rect_dims();
     let click_metric = with_map_ui_mut(|ui| {
-        let should_click =
-            button == 0 && (!ui.camera_2d.dragging || !ui.camera_2d.drag_moved);
+        let should_click = button == 0 && (!ui.camera_2d.dragging || !ui.camera_2d.drag_moved);
         ui.camera_2d.clear_drag();
         if !should_click {
             return None;
         }
         let r = rect?;
-        let board = ui.map.board_size_m();
-        let cell_m = ui.map.cell_size_m();
         ui.camera_2d
-            .unproject_client_to_metric(client_x, client_y, r, board, cell_m)
+            .unproject_client_to_metric(client_x, client_y, r, ui.map.board_size_m(), ui.map.cell_size_m())
     });
     if let Some((fx, fy)) = click_metric {
         handle_map_point_clicked(fx, fy);
@@ -610,9 +606,7 @@ pub fn satya_battlemap_mouse_up(button: i32, client_x: f32, client_y: f32) {
 /// Cancels active 2D drag/overscroll state when the pointer leaves `#battlemap-overlay`.
 #[wasm_bindgen]
 pub fn satya_battlemap_mouse_leave() {
-    with_map_ui_mut(|ui| {
-        ui.camera_2d.clear_drag();
-    });
+    with_map_ui_mut(|ui| ui.camera_2d.clear_drag());
     satya_leave_map_hover();
 }
 
@@ -621,8 +615,7 @@ fn zoom_active_map_by(factor: f32) {
     if battlemap_on {
         let rect = overlay_rect_dims();
         with_map_ui_mut(|ui| {
-            let board = ui.map.board_size_m();
-            let cell_m = ui.map.cell_size_m();
+            let (board, cell_m) = (ui.map.board_size_m(), ui.map.cell_size_m());
             if let Some(r) = rect {
                 ui.camera_2d.zoom_around_client_point(
                     factor,
@@ -671,14 +664,11 @@ mod tests {
         let cam = BattlemapCamera2d::default();
         assert_eq!(cam.view_box_tuple((20.0, 14.0), 1.0), (-12.0, -12.0, 1304.0, 920.0));
         let fit_80x56 = BattlemapCamera2d::fit_zoom_for_board((80.0, 56.0));
-        assert!((fit_80x56 - 0.25).abs() < 1e-4, "expected 0.25x for 80x56, got {fit_80x56}");
+        assert!((fit_80x56 - 0.25).abs() < 1e-4, "expected 0.25x, got {fit_80x56}");
         let fit_64x48 = BattlemapCamera2d::fit_zoom_for_board((64.0, 48.0));
-        assert!((fit_64x48 - (14.0 / 48.0)).abs() < 1e-4, "expected 14/48 for 64x48, got {fit_64x48}");
+        assert!((fit_64x48 - (14.0 / 48.0)).abs() < 1e-4, "expected 14/48, got {fit_64x48}");
         let fit_240x180 = BattlemapCamera2d::fit_zoom_for_board((240.0, 180.0));
-        assert!(
-            fit_240x180 >= MIN_ZOOM_2D && (fit_240x180 - (14.0 / 180.0)).abs() < 1e-4,
-            "expected >= MIN_ZOOM_2D for 240x180, got {fit_240x180}"
-        );
+        assert!(fit_240x180 >= MIN_ZOOM_2D && (fit_240x180 - (14.0 / 180.0)).abs() < 1e-4);
     }
 
     #[test]
@@ -686,56 +676,32 @@ mod tests {
         let mut cam = BattlemapCamera2d::default();
         let board = (20.0, 14.0);
         // Ultra-wide 1000x400 container with xMidYMid meet letterboxing
-        let rect = ClientRect2d {
-            left: 100.0,
-            top: 50.0,
-            width: 1000.0,
-            height: 400.0,
-        };
+        let rect = ClientRect2d { left: 100.0, top: 50.0, width: 1000.0, height: 400.0 };
         let (cx, cy) = (rect.left + 680.0, rect.top + 135.0);
-        let before = cam
-            .unproject_client_to_metric(cx, cy, rect, board, 1.0)
-            .expect("unproject before zoom");
+        let before = cam.unproject_client_to_metric(cx, cy, rect, board, 1.0).expect("before");
         cam.zoom_around_client_point(2.0, (cx, cy), rect, board, 1.0);
-        let after = cam
-            .unproject_client_to_metric(cx, cy, rect, board, 1.0)
-            .expect("unproject after zoom");
-        assert!(
-            (before.0 - after.0).abs() < 1e-3 && (before.1 - after.1).abs() < 1e-3,
-            "anchor drifted across cursor zoom: {before:?} -> {after:?}"
-        );
+        let after = cam.unproject_client_to_metric(cx, cy, rect, board, 1.0).expect("after");
+        assert!((before.0 - after.0).abs() < 1e-3 && (before.1 - after.1).abs() < 1e-3);
     }
 
     #[test]
     fn overscroll_sign_and_stitch_camera_shift_preserve_world_focus() {
         let mut cam = BattlemapCamera2d::default();
         let board = (20.0, 14.0);
-        let (max_x, _) = cam.max_pan_m(board);
-        cam.pan_m.0 = max_x;
+        cam.pan_m.0 = cam.max_pan_m(board).0;
         // Dragging mouse left (`dx_px = -70`) twice while clamped East triggers East continuation
         assert_eq!(cam.pan_by_client_delta(-70.0, 0.0, 800.0, 560.0, board, 1.0), None);
-        assert_eq!(
-            cam.pan_by_client_delta(-70.0, 0.0, 800.0, 560.0, board, 1.0),
-            Some(MapContinuationDir::East)
-        );
+        assert_eq!(cam.pan_by_client_delta(-70.0, 0.0, 800.0, 560.0, board, 1.0), Some(MapContinuationDir::East));
 
         // North overscroll: dragging mouse down (`dy_px = +70`) twice while clamped North
         cam.pan_m = (0.0, -cam.max_pan_m(board).1);
         assert_eq!(cam.pan_by_client_delta(0.0, 70.0, 800.0, 560.0, board, 1.0), None);
-        assert_eq!(
-            cam.pan_by_client_delta(0.0, 70.0, 800.0, 560.0, board, 1.0),
-            Some(MapContinuationDir::North)
-        );
+        assert_eq!(cam.pan_by_client_delta(0.0, 70.0, 800.0, 560.0, board, 1.0), Some(MapContinuationDir::North));
 
         // West stitch keeps the original room camera anchor shifted (+20m West added -> world center +10m)
-        let mut west_cam = BattlemapCamera2d {
-            pan_m: (-3.0, 1.0),
-            zoom: 1.5,
-            ..Default::default()
-        };
+        let mut west_cam = BattlemapCamera2d { pan_m: (-3.0, 1.0), zoom: 1.5, ..Default::default() };
         west_cam.adjust_after_stitch((20.0, 14.0), (40.0, 14.0), MapContinuationDir::West, false);
-        assert!((west_cam.pan_m.0 - 7.0).abs() < 1e-4, "expected +7.0m pan, got {}", west_cam.pan_m.0);
-        assert!((west_cam.pan_m.1 - 1.0).abs() < 1e-4);
+        assert!((west_cam.pan_m.0 - 7.0).abs() < 1e-4 && (west_cam.pan_m.1 - 1.0).abs() < 1e-4);
     }
 
     #[test]
@@ -753,9 +719,6 @@ mod tests {
         let mut cam = BattlemapCamera2d::default();
         assert!(active_panned_continuation_dirs_2d(&cam, &map, None).is_empty());
         cam.pan_m.0 = 4.0;
-        assert_eq!(
-            active_panned_continuation_dirs_2d(&cam, &map, None),
-            vec![MapContinuationDir::East]
-        );
+        assert_eq!(active_panned_continuation_dirs_2d(&cam, &map, None), vec![MapContinuationDir::East]);
     }
 }

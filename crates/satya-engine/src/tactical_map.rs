@@ -27,6 +27,10 @@ use crate::map_outdoor_gen::{OutdoorStyle, generate_outdoor_sector};
 use crate::map_sector_gen::{FacilitySectorStyle, generate_facility_sector};
 use crate::map_surface_geom::topmost_surface_at_m;
 pub use crate::map_continuation::*;
+pub use crate::map_world_graph::{
+    NeighborSectorSpec, compute_sector_boundary_profile, preview_continuation_tooltip,
+    select_neighbor_sector_transition,
+};
 pub use crate::tactical_map_edges::{EdgeObstruction, WallEdgeIndex};
 use crate::tactical_map_geom::{
     circle_collides_obstacles, intersect_segment_edge, intersect_segment_prop,
@@ -69,7 +73,7 @@ define_coded_enum! {
     /// Canonical procedural sector layout presets for `1.0m` tactical battlemaps.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
-    pub enum SectorPreset [count = 18] {
+    pub enum SectorPreset [count = 25] {
         #[default]
         ResidentialApartment => {
             code: "residential_apartment",
@@ -123,13 +127,13 @@ define_coded_enum! {
             code: "docking_bay",
             label: "Industrial Logistics & Loading Bay",
             subtitle: "Warehouse cargo deck with elevated catwalk, shipping office, utility van & hazmat spill",
-            aliases: ["cargo", "hangar", "bay", "warehouse", "industrial", "plant"],
+            aliases: ["cargo", "hangar", "bay", "spaceport", "freight_bay"],
         },
         MedLabSector => {
             code: "med_lab",
             label: "Trauma Clinic & Bio-Containment Lab",
             subtitle: "Partitioned triage ward, surgical bay & quarantine containment lab with bio-spill",
-            aliases: ["medlab", "medical", "lab", "clinic", "hospital"],
+            aliases: ["medlab", "medical", "medical_lab", "lab", "clinic", "biolab"],
         },
         DerelictCorridor => {
             code: "derelict_corridor",
@@ -179,8 +183,96 @@ define_coded_enum! {
             subtitle: "Glazed sidewalk storefronts with grocery, boutique, pharmacy & cafe bays plus upper lofts",
             aliases: ["downtown_commercial", "retail", "stores", "downtown", "strip_mall", "shopping"],
         },
+        Hospital => {
+            code: "hospital",
+            label: "Hospital & Trauma Wing",
+            subtitle: "Multi-floor medical center with ambulance bay, ER triage, patient wards, surgical & imaging suites",
+            aliases: ["trauma", "emergency_room", "er", "medical_center", "infirmary"],
+        },
+        ShoppingPlaza => {
+            code: "shopping_plaza",
+            label: "Outdoor Shopping Plaza",
+            subtitle: "Curving landscaped parking lot, shaded canopy promenade, patio cafes & varied retail storefronts",
+            aliases: ["plaza", "retail_plaza", "outdoor_plaza", "power_center"],
+        },
+        ShoppingMall => {
+            code: "shopping_mall",
+            label: "Indoor Shopping Mall",
+            subtitle: "Multi-floor enclosed galleria with concourse kiosks, department anchors, boutiques, food court & skybridge",
+            aliases: ["mall", "galleria", "arcade_mall", "concourse"],
+        },
+        Farms => {
+            code: "farms",
+            label: "Agricultural Farmstead",
+            subtitle: "Contoured crop fields, irrigation ditch & culvert bridge, tractor lane, farmhouse, barn & equipment yard",
+            aliases: ["farm", "farmland", "crops", "orchard", "barn"],
+        },
+        BotanicalGarden => {
+            code: "botanical_garden",
+            label: "Botanical Garden & Conservatory",
+            subtitle: "Glazed glass conservatory with planter benches, winding stone trails, ornamental flora beds & stream bridges",
+            aliases: ["botanical", "conservatory", "arboretum", "greenhouse"],
+        },
+        ManufacturingPlant => {
+            code: "manufacturing_plant",
+            label: "Manufacturing & Assembly Plant",
+            subtitle: "Conveyor assembly runs, hydraulic presses, catwalk supervisor office & exterior freight loading apron",
+            aliases: ["manufacturing", "factory", "plant", "assembly_line", "industrial", "foundry"],
+        },
+        Warehouse => {
+            code: "warehouse",
+            label: "Logistics & High-Bay Warehouse",
+            subtitle: "High-bay pallet rack aisles, forklifts, shipping containers, dispatch office & loading dock apron",
+            aliases: ["depot", "distribution_center", "storage_warehouse", "fulfillment"],
+        },
     }
 }
+
+/// UI optgroup bucket grouping [`SectorPreset`] entries for the `<select id="map-preset-select">` control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SectorPresetGroup {
+    pub label: &'static str,
+    pub presets: &'static [SectorPreset],
+}
+
+/// Canonical grouped `<optgroup>` hierarchy covering all `25` [`SectorPreset`] variants without overlap.
+pub const SECTOR_PRESET_GROUPS: &[SectorPresetGroup] = &[
+    SectorPresetGroup {
+        label: "Urban & Commercial",
+        presets: &[
+            SectorPreset::UrbanCrossroads, SectorPreset::DowntownCommercial,
+            SectorPreset::ShoppingPlaza, SectorPreset::ShoppingMall,
+            SectorPreset::CornerBar, SectorPreset::OfficeFloor,
+        ],
+    },
+    SectorPresetGroup {
+        label: "Residential & Estates",
+        presets: &[
+            SectorPreset::UrbanResidential, SectorPreset::ProjectsHighDensity,
+            SectorPreset::SuburbanNeighborhood, SectorPreset::ResidentialApartment,
+            SectorPreset::LuxuryMansion, SectorPreset::GardenEstate,
+            SectorPreset::RuralCountryside,
+        ],
+    },
+    SectorPresetGroup {
+        label: "Civic & Industrial",
+        presets: &[SectorPreset::Hospital, SectorPreset::ManufacturingPlant, SectorPreset::Warehouse],
+    },
+    SectorPresetGroup {
+        label: "Natural & Agricultural",
+        presets: &[
+            SectorPreset::WoodedPark, SectorPreset::WoodlandCreek,
+            SectorPreset::BotanicalGarden, SectorPreset::Farms, SectorPreset::RoadsideDitch,
+        ],
+    },
+    SectorPresetGroup {
+        label: "Sci-Fi & Orbital",
+        presets: &[
+            SectorPreset::DockingBay, SectorPreset::DerelictCorridor,
+            SectorPreset::MedLabSector, SectorPreset::OrbitalAirlock,
+        ],
+    },
+];
 
 impl SectorPreset {
     /// Furnished edge-wall interior style (`None` for outdoor/facility presets).
@@ -210,6 +302,22 @@ impl SectorPreset {
     #[must_use]
     pub const fn has_structural_wall_edges(self) -> bool {
         !matches!(self, Self::WoodedPark | Self::WoodlandCreek | Self::RoadsideDitch)
+    }
+
+    /// Whether this preset generates an enclosed perimeter shell of walls around its entire `(0..w, 0..h)` boundary.
+    #[must_use]
+    pub const fn is_perimeter_walled_shell(self) -> bool {
+        matches!(
+            self,
+            Self::ResidentialApartment
+                | Self::OfficeFloor
+                | Self::CornerBar
+                | Self::DockingBay
+                | Self::MedLabSector
+                | Self::DerelictCorridor
+                | Self::OrbitalAirlock
+                | Self::ShoppingMall
+        )
     }
 
     /// Whether this preset routes through decoupled zoning × economic-tier builders.
@@ -260,7 +368,14 @@ impl SectorPreset {
             | Self::SuburbanNeighborhood
             | Self::RuralCountryside
             | Self::LuxuryMansion
-            | Self::DowntownCommercial => (48, 36),
+            | Self::DowntownCommercial
+            | Self::Hospital
+            | Self::ShoppingPlaza
+            | Self::ShoppingMall
+            | Self::Farms
+            | Self::BotanicalGarden
+            | Self::ManufacturingPlant
+            | Self::Warehouse => (48, 36),
         }
     }
 
@@ -306,6 +421,15 @@ pub fn generate_procedural_sector_with_options(
     );
     if preset.is_zoned_preset() {
         return crate::map_gen_zoning::generate_zoned_sector(preset, w, h, seed, economic_tier, zoning);
+    }
+    if matches!(preset, SectorPreset::Hospital | SectorPreset::ShoppingPlaza | SectorPreset::ShoppingMall) {
+        return crate::map_gen_civic_retail::generate_civic_or_retail_sector(preset, w, h, seed);
+    }
+    if matches!(
+        preset,
+        SectorPreset::Farms | SectorPreset::BotanicalGarden | SectorPreset::ManufacturingPlant | SectorPreset::Warehouse
+    ) {
+        return crate::map_gen_agro_industrial::generate_agro_or_industrial_sector(preset, w, h, seed);
     }
     if let Some(style) = preset.interior_style() {
         return generate_furnished_interior(style, w, h, seed);
@@ -532,67 +656,48 @@ pub fn build_procedural_map_request_with_options(
         .to_string();
 
     let sara_y = (mid_y - 1).max(1);
-    let tokens = vec![
-        TokenPlacement {
-            entity_id: "tok-sara".to_string(),
-            label: "Sara (Valkyrie)".to_string(),
-            x: 2,
-            y: sara_y,
-            visibility: MessageVisibility::Public,
-        },
-        TokenPlacement {
-            entity_id: "tok-marcus".to_string(),
-            label: "Marcus (Recon)".to_string(),
-            x: 2,
-            y: mid_y,
-            visibility: MessageVisibility::Public,
-        },
-        TokenPlacement {
-            entity_id: "tok-secops-1".to_string(),
-            label: "SecOps Sentry".to_string(),
-            x: w - 3,
-            y: mid_y,
-            visibility: MessageVisibility::Public,
-        },
+    let starters = [
+        ("tok-sara", "Sara (Valkyrie)", 2, sara_y, "valkyrie_rig", "#38bdf8", 90, "aimed"),
+        ("tok-marcus", "Marcus (Recon)", 2, mid_y, "recon_mk4", "#22d3ee", 90, "idle"),
+        ("tok-secops-1", "SecOps Sentry", w - 3, mid_y, "secops_sentry", "#f87171", 270, "aimed"),
     ];
-    let token_visuals = vec![
-        TokenVisualSpec {
-            entity_id: "tok-sara".to_string(),
-            model_preset: "valkyrie_rig".to_string(),
-            color_hex: "#38bdf8".to_string(),
-            facing_deg: 90,
+    let tokens: Vec<TokenPlacement> = starters
+        .iter()
+        .map(|&(id, label, x, y, _, _, _, _)| TokenPlacement {
+            entity_id: id.to_string(),
+            label: label.to_string(),
+            x,
+            y,
+            visibility: MessageVisibility::Public,
+        })
+        .collect();
+    let token_visuals: Vec<TokenVisualSpec> = starters
+        .iter()
+        .map(|&(id, _, x, y, rig, hex, facing_deg, pose)| TokenVisualSpec {
+            entity_id: id.to_string(),
+            model_preset: rig.to_string(),
+            color_hex: hex.to_string(),
+            facing_deg,
             elevation_cm: 0,
             floor_index: 0,
-            stance_pose: "aimed".to_string(),
+            stance_pose: pose.to_string(),
             portrait_url: None,
-            pos_x_cm: Some(250),
-            pos_y_cm: Some(sara_y * 100 + 50),
-        },
-        TokenVisualSpec {
-            entity_id: "tok-marcus".to_string(),
-            model_preset: "recon_mk4".to_string(),
-            color_hex: "#22d3ee".to_string(),
-            facing_deg: 90,
-            elevation_cm: 0,
-            floor_index: 0,
-            stance_pose: "idle".to_string(),
-            portrait_url: None,
-            pos_x_cm: Some(250),
-            pos_y_cm: Some(mid_y * 100 + 50),
-        },
-        TokenVisualSpec {
-            entity_id: "tok-secops-1".to_string(),
-            model_preset: "secops_sentry".to_string(),
-            color_hex: "#f87171".to_string(),
-            facing_deg: 270,
-            elevation_cm: 0,
-            floor_index: 0,
-            stance_pose: "aimed".to_string(),
-            portrait_url: None,
-            pos_x_cm: Some((w - 3) * 100 + 50),
-            pos_y_cm: Some(mid_y * 100 + 50),
-        },
-    ];
+            pos_x_cm: Some(x * 100 + 50),
+            pos_y_cm: Some(y * 100 + 50),
+        })
+        .collect();
+
+    let root_cell = crate::map_world_graph::build_root_world_sector_cell(
+        preset,
+        w,
+        h,
+        seed,
+        zoning,
+        economic_tier,
+        &wall_edges,
+        &surfaces,
+        &props,
+    );
 
     GmMapUpdateRequest {
         map_id: map_id.to_string(),
@@ -618,6 +723,7 @@ pub fn build_procedural_map_request_with_options(
         surfaces,
         floors,
         active_floor,
+        world_sectors: vec![root_cell],
     }
 }
 

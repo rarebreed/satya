@@ -90,7 +90,7 @@ _NON_SOLID_PROP_KINDS = {
     "STAIRWELL",
     "HAZARD_SPILL",
 }
-_CONCEALMENT_PROP_KINDS = {"BUSH", "MEDIUM_TREE", "LARGE_TREE"}
+_CONCEALMENT_PROP_KINDS = {"BUSH", "MEDIUM_TREE", "LARGE_TREE", "PRIVACY_CURTAIN", "CROP_ROW"}
 
 
 def _repo_root() -> Path:
@@ -136,12 +136,23 @@ def get_session_llm_config(session_id: str) -> SessionLlmConfig | None:
 
 
 def infer_sector_preset(theme: str) -> str:
-    """Map a free-text scene theme to one of the 18 canonical `satya-engine` `SectorPreset` codes."""
+    """Map a free-text scene theme to one of the 25 canonical `satya-engine` `SectorPreset` codes."""
     low = (theme or "").lower()
+    words = set(low.replace("-", " ").replace("_", " ").split())
     if any(k in low for k in ("creek", "stream", "brook", "river", "ravine")):
         return "woodland_creek"
     if any(k in low for k in ("ditch", "trench", "culvert", "country lane")):
         return "roadside_ditch"
+    if any(k in low for k in ("med_lab", "med-lab", "medlab", "biolab")):
+        return "med_lab"
+    if any(k in low for k in ("hospital", "medical center", "emergency room", "inpatient", "operating room", "triage")):
+        return "hospital"
+    if any(k in low for k in ("shopping_mall", "shopping mall", "enclosed mall", "galleria", "food court")):
+        return "shopping_mall"
+    if any(k in low for k in ("shopping_plaza", "shopping plaza", "outdoor plaza", "retail plaza", "lifestyle center", "plaza")):
+        return "shopping_plaza"
+    if any(k in low for k in ("botanical_garden", "botanical garden", "botanical", "conservatory", "arboretum", "greenhouse")):
+        return "botanical_garden"
     if any(k in low for k in ("luxury mansion", "luxury_mansion", "manor", "penthouse estate")):
         return "luxury_mansion"
     if any(k in low for k in ("projects_high_density", "projects", "public housing", "tenement", "housing block")):
@@ -150,6 +161,27 @@ def infer_sector_preset(theme: str) -> str:
         return "suburban_neighborhood"
     if any(k in low for k in ("rural_countryside", "rural", "countryside", "farmhouse", "homestead")):
         return "rural_countryside"
+    if any(k in low for k in ("farms", "farmland", "cropland", "orchard", "pasture", "acreage", "barn")) or "farm" in words:
+        return "farms"
+    if any(k in low for k in ("warehouse", "distribution center", "logistics", "pallet rack", "freight depot")):
+        return "warehouse"
+    if (
+        any(
+            k in low
+            for k in (
+                "manufacturing_plant",
+                "manufacturing plant",
+                "manufacturing",
+                "factory",
+                "assembly line",
+                "foundry",
+                "stamping",
+                "industrial plant",
+            )
+        )
+        or "plant" in words
+    ):
+        return "manufacturing_plant"
     if any(
         k in low
         for k in (
@@ -175,7 +207,7 @@ def infer_sector_preset(theme: str) -> str:
         return "office_floor"
     if any(k in low for k in ("apartment", "flat", "safehouse", "house", "home", "residential", "motel")):
         return "residential_apartment"
-    if any(k in low for k in ("dock", "cargo", "hangar", "bay", "warehouse", "factory", "plant")):
+    if any(k in low for k in ("dock", "cargo", "hangar", "bay")):
         return "docking_bay"
     if any(k in low for k in ("med", "trauma", "lab", "clinic", "ward")):
         return "med_lab"
@@ -825,6 +857,9 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
         "token_visuals": wire_visuals,
         "notes": map_state.get("notes"),
     }
+    for opt_key in ("surfaces", "floors", "active_floor", "world_sectors"):
+        if opt_key in map_state:
+            wire_payload[opt_key] = map_state[opt_key]
     url = f"{_signaling_base_url()}/api/gm/sessions/{session_id}/map"
     headers = _gm_headers()
     if httpx is not None:

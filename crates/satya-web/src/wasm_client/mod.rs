@@ -39,6 +39,7 @@ pub mod map_2d_art;
 pub mod map_2d_art_furniture;
 pub mod map_2d_art_overlay;
 pub mod map_2d_art_props;
+pub mod map_2d_art_props_facility;
 pub mod map_2d_art_surfaces;
 pub mod map_2d_art_textures;
 pub mod map_2d_art_walls;

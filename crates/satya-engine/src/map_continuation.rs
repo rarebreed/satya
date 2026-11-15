@@ -14,8 +14,14 @@ use satya_schema::{
 };
 
 use crate::map_dressing::{PropObstruction, make_prop_at_cm, prop_spec};
+use crate::map_world_graph::{
+    bootstrap_world_sectors_if_empty, compute_sector_boundary_profile, format_stitched_world_notes,
+    orient_sector_to_shared_road, partition_continuation_seam_by_world_sectors,
+    select_neighbor_sector_transition,
+};
 use crate::tactical_map::{
-    ProceduralSector, SectorPreset, build_procedural_map_request, generate_procedural_sector,
+    ProceduralSector, SectorPreset, build_procedural_map_request,
+    generate_procedural_sector_with_options,
 };
 use crate::tactical_map_geom::{
     all_walkable_areas_connected, migrate_legacy_tiles_to_vector, prop_intersects_circle,
@@ -229,7 +235,7 @@ pub(crate) fn mirror_prop_axis(p: MapPropPlacement, cw: i32, ch: i32, horizontal
     }
 }
 
-fn mirror_sector(sec: &mut ProceduralSector, cw: i32, ch: i32, horizontal_flip: bool) {
+pub(crate) fn mirror_sector(sec: &mut ProceduralSector, cw: i32, ch: i32, horizontal_flip: bool) {
     for e in &mut sec.wall_edges {
         mirror_edge_axis(e, cw, ch, horizontal_flip);
     }
@@ -267,8 +273,8 @@ fn reconcile_chunk_entry_seam(
         new_h,
         dir,
     } = seam;
-    let walled_shell = preset.has_structural_wall_edges()
-        && !matches!(preset, SectorPreset::UrbanCrossroads | SectorPreset::GardenEstate);
+    let source_seam_walled = slice.edges.iter().filter(|e| e.is_some()).count() * 2 >= slice.t_len.max(1) as usize;
+    let walled_shell = preset.is_perimeter_walled_shell() || source_seam_walled;
     let door_mat = if preset.interior_style().is_some() {
         MaterialClass::SolidWood
     } else {
@@ -301,17 +307,17 @@ fn reconcile_chunk_entry_seam(
         }
     }
 
-    // If a walled interior/facility expands across a doorless edge (typically North or South),
-    // pick the cleanest walkable boundary slot on the existing side and cut a connecting doorway.
+    // If a walled interior/facility expands across a doorless edge, pick the cleanest seam slot and cut a doorway.
     if walled_shell && !seam_has_door && slice.t_len >= 3 {
         let center = slice.t_len / 2;
         let pick_dt = (1..(slice.t_len - 1))
             .min_by_key(|&dt| {
                 let clear_score = i32::from(!slice.src_clear[dt as usize]) * 100;
                 let mat_score = match slice.edges[dt as usize].map(|(k, _)| k) {
+                    Some(WallEdgeKind::Wall) => 0,
                     Some(WallEdgeKind::Window) => 2,
-                    Some(WallEdgeKind::Wall) | None => 0,
-                    _ => 1,
+                    Some(_) => 1,
+                    None => 20,
                 };
                 clear_score + mat_score * 5 + (dt - center).abs()
             })
@@ -323,16 +329,18 @@ fn reconcile_chunk_entry_seam(
             MapContinuationDir::South => (t_abs, y_off, EdgeSide::North),
             MapContinuationDir::North => (t_abs, ch, EdgeSide::North),
         };
-        upsert_edge(
-            out_edges,
-            MapWallEdge {
-                x: seam_x,
-                y: seam_y,
-                side: seam_side,
-                kind: WallEdgeKind::DoorClosed,
-                material: door_mat,
-            },
-        );
+        if slice.edges[pick_dt as usize].is_some() || preset.is_perimeter_walled_shell() {
+            upsert_edge(
+                out_edges,
+                MapWallEdge {
+                    x: seam_x,
+                    y: seam_y,
+                    side: seam_side,
+                    kind: WallEdgeKind::DoorClosed,
+                    material: door_mat,
+                },
+            );
+        }
         let t_local = pick_dt as f32 + 0.5;
         let (px, py) = match dir {
             MapContinuationDir::East => (0.5, t_local),
@@ -458,7 +466,7 @@ pub fn continue_procedural_map(
         base.tiles.clear();
     }
 
-    let preset = base
+    let root_preset = base
         .theme_preset
         .as_deref()
         .and_then(SectorPreset::from_code_str)
@@ -469,31 +477,11 @@ pub fn continue_procedural_map(
     let cell_m = cell_cm as f32 / 100.0;
 
     let strip_depth = continuation_strip_depth(existing, dir);
-    let ((new_w, new_h), (dx_cells, dy_cells), (added_w, added_h), chunks) = match dir {
-        MapContinuationDir::East => (
-            (old_w + strip_depth, old_h),
-            (0, 0),
-            (strip_depth, old_h),
-            partition_span_into_chunks(old_h, 26),
-        ),
-        MapContinuationDir::West => (
-            (old_w + strip_depth, old_h),
-            (strip_depth, 0),
-            (strip_depth, old_h),
-            partition_span_into_chunks(old_h, 26),
-        ),
-        MapContinuationDir::South => (
-            (old_w, old_h + strip_depth),
-            (0, 0),
-            (old_w, strip_depth),
-            partition_span_into_chunks(old_w, 32),
-        ),
-        MapContinuationDir::North => (
-            (old_w, old_h + strip_depth),
-            (0, strip_depth),
-            (old_w, strip_depth),
-            partition_span_into_chunks(old_w, 32),
-        ),
+    let ((new_w, new_h), (dx_cells, dy_cells), (added_w, added_h)) = match dir {
+        MapContinuationDir::East => ((old_w + strip_depth, old_h), (0, 0), (strip_depth, old_h)),
+        MapContinuationDir::West => ((old_w + strip_depth, old_h), (strip_depth, 0), (strip_depth, old_h)),
+        MapContinuationDir::South => ((old_w, old_h + strip_depth), (0, 0), (old_w, strip_depth)),
+        MapContinuationDir::North => ((old_w, old_h + strip_depth), (0, strip_depth), (old_w, strip_depth)),
     };
 
     let prev_active_floor = base.active_floor;
@@ -504,10 +492,13 @@ pub fn continue_procedural_map(
         }
     }
 
+    let mut existing_sectors = bootstrap_world_sectors_if_empty(&base);
+    let chunk_plans = partition_continuation_seam_by_world_sectors(&existing_sectors, old_w, old_h, dir);
+
     // Snapshot boundary features on `base` before translating coordinates.
-    let seam_slices: Vec<BoundarySeamSlice> = chunks
+    let seam_slices: Vec<BoundarySeamSlice> = chunk_plans
         .iter()
-        .map(|&(t0, t_len)| extract_seam_slice(&base, dir, t0, t_len))
+        .map(|p| extract_seam_slice(&base, dir, p.t0, p.t_len))
         .collect();
 
     // Preserve continuous token cm positions before resizing.
@@ -523,7 +514,7 @@ pub fn continue_procedural_map(
     base.grid_width = new_w;
     base.grid_height = new_h;
     base.seed = Some(seed);
-    base.theme_preset = Some(preset.as_str().to_string());
+    base.theme_preset = Some(root_preset.as_str().to_string());
 
     for e in &mut base.wall_edges {
         e.x += dx_cells;
@@ -534,6 +525,9 @@ pub fn continue_procedural_map(
     }
     for s in &mut base.surfaces {
         *s = s.translated(dx_cells * cell_cm, dy_cells * cell_cm);
+    }
+    for c in &mut existing_sectors {
+        c.shift_origin(dx_cells, dy_cells);
     }
     crate::map_continuation_ribbons::translate_floor_levels(
         &mut base.floors,
@@ -551,31 +545,55 @@ pub fn continue_procedural_map(
 
     let mut new_floor_props = Vec::new();
     let mut new_solid_props = Vec::new();
-    for (idx, slice) in seam_slices.iter().enumerate() {
+    let mut last_chunk_preset = root_preset;
+    for (idx, (plan, slice)) in chunk_plans.iter().zip(seam_slices.iter()).enumerate() {
         let chunk_seed = next_continuation_seed(seed, idx as i32 + 1, slice.t_len, dir);
+        let spec = select_neighbor_sector_transition(
+            &plan.source_cell,
+            &existing_sectors,
+            plan.target_sector_coord,
+            dir,
+            chunk_seed,
+        );
+        last_chunk_preset = spec.preset;
         let (x_off, y_off, cw, ch) = match dir {
             MapContinuationDir::East => (old_w, slice.t0, strip_depth, slice.t_len),
             MapContinuationDir::West => (0, slice.t0, strip_depth, slice.t_len),
             MapContinuationDir::South => (slice.t0, old_h, slice.t_len, strip_depth),
             MapContinuationDir::North => (slice.t0, 0, slice.t_len, strip_depth),
         };
-        let mut sec = generate_procedural_sector(preset, cw, ch, chunk_seed);
-        align_chunk_ribbons(&mut sec, preset, &slice.ribbons, cw, ch, dir, mirror_sector);
+        let mut sec = generate_procedural_sector_with_options(
+            spec.preset,
+            cw,
+            ch,
+            chunk_seed,
+            spec.economic_tier,
+            spec.zoning,
+        );
+        orient_sector_to_shared_road(&mut sec, cw, ch, spec.preferred_road_side, mirror_sector);
+        align_chunk_ribbons(&mut sec, spec.preset, &slice.ribbons, cw, ch, dir, mirror_sector);
         reconcile_chunk_entry_seam(
             &mut sec,
-            preset,
+            spec.preset,
             slice,
-            SeamPlacement {
-                x_off,
-                y_off,
-                cw,
-                ch,
-                new_w,
-                new_h,
-                dir,
-            },
+            SeamPlacement { x_off, y_off, cw, ch, new_w, new_h, dir },
             &mut base.wall_edges,
         );
+        let boundary = compute_sector_boundary_profile(cw, ch, &sec.wall_edges, &sec.surfaces, &sec.props);
+        existing_sectors.push(satya_schema::WorldSectorCell {
+            sector_x: plan.target_sector_coord.0,
+            sector_y: plan.target_sector_coord.1,
+            origin_x: x_off,
+            origin_y: y_off,
+            width: cw,
+            height: ch,
+            preset: spec.preset.as_str().to_string(),
+            zoning: spec.zoning,
+            economic_tier: spec.economic_tier,
+            zone_depth: spec.zone_depth,
+            seed: chunk_seed,
+            boundary,
+        });
         for mut e in sec.wall_edges {
             e.x += x_off;
             e.y += y_off;
@@ -600,6 +618,7 @@ pub fn continue_procedural_map(
             cell_cm,
         );
     }
+    base.world_sectors = existing_sectors;
 
     // Interleave surface decals underneath existing solid props so rendering Z-order stays crisp.
     let first_solid = base
@@ -616,7 +635,7 @@ pub fn continue_procedural_map(
         MapContinuationDir::South => old_h,
         MapContinuationDir::North => strip_depth,
     };
-    ensure_seam_connectivity(new_w, new_h, &mut base.wall_edges, &mut base.props, preset, dir, seam_coord);
+    ensure_seam_connectivity(new_w, new_h, &mut base.wall_edges, &mut base.props, last_chunk_preset, dir, seam_coord);
 
     // Also verify sibling seams when the continued strip spans > 1 chunk.
     for slice in seam_slices.iter().skip(1) {
@@ -625,7 +644,7 @@ pub fn continue_procedural_map(
         } else {
             MapContinuationDir::East
         };
-        ensure_seam_connectivity(new_w, new_h, &mut base.wall_edges, &mut base.props, preset, sib_dir, slice.t0);
+        ensure_seam_connectivity(new_w, new_h, &mut base.wall_edges, &mut base.props, last_chunk_preset, sib_dir, slice.t0);
     }
 
     if !base.floors.is_empty() {
@@ -640,12 +659,12 @@ pub fn continue_procedural_map(
         }
     }
 
-    base.notes = Some(format!(
-        "{} · Continuous Metric Arena ({}m x {}m, Seed {})",
-        preset.subtitle(),
+    base.notes = Some(format_stitched_world_notes(
+        &base.world_sectors,
+        root_preset,
         new_w,
         new_h,
-        seed
+        seed,
     ));
 
     Ok(MapContinuationOutcome {
