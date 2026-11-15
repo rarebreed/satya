@@ -16,6 +16,7 @@ pylance = ">=12.0.0, <13"
 fastavro = ">=1.9.0"
 pyarrow = ">=18.0.0"
 pytest = ">=9.0.0"
+pytest-xdist = ">=3.6.0"
 langgraph = ">=0.4.0"
 langchain-core = ">=0.3.0"
 langchain-ollama = ">=0.3.0"
@@ -50,7 +51,7 @@ test-storage = { cmd = "cargo test -p satya-storage", description = "Run Apache 
 test-signaling = { cmd = "cargo test -p satya-signaling", description = "Run Argon2 auth, session password, disconnect, and private routing tests" }
 test-web = { cmd = "cargo test -p satya-web", depends-on = ["check-wasm"], description = "Run Leptos SSR and Rust/Wasm client unit tests (after wasm32 compile gate)" }
 test-rust = { cmd = "cargo test --workspace", description = "Run all Rust unit, integration, and doc tests" }
-test-py = { cmd = "pytest tests", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Run Python Avro & PyLance ML pipeline unit tests" }
+test-py = { cmd = "pytest -n auto --dist loadfile tests", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Run Python Avro, AI GM, and PyLance ML pipeline unit tests in parallel" }
 test = { depends-on = ["check-wasm", "test-rust", "test-py"], description = "Run the full polyglot (Rust + Python) test suite, gated on the satya-web wasm32 compile check" }
 
 # --- Server & Runtime ---

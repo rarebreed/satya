@@ -102,8 +102,14 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
+_OFFLINE_SIGNALING_VALUES = frozenset({"", "0", "false", "none", "off", "offline", "disabled"})
+
+
 def _signaling_base_url() -> str:
-    return os.environ.get("SATYA_SIGNALING_URL", "http://127.0.0.1:3000").rstrip("/")
+    raw = os.environ.get("SATYA_SIGNALING_URL", "http://127.0.0.1:3000").strip()
+    if raw.lower() in _OFFLINE_SIGNALING_VALUES:
+        return ""
+    return raw.rstrip("/")
 
 
 def _gm_service_token() -> str:
@@ -876,11 +882,16 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
     for opt_key in ("surfaces", "floors", "active_floor", "world_sectors"):
         if opt_key in map_state:
             wire_payload[opt_key] = map_state[opt_key]
-    url = f"{_signaling_base_url()}/api/gm/sessions/{session_id}/map"
+    base = _signaling_base_url()
+    if not base:
+        return
+    url = f"{base}/api/gm/sessions/{session_id}/map"
     headers = _gm_headers()
+    loopback = "127.0.0.1" in url or "localhost" in url
     if httpx is not None:
         try:
-            with httpx.Client(timeout=2.0) as client:
+            timeout: Any = httpx.Timeout(2.0, connect=0.25) if loopback else 2.0
+            with httpx.Client(timeout=timeout) as client:
                 client.post(url, headers=headers, json=wire_payload)
                 return
         except Exception:
@@ -892,7 +903,7 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
             headers=headers,
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=2.0):
+        with urllib.request.urlopen(req, timeout=0.25 if loopback else 2.0):
             pass
     except Exception:
         pass

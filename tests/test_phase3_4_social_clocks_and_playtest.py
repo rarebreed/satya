@@ -651,5 +651,15 @@ def test_post_merge_9axis_vectors_faction_aliases_and_clock_id_mapping() -> None
         assert len(clocks) == 5
         daise_clock = next(c for c in clocks if c["faction_id"] == "daise")
         assert daise_clock["progress"] == 2
+
+        # 4. Offline signaling mode short-circuits HTTP calls without waiting on loopback SYN timeouts
+        import time
+        from satya_ml.ai_gm.tools import _http_get_json, _http_post_json, _signaling_base_url
+
+        assert _signaling_base_url() == ""
+        t0 = time.perf_counter()
+        assert _http_get_json(f"{_signaling_base_url()}/api/gm/sessions/{sid}/context") is None
+        assert _http_post_json(f"{_signaling_base_url()}/api/gm/sessions/{sid}/chat", {}) is None
+        assert (time.perf_counter() - t0) < 0.05
     finally:
         reset_session_npcs(sid)

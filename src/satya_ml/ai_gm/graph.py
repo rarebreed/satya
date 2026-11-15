@@ -330,10 +330,18 @@ def _classify_tool_tier(tool_name: str) -> tuple[str, str]:
 
 def fetch_session_context_from_rust(session_id: str) -> dict[str, Any] | None:
     """Query `GET /api/gm/sessions/:id/context` from `satya-signaling` when reachable."""
+    base = _signaling_base_url()
+    if not base:
+        return None
+    timeout: Any = (
+        httpx.Timeout(2.0, connect=0.25)
+        if ("127.0.0.1" in base or "localhost" in base)
+        else 2.0
+    )
     try:
-        with httpx.Client(timeout=2.0) as client:
+        with httpx.Client(timeout=timeout) as client:
             resp = client.get(
-                f"{_signaling_base_url()}/api/gm/sessions/{session_id}/context",
+                f"{base}/api/gm/sessions/{session_id}/context",
                 headers=_gm_headers(),
             )
             if resp.status_code == 200:
@@ -345,10 +353,18 @@ def fetch_session_context_from_rust(session_id: str) -> dict[str, Any] | None:
 
 def report_trajectory_to_rust(session_id: str, payload: dict[str, Any]) -> None:
     """Emit an `AiGmTrajectoryEvent` to `POST /api/gm/sessions/:id/trajectory` (Topic 8)."""
+    base = _signaling_base_url()
+    if not base:
+        return
+    timeout: Any = (
+        httpx.Timeout(2.0, connect=0.25)
+        if ("127.0.0.1" in base or "localhost" in base)
+        else 2.0
+    )
     try:
-        with httpx.Client(timeout=2.0) as client:
+        with httpx.Client(timeout=timeout) as client:
             client.post(
-                f"{_signaling_base_url()}/api/gm/sessions/{session_id}/trajectory",
+                f"{base}/api/gm/sessions/{session_id}/trajectory",
                 headers=_gm_headers(),
                 json=payload,
             )
@@ -1243,42 +1259,49 @@ def build_ai_gm_graph(
                     if (is_ooc_turn and operating_mode != "co_pilot")
                     else "GM_NARRATION"
                 )
-                try:
-                    with httpx.Client(timeout=2.5) as client:
-                        chat_resp = client.post(
-                            f"{_signaling_base_url()}/api/gm/sessions/{session_id}/chat",
-                            headers=_gm_headers(),
-                            json={
-                                "visibility": visibility,
-                                "recipient_user_ids": recipients,
-                                "channel_context": reply_channel_ctx,
-                                "body": reply_text,
-                                "model_id": cfg.model_id,
-                                "speaker_override": None,
-                            },
-                        )
-                        if chat_resp.status_code == 200:
-                            try:
-                                chat_json = chat_resp.json()
-                                if isinstance(chat_json, dict):
-                                    meta = chat_json.get("metadata")
-                                    if isinstance(meta, dict) and meta.get("event_id"):
-                                        record_emitted_event_id(str(meta["event_id"]))
-                                    elif chat_json.get("message_id"):
-                                        record_emitted_event_id(str(chat_json["message_id"]))
-                            except Exception:
-                                pass
-                        logger.info(
-                            "[publish_gm_response] Posted GM reply (visibility=%s, recipients=%s, status=%d)",
-                            visibility,
-                            recipients,
-                            chat_resp.status_code,
-                        )
-                except Exception as exc:
-                    logger.warning(
-                        "[publish_gm_response] Could not post GM reply to satya-signaling: %s",
-                        exc,
+                base = _signaling_base_url()
+                if base:
+                    chat_timeout: Any = (
+                        httpx.Timeout(2.5, connect=0.25)
+                        if ("127.0.0.1" in base or "localhost" in base)
+                        else 2.5
                     )
+                    try:
+                        with httpx.Client(timeout=chat_timeout) as client:
+                            chat_resp = client.post(
+                                f"{base}/api/gm/sessions/{session_id}/chat",
+                                headers=_gm_headers(),
+                                json={
+                                    "visibility": visibility,
+                                    "recipient_user_ids": recipients,
+                                    "channel_context": reply_channel_ctx,
+                                    "body": reply_text,
+                                    "model_id": cfg.model_id,
+                                    "speaker_override": None,
+                                },
+                            )
+                            if chat_resp.status_code == 200:
+                                try:
+                                    chat_json = chat_resp.json()
+                                    if isinstance(chat_json, dict):
+                                        meta = chat_json.get("metadata")
+                                        if isinstance(meta, dict) and meta.get("event_id"):
+                                            record_emitted_event_id(str(meta["event_id"]))
+                                        elif chat_json.get("message_id"):
+                                            record_emitted_event_id(str(chat_json["message_id"]))
+                                except Exception:
+                                    pass
+                            logger.info(
+                                "[publish_gm_response] Posted GM reply (visibility=%s, recipients=%s, status=%d)",
+                                visibility,
+                                recipients,
+                                chat_resp.status_code,
+                            )
+                    except Exception as exc:
+                        logger.warning(
+                            "[publish_gm_response] Could not post GM reply to satya-signaling: %s",
+                            exc,
+                        )
 
             started_ms = state.get("turn_started_ms") or (time.perf_counter() * 1000.0)
             latency_ms = int(max(1.0, (time.perf_counter() * 1000.0) - started_ms))

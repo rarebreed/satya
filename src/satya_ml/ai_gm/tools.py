@@ -67,8 +67,24 @@ def load_ai_gm_toml_config(repo_root: Path | None = None) -> dict[str, Any]:
         return {}
 
 
+_OFFLINE_SIGNALING_VALUES = frozenset({"", "0", "false", "none", "off", "offline", "disabled"})
+
+
 def _signaling_base_url() -> str:
-    return os.environ.get("SATYA_SIGNALING_URL", "http://127.0.0.1:3000").rstrip("/")
+    raw = os.environ.get("SATYA_SIGNALING_URL", "http://127.0.0.1:3000").strip()
+    if raw.lower() in _OFFLINE_SIGNALING_VALUES:
+        return ""
+    return raw.rstrip("/")
+
+
+def _is_loopback_url(url: str) -> bool:
+    return "127.0.0.1" in url or "localhost" in url
+
+
+def _httpx_timeout(url: str, timeout: float) -> Any:
+    if httpx is not None and _is_loopback_url(url):
+        return httpx.Timeout(timeout, connect=min(timeout, 0.25))
+    return timeout
 
 
 def _gm_service_token() -> str:
@@ -102,10 +118,12 @@ def _extract_and_record_event_id(res_dict: dict[str, Any]) -> None:
 
 def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> dict[str, Any] | None:
     """POST JSON to `url` with GM service headers, returning parsed JSON on 200 OK or None on failure."""
+    if not url.startswith(("http://", "https://")):
+        return None
     headers = _gm_headers()
     if httpx is not None:
         try:
-            with httpx.Client(timeout=timeout) as client:
+            with httpx.Client(timeout=_httpx_timeout(url, timeout)) as client:
                 resp = client.post(url, headers=headers, json=payload)
                 if resp.status_code == 200:
                     data = dict(resp.json())
@@ -115,6 +133,7 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> 
             return None
         return None
 
+    eff_timeout = min(timeout, 0.25) if _is_loopback_url(url) else timeout
     try:
         req = urllib.request.Request(
             url,
@@ -122,7 +141,7 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> 
             headers=headers,
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=eff_timeout) as resp:
             if resp.status == 200:
                 data = dict(json.loads(resp.read().decode("utf-8")))
                 _extract_and_record_event_id(data)
@@ -134,10 +153,12 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> 
 
 def _http_get_json(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
     """GET JSON from `url` with GM service headers, returning parsed JSON on 200 OK or None on failure."""
+    if not url.startswith(("http://", "https://")):
+        return None
     headers = _gm_headers()
     if httpx is not None:
         try:
-            with httpx.Client(timeout=timeout) as client:
+            with httpx.Client(timeout=_httpx_timeout(url, timeout)) as client:
                 resp = client.get(url, headers=headers)
                 if resp.status_code == 200:
                     return dict(resp.json())
@@ -145,9 +166,10 @@ def _http_get_json(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
             return None
         return None
 
+    eff_timeout = min(timeout, 0.25) if _is_loopback_url(url) else timeout
     try:
         req = urllib.request.Request(url, headers=headers, method="GET")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=eff_timeout) as resp:
             if resp.status == 200:
                 return dict(json.loads(resp.read().decode("utf-8")))
     except Exception:
@@ -315,21 +337,14 @@ def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
         _SESSION_NPCS[session_id] = load_all_npc_profiles()
         _SESSION_NPC_PACKS[session_id] = active_pack
     npcs = _SESSION_NPCS[session_id]
-    if httpx is not None:
-        try:
-            with httpx.Client(timeout=1.5) as client:
-                resp = client.get(
-                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/npcs",
-                    headers=_gm_headers(),
-                )
-                if resp.status_code == 200:
-                    data = dict(resp.json())
-                    for raw_entry in data.get("npcs") or []:
-                        if isinstance(raw_entry, dict) and raw_entry.get("character_id"):
-                            norm = _normalize_remote_npc_entry(raw_entry)
-                            npcs[norm["npc_id"]] = norm
-        except Exception:
-            pass
+    base = _signaling_base_url()
+    if base:
+        data = _http_get_json(f"{base}/api/gm/sessions/{session_id}/npcs", timeout=1.5)
+        if isinstance(data, dict):
+            for raw_entry in data.get("npcs") or []:
+                if isinstance(raw_entry, dict) and raw_entry.get("character_id"):
+                    norm = _normalize_remote_npc_entry(raw_entry)
+                    npcs[norm["npc_id"]] = norm
     return npcs
 
 
@@ -387,7 +402,8 @@ def update_npc_state(
         npc["immediate_agenda"] = immediate_agenda
     npcs[target_key] = npc
 
-    if httpx is not None:
+    base = _signaling_base_url()
+    if base and httpx is not None:
         patch_body: dict[str, Any] = {}
         if disposition is not None:
             patch_body["disposition"] = disposition
@@ -398,10 +414,11 @@ def update_npc_state(
                 f"{npc.get('disposition', 'steady')} · Fat {npc['fatigue']}/Shock {npc['wound_shock']}"
             )
         if patch_body:
+            url = f"{base}/api/gm/sessions/{session_id}/npcs/{target_key}"
             try:
-                with httpx.Client(timeout=1.5) as client:
+                with httpx.Client(timeout=_httpx_timeout(url, 1.5)) as client:
                     client.patch(
-                        f"{_signaling_base_url()}/api/gm/sessions/{session_id}/npcs/{target_key}",
+                        url,
                         headers=_gm_headers(),
                         json=patch_body,
                     )
@@ -1004,19 +1021,12 @@ def read_gm_documents(
 ) -> str:
     """Read sanitized `GM_ONLY` documents (character dossiers, backstories, Google Docs/Sheets) uploaded to the GM in this session."""
     docs = get_session_gm_docs(session_id)
-    if not docs and httpx is not None:
-        try:
-            with httpx.Client(timeout=2.0) as client:
-                resp = client.get(
-                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/context",
-                    headers=_gm_headers(),
-                )
-                if resp.status_code == 200:
-                    data = dict(resp.json())
-                    docs = list(data.get("gm_documents") or [])
-                    set_session_gm_docs(session_id, docs)
-        except Exception:
-            pass
+    base = _signaling_base_url()
+    if not docs and base:
+        data = _http_get_json(f"{base}/api/gm/sessions/{session_id}/context", timeout=2.0)
+        if isinstance(data, dict):
+            docs = list(data.get("gm_documents") or [])
+            set_session_gm_docs(session_id, docs)
 
     if not docs:
         return f"No GM_ONLY documents have been uploaded for session '{session_id}'."
@@ -1057,19 +1067,12 @@ def lookup_character_sheet(
 ) -> dict[str, Any]:
     """Look up a bound player Character Sheet (`CharacterSheetRecord` — characteristics, aptitudes, skills, weapons, armor, anatomical trauma, fatigue, psyche) for `session_id` without bloating the prompt."""
     chars = get_session_characters(session_id)
-    if not chars and httpx is not None:
-        try:
-            with httpx.Client(timeout=2.0) as client:
-                resp = client.get(
-                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/context",
-                    headers=_gm_headers(),
-                )
-                if resp.status_code == 200:
-                    data = dict(resp.json())
-                    chars = list(data.get("session_characters") or [])
-                    set_session_characters(session_id, chars)
-        except Exception:
-            pass
+    base = _signaling_base_url()
+    if not chars and base:
+        data = _http_get_json(f"{base}/api/gm/sessions/{session_id}/context", timeout=2.0)
+        if isinstance(data, dict):
+            chars = list(data.get("session_characters") or [])
+            set_session_characters(session_id, chars)
 
     if not chars:
         return {
@@ -1114,19 +1117,12 @@ def lookup_character_sheet(
 @tool
 def get_combat_tracker_state(session_id: str = "default") -> dict[str, Any]:
     """Read the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.5s`, `1 Window = 20 Ticks = 10.0s`) and combatant readiness for `session_id`."""
-    if httpx is not None:
-        try:
-            with httpx.Client(timeout=2.0) as client:
-                resp = client.get(
-                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/combat",
-                    headers=_gm_headers(),
-                )
-                if resp.status_code == 200:
-                    tracker = dict(resp.json())
-                    set_session_combat_tracker(session_id, tracker)
-                    return tracker
-        except Exception:
-            pass
+    base = _signaling_base_url()
+    if base:
+        tracker = _http_get_json(f"{base}/api/gm/sessions/{session_id}/combat", timeout=2.0)
+        if isinstance(tracker, dict):
+            set_session_combat_tracker(session_id, tracker)
+            return tracker
     return get_session_combat_tracker(session_id)
 
 
@@ -1339,11 +1335,13 @@ def search_gm_memory_and_docs(
         else str(query or "")
     )
     norm_scope = (scope or "ALL").strip().upper()
-    if httpx is not None:
+    base = _signaling_base_url()
+    if base and httpx is not None:
+        url = f"{base}/api/gm/sessions/{session_id}/lookup"
         try:
-            with httpx.Client(timeout=2.5) as client:
+            with httpx.Client(timeout=_httpx_timeout(url, 2.5)) as client:
                 resp = client.get(
-                    f"{_signaling_base_url()}/api/gm/sessions/{session_id}/lookup",
+                    url,
                     params={"q": query_str, "scope": norm_scope},
                     headers=_gm_headers(),
                 )

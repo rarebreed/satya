@@ -462,11 +462,17 @@ def build_ai_player_graph(
         auto_trigger_gm = bool(trigger.get("auto_trigger_gm", True))
 
         with span_scope("publish_player_turn"):
-            if reply_text and not already_sent_chat:
+            base = _signaling_base_url()
+            if reply_text and not already_sent_chat and base:
+                timeout: Any = (
+                    httpx.Timeout(3.0, connect=0.25)
+                    if ("127.0.0.1" in base or "localhost" in base)
+                    else 3.0
+                )
                 try:
-                    with httpx.Client(timeout=3.0) as client:
+                    with httpx.Client(timeout=timeout) as client:
                         resp = client.post(
-                            f"{_signaling_base_url()}/api/player-ai/sessions/{session_id}/chat",
+                            f"{base}/api/player-ai/sessions/{session_id}/chat",
                             headers=_gm_headers(),
                             json={
                                 "user_id": player_user_id,
