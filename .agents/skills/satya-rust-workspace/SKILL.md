@@ -4,24 +4,25 @@ description: >-
   Universal Rust architecture, modularization, and anti-bloat steering guide for all
   crates in the Satya workspace (satya-schema, satya-engine, satya-web, satya-py,
   satya-signaling, satya-storage). Activate this skill whenever creating, modifying,
-  or refactoring any Rust (.rs), stylesheet (.css), or documentation (.md) file in
-  the repository.
+  or refactoring any Rust (.rs), Python (.py), stylesheet (.css), or documentation
+  (.md) file in the repository.
 ---
 
 # Satya Rust Workspace Steering Skill (`satya-rust-workspace`)
 
 Canonical universal rules for **every** crate in the Satya Rust workspace (`crates/*`).
 
-Crate-specific workflows and module maps:
+Domain-specific workflows and module maps:
 - **`satya-rust-engine`**: [`.agents/skills/satya-rust-engine/SKILL.md`](../satya-rust-engine/SKILL.md)
 - **`satya-rust-web`**: [`.agents/skills/satya-rust-web/SKILL.md`](../satya-rust-web/SKILL.md)
+- **`satya-python-ai`**: [`.agents/skills/satya-python-ai/SKILL.md`](../satya-python-ai/SKILL.md)
 
 ---
 
 ## 1. Single-Read Modularization (`~300–750` Lines / `<= 45 KB`)
 
 1. **Design Focused Submodules Upfront**:
-   - Aim to keep `.rs`, `.css`, and `.md` files within **`~300–750` lines (`<= 45 KB`)** so every file reads cleanly inside a single `800`-line / `46,080`-byte `read_file` call.
+   - Aim to keep `.rs`, `.py`, `.css`, and `.md` files within **`~300–750` lines (`<= 45 KB`)** so every file reads cleanly inside a single `800`-line / `46,080`-byte `read_file` call.
    - When a file outgrows `~750` lines, split along domain/view boundaries into companion modules rather than golf-compressing code or re-editing over a few kilobytes.
 2. **Flat Companion Re-Exports Without Duplicate Glob Imports**:
    - When splitting `foo.rs` into `foo.rs` + `foo_sub.rs`, put `pub use crate::...::foo_sub::*;` in `foo.rs` and declare `pub mod foo_sub;` in the parent `lib.rs` / `mod.rs` (keeping `pub use foo::*;` in `lib.rs` / `mod.rs` without ALSO adding `pub use foo_sub::*;` there, which triggers `unused_imports` under `clippy -- -D warnings`).
@@ -62,22 +63,25 @@ Crate-specific workflows and module maps:
 
 ---
 
-## 5. Offline Verification Workflow (Windows Sandbox)
+## 5. Pixi Verification & Git Worktree Workflow
 
-- **Core Rust Workspace (5 crates)**:
+Always invoke tools via `pixi run ...` (never call `.pixi/envs/default/*.exe` directly or hardcode external `uv` Python paths). Run Cargo invocations sequentially so `target/` locks do not contend:
+
+- **Core Rust Workspace (5 non-PyO3 crates)**:
   ```powershell
-  cargo clippy --offline -p satya-schema -p satya-engine -p satya-web -p satya-signaling -p satya-storage --all-targets -- -D warnings
-  cargo test --offline -p satya-schema -p satya-engine -p satya-web -p satya-signaling -p satya-storage
+  pixi run cargo clippy --offline -p satya-schema -p satya-engine -p satya-web -p satya-signaling -p satya-storage --all-targets -- -D warnings
+  pixi run cargo test --offline -p satya-schema -p satya-engine -p satya-web -p satya-signaling -p satya-storage
   ```
-- **PyO3 Extension (`satya-py`)**: set `PYO3_PYTHON` before running Cargo, use `--no-default-features` for `clippy`/`test` (keep default features for `cargo build`), and sync `src\satya_py.pyd`:
+- **PyO3 Extension (`satya-py`)**: use `--no-default-features` (`auto-initialize` off) for Rust unit tests/clippy, and `pixi run build-py` to compile release `src/satya_py.pyd`:
   ```powershell
-  $env:PYO3_PYTHON = 'C:\Users\hapah\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\python.exe'
-  cargo clippy --offline --no-default-features -p satya-py --all-targets -- -D warnings
-  cargo test --offline --no-default-features -p satya-py
-  cargo build --offline -p satya-py
-  Copy-Item -Force target\debug\satya_py.dll src\satya_py.pyd
+  pixi run cargo clippy --offline --no-default-features -p satya-py --all-targets -- -D warnings
+  pixi run cargo test --offline --no-default-features -p satya-py
+  pixi run build-py
   ```
-- **Python Test Suite**: disable cache writes inside the offline sandbox:
+- **Python Static Check, RAG Index & Parallel Pytest (`pytest-xdist`)**:
   ```powershell
-  uv run --offline pytest -p no:cacheprovider tests/test_dice_probabilities.py tests/test_ai_gm_multiplayer_and_npcs.py
+  pixi run pyrefly check src/satya_ml tests
+  pixi run build-rag
+  pixi run test-py
   ```
+- **Git Worktrees**: Branch worktrees (`worktrees/satya/<branch>`) reference the primary `.git` directory where `main` is checked out (`git worktree list`). Never run `git checkout main` inside a branch worktree; merge `main` into a feature worktree with `git merge main`, and merge a feature branch back into `main` via `git -C <main-worktree-path> merge <branch>`.
