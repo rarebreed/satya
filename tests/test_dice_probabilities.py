@@ -444,6 +444,35 @@ def test_satya_py_contested_cascade_and_plotly_builders() -> None:
     assert len(fig_spec.data) == 6
 
 
+def test_satya_py_stub_matches_compiled_extension_exports() -> None:
+    """Verify that `src/satya_py.pyi` declares every public class, function, and member of `satya_py`."""
+    import ast
+    import satya_py
 
+    stub_path = Path(__file__).resolve().parent.parent / "src" / "satya_py.pyi"
+    tree = ast.parse(stub_path.read_text(encoding="utf-8"))
 
+    stub_exports = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef)) and not node.name.startswith("_")
+    }
+    runtime_exports = {name for name in dir(satya_py) if not name.startswith("_")}
+    assert stub_exports == runtime_exports
+
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+            stub_members: set[str] = set()
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and not item.name.startswith("_"):
+                    stub_members.add(item.name)
+                elif (
+                    isinstance(item, ast.AnnAssign)
+                    and isinstance(item.target, ast.Name)
+                    and not item.target.id.startswith("_")
+                ):
+                    stub_members.add(item.target.id)
+            cls_obj = getattr(satya_py, node.name)
+            runtime_members = {name for name in dir(cls_obj) if not name.startswith("_")}
+            assert stub_members == runtime_members, f"Stub mismatch on {node.name}"
 

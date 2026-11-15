@@ -21,9 +21,9 @@ from satya_ml.dice_probabilities import (
 )
 
 try:
-    import satya_py as _satya_py  # type: ignore[import-not-found]
+    import satya_py as _satya_py
 except ImportError:
-    _satya_py = None
+    _satya_py = None  # type: ignore[assignment]
 
 BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
     {

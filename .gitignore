@@ -6,7 +6,12 @@ target/
 pkg/
 data/
 
+# compiled Python extensions (built into src/ via `pixi run build-py`)
+*.pyd
+*.so
+
 **/__pycache__/
+**/.ipynb_checkpoints/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
