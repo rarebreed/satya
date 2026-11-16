@@ -303,8 +303,35 @@ impl AuthAndSessionManager {
         }
 
         let roster_vec: Vec<Participant> = roster.values().cloned().collect();
-        let gm_documents = self.load_persistent_gm_docs_from_db(sid).await;
-        let gm_memories = self.load_persistent_gm_memories_from_db(sid).await;
+        let mut gm_documents = self.load_persistent_gm_docs_from_db(sid).await;
+        let mut gm_memories = self.load_persistent_gm_memories_from_db(sid).await;
+        if !campaign_tag.trim().is_empty() && !campaign_tag.eq_ignore_ascii_case(sid) {
+            for doc in self.load_persistent_gm_docs_from_db(&campaign_tag).await {
+                if !gm_documents.iter().any(|d| d.doc_id == doc.doc_id) {
+                    gm_documents.push(doc);
+                }
+            }
+            for mem in self
+                .load_persistent_gm_memories_from_db(&campaign_tag)
+                .await
+            {
+                let dup_npc = mem.memory_id.starts_with("mem_npc_")
+                    && crate::gm_persistence::extract_npc_name_from_memory_title(&mem.title)
+                        .is_some_and(|n| {
+                            gm_memories.iter().any(|existing| {
+                                existing.memory_id.starts_with("mem_npc_")
+                                    && crate::gm_persistence::extract_npc_name_from_memory_title(
+                                        &existing.title,
+                                    )
+                                    .as_deref()
+                                        == Some(n.as_str())
+                            })
+                        });
+                if !dup_npc && !gm_memories.iter().any(|m| m.memory_id == mem.memory_id) {
+                    gm_memories.push(mem);
+                }
+            }
+        }
         let combat_tracker = self.load_or_init_combat_tracker(sid, &roster_vec).await;
 
         let rehydrated = ProtectedSession {
@@ -505,9 +532,9 @@ impl AuthAndSessionManager {
             let guard = self.sessions.read().await;
             if let Some(s) = guard.get(sid) {
                 (
-                    s.active_map.as_ref().map(|m| {
-                        crate::map_handlers::filter_map_for_role(m, participant.role)
-                    }),
+                    s.active_map
+                        .as_ref()
+                        .map(|m| crate::map_handlers::filter_map_for_role(m, participant.role)),
                     Some(s.combat_tracker.clone()),
                 )
             } else {

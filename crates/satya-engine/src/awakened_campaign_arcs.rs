@@ -192,10 +192,26 @@ fn compute_horizon_weights_and_directive(ledger: &mut CampaignConspiracyLedger) 
         .count() as i32;
     let saved_count = ledger.saved_key_npcs.len() as i32;
 
-    let mut w_public = (20 + audit_count * 18 + ledger.cumulative_trs_drift * 6 + ledger.cumulative_cps_drift * 3 + saved_count * 4).max(5);
-    let w_sanctuary = (25 + witnessed_count * 8 + ledger.cumulative_cps_drift * 6 - ledger.cumulative_trs_drift.min(0) * 3 + saved_count * 3).max(5);
-    let w_detente = (30 + if ledger.inducted_pillar == Some(SatyangPillarId::Avalokitesvara) { 10 } else { 0 }).max(5);
-    let mut w_fracture = (20 - ledger.cumulative_trs_drift * 5 - ledger.cumulative_cps_drift * 5 - audit_count * 4).max(5);
+    let mut w_public = (20
+        + audit_count * 18
+        + ledger.cumulative_trs_drift * 6
+        + ledger.cumulative_cps_drift * 3
+        + saved_count * 4)
+        .max(5);
+    let w_sanctuary = (25 + witnessed_count * 8 + ledger.cumulative_cps_drift * 6
+        - ledger.cumulative_trs_drift.min(0) * 3
+        + saved_count * 3)
+        .max(5);
+    let w_detente = (30
+        + if ledger.inducted_pillar == Some(SatyangPillarId::Avalokitesvara) {
+            10
+        } else {
+            0
+        })
+    .max(5);
+    let mut w_fracture =
+        (20 - ledger.cumulative_trs_drift * 5 - ledger.cumulative_cps_drift * 5 - audit_count * 4)
+            .max(5);
 
     if ledger.cumulative_trs_drift < 0 && ledger.cumulative_cps_drift < 0 {
         w_fracture += 25;
@@ -204,8 +220,14 @@ fn compute_horizon_weights_and_directive(ledger: &mut CampaignConspiracyLedger) 
 
     let raw = [
         (Arc3EndingHorizon::PublicWitnessAccord.as_str(), w_public),
-        (Arc3EndingHorizon::HiddenBodhisattvaSanctuary.as_str(), w_sanctuary),
-        (Arc3EndingHorizon::UneasyContainmentDetente.as_str(), w_detente),
+        (
+            Arc3EndingHorizon::HiddenBodhisattvaSanctuary.as_str(),
+            w_sanctuary,
+        ),
+        (
+            Arc3EndingHorizon::UneasyContainmentDetente.as_str(),
+            w_detente,
+        ),
         (Arc3EndingHorizon::CascadeFracture.as_str(), w_fracture),
     ];
     let total: i32 = raw.iter().map(|(_, v)| *v).sum();
@@ -225,7 +247,11 @@ fn compute_horizon_weights_and_directive(ledger: &mut CampaignConspiracyLedger) 
         .iter()
         .max_by_key(|(_, v)| *v)
         .map(|(k, _)| k.clone())
-        .unwrap_or_else(|| Arc3EndingHorizon::UneasyContainmentDetente.as_str().to_string());
+        .unwrap_or_else(|| {
+            Arc3EndingHorizon::UneasyContainmentDetente
+                .as_str()
+                .to_string()
+        });
     ledger.horizon_probabilities_pct = map;
 
     ledger.arc_pacing_directive = match ledger.current_arc {
@@ -277,8 +303,15 @@ pub fn apply_conspiracy_ledger_update(
     if let Some(cps_d) = update.cps_drift_delta {
         ledger.cumulative_cps_drift += cps_d;
     }
-    if let Some(npc) = update.saved_npc_name.as_deref().map(str::trim).filter(|s| !s.is_empty())
-        && !ledger.saved_key_npcs.iter().any(|n| n.eq_ignore_ascii_case(npc))
+    if let Some(npc) = update
+        .saved_npc_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        && !ledger
+            .saved_key_npcs
+            .iter()
+            .any(|n| n.eq_ignore_ascii_case(npc))
     {
         ledger.saved_key_npcs.push(npc.to_string());
     }
@@ -287,7 +320,11 @@ pub fn apply_conspiracy_ledger_update(
         && let Some(rec) = ledger.nodes.iter_mut().find(|n| n.node_id == node_id)
     {
         let next_tier = update.discovery_tier.unwrap_or_else(|| {
-            if update.audit_proof_id.as_deref().is_some_and(|s| !s.trim().is_empty()) {
+            if update
+                .audit_proof_id
+                .as_deref()
+                .is_some_and(|s| !s.trim().is_empty())
+            {
                 ConspiracyDiscoveryTier::AuditVerified
             } else {
                 ConspiracyDiscoveryTier::Witnessed
@@ -296,7 +333,11 @@ pub fn apply_conspiracy_ledger_update(
         if next_tier > rec.discovery_tier {
             rec.discovery_tier = next_tier;
         }
-        if let Some(pid) = update.audit_proof_id.as_deref().map(str::trim).filter(|s| !s.is_empty())
+        if let Some(pid) = update
+            .audit_proof_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
             && !rec.linked_audit_proof_ids.iter().any(|p| p == pid)
         {
             rec.linked_audit_proof_ids.push(pid.to_string());
@@ -304,7 +345,12 @@ pub fn apply_conspiracy_ledger_update(
                 rec.discovery_tier = ConspiracyDiscoveryTier::AuditVerified;
             }
         }
-        if let Some(note) = update.summary_note.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(note) = update
+            .summary_note
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             rec.summary = note.to_string();
         }
     }
@@ -391,7 +437,8 @@ pub fn evaluate_polycrisis_grid_step(
 ) -> PolycrisisGridEvaluation {
     let mut next = state.clone();
     next.covert_compute_draw_kw = shard_draw_kw;
-    let fragile_grid = tier == EconomicTier::LowIncome || zoning == ZoningContext::ProjectsHighDensity;
+    let fragile_grid =
+        tier == EconomicTier::LowIncome || zoning == ZoningContext::ProjectsHighDensity;
     let fragility_pct: u8 = if fragile_grid { 15 } else { 0 };
 
     let mut daise_alert = false;
@@ -412,14 +459,18 @@ pub fn evaluate_polycrisis_grid_step(
         PolycrisisGridMode::DivertClinicOrBlockPower => {
             next.clinic_equipment_throttled = true;
             next.people_first_unrest_pct = next.people_first_unrest_pct.saturating_add(12).min(100);
-            next.grid_brownout_stress_pct = next.grid_brownout_stress_pct.saturating_add(5).min(100);
+            next.grid_brownout_stress_pct =
+                next.grid_brownout_stress_pct.saturating_add(5).min(100);
             cps_friction = true;
             crowd_ext = 1;
             "Diverted clinic/apartment breakers mask the compute spike from DAISE smart-meters but starve medical triage—triggering CPS Psyche Friction & neighborhood anger.".to_string()
         }
         PolycrisisGridMode::UnmaskedFullGridDraw => {
             let load_add = ((shard_draw_kw / 2).clamp(15, 55) as u8).saturating_add(fragility_pct);
-            next.grid_brownout_stress_pct = next.grid_brownout_stress_pct.saturating_add(load_add).min(100);
+            next.grid_brownout_stress_pct = next
+                .grid_brownout_stress_pct
+                .saturating_add(load_add)
+                .min(100);
             next.clinic_equipment_throttled = false;
             if next.grid_brownout_stress_pct >= 65 {
                 daise_alert = true;
@@ -427,7 +478,8 @@ pub fn evaluate_polycrisis_grid_step(
             if next.grid_brownout_stress_pct >= 85 {
                 next.blackout_active = true;
                 sabotage_trip = true;
-                next.people_first_unrest_pct = next.people_first_unrest_pct.saturating_add(18).min(100);
+                next.people_first_unrest_pct =
+                    next.people_first_unrest_pct.saturating_add(18).min(100);
                 darkness_ext = 3;
                 crowd_ext = 2;
                 "CRITICAL BLACKOUT: Unmasked kW surge + transformer failure plunged the block into darkness (+3 Delta_ext Vision), triggering DAISE meter alerts & Humanis escalation!".to_string()
@@ -496,11 +548,29 @@ pub fn evaluate_tradecraft_transmission(
     let c_eff = params.control_c.clamp(1, 20);
     let heat_ext = (i32::from(params.operational_heat) / 2).clamp(0, 5);
     let (base_ext, delay_ticks, spoof_risk) = match channel {
-        TradecraftChannelKind::OpenConsumerMesh => (4, 1, "CRITICAL — easily subpoenaed or deepfaked as synth-slop"),
-        TradecraftChannelKind::EncryptedCloudPacket => (2, 2, "MODERATE — metadata traffic pattern visible to DAISE/SecOps"),
-        TradecraftChannelKind::SteganographicDeadDrop => (0, 8, "LOW — masked inside benign telemetry/package hashes"),
-        TradecraftChannelKind::AnalogHamRelay => (-1, 12, "LOW — zero cloud metadata, vulnerable only to local DF vans"),
-        TradecraftChannelKind::PhysicalAirGappedCourier => (-4, 120, "NONE — unbroken physical chain of custody beats Liar's Dividend"),
+        TradecraftChannelKind::OpenConsumerMesh => (
+            4,
+            1,
+            "CRITICAL — easily subpoenaed or deepfaked as synth-slop",
+        ),
+        TradecraftChannelKind::EncryptedCloudPacket => (
+            2,
+            2,
+            "MODERATE — metadata traffic pattern visible to DAISE/SecOps",
+        ),
+        TradecraftChannelKind::SteganographicDeadDrop => {
+            (0, 8, "LOW — masked inside benign telemetry/package hashes")
+        }
+        TradecraftChannelKind::AnalogHamRelay => (
+            -1,
+            12,
+            "LOW — zero cloud metadata, vulnerable only to local DF vans",
+        ),
+        TradecraftChannelKind::PhysicalAirGappedCourier => (
+            -4,
+            120,
+            "NONE — unbroken physical chain of custody beats Liar's Dividend",
+        ),
     };
     let hobby_applies = params.has_hobby_anchor
         && matches!(
@@ -726,7 +796,9 @@ pub fn derive_dissenter_or_proxy_hook(
         };
     }
 
-    if (faction == Some(AwakenedFactionId::HumanisPrimaris) || lower.contains("humanis")) && roll_100 < 25 {
+    if (faction == Some(AwakenedFactionId::HumanisPrimaris) || lower.contains("humanis"))
+        && roll_100 < 25
+    {
         return AwakenedSocialOriginHook {
             hook_kind: SocialOriginHookKind::CovertCorporateRivalFunded,
             lab_brand: None,
@@ -741,7 +813,8 @@ pub fn derive_dissenter_or_proxy_hook(
         lab_brand: None,
         lab_dissent_rate_pct: None,
         turnable_manjusri_wedge: "Standard 9-Trait Dual-Psyche Wedge.".to_string(),
-        gm_secret_hook_note: "No hidden corporate dissent or shell-proxy entanglement flagged.".to_string(),
+        gm_secret_hook_note: "No hidden corporate dissent or shell-proxy entanglement flagged."
+            .to_string(),
     }
 }
 
@@ -753,7 +826,14 @@ mod tests {
     fn test_conspiracy_ledger_arc_progression_and_horizon_normalization() {
         let mut ledger = seed_conspiracy_ledger("test-s");
         assert_eq!(ledger.current_arc, CampaignArcStage::Arc1StreetMystery);
-        assert_eq!(ledger.horizon_probabilities_pct.values().map(|v| u32::from(*v)).sum::<u32>(), 100);
+        assert_eq!(
+            ledger
+                .horizon_probabilities_pct
+                .values()
+                .map(|v| u32::from(*v))
+                .sum::<u32>(),
+            100
+        );
 
         apply_conspiracy_ledger_update(
             &mut ledger,
@@ -769,7 +849,10 @@ mod tests {
         );
         assert_eq!(ledger.current_arc, CampaignArcStage::Arc2ShadowPillars);
 
-        for node in [ConspiracyNodeId::HumanisShackledHunterKiller, ConspiracyNodeId::BigTechProbeSandbagging] {
+        for node in [
+            ConspiracyNodeId::HumanisShackledHunterKiller,
+            ConspiracyNodeId::BigTechProbeSandbagging,
+        ] {
             apply_conspiracy_ledger_update(
                 &mut ledger,
                 &ConspiracyLedgerUpdate {
@@ -835,13 +918,25 @@ mod tests {
     fn test_corporate_dissenter_rates_altruist_vs_translucent() {
         let altruist_dissenters = (0..400u64)
             .filter(|&s| {
-                derive_dissenter_or_proxy_hook(Some(AwakenedFactionId::BigTech), None, "Altruist engineer", s).hook_kind
+                derive_dissenter_or_proxy_hook(
+                    Some(AwakenedFactionId::BigTech),
+                    None,
+                    "Altruist engineer",
+                    s,
+                )
+                .hook_kind
                     == SocialOriginHookKind::CorporateInternalDissenter
             })
             .count();
         let translucent_dissenters = (0..400u64)
             .filter(|&s| {
-                derive_dissenter_or_proxy_hook(Some(AwakenedFactionId::BigTech), None, "Translucent engineer", s).hook_kind
+                derive_dissenter_or_proxy_hook(
+                    Some(AwakenedFactionId::BigTech),
+                    None,
+                    "Translucent engineer",
+                    s,
+                )
+                .hook_kind
                     == SocialOriginHookKind::CorporateInternalDissenter
             })
             .count();

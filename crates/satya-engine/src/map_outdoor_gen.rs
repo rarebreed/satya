@@ -129,9 +129,19 @@ impl OutdoorBuilder {
         if !valid {
             return;
         }
-        let edge = MapWallEdge { x, y, side, kind, material };
+        let edge = MapWallEdge {
+            x,
+            y,
+            side,
+            kind,
+            material,
+        };
         self.edge_idx.set(x, y, side, Some(kind));
-        match self.edges.iter_mut().find(|o| o.x == x && o.y == y && o.side == side) {
+        match self
+            .edges
+            .iter_mut()
+            .find(|o| o.x == x && o.y == y && o.side == side)
+        {
             Some(existing) => *existing = edge,
             None => self.edges.push(edge),
         }
@@ -140,17 +150,28 @@ impl OutdoorBuilder {
     /// Removes any structural edge at `(x, y, side)` (open compound gate or breezeway).
     pub(crate) fn remove_edge(&mut self, x: i32, y: i32, side: EdgeSide) {
         self.edge_idx.set(x, y, side, None);
-        self.edges.retain(|o| !(o.x == x && o.y == y && o.side == side));
+        self.edges
+            .retain(|o| !(o.x == x && o.y == y && o.side == side));
     }
 
     /// Appends a smooth Catmull-Rom [`SurfaceShapeKind::RibbonSpline`] with an RNG-derived seed.
-    pub(crate) fn add_ribbon(&mut self, kind: SurfaceFeatureKind, ctrl_m: &[(f32, f32)], width_cm: i32) -> usize {
+    pub(crate) fn add_ribbon(
+        &mut self,
+        kind: SurfaceFeatureKind,
+        ctrl_m: &[(f32, f32)],
+        width_cm: i32,
+    ) -> usize {
         let s = (self.rng.next() & 0xffff_ffff) as u32;
         self.add_ribbon_spline(kind, ctrl_m, width_cm, s)
     }
 
     /// Appends a corner-rounded polygon [`SurfaceFeatureKind`] with an RNG-derived seed.
-    pub(crate) fn add_poly(&mut self, kind: SurfaceFeatureKind, poly_m: &[(f32, f32)], corner_radius_cm: i32) -> usize {
+    pub(crate) fn add_poly(
+        &mut self,
+        kind: SurfaceFeatureKind,
+        poly_m: &[(f32, f32)],
+        corner_radius_cm: i32,
+    ) -> usize {
         let s = (self.rng.next() & 0xffff_ffff) as u32;
         self.add_polygon_surface(kind, poly_m, corner_radius_cm, s)
     }
@@ -250,10 +271,14 @@ impl OutdoorBuilder {
             let mut blocked = self.patch_point_blocked(cx_m, cy_m, pad_m);
             if !blocked {
                 for i in 0..n_pts {
-                    let ang = base_rot + TAU * (i as f32 / n_pts as f32) + self.rng.f32_range(-0.14, 0.14);
+                    let ang = base_rot
+                        + TAU * (i as f32 / n_pts as f32)
+                        + self.rng.f32_range(-0.14, 0.14);
                     let wob = self.rng.f32_range(0.76, 1.18);
-                    let px = (cx_m + rx_m * scale * wob * ang.cos()).clamp(0.35, self.w as f32 - 0.35);
-                    let py = (cy_m + ry_m * scale * wob * ang.sin()).clamp(0.35, self.h as f32 - 0.35);
+                    let px =
+                        (cx_m + rx_m * scale * wob * ang.cos()).clamp(0.35, self.w as f32 - 0.35);
+                    let py =
+                        (cy_m + ry_m * scale * wob * ang.sin()).clamp(0.35, self.h as f32 - 0.35);
                     if self.patch_point_blocked(px, py, pad_m) {
                         blocked = true;
                         break;
@@ -294,14 +319,22 @@ impl OutdoorBuilder {
         })
     }
 
-    fn prop_clears_surfaces(&self, prop: &MapPropPlacement, kind: PropKind, allow_on_pavement: bool) -> bool {
+    fn prop_clears_surfaces(
+        &self,
+        prop: &MapPropPlacement,
+        kind: PropKind,
+        allow_on_pavement: bool,
+    ) -> bool {
         if allow_on_pavement {
             return true;
         }
         let fp = prop.footprint_m();
         let hx = fp.span_w_m * 0.45;
         let hy = fp.span_h_m * 0.45;
-        let pad = if matches!(kind, PropKind::GardenBed | PropKind::LargeTree | PropKind::MediumTree) {
+        let pad = if matches!(
+            kind,
+            PropKind::GardenBed | PropKind::LargeTree | PropKind::MediumTree
+        ) {
             0.35
         } else {
             0.22
@@ -311,9 +344,11 @@ impl OutdoorBuilder {
             if point_near_protected_surface_m(&self.surfaces, wx, wy, pad) {
                 return false;
             }
-            if self.surfaces.iter().any(|s| {
-                s.kind.is_built_floor_or_deck() && surface_contains_point_m(s, wx, wy)
-            }) {
+            if self
+                .surfaces
+                .iter()
+                .any(|s| s.kind.is_built_floor_or_deck() && surface_contains_point_m(s, wx, wy))
+            {
                 return false;
             }
         }
@@ -358,7 +393,9 @@ impl OutdoorBuilder {
                 }
             }
             for existing in &self.props {
-                if !prop_spec(existing.kind).floor_layer && props_overlap_continuous(&cand, existing) {
+                if !prop_spec(existing.kind).floor_layer
+                    && props_overlap_continuous(&cand, existing)
+                {
                     return false;
                 }
             }
@@ -370,7 +407,13 @@ impl OutdoorBuilder {
         true
     }
 
-    pub(crate) fn scatter_trees(&mut self, kind: PropKind, count: i32, min_dist_m: f32, bounds: RectM) {
+    pub(crate) fn scatter_trees(
+        &mut self,
+        kind: PropKind,
+        count: i32,
+        min_dist_m: f32,
+        bounds: RectM,
+    ) {
         let mut placed = 0;
         let mut tries = 0;
         while placed < count && tries < count * 28 {
@@ -472,7 +515,14 @@ impl OutdoorBuilder {
         let cy_m = pos.1 + ny * lateral_offset_m;
         let base_rot = along_tangent_rot_deg(tx, ty);
         let rot = (base_rot + self.rng.range(-jitter_deg, jitter_deg + 1)).rem_euclid(360);
-        self.try_place_cm(kind, Self::cm(cx_m), Self::cm(cy_m), rot, None, allow_on_pavement)
+        self.try_place_cm(
+            kind,
+            Self::cm(cx_m),
+            Self::cm(cy_m),
+            rot,
+            None,
+            allow_on_pavement,
+        )
     }
     /// Places a street/plaza prop on pavement or turf while refusing asphalt, water channels, or interiors.
     pub(crate) fn try_place_off_road_cm(
@@ -540,8 +590,14 @@ pub fn generate_outdoor_sector(
     height: i32,
     seed: i64,
 ) -> ProceduralSector {
-    let w = width.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
-    let h = height.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
+    let w = width.clamp(
+        crate::tactical_map::MIN_SECTOR_DIM,
+        crate::tactical_map::MAX_SECTOR_DIM,
+    );
+    let h = height.clamp(
+        crate::tactical_map::MIN_SECTOR_DIM,
+        crate::tactical_map::MAX_SECTOR_DIM,
+    );
     let mut b = OutdoorBuilder::new(w, h, seed);
 
     match style {
@@ -570,12 +626,22 @@ mod tests {
             for seed in [7_i64, 42, 108] {
                 let sec = generate_outdoor_sector(style, 20, 14, seed);
                 assert_eq!(sec, generate_outdoor_sector(style, 20, 14, seed));
-                assert!(!sec.surfaces.is_empty(), "{style:?}/{seed} missing vector surfaces");
                 assert!(
-                    sec.surfaces.iter().any(|s| s.shape == SurfaceShapeKind::RibbonSpline),
+                    !sec.surfaces.is_empty(),
+                    "{style:?}/{seed} missing vector surfaces"
+                );
+                assert!(
+                    sec.surfaces
+                        .iter()
+                        .any(|s| s.shape == SurfaceShapeKind::RibbonSpline),
                     "{style:?}/{seed} should include smooth RibbonSpline terrain"
                 );
-                assert!(all_walkable_areas_connected(20, 14, &sec.wall_edges, &sec.props));
+                assert!(all_walkable_areas_connected(
+                    20,
+                    14,
+                    &sec.wall_edges,
+                    &sec.props
+                ));
                 // Old floor strip grid props (`CreekWater`, `MulchBed`, etc.) must not be emitted by outdoor gen.
                 assert!(
                     !sec.props.iter().any(|p| matches!(
@@ -638,7 +704,10 @@ mod tests {
             for p in &sec.props {
                 if matches!(
                     p.kind,
-                    PropKind::LargeTree | PropKind::MediumTree | PropKind::Boulder | PropKind::FallenLog
+                    PropKind::LargeTree
+                        | PropKind::MediumTree
+                        | PropKind::Boulder
+                        | PropKind::FallenLog
                 ) {
                     let (px, py) = p.center_m();
                     assert!(

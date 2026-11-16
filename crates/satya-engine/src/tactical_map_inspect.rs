@@ -15,8 +15,8 @@ use satya_schema::{
 
 use crate::map_dressing::{make_prop, prop_spec};
 use crate::tactical_map_geom::{
-    distance_point_to_segment, edge_endpoints_m, prop_contains_point,
-    vehicle_point_is_engine_bay, EDGE_PICK_HALF_THICK_M, TOKEN_PICK_RADIUS_M, TOKEN_RADIUS_M,
+    EDGE_PICK_HALF_THICK_M, TOKEN_PICK_RADIUS_M, TOKEN_RADIUS_M, distance_point_to_segment,
+    edge_endpoints_m, prop_contains_point, vehicle_point_is_engine_bay,
 };
 use crate::tactical_map_spatial::{SpatialObstacleIndex, SpatialWallFilter};
 
@@ -67,7 +67,10 @@ pub fn migrate_legacy_tiles_to_vector(
         }
     };
     let mut push_edge_unique = |e: MapWallEdge| {
-        if !edges.iter().any(|x| x.x == e.x && x.y == e.y && x.side == e.side) {
+        if !edges
+            .iter()
+            .any(|x| x.x == e.x && x.y == e.y && x.side == e.side)
+        {
             edges.push(e);
         }
     };
@@ -165,9 +168,8 @@ pub fn all_walkable_areas_connected(
     let spatial = SpatialObstacleIndex::new(bw, bh, edges, props);
     let cols = (width * 2) as usize;
     let rows = (height * 2) as usize;
-    let node_pos = |ix: usize, iy: usize| -> (f32, f32) {
-        ((ix as f32 + 0.5) * 0.5, (iy as f32 + 0.5) * 0.5)
-    };
+    let node_pos =
+        |ix: usize, iy: usize| -> (f32, f32) { ((ix as f32 + 0.5) * 0.5, (iy as f32 + 0.5) * 0.5) };
     let mut open = vec![false; cols * rows];
     let mut first = None;
     for iy in 0..rows {
@@ -183,7 +185,8 @@ pub fn all_walkable_areas_connected(
     }
     // Prefer starting near the West deployment pad `(2.5m, h/2 + 0.5m)` when unobstructed.
     let pref_ix = ((2.5_f32 / 0.5).floor() as usize).min(cols.saturating_sub(1));
-    let pref_iy = ((((height / 2) as f32 + 0.5) / 0.5).floor() as usize).min(rows.saturating_sub(1));
+    let pref_iy =
+        ((((height / 2) as f32 + 0.5) / 0.5).floor() as usize).min(rows.saturating_sub(1));
     let start = if open[pref_iy * cols + pref_ix] {
         (pref_ix, pref_iy)
     } else if let Some(f) = first {
@@ -218,8 +221,12 @@ pub fn all_walkable_areas_connected(
         for gx in 0..width {
             let cx = gx as f32 + 0.5;
             let cy = gy as f32 + 0.5;
-            if spatial.circle_hits_wall(cx, cy, TOKEN_RADIUS_M, SpatialWallFilter::WallsAndWindowsOnly)
-                || spatial.any_full_obstacle_prop_intersects_circle(cx, cy, TOKEN_RADIUS_M - 1e-4)
+            if spatial.circle_hits_wall(
+                cx,
+                cy,
+                TOKEN_RADIUS_M,
+                SpatialWallFilter::WallsAndWindowsOnly,
+            ) || spatial.any_full_obstacle_prop_intersects_circle(cx, cy, TOKEN_RADIUS_M - 1e-4)
             {
                 continue;
             }
@@ -253,9 +260,18 @@ fn cover_label_for_grade(grade: CoverGrade) -> &'static str {
 
 fn theme_is_interior(theme_name: &str) -> bool {
     let lower = theme_name.to_ascii_lowercase();
-    ["apartment", "office", "subway", "warehouse", "diner", "bar", "interior", "room"]
-        .iter()
-        .any(|kw| lower.contains(kw))
+    [
+        "apartment",
+        "office",
+        "subway",
+        "warehouse",
+        "diner",
+        "bar",
+        "interior",
+        "room",
+    ]
+    .iter()
+    .any(|kw| lower.contains(kw))
 }
 
 /// Inspects any continuous `(x_m, y_m)` cursor position on the battlemap and classifies the topmost
@@ -332,11 +348,7 @@ pub fn inspect_map_point(
                 "Full Cover / Blocks LoS (Interactable)".to_owned(),
                 215,
             ),
-            WallEdgeKind::DoorOpen => (
-                "Open Doorway".to_owned(),
-                "Open Passage".to_owned(),
-                215,
-            ),
+            WallEdgeKind::DoorOpen => ("Open Doorway".to_owned(), "Open Passage".to_owned(), 215),
             WallEdgeKind::Window => (
                 "Glazed Window".to_owned(),
                 "Half Cover / Clear Sightline".to_owned(),
@@ -396,7 +408,9 @@ pub fn inspect_map_point(
                 target_ref: format!("prop:{idx}"),
             });
         }
-        if matches!(p.kind, PropKind::Car | PropKind::UtilityVan) && vehicle_point_is_engine_bay(p, x_m, y_m) {
+        if matches!(p.kind, PropKind::Car | PropKind::UtilityVan)
+            && vehicle_point_is_engine_bay(p, x_m, y_m)
+        {
             return Some(MapHoverInspection {
                 category: MapHoverCategory::SolidProp,
                 title: format!("{} — Engine Block", p.kind.label()),
@@ -460,11 +474,23 @@ pub fn inspect_map_point(
             continue;
         }
         let (subtitle, cover_label, elevation_cm) = if p.kind == PropKind::Stairwell {
-            ("Vertical Transit · Connects Adjacent Floors".to_owned(), "Stairwell Access".to_owned(), 0)
+            (
+                "Vertical Transit · Connects Adjacent Floors".to_owned(),
+                "Stairwell Access".to_owned(),
+                0,
+            )
         } else if p.kind == PropKind::ElevatedCatwalk {
-            ("Elevated Walkway (+15 cm)".to_owned(), "Elevated Surface".to_owned(), 15)
+            (
+                "Elevated Walkway (+15 cm)".to_owned(),
+                "Elevated Surface".to_owned(),
+                15,
+            )
         } else if p.kind == PropKind::Gazebo {
-            ("Timber Garden Pavilion (Canopy Overhead)".to_owned(), "Walkable Deck + Overhead Cover".to_owned(), 5)
+            (
+                "Timber Garden Pavilion (Canopy Overhead)".to_owned(),
+                "Walkable Deck + Overhead Cover".to_owned(),
+                5,
+            )
         } else if spec.move_cost_mult > 1.1 {
             (
                 format!("Difficult Ground ({:.1}x Move Cost)", spec.move_cost_mult),
@@ -514,13 +540,22 @@ pub fn inspect_map_point(
                 "Soft Ground".to_owned(),
                 8,
             ),
-            _ => ("Vector Surface Layer".to_owned(), "Walkable Surface".to_owned(), 0),
+            _ => (
+                "Vector Surface Layer".to_owned(),
+                "Walkable Surface".to_owned(),
+                0,
+            ),
         };
         if req.world_sectors.len() > 1
             && let Some(sec) = req.sector_at_m(x_m, y_m)
             && let Some(sp) = crate::tactical_map::SectorPreset::from_code_str(&sec.preset)
         {
-            subtitle.push_str(&format!(" · {} ({}, {})", sp.label(), sec.sector_x, sec.sector_y));
+            subtitle.push_str(&format!(
+                " · {} ({}, {})",
+                sp.label(),
+                sec.sector_x,
+                sec.sector_y
+            ));
         }
         return Some(MapHoverInspection {
             category: MapHoverCategory::SurfaceProp,
@@ -538,25 +573,31 @@ pub fn inspect_map_point(
     }
 
     // 5. Bare ground / floor fallback (scoped to local stitched WorldSectorCell when present).
-    let sector_ctx = (req.world_sectors.len() > 1).then(|| req.sector_at_m(x_m, y_m)).flatten();
-    let sector_preset = sector_ctx
-        .and_then(|s| crate::tactical_map::SectorPreset::from_code_str(&s.preset));
-    let theme_label = sector_preset
-        .map(|p| p.label())
-        .unwrap_or_else(|| {
-            if theme_name.trim().is_empty() {
-                "Tactical Floor"
-            } else {
-                theme_name.trim()
-            }
-        });
+    let sector_ctx = (req.world_sectors.len() > 1)
+        .then(|| req.sector_at_m(x_m, y_m))
+        .flatten();
+    let sector_preset =
+        sector_ctx.and_then(|s| crate::tactical_map::SectorPreset::from_code_str(&s.preset));
+    let theme_label = sector_preset.map(|p| p.label()).unwrap_or_else(|| {
+        if theme_name.trim().is_empty() {
+            "Tactical Floor"
+        } else {
+            theme_name.trim()
+        }
+    });
     let is_interior = sector_preset
         .map(|p| p.is_perimeter_walled_shell())
         .unwrap_or_else(|| theme_is_interior(theme_label));
     let (title, material_label) = if is_interior {
-        (format!("Interior Floor — {theme_label}"), "Finished Flooring".to_owned())
+        (
+            format!("Interior Floor — {theme_label}"),
+            "Finished Flooring".to_owned(),
+        )
     } else {
-        (format!("Open Ground — {theme_label}"), "Natural / Paved Ground".to_owned())
+        (
+            format!("Open Ground — {theme_label}"),
+            "Natural / Paved Ground".to_owned(),
+        )
     };
     let subtitle = if let Some(sec) = sector_ctx {
         format!(
@@ -662,7 +703,11 @@ mod tests {
 
         let edge = inspect_map_point(&req, "Suburban Park", 1.05, 5.5).unwrap();
         assert_eq!(edge.category, MapHoverCategory::EdgeBarrier);
-        assert!(edge.title.contains("Brick masonry Wall"), "title={}", edge.title);
+        assert!(
+            edge.title.contains("Brick masonry Wall"),
+            "title={}",
+            edge.title
+        );
 
         let trunk = inspect_map_point(&req, "Suburban Park", 2.0, 2.0).unwrap();
         assert!(trunk.title.contains("Trunk"));
@@ -686,7 +731,11 @@ mod tests {
         let req = sample_req();
         // Clicking at x=1.20 next to West brick wall at x=1.00 nudges right to >= 1.375m.
         let snapped = resolve_token_destination_cm(&req, "pc1", 120, 550).unwrap();
-        assert!(snapped.0 >= 137 && snapped.0 <= 145, "snapped x={}", snapped.0);
+        assert!(
+            snapped.0 >= 137 && snapped.0 <= 145,
+            "snapped x={}",
+            snapped.0
+        );
         // Clicking deep inside the car cabin (500, 450) rejects.
         assert!(resolve_token_destination_cm(&req, "pc1", 500, 450).is_err());
     }

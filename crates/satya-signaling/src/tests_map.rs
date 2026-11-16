@@ -302,7 +302,10 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
     assert_eq!(generated_map.grid_width, 20);
     assert_eq!(generated_map.grid_height, 14);
     assert_eq!(generated_map.cell_size_cm, 100);
-    assert!(generated_map.tiles.is_empty(), "Procedural vector maps emit empty legacy tiles");
+    assert!(
+        generated_map.tiles.is_empty(),
+        "Procedural vector maps emit empty legacy tiles"
+    );
     assert!(!generated_map.wall_edges.is_empty());
     assert!(!generated_map.props.is_empty());
     assert!(
@@ -386,7 +389,9 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
     // 4. Player moves their own miniature to a continuous unblocked sub-meter spot -> 200 OK
     let (board_w_m, board_h_m) = generated_map.board_size_m();
     let (free_mv_x_cm, free_mv_y_cm) = (1..generated_map.grid_height - 1)
-        .flat_map(|yy| (1..generated_map.grid_width - 1).map(move |xx| (xx * 100 + 42, yy * 100 + 28)))
+        .flat_map(|yy| {
+            (1..generated_map.grid_width - 1).map(move |xx| (xx * 100 + 42, yy * 100 + 28))
+        })
         .find(|&(x_cm, y_cm)| {
             !satya_engine::tactical_map_geom::circle_collides_obstacles(
                 board_w_m,
@@ -435,15 +440,11 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
     )
     .unwrap();
     assert_eq!(
-        ok_map
-            .visual_for(&p1_auth.user_id)
-            .and_then(|v| v.pos_x_cm),
+        ok_map.visual_for(&p1_auth.user_id).and_then(|v| v.pos_x_cm),
         Some(free_mv_x_cm)
     );
     assert_eq!(
-        ok_map
-            .visual_for(&p1_auth.user_id)
-            .and_then(|v| v.pos_y_cm),
+        ok_map.visual_for(&p1_auth.user_id).and_then(|v| v.pos_y_cm),
         Some(free_mv_y_cm)
     );
 
@@ -520,8 +521,11 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
     );
 
     // 6. Phase 4: GM 360-deg continuous prop placement & removal + portrait URL sanitization
-    let occupied_tokens_m: Vec<(f32, f32)> =
-        p1_map.tokens.iter().map(|t| p1_map.token_pos_m(t)).collect();
+    let occupied_tokens_m: Vec<(f32, f32)> = p1_map
+        .tokens
+        .iter()
+        .map(|t| p1_map.token_pos_m(t))
+        .collect();
     let sofa = (2..p1_map.grid_height - 2)
         .flat_map(|yy| (2..p1_map.grid_width - 2).map(move |xx| (xx * 100 + 50, yy * 100 + 50)))
         .find_map(|(cx_cm, cy_cm)| {
@@ -588,7 +592,9 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
         prop_map
             .props
             .iter()
-            .any(|p| p.kind == satya_schema::PropKind::Sofa && p.rotation_deg == 33 && p.center_cm() == sofa_cm)
+            .any(|p| p.kind == satya_schema::PropKind::Sofa
+                && p.rotation_deg == 33
+                && p.center_cm() == sofa_cm)
     );
 
     let gm_clear_req = axum::http::Request::builder()

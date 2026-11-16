@@ -152,10 +152,7 @@ pub const APPEARANCE_FONT_OPTIONS: SelectOptionSlice = &[
     ("lcars", "Starfleet Condensed (Antonio / LCARS)"),
     ("military", "Military Field HUD (Chakra Petch / Stencil)"),
     ("stencil", "Ordnance Stencil (Black Ops One)"),
-    (
-        "pulp",
-        "1930s Pulp Typewriter (Courier Prime / Art Deco)",
-    ),
+    ("pulp", "1930s Pulp Typewriter (Courier Prime / Art Deco)"),
 ];
 
 /// Canonical UI font size / scale options (`(font_size_id, label)`).

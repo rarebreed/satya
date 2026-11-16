@@ -113,7 +113,10 @@ pub fn extract_character_lifepath_anchors_json(character_json: &str) -> PyResult
 pub fn register_hooks_and_npc_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_party_motivational_hooks_json, m)?)?;
     m.add_function(wrap_pyfunction!(generate_npc_profile_json, m)?)?;
-    m.add_function(wrap_pyfunction!(extract_character_lifepath_anchors_json, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        extract_character_lifepath_anchors_json,
+        m
+    )?)?;
     Ok(())
 }
 

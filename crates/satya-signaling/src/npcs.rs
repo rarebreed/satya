@@ -17,7 +17,7 @@ use axum::{
     Json,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
 use chrono::Utc;
 use satya_engine::{
@@ -29,82 +29,59 @@ use satya_schema::{
     UpsertGmMemoryRequest,
 };
 use serde_json::json;
-use sqlx::{Row, SqlitePool};
+use sqlx::Row;
 use uuid::Uuid;
 
-use crate::auth::{AuthAndSessionManager, UserAccount};
+use crate::auth::UserAccount;
 use crate::characters::audit_and_stamp_character_record;
 use crate::gm_api::verify_gm_service_header;
+pub(crate) use crate::npcs_store::*;
 use crate::state::SignalingAppState;
 
-async fn ensure_session_npcs_table_with_pool(pool: &SqlitePool) -> anyhow::Result<()> {
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS session_npcs (
-            character_id           TEXT PRIMARY KEY,
-            session_id             TEXT NOT NULL,
-            campaign_tag           TEXT NOT NULL,
-            owner_user_id          TEXT NOT NULL,
-            character_name         TEXT NOT NULL,
-            callsign_or_role       TEXT NOT NULL,
-            age_years              INTEGER NOT NULL,
-            public_summary         TEXT NOT NULL,
-            apparent_condition     TEXT NOT NULL,
-            gm_secret_dossier      TEXT NOT NULL,
-            psyche_json            TEXT NOT NULL,
-            top_skills_json        TEXT NOT NULL,
-            sheet_json             TEXT NOT NULL,
-            is_persistent          INTEGER NOT NULL DEFAULT 1,
-            updated_at_us          INTEGER NOT NULL,
-            disposition            TEXT,
-            faction_id             TEXT,
-            immediate_agenda       TEXT,
-            core_drive             TEXT,
-            dual_psyche_wedge_hint TEXT
-        );
-        "#,
-    )
-    .execute(pool)
-    .await?;
-
-    for col_def in [
-        "disposition TEXT",
-        "faction_id TEXT",
-        "immediate_agenda TEXT",
-        "core_drive TEXT",
-        "dual_psyche_wedge_hint TEXT",
-    ] {
-        let _ = sqlx::query(&format!("ALTER TABLE session_npcs ADD COLUMN {col_def}"))
-            .execute(pool)
-            .await;
-    }
-    Ok(())
+fn json_err(status: StatusCode, msg: impl std::fmt::Display) -> Response {
+    (status, Json(json!({ "error": msg.to_string() }))).into_response()
 }
 
-async fn ensure_session_npcs_table(state: &SignalingAppState) -> anyhow::Result<()> {
-    ensure_session_npcs_table_with_pool(state.auth.db_pool()).await
-}
-
-async fn resolve_caller(
+async fn prepare_npc_request(
     state: &SignalingAppState,
     headers: &HeaderMap,
-) -> Result<(Option<UserAccount>, bool), (StatusCode, Json<serde_json::Value>)> {
-    if verify_gm_service_header(state, headers).is_ok() {
-        return Ok((None, true));
+    sid: &str,
+    require_gm: bool,
+) -> Result<(Option<UserAccount>, bool, bool), Box<Response>> {
+    let (user_opt, is_gm_service) = if verify_gm_service_header(state, headers).is_ok() {
+        (None, true)
+    } else {
+        let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+            return Err(Box::new(json_err(
+                StatusCode::UNAUTHORIZED,
+                "Missing Authorization header",
+            )));
+        };
+        let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
+            return Err(Box::new(json_err(
+                StatusCode::UNAUTHORIZED,
+                "Invalid or expired auth token",
+            )));
+        };
+        (Some(user), false)
+    };
+    if sid.is_empty() {
+        return Err(Box::new(json_err(
+            StatusCode::BAD_REQUEST,
+            "session_id cannot be empty",
+        )));
     }
-    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({ "error": "Missing Authorization header" })),
-        ));
-    };
-    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({ "error": "Invalid or expired auth token" })),
-        ));
-    };
-    Ok((Some(user), false))
+    let can_see_gm = can_caller_view_gm_secrets(state, sid, user_opt.as_ref(), is_gm_service).await;
+    if require_gm && !can_see_gm {
+        return Err(Box::new(json_err(
+            StatusCode::FORBIDDEN,
+            "Only the Game Master can modify NPC state while a Human GM leads the session",
+        )));
+    }
+    ensure_session_npcs_table_with_pool(state.auth.db_pool())
+        .await
+        .map_err(|e| Box::new(json_err(StatusCode::INTERNAL_SERVER_ERROR, e)))?;
+    Ok((user_opt, is_gm_service, can_see_gm))
 }
 
 /// Determines whether the caller is allowed to see GM-only NPC stats, Psyche traits, and secrets.
@@ -141,19 +118,6 @@ pub(crate) async fn can_caller_view_gm_secrets(
     !has_human_gm
 }
 
-fn redact_npc_entry_for_viewer(mut entry: SessionNpcEntry, can_see_gm: bool) -> SessionNpcEntry {
-    if !can_see_gm {
-        entry.gm_character = None;
-        entry.psyche_summary.clear();
-        entry.top_skills.clear();
-        entry.gm_secret_dossier = None;
-        entry.immediate_agenda = None;
-        entry.core_drive = None;
-        entry.dual_psyche_wedge_hint = None;
-    }
-    entry
-}
-
 fn compute_apparent_condition(sheet: &CharacterSheetRecord) -> String {
     if sheet.wound_shock_index >= 3 || sheet.fatigue_level >= 4 {
         "Critically Wounded / Exhausted".to_string()
@@ -172,27 +136,12 @@ pub async fn generate_session_npc_handler(
     headers: HeaderMap,
     Json(req): Json<GenerateNpcRequest>,
 ) -> impl IntoResponse {
-    let (user_opt, is_gm_service) = match resolve_caller(&state, &headers).await {
-        Ok(v) => v,
-        Err(err) => return err.into_response(),
-    };
-
     let sid = session_id.trim();
-    if sid.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "session_id cannot be empty" })),
-        )
-            .into_response();
-    }
-
-    if let Err(e) = ensure_session_npcs_table(&state).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": e.to_string() })),
-        )
-            .into_response();
-    }
+    let (user_opt, is_gm_service, can_see_gm) =
+        match prepare_npc_request(&state, &headers, sid, false).await {
+            Ok(v) => v,
+            Err(resp) => return *resp,
+        };
 
     let owner_uid = user_opt
         .as_ref()
@@ -270,8 +219,6 @@ pub async fn generate_session_npc_handler(
         character.notes = Some(full_dossier.clone());
     }
 
-    audit_and_stamp_character_record(&state, &mut character, true);
-
     let campaign_tag = req
         .campaign_tag
         .as_deref()
@@ -279,6 +226,31 @@ pub async fn generate_session_npc_handler(
         .filter(|s| !s.is_empty())
         .unwrap_or(sid)
         .to_string();
+    let caller_uid = user_opt.as_ref().map(|u| u.user_id.as_str());
+
+    let existing_ids: Vec<String> = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT character_id FROM session_npcs
+        WHERE (session_id = ?1 OR (campaign_tag = ?2 COLLATE NOCASE AND is_persistent = 1))
+          AND LOWER(TRIM(character_name)) = LOWER(TRIM(?3))
+        ORDER BY updated_at_us DESC
+        "#,
+    )
+    .bind(sid)
+    .bind(&campaign_tag)
+    .bind(&character.character_name)
+    .fetch_all(state.auth.db_pool())
+    .await
+    .unwrap_or_default();
+
+    if let Some(primary_id) = existing_ids.first() {
+        character.character_id = primary_id.clone();
+    }
+    for dup_id in existing_ids.iter().skip(1) {
+        delete_npc_records_by_id(&state, sid, caller_uid, is_gm_service, dup_id).await;
+    }
+
+    audit_and_stamp_character_record(&state, &mut character, true);
 
     let psyche_summary: Vec<String> = gen_res
         .psyche_traits
@@ -291,10 +263,7 @@ pub async fn generate_session_npc_handler(
         .map(|(_, name, rank)| format!("{name} (N={rank})"))
         .collect();
     let apparent_condition = compute_apparent_condition(&character);
-
     let sheet_json = serde_json::to_string(&character).unwrap_or_default();
-    let psyche_json = serde_json::to_string(&psyche_summary).unwrap_or_default();
-    let top_skills_json = serde_json::to_string(&top_skills).unwrap_or_default();
 
     // Save into `characters` and `session_characters` so Omnisearch & character sheet lookup find the NPC
     let _ = sqlx::query(
@@ -345,60 +314,36 @@ pub async fn generate_session_npc_handler(
     .execute(state.auth.db_pool())
     .await;
 
-    let _ = sqlx::query(
-        r#"
-        INSERT INTO session_npcs (
-            character_id, session_id, campaign_tag, owner_user_id,
-            character_name, callsign_or_role, age_years, public_summary,
-            apparent_condition, gm_secret_dossier, psyche_json, top_skills_json,
-            sheet_json, is_persistent, updated_at_us,
-            disposition, faction_id, immediate_agenda, core_drive, dual_psyche_wedge_hint
-        )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
-        ON CONFLICT(character_id) DO UPDATE SET
-            session_id             = excluded.session_id,
-            campaign_tag           = excluded.campaign_tag,
-            character_name         = excluded.character_name,
-            callsign_or_role       = excluded.callsign_or_role,
-            age_years              = excluded.age_years,
-            public_summary         = excluded.public_summary,
-            apparent_condition     = excluded.apparent_condition,
-            gm_secret_dossier      = excluded.gm_secret_dossier,
-            psyche_json            = excluded.psyche_json,
-            top_skills_json        = excluded.top_skills_json,
-            sheet_json             = excluded.sheet_json,
-            is_persistent          = excluded.is_persistent,
-            updated_at_us          = excluded.updated_at_us,
-            disposition            = excluded.disposition,
-            faction_id             = excluded.faction_id,
-            immediate_agenda       = excluded.immediate_agenda,
-            core_drive             = excluded.core_drive,
-            dual_psyche_wedge_hint = excluded.dual_psyche_wedge_hint
-        "#,
+    let full_entry = SessionNpcEntry {
+        character_id: character.character_id.clone(),
+        character_name: character.character_name.clone(),
+        callsign_or_role: character.callsign_or_role.clone(),
+        age_years: character.age_years,
+        public_summary: gen_res.public_summary,
+        apparent_condition,
+        is_persistent: req.is_persistent,
+        gm_character: Some(character),
+        psyche_summary,
+        top_skills,
+        gm_secret_dossier: Some(full_dossier.clone()),
+        disposition: Some(disposition),
+        faction_id: None,
+        immediate_agenda,
+        core_drive,
+        dual_psyche_wedge_hint,
+    };
+
+    let _ = upsert_session_npc_row(
+        state.auth.db_pool(),
+        sid,
+        &campaign_tag,
+        &owner_uid,
+        &full_entry,
+        now_us,
     )
-    .bind(&character.character_id)
-    .bind(sid)
-    .bind(&campaign_tag)
-    .bind(&owner_uid)
-    .bind(&character.character_name)
-    .bind(&character.callsign_or_role)
-    .bind(character.age_years)
-    .bind(&gen_res.public_summary)
-    .bind(&apparent_condition)
-    .bind(&full_dossier)
-    .bind(&psyche_json)
-    .bind(&top_skills_json)
-    .bind(&sheet_json)
-    .bind(i32::from(req.is_persistent))
-    .bind(now_us)
-    .bind(&disposition)
-    .bind(Option::<String>::None)
-    .bind(&immediate_agenda)
-    .bind(&core_drive)
-    .bind(&dual_psyche_wedge_hint)
-    .execute(state.auth.db_pool())
     .await;
 
+    let mem_id = format!("mem_{}", full_entry.character_id);
     let gm_memory = if req.is_persistent {
         state
             .auth
@@ -408,14 +353,14 @@ pub async fn generate_session_npc_handler(
                 &author_name,
                 is_gm_service,
                 UpsertGmMemoryRequest {
-                    memory_id: Some(format!("mem_{}", character.character_id)),
+                    memory_id: Some(mem_id),
                     campaign_tag: Some(campaign_tag.clone()),
                     category: GmMemoryCategory::NpcSecret,
                     title: format!(
                         "NPC: {} ({})",
-                        character.character_name, character.callsign_or_role
+                        full_entry.character_name, full_entry.callsign_or_role
                     ),
-                    content: full_dossier.clone(),
+                    content: full_dossier,
                     is_pinned: true,
                     is_persistent: true,
                 },
@@ -423,32 +368,14 @@ pub async fn generate_session_npc_handler(
             .await
             .ok()
     } else {
+        let _ = state
+            .auth
+            .delete_session_gm_memory(sid, caller_uid, is_gm_service, &mem_id)
+            .await;
         None
     };
 
-    let can_see_gm =
-        can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
-    let entry = redact_npc_entry_for_viewer(
-        SessionNpcEntry {
-            character_id: character.character_id.clone(),
-            character_name: character.character_name.clone(),
-            callsign_or_role: character.callsign_or_role.clone(),
-            age_years: character.age_years,
-            public_summary: gen_res.public_summary,
-            apparent_condition,
-            is_persistent: req.is_persistent,
-            gm_character: Some(character),
-            psyche_summary,
-            top_skills,
-            gm_secret_dossier: Some(full_dossier),
-            disposition: Some(disposition),
-            faction_id: None,
-            immediate_agenda,
-            core_drive,
-            dual_psyche_wedge_hint,
-        },
-        can_see_gm,
-    );
+    let entry = redact_npc_entry_for_viewer(full_entry, can_see_gm);
 
     (
         StatusCode::OK,
@@ -460,99 +387,6 @@ pub async fn generate_session_npc_handler(
         .into_response()
 }
 
-fn decode_npc_row(row: &sqlx::sqlite::SqliteRow, can_see_gm: bool) -> SessionNpcEntry {
-    let character_id: String = row.try_get("character_id").unwrap_or_default();
-    let character_name: String = row.try_get("character_name").unwrap_or_default();
-    let callsign_or_role: String = row.try_get("callsign_or_role").unwrap_or_default();
-    let age_years: i32 = row.try_get("age_years").unwrap_or(26);
-    let public_summary: String = row.try_get("public_summary").unwrap_or_default();
-    let apparent_condition: String = row.try_get("apparent_condition").unwrap_or_default();
-    let gm_secret_dossier: String = row.try_get("gm_secret_dossier").unwrap_or_default();
-    let psyche_json: String = row.try_get("psyche_json").unwrap_or_default();
-    let top_skills_json: String = row.try_get("top_skills_json").unwrap_or_default();
-    let sheet_json: String = row.try_get("sheet_json").unwrap_or_default();
-    let is_persistent: i32 = row.try_get("is_persistent").unwrap_or(1);
-    let disposition: Option<String> = row.try_get("disposition").ok().flatten();
-    let faction_id: Option<String> = row.try_get("faction_id").ok().flatten();
-    let immediate_agenda: Option<String> = row.try_get("immediate_agenda").ok().flatten();
-    let core_drive: Option<String> = row.try_get("core_drive").ok().flatten();
-    let dual_psyche_wedge_hint: Option<String> =
-        row.try_get("dual_psyche_wedge_hint").ok().flatten();
-
-    let psyche_summary: Vec<String> = serde_json::from_str(&psyche_json).unwrap_or_default();
-    let top_skills: Vec<String> = serde_json::from_str(&top_skills_json).unwrap_or_default();
-    let gm_character: Option<CharacterSheetRecord> = serde_json::from_str(&sheet_json).ok();
-
-    redact_npc_entry_for_viewer(
-        SessionNpcEntry {
-            character_id,
-            character_name,
-            callsign_or_role,
-            age_years,
-            public_summary,
-            apparent_condition,
-            is_persistent: is_persistent != 0,
-            gm_character,
-            psyche_summary,
-            top_skills,
-            gm_secret_dossier: if gm_secret_dossier.is_empty() {
-                None
-            } else {
-                Some(gm_secret_dossier)
-            },
-            disposition,
-            faction_id,
-            immediate_agenda,
-            core_drive,
-            dual_psyche_wedge_hint,
-        },
-        can_see_gm,
-    )
-}
-
-async fn query_session_npc_rows(
-    pool: &SqlitePool,
-    sid: &str,
-    can_see_gm: bool,
-) -> anyhow::Result<Vec<SessionNpcEntry>> {
-    let rows = sqlx::query(
-        r#"
-        SELECT character_id, character_name, callsign_or_role, age_years,
-               public_summary, apparent_condition, gm_secret_dossier,
-               psyche_json, top_skills_json, sheet_json, is_persistent,
-               disposition, faction_id, immediate_agenda, core_drive, dual_psyche_wedge_hint
-        FROM session_npcs
-        WHERE session_id = ?1 OR (campaign_tag = ?1 AND is_persistent = 1)
-        ORDER BY updated_at_us DESC
-        "#,
-    )
-    .bind(sid)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(rows
-        .iter()
-        .map(|row| decode_npc_row(row, can_see_gm))
-        .collect())
-}
-
-/// Queries SQLite `session_npcs` for Omnisearch indexing, applying `can_see_gm` redaction.
-pub(crate) async fn load_session_npcs_for_omnisearch(
-    auth: &AuthAndSessionManager,
-    sid: &str,
-    can_see_gm: bool,
-) -> Vec<SessionNpcEntry> {
-    if ensure_session_npcs_table_with_pool(auth.db_pool())
-        .await
-        .is_err()
-    {
-        return Vec::new();
-    }
-    query_session_npc_rows(auth.db_pool(), sid, can_see_gm)
-        .await
-        .unwrap_or_default()
-}
-
 /// Lists all NPCs for `session_id` (and matching persistent `campaign_tag`), automatically redacting
 /// GM-only stats/secrets when the caller is a non-GM player in a human-GM session (`GET /api/sessions/:session_id/npcs`).
 pub async fn list_session_npcs_handler(
@@ -560,32 +394,15 @@ pub async fn list_session_npcs_handler(
     Path(session_id): Path<String>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    let (user_opt, is_gm_service) = match resolve_caller(&state, &headers).await {
-        Ok(v) => v,
-        Err(err) => return err.into_response(),
-    };
-
     let sid = session_id.trim();
-    if let Err(e) = ensure_session_npcs_table(&state).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": e.to_string() })),
-        )
-            .into_response();
-    }
-
-    let can_see_gm =
-        can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
+    let (_, _, can_see_gm) = match prepare_npc_request(&state, &headers, sid, false).await {
+        Ok(v) => v,
+        Err(resp) => return *resp,
+    };
 
     let npcs = match query_session_npc_rows(state.auth.db_pool(), sid, can_see_gm).await {
         Ok(list) => list,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": e.to_string() })),
-            )
-                .into_response();
-        }
+        Err(e) => return json_err(StatusCode::INTERNAL_SERVER_ERROR, e),
     };
 
     (
@@ -608,71 +425,47 @@ pub async fn update_session_npc_handler(
     headers: HeaderMap,
     Json(req): Json<UpdateSessionNpcRequest>,
 ) -> impl IntoResponse {
-    let (user_opt, is_gm_service) = match resolve_caller(&state, &headers).await {
-        Ok(v) => v,
-        Err(err) => return err.into_response(),
-    };
-
     let sid = session_id.trim();
     let cid = character_id.trim();
-    if sid.is_empty() || cid.is_empty() {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "session_id and character_id are required" })),
-        )
-            .into_response();
+    if cid.is_empty() {
+        return json_err(StatusCode::BAD_REQUEST, "character_id is required");
     }
+    let (user_opt, is_gm_service, _) = match prepare_npc_request(&state, &headers, sid, true).await
+    {
+        Ok(v) => v,
+        Err(resp) => return *resp,
+    };
 
-    let can_see_gm =
-        can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
-    if !can_see_gm {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({ "error": "Only the Game Master can update NPC state while a Human GM leads the session" })),
-        )
-            .into_response();
-    }
+    let find_sql = format!(
+        "SELECT session_id, campaign_tag, {NPC_SELECT_COLS} FROM session_npcs WHERE character_id = ?1 AND (session_id = ?2 OR campaign_tag = ?2 COLLATE NOCASE) LIMIT 1"
+    );
+    let existing_row = sqlx::query(&find_sql)
+        .bind(cid)
+        .bind(sid)
+        .fetch_optional(state.auth.db_pool())
+        .await
+        .ok()
+        .flatten();
 
-    if let Err(e) = ensure_session_npcs_table(&state).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": e.to_string() })),
-        )
-            .into_response();
-    }
-
-    let existing_row = sqlx::query(
-        r#"
-        SELECT character_id, character_name, callsign_or_role, age_years,
-               public_summary, apparent_condition, gm_secret_dossier,
-               psyche_json, top_skills_json, sheet_json, is_persistent,
-               disposition, faction_id, immediate_agenda, core_drive, dual_psyche_wedge_hint
-        FROM session_npcs
-        WHERE character_id = ?1 AND (session_id = ?2 OR (campaign_tag = ?2 AND is_persistent = 1))
-        LIMIT 1
-        "#,
-    )
-    .bind(cid)
-    .bind(sid)
-    .fetch_optional(state.auth.db_pool())
-    .await
-    .ok()
-    .flatten();
-
-    let mut entry = if let Some(row) = existing_row {
-        decode_npc_row(&row, true)
+    let (row_sid, row_ctag, mut entry) = if let Some(row) = existing_row {
+        let r_sid: String = row
+            .try_get("session_id")
+            .unwrap_or_else(|_| sid.to_string());
+        let r_ctag: String = row
+            .try_get("campaign_tag")
+            .unwrap_or_else(|_| sid.to_string());
+        (r_sid, r_ctag, decode_npc_row(&row, true))
     } else if let Some(starter) =
         crate::campaign_lore::load_pack_starter_npcs(Some(state.campaign_pack.as_str()), true)
             .into_iter()
             .find(|n| n.character_id.eq_ignore_ascii_case(cid))
     {
-        starter
+        (sid.to_string(), sid.to_string(), starter)
     } else {
-        return (
+        return json_err(
             StatusCode::NOT_FOUND,
-            Json(json!({ "error": format!("NPC '{cid}' not found in session '{sid}'") })),
-        )
-            .into_response();
+            format!("NPC '{cid}' not found in session '{sid}'"),
+        );
     };
 
     if let Some(d) = req.disposition {
@@ -709,55 +502,92 @@ pub async fn update_session_npc_handler(
         .as_ref()
         .map(|u| u.user_id.clone())
         .unwrap_or_else(|| "ai_gm_service".to_string());
-    let psyche_json = serde_json::to_string(&entry.psyche_summary).unwrap_or_default();
-    let top_skills_json = serde_json::to_string(&entry.top_skills).unwrap_or_default();
-    let sheet_json = entry
-        .gm_character
-        .as_ref()
-        .and_then(|c| serde_json::to_string(c).ok())
-        .unwrap_or_default();
-
-    let _ = sqlx::query(
-        r#"
-        INSERT INTO session_npcs (
-            character_id, session_id, campaign_tag, owner_user_id,
-            character_name, callsign_or_role, age_years, public_summary,
-            apparent_condition, gm_secret_dossier, psyche_json, top_skills_json,
-            sheet_json, is_persistent, updated_at_us,
-            disposition, faction_id, immediate_agenda, core_drive, dual_psyche_wedge_hint
-        )
-        VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
-        ON CONFLICT(character_id) DO UPDATE SET
-            public_summary         = excluded.public_summary,
-            apparent_condition     = excluded.apparent_condition,
-            gm_secret_dossier      = excluded.gm_secret_dossier,
-            is_persistent          = excluded.is_persistent,
-            updated_at_us          = excluded.updated_at_us,
-            disposition            = excluded.disposition,
-            immediate_agenda       = excluded.immediate_agenda
-        "#,
+    let _ = upsert_session_npc_row(
+        state.auth.db_pool(),
+        &row_sid,
+        &row_ctag,
+        &owner_uid,
+        &entry,
+        now_us,
     )
-    .bind(&entry.character_id)
-    .bind(sid)
-    .bind(&owner_uid)
-    .bind(&entry.character_name)
-    .bind(&entry.callsign_or_role)
-    .bind(entry.age_years)
-    .bind(&entry.public_summary)
-    .bind(&entry.apparent_condition)
-    .bind(entry.gm_secret_dossier.as_deref().unwrap_or(""))
-    .bind(&psyche_json)
-    .bind(&top_skills_json)
-    .bind(&sheet_json)
-    .bind(i32::from(entry.is_persistent))
-    .bind(now_us)
-    .bind(&entry.disposition)
-    .bind(&entry.faction_id)
-    .bind(&entry.immediate_agenda)
-    .bind(&entry.core_drive)
-    .bind(&entry.dual_psyche_wedge_hint)
-    .execute(state.auth.db_pool())
     .await;
 
+    if let Some(persist) = req.is_persistent {
+        let _ = sqlx::query(
+            "UPDATE session_npcs SET is_persistent = ?1 WHERE LOWER(TRIM(character_name)) = LOWER(TRIM(?2)) AND (session_id = ?3 OR campaign_tag = ?3 COLLATE NOCASE)",
+        )
+        .bind(i32::from(persist))
+        .bind(&entry.character_name)
+        .bind(sid)
+        .execute(state.auth.db_pool())
+        .await;
+
+        let caller_uid = user_opt.as_ref().map(|u| u.user_id.as_str());
+        let _ = state
+            .auth
+            .toggle_session_gm_memory_persistence(
+                sid,
+                caller_uid,
+                is_gm_service,
+                &format!("mem_{}", entry.character_id),
+                persist,
+                None,
+            )
+            .await;
+    }
+
     (StatusCode::OK, Json(entry)).into_response()
+}
+
+/// Deletes a session NPC (plus any same-name duplicate rows, `characters`/`session_characters` links,
+/// and companion `mem_<character_id>` GM Memory note) via `DELETE /api/(gm/)sessions/:session_id/npcs/:character_id`.
+pub async fn delete_session_npc_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    Path((session_id, character_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let sid = session_id.trim();
+    let cid = character_id.trim();
+    if cid.is_empty() {
+        return json_err(StatusCode::BAD_REQUEST, "character_id is required");
+    }
+    let (user_opt, is_gm_service, _) = match prepare_npc_request(&state, &headers, sid, true).await
+    {
+        Ok(v) => v,
+        Err(resp) => return *resp,
+    };
+
+    let pool = state.auth.db_pool();
+    let mut target_ids = vec![cid.to_string()];
+    if let Ok(Some(npc_name)) =
+        sqlx::query_scalar::<_, String>("SELECT character_name FROM session_npcs WHERE character_id = ?1")
+            .bind(cid)
+            .fetch_optional(pool)
+            .await
+        && let Ok(dup_ids) = sqlx::query_scalar::<_, String>(
+            "SELECT character_id FROM session_npcs WHERE LOWER(TRIM(character_name)) = LOWER(TRIM(?1)) AND (session_id = ?2 OR campaign_tag = ?2 COLLATE NOCASE)",
+        )
+        .bind(&npc_name)
+        .bind(sid)
+        .fetch_all(pool)
+        .await
+    {
+        for id in dup_ids {
+            if !target_ids.contains(&id) {
+                target_ids.push(id);
+            }
+        }
+    }
+
+    let caller_uid = user_opt.as_ref().map(|u| u.user_id.as_str());
+    let mut deleted = false;
+    for id in target_ids {
+        deleted |= delete_npc_records_by_id(&state, sid, caller_uid, is_gm_service, &id).await;
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({ "status": "ok", "character_id": cid, "deleted": deleted })),
+    )
+        .into_response()
 }

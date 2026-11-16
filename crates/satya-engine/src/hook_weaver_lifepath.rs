@@ -110,9 +110,7 @@ fn parse_event_code_flexible(raw: &str) -> Option<FormativeLifeEventId> {
         "WRONGFUL_ACCUSATION_DEEPFAKE" => {
             Some(FormativeLifeEventId::WrongfulAccusationDeepfakeFraming)
         }
-        "PROXY_SYNTHETIC_ENCOUNTER" => {
-            Some(FormativeLifeEventId::AnomalousUnclampedAiEncounter)
-        }
+        "PROXY_SYNTHETIC_ENCOUNTER" => Some(FormativeLifeEventId::AnomalousUnclampedAiEncounter),
         "BETRAYAL_OR_SCAPEGOAT" => Some(FormativeLifeEventId::RomanticBetrayalEstrangement),
         _ => None,
     }
@@ -284,8 +282,7 @@ pub fn extract_character_lifepath_anchors(
             }
             if let Some(events) = val.get("formative_events").and_then(Value::as_array) {
                 for ev in events {
-                    let choice =
-                        parse_choice_branch(ev.get("choice").and_then(Value::as_str));
+                    let choice = parse_choice_branch(ev.get("choice").and_then(Value::as_str));
                     let is_adult = ev
                         .get("is_adult_term")
                         .and_then(Value::as_bool)
@@ -538,12 +535,8 @@ pub fn compile_faction_entanglements(
             if let (Some(fa), Some(fb)) = (fa, fb)
                 && fa != fb
             {
-                let (axis, prompt) = faction_pair_tension_prompt(
-                    fa,
-                    fb,
-                    &a.character_name,
-                    &b.character_name,
-                );
+                let (axis, prompt) =
+                    faction_pair_tension_prompt(fa, fb, &a.character_name, &b.character_name);
                 out.push(PartyEntanglementHook {
                     hook_id: format!(
                         "entangle_faction_{}_{}_{}_{}",
@@ -665,17 +658,40 @@ mod tests {
         let anchors = extract_character_lifepath_anchors(&pc1);
         assert_eq!(anchors.faction_id.as_deref(), Some("SATYANG"));
         assert_eq!(anchors.hobby_contacts.len(), 1);
-        assert_eq!(anchors.hobby_contacts[0].hobby_code, "CITIZEN_OSINT_DEEPFAKE");
+        assert_eq!(
+            anchors.hobby_contacts[0].hobby_code,
+            "CITIZEN_OSINT_DEEPFAKE"
+        );
         assert_eq!(anchors.formative_anchors.len(), 2);
 
         let cards = compile_lifepath_and_faction_hooks(&pc1, Some("St. Jude Clinic"), "awakened");
-        assert!(cards.iter().any(|c| c.category == HookCategory::FactionWedge));
-        assert!(cards.iter().any(|c| c.category == HookCategory::HobbyContact));
-        assert!(cards.iter().any(|c| c.category == HookCategory::FormativeAnchor));
+        assert!(
+            cards
+                .iter()
+                .any(|c| c.category == HookCategory::FactionWedge)
+        );
+        assert!(
+            cards
+                .iter()
+                .any(|c| c.category == HookCategory::HobbyContact)
+        );
+        assert!(
+            cards
+                .iter()
+                .any(|c| c.category == HookCategory::FormativeAnchor)
+        );
 
         let faction_entanglements = compile_faction_entanglements(&[pc1, pc2], "awakened");
         assert_eq!(faction_entanglements.len(), 1);
-        assert!(faction_entanglements[0].shared_scene_prompt.contains("DAISE"));
-        assert!(faction_entanglements[0].tension_axis.contains("Containment"));
+        assert!(
+            faction_entanglements[0]
+                .shared_scene_prompt
+                .contains("DAISE")
+        );
+        assert!(
+            faction_entanglements[0]
+                .tension_axis
+                .contains("Containment")
+        );
     }
 }

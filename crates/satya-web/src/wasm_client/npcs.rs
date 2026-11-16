@@ -4,9 +4,14 @@
 use crate::wasm_client::character_sheet::render_character_sheet;
 use crate::wasm_client::chat_and_ttrpg::append_system_notice;
 use crate::wasm_client::dom::{
-    active_session_and_token_or_feedback, escape_html, fetch_json, get_element, input_checked,
-    input_value, select_value, set_display, set_html, set_text,
+    active_session_and_token_or_feedback, escape_html, escape_js_single_quoted_attr, fetch_json,
+    get_element, input_checked, input_value, select_value, set_display, set_feedback, set_html,
+    set_text,
 };
+use crate::wasm_client::gm_memories_and_director::{
+    satya_refresh_gm_memories, sync_local_gm_memories_dom,
+};
+use crate::wasm_client::gm_omnisearch::refresh_gm_omnisearch_if_active;
 use crate::wasm_client::notebook::satya_select_notebook_tab;
 use crate::wasm_client::state::{with_state, with_state_mut};
 use satya_engine::{
@@ -14,20 +19,14 @@ use satya_engine::{
 };
 use satya_schema::{
     GenerateNpcRequest, GenerateNpcResponse, Participant, ParticipantKind, SessionNpcEntry,
-    SessionNpcsResponse, SessionRole,
+    SessionNpcsResponse, SessionRole, UpdateSessionNpcRequest,
 };
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
-/// Pure role-and-roster policy determining whether a viewer can inspect GM-only NPC secrets,
-/// Psyche scores, Characteristics, and full Skill ranks.
-///
-/// Returns `true` when:
-/// - `session_id` is `None` (offline / local Solo mode), OR
-/// - `self_part` has `role == SessionRole::Gm` (Human or AI GM), OR
-/// - `roster` is non-empty and contains **no** `ParticipantKind::Human` with `SessionRole::Gm`
-///   (e.g. Solo / Co-op Autonomous AI-GM session), OR
-/// - `roster` is not yet populated and `fallback` (`viewer_can_see_gm_secrets` from the server) is `true`.
+/// Pure role-and-roster policy determining whether a viewer can inspect GM-only NPC secrets.
+/// Returns `true` when offline (`session_id.is_none()`), the viewer is GM, the roster lacks a human GM,
+/// or the roster is not yet populated and `fallback` (`viewer_can_see_gm_secrets`) is `true`.
 #[must_use]
 pub fn can_viewer_see_npc_secrets(
     session_id: Option<&str>,
@@ -66,8 +65,8 @@ pub fn viewer_can_see_npc_gm_secrets() -> bool {
 }
 
 fn ensure_default_demo_npc_if_empty() {
-    let is_empty = with_state(|st| st.session_npcs.is_empty());
-    if !is_empty {
+    let should_seed = with_state(|st| st.session_id.is_none() && st.session_npcs.is_empty());
+    if !should_seed {
         return;
     }
     let gen_res = generate_npc_from_prompt(&NpcGenerationParams {
@@ -101,7 +100,7 @@ fn ensure_default_demo_npc_if_empty() {
         psyche_summary,
         top_skills,
         gm_secret_dossier: Some(gen_res.gm_secret_dossier),
-            ..Default::default()
+        ..Default::default()
     };
     with_state_mut(|st| {
         st.selected_npc_id = Some(demo_entry.character_id.clone());
@@ -122,6 +121,20 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
     } else {
         r#"<span class="pill pill-muted">Session NPC</span>"#
     };
+    let gm_controls_html = if can_see_gm_secrets {
+        let js_id = escape_js_single_quoted_attr(&npc.character_id);
+        let next_persist = !npc.is_persistent;
+        let toggle_label = if npc.is_persistent {
+            "Unmark Persistent"
+        } else {
+            "Mark Persistent"
+        };
+        format!(
+            r#"<button type="button" class="btn-chip" onclick="window.satyaToggleNpcPersistence('{js_id}', {next_persist})">{toggle_label}</button><button type="button" class="btn-chip" onclick="window.satyaDeleteSessionNpc('{js_id}')">Delete NPC</button>"#
+        )
+    } else {
+        String::new()
+    };
     let cond_cls = if npc.apparent_condition.contains("Critically") {
         "pill pill-danger"
     } else if npc.apparent_condition.contains("Fatigued") {
@@ -139,6 +152,7 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
                 <div class="btn-row-compact">
                     <span class="{cond_cls}">{}</span>
                     {persist_badge}
+                    {gm_controls_html}
                 </div>
             </div>
             <div class="gm-doc-meta">
@@ -153,25 +167,17 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
     );
 
     if can_see_gm_secrets {
+        const BALANCED: &str = "Grounded Pragmatic Cooperative Ambiverted Adaptive Adaptable Measured Discerning Humane";
         let psyche_chips = if npc.psyche_summary.is_empty() {
             r#"<span class="pill pill-muted">Balanced Psyche</span>"#.to_string()
         } else {
             npc.psyche_summary
                 .iter()
                 .map(|p| {
-                    let is_polar = !p.contains("Grounded")
-                        && !p.contains("Pragmatic")
-                        && !p.contains("Cooperative")
-                        && !p.contains("Ambiverted")
-                        && !p.contains("Adaptive")
-                        && !p.contains("Adaptable")
-                        && !p.contains("Measured")
-                        && !p.contains("Discerning")
-                        && !p.contains("Humane");
-                    let cls = if is_polar {
-                        "pill pill-accent"
-                    } else {
+                    let cls = if BALANCED.split(' ').any(|w| p.contains(w)) {
                         "pill pill-muted"
+                    } else {
+                        "pill pill-accent"
                     };
                     format!(r#"<span class="{cls}">{}</span>"#, escape_html(p))
                 })
@@ -189,27 +195,24 @@ pub fn format_npc_card_html(npc: &SessionNpcEntry, can_see_gm_secrets: bool) -> 
                 .join(" ")
         };
 
-        let stats_line = if let Some(ch) = &npc.gm_character {
-            let c = &ch.characteristics;
-            format!(
-                "SPD {} · FOR {} · DEX {} · HLT {} · FIT {} | MEM {} · ANA {} · INS {} · DIS {} · FOC {} | COM {} · PRE {} · ELO {}",
-                c.spd,
-                c.for_stat,
-                c.dex,
-                c.hlt,
-                c.fit,
-                c.mem,
-                c.ana,
-                c.ins,
-                c.dis,
-                c.foc,
-                c.com,
-                c.pre,
-                c.elo
-            )
-        } else {
-            "Stats loaded in GM Vault".to_string()
-        };
+        let stats_line = npc.gm_character.as_ref().map_or_else(
+            || "Stats loaded in GM Vault".to_string(),
+            |ch| {
+                let c = &ch.characteristics;
+                [
+                    format!(
+                        "SPD {} · FOR {} · DEX {} · HLT {} · FIT {}",
+                        c.spd, c.for_stat, c.dex, c.hlt, c.fit
+                    ),
+                    format!(
+                        "MEM {} · ANA {} · INS {} · DIS {} · FOC {}",
+                        c.mem, c.ana, c.ins, c.dis, c.foc
+                    ),
+                    format!("COM {} · PRE {} · ELO {}", c.com, c.pre, c.elo),
+                ]
+                .join(" | ")
+            },
+        );
 
         let dossier_text = npc
             .gm_secret_dossier
@@ -322,9 +325,7 @@ pub fn satya_refresh_npcs_tab() {
         {
             with_state_mut(|st| {
                 st.viewer_can_see_gm_secrets = resp.viewer_can_see_gm_secrets;
-                if !resp.npcs.is_empty() {
-                    st.session_npcs = resp.npcs;
-                }
+                st.session_npcs = resp.npcs;
             });
             render_npcs_tab_dom();
         }
@@ -343,6 +344,167 @@ pub fn satya_select_npc_from_list() {
     render_npcs_tab_dom();
 }
 
+fn npc_persist_status_msg(name: &str, is_persistent: bool) -> String {
+    let label = if is_persistent {
+        "Marked Persistent in Campaign Roster"
+    } else {
+        "Set to Session-Only"
+    };
+    format!("Updated NPC '{name}': {label}")
+}
+
+fn is_matching_npc_memory(
+    m: &satya_schema::GmMemoryNoteRecord,
+    cid: &str,
+    name_low: Option<&str>,
+) -> bool {
+    m.memory_id == format!("mem_{cid}")
+        || (m.memory_id.starts_with("mem_npc_")
+            && name_low.is_some_and(|n| {
+                !n.is_empty()
+                    && m.title
+                        .to_ascii_lowercase()
+                        .starts_with(&format!("npc: {n}"))
+            }))
+}
+
+fn retain_non_duplicate_npcs(
+    npcs: &mut Vec<SessionNpcEntry>,
+    cid: &str,
+    name_low: &str,
+    drop_demo: bool,
+) {
+    npcs.retain(|n| {
+        n.character_id != cid
+            && (!drop_demo || n.character_id != "npc_000000000000002a")
+            && (name_low.is_empty() || n.character_name.trim().to_ascii_lowercase() != name_low)
+    });
+}
+
+fn notify_npc_vault_synced(msg: &str, append_notice: bool) {
+    render_npcs_tab_dom();
+    satya_refresh_gm_memories();
+    refresh_gm_omnisearch_if_active();
+    set_feedback("gm-doc-feedback", msg, false);
+    if append_notice {
+        append_system_notice(msg);
+    }
+}
+
+/// Toggles `is_persistent` on a Session NPC (and its companion `mem_<character_id>` GM memory)
+/// via `PATCH /api/sessions/:session_id/npcs/:character_id`.
+#[wasm_bindgen]
+pub fn satya_toggle_npc_persistence(character_id: String, is_persistent: bool) {
+    if !viewer_can_see_npc_gm_secrets() {
+        return;
+    }
+    let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
+        let (updated_name, mems_opt) = with_state_mut(|st| {
+            let name = st
+                .session_npcs
+                .iter_mut()
+                .find(|n| n.character_id == character_id)
+                .map(|npc| {
+                    npc.is_persistent = is_persistent;
+                    npc.character_name.clone()
+                });
+            let mem_id = format!("mem_{character_id}");
+            let mut changed = false;
+            for mem in st.gm_memories.iter_mut().filter(|m| m.memory_id == mem_id) {
+                mem.is_persistent = is_persistent;
+                changed = true;
+            }
+            (name, changed.then(|| st.gm_memories.clone()))
+        });
+        render_npcs_tab_dom();
+        if let Some(mems) = mems_opt {
+            sync_local_gm_memories_dom(&mems);
+        }
+        refresh_gm_omnisearch_if_active();
+        if let Some(name) = updated_name {
+            let msg = npc_persist_status_msg(&name, is_persistent);
+            set_feedback("gm-doc-feedback", &msg, false);
+        }
+        return;
+    };
+
+    spawn_local(async move {
+        let req = UpdateSessionNpcRequest {
+            is_persistent: Some(is_persistent),
+            ..Default::default()
+        };
+        let url = format!("/api/sessions/{sid}/npcs/{character_id}");
+        match fetch_json::<_, SessionNpcEntry>("PATCH", &url, Some(&tok), Some(&req)).await {
+            Ok(updated) => {
+                let msg = npc_persist_status_msg(&updated.character_name, updated.is_persistent);
+                with_state_mut(|st| {
+                    if let Some(slot) = st
+                        .session_npcs
+                        .iter_mut()
+                        .find(|n| n.character_id == updated.character_id)
+                    {
+                        *slot = updated;
+                    } else {
+                        st.session_npcs.insert(0, updated);
+                    }
+                });
+                notify_npc_vault_synced(&msg, true);
+            }
+            Err(err) => set_feedback("gm-doc-feedback", &err, true),
+        }
+    });
+}
+
+/// Deletes a Session NPC (plus companion `mem_<character_id>` GM memory and same-name duplicates)
+/// via `DELETE /api/sessions/:session_id/npcs/:character_id`.
+#[wasm_bindgen]
+pub fn satya_delete_session_npc(character_id: String) {
+    if !viewer_can_see_npc_gm_secrets() {
+        return;
+    }
+    let remove_local = |cid: &str| {
+        with_state_mut(|st| {
+            let name_low = st
+                .session_npcs
+                .iter()
+                .find(|n| n.character_id == cid)
+                .map(|n| n.character_name.trim().to_ascii_lowercase());
+            retain_non_duplicate_npcs(
+                &mut st.session_npcs,
+                cid,
+                name_low.as_deref().unwrap_or(""),
+                false,
+            );
+            if st.selected_npc_id.as_deref() == Some(cid) {
+                st.selected_npc_id = st.session_npcs.first().map(|n| n.character_id.clone());
+            }
+            st.gm_memories
+                .retain(|m| !is_matching_npc_memory(m, cid, name_low.as_deref()));
+            st.gm_memories.clone()
+        })
+    };
+
+    let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
+        let mems = remove_local(&character_id);
+        sync_local_gm_memories_dom(&mems);
+        render_npcs_tab_dom();
+        refresh_gm_omnisearch_if_active();
+        set_feedback("gm-doc-feedback", "Deleted Session NPC.", false);
+        return;
+    };
+
+    spawn_local(async move {
+        let url = format!("/api/sessions/{sid}/npcs/{character_id}");
+        match fetch_json::<(), serde_json::Value>("DELETE", &url, Some(&tok), None).await {
+            Ok(_) => {
+                let _ = remove_local(&character_id);
+                notify_npc_vault_synced("Deleted Session NPC.", true);
+            }
+            Err(err) => set_feedback("gm-doc-feedback", &err, true),
+        }
+    });
+}
+
 /// Rolls up a rules-legal Satya NPC from `#npc-gen-prompt` and `#npc-gen-template`, adds it to the
 /// `NPC List` selector immediately, and persists it to the session/campaign vault when connected.
 #[wasm_bindgen]
@@ -352,18 +514,14 @@ pub fn satya_generate_npc_from_prompt() {
         return;
     }
 
-    let raw_prompt = input_value("npc-gen-prompt");
-    let prompt = if raw_prompt.trim().is_empty() {
+    let trim_opt = |id: &str| {
+        let raw = input_value(id);
+        (!raw.trim().is_empty()).then(|| raw.trim().to_string())
+    };
+    let prompt = trim_opt("npc-gen-prompt").unwrap_or_else(|| {
         "Terry is a kind general MD, but needs to feel like she belongs".to_string()
-    } else {
-        raw_prompt.trim().to_string()
-    };
-    let name_ovr_raw = input_value("npc-gen-name");
-    let name_override = if name_ovr_raw.trim().is_empty() {
-        None
-    } else {
-        Some(name_ovr_raw.trim().to_string())
-    };
+    });
+    let name_override = trim_opt("npc-gen-name");
     let tmpl_str = select_value("npc-gen-template");
     let faction_archetype = FactionArchetypeId::from_code_str(&tmpl_str);
     let template = if faction_archetype.is_some() {
@@ -376,12 +534,7 @@ pub fn satya_generate_npc_from_prompt() {
         .parse::<usize>()
         .unwrap_or(2)
         .clamp(1, 4);
-    let secret_raw = input_value("npc-gen-secret");
-    let gm_secret_notes = if secret_raw.trim().is_empty() {
-        None
-    } else {
-        Some(secret_raw.trim().to_string())
-    };
+    let gm_secret_notes = trim_opt("npc-gen-secret");
     let is_persistent = input_checked("npc-gen-persist");
 
     // 1. Generate immediately in Wasm via satya-engine so offline/solo and online GMs get instant results
@@ -424,16 +577,22 @@ pub fn satya_generate_npc_from_prompt() {
         psyche_summary,
         top_skills,
         gm_secret_dossier: Some(full_dossier),
-            ..Default::default()
+        ..Default::default()
     };
 
+    let local_name_low = local_entry.character_name.trim().to_ascii_lowercase();
     with_state_mut(|st| {
-        st.session_npcs
-            .retain(|n| n.character_id != local_entry.character_id);
+        retain_non_duplicate_npcs(
+            &mut st.session_npcs,
+            &local_entry.character_id,
+            &local_name_low,
+            false,
+        );
         st.session_npcs.insert(0, local_entry.clone());
         st.selected_npc_id = Some(local_entry.character_id.clone());
     });
     render_npcs_tab_dom();
+    refresh_gm_omnisearch_if_active();
     append_system_notice(&format!(
         "Rolled up NPC '{}' ({}) with rules-legal 5-Stage Lifepath, Skills, and 9 Psyche traits.",
         local_entry.character_name, local_entry.callsign_or_role
@@ -469,17 +628,30 @@ pub fn satya_generate_npc_from_prompt() {
         )
         .await
         {
+            let resp_name_low = resp.npc.character_name.trim().to_ascii_lowercase();
             with_state_mut(|st| {
-                st.session_npcs
-                    .retain(|n| n.character_id != resp.npc.character_id);
-                st.session_npcs.insert(0, resp.npc.clone());
-                st.selected_npc_id = Some(resp.npc.character_id);
+                retain_non_duplicate_npcs(
+                    &mut st.session_npcs,
+                    &resp.npc.character_id,
+                    &resp_name_low,
+                    true,
+                );
                 if let Some(mem) = resp.gm_memory {
-                    st.gm_memories.retain(|m| m.memory_id != mem.memory_id);
+                    st.gm_memories.retain(|m| {
+                        m.memory_id != mem.memory_id
+                            && !is_matching_npc_memory(
+                                m,
+                                &resp.npc.character_id,
+                                Some(&resp_name_low),
+                            )
+                    });
                     st.gm_memories.insert(0, mem);
                 }
+                st.selected_npc_id = Some(resp.npc.character_id.clone());
+                st.session_npcs.insert(0, resp.npc);
             });
             render_npcs_tab_dom();
+            refresh_gm_omnisearch_if_active();
         }
     });
 }
@@ -520,52 +692,36 @@ mod tests {
         let human_gm = Participant::human("u-gm", "sean", "Sean (GM)", SessionRole::Gm);
         let human_player = Participant::human("u-p1", "sara", "Sara", SessionRole::Player);
         let ai_gm = Participant::ai_gm("sess-1", "gemma4:12b", "harsh-reality-arbiter");
+        let gm_roster = [human_gm.clone(), human_player.clone()];
+        let ai_roster = [ai_gm, human_player.clone()];
+        let hp = Some(&human_player);
 
         // 1. Offline / Solo mode (no session_id) -> always true
-        assert!(can_viewer_see_npc_secrets(
-            None,
-            Some(&human_player),
-            &[human_gm.clone(), human_player.clone()],
-            false,
-        ));
-
+        assert!(can_viewer_see_npc_secrets(None, hp, &gm_roster, false));
         // 2. Active session where viewer is Human GM -> true
         assert!(can_viewer_see_npc_secrets(
             Some("sess-1"),
             Some(&human_gm),
-            &[human_gm.clone(), human_player.clone()],
-            false,
+            &gm_roster,
+            false
         ));
-
-        // 3. Active session where viewer is Player and a Human GM is present -> false (secrets redacted!)
+        // 3. Active session where viewer is Player and a Human GM is present -> false
         assert!(!can_viewer_see_npc_secrets(
             Some("sess-1"),
-            Some(&human_player),
-            &[human_gm, human_player.clone()],
-            true,
+            hp,
+            &gm_roster,
+            true
         ));
-
-        // 4. Active session where viewer is Player with ONLY an AI GM (Solo/Co-op AI-GM) -> true
+        // 4. Active session where viewer is Player with ONLY an AI GM -> true
         assert!(can_viewer_see_npc_secrets(
             Some("sess-1"),
-            Some(&human_player),
-            &[ai_gm, human_player.clone()],
-            false,
+            hp,
+            &ai_roster,
+            false
         ));
-
         // 5. Empty roster before initial ROSTER_SYNC -> defers to server fallback flag
-        assert!(!can_viewer_see_npc_secrets(
-            Some("sess-1"),
-            Some(&human_player),
-            &[],
-            false,
-        ));
-        assert!(can_viewer_see_npc_secrets(
-            Some("sess-1"),
-            Some(&human_player),
-            &[],
-            true,
-        ));
+        assert!(!can_viewer_see_npc_secrets(Some("sess-1"), hp, &[], false));
+        assert!(can_viewer_see_npc_secrets(Some("sess-1"), hp, &[], true));
     }
 
     #[test]
@@ -596,20 +752,42 @@ mod tests {
         };
 
         let gm_html = format_npc_card_html(&entry, true);
-        assert!(gm_html.contains("Dr. Lin &lt;Trauma&gt;"));
-        assert!(gm_html.contains("Calm bedside manner under fire."));
-        assert!(gm_html.contains("EMP 17 (Compassionate)"));
-        assert!(gm_html.contains("Trauma Surgery (N=4)"));
-        assert!(gm_html.contains("Owes 40,000 cr to Black Sun brokers."));
-        assert!(gm_html.contains("satyaLoadSelectedNpcToSheet()"));
+        let toggle_js = format!(
+            "window.satyaToggleNpcPersistence('{}', false)",
+            entry.character_id
+        );
+        let del_js = format!("window.satyaDeleteSessionNpc('{}')", entry.character_id);
+        assert!(
+            gm_html.contains("Dr. Lin &lt;Trauma&gt;")
+                && gm_html.contains("EMP 17 (Compassionate)")
+        );
+        assert!(
+            gm_html.contains("Calm bedside manner under fire.")
+                && gm_html.contains("Trauma Surgery (N=4)")
+        );
+        assert!(
+            gm_html.contains("Owes 40,000 cr to Black Sun brokers.")
+                && gm_html.contains("satyaLoadSelectedNpcToSheet()")
+        );
+        assert!(gm_html.contains(&toggle_js) && gm_html.contains(&del_js));
 
         let player_html = format_npc_card_html(&entry, false);
-        assert!(player_html.contains("Dr. Lin &lt;Trauma&gt;"));
-        assert!(player_html.contains("Calm bedside manner under fire."));
+        assert!(
+            player_html.contains("Dr. Lin &lt;Trauma&gt;")
+                && player_html.contains("Calm bedside manner under fire.")
+        );
         assert!(player_html.contains("Player View: GM-only Characteristics"));
-        assert!(!player_html.contains("EMP 17 (Compassionate)"));
-        assert!(!player_html.contains("Trauma Surgery (N=4)"));
-        assert!(!player_html.contains("Owes 40,000 cr to Black Sun brokers."));
-        assert!(!player_html.contains("satyaLoadSelectedNpcToSheet()"));
+        assert!(
+            !player_html.contains("EMP 17 (Compassionate)")
+                && !player_html.contains("Trauma Surgery (N=4)")
+        );
+        assert!(
+            !player_html.contains("Owes 40,000 cr to Black Sun brokers.")
+                && !player_html.contains("satyaLoadSelectedNpcToSheet()")
+        );
+        assert!(
+            !player_html.contains("satyaToggleNpcPersistence")
+                && !player_html.contains("satyaDeleteSessionNpc")
+        );
     }
 }

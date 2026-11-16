@@ -28,8 +28,8 @@ use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{
     AnalyserNode, AudioContext, HtmlVideoElement, MediaStream, MediaStreamConstraints,
     MessageEvent, RtcConfiguration, RtcDataChannel, RtcDataChannelEvent, RtcIceCandidate,
-    RtcIceCandidateInit, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent,
-    RtcSdpType, RtcSessionDescriptionInit, RtcTrackEvent, WebSocket,
+    RtcIceCandidateInit, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
+    RtcSessionDescriptionInit, RtcTrackEvent, WebSocket,
 };
 
 pub(crate) fn connect_signaling_websocket() {
@@ -311,9 +311,8 @@ pub fn satya_toggle_video() {
 
 /// Stops any active `250ms` prosody `setInterval` timer and closes any active WebAudio `AudioContext`.
 pub(crate) fn teardown_prosody_monitor() {
-    let (interval_id, audio_ctx) = with_state_mut(|st| {
-        (st.prosody_interval_id.take(), st.prosody_audio_ctx.take())
-    });
+    let (interval_id, audio_ctx) =
+        with_state_mut(|st| (st.prosody_interval_id.take(), st.prosody_audio_ctx.take()));
     if let Some(id) = interval_id
         && let Some(win) = window()
     {

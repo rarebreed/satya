@@ -402,7 +402,11 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                 .iter()
                 .map(|&arch| {
                     format_archetype_radio_card_html(
-                        ("wiz-gang-arch", "wiz_stage4b_archetype", "stage4b_archetype"),
+                        (
+                            "wiz-gang-arch",
+                            "wiz_stage4b_archetype",
+                            "stage4b_archetype",
+                        ),
                         (arch.as_str(), arch.label(), arch.subtitle()),
                         cfg.stage4b_gang_archetype == arch,
                     )
@@ -428,7 +432,11 @@ pub fn format_lifepath_step_html(st: &CharacterWizardState) -> String {
                 .iter()
                 .map(|&arch| {
                     format_archetype_radio_card_html(
-                        ("wiz-rural-arch", "wiz_stage4c_archetype", "stage4c_archetype"),
+                        (
+                            "wiz-rural-arch",
+                            "wiz_stage4c_archetype",
+                            "stage4c_archetype",
+                        ),
                         (arch.as_str(), arch.label(), arch.subtitle()),
                         cfg.stage4c_rural_archetype == arch,
                     )

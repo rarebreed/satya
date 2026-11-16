@@ -87,9 +87,7 @@ fn test_procedural_sector_presets_and_continuous_los_cover() {
     };
     let low = evaluate_los_continuous(&low_scene, (2.5, 4.5), (9.5, 4.5));
     assert!(
-        low.has_los
-            && low.cover_grade == CoverGrade::LowCover
-            && low.recommended_delta_ext == 4
+        low.has_los && low.cover_grade == CoverGrade::LowCover && low.recommended_delta_ext == 4
     );
 
     // Braced right behind barrier -> Clear outgoing shot!
@@ -222,7 +220,12 @@ fn topology_signature(sec: &ProceduralSector) -> (usize, usize, u64, u64) {
             }
         }
     }
-    (sec.wall_edges.len(), sec.surfaces.len(), edge_hash, surf_hash)
+    (
+        sec.wall_edges.len(),
+        sec.surfaces.len(),
+        edge_hash,
+        surf_hash,
+    )
 }
 
 #[test]
@@ -346,14 +349,8 @@ fn continue_all_presets_across_all_four_cardinal_edges() {
 
 #[test]
 fn walled_north_south_adds_seam_doorway_and_outdoor_ribbons_continue() {
-    let apt = build_procedural_map_request(
-        "apt",
-        SectorPreset::ResidentialApartment,
-        None,
-        20,
-        14,
-        42,
-    );
+    let apt =
+        build_procedural_map_request("apt", SectorPreset::ResidentialApartment, None, 20, 14, 42);
     let south = continue_procedural_map(&apt, MapContinuationDir::South, None).unwrap();
     let has_seam_door = south.map.wall_edges.iter().any(|e| {
         e.side == EdgeSide::North
@@ -427,7 +424,8 @@ fn multi_step_l_and_full_stitch_respects_max_arena_bounds() {
     assert!(continue_procedural_map(&map, MapContinuationDir::East, None).is_err());
 
     // Large single sectors stitch with proportional continuation strips cleanly.
-    let estate = build_procedural_map_request("estate", SectorPreset::GardenEstate, None, 48, 36, 99);
+    let estate =
+        build_procedural_map_request("estate", SectorPreset::GardenEstate, None, 48, 36, 99);
     let stitched_estate = continue_procedural_map(&estate, MapContinuationDir::East, None)
         .unwrap()
         .map;
@@ -506,10 +504,7 @@ fn interiors_are_deterministic_furnished_and_fully_connected() {
         .iter()
         .find(|p| p.kind == PropKind::BarCounter)
         .expect("bar counter");
-    assert!(
-        counter.w_cells >= 3,
-        "multi-cell bar counter: {counter:?}"
-    );
+    assert!(counter.w_cells >= 3, "multi-cell bar counter: {counter:?}");
     let office = generate_furnished_interior(InteriorStyle::Office, 20, 14, 42);
     assert!(
         office.props.iter().any(|p| p.kind == PropKind::Desk),
@@ -662,7 +657,12 @@ fn residential_architectures_vary_shapes_floors_decks_pools_and_non_sparse_rooms
             SectorPreset::LuxuryMansion,
         ] {
             let sec = generate_zoned_sector(preset, 36, 26, seed, None, None);
-            assert!(all_walkable_areas_connected(36, 26, &sec.wall_edges, &sec.props));
+            assert!(all_walkable_areas_connected(
+                36,
+                26,
+                &sec.wall_edges,
+                &sec.props
+            ));
             let interior_count = sec
                 .surfaces
                 .iter()
@@ -705,11 +705,20 @@ fn residential_architectures_vary_shapes_floors_decks_pools_and_non_sparse_rooms
         }
     }
 
-    assert!(saw_multi_wing, "expected L-shaped multi-wing homes across seeds");
-    assert!(saw_tile_or_marble, "expected ceramic/marble kitchen/bath room floors");
+    assert!(
+        saw_multi_wing,
+        "expected L-shaped multi-wing homes across seeds"
+    );
+    assert!(
+        saw_tile_or_marble,
+        "expected ceramic/marble kitchen/bath room floors"
+    );
     assert!(saw_carpet, "expected carpet flooring in bedrooms");
     assert!(saw_deck_or_pool, "expected attached wood decks and pools");
-    assert!(saw_bedroom_suite, "expected non-sparse bedroom suites with nightstands/dressers/lamps");
+    assert!(
+        saw_bedroom_suite,
+        "expected non-sparse bedroom suites with nightstands/dressers/lamps"
+    );
     assert!((tree_canopy_radius_m(PropKind::LargeTree) - 1.95).abs() < 1e-4);
     assert!((tree_canopy_radius_m(PropKind::MediumTree) - 1.35).abs() < 1e-4);
 }

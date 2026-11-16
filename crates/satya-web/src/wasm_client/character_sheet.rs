@@ -24,10 +24,6 @@ use crate::wasm_client::dom::{
     slugify_identifier,
 };
 use crate::wasm_client::state::{with_state, with_state_mut};
-pub use satya_engine::{
-    BoneFractureStatus, CANONICAL_FIELD_GEAR_PRESETS, CANONICAL_FIREARM_PRESETS, FieldGearItem,
-    lookup_field_gear_preset, lookup_firearm_preset,
-};
 use satya_engine::{
     AcuteMentalTraumaTier, AptitudeCode, ArmorProfileId, CarriedLoadItem, CarryErgonomicMethod,
     CharacterAptitudes, CharacterCharacteristics, CharacteristicCode, ConditionImpact,
@@ -37,8 +33,12 @@ use satya_engine::{
     build_amara_okafor_lifepath, build_linnea_cho_lifepath, build_mateo_vance_lifepath,
     build_priya_nair_lifepath, compute_lifepath_baseline_from_config, compute_tactical_pool,
     evaluate_acute_mental_trauma, evaluate_blood_loss_progression, evaluate_encumbrance_load,
-    evaluate_fatigue_level, evaluate_physiological_status_conditions,
-    initialize_universal_talents, resolve_hit_location_d20,
+    evaluate_fatigue_level, evaluate_physiological_status_conditions, initialize_universal_talents,
+    resolve_hit_location_d20,
+};
+pub use satya_engine::{
+    BoneFractureStatus, CANONICAL_FIELD_GEAR_PRESETS, CANONICAL_FIREARM_PRESETS, FieldGearItem,
+    lookup_field_gear_preset, lookup_firearm_preset,
 };
 use wasm_bindgen::prelude::*;
 
@@ -620,7 +620,8 @@ impl CharacterSheetState {
             "wound_tier" => zone.wound_tier = v.parse::<u8>().unwrap_or(0).min(5),
             "bone_status" => zone.bone_status = BoneFractureStatus::from_code(v),
             "bleed_grade" => {
-                zone.bleed_grade = HemorrhageGrade::from_grade_number(v.parse::<i32>().unwrap_or(0));
+                zone.bleed_grade =
+                    HemorrhageGrade::from_grade_number(v.parse::<i32>().unwrap_or(0));
             }
             _ => {}
         }
@@ -904,7 +905,8 @@ pub fn satya_char_sheet_roll_hit_location() {
 #[wasm_bindgen]
 pub fn satya_char_sheet_update_zone(zone_idx: usize, field: String, value: String) {
     with_state_mut(|st| {
-        st.character_sheet.apply_zone_mutation(zone_idx, &field, &value);
+        st.character_sheet
+            .apply_zone_mutation(zone_idx, &field, &value);
     });
     render_character_sheet();
 }

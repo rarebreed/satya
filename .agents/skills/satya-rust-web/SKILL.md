@@ -16,7 +16,7 @@ Use alongside [`satya-rust-workspace`](../satya-rust-workspace/SKILL.md) wheneve
 
 ## 1. Token-Saving Fast-Path Task Router
 
-Read **only** the specific source file(s) and companion doc for your task (every file fits in 1 `read_file` call):
+Read **only** the specific source file(s) and companion doc for your task (using `rg -n` + `StartLine`/`EndLine` on larger files):
 
 | Task / Feature Area | Primary Source Files (`crates/satya-web/src/`) | Deep-Dive Doc (`docs/technical/satya-web/`) |
 | :--- | :--- | :--- |
@@ -31,7 +31,7 @@ Read **only** the specific source file(s) and companion doc for your task (every
 | **Auth, Session Resume, `.satyasession` & Transcripts** | `views_gate.rs`, `wasm_client/{auth_session.rs,session_persistence.rs}` | [`05-session-webrtc-chat-and-gm-vault.md`](../../../docs/technical/satya-web/05-session-webrtc-chat-and-gm-vault.md) |
 | **WebSocket Signaling, WebRTC Mesh & Prosody** | `views_workspace.rs`, `wasm_client/{webrtc.rs,workspace_drawers.rs}` | [`05-session-webrtc-chat-and-gm-vault.md`](../../../docs/technical/satya-web/05-session-webrtc-chat-and-gm-vault.md) |
 | **Chat `/msg` + `/roll` DSL, `2d20` Cascade & Triad Pool** | `chat_cmd.rs`, `views_workspace.rs`, `wasm_client/{chat_and_ttrpg.rs,ttrpg_drawer_cascade.rs,ttrpg_drawer_triad.rs}` | [`05-session-webrtc-chat-and-gm-vault.md`](../../../docs/technical/satya-web/05-session-webrtc-chat-and-gm-vault.md) |
-| **Combat Clock, Rules Book, GM Vault/Drive, Director, NPCs, Iggy** | `views_notebook_docs.rs`, `views_notebook_gm.rs`, `wasm_client/{notebook.rs,gm_docs.rs,gm_memories_and_director.rs,npcs.rs,telemetry.rs}` | [`05-session-webrtc-chat-and-gm-vault.md`](../../../docs/technical/satya-web/05-session-webrtc-chat-and-gm-vault.md) |
+| **Combat Clock, Rules Book, GM Vault/Drive, Director, NPCs, Iggy** | `views_notebook_docs.rs`, `views_notebook_gm.rs`, `wasm_client/{notebook.rs,gm_docs.rs,gm_docs_google.rs,gm_memories_and_director.rs,gm_omnisearch.rs,npcs.rs,telemetry.rs}` | [`05-session-webrtc-chat-and-gm-vault.md`](../../../docs/technical/satya-web/05-session-webrtc-chat-and-gm-vault.md) |
 
 ---
 
@@ -39,9 +39,9 @@ Read **only** the specific source file(s) and companion doc for your task (every
 
 1. **One-Shot SSR, Unique DOM IDs, & `bind_window_callbacks!`**:
    - `render_satya_app_html()` serializes `SatyaApp().to_html()` once on the server (`satya-signaling` `GET /`); `SatyaApp` is **not** client-hydrated by Leptos reactive signals.
-   - Register every `window.satya*` handler in `bind_window_callbacks!` (`wasm_client/mod.rs`), which populates `REGISTERED_WINDOW_CALLBACKS`. Host tests in `tests.rs` fail if any `window.satya*` attribute in SSR/formatter HTML is missing from `REGISTERED_WINDOW_CALLBACKS` or if any SSR `id="..."` attribute is duplicated.
-2. **Single-Read File Budget (`<= 45 KB` / `< 800` Lines)**:
-   - Split growing modules along clean domain boundaries with flat `pub use companion::*;` re-exports in the parent feature file (avoiding duplicate glob re-exports in `wasm_client/mod.rs`).
+   - Register every `window.satya*` handler in `bind_window_callbacks!` (`wasm_client/mod.rs`), which populates `REGISTERED_WINDOW_CALLBACKS`. Include representative outputs of dynamic `format_*_html` emitters (e.g., `format_gm_documents_list_html`, `format_gm_memories_list_html`, `format_gm_omnisearch_hits_html`, `format_npc_card_html`) in `tests_contracts.rs::test_ssr_and_dynamic_window_callbacks_match_registered_bindings` so any missing callback binding or duplicate SSR DOM `id="..."` fails host tests immediately.
+2. **Responsibility-Driven Module Boundaries**:
+   - Split modules only along distinct UI/protocol responsibilities with flat `pub use companion::*;` re-exports in the parent feature file (avoiding duplicate glob re-exports in `wasm_client/mod.rs`); keep single-responsibility feature modules together regardless of line count rather than micro-splitting or line-golfing fluent/builder code.
 3. **Single Source of Truth with `satya-engine` & `satya-schema`**:
    - Drive the 10-tab Notebook from `NOTEBOOK_TAB_SPECS`, Rules chapters from `rules_book_catalog()`, 30 techniques from `canonical_combat_technique_catalog()`, firearms/gear/trauma (`CANONICAL_FIREARM_PRESETS`, `CANONICAL_FIELD_GEAR_PRESETS`, `BoneFractureStatus`), and spatial/hover geometry (`tactical_map`, `tactical_map_inspect`, `MapPropPlacement::footprint_m()`) directly from Rust core crates (`SECONDS_PER_TICK = 0.25`).
 4. **Shared `dom.rs`, `dom_tooltip.rs`, & `wgpu_shared.rs` Primitives**:
@@ -71,3 +71,9 @@ Read **only** the specific source file(s) and companion doc for your task (every
 8. **Resizable CSS Grid Tracks & Floating Overlay Panes (`styles.css`, `workspace_drawers.rs`)**:
    - `#workspace-col-splitter` persists inline `--col-left-track` on `#workspace-panel`, which overrides class-level `--col-*-track` definitions; collapsed/undocked states must override `grid-template-columns` directly with explicit `minmax(0, 1fr)` / `fr` tracks instead of relying solely on custom properties.
    - Use `display: contents` (`.is-undocked`) on column wrappers containing only `position: fixed` floating panes so grid tracks disappear without hiding the overlays; avoid `overflow: clip` on `.is-floating` cards (use `overflow: hidden` or `auto` so `resize: both` remains functional), and strip inline `left`/`top`/`right`/`width`/`height`/`z-index` on re-dock.
+9. **Single Vertical Scroll Container per Notebook Tab (Precision Trackpad Scrolling)**:
+   - Scrolling panes (e.g., `#notebook-pane-docs`, `#notebook-pane-npcs`) inherit vertical scrolling from `.notebook-pane { overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; scrollbar-gutter: stable; }`, whereas full-viewport tabs (`#notebook-pane-rules`, `#notebook-pane-wizard`, `#notebook-pane-character`, `#notebook-pane-dice`, `#notebook-pane-maps`) set `overflow: hidden` and delegate scrolling to their dedicated inner viewport.
+   - Never put `overflow-y: auto; overscroll-behavior-y: contain;` on un-bounded inner list wrappers (`.gm-docs-list`) or `flex-shrink: 1` min-height traps inside `.notebook-pane` — precision trackpads trap wheel events inside the inner wrapper and block scroll chaining up to `.notebook-pane`. Reserve bounded `overflow-y: auto` only for explicitly `max-height`-capped drawers like `#rules-search-results`.
+10. **Session-Scoped Client Cache & Demo Seeding Hygiene**:
+   - Reset all room/vault caches (`gm_documents`, `gm_memories`, `gm_omnisearch_active`, `session_npcs`, `selected_npc_id`) in `cleanup_client_session_state`.
+   - Gate offline demo seeding (`ensure_default_demo_npc_if_empty`) strictly on `st.session_id.is_none() && st.session_npcs.is_empty()`, overwrite client vectors unconditionally from authoritative server responses (`st.session_npcs = resp.npcs;` without `if !is_empty()` guards), deduplicate optimistic vs. server NPC records by ID and case-insensitive name, and call `refresh_gm_omnisearch_if_active()` after vault/NPC mutations.

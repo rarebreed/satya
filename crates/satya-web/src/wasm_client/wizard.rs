@@ -628,7 +628,11 @@ pub fn satya_wizard_roll_aptitudes() {
 pub fn satya_wizard_roll_complete_lifepath() {
     with_state_mut(|st| {
         for stage in 1..=5 {
-            roll_lifepath_stage_in_config(&mut st.wizard.lifepath, stage, &mut roll_browser_die_i32);
+            roll_lifepath_stage_in_config(
+                &mut st.wizard.lifepath,
+                stage,
+                &mut roll_browser_die_i32,
+            );
         }
         st.wizard.rebuild_and_auto_allocate_skills();
     });
@@ -644,7 +648,11 @@ pub fn satya_wizard_roll_complete_lifepath() {
 #[wasm_bindgen]
 pub fn satya_wizard_roll_lifepath_stage(stage_num: u8) {
     with_state_mut(|st| {
-        roll_lifepath_stage_in_config(&mut st.wizard.lifepath, stage_num, &mut roll_browser_die_i32);
+        roll_lifepath_stage_in_config(
+            &mut st.wizard.lifepath,
+            stage_num,
+            &mut roll_browser_die_i32,
+        );
         st.wizard.rebuild_and_auto_allocate_skills();
     });
     render_character_wizard();
@@ -661,7 +669,12 @@ pub fn satya_wizard_update_lifepath_field(field_name: String, raw_value: String)
     let field = field_name.trim().to_ascii_lowercase();
     let val = raw_value.trim();
     with_state_mut(|st| {
-        apply_lifepath_field_in_config(&mut st.wizard.lifepath, &field, val, &mut roll_browser_die_i32);
+        apply_lifepath_field_in_config(
+            &mut st.wizard.lifepath,
+            &field,
+            val,
+            &mut roll_browser_die_i32,
+        );
         st.wizard.rebuild_and_auto_allocate_skills();
     });
     render_character_wizard();
@@ -673,7 +686,13 @@ pub fn satya_wizard_update_career_term(term_idx: usize, field: String, raw_value
     let f = field.trim().to_ascii_lowercase();
     let v = raw_value.trim();
     with_state_mut(|st| {
-        apply_career_term_in_config(&mut st.wizard.lifepath, term_idx, &f, v, &mut roll_browser_die_i32);
+        apply_career_term_in_config(
+            &mut st.wizard.lifepath,
+            term_idx,
+            &f,
+            v,
+            &mut roll_browser_die_i32,
+        );
         st.wizard.rebuild_and_auto_allocate_skills();
     });
     render_character_wizard();

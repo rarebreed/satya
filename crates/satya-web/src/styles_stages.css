@@ -76,8 +76,10 @@
     max-inline-size: 100%;
     overflow-y: auto;
     overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
 }
-#notebook-pane-rules, #notebook-pane-wizard, #notebook-pane-dice, #notebook-pane-maps {
+#notebook-pane-rules, #notebook-pane-wizard, #notebook-pane-character, #notebook-pane-dice, #notebook-pane-maps {
     overflow: hidden;
 }
 .pane-toolbar {

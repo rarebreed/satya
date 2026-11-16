@@ -286,7 +286,10 @@ mod tests {
         assert_eq!(sheet.blood_units_lost, 0.0);
 
         // Accumulate FT + 2 exertion marks -> rolls over into +1 Fatigue Level with 2 remaining marks
-        let ft = sheet.characteristics.compute_derived(0).ft_fatigue_threshold;
+        let ft = sheet
+            .characteristics
+            .compute_derived(0)
+            .ft_fatigue_threshold;
         sheet.apply_status_mutation("exertion_delta", &(ft + 2).to_string());
         assert_eq!(sheet.fatigue_level, 1);
         assert_eq!(sheet.exertion_marks, 2);
@@ -344,16 +347,22 @@ mod tests {
             .apply_status_mutation("mental_trauma", "TIER_2");
 
         let record = st.character_sheet.to_character_sheet_record("usr-kira");
-        assert_eq!(record.lifepath_config_json.as_deref(), Some(lp_json.as_str()));
+        assert_eq!(
+            record.lifepath_config_json.as_deref(),
+            Some(lp_json.as_str())
+        );
 
         let bytes = encode_offline_satyachar_bytes(&record, Some("sess-offline-1"))
             .expect("offline .satyachar encode must succeed");
         assert!(!bytes.is_empty());
 
-        let decoded = decode_offline_satyachar_bytes(&bytes)
-            .expect("offline .satyachar decode must succeed");
+        let decoded =
+            decode_offline_satyachar_bytes(&bytes).expect("offline .satyachar decode must succeed");
         assert_eq!(decoded.character_name, "Kira \"Ghost\" Solis!");
-        assert_eq!(decoded.lifepath_config_json.as_deref(), Some(lp_json.as_str()));
+        assert_eq!(
+            decoded.lifepath_config_json.as_deref(),
+            Some(lp_json.as_str())
+        );
         assert_eq!(
             decoded.verification_status,
             CharacterVerificationStatus::LegalCustom

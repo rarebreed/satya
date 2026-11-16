@@ -70,7 +70,11 @@ fn dsu_find(p: &mut [usize], mut x: usize) -> usize {
 }
 
 const fn stair_foot(st: StairAnchor) -> (i32, i32, i32, i32) {
-    let (sw, sh) = if st.rot_deg.rem_euclid(180) == 90 { (3, 2) } else { (2, 3) };
+    let (sw, sh) = if st.rot_deg.rem_euclid(180) == 90 {
+        (3, 2)
+    } else {
+        (2, 3)
+    };
     (st.x, st.y, st.x + sw, st.y + sh)
 }
 
@@ -86,17 +90,37 @@ fn cut_avoids_stair_h(r: Room, sy: i32, stair: Option<StairAnchor>) -> bool {
     r.x1 <= tx0 || r.x0 >= tx1 || sy <= ty0 || sy >= ty1
 }
 
-fn pick_v_cut(r: Room, target: i32, min_a: i32, min_b: i32, stair: Option<StairAnchor>) -> Option<i32> {
+fn pick_v_cut(
+    r: Room,
+    target: i32,
+    min_a: i32,
+    min_b: i32,
+    stair: Option<StairAnchor>,
+) -> Option<i32> {
     let (lo, hi) = (r.x0 + min_a, r.x1 - min_b);
     (lo <= hi)
-        .then(|| (lo..=hi).filter(|&sx| cut_avoids_stair_v(r, sx, stair)).min_by_key(|&sx| (sx - target).abs()))
+        .then(|| {
+            (lo..=hi)
+                .filter(|&sx| cut_avoids_stair_v(r, sx, stair))
+                .min_by_key(|&sx| (sx - target).abs())
+        })
         .flatten()
 }
 
-fn pick_h_cut(r: Room, target: i32, min_a: i32, min_b: i32, stair: Option<StairAnchor>) -> Option<i32> {
+fn pick_h_cut(
+    r: Room,
+    target: i32,
+    min_a: i32,
+    min_b: i32,
+    stair: Option<StairAnchor>,
+) -> Option<i32> {
     let (lo, hi) = (r.y0 + min_a, r.y1 - min_b);
     (lo <= hi)
-        .then(|| (lo..=hi).filter(|&sy| cut_avoids_stair_h(r, sy, stair)).min_by_key(|&sy| (sy - target).abs()))
+        .then(|| {
+            (lo..=hi)
+                .filter(|&sy| cut_avoids_stair_h(r, sy, stair))
+                .min_by_key(|&sy| (sy - target).abs())
+        })
         .flatten()
 }
 
@@ -114,7 +138,10 @@ pub(crate) fn plan_home_blueprint(
     let can_l = lot.w() >= 11 && lot.h() >= 9;
     let can_villa = lot.w() >= 14
         && lot.h() >= 10
-        && matches!(tier, EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion);
+        && matches!(
+            tier,
+            EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
+        );
 
     let roll = rng.range(0, 100);
     let plan = if lot.w() < 9 || lot.h() < 7 {
@@ -134,13 +161,23 @@ pub(crate) fn plan_home_blueprint(
     let main_wing = match plan {
         HomePlanKind::LShaped => {
             let notch = match (entry_side, rng.chance(1, 2)) {
-                (CardinalEntry::South, true) | (CardinalEntry::West, true) => NotchCorner::NorthEast,
-                (CardinalEntry::South, false) | (CardinalEntry::East, true) => NotchCorner::NorthWest,
-                (CardinalEntry::North, true) | (CardinalEntry::West, false) => NotchCorner::SouthEast,
-                (CardinalEntry::North, false) | (CardinalEntry::East, false) => NotchCorner::SouthWest,
+                (CardinalEntry::South, true) | (CardinalEntry::West, true) => {
+                    NotchCorner::NorthEast
+                }
+                (CardinalEntry::South, false) | (CardinalEntry::East, true) => {
+                    NotchCorner::NorthWest
+                }
+                (CardinalEntry::North, true) | (CardinalEntry::West, false) => {
+                    NotchCorner::SouthEast
+                }
+                (CardinalEntry::North, false) | (CardinalEntry::East, false) => {
+                    NotchCorner::SouthWest
+                }
             };
-            let split_x = (lot.x0 + lot.w() * rng.range(48, 60) / 100).clamp(lot.x0 + 5, lot.x1 - 4);
-            let split_y = (lot.y0 + lot.h() * rng.range(46, 60) / 100).clamp(lot.y0 + 4, lot.y1 - 4);
+            let split_x =
+                (lot.x0 + lot.w() * rng.range(48, 60) / 100).clamp(lot.x0 + 5, lot.x1 - 4);
+            let split_y =
+                (lot.y0 + lot.h() * rng.range(46, 60) / 100).clamp(lot.y0 + 4, lot.y1 - 4);
             let (m, a, n) = match notch {
                 NotchCorner::NorthEast => (
                     LotBox::new(lot.x0, split_y, lot.x1, lot.y1),
@@ -167,9 +204,15 @@ pub(crate) fn plan_home_blueprint(
             patio_box = Some(n);
             m
         }
-        HomePlanKind::CourtyardVilla | HomePlanKind::OpenConceptFoyer | HomePlanKind::FarmhouseSunroom => {
+        HomePlanKind::CourtyardVilla
+        | HomePlanKind::OpenConceptFoyer
+        | HomePlanKind::FarmhouseSunroom => {
             if lot.h() >= 11 && !matches!(entry_side, CardinalEntry::West | CardinalEntry::East) {
-                let deck_d = if plan == HomePlanKind::CourtyardVilla { 3 } else { 2 };
+                let deck_d = if plan == HomePlanKind::CourtyardVilla {
+                    3
+                } else {
+                    2
+                };
                 match entry_side {
                     CardinalEntry::South => {
                         patio_box = Some(LotBox::new(lot.x0, lot.y0, lot.x1, lot.y0 + deck_d));
@@ -189,20 +232,36 @@ pub(crate) fn plan_home_blueprint(
     };
 
     let stair = if allow_vertical_shaft && main_wing.w() >= 6 && main_wing.h() >= 5 {
-        let rot_deg = if main_wing.w() >= main_wing.h() + 3 { 90 } else { 0 };
+        let rot_deg = if main_wing.w() >= main_wing.h() + 3 {
+            90
+        } else {
+            0
+        };
         let (sw, sh) = if rot_deg == 90 { (3, 2) } else { (2, 3) };
         let sx = (main_wing.x0 + (main_wing.w() - sw) / 2).clamp(main_wing.x0, main_wing.x1 - sw);
         let sy = (main_wing.y0 + (main_wing.h() - sh) / 2).clamp(main_wing.y0, main_wing.y1 - sh);
-        Some(StairAnchor { x: sx, y: sy, rot_deg })
+        Some(StairAnchor {
+            x: sx,
+            y: sy,
+            rot_deg,
+        })
     } else if allow_vertical_shaft && main_wing.w() >= 4 && main_wing.h() >= 4 {
-        Some(StairAnchor { x: main_wing.x0, y: main_wing.y0, rot_deg: 0 })
+        Some(StairAnchor {
+            x: main_wing.x0,
+            y: main_wing.y0,
+            rot_deg: 0,
+        })
     } else {
         None
     };
 
-    let affluent = matches!(tier, EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion);
+    let affluent = matches!(
+        tier,
+        EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
+    );
     let pool_in_patio = affluent && patio_box.is_some_and(|p| p.w() >= 5 && p.h() >= 4);
-    let hot_tub_in_patio = affluent && !pool_in_patio && patio_box.is_some_and(|p| p.w() >= 3 && p.h() >= 3);
+    let hot_tub_in_patio =
+        affluent && !pool_in_patio && patio_box.is_some_and(|p| p.w() >= 3 && p.h() >= 3);
 
     HomeBlueprint {
         plan,
@@ -218,15 +277,33 @@ pub(crate) fn plan_home_blueprint(
 
 fn is_seam_edge(x: i32, y: i32, side: EdgeSide, a: LotBox, b: LotBox) -> bool {
     match side {
-        EdgeSide::North => (y == a.y1 && y == b.y0 || y == b.y1 && y == a.y0) && x >= a.x0.max(b.x0) && x < a.x1.min(b.x1),
-        EdgeSide::West => (x == a.x1 && x == b.x0 || x == b.x1 && x == a.x0) && y >= a.y0.max(b.y0) && y < a.y1.min(b.y1),
+        EdgeSide::North => {
+            (y == a.y1 && y == b.y0 || y == b.y1 && y == a.y0)
+                && x >= a.x0.max(b.x0)
+                && x < a.x1.min(b.x1)
+        }
+        EdgeSide::West => {
+            (x == a.x1 && x == b.x0 || x == b.x1 && x == a.x0)
+                && y >= a.y0.max(b.y0)
+                && y < a.y1.min(b.y1)
+        }
     }
 }
 
-fn enclose_wing_perimeter(shell: &mut Shell, wing: LotBox, other_wing: Option<LotBox>, mat: MaterialClass, win_step: i32) {
+fn enclose_wing_perimeter(
+    shell: &mut Shell,
+    wing: LotBox,
+    other_wing: Option<LotBox>,
+    mat: MaterialClass,
+    win_step: i32,
+) {
     for x in wing.x0..wing.x1 {
         let win = win_step > 0 && (x - wing.x0) % win_step == 1 && x + 1 < wing.x1;
-        let (k, m) = if win { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, mat) };
+        let (k, m) = if win {
+            (WallEdgeKind::Window, MaterialClass::Glass)
+        } else {
+            (WallEdgeKind::Wall, mat)
+        };
         if !other_wing.is_some_and(|o| is_seam_edge(x, wing.y0, EdgeSide::North, wing, o)) {
             shell.put(x, wing.y0, EdgeSide::North, k, m);
         }
@@ -236,7 +313,11 @@ fn enclose_wing_perimeter(shell: &mut Shell, wing: LotBox, other_wing: Option<Lo
     }
     for y in wing.y0..wing.y1 {
         let win = win_step > 0 && (y - wing.y0) % win_step == 1 && y + 1 < wing.y1;
-        let (k, m) = if win { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, mat) };
+        let (k, m) = if win {
+            (WallEdgeKind::Window, MaterialClass::Glass)
+        } else {
+            (WallEdgeKind::Wall, mat)
+        };
         if !other_wing.is_some_and(|o| is_seam_edge(wing.x0, y, EdgeSide::West, wing, o)) {
             shell.put(wing.x0, y, EdgeSide::West, k, m);
         }
@@ -246,18 +327,27 @@ fn enclose_wing_perimeter(shell: &mut Shell, wing: LotBox, other_wing: Option<Lo
     }
 }
 
-fn subdivide_cluster(r: Room, stair: Option<StairAnchor>, depth_left: u8, rng: &mut Rng, out: &mut Vec<Room>) {
+fn subdivide_cluster(
+    r: Room,
+    stair: Option<StairAnchor>,
+    depth_left: u8,
+    rng: &mut Rng,
+    out: &mut Vec<Room>,
+) {
     if depth_left == 0 || r.area() <= 16 || (r.w() < 5 && r.h() < 5) {
         out.push(r);
         return;
     }
     let split_v = r.w() >= 6 && (r.h() < 5 || (r.w() > r.h() && rng.chance(2, 3)));
-    if split_v && let Some(sx) = pick_v_cut(r, r.x0 + r.w() * rng.range(42, 62) / 100, 2, 3, stair) {
+    if split_v && let Some(sx) = pick_v_cut(r, r.x0 + r.w() * rng.range(42, 62) / 100, 2, 3, stair)
+    {
         subdivide_cluster(Room { x1: sx, ..r }, stair, depth_left - 1, rng, out);
         subdivide_cluster(Room { x0: sx, ..r }, stair, depth_left - 1, rng, out);
         return;
     }
-    if r.h() >= 5 && let Some(sy) = pick_h_cut(r, r.y0 + r.h() * rng.range(40, 62) / 100, 2, 3, stair) {
+    if r.h() >= 5
+        && let Some(sy) = pick_h_cut(r, r.y0 + r.h() * rng.range(40, 62) / 100, 2, 3, stair)
+    {
         subdivide_cluster(Room { y1: sy, ..r }, stair, depth_left - 1, rng, out);
         subdivide_cluster(Room { y0: sy, ..r }, stair, depth_left - 1, rng, out);
         return;
@@ -303,10 +393,12 @@ fn partition_wing_rooms(
         rooms.push(r);
     }
 
-    assign_architectural_roles(&rooms, wing, entry_side, floor_idx, is_main, plan, stair, rng)
-        .into_iter()
-        .map(|(rm, rl)| (rm, rl, wing_id))
-        .collect()
+    assign_architectural_roles(
+        &rooms, wing, entry_side, floor_idx, is_main, plan, stair, rng,
+    )
+    .into_iter()
+    .map(|(rm, rl)| (rm, rl, wing_id))
+    .collect()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -326,7 +418,13 @@ fn assign_architectural_roles(
         return Vec::new();
     }
     if floor_idx == -1 {
-        const B_ROLES: [Role; 5] = [Role::Storage, Role::BarHall, Role::Laundry, Role::ServerCloset, Role::BackKitchen];
+        const B_ROLES: [Role; 5] = [
+            Role::Storage,
+            Role::BarHall,
+            Role::Laundry,
+            Role::ServerCloset,
+            Role::BackKitchen,
+        ];
         for (i, r) in roles.iter_mut().enumerate() {
             *r = B_ROLES[i % B_ROLES.len()];
         }
@@ -369,9 +467,33 @@ fn assign_architectural_roles(
             assigned[li] = true;
         }
         let main_palette: &[Role] = match plan {
-            HomePlanKind::FarmhouseSunroom => &[Role::Kitchen, Role::Sunroom, Role::Dining, Role::MasterBedroom, Role::Bathroom, Role::Closet, Role::Bedroom],
-            HomePlanKind::CourtyardVilla => &[Role::Dining, Role::Kitchen, Role::Sunroom, Role::MasterBedroom, Role::MasterBath, Role::Closet, Role::Office],
-            _ => &[Role::Kitchen, Role::Dining, Role::MasterBedroom, Role::Bathroom, Role::Closet, Role::Bedroom, Role::Office],
+            HomePlanKind::FarmhouseSunroom => &[
+                Role::Kitchen,
+                Role::Sunroom,
+                Role::Dining,
+                Role::MasterBedroom,
+                Role::Bathroom,
+                Role::Closet,
+                Role::Bedroom,
+            ],
+            HomePlanKind::CourtyardVilla => &[
+                Role::Dining,
+                Role::Kitchen,
+                Role::Sunroom,
+                Role::MasterBedroom,
+                Role::MasterBath,
+                Role::Closet,
+                Role::Office,
+            ],
+            _ => &[
+                Role::Kitchen,
+                Role::Dining,
+                Role::MasterBedroom,
+                Role::Bathroom,
+                Role::Closet,
+                Role::Bedroom,
+                Role::Office,
+            ],
         };
         let small_roles = [Role::Bathroom, Role::Closet, Role::Laundry];
         let (mut big_cur, mut small_cur) = (0usize, 0usize);
@@ -399,9 +521,17 @@ fn assign_architectural_roles(
         ];
         for (cur, &idx) in by_area.iter().enumerate() {
             if cur == 0 || (touches_stair(rooms[idx]) && rooms[idx].area() >= 10) {
-                roles[idx] = if touches_stair(rooms[idx]) || rng.chance(1, 2) { Role::Living } else { Role::Office };
+                roles[idx] = if touches_stair(rooms[idx]) || rng.chance(1, 2) {
+                    Role::Living
+                } else {
+                    Role::Office
+                };
             } else if rooms[idx].area() <= 8 || rooms[idx].w() <= 2 || rooms[idx].h() <= 2 {
-                roles[idx] = if cur % 2 == 1 { Role::MasterBath } else { Role::Closet };
+                roles[idx] = if cur % 2 == 1 {
+                    Role::MasterBath
+                } else {
+                    Role::Closet
+                };
             } else {
                 roles[idx] = arm_palette[cur % arm_palette.len()];
             }
@@ -430,9 +560,24 @@ fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], is_v
                 let (s, e) = (ra.y0.max(rb.y0), ra.y1.min(rb.y1));
                 if e > s {
                     for y in s..e {
-                        shell.put(fx, y, EdgeSide::West, WallEdgeKind::Wall, MaterialClass::Drywall);
+                        shell.put(
+                            fx,
+                            y,
+                            EdgeSide::West,
+                            WallEdgeKind::Wall,
+                            MaterialClass::Drywall,
+                        );
                     }
-                    borders.push(SharedBorder { a: i, b: j, vertical: true, fixed_coord: fx, start: s, end: e, same_wing, weight });
+                    borders.push(SharedBorder {
+                        a: i,
+                        b: j,
+                        vertical: true,
+                        fixed_coord: fx,
+                        start: s,
+                        end: e,
+                        same_wing,
+                        weight,
+                    });
                 }
             }
             if ra.y1 == rb.y0 || rb.y1 == ra.y0 {
@@ -440,9 +585,24 @@ fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], is_v
                 let (s, e) = (ra.x0.max(rb.x0), ra.x1.min(rb.x1));
                 if e > s {
                     for x in s..e {
-                        shell.put(x, fy, EdgeSide::North, WallEdgeKind::Wall, MaterialClass::Drywall);
+                        shell.put(
+                            x,
+                            fy,
+                            EdgeSide::North,
+                            WallEdgeKind::Wall,
+                            MaterialClass::Drywall,
+                        );
                     }
-                    borders.push(SharedBorder { a: i, b: j, vertical: false, fixed_coord: fy, start: s, end: e, same_wing, weight });
+                    borders.push(SharedBorder {
+                        a: i,
+                        b: j,
+                        vertical: false,
+                        fixed_coord: fy,
+                        start: s,
+                        end: e,
+                        same_wing,
+                        weight,
+                    });
                 }
             }
         }
@@ -468,8 +628,14 @@ fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], is_v
         if carved[bi] || bd.end - bd.start < 2 {
             continue;
         }
-        let social = |r| matches!(r, Role::Foyer | Role::Living | Role::Dining | Role::Kitchen | Role::Sunroom);
-        if social(tagged[bd.a].1) && social(tagged[bd.b].1) && (is_villa || shell.rng.chance(1, 2)) {
+        let social = |r| {
+            matches!(
+                r,
+                Role::Foyer | Role::Living | Role::Dining | Role::Kitchen | Role::Sunroom
+            )
+        };
+        if social(tagged[bd.a].1) && social(tagged[bd.b].1) && (is_villa || shell.rng.chance(1, 2))
+        {
             carved[bi] = true;
         }
     }
@@ -480,22 +646,45 @@ fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], is_v
         }
         let open_arch = matches!(
             (tagged[bd.a].1, tagged[bd.b].1),
-            (Role::Foyer, Role::Living) | (Role::Living, Role::Foyer)
-                | (Role::Living, Role::Dining) | (Role::Dining, Role::Living)
-                | (Role::Dining, Role::Kitchen) | (Role::Kitchen, Role::Dining)
+            (Role::Foyer, Role::Living)
+                | (Role::Living, Role::Foyer)
+                | (Role::Living, Role::Dining)
+                | (Role::Dining, Role::Living)
+                | (Role::Dining, Role::Kitchen)
+                | (Role::Kitchen, Role::Dining)
         );
-        let kind = if open_arch { WallEdgeKind::DoorOpen } else { shell.door_kind() };
-        let mat = if open_arch { MaterialClass::SolidWood } else { MaterialClass::Drywall };
+        let kind = if open_arch {
+            WallEdgeKind::DoorOpen
+        } else {
+            shell.door_kind()
+        };
+        let mat = if open_arch {
+            MaterialClass::SolidWood
+        } else {
+            MaterialClass::Drywall
+        };
         let mid = bd.start + (bd.end - bd.start) / 2;
         if bd.vertical {
             shell.put(bd.fixed_coord, mid, EdgeSide::West, kind, mat);
             if open_arch && bd.end - bd.start >= 3 {
-                shell.put(bd.fixed_coord, mid - 1, EdgeSide::West, WallEdgeKind::DoorOpen, mat);
+                shell.put(
+                    bd.fixed_coord,
+                    mid - 1,
+                    EdgeSide::West,
+                    WallEdgeKind::DoorOpen,
+                    mat,
+                );
             }
         } else {
             shell.put(mid, bd.fixed_coord, EdgeSide::North, kind, mat);
             if open_arch && bd.end - bd.start >= 3 {
-                shell.put(mid - 1, bd.fixed_coord, EdgeSide::North, WallEdgeKind::DoorOpen, mat);
+                shell.put(
+                    mid - 1,
+                    bd.fixed_coord,
+                    EdgeSide::North,
+                    WallEdgeKind::DoorOpen,
+                    mat,
+                );
             }
         }
     }
@@ -529,7 +718,13 @@ pub(crate) fn build_blueprint_floor(
         rng: Rng(seed ^ ((floor_idx + 5) as u64).wrapping_mul(0x9E37_79B9)),
         edges: Vec::new(),
     };
-    let win_step = if floor_idx < 0 { 0 } else if tier == EconomicTier::LowIncome { 4 } else { 3 };
+    let win_step = if floor_idx < 0 {
+        0
+    } else if tier == EconomicTier::LowIncome {
+        4
+    } else {
+        3
+    };
     let other_wing = if floor_idx < 0 { None } else { bp.arm_wing };
 
     enclose_wing_perimeter(&mut shell, bp.main_wing, other_wing, exterior_mat, win_step);
@@ -537,12 +732,32 @@ pub(crate) fn build_blueprint_floor(
         enclose_wing_perimeter(&mut shell, arm, Some(bp.main_wing), exterior_mat, win_step);
     }
 
-    let mut tagged_rooms = partition_wing_rooms(bp.main_wing, bp.stair, floor_idx, entry_side, true, bp.plan, &mut shell.rng);
+    let mut tagged_rooms = partition_wing_rooms(
+        bp.main_wing,
+        bp.stair,
+        floor_idx,
+        entry_side,
+        true,
+        bp.plan,
+        &mut shell.rng,
+    );
     if let Some(arm) = other_wing {
-        tagged_rooms.extend(partition_wing_rooms(arm, None, floor_idx, entry_side, false, bp.plan, &mut shell.rng));
+        tagged_rooms.extend(partition_wing_rooms(
+            arm,
+            None,
+            floor_idx,
+            entry_side,
+            false,
+            bp.plan,
+            &mut shell.rng,
+        ));
     }
 
-    connect_rooms_with_doors(&mut shell, &tagged_rooms, bp.plan == HomePlanKind::CourtyardVilla);
+    connect_rooms_with_doors(
+        &mut shell,
+        &tagged_rooms,
+        bp.plan == HomePlanKind::CourtyardVilla,
+    );
     if floor_idx == 0 {
         add_ground_entry_and_patio_doors(&mut shell, bp, entry_side, rear_door);
     }
@@ -573,7 +788,11 @@ pub(crate) fn build_blueprint_floor(
         let _ = furn.against_any_wall(PropKind::StructuralPillar, bp.main_wing.as_room(), None);
     }
 
-    let mut surfaces = vec![bp.main_wing.polygon_feature(SurfaceFeatureKind::InteriorFloor, 0, bp.hardwood_seed)];
+    let mut surfaces =
+        vec![
+            bp.main_wing
+                .polygon_feature(SurfaceFeatureKind::InteriorFloor, 0, bp.hardwood_seed),
+        ];
     if let Some(arm) = other_wing {
         surfaces.push(arm.polygon_feature(SurfaceFeatureKind::InteriorFloor, 0, bp.hardwood_seed));
     }
@@ -603,49 +822,124 @@ pub(crate) fn build_blueprint_floor(
         add_attached_patio_and_exterior(&mut furn, bp, tier, &mut surfaces, &mut shell.rng);
     }
 
-    trim_floor_props_to_connected(board_w, board_h, bp.main_wing, &shell.edges, &mut furn.props);
+    trim_floor_props_to_connected(
+        board_w,
+        board_h,
+        bp.main_wing,
+        &shell.edges,
+        &mut furn.props,
+    );
     if let Some(arm) = other_wing {
         trim_floor_props_to_connected(board_w, board_h, arm, &shell.edges, &mut furn.props);
     }
     prune_occluded_surfaces(&mut surfaces, board_w, board_h);
 
-    FloorContent { wall_edges: shell.edges, props: furn.props, surfaces }
+    FloorContent {
+        wall_edges: shell.edges,
+        props: furn.props,
+        surfaces,
+    }
 }
 
-fn add_ground_entry_and_patio_doors(shell: &mut Shell, bp: &HomeBlueprint, entry_side: CardinalEntry, rear_door: bool) {
+fn add_ground_entry_and_patio_doors(
+    shell: &mut Shell,
+    bp: &HomeBlueprint,
+    entry_side: CardinalEntry,
+    rear_door: bool,
+) {
     let w = bp.main_wing;
     let (mx, my) = (w.x0 + w.w() / 2, w.y0 + w.h() / 2);
-    let dk = if shell.rng.chance(2, 3) { WallEdgeKind::DoorOpen } else { WallEdgeKind::DoorClosed };
+    let dk = if shell.rng.chance(2, 3) {
+        WallEdgeKind::DoorOpen
+    } else {
+        WallEdgeKind::DoorClosed
+    };
     match entry_side {
         CardinalEntry::North => {
             shell.put(mx, w.y0, EdgeSide::North, dk, MaterialClass::SolidWood);
-            if rear_door { shell.put(mx, w.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SolidWood); }
+            if rear_door {
+                shell.put(
+                    mx,
+                    w.y1,
+                    EdgeSide::North,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::SolidWood,
+                );
+            }
         }
         CardinalEntry::South => {
             shell.put(mx, w.y1, EdgeSide::North, dk, MaterialClass::SolidWood);
-            if rear_door { shell.put(mx, w.y0, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SolidWood); }
+            if rear_door {
+                shell.put(
+                    mx,
+                    w.y0,
+                    EdgeSide::North,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::SolidWood,
+                );
+            }
         }
         CardinalEntry::West => {
             shell.put(w.x0, my, EdgeSide::West, dk, MaterialClass::SolidWood);
-            if rear_door { shell.put(w.x1, my, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SolidWood); }
+            if rear_door {
+                shell.put(
+                    w.x1,
+                    my,
+                    EdgeSide::West,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::SolidWood,
+                );
+            }
         }
         CardinalEntry::East => {
             shell.put(w.x1, my, EdgeSide::West, dk, MaterialClass::SolidWood);
-            if rear_door { shell.put(w.x0, my, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SolidWood); }
+            if rear_door {
+                shell.put(
+                    w.x0,
+                    my,
+                    EdgeSide::West,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::SolidWood,
+                );
+            }
         }
     }
     if let Some(p) = bp.patio_box {
         if p.y1 == w.y0 && p.x1 > w.x0 && p.x0 < w.x1 {
-            shell.put((p.x0.max(w.x0) + p.x1.min(w.x1)) / 2, w.y0, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+            shell.put(
+                (p.x0.max(w.x0) + p.x1.min(w.x1)) / 2,
+                w.y0,
+                EdgeSide::North,
+                WallEdgeKind::DoorOpen,
+                MaterialClass::Glass,
+            );
         } else if p.y0 == w.y1 && p.x1 > w.x0 && p.x0 < w.x1 {
-            shell.put((p.x0.max(w.x0) + p.x1.min(w.x1)) / 2, w.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+            shell.put(
+                (p.x0.max(w.x0) + p.x1.min(w.x1)) / 2,
+                w.y1,
+                EdgeSide::North,
+                WallEdgeKind::DoorOpen,
+                MaterialClass::Glass,
+            );
         }
         if let Some(arm) = bp.arm_wing {
             let dy = (p.y0.max(arm.y0) + p.y1.min(arm.y1)) / 2;
             if p.x0 == arm.x1 && p.y1 > arm.y0 && p.y0 < arm.y1 {
-                shell.put(arm.x1, dy, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+                shell.put(
+                    arm.x1,
+                    dy,
+                    EdgeSide::West,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::Glass,
+                );
             } else if p.x1 == arm.x0 && p.y1 > arm.y0 && p.y0 < arm.y1 {
-                shell.put(arm.x0, dy, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+                shell.put(
+                    arm.x0,
+                    dy,
+                    EdgeSide::West,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::Glass,
+                );
             }
         }
     }
@@ -678,11 +972,19 @@ fn add_attached_patio_and_exterior(
             }
         }
     } else if bp.hot_tub_in_patio {
-        let _ = furn.try_place(PropKind::HotTub, patio.x0 + (patio.w() - 2).max(0) / 2, patio.y0 + (patio.h() - 2).max(0) / 2, 0, None, pr);
+        let _ = furn.try_place(
+            PropKind::HotTub,
+            patio.x0 + (patio.w() - 2).max(0) / 2,
+            patio.y0 + (patio.h() - 2).max(0) / 2,
+            0,
+            None,
+            pr,
+        );
     }
 
     let _ = furn.against_any_wall(PropKind::BbqGrill, pr, None);
-    let _ = furn.against_any_wall(PropKind::RoundTable, pr, None)
+    let _ = furn
+        .against_any_wall(PropKind::RoundTable, pr, None)
         .or_else(|| furn.against_any_wall(PropKind::PicnicTable, pr, None));
     let _ = furn.against_any_wall(PropKind::AcUnit, pr, None);
     let _ = furn.against_any_wall(PropKind::TrashCan, pr, None);

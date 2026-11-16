@@ -3,7 +3,7 @@
 When working on any Rust crate, Python module, or documentation file in this repository, activate the corresponding skill in `.agents/skills/` and follow the universal rules in [`.agents/skills/satya-rust-workspace/SKILL.md`](.agents/skills/satya-rust-workspace/SKILL.md):
 
 - **All Rust Crates (`crates/*`) & Python Modules (`src/satya_ml/*`, `tests/*`)**: Skill [`satya-rust-workspace`](.agents/skills/satya-rust-workspace/SKILL.md)
-  - Target `~300–750` lines (`<= 45 KB`) per `.rs`, `.py`, `.css`, and `.md` file via focused companion modules with flat `pub use` re-exports in the parent module (avoid duplicate glob re-exports in `lib.rs` / `mod.rs`) so every file fits inside a single `read_file` call.
+  - Organize modules strictly by **responsibility & cohesion**, never by line count or file size: keep single-responsibility modules together regardless of length, preserve readable fluent/builder chains and borrow-friendly control flow without golfing lines, and navigate larger files via `rg -n` + `read_file(StartLine, EndLine)`. When splitting genuinely distinct concerns into companion modules, use flat `pub use` re-exports in the parent module (avoid duplicate glob re-exports in `lib.rs` / `mod.rs`).
   - Zero duplicate domain types, formulas, or geometry helpers across crates; prefer declarative macros (`define_wire_enum!`, `define_coded_enum!`, `bind_window_callbacks!`) and `const` tables.
   - High-signal `//!` and `///` docstrings (no `#![deny(missing_docs)]`) + unit suffixes (`_ms`, `_us`, `_deg`, `_m`, `_cm`, `_kg`).
   - **Strict `LF` (`\n`) line endings**: Save every file with `\n` endings — never `CRLF` (`\r\n`) — and never run parallel `edit_file` calls on the same file.

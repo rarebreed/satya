@@ -176,10 +176,9 @@ pub fn sanitize_portrait_url(raw: &str) -> Option<String> {
     if trimmed.is_empty() || trimmed.len() > 4096 {
         return None;
     }
-    if trimmed
-        .bytes()
-        .any(|b| b.is_ascii_control() || b.is_ascii_whitespace() || matches!(b, b'<' | b'>' | b'"' | b'\''))
-    {
+    if trimmed.bytes().any(|b| {
+        b.is_ascii_control() || b.is_ascii_whitespace() || matches!(b, b'<' | b'>' | b'"' | b'\'')
+    }) {
         return None;
     }
     let low = trimmed.to_ascii_lowercase();
@@ -472,19 +471,38 @@ mod tests {
             "/api/characters/../etc/passwd",
             "https://cdn.example.com/a\"b.png",
         ] {
-            assert_eq!(sanitize_portrait_url(bad), None, "expected reject for {bad}");
+            assert_eq!(
+                sanitize_portrait_url(bad),
+                None,
+                "expected reject for {bad}"
+            );
         }
     }
 
     #[test]
     fn map_continuation_dir_and_request_roundtrip() {
-        assert_eq!(MapContinuationDir::North.opposite(), MapContinuationDir::South);
-        assert_eq!(MapContinuationDir::South.opposite(), MapContinuationDir::North);
-        assert_eq!(MapContinuationDir::East.opposite(), MapContinuationDir::West);
-        assert_eq!(MapContinuationDir::West.opposite(), MapContinuationDir::East);
+        assert_eq!(
+            MapContinuationDir::North.opposite(),
+            MapContinuationDir::South
+        );
+        assert_eq!(
+            MapContinuationDir::South.opposite(),
+            MapContinuationDir::North
+        );
+        assert_eq!(
+            MapContinuationDir::East.opposite(),
+            MapContinuationDir::West
+        );
+        assert_eq!(
+            MapContinuationDir::West.opposite(),
+            MapContinuationDir::East
+        );
         assert_eq!(MapContinuationDir::East.unit_step(), (1, 0));
         assert_eq!(MapContinuationDir::West.label(), "West");
-        assert_eq!(MapContinuationDir::from_code_str("south"), Some(MapContinuationDir::South));
+        assert_eq!(
+            MapContinuationDir::from_code_str("south"),
+            Some(MapContinuationDir::South)
+        );
 
         let req = GenerateSessionMapRequest {
             continue_direction: Some(MapContinuationDir::East),
@@ -504,12 +522,27 @@ mod tests {
 
         // MapScalePreset roundtrip & resolution
         assert_eq!(MapScalePreset::Auto.resolve_dimensions((36, 26)), (36, 26));
-        assert_eq!(MapScalePreset::Compact.resolve_dimensions((36, 26)), (24, 18));
-        assert_eq!(MapScalePreset::Standard.resolve_dimensions((48, 36)), (36, 26));
+        assert_eq!(
+            MapScalePreset::Compact.resolve_dimensions((36, 26)),
+            (24, 18)
+        );
+        assert_eq!(
+            MapScalePreset::Standard.resolve_dimensions((48, 36)),
+            (36, 26)
+        );
         assert_eq!(MapScalePreset::Large.resolve_dimensions((24, 18)), (48, 36));
-        assert_eq!(MapScalePreset::Massive.resolve_dimensions((24, 18)), (64, 48));
-        assert_eq!(MapScalePreset::parse_loose("standard"), MapScalePreset::Standard);
-        assert_eq!(MapScalePreset::parse_loose("64x48"), MapScalePreset::Massive);
+        assert_eq!(
+            MapScalePreset::Massive.resolve_dimensions((24, 18)),
+            (64, 48)
+        );
+        assert_eq!(
+            MapScalePreset::parse_loose("standard"),
+            MapScalePreset::Standard
+        );
+        assert_eq!(
+            MapScalePreset::parse_loose("64x48"),
+            MapScalePreset::Massive
+        );
         assert_eq!(MapScalePreset::parse_loose("unknown"), MapScalePreset::Auto);
 
         let scaled_req = GenerateSessionMapRequest {

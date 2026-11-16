@@ -119,10 +119,30 @@ pub fn compute_sector_boundary_profile(
                 let dx = (pt.x_cm - adj.x_cm).abs();
                 let dy = (pt.y_cm - adj.y_cm).abs();
                 let check_ends = [
-                    (MapContinuationDir::North, pt.y_cm <= CROSSING_EDGE_BAND_CM, pt.x_cm.clamp(0, w_cm), dx < dy * 2 + 25),
-                    (MapContinuationDir::South, pt.y_cm >= h_cm - CROSSING_EDGE_BAND_CM, pt.x_cm.clamp(0, w_cm), dx < dy * 2 + 25),
-                    (MapContinuationDir::West, pt.x_cm <= CROSSING_EDGE_BAND_CM, pt.y_cm.clamp(0, h_cm), dy < dx * 2 + 25),
-                    (MapContinuationDir::East, pt.x_cm >= w_cm - CROSSING_EDGE_BAND_CM, pt.y_cm.clamp(0, h_cm), dy < dx * 2 + 25),
+                    (
+                        MapContinuationDir::North,
+                        pt.y_cm <= CROSSING_EDGE_BAND_CM,
+                        pt.x_cm.clamp(0, w_cm),
+                        dx < dy * 2 + 25,
+                    ),
+                    (
+                        MapContinuationDir::South,
+                        pt.y_cm >= h_cm - CROSSING_EDGE_BAND_CM,
+                        pt.x_cm.clamp(0, w_cm),
+                        dx < dy * 2 + 25,
+                    ),
+                    (
+                        MapContinuationDir::West,
+                        pt.x_cm <= CROSSING_EDGE_BAND_CM,
+                        pt.y_cm.clamp(0, h_cm),
+                        dy < dx * 2 + 25,
+                    ),
+                    (
+                        MapContinuationDir::East,
+                        pt.x_cm >= w_cm - CROSSING_EDGE_BAND_CM,
+                        pt.y_cm.clamp(0, h_cm),
+                        dy < dx * 2 + 25,
+                    ),
                 ];
                 for (dir, near_edge, t_cm, approach_ok) in check_ends {
                     if !near_edge || (bucket == 0 && !approach_ok) {
@@ -154,9 +174,17 @@ pub fn compute_sector_boundary_profile(
             };
             for (dir, hit, tc) in [
                 (MapContinuationDir::North, cy <= 150, cx.clamp(0, w_cm)),
-                (MapContinuationDir::South, cy >= h_cm - 150, cx.clamp(0, w_cm)),
+                (
+                    MapContinuationDir::South,
+                    cy >= h_cm - 150,
+                    cx.clamp(0, w_cm),
+                ),
                 (MapContinuationDir::West, cx <= 150, cy.clamp(0, h_cm)),
-                (MapContinuationDir::East, cx >= w_cm - 150, cy.clamp(0, h_cm)),
+                (
+                    MapContinuationDir::East,
+                    cx >= w_cm - 150,
+                    cy.clamp(0, h_cm),
+                ),
             ] {
                 if hit {
                     let edge = profile.edge_mut(dir);
@@ -225,9 +253,17 @@ pub fn build_root_world_sector_cell(
         (zoning_opt, tier_opt)
     };
     WorldSectorCell {
-        sector_x: 0, sector_y: 0, origin_x: 0, origin_y: 0,
-        width, height, preset: preset.as_str().to_string(),
-        zoning, economic_tier, zone_depth: 0, seed,
+        sector_x: 0,
+        sector_y: 0,
+        origin_x: 0,
+        origin_y: 0,
+        width,
+        height,
+        preset: preset.as_str().to_string(),
+        zoning,
+        economic_tier,
+        zone_depth: 0,
+        seed,
         boundary: compute_sector_boundary_profile(width, height, wall_edges, surfaces, props),
     }
 }
@@ -238,10 +274,21 @@ pub fn bootstrap_world_sectors_if_empty(map: &GmMapUpdateRequest) -> Vec<WorldSe
     if !map.world_sectors.is_empty() {
         return map.world_sectors.clone();
     }
-    let preset = map.theme_preset.as_deref().and_then(SectorPreset::from_code_str).unwrap_or_default();
+    let preset = map
+        .theme_preset
+        .as_deref()
+        .and_then(SectorPreset::from_code_str)
+        .unwrap_or_default();
     vec![build_root_world_sector_cell(
-        preset, map.grid_width, map.grid_height, map.seed.unwrap_or(42),
-        None, None, &map.wall_edges, &map.surfaces, &map.props,
+        preset,
+        map.grid_width,
+        map.grid_height,
+        map.seed.unwrap_or(42),
+        None,
+        None,
+        &map.wall_edges,
+        &map.surfaces,
+        &map.props,
     )]
 }
 
@@ -294,12 +341,15 @@ pub fn partition_continuation_seam_by_world_sectors(
         for (t0, t_len, cell) in boundary_cells {
             if t_len <= 64 {
                 plans.push(SeamSectorChunkPlan {
-                    t0, t_len, source_cell: cell.clone(),
+                    t0,
+                    t_len,
+                    source_cell: cell.clone(),
                     target_sector_coord: (cell.sector_x + ux, cell.sector_y + uy),
                 });
             } else {
-                for (sub_idx, (sub_t0, sub_len)) in
-                    partition_span_into_chunks(t_len, target_chunk).into_iter().enumerate()
+                for (sub_idx, (sub_t0, sub_len)) in partition_span_into_chunks(t_len, target_chunk)
+                    .into_iter()
+                    .enumerate()
                 {
                     let extra = sub_idx as i32;
                     let target_sector_coord = if horizontal_seam {
@@ -308,7 +358,10 @@ pub fn partition_continuation_seam_by_world_sectors(
                         (cell.sector_x + ux, cell.sector_y + uy + extra)
                     };
                     plans.push(SeamSectorChunkPlan {
-                        t0: t0 + sub_t0, t_len: sub_len, source_cell: cell.clone(), target_sector_coord,
+                        t0: t0 + sub_t0,
+                        t_len: sub_len,
+                        source_cell: cell.clone(),
+                        target_sector_coord,
                     });
                 }
             }
@@ -327,13 +380,22 @@ pub fn partition_continuation_seam_by_world_sectors(
                 .find(|(bt0, blen, _)| mid >= *bt0 && mid < bt0 + blen)
                 .map_or(&fallback_src, |(_, _, c)| *c)
                 .clone();
-            let extra = if boundary_cells.len() <= 1 { idx as i32 } else { 0 };
+            let extra = if boundary_cells.len() <= 1 {
+                idx as i32
+            } else {
+                0
+            };
             let target_sector_coord = if horizontal_seam {
                 (src.sector_x + ux + extra, src.sector_y + uy)
             } else {
                 (src.sector_x + ux, src.sector_y + uy + extra)
             };
-            SeamSectorChunkPlan { t0, t_len, source_cell: src, target_sector_coord }
+            SeamSectorChunkPlan {
+                t0,
+                t_len,
+                source_cell: src,
+                target_sector_coord,
+            }
         })
         .collect()
 }
@@ -349,9 +411,15 @@ pub(crate) fn orient_sector_to_shared_road(
     let Some(target_side) = preferred_road_side else {
         return;
     };
-    let profile = compute_sector_boundary_profile(cw, ch, &sec.wall_edges, &sec.surfaces, &sec.props);
-    if !profile.edge(target_side).road_parallel && profile.edge(target_side.opposite()).road_parallel {
-        let horizontal_flip = matches!(target_side, MapContinuationDir::East | MapContinuationDir::West);
+    let profile =
+        compute_sector_boundary_profile(cw, ch, &sec.wall_edges, &sec.surfaces, &sec.props);
+    if !profile.edge(target_side).road_parallel
+        && profile.edge(target_side.opposite()).road_parallel
+    {
+        let horizontal_flip = matches!(
+            target_side,
+            MapContinuationDir::East | MapContinuationDir::West
+        );
         mirror_fn(sec, cw, ch, horizontal_flip);
     }
 }
@@ -373,12 +441,19 @@ pub fn format_stitched_world_notes(
     }
     let mut distinct_labels: Vec<&'static str> = Vec::new();
     for cell in world_sectors {
-        let label = SectorPreset::from_code_str(&cell.preset).unwrap_or(fallback_preset).label();
+        let label = SectorPreset::from_code_str(&cell.preset)
+            .unwrap_or(fallback_preset)
+            .label();
         if !distinct_labels.contains(&label) {
             distinct_labels.push(label);
         }
     }
-    let summary = distinct_labels.iter().take(4).copied().collect::<Vec<_>>().join(" + ");
+    let summary = distinct_labels
+        .iter()
+        .take(4)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" + ");
     let suffix = if distinct_labels.len() > 4 { "…" } else { "" };
     format!(
         "{} Sectors ({summary}{suffix}) · Stitched Metric Arena ({width}m x {height}m, Seed {seed})",
@@ -391,12 +466,24 @@ pub fn format_stitched_world_notes(
 pub fn preview_continuation_tooltip(map: &GmMapUpdateRequest, dir: MapContinuationDir) -> String {
     let strip = continuation_strip_depth(map, dir);
     let sectors = bootstrap_world_sectors_if_empty(map);
-    let plans = partition_continuation_seam_by_world_sectors(&sectors, map.grid_width, map.grid_height, dir);
+    let plans = partition_continuation_seam_by_world_sectors(
+        &sectors,
+        map.grid_width,
+        map.grid_height,
+        dir,
+    );
     let Some(plan) = plans.first() else {
         return format!("Continue {} (+{strip}m)", dir.label());
     };
-    let next_seed = next_continuation_seed(map.seed.unwrap_or(42), map.grid_width, map.grid_height, dir);
-    let spec = select_neighbor_sector_transition(&plan.source_cell, &sectors, plan.target_sector_coord, dir, next_seed);
+    let next_seed =
+        next_continuation_seed(map.seed.unwrap_or(42), map.grid_width, map.grid_height, dir);
+    let spec = select_neighbor_sector_transition(
+        &plan.source_cell,
+        &sectors,
+        plan.target_sector_coord,
+        dir,
+        next_seed,
+    );
     let via_road = if plan.source_cell.boundary.edge(dir).road_parallel {
         " · across border road"
     } else if plan.source_cell.boundary.edge(dir).has_water() {
@@ -407,10 +494,27 @@ pub fn preview_continuation_tooltip(map: &GmMapUpdateRequest, dir: MapContinuati
     let tier_note = spec
         .economic_tier
         .map(|t| format!(" ({}{via_road})", t.label()))
-        .unwrap_or_else(|| if via_road.is_empty() { String::new() } else { format!(" ({})", &via_road[3..]) });
+        .unwrap_or_else(|| {
+            if via_road.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", &via_road[3..])
+            }
+        });
     if plans.len() > 1 {
-        format!("Continue {} (+{strip}m, {} sectors) → {}{}", dir.label(), plans.len(), spec.preset.label(), tier_note)
+        format!(
+            "Continue {} (+{strip}m, {} sectors) → {}{}",
+            dir.label(),
+            plans.len(),
+            spec.preset.label(),
+            tier_note
+        )
     } else {
-        format!("Continue {} (+{strip}m) → {}{}", dir.label(), spec.preset.label(), tier_note)
+        format!(
+            "Continue {} (+{strip}m) → {}{}",
+            dir.label(),
+            spec.preset.label(),
+            tier_note
+        )
     }
 }

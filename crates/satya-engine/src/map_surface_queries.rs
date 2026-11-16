@@ -92,8 +92,12 @@ pub fn surface_contains_point_m(surface: &MapSurfaceFeature, px_m: f32, py_m: f3
             if ring.len() < 3 {
                 return false;
             }
-            let (mut min_x, mut min_y, mut max_x, mut max_y) =
-                (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+            let (mut min_x, mut min_y, mut max_x, mut max_y) = (
+                f32::INFINITY,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::NEG_INFINITY,
+            );
             for &(x, y) in &ring {
                 min_x = min_x.min(x);
                 min_y = min_y.min(y);
@@ -257,7 +261,10 @@ mod tests {
                 0.5 * ((b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)).abs()
             })
             .sum();
-        assert!((tri_area - 20.0).abs() < 1e-3, "expected L-area 20, got {tri_area}");
+        assert!(
+            (tri_area - 20.0).abs() < 1e-3,
+            "expected L-area 20, got {tri_area}"
+        );
     }
 
     #[test]
@@ -297,9 +304,18 @@ mod tests {
             variant_seed: 3,
         };
         let list = [bridge.clone(), creek.clone(), mulch.clone()];
-        assert_eq!(topmost_surface_at_m(&list, 5.5, 5.0).unwrap().kind, SurfaceFeatureKind::BridgeDeck);
-        assert_eq!(topmost_surface_at_m(&list, 2.5, 5.0).unwrap().kind, SurfaceFeatureKind::CreekChannel);
-        assert_eq!(topmost_surface_at_m(&list, 5.5, 8.0).unwrap().kind, SurfaceFeatureKind::MulchZone);
+        assert_eq!(
+            topmost_surface_at_m(&list, 5.5, 5.0).unwrap().kind,
+            SurfaceFeatureKind::BridgeDeck
+        );
+        assert_eq!(
+            topmost_surface_at_m(&list, 2.5, 5.0).unwrap().kind,
+            SurfaceFeatureKind::CreekChannel
+        );
+        assert_eq!(
+            topmost_surface_at_m(&list, 5.5, 8.0).unwrap().kind,
+            SurfaceFeatureKind::MulchZone
+        );
     }
 
     #[test]
@@ -403,7 +419,8 @@ mod tests {
                                     p.kind
                                 );
                                 assert!(
-                                    !top_kind.is_some_and(SurfaceFeatureKind::is_built_floor_or_deck),
+                                    !top_kind
+                                        .is_some_and(SurfaceFeatureKind::is_built_floor_or_deck),
                                     "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed inside built floor/deck/pool ({top_kind:?})",
                                     p.kind
                                 );
@@ -413,7 +430,8 @@ mod tests {
                                 PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier
                             ) {
                                 assert!(
-                                    !top_kind.is_some_and(SurfaceFeatureKind::is_built_floor_or_deck),
+                                    !top_kind
+                                        .is_some_and(SurfaceFeatureKind::is_built_floor_or_deck),
                                     "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed inside built floor/deck/pool ({top_kind:?})",
                                     p.kind
                                 );

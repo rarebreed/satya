@@ -15,13 +15,22 @@ const NPC_ARCHETYPE_OPTIONS: &[(&str, &str)] = &[
         "DETECTIVE_INVESTIGATOR",
         "Detective / Law Enforcement Investigator",
     ),
-    ("SYNDICATE_ENFORCER", "Syndicate Enforcer / Underworld Fixer"),
-    ("STEM_ENGINEER", "STEM Scientist / Cyber & Robotics Engineer"),
+    (
+        "SYNDICATE_ENFORCER",
+        "Syndicate Enforcer / Underworld Fixer",
+    ),
+    (
+        "STEM_ENGINEER",
+        "STEM Scientist / Cyber & Robotics Engineer",
+    ),
     (
         "INTELLIGENCE_OPERATIVE",
         "Clandestine Intelligence Operative / Handler",
     ),
-    ("BLUE_COLLAR_TECH", "Blue-Collar Technician / Mechanic / Pilot"),
+    (
+        "BLUE_COLLAR_TECH",
+        "Blue-Collar Technician / Mechanic / Pilot",
+    ),
     (
         "FRONTIER_RANGER",
         "Frontier Ranger / Wilderness Scout & Herbalist",
@@ -46,6 +55,8 @@ const GM_OMNISEARCH_SCOPE_OPTIONS: &[(&str, &str)] = &[
     ("GM_DOCS", "GM_ONLY Documents (Session & Persistent)"),
     ("GM_MEMORY", "GM Memory Notes & Pinned AI Facts"),
     ("CHARACTERS", "Bound Session Character Sheets"),
+    ("NPCS", "Session & Starter NPCs"),
+    ("LORE", "Campaign Lore & Faction Clocks"),
     ("COMBAT", "Combat Tracker & Tick Timeline"),
     ("MAP", "Tactical Map & Telemetry"),
 ];
@@ -56,7 +67,10 @@ const GM_MEMORY_CATEGORY_OPTIONS: &[(&str, &str)] = &[
     ("NPC_SECRET", "NPC Secret / Agenda (`NPC_SECRET`)"),
     ("QUEST_HOOK", "Quest Hook / Objective (`QUEST_HOOK`)"),
     ("RULING", "Table Ruling (`RULING`)"),
-    ("ROLLING_SUMMARY", "Rolling Session Summary (`ROLLING_SUMMARY`)"),
+    (
+        "ROLLING_SUMMARY",
+        "Rolling Session Summary (`ROLLING_SUMMARY`)",
+    ),
 ];
 
 /// Renders the NPC Roster/Generator (`#notebook-pane-npcs`) and `GM_ONLY` Document Vault,

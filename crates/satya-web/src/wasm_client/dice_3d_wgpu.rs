@@ -276,7 +276,9 @@ mod webgpu_runtime {
                 ctrl.active_drag = Some((mode, cx, cy));
                 match mode {
                     CanvasDragMode::Orbit => ctrl.camera.orbit_by(-dx * 0.45, dy * 0.35),
-                    CanvasDragMode::Pan => ctrl.camera.pan_by_screen_delta(-dx * 0.015, -dy * 0.015),
+                    CanvasDragMode::Pan => {
+                        ctrl.camera.pan_by_screen_delta(-dx * 0.015, -dy * 0.015)
+                    }
                 }
                 super::sync_camera_dom_from_config(&ctrl.camera);
                 render_current_frame(ctrl);

@@ -312,7 +312,9 @@ impl OrbitOrthoCamera {
     #[must_use]
     pub fn fit_zoom_for_board(board_size_m: (f32, f32)) -> f32 {
         let (w_m, h_m) = board_size_m;
-        (14.0 / h_m.max(1.0)).min(20.0 / w_m.max(1.0)).clamp(0.07, 1.0)
+        (14.0 / h_m.max(1.0))
+            .min(20.0 / w_m.max(1.0))
+            .clamp(0.07, 1.0)
     }
 
     pub fn orbit_by(&mut self, dyaw_deg: f32, dpitch_deg: f32) {
@@ -358,11 +360,7 @@ impl OrbitOrthoCamera {
             target[1] + dist * pitch_eff.sin(),
             target[2] + horiz * yaw_rad.cos(),
         ];
-        let fwd = normalize3([
-            target[0] - eye[0],
-            target[1] - eye[1],
-            target[2] - eye[2],
-        ]);
+        let fwd = normalize3([target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]]);
         let right = normalize3(cross3(fwd, [0.0, 1.0, 0.0]));
         let up = normalize3(cross3(right, fwd));
         (eye, target, right, up, fwd)
@@ -802,8 +800,9 @@ mod tests {
     use naga::valid::{Capabilities, ValidationFlags, Validator};
 
     fn assert_valid_wgsl(label: &str, wgsl_src: &str, expected_entry_points: &[&str]) {
-        let module = parse_str(wgsl_src)
-            .unwrap_or_else(|e| panic!("{label} WGSL parse error:\n{}", e.emit_to_string(wgsl_src)));
+        let module = parse_str(wgsl_src).unwrap_or_else(|e| {
+            panic!("{label} WGSL parse error:\n{}", e.emit_to_string(wgsl_src))
+        });
         let mut validator = Validator::new(ValidationFlags::all(), Capabilities::empty());
         validator
             .validate(&module)

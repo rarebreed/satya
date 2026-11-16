@@ -43,12 +43,7 @@ pub(crate) struct RibbonAnchor {
 }
 
 #[inline]
-fn point_seam_coords(
-    pt: (f32, f32),
-    dir: MapContinuationDir,
-    w: i32,
-    h: i32,
-) -> (f32, f32) {
+fn point_seam_coords(pt: (f32, f32), dir: MapContinuationDir, w: i32, h: i32) -> (f32, f32) {
     match dir {
         MapContinuationDir::North => (pt.1, pt.0),
         MapContinuationDir::South => (h as f32 - pt.1, pt.0),
@@ -71,10 +66,16 @@ pub(crate) fn extract_seam_ribbons(
         if s.shape != SurfaceShapeKind::RibbonSpline || s.points_cm.len() < 2 {
             continue;
         }
-        let endpoints = [s.points_cm[0].to_m(), s.points_cm[s.points_cm.len() - 1].to_m()];
+        let endpoints = [
+            s.points_cm[0].to_m(),
+            s.points_cm[s.points_cm.len() - 1].to_m(),
+        ];
         for pt in endpoints {
             let (norm_dist, tang_coord) = point_seam_coords(pt, dir, w, h);
-            if norm_dist <= 1.50 && tang_coord >= t0 as f32 - 0.5 && tang_coord <= (t0 + t_len) as f32 + 0.5 {
+            if norm_dist <= 1.50
+                && tang_coord >= t0 as f32 - 0.5
+                && tang_coord <= (t0 + t_len) as f32 + 0.5
+            {
                 let local_t_m = (tang_coord - t0 as f32).clamp(0.5, t_len as f32 - 0.5);
                 let dup = ribbons.iter().any(|r: &RibbonAnchor| {
                     matches!(r.target, RibbonTargetKind::Surface(k) if k == s.kind)
@@ -103,11 +104,18 @@ pub(crate) fn extract_seam_ribbons(
             MapContinuationDir::West => (fp.cx_m - fp.hx_m.max(0.5), fp.cy_m),
             MapContinuationDir::East => (w as f32 - (fp.cx_m + fp.hx_m.max(0.5)), fp.cy_m),
         };
-        if norm_dist <= 1.25 && tang_coord >= t0 as f32 - 0.5 && tang_coord <= (t0 + t_len) as f32 + 0.5 {
+        if norm_dist <= 1.25
+            && tang_coord >= t0 as f32 - 0.5
+            && tang_coord <= (t0 + t_len) as f32 + 0.5
+        {
             let local_t_m = (tang_coord - t0 as f32).clamp(0.5, t_len as f32 - 0.5);
             let tang_span = match dir {
-                MapContinuationDir::North | MapContinuationDir::South => (fp.hx_m * 2.0).clamp(1.0, 5.0),
-                MapContinuationDir::East | MapContinuationDir::West => (fp.hy_m * 2.0).clamp(1.0, 5.0),
+                MapContinuationDir::North | MapContinuationDir::South => {
+                    (fp.hx_m * 2.0).clamp(1.0, 5.0)
+                }
+                MapContinuationDir::East | MapContinuationDir::West => {
+                    (fp.hy_m * 2.0).clamp(1.0, 5.0)
+                }
             };
             let dup = ribbons.iter().any(|r: &RibbonAnchor| {
                 matches!(r.target, RibbonTargetKind::LegacyProp(k) if k == p.kind)
@@ -140,7 +148,12 @@ pub(crate) fn mirror_sector_surfaces(
     }
 }
 
-pub(crate) fn clear_props_near(props: &mut Vec<MapPropPlacement>, px_m: f32, py_m: f32, radius_m: f32) {
+pub(crate) fn clear_props_near(
+    props: &mut Vec<MapPropPlacement>,
+    px_m: f32,
+    py_m: f32,
+    radius_m: f32,
+) {
     props.retain(|p| {
         prop_spec(p.kind).floor_layer || !prop_intersects_circle(p, px_m, py_m, radius_m)
     });
@@ -153,14 +166,24 @@ fn find_chunk_entry_coord(
     ch: i32,
     entry_side: MapContinuationDir,
 ) -> Option<f32> {
-    let horizontal_seam = matches!(entry_side, MapContinuationDir::North | MapContinuationDir::South);
+    let horizontal_seam = matches!(
+        entry_side,
+        MapContinuationDir::North | MapContinuationDir::South
+    );
     match target {
         RibbonTargetKind::Surface(kind) => sec
             .surfaces
             .iter()
-            .filter(|s| s.kind == *kind && s.shape == SurfaceShapeKind::RibbonSpline && s.points_cm.len() >= 2)
+            .filter(|s| {
+                s.kind == *kind
+                    && s.shape == SurfaceShapeKind::RibbonSpline
+                    && s.points_cm.len() >= 2
+            })
             .filter_map(|s| {
-                let endpoints = [s.points_cm[0].to_m(), s.points_cm[s.points_cm.len() - 1].to_m()];
+                let endpoints = [
+                    s.points_cm[0].to_m(),
+                    s.points_cm[s.points_cm.len() - 1].to_m(),
+                ];
                 endpoints.into_iter().find_map(|pt| {
                     let (nd, tc) = point_seam_coords(pt, entry_side, cw, ch);
                     (nd <= 1.50).then_some(tc)
@@ -206,7 +229,11 @@ pub(crate) fn align_chunk_ribbons(
         && let Some(primary) = ribbons.first()
         && let Some(dst_t) = find_chunk_entry_coord(sec, &primary.target, cw, ch, entry_side)
     {
-        let span_max = if horizontal_seam { cw as f32 } else { ch as f32 };
+        let span_max = if horizontal_seam {
+            cw as f32
+        } else {
+            ch as f32
+        };
         let flipped_t = span_max - dst_t;
         if (flipped_t - primary.local_t_m).abs() + 0.5 < (dst_t - primary.local_t_m).abs() {
             mirror_fn(sec, cw, ch, horizontal_seam);
@@ -230,7 +257,11 @@ pub(crate) fn align_chunk_ribbons(
                 let reach_in = if dst_opt.is_some() { 1.6_f32 } else { 2.4_f32 };
                 let mid_t = 0.5 * (anchor.local_t_m + dst_t);
                 let pt_m = |n_pos: f32, t_pos: f32| -> (f32, f32) {
-                    if horizontal_seam { (t_pos, n_pos) } else { (n_pos, t_pos) }
+                    if horizontal_seam {
+                        (t_pos, n_pos)
+                    } else {
+                        (n_pos, t_pos)
+                    }
                 };
                 let knots_m = [
                     pt_m(seam_n - inward * 0.45, anchor.local_t_m),
@@ -245,7 +276,9 @@ pub(crate) fn align_chunk_ribbons(
                     shape: SurfaceShapeKind::RibbonSpline,
                     points_cm: knots_m
                         .into_iter()
-                        .map(|(x, y)| MapPointCm::new((x * 100.0).round() as i32, (y * 100.0).round() as i32))
+                        .map(|(x, y)| {
+                            MapPointCm::new((x * 100.0).round() as i32, (y * 100.0).round() as i32)
+                        })
                         .collect(),
                     width_cm: anchor.span_cm,
                     border_style_cm: 0,
@@ -278,7 +311,11 @@ pub(crate) fn align_chunk_ribbons(
                     let frac = i as f32 / (steps - 1).max(1) as f32;
                     let tang = anchor.local_t_m + (dst_t - anchor.local_t_m) * frac;
                     let norm = seam_cell_n + inward * (frac * 1.5);
-                    let (wx, wy) = if horizontal_seam { (tang, norm) } else { (norm, tang) };
+                    let (wx, wy) = if horizontal_seam {
+                        (tang, norm)
+                    } else {
+                        (norm, tang)
+                    };
                     let rot = if horizontal_seam { 0 } else { 90 };
                     legacy_additions.push(make_prop_at_cm(
                         kind,
@@ -369,7 +406,11 @@ pub(crate) fn stitch_continued_floors(
                 surfaces: base.surfaces.clone(),
             });
         }
-        if let Some(dst) = base.floors.iter_mut().find(|f| f.floor_index == src.floor_index) {
+        if let Some(dst) = base
+            .floors
+            .iter_mut()
+            .find(|f| f.floor_index == src.floor_index)
+        {
             for e in &src.wall_edges {
                 let mut shifted = *e;
                 shifted.x += x_off;
@@ -394,7 +435,8 @@ pub(crate) fn stitch_continued_floors(
             dst.props.splice(first_solid..first_solid, floor_props);
             dst.props.extend(solid_props);
             for s in &src.surfaces {
-                dst.surfaces.push(s.translated(x_off * cell_cm, y_off * cell_cm));
+                dst.surfaces
+                    .push(s.translated(x_off * cell_cm, y_off * cell_cm));
             }
         } else {
             let mut added = src.clone();

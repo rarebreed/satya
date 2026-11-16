@@ -26,7 +26,11 @@ pub(crate) const MODEL_RIG_OPTIONS: &[(&str, &str, &str)] = &[
     ("valkyrie_rig", "Valkyrie Rig", "Valkyrie Exo-Rig (Sara)"),
     ("recon_mk4", "Recon Mk-IV", "Recon Suit Mk-IV (Marcus)"),
     ("secops_sentry", "SecOps Sentry", "SecOps Heavy Sentry"),
-    ("operative_light", "Light Operative", "Light Tactical Operative"),
+    (
+        "operative_light",
+        "Light Operative",
+        "Light Tactical Operative",
+    ),
 ];
 
 /// 3D Dice translucent material presets (`(value, label)`).

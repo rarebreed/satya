@@ -182,13 +182,25 @@ impl RibbonMesh2d {
         let mut ring = Vec::with_capacity(self.left.len() + self.right.len() + 10);
         ring.extend_from_slice(&self.left);
         if self.cap_end {
-            append_semicircle_cap(&mut ring, self.centerline[self.centerline.len() - 1], self.left[self.left.len() - 1], self.right[self.right.len() - 1], 4);
+            append_semicircle_cap(
+                &mut ring,
+                self.centerline[self.centerline.len() - 1],
+                self.left[self.left.len() - 1],
+                self.right[self.right.len() - 1],
+                4,
+            );
         }
         for &pt in self.right.iter().rev() {
             ring.push(pt);
         }
         if self.cap_start {
-            append_semicircle_cap(&mut ring, self.centerline[0], self.right[0], self.left[0], 4);
+            append_semicircle_cap(
+                &mut ring,
+                self.centerline[0],
+                self.right[0],
+                self.left[0],
+                4,
+            );
         }
         dedup_consecutive_points(&ring)
     }
@@ -215,7 +227,14 @@ impl RibbonMesh2d {
             indices.extend_from_slice(&[l0, r0, l1, r0, r1, l1]);
         }
         if self.cap_start {
-            append_cap_fan(&mut verts, &mut indices, self.centerline[0], self.right[0], self.left[0], 5);
+            append_cap_fan(
+                &mut verts,
+                &mut indices,
+                self.centerline[0],
+                self.right[0],
+                self.left[0],
+                5,
+            );
         }
         if self.cap_end {
             append_cap_fan(

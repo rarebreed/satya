@@ -1412,3 +1412,560 @@ async fn test_session_save_resume_across_logout_restart_and_transcript_snapshot_
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[tokio::test]
+async fn test_npc_dedup_unpersist_and_delete_across_teardown() {
+    use axum::body::{Body, to_bytes};
+    use axum::http::Request;
+    use satya_schema::{
+        GenerateNpcRequest, GenerateNpcResponse, GmDocumentRecord, GmDocumentSource,
+        GmLookupSourceKind, GmMemoryCategory, GmMemoryNoteRecord, GmOmnisearchResponse,
+        ResumeSessionRequest, SessionGmDocsResponse, SessionGmMemoriesResponse,
+        SessionNpcsResponse, SubmitGmDocumentRequest, ToggleGmDocumentPersistenceRequest,
+        UpdateSessionNpcRequest, UpsertGmMemoryRequest,
+    };
+    use tower::ServiceExt;
+
+    let temp_dir = std::env::temp_dir().join(format!("satya_dedup_persist_{}", Uuid::now_v7()));
+    let state = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let gm_auth = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
+    state
+        .auth
+        .create_session(
+            &gm_user,
+            "camp-dedup-arc",
+            "room-pw",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+
+    // (a) Generating "Sammat" twice reuses character_id and yields 1 NPC & 1 omnisearch hit.
+    let gen_sammat = |prompt: &str, seed: u64| {
+        let app = app.clone();
+        let tok = gm_auth.auth_token.clone();
+        let prompt = prompt.to_string();
+        async move {
+            let res = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/sessions/camp-dedup-arc/npcs/generate")
+                        .header("Authorization", format!("Bearer {tok}"))
+                        .header("Content-Type", "application/json")
+                        .body(Body::from(
+                            serde_json::to_string(&GenerateNpcRequest {
+                                prompt,
+                                name_override: Some("Sammat".to_string()),
+                                template: None,
+                                career_terms: 2,
+                                seed,
+                                gm_secret_notes: Some("Runs dockside cipher trade".to_string()),
+                                is_persistent: true,
+                                campaign_tag: Some("Awakened".to_string()),
+                            })
+                            .unwrap(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(res.status(), StatusCode::OK);
+            let bytes = to_bytes(res.into_body(), 128 * 1024).await.unwrap();
+            serde_json::from_slice::<GenerateNpcResponse>(&bytes).unwrap()
+        }
+    };
+
+    let sammat1 = gen_sammat("Sammat is a shady dockside broker", 11).await;
+    let sammat2 = gen_sammat("Sammat upgraded syndicate handler", 99).await;
+    assert_eq!(sammat1.npc.character_id, sammat2.npc.character_id);
+
+    let list_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/camp-dedup-arc/npcs")
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(list_res.status(), StatusCode::OK);
+    let npcs_resp: SessionNpcsResponse =
+        serde_json::from_slice(&to_bytes(list_res.into_body(), 128 * 1024).await.unwrap()).unwrap();
+    assert_eq!(npcs_resp.npcs.len(), 1);
+    assert_eq!(npcs_resp.npcs[0].character_id, sammat1.npc.character_id);
+
+    let lookup_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/camp-dedup-arc/lookup?q=&scope=ALL")
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(lookup_res.status(), StatusCode::OK);
+    let lookup_resp: GmOmnisearchResponse =
+        serde_json::from_slice(&to_bytes(lookup_res.into_body(), 256 * 1024).await.unwrap())
+            .unwrap();
+    let sammat_npc_hits = lookup_resp
+        .hits
+        .iter()
+        .filter(|h| {
+            h.source_kind == GmLookupSourceKind::SessionNpc
+                && h.title.eq_ignore_ascii_case("Sammat")
+        })
+        .count();
+    let sammat_dup_mem_or_sheet_hits = lookup_resp
+        .hits
+        .iter()
+        .filter(|h| {
+            matches!(
+                h.source_kind,
+                GmLookupSourceKind::GmMemory | GmLookupSourceKind::CharacterSheet
+            ) && (h.title.to_ascii_lowercase().contains("sammat")
+                || h.item_id.contains(&sammat1.npc.character_id))
+        })
+        .count();
+    assert_eq!(sammat_npc_hits, 1);
+    assert_eq!(sammat_dup_mem_or_sheet_hits, 0);
+
+    // (b) Create persistent GM Docs, GM Memory, and a second NPC "Vesper", then unpersist / delete.
+    let post_doc = |title: &str, body: &str| {
+        let app = app.clone();
+        let tok = gm_auth.auth_token.clone();
+        let title = title.to_string();
+        let body = body.to_string();
+        async move {
+            let res = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/sessions/camp-dedup-arc/docs")
+                        .header("Authorization", format!("Bearer {tok}"))
+                        .header("Content-Type", "application/json")
+                        .body(Body::from(
+                            serde_json::to_string(&SubmitGmDocumentRequest {
+                                title,
+                                source_kind: GmDocumentSource::DirectTextUpload,
+                                raw_content: Some(body),
+                                google_file_id: None,
+                                google_access_token: None,
+                                is_persistent: true,
+                                campaign_tag: Some("Awakened".to_string()),
+                            })
+                            .unwrap(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(res.status(), StatusCode::OK);
+            serde_json::from_slice::<GmDocumentRecord>(
+                &to_bytes(res.into_body(), 64 * 1024).await.unwrap(),
+            )
+            .unwrap()
+        }
+    };
+    let doc_keep = post_doc("Keeper Dossier", "Always persists across campaign").await;
+    let doc_unpersist = post_doc("Unpersist Dossier", "Drops persistence flag").await;
+    let doc_delete = post_doc("Delete Dossier", "Should be deleted permanently").await;
+
+    let mem_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/camp-dedup-arc/memories")
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&UpsertGmMemoryRequest {
+                        memory_id: None,
+                        campaign_tag: Some("Awakened".to_string()),
+                        category: GmMemoryCategory::SceneState,
+                        title: "Orbital Relay Note".to_string(),
+                        content: "Dock 4 offline".to_string(),
+                        is_pinned: false,
+                        is_persistent: true,
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(mem_res.status(), StatusCode::OK);
+    let mem_unpersist: GmMemoryNoteRecord =
+        serde_json::from_slice(&to_bytes(mem_res.into_body(), 64 * 1024).await.unwrap()).unwrap();
+
+    let vesper_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/camp-dedup-arc/npcs/generate")
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&GenerateNpcRequest {
+                        prompt: "Vesper is an orbital courier".to_string(),
+                        name_override: Some("Vesper".to_string()),
+                        template: None,
+                        career_terms: 2,
+                        seed: 33,
+                        gm_secret_notes: None,
+                        is_persistent: true,
+                        campaign_tag: Some("Awakened".to_string()),
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(vesper_res.status(), StatusCode::OK);
+    let vesper: GenerateNpcResponse =
+        serde_json::from_slice(&to_bytes(vesper_res.into_body(), 128 * 1024).await.unwrap())
+            .unwrap();
+
+    // Unmark persistent on doc_unpersist, mem_unpersist, and Sammat; delete doc_delete and Vesper.
+    let unp_doc_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/sessions/camp-dedup-arc/docs/{}/persist",
+                    doc_unpersist.doc_id
+                ))
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&ToggleGmDocumentPersistenceRequest {
+                        is_persistent: false,
+                        campaign_tag: None,
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unp_doc_res.status(), StatusCode::OK);
+    let unp_doc: GmDocumentRecord =
+        serde_json::from_slice(&to_bytes(unp_doc_res.into_body(), 64 * 1024).await.unwrap())
+            .unwrap();
+    assert!(!unp_doc.is_persistent);
+
+    let unp_mem_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/api/sessions/camp-dedup-arc/memories/{}/persist",
+                    mem_unpersist.memory_id
+                ))
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&ToggleGmDocumentPersistenceRequest {
+                        is_persistent: false,
+                        campaign_tag: None,
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unp_mem_res.status(), StatusCode::OK);
+    let unp_mem: GmMemoryNoteRecord =
+        serde_json::from_slice(&to_bytes(unp_mem_res.into_body(), 64 * 1024).await.unwrap())
+            .unwrap();
+    assert!(!unp_mem.is_persistent);
+
+    let unp_npc_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!(
+                    "/api/sessions/camp-dedup-arc/npcs/{}",
+                    sammat1.npc.character_id
+                ))
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&UpdateSessionNpcRequest {
+                        is_persistent: Some(false),
+                        ..Default::default()
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unp_npc_res.status(), StatusCode::OK);
+
+    let del_doc_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!(
+                    "/api/sessions/camp-dedup-arc/docs/{}",
+                    doc_delete.doc_id
+                ))
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(del_doc_res.status(), StatusCode::OK);
+
+    let del_npc_res = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!(
+                    "/api/sessions/camp-dedup-arc/npcs/{}",
+                    vesper.npc.character_id
+                ))
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(del_npc_res.status(), StatusCode::OK);
+
+    // Tear down signaling state and recreate against the same SQLite DB.
+    drop(app);
+    drop(state);
+
+    let state2 = SignalingAppState::new(StorageConfig::default(), &temp_dir)
+        .await
+        .unwrap();
+    let app2 = build_router(state2.clone());
+    let gm_user2 = state2
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
+
+    // 1. Fresh campaign session "awakened" sees only persistent items, NOT unmarked or deleted ones.
+    state2
+        .auth
+        .create_session(
+            &gm_user2,
+            "awakened",
+            "room-pw",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+
+    let aw_docs: SessionGmDocsResponse = serde_json::from_slice(
+        &to_bytes(
+            app2.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/awakened/docs")
+                        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            64 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        aw_docs
+            .documents
+            .iter()
+            .any(|d| d.doc_id == doc_keep.doc_id)
+    );
+    assert!(
+        !aw_docs
+            .documents
+            .iter()
+            .any(|d| d.doc_id == doc_unpersist.doc_id)
+    );
+    assert!(
+        !aw_docs
+            .documents
+            .iter()
+            .any(|d| d.doc_id == doc_delete.doc_id)
+    );
+
+    let aw_mems: SessionGmMemoriesResponse = serde_json::from_slice(
+        &to_bytes(
+            app2.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/awakened/memories")
+                        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            64 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        !aw_mems
+            .memories
+            .iter()
+            .any(|m| m.memory_id == mem_unpersist.memory_id)
+    );
+    assert!(
+        !aw_mems
+            .memories
+            .iter()
+            .any(|m| m.memory_id == format!("mem_{}", sammat1.npc.character_id))
+    );
+
+    let aw_npcs: SessionNpcsResponse = serde_json::from_slice(
+        &to_bytes(
+            app2.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/awakened/npcs")
+                        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            64 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(aw_npcs.npcs.is_empty());
+
+    // 2. Resuming "camp-dedup-arc" confirms deleted docs/NPCs do not return after teardown.
+    let resume_res = app2
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/resume")
+                .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_string(&ResumeSessionRequest {
+                        session_id: "camp-dedup-arc".to_string(),
+                        session_password: None,
+                        join_token: None,
+                        role: None,
+                        display_name: None,
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resume_res.status(), StatusCode::OK);
+
+    let resumed_docs: SessionGmDocsResponse = serde_json::from_slice(
+        &to_bytes(
+            app2.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/sessions/camp-dedup-arc/docs")
+                        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            64 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        !resumed_docs
+            .documents
+            .iter()
+            .any(|d| d.doc_id == doc_delete.doc_id)
+    );
+
+    let resumed_npcs: SessionNpcsResponse = serde_json::from_slice(
+        &to_bytes(
+            app2.oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/sessions/camp-dedup-arc/npcs")
+                    .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+            .into_body(),
+            64 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        !resumed_npcs
+            .npcs
+            .iter()
+            .any(|n| n.character_id == vesper.npc.character_id)
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

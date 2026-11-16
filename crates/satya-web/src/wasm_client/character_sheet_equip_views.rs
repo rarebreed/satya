@@ -255,7 +255,11 @@ pub fn format_equipment_weapons_and_armor_html(sheet: &CharacterSheetState) -> S
     ]
     .iter()
     .map(|&(r, lbl)| {
-        let sel = if (dist_m - r).abs() < 1.0 { " selected" } else { "" };
+        let sel = if (dist_m - r).abs() < 1.0 {
+            " selected"
+        } else {
+            ""
+        };
         format!(r#"<option value="{r}"{sel}>{lbl}</option>"#)
     })
     .collect::<Vec<_>>()

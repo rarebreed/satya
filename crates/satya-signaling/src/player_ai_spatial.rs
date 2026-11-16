@@ -28,8 +28,7 @@ use uuid::Uuid;
 use crate::campaign_lore::{append_omnisearch_lore_and_npc_hits, resolve_pack_defaults};
 use crate::gm_api::verify_gm_service_header;
 use crate::map_handlers::{
-    broadcast_role_filtered_map, ensure_vector_map_ready, filter_map_for_role,
-    log_map_canvas_event,
+    broadcast_role_filtered_map, ensure_vector_map_ready, filter_map_for_role, log_map_canvas_event,
 };
 use crate::player_ai_api::{PlayerAiContextQuery, default_ai_player_uid};
 use crate::state::SignalingAppState;
@@ -136,7 +135,9 @@ pub async fn player_ai_move_map_token_handler(
         )
             .into_response();
     }
-    let target_floor = req.to_floor.unwrap_or_else(|| map.token_floor(&req.entity_id));
+    let target_floor = req
+        .to_floor
+        .unwrap_or_else(|| map.token_floor(&req.entity_id));
     let (final_x_cm, final_y_cm) = match if target_floor == map.active_floor {
         resolve_token_destination_cm(&map, &req.entity_id, req_x_cm, req_y_cm)
     } else {
@@ -169,7 +170,12 @@ pub async fn player_ai_move_map_token_handler(
         if let Some(tok) = map.tokens.iter_mut().find(|t| t.entity_id == req.entity_id) {
             tok.x = final_gx;
             tok.y = final_gy;
-            if let Some(lbl) = req.label.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            if let Some(lbl) = req
+                .label
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
                 tok.label = lbl.to_string();
             }
             tok.visibility = MessageVisibility::Public;
@@ -449,12 +455,21 @@ mod tests {
             .header("Authorization", format!("Bearer {}", p1.auth_token))
             .body(axum::body::Body::empty())
             .unwrap();
-        let p_resp = tower::ServiceExt::oneshot(app.clone(), p_get).await.unwrap();
+        let p_resp = tower::ServiceExt::oneshot(app.clone(), p_get)
+            .await
+            .unwrap();
         assert_eq!(p_resp.status(), StatusCode::OK);
-        let p_bytes = axum::body::to_bytes(p_resp.into_body(), 64 * 1024).await.unwrap();
+        let p_bytes = axum::body::to_bytes(p_resp.into_body(), 64 * 1024)
+            .await
+            .unwrap();
         let p_ledger: SessionWorldLedger = serde_json::from_slice(&p_bytes).unwrap();
         assert!(!p_ledger.faction_clocks.is_empty());
-        assert!(p_ledger.faction_clocks.iter().all(|c| c.gm_secret_agenda.is_none()));
+        assert!(
+            p_ledger
+                .faction_clocks
+                .iter()
+                .all(|c| c.gm_secret_agenda.is_none())
+        );
 
         let p_mut = axum::http::Request::builder()
             .method("POST")
@@ -469,7 +484,9 @@ mod tests {
                 .unwrap(),
             ))
             .unwrap();
-        let p_mut_resp = tower::ServiceExt::oneshot(app.clone(), p_mut).await.unwrap();
+        let p_mut_resp = tower::ServiceExt::oneshot(app.clone(), p_mut)
+            .await
+            .unwrap();
         assert_eq!(p_mut_resp.status(), StatusCode::FORBIDDEN);
 
         let gm_mut = axum::http::Request::builder()
@@ -488,9 +505,13 @@ mod tests {
                 .unwrap(),
             ))
             .unwrap();
-        let gm_resp = tower::ServiceExt::oneshot(app.clone(), gm_mut).await.unwrap();
+        let gm_resp = tower::ServiceExt::oneshot(app.clone(), gm_mut)
+            .await
+            .unwrap();
         assert_eq!(gm_resp.status(), StatusCode::OK);
-        let gm_bytes = axum::body::to_bytes(gm_resp.into_body(), 64 * 1024).await.unwrap();
+        let gm_bytes = axum::body::to_bytes(gm_resp.into_body(), 64 * 1024)
+            .await
+            .unwrap();
         let gm_updated: WorldLedgerUpdateResponse = serde_json::from_slice(&gm_bytes).unwrap();
         assert!(gm_updated.ledger.operational_heat >= 2);
         assert!(
@@ -551,7 +572,9 @@ mod tests {
                 .unwrap(),
             ))
             .unwrap();
-        let npc_resp = tower::ServiceExt::oneshot(app.clone(), npc_req).await.unwrap();
+        let npc_resp = tower::ServiceExt::oneshot(app.clone(), npc_req)
+            .await
+            .unwrap();
         assert_eq!(npc_resp.status(), StatusCode::OK);
 
         let spawn_req = axum::http::Request::builder()
@@ -574,7 +597,9 @@ mod tests {
                 .unwrap(),
             ))
             .unwrap();
-        let spawn_resp = tower::ServiceExt::oneshot(app.clone(), spawn_req).await.unwrap();
+        let spawn_resp = tower::ServiceExt::oneshot(app.clone(), spawn_req)
+            .await
+            .unwrap();
         assert_eq!(spawn_resp.status(), StatusCode::OK);
 
         // Seed map with open floor + 1 public self token + 1 GM_ONLY sniper token
@@ -609,11 +634,15 @@ mod tests {
         // Context endpoint hides GM_ONLY token, GM doc, NPC secret dossier, and faction gm_secret_agenda
         let ctx_req = axum::http::Request::builder()
             .method("GET")
-            .uri(format!("/api/player-ai/sessions/{sid}/context?user_id=ai-player-kaelen"))
+            .uri(format!(
+                "/api/player-ai/sessions/{sid}/context?user_id=ai-player-kaelen"
+            ))
             .header("Authorization", format!("Bearer {gm_svc_tok}"))
             .body(axum::body::Body::empty())
             .unwrap();
-        let ctx_resp = tower::ServiceExt::oneshot(app.clone(), ctx_req).await.unwrap();
+        let ctx_resp = tower::ServiceExt::oneshot(app.clone(), ctx_req)
+            .await
+            .unwrap();
         assert_eq!(ctx_resp.status(), StatusCode::OK);
         let ctx_bytes = axum::body::to_bytes(ctx_resp.into_body(), 128 * 1024)
             .await
@@ -636,7 +665,9 @@ mod tests {
             .header("Authorization", format!("Bearer {gm_svc_tok}"))
             .body(axum::body::Body::empty())
             .unwrap();
-        let lookup_resp = tower::ServiceExt::oneshot(app.clone(), lookup_req).await.unwrap();
+        let lookup_resp = tower::ServiceExt::oneshot(app.clone(), lookup_req)
+            .await
+            .unwrap();
         assert_eq!(lookup_resp.status(), StatusCode::OK);
         let lookup_bytes = axum::body::to_bytes(lookup_resp.into_body(), 128 * 1024)
             .await
@@ -649,7 +680,9 @@ mod tests {
         // Self-token move succeeds (200 OK); moving another entity returns 403 Forbidden
         let move_ok = axum::http::Request::builder()
             .method("POST")
-            .uri(format!("/api/player-ai/sessions/{sid}/map/move?user_id=ai-player-kaelen"))
+            .uri(format!(
+                "/api/player-ai/sessions/{sid}/map/move?user_id=ai-player-kaelen"
+            ))
             .header("Authorization", format!("Bearer {gm_svc_tok}"))
             .header("Content-Type", "application/json")
             .body(axum::body::Body::from(
@@ -661,7 +694,9 @@ mod tests {
                 .unwrap(),
             ))
             .unwrap();
-        let move_resp = tower::ServiceExt::oneshot(app.clone(), move_ok).await.unwrap();
+        let move_resp = tower::ServiceExt::oneshot(app.clone(), move_ok)
+            .await
+            .unwrap();
         assert_eq!(move_resp.status(), StatusCode::OK);
         let move_bytes = axum::body::to_bytes(move_resp.into_body(), 128 * 1024)
             .await
@@ -673,11 +708,18 @@ mod tests {
             .find(|t| t.entity_id == "ai-player-kaelen")
             .unwrap();
         assert_eq!((moved_tok.x, moved_tok.y), (4, 3));
-        assert!(!filtered_map.tokens.iter().any(|t| t.entity_id == "gm-ambush-1"));
+        assert!(
+            !filtered_map
+                .tokens
+                .iter()
+                .any(|t| t.entity_id == "gm-ambush-1")
+        );
 
         let move_forbidden = axum::http::Request::builder()
             .method("POST")
-            .uri(format!("/api/player-ai/sessions/{sid}/map/move?user_id=ai-player-kaelen"))
+            .uri(format!(
+                "/api/player-ai/sessions/{sid}/map/move?user_id=ai-player-kaelen"
+            ))
             .header("Authorization", format!("Bearer {gm_svc_tok}"))
             .header("Content-Type", "application/json")
             .body(axum::body::Body::from(

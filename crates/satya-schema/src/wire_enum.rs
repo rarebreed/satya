@@ -78,17 +78,32 @@ mod tests {
 
     #[test]
     fn wire_enum_macro_supports_codes_aliases_default_and_serde() {
-        assert_eq!(SampleWireKind::ALL, [SampleWireKind::Alpha, SampleWireKind::Beta]);
+        assert_eq!(
+            SampleWireKind::ALL,
+            [SampleWireKind::Alpha, SampleWireKind::Beta]
+        );
         assert_eq!(SampleWireKind::default(), SampleWireKind::Alpha);
         assert_eq!(SampleWireKind::Alpha.as_str(), "ALPHA");
         assert_eq!(SampleWireKind::Beta.code(), "BETA");
         assert_eq!(SampleWireKind::Beta.label(), "Beta label");
-        assert_eq!(SampleWireKind::from_code_str(" alpha "), Some(SampleWireKind::Alpha));
-        assert_eq!(SampleWireKind::from_code_str("b_alias"), Some(SampleWireKind::Beta));
-        assert_eq!(SampleWireKind::from_code_str("SECOND"), Some(SampleWireKind::Beta));
+        assert_eq!(
+            SampleWireKind::from_code_str(" alpha "),
+            Some(SampleWireKind::Alpha)
+        );
+        assert_eq!(
+            SampleWireKind::from_code_str("b_alias"),
+            Some(SampleWireKind::Beta)
+        );
+        assert_eq!(
+            SampleWireKind::from_code_str("SECOND"),
+            Some(SampleWireKind::Beta)
+        );
         assert_eq!(SampleWireKind::from_code_str("unknown"), None);
         let wire = serde_json::to_string(&SampleWireKind::Beta).unwrap();
         assert_eq!(wire, "\"BETA\"");
-        assert_eq!(serde_json::from_str::<SampleWireKind>(&wire).unwrap(), SampleWireKind::Beta);
+        assert_eq!(
+            serde_json::from_str::<SampleWireKind>(&wire).unwrap(),
+            SampleWireKind::Beta
+        );
     }
 }

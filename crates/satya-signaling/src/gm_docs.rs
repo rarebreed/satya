@@ -581,3 +581,42 @@ pub async fn list_session_gm_docs_handler(
             .into_response(),
     }
 }
+
+/// Deletes a `GM_ONLY` document at `DELETE /api/sessions/:session_id/docs/:doc_id`.
+pub async fn delete_session_gm_doc_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    Path((session_id, doc_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Missing Authorization header" })),
+        )
+            .into_response();
+    };
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or expired auth token" })),
+        )
+            .into_response();
+    };
+
+    match state
+        .auth
+        .delete_session_gm_document(&session_id, &user.user_id, &doc_id)
+        .await
+    {
+        Ok(deleted) => (
+            StatusCode::OK,
+            Json(json!({ "status": "ok", "doc_id": doc_id, "deleted": deleted })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}

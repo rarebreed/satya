@@ -259,13 +259,9 @@ pub const fn psyche_pole_descriptor(code: CharacteristicCode, score: i32) -> &'s
         (CharacteristicCode::TRS, PsychePole::Balanced) => "Discerning / Verify-Then-Trust",
         (CharacteristicCode::TRS, PsychePole::HighPole) => "Trusting / Open-Handed / Gullible",
 
-        (CharacteristicCode::CPS, PsychePole::LowPole) => {
-            "Ruthless / Utilitarian / Cold-Blooded"
-        }
+        (CharacteristicCode::CPS, PsychePole::LowPole) => "Ruthless / Utilitarian / Cold-Blooded",
         (CharacteristicCode::CPS, PsychePole::Balanced) => "Humane / Proportionate",
-        (CharacteristicCode::CPS, PsychePole::HighPole) => {
-            "Merciful / Tender-Hearted / Pacifistic"
-        }
+        (CharacteristicCode::CPS, PsychePole::HighPole) => "Merciful / Tender-Hearted / Pacifistic",
 
         _ => "Non-Psyche Characteristic",
     }

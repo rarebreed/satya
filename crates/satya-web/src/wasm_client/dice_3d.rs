@@ -266,7 +266,10 @@ fn append_polygon_face(
 
     let (u0, v0, u1, v1) = atlas_uv_bounds(face_number);
     let (u_mid, v_mid) = (0.5 * (u0 + u1), 0.5 * (v0 + v1));
-    let (u_half, v_half) = (0.5 * (u1 - u0) * uv_radius_scale, 0.5 * (v1 - v0) * uv_radius_scale);
+    let (u_half, v_half) = (
+        0.5 * (u1 - u0) * uv_radius_scale,
+        0.5 * (v1 - v0) * uv_radius_scale,
+    );
 
     let project_uv = |p: [f32; 3]| -> [f32; 2] {
         let rel = vec3_sub(p, centroid);
@@ -317,8 +320,17 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
         DieKind::D4 => {
             let s = 1.0 / 3.0_f32.sqrt();
             let v = [[s, s, s], [s, -s, -s], [-s, s, -s], [-s, -s, s]];
-            for (idx, f) in [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]].iter().enumerate() {
-                append_polygon_face(&mut vertices, &mut face_normals, &[v[f[0]], v[f[1]], v[f[2]]], idx + 1, 0.82);
+            for (idx, f) in [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]]
+                .iter()
+                .enumerate()
+            {
+                append_polygon_face(
+                    &mut vertices,
+                    &mut face_normals,
+                    &[v[f[0]], v[f[1]], v[f[2]]],
+                    idx + 1,
+                    0.82,
+                );
             }
         }
         DieKind::D6 => {
@@ -340,8 +352,14 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
             let (top, bot) = ([0.0, r, 0.0], [0.0, -r, 0.0]);
             let (px, nx, pz, nz) = ([r, 0.0, 0.0], [-r, 0.0, 0.0], [0.0, 0.0, r], [0.0, 0.0, -r]);
             let faces = [
-                [top, pz, px], [top, px, nz], [top, nz, nx], [top, nx, pz],
-                [bot, px, pz], [bot, nz, px], [bot, nx, nz], [bot, pz, nx],
+                [top, pz, px],
+                [top, px, nz],
+                [top, nz, nx],
+                [top, nx, pz],
+                [bot, px, pz],
+                [bot, nz, px],
+                [bot, nx, nz],
+                [bot, pz, nx],
             ];
             for (idx, poly) in faces.iter().enumerate() {
                 append_polygon_face(&mut vertices, &mut face_normals, poly, idx + 1, 0.84);
@@ -360,8 +378,20 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
             }
             for i in 0..5 {
                 let next = (i + 1) % 5;
-                append_polygon_face(&mut vertices, &mut face_normals, &[apex_top, upper[i], lower[i], upper[next]], i * 2 + 1, 0.82);
-                append_polygon_face(&mut vertices, &mut face_normals, &[apex_bot, lower[i], upper[next], lower[next]], i * 2 + 2, 0.82);
+                append_polygon_face(
+                    &mut vertices,
+                    &mut face_normals,
+                    &[apex_top, upper[i], lower[i], upper[next]],
+                    i * 2 + 1,
+                    0.82,
+                );
+                append_polygon_face(
+                    &mut vertices,
+                    &mut face_normals,
+                    &[apex_bot, lower[i], upper[next], lower[next]],
+                    i * 2 + 2,
+                    0.82,
+                );
             }
         }
         DieKind::D12 => {
@@ -379,21 +409,39 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
                     }
                 }
                 let n = vec3_normalize(v_dir);
-                let up_ref = if n[1].abs() < 0.9 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
+                let up_ref = if n[1].abs() < 0.9 {
+                    [0.0, 1.0, 0.0]
+                } else {
+                    [1.0, 0.0, 0.0]
+                };
                 let tu = vec3_normalize(vec3_cross(up_ref, n));
                 let tv = vec3_normalize(vec3_cross(n, tu));
                 incident_centers.sort_by(|a, b| {
                     let ang_a = vec3_dot(*a, tv).atan2(vec3_dot(*a, tu));
                     let ang_b = vec3_dot(*b, tv).atan2(vec3_dot(*b, tu));
-                    ang_a.partial_cmp(&ang_b).unwrap_or(std::cmp::Ordering::Equal)
+                    ang_a
+                        .partial_cmp(&ang_b)
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 });
-                append_polygon_face(&mut vertices, &mut face_normals, &incident_centers, v_idx + 1, 0.88);
+                append_polygon_face(
+                    &mut vertices,
+                    &mut face_normals,
+                    &incident_centers,
+                    v_idx + 1,
+                    0.88,
+                );
             }
         }
         DieKind::D20 => {
             let v = raw_icosahedron_vertices();
             for (idx, tri) in raw_icosahedron_triangles().iter().enumerate() {
-                append_polygon_face(&mut vertices, &mut face_normals, &[v[tri[0]], v[tri[1]], v[tri[2]]], idx + 1, 0.85);
+                append_polygon_face(
+                    &mut vertices,
+                    &mut face_normals,
+                    &[v[tri[0]], v[tri[1]], v[tri[2]]],
+                    idx + 1,
+                    0.85,
+                );
             }
         }
     }
@@ -408,9 +456,18 @@ pub fn build_polyhedral_mesh(kind: DieKind) -> PolyhedralMesh {
 fn raw_icosahedron_vertices() -> [[f32; 3]; 12] {
     let phi = 0.5 * (1.0 + 5.0_f32.sqrt());
     let raw = [
-        [-1.0, phi, 0.0], [1.0, phi, 0.0], [-1.0, -phi, 0.0], [1.0, -phi, 0.0],
-        [0.0, -1.0, phi], [0.0, 1.0, phi], [0.0, -1.0, -phi], [0.0, 1.0, -phi],
-        [phi, 0.0, -1.0], [phi, 0.0, 1.0], [-phi, 0.0, -1.0], [-phi, 0.0, 1.0],
+        [-1.0, phi, 0.0],
+        [1.0, phi, 0.0],
+        [-1.0, -phi, 0.0],
+        [1.0, -phi, 0.0],
+        [0.0, -1.0, phi],
+        [0.0, 1.0, phi],
+        [0.0, -1.0, -phi],
+        [0.0, 1.0, -phi],
+        [phi, 0.0, -1.0],
+        [phi, 0.0, 1.0],
+        [-phi, 0.0, -1.0],
+        [-phi, 0.0, 1.0],
     ];
     let mut out = [[0.0_f32; 3]; 12];
     for (i, r) in raw.iter().enumerate() {
@@ -421,10 +478,26 @@ fn raw_icosahedron_vertices() -> [[f32; 3]; 12] {
 
 fn raw_icosahedron_triangles() -> [[usize; 3]; 20] {
     [
-        [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
-        [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
-        [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
-        [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
+        [0, 11, 5],
+        [0, 5, 1],
+        [0, 1, 7],
+        [0, 7, 10],
+        [0, 10, 11],
+        [1, 5, 9],
+        [5, 11, 4],
+        [11, 10, 2],
+        [10, 7, 6],
+        [7, 1, 8],
+        [3, 9, 4],
+        [3, 4, 2],
+        [3, 2, 6],
+        [3, 6, 8],
+        [3, 8, 9],
+        [4, 9, 5],
+        [2, 4, 11],
+        [6, 2, 10],
+        [8, 6, 7],
+        [9, 8, 1],
     ]
 }
 
@@ -485,16 +558,60 @@ fn segment_sdf(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
 fn digit_sdf(digit: u8, x: f32, y: f32) -> f32 {
     let (l, r, t, m, b) = (-0.50_f32, 0.50_f32, -0.72_f32, 0.00_f32, 0.72_f32);
     let segs: &[([f32; 2], [f32; 2])] = match digit {
-        0 => &[([l, t], [r, t]), ([r, t], [r, b]), ([r, b], [l, b]), ([l, b], [l, t])],
-        1 => &[([-0.22, -0.42], [0.05, t]), ([0.05, t], [0.05, b]), ([-0.30, b], [0.38, b])],
-        2 => &[([l, t], [r, t]), ([r, t], [r, m]), ([r, m], [l, m]), ([l, m], [l, b]), ([l, b], [r, b])],
-        3 => &[([l, t], [r, t]), ([r, t], [r, b]), ([l, m], [r, m]), ([l, b], [r, b])],
+        0 => &[
+            ([l, t], [r, t]),
+            ([r, t], [r, b]),
+            ([r, b], [l, b]),
+            ([l, b], [l, t]),
+        ],
+        1 => &[
+            ([-0.22, -0.42], [0.05, t]),
+            ([0.05, t], [0.05, b]),
+            ([-0.30, b], [0.38, b]),
+        ],
+        2 => &[
+            ([l, t], [r, t]),
+            ([r, t], [r, m]),
+            ([r, m], [l, m]),
+            ([l, m], [l, b]),
+            ([l, b], [r, b]),
+        ],
+        3 => &[
+            ([l, t], [r, t]),
+            ([r, t], [r, b]),
+            ([l, m], [r, m]),
+            ([l, b], [r, b]),
+        ],
         4 => &[([l, t], [l, m]), ([l, m], [r, m]), ([r, t], [r, b])],
-        5 => &[([r, t], [l, t]), ([l, t], [l, m]), ([l, m], [r, m]), ([r, m], [r, b]), ([r, b], [l, b])],
-        6 => &[([r, t], [l, t]), ([l, t], [l, b]), ([l, b], [r, b]), ([r, b], [r, m]), ([r, m], [l, m])],
+        5 => &[
+            ([r, t], [l, t]),
+            ([l, t], [l, m]),
+            ([l, m], [r, m]),
+            ([r, m], [r, b]),
+            ([r, b], [l, b]),
+        ],
+        6 => &[
+            ([r, t], [l, t]),
+            ([l, t], [l, b]),
+            ([l, b], [r, b]),
+            ([r, b], [r, m]),
+            ([r, m], [l, m]),
+        ],
         7 => &[([l, t], [r, t]), ([r, t], [-0.10, b])],
-        8 => &[([l, t], [r, t]), ([r, t], [r, b]), ([r, b], [l, b]), ([l, b], [l, t]), ([l, m], [r, m])],
-        9 => &[([l, m], [l, t]), ([l, t], [r, t]), ([r, t], [r, b]), ([r, b], [l, b]), ([l, m], [r, m])],
+        8 => &[
+            ([l, t], [r, t]),
+            ([r, t], [r, b]),
+            ([r, b], [l, b]),
+            ([l, b], [l, t]),
+            ([l, m], [r, m]),
+        ],
+        9 => &[
+            ([l, m], [l, t]),
+            ([l, t], [r, t]),
+            ([r, t], [r, b]),
+            ([r, b], [l, b]),
+            ([l, m], [r, m]),
+        ],
         _ => &[],
     };
     let mut d = 10.0_f32;

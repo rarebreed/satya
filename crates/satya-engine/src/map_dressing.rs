@@ -198,7 +198,11 @@ pub const fn normalize_prop_rotation_deg(_kind: PropKind, rotation_deg: i32) -> 
 
 /// World-space AABB half-extents in centimeters for a canonical `(span_w_cm, span_h_cm)` prop rotated `rotation_deg` clockwise.
 #[must_use]
-pub fn rotated_aabb_half_extents_cm(span_w_cm: i32, span_h_cm: i32, rotation_deg: i32) -> (f32, f32) {
+pub fn rotated_aabb_half_extents_cm(
+    span_w_cm: i32,
+    span_h_cm: i32,
+    rotation_deg: i32,
+) -> (f32, f32) {
     let r = rotation_deg.rem_euclid(360);
     let sw = span_w_cm.max(1) as f32;
     let sh = span_h_cm.max(1) as f32;
@@ -310,13 +314,20 @@ pub fn make_prop_at_cm(
 #[must_use]
 pub fn terrain_hazard_prop_at(props: &[MapPropPlacement], x: i32, y: i32) -> bool {
     props.iter().any(|p| {
-        matches!(p.kind, PropKind::CreekWater | PropKind::DrainageDitch | PropKind::HazardSpill) && p.covers(x, y)
+        matches!(
+            p.kind,
+            PropKind::CreekWater | PropKind::DrainageDitch | PropKind::HazardSpill
+        ) && p.covers(x, y)
     })
 }
 
 /// Index and reference of the solid (non-floor-layer) prop covering `(x, y)`, if any.
 #[must_use]
-pub fn solid_prop_index_at(props: &[MapPropPlacement], x: i32, y: i32) -> Option<(usize, &MapPropPlacement)> {
+pub fn solid_prop_index_at(
+    props: &[MapPropPlacement],
+    x: i32,
+    y: i32,
+) -> Option<(usize, &MapPropPlacement)> {
     props
         .iter()
         .enumerate()
@@ -382,9 +393,17 @@ mod tests {
         for (i, k) in PropKind::ALL.iter().enumerate() {
             assert_eq!(PROP_CATALOG[i].kind, *k, "PROP_CATALOG out of order at {i}");
         }
-        assert!(prop_spec(PropKind::BarCounter).stretchable && prop_spec(PropKind::Rug).floor_layer);
-        assert!(prop_spec(PropKind::ElevatedCatwalk).floor_layer && prop_spec(PropKind::ElevatedCatwalk).stretchable);
-        assert_eq!(prop_spec(PropKind::StructuralPillar).obstruction, PropObstruction::FullObstacle);
+        assert!(
+            prop_spec(PropKind::BarCounter).stretchable && prop_spec(PropKind::Rug).floor_layer
+        );
+        assert!(
+            prop_spec(PropKind::ElevatedCatwalk).floor_layer
+                && prop_spec(PropKind::ElevatedCatwalk).stretchable
+        );
+        assert_eq!(
+            prop_spec(PropKind::StructuralPillar).obstruction,
+            PropObstruction::FullObstacle
+        );
         assert_eq!(prop_spec(PropKind::HazardSpill).move_cost_mult, 2.0);
         assert_eq!(normalize_prop_rotation_deg(PropKind::Sofa, 23), 23);
         assert_eq!(normalize_prop_rotation_deg(PropKind::Car, -30), 330);
@@ -412,7 +431,10 @@ mod tests {
         assert!(!desk_t.covers(5, 2) && !desk_t.covers(7, 2));
 
         let log45 = make_prop(PropKind::FallenLog, 1, 4, 45, None, 3);
-        assert_eq!((log45.w_cells, log45.h_cells, log45.rotation_deg), (3, 3, 45));
+        assert_eq!(
+            (log45.w_cells, log45.h_cells, log45.rotation_deg),
+            (3, 3, 45)
+        );
         assert!(log45.covers(1, 4) && log45.covers(2, 5) && log45.covers(3, 6));
         assert!(!log45.covers(3, 4) && !log45.covers(1, 6));
 

@@ -6,7 +6,9 @@
 //! fixed-position docked pop-up pane inside `#tabletop-map-viewport` when Inspect mode is active
 //! (`Alt`-hold, `I` hotkey, or `#btn-map-inspect-toggle`) so map layout never jumps or reflows.
 
-use crate::wasm_client::dom::{escape_html, get_element, set_class, set_display, set_html, set_text};
+use crate::wasm_client::dom::{
+    escape_html, get_element, set_class, set_display, set_html, set_text,
+};
 use crate::wasm_client::dom_tooltip::is_keyboard_typing_target;
 use crate::wasm_client::map_2d_art::battlemap_theme_for_preset;
 use crate::wasm_client::map_2d_art_overlay::sync_battlemap_svg_host;
@@ -146,7 +148,11 @@ fn sync_hover_tooltip_dom() {
     set_text("map-hover-coords-pill", &coords_txt);
     set_text(
         "btn-map-inspect-toggle",
-        if pinned { "Inspect: ON [I]" } else { "Inspect [Alt/I]" },
+        if pinned {
+            "Inspect: ON [I]"
+        } else {
+            "Inspect [Alt/I]"
+        },
     );
     set_class(
         "btn-map-inspect-toggle",
@@ -191,13 +197,14 @@ pub fn satya_hover_map_point(x_m: f32, y_m: f32, _client_x: f32, _client_y: f32)
         }
         let cell_m = ui.map.cell_size_m().max(0.25);
         let cell = (
-            (x_m / cell_m).floor().clamp(0.0, (ui.map.grid_width - 1) as f32) as i32,
-            (y_m / cell_m).floor().clamp(0.0, (ui.map.grid_height - 1) as f32) as i32,
+            (x_m / cell_m)
+                .floor()
+                .clamp(0.0, (ui.map.grid_width - 1) as f32) as i32,
+            (y_m / cell_m)
+                .floor()
+                .clamp(0.0, (ui.map.grid_height - 1) as f32) as i32,
         );
-        let prev_ref = ui
-            .hover_inspection
-            .as_ref()
-            .map(|i| i.target_ref.clone());
+        let prev_ref = ui.hover_inspection.as_ref().map(|i| i.target_ref.clone());
         let prev_cell = ui.hovered_cell;
         let next_ins = compute_hover_inspection(ui, x_m, y_m);
         let next_ref = next_ins.as_ref().map(|i| i.target_ref.clone());
@@ -212,12 +219,18 @@ pub fn satya_hover_map_point(x_m: f32, y_m: f32, _client_x: f32, _client_y: f32)
         if significant {
             ui.recompute_overlays();
         }
-        (significant || !ui.view_battlemap, significant && !ui.view_battlemap)
+        (
+            significant || !ui.view_battlemap,
+            significant && !ui.view_battlemap,
+        )
     });
 
     sync_hover_tooltip_dom();
     if redraw_overlay {
-        set_html("tabletop-map-los-hud", &with_map_ui(format_map_tactical_hud_html));
+        set_html(
+            "tabletop-map-los-hud",
+            &with_map_ui(format_map_tactical_hud_html),
+        );
         sync_battlemap_svg_host();
     }
     if redraw_wgpu {
@@ -241,7 +254,10 @@ pub fn satya_leave_map_hover() {
     });
     sync_hover_tooltip_dom();
     if changed {
-        set_html("tabletop-map-los-hud", &with_map_ui(format_map_tactical_hud_html));
+        set_html(
+            "tabletop-map-los-hud",
+            &with_map_ui(format_map_tactical_hud_html),
+        );
         sync_battlemap_svg_host();
         mark_map_wgpu_dirty();
         refresh_map_wgpu_if_active();
@@ -324,7 +340,9 @@ pub fn handle_map_global_keyup(ev: &web_sys::KeyboardEvent) {
 mod tests {
     use super::*;
     use satya_engine::map_dressing::make_prop_at_cm;
-    use satya_schema::{EdgeSide, MapWallEdge, MaterialClass, PropKind, TokenPlacement, WallEdgeKind};
+    use satya_schema::{
+        EdgeSide, MapWallEdge, MaterialClass, PropKind, TokenPlacement, WallEdgeKind,
+    };
 
     #[test]
     fn hover_inspector_identifies_tokens_walls_car_parts_trees_surfaces_and_ground() {

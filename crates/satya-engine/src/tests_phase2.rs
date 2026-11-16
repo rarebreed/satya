@@ -48,8 +48,7 @@ fn test_derive_motivational_profile_highlights_dual_psyche_wedge() {
         "awakened",
     );
     assert!(
-        profile.negotiation_lever.contains("BLG=16")
-            || profile.negotiation_lever.contains("SLF=5")
+        profile.negotiation_lever.contains("BLG=16") || profile.negotiation_lever.contains("SLF=5")
     );
     assert!(profile.dual_psyche_wedge.contains("Wedge"));
     assert!(!profile.dominant_poles.is_empty());
@@ -131,8 +130,14 @@ fn test_expanded_32_characteristics_and_9_psyche_traits() {
     assert_eq!(CharacteristicCode::ALL.len(), 32);
     assert_eq!(CharacteristicCode::PSYCHE_ALL.len(), 9);
     assert_eq!(PsycheTraitId::ALL.len(), 9);
-    assert_eq!(CharacteristicCode::TRS.category(), CharacteristicCategory::Psyche);
-    assert_eq!(CharacteristicCode::CPS.category(), CharacteristicCategory::Psyche);
+    assert_eq!(
+        CharacteristicCode::TRS.category(),
+        CharacteristicCategory::Psyche
+    );
+    assert_eq!(
+        CharacteristicCode::CPS.category(),
+        CharacteristicCategory::Psyche
+    );
 
     let defaults = CharacterCharacteristics::default();
     assert_eq!(defaults.trs, 10);
@@ -332,7 +337,10 @@ fn test_12_formative_life_events_and_branches() {
 
     let silent = resolve_formative_life_event(35, LifeEventChoiceBranch::BranchA, true);
     let whistle = resolve_formative_life_event(35, LifeEventChoiceBranch::BranchB, true);
-    assert_eq!(silent.event_id, FormativeLifeEventId::WhistleblowerCrossroads);
+    assert_eq!(
+        silent.event_id,
+        FormativeLifeEventId::WhistleblowerCrossroads
+    );
     assert_eq!(silent.sqm_delta, 1);
     assert_eq!(whistle.heat_delta, 1);
 }

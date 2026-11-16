@@ -30,16 +30,27 @@ use crate::tactical_map::{ProceduralSector, SectorPreset};
 #[must_use]
 pub const fn default_zoning_and_tier(preset: SectorPreset) -> (ZoningContext, EconomicTier) {
     match preset {
-        SectorPreset::UrbanResidential => (ZoningContext::UrbanResidential, EconomicTier::MiddleClass),
-        SectorPreset::ProjectsHighDensity => (ZoningContext::ProjectsHighDensity, EconomicTier::LowIncome),
-        SectorPreset::SuburbanNeighborhood => {
-            (ZoningContext::SuburbanNeighborhood, EconomicTier::UpperMiddleClass)
+        SectorPreset::UrbanResidential => {
+            (ZoningContext::UrbanResidential, EconomicTier::MiddleClass)
         }
-        SectorPreset::RuralCountryside => (ZoningContext::RuralCountryside, EconomicTier::LowIncome),
-        SectorPreset::LuxuryMansion => (ZoningContext::SuburbanNeighborhood, EconomicTier::LuxuryMansion),
-        SectorPreset::DowntownCommercial => {
-            (ZoningContext::DowntownCommercial, EconomicTier::UpperMiddleClass)
+        SectorPreset::ProjectsHighDensity => {
+            (ZoningContext::ProjectsHighDensity, EconomicTier::LowIncome)
         }
+        SectorPreset::SuburbanNeighborhood => (
+            ZoningContext::SuburbanNeighborhood,
+            EconomicTier::UpperMiddleClass,
+        ),
+        SectorPreset::RuralCountryside => {
+            (ZoningContext::RuralCountryside, EconomicTier::LowIncome)
+        }
+        SectorPreset::LuxuryMansion => (
+            ZoningContext::SuburbanNeighborhood,
+            EconomicTier::LuxuryMansion,
+        ),
+        SectorPreset::DowntownCommercial => (
+            ZoningContext::DowntownCommercial,
+            EconomicTier::UpperMiddleClass,
+        ),
         _ => (ZoningContext::UrbanResidential, EconomicTier::MiddleClass),
     }
 }
@@ -135,7 +146,13 @@ impl FloorStack {
 
 /// Safe building column envelope reserving East/West spawn pads on standard boards.
 fn safe_x_span(w: i32) -> (i32, i32) {
-    let pad = if w >= 16 { 4 } else if w >= 12 { 3 } else { 2 };
+    let pad = if w >= 16 {
+        4
+    } else if w >= 12 {
+        3
+    } else {
+        2
+    };
     (pad, (w - pad).max(pad + 4).min(w - 1))
 }
 
@@ -160,16 +177,29 @@ fn add_entry_walk(
 
 /// Scatters perimeter shrubs, trees, benches, and organic yard patches strictly outside roofs & asphalt.
 fn dress_yard_props(b: &mut OutdoorBuilder, tier: EconomicTier, tree_budget: i32, patches: usize) {
-    let bounds = RectM { x0: 1.5, y0: 1.5, x1: b.w as f32 - 1.5, y1: b.h as f32 - 1.5 };
+    let bounds = RectM {
+        x0: 1.5,
+        y0: 1.5,
+        x1: b.w as f32 - 1.5,
+        y1: b.h as f32 - 1.5,
+    };
     for i in 0..patches {
-        let px = b.rng.f32_range(bounds.x0 + 0.5, (bounds.x1 - 0.5).max(bounds.x0 + 1.0));
-        let py = b.rng.f32_range(bounds.y0 + 0.5, (bounds.y1 - 0.5).max(bounds.y0 + 1.0));
+        let px = b
+            .rng
+            .f32_range(bounds.x0 + 0.5, (bounds.x1 - 0.5).max(bounds.x0 + 1.0));
+        let py = b
+            .rng
+            .f32_range(bounds.y0 + 0.5, (bounds.y1 - 0.5).max(bounds.y0 + 1.0));
         let kind = if i % 2 == 0 {
             SurfaceFeatureKind::GardenBedZone
         } else {
             SurfaceFeatureKind::MulchZone
         };
-        let rad = if tier == EconomicTier::LuxuryMansion { 1.5 } else { 1.1 };
+        let rad = if tier == EconomicTier::LuxuryMansion {
+            1.5
+        } else {
+            1.1
+        };
         b.try_add_organic_patch(kind, (px, py), (rad, rad * 0.8), 0.30, 28);
     }
     if tree_budget > 0 {
@@ -192,29 +222,67 @@ fn dress_yard_props(b: &mut OutdoorBuilder, tier: EconomicTier, tree_budget: i32
 fn add_estate_perimeter(b: &mut OutdoorBuilder, comp: LotBox, gate_x: i32, gate_south: bool) {
     for x in comp.x0..comp.x1 {
         let is_gate = x == gate_x || x == gate_x + 1;
-        let k = if is_gate { WallEdgeKind::DoorOpen } else { WallEdgeKind::Wall };
-        let m = if is_gate { MaterialClass::SheetSteel } else { MaterialClass::ConcreteBlock };
+        let k = if is_gate {
+            WallEdgeKind::DoorOpen
+        } else {
+            WallEdgeKind::Wall
+        };
+        let m = if is_gate {
+            MaterialClass::SheetSteel
+        } else {
+            MaterialClass::ConcreteBlock
+        };
         b.put_edge(
             x,
             comp.y0,
             EdgeSide::North,
-            if !gate_south && is_gate { k } else { WallEdgeKind::Wall },
-            if !gate_south && is_gate { m } else { MaterialClass::ConcreteBlock },
+            if !gate_south && is_gate {
+                k
+            } else {
+                WallEdgeKind::Wall
+            },
+            if !gate_south && is_gate {
+                m
+            } else {
+                MaterialClass::ConcreteBlock
+            },
         );
         b.put_edge(
             x,
             comp.y1,
             EdgeSide::North,
-            if gate_south && is_gate { k } else { WallEdgeKind::Wall },
-            if gate_south && is_gate { m } else { MaterialClass::ConcreteBlock },
+            if gate_south && is_gate {
+                k
+            } else {
+                WallEdgeKind::Wall
+            },
+            if gate_south && is_gate {
+                m
+            } else {
+                MaterialClass::ConcreteBlock
+            },
         );
     }
     for y in comp.y0..comp.y1 {
         let is_side_door = y == (comp.y0 + comp.y1) / 2;
-        let k = if is_side_door { WallEdgeKind::DoorOpen } else { WallEdgeKind::Wall };
-        let m = if is_side_door { MaterialClass::SheetSteel } else { MaterialClass::ConcreteBlock };
+        let k = if is_side_door {
+            WallEdgeKind::DoorOpen
+        } else {
+            WallEdgeKind::Wall
+        };
+        let m = if is_side_door {
+            MaterialClass::SheetSteel
+        } else {
+            MaterialClass::ConcreteBlock
+        };
         b.put_edge(comp.x0, y, EdgeSide::West, k, m);
-        b.put_edge(comp.x1, y, EdgeSide::West, WallEdgeKind::Wall, MaterialClass::ConcreteBlock);
+        b.put_edge(
+            comp.x1,
+            y,
+            EdgeSide::West,
+            WallEdgeKind::Wall,
+            MaterialClass::ConcreteBlock,
+        );
     }
 }
 
@@ -242,7 +310,11 @@ fn build_urban_block(
 
     let street_idx = b.add_ribbon(
         SurfaceFeatureKind::AsphaltRoad,
-        &[(0.0, street_y), (wf * 0.45, street_y + 0.10), (wf, street_y - 0.08)],
+        &[
+            (0.0, street_y),
+            (wf * 0.45, street_y + 0.10),
+            (wf, street_y - 0.08),
+        ],
         300,
     );
     b.add_ribbon(
@@ -263,7 +335,10 @@ fn build_urban_block(
     };
     let each_w = ((span - lot_gap * (count - 1)) / count).max(5);
     let allow_basement = !high_density
-        && matches!(tier, EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion);
+        && matches!(
+            tier,
+            EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
+        );
 
     for i in 0..count {
         let lx0 = sx0 + i * (each_w + lot_gap);
@@ -291,7 +366,11 @@ fn build_urban_block(
 
     if variant == 2 {
         let alley_y = if street_north { hf - 0.85 } else { 0.85 };
-        b.add_ribbon(SurfaceFeatureKind::GravelRoad, &[(0.0, alley_y), (wf, alley_y)], 150);
+        b.add_ribbon(
+            SurfaceFeatureKind::GravelRoad,
+            &[(0.0, alley_y), (wf, alley_y)],
+            150,
+        );
     }
 
     let _ = b.place_vehicle_along_ribbon(PropKind::Car, street_idx, 0.28, 0.20, 6);
@@ -320,7 +399,12 @@ fn build_urban_block(
         None,
         true,
     );
-    dress_yard_props(b, tier, if high_density { 2 } else { 4 }, if high_density { 2 } else { 3 });
+    dress_yard_props(
+        b,
+        tier,
+        if high_density { 2 } else { 4 },
+        if high_density { 2 } else { 3 },
+    );
 }
 
 /// Topology family for `SuburbanNeighborhood` (detached 1–2 house yards, driveways, curved road).
@@ -335,7 +419,11 @@ fn build_suburban_neighborhood(
     let (wf, hf) = (w as f32, h as f32);
     let curved_top = variant == 1;
     let street_y = if curved_top { 1.45 } else { hf - 1.45 };
-    let entry = if curved_top { CardinalEntry::North } else { CardinalEntry::South };
+    let entry = if curved_top {
+        CardinalEntry::North
+    } else {
+        CardinalEntry::South
+    };
     let walk_y = if curved_top { 3.55 } else { hf - 3.55 };
 
     let bend = if variant == 2 { 0.45 } else { -0.35 };
@@ -349,14 +437,26 @@ fn build_suburban_neighborhood(
         ],
         300,
     );
-    b.add_ribbon(SurfaceFeatureKind::ConcreteWalk, &[(0.0, walk_y), (wf, walk_y)], 140);
+    b.add_ribbon(
+        SurfaceFeatureKind::ConcreteWalk,
+        &[(0.0, walk_y), (wf, walk_y)],
+        140,
+    );
 
     let (sx0, sx1) = safe_x_span(w);
     let lot_y0 = if curved_top { 5 } else { 2 };
-    let lot_y1 = if curved_top { (h - 2).max(11) } else { (h - 5).max(8) };
+    let lot_y1 = if curved_top {
+        (h - 2).max(11)
+    } else {
+        (h - 5).max(8)
+    };
     let lots: Vec<LotBox> = if sx1 - sx0 >= 20 && variant != 2 {
         let mid = (sx0 + sx1) / 2;
-        let gap = if tier == EconomicTier::LuxuryMansion { 4 } else { 3 };
+        let gap = if tier == EconomicTier::LuxuryMansion {
+            4
+        } else {
+            3
+        };
         vec![
             LotBox::new(sx0, lot_y0, mid - gap / 2, lot_y1),
             LotBox::new(mid + (gap + 1) / 2, lot_y0, sx1, lot_y1),
@@ -366,7 +466,10 @@ fn build_suburban_neighborhood(
         vec![LotBox::new(sx0 + inset, lot_y0, sx1 - inset, lot_y1)]
     };
 
-    let allow_basement = matches!(tier, EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion);
+    let allow_basement = matches!(
+        tier,
+        EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
+    );
     for (idx, lot) in lots.iter().copied().enumerate() {
         if lot.w() < 5 || lot.h() < 5 {
             continue;
@@ -387,7 +490,11 @@ fn build_suburban_neighborhood(
         stack.absorb_home(b, home, allow_basement && idx == 0);
         add_entry_walk(b, lot, entry, SurfaceFeatureKind::StoneWalk, walk_y);
         let drive_x = (lot.x0 as f32 - 1.5).max(1.5);
-        let y_end = if curved_top { lot.y0 as f32 } else { lot.y1 as f32 };
+        let y_end = if curved_top {
+            lot.y0 as f32
+        } else {
+            lot.y1 as f32
+        };
         let drive_idx = b.add_ribbon(
             SurfaceFeatureKind::AsphaltRoad,
             &[(drive_x, street_y), (drive_x, y_end)],
@@ -416,7 +523,11 @@ fn build_luxury_mansion_site(
     let street_y = if gate_south { hf - 1.45 } else { 1.45 };
     let street_idx = b.add_ribbon(
         SurfaceFeatureKind::AsphaltRoad,
-        &[(0.0, street_y), (wf * 0.4, street_y + 0.12), (wf, street_y - 0.10)],
+        &[
+            (0.0, street_y),
+            (wf * 0.4, street_y + 0.12),
+            (wf, street_y - 0.10),
+        ],
         300,
     );
 
@@ -425,30 +536,52 @@ fn build_luxury_mansion_site(
         sx0.max(3),
         if gate_south { 2 } else { 3 },
         sx1.min(w - 3),
-        if gate_south { (h - 3).max(10) } else { (h - 2).max(10) },
+        if gate_south {
+            (h - 3).max(10)
+        } else {
+            (h - 2).max(10)
+        },
     );
     let manor_pad_x = if comp.w() >= 18 { 3 } else { 2 };
     let manor_y0 = if gate_south { comp.y0 + 1 } else { comp.y0 + 2 };
-    let manor_y1 = if gate_south { (comp.y1 - 2).max(manor_y0 + 5) } else { (comp.y1 - 1).max(manor_y0 + 5) };
+    let manor_y1 = if gate_south {
+        (comp.y1 - 2).max(manor_y0 + 5)
+    } else {
+        (comp.y1 - 1).max(manor_y0 + 5)
+    };
     let manor = LotBox::new(
         (comp.x0 + manor_pad_x).min(comp.x1 - 7),
         manor_y0,
         (comp.x1 - manor_pad_x).max(comp.x0 + 8),
         manor_y1,
     );
-    let entry = if gate_south { CardinalEntry::South } else { CardinalEntry::North };
+    let entry = if gate_south {
+        CardinalEntry::South
+    } else {
+        CardinalEntry::North
+    };
     let gate_x = (manor.x0 + manor.x1) / 2;
 
-    let approach_y = if gate_south { manor.y1 as f32 } else { manor.y0 as f32 };
+    let approach_y = if gate_south {
+        manor.y1 as f32
+    } else {
+        manor.y0 as f32
+    };
     b.add_ribbon(
         SurfaceFeatureKind::StoneWalk,
-        &[(gate_x as f32 + 0.5, street_y), (gate_x as f32 + 0.5, approach_y)],
+        &[
+            (gate_x as f32 + 0.5, street_y),
+            (gate_x as f32 + 0.5, approach_y),
+        ],
         210,
     );
     if variant == 2 && manor.x0 >= 6 {
         b.add_ribbon(
             SurfaceFeatureKind::GravelRoad,
-            &[(comp.x0 as f32 - 0.5, street_y), (comp.x0 as f32 - 0.5, (manor.y0 + manor.y1) as f32 * 0.5)],
+            &[
+                (comp.x0 as f32 - 0.5, street_y),
+                (comp.x0 as f32 - 0.5, (manor.y0 + manor.y1) as f32 * 0.5),
+            ],
             200,
         );
     }
@@ -526,14 +659,28 @@ fn build_rural_countryside(
     } else {
         LotBox::new(lx0, 2, lx0 + lot_w, (h - 5).max(8))
     };
-    let entry = if variant == 1 { CardinalEntry::North } else { CardinalEntry::South };
+    let entry = if variant == 1 {
+        CardinalEntry::North
+    } else {
+        CardinalEntry::South
+    };
     let entry_m = (lot.x0 + lot.x1) as f32 * 0.5;
     b.add_ribbon(
         SurfaceFeatureKind::DirtTrail,
         &[
             (entry_m, lane_y),
-            (entry_m + 0.25, (lane_y + if variant == 1 { 1.1 } else { -1.2 })),
-            (entry_m, if variant == 1 { lot.y0 as f32 } else { lot.y1 as f32 }),
+            (
+                entry_m + 0.25,
+                (lane_y + if variant == 1 { 1.1 } else { -1.2 }),
+            ),
+            (
+                entry_m,
+                if variant == 1 {
+                    lot.y0 as f32
+                } else {
+                    lot.y1 as f32
+                },
+            ),
         ],
         145,
     );
@@ -554,7 +701,12 @@ fn build_rural_countryside(
     stack.absorb_home(b, home, tier == EconomicTier::LuxuryMansion);
 
     let _ = b.place_vehicle_along_ribbon(PropKind::UtilityVan, lane_idx, 0.30, 0.1, 10);
-    let bounds = RectM { x0: 1.5, y0: 1.5, x1: wf - 1.5, y1: hf - 1.5 };
+    let bounds = RectM {
+        x0: 1.5,
+        y0: 1.5,
+        x1: wf - 1.5,
+        y1: hf - 1.5,
+    };
     b.scatter_trees(PropKind::LargeTree, (w * h / 110).clamp(2, 8), 3.2, bounds);
     b.scatter_trees(PropKind::MediumTree, (w * h / 90).clamp(3, 10), 2.5, bounds);
     b.scatter_turf_prop_rot(PropKind::Boulder, 3, 25, bounds);
@@ -575,18 +727,36 @@ fn build_downtown_commercial(
     let (street_y, walk_y, front_side, bay_y0, bay_y1) = if street_north {
         (1.45, 3.60, CardinalEntry::North, 5, (h - 2).max(11))
     } else {
-        (hf - 1.45, hf - 3.60, CardinalEntry::South, 2, (h - 5).max(8))
+        (
+            hf - 1.45,
+            hf - 3.60,
+            CardinalEntry::South,
+            2,
+            (h - 5).max(8),
+        )
     };
 
     let street_idx = b.add_ribbon(
         SurfaceFeatureKind::AsphaltRoad,
-        &[(0.0, street_y), (wf * 0.5, street_y + 0.08), (wf, street_y - 0.06)],
+        &[
+            (0.0, street_y),
+            (wf * 0.5, street_y + 0.08),
+            (wf, street_y - 0.06),
+        ],
         300,
     );
-    b.add_ribbon(SurfaceFeatureKind::ConcreteWalk, &[(0.0, walk_y), (wf, walk_y)], 165);
+    b.add_ribbon(
+        SurfaceFeatureKind::ConcreteWalk,
+        &[(0.0, walk_y), (wf, walk_y)],
+        165,
+    );
     if variant == 2 {
         let alley_y = if street_north { hf - 0.85 } else { 0.85 };
-        b.add_ribbon(SurfaceFeatureKind::GravelRoad, &[(0.0, alley_y), (wf, alley_y)], 150);
+        b.add_ribbon(
+            SurfaceFeatureKind::GravelRoad,
+            &[(0.0, alley_y), (wf, alley_y)],
+            150,
+        );
     }
 
     let (sx0, sx1) = safe_x_span(w);
@@ -642,7 +812,10 @@ fn build_downtown_commercial(
                 // Clear any ground-floor solid prop overlapped by the vertical stairwell landing.
                 b.props.retain(|existing| {
                     prop_spec(existing.kind).floor_layer
-                        || !crate::tactical_map_geom::props_overlap_continuous(existing, &stair_prop)
+                        || !crate::tactical_map_geom::props_overlap_continuous(
+                            existing,
+                            &stair_prop,
+                        )
                 });
                 b.props.push(stair_prop);
             }
@@ -654,7 +827,12 @@ fn build_downtown_commercial(
 
     let _ = b.place_vehicle_along_ribbon(PropKind::Car, street_idx, 0.25, 0.20, 5);
     let _ = b.place_vehicle_along_ribbon(PropKind::UtilityVan, street_idx, 0.72, -0.20, 6);
-    let bounds = RectM { x0: 1.5, y0: 1.5, x1: wf - 1.5, y1: hf - 1.5 };
+    let bounds = RectM {
+        x0: 1.5,
+        y0: 1.5,
+        x1: wf - 1.5,
+        y1: hf - 1.5,
+    };
     b.scatter_turf_prop_rot(PropKind::ParkBench, 2, 45, bounds);
     b.scatter_turf_prop_rot(PropKind::Planter, 2, 45, bounds);
     let _ = b.try_place_off_road_cm(
@@ -677,8 +855,14 @@ pub fn generate_zoned_sector(
     tier_override: Option<EconomicTier>,
     zoning_override: Option<ZoningContext>,
 ) -> ProceduralSector {
-    let w = width.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
-    let h = height.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
+    let w = width.clamp(
+        crate::tactical_map::MIN_SECTOR_DIM,
+        crate::tactical_map::MAX_SECTOR_DIM,
+    );
+    let h = height.clamp(
+        crate::tactical_map::MIN_SECTOR_DIM,
+        crate::tactical_map::MAX_SECTOR_DIM,
+    );
     let (def_zone, def_tier) = default_zoning_and_tier(preset);
     let zone = zoning_override.unwrap_or(def_zone);
     let tier = tier_override.unwrap_or(def_tier);

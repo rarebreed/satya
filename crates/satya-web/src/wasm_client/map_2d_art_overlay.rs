@@ -53,7 +53,10 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
     let cf = c as f32;
     let (vw, vh) = (w * c, h * c);
     let mut out = String::with_capacity(16 * 1024);
-    let _ = write!(out, r##"<rect width="{vw}" height="{vh}" fill="#000" fill-opacity="0"/>"##);
+    let _ = write!(
+        out,
+        r##"<rect width="{vw}" height="{vh}" fill="#000" fill-opacity="0"/>"##
+    );
 
     if ui.show_grid_overlay {
         let ink = ui.ink_style.grid_ink_override().unwrap_or(t.grid_ink);
@@ -166,13 +169,7 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
             .last_ballistic
             .as_ref()
             .filter(|b| b.effective_delta_ext != los.recommended_delta_ext)
-            .map(|b| {
-                format!(
-                    "{} (+{} Δ_ext)",
-                    b.verdict.label(),
-                    b.effective_delta_ext
-                )
-            })
+            .map(|b| format!("{} (+{} Δ_ext)", b.verdict.label(), b.effective_delta_ext))
             .unwrap_or_else(|| los.cover_grade.label().to_string());
         let (mx, my) = ((x1 + x2) * 0.5, (y1 + y2) * 0.5);
         let _ = write!(
@@ -230,7 +227,9 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
 #[must_use]
 pub fn format_tactical_map_svg_markup(ui: &TacticalMapUiState) -> String {
     let (bw_m, bh_m) = ui.map.board_size_m();
-    let view_box = ui.camera_2d.view_box_attr((bw_m, bh_m), ui.map.cell_size_m());
+    let view_box = ui
+        .camera_2d
+        .view_box_attr((bw_m, bh_m), ui.map.cell_size_m());
     let key = battlemap_art_cache_key(ui);
     format!(
         r#"<div class="battlemap-stack"><svg id="battlemap-art" class="battlemap-art" data-art-key="{key}" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">{art}</svg><svg id="battlemap-overlay" class="battlemap-overlay" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Illustrated 2D tactical battlemap ({bw_m:.0}m x {bh_m:.0}m)" onwheel="event.preventDefault();window.satyaBattlemapWheel(event.deltaY,event.clientX,event.clientY)" onmousedown="window.satyaBattlemapMouseDown(event.button,event.clientX,event.clientY)" onmousemove="window.satyaBattlemapMouseMove(event.buttons,event.clientX,event.clientY)" onmouseup="window.satyaBattlemapMouseUp(event.button,event.clientX,event.clientY)" onmouseleave="window.satyaBattlemapMouseLeave()" ondblclick="window.satyaResetMapCamera()" oncontextmenu="event.preventDefault()">{overlay}</svg></div>"#,
@@ -260,14 +259,27 @@ pub fn sync_battlemap_svg_host() {
 fn apply_battlemap_view_chrome(battlemap_on: bool) {
     set_text(
         "btn-map-view-mode",
-        if battlemap_on { "Mode: 2D Battlemap" } else { "Mode: 3D Diorama" },
+        if battlemap_on {
+            "Mode: 2D Battlemap"
+        } else {
+            "Mode: 3D Diorama"
+        },
     );
     for id in ["btn-map-toggle-proj", "btn-map-wall-cutaway"] {
         set_button_disabled(id, battlemap_on);
     }
-    set_display("btn-map-grid-overlay", if battlemap_on { "inline-flex" } else { "none" });
-    set_display("btn-map-tex-mode", if battlemap_on { "inline-flex" } else { "none" });
-    set_display("map-ink-style-wrap", if battlemap_on { "inline-flex" } else { "none" });
+    set_display(
+        "btn-map-grid-overlay",
+        if battlemap_on { "inline-flex" } else { "none" },
+    );
+    set_display(
+        "btn-map-tex-mode",
+        if battlemap_on { "inline-flex" } else { "none" },
+    );
+    set_display(
+        "map-ink-style-wrap",
+        if battlemap_on { "inline-flex" } else { "none" },
+    );
     if battlemap_on {
         let (style, tex_mode) = with_map_ui(|ui| (ui.ink_style, ui.texture_mode));
         set_select_value("map-ink-style-select", style.as_str());
@@ -330,7 +342,10 @@ pub fn satya_toggle_battlemap_grid() {
         ui.show_grid_overlay = !ui.show_grid_overlay;
         ui.show_grid_overlay
     });
-    set_text("btn-map-grid-overlay", if on { "Grid: On" } else { "Grid: Off" });
+    set_text(
+        "btn-map-grid-overlay",
+        if on { "Grid: On" } else { "Grid: Off" },
+    );
     sync_battlemap_svg_host();
 }
 
@@ -353,7 +368,10 @@ mod tests {
             ),
             ..Default::default()
         };
-        assert!(ui.map.has_multiple_floors(), "LuxuryMansion must have >= 2 floors");
+        assert!(
+            ui.map.has_multiple_floors(),
+            "LuxuryMansion must have >= 2 floors"
+        );
         ui.map.tokens.push(TokenPlacement {
             entity_id: "tok-mansion-1".to_string(),
             label: "Quantum Knight".to_string(),
@@ -365,7 +383,10 @@ mod tests {
 
         let key_1f = battlemap_art_cache_key(&ui);
         let ov_1f = format_battlemap_overlay_inner(&ui);
-        assert!(ov_1f.contains(">QK<"), "1F overlay should render floor-0 token");
+        assert!(
+            ov_1f.contains(">QK<"),
+            "1F overlay should render floor-0 token"
+        );
 
         assert!(ui.map.switch_active_floor(1), "switch to 2F must succeed");
         let key_2f = battlemap_art_cache_key(&ui);
@@ -403,7 +424,12 @@ mod tests {
             ),
             ..Default::default()
         };
-        let occupied: Vec<(f32, f32)> = ui.map.tokens.iter().map(|t| ui.map.token_pos_m(t)).collect();
+        let occupied: Vec<(f32, f32)> = ui
+            .map
+            .tokens
+            .iter()
+            .map(|t| ui.map.token_pos_m(t))
+            .collect();
         let (bw_m, bh_m) = ui.map.board_size_m();
         let _ = satya_engine::tactical_map_geom::place_prop_on_map(
             &mut ui.map.props,

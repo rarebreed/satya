@@ -8,8 +8,8 @@
 use std::collections::VecDeque;
 
 use satya_schema::{
-    EconomicTier, MapFloorLevel, MapPointCm, MapPropPlacement, MapSurfaceFeature,
-    MapWallEdge, PropKind, SurfaceFeatureKind, SurfaceShapeKind,
+    EconomicTier, MapFloorLevel, MapPointCm, MapPropPlacement, MapSurfaceFeature, MapWallEdge,
+    PropKind, SurfaceFeatureKind, SurfaceShapeKind,
 };
 
 use crate::map_dressing::{PropObstruction, prop_spec};
@@ -61,7 +61,12 @@ impl LotBox {
     }
 
     #[must_use]
-    pub fn polygon_feature(self, kind: SurfaceFeatureKind, corner_cm: i32, seed: u32) -> MapSurfaceFeature {
+    pub fn polygon_feature(
+        self,
+        kind: SurfaceFeatureKind,
+        corner_cm: i32,
+        seed: u32,
+    ) -> MapSurfaceFeature {
         MapSurfaceFeature {
             kind,
             shape: SurfaceShapeKind::Polygon,
@@ -116,7 +121,11 @@ pub struct GeneratedHome {
 impl GeneratedHome {
     /// Converts upper/basement floor data into wire [`MapFloorLevel`] entries sorted ascending by `floor_index`.
     #[must_use]
-    pub fn into_floor_levels(self, ground_merged: FloorContent, has_cellar: bool) -> Vec<MapFloorLevel> {
+    pub fn into_floor_levels(
+        self,
+        ground_merged: FloorContent,
+        has_cellar: bool,
+    ) -> Vec<MapFloorLevel> {
         let mut levels = Vec::new();
         if let Some(b1) = self.basement
             && has_cellar
@@ -230,8 +239,12 @@ pub fn floor_lot_connected(
         for gx in lot.x0..lot.x1 {
             let cx = gx as f32 + 0.5;
             let cy = gy as f32 + 0.5;
-            if spatial.circle_hits_wall(cx, cy, TOKEN_RADIUS_M, SpatialWallFilter::WallsAndWindowsOnly)
-                || spatial.any_full_obstacle_prop_intersects_circle(cx, cy, TOKEN_RADIUS_M - 1e-4)
+            if spatial.circle_hits_wall(
+                cx,
+                cy,
+                TOKEN_RADIUS_M,
+                SpatialWallFilter::WallsAndWindowsOnly,
+            ) || spatial.any_full_obstacle_prop_intersects_circle(cx, cy, TOKEN_RADIUS_M - 1e-4)
             {
                 continue;
             }
@@ -296,7 +309,13 @@ pub fn generate_home_in_lot(
     spawn_pads_m: &[(f32, f32)],
     seed: u64,
 ) -> GeneratedHome {
-    let bp = plan_home_blueprint(lot, tier, entry_side, allow_upper_floor || allow_basement, seed);
+    let bp = plan_home_blueprint(
+        lot,
+        tier,
+        entry_side,
+        allow_upper_floor || allow_basement,
+        seed,
+    );
     let ground = build_blueprint_floor(
         board_w,
         board_h,
@@ -308,7 +327,11 @@ pub fn generate_home_in_lot(
         spawn_pads_m,
         seed,
     );
-    let upper = if allow_upper_floor && bp.stair.is_some() && bp.main_wing.w() >= 5 && bp.main_wing.h() >= 4 {
+    let upper = if allow_upper_floor
+        && bp.stair.is_some()
+        && bp.main_wing.w() >= 5
+        && bp.main_wing.h() >= 4
+    {
         Some(build_blueprint_floor(
             board_w,
             board_h,
@@ -323,21 +346,22 @@ pub fn generate_home_in_lot(
     } else {
         None
     };
-    let basement = if allow_basement && bp.stair.is_some() && bp.main_wing.w() >= 6 && bp.main_wing.h() >= 5 {
-        Some(build_blueprint_floor(
-            board_w,
-            board_h,
-            &bp,
-            tier,
-            entry_side,
-            -1,
-            false,
-            &[],
-            seed.wrapping_add(202),
-        ))
-    } else {
-        None
-    };
+    let basement =
+        if allow_basement && bp.stair.is_some() && bp.main_wing.w() >= 6 && bp.main_wing.h() >= 5 {
+            Some(build_blueprint_floor(
+                board_w,
+                board_h,
+                &bp,
+                tier,
+                entry_side,
+                -1,
+                false,
+                &[],
+                seed.wrapping_add(202),
+            ))
+        } else {
+            None
+        };
 
     GeneratedHome {
         lot,
@@ -367,7 +391,10 @@ mod tests {
             .collect();
         assert!(!wings.is_empty(), "{label} missing InteriorFloor wing");
         for wing in wings {
-            assert!(floor_lot_connected(board_w, board_h, wing, &floor.wall_edges, &floor.props), "{label} wing {wing:?} disconnected");
+            assert!(
+                floor_lot_connected(board_w, board_h, wing, &floor.wall_edges, &floor.props),
+                "{label} wing {wing:?} disconnected"
+            );
         }
     }
 
@@ -394,13 +421,30 @@ mod tests {
                 assert_wings_connected(28, 22, &home.ground, &format!("{tier:?}/{seed} 1F"));
                 let f2 = home.upper.as_ref().expect("2F level present");
                 assert_wings_connected(28, 22, f2, &format!("{tier:?}/{seed} 2F"));
-                let st1 = home.ground.props.iter().find(|p| p.kind == PropKind::Stairwell).unwrap();
-                let st2 = f2.props.iter().find(|p| p.kind == PropKind::Stairwell).unwrap();
-                assert_eq!(st1.center_cm(), st2.center_cm(), "{tier:?} stairs must align across floors");
+                let st1 = home
+                    .ground
+                    .props
+                    .iter()
+                    .find(|p| p.kind == PropKind::Stairwell)
+                    .unwrap();
+                let st2 = f2
+                    .props
+                    .iter()
+                    .find(|p| p.kind == PropKind::Stairwell)
+                    .unwrap();
+                assert_eq!(
+                    st1.center_cm(),
+                    st2.center_cm(),
+                    "{tier:?} stairs must align across floors"
+                );
                 if allow_b1 {
                     let b1 = home.basement.as_ref().expect("B1 cellar present");
                     assert_wings_connected(28, 22, b1, &format!("{tier:?}/{seed} B1"));
-                    let stb = b1.props.iter().find(|p| p.kind == PropKind::Stairwell).unwrap();
+                    let stb = b1
+                        .props
+                        .iter()
+                        .find(|p| p.kind == PropKind::Stairwell)
+                        .unwrap();
                     assert_eq!(st1.center_cm(), stb.center_cm());
                 }
             }

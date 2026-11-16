@@ -175,7 +175,13 @@ pub fn battlemap_smooth_region_path(
                 let out_dy = e_to.1 - e_from.1;
                 let cross = in_dx * out_dy - in_dy * out_dx;
                 let dot = in_dx * out_dx + in_dy * out_dy;
-                let score = if cross > 0 { 0 } else if dot > 0 { 1 } else { 2 };
+                let score = if cross > 0 {
+                    0
+                } else if dot > 0 {
+                    1
+                } else {
+                    2
+                };
                 if best.is_none_or(|(_, bs)| score < bs) {
                     best = Some((ei, score));
                 }
@@ -255,7 +261,9 @@ fn emit_vector_surfaces_svg(
     for (_, s) in &order {
         if s.kind == SurfaceFeatureKind::AsphaltRoad {
             let ring = match s.shape {
-                SurfaceShapeKind::RibbonSpline => extrude_surface_ribbon_m(s, bw_m, bh_m).to_closed_ring_m(),
+                SurfaceShapeKind::RibbonSpline => {
+                    extrude_surface_ribbon_m(s, bw_m, bh_m).to_closed_ring_m()
+                }
                 _ => sampled_closed_ring_m(s),
             };
             push_ring_d(&mut road_curb_d, &ring, cell_px);
@@ -270,7 +278,9 @@ fn emit_vector_surfaces_svg(
 
     for &(_, s) in &order {
         let ring = match s.shape {
-            SurfaceShapeKind::RibbonSpline => extrude_surface_ribbon_m(s, bw_m, bh_m).to_closed_ring_m(),
+            SurfaceShapeKind::RibbonSpline => {
+                extrude_surface_ribbon_m(s, bw_m, bh_m).to_closed_ring_m()
+            }
             _ => sampled_closed_ring_m(s),
         };
         if ring.len() < 3 {
@@ -284,7 +294,11 @@ fn emit_vector_surfaces_svg(
                 let _ = write!(out, r##"<path d="{d}" fill="url(#bm-tarmac)"/>"##);
             }
             SurfaceFeatureKind::ConcreteWalk => {
-                let fill = if painted { "url(#bm-concrete)" } else { "#cac6bc" };
+                let fill = if painted {
+                    "url(#bm-concrete)"
+                } else {
+                    "#cac6bc"
+                };
                 let _ = write!(
                     out,
                     r##"<path d="{d}" fill="{fill}" stroke="#9e988c" stroke-width="2" stroke-linejoin="round"/>"##
@@ -297,7 +311,11 @@ fn emit_vector_surfaces_svg(
                 );
             }
             SurfaceFeatureKind::GravelRoad => {
-                let pat = ["url(#bm-gravel)", "url(#bm-gravel-pea)", "url(#bm-gravel-slate)"][(s.variant_seed % 3) as usize];
+                let pat = [
+                    "url(#bm-gravel)",
+                    "url(#bm-gravel-pea)",
+                    "url(#bm-gravel-slate)",
+                ][(s.variant_seed % 3) as usize];
                 let _ = write!(
                     out,
                     r##"<path d="{d}" fill="none" stroke="#938b7d" stroke-width="4.2" stroke-linejoin="round" opacity=".55"/><path d="{d}" fill="{pat}" stroke="#6a6358" stroke-width="1.2" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
@@ -328,11 +346,19 @@ fn emit_vector_surfaces_svg(
                 let cx = ring.iter().map(|p| p.0).sum::<f32>() / ring.len() as f32;
                 let cy = ring.iter().map(|p| p.1).sum::<f32>() / ring.len() as f32;
                 let blooms = ["#e05770", "#f2c247", "#a875e0", "#f08552"];
-                for (bi, pt) in ring.iter().step_by((ring.len() / 6).max(1)).take(6).enumerate() {
+                for (bi, pt) in ring
+                    .iter()
+                    .step_by((ring.len() / 6).max(1))
+                    .take(6)
+                    .enumerate()
+                {
                     let fx = (cx + (pt.0 - cx) * 0.54) * cell_px;
                     let fy = (cy + (pt.1 - cy) * 0.54) * cell_px;
                     let col = blooms[(bi + s.variant_seed as usize) % blooms.len()];
-                    let _ = write!(out, r##"<circle cx="{fx:.1}" cy="{fy:.1}" r="4.5" fill="{col}" stroke="{BATTLEMAP_INK}" stroke-width=".9"/>"##);
+                    let _ = write!(
+                        out,
+                        r##"<circle cx="{fx:.1}" cy="{fy:.1}" r="4.5" fill="{col}" stroke="{BATTLEMAP_INK}" stroke-width=".9"/>"##
+                    );
                 }
             }
             SurfaceFeatureKind::CreekChannel => {
@@ -355,7 +381,12 @@ fn emit_vector_surfaces_svg(
                     let ctrl_m: Vec<(f32, f32)> = s.points_cm.iter().map(|p| p.to_m()).collect();
                     let cl = sample_open_catmull_rom_m(&ctrl_m, 12);
                     if cl.len() >= 2 {
-                        let _ = write!(out, r##"<path d="M{:.1} {:.1}"##, cl[0].0 * cell_px, cl[0].1 * cell_px);
+                        let _ = write!(
+                            out,
+                            r##"<path d="M{:.1} {:.1}"##,
+                            cl[0].0 * cell_px,
+                            cl[0].1 * cell_px
+                        );
                         for pt in &cl[1..] {
                             let _ = write!(out, "L{:.1} {:.1}", pt.0 * cell_px, pt.1 * cell_px);
                         }
@@ -377,7 +408,8 @@ fn emit_vector_surfaces_svg(
                         for i in (1..edge.len()).step_by(3) {
                             let p = edge[i];
                             let prev = edge[i - 1];
-                            if point_masked_by_higher_surface(&ui.map.surfaces, min_prio, p.0, p.1) {
+                            if point_masked_by_higher_surface(&ui.map.surfaces, min_prio, p.0, p.1)
+                            {
                                 continue;
                             }
                             let dx = p.0 - prev.0;
@@ -395,19 +427,30 @@ fn emit_vector_surfaces_svg(
                         }
                     }
                     if !hd.is_empty() {
-                        let _ = write!(out, r##"<path d="{hd}" fill="none" stroke="#3b2f22" stroke-width="1.4" opacity=".65"/>"##);
+                        let _ = write!(
+                            out,
+                            r##"<path d="{hd}" fill="none" stroke="#3b2f22" stroke-width="1.4" opacity=".65"/>"##
+                        );
                     }
                 }
             }
             SurfaceFeatureKind::WoodDeck => {
-                let fill = if painted { "url(#bm-wood-deck)" } else { "#9c6a47" };
+                let fill = if painted {
+                    "url(#bm-wood-deck)"
+                } else {
+                    "#9c6a47"
+                };
                 let _ = write!(
                     out,
                     r##"<path d="{d}" fill="{fill}" stroke="#4f331d" stroke-width="2.2" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
                 );
             }
             SurfaceFeatureKind::PoolWater => {
-                let fill = if painted { "url(#bm-pool-water)" } else { "#38b6d6" };
+                let fill = if painted {
+                    "url(#bm-pool-water)"
+                } else {
+                    "#38b6d6"
+                };
                 let _ = write!(
                     out,
                     r##"<path d="{d}" fill="none" stroke="#ddd6c7" stroke-width="7.5" stroke-linejoin="round"/><path d="{d}" fill="{fill}" stroke="#277996" stroke-width="2.2" stroke-linejoin="round" filter="url(#bm-ink)"/><path d="{d}" fill="none" stroke="#b8f2ff" stroke-width="1.5" stroke-opacity=".55" stroke-linejoin="round"/>"##
@@ -416,7 +459,11 @@ fn emit_vector_surfaces_svg(
             SurfaceFeatureKind::InteriorFloor => {
                 if !indoor_theme {
                     let fill = if painted {
-                        ["url(#bm-hardwood)", "url(#bm-hardwood-walnut)", "url(#bm-hardwood-ash)"][(s.variant_seed % 3) as usize]
+                        [
+                            "url(#bm-hardwood)",
+                            "url(#bm-hardwood-walnut)",
+                            "url(#bm-hardwood-ash)",
+                        ][(s.variant_seed % 3) as usize]
                     } else {
                         ["#9b7854", "#63432e", "#d2be99"][(s.variant_seed % 3) as usize]
                     };
@@ -429,7 +476,11 @@ fn emit_vector_surfaces_svg(
             SurfaceFeatureKind::CeramicTileFloor => {
                 let terra = s.variant_seed & 1 == 1;
                 let fill = if painted {
-                    if terra { "url(#bm-terracotta)" } else { "url(#bm-ceramic)" }
+                    if terra {
+                        "url(#bm-terracotta)"
+                    } else {
+                        "url(#bm-ceramic)"
+                    }
                 } else if terra {
                     "#c67856"
                 } else {
@@ -441,15 +492,24 @@ fn emit_vector_surfaces_svg(
                 );
             }
             SurfaceFeatureKind::MarbleFloor => {
-                let fill = if painted { "url(#bm-marble)" } else { "#eceae6" };
+                let fill = if painted {
+                    "url(#bm-marble)"
+                } else {
+                    "#eceae6"
+                };
                 let _ = write!(
                     out,
                     r##"<path d="{d}" fill="{fill}" stroke="#b9b4aa" stroke-width="1.4" stroke-linejoin="round"/>"##
                 );
             }
             SurfaceFeatureKind::CarpetFloor => {
-                let fill = if painted { "url(#bm-carpet)" } else { "#c5bdb1" };
-                let tint = ["#5c6f84", "#7d6b5d", "#637864", "#826d7a"][(s.variant_seed % 4) as usize];
+                let fill = if painted {
+                    "url(#bm-carpet)"
+                } else {
+                    "#c5bdb1"
+                };
+                let tint =
+                    ["#5c6f84", "#7d6b5d", "#637864", "#826d7a"][(s.variant_seed % 4) as usize];
                 let _ = write!(
                     out,
                     r##"<path d="{d}" fill="{fill}" stroke="#7f7568" stroke-width="1.3" stroke-linejoin="round"/><path d="{d}" fill="{tint}" fill-opacity=".16" stroke="none"/>"##
@@ -476,13 +536,26 @@ fn emit_vector_surfaces_svg(
                         let ay = p[0].1 + (p[1].1 - p[0].1) * t;
                         let bx = p[3].0 + (p[2].0 - p[3].0) * t;
                         let by = p[3].1 + (p[2].1 - p[3].1) * t;
-                        let _ = write!(pd, "M{:.1} {:.1}L{:.1} {:.1}", ax * cell_px, ay * cell_px, bx * cell_px, by * cell_px);
+                        let _ = write!(
+                            pd,
+                            "M{:.1} {:.1}L{:.1} {:.1}",
+                            ax * cell_px,
+                            ay * cell_px,
+                            bx * cell_px,
+                            by * cell_px
+                        );
                     }
                     let _ = write!(
                         out,
                         r##"<path d="{pd}" fill="none" stroke="#5c3e24" stroke-width="1.3"/><path d="M{:.1} {:.1}L{:.1} {:.1}M{:.1} {:.1}L{:.1} {:.1}" fill="none" stroke="#3f2713" stroke-width="4" stroke-linecap="round"/>"##,
-                        p[0].0 * cell_px, p[0].1 * cell_px, p[1].0 * cell_px, p[1].1 * cell_px,
-                        p[2].0 * cell_px, p[2].1 * cell_px, p[3].0 * cell_px, p[3].1 * cell_px
+                        p[0].0 * cell_px,
+                        p[0].1 * cell_px,
+                        p[1].0 * cell_px,
+                        p[1].1 * cell_px,
+                        p[2].0 * cell_px,
+                        p[2].1 * cell_px,
+                        p[3].0 * cell_px,
+                        p[3].1 * cell_px
                     );
                 }
             }
@@ -521,14 +594,69 @@ pub(crate) fn push_landscaping_surfaces_svg(
     }
 
     for (kind, pat, bank_col, bank_w, stroke_col, stroke_w, wobble, salt) in [
-        (PropKind::DirtPath, "#bm-dirt", "#7d6447", 4.5_f32, "#59452e", 1.2_f32, 6.5_f32, 11_i64),
-        (PropKind::GravelPath, "#bm-gravel", "#938b7d", 4.2, "#6a6358", 1.2, 5.5, 23),
-        (PropKind::MulchBed, "#bm-mulch", "#442e1f", 3.5, "#2f1e13", 1.2, 6.5, 37),
-        (PropKind::DrainageDitch, "#bm-ditch", "#3c4a39", 6.0, "#242e23", 1.5, 5.0, 53),
-        (PropKind::CreekWater, "#bm-creek", "#8b836f", 8.5, "#2a5d73", 1.7, 7.5, 71),
-        (PropKind::StonePath, "#bm-paver", "#8b8273", 3.4, BATTLEMAP_INK, 1.4, 4.2, 89),
+        (
+            PropKind::DirtPath,
+            "#bm-dirt",
+            "#7d6447",
+            4.5_f32,
+            "#59452e",
+            1.2_f32,
+            6.5_f32,
+            11_i64,
+        ),
+        (
+            PropKind::GravelPath,
+            "#bm-gravel",
+            "#938b7d",
+            4.2,
+            "#6a6358",
+            1.2,
+            5.5,
+            23,
+        ),
+        (
+            PropKind::MulchBed,
+            "#bm-mulch",
+            "#442e1f",
+            3.5,
+            "#2f1e13",
+            1.2,
+            6.5,
+            37,
+        ),
+        (
+            PropKind::DrainageDitch,
+            "#bm-ditch",
+            "#3c4a39",
+            6.0,
+            "#242e23",
+            1.5,
+            5.0,
+            53,
+        ),
+        (
+            PropKind::CreekWater,
+            "#bm-creek",
+            "#8b836f",
+            8.5,
+            "#2a5d73",
+            1.7,
+            7.5,
+            71,
+        ),
+        (
+            PropKind::StonePath,
+            "#bm-paver",
+            "#8b8273",
+            3.4,
+            BATTLEMAP_INK,
+            1.4,
+            4.2,
+            89,
+        ),
     ] {
-        let d = battlemap_smooth_region_path(w, h, |x, y| has_surf(kind, x, y), seed ^ salt, wobble);
+        let d =
+            battlemap_smooth_region_path(w, h, |x, y| has_surf(kind, x, y), seed ^ salt, wobble);
         if d.is_empty() {
             continue;
         }
@@ -568,13 +696,19 @@ pub(crate) fn push_ground_dressing_and_lanes_svg(
                             xm + dx,
                             ym + dy,
                         )
-                        .is_some_and(|s| s.kind.is_road_or_pavement() || s.kind.is_water_or_channel())
+                        .is_some_and(|s| {
+                            s.kind.is_road_or_pavement() || s.kind.is_water_or_channel()
+                        })
                     });
             if blocked_by_surface {
                 continue;
             }
-            let d = crate::wasm_client::map_2d_art_props::battlemap_blob_path(sx, sy, r, 8, 0.3, hh);
-            let _ = write!(out, r##"<path d="{d}" fill="#5b4a36" fill-opacity=".14"/>"##);
+            let d =
+                crate::wasm_client::map_2d_art_props::battlemap_blob_path(sx, sy, r, 8, 0.3, hh);
+            let _ = write!(
+                out,
+                r##"<path d="{d}" fill="#5b4a36" fill-opacity=".14"/>"##
+            );
         }
     }
 
@@ -598,10 +732,13 @@ pub(crate) fn push_ground_dressing_and_lanes_svg(
                 let min_prio = road.kind.layer_priority() + 1;
                 let mut pen_down = false;
                 for pt in line {
-                    let masked = point_masked_by_higher_surface(&ui.map.surfaces, min_prio, pt.0, pt.1)
-                        || roads[..r_idx]
-                            .iter()
-                            .any(|prev| satya_engine::map_surface_geom::surface_contains_point_m(prev, pt.0, pt.1));
+                    let masked =
+                        point_masked_by_higher_surface(&ui.map.surfaces, min_prio, pt.0, pt.1)
+                            || roads[..r_idx].iter().any(|prev| {
+                                satya_engine::map_surface_geom::surface_contains_point_m(
+                                    prev, pt.0, pt.1,
+                                )
+                            });
                     if masked {
                         pen_down = false;
                         continue;
@@ -625,12 +762,24 @@ pub(crate) fn push_ground_dressing_and_lanes_svg(
             let (my, mx) = (h / 2, w / 2);
             for x in 0..w {
                 if on_road(x, my - 1) && on_road(x, my) {
-                    let _ = write!(d, "M{} {}h{}", x * BATTLEMAP_CELL_PX, my * BATTLEMAP_CELL_PX, BATTLEMAP_CELL_PX);
+                    let _ = write!(
+                        d,
+                        "M{} {}h{}",
+                        x * BATTLEMAP_CELL_PX,
+                        my * BATTLEMAP_CELL_PX,
+                        BATTLEMAP_CELL_PX
+                    );
                 }
             }
             for y in 0..h {
                 if on_road(mx - 1, y) && on_road(mx, y) && !(y == my - 1 || y == my) {
-                    let _ = write!(d, "M{} {}v{}", mx * BATTLEMAP_CELL_PX, y * BATTLEMAP_CELL_PX, BATTLEMAP_CELL_PX);
+                    let _ = write!(
+                        d,
+                        "M{} {}v{}",
+                        mx * BATTLEMAP_CELL_PX,
+                        y * BATTLEMAP_CELL_PX,
+                        BATTLEMAP_CELL_PX
+                    );
                 }
             }
         }
@@ -660,7 +809,10 @@ mod tests {
             5.0,
         );
         assert!(d.starts_with('M'));
-        assert!(d.matches('Z').count() >= 2, "outer band plus interior island hole");
+        assert!(
+            d.matches('Z').count() >= 2,
+            "outer band plus interior island hole"
+        );
         assert!(!d.contains("NaN"));
     }
 
@@ -673,7 +825,10 @@ mod tests {
         let art = format_battlemap_art_layer(&ui);
         assert!(art.contains("url(#bm-tarmac)"));
         assert!(art.contains("url(#bm-ditch)"));
-        assert!(art.contains(r##"stroke="#3f2713""##), "culvert BridgeDeck rails must render");
+        assert!(
+            art.contains(r##"stroke="#3f2713""##),
+            "culvert BridgeDeck rails must render"
+        );
         assert!(!art.contains("NaN"));
 
         let key_before = battlemap_art_cache_key(&ui);
@@ -690,11 +845,22 @@ mod tests {
             border_style_cm: 18,
             variant_seed: 9,
         });
-        assert_ne!(key_before, battlemap_art_cache_key(&ui), "surface edits bust art cache");
+        assert_ne!(
+            key_before,
+            battlemap_art_cache_key(&ui),
+            "surface edits bust art cache"
+        );
 
         // Full-board AsphaltRoad protects every stain sample under urban_crossroads theme.
         let mut road_ui = TacticalMapUiState {
-            map: build_procedural_map_request("road", SectorPreset::UrbanCrossroads, None, 12, 10, 42),
+            map: build_procedural_map_request(
+                "road",
+                SectorPreset::UrbanCrossroads,
+                None,
+                12,
+                10,
+                42,
+            ),
             ..Default::default()
         };
         road_ui.map.surfaces = vec![MapSurfaceFeature {
@@ -711,23 +877,45 @@ mod tests {
             variant_seed: 1,
         }];
         let road_art = format_battlemap_art_layer(&road_ui);
-        assert!(!road_art.contains(r##"fill="#5b4a36""##), "dirt stains must never appear on AsphaltRoad");
+        assert!(
+            !road_art.contains(r##"fill="#5b4a36""##),
+            "dirt stains must never appear on AsphaltRoad"
+        );
     }
 
     #[test]
     fn woodland_creek_svg_paints_creek_water_above_ravine_and_gravel_shoals() {
         let ui = TacticalMapUiState {
-            map: build_procedural_map_request("creek2d", SectorPreset::WoodlandCreek, None, 36, 26, 42),
+            map: build_procedural_map_request(
+                "creek2d",
+                SectorPreset::WoodlandCreek,
+                None,
+                36,
+                26,
+                42,
+            ),
             ..Default::default()
         };
         let art = format_battlemap_art_layer(&ui);
-        assert!(art.contains("url(#bm-creek)"), "WoodlandCreek SVG missing creek water fill");
-        assert!(art.contains("url(#bm-ditch)"), "WoodlandCreek SVG missing ravine hachured trench fill");
+        assert!(
+            art.contains("url(#bm-creek)"),
+            "WoodlandCreek SVG missing creek water fill"
+        );
+        assert!(
+            art.contains("url(#bm-ditch)"),
+            "WoodlandCreek SVG missing ravine hachured trench fill"
+        );
         let last_creek = art.rfind("url(#bm-creek)").unwrap();
         let first_ravine = art.find("url(#bm-ditch)").unwrap();
-        assert!(last_creek > first_ravine, "creek water must draw after ravine banks");
+        assert!(
+            last_creek > first_ravine,
+            "creek water must draw after ravine banks"
+        );
         if let Some(last_gravel) = art.rfind("url(#bm-gravel)") {
-            assert!(last_creek > last_gravel, "creek water must draw above gravel shoals");
+            assert!(
+                last_creek > last_gravel,
+                "creek water must draw above gravel shoals"
+            );
         }
     }
 }

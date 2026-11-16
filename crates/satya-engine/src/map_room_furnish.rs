@@ -8,8 +8,8 @@
 //! (`CeramicTileFloor`, `MarbleFloor`, `CarpetFloor`).
 
 use satya_schema::{
-    EdgeSide, EconomicTier, MapPointCm, MapPropPlacement, MapSurfaceFeature, MapWallEdge,
-    PropKind, SurfaceFeatureKind, SurfaceShapeKind, WallEdgeKind,
+    EconomicTier, EdgeSide, MapPointCm, MapPropPlacement, MapSurfaceFeature, MapWallEdge, PropKind,
+    SurfaceFeatureKind, SurfaceShapeKind, WallEdgeKind,
 };
 
 use crate::map_dressing::{make_prop, prop_spec};
@@ -118,7 +118,8 @@ impl Furnisher {
             && y >= r.y0
             && x + fw <= r.x1
             && y + fh <= r.y1
-            && (y..y + fh).all(|yy| (x..x + fw).all(|xx| !self.blocked[(yy * self.w + xx) as usize]))
+            && (y..y + fh)
+                .all(|yy| (x..x + fw).all(|xx| !self.blocked[(yy * self.w + xx) as usize]))
     }
 
     fn free_prop(&self, p: &MapPropPlacement, r: Room) -> bool {
@@ -127,7 +128,8 @@ impl Furnisher {
             && p.x + p.w_cells <= r.x1
             && p.y + p.h_cells <= r.y1
             && (p.y..p.y + p.h_cells).all(|yy| {
-                (p.x..p.x + p.w_cells).all(|xx| !p.covers(xx, yy) || !self.blocked[(yy * self.w + xx) as usize])
+                (p.x..p.x + p.w_cells)
+                    .all(|xx| !p.covers(xx, yy) || !self.blocked[(yy * self.w + xx) as usize])
             })
     }
 
@@ -207,22 +209,39 @@ impl Furnisher {
             .find_map(|(x, y)| self.try_place(kind, x, y, rot, len, r))
     }
 
-    pub(crate) fn against_any_wall(&mut self, kind: PropKind, r: Room, len: Option<i32>) -> Option<MapPropPlacement> {
+    pub(crate) fn against_any_wall(
+        &mut self,
+        kind: PropKind,
+        r: Room,
+        len: Option<i32>,
+    ) -> Option<MapPropPlacement> {
         let start = self.rng.range(0, 4) as usize;
         (0..4).find_map(|i| self.against_wall(kind, r, Side::ALL[(start + i) % 4], len))
     }
 
     /// Places a `1×1` prop flanking an anchor prop along its shared wall (`Nightstand` beside `Bed`,
     /// `Stereo` beside `TvStand`, `DeskLamp` beside `Desk`).
-    fn beside_anchor(&mut self, anchor: MapPropPlacement, kind: PropKind, r: Room, both_sides: bool) {
+    fn beside_anchor(
+        &mut self,
+        anchor: MapPropPlacement,
+        kind: PropKind,
+        r: Room,
+        both_sides: bool,
+    ) {
         let rot = anchor.rotation_deg;
         let candidates: [(i32, i32); 2] = match side_from_rot(rot) {
-            Side::North => [(anchor.x - 1, anchor.y), (anchor.x + anchor.w_cells, anchor.y)],
+            Side::North => [
+                (anchor.x - 1, anchor.y),
+                (anchor.x + anchor.w_cells, anchor.y),
+            ],
             Side::South => [
                 (anchor.x - 1, anchor.y + anchor.h_cells - 1),
                 (anchor.x + anchor.w_cells, anchor.y + anchor.h_cells - 1),
             ],
-            Side::West => [(anchor.x, anchor.y - 1), (anchor.x, anchor.y + anchor.h_cells)],
+            Side::West => [
+                (anchor.x, anchor.y - 1),
+                (anchor.x, anchor.y + anchor.h_cells),
+            ],
             Side::East => [
                 (anchor.x + anchor.w_cells - 1, anchor.y - 1),
                 (anchor.x + anchor.w_cells - 1, anchor.y + anchor.h_cells),
@@ -254,14 +273,26 @@ impl Furnisher {
     }
 
     /// Places `kind` with the same rotation, centered in front of `anchor` after `gap` free cells.
-    pub(crate) fn in_front(&mut self, anchor: MapPropPlacement, kind: PropKind, gap: i32, r: Room) -> Option<MapPropPlacement> {
+    pub(crate) fn in_front(
+        &mut self,
+        anchor: MapPropPlacement,
+        kind: PropKind,
+        gap: i32,
+        r: Room,
+    ) -> Option<MapPropPlacement> {
         let rot = anchor.rotation_deg;
         let probe = make_prop(kind, 0, 0, rot, None, 0);
         let (fw, fh) = (probe.w_cells, probe.h_cells);
         let (x, y) = match front_dir(rot) {
-            (0, 1) => (anchor.x + (anchor.w_cells - fw) / 2, anchor.y + anchor.h_cells + gap),
+            (0, 1) => (
+                anchor.x + (anchor.w_cells - fw) / 2,
+                anchor.y + anchor.h_cells + gap,
+            ),
             (0, _) => (anchor.x + (anchor.w_cells - fw) / 2, anchor.y - gap - fh),
-            (1, _) => (anchor.x + anchor.w_cells + gap, anchor.y + (anchor.h_cells - fh) / 2),
+            (1, _) => (
+                anchor.x + anchor.w_cells + gap,
+                anchor.y + (anchor.h_cells - fh) / 2,
+            ),
             _ => (anchor.x - gap - fw, anchor.y + (anchor.h_cells - fh) / 2),
         };
         self.try_place(kind, x, y, rot, None, r)
@@ -273,7 +304,11 @@ impl Furnisher {
         if r.w() >= probe.w_cells && r.h() >= probe.h_cells {
             let rx = r.x0 + (r.w() - probe.w_cells) / 2;
             let ry = r.y0 + (r.h() - probe.h_cells) / 2;
-            let rot = if kind == PropKind::RunnerRug && r.h() > r.w() { 90 } else { 0 };
+            let rot = if kind == PropKind::RunnerRug && r.h() > r.w() {
+                90
+            } else {
+                0
+            };
             let _ = self.try_place(kind, rx, ry, rot, None, r);
         }
     }
@@ -284,7 +319,10 @@ impl Furnisher {
             let x = self.rng.range(r.x0, r.x1);
             let y = self.rng.range(r.y0, r.y1);
             let rot = self.rng.range(0, 360);
-            if self.try_place_open_decal(kind, x, y, rot, None, r).is_some() {
+            if self
+                .try_place_open_decal(kind, x, y, rot, None, r)
+                .is_some()
+            {
                 break;
             }
         }
@@ -293,7 +331,10 @@ impl Furnisher {
     /// Scatters up to `count` props with a one-cell clearance ring inside `r` and natural `1°` jitter.
     pub(crate) fn scatter(&mut self, kind: PropKind, r: Room, count: usize, rot: i32) {
         let jitter_range = match kind {
-            PropKind::RoundTable | PropKind::Armchair | PropKind::CoffeeTable | PropKind::WoodCrate => 8,
+            PropKind::RoundTable
+            | PropKind::Armchair
+            | PropKind::CoffeeTable
+            | PropKind::WoodCrate => 8,
             PropKind::PoolTable => 2,
             _ => 0,
         };
@@ -313,7 +354,12 @@ impl Furnisher {
             }
             let x = self.rng.range(r.x0 + 1, r.x1 - probe.w_cells);
             let y = self.rng.range(r.y0 + 1, r.y1 - probe.h_cells);
-            let ring = Room { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 };
+            let ring = Room {
+                x0: r.x0,
+                y0: r.y0,
+                x1: r.x1,
+                y1: r.y1,
+            };
             if self.free(x - 1, y - 1, probe.w_cells + 2, probe.h_cells + 2, ring)
                 && self.try_place(kind, x, y, rot_deg, None, r).is_some()
             {
@@ -336,7 +382,8 @@ impl Furnisher {
                 let _ = self.in_corner(P::StandingLamp, r);
                 let _ = self.in_corner(P::Planter, r);
                 if r.w() >= 4 || r.h() >= 4 {
-                    let _ = self.against_any_wall(P::Armchair, r, None)
+                    let _ = self
+                        .against_any_wall(P::Armchair, r, None)
                         .or_else(|| self.against_any_wall(P::RoundTable, r, None));
                 }
             }
@@ -371,7 +418,14 @@ impl Furnisher {
                 let _ = self.against_any_wall(P::Planter, r, None);
             }
             Role::Dining => {
-                self.center_rug(if r.w() >= 4 && r.h() >= 4 { P::Rug } else { P::RoundRug }, r);
+                self.center_rug(
+                    if r.w() >= 4 && r.h() >= 4 {
+                        P::Rug
+                    } else {
+                        P::RoundRug
+                    },
+                    r,
+                );
                 let placed_table = if r.w() >= 4 && r.h() >= 4 {
                     let cx = r.x0 + (r.w() - 2) / 2;
                     let cy = r.y0 + (r.h() - 2) / 2;
@@ -383,23 +437,30 @@ impl Furnisher {
                     let cx = r.x0 + r.w() / 2;
                     let cy = r.y0 + r.h() / 2;
                     if self.try_place(P::RoundTable, cx, cy, 0, None, r).is_none() {
-                        let _ = self.against_any_wall(P::DiningTable, r, None)
+                        let _ = self
+                            .against_any_wall(P::DiningTable, r, None)
                             .or_else(|| self.against_any_wall(P::RoundTable, r, None));
                     }
                 }
-                let _ = self.against_any_wall(P::Dresser, r, None)
+                let _ = self
+                    .against_any_wall(P::Dresser, r, None)
                     .or_else(|| self.against_any_wall(P::Bookshelf, r, None));
                 let _ = self.in_corner(P::StandingLamp, r);
                 let _ = self.in_corner(P::Planter, r);
             }
             Role::Kitchen | Role::BackKitchen => {
                 let side = Side::ALL[self.rng.range(0, 4) as usize];
-                let run = match side { Side::North | Side::South => r.w(), _ => r.h() };
+                let run = match side {
+                    Side::North | Side::South => r.w(),
+                    _ => r.h(),
+                };
                 let len = (run - 2).clamp(2, 4);
                 let _ = self.against_wall(P::KitchenCounter, r, side, Some(len));
-                let _ = self.against_wall(P::Stove, r, side, None)
+                let _ = self
+                    .against_wall(P::Stove, r, side, None)
                     .or_else(|| self.against_any_wall(P::Stove, r, None));
-                let _ = self.against_wall(P::Fridge, r, side, None)
+                let _ = self
+                    .against_wall(P::Fridge, r, side, None)
                     .or_else(|| self.against_any_wall(P::Fridge, r, None));
                 if role == Role::Kitchen {
                     if r.w() >= 5 && r.h() >= 5 {
@@ -417,9 +478,12 @@ impl Furnisher {
                     let _ = self.in_corner(P::FireExtinguisher, r);
                 }
             }
-            Role::MasterBedroom | Role::Bedroom => self.furnish_bedroom(r, role == Role::MasterBedroom),
+            Role::MasterBedroom | Role::Bedroom => {
+                self.furnish_bedroom(r, role == Role::MasterBedroom)
+            }
             Role::Closet => {
-                let _ = self.against_any_wall(P::Wardrobe, r, None)
+                let _ = self
+                    .against_any_wall(P::Wardrobe, r, None)
                     .or_else(|| self.against_any_wall(P::Dresser, r, None))
                     .or_else(|| self.against_any_wall(P::SteelShelving, r, None));
                 self.center_rug(P::RunnerRug, r);
@@ -433,7 +497,8 @@ impl Furnisher {
             }
             Role::Sunroom => {
                 self.center_rug(P::RoundRug, r);
-                let _ = self.against_any_wall(P::Loveseat, r, None)
+                let _ = self
+                    .against_any_wall(P::Loveseat, r, None)
                     .or_else(|| self.against_any_wall(P::Armchair, r, None));
                 self.scatter(P::RoundTable, r, 1, 0);
                 let _ = self.in_corner(P::Planter, r);
@@ -466,7 +531,15 @@ impl Furnisher {
                 if role != Role::Restroom {
                     let _ = self.against_any_wall(P::Bathtub, r, None);
                 }
-                let _ = self.against_any_wall(P::BathroomSink, r, if role == Role::MasterBath && r.w() >= 4 { Some(2) } else { None });
+                let _ = self.against_any_wall(
+                    P::BathroomSink,
+                    r,
+                    if role == Role::MasterBath && r.w() >= 4 {
+                        Some(2)
+                    } else {
+                        None
+                    },
+                );
                 let _ = self.against_any_wall(P::Toilet, r, None);
                 if role == Role::Restroom {
                     let _ = self.against_any_wall(P::Toilet, r, None);
@@ -489,7 +562,11 @@ impl Furnisher {
             }
             Role::BarHall => self.furnish_bar_hall(r),
             Role::Bullpen => {
-                let side = if self.rng.chance(1, 2) { Side::North } else { Side::South };
+                let side = if self.rng.chance(1, 2) {
+                    Side::North
+                } else {
+                    Side::South
+                };
                 let lounge = self
                     .against_wall(P::Sofa, r, side, None)
                     .or_else(|| self.against_wall(P::Loveseat, r, side, None));
@@ -524,7 +601,11 @@ impl Furnisher {
                 let _ = self.against_any_wall(P::Planter, r, None);
             }
             Role::Breakroom => {
-                let side = if r.w() >= r.h() { Side::North } else { Side::East };
+                let side = if r.w() >= r.h() {
+                    Side::North
+                } else {
+                    Side::East
+                };
                 let run = match side {
                     Side::North | Side::South => r.w(),
                     _ => r.h(),
@@ -642,11 +723,17 @@ pub(crate) fn emit_room_floor_surface(
     }
     let kind = match role {
         Role::MasterBath => Some(SurfaceFeatureKind::MarbleFloor),
-        Role::Bathroom | Role::Restroom | Role::Kitchen | Role::BackKitchen | Role::Sunroom | Role::Laundry => {
-            Some(SurfaceFeatureKind::CeramicTileFloor)
-        }
+        Role::Bathroom
+        | Role::Restroom
+        | Role::Kitchen
+        | Role::BackKitchen
+        | Role::Sunroom
+        | Role::Laundry => Some(SurfaceFeatureKind::CeramicTileFloor),
         Role::Foyer => {
-            if matches!(tier, EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion) {
+            if matches!(
+                tier,
+                EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
+            ) {
                 Some(SurfaceFeatureKind::MarbleFloor)
             } else if rng.chance(2, 3) {
                 Some(SurfaceFeatureKind::CeramicTileFloor)

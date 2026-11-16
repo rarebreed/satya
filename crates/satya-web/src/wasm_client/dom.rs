@@ -329,7 +329,11 @@ pub(crate) async fn read_first_file_bytes(input_id: &str) -> Option<(String, Str
         .ok()?
         .dyn_into::<js_sys::Function>()
         .ok()?;
-    let promise = buf_fn.call0(&file).ok()?.dyn_into::<js_sys::Promise>().ok()?;
+    let promise = buf_fn
+        .call0(&file)
+        .ok()?
+        .dyn_into::<js_sys::Promise>()
+        .ok()?;
     let buf_val = JsFuture::from(promise).await.ok()?;
     let bytes = js_sys::Uint8Array::new(&buf_val).to_vec();
     Some((name, mime, bytes))

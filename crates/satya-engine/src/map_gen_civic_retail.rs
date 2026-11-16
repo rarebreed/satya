@@ -26,7 +26,13 @@ use crate::map_surface_queries::prune_occluded_surfaces;
 use crate::tactical_map::{ProceduralSector, SectorPreset};
 
 fn safe_x_span(w: i32) -> (i32, i32) {
-    let pad = if w >= 16 { 4 } else if w >= 12 { 3 } else { 2 };
+    let pad = if w >= 16 {
+        4
+    } else if w >= 12 {
+        3
+    } else {
+        2
+    };
     (pad, (w - pad).max(pad + 4).min(w - 1))
 }
 
@@ -38,36 +44,73 @@ fn enclose_campus_shell(
 ) {
     for x in lot.x0..lot.x1 {
         let win = win_step > 0 && (x - lot.x0) % win_step == 1 && x + 1 < lot.x1;
-        let (k, m) = if win { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, wall_mat) };
+        let (k, m) = if win {
+            (WallEdgeKind::Window, MaterialClass::Glass)
+        } else {
+            (WallEdgeKind::Wall, wall_mat)
+        };
         b.put_edge(x, lot.y0, EdgeSide::North, k, m);
         b.put_edge(x, lot.y1, EdgeSide::North, k, m);
     }
     for y in lot.y0..lot.y1 {
         let win = win_step > 0 && (y - lot.y0) % win_step == 1 && y + 1 < lot.y1;
-        let (k, m) = if win { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, wall_mat) };
+        let (k, m) = if win {
+            (WallEdgeKind::Window, MaterialClass::Glass)
+        } else {
+            (WallEdgeKind::Wall, wall_mat)
+        };
         b.put_edge(lot.x0, y, EdgeSide::West, k, m);
         b.put_edge(lot.x1, y, EdgeSide::West, k, m);
     }
 }
 
-fn edge_upsert(edges: &mut Vec<MapWallEdge>, x: i32, y: i32, side: EdgeSide, kind: WallEdgeKind, material: MaterialClass) {
-    let e = MapWallEdge { x, y, side, kind, material };
-    match edges.iter_mut().find(|o| o.x == x && o.y == y && o.side == side) {
+fn edge_upsert(
+    edges: &mut Vec<MapWallEdge>,
+    x: i32,
+    y: i32,
+    side: EdgeSide,
+    kind: WallEdgeKind,
+    material: MaterialClass,
+) {
+    let e = MapWallEdge {
+        x,
+        y,
+        side,
+        kind,
+        material,
+    };
+    match edges
+        .iter_mut()
+        .find(|o| o.x == x && o.y == y && o.side == side)
+    {
         Some(slot) => *slot = e,
         None => edges.push(e),
     }
 }
 
-fn enclose_upper_shell(edges: &mut Vec<MapWallEdge>, lot: LotBox, wall_mat: MaterialClass, win_step: i32) {
+fn enclose_upper_shell(
+    edges: &mut Vec<MapWallEdge>,
+    lot: LotBox,
+    wall_mat: MaterialClass,
+    win_step: i32,
+) {
     for x in lot.x0..lot.x1 {
         let win = win_step > 0 && (x - lot.x0) % win_step == 1 && x + 1 < lot.x1;
-        let (k, m) = if win { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, wall_mat) };
+        let (k, m) = if win {
+            (WallEdgeKind::Window, MaterialClass::Glass)
+        } else {
+            (WallEdgeKind::Wall, wall_mat)
+        };
         edge_upsert(edges, x, lot.y0, EdgeSide::North, k, m);
         edge_upsert(edges, x, lot.y1, EdgeSide::North, k, m);
     }
     for y in lot.y0..lot.y1 {
         let win = win_step > 0 && (y - lot.y0) % win_step == 1 && y + 1 < lot.y1;
-        let (k, m) = if win { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, wall_mat) };
+        let (k, m) = if win {
+            (WallEdgeKind::Window, MaterialClass::Glass)
+        } else {
+            (WallEdgeKind::Wall, wall_mat)
+        };
         edge_upsert(edges, lot.x0, y, EdgeSide::West, k, m);
         edge_upsert(edges, lot.x1, y, EdgeSide::West, k, m);
     }
@@ -83,7 +126,14 @@ fn h_partition_on_edges(
 ) {
     for x in x0..x1 {
         if doors.contains(&x) {
-            edge_upsert(edges, x, y, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
+            edge_upsert(
+                edges,
+                x,
+                y,
+                EdgeSide::North,
+                WallEdgeKind::DoorOpen,
+                MaterialClass::SheetSteel,
+            );
         } else {
             edge_upsert(edges, x, y, EdgeSide::North, WallEdgeKind::Wall, wall_mat);
         }
@@ -100,7 +150,14 @@ fn v_partition_on_edges(
 ) {
     for y in y0..y1 {
         if doors.contains(&y) {
-            edge_upsert(edges, x, y, EdgeSide::West, WallEdgeKind::DoorClosed, wall_mat);
+            edge_upsert(
+                edges,
+                x,
+                y,
+                EdgeSide::West,
+                WallEdgeKind::DoorClosed,
+                wall_mat,
+            );
         } else {
             edge_upsert(edges, x, y, EdgeSide::West, WallEdgeKind::Wall, wall_mat);
         }
@@ -154,23 +211,86 @@ fn fill_hospital_floor(
     // North wing split into 3 medical bays; South wing split flanking central ER/lobby transept.
     let nx_a = lot.x0 + bw / 3;
     let nx_b = lot.x0 + (2 * bw) / 3;
-    h_partition_on_edges(edges, corr_y0, lot.x0, lot.x1, &[lot.x0 + 1, (nx_a + nx_b) / 2, lot.x1 - 2], MaterialClass::Drywall);
-    v_partition_on_edges(edges, nx_a, lot.y0, corr_y0, &[lot.y0 + 1], MaterialClass::Drywall);
-    v_partition_on_edges(edges, nx_b, lot.y0, corr_y0, &[corr_y0 - 1], MaterialClass::Drywall);
+    h_partition_on_edges(
+        edges,
+        corr_y0,
+        lot.x0,
+        lot.x1,
+        &[lot.x0 + 1, (nx_a + nx_b) / 2, lot.x1 - 2],
+        MaterialClass::Drywall,
+    );
+    v_partition_on_edges(
+        edges,
+        nx_a,
+        lot.y0,
+        corr_y0,
+        &[lot.y0 + 1],
+        MaterialClass::Drywall,
+    );
+    v_partition_on_edges(
+        edges,
+        nx_b,
+        lot.y0,
+        corr_y0,
+        &[corr_y0 - 1],
+        MaterialClass::Drywall,
+    );
 
-    h_partition_on_edges(edges, corr_y1, lot.x0, tx0, &[lot.x0 + 1], MaterialClass::Drywall);
-    h_partition_on_edges(edges, corr_y1, tx1, lot.x1, &[lot.x1 - 2], MaterialClass::Drywall);
-    v_partition_on_edges(edges, tx0, corr_y1, lot.y1, &[corr_y1], MaterialClass::Drywall);
-    v_partition_on_edges(edges, tx1, corr_y1, lot.y1, &[corr_y1], MaterialClass::Drywall);
+    h_partition_on_edges(
+        edges,
+        corr_y1,
+        lot.x0,
+        tx0,
+        &[lot.x0 + 1],
+        MaterialClass::Drywall,
+    );
+    h_partition_on_edges(
+        edges,
+        corr_y1,
+        tx1,
+        lot.x1,
+        &[lot.x1 - 2],
+        MaterialClass::Drywall,
+    );
+    v_partition_on_edges(
+        edges,
+        tx0,
+        corr_y1,
+        lot.y1,
+        &[corr_y1],
+        MaterialClass::Drywall,
+    );
+    v_partition_on_edges(
+        edges,
+        tx1,
+        corr_y1,
+        lot.y1,
+        &[corr_y1],
+        MaterialClass::Drywall,
+    );
 
     // Sub-divide wide North wards or South wings slightly when campus is large.
     if bw >= 26 && bh >= 16 {
         let extra_x = nx_a + (nx_b - nx_a) / 2;
-        v_partition_on_edges(edges, extra_x, lot.y0, corr_y0, &[corr_y0 - 1], MaterialClass::Drywall);
+        v_partition_on_edges(
+            edges,
+            extra_x,
+            lot.y0,
+            corr_y0,
+            &[corr_y0 - 1],
+            MaterialClass::Drywall,
+        );
     }
 
     // Aligned elevator/stairwell shaft inside the North-central nurse hub.
-    let stair_prop = make_prop(PropKind::Stairwell, stair_xy.0, stair_xy.1, 0, None, seed as u32);
+    let stair_prop = make_prop(
+        PropKind::Stairwell,
+        stair_xy.0,
+        stair_xy.1,
+        0,
+        None,
+        seed as u32,
+    );
     props.push(stair_prop);
 
     // Dress waiting/triage (NW), ward beds + curtains (N-mid & NE), surgical suite (SW), imaging suite (SE).
@@ -182,51 +302,208 @@ fn fill_hospital_floor(
     let se_wing = LotBox::new(tx1, corr_y1, lot.x1, lot.y1);
 
     if is_upper {
-        let _ = place_indoor_checked(edges, props, triage, make_prop(PropKind::HospitalBed, triage.x0, triage.y0, 0, None, s + 1));
-        let _ = place_indoor_checked(edges, props, triage, make_prop(PropKind::PrivacyCurtain, triage.x0, triage.y0 + 1, 0, Some(triage.w().min(3)), s + 2));
-        let _ = place_indoor_checked(edges, props, triage, make_prop(PropKind::Armchair, triage.x1 - 1, triage.y0, 90, None, s + 3));
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            triage,
+            make_prop(PropKind::HospitalBed, triage.x0, triage.y0, 0, None, s + 1),
+        );
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            triage,
+            make_prop(
+                PropKind::PrivacyCurtain,
+                triage.x0,
+                triage.y0 + 1,
+                0,
+                Some(triage.w().min(3)),
+                s + 2,
+            ),
+        );
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            triage,
+            make_prop(
+                PropKind::Armchair,
+                triage.x1 - 1,
+                triage.y0,
+                90,
+                None,
+                s + 3,
+            ),
+        );
     } else {
-        let _ = place_indoor_checked(edges, props, triage, make_prop(PropKind::CheckoutCounter, triage.x0 + 1, triage.y0 + 1, 0, Some(2), s + 1));
-        let _ = place_indoor_checked(edges, props, triage, make_prop(PropKind::Sofa, triage.x0, triage.y0, 0, None, s + 2));
-        let _ = place_indoor_checked(edges, props, triage, make_prop(PropKind::Armchair, triage.x1 - 1, triage.y0, 180, None, s + 3));
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            triage,
+            make_prop(
+                PropKind::CheckoutCounter,
+                triage.x0 + 1,
+                triage.y0 + 1,
+                0,
+                Some(2),
+                s + 1,
+            ),
+        );
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            triage,
+            make_prop(PropKind::Sofa, triage.x0, triage.y0, 0, None, s + 2),
+        );
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            triage,
+            make_prop(
+                PropKind::Armchair,
+                triage.x1 - 1,
+                triage.y0,
+                180,
+                None,
+                s + 3,
+            ),
+        );
     }
 
     // Patient beds + privacy curtains along NE ward & center bays.
     for (idx, bay) in [ward_mid, ward_ne].iter().enumerate() {
         let mut bx = bay.x0;
         while bx + 2 <= bay.x1 {
-            let bed = make_prop(PropKind::HospitalBed, bx, bay.y0, 90, None, s + 10 + idx as u32);
+            let bed = make_prop(
+                PropKind::HospitalBed,
+                bx,
+                bay.y0,
+                90,
+                None,
+                s + 10 + idx as u32,
+            );
             if place_indoor_checked(edges, props, *bay, bed) && bx + 2 < bay.x1 {
-                let curt = make_prop(PropKind::PrivacyCurtain, bx + 1, bay.y0, 90, Some(bay.h().clamp(2, 3)), s + 20 + idx as u32);
+                let curt = make_prop(
+                    PropKind::PrivacyCurtain,
+                    bx + 1,
+                    bay.y0,
+                    90,
+                    Some(bay.h().clamp(2, 3)),
+                    s + 20 + idx as u32,
+                );
                 let _ = place_indoor_checked(edges, props, *bay, curt);
             }
             bx += 3;
         }
-        let _ = place_indoor_checked(edges, props, *bay, make_prop(PropKind::SteelShelving, bay.x0, bay.y1 - 1, 0, Some(2), s + 31));
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            *bay,
+            make_prop(
+                PropKind::SteelShelving,
+                bay.x0,
+                bay.y1 - 1,
+                0,
+                Some(2),
+                s + 31,
+            ),
+        );
     }
 
     // Surgical operating wing (SW).
     let sx = sw_wing.x0 + (sw_wing.w() / 2 - 1).max(0);
     let sy = sw_wing.y0 + (sw_wing.h() / 2 - 1).max(0);
-    let _ = place_indoor_checked(edges, props, sw_wing, make_prop(PropKind::SurgicalTable, sx, sy, 0, None, s + 40));
+    let _ = place_indoor_checked(
+        edges,
+        props,
+        sw_wing,
+        make_prop(PropKind::SurgicalTable, sx, sy, 0, None, s + 40),
+    );
     if sw_wing.w() >= 6 {
-        let _ = place_indoor_checked(edges, props, sw_wing, make_prop(PropKind::SurgicalTable, sw_wing.x0, sw_wing.y0, 0, None, s + 41));
-        let _ = place_indoor_checked(edges, props, sw_wing, make_prop(PropKind::PrivacyCurtain, sw_wing.x0 + 2, sw_wing.y0, 90, Some(2), s + 42));
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            sw_wing,
+            make_prop(
+                PropKind::SurgicalTable,
+                sw_wing.x0,
+                sw_wing.y0,
+                0,
+                None,
+                s + 41,
+            ),
+        );
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            sw_wing,
+            make_prop(
+                PropKind::PrivacyCurtain,
+                sw_wing.x0 + 2,
+                sw_wing.y0,
+                90,
+                Some(2),
+                s + 42,
+            ),
+        );
     }
-    let _ = place_indoor_checked(edges, props, sw_wing, make_prop(PropKind::SteelShelving, sw_wing.x0, sw_wing.y1 - 1, 0, Some(2), s + 43));
+    let _ = place_indoor_checked(
+        edges,
+        props,
+        sw_wing,
+        make_prop(
+            PropKind::SteelShelving,
+            sw_wing.x0,
+            sw_wing.y1 - 1,
+            0,
+            Some(2),
+            s + 43,
+        ),
+    );
 
     // Diagnostic imaging wing (SE).
     let ix = se_wing.x0 + (se_wing.w() / 2 - 1).max(0);
     let iy = se_wing.y0 + (se_wing.h() / 2 - 1).max(0);
-    let _ = place_indoor_checked(edges, props, se_wing, make_prop(PropKind::ImagingScanner, ix, iy, 0, None, s + 50));
-    let _ = place_indoor_checked(edges, props, se_wing, make_prop(PropKind::Desk, se_wing.x1 - 2, se_wing.y0, 0, None, s + 51));
+    let _ = place_indoor_checked(
+        edges,
+        props,
+        se_wing,
+        make_prop(PropKind::ImagingScanner, ix, iy, 0, None, s + 50),
+    );
+    let _ = place_indoor_checked(
+        edges,
+        props,
+        se_wing,
+        make_prop(PropKind::Desk, se_wing.x1 - 2, se_wing.y0, 0, None, s + 51),
+    );
     if is_upper && se_wing.w() >= 6 {
-        let _ = place_indoor_checked(edges, props, se_wing, make_prop(PropKind::HospitalBed, se_wing.x0, se_wing.y1 - 1, 0, None, s + 52));
+        let _ = place_indoor_checked(
+            edges,
+            props,
+            se_wing,
+            make_prop(
+                PropKind::HospitalBed,
+                se_wing.x0,
+                se_wing.y1 - 1,
+                0,
+                None,
+                s + 52,
+            ),
+        );
     }
 
     // Reception / crash-cart cover along main E-W corridor margins.
-    let _ = place_indoor_checked(edges, props, lot, make_prop(PropKind::Planter, tx0 - 2, corr_y0, 0, None, s + 60));
-    let _ = place_indoor_checked(edges, props, lot, make_prop(PropKind::CheckoutCounter, tx1, corr_y0, 0, Some(2), s + 61));
+    let _ = place_indoor_checked(
+        edges,
+        props,
+        lot,
+        make_prop(PropKind::Planter, tx0 - 2, corr_y0, 0, None, s + 60),
+    );
+    let _ = place_indoor_checked(
+        edges,
+        props,
+        lot,
+        make_prop(PropKind::CheckoutCounter, tx1, corr_y0, 0, Some(2), s + 61),
+    );
 }
 
 fn generate_hospital(w: i32, h: i32, seed: i64) -> ProceduralSector {
@@ -250,7 +527,11 @@ fn generate_hospital(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let walk_y = by1 as f32 + 0.65;
     b.add_ribbon(
         SurfaceFeatureKind::ConcreteWalk,
-        &[(bx0 as f32 + 1.0, walk_y), (w as f32 * 0.5, walk_y + 0.08), (bx1 as f32 - 1.0, walk_y)],
+        &[
+            (bx0 as f32 + 1.0, walk_y),
+            (w as f32 * 0.5, walk_y + 0.08),
+            (bx1 as f32 - 1.0, walk_y),
+        ],
         115,
     );
 
@@ -258,7 +539,12 @@ fn generate_hospital(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let floor_seed = (b.rng.next() & 0xffff_ffff) as u32;
     b.add_polygon_surface(
         SurfaceFeatureKind::InteriorFloor,
-        &[(bx0 as f32, by0 as f32), (bx1 as f32, by0 as f32), (bx1 as f32, by1 as f32), (bx0 as f32, by1 as f32)],
+        &[
+            (bx0 as f32, by0 as f32),
+            (bx1 as f32, by0 as f32),
+            (bx1 as f32, by1 as f32),
+            (bx0 as f32, by1 as f32),
+        ],
         0,
         floor_seed,
     );
@@ -268,17 +554,69 @@ fn generate_hospital(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let corr_y0 = (mid_y - 1).max(by0 + 2);
     let tx0 = (bx0 + bw / 2 - 1).max(bx0 + 3);
     // Wide ER double sliding glass doors + West/East campus doors near center spawn axis.
-    b.put_edge(tx0, by1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(tx0 + 1, by1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx0, corr_y0, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx0, corr_y0 + 1, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx1, corr_y0, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx1, corr_y0 + 1, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx0 + 1, by0, EdgeSide::North, WallEdgeKind::DoorClosed, MaterialClass::SheetSteel);
+    b.put_edge(
+        tx0,
+        by1,
+        EdgeSide::North,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        tx0 + 1,
+        by1,
+        EdgeSide::North,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx0,
+        corr_y0,
+        EdgeSide::West,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx0,
+        corr_y0 + 1,
+        EdgeSide::West,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx1,
+        corr_y0,
+        EdgeSide::West,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx1,
+        corr_y0 + 1,
+        EdgeSide::West,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx0 + 1,
+        by0,
+        EdgeSide::North,
+        WallEdgeKind::DoorClosed,
+        MaterialClass::SheetSteel,
+    );
 
-    let stair_xy = ((bx0 + bw / 3 + 1).min(bx1 - 3), (by0 + 1).min(corr_y0 - 3).max(by0));
+    let stair_xy = (
+        (bx0 + bw / 3 + 1).min(bx1 - 3),
+        (by0 + 1).min(corr_y0 - 3).max(by0),
+    );
     let mut f1_props = Vec::new();
-    fill_hospital_floor(lot, &mut b.edges, &mut f1_props, stair_xy, false, seed as u64);
+    fill_hospital_floor(
+        lot,
+        &mut b.edges,
+        &mut f1_props,
+        stair_xy,
+        false,
+        seed as u64,
+    );
     trim_floor_props_to_connected(w, h, lot, &b.edges, &mut f1_props);
     for p in f1_props {
         let (cx, cy) = p.center_cm();
@@ -293,19 +631,72 @@ fn generate_hospital(w: i32, h: i32, seed: i64) -> ProceduralSector {
     // Exterior ambulances, cars, landscaped flowerbeds & campus trees strictly outside building/road.
     let _ = b.place_vehicle_along_ribbon(PropKind::UtilityVan, road_idx, 0.42, 0.0, 5);
     let _ = b.place_vehicle_along_ribbon(PropKind::Car, road_idx, 0.70, 0.0, 6);
-    let _ = b.try_add_organic_patch(SurfaceFeatureKind::GardenBedZone, (2.0, 2.3), (1.3, 1.1), 0.30, 28);
-    let _ = b.try_add_organic_patch(SurfaceFeatureKind::GardenBedZone, (w as f32 - 2.0, 2.3), (1.3, 1.1), 0.30, 28);
-    b.scatter_trees(PropKind::MediumTree, 4, 2.8, RectM { x0: 1.2, y0: 1.2, x1: bx0 as f32 - 0.5, y1: by1 as f32 });
-    b.scatter_trees(PropKind::MediumTree, 4, 2.8, RectM { x0: bx1 as f32 + 0.5, y0: 1.2, x1: w as f32 - 1.2, y1: by1 as f32 });
-    b.scatter_turf_prop_rot(PropKind::ParkBench, 2, 15, RectM { x0: 1.2, y0: 1.2, x1: bx0 as f32 - 0.4, y1: h as f32 - 3.5 });
+    let _ = b.try_add_organic_patch(
+        SurfaceFeatureKind::GardenBedZone,
+        (2.0, 2.3),
+        (1.3, 1.1),
+        0.30,
+        28,
+    );
+    let _ = b.try_add_organic_patch(
+        SurfaceFeatureKind::GardenBedZone,
+        (w as f32 - 2.0, 2.3),
+        (1.3, 1.1),
+        0.30,
+        28,
+    );
+    b.scatter_trees(
+        PropKind::MediumTree,
+        4,
+        2.8,
+        RectM {
+            x0: 1.2,
+            y0: 1.2,
+            x1: bx0 as f32 - 0.5,
+            y1: by1 as f32,
+        },
+    );
+    b.scatter_trees(
+        PropKind::MediumTree,
+        4,
+        2.8,
+        RectM {
+            x0: bx1 as f32 + 0.5,
+            y0: 1.2,
+            x1: w as f32 - 1.2,
+            y1: by1 as f32,
+        },
+    );
+    b.scatter_turf_prop_rot(
+        PropKind::ParkBench,
+        2,
+        15,
+        RectM {
+            x0: 1.2,
+            y0: 1.2,
+            x1: bx0 as f32 - 0.4,
+            y1: h as f32 - 3.5,
+        },
+    );
 
     // Build 2F · Inpatient & Surgical Ward with aligned stairwell.
     let mut f2_edges = Vec::new();
     let mut f2_props = Vec::new();
     enclose_upper_shell(&mut f2_edges, lot, MaterialClass::ReinforcedConcrete, 3);
-    fill_hospital_floor(lot, &mut f2_edges, &mut f2_props, stair_xy, true, (seed as u64).wrapping_add(77));
+    fill_hospital_floor(
+        lot,
+        &mut f2_edges,
+        &mut f2_props,
+        stair_xy,
+        true,
+        (seed as u64).wrapping_add(77),
+    );
     trim_floor_props_to_connected(w, h, lot, &f2_edges, &mut f2_props);
-    let mut f2_surfaces = vec![lot.polygon_feature(SurfaceFeatureKind::InteriorFloor, 0, floor_seed.wrapping_add(19))];
+    let mut f2_surfaces = vec![lot.polygon_feature(
+        SurfaceFeatureKind::InteriorFloor,
+        0,
+        floor_seed.wrapping_add(19),
+    )];
     prune_occluded_surfaces(&mut f2_surfaces, w, h);
 
     let mut sec = b.finalize_connected();
@@ -342,7 +733,11 @@ fn generate_shopping_plaza(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let prom_y = by1 as f32 + 1.05;
     b.add_ribbon(
         SurfaceFeatureKind::ConcreteWalk,
-        &[(1.0, prom_y), (w as f32 * 0.5, prom_y + 0.05), (w as f32 - 1.0, prom_y)],
+        &[
+            (1.0, prom_y),
+            (w as f32 * 0.5, prom_y + 0.05),
+            (w as f32 - 1.0, prom_y),
+        ],
         200,
     );
 
@@ -403,25 +798,84 @@ fn generate_shopping_plaza(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let _ = b.try_place_off_road_cm(PropKind::MallKiosk, kiosk_cx, prom_cy, kiosk_rot, None);
     let patio_x = OutdoorBuilder::cm(bx0 as f32 + 2.5);
     let _ = b.try_place_off_road_cm(PropKind::RoundTable, patio_x, prom_cy, 15, None);
-    let _ = b.try_place_off_road_cm(PropKind::ParkBench, OutdoorBuilder::cm(bx1 as f32 - 2.5), prom_cy, 180, None);
+    let _ = b.try_place_off_road_cm(
+        PropKind::ParkBench,
+        OutdoorBuilder::cm(bx1 as f32 - 2.5),
+        prom_cy,
+        180,
+        None,
+    );
 
     // Angled parking vehicles along parking lane.
     for (idx, frac) in [0.18_f32, 0.38, 0.62, 0.82].iter().enumerate() {
-        let veh = if idx % 3 == 2 { PropKind::UtilityVan } else { PropKind::Car };
+        let veh = if idx % 3 == 2 {
+            PropKind::UtilityVan
+        } else {
+            PropKind::Car
+        };
         let _ = b.place_vehicle_along_ribbon(veh, road_idx, *frac, 0.0, 22);
     }
 
     // Landscaped turf islands + trees on flank margins strictly outside roads, promenade & interiors.
-    let _ = b.try_add_organic_patch(SurfaceFeatureKind::GardenBedZone, (1.9, 2.6), (1.3, 1.2), 0.30, 28);
-    let _ = b.try_add_organic_patch(SurfaceFeatureKind::GardenBedZone, (w as f32 - 1.9, 2.6), (1.3, 1.2), 0.30, 28);
-    b.scatter_trees(PropKind::MediumTree, 4, 2.5, RectM { x0: 1.0, y0: 1.0, x1: bx0 as f32 - 0.5, y1: prom_y - 1.2 });
-    b.scatter_trees(PropKind::MediumTree, 4, 2.5, RectM { x0: bx1 as f32 + 0.5, y0: 1.0, x1: w as f32 - 1.0, y1: prom_y - 1.2 });
-    b.scatter_turf_prop_rot(PropKind::Bush, 4, 25, RectM { x0: 0.8, y0: 0.8, x1: w as f32 - 0.8, y1: prom_y - 1.0 });
+    let _ = b.try_add_organic_patch(
+        SurfaceFeatureKind::GardenBedZone,
+        (1.9, 2.6),
+        (1.3, 1.2),
+        0.30,
+        28,
+    );
+    let _ = b.try_add_organic_patch(
+        SurfaceFeatureKind::GardenBedZone,
+        (w as f32 - 1.9, 2.6),
+        (1.3, 1.2),
+        0.30,
+        28,
+    );
+    b.scatter_trees(
+        PropKind::MediumTree,
+        4,
+        2.5,
+        RectM {
+            x0: 1.0,
+            y0: 1.0,
+            x1: bx0 as f32 - 0.5,
+            y1: prom_y - 1.2,
+        },
+    );
+    b.scatter_trees(
+        PropKind::MediumTree,
+        4,
+        2.5,
+        RectM {
+            x0: bx1 as f32 + 0.5,
+            y0: 1.0,
+            x1: w as f32 - 1.0,
+            y1: prom_y - 1.2,
+        },
+    );
+    b.scatter_turf_prop_rot(
+        PropKind::Bush,
+        4,
+        25,
+        RectM {
+            x0: 0.8,
+            y0: 0.8,
+            x1: w as f32 - 0.8,
+            y1: prom_y - 1.0,
+        },
+    );
 
     b.finalize_connected()
 }
 
-fn build_mall_concourse_shell(edges: &mut Vec<MapWallEdge>, w: i32, h: i32, conc_y0: i32, conc_y1: i32, is_upper: bool) {
+fn build_mall_concourse_shell(
+    edges: &mut Vec<MapWallEdge>,
+    w: i32,
+    h: i32,
+    conc_y0: i32,
+    conc_y1: i32,
+    is_upper: bool,
+) {
     let mid_x = w / 2;
     for x in 0..w {
         let is_portal = !is_upper && (x == mid_x || x == mid_x - 1);
@@ -462,7 +916,12 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let floor_seed = (seed as u32).wrapping_add(0x4A11);
     b.add_polygon_surface(
         SurfaceFeatureKind::InteriorFloor,
-        &[(0.0, 0.0), (w as f32, 0.0), (w as f32, h as f32), (0.0, h as f32)],
+        &[
+            (0.0, 0.0),
+            (w as f32, 0.0),
+            (w as f32, h as f32),
+            (0.0, h as f32),
+        ],
         0,
         floor_seed,
     );
@@ -487,15 +946,36 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
         let qw = qx1 - qx0;
         if qw >= 14 {
             let split = qx0 + qw / 2;
-            wing_lots.push((LotBox::new(qx0, qy0, split, qy1), entry, archetypes[(qi * 2) % archetypes.len()]));
-            wing_lots.push((LotBox::new(split, qy0, qx1, qy1), entry, archetypes[(qi * 2 + 1) % archetypes.len()]));
+            wing_lots.push((
+                LotBox::new(qx0, qy0, split, qy1),
+                entry,
+                archetypes[(qi * 2) % archetypes.len()],
+            ));
+            wing_lots.push((
+                LotBox::new(split, qy0, qx1, qy1),
+                entry,
+                archetypes[(qi * 2 + 1) % archetypes.len()],
+            ));
         } else if qw >= 4 && (qy1 - qy0) >= 4 {
-            wing_lots.push((LotBox::new(qx0, qy0, qx1, qy1), entry, archetypes[qi % archetypes.len()]));
+            wing_lots.push((
+                LotBox::new(qx0, qy0, qx1, qy1),
+                entry,
+                archetypes[qi % archetypes.len()],
+            ));
         }
     }
 
     for (bi, &(bay, entry, arch)) in wing_lots.iter().enumerate() {
-        let unit = generate_store_unit(w, h, bay, arch, entry, false, &b.spawn_pads_m, (seed as u64).wrapping_add(bi as u64 * 97));
+        let unit = generate_store_unit(
+            w,
+            h,
+            bay,
+            arch,
+            entry,
+            false,
+            &b.spawn_pads_m,
+            (seed as u64).wrapping_add(bi as u64 * 97),
+        );
         for e in unit.wall_edges {
             b.put_edge(e.x, e.y, e.side, e.kind, e.material);
         }
@@ -512,14 +992,63 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
     b.props.push(stair_1f);
 
     let cy_mid_cm = OutdoorBuilder::cm((conc_y0 + conc_y1) as f32 * 0.5);
-    let _ = b.try_place_cm(PropKind::MallKiosk, OutdoorBuilder::cm((cx0 + cx1) as f32 * 0.5 + 1.5), cy_mid_cm, 12, None, true);
-    let _ = b.try_place_cm(PropKind::PlanterTable, OutdoorBuilder::cm((cx0 + 1) as f32), OutdoorBuilder::cm(conc_y1 as f32 - 0.6), 0, Some(200), true);
+    let _ = b.try_place_cm(
+        PropKind::MallKiosk,
+        OutdoorBuilder::cm((cx0 + cx1) as f32 * 0.5 + 1.5),
+        cy_mid_cm,
+        12,
+        None,
+        true,
+    );
+    let _ = b.try_place_cm(
+        PropKind::PlanterTable,
+        OutdoorBuilder::cm((cx0 + 1) as f32),
+        OutdoorBuilder::cm(conc_y1 as f32 - 0.6),
+        0,
+        Some(200),
+        true,
+    );
     if w >= 28 {
-        let _ = b.try_place_cm(PropKind::MallKiosk, OutdoorBuilder::cm(w as f32 * 0.28), cy_mid_cm, 348, None, true);
-        let _ = b.try_place_cm(PropKind::MallKiosk, OutdoorBuilder::cm(w as f32 * 0.72), cy_mid_cm, 15, None, true);
-        let _ = b.try_place_cm(PropKind::SmallFountain, OutdoorBuilder::cm(w as f32 * 0.40), cy_mid_cm, 0, None, true);
-        let _ = b.try_place_cm(PropKind::ParkBench, OutdoorBuilder::cm(w as f32 * 0.60), OutdoorBuilder::cm(conc_y0 as f32 + 0.7), 0, None, true);
-        let _ = b.try_place_cm(PropKind::TrashCan, OutdoorBuilder::cm(w as f32 * 0.62), OutdoorBuilder::cm(conc_y0 as f32 + 0.7), 0, None, true);
+        let _ = b.try_place_cm(
+            PropKind::MallKiosk,
+            OutdoorBuilder::cm(w as f32 * 0.28),
+            cy_mid_cm,
+            348,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::MallKiosk,
+            OutdoorBuilder::cm(w as f32 * 0.72),
+            cy_mid_cm,
+            15,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::SmallFountain,
+            OutdoorBuilder::cm(w as f32 * 0.40),
+            cy_mid_cm,
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::ParkBench,
+            OutdoorBuilder::cm(w as f32 * 0.60),
+            OutdoorBuilder::cm(conc_y0 as f32 + 0.7),
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::TrashCan,
+            OutdoorBuilder::cm(w as f32 * 0.62),
+            OutdoorBuilder::cm(conc_y0 as f32 + 0.7),
+            0,
+            None,
+            true,
+        );
     }
 
     let mut sec = b.finalize_connected();
@@ -533,17 +1062,47 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
             StoreArchetype::Grocery => StoreArchetype::CafeRestaurant,
             other => other,
         };
-        let unit = generate_store_unit(w, h, bay, f2_arch, entry, false, &[], (seed as u64).wrapping_add(500 + bi as u64 * 59));
+        let unit = generate_store_unit(
+            w,
+            h,
+            bay,
+            f2_arch,
+            entry,
+            false,
+            &[],
+            (seed as u64).wrapping_add(500 + bi as u64 * 59),
+        );
         for e in unit.wall_edges {
             edge_upsert(&mut f2_edges, e.x, e.y, e.side, e.kind, e.material);
         }
         f2_props.extend(unit.props);
     }
     build_mall_concourse_shell(&mut f2_edges, w, h, conc_y0, conc_y1, true);
-    f2_props.push(make_prop(PropKind::Stairwell, stair_x, stair_y, 0, None, floor_seed + 1));
-    let kiosk_2f = make_prop(PropKind::MallKiosk, (w / 2 - 1).clamp(3, w - 4), conc_y0 + 1, 0, None, floor_seed + 2);
+    f2_props.push(make_prop(
+        PropKind::Stairwell,
+        stair_x,
+        stair_y,
+        0,
+        None,
+        floor_seed + 1,
+    ));
+    let kiosk_2f = make_prop(
+        PropKind::MallKiosk,
+        (w / 2 - 1).clamp(3, w - 4),
+        conc_y0 + 1,
+        0,
+        None,
+        floor_seed + 2,
+    );
     let _ = place_indoor_checked(&f2_edges, &mut f2_props, full_lot, kiosk_2f);
-    let planter_2f = make_prop(PropKind::PlanterTable, cx0, conc_y1 - 1, 0, Some(2), floor_seed + 3);
+    let planter_2f = make_prop(
+        PropKind::PlanterTable,
+        cx0,
+        conc_y1 - 1,
+        0,
+        Some(2),
+        floor_seed + 3,
+    );
     let _ = place_indoor_checked(&f2_edges, &mut f2_props, full_lot, planter_2f);
     trim_floor_props_to_connected(w, h, full_lot, &f2_edges, &mut f2_props);
 
@@ -595,8 +1154,14 @@ pub fn generate_civic_or_retail_sector(
     height: i32,
     seed: i64,
 ) -> ProceduralSector {
-    let w = width.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
-    let h = height.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
+    let w = width.clamp(
+        crate::tactical_map::MIN_SECTOR_DIM,
+        crate::tactical_map::MAX_SECTOR_DIM,
+    );
+    let h = height.clamp(
+        crate::tactical_map::MIN_SECTOR_DIM,
+        crate::tactical_map::MAX_SECTOR_DIM,
+    );
     match preset {
         SectorPreset::Hospital => generate_hospital(w, h, seed),
         SectorPreset::ShoppingPlaza => generate_shopping_plaza(w, h, seed),
@@ -609,5 +1174,7 @@ pub fn generate_civic_or_retail_sector(
 #[allow(dead_code)]
 fn has_exposed_half_cover(sec: &ProceduralSector) -> bool {
     let _ = topmost_surface_at_m;
-    sec.props.iter().any(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover)
+    sec.props
+        .iter()
+        .any(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover)
 }

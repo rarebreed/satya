@@ -746,7 +746,12 @@ pub fn evaluate_emotional_trigger(
             let base_delta_ext = if p.trs >= 14 { 4 } else { 2 };
             let fail_state = step_morale_condition(current_morale, -1);
             let fail_int = if p.trs >= 14 { 2 } else { 0 };
-            roll_outcome(base_delta_ext, false, current_morale, (fail_state, fail_int))
+            roll_outcome(
+                base_delta_ext,
+                false,
+                current_morale,
+                (fail_state, fail_int),
+            )
         }
         EmotionalTriggerKind::InsultedOrTaunted => {
             if !(p.ego >= 13 || p.agg >= 13) {

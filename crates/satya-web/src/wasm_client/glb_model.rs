@@ -192,7 +192,10 @@ fn accessor_buffer_offset_and_stride(
         .and_then(|a| a.get(acc_idx))
         .ok_or_else(|| format!("Missing accessor {acc_idx}"))?;
     let count = acc.get("count").and_then(Value::as_u64).unwrap_or(0) as usize;
-    let comp_type = acc.get("componentType").and_then(Value::as_u64).unwrap_or(0);
+    let comp_type = acc
+        .get("componentType")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     let bv_idx = acc
         .get("bufferView")
         .and_then(Value::as_u64)
@@ -203,7 +206,8 @@ fn accessor_buffer_offset_and_stride(
         .and_then(|b| b.get(bv_idx))
         .ok_or_else(|| format!("Missing bufferView {bv_idx}"))?;
     let base_offset = (bv.get("byteOffset").and_then(Value::as_u64).unwrap_or(0)
-        + acc.get("byteOffset").and_then(Value::as_u64).unwrap_or(0)) as usize;
+        + acc.get("byteOffset").and_then(Value::as_u64).unwrap_or(0))
+        as usize;
     let stride = bv
         .get("byteStride")
         .and_then(Value::as_u64)
@@ -217,9 +221,12 @@ fn read_accessor_vec3_f32(
     bin: &[u8],
     acc_idx: usize,
 ) -> Result<Vec<[f32; 3]>, String> {
-    let (count, comp_type, base_offset, stride) = accessor_buffer_offset_and_stride(gltf, acc_idx, 12)?;
+    let (count, comp_type, base_offset, stride) =
+        accessor_buffer_offset_and_stride(gltf, acc_idx, 12)?;
     if comp_type != 5126 {
-        return Err(format!("Unsupported VEC3 componentType {comp_type} (expected 5126 FLOAT)"));
+        return Err(format!(
+            "Unsupported VEC3 componentType {comp_type} (expected 5126 FLOAT)"
+        ));
     }
     let mut out = Vec::with_capacity(count);
     for i in 0..count {
@@ -302,7 +309,9 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
     }
     let version = read_u32_le(bytes, 4).unwrap_or(0);
     if version != GLB_VERSION_2 {
-        return Err(format!("Unsupported glTF version {version} (expected glTF 2.0)"));
+        return Err(format!(
+            "Unsupported glTF version {version} (expected glTF 2.0)"
+        ));
     }
 
     let mut offset = 12_usize;
@@ -328,11 +337,24 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
     let gltf: Value =
         serde_json::from_slice(raw_json).map_err(|e| format!("Invalid glTF JSON chunk: {e}"))?;
 
-    let nodes = gltf.get("nodes").and_then(Value::as_array).cloned().unwrap_or_default();
-    let meshes = gltf.get("meshes").and_then(Value::as_array).cloned().unwrap_or_default();
-    let materials = gltf.get("materials").and_then(Value::as_array).cloned().unwrap_or_default();
+    let nodes = gltf
+        .get("nodes")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let meshes = gltf
+        .get("meshes")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let materials = gltf
+        .get("materials")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
 
-    let root_indices: Vec<usize> = if let Some(scenes) = gltf.get("scenes").and_then(Value::as_array)
+    let root_indices: Vec<usize> = if let Some(scenes) =
+        gltf.get("scenes").and_then(Value::as_array)
         && !scenes.is_empty()
     {
         let sc_idx = gltf.get("scene").and_then(Value::as_u64).unwrap_or(0) as usize;
@@ -341,7 +363,11 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
             .or_else(|| scenes.first())
             .and_then(|s| s.get("nodes"))
             .and_then(Value::as_array)
-            .map(|arr| arr.iter().filter_map(|v| v.as_u64().map(|u| u as usize)).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_u64().map(|u| u as usize))
+                    .collect()
+            })
             .unwrap_or_default()
     } else {
         (0..nodes.len()).collect()
@@ -368,7 +394,10 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
         if let Some(mesh_idx) = node.get("mesh").and_then(Value::as_u64)
             && let Some(mesh) = meshes.get(mesh_idx as usize)
         {
-            let mesh_name = mesh.get("name").and_then(Value::as_str).unwrap_or(&node_name);
+            let mesh_name = mesh
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(&node_name);
             let combined_name = format!("{node_name}_{mesh_name}");
             if let Some(prims) = mesh.get("primitives").and_then(Value::as_array) {
                 for prim in prims {
@@ -390,7 +419,9 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                         .get("attributes")
                         .and_then(|a| a.get("NORMAL"))
                         .and_then(Value::as_u64)
-                        .and_then(|n_acc| read_accessor_vec3_f32(&gltf, bin_slice, n_acc as usize).ok());
+                        .and_then(|n_acc| {
+                            read_accessor_vec3_f32(&gltf, bin_slice, n_acc as usize).ok()
+                        });
                     let indices = if let Some(i_acc) = prim.get("indices").and_then(Value::as_u64) {
                         read_accessor_indices(&gltf, bin_slice, i_acc as usize)?
                     } else {
@@ -406,7 +437,11 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                     if let Some(mat_idx) = prim.get("material").and_then(Value::as_u64)
                         && let Some(mat) = materials.get(mat_idx as usize)
                     {
-                        mat_name = mat.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+                        mat_name = mat
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_string();
                         let low_mat = mat_name.to_ascii_lowercase();
                         if low_mat.contains("tint") || low_mat.contains("primary") {
                             tintable = true;
@@ -428,18 +463,27 @@ pub fn parse_glb_bytes(bytes: &[u8], fallback_name: &str) -> Result<LoadedGlbMod
                         }
                     }
 
-                    let world_pos: Vec<[f32; 3]> =
-                        raw_pos.iter().map(|&p| transform_point(&world_mat, p)).collect();
+                    let world_pos: Vec<[f32; 3]> = raw_pos
+                        .iter()
+                        .map(|&p| transform_point(&world_mat, p))
+                        .collect();
                     let world_norm: Vec<[f32; 3]> = if let Some(rn) = raw_norm
                         && rn.len() == world_pos.len()
                     {
-                        rn.iter().map(|&n| transform_normal(&world_mat, n)).collect()
+                        rn.iter()
+                            .map(|&n| transform_normal(&world_mat, n))
+                            .collect()
                     } else {
                         let mut gen_nrms = vec![[0.0_f32, 1.0, 0.0]; world_pos.len()];
                         for &[raw0, raw1, raw2] in indices.as_chunks::<3>().0 {
                             let (i0, i1, i2) = (raw0 as usize, raw1 as usize, raw2 as usize);
-                            if i0 < world_pos.len() && i1 < world_pos.len() && i2 < world_pos.len() {
-                                let fnrm = compute_face_normal(world_pos[i0], world_pos[i1], world_pos[i2]);
+                            if i0 < world_pos.len() && i1 < world_pos.len() && i2 < world_pos.len()
+                            {
+                                let fnrm = compute_face_normal(
+                                    world_pos[i0],
+                                    world_pos[i1],
+                                    world_pos[i2],
+                                );
                                 gen_nrms[i0] = fnrm;
                                 gen_nrms[i1] = fnrm;
                                 gen_nrms[i2] = fnrm;
@@ -497,7 +541,11 @@ fn assemble_loaded_model(
     }
 
     if ground_and_center_xz && bmin[0].is_finite() {
-        let (cx, cz, min_y) = (0.5 * (bmin[0] + bmax[0]), 0.5 * (bmin[2] + bmax[2]), bmin[1]);
+        let (cx, cz, min_y) = (
+            0.5 * (bmin[0] + bmax[0]),
+            0.5 * (bmin[2] + bmax[2]),
+            bmin[1],
+        );
         for sm in &mut submeshes {
             for p in &mut sm.positions {
                 p[0] -= cx;
@@ -805,21 +853,66 @@ fn build_humanoid_submeshes(p: &HumanoidProfile) -> Vec<GlbSubmesh> {
         let (lx, z_off) = (sign * 0.115 * s, sign * 0.03);
         legs.add_tapered_box(lx, z_off - 0.03, 0.055, 0.18 * s, 0.075, 0.11, 0.065, 0.085);
         legs.add_tapered_box(lx, z_off, 0.18 * s, 0.50 * s, 0.065, 0.075, 0.075, 0.080);
-        legs.add_tapered_box(lx, z_off * 0.5, 0.50 * s, 0.86 * s, 0.078, 0.082, 0.088, 0.092);
+        legs.add_tapered_box(
+            lx,
+            z_off * 0.5,
+            0.50 * s,
+            0.86 * s,
+            0.078,
+            0.082,
+            0.088,
+            0.092,
+        );
     }
 
     let mut torso = SubmeshBuilder::new();
     torso.add_tapered_box(0.0, 0.0, 0.82 * s, 0.98 * s, 0.17 * s, 0.11, 0.15 * s, 0.10);
-    torso.add_tapered_box(0.0, 0.0, 0.98 * s, 1.43 * s, 0.155 * s, p.chest_depth * 0.82, p.shoulder_w, p.chest_depth);
+    torso.add_tapered_box(
+        0.0,
+        0.0,
+        0.98 * s,
+        1.43 * s,
+        0.155 * s,
+        p.chest_depth * 0.82,
+        p.shoulder_w,
+        p.chest_depth,
+    );
     for sign in [-1.0_f32, 1.0] {
-        torso.add_tapered_box(sign * (p.shoulder_w + 0.055), 0.0, 1.30 * s, 1.46 * s, 0.075, 0.105, 0.055, 0.085);
+        torso.add_tapered_box(
+            sign * (p.shoulder_w + 0.055),
+            0.0,
+            1.30 * s,
+            1.46 * s,
+            0.075,
+            0.105,
+            0.055,
+            0.085,
+        );
     }
 
     let mut pack = SubmeshBuilder::new();
-    pack.add_tapered_box(0.0, p.chest_depth + 0.075, 1.02 * s, 1.42 * s, 0.13 * s, 0.075, 0.11 * s, 0.065);
+    pack.add_tapered_box(
+        0.0,
+        p.chest_depth + 0.075,
+        1.02 * s,
+        1.42 * s,
+        0.13 * s,
+        0.075,
+        0.11 * s,
+        0.065,
+    );
     if p.has_thruster_fins {
         for sign in [-1.0_f32, 1.0] {
-            pack.add_tapered_box(sign * 0.15 * s, p.chest_depth + 0.11, 1.18 * s, 1.56 * s, 0.03, 0.05, 0.018, 0.035);
+            pack.add_tapered_box(
+                sign * 0.15 * s,
+                p.chest_depth + 0.11,
+                1.18 * s,
+                1.56 * s,
+                0.03,
+                0.05,
+                0.018,
+                0.035,
+            );
         }
     }
 
@@ -827,10 +920,28 @@ fn build_humanoid_submeshes(p: &HumanoidProfile) -> Vec<GlbSubmesh> {
     for sign in [-1.0_f32, 1.0] {
         let ax = sign * (p.shoulder_w + 0.045);
         arms.add_tapered_box(ax, -0.02, 1.10 * s, 1.34 * s, 0.055, 0.058, 0.062, 0.062);
-        arms.add_tapered_box(ax * 0.72, -0.16, 1.04 * s, 1.16 * s, 0.048, 0.13, 0.048, 0.11);
+        arms.add_tapered_box(
+            ax * 0.72,
+            -0.16,
+            1.04 * s,
+            1.16 * s,
+            0.048,
+            0.13,
+            0.048,
+            0.11,
+        );
     }
     if p.rifle_len > 0.05 {
-        arms.add_tapered_box(0.05, -0.28 - p.rifle_len * 0.35, 1.06 * s, 1.16 * s, 0.032, p.rifle_len * 0.5, 0.026, p.rifle_len * 0.48);
+        arms.add_tapered_box(
+            0.05,
+            -0.28 - p.rifle_len * 0.35,
+            1.06 * s,
+            1.16 * s,
+            0.032,
+            p.rifle_len * 0.5,
+            0.026,
+            p.rifle_len * 0.48,
+        );
     }
 
     let mut head = SubmeshBuilder::new();
@@ -844,13 +955,62 @@ fn build_humanoid_submeshes(p: &HumanoidProfile) -> Vec<GlbSubmesh> {
     visor.add_tapered_box(0.0, -0.115, 1.55 * s, 1.64 * s, 0.088, 0.022, 0.082, 0.020);
 
     vec![
-        base.finish("miniature_base", [0.14, 0.19, 0.27, 1.0], 0.4, 0.6, false, HitZoneTag::BaseOrProp),
-        legs.finish("legs_boots", [0.22, 0.28, 0.38, 1.0], 0.35, 0.55, false, HitZoneTag::LegsBoots),
-        torso.finish("torso_carapace", p.primary_rgba, 0.45, 0.38, true, HitZoneTag::TorsoCarapace),
-        pack.finish("pack_thrusters", [0.26, 0.33, 0.44, 1.0], 0.5, 0.45, false, HitZoneTag::PackThrusters),
-        arms.finish("arms_weapon", [0.18, 0.22, 0.30, 1.0], 0.65, 0.35, false, HitZoneTag::ArmsWeapon),
-        head.finish("head_helm", p.primary_rgba, 0.45, 0.35, true, HitZoneTag::HeadOptics),
-        visor.finish("visor_optics", p.visor_rgba, 0.85, 0.15, false, HitZoneTag::HeadOptics),
+        base.finish(
+            "miniature_base",
+            [0.14, 0.19, 0.27, 1.0],
+            0.4,
+            0.6,
+            false,
+            HitZoneTag::BaseOrProp,
+        ),
+        legs.finish(
+            "legs_boots",
+            [0.22, 0.28, 0.38, 1.0],
+            0.35,
+            0.55,
+            false,
+            HitZoneTag::LegsBoots,
+        ),
+        torso.finish(
+            "torso_carapace",
+            p.primary_rgba,
+            0.45,
+            0.38,
+            true,
+            HitZoneTag::TorsoCarapace,
+        ),
+        pack.finish(
+            "pack_thrusters",
+            [0.26, 0.33, 0.44, 1.0],
+            0.5,
+            0.45,
+            false,
+            HitZoneTag::PackThrusters,
+        ),
+        arms.finish(
+            "arms_weapon",
+            [0.18, 0.22, 0.30, 1.0],
+            0.65,
+            0.35,
+            false,
+            HitZoneTag::ArmsWeapon,
+        ),
+        head.finish(
+            "head_helm",
+            p.primary_rgba,
+            0.45,
+            0.35,
+            true,
+            HitZoneTag::HeadOptics,
+        ),
+        visor.finish(
+            "visor_optics",
+            p.visor_rgba,
+            0.85,
+            0.15,
+            false,
+            HitZoneTag::HeadOptics,
+        ),
     ]
 }
 
@@ -871,10 +1031,38 @@ fn build_sector4_airlock_submeshes() -> Vec<GlbSubmesh> {
     valve.add_frustum(-1.05, -0.28, 0.88, 1.08, 0.16, 0.16, 10);
 
     vec![
-        frame.finish("base_bulkhead", [0.22, 0.29, 0.39, 1.0], 0.55, 0.50, false, HitZoneTag::BaseOrProp),
-        doors.finish("torso_airlock_doors", [0.08, 0.58, 0.84, 1.0], 0.50, 0.38, true, HitZoneTag::TorsoCarapace),
-        crane.finish("pack_mag_crane", [0.92, 0.62, 0.12, 1.0], 0.60, 0.42, false, HitZoneTag::PackThrusters),
-        valve.finish("arms_valve_wheel", [0.94, 0.27, 0.36, 1.0], 0.50, 0.40, false, HitZoneTag::ArmsWeapon),
+        frame.finish(
+            "base_bulkhead",
+            [0.22, 0.29, 0.39, 1.0],
+            0.55,
+            0.50,
+            false,
+            HitZoneTag::BaseOrProp,
+        ),
+        doors.finish(
+            "torso_airlock_doors",
+            [0.08, 0.58, 0.84, 1.0],
+            0.50,
+            0.38,
+            true,
+            HitZoneTag::TorsoCarapace,
+        ),
+        crane.finish(
+            "pack_mag_crane",
+            [0.92, 0.62, 0.12, 1.0],
+            0.60,
+            0.42,
+            false,
+            HitZoneTag::PackThrusters,
+        ),
+        valve.finish(
+            "arms_valve_wheel",
+            [0.94, 0.27, 0.36, 1.0],
+            0.50,
+            0.40,
+            false,
+            HitZoneTag::ArmsWeapon,
+        ),
     ]
 }
 
@@ -983,8 +1171,15 @@ mod tests {
             let glb = build_preset_glb_bytes(preset);
             assert_eq!(&glb[0..4], b"glTF");
             let parsed = parse_glb_bytes(&glb, preset).expect("GLB should parse");
-            assert!(parsed.triangle_count >= 60, "{preset} had too few triangles");
-            assert!(parsed.height_m() > 1.2, "{preset} height was {}", parsed.height_m());
+            assert!(
+                parsed.triangle_count >= 60,
+                "{preset} had too few triangles"
+            );
+            assert!(
+                parsed.height_m() > 1.2,
+                "{preset} height was {}",
+                parsed.height_m()
+            );
             assert!((parsed.bounds_min[1]).abs() < 1e-4);
         }
     }

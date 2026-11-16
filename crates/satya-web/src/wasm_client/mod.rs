@@ -34,7 +34,9 @@ pub mod dom;
 pub mod dom_tooltip;
 pub mod glb_model;
 pub mod gm_docs;
+pub mod gm_docs_google;
 pub mod gm_memories_and_director;
+pub mod gm_omnisearch;
 pub mod map_2d_art;
 pub mod map_2d_art_furniture;
 pub mod map_2d_art_overlay;
@@ -247,7 +249,9 @@ macro_rules! for_all_window_callbacks {
             "satyaSubmitGmDocument" => satya_submit_gm_document(),
             "satyaRefreshGmDocuments" => satya_refresh_gm_documents(),
             "satyaToggleGmDocPersistence" => satya_toggle_gm_doc_persistence(String, bool),
+            "satyaDeleteGmDocument" => satya_delete_gm_document(String),
             "satyaSubmitGmMemory" => satya_submit_gm_memory(),
+            "satyaToggleGmMemoryPersistence" => satya_toggle_gm_memory_persistence(String, bool),
             "satyaDeleteGmMemory" => satya_delete_gm_memory(String),
             "satyaRefreshGmMemories" => satya_refresh_gm_memories(),
             "satyaUpdateScenarioDialReadouts" => satya_update_scenario_dial_readouts(),
@@ -256,6 +260,8 @@ macro_rules! for_all_window_callbacks {
             "satyaSearchGmOmnisearch" => satya_search_gm_omnisearch(),
             "satyaRefreshNpcsTab" => satya_refresh_npcs_tab(),
             "satyaSelectNpcFromList" => satya_select_npc_from_list(),
+            "satyaToggleNpcPersistence" => satya_toggle_npc_persistence(String, bool),
+            "satyaDeleteSessionNpc" => satya_delete_session_npc(String),
             "satyaGenerateNpcFromPrompt" => satya_generate_npc_from_prompt(),
             "satyaLoadSelectedNpcToSheet" => satya_load_selected_npc_to_sheet(),
 

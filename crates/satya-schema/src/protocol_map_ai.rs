@@ -204,9 +204,7 @@ impl GmMapUpdateRequest {
     /// Looks up the [`TokenVisualSpec`] for `entity_id`, if present.
     #[must_use]
     pub fn visual_for(&self, entity_id: &str) -> Option<&TokenVisualSpec> {
-        self.token_visuals
-            .iter()
-            .find(|v| v.entity_id == entity_id)
+        self.token_visuals.iter().find(|v| v.entity_id == entity_id)
     }
 
     /// Authoritative continuous center coordinate `(x_cm, y_cm)` for `tok`, falling back to the

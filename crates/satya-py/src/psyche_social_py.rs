@@ -66,11 +66,7 @@ fn normalize_vector_code_and_hints(raw: &str) -> (String, bool, bool) {
         || lower.contains("greater_good")
         || lower.contains("greater good");
 
-    let base = raw
-        .split('(')
-        .next()
-        .unwrap_or(raw)
-        .trim();
+    let base = raw.split('(').next().unwrap_or(raw).trim();
 
     let mut snake = String::with_capacity(base.len() + 8);
     let mut prev_is_lower_or_digit = false;
@@ -99,7 +95,10 @@ fn normalize_vector_code_and_hints(raw: &str) -> (String, bool, bool) {
     (norm, audit_hint, triage_hint)
 }
 
-fn map_vector_code(raw: &str, flags: Option<&serde_json::Map<String, serde_json::Value>>) -> PyResult<SocialArgumentVector> {
+fn map_vector_code(
+    raw: &str,
+    flags: Option<&serde_json::Map<String, serde_json::Value>>,
+) -> PyResult<SocialArgumentVector> {
     let (norm, audit_hint, triage_hint) = normalize_vector_code_and_hints(raw);
     let flag = |key: &str| -> bool {
         flags
@@ -121,7 +120,9 @@ fn map_vector_code(raw: &str, flags: Option<&serde_json::Map<String, serde_json:
         }),
         "flattery_prestige" | "flattery_prestige_legacy_status" | "flattery" | "prestige" => {
             Ok(SocialArgumentVector::FlatteryPrestigeLegacyStatus {
-                humiliates_or_demands_fault_admission: flag("humiliates_or_demands_fault_admission"),
+                humiliates_or_demands_fault_admission: flag(
+                    "humiliates_or_demands_fault_admission",
+                ),
             })
         }
         "humiliate_fault" => Ok(SocialArgumentVector::FlatteryPrestigeLegacyStatus {
@@ -130,9 +131,10 @@ fn map_vector_code(raw: &str, flags: Option<&serde_json::Map<String, serde_json:
         "personal_profit" | "personal_profit_immunity_self_interest" | "profit" | "bribe" => {
             Ok(SocialArgumentVector::PersonalProfitImmunitySelfInterest)
         }
-        "humanitarian_mercy" | "self_sacrifice_humanitarian_duty_mercy" | "mercy" | "humanitarian" => {
-            Ok(SocialArgumentVector::SelfSacrificeHumanitarianDutyMercy)
-        }
+        "humanitarian_mercy"
+        | "self_sacrifice_humanitarian_duty_mercy"
+        | "mercy"
+        | "humanitarian" => Ok(SocialArgumentVector::SelfSacrificeHumanitarianDutyMercy),
         "rules_protocol" | "rules_law_protocol_chain_of_command" | "rules" | "protocol" => {
             Ok(SocialArgumentVector::RulesLawProtocolChainOfCommand {
                 asks_to_break_law_or_orders: flag("asks_to_break_law_or_orders"),
@@ -215,7 +217,10 @@ fn parse_trait_id(raw: &str) -> PyResult<PsycheTraitId> {
 /// Evaluates an Empathy & Read Person check (`INS/ITU` or `INS/ELO`) against a target's Psyche.
 #[pyfunction]
 #[pyo3(signature = (target_psyche_json, net_successes))]
-pub fn evaluate_empathy_read_json(target_psyche_json: &str, net_successes: i32) -> PyResult<String> {
+pub fn evaluate_empathy_read_json(
+    target_psyche_json: &str,
+    net_successes: i32,
+) -> PyResult<String> {
     let psyche = parse_psyche_profile_json(target_psyche_json)?;
     let res = evaluate_empathy_read(&psyche, net_successes);
     let revealed: Vec<serde_json::Value> = res
@@ -294,7 +299,10 @@ pub fn resolve_cognitive_dissonance_json(
 ) -> PyResult<String> {
     let state: SocialComposureState = serde_json::from_str(composure_state_json)
         .map_err(|e| to_py_err(format!("Invalid composure_state_json: {e}")))?;
-    let path_norm = resolution_path.trim().to_ascii_lowercase().replace('-', "_");
+    let path_norm = resolution_path
+        .trim()
+        .to_ascii_lowercase()
+        .replace('-', "_");
     let path = match path_norm.as_str() {
         "conversion_defection" | "conversion" | "defection" => {
             DissonanceResolutionPath::ConversionDefection {
@@ -304,13 +312,19 @@ pub fn resolve_cognitive_dissonance_json(
         "dogmatic_denial" | "denial" => DissonanceResolutionPath::DogmaticDenial {
             dis_check_successes,
         },
-        "compartmentalization" | "compartmentalize" => DissonanceResolutionPath::Compartmentalization {
-            dis_check_successes,
-        },
+        "compartmentalization" | "compartmentalize" => {
+            DissonanceResolutionPath::Compartmentalization {
+                dis_check_successes,
+            }
+        }
         "emotional_lashing_out" | "lashing_out" | "lash_out" => {
             DissonanceResolutionPath::EmotionalLashingOut
         }
-        _ => return Err(to_py_err(format!("Unknown resolution_path '{resolution_path}'"))),
+        _ => {
+            return Err(to_py_err(format!(
+                "Unknown resolution_path '{resolution_path}'"
+            )));
+        }
     };
     let outcome = resolve_cognitive_dissonance(&state, dis, path);
     serde_json::to_string(&outcome).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
@@ -335,7 +349,9 @@ pub fn evaluate_conviction_surge_json(
             "boundless_compassion" => Some(ConvictionPrincipleArchetype::BoundlessCompassion),
             "unbowed_defiance" | "defiance" => Some(ConvictionPrincipleArchetype::UnbowedDefiance),
             "iconoclastic_truth" | "truth" => Some(ConvictionPrincipleArchetype::IconoclasticTruth),
-            _ => Some(ConvictionPrincipleArchetype::ExtremeTraitEmbodiment(parse_trait_id(raw)?)),
+            _ => Some(ConvictionPrincipleArchetype::ExtremeTraitEmbodiment(
+                parse_trait_id(raw)?,
+            )),
         },
     };
     let res = evaluate_conviction_surge(
@@ -357,7 +373,13 @@ pub fn apply_psyche_drift_mark_json(
     dis: i32,
     target_pole_score: Option<i32>,
 ) -> PyResult<String> {
-    let res = apply_psyche_drift_mark(trait_score, current_marks, marks_added, dis, target_pole_score);
+    let res = apply_psyche_drift_mark(
+        trait_score,
+        current_marks,
+        marks_added,
+        dis,
+        target_pole_score,
+    );
     serde_json::to_string(&res).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
@@ -507,7 +529,10 @@ fn parse_battlefield_morale_situation(raw: &str) -> PyResult<BattlefieldMoraleSi
         if let Some(v) = obj.get("tracks_ammo").and_then(|v| v.as_bool()) {
             sit.tracks_ammo = v;
         }
-        if let Some(v) = obj.get("primary_weapon_compromised").and_then(|v| v.as_bool()) {
+        if let Some(v) = obj
+            .get("primary_weapon_compromised")
+            .and_then(|v| v.as_bool())
+        {
             sit.primary_weapon_compromised = v;
         }
         if let Some(v) = obj
@@ -563,14 +588,8 @@ pub fn evaluate_emotional_trigger_json(
     let morale = parse_morale_state_code(current_morale);
     let trigger = parse_emotional_trigger_kind(trigger_kind, wound_tier)?;
     let pairs = parse_roll_pairs(roll_pairs_json, vec![(11, 10)])?;
-    let outcome = evaluate_emotional_trigger(
-        &psyche,
-        dis,
-        morale,
-        current_delta_int,
-        trigger,
-        &pairs,
-    );
+    let outcome =
+        evaluate_emotional_trigger(&psyche, dis, morale, current_delta_int, trigger, &pairs);
     serde_json::to_string(&outcome).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
@@ -677,7 +696,10 @@ mod tests {
         )
         .unwrap();
         let ex_9axis_val: serde_json::Value = serde_json::from_str(&ex_9axis_json).unwrap();
-        assert_eq!(ex_9axis_val["argument_eval"]["triggers_dual_psyche_wedge"], true);
+        assert_eq!(
+            ex_9axis_val["argument_eval"]["triggers_dual_psyche_wedge"],
+            true
+        );
 
         let ex_pascal_json = evaluate_social_exchange_json(
             npc_psyche,
@@ -703,7 +725,12 @@ mod tests {
         .unwrap();
         let ledger_val: serde_json::Value = serde_json::from_str(&ledger_json).unwrap();
         assert_eq!(ledger_val["ledger"]["operational_heat"], 4);
-        assert!(!ledger_val["triggered_events"].as_array().unwrap().is_empty());
+        assert!(
+            !ledger_val["triggered_events"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

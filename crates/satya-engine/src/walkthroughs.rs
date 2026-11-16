@@ -314,4 +314,3 @@ pub fn build_linnea_cho_lifepath() -> LifepathCharacterProfile {
 
     linnea
 }
-

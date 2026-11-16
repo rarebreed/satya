@@ -116,7 +116,9 @@ pub fn resolve_pack_defaults(explicit_pack: Option<&str>) -> ResolvedPackDefault
             .and_then(|t| t.get(&pack_name))
             .and_then(|v| v.as_table())
     {
-        if let Some(code) = pack_tbl.get("default_sector_preset").and_then(|v| v.as_str())
+        if let Some(code) = pack_tbl
+            .get("default_sector_preset")
+            .and_then(|v| v.as_str())
             && let Some(parsed) = SectorPreset::from_code_str(code)
         {
             defaults.default_sector_preset = parsed;
@@ -189,7 +191,10 @@ fn toml_npc_to_session_entry(entry: &toml::Table, is_gm: bool) -> Option<Session
         .get("age_years")
         .and_then(|v| v.as_integer())
         .unwrap_or(36) as i32;
-    let fatigue = entry.get("fatigue").and_then(|v| v.as_integer()).unwrap_or(0);
+    let fatigue = entry
+        .get("fatigue")
+        .and_then(|v| v.as_integer())
+        .unwrap_or(0);
     let wound_shock = entry
         .get("wound_shock")
         .and_then(|v| v.as_integer())
@@ -379,7 +384,14 @@ pub async fn append_omnisearch_lore_and_npc_hits(
         );
     let include_npcs = matches!(
         norm_scope.as_str(),
-        "ALL" | "NPC" | "NPCS" | "SESSION_NPC" | "SESSION_NPCS" | "CHARACTER" | "CHARACTERS" | "LORE"
+        "ALL"
+            | "NPC"
+            | "NPCS"
+            | "SESSION_NPC"
+            | "SESSION_NPCS"
+            | "CHARACTER"
+            | "CHARACTERS"
+            | "LORE"
     );
 
     if include_lore {
@@ -429,12 +441,42 @@ pub async fn append_omnisearch_lore_and_npc_hits(
 
     if include_npcs {
         let mut seen_ids = BTreeSet::new();
+        let mut seen_names = BTreeSet::new();
         let db_npcs = load_session_npcs_for_omnisearch(&state.auth, session_id, is_gm).await;
-        for npc in db_npcs
-            .into_iter()
-            .chain(load_pack_starter_npcs(Some(state.campaign_pack.as_str()), is_gm))
-        {
-            if !seen_ids.insert(npc.character_id.clone()) {
+        let db_npc_ids: BTreeSet<String> = db_npcs.iter().map(|n| n.character_id.clone()).collect();
+        let db_npc_names: BTreeSet<String> = db_npcs
+            .iter()
+            .map(|n| n.character_name.trim().to_ascii_lowercase())
+            .filter(|n| !n.is_empty())
+            .collect();
+        hits.retain(|h| {
+            if h.source_kind != GmLookupSourceKind::GmMemory {
+                return true;
+            }
+            if let Some(npc_id) = h.item_id.strip_prefix("mem_")
+                && db_npc_ids.contains(npc_id)
+            {
+                return false;
+            }
+            if h.item_id.starts_with("mem_npc_")
+                && let Some(npc_name) =
+                    crate::gm_persistence::extract_npc_name_from_memory_title(&h.title)
+                && db_npc_names.contains(&npc_name)
+            {
+                return false;
+            }
+            true
+        });
+
+        for (is_db, npc) in db_npcs.into_iter().map(|n| (true, n)).chain(
+            load_pack_starter_npcs(Some(state.campaign_pack.as_str()), is_gm)
+                .into_iter()
+                .map(|n| (false, n)),
+        ) {
+            let norm_name = npc.character_name.trim().to_ascii_lowercase();
+            if !seen_ids.insert(npc.character_id.clone())
+                || (!norm_name.is_empty() && !seen_names.insert(norm_name))
+            {
                 continue;
             }
             let searchable = format!(
@@ -446,8 +488,10 @@ pub async fn append_omnisearch_lore_and_npc_hits(
                 npc.immediate_agenda.as_deref().unwrap_or(""),
                 npc.gm_secret_dossier.as_deref().unwrap_or(""),
             );
-            let score = score_text_match(&q_low, &keywords, &npc.character_name, &searchable);
-            if score > 0 {
+            let base_score = score_text_match(&q_low, &keywords, &npc.character_name, &searchable);
+            if base_score > 0 {
+                let score = if is_db { base_score + 24 } else { base_score };
+                let kind_prefix = if is_db { "Session NPC" } else { "Starter NPC" };
                 let mut snippet = npc.public_summary.clone();
                 if is_gm && let Some(agenda) = &npc.immediate_agenda {
                     snippet.push_str(&format!("\nAgenda: {agenda}"));
@@ -460,7 +504,7 @@ pub async fn append_omnisearch_lore_and_npc_hits(
                     item_id: npc.character_id.clone(),
                     title: npc.character_name.clone(),
                     subtitle: format!(
-                        "Session NPC · {} · {}",
+                        "{kind_prefix} · {} · {}",
                         npc.callsign_or_role, npc.apparent_condition
                     ),
                     snippet: snippet.chars().take(420).collect(),
@@ -492,7 +536,10 @@ pub async fn append_omnisearch_lore_and_npc_hits(
             }
             let title = format!("{} — {}", clock.faction_name, clock.clock_title);
             let mut score = score_text_match(&q_low, &keywords, &title, &body);
-            if matches!(norm_scope.as_str(), "CLOCKS" | "FACTIONS" | "WORLD") && score == 0 && q_low.is_empty() {
+            if matches!(norm_scope.as_str(), "CLOCKS" | "FACTIONS" | "WORLD")
+                && score == 0
+                && q_low.is_empty()
+            {
                 score = 5;
             }
             if score > 0 {
@@ -530,7 +577,10 @@ pub async fn append_omnisearch_lore_and_npc_hits(
             ledger.heat_description
         );
         let mut heat_score = score_text_match(&q_low, &keywords, &heat_title, &heat_body);
-        if matches!(norm_scope.as_str(), "HEAT" | "WORLD" | "CLOCKS") && heat_score == 0 && q_low.is_empty() {
+        if matches!(norm_scope.as_str(), "HEAT" | "WORLD" | "CLOCKS")
+            && heat_score == 0
+            && q_low.is_empty()
+        {
             heat_score = 5;
         }
         if heat_score > 0 {
@@ -558,5 +608,5 @@ pub async fn append_omnisearch_lore_and_npc_hits(
     }
 
     hits.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.title.cmp(&b.title)));
-    hits.truncate(20);
+    hits.truncate(25);
 }

@@ -16,7 +16,7 @@ use satya_schema::{
     WallEdgeKind,
 };
 
-use crate::map_dressing::{prop_spec, rotated_aabb_half_extents_cm, PropObstruction};
+use crate::map_dressing::{PropObstruction, prop_spec, rotated_aabb_half_extents_cm};
 
 /// Physical collision radius of a standing miniature on the metric battlemap.
 pub const TOKEN_RADIUS_M: f32 = 0.30;
@@ -61,20 +61,65 @@ fn vehicle_hood_y_min_local(p: &MapPropPlacement) -> f32 {
 /// collision and primary solid hit-testing.
 fn prop_collision_shapes(p: &MapPropPlacement) -> [Option<LocalShape>; 2] {
     let fp = p.footprint_m();
-    let shape = |cx, cy, sx, sy| Some(LocalShape::Obb { cx, cy, hx: sx, hy: sy });
+    let shape = |cx, cy, sx, sy| {
+        Some(LocalShape::Obb {
+            cx,
+            cy,
+            hx: sx,
+            hy: sy,
+        })
+    };
     match p.kind {
         PropKind::DeskL => [shape(0.0, -0.5, 1.0, 0.5), shape(-0.5, 0.5, 0.5, 0.5)],
         PropKind::DeskT => [shape(0.0, -0.5, 1.5, 0.5), shape(0.0, 0.5, 0.5, 0.5)],
-        PropKind::LargeTree => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.44 }), None],
-        PropKind::MediumTree => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.26 }), None],
-        PropKind::Bush | PropKind::Planter | PropKind::DrumCluster => {
-            [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.46 }), None]
-        }
-        PropKind::RoundTable | PropKind::SmallFountain => {
-            [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.46 }), None]
-        }
-        PropKind::MediumFountain => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.94 }), None],
-        PropKind::LargeFountain => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 1.40 }), None],
+        PropKind::LargeTree => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: 0.44,
+            }),
+            None,
+        ],
+        PropKind::MediumTree => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: 0.26,
+            }),
+            None,
+        ],
+        PropKind::Bush | PropKind::Planter | PropKind::DrumCluster => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: 0.46,
+            }),
+            None,
+        ],
+        PropKind::RoundTable | PropKind::SmallFountain => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: 0.46,
+            }),
+            None,
+        ],
+        PropKind::MediumFountain => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: 0.94,
+            }),
+            None,
+        ],
+        PropKind::LargeFountain => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: 1.40,
+            }),
+            None,
+        ],
         PropKind::RoundRug => [
             Some(LocalShape::Circle {
                 cx: 0.0,
@@ -83,11 +128,30 @@ fn prop_collision_shapes(p: &MapPropPlacement) -> [Option<LocalShape>; 2] {
             }),
             None,
         ],
-        PropKind::TrashCan => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.36 }), None],
-        PropKind::DeskLamp => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.30 }), None],
-        PropKind::BarStool | PropKind::StandingLamp | PropKind::FireExtinguisher => {
-            [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.28 }), None]
-        }
+        PropKind::TrashCan => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: 0.36,
+            }),
+            None,
+        ],
+        PropKind::DeskLamp => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: 0.30,
+            }),
+            None,
+        ],
+        PropKind::BarStool | PropKind::StandingLamp | PropKind::FireExtinguisher => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: 0.28,
+            }),
+            None,
+        ],
         PropKind::StructuralPillar => [shape(0.0, 0.0, 0.45, 0.45), None],
         _ => [shape(0.0, 0.0, fp.hx_m, fp.hy_m), None],
     }
@@ -160,7 +224,12 @@ fn push_out_local_shape(lx: f32, ly: f32, radius: f32, shape: LocalShape) -> Opt
 
 /// Whether world point `(wx_m, wy_m)` falls inside a prop's solid footprint (or tree canopy when `include_canopy`).
 #[must_use]
-pub fn prop_contains_point(p: &MapPropPlacement, wx_m: f32, wy_m: f32, include_canopy: bool) -> bool {
+pub fn prop_contains_point(
+    p: &MapPropPlacement,
+    wx_m: f32,
+    wy_m: f32,
+    include_canopy: bool,
+) -> bool {
     let (lx, ly) = p.footprint_m().world_to_local(wx_m, wy_m);
     if include_canopy {
         let canopy_r = tree_canopy_radius_m(p.kind);
@@ -168,10 +237,13 @@ pub fn prop_contains_point(p: &MapPropPlacement, wx_m: f32, wy_m: f32, include_c
             return true;
         }
     }
-    prop_collision_shapes(p).into_iter().flatten().any(|s| match s {
-        LocalShape::Obb { cx, cy, hx, hy } => (lx - cx).abs() <= hx && (ly - cy).abs() <= hy,
-        LocalShape::Circle { cx, cy, r } => (lx - cx).powi(2) + (ly - cy).powi(2) <= r * r,
-    })
+    prop_collision_shapes(p)
+        .into_iter()
+        .flatten()
+        .any(|s| match s {
+            LocalShape::Obb { cx, cy, hx, hy } => (lx - cx).abs() <= hx && (ly - cy).abs() <= hy,
+            LocalShape::Circle { cx, cy, r } => (lx - cx).powi(2) + (ly - cy).powi(2) <= r * r,
+        })
 }
 
 /// Whether world disc `(cx_m, cy_m, radius_m)` intersects the prop's solid collision footprint.
@@ -187,7 +259,9 @@ pub fn prop_intersects_circle(p: &MapPropPlacement, cx_m: f32, cy_m: f32, radius
 /// Whether world point `(wx_m, wy_m)` hits a vehicle's front hood / engine block at any `0..360°` orientation.
 #[must_use]
 pub fn vehicle_point_is_engine_bay(p: &MapPropPlacement, wx_m: f32, wy_m: f32) -> bool {
-    if !matches!(p.kind, PropKind::Car | PropKind::UtilityVan) || !prop_contains_point(p, wx_m, wy_m, false) {
+    if !matches!(p.kind, PropKind::Car | PropKind::UtilityVan)
+        || !prop_contains_point(p, wx_m, wy_m, false)
+    {
         return false;
     }
     let (_, ly) = p.footprint_m().world_to_local(wx_m, wy_m);
@@ -233,10 +307,7 @@ fn intersect_segment_aabb(
     let dy = b.1 - a.1;
     let mut tmin = 0.0_f32;
     let mut tmax = 1.0_f32;
-    for (p0, d, min_b, max_b) in [
-        (a.0, dx, cx - hx, cx + hx),
-        (a.1, dy, cy - hy, cy + hy),
-    ] {
+    for (p0, d, min_b, max_b) in [(a.0, dx, cx - hx, cx + hx), (a.1, dy, cy - hy, cy + hy)] {
         if d.abs() < 1e-7 {
             if p0 < min_b || p0 > max_b {
                 return None;
@@ -467,7 +538,14 @@ pub fn circle_collides_obstacles(
     cy: f32,
     radius_m: f32,
 ) -> bool {
-    circle_collides_with_filter((board_w_m, board_h_m), edges, props, (cx, cy), radius_m, false)
+    circle_collides_with_filter(
+        (board_w_m, board_h_m),
+        edges,
+        props,
+        (cx, cy),
+        radius_m,
+        false,
+    )
 }
 
 /// Resolves a point-and-click continuous destination in centimeters for `moving_entity_id`.
@@ -489,12 +567,19 @@ pub fn resolve_token_destination_cm(
     }
 
     // Clamp to perimeter keeping full miniature disc inside bounds.
-    let mut x = click_x.clamp(TOKEN_RADIUS_M, (board_w_m - TOKEN_RADIUS_M).max(TOKEN_RADIUS_M));
-    let mut y = click_y.clamp(TOKEN_RADIUS_M, (board_h_m - TOKEN_RADIUS_M).max(TOKEN_RADIUS_M));
+    let mut x = click_x.clamp(
+        TOKEN_RADIUS_M,
+        (board_w_m - TOKEN_RADIUS_M).max(TOKEN_RADIUS_M),
+    );
+    let mut y = click_y.clamp(
+        TOKEN_RADIUS_M,
+        (board_h_m - TOKEN_RADIUS_M).max(TOKEN_RADIUS_M),
+    );
 
     // Reject if clicked squarely onto another occupying token (center within 0.58m).
     for tok in &req.tokens {
-        if tok.entity_id == moving_entity_id || req.token_floor(&tok.entity_id) != req.active_floor {
+        if tok.entity_id == moving_entity_id || req.token_floor(&tok.entity_id) != req.active_floor
+        {
             continue;
         }
         let (tx, ty) = req.token_pos_m(tok);
@@ -535,26 +620,43 @@ pub fn resolve_token_destination_cm(
             let fp = p.footprint_m();
             let (lx, ly) = fp.world_to_local(x, y);
             for shape in prop_collision_shapes(p).into_iter().flatten() {
-                if let Some((plx, ply)) = push_out_local_shape(lx, ly, TOKEN_RADIUS_M + 0.005, shape) {
+                if let Some((plx, ply)) =
+                    push_out_local_shape(lx, ly, TOKEN_RADIUS_M + 0.005, shape)
+                {
                     let (wx, wy) = fp.local_dir_to_world(plx, ply);
                     x += wx;
                     y += wy;
                 }
             }
         }
-        x = x.clamp(TOKEN_RADIUS_M, (board_w_m - TOKEN_RADIUS_M).max(TOKEN_RADIUS_M));
-        y = y.clamp(TOKEN_RADIUS_M, (board_h_m - TOKEN_RADIUS_M).max(TOKEN_RADIUS_M));
+        x = x.clamp(
+            TOKEN_RADIUS_M,
+            (board_w_m - TOKEN_RADIUS_M).max(TOKEN_RADIUS_M),
+        );
+        y = y.clamp(
+            TOKEN_RADIUS_M,
+            (board_h_m - TOKEN_RADIUS_M).max(TOKEN_RADIUS_M),
+        );
     }
 
     let disp = ((x - click_x).powi(2) + (y - click_y).powi(2)).sqrt();
     if disp > COVER_SNAP_MAX_M {
         return Err("Target destination is blocked by solid cover or structural wall");
     }
-    if circle_collides_obstacles(board_w_m, board_h_m, &req.wall_edges, &req.props, x, y, TOKEN_RADIUS_M) {
+    if circle_collides_obstacles(
+        board_w_m,
+        board_h_m,
+        &req.wall_edges,
+        &req.props,
+        x,
+        y,
+        TOKEN_RADIUS_M,
+    ) {
         return Err("Insufficient miniature clearance at target destination");
     }
     for tok in &req.tokens {
-        if tok.entity_id == moving_entity_id || req.token_floor(&tok.entity_id) != req.active_floor {
+        if tok.entity_id == moving_entity_id || req.token_floor(&tok.entity_id) != req.active_floor
+        {
             continue;
         }
         let (tx, ty) = req.token_pos_m(tok);
@@ -637,11 +739,16 @@ pub fn place_prop_on_map(
         return Err("Map dimensions are invalid for prop placement");
     }
     let spec = prop_spec(placement.kind);
-    let rot = crate::map_dressing::normalize_prop_rotation_deg(placement.kind, placement.rotation_deg);
+    let rot =
+        crate::map_dressing::normalize_prop_rotation_deg(placement.kind, placement.rotation_deg);
     let (cx_cm, cy_cm) = placement.center_cm();
     let (raw_sw, raw_sh) = placement.local_span_cm();
     let length_cm = if spec.stretchable {
-        Some(raw_sw.max(raw_sh).clamp(25, (board_w_m.max(board_h_m) * 100.0) as i32))
+        Some(
+            raw_sw
+                .max(raw_sh)
+                .clamp(25, (board_w_m.max(board_h_m) * 100.0) as i32),
+        )
     } else {
         None
     };
@@ -710,6 +817,10 @@ pub fn remove_prop_at_point(
     let idx = props
         .iter()
         .rposition(|p| !prop_spec(p.kind).floor_layer && prop_contains_point(p, x_m, y_m, true))
-        .or_else(|| props.iter().rposition(|p| prop_contains_point(p, x_m, y_m, false)))?;
+        .or_else(|| {
+            props
+                .iter()
+                .rposition(|p| prop_contains_point(p, x_m, y_m, false))
+        })?;
     Some(props.remove(idx))
 }

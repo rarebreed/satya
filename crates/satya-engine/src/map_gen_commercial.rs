@@ -96,39 +96,111 @@ fn enclose_store_shell(
     };
     match front_side {
         CardinalEntry::North => {
-            shell.put(mx, bay.y0, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+            shell.put(
+                mx,
+                bay.y0,
+                EdgeSide::North,
+                WallEdgeKind::DoorOpen,
+                MaterialClass::Glass,
+            );
             if bay.w() >= 9 {
-                shell.put(mx - 1, bay.y0, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+                shell.put(
+                    mx - 1,
+                    bay.y0,
+                    EdgeSide::North,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::Glass,
+                );
             }
             if rear_door {
-                shell.put(mx, bay.y1, EdgeSide::North, WallEdgeKind::DoorClosed, service_mat);
+                shell.put(
+                    mx,
+                    bay.y1,
+                    EdgeSide::North,
+                    WallEdgeKind::DoorClosed,
+                    service_mat,
+                );
             }
         }
         CardinalEntry::South => {
-            shell.put(mx, bay.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+            shell.put(
+                mx,
+                bay.y1,
+                EdgeSide::North,
+                WallEdgeKind::DoorOpen,
+                MaterialClass::Glass,
+            );
             if bay.w() >= 9 {
-                shell.put(mx - 1, bay.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+                shell.put(
+                    mx - 1,
+                    bay.y1,
+                    EdgeSide::North,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::Glass,
+                );
             }
             if rear_door {
-                shell.put(mx, bay.y0, EdgeSide::North, WallEdgeKind::DoorClosed, service_mat);
+                shell.put(
+                    mx,
+                    bay.y0,
+                    EdgeSide::North,
+                    WallEdgeKind::DoorClosed,
+                    service_mat,
+                );
             }
         }
         CardinalEntry::West => {
-            shell.put(bay.x0, my, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+            shell.put(
+                bay.x0,
+                my,
+                EdgeSide::West,
+                WallEdgeKind::DoorOpen,
+                MaterialClass::Glass,
+            );
             if bay.h() >= 9 {
-                shell.put(bay.x0, my - 1, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+                shell.put(
+                    bay.x0,
+                    my - 1,
+                    EdgeSide::West,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::Glass,
+                );
             }
             if rear_door {
-                shell.put(bay.x1, my, EdgeSide::West, WallEdgeKind::DoorClosed, service_mat);
+                shell.put(
+                    bay.x1,
+                    my,
+                    EdgeSide::West,
+                    WallEdgeKind::DoorClosed,
+                    service_mat,
+                );
             }
         }
         CardinalEntry::East => {
-            shell.put(bay.x1, my, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+            shell.put(
+                bay.x1,
+                my,
+                EdgeSide::West,
+                WallEdgeKind::DoorOpen,
+                MaterialClass::Glass,
+            );
             if bay.h() >= 9 {
-                shell.put(bay.x1, my - 1, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+                shell.put(
+                    bay.x1,
+                    my - 1,
+                    EdgeSide::West,
+                    WallEdgeKind::DoorOpen,
+                    MaterialClass::Glass,
+                );
             }
             if rear_door {
-                shell.put(bay.x0, my, EdgeSide::West, WallEdgeKind::DoorClosed, service_mat);
+                shell.put(
+                    bay.x0,
+                    my,
+                    EdgeSide::West,
+                    WallEdgeKind::DoorClosed,
+                    service_mat,
+                );
             }
         }
     }
@@ -171,13 +243,33 @@ fn partition_sales_and_backroom(
         shell.partition_h(split_y, bay.x0, bay.x1, &[door_x]);
         if front_is_min {
             (
-                Room { x0: bay.x0, y0: bay.y0, x1: bay.x1, y1: split_y },
-                Room { x0: bay.x0, y0: split_y, x1: bay.x1, y1: bay.y1 },
+                Room {
+                    x0: bay.x0,
+                    y0: bay.y0,
+                    x1: bay.x1,
+                    y1: split_y,
+                },
+                Room {
+                    x0: bay.x0,
+                    y0: split_y,
+                    x1: bay.x1,
+                    y1: bay.y1,
+                },
             )
         } else {
             (
-                Room { x0: bay.x0, y0: split_y, x1: bay.x1, y1: bay.y1 },
-                Room { x0: bay.x0, y0: bay.y0, x1: bay.x1, y1: split_y },
+                Room {
+                    x0: bay.x0,
+                    y0: split_y,
+                    x1: bay.x1,
+                    y1: bay.y1,
+                },
+                Room {
+                    x0: bay.x0,
+                    y0: bay.y0,
+                    x1: bay.x1,
+                    y1: split_y,
+                },
             )
         }
     } else {
@@ -190,13 +282,33 @@ fn partition_sales_and_backroom(
         shell.partition_v(split_x, bay.y0, bay.y1, &[door_y]);
         if front_is_min {
             (
-                Room { x0: bay.x0, y0: bay.y0, x1: split_x, y1: bay.y1 },
-                Room { x0: split_x, y0: bay.y0, x1: bay.x1, y1: bay.y1 },
+                Room {
+                    x0: bay.x0,
+                    y0: bay.y0,
+                    x1: split_x,
+                    y1: bay.y1,
+                },
+                Room {
+                    x0: split_x,
+                    y0: bay.y0,
+                    x1: bay.x1,
+                    y1: bay.y1,
+                },
             )
         } else {
             (
-                Room { x0: split_x, y0: bay.y0, x1: bay.x1, y1: bay.y1 },
-                Room { x0: bay.x0, y0: bay.y0, x1: split_x, y1: bay.y1 },
+                Room {
+                    x0: split_x,
+                    y0: bay.y0,
+                    x1: bay.x1,
+                    y1: bay.y1,
+                },
+                Room {
+                    x0: bay.x0,
+                    y0: bay.y0,
+                    x1: split_x,
+                    y1: bay.y1,
+                },
             )
         }
     };
@@ -206,22 +318,42 @@ fn partition_sales_and_backroom(
         let wc_split = back_strip.x1 - 3;
         shell.partition_v(wc_split, back_strip.y0, back_strip.y1, &[back_strip.y0]);
         back_rooms.push((
-            Room { x0: back_strip.x0, y0: back_strip.y0, x1: wc_split, y1: back_strip.y1 },
+            Room {
+                x0: back_strip.x0,
+                y0: back_strip.y0,
+                x1: wc_split,
+                y1: back_strip.y1,
+            },
             back_role,
         ));
         back_rooms.push((
-            Room { x0: wc_split, y0: back_strip.y0, x1: back_strip.x1, y1: back_strip.y1 },
+            Room {
+                x0: wc_split,
+                y0: back_strip.y0,
+                x1: back_strip.x1,
+                y1: back_strip.y1,
+            },
             Role::Bathroom,
         ));
     } else if !horizontal_front && back_strip.h() >= 7 {
         let wc_split = back_strip.y1 - 3;
         shell.partition_h(wc_split, back_strip.x0, back_strip.x1, &[back_strip.x0]);
         back_rooms.push((
-            Room { x0: back_strip.x0, y0: back_strip.y0, x1: back_strip.x1, y1: wc_split },
+            Room {
+                x0: back_strip.x0,
+                y0: back_strip.y0,
+                x1: back_strip.x1,
+                y1: wc_split,
+            },
             back_role,
         ));
         back_rooms.push((
-            Room { x0: back_strip.x0, y0: wc_split, x1: back_strip.x1, y1: back_strip.y1 },
+            Room {
+                x0: back_strip.x0,
+                y0: wc_split,
+                x1: back_strip.x1,
+                y1: back_strip.y1,
+            },
             Role::Bathroom,
         ));
     } else {
@@ -241,7 +373,8 @@ fn place_store_prop_checked(
     len: Option<i32>,
     room: Room,
 ) -> bool {
-    furn.try_place(kind, pos.0, pos.1, rot_deg, len, room).is_some()
+    furn.try_place(kind, pos.0, pos.1, rot_deg, len, room)
+        .is_some()
 }
 
 /// Places a register / service counter bank inset `1–2m` from the storefront (or rear pharmacy counter).
@@ -275,7 +408,14 @@ fn place_checkout_bank(
             let mut placed = 0usize;
             let mut cx = start_x;
             while cx + len_cells < sales.x1 && placed < count {
-                if place_store_prop_checked(furn, PropKind::CheckoutCounter, (cx, cy), 0, len, sales) {
+                if place_store_prop_checked(
+                    furn,
+                    PropKind::CheckoutCounter,
+                    (cx, cy),
+                    0,
+                    len,
+                    sales,
+                ) {
                     placed += 1;
                 }
                 cx += len_cells + 2;
@@ -291,7 +431,14 @@ fn place_checkout_bank(
             let mut placed = 0usize;
             let mut cy = start_y;
             while cy + len_cells < sales.y1 && placed < count {
-                if place_store_prop_checked(furn, PropKind::CheckoutCounter, (cx, cy), 90, len, sales) {
+                if place_store_prop_checked(
+                    furn,
+                    PropKind::CheckoutCounter,
+                    (cx, cy),
+                    90,
+                    len,
+                    sales,
+                ) {
                     placed += 1;
                 }
                 cy += len_cells + 2;
@@ -427,7 +574,11 @@ pub fn generate_store_unit(
         StoreArchetype::Grocery => {
             place_checkout_bank(&mut furn, sales, front_side, 2, 2, false);
             let _ = furn.against_any_wall(PropKind::SteelShelving, sales, Some(3));
-            let len = if (along_x && sales.w() >= 10) || (!along_x && sales.h() >= 10) { 3 } else { 2 };
+            let len = if (along_x && sales.w() >= 10) || (!along_x && sales.h() >= 10) {
+                3
+            } else {
+                2
+            };
             place_display_aisles(&mut furn, sales, along_x, len, 2, 0, seed);
         }
         StoreArchetype::ApparelBoutique => {
@@ -468,12 +619,20 @@ pub fn generate_store_unit(
     {
         let fallback_x = sales.x0 + (sales.w() / 2 - 1).max(0);
         let fallback_y = sales.y0 + (sales.h() / 2).max(0);
-        let _ = furn.try_place(PropKind::CheckoutCounter, fallback_x, fallback_y, 0, Some(2), sales);
+        let _ = furn.try_place(
+            PropKind::CheckoutCounter,
+            fallback_x,
+            fallback_y,
+            0,
+            Some(2),
+            sales,
+        );
     }
 
     trim_floor_props_to_connected(board_w, board_h, bay, &shell.edges, &mut furn.props);
 
-    let surfaces = vec![bay.polygon_feature(SurfaceFeatureKind::InteriorFloor, 0, seed as u32 ^ 0x5103)];
+    let surfaces =
+        vec![bay.polygon_feature(SurfaceFeatureKind::InteriorFloor, 0, seed as u32 ^ 0x5103)];
     FloorContent {
         wall_edges: shell.edges,
         props: furn.props,
@@ -507,11 +666,17 @@ mod tests {
                 900 + idx as u64,
             );
             assert!(
-                compact.surfaces.iter().any(|s| s.kind == SurfaceFeatureKind::InteriorFloor),
+                compact
+                    .surfaces
+                    .iter()
+                    .any(|s| s.kind == SurfaceFeatureKind::InteriorFloor),
                 "{arch:?} should emit InteriorFloor surface"
             );
             assert!(
-                compact.wall_edges.iter().any(|e| matches!(e.kind, WallEdgeKind::DoorOpen | WallEdgeKind::DoorClosed)),
+                compact
+                    .wall_edges
+                    .iter()
+                    .any(|e| matches!(e.kind, WallEdgeKind::DoorOpen | WallEdgeKind::DoorClosed)),
                 "{arch:?} should include doors"
             );
             assert!(
@@ -522,7 +687,13 @@ mod tests {
                 "{arch:?} should emit commercial DisplayRack or CheckoutCounter"
             );
             assert!(
-                floor_lot_connected(14, 10, LotBox::new(2, 1, 12, 9), &compact.wall_edges, &compact.props),
+                floor_lot_connected(
+                    14,
+                    10,
+                    LotBox::new(2, 1, 12, 9),
+                    &compact.wall_edges,
+                    &compact.props
+                ),
                 "{arch:?} compact bay must stay 100% connected"
             );
 
@@ -537,7 +708,13 @@ mod tests {
                 1200 + idx as u64,
             );
             assert!(
-                floor_lot_connected(20, 14, LotBox::new(2, 2, 18, 12), &full.wall_edges, &full.props),
+                floor_lot_connected(
+                    20,
+                    14,
+                    LotBox::new(2, 2, 18, 12),
+                    &full.wall_edges,
+                    &full.props
+                ),
                 "{arch:?} 20x14 bay must stay 100% connected"
             );
         }

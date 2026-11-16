@@ -77,9 +77,11 @@ impl SurfaceFeatureKind {
     #[must_use]
     pub const fn material(self) -> MaterialClass {
         match self {
-            Self::MulchZone | Self::DirtTrail | Self::DrainageDitch | Self::DefensiveTrench | Self::CreekChannel => {
-                MaterialClass::Earth
-            }
+            Self::MulchZone
+            | Self::DirtTrail
+            | Self::DrainageDitch
+            | Self::DefensiveTrench
+            | Self::CreekChannel => MaterialClass::Earth,
             Self::GardenBedZone => MaterialClass::Foliage,
             Self::GravelRoad
             | Self::StoneWalk
@@ -98,10 +100,7 @@ impl SurfaceFeatureKind {
     pub const fn is_interior_surface(self) -> bool {
         matches!(
             self,
-            Self::InteriorFloor
-                | Self::CeramicTileFloor
-                | Self::MarbleFloor
-                | Self::CarpetFloor
+            Self::InteriorFloor | Self::CeramicTileFloor | Self::MarbleFloor | Self::CarpetFloor
         )
     }
 
@@ -137,10 +136,7 @@ impl SurfaceFeatureKind {
     pub const fn is_water_or_channel(self) -> bool {
         matches!(
             self,
-            Self::CreekChannel
-                | Self::DrainageDitch
-                | Self::DefensiveTrench
-                | Self::PoolWater
+            Self::CreekChannel | Self::DrainageDitch | Self::DefensiveTrench | Self::PoolWater
         )
     }
 
@@ -240,7 +236,10 @@ impl MapSurfaceFeature {
                 pt.y_cm = span_h_cm - pt.y_cm;
             }
         }
-        if matches!(out.shape, SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon) {
+        if matches!(
+            out.shape,
+            SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon
+        ) {
             out.points_cm.reverse();
         }
         out

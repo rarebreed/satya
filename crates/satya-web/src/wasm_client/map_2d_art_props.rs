@@ -47,7 +47,14 @@ pub fn battlemap_unit_f32(h: u64) -> f32 {
 /// Smooth closed organic blob path (`d` attribute) around `(cx, cy)` with radius `r_px`, `n` control
 /// points, and `jitter_frac` radial noise. Drawn with quadratic curves through edge midpoints.
 #[must_use]
-pub fn battlemap_blob_path(cx: f32, cy: f32, r_px: f32, n: usize, jitter_frac: f32, variant: u64) -> String {
+pub fn battlemap_blob_path(
+    cx: f32,
+    cy: f32,
+    r_px: f32,
+    n: usize,
+    jitter_frac: f32,
+    variant: u64,
+) -> String {
     let n = n.max(3);
     let mut h = variant;
     let pts: Vec<(f32, f32)> = (0..n)
@@ -97,10 +104,19 @@ fn pick(variant: u64, opts: &[&'static str]) -> &'static str {
     opts[((variant >> 8) % opts.len() as u64) as usize]
 }
 
-const FABRICS: &[&str] = &["#7d8e9b", "#a0705a", "#6d7f68", "#8c7f9e", "#b49a6a", "#5f6b78"];
+const FABRICS: &[&str] = &[
+    "#7d8e9b", "#a0705a", "#6d7f68", "#8c7f9e", "#b49a6a", "#5f6b78",
+];
 
 /// Appends one prop glyph centered at SVG `(cx, cy)` and rotated `rot_deg` clockwise.
-pub fn push_battlemap_prop(out: &mut String, kind: BattlemapPropKind, cx: f32, cy: f32, rot_deg: u16, variant: u64) {
+pub fn push_battlemap_prop(
+    out: &mut String,
+    kind: BattlemapPropKind,
+    cx: f32,
+    cy: f32,
+    rot_deg: u16,
+    variant: u64,
+) {
     push_battlemap_prop_with_mode(
         out,
         kind,
@@ -176,14 +192,22 @@ pub fn push_battlemap_prop_with_mode(
             let pot = pick(variant, &["#b06a48", "#55595d", "#d8d2c4"]);
             let leaf_d = battlemap_blob_path(0.0, 0.0, 18.0, 9, 0.22, variant);
             let hi_d = battlemap_blob_path(-4.0, -4.0, 10.0, 7, 0.25, variant ^ 0x55);
-            let leaf_fill = if painted { "url(#bm-leaf-tex)" } else { "#4f7a45" };
+            let leaf_fill = if painted {
+                "url(#bm-leaf-tex)"
+            } else {
+                "#4f7a45"
+            };
             let _ = write!(
                 out,
                 r##"<circle r="21" fill="{pot}"/><path d="{leaf_d}" fill="{leaf_fill}"/><path d="{hi_d}" fill="#79a35d" fill-opacity=".58" stroke="none"/>"##
             );
         }
         BattlemapPropKind::StorageCabinet => {
-            let c = if painted { "url(#bm-steel)" } else { pick(variant, &["#9aa3a8", "#b8ad98", "#6e7b84"]) };
+            let c = if painted {
+                "url(#bm-steel)"
+            } else {
+                pick(variant, &["#9aa3a8", "#b8ad98", "#6e7b84"])
+            };
             let _ = write!(
                 out,
                 r##"<rect x="-26" y="-14" width="52" height="28" rx="2" fill="{c}"/><rect x="-21" y="-9" width="11" height="14" fill="#e9e3d6" stroke-width="1"/><rect x="4" y="-7" width="15" height="11" fill="#c8a27a" stroke-width="1"/><path d="M4 -1.5H19" stroke="#e8dcc0" stroke-width="1.6"/>"##
@@ -191,7 +215,10 @@ pub fn push_battlemap_prop_with_mode(
         }
         BattlemapPropKind::WoodCrate => {
             let w = pick(variant, &["#b98b55", "#c79a62", "#a77a48"]);
-            let _ = write!(out, r##"<rect x="-24" y="-24" width="48" height="48" rx="2" fill="{w}"/>"##);
+            let _ = write!(
+                out,
+                r##"<rect x="-24" y="-24" width="48" height="48" rx="2" fill="{w}"/>"##
+            );
             wood_veneer_overlay(out, [-24.0, -24.0, 48.0, 48.0], 2.0, painted);
             out.push_str(
                 r##"<rect x="-19" y="-19" width="38" height="38" fill="none" stroke-width="1.2" stroke-opacity=".6"/><path d="M-19 -6.5H19M-19 6.5H19" fill="none" stroke-width="1" stroke-opacity=".45"/><path d="M-19 -19L19 19" fill="none" stroke-width="2.4"/>"##,
@@ -218,7 +245,9 @@ pub fn push_battlemap_prop_with_mode(
                     dx + 4,
                     dy - 4,
                     steel = if painted {
-                        format!(r#"<circle cx="{dx}" cy="{dy}" r="12" fill="url(#bm-steel)" fill-opacity=".35" style="mix-blend-mode:multiply" stroke="none"/>"#)
+                        format!(
+                            r#"<circle cx="{dx}" cy="{dy}" r="12" fill="url(#bm-steel)" fill-opacity=".35" style="mix-blend-mode:multiply" stroke="none"/>"#
+                        )
                     } else {
                         String::new()
                     },
@@ -226,7 +255,9 @@ pub fn push_battlemap_prop_with_mode(
             }
         }
         BattlemapPropKind::Workbench => {
-            out.push_str(r##"<rect x="-28" y="-15" width="56" height="30" rx="1.5" fill="#8a6a4a"/>"##);
+            out.push_str(
+                r##"<rect x="-28" y="-15" width="56" height="30" rx="1.5" fill="#8a6a4a"/>"##,
+            );
             wood_veneer_overlay(out, [-28.0, -15.0, 56.0, 30.0], 1.5, painted);
             out.push_str(
                 r##"<path d="M-28 -5H28M-28 5H28" fill="none" stroke-width=".9" stroke-opacity=".35"/><rect x="18" y="-20" width="10" height="9" fill="#5b6770"/><path d="M-18 -6l10 6" stroke="#3f4448" stroke-width="3.2" stroke-linecap="round"/><circle cx="-1" cy="6" r="4" fill="#c9502f" stroke-width="1.2"/><rect x="-24" y="3" width="10" height="7" fill="#d9c38a" stroke-width="1"/>"##,
@@ -260,7 +291,11 @@ pub fn push_battlemap_prop_with_mode(
             );
         }
         BattlemapPropKind::JerseyBarrier => {
-            let fill = if painted { "url(#bm-concrete)" } else { "#cbc7bd" };
+            let fill = if painted {
+                "url(#bm-concrete)"
+            } else {
+                "#cbc7bd"
+            };
             let _ = write!(
                 out,
                 r##"<rect x="-29" y="-9" width="58" height="18" rx="3" fill="{fill}"/><rect x="-25" y="-4" width="50" height="8" rx="2" fill="#000" fill-opacity=".08" stroke="none"/><path d="M-29 0H29" fill="none" stroke-width="1" stroke-opacity=".5"/><rect x="-3" y="-9" width="6" height="18" fill="#e07a2e" stroke-width="1"/>"##,
@@ -279,7 +314,9 @@ pub fn push_battlemap_prop_with_mode(
             );
         }
         BattlemapPropKind::StreetBench => {
-            out.push_str(r##"<rect x="-27" y="-9" width="54" height="18" rx="2" fill="#8b6a48"/>"##);
+            out.push_str(
+                r##"<rect x="-27" y="-9" width="54" height="18" rx="2" fill="#8b6a48"/>"##,
+            );
             wood_veneer_overlay(out, [-27.0, -9.0, 54.0, 18.0], 2.0, painted);
             out.push_str(
                 r##"<path d="M-27 -3H27M-27 3H27" fill="none" stroke-width="1" stroke-opacity=".55"/><path d="M-20 -12V12M20 -12V12" stroke="#3b3f43" stroke-width="3.2"/>"##,
@@ -294,7 +331,11 @@ pub fn push_battlemap_prop_with_mode(
                 let py = (battlemap_unit_f32(h ^ 0x77) - 0.5) * 34.0;
                 let r = 8.0 + battlemap_unit_f32(h ^ 0x1F) * 7.0;
                 let d = battlemap_blob_path(px, py, r, 5, 0.35, h);
-                let fill = if painted { "url(#bm-rock)" } else { STONES[i % STONES.len()] };
+                let fill = if painted {
+                    "url(#bm-rock)"
+                } else {
+                    STONES[i % STONES.len()]
+                };
                 let _ = write!(out, r#"<path d="{d}" fill="{fill}" stroke-width="1.5"/>"#);
             }
             out.push_str(
@@ -303,7 +344,10 @@ pub fn push_battlemap_prop_with_mode(
         }
         BattlemapPropKind::OverturnedTable => {
             let w = pick(variant, FURNITURE_WOODS);
-            let _ = write!(out, r##"<rect x="-27" y="-8" width="54" height="13" rx="2" fill="{w}"/>"##);
+            let _ = write!(
+                out,
+                r##"<rect x="-27" y="-8" width="54" height="13" rx="2" fill="{w}"/>"##
+            );
             wood_veneer_overlay(out, [-27.0, -8.0, 54.0, 13.0], 2.0, painted);
             out.push_str(
                 r##"<path d="M-27 -1.5H27" fill="none" stroke-width=".9" stroke-opacity=".4"/><path d="M-21 5V22M21 5V22" stroke="#5a4330" stroke-width="4.5" stroke-linecap="round"/><rect x="-6" y="12" width="7" height="5" fill="#f4f1ea" stroke-width="1" transform="rotate(-18 -2 14)"/>"##,
@@ -324,7 +368,10 @@ mod tests {
         assert_eq!(a, b);
         assert!(a.starts_with('M') && a.ends_with('Z'));
         assert_eq!(a.matches('Q').count(), 8);
-        assert_ne!(battlemap_cell_hash(1, 2, 3, 0), battlemap_cell_hash(1, 3, 2, 0));
+        assert_ne!(
+            battlemap_cell_hash(1, 2, 3, 0),
+            battlemap_cell_hash(1, 3, 2, 0)
+        );
     }
 
     #[test]

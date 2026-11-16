@@ -52,9 +52,9 @@ flowchart TD
 | `wasm_client/ttrpg_drawer_cascade.rs` | Searchable 89-skill combobox, Contested ($\text{TN}_P, \text{TN}_{\text{GM}}$) vs Uncontested ($\text{TN}_{\text{eff}}$) `2d20` Cascade exact 400-state odds preview, and roll submission. |
 | `wasm_client/ttrpg_drawer_triad.rs` | 30-technique `Tempo / Control / Force` Triad dice allocator enforcing live $P_{\text{eff}}$ and `Triad<i32>` trauma caps (`1 Tick = 0.25s`). |
 | `wasm_client/notebook.rs` | 10-tab `NOTEBOOK_TABS` switcher, Count-Up Tick Combat Tracker (`POST /api/sessions/:id/combat`), and 17-chapter offline Rules Book search/reader. |
-| `wasm_client/gm_docs.rs` | Dynamic Google Identity Services + Picker (`drive.file` scope), `GM_ONLY` Document Vault (`safety_flagged`, `is_persistent`), and 6-source Omnisearch (`GET /api/sessions/:id/lookup`). |
-| `wasm_client/gm_memories_and_director.rs` | GM Memories CRUD (`GET/POST/DELETE /api/sessions/:id/memories`) and 12-dial `SCENARIO_DIRECTOR_DIAL_SPECS` (`mem-scenario-director` + `localStorage` fallback). |
-| `wasm_client/npcs.rs` & `telemetry.rs` | Role-aware NPC secret redaction (`can_viewer_see_npc_secrets`) and `AccountRole::Admin` Apache Iggy WAL / Avro CRC-64 fingerprint inspector. |
+| `wasm_client/gm_docs.rs` & `gm_docs_google.rs` | Dynamic Google Identity Services + Picker (`drive.file` scope), `GM_ONLY` Document Vault (`safety_flagged`, `is_persistent`, `DELETE .../docs/:id`). |
+| `wasm_client/gm_memories_and_director.rs` & `gm_omnisearch.rs` | GM Memories CRUD (`GET/POST/DELETE .../memories`, `POST .../memories/:id/persist`), 12-dial `SCENARIO_DIRECTOR_DIAL_SPECS`, and 6-source GM Archivist Omnisearch (`GET /api/sessions/:id/lookup`) with direct persistence & delete controls. |
+| `wasm_client/npcs.rs` & `telemetry.rs` | Role-aware NPC secret redaction (`can_viewer_see_npc_secrets`), `PATCH`/`DELETE` NPC persistence & deletion, and `AccountRole::Admin` Apache Iggy WAL / Avro CRC-64 fingerprint inspector. |
 
 ### 1.2 Four Session Topologies & Two-Tier Token Architecture (`auth_session.rs`)
 
@@ -249,4 +249,3 @@ $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{tool}} + \Delta_{\text{ext}}$$
 - **Command DSL & Safety Caps (`chat_cmd.rs`)**: Verifies `/msg`/`/w`/`/whisper` fuzzy prefix resolution, ambiguity errors, `/roll` `|>` chaining (`hi`, bare `n`, `lo`, `sum`, polymorphic list-filter vs scalar-check `gte`/`lte`), `MAX_EXPLOSIONS = 100` termination, and `ChatInputHistory` draft preservation.
 - **Signaling & Replay Determinism (`webrtc.rs`, `session_persistence.rs`)**: Asserts `should_initiate_peer_connection` lexicographical glare avoidance + `renegotiate` override, strict `sequence_num` ordering in `merge_history_events_by_sequence`, and `format_roster_and_recipients_html` recipient retention.
 - **Odds, Secrets & Vault Parsers (`ttrpg_drawer_cascade.rs`, `npcs.rs`, `gm_docs.rs`)**: Verifies Contested ($\text{TN}_P, \text{TN}_{\text{GM}}$) vs Static ($\text{TN}_{\text{eff}}$) `2d20` probability sums (`100.0%`), `can_viewer_see_npc_secrets` HTML redaction on player/spectator seats, `extract_google_drive_file_id_and_kind` URL parsing across Docs/Sheets/Drive links, and 12-dial `SCENARIO_DIRECTOR_DIAL_SPECS` JSON serialization.
-

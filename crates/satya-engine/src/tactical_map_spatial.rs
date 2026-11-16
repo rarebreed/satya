@@ -217,10 +217,7 @@ impl<'a> SpatialObstacleIndex<'a> {
         radius_m: f32,
         filter: SpatialWallFilter,
     ) -> bool {
-        if px < radius_m
-            || cy_out(py, radius_m, self.height_m)
-            || px > self.width_m - radius_m
-        {
+        if px < radius_m || cy_out(py, radius_m, self.height_m) || px > self.width_m - radius_m {
             return true;
         }
         let r_eff = radius_m + EDGE_HALF_THICK_M - 1e-4;
@@ -236,7 +233,13 @@ impl<'a> SpatialObstacleIndex<'a> {
                         self.edge_idx.get_with_material(ex, ey, EdgeSide::North)
                     && filter.blocks(kind)
                 {
-                    let e = MapWallEdge { x: ex, y: ey, side: EdgeSide::North, kind, material };
+                    let e = MapWallEdge {
+                        x: ex,
+                        y: ey,
+                        side: EdgeSide::North,
+                        kind,
+                        material,
+                    };
                     let (a, b) = edge_endpoints_m(&e);
                     if distance_point_to_segment(px, py, a, b).0 < r_eff {
                         return true;
@@ -247,7 +250,13 @@ impl<'a> SpatialObstacleIndex<'a> {
                         self.edge_idx.get_with_material(ex, ey, EdgeSide::West)
                     && filter.blocks(kind)
                 {
-                    let e = MapWallEdge { x: ex, y: ey, side: EdgeSide::West, kind, material };
+                    let e = MapWallEdge {
+                        x: ex,
+                        y: ey,
+                        side: EdgeSide::West,
+                        kind,
+                        material,
+                    };
                     let (a, b) = edge_endpoints_m(&e);
                     if distance_point_to_segment(px, py, a, b).0 < r_eff {
                         return true;
@@ -309,7 +318,13 @@ impl<'a> SpatialObstacleIndex<'a> {
                         self.edge_idx.get_with_material(ex, ey, EdgeSide::North)
                     && kind.blocks_movement()
                 {
-                    let e = MapWallEdge { x: ex, y: ey, side: EdgeSide::North, kind, material };
+                    let e = MapWallEdge {
+                        x: ex,
+                        y: ey,
+                        side: EdgeSide::North,
+                        kind,
+                        material,
+                    };
                     if intersect_segment_edge(a, b, &e).is_some() {
                         return true;
                     }
@@ -319,7 +334,13 @@ impl<'a> SpatialObstacleIndex<'a> {
                         self.edge_idx.get_with_material(ex, ey, EdgeSide::West)
                     && kind.blocks_movement()
                 {
-                    let e = MapWallEdge { x: ex, y: ey, side: EdgeSide::West, kind, material };
+                    let e = MapWallEdge {
+                        x: ex,
+                        y: ey,
+                        side: EdgeSide::West,
+                        kind,
+                        material,
+                    };
                     if intersect_segment_edge(a, b, &e).is_some() {
                         return true;
                     }
@@ -338,10 +359,10 @@ const fn cy_out(py: f32, radius_m: f32, height_m: f32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::environment_vehicles::CombatMovementGait;
     use crate::tactical_map::{
         SectorPreset, TacticalSceneView, compute_reachable_continuous, generate_procedural_sector,
     };
-    use crate::environment_vehicles::CombatMovementGait;
     use crate::tactical_map_geom::all_walkable_areas_connected;
 
     #[test]
@@ -389,7 +410,12 @@ mod tests {
     #[test]
     fn spatial_index_keeps_connectivity_and_reach_fast_on_large_boards() {
         let sec = generate_procedural_sector(SectorPreset::UrbanCrossroads, 64, 48, 77);
-        assert!(all_walkable_areas_connected(64, 48, &sec.wall_edges, &sec.props));
+        assert!(all_walkable_areas_connected(
+            64,
+            48,
+            &sec.wall_edges,
+            &sec.props
+        ));
         let scene = TacticalSceneView {
             width_m: 64.0,
             height_m: 48.0,

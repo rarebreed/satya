@@ -155,10 +155,38 @@ pub fn nearest_edge_at(fx: f32, fy: f32, w: i32, h: i32, tol: f32) -> Option<Map
     let (gx, gy) = (fx.floor() as i32, fy.floor() as i32);
     let (ux, uy) = (fx - gx as f32, fy - gy as f32);
     let cands = [
-        (ux, MapEdgeRef { x: gx, y: gy, side: EdgeSide::West }),
-        (1.0 - ux, MapEdgeRef { x: gx + 1, y: gy, side: EdgeSide::West }),
-        (uy, MapEdgeRef { x: gx, y: gy, side: EdgeSide::North }),
-        (1.0 - uy, MapEdgeRef { x: gx, y: gy + 1, side: EdgeSide::North }),
+        (
+            ux,
+            MapEdgeRef {
+                x: gx,
+                y: gy,
+                side: EdgeSide::West,
+            },
+        ),
+        (
+            1.0 - ux,
+            MapEdgeRef {
+                x: gx + 1,
+                y: gy,
+                side: EdgeSide::West,
+            },
+        ),
+        (
+            uy,
+            MapEdgeRef {
+                x: gx,
+                y: gy,
+                side: EdgeSide::North,
+            },
+        ),
+        (
+            1.0 - uy,
+            MapEdgeRef {
+                x: gx,
+                y: gy + 1,
+                side: EdgeSide::North,
+            },
+        ),
     ];
     let (dist, r) = cands.into_iter().min_by(|a, b| a.0.total_cmp(&b.0))?;
     let in_bounds = match r.side {
@@ -179,7 +207,10 @@ pub fn edge_kind_at(map: &GmMapUpdateRequest, r: MapEdgeRef) -> Option<WallEdgeK
 
 /// Sets (`Some`) or removes (`None`) the edge at `r`, preserving an existing material.
 pub fn apply_edge_kind(map: &mut GmMapUpdateRequest, r: MapEdgeRef, kind: Option<WallEdgeKind>) {
-    let pos = map.wall_edges.iter().position(|e| e.x == r.x && e.y == r.y && e.side == r.side);
+    let pos = map
+        .wall_edges
+        .iter()
+        .position(|e| e.x == r.x && e.y == r.y && e.side == r.side);
     match (pos, kind) {
         (Some(i), Some(k)) => map.wall_edges[i].kind = k,
         (Some(i), None) => {
@@ -190,7 +221,11 @@ pub fn apply_edge_kind(map: &mut GmMapUpdateRequest, r: MapEdgeRef, kind: Option
             y: r.y,
             side: r.side,
             kind: k,
-            material: if k == WallEdgeKind::Window { MaterialClass::Glass } else { MaterialClass::Drywall },
+            material: if k == WallEdgeKind::Window {
+                MaterialClass::Glass
+            } else {
+                MaterialClass::Drywall
+            },
         }),
         (None, None) => {}
     }
@@ -220,7 +255,8 @@ pub fn satya_update_map_prop_brush() {
     let raw = select_value("map-prop-brush-select");
     with_map_ui_mut(|ui| {
         if let Some(kind) = PropKind::from_code_str(&raw) {
-            ui.edit_prop_rotation_deg = normalize_prop_rotation_deg(kind, ui.edit_prop_rotation_deg);
+            ui.edit_prop_rotation_deg =
+                normalize_prop_rotation_deg(kind, ui.edit_prop_rotation_deg);
         }
         ui.edit_prop_brush = raw;
     });
@@ -266,7 +302,13 @@ pub fn handle_map_prop_brush_point(fx_m: f32, fy_m: f32) {
     }
     let pending = with_map_ui_mut(|ui| {
         let (bw_m, bh_m) = ui.map.board_size_m();
-        if !fx_m.is_finite() || !fy_m.is_finite() || fx_m < 0.0 || fy_m < 0.0 || fx_m >= bw_m || fy_m >= bh_m {
+        if !fx_m.is_finite()
+            || !fy_m.is_finite()
+            || fx_m < 0.0
+            || fy_m < 0.0
+            || fx_m >= bw_m
+            || fy_m >= bh_m
+        {
             return None;
         }
         ui.ensure_vector_scene_populated();
@@ -294,7 +336,12 @@ pub fn handle_map_prop_brush_point(fx_m: f32, fy_m: f32) {
         };
         let cx_cm = (px_m * 100.0).round() as i32;
         let cy_cm = (py_m * 100.0).round() as i32;
-        let occupied: Vec<(f32, f32)> = ui.map.tokens.iter().map(|t| ui.map.token_pos_m(t)).collect();
+        let occupied: Vec<(f32, f32)> = ui
+            .map
+            .tokens
+            .iter()
+            .map(|t| ui.map.token_pos_m(t))
+            .collect();
         let seed = (ui.map.seed.unwrap_or(42) as u32)
             .wrapping_mul(31)
             .wrapping_add((cx_cm as u32).wrapping_mul(17) ^ (cy_cm as u32).wrapping_mul(53));
@@ -330,7 +377,10 @@ pub fn handle_map_prop_brush_click(gx: i32, gy: i32) {
 #[wasm_bindgen]
 pub fn satya_click_map_point(fx_m: f32, fy_m: f32) {
     let (is_edit, brush) = crate::wasm_client::map_3d::with_map_ui(|ui| {
-        (ui.interaction_mode == "edit_terrain", ui.edit_prop_brush.clone())
+        (
+            ui.interaction_mode == "edit_terrain",
+            ui.edit_prop_brush.clone(),
+        )
     });
     if is_edit && !brush.is_empty() && brush != "__wall_edge__" {
         handle_map_prop_brush_point(fx_m, fy_m);
@@ -392,7 +442,11 @@ fn post_prop_edit_if_in_session(
     });
 }
 
-pub(crate) fn post_edge_edit_if_in_session(preset: String, r: MapEdgeRef, next: Option<WallEdgeKind>) {
+pub(crate) fn post_edge_edit_if_in_session(
+    preset: String,
+    r: MapEdgeRef,
+    next: Option<WallEdgeKind>,
+) {
     let (auth_token, session_id) = with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
     let (Some(token), Some(sid)) = (auth_token, session_id) else {
         return;
@@ -429,13 +483,29 @@ mod tests {
         assert_eq!((r.x, r.y, r.side), (3, 2, EdgeSide::West));
         let r = nearest_edge_at(3.5, 2.93, 10, 8, 0.2).unwrap();
         assert_eq!((r.x, r.y, r.side), (3, 3, EdgeSide::North));
-        assert!(nearest_edge_at(3.5, 2.5, 10, 8, 0.2).is_none(), "cell interior");
-        assert!(nearest_edge_at(9.95, 2.5, 10, 8, 0.2).is_some(), "east border edge x = w");
+        assert!(
+            nearest_edge_at(3.5, 2.5, 10, 8, 0.2).is_none(),
+            "cell interior"
+        );
+        assert!(
+            nearest_edge_at(9.95, 2.5, 10, 8, 0.2).is_some(),
+            "east border edge x = w"
+        );
 
         let mut map = GmMapUpdateRequest::default();
-        let r = MapEdgeRef { x: 2, y: 2, side: EdgeSide::North };
+        let r = MapEdgeRef {
+            x: 2,
+            y: 2,
+            side: EdgeSide::North,
+        };
         let mut cur = None;
-        for expect in [Some(WallEdgeKind::Wall), Some(WallEdgeKind::DoorClosed), Some(WallEdgeKind::DoorOpen), Some(WallEdgeKind::Window), None] {
+        for expect in [
+            Some(WallEdgeKind::Wall),
+            Some(WallEdgeKind::DoorClosed),
+            Some(WallEdgeKind::DoorOpen),
+            Some(WallEdgeKind::Window),
+            None,
+        ] {
             cur = next_painted_edge(cur);
             apply_edge_kind(&mut map, r, cur);
             assert_eq!(edge_kind_at(&map, r), expect);
@@ -448,7 +518,11 @@ mod tests {
         let mut seen = std::collections::BTreeSet::new();
         for &(_, kinds) in PROP_BRUSH_GROUPS {
             for &k in kinds {
-                assert!(seen.insert(k.as_str()), "duplicate brush entry {}", k.as_str());
+                assert!(
+                    seen.insert(k.as_str()),
+                    "duplicate brush entry {}",
+                    k.as_str()
+                );
             }
         }
         assert_eq!(

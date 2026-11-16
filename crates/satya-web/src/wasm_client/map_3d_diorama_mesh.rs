@@ -158,7 +158,9 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
     };
 
     // 2. Vector walls / doors / windows and 360°-rotated opaque 3D props
-    crate::wasm_client::map_3d_dressing_geom::push_dressing_geometry(&mut verts, ui, wall_h, door_h);
+    crate::wasm_client::map_3d_dressing_geom::push_dressing_geometry(
+        &mut verts, ui, wall_h, door_h,
+    );
 
     // 3. Continuous 0.25m gait reach strips (`y = 0.016m`)
     for s in &ui.reachable_strips {
@@ -188,7 +190,17 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
         let (tx_m, ty_m) = ui.map.token_pos_m(tok);
         let [sx, sz] = metric_to_world_xz(tx_m, ty_m, bw_m, bh_m);
         let sy = catwalk_elevation(tx_m, ty_m) + 0.022;
-        push_box(&mut verts, sx, sz, sy, sy + 0.024, 0.42, 0.42, [0.96, 0.78, 0.14], 0.0);
+        push_box(
+            &mut verts,
+            sx,
+            sz,
+            sy,
+            sy + 0.024,
+            0.42,
+            0.42,
+            [0.96, 0.78, 0.14],
+            0.0,
+        );
     }
     if let Some((hx_m, hy_m)) = ui.hovered_point_m {
         let [wx, wz] = metric_to_world_xz(hx_m, hy_m, bw_m, bh_m);
@@ -300,14 +312,16 @@ mod tests {
         assert!((wall_cut_max_y - 0.61).abs() < 1e-3);
 
         ui.map.wall_edges.clear();
-        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
-            satya_schema::PropKind::ElevatedCatwalk,
-            200,
-            200,
-            0,
-            None,
-            1,
-        ));
+        ui.map
+            .props
+            .push(satya_engine::map_dressing::make_prop_at_cm(
+                satya_schema::PropKind::ElevatedCatwalk,
+                200,
+                200,
+                0,
+                None,
+                1,
+            ));
         let plat_verts = build_tactical_diorama_vertices(&ui);
         assert!(
             plat_verts
@@ -323,19 +337,48 @@ mod tests {
             wall_cutaway: false,
             ..Default::default()
         };
-        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
-            PropKind::LargeTree, 450, 450, 0, None, 1,
-        ));
-        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
-            PropKind::MediumTree, 850, 450, 0, None, 2,
-        ));
-        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
-            PropKind::Gazebo, 1300, 700, 0, None, 3,
-        ));
+        ui.map
+            .props
+            .push(satya_engine::map_dressing::make_prop_at_cm(
+                PropKind::LargeTree,
+                450,
+                450,
+                0,
+                None,
+                1,
+            ));
+        ui.map
+            .props
+            .push(satya_engine::map_dressing::make_prop_at_cm(
+                PropKind::MediumTree,
+                850,
+                450,
+                0,
+                None,
+                2,
+            ));
+        ui.map
+            .props
+            .push(satya_engine::map_dressing::make_prop_at_cm(
+                PropKind::Gazebo,
+                1300,
+                700,
+                0,
+                None,
+                3,
+            ));
         let (verts_full, opaque_full) = build_tactical_diorama_layered(&ui);
         assert!(verts_full.len() as u32 > opaque_full);
-        assert!(verts_full[opaque_full as usize..].iter().all(|v| (v.bary_zone[3] + 0.35).abs() < 1e-4));
-        assert!(verts_full[..opaque_full as usize].iter().all(|v| (v.bary_zone[3] + 0.35).abs() > 0.05));
+        assert!(
+            verts_full[opaque_full as usize..]
+                .iter()
+                .all(|v| (v.bary_zone[3] + 0.35).abs() < 1e-4)
+        );
+        assert!(
+            verts_full[..opaque_full as usize]
+                .iter()
+                .all(|v| (v.bary_zone[3] + 0.35).abs() > 0.05)
+        );
 
         ui.wall_cutaway = true;
         let (verts_cut, opaque_cut) = build_tactical_diorama_layered(&ui);

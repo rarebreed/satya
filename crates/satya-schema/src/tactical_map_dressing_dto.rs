@@ -308,8 +308,16 @@ impl MapPropPlacement {
         match (self.span_w_cm, self.span_h_cm) {
             (Some(w), Some(h)) => (if w > 10 { w } else { 10 }, if h > 10 { h } else { 10 }),
             _ => {
-                let w = if self.w_cells > 0 { self.w_cells * 100 } else { 100 };
-                let h = if self.h_cells > 0 { self.h_cells * 100 } else { 100 };
+                let w = if self.w_cells > 0 {
+                    self.w_cells * 100
+                } else {
+                    100
+                };
+                let h = if self.h_cells > 0 {
+                    self.h_cells * 100
+                } else {
+                    100
+                };
                 if self.rotation_deg.rem_euclid(180) == 90 {
                     (h, w)
                 } else {
@@ -362,7 +370,11 @@ impl MapPropPlacement {
             return false;
         }
         let rot = self.rotation_deg.rem_euclid(360);
-        if rot % 90 != 0 && self.span_w_cm.is_none() && self.w_cells == self.h_cells && self.w_cells >= 2 {
+        if rot % 90 != 0
+            && self.span_w_cm.is_none()
+            && self.w_cells == self.h_cells
+            && self.w_cells >= 2
+        {
             let rx = cx - self.x;
             let ry = cy - self.y;
             return if rot == 45 || rot == 225 {
@@ -410,7 +422,14 @@ impl MapPropPlacement {
 mod tests {
     use super::*;
 
-    const fn mk_prop(kind: PropKind, x: i32, y: i32, w_cells: i32, h_cells: i32, rotation_deg: i32) -> MapPropPlacement {
+    const fn mk_prop(
+        kind: PropKind,
+        x: i32,
+        y: i32,
+        w_cells: i32,
+        h_cells: i32,
+        rotation_deg: i32,
+    ) -> MapPropPlacement {
         MapPropPlacement {
             kind,
             x,
@@ -444,27 +463,72 @@ mod tests {
         assert!(WallEdgeKind::Window.blocks_movement() && !WallEdgeKind::Window.blocks_sight());
         assert!(!WallEdgeKind::DoorOpen.blocks_movement());
         for k in PropKind::ALL {
-            assert_eq!(serde_json::to_string(&k).unwrap(), format!("\"{}\"", k.as_str()));
-            assert_eq!(PropKind::from_code_str(&k.as_str().to_ascii_lowercase()), Some(k));
+            assert_eq!(
+                serde_json::to_string(&k).unwrap(),
+                format!("\"{}\"", k.as_str())
+            );
+            assert_eq!(
+                PropKind::from_code_str(&k.as_str().to_ascii_lowercase()),
+                Some(k)
+            );
         }
         assert_eq!(PropKind::ALL.len(), 90);
         assert_eq!(PropKind::from_code_str("sofa"), Some(PropKind::Sofa));
-        assert_eq!(PropKind::from_code_str("nightstand"), Some(PropKind::Nightstand));
-        assert_eq!(PropKind::from_code_str("table_lamp"), Some(PropKind::DeskLamp));
-        assert_eq!(PropKind::from_code_str("floor_lamp"), Some(PropKind::StandingLamp));
-        assert_eq!(PropKind::from_code_str("vanity_sink"), Some(PropKind::BathroomSink));
-        assert_eq!(PropKind::from_code_str("television"), Some(PropKind::TvStand));
-        assert_eq!(PropKind::from_code_str("fountain"), Some(PropKind::MediumFountain));
+        assert_eq!(
+            PropKind::from_code_str("nightstand"),
+            Some(PropKind::Nightstand)
+        );
+        assert_eq!(
+            PropKind::from_code_str("table_lamp"),
+            Some(PropKind::DeskLamp)
+        );
+        assert_eq!(
+            PropKind::from_code_str("floor_lamp"),
+            Some(PropKind::StandingLamp)
+        );
+        assert_eq!(
+            PropKind::from_code_str("vanity_sink"),
+            Some(PropKind::BathroomSink)
+        );
+        assert_eq!(
+            PropKind::from_code_str("television"),
+            Some(PropKind::TvStand)
+        );
+        assert_eq!(
+            PropKind::from_code_str("fountain"),
+            Some(PropKind::MediumFountain)
+        );
         assert_eq!(PropKind::from_code_str("gazebo"), Some(PropKind::Gazebo));
         assert_eq!(PropKind::from_code_str("hot_tub"), Some(PropKind::HotTub));
-        assert_eq!(PropKind::from_code_str("street_debris"), Some(PropKind::StreetDebris));
-        assert_eq!(PropKind::from_code_str("structural_pillar"), Some(PropKind::StructuralPillar));
-        assert_eq!(PropKind::from_code_str("elevated_catwalk"), Some(PropKind::ElevatedCatwalk));
-        assert_eq!(PropKind::from_code_str("hazard_spill"), Some(PropKind::HazardSpill));
-        assert_eq!(PropKind::from_code_str("hospital_bed"), Some(PropKind::HospitalBed));
-        assert_eq!(PropKind::from_code_str("shipping_container"), Some(PropKind::ShippingContainer));
+        assert_eq!(
+            PropKind::from_code_str("street_debris"),
+            Some(PropKind::StreetDebris)
+        );
+        assert_eq!(
+            PropKind::from_code_str("structural_pillar"),
+            Some(PropKind::StructuralPillar)
+        );
+        assert_eq!(
+            PropKind::from_code_str("elevated_catwalk"),
+            Some(PropKind::ElevatedCatwalk)
+        );
+        assert_eq!(
+            PropKind::from_code_str("hazard_spill"),
+            Some(PropKind::HazardSpill)
+        );
+        assert_eq!(
+            PropKind::from_code_str("hospital_bed"),
+            Some(PropKind::HospitalBed)
+        );
+        assert_eq!(
+            PropKind::from_code_str("shipping_container"),
+            Some(PropKind::ShippingContainer)
+        );
         assert_eq!(PropKind::from_code_str("crop_row"), Some(PropKind::CropRow));
-        assert_eq!(PropKind::from_code_str("planter_table"), Some(PropKind::PlanterTable));
+        assert_eq!(
+            PropKind::from_code_str("planter_table"),
+            Some(PropKind::PlanterTable)
+        );
         assert_eq!(PropKind::from_code_str("nonexistent_prop"), None);
         let p = mk_prop(PropKind::BarCounter, 2, 1, 5, 1, 0);
         assert!(p.covers(6, 1) && !p.covers(7, 1) && !p.covers(2, 2));
@@ -482,7 +546,10 @@ mod tests {
                 .filter(|&(x, y)| l_desk.covers(x, y))
                 .collect();
             assert_eq!(covered.len(), 3, "rot={rot}");
-            assert!(!l_desk.covers(open_xy.0, open_xy.1), "rot={rot} open={open_xy:?}");
+            assert!(
+                !l_desk.covers(open_xy.0, open_xy.1),
+                "rot={rot} open={open_xy:?}"
+            );
         }
 
         // DeskT 3x2: at 0° (0,1) & (2,1) open; at 90° (2x3) (0,0) & (0,2) open
@@ -548,7 +615,10 @@ mod tests {
             let fp = p.footprint_m();
             let (wx, wy) = fp.local_offset_to_world(0.85, -0.35);
             let (lx, ly) = fp.world_to_local(wx, wy);
-            assert!((lx - 0.85).abs() < 1e-4 && (ly - (-0.35)).abs() < 1e-4, "rot={rot}: ({lx}, {ly})");
+            assert!(
+                (lx - 0.85).abs() < 1e-4 && (ly - (-0.35)).abs() < 1e-4,
+                "rot={rot}: ({lx}, {ly})"
+            );
         }
 
         let py_json = r#"{
@@ -565,9 +635,15 @@ mod tests {
         }"#;
         let parsed: MapPropPlacement = serde_json::from_str(py_json).unwrap();
         assert_eq!(parsed.kind, PropKind::JerseyBarrier);
-        assert_eq!((parsed.x, parsed.y, parsed.w_cells, parsed.h_cells), (6, 4, 2, 1));
+        assert_eq!(
+            (parsed.x, parsed.y, parsed.w_cells, parsed.h_cells),
+            (6, 4, 2, 1)
+        );
         assert_eq!(parsed.center_cm(), (700, 475));
         assert_eq!(parsed.local_span_cm(), (140, 80));
-        assert_eq!(MaterialClass::from_code_str("SOLID_OAK"), Some(MaterialClass::SolidWood));
+        assert_eq!(
+            MaterialClass::from_code_str("SOLID_OAK"),
+            Some(MaterialClass::SolidWood)
+        );
     }
 }

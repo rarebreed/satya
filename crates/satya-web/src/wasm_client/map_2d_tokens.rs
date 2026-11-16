@@ -194,7 +194,13 @@ fn push_preset_portrait_silhouette(out: &mut String, cx: i32, cy: i32, preset: &
             let _ = write!(
                 out,
                 r##"<path d="M{} {}l-5-7 6 3zm{} {}l5-7-6 3z" fill="{accent}" stroke="{BATTLEMAP_INK}" stroke-width=".9"/><circle cx="{cx}" cy="{}" r="7.5" fill="#d8e3ee" stroke="{BATTLEMAP_INK}" stroke-width="1.2"/><path d="M{} {}h10l-2 4h-6z" fill="{accent}" stroke="{BATTLEMAP_INK}" stroke-width=".8"/>"##,
-                cx - 6, cy - 3, cx + 6, cy - 3, cy - 3, cx - 5, cy - 5,
+                cx - 6,
+                cy - 3,
+                cx + 6,
+                cy - 3,
+                cy - 3,
+                cx - 5,
+                cy - 5,
             );
         }
         "recon_mk4" => {
@@ -202,7 +208,13 @@ fn push_preset_portrait_silhouette(out: &mut String, cx: i32, cy: i32, preset: &
             let _ = write!(
                 out,
                 r##"<path d="M{} {}c0-8 16-8 16 0v5h-16z" fill="#2c3a47" stroke="{BATTLEMAP_INK}" stroke-width="1.2"/><circle cx="{cx}" cy="{}" r="6" fill="#465666"/><circle cx="{}" cy="{}" r="2.3" fill="#34d399" stroke="{BATTLEMAP_INK}" stroke-width=".8"/><circle cx="{}" cy="{}" r="2.3" fill="#34d399" stroke="{BATTLEMAP_INK}" stroke-width=".8"/>"##,
-                cx - 8, cy - 1, cy - 2, cx - 3, cy - 3, cx + 3, cy - 3,
+                cx - 8,
+                cy - 1,
+                cy - 2,
+                cx - 3,
+                cy - 3,
+                cx + 3,
+                cy - 3,
             );
         }
         "secops_sentry" => {
@@ -210,7 +222,11 @@ fn push_preset_portrait_silhouette(out: &mut String, cx: i32, cy: i32, preset: &
             let _ = write!(
                 out,
                 r##"<rect x="{}" y="{}" width="16" height="15" rx="6" fill="#39404a" stroke="{BATTLEMAP_INK}" stroke-width="1.3"/><rect x="{}" y="{}" width="12" height="4" rx="1.5" fill="{accent}" stroke="{BATTLEMAP_INK}" stroke-width=".8"/><path d="M{cx} {}v5" stroke="{accent}" stroke-width="2.2" stroke-linecap="round"/>"##,
-                cx - 8, cy - 11, cx - 6, cy - 6, cy - 3,
+                cx - 8,
+                cy - 11,
+                cx - 6,
+                cy - 6,
+                cy - 3,
             );
         }
         "custom_glb" => {
@@ -218,7 +234,13 @@ fn push_preset_portrait_silhouette(out: &mut String, cx: i32, cy: i32, preset: &
             let _ = write!(
                 out,
                 r##"<circle cx="{cx}" cy="{}" r="7.5" fill="#334155" stroke="{BATTLEMAP_INK}" stroke-width="1.2"/><polygon points="{cx},{} {},{} {cx},{} {},{}" fill="{accent}" stroke="{BATTLEMAP_INK}" stroke-width=".9"/>"##,
-                cy - 3, cy - 9, cx + 5, cy - 3, cy + 3, cx - 5, cy - 3,
+                cy - 3,
+                cy - 9,
+                cx + 5,
+                cy - 3,
+                cy + 3,
+                cx - 5,
+                cy - 3,
             );
         }
         _ => {
@@ -226,7 +248,13 @@ fn push_preset_portrait_silhouette(out: &mut String, cx: i32, cy: i32, preset: &
             let _ = write!(
                 out,
                 r##"<circle cx="{cx}" cy="{}" r="7" fill="#c9a585" stroke="{BATTLEMAP_INK}" stroke-width="1.1"/><path d="M{} {}c1-5 12-5 14 0v-2c-1-4-13-4-14 0z" fill="#2d333b"/><path d="M{} {}a8 8 0 0 1 16 0" fill="none" stroke="{accent}" stroke-width="2" stroke-linecap="round"/><rect x="{}" y="{}" width="10" height="3.2" rx="1.2" fill="{accent}" fill-opacity=".88"/>"##,
-                cy - 3, cx - 7, cy - 5, cx - 8, cy - 4, cx - 5, cy - 5,
+                cy - 3,
+                cx - 7,
+                cy - 5,
+                cx - 8,
+                cy - 4,
+                cx - 5,
+                cy - 5,
             );
         }
     }
@@ -250,7 +278,11 @@ pub fn push_token_portrait_disc_svg(
     let cf = cell_px as f32;
     let (cx, cy) = ((pos_m.0 * cf).round() as i32, (pos_m.1 * cf).round() as i32);
     let col = escape_html(color_hex);
-    let op = if tok.visibility == MessageVisibility::GmOnly { ".55" } else { "1" };
+    let op = if tok.visibility == MessageVisibility::GmOnly {
+        ".55"
+    } else {
+        "1"
+    };
     let clip_id = format!("bm-tok-clip-{idx}");
     let _ = write!(
         out,

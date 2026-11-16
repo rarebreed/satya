@@ -13,7 +13,7 @@ description: >-
 ## 1. Thin Python Orchestration Over `satya_py`
 - Keep deterministic TTRPG math, 9-axis Psyche (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`), social combat, spatial LoS/cover, and *Awakened* substrate/arc mechanics in `crates/satya-engine` exposed as JSON functions in `crates/satya-py/src/*_py.rs`.
 - Do **not** write parallel pure-Python mechanics fallbacks when adding new features; `pixi run test-py` depends on `build-py`, so `satya_py` is always available in tests and runtime.
-- Keep individual `.py` files within `~300–750` lines (`<= 45 KB`) via focused domain modules (`social_and_clocks.py`, `npc_psyche_combat.py`, `audit_and_first_contact.py`, `awakened_systems.py`, `rag/{corpus_builder,hybrid_index}.py`) rather than growing `tools.py`, `graph.py`, or `maps.py`.
+- Organize `.py` files by cohesive domain responsibility (`social_and_clocks.py`, `npc_psyche_combat.py`, `audit_and_first_contact.py`, `awakened_systems.py`, `rag/{corpus_builder,hybrid_index}.py`) rather than accumulating unrelated tools in `tools.py`, `graph.py`, or `maps.py` — split by concern, not line count.
 
 ## 2. 5-Step Checklist When Adding or Renaming an AI GM `@tool`
 Every new LangGraph AI GM tool must update all 5 sites together:

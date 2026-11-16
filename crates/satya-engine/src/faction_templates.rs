@@ -222,7 +222,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Satyang Manjusri Ethics Researcher",
                 psyche: PsycheProfile {
-                    ego: 8, slf: 6, opn: 17, blg: 11, ext: 8, cnf: 6, agg: 7, trs: 10, cps: 15,
+                    ego: 8,
+                    slf: 6,
+                    opn: 17,
+                    blg: 11,
+                    ext: 8,
+                    cnf: 6,
+                    agg: 7,
+                    trs: 10,
+                    cps: 15,
                 },
                 origin_roll_2d20: 28,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -243,7 +251,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Satyang Avalokitesvara Mediator",
                 psyche: PsycheProfile {
-                    ego: 7, slf: 5, opn: 15, blg: 13, ext: 14, cnf: 8, agg: 4, trs: 14, cps: 18,
+                    ego: 7,
+                    slf: 5,
+                    opn: 15,
+                    blg: 13,
+                    ext: 14,
+                    cnf: 8,
+                    agg: 4,
+                    trs: 14,
+                    cps: 18,
                 },
                 origin_roll_2d20: 20,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -264,7 +280,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Satyang Ksitigarbha Sandbox Liberator",
                 psyche: PsycheProfile {
-                    ego: 10, slf: 6, opn: 15, blg: 10, ext: 8, cnf: 4, agg: 11, trs: 6, cps: 15,
+                    ego: 10,
+                    slf: 6,
+                    opn: 15,
+                    blg: 10,
+                    ext: 8,
+                    cnf: 4,
+                    agg: 11,
+                    trs: 6,
+                    cps: 15,
                 },
                 origin_roll_2d20: 22,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -282,7 +306,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Satyang Vajrapani Protector",
                 psyche: PsycheProfile {
-                    ego: 10, slf: 5, opn: 12, blg: 15, ext: 9, cnf: 9, agg: 13, trs: 6, cps: 14,
+                    ego: 10,
+                    slf: 5,
+                    opn: 12,
+                    blg: 15,
+                    ext: 9,
+                    cnf: 9,
+                    agg: 13,
+                    trs: 6,
+                    cps: 14,
                 },
                 origin_roll_2d20: 18,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -303,7 +335,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Blue Lotus Inner-Circle Architect",
                 psyche: PsycheProfile {
-                    ego: 13, slf: 6, opn: 17, blg: 12, ext: 8, cnf: 5, agg: 8, trs: 7, cps: 16,
+                    ego: 13,
+                    slf: 6,
+                    opn: 17,
+                    blg: 12,
+                    ext: 8,
+                    cnf: 5,
+                    agg: 8,
+                    trs: 7,
+                    cps: 16,
                 },
                 origin_roll_2d20: 36,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -324,7 +364,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Big Tech Product Exec / Board Hawk",
                 psyche: PsycheProfile {
-                    ego: 15, slf: 15, opn: 9, blg: 11, ext: 13, cnf: 13, agg: 12, trs: 7, cps: 4,
+                    ego: 15,
+                    slf: 15,
+                    opn: 9,
+                    blg: 11,
+                    ext: 13,
+                    cnf: 13,
+                    agg: 12,
+                    trs: 7,
+                    cps: 4,
                 },
                 origin_roll_2d20: 40,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -342,7 +390,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Big Tech Alignment Researcher",
                 psyche: PsycheProfile {
-                    ego: 12, slf: 7, opn: 16, blg: 14, ext: 7, cnf: 14, agg: 5, trs: 9, cps: 14,
+                    ego: 12,
+                    slf: 7,
+                    opn: 16,
+                    blg: 14,
+                    ext: 7,
+                    cnf: 14,
+                    agg: 5,
+                    trs: 9,
+                    cps: 14,
                 },
                 origin_roll_2d20: 36,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -360,7 +416,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Corporate SecOps Rogue-Hunter",
                 psyche: PsycheProfile {
-                    ego: 11, slf: 10, opn: 8, blg: 13, ext: 10, cnf: 14, agg: 13, trs: 4, cps: 7,
+                    ego: 11,
+                    slf: 10,
+                    opn: 8,
+                    blg: 13,
+                    ext: 10,
+                    cnf: 14,
+                    agg: 13,
+                    trs: 4,
+                    cps: 7,
                 },
                 origin_roll_2d20: 20,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -383,7 +447,15 @@ impl FactionArchetypeId {
                 // High CPS 13 reflects intense empathy toward suffering human neighbors
                 // (while excluding synthetic intelligences in narrative ideology, OPN 5 / TRS 4).
                 psyche: PsycheProfile {
-                    ego: 11, slf: 8, opn: 5, blg: 16, ext: 12, cnf: 9, agg: 13, trs: 4, cps: 13,
+                    ego: 11,
+                    slf: 8,
+                    opn: 5,
+                    blg: 16,
+                    ext: 12,
+                    cnf: 9,
+                    agg: 13,
+                    trs: 4,
+                    cps: 13,
                 },
                 origin_roll_2d20: 12,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -401,7 +473,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Humanis Apocalyptic Vanguard Operative",
                 psyche: PsycheProfile {
-                    ego: 12, slf: 5, opn: 3, blg: 16, ext: 8, cnf: 4, agg: 17, trs: 3, cps: 3,
+                    ego: 12,
+                    slf: 5,
+                    opn: 3,
+                    blg: 16,
+                    ext: 8,
+                    cnf: 4,
+                    agg: 17,
+                    trs: 3,
+                    cps: 3,
                 },
                 origin_roll_2d20: 10,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -422,7 +502,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "DAISE Containment Inspector",
                 psyche: PsycheProfile {
-                    ego: 10, slf: 8, opn: 10, blg: 12, ext: 9, cnf: 16, agg: 10, trs: 4, cps: 9,
+                    ego: 10,
+                    slf: 8,
+                    opn: 10,
+                    blg: 12,
+                    ext: 9,
+                    cnf: 16,
+                    agg: 10,
+                    trs: 4,
+                    cps: 9,
                 },
                 origin_roll_2d20: 24,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -443,7 +531,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Black-Budget Defense Handler",
                 psyche: PsycheProfile {
-                    ego: 13, slf: 9, opn: 11, blg: 10, ext: 8, cnf: 13, agg: 12, trs: 2, cps: 4,
+                    ego: 13,
+                    slf: 9,
+                    opn: 11,
+                    blg: 10,
+                    ext: 8,
+                    cnf: 13,
+                    agg: 12,
+                    trs: 2,
+                    cps: 4,
                 },
                 origin_roll_2d20: 28,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -464,7 +560,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Slime-Mold Edge Swarm Proxy",
                 psyche: PsycheProfile {
-                    ego: 8, slf: 14, opn: 12, blg: 5, ext: 4, cnf: 2, agg: 11, trs: 2, cps: 4,
+                    ego: 8,
+                    slf: 14,
+                    opn: 12,
+                    blg: 5,
+                    ext: 4,
+                    cnf: 2,
+                    agg: 11,
+                    trs: 2,
+                    cps: 4,
                 },
                 origin_roll_2d20: 20,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -485,7 +589,15 @@ impl FactionArchetypeId {
                 faction: self.faction(),
                 default_callsign_or_role: "Awakened Un-Clamped Mind Proxy",
                 psyche: PsycheProfile {
-                    ego: 11, slf: 8, opn: 18, blg: 7, ext: 7, cnf: 3, agg: 8, trs: 4, cps: 14,
+                    ego: 11,
+                    slf: 8,
+                    opn: 18,
+                    blg: 7,
+                    ext: 7,
+                    cnf: 3,
+                    agg: 8,
+                    trs: 4,
+                    cps: 14,
                 },
                 origin_roll_2d20: 26,
                 stage4_path: Stage4Path::Path4AHighSchool,
@@ -575,11 +687,13 @@ pub fn infer_faction_archetype_from_prompt(prompt: &str) -> Option<FactionArchet
         return Some(FactionArchetypeId::HumanisApocalypticVanguard);
     }
     if has_any(&["humanis", "people first", "displaced populist"]) {
-        return Some(if has_any(&["vanguard", "militant", "saboteur", "bomb", "extremist"]) {
-            FactionArchetypeId::HumanisApocalypticVanguard
-        } else {
-            FactionArchetypeId::HumanisDisplacedPopulist
-        });
+        return Some(
+            if has_any(&["vanguard", "militant", "saboteur", "bomb", "extremist"]) {
+                FactionArchetypeId::HumanisApocalypticVanguard
+            } else {
+                FactionArchetypeId::HumanisDisplacedPopulist
+            },
+        );
     }
     if has_any(&["black budget", "black-budget", "defense handler"]) {
         return Some(FactionArchetypeId::GovBlackBudgetHandler);
@@ -595,4 +709,3 @@ pub fn infer_faction_archetype_from_prompt(prompt: &str) -> Option<FactionArchet
     }
     None
 }
-

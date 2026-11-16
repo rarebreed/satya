@@ -468,6 +468,11 @@ pub fn cleanup_client_session_state() {
         if let Some(ws) = st.ws.take() {
             let _ = ws.close();
         }
+        st.gm_documents.clear();
+        st.gm_memories.clear();
+        st.gm_omnisearch_active = false;
+        st.session_npcs.clear();
+        st.selected_npc_id = None;
         st.session_id = None;
         st.join_token = None;
         st.self_participant = None;
@@ -750,7 +755,11 @@ mod tests {
         assert!(roster_html.contains("Sara &lt;Valkyrie&gt; [Player]"));
         assert!(roster_html.contains(r#"class="participant-chip ai""#));
 
-        assert!(recip_html.contains(r#"id="recipient-row-broadcast" class="recip-row broadcast-row selected""#));
+        assert!(
+            recip_html.contains(
+                r#"id="recipient-row-broadcast" class="recip-row broadcast-row selected""#
+            )
+        );
         assert!(recip_html.contains(r#"onchange="window.satyaSelectBroadcast()""#));
         assert!(!recip_html.contains(r#"data-recipient-uid="u-sean-01""#));
         assert!(recip_html.contains(r#"window.satyaToggleRecipient('u-sara\'02')"#));
@@ -761,9 +770,18 @@ mod tests {
             Some("u-sean-01"),
             &["u-sara'02".to_string()],
         );
-        assert!(recip_sel.contains(r#"id="recipient-row-broadcast" class="recip-row broadcast-row""#));
-        assert!(!recip_sel.contains(r#"id="recipient-cb-broadcast" type="checkbox" value="BROADCAST" checked"#));
-        assert!(recip_sel.contains(r#"class="recip-row selected" data-recipient-row-uid="u-sara&#39;02""#));
+        assert!(
+            recip_sel.contains(r#"id="recipient-row-broadcast" class="recip-row broadcast-row""#)
+        );
+        assert!(
+            !recip_sel.contains(
+                r#"id="recipient-cb-broadcast" type="checkbox" value="BROADCAST" checked"#
+            )
+        );
+        assert!(
+            recip_sel
+                .contains(r#"class="recip-row selected" data-recipient-row-uid="u-sara&#39;02""#)
+        );
         assert!(recip_sel.contains(r#"data-recipient-uid="u-sara&#39;02" checked"#));
     }
 }

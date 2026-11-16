@@ -126,6 +126,8 @@ pub struct SatyaWasmState {
     pub gm_documents: Vec<GmDocumentRecord>,
     /// Cached persistent and session-scoped GM memory notes for the active session/campaign.
     pub gm_memories: Vec<GmMemoryNoteRecord>,
+    /// Whether the user has executed a GM Archivist omnisearch (`#gm-omnisearch-results`) in the current view.
+    pub gm_omnisearch_active: bool,
     /// Cached NPC entries for the `NPC List` tab (`#notebook-pane-npcs`).
     pub session_npcs: Vec<SessionNpcEntry>,
     /// Currently selected NPC `character_id` in the `NPC List` tab.
@@ -188,6 +190,7 @@ impl Default for SatyaWasmState {
             google_picker_api_key: None,
             gm_documents: Vec::new(),
             gm_memories: Vec::new(),
+            gm_omnisearch_active: false,
             session_npcs: Vec::new(),
             selected_npc_id: None,
             viewer_can_see_gm_secrets: true,

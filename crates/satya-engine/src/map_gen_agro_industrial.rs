@@ -14,7 +14,8 @@
 //!   lanes, [`PropKind::ShippingContainer`] dock bays, dispatch office, and sorting conveyor spur.
 
 use satya_schema::{
-    EconomicTier, EdgeSide, MapFloorLevel, MaterialClass, PropKind, SurfaceFeatureKind, WallEdgeKind,
+    EconomicTier, EdgeSide, MapFloorLevel, MaterialClass, PropKind, SurfaceFeatureKind,
+    WallEdgeKind,
 };
 
 use crate::map_gen_residential::{
@@ -25,7 +26,13 @@ use crate::map_surface_queries::prune_occluded_surfaces;
 use crate::tactical_map::{ProceduralSector, SectorPreset};
 
 fn safe_x_span(w: i32) -> (i32, i32) {
-    let pad = if w >= 16 { 4 } else if w >= 12 { 3 } else { 2 };
+    let pad = if w >= 16 {
+        4
+    } else if w >= 12 {
+        3
+    } else {
+        2
+    };
     (pad, (w - pad).max(pad + 4).min(w - 1))
 }
 
@@ -154,7 +161,11 @@ fn generate_farms(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let farm_lot = LotBox::new(bx0, bldg_y0, bx0 + farm_w, bldg_y1);
     let barn_lot = LotBox::new((bx1 - barn_w).max(farm_lot.x1 + 2), bldg_y0, bx1, bldg_y1);
 
-    let tier = if seed % 2 == 0 { EconomicTier::MiddleClass } else { EconomicTier::LowIncome };
+    let tier = if seed % 2 == 0 {
+        EconomicTier::MiddleClass
+    } else {
+        EconomicTier::LowIncome
+    };
     let home = generate_home_in_lot(
         w,
         h,
@@ -188,8 +199,20 @@ fn generate_farms(w: i32, h: i32, seed: i64) -> ProceduralSector {
     );
     enclose_hall(&mut b, barn_lot, MaterialClass::SolidWood, 0, false);
     let barn_mid_x = barn_lot.x0 + barn_lot.w() / 2;
-    carve_door_band_h(&mut b, barn_lot.y1, barn_mid_x - 1, (barn_mid_x + 1).min(barn_lot.x1), MaterialClass::SolidWood);
-    carve_door_band_h(&mut b, barn_lot.y0, barn_mid_x, (barn_mid_x + 1).min(barn_lot.x1), MaterialClass::SolidWood);
+    carve_door_band_h(
+        &mut b,
+        barn_lot.y1,
+        barn_mid_x - 1,
+        (barn_mid_x + 1).min(barn_lot.x1),
+        MaterialClass::SolidWood,
+    );
+    carve_door_band_h(
+        &mut b,
+        barn_lot.y0,
+        barn_mid_x,
+        (barn_mid_x + 1).min(barn_lot.x1),
+        MaterialClass::SolidWood,
+    );
     let _ = b.try_place_cm(
         PropKind::PalletRack,
         OutdoorBuilder::cm(barn_lot.x0 as f32 + 1.6),
@@ -228,7 +251,14 @@ fn generate_farms(w: i32, h: i32, seed: i64) -> ProceduralSector {
             20,
             gseed,
         );
-        let _ = b.try_place_cm(PropKind::Forklift, OutdoorBuilder::cm(gx0 + 1.3), OutdoorBuilder::cm((gy0 + gy1) * 0.5), 24, None, true);
+        let _ = b.try_place_cm(
+            PropKind::Forklift,
+            OutdoorBuilder::cm(gx0 + 1.3),
+            OutdoorBuilder::cm((gy0 + gy1) * 0.5),
+            24,
+            None,
+            true,
+        );
     }
 
     // Disjoint contoured tilled CropRow field zone strictly between buildings and tractor lane on West half.
@@ -241,24 +271,85 @@ fn generate_farms(w: i32, h: i32, seed: i64) -> ProceduralSector {
         let mseed = (b.rng.next() & 0xffff_ffff) as u32;
         b.add_polygon_surface(
             SurfaceFeatureKind::MulchZone,
-            &[(field_x0, field_y0), (field_x1, field_y0 + 0.25), (field_x1 - 0.2, field_y1), (field_x0 + 0.25, field_y1 - 0.2)],
+            &[
+                (field_x0, field_y0),
+                (field_x1, field_y0 + 0.25),
+                (field_x1 - 0.2, field_y1),
+                (field_x0 + 0.25, field_y1 - 0.2),
+            ],
             35,
             mseed,
         );
         let mut rx = field_x0 + 1.6;
         while rx + 1.2 <= field_x1 {
             let cy_f = (field_y0 + field_y1) * 0.5;
-            let _ = b.try_place_cm(PropKind::CropRow, OutdoorBuilder::cm(rx), OutdoorBuilder::cm(cy_f), row_angle, Some(280), true);
+            let _ = b.try_place_cm(
+                PropKind::CropRow,
+                OutdoorBuilder::cm(rx),
+                OutdoorBuilder::cm(cy_f),
+                row_angle,
+                Some(280),
+                true,
+            );
             rx += 3.6;
         }
     }
     // Exposed decorative GardenBedZone near farmhouse porch / orchard edge + orchard trees & corral fence.
-    let _ = b.try_add_organic_patch(SurfaceFeatureKind::GardenBedZone, (1.8, 2.2), (1.1, 1.0), 0.30, 24);
-    let _ = b.try_add_organic_patch(SurfaceFeatureKind::MulchZone, (w as f32 - 2.0, 2.4), (1.2, 1.0), 0.30, 0);
-    let _ = b.try_place_cm(PropKind::UtilityVan, OutdoorBuilder::cm(w as f32 * 0.25), OutdoorBuilder::cm(lane_y), 94, None, true);
-    b.scatter_trees(PropKind::LargeTree, 3, 3.2, RectM { x0: 1.0, y0: 1.0, x1: bx0 as f32 - 0.5, y1: lane_y - 1.5 });
-    b.scatter_trees(PropKind::MediumTree, 4, 2.8, RectM { x0: bx1 as f32 + 0.5, y0: 1.0, x1: w as f32 - 1.0, y1: ditch_y - 1.2 });
-    b.scatter_turf_prop_rot(PropKind::Bush, 5, 25, RectM { x0: 0.8, y0: 0.8, x1: w as f32 - 0.8, y1: ditch_y - 1.0 });
+    let _ = b.try_add_organic_patch(
+        SurfaceFeatureKind::GardenBedZone,
+        (1.8, 2.2),
+        (1.1, 1.0),
+        0.30,
+        24,
+    );
+    let _ = b.try_add_organic_patch(
+        SurfaceFeatureKind::MulchZone,
+        (w as f32 - 2.0, 2.4),
+        (1.2, 1.0),
+        0.30,
+        0,
+    );
+    let _ = b.try_place_cm(
+        PropKind::UtilityVan,
+        OutdoorBuilder::cm(w as f32 * 0.25),
+        OutdoorBuilder::cm(lane_y),
+        94,
+        None,
+        true,
+    );
+    b.scatter_trees(
+        PropKind::LargeTree,
+        3,
+        3.2,
+        RectM {
+            x0: 1.0,
+            y0: 1.0,
+            x1: bx0 as f32 - 0.5,
+            y1: lane_y - 1.5,
+        },
+    );
+    b.scatter_trees(
+        PropKind::MediumTree,
+        4,
+        2.8,
+        RectM {
+            x0: bx1 as f32 + 0.5,
+            y0: 1.0,
+            x1: w as f32 - 1.0,
+            y1: ditch_y - 1.2,
+        },
+    );
+    b.scatter_turf_prop_rot(
+        PropKind::Bush,
+        5,
+        25,
+        RectM {
+            x0: 0.8,
+            y0: 0.8,
+            x1: w as f32 - 0.8,
+            y1: ditch_y - 1.0,
+        },
+    );
 
     let mut sec = b.finalize_connected();
     if let Some(mut f2) = home.upper {
@@ -300,25 +391,68 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let cseed = (b.rng.next() & 0xffff_ffff) as u32;
     b.add_polygon_surface(
         SurfaceFeatureKind::InteriorFloor,
-        &[(cx0 as f32, cy0 as f32), (cx1 as f32, cy0 as f32), (cx1 as f32, cy1 as f32), (cx0 as f32, cy1 as f32)],
+        &[
+            (cx0 as f32, cy0 as f32),
+            (cx1 as f32, cy0 as f32),
+            (cx1 as f32, cy1 as f32),
+            (cx0 as f32, cy1 as f32),
+        ],
         0,
         cseed,
     );
     enclose_hall(&mut b, cons_lot, MaterialClass::Brick, 1, true);
     let mid_x = cx0 + cw / 2;
     let mid_y = cy0 + cons_lot.h() / 2;
-    carve_door_band_h(&mut b, cy1, mid_x - 1, (mid_x + 1).min(cx1), MaterialClass::Glass);
-    carve_door_band_h(&mut b, cy0, mid_x - 1, (mid_x + 1).min(cx1), MaterialClass::Glass);
-    carve_door_band_v(&mut b, cx0, mid_y, (mid_y + 1).min(cy1), MaterialClass::Glass);
-    carve_door_band_v(&mut b, cx1, mid_y, (mid_y + 1).min(cy1), MaterialClass::Glass);
+    carve_door_band_h(
+        &mut b,
+        cy1,
+        mid_x - 1,
+        (mid_x + 1).min(cx1),
+        MaterialClass::Glass,
+    );
+    carve_door_band_h(
+        &mut b,
+        cy0,
+        mid_x - 1,
+        (mid_x + 1).min(cx1),
+        MaterialClass::Glass,
+    );
+    carve_door_band_v(
+        &mut b,
+        cx0,
+        mid_y,
+        (mid_y + 1).min(cy1),
+        MaterialClass::Glass,
+    );
+    carve_door_band_v(
+        &mut b,
+        cx1,
+        mid_y,
+        (mid_y + 1).min(cy1),
+        MaterialClass::Glass,
+    );
 
     // Conservatory specimen PlanterTables & benches inside glazed hall.
     let mut px = cx0 as f32 + 1.8;
     while px + 1.4 <= cx1 as f32 {
         if (px - (mid_x as f32)).abs() >= 1.6 {
-            let _ = b.try_place_cm(PropKind::PlanterTable, OutdoorBuilder::cm(px), OutdoorBuilder::cm(cy0 as f32 + 1.3), 12, None, true);
+            let _ = b.try_place_cm(
+                PropKind::PlanterTable,
+                OutdoorBuilder::cm(px),
+                OutdoorBuilder::cm(cy0 as f32 + 1.3),
+                12,
+                None,
+                true,
+            );
             if cons_lot.h() >= 7 {
-                let _ = b.try_place_cm(PropKind::PlanterTable, OutdoorBuilder::cm(px), OutdoorBuilder::cm(cy1 as f32 - 1.3), 348, None, true);
+                let _ = b.try_place_cm(
+                    PropKind::PlanterTable,
+                    OutdoorBuilder::cm(px),
+                    OutdoorBuilder::cm(cy1 as f32 - 1.3),
+                    348,
+                    None,
+                    true,
+                );
             }
         }
         px += 3.2;
@@ -355,7 +489,11 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
     );
     b.add_ribbon(
         SurfaceFeatureKind::DirtTrail,
-        &[(cx1 as f32 + 1.5, 1.5), (w as f32 - 2.0, walk_y - 1.0), (w as f32 - 2.5, 2.2)],
+        &[
+            (cx1 as f32 + 1.5, 1.5),
+            (w as f32 - 2.0, walk_y - 1.0),
+            (w as f32 - 2.5, 2.2),
+        ],
         115,
     );
 
@@ -366,14 +504,80 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
         (w as f32 * 0.30, cy1 as f32 + 1.6, 1.4, 1.0),
         (w as f32 * 0.70, cy1 as f32 + 1.6, 1.4, 1.0),
     ] {
-        let _ = b.try_add_organic_patch(SurfaceFeatureKind::GardenBedZone, (gx, gy), (rx, ry), 0.35, 32);
+        let _ = b.try_add_organic_patch(
+            SurfaceFeatureKind::GardenBedZone,
+            (gx, gy),
+            (rx, ry),
+            0.35,
+            32,
+        );
     }
-    b.scatter_trees(PropKind::LargeTree, 4, 3.0, RectM { x0: 1.0, y0: 1.0, x1: w as f32 - 1.0, y1: h as f32 - 1.0 });
-    b.scatter_trees(PropKind::MediumTree, 6, 2.4, RectM { x0: 1.0, y0: 1.0, x1: w as f32 - 1.0, y1: h as f32 - 1.0 });
-    b.scatter_turf_prop_rot(PropKind::PlanterTable, 3, 18, RectM { x0: 1.2, y0: 1.2, x1: w as f32 - 1.2, y1: stream_y - 1.3 });
-    b.scatter_turf_prop_rot(PropKind::Bush, 6, 22, RectM { x0: 0.8, y0: 0.8, x1: w as f32 - 0.8, y1: h as f32 - 0.8 });
-    b.scatter_turf_prop_rot(PropKind::ParkBench, 3, 15, RectM { x0: 1.2, y0: cy1 as f32 + 0.6, x1: w as f32 - 1.2, y1: h as f32 - 1.2 });
-    b.scatter_turf_prop_rot(PropKind::Boulder, 3, 25, RectM { x0: 1.0, y0: stream_y - 1.6, x1: w as f32 - 1.0, y1: h as f32 - 0.8 });
+    b.scatter_trees(
+        PropKind::LargeTree,
+        4,
+        3.0,
+        RectM {
+            x0: 1.0,
+            y0: 1.0,
+            x1: w as f32 - 1.0,
+            y1: h as f32 - 1.0,
+        },
+    );
+    b.scatter_trees(
+        PropKind::MediumTree,
+        6,
+        2.4,
+        RectM {
+            x0: 1.0,
+            y0: 1.0,
+            x1: w as f32 - 1.0,
+            y1: h as f32 - 1.0,
+        },
+    );
+    b.scatter_turf_prop_rot(
+        PropKind::PlanterTable,
+        3,
+        18,
+        RectM {
+            x0: 1.2,
+            y0: 1.2,
+            x1: w as f32 - 1.2,
+            y1: stream_y - 1.3,
+        },
+    );
+    b.scatter_turf_prop_rot(
+        PropKind::Bush,
+        6,
+        22,
+        RectM {
+            x0: 0.8,
+            y0: 0.8,
+            x1: w as f32 - 0.8,
+            y1: h as f32 - 0.8,
+        },
+    );
+    b.scatter_turf_prop_rot(
+        PropKind::ParkBench,
+        3,
+        15,
+        RectM {
+            x0: 1.2,
+            y0: cy1 as f32 + 0.6,
+            x1: w as f32 - 1.2,
+            y1: h as f32 - 1.2,
+        },
+    );
+    b.scatter_turf_prop_rot(
+        PropKind::Boulder,
+        3,
+        25,
+        RectM {
+            x0: 1.0,
+            y0: stream_y - 1.6,
+            x1: w as f32 - 1.0,
+            y1: h as f32 - 0.8,
+        },
+    );
 
     b.finalize_connected()
 }
@@ -393,7 +597,11 @@ fn build_industrial_hall_shell_and_apron(
     let road_y = h as f32 - 1.35;
     let road_idx = b.add_ribbon(
         SurfaceFeatureKind::AsphaltRoad,
-        &[(-0.5, road_y - 0.1), (w as f32 * 0.5, road_y + 0.12), (w as f32 + 0.5, road_y - 0.1)],
+        &[
+            (-0.5, road_y - 0.1),
+            (w as f32 * 0.5, road_y + 0.12),
+            (w as f32 + 0.5, road_y - 0.1),
+        ],
         220,
     );
     let walk_y = by1 as f32 + 0.65;
@@ -406,7 +614,12 @@ fn build_industrial_hall_shell_and_apron(
     let fseed = (b.rng.next() & 0xffff_ffff) as u32;
     b.add_polygon_surface(
         SurfaceFeatureKind::InteriorFloor,
-        &[(bx0 as f32, by0 as f32), (bx1 as f32, by0 as f32), (bx1 as f32, by1 as f32), (bx0 as f32, by1 as f32)],
+        &[
+            (bx0 as f32, by0 as f32),
+            (bx1 as f32, by0 as f32),
+            (bx1 as f32, by1 as f32),
+            (bx0 as f32, by1 as f32),
+        ],
         0,
         fseed,
     );
@@ -419,7 +632,13 @@ fn build_industrial_hall_shell_and_apron(
     let bw = lot.w();
     for i in 0..dock_bays {
         let dx = bx0 + ((i as i32 + 1) * bw) / (dock_bays as i32 + 1);
-        carve_door_band_h(b, by1, (dx - 1).max(bx0 + 1), (dx + 1).min(bx1 - 1), MaterialClass::SheetSteel);
+        carve_door_band_h(
+            b,
+            by1,
+            (dx - 1).max(bx0 + 1),
+            (dx + 1).min(bx1 - 1),
+            MaterialClass::SheetSteel,
+        );
     }
 
     (lot, road_idx)
@@ -458,28 +677,101 @@ fn generate_manufacturing_plant(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let floor_top = (office.y1 as f32 + 1.2).min(lot.y1 as f32 - 4.0);
     let conv_len_cm = (((lot.w() - 4).clamp(3, 8)) * 100).min(700);
     let mid_x_cm = OutdoorBuilder::cm((lot.x0 + lot.x1) as f32 * 0.5);
-    let _ = b.try_place_cm(PropKind::ConveyorBelt, mid_x_cm, OutdoorBuilder::cm(floor_top + 0.6), 0, Some(conv_len_cm), true);
+    let _ = b.try_place_cm(
+        PropKind::ConveyorBelt,
+        mid_x_cm,
+        OutdoorBuilder::cm(floor_top + 0.6),
+        0,
+        Some(conv_len_cm),
+        true,
+    );
     if lot.h() >= 12 {
-        let _ = b.try_place_cm(PropKind::ConveyorBelt, mid_x_cm, OutdoorBuilder::cm(lot.y1 as f32 - 2.0), 0, Some(conv_len_cm), true);
+        let _ = b.try_place_cm(
+            PropKind::ConveyorBelt,
+            mid_x_cm,
+            OutdoorBuilder::cm(lot.y1 as f32 - 2.0),
+            0,
+            Some(conv_len_cm),
+            true,
+        );
     }
 
     let press_y = OutdoorBuilder::cm((floor_top + lot.y1 as f32 - 1.5) * 0.5);
-    let _ = b.try_place_cm(PropKind::IndustrialPress, OutdoorBuilder::cm(lot.x0 as f32 + 2.5), press_y, 0, None, true);
+    let _ = b.try_place_cm(
+        PropKind::IndustrialPress,
+        OutdoorBuilder::cm(lot.x0 as f32 + 2.5),
+        press_y,
+        0,
+        None,
+        true,
+    );
     if lot.w() >= 16 {
-        let _ = b.try_place_cm(PropKind::IndustrialPress, OutdoorBuilder::cm(lot.x1 as f32 - 2.5), press_y, 180, None, true);
+        let _ = b.try_place_cm(
+            PropKind::IndustrialPress,
+            OutdoorBuilder::cm(lot.x1 as f32 - 2.5),
+            press_y,
+            180,
+            None,
+            true,
+        );
     }
-    let _ = b.try_place_cm(PropKind::PalletRack, OutdoorBuilder::cm(lot.x1 as f32 - 2.2), OutdoorBuilder::cm(lot.y0 as f32 + 0.6), 0, None, true);
-    let _ = b.try_place_cm(PropKind::DrumCluster, OutdoorBuilder::cm(office.x1 as f32 + 0.8), OutdoorBuilder::cm(lot.y0 as f32 + 0.7), 22, None, true);
+    let _ = b.try_place_cm(
+        PropKind::PalletRack,
+        OutdoorBuilder::cm(lot.x1 as f32 - 2.2),
+        OutdoorBuilder::cm(lot.y0 as f32 + 0.6),
+        0,
+        None,
+        true,
+    );
+    let _ = b.try_place_cm(
+        PropKind::DrumCluster,
+        OutdoorBuilder::cm(office.x1 as f32 + 0.8),
+        OutdoorBuilder::cm(lot.y0 as f32 + 0.7),
+        22,
+        None,
+        true,
+    );
 
     // Exterior freight ShippingContainers + Forklift + UtilityVans cleanly off InteriorFloor & AsphaltRoad.
-    let _ = b.try_place_cm(PropKind::ShippingContainer, OutdoorBuilder::cm(1.85), OutdoorBuilder::cm(3.6), 87, None, true);
+    let _ = b.try_place_cm(
+        PropKind::ShippingContainer,
+        OutdoorBuilder::cm(1.85),
+        OutdoorBuilder::cm(3.6),
+        87,
+        None,
+        true,
+    );
     if h >= 24 {
-        let _ = b.try_place_cm(PropKind::ShippingContainer, OutdoorBuilder::cm(w as f32 - 1.85), OutdoorBuilder::cm(4.2), 273, None, true);
+        let _ = b.try_place_cm(
+            PropKind::ShippingContainer,
+            OutdoorBuilder::cm(w as f32 - 1.85),
+            OutdoorBuilder::cm(4.2),
+            273,
+            None,
+            true,
+        );
     }
     let _ = b.place_vehicle_along_ribbon(PropKind::UtilityVan, road_idx, 0.35, 0.0, 4);
     let _ = b.place_vehicle_along_ribbon(PropKind::UtilityVan, road_idx, 0.72, 0.0, 5);
-    let _ = b.try_place_cm(PropKind::Forklift, OutdoorBuilder::cm(w as f32 * 0.5 + 1.5), OutdoorBuilder::cm(lot.y1 as f32 + 0.65), 14, None, true);
-    b.scatter_turf_prop_rot(PropKind::JerseyBarrier, 2, 15, RectM { x0: 1.0, y0: lot.y1 as f32 + 0.2, x1: w as f32 - 1.0, y1: h as f32 - 0.5 });
+    let _ = b.try_place_cm(
+        PropKind::Forklift,
+        OutdoorBuilder::cm(w as f32 * 0.5 + 1.5),
+        OutdoorBuilder::cm(lot.y1 as f32 + 0.65),
+        14,
+        None,
+        true,
+    );
+    b.scatter_turf_prop_rot(
+        PropKind::JerseyBarrier,
+        2,
+        15,
+        RectM {
+            x0: 1.0,
+            y0: lot.y1 as f32 + 0.2,
+            x1: w as f32 - 1.0,
+            y1: h as f32 - 0.5,
+        },
+    );
 
     b.finalize_connected()
 }
@@ -503,7 +795,14 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
     while ry <= rack_y1 {
         let mut rx = rack_x0;
         while rx + 1.8 <= rack_x1 {
-            let _ = b.try_place_cm(PropKind::PalletRack, OutdoorBuilder::cm(rx + 1.0), OutdoorBuilder::cm(ry), 0, None, true);
+            let _ = b.try_place_cm(
+                PropKind::PalletRack,
+                OutdoorBuilder::cm(rx + 1.0),
+                OutdoorBuilder::cm(ry),
+                0,
+                None,
+                true,
+            );
             rx += 4.4;
         }
         ry += 3.0;
@@ -513,20 +812,69 @@ fn generate_warehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let conv_cx = OutdoorBuilder::cm(lot.x0 as f32 + 2.5);
     let conv_cy = OutdoorBuilder::cm((lot.y1 as f32 - 1.4).max(office.y1 as f32 + 0.8));
     let _ = b.try_place_cm(PropKind::ConveyorBelt, conv_cx, conv_cy, 0, Some(300), true);
-    let _ = b.try_place_cm(PropKind::Forklift, OutdoorBuilder::cm((lot.x0 + lot.x1) as f32 * 0.5), OutdoorBuilder::cm(lot.y1 as f32 - 1.6), 19, None, true);
-    let _ = b.try_place_cm(PropKind::WoodCrate, OutdoorBuilder::cm(lot.x0 as f32 + 1.2), OutdoorBuilder::cm(lot.y1 as f32 - 2.6), 27, None, true);
-    let _ = b.try_place_cm(PropKind::DrumCluster, OutdoorBuilder::cm(lot.x1 as f32 - 1.2), OutdoorBuilder::cm(lot.y0 as f32 + 1.2), 11, None, true);
+    let _ = b.try_place_cm(
+        PropKind::Forklift,
+        OutdoorBuilder::cm((lot.x0 + lot.x1) as f32 * 0.5),
+        OutdoorBuilder::cm(lot.y1 as f32 - 1.6),
+        19,
+        None,
+        true,
+    );
+    let _ = b.try_place_cm(
+        PropKind::WoodCrate,
+        OutdoorBuilder::cm(lot.x0 as f32 + 1.2),
+        OutdoorBuilder::cm(lot.y1 as f32 - 2.6),
+        27,
+        None,
+        true,
+    );
+    let _ = b.try_place_cm(
+        PropKind::DrumCluster,
+        OutdoorBuilder::cm(lot.x1 as f32 - 1.2),
+        OutdoorBuilder::cm(lot.y0 as f32 + 1.2),
+        11,
+        None,
+        true,
+    );
 
     // Exterior ShippingContainers in side freight yards + Freight Van + Forklift on truck apron.
-    let _ = b.try_place_cm(PropKind::ShippingContainer, OutdoorBuilder::cm(1.85), OutdoorBuilder::cm(3.8), 88, None, true);
+    let _ = b.try_place_cm(
+        PropKind::ShippingContainer,
+        OutdoorBuilder::cm(1.85),
+        OutdoorBuilder::cm(3.8),
+        88,
+        None,
+        true,
+    );
     if h >= 24 {
-        let _ = b.try_place_cm(PropKind::ShippingContainer, OutdoorBuilder::cm(1.85), OutdoorBuilder::cm(9.2), 266, None, true);
+        let _ = b.try_place_cm(
+            PropKind::ShippingContainer,
+            OutdoorBuilder::cm(1.85),
+            OutdoorBuilder::cm(9.2),
+            266,
+            None,
+            true,
+        );
     }
     if w >= 28 && h >= 24 {
-        let _ = b.try_place_cm(PropKind::ShippingContainer, OutdoorBuilder::cm(w as f32 - 1.85), OutdoorBuilder::cm(4.2), 274, None, true);
+        let _ = b.try_place_cm(
+            PropKind::ShippingContainer,
+            OutdoorBuilder::cm(w as f32 - 1.85),
+            OutdoorBuilder::cm(4.2),
+            274,
+            None,
+            true,
+        );
     }
     let _ = b.place_vehicle_along_ribbon(PropKind::UtilityVan, road_idx, 0.72, 0.0, 5);
-    let _ = b.try_place_cm(PropKind::Forklift, OutdoorBuilder::cm(w as f32 * 0.55), OutdoorBuilder::cm(lot.y1 as f32 + 0.65), 344, None, true);
+    let _ = b.try_place_cm(
+        PropKind::Forklift,
+        OutdoorBuilder::cm(w as f32 * 0.55),
+        OutdoorBuilder::cm(lot.y1 as f32 + 0.65),
+        344,
+        None,
+        true,
+    );
 
     b.finalize_connected()
 }
@@ -539,8 +887,14 @@ pub fn generate_agro_or_industrial_sector(
     height: i32,
     seed: i64,
 ) -> ProceduralSector {
-    let w = width.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
-    let h = height.clamp(crate::tactical_map::MIN_SECTOR_DIM, crate::tactical_map::MAX_SECTOR_DIM);
+    let w = width.clamp(
+        crate::tactical_map::MIN_SECTOR_DIM,
+        crate::tactical_map::MAX_SECTOR_DIM,
+    );
+    let h = height.clamp(
+        crate::tactical_map::MIN_SECTOR_DIM,
+        crate::tactical_map::MAX_SECTOR_DIM,
+    );
     match preset {
         SectorPreset::Farms => generate_farms(w, h, seed),
         SectorPreset::BotanicalGarden => generate_botanical_garden(w, h, seed),

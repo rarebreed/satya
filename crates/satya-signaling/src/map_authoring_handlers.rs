@@ -59,7 +59,12 @@ pub async fn session_generate_or_edit_map_handler(
         )
             .into_response();
     };
-    let Some(caller_part) = ctx.roster.iter().find(|p| p.user_id == user.user_id).cloned() else {
+    let Some(caller_part) = ctx
+        .roster
+        .iter()
+        .find(|p| p.user_id == user.user_id)
+        .cloned()
+    else {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({ "error": "Caller is not an active participant in this session" })),
@@ -124,10 +129,12 @@ pub async fn session_generate_or_edit_map_handler(
         ensure_vector_map_ready(&mut map);
         let in_bounds = match edge_ref.side {
             EdgeSide::North => {
-                (0..map.grid_width).contains(&edge_ref.x) && (0..=map.grid_height).contains(&edge_ref.y)
+                (0..map.grid_width).contains(&edge_ref.x)
+                    && (0..=map.grid_height).contains(&edge_ref.y)
             }
             EdgeSide::West => {
-                (0..=map.grid_width).contains(&edge_ref.x) && (0..map.grid_height).contains(&edge_ref.y)
+                (0..=map.grid_width).contains(&edge_ref.x)
+                    && (0..map.grid_height).contains(&edge_ref.y)
             }
         };
         if !in_bounds {
@@ -143,7 +150,10 @@ pub async fn session_generate_or_edit_map_handler(
             .position(|e| e.x == edge_ref.x && e.y == edge_ref.y && e.side == edge_ref.side);
         let current_kind = existing.map(|i| map.wall_edges[i].kind);
         let is_door_toggle = !req.clear_edge
-            && matches!(current_kind, Some(WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen))
+            && matches!(
+                current_kind,
+                Some(WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen)
+            )
             && matches!(
                 req.set_edge_kind,
                 None | Some(WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen)
@@ -275,8 +285,8 @@ pub async fn session_generate_or_edit_map_handler(
     if let (Some(ex), Some(ey)) = (req.edit_cell_x, req.edit_cell_y) {
         let mut map = ctx.active_map.clone().unwrap_or_else(|| {
             let p = SectorPreset::from_code_str(&req.preset).unwrap_or_else(|| {
-    crate::campaign_lore::resolve_pack_defaults(None).default_sector_preset
-});
+                crate::campaign_lore::resolve_pack_defaults(None).default_sector_preset
+            });
             let (raw_w, raw_h) = req
                 .scale
                 .map(|s| p.resolve_scale_dimensions(s))
@@ -439,16 +449,14 @@ pub async fn session_generate_or_edit_map_handler(
         if base_map.theme_preset.is_none() && !req.preset.trim().is_empty() {
             base_map.theme_preset = Some(req.preset.clone());
         }
-        let map = match satya_engine::tactical_map::continue_procedural_map(
-            &base_map,
-            dir,
-            req.seed,
-        ) {
-            Ok(outcome) => outcome.map,
-            Err(err) => {
-                return (StatusCode::BAD_REQUEST, Json(json!({ "error": err }))).into_response();
-            }
-        };
+        let map =
+            match satya_engine::tactical_map::continue_procedural_map(&base_map, dir, req.seed) {
+                Ok(outcome) => outcome.map,
+                Err(err) => {
+                    return (StatusCode::BAD_REQUEST, Json(json!({ "error": err })))
+                        .into_response();
+                }
+            };
 
         let _ = state
             .auth
@@ -581,8 +589,7 @@ pub async fn session_generate_or_edit_map_handler(
         map.token_visuals = prev.token_visuals.clone();
         for mut tok in prev.tokens.clone() {
             let (px_cm, py_cm) = prev.token_pos_cm(&tok);
-            let (nx_cm, ny_cm) =
-                find_unblocked_spawn_pos_cm(&map, px_cm, py_cm, &occupied_m);
+            let (nx_cm, ny_cm) = find_unblocked_spawn_pos_cm(&map, px_cm, py_cm, &occupied_m);
             occupied_m.push((nx_cm as f32 / 100.0, ny_cm as f32 / 100.0));
             tok.x = (nx_cm / cell_cm).clamp(0, width - 1);
             tok.y = (ny_cm / cell_cm).clamp(0, height - 1);

@@ -19,11 +19,12 @@ Domain-specific workflows and module maps:
 
 ---
 
-## 1. Single-Read Modularization (`~300–750` Lines / `<= 45 KB`)
+## 1. Responsibility-Driven Modularization (Cohesion Over File Size)
 
 1. **Design Focused Submodules Upfront**:
-   - Aim to keep `.rs`, `.py`, `.css`, and `.md` files within **`~300–750` lines (`<= 45 KB`)** so every file reads cleanly inside a single `800`-line / `46,080`-byte `read_file` call.
-   - When a file outgrows `~750` lines, split along domain/view boundaries into companion modules rather than golf-compressing code or re-editing over a few kilobytes.
+   - Split modules strictly by **distinct responsibility and domain ownership** — never to stay under a line-count or byte-size cap. A single-responsibility Rust module may legitimately grow large due to `rustfmt`-expanded fluent/builder chains (`sqlx::query().bind()`, `Request::builder()`, `wgpu` descriptors), exhaustive `match` arms, or ownership/borrowing scopes where extracting closures/helpers hurts clarity.
+   - Never split tightly coupled handlers from their private SQL/state helpers, and never compress readable fluent chains or docstrings just to reduce line count. Navigate larger cohesive files via `rg -n` + bounded `read_file(StartLine, EndLine)` (or sequential range reads).
+   - Split into companion modules only when separating genuinely independent concerns (e.g., OAuth/Picker integration vs. Document Vault CRUD, or Omnisearch UI vs. Scenario Director).
 2. **Flat Companion Re-Exports Without Duplicate Glob Imports**:
    - When splitting `foo.rs` into `foo.rs` + `foo_sub.rs`, put `pub use crate::...::foo_sub::*;` in `foo.rs` and declare `pub mod foo_sub;` in the parent `lib.rs` / `mod.rs` (keeping `pub use foo::*;` in `lib.rs` / `mod.rs` without ALSO adding `pub use foo_sub::*;` there, which triggers `unused_imports` under `clippy -- -D warnings`).
 
@@ -55,7 +56,7 @@ Domain-specific workflows and module maps:
 ## 4. Editing Hygiene, Strict `LF` (`\n`), & Cross-Crate Compilation
 
 1. **Always Use `LF` (`\n`) — Never `CRLF` (`\r\n`)**:
-   - Every created or modified file (`.rs`, `.py`, `.md`, `.css`, `.toml`, `.avsc`, `.json`, `.html`) **must** use `LF` (`\n`). Normalize any `CRLF` file on Windows via `path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n"))`; never use PowerShell `Set-Content` / `Out-File` or `"..."` strings containing backticks/`$`.
+   - Every created or modified file (`.rs`, `.py`, `.md`, `.css`, `.toml`, `.avsc`, `.json`, `.html`) **must** use `LF` (`\n`). On Windows inside the sandbox, `path.write_bytes(...)` (`O_TRUNC` on existing files) can fail with `OSError: [Errno 22] Invalid argument`; normalize `CRLF` files cleanly using `write_file(..., Overwrite: true)` (passing `\n` line endings) or an atomic temp-file + `os.replace(...)`, and never use PowerShell `Set-Content` / `Out-File` or `"..."` strings containing backticks/`$`.
 2. **Never Issue Parallel `edit_file` Calls on the Same File**:
    - On Windows, apply multiple edits to different regions of the same file sequentially, or combine them safely so stale targets/handles cannot conflict.
 3. **Run Cross-Crate `cargo check --offline` Early**:

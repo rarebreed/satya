@@ -304,7 +304,9 @@ const PRESET_ART_THEME_MAP: &[(&str, &str)] = &[
     ("warehouse", "industrial"),
 ];
 
-pub fn battlemap_theme_for_map(map: &satya_schema::GmMapUpdateRequest) -> &'static BattlemapArtTheme {
+pub fn battlemap_theme_for_map(
+    map: &satya_schema::GmMapUpdateRequest,
+) -> &'static BattlemapArtTheme {
     if map.active_floor < 0 {
         return battlemap_theme_for_preset(Some("industrial"));
     } else if map.active_floor > 0 {
@@ -371,7 +373,11 @@ pub fn battlemap_boundary_path(w: i32, h: i32, inside: impl Fn(i32, i32) -> bool
 }
 
 /// Union of axis-aligned cell squares (`d`) for every cell where `inside(x, y)` is true.
-pub(crate) fn battlemap_cell_rects_path(w: i32, h: i32, inside: impl Fn(i32, i32) -> bool) -> String {
+pub(crate) fn battlemap_cell_rects_path(
+    w: i32,
+    h: i32,
+    inside: impl Fn(i32, i32) -> bool,
+) -> String {
     let c = BATTLEMAP_CELL_PX;
     let mut d = String::new();
     for y in 0..h {
@@ -406,7 +412,13 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
         acc = fnv(acc, u64::from(b));
     }
     for e in &ui.map.wall_edges {
-        for v in [e.x as u64, e.y as u64, e.side as u64, e.kind as u64, e.material as u64] {
+        for v in [
+            e.x as u64,
+            e.y as u64,
+            e.side as u64,
+            e.kind as u64,
+            e.material as u64,
+        ] {
             acc = fnv(acc, v);
         }
     }
@@ -527,7 +539,12 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
 
     // 3. Solid 360°-rotated furniture, vehicles, pillars & tree trunks under the shared wobbly-ink shadow filter
     out.push_str(r#"<g filter="url(#bm-prop)">"#);
-    for p in ui.map.props.iter().filter(|p| !prop_spec(p.kind).floor_layer) {
+    for p in ui
+        .map
+        .props
+        .iter()
+        .filter(|p| !prop_spec(p.kind).floor_layer)
+    {
         push_furniture_glyph_with_mode(&mut out, p, CELL_F, tex_mode);
     }
     out.push_str("</g>");
@@ -536,7 +553,12 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     push_edge_walls_svg_with_mode(&mut out, &ui.map.wall_edges, (w, h), t, tex_mode, CELL_F);
 
     // 5. Overhanging tree & gazebo canopies (drawn above ground props/walls cleanly)
-    if ui.map.props.iter().any(|p| matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree | PropKind::Gazebo)) {
+    if ui.map.props.iter().any(|p| {
+        matches!(
+            p.kind,
+            PropKind::LargeTree | PropKind::MediumTree | PropKind::Gazebo
+        )
+    }) {
         out.push_str(r#"<g filter="url(#bm-prop)">"#);
         for p in &ui.map.props {
             push_tree_canopy_glyph_with_mode(&mut out, p, CELL_F, tex_mode);
@@ -559,12 +581,25 @@ mod tests {
     #[test]
     fn theme_lookup_maps_presets_and_falls_back_to_modern_interior() {
         assert_eq!(battlemap_theme_for_preset(Some("med_lab")).id, "clinic");
-        assert_eq!(battlemap_theme_for_preset(Some("urban_crossroads")).id, "urban_street");
-        assert_eq!(battlemap_theme_for_preset(Some("industrial")).id, "industrial");
+        assert_eq!(
+            battlemap_theme_for_preset(Some("urban_crossroads")).id,
+            "urban_street"
+        );
+        assert_eq!(
+            battlemap_theme_for_preset(Some("industrial")).id,
+            "industrial"
+        );
         assert_eq!(battlemap_theme_for_preset(None).id, "modern_interior");
-        assert_eq!(battlemap_theme_for_preset(Some("unknown_setting")).id, "modern_interior");
+        assert_eq!(
+            battlemap_theme_for_preset(Some("unknown_setting")).id,
+            "modern_interior"
+        );
         for t in BATTLEMAP_ART_THEMES {
-            assert!(!t.cover_props.is_empty(), "theme {} needs cover props", t.id);
+            assert!(
+                !t.cover_props.is_empty(),
+                "theme {} needs cover props",
+                t.id
+            );
         }
     }
 
@@ -584,19 +619,38 @@ mod tests {
         assert!(svg.starts_with(r#"<div class="battlemap-stack">"#));
         assert!(svg.contains(r#"id="battlemap-art""#) && svg.contains(r#"id="battlemap-overlay""#));
         assert!(svg.contains(r#"preserveAspectRatio="xMidYMid meet""#));
-        assert!(svg.contains("window.satyaBattlemapWheel(event.deltaY,event.clientX,event.clientY)"));
-        assert!(svg.contains("window.satyaBattlemapMouseDown(event.button,event.clientX,event.clientY)"));
-        assert!(svg.contains("window.satyaBattlemapMouseMove(event.buttons,event.clientX,event.clientY)"));
-        assert!(svg.contains("window.satyaBattlemapMouseUp(event.button,event.clientX,event.clientY)"));
+        assert!(
+            svg.contains("window.satyaBattlemapWheel(event.deltaY,event.clientX,event.clientY)")
+        );
+        assert!(
+            svg.contains(
+                "window.satyaBattlemapMouseDown(event.button,event.clientX,event.clientY)"
+            )
+        );
+        assert!(
+            svg.contains(
+                "window.satyaBattlemapMouseMove(event.buttons,event.clientX,event.clientY)"
+            )
+        );
+        assert!(
+            svg.contains("window.satyaBattlemapMouseUp(event.button,event.clientX,event.clientY)")
+        );
         assert!(svg.contains("window.satyaBattlemapMouseLeave()"));
         assert!(svg.ends_with("</svg></div>"));
         assert_eq!(svg.matches("<svg").count(), 2);
-        assert!(!svg.contains("onclick=\"window.satyaClickMapCell(0,0)\""), "no per-cell handlers");
+        assert!(
+            !svg.contains("onclick=\"window.satyaClickMapCell(0,0)\""),
+            "no per-cell handlers"
+        );
 
         let key_a = battlemap_art_cache_key(&ui);
         ui.hovered_point_m = Some((3.4, 3.6));
         ui.show_grid_overlay = false;
-        assert_eq!(key_a, battlemap_art_cache_key(&ui), "overlay state must not bust art cache");
+        assert_eq!(
+            key_a,
+            battlemap_art_cache_key(&ui),
+            "overlay state must not bust art cache"
+        );
         if let Some(p) = ui.map.props.first_mut() {
             p.rotation_deg = (p.rotation_deg + 15) % 360;
         }
@@ -608,13 +662,27 @@ mod tests {
     fn every_theme_renders_vector_scene_and_props() {
         use satya_engine::map_dressing::make_prop_at_cm;
         let mut ui = TacticalMapUiState::default();
-        ui.map.props.push(make_prop_at_cm(PropKind::ElevatedCatwalk, 400, 400, 0, None, 1));
-        ui.map.props.push(make_prop_at_cm(PropKind::HazardSpill, 650, 450, 0, None, 2));
+        ui.map.props.push(make_prop_at_cm(
+            PropKind::ElevatedCatwalk,
+            400,
+            400,
+            0,
+            None,
+            1,
+        ));
+        ui.map
+            .props
+            .push(make_prop_at_cm(PropKind::HazardSpill, 650, 450, 0, None, 2));
         for t in BATTLEMAP_ART_THEMES {
             ui.map.theme_preset = Some(t.id.to_string());
             let art = format_battlemap_art_layer(&ui);
             assert!(art.contains("url(#bm-floor)"), "{}", t.id);
-            assert_eq!(art.matches("<g").count(), art.matches("</g>").count(), "{}", t.id);
+            assert_eq!(
+                art.matches("<g").count(),
+                art.matches("</g>").count(),
+                "{}",
+                t.id
+            );
         }
         assert_eq!(token_initials("Sara (Valkyrie)"), "SV");
         assert_eq!(token_initials("--"), "?");
@@ -630,18 +698,32 @@ mod tests {
             };
             ui.recompute_overlays();
             if preset.has_structural_wall_edges() {
-                assert!(!ui.map.wall_edges.is_empty(), "{preset:?}: missing wall_edges");
+                assert!(
+                    !ui.map.wall_edges.is_empty(),
+                    "{preset:?}: missing wall_edges"
+                );
             }
             assert!(!ui.map.props.is_empty(), "{preset:?}: missing props");
             let art = format_battlemap_art_layer(&ui);
             if preset.has_structural_wall_edges() {
-                assert!(art.contains("stroke-linecap=\"square\""), "{preset:?}: merged edge-wall runs");
+                assert!(
+                    art.contains("stroke-linecap=\"square\""),
+                    "{preset:?}: merged edge-wall runs"
+                );
             }
-            assert_eq!(art.matches("<g").count(), art.matches("</g>").count(), "{preset:?}");
+            assert_eq!(
+                art.matches("<g").count(),
+                art.matches("</g>").count(),
+                "{preset:?}"
+            );
             let key = battlemap_art_cache_key(&ui);
             if !ui.map.wall_edges.is_empty() {
                 ui.map.wall_edges.pop();
-                assert_ne!(key, battlemap_art_cache_key(&ui), "edge edits bust the art cache");
+                assert_ne!(
+                    key,
+                    battlemap_art_cache_key(&ui),
+                    "edge edits bust the art cache"
+                );
             }
         }
         for preset in [
@@ -653,7 +735,10 @@ mod tests {
                 map: build_procedural_map_request("t", preset, None, 20, 14, 42),
                 ..Default::default()
             };
-            assert!(format_battlemap_art_layer(&ui).contains("#d6ebf5"), "{preset:?}: windows");
+            assert!(
+                format_battlemap_art_layer(&ui).contains("#d6ebf5"),
+                "{preset:?}: windows"
+            );
         }
         for preset in [SectorPreset::WoodedPark, SectorPreset::GardenEstate] {
             let mut ui = TacticalMapUiState {
@@ -662,8 +747,14 @@ mod tests {
             };
             ui.recompute_overlays();
             let art = format_battlemap_art_layer(&ui);
-            assert!(art.contains("url(#bm-paver)"), "{preset:?}: merged flagstone paths");
-            assert!(art.contains("url(#bm-tarmac)"), "{preset:?}: merged asphalt road/driveway");
+            assert!(
+                art.contains("url(#bm-paver)"),
+                "{preset:?}: merged flagstone paths"
+            );
+            assert!(
+                art.contains("url(#bm-tarmac)"),
+                "{preset:?}: merged asphalt road/driveway"
+            );
         }
         let creek_ui = TacticalMapUiState {
             map: build_procedural_map_request("tc", SectorPreset::WoodlandCreek, None, 20, 14, 42),
@@ -684,19 +775,36 @@ mod tests {
         use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
 
         let mut ui = TacticalMapUiState {
-            map: build_procedural_map_request("p4", SectorPreset::ResidentialApartment, None, 20, 14, 42),
+            map: build_procedural_map_request(
+                "p4",
+                SectorPreset::ResidentialApartment,
+                None,
+                20,
+                14,
+                42,
+            ),
             ..Default::default()
         };
         let key_vellum = battlemap_art_cache_key(&ui);
         for style in BattlemapInkStyle::ALL {
             ui.ink_style = style;
             let art = format_battlemap_art_layer(&ui);
-            assert_eq!(art.matches("<g").count(), art.matches("</g>").count(), "{style:?}: balanced <g>");
+            assert_eq!(
+                art.matches("<g").count(),
+                art.matches("</g>").count(),
+                "{style:?}: balanced <g>"
+            );
             if style != BattlemapInkStyle::ModernVellum {
-                assert_ne!(battlemap_art_cache_key(&ui), key_vellum, "{style:?} should bust cache");
+                assert_ne!(
+                    battlemap_art_cache_key(&ui),
+                    key_vellum,
+                    "{style:?} should bust cache"
+                );
             }
             if style.uses_color_tint() {
-                assert!(art.contains(r#"id="bm-tint""#) && art.contains(r#"filter="url(#bm-tint)""#));
+                assert!(
+                    art.contains(r#"id="bm-tint""#) && art.contains(r#"filter="url(#bm-tint)""#)
+                );
             }
         }
         ui.ink_style = BattlemapInkStyle::CleanVector;
