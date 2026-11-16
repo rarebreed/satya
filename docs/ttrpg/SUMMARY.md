@@ -5,6 +5,10 @@ This manifest defines the canonical chapter ordering, identifiers, categories, c
 - The **Interactive Marimo Rules Book & Static HTML Generator** (`notebooks/satya_rules_book.py` & `python -m satya_ml.build_rules_book`)
 - The **Satya AI Game Master** (`query_satya_rules` in `src/satya_ml/ai_gm/tools.py`)
 
+> [!TIP]
+> **New Human GM or Player? Start With Prose Play Examples First!**
+> The 18 chapters below are written as a terse, mathematical rules specification (`docs/ttrpg/`). If you want step-by-step table dialogue, dice walkthroughs, and GM coaching showing how the rules play in practice, see **[Satya Guided Examples of Play](../ttrpg-examples/README.md)** (`docs/ttrpg-examples/`).
+
 ---
 
 ## Table of Contents

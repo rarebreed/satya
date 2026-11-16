@@ -362,3 +362,20 @@ def test_part2_hybrid_rag_synonyms_tables_rust_symbols_and_visibility_wall() -> 
         assert name in tool_names
         tier, _ = _classify_tool_tier(name)
         assert tier == "TIER_2_RULESET_ENGINE"
+
+
+def test_human_prose_examples_excluded_from_rag_corpus() -> None:
+    from satya_ml.rag.corpus_builder import build_all_knowledge_chunks
+
+    repo_root = Path(__file__).resolve().parent.parent
+    examples_dir = repo_root / "docs" / "ttrpg-examples"
+    assert examples_dir.exists()
+    example_guides = [p for p in examples_dir.glob("*.md") if p.name != "AGENTS.md"]
+    assert len(example_guides) >= 6
+
+    chunks = build_all_knowledge_chunks(repo_root)
+    assert chunks
+    assert not any(
+        str(chunk.get("source_path", "")).startswith("docs/ttrpg-examples")
+        for chunk in chunks
+    )

@@ -59,6 +59,9 @@ Always build on the shared primitives in [`crates/satya-engine/src/primitives.rs
 
 ## 5. Bidirectional `docs/ttrpg/` <-> `satya-engine` Synchronization Checklist
 
+> [!NOTE]
+> **`docs/ttrpg-examples/` Boundary**: Verbose human-only prose play tutorials live separately in [`docs/ttrpg-examples/`](../../../docs/ttrpg-examples/AGENTS.md) and are intentionally excluded from `STATIC_CHAPTERS` and PyLance RAG. Do **not** read, grep, or sync `docs/ttrpg-examples/` unless the user explicitly requests it.
+
 Whenever adding, renaming, or splitting a `docs/ttrpg/` markdown chapter or changing a canonical formula:
 1. Update [`docs/ttrpg/SUMMARY.md`](../../../docs/ttrpg/SUMMARY.md) (Table of Contents + Reciprocal Rust Engine Module Index) and ensure the chapter has a `> **Rust Engine Implementation**:` callout at the top.
 2. Update `STATIC_CHAPTERS` in [`crates/satya-engine/src/rules_book.rs`](../../../crates/satya-engine/src/rules_book.rs) and `resolve_markdown_link_chapter_id` in [`crates/satya-engine/src/rules_book_html.rs`](../../../crates/satya-engine/src/rules_book_html.rs).

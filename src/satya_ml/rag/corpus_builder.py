@@ -223,7 +223,11 @@ def split_markdown_with_breadcrumbs(
 
 
 def build_ttrpg_rules_chunks(repo_root: Path) -> list[dict[str, Any]]:
-    """Index all `docs/ttrpg/**/*.md` rules chapters into breadcrumb + table-aware chunks."""
+    """Index all `docs/ttrpg/**/*.md` rules chapters into breadcrumb + table-aware chunks.
+
+    Note: Verbose human-oriented prose tutorials under `docs/ttrpg-examples/` are intentionally
+    excluded so RAG chunks stay terse, mathematical, and high-signal for AI GM/Player lookup.
+    """
     ttrpg_dir = repo_root / "docs" / "ttrpg"
     if not ttrpg_dir.exists():
         return []
