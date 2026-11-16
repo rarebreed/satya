@@ -177,8 +177,14 @@ fn dress_yard_props(b: &mut OutdoorBuilder, tier: EconomicTier, tree_budget: i32
         b.scatter_turf_prop_rot(PropKind::Bush, (tree_budget + 1).max(2), 35, bounds);
     }
     b.scatter_turf_prop_rot(PropKind::ParkBench, 2, 45, bounds);
+    b.scatter_turf_prop_rot(PropKind::TrashCan, 1, 30, bounds);
     if matches!(tier, EconomicTier::LowIncome | EconomicTier::MiddleClass) {
         b.scatter_turf_prop_rot(PropKind::WoodCrate, 2, 30, bounds);
+    } else {
+        b.scatter_turf_prop_rot(PropKind::HotTub, 1, 0, bounds);
+    }
+    if !matches!(tier, EconomicTier::LowIncome) {
+        b.scatter_turf_prop_rot(PropKind::GardenShed, 1, 0, bounds);
     }
 }
 
@@ -298,6 +304,21 @@ fn build_urban_block(
         OutdoorBuilder::cm(if street_north { hf - 1.5 } else { 1.5 }),
         4,
         None,
+    );
+    let _ = b.try_place_off_road_cm(
+        PropKind::GarbagePile,
+        OutdoorBuilder::cm((sx0 as f32 - 1.5).max(1.5)),
+        OutdoorBuilder::cm(if street_north { hf - 3.2 } else { 3.2 }),
+        18,
+        None,
+    );
+    let _ = b.try_place_cm(
+        PropKind::StreetDebris,
+        OutdoorBuilder::cm(wf * 0.35),
+        OutdoorBuilder::cm(walk_y),
+        8,
+        None,
+        true,
     );
     dress_yard_props(b, tier, if high_density { 2 } else { 4 }, if high_density { 2 } else { 3 });
 }

@@ -8,6 +8,9 @@
 //! Phase 1 maps mechanical `HalfCover` tiles onto theme-appropriate props; a later dressing layer
 //! (`PropKind` in `satya-engine`) will select glyphs explicitly with real ballistic material data.
 
+use crate::wasm_client::map_2d_art_furniture::{
+    COUNTER_STONES, FURNITURE_WOODS, wood_veneer_overlay,
+};
 use crate::wasm_client::map_2d_art_textures::BattlemapTextureMode;
 use std::f32::consts::TAU;
 use std::fmt::Write as _;
@@ -95,7 +98,6 @@ fn pick(variant: u64, opts: &[&'static str]) -> &'static str {
 }
 
 const FABRICS: &[&str] = &["#7d8e9b", "#a0705a", "#6d7f68", "#8c7f9e", "#b49a6a", "#5f6b78"];
-const WOODS: &[&str] = &["#a47b55", "#c4a27c", "#7a5c43", "#b8926a"];
 
 /// Appends one prop glyph centered at SVG `(cx, cy)` and rotated `rot_deg` clockwise.
 pub fn push_battlemap_prop(out: &mut String, kind: BattlemapPropKind, cx: f32, cy: f32, rot_deg: u16, variant: u64) {
@@ -140,10 +142,9 @@ pub fn push_battlemap_prop_with_mode(
         }
         BattlemapPropKind::Armchair => {
             let f = pick(variant, FABRICS);
-            let side = if painted { "url(#bm-oak)" } else { "#c4a27c" };
             let _ = write!(
                 out,
-                r##"<rect x="-20" y="-20" width="40" height="40" rx="8" fill="{f}"/><rect x="-20" y="-20" width="40" height="11" rx="5" fill="{f}"/><rect x="-18" y="-18.5" width="36" height="8" rx="4" fill="#000" fill-opacity=".16" stroke="none"/><rect x="-20" y="-13" width="8" height="33" rx="4" fill="{f}"/><rect x="12" y="-13" width="8" height="33" rx="4" fill="{f}"/><circle cx="21" cy="21" r="6" fill="{side}" stroke-width="1.4"/>"##
+                r##"<rect x="-20" y="-20" width="40" height="40" rx="8" fill="{f}"/><rect x="-20" y="-20" width="40" height="11" rx="5" fill="{f}"/><rect x="-18" y="-18.5" width="36" height="8" rx="4" fill="#000" fill-opacity=".16" stroke="none"/><rect x="-20" y="-13" width="8" height="33" rx="4" fill="{f}"/><rect x="12" y="-13" width="8" height="33" rx="4" fill="{f}"/><circle cx="21" cy="21" r="6" fill="#b38354" stroke-width="1.4"/>"##
             );
             if painted {
                 out.push_str(
@@ -152,14 +153,19 @@ pub fn push_battlemap_prop_with_mode(
             }
         }
         BattlemapPropKind::OfficeDesk => {
-            let w = if painted { "url(#bm-oak)" } else { pick(variant, WOODS) };
+            let w = pick(variant, FURNITURE_WOODS);
             let _ = write!(
                 out,
-                r##"<rect x="-28" y="-27" width="56" height="27" rx="2" fill="{w}"/><rect x="-11" y="-23" width="22" height="5" rx="1" fill="#2f3439"/><rect x="-9" y="-13" width="18" height="5" rx="1" fill="#e8e6e1" stroke-width="1"/><rect x="15" y="-21" width="8" height="10" fill="#f4f1ea" stroke-width="1" transform="rotate(14 19 -16)"/><circle cx="0" cy="13" r="10" fill="#3d4247"/><path d="M-9 20Q0 27 9 20" fill="none" stroke-width="3.2" stroke-linecap="round"/>"##
+                r##"<rect x="-28" y="-27" width="56" height="27" rx="2" fill="{w}"/>"##
+            );
+            wood_veneer_overlay(out, [-28.0, -27.0, 56.0, 27.0], 2.0, painted);
+            let _ = write!(
+                out,
+                r##"<rect x="-11" y="-23" width="22" height="5" rx="1" fill="#2f3439"/><rect x="-9" y="-13" width="18" height="5" rx="1" fill="#e8e6e1" stroke-width="1"/><rect x="15" y="-21" width="8" height="10" fill="#f4f1ea" stroke-width="1" transform="rotate(14 19 -16)"/><circle cx="0" cy="13" r="10" fill="#3d4247"/><path d="M-9 20Q0 27 9 20" fill="none" stroke-width="3.2" stroke-linecap="round"/>"##
             );
         }
         BattlemapPropKind::KitchenIsland => {
-            let top = if painted { "url(#bm-ceramic)" } else { "#dcd8cf" };
+            let top = pick(variant, COUNTER_STONES);
             let sink = if painted { "url(#bm-steel)" } else { "#b7c1c7" };
             let _ = write!(
                 out,
@@ -184,18 +190,22 @@ pub fn push_battlemap_prop_with_mode(
             );
         }
         BattlemapPropKind::WoodCrate => {
-            let w = if painted { "url(#bm-oak)" } else { pick(variant, &["#b98b55", "#c79a62", "#a77a48"]) };
-            let _ = write!(
-                out,
-                r##"<rect x="-24" y="-24" width="48" height="48" rx="2" fill="{w}"/><rect x="-19" y="-19" width="38" height="38" fill="none" stroke-width="1.2" stroke-opacity=".6"/><path d="M-19 -6.5H19M-19 6.5H19" fill="none" stroke-width="1" stroke-opacity=".45"/><path d="M-19 -19L19 19" fill="none" stroke-width="2.4"/>"##
+            let w = pick(variant, &["#b98b55", "#c79a62", "#a77a48"]);
+            let _ = write!(out, r##"<rect x="-24" y="-24" width="48" height="48" rx="2" fill="{w}"/>"##);
+            wood_veneer_overlay(out, [-24.0, -24.0, 48.0, 48.0], 2.0, painted);
+            out.push_str(
+                r##"<rect x="-19" y="-19" width="38" height="38" fill="none" stroke-width="1.2" stroke-opacity=".6"/><path d="M-19 -6.5H19M-19 6.5H19" fill="none" stroke-width="1" stroke-opacity=".45"/><path d="M-19 -19L19 19" fill="none" stroke-width="2.4"/>"##,
             );
         }
         BattlemapPropKind::PalletStack => {
-            let b = if painted { "url(#bm-oak)" } else { pick(variant, &["#c8a27a", "#b88f63", "#d2b48c"]) };
-            let base = if painted { "url(#bm-oak)" } else { "#c6a46f" };
+            let b = pick(variant, &["#c8a27a", "#b88f63", "#d2b48c"]);
             let _ = write!(
                 out,
-                r##"<rect x="-26" y="-24" width="52" height="48" rx="1" fill="{base}"/><rect x="-22" y="-20" width="21" height="19" fill="{b}"/><rect x="1" y="-20" width="21" height="19" fill="{b}"/><rect x="-22" y="1" width="44" height="19" fill="{b}"/><path d="M-11.5 -20V-1M11.5 -20V-1M-22 10.5H22" fill="none" stroke="#efe4c8" stroke-width="2.6"/><path d="M-23 -22H-6" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>"##
+                r##"<rect x="-26" y="-24" width="52" height="48" rx="1" fill="#b99664"/><rect x="-22" y="-20" width="21" height="19" fill="{b}"/><rect x="1" y="-20" width="21" height="19" fill="{b}"/><rect x="-22" y="1" width="44" height="19" fill="{b}"/>"##
+            );
+            wood_veneer_overlay(out, [-26.0, -24.0, 52.0, 48.0], 1.0, painted);
+            out.push_str(
+                r##"<path d="M-11.5 -20V-1M11.5 -20V-1M-22 10.5H22" fill="none" stroke="#efe4c8" stroke-width="2.6"/><path d="M-23 -22H-6" stroke="#fff" stroke-opacity=".55" stroke-width="2"/>"##,
             );
         }
         BattlemapPropKind::DrumCluster => {
@@ -216,10 +226,10 @@ pub fn push_battlemap_prop_with_mode(
             }
         }
         BattlemapPropKind::Workbench => {
-            let top = if painted { "url(#bm-oak)" } else { "#8a6a4a" };
-            let _ = write!(
-                out,
-                r##"<rect x="-28" y="-15" width="56" height="30" rx="1.5" fill="{top}"/><path d="M-28 -5H28M-28 5H28" fill="none" stroke-width=".9" stroke-opacity=".35"/><rect x="18" y="-20" width="10" height="9" fill="#5b6770"/><path d="M-18 -6l10 6" stroke="#3f4448" stroke-width="3.2" stroke-linecap="round"/><circle cx="-1" cy="6" r="4" fill="#c9502f" stroke-width="1.2"/><rect x="-24" y="3" width="10" height="7" fill="#d9c38a" stroke-width="1"/>"##,
+            out.push_str(r##"<rect x="-28" y="-15" width="56" height="30" rx="1.5" fill="#8a6a4a"/>"##);
+            wood_veneer_overlay(out, [-28.0, -15.0, 56.0, 30.0], 1.5, painted);
+            out.push_str(
+                r##"<path d="M-28 -5H28M-28 5H28" fill="none" stroke-width=".9" stroke-opacity=".35"/><rect x="18" y="-20" width="10" height="9" fill="#5b6770"/><path d="M-18 -6l10 6" stroke="#3f4448" stroke-width="3.2" stroke-linecap="round"/><circle cx="-1" cy="6" r="4" fill="#c9502f" stroke-width="1.2"/><rect x="-24" y="3" width="10" height="7" fill="#d9c38a" stroke-width="1"/>"##,
             );
         }
         BattlemapPropKind::IbcTote => {
@@ -269,10 +279,10 @@ pub fn push_battlemap_prop_with_mode(
             );
         }
         BattlemapPropKind::StreetBench => {
-            let wood = if painted { "url(#bm-oak)" } else { "#8b6a48" };
-            let _ = write!(
-                out,
-                r##"<rect x="-27" y="-9" width="54" height="18" rx="2" fill="{wood}"/><path d="M-27 -3H27M-27 3H27" fill="none" stroke-width="1" stroke-opacity=".55"/><path d="M-20 -12V12M20 -12V12" stroke="#3b3f43" stroke-width="3.2"/>"##,
+            out.push_str(r##"<rect x="-27" y="-9" width="54" height="18" rx="2" fill="#8b6a48"/>"##);
+            wood_veneer_overlay(out, [-27.0, -9.0, 54.0, 18.0], 2.0, painted);
+            out.push_str(
+                r##"<path d="M-27 -3H27M-27 3H27" fill="none" stroke-width="1" stroke-opacity=".55"/><path d="M-20 -12V12M20 -12V12" stroke="#3b3f43" stroke-width="3.2"/>"##,
             );
         }
         BattlemapPropKind::Rubble => {
@@ -292,10 +302,11 @@ pub fn push_battlemap_prop_with_mode(
             );
         }
         BattlemapPropKind::OverturnedTable => {
-            let w = if painted { "url(#bm-oak)" } else { pick(variant, WOODS) };
-            let _ = write!(
-                out,
-                r##"<rect x="-27" y="-8" width="54" height="13" rx="2" fill="{w}"/><path d="M-27 -1.5H27" fill="none" stroke-width=".9" stroke-opacity=".4"/><path d="M-21 5V22M21 5V22" stroke="#5a4330" stroke-width="4.5" stroke-linecap="round"/><rect x="-6" y="12" width="7" height="5" fill="#f4f1ea" stroke-width="1" transform="rotate(-18 -2 14)"/>"##
+            let w = pick(variant, FURNITURE_WOODS);
+            let _ = write!(out, r##"<rect x="-27" y="-8" width="54" height="13" rx="2" fill="{w}"/>"##);
+            wood_veneer_overlay(out, [-27.0, -8.0, 54.0, 13.0], 2.0, painted);
+            out.push_str(
+                r##"<path d="M-27 -1.5H27" fill="none" stroke-width=".9" stroke-opacity=".4"/><path d="M-21 5V22M21 5V22" stroke="#5a4330" stroke-width="4.5" stroke-linecap="round"/><rect x="-6" y="12" width="7" height="5" fill="#f4f1ea" stroke-width="1" transform="rotate(-18 -2 14)"/>"##,
             );
         }
     }

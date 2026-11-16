@@ -6,6 +6,7 @@ import argparse
 import base64
 import io
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +64,7 @@ class GeminiImageClient:
                     "gemini-nano-banana-2.1",
                     "gemini-3.1-flash-image",
                     "gemini-3.1-flash-image-preview",
+                    "gemini-2.5-flash-image",
                 ]
             )
         )
@@ -194,6 +196,34 @@ def _load_rgb(path: Path) -> np.ndarray:
     return np.asarray(Image.open(path).convert("RGB"), dtype=np.uint8)
 
 
+def _resolve_api_key() -> str | None:
+    """Resolve Gemini API key from env vars, HKCU\\Environment on Windows, or data/.gemini_api_key."""
+    for env_name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        val = os.environ.get(env_name, "").strip()
+        if val:
+            return val
+    if sys.platform == "win32":
+        import winreg
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as reg_key:
+                for env_name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+                    try:
+                        val, _ = winreg.QueryValueEx(reg_key, env_name)
+                    except OSError:
+                        continue
+                    if isinstance(val, str) and val.strip():
+                        return val.strip()
+        except OSError:
+            pass
+    key_file = Path("data/.gemini_api_key")
+    if key_file.is_file():
+        val = key_file.read_text(encoding="utf-8").strip()
+        if val:
+            return val
+    return None
+
+
 def fetch_raw_textures(
     specs: list[TextureSpec],
     *,
@@ -202,7 +232,7 @@ def fetch_raw_textures(
     heal_pass: bool,
     skip_existing: bool = False,
 ) -> None:
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    api_key = _resolve_api_key()
     if not api_key:
         raise SystemExit("Missing GEMINI_API_KEY or GOOGLE_API_KEY environment variable.")
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -260,7 +290,13 @@ def process_raw_textures(
         tile = finalize_tile(raw_rgb, spec, healed_rolled_rgb=healed_rgb, out_px=size_px)
         out_path = out_dir / spec.filename
         Image.fromarray(tile).save(out_path, format="WEBP", quality=quality, method=6)
-        rx, ry = wrap_seam_ratio(tile)
+        rx, ry = wrap_seam_ratio(_load_rgb(out_path))
+        if (rx > 1.38 or ry > 1.38) and quality < 98:
+            Image.fromarray(tile).save(out_path, format="WEBP", quality=98, method=6)
+            rx, ry = wrap_seam_ratio(_load_rgb(out_path))
+        if rx > 1.38 or ry > 1.38:
+            Image.fromarray(tile).save(out_path, format="WEBP", lossless=True, method=6)
+            rx, ry = wrap_seam_ratio(_load_rgb(out_path))
         print(f"[texture_gen] baked {out_path} ({size_px}x{size_px}, wrap_ratio=({rx:.2f}, {ry:.2f}))")
 
         if preview_dir is not None:

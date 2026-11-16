@@ -113,6 +113,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let mode = i32(round(scene.mode_params.x));
     var albedo = in.base_rgb;
     var spec_scale = 1.0;
+    var out_alpha = in.alpha;
 
     if mode == 2 {
         albedo = zone_palette(in.zone_id, in.base_rgb * 0.65);
@@ -149,7 +150,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             albedo = mix(albedo * 0.86, albedo * 1.28, rip * 0.5 + 0.5);
             n = normalize(n + vec3<f32>(rip * 0.08, 0.0, cos(wp.y * 8.0) * 0.06));
             spec_scale = 2.2;
-        } else if abs(in.zone_id - (-0.25)) < 0.1 {
+        } else if abs(in.zone_id - (-0.35)) < 0.04 {
+            let l_clump = vnoise2(wp * 7.5 + in.world_pos.y * 3.1);
+            let l_leaf = vnoise2(wp * 19.0 - in.world_pos.y * 5.0);
+            albedo = albedo * (0.72 + 0.48 * l_clump) + vec3<f32>(0.04, 0.07, 0.01) * l_leaf;
+            n = normalize(n + vec3<f32>((l_leaf - 0.5) * 0.24, 0.0, (l_clump - 0.5) * 0.24));
+            spec_scale = 0.35;
+            out_alpha = in.alpha * 0.46;
+        } else if abs(in.zone_id - (-0.25)) < 0.06 {
             let l_clump = vnoise2(wp * 7.5 + in.world_pos.y * 3.1);
             let l_leaf = vnoise2(wp * 19.0 - in.world_pos.y * 5.0);
             albedo = albedo * (0.72 + 0.48 * l_clump) + vec3<f32>(0.04, 0.07, 0.01) * l_leaf;
@@ -161,6 +169,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             albedo = albedo * (0.88 + 0.14 * wear + 0.12 * (grain - 0.5));
             n = normalize(n + vec3<f32>((grain - 0.5) * 0.10, 0.0, (wear - 0.5) * 0.10));
             spec_scale = 0.30;
+        } else if abs(in.zone_id - (-8.0)) < 0.1 {
+            let vein = vnoise2(wp * 2.8 + vec2<f32>(vnoise2(wp * 1.4) * 1.6, 0.0));
+            let cell_uv = fract(wp * 2.0);
+            let edge = min(min(cell_uv.x, 1.0 - cell_uv.x), min(cell_uv.y, 1.0 - cell_uv.y));
+            let grout = 1.0 - smoothstep(0.0, 0.025, edge);
+            albedo = mix(albedo * (0.86 + 0.22 * vein), albedo * 0.55, grout * 0.55);
+            spec_scale = 0.85;
         }
     }
 
@@ -207,7 +222,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         rgb = mix(rgb, wire_col, wire * scene.mode_params.z);
     }
 
-    return vec4<f32>(rgb, in.alpha);
+    return vec4<f32>(rgb, out_alpha);
 }
 "#;
 

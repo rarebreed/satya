@@ -188,14 +188,44 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         PropKind::BarCounter | PropKind::BackBarShelf | PropKind::Booth | PropKind::PoolTable | PropKind::Jukebox => {
             Some(("hospitality_lounge", "Bar / Hospitality Lounge"))
         }
-        PropKind::Sofa | PropKind::Loveseat | PropKind::Bed | PropKind::KitchenCounter | PropKind::Stove => {
+        PropKind::Sofa
+        | PropKind::Loveseat
+        | PropKind::Bed
+        | PropKind::KitchenCounter
+        | PropKind::Stove
+        | PropKind::Nightstand
+        | PropKind::Dresser
+        | PropKind::BathroomSink
+        | PropKind::TvStand
+        | PropKind::Stereo
+        | PropKind::RunnerRug
+        | PropKind::RoundRug
+        | PropKind::DeskLamp
+        | PropKind::StandingLamp
+        | PropKind::FloorClothes
+        | PropKind::FloorToys => {
             Some(("residential_quarters", "Living Quarters / Unit"))
         }
-        PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier => {
+        PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier | PropKind::StreetDebris => {
             Some(("vehicle_perimeter", "Curbside / Vehicle Perimeter"))
         }
-        PropKind::CropRow | PropKind::PlanterTable | PropKind::LargeTree | PropKind::MediumTree | PropKind::Boulder => {
+        PropKind::CropRow
+        | PropKind::PlanterTable
+        | PropKind::LargeTree
+        | PropKind::MediumTree
+        | PropKind::Boulder
+        | PropKind::SmallFountain
+        | PropKind::MediumFountain
+        | PropKind::LargeFountain
+        | PropKind::Gazebo
+        | PropKind::BbqGrill
+        | PropKind::GardenShed
+        | PropKind::HotTub => {
             Some(("exterior_grounds", "Exterior / Greenbelt Grounds"))
+        }
+        PropKind::FireExtinguisher => Some(("office_ops", "Safety & Utility Fixture")),
+        PropKind::TrashCan | PropKind::GarbagePile | PropKind::AcUnit => {
+            Some(("utility_service", "Service / Utility Yard"))
         }
         PropKind::Stairwell => Some(("vertical_stairwell", "Stairwell / Vertical Access")),
         PropKind::HazardSpill => Some(("hazard_spill", "Hazardous Spill Zone")),
@@ -207,7 +237,12 @@ fn surface_semantic_label(kind: SurfaceFeatureKind) -> &'static str {
     match kind {
         SurfaceFeatureKind::AsphaltRoad | SurfaceFeatureKind::GravelRoad => "Roadway Corridor",
         SurfaceFeatureKind::ConcreteWalk | SurfaceFeatureKind::StoneWalk => "Pedestrian Plaza / Walk",
-        SurfaceFeatureKind::InteriorFloor => "Building Interior Wing",
+        SurfaceFeatureKind::WoodDeck => "Timber Deck / Porch",
+        SurfaceFeatureKind::PoolWater => "Swimming Pool Basin",
+        SurfaceFeatureKind::InteriorFloor
+        | SurfaceFeatureKind::CeramicTileFloor
+        | SurfaceFeatureKind::MarbleFloor
+        | SurfaceFeatureKind::CarpetFloor => "Building Interior Wing",
         SurfaceFeatureKind::BridgeDeck => "Bridge / Overpass Span",
         SurfaceFeatureKind::CreekChannel | SurfaceFeatureKind::DrainageDitch => "Waterway / Drainage Cut",
         SurfaceFeatureKind::DefensiveTrench => "Excavated Trench / Earthwork",

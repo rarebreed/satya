@@ -16,7 +16,8 @@ use std::f32::consts::TAU;
 use std::fmt::Write as _;
 
 const FABRICS: &[&str] = &["#7d8e9b", "#a0705a", "#6d7f68", "#8c7f9e", "#b49a6a", "#5f6b78"];
-const WOODS: &[&str] = &["#a47b55", "#c4a27c", "#7a5c43", "#b8926a"];
+pub(crate) const FURNITURE_WOODS: &[&str] = &["#8b5e3c", "#6f472b", "#b38354", "#4e3321", "#a47449", "#c29b70"];
+pub(crate) const COUNTER_STONES: &[&str] = &["#e4dfd7", "#36393e", "#cfc8bc", "#d8c4a8"];
 const BOTTLES: &[&str] = &["#3f7a3a", "#8a5a2b", "#d9c38a", "#6b2f2f", "#2f5a7a", "#c9c9c0"];
 const CANOPY_OUTER: &[&str] = &["#3f6b35", "#355e3b", "#4a6f35", "#4f6a2f", "#2f5838"];
 const CANOPY_MID: &[&str] = &["#5d8c47", "#4f814e", "#6b9348", "#6d8b3d", "#48784c"];
@@ -43,6 +44,18 @@ fn fabric_overlay(out: &mut String, [x, y, w, h]: [f32; 4], rx: f32) {
         "url(#bm-fabric)",
         r#"fill-opacity=".38" style="mix-blend-mode:multiply" stroke="none""#,
     );
+}
+
+pub(crate) fn wood_veneer_overlay(out: &mut String, coords: [f32; 4], rx: f32, painted: bool) {
+    if painted {
+        rect(
+            out,
+            coords,
+            rx,
+            "url(#bm-wood-veneer)",
+            r#"fill-opacity=".42" style="mix-blend-mode:multiply" stroke="none""#,
+        );
+    }
 }
 
 fn circle(out: &mut String, cx: f32, cy: f32, r: f32, fill: &str, extra: &str) {
@@ -80,7 +93,7 @@ pub fn push_furniture_glyph_with_mode(
     let (l, t) = (lw * 0.5, lh * 0.5);
     let v = p.variant_seed;
     let thin = r#"stroke-width="1.1" stroke-opacity=".55""#;
-    let wd_for = |seed: u32| if painted { "url(#bm-oak)" } else { pick(seed, WOODS) };
+    let wd_for = |seed: u32| pick(seed, FURNITURE_WOODS);
     let _ = write!(
         out,
         r#"<g transform="translate({cx:.1} {cy:.1}) rotate({rot})" stroke="{BATTLEMAP_INK}" stroke-width="2" stroke-linejoin="round">"#
@@ -104,7 +117,9 @@ pub fn push_furniture_glyph_with_mode(
             }
         }
         PropKind::CoffeeTable => {
-            rect(out, [-l + 10.0, -t + 14.0, lw - 20.0, lh - 28.0], 5.0, wd_for(v), "");
+            let coords = [-l + 10.0, -t + 14.0, lw - 20.0, lh - 28.0];
+            rect(out, coords, 5.0, wd_for(v), "");
+            wood_veneer_overlay(out, coords, 5.0, painted);
             rect(out, [-l + 22.0, -t + 22.0, 16.0, 11.0], 1.0, "#e9e3d6", r#"stroke-width="1""#);
             circle(out, l - 26.0, 0.0, 5.0, "#f4f1ea", r#"stroke-width="1.2""#);
         }
@@ -131,13 +146,18 @@ pub fn push_furniture_glyph_with_mode(
             for (x, y) in [(-l + 4.0, -8.0), (l - 18.0, -8.0)] {
                 rect(out, [x, y, 14.0, 16.0], 4.0, "#5b4a3a", "");
             }
-            rect(out, [-l + 20.0, -t + 18.0, lw - 40.0, lh - 36.0], 4.0, wd_for(v), "");
+            let coords = [-l + 20.0, -t + 18.0, lw - 40.0, lh - 36.0];
+            rect(out, coords, 4.0, wd_for(v), "");
+            wood_veneer_overlay(out, coords, 4.0, painted);
             circle(out, 0.0, 0.0, 7.0, "#f4f1ea", r#"stroke-width="1.2""#);
         }
         PropKind::RoundTable => {
             circle(out, -21.0, 0.0, 7.5, "#3d4247", "");
             circle(out, 21.0, 0.0, 7.5, "#3d4247", "");
             circle(out, 0.0, 0.0, 15.0, wd_for(v), "");
+            if painted {
+                circle(out, 0.0, 0.0, 15.0, "url(#bm-wood-veneer)", r#"fill-opacity=".42" style="mix-blend-mode:multiply" stroke="none""#);
+            }
             circle(out, 4.0, -3.0, 3.5, "#d9a441", r#"stroke-width="1""#);
         }
         PropKind::Booth => {
@@ -150,12 +170,16 @@ pub fn push_furniture_glyph_with_mode(
             }
             rect(out, [-l + 6.0, -t + 4.0, lw - 12.0, 8.0], 3.0, "#000", r#"fill-opacity=".2" stroke="none""#);
             rect(out, [-l + 6.0, t - 12.0, lw - 12.0, 8.0], 3.0, "#000", r#"fill-opacity=".2" stroke="none""#);
-            rect(out, [-l + 14.0, -t + 34.0, lw - 28.0, lh - 68.0], 3.0, wd_for(v ^ 7), "");
+            let tbl = [-l + 14.0, -t + 34.0, lw - 28.0, lh - 68.0];
+            rect(out, tbl, 3.0, wd_for(v ^ 7), "");
+            wood_veneer_overlay(out, tbl, 3.0, painted);
         }
         PropKind::Bed => {
             let duvet = pick(v, &["#8fb3c9", "#c9b8d6", "#d8cbb0", "#9fb8a0"]);
             rect(out, [-l + 6.0, -t + 4.0, lw - 12.0, lh - 8.0], 5.0, "#e8e4dc", "");
-            rect(out, [-l + 6.0, -t + 4.0, lw - 12.0, 10.0], 3.0, wd_for(v ^ 3), "");
+            let hb = [-l + 6.0, -t + 4.0, lw - 12.0, 10.0];
+            rect(out, hb, 3.0, wd_for(v ^ 3), "");
+            wood_veneer_overlay(out, hb, 3.0, painted);
             rect(out, [-l + 14.0, -t + 18.0, l - 20.0, 18.0], 7.0, "#fbfbf8", "");
             rect(out, [6.0, -t + 18.0, l - 20.0, 18.0], 7.0, "#fbfbf8", "");
             rect(out, [-l + 6.0, -t + 44.0, lw - 12.0, lh - 48.0], 4.0, duvet, "");
@@ -165,7 +189,9 @@ pub fn push_furniture_glyph_with_mode(
             let _ = write!(out, r#"<path d="M{:.1} {:.1}H{:.1}" {thin}/>"#, -l + 6.0, -t + 54.0, l - 6.0);
         }
         PropKind::Desk => {
-            rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh * 0.5], 2.0, wd_for(v), "");
+            let top = [-l + 4.0, -t + 4.0, lw - 8.0, lh * 0.5];
+            rect(out, top, 2.0, wd_for(v), "");
+            wood_veneer_overlay(out, top, 2.0, painted);
             rect(out, [-14.0, -t + 8.0, 28.0, 5.0], 1.0, "#2f3439", "");
             rect(out, [-11.0, -t + 18.0, 22.0, 6.0], 1.0, "#e8e6e1", r#"stroke-width="1""#);
             rect(out, [l - 26.0, -t + 10.0, 12.0, 14.0], 0.0, "#f4f1ea", r#"stroke-width="1" transform="rotate(10)""#);
@@ -180,7 +206,11 @@ pub fn push_furniture_glyph_with_mode(
                 wd_for(v)
             };
             let depth = lh * 0.48;
-            rect(out, [-l + 3.0, -t + 3.0, lw - 6.0, depth], 1.5, body, "");
+            let coords = [-l + 3.0, -t + 3.0, lw - 6.0, depth];
+            rect(out, coords, 1.5, body, "");
+            if !steel {
+                wood_veneer_overlay(out, coords, 1.5, painted);
+            }
             let n = (lw / 9.0) as i32;
             for i in 0..n {
                 let x = -l + 7.0 + i as f32 * 8.6;
@@ -190,14 +220,16 @@ pub fn push_furniture_glyph_with_mode(
         }
         PropKind::Wardrobe => {
             let depth = lh * 0.55;
-            rect(out, [-l + 3.0, -t + 3.0, lw - 6.0, depth], 2.0, wd_for(v), "");
+            let coords = [-l + 3.0, -t + 3.0, lw - 6.0, depth];
+            rect(out, coords, 2.0, wd_for(v), "");
+            wood_veneer_overlay(out, coords, 2.0, painted);
             let _ = write!(out, r#"<path d="M0 {:.1}V{:.1}" {thin}/>"#, -t + 3.0, -t + 3.0 + depth);
             circle(out, -4.0, -t + depth - 6.0, 1.8, BATTLEMAP_INK, "");
             circle(out, 4.0, -t + depth - 6.0, 1.8, BATTLEMAP_INK, "");
         }
         PropKind::KitchenCounter => {
             let depth = lh * 0.62;
-            let top = if painted { "url(#bm-ceramic)" } else { "#d9d4ca" };
+            let top = pick(v, COUNTER_STONES);
             let sink = if painted { "url(#bm-steel)" } else { "#b7c1c7" };
             rect(out, [-l + 1.0, -t + 2.0, lw - 2.0, depth], 1.5, top, "");
             let _ = write!(out, r#"<path d="M{:.1} {:.1}H{:.1}" {thin}/>"#, -l + 1.0, -t + 7.0, l - 1.0);
@@ -223,11 +255,12 @@ pub fn push_furniture_glyph_with_mode(
             rect(out, [l - 14.0, -t + 10.0, 3.0, 12.0], 1.0, "#9aa0a6", r#"stroke-width=".8""#);
         }
         PropKind::BarCounter => {
-            rect(out, [-l + 1.0, -t + 10.0, lw - 2.0, lh - 20.0], 3.0, if painted { "url(#bm-oak)" } else { "#5a3a24" }, "");
-            if painted {
-                rect(out, [-l + 1.0, -t + 10.0, lw - 2.0, lh - 20.0], 3.0, "#2a1608", r#"fill-opacity=".35" stroke="none""#);
-            }
-            rect(out, [-l + 1.0, t - 18.0, lw - 2.0, 8.0], 3.0, if painted { "url(#bm-oak)" } else { "#8a6a48" }, r#"stroke-width="1.4""#);
+            let body = [-l + 1.0, -t + 10.0, lw - 2.0, lh - 20.0];
+            let rail = [-l + 1.0, t - 18.0, lw - 2.0, 8.0];
+            rect(out, body, 3.0, "#5c3b23", "");
+            wood_veneer_overlay(out, body, 3.0, painted);
+            rect(out, rail, 3.0, "#8a6845", r#"stroke-width="1.4""#);
+            wood_veneer_overlay(out, rail, 3.0, painted);
             let n = p.w_cells.max(p.h_cells);
             for i in 0..n {
                 let x = -l + cell_px * (i as f32 + 0.5);
@@ -240,7 +273,9 @@ pub fn push_furniture_glyph_with_mode(
         }
         PropKind::BackBarShelf => {
             let depth = lh * 0.45;
-            rect(out, [-l + 1.0, -t + 2.0, lw - 2.0, depth], 1.0, if painted { "url(#bm-oak)" } else { "#3e2a1b" }, "");
+            let coords = [-l + 1.0, -t + 2.0, lw - 2.0, depth];
+            rect(out, coords, 1.0, "#492f1c", "");
+            wood_veneer_overlay(out, coords, 1.0, painted);
             let n = (lw / 7.0) as i32;
             for i in 0..n {
                 let c = pick(v.wrapping_add(i as u32 * 17), BOTTLES);
@@ -252,7 +287,9 @@ pub fn push_furniture_glyph_with_mode(
             circle(out, 0.0, 0.0, 7.0, "#7a2f2f", r#"stroke-width="1""#);
         }
         PropKind::PoolTable => {
-            rect(out, [-l + 8.0, -t + 8.0, lw - 16.0, lh - 16.0], 8.0, if painted { "url(#bm-oak)" } else { "#5a3a24" }, "");
+            let rim = [-l + 8.0, -t + 8.0, lw - 16.0, lh - 16.0];
+            rect(out, rim, 8.0, "#5a3a24", "");
+            wood_veneer_overlay(out, rim, 8.0, painted);
             rect(out, [-l + 18.0, -t + 18.0, lw - 36.0, lh - 36.0], 2.0, "#1f6b3e", r#"stroke-width="1.4""#);
             if painted {
                 fabric_overlay(out, [-l + 18.0, -t + 18.0, lw - 36.0, lh - 36.0], 2.0);
@@ -281,7 +318,7 @@ pub fn push_furniture_glyph_with_mode(
             );
         }
         PropKind::Bathtub => {
-            rect(out, [-l + 4.0, -t + 6.0, lw - 8.0, lh - 12.0], 14.0, if painted { "url(#bm-ceramic)" } else { "#f1f2f3" }, "");
+            rect(out, [-l + 4.0, -t + 6.0, lw - 8.0, lh - 12.0], 14.0, "#f4f7f9", "");
             rect(out, [-l + 12.0, -t + 13.0, lw - 24.0, lh - 26.0], 12.0, "#cfe3ee", r#"stroke-width="1.2""#);
             circle(out, l - 22.0, 0.0, 2.5, "#8b959b", r#"stroke-width="1""#);
         }
@@ -349,7 +386,9 @@ pub fn push_furniture_glyph_with_mode(
             );
         }
         PropKind::ParkBench => {
-            rect(out, [-l + 6.0, -t + 10.0, lw - 12.0, lh - 22.0], 3.0, wd_for(v), "");
+            let seat = [-l + 6.0, -t + 10.0, lw - 12.0, lh - 22.0];
+            rect(out, seat, 3.0, wd_for(v), "");
+            wood_veneer_overlay(out, seat, 3.0, painted);
             rect(out, [-l + 6.0, -t + 8.0, lw - 12.0, 9.0], 2.5, "#6b4c32", "");
             let _ = write!(
                 out,
@@ -364,15 +403,15 @@ pub fn push_furniture_glyph_with_mode(
         }
         PropKind::PicnicTable => {
             let wd = wd_for(v);
-            rect(out, [-l + 8.0, -t + 6.0, lw - 16.0, 16.0], 3.0, wd, "");
-            rect(out, [-l + 8.0, t - 22.0, lw - 16.0, 16.0], 3.0, wd, "");
-            rect(out, [-l + 6.0, -t + 28.0, lw - 12.0, lh - 56.0], 4.0, wd, "");
-            let _ = write!(
-                out,
-                r#"<path d="M{x0:.1} -8H{x1:.1}M{x0:.1} 8H{x1:.1}" {thin}/>"#,
-                x0 = -l + 8.0,
-                x1 = l - 8.0
-            );
+            for box_r in [
+                [-l + 8.0, -t + 6.0, lw - 16.0, 16.0],
+                [-l + 8.0, t - 22.0, lw - 16.0, 16.0],
+                [-l + 6.0, -t + 28.0, lw - 12.0, lh - 56.0],
+            ] {
+                rect(out, box_r, if box_r[3] > 20.0 { 4.0 } else { 3.0 }, wd, "");
+                wood_veneer_overlay(out, box_r, 3.0, painted);
+            }
+            let _ = write!(out, r#"<path d="M{x0:.1} -8H{x1:.1}M{x0:.1} 8H{x1:.1}" {thin}/>"#, x0 = -l + 8.0, x1 = l - 8.0);
         }
         PropKind::Dumpster => {
             let body = pick(v, &["#2f5d41", "#2f4b69", "#524a3e"]);
@@ -450,16 +489,13 @@ pub fn push_furniture_glyph_with_mode(
         }
         PropKind::DeskL => {
             let wd = wd_for(v);
-            let x0 = -l + 4.0;
-            let y0 = -t + 5.0;
-            let x1 = l - 4.0;
-            let y1 = t - 5.0;
-            let xm = (-l + cell_px - 6.0).min(x1 - 12.0);
-            let ym = (-t + cell_px - 6.0).min(y1 - 12.0);
-            let _ = write!(
-                out,
-                r##"<path d="M{x0:.1} {y0:.1}H{x1:.1}V{ym:.1}H{xm:.1}V{y1:.1}H{x0:.1}Z" fill="{wd}"/>"##
-            );
+            let (x0, y0, x1, y1) = (-l + 4.0, -t + 5.0, l - 4.0, t - 5.0);
+            let (xm, ym) = ((-l + cell_px - 6.0).min(x1 - 12.0), (-t + cell_px - 6.0).min(y1 - 12.0));
+            let d = format!("M{x0:.1} {y0:.1}H{x1:.1}V{ym:.1}H{xm:.1}V{y1:.1}H{x0:.1}Z");
+            let _ = write!(out, r#"<path d="{d}" fill="{wd}"/>"#);
+            if painted {
+                let _ = write!(out, r#"<path d="{d}" fill="url(#bm-wood-veneer)" fill-opacity=".42" style="mix-blend-mode:multiply" stroke="none"/>"#);
+            }
             let _ = write!(
                 out,
                 r##"<rect x="{:.1}" y="{:.1}" width="24" height="5" rx="1.5" transform="rotate(-35 {:.1} {:.1})" fill="#2a3038"/><rect x="{:.1}" y="{:.1}" width="18" height="7" rx="1.5" transform="rotate(-35 {:.1} {:.1})" fill="#3b424c" stroke-width="1"/>"##,
@@ -472,17 +508,13 @@ pub fn push_furniture_glyph_with_mode(
         }
         PropKind::DeskT => {
             let wd = wd_for(v);
-            let x0 = -l + 4.0;
-            let x1 = l - 4.0;
-            let y0 = -t + 5.0;
-            let y1 = t - 5.0;
-            let ym = (-t + cell_px - 6.0).min(y1 - 12.0);
-            let sx0 = -cell_px * 0.40;
-            let sx1 = cell_px * 0.40;
-            let _ = write!(
-                out,
-                r##"<path d="M{x0:.1} {y0:.1}H{x1:.1}V{ym:.1}H{sx1:.1}V{y1:.1}H{sx0:.1}V{ym:.1}H{x0:.1}Z" fill="{wd}"/>"##
-            );
+            let (x0, x1, y0, y1) = (-l + 4.0, l - 4.0, -t + 5.0, t - 5.0);
+            let (ym, sx0, sx1) = ((-t + cell_px - 6.0).min(y1 - 12.0), -cell_px * 0.40, cell_px * 0.40);
+            let d = format!("M{x0:.1} {y0:.1}H{x1:.1}V{ym:.1}H{sx1:.1}V{y1:.1}H{sx0:.1}V{ym:.1}H{x0:.1}Z");
+            let _ = write!(out, r#"<path d="{d}" fill="{wd}"/>"#);
+            if painted {
+                let _ = write!(out, r#"<path d="{d}" fill="url(#bm-wood-veneer)" fill-opacity=".42" style="mix-blend-mode:multiply" stroke="none"/>"#);
+            }
             rect(out, [-cell_px * 0.72, y0 + 5.0, 22.0, 5.0], 1.5, "#2a3038", r#"stroke-width="1""#);
             rect(out, [cell_px * 0.72 - 22.0, y0 + 5.0, 22.0, 5.0], 1.5, "#2a3038", r#"stroke-width="1""#);
             rect(out, [-10.0, 2.0, 20.0, 12.0], 2.0, "#dce4ec", r#"stroke-width="1""#);
@@ -576,22 +608,22 @@ pub fn push_furniture_glyph_with_mode(
                 in_op = if painted { ".28" } else { ".55" },
             );
         }
-        PropKind::Stairwell
-        | PropKind::DisplayRack
-        | PropKind::CheckoutCounter
-        | PropKind::HospitalBed
-        | PropKind::SurgicalTable
-        | PropKind::ImagingScanner
-        | PropKind::PrivacyCurtain
-        | PropKind::MallKiosk
-        | PropKind::ConveyorBelt
-        | PropKind::IndustrialPress
-        | PropKind::PalletRack
-        | PropKind::Forklift
-        | PropKind::ShippingContainer
-        | PropKind::CropRow
-        | PropKind::PlanterTable => {
+        PropKind::Stairwell | PropKind::DisplayRack | PropKind::CheckoutCounter
+        | PropKind::HospitalBed | PropKind::SurgicalTable | PropKind::ImagingScanner
+        | PropKind::PrivacyCurtain | PropKind::MallKiosk | PropKind::ConveyorBelt
+        | PropKind::IndustrialPress | PropKind::PalletRack | PropKind::Forklift
+        | PropKind::ShippingContainer | PropKind::CropRow | PropKind::PlanterTable => {
             let _ = crate::wasm_client::map_2d_art_props_facility::push_facility_furniture_glyph(
+                out, p.kind, lw, lh, painted, v,
+            );
+        }
+        PropKind::DeskLamp | PropKind::StandingLamp | PropKind::Nightstand | PropKind::Dresser
+        | PropKind::BathroomSink | PropKind::FireExtinguisher | PropKind::TvStand | PropKind::Stereo
+        | PropKind::RunnerRug | PropKind::RoundRug | PropKind::SmallFountain | PropKind::MediumFountain
+        | PropKind::LargeFountain | PropKind::Gazebo | PropKind::BbqGrill | PropKind::GardenShed
+        | PropKind::TrashCan | PropKind::GarbagePile | PropKind::AcUnit | PropKind::HotTub
+        | PropKind::FloorClothes | PropKind::FloorToys | PropKind::StreetDebris => {
+            let _ = crate::wasm_client::map_2d_art_props_home::push_home_furniture_glyph(
                 out, p.kind, lw, lh, painted, v,
             );
         }
@@ -600,9 +632,8 @@ pub fn push_furniture_glyph_with_mode(
     out.push_str("</g>");
 }
 
-/// Appends an overhanging, semi-translucent leafy crown for [`PropKind::LargeTree`] and
-/// [`PropKind::MediumTree`] so canopies layer naturally above paths, benches, hedges, and walls while
-/// keeping tokens and the visual `1.0m` scale grid legible above `#battlemap-art`.
+/// Appends an overhanging, semi-translucent leafy crown or gazebo roof so canopies layer naturally
+/// above paths, benches, hedges, and walls while keeping tokens and miniatures underneath legible.
 pub fn push_tree_canopy_glyph(out: &mut String, p: &MapPropPlacement, cell_px: f32) {
     push_tree_canopy_glyph_with_mode(out, p, cell_px, BattlemapTextureMode::Painted);
 }
@@ -614,20 +645,20 @@ pub fn push_tree_canopy_glyph_with_mode(
     cell_px: f32,
     tex_mode: BattlemapTextureMode,
 ) {
+    if p.kind == PropKind::Gazebo {
+        crate::wasm_client::map_2d_art_props_home::push_gazebo_canopy_glyph_with_mode(
+            out, p, cell_px, tex_mode,
+        );
+        return;
+    }
     if !matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree) {
         return;
     }
     let painted = tex_mode.is_painted();
     let (cx_m, cy_m) = p.center_m();
     let (cx, cy) = (cx_m * cell_px, cy_m * cell_px);
-    let (sw_m, sh_m) = p.local_span_m();
-    let (fw, fh) = (sw_m * cell_px, sh_m * cell_px);
     let v = p.variant_seed;
-    let r = if p.kind == PropKind::LargeTree {
-        fw.max(fh) * 0.94
-    } else {
-        cell_px * 1.15
-    };
+    let r = satya_engine::tactical_map_geom::tree_canopy_radius_m(p.kind) * cell_px;
     let outer = pick(v, CANOPY_OUTER);
     let mid = pick(v, CANOPY_MID);
     let sun = pick(v, CANOPY_SUN);
@@ -637,7 +668,7 @@ pub fn push_tree_canopy_glyph_with_mode(
     let leaf_op = if painted { ".78" } else { ".62" };
     let _ = write!(
         out,
-        r##"<g stroke="{BATTLEMAP_INK}" stroke-linejoin="round"><path d="{d_outer}" fill="{outer}" fill-opacity=".84" stroke-width="2.2"/><path d="{d_outer}" fill="url(#bm-leaf-tex)" fill-opacity="{leaf_op}" stroke="none"/>"##
+        r##"<g opacity=".48" stroke="{BATTLEMAP_INK}" stroke-linejoin="round"><path d="{d_outer}" fill="{outer}" stroke-width="2.2"/><path d="{d_outer}" fill="url(#bm-leaf-tex)" fill-opacity="{leaf_op}" stroke="none"/>"##
     );
     // Satellite leaf lobes around crown perimeter for organic silhouette
     for i in 0..6 {
@@ -687,12 +718,19 @@ mod tests {
                 assert!(!s.contains("NaN"), "{kind:?} rot={rot}");
             }
         }
-        for tree in [PropKind::LargeTree, PropKind::MediumTree] {
+        for (idx, canopy_prop) in [PropKind::LargeTree, PropKind::MediumTree, PropKind::Gazebo].into_iter().enumerate() {
             let mut c = String::new();
-            push_tree_canopy_glyph(&mut c, &make_prop(tree, 2, 2, 0, None, 7), 64.0);
-            assert!(c.contains("url(#bm-leaf-tex)"));
+            push_tree_canopy_glyph(&mut c, &make_prop(canopy_prop, 2, 2, 0, None, 7), 64.0);
+            if idx < 2 {
+                assert!(c.contains("url(#bm-leaf-tex)") && c.contains(r#"opacity=".48""#));
+            } else {
+                assert!(c.contains(r#"opacity=".50""#));
+            }
             assert_eq!(c.matches("<g").count(), c.matches("</g>").count());
             assert!(!c.contains("NaN"));
         }
+        let mut table_svg = String::new();
+        push_furniture_glyph(&mut table_svg, &make_prop(PropKind::DiningTable, 2, 2, 0, None, 7), 64.0);
+        assert!(table_svg.contains("url(#bm-wood-veneer)") && !table_svg.contains("url(#bm-oak)"));
     }
 }

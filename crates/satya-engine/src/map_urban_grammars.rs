@@ -341,6 +341,9 @@ fn dress_urban_street_props(b: &mut SectorBuilder, bw: i32, bh: i32, cx: i32, cy
     let _ = b.try_place_filtered(PropKind::JerseyBarrier, ((cx + 1).min(w - 4), (cy + 1).min(h - 3)), jb2, Some(2), whole, road_ok)
         .or_else(|| b.try_place_filtered(PropKind::JerseyBarrier, ((cx + 1).min(w - 4), (cy + 1).min(h - 3)), 0, Some(2), whole, road_ok));
     let _ = b.try_place_filtered(PropKind::Dumpster, ((w - bw - 3).max(2), 1), 0, None, whole, off_road);
+    let _ = b.try_place_filtered(PropKind::TrashCan, ((w - bw - 1).max(2), 1), 0, None, whole, off_road);
+    let _ = b.try_place_filtered(PropKind::GarbagePile, ((w - bw - 3).max(2), 2), 15, None, whole, off_road);
+    b.scatter_filtered(PropKind::StreetDebris, whole, 2, false, off_road);
     if b.try_place_filtered(PropKind::ParkBench, ((bw + 1).min(w - 4), (h - bh - 1).max(2)), 0, None, whole, off_road).is_none() {
         b.scatter_filtered(PropKind::ParkBench, whole, 1, false, off_road);
     }

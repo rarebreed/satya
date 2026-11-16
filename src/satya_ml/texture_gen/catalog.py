@@ -352,6 +352,173 @@ BATTLEMAP_2D_TEXTURE_CATALOG: tuple[TextureSpec, ...] = (
             "olive-chartreuse, amber-ochre, bruised teal, and dark petroleum swirl ripples."
         ),
     ),
+    TextureSpec(
+        id="marble_floor",
+        filename="marble_floor.webp",
+        label="Polished Carrara Marble Floor",
+        svg_span_px=128,
+        fallback_hex="#eceae6",
+        delight_strength=0.80,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Large square polished Carrara white and warm alabaster marble floor tiles in a 2x2 grid "
+            "seen straight down; soft dove-grey and subtle champagne mineral veining flowing across "
+            "tiles separated by ultra-fine light-grey stone grout seams."
+        ),
+    ),
+    TextureSpec(
+        id="terracotta_tile",
+        filename="terracotta_tile.webp",
+        label="Warm Terracotta Quarry Tile",
+        svg_span_px=112,
+        fallback_hex="#c67856",
+        delight_strength=0.76,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Hand-glazed warm terracotta and kiln-baked sienna ceramic kitchen and sunroom tiles "
+            "in an even 4x4 grid seen straight down; subtle earthy clay tonal shifts and crisp "
+            "warm-taupe mortar grout joints."
+        ),
+    ),
+    TextureSpec(
+        id="carpet_plush",
+        filename="carpet_plush.webp",
+        label="Residential Woven Plush Carpet",
+        svg_span_px=96,
+        fallback_hex="#c5bdb1",
+        delight_strength=0.82,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Soft residential tufted plush wall-to-wall carpet in warm oatmeal-taupe seen straight "
+            "down; subtle micro-woven loop pile texture and gentle uniform yarn heathering with "
+            "zero seams or hard grid lines."
+        ),
+    ),
+    TextureSpec(
+        id="pool_water",
+        filename="pool_water.webp",
+        label="Turquoise Swimming Pool Water",
+        svg_span_px=160,
+        fallback_hex="#38b6d6",
+        delight_strength=0.72,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Clear sparkling turquoise-azure swimming pool water seen straight down; sunlit white-cyan "
+            "caustic ripple networks shimmering over faint sky-blue mosaic pool basin floor."
+        ),
+    ),
+    TextureSpec(
+        id="wood_deck",
+        filename="wood_deck.webp",
+        label="Weathered Cedar Deck Planks",
+        svg_span_px=128,
+        fallback_hex="#9c6a47",
+        delight_strength=0.75,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Outdoor redwood and weathered cedar timber deck planks running horizontally left-to-right "
+            "with distinct narrow dark drainage shadow gaps between boards, painterly wood grain fibers, "
+            "and subtle sunlit matte patina."
+        ),
+    ),
+    TextureSpec(
+        id="hardwood_walnut",
+        filename="hardwood_walnut.webp",
+        label="Dark Walnut Hardwood Flooring",
+        svg_span_px=128,
+        fallback_hex="#5d3f2c",
+        delight_strength=0.74,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Rich dark espresso-walnut hardwood strip planks running horizontally left-to-right; "
+            "deep chocolate and warm umber wood grain with fine staggered dark-brown plank seams."
+        ),
+    ),
+    TextureSpec(
+        id="hardwood_ash",
+        filename="hardwood_ash.webp",
+        label="Blonde Ash Hardwood Flooring",
+        svg_span_px=128,
+        fallback_hex="#d9c6a3",
+        delight_strength=0.76,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Pale Scandinavian blonde-ash and white-oak hardwood planks running horizontally "
+            "left-to-right; light cream-honey timber grain with delicate warm-tan plank seams."
+        ),
+    ),
+    TextureSpec(
+        id="gravel_pea",
+        filename="gravel_pea.webp",
+        label="Warm Golden Pea Gravel",
+        svg_span_px=128,
+        fallback_hex="#c8b38d",
+        delight_strength=0.75,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Rounded warm tan, cream, ochre, and sandstone pea gravel pebbles closely packed "
+            "in fine sandy bed seen straight down with crisp micro-shadow crevices."
+        ),
+    ),
+    TextureSpec(
+        id="gravel_slate",
+        filename="gravel_slate.webp",
+        label="Crushed Charcoal Slate Gravel",
+        svg_span_px=128,
+        fallback_hex="#5b6169",
+        delight_strength=0.76,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Angular crushed dark blue-slate, basalt charcoal, and cool pewter driveway gravel "
+            "chips seen straight down with crisp mineral edges and uniform aggregate scale."
+        ),
+    ),
+    TextureSpec(
+        id="grass_lush",
+        filename="grass_lush.webp",
+        label="Manicured Emerald Estate Lawn",
+        svg_span_px=192,
+        fallback_hex="#4e8442",
+        delight_strength=0.86,
+        delight_sigma_frac=0.12,
+        exposure_scale=0.92,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Manicured deep emerald and vibrant clover-green estate lawn turf seen straight down; "
+            "fine combed short grass blades with crisp painterly foliage grain and zero bare dirt."
+        ),
+    ),
+    TextureSpec(
+        id="grass_dry",
+        filename="grass_dry.webp",
+        label="Dry Sunlit Pasture Grass",
+        svg_span_px=192,
+        fallback_hex="#9e9555",
+        delight_strength=0.85,
+        delight_sigma_frac=0.12,
+        exposure_scale=0.94,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Sun-cured golden-olive and sage prairie pasture grass seen straight down; swept dry "
+            "straw-tan and muted sage grass blades with fine warm earth undertones."
+        ),
+    ),
+    TextureSpec(
+        id="wood_veneer",
+        filename="wood_veneer.webp",
+        label="Satin Continuous Wood Veneer",
+        svg_span_px=128,
+        fallback_hex="#d4cfc7",
+        delight_strength=0.80,
+        is_neutral_tint_mask=True,
+        prompt=_prompt(
+            "Continuous fine satin hardwood cabinet and tabletop veneer grain running smoothly "
+            "left-to-right in neutral warm putty-oatmeal tones suitable for multiply tinting; "
+            "delicate organic cathedral grain fibers over one unbroken solid timber sheet with "
+            "ZERO plank seams, ZERO floorboard lines, ZERO butt joints, ZERO grooves, ZERO knots, "
+            "and ZERO gaps."
+        ),
+    ),
 )
 
 _BY_ID: dict[str, TextureSpec] = {spec.id: spec for spec in BATTLEMAP_2D_TEXTURE_CATALOG}

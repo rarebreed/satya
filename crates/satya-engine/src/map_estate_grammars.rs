@@ -173,10 +173,20 @@ fn furnish_estate_rooms(b: &mut OutdoorBuilder, rooms: &[BoxI]) {
         let center_kind = match idx % 4 { 0 => PropKind::Sofa, 1 => PropKind::DiningTable, 2 => PropKind::Desk, _ => PropKind::Bed };
         b.try_place_cm(center_kind, cx, cy, rot, None, true);
         if rm.w() >= 4 && rm.h() >= 4 {
-            let accent = match idx % 3 { 0 => PropKind::Bookshelf, 1 => PropKind::KitchenCounter, _ => PropKind::Armchair };
-            b.try_place_cm(accent, rm.x0 * 100 + 85, rm.y0 * 100 + 85, (idx as i32 * 90).rem_euclid(360), None, true);
-            let third = if idx % 2 == 0 { PropKind::CoffeeTable } else { PropKind::Wardrobe };
-            b.try_place_cm(third, rm.x1 * 100 - 85, rm.y1 * 100 - 85, ((idx as i32 * 90) + 180).rem_euclid(360), None, true);
+            let accent = match idx % 4 {
+                0 => PropKind::TvStand,
+                1 => PropKind::KitchenCounter,
+                2 => PropKind::Bookshelf,
+                _ => PropKind::Dresser,
+            };
+            b.try_place_cm(accent, rm.x0 * 100 + 75, rm.y0 * 100 + 75, (idx as i32 * 90).rem_euclid(360), None, true);
+            let third = match idx % 4 {
+                0 => PropKind::CoffeeTable,
+                1 => PropKind::Armchair,
+                2 => PropKind::StandingLamp,
+                _ => PropKind::Nightstand,
+            };
+            b.try_place_cm(third, rm.x1 * 100 - 75, rm.y1 * 100 - 75, ((idx as i32 * 90) + 180).rem_euclid(360), None, true);
         }
     }
 }
@@ -328,10 +338,13 @@ fn build_forecourt_turnaround(b: &mut OutdoorBuilder) {
     furnish_estate_rooms(b, &rooms);
 
     build_carriage_house(b, carriage, gate_top);
-    b.try_place_cm(PropKind::Planter, OutdoorBuilder::cm(gx_m), OutdoorBuilder::cm(island_y), 0, None, true);
+    b.try_place_cm(PropKind::MediumFountain, OutdoorBuilder::cm(gx_m), OutdoorBuilder::cm(island_y), 0, None, true);
     b.place_vehicle_along_ribbon(PropKind::Car, street, 0.25, 0.2, 6);
     place_rot_m(b, PropKind::UtilityVan, gx_m - rx, island_y, 0, 360, true);
     dress_estate_grounds(b, comp.rect_m(1.0), &[(manor.x0 as f32 - 2.0, (manor.y0 + manor.y1) as f32 * 0.5, 90), (manor.x1 as f32 + 2.0, (manor.y0 + manor.y1) as f32 * 0.5, 90)], (w * h / 110).clamp(6, 16));
+    if w >= 28 && h >= 22 {
+        b.scatter_trees(PropKind::Gazebo, 1, 2.5, comp.rect_m(3.0));
+    }
 }
 
 /// Topology 1: Quadrant-mirrored L-wing mansion, paved terrace court & detached stable/carriage wing.

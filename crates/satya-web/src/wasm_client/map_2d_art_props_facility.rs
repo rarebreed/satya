@@ -7,6 +7,7 @@
 //! `ConveyorBelt`, `IndustrialPress`, `PalletRack`, `Forklift`, `ShippingContainer`, `CropRow`,
 //! and `PlanterTable`).
 
+use crate::wasm_client::map_2d_art_furniture::{FURNITURE_WOODS, wood_veneer_overlay};
 use crate::wasm_client::map_2d_art_props::{BATTLEMAP_INK, battlemap_mix_u64};
 use satya_schema::PropKind;
 use std::fmt::Write as _;
@@ -43,7 +44,7 @@ pub(crate) fn push_facility_furniture_glyph(
 ) -> bool {
     let (l, t) = (lw * 0.5, lh * 0.5);
     let thin = r#"stroke-width="1.1" stroke-opacity=".6""#;
-    let wd = if painted { "url(#bm-oak)" } else { "#9e7752" };
+    let wd = pick(v, FURNITURE_WOODS);
     match kind {
         PropKind::Stairwell => {
             rect(out, [-l + 2.0, -t + 2.0, lw - 4.0, lh - 4.0], 3.0, if painted { "url(#bm-concrete)" } else { "#c8ccd2" }, "");
@@ -75,7 +76,9 @@ pub(crate) fn push_facility_furniture_glyph(
             let _ = write!(out, r##"<line x1="{:.1}" y1="0" x2="{:.1}" y2="0" stroke="#2d343d" stroke-width="2.4"/>"##, -l + 4.0, l - 4.0);
         }
         PropKind::CheckoutCounter => {
-            rect(out, [-l + 3.0, -t + 4.0, lw - 6.0, lh - 8.0], 3.0, wd, "");
+            let coords = [-l + 3.0, -t + 4.0, lw - 6.0, lh - 8.0];
+            rect(out, coords, 3.0, wd, "");
+            wood_veneer_overlay(out, coords, 3.0, painted);
             rect(out, [-l + 10.0, -t + 8.0, (lw * 0.46).max(16.0), lh - 16.0], 2.0, "#31363f", r#"stroke-width="1.2""#);
             rect(out, [l - 34.0, -t + 9.0, 22.0, 16.0], 2.0, "#dce4ec", r#"stroke-width="1.2""#);
             rect(out, [l - 30.0, -t + 12.0, 14.0, 7.0], 1.0, "#38bdf8", r#"stroke="none" fill-opacity=".8""#);
@@ -113,7 +116,9 @@ pub(crate) fn push_facility_furniture_glyph(
             let _ = write!(out, r##"<path d="{path}" fill="none" stroke="#67e8f9" stroke-width="6" stroke-linecap="round" opacity=".88"/><path d="{path}" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.6"/>"##);
         }
         PropKind::MallKiosk => {
-            rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 10.0, wd, "");
+            let coords = [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0];
+            rect(out, coords, 10.0, wd, "");
+            wood_veneer_overlay(out, coords, 10.0, painted);
             rect(out, [-l + 12.0, -t + 12.0, lw - 24.0, lh - 24.0], 6.0, "#bfdbfe", r##"fill-opacity=".72" stroke-width="1.4""##);
             rect(out, [-16.0, -10.0, 32.0, 20.0], 3.0, "#334155", thin);
             for (px, py) in [(-l + 9.0, -t + 9.0), (l - 9.0, -t + 9.0), (-l + 9.0, t - 9.0), (l - 9.0, t - 9.0)] {
@@ -181,7 +186,9 @@ pub(crate) fn push_facility_furniture_glyph(
             }
         }
         PropKind::PlanterTable => {
-            rect(out, [-l + 3.0, -t + 4.0, lw - 6.0, lh - 8.0], 3.0, wd, "");
+            let coords = [-l + 3.0, -t + 4.0, lw - 6.0, lh - 8.0];
+            rect(out, coords, 3.0, wd, "");
+            wood_veneer_overlay(out, coords, 3.0, painted);
             rect(out, [-l + 7.0, -t + 8.0, lw - 14.0, lh - 16.0], 2.0, "#4a3321", thin);
             let plants = ((lw - 18.0) / 24.0).round().max(2.0) as i32;
             let step = (lw - 18.0) / plants as f32;

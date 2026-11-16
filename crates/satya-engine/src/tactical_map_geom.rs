@@ -70,8 +70,24 @@ fn prop_collision_shapes(p: &MapPropPlacement) -> [Option<LocalShape>; 2] {
         PropKind::Bush | PropKind::Planter | PropKind::DrumCluster => {
             [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.46 }), None]
         }
-        PropKind::RoundTable => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.45 }), None],
-        PropKind::BarStool => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.28 }), None],
+        PropKind::RoundTable | PropKind::SmallFountain => {
+            [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.46 }), None]
+        }
+        PropKind::MediumFountain => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.94 }), None],
+        PropKind::LargeFountain => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 1.40 }), None],
+        PropKind::RoundRug => [
+            Some(LocalShape::Circle {
+                cx: 0.0,
+                cy: 0.0,
+                r: fp.hx_m.min(fp.hy_m) * 0.92,
+            }),
+            None,
+        ],
+        PropKind::TrashCan => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.36 }), None],
+        PropKind::DeskLamp => [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.30 }), None],
+        PropKind::BarStool | PropKind::StandingLamp | PropKind::FireExtinguisher => {
+            [Some(LocalShape::Circle { cx: 0.0, cy: 0.0, r: 0.28 }), None]
+        }
         PropKind::StructuralPillar => [shape(0.0, 0.0, 0.45, 0.45), None],
         _ => [shape(0.0, 0.0, fp.hx_m, fp.hy_m), None],
     }
@@ -81,8 +97,8 @@ fn prop_collision_shapes(p: &MapPropPlacement) -> [Option<LocalShape>; 2] {
 #[must_use]
 pub const fn tree_canopy_radius_m(kind: PropKind) -> f32 {
     match kind {
-        PropKind::LargeTree => 0.96,
-        PropKind::MediumTree => 0.48,
+        PropKind::LargeTree => 1.95,
+        PropKind::MediumTree => 1.35,
         _ => 0.0,
     }
 }
@@ -597,12 +613,14 @@ pub fn props_overlap_continuous(a: &MapPropPlacement, b: &MapPropPlacement) -> b
 /// Returns `true` if `prop` slices across any structural wall or closed door segment.
 #[must_use]
 pub fn prop_crosses_wall_edge(prop: &MapPropPlacement, edges: &[MapWallEdge]) -> bool {
+    let is_tree = matches!(prop.kind, PropKind::LargeTree | PropKind::MediumTree);
     edges
         .iter()
         .filter(|e| matches!(e.kind, WallEdgeKind::Wall | WallEdgeKind::DoorClosed))
         .any(|e| {
             let (a, b) = edge_endpoints_m(e);
-            intersect_segment_prop(prop, a, b).is_some_and(|hit| hit.thickness_m > 0.25)
+            intersect_segment_prop(prop, a, b)
+                .is_some_and(|hit| (!is_tree || hit.is_tree_trunk) && hit.thickness_m > 0.25)
         })
 }
 
@@ -653,13 +671,15 @@ pub fn place_prop_on_map(
     {
         return Err("Prop footprint overlaps an occupied miniature");
     }
+    let is_tree = matches!(norm.kind, PropKind::LargeTree | PropKind::MediumTree);
     if !spec.floor_layer
         && edges
             .iter()
             .filter(|e| matches!(e.kind, WallEdgeKind::Wall | WallEdgeKind::DoorClosed))
             .any(|e| {
                 let (a, b) = edge_endpoints_m(e);
-                intersect_segment_prop(&norm, a, b).is_some_and(|hit| hit.thickness_m > 0.25)
+                intersect_segment_prop(&norm, a, b)
+                    .is_some_and(|hit| (!is_tree || hit.is_tree_trunk) && hit.thickness_m > 0.25)
             })
     {
         return Err("Prop footprint crosses an interior structural wall or closed door");

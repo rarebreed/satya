@@ -16,7 +16,7 @@ use satya_schema::{EdgeSide, MaterialClass, PropKind, WallEdgeKind};
 const WALL_HALF_THICK_M: f32 = 0.07;
 
 #[allow(clippy::too_many_arguments)]
-fn push_obb(
+pub(crate) fn push_obb(
     verts: &mut Vec<GlbVertex>,
     cx: f32,
     cz: f32,
@@ -58,7 +58,7 @@ const fn material_rgb(m: MaterialClass) -> [f32; 3] {
     }
 }
 
-fn lighten(c: [f32; 3], k: f32) -> [f32; 3] {
+pub(crate) fn lighten(c: [f32; 3], k: f32) -> [f32; 3] {
     [(c[0] * k).min(1.0), (c[1] * k).min(1.0), (c[2] * k).min(1.0)]
 }
 
@@ -238,24 +238,10 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
             PropKind::LargeTree => {
                 push_obb(verts, cx, cz, 0.0, 0.45, hx * 0.58, hz * 0.58, rot, rgb, 0.0);
                 push_obb(verts, cx, cz, 0.0, top.min(2.3), hx * 0.42, hz * 0.42, rot, rgb, 0.0);
-                if !cutaway {
-                    let cr = hx.max(hz) * 1.85;
-                    push_obb(verts, cx, cz, 2.0, 3.8, cr, cr, 0, [0.22, 0.40, 0.18], -0.25);
-                    push_obb(verts, cx, cz, 2.15, 3.95, cr * 0.96, cr * 0.96, 45, [0.26, 0.45, 0.21], -0.25);
-                    push_obb(verts, cx, cz, 3.4, 4.65, cr * 0.68, cr * 0.68, 22, [0.30, 0.52, 0.24], -0.25);
-                    push_obb(verts, cx + cr * 0.28, cz - cr * 0.22, 2.4, 4.15, cr * 0.56, cr * 0.56, 15, [0.28, 0.48, 0.22], -0.25);
-                    push_obb(verts, cx - cr * 0.26, cz + cr * 0.24, 2.3, 4.0, cr * 0.54, cr * 0.54, 60, [0.20, 0.38, 0.17], -0.25);
-                }
             }
             PropKind::MediumTree => {
                 push_obb(verts, cx, cz, 0.0, 0.38, hx * 0.52, hz * 0.52, rot, rgb, 0.0);
                 push_obb(verts, cx, cz, 0.0, top.min(1.95), hx * 0.38, hz * 0.38, rot, rgb, 0.0);
-                if !cutaway {
-                    let cr = hx.max(hz) * 2.05;
-                    push_obb(verts, cx, cz, 1.75, 3.35, cr, cr, 0, [0.22, 0.43, 0.20], -0.25);
-                    push_obb(verts, cx, cz, 1.9, 3.45, cr * 0.94, cr * 0.94, 45, [0.27, 0.50, 0.24], -0.25);
-                    push_obb(verts, cx - cr * 0.15, cz - cr * 0.15, 3.05, 3.95, cr * 0.64, cr * 0.64, 22, [0.33, 0.56, 0.27], -0.25);
-                }
             }
             PropKind::Car => {
                 push_obb(verts, cx, cz, 0.15, 0.85, hx, hz, rot, rgb, 0.0);
@@ -369,6 +355,33 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
             PropKind::PlanterTable => {
                 push_obb(verts, cx, cz, 0.0, top * 0.78, hx * 0.94, hz * 0.92, rot, rgb, 0.0);
                 push_obb(verts, cx, cz, top * 0.78, top, hx * 0.88, hz * 0.80, rot, [0.24, 0.48, 0.22], -0.20);
+            }
+            PropKind::DeskLamp
+            | PropKind::StandingLamp
+            | PropKind::Nightstand
+            | PropKind::Dresser
+            | PropKind::BathroomSink
+            | PropKind::FireExtinguisher
+            | PropKind::TvStand
+            | PropKind::Stereo
+            | PropKind::RunnerRug
+            | PropKind::RoundRug
+            | PropKind::SmallFountain
+            | PropKind::MediumFountain
+            | PropKind::LargeFountain
+            | PropKind::Gazebo
+            | PropKind::BbqGrill
+            | PropKind::GardenShed
+            | PropKind::TrashCan
+            | PropKind::GarbagePile
+            | PropKind::AcUnit
+            | PropKind::HotTub
+            | PropKind::FloorClothes
+            | PropKind::FloorToys
+            | PropKind::StreetDebris => {
+                let _ = crate::wasm_client::map_3d_props_extra::push_extra_prop_3d(
+                    verts, p, cx, cz, hx, hz, top, cutaway, s,
+                );
             }
             _ => {
                 let cap = (top * 0.08).clamp(0.02, 0.06);

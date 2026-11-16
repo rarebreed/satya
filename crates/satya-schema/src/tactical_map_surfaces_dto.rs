@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 define_wire_enum! {
     /// Classification of a continuous vector terrain surface feature.
     #[derive(Default)]
-    pub enum SurfaceFeatureKind [count = 12] {
+    pub enum SurfaceFeatureKind [count = 17] {
         #[default]
         MulchZone => ("MULCH_ZONE", "Organic Bark Mulch"),
         GardenBedZone => ("GARDEN_BED_ZONE", "Curved Garden Bed"),
@@ -27,13 +27,18 @@ define_wire_enum! {
         StoneWalk => ("STONE_WALK", "Flagstone Walkway"),
         ConcreteWalk => ("CONCRETE_WALK", "Concrete Sidewalk / Plaza"),
         AsphaltRoad => ("ASPHALT_ROAD", "Asphalt Road / Drive"),
+        WoodDeck => ("WOOD_DECK", "Timber Deck / Porch"),
+        PoolWater => ("POOL_WATER", "Swimming Pool"),
         InteriorFloor => ("INTERIOR_FLOOR", "Building Interior Floor"),
+        CeramicTileFloor => ("CERAMIC_TILE_FLOOR", "Ceramic / Terracotta Tile Floor"),
+        MarbleFloor => ("MARBLE_FLOOR", "Polished Marble Tile Floor"),
+        CarpetFloor => ("CARPET_FLOOR", "Woven Carpet Flooring"),
         BridgeDeck => ("BRIDGE_DECK", "Bridge / Culvert Deck"),
     }
 }
 
 impl SurfaceFeatureKind {
-    /// Deterministic compositing & masking z-priority (`BridgeDeck > InteriorFloor > AsphaltRoad > ConcreteWalk > StoneWalk > CreekChannel > DrainageDitch > GravelRoad > DefensiveTrench > DirtTrail > GardenBedZone > MulchZone`).
+    /// Deterministic compositing & masking z-priority (`BridgeDeck > CarpetFloor > MarbleFloor > CeramicTileFloor > InteriorFloor > PoolWater > WoodDeck > AsphaltRoad > ConcreteWalk > StoneWalk > CreekChannel > DrainageDitch > GravelRoad > DefensiveTrench > DirtTrail > GardenBedZone > MulchZone`).
     #[must_use]
     pub const fn layer_priority(self) -> u8 {
         match self {
@@ -47,7 +52,12 @@ impl SurfaceFeatureKind {
             Self::StoneWalk => 38,
             Self::ConcreteWalk => 45,
             Self::AsphaltRoad => 50,
+            Self::WoodDeck => 56,
+            Self::PoolWater => 58,
             Self::InteriorFloor => 60,
+            Self::CeramicTileFloor => 62,
+            Self::MarbleFloor => 63,
+            Self::CarpetFloor => 64,
             Self::BridgeDeck => 70,
         }
     }
@@ -56,7 +66,7 @@ impl SurfaceFeatureKind {
     #[must_use]
     pub const fn move_cost_mult(self) -> f32 {
         match self {
-            Self::CreekChannel | Self::DrainageDitch => 2.0,
+            Self::CreekChannel | Self::DrainageDitch | Self::PoolWater => 2.0,
             Self::DefensiveTrench => 1.5,
             Self::GardenBedZone => 1.25,
             _ => 1.0,
@@ -71,14 +81,38 @@ impl SurfaceFeatureKind {
                 MaterialClass::Earth
             }
             Self::GardenBedZone => MaterialClass::Foliage,
-            Self::GravelRoad | Self::StoneWalk => MaterialClass::Ceramic,
+            Self::GravelRoad
+            | Self::StoneWalk
+            | Self::PoolWater
+            | Self::CeramicTileFloor
+            | Self::MarbleFloor => MaterialClass::Ceramic,
             Self::ConcreteWalk | Self::AsphaltRoad => MaterialClass::ReinforcedConcrete,
-            Self::InteriorFloor => MaterialClass::SolidWood,
+            Self::InteriorFloor | Self::WoodDeck => MaterialClass::SolidWood,
+            Self::CarpetFloor => MaterialClass::Upholstery,
             Self::BridgeDeck => MaterialClass::ConcreteBlock,
         }
     }
 
-    /// Whether this surface represents a paved, gravel, or stone travel/building surface where organic
+    /// Whether this surface is an indoor room floor surface (wood, tile, marble, or carpet).
+    #[must_use]
+    pub const fn is_interior_surface(self) -> bool {
+        matches!(
+            self,
+            Self::InteriorFloor
+                | Self::CeramicTileFloor
+                | Self::MarbleFloor
+                | Self::CarpetFloor
+        )
+    }
+
+    /// Whether this surface is a constructed indoor floor, timber deck, or swimming pool where
+    /// outdoor plants, boulders, and vehicles must never spawn.
+    #[must_use]
+    pub const fn is_built_floor_or_deck(self) -> bool {
+        self.is_interior_surface() || matches!(self, Self::WoodDeck | Self::PoolWater)
+    }
+
+    /// Whether this surface represents a paved, gravel, stone, or flooring surface where organic
     /// mulch patches and planting beds should never intrude.
     #[must_use]
     pub const fn is_road_or_pavement(self) -> bool {
@@ -86,6 +120,11 @@ impl SurfaceFeatureKind {
             self,
             Self::BridgeDeck
                 | Self::InteriorFloor
+                | Self::CeramicTileFloor
+                | Self::MarbleFloor
+                | Self::CarpetFloor
+                | Self::WoodDeck
+                | Self::PoolWater
                 | Self::AsphaltRoad
                 | Self::ConcreteWalk
                 | Self::StoneWalk
@@ -93,12 +132,15 @@ impl SurfaceFeatureKind {
         )
     }
 
-    /// Whether this surface is a hydrological channel or excavated trench.
+    /// Whether this surface is a hydrological channel, excavated trench, or pool.
     #[must_use]
     pub const fn is_water_or_channel(self) -> bool {
         matches!(
             self,
-            Self::CreekChannel | Self::DrainageDitch | Self::DefensiveTrench
+            Self::CreekChannel
+                | Self::DrainageDitch
+                | Self::DefensiveTrench
+                | Self::PoolWater
         )
     }
 
@@ -258,6 +300,23 @@ mod tests {
         assert!(
             SurfaceFeatureKind::GardenBedZone.layer_priority()
                 > SurfaceFeatureKind::MulchZone.layer_priority()
+        );
+
+        assert_eq!(SurfaceFeatureKind::ALL.len(), 17);
+        assert!(SurfaceFeatureKind::PoolWater.is_water_or_channel());
+        assert!(SurfaceFeatureKind::PoolWater.is_built_floor_or_deck());
+        assert!(SurfaceFeatureKind::CeramicTileFloor.is_interior_surface());
+        assert!(SurfaceFeatureKind::MarbleFloor.is_interior_surface());
+        assert!(SurfaceFeatureKind::CarpetFloor.is_interior_surface());
+        assert!(!SurfaceFeatureKind::WoodDeck.is_interior_surface());
+        assert!(SurfaceFeatureKind::WoodDeck.is_built_floor_or_deck());
+        assert!(
+            SurfaceFeatureKind::CarpetFloor.layer_priority()
+                > SurfaceFeatureKind::InteriorFloor.layer_priority()
+        );
+        assert!(
+            SurfaceFeatureKind::PoolWater.layer_priority()
+                > SurfaceFeatureKind::WoodDeck.layer_priority()
         );
 
         let moved = feat.translated(200, -100);

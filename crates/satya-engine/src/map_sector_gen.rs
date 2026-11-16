@@ -400,7 +400,7 @@ impl SectorBuilder {
                 if !allow.allow_road && sf.kind == SurfaceFeatureKind::AsphaltRoad {
                     return false;
                 }
-                if !allow.allow_indoor && sf.kind == SurfaceFeatureKind::InteriorFloor {
+                if !allow.allow_indoor && sf.kind.is_built_floor_or_deck() {
                     return false;
                 }
             }

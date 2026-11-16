@@ -297,9 +297,10 @@ fn emit_vector_surfaces_svg(
                 );
             }
             SurfaceFeatureKind::GravelRoad => {
+                let pat = ["url(#bm-gravel)", "url(#bm-gravel-pea)", "url(#bm-gravel-slate)"][(s.variant_seed % 3) as usize];
                 let _ = write!(
                     out,
-                    r##"<path d="{d}" fill="none" stroke="#938b7d" stroke-width="4.2" stroke-linejoin="round" opacity=".55"/><path d="{d}" fill="url(#bm-gravel)" stroke="#6a6358" stroke-width="1.2" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                    r##"<path d="{d}" fill="none" stroke="#938b7d" stroke-width="4.2" stroke-linejoin="round" opacity=".55"/><path d="{d}" fill="{pat}" stroke="#6a6358" stroke-width="1.2" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
                 );
             }
             SurfaceFeatureKind::DirtTrail => {
@@ -398,14 +399,61 @@ fn emit_vector_surfaces_svg(
                     }
                 }
             }
+            SurfaceFeatureKind::WoodDeck => {
+                let fill = if painted { "url(#bm-wood-deck)" } else { "#9c6a47" };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#4f331d" stroke-width="2.2" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                );
+            }
+            SurfaceFeatureKind::PoolWater => {
+                let fill = if painted { "url(#bm-pool-water)" } else { "#38b6d6" };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="none" stroke="#ddd6c7" stroke-width="7.5" stroke-linejoin="round"/><path d="{d}" fill="{fill}" stroke="#277996" stroke-width="2.2" stroke-linejoin="round" filter="url(#bm-ink)"/><path d="{d}" fill="none" stroke="#b8f2ff" stroke-width="1.5" stroke-opacity=".55" stroke-linejoin="round"/>"##
+                );
+            }
             SurfaceFeatureKind::InteriorFloor => {
                 if !indoor_theme {
-                    let fill = if painted { "url(#bm-hardwood)" } else { "#9b7854" };
+                    let fill = if painted {
+                        ["url(#bm-hardwood)", "url(#bm-hardwood-walnut)", "url(#bm-hardwood-ash)"][(s.variant_seed % 3) as usize]
+                    } else {
+                        ["#9b7854", "#63432e", "#d2be99"][(s.variant_seed % 3) as usize]
+                    };
                     let _ = write!(
                         out,
                         r##"<path d="{d}" fill="{fill}" stroke="#664b30" stroke-width="1.5" stroke-linejoin="round"/>"##
                     );
                 }
+            }
+            SurfaceFeatureKind::CeramicTileFloor => {
+                let terra = s.variant_seed & 1 == 1;
+                let fill = if painted {
+                    if terra { "url(#bm-terracotta)" } else { "url(#bm-ceramic)" }
+                } else if terra {
+                    "#c67856"
+                } else {
+                    "#dfe5e8"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#7b746c" stroke-width="1.4" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::MarbleFloor => {
+                let fill = if painted { "url(#bm-marble)" } else { "#eceae6" };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#b9b4aa" stroke-width="1.4" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::CarpetFloor => {
+                let fill = if painted { "url(#bm-carpet)" } else { "#c5bdb1" };
+                let tint = ["#5c6f84", "#7d6b5d", "#637864", "#826d7a"][(s.variant_seed % 4) as usize];
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#7f7568" stroke-width="1.3" stroke-linejoin="round"/><path d="{d}" fill="{tint}" fill-opacity=".16" stroke="none"/>"##
+                );
             }
             SurfaceFeatureKind::BridgeDeck => {
                 let fill = if painted { "url(#bm-oak)" } else { "#8c623d" };

@@ -448,9 +448,10 @@ fn push_defs(
     t: &BattlemapArtTheme,
     style: BattlemapInkStyle,
     tex_mode: BattlemapTextureMode,
+    seed: i64,
 ) {
     out.push_str("<defs>");
-    push_battlemap_material_defs(out, t, tex_mode);
+    push_battlemap_material_defs_seeded(out, t, tex_mode, seed);
     push_ink_style_filters(out, style);
     out.push_str("</defs>");
 }
@@ -465,7 +466,7 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     let (vw, vh) = (w * BATTLEMAP_CELL_PX, h * BATTLEMAP_CELL_PX);
     let seed = ui.map.seed.unwrap_or(42);
     let mut out = String::with_capacity(48 * 1024);
-    push_defs(&mut out, t, style, tex_mode);
+    push_defs(&mut out, t, style, tex_mode, seed);
 
     // 1. Exterior margin, floor material + large-scale tonal mottling
     let pad = BATTLEMAP_PAD_PX;
@@ -534,8 +535,8 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     // 4. Architectural vector walls, doors & windows
     push_edge_walls_svg_with_mode(&mut out, &ui.map.wall_edges, (w, h), t, tex_mode, CELL_F);
 
-    // 5. Overhanging tree canopies (drawn above ground props/walls so foliage drapes naturally)
-    if ui.map.props.iter().any(|p| matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree)) {
+    // 5. Overhanging tree & gazebo canopies (drawn above ground props/walls cleanly)
+    if ui.map.props.iter().any(|p| matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree | PropKind::Gazebo)) {
         out.push_str(r#"<g filter="url(#bm-prop)">"#);
         for p in &ui.map.props {
             push_tree_canopy_glyph_with_mode(&mut out, p, CELL_F, tex_mode);

@@ -285,12 +285,12 @@ impl OutdoorBuilder {
             return true;
         }
         self.surfaces.iter().any(|s| {
-            matches!(
-                s.kind,
-                SurfaceFeatureKind::InteriorFloor
-                    | SurfaceFeatureKind::MulchZone
-                    | SurfaceFeatureKind::GardenBedZone
-            ) && surface_contains_point_m(s, px, py)
+            (s.kind.is_built_floor_or_deck()
+                || matches!(
+                    s.kind,
+                    SurfaceFeatureKind::MulchZone | SurfaceFeatureKind::GardenBedZone
+                ))
+                && surface_contains_point_m(s, px, py)
         })
     }
 
@@ -312,7 +312,7 @@ impl OutdoorBuilder {
                 return false;
             }
             if self.surfaces.iter().any(|s| {
-                s.kind == SurfaceFeatureKind::InteriorFloor && surface_contains_point_m(s, wx, wy)
+                s.kind.is_built_floor_or_deck() && surface_contains_point_m(s, wx, wy)
             }) {
                 return false;
             }
@@ -488,10 +488,9 @@ impl OutdoorBuilder {
         if let Some(top) = topmost_surface_at_m(&self.surfaces, cx_m, cy_m)
             && (matches!(
                 top.kind,
-                SurfaceFeatureKind::AsphaltRoad
-                    | SurfaceFeatureKind::InteriorFloor
-                    | SurfaceFeatureKind::GravelRoad
-            ) || top.kind.is_water_or_channel())
+                SurfaceFeatureKind::AsphaltRoad | SurfaceFeatureKind::GravelRoad
+            ) || top.kind.is_built_floor_or_deck()
+                || top.kind.is_water_or_channel())
         {
             return false;
         }

@@ -75,9 +75,10 @@ pub fn push_beam(
     push_quad(verts, [p0, p3, p2, p1], [rgb[0], rgb[1], rgb[2], 0.0], 0.0);
 }
 
-/// Builds the static/overlay tactical diorama vertex list for `ui`.
+/// Builds the layered tactical diorama vertex buffer `(verts, opaque_vertex_count)`, placing
+/// translucent overhanging tree/gazebo canopies after opaque geometry so miniatures draw in between.
 #[must_use]
-pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex> {
+pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex>, u32) {
     let w = ui.map.grid_width.max(4);
     let h = ui.map.grid_height.max(4);
     let cell_m = ui.map.cell_size_m();
@@ -156,7 +157,7 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
         }
     };
 
-    // 2. Vector walls / doors / windows and 360°-rotated 3D props
+    // 2. Vector walls / doors / windows and 360°-rotated opaque 3D props
     crate::wasm_client::map_3d_dressing_geom::push_dressing_geometry(&mut verts, ui, wall_h, door_h);
 
     // 3. Continuous 0.25m gait reach strips (`y = 0.016m`)
@@ -221,7 +222,15 @@ pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex
         push_beam(&mut verts, a_xz, t_xz, 1.05, 0.045, beam_rgb);
     }
 
-    verts
+    let opaque_vcount = verts.len() as u32;
+    crate::wasm_client::map_3d_props_extra::push_translucent_canopies_3d(&mut verts, ui);
+    (verts, opaque_vcount)
+}
+
+/// Builds the static/overlay tactical diorama vertex list for `ui`.
+#[must_use]
+pub fn build_tactical_diorama_vertices(ui: &TacticalMapUiState) -> Vec<GlbVertex> {
+    build_tactical_diorama_layered(ui).0
 }
 
 #[cfg(test)]
@@ -306,6 +315,31 @@ mod tests {
                 .any(|v| (v.position[1] - 1.48).abs() < 1e-4 && (v.bary_zone[3] + 1.0).abs() < 1e-4),
             "ElevatedCatwalk must emit 1.48m gridded catwalk top geometry"
         );
+    }
+
+    #[test]
+    fn test_layered_diorama_puts_translucent_canopies_after_opaque_vcount() {
+        let mut ui = TacticalMapUiState {
+            wall_cutaway: false,
+            ..Default::default()
+        };
+        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
+            PropKind::LargeTree, 450, 450, 0, None, 1,
+        ));
+        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
+            PropKind::MediumTree, 850, 450, 0, None, 2,
+        ));
+        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
+            PropKind::Gazebo, 1300, 700, 0, None, 3,
+        ));
+        let (verts_full, opaque_full) = build_tactical_diorama_layered(&ui);
+        assert!(verts_full.len() as u32 > opaque_full);
+        assert!(verts_full[opaque_full as usize..].iter().all(|v| (v.bary_zone[3] + 0.35).abs() < 1e-4));
+        assert!(verts_full[..opaque_full as usize].iter().all(|v| (v.bary_zone[3] + 0.35).abs() > 0.05));
+
+        ui.wall_cutaway = true;
+        let (verts_cut, opaque_cut) = build_tactical_diorama_layered(&ui);
+        assert_eq!(verts_cut.len() as u32, opaque_cut);
     }
 
     #[test]

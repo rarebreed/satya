@@ -517,7 +517,9 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
     if w >= 28 {
         let _ = b.try_place_cm(PropKind::MallKiosk, OutdoorBuilder::cm(w as f32 * 0.28), cy_mid_cm, 348, None, true);
         let _ = b.try_place_cm(PropKind::MallKiosk, OutdoorBuilder::cm(w as f32 * 0.72), cy_mid_cm, 15, None, true);
+        let _ = b.try_place_cm(PropKind::SmallFountain, OutdoorBuilder::cm(w as f32 * 0.40), cy_mid_cm, 0, None, true);
         let _ = b.try_place_cm(PropKind::ParkBench, OutdoorBuilder::cm(w as f32 * 0.60), OutdoorBuilder::cm(conc_y0 as f32 + 0.7), 0, None, true);
+        let _ = b.try_place_cm(PropKind::TrashCan, OutdoorBuilder::cm(w as f32 * 0.62), OutdoorBuilder::cm(conc_y0 as f32 + 0.7), 0, None, true);
     }
 
     let mut sec = b.finalize_connected();

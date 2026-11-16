@@ -104,9 +104,14 @@ fn subdivide_zone_by_style(
                 let role = match i {
                     0 => Role::Living,
                     1 => Role::Kitchen,
-                    _ if i == n - 1 && n >= 4 => Role::Bathroom,
+                    _ if i == n - 1 && n >= 4 => Role::MasterBath,
+                    _ if r.area() <= 8 || r.w() <= 2 || r.h() <= 2 => {
+                        if i % 2 == 0 { Role::Closet } else { Role::Bathroom }
+                    }
+                    2 => Role::MasterBedroom,
+                    3 => Role::Dining,
                     _ if i % 2 == 0 => Role::Bedroom,
-                    _ => Role::Office,
+                    _ => Role::Foyer,
                 };
                 out.push((r, role));
             }
@@ -359,7 +364,15 @@ fn build_central_corridor_suite(
 
     let mut rooms = Vec::new();
     let roles: &[Role] = match style {
-        InteriorStyle::Apartment => &[Role::Living, Role::Kitchen, Role::Bedroom, Role::Office, Role::Bathroom],
+        InteriorStyle::Apartment => &[
+            Role::Living,
+            Role::Kitchen,
+            Role::MasterBedroom,
+            Role::Bedroom,
+            Role::Bathroom,
+            Role::Closet,
+            Role::Dining,
+        ],
         InteriorStyle::Bar => &[Role::BarHall, Role::BackKitchen, Role::Storage, Role::Restroom, Role::Office],
         InteriorStyle::Office => &[Role::Bullpen, Role::ConferenceRoom, Role::Office, Role::Breakroom, Role::ServerCloset],
     };
@@ -383,6 +396,6 @@ fn build_central_corridor_suite(
     shell.partition_h_styled(cor_y0, 0, w, &north_doors, cor_wall);
     shell.partition_h_styled(cor_y1, 0, w, &south_doors, cor_wall);
     let corridor = Room { x0: 0, y0: cor_y0, x1: w, y1: cor_y1 };
-    rooms.push((corridor, Role::Office));
+    rooms.push((corridor, Role::Hall));
     (rooms, surfaces, Vec::new())
 }

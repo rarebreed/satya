@@ -159,6 +159,29 @@ prop_catalog! {
     ShippingContainer: 6 x 2, FullObstacle, SheetSteel, 260 cm, [0.20, 0.42, 0.56], stretch;
     CropRow: 3 x 1, Concealment, Foliage, 155 cm, [0.34, 0.58, 0.22], stretch;
     PlanterTable: 2 x 1, HalfCover, SolidWood, 95 cm, [0.56, 0.40, 0.26], stretch;
+    DeskLamp: 1 x 1, FloorLayer, WoodFurniture, 45 cm, [0.85, 0.72, 0.42];
+    StandingLamp: 1 x 1, FloorLayer, SheetSteel, 165 cm, [0.82, 0.75, 0.55];
+    Nightstand: 1 x 1, HalfCover, WoodFurniture, 62 cm, [0.52, 0.36, 0.24];
+    Dresser: 2 x 1, HalfCover, WoodFurniture, 105 cm, [0.50, 0.35, 0.23];
+    BathroomSink: 1 x 1, HalfCover, Ceramic, 86 cm, [0.92, 0.94, 0.96], stretch;
+    FireExtinguisher: 1 x 1, FloorLayer, SheetSteel, 68 cm, [0.82, 0.14, 0.14];
+    TvStand: 2 x 1, HalfCover, WoodFurniture, 118 cm, [0.22, 0.22, 0.25], stretch;
+    Stereo: 1 x 1, HalfCover, Appliance, 85 cm, [0.20, 0.22, 0.26], stretch;
+    RunnerRug: 2 x 1, FloorLayer, Upholstery, 1 cm, [0.64, 0.36, 0.28], stretch, floor;
+    RoundRug: 2 x 2, FloorLayer, Upholstery, 1 cm, [0.58, 0.38, 0.30], floor;
+    SmallFountain: 1 x 1, HalfCover, ConcreteBlock, 95 cm, [0.74, 0.76, 0.78];
+    MediumFountain: 2 x 2, HalfCover, ConcreteBlock, 145 cm, [0.72, 0.75, 0.78];
+    LargeFountain: 3 x 3, HalfCover, ReinforcedConcrete, 195 cm, [0.70, 0.74, 0.77];
+    Gazebo: 4 x 4, FloorLayer, SolidWood, 310 cm, [0.54, 0.38, 0.24], floor;
+    BbqGrill: 1 x 1, HalfCover, Appliance, 112 cm, [0.24, 0.24, 0.26];
+    GardenShed: 3 x 2, FullObstacle, SolidWood, 240 cm, [0.48, 0.34, 0.22];
+    TrashCan: 1 x 1, HalfCover, SheetSteel, 96 cm, [0.28, 0.32, 0.34];
+    GarbagePile: 2 x 1, HalfCover, Upholstery, 78 cm, [0.24, 0.26, 0.24];
+    AcUnit: 1 x 1, HalfCover, Appliance, 82 cm, [0.72, 0.74, 0.75];
+    HotTub: 2 x 2, HalfCover, SolidWood, 96 cm, [0.44, 0.28, 0.18];
+    FloorClothes: 1 x 1, FloorLayer, Upholstery, 8 cm, [0.46, 0.54, 0.66], floor;
+    FloorToys: 1 x 1, FloorLayer, WoodFurniture, 12 cm, [0.84, 0.42, 0.28], floor;
+    StreetDebris: 2 x 1, FloorLayer, Earth, 6 cm, [0.44, 0.42, 0.38], stretch, floor;
 }
 
 /// Catalog entry for `kind`.

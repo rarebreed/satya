@@ -119,20 +119,42 @@ fn push_segment_prism(
     }
 }
 
-fn surface_style(kind: SurfaceFeatureKind) -> ([f32; 3], f32) {
+fn surface_style(kind: SurfaceFeatureKind, variant_seed: u32) -> ([f32; 3], f32) {
     match kind {
         SurfaceFeatureKind::AsphaltRoad => ([0.21, 0.22, 0.24], -7.0),
         SurfaceFeatureKind::ConcreteWalk => ([0.64, 0.63, 0.60], -7.0),
         SurfaceFeatureKind::StoneWalk => ([0.66, 0.62, 0.56], -3.0),
-        SurfaceFeatureKind::GravelRoad => ([0.58, 0.56, 0.52], -4.0),
+        SurfaceFeatureKind::GravelRoad => {
+            let rgb = match variant_seed % 3 {
+                0 => [0.58, 0.56, 0.52],
+                1 => [0.66, 0.58, 0.44],
+                _ => [0.34, 0.36, 0.40],
+            };
+            (rgb, -4.0)
+        }
         SurfaceFeatureKind::DirtTrail => ([0.48, 0.37, 0.26], -4.0),
         SurfaceFeatureKind::MulchZone => ([0.31, 0.20, 0.13], -5.0),
         SurfaceFeatureKind::GardenBedZone => ([0.25, 0.36, 0.18], -5.0),
         SurfaceFeatureKind::CreekChannel => ([0.18, 0.44, 0.56], -6.0),
         SurfaceFeatureKind::DrainageDitch => ([0.30, 0.25, 0.18], -4.0),
         SurfaceFeatureKind::DefensiveTrench => ([0.36, 0.27, 0.18], -4.0),
+        SurfaceFeatureKind::WoodDeck => ([0.52, 0.35, 0.22], -3.0),
+        SurfaceFeatureKind::PoolWater => ([0.16, 0.62, 0.78], -6.0),
+        SurfaceFeatureKind::InteriorFloor => {
+            let rgb = match variant_seed % 3 {
+                0 => [0.38, 0.28, 0.19],
+                1 => [0.24, 0.16, 0.11],
+                _ => [0.58, 0.50, 0.38],
+            };
+            (rgb, -1.0)
+        }
+        SurfaceFeatureKind::CeramicTileFloor => {
+            let rgb = if variant_seed & 1 == 1 { [0.68, 0.40, 0.28] } else { [0.82, 0.85, 0.87] };
+            (rgb, -8.0)
+        }
+        SurfaceFeatureKind::MarbleFloor => ([0.89, 0.88, 0.85], -8.0),
+        SurfaceFeatureKind::CarpetFloor => ([0.66, 0.62, 0.57], -4.0),
         SurfaceFeatureKind::BridgeDeck => ([0.46, 0.32, 0.19], -3.0),
-        SurfaceFeatureKind::InteriorFloor => ([0.38, 0.28, 0.19], -1.0),
     }
 }
 
@@ -418,7 +440,7 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
     for (rank, &(orig_idx, s)) in order.iter().enumerate() {
         let prio = s.kind.layer_priority();
         let y = 0.003 + (prio as f32) * 0.00032 + (rank as f32) * 0.00004;
-        let (rgb, zone_id) = surface_style(s.kind);
+        let (rgb, zone_id) = surface_style(s.kind, s.variant_seed);
 
         if s.kind == SurfaceFeatureKind::BridgeDeck {
             push_bridge_deck_3d(verts, s, bw_m, bh_m);
@@ -474,15 +496,29 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
             }
             SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon => {
                 let ring = sampled_closed_ring_m(s);
+                let eff_y = if s.kind == SurfaceFeatureKind::WoodDeck { y.max(0.032) } else { y };
                 let (verts_m, tris) = triangulate_simple_polygon_m(&ring);
                 let col = [rgb[0], rgb[1], rgb[2], 0.0];
                 for t in &tris {
                     let a = metric_to_world_xz(verts_m[t[0]].0, verts_m[t[0]].1, bw_m, bh_m);
                     let b = metric_to_world_xz(verts_m[t[1]].0, verts_m[t[1]].1, bw_m, bh_m);
                     let c = metric_to_world_xz(verts_m[t[2]].0, verts_m[t[2]].1, bw_m, bh_m);
-                    push_tri_up(verts, a, b, c, y, col, zone_id);
+                    push_tri_up(verts, a, b, c, eff_y, col, zone_id);
                 }
-                if matches!(
+                if s.kind == SurfaceFeatureKind::WoodDeck && ring.len() >= 3 {
+                    let skirt = [0.36, 0.23, 0.14, 0.0];
+                    for i in 0..ring.len() {
+                        let a = metric_to_world_xz(ring[i].0, ring[i].1, bw_m, bh_m);
+                        let b = metric_to_world_xz(ring[(i + 1) % ring.len()].0, ring[(i + 1) % ring.len()].1, bw_m, bh_m);
+                        push_wall_quad(verts, a, b, 0.0, eff_y, skirt, -3.0);
+                    }
+                } else if s.kind == SurfaceFeatureKind::PoolWater && ring.len() >= 3 {
+                    for i in 0..ring.len() {
+                        let a = ring[i];
+                        let b = ring[(i + 1) % ring.len()];
+                        push_segment_prism(verts, a.0, a.1, b.0, b.1, 0.055, y, y + 0.045, bw_m, bh_m, [0.82, 0.79, 0.73], -3.0);
+                    }
+                } else if matches!(
                     s.kind,
                     SurfaceFeatureKind::GardenBedZone | SurfaceFeatureKind::MulchZone
                 ) {

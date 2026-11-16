@@ -6,11 +6,13 @@
 //!    door thresholds and spawn pads stay clear while tall props preserve full connectivity.
 
 use satya_schema::{
-    EdgeSide, MapPropPlacement, MapWallEdge, MaterialClass, PropKind, WallEdgeKind,
+    EconomicTier, EdgeSide, MapWallEdge, MaterialClass, WallEdgeKind,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::map_dressing::{PropObstruction, make_prop, prop_spec};
+use crate::map_dressing::{PropObstruction, prop_spec};
+pub(crate) use crate::map_room_furnish::{Furnisher, Role, emit_room_floor_surface};
+use crate::map_surface_queries::prune_occluded_surfaces;
 use crate::tactical_map::ProceduralSector;
 use crate::tactical_map_edges::WallEdgeIndex;
 use crate::tactical_map_geom::all_walkable_areas_connected;
@@ -59,23 +61,6 @@ impl Room {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Role {
-    Living,
-    Kitchen,
-    Bedroom,
-    Office,
-    Bathroom,
-    BarHall,
-    Storage,
-    Restroom,
-    BackKitchen,
-    Bullpen,
-    ConferenceRoom,
-    Breakroom,
-    ServerCloset,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Side {
     North,
     East,
@@ -93,16 +78,6 @@ impl Side {
             Self::South => 180,
             Self::West => 270,
         }
-    }
-}
-
-/// Unit vector a prop's **front** faces for `rotation_deg` (back faces North at `0`).
-const fn front_dir(rotation_deg: i32) -> (i32, i32) {
-    match rotation_deg.rem_euclid(360) {
-        90 => (-1, 0),
-        180 => (0, -1),
-        270 => (1, 0),
-        _ => (0, 1),
     }
 }
 
@@ -240,323 +215,6 @@ impl Shell {
     }
 }
 
-pub(crate) struct Furnisher {
-    pub(crate) w: i32,
-    pub(crate) h: i32,
-    pub(crate) blocked: Vec<bool>,
-    pub(crate) props: Vec<MapPropPlacement>,
-    pub(crate) rng: Rng,
-}
-
-impl Furnisher {
-    pub(crate) fn new(w: i32, h: i32, seed: u64) -> Self {
-        Self {
-            w,
-            h,
-            blocked: vec![false; (w.max(1) * h.max(1)) as usize],
-            props: Vec::new(),
-            rng: Rng(seed),
-        }
-    }
-
-    pub(crate) fn reserve_cell(&mut self, x: i32, y: i32) {
-        if x >= 0 && y >= 0 && x < self.w && y < self.h {
-            self.blocked[(y * self.w + x) as usize] = true;
-        }
-    }
-
-    pub(crate) fn reserve_doors(&mut self, edges: &[MapWallEdge]) {
-        for e in edges {
-            if matches!(e.kind, WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen) {
-                match e.side {
-                    EdgeSide::West => {
-                        self.reserve_cell(e.x - 1, e.y);
-                        self.reserve_cell(e.x, e.y);
-                    }
-                    EdgeSide::North => {
-                        self.reserve_cell(e.x, e.y - 1);
-                        self.reserve_cell(e.x, e.y);
-                    }
-                }
-            }
-        }
-    }
-
-    fn free(&self, x: i32, y: i32, fw: i32, fh: i32, r: Room) -> bool {
-        x >= r.x0
-            && y >= r.y0
-            && x + fw <= r.x1
-            && y + fh <= r.y1
-            && (y..y + fh).all(|yy| (x..x + fw).all(|xx| !self.blocked[(yy * self.w + xx) as usize]))
-    }
-
-    fn free_prop(&self, p: &MapPropPlacement, r: Room) -> bool {
-        p.x >= r.x0
-            && p.y >= r.y0
-            && p.x + p.w_cells <= r.x1
-            && p.y + p.h_cells <= r.y1
-            && (p.y..p.y + p.h_cells).all(|yy| {
-                (p.x..p.x + p.w_cells).all(|xx| !p.covers(xx, yy) || !self.blocked[(yy * self.w + xx) as usize])
-            })
-    }
-
-    pub(crate) fn try_place(&mut self, kind: PropKind, x: i32, y: i32, rot: i32, len: Option<i32>, r: Room) -> Option<MapPropPlacement> {
-        let seed = self.rng.next() as u32;
-        let p = make_prop(kind, x, y, rot, len, seed);
-        let decal = prop_spec(kind).floor_layer;
-        let fits = if decal {
-            x >= r.x0 && y >= r.y0 && x + p.w_cells <= r.x1 && y + p.h_cells <= r.y1
-        } else {
-            self.free_prop(&p, r)
-        };
-        if !fits {
-            return None;
-        }
-        if !decal {
-            for yy in y..y + p.h_cells {
-                for xx in x..x + p.w_cells {
-                    if p.covers(xx, yy) {
-                        self.blocked[(yy * self.w + xx) as usize] = true;
-                    }
-                }
-            }
-        }
-        self.props.push(p);
-        Some(p)
-    }
-
-    pub(crate) fn against_wall(&mut self, kind: PropKind, r: Room, side: Side, len: Option<i32>) -> Option<MapPropPlacement> {
-        let rot = side.rot();
-        let probe = make_prop(kind, 0, 0, rot, len, 0);
-        let (fw, fh) = (probe.w_cells, probe.h_cells);
-        let cands: Vec<(i32, i32)> = match side {
-            Side::North => (r.x0..=r.x1 - fw).map(|x| (x, r.y0)).collect(),
-            Side::South => (r.x0..=r.x1 - fw).map(|x| (x, r.y1 - fh)).collect(),
-            Side::West => (r.y0..=r.y1 - fh).map(|y| (r.x0, y)).collect(),
-            Side::East => (r.y0..=r.y1 - fh).map(|y| (r.x1 - fw, y)).collect(),
-        };
-        if cands.is_empty() {
-            return None;
-        }
-        let start = self.rng.range(0, cands.len() as i32) as usize;
-        (0..cands.len())
-            .map(|i| cands[(start + i) % cands.len()])
-            .find_map(|(x, y)| self.try_place(kind, x, y, rot, len, r))
-    }
-
-    pub(crate) fn against_any_wall(&mut self, kind: PropKind, r: Room, len: Option<i32>) -> Option<MapPropPlacement> {
-        let start = self.rng.range(0, 4) as usize;
-        (0..4).find_map(|i| self.against_wall(kind, r, Side::ALL[(start + i) % 4], len))
-    }
-
-    /// Places `kind` with the same rotation, centered in front of `anchor` after a `gap` of free cells.
-    pub(crate) fn in_front(&mut self, anchor: MapPropPlacement, kind: PropKind, gap: i32, r: Room) -> Option<MapPropPlacement> {
-        let rot = anchor.rotation_deg;
-        let probe = make_prop(kind, 0, 0, rot, None, 0);
-        let (fw, fh) = (probe.w_cells, probe.h_cells);
-        let (x, y) = match front_dir(rot) {
-            (0, 1) => (anchor.x + (anchor.w_cells - fw) / 2, anchor.y + anchor.h_cells + gap),
-            (0, _) => (anchor.x + (anchor.w_cells - fw) / 2, anchor.y - gap - fh),
-            (1, _) => (anchor.x + anchor.w_cells + gap, anchor.y + (anchor.h_cells - fh) / 2),
-            _ => (anchor.x - gap - fw, anchor.y + (anchor.h_cells - fh) / 2),
-        };
-        self.try_place(kind, x, y, rot, None, r)
-    }
-
-    /// Scatters up to `count` props with a one-cell clearance ring inside `r` and natural `1°` jitter.
-    pub(crate) fn scatter(&mut self, kind: PropKind, r: Room, count: usize, rot: i32) {
-        let jitter_range = match kind {
-            PropKind::RoundTable | PropKind::Armchair | PropKind::CoffeeTable | PropKind::WoodCrate => 8,
-            PropKind::PoolTable => 2,
-            _ => 0,
-        };
-        let mut placed = 0;
-        for _ in 0..(count * 12) {
-            if placed >= count {
-                break;
-            }
-            let rot_deg = if jitter_range > 0 {
-                (rot + self.rng.range(-jitter_range, jitter_range + 1)).rem_euclid(360)
-            } else {
-                rot
-            };
-            let probe = make_prop(kind, 0, 0, rot_deg, None, 0);
-            let x = self.rng.range(r.x0 + 1, r.x1 - probe.w_cells);
-            let y = self.rng.range(r.y0 + 1, r.y1 - probe.h_cells);
-            let ring = Room { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 };
-            if self.free(x - 1, y - 1, probe.w_cells + 2, probe.h_cells + 2, ring)
-                && self.try_place(kind, x, y, rot_deg, None, r).is_some()
-            {
-                placed += 1;
-            }
-        }
-    }
-
-    pub(crate) fn furnish(&mut self, role: Role, r: Room) {
-        use PropKind as P;
-        let area_scale = (r.area() / 36).clamp(1, 5) as usize;
-        match role {
-            Role::Living => {
-                let seat = self.against_any_wall(P::Sofa, r, None).or_else(|| self.against_any_wall(P::Loveseat, r, None));
-                if let Some(s) = seat {
-                    let _ = self.in_front(s, P::Rug, 0, r);
-                    let _ = self.in_front(s, P::CoffeeTable, 1, r).or_else(|| self.in_front(s, P::CoffeeTable, 0, r));
-                }
-                if area_scale >= 2 {
-                    let _ = self.against_any_wall(P::Sofa, r, None);
-                    self.scatter(P::Armchair, r, area_scale.min(3), 0);
-                } else {
-                    let _ = self.against_any_wall(P::Armchair, r, None);
-                }
-                let _ = self.against_any_wall(P::Bookshelf, r, None);
-                let _ = self.against_any_wall(P::Planter, r, None);
-            }
-            Role::Kitchen | Role::BackKitchen => {
-                let side = Side::ALL[self.rng.range(0, 4) as usize];
-                let run = match side { Side::North | Side::South => r.w(), _ => r.h() };
-                let len = (run - 2).clamp(2, 4);
-                let _ = self.against_wall(P::KitchenCounter, r, side, Some(len));
-                let _ = self.against_wall(P::Stove, r, side, None);
-                let _ = self.against_wall(P::Fridge, r, side, None).or_else(|| self.against_any_wall(P::Fridge, r, None));
-                if role == Role::Kitchen {
-                    self.scatter(P::DiningTable, r, area_scale.min(3), 0);
-                } else {
-                    self.scatter(P::WoodCrate, r, (area_scale * 2).min(6), 0);
-                }
-            }
-            Role::Bedroom => {
-                let _ = self.against_any_wall(P::Bed, r, None);
-                let _ = self.against_any_wall(P::Wardrobe, r, None);
-                let _ = self.against_any_wall(P::Desk, r, None);
-                if area_scale >= 2 {
-                    let _ = self.against_any_wall(P::Armchair, r, None);
-                    let _ = self.against_any_wall(P::Planter, r, None);
-                }
-            }
-            Role::Office => {
-                let _ = self
-                    .against_any_wall(P::DeskL, r, None)
-                    .or_else(|| self.against_any_wall(P::Desk, r, None));
-                self.scatter(P::Desk, r, area_scale.min(3), 0);
-                let _ = self.against_any_wall(P::Bookshelf, r, None);
-                let _ = self.against_any_wall(P::Planter, r, None);
-            }
-            Role::Bathroom | Role::Restroom => {
-                if role == Role::Bathroom {
-                    let _ = self.against_any_wall(P::Bathtub, r, None);
-                }
-                let _ = self.against_any_wall(P::Toilet, r, None);
-                if role == Role::Restroom {
-                    let _ = self.against_any_wall(P::Toilet, r, None);
-                }
-            }
-            Role::Storage => {
-                for _ in 0..area_scale.min(3) {
-                    let _ = self.against_any_wall(P::SteelShelving, r, None);
-                }
-                for _ in 0..(area_scale * 3 + 1).min(10) {
-                    let _ = self.against_any_wall(P::WoodCrate, r, None);
-                }
-                let _ = self.against_any_wall(P::DrumCluster, r, None);
-            }
-            Role::BarHall => self.furnish_bar_hall(r),
-            Role::Bullpen => {
-                let side = if self.rng.chance(1, 2) { Side::North } else { Side::South };
-                let lounge = self
-                    .against_wall(P::Sofa, r, side, None)
-                    .or_else(|| self.against_wall(P::Loveseat, r, side, None));
-                if let Some(s) = lounge {
-                    let _ = self.in_front(s, P::Rug, 0, r);
-                    let _ = self
-                        .in_front(s, P::CoffeeTable, 1, r)
-                        .or_else(|| self.in_front(s, P::CoffeeTable, 0, r));
-                }
-                self.scatter(P::DeskT, r, (r.area() / 48).clamp(1, 4) as usize, 0);
-                let _ = self.against_any_wall(P::DeskL, r, None);
-                let _ = self.against_any_wall(P::DeskL, r, None);
-                let desk_count = ((r.area() / 22).clamp(1, 8)) as usize;
-                self.scatter(P::Desk, r, desk_count, 0);
-                let _ = self.against_any_wall(P::Bookshelf, r, None);
-                self.scatter(P::Planter, r, (r.area() / 60).clamp(1, 4) as usize, 0);
-            }
-            Role::ConferenceRoom => {
-                let cx = r.x0 + (r.w() - 2) / 2;
-                let cy = r.y0 + (r.h() - 2) / 2;
-                if r.w() >= 6 && r.h() >= 5 {
-                    let _ = self.try_place(P::DiningTable, cx - 1, cy, 0, None, r);
-                    let _ = self.try_place(P::DiningTable, cx + 1, cy, 0, None, r);
-                } else {
-                    let _ = self.try_place(P::DiningTable, cx, cy, 0, None, r);
-                }
-                if area_scale >= 2 {
-                    self.scatter(P::Armchair, r, 2, 0);
-                }
-                let _ = self.against_any_wall(P::Bookshelf, r, None);
-                let _ = self.against_any_wall(P::Planter, r, None);
-            }
-            Role::Breakroom => {
-                let side = if r.w() >= r.h() { Side::North } else { Side::East };
-                let run = match side {
-                    Side::North | Side::South => r.w(),
-                    _ => r.h(),
-                };
-                let _ = self.against_wall(P::KitchenCounter, r, side, Some((run - 2).clamp(2, 4)));
-                let _ = self
-                    .against_wall(P::Fridge, r, side, None)
-                    .or_else(|| self.against_any_wall(P::Fridge, r, None));
-                self.scatter(P::RoundTable, r, (r.area() / 24).clamp(2, 6) as usize, 0);
-            }
-            Role::ServerCloset => {
-                for _ in 0..area_scale.min(3) {
-                    let _ = self.against_any_wall(P::SteelShelving, r, None);
-                }
-                let _ = self.against_any_wall(P::Desk, r, None);
-                let _ = self.against_any_wall(P::WoodCrate, r, None);
-            }
-        }
-    }
-
-    fn furnish_patio(&mut self, r: Room) {
-        use PropKind as P;
-        self.scatter(P::RoundTable, r, (r.area() / 32).clamp(1, 4) as usize, 0);
-        self.scatter(P::ParkBench, r, (r.area() / 48).clamp(1, 3) as usize, 0);
-        self.scatter(P::Planter, r, (r.area() / 36).clamp(1, 4) as usize, 0);
-        let _ = self.against_any_wall(P::Bush, r, None);
-    }
-
-    /// Back-bar shelf → bartender aisle → long bar counter → stool row, then booths, pool & bistro tables.
-    fn furnish_bar_hall(&mut self, r: Room) {
-        use PropKind as P;
-        let len = (r.w() - 4).clamp(3, 10);
-        let bx = r.x0 + 1 + self.rng.range(0, (r.w() - len - 2).max(1));
-        let north = self.rng.chance(1, 2);
-        let (shelf_y, counter_y, stool_y, rot) = if north {
-            (r.y0, r.y0 + 2, r.y0 + 3, 0)
-        } else {
-            (r.y1 - 1, r.y1 - 3, r.y1 - 4, 180)
-        };
-        if r.h() >= 8 {
-            let _ = self.try_place(P::BackBarShelf, bx, shelf_y, rot, Some(len), r);
-            let aisle_y = (shelf_y + counter_y) / 2;
-            for x in bx..bx + len {
-                self.blocked[(aisle_y * self.w + x) as usize] = true;
-            }
-            let _ = self.try_place(P::BarCounter, bx, counter_y, rot, Some(len), r);
-            for x in bx..bx + len {
-                let _ = self.try_place(P::BarStool, x, stool_y, rot, None, r);
-            }
-        }
-        let far = if north { Side::South } else { Side::North };
-        for _ in 0..(r.w() / 5).clamp(3, 6) {
-            let _ = self.against_wall(P::Booth, r, far, None);
-        }
-        self.scatter(P::PoolTable, r, (r.area() / 90).clamp(1, 3) as usize, 0);
-        self.scatter(P::RoundTable, r, (r.area() / 32).clamp(4, 10) as usize, 0);
-        let _ = self.against_any_wall(P::Jukebox, r, None);
-        let _ = self.against_any_wall(P::Planter, r, None);
-    }
-}
-
 /// Generates a furnished edge-walled interior sector (`width × height` cells, already clamped by caller).
 #[must_use]
 pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32, seed: i64) -> ProceduralSector {
@@ -571,7 +229,7 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
     let whole = Room { x0: 0, y0: 0, x1: w, y1: h };
     let mut rooms_roles: Vec<(Room, Role)> = Vec::new();
     let mut patio_rooms: Vec<Room> = Vec::new();
-    let surfaces = if w >= 24 && h >= 18 {
+    let mut surfaces = if w >= 24 && h >= 18 {
         let (r_roles, ext_surfaces, patios) =
             crate::map_interior_topologies::build_scaled_interior_layout(style, &mut shell);
         rooms_roles = r_roles;
@@ -585,7 +243,7 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
         match style {
             InteriorStyle::Apartment => {
                 let mut rooms = Vec::new();
-                shell.bsp(whole, 0, 4, 3, &mut rooms);
+                shell.bsp(whole, 0, 3, 3, &mut rooms);
                 rooms.sort_by_key(|r| -r.area());
                 let n = rooms.len();
                 for (i, r) in rooms.into_iter().enumerate() {
@@ -593,8 +251,11 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
                         0 => Role::Living,
                         1 => Role::Kitchen,
                         _ if i == n - 1 && n >= 4 => Role::Bathroom,
+                        _ if r.area() <= 8 || r.w() <= 2 || r.h() <= 2 => Role::Closet,
+                        2 => Role::MasterBedroom,
+                        3 => Role::Dining,
                         _ if i % 2 == 0 => Role::Bedroom,
-                        _ => Role::Office,
+                        _ => Role::Foyer,
                     };
                     rooms_roles.push((r, role));
                 }
@@ -678,6 +339,37 @@ pub fn generate_furnished_interior(style: InteriorStyle, width: i32, height: i32
             variant_seed: (seed as u32).wrapping_add(7),
         }]
     };
+
+    let interior_count = surfaces
+        .iter()
+        .filter(|s| s.kind == satya_schema::SurfaceFeatureKind::InteriorFloor)
+        .count();
+    let mut wood_kept_per_poly = vec![false; interior_count.max(1)];
+    let mut room_overlays = Vec::new();
+    for &(r, role) in &rooms_roles {
+        let poly_idx = surfaces
+            .iter()
+            .filter(|s| s.kind == satya_schema::SurfaceFeatureKind::InteriorFloor)
+            .position(|s| {
+                let cx = (r.x0 + r.x1) as f32 * 0.5;
+                let cy = (r.y0 + r.y1) as f32 * 0.5;
+                crate::map_surface_queries::surface_contains_point_m(s, cx, cy)
+            })
+            .unwrap_or(0);
+        if let Some(sf) = emit_room_floor_surface(r, role, EconomicTier::MiddleClass, &mut shell.rng) {
+            room_overlays.push((poly_idx, sf));
+        } else {
+            wood_kept_per_poly[poly_idx] = true;
+        }
+    }
+    for (poly_idx, sf) in room_overlays {
+        if !wood_kept_per_poly[poly_idx] {
+            wood_kept_per_poly[poly_idx] = true;
+            continue;
+        }
+        surfaces.push(sf);
+    }
+    prune_occluded_surfaces(&mut surfaces, w, h);
 
     // Reserve spawn pads and both sides of every door so thresholds stay walkable.
     let mut furn = Furnisher::new(w, h, shell.rng.next());

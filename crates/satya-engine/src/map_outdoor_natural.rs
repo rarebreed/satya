@@ -290,8 +290,14 @@ pub(crate) fn build_wooded_park(b: &mut OutdoorBuilder) {
     };
 
     b.place_vehicle_along_ribbon(PropKind::Car, road, 0.26, 0.15, 6);
-    place_rot_m(b, PropKind::PicnicTable, wf * 0.50, hf * 0.47, 0, 90, true);
+    place_rot_m(b, PropKind::MediumFountain, wf * 0.50, hf * 0.45, 0, 360, true);
+    place_rot_m(b, PropKind::PicnicTable, wf * 0.56, hf * 0.50, 0, 90, true);
+    place_rot_m(b, PropKind::BbqGrill, wf * 0.59, hf * 0.50, 0, 360, true);
     place_rot_m(b, PropKind::ParkBench, wf * 0.43, hf * 0.46, -25, 26, true);
+    place_rot_m(b, PropKind::TrashCan, wf * 0.41, hf * 0.48, 0, 360, true);
+    if b.w >= 26 && b.h >= 20 {
+        b.scatter_turf_prop_rot(PropKind::Gazebo, 1, 0, full_rect(b, 3.0));
+    }
 
     let area_scale = (b.w * b.h / 85).clamp(3, 18);
     scatter_organic_beds(b, (area_scale / 2 + 2).clamp(3, 10), full_rect(b, 1.4), true);

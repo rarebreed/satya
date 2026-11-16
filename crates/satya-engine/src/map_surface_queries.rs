@@ -402,10 +402,9 @@ mod tests {
                                     "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed on AsphaltRoad",
                                     p.kind
                                 );
-                                assert_ne!(
-                                    top_kind,
-                                    Some(SurfaceFeatureKind::InteriorFloor),
-                                    "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed inside InteriorFloor",
+                                assert!(
+                                    !top_kind.is_some_and(SurfaceFeatureKind::is_built_floor_or_deck),
+                                    "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed inside built floor/deck/pool ({top_kind:?})",
                                     p.kind
                                 );
                             }
@@ -413,10 +412,9 @@ mod tests {
                                 p.kind,
                                 PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier
                             ) {
-                                assert_ne!(
-                                    top_kind,
-                                    Some(SurfaceFeatureKind::InteriorFloor),
-                                    "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed inside InteriorFloor",
+                                assert!(
+                                    !top_kind.is_some_and(SurfaceFeatureKind::is_built_floor_or_deck),
+                                    "{preset:?} {w}x{h} seed {seed}: {:?} at ({cx}, {cy}) landed inside built floor/deck/pool ({top_kind:?})",
                                     p.kind
                                 );
                             }

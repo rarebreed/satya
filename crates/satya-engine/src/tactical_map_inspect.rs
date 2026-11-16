@@ -412,8 +412,10 @@ pub fn inspect_map_point(
             });
         }
         let mat_label = spec.material.label().to_owned();
-        let cover = if matches!(p.kind, PropKind::BarStool) {
+        let cover = if p.kind == PropKind::BarStool {
             "Seat / Low Obstacle"
+        } else if spec.obstruction == crate::map_dressing::PropObstruction::FloorLayer {
+            "Accent / Non-Blocking"
         } else {
             cover_label_for_grade(spec.obstruction.cover_grade())
         };
@@ -461,6 +463,8 @@ pub fn inspect_map_point(
             ("Vertical Transit · Connects Adjacent Floors".to_owned(), "Stairwell Access".to_owned(), 0)
         } else if p.kind == PropKind::ElevatedCatwalk {
             ("Elevated Walkway (+15 cm)".to_owned(), "Elevated Surface".to_owned(), 15)
+        } else if p.kind == PropKind::Gazebo {
+            ("Timber Garden Pavilion (Canopy Overhead)".to_owned(), "Walkable Deck + Overhead Cover".to_owned(), 5)
         } else if spec.move_cost_mult > 1.1 {
             (
                 format!("Difficult Ground ({:.1}x Move Cost)", spec.move_cost_mult),
@@ -493,6 +497,11 @@ pub fn inspect_map_point(
                 format!("Excavated Trench ({cost:.1}x Move Cost)"),
                 "Low Cover (Trench)".to_owned(),
                 -40,
+            ),
+            satya_schema::SurfaceFeatureKind::PoolWater => (
+                format!("Swimming Pool ({cost:.1}x Move Cost)"),
+                "Wading / Swimming Water".to_owned(),
+                -20,
             ),
             satya_schema::SurfaceFeatureKind::CreekChannel
             | satya_schema::SurfaceFeatureKind::DrainageDitch => (

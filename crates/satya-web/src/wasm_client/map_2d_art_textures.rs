@@ -78,7 +78,7 @@ pub struct BattlemapTextureSpec {
     pub fallback_hex: &'static str,
 }
 
-/// Complete 21-tile battlemap texture catalog synchronized with `src/satya_ml/texture_gen/catalog.py`.
+/// Complete 33-tile battlemap texture catalog synchronized with `src/satya_ml/texture_gen/catalog.py`.
 pub const BATTLEMAP_TEXTURE_SPECS: &[BattlemapTextureSpec] = &[
     BattlemapTextureSpec { pattern_id: "bm-grass", asset_file: "grass_meadow.webp", span_px: 256, fallback_hex: "#638045" },
     BattlemapTextureSpec { pattern_id: "bm-gravel", asset_file: "gravel_shoal.webp", span_px: 128, fallback_hex: "#b7afa2" },
@@ -101,15 +101,42 @@ pub const BATTLEMAP_TEXTURE_SPECS: &[BattlemapTextureSpec] = &[
     BattlemapTextureSpec { pattern_id: "bm-ceramic", asset_file: "ceramic_tile.webp", span_px: 96, fallback_hex: "#dfe5e8" },
     BattlemapTextureSpec { pattern_id: "bm-brick", asset_file: "brick_masonry.webp", span_px: 96, fallback_hex: "#9c5a49" },
     BattlemapTextureSpec { pattern_id: "bm-spill", asset_file: "hazard_spill.webp", span_px: 128, fallback_hex: "#9db82c" },
+    BattlemapTextureSpec { pattern_id: "bm-marble", asset_file: "marble_floor.webp", span_px: 128, fallback_hex: "#eceae6" },
+    BattlemapTextureSpec { pattern_id: "bm-terracotta", asset_file: "terracotta_tile.webp", span_px: 112, fallback_hex: "#c67856" },
+    BattlemapTextureSpec { pattern_id: "bm-carpet", asset_file: "carpet_plush.webp", span_px: 96, fallback_hex: "#c5bdb1" },
+    BattlemapTextureSpec { pattern_id: "bm-pool-water", asset_file: "pool_water.webp", span_px: 160, fallback_hex: "#38b6d6" },
+    BattlemapTextureSpec { pattern_id: "bm-wood-deck", asset_file: "wood_deck.webp", span_px: 128, fallback_hex: "#9c6a47" },
+    BattlemapTextureSpec { pattern_id: "bm-hardwood-walnut", asset_file: "hardwood_walnut.webp", span_px: 128, fallback_hex: "#5d3f2c" },
+    BattlemapTextureSpec { pattern_id: "bm-hardwood-ash", asset_file: "hardwood_ash.webp", span_px: 128, fallback_hex: "#d9c6a3" },
+    BattlemapTextureSpec { pattern_id: "bm-gravel-pea", asset_file: "gravel_pea.webp", span_px: 128, fallback_hex: "#c8b38d" },
+    BattlemapTextureSpec { pattern_id: "bm-gravel-slate", asset_file: "gravel_slate.webp", span_px: 128, fallback_hex: "#5b6169" },
+    BattlemapTextureSpec { pattern_id: "bm-grass-lush", asset_file: "grass_lush.webp", span_px: 192, fallback_hex: "#4e8442" },
+    BattlemapTextureSpec { pattern_id: "bm-grass-dry", asset_file: "grass_dry.webp", span_px: 192, fallback_hex: "#9e9555" },
+    BattlemapTextureSpec { pattern_id: "bm-wood-veneer", asset_file: "wood_veneer.webp", span_px: 128, fallback_hex: "#d4cfc7" },
 ];
 
-fn floor_webp_spec_for_theme(t: &BattlemapArtTheme) -> (&'static str, i32, &'static str) {
+fn floor_webp_spec_for_theme_seeded(t: &BattlemapArtTheme, seed: i64) -> (&'static str, i32, &'static str) {
     if t.id == "clinic" {
         return ("ceramic_tile.webp", 96, t.floor_base);
     }
+    let variant = (seed.unsigned_abs() % 3) as usize;
     match t.floor {
-        BattlemapFloorPattern::Grass => ("grass_meadow.webp", 256, "#638045"),
-        BattlemapFloorPattern::Hardwood => ("hardwood_plank.webp", 128, t.floor_base),
+        BattlemapFloorPattern::Grass => [
+            ("grass_meadow.webp", 256, "#638045"),
+            ("grass_lush.webp", 192, "#4e8442"),
+            ("grass_dry.webp", 192, "#9e9555"),
+        ][variant],
+        BattlemapFloorPattern::Hardwood => {
+            if t.id == "bar_interior" {
+                ("hardwood_plank.webp", 128, t.floor_base)
+            } else {
+                [
+                    ("hardwood_plank.webp", 128, t.floor_base),
+                    ("hardwood_walnut.webp", 128, "#5d3f2c"),
+                    ("hardwood_ash.webp", 128, "#d9c6a3"),
+                ][variant]
+            }
+        }
         BattlemapFloorPattern::PolishedConcrete => ("concrete_slab.webp", 256, t.floor_base),
         BattlemapFloorPattern::StainedConcrete => ("stained_concrete.webp", 256, t.floor_base),
         BattlemapFloorPattern::VinylTile => ("vinyl_tile.webp", 128, t.floor_base),
@@ -117,11 +144,96 @@ fn floor_webp_spec_for_theme(t: &BattlemapArtTheme) -> (&'static str, i32, &'sta
     }
 }
 
+fn push_extra_vector_pattern_defs(out: &mut String) {
+    out.push_str(
+        r##"<pattern id="bm-paver" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#cfc7b8"/><rect x="2" y="2" width="28" height="28" rx="3" fill="#dbd4c6" opacity=".6"/><rect x="34" y="34" width="28" height="28" rx="3" fill="#c3baa9" opacity=".55"/><path d="M0 32H64M32 0V32M16 32V64M48 32V64M0 0H64M0 0V64" stroke="#938a7a" stroke-width="1.3" opacity=".65"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-tarmac" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#55585c"/><circle cx="9" cy="11" r="1" fill="#fff" opacity=".12"/><circle cx="33" cy="24" r="1.2" fill="#fff" opacity=".1"/><circle cx="19" cy="39" r=".9" fill="#000" opacity=".28"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-marble" width="128" height="128" patternUnits="userSpaceOnUse"><rect width="128" height="128" fill="#eceae6"/><path d="M12 18q28 16 54 6t44 18M4 88q36-12 68 8t48-10" fill="none" stroke="#c8c4bc" stroke-width="1.8" opacity=".6"/><path d="M0 64H128M64 0V128M0 0H128M0 0V128" fill="none" stroke="#b8b4ac" stroke-width="1.1"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-terracotta" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#c67856"/><rect x="1" y="1" width="30" height="30" fill="#cf815e" opacity=".45"/><rect x="33" y="33" width="30" height="30" fill="#b46747" opacity=".4"/><path d="M0 32H64M32 0V64M0 0H64M0 0V64" fill="none" stroke="#7c5646" stroke-width="1.4"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-ceramic" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#dfe5e8"/><path d="M0 16H48M0 32H48M16 0V48M32 0V48M0 0H48M0 0V48" fill="none" stroke="#aeb7bd" stroke-width="1"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-carpet" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#c5bdb1"/><circle cx="7" cy="9" r="1.2" fill="#9f968a" opacity=".5"/><circle cx="21" cy="24" r="1.2" fill="#dfd9cf" opacity=".55"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-pool-water" width="80" height="80" patternUnits="userSpaceOnUse"><rect width="80" height="80" fill="#38b6d6"/><path d="M4 22q18-7 36 0t36 0M6 58q18 7 36 0t36 0" fill="none" stroke="#a6ecfb" stroke-width="1.8" opacity=".65"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-wood-deck" width="96" height="48" patternUnits="userSpaceOnUse"><rect width="96" height="48" fill="#9c6a47"/><path d="M0 12H96M0 24H96M0 36H96M0 48H96" stroke="#4f331d" stroke-width="1.6"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-hardwood" width="96" height="48" patternUnits="userSpaceOnUse"><rect width="96" height="48" fill="#c8a57e"/><path d="M0 12H96M0 24H96M0 36H96M0 48H96M32 0V12M70 12V24M18 24V36" stroke="#8a6a4a" stroke-width="1"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-hardwood-walnut" width="96" height="48" patternUnits="userSpaceOnUse"><rect width="96" height="48" fill="#5d3f2c"/><path d="M0 12H96M0 24H96M0 36H96M0 48H96M42 0V12M14 12V24" stroke="#362216" stroke-width="1.1"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-hardwood-ash" width="96" height="48" patternUnits="userSpaceOnUse"><rect width="96" height="48" fill="#d9c6a3"/><path d="M0 12H96M0 24H96M0 36H96M0 48H96M28 0V12M64 12V24" stroke="#ab9875" stroke-width="1"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-gravel-pea" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#c8b38d"/><circle cx="11" cy="14" r="3" fill="#decba7" opacity=".75"/><circle cx="31" cy="28" r="2.8" fill="#a8936e" opacity=".75"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-gravel-slate" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#5b6169"/><polygon points="8,14 16,10 18,19 9,20" fill="#707780" opacity=".75"/><polygon points="28,26 36,24 38,34 27,32" fill="#464b52" opacity=".75"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-grass-lush" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#4e8442"/><path d="M12 20l2-6M42 46l2-6" stroke="#6aa65a" stroke-width="1.3"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-grass-dry" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#9e9555"/><path d="M14 24l3-6M46 44l3-6" stroke="#b5ad6e" stroke-width="1.3"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-oak" width="64" height="32" patternUnits="userSpaceOnUse"><rect width="64" height="32" fill="#a47b55"/><path d="M0 16H64" stroke="#6f4f33" stroke-width="1.1"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-wood-veneer" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#d4cfc7"/><path d="M0 16q16 3 32 0t32 0M0 44q18-3 36 0t28 0" fill="none" stroke="#b9b2a8" stroke-width="1" opacity=".55"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-brick" width="48" height="24" patternUnits="userSpaceOnUse"><rect width="48" height="24" fill="#9c5a49"/><path d="M0 12H48M24 0V12M0 12V24" stroke="#c8beb3" stroke-width="1.1" opacity=".65"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-concrete" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#bdb9b0"/><circle cx="18" cy="40" r="1.2" fill="#9a958b"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-steel" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#9aa2a9"/><path d="M0 8H32M0 24H32" stroke="#b5bdc4" stroke-width=".8" opacity=".45"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-fabric" width="24" height="24" patternUnits="userSpaceOnUse"><rect width="24" height="24" fill="#d6d3cd"/><path d="M0 12H24M12 0V24" stroke="#bab6af" stroke-width=".7" opacity=".4"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-rock" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#7b7972"/><path d="M8 14L24 22L38 12" fill="none" stroke="#575550" stroke-width="1.2"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-spill" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#9db82c"/><ellipse cx="22" cy="24" rx="14" ry="8" fill="#c7e048" opacity=".45"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-roof-gravel" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#736f68"/><circle cx="10" cy="14" r="2" fill="#59554f"/><circle cx="24" cy="22" r="2" fill="#8b877f"/></pattern>"##,
+    );
+}
+
 /// Appends architectural and material `<pattern>` definitions inside `<defs>` according to `mode`.
 pub fn push_battlemap_material_defs(
     out: &mut String,
     t: &BattlemapArtTheme,
     mode: BattlemapTextureMode,
+) {
+    push_battlemap_material_defs_seeded(out, t, mode, 42);
+}
+
+/// Seed-aware variant of [`push_battlemap_material_defs`] selecting grass/hardwood palette varieties.
+pub fn push_battlemap_material_defs_seeded(
+    out: &mut String,
+    t: &BattlemapArtTheme,
+    mode: BattlemapTextureMode,
+    seed: i64,
 ) {
     let _ = write!(
         out,
@@ -134,13 +246,11 @@ pub fn push_battlemap_material_defs(
     if !mode.is_painted() {
         push_floor_pattern_def(out, t);
         push_surface_pattern_defs(out);
-        out.push_str(
-            r##"<pattern id="bm-paver" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#cfc7b8"/><rect x="2" y="2" width="28" height="28" rx="3" fill="#dbd4c6" opacity=".6"/><rect x="34" y="34" width="28" height="28" rx="3" fill="#c3baa9" opacity=".55"/><path d="M0 32H64M32 0V32M16 32V64M48 32V64M0 0H64M0 0V64" stroke="#938a7a" stroke-width="1.3" opacity=".65"/></pattern><pattern id="bm-tarmac" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#55585c"/><circle cx="9" cy="11" r="1" fill="#fff" opacity=".12"/><circle cx="33" cy="24" r="1.2" fill="#fff" opacity=".1"/><circle cx="19" cy="39" r=".9" fill="#000" opacity=".28"/></pattern>"##,
-        );
+        push_extra_vector_pattern_defs(out);
         return;
     }
 
-    let (floor_file, floor_span, floor_fallback) = floor_webp_spec_for_theme(t);
+    let (floor_file, floor_span, floor_fallback) = floor_webp_spec_for_theme_seeded(t, seed);
     let _ = write!(
         out,
         r##"<pattern id="bm-floor" width="{floor_span}" height="{floor_span}" patternUnits="userSpaceOnUse"><rect width="{floor_span}" height="{floor_span}" fill="{floor_fallback}"/><image href="{BATTLEMAP_TEXTURE_BASE_URL}/{floor_file}" width="{floor_span}" height="{floor_span}" preserveAspectRatio="none"/>"##,
@@ -197,12 +307,12 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn texture_spec_catalog_covers_all_21_webp_assets() {
-        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 21);
+    fn texture_spec_catalog_covers_all_33_webp_assets() {
+        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 33);
         let pids: BTreeSet<&str> = BATTLEMAP_TEXTURE_SPECS.iter().map(|s| s.pattern_id).collect();
         let files: BTreeSet<&str> = BATTLEMAP_TEXTURE_SPECS.iter().map(|s| s.asset_file).collect();
-        assert_eq!(pids.len(), 21);
-        assert_eq!(files.len(), 21);
+        assert_eq!(pids.len(), 33);
+        assert_eq!(files.len(), 33);
 
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/textures/map2d");
         for spec in BATTLEMAP_TEXTURE_SPECS {
@@ -236,6 +346,7 @@ mod tests {
         let painted_key = battlemap_art_cache_key(&ui);
         let painted_art = format_battlemap_art_layer(&ui);
         assert!(painted_art.contains("/assets/textures/map2d/grass_meadow.webp"));
+        assert!(painted_art.contains("url(#bm-wood-veneer)"));
         assert!(painted_art.contains("url(#bm-oak)"));
         assert!(painted_art.contains("url(#bm-fabric)"));
         assert!(painted_art.contains("url(#bm-rock)"));

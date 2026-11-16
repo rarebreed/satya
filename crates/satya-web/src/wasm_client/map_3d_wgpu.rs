@@ -37,6 +37,7 @@ mod map_wgpu_runtime {
         bind_group: wgpu::BindGroup,
         render_pipeline: wgpu::RenderPipeline,
         diorama_vb: wgpu::Buffer,
+        diorama_opaque_vcount: u32,
         diorama_vcount: u32,
         diorama_ib: wgpu::Buffer,
         miniature_meshes: HashMap<String, GpuMeshSlice>,
@@ -148,7 +149,7 @@ mod map_wgpu_runtime {
         );
 
         if ctrl.scene_dirty {
-            let verts = with_map_ui(build_tactical_diorama_vertices);
+            let (verts, opaque_vcount) = with_map_ui(build_tactical_diorama_layered);
             let bytes: &[u8] = bytemuck::cast_slice(&verts);
             let vb = pipe.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("satya-map-diorama-vb"),
@@ -158,6 +159,7 @@ mod map_wgpu_runtime {
             });
             pipe.queue.write_buffer(&vb, 0, bytes);
             pipe.diorama_vb = vb;
+            pipe.diorama_opaque_vcount = opaque_vcount;
             pipe.diorama_vcount = verts.len() as u32;
             let world_inst =
                 GlbInstanceData::from_trs_and_tint([0.0, 0.0, 0.0], 0.0, [1.0, 1.0, 1.0], [1.0; 4]);
@@ -287,12 +289,12 @@ mod map_wgpu_runtime {
             rpass.set_pipeline(&pipe.render_pipeline);
             rpass.set_bind_group(0, &pipe.bind_group, &[]);
 
-            // Draw floor, cover, bulkheads, reach envelope, and LoS laser
+            // 1. Draw opaque floor, cover, bulkheads, reach envelope, and LoS laser
             rpass.set_vertex_buffer(0, pipe.diorama_vb.slice(..));
             rpass.set_vertex_buffer(1, pipe.diorama_ib.slice(..));
-            rpass.draw(0..pipe.diorama_vcount, 0..1);
+            rpass.draw(0..pipe.diorama_opaque_vcount, 0..1);
 
-            // Draw each `.glb` character miniature at its world cell transform
+            // 2. Draw each `.glb` character miniature at its world cell transform
             let stride = std::mem::size_of::<GlbInstanceData>() as u64;
             for (idx, (preset, _)) in draws.iter().enumerate() {
                 if let Some(mesh) = pipe.miniature_meshes.get(preset)
@@ -303,6 +305,13 @@ mod map_wgpu_runtime {
                     rpass.set_vertex_buffer(1, pipe.miniature_ib.slice(off..off + stride));
                     rpass.draw(0..mesh.vertex_count, 0..1);
                 }
+            }
+
+            // 3. Draw translucent canopies (trees, gazebos) after miniatures so tokens underneath stay visible
+            if pipe.diorama_vcount > pipe.diorama_opaque_vcount {
+                rpass.set_vertex_buffer(0, pipe.diorama_vb.slice(..));
+                rpass.set_vertex_buffer(1, pipe.diorama_ib.slice(..));
+                rpass.draw(pipe.diorama_opaque_vcount..pipe.diorama_vcount, 0..1);
             }
         }
         pipe.queue.submit(std::iter::once(enc.finish()));
@@ -528,6 +537,7 @@ mod map_wgpu_runtime {
             bind_group,
             render_pipeline,
             diorama_vb,
+            diorama_opaque_vcount: 0,
             diorama_vcount: 0,
             diorama_ib,
             miniature_meshes: HashMap::new(),

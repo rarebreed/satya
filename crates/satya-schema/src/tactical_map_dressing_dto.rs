@@ -81,7 +81,7 @@ define_wire_enum! {
 define_wire_enum! {
     /// Catalog of placeable continuous props & surface zones. Dimensions, heights, and materials are in
     /// `satya_engine::map_dressing::prop_spec`.
-    pub enum PropKind [count = 67] {
+    pub enum PropKind [count = 90] {
         Sofa => ("SOFA", "Sofa (3-seat)"),
         Loveseat => ("LOVESEAT", "Loveseat"),
         Armchair => ("ARMCHAIR", "Armchair"),
@@ -149,6 +149,29 @@ define_wire_enum! {
         ShippingContainer => ("SHIPPING_CONTAINER", "ISO shipping container"),
         CropRow => ("CROP_ROW", "Field crop row"),
         PlanterTable => ("PLANTER_TABLE", "Conservatory planter bench"),
+        DeskLamp => ("DESK_LAMP", "Desk lamp", aliases: ["TABLE_LAMP"]),
+        StandingLamp => ("STANDING_LAMP", "Standing floor lamp", aliases: ["FLOOR_LAMP"]),
+        Nightstand => ("NIGHTSTAND", "Bedside nightstand", aliases: ["BEDSIDE_TABLE", "END_TABLE"]),
+        Dresser => ("DRESSER", "Bedroom dresser", aliases: ["CHEST_OF_DRAWERS", "BUREAU"]),
+        BathroomSink => ("BATHROOM_SINK", "Bathroom vanity & sink", aliases: ["VANITY_SINK", "WASHBASIN", "SINK"]),
+        FireExtinguisher => ("FIRE_EXTINGUISHER", "Fire extinguisher", aliases: ["EXTINGUISHER"]),
+        TvStand => ("TV_STAND", "Entertainment stand & TV", aliases: ["TELEVISION", "ENTERTAINMENT_CENTER", "MEDIA_CONSOLE"]),
+        Stereo => ("STEREO", "Stereo system & speakers", aliases: ["SOUND_SYSTEM", "SPEAKERS"]),
+        RunnerRug => ("RUNNER_RUG", "Hallway / bedside runner rug", aliases: ["HALL_RUG", "BATH_MAT"]),
+        RoundRug => ("ROUND_RUG", "Circular accent rug", aliases: ["CIRCLE_RUG"]),
+        SmallFountain => ("SMALL_FOUNTAIN", "Small courtyard fountain", aliases: ["COURTYARD_FOUNTAIN"]),
+        MediumFountain => ("MEDIUM_FOUNTAIN", "Tiered plaza fountain", aliases: ["FOUNTAIN", "PLAZA_FOUNTAIN"]),
+        LargeFountain => ("LARGE_FOUNTAIN", "Grand monumental fountain", aliases: ["GRAND_FOUNTAIN"]),
+        Gazebo => ("GAZEBO", "Timber garden gazebo", aliases: ["PAVILION", "PERGOLA"]),
+        BbqGrill => ("BBQ_GRILL", "Outdoor barbeque grill", aliases: ["GRILL", "BARBECUE"]),
+        GardenShed => ("GARDEN_SHED", "Backyard utility shed", aliases: ["SHED", "TOOL_SHED"]),
+        TrashCan => ("TRASH_CAN", "Trash bin", aliases: ["GARBAGE_CAN", "WASTE_BIN"]),
+        GarbagePile => ("GARBAGE_PILE", "Garbage & refuse pile", aliases: ["TRASH_BAGS", "REFUSE_PILE"]),
+        AcUnit => ("AC_UNIT", "Exterior HVAC / AC condenser", aliases: ["AIR_CONDITIONER", "HVAC_CONDENSER"]),
+        HotTub => ("HOT_TUB", "Outdoor spa & hot tub", aliases: ["SPA", "JACUZZI"]),
+        FloorClothes => ("FLOOR_CLOTHES", "Scattered clothes on floor", aliases: ["LAUNDRY_PILE", "CLOTHES_PILE"]),
+        FloorToys => ("FLOOR_TOYS", "Scattered toys on floor", aliases: ["TOYS"]),
+        StreetDebris => ("STREET_DEBRIS", "Scattered street litter & debris", aliases: ["LITTER", "TRASH_SCATTER"]),
     }
 }
 
@@ -424,8 +447,17 @@ mod tests {
             assert_eq!(serde_json::to_string(&k).unwrap(), format!("\"{}\"", k.as_str()));
             assert_eq!(PropKind::from_code_str(&k.as_str().to_ascii_lowercase()), Some(k));
         }
-        assert_eq!(PropKind::ALL.len(), 67);
+        assert_eq!(PropKind::ALL.len(), 90);
         assert_eq!(PropKind::from_code_str("sofa"), Some(PropKind::Sofa));
+        assert_eq!(PropKind::from_code_str("nightstand"), Some(PropKind::Nightstand));
+        assert_eq!(PropKind::from_code_str("table_lamp"), Some(PropKind::DeskLamp));
+        assert_eq!(PropKind::from_code_str("floor_lamp"), Some(PropKind::StandingLamp));
+        assert_eq!(PropKind::from_code_str("vanity_sink"), Some(PropKind::BathroomSink));
+        assert_eq!(PropKind::from_code_str("television"), Some(PropKind::TvStand));
+        assert_eq!(PropKind::from_code_str("fountain"), Some(PropKind::MediumFountain));
+        assert_eq!(PropKind::from_code_str("gazebo"), Some(PropKind::Gazebo));
+        assert_eq!(PropKind::from_code_str("hot_tub"), Some(PropKind::HotTub));
+        assert_eq!(PropKind::from_code_str("street_debris"), Some(PropKind::StreetDebris));
         assert_eq!(PropKind::from_code_str("structural_pillar"), Some(PropKind::StructuralPillar));
         assert_eq!(PropKind::from_code_str("elevated_catwalk"), Some(PropKind::ElevatedCatwalk));
         assert_eq!(PropKind::from_code_str("hazard_spill"), Some(PropKind::HazardSpill));

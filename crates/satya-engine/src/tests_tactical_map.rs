@@ -20,7 +20,7 @@ use crate::tactical_map::{
     compute_reachable_continuous, evaluate_los_continuous, generate_procedural_sector,
 };
 use crate::tactical_map_geom::{
-    TOKEN_RADIUS_M, all_walkable_areas_connected, circle_collides_obstacles,
+    TOKEN_RADIUS_M, all_walkable_areas_connected, circle_collides_obstacles, tree_canopy_radius_m,
 };
 
 #[test]
@@ -645,4 +645,71 @@ fn economic_tier_and_zoning_override_decoupling_works() {
     );
     assert!(req.has_multiple_floors());
     assert_eq!(req.active_floor, 0);
+}
+
+#[test]
+fn residential_architectures_vary_shapes_floors_decks_pools_and_non_sparse_rooms() {
+    let mut saw_multi_wing = false;
+    let mut saw_tile_or_marble = false;
+    let mut saw_carpet = false;
+    let mut saw_deck_or_pool = false;
+    let mut saw_bedroom_suite = false;
+
+    for seed in 1_i64..=18 {
+        for preset in [
+            SectorPreset::RuralCountryside,
+            SectorPreset::SuburbanNeighborhood,
+            SectorPreset::LuxuryMansion,
+        ] {
+            let sec = generate_zoned_sector(preset, 36, 26, seed, None, None);
+            assert!(all_walkable_areas_connected(36, 26, &sec.wall_edges, &sec.props));
+            let interior_count = sec
+                .surfaces
+                .iter()
+                .filter(|s| s.kind == SurfaceFeatureKind::InteriorFloor)
+                .count();
+            if interior_count >= 2 {
+                saw_multi_wing = true;
+            }
+            if sec.surfaces.iter().any(|s| {
+                matches!(
+                    s.kind,
+                    SurfaceFeatureKind::CeramicTileFloor | SurfaceFeatureKind::MarbleFloor
+                )
+            }) {
+                saw_tile_or_marble = true;
+            }
+            if sec
+                .surfaces
+                .iter()
+                .any(|s| s.kind == SurfaceFeatureKind::CarpetFloor)
+            {
+                saw_carpet = true;
+            }
+            if sec.surfaces.iter().any(|s| {
+                matches!(
+                    s.kind,
+                    SurfaceFeatureKind::WoodDeck | SurfaceFeatureKind::PoolWater
+                )
+            }) {
+                saw_deck_or_pool = true;
+            }
+            if sec
+                .props
+                .iter()
+                .any(|p| matches!(p.kind, PropKind::Nightstand | PropKind::Dresser))
+                && sec.props.iter().any(|p| p.kind == PropKind::StandingLamp)
+            {
+                saw_bedroom_suite = true;
+            }
+        }
+    }
+
+    assert!(saw_multi_wing, "expected L-shaped multi-wing homes across seeds");
+    assert!(saw_tile_or_marble, "expected ceramic/marble kitchen/bath room floors");
+    assert!(saw_carpet, "expected carpet flooring in bedrooms");
+    assert!(saw_deck_or_pool, "expected attached wood decks and pools");
+    assert!(saw_bedroom_suite, "expected non-sparse bedroom suites with nightstands/dressers/lamps");
+    assert!((tree_canopy_radius_m(PropKind::LargeTree) - 1.95).abs() < 1e-4);
+    assert!((tree_canopy_radius_m(PropKind::MediumTree) - 1.35).abs() < 1e-4);
 }
