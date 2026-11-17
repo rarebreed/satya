@@ -112,6 +112,16 @@ pub fn NotebookMapPane() -> impl IntoView {
                     >
                         "Inspect [Alt/I]"
                     </button>
+                    <button
+                        type="button"
+                        id="btn-map-editor-toggle"
+                        class="btn btn-sm btn-secondary"
+                        title="Toggle interactive 2D/3D Battlemap Editor Mode (hotkey E)"
+                        onclick="window.satyaToggleMapEditor()"
+                        on:click=move |_| wasm_client::satya_toggle_map_editor()
+                    >
+                        "Editor [E]"
+                    </button>
                     <label
                         id="map-ink-style-wrap"
                         class="inline-label"
@@ -359,6 +369,455 @@ pub fn NotebookMapPane() -> impl IntoView {
                 >
                     "Send Cover Δ_ext → 2d20"
                 </button>
+            </div>
+
+            <div
+                id="map-editor-toolbar"
+                class="map-editor-toolbar"
+                style="display: none;"
+                role="region"
+                aria-label="Interactive Battlemap Editor"
+            >
+                <div class="map-editor-row">
+                    <button
+                        type="button"
+                        id="btn-editor-tool-select"
+                        class="btn btn-sm btn-accent"
+                        onclick="window.satyaSetMapEditorTool('select')"
+                        on:click=move |_| wasm_client::satya_set_map_editor_tool("select".to_string())
+                    >
+                        "Select / Move"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-tool-prop"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaSetMapEditorTool('prop')"
+                        on:click=move |_| wasm_client::satya_set_map_editor_tool("prop".to_string())
+                    >
+                        "+ Add Object"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-tool-wall"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaSetMapEditorTool('wall')"
+                        on:click=move |_| wasm_client::satya_set_map_editor_tool("wall".to_string())
+                    >
+                        "Walls & Doors"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-tool-surface"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaSetMapEditorTool('surface')"
+                        on:click=move |_| wasm_client::satya_set_map_editor_tool("surface".to_string())
+                    >
+                        "Floor / Ground Zone"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-tool-ground"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaSetMapEditorTool('ground')"
+                        on:click=move |_| wasm_client::satya_set_map_editor_tool("ground".to_string())
+                    >
+                        "Base Ground"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-tool-erase"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaSetMapEditorTool('erase')"
+                        on:click=move |_| wasm_client::satya_set_map_editor_tool("erase".to_string())
+                    >
+                        "Erase"
+                    </button>
+                    <label class="inline-label" for="map-editor-snap-chk">
+                        <input
+                            type="checkbox"
+                            id="map-editor-snap-chk"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        />
+                        <span>"0.5m Snap"</span>
+                    </label>
+                    <button
+                        type="button"
+                        id="btn-editor-undo"
+                        class="btn btn-sm btn-secondary"
+                        title="Undo (Ctrl+Z)"
+                        onclick="window.satyaEditorUndo()"
+                        on:click=move |_| wasm_client::satya_editor_undo()
+                    >
+                        "↶ Undo"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-redo"
+                        class="btn btn-sm btn-secondary"
+                        title="Redo (Ctrl+Y)"
+                        onclick="window.satyaEditorRedo()"
+                        on:click=move |_| wasm_client::satya_editor_redo()
+                    >
+                        "↷ Redo"
+                    </button>
+                    <span id="map-editor-status-pill" class="map-editor-status-pill">
+                        "Click prop/zone to select · Drag prop to move"
+                    </span>
+                </div>
+
+                <div id="map-editor-panel-prop" class="map-editor-row" style="display: none;">
+                    <label class="inline-label" for="map-editor-prop-select">
+                        <span>"Object"</span>
+                        <select
+                            id="map-editor-prop-select"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        >
+                            {wasm_client::PROP_BRUSH_GROUPS
+                                .iter()
+                                .map(|&(group_label, kinds)| {
+                                    view! {
+                                        <optgroup label=group_label>
+                                            {kinds
+                                                .iter()
+                                                .map(|kind| {
+                                                    view! { <option value=kind.as_str()>{kind.label()}</option> }
+                                                })
+                                                .collect_view()}
+                                        </optgroup>
+                                    }
+                                })
+                                .collect_view()}
+                        </select>
+                    </label>
+                    <label class="inline-label" for="map-editor-prop-rot">
+                        <span>"Rot°"</span>
+                        <input
+                            type="number"
+                            id="map-editor-prop-rot"
+                            class="map-ticks-input"
+                            min="0"
+                            max="359"
+                            step="15"
+                            value="0"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        />
+                    </label>
+                    <label class="inline-label" for="map-editor-prop-decorative">
+                        <input
+                            type="checkbox"
+                            id="map-editor-prop-decorative"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        />
+                        <span>"Visual Only (No Cover/LoS)"</span>
+                    </label>
+                    <label class="inline-label" for="map-editor-prop-tint">
+                        <span>"Tint"</span>
+                        <input
+                            type="color"
+                            id="map-editor-prop-tint"
+                            class="dice-color-input"
+                            value="#7c8ea6"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        id="btn-editor-brush-tint-clear"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaClearEditorBrushTint()"
+                        on:click=move |_| wasm_client::satya_clear_editor_brush_tint()
+                    >
+                        "No Tint"
+                    </button>
+                </div>
+
+                <div id="map-editor-panel-wall" class="map-editor-row" style="display: none;">
+                    <label class="inline-label" for="map-editor-wall-kind">
+                        <span>"Edge"</span>
+                        <select
+                            id="map-editor-wall-kind"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        >
+                            <option value="wall">"Solid Wall"</option>
+                            <option value="door_closed">"Closed Door"</option>
+                            <option value="door_open">"Open Door"</option>
+                            <option value="window">"Window Sill"</option>
+                            <option value="erase">"Remove Wall / Open"</option>
+                        </select>
+                    </label>
+                    <label class="inline-label" for="map-editor-wall-mat">
+                        <span>"Material"</span>
+                        <select
+                            id="map-editor-wall-mat"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        >
+                            {satya_schema::MaterialClass::ALL
+                                .iter()
+                                .map(|m| {
+                                    view! { <option value=m.as_str()>{m.label()}</option> }
+                                })
+                                .collect_view()}
+                        </select>
+                    </label>
+                </div>
+
+                <div id="map-editor-panel-surface" class="map-editor-row" style="display: none;">
+                    <label class="inline-label" for="map-editor-surface-kind">
+                        <span>"Texture"</span>
+                        <select
+                            id="map-editor-surface-kind"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        >
+                            {satya_schema::SurfaceFeatureKind::ALL
+                                .iter()
+                                .map(|sk| {
+                                    view! { <option value=sk.as_str()>{sk.label()}</option> }
+                                })
+                                .collect_view()}
+                        </select>
+                    </label>
+                    <label class="inline-label" for="map-editor-surface-shape">
+                        <span>"Shape"</span>
+                        <select
+                            id="map-editor-surface-shape"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        >
+                            <option value="rect">"Rectangle Drag"</option>
+                            <option value="polygon">"Multi-Point Polygon"</option>
+                            <option value="ribbon">"Curved Path / Ribbon"</option>
+                        </select>
+                    </label>
+                    <label class="inline-label" for="map-editor-surface-width">
+                        <span>"Width(cm)"</span>
+                        <input
+                            type="number"
+                            id="map-editor-surface-width"
+                            class="map-ticks-input"
+                            min="40"
+                            max="1200"
+                            step="20"
+                            value="180"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        />
+                    </label>
+                    <label class="inline-label" for="map-editor-surface-tint">
+                        <span>"Tint"</span>
+                        <input
+                            type="color"
+                            id="map-editor-surface-tint"
+                            class="dice-color-input"
+                            value="#7c8ea6"
+                            onchange="window.satyaUpdateEditorBrushControls()"
+                            on:change=move |_| wasm_client::satya_update_editor_brush_controls()
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        id="btn-editor-surface-tint-clear"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaClearEditorBrushTint()"
+                        on:click=move |_| wasm_client::satya_clear_editor_brush_tint()
+                    >
+                        "No Tint"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-surface-finish"
+                        class="btn btn-sm btn-accent"
+                        style="display: none;"
+                        onclick="window.satyaFinishEditorSurface()"
+                        on:click=move |_| wasm_client::satya_finish_editor_surface()
+                    >
+                        "✓ Finish Zone"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-surface-cancel"
+                        class="btn btn-sm btn-secondary"
+                        style="display: none;"
+                        onclick="window.satyaCancelEditorDraft()"
+                        on:click=move |_| wasm_client::satya_cancel_editor_draft()
+                    >
+                        "✕ Cancel"
+                    </button>
+                </div>
+
+                <div id="map-editor-panel-ground" class="map-editor-row" style="display: none;">
+                    <label class="inline-label" for="map-editor-ground-override">
+                        <span>"Base Texture"</span>
+                        <select
+                            id="map-editor-ground-override"
+                            onchange="window.satyaApplyEditorGroundStyle()"
+                            on:change=move |_| wasm_client::satya_apply_editor_ground_style()
+                        >
+                            {wasm_client::GROUND_OVERRIDE_OPTIONS
+                                .iter()
+                                .map(|&(val, label)| {
+                                    view! { <option value=val>{label}</option> }
+                                })
+                                .collect_view()}
+                        </select>
+                    </label>
+                    <label class="inline-label" for="map-editor-ground-tint">
+                        <span>"Ground Tint"</span>
+                        <input
+                            type="color"
+                            id="map-editor-ground-tint"
+                            class="dice-color-input"
+                            value="#6b7280"
+                            onchange="window.satyaApplyEditorGroundStyle()"
+                            on:change=move |_| wasm_client::satya_apply_editor_ground_style()
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        id="btn-editor-ground-clear"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaClearEditorGroundStyle()"
+                        on:click=move |_| wasm_client::satya_clear_editor_ground_style()
+                    >
+                        "Reset Ground"
+                    </button>
+                </div>
+
+                <div
+                    id="map-editor-inspector"
+                    class="map-editor-inspector"
+                    style="display: none;"
+                >
+                    <span id="map-editor-sel-label" class="map-editor-sel-label">"Selected"</span>
+                    <span id="map-editor-sel-prop-controls" class="map-editor-row">
+                        <button
+                            type="button"
+                            id="btn-editor-sel-rot-ccw"
+                            class="btn btn-sm btn-secondary"
+                            onclick="window.satyaEditorRotateSelected(-15)"
+                            on:click=move |_| wasm_client::satya_editor_rotate_selected(-15)
+                        >
+                            "⟲ -15°"
+                        </button>
+                        <button
+                            type="button"
+                            id="btn-editor-sel-rot-cw"
+                            class="btn btn-sm btn-secondary"
+                            onclick="window.satyaEditorRotateSelected(15)"
+                            on:click=move |_| wasm_client::satya_editor_rotate_selected(15)
+                        >
+                            "⟳ +15°"
+                        </button>
+                        <label class="inline-label" for="map-editor-sel-rot">
+                            <span>"Deg"</span>
+                            <input
+                                type="number"
+                                id="map-editor-sel-rot"
+                                class="map-ticks-input"
+                                min="0"
+                                max="359"
+                                step="5"
+                                value="0"
+                                onchange="window.satyaEditorSetSelectedRot()"
+                                on:change=move |_| wasm_client::satya_editor_set_selected_rot()
+                            />
+                        </label>
+                        <button
+                            type="button"
+                            id="btn-editor-sel-shrink"
+                            class="btn btn-sm btn-secondary"
+                            onclick="window.satyaEditorStretchSelected(-25)"
+                            on:click=move |_| wasm_client::satya_editor_stretch_selected(-25)
+                        >
+                            "Span −"
+                        </button>
+                        <button
+                            type="button"
+                            id="btn-editor-sel-stretch"
+                            class="btn btn-sm btn-secondary"
+                            onclick="window.satyaEditorStretchSelected(25)"
+                            on:click=move |_| wasm_client::satya_editor_stretch_selected(25)
+                        >
+                            "Span +"
+                        </button>
+                        <label class="inline-label" for="map-editor-sel-decorative">
+                            <input
+                                type="checkbox"
+                                id="map-editor-sel-decorative"
+                                onchange="window.satyaEditorToggleSelectedDecorative()"
+                                on:change=move |_| wasm_client::satya_editor_toggle_selected_decorative()
+                            />
+                            <span>"Visual Only"</span>
+                        </label>
+                        <button
+                            type="button"
+                            id="btn-editor-sel-dup"
+                            class="btn btn-sm btn-secondary"
+                            onclick="window.satyaEditorDuplicateSelected()"
+                            on:click=move |_| wasm_client::satya_editor_duplicate_selected()
+                        >
+                            "Duplicate"
+                        </button>
+                    </span>
+                    <span
+                        id="map-editor-sel-surface-wrap"
+                        class="map-editor-row"
+                        style="display: none;"
+                    >
+                        <label class="inline-label" for="map-editor-sel-surface-kind">
+                            <span>"Zone Texture"</span>
+                            <select
+                                id="map-editor-sel-surface-kind"
+                                onchange="window.satyaEditorSetSelectedSurfaceKind()"
+                                on:change=move |_| wasm_client::satya_editor_set_selected_surface_kind()
+                            >
+                                {satya_schema::SurfaceFeatureKind::ALL
+                                    .iter()
+                                    .map(|sk| {
+                                        view! { <option value=sk.as_str()>{sk.label()}</option> }
+                                    })
+                                    .collect_view()}
+                            </select>
+                        </label>
+                    </span>
+                    <label class="inline-label" for="map-editor-sel-tint">
+                        <span>"Tint"</span>
+                        <input
+                            type="color"
+                            id="map-editor-sel-tint"
+                            class="dice-color-input"
+                            value="#7c8ea6"
+                            oninput="window.satyaEditorSetSelectedTint()"
+                            on:input=move |_| wasm_client::satya_editor_set_selected_tint()
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        id="btn-editor-sel-tint-clear"
+                        class="btn btn-sm btn-secondary"
+                        onclick="window.satyaEditorClearSelectedTint()"
+                        on:click=move |_| wasm_client::satya_editor_clear_selected_tint()
+                    >
+                        "Clear Tint"
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-editor-sel-del"
+                        class="btn btn-sm btn-danger"
+                        onclick="window.satyaEditorDeleteSelected()"
+                        on:click=move |_| wasm_client::satya_editor_delete_selected()
+                    >
+                        "Delete"
+                    </button>
+                </div>
             </div>
 
             <div id="tabletop-map-viewport" class="tabletop-map-viewport">

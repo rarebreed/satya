@@ -50,9 +50,7 @@ impl MacroZoneFamily {
             | SectorPreset::LuxuryMansion
             | SectorPreset::GardenEstate => Self::SuburbanEstate,
             SectorPreset::Hospital => Self::CivicCampus,
-            SectorPreset::ManufacturingPlant | SectorPreset::Warehouse => {
-                Self::IndustrialDistrict
-            }
+            SectorPreset::ManufacturingPlant | SectorPreset::Warehouse => Self::IndustrialDistrict,
             SectorPreset::WoodedPark
             | SectorPreset::WoodlandCreek
             | SectorPreset::BotanicalGarden
@@ -83,13 +81,25 @@ pub struct NeighborSectorSpec {
 fn urban_tier_shift(base: Option<EconomicTier>, roll: u32) -> EconomicTier {
     match base.unwrap_or(EconomicTier::MiddleClass) {
         EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion => {
-            if roll < 70 { EconomicTier::UpperMiddleClass } else { EconomicTier::MiddleClass }
+            if roll < 70 {
+                EconomicTier::UpperMiddleClass
+            } else {
+                EconomicTier::MiddleClass
+            }
         }
         EconomicTier::MiddleClass => {
-            if roll < 65 { EconomicTier::MiddleClass } else { EconomicTier::UpperMiddleClass }
+            if roll < 65 {
+                EconomicTier::MiddleClass
+            } else {
+                EconomicTier::UpperMiddleClass
+            }
         }
         EconomicTier::LowIncome => {
-            if roll < 65 { EconomicTier::LowIncome } else { EconomicTier::MiddleClass }
+            if roll < 65 {
+                EconomicTier::LowIncome
+            } else {
+                EconomicTier::MiddleClass
+            }
         }
     }
 }
@@ -110,11 +120,7 @@ fn zoned(
     }
 }
 
-fn plain(
-    preset: SectorPreset,
-    zd: u8,
-    road: Option<MapContinuationDir>,
-) -> NeighborSectorSpec {
+fn plain(preset: SectorPreset, zd: u8, road: Option<MapContinuationDir>) -> NeighborSectorSpec {
     NeighborSectorSpec {
         preset,
         zoning: None,
@@ -161,8 +167,10 @@ pub fn select_neighbor_sector_transition(
 
     match family {
         MacroZoneFamily::CommercialCore => {
-            let is_plaza_or_mall =
-                matches!(src_preset, SectorPreset::ShoppingPlaza | SectorPreset::ShoppingMall);
+            let is_plaza_or_mall = matches!(
+                src_preset,
+                SectorPreset::ShoppingPlaza | SectorPreset::ShoppingMall
+            );
             if depth == 0 {
                 if !is_plaza_or_mall && roll < 82 {
                     let next_p = if src_preset == SectorPreset::UrbanCrossroads && sub_roll < 55 {
@@ -175,7 +183,13 @@ pub fn select_neighbor_sector_transition(
                         SectorPreset::ShoppingPlaza
                     };
                     if next_p.is_zoned_preset() {
-                        zoned(next_p, ZoningContext::DowntownCommercial, EconomicTier::UpperMiddleClass, 1, road_opp)
+                        zoned(
+                            next_p,
+                            ZoningContext::DowntownCommercial,
+                            EconomicTier::UpperMiddleClass,
+                            1,
+                            road_opp,
+                        )
                     } else {
                         plain(next_p, 1, road_opp)
                     }
@@ -188,52 +202,128 @@ pub fn select_neighbor_sector_transition(
                         SectorPreset::ShoppingMall
                     };
                     if next_p.is_zoned_preset() {
-                        zoned(next_p, ZoningContext::DowntownCommercial, EconomicTier::UpperMiddleClass, 1, road_opp)
+                        zoned(
+                            next_p,
+                            ZoningContext::DowntownCommercial,
+                            EconomicTier::UpperMiddleClass,
+                            1,
+                            road_opp,
+                        )
                     } else {
                         plain(next_p, 1, road_opp)
                     }
                 } else if sub_roll < 70 {
-                    zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, EconomicTier::UpperMiddleClass, 0, road_opp)
+                    zoned(
+                        SectorPreset::UrbanResidential,
+                        ZoningContext::UrbanResidential,
+                        EconomicTier::UpperMiddleClass,
+                        0,
+                        road_opp,
+                    )
                 } else {
-                    zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, EconomicTier::UpperMiddleClass, 0, road_opp)
+                    zoned(
+                        SectorPreset::SuburbanNeighborhood,
+                        ZoningContext::SuburbanNeighborhood,
+                        EconomicTier::UpperMiddleClass,
+                        0,
+                        road_opp,
+                    )
                 }
             } else if depth == 1 {
                 if !is_plaza_or_mall && roll < 45 {
-                    let next_p = if sub_roll < 60 { SectorPreset::DowntownCommercial } else { SectorPreset::UrbanCrossroads };
+                    let next_p = if sub_roll < 60 {
+                        SectorPreset::DowntownCommercial
+                    } else {
+                        SectorPreset::UrbanCrossroads
+                    };
                     if next_p.is_zoned_preset() {
-                        zoned(next_p, ZoningContext::DowntownCommercial, EconomicTier::UpperMiddleClass, 2, road_opp)
+                        zoned(
+                            next_p,
+                            ZoningContext::DowntownCommercial,
+                            EconomicTier::UpperMiddleClass,
+                            2,
+                            road_opp,
+                        )
                     } else {
                         plain(next_p, 2, road_opp)
                     }
                 } else if is_plaza_or_mall && roll < 30 {
                     plain(SectorPreset::ShoppingPlaza, 2, road_opp)
                 } else if roll < 78 {
-                    zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, EconomicTier::UpperMiddleClass, 0, road_opp)
+                    zoned(
+                        SectorPreset::UrbanResidential,
+                        ZoningContext::UrbanResidential,
+                        EconomicTier::UpperMiddleClass,
+                        0,
+                        road_opp,
+                    )
                 } else {
-                    zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, EconomicTier::UpperMiddleClass, 0, road_opp)
+                    zoned(
+                        SectorPreset::SuburbanNeighborhood,
+                        ZoningContext::SuburbanNeighborhood,
+                        EconomicTier::UpperMiddleClass,
+                        0,
+                        road_opp,
+                    )
                 }
             } else if roll < 65 {
-                zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, EconomicTier::UpperMiddleClass, 0, road_opp)
+                zoned(
+                    SectorPreset::UrbanResidential,
+                    ZoningContext::UrbanResidential,
+                    EconomicTier::UpperMiddleClass,
+                    0,
+                    road_opp,
+                )
             } else if roll < 92 {
-                zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, EconomicTier::UpperMiddleClass, 0, road_opp)
+                zoned(
+                    SectorPreset::SuburbanNeighborhood,
+                    ZoningContext::SuburbanNeighborhood,
+                    EconomicTier::UpperMiddleClass,
+                    0,
+                    road_opp,
+                )
             } else {
-                zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, EconomicTier::MiddleClass, 0, road_opp)
+                zoned(
+                    SectorPreset::UrbanResidential,
+                    ZoningContext::UrbanResidential,
+                    EconomicTier::MiddleClass,
+                    0,
+                    road_opp,
+                )
             }
         }
 
         MacroZoneFamily::CivicCampus => {
             if src_edge.road_parallel {
                 if roll < 45 {
-                    zoned(SectorPreset::DowntownCommercial, ZoningContext::DowntownCommercial, EconomicTier::UpperMiddleClass, 0, road_opp)
+                    zoned(
+                        SectorPreset::DowntownCommercial,
+                        ZoningContext::DowntownCommercial,
+                        EconomicTier::UpperMiddleClass,
+                        0,
+                        road_opp,
+                    )
                 } else if roll < 80 {
-                    zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, EconomicTier::UpperMiddleClass, 0, road_opp)
+                    zoned(
+                        SectorPreset::UrbanResidential,
+                        ZoningContext::UrbanResidential,
+                        EconomicTier::UpperMiddleClass,
+                        0,
+                        road_opp,
+                    )
                 } else {
                     plain(SectorPreset::UrbanCrossroads, 0, road_opp)
                 }
             } else if depth == 0 && roll < 35 {
                 plain(SectorPreset::Hospital, 1, None)
             } else if roll < 68 {
-                zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, EconomicTier::UpperMiddleClass, 0, None)
+                zoned(
+                    SectorPreset::UrbanResidential,
+                    ZoningContext::UrbanResidential,
+                    EconomicTier::UpperMiddleClass,
+                    0,
+                    None,
+                )
             } else {
                 plain(SectorPreset::BotanicalGarden, 0, None)
             }
@@ -241,7 +331,11 @@ pub fn select_neighbor_sector_transition(
 
         MacroZoneFamily::IndustrialDistrict => {
             if depth == 0 && roll < 65 {
-                let wh_thresh = if src_preset == SectorPreset::ManufacturingPlant { 60 } else { 55 };
+                let wh_thresh = if src_preset == SectorPreset::ManufacturingPlant {
+                    60
+                } else {
+                    55
+                };
                 let next_p = if sub_roll < wh_thresh {
                     SectorPreset::Warehouse
                 } else {
@@ -249,7 +343,13 @@ pub fn select_neighbor_sector_transition(
                 };
                 plain(next_p, 1, road_opp)
             } else if roll < 42 {
-                zoned(SectorPreset::ProjectsHighDensity, ZoningContext::ProjectsHighDensity, EconomicTier::LowIncome, 0, road_opp)
+                zoned(
+                    SectorPreset::ProjectsHighDensity,
+                    ZoningContext::ProjectsHighDensity,
+                    EconomicTier::LowIncome,
+                    0,
+                    road_opp,
+                )
             } else if roll < 72 {
                 plain(SectorPreset::UrbanCrossroads, 0, road_opp)
             } else {
@@ -261,34 +361,96 @@ pub fn select_neighbor_sector_transition(
             if src_preset == SectorPreset::BotanicalGarden {
                 if src_edge.road_parallel {
                     if roll < 50 {
-                        zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, EconomicTier::UpperMiddleClass, 0, road_opp)
+                        zoned(
+                            SectorPreset::UrbanResidential,
+                            ZoningContext::UrbanResidential,
+                            EconomicTier::UpperMiddleClass,
+                            0,
+                            road_opp,
+                        )
                     } else if roll < 82 {
-                        zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, EconomicTier::UpperMiddleClass, 0, road_opp)
+                        zoned(
+                            SectorPreset::SuburbanNeighborhood,
+                            ZoningContext::SuburbanNeighborhood,
+                            EconomicTier::UpperMiddleClass,
+                            0,
+                            road_opp,
+                        )
                     } else {
-                        zoned(SectorPreset::LuxuryMansion, ZoningContext::SuburbanNeighborhood, EconomicTier::LuxuryMansion, 0, road_opp)
+                        zoned(
+                            SectorPreset::LuxuryMansion,
+                            ZoningContext::SuburbanNeighborhood,
+                            EconomicTier::LuxuryMansion,
+                            0,
+                            road_opp,
+                        )
                     }
                 } else if roll < 50 {
                     plain(SectorPreset::WoodedPark, depth.saturating_add(1), None)
                 } else if roll < 82 {
                     plain(SectorPreset::WoodlandCreek, depth.saturating_add(1), None)
                 } else {
-                    zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, EconomicTier::UpperMiddleClass, 0, None)
+                    zoned(
+                        SectorPreset::SuburbanNeighborhood,
+                        ZoningContext::SuburbanNeighborhood,
+                        EconomicTier::UpperMiddleClass,
+                        0,
+                        None,
+                    )
                 }
             } else if src_edge.road_parallel {
                 if src_preset == SectorPreset::WoodedPark {
                     if roll < 40 {
-                        let tier = if sub_roll < 55 { EconomicTier::UpperMiddleClass } else { EconomicTier::MiddleClass };
-                        zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, tier, 0, road_opp)
+                        let tier = if sub_roll < 55 {
+                            EconomicTier::UpperMiddleClass
+                        } else {
+                            EconomicTier::MiddleClass
+                        };
+                        zoned(
+                            SectorPreset::UrbanResidential,
+                            ZoningContext::UrbanResidential,
+                            tier,
+                            0,
+                            road_opp,
+                        )
                     } else if roll < 75 {
-                        let tier = if sub_roll < 60 { EconomicTier::UpperMiddleClass } else { EconomicTier::MiddleClass };
-                        zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, tier, 0, road_opp)
+                        let tier = if sub_roll < 60 {
+                            EconomicTier::UpperMiddleClass
+                        } else {
+                            EconomicTier::MiddleClass
+                        };
+                        zoned(
+                            SectorPreset::SuburbanNeighborhood,
+                            ZoningContext::SuburbanNeighborhood,
+                            tier,
+                            0,
+                            road_opp,
+                        )
                     } else {
-                        zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::MiddleClass, 0, road_opp)
+                        zoned(
+                            SectorPreset::RuralCountryside,
+                            ZoningContext::RuralCountryside,
+                            EconomicTier::MiddleClass,
+                            0,
+                            road_opp,
+                        )
                     }
                 } else if roll < 55 {
-                    zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::LowIncome, 0, road_opp)
+                    zoned(
+                        SectorPreset::RuralCountryside,
+                        ZoningContext::RuralCountryside,
+                        EconomicTier::LowIncome,
+                        0,
+                        road_opp,
+                    )
                 } else if roll < 85 {
-                    zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, EconomicTier::MiddleClass, 0, road_opp)
+                    zoned(
+                        SectorPreset::SuburbanNeighborhood,
+                        ZoningContext::SuburbanNeighborhood,
+                        EconomicTier::MiddleClass,
+                        0,
+                        road_opp,
+                    )
                 } else {
                     plain(SectorPreset::WoodedPark, 0, road_opp)
                 }
@@ -296,26 +458,50 @@ pub fn select_neighbor_sector_transition(
                 if roll < 55 {
                     plain(SectorPreset::WoodlandCreek, depth.saturating_add(1), None)
                 } else if roll < 85 {
-                    zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::MiddleClass, 0, None)
+                    zoned(
+                        SectorPreset::RuralCountryside,
+                        ZoningContext::RuralCountryside,
+                        EconomicTier::MiddleClass,
+                        0,
+                        None,
+                    )
                 } else {
                     plain(SectorPreset::WoodedPark, depth.saturating_add(1), None)
                 }
             } else if !src_edge.crossing_roads_cm.is_empty() {
                 if depth < 2 {
                     if roll < 45 {
-                        zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::MiddleClass, 0, None)
+                        zoned(
+                            SectorPreset::RuralCountryside,
+                            ZoningContext::RuralCountryside,
+                            EconomicTier::MiddleClass,
+                            0,
+                            None,
+                        )
                     } else if roll < 75 {
                         plain(SectorPreset::RoadsideDitch, depth.saturating_add(1), None)
                     } else {
                         plain(SectorPreset::WoodedPark, depth.saturating_add(1), None)
                     }
                 } else if roll < 65 {
-                    zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::MiddleClass, 0, None)
+                    zoned(
+                        SectorPreset::RuralCountryside,
+                        ZoningContext::RuralCountryside,
+                        EconomicTier::MiddleClass,
+                        0,
+                        None,
+                    )
                 } else {
                     plain(SectorPreset::RoadsideDitch, 0, None)
                 }
             } else if roll < 45 {
-                zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::LowIncome, 0, None)
+                zoned(
+                    SectorPreset::RuralCountryside,
+                    ZoningContext::RuralCountryside,
+                    EconomicTier::LowIncome,
+                    0,
+                    None,
+                )
             } else if roll < 78 {
                 plain(SectorPreset::WoodedPark, depth.saturating_add(1), None)
             } else {
@@ -327,59 +513,146 @@ pub fn select_neighbor_sector_transition(
             let tier = urban_tier_shift(source.economic_tier, sub_roll);
             if depth < 2 {
                 if src_preset == SectorPreset::ProjectsHighDensity && roll < 55 {
-                    zoned(SectorPreset::ProjectsHighDensity, ZoningContext::ProjectsHighDensity, EconomicTier::LowIncome, depth + 1, road_opp)
+                    zoned(
+                        SectorPreset::ProjectsHighDensity,
+                        ZoningContext::ProjectsHighDensity,
+                        EconomicTier::LowIncome,
+                        depth + 1,
+                        road_opp,
+                    )
                 } else if roll < 50 {
-                    zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, tier, depth + 1, road_opp)
+                    zoned(
+                        SectorPreset::UrbanResidential,
+                        ZoningContext::UrbanResidential,
+                        tier,
+                        depth + 1,
+                        road_opp,
+                    )
                 } else if roll < 72 || (orth_has_commercial && roll < 82) {
                     if sub_roll < 30 {
                         plain(SectorPreset::ShoppingPlaza, 0, road_opp)
                     } else {
-                        zoned(SectorPreset::DowntownCommercial, ZoningContext::DowntownCommercial, EconomicTier::UpperMiddleClass, 0, road_opp)
+                        zoned(
+                            SectorPreset::DowntownCommercial,
+                            ZoningContext::DowntownCommercial,
+                            EconomicTier::UpperMiddleClass,
+                            0,
+                            road_opp,
+                        )
                     }
                 } else if roll < 88 {
-                    zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, tier, 0, road_opp)
+                    zoned(
+                        SectorPreset::SuburbanNeighborhood,
+                        ZoningContext::SuburbanNeighborhood,
+                        tier,
+                        0,
+                        road_opp,
+                    )
                 } else {
                     plain(SectorPreset::WoodedPark, 0, road_opp)
                 }
             } else if roll < 45 {
-                zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, tier, 0, road_opp)
+                zoned(
+                    SectorPreset::SuburbanNeighborhood,
+                    ZoningContext::SuburbanNeighborhood,
+                    tier,
+                    0,
+                    road_opp,
+                )
             } else if roll < 75 {
                 plain(SectorPreset::WoodedPark, 0, road_opp)
             } else {
-                zoned(SectorPreset::DowntownCommercial, ZoningContext::DowntownCommercial, EconomicTier::UpperMiddleClass, 0, road_opp)
+                zoned(
+                    SectorPreset::DowntownCommercial,
+                    ZoningContext::DowntownCommercial,
+                    EconomicTier::UpperMiddleClass,
+                    0,
+                    road_opp,
+                )
             }
         }
 
         MacroZoneFamily::SuburbanEstate => {
-            if matches!(src_preset, SectorPreset::LuxuryMansion | SectorPreset::GardenEstate) {
+            if matches!(
+                src_preset,
+                SectorPreset::LuxuryMansion | SectorPreset::GardenEstate
+            ) {
                 if src_edge.road_parallel {
                     if roll < 60 {
-                        zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, EconomicTier::UpperMiddleClass, 0, road_opp)
+                        zoned(
+                            SectorPreset::SuburbanNeighborhood,
+                            ZoningContext::SuburbanNeighborhood,
+                            EconomicTier::UpperMiddleClass,
+                            0,
+                            road_opp,
+                        )
                     } else if roll < 85 {
-                        zoned(SectorPreset::LuxuryMansion, ZoningContext::SuburbanNeighborhood, EconomicTier::LuxuryMansion, depth.saturating_add(1), road_opp)
+                        zoned(
+                            SectorPreset::LuxuryMansion,
+                            ZoningContext::SuburbanNeighborhood,
+                            EconomicTier::LuxuryMansion,
+                            depth.saturating_add(1),
+                            road_opp,
+                        )
                     } else {
-                        zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::UpperMiddleClass, 0, road_opp)
+                        zoned(
+                            SectorPreset::RuralCountryside,
+                            ZoningContext::RuralCountryside,
+                            EconomicTier::UpperMiddleClass,
+                            0,
+                            road_opp,
+                        )
                     }
                 } else if roll < 45 {
                     plain(SectorPreset::WoodedPark, 0, None)
                 } else if roll < 75 {
-                    zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::MiddleClass, 0, None)
+                    zoned(
+                        SectorPreset::RuralCountryside,
+                        ZoningContext::RuralCountryside,
+                        EconomicTier::MiddleClass,
+                        0,
+                        None,
+                    )
                 } else {
                     plain(SectorPreset::WoodlandCreek, 0, None)
                 }
             } else if depth < 2 {
                 let tier = urban_tier_shift(source.economic_tier, sub_roll);
                 if roll < 55 {
-                    zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, tier, depth + 1, road_opp)
+                    zoned(
+                        SectorPreset::SuburbanNeighborhood,
+                        ZoningContext::SuburbanNeighborhood,
+                        tier,
+                        depth + 1,
+                        road_opp,
+                    )
                 } else if roll < 70 {
-                    zoned(SectorPreset::LuxuryMansion, ZoningContext::SuburbanNeighborhood, EconomicTier::LuxuryMansion, 0, road_opp)
+                    zoned(
+                        SectorPreset::LuxuryMansion,
+                        ZoningContext::SuburbanNeighborhood,
+                        EconomicTier::LuxuryMansion,
+                        0,
+                        road_opp,
+                    )
                 } else if roll < 85 {
                     plain(SectorPreset::WoodedPark, 0, road_opp)
                 } else {
-                    zoned(SectorPreset::UrbanResidential, ZoningContext::UrbanResidential, tier, 0, road_opp)
+                    zoned(
+                        SectorPreset::UrbanResidential,
+                        ZoningContext::UrbanResidential,
+                        tier,
+                        0,
+                        road_opp,
+                    )
                 }
             } else if roll < 45 {
-                zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::MiddleClass, 0, None)
+                zoned(
+                    SectorPreset::RuralCountryside,
+                    ZoningContext::RuralCountryside,
+                    EconomicTier::MiddleClass,
+                    0,
+                    None,
+                )
             } else if roll < 80 {
                 plain(SectorPreset::WoodedPark, 0, road_opp)
             } else {
@@ -393,11 +666,23 @@ pub fn select_neighbor_sector_transition(
             } else if src_edge.has_any_road() && (45..75).contains(&roll) {
                 plain(SectorPreset::RoadsideDitch, 0, None)
             } else if src_edge.road_parallel && (75..90).contains(&roll) {
-                zoned(SectorPreset::SuburbanNeighborhood, ZoningContext::SuburbanNeighborhood, EconomicTier::MiddleClass, 0, road_opp)
+                zoned(
+                    SectorPreset::SuburbanNeighborhood,
+                    ZoningContext::SuburbanNeighborhood,
+                    EconomicTier::MiddleClass,
+                    0,
+                    road_opp,
+                )
             } else if roll < 40 {
                 plain(SectorPreset::Farms, (depth + 1).min(4), None)
             } else if roll < 68 {
-                zoned(SectorPreset::RuralCountryside, ZoningContext::RuralCountryside, EconomicTier::LowIncome, (depth + 1).min(4), None)
+                zoned(
+                    SectorPreset::RuralCountryside,
+                    ZoningContext::RuralCountryside,
+                    EconomicTier::LowIncome,
+                    (depth + 1).min(4),
+                    None,
+                )
             } else if roll < 86 {
                 plain(SectorPreset::WoodedPark, 0, None)
             } else {
@@ -409,9 +694,17 @@ pub fn select_neighbor_sector_transition(
             let next_p = if roll < 72 {
                 src_preset
             } else if src_preset == SectorPreset::ResidentialApartment {
-                if sub_roll < 60 { SectorPreset::OfficeFloor } else { SectorPreset::CornerBar }
+                if sub_roll < 60 {
+                    SectorPreset::OfficeFloor
+                } else {
+                    SectorPreset::CornerBar
+                }
             } else if src_preset == SectorPreset::OfficeFloor {
-                if sub_roll < 65 { SectorPreset::ResidentialApartment } else { SectorPreset::CornerBar }
+                if sub_roll < 65 {
+                    SectorPreset::ResidentialApartment
+                } else {
+                    SectorPreset::CornerBar
+                }
             } else if sub_roll < 55 {
                 SectorPreset::ResidentialApartment
             } else {
@@ -430,7 +723,8 @@ pub fn select_neighbor_sector_transition(
             let next_p = if roll < 65 {
                 src_preset
             } else {
-                let candidates: Vec<SectorPreset> = wings.into_iter().filter(|&p| p != src_preset).collect();
+                let candidates: Vec<SectorPreset> =
+                    wings.into_iter().filter(|&p| p != src_preset).collect();
                 candidates[(sub_roll as usize) % candidates.len()]
             };
             plain(next_p, depth.saturating_add(1), None)

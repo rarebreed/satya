@@ -465,8 +465,7 @@ pub fn satya_open_ttrpg_skill_dropdown() {
 pub fn satya_toggle_ttrpg_skill_dropdown() {
     if let Some(opened) = toggle_element_display("ttrpg-skill-dropdown", "flex") {
         if opened {
-            let html =
-                with_state(|st| format_ttrpg_skill_dropdown_html("", &st.character_sheet));
+            let html = with_state(|st| format_ttrpg_skill_dropdown_html("", &st.character_sheet));
             set_html("ttrpg-skill-dropdown", &html);
         }
         if let Some(inp) = get_element("ttrpg-skill") {
@@ -664,15 +663,8 @@ mod tests {
 
     #[test]
     fn test_format_contested_cascade_odds_summary_clamping_and_markup() {
-        let (pill, html) = format_contested_cascade_odds_summary(
-            3,
-            12,
-            -2,
-            4,
-            1,
-            "markov_step",
-            "closest_miss",
-        );
+        let (pill, html) =
+            format_contested_cascade_odds_summary(3, 12, -2, 4, 1, "markov_step", "closest_miss");
         // TN_P = 31 - 12 + (-2) = 17; TN_GM = 21 - 4 = 17
         assert!(pill.contains("TN_P: 17 vs TN_GM: 17"));
         assert!(pill.contains("P(Win):"));

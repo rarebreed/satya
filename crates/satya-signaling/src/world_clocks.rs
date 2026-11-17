@@ -197,7 +197,8 @@ pub async fn get_session_world_ledger_handler(
         }
     }
 
-    let can_see_gm = can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
+    let can_see_gm =
+        can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
     let ledger = get_or_init_world_ledger(&state, sid).await;
     (
         StatusCode::OK,
@@ -219,7 +220,8 @@ pub async fn update_session_world_ledger_handler(
         Err(err) => return err.into_response(),
     };
     let sid = session_id.trim();
-    let can_see_gm = can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
+    let can_see_gm =
+        can_caller_view_gm_secrets(&state, sid, user_opt.as_ref(), is_gm_service).await;
     if !can_see_gm {
         return (
             StatusCode::FORBIDDEN,

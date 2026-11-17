@@ -52,6 +52,7 @@ mod map_wgpu_runtime {
         pub camera: OrbitOrthoCamera,
         /// `(is_pan, start_x, start_y, last_x, last_y, moved_beyond_click)`
         pub drag_state: Option<(bool, i32, i32, i32, i32, bool)>,
+        pub editor_pointer_active: bool,
         pub scene_dirty: bool,
         pub shader_mode: String,
     }
@@ -64,6 +65,7 @@ mod map_wgpu_runtime {
                 listeners_attached: false,
                 camera: OrbitOrthoCamera::tactical_map_default(),
                 drag_state: None,
+                editor_pointer_active: false,
                 scene_dirty: true,
                 shader_mode: "pbr".to_string(),
             }
@@ -85,9 +87,7 @@ mod map_wgpu_runtime {
     fn ensure_miniature_gpu_mesh(pipe: &mut MapDioramaPipeline, preset: &str) {
         let cur_gen = custom_glb_generation();
         if preset == "custom_glb" {
-            if pipe.miniature_meshes.contains_key(preset)
-                && pipe.cached_custom_glb_gen == cur_gen
-            {
+            if pipe.miniature_meshes.contains_key(preset) && pipe.cached_custom_glb_gen == cur_gen {
                 return;
             }
         } else if pipe.miniature_meshes.contains_key(preset) {
@@ -169,60 +169,68 @@ mod map_wgpu_runtime {
         }
 
         // Gather token miniature draw calls grouped in order
-        let (cell_m, show_grid, draws): (f32, bool, Vec<(String, GlbInstanceData)>) = with_map_ui(|ui| {
-            let cm = ui.map.cell_size_m();
-            let (bw_m, bh_m) = ui.map.board_size_m();
-            let mut list = Vec::with_capacity(ui.map.tokens.len());
-            for tok in &ui.map.tokens {
-                if ui.map.token_floor(&tok.entity_id) != ui.map.active_floor {
-                    continue;
-                }
-                let (preset, hex_col, facing_deg) = resolve_token_visual(&ui.map, tok);
-                let (_, rgb) = parse_hex_color(&hex_col, [0.22, 0.74, 0.98]);
-                let (tx_m, ty_m) = ui.map.token_pos_m(tok);
-                let [wx, wz] = metric_to_world_xz(tx_m, ty_m, bw_m, bh_m);
-                let on_catwalk = ui.map.props.iter().any(|p| {
-                    p.kind == PropKind::ElevatedCatwalk
-                        && satya_engine::tactical_map_geom::prop_contains_point(p, tx_m, ty_m, false)
-                });
-                let on_bridge = !on_catwalk
-                    && matches!(
-                        satya_engine::map_surface_geom::topmost_surface_at_m(&ui.map.surfaces, tx_m, ty_m)
+        let (cell_m, show_grid, draws): (f32, bool, Vec<(String, GlbInstanceData)>) =
+            with_map_ui(|ui| {
+                let cm = ui.map.cell_size_m();
+                let (bw_m, bh_m) = ui.map.board_size_m();
+                let mut list = Vec::with_capacity(ui.map.tokens.len());
+                for tok in &ui.map.tokens {
+                    if ui.map.token_floor(&tok.entity_id) != ui.map.active_floor {
+                        continue;
+                    }
+                    let (preset, hex_col, facing_deg) = resolve_token_visual(&ui.map, tok);
+                    let (_, rgb) = parse_hex_color(&hex_col, [0.22, 0.74, 0.98]);
+                    let (tx_m, ty_m) = ui.map.token_pos_m(tok);
+                    let [wx, wz] = metric_to_world_xz(tx_m, ty_m, bw_m, bh_m);
+                    let on_catwalk = ui.map.props.iter().any(|p| {
+                        p.kind == PropKind::ElevatedCatwalk
+                            && satya_engine::tactical_map_geom::prop_contains_point(
+                                p, tx_m, ty_m, false,
+                            )
+                    });
+                    let on_bridge = !on_catwalk
+                        && matches!(
+                            satya_engine::map_surface_geom::topmost_surface_at_m(
+                                &ui.map.surfaces,
+                                tx_m,
+                                ty_m
+                            )
                             .map(|s| s.kind),
-                        Some(satya_schema::SurfaceFeatureKind::BridgeDeck)
+                            Some(satya_schema::SurfaceFeatureKind::BridgeDeck)
+                        );
+                    let active_floor_elev_cm = ui.map.floor_elevation_cm(ui.map.active_floor);
+                    let base_y = if on_catwalk {
+                        1.48
+                    } else if on_bridge {
+                        0.12
+                    } else {
+                        ui.map.visual_for(&tok.entity_id).map_or(0.0, |v| {
+                            ((v.elevation_cm - active_floor_elev_cm) as f32 / 100.0).max(0.0)
+                        })
+                    };
+                    let alpha = if tok.visibility == MessageVisibility::GmOnly {
+                        0.55
+                    } else {
+                        1.0
+                    };
+                    // Convert `0 deg = North (-Z)` vs `.glb` forward `-Z`: `-facing_deg` yaw around `+Y`
+                    let inst = GlbInstanceData::from_trs_and_tint(
+                        [wx, base_y, wz],
+                        -facing_deg,
+                        [0.92, 0.92, 0.92],
+                        [rgb[0], rgb[1], rgb[2], alpha],
                     );
-                let active_floor_elev_cm = ui.map.floor_elevation_cm(ui.map.active_floor);
-                let base_y = if on_catwalk {
-                    1.48
-                } else if on_bridge {
-                    0.12
-                } else {
-                    ui.map.visual_for(&tok.entity_id).map_or(0.0, |v| {
-                        ((v.elevation_cm - active_floor_elev_cm) as f32 / 100.0).max(0.0)
-                    })
-                };
-                let alpha = if tok.visibility == MessageVisibility::GmOnly {
-                    0.55
-                } else {
-                    1.0
-                };
-                // Convert `0 deg = North (-Z)` vs `.glb` forward `-Z`: `-facing_deg` yaw around `+Y`
-                let inst = GlbInstanceData::from_trs_and_tint(
-                    [wx, base_y, wz],
-                    -facing_deg,
-                    [0.92, 0.92, 0.92],
-                    [rgb[0], rgb[1], rgb[2], alpha],
-                );
-                list.push((preset, inst));
-            }
-            (cm, ui.show_grid_overlay, list)
-        });
+                    list.push((preset, inst));
+                }
+                (cm, ui.show_grid_overlay, list)
+            });
 
         for (preset, _) in &draws {
             ensure_miniature_gpu_mesh(pipe, preset);
         }
         let all_insts: Vec<GlbInstanceData> = draws.iter().map(|(_, d)| *d).collect();
-        let max_inst_bytes = (all_insts.len().max(1) * std::mem::size_of::<GlbInstanceData>()) as u64;
+        let max_inst_bytes =
+            (all_insts.len().max(1) * std::mem::size_of::<GlbInstanceData>()) as u64;
         if pipe.miniature_ib.size() < max_inst_bytes {
             pipe.miniature_ib = pipe.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("satya-map-mini-ib"),
@@ -340,9 +348,24 @@ mod map_wgpu_runtime {
 
         let on_down = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
             ev.prevent_default();
+            if ev.button() == 0
+                && !ev.shift_key()
+                && crate::wasm_client::map_editor::is_editor_active()
+            {
+                let cam = with_map_ctrl(|c| c.camera);
+                if let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam) {
+                    with_map_ctrl(|c| {
+                        c.drag_state = None;
+                        c.editor_pointer_active = true;
+                    });
+                    crate::wasm_client::map_editor::handle_editor_pointer_down(mx, my);
+                    return;
+                }
+            }
             let is_pan = ev.shift_key() || ev.button() == 1 || ev.button() == 2;
             let (cx, cy) = (ev.client_x(), ev.client_y());
             with_map_ctrl(|c| {
+                c.editor_pointer_active = false;
                 c.drag_state = Some((is_pan, cx, cy, cx, cy, false));
             });
         });
@@ -371,7 +394,7 @@ mod map_wgpu_runtime {
 
         let on_canvas_hover = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
             let cam_opt = with_map_ctrl(|c| {
-                if c.drag_state.is_some() {
+                if c.drag_state.is_some() || c.editor_pointer_active {
                     None
                 } else {
                     Some(c.camera)
@@ -391,18 +414,35 @@ mod map_wgpu_runtime {
                 crate::wasm_client::map_hover_inspect::satya_leave_map_hover();
             }
         });
-        let _ = canvas
-            .add_event_listener_with_callback("mousemove", on_canvas_hover.as_ref().unchecked_ref());
+        let _ = canvas.add_event_listener_with_callback(
+            "mousemove",
+            on_canvas_hover.as_ref().unchecked_ref(),
+        );
         on_canvas_hover.forget();
 
         let on_canvas_leave = Closure::<dyn FnMut(MouseEvent)>::new(move |_ev: MouseEvent| {
             crate::wasm_client::map_hover_inspect::satya_leave_map_hover();
         });
-        let _ = canvas
-            .add_event_listener_with_callback("mouseleave", on_canvas_leave.as_ref().unchecked_ref());
+        let _ = canvas.add_event_listener_with_callback(
+            "mouseleave",
+            on_canvas_leave.as_ref().unchecked_ref(),
+        );
         on_canvas_leave.forget();
 
         let on_win_move = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
+            let ed_cam = with_map_ctrl(|c| {
+                if c.editor_pointer_active {
+                    Some(c.camera)
+                } else {
+                    None
+                }
+            });
+            if let Some(cam) = ed_cam {
+                if let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam) {
+                    crate::wasm_client::map_editor::handle_editor_pointer_move(mx, my);
+                }
+                return;
+            }
             let panned = with_map_ctrl(|c| {
                 let Some((is_pan, sx, sy, lx, ly, mut moved)) = c.drag_state else {
                     return false;
@@ -421,7 +461,8 @@ mod map_wgpu_runtime {
                         let (w, h) = ui.map.board_size_m();
                         w.max(h) * 0.55 + 6.0
                     });
-                    c.camera.pan_by_screen_delta(-dx * 0.032, dy * 0.032, max_pan);
+                    c.camera
+                        .pan_by_screen_delta(-dx * 0.032, dy * 0.032, max_pan);
                     render_map_frame(c);
                     return true;
                 }
@@ -438,13 +479,25 @@ mod map_wgpu_runtime {
         on_win_move.forget();
 
         let on_up = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
-            let clicked_cam = with_map_ctrl(|c| {
+            let (ed_cam, clicked_cam) = with_map_ctrl(|c| {
+                if c.editor_pointer_active && ev.button() == 0 {
+                    c.editor_pointer_active = false;
+                    return (Some(c.camera), None);
+                }
+                c.editor_pointer_active = false;
                 let st = c.drag_state.take();
-                match st {
+                let click = match st {
                     Some((false, _, _, _, _, false)) if ev.button() == 0 => Some(c.camera),
                     _ => None,
-                }
+                };
+                (None, click)
             });
+            if let Some(cam) = ed_cam {
+                if let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam) {
+                    crate::wasm_client::map_editor::handle_editor_pointer_up(mx, my);
+                }
+                return;
+            }
             if let Some(cam) = clicked_cam
                 && let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam)
             {
@@ -482,7 +535,10 @@ mod map_wgpu_runtime {
                         // The user may have switched to `Mode: 2D Battlemap` while the adapter was initializing.
                         if !with_map_ui(|ui| ui.view_battlemap) {
                             crate::wasm_client::dom::set_display("wgpu-map-canvas-wrap", "block");
-                            crate::wasm_client::dom::set_display("tabletop-map-svg-fallback", "none");
+                            crate::wasm_client::dom::set_display(
+                                "tabletop-map-svg-fallback",
+                                "none",
+                            );
                             render_map_frame(c);
                         }
                     }
@@ -588,7 +644,11 @@ pub fn satya_toggle_map_wall_cutaway() {
     });
     crate::wasm_client::dom::set_text(
         "btn-map-wall-cutaway",
-        if is_cut { "Walls: Cutaway" } else { "Walls: Full 2.4m" },
+        if is_cut {
+            "Walls: Cutaway"
+        } else {
+            "Walls: Full 2.4m"
+        },
     );
     mark_map_wgpu_dirty();
     refresh_map_wgpu_if_active();
@@ -642,10 +702,12 @@ pub fn shift_3d_camera_on_stitch(
         };
         let max_pan = (new_size_m.0.max(new_size_m.1) * 0.55 + 6.0).max(24.0);
         map_wgpu_runtime::with_map_ctrl(|c| {
-            c.camera.pan[0] = (c.camera.pan[0] + shift_x + 0.5 * (old_size_m.0 - new_size_m.0) + nudge_x)
-                .clamp(-max_pan, max_pan);
-            c.camera.pan[1] = (c.camera.pan[1] + shift_z + 0.5 * (old_size_m.1 - new_size_m.1) + nudge_z)
-                .clamp(-max_pan, max_pan);
+            c.camera.pan[0] =
+                (c.camera.pan[0] + shift_x + 0.5 * (old_size_m.0 - new_size_m.0) + nudge_x)
+                    .clamp(-max_pan, max_pan);
+            c.camera.pan[1] =
+                (c.camera.pan[1] + shift_z + 0.5 * (old_size_m.1 - new_size_m.1) + nudge_z)
+                    .clamp(-max_pan, max_pan);
             map_wgpu_runtime::render_map_frame(c);
         });
     }

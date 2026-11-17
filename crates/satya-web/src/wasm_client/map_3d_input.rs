@@ -88,6 +88,7 @@ pub fn satya_select_map_floor(floor_idx: i32) {
     if !changed {
         return;
     }
+    crate::wasm_client::map_editor::reset_editor_selection_and_drafts(false);
     mark_map_wgpu_dirty();
     refresh_map_dom_and_wgpu();
     post_set_active_floor_if_in_session(floor_idx);
@@ -104,19 +105,24 @@ pub fn satya_move_token_to_floor(floor_idx: i32) {
         if !ui.map.has_floor(floor_idx) || !ui.map.switch_active_floor(floor_idx) {
             return;
         }
-        let Some(prev_tok) = ui.map.tokens.iter().find(|t| t.entity_id == sel_id).cloned() else {
+        let Some(prev_tok) = ui
+            .map
+            .tokens
+            .iter()
+            .find(|t| t.entity_id == sel_id)
+            .cloned()
+        else {
             return;
         };
         let (pref_x_cm, pref_y_cm) = ui
             .map
             .props
             .iter()
-            .find(|p| p.kind == satya_schema::PropKind::Stairwell)
+            .find(|p| p.kind.is_vertical_portal())
             .map(|p| p.center_cm())
             .unwrap_or_else(|| ui.map.token_pos_cm(&prev_tok));
-        let (nx_cm, ny_cm) =
-            resolve_token_destination_cm(&ui.map, &sel_id, pref_x_cm, pref_y_cm)
-                .unwrap_or((pref_x_cm, pref_y_cm));
+        let (nx_cm, ny_cm) = resolve_token_destination_cm(&ui.map, &sel_id, pref_x_cm, pref_y_cm)
+            .unwrap_or((pref_x_cm, pref_y_cm));
         let nx_cell = (nx_cm / 100).clamp(0, ui.map.grid_width - 1);
         let ny_cell = (ny_cm / 100).clamp(0, ui.map.grid_height - 1);
         if let Some(tok) = ui.map.tokens.iter_mut().find(|t| t.entity_id == sel_id) {
@@ -216,9 +222,11 @@ pub fn satya_generate_procedural_map() {
                 {
                     continue;
                 }
-                let pref_y_cm = ((mid_y - 2 + (idx as i32) * 2).clamp(1, built.grid_height - 2)) * 100 + 50;
-                let (px_cm, py_cm) = resolve_token_destination_cm(&built, &p.user_id, 250, pref_y_cm)
-                    .unwrap_or((250, pref_y_cm));
+                let pref_y_cm =
+                    ((mid_y - 2 + (idx as i32) * 2).clamp(1, built.grid_height - 2)) * 100 + 50;
+                let (px_cm, py_cm) =
+                    resolve_token_destination_cm(&built, &p.user_id, 250, pref_y_cm)
+                        .unwrap_or((250, pref_y_cm));
                 built.tokens.push(TokenPlacement {
                     entity_id: p.user_id.clone(),
                     label: p.display_name.clone(),
@@ -279,6 +287,7 @@ pub fn satya_generate_procedural_map() {
     });
 
     mark_map_wgpu_dirty();
+    crate::wasm_client::map_editor::reset_editor_selection_and_drafts(true);
     refresh_map_dom_and_wgpu();
     crate::wasm_client::map_3d_wgpu::reset_3d_map_camera_for_board((w as f32, h as f32));
     post_generate_map_if_in_session(preset.as_str(), seed, w, h, scale);
@@ -293,7 +302,8 @@ pub fn continue_session_map_in_direction(dir: satya_schema::MapContinuationDir) 
     let has_session = auth_token.is_some() && session_id.is_some();
 
     let next_action = with_map_ui_mut(|ui| {
-        if ui.continuation_in_flight || !satya_engine::tactical_map::can_continue_map(&ui.map, dir) {
+        if ui.continuation_in_flight || !satya_engine::tactical_map::can_continue_map(&ui.map, dir)
+        {
             return None;
         }
         ui.seed_counter = ui.seed_counter.wrapping_add(193);
@@ -449,7 +459,13 @@ pub fn satya_update_selected_token_visual() {
         let Some(sel_id) = ui.selected_entity_id.clone() else {
             return;
         };
-        let Some(tok) = ui.map.tokens.iter().find(|t| t.entity_id == sel_id).cloned() else {
+        let Some(tok) = ui
+            .map
+            .tokens
+            .iter()
+            .find(|t| t.entity_id == sel_id)
+            .cloned()
+        else {
             return;
         };
         let p_eff = if model_preset.is_empty() {
@@ -550,18 +566,29 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
     }
 
     let mut move_req: Option<MoveMapTokenRequest> = None;
-    let mut door_sync: Option<(String, satya_schema::MapEdgeRef, satya_schema::WallEdgeKind)> = None;
+    let mut door_sync: Option<(String, satya_schema::MapEdgeRef, satya_schema::WallEdgeKind)> =
+        None;
 
     with_map_ui_mut(|ui| {
         let (bw_m, bh_m) = ui.map.board_size_m();
-        if !x_m.is_finite() || !y_m.is_finite() || x_m < 0.0 || y_m < 0.0 || x_m >= bw_m || y_m >= bh_m {
+        if !x_m.is_finite()
+            || !y_m.is_finite()
+            || x_m < 0.0
+            || y_m < 0.0
+            || x_m >= bw_m
+            || y_m >= bh_m
+        {
             return;
         }
         ui.ensure_vector_scene_populated();
         let cell_m = ui.map.cell_size_m().max(0.25);
         let cell = (
-            (x_m / cell_m).floor().clamp(0.0, (ui.map.grid_width - 1) as f32) as i32,
-            (y_m / cell_m).floor().clamp(0.0, (ui.map.grid_height - 1) as f32) as i32,
+            (x_m / cell_m)
+                .floor()
+                .clamp(0.0, (ui.map.grid_width - 1) as f32) as i32,
+            (y_m / cell_m)
+                .floor()
+                .clamp(0.0, (ui.map.grid_height - 1) as f32) as i32,
         );
 
         if ui.interaction_mode == "measure_los" {
@@ -660,7 +687,11 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
             .find(|v| v.entity_id == sel_id)
         {
             v.facing_deg = facing;
-            (v.model_preset.clone(), v.color_hex.clone(), v.portrait_url.clone())
+            (
+                v.model_preset.clone(),
+                v.color_hex.clone(),
+                v.portrait_url.clone(),
+            )
         } else {
             ui.map.token_visuals.push(TokenVisualSpec {
                 entity_id: sel_id.clone(),

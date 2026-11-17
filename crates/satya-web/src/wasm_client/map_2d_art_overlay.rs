@@ -44,6 +44,160 @@ pub(crate) fn token_initials(label: &str) -> String {
     s
 }
 
+fn push_editor_overlay_svg(out: &mut String, ui: &TacticalMapUiState, cf: f32) {
+    use crate::wasm_client::map_editor::{
+        EditorSelection, EditorTool, SurfaceBrushShape, rasterize_wall_stroke_edges, with_editor,
+    };
+    with_editor(|ed| {
+        if !ed.active {
+            return;
+        }
+        match ed.selection {
+            EditorSelection::Prop(idx) => {
+                if let Some(p) = ui.map.props.get(idx) {
+                    let (pcx, pcy) = p.center_m();
+                    let (psw, psh) = p.local_span_m();
+                    let (bw, bh) = ((psw * cf) + 8.0, (psh * cf) + 8.0);
+                    let arrow_y = -bh * 0.5 - 4.0;
+                    let _ = write!(
+                        out,
+                        r##"<g transform="translate({:.1} {:.1}) rotate({})" pointer-events="none"><rect x="{:.1}" y="{:.1}" width="{bw:.1}" height="{bh:.1}" rx="6" fill="#facc15" fill-opacity=".12" stroke="#facc15" stroke-width="3" stroke-dasharray="8 4"/><polygon points="0,{:.1} -7,{:.1} 7,{:.1}" fill="#facc15" stroke="#0f172a" stroke-width="1.2"/></g>"##,
+                        pcx * cf,
+                        pcy * cf,
+                        p.rotation_deg,
+                        -bw * 0.5,
+                        -bh * 0.5,
+                        arrow_y - 9.0,
+                        arrow_y,
+                        arrow_y,
+                    );
+                }
+            }
+            EditorSelection::Surface(idx) => {
+                if let Some(s) = ui.map.surfaces.get(idx)
+                    && !s.points_cm.is_empty()
+                {
+                    let pts: String = s
+                        .points_cm
+                        .iter()
+                        .map(|pt| {
+                            format!(
+                                "{:.1},{:.1}",
+                                (pt.x_cm as f32 / 100.0) * cf,
+                                (pt.y_cm as f32 / 100.0) * cf
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let tag = if s.shape == satya_schema::SurfaceShapeKind::RibbonSpline {
+                        "polyline"
+                    } else {
+                        "polygon"
+                    };
+                    let _ = write!(
+                        out,
+                        r##"<{tag} points="{pts}" fill="none" stroke="#c084fc" stroke-width="3.2" stroke-dasharray="9 5" pointer-events="none"/>"##
+                    );
+                }
+            }
+            EditorSelection::None => {}
+        }
+
+        if ed.tool == EditorTool::AddProp
+            && let Some((hx_m, hy_m)) = ui.hovered_point_m
+        {
+            let (px_m, py_m) = if ed.snap_half_m {
+                ((hx_m * 2.0).round() * 0.5, (hy_m * 2.0).round() * 0.5)
+            } else {
+                (hx_m, hy_m)
+            };
+            let p = make_prop_at_cm(
+                ed.prop_kind,
+                (px_m * 100.0).round() as i32,
+                (py_m * 100.0).round() as i32,
+                ed.prop_rotation_deg,
+                None,
+                0,
+            );
+            let (pcx, pcy) = p.center_m();
+            let (psw, psh) = p.local_span_m();
+            let (bw, bh) = (psw * cf, psh * cf);
+            let _ = write!(
+                out,
+                r##"<g transform="translate({:.1} {:.1}) rotate({})" pointer-events="none"><rect x="{:.1}" y="{:.1}" width="{bw:.1}" height="{bh:.1}" rx="5" fill="#38bdf8" fill-opacity=".20" stroke="#0284c7" stroke-width="2.6" stroke-dasharray="6 4"/></g>"##,
+                pcx * cf,
+                pcy * cf,
+                p.rotation_deg,
+                -bw * 0.5,
+                -bh * 0.5,
+            );
+        } else if ed.tool == EditorTool::PaintWall
+            && let (Some(st), Some(en)) = (ed.wall_drag_start, ed.wall_drag_cur)
+        {
+            let cell_m = ui.map.cell_size_m().max(0.25);
+            for r in rasterize_wall_stroke_edges(&ui.map, st, en) {
+                let (x1, y1, x2, y2) = match r.side {
+                    satya_schema::EdgeSide::North => (
+                        r.x as f32 * cell_m * cf,
+                        r.y as f32 * cell_m * cf,
+                        (r.x + 1) as f32 * cell_m * cf,
+                        r.y as f32 * cell_m * cf,
+                    ),
+                    satya_schema::EdgeSide::West => (
+                        r.x as f32 * cell_m * cf,
+                        r.y as f32 * cell_m * cf,
+                        r.x as f32 * cell_m * cf,
+                        (r.y + 1) as f32 * cell_m * cf,
+                    ),
+                };
+                let _ = write!(
+                    out,
+                    r##"<line x1="{x1:.1}" y1="{y1:.1}" x2="{x2:.1}" y2="{y2:.1}" stroke="#f59e0b" stroke-width="7" stroke-linecap="round" stroke-opacity=".85" pointer-events="none"/>"##
+                );
+            }
+        } else if ed.tool == EditorTool::PaintSurface {
+            if ed.surface_shape == SurfaceBrushShape::Rect
+                && let (Some(a), Some(b)) = (ed.surface_rect_start_cm, ed.surface_rect_cur_cm)
+            {
+                let x = (a.0.min(b.0) as f32 / 100.0) * cf;
+                let y = (a.1.min(b.1) as f32 / 100.0) * cf;
+                let w = ((a.0.max(b.0) - a.0.min(b.0)).max(20) as f32 / 100.0) * cf;
+                let h = ((a.1.max(b.1) - a.1.min(b.1)).max(20) as f32 / 100.0) * cf;
+                let _ = write!(
+                    out,
+                    r##"<rect x="{x:.1}" y="{y:.1}" width="{w:.1}" height="{h:.1}" rx="4" fill="#c084fc" fill-opacity=".22" stroke="#a855f7" stroke-width="3" stroke-dasharray="8 4" pointer-events="none"/>"##
+                );
+            } else if !ed.surface_draft_pts_cm.is_empty() {
+                let pts: String = ed
+                    .surface_draft_pts_cm
+                    .iter()
+                    .map(|pt| {
+                        format!(
+                            "{:.1},{:.1}",
+                            (pt.x_cm as f32 / 100.0) * cf,
+                            (pt.y_cm as f32 / 100.0) * cf
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let _ = write!(
+                    out,
+                    r##"<polyline points="{pts}" fill="none" stroke="#c084fc" stroke-width="3" stroke-dasharray="6 4" pointer-events="none"/>"##
+                );
+                for (i, pt) in ed.surface_draft_pts_cm.iter().enumerate() {
+                    let (px, py) = ((pt.x_cm as f32 / 100.0) * cf, (pt.y_cm as f32 / 100.0) * cf);
+                    let col = if i == 0 { "#facc15" } else { "#c084fc" };
+                    let r = if i == 0 { 7.0 } else { 5.0 };
+                    let _ = write!(
+                        out,
+                        r##"<circle cx="{px:.1}" cy="{py:.1}" r="{r:.1}" fill="{col}" stroke="#0f172a" stroke-width="1.5" pointer-events="none"/>"##
+                    );
+                }
+            }
+        }
+    });
+}
+
 /// Dynamic tactical overlay (inner markup of `#battlemap-overlay`): grid, reach strips, hover, LoS, tokens.
 #[must_use]
 pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
@@ -53,7 +207,10 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
     let cf = c as f32;
     let (vw, vh) = (w * c, h * c);
     let mut out = String::with_capacity(16 * 1024);
-    let _ = write!(out, r##"<rect width="{vw}" height="{vh}" fill="#000" fill-opacity="0"/>"##);
+    let _ = write!(
+        out,
+        r##"<rect width="{vw}" height="{vh}" fill="#000" fill-opacity="0"/>"##
+    );
 
     if ui.show_grid_overlay {
         let ink = ui.ink_style.grid_ink_override().unwrap_or(t.grid_ink);
@@ -147,6 +304,8 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
         }
     }
 
+    push_editor_overlay_svg(&mut out, ui, cf);
+
     if let Some(los) = ui.last_los.as_ref() {
         let (x1, y1) = (los.attacker_m.0 * cf, los.attacker_m.1 * cf);
         let (x2, y2) = (los.target_m.0 * cf, los.target_m.1 * cf);
@@ -166,13 +325,7 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
             .last_ballistic
             .as_ref()
             .filter(|b| b.effective_delta_ext != los.recommended_delta_ext)
-            .map(|b| {
-                format!(
-                    "{} (+{} Δ_ext)",
-                    b.verdict.label(),
-                    b.effective_delta_ext
-                )
-            })
+            .map(|b| format!("{} (+{} Δ_ext)", b.verdict.label(), b.effective_delta_ext))
             .unwrap_or_else(|| los.cover_grade.label().to_string());
         let (mx, my) = ((x1 + x2) * 0.5, (y1 + y2) * 0.5);
         let _ = write!(
@@ -230,7 +383,9 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
 #[must_use]
 pub fn format_tactical_map_svg_markup(ui: &TacticalMapUiState) -> String {
     let (bw_m, bh_m) = ui.map.board_size_m();
-    let view_box = ui.camera_2d.view_box_attr((bw_m, bh_m), ui.map.cell_size_m());
+    let view_box = ui
+        .camera_2d
+        .view_box_attr((bw_m, bh_m), ui.map.cell_size_m());
     let key = battlemap_art_cache_key(ui);
     format!(
         r#"<div class="battlemap-stack"><svg id="battlemap-art" class="battlemap-art" data-art-key="{key}" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">{art}</svg><svg id="battlemap-overlay" class="battlemap-overlay" xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Illustrated 2D tactical battlemap ({bw_m:.0}m x {bh_m:.0}m)" onwheel="event.preventDefault();window.satyaBattlemapWheel(event.deltaY,event.clientX,event.clientY)" onmousedown="window.satyaBattlemapMouseDown(event.button,event.clientX,event.clientY)" onmousemove="window.satyaBattlemapMouseMove(event.buttons,event.clientX,event.clientY)" onmouseup="window.satyaBattlemapMouseUp(event.button,event.clientX,event.clientY)" onmouseleave="window.satyaBattlemapMouseLeave()" ondblclick="window.satyaResetMapCamera()" oncontextmenu="event.preventDefault()">{overlay}</svg></div>"#,
@@ -260,14 +415,27 @@ pub fn sync_battlemap_svg_host() {
 fn apply_battlemap_view_chrome(battlemap_on: bool) {
     set_text(
         "btn-map-view-mode",
-        if battlemap_on { "Mode: 2D Battlemap" } else { "Mode: 3D Diorama" },
+        if battlemap_on {
+            "Mode: 2D Battlemap"
+        } else {
+            "Mode: 3D Diorama"
+        },
     );
     for id in ["btn-map-toggle-proj", "btn-map-wall-cutaway"] {
         set_button_disabled(id, battlemap_on);
     }
-    set_display("btn-map-grid-overlay", if battlemap_on { "inline-flex" } else { "none" });
-    set_display("btn-map-tex-mode", if battlemap_on { "inline-flex" } else { "none" });
-    set_display("map-ink-style-wrap", if battlemap_on { "inline-flex" } else { "none" });
+    set_display(
+        "btn-map-grid-overlay",
+        if battlemap_on { "inline-flex" } else { "none" },
+    );
+    set_display(
+        "btn-map-tex-mode",
+        if battlemap_on { "inline-flex" } else { "none" },
+    );
+    set_display(
+        "map-ink-style-wrap",
+        if battlemap_on { "inline-flex" } else { "none" },
+    );
     if battlemap_on {
         let (style, tex_mode) = with_map_ui(|ui| (ui.ink_style, ui.texture_mode));
         set_select_value("map-ink-style-select", style.as_str());
@@ -330,7 +498,10 @@ pub fn satya_toggle_battlemap_grid() {
         ui.show_grid_overlay = !ui.show_grid_overlay;
         ui.show_grid_overlay
     });
-    set_text("btn-map-grid-overlay", if on { "Grid: On" } else { "Grid: Off" });
+    set_text(
+        "btn-map-grid-overlay",
+        if on { "Grid: On" } else { "Grid: Off" },
+    );
     sync_battlemap_svg_host();
 }
 
@@ -353,7 +524,10 @@ mod tests {
             ),
             ..Default::default()
         };
-        assert!(ui.map.has_multiple_floors(), "LuxuryMansion must have >= 2 floors");
+        assert!(
+            ui.map.has_multiple_floors(),
+            "LuxuryMansion must have >= 2 floors"
+        );
         ui.map.tokens.push(TokenPlacement {
             entity_id: "tok-mansion-1".to_string(),
             label: "Quantum Knight".to_string(),
@@ -365,7 +539,10 @@ mod tests {
 
         let key_1f = battlemap_art_cache_key(&ui);
         let ov_1f = format_battlemap_overlay_inner(&ui);
-        assert!(ov_1f.contains(">QK<"), "1F overlay should render floor-0 token");
+        assert!(
+            ov_1f.contains(">QK<"),
+            "1F overlay should render floor-0 token"
+        );
 
         assert!(ui.map.switch_active_floor(1), "switch to 2F must succeed");
         let key_2f = battlemap_art_cache_key(&ui);
@@ -403,7 +580,12 @@ mod tests {
             ),
             ..Default::default()
         };
-        let occupied: Vec<(f32, f32)> = ui.map.tokens.iter().map(|t| ui.map.token_pos_m(t)).collect();
+        let occupied: Vec<(f32, f32)> = ui
+            .map
+            .tokens
+            .iter()
+            .map(|t| ui.map.token_pos_m(t))
+            .collect();
         let (bw_m, bh_m) = ui.map.board_size_m();
         let _ = satya_engine::tactical_map_geom::place_prop_on_map(
             &mut ui.map.props,

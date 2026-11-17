@@ -463,12 +463,7 @@ pub fn compute_skill_allocation_sp_ledger(
 ) -> SkillAllocationSpLedger {
     let hobbies = cfg.collected_hobbies();
     compute_skill_allocation_sp_ledger_with_hobbies(
-        baseline,
-        cfg,
-        &hobbies,
-        chars,
-        aptitudes,
-        skills,
+        baseline, cfg, &hobbies, chars, aptitudes, skills,
     )
 }
 

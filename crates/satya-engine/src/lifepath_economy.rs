@@ -785,8 +785,7 @@ pub fn compute_lifepath_baseline_from_config(
         ));
     }
     if let Some(roll) = cfg.adolescent_life_event_roll_2d20 {
-        let outcome =
-            resolve_formative_life_event(roll, cfg.adolescent_life_event_choice, false);
+        let outcome = resolve_formative_life_event(roll, cfg.adolescent_life_event_choice, false);
         elective_skill_budget += outcome.experience_sp_grant;
         career_skill_budget += outcome.formal_sp_grant;
         sqm_delta_acc += i32::from(outcome.sqm_delta);
@@ -845,7 +844,11 @@ pub fn compute_lifepath_baseline_from_config(
             career_skill_budget += outcome.formal_sp_grant;
             sqm_delta_acc += i32::from(outcome.sqm_delta);
             heat_delta_acc += i32::from(outcome.heat_delta);
-            stage_history.push(format!("Stage 5 Term {} {}", t_idx + 1, outcome.summary_line));
+            stage_history.push(format!(
+                "Stage 5 Term {} {}",
+                t_idx + 1,
+                outcome.summary_line
+            ));
         }
         term_evals.push(t_eval);
     }
@@ -854,7 +857,8 @@ pub fn compute_lifepath_baseline_from_config(
     let age_years = 18 + (num_terms as u32) * 4;
     let max_post_school_gain_per_skill = (2 * num_terms.max(1)).max(2);
 
-    let default_sqm = (i32::from(origin.class.default_campaign_sqm()) + sqm_delta_acc).clamp(1, 10) as u8;
+    let default_sqm =
+        (i32::from(origin.class.default_campaign_sqm()) + sqm_delta_acc).clamp(1, 10) as u8;
     let base_heat: i32 = if cfg
         .career_terms
         .iter()

@@ -12,6 +12,7 @@ pub use crate::wasm_client::map_2d_art::*;
 pub use crate::wasm_client::map_3d_input::*;
 pub use crate::wasm_client::map_3d_wgpu::*;
 pub use crate::wasm_client::map_edge_edit::*;
+pub use crate::wasm_client::map_editor::*;
 
 use crate::wasm_client::dom::{
     escape_html, get_element, set_class, set_display, set_html, set_input_value, set_select_value,
@@ -83,14 +84,8 @@ pub struct TacticalMapUiState {
 
 impl Default for TacticalMapUiState {
     fn default() -> Self {
-        let map = build_procedural_map_request(
-            "map-starter",
-            SectorPreset::default(),
-            None,
-            20,
-            14,
-            42,
-        );
+        let map =
+            build_procedural_map_request("map-starter", SectorPreset::default(), None, 20, 14, 42);
         let selected = map.tokens.first().map(|t| t.entity_id.clone());
         let camera_2d = crate::wasm_client::map_2d_camera::BattlemapCamera2d::default();
         let mut st = Self {
@@ -318,7 +313,10 @@ pub fn parse_movement_gait_code(code: &str) -> CombatMovementGait {
 
 /// Resolves `(model_preset, color_hex, facing_deg)` for a token on `map`.
 #[must_use]
-pub fn resolve_token_visual(map: &GmMapUpdateRequest, tok: &TokenPlacement) -> (String, String, f32) {
+pub fn resolve_token_visual(
+    map: &GmMapUpdateRequest,
+    tok: &TokenPlacement,
+) -> (String, String, f32) {
     if let Some(v) = map.visual_for(&tok.entity_id) {
         return (
             v.model_preset.clone(),
@@ -327,8 +325,10 @@ pub fn resolve_token_visual(map: &GmMapUpdateRequest, tok: &TokenPlacement) -> (
         );
     }
     let low = tok.label.to_ascii_lowercase();
-    let is_hostile =
-        low.contains("sentry") || low.contains("secops") || low.contains("hostile") || tok.visibility == MessageVisibility::GmOnly;
+    let is_hostile = low.contains("sentry")
+        || low.contains("secops")
+        || low.contains("hostile")
+        || tok.visibility == MessageVisibility::GmOnly;
     let preset = if low.contains("valkyrie") || low.contains("sara") {
         "valkyrie_rig"
     } else if low.contains("recon") || low.contains("marcus") {
@@ -368,7 +368,9 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
         .tokens
         .iter()
         .map(|t| (t, ui.map.token_pos_m(t)))
-        .find(|(_, (px, py))| (px - los.target_m.0).hypot(py - los.target_m.1) <= TOKEN_PICK_RADIUS_M)
+        .find(|(_, (px, py))| {
+            (px - los.target_m.0).hypot(py - los.target_m.1) <= TOKEN_PICK_RADIUS_M
+        })
         .map(|(t, (px, py))| format!("{} @ ({px:.2}m, {py:.2}m)", escape_html(&t.label)))
         .unwrap_or_else(|| {
             let (tx, ty) = los.target_m;
@@ -398,7 +400,10 @@ pub fn format_map_tactical_hud_html(ui: &TacticalMapUiState) -> String {
                 BarrierPenetrationVerdict::PenetratesWithLoss => "pill pill-iggy",
                 BarrierPenetrationVerdict::StoppedByBarrier => "pill pill-muted",
             };
-            format!(r#"<span class="{b_cls}">{}</span>"#, escape_html(&b.summary_label))
+            format!(
+                r#"<span class="{b_cls}">{}</span>"#,
+                escape_html(&b.summary_label)
+            )
         })
         .unwrap_or_default();
 
@@ -456,8 +461,7 @@ pub fn refresh_map_dom_and_wgpu() {
         let pill = format!("{} ({bw_m:.0}m × {bh_m:.0}m · Free Metric)", ui.map.title);
         let chips = format_selectable_token_chips_html(&ui.map, ui.selected_entity_id.as_deref());
         let hud = format_map_tactical_hud_html(ui);
-        let floor_bar =
-            format_map_floor_switcher_html(&ui.map, ui.selected_entity_id.as_deref());
+        let floor_bar = format_map_floor_switcher_html(&ui.map, ui.selected_entity_id.as_deref());
         let (preset, color) = ui
             .selected_entity_id
             .as_deref()
@@ -496,14 +500,26 @@ pub fn refresh_map_dom_and_wgpu() {
     set_select_value("map-weapon-select", &sel_wpn);
     set_select_value("map-token-model-select", &sel_preset);
     set_input_value("map-token-color", &sel_color);
-    set_display("map-prop-brush-wrap", if edit_on { "inline-flex" } else { "none" });
+    set_display(
+        "map-prop-brush-wrap",
+        if edit_on { "inline-flex" } else { "none" },
+    );
     set_select_value("map-prop-brush-select", &prop_brush);
     let show_rot = edit_on && satya_schema::PropKind::from_code_str(&prop_brush).is_some();
-    set_display("btn-map-prop-rotate", if show_rot { "inline-flex" } else { "none" });
-    set_display("map-prop-rot-wrap", if show_rot { "inline-flex" } else { "none" });
+    set_display(
+        "btn-map-prop-rotate",
+        if show_rot { "inline-flex" } else { "none" },
+    );
+    set_display(
+        "map-prop-rot-wrap",
+        if show_rot { "inline-flex" } else { "none" },
+    );
     set_text("btn-map-prop-rotate", &format!("Rot {prop_rot}°"));
     set_input_value("map-prop-rot-deg", &prop_rot.to_string());
-    set_display("btn-map-snap-toggle", if edit_on { "inline-flex" } else { "none" });
+    set_display(
+        "btn-map-snap-toggle",
+        if edit_on { "inline-flex" } else { "none" },
+    );
     set_text(
         "btn-map-snap-toggle",
         if snap_on { "Snap: 0.5m" } else { "Snap: Free" },
@@ -527,11 +543,15 @@ pub fn refresh_map_dom_and_wgpu() {
         refresh_map_wgpu_if_active();
     }
     crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
+    crate::wasm_client::map_editor::sync_map_editor_dom();
 }
 
 /// Formats the floating floor switcher pill bar + cross-floor move buttons for multi-floor maps.
 #[must_use]
-pub fn format_map_floor_switcher_html(map: &GmMapUpdateRequest, selected_id: Option<&str>) -> String {
+pub fn format_map_floor_switcher_html(
+    map: &GmMapUpdateRequest,
+    selected_id: Option<&str>,
+) -> String {
     if !map.has_multiple_floors() {
         return String::new();
     }
@@ -634,7 +654,8 @@ pub fn format_selectable_token_chips_html(
 
 /// Ingests an authoritative [`GmMapUpdateRequest`] from `ServerWsPacket::MapUpdated` or REST history.
 pub fn apply_incoming_map_update(incoming: &GmMapUpdateRequest) {
-    let (old_size, new_size, stitch_dir, nudge, size_changed) = with_map_ui_mut(|ui| {
+    let (old_size, new_size, stitch_dir, nudge, size_changed, new_map_id) = with_map_ui_mut(|ui| {
+        let new_map_id = incoming.map_id != ui.map.map_id;
         let old_size = ui.map.board_size_m();
         let new_size = incoming.board_size_m();
         let size_changed =
@@ -660,8 +681,12 @@ pub fn apply_incoming_map_update(incoming: &GmMapUpdateRequest) {
             stitch_dir,
             explicit_nudge.is_some(),
             size_changed,
+            new_map_id,
         )
     });
+    if new_map_id {
+        crate::wasm_client::map_editor::reset_editor_selection_and_drafts(true);
+    }
     if let Some(dir) = stitch_dir {
         crate::wasm_client::map_3d_wgpu::shift_3d_camera_on_stitch(old_size, new_size, dir, nudge);
     } else if size_changed {
@@ -708,7 +733,14 @@ mod tests {
         assert!(ok, "continuous metric movement should succeed in open deck");
 
         // Verify weapon-graded barrier HUD across Apartment drywall/furniture & Estate masonry/foliage
-        ui.map = build_procedural_map_request("apt", SectorPreset::ResidentialApartment, None, 20, 14, 42);
+        ui.map = build_procedural_map_request(
+            "apt",
+            SectorPreset::ResidentialApartment,
+            None,
+            20,
+            14,
+            42,
+        );
         ui.selected_weapon_id = "sig_p320_9mm".to_string();
         ui.recompute_overlays();
         assert!(ui.last_ballistic.is_some());
@@ -719,11 +751,18 @@ mod tests {
         assert_ne!(hud_9mm, hud_762);
 
         // Verify multi-floor Luxurious Mansion formats #map-floor-switcher & token badges
-        let mansion = build_procedural_map_request("mansion", SectorPreset::LuxuryMansion, None, 24, 18, 42);
+        let mansion =
+            build_procedural_map_request("mansion", SectorPreset::LuxuryMansion, None, 24, 18, 42);
         let sel_id = mansion.tokens.first().map(|t| t.entity_id.as_str());
         let switcher_html = format_map_floor_switcher_html(&mansion, sel_id);
-        assert!(switcher_html.contains("satyaSelectMapFloor("), "{switcher_html}");
-        assert!(switcher_html.contains("satyaMoveTokenToFloor("), "{switcher_html}");
+        assert!(
+            switcher_html.contains("satyaSelectMapFloor("),
+            "{switcher_html}"
+        );
+        assert!(
+            switcher_html.contains("satyaMoveTokenToFloor("),
+            "{switcher_html}"
+        );
         let chips_html = format_selectable_token_chips_html(&mansion, sel_id);
         assert!(chips_html.contains("[1F]"), "{chips_html}");
     }

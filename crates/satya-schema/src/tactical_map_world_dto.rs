@@ -202,8 +202,10 @@ mod tests {
         assert_eq!(decoded.world_sectors, vec![cell]);
 
         // Legacy map payloads omitting world_sectors deserialize cleanly.
-        let legacy: GmMapUpdateRequest =
-            serde_json::from_str(r#"{"map_id":"m","title":"T","image_url":"","grid_width":20,"grid_height":14}"#).unwrap();
+        let legacy: GmMapUpdateRequest = serde_json::from_str(
+            r#"{"map_id":"m","title":"T","image_url":"","grid_width":20,"grid_height":14}"#,
+        )
+        .unwrap();
         assert!(legacy.world_sectors.is_empty());
     }
 }

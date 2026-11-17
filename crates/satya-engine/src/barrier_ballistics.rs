@@ -83,7 +83,9 @@ mat_profiles! {
 
 /// Ballistic resistance profile for `material`.
 #[must_use]
-pub const fn material_ballistic_profile(material: MaterialClass) -> &'static MaterialBallisticProfile {
+pub const fn material_ballistic_profile(
+    material: MaterialClass,
+) -> &'static MaterialBallisticProfile {
     &MATERIAL_BALLISTIC_PROFILES[material as usize]
 }
 
@@ -212,7 +214,10 @@ fn prop_barrier_entry(kind: PropKind, hit: PropRayHit) -> InterceptedBarrier {
     let (pr, label) = if hit.is_engine_bay {
         (9, format!("{} (engine block)", kind.label()))
     } else if kind == PropKind::LargeTree && hit.is_tree_trunk {
-        (prof.barrier_pr + 2, format!("{} (massive trunk)", kind.label()))
+        (
+            prof.barrier_pr + 2,
+            format!("{} (massive trunk)", kind.label()),
+        )
     } else {
         (prof.barrier_pr, kind.label().to_string())
     };
@@ -234,12 +239,17 @@ pub fn collect_ray_barriers(
     attacker_m: (f32, f32),
     target_m: (f32, f32),
 ) -> Vec<InterceptedBarrier> {
-    let seg_len = ((target_m.0 - attacker_m.0).powi(2) + (target_m.1 - attacker_m.1).powi(2)).sqrt();
+    let seg_len =
+        ((target_m.0 - attacker_m.0).powi(2) + (target_m.1 - attacker_m.1).powi(2)).sqrt();
     if seg_len <= 0.05 {
         return Vec::new();
     }
 
-    type OrderedBarrierHit = (f32, Option<(WallEdgeKind, MaterialClass)>, InterceptedBarrier);
+    type OrderedBarrierHit = (
+        f32,
+        Option<(WallEdgeKind, MaterialClass)>,
+        InterceptedBarrier,
+    );
     let mut ordered: Vec<OrderedBarrierHit> = Vec::new();
     for edge in scene.edges {
         if matches!(edge.kind, WallEdgeKind::DoorOpen) {
@@ -435,10 +445,21 @@ mod tests {
     use crate::ranged_combat::{ArmorProfileId, canonical_armor_catalog};
     use satya_schema::{EdgeSide, MapWallEdge};
 
-    fn shot_across_prop(kind: PropKind, rot_deg: i32, target_xy: (i32, i32), weapon_id: &str) -> BallisticShotEvaluation {
+    fn shot_across_prop(
+        kind: PropKind,
+        rot_deg: i32,
+        target_xy: (i32, i32),
+        weapon_id: &str,
+    ) -> BallisticShotEvaluation {
         let prop = make_prop(kind, 6, 4, rot_deg, None, 0);
         let props = [prop];
-        let scene = TacticalSceneView { width_m: 14.0, height_m: 10.0, edges: &[], props: &props, surfaces: &[] };
+        let scene = TacticalSceneView {
+            width_m: 14.0,
+            height_m: 10.0,
+            edges: &[],
+            props: &props,
+            surfaces: &[],
+        };
         evaluate_ballistic_shot(BallisticShotQuery {
             scene: &scene,
             attacker_m: (2.5, 4.5),
@@ -457,7 +478,10 @@ mod tests {
         let hedge_9mm = shot_across_prop(PropKind::Hedge, 0, (10, 4), "sig_p320_9mm");
         assert_eq!(hedge_9mm.sight_cover_grade, CoverGrade::Concealment);
         assert_eq!(hedge_9mm.effective_delta_ext, 3);
-        assert_eq!(hedge_9mm.verdict, BarrierPenetrationVerdict::ConcealmentOnly);
+        assert_eq!(
+            hedge_9mm.verdict,
+            BarrierPenetrationVerdict::ConcealmentOnly
+        );
         assert_eq!(hedge_9mm.residual_impact, hedge_9mm.initial_impact);
         assert_eq!(hedge_9mm.residual_pen, hedge_9mm.initial_pen);
     }
@@ -466,21 +490,33 @@ mod tests {
     fn furniture_and_drywall_grade_handguns_vs_long_arms_and_stud_hits() {
         // Desk (WoodFurniture PR 2): stops 9x19mm JHP (Pen 2), overmatched by 5.56mm (Pen 6 -> +2 Δ_ext)!
         let desk_9mm = shot_across_prop(PropKind::Desk, 0, (10, 4), "sig_p320_9mm");
-        assert_eq!(desk_9mm.verdict, BarrierPenetrationVerdict::StoppedByBarrier);
+        assert_eq!(
+            desk_9mm.verdict,
+            BarrierPenetrationVerdict::StoppedByBarrier
+        );
         assert_eq!(desk_9mm.residual_impact, 0);
         assert_eq!(desk_9mm.effective_delta_ext, 4);
 
         let desk_556 = shot_across_prop(PropKind::Desk, 0, (10, 4), "hk416_carbine_556");
-        assert_eq!(desk_556.verdict, BarrierPenetrationVerdict::OvermatchedCover);
+        assert_eq!(
+            desk_556.verdict,
+            BarrierPenetrationVerdict::OvermatchedCover
+        );
         assert_eq!(desk_556.residual_impact, 4);
         assert_eq!(desk_556.effective_delta_ext, 2);
 
         // Sofa (Upholstery PR 1): degrades 9mm (-1 impact), overmatched by 5.56mm!
         let sofa_9mm = shot_across_prop(PropKind::Sofa, 0, (10, 4), "sig_p320_9mm");
-        assert_eq!(sofa_9mm.verdict, BarrierPenetrationVerdict::PenetratesWithLoss);
+        assert_eq!(
+            sofa_9mm.verdict,
+            BarrierPenetrationVerdict::PenetratesWithLoss
+        );
         assert_eq!(sofa_9mm.residual_impact, 5);
         let sofa_556 = shot_across_prop(PropKind::Sofa, 0, (10, 4), "hk416_carbine_556");
-        assert_eq!(sofa_556.verdict, BarrierPenetrationVerdict::OvermatchedCover);
+        assert_eq!(
+            sofa_556.verdict,
+            BarrierPenetrationVerdict::OvermatchedCover
+        );
         assert_eq!(sofa_556.residual_impact, 5);
 
         // Thin Drywall partition (PR 1 cavity vs. PR 3 2x4 wood stud):
@@ -493,13 +529,23 @@ mod tests {
                 material: MaterialClass::Drywall,
             })
             .collect();
-        let scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &wall_edges, props: &[], surfaces: &[] };
+        let scene = TacticalSceneView {
+            width_m: 12.0,
+            height_m: 8.0,
+            edges: &wall_edges,
+            props: &[],
+            surfaces: &[],
+        };
         let p320 = lookup_firearm_preset("sig_p320_9mm").unwrap();
         let hk416 = lookup_firearm_preset("hk416_carbine_556").unwrap();
 
         let cavity_9mm = evaluate_ballistic_shot(BallisticShotQuery {
-            scene: &scene, attacker_m: (2.5, 4.5), target_m: (9.5, 4.5),
-            firearm: p320, net_successes: 0, hit_frame_or_stud: false,
+            scene: &scene,
+            attacker_m: (2.5, 4.5),
+            target_m: (9.5, 4.5),
+            firearm: p320,
+            net_successes: 0,
+            hit_frame_or_stud: false,
         });
         assert!(cavity_9mm.is_blind_fire && cavity_9mm.can_reach_target);
         assert_eq!(cavity_9mm.effective_delta_ext, 6);
@@ -507,14 +553,22 @@ mod tests {
         assert_eq!(cavity_9mm.stud_stop_risk_pct, 10);
 
         let stud_9mm = evaluate_ballistic_shot(BallisticShotQuery {
-            scene: &scene, attacker_m: (2.5, 4.5), target_m: (9.5, 4.5),
-            firearm: p320, net_successes: 0, hit_frame_or_stud: true,
+            scene: &scene,
+            attacker_m: (2.5, 4.5),
+            target_m: (9.5, 4.5),
+            firearm: p320,
+            net_successes: 0,
+            hit_frame_or_stud: true,
         });
         assert!(!stud_9mm.can_reach_target && stud_9mm.residual_impact == 0);
 
         let stud_556 = evaluate_ballistic_shot(BallisticShotQuery {
-            scene: &scene, attacker_m: (2.5, 4.5), target_m: (9.5, 4.5),
-            firearm: hk416, net_successes: 0, hit_frame_or_stud: true,
+            scene: &scene,
+            attacker_m: (2.5, 4.5),
+            target_m: (9.5, 4.5),
+            firearm: hk416,
+            net_successes: 0,
+            hit_frame_or_stud: true,
         });
         assert!(stud_556.can_reach_target && stud_556.residual_impact == 3);
     }
@@ -530,7 +584,13 @@ mod tests {
                 material: MaterialClass::Brick,
             })
             .collect();
-        let scene = TacticalSceneView { width_m: 12.0, height_m: 8.0, edges: &brick_edges, props: &[], surfaces: &[] };
+        let scene = TacticalSceneView {
+            width_m: 12.0,
+            height_m: 8.0,
+            edges: &brick_edges,
+            props: &[],
+            surfaces: &[],
+        };
         let eval = |wid: &str| {
             evaluate_ballistic_shot(BallisticShotQuery {
                 scene: &scene,
@@ -542,16 +602,34 @@ mod tests {
             })
         };
 
-        for stopped_id in ["sig_p320_9mm", "mp7_pdw_57", "benelli_m4_12ga", "akm_762x39", "hk416_carbine_556"] {
+        for stopped_id in [
+            "sig_p320_9mm",
+            "mp7_pdw_57",
+            "benelli_m4_12ga",
+            "akm_762x39",
+            "hk416_carbine_556",
+        ] {
             let r = eval(stopped_id);
-            assert_eq!(r.verdict, BarrierPenetrationVerdict::StoppedByBarrier, "{stopped_id} vs Brick");
+            assert_eq!(
+                r.verdict,
+                BarrierPenetrationVerdict::StoppedByBarrier,
+                "{stopped_id} vs Brick"
+            );
             assert!(!r.can_reach_target && r.effective_delta_ext == 16);
         }
 
         let nato_762 = eval("scar_h_762x51");
-        assert_eq!(nato_762.verdict, BarrierPenetrationVerdict::PenetratesWithLoss);
-        assert!(nato_762.can_reach_target && nato_762.residual_impact == 3 && nato_762.residual_pen == 1);
-        let vest = &canonical_armor_catalog()[ArmorProfileId::ConcealableSoftKevlarVestNij3a as usize];
+        assert_eq!(
+            nato_762.verdict,
+            BarrierPenetrationVerdict::PenetratesWithLoss
+        );
+        assert!(
+            nato_762.can_reach_target
+                && nato_762.residual_impact == 3
+                && nato_762.residual_pen == 1
+        );
+        let vest =
+            &canonical_armor_catalog()[ArmorProfileId::ConcealableSoftKevlarVestNij3a as usize];
         let armor_out = nato_762.resolve_against_target_armor(vest, false).unwrap();
         assert!(!armor_out.penetrated && armor_out.babt_trauma == 1);
 
@@ -559,47 +637,90 @@ mod tests {
         assert!(cm_65.can_reach_target && cm_65.residual_pen == 2);
 
         let jersey_762 = shot_across_prop(PropKind::JerseyBarrier, 90, (10, 4), "scar_h_762x51");
-        assert_eq!(jersey_762.verdict, BarrierPenetrationVerdict::StoppedByBarrier);
+        assert_eq!(
+            jersey_762.verdict,
+            BarrierPenetrationVerdict::StoppedByBarrier
+        );
     }
 
     #[test]
     fn vehicle_cabin_doors_perforate_under_rifle_fire_while_engine_block_stops_762_nato() {
         let car = make_prop(PropKind::Car, 6, 3, 0, None, 0);
         let props = [car];
-        let scene = TacticalSceneView { width_m: 14.0, height_m: 12.0, edges: &[], props: &props, surfaces: &[] };
+        let scene = TacticalSceneView {
+            width_m: 14.0,
+            height_m: 12.0,
+            edges: &[],
+            props: &props,
+            surfaces: &[],
+        };
 
         let door_9mm = evaluate_ballistic_shot(BallisticShotQuery {
-            scene: &scene, attacker_m: (2.5, 5.5), target_m: (11.5, 5.5),
-            firearm: lookup_firearm_preset("sig_p320_9mm").unwrap(), net_successes: 0, hit_frame_or_stud: false,
+            scene: &scene,
+            attacker_m: (2.5, 5.5),
+            target_m: (11.5, 5.5),
+            firearm: lookup_firearm_preset("sig_p320_9mm").unwrap(),
+            net_successes: 0,
+            hit_frame_or_stud: false,
         });
-        assert_eq!(door_9mm.verdict, BarrierPenetrationVerdict::StoppedByBarrier);
+        assert_eq!(
+            door_9mm.verdict,
+            BarrierPenetrationVerdict::StoppedByBarrier
+        );
 
         let door_556 = evaluate_ballistic_shot(BallisticShotQuery {
-            scene: &scene, attacker_m: (2.5, 5.5), target_m: (11.5, 5.5),
-            firearm: lookup_firearm_preset("hk416_carbine_556").unwrap(), net_successes: 0, hit_frame_or_stud: false,
+            scene: &scene,
+            attacker_m: (2.5, 5.5),
+            target_m: (11.5, 5.5),
+            firearm: lookup_firearm_preset("hk416_carbine_556").unwrap(),
+            net_successes: 0,
+            hit_frame_or_stud: false,
         });
-        assert_eq!(door_556.verdict, BarrierPenetrationVerdict::OvermatchedCover);
+        assert_eq!(
+            door_556.verdict,
+            BarrierPenetrationVerdict::OvermatchedCover
+        );
         assert_eq!(door_556.barriers.len(), 1);
         assert_eq!(door_556.residual_impact, 3);
 
         let engine_762 = evaluate_ballistic_shot(BallisticShotQuery {
-            scene: &scene, attacker_m: (2.5, 7.5), target_m: (11.5, 7.5),
-            firearm: lookup_firearm_preset("scar_h_762x51").unwrap(), net_successes: 0, hit_frame_or_stud: false,
+            scene: &scene,
+            attacker_m: (2.5, 7.5),
+            target_m: (11.5, 7.5),
+            firearm: lookup_firearm_preset("scar_h_762x51").unwrap(),
+            net_successes: 0,
+            hit_frame_or_stud: false,
         });
-        assert_eq!(engine_762.verdict, BarrierPenetrationVerdict::StoppedByBarrier);
+        assert_eq!(
+            engine_762.verdict,
+            BarrierPenetrationVerdict::StoppedByBarrier
+        );
         assert_eq!(engine_762.barriers[0].barrier_pr, 9);
 
         // Angled 30° parked car still identifies ArmorSteel engine bay accurately.
         let angled_car = make_prop_at_cm(PropKind::Car, 700, 600, 30, None, 0);
         let angled_props = [angled_car];
-        let angled_scene = TacticalSceneView { width_m: 14.0, height_m: 12.0, edges: &[], props: &angled_props, surfaces: &[] };
+        let angled_scene = TacticalSceneView {
+            width_m: 14.0,
+            height_m: 12.0,
+            edges: &[],
+            props: &angled_props,
+            surfaces: &[],
+        };
         let rad = 30.0_f32.to_radians();
         let ey = 6.0 + rad.cos() * 2.0;
         let angled_engine = evaluate_ballistic_shot(BallisticShotQuery {
-            scene: &angled_scene, attacker_m: (2.0, ey), target_m: (12.0, ey),
-            firearm: lookup_firearm_preset("scar_h_762x51").unwrap(), net_successes: 0, hit_frame_or_stud: false,
+            scene: &angled_scene,
+            attacker_m: (2.0, ey),
+            target_m: (12.0, ey),
+            firearm: lookup_firearm_preset("scar_h_762x51").unwrap(),
+            net_successes: 0,
+            hit_frame_or_stud: false,
         });
-        assert_eq!(angled_engine.verdict, BarrierPenetrationVerdict::StoppedByBarrier);
+        assert_eq!(
+            angled_engine.verdict,
+            BarrierPenetrationVerdict::StoppedByBarrier
+        );
         assert_eq!(angled_engine.barriers[0].barrier_pr, 9);
     }
 }

@@ -36,8 +36,17 @@ struct PsycheCueRule {
 const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     PsycheCueRule {
         cues: &[
-            "kind", "caring", "compassionate", "gentle", "altruistic", "selfless",
-            "empathetic", "warm", "generous", "tender", "healer",
+            "kind",
+            "caring",
+            "compassionate",
+            "gentle",
+            "altruistic",
+            "selfless",
+            "empathetic",
+            "warm",
+            "generous",
+            "tender",
+            "healer",
         ],
         set_trait: Some((PsycheTraitId::Selfishness, 5)),
         boost_social: false,
@@ -54,8 +63,14 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "selfish", "greedy", "mercenary", "ruthless", "callous", "opportunistic",
-            "self-serving", "cutthroat",
+            "selfish",
+            "greedy",
+            "mercenary",
+            "ruthless",
+            "callous",
+            "opportunistic",
+            "self-serving",
+            "cutthroat",
         ],
         set_trait: Some((PsycheTraitId::Selfishness, 16)),
         boost_social: false,
@@ -67,9 +82,20 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "belong", "belongs", "belonging", "fit in", "acceptance", "accepted",
-            "loyal", "tribal", "devoted", "team player", "pack", "family",
-            "needs to feel like", "approval",
+            "belong",
+            "belongs",
+            "belonging",
+            "fit in",
+            "acceptance",
+            "accepted",
+            "loyal",
+            "tribal",
+            "devoted",
+            "team player",
+            "pack",
+            "family",
+            "needs to feel like",
+            "approval",
         ],
         set_trait: Some((PsycheTraitId::Belonging, 16)),
         boost_social: false,
@@ -81,8 +107,14 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "loner", "lone wolf", "detached", "solitary", "independent", "outcast",
-            "drifter", "aloof",
+            "loner",
+            "lone wolf",
+            "detached",
+            "solitary",
+            "independent",
+            "outcast",
+            "drifter",
+            "aloof",
         ],
         set_trait: Some((PsycheTraitId::Belonging, 4)),
         boost_social: false,
@@ -94,8 +126,14 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "arrogant", "proud", "narcissistic", "cocky", "vain", "egotistical",
-            "grandiose", "haughty",
+            "arrogant",
+            "proud",
+            "narcissistic",
+            "cocky",
+            "vain",
+            "egotistical",
+            "grandiose",
+            "haughty",
         ],
         set_trait: Some((PsycheTraitId::Ego, 17)),
         boost_social: false,
@@ -117,8 +155,13 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "curious", "open-minded", "imaginative", "inquisitive", "creative",
-            "eccentric", "visionary",
+            "curious",
+            "open-minded",
+            "imaginative",
+            "inquisitive",
+            "creative",
+            "eccentric",
+            "visionary",
         ],
         set_trait: Some((PsycheTraitId::Openness, 16)),
         boost_social: false,
@@ -130,8 +173,13 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "dogmatic", "rigid", "stubborn", "traditional", "closed-minded",
-            "suspicious", "cynical",
+            "dogmatic",
+            "rigid",
+            "stubborn",
+            "traditional",
+            "closed-minded",
+            "suspicious",
+            "cynical",
         ],
         set_trait: Some((PsycheTraitId::Openness, 5)),
         boost_social: false,
@@ -143,8 +191,14 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "extroverted", "outgoing", "charismatic", "gregarious", "talkative",
-            "charming", "boisterous", "social",
+            "extroverted",
+            "outgoing",
+            "charismatic",
+            "gregarious",
+            "talkative",
+            "charming",
+            "boisterous",
+            "social",
         ],
         set_trait: Some((PsycheTraitId::Extraversion, 16)),
         boost_social: true,
@@ -156,7 +210,12 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "shy", "quiet", "introverted", "reserved", "stoic", "taciturn",
+            "shy",
+            "quiet",
+            "introverted",
+            "reserved",
+            "stoic",
+            "taciturn",
             "withdrawn",
         ],
         set_trait: Some((PsycheTraitId::Extraversion, 5)),
@@ -169,8 +228,14 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "by-the-book", "orthodox", "obedient", "disciplined", "dutiful",
-            "strict", "conformist", "bureaucratic",
+            "by-the-book",
+            "orthodox",
+            "obedient",
+            "disciplined",
+            "dutiful",
+            "strict",
+            "conformist",
+            "bureaucratic",
         ],
         set_trait: Some((PsycheTraitId::Conformity, 16)),
         boost_social: false,
@@ -182,8 +247,13 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "rebel", "rebellious", "maverick", "iconoclast", "unconventional",
-            "anti-authority", "rogue",
+            "rebel",
+            "rebellious",
+            "maverick",
+            "iconoclast",
+            "unconventional",
+            "anti-authority",
+            "rogue",
         ],
         set_trait: Some((PsycheTraitId::Conformity, 4)),
         boost_social: false,
@@ -195,8 +265,14 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "aggressive", "violent", "fierce", "belligerent", "hot-headed",
-            "brutal", "combative", "pugnacious",
+            "aggressive",
+            "violent",
+            "fierce",
+            "belligerent",
+            "hot-headed",
+            "brutal",
+            "combative",
+            "pugnacious",
         ],
         set_trait: Some((PsycheTraitId::Aggression, 17)),
         boost_social: false,
@@ -208,7 +284,11 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "pacifist", "peaceful", "nonviolent", "calm", "conflict-averse",
+            "pacifist",
+            "peaceful",
+            "nonviolent",
+            "calm",
+            "conflict-averse",
             "timid",
         ],
         set_trait: Some((PsycheTraitId::Aggression, 4)),
@@ -221,7 +301,12 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "trusting", "open-handed", "gullible", "naive", "good-faith", "earnest",
+            "trusting",
+            "open-handed",
+            "gullible",
+            "naive",
+            "good-faith",
+            "earnest",
         ],
         set_trait: Some((PsycheTraitId::Trust, 16)),
         boost_social: false,
@@ -233,8 +318,14 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "paranoid", "distrustful", "zero-trust", "guarded", "suspicious", "cynical",
-            "skeptical", "wary",
+            "paranoid",
+            "distrustful",
+            "zero-trust",
+            "guarded",
+            "suspicious",
+            "cynical",
+            "skeptical",
+            "wary",
         ],
         set_trait: Some((PsycheTraitId::Trust, 4)),
         boost_social: false,
@@ -246,8 +337,15 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "merciful", "compassionate", "tender-hearted", "humane", "empathetic",
-            "kind", "caring", "gentle", "healer",
+            "merciful",
+            "compassionate",
+            "tender-hearted",
+            "humane",
+            "empathetic",
+            "kind",
+            "caring",
+            "gentle",
+            "healer",
         ],
         set_trait: Some((PsycheTraitId::Compassion, 16)),
         boost_social: false,
@@ -259,8 +357,13 @@ const PSYCHE_CUE_RULES: &[PsycheCueRule] = &[
     },
     PsycheCueRule {
         cues: &[
-            "ruthless", "cold-blooded", "utilitarian", "merciless", "callous",
-            "unsentimental", "pragmatic killer",
+            "ruthless",
+            "cold-blooded",
+            "utilitarian",
+            "merciless",
+            "callous",
+            "unsentimental",
+            "pragmatic killer",
         ],
         set_trait: Some((PsycheTraitId::Compassion, 4)),
         boost_social: false,
@@ -357,7 +460,14 @@ pub(crate) fn apply_prompt_psyche_and_skill_cues(
     if any_cue(
         &lower,
         &words,
-        &["general md", "md", "physician", "doctor", "diagnosis", "clinic"],
+        &[
+            "general md",
+            "md",
+            "physician",
+            "doctor",
+            "diagnosis",
+            "clinic",
+        ],
     ) {
         priority_skills.extend_from_slice(&[
             "clinical_diagnosis_internal_medicine",
@@ -367,7 +477,11 @@ pub(crate) fn apply_prompt_psyche_and_skill_cues(
             "anatomy_physiology",
         ]);
     }
-    if any_cue(&lower, &words, &["surgeon", "surgery", "trauma", "orthopedic"]) {
+    if any_cue(
+        &lower,
+        &words,
+        &["surgeon", "surgery", "trauma", "orthopedic"],
+    ) {
         priority_skills.extend_from_slice(&[
             "trauma_orthopedic_general_surgery",
             "clinical_diagnosis_internal_medicine",
@@ -668,14 +782,16 @@ pub fn derive_npc_motivational_profile(
     let chars = characteristics_from_record(chars_rec);
     let sorted = extract_sorted_psyche(&chars);
 
-    let (primary_trait, primary_score, primary_dev) = sorted
-        .first()
-        .copied()
-        .unwrap_or((PsycheTraitId::Belonging, 10, 0));
-    let (secondary_trait, secondary_score, secondary_dev) = sorted
-        .get(1)
-        .copied()
-        .unwrap_or((PsycheTraitId::Conformity, 10, 0));
+    let (primary_trait, primary_score, primary_dev) =
+        sorted
+            .first()
+            .copied()
+            .unwrap_or((PsycheTraitId::Belonging, 10, 0));
+    let (secondary_trait, secondary_score, secondary_dev) =
+        sorted
+            .get(1)
+            .copied()
+            .unwrap_or((PsycheTraitId::Conformity, 10, 0));
 
     let primary_pole = PsychePole::from_score(primary_score);
     let secondary_pole = PsychePole::from_score(secondary_score);
@@ -696,13 +812,21 @@ pub fn derive_npc_motivational_profile(
         .collect();
 
     let core_drive = if secondary_dev >= 3 && primary_trait != secondary_trait {
-        format!("{}; tempered by drive to {}", spec_a.drive, spec_b.drive.to_ascii_lowercase())
+        format!(
+            "{}; tempered by drive to {}",
+            spec_a.drive,
+            spec_b.drive.to_ascii_lowercase()
+        )
     } else {
         spec_a.drive.to_string()
     };
 
     let underlying_fear = if secondary_dev >= 3 && primary_trait != secondary_trait {
-        format!("{}; compounded by fear of {}", spec_a.fear, spec_b.fear.to_ascii_lowercase())
+        format!(
+            "{}; compounded by fear of {}",
+            spec_a.fear,
+            spec_b.fear.to_ascii_lowercase()
+        )
     } else {
         spec_a.fear.to_string()
     };
@@ -716,7 +840,10 @@ pub fn derive_npc_motivational_profile(
         spec_a.clashes_vector
     );
 
-    let dual_psyche_wedge = if primary_dev >= 3 && secondary_dev >= 3 && primary_trait != secondary_trait {
+    let dual_psyche_wedge = if primary_dev >= 3
+        && secondary_dev >= 3
+        && primary_trait != secondary_trait
+    {
         format!(
             "Dual-Psyche Wedge ({}={primary_score} vs {}={secondary_score}): Force a choice between satisfying {} ({}) and honoring {} ({}).",
             primary_trait.code(),
@@ -961,7 +1088,11 @@ pub fn compile_character_hooks(
         ),
     );
 
-    cards.sort_by(|a, b| b.salience.total_cmp(&a.salience).then_with(|| a.hook_id.cmp(&b.hook_id)));
+    cards.sort_by(|a, b| {
+        b.salience
+            .total_cmp(&a.salience)
+            .then_with(|| a.hook_id.cmp(&b.hook_id))
+    });
     cards
 }
 
@@ -978,7 +1109,10 @@ pub fn compile_party_hooks(
         .or_else(|| scene_context.get("active_location"))
         .cloned();
     let loc_ref = active_location.as_deref();
-    let active_preset = scene_context.get("sector_preset").map(String::as_str).unwrap_or("");
+    let active_preset = scene_context
+        .get("sector_preset")
+        .map(String::as_str)
+        .unwrap_or("");
 
     let mut character_profiles = BTreeMap::new();
     let mut hooks = Vec::new();
@@ -998,12 +1132,20 @@ pub fn compile_party_hooks(
 
     let mut party_entanglements =
         crate::hook_weaver_lifepath::compile_psyche_polarity_entanglements(party);
-    party_entanglements.extend(
-        crate::hook_weaver_lifepath::compile_faction_entanglements(party, pack_id),
-    );
+    party_entanglements.extend(crate::hook_weaver_lifepath::compile_faction_entanglements(
+        party, pack_id,
+    ));
 
-    hooks.sort_by(|a, b| b.salience.total_cmp(&a.salience).then_with(|| a.hook_id.cmp(&b.hook_id)));
-    party_entanglements.sort_by(|a, b| b.salience.total_cmp(&a.salience).then_with(|| a.hook_id.cmp(&b.hook_id)));
+    hooks.sort_by(|a, b| {
+        b.salience
+            .total_cmp(&a.salience)
+            .then_with(|| a.hook_id.cmp(&b.hook_id))
+    });
+    party_entanglements.sort_by(|a, b| {
+        b.salience
+            .total_cmp(&a.salience)
+            .then_with(|| a.hook_id.cmp(&b.hook_id))
+    });
 
     PartyHookManifest {
         pack_id: pack_id.to_string(),
@@ -1013,4 +1155,3 @@ pub fn compile_party_hooks(
         party_entanglements,
     }
 }
-

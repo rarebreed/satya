@@ -92,8 +92,8 @@ pub fn sync_floating_tooltip_dom(
     if client_x_px > 0.0
         && client_y_px > 0.0
         && let Some(container) = get_element(container_id)
-        && let Some(tip) = get_element(tooltip_id)
-            .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+        && let Some(tip) =
+            get_element(tooltip_id).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let rect = container.get_bounding_client_rect();
         let (rx, ry) = clamp_tooltip_within_rect(
@@ -133,11 +133,20 @@ mod tests {
     #[test]
     fn tooltip_clamping_respects_margins_and_edges() {
         let spec = TooltipClampSpec::default();
-        assert_eq!(clamp_tooltip_within_rect(40.0, 50.0, 800.0, 600.0, spec), (56.0, 66.0));
+        assert_eq!(
+            clamp_tooltip_within_rect(40.0, 50.0, 800.0, 600.0, spec),
+            (56.0, 66.0)
+        );
         // Near bottom-right corner clamps cleanly
-        assert_eq!(clamp_tooltip_within_rect(790.0, 595.0, 800.0, 600.0, spec), (510.0, 452.0));
+        assert_eq!(
+            clamp_tooltip_within_rect(790.0, 595.0, 800.0, 600.0, spec),
+            (510.0, 452.0)
+        );
         // Tiny container never produces negative/sub-margin coordinates
-        assert_eq!(clamp_tooltip_within_rect(200.0, 120.0, 120.0, 80.0, spec), (8.0, 8.0));
+        assert_eq!(
+            clamp_tooltip_within_rect(200.0, 120.0, 120.0, 80.0, spec),
+            (8.0, 8.0)
+        );
     }
 
     #[test]

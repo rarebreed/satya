@@ -367,7 +367,10 @@ impl CareerTermTrack {
             ),
             Self::JournalismMediaPerformingArts => (
                 chars.cre.max(chars.elo),
-                aptitudes.apt_lng.max(aptitudes.apt_soc).max(aptitudes.apt_aud),
+                aptitudes
+                    .apt_lng
+                    .max(aptitudes.apt_soc)
+                    .max(aptitudes.apt_aud),
             ),
             Self::GrassrootsActivismHumanitarianNgo => (
                 chars.ins.max(chars.elo),

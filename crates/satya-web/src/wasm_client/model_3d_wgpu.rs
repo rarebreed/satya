@@ -29,7 +29,10 @@ pub fn custom_glb_generation() -> u64 {
 
 /// Stores user-imported `.glb` bytes in the browser session (incrementing [`custom_glb_generation`])
 /// so both the `3D Model` viewer and `"custom_glb"` miniatures on the Tactical Map render it.
-pub fn set_custom_glb_asset(name: &str, raw_bytes: Vec<u8>) -> Result<(String, usize, f32), String> {
+pub fn set_custom_glb_asset(
+    name: &str,
+    raw_bytes: Vec<u8>,
+) -> Result<(String, usize, f32), String> {
     let parsed = parse_glb_bytes(&raw_bytes, name)?;
     let summary = (
         parsed.name.clone(),

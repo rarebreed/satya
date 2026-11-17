@@ -9,8 +9,8 @@
 //! `0.5m`-lattice connectivity).
 
 use satya_schema::{
-    EdgeSide, GmMapUpdateRequest, MapContinuationDir, MapPropPlacement, MapWallEdge,
-    MaterialClass, WallEdgeKind,
+    EdgeSide, GmMapUpdateRequest, MapContinuationDir, MapPropPlacement, MapWallEdge, MaterialClass,
+    WallEdgeKind,
 };
 
 use crate::map_dressing::{PropObstruction, make_prop_at_cm, prop_spec};
@@ -24,8 +24,8 @@ use crate::tactical_map::{
     generate_procedural_sector_with_options,
 };
 use crate::tactical_map_geom::{
-    all_walkable_areas_connected, migrate_legacy_tiles_to_vector, prop_intersects_circle,
-    TOKEN_RADIUS_M,
+    TOKEN_RADIUS_M, all_walkable_areas_connected, migrate_legacy_tiles_to_vector,
+    prop_intersects_circle,
 };
 
 /// Default added width (cells = meters) when continuing East or West for compact `20x14` maps.
@@ -145,7 +145,12 @@ struct BoundarySeamSlice {
     ribbons: Vec<RibbonAnchor>,
 }
 
-fn edge_slot_at(edges: &[MapWallEdge], x: i32, y: i32, side: EdgeSide) -> Option<(WallEdgeKind, MaterialClass)> {
+fn edge_slot_at(
+    edges: &[MapWallEdge],
+    x: i32,
+    y: i32,
+    side: EdgeSide,
+) -> Option<(WallEdgeKind, MaterialClass)> {
     edges
         .iter()
         .rev()
@@ -195,10 +200,21 @@ fn extract_seam_slice(
     }
 
     let ribbons = extract_seam_ribbons(map, dir, t0, t_len);
-    BoundarySeamSlice { t0, t_len, edges, src_clear, ribbons }
+    BoundarySeamSlice {
+        t0,
+        t_len,
+        edges,
+        src_clear,
+        ribbons,
+    }
 }
 
-pub(crate) fn translate_prop(p: MapPropPlacement, dx_cells: i32, dy_cells: i32, cell_cm: i32) -> MapPropPlacement {
+pub(crate) fn translate_prop(
+    p: MapPropPlacement,
+    dx_cells: i32,
+    dy_cells: i32,
+    cell_cm: i32,
+) -> MapPropPlacement {
     let mut out = p;
     out.x += dx_cells;
     out.y += dy_cells;
@@ -222,17 +238,25 @@ pub(crate) fn mirror_edge_axis(e: &mut MapWallEdge, cw: i32, ch: i32, horizontal
     }
 }
 
-pub(crate) fn mirror_prop_axis(p: MapPropPlacement, cw: i32, ch: i32, horizontal_flip: bool) -> MapPropPlacement {
+pub(crate) fn mirror_prop_axis(
+    p: MapPropPlacement,
+    cw: i32,
+    ch: i32,
+    horizontal_flip: bool,
+) -> MapPropPlacement {
     let (cx_cm, cy_cm) = p.center_cm();
     let (sw_cm, sh_cm) = p.local_span_cm();
     let len_cm = prop_spec(p.kind).stretchable.then_some(sw_cm.max(sh_cm));
-    if horizontal_flip {
+    let mut out = if horizontal_flip {
         let rot = (360 - p.rotation_deg).rem_euclid(360);
         make_prop_at_cm(p.kind, cw * 100 - cx_cm, cy_cm, rot, len_cm, p.variant_seed)
     } else {
         let rot = (180 - p.rotation_deg).rem_euclid(360);
         make_prop_at_cm(p.kind, cx_cm, ch * 100 - cy_cm, rot, len_cm, p.variant_seed)
-    }
+    };
+    out.tint_rgb = p.tint_rgb;
+    out.decorative = p.decorative;
+    out
 }
 
 pub(crate) fn mirror_sector(sec: &mut ProceduralSector, cw: i32, ch: i32, horizontal_flip: bool) {
@@ -273,7 +297,8 @@ fn reconcile_chunk_entry_seam(
         new_h,
         dir,
     } = seam;
-    let source_seam_walled = slice.edges.iter().filter(|e| e.is_some()).count() * 2 >= slice.t_len.max(1) as usize;
+    let source_seam_walled =
+        slice.edges.iter().filter(|e| e.is_some()).count() * 2 >= slice.t_len.max(1) as usize;
     let walled_shell = preset.is_perimeter_walled_shell() || source_seam_walled;
     let door_mat = if preset.interior_style().is_some() {
         MaterialClass::SolidWood
@@ -368,8 +393,12 @@ fn reconcile_chunk_entry_seam(
 
     // Clamp or discard any stray out-of-bounds edges just in case.
     sec.wall_edges.retain(|e| match e.side {
-        EdgeSide::North => x_off + e.x >= 0 && x_off + e.x < new_w && y_off + e.y >= 0 && y_off + e.y <= new_h,
-        EdgeSide::West => x_off + e.x >= 0 && x_off + e.x <= new_w && y_off + e.y >= 0 && y_off + e.y < new_h,
+        EdgeSide::North => {
+            x_off + e.x >= 0 && x_off + e.x < new_w && y_off + e.y >= 0 && y_off + e.y <= new_h
+        }
+        EdgeSide::West => {
+            x_off + e.x >= 0 && x_off + e.x <= new_w && y_off + e.y >= 0 && y_off + e.y < new_h
+        }
     });
 }
 
@@ -390,10 +419,20 @@ fn ensure_seam_connectivity(
     } else {
         MaterialClass::SheetSteel
     };
-    let span = if matches!(dir, MapContinuationDir::East | MapContinuationDir::West) { h } else { w };
+    let span = if matches!(dir, MapContinuationDir::East | MapContinuationDir::West) {
+        h
+    } else {
+        w
+    };
     // Try opening/adding doors along the seam where blocking walls exist until connected.
     for step in 0..span {
-        let t = (span / 2 + if step % 2 == 0 { step / 2 } else { -(step + 1) / 2 }).clamp(0, span - 1);
+        let t = (span / 2
+            + if step % 2 == 0 {
+                step / 2
+            } else {
+                -(step + 1) / 2
+            })
+        .clamp(0, span - 1);
         let (x, y, side, px_a, py_a, px_b, py_b) = match dir {
             MapContinuationDir::East | MapContinuationDir::West => (
                 seam_coord,
@@ -419,7 +458,16 @@ fn ensure_seam_connectivity(
         {
             clear_props_near(props, px_a, py_a, 1.15);
             clear_props_near(props, px_b, py_b, 1.15);
-            upsert_edge(edges, MapWallEdge { x, y, side, kind: WallEdgeKind::DoorClosed, material: door_mat });
+            upsert_edge(
+                edges,
+                MapWallEdge {
+                    x,
+                    y,
+                    side,
+                    kind: WallEdgeKind::DoorClosed,
+                    material: door_mat,
+                },
+            );
             if all_walkable_areas_connected(w, h, edges, props) {
                 return;
             }
@@ -479,9 +527,17 @@ pub fn continue_procedural_map(
     let strip_depth = continuation_strip_depth(existing, dir);
     let ((new_w, new_h), (dx_cells, dy_cells), (added_w, added_h)) = match dir {
         MapContinuationDir::East => ((old_w + strip_depth, old_h), (0, 0), (strip_depth, old_h)),
-        MapContinuationDir::West => ((old_w + strip_depth, old_h), (strip_depth, 0), (strip_depth, old_h)),
+        MapContinuationDir::West => (
+            (old_w + strip_depth, old_h),
+            (strip_depth, 0),
+            (strip_depth, old_h),
+        ),
         MapContinuationDir::South => ((old_w, old_h + strip_depth), (0, 0), (old_w, strip_depth)),
-        MapContinuationDir::North => ((old_w, old_h + strip_depth), (0, strip_depth), (old_w, strip_depth)),
+        MapContinuationDir::North => (
+            (old_w, old_h + strip_depth),
+            (0, strip_depth),
+            (old_w, strip_depth),
+        ),
     };
 
     let prev_active_floor = base.active_floor;
@@ -493,7 +549,8 @@ pub fn continue_procedural_map(
     }
 
     let mut existing_sectors = bootstrap_world_sectors_if_empty(&base);
-    let chunk_plans = partition_continuation_seam_by_world_sectors(&existing_sectors, old_w, old_h, dir);
+    let chunk_plans =
+        partition_continuation_seam_by_world_sectors(&existing_sectors, old_w, old_h, dir);
 
     // Snapshot boundary features on `base` before translating coordinates.
     let seam_slices: Vec<BoundarySeamSlice> = chunk_plans
@@ -571,15 +628,32 @@ pub fn continue_procedural_map(
             spec.zoning,
         );
         orient_sector_to_shared_road(&mut sec, cw, ch, spec.preferred_road_side, mirror_sector);
-        align_chunk_ribbons(&mut sec, spec.preset, &slice.ribbons, cw, ch, dir, mirror_sector);
+        align_chunk_ribbons(
+            &mut sec,
+            spec.preset,
+            &slice.ribbons,
+            cw,
+            ch,
+            dir,
+            mirror_sector,
+        );
         reconcile_chunk_entry_seam(
             &mut sec,
             spec.preset,
             slice,
-            SeamPlacement { x_off, y_off, cw, ch, new_w, new_h, dir },
+            SeamPlacement {
+                x_off,
+                y_off,
+                cw,
+                ch,
+                new_w,
+                new_h,
+                dir,
+            },
             &mut base.wall_edges,
         );
-        let boundary = compute_sector_boundary_profile(cw, ch, &sec.wall_edges, &sec.surfaces, &sec.props);
+        let boundary =
+            compute_sector_boundary_profile(cw, ch, &sec.wall_edges, &sec.surfaces, &sec.props);
         existing_sectors.push(satya_schema::WorldSectorCell {
             sector_x: plan.target_sector_coord.0,
             sector_y: plan.target_sector_coord.1,
@@ -635,7 +709,15 @@ pub fn continue_procedural_map(
         MapContinuationDir::South => old_h,
         MapContinuationDir::North => strip_depth,
     };
-    ensure_seam_connectivity(new_w, new_h, &mut base.wall_edges, &mut base.props, last_chunk_preset, dir, seam_coord);
+    ensure_seam_connectivity(
+        new_w,
+        new_h,
+        &mut base.wall_edges,
+        &mut base.props,
+        last_chunk_preset,
+        dir,
+        seam_coord,
+    );
 
     // Also verify sibling seams when the continued strip spans > 1 chunk.
     for slice in seam_slices.iter().skip(1) {
@@ -644,7 +726,15 @@ pub fn continue_procedural_map(
         } else {
             MapContinuationDir::East
         };
-        ensure_seam_connectivity(new_w, new_h, &mut base.wall_edges, &mut base.props, last_chunk_preset, sib_dir, slice.t0);
+        ensure_seam_connectivity(
+            new_w,
+            new_h,
+            &mut base.wall_edges,
+            &mut base.props,
+            last_chunk_preset,
+            sib_dir,
+            slice.t0,
+        );
     }
 
     if !base.floors.is_empty() {

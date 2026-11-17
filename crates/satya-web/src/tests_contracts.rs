@@ -61,7 +61,11 @@ fn extract_window_satya_calls(src: &str) -> BTreeSet<String> {
         if ident_len > "satya".len() {
             let ident = &after[..ident_len];
             // Only match invoked/referenced callback functions (`satyaFoo`), not internal state fields (`_satya...`)
-            if ident.as_bytes().get(5).is_some_and(|c| c.is_ascii_uppercase()) {
+            if ident
+                .as_bytes()
+                .get(5)
+                .is_some_and(|c| c.is_ascii_uppercase())
+            {
                 found.insert(ident.to_string());
             }
         }
@@ -84,10 +88,8 @@ fn test_ssr_dom_ids_are_globally_unique() {
     for id in &ids {
         *counts.entry(id.as_str()).or_insert(0) += 1;
     }
-    let duplicates: Vec<(&str, usize)> = counts
-        .into_iter()
-        .filter(|(_, count)| *count > 1)
-        .collect();
+    let duplicates: Vec<(&str, usize)> =
+        counts.into_iter().filter(|(_, count)| *count > 1).collect();
     assert!(
         duplicates.is_empty(),
         "duplicate DOM element IDs found in SSR HTML: {duplicates:?}"
@@ -128,7 +130,9 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
         combined_html.push_str(&wasm_client::format_character_sheet_html(&s));
     }
     combined_html.push('\n');
-    combined_html.push_str(&wasm_client::format_ttrpg_skill_dropdown_html("surg", &sheet));
+    combined_html.push_str(&wasm_client::format_ttrpg_skill_dropdown_html(
+        "surg", &sheet,
+    ));
     combined_html.push('\n');
     let (rules_html, _) = wasm_client::format_rules_chapter_html("tasks");
     combined_html.push_str(&rules_html);
@@ -156,6 +160,99 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
     combined_html.push('\n');
     combined_html.push_str(&recip_html);
 
+    let gm_docs_html = crate::wasm_client::gm_docs::format_gm_documents_list_html(&[
+        satya_schema::GmDocumentRecord {
+            doc_id: "doc_contract".to_string(),
+            session_id: "sess-c".to_string(),
+            uploader_user_id: "u-gm".to_string(),
+            uploader_display_name: "GM".to_string(),
+            title: "Brief".to_string(),
+            source_kind: satya_schema::GmDocumentSource::DirectTextUpload,
+            google_file_id: None,
+            visibility: satya_schema::MessageVisibility::GmOnly,
+            sanitized_content: "Classified".to_string(),
+            char_count: 10,
+            safety_flagged: false,
+            is_persistent: true,
+            campaign_tag: Some("awakened".to_string()),
+            created_at_us: 1,
+        },
+    ]);
+    let gm_mems_html =
+        crate::wasm_client::gm_memories_and_director::format_gm_memories_list_html(&[
+            satya_schema::GmMemoryNoteRecord {
+                memory_id: "mem_contract".to_string(),
+                session_id: "sess-c".to_string(),
+                campaign_tag: "awakened".to_string(),
+                author_user_id: "u-gm".to_string(),
+                author_display_name: "GM".to_string(),
+                category: satya_schema::GmMemoryCategory::SceneState,
+                title: "Clock".to_string(),
+                content: "Tick".to_string(),
+                is_pinned: false,
+                is_persistent: true,
+                updated_at_us: 1,
+            },
+        ]);
+    let omnisearch_html = crate::wasm_client::gm_omnisearch::format_gm_omnisearch_hits_html(
+        &satya_schema::GmOmnisearchResponse {
+            session_id: "sess-c".to_string(),
+            campaign_tag: "awakened".to_string(),
+            query: String::new(),
+            scope: "ALL".to_string(),
+            hits: vec![
+                satya_schema::GmLookupHit {
+                    source_kind: satya_schema::GmLookupSourceKind::GmDocument,
+                    item_id: "doc_contract".to_string(),
+                    title: "Brief".to_string(),
+                    subtitle: "TEXT".to_string(),
+                    snippet: "Classified".to_string(),
+                    is_persistent: true,
+                    score: 25,
+                },
+                satya_schema::GmLookupHit {
+                    source_kind: satya_schema::GmLookupSourceKind::GmMemory,
+                    item_id: "mem_contract".to_string(),
+                    title: "Clock".to_string(),
+                    subtitle: "GM Memory [SCENE_STATE]".to_string(),
+                    snippet: "Tick".to_string(),
+                    is_persistent: true,
+                    score: 25,
+                },
+                satya_schema::GmLookupHit {
+                    source_kind: satya_schema::GmLookupSourceKind::SessionNpc,
+                    item_id: "npc_contract".to_string(),
+                    title: "Sammat".to_string(),
+                    subtitle: "Session NPC · Broker · Healthy & Alert".to_string(),
+                    snippet: "Broker".to_string(),
+                    is_persistent: true,
+                    score: 48,
+                },
+            ],
+        },
+    );
+    let npc_card_html = crate::wasm_client::npcs::format_npc_card_html(
+        &satya_schema::SessionNpcEntry {
+            character_id: "npc_contract".to_string(),
+            character_name: "Sammat".to_string(),
+            callsign_or_role: "Broker".to_string(),
+            age_years: 34,
+            public_summary: "Broker".to_string(),
+            apparent_condition: "Healthy & Alert".to_string(),
+            is_persistent: true,
+            ..Default::default()
+        },
+        true,
+    );
+    combined_html.push('\n');
+    combined_html.push_str(&gm_docs_html);
+    combined_html.push('\n');
+    combined_html.push_str(&gm_mems_html);
+    combined_html.push('\n');
+    combined_html.push_str(&omnisearch_html);
+    combined_html.push('\n');
+    combined_html.push_str(&npc_card_html);
+
     let referenced = extract_window_satya_calls(&combined_html);
     assert!(
         referenced.len() >= 90,
@@ -175,7 +272,10 @@ fn test_ssr_and_dynamic_window_callbacks_match_registered_bindings() {
 #[test]
 fn test_appearance_themes_bootstrap_and_css_parity() {
     let html = render_satya_app_html();
-    assert!(WASM_BOOTSTRAP_LOADER.contains(r#"["theme", "data-theme", "menu-theme-select", "obsidian"]"#));
+    assert!(
+        WASM_BOOTSTRAP_LOADER
+            .contains(r#"["theme", "data-theme", "menu-theme-select", "obsidian"]"#)
+    );
 
     for &(theme_id, _label) in wasm_client::APPEARANCE_THEME_OPTIONS {
         assert_eq!(
@@ -274,10 +374,7 @@ fn test_phase2_psyche_9_linnea_cho_and_faction_templates() {
     assert_eq!(sheet.characteristics.trs, 12);
     assert_eq!(sheet.characteristics.cps, 17);
     assert_eq!(sheet.faction_id.as_deref(), Some("SATYANG"));
-    assert_eq!(
-        sheet.faction_archetype.as_deref(),
-        Some("SATYANG_MANJUSRI")
-    );
+    assert_eq!(sheet.faction_archetype.as_deref(), Some("SATYANG_MANJUSRI"));
     let sheet_html = wasm_client::format_character_sheet_html(&sheet);
     assert!(sheet_html.contains("Satyang"));
     assert!(sheet_html.contains("Psyche Profile (9 Bipolar Disposition Traits"));
@@ -285,8 +382,16 @@ fn test_phase2_psyche_9_linnea_cho_and_faction_templates() {
     assert!(sheet_html.contains("Compassion"));
 
     let record = sheet.to_character_sheet_record("usr-linnea");
-    assert!(record.sp_budget_valid, "violations: {:?}", record.audit_violations);
-    assert!(record.dag_prereqs_valid, "violations: {:?}", record.audit_violations);
+    assert!(
+        record.sp_budget_valid,
+        "violations: {:?}",
+        record.audit_violations
+    );
+    assert!(
+        record.dag_prereqs_valid,
+        "violations: {:?}",
+        record.audit_violations
+    );
     let bytes = wasm_client::encode_offline_satyachar_bytes(&record, Some("sess-linnea"))
         .expect("v2 .satyachar encode must succeed");
     let decoded = wasm_client::decode_offline_satyachar_bytes(&bytes)

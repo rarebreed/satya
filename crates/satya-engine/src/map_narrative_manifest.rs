@@ -173,21 +173,28 @@ pub struct PassivePerceptionWhisper {
 
 fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
     match kind {
-        PropKind::HospitalBed | PropKind::SurgicalTable | PropKind::ImagingScanner | PropKind::PrivacyCurtain => {
-            Some(("clinical_medical", "Clinical / Triage Bay"))
-        }
+        PropKind::HospitalBed
+        | PropKind::SurgicalTable
+        | PropKind::ImagingScanner
+        | PropKind::PrivacyCurtain => Some(("clinical_medical", "Clinical / Triage Bay")),
         PropKind::DisplayRack | PropKind::CheckoutCounter | PropKind::MallKiosk => {
             Some(("retail_concourse", "Retail Concourse / Counter"))
         }
-        PropKind::ConveyorBelt | PropKind::IndustrialPress | PropKind::PalletRack | PropKind::Forklift | PropKind::ShippingContainer => {
+        PropKind::ConveyorBelt
+        | PropKind::IndustrialPress
+        | PropKind::PalletRack
+        | PropKind::Forklift
+        | PropKind::ShippingContainer => {
             Some(("industrial_logistics", "Industrial / Logistics Floor"))
         }
         PropKind::Desk | PropKind::DeskL | PropKind::DeskT | PropKind::Bookshelf => {
             Some(("office_ops", "Command / Office Suite"))
         }
-        PropKind::BarCounter | PropKind::BackBarShelf | PropKind::Booth | PropKind::PoolTable | PropKind::Jukebox => {
-            Some(("hospitality_lounge", "Bar / Hospitality Lounge"))
-        }
+        PropKind::BarCounter
+        | PropKind::BackBarShelf
+        | PropKind::Booth
+        | PropKind::PoolTable
+        | PropKind::Jukebox => Some(("hospitality_lounge", "Bar / Hospitality Lounge")),
         PropKind::Sofa
         | PropKind::Loveseat
         | PropKind::Bed
@@ -203,9 +210,7 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::DeskLamp
         | PropKind::StandingLamp
         | PropKind::FloorClothes
-        | PropKind::FloorToys => {
-            Some(("residential_quarters", "Living Quarters / Unit"))
-        }
+        | PropKind::FloorToys => Some(("residential_quarters", "Living Quarters / Unit")),
         PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier | PropKind::StreetDebris => {
             Some(("vehicle_perimeter", "Curbside / Vehicle Perimeter"))
         }
@@ -220,14 +225,15 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::Gazebo
         | PropKind::BbqGrill
         | PropKind::GardenShed
-        | PropKind::HotTub => {
-            Some(("exterior_grounds", "Exterior / Greenbelt Grounds"))
-        }
+        | PropKind::HotTub => Some(("exterior_grounds", "Exterior / Greenbelt Grounds")),
         PropKind::FireExtinguisher => Some(("office_ops", "Safety & Utility Fixture")),
         PropKind::TrashCan | PropKind::GarbagePile | PropKind::AcUnit => {
             Some(("utility_service", "Service / Utility Yard"))
         }
-        PropKind::Stairwell => Some(("vertical_stairwell", "Stairwell / Vertical Access")),
+        PropKind::Stairwell | PropKind::ElevatorCar | PropKind::ServiceElevator => {
+            Some(("vertical_stairwell", "Stairwell / Vertical Access"))
+        }
+        PropKind::NurseStation => Some(("nurse_station", "Nursing Station / Triage Hub")),
         PropKind::HazardSpill => Some(("hazard_spill", "Hazardous Spill Zone")),
         _ => None,
     }
@@ -236,18 +242,29 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
 fn surface_semantic_label(kind: SurfaceFeatureKind) -> &'static str {
     match kind {
         SurfaceFeatureKind::AsphaltRoad | SurfaceFeatureKind::GravelRoad => "Roadway Corridor",
-        SurfaceFeatureKind::ConcreteWalk | SurfaceFeatureKind::StoneWalk => "Pedestrian Plaza / Walk",
+        SurfaceFeatureKind::ConcreteWalk
+        | SurfaceFeatureKind::StoneWalk
+        | SurfaceFeatureKind::BrickPaverWalk => "Pedestrian Plaza / Walk",
         SurfaceFeatureKind::WoodDeck => "Timber Deck / Porch",
         SurfaceFeatureKind::PoolWater => "Swimming Pool Basin",
         SurfaceFeatureKind::InteriorFloor
         | SurfaceFeatureKind::CeramicTileFloor
         | SurfaceFeatureKind::MarbleFloor
-        | SurfaceFeatureKind::CarpetFloor => "Building Interior Wing",
+        | SurfaceFeatureKind::CarpetFloor
+        | SurfaceFeatureKind::StainedConcreteFloor
+        | SurfaceFeatureKind::ClinicalVinylFloor
+        | SurfaceFeatureKind::LinoleumCheckFloor
+        | SurfaceFeatureKind::TerrazzoFloor
+        | SurfaceFeatureKind::SteelPlateFloor => "Building Interior Wing",
         SurfaceFeatureKind::BridgeDeck => "Bridge / Overpass Span",
-        SurfaceFeatureKind::CreekChannel | SurfaceFeatureKind::DrainageDitch => "Waterway / Drainage Cut",
+        SurfaceFeatureKind::CreekChannel | SurfaceFeatureKind::DrainageDitch => {
+            "Waterway / Drainage Cut"
+        }
         SurfaceFeatureKind::DefensiveTrench => "Excavated Trench / Earthwork",
         SurfaceFeatureKind::DirtTrail => "Unpaved Dirt Trail",
-        SurfaceFeatureKind::GardenBedZone | SurfaceFeatureKind::MulchZone => "Landscaped Grounds",
+        SurfaceFeatureKind::LawnGrassZone
+        | SurfaceFeatureKind::GardenBedZone
+        | SurfaceFeatureKind::MulchZone => "Landscaped Grounds",
     }
 }
 
@@ -270,7 +287,15 @@ fn find_clear_anchor_near(
                 let y = (target_y_m + dy as f32).clamp(1.0, (h_m - 1.0).max(1.0));
                 let x_m = (x * 100.0).round() / 100.0;
                 let y_m = (y * 100.0).round() / 100.0;
-                if !circle_collides_obstacles(w_m, h_m, &map.wall_edges, &map.props, x_m, y_m, TOKEN_RADIUS_M) {
+                if !circle_collides_obstacles(
+                    w_m,
+                    h_m,
+                    &map.wall_edges,
+                    &map.props,
+                    x_m,
+                    y_m,
+                    TOKEN_RADIUS_M,
+                ) {
                     return Some(WalkableAnchorPoint {
                         label: label.to_string(),
                         floor_index,
@@ -328,15 +353,17 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
         };
         let fp = p.footprint_m();
         let obs = prop_spec(p.kind).obstruction;
-        let entry = grouped.entry(format!("prop_{zone_key}")).or_insert_with(|| Acc {
-            category: "Interior / Prop Cluster".to_string(),
-            label: zone_label.to_string(),
-            sum_x: 0.0,
-            sum_y: 0.0,
-            count: 0,
-            cover_props: 0,
-            concealment_props: 0,
-        });
+        let entry = grouped
+            .entry(format!("prop_{zone_key}"))
+            .or_insert_with(|| Acc {
+                category: "Interior / Prop Cluster".to_string(),
+                label: zone_label.to_string(),
+                sum_x: 0.0,
+                sum_y: 0.0,
+                count: 0,
+                cover_props: 0,
+                concealment_props: 0,
+            });
         entry.sum_x += fp.cx_m;
         entry.sum_y += fp.cy_m;
         entry.count += 1;
@@ -351,10 +378,13 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
         if surf.points_cm.is_empty() {
             continue;
         }
-        let (sx, sy) = surf.points_cm.iter().fold((0.0_f32, 0.0_f32), |(ax, ay), pt| {
-            let (mx, my) = pt.to_m();
-            (ax + mx, ay + my)
-        });
+        let (sx, sy) = surf
+            .points_cm
+            .iter()
+            .fold((0.0_f32, 0.0_f32), |(ax, ay), pt| {
+                let (mx, my) = pt.to_m();
+                (ax + mx, ay + my)
+            });
         let n = surf.points_cm.len() as f32;
         let key = format!("surf_{}", surf.kind.as_str().to_ascii_lowercase());
         let entry = grouped.entry(key).or_insert_with(|| Acc {
@@ -387,7 +417,11 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
             concealment_prop_count: acc.concealment_props,
         })
         .collect();
-    zones.sort_by(|a, b| b.feature_count.cmp(&a.feature_count).then_with(|| a.zone_id.cmp(&b.zone_id)));
+    zones.sort_by(|a, b| {
+        b.feature_count
+            .cmp(&a.feature_count)
+            .then_with(|| a.zone_id.cmp(&b.zone_id))
+    });
 
     let sectors = bootstrap_world_sectors_if_empty(map);
     let dirs = [
@@ -456,7 +490,11 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
         height_m,
         map.active_floor,
         floor_names.join(", "),
-        if zone_names.is_empty() { "Open Floorplan".to_string() } else { zone_names.join("; ") },
+        if zone_names.is_empty() {
+            "Open Floorplan".to_string()
+        } else {
+            zone_names.join("; ")
+        },
         exit_names.join(" | "),
     );
 
@@ -479,7 +517,10 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
 // §4 Passive Movement Perception Evaluation (`SIG` / `HEA` / `OLF` / `ITU`)
 // ============================================================================
 
-fn observer_passive_score(sheet: Option<&CharacterSheetRecord>, channel: SpatialSensoryChannel) -> i32 {
+fn observer_passive_score(
+    sheet: Option<&CharacterSheetRecord>,
+    channel: SpatialSensoryChannel,
+) -> i32 {
     let Some(rec) = sheet else {
         return 10;
     };
@@ -489,9 +530,16 @@ fn observer_passive_score(sheet: Option<&CharacterSheetRecord>, channel: Spatial
         SpatialSensoryChannel::Olfaction => rec.characteristics.olf,
         SpatialSensoryChannel::Intuition => rec.characteristics.itu,
     };
-    let alertness = rec.skills.get("alertness_situational_awareness").copied().unwrap_or(0);
+    let alertness = rec
+        .skills
+        .get("alertness_situational_awareness")
+        .copied()
+        .unwrap_or(0);
     let empathy = if channel == SpatialSensoryChannel::Intuition {
-        rec.skills.get("empathy_social_perception").copied().unwrap_or(0)
+        rec.skills
+            .get("empathy_social_perception")
+            .copied()
+            .unwrap_or(0)
     } else {
         0
     };
@@ -546,7 +594,10 @@ fn evaluate_single_pin(
     })
 }
 
-fn synthesize_environment_pins(map: &GmMapUpdateRequest, exclude_entity: &str) -> Vec<SpatialSensoryPin> {
+fn synthesize_environment_pins(
+    map: &GmMapUpdateRequest,
+    exclude_entity: &str,
+) -> Vec<SpatialSensoryPin> {
     let mut pins = Vec::new();
     for (idx, prop) in map.props.iter().enumerate() {
         if prop.kind == PropKind::HazardSpill {
@@ -559,7 +610,9 @@ fn synthesize_environment_pins(map: &GmMapUpdateRequest, exclude_entity: &str) -
                 channel: SpatialSensoryChannel::Olfaction,
                 difficulty_tn: 10,
                 max_range_m: 9.0,
-                whisper_text: "Sharp chemical / plasma residue hangs in the air near a nearby hazard spill.".to_string(),
+                whisper_text:
+                    "Sharp chemical / plasma residue hangs in the air near a nearby hazard spill."
+                        .to_string(),
                 revealed_to: Vec::new(),
             });
         }
@@ -672,7 +725,11 @@ pub fn evaluate_passive_movement_perceptions(
         }
     }
 
-    whispers.sort_by(|a, b| b.margin.cmp(&a.margin).then_with(|| a.pin_id.cmp(&b.pin_id)));
+    whispers.sort_by(|a, b| {
+        b.margin
+            .cmp(&a.margin)
+            .then_with(|| a.pin_id.cmp(&b.pin_id))
+    });
     whispers
 }
 
@@ -724,7 +781,8 @@ mod tests {
             ..CharacterSheetRecord::default()
         };
         pc.characteristics.sig = 15;
-        pc.skills.insert("alertness_situational_awareness".to_string(), 3);
+        pc.skills
+            .insert("alertness_situational_awareness".to_string(), 3);
 
         let pin = SpatialSensoryPin {
             pin_id: "pin-blood-swab".to_string(),
@@ -734,11 +792,16 @@ mod tests {
             channel: SpatialSensoryChannel::Sight,
             difficulty_tn: 13,
             max_range_m: 8.0,
-            whisper_text: "Micro-hairline fracture and wiped reagent swab under the trolley.".to_string(),
+            whisper_text: "Micro-hairline fracture and wiped reagent swab under the trolley."
+                .to_string(),
             revealed_to: Vec::new(),
         };
 
         let whispers = evaluate_passive_movement_perceptions(&map, &tok_id, &[pc], &[pin]);
-        assert!(whispers.iter().any(|w| w.pin_id == "pin-blood-swab" && w.characteristic_code == "SIG"));
+        assert!(
+            whispers
+                .iter()
+                .any(|w| w.pin_id == "pin-blood-swab" && w.characteristic_code == "SIG")
+        );
     }
 }

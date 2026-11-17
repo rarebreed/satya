@@ -849,7 +849,9 @@ pub fn generate_npc_from_prompt_with_pack(
                 .as_ref()
                 .and_then(|s| s.preferred_hobbies.get(term_idx + 1).copied()),
             life_event_roll_2d20: if term_idx == 0 {
-                spec_opt.as_ref().map(|s| s.recommended_life_event_roll_2d20)
+                spec_opt
+                    .as_ref()
+                    .map(|s| s.recommended_life_event_roll_2d20)
             } else {
                 None
             },

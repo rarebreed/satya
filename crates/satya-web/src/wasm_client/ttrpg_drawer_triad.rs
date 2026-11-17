@@ -336,12 +336,18 @@ mod tests {
         let mut env = compute_active_drawer_envelope(12, 3, false, 0, 0.0);
         for preset in ["balanced", "blitz_tempo", "max_control", "heavy_force"] {
             let (t, c, f) = compute_preset_triad_allocation(&env, preset);
-            assert!(t >= 0 && t <= env.tempo_cap, "tempo cap violated for {preset}");
+            assert!(
+                t >= 0 && t <= env.tempo_cap,
+                "tempo cap violated for {preset}"
+            );
             assert!(
                 c >= 0 && c <= env.control_cap,
                 "control cap violated for {preset}"
             );
-            assert!(f >= 0 && f <= env.force_cap, "force cap violated for {preset}");
+            assert!(
+                f >= 0 && f <= env.force_cap,
+                "force cap violated for {preset}"
+            );
             assert!(
                 t + c + f <= env.p_eff,
                 "sum {} exceeded p_eff {} for {preset}",

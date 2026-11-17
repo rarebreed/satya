@@ -482,7 +482,11 @@ pub async fn gm_session_map_handler(
             &mut req.props,
         );
         req.tiles.clear();
-    } else if req.wall_edges.is_empty() && req.props.is_empty() && req.grid_width >= 4 && req.grid_height >= 4 {
+    } else if req.wall_edges.is_empty()
+        && req.props.is_empty()
+        && req.grid_width >= 4
+        && req.grid_height >= 4
+    {
         let preset = req
             .theme_preset
             .as_deref()

@@ -80,42 +80,240 @@ pub struct BattlemapTextureSpec {
 
 /// Complete 33-tile battlemap texture catalog synchronized with `src/satya_ml/texture_gen/catalog.py`.
 pub const BATTLEMAP_TEXTURE_SPECS: &[BattlemapTextureSpec] = &[
-    BattlemapTextureSpec { pattern_id: "bm-grass", asset_file: "grass_meadow.webp", span_px: 256, fallback_hex: "#638045" },
-    BattlemapTextureSpec { pattern_id: "bm-gravel", asset_file: "gravel_shoal.webp", span_px: 128, fallback_hex: "#b7afa2" },
-    BattlemapTextureSpec { pattern_id: "bm-tarmac", asset_file: "asphalt_road.webp", span_px: 256, fallback_hex: "#55585c" },
-    BattlemapTextureSpec { pattern_id: "bm-oak", asset_file: "wood_oak.webp", span_px: 128, fallback_hex: "#a47b55" },
-    BattlemapTextureSpec { pattern_id: "bm-dirt", asset_file: "packed_dirt.webp", span_px: 192, fallback_hex: "#9e8260" },
-    BattlemapTextureSpec { pattern_id: "bm-mulch", asset_file: "bark_mulch.webp", span_px: 128, fallback_hex: "#5c402c" },
-    BattlemapTextureSpec { pattern_id: "bm-creek", asset_file: "creek_water.webp", span_px: 192, fallback_hex: "#4689a3" },
-    BattlemapTextureSpec { pattern_id: "bm-ditch", asset_file: "drainage_ditch.webp", span_px: 128, fallback_hex: "#546854" },
-    BattlemapTextureSpec { pattern_id: "bm-paver", asset_file: "flagstone_paver.webp", span_px: 128, fallback_hex: "#cfc7b8" },
-    BattlemapTextureSpec { pattern_id: "bm-concrete", asset_file: "concrete_slab.webp", span_px: 256, fallback_hex: "#bdb9b0" },
-    BattlemapTextureSpec { pattern_id: "bm-stained-conc", asset_file: "stained_concrete.webp", span_px: 256, fallback_hex: "#a8a397" },
-    BattlemapTextureSpec { pattern_id: "bm-hardwood", asset_file: "hardwood_plank.webp", span_px: 128, fallback_hex: "#c8a57e" },
-    BattlemapTextureSpec { pattern_id: "bm-vinyl", asset_file: "vinyl_tile.webp", span_px: 128, fallback_hex: "#d4d8dc" },
-    BattlemapTextureSpec { pattern_id: "bm-leaf-tex", asset_file: "foliage_canopy.webp", span_px: 128, fallback_hex: "#4b7b37" },
-    BattlemapTextureSpec { pattern_id: "bm-rock", asset_file: "granite_boulder.webp", span_px: 128, fallback_hex: "#7b7972" },
-    BattlemapTextureSpec { pattern_id: "bm-fabric", asset_file: "woven_fabric.webp", span_px: 96, fallback_hex: "#d6d3cd" },
-    BattlemapTextureSpec { pattern_id: "bm-steel", asset_file: "brushed_steel.webp", span_px: 128, fallback_hex: "#9aa2a9" },
-    BattlemapTextureSpec { pattern_id: "bm-roof-gravel", asset_file: "rooftop_gravel.webp", span_px: 128, fallback_hex: "#736f68" },
-    BattlemapTextureSpec { pattern_id: "bm-ceramic", asset_file: "ceramic_tile.webp", span_px: 96, fallback_hex: "#dfe5e8" },
-    BattlemapTextureSpec { pattern_id: "bm-brick", asset_file: "brick_masonry.webp", span_px: 96, fallback_hex: "#9c5a49" },
-    BattlemapTextureSpec { pattern_id: "bm-spill", asset_file: "hazard_spill.webp", span_px: 128, fallback_hex: "#9db82c" },
-    BattlemapTextureSpec { pattern_id: "bm-marble", asset_file: "marble_floor.webp", span_px: 128, fallback_hex: "#eceae6" },
-    BattlemapTextureSpec { pattern_id: "bm-terracotta", asset_file: "terracotta_tile.webp", span_px: 112, fallback_hex: "#c67856" },
-    BattlemapTextureSpec { pattern_id: "bm-carpet", asset_file: "carpet_plush.webp", span_px: 96, fallback_hex: "#c5bdb1" },
-    BattlemapTextureSpec { pattern_id: "bm-pool-water", asset_file: "pool_water.webp", span_px: 160, fallback_hex: "#38b6d6" },
-    BattlemapTextureSpec { pattern_id: "bm-wood-deck", asset_file: "wood_deck.webp", span_px: 128, fallback_hex: "#9c6a47" },
-    BattlemapTextureSpec { pattern_id: "bm-hardwood-walnut", asset_file: "hardwood_walnut.webp", span_px: 128, fallback_hex: "#5d3f2c" },
-    BattlemapTextureSpec { pattern_id: "bm-hardwood-ash", asset_file: "hardwood_ash.webp", span_px: 128, fallback_hex: "#d9c6a3" },
-    BattlemapTextureSpec { pattern_id: "bm-gravel-pea", asset_file: "gravel_pea.webp", span_px: 128, fallback_hex: "#c8b38d" },
-    BattlemapTextureSpec { pattern_id: "bm-gravel-slate", asset_file: "gravel_slate.webp", span_px: 128, fallback_hex: "#5b6169" },
-    BattlemapTextureSpec { pattern_id: "bm-grass-lush", asset_file: "grass_lush.webp", span_px: 192, fallback_hex: "#4e8442" },
-    BattlemapTextureSpec { pattern_id: "bm-grass-dry", asset_file: "grass_dry.webp", span_px: 192, fallback_hex: "#9e9555" },
-    BattlemapTextureSpec { pattern_id: "bm-wood-veneer", asset_file: "wood_veneer.webp", span_px: 128, fallback_hex: "#d4cfc7" },
+    BattlemapTextureSpec {
+        pattern_id: "bm-grass",
+        asset_file: "grass_meadow.webp",
+        span_px: 256,
+        fallback_hex: "#638045",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-gravel",
+        asset_file: "gravel_shoal.webp",
+        span_px: 128,
+        fallback_hex: "#b7afa2",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-tarmac",
+        asset_file: "asphalt_road.webp",
+        span_px: 256,
+        fallback_hex: "#55585c",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-oak",
+        asset_file: "wood_oak.webp",
+        span_px: 128,
+        fallback_hex: "#a47b55",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-dirt",
+        asset_file: "packed_dirt.webp",
+        span_px: 192,
+        fallback_hex: "#9e8260",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-mulch",
+        asset_file: "bark_mulch.webp",
+        span_px: 128,
+        fallback_hex: "#5c402c",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-creek",
+        asset_file: "creek_water.webp",
+        span_px: 192,
+        fallback_hex: "#4689a3",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-ditch",
+        asset_file: "drainage_ditch.webp",
+        span_px: 128,
+        fallback_hex: "#546854",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-paver",
+        asset_file: "flagstone_paver.webp",
+        span_px: 128,
+        fallback_hex: "#cfc7b8",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-concrete",
+        asset_file: "concrete_slab.webp",
+        span_px: 256,
+        fallback_hex: "#bdb9b0",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-stained-conc",
+        asset_file: "stained_concrete.webp",
+        span_px: 256,
+        fallback_hex: "#a8a397",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-hardwood",
+        asset_file: "hardwood_plank.webp",
+        span_px: 128,
+        fallback_hex: "#c8a57e",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-vinyl",
+        asset_file: "vinyl_tile.webp",
+        span_px: 128,
+        fallback_hex: "#d4d8dc",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-leaf-tex",
+        asset_file: "foliage_canopy.webp",
+        span_px: 128,
+        fallback_hex: "#4b7b37",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-rock",
+        asset_file: "granite_boulder.webp",
+        span_px: 128,
+        fallback_hex: "#7b7972",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-fabric",
+        asset_file: "woven_fabric.webp",
+        span_px: 96,
+        fallback_hex: "#d6d3cd",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-steel",
+        asset_file: "brushed_steel.webp",
+        span_px: 128,
+        fallback_hex: "#9aa2a9",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-roof-gravel",
+        asset_file: "rooftop_gravel.webp",
+        span_px: 128,
+        fallback_hex: "#736f68",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-ceramic",
+        asset_file: "ceramic_tile.webp",
+        span_px: 96,
+        fallback_hex: "#dfe5e8",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-brick",
+        asset_file: "brick_masonry.webp",
+        span_px: 96,
+        fallback_hex: "#9c5a49",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-spill",
+        asset_file: "hazard_spill.webp",
+        span_px: 128,
+        fallback_hex: "#9db82c",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-marble",
+        asset_file: "marble_floor.webp",
+        span_px: 128,
+        fallback_hex: "#eceae6",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-terracotta",
+        asset_file: "terracotta_tile.webp",
+        span_px: 112,
+        fallback_hex: "#c67856",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-carpet",
+        asset_file: "carpet_plush.webp",
+        span_px: 96,
+        fallback_hex: "#c5bdb1",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-pool-water",
+        asset_file: "pool_water.webp",
+        span_px: 160,
+        fallback_hex: "#38b6d6",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-wood-deck",
+        asset_file: "wood_deck.webp",
+        span_px: 128,
+        fallback_hex: "#9c6a47",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-hardwood-walnut",
+        asset_file: "hardwood_walnut.webp",
+        span_px: 128,
+        fallback_hex: "#5d3f2c",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-hardwood-ash",
+        asset_file: "hardwood_ash.webp",
+        span_px: 128,
+        fallback_hex: "#d9c6a3",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-gravel-pea",
+        asset_file: "gravel_pea.webp",
+        span_px: 128,
+        fallback_hex: "#c8b38d",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-gravel-slate",
+        asset_file: "gravel_slate.webp",
+        span_px: 128,
+        fallback_hex: "#5b6169",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-grass-lush",
+        asset_file: "grass_lush.webp",
+        span_px: 192,
+        fallback_hex: "#4e8442",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-grass-dry",
+        asset_file: "grass_dry.webp",
+        span_px: 192,
+        fallback_hex: "#9e9555",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-wood-veneer",
+        asset_file: "wood_veneer.webp",
+        span_px: 128,
+        fallback_hex: "#d4cfc7",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-clinical-vinyl",
+        asset_file: "clinical_vinyl.webp",
+        span_px: 128,
+        fallback_hex: "#d2dce0",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-linoleum-check",
+        asset_file: "linoleum_check.webp",
+        span_px: 128,
+        fallback_hex: "#cbd2d6",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-terrazzo",
+        asset_file: "terrazzo_stone.webp",
+        span_px: 128,
+        fallback_hex: "#d8d4cb",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-herringbone-brick",
+        asset_file: "herringbone_brick.webp",
+        span_px: 128,
+        fallback_hex: "#a2614c",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-server-tile",
+        asset_file: "server_raised_tile.webp",
+        span_px: 128,
+        fallback_hex: "#2d353e",
+    },
 ];
 
-fn floor_webp_spec_for_theme_seeded(t: &BattlemapArtTheme, seed: i64) -> (&'static str, i32, &'static str) {
+fn floor_webp_spec_for_theme_seeded(
+    t: &BattlemapArtTheme,
+    seed: i64,
+) -> (&'static str, i32, &'static str) {
     if t.id == "clinic" {
         return ("ceramic_tile.webp", 96, t.floor_base);
     }
@@ -217,6 +415,35 @@ fn push_extra_vector_pattern_defs(out: &mut String) {
     out.push_str(
         r##"<pattern id="bm-roof-gravel" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#736f68"/><circle cx="10" cy="14" r="2" fill="#59554f"/><circle cx="24" cy="22" r="2" fill="#8b877f"/></pattern>"##,
     );
+    out.push_str(
+        r##"<pattern id="bm-clinical-vinyl" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#d2dce0"/><path d="M0 32H64M32 0V64" stroke="#b9c7ce" stroke-width=".9"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-linoleum-check" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#cbd2d6"/><rect width="24" height="24" fill="#b4bec4"/><rect x="24" y="24" width="24" height="24" fill="#b4bec4"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-terrazzo" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#d8d4cb"/><circle cx="14" cy="18" r="2.2" fill="#8e8376"/><circle cx="38" cy="12" r="1.8" fill="#b79678"/><circle cx="46" cy="42" r="2.5" fill="#7a8288"/><circle cx="18" cy="50" r="1.9" fill="#a86d5c"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-herringbone-brick" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#a2614c"/><path d="M0 12H24V24H48M12 24V48M36 0V24" fill="none" stroke="#c8beb3" stroke-width="1.3"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-server-tile" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#2d353e"/><rect x="2" y="2" width="44" height="44" fill="none" stroke="#475569" stroke-width="1.4"/><path d="M12 14h24M12 24h24M12 34h24" stroke="#38bdf8" stroke-opacity=".22" stroke-width="1.2"/></pattern>"##,
+    );
+}
+
+/// Resolves a base ground floor pattern override key (e.g. `"grass_lush"`, `"clinical_vinyl"`)
+/// onto `(pattern_id, asset_file, span_px, fallback_hex)`.
+#[must_use]
+pub fn ground_override_texture_spec(key: &str) -> Option<&'static BattlemapTextureSpec> {
+    let needle = key.trim().to_ascii_lowercase();
+    if needle.is_empty() {
+        return None;
+    }
+    BATTLEMAP_TEXTURE_SPECS.iter().find(|spec| {
+        spec.asset_file.strip_suffix(".webp") == Some(needle.as_str())
+            || spec.pattern_id == needle.as_str()
+    })
 }
 
 /// Appends architectural and material `<pattern>` definitions inside `<defs>` according to `mode`.
@@ -228,12 +455,15 @@ pub fn push_battlemap_material_defs(
     push_battlemap_material_defs_seeded(out, t, mode, 42);
 }
 
-/// Seed-aware variant of [`push_battlemap_material_defs`] selecting grass/hardwood palette varieties.
-pub fn push_battlemap_material_defs_seeded(
+/// Seed- and Editor-ground-aware variant of [`push_battlemap_material_defs`] selecting grass/hardwood varieties,
+/// optional `ground_floor_override` texture, and optional `ground_tint_rgb` multiply wash.
+pub fn push_battlemap_material_defs_with_ground(
     out: &mut String,
     t: &BattlemapArtTheme,
     mode: BattlemapTextureMode,
     seed: i64,
+    ground_override: Option<&str>,
+    ground_tint_rgb: Option<[u8; 3]>,
 ) {
     let _ = write!(
         out,
@@ -242,23 +472,64 @@ pub fn push_battlemap_material_defs_seeded(
         hatch = t.wall_hatch,
         plat = t.platform_fill,
     );
+    let override_spec = ground_override.and_then(ground_override_texture_spec);
 
     if !mode.is_painted() {
-        push_floor_pattern_def(out, t);
         push_surface_pattern_defs(out);
         push_extra_vector_pattern_defs(out);
+        if let Some(spec) = override_spec {
+            let s = spec.span_px;
+            let _ = write!(
+                out,
+                r##"<pattern id="bm-floor" width="{s}" height="{s}" patternUnits="userSpaceOnUse"><rect width="{s}" height="{s}" fill="url(#{pid})"/>"##,
+                pid = spec.pattern_id
+            );
+            if let Some(rgb) = ground_tint_rgb {
+                let hex = satya_schema::format_rgb_hex(rgb);
+                let _ = write!(
+                    out,
+                    r##"<rect width="{s}" height="{s}" fill="{hex}" fill-opacity=".30" style="mix-blend-mode:multiply"/>"##
+                );
+            }
+            out.push_str("</pattern>");
+        } else if let Some(rgb) = ground_tint_rgb {
+            let mut inner = String::new();
+            push_floor_pattern_def(&mut inner, t);
+            let hex = satya_schema::format_rgb_hex(rgb);
+            if let Some(body) = inner.strip_suffix("</pattern>") {
+                let _ = write!(
+                    out,
+                    r##"{body}<rect width="256" height="256" fill="{hex}" fill-opacity=".28" style="mix-blend-mode:multiply"/></pattern>"##
+                );
+            } else {
+                out.push_str(&inner);
+            }
+        } else {
+            push_floor_pattern_def(out, t);
+        }
         return;
     }
 
-    let (floor_file, floor_span, floor_fallback) = floor_webp_spec_for_theme_seeded(t, seed);
+    let (floor_file, floor_span, floor_fallback) = if let Some(spec) = override_spec {
+        (spec.asset_file, spec.span_px, spec.fallback_hex)
+    } else {
+        floor_webp_spec_for_theme_seeded(t, seed)
+    };
     let _ = write!(
         out,
         r##"<pattern id="bm-floor" width="{floor_span}" height="{floor_span}" patternUnits="userSpaceOnUse"><rect width="{floor_span}" height="{floor_span}" fill="{floor_fallback}"/><image href="{BATTLEMAP_TEXTURE_BASE_URL}/{floor_file}" width="{floor_span}" height="{floor_span}" preserveAspectRatio="none"/>"##,
     );
-    if t.id == "bar_interior" {
+    if t.id == "bar_interior" && override_spec.is_none() {
         let _ = write!(
             out,
             r##"<rect width="{floor_span}" height="{floor_span}" fill="#3b2310" fill-opacity=".22"/>"##
+        );
+    }
+    if let Some(rgb) = ground_tint_rgb {
+        let hex = satya_schema::format_rgb_hex(rgb);
+        let _ = write!(
+            out,
+            r##"<rect width="{floor_span}" height="{floor_span}" fill="{hex}" fill-opacity=".32" style="mix-blend-mode:multiply"/>"##
         );
     }
     out.push_str("</pattern>");
@@ -273,6 +544,16 @@ pub fn push_battlemap_material_defs_seeded(
             file = spec.asset_file,
         );
     }
+}
+
+/// Seed-aware variant of [`push_battlemap_material_defs`] selecting grass/hardwood palette varieties.
+pub fn push_battlemap_material_defs_seeded(
+    out: &mut String,
+    t: &BattlemapArtTheme,
+    mode: BattlemapTextureMode,
+    seed: i64,
+) {
+    push_battlemap_material_defs_with_ground(out, t, mode, seed, None, None);
 }
 
 /// Loads the persisted `localStorage` texture mode (`"painted"` / `"vector"`).
@@ -307,19 +588,29 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn texture_spec_catalog_covers_all_33_webp_assets() {
-        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 33);
-        let pids: BTreeSet<&str> = BATTLEMAP_TEXTURE_SPECS.iter().map(|s| s.pattern_id).collect();
-        let files: BTreeSet<&str> = BATTLEMAP_TEXTURE_SPECS.iter().map(|s| s.asset_file).collect();
-        assert_eq!(pids.len(), 33);
-        assert_eq!(files.len(), 33);
+    fn texture_spec_catalog_covers_all_38_webp_assets() {
+        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 38);
+        let pids: BTreeSet<&str> = BATTLEMAP_TEXTURE_SPECS
+            .iter()
+            .map(|s| s.pattern_id)
+            .collect();
+        let files: BTreeSet<&str> = BATTLEMAP_TEXTURE_SPECS
+            .iter()
+            .map(|s| s.asset_file)
+            .collect();
+        assert_eq!(pids.len(), 38);
+        assert_eq!(files.len(), 38);
 
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/textures/map2d");
         for spec in BATTLEMAP_TEXTURE_SPECS {
             assert!(spec.asset_file.ends_with(".webp"));
             assert!(spec.span_px >= 64);
             let full = dir.join(spec.asset_file);
-            assert!(full.exists(), "missing baked WebP texture: {}", full.display());
+            assert!(
+                full.exists(),
+                "missing baked WebP texture: {}",
+                full.display()
+            );
         }
     }
 
@@ -329,11 +620,36 @@ mod tests {
             map: build_procedural_map_request("tex", SectorPreset::WoodlandCreek, None, 20, 14, 42),
             ..Default::default()
         };
-        ui.map.props.push(make_prop_at_cm(PropKind::Sofa, 350, 350, 15, None, 1));
-        ui.map.props.push(make_prop_at_cm(PropKind::DiningTable, 650, 350, 45, None, 2));
-        ui.map.props.push(make_prop_at_cm(PropKind::Boulder, 850, 550, 10, None, 3));
-        ui.map.props.push(make_prop_at_cm(PropKind::StructuralPillar, 950, 450, 0, None, 4));
-        ui.map.props.push(make_prop_at_cm(PropKind::HazardSpill, 1050, 450, 20, None, 5));
+        ui.map
+            .props
+            .push(make_prop_at_cm(PropKind::Sofa, 350, 350, 15, None, 1));
+        ui.map.props.push(make_prop_at_cm(
+            PropKind::DiningTable,
+            650,
+            350,
+            45,
+            None,
+            2,
+        ));
+        ui.map
+            .props
+            .push(make_prop_at_cm(PropKind::Boulder, 850, 550, 10, None, 3));
+        ui.map.props.push(make_prop_at_cm(
+            PropKind::StructuralPillar,
+            950,
+            450,
+            0,
+            None,
+            4,
+        ));
+        ui.map.props.push(make_prop_at_cm(
+            PropKind::HazardSpill,
+            1050,
+            450,
+            20,
+            None,
+            5,
+        ));
         ui.map.wall_edges.push(MapWallEdge {
             x: 1,
             y: 1,
@@ -352,13 +668,19 @@ mod tests {
         assert!(painted_art.contains("url(#bm-rock)"));
         assert!(painted_art.contains("url(#bm-steel)"));
         assert!(painted_art.contains("url(#bm-spill)"));
-        assert_eq!(painted_art.matches("<g").count(), painted_art.matches("</g>").count());
+        assert_eq!(
+            painted_art.matches("<g").count(),
+            painted_art.matches("</g>").count()
+        );
 
         ui.texture_mode = BattlemapTextureMode::ProceduralVector;
         let vec_key = battlemap_art_cache_key(&ui);
         assert_ne!(painted_key, vec_key, "texture mode toggle must bust cache");
         let vec_art = format_battlemap_art_layer(&ui);
         assert!(!vec_art.contains("/assets/textures/map2d/"));
-        assert_eq!(vec_art.matches("<g").count(), vec_art.matches("</g>").count());
+        assert_eq!(
+            vec_art.matches("<g").count(),
+            vec_art.matches("</g>").count()
+        );
     }
 }

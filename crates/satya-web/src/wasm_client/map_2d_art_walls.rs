@@ -33,7 +33,15 @@ const fn classify_wall(m: MaterialClass) -> WallRunClass {
 }
 
 /// Appends edge walls/doors/windows for a `w × h` board at `cell` SVG units per cell.
-pub fn push_edge_walls_svg(out: &mut String, edges: &[MapWallEdge], w: i32, h: i32, wall_fill: &str, door_fill: &str, cell: f32) {
+pub fn push_edge_walls_svg(
+    out: &mut String,
+    edges: &[MapWallEdge],
+    w: i32,
+    h: i32,
+    wall_fill: &str,
+    door_fill: &str,
+    cell: f32,
+) {
     push_edge_walls_impl(
         out,
         edges,
@@ -75,8 +83,10 @@ fn push_edge_walls_impl(
         return;
     }
     let painted = tex_mode.is_painted();
-    let by_addr: HashMap<(i32, i32, bool), &MapWallEdge> =
-        edges.iter().map(|e| ((e.x, e.y, e.side == EdgeSide::North), e)).collect();
+    let by_addr: HashMap<(i32, i32, bool), &MapWallEdge> = edges
+        .iter()
+        .map(|e| ((e.x, e.y, e.side == EdgeSide::North), e))
+        .collect();
     let wall_class = |x: i32, y: i32, north: bool| -> Option<WallRunClass> {
         by_addr
             .get(&(x, y, north))
@@ -85,7 +95,11 @@ fn push_edge_walls_impl(
     };
 
     // Merged wall runs per weight/material class
-    for cls in [WallRunClass::BrickMasonry, WallRunClass::Heavy, WallRunClass::Light] {
+    for cls in [
+        WallRunClass::BrickMasonry,
+        WallRunClass::Heavy,
+        WallRunClass::Light,
+    ] {
         let mut d = String::new();
         for y in 0..=h {
             let mut run: Option<i32> = None;
@@ -94,7 +108,13 @@ fn push_edge_walls_impl(
                 match (on, run) {
                     (true, None) => run = Some(x),
                     (false, Some(x0)) => {
-                        let _ = write!(d, "M{:.0} {:.0}H{:.0}", x0 as f32 * cell, y as f32 * cell, x as f32 * cell);
+                        let _ = write!(
+                            d,
+                            "M{:.0} {:.0}H{:.0}",
+                            x0 as f32 * cell,
+                            y as f32 * cell,
+                            x as f32 * cell
+                        );
                         run = None;
                     }
                     _ => {}
@@ -108,7 +128,13 @@ fn push_edge_walls_impl(
                 match (on, run) {
                     (true, None) => run = Some(y),
                     (false, Some(y0)) => {
-                        let _ = write!(d, "M{:.0} {:.0}V{:.0}", x as f32 * cell, y0 as f32 * cell, y as f32 * cell);
+                        let _ = write!(
+                            d,
+                            "M{:.0} {:.0}V{:.0}",
+                            x as f32 * cell,
+                            y0 as f32 * cell,
+                            y as f32 * cell
+                        );
                         run = None;
                     }
                     _ => {}
@@ -144,7 +170,11 @@ fn push_edge_walls_impl(
     for e in edges {
         let (ax, ay) = (e.x as f32 * cell, e.y as f32 * cell);
         let north = e.side == EdgeSide::North;
-        let (bx, by) = if north { (ax + cell, ay) } else { (ax, ay + cell) };
+        let (bx, by) = if north {
+            (ax + cell, ay)
+        } else {
+            (ax, ay + cell)
+        };
         match e.kind {
             WallEdgeKind::Wall => {}
             WallEdgeKind::Window => {
@@ -160,10 +190,21 @@ fn push_edge_walls_impl(
                 let _ = write!(
                     out,
                     r#"<path d="M{:.1} {:.1}L{:.1} {:.1}M{:.1} {:.1}L{:.1} {:.1}" stroke="{BATTLEMAP_INK}" stroke-width="3"/>"#,
-                    ax - tx, ay - ty, ax + tx, ay + ty, bx - tx, by - ty, bx + tx, by + ty
+                    ax - tx,
+                    ay - ty,
+                    ax + tx,
+                    ay + ty,
+                    bx - tx,
+                    by - ty,
+                    bx + tx,
+                    by + ty
                 );
                 if e.kind == WallEdgeKind::DoorClosed {
-                    let (rx, ry, rw, rh) = if north { (ax + 3.0, ay - 4.0, leaf, 8.0) } else { (ax - 4.0, ay + 3.0, 8.0, leaf) };
+                    let (rx, ry, rw, rh) = if north {
+                        (ax + 3.0, ay - 4.0, leaf, 8.0)
+                    } else {
+                        (ax - 4.0, ay + 3.0, 8.0, leaf)
+                    };
                     let _ = write!(
                         out,
                         r#"<rect x="{rx:.1}" y="{ry:.1}" width="{rw:.1}" height="{rh:.1}" fill="{eff_door_fill}" stroke="{BATTLEMAP_INK}" stroke-width="1.6"/>"#
@@ -171,9 +212,29 @@ fn push_edge_walls_impl(
                 } else {
                     // Hinge at the edge start; the leaf swings into the owning cell (+y for North, +x for West).
                     let (lx, ly, lw, lh, arc) = if north {
-                        (ax - 2.5, ay, 5.0, leaf, format!("M{:.1} {ay:.1}A{leaf} {leaf} 0 0 1 {ax:.1} {:.1}", ax + leaf, ay + leaf))
+                        (
+                            ax - 2.5,
+                            ay,
+                            5.0,
+                            leaf,
+                            format!(
+                                "M{:.1} {ay:.1}A{leaf} {leaf} 0 0 1 {ax:.1} {:.1}",
+                                ax + leaf,
+                                ay + leaf
+                            ),
+                        )
                     } else {
-                        (ax, ay - 2.5, leaf, 5.0, format!("M{ax:.1} {:.1}A{leaf} {leaf} 0 0 0 {:.1} {ay:.1}", ay + leaf, ax + leaf))
+                        (
+                            ax,
+                            ay - 2.5,
+                            leaf,
+                            5.0,
+                            format!(
+                                "M{ax:.1} {:.1}A{leaf} {leaf} 0 0 0 {:.1} {ay:.1}",
+                                ay + leaf,
+                                ax + leaf
+                            ),
+                        )
                     };
                     let _ = write!(
                         out,
@@ -192,18 +253,60 @@ mod tests {
 
     #[test]
     fn wall_runs_merge_and_doors_render() {
-        let mk = |x, y, side, kind, material| MapWallEdge { x, y, side, kind, material };
+        let mk = |x, y, side, kind, material| MapWallEdge {
+            x,
+            y,
+            side,
+            kind,
+            material,
+        };
         let edges = vec![
-            mk(0, 0, EdgeSide::North, WallEdgeKind::Wall, MaterialClass::Brick),
-            mk(1, 0, EdgeSide::North, WallEdgeKind::Wall, MaterialClass::Brick),
-            mk(2, 0, EdgeSide::North, WallEdgeKind::Wall, MaterialClass::Brick),
-            mk(3, 1, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Drywall),
-            mk(3, 2, EdgeSide::West, WallEdgeKind::Window, MaterialClass::Glass),
+            mk(
+                0,
+                0,
+                EdgeSide::North,
+                WallEdgeKind::Wall,
+                MaterialClass::Brick,
+            ),
+            mk(
+                1,
+                0,
+                EdgeSide::North,
+                WallEdgeKind::Wall,
+                MaterialClass::Brick,
+            ),
+            mk(
+                2,
+                0,
+                EdgeSide::North,
+                WallEdgeKind::Wall,
+                MaterialClass::Brick,
+            ),
+            mk(
+                3,
+                1,
+                EdgeSide::West,
+                WallEdgeKind::DoorOpen,
+                MaterialClass::Drywall,
+            ),
+            mk(
+                3,
+                2,
+                EdgeSide::West,
+                WallEdgeKind::Window,
+                MaterialClass::Glass,
+            ),
         ];
         let mut s = String::new();
         push_edge_walls_svg(&mut s, &edges, 6, 4, "#3b3835", "#9a6b43", 64.0);
-        assert!(s.contains("M0 0H192"), "three brick edges merge into one run: {s}");
-        assert!(s.contains("stroke-dasharray=\"4 3\""), "open door swing arc");
+        assert!(
+            s.contains("M0 0H192"),
+            "three brick edges merge into one run: {s}"
+        );
+        assert!(
+            s.contains("stroke-dasharray=\"4 3\""),
+            "open door swing arc"
+        );
         assert!(s.contains("#d6ebf5"), "window glass");
         assert_eq!(s.matches("<g").count(), s.matches("</g>").count());
     }

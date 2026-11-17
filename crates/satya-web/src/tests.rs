@@ -543,6 +543,23 @@ fn test_ssr_gm_vault_rules_book_npcs_and_markdown_chat() {
     let rules_css_idx = html.find(".satya-rules-article").unwrap();
     let wiz_css_idx = html.find(".wiz-shell").unwrap();
     assert!(!html[rules_css_idx..wiz_css_idx].contains("overscroll-behavior: contain"));
+
+    let nb_pane_start = html.find("\n.notebook-pane {").unwrap();
+    let nb_pane_end = html[nb_pane_start..].find('}').unwrap() + nb_pane_start;
+    assert!(html[nb_pane_start..nb_pane_end].contains("overscroll-behavior-y: contain;"));
+
+    let docs_list_start = html.find(".gm-docs-list {").unwrap();
+    let docs_list_end = html[docs_list_start..].find(".gm-doc-card {").unwrap() + docs_list_start;
+    let docs_list_css = &html[docs_list_start..docs_list_end];
+    assert!(!docs_list_css.contains("overscroll-behavior"));
+    assert!(!docs_list_css.contains("overflow-y: auto"));
+
+    let rules_search_start = html.find("#rules-search-results {").unwrap();
+    let rules_search_end = html[rules_search_start..]
+        .find(".rules-book-viewport {")
+        .unwrap()
+        + rules_search_start;
+    assert!(html[rules_search_start..rules_search_end].contains("overflow-y: auto;"));
     assert!(!html[rules_css_idx..wiz_css_idx].contains("overflow-x: auto"));
     assert!(html.contains("rules-math-inline"));
     assert!(html.contains("rules-math-block"));
@@ -568,7 +585,7 @@ fn test_ssr_gm_vault_rules_book_npcs_and_markdown_chat() {
         ],
         top_skills: vec!["Clinical Diagnosis & Internal Medicine (N=3)".to_string()],
         gm_secret_dossier: Some("Secretly treating wounded couriers for free.".to_string()),
-                ..Default::default()
+        ..Default::default()
     };
     let gm_card_html = wasm_client::format_npc_card_html(&terry_entry, true);
     assert!(gm_card_html.contains("BLG 16 (Tribal / Group-Dependent)"));

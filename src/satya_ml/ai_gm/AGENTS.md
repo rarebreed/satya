@@ -1,6 +1,6 @@
 # `satya_ml.ai_gm` Agent Persona, Markdown & Scenario Director Steering Rules
 
-When working on or operating the Satya Autonomous / Co-Pilot AI Game Master (`src/satya_ml/ai_gm/`) or its signaling bridge (`crates/satya-signaling/src/{gm_api.rs,ai_bridge.rs,gm_vault.rs}`), follow these architectural and persona steering rules (full specification in [`docs/technical/ai-gm-agent-design.md`](../../../docs/technical/ai-gm-agent-design.md)). Activate [`satya-python-ai`](../../../.agents/skills/satya-python-ai/SKILL.md) when modifying Python code, `@tool` registrations, PyO3 wrappers, or RAG pipelines under `src/satya_ml/` and `crates/satya-py`.
+When working on or operating the Satya Autonomous / Co-Pilot AI Game Master (`src/satya_ml/ai_gm/`) or its signaling bridge (`crates/satya-signaling/src/{gm_api.rs,gm_docs.rs,gm_persistence.rs,player_ai_api.rs,player_ai_spatial.rs}`), follow these architectural and persona steering rules (full specification in [`docs/technical/ai-gm-agent-design.md`](../../../docs/technical/ai-gm-agent-design.md)). Activate [`satya-python-ai`](../../../.agents/skills/satya-python-ai/SKILL.md) when modifying Python code, `@tool` registrations, PyO3 wrappers, or RAG pipelines under `src/satya_ml/` and `crates/satya-py`.
 
 1. **Rich Markdown Output in Session Chat (`satya_engine::render_rules_markdown_to_html`)**:
    - Session Chat (`#chat-log`) and the multi-line `#chat-input` composer natively accept and render **Markdown** into sanitized HTML.

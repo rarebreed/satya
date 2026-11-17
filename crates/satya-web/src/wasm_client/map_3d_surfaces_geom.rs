@@ -28,8 +28,7 @@ fn push_tri_up(
     col: [f32; 4],
     zone_id: f32,
 ) {
-    let ny = (b_xz[1] - a_xz[1]) * (c_xz[0] - a_xz[0])
-        - (b_xz[0] - a_xz[0]) * (c_xz[1] - a_xz[1]);
+    let ny = (b_xz[1] - a_xz[1]) * (c_xz[0] - a_xz[0]) - (b_xz[0] - a_xz[0]) * (c_xz[1] - a_xz[1]);
     if ny.abs() < 1e-6 {
         return;
     }
@@ -149,12 +148,23 @@ fn surface_style(kind: SurfaceFeatureKind, variant_seed: u32) -> ([f32; 3], f32)
             (rgb, -1.0)
         }
         SurfaceFeatureKind::CeramicTileFloor => {
-            let rgb = if variant_seed & 1 == 1 { [0.68, 0.40, 0.28] } else { [0.82, 0.85, 0.87] };
+            let rgb = if variant_seed & 1 == 1 {
+                [0.68, 0.40, 0.28]
+            } else {
+                [0.82, 0.85, 0.87]
+            };
             (rgb, -8.0)
         }
         SurfaceFeatureKind::MarbleFloor => ([0.89, 0.88, 0.85], -8.0),
         SurfaceFeatureKind::CarpetFloor => ([0.66, 0.62, 0.57], -4.0),
         SurfaceFeatureKind::BridgeDeck => ([0.46, 0.32, 0.19], -3.0),
+        SurfaceFeatureKind::LawnGrassZone => ([0.26, 0.41, 0.19], -2.0),
+        SurfaceFeatureKind::BrickPaverWalk => ([0.58, 0.34, 0.26], -3.0),
+        SurfaceFeatureKind::StainedConcreteFloor => ([0.52, 0.50, 0.47], -7.0),
+        SurfaceFeatureKind::ClinicalVinylFloor => ([0.78, 0.83, 0.85], -8.0),
+        SurfaceFeatureKind::LinoleumCheckFloor => ([0.72, 0.76, 0.78], -8.0),
+        SurfaceFeatureKind::TerrazzoFloor => ([0.81, 0.79, 0.75], -8.0),
+        SurfaceFeatureKind::SteelPlateFloor => ([0.20, 0.24, 0.29], -1.0),
     }
 }
 
@@ -248,7 +258,8 @@ fn push_road_details_3d(
             let mid = ((seg[0].0 + seg[1].0) * 0.5, (seg[0].1 + seg[1].1) * 0.5);
             let dash_on = (accum_m % 1.1) < 0.62;
             accum_m += slen;
-            if !dash_on || point_masked_by_higher_surface(all_surfaces, road_prio + 1, mid.0, mid.1) {
+            if !dash_on || point_masked_by_higher_surface(all_surfaces, road_prio + 1, mid.0, mid.1)
+            {
                 continue;
             }
             push_segment_prism(
@@ -368,8 +379,34 @@ fn push_garden_edging_and_blooms_3d(
                 continue;
             }
             let bloom = palette[(k + surface.variant_seed as usize) % palette.len()];
-            push_segment_prism(verts, tx - 0.12, ty, tx + 0.12, ty, 0.12, y, y + 0.14, bw_m, bh_m, [0.24, 0.48, 0.21], -0.25);
-            push_segment_prism(verts, tx - 0.06, ty, tx + 0.06, ty, 0.06, y + 0.14, y + 0.21, bw_m, bh_m, bloom, 0.0);
+            push_segment_prism(
+                verts,
+                tx - 0.12,
+                ty,
+                tx + 0.12,
+                ty,
+                0.12,
+                y,
+                y + 0.14,
+                bw_m,
+                bh_m,
+                [0.24, 0.48, 0.21],
+                -0.25,
+            );
+            push_segment_prism(
+                verts,
+                tx - 0.06,
+                ty,
+                tx + 0.06,
+                ty,
+                0.06,
+                y + 0.14,
+                y + 0.21,
+                bw_m,
+                bh_m,
+                bloom,
+                0.0,
+            );
         }
     }
 }
@@ -398,7 +435,12 @@ fn push_bridge_deck_3d(
     let skirt_col = [0.34, 0.23, 0.14, 0.0];
     for i in 0..ring.len() {
         let a = metric_to_world_xz(ring[i].0, ring[i].1, bw_m, bh_m);
-        let b = metric_to_world_xz(ring[(i + 1) % ring.len()].0, ring[(i + 1) % ring.len()].1, bw_m, bh_m);
+        let b = metric_to_world_xz(
+            ring[(i + 1) % ring.len()].0,
+            ring[(i + 1) % ring.len()].1,
+            bw_m,
+            bh_m,
+        );
         push_wall_quad(verts, a, b, 0.0, deck_y, skirt_col, -3.0);
     }
     // Bridge side guard rails along [0]->[1] and [2]->[3] (leaving entry/exit ends [1]->[2] & [3]->[0] open)
@@ -440,7 +482,15 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
     for (rank, &(orig_idx, s)) in order.iter().enumerate() {
         let prio = s.kind.layer_priority();
         let y = 0.003 + (prio as f32) * 0.00032 + (rank as f32) * 0.00004;
-        let (rgb, zone_id) = surface_style(s.kind, s.variant_seed);
+        let (mut rgb, zone_id) = surface_style(s.kind, s.variant_seed);
+        if let Some([tr, tg, tb]) = s.tint_rgb {
+            let tint = [tr as f32 / 255.0, tg as f32 / 255.0, tb as f32 / 255.0];
+            rgb = [
+                rgb[0] * 0.60 + tint[0] * 0.40,
+                rgb[1] * 0.60 + tint[1] * 0.40,
+                rgb[2] * 0.60 + tint[2] * 0.40,
+            ];
+        }
 
         if s.kind == SurfaceFeatureKind::BridgeDeck {
             push_bridge_deck_3d(verts, s, bw_m, bh_m);
@@ -450,7 +500,15 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
         match s.shape {
             SurfaceShapeKind::RibbonSpline => {
                 if s.kind == SurfaceFeatureKind::CreekChannel {
-                    push_ribbon_surface_fill(verts, s, 0.42, y, [0.46, 0.45, 0.42], -3.0, (bw_m, bh_m));
+                    push_ribbon_surface_fill(
+                        verts,
+                        s,
+                        0.42,
+                        y,
+                        [0.46, 0.45, 0.42],
+                        -3.0,
+                        (bw_m, bh_m),
+                    );
                     push_ribbon_surface_fill(verts, s, 0.0, y + 0.0045, rgb, zone_id, (bw_m, bh_m));
                     let mut bank = s.clone();
                     bank.width_cm += 84;
@@ -496,7 +554,11 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
             }
             SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon => {
                 let ring = sampled_closed_ring_m(s);
-                let eff_y = if s.kind == SurfaceFeatureKind::WoodDeck { y.max(0.032) } else { y };
+                let eff_y = if s.kind == SurfaceFeatureKind::WoodDeck {
+                    y.max(0.032)
+                } else {
+                    y
+                };
                 let (verts_m, tris) = triangulate_simple_polygon_m(&ring);
                 let col = [rgb[0], rgb[1], rgb[2], 0.0];
                 for t in &tris {
@@ -509,14 +571,32 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
                     let skirt = [0.36, 0.23, 0.14, 0.0];
                     for i in 0..ring.len() {
                         let a = metric_to_world_xz(ring[i].0, ring[i].1, bw_m, bh_m);
-                        let b = metric_to_world_xz(ring[(i + 1) % ring.len()].0, ring[(i + 1) % ring.len()].1, bw_m, bh_m);
+                        let b = metric_to_world_xz(
+                            ring[(i + 1) % ring.len()].0,
+                            ring[(i + 1) % ring.len()].1,
+                            bw_m,
+                            bh_m,
+                        );
                         push_wall_quad(verts, a, b, 0.0, eff_y, skirt, -3.0);
                     }
                 } else if s.kind == SurfaceFeatureKind::PoolWater && ring.len() >= 3 {
                     for i in 0..ring.len() {
                         let a = ring[i];
                         let b = ring[(i + 1) % ring.len()];
-                        push_segment_prism(verts, a.0, a.1, b.0, b.1, 0.055, y, y + 0.045, bw_m, bh_m, [0.82, 0.79, 0.73], -3.0);
+                        push_segment_prism(
+                            verts,
+                            a.0,
+                            a.1,
+                            b.0,
+                            b.1,
+                            0.055,
+                            y,
+                            y + 0.045,
+                            bw_m,
+                            bh_m,
+                            [0.82, 0.79, 0.73],
+                            -3.0,
+                        );
                     }
                 } else if matches!(
                     s.kind,
@@ -548,16 +628,23 @@ mod tests {
                 map: build_procedural_map_request("v3d", preset, None, 20, 14, 42),
                 ..Default::default()
             };
-            assert!(!ui.map.surfaces.is_empty(), "{preset:?} missing vector surfaces");
+            assert!(
+                !ui.map.surfaces.is_empty(),
+                "{preset:?} missing vector surfaces"
+            );
             let verts = build_tactical_diorama_vertices(&ui);
             assert!(verts.len() > 200, "{preset:?} emitted too few 3D vertices");
             for v in &verts {
                 assert!(
-                    v.position.iter().all(|c| c.is_finite()) && v.normal.iter().all(|c| c.is_finite()),
+                    v.position.iter().all(|c| c.is_finite())
+                        && v.normal.iter().all(|c| c.is_finite()),
                     "{preset:?} emitted non-finite vertex"
                 );
             }
-            if matches!(preset, SectorPreset::WoodlandCreek | SectorPreset::RoadsideDitch) {
+            if matches!(
+                preset,
+                SectorPreset::WoodlandCreek | SectorPreset::RoadsideDitch
+            ) {
                 assert!(
                     verts.iter().any(|v| (v.position[1] - 0.12).abs() < 1e-4),
                     "{preset:?} expected elevated 0.12m BridgeDeck geometry"

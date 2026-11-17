@@ -29,7 +29,11 @@ async fn test_map_continuation_permissions_and_stitched_coordinates() {
         .authenticate_user("gm_sean", "satya-truth-2026")
         .await
         .unwrap();
-    let gm_user = state.auth.verify_auth_token(&gm_auth.auth_token).await.unwrap();
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
     let _ = state
         .auth
         .create_session(
@@ -49,7 +53,11 @@ async fn test_map_continuation_permissions_and_stitched_coordinates() {
         .authenticate_user("sara_valkyrie", "satya-truth-2026")
         .await
         .unwrap();
-    let p1_user = state.auth.verify_auth_token(&p1_auth.auth_token).await.unwrap();
+    let p1_user = state
+        .auth
+        .verify_auth_token(&p1_auth.auth_token)
+        .await
+        .unwrap();
     let _ = state
         .auth
         .join_session(
@@ -265,7 +273,11 @@ async fn multi_floor_mansion_generation_floor_switch_and_cross_floor_token_move(
         .authenticate_user("gm_sean", "satya-truth-2026")
         .await
         .unwrap();
-    let gm_user = state.auth.verify_auth_token(&gm_auth.auth_token).await.unwrap();
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
     let _ = state
         .auth
         .create_session(
@@ -285,7 +297,11 @@ async fn multi_floor_mansion_generation_floor_switch_and_cross_floor_token_move(
         .authenticate_user("sara_valkyrie", "satya-truth-2026")
         .await
         .unwrap();
-    let p1_user = state.auth.verify_auth_token(&p1_auth.auth_token).await.unwrap();
+    let p1_user = state
+        .auth
+        .verify_auth_token(&p1_auth.auth_token)
+        .await
+        .unwrap();
     let _ = state
         .auth
         .join_session(
@@ -327,7 +343,10 @@ async fn multi_floor_mansion_generation_floor_switch_and_cross_floor_token_move(
             .unwrap(),
     )
     .unwrap();
-    assert!(mansion_map.floors.len() >= 2, "Luxury mansion must have >= 2 floors");
+    assert!(
+        mansion_map.floors.len() >= 2,
+        "Luxury mansion must have >= 2 floors"
+    );
     assert_eq!(mansion_map.active_floor, 0);
 
     // 2. Switch active floor to 2F (`floor_index == 1`).

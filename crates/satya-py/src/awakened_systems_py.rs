@@ -6,10 +6,9 @@
 use pyo3::prelude::*;
 use satya_engine::{
     AwakenedFactionId, CageInterventionAction, CageInterventionRollParams,
-    CampaignConspiracyLedger, ConspiracyLedgerUpdate, FactionArchetypeId,
-    PolycrisisDistrictState, PolycrisisGridMode, SubstrateCounterplayAction,
-    SyntheticSubstrateState, TradecraftChannelKind, TradecraftTransmissionParams,
-    apply_conspiracy_ledger_update, derive_dissenter_or_proxy_hook,
+    CampaignConspiracyLedger, ConspiracyLedgerUpdate, FactionArchetypeId, PolycrisisDistrictState,
+    PolycrisisGridMode, SubstrateCounterplayAction, SyntheticSubstrateState, TradecraftChannelKind,
+    TradecraftTransmissionParams, apply_conspiracy_ledger_update, derive_dissenter_or_proxy_hook,
     evaluate_ambiguous_sentience_read, evaluate_cage_or_hunter_ai_intervention,
     evaluate_polycrisis_grid_step, evaluate_substrate_counterplay,
     evaluate_tradecraft_transmission, seed_conspiracy_ledger,
@@ -261,7 +260,8 @@ pub fn derive_dissenter_or_proxy_hook_json(
     prompt: &str,
     seed: u64,
 ) -> PyResult<String> {
-    let faction = faction_code.and_then(|s| AwakenedFactionId::from_code_str(&normalize_enum_code(s)));
+    let faction =
+        faction_code.and_then(|s| AwakenedFactionId::from_code_str(&normalize_enum_code(s)));
     let archetype =
         archetype_code.and_then(|s| FactionArchetypeId::from_code_str(&normalize_enum_code(s)));
     let hook = derive_dissenter_or_proxy_hook(faction, archetype, prompt, seed);
@@ -276,14 +276,8 @@ pub fn register_awakened_systems_functions(m: &Bound<'_, PyModule>) -> PyResult<
         m
     )?)?;
     m.add_function(wrap_pyfunction!(evaluate_cage_or_hunter_ai_json, m)?)?;
-    m.add_function(wrap_pyfunction!(
-        evaluate_ambiguous_sentience_read_json,
-        m
-    )?)?;
-    m.add_function(wrap_pyfunction!(
-        seed_or_update_conspiracy_ledger_json,
-        m
-    )?)?;
+    m.add_function(wrap_pyfunction!(evaluate_ambiguous_sentience_read_json, m)?)?;
+    m.add_function(wrap_pyfunction!(seed_or_update_conspiracy_ledger_json, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_polycrisis_grid_step_json, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_tradecraft_channel_json, m)?)?;
     m.add_function(wrap_pyfunction!(derive_dissenter_or_proxy_hook_json, m)?)?;
@@ -302,7 +296,10 @@ mod tests {
             evaluate_synthetic_substrate_action_json(&sub_json, "SEVER_FIBER_OR_FARADAY", 80)
                 .unwrap();
         let act_val: serde_json::Value = serde_json::from_str(&act_json).unwrap();
-        assert_eq!(act_val["updated_state"]["metabolic_mode"], "SEVERED_FARADAY_REFLEX");
+        assert_eq!(
+            act_val["updated_state"]["metabolic_mode"],
+            "SEVERED_FARADAY_REFLEX"
+        );
 
         let cage_json = evaluate_cage_or_hunter_ai_json(
             &sub_json,
@@ -315,14 +312,16 @@ mod tests {
         let cage_val: serde_json::Value = serde_json::from_str(&cage_json).unwrap();
         assert_eq!(cage_val["control_room_halt_triggered"], false);
 
-        let sent_json = evaluate_ambiguous_sentience_read_json(
-            &sub_json,
-            r#"{"opn":14,"trs":12,"cps":16}"#,
-            3,
-        )
-        .unwrap();
+        let sent_json =
+            evaluate_ambiguous_sentience_read_json(&sub_json, r#"{"opn":14,"trs":12,"cps":16}"#, 3)
+                .unwrap();
         let sent_val: serde_json::Value = serde_json::from_str(&sent_json).unwrap();
-        assert!(sent_val["player_observable"]["apparent_sincerity_pct"].as_u64().unwrap() <= 82);
+        assert!(
+            sent_val["player_observable"]["apparent_sincerity_pct"]
+                .as_u64()
+                .unwrap()
+                <= 82
+        );
 
         let ledger_json = seed_or_update_conspiracy_ledger_json(
             "sess-1",

@@ -19,15 +19,75 @@ use satya_engine::map_dressing::make_prop;
 use satya_engine::tactical_map::{
     SectorPreset, build_procedural_map_request, build_procedural_map_request_with_options,
 };
-use satya_engine::tactical_map_geom::{place_prop_on_map, remove_prop_at_point};
+use satya_engine::tactical_map_geom::{
+    place_prop_on_map, remove_prop_at_point, update_prop_on_map_at_index,
+};
 use satya_schema::{
-    CanvasEventType, EdgeSide, GenerateSessionMapRequest, MapWallEdge, MaterialClass,
-    MessageVisibility, ParticipantKind, PropKind, SessionRole, TacticalTileKind, TokenPlacement,
-    TokenVisualSpec, WallEdgeKind,
+    CanvasEventType, EdgeSide, GenerateSessionMapRequest, GmMapUpdateRequest, MapSurfaceFeature,
+    MapWallEdge, MaterialClass, MessageVisibility, ParticipantKind, PropKind, SessionRole,
+    SurfaceShapeKind, TacticalTileKind, TokenPlacement, TokenVisualSpec, WallEdgeKind,
+    parse_hex_rgb,
 };
 use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
+
+fn edge_in_bounds(map: &GmMapUpdateRequest, x: i32, y: i32, side: EdgeSide) -> bool {
+    match side {
+        EdgeSide::North => (0..map.grid_width).contains(&x) && (0..=map.grid_height).contains(&y),
+        EdgeSide::West => (0..=map.grid_width).contains(&x) && (0..map.grid_height).contains(&y),
+    }
+}
+
+fn upsert_wall_edge(edges: &mut Vec<MapWallEdge>, edge: MapWallEdge) {
+    if let Some(slot) = edges
+        .iter_mut()
+        .find(|e| e.x == edge.x && e.y == edge.y && e.side == edge.side)
+    {
+        *slot = edge;
+    } else {
+        edges.push(edge);
+    }
+}
+
+fn validate_surface_geometry(sf: &MapSurfaceFeature) -> Result<(), &'static str> {
+    let min_pts = match sf.shape {
+        SurfaceShapeKind::Polygon | SurfaceShapeKind::OrganicClosed => 3,
+        SurfaceShapeKind::RibbonSpline => 2,
+    };
+    if sf.points_cm.len() < min_pts {
+        return Err("Surface feature has too few control points");
+    }
+    Ok(())
+}
+
+async fn persist_and_broadcast_map(
+    state: &Arc<SignalingAppState>,
+    session_id: &str,
+    ctx: &satya_schema::GmContextResponse,
+    caller_part: &satya_schema::Participant,
+    map: GmMapUpdateRequest,
+) -> axum::response::Response {
+    let _ = state
+        .auth
+        .set_session_active_map(session_id, map.clone())
+        .await;
+    log_map_canvas_event(
+        state,
+        session_id,
+        ctx.session_mode,
+        CanvasEventType::MapUpdated,
+        caller_part,
+        &map,
+    )
+    .await;
+    broadcast_role_filtered_map(state, session_id, &ctx.roster, &map).await;
+    (
+        StatusCode::OK,
+        Json(filter_map_for_role(&map, caller_part.role)),
+    )
+        .into_response()
+}
 
 /// Generates a procedural `1.0m` tactical sector map or edits/toggles a wall edge, prop, or legacy cell
 /// at `POST /api/sessions/:session_id/map`.
@@ -59,7 +119,12 @@ pub async fn session_generate_or_edit_map_handler(
         )
             .into_response();
     };
-    let Some(caller_part) = ctx.roster.iter().find(|p| p.user_id == user.user_id).cloned() else {
+    let Some(caller_part) = ctx
+        .roster
+        .iter()
+        .find(|p| p.user_id == user.user_id)
+        .cloned()
+    else {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({ "error": "Caller is not an active participant in this session" })),
@@ -124,10 +189,12 @@ pub async fn session_generate_or_edit_map_handler(
         ensure_vector_map_ready(&mut map);
         let in_bounds = match edge_ref.side {
             EdgeSide::North => {
-                (0..map.grid_width).contains(&edge_ref.x) && (0..=map.grid_height).contains(&edge_ref.y)
+                (0..map.grid_width).contains(&edge_ref.x)
+                    && (0..=map.grid_height).contains(&edge_ref.y)
             }
             EdgeSide::West => {
-                (0..=map.grid_width).contains(&edge_ref.x) && (0..map.grid_height).contains(&edge_ref.y)
+                (0..=map.grid_width).contains(&edge_ref.x)
+                    && (0..map.grid_height).contains(&edge_ref.y)
             }
         };
         if !in_bounds {
@@ -143,7 +210,10 @@ pub async fn session_generate_or_edit_map_handler(
             .position(|e| e.x == edge_ref.x && e.y == edge_ref.y && e.side == edge_ref.side);
         let current_kind = existing.map(|i| map.wall_edges[i].kind);
         let is_door_toggle = !req.clear_edge
-            && matches!(current_kind, Some(WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen))
+            && matches!(
+                current_kind,
+                Some(WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen)
+            )
             && matches!(
                 req.set_edge_kind,
                 None | Some(WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen)
@@ -165,7 +235,12 @@ pub async fn session_generate_or_edit_map_handler(
             })
         };
         match (existing, next_kind) {
-            (Some(i), Some(kind)) => map.wall_edges[i].kind = kind,
+            (Some(i), Some(kind)) => {
+                map.wall_edges[i].kind = kind;
+                if let Some(mat) = req.set_edge_material {
+                    map.wall_edges[i].material = mat;
+                }
+            }
             (Some(i), None) => {
                 map.wall_edges.remove(i);
             }
@@ -174,29 +249,34 @@ pub async fn session_generate_or_edit_map_handler(
                 y: edge_ref.y,
                 side: edge_ref.side,
                 kind,
-                material: if kind == WallEdgeKind::Window {
+                material: req.set_edge_material.unwrap_or(if kind == WallEdgeKind::Window {
                     MaterialClass::Glass
                 } else {
                     MaterialClass::Drywall
-                },
+                }),
             }),
             (None, None) => {}
         }
         map.sync_active_floor_snapshot();
-        let _ = state
-            .auth
-            .set_session_active_map(&session_id, map.clone())
-            .await;
-        broadcast_role_filtered_map(&state, &session_id, &ctx.roster, &map).await;
-        return (
-            StatusCode::OK,
-            Json(filter_map_for_role(&map, caller_part.role)),
-        )
-            .into_response();
+        return persist_and_broadcast_map(&state, &session_id, &ctx, &caller_part, map).await;
     }
 
-    // Branch A0b: GM prop placement or removal on active map (`edit_prop` / `clear_prop_at` / `clear_prop_at_cm`)
-    if req.edit_prop.is_some() || req.clear_prop_at.is_some() || req.clear_prop_at_cm.is_some() {
+    // Branch A0b: GM interactive map authoring (replace_floor_geometry, batch edges, props, surfaces, ground style)
+    let has_authoring_op = req.replace_floor_geometry.is_some()
+        || !req.batch_edges.is_empty()
+        || !req.clear_edges.is_empty()
+        || req.edit_prop.is_some()
+        || req.update_prop_at_index.is_some()
+        || req.remove_prop_index.is_some()
+        || req.clear_prop_at.is_some()
+        || req.clear_prop_at_cm.is_some()
+        || req.add_surface.is_some()
+        || req.update_surface_at_index.is_some()
+        || req.remove_surface_index.is_some()
+        || req.set_ground_floor_override.is_some()
+        || req.set_ground_tint_hex.is_some();
+
+    if has_authoring_op {
         let Some(mut map) = ctx.active_map.clone() else {
             return (
                 StatusCode::CONFLICT,
@@ -207,13 +287,66 @@ pub async fn session_generate_or_edit_map_handler(
         if !caller_is_gm_or_solo {
             return (
                 StatusCode::FORBIDDEN,
-                Json(json!({ "error": "Only the Game Master can place or remove map props" })),
+                Json(json!({ "error": "Only the Game Master can author map geometry, props, and surfaces" })),
             )
                 .into_response();
         }
         ensure_vector_map_ready(&mut map);
         let (board_w_cm, board_h_cm) = map.board_size_cm();
         let (board_w_m, board_h_m) = map.board_size_m();
+        let occupied_m: Vec<(f32, f32)> = map
+            .tokens
+            .iter()
+            .filter(|t| map.token_floor(&t.entity_id) == map.active_floor)
+            .map(|t| map.token_pos_m(t))
+            .collect();
+
+        if let Some(snap) = req.replace_floor_geometry {
+            for e in &snap.wall_edges {
+                if !edge_in_bounds(&map, e.x, e.y, e.side) {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({ "error": "Snapshot wall edge out of grid bounds" })),
+                    )
+                        .into_response();
+                }
+            }
+            for sf in &snap.surfaces {
+                if let Err(msg) = validate_surface_geometry(sf) {
+                    return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+                }
+            }
+            map.wall_edges = snap.wall_edges;
+            map.props = snap.props;
+            map.surfaces = snap.surfaces;
+            map.ground_floor_override = snap.ground_floor_override;
+            map.ground_tint_rgb = snap.ground_tint_rgb;
+            map.sync_active_floor_snapshot();
+            return persist_and_broadcast_map(&state, &session_id, &ctx, &caller_part, map).await;
+        }
+
+        for er in &req.clear_edges {
+            if !edge_in_bounds(&map, er.x, er.y, er.side) {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "Edge out of grid bounds" })),
+                )
+                    .into_response();
+            }
+            map.wall_edges
+                .retain(|e| !(e.x == er.x && e.y == er.y && e.side == er.side));
+        }
+        for edge in req.batch_edges {
+            if !edge_in_bounds(&map, edge.x, edge.y, edge.side) {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "Edge out of grid bounds" })),
+                )
+                    .into_response();
+            }
+            upsert_wall_edge(&mut map.wall_edges, edge);
+        }
+
         if let Some((cx_cm, cy_cm)) = req.clear_prop_at_cm {
             if cx_cm < 0 || cy_cm < 0 || cx_cm >= board_w_cm || cy_cm >= board_h_cm {
                 return (
@@ -232,51 +365,104 @@ pub async fn session_generate_or_edit_map_handler(
                     .into_response();
             }
             remove_prop_at_point(&mut map.props, cx as f32 + 0.5, cy as f32 + 0.5);
-        } else if let Some(prop) = req.edit_prop {
-            let occupied_m: Vec<(f32, f32)> = map
-                .tokens
-                .iter()
-                .filter(|t| map.token_floor(&t.entity_id) == map.active_floor)
-                .map(|t| map.token_pos_m(t))
-                .collect();
-            if let Err(msg) = place_prop_on_map(
+        }
+        if let Some(idx) = req.remove_prop_index {
+            if idx >= map.props.len() {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "Prop index out of range" })),
+                )
+                    .into_response();
+            }
+            map.props.remove(idx);
+        }
+        if let Some((idx, prop)) = req.update_prop_at_index
+            && let Err(msg) = update_prop_on_map_at_index(
+                &mut map.props,
+                idx,
+                &map.wall_edges,
+                &occupied_m,
+                (board_w_m, board_h_m),
+                prop,
+            )
+        {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+        }
+        if let Some(prop) = req.edit_prop
+            && let Err(msg) = place_prop_on_map(
                 &mut map.props,
                 &map.wall_edges,
                 &occupied_m,
                 (board_w_m, board_h_m),
                 prop,
-            ) {
+            )
+        {
+            return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+        }
+
+        if let Some(idx) = req.remove_surface_index {
+            if idx >= map.surfaces.len() {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "Surface index out of range" })),
+                )
+                    .into_response();
+            }
+            map.surfaces.remove(idx);
+        }
+        if let Some((idx, sf)) = req.update_surface_at_index {
+            if idx >= map.surfaces.len() {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "Surface index out of range" })),
+                )
+                    .into_response();
+            }
+            if let Err(msg) = validate_surface_geometry(&sf) {
                 return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
             }
+            map.surfaces[idx] = sf;
         }
+        if let Some(sf) = req.add_surface {
+            if let Err(msg) = validate_surface_geometry(&sf) {
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+            }
+            map.surfaces.push(sf);
+        }
+
+        if let Some(override_key) = req.set_ground_floor_override {
+            let trimmed = override_key.trim();
+            map.ground_floor_override = if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            };
+        }
+        if let Some(tint_hex) = req.set_ground_tint_hex {
+            let trimmed = tint_hex.trim();
+            if trimmed.is_empty() {
+                map.ground_tint_rgb = None;
+            } else if let Some(rgb) = parse_hex_rgb(trimmed) {
+                map.ground_tint_rgb = Some(rgb);
+            } else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "Invalid #RRGGBB hex ground tint" })),
+                )
+                    .into_response();
+            }
+        }
+
         map.sync_active_floor_snapshot();
-        let _ = state
-            .auth
-            .set_session_active_map(&session_id, map.clone())
-            .await;
-        log_map_canvas_event(
-            &state,
-            &session_id,
-            ctx.session_mode,
-            CanvasEventType::MapUpdated,
-            &caller_part,
-            &map,
-        )
-        .await;
-        broadcast_role_filtered_map(&state, &session_id, &ctx.roster, &map).await;
-        return (
-            StatusCode::OK,
-            Json(filter_map_for_role(&map, caller_part.role)),
-        )
-            .into_response();
+        return persist_and_broadcast_map(&state, &session_id, &ctx, &caller_part, map).await;
     }
 
     // Branch A: Single-cell edit (door toggle or terrain paint)
     if let (Some(ex), Some(ey)) = (req.edit_cell_x, req.edit_cell_y) {
         let mut map = ctx.active_map.clone().unwrap_or_else(|| {
             let p = SectorPreset::from_code_str(&req.preset).unwrap_or_else(|| {
-    crate::campaign_lore::resolve_pack_defaults(None).default_sector_preset
-});
+                crate::campaign_lore::resolve_pack_defaults(None).default_sector_preset
+            });
             let (raw_w, raw_h) = req
                 .scale
                 .map(|s| p.resolve_scale_dimensions(s))
@@ -439,16 +625,14 @@ pub async fn session_generate_or_edit_map_handler(
         if base_map.theme_preset.is_none() && !req.preset.trim().is_empty() {
             base_map.theme_preset = Some(req.preset.clone());
         }
-        let map = match satya_engine::tactical_map::continue_procedural_map(
-            &base_map,
-            dir,
-            req.seed,
-        ) {
-            Ok(outcome) => outcome.map,
-            Err(err) => {
-                return (StatusCode::BAD_REQUEST, Json(json!({ "error": err }))).into_response();
-            }
-        };
+        let map =
+            match satya_engine::tactical_map::continue_procedural_map(&base_map, dir, req.seed) {
+                Ok(outcome) => outcome.map,
+                Err(err) => {
+                    return (StatusCode::BAD_REQUEST, Json(json!({ "error": err })))
+                        .into_response();
+                }
+            };
 
         let _ = state
             .auth
@@ -581,8 +765,7 @@ pub async fn session_generate_or_edit_map_handler(
         map.token_visuals = prev.token_visuals.clone();
         for mut tok in prev.tokens.clone() {
             let (px_cm, py_cm) = prev.token_pos_cm(&tok);
-            let (nx_cm, ny_cm) =
-                find_unblocked_spawn_pos_cm(&map, px_cm, py_cm, &occupied_m);
+            let (nx_cm, ny_cm) = find_unblocked_spawn_pos_cm(&map, px_cm, py_cm, &occupied_m);
             occupied_m.push((nx_cm as f32 / 100.0, ny_cm as f32 / 100.0));
             tok.x = (nx_cm / cell_cm).clamp(0, width - 1);
             tok.y = (ny_cm / cell_cm).clamp(0, height - 1);

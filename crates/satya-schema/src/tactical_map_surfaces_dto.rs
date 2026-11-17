@@ -15,33 +15,41 @@ use serde::{Deserialize, Serialize};
 define_wire_enum! {
     /// Classification of a continuous vector terrain surface feature.
     #[derive(Default)]
-    pub enum SurfaceFeatureKind [count = 17] {
+    pub enum SurfaceFeatureKind [count = 24] {
         #[default]
         MulchZone => ("MULCH_ZONE", "Organic Bark Mulch"),
         GardenBedZone => ("GARDEN_BED_ZONE", "Curved Garden Bed"),
+        LawnGrassZone => ("LAWN_GRASS_ZONE", "Manicured Lawn Turf"),
         DirtTrail => ("DIRT_TRAIL", "Packed Dirt Trail"),
-        DrainageDitch => ("DRAINAGE_DITCH", "Drainage Ditch"),
         DefensiveTrench => ("DEFENSIVE_TRENCH", "Excavated Trench"),
-        CreekChannel => ("CREEK_CHANNEL", "Creek / Shallow Stream"),
         GravelRoad => ("GRAVEL_ROAD", "Gravel Lane / Shoal"),
+        DrainageDitch => ("DRAINAGE_DITCH", "Drainage Ditch"),
+        CreekChannel => ("CREEK_CHANNEL", "Creek / Shallow Stream"),
         StoneWalk => ("STONE_WALK", "Flagstone Walkway"),
+        BrickPaverWalk => ("BRICK_PAVER_WALK", "Herringbone Brick Sidewalk / Alley"),
         ConcreteWalk => ("CONCRETE_WALK", "Concrete Sidewalk / Plaza"),
         AsphaltRoad => ("ASPHALT_ROAD", "Asphalt Road / Drive"),
         WoodDeck => ("WOOD_DECK", "Timber Deck / Porch"),
         PoolWater => ("POOL_WATER", "Swimming Pool"),
         InteriorFloor => ("INTERIOR_FLOOR", "Building Interior Floor"),
+        StainedConcreteFloor => ("STAINED_CONCRETE_FLOOR", "Stained Workshop / Utility Concrete"),
         CeramicTileFloor => ("CERAMIC_TILE_FLOOR", "Ceramic / Terracotta Tile Floor"),
         MarbleFloor => ("MARBLE_FLOOR", "Polished Marble Tile Floor"),
         CarpetFloor => ("CARPET_FLOOR", "Woven Carpet Flooring"),
+        ClinicalVinylFloor => ("CLINICAL_VINYL_FLOOR", "Antiseptic Medical / Lab Sheet Vinyl"),
+        LinoleumCheckFloor => ("LINOLEUM_CHECK_FLOOR", "Checkerboard Linoleum Tile"),
+        TerrazzoFloor => ("TERRAZZO_FLOOR", "Polished Terrazzo Stone Floor"),
+        SteelPlateFloor => ("STEEL_PLATE_FLOOR", "Raised Brushed-Steel Access Floor"),
         BridgeDeck => ("BRIDGE_DECK", "Bridge / Culvert Deck"),
     }
 }
 
 impl SurfaceFeatureKind {
-    /// Deterministic compositing & masking z-priority (`BridgeDeck > CarpetFloor > MarbleFloor > CeramicTileFloor > InteriorFloor > PoolWater > WoodDeck > AsphaltRoad > ConcreteWalk > StoneWalk > CreekChannel > DrainageDitch > GravelRoad > DefensiveTrench > DirtTrail > GardenBedZone > MulchZone`).
+    /// Deterministic compositing & masking z-priority (`BridgeDeck > SteelPlateFloor > TerrazzoFloor > LinoleumCheckFloor > ClinicalVinylFloor > CarpetFloor > MarbleFloor > CeramicTileFloor > StainedConcreteFloor > InteriorFloor > PoolWater > WoodDeck > AsphaltRoad > ConcreteWalk > BrickPaverWalk > StoneWalk > CreekChannel > DrainageDitch > GravelRoad > DefensiveTrench > DirtTrail > LawnGrassZone > GardenBedZone > MulchZone`).
     #[must_use]
     pub const fn layer_priority(self) -> u8 {
         match self {
+            Self::LawnGrassZone => 12,
             Self::MulchZone => 14,
             Self::GardenBedZone => 16,
             Self::DirtTrail => 24,
@@ -50,15 +58,21 @@ impl SurfaceFeatureKind {
             Self::DrainageDitch => 32,
             Self::CreekChannel => 34,
             Self::StoneWalk => 38,
+            Self::BrickPaverWalk => 42,
             Self::ConcreteWalk => 45,
             Self::AsphaltRoad => 50,
             Self::WoodDeck => 56,
             Self::PoolWater => 58,
             Self::InteriorFloor => 60,
+            Self::StainedConcreteFloor => 61,
             Self::CeramicTileFloor => 62,
             Self::MarbleFloor => 63,
             Self::CarpetFloor => 64,
-            Self::BridgeDeck => 70,
+            Self::ClinicalVinylFloor => 65,
+            Self::LinoleumCheckFloor => 66,
+            Self::TerrazzoFloor => 67,
+            Self::SteelPlateFloor => 68,
+            Self::BridgeDeck => 74,
         }
     }
 
@@ -77,31 +91,45 @@ impl SurfaceFeatureKind {
     #[must_use]
     pub const fn material(self) -> MaterialClass {
         match self {
-            Self::MulchZone | Self::DirtTrail | Self::DrainageDitch | Self::DefensiveTrench | Self::CreekChannel => {
-                MaterialClass::Earth
-            }
-            Self::GardenBedZone => MaterialClass::Foliage,
+            Self::MulchZone
+            | Self::DirtTrail
+            | Self::DrainageDitch
+            | Self::DefensiveTrench
+            | Self::CreekChannel => MaterialClass::Earth,
+            Self::GardenBedZone | Self::LawnGrassZone => MaterialClass::Foliage,
+            Self::BrickPaverWalk => MaterialClass::Brick,
             Self::GravelRoad
             | Self::StoneWalk
             | Self::PoolWater
             | Self::CeramicTileFloor
-            | Self::MarbleFloor => MaterialClass::Ceramic,
-            Self::ConcreteWalk | Self::AsphaltRoad => MaterialClass::ReinforcedConcrete,
+            | Self::MarbleFloor
+            | Self::ClinicalVinylFloor
+            | Self::LinoleumCheckFloor => MaterialClass::Ceramic,
+            Self::ConcreteWalk
+            | Self::AsphaltRoad
+            | Self::StainedConcreteFloor
+            | Self::TerrazzoFloor => MaterialClass::ReinforcedConcrete,
             Self::InteriorFloor | Self::WoodDeck => MaterialClass::SolidWood,
             Self::CarpetFloor => MaterialClass::Upholstery,
+            Self::SteelPlateFloor => MaterialClass::SheetSteel,
             Self::BridgeDeck => MaterialClass::ConcreteBlock,
         }
     }
 
-    /// Whether this surface is an indoor room floor surface (wood, tile, marble, or carpet).
+    /// Whether this surface is an indoor room floor surface (wood, tile, vinyl, terrazzo, steel, or carpet).
     #[must_use]
     pub const fn is_interior_surface(self) -> bool {
         matches!(
             self,
             Self::InteriorFloor
+                | Self::StainedConcreteFloor
                 | Self::CeramicTileFloor
                 | Self::MarbleFloor
                 | Self::CarpetFloor
+                | Self::ClinicalVinylFloor
+                | Self::LinoleumCheckFloor
+                | Self::TerrazzoFloor
+                | Self::SteelPlateFloor
         )
     }
 
@@ -120,13 +148,19 @@ impl SurfaceFeatureKind {
             self,
             Self::BridgeDeck
                 | Self::InteriorFloor
+                | Self::StainedConcreteFloor
                 | Self::CeramicTileFloor
                 | Self::MarbleFloor
                 | Self::CarpetFloor
+                | Self::ClinicalVinylFloor
+                | Self::LinoleumCheckFloor
+                | Self::TerrazzoFloor
+                | Self::SteelPlateFloor
                 | Self::WoodDeck
                 | Self::PoolWater
                 | Self::AsphaltRoad
                 | Self::ConcreteWalk
+                | Self::BrickPaverWalk
                 | Self::StoneWalk
                 | Self::GravelRoad
         )
@@ -137,10 +171,7 @@ impl SurfaceFeatureKind {
     pub const fn is_water_or_channel(self) -> bool {
         matches!(
             self,
-            Self::CreekChannel
-                | Self::DrainageDitch
-                | Self::DefensiveTrench
-                | Self::PoolWater
+            Self::CreekChannel | Self::DrainageDitch | Self::DefensiveTrench | Self::PoolWater
         )
     }
 
@@ -153,6 +184,7 @@ impl SurfaceFeatureKind {
                 | Self::AsphaltRoad
                 | Self::GravelRoad
                 | Self::StoneWalk
+                | Self::BrickPaverWalk
                 | Self::ConcreteWalk
         )
     }
@@ -200,7 +232,7 @@ impl MapPointCm {
 }
 
 /// A smooth continuous vector terrain ribbon or closed ground zone on [`crate::protocol::GmMapUpdateRequest`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct MapSurfaceFeature {
     pub kind: SurfaceFeatureKind,
     #[serde(default)]
@@ -216,6 +248,9 @@ pub struct MapSurfaceFeature {
     pub border_style_cm: i32,
     #[serde(default)]
     pub variant_seed: u32,
+    /// Optional Editor Mode color tint `[r, g, b]`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tint_rgb: Option<[u8; 3]>,
 }
 
 impl MapSurfaceFeature {
@@ -240,7 +275,10 @@ impl MapSurfaceFeature {
                 pt.y_cm = span_h_cm - pt.y_cm;
             }
         }
-        if matches!(out.shape, SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon) {
+        if matches!(
+            out.shape,
+            SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon
+        ) {
             out.points_cm.reverse();
         }
         out
@@ -264,6 +302,7 @@ mod tests {
             width_cm: 190,
             border_style_cm: 0,
             variant_seed: 17,
+            tint_rgb: None,
         };
         let json = serde_json::to_string(&feat).unwrap();
         let back: MapSurfaceFeature = serde_json::from_str(&json).unwrap();
@@ -302,7 +341,13 @@ mod tests {
                 > SurfaceFeatureKind::MulchZone.layer_priority()
         );
 
-        assert_eq!(SurfaceFeatureKind::ALL.len(), 17);
+        assert_eq!(SurfaceFeatureKind::ALL.len(), 24);
+        assert!(SurfaceFeatureKind::ClinicalVinylFloor.is_interior_surface());
+        assert!(SurfaceFeatureKind::TerrazzoFloor.is_interior_surface());
+        assert!(SurfaceFeatureKind::SteelPlateFloor.is_interior_surface());
+        assert!(SurfaceFeatureKind::BrickPaverWalk.is_road_or_pavement());
+        assert!(!SurfaceFeatureKind::LawnGrassZone.is_road_or_pavement());
+        assert_eq!(SurfaceFeatureKind::ClinicalVinylFloor.move_cost_mult(), 1.0);
         assert!(SurfaceFeatureKind::PoolWater.is_water_or_channel());
         assert!(SurfaceFeatureKind::PoolWater.is_built_floor_or_deck());
         assert!(SurfaceFeatureKind::CeramicTileFloor.is_interior_surface());

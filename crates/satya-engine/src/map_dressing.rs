@@ -182,12 +182,66 @@ prop_catalog! {
     FloorClothes: 1 x 1, FloorLayer, Upholstery, 8 cm, [0.46, 0.54, 0.66], floor;
     FloorToys: 1 x 1, FloorLayer, WoodFurniture, 12 cm, [0.84, 0.42, 0.28], floor;
     StreetDebris: 2 x 1, FloorLayer, Earth, 6 cm, [0.44, 0.42, 0.38], stretch, floor;
+    Cot: 1 x 2, HalfCover, Upholstery, 48 cm, [0.52, 0.58, 0.48];
+    Gurney: 1 x 2, HalfCover, SheetSteel, 86 cm, [0.80, 0.85, 0.89];
+    ReclinerChair: 1 x 1, HalfCover, Upholstery, 96 cm, [0.44, 0.52, 0.60];
+    MedicalCounter: 1 x 1, HalfCover, SheetSteel, 92 cm, [0.82, 0.86, 0.88], stretch;
+    NurseStation: 3 x 2, HalfCover, WoodFurniture, 108 cm, [0.74, 0.79, 0.84], stretch;
+    TelemetryMonitor: 1 x 1, FloorLayer, Appliance, 145 cm, [0.22, 0.28, 0.34], floor;
+    BiohazardBin: 1 x 1, FloorLayer, SheetSteel, 78 cm, [0.80, 0.18, 0.18], floor;
+    LinenCart: 2 x 1, HalfCover, SheetSteel, 118 cm, [0.76, 0.82, 0.88];
+    ElevatorCar: 2 x 2, FloorLayer, SheetSteel, 240 cm, [0.64, 0.68, 0.73], floor;
+    ServiceElevator: 3 x 2, FloorLayer, ArmorSteel, 240 cm, [0.58, 0.63, 0.68], floor;
+    LabBench: 2 x 1, HalfCover, SheetSteel, 92 cm, [0.28, 0.31, 0.35], stretch;
+    DeskClutter: 1 x 1, FloorLayer, WoodFurniture, 18 cm, [0.86, 0.84, 0.78], floor;
+    SolderingStation: 2 x 1, HalfCover, Appliance, 95 cm, [0.22, 0.44, 0.38];
+    TestBench: 2 x 1, HalfCover, Appliance, 125 cm, [0.30, 0.34, 0.40];
+    Printer3dStation: 2 x 1, HalfCover, Appliance, 132 cm, [0.26, 0.28, 0.32];
+    AirCompressor: 1 x 1, HalfCover, ArmorSteel, 92 cm, [0.78, 0.26, 0.18];
+    CncMill: 3 x 2, FullObstacle, ArmorSteel, 225 cm, [0.32, 0.38, 0.44];
+    ServerRack: 1 x 1, FullObstacle, SheetSteel, 210 cm, [0.16, 0.18, 0.22], stretch;
+    FumeHood: 2 x 1, FullObstacle, Glass, 215 cm, [0.82, 0.87, 0.90];
+    ShowerStall: 1 x 1, HalfCover, Glass, 205 cm, [0.80, 0.90, 0.94];
+    SpaBath: 2 x 2, HalfCover, Ceramic, 68 cm, [0.90, 0.94, 0.96];
+    LinenCloset: 1 x 1, FullObstacle, WoodFurniture, 195 cm, [0.76, 0.72, 0.66];
+    WasherDryer: 2 x 1, HalfCover, Appliance, 92 cm, [0.88, 0.89, 0.91];
+    SingleBed: 1 x 2, HalfCover, Upholstery, 58 cm, [0.76, 0.80, 0.86];
+    FilingCabinet: 1 x 1, HalfCover, SheetSteel, 132 cm, [0.54, 0.56, 0.59], stretch;
+    WaterCooler: 1 x 1, FloorLayer, Appliance, 122 cm, [0.72, 0.84, 0.92], floor;
+    BrownstoneStoop: 2 x 2, FloorLayer, Brick, 72 cm, [0.58, 0.38, 0.30], floor;
+    AwningCanopy: 2 x 1, FloorLayer, Upholstery, 255 cm, [0.72, 0.22, 0.20], stretch, floor;
 }
 
 /// Catalog entry for `kind`.
 #[must_use]
 pub const fn prop_spec(kind: PropKind) -> &'static PropSpec {
     &PROP_CATALOG[kind as usize]
+}
+
+/// Effective obstruction tier of a placed prop (`FloorLayer` whenever `p.decorative` is `true`).
+#[must_use]
+pub const fn effective_obstruction(p: &MapPropPlacement) -> PropObstruction {
+    if p.decorative {
+        PropObstruction::FloorLayer
+    } else {
+        prop_spec(p.kind).obstruction
+    }
+}
+
+/// Whether `p` is purely visual/walkable (`p.decorative` or `prop_spec(p.kind).floor_layer`).
+#[must_use]
+pub const fn is_non_blocking_prop(p: &MapPropPlacement) -> bool {
+    p.decorative || prop_spec(p.kind).floor_layer
+}
+
+/// Effective movement cost multiplier for `p` (`1.0` whenever `p.decorative` is `true`).
+#[must_use]
+pub const fn effective_move_cost_mult(p: &MapPropPlacement) -> f32 {
+    if p.decorative {
+        1.0
+    } else {
+        prop_spec(p.kind).move_cost_mult
+    }
 }
 
 /// Normalizes any integer angle into `[0, 360)` with full `1°` (`360°`) freedom.
@@ -198,7 +252,11 @@ pub const fn normalize_prop_rotation_deg(_kind: PropKind, rotation_deg: i32) -> 
 
 /// World-space AABB half-extents in centimeters for a canonical `(span_w_cm, span_h_cm)` prop rotated `rotation_deg` clockwise.
 #[must_use]
-pub fn rotated_aabb_half_extents_cm(span_w_cm: i32, span_h_cm: i32, rotation_deg: i32) -> (f32, f32) {
+pub fn rotated_aabb_half_extents_cm(
+    span_w_cm: i32,
+    span_h_cm: i32,
+    rotation_deg: i32,
+) -> (f32, f32) {
     let r = rotation_deg.rem_euclid(360);
     let sw = span_w_cm.max(1) as f32;
     let sh = span_h_cm.max(1) as f32;
@@ -263,6 +321,8 @@ pub fn make_prop(
         center_y_cm: Some(y * 100 + h_cells * 50),
         span_w_cm: Some(span_w_cm),
         span_h_cm: Some(span_h_cm),
+        tint_rgb: None,
+        decorative: false,
     }
 }
 
@@ -303,6 +363,8 @@ pub fn make_prop_at_cm(
         center_y_cm: Some(center_y_cm),
         span_w_cm: Some(span_w_cm),
         span_h_cm: Some(span_h_cm),
+        tint_rgb: None,
+        decorative: false,
     }
 }
 
@@ -310,17 +372,26 @@ pub fn make_prop_at_cm(
 #[must_use]
 pub fn terrain_hazard_prop_at(props: &[MapPropPlacement], x: i32, y: i32) -> bool {
     props.iter().any(|p| {
-        matches!(p.kind, PropKind::CreekWater | PropKind::DrainageDitch | PropKind::HazardSpill) && p.covers(x, y)
+        !p.decorative
+            && matches!(
+                p.kind,
+                PropKind::CreekWater | PropKind::DrainageDitch | PropKind::HazardSpill
+            )
+            && p.covers(x, y)
     })
 }
 
-/// Index and reference of the solid (non-floor-layer) prop covering `(x, y)`, if any.
+/// Index and reference of the solid (non-floor-layer, non-decorative) prop covering `(x, y)`, if any.
 #[must_use]
-pub fn solid_prop_index_at(props: &[MapPropPlacement], x: i32, y: i32) -> Option<(usize, &MapPropPlacement)> {
+pub fn solid_prop_index_at(
+    props: &[MapPropPlacement],
+    x: i32,
+    y: i32,
+) -> Option<(usize, &MapPropPlacement)> {
     props
         .iter()
         .enumerate()
-        .find(|(_, p)| !prop_spec(p.kind).floor_layer && p.covers(x, y))
+        .find(|(_, p)| !is_non_blocking_prop(p) && p.covers(x, y))
 }
 
 /// The solid (non-floor-layer) prop covering `(x, y)`, if any.
@@ -382,9 +453,17 @@ mod tests {
         for (i, k) in PropKind::ALL.iter().enumerate() {
             assert_eq!(PROP_CATALOG[i].kind, *k, "PROP_CATALOG out of order at {i}");
         }
-        assert!(prop_spec(PropKind::BarCounter).stretchable && prop_spec(PropKind::Rug).floor_layer);
-        assert!(prop_spec(PropKind::ElevatedCatwalk).floor_layer && prop_spec(PropKind::ElevatedCatwalk).stretchable);
-        assert_eq!(prop_spec(PropKind::StructuralPillar).obstruction, PropObstruction::FullObstacle);
+        assert!(
+            prop_spec(PropKind::BarCounter).stretchable && prop_spec(PropKind::Rug).floor_layer
+        );
+        assert!(
+            prop_spec(PropKind::ElevatedCatwalk).floor_layer
+                && prop_spec(PropKind::ElevatedCatwalk).stretchable
+        );
+        assert_eq!(
+            prop_spec(PropKind::StructuralPillar).obstruction,
+            PropObstruction::FullObstacle
+        );
         assert_eq!(prop_spec(PropKind::HazardSpill).move_cost_mult, 2.0);
         assert_eq!(normalize_prop_rotation_deg(PropKind::Sofa, 23), 23);
         assert_eq!(normalize_prop_rotation_deg(PropKind::Car, -30), 330);
@@ -412,7 +491,10 @@ mod tests {
         assert!(!desk_t.covers(5, 2) && !desk_t.covers(7, 2));
 
         let log45 = make_prop(PropKind::FallenLog, 1, 4, 45, None, 3);
-        assert_eq!((log45.w_cells, log45.h_cells, log45.rotation_deg), (3, 3, 45));
+        assert_eq!(
+            (log45.w_cells, log45.h_cells, log45.rotation_deg),
+            (3, 3, 45)
+        );
         assert!(log45.covers(1, 4) && log45.covers(2, 5) && log45.covers(3, 6));
         assert!(!log45.covers(3, 4) && !log45.covers(1, 6));
 

@@ -97,7 +97,9 @@ pub enum SocialArgumentVector {
     /// **9. Moral Sanctity, Witnessed Suffering & Mercy** (*Persuasion* `ELO/INS` / *Empathy* `INS/ITU`):
     /// When `utilitarian_greater_good_triage == false`, resonates with High `CPS >= 13` ($-(\text{CPS}-10)$) and clashes with Low `CPS <= 7` ($+(10-\text{CPS})$).
     /// When `utilitarian_greater_good_triage == true`, resonates with Low `CPS <= 7` utilitarian triage ($-(10-\text{CPS})$) and clashes violently with High `CPS >= 13` ($+(\text{CPS}-10)$).
-    MoralSanctityWitnessedSufferingMercy { utilitarian_greater_good_triage: bool },
+    MoralSanctityWitnessedSufferingMercy {
+        utilitarian_greater_good_triage: bool,
+    },
 }
 
 /// Evaluation of how a single or compound [`SocialArgumentVector`] interacts with a target's [`CharacterCharacteristics`](crate::characteristics::CharacterCharacteristics) Psyche profile
@@ -197,12 +199,7 @@ pub fn compute_single_vector_psyche_modifier(
         }
         SocialArgumentVector::MoralSanctityWitnessedSufferingMercy {
             utilitarian_greater_good_triage,
-        } => eval_trait_pole(
-            p.cps,
-            Compassion,
-            !utilitarian_greater_good_triage,
-            true,
-        ),
+        } => eval_trait_pole(p.cps, Compassion, !utilitarian_greater_good_triage, true),
     }
 }
 

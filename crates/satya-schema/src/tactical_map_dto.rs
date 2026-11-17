@@ -176,10 +176,9 @@ pub fn sanitize_portrait_url(raw: &str) -> Option<String> {
     if trimmed.is_empty() || trimmed.len() > 4096 {
         return None;
     }
-    if trimmed
-        .bytes()
-        .any(|b| b.is_ascii_control() || b.is_ascii_whitespace() || matches!(b, b'<' | b'>' | b'"' | b'\''))
-    {
+    if trimmed.bytes().any(|b| {
+        b.is_ascii_control() || b.is_ascii_whitespace() || matches!(b, b'<' | b'>' | b'"' | b'\'')
+    }) {
         return None;
     }
     let low = trimmed.to_ascii_lowercase();
@@ -305,18 +304,51 @@ pub struct GenerateSessionMapRequest {
     /// Target [`WallEdgeKind`] for `edit_edge` (`None` toggles a door open/closed).
     #[serde(default)]
     pub set_edge_kind: Option<WallEdgeKind>,
+    /// Optional [`MaterialClass`] override when painting an edge with `edit_edge`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_edge_material: Option<MaterialClass>,
     /// When `true` with `edit_edge`, removes the edge entirely (GM only).
     #[serde(default)]
     pub clear_edge: bool,
+    /// Optional batch wall/door/window edge upserts from Editor drag strokes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub batch_edges: Vec<MapWallEdge>,
+    /// Optional batch edge deletions from Editor drag strokes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clear_edges: Vec<MapEdgeRef>,
     /// Optional GM continuous prop placement/replacement on the existing active map.
     #[serde(default)]
     pub edit_prop: Option<MapPropPlacement>,
+    /// Optional in-place prop update `(index, placement)` for Editor move/rotate/stretch/tint/decorative.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update_prop_at_index: Option<(usize, MapPropPlacement)>,
+    /// Optional prop removal by index in `map.props`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remove_prop_index: Option<usize>,
     /// Optional GM prop removal covering integer cell `(x, y)` on the existing active map.
     #[serde(default)]
     pub clear_prop_at: Option<(i32, i32)>,
     /// Optional GM prop removal at continuous centimeter point `(x_cm, y_cm)`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clear_prop_at_cm: Option<(i32, i32)>,
+    /// Optional Editor addition of a vector ground surface feature.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub add_surface: Option<MapSurfaceFeature>,
+    /// Optional in-place Editor update `(index, surface)` on `map.surfaces`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update_surface_at_index: Option<(usize, MapSurfaceFeature)>,
+    /// Optional Editor removal of a vector ground surface feature by index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remove_surface_index: Option<usize>,
+    /// Optional Editor base ground pattern override (`Some("")` clears override).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_ground_floor_override: Option<String>,
+    /// Optional Editor base ground hex tint override (`Some("")` clears tint).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set_ground_tint_hex: Option<String>,
+    /// Optional atomic active-floor geometry snapshot replacement for Undo/Redo synchronization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replace_floor_geometry: Option<MapFloorLevel>,
     /// Optional cardinal boundary (`NORTH`, `SOUTH`, `EAST`, `WEST`) to seamlessly expand and stitch
     /// onto the active tactical map using edge-matched procedural generation (GM or Solo AI-GM only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -388,10 +420,21 @@ impl Default for GenerateSessionMapRequest {
             set_tile_kind: None,
             edit_edge: None,
             set_edge_kind: None,
+            set_edge_material: None,
             clear_edge: false,
+            batch_edges: Vec::new(),
+            clear_edges: Vec::new(),
             edit_prop: None,
+            update_prop_at_index: None,
+            remove_prop_index: None,
             clear_prop_at: None,
             clear_prop_at_cm: None,
+            add_surface: None,
+            update_surface_at_index: None,
+            remove_surface_index: None,
+            set_ground_floor_override: None,
+            set_ground_tint_hex: None,
+            replace_floor_geometry: None,
             continue_direction: None,
             set_active_floor: None,
             economic_tier: None,
@@ -472,19 +515,38 @@ mod tests {
             "/api/characters/../etc/passwd",
             "https://cdn.example.com/a\"b.png",
         ] {
-            assert_eq!(sanitize_portrait_url(bad), None, "expected reject for {bad}");
+            assert_eq!(
+                sanitize_portrait_url(bad),
+                None,
+                "expected reject for {bad}"
+            );
         }
     }
 
     #[test]
     fn map_continuation_dir_and_request_roundtrip() {
-        assert_eq!(MapContinuationDir::North.opposite(), MapContinuationDir::South);
-        assert_eq!(MapContinuationDir::South.opposite(), MapContinuationDir::North);
-        assert_eq!(MapContinuationDir::East.opposite(), MapContinuationDir::West);
-        assert_eq!(MapContinuationDir::West.opposite(), MapContinuationDir::East);
+        assert_eq!(
+            MapContinuationDir::North.opposite(),
+            MapContinuationDir::South
+        );
+        assert_eq!(
+            MapContinuationDir::South.opposite(),
+            MapContinuationDir::North
+        );
+        assert_eq!(
+            MapContinuationDir::East.opposite(),
+            MapContinuationDir::West
+        );
+        assert_eq!(
+            MapContinuationDir::West.opposite(),
+            MapContinuationDir::East
+        );
         assert_eq!(MapContinuationDir::East.unit_step(), (1, 0));
         assert_eq!(MapContinuationDir::West.label(), "West");
-        assert_eq!(MapContinuationDir::from_code_str("south"), Some(MapContinuationDir::South));
+        assert_eq!(
+            MapContinuationDir::from_code_str("south"),
+            Some(MapContinuationDir::South)
+        );
 
         let req = GenerateSessionMapRequest {
             continue_direction: Some(MapContinuationDir::East),
@@ -504,12 +566,27 @@ mod tests {
 
         // MapScalePreset roundtrip & resolution
         assert_eq!(MapScalePreset::Auto.resolve_dimensions((36, 26)), (36, 26));
-        assert_eq!(MapScalePreset::Compact.resolve_dimensions((36, 26)), (24, 18));
-        assert_eq!(MapScalePreset::Standard.resolve_dimensions((48, 36)), (36, 26));
+        assert_eq!(
+            MapScalePreset::Compact.resolve_dimensions((36, 26)),
+            (24, 18)
+        );
+        assert_eq!(
+            MapScalePreset::Standard.resolve_dimensions((48, 36)),
+            (36, 26)
+        );
         assert_eq!(MapScalePreset::Large.resolve_dimensions((24, 18)), (48, 36));
-        assert_eq!(MapScalePreset::Massive.resolve_dimensions((24, 18)), (64, 48));
-        assert_eq!(MapScalePreset::parse_loose("standard"), MapScalePreset::Standard);
-        assert_eq!(MapScalePreset::parse_loose("64x48"), MapScalePreset::Massive);
+        assert_eq!(
+            MapScalePreset::Massive.resolve_dimensions((24, 18)),
+            (64, 48)
+        );
+        assert_eq!(
+            MapScalePreset::parse_loose("standard"),
+            MapScalePreset::Standard
+        );
+        assert_eq!(
+            MapScalePreset::parse_loose("64x48"),
+            MapScalePreset::Massive
+        );
         assert_eq!(MapScalePreset::parse_loose("unknown"), MapScalePreset::Auto);
 
         let scaled_req = GenerateSessionMapRequest {

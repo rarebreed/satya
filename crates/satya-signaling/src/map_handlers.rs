@@ -30,7 +30,10 @@ use uuid::Uuid;
 /// Returns `true` when `role` is authorized to view `MessageVisibility::GmOnly` map tokens.
 #[must_use]
 pub fn can_role_see_gm_only_tokens(role: SessionRole) -> bool {
-    matches!(role, SessionRole::Gm | SessionRole::Host | SessionRole::AiGm)
+    matches!(
+        role,
+        SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
+    )
 }
 
 /// Filters `MessageVisibility::GmOnly` tokens (and their `token_visuals`) from `map` when `role` is a non-GM player or observer.
@@ -184,10 +187,7 @@ pub(crate) fn find_unblocked_spawn_pos_cm(
             let cx_m = pref_x_m + r_m * rad.cos();
             let cy_m = pref_y_m + r_m * rad.sin();
             if is_free(cx_m, cy_m) {
-                return (
-                    (cx_m * 100.0).round() as i32,
-                    (cy_m * 100.0).round() as i32,
-                );
+                return ((cx_m * 100.0).round() as i32, (cy_m * 100.0).round() as i32);
             }
         }
     }
@@ -323,7 +323,12 @@ pub async fn session_move_map_token_handler(
         )
             .into_response();
     };
-    let Some(caller_part) = ctx.roster.iter().find(|p| p.user_id == user.user_id).cloned() else {
+    let Some(caller_part) = ctx
+        .roster
+        .iter()
+        .find(|p| p.user_id == user.user_id)
+        .cloned()
+    else {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({ "error": "Caller is not an active participant in this session" })),
@@ -410,11 +415,7 @@ pub async fn session_move_map_token_handler(
         } {
             Ok(coords) => coords,
             Err(msg) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({ "error": msg })),
-                )
-                    .into_response();
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
             }
         };
 
@@ -444,7 +445,12 @@ pub async fn session_move_map_token_handler(
             if let Some(tok) = map.tokens.iter_mut().find(|t| t.entity_id == req.entity_id) {
                 tok.x = final_gx;
                 tok.y = final_gy;
-                if let Some(lbl) = req.label.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                if let Some(lbl) = req
+                    .label
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                {
                     tok.label = lbl.to_string();
                 }
                 if req.visibility.is_some() && can_role_see_gm_only_tokens(caller_part.role) {

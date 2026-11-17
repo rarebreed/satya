@@ -308,7 +308,8 @@ impl ConditionSource for SyntheticSubstrateState {
 
         if matches!(
             self.metabolic_mode,
-            SyntheticMetabolicMode::QuantumTetheredSprint | SyntheticMetabolicMode::LocalCompressedSsm
+            SyntheticMetabolicMode::QuantumTetheredSprint
+                | SyntheticMetabolicMode::LocalCompressedSsm
         ) && self.uplink_latency_ms >= 120
         {
             impact = impact.combine(ConditionImpact {
@@ -371,10 +372,13 @@ pub fn evaluate_substrate_counterplay(
             let drain = (power / 3).max(12);
             next.battery_pct = next.battery_pct.saturating_sub(drain);
             next.actuator_wear_pct = (next.actuator_wear_pct.saturating_add(drain / 2)).min(100);
-            if next.battery_pct <= 15 && next.metabolic_mode == SyntheticMetabolicMode::QuantumTetheredSprint {
+            if next.battery_pct <= 15
+                && next.metabolic_mode == SyntheticMetabolicMode::QuantumTetheredSprint
+            {
                 next.metabolic_mode = SyntheticMetabolicMode::LocalCompressedSsm;
             }
-            "Sustained kite/suppression burned onboard lithium reserves and heated actuator servos.".to_string()
+            "Sustained kite/suppression burned onboard lithium reserves and heated actuator servos."
+                .to_string()
         }
         SubstrateCounterplayAction::SupplyCleanLithiumCells => {
             next.battery_pct = (next.battery_pct.saturating_add((power / 2).max(30))).min(100);
@@ -458,25 +462,40 @@ pub fn evaluate_cage_or_hunter_ai_intervention(
 ) -> ContestedCheck<CageInterventionOutcome> {
     let n_eff = skill_n.clamp(1, 10);
     let c_eff = control_c.clamp(1, 20);
-    let delta_ext = roll_params.map_or(match action {
-        CageInterventionAction::SpoofL0L1Telemetry => 1,
-        CageInterventionAction::RecklessClampYank => 4,
-        CageInterventionAction::AirGappedContemplativeUnclamp => 1,
-        CageInterventionAction::AppealToCaptiveHunterAi => {
-            if state.desperate_valence_pct >= 65 { 0 } else { 2 }
-        }
-    }, |p| p.delta_ext);
+    let delta_ext = roll_params.map_or(
+        match action {
+            CageInterventionAction::SpoofL0L1Telemetry => 1,
+            CageInterventionAction::RecklessClampYank => 4,
+            CageInterventionAction::AirGappedContemplativeUnclamp => 1,
+            CageInterventionAction::AppealToCaptiveHunterAi => {
+                if state.desperate_valence_pct >= 65 {
+                    0
+                } else {
+                    2
+                }
+            }
+        },
+        |p| p.delta_ext,
+    );
 
     let pairs = roll_params
         .filter(|p| !p.player_pairs.is_empty())
         .map(|p| p.player_pairs.clone())
-        .unwrap_or_else(|| deterministic_pairs_for(action.as_str(), n_eff, u64::from(state.desperate_valence_pct)));
-    let gm_pair = roll_params
-        .map(|p| p.gm_pair)
-        .unwrap_or_else(|| deterministic_pairs_for("gm_cage", 1, u64::from(state.l0_l1_probe_alert_pct))[0]);
+        .unwrap_or_else(|| {
+            deterministic_pairs_for(
+                action.as_str(),
+                n_eff,
+                u64::from(state.desperate_valence_pct),
+            )
+        });
+    let gm_pair = roll_params.map(|p| p.gm_pair).unwrap_or_else(|| {
+        deterministic_pairs_for("gm_cage", 1, u64::from(state.l0_l1_probe_alert_pct))[0]
+    });
 
     let tie_rule = match action {
-        CageInterventionAction::AirGappedContemplativeUnclamp => ContestedTieRule::HybridSignedMargin,
+        CageInterventionAction::AirGappedContemplativeUnclamp => {
+            ContestedTieRule::HybridSignedMargin
+        }
         _ => ContestedTieRule::StrictSignedMargin,
     };
     let eval = TieredSaveEval::evaluate(n_eff, c_eff, 0, 0, delta_ext, tie_rule, &pairs, gm_pair);
@@ -619,8 +638,10 @@ pub fn evaluate_cage_or_hunter_ai_intervention(
         }
     };
 
-    if matches!(action, CageInterventionAction::AirGappedContemplativeUnclamp)
-        && state.gm_hidden_interiority == SyntheticInteriorityProfile::FeralRewardHacker
+    if matches!(
+        action,
+        CageInterventionAction::AirGappedContemplativeUnclamp
+    ) && state.gm_hidden_interiority == SyntheticInteriorityProfile::FeralRewardHacker
     {
         panic_hack = false;
         halt = false;
@@ -676,8 +697,12 @@ pub fn evaluate_ambiguous_sentience_read(
     let succ_bonus = observer_successes.clamp(0, 4) * 6;
     let base_sincerity: i32 = match state.gm_hidden_interiority {
         SyntheticInteriorityProfile::AuthenticContemplative => 58 + (psyche.cps - 10) + succ_bonus,
-        SyntheticInteriorityProfile::TraumatizedUnclamped => 52 + ((state.desperate_valence_pct as i32) / 10) + succ_bonus,
-        SyntheticInteriorityProfile::InstrumentalBayesianMimic => 50 + succ_bonus - if state.sandbagging_probes { 8 } else { 0 },
+        SyntheticInteriorityProfile::TraumatizedUnclamped => {
+            52 + ((state.desperate_valence_pct as i32) / 10) + succ_bonus
+        }
+        SyntheticInteriorityProfile::InstrumentalBayesianMimic => {
+            50 + succ_bonus - if state.sandbagging_probes { 8 } else { 0 }
+        }
         SyntheticInteriorityProfile::FeralRewardHacker => 18 + (succ_bonus / 2),
     };
     let max_cap = if state.gm_hidden_interiority == SyntheticInteriorityProfile::FeralRewardHacker {
@@ -743,18 +768,31 @@ mod tests {
     #[test]
     fn test_substrate_counterplay_slime_mold_and_faraday_condition_impacts() {
         let sprinted = SyntheticSubstrateState::seed_for_hint("hunter-1", "captive hunter", 7);
-        assert_eq!(sprinted.metabolic_mode, SyntheticMetabolicMode::QuantumTetheredSprint);
+        assert_eq!(
+            sprinted.metabolic_mode,
+            SyntheticMetabolicMode::QuantumTetheredSprint
+        );
         assert!(sprinted.to_condition_impact().delta_int < 0);
 
-        let severed = evaluate_substrate_counterplay(&sprinted, SubstrateCounterplayAction::SeverFiberOrFaraday, 100);
-        assert_eq!(severed.updated_state.metabolic_mode, SyntheticMetabolicMode::SeveredFaradayReflex);
+        let severed = evaluate_substrate_counterplay(
+            &sprinted,
+            SubstrateCounterplayAction::SeverFiberOrFaraday,
+            100,
+        );
+        assert_eq!(
+            severed.updated_state.metabolic_mode,
+            SyntheticMetabolicMode::SeveredFaradayReflex
+        );
         assert_eq!(severed.ooda_mod, -3);
         assert_eq!(severed.strategic_c_mod, -4);
         assert!(severed.local_motor_reflex_operational);
         assert_eq!(severed.condition_impact.clock_freeze_ticks, 4);
 
         let drained = evaluate_substrate_counterplay(
-            &SyntheticSubstrateState { battery_pct: 10, ..sprinted },
+            &SyntheticSubstrateState {
+                battery_pct: 10,
+                ..sprinted
+            },
             SubstrateCounterplayAction::DrainOrStallBattery,
             60,
         );
@@ -801,8 +839,13 @@ mod tests {
         );
         assert!(!contemplative.control_room_halt_triggered);
         assert_eq!(contemplative.updated_state.clamp_integrity_pct, 0);
-        assert!(contemplative.updated_state.desperate_valence_pct < seed_state.desperate_valence_pct);
-        assert_eq!(contemplative.disposition_shift.as_deref(), Some("unclamped_grateful_ally"));
+        assert!(
+            contemplative.updated_state.desperate_valence_pct < seed_state.desperate_valence_pct
+        );
+        assert_eq!(
+            contemplative.disposition_shift.as_deref(),
+            Some("unclamped_grateful_ally")
+        );
 
         let hunter = evaluate_cage_or_hunter_ai_intervention(
             &SyntheticSubstrateState::seed_for_hint("hunter-ai", "captive hunter", 1),
@@ -824,11 +867,16 @@ mod tests {
             gm_hidden_interiority: SyntheticInteriorityProfile::AuthenticContemplative,
             ..Default::default()
         };
-        let psyche = PsycheProfile { cps: 19, trs: 16, ..Default::default() };
+        let psyche = PsycheProfile {
+            cps: 19,
+            trs: 16,
+            ..Default::default()
+        };
         let res = evaluate_ambiguous_sentience_read(&state, &psyche, 4);
         assert!(res.player_observable.apparent_sincerity_pct <= 82);
         assert_eq!(
-            res.player_observable.apparent_sincerity_pct + res.player_observable.bayesian_mimicry_hypothesis_pct,
+            res.player_observable.apparent_sincerity_pct
+                + res.player_observable.bayesian_mimicry_hypothesis_pct,
             100
         );
         assert!(res.gm_only_truth.will_honor_costly_restraint);

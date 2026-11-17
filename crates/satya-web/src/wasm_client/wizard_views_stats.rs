@@ -75,7 +75,9 @@ pub(crate) fn format_pool_slot_options_html<C: PoolCodeLabel>(
     } else {
         ""
     };
-    opts.push(format!(r#"<option value=""{none_selected}>{none_label}</option>"#));
+    opts.push(format!(
+        r#"<option value=""{none_selected}>{none_label}</option>"#
+    ));
     let cur_code = codes.get(cur_idx).map_or("?", |c| c.code_label());
     for slot_idx in 0..pool_len {
         let sel_attr = if cur_selected == Some(slot_idx) {

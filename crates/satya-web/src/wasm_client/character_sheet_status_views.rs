@@ -245,7 +245,11 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
     ]
     .iter()
     .map(|&(t, lbl)| {
-        let s = if sel_zone.wound_tier == t { " selected" } else { "" };
+        let s = if sel_zone.wound_tier == t {
+            " selected"
+        } else {
+            ""
+        };
         format!(r#"<option value="{t}"{s}>{lbl}</option>"#)
     })
     .collect::<Vec<_>>()
@@ -254,7 +258,11 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
     let bone_opts: String = BoneFractureStatus::ALL
         .iter()
         .map(|&b| {
-            let s = if sel_zone.bone_status == b { " selected" } else { "" };
+            let s = if sel_zone.bone_status == b {
+                " selected"
+            } else {
+                ""
+            };
             format!(r#"<option value="{}"{s}>{}</option>"#, b.code(), b.label())
         })
         .collect::<Vec<_>>()
@@ -263,7 +271,11 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
     let bleed_opts: String = HemorrhageGrade::ALL
         .iter()
         .map(|&g| {
-            let s = if sel_zone.bleed_grade == g { " selected" } else { "" };
+            let s = if sel_zone.bleed_grade == g {
+                " selected"
+            } else {
+                ""
+            };
             format!(
                 r#"<option value="{}"{s}>{}</option>"#,
                 g.grade_number(),
@@ -365,7 +377,11 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
     let morale_opts: String = MoraleState::ALL
         .iter()
         .map(|&m| {
-            let s = if sheet.morale_state == m { " selected" } else { "" };
+            let s = if sheet.morale_state == m {
+                " selected"
+            } else {
+                ""
+            };
             format!(
                 r#"<option value="{}"{s}>{} ({:+} Pool)</option>"#,
                 m.as_str(),
@@ -376,9 +392,15 @@ pub fn format_character_status_and_hit_locations_html(sheet: &CharacterSheetStat
         .collect::<Vec<_>>()
         .join("");
 
-    let cur_mt = sheet.mental_trauma.map_or("NONE", AcuteMentalTraumaTier::code);
+    let cur_mt = sheet
+        .mental_trauma
+        .map_or("NONE", AcuteMentalTraumaTier::code);
     let mt_opts: String = std::iter::once(("NONE", "None (Mentally Composed)"))
-        .chain(AcuteMentalTraumaTier::ALL.iter().map(|&t| (t.code(), t.label())))
+        .chain(
+            AcuteMentalTraumaTier::ALL
+                .iter()
+                .map(|&t| (t.code(), t.label())),
+        )
         .map(|(code, lbl)| {
             let s = if cur_mt == code { " selected" } else { "" };
             format!(r#"<option value="{code}"{s}>{}</option>"#, escape_html(lbl))

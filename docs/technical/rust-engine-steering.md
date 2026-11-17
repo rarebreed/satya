@@ -5,6 +5,6 @@
 
 ## Related References
 
-- **Crate Rules & Module Inventory**: [`crates/satya-engine/AGENTS.md`](../../crates/satya-engine/AGENTS.md)
+- **Crate Rules & Responsibility Map**: [`crates/satya-engine/AGENTS.md`](../../crates/satya-engine/AGENTS.md)
 - **Universal Workspace Standards**: [`.agents/skills/satya-rust-workspace/SKILL.md`](../../.agents/skills/satya-rust-workspace/SKILL.md)
 - **TTRPG Rules Reference**: [`docs/ttrpg/SUMMARY.md`](../ttrpg/SUMMARY.md)

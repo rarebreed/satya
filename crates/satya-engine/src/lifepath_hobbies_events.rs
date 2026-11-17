@@ -410,12 +410,14 @@ impl FormativeLifeEventId {
     #[must_use]
     pub const fn branch_labels(self) -> Option<(&'static str, &'static str)> {
         match self {
-            Self::BereavementFamilyDeath => {
-                Some(("Refuse to let others suffer (+1 CPS)", "Withdraw into isolation (-2 BLG)"))
-            }
-            Self::AiAutomationDisplacementShock => {
-                Some(("Seek root truth (+1 OPN, +1 CPS)", "Bitter resentment (-2 OPN, +2 AGG)"))
-            }
+            Self::BereavementFamilyDeath => Some((
+                "Refuse to let others suffer (+1 CPS)",
+                "Withdraw into isolation (-2 BLG)",
+            )),
+            Self::AiAutomationDisplacementShock => Some((
+                "Seek root truth (+1 OPN, +1 CPS)",
+                "Bitter resentment (-2 OPN, +2 AGG)",
+            )),
             Self::TransformativeRomanceFoundFamily => Some((
                 "Protect chosen family (+1 BLG, +1 CPS)",
                 "Shared mutual faith (+1 BLG, +1 TRS)",

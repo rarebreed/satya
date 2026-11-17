@@ -8,11 +8,13 @@
 use std::collections::VecDeque;
 
 use satya_schema::{
-    EconomicTier, MapFloorLevel, MapPointCm, MapPropPlacement, MapSurfaceFeature,
-    MapWallEdge, PropKind, SurfaceFeatureKind, SurfaceShapeKind,
+    EconomicTier, MapFloorLevel, MapPointCm, MapPropPlacement, MapSurfaceFeature, MapWallEdge,
+    SurfaceFeatureKind, SurfaceShapeKind,
 };
+#[cfg(test)]
+use satya_schema::PropKind;
 
-use crate::map_dressing::{PropObstruction, prop_spec};
+use crate::map_dressing::{PropObstruction, effective_obstruction};
 use crate::map_home_floorplan::{build_blueprint_floor, plan_home_blueprint};
 use crate::map_interior_gen::Room;
 use crate::tactical_map_geom::TOKEN_RADIUS_M;
@@ -61,7 +63,12 @@ impl LotBox {
     }
 
     #[must_use]
-    pub fn polygon_feature(self, kind: SurfaceFeatureKind, corner_cm: i32, seed: u32) -> MapSurfaceFeature {
+    pub fn polygon_feature(
+        self,
+        kind: SurfaceFeatureKind,
+        corner_cm: i32,
+        seed: u32,
+    ) -> MapSurfaceFeature {
         MapSurfaceFeature {
             kind,
             shape: SurfaceShapeKind::Polygon,
@@ -74,6 +81,7 @@ impl LotBox {
             width_cm: 0,
             border_style_cm: corner_cm,
             variant_seed: seed,
+            tint_rgb: None,
         }
     }
 }
@@ -116,7 +124,11 @@ pub struct GeneratedHome {
 impl GeneratedHome {
     /// Converts upper/basement floor data into wire [`MapFloorLevel`] entries sorted ascending by `floor_index`.
     #[must_use]
-    pub fn into_floor_levels(self, ground_merged: FloorContent, has_cellar: bool) -> Vec<MapFloorLevel> {
+    pub fn into_floor_levels(
+        self,
+        ground_merged: FloorContent,
+        has_cellar: bool,
+    ) -> Vec<MapFloorLevel> {
         let mut levels = Vec::new();
         if let Some(b1) = self.basement
             && has_cellar
@@ -128,6 +140,7 @@ impl GeneratedHome {
                 wall_edges: b1.wall_edges,
                 props: b1.props,
                 surfaces: b1.surfaces,
+                ..Default::default()
             });
         }
         levels.push(MapFloorLevel {
@@ -137,6 +150,7 @@ impl GeneratedHome {
             wall_edges: ground_merged.wall_edges,
             props: ground_merged.props,
             surfaces: ground_merged.surfaces,
+            ..Default::default()
         });
         if let Some(f2) = self.upper {
             levels.push(MapFloorLevel {
@@ -146,6 +160,7 @@ impl GeneratedHome {
                 wall_edges: f2.wall_edges,
                 props: f2.props,
                 surfaces: f2.surfaces,
+                ..Default::default()
             });
         }
         levels.sort_by_key(|f| f.floor_index);
@@ -179,7 +194,7 @@ pub fn floor_lot_connected(
     };
     let mut open = vec![false; cols * rows];
     let mut first = None;
-    let stair = props.iter().find(|p| p.kind == PropKind::Stairwell);
+    let stair = props.iter().find(|p| p.kind.is_vertical_portal());
     let mut preferred = None;
     for iy in 0..rows {
         for ix in 0..cols {
@@ -230,8 +245,12 @@ pub fn floor_lot_connected(
         for gx in lot.x0..lot.x1 {
             let cx = gx as f32 + 0.5;
             let cy = gy as f32 + 0.5;
-            if spatial.circle_hits_wall(cx, cy, TOKEN_RADIUS_M, SpatialWallFilter::WallsAndWindowsOnly)
-                || spatial.any_full_obstacle_prop_intersects_circle(cx, cy, TOKEN_RADIUS_M - 1e-4)
+            if spatial.circle_hits_wall(
+                cx,
+                cy,
+                TOKEN_RADIUS_M,
+                SpatialWallFilter::WallsAndWindowsOnly,
+            ) || spatial.any_full_obstacle_prop_intersects_circle(cx, cy, TOKEN_RADIUS_M - 1e-4)
             {
                 continue;
             }
@@ -266,11 +285,11 @@ pub(crate) fn trim_floor_props_to_connected(
         guard += 1;
         match props
             .iter()
-            .rposition(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle)
+            .rposition(|p| effective_obstruction(p) == PropObstruction::FullObstacle)
             .or_else(|| {
                 props
                     .iter()
-                    .rposition(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover)
+                    .rposition(|p| effective_obstruction(p) == PropObstruction::HalfCover)
             }) {
             Some(i) => {
                 props.remove(i);
@@ -296,7 +315,13 @@ pub fn generate_home_in_lot(
     spawn_pads_m: &[(f32, f32)],
     seed: u64,
 ) -> GeneratedHome {
-    let bp = plan_home_blueprint(lot, tier, entry_side, allow_upper_floor || allow_basement, seed);
+    let bp = plan_home_blueprint(
+        lot,
+        tier,
+        entry_side,
+        allow_upper_floor || allow_basement,
+        seed,
+    );
     let ground = build_blueprint_floor(
         board_w,
         board_h,
@@ -308,7 +333,11 @@ pub fn generate_home_in_lot(
         spawn_pads_m,
         seed,
     );
-    let upper = if allow_upper_floor && bp.stair.is_some() && bp.main_wing.w() >= 5 && bp.main_wing.h() >= 4 {
+    let upper = if allow_upper_floor
+        && bp.stair.is_some()
+        && bp.main_wing.w() >= 5
+        && bp.main_wing.h() >= 4
+    {
         Some(build_blueprint_floor(
             board_w,
             board_h,
@@ -323,21 +352,22 @@ pub fn generate_home_in_lot(
     } else {
         None
     };
-    let basement = if allow_basement && bp.stair.is_some() && bp.main_wing.w() >= 6 && bp.main_wing.h() >= 5 {
-        Some(build_blueprint_floor(
-            board_w,
-            board_h,
-            &bp,
-            tier,
-            entry_side,
-            -1,
-            false,
-            &[],
-            seed.wrapping_add(202),
-        ))
-    } else {
-        None
-    };
+    let basement =
+        if allow_basement && bp.stair.is_some() && bp.main_wing.w() >= 6 && bp.main_wing.h() >= 5 {
+            Some(build_blueprint_floor(
+                board_w,
+                board_h,
+                &bp,
+                tier,
+                entry_side,
+                -1,
+                false,
+                &[],
+                seed.wrapping_add(202),
+            ))
+        } else {
+            None
+        };
 
     GeneratedHome {
         lot,
@@ -367,7 +397,10 @@ mod tests {
             .collect();
         assert!(!wings.is_empty(), "{label} missing InteriorFloor wing");
         for wing in wings {
-            assert!(floor_lot_connected(board_w, board_h, wing, &floor.wall_edges, &floor.props), "{label} wing {wing:?} disconnected");
+            assert!(
+                floor_lot_connected(board_w, board_h, wing, &floor.wall_edges, &floor.props),
+                "{label} wing {wing:?} disconnected"
+            );
         }
     }
 
@@ -394,13 +427,30 @@ mod tests {
                 assert_wings_connected(28, 22, &home.ground, &format!("{tier:?}/{seed} 1F"));
                 let f2 = home.upper.as_ref().expect("2F level present");
                 assert_wings_connected(28, 22, f2, &format!("{tier:?}/{seed} 2F"));
-                let st1 = home.ground.props.iter().find(|p| p.kind == PropKind::Stairwell).unwrap();
-                let st2 = f2.props.iter().find(|p| p.kind == PropKind::Stairwell).unwrap();
-                assert_eq!(st1.center_cm(), st2.center_cm(), "{tier:?} stairs must align across floors");
+                let st1 = home
+                    .ground
+                    .props
+                    .iter()
+                    .find(|p| p.kind == PropKind::Stairwell)
+                    .unwrap();
+                let st2 = f2
+                    .props
+                    .iter()
+                    .find(|p| p.kind == PropKind::Stairwell)
+                    .unwrap();
+                assert_eq!(
+                    st1.center_cm(),
+                    st2.center_cm(),
+                    "{tier:?} stairs must align across floors"
+                );
                 if allow_b1 {
                     let b1 = home.basement.as_ref().expect("B1 cellar present");
                     assert_wings_connected(28, 22, b1, &format!("{tier:?}/{seed} B1"));
-                    let stb = b1.props.iter().find(|p| p.kind == PropKind::Stairwell).unwrap();
+                    let stb = b1
+                        .props
+                        .iter()
+                        .find(|p| p.kind == PropKind::Stairwell)
+                        .unwrap();
                     assert_eq!(st1.center_cm(), stb.center_cm());
                 }
             }

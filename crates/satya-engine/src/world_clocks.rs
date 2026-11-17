@@ -232,7 +232,12 @@ pub fn apply_world_ledger_update(
     let prev_heat = ledger.operational_heat;
     let prev_frozen = ledger.legal_bank_accounts_frozen;
 
-    if let Some(pack) = req.pack_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(pack) = req
+        .pack_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         ledger.pack_id = pack.to_string();
     }
     if let Some(tier) = req.economic_tier {
@@ -266,7 +271,9 @@ pub fn apply_world_ledger_update(
     if next_heat != prev_heat {
         alerts.push(format!(
             "Operational Heat shifted {} -> {}/10 ({})",
-            prev_heat, next_heat, status.tier.label()
+            prev_heat,
+            next_heat,
+            status.tier.label()
         ));
     }
     if !prev_frozen && status.legal_bank_accounts_frozen {
@@ -276,7 +283,12 @@ pub fn apply_world_ledger_update(
         );
     }
 
-    if let Some(raw_fid) = req.faction_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(raw_fid) = req
+        .faction_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         let needle = raw_fid.to_ascii_lowercase();
         let canonical_clock_id = AwakenedFactionId::from_code_str(raw_fid).map(|f| match f {
             AwakenedFactionId::Satyang => "satyang",
@@ -307,17 +319,35 @@ pub fn apply_world_ledger_update(
                 public_rumor: req.public_rumor.clone().unwrap_or_default(),
                 gm_secret_agenda: req.gm_secret_agenda.clone(),
             });
-            ledger.faction_clocks.last_mut().expect("pushed clock exists")
+            ledger
+                .faction_clocks
+                .last_mut()
+                .expect("pushed clock exists")
         };
 
         let prev_prog = clock.progress;
-        if let Some(title) = req.clock_title.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(title) = req
+            .clock_title
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             clock.clock_title = title.to_string();
         }
-        if let Some(rumor) = req.public_rumor.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(rumor) = req
+            .public_rumor
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             clock.public_rumor = rumor.to_string();
         }
-        if let Some(agenda) = req.gm_secret_agenda.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(agenda) = req
+            .gm_secret_agenda
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             clock.gm_secret_agenda = Some(agenda.to_string());
         }
         if let Some(cd) = req.clock_delta {
@@ -330,7 +360,12 @@ pub fn apply_world_ledger_update(
         if clock.progress != prev_prog {
             alerts.push(format!(
                 "Faction Clock [{} — {}]: {}/{} -> {}/{}",
-                clock.faction_name, clock.clock_title, prev_prog, clock.segments, clock.progress, clock.segments
+                clock.faction_name,
+                clock.clock_title,
+                prev_prog,
+                clock.segments,
+                clock.progress,
+                clock.segments
             ));
             if clock.progress >= clock.segments {
                 alerts.push(format!(
@@ -397,8 +432,18 @@ mod tests {
             ZoningContext::SuburbanNeighborhood,
         );
         assert_eq!(awakened.faction_clocks.len(), 5);
-        assert!(awakened.faction_clocks.iter().any(|c| c.faction_id == "daise"));
-        assert!(awakened.faction_clocks.iter().any(|c| c.faction_id == "satyang"));
+        assert!(
+            awakened
+                .faction_clocks
+                .iter()
+                .any(|c| c.faction_id == "daise")
+        );
+        assert!(
+            awakened
+                .faction_clocks
+                .iter()
+                .any(|c| c.faction_id == "satyang")
+        );
         assert_eq!(awakened.black_market_delta_ext_mod, 3);
 
         let space = seed_default_world_ledger(
@@ -409,7 +454,12 @@ mod tests {
             ZoningContext::UrbanResidential,
         );
         assert_eq!(space.faction_clocks.len(), 3);
-        assert!(space.faction_clocks.iter().any(|c| c.faction_id == "station_secops"));
+        assert!(
+            space
+                .faction_clocks
+                .iter()
+                .any(|c| c.faction_id == "station_secops")
+        );
 
         let mut luxury = awakened.clone();
         let alerts_lux = apply_world_ledger_update(
@@ -459,7 +509,12 @@ mod tests {
         assert_eq!(daise.progress, 6);
 
         let player_view = filter_world_ledger_for_viewer(&projects, false);
-        assert!(player_view.faction_clocks.iter().all(|c| c.gm_secret_agenda.is_none()));
+        assert!(
+            player_view
+                .faction_clocks
+                .iter()
+                .all(|c| c.gm_secret_agenda.is_none())
+        );
     }
 
     #[test]

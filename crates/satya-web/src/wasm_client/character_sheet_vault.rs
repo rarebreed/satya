@@ -9,10 +9,10 @@ use crate::wasm_client::character_sheet::{CharacterSheetState, render_character_
 pub use crate::wasm_client::character_sheet_record::*;
 use crate::wasm_client::chat_and_ttrpg::append_system_notice;
 pub use crate::wasm_client::dom::encode_base64_bytes;
+use crate::wasm_client::dom::{escape_html, fetch_json, select_value, slugify_identifier, window};
 pub(crate) use crate::wasm_client::dom::{
     prompt_save_bytes as prompt_save_satyachar_bytes, read_first_file_bytes,
 };
-use crate::wasm_client::dom::{escape_html, fetch_json, select_value, slugify_identifier, window};
 use crate::wasm_client::state::{with_state, with_state_mut};
 use js_sys::Uint8Array;
 use satya_schema::{
@@ -645,7 +645,8 @@ pub fn satya_char_sheet_upload_asset() {
         let kind_str = select_value("char-asset-kind-select");
         let asset_kind = CharacterAssetKind::from_code_str(&kind_str);
         if asset_kind == CharacterAssetKind::Model3dGlb {
-            let _ = crate::wasm_client::model_3d_wgpu::set_custom_glb_asset(&filename, bytes.clone());
+            let _ =
+                crate::wasm_client::model_3d_wgpu::set_custom_glb_asset(&filename, bytes.clone());
         }
 
         let (tok_opt, session_id, record): (Option<String>, Option<String>, CharacterSheetRecord) =

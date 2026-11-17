@@ -140,6 +140,12 @@ pub struct GmMapUpdateRequest {
     /// Macro-world stitched sector cells (`(sector_x, sector_y)`, bounds, zoning & `N/S/E/W` border profiles).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub world_sectors: Vec<WorldSectorCell>,
+    /// Optional Editor Mode base floor pattern override for the active floor (`"hardwood"`, `"grass_lush"`, etc.).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ground_floor_override: Option<String>,
+    /// Optional Editor Mode base ground color tint RGB override for the active floor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ground_tint_rgb: Option<[u8; 3]>,
 }
 
 impl Default for GmMapUpdateRequest {
@@ -163,6 +169,8 @@ impl Default for GmMapUpdateRequest {
             floors: Vec::new(),
             active_floor: 0,
             world_sectors: Vec::new(),
+            ground_floor_override: None,
+            ground_tint_rgb: None,
         }
     }
 }
@@ -204,9 +212,7 @@ impl GmMapUpdateRequest {
     /// Looks up the [`TokenVisualSpec`] for `entity_id`, if present.
     #[must_use]
     pub fn visual_for(&self, entity_id: &str) -> Option<&TokenVisualSpec> {
-        self.token_visuals
-            .iter()
-            .find(|v| v.entity_id == entity_id)
+        self.token_visuals.iter().find(|v| v.entity_id == entity_id)
     }
 
     /// Authoritative continuous center coordinate `(x_cm, y_cm)` for `tok`, falling back to the

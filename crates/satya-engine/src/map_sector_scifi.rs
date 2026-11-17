@@ -6,6 +6,7 @@
 
 use satya_schema::{EdgeSide, MaterialClass, PropKind, SurfaceFeatureKind, WallEdgeKind};
 
+use crate::map_dressing::make_prop;
 use crate::map_sector_gen::{Rect, SURF_CATWALK, SURF_HAZARD, SectorBuilder, Side};
 
 fn add_rect_floor(b: &mut SectorBuilder, x0: f32, y0: f32, x1: f32, y1: f32, seed: u32) {
@@ -41,7 +42,12 @@ pub(crate) fn build_docking_bay(b: &mut SectorBuilder) {
         add_rect_floor(b, ax0, ay1, w as f32, h as f32, 505);
         b.add_polygon_surface(
             SurfaceFeatureKind::AsphaltRoad,
-            &[(ax0 - 0.15, ay0 - 0.15), (w as f32, ay0 - 0.15), (w as f32, ay1 + 0.15), (ax0 - 0.15, ay1 + 0.15)],
+            &[
+                (ax0 - 0.15, ay0 - 0.15),
+                (w as f32, ay0 - 0.15),
+                (w as f32, ay1 + 0.15),
+                (ax0 - 0.15, ay1 + 0.15),
+            ],
             14,
             502,
         );
@@ -56,12 +62,27 @@ pub(crate) fn build_docking_bay(b: &mut SectorBuilder) {
     b.set_surf(mid_x, (h - 3).max(cat_y + 2), SURF_HAZARD);
 
     let office = if w >= 14 && h >= 11 {
-        let r = Rect { x0: 1, y0: h - 4, x1: 6, y1: h };
+        let r = Rect {
+            x0: 1,
+            y0: h - 4,
+            x1: 6,
+            y1: h,
+        };
         b.enclose_rect(r, MaterialClass::Drywall);
         for x in 2..5 {
-            b.put_edge((x, r.y0), EdgeSide::North, WallEdgeKind::Window, MaterialClass::Glass);
+            b.put_edge(
+                (x, r.y0),
+                EdgeSide::North,
+                WallEdgeKind::Window,
+                MaterialClass::Glass,
+            );
         }
-        b.put_edge((r.x1, h - 2), EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SolidWood);
+        b.put_edge(
+            (r.x1, h - 2),
+            EdgeSide::West,
+            WallEdgeKind::DoorOpen,
+            MaterialClass::SolidWood,
+        );
         Some(r)
     } else {
         None
@@ -76,16 +97,30 @@ pub(crate) fn build_docking_bay(b: &mut SectorBuilder) {
     }
     if w >= 16 && h >= 14 {
         let van_rot = 90 + b.rng.range(-3, 4);
-        let _ = b.try_place(PropKind::UtilityVan, (w - 6, 4), van_rot, None, whole)
+        let _ = b
+            .try_place(PropKind::UtilityVan, (w - 6, 4), van_rot, None, whole)
             .or_else(|| b.try_place(PropKind::UtilityVan, (w - 6, 4), 90, None, whole));
     }
-    let _ = b.try_place(PropKind::SteelShelving, (mid_x - 1, 4), 0, None, whole)
+    let _ = b
+        .try_place(PropKind::SteelShelving, (mid_x - 1, 4), 0, None, whole)
         .or_else(|| b.try_place(PropKind::SteelShelving, (4, 1), 0, None, whole));
     let _ = b.try_place(PropKind::SteelShelving, (mid_x + 1, h - 2), 0, None, whole);
-    let _ = b.try_place(PropKind::JerseyBarrier, (mid_x - 4, mid_y + 1), 90, Some(2), whole)
+    let _ = b
+        .try_place(
+            PropKind::JerseyBarrier,
+            (mid_x - 4, mid_y + 1),
+            90,
+            Some(2),
+            whole,
+        )
         .or_else(|| b.try_place(PropKind::JerseyBarrier, (1, 1), 0, Some(2), whole));
     let clear_ring = w >= 12;
-    let crate_bounds = Rect { x0: if clear_ring { 3 } else { 2 }, y0: cat_y + 1, x1: w - if clear_ring { 3 } else { 2 }, y1: h - 1 };
+    let crate_bounds = Rect {
+        x0: if clear_ring { 3 } else { 2 },
+        y0: cat_y + 1,
+        x1: w - if clear_ring { 3 } else { 2 },
+        y1: h - 1,
+    };
     b.scatter_in(PropKind::WoodCrate, crate_bounds, 5, clear_ring);
     b.scatter_in(PropKind::DrumCluster, crate_bounds, 3, clear_ring);
 }
@@ -99,7 +134,12 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
     add_rect_floor(b, bay_x0, bay_y1, w as f32, h as f32, 505);
     b.add_polygon_surface(
         SurfaceFeatureKind::AsphaltRoad,
-        &[(bay_x0 - 0.15, 2.85), (w as f32, 2.85), (w as f32, bay_y1 + 0.15), (bay_x0 - 0.15, bay_y1 + 0.15)],
+        &[
+            (bay_x0 - 0.15, 2.85),
+            (w as f32, 2.85),
+            (w as f32, bay_y1 + 0.15),
+            (bay_x0 - 0.15, bay_y1 + 0.15),
+        ],
         18,
         502,
     );
@@ -111,7 +151,12 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
         add_rect_floor(b, 2.0, sy1, sx1, h as f32, 508);
         b.add_polygon_surface(
             SurfaceFeatureKind::AsphaltRoad,
-            &[(1.85, sy0 - 0.15), (sx1 + 0.15, sy0 - 0.15), (sx1 + 0.15, sy1 + 0.15), (1.85, sy1 + 0.15)],
+            &[
+                (1.85, sy0 - 0.15),
+                (sx1 + 0.15, sy0 - 0.15),
+                (sx1 + 0.15, sy1 + 0.15),
+                (1.85, sy1 + 0.15),
+            ],
             18,
             503,
         );
@@ -123,7 +168,9 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
     let bot_y = h - 3;
     for x in 3..(w - 3) {
         b.set_surf(x, top_y, SURF_CATWALK);
-        if flip { b.set_surf(x, bot_y, SURF_CATWALK); }
+        if flip {
+            b.set_surf(x, bot_y, SURF_CATWALK);
+        }
     }
     for y in top_y..=bot_y {
         b.set_surf(mid_x - 1, y, SURF_CATWALK);
@@ -132,15 +179,42 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
         b.set_surf(mid_x + dx, (mid_y + 2).min(h - 3), SURF_HAZARD);
     }
 
-    let dispatch = Rect { x0: 1, y0: if flip { 1 } else { h - 6 }, x1: 8, y1: if flip { 6 } else { h - 1 } };
-    let cage = Rect { x0: 1, y0: if flip { h - 6 } else { 1 }, x1: 9, y1: if flip { h - 1 } else { 6 } };
+    let dispatch = Rect {
+        x0: 1,
+        y0: if flip { 1 } else { h - 6 },
+        x1: 8,
+        y1: if flip { 6 } else { h - 1 },
+    };
+    let cage = Rect {
+        x0: 1,
+        y0: if flip { h - 6 } else { 1 },
+        x1: 9,
+        y1: if flip { h - 1 } else { 6 },
+    };
     for (idx, r) in [dispatch, cage].into_iter().enumerate() {
-        b.enclose_rect(r, if idx == 0 { MaterialClass::Drywall } else { MaterialClass::SheetSteel });
+        b.enclose_rect(
+            r,
+            if idx == 0 {
+                MaterialClass::Drywall
+            } else {
+                MaterialClass::SheetSteel
+            },
+        );
         let win_y = if r.y0 <= 2 { r.y1 } else { r.y0 };
         for x in (r.x0 + 1)..(r.x1 - 1) {
-            b.put_edge((x, win_y), EdgeSide::North, WallEdgeKind::Window, MaterialClass::Glass);
+            b.put_edge(
+                (x, win_y),
+                EdgeSide::North,
+                WallEdgeKind::Window,
+                MaterialClass::Glass,
+            );
         }
-        b.put_edge((r.x1, r.y0 + r.h() / 2), EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SolidWood);
+        b.put_edge(
+            (r.x1, r.y0 + r.h() / 2),
+            EdgeSide::West,
+            WallEdgeKind::DoorOpen,
+            MaterialClass::SolidWood,
+        );
     }
     b.add_perimeter_windows(4);
     b.reserve_spawns_and_doors();
@@ -155,10 +229,62 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
     let r1 = 90 + b.rng.range(-4, 5);
     let _ = b.try_place(PropKind::UtilityVan, (w - 6, van_y0), r0, None, whole);
     let _ = b.try_place(PropKind::UtilityVan, (w - 6, van_y1), r1, None, whole);
-    b.scatter_in(PropKind::SteelShelving, Rect { x0: 3, y0: 4, x1: mid_x - 2, y1: h - 4 }, (area / 180).clamp(3, 8) as usize, true);
-    b.scatter_in(PropKind::JerseyBarrier, Rect { x0: mid_x - 4, y0: 4, x1: w - 4, y1: h - 4 }, (area / 240).clamp(2, 5) as usize, true);
-    b.scatter_in(PropKind::WoodCrate, Rect { x0: 3, y0: 3, x1: w - 3, y1: h - 2 }, (area / 95).clamp(6, 18) as usize, true);
-    b.scatter_in(PropKind::DrumCluster, Rect { x0: 3, y0: 3, x1: w - 3, y1: h - 2 }, (area / 140).clamp(4, 12) as usize, true);
+    b.scatter_in(
+        PropKind::SteelShelving,
+        Rect {
+            x0: 3,
+            y0: 4,
+            x1: mid_x - 2,
+            y1: h - 4,
+        },
+        (area / 180).clamp(3, 8) as usize,
+        true,
+    );
+    b.scatter_in(
+        PropKind::JerseyBarrier,
+        Rect {
+            x0: mid_x - 4,
+            y0: 4,
+            x1: w - 4,
+            y1: h - 4,
+        },
+        (area / 240).clamp(2, 5) as usize,
+        true,
+    );
+    b.scatter_in(
+        PropKind::WoodCrate,
+        Rect {
+            x0: 3,
+            y0: 3,
+            x1: w - 3,
+            y1: h - 2,
+        },
+        (area / 95).clamp(6, 18) as usize,
+        true,
+    );
+    b.scatter_in(
+        PropKind::DrumCluster,
+        Rect {
+            x0: 3,
+            y0: 3,
+            x1: w - 3,
+            y1: h - 2,
+        },
+        (area / 140).clamp(4, 12) as usize,
+        true,
+    );
+}
+
+fn attach_desk_clutter(b: &mut SectorBuilder, desk: satya_schema::MapPropPlacement, rot_offset: i32) {
+    let seed = (b.rng.next() & 0xffff_ffff) as u32;
+    b.push_floor_decal(make_prop(
+        PropKind::DeskClutter,
+        desk.x,
+        desk.y,
+        (desk.rotation_deg + rot_offset).rem_euclid(360),
+        None,
+        seed,
+    ));
 }
 
 pub(crate) fn build_med_lab(b: &mut SectorBuilder) {
@@ -176,40 +302,122 @@ pub(crate) fn build_med_lab(b: &mut SectorBuilder) {
         let x1 = (w / 3).clamp(3, w - 5);
         let x2 = (2 * w / 3).clamp(x1 + 2, w - 3);
         for y in 0..h {
-            let (k1, m1) = if y == mid_y || y == 2 { (WallEdgeKind::DoorOpen, MaterialClass::Drywall) } else if (y - mid_y).abs() == 1 { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, MaterialClass::Drywall) };
+            let (k1, m1) = if y == mid_y || y == 2 {
+                (WallEdgeKind::DoorOpen, MaterialClass::Drywall)
+            } else if (y - mid_y).abs() == 1 {
+                (WallEdgeKind::Window, MaterialClass::Glass)
+            } else {
+                (WallEdgeKind::Wall, MaterialClass::Drywall)
+            };
             b.put_edge((x1, y), EdgeSide::West, k1, m1);
-            let (k2, m2) = if y == mid_y || y == (h - 3).max(1) { (WallEdgeKind::DoorClosed, MaterialClass::SheetSteel) } else if y == 3 || y == (h - 4).max(4) { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, MaterialClass::ReinforcedConcrete) };
+            let (k2, m2) = if y == mid_y || y == (h - 3).max(1) {
+                (WallEdgeKind::DoorClosed, MaterialClass::SheetSteel)
+            } else if y == 3 || y == (h - 4).max(4) {
+                (WallEdgeKind::Window, MaterialClass::Glass)
+            } else {
+                (WallEdgeKind::Wall, MaterialClass::ReinforcedConcrete)
+            };
             b.put_edge((x2, y), EdgeSide::West, k2, m2);
         }
+        // Keep west intake wing on InteriorFloor while mid/east labs show clinical & shop flooring.
+        b.add_polygon_surface(
+            SurfaceFeatureKind::ClinicalVinylFloor,
+            &[
+                (x1 as f32, 0.0),
+                (x2 as f32, 0.0),
+                (x2 as f32, h as f32),
+                (x1 as f32, h as f32),
+            ],
+            0,
+            512,
+        );
+        b.add_polygon_surface(
+            SurfaceFeatureKind::StainedConcreteFloor,
+            &[
+                (x2 as f32, 0.0),
+                (w as f32, 0.0),
+                (w as f32, h as f32),
+                (x2 as f32, h as f32),
+            ],
+            0,
+            513,
+        );
         b.set_surf(x2 + 1, (mid_y + 1).min(h - 2), SURF_HAZARD);
         b.set_surf((x2 + 2).min(w - 2), (mid_y + 1).min(h - 2), SURF_HAZARD);
         b.add_perimeter_windows(4);
         b.reserve_spawns_and_doors();
-        let (triage, trauma, lab) = (Rect { x0: 0, y0: 0, x1, y1: h }, Rect { x0: x1, y0: 0, x1: x2, y1: h }, Rect { x0: x2, y0: 0, x1: w, y1: h });
-        let _ = b.against_any_wall(PropKind::Desk, triage, None);
+        let (triage, trauma, lab) = (
+            Rect {
+                x0: 0,
+                y0: 0,
+                x1,
+                y1: h,
+            },
+            Rect {
+                x0: x1,
+                y0: 0,
+                x1: x2,
+                y1: h,
+            },
+            Rect {
+                x0: x2,
+                y0: 0,
+                x1: w,
+                y1: h,
+            },
+        );
+        if let Some(d) = b.against_any_wall(PropKind::Desk, triage, None) {
+            attach_desk_clutter(b, d, 9);
+        }
         let _ = b.against_any_wall(PropKind::Loveseat, triage, None);
-        let _ = b.against_any_wall(PropKind::Planter, triage, None);
-        let _ = b.against_any_wall(PropKind::Fridge, trauma, None);
-        let _ = b.against_any_wall(PropKind::SteelShelving, trauma, None);
-        let _ = b.against_any_wall(PropKind::KitchenCounter, trauma, Some(3));
-        b.scatter_in(PropKind::Bed, trauma, 2, true);
-        let _ = b.against_any_wall(PropKind::Fridge, lab, None);
-        let _ = b.against_any_wall(PropKind::Desk, lab, None);
-        b.scatter_in(PropKind::DrumCluster, lab, 2, true);
+        let _ = b.try_place(PropKind::WaterCooler, (1, 1), 0, None, triage);
+        let _ = b.against_any_wall(PropKind::MedicalCounter, trauma, Some(2));
+        let _ = b.against_any_wall(PropKind::BiohazardBin, trauma, None);
+        b.scatter_in(PropKind::HospitalBed, trauma, 1, true);
+        b.scatter_in(PropKind::Cot, trauma, 1, true);
+        let _ = b.try_place(PropKind::TelemetryMonitor, (x1 + 1, 1), 0, None, trauma);
+        if let Some(bch) = b.against_any_wall(PropKind::LabBench, lab, Some(2)) {
+            attach_desk_clutter(b, bch, -6);
+        }
+        let _ = b.against_any_wall(PropKind::TestBench, lab, None);
+        let _ = b.against_any_wall(PropKind::SolderingStation, lab, None);
+        let _ = b.against_any_wall(PropKind::Printer3dStation, lab, None);
+        let _ = b.against_any_wall(PropKind::ServerRack, lab, None);
+        let _ = b.against_any_wall(PropKind::FumeHood, lab, None);
     } else {
         let sx = w / 2;
         for y in 0..h {
-            b.put_edge((sx, y), EdgeSide::West, if y == mid_y { WallEdgeKind::DoorClosed } else { WallEdgeKind::Wall }, MaterialClass::ConcreteBlock);
+            b.put_edge(
+                (sx, y),
+                EdgeSide::West,
+                if y == mid_y {
+                    WallEdgeKind::DoorClosed
+                } else {
+                    WallEdgeKind::Wall
+                },
+                MaterialClass::ConcreteBlock,
+            );
         }
         b.set_surf(sx + 1, (mid_y + 1).min(h - 2), SURF_HAZARD);
         b.add_perimeter_windows(3);
         b.reserve_spawns_and_doors();
         let whole = b.whole();
-        let _ = b.against_any_wall(PropKind::Desk, Rect { x0: 0, y0: 0, x1: sx, y1: h }, None);
-        let _ = b.try_place(PropKind::Bed, (sx + 1, 1), 0, None, whole);
-        b.scatter_in(PropKind::Bed, whole, 1, false);
-        b.scatter_in(PropKind::DrumCluster, whole, 2, false);
-        let _ = b.against_any_wall(PropKind::Fridge, whole, None);
+        if let Some(d) = b.against_any_wall(
+            PropKind::Desk,
+            Rect {
+                x0: 0,
+                y0: 0,
+                x1: sx,
+                y1: h,
+            },
+            None,
+        ) {
+            attach_desk_clutter(b, d, 11);
+        }
+        let _ = b.try_place(PropKind::HospitalBed, (sx + 1, 1), 0, None, whole);
+        b.scatter_in(PropKind::LabBench, whole, 1, false);
+        b.scatter_in(PropKind::TestBench, whole, 1, false);
+        let _ = b.against_any_wall(PropKind::ServerRack, whole, None);
     }
 }
 
@@ -218,47 +426,193 @@ fn build_med_lab_scaled(b: &mut SectorBuilder) {
     let x1 = (w * 3 / 10).clamp(6, w - 12);
     let x2 = (w * 68 / 100).clamp(x1 + 6, w - 6);
     for y in 0..h {
-        let (k1, m1) = if y == mid_y || y == 3 || y == h - 4 { (WallEdgeKind::DoorOpen, MaterialClass::Drywall) } else if y % 3 == 1 { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, MaterialClass::Drywall) };
+        let (k1, m1) = if y == mid_y || y == 3 || y == h - 4 {
+            (WallEdgeKind::DoorOpen, MaterialClass::Drywall)
+        } else if y % 3 == 1 {
+            (WallEdgeKind::Window, MaterialClass::Glass)
+        } else {
+            (WallEdgeKind::Wall, MaterialClass::Drywall)
+        };
         b.put_edge((x1, y), EdgeSide::West, k1, m1);
-        let (k2, m2) = if y == mid_y || y == h / 4 || y == (3 * h) / 4 { (WallEdgeKind::DoorClosed, MaterialClass::SheetSteel) } else if y % 4 == 2 { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, MaterialClass::ReinforcedConcrete) };
+        let (k2, m2) = if y == mid_y || y == h / 4 || y == (3 * h) / 4 {
+            (WallEdgeKind::DoorClosed, MaterialClass::SheetSteel)
+        } else if y % 4 == 2 {
+            (WallEdgeKind::Window, MaterialClass::Glass)
+        } else {
+            (WallEdgeKind::Wall, MaterialClass::ReinforcedConcrete)
+        };
         b.put_edge((x2, y), EdgeSide::West, k2, m2);
     }
-    // Horizontal triage exam cubicles and twin containment labs.
+    // Horizontal triage exam cubicles and twin engineering/bio-fabrication labs.
     let split_y = mid_y;
     for x in x2..w {
-        let k = if x == (x2 + w) / 2 { WallEdgeKind::DoorOpen } else { WallEdgeKind::Window };
+        let k = if x == (x2 + w) / 2 {
+            WallEdgeKind::DoorOpen
+        } else {
+            WallEdgeKind::Window
+        };
         b.put_edge((x, split_y), EdgeSide::North, k, MaterialClass::Glass);
     }
     let ward_top = h / 3;
     let ward_bot = (2 * h) / 3;
     for x in x1..x2 {
-        let kt = if x == x1 + 2 || x == x2 - 3 { WallEdgeKind::DoorOpen } else { WallEdgeKind::Wall };
+        let kt = if x == x1 + 2 || x == x2 - 3 {
+            WallEdgeKind::DoorOpen
+        } else {
+            WallEdgeKind::Wall
+        };
         b.put_edge((x, ward_top), EdgeSide::North, kt, MaterialClass::Drywall);
         b.put_edge((x, ward_bot), EdgeSide::North, kt, MaterialClass::Drywall);
     }
+
+    // Disjoint floor surface zoning: intake keeps InteriorFloor; trauma=ClinicalVinylFloor;
+    // electronics/prototyping lab=StainedConcreteFloor; fabrication & server bay=SteelPlateFloor.
+    b.add_polygon_surface(
+        SurfaceFeatureKind::ClinicalVinylFloor,
+        &[
+            (x1 as f32, 0.0),
+            (x2 as f32, 0.0),
+            (x2 as f32, h as f32),
+            (x1 as f32, h as f32),
+        ],
+        0,
+        514,
+    );
+    b.add_polygon_surface(
+        SurfaceFeatureKind::StainedConcreteFloor,
+        &[
+            (x2 as f32, 0.0),
+            (w as f32, 0.0),
+            (w as f32, split_y as f32),
+            (x2 as f32, split_y as f32),
+        ],
+        0,
+        515,
+    );
+    b.add_polygon_surface(
+        SurfaceFeatureKind::SteelPlateFloor,
+        &[
+            (x2 as f32, split_y as f32),
+            (w as f32, split_y as f32),
+            (w as f32, h as f32),
+            (x2 as f32, h as f32),
+        ],
+        0,
+        516,
+    );
+
     b.set_surf(x2 + 2, (ward_top - 1).max(2), SURF_HAZARD);
     b.set_surf((x2 + 3).min(w - 2), (ward_bot + 1).min(h - 2), SURF_HAZARD);
     b.add_perimeter_windows(4);
     b.reserve_spawns_and_doors();
 
-    let intake = Rect { x0: 0, y0: 0, x1, y1: h };
-    let _ = b.against_any_wall(PropKind::DeskL, intake, None);
-    b.scatter_in(PropKind::Loveseat, intake, 2, true);
-    b.scatter_in(PropKind::Planter, intake, 2, true);
-    for r in [
-        Rect { x0: x1, y0: 0, x1: x2, y1: ward_top },
-        Rect { x0: x1, y0: ward_top, x1: x2, y1: ward_bot },
-        Rect { x0: x1, y0: ward_bot, x1: x2, y1: h },
-    ] {
-        b.scatter_in(PropKind::Bed, r, 2, true);
-        let _ = b.against_any_wall(PropKind::KitchenCounter, r, Some(3));
-        let _ = b.against_any_wall(PropKind::Fridge, r, None);
+    let intake = Rect {
+        x0: 0,
+        y0: 0,
+        x1,
+        y1: h,
+    };
+    let _ = b.try_place(PropKind::ElevatorCar, (1, 1), 0, None, intake);
+    if let Some(d) = b.against_any_wall(PropKind::DeskL, intake, None) {
+        attach_desk_clutter(b, d, 14);
     }
-    for lab in [Rect { x0: x2, y0: 0, x1: w, y1: split_y }, Rect { x0: x2, y0: split_y, x1: w, y1: h }] {
-        let _ = b.against_any_wall(PropKind::SteelShelving, lab, None);
-        let _ = b.against_any_wall(PropKind::Desk, lab, None);
-        b.scatter_in(PropKind::DrumCluster, lab, 2, true);
+    if let Some(d2) = b.against_any_wall(PropKind::Desk, intake, None) {
+        attach_desk_clutter(b, d2, -8);
     }
+    let _ = b.try_place(PropKind::WaterCooler, ((x1 - 2).max(1), 1), 0, None, intake);
+    b.scatter_in(PropKind::Loveseat, intake, 1, true);
+    b.scatter_in(PropKind::ReclinerChair, intake, 2, true);
+    let _ = b.against_any_wall(PropKind::FilingCabinet, intake, None);
+
+    // Trauma & isolation wards (clinical beds/cots/gurneys + monitors + counters + waste bins).
+    for (idx, r) in [
+        Rect {
+            x0: x1,
+            y0: 0,
+            x1: x2,
+            y1: ward_top,
+        },
+        Rect {
+            x0: x1,
+            y0: ward_top,
+            x1: x2,
+            y1: ward_bot,
+        },
+        Rect {
+            x0: x1,
+            y0: ward_bot,
+            x1: x2,
+            y1: h,
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let bed_kind = if idx == 0 {
+            PropKind::Gurney
+        } else if idx == 1 {
+            PropKind::HospitalBed
+        } else {
+            PropKind::Cot
+        };
+        if let Some(bed) = b.against_any_wall(bed_kind, r, None) {
+            let _ = b.try_place(
+                PropKind::TelemetryMonitor,
+                ((bed.x + 1).min(r.x1 - 1), bed.y),
+                0,
+                None,
+                r,
+            );
+        }
+        b.scatter_in(PropKind::HospitalBed, r, 1, true);
+        let _ = b.against_any_wall(PropKind::MedicalCounter, r, Some(2));
+        let _ = b.try_place(PropKind::BiohazardBin, (r.x0, r.y1 - 1), 0, None, r);
+        let _ = b.against_any_wall(PropKind::PrivacyCurtain, r, Some(2));
+        let _ = b.against_any_wall(PropKind::LinenCart, r, None);
+    }
+
+    // Upper Lab (NE): Electronics, instrumentation & rapid prototyping bay.
+    let elec_lab = Rect {
+        x0: x2,
+        y0: 0,
+        x1: w,
+        y1: split_y,
+    };
+    if let Some(lb) = b.against_any_wall(PropKind::LabBench, elec_lab, Some(3)) {
+        attach_desk_clutter(b, lb, 6);
+    }
+    if let Some(ss) = b.against_any_wall(PropKind::SolderingStation, elec_lab, None) {
+        attach_desk_clutter(b, ss, -12);
+    }
+    let _ = b.against_any_wall(PropKind::TestBench, elec_lab, None);
+    let _ = b.against_any_wall(PropKind::Printer3dStation, elec_lab, None);
+    let _ = b.against_any_wall(PropKind::AirCompressor, elec_lab, None);
+    if let Some(d) = b.against_any_wall(PropKind::Desk, elec_lab, None) {
+        attach_desk_clutter(b, d, 19);
+    }
+    b.scatter_in(PropKind::LabBench, elec_lab, 1, true);
+
+    // Lower Lab (SE): Heavy CNC fabrication, server cluster & biosafety containment bay.
+    let fab_lab = Rect {
+        x0: x2,
+        y0: split_y,
+        x1: w,
+        y1: h,
+    };
+    let _ = b.against_any_wall(PropKind::CncMill, fab_lab, None);
+    let _ = b.against_any_wall(PropKind::FumeHood, fab_lab, None);
+    for _ in 0..3 {
+        let _ = b.against_any_wall(PropKind::ServerRack, fab_lab, None);
+    }
+    let _ = b.against_any_wall(PropKind::AirCompressor, fab_lab, None);
+    let _ = b.against_any_wall(PropKind::TestBench, fab_lab, None);
+    let _ = b.try_place(
+        PropKind::BiohazardBin,
+        (fab_lab.x0 + 1, fab_lab.y1 - 1),
+        0,
+        None,
+        fab_lab,
+    );
 }
 
 pub(crate) fn build_derelict_corridor(b: &mut SectorBuilder) {
@@ -271,29 +625,89 @@ pub(crate) fn build_derelict_corridor(b: &mut SectorBuilder) {
     let y_bot = (h - y_top).max(y_top + 3);
     if w >= 12 && h >= 10 {
         for x in 0..w {
-            let top_door = x == 2 || x == mid_x || x == w - 3 || (w >= 24 && (x == w / 4 || x == (3 * w) / 4));
-            let bot_door = x == 3 || x == mid_x - 1 || x == w - 4 || (w >= 24 && (x == w / 4 + 1 || x == (3 * w) / 4 - 1));
-            let top_kind = if top_door { WallEdgeKind::DoorOpen } else if x % 4 == 1 { WallEdgeKind::Window } else { WallEdgeKind::Wall };
-            let bot_kind = if bot_door { WallEdgeKind::DoorClosed } else if x % 4 == 2 { WallEdgeKind::Window } else { WallEdgeKind::Wall };
-            b.put_edge((x, y_top), EdgeSide::North, top_kind, MaterialClass::ConcreteBlock);
-            b.put_edge((x, y_bot), EdgeSide::North, bot_kind, MaterialClass::ConcreteBlock);
+            let top_door =
+                x == 2 || x == mid_x || x == w - 3 || (w >= 24 && (x == w / 4 || x == (3 * w) / 4));
+            let bot_door = x == 3
+                || x == mid_x - 1
+                || x == w - 4
+                || (w >= 24 && (x == w / 4 + 1 || x == (3 * w) / 4 - 1));
+            let top_kind = if top_door {
+                WallEdgeKind::DoorOpen
+            } else if x % 4 == 1 {
+                WallEdgeKind::Window
+            } else {
+                WallEdgeKind::Wall
+            };
+            let bot_kind = if bot_door {
+                WallEdgeKind::DoorClosed
+            } else if x % 4 == 2 {
+                WallEdgeKind::Window
+            } else {
+                WallEdgeKind::Wall
+            };
+            b.put_edge(
+                (x, y_top),
+                EdgeSide::North,
+                top_kind,
+                MaterialClass::ConcreteBlock,
+            );
+            b.put_edge(
+                (x, y_bot),
+                EdgeSide::North,
+                bot_kind,
+                MaterialClass::ConcreteBlock,
+            );
         }
-        let divs: Vec<i32> = if w >= 28 { vec![w / 4, w / 2, (3 * w) / 4] } else { vec![w / 3, (2 * w) / 3] };
+        let divs: Vec<i32> = if w >= 28 {
+            vec![w / 4, w / 2, (3 * w) / 4]
+        } else {
+            vec![w / 3, (2 * w) / 3]
+        };
         for div_x in divs {
             for y in 0..y_top {
-                b.put_edge((div_x, y), EdgeSide::West, WallEdgeKind::Wall, MaterialClass::SheetSteel);
+                b.put_edge(
+                    (div_x, y),
+                    EdgeSide::West,
+                    WallEdgeKind::Wall,
+                    MaterialClass::SheetSteel,
+                );
             }
             for y in y_bot..h {
-                b.put_edge((div_x, y), EdgeSide::West, WallEdgeKind::Wall, MaterialClass::SheetSteel);
+                b.put_edge(
+                    (div_x, y),
+                    EdgeSide::West,
+                    WallEdgeKind::Wall,
+                    MaterialClass::SheetSteel,
+                );
             }
             for y in y_top..y_bot {
-                let kind = if y == mid_y { WallEdgeKind::DoorOpen } else if y == (mid_y - 1).max(y_top) { WallEdgeKind::DoorClosed } else { WallEdgeKind::Wall };
-                b.put_edge((div_x, y), EdgeSide::West, kind, MaterialClass::ReinforcedConcrete);
+                let kind = if y == mid_y {
+                    WallEdgeKind::DoorOpen
+                } else if y == (mid_y - 1).max(y_top) {
+                    WallEdgeKind::DoorClosed
+                } else {
+                    WallEdgeKind::Wall
+                };
+                b.put_edge(
+                    (div_x, y),
+                    EdgeSide::West,
+                    kind,
+                    MaterialClass::ReinforcedConcrete,
+                );
             }
         }
     } else {
         for y in 0..h {
-            b.put_edge((mid_x, y), EdgeSide::West, if y == mid_y { WallEdgeKind::DoorOpen } else { WallEdgeKind::Wall }, MaterialClass::ReinforcedConcrete);
+            b.put_edge(
+                (mid_x, y),
+                EdgeSide::West,
+                if y == mid_y {
+                    WallEdgeKind::DoorOpen
+                } else {
+                    WallEdgeKind::Wall
+                },
+                MaterialClass::ReinforcedConcrete,
+            );
         }
     }
 
@@ -305,10 +719,35 @@ pub(crate) fn build_derelict_corridor(b: &mut SectorBuilder) {
     b.reserve_spawns_and_doors();
 
     let whole = b.whole();
-    let spine = Rect { x0: 1, y0: y_top.min(h - 2), x1: w - 1, y1: y_bot.min(h - 1).max(y_top + 1) };
-    let _ = b.against_any_wall(PropKind::SteelShelving, Rect { x0: 1, y0: 0, x1: w - 1, y1: y_top }, None)
+    let spine = Rect {
+        x0: 1,
+        y0: y_top.min(h - 2),
+        x1: w - 1,
+        y1: y_bot.min(h - 1).max(y_top + 1),
+    };
+    let _ = b
+        .against_any_wall(
+            PropKind::SteelShelving,
+            Rect {
+                x0: 1,
+                y0: 0,
+                x1: w - 1,
+                y1: y_top,
+            },
+            None,
+        )
         .or_else(|| b.against_any_wall(PropKind::SteelShelving, whole, None));
-    let _ = b.against_any_wall(PropKind::Desk, Rect { x0: 1, y0: y_bot, x1: w - 1, y1: h }, None)
+    let _ = b
+        .against_any_wall(
+            PropKind::Desk,
+            Rect {
+                x0: 1,
+                y0: y_bot,
+                x1: w - 1,
+                y1: h,
+            },
+            None,
+        )
         .or_else(|| b.against_any_wall(PropKind::Desk, whole, None));
     let clear_ring = w >= 14 && h >= 12;
     let scale = (w * h / 120).clamp(1, 5) as usize;
@@ -329,7 +768,12 @@ pub(crate) fn build_orbital_airlock(b: &mut SectorBuilder) {
             }
         }
     } else if w >= 14 && h >= 10 {
-        for &(px, py) in &[(mid_x - 4, 3), (mid_x + 3, 3), (mid_x - 4, h - 4), (mid_x + 3, h - 4)] {
+        for &(px, py) in &[
+            (mid_x - 4, 3),
+            (mid_x + 3, 3),
+            (mid_x - 4, h - 4),
+            (mid_x + 3, h - 4),
+        ] {
             b.add_pillar(px, py);
         }
     } else {
@@ -344,16 +788,46 @@ pub(crate) fn build_orbital_airlock(b: &mut SectorBuilder) {
         let bx0 = (mid_x - (w / 6).clamp(3, 7)).max(4);
         let bx1 = (mid_x + (w / 6).clamp(3, 7)).min(w - 4);
         let bd = if h >= 18 { 4 } else { 3 };
-        let north_booth = Rect { x0: bx0, y0: 0, x1: bx1, y1: bd };
-        let south_booth = Rect { x0: bx0, y0: h - bd, x1: bx1, y1: h };
+        let north_booth = Rect {
+            x0: bx0,
+            y0: 0,
+            x1: bx1,
+            y1: bd,
+        };
+        let south_booth = Rect {
+            x0: bx0,
+            y0: h - bd,
+            x1: bx1,
+            y1: h,
+        };
         b.enclose_rect(north_booth, MaterialClass::SheetSteel);
         b.enclose_rect(south_booth, MaterialClass::SheetSteel);
         for x in (bx0 + 1)..(bx1 - 1) {
-            b.put_edge((x, bd), EdgeSide::North, WallEdgeKind::Window, MaterialClass::Glass);
-            b.put_edge((x, h - bd), EdgeSide::North, WallEdgeKind::Window, MaterialClass::Glass);
+            b.put_edge(
+                (x, bd),
+                EdgeSide::North,
+                WallEdgeKind::Window,
+                MaterialClass::Glass,
+            );
+            b.put_edge(
+                (x, h - bd),
+                EdgeSide::North,
+                WallEdgeKind::Window,
+                MaterialClass::Glass,
+            );
         }
-        b.put_edge((bx0, 1), EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
-        b.put_edge((bx1, h - 2), EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::SheetSteel);
+        b.put_edge(
+            (bx0, 1),
+            EdgeSide::West,
+            WallEdgeKind::DoorOpen,
+            MaterialClass::SheetSteel,
+        );
+        b.put_edge(
+            (bx1, h - 2),
+            EdgeSide::West,
+            WallEdgeKind::DoorClosed,
+            MaterialClass::SheetSteel,
+        );
         booths.push(north_booth);
         booths.push(south_booth);
         for x in (bx0 + 1)..(bx1 - 1) {
@@ -362,10 +836,22 @@ pub(crate) fn build_orbital_airlock(b: &mut SectorBuilder) {
     }
 
     if w >= 16 && h >= 10 {
-        let vest_xs: Vec<i32> = if w >= 28 { vec![4, w / 3, (2 * w) / 3, w - 4] } else { vec![4, w - 4] };
+        let vest_xs: Vec<i32> = if w >= 28 {
+            vec![4, w / 3, (2 * w) / 3, w - 4]
+        } else {
+            vec![4, w - 4]
+        };
         for vx in vest_xs {
             for y in 2..(h - 2) {
-                let (kind, mat) = if y == mid_y { (WallEdgeKind::DoorOpen, MaterialClass::ArmorSteel) } else if y == mid_y - 1 { (WallEdgeKind::DoorClosed, MaterialClass::ArmorSteel) } else if (y - mid_y).abs() == 2 { (WallEdgeKind::Window, MaterialClass::Glass) } else { (WallEdgeKind::Wall, MaterialClass::ArmorSteel) };
+                let (kind, mat) = if y == mid_y {
+                    (WallEdgeKind::DoorOpen, MaterialClass::ArmorSteel)
+                } else if y == mid_y - 1 {
+                    (WallEdgeKind::DoorClosed, MaterialClass::ArmorSteel)
+                } else if (y - mid_y).abs() == 2 {
+                    (WallEdgeKind::Window, MaterialClass::Glass)
+                } else {
+                    (WallEdgeKind::Wall, MaterialClass::ArmorSteel)
+                };
                 b.put_edge((vx, y), EdgeSide::West, kind, mat);
             }
         }
@@ -377,12 +863,25 @@ pub(crate) fn build_orbital_airlock(b: &mut SectorBuilder) {
         let _ = b.against_any_wall(PropKind::Desk, booth, None);
         let _ = b.against_any_wall(PropKind::Wardrobe, booth, None);
     }
-    let _ = b.try_place(PropKind::JerseyBarrier, (mid_x - 1, (mid_y - 1).max(3)), 90, Some(2), whole)
+    let _ = b
+        .try_place(
+            PropKind::JerseyBarrier,
+            (mid_x - 1, (mid_y - 1).max(3)),
+            90,
+            Some(2),
+            whole,
+        )
         .or_else(|| b.try_place(PropKind::JerseyBarrier, (mid_x - 1, 1), 0, Some(2), whole));
-    let _ = b.try_place(PropKind::SteelShelving, (mid_x, h - 4), 0, None, whole)
+    let _ = b
+        .try_place(PropKind::SteelShelving, (mid_x, h - 4), 0, None, whole)
         .or_else(|| b.against_any_wall(PropKind::SteelShelving, whole, None));
     let clear_ring = w >= 14 && h >= 10;
-    let cargo_bounds = Rect { x0: if clear_ring { 4 } else { 1 }, y0: if clear_ring { 3 } else { 1 }, x1: (w - if clear_ring { 4 } else { 1 }).max(5), y1: (h - if clear_ring { 3 } else { 1 }).max(4) };
+    let cargo_bounds = Rect {
+        x0: if clear_ring { 4 } else { 1 },
+        y0: if clear_ring { 3 } else { 1 },
+        x1: (w - if clear_ring { 4 } else { 1 }).max(5),
+        y1: (h - if clear_ring { 3 } else { 1 }).max(4),
+    };
     let scale = (w * h / 120).clamp(1, 5) as usize;
     b.scatter_in(PropKind::WoodCrate, cargo_bounds, 4 * scale, clear_ring);
     b.scatter_in(PropKind::DrumCluster, cargo_bounds, 2 * scale, clear_ring);

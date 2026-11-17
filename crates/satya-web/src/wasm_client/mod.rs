@@ -34,13 +34,16 @@ pub mod dom;
 pub mod dom_tooltip;
 pub mod glb_model;
 pub mod gm_docs;
+pub mod gm_docs_google;
 pub mod gm_memories_and_director;
+pub mod gm_omnisearch;
 pub mod map_2d_art;
 pub mod map_2d_art_furniture;
 pub mod map_2d_art_overlay;
 pub mod map_2d_art_props;
 pub mod map_2d_art_props_facility;
 pub mod map_2d_art_props_home;
+pub mod map_2d_art_props_lab_urban;
 pub mod map_2d_art_surfaces;
 pub mod map_2d_art_textures;
 pub mod map_2d_art_walls;
@@ -51,9 +54,11 @@ pub mod map_3d_diorama_mesh;
 pub mod map_3d_dressing_geom;
 pub mod map_3d_input;
 pub mod map_3d_props_extra;
+pub mod map_3d_props_lab_urban;
 pub mod map_3d_surfaces_geom;
 pub mod map_3d_wgpu;
 pub mod map_edge_edit;
+pub mod map_editor;
 pub mod map_hover_inspect;
 pub mod menu;
 pub mod model_3d_wgpu;
@@ -228,6 +233,25 @@ macro_rules! for_all_window_callbacks {
             "satyaToggleMapProjection" => satya_toggle_map_projection(),
             "satyaToggleMapWallCutaway" => satya_toggle_map_wall_cutaway(),
             "satyaResetMapCamera" => satya_reset_map_camera(),
+            "satyaToggleMapEditor" => satya_toggle_map_editor(),
+            "satyaSetMapEditorTool" => satya_set_map_editor_tool(String),
+            "satyaEditorUndo" => satya_editor_undo(),
+            "satyaEditorRedo" => satya_editor_redo(),
+            "satyaUpdateEditorBrushControls" => satya_update_editor_brush_controls(),
+            "satyaClearEditorBrushTint" => satya_clear_editor_brush_tint(),
+            "satyaFinishEditorSurface" => satya_finish_editor_surface(),
+            "satyaCancelEditorDraft" => satya_cancel_editor_draft(),
+            "satyaApplyEditorGroundStyle" => satya_apply_editor_ground_style(),
+            "satyaClearEditorGroundStyle" => satya_clear_editor_ground_style(),
+            "satyaEditorRotateSelected" => satya_editor_rotate_selected(i32),
+            "satyaEditorSetSelectedRot" => satya_editor_set_selected_rot(),
+            "satyaEditorStretchSelected" => satya_editor_stretch_selected(i32),
+            "satyaEditorSetSelectedTint" => satya_editor_set_selected_tint(),
+            "satyaEditorClearSelectedTint" => satya_editor_clear_selected_tint(),
+            "satyaEditorToggleSelectedDecorative" => satya_editor_toggle_selected_decorative(),
+            "satyaEditorSetSelectedSurfaceKind" => satya_editor_set_selected_surface_kind(),
+            "satyaEditorDuplicateSelected" => satya_editor_duplicate_selected(),
+            "satyaEditorDeleteSelected" => satya_editor_delete_selected(),
             "satyaLoadSkillPreset" => satya_load_skill_preset(String, i32, i32),
             "satyaAdvanceCombatTick" => satya_advance_combat_tick(i32),
             "satyaSelectRulesChapter" => satya_select_rules_chapter(String),
@@ -247,7 +271,9 @@ macro_rules! for_all_window_callbacks {
             "satyaSubmitGmDocument" => satya_submit_gm_document(),
             "satyaRefreshGmDocuments" => satya_refresh_gm_documents(),
             "satyaToggleGmDocPersistence" => satya_toggle_gm_doc_persistence(String, bool),
+            "satyaDeleteGmDocument" => satya_delete_gm_document(String),
             "satyaSubmitGmMemory" => satya_submit_gm_memory(),
+            "satyaToggleGmMemoryPersistence" => satya_toggle_gm_memory_persistence(String, bool),
             "satyaDeleteGmMemory" => satya_delete_gm_memory(String),
             "satyaRefreshGmMemories" => satya_refresh_gm_memories(),
             "satyaUpdateScenarioDialReadouts" => satya_update_scenario_dial_readouts(),
@@ -256,6 +282,8 @@ macro_rules! for_all_window_callbacks {
             "satyaSearchGmOmnisearch" => satya_search_gm_omnisearch(),
             "satyaRefreshNpcsTab" => satya_refresh_npcs_tab(),
             "satyaSelectNpcFromList" => satya_select_npc_from_list(),
+            "satyaToggleNpcPersistence" => satya_toggle_npc_persistence(String, bool),
+            "satyaDeleteSessionNpc" => satya_delete_session_npc(String),
             "satyaGenerateNpcFromPrompt" => satya_generate_npc_from_prompt(),
             "satyaLoadSelectedNpcToSheet" => satya_load_selected_npc_to_sheet(),
 

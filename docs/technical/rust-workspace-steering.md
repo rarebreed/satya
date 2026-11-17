@@ -1,7 +1,7 @@
 # Rust Workspace Technical Steering Guide (`satya-rust-workspace`)
 
 > [!NOTE]
-> The canonical, agent-loaded rulebook for universal Satya Rust architecture, modularization (`~300–750` lines / `<= 45 KB`), `LF` (`\n`) endings, and offline Windows Cargo/PyO3/pytest commands lives in [`.agents/skills/satya-rust-workspace/SKILL.md`](../../.agents/skills/satya-rust-workspace/SKILL.md).
+> The canonical, agent-loaded rulebook for universal Satya Rust architecture, responsibility-driven modularization, `LF` (`\n`) endings, and offline Windows Cargo/PyO3/pytest commands lives in [`.agents/skills/satya-rust-workspace/SKILL.md`](../../.agents/skills/satya-rust-workspace/SKILL.md).
 
 ## Crate Rulebooks & Companion Guides
 

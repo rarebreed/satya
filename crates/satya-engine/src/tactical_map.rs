@@ -21,12 +21,12 @@ use satya_schema::{
 use serde::{Deserialize, Serialize};
 
 use crate::define_coded_enum;
+pub use crate::map_continuation::*;
 use crate::map_dressing::PropObstruction;
 use crate::map_interior_gen::{InteriorStyle, generate_furnished_interior};
 use crate::map_outdoor_gen::{OutdoorStyle, generate_outdoor_sector};
 use crate::map_sector_gen::{FacilitySectorStyle, generate_facility_sector};
 use crate::map_surface_geom::topmost_surface_at_m;
-pub use crate::map_continuation::*;
 pub use crate::map_world_graph::{
     NeighborSectorSpec, compute_sector_boundary_profile, preview_continuation_tooltip,
     select_neighbor_sector_transition,
@@ -240,36 +240,51 @@ pub const SECTOR_PRESET_GROUPS: &[SectorPresetGroup] = &[
     SectorPresetGroup {
         label: "Urban & Commercial",
         presets: &[
-            SectorPreset::UrbanCrossroads, SectorPreset::DowntownCommercial,
-            SectorPreset::ShoppingPlaza, SectorPreset::ShoppingMall,
-            SectorPreset::CornerBar, SectorPreset::OfficeFloor,
+            SectorPreset::UrbanCrossroads,
+            SectorPreset::DowntownCommercial,
+            SectorPreset::ShoppingPlaza,
+            SectorPreset::ShoppingMall,
+            SectorPreset::CornerBar,
+            SectorPreset::OfficeFloor,
         ],
     },
     SectorPresetGroup {
         label: "Residential & Estates",
         presets: &[
-            SectorPreset::UrbanResidential, SectorPreset::ProjectsHighDensity,
-            SectorPreset::SuburbanNeighborhood, SectorPreset::ResidentialApartment,
-            SectorPreset::LuxuryMansion, SectorPreset::GardenEstate,
+            SectorPreset::UrbanResidential,
+            SectorPreset::ProjectsHighDensity,
+            SectorPreset::SuburbanNeighborhood,
+            SectorPreset::ResidentialApartment,
+            SectorPreset::LuxuryMansion,
+            SectorPreset::GardenEstate,
             SectorPreset::RuralCountryside,
         ],
     },
     SectorPresetGroup {
         label: "Civic & Industrial",
-        presets: &[SectorPreset::Hospital, SectorPreset::ManufacturingPlant, SectorPreset::Warehouse],
+        presets: &[
+            SectorPreset::Hospital,
+            SectorPreset::ManufacturingPlant,
+            SectorPreset::Warehouse,
+        ],
     },
     SectorPresetGroup {
         label: "Natural & Agricultural",
         presets: &[
-            SectorPreset::WoodedPark, SectorPreset::WoodlandCreek,
-            SectorPreset::BotanicalGarden, SectorPreset::Farms, SectorPreset::RoadsideDitch,
+            SectorPreset::WoodedPark,
+            SectorPreset::WoodlandCreek,
+            SectorPreset::BotanicalGarden,
+            SectorPreset::Farms,
+            SectorPreset::RoadsideDitch,
         ],
     },
     SectorPresetGroup {
         label: "Sci-Fi & Orbital",
         presets: &[
-            SectorPreset::DockingBay, SectorPreset::DerelictCorridor,
-            SectorPreset::MedLabSector, SectorPreset::OrbitalAirlock,
+            SectorPreset::DockingBay,
+            SectorPreset::DerelictCorridor,
+            SectorPreset::MedLabSector,
+            SectorPreset::OrbitalAirlock,
         ],
     },
 ];
@@ -301,7 +316,10 @@ impl SectorPreset {
     /// Whether this preset generates architectural [`MapWallEdge`] boundaries.
     #[must_use]
     pub const fn has_structural_wall_edges(self) -> bool {
-        !matches!(self, Self::WoodedPark | Self::WoodlandCreek | Self::RoadsideDitch)
+        !matches!(
+            self,
+            Self::WoodedPark | Self::WoodlandCreek | Self::RoadsideDitch
+        )
     }
 
     /// Whether this preset generates an enclosed perimeter shell of walls around its entire `(0..w, 0..h)` boundary.
@@ -420,16 +438,31 @@ pub fn generate_procedural_sector_with_options(
         height.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM),
     );
     if preset.is_zoned_preset() {
-        return crate::map_gen_zoning::generate_zoned_sector(preset, w, h, seed, economic_tier, zoning);
+        return crate::map_gen_zoning::generate_zoned_sector(
+            preset,
+            w,
+            h,
+            seed,
+            economic_tier,
+            zoning,
+        );
     }
-    if matches!(preset, SectorPreset::Hospital | SectorPreset::ShoppingPlaza | SectorPreset::ShoppingMall) {
+    if matches!(
+        preset,
+        SectorPreset::Hospital | SectorPreset::ShoppingPlaza | SectorPreset::ShoppingMall
+    ) {
         return crate::map_gen_civic_retail::generate_civic_or_retail_sector(preset, w, h, seed);
     }
     if matches!(
         preset,
-        SectorPreset::Farms | SectorPreset::BotanicalGarden | SectorPreset::ManufacturingPlant | SectorPreset::Warehouse
+        SectorPreset::Farms
+            | SectorPreset::BotanicalGarden
+            | SectorPreset::ManufacturingPlant
+            | SectorPreset::Warehouse
     ) {
-        return crate::map_gen_agro_industrial::generate_agro_or_industrial_sector(preset, w, h, seed);
+        return crate::map_gen_agro_industrial::generate_agro_or_industrial_sector(
+            preset, w, h, seed,
+        );
     }
     if let Some(style) = preset.interior_style() {
         return generate_furnished_interior(style, w, h, seed);
@@ -445,7 +478,12 @@ pub fn generate_procedural_sector_with_options(
 
 /// Generates the complete [`ProceduralSector`] for `preset`, emitting thin edge walls and props.
 #[must_use]
-pub fn generate_procedural_sector(preset: SectorPreset, width: i32, height: i32, seed: i64) -> ProceduralSector {
+pub fn generate_procedural_sector(
+    preset: SectorPreset,
+    width: i32,
+    height: i32,
+    seed: i64,
+) -> ProceduralSector {
     generate_procedural_sector_with_options(preset, width, height, seed, None, None)
 }
 
@@ -594,7 +632,15 @@ pub fn evaluate_los_continuous(
     ];
     for &(ox, oy) in &leans {
         let peek = (attacker_m.0 + ox, attacker_m.1 + oy);
-        if circle_collides_obstacles(scene.width_m, scene.height_m, scene.edges, scene.props, peek.0, peek.1, 0.18) {
+        if circle_collides_obstacles(
+            scene.width_m,
+            scene.height_m,
+            scene.edges,
+            scene.props,
+            peek.0,
+            peek.1,
+            0.18,
+        ) {
             continue;
         }
         let lean_clear = !eval_continuous_ray(scene, attacker_m, peek).blocked;
@@ -657,9 +703,36 @@ pub fn build_procedural_map_request_with_options(
 
     let sara_y = (mid_y - 1).max(1);
     let starters = [
-        ("tok-sara", "Sara (Valkyrie)", 2, sara_y, "valkyrie_rig", "#38bdf8", 90, "aimed"),
-        ("tok-marcus", "Marcus (Recon)", 2, mid_y, "recon_mk4", "#22d3ee", 90, "idle"),
-        ("tok-secops-1", "SecOps Sentry", w - 3, mid_y, "secops_sentry", "#f87171", 270, "aimed"),
+        (
+            "tok-sara",
+            "Sara (Valkyrie)",
+            2,
+            sara_y,
+            "valkyrie_rig",
+            "#38bdf8",
+            90,
+            "aimed",
+        ),
+        (
+            "tok-marcus",
+            "Marcus (Recon)",
+            2,
+            mid_y,
+            "recon_mk4",
+            "#22d3ee",
+            90,
+            "idle",
+        ),
+        (
+            "tok-secops-1",
+            "SecOps Sentry",
+            w - 3,
+            mid_y,
+            "secops_sentry",
+            "#f87171",
+            270,
+            "aimed",
+        ),
     ];
     let tokens: Vec<TokenPlacement> = starters
         .iter()
@@ -673,18 +746,20 @@ pub fn build_procedural_map_request_with_options(
         .collect();
     let token_visuals: Vec<TokenVisualSpec> = starters
         .iter()
-        .map(|&(id, _, x, y, rig, hex, facing_deg, pose)| TokenVisualSpec {
-            entity_id: id.to_string(),
-            model_preset: rig.to_string(),
-            color_hex: hex.to_string(),
-            facing_deg,
-            elevation_cm: 0,
-            floor_index: 0,
-            stance_pose: pose.to_string(),
-            portrait_url: None,
-            pos_x_cm: Some(x * 100 + 50),
-            pos_y_cm: Some(y * 100 + 50),
-        })
+        .map(
+            |&(id, _, x, y, rig, hex, facing_deg, pose)| TokenVisualSpec {
+                entity_id: id.to_string(),
+                model_preset: rig.to_string(),
+                color_hex: hex.to_string(),
+                facing_deg,
+                elevation_cm: 0,
+                floor_index: 0,
+                stance_pose: pose.to_string(),
+                portrait_url: None,
+                pos_x_cm: Some(x * 100 + 50),
+                pos_y_cm: Some(y * 100 + 50),
+            },
+        )
         .collect();
 
     let root_cell = crate::map_world_graph::build_root_world_sector_cell(
@@ -724,6 +799,8 @@ pub fn build_procedural_map_request_with_options(
         floors,
         active_floor,
         world_sectors: vec![root_cell],
+        ground_floor_override: None,
+        ground_tint_rgb: None,
     }
 }
 
@@ -737,5 +814,14 @@ pub fn build_procedural_map_request(
     height: i32,
     seed: i64,
 ) -> GmMapUpdateRequest {
-    build_procedural_map_request_with_options(map_id, preset, title_override, width, height, seed, None, None)
+    build_procedural_map_request_with_options(
+        map_id,
+        preset,
+        title_override,
+        width,
+        height,
+        seed,
+        None,
+        None,
+    )
 }

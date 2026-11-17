@@ -22,6 +22,7 @@ pub mod http_handlers;
 pub mod map_authoring_handlers;
 pub mod map_handlers;
 pub mod npcs;
+pub mod npcs_store;
 pub mod player_ai_api;
 pub mod player_ai_spatial;
 pub mod session_export;
@@ -105,6 +106,10 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             get(list_session_gm_docs_handler).post(submit_session_gm_doc_handler),
         )
         .route(
+            "/api/sessions/:session_id/docs/:doc_id",
+            delete(delete_session_gm_doc_handler),
+        )
+        .route(
             "/api/sessions/:session_id/docs/:doc_id/persist",
             post(toggle_session_gm_doc_persistence_handler),
         )
@@ -115,6 +120,10 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         .route(
             "/api/sessions/:session_id/memories/:memory_id",
             delete(delete_session_gm_memory_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/memories/:memory_id/persist",
+            post(toggle_session_gm_memory_persistence_handler),
         )
         .route(
             "/api/sessions/:session_id/combat",
@@ -142,7 +151,7 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         )
         .route(
             "/api/sessions/:session_id/npcs/:character_id",
-            patch(update_session_npc_handler),
+            patch(update_session_npc_handler).delete(delete_session_npc_handler),
         )
         .route(
             "/api/gm/sessions/:session_id/context",
@@ -170,7 +179,7 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
         )
         .route(
             "/api/gm/sessions/:session_id/npcs/:character_id",
-            patch(update_session_npc_handler),
+            patch(update_session_npc_handler).delete(delete_session_npc_handler),
         )
         .route(
             "/api/sessions/:session_id/world-ledger",
@@ -283,7 +292,10 @@ mod router_assets_tests {
                 .to_string_lossy()
                 .to_string();
         }
-        cfg.auth.database_url = temp_dir.join("users_assets.db").to_string_lossy().to_string();
+        cfg.auth.database_url = temp_dir
+            .join("users_assets.db")
+            .to_string_lossy()
+            .to_string();
         let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
         let app = build_router(state);
 

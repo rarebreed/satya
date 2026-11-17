@@ -7,9 +7,7 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use satya_schema::{
-    MapSurfaceFeature, SurfaceFeatureKind, SurfaceShapeKind,
-};
+use satya_schema::{MapSurfaceFeature, SurfaceFeatureKind, SurfaceShapeKind};
 use serde::{Deserialize, Serialize};
 
 use crate::environment_vehicles::{CombatMovementGait, compute_stride_and_sprint_velocity};
@@ -46,7 +44,11 @@ impl ReachableField {
     #[must_use]
     pub fn ticks_at_m(&self, x_m: f32, y_m: f32) -> Option<u32> {
         let dist_m = self.distance_m_at(x_m, y_m)?;
-        Some((f64::from(dist_m) / f64::from(self.m_per_tick)).ceil().max(1.0) as u32)
+        Some(
+            (f64::from(dist_m) / f64::from(self.m_per_tick))
+                .ceil()
+                .max(1.0) as u32,
+        )
     }
 
     /// Geodesic travel distance in meters at `(x_m, y_m)`, or `None` if unreachable.
@@ -80,7 +82,11 @@ impl ReachableField {
                 let ticks = if c_mm == i32::MAX || c_mm == 0 {
                     None
                 } else {
-                    Some(((f64::from(c_mm) / 1000.0) / f64::from(self.m_per_tick)).ceil().max(1.0) as u32)
+                    Some(
+                        ((f64::from(c_mm) / 1000.0) / f64::from(self.m_per_tick))
+                            .ceil()
+                            .max(1.0) as u32,
+                    )
                 };
                 match (active, ticks) {
                     (Some((x0, x1, t_cur)), Some(t)) if t == t_cur => {
@@ -185,8 +191,12 @@ impl PreSampledSurface {
                 let raw: Vec<(f32, f32)> = s.points_cm.iter().map(|p| p.to_m()).collect();
                 let pts = sample_open_catmull_rom_m(&raw, 6);
                 let half_w = (s.width_cm.max(10) as f32) / 200.0;
-                let (mut min_x, mut min_y, mut max_x, mut max_y) =
-                    (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+                let (mut min_x, mut min_y, mut max_x, mut max_y) = (
+                    f32::INFINITY,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    f32::NEG_INFINITY,
+                );
                 for &(x, y) in &pts {
                     min_x = min_x.min(x - half_w);
                     min_y = min_y.min(y - half_w);
@@ -208,8 +218,12 @@ impl PreSampledSurface {
                 if pts.len() < 3 {
                     return None;
                 }
-                let (mut min_x, mut min_y, mut max_x, mut max_y) =
-                    (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY);
+                let (mut min_x, mut min_y, mut max_x, mut max_y) = (
+                    f32::INFINITY,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    f32::NEG_INFINITY,
+                );
                 for &(x, y) in &pts {
                     min_x = min_x.min(x);
                     min_y = min_y.min(y);
@@ -264,7 +278,8 @@ pub fn compute_reachable_continuous(
         };
     }
 
-    let max_budget_mm = (f64::from(m_per_tick) * f64::from(query.tick_budget) * 1000.0).round() as i32;
+    let max_budget_mm =
+        (f64::from(m_per_tick) * f64::from(query.tick_budget) * 1000.0).round() as i32;
     let total = cols * rows;
     let mut walkable = vec![false; total];
     let mut cost_mult = vec![1.0_f32; total];
@@ -293,14 +308,15 @@ pub fn compute_reachable_continuous(
     let node_pos = |ix: usize, iy: usize| -> (f32, f32) {
         ((ix as f32 + 0.5) * step_m, (iy as f32 + 0.5) * step_m)
     };
-    let spatial = SpatialObstacleIndex::new(scene.width_m, scene.height_m, scene.edges, scene.props);
+    let spatial =
+        SpatialObstacleIndex::new(scene.width_m, scene.height_m, scene.edges, scene.props);
 
     for iy in iy_min..=iy_max {
         for ix in ix_min..=ix_max {
             let (px, py) = node_pos(ix, iy);
-            let occupied = occupied_tokens_m
-                .iter()
-                .any(|&(tx, ty)| (px - tx).powi(2) + (py - ty).powi(2) < (TOKEN_RADIUS_M * 1.65).powi(2));
+            let occupied = occupied_tokens_m.iter().any(|&(tx, ty)| {
+                (px - tx).powi(2) + (py - ty).powi(2) < (TOKEN_RADIUS_M * 1.65).powi(2)
+            });
             let idx = iy * cols + ix;
             walkable[idx] = !occupied
                 && !spatial.any_move_blocking_prop_intersects_circle(px, py, 0.22)
@@ -327,7 +343,11 @@ pub fn compute_reachable_continuous(
     cost_mm[sy * cols + sx] = 0;
 
     let mut heap = BinaryHeap::new();
-    heap.push(DijkstraNode { cost_mm: 0, ix: sx, iy: sy });
+    heap.push(DijkstraNode {
+        cost_mm: 0,
+        ix: sx,
+        iy: sy,
+    });
 
     // 16-directional lattice neighborhood: axial (250mm), diagonal (354mm), knight (559mm).
     let neighbors: [(isize, isize, i32); 16] = [
@@ -384,10 +404,20 @@ pub fn compute_reachable_continuous(
             }
             if next_cost < cost_mm[nidx] {
                 cost_mm[nidx] = next_cost;
-                heap.push(DijkstraNode { cost_mm: next_cost, ix: nx, iy: ny });
+                heap.push(DijkstraNode {
+                    cost_mm: next_cost,
+                    ix: nx,
+                    iy: ny,
+                });
             }
         }
     }
 
-    ReachableField { step_m, cols, rows, m_per_tick, cost_mm }
+    ReachableField {
+        step_m,
+        cols,
+        rows,
+        m_per_tick,
+        cost_mm,
+    }
 }

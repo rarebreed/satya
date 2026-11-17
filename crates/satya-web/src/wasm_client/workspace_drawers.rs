@@ -235,7 +235,9 @@ fn strip_header_drag_attrs(header: &Element, base_class: &str) {
 
 fn apply_floating_card_xy(card: &HtmlElement, left_px: f64, top_px: f64) {
     let _ = card.style().remove_property("right");
-    let _ = card.style().set_property("left", &format!("{left_px:.0}px"));
+    let _ = card
+        .style()
+        .set_property("left", &format!("{left_px:.0}px"));
     let _ = card.style().set_property("top", &format!("{top_px:.0}px"));
 }
 
@@ -342,8 +344,8 @@ fn sync_floating_z_indices() {
         (FloatingPaneKind::Webcam, cam_vis),
     ] {
         if active
-            && let Some(card) =
-                get_element(spec_for_pane(kind).card_id).and_then(|e| e.dyn_into::<HtmlElement>().ok())
+            && let Some(card) = get_element(spec_for_pane(kind).card_id)
+                .and_then(|e| e.dyn_into::<HtmlElement>().ok())
         {
             let _ = card
                 .style()
@@ -653,14 +655,8 @@ fn move_floating_pane_clamped(
 ) {
     let rect = card.get_bounding_client_rect();
     let (vw, vh) = viewport_size_px();
-    let (new_left, new_top) = clamp_floating_pane_position(
-        raw_left_px,
-        raw_top_px,
-        rect.width(),
-        rect.height(),
-        vw,
-        vh,
-    );
+    let (new_left, new_top) =
+        clamp_floating_pane_position(raw_left_px, raw_top_px, rect.width(), rect.height(), vw, vh);
     apply_floating_card_xy(card, new_left, new_top);
     with_state_mut(|st| {
         if bring_to_front {
@@ -892,13 +888,23 @@ mod tests {
                     let (ttrpg_float, ttrpg_coll) = ttrpg.flags();
                     let (cam_float, cam_coll) = webcam.flags();
                     let spec = compute_workspace_layout_classes(
-                        chat_float, chat_coll, ttrpg_float, ttrpg_coll, cam_float, cam_coll, false,
+                        chat_float,
+                        chat_coll,
+                        ttrpg_float,
+                        ttrpg_coll,
+                        cam_float,
+                        cam_coll,
+                        false,
                     );
                     let center_docked = chat == Mode::Docked || ttrpg == Mode::Docked;
-                    let any_collapsed =
-                        chat == Mode::Collapsed || ttrpg == Mode::Collapsed || webcam == Mode::Collapsed;
+                    let any_collapsed = chat == Mode::Collapsed
+                        || ttrpg == Mode::Collapsed
+                        || webcam == Mode::Collapsed;
 
-                    assert_eq!(spec.rails_display, if any_collapsed { "flex" } else { "none" });
+                    assert_eq!(
+                        spec.rails_display,
+                        if any_collapsed { "flex" } else { "none" }
+                    );
                     if !center_docked {
                         assert!(spec.workspace_classes.contains("center-collapsed"));
                         if chat == Mode::Floating || ttrpg == Mode::Floating {
@@ -914,37 +920,80 @@ mod tests {
                     }
                     assert_eq!(
                         spec.webrtc_col_display,
-                        if webcam == Mode::Floating && !any_collapsed { "contents" } else { "flex" }
+                        if webcam == Mode::Floating && !any_collapsed {
+                            "contents"
+                        } else {
+                            "flex"
+                        }
                     );
                 }
             }
         }
         assert_eq!(count, 27);
 
-        let all_coll = compute_workspace_layout_classes(false, true, false, true, false, true, false);
-        assert_eq!(all_coll.workspace_classes, "workspace-columns webcam-collapsed center-collapsed");
+        let all_coll =
+            compute_workspace_layout_classes(false, true, false, true, false, true, false);
+        assert_eq!(
+            all_coll.workspace_classes,
+            "workspace-columns webcam-collapsed center-collapsed"
+        );
         assert_eq!(all_coll.center_col_display, "none");
 
-        let all_float = compute_workspace_layout_classes(true, false, true, false, true, false, false);
-        assert_eq!(all_float.workspace_classes, "workspace-columns webcam-undocked center-collapsed");
-        assert_eq!((all_float.center_col_display, all_float.webrtc_col_display), ("contents", "contents"));
+        let all_float =
+            compute_workspace_layout_classes(true, false, true, false, true, false, false);
+        assert_eq!(
+            all_float.workspace_classes,
+            "workspace-columns webcam-undocked center-collapsed"
+        );
+        assert_eq!(
+            (all_float.center_col_display, all_float.webrtc_col_display),
+            ("contents", "contents")
+        );
 
-        let meeting_coll = compute_workspace_layout_classes(false, true, false, false, false, true, true);
-        assert_eq!(meeting_coll.workspace_classes, "workspace-columns webcam-collapsed center-collapsed");
-        let meeting_dock = compute_workspace_layout_classes(false, false, false, false, false, false, true);
-        assert_eq!(meeting_dock.workspace_classes, "workspace-columns ttrpg-collapsed");
+        let meeting_coll =
+            compute_workspace_layout_classes(false, true, false, false, false, true, true);
+        assert_eq!(
+            meeting_coll.workspace_classes,
+            "workspace-columns webcam-collapsed center-collapsed"
+        );
+        let meeting_dock =
+            compute_workspace_layout_classes(false, false, false, false, false, false, true);
+        assert_eq!(
+            meeting_dock.workspace_classes,
+            "workspace-columns ttrpg-collapsed"
+        );
         assert_eq!(meeting_dock.rails_display, "none");
     }
 
     #[test]
     fn test_clamp_floating_pane_position_and_z_order() {
-        assert_eq!(clamp_floating_pane_position(-50.0, -20.0, 420.0, 500.0, 1440.0, 900.0), (8.0, 8.0));
-        assert_eq!(clamp_floating_pane_position(2000.0, 1200.0, 420.0, 500.0, 1440.0, 900.0), (1180.0, 844.0));
-        assert_eq!(clamp_floating_pane_position(300.0, 200.0, 420.0, 500.0, 120.0, 40.0), (8.0, 8.0));
+        assert_eq!(
+            clamp_floating_pane_position(-50.0, -20.0, 420.0, 500.0, 1440.0, 900.0),
+            (8.0, 8.0)
+        );
+        assert_eq!(
+            clamp_floating_pane_position(2000.0, 1200.0, 420.0, 500.0, 1440.0, 900.0),
+            (1180.0, 844.0)
+        );
+        assert_eq!(
+            clamp_floating_pane_position(300.0, 200.0, 420.0, 500.0, 120.0, 40.0),
+            (8.0, 8.0)
+        );
 
-        let mut order = [FloatingPaneKind::Chat, FloatingPaneKind::Ttrpg, FloatingPaneKind::Webcam];
+        let mut order = [
+            FloatingPaneKind::Chat,
+            FloatingPaneKind::Ttrpg,
+            FloatingPaneKind::Webcam,
+        ];
         bring_floating_pane_to_front(&mut order, FloatingPaneKind::Chat);
-        assert_eq!(order, [FloatingPaneKind::Ttrpg, FloatingPaneKind::Webcam, FloatingPaneKind::Chat]);
+        assert_eq!(
+            order,
+            [
+                FloatingPaneKind::Ttrpg,
+                FloatingPaneKind::Webcam,
+                FloatingPaneKind::Chat
+            ]
+        );
         assert_eq!(z_index_for_pane(&order, FloatingPaneKind::Chat), 97);
         assert_eq!(z_index_for_pane(&order, FloatingPaneKind::Ttrpg), 95);
     }

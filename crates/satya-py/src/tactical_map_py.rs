@@ -107,13 +107,17 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
                 tok.entry("visibility")
                     .or_insert_with(|| Value::String("PUBLIC".to_string()));
 
-                let pos_x_cm = tok.get("pos_x_cm").and_then(Value::as_i64).map(|v| v as i32);
-                let pos_y_cm = tok.get("pos_y_cm").and_then(Value::as_i64).map(|v| v as i32);
+                let pos_x_cm = tok
+                    .get("pos_x_cm")
+                    .and_then(Value::as_i64)
+                    .map(|v| v as i32);
+                let pos_y_cm = tok
+                    .get("pos_y_cm")
+                    .and_then(Value::as_i64)
+                    .map(|v| v as i32);
                 if pos_x_cm.is_some() || pos_y_cm.is_some() {
-                    let facing_deg = tok
-                        .get("facing_deg")
-                        .and_then(Value::as_i64)
-                        .unwrap_or(0) as i32;
+                    let facing_deg =
+                        tok.get("facing_deg").and_then(Value::as_i64).unwrap_or(0) as i32;
                     let color_hex = tok
                         .get("color_hex")
                         .and_then(Value::as_str)
@@ -164,7 +168,11 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
         .map_err(|e| format!("Failed to deserialize GmMapUpdateRequest: {e}"))?;
 
     for vis in synthesized_visuals {
-        if !map.token_visuals.iter().any(|v| v.entity_id == vis.entity_id) {
+        if !map
+            .token_visuals
+            .iter()
+            .any(|v| v.entity_id == vis.entity_id)
+        {
             map.token_visuals.push(vis);
         }
     }
@@ -205,7 +213,8 @@ pub fn resolve_tactical_token_destination_cm(
     target_y_cm: i32,
 ) -> PyResult<(i32, i32)> {
     let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
-    resolve_token_destination_cm(&map, moving_entity_id, target_x_cm, target_y_cm).map_err(to_py_err)
+    resolve_token_destination_cm(&map, moving_entity_id, target_x_cm, target_y_cm)
+        .map_err(to_py_err)
 }
 
 /// Evaluates continuous Line-of-Sight, cover grade, and recommended `Δ_ext` between two positions in meters.
@@ -304,10 +313,7 @@ pub fn continue_procedural_tactical_map_json(
 
 /// Switches `active_floor` on a multi-floor procedural sector and syncs top-level wall/prop/surface mirrors.
 #[pyfunction]
-pub fn switch_tactical_map_floor_json(
-    map_json: &str,
-    target_floor_index: i32,
-) -> PyResult<String> {
+pub fn switch_tactical_map_floor_json(map_json: &str, target_floor_index: i32) -> PyResult<String> {
     let mut map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
     if !map.switch_active_floor(target_floor_index) {
         return Err(to_py_err(format!(
@@ -357,11 +363,17 @@ pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(resolve_tactical_token_destination_cm, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_tactical_los_and_cover, m)?)?;
     m.add_function(wrap_pyfunction!(inspect_tactical_map_point, m)?)?;
-    m.add_function(wrap_pyfunction!(generate_procedural_tactical_sector_json, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        generate_procedural_tactical_sector_json,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(continue_procedural_tactical_map_json, m)?)?;
     m.add_function(wrap_pyfunction!(switch_tactical_map_floor_json, m)?)?;
     m.add_function(wrap_pyfunction!(extract_sector_narrative_manifest_json, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_passive_movement_perceptions_json, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        evaluate_passive_movement_perceptions_json,
+        m
+    )?)?;
     Ok(())
 }
 
@@ -386,7 +398,12 @@ mod tests {
         let manifest_json = extract_sector_narrative_manifest_json(&sector_json).unwrap();
         let manifest_val: Value = serde_json::from_str(&manifest_json).unwrap();
         assert_eq!(manifest_val["cardinal_exits"].as_array().unwrap().len(), 4);
-        assert!(!manifest_val["walkable_anchors"].as_array().unwrap().is_empty());
+        assert!(
+            !manifest_val["walkable_anchors"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
 
         let hosp_json = generate_procedural_tactical_sector_json(
             "map-hosp",
@@ -412,7 +429,8 @@ mod tests {
         assert!(!parsed.wall_edges.is_empty());
         assert!(!parsed.props.is_empty());
 
-        let east_json = continue_procedural_tactical_map_json(&sector_json, "EAST", Some(99)).unwrap();
+        let east_json =
+            continue_procedural_tactical_map_json(&sector_json, "EAST", Some(99)).unwrap();
         let east_map = parse_flexible_map_json(&east_json).unwrap();
         assert_eq!(east_map.world_sectors.len(), 2);
         assert!(east_map.grid_width > 12);

@@ -51,7 +51,10 @@ impl WallEdgeIndex {
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.north.iter().chain(self.west.iter()).all(Option::is_none)
+        self.north
+            .iter()
+            .chain(self.west.iter())
+            .all(Option::is_none)
     }
 
     fn slot(&self, x: i32, y: i32, side: EdgeSide) -> Option<usize> {
@@ -101,7 +104,12 @@ impl WallEdgeIndex {
 
     /// Edge and material occupying `(x, y, side)`, if any.
     #[must_use]
-    pub fn get_with_material(&self, x: i32, y: i32, side: EdgeSide) -> Option<(WallEdgeKind, MaterialClass)> {
+    pub fn get_with_material(
+        &self,
+        x: i32,
+        y: i32,
+        side: EdgeSide,
+    ) -> Option<(WallEdgeKind, MaterialClass)> {
         let i = self.slot(x, y, side)?;
         match side {
             EdgeSide::North => self.north[i],
@@ -117,7 +125,11 @@ impl WallEdgeIndex {
 
     /// Edge and material separating two orthogonally adjacent cells `a` and `b` (`None` if not adjacent or open).
     #[must_use]
-    pub fn slot_between(&self, a: (i32, i32), b: (i32, i32)) -> Option<(WallEdgeKind, MaterialClass)> {
+    pub fn slot_between(
+        &self,
+        a: (i32, i32),
+        b: (i32, i32),
+    ) -> Option<(WallEdgeKind, MaterialClass)> {
         if a.1 == b.1 && (a.0 - b.0).abs() == 1 {
             self.get_with_material(a.0.max(b.0), a.1, EdgeSide::West)
         } else if a.0 == b.0 && (a.1 - b.1).abs() == 1 {
@@ -135,7 +147,13 @@ impl WallEdgeIndex {
 
     /// Whether a step from `from` by `(dx, dy)` (each `-1..=1`) crosses an edge matching `blocks`.
     #[must_use]
-    pub fn step_blocked(&self, from: (i32, i32), dx: i32, dy: i32, blocks: impl Fn(WallEdgeKind) -> bool) -> bool {
+    pub fn step_blocked(
+        &self,
+        from: (i32, i32),
+        dx: i32,
+        dy: i32,
+        blocks: impl Fn(WallEdgeKind) -> bool,
+    ) -> bool {
         let hit = |a: (i32, i32), b: (i32, i32)| self.between(a, b).is_some_and(&blocks);
         let to = (from.0 + dx, from.1 + dy);
         if dx == 0 || dy == 0 {
@@ -149,7 +167,12 @@ impl WallEdgeIndex {
     /// Physical edge barrier crossed by a step from `from` by `(dx, dy)` (`Wall`, `DoorClosed`, or `Window`;
     /// open doorways return `None`, and diagonal vertex crossings follow the dual-L-route rule).
     #[must_use]
-    pub fn step_barrier(&self, from: (i32, i32), dx: i32, dy: i32) -> Option<(WallEdgeKind, MaterialClass)> {
+    pub fn step_barrier(
+        &self,
+        from: (i32, i32),
+        dx: i32,
+        dy: i32,
+    ) -> Option<(WallEdgeKind, MaterialClass)> {
         let solid = |a: (i32, i32), b: (i32, i32)| {
             self.slot_between(a, b)
                 .filter(|(k, _)| k.blocks_sight() || k.provides_half_cover())
@@ -172,7 +195,12 @@ impl WallEdgeIndex {
     /// Traces a ray in continuous cell space (`cell (x, y)` spans `[x, x+1) × [y, y+1)`) from `start` to `end`.
     /// Crossings out of `attacker_cell` never impose Low Cover, since the shooter braces on their own sill.
     #[must_use]
-    pub fn trace_obstruction(&self, start: (f32, f32), end: (f32, f32), attacker_cell: (i32, i32)) -> EdgeObstruction {
+    pub fn trace_obstruction(
+        &self,
+        start: (f32, f32),
+        end: (f32, f32),
+        attacker_cell: (i32, i32),
+    ) -> EdgeObstruction {
         self.trace_ray_internal(start, end, attacker_cell, true).0
     }
 
@@ -242,7 +270,9 @@ impl WallEdgeIndex {
                     return (out, barriers);
                 }
             } else if from != attacker_cell
-                && self.step_blocked(from, sx, sy, |k| k.blocks_sight() || k.provides_half_cover())
+                && self.step_blocked(from, sx, sy, |k| {
+                    k.blocks_sight() || k.provides_half_cover()
+                })
             {
                 out.half_cover = true;
                 if let Some(hit) = self.step_barrier(from, sx, sy) {
@@ -262,13 +292,21 @@ mod tests {
     use satya_schema::MaterialClass;
 
     fn edge(x: i32, y: i32, side: EdgeSide, kind: WallEdgeKind) -> MapWallEdge {
-        MapWallEdge { x, y, side, kind, material: MaterialClass::Drywall }
+        MapWallEdge {
+            x,
+            y,
+            side,
+            kind,
+            material: MaterialClass::Drywall,
+        }
     }
 
     #[test]
     fn steps_respect_walls_doors_and_corner_junctions() {
         // Vertical wall on the West edges of column 3 for rows 0..4, with a door at row 2.
-        let mut edges: Vec<MapWallEdge> = (0..4).map(|y| edge(3, y, EdgeSide::West, WallEdgeKind::Wall)).collect();
+        let mut edges: Vec<MapWallEdge> = (0..4)
+            .map(|y| edge(3, y, EdgeSide::West, WallEdgeKind::Wall))
+            .collect();
         edges[2].kind = WallEdgeKind::DoorClosed;
         let mut idx = WallEdgeIndex::from_edges(6, 5, &edges);
         assert!(idx.step_blocked((2, 1), 1, 0, WallEdgeKind::blocks_movement));
@@ -296,10 +334,23 @@ mod tests {
         let window = idx.trace_obstruction((1.5, 2.5), (5.5, 2.5), (1, 2));
         assert!(!window.blocked && window.half_cover);
         let braced = idx.trace_obstruction((2.5, 2.5), (5.5, 2.5), (2, 2));
-        assert!(!braced.blocked && !braced.half_cover, "shooter braced on their own sill");
+        assert!(
+            !braced.blocked && !braced.half_cover,
+            "shooter braced on their own sill"
+        );
         // Diagonal through the ┌ vertex into the room is blocked; the tangent diagonal is not.
-        assert!(idx.trace_obstruction((5.5, 5.5), (6.5, 6.5), (5, 5)).blocked);
-        assert!(!idx.trace_obstruction((5.5, 6.5), (6.5, 5.5), (5, 6)).blocked);
-        assert!(!WallEdgeIndex::default().trace_obstruction((0.5, 0.5), (3.5, 3.5), (0, 0)).blocked);
+        assert!(
+            idx.trace_obstruction((5.5, 5.5), (6.5, 6.5), (5, 5))
+                .blocked
+        );
+        assert!(
+            !idx.trace_obstruction((5.5, 6.5), (6.5, 5.5), (5, 6))
+                .blocked
+        );
+        assert!(
+            !WallEdgeIndex::default()
+                .trace_obstruction((0.5, 0.5), (3.5, 3.5), (0, 0))
+                .blocked
+        );
     }
 }

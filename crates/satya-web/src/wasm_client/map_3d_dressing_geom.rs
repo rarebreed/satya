@@ -53,17 +53,28 @@ const fn material_rgb(m: MaterialClass) -> [f32; 3] {
         MaterialClass::Brick => [0.55, 0.30, 0.24],
         MaterialClass::ConcreteBlock | MaterialClass::ReinforcedConcrete => [0.52, 0.53, 0.54],
         MaterialClass::SolidWood | MaterialClass::WoodFurniture => [0.50, 0.34, 0.20],
-        MaterialClass::SheetSteel | MaterialClass::ArmorSteel | MaterialClass::Appliance => [0.45, 0.50, 0.55],
+        MaterialClass::SheetSteel | MaterialClass::ArmorSteel | MaterialClass::Appliance => {
+            [0.45, 0.50, 0.55]
+        }
         _ => [0.80, 0.78, 0.72],
     }
 }
 
 pub(crate) fn lighten(c: [f32; 3], k: f32) -> [f32; 3] {
-    [(c[0] * k).min(1.0), (c[1] * k).min(1.0), (c[2] * k).min(1.0)]
+    [
+        (c[0] * k).min(1.0),
+        (c[1] * k).min(1.0),
+        (c[2] * k).min(1.0),
+    ]
 }
 
 /// Appends edge-wall and prop geometry for `ui` (`wall_h_m` / `door_h_m` honor the cutaway toggle).
-pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiState, wall_h_m: f32, door_h_m: f32) {
+pub fn push_dressing_geometry(
+    verts: &mut Vec<GlbVertex>,
+    ui: &TacticalMapUiState,
+    wall_h_m: f32,
+    door_h_m: f32,
+) {
     crate::wasm_client::map_3d_surfaces_geom::push_vector_surfaces_3d(verts, ui);
     let (w, h) = (ui.map.grid_width.max(1), ui.map.grid_height.max(1));
     let s = ui.map.cell_size_m();
@@ -79,27 +90,86 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
         };
         let (mx, mz) = (ax + dir_x * s * 0.5, az + dir_z * s * 0.5);
         let half_len = s * 0.5 + WALL_HALF_THICK_M;
-        let (hx, hz) = (dir_x * half_len + dir_z * WALL_HALF_THICK_M, dir_z * half_len + dir_x * WALL_HALF_THICK_M);
+        let (hx, hz) = (
+            dir_x * half_len + dir_z * WALL_HALF_THICK_M,
+            dir_z * half_len + dir_x * WALL_HALF_THICK_M,
+        );
         let wall_rgb = material_rgb(e.material);
         match e.kind {
             WallEdgeKind::Wall => {
                 push_box(verts, mx, mz, 0.0, wall_h_m, hx, hz, wall_rgb, 0.0);
-                push_box(verts, mx, mz, wall_h_m, wall_h_m + 0.03, hx, hz, lighten(wall_rgb, 1.25), 0.0);
+                push_box(
+                    verts,
+                    mx,
+                    mz,
+                    wall_h_m,
+                    wall_h_m + 0.03,
+                    hx,
+                    hz,
+                    lighten(wall_rgb, 1.25),
+                    0.0,
+                );
             }
             WallEdgeKind::DoorClosed => {
-                let (dhx, dhz) = (dir_x * s * 0.46 + dir_z * 0.03, dir_z * s * 0.46 + dir_x * 0.03);
-                push_box(verts, mx, mz, 0.0, door_h_m, dhx, dhz, [0.62, 0.40, 0.20], 0.0);
+                let (dhx, dhz) = (
+                    dir_x * s * 0.46 + dir_z * 0.03,
+                    dir_z * s * 0.46 + dir_x * 0.03,
+                );
+                push_box(
+                    verts,
+                    mx,
+                    mz,
+                    0.0,
+                    door_h_m,
+                    dhx,
+                    dhz,
+                    [0.62, 0.40, 0.20],
+                    0.0,
+                );
             }
             WallEdgeKind::DoorOpen => {
                 // Leaf hinged at the edge start, swung 90° into the owning cell (+Z for North, +X for West).
                 let leaf = s * 0.46;
-                let (lx, lz) = (ax + dir_z * leaf + dir_x * 0.04, az + dir_x * leaf + dir_z * 0.04);
+                let (lx, lz) = (
+                    ax + dir_z * leaf + dir_x * 0.04,
+                    az + dir_x * leaf + dir_z * 0.04,
+                );
                 let (lhx, lhz) = (dir_z * leaf + dir_x * 0.03, dir_x * leaf + dir_z * 0.03);
-                push_box(verts, lx, lz, 0.0, door_h_m.min(0.9), lhx, lhz, [0.62, 0.40, 0.20], 0.0);
+                push_box(
+                    verts,
+                    lx,
+                    lz,
+                    0.0,
+                    door_h_m.min(0.9),
+                    lhx,
+                    lhz,
+                    [0.62, 0.40, 0.20],
+                    0.0,
+                );
             }
             WallEdgeKind::Window => {
-                push_box(verts, mx, mz, 0.0, 0.9_f32.min(wall_h_m), hx, hz, wall_rgb, 0.0);
-                push_box(verts, mx, mz, 0.9_f32.min(wall_h_m), 0.94_f32.min(wall_h_m + 0.04), hx, hz, [0.70, 0.86, 0.95], 0.0);
+                push_box(
+                    verts,
+                    mx,
+                    mz,
+                    0.0,
+                    0.9_f32.min(wall_h_m),
+                    hx,
+                    hz,
+                    wall_rgb,
+                    0.0,
+                );
+                push_box(
+                    verts,
+                    mx,
+                    mz,
+                    0.9_f32.min(wall_h_m),
+                    0.94_f32.min(wall_h_m + 0.04),
+                    hx,
+                    hz,
+                    [0.70, 0.86, 0.95],
+                    0.0,
+                );
                 if wall_h_m > 2.0 {
                     push_box(verts, mx, mz, 2.05, wall_h_m, hx, hz, wall_rgb, 0.0);
                 }
@@ -136,93 +206,402 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
         let (hx, hz) = ((full_hx - inset).max(0.05), (full_hz - inset).max(0.05));
         let rot = fp.rot_deg;
         let (sn, cs) = (fp.sin_rot, fp.cos_rot);
-        let rot_pt = |ox: f32, oz: f32| -> (f32, f32) { (cx + ox * cs - oz * sn, cz + ox * sn + oz * cs) };
+        let rot_pt =
+            |ox: f32, oz: f32| -> (f32, f32) { (cx + ox * cs - oz * sn, cz + ox * sn + oz * cs) };
         let mut top = spec.height_cm as f32 / 100.0;
         if cutaway {
             top = top.min(0.95);
         }
-        let rgb = spec.albedo_rgb;
+        let rgb = crate::wasm_client::map_3d_props_lab_urban::apply_prop_tint(
+            spec.albedo_rgb,
+            p.tint_rgb,
+        );
         match p.kind {
             PropKind::Rug => push_obb(verts, cx, cz, 0.002, 0.012, hx, hz, rot, rgb, 0.0),
             PropKind::ElevatedCatwalk => {
                 // Raised industrial mezzanine stays at 1.48m even in cutaway view so platform height stays clear.
-                push_obb(verts, cx, cz, 0.0, 1.48, full_hx * 0.98, full_hz * 0.98, rot, [0.15, 0.21, 0.31], -1.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    1.48,
+                    full_hx * 0.98,
+                    full_hz * 0.98,
+                    rot,
+                    [0.15, 0.21, 0.31],
+                    -1.0,
+                );
             }
             PropKind::HazardSpill => {
                 push_obb(verts, cx, cz, 0.004, 0.028, hx, hz, rot, rgb, 0.0);
             }
             PropKind::StructuralPillar => {
                 push_obb(verts, cx, cz, 0.0, wall_h_m, hx, hz, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, wall_h_m, wall_h_m + 0.03, hx * 0.96, hz * 0.96, rot, lighten(rgb, 1.25), 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    wall_h_m,
+                    wall_h_m + 0.03,
+                    hx * 0.96,
+                    hz * 0.96,
+                    rot,
+                    lighten(rgb, 1.25),
+                    0.0,
+                );
             }
             PropKind::StonePath | PropKind::AsphaltDrive => {
-                push_obb(verts, cx, cz, 0.002, 0.014, full_hx, full_hz, rot, rgb, -1.0);
+                push_obb(
+                    verts, cx, cz, 0.002, 0.014, full_hx, full_hz, rot, rgb, -1.0,
+                );
             }
             PropKind::GravelPath => {
-                push_obb(verts, cx, cz, 0.003, 0.018, full_hx, full_hz, rot, rgb, -3.0);
+                push_obb(
+                    verts, cx, cz, 0.003, 0.018, full_hx, full_hz, rot, rgb, -3.0,
+                );
             }
             PropKind::DirtPath => {
-                push_obb(verts, cx, cz, 0.002, 0.014, full_hx, full_hz, rot, rgb, -4.0);
+                push_obb(
+                    verts, cx, cz, 0.002, 0.014, full_hx, full_hz, rot, rgb, -4.0,
+                );
             }
             PropKind::MulchBed => {
-                push_obb(verts, cx, cz, 0.003, 0.020, full_hx, full_hz, rot, rgb, -5.0);
+                push_obb(
+                    verts, cx, cz, 0.003, 0.020, full_hx, full_hz, rot, rgb, -5.0,
+                );
             }
             PropKind::CreekWater => {
-                push_obb(verts, cx, cz, 0.002, 0.015, full_hx, full_hz, rot, [0.46, 0.43, 0.36], 0.0);
-                push_obb(verts, cx, cz, 0.004, 0.026, full_hx * 0.96, full_hz * 0.96, rot, rgb, -6.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.002,
+                    0.015,
+                    full_hx,
+                    full_hz,
+                    rot,
+                    [0.46, 0.43, 0.36],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.004,
+                    0.026,
+                    full_hx * 0.96,
+                    full_hz * 0.96,
+                    rot,
+                    rgb,
+                    -6.0,
+                );
             }
             PropKind::DrainageDitch => {
                 let (b1x, b1z) = rot_pt(0.0, -full_hz + 0.08 * s);
                 let (b2x, b2z) = rot_pt(0.0, full_hz - 0.08 * s);
-                push_obb(verts, b1x, b1z, 0.0, 0.11, full_hx, 0.08 * s, rot, [0.34, 0.27, 0.19], -4.0);
-                push_obb(verts, b2x, b2z, 0.0, 0.11, full_hx, 0.08 * s, rot, [0.34, 0.27, 0.19], -4.0);
-                push_obb(verts, cx, cz, 0.003, 0.022, full_hx, full_hz * 0.84, rot, rgb, -6.0);
+                push_obb(
+                    verts,
+                    b1x,
+                    b1z,
+                    0.0,
+                    0.11,
+                    full_hx,
+                    0.08 * s,
+                    rot,
+                    [0.34, 0.27, 0.19],
+                    -4.0,
+                );
+                push_obb(
+                    verts,
+                    b2x,
+                    b2z,
+                    0.0,
+                    0.11,
+                    full_hx,
+                    0.08 * s,
+                    rot,
+                    [0.34, 0.27, 0.19],
+                    -4.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.003,
+                    0.022,
+                    full_hx,
+                    full_hz * 0.84,
+                    rot,
+                    rgb,
+                    -6.0,
+                );
             }
             PropKind::FallenLog => {
                 let hl = (sw_m.max(sh_m) - 0.12).max(0.4) * 0.5;
                 let r = 0.23 * s;
                 let log_top = top.min(0.62);
                 push_obb(verts, cx, cz, 0.02, log_top * 0.86, hl, r, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, log_top * 0.68, log_top, hl * 0.99, r * 0.68, rot, lighten(rgb, 1.15), 0.0);
-                push_obb(verts, cx, cz, 0.06, log_top * 0.72, hl + 0.015, r * 0.66, rot, [0.76, 0.62, 0.44], 0.0);
-                push_obb(verts, cx, cz, log_top - 0.01, log_top + 0.03, hl * 0.55, r * 0.45, rot, [0.34, 0.50, 0.24], -0.25);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    log_top * 0.68,
+                    log_top,
+                    hl * 0.99,
+                    r * 0.68,
+                    rot,
+                    lighten(rgb, 1.15),
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.06,
+                    log_top * 0.72,
+                    hl + 0.015,
+                    r * 0.66,
+                    rot,
+                    [0.76, 0.62, 0.44],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    log_top - 0.01,
+                    log_top + 0.03,
+                    hl * 0.55,
+                    r * 0.45,
+                    rot,
+                    [0.34, 0.50, 0.24],
+                    -0.25,
+                );
             }
             PropKind::DeskL => {
                 let (bx, bz) = rot_pt(0.0, -0.5);
                 let (wx, wz) = rot_pt(-0.5, 0.5);
-                push_obb(verts, bx, bz, 0.0, top - 0.06, (1.0 - inset).max(0.2), (0.5 - inset).max(0.2), rot, [0.32, 0.26, 0.22], 0.0);
-                push_obb(verts, bx, bz, top - 0.06, top, (1.0 - inset).max(0.2), (0.5 - inset).max(0.2), rot, rgb, 0.0);
-                push_obb(verts, wx, wz, 0.0, top - 0.06, (0.5 - inset).max(0.2), 0.5, rot, [0.32, 0.26, 0.22], 0.0);
-                push_obb(verts, wx, wz, top - 0.06, top, (0.5 - inset).max(0.2), 0.5, rot, rgb, 0.0);
+                push_obb(
+                    verts,
+                    bx,
+                    bz,
+                    0.0,
+                    top - 0.06,
+                    (1.0 - inset).max(0.2),
+                    (0.5 - inset).max(0.2),
+                    rot,
+                    [0.32, 0.26, 0.22],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    bx,
+                    bz,
+                    top - 0.06,
+                    top,
+                    (1.0 - inset).max(0.2),
+                    (0.5 - inset).max(0.2),
+                    rot,
+                    rgb,
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    wx,
+                    wz,
+                    0.0,
+                    top - 0.06,
+                    (0.5 - inset).max(0.2),
+                    0.5,
+                    rot,
+                    [0.32, 0.26, 0.22],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    wx,
+                    wz,
+                    top - 0.06,
+                    top,
+                    (0.5 - inset).max(0.2),
+                    0.5,
+                    rot,
+                    rgb,
+                    0.0,
+                );
                 let (chx, chz) = rot_pt(0.45, 0.45);
-                push_obb(verts, chx, chz, 0.0, 0.42, 0.10 * s, 0.10 * s, rot, [0.18, 0.20, 0.23], 0.0);
-                push_obb(verts, chx, chz, 0.42, 0.48, 0.24 * s, 0.24 * s, rot, [0.22, 0.24, 0.28], 0.0);
-                push_obb(verts, chx, chz, 0.48, (top + 0.14).min(0.92), 0.22 * s, 0.08 * s, rot, [0.18, 0.20, 0.24], 0.0);
+                push_obb(
+                    verts,
+                    chx,
+                    chz,
+                    0.0,
+                    0.42,
+                    0.10 * s,
+                    0.10 * s,
+                    rot,
+                    [0.18, 0.20, 0.23],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    chx,
+                    chz,
+                    0.42,
+                    0.48,
+                    0.24 * s,
+                    0.24 * s,
+                    rot,
+                    [0.22, 0.24, 0.28],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    chx,
+                    chz,
+                    0.48,
+                    (top + 0.14).min(0.92),
+                    0.22 * s,
+                    0.08 * s,
+                    rot,
+                    [0.18, 0.20, 0.24],
+                    0.0,
+                );
             }
             PropKind::DeskT => {
                 let (bx, bz) = rot_pt(0.0, -0.5);
                 let (px, pz) = rot_pt(0.0, 0.5);
-                push_obb(verts, bx, bz, 0.0, top - 0.06, (1.5 - inset).max(0.3), (0.5 - inset).max(0.2), rot, [0.32, 0.26, 0.22], 0.0);
-                push_obb(verts, bx, bz, top - 0.06, top, (1.5 - inset).max(0.3), (0.5 - inset).max(0.2), rot, rgb, 0.0);
-                push_obb(verts, px, pz, 0.0, top - 0.06, (0.5 - inset).max(0.2), 0.5, rot, [0.32, 0.26, 0.22], 0.0);
-                push_obb(verts, px, pz, top - 0.06, top, (0.5 - inset).max(0.2), 0.5, rot, rgb, 0.0);
+                push_obb(
+                    verts,
+                    bx,
+                    bz,
+                    0.0,
+                    top - 0.06,
+                    (1.5 - inset).max(0.3),
+                    (0.5 - inset).max(0.2),
+                    rot,
+                    [0.32, 0.26, 0.22],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    bx,
+                    bz,
+                    top - 0.06,
+                    top,
+                    (1.5 - inset).max(0.3),
+                    (0.5 - inset).max(0.2),
+                    rot,
+                    rgb,
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    px,
+                    pz,
+                    0.0,
+                    top - 0.06,
+                    (0.5 - inset).max(0.2),
+                    0.5,
+                    rot,
+                    [0.32, 0.26, 0.22],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    px,
+                    pz,
+                    top - 0.06,
+                    top,
+                    (0.5 - inset).max(0.2),
+                    0.5,
+                    rot,
+                    rgb,
+                    0.0,
+                );
                 for ox in [-0.95_f32, 0.95] {
                     let (chx, chz) = rot_pt(ox, 0.45);
-                    push_obb(verts, chx, chz, 0.0, 0.42, 0.10 * s, 0.10 * s, rot, [0.18, 0.20, 0.23], 0.0);
-                    push_obb(verts, chx, chz, 0.42, 0.48, 0.24 * s, 0.24 * s, rot, [0.22, 0.24, 0.28], 0.0);
+                    push_obb(
+                        verts,
+                        chx,
+                        chz,
+                        0.0,
+                        0.42,
+                        0.10 * s,
+                        0.10 * s,
+                        rot,
+                        [0.18, 0.20, 0.23],
+                        0.0,
+                    );
+                    push_obb(
+                        verts,
+                        chx,
+                        chz,
+                        0.42,
+                        0.48,
+                        0.24 * s,
+                        0.24 * s,
+                        rot,
+                        [0.22, 0.24, 0.28],
+                        0.0,
+                    );
                 }
             }
             PropKind::GardenBed => {
-                push_obb(verts, cx, cz, 0.0, top, hx, hz, rot, [0.44, 0.29, 0.18], 0.0);
-                push_obb(verts, cx, cz, 0.0, top + 0.02, hx * 0.86, hz * 0.86, rot, [0.30, 0.21, 0.14], -5.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top,
+                    hx,
+                    hz,
+                    rot,
+                    [0.44, 0.29, 0.18],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top + 0.02,
+                    hx * 0.86,
+                    hz * 0.86,
+                    rot,
+                    [0.30, 0.21, 0.14],
+                    -5.0,
+                );
                 for (ox, oz, bloom) in [
                     (-hx * 0.45, -hz * 0.25, [0.88, 0.34, 0.44]),
                     (0.0, hz * 0.20, [0.95, 0.76, 0.28]),
                     (hx * 0.45, -hz * 0.15, [0.64, 0.46, 0.88]),
                 ] {
                     let (bx, bz) = rot_pt(ox, oz);
-                    push_obb(verts, bx, bz, top + 0.02, top + 0.18, hx * 0.22, hz * 0.32, rot, [0.24, 0.48, 0.21], -0.25);
-                    push_obb(verts, bx, bz, top + 0.16, top + 0.24, 0.08 * s, 0.08 * s, rot, bloom, 0.0);
+                    push_obb(
+                        verts,
+                        bx,
+                        bz,
+                        top + 0.02,
+                        top + 0.18,
+                        hx * 0.22,
+                        hz * 0.32,
+                        rot,
+                        [0.24, 0.48, 0.21],
+                        -0.25,
+                    );
+                    push_obb(
+                        verts,
+                        bx,
+                        bz,
+                        top + 0.16,
+                        top + 0.24,
+                        0.08 * s,
+                        0.08 * s,
+                        rot,
+                        bloom,
+                        0.0,
+                    );
                 }
             }
             PropKind::GardenEdging => {
@@ -232,38 +611,152 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
                     let t = (i as f32 + 0.5) / steps as f32 - 0.5;
                     let (sx, sz) = rot_pt(t * span, 0.0);
                     let bh = if i % 2 == 0 { top } else { top * 0.88 };
-                    push_obb(verts, sx, sz, 0.0, bh, (span / steps as f32) * 0.44, 0.18 * s, rot, rgb, 0.0);
+                    push_obb(
+                        verts,
+                        sx,
+                        sz,
+                        0.0,
+                        bh,
+                        (span / steps as f32) * 0.44,
+                        0.18 * s,
+                        rot,
+                        rgb,
+                        0.0,
+                    );
                 }
             }
             PropKind::LargeTree => {
-                push_obb(verts, cx, cz, 0.0, 0.45, hx * 0.58, hz * 0.58, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, 0.0, top.min(2.3), hx * 0.42, hz * 0.42, rot, rgb, 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    0.45,
+                    hx * 0.58,
+                    hz * 0.58,
+                    rot,
+                    rgb,
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top.min(2.3),
+                    hx * 0.42,
+                    hz * 0.42,
+                    rot,
+                    rgb,
+                    0.0,
+                );
             }
             PropKind::MediumTree => {
-                push_obb(verts, cx, cz, 0.0, 0.38, hx * 0.52, hz * 0.52, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, 0.0, top.min(1.95), hx * 0.38, hz * 0.38, rot, rgb, 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    0.38,
+                    hx * 0.52,
+                    hz * 0.52,
+                    rot,
+                    rgb,
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top.min(1.95),
+                    hx * 0.38,
+                    hz * 0.38,
+                    rot,
+                    rgb,
+                    0.0,
+                );
             }
             PropKind::Car => {
                 push_obb(verts, cx, cz, 0.15, 0.85, hx, hz, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, 0.85, top, hx * 0.86, hz * 0.55, rot, [0.20, 0.24, 0.30], 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.85,
+                    top,
+                    hx * 0.86,
+                    hz * 0.55,
+                    rot,
+                    [0.20, 0.24, 0.30],
+                    0.0,
+                );
             }
             PropKind::UtilityVan => {
                 push_obb(verts, cx, cz, 0.16, 0.92, hx, hz, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, 0.92, top, hx * 0.90, hz * 0.78, rot, lighten(rgb, 0.92), 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.92,
+                    top,
+                    hx * 0.90,
+                    hz * 0.78,
+                    rot,
+                    lighten(rgb, 0.92),
+                    0.0,
+                );
             }
             PropKind::Hedge => {
                 push_obb(verts, cx, cz, 0.0, top, hx, hz, rot, rgb, -0.25);
             }
             PropKind::Bush => {
-                push_obb(verts, cx, cz, 0.0, top * 0.92, hx * 0.66, hz * 0.66, rot, rgb, -0.25);
-                push_obb(verts, cx, cz, 0.05, top, hx * 0.62, hz * 0.62, rot + 45, lighten(rgb, 1.12), -0.25);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top * 0.92,
+                    hx * 0.66,
+                    hz * 0.66,
+                    rot,
+                    rgb,
+                    -0.25,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.05,
+                    top,
+                    hx * 0.62,
+                    hz * 0.62,
+                    rot + 45,
+                    lighten(rgb, 1.12),
+                    -0.25,
+                );
             }
             PropKind::BarStool | PropKind::Planter => {
                 push_obb(verts, cx, cz, 0.0, top, hx * 0.62, hz * 0.62, rot, rgb, 0.0);
             }
             PropKind::Stairwell => {
-                let stair_h = if cutaway { top.min(0.68) } else { top.min(0.84) };
-                push_obb(verts, cx, cz, 0.0, 0.04, full_hx * 0.96, full_hz * 0.96, rot, [0.22, 0.24, 0.28], 0.0);
+                let stair_h = if cutaway {
+                    top.min(0.68)
+                } else {
+                    top.min(0.84)
+                };
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    0.04,
+                    full_hx * 0.96,
+                    full_hz * 0.96,
+                    rot,
+                    [0.22, 0.24, 0.28],
+                    0.0,
+                );
                 let steps = 6;
                 let step_d = (full_hz * 1.84) / steps as f32;
                 for i in 0..steps {
@@ -271,90 +764,431 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
                     let h = 0.08 + ((i + 1) as f32 / steps as f32) * (stair_h - 0.08);
                     let (tx, tz) = rot_pt(0.0, frac * (full_hz * 1.84));
                     let col = if i % 2 == 0 { rgb } else { lighten(rgb, 1.12) };
-                    push_obb(verts, tx, tz, 0.04, h, hx * 0.86, (step_d * 0.46).max(0.06), rot, col, 0.0);
+                    push_obb(
+                        verts,
+                        tx,
+                        tz,
+                        0.04,
+                        h,
+                        hx * 0.86,
+                        (step_d * 0.46).max(0.06),
+                        rot,
+                        col,
+                        0.0,
+                    );
                 }
                 for sx in [-(full_hx * 0.90), full_hx * 0.90] {
                     let (rx, rz) = rot_pt(sx, 0.0);
-                    push_obb(verts, rx, rz, 0.04, stair_h + 0.14, 0.04, full_hz * 0.92, rot, [0.58, 0.62, 0.68], 0.0);
+                    push_obb(
+                        verts,
+                        rx,
+                        rz,
+                        0.04,
+                        stair_h + 0.14,
+                        0.04,
+                        full_hz * 0.92,
+                        rot,
+                        [0.58, 0.62, 0.68],
+                        0.0,
+                    );
                 }
             }
             PropKind::DisplayRack => {
-                push_obb(verts, cx, cz, 0.0, 0.12, hx, hz, rot, [0.24, 0.27, 0.32], 0.0);
-                push_obb(verts, cx, cz, 0.12, top, hx * 0.96, (hz * 0.18).max(0.04), rot, [0.34, 0.38, 0.44], 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    0.12,
+                    hx,
+                    hz,
+                    rot,
+                    [0.24, 0.27, 0.32],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.12,
+                    top,
+                    hx * 0.96,
+                    (hz * 0.18).max(0.04),
+                    rot,
+                    [0.34, 0.38, 0.44],
+                    0.0,
+                );
                 for frac in [0.36_f32, 0.68, 0.96] {
                     let y1 = (top * frac).max(0.16);
-                    push_obb(verts, cx, cz, (y1 - 0.05).max(0.12), y1, hx, hz * 0.92, rot, rgb, 0.0);
+                    push_obb(
+                        verts,
+                        cx,
+                        cz,
+                        (y1 - 0.05).max(0.12),
+                        y1,
+                        hx,
+                        hz * 0.92,
+                        rot,
+                        rgb,
+                        0.0,
+                    );
                 }
             }
             PropKind::CheckoutCounter => {
                 let cap = (top * 0.10).clamp(0.03, 0.08);
                 push_obb(verts, cx, cz, 0.0, top - cap, hx, hz, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, top - cap, top, hx * 0.99, hz * 0.99, rot, lighten(rgb, 1.18), 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top - cap,
+                    top,
+                    hx * 0.99,
+                    hz * 0.99,
+                    rot,
+                    lighten(rgb, 1.18),
+                    0.0,
+                );
                 let (px, pz) = rot_pt(-hx * 0.48, 0.0);
-                push_obb(verts, px, pz, top, (top + 0.24).min(1.05), 0.14, 0.10, rot, [0.16, 0.19, 0.24], 0.0);
+                push_obb(
+                    verts,
+                    px,
+                    pz,
+                    top,
+                    (top + 0.24).min(1.05),
+                    0.14,
+                    0.10,
+                    rot,
+                    [0.16, 0.19, 0.24],
+                    0.0,
+                );
             }
             PropKind::HospitalBed => {
-                push_obb(verts, cx, cz, 0.14, 0.56, hx, hz, rot, [0.76, 0.80, 0.85], 0.0);
-                push_obb(verts, cx, cz, 0.56, 0.78, hx * 0.94, hz * 0.88, rot, [0.92, 0.95, 0.98], 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.14,
+                    0.56,
+                    hx,
+                    hz,
+                    rot,
+                    [0.76, 0.80, 0.85],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.56,
+                    0.78,
+                    hx * 0.94,
+                    hz * 0.88,
+                    rot,
+                    [0.92, 0.95, 0.98],
+                    0.0,
+                );
                 let (px, pz) = rot_pt(-hx * 0.62, 0.0);
-                push_obb(verts, px, pz, 0.78, 0.92, hx * 0.22, hz * 0.74, rot, [0.97, 0.98, 1.0], 0.0);
+                push_obb(
+                    verts,
+                    px,
+                    pz,
+                    0.78,
+                    0.92,
+                    hx * 0.22,
+                    hz * 0.74,
+                    rot,
+                    [0.97, 0.98, 1.0],
+                    0.0,
+                );
             }
             PropKind::SurgicalTable => {
-                push_obb(verts, cx, cz, 0.0, 0.72, hx * 0.28, hz * 0.36, rot, [0.58, 0.64, 0.70], 0.0);
-                push_obb(verts, cx, cz, 0.72, top, hx * 0.92, hz * 0.82, rot, [0.64, 0.88, 0.84], 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    0.72,
+                    hx * 0.28,
+                    hz * 0.36,
+                    rot,
+                    [0.58, 0.64, 0.70],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.72,
+                    top,
+                    hx * 0.92,
+                    hz * 0.82,
+                    rot,
+                    [0.64, 0.88, 0.84],
+                    0.0,
+                );
             }
             PropKind::ImagingScanner => {
-                push_obb(verts, cx, cz, 0.0, top * 0.38, hx * 0.85, hz * 0.92, rot, [0.88, 0.91, 0.94], 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top * 0.38,
+                    hx * 0.85,
+                    hz * 0.92,
+                    rot,
+                    [0.88, 0.91, 0.94],
+                    0.0,
+                );
                 for sx in [-hx * 0.58, hx * 0.58] {
                     let (px, pz) = rot_pt(sx, 0.0);
-                    push_obb(verts, px, pz, 0.25, top, hx * 0.30, hz * 0.84, rot, [0.93, 0.95, 0.97], 0.0);
+                    push_obb(
+                        verts,
+                        px,
+                        pz,
+                        0.25,
+                        top,
+                        hx * 0.30,
+                        hz * 0.84,
+                        rot,
+                        [0.93, 0.95, 0.97],
+                        0.0,
+                    );
                 }
-                push_obb(verts, cx, cz, top * 0.72, top, hx * 0.86, hz * 0.84, rot, [0.82, 0.88, 0.93], 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top * 0.72,
+                    top,
+                    hx * 0.86,
+                    hz * 0.84,
+                    rot,
+                    [0.82, 0.88, 0.93],
+                    0.0,
+                );
             }
             PropKind::PrivacyCurtain => {
                 let c_top = if cutaway { top.min(0.68) } else { top };
-                push_obb(verts, cx, cz, 0.06, c_top, hx * 0.98, (hz * 0.22).max(0.05), rot, rgb, -0.20);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.06,
+                    c_top,
+                    hx * 0.98,
+                    (hz * 0.22).max(0.05),
+                    rot,
+                    rgb,
+                    -0.20,
+                );
             }
             PropKind::MallKiosk => {
-                push_obb(verts, cx, cz, 0.0, top * 0.88, hx * 0.96, hz * 0.96, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, top * 0.88, top, hx * 0.98, hz * 0.98, rot, [0.65, 0.82, 0.95], 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top * 0.88,
+                    hx * 0.96,
+                    hz * 0.96,
+                    rot,
+                    rgb,
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top * 0.88,
+                    top,
+                    hx * 0.98,
+                    hz * 0.98,
+                    rot,
+                    [0.65, 0.82, 0.95],
+                    0.0,
+                );
             }
             PropKind::ConveyorBelt => {
-                push_obb(verts, cx, cz, 0.0, top * 0.78, hx, hz * 0.92, rot, [0.36, 0.41, 0.47], 0.0);
-                push_obb(verts, cx, cz, top * 0.78, top, hx * 0.98, hz * 0.74, rot, [0.18, 0.19, 0.22], 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top * 0.78,
+                    hx,
+                    hz * 0.92,
+                    rot,
+                    [0.36, 0.41, 0.47],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top * 0.78,
+                    top,
+                    hx * 0.98,
+                    hz * 0.74,
+                    rot,
+                    [0.18, 0.19, 0.22],
+                    0.0,
+                );
             }
             PropKind::IndustrialPress => {
-                push_obb(verts, cx, cz, 0.0, top * 0.42, hx, hz, rot, [0.32, 0.35, 0.39], 0.0);
-                push_obb(verts, cx, cz, top * 0.42, top, hx * 0.82, hz * 0.78, rot, rgb, 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top * 0.42,
+                    hx,
+                    hz,
+                    rot,
+                    [0.32, 0.35, 0.39],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top * 0.42,
+                    top,
+                    hx * 0.82,
+                    hz * 0.78,
+                    rot,
+                    rgb,
+                    0.0,
+                );
             }
             PropKind::PalletRack => {
                 let rack_h = if cutaway { top.min(0.82) } else { top };
                 for sx in [-hx * 0.88, hx * 0.88] {
                     let (px, pz) = rot_pt(sx, 0.0);
-                    push_obb(verts, px, pz, 0.0, rack_h, 0.09, hz * 0.90, rot, [0.86, 0.36, 0.12], 0.0);
+                    push_obb(
+                        verts,
+                        px,
+                        pz,
+                        0.0,
+                        rack_h,
+                        0.09,
+                        hz * 0.90,
+                        rot,
+                        [0.86, 0.36, 0.12],
+                        0.0,
+                    );
                 }
                 for frac in [0.36_f32, 0.74] {
                     let y0 = rack_h * frac;
-                    push_obb(verts, cx, cz, y0, (y0 + 0.22).min(rack_h), hx * 0.86, hz * 0.86, rot, [0.74, 0.56, 0.34], 0.0);
+                    push_obb(
+                        verts,
+                        cx,
+                        cz,
+                        y0,
+                        (y0 + 0.22).min(rack_h),
+                        hx * 0.86,
+                        hz * 0.86,
+                        rot,
+                        [0.74, 0.56, 0.34],
+                        0.0,
+                    );
                 }
             }
             PropKind::Forklift => {
                 let fork_h = if cutaway { top.min(0.84) } else { top };
-                push_obb(verts, cx - 0.18, cz, 0.14, (fork_h * 0.55).min(0.95), hx * 0.65, hz * 0.88, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, 0.55, fork_h, hx * 0.42, hz * 0.74, rot, [0.20, 0.22, 0.25], 0.0);
+                push_obb(
+                    verts,
+                    cx - 0.18,
+                    cz,
+                    0.14,
+                    (fork_h * 0.55).min(0.95),
+                    hx * 0.65,
+                    hz * 0.88,
+                    rot,
+                    rgb,
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.55,
+                    fork_h,
+                    hx * 0.42,
+                    hz * 0.74,
+                    rot,
+                    [0.20, 0.22, 0.25],
+                    0.0,
+                );
             }
             PropKind::ShippingContainer => {
                 let hull_h = if cutaway { top.min(0.85) } else { top };
                 push_obb(verts, cx, cz, 0.0, hull_h, hx, hz, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, (hull_h - 0.08).max(0.05), hull_h + 0.02, hx * 0.96, hz * 0.94, rot, lighten(rgb, 1.14), 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    (hull_h - 0.08).max(0.05),
+                    hull_h + 0.02,
+                    hx * 0.96,
+                    hz * 0.94,
+                    rot,
+                    lighten(rgb, 1.14),
+                    0.0,
+                );
             }
             PropKind::CropRow => {
-                push_obb(verts, cx, cz, 0.0, 0.14, hx * 0.96, hz * 0.82, rot, [0.36, 0.25, 0.16], 0.0);
-                push_obb(verts, cx, cz, 0.14, top, hx * 0.90, hz * 0.68, rot, rgb, -0.25);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    0.14,
+                    hx * 0.96,
+                    hz * 0.82,
+                    rot,
+                    [0.36, 0.25, 0.16],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.14,
+                    top,
+                    hx * 0.90,
+                    hz * 0.68,
+                    rot,
+                    rgb,
+                    -0.25,
+                );
             }
             PropKind::PlanterTable => {
-                push_obb(verts, cx, cz, 0.0, top * 0.78, hx * 0.94, hz * 0.92, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, top * 0.78, top, hx * 0.88, hz * 0.80, rot, [0.24, 0.48, 0.22], -0.20);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top * 0.78,
+                    hx * 0.94,
+                    hz * 0.92,
+                    rot,
+                    rgb,
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top * 0.78,
+                    top,
+                    hx * 0.88,
+                    hz * 0.80,
+                    rot,
+                    [0.24, 0.48, 0.22],
+                    -0.20,
+                );
             }
             PropKind::DeskLamp
             | PropKind::StandingLamp
@@ -383,10 +1217,61 @@ pub fn push_dressing_geometry(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiStat
                     verts, p, cx, cz, hx, hz, top, cutaway, s,
                 );
             }
+            PropKind::Cot
+            | PropKind::Gurney
+            | PropKind::ReclinerChair
+            | PropKind::MedicalCounter
+            | PropKind::NurseStation
+            | PropKind::TelemetryMonitor
+            | PropKind::BiohazardBin
+            | PropKind::LinenCart
+            | PropKind::ElevatorCar
+            | PropKind::ServiceElevator
+            | PropKind::LabBench
+            | PropKind::DeskClutter
+            | PropKind::SolderingStation
+            | PropKind::TestBench
+            | PropKind::Printer3dStation
+            | PropKind::AirCompressor
+            | PropKind::CncMill
+            | PropKind::ServerRack
+            | PropKind::FumeHood
+            | PropKind::ShowerStall
+            | PropKind::SpaBath
+            | PropKind::LinenCloset
+            | PropKind::WasherDryer
+            | PropKind::SingleBed
+            | PropKind::FilingCabinet
+            | PropKind::WaterCooler
+            | PropKind::BrownstoneStoop
+            | PropKind::AwningCanopy => {
+                let _ = crate::wasm_client::map_3d_props_lab_urban::push_lab_urban_prop_3d(
+                    verts,
+                    p,
+                    &ui.map.props,
+                    cx,
+                    cz,
+                    hx,
+                    hz,
+                    top,
+                    cutaway,
+                );
+            }
             _ => {
                 let cap = (top * 0.08).clamp(0.02, 0.06);
                 push_obb(verts, cx, cz, 0.0, top - cap, hx, hz, rot, rgb, 0.0);
-                push_obb(verts, cx, cz, top - cap, top, hx * 0.98, hz * 0.98, rot, lighten(rgb, 1.22), 0.0);
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top - cap,
+                    top,
+                    hx * 0.98,
+                    hz * 0.98,
+                    rot,
+                    lighten(rgb, 1.22),
+                    0.0,
+                );
             }
         }
     }

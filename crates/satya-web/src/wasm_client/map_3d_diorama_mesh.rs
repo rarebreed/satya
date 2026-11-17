@@ -75,6 +75,132 @@ pub fn push_beam(
     push_quad(verts, [p0, p3, p2, p1], [rgb[0], rgb[1], rgb[2], 0.0], 0.0);
 }
 
+fn push_editor_overlay_3d(
+    verts: &mut Vec<GlbVertex>,
+    ui: &TacticalMapUiState,
+    bw_m: f32,
+    bh_m: f32,
+    catwalk_elevation: &dyn Fn(f32, f32) -> f32,
+) {
+    use crate::wasm_client::map_3d_dressing_geom::push_obb;
+    use crate::wasm_client::map_editor::{
+        EditorSelection, EditorTool, SurfaceBrushShape, rasterize_wall_stroke_edges, with_editor,
+    };
+    with_editor(|ed| {
+        if !ed.active {
+            return;
+        }
+        match ed.selection {
+            EditorSelection::Prop(idx) => {
+                if let Some(p) = ui.map.props.get(idx) {
+                    let fp = p.footprint_m();
+                    let [cx, cz] = metric_to_world_xz(fp.cx_m, fp.cy_m, bw_m, bh_m);
+                    let base_y = catwalk_elevation(fp.cx_m, fp.cy_m) + 0.022;
+                    push_obb(
+                        verts,
+                        cx,
+                        cz,
+                        base_y,
+                        base_y + 0.026,
+                        fp.hx_m + 0.08,
+                        fp.hy_m + 0.08,
+                        fp.rot_deg,
+                        [0.98, 0.80, 0.16],
+                        0.0,
+                    );
+                }
+            }
+            EditorSelection::Surface(idx) => {
+                if let Some(s) = ui.map.surfaces.get(idx) {
+                    for pt in &s.points_cm {
+                        let [vx, vz] =
+                            metric_to_world_xz(pt.x_cm as f32 / 100.0, pt.y_cm as f32 / 100.0, bw_m, bh_m);
+                        push_box(verts, vx, vz, 0.025, 0.09, 0.10, 0.10, [0.76, 0.36, 0.96], 0.0);
+                    }
+                }
+            }
+            EditorSelection::None => {}
+        }
+
+        if ed.tool == EditorTool::AddProp
+            && let Some((hx_m, hy_m)) = ui.hovered_point_m
+        {
+            let (px_m, py_m) = if ed.snap_half_m {
+                ((hx_m * 2.0).round() * 0.5, (hy_m * 2.0).round() * 0.5)
+            } else {
+                (hx_m, hy_m)
+            };
+            let p = satya_engine::map_dressing::make_prop_at_cm(
+                ed.prop_kind,
+                (px_m * 100.0).round() as i32,
+                (py_m * 100.0).round() as i32,
+                ed.prop_rotation_deg,
+                None,
+                0,
+            );
+            let fp = p.footprint_m();
+            let [cx, cz] = metric_to_world_xz(fp.cx_m, fp.cy_m, bw_m, bh_m);
+            let base_y = catwalk_elevation(fp.cx_m, fp.cy_m) + 0.024;
+            push_obb(
+                verts,
+                cx,
+                cz,
+                base_y,
+                base_y + 0.026,
+                fp.hx_m,
+                fp.hy_m,
+                fp.rot_deg,
+                [0.20, 0.82, 0.98],
+                0.0,
+            );
+        } else if ed.tool == EditorTool::PaintWall
+            && let (Some(st), Some(en)) = (ed.wall_drag_start, ed.wall_drag_cur)
+        {
+            let cell_m = ui.map.cell_size_m().max(0.25);
+            for r in rasterize_wall_stroke_edges(&ui.map, st, en) {
+                let (xm, ym, hx, hz) = match r.side {
+                    satya_schema::EdgeSide::North => (
+                        (r.x as f32 + 0.5) * cell_m,
+                        r.y as f32 * cell_m,
+                        cell_m * 0.5,
+                        0.08,
+                    ),
+                    satya_schema::EdgeSide::West => (
+                        r.x as f32 * cell_m,
+                        (r.y as f32 + 0.5) * cell_m,
+                        0.08,
+                        cell_m * 0.5,
+                    ),
+                };
+                let [wx, wz] = metric_to_world_xz(xm, ym, bw_m, bh_m);
+                push_box(verts, wx, wz, 0.0, 0.68, hx, hz, [0.98, 0.72, 0.16], 0.0);
+            }
+        } else if ed.tool == EditorTool::PaintSurface {
+            if ed.surface_shape == SurfaceBrushShape::Rect
+                && let (Some(a), Some(b)) = (ed.surface_rect_start_cm, ed.surface_rect_cur_cm)
+            {
+                let x_m = ((a.0 + b.0) as f32 * 0.5) / 100.0;
+                let y_m = ((a.1 + b.1) as f32 * 0.5) / 100.0;
+                let hx = (((a.0 - b.0).abs().max(20)) as f32 * 0.5) / 100.0;
+                let hz = (((a.1 - b.1).abs().max(20)) as f32 * 0.5) / 100.0;
+                let [wx, wz] = metric_to_world_xz(x_m, y_m, bw_m, bh_m);
+                push_box(verts, wx, wz, 0.022, 0.055, hx, hz, [0.76, 0.36, 0.96], 0.0);
+            } else {
+                for (i, pt) in ed.surface_draft_pts_cm.iter().enumerate() {
+                    let [vx, vz] =
+                        metric_to_world_xz(pt.x_cm as f32 / 100.0, pt.y_cm as f32 / 100.0, bw_m, bh_m);
+                    let col = if i == 0 {
+                        [0.98, 0.80, 0.16]
+                    } else {
+                        [0.76, 0.36, 0.96]
+                    };
+                    push_box(verts, vx, vz, 0.02, 0.12, 0.12, 0.12, col, 0.0);
+                }
+            }
+        }
+    });
+}
+
 /// Builds the layered tactical diorama vertex buffer `(verts, opaque_vertex_count)`, placing
 /// translucent overhanging tree/gazebo canopies after opaque geometry so miniatures draw in between.
 #[must_use]
@@ -90,7 +216,39 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
     // 1. Continuous 1.0m-gridded tactical deck floor (`zone_id = -2.0` grass / `-1.0` interior deck)
     let active_floor = ui.map.active_floor;
     let preset_code = ui.map.theme_preset.as_deref().unwrap_or_default();
-    let (deck_rgba, deck_zone_id) = if active_floor < 0 {
+    let (mut deck_rgba, mut deck_zone_id) = if let Some(override_key) = ui
+        .map
+        .ground_floor_override
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+    {
+        if let Some(spec) =
+            crate::wasm_client::map_2d_art_textures::ground_override_texture_spec(override_key)
+        {
+            let rgb = satya_schema::parse_hex_rgb(spec.fallback_hex).unwrap_or([100, 108, 118]);
+            let zid = match spec.pattern_id {
+                "bm-grass" | "bm-grass-lush" | "bm-grass-dry" | "bm-leaf-tex" => -2.0_f32,
+                "bm-dirt" | "bm-mulch" | "bm-carpet" => -4.0_f32,
+                "bm-asphalt" | "bm-concrete" | "bm-stained-concrete" => -7.0_f32,
+                "bm-clinical-vinyl" | "bm-linoleum-check" | "bm-terrazzo" | "bm-ceramic"
+                | "bm-marble" | "bm-vinyl" => -8.0_f32,
+                "bm-stone" | "bm-gravel" | "bm-gravel-pea" | "bm-gravel-slate" | "bm-brick"
+                | "bm-herringbone-brick" | "bm-wood-deck" => -3.0_f32,
+                _ => -1.0_f32,
+            };
+            (
+                [
+                    rgb[0] as f32 / 255.0,
+                    rgb[1] as f32 / 255.0,
+                    rgb[2] as f32 / 255.0,
+                    0.0,
+                ],
+                zid,
+            )
+        } else {
+            ([0.16, 0.18, 0.21, 0.0], -1.0_f32)
+        }
+    } else if active_floor < 0 {
         ([0.16, 0.18, 0.21, 0.0], -1.0_f32)
     } else if active_floor > 0 {
         ([0.23, 0.17, 0.12, 0.0], -1.0_f32)
@@ -113,6 +271,15 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
             _ => ([0.075, 0.115, 0.185, 0.0], -1.0_f32),
         }
     };
+    if let Some([tr, tg, tb]) = ui.map.ground_tint_rgb {
+        let tint = [tr as f32 / 255.0, tg as f32 / 255.0, tb as f32 / 255.0];
+        deck_rgba[0] = deck_rgba[0] * 0.65 + tint[0] * 0.35;
+        deck_rgba[1] = deck_rgba[1] * 0.65 + tint[1] * 0.35;
+        deck_rgba[2] = deck_rgba[2] * 0.65 + tint[2] * 0.35;
+        if deck_zone_id < -0.5 {
+            deck_zone_id = -1.0;
+        }
+    }
     push_quad(
         &mut verts,
         [
@@ -158,7 +325,9 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
     };
 
     // 2. Vector walls / doors / windows and 360°-rotated opaque 3D props
-    crate::wasm_client::map_3d_dressing_geom::push_dressing_geometry(&mut verts, ui, wall_h, door_h);
+    crate::wasm_client::map_3d_dressing_geom::push_dressing_geometry(
+        &mut verts, ui, wall_h, door_h,
+    );
 
     // 3. Continuous 0.25m gait reach strips (`y = 0.016m`)
     for s in &ui.reachable_strips {
@@ -188,7 +357,17 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
         let (tx_m, ty_m) = ui.map.token_pos_m(tok);
         let [sx, sz] = metric_to_world_xz(tx_m, ty_m, bw_m, bh_m);
         let sy = catwalk_elevation(tx_m, ty_m) + 0.022;
-        push_box(&mut verts, sx, sz, sy, sy + 0.024, 0.42, 0.42, [0.96, 0.78, 0.14], 0.0);
+        push_box(
+            &mut verts,
+            sx,
+            sz,
+            sy,
+            sy + 0.024,
+            0.42,
+            0.42,
+            [0.96, 0.78, 0.14],
+            0.0,
+        );
     }
     if let Some((hx_m, hy_m)) = ui.hovered_point_m {
         let [wx, wz] = metric_to_world_xz(hx_m, hy_m, bw_m, bh_m);
@@ -200,6 +379,9 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
         };
         push_box(&mut verts, wx, wz, hy_m, hy_m + 0.022, 0.34, 0.34, col, 0.0);
     }
+
+    // 4b. Interactive Battlemap Editor selection frame, AddProp ghost & wall/surface drafts
+    push_editor_overlay_3d(&mut verts, ui, bw_m, bh_m, &catwalk_elevation);
 
     // 5. 3D Line-of-Sight & Cover laser ribbon (`y = 1.05m` chest/rifle sightline)
     if let Some(los) = ui.last_los.as_ref()
@@ -300,14 +482,16 @@ mod tests {
         assert!((wall_cut_max_y - 0.61).abs() < 1e-3);
 
         ui.map.wall_edges.clear();
-        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
-            satya_schema::PropKind::ElevatedCatwalk,
-            200,
-            200,
-            0,
-            None,
-            1,
-        ));
+        ui.map
+            .props
+            .push(satya_engine::map_dressing::make_prop_at_cm(
+                satya_schema::PropKind::ElevatedCatwalk,
+                200,
+                200,
+                0,
+                None,
+                1,
+            ));
         let plat_verts = build_tactical_diorama_vertices(&ui);
         assert!(
             plat_verts
@@ -323,19 +507,48 @@ mod tests {
             wall_cutaway: false,
             ..Default::default()
         };
-        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
-            PropKind::LargeTree, 450, 450, 0, None, 1,
-        ));
-        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
-            PropKind::MediumTree, 850, 450, 0, None, 2,
-        ));
-        ui.map.props.push(satya_engine::map_dressing::make_prop_at_cm(
-            PropKind::Gazebo, 1300, 700, 0, None, 3,
-        ));
+        ui.map
+            .props
+            .push(satya_engine::map_dressing::make_prop_at_cm(
+                PropKind::LargeTree,
+                450,
+                450,
+                0,
+                None,
+                1,
+            ));
+        ui.map
+            .props
+            .push(satya_engine::map_dressing::make_prop_at_cm(
+                PropKind::MediumTree,
+                850,
+                450,
+                0,
+                None,
+                2,
+            ));
+        ui.map
+            .props
+            .push(satya_engine::map_dressing::make_prop_at_cm(
+                PropKind::Gazebo,
+                1300,
+                700,
+                0,
+                None,
+                3,
+            ));
         let (verts_full, opaque_full) = build_tactical_diorama_layered(&ui);
         assert!(verts_full.len() as u32 > opaque_full);
-        assert!(verts_full[opaque_full as usize..].iter().all(|v| (v.bary_zone[3] + 0.35).abs() < 1e-4));
-        assert!(verts_full[..opaque_full as usize].iter().all(|v| (v.bary_zone[3] + 0.35).abs() > 0.05));
+        assert!(
+            verts_full[opaque_full as usize..]
+                .iter()
+                .all(|v| (v.bary_zone[3] + 0.35).abs() < 1e-4)
+        );
+        assert!(
+            verts_full[..opaque_full as usize]
+                .iter()
+                .all(|v| (v.bary_zone[3] + 0.35).abs() > 0.05)
+        );
 
         ui.wall_cutaway = true;
         let (verts_cut, opaque_cut) = build_tactical_diorama_layered(&ui);

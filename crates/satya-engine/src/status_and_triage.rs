@@ -14,7 +14,9 @@ use crate::primitives::{ConditionImpact, ConditionSource, Triad};
 // ============================================================================
 
 /// Fracture or joint integrity state for an anatomical hit location (`docs/ttrpg/06-health-and-survival/health_and_trauma.md` §3.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum BoneFractureStatus {
     #[default]

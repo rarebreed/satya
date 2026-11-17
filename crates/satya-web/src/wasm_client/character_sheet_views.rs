@@ -137,7 +137,10 @@ pub fn format_all_characteristics_and_aptitudes_html(sheet: &CharacterSheetState
         (
             "Quick Thinking (D_cog)",
             format!("{}", derived.d_cog_quick_thinking),
-            format!("floor((max(ANA {}, CRE {}) + FOC {})/2)", c.ana, c.cre, c.foc),
+            format!(
+                "floor((max(ANA {}, CRE {}) + FOC {})/2)",
+                c.ana, c.cre, c.foc
+            ),
         ),
         (
             "Striking Power (POW)",
@@ -201,7 +204,10 @@ pub fn format_all_characteristics_and_aptitudes_html(sheet: &CharacterSheetState
         ),
         (
             "Triad Ceilings (T / C / F)",
-            format!("{} / {} / {}", env.tempo_cap, env.control_cap, env.force_cap),
+            format!(
+                "{} / {} / {}",
+                env.tempo_cap, env.control_cap, env.force_cap
+            ),
             format!("Morale: {} · Live Caps", env.morale_state.label()),
         ),
     ];
@@ -219,7 +225,13 @@ pub fn format_all_characteristics_and_aptitudes_html(sheet: &CharacterSheetState
     let hgt_scale = c.get_scale(CharacteristicCode::HGT);
     let mas_scale = c.get_scale(CharacteristicCode::MAS);
     let bmi = c.mas_kg / (c.hgt_m * c.hgt_m).max(1.0);
-    let std_hdrs = &["Characteristic", "Score", "Base / Eff TN", "Population Tier", "Roll"];
+    let std_hdrs = &[
+        "Characteristic",
+        "Score",
+        "Base / Eff TN",
+        "Population Tier",
+        "Roll",
+    ];
     let cards_html = [
         render_table_card(
             &format!(
@@ -386,13 +398,24 @@ pub fn format_talents_and_skills_tables_html(sheet: &CharacterSheetState) -> Str
             } else {
                 ""
             };
-            format!(r#"<option value="{code}"{sel}>{}</option>"#, escape_html(title))
+            format!(
+                r#"<option value="{code}"{sel}>{}</option>"#,
+                escape_html(title)
+            )
         })
         .collect::<Vec<_>>()
         .join("");
 
-    let trained_sel = if sheet.skills_trained_only { " selected" } else { "" };
-    let all_sel = if !sheet.skills_trained_only { " selected" } else { "" };
+    let trained_sel = if sheet.skills_trained_only {
+        " selected"
+    } else {
+        ""
+    };
+    let all_sel = if !sheet.skills_trained_only {
+        " selected"
+    } else {
+        ""
+    };
     let chips_html = format_trained_skill_chips_html(c, &sheet.skills);
 
     format!(
@@ -559,7 +582,10 @@ pub fn format_character_sheet_html(sheet: &CharacterSheetState) -> String {
         .or_else(|| {
             sheet.faction_id.as_deref().map(|fid| {
                 let lbl = AwakenedFactionId::from_code_str(fid).map_or(fid, |f| f.label());
-                format!(r#" <span class="pill pill-accent">{}</span>"#, escape_html(lbl))
+                format!(
+                    r#" <span class="pill pill-accent">{}</span>"#,
+                    escape_html(lbl)
+                )
             })
         })
         .unwrap_or_default();

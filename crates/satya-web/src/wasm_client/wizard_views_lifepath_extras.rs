@@ -205,7 +205,8 @@ fn format_life_event_select_and_branch_html(
 ) -> String {
     let none_sel = if roll_opt.is_none() { " selected" } else { "" };
     let active_evt = roll_opt.map(FormativeLifeEventId::from_roll_2d20);
-    let mut evt_opts = format!(r#"<option value="NONE"{none_sel}>-- None / Skip Event --</option>"#);
+    let mut evt_opts =
+        format!(r#"<option value="NONE"{none_sel}>-- None / Skip Event --</option>"#);
     for &ev in &FormativeLifeEventId::ALL {
         let rep_roll = ev.representative_roll_2d20();
         let sel = if active_evt == Some(ev) {
@@ -331,10 +332,8 @@ pub fn format_faction_quickstart_fieldset_html(st: &CharacterWizardState) -> Str
 /// Renders Stage 3 Youth Club/Hobby (`-15%` Experience SP) and Adolescent Formative Life Event cards.
 #[must_use]
 pub fn format_youth_hobby_and_event_cards_html(cfg: &LifepathBuildConfig) -> String {
-    let hobby_opts = format_hobby_options_html(
-        cfg.youth_hobby,
-        "-- None (No Youth Club Selected) --",
-    );
+    let hobby_opts =
+        format_hobby_options_html(cfg.youth_hobby, "-- None (No Youth Club Selected) --");
     let hobby_note = if let Some(h) = cfg.youth_hobby {
         let sp = h.spec();
         format!(
@@ -376,10 +375,8 @@ pub fn format_youth_hobby_and_event_cards_html(cfg: &LifepathBuildConfig) -> Str
 /// Renders per-Term Off-Duty Hobby and `2d20` Formative Life Event controls for Stage 5 Career Term `t_idx`.
 #[must_use]
 pub fn format_term_hobby_and_event_controls_html(t_idx: usize, term: &CareerTermConfig) -> String {
-    let hobby_opts = format_hobby_options_html(
-        term.off_duty_hobby,
-        "-- None (No Off-Duty Hobby) --",
-    );
+    let hobby_opts =
+        format_hobby_options_html(term.off_duty_hobby, "-- None (No Off-Duty Hobby) --");
     let roll_onchange =
         format!("window.satyaWizardUpdateCareerTerm({t_idx}, 'life_event_roll', this.value)");
     let choice_onchange =

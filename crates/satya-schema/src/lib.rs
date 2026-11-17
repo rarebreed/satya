@@ -245,9 +245,7 @@ mod tests {
                 if k == "character"
                     && let apache_avro::types::Value::Record(char_fields) = v
                 {
-                    char_fields.retain(|(cf, _)| {
-                        cf != "faction_id" && cf != "faction_archetype"
-                    });
+                    char_fields.retain(|(cf, _)| cf != "faction_id" && cf != "faction_archetype");
                     for (ck, cv) in char_fields.iter_mut() {
                         if ck == "characteristics"
                             && let apache_avro::types::Value::Record(stat_fields) = cv
@@ -258,7 +256,8 @@ mod tests {
                 }
             }
         }
-        let avro_v1_bytes = apache_avro::to_avro_datum(&char_v1_reg.avro_schema, raw_v1_val).unwrap();
+        let avro_v1_bytes =
+            apache_avro::to_avro_datum(&char_v1_reg.avro_schema, raw_v1_val).unwrap();
         let hdr_v1_wire = WireFrameHeader {
             magic_byte: WIRE_MAGIC_BYTE,
             schema_id: char_v1_reg.schema_id,
