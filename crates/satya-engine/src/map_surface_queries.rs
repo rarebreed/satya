@@ -8,7 +8,10 @@ use satya_schema::tactical_map_surfaces_dto::{
     MapSurfaceFeature, SurfaceFeatureKind, SurfaceShapeKind,
 };
 
-use crate::map_surface_geom::{sample_open_catmull_rom_m, sampled_closed_ring_m};
+use crate::map_surface_geom::{
+    local_ribbon_half_width_m, ribbon_edge_roughness_spec, sample_open_catmull_rom_m,
+    sampled_closed_ring_m, visit_open_catmull_rom_segments,
+};
 
 /// Computes minimum Euclidean distance in meters from `(px, py)` to a 2D polyline.
 #[must_use]
@@ -68,8 +71,9 @@ pub fn surface_contains_point_m(surface: &MapSurfaceFeature, px_m: f32, py_m: f3
         max_y_cm = max_y_cm.max(pt.y_cm);
     }
     let half_w = (surface.width_cm.max(10) as f32) / 200.0;
+    let (rough_rel, rough_max_amp) = ribbon_edge_roughness_spec(surface.kind);
     let quick_pad_m = match surface.shape {
-        SurfaceShapeKind::RibbonSpline => half_w + 1.5,
+        SurfaceShapeKind::RibbonSpline => half_w + rough_max_amp + 1.5,
         SurfaceShapeKind::OrganicClosed => 1.5,
         SurfaceShapeKind::Polygon => 0.1,
     };
@@ -81,11 +85,45 @@ pub fn surface_contains_point_m(surface: &MapSurfaceFeature, px_m: f32, py_m: f3
         return false;
     }
 
-    let raw: Vec<(f32, f32)> = surface.points_cm.iter().map(|p| p.to_m()).collect();
     match surface.shape {
         SurfaceShapeKind::RibbonSpline => {
-            let cl = sample_open_catmull_rom_m(&raw, 6);
-            distance_point_to_polyline_m(px_m, py_m, &cl) <= half_w
+            let subdivs = if surface.points_cm.len() >= 8 { 4 } else { 6 };
+            let mut best_dist = f32::INFINITY;
+            let mut best_arc = 0.0_f32;
+            let mut best_left = true;
+            let mut arc_m = 0.0_f32;
+            visit_open_catmull_rom_segments(&surface.points_cm, subdivs, |a, b| {
+                let (d, t) = crate::tactical_map_geom::distance_point_to_segment(px_m, py_m, a, b);
+                if rough_rel <= 0.0 {
+                    if d < best_dist {
+                        best_dist = d;
+                    }
+                } else {
+                    let seg_len = (b.0 - a.0).hypot(b.1 - a.1);
+                    if d < best_dist {
+                        best_dist = d;
+                        best_arc = arc_m + t * seg_len;
+                        let qx = a.0 + (b.0 - a.0) * t;
+                        let qy = a.1 + (b.1 - a.1) * t;
+                        best_left =
+                            (b.0 - a.0) * (py_m - qy) - (b.1 - a.1) * (px_m - qx) >= 0.0;
+                    }
+                    arc_m += seg_len;
+                }
+            });
+            if rough_rel <= 0.0 {
+                best_dist <= half_w
+            } else {
+                let local_hw = local_ribbon_half_width_m(
+                    half_w,
+                    surface.kind,
+                    surface.variant_seed,
+                    best_left,
+                    best_arc,
+                    1.0,
+                );
+                best_dist <= local_hw
+            }
         }
         SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon => {
             let ring = sampled_closed_ring_m(surface);
@@ -169,40 +207,242 @@ pub fn point_near_protected_surface_m(
     })
 }
 
+enum PreSampledSurfaceShape {
+    Empty,
+    Ring(Vec<(f32, f32)>),
+    Ribbon {
+        cl: Vec<(f32, f32)>,
+        cum_arc: Vec<f32>,
+        half_w: f32,
+        rough_rel: f32,
+        variant_seed: u32,
+    },
+}
+
+struct PreSampledSurfaceEntry {
+    kind: SurfaceFeatureKind,
+    prio: u8,
+    min_x: f32,
+    min_y: f32,
+    max_x: f32,
+    max_y: f32,
+    shape: PreSampledSurfaceShape,
+}
+
+impl PreSampledSurfaceEntry {
+    fn from_feature(s: &MapSurfaceFeature) -> Self {
+        let prio = s.kind.layer_priority();
+        if s.points_cm.is_empty() {
+            return Self {
+                kind: s.kind,
+                prio,
+                min_x: 0.0,
+                min_y: 0.0,
+                max_x: -1.0,
+                max_y: -1.0,
+                shape: PreSampledSurfaceShape::Empty,
+            };
+        }
+        match s.shape {
+            SurfaceShapeKind::RibbonSpline => {
+                let raw: Vec<(f32, f32)> = s.points_cm.iter().map(|p| p.to_m()).collect();
+                let subdivs = if s.points_cm.len() >= 8 { 4 } else { 6 };
+                let cl = sample_open_catmull_rom_m(&raw, subdivs);
+                let half_w = (s.width_cm.max(10) as f32) / 200.0;
+                let (rough_rel, rough_max_amp) = ribbon_edge_roughness_spec(s.kind);
+                let pad = half_w + rough_max_amp;
+                let (mut min_x, mut min_y, mut max_x, mut max_y) = (
+                    f32::INFINITY,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    f32::NEG_INFINITY,
+                );
+                for &(x, y) in &cl {
+                    min_x = min_x.min(x - pad);
+                    min_y = min_y.min(y - pad);
+                    max_x = max_x.max(x + pad);
+                    max_y = max_y.max(y + pad);
+                }
+                let mut cum_arc = Vec::with_capacity(cl.len());
+                cum_arc.push(0.0_f32);
+                for w in cl.windows(2) {
+                    let seg = (w[1].0 - w[0].0).hypot(w[1].1 - w[0].1);
+                    cum_arc.push(cum_arc[cum_arc.len() - 1] + seg);
+                }
+                Self {
+                    kind: s.kind,
+                    prio,
+                    min_x,
+                    min_y,
+                    max_x,
+                    max_y,
+                    shape: PreSampledSurfaceShape::Ribbon {
+                        cl,
+                        cum_arc,
+                        half_w,
+                        rough_rel,
+                        variant_seed: s.variant_seed,
+                    },
+                }
+            }
+            SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon => {
+                let ring = sampled_closed_ring_m(s);
+                if ring.len() < 3 {
+                    return Self {
+                        kind: s.kind,
+                        prio,
+                        min_x: 0.0,
+                        min_y: 0.0,
+                        max_x: -1.0,
+                        max_y: -1.0,
+                        shape: PreSampledSurfaceShape::Empty,
+                    };
+                }
+                let (mut min_x, mut min_y, mut max_x, mut max_y) = (
+                    f32::INFINITY,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    f32::NEG_INFINITY,
+                );
+                for &(x, y) in &ring {
+                    min_x = min_x.min(x);
+                    min_y = min_y.min(y);
+                    max_x = max_x.max(x);
+                    max_y = max_y.max(y);
+                }
+                Self {
+                    kind: s.kind,
+                    prio,
+                    min_x,
+                    min_y,
+                    max_x,
+                    max_y,
+                    shape: PreSampledSurfaceShape::Ring(ring),
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn contains(&self, px_m: f32, py_m: f32) -> bool {
+        if px_m < self.min_x || px_m > self.max_x || py_m < self.min_y || py_m > self.max_y {
+            return false;
+        }
+        match &self.shape {
+            PreSampledSurfaceShape::Empty => false,
+            PreSampledSurfaceShape::Ring(ring) => point_in_ring_m(px_m, py_m, ring),
+            PreSampledSurfaceShape::Ribbon {
+                cl,
+                cum_arc,
+                half_w,
+                rough_rel,
+                variant_seed,
+            } => {
+                if *rough_rel <= 0.0 {
+                    return distance_point_to_polyline_m(px_m, py_m, cl) <= *half_w;
+                }
+                if cl.len() < 2 {
+                    return cl
+                        .first()
+                        .is_some_and(|&(x, y)| (px_m - x).hypot(py_m - y) <= *half_w);
+                }
+                let mut best_dist = f32::INFINITY;
+                let mut best_arc = 0.0_f32;
+                let mut best_left = true;
+                for i in 0..cl.len() - 1 {
+                    let (a, b) = (cl[i], cl[i + 1]);
+                    let (d, t) =
+                        crate::tactical_map_geom::distance_point_to_segment(px_m, py_m, a, b);
+                    if d < best_dist {
+                        best_dist = d;
+                        let seg_len = cum_arc[i + 1] - cum_arc[i];
+                        best_arc = cum_arc[i] + t * seg_len;
+                        let qx = a.0 + (b.0 - a.0) * t;
+                        let qy = a.1 + (b.1 - a.1) * t;
+                        best_left =
+                            (b.0 - a.0) * (py_m - qy) - (b.1 - a.1) * (px_m - qx) >= 0.0;
+                    }
+                }
+                let local_hw = local_ribbon_half_width_m(
+                    *half_w,
+                    self.kind,
+                    *variant_seed,
+                    best_left,
+                    best_arc,
+                    1.0,
+                );
+                best_dist <= local_hw
+            }
+        }
+    }
+}
+
+/// Pre-sampled surface index accelerating dense grid queries (`prune_occluded_surfaces`, test grids).
+pub struct PreparedSurfaceGrid {
+    entries: Vec<PreSampledSurfaceEntry>,
+}
+
+impl PreparedSurfaceGrid {
+    /// Pre-samples all vector surface contours and tight bounding boxes once.
+    #[must_use]
+    pub fn new(surfaces: &[MapSurfaceFeature]) -> Self {
+        Self {
+            entries: surfaces
+                .iter()
+                .map(PreSampledSurfaceEntry::from_feature)
+                .collect(),
+        }
+    }
+
+    /// Returns `true` if surface `idx` covers world point `(px_m, py_m)`.
+    #[must_use]
+    pub fn contains_surface(&self, idx: usize, px_m: f32, py_m: f32) -> bool {
+        self.entries
+            .get(idx)
+            .is_some_and(|e| e.contains(px_m, py_m))
+    }
+
+    /// Returns the topmost [`SurfaceFeatureKind`] at `(px_m, py_m)` matching [`topmost_surface_at_m`].
+    #[must_use]
+    pub fn topmost_kind_at_m(&self, px_m: f32, py_m: f32) -> Option<SurfaceFeatureKind> {
+        let mut best: Option<SurfaceFeatureKind> = None;
+        let mut best_prio = 0u8;
+        for entry in &self.entries {
+            if best.is_some() && entry.prio < best_prio {
+                continue;
+            }
+            if entry.contains(px_m, py_m) {
+                best = Some(entry.kind);
+                best_prio = entry.prio;
+            }
+        }
+        best
+    }
+}
+
 /// Drops any surface patch that has zero exposed `0.25m` sample points inside `[0, w] x [0, h]`
 /// (for instance, a cramped decorative bed completely covered by a higher-priority building slab).
 pub fn prune_occluded_surfaces(surfaces: &mut Vec<MapSurfaceFeature>, w: i32, h: i32) {
     let max_gx = (w * 4 - 1).max(1);
     let max_gy = (h * 4 - 1).max(1);
+    let grid = PreparedSurfaceGrid::new(surfaces);
     let mut keep = vec![false; surfaces.len()];
-    for (idx, s) in surfaces.iter().enumerate() {
-        let Some((mut min_x_cm, mut min_y_cm, mut max_x_cm, mut max_y_cm)) = s
-            .points_cm
-            .first()
-            .map(|p| (p.x_cm, p.y_cm, p.x_cm, p.y_cm))
-        else {
+    for (idx, entry) in grid.entries.iter().enumerate() {
+        if entry.max_x < entry.min_x || entry.max_y < entry.min_y {
             continue;
-        };
-        for p in &s.points_cm[1..] {
-            min_x_cm = min_x_cm.min(p.x_cm);
-            min_y_cm = min_y_cm.min(p.y_cm);
-            max_x_cm = max_x_cm.max(p.x_cm);
-            max_y_cm = max_y_cm.max(p.y_cm);
         }
-        let pad_cm = s.width_cm / 2 + 150;
-        let gx_min = (((min_x_cm - pad_cm) as f32 / 25.0).floor() as i32).clamp(1, max_gx);
-        let gx_max = (((max_x_cm + pad_cm) as f32 / 25.0).ceil() as i32).clamp(gx_min, max_gx);
-        let gy_min = (((min_y_cm - pad_cm) as f32 / 25.0).floor() as i32).clamp(1, max_gy);
-        let gy_max = (((max_y_cm + pad_cm) as f32 / 25.0).ceil() as i32).clamp(gy_min, max_gy);
+        let gx_min = ((entry.min_x * 4.0).floor() as i32).clamp(1, max_gx);
+        let gx_max = ((entry.max_x * 4.0).ceil() as i32).clamp(gx_min, max_gx);
+        let gy_min = ((entry.min_y * 4.0).floor() as i32).clamp(1, max_gy);
+        let gy_max = ((entry.max_y * 4.0).ceil() as i32).clamp(gy_min, max_gy);
 
         let mut exposed = false;
         for gy in gy_min..=gy_max {
             let py = gy as f32 * 0.25;
             for gx in gx_min..=gx_max {
                 let px = gx as f32 * 0.25;
-                if surface_contains_point_m(s, px, py)
-                    && let Some(top) = topmost_surface_at_m(surfaces, px, py)
-                    && top.kind == s.kind
+                if grid.contains_surface(idx, px, py)
+                    && grid.topmost_kind_at_m(px, py) == Some(entry.kind)
                 {
                     exposed = true;
                     break;
@@ -361,17 +601,16 @@ mod tests {
             for &(w, h) in &[(20, 14), (24, 18), (36, 26)] {
                 for seed in 1_i64..=12 {
                     let sec = crate::tactical_map::generate_procedural_sector(preset, w, h, seed);
+                    let grid = PreparedSurfaceGrid::new(&sec.surfaces);
                     let emitted: HashSet<SurfaceFeatureKind> =
                         sec.surfaces.iter().map(|s| s.kind).collect();
                     let mut exposed: HashSet<SurfaceFeatureKind> = HashSet::new();
                     for gy in 1..(h * 4) {
                         for gx in 1..(w * 4) {
-                            if let Some(top) = topmost_surface_at_m(
-                                &sec.surfaces,
-                                gx as f32 * 0.25,
-                                gy as f32 * 0.25,
-                            ) {
-                                exposed.insert(top.kind);
+                            if let Some(kind) =
+                                grid.topmost_kind_at_m(gx as f32 * 0.25, gy as f32 * 0.25)
+                            {
+                                exposed.insert(kind);
                             }
                         }
                     }
@@ -404,8 +643,7 @@ mod tests {
                     ) {
                         for p in &sec.props {
                             let (cx, cy) = p.center_m();
-                            let top_kind =
-                                topmost_surface_at_m(&sec.surfaces, cx, cy).map(|s| s.kind);
+                            let top_kind = grid.topmost_kind_at_m(cx, cy);
                             if matches!(
                                 p.kind,
                                 PropKind::LargeTree
@@ -443,17 +681,16 @@ mod tests {
                     }
 
                     for fl in &sec.floors {
+                        let fl_grid = PreparedSurfaceGrid::new(&fl.surfaces);
                         let fl_emitted: HashSet<SurfaceFeatureKind> =
                             fl.surfaces.iter().map(|s| s.kind).collect();
                         let mut fl_exposed: HashSet<SurfaceFeatureKind> = HashSet::new();
                         for gy in 1..(h * 4) {
                             for gx in 1..(w * 4) {
-                                if let Some(top) = topmost_surface_at_m(
-                                    &fl.surfaces,
-                                    gx as f32 * 0.25,
-                                    gy as f32 * 0.25,
-                                ) {
-                                    fl_exposed.insert(top.kind);
+                                if let Some(kind) =
+                                    fl_grid.topmost_kind_at_m(gx as f32 * 0.25, gy as f32 * 0.25)
+                                {
+                                    fl_exposed.insert(kind);
                                 }
                             }
                         }

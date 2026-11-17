@@ -22,6 +22,9 @@ use crate::map_gen_residential::{
     CardinalEntry, LotBox, generate_home_in_lot, trim_floor_props_to_connected,
 };
 use crate::map_outdoor_gen::{OutdoorBuilder, RectM};
+use crate::map_outdoor_natural::{
+    CurveProfile, CurveSpec, route_trail_across_bridge_m, synthesize_natural_curve_m,
+};
 use crate::map_surface_queries::prune_occluded_surfaces;
 use crate::tactical_map::{ProceduralSector, SectorPreset};
 
@@ -128,29 +131,79 @@ fn build_interior_office(b: &mut OutdoorBuilder, office: LotBox, on_west: bool, 
 fn generate_farms(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let mut b = OutdoorBuilder::new(w, h, seed);
     let (bx0, bx1) = safe_x_span(w);
-    let lane_y = (h as f32 * 0.68).min(h as f32 - 3.6);
-    let ditch_y = (h as f32 - 1.45).max(lane_y + 2.0);
-    let wob = b.rng.f32_range(-0.35, 0.35);
+    let (wf, hf) = (w as f32, h as f32);
+    let lane_y = (hf * 0.66).min(hf - 4.0);
+    let ditch_y = (hf - 1.85).max(lane_y + 2.2);
 
     // Tractor DirtTrail lane across South-mid & meandering DrainageDitch culvert below it.
-    let trail_ctrl = [
-        (-0.5, lane_y - wob),
-        (w as f32 * 0.25, lane_y + wob),
-        (w as f32 * 0.55, lane_y - wob * 0.5),
-        (w as f32 * 0.80, lane_y + wob),
-        (w as f32 + 0.5, lane_y),
-    ];
+    let trail_rect = RectM {
+        x0: 1.0,
+        y0: lane_y - 0.55,
+        x1: wf - 1.0,
+        y1: (ditch_y - 1.40).max(lane_y + 0.25),
+    };
+    let trail_y0 = lane_y + b.rng.f32_range(-0.35, 0.35);
+    let trail_y1 = lane_y + b.rng.f32_range(-0.35, 0.35);
+    let trail_ctrl = synthesize_natural_curve_m(
+        &mut b.rng,
+        (-0.5, trail_y0),
+        (wf + 0.5, trail_y1),
+        CurveSpec {
+            profile: CurveProfile::ForestTrail,
+            max_lateral_m: 0.75,
+            ribbon_half_w_m: 1.0,
+            clamp_rect: trail_rect,
+        },
+    );
     b.add_ribbon(SurfaceFeatureKind::DirtTrail, &trail_ctrl, 200);
 
-    let ditch_ctrl = [
-        (-0.5, ditch_y + 0.15),
-        (w as f32 * 0.28, ditch_y - 0.30),
-        (w as f32 * 0.52, ditch_y + 0.20),
-        (w as f32 * 0.78, ditch_y - 0.25),
-        (w as f32 + 0.5, ditch_y + 0.10),
-    ];
+    let ditch_rect = RectM {
+        x0: 1.0,
+        y0: (lane_y + 1.40).min(ditch_y - 0.35),
+        x1: wf - 1.0,
+        y1: (hf - 1.80).max(ditch_y + 0.15),
+    };
+    let ditch_y0 = ditch_y + b.rng.f32_range(-0.20, 0.20);
+    let ditch_y1 = ditch_y + b.rng.f32_range(-0.20, 0.20);
+    let ditch_ctrl = synthesize_natural_curve_m(
+        &mut b.rng,
+        (-0.5, ditch_y0),
+        (wf + 0.5, ditch_y1),
+        CurveSpec {
+            profile: CurveProfile::DrainageSwale,
+            max_lateral_m: 0.65,
+            ribbon_half_w_m: 0.65,
+            clamp_rect: ditch_rect,
+        },
+    );
     let ditch_idx = b.add_ribbon(SurfaceFeatureKind::DrainageDitch, &ditch_ctrl, 130);
-    let _ = b.add_bridge_deck_across(ditch_idx, 0.50, 2.6, 2.4);
+    let br_frac = b.rng.f32_range(0.35, 0.68);
+    if let Some(bridge) = b.place_perpendicular_bridge(ditch_idx, br_frac, 2.5, 2.4) {
+        let spur_start = (bridge.center_m.0, lane_y);
+        let dot_in = (spur_start.0 - bridge.center_m.0) * bridge.span_dir.0
+            + (spur_start.1 - bridge.center_m.1) * bridge.span_dir.1;
+        let out_sign = if dot_in <= 0.0 { 1.0 } else { -1.0 };
+        let spur_end = (
+            (bridge.center_m.0 + bridge.span_dir.0 * out_sign * (bridge.half_span_m + 0.45))
+                .clamp(1.2, wf - 1.2),
+            (bridge.center_m.1 + bridge.span_dir.1 * out_sign * (bridge.half_span_m + 0.45))
+                .clamp(1.2, hf - 0.35),
+        );
+        let spur_pts = route_trail_across_bridge_m(
+            &mut b.rng,
+            spur_start,
+            bridge,
+            spur_end,
+            RectM {
+                x0: 0.8,
+                y0: lane_y - 0.5,
+                x1: wf - 0.8,
+                y1: hf - 0.35,
+            },
+            Some((&ditch_ctrl, 1.1)),
+        );
+        b.add_ribbon(SurfaceFeatureKind::DirtTrail, &spur_pts, 180);
+    }
 
     // North-West Farmhouse + North-East Timber Barn.
     let bldg_y0 = 1;
@@ -461,40 +514,80 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
     }
 
     // Meandering ornamental CreekChannel stream across South grounds + BridgeDeck footbridge(s).
-    let stream_y = (h as f32 * 0.78).max(cy1 as f32 + 3.2).min(h as f32 - 1.4);
-    let s_amp = if h >= 22 { 1.4 } else { 0.65 };
-    let creek_ctrl = [
-        (-0.5, stream_y - s_amp * 0.4),
-        (w as f32 * 0.25, stream_y + s_amp),
-        (w as f32 * 0.50, stream_y - s_amp * 0.6),
-        (w as f32 * 0.75, stream_y + s_amp * 0.8),
-        (w as f32 + 0.5, stream_y - s_amp * 0.3),
-    ];
+    let (wf, hf) = (w as f32, h as f32);
+    let stream_y = (hf * 0.78).max(cy1 as f32 + 3.2).min(hf - 1.9);
+    let stream_rect = RectM {
+        x0: 1.4,
+        y0: (cy1 as f32 + 2.4).min(stream_y - 0.5),
+        x1: wf - 1.4,
+        y1: (hf - 1.9).max(stream_y + 0.3),
+    };
+    let creek_y0 = stream_y + b.rng.f32_range(-0.4, 0.4);
+    let creek_y1 = stream_y + b.rng.f32_range(-0.4, 0.4);
+    let creek_ctrl = synthesize_natural_curve_m(
+        &mut b.rng,
+        (-0.5, creek_y0),
+        (wf + 0.5, creek_y1),
+        CurveSpec {
+            profile: CurveProfile::WildStream,
+            max_lateral_m: if h >= 22 { 1.6 } else { 0.85 },
+            ribbon_half_w_m: 0.98,
+            clamp_rect: stream_rect,
+        },
+    );
     let creek_idx = b.add_ribbon(SurfaceFeatureKind::CreekChannel, &creek_ctrl, 195);
-    let _ = b.add_bridge_deck_across(creek_idx, 0.50, 2.8, 2.7);
+    let main_frac = b.rng.f32_range(0.42, 0.62);
+    let main_bridge = b.place_perpendicular_bridge(creek_idx, main_frac, 2.8, 2.8);
     if w >= 32 {
-        let _ = b.add_bridge_deck_across(creek_idx, 0.22, 2.4, 2.6);
+        let side_frac = b.rng.f32_range(0.18, 0.30);
+        let _ = b.place_perpendicular_bridge(creek_idx, side_frac, 2.4, 2.7);
     }
 
-    // Winding StoneWalk promenade linking East/West borders & conservatory, plus meandering DirtTrail spur.
-    let walk_y = ((cy1 as f32 + stream_y) * 0.5 - 0.3).clamp(cy1 as f32 + 1.1, stream_y - 1.3);
-    b.add_ribbon(
-        SurfaceFeatureKind::StoneWalk,
-        &[
-            (-0.5, h as f32 * 0.5 + 0.3),
-            (w as f32 * 0.25, walk_y - 0.6),
-            (w as f32 * 0.50, walk_y + 0.4),
-            (w as f32 * 0.75, walk_y - 0.5),
-            (w as f32 + 0.5, h as f32 * 0.5 - 0.2),
-        ],
-        155,
+    // Winding StoneWalk promenade linking East/West borders & conservatory, plus meandering DirtTrail spurs.
+    let walk_y = ((cy1 as f32 + stream_y) * 0.5 - 0.25).clamp(cy1 as f32 + 1.1, stream_y - 1.4);
+    let walk_rect = RectM {
+        x0: 1.0,
+        y0: cy1 as f32 + 0.9,
+        x1: wf - 1.0,
+        y1: (stream_y - 1.25).max(cy1 as f32 + 1.3),
+    };
+    let walk_y0 = (hf * 0.5 + b.rng.f32_range(-0.3, 0.4)).clamp(walk_rect.y0, walk_rect.y1);
+    let walk_y1 = (hf * 0.5 + b.rng.f32_range(-0.4, 0.3)).clamp(walk_rect.y0, walk_rect.y1);
+    let walk_ctrl = synthesize_natural_curve_m(
+        &mut b.rng,
+        (-0.5, walk_y0),
+        (wf + 0.5, walk_y1),
+        CurveSpec {
+            profile: CurveProfile::GentleWalk,
+            max_lateral_m: 0.9,
+            ribbon_half_w_m: 0.78,
+            clamp_rect: walk_rect,
+        },
     );
+    b.add_ribbon(SurfaceFeatureKind::StoneWalk, &walk_ctrl, 155);
+    if let Some(br) = main_bridge {
+        let end_x = (br.center_m.0 + b.rng.f32_range(-1.6, 1.6)).clamp(1.2, wf - 1.2);
+        let garden_trail = route_trail_across_bridge_m(
+            &mut b.rng,
+            (br.center_m.0, walk_y),
+            br,
+            (end_x, hf - 0.35),
+            RectM {
+                x0: 0.8,
+                y0: walk_y - 0.4,
+                x1: wf - 0.8,
+                y1: hf - 0.35,
+            },
+            Some((&creek_ctrl, 1.35)),
+        );
+        b.add_ribbon(SurfaceFeatureKind::DirtTrail, &garden_trail, 150);
+    }
     b.add_ribbon(
         SurfaceFeatureKind::DirtTrail,
         &[
             (cx1 as f32 + 1.5, 1.5),
-            (w as f32 - 2.0, walk_y - 1.0),
-            (w as f32 - 2.5, 2.2),
+            (wf - 2.0, walk_y - 1.0),
+            (wf - 2.5, 2.2),
         ],
         115,
     );
