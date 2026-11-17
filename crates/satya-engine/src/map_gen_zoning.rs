@@ -23,6 +23,9 @@ use crate::map_gen_residential::{
     CardinalEntry, FloorContent, GeneratedHome, LotBox, generate_home_in_lot,
 };
 use crate::map_outdoor_gen::{OutdoorBuilder, RectM};
+use crate::map_outdoor_natural::{
+    CurveProfile, CurveSpec, route_trail_across_bridge_m, synthesize_natural_curve_m,
+};
 use crate::map_surface_queries::prune_occluded_surfaces;
 use crate::tactical_map::{ProceduralSector, SectorPreset};
 
@@ -1153,38 +1156,77 @@ fn build_rural_countryside(
     let (w, h) = (b.w, b.h);
     let (wf, hf) = (w as f32, h as f32);
     let lane_y = if variant == 1 { 1.65 } else { hf - 1.65 };
-    let lane_idx = b.add_ribbon(
-        SurfaceFeatureKind::GravelRoad,
-        &[
-            (0.0, lane_y + 0.20),
-            (wf * 0.32, lane_y - 0.28),
-            (wf * 0.68, lane_y + 0.25),
-            (wf, lane_y - 0.12),
-        ],
-        250,
+    let lane_rect = RectM {
+        x0: 1.0,
+        y0: if variant == 1 { 1.15 } else { hf - 2.45 },
+        x1: wf - 1.0,
+        y1: if variant == 1 { 2.45 } else { hf - 1.15 },
+    };
+    let lane_y0 = lane_y + b.rng.f32_range(-0.25, 0.25);
+    let lane_y1 = lane_y + b.rng.f32_range(-0.25, 0.25);
+    let lane_pts = synthesize_natural_curve_m(
+        &mut b.rng,
+        (0.0, lane_y0),
+        (wf, lane_y1),
+        CurveSpec {
+            profile: CurveProfile::CountryRoad,
+            max_lateral_m: 0.65,
+            ribbon_half_w_m: 1.25,
+            clamp_rect: lane_rect,
+        },
     );
+    let lane_idx = b.add_ribbon(SurfaceFeatureKind::GravelRoad, &lane_pts, 250);
 
+    let lot_y1_est = (h - 4).max(10) as f32;
+    let mut creek_bridge = None;
+    let mut creek_pts_opt = None;
     if variant == 1 && h >= 14 {
-        let creek_y = hf - 1.75;
-        let creek = b.add_ribbon(
-            SurfaceFeatureKind::CreekChannel,
-            &[
-                (0.0, creek_y - 0.15),
-                (wf * 0.35, creek_y + 0.45),
-                (wf * 0.70, creek_y - 0.35),
-                (wf, creek_y + 0.15),
-            ],
-            200,
+        let creek_y = hf - 2.15;
+        let creek_rect = RectM {
+            x0: 1.2,
+            y0: (lot_y1_est + 1.15).min(creek_y - 0.15),
+            x1: wf - 1.2,
+            y1: (hf - 2.05).max(creek_y + 0.15),
+        };
+        let cy0 = creek_y + b.rng.f32_range(-0.25, 0.25);
+        let cy1 = creek_y + b.rng.f32_range(-0.25, 0.25);
+        let creek_pts = synthesize_natural_curve_m(
+            &mut b.rng,
+            (0.0, cy0),
+            (wf, cy1),
+            CurveSpec {
+                profile: CurveProfile::WildStream,
+                max_lateral_m: 0.75,
+                ribbon_half_w_m: 1.0,
+                clamp_rect: creek_rect,
+            },
         );
-        b.add_bridge_deck_across(creek, 0.45, 2.2, 3.0);
+        let creek = b.add_ribbon(SurfaceFeatureKind::CreekChannel, &creek_pts, 200);
+        let br_frac = b.rng.f32_range(0.35, 0.65);
+        creek_bridge = b.place_perpendicular_bridge(creek, br_frac, 2.2, 3.0);
+        creek_pts_opt = Some(creek_pts);
     } else if variant == 2 {
         // Flanking roadside ditch on left wing, safely clear of center farmhouse drive.
         let ditch_y = (lane_y - 2.2).max(1.2);
-        b.add_ribbon(
-            SurfaceFeatureKind::DrainageDitch,
-            &[(0.0, ditch_y), (wf * 0.28, ditch_y + 0.2)],
-            135,
+        let ditch_rect = RectM {
+            x0: 0.5,
+            y0: 0.8,
+            x1: wf * 0.35,
+            y1: (lane_y - 1.9).max(1.5),
+        };
+        let dy1 = ditch_y + b.rng.f32_range(-0.25, 0.25);
+        let ditch_pts = synthesize_natural_curve_m(
+            &mut b.rng,
+            (0.0, ditch_y),
+            (wf * 0.28, dy1),
+            CurveSpec {
+                profile: CurveProfile::DrainageSwale,
+                max_lateral_m: 0.45,
+                ribbon_half_w_m: 0.68,
+                clamp_rect: ditch_rect,
+            },
         );
+        b.add_ribbon(SurfaceFeatureKind::DrainageDitch, &ditch_pts, 135);
     }
 
     let (sx0, sx1) = safe_x_span(w);
@@ -1201,25 +1243,46 @@ fn build_rural_countryside(
         CardinalEntry::South
     };
     let entry_m = (lot.x0 + lot.x1) as f32 * 0.5;
-    b.add_ribbon(
-        SurfaceFeatureKind::DirtTrail,
-        &[
-            (entry_m, lane_y),
-            (
-                entry_m + 0.25,
-                (lane_y + if variant == 1 { 1.1 } else { -1.2 }),
-            ),
-            (
-                entry_m,
-                if variant == 1 {
-                    lot.y0 as f32
-                } else {
-                    lot.y1 as f32
-                },
-            ),
-        ],
-        145,
+    let drive_end_y = if variant == 1 {
+        lot.y0 as f32
+    } else {
+        lot.y1 as f32
+    };
+    let drive_pts = synthesize_natural_curve_m(
+        &mut b.rng,
+        (entry_m, lane_y),
+        (entry_m, drive_end_y),
+        CurveSpec {
+            profile: CurveProfile::ForestTrail,
+            max_lateral_m: 0.75,
+            ribbon_half_w_m: 0.72,
+            clamp_rect: RectM {
+                x0: 1.0,
+                y0: 0.8,
+                x1: wf - 1.0,
+                y1: hf - 0.8,
+            },
+        },
     );
+    b.add_ribbon(SurfaceFeatureKind::DirtTrail, &drive_pts, 145);
+    if let (Some(br), Some(creek_pts)) = (creek_bridge, creek_pts_opt.as_ref()) {
+        let foot_start = (br.center_m.0, lot.y1 as f32 + 0.15);
+        let foot_end_x = (br.center_m.0 + b.rng.f32_range(-1.0, 1.0)).clamp(1.0, wf - 1.0);
+        let foot_pts = route_trail_across_bridge_m(
+            &mut b.rng,
+            foot_start,
+            br,
+            (foot_end_x, hf - 0.35),
+            RectM {
+                x0: 0.8,
+                y0: lot.y1 as f32,
+                x1: wf - 0.8,
+                y1: hf - 0.35,
+            },
+            Some((creek_pts, 1.3)),
+        );
+        b.add_ribbon(SurfaceFeatureKind::DirtTrail, &foot_pts, 130);
+    }
 
     let pads = b.spawn_pads_m.clone();
     let home = generate_home_in_lot(

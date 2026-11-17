@@ -606,7 +606,8 @@ fn emit_vector_surfaces_svg(
                         s.points_cm[2].to_m(),
                         s.points_cm[3].to_m(),
                     ];
-                    let planks = 7;
+                    let span_len_m = (p[1].0 - p[0].0).hypot(p[1].1 - p[0].1);
+                    let planks = (span_len_m / 0.42).round().clamp(6.0, 20.0) as usize;
                     let mut pd = String::new();
                     for k in 1..planks {
                         let t = k as f32 / planks as f32;

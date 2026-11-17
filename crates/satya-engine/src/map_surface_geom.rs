@@ -6,12 +6,96 @@
 //!
 //! No triangle clipping, ear-cutting, or Catmull-Rom math should be duplicated in `satya-web`.
 
-use satya_schema::tactical_map_surfaces_dto::{MapSurfaceFeature, SurfaceShapeKind};
+use satya_schema::tactical_map_surfaces_dto::{
+    MapPointCm, MapSurfaceFeature, SurfaceFeatureKind, SurfaceShapeKind,
+};
 
 pub use crate::map_surface_queries::*;
 
 /// Minimum segment length threshold (m) used to ignore degenerate duplicate control points.
 const EPS_LEN_M: f32 = 1e-4;
+
+/// Returns `(rel_fraction_of_half_w, max_amp_m)` controlling 1D fBm edge modulation for natural ribbons.
+#[must_use]
+pub const fn ribbon_edge_roughness_spec(kind: SurfaceFeatureKind) -> (f32, f32) {
+    match kind {
+        SurfaceFeatureKind::CreekChannel => (0.26, 0.42),
+        SurfaceFeatureKind::DefensiveTrench => (0.22, 0.48),
+        SurfaceFeatureKind::DrainageDitch => (0.22, 0.28),
+        SurfaceFeatureKind::DirtTrail => (0.20, 0.24),
+        SurfaceFeatureKind::GravelRoad => (0.14, 0.22),
+        SurfaceFeatureKind::StoneWalk => (0.05, 0.05),
+        _ => (0.0, 0.0),
+    }
+}
+
+#[inline]
+fn hash_1d_knot(knot: i32, seed: u32) -> f32 {
+    let mut x = (knot as u32).wrapping_mul(0x9E37_79B1) ^ seed.wrapping_mul(0x85EB_CA6B);
+    x ^= x >> 16;
+    x = x.wrapping_mul(0x7FEB_352D);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x846C_A68B);
+    x ^= x >> 16;
+    ((x & 0x00FF_FFFF) as f32 / 16_777_215.0) * 2.0 - 1.0
+}
+
+/// Deterministic 3-octave 1D fBm noise in `[-1.0, 1.0]` for organic ribbon edge modulation.
+#[must_use]
+pub(crate) fn fbm_ribbon_edge_1d(arc_m: f32, seed: u32) -> f32 {
+    const OCTAVES: [(f32, f32, u32); 3] = [
+        (4.2, 0.52, 0x1357_9BDF),
+        (1.65, 0.32, 0x2468_ACE0),
+        (0.68, 0.16, 0xA5A5_5A5A),
+    ];
+    let mut sum = 0.0_f32;
+    for (wl, w, salt) in OCTAVES {
+        let pos = arc_m / wl;
+        let i0 = pos.floor() as i32;
+        let f = pos - i0 as f32;
+        let u = f * f * (3.0 - 2.0 * f);
+        let v0 = hash_1d_knot(i0, seed ^ salt);
+        let v1 = hash_1d_knot(i0 + 1, seed ^ salt);
+        sum += (v0 + (v1 - v0) * u) * w;
+    }
+    sum.clamp(-1.0, 1.0)
+}
+
+/// Computes local left/right bank half-width at `arc_m` with independent side seeds and pinch guard.
+#[must_use]
+pub(crate) fn local_ribbon_half_width_m(
+    base_half_w_m: f32,
+    kind: SurfaceFeatureKind,
+    variant_seed: u32,
+    is_left: bool,
+    arc_m: f32,
+    edge_taper: f32,
+) -> f32 {
+    let (rel_frac, max_amp_m) = ribbon_edge_roughness_spec(kind);
+    if rel_frac <= 0.0 || edge_taper <= 0.0 {
+        return base_half_w_m;
+    }
+    let side_seed = variant_seed ^ if is_left { 0x9E37_79B9 } else { 0x51A7_F00D };
+    let fbm = fbm_ribbon_edge_1d(arc_m, side_seed);
+    let amp = (base_half_w_m * rel_frac).min(max_amp_m) * edge_taper.clamp(0.0, 1.0);
+    (base_half_w_m + amp * fbm).max(base_half_w_m * 0.58)
+}
+
+fn resample_polyline_max_step_m(pts: &[(f32, f32)], max_step_m: f32) -> Vec<(f32, f32)> {
+    if pts.len() < 2 || max_step_m <= EPS_LEN_M {
+        return pts.to_vec();
+    }
+    let mut out = Vec::with_capacity(pts.len() * 2);
+    out.push(pts[0]);
+    for w in pts.windows(2) {
+        let seg_len = dist_m(w[0], w[1]);
+        let steps = (seg_len / max_step_m).ceil().max(1.0) as usize;
+        for s in 1..=steps {
+            out.push(lerp_pt(w[0], w[1], s as f32 / steps as f32));
+        }
+    }
+    out
+}
 
 /// Samples an open polyline through centripetal Catmull-Rom interpolation (`alpha = 0.5`).
 ///
@@ -58,6 +142,68 @@ pub fn sample_open_catmull_rom_m(pts: &[(f32, f32)], subdivs_per_seg: usize) -> 
         }
     }
     out
+}
+
+/// Streams open centripetal Catmull-Rom segments `(a_m, b_m)` on the stack with zero heap
+/// allocations for typical splines (`<= 32` control points).
+pub(crate) fn visit_open_catmull_rom_segments(
+    points_cm: &[MapPointCm],
+    subdivs_per_seg: usize,
+    mut f: impl FnMut((f32, f32), (f32, f32)),
+) {
+    if points_cm.len() > 32 {
+        let raw: Vec<(f32, f32)> = points_cm.iter().map(|p| p.to_m()).collect();
+        let cl = sample_open_catmull_rom_m(&raw, subdivs_per_seg);
+        if cl.len() == 1 {
+            f(cl[0], cl[0]);
+            return;
+        }
+        for w in cl.windows(2) {
+            f(w[0], w[1]);
+        }
+        return;
+    }
+
+    let mut clean = [(0.0_f32, 0.0_f32); 32];
+    let mut n = 0usize;
+    for p in points_cm {
+        let m = p.to_m();
+        if n == 0 || dist_sq(clean[n - 1], m) > EPS_LEN_M * EPS_LEN_M {
+            clean[n] = m;
+            n += 1;
+        }
+    }
+    if n == 0 {
+        return;
+    }
+    if n == 1 {
+        f(clean[0], clean[0]);
+        return;
+    }
+    if n == 2 {
+        f(clean[0], clean[1]);
+        return;
+    }
+
+    let steps = subdivs_per_seg.max(1);
+    let p_start = (2.0 * clean[0].0 - clean[1].0, 2.0 * clean[0].1 - clean[1].1);
+    let p_end = (
+        2.0 * clean[n - 1].0 - clean[n - 2].0,
+        2.0 * clean[n - 1].1 - clean[n - 2].1,
+    );
+    let mut prev = clean[0];
+    for i in 0..n - 1 {
+        let p0 = if i == 0 { p_start } else { clean[i - 1] };
+        let p1 = clean[i];
+        let p2 = clean[i + 1];
+        let p3 = if i + 2 == n { p_end } else { clean[i + 2] };
+        for s in 1..=steps {
+            let u = s as f32 / steps as f32;
+            let cur = centripetal_cr_eval(p0, p1, p2, p3, u);
+            f(prev, cur);
+            prev = cur;
+        }
+    }
 }
 
 /// Samples a closed loop via cyclic centripetal Catmull-Rom interpolation (`alpha = 0.5`).
@@ -250,6 +396,13 @@ impl RibbonMesh2d {
     }
 }
 
+#[derive(Clone, Copy)]
+struct RibbonStyleSpec {
+    kind: SurfaceFeatureKind,
+    variant_seed: u32,
+    board_m: Option<(f32, f32)>,
+}
+
 /// Extrudes a smooth centerline polyline into left/right parallel rails with clamped miters.
 #[must_use]
 pub fn extrude_ribbon_strip_m(
@@ -258,7 +411,20 @@ pub fn extrude_ribbon_strip_m(
     cap_start: bool,
     cap_end: bool,
 ) -> RibbonMesh2d {
-    let pts = dedup_consecutive_points(centerline);
+    extrude_styled_ribbon_strip_m(centerline, half_w_m, cap_start, cap_end, None)
+}
+
+fn extrude_styled_ribbon_strip_m(
+    centerline: &[(f32, f32)],
+    half_w_m: f32,
+    cap_start: bool,
+    cap_end: bool,
+    style: Option<RibbonStyleSpec>,
+) -> RibbonMesh2d {
+    let mut pts = dedup_consecutive_points(centerline);
+    if style.is_some_and(|st| ribbon_edge_roughness_spec(st.kind).0 > 0.0) && pts.len() >= 2 {
+        pts = dedup_consecutive_points(&resample_polyline_max_step_m(&pts, 0.32));
+    }
     let hw = half_w_m.max(0.02);
     let n = pts.len();
     if n < 2 {
@@ -274,7 +440,11 @@ pub fn extrude_ribbon_strip_m(
 
     let mut left = Vec::with_capacity(n);
     let mut right = Vec::with_capacity(n);
+    let mut arc_m = 0.0_f32;
     for i in 0..n {
+        if i > 0 {
+            arc_m += dist_m(pts[i - 1], pts[i]);
+        }
         let (tx, ty, miter_scale) = if i == 0 {
             let (dx, dy, _) = unit_vec(pts[0], pts[1]);
             (dx, dy, 1.0_f32)
@@ -297,9 +467,36 @@ pub fn extrude_ribbon_strip_m(
         };
         let nx = -ty;
         let ny = tx;
-        let offset = hw * miter_scale;
-        left.push((pts[i].0 + nx * offset, pts[i].1 + ny * offset));
-        right.push((pts[i].0 - nx * offset, pts[i].1 - ny * offset));
+        let edge_taper = if let Some((bw_m, bh_m)) = style.and_then(|st| st.board_m) {
+            let d_edge = pts[i]
+                .0
+                .min(bw_m - pts[i].0)
+                .min(pts[i].1)
+                .min(bh_m - pts[i].1);
+            if d_edge < 0.75 {
+                let t = (d_edge / 0.75).clamp(0.0, 1.0);
+                0.30 + 0.70 * t
+            } else {
+                1.0
+            }
+        } else {
+            1.0
+        };
+        let (hw_l, hw_r) = match style {
+            Some(st) => (
+                local_ribbon_half_width_m(hw, st.kind, st.variant_seed, true, arc_m, edge_taper),
+                local_ribbon_half_width_m(hw, st.kind, st.variant_seed, false, arc_m, edge_taper),
+            ),
+            None => (hw, hw),
+        };
+        left.push((
+            pts[i].0 + nx * hw_l * miter_scale,
+            pts[i].1 + ny * hw_l * miter_scale,
+        ));
+        right.push((
+            pts[i].0 - nx * hw_r * miter_scale,
+            pts[i].1 - ny * hw_r * miter_scale,
+        ));
     }
 
     RibbonMesh2d {
@@ -329,7 +526,17 @@ pub fn extrude_surface_ribbon_m(
     let cap_end = cl
         .last()
         .is_some_and(|&(x, y)| !is_near_board_edge(x, y, board_w_m, board_h_m, 0.35));
-    extrude_ribbon_strip_m(&cl, half_w, cap_start, cap_end)
+    extrude_styled_ribbon_strip_m(
+        &cl,
+        half_w,
+        cap_start,
+        cap_end,
+        Some(RibbonStyleSpec {
+            kind: surface.kind,
+            variant_seed: surface.variant_seed,
+            board_m: Some((board_w_m, board_h_m)),
+        }),
+    )
 }
 
 /// Returns true if `(x, y)` lies near or outside any board boundary within `margin_m`.
@@ -351,7 +558,18 @@ pub fn sampled_closed_ring_m(surface: &MapSurfaceFeature) -> Vec<(f32, f32)> {
         SurfaceShapeKind::RibbonSpline => {
             let cl = sample_open_catmull_rom_m(&raw, 8);
             let half_w = (surface.width_cm.max(10) as f32) / 200.0;
-            extrude_ribbon_strip_m(&cl, half_w, true, true).to_closed_ring_m()
+            extrude_styled_ribbon_strip_m(
+                &cl,
+                half_w,
+                true,
+                true,
+                Some(RibbonStyleSpec {
+                    kind: surface.kind,
+                    variant_seed: surface.variant_seed,
+                    board_m: None,
+                }),
+            )
+            .to_closed_ring_m()
         }
     }
 }
@@ -466,15 +684,18 @@ pub fn vehicle_forward_rot_deg(dx: f32, dy: f32) -> i32 {
     ((-dx).atan2(dy).to_degrees().round() as i32).rem_euclid(360)
 }
 
-/// Samples a `RibbonSpline` by arc length at normalized fraction `frac in [0, 1]`, returning
-/// `(position_m, unit_tangent)`.
-#[must_use]
-pub fn ribbon_point_and_tangent_at_fraction(
+struct SampledArcTable {
+    pts: Vec<(f32, f32)>,
+    cum_m: Vec<f32>,
+    total_m: f32,
+}
+
+fn build_sampled_arc_table(
     surface: &MapSurfaceFeature,
-    frac: f32,
-) -> Option<((f32, f32), (f32, f32))> {
+    subdivs_per_seg: usize,
+) -> Option<SampledArcTable> {
     let raw: Vec<(f32, f32)> = surface.points_cm.iter().map(|p| p.to_m()).collect();
-    let cl = sample_open_catmull_rom_m(&raw, 8);
+    let cl = sample_open_catmull_rom_m(&raw, subdivs_per_seg);
     if cl.len() < 2 {
         return None;
     }
@@ -484,22 +705,78 @@ pub fn ribbon_point_and_tangent_at_fraction(
         cum.push(cum[cum.len() - 1] + dist_m(w[0], w[1]));
     }
     let total = *cum.last().unwrap_or(&0.0);
-    if total < EPS_LEN_M {
-        return Some((cl[0], (1.0, 0.0)));
-    }
-    let target = frac.clamp(0.0, 1.0) * total;
+    Some(SampledArcTable {
+        pts: cl,
+        cum_m: cum,
+        total_m: total,
+    })
+}
+
+fn eval_polyline_pos_tan_at_arc(
+    cl: &[(f32, f32)],
+    cum: &[f32],
+    target_arc_m: f32,
+) -> ((f32, f32), (f32, f32)) {
     for i in 0..cl.len() - 1 {
         let d0 = cum[i];
         let d1 = cum[i + 1];
-        if target <= d1 || i + 2 == cl.len() {
+        if target_arc_m <= d1 || i + 2 == cl.len() {
             let seg = (d1 - d0).max(EPS_LEN_M);
-            let t = ((target - d0) / seg).clamp(0.0, 1.0);
+            let t = ((target_arc_m - d0) / seg).clamp(0.0, 1.0);
             let pos = lerp_pt(cl[i], cl[i + 1], t);
             let (tx, ty, _) = unit_vec(cl[i], cl[i + 1]);
-            return Some((pos, (tx, ty)));
+            return (pos, (tx, ty));
         }
     }
-    None
+    (cl[0], (1.0, 0.0))
+}
+
+/// Samples a `RibbonSpline` by arc length at normalized fraction `frac in [0, 1]`, returning
+/// `(position_m, unit_tangent)`.
+#[must_use]
+pub fn ribbon_point_and_tangent_at_fraction(
+    surface: &MapSurfaceFeature,
+    frac: f32,
+) -> Option<((f32, f32), (f32, f32))> {
+    let tbl = build_sampled_arc_table(surface, 8)?;
+    if tbl.total_m < EPS_LEN_M {
+        return Some((tbl.pts[0], (1.0, 0.0)));
+    }
+    let target = frac.clamp(0.0, 1.0) * tbl.total_m;
+    Some(eval_polyline_pos_tan_at_arc(&tbl.pts, &tbl.cum_m, target))
+}
+
+/// Position `(x_m, y_m)`, macro unit tangent `(tx, ty)`, and chord bend sagitta (m).
+pub type RibbonMacroChord = ((f32, f32), (f32, f32), f32);
+
+/// Samples a `RibbonSpline` by arc length at `frac in [0, 1]`, returning
+/// `(position_m, macro_unit_tangent, bend_sagitta_m)` averaged over `±half_window_m`.
+#[must_use]
+pub fn ribbon_macro_chord_at_fraction(
+    surface: &MapSurfaceFeature,
+    frac: f32,
+    half_window_m: f32,
+) -> Option<RibbonMacroChord> {
+    let tbl = build_sampled_arc_table(surface, 10)?;
+    if tbl.total_m < EPS_LEN_M {
+        return Some((tbl.pts[0], (1.0, 0.0), 0.0));
+    }
+    let s_mid = frac.clamp(0.0, 1.0) * tbl.total_m;
+    let hw = half_window_m.max(0.2);
+    let s_lo = (s_mid - hw).max(0.0);
+    let s_hi = (s_mid + hw).min(tbl.total_m);
+    let (pos, t_instant) = eval_polyline_pos_tan_at_arc(&tbl.pts, &tbl.cum_m, s_mid);
+    let (p_lo, _) = eval_polyline_pos_tan_at_arc(&tbl.pts, &tbl.cum_m, s_lo);
+    let (p_hi, _) = eval_polyline_pos_tan_at_arc(&tbl.pts, &tbl.cum_m, s_hi);
+    let (tx, ty, chord_len) = unit_vec(p_lo, p_hi);
+    let chord_dir = if chord_len < EPS_LEN_M {
+        t_instant
+    } else {
+        (tx, ty)
+    };
+    let mid_chord = ((p_lo.0 + p_hi.0) * 0.5, (p_lo.1 + p_hi.1) * 0.5);
+    let sagitta_m = dist_m(pos, mid_chord);
+    Some((pos, chord_dir, sagitta_m))
 }
 
 fn dedup_consecutive_points(pts: &[(f32, f32)]) -> Vec<(f32, f32)> {
@@ -536,13 +813,11 @@ fn remove_collinear_and_dups(ring: &[(f32, f32)]) -> Vec<(f32, f32)> {
     out
 }
 
-fn append_semicircle_cap(
-    ring: &mut Vec<(f32, f32)>,
+fn cap_arc_angles_and_radii(
     center: (f32, f32),
     from: (f32, f32),
     to: (f32, f32),
-    steps: usize,
-) {
+) -> (f32, f32, f32, f32) {
     let a0 = (from.1 - center.1).atan2(from.0 - center.0);
     let a1 = (to.1 - center.1).atan2(to.0 - center.0);
     let mut delta = a1 - a0;
@@ -552,9 +827,21 @@ fn append_semicircle_cap(
     while delta < -std::f32::consts::PI {
         delta += std::f32::consts::TAU;
     }
-    let r = dist_m(center, from);
+    (a0, delta, dist_m(center, from), dist_m(center, to))
+}
+
+fn append_semicircle_cap(
+    ring: &mut Vec<(f32, f32)>,
+    center: (f32, f32),
+    from: (f32, f32),
+    to: (f32, f32),
+    steps: usize,
+) {
+    let (a0, delta, r0, r1) = cap_arc_angles_and_radii(center, from, to);
     for s in 1..steps {
-        let ang = a0 + delta * (s as f32 / steps as f32);
+        let frac = s as f32 / steps as f32;
+        let ang = a0 + delta * frac;
+        let r = r0 + (r1 - r0) * frac;
         ring.push((center.0 + r * ang.cos(), center.1 + r * ang.sin()));
     }
 }
@@ -567,22 +854,15 @@ fn append_cap_fan(
     to: (f32, f32),
     steps: usize,
 ) {
-    let a0 = (from.1 - center.1).atan2(from.0 - center.0);
-    let a1 = (to.1 - center.1).atan2(to.0 - center.0);
-    let mut delta = a1 - a0;
-    while delta > std::f32::consts::PI {
-        delta -= std::f32::consts::TAU;
-    }
-    while delta < -std::f32::consts::PI {
-        delta += std::f32::consts::TAU;
-    }
-    let r = dist_m(center, from);
+    let (a0, delta, r0, r1) = cap_arc_angles_and_radii(center, from, to);
     let c_idx = verts.len() as u32;
     verts.push([center.0, center.1]);
     let mut prev_idx = verts.len() as u32;
     verts.push([from.0, from.1]);
     for s in 1..=steps {
-        let ang = a0 + delta * (s as f32 / steps as f32);
+        let frac = s as f32 / steps as f32;
+        let ang = a0 + delta * frac;
+        let r = r0 + (r1 - r0) * frac;
         let cur_idx = verts.len() as u32;
         verts.push([center.0 + r * ang.cos(), center.1 + r * ang.sin()]);
         indices.extend_from_slice(&[c_idx, prev_idx, cur_idx]);
