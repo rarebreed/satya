@@ -135,6 +135,12 @@ pub struct MapFloorLevel {
     /// Vector ground/floor surfaces belonging to this floor level.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub surfaces: Vec<MapSurfaceFeature>,
+    /// Optional base floor pattern override applied by Editor Mode (`"hardwood"`, `"clinical_vinyl"`, etc.).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ground_floor_override: Option<String>,
+    /// Optional base ground tint RGB override applied by Editor Mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ground_tint_rgb: Option<[u8; 3]>,
 }
 
 /// Canonical short floor badge (`"B1"`, `"1F"`, `"2F"`, ...) for a signed floor index.
@@ -186,8 +192,8 @@ impl GmMapUpdateRequest {
             .map_or(floor_index * 320, |f| f.elevation_cm)
     }
 
-    /// Writes `self.wall_edges`, `self.props`, and `self.surfaces` back into the active [`MapFloorLevel`]
-    /// entry so in-place edits persist across floor switches.
+    /// Writes `self.wall_edges`, `self.props`, `self.surfaces`, and base ground overrides back into
+    /// the active [`MapFloorLevel`] entry so in-place edits persist across floor switches.
     pub fn sync_active_floor_snapshot(&mut self) {
         if let Some(cur) = self
             .floors
@@ -197,6 +203,8 @@ impl GmMapUpdateRequest {
             cur.wall_edges = self.wall_edges.clone();
             cur.props = self.props.clone();
             cur.surfaces = self.surfaces.clone();
+            cur.ground_floor_override = self.ground_floor_override.clone();
+            cur.ground_tint_rgb = self.ground_tint_rgb;
         }
     }
 
@@ -211,6 +219,8 @@ impl GmMapUpdateRequest {
             self.wall_edges = target.wall_edges.clone();
             self.props = target.props.clone();
             self.surfaces = target.surfaces.clone();
+            self.ground_floor_override = target.ground_floor_override.clone();
+            self.ground_tint_rgb = target.ground_tint_rgb;
             self.active_floor = target_floor;
             self.tiles.clear();
             true

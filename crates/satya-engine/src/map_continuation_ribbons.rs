@@ -283,6 +283,7 @@ pub(crate) fn align_chunk_ribbons(
                     width_cm: anchor.span_cm,
                     border_style_cm: 0,
                     variant_seed: anchor.variant_seed ^ 0x5E43,
+                    tint_rgb: None,
                 };
                 if kind.is_road_or_pavement() {
                     // Protect seam bridges from any overlapping organic mulch/flowerbed centroid inside `sec`.
@@ -404,6 +405,7 @@ pub(crate) fn stitch_continued_floors(
                 wall_edges: base.wall_edges.clone(),
                 props: base.props.clone(),
                 surfaces: base.surfaces.clone(),
+                ..Default::default()
             });
         }
         if let Some(dst) = base

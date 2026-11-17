@@ -247,13 +247,16 @@ pub(crate) fn mirror_prop_axis(
     let (cx_cm, cy_cm) = p.center_cm();
     let (sw_cm, sh_cm) = p.local_span_cm();
     let len_cm = prop_spec(p.kind).stretchable.then_some(sw_cm.max(sh_cm));
-    if horizontal_flip {
+    let mut out = if horizontal_flip {
         let rot = (360 - p.rotation_deg).rem_euclid(360);
         make_prop_at_cm(p.kind, cw * 100 - cx_cm, cy_cm, rot, len_cm, p.variant_seed)
     } else {
         let rot = (180 - p.rotation_deg).rem_euclid(360);
         make_prop_at_cm(p.kind, cx_cm, ch * 100 - cy_cm, rot, len_cm, p.variant_seed)
-    }
+    };
+    out.tint_rgb = p.tint_rgb;
+    out.decorative = p.decorative;
+    out
 }
 
 pub(crate) fn mirror_sector(sec: &mut ProceduralSector, cw: i32, ch: i32, horizontal_flip: bool) {

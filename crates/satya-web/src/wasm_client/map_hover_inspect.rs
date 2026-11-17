@@ -296,7 +296,13 @@ pub fn handle_map_global_keydown(ev: &web_sys::KeyboardEvent) {
         }
         return;
     }
-    if !is_maps_pane_active() || ev.ctrl_key() || ev.meta_key() {
+    if !is_maps_pane_active() {
+        return;
+    }
+    if crate::wasm_client::map_editor::handle_editor_keydown(ev) {
+        return;
+    }
+    if ev.ctrl_key() || ev.meta_key() {
         return;
     }
     match ev.key().as_str() {

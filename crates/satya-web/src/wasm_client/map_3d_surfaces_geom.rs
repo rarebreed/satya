@@ -158,6 +158,13 @@ fn surface_style(kind: SurfaceFeatureKind, variant_seed: u32) -> ([f32; 3], f32)
         SurfaceFeatureKind::MarbleFloor => ([0.89, 0.88, 0.85], -8.0),
         SurfaceFeatureKind::CarpetFloor => ([0.66, 0.62, 0.57], -4.0),
         SurfaceFeatureKind::BridgeDeck => ([0.46, 0.32, 0.19], -3.0),
+        SurfaceFeatureKind::LawnGrassZone => ([0.26, 0.41, 0.19], -2.0),
+        SurfaceFeatureKind::BrickPaverWalk => ([0.58, 0.34, 0.26], -3.0),
+        SurfaceFeatureKind::StainedConcreteFloor => ([0.52, 0.50, 0.47], -7.0),
+        SurfaceFeatureKind::ClinicalVinylFloor => ([0.78, 0.83, 0.85], -8.0),
+        SurfaceFeatureKind::LinoleumCheckFloor => ([0.72, 0.76, 0.78], -8.0),
+        SurfaceFeatureKind::TerrazzoFloor => ([0.81, 0.79, 0.75], -8.0),
+        SurfaceFeatureKind::SteelPlateFloor => ([0.20, 0.24, 0.29], -1.0),
     }
 }
 
@@ -475,7 +482,15 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
     for (rank, &(orig_idx, s)) in order.iter().enumerate() {
         let prio = s.kind.layer_priority();
         let y = 0.003 + (prio as f32) * 0.00032 + (rank as f32) * 0.00004;
-        let (rgb, zone_id) = surface_style(s.kind, s.variant_seed);
+        let (mut rgb, zone_id) = surface_style(s.kind, s.variant_seed);
+        if let Some([tr, tg, tb]) = s.tint_rgb {
+            let tint = [tr as f32 / 255.0, tg as f32 / 255.0, tb as f32 / 255.0];
+            rgb = [
+                rgb[0] * 0.60 + tint[0] * 0.40,
+                rgb[1] * 0.60 + tint[1] * 0.40,
+                rgb[2] * 0.60 + tint[2] * 0.40,
+            ];
+        }
 
         if s.kind == SurfaceFeatureKind::BridgeDeck {
             push_bridge_deck_3d(verts, s, bw_m, bh_m);

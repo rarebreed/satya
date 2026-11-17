@@ -13,7 +13,7 @@ use satya_schema::{
     MessageVisibility, PropKind, TacticalTileKind, TokenPlacement, WallEdgeKind,
 };
 
-use crate::map_dressing::{make_prop, prop_spec};
+use crate::map_dressing::{effective_obstruction, make_prop, prop_spec};
 use crate::tactical_map_geom::{
     EDGE_PICK_HALF_THICK_M, TOKEN_PICK_RADIUS_M, TOKEN_RADIUS_M, distance_point_to_segment,
     edge_endpoints_m, prop_contains_point, vehicle_point_is_engine_bay,
@@ -426,17 +426,24 @@ pub fn inspect_map_point(
             });
         }
         let mat_label = spec.material.label().to_owned();
-        let cover = if p.kind == PropKind::BarStool {
+        let eff_obs = effective_obstruction(p);
+        let cover = if p.decorative {
+            "Visual Only (No Cover)"
+        } else if p.kind == PropKind::BarStool {
             "Seat / Low Obstacle"
-        } else if spec.obstruction == crate::map_dressing::PropObstruction::FloorLayer {
+        } else if eff_obs == crate::map_dressing::PropObstruction::FloorLayer {
             "Accent / Non-Blocking"
         } else {
-            cover_label_for_grade(spec.obstruction.cover_grade())
+            cover_label_for_grade(eff_obs.cover_grade())
         };
         return Some(MapHoverInspection {
             category: MapHoverCategory::SolidProp,
             title: p.kind.label().to_owned(),
-            subtitle: format!("Solid Prop · {}°", p.rotation_deg),
+            subtitle: if p.decorative {
+                format!("Visual Only · {}°", p.rotation_deg)
+            } else {
+                format!("Solid Prop · {}°", p.rotation_deg)
+            },
             material_label: mat_label,
             cover_label: cover.to_owned(),
             height_cm: spec.height_cm,
@@ -473,10 +480,28 @@ pub fn inspect_map_point(
         if !spec.floor_layer || !prop_contains_point(p, x_m, y_m, false) {
             continue;
         }
-        let (subtitle, cover_label, elevation_cm) = if p.kind == PropKind::Stairwell {
+        let (subtitle, cover_label, elevation_cm) = if p.decorative && !p.kind.is_vertical_portal() {
             (
-                "Vertical Transit · Connects Adjacent Floors".to_owned(),
-                "Stairwell Access".to_owned(),
+                "Visual Only Layer".to_owned(),
+                "Visual Only (No Cover)".to_owned(),
+                0,
+            )
+        } else if p.kind.is_vertical_portal() {
+            (
+                match p.kind {
+                    PropKind::ElevatorCar => "Passenger Elevator · Connects Adjacent Floors",
+                    PropKind::ServiceElevator => {
+                        "Hospital Gurney / Freight Elevator · Connects Adjacent Floors"
+                    }
+                    _ => "Vertical Transit · Connects Adjacent Floors",
+                }
+                .to_owned(),
+                if p.kind == PropKind::Stairwell {
+                    "Stairwell Access"
+                } else {
+                    "Elevator Access"
+                }
+                .to_owned(),
                 0,
             )
         } else if p.kind == PropKind::ElevatedCatwalk {

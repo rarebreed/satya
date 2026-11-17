@@ -11,7 +11,7 @@ use crate::wasm_client::map_2d_art_props::{
     push_battlemap_prop_with_mode,
 };
 use crate::wasm_client::map_2d_art_textures::BattlemapTextureMode;
-use satya_schema::{MapPropPlacement, PropKind};
+use satya_schema::{MapPropPlacement, PropKind, format_rgb_hex};
 use std::f32::consts::TAU;
 use std::fmt::Write as _;
 
@@ -1277,7 +1277,62 @@ pub fn push_furniture_glyph_with_mode(
                 out, p.kind, lw, lh, painted, v,
             );
         }
+        PropKind::Cot
+        | PropKind::Gurney
+        | PropKind::ReclinerChair
+        | PropKind::MedicalCounter
+        | PropKind::NurseStation
+        | PropKind::TelemetryMonitor
+        | PropKind::BiohazardBin
+        | PropKind::LinenCart
+        | PropKind::ElevatorCar
+        | PropKind::ServiceElevator
+        | PropKind::LabBench
+        | PropKind::DeskClutter
+        | PropKind::SolderingStation
+        | PropKind::TestBench
+        | PropKind::Printer3dStation
+        | PropKind::AirCompressor
+        | PropKind::CncMill
+        | PropKind::ServerRack
+        | PropKind::FumeHood
+        | PropKind::ShowerStall
+        | PropKind::SpaBath
+        | PropKind::LinenCloset
+        | PropKind::WasherDryer
+        | PropKind::SingleBed
+        | PropKind::FilingCabinet
+        | PropKind::WaterCooler
+        | PropKind::BrownstoneStoop
+        | PropKind::AwningCanopy => {
+            let _ = crate::wasm_client::map_2d_art_props_lab_urban::push_lab_urban_furniture_glyph(
+                out, p.kind, lw, lh, painted, v,
+            );
+        }
         PropKind::Armchair | PropKind::Planter | PropKind::WoodCrate | PropKind::DrumCluster => {}
+    }
+    if p.kind != PropKind::AwningCanopy
+        && let Some(tint) = p.tint_rgb
+    {
+        let tint_hex = format_rgb_hex(tint);
+        let _ = write!(
+            out,
+            r#"<rect x="{:.1}" y="{:.1}" width="{:.1}" height="{:.1}" rx="3" fill="{tint_hex}" fill-opacity=".35" style="mix-blend-mode:multiply" pointer-events="none"/>"#,
+            -lw * 0.5,
+            -lh * 0.5,
+            lw,
+            lh
+        );
+    }
+    if p.decorative {
+        let _ = write!(
+            out,
+            r##"<rect x="{:.1}" y="{:.1}" width="{:.1}" height="{:.1}" rx="3" fill="none" stroke="#38bdf8" stroke-opacity=".42" stroke-width="0.9" stroke-dasharray="3 2" pointer-events="none"/>"##,
+            -lw * 0.5,
+            -lh * 0.5,
+            lw,
+            lh
+        );
     }
     out.push_str("</g>");
 }
@@ -1297,6 +1352,12 @@ pub fn push_tree_canopy_glyph_with_mode(
 ) {
     if p.kind == PropKind::Gazebo {
         crate::wasm_client::map_2d_art_props_home::push_gazebo_canopy_glyph_with_mode(
+            out, p, cell_px, tex_mode,
+        );
+        return;
+    }
+    if p.kind == PropKind::AwningCanopy {
+        crate::wasm_client::map_2d_art_props_lab_urban::push_awning_canopy_glyph_with_mode(
             out, p, cell_px, tex_mode,
         );
         return;
@@ -1396,16 +1457,23 @@ mod tests {
                 assert!(!s.contains("NaN"), "{kind:?} rot={rot}");
             }
         }
-        for (idx, canopy_prop) in [PropKind::LargeTree, PropKind::MediumTree, PropKind::Gazebo]
-            .into_iter()
-            .enumerate()
+        for (idx, canopy_prop) in [
+            PropKind::LargeTree,
+            PropKind::MediumTree,
+            PropKind::Gazebo,
+            PropKind::AwningCanopy,
+        ]
+        .into_iter()
+        .enumerate()
         {
             let mut c = String::new();
             push_tree_canopy_glyph(&mut c, &make_prop(canopy_prop, 2, 2, 0, None, 7), 64.0);
             if idx < 2 {
                 assert!(c.contains("url(#bm-leaf-tex)") && c.contains(r#"opacity=".48""#));
-            } else {
+            } else if idx == 2 {
                 assert!(c.contains(r#"opacity=".50""#));
+            } else {
+                assert!(c.contains(r#"opacity=".92""#));
             }
             assert_eq!(c.matches("<g").count(), c.matches("</g>").count());
             assert!(!c.contains("NaN"));

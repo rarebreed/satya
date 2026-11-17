@@ -799,6 +799,8 @@ pub fn build_procedural_map_request_with_options(
         floors,
         active_floor,
         world_sectors: vec![root_cell],
+        ground_floor_override: None,
+        ground_tint_rgb: None,
     }
 }
 

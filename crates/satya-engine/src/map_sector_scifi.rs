@@ -6,6 +6,7 @@
 
 use satya_schema::{EdgeSide, MaterialClass, PropKind, SurfaceFeatureKind, WallEdgeKind};
 
+use crate::map_dressing::make_prop;
 use crate::map_sector_gen::{Rect, SURF_CATWALK, SURF_HAZARD, SectorBuilder, Side};
 
 fn add_rect_floor(b: &mut SectorBuilder, x0: f32, y0: f32, x1: f32, y1: f32, seed: u32) {
@@ -274,6 +275,18 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
     );
 }
 
+fn attach_desk_clutter(b: &mut SectorBuilder, desk: satya_schema::MapPropPlacement, rot_offset: i32) {
+    let seed = (b.rng.next() & 0xffff_ffff) as u32;
+    b.push_floor_decal(make_prop(
+        PropKind::DeskClutter,
+        desk.x,
+        desk.y,
+        (desk.rotation_deg + rot_offset).rem_euclid(360),
+        None,
+        seed,
+    ));
+}
+
 pub(crate) fn build_med_lab(b: &mut SectorBuilder) {
     let (w, h, mid_y) = (b.w, b.h, b.h / 2);
     b.perimeter(MaterialClass::ConcreteBlock, MaterialClass::SolidWood);
@@ -306,6 +319,29 @@ pub(crate) fn build_med_lab(b: &mut SectorBuilder) {
             };
             b.put_edge((x2, y), EdgeSide::West, k2, m2);
         }
+        // Keep west intake wing on InteriorFloor while mid/east labs show clinical & shop flooring.
+        b.add_polygon_surface(
+            SurfaceFeatureKind::ClinicalVinylFloor,
+            &[
+                (x1 as f32, 0.0),
+                (x2 as f32, 0.0),
+                (x2 as f32, h as f32),
+                (x1 as f32, h as f32),
+            ],
+            0,
+            512,
+        );
+        b.add_polygon_surface(
+            SurfaceFeatureKind::StainedConcreteFloor,
+            &[
+                (x2 as f32, 0.0),
+                (w as f32, 0.0),
+                (w as f32, h as f32),
+                (x2 as f32, h as f32),
+            ],
+            0,
+            513,
+        );
         b.set_surf(x2 + 1, (mid_y + 1).min(h - 2), SURF_HAZARD);
         b.set_surf((x2 + 2).min(w - 2), (mid_y + 1).min(h - 2), SURF_HAZARD);
         b.add_perimeter_windows(4);
@@ -330,16 +366,24 @@ pub(crate) fn build_med_lab(b: &mut SectorBuilder) {
                 y1: h,
             },
         );
-        let _ = b.against_any_wall(PropKind::Desk, triage, None);
+        if let Some(d) = b.against_any_wall(PropKind::Desk, triage, None) {
+            attach_desk_clutter(b, d, 9);
+        }
         let _ = b.against_any_wall(PropKind::Loveseat, triage, None);
-        let _ = b.against_any_wall(PropKind::Planter, triage, None);
-        let _ = b.against_any_wall(PropKind::Fridge, trauma, None);
-        let _ = b.against_any_wall(PropKind::SteelShelving, trauma, None);
-        let _ = b.against_any_wall(PropKind::KitchenCounter, trauma, Some(3));
-        b.scatter_in(PropKind::Bed, trauma, 2, true);
-        let _ = b.against_any_wall(PropKind::Fridge, lab, None);
-        let _ = b.against_any_wall(PropKind::Desk, lab, None);
-        b.scatter_in(PropKind::DrumCluster, lab, 2, true);
+        let _ = b.try_place(PropKind::WaterCooler, (1, 1), 0, None, triage);
+        let _ = b.against_any_wall(PropKind::MedicalCounter, trauma, Some(2));
+        let _ = b.against_any_wall(PropKind::BiohazardBin, trauma, None);
+        b.scatter_in(PropKind::HospitalBed, trauma, 1, true);
+        b.scatter_in(PropKind::Cot, trauma, 1, true);
+        let _ = b.try_place(PropKind::TelemetryMonitor, (x1 + 1, 1), 0, None, trauma);
+        if let Some(bch) = b.against_any_wall(PropKind::LabBench, lab, Some(2)) {
+            attach_desk_clutter(b, bch, -6);
+        }
+        let _ = b.against_any_wall(PropKind::TestBench, lab, None);
+        let _ = b.against_any_wall(PropKind::SolderingStation, lab, None);
+        let _ = b.against_any_wall(PropKind::Printer3dStation, lab, None);
+        let _ = b.against_any_wall(PropKind::ServerRack, lab, None);
+        let _ = b.against_any_wall(PropKind::FumeHood, lab, None);
     } else {
         let sx = w / 2;
         for y in 0..h {
@@ -358,7 +402,7 @@ pub(crate) fn build_med_lab(b: &mut SectorBuilder) {
         b.add_perimeter_windows(3);
         b.reserve_spawns_and_doors();
         let whole = b.whole();
-        let _ = b.against_any_wall(
+        if let Some(d) = b.against_any_wall(
             PropKind::Desk,
             Rect {
                 x0: 0,
@@ -367,11 +411,13 @@ pub(crate) fn build_med_lab(b: &mut SectorBuilder) {
                 y1: h,
             },
             None,
-        );
-        let _ = b.try_place(PropKind::Bed, (sx + 1, 1), 0, None, whole);
-        b.scatter_in(PropKind::Bed, whole, 1, false);
-        b.scatter_in(PropKind::DrumCluster, whole, 2, false);
-        let _ = b.against_any_wall(PropKind::Fridge, whole, None);
+        ) {
+            attach_desk_clutter(b, d, 11);
+        }
+        let _ = b.try_place(PropKind::HospitalBed, (sx + 1, 1), 0, None, whole);
+        b.scatter_in(PropKind::LabBench, whole, 1, false);
+        b.scatter_in(PropKind::TestBench, whole, 1, false);
+        let _ = b.against_any_wall(PropKind::ServerRack, whole, None);
     }
 }
 
@@ -397,7 +443,7 @@ fn build_med_lab_scaled(b: &mut SectorBuilder) {
         };
         b.put_edge((x2, y), EdgeSide::West, k2, m2);
     }
-    // Horizontal triage exam cubicles and twin containment labs.
+    // Horizontal triage exam cubicles and twin engineering/bio-fabrication labs.
     let split_y = mid_y;
     for x in x2..w {
         let k = if x == (x2 + w) / 2 {
@@ -418,6 +464,43 @@ fn build_med_lab_scaled(b: &mut SectorBuilder) {
         b.put_edge((x, ward_top), EdgeSide::North, kt, MaterialClass::Drywall);
         b.put_edge((x, ward_bot), EdgeSide::North, kt, MaterialClass::Drywall);
     }
+
+    // Disjoint floor surface zoning: intake keeps InteriorFloor; trauma=ClinicalVinylFloor;
+    // electronics/prototyping lab=StainedConcreteFloor; fabrication & server bay=SteelPlateFloor.
+    b.add_polygon_surface(
+        SurfaceFeatureKind::ClinicalVinylFloor,
+        &[
+            (x1 as f32, 0.0),
+            (x2 as f32, 0.0),
+            (x2 as f32, h as f32),
+            (x1 as f32, h as f32),
+        ],
+        0,
+        514,
+    );
+    b.add_polygon_surface(
+        SurfaceFeatureKind::StainedConcreteFloor,
+        &[
+            (x2 as f32, 0.0),
+            (w as f32, 0.0),
+            (w as f32, split_y as f32),
+            (x2 as f32, split_y as f32),
+        ],
+        0,
+        515,
+    );
+    b.add_polygon_surface(
+        SurfaceFeatureKind::SteelPlateFloor,
+        &[
+            (x2 as f32, split_y as f32),
+            (w as f32, split_y as f32),
+            (w as f32, h as f32),
+            (x2 as f32, h as f32),
+        ],
+        0,
+        516,
+    );
+
     b.set_surf(x2 + 2, (ward_top - 1).max(2), SURF_HAZARD);
     b.set_surf((x2 + 3).min(w - 2), (ward_bot + 1).min(h - 2), SURF_HAZARD);
     b.add_perimeter_windows(4);
@@ -429,10 +512,20 @@ fn build_med_lab_scaled(b: &mut SectorBuilder) {
         x1,
         y1: h,
     };
-    let _ = b.against_any_wall(PropKind::DeskL, intake, None);
-    b.scatter_in(PropKind::Loveseat, intake, 2, true);
-    b.scatter_in(PropKind::Planter, intake, 2, true);
-    for r in [
+    let _ = b.try_place(PropKind::ElevatorCar, (1, 1), 0, None, intake);
+    if let Some(d) = b.against_any_wall(PropKind::DeskL, intake, None) {
+        attach_desk_clutter(b, d, 14);
+    }
+    if let Some(d2) = b.against_any_wall(PropKind::Desk, intake, None) {
+        attach_desk_clutter(b, d2, -8);
+    }
+    let _ = b.try_place(PropKind::WaterCooler, ((x1 - 2).max(1), 1), 0, None, intake);
+    b.scatter_in(PropKind::Loveseat, intake, 1, true);
+    b.scatter_in(PropKind::ReclinerChair, intake, 2, true);
+    let _ = b.against_any_wall(PropKind::FilingCabinet, intake, None);
+
+    // Trauma & isolation wards (clinical beds/cots/gurneys + monitors + counters + waste bins).
+    for (idx, r) in [
         Rect {
             x0: x1,
             y0: 0,
@@ -451,29 +544,75 @@ fn build_med_lab_scaled(b: &mut SectorBuilder) {
             x1: x2,
             y1: h,
         },
-    ] {
-        b.scatter_in(PropKind::Bed, r, 2, true);
-        let _ = b.against_any_wall(PropKind::KitchenCounter, r, Some(3));
-        let _ = b.against_any_wall(PropKind::Fridge, r, None);
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let bed_kind = if idx == 0 {
+            PropKind::Gurney
+        } else if idx == 1 {
+            PropKind::HospitalBed
+        } else {
+            PropKind::Cot
+        };
+        if let Some(bed) = b.against_any_wall(bed_kind, r, None) {
+            let _ = b.try_place(
+                PropKind::TelemetryMonitor,
+                ((bed.x + 1).min(r.x1 - 1), bed.y),
+                0,
+                None,
+                r,
+            );
+        }
+        b.scatter_in(PropKind::HospitalBed, r, 1, true);
+        let _ = b.against_any_wall(PropKind::MedicalCounter, r, Some(2));
+        let _ = b.try_place(PropKind::BiohazardBin, (r.x0, r.y1 - 1), 0, None, r);
+        let _ = b.against_any_wall(PropKind::PrivacyCurtain, r, Some(2));
+        let _ = b.against_any_wall(PropKind::LinenCart, r, None);
     }
-    for lab in [
-        Rect {
-            x0: x2,
-            y0: 0,
-            x1: w,
-            y1: split_y,
-        },
-        Rect {
-            x0: x2,
-            y0: split_y,
-            x1: w,
-            y1: h,
-        },
-    ] {
-        let _ = b.against_any_wall(PropKind::SteelShelving, lab, None);
-        let _ = b.against_any_wall(PropKind::Desk, lab, None);
-        b.scatter_in(PropKind::DrumCluster, lab, 2, true);
+
+    // Upper Lab (NE): Electronics, instrumentation & rapid prototyping bay.
+    let elec_lab = Rect {
+        x0: x2,
+        y0: 0,
+        x1: w,
+        y1: split_y,
+    };
+    if let Some(lb) = b.against_any_wall(PropKind::LabBench, elec_lab, Some(3)) {
+        attach_desk_clutter(b, lb, 6);
     }
+    if let Some(ss) = b.against_any_wall(PropKind::SolderingStation, elec_lab, None) {
+        attach_desk_clutter(b, ss, -12);
+    }
+    let _ = b.against_any_wall(PropKind::TestBench, elec_lab, None);
+    let _ = b.against_any_wall(PropKind::Printer3dStation, elec_lab, None);
+    let _ = b.against_any_wall(PropKind::AirCompressor, elec_lab, None);
+    if let Some(d) = b.against_any_wall(PropKind::Desk, elec_lab, None) {
+        attach_desk_clutter(b, d, 19);
+    }
+    b.scatter_in(PropKind::LabBench, elec_lab, 1, true);
+
+    // Lower Lab (SE): Heavy CNC fabrication, server cluster & biosafety containment bay.
+    let fab_lab = Rect {
+        x0: x2,
+        y0: split_y,
+        x1: w,
+        y1: h,
+    };
+    let _ = b.against_any_wall(PropKind::CncMill, fab_lab, None);
+    let _ = b.against_any_wall(PropKind::FumeHood, fab_lab, None);
+    for _ in 0..3 {
+        let _ = b.against_any_wall(PropKind::ServerRack, fab_lab, None);
+    }
+    let _ = b.against_any_wall(PropKind::AirCompressor, fab_lab, None);
+    let _ = b.against_any_wall(PropKind::TestBench, fab_lab, None);
+    let _ = b.try_place(
+        PropKind::BiohazardBin,
+        (fab_lab.x0 + 1, fab_lab.y1 - 1),
+        0,
+        None,
+        fab_lab,
+    );
 }
 
 pub(crate) fn build_derelict_corridor(b: &mut SectorBuilder) {

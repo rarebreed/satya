@@ -230,7 +230,10 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         PropKind::TrashCan | PropKind::GarbagePile | PropKind::AcUnit => {
             Some(("utility_service", "Service / Utility Yard"))
         }
-        PropKind::Stairwell => Some(("vertical_stairwell", "Stairwell / Vertical Access")),
+        PropKind::Stairwell | PropKind::ElevatorCar | PropKind::ServiceElevator => {
+            Some(("vertical_stairwell", "Stairwell / Vertical Access"))
+        }
+        PropKind::NurseStation => Some(("nurse_station", "Nursing Station / Triage Hub")),
         PropKind::HazardSpill => Some(("hazard_spill", "Hazardous Spill Zone")),
         _ => None,
     }
@@ -239,22 +242,29 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
 fn surface_semantic_label(kind: SurfaceFeatureKind) -> &'static str {
     match kind {
         SurfaceFeatureKind::AsphaltRoad | SurfaceFeatureKind::GravelRoad => "Roadway Corridor",
-        SurfaceFeatureKind::ConcreteWalk | SurfaceFeatureKind::StoneWalk => {
-            "Pedestrian Plaza / Walk"
-        }
+        SurfaceFeatureKind::ConcreteWalk
+        | SurfaceFeatureKind::StoneWalk
+        | SurfaceFeatureKind::BrickPaverWalk => "Pedestrian Plaza / Walk",
         SurfaceFeatureKind::WoodDeck => "Timber Deck / Porch",
         SurfaceFeatureKind::PoolWater => "Swimming Pool Basin",
         SurfaceFeatureKind::InteriorFloor
         | SurfaceFeatureKind::CeramicTileFloor
         | SurfaceFeatureKind::MarbleFloor
-        | SurfaceFeatureKind::CarpetFloor => "Building Interior Wing",
+        | SurfaceFeatureKind::CarpetFloor
+        | SurfaceFeatureKind::StainedConcreteFloor
+        | SurfaceFeatureKind::ClinicalVinylFloor
+        | SurfaceFeatureKind::LinoleumCheckFloor
+        | SurfaceFeatureKind::TerrazzoFloor
+        | SurfaceFeatureKind::SteelPlateFloor => "Building Interior Wing",
         SurfaceFeatureKind::BridgeDeck => "Bridge / Overpass Span",
         SurfaceFeatureKind::CreekChannel | SurfaceFeatureKind::DrainageDitch => {
             "Waterway / Drainage Cut"
         }
         SurfaceFeatureKind::DefensiveTrench => "Excavated Trench / Earthwork",
         SurfaceFeatureKind::DirtTrail => "Unpaved Dirt Trail",
-        SurfaceFeatureKind::GardenBedZone | SurfaceFeatureKind::MulchZone => "Landscaped Grounds",
+        SurfaceFeatureKind::LawnGrassZone
+        | SurfaceFeatureKind::GardenBedZone
+        | SurfaceFeatureKind::MulchZone => "Landscaped Grounds",
     }
 }
 

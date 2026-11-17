@@ -195,6 +195,7 @@ impl OutdoorBuilder {
             width_cm,
             border_style_cm: 0,
             variant_seed,
+            tint_rgb: None,
         });
         idx
     }
@@ -218,6 +219,7 @@ impl OutdoorBuilder {
             width_cm: 0,
             border_style_cm: corner_radius_cm,
             variant_seed,
+            tint_rgb: None,
         });
         idx
     }
@@ -298,6 +300,7 @@ impl OutdoorBuilder {
                     width_cm: 0,
                     border_style_cm,
                     variant_seed: seed,
+                    tint_rgb: None,
                 });
                 return true;
             }

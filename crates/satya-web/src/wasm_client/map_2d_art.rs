@@ -411,6 +411,14 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
     for b in ui.texture_mode.as_str().bytes() {
         acc = fnv(acc, u64::from(b));
     }
+    if let Some(ov) = ui.map.ground_floor_override.as_deref() {
+        for b in ov.bytes() {
+            acc = fnv(acc, u64::from(b) ^ 0x55);
+        }
+    }
+    if let Some(rgb) = ui.map.ground_tint_rgb {
+        acc = fnv(acc, (u64::from(rgb[0]) << 16) | (u64::from(rgb[1]) << 8) | u64::from(rgb[2]) | 0x100_0000);
+    }
     for e in &ui.map.wall_edges {
         for v in [
             e.x as u64,
@@ -433,6 +441,10 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
             sh_cm as u64,
             p.rotation_deg as u64,
             u64::from(p.variant_seed),
+            u64::from(p.decorative),
+            p.tint_rgb.map_or(0, |c| {
+                0x100_0000 | (u64::from(c[0]) << 16) | (u64::from(c[1]) << 8) | u64::from(c[2])
+            }),
         ] {
             acc = fnv(acc, v);
         }
@@ -444,6 +456,9 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
             s.width_cm as u64,
             s.border_style_cm as u64,
             u64::from(s.variant_seed),
+            s.tint_rgb.map_or(0, |c| {
+                0x100_0000 | (u64::from(c[0]) << 16) | (u64::from(c[1]) << 8) | u64::from(c[2])
+            }),
         ] {
             acc = fnv(acc, v);
         }
@@ -461,9 +476,18 @@ fn push_defs(
     style: BattlemapInkStyle,
     tex_mode: BattlemapTextureMode,
     seed: i64,
+    ground_override: Option<&str>,
+    ground_tint_rgb: Option<[u8; 3]>,
 ) {
     out.push_str("<defs>");
-    push_battlemap_material_defs_seeded(out, t, tex_mode, seed);
+    push_battlemap_material_defs_with_ground(
+        out,
+        t,
+        tex_mode,
+        seed,
+        ground_override,
+        ground_tint_rgb,
+    );
     push_ink_style_filters(out, style);
     out.push_str("</defs>");
 }
@@ -478,7 +502,15 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     let (vw, vh) = (w * BATTLEMAP_CELL_PX, h * BATTLEMAP_CELL_PX);
     let seed = ui.map.seed.unwrap_or(42);
     let mut out = String::with_capacity(48 * 1024);
-    push_defs(&mut out, t, style, tex_mode, seed);
+    push_defs(
+        &mut out,
+        t,
+        style,
+        tex_mode,
+        seed,
+        ui.map.ground_floor_override.as_deref(),
+        ui.map.ground_tint_rgb,
+    );
 
     // 1. Exterior margin, floor material + large-scale tonal mottling
     let pad = BATTLEMAP_PAD_PX;
@@ -502,6 +534,8 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     push_landscaping_surfaces_svg(&mut out, ui, w, h, seed, tex_mode);
     for p in ui.map.props.iter().filter(|p| {
         prop_spec(p.kind).floor_layer
+            && !p.kind.is_tabletop_clutter()
+            && !p.kind.is_overhead_canopy()
             && (if has_vector_surfaces {
                 !matches!(
                     p.kind,
@@ -537,7 +571,7 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
         &mut out, ui, t, w, h, seed,
     );
 
-    // 3. Solid 360°-rotated furniture, vehicles, pillars & tree trunks under the shared wobbly-ink shadow filter
+    // 3. Solid 360°-rotated furniture, vehicles, pillars & tree trunks + tabletop clutter above them
     out.push_str(r#"<g filter="url(#bm-prop)">"#);
     for p in ui
         .map
@@ -547,18 +581,21 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     {
         push_furniture_glyph_with_mode(&mut out, p, CELL_F, tex_mode);
     }
+    for p in ui
+        .map
+        .props
+        .iter()
+        .filter(|p| p.kind.is_tabletop_clutter())
+    {
+        push_furniture_glyph_with_mode(&mut out, p, CELL_F, tex_mode);
+    }
     out.push_str("</g>");
 
     // 4. Architectural vector walls, doors & windows
     push_edge_walls_svg_with_mode(&mut out, &ui.map.wall_edges, (w, h), t, tex_mode, CELL_F);
 
-    // 5. Overhanging tree & gazebo canopies (drawn above ground props/walls cleanly)
-    if ui.map.props.iter().any(|p| {
-        matches!(
-            p.kind,
-            PropKind::LargeTree | PropKind::MediumTree | PropKind::Gazebo
-        )
-    }) {
+    // 5. Overhanging tree, gazebo & awning canopies (drawn above ground props/walls cleanly)
+    if ui.map.props.iter().any(|p| p.kind.is_overhead_canopy()) {
         out.push_str(r#"<g filter="url(#bm-prop)">"#);
         for p in &ui.map.props {
             push_tree_canopy_glyph_with_mode(&mut out, p, CELL_F, tex_mode);

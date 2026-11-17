@@ -363,6 +363,7 @@ fn generate_farms(w: i32, h: i32, seed: i64) -> ProceduralSector {
                 wall_edges: sec.wall_edges.clone(),
                 props: sec.props.clone(),
                 surfaces: sec.surfaces.clone(),
+                ..Default::default()
             },
             MapFloorLevel {
                 floor_index: 1,
@@ -371,6 +372,7 @@ fn generate_farms(w: i32, h: i32, seed: i64) -> ProceduralSector {
                 wall_edges: f2.wall_edges,
                 props: f2.props,
                 surfaces: f2.surfaces,
+                ..Default::default()
             },
         ];
     }

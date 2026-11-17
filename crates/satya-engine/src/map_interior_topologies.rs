@@ -35,6 +35,7 @@ fn poly_surface(
         width_cm: 0,
         border_style_cm: corner_radius_cm,
         variant_seed: seed,
+        tint_rgb: None,
     }
 }
 
@@ -68,6 +69,7 @@ fn ribbon_surface(
         width_cm,
         border_style_cm: 0,
         variant_seed: seed,
+        tint_rgb: None,
     }
 }
 

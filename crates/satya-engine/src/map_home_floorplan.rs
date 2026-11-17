@@ -334,7 +334,7 @@ fn subdivide_cluster(
     rng: &mut Rng,
     out: &mut Vec<Room>,
 ) {
-    if depth_left == 0 || r.area() <= 16 || (r.w() < 5 && r.h() < 5) {
+    if depth_left == 0 || r.area() <= 14 || (r.w() < 5 && r.h() < 5) {
         out.push(r);
         return;
     }
@@ -355,6 +355,186 @@ fn subdivide_cluster(
     out.push(r);
 }
 
+fn split_along_strip_cols(r: Room, stair: Option<StairAnchor>, target_w: i32, out: &mut Vec<Room>) {
+    if r.w() <= target_w + 1 {
+        out.push(r);
+        return;
+    }
+    if let Some(sx) = pick_v_cut(r, r.x0 + (r.w() / 2).max(2), 2, 2, stair) {
+        split_along_strip_cols(Room { x1: sx, ..r }, stair, target_w, out);
+        split_along_strip_cols(Room { x0: sx, ..r }, stair, target_w, out);
+    } else {
+        out.push(r);
+    }
+}
+
+fn max_service_room_area(role: Role) -> Option<i32> {
+    match role {
+        Role::MasterBath => Some(18),
+        Role::Bathroom => Some(14),
+        Role::Closet | Role::Laundry => Some(12),
+        _ => None,
+    }
+}
+
+/// Splits any oversized `Bathroom`, `MasterBath`, `Closet`, or `Laundry` room (`> 14..18 m²`)
+/// into a human-scaled bath/service compartment plus a `Bedroom`/`Office`/`Closet`.
+fn enforce_service_room_caps(
+    tagged: &mut Vec<(Room, Role, u8)>,
+    stair: Option<StairAnchor>,
+    floor_idx: i32,
+    is_main: bool,
+) {
+    if floor_idx < 0 {
+        return;
+    }
+    // Guarantee ground-floor homes with >= 2 rooms include at least one Bathroom before capping size.
+    let has_bath = tagged
+        .iter()
+        .any(|(_, rl, _)| matches!(rl, Role::Bathroom | Role::MasterBath));
+    if is_main && floor_idx == 0 && tagged.len() >= 2 && !has_bath {
+        if let Some(cand_i) = tagged
+            .iter()
+            .enumerate()
+            .filter(|(_, (rm, rl, _))| {
+                rm.area() <= 14
+                    && !matches!(
+                        rl,
+                        Role::Hall | Role::Foyer | Role::Living | Role::Kitchen | Role::MasterBedroom
+                    )
+            })
+            .min_by_key(|(_, (rm, _, _))| rm.area())
+            .map(|(i, _)| i)
+        {
+            tagged[cand_i].1 = Role::Bathroom;
+        } else if let Some((split_i, _)) = tagged
+            .iter()
+            .enumerate()
+            .filter(|(_, (rm, rl, _))| {
+                (rm.w() >= 4 || rm.h() >= 4) && !matches!(rl, Role::Hall | Role::Foyer)
+            })
+            .min_by_key(|(_, (rm, rl, _))| {
+                let pen = if matches!(rl, Role::Living | Role::Kitchen) {
+                    100
+                } else {
+                    0
+                };
+                pen + rm.area()
+            })
+        {
+            let (rm, rl, wid) = tagged[split_i];
+            if rm.w() >= 4
+                && let Some(sx) = pick_v_cut(rm, rm.x0 + 2, 2, 2, stair)
+                    .or_else(|| pick_v_cut(rm, rm.x1 - 2, 2, 2, stair))
+            {
+                let a = Room { x1: sx, ..rm };
+                let b = Room { x0: sx, ..rm };
+                let (bath, rest) = if a.area() <= b.area() { (a, b) } else { (b, a) };
+                tagged[split_i] = (rest, rl, wid);
+                tagged.push((bath, Role::Bathroom, wid));
+            } else if rm.h() >= 4
+                && let Some(sy) = pick_h_cut(rm, rm.y0 + 2, 2, 2, stair)
+                    .or_else(|| pick_h_cut(rm, rm.y1 - 2, 2, 2, stair))
+            {
+                let a = Room { y1: sy, ..rm };
+                let b = Room { y0: sy, ..rm };
+                let (bath, rest) = if a.area() <= b.area() { (a, b) } else { (b, a) };
+                tagged[split_i] = (rest, rl, wid);
+                tagged.push((bath, Role::Bathroom, wid));
+            } else if let Some(cand_i) = tagged
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, cr, _))| !matches!(cr, Role::Hall | Role::Foyer))
+                .min_by_key(|(_, (rm, _, _))| rm.area())
+                .map(|(i, _)| i)
+            {
+                tagged[cand_i].1 = Role::Bathroom;
+            }
+        }
+    }
+
+    for _pass in 0..8 {
+        let Some(idx) = tagged.iter().position(|(rm, role, _)| {
+            max_service_room_area(*role).is_some_and(|cap| rm.area() > cap)
+        }) else {
+            break;
+        };
+        let (rm, role, wid) = tagged[idx];
+        let cap = max_service_room_area(role).unwrap_or(14);
+        let max_bath_dim = if role == Role::MasterBath { 4 } else { 3 };
+        let try_split_v = if rm.w() >= rm.h() {
+            [true, false]
+        } else {
+            [false, true]
+        };
+        let mut did_split = false;
+        for split_v in try_split_v {
+            if split_v && rm.w() >= 4 {
+                let want = (cap / rm.h().max(1)).clamp(2, max_bath_dim);
+                if let Some(sx) = pick_v_cut(rm, rm.x0 + want, 2, 2, stair) {
+                    let a = Room { x1: sx, ..rm };
+                    let b = Room { x0: sx, ..rm };
+                    let (bath_rm, rest_rm) = if a.area() <= b.area() { (a, b) } else { (b, a) };
+                    let rest_role = if rest_rm.area() >= 10 {
+                        Role::Bedroom
+                    } else if rest_rm.area() >= 6 {
+                        Role::Closet
+                    } else {
+                        Role::Hall
+                    };
+                    tagged[idx] = (bath_rm, role, wid);
+                    tagged.push((rest_rm, rest_role, wid));
+                    did_split = true;
+                    break;
+                }
+            } else if !split_v && rm.h() >= 4 {
+                let want = (cap / rm.w().max(1)).clamp(2, max_bath_dim);
+                if let Some(sy) = pick_h_cut(rm, rm.y0 + want, 2, 2, stair) {
+                    let a = Room { y1: sy, ..rm };
+                    let b = Room { y0: sy, ..rm };
+                    let (bath_rm, rest_rm) = if a.area() <= b.area() { (a, b) } else { (b, a) };
+                    let rest_role = if rest_rm.area() >= 10 {
+                        Role::Bedroom
+                    } else if rest_rm.area() >= 6 {
+                        Role::Closet
+                    } else {
+                        Role::Hall
+                    };
+                    tagged[idx] = (bath_rm, role, wid);
+                    tagged.push((rest_rm, rest_role, wid));
+                    did_split = true;
+                    break;
+                }
+            }
+        }
+        if !did_split {
+            // If stair blocks splitting an oversized room, swap role with a compact non-bath room or turn into Bedroom.
+            if let Some(swap_i) = tagged.iter().position(|(other, orole, _)| {
+                other.area() <= cap
+                    && !matches!(
+                        orole,
+                        Role::Hall
+                            | Role::Foyer
+                            | Role::Bathroom
+                            | Role::MasterBath
+                            | Role::Closet
+                            | Role::Laundry
+                    )
+            }) {
+                let small_role = tagged[swap_i].1;
+                tagged[swap_i].1 = role;
+                tagged[idx].1 = small_role;
+            } else {
+                tagged[idx].1 = if rm.area() >= 12 {
+                    Role::Bedroom
+                } else {
+                    Role::Office
+                };
+            }
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn partition_wing_rooms(
     wing: LotBox,
@@ -368,24 +548,72 @@ fn partition_wing_rooms(
     let wing_id = u8::from(!is_main);
     let r = wing.as_room();
     let mut rooms: Vec<Room> = Vec::new();
+    let mut preset_hall: Vec<Room> = Vec::new();
+
     if r.w() <= 5 || r.h() <= 4 {
         rooms.push(r);
+    } else if floor_idx >= 0
+        && r.w() >= 9
+        && r.h() >= 7
+        && let Some(sx1) = pick_v_cut(r, r.x0 + r.w() * rng.range(38, 52) / 100, 4, 4, stair)
+    {
+        let (pub_r, priv_r) = if entry_side == CardinalEntry::East {
+            (Room { x0: sx1, ..r }, Room { x1: sx1, ..r })
+        } else {
+            (Room { x1: sx1, ..r }, Room { x0: sx1, ..r })
+        };
+        let pub_depth = if pub_r.area() >= 42 { 3 } else { 2 };
+        subdivide_cluster(pub_r, stair, pub_depth, rng, &mut rooms);
+
+        let hy0 = priv_r.y0 + priv_r.h() / 2 - 1;
+        let hy1 = hy0 + 2;
+        if priv_r.w() >= 5
+            && hy0 >= priv_r.y0 + 2
+            && priv_r.y1 - hy1 >= 2
+            && cut_avoids_stair_h(priv_r, hy0, stair)
+            && cut_avoids_stair_h(priv_r, hy1, stair)
+        {
+            let hall_r = Room {
+                y0: hy0,
+                y1: hy1,
+                ..priv_r
+            };
+            preset_hall.push(hall_r);
+            rooms.push(hall_r);
+            let n_strip = Room { y1: hy0, ..priv_r };
+            let s_strip = Room { y0: hy1, ..priv_r };
+            if n_strip.h() <= 5 {
+                split_along_strip_cols(n_strip, stair, 4, &mut rooms);
+            } else {
+                subdivide_cluster(n_strip, stair, 2, rng, &mut rooms);
+            }
+            if s_strip.h() <= 5 {
+                split_along_strip_cols(s_strip, stair, 4, &mut rooms);
+            } else {
+                subdivide_cluster(s_strip, stair, 2, rng, &mut rooms);
+            }
+        } else {
+            let priv_depth = if priv_r.area() >= 42 { 3 } else { 2 };
+            subdivide_cluster(priv_r, stair, priv_depth, rng, &mut rooms);
+        }
     } else if r.w() >= 10 && r.h() >= 6 {
         if let Some(sx1) = (r.w() >= r.h())
             .then(|| pick_v_cut(r, r.x0 + r.w() * rng.range(38, 52) / 100, 4, 4, stair))
             .flatten()
         {
-            subdivide_cluster(Room { x1: sx1, ..r }, stair, 2, rng, &mut rooms);
-            subdivide_cluster(Room { x0: sx1, ..r }, stair, 2, rng, &mut rooms);
+            let d = if r.area() >= 64 { 3 } else { 2 };
+            subdivide_cluster(Room { x1: sx1, ..r }, stair, d, rng, &mut rooms);
+            subdivide_cluster(Room { x0: sx1, ..r }, stair, d, rng, &mut rooms);
         } else if let Some(sy1) = pick_h_cut(r, r.y0 + r.h() / 2, 3, 3, stair) {
-            subdivide_cluster(Room { y1: sy1, ..r }, stair, 2, rng, &mut rooms);
-            subdivide_cluster(Room { y0: sy1, ..r }, stair, 2, rng, &mut rooms);
+            let d = if r.area() >= 64 { 3 } else { 2 };
+            subdivide_cluster(Room { y1: sy1, ..r }, stair, d, rng, &mut rooms);
+            subdivide_cluster(Room { y0: sy1, ..r }, stair, d, rng, &mut rooms);
         } else {
             rooms.push(r);
         }
     } else if let Some(sx) = pick_v_cut(r, r.x0 + r.w() / 2, 3, 3, stair) {
-        subdivide_cluster(Room { x1: sx, ..r }, stair, 1, rng, &mut rooms);
-        subdivide_cluster(Room { x0: sx, ..r }, stair, 1, rng, &mut rooms);
+        subdivide_cluster(Room { x1: sx, ..r }, stair, 2, rng, &mut rooms);
+        subdivide_cluster(Room { x0: sx, ..r }, stair, 2, rng, &mut rooms);
     } else if let Some(sy) = pick_h_cut(r, r.y0 + r.h() / 2, 3, 3, stair) {
         rooms.push(Room { y1: sy, ..r });
         rooms.push(Room { y0: sy, ..r });
@@ -393,12 +621,21 @@ fn partition_wing_rooms(
         rooms.push(r);
     }
 
-    assign_architectural_roles(
+    let mut tagged: Vec<(Room, Role, u8)> = assign_architectural_roles(
         &rooms, wing, entry_side, floor_idx, is_main, plan, stair, rng,
     )
     .into_iter()
-    .map(|(rm, rl)| (rm, rl, wing_id))
-    .collect()
+    .map(|(rm, rl)| {
+        let final_rl = if preset_hall.contains(&rm) {
+            Role::Hall
+        } else {
+            rl
+        };
+        (rm, final_rl, wing_id)
+    })
+    .collect();
+    enforce_service_room_caps(&mut tagged, stair, floor_idx, is_main);
+    tagged
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -466,59 +703,55 @@ fn assign_architectural_roles(
             roles[li] = Role::Living;
             assigned[li] = true;
         }
-        let main_palette: &[Role] = match plan {
+        let large_palette: &[Role] = match plan {
             HomePlanKind::FarmhouseSunroom => &[
                 Role::Kitchen,
                 Role::Sunroom,
                 Role::Dining,
                 Role::MasterBedroom,
-                Role::Bathroom,
-                Role::Closet,
                 Role::Bedroom,
+                Role::Office,
             ],
             HomePlanKind::CourtyardVilla => &[
                 Role::Dining,
                 Role::Kitchen,
                 Role::Sunroom,
                 Role::MasterBedroom,
-                Role::MasterBath,
-                Role::Closet,
+                Role::Bedroom,
                 Role::Office,
             ],
             _ => &[
                 Role::Kitchen,
                 Role::Dining,
                 Role::MasterBedroom,
-                Role::Bathroom,
-                Role::Closet,
                 Role::Bedroom,
                 Role::Office,
             ],
         };
-        let small_roles = [Role::Bathroom, Role::Closet, Role::Laundry];
+        let compact_service = [Role::Bathroom, Role::Closet, Role::Laundry, Role::MasterBath];
         let (mut big_cur, mut small_cur) = (0usize, 0usize);
         for &idx in &by_area {
             if assigned[idx] {
                 continue;
             }
-            if rooms[idx].area() <= 9 || rooms[idx].w() <= 2 || rooms[idx].h() <= 2 {
-                roles[idx] = small_roles[small_cur % small_roles.len()];
+            if rooms[idx].area() <= 14 || rooms[idx].w() <= 2 || rooms[idx].h() <= 2 {
+                roles[idx] = compact_service[small_cur % compact_service.len()];
                 small_cur += 1;
             } else {
-                roles[idx] = main_palette[big_cur % main_palette.len()];
+                roles[idx] = large_palette[big_cur % large_palette.len()];
                 big_cur += 1;
             }
         }
     } else {
-        let arm_palette = [
+        let arm_large = [
             Role::MasterBedroom,
-            Role::MasterBath,
-            Role::Closet,
             Role::Bedroom,
-            Role::Bathroom,
             Role::Sunroom,
             Role::Office,
+            Role::Dining,
         ];
+        let arm_compact = [Role::MasterBath, Role::Bathroom, Role::Closet, Role::Laundry];
+        let (mut large_cur, mut comp_cur) = (0usize, 0usize);
         for (cur, &idx) in by_area.iter().enumerate() {
             if cur == 0 || (touches_stair(rooms[idx]) && rooms[idx].area() >= 10) {
                 roles[idx] = if touches_stair(rooms[idx]) || rng.chance(1, 2) {
@@ -526,26 +759,67 @@ fn assign_architectural_roles(
                 } else {
                     Role::Office
                 };
-            } else if rooms[idx].area() <= 8 || rooms[idx].w() <= 2 || rooms[idx].h() <= 2 {
-                roles[idx] = if cur % 2 == 1 {
-                    Role::MasterBath
-                } else {
-                    Role::Closet
-                };
+            } else if rooms[idx].area() <= 14 || rooms[idx].w() <= 2 || rooms[idx].h() <= 2 {
+                roles[idx] = arm_compact[comp_cur % arm_compact.len()];
+                comp_cur += 1;
             } else {
-                roles[idx] = arm_palette[cur % arm_palette.len()];
+                roles[idx] = arm_large[large_cur % arm_large.len()];
+                large_cur += 1;
             }
         }
     }
     rooms.iter().copied().zip(roles).collect()
 }
 
+const fn is_circulation_role(r: Role) -> bool {
+    matches!(r, Role::Hall | Role::Foyer | Role::Living)
+}
+
 const fn role_door_weight(r: Role) -> i32 {
     match r {
-        Role::Bathroom | Role::MasterBath | Role::Closet | Role::Laundry => 80,
-        Role::Bedroom | Role::MasterBedroom => 25,
-        _ => 4,
+        Role::Hall | Role::Foyer | Role::Living => 1,
+        Role::Bathroom | Role::MasterBath | Role::Closet | Role::Laundry => 90,
+        Role::Bedroom | Role::MasterBedroom | Role::Office => 30,
+        _ => 8,
     }
+}
+
+const fn pair_door_tier(a: Role, b: Role) -> u8 {
+    let ca = is_circulation_role(a);
+    let cb = is_circulation_role(b);
+    if ca && cb {
+        0
+    } else if (ca && matches!(b, Role::Bedroom | Role::MasterBedroom | Role::Office | Role::Dining | Role::Kitchen | Role::Sunroom))
+        || (cb && matches!(a, Role::Bedroom | Role::MasterBedroom | Role::Office | Role::Dining | Role::Kitchen | Role::Sunroom))
+    {
+        1
+    } else if (ca && matches!(b, Role::Bathroom | Role::MasterBath | Role::Closet | Role::Laundry))
+        || (cb && matches!(a, Role::Bathroom | Role::MasterBath | Role::Closet | Role::Laundry))
+        || (matches!(a, Role::Dining | Role::Kitchen | Role::Sunroom)
+            && matches!(b, Role::Dining | Role::Kitchen | Role::Sunroom))
+    {
+        2
+    } else if (matches!(a, Role::MasterBedroom | Role::Bedroom)
+        && matches!(b, Role::MasterBath | Role::Bathroom | Role::Closet))
+        || (matches!(b, Role::MasterBedroom | Role::Bedroom)
+            && matches!(a, Role::MasterBath | Role::Bathroom | Role::Closet))
+    {
+        3
+    } else {
+        4
+    }
+}
+
+const fn is_open_concept_pair(a: Role, b: Role) -> bool {
+    matches!(
+        (a, b),
+        (Role::Kitchen, Role::Dining)
+            | (Role::Dining, Role::Kitchen)
+            | (Role::Dining, Role::Living)
+            | (Role::Living, Role::Dining)
+            | (Role::Foyer, Role::Living)
+            | (Role::Living, Role::Foyer)
+    )
 }
 
 fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], is_villa: bool) {
@@ -608,7 +882,14 @@ fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], is_v
         }
     }
 
-    borders.sort_by_key(|b| (u8::from(!b.same_wing), b.weight, -(b.end - b.start)));
+    borders.sort_by_key(|b| {
+        (
+            u8::from(!b.same_wing),
+            pair_door_tier(tagged[b.a].1, tagged[b.b].1),
+            b.weight,
+            -(b.end - b.start),
+        )
+    });
     let mut parent: Vec<usize> = (0..tagged.len()).collect();
     let mut carved = vec![false; borders.len()];
     for pass in [true, false] {
@@ -624,6 +905,40 @@ fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], is_v
         }
     }
 
+    // Ensure every Bedroom / MasterBedroom touching Hall/Living/Foyer has direct circulation access.
+    for i in 0..tagged.len() {
+        if !matches!(tagged[i].1, Role::Bedroom | Role::MasterBedroom) {
+            continue;
+        }
+        let has_circ = borders.iter().enumerate().any(|(bi, bd)| {
+            if !carved[bi] {
+                return false;
+            }
+            let other = if bd.a == i {
+                Some(bd.b)
+            } else if bd.b == i {
+                Some(bd.a)
+            } else {
+                None
+            };
+            other.is_some_and(|o| is_circulation_role(tagged[o].1))
+        });
+        if !has_circ
+            && let Some(bi) = borders.iter().position(|bd| {
+                let other = if bd.a == i {
+                    Some(bd.b)
+                } else if bd.b == i {
+                    Some(bd.a)
+                } else {
+                    None
+                };
+                other.is_some_and(|o| is_circulation_role(tagged[o].1))
+            })
+        {
+            carved[bi] = true;
+        }
+    }
+
     for (bi, bd) in borders.iter().enumerate() {
         if carved[bi] || bd.end - bd.start < 2 {
             continue;
@@ -631,7 +946,7 @@ fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], is_v
         let social = |r| {
             matches!(
                 r,
-                Role::Foyer | Role::Living | Role::Dining | Role::Kitchen | Role::Sunroom
+                Role::Foyer | Role::Living | Role::Dining | Role::Kitchen | Role::Sunroom | Role::Hall
             )
         };
         if social(tagged[bd.a].1) && social(tagged[bd.b].1) && (is_villa || shell.rng.chance(1, 2))
@@ -644,14 +959,32 @@ fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], is_v
         if !carved[bi] {
             continue;
         }
+        let (ra_role, rb_role) = (tagged[bd.a].1, tagged[bd.b].1);
+        if is_open_concept_pair(ra_role, rb_role) && bd.end - bd.start >= 2 {
+            // Open passage with zero interior wall dividing connected social spaces.
+            shell.edges.retain(|e| {
+                if bd.vertical {
+                    !(e.side == EdgeSide::West
+                        && e.x == bd.fixed_coord
+                        && e.y >= bd.start
+                        && e.y < bd.end)
+                } else {
+                    !(e.side == EdgeSide::North
+                        && e.y == bd.fixed_coord
+                        && e.x >= bd.start
+                        && e.x < bd.end)
+                }
+            });
+            continue;
+        }
         let open_arch = matches!(
-            (tagged[bd.a].1, tagged[bd.b].1),
-            (Role::Foyer, Role::Living)
-                | (Role::Living, Role::Foyer)
-                | (Role::Living, Role::Dining)
-                | (Role::Dining, Role::Living)
-                | (Role::Dining, Role::Kitchen)
-                | (Role::Kitchen, Role::Dining)
+            (ra_role, rb_role),
+            (Role::Living, Role::Sunroom)
+                | (Role::Sunroom, Role::Living)
+                | (Role::Hall, Role::Living)
+                | (Role::Living, Role::Hall)
+                | (Role::Hall, Role::Foyer)
+                | (Role::Foyer, Role::Hall)
         );
         let kind = if open_arch {
             WallEdgeKind::DoorOpen

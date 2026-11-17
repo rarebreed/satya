@@ -644,6 +644,40 @@ input[type="range"].dice-opacity-slider:focus-visible {
     flex-shrink: 0;
     white-space: nowrap;
 }
+.map-editor-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 7px 10px;
+    background: rgba(11, 17, 30, 0.94);
+    border: 1px solid rgba(56, 189, 248, 0.42);
+    border-radius: 7px;
+}
+.map-editor-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.map-editor-inspector {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+.map-editor-sel-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #fde047;
+    margin-right: 4px;
+}
+.map-editor-status-pill {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-left: auto;
+}
 .wgpu-model-canvas-wrap {
     width: 100%;
     height: clamp(280px, 38dvh, 420px);

@@ -544,6 +544,24 @@ pub fn satya_battlemap_mouse_down(button: i32, client_x: f32, client_y: f32) {
     if !(0..=2).contains(&button) {
         return;
     }
+    if button == 0
+        && crate::wasm_client::map_editor::is_editor_active()
+        && let Some(rect) = overlay_rect_dims()
+    {
+        let metric = with_map_ui(|ui| {
+            ui.camera_2d.unproject_client_to_metric(
+                client_x,
+                client_y,
+                rect,
+                ui.map.board_size_m(),
+                ui.map.cell_size_m(),
+            )
+        });
+        if let Some((mx, my)) = metric {
+            crate::wasm_client::map_editor::handle_editor_pointer_down(mx, my);
+            return;
+        }
+    }
     with_map_ui_mut(|ui| {
         ui.camera_2d.dragging = true;
         ui.camera_2d.drag_moved = false;
@@ -597,7 +615,14 @@ pub fn satya_battlemap_mouse_move(buttons: i32, client_x: f32, client_y: f32) {
     if did_pan {
         sync_map_camera_and_edge_controls_dom();
     } else if let Some((fx, fy)) = hover_metric {
-        satya_hover_map_point(fx, fy, client_x, client_y);
+        let editor_moved = if (buttons & 1) != 0 && crate::wasm_client::map_editor::is_editor_active() {
+            crate::wasm_client::map_editor::handle_editor_pointer_move(fx, fy)
+        } else {
+            false
+        };
+        if !editor_moved {
+            satya_hover_map_point(fx, fy, client_x, client_y);
+        }
     }
     if let Some(dir) = overscroll_dir {
         continue_session_map_in_direction(dir);
@@ -608,6 +633,26 @@ pub fn satya_battlemap_mouse_move(buttons: i32, client_x: f32, client_y: f32) {
 #[wasm_bindgen]
 pub fn satya_battlemap_mouse_up(button: i32, client_x: f32, client_y: f32) {
     let rect = overlay_rect_dims();
+    if button == 0
+        && crate::wasm_client::map_editor::is_editor_active()
+        && !with_map_ui(|ui| ui.camera_2d.dragging)
+    {
+        if let Some(r) = rect {
+            let metric = with_map_ui(|ui| {
+                ui.camera_2d.unproject_client_to_metric(
+                    client_x,
+                    client_y,
+                    r,
+                    ui.map.board_size_m(),
+                    ui.map.cell_size_m(),
+                )
+            });
+            if let Some((fx, fy)) = metric {
+                crate::wasm_client::map_editor::handle_editor_pointer_up(fx, fy);
+            }
+        }
+        return;
+    }
     let click_metric = with_map_ui_mut(|ui| {
         let should_click = button == 0 && (!ui.camera_2d.dragging || !ui.camera_2d.drag_moved);
         ui.camera_2d.clear_drag();

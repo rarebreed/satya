@@ -12,6 +12,7 @@ pub use crate::wasm_client::map_2d_art::*;
 pub use crate::wasm_client::map_3d_input::*;
 pub use crate::wasm_client::map_3d_wgpu::*;
 pub use crate::wasm_client::map_edge_edit::*;
+pub use crate::wasm_client::map_editor::*;
 
 use crate::wasm_client::dom::{
     escape_html, get_element, set_class, set_display, set_html, set_input_value, set_select_value,
@@ -542,6 +543,7 @@ pub fn refresh_map_dom_and_wgpu() {
         refresh_map_wgpu_if_active();
     }
     crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
+    crate::wasm_client::map_editor::sync_map_editor_dom();
 }
 
 /// Formats the floating floor switcher pill bar + cross-floor move buttons for multi-floor maps.
@@ -652,7 +654,8 @@ pub fn format_selectable_token_chips_html(
 
 /// Ingests an authoritative [`GmMapUpdateRequest`] from `ServerWsPacket::MapUpdated` or REST history.
 pub fn apply_incoming_map_update(incoming: &GmMapUpdateRequest) {
-    let (old_size, new_size, stitch_dir, nudge, size_changed) = with_map_ui_mut(|ui| {
+    let (old_size, new_size, stitch_dir, nudge, size_changed, new_map_id) = with_map_ui_mut(|ui| {
+        let new_map_id = incoming.map_id != ui.map.map_id;
         let old_size = ui.map.board_size_m();
         let new_size = incoming.board_size_m();
         let size_changed =
@@ -678,8 +681,12 @@ pub fn apply_incoming_map_update(incoming: &GmMapUpdateRequest) {
             stitch_dir,
             explicit_nudge.is_some(),
             size_changed,
+            new_map_id,
         )
     });
+    if new_map_id {
+        crate::wasm_client::map_editor::reset_editor_selection_and_drafts(true);
+    }
     if let Some(dir) = stitch_dir {
         crate::wasm_client::map_3d_wgpu::shift_3d_camera_on_stitch(old_size, new_size, dir, nudge);
     } else if size_changed {

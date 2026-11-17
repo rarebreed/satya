@@ -457,7 +457,7 @@ fn emit_vector_surfaces_svg(
                 );
             }
             SurfaceFeatureKind::InteriorFloor => {
-                if !indoor_theme {
+                if !indoor_theme || s.tint_rgb.is_some() {
                     let fill = if painted {
                         [
                             "url(#bm-hardwood)",
@@ -472,6 +472,84 @@ fn emit_vector_surfaces_svg(
                         r##"<path d="{d}" fill="{fill}" stroke="#664b30" stroke-width="1.5" stroke-linejoin="round"/>"##
                     );
                 }
+            }
+            SurfaceFeatureKind::LawnGrassZone => {
+                let fill = if painted {
+                    ["url(#bm-grass)", "url(#bm-grass-lush)", "url(#bm-grass-dry)"]
+                        [(s.variant_seed % 3) as usize]
+                } else {
+                    ["#638045", "#4e8442", "#9e9555"][(s.variant_seed % 3) as usize]
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#4e6a35" stroke-width="1.1" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::BrickPaverWalk => {
+                let fill = if painted {
+                    "url(#bm-herringbone-brick)"
+                } else {
+                    "#a2614c"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="{BATTLEMAP_INK}" stroke-width="1.4" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                );
+            }
+            SurfaceFeatureKind::StainedConcreteFloor => {
+                let fill = if painted {
+                    "url(#bm-concrete)"
+                } else {
+                    "#9c978d"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#646059" stroke-width="1.4" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::ClinicalVinylFloor => {
+                let fill = if painted {
+                    "url(#bm-clinical-vinyl)"
+                } else {
+                    "#d2dce0"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#9db2bc" stroke-width="1.3" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::LinoleumCheckFloor => {
+                let fill = if painted {
+                    "url(#bm-linoleum-check)"
+                } else {
+                    "#cbd2d6"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#8e9aa0" stroke-width="1.3" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::TerrazzoFloor => {
+                let fill = if painted {
+                    "url(#bm-terrazzo)"
+                } else {
+                    "#d8d4cb"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#a8a095" stroke-width="1.3" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::SteelPlateFloor => {
+                let fill = if painted {
+                    "url(#bm-server-tile)"
+                } else {
+                    "#2d353e"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#475569" stroke-width="1.4" stroke-linejoin="round"/>"##
+                );
             }
             SurfaceFeatureKind::CeramicTileFloor => {
                 let terra = s.variant_seed & 1 == 1;
@@ -559,6 +637,13 @@ fn emit_vector_surfaces_svg(
                     );
                 }
             }
+        }
+        if let Some(rgb) = s.tint_rgb {
+            let hex = satya_schema::format_rgb_hex(rgb);
+            let _ = write!(
+                out,
+                r##"<path d="{d}" fill="{hex}" fill-opacity=".28" style="mix-blend-mode:multiply" stroke="none"/>"##
+            );
         }
     }
 }
@@ -844,6 +929,7 @@ mod tests {
             width_cm: 0,
             border_style_cm: 18,
             variant_seed: 9,
+            tint_rgb: None,
         });
         assert_ne!(
             key_before,
@@ -875,6 +961,7 @@ mod tests {
             width_cm: 0,
             border_style_cm: 0,
             variant_seed: 1,
+            tint_rgb: None,
         }];
         let road_art = format_battlemap_art_layer(&road_ui);
         assert!(

@@ -510,6 +510,7 @@ pub fn generate_furnished_interior(
             width_cm: 0,
             border_style_cm: 0,
             variant_seed: (seed as u32).wrapping_add(7),
+            tint_rgb: None,
         }]
     };
 
@@ -559,6 +560,27 @@ pub fn generate_furnished_interior(
     furn.reserve_doors(&shell.edges);
     for &(r, role) in &rooms_roles {
         furn.furnish(role, r);
+    }
+    if style == InteriorStyle::Office
+        && w >= 24
+        && h >= 18
+        && let Some((er, _)) = rooms_roles
+            .iter()
+            .find(|(r, role)| *role == Role::Hall && r.w() >= 3 && r.h() >= 2)
+            .or_else(|| {
+                rooms_roles
+                    .iter()
+                    .find(|(r, role)| *role == Role::Bullpen && r.w() >= 4 && r.h() >= 3)
+            })
+    {
+        let _ = furn.try_place(
+            satya_schema::PropKind::ElevatorCar,
+            er.x0 + 1,
+            er.y0,
+            0,
+            None,
+            *er,
+        );
     }
     for pr in patio_rooms {
         furn.furnish_patio(pr);

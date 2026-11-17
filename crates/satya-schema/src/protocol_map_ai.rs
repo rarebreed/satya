@@ -140,6 +140,12 @@ pub struct GmMapUpdateRequest {
     /// Macro-world stitched sector cells (`(sector_x, sector_y)`, bounds, zoning & `N/S/E/W` border profiles).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub world_sectors: Vec<WorldSectorCell>,
+    /// Optional Editor Mode base floor pattern override for the active floor (`"hardwood"`, `"grass_lush"`, etc.).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ground_floor_override: Option<String>,
+    /// Optional Editor Mode base ground color tint RGB override for the active floor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ground_tint_rgb: Option<[u8; 3]>,
 }
 
 impl Default for GmMapUpdateRequest {
@@ -163,6 +169,8 @@ impl Default for GmMapUpdateRequest {
             floors: Vec::new(),
             active_floor: 0,
             world_sectors: Vec::new(),
+            ground_floor_override: None,
+            ground_tint_rgb: None,
         }
     }
 }

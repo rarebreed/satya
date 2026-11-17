@@ -15,6 +15,29 @@ const fn default_one_cell() -> i32 {
     1
 }
 
+const fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// Parses a `#rrggbb` or `rrggbb` hex color string into `[r, g, b]`.
+#[must_use]
+pub fn parse_hex_rgb(raw: &str) -> Option<[u8; 3]> {
+    let hex = raw.trim().strip_prefix('#').unwrap_or(raw.trim());
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some([r, g, b])
+}
+
+/// Formats `[r, g, b]` into canonical lowercase `#rrggbb`.
+#[must_use]
+pub fn format_rgb_hex(rgb: [u8; 3]) -> String {
+    format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])
+}
+
 define_wire_enum! {
     /// What occupies a cell-boundary edge.
     pub enum WallEdgeKind [count = 4] {
@@ -81,7 +104,7 @@ define_wire_enum! {
 define_wire_enum! {
     /// Catalog of placeable continuous props & surface zones. Dimensions, heights, and materials are in
     /// `satya_engine::map_dressing::prop_spec`.
-    pub enum PropKind [count = 90] {
+    pub enum PropKind [count = 118] {
         Sofa => ("SOFA", "Sofa (3-seat)"),
         Loveseat => ("LOVESEAT", "Loveseat"),
         Armchair => ("ARMCHAIR", "Armchair"),
@@ -172,6 +195,60 @@ define_wire_enum! {
         FloorClothes => ("FLOOR_CLOTHES", "Scattered clothes on floor", aliases: ["LAUNDRY_PILE", "CLOTHES_PILE"]),
         FloorToys => ("FLOOR_TOYS", "Scattered toys on floor", aliases: ["TOYS"]),
         StreetDebris => ("STREET_DEBRIS", "Scattered street litter & debris", aliases: ["LITTER", "TRASH_SCATTER"]),
+        Cot => ("COT", "Folding triage / camp cot", aliases: ["CAMP_COT", "FOLDING_COT"]),
+        Gurney => ("GURNEY", "Wheeled trauma stretcher", aliases: ["STRETCHER", "MEDICAL_STRETCHER"]),
+        ReclinerChair => ("RECLINER_CHAIR", "Visitor sleeper recliner", aliases: ["RECLINER", "SLEEPER_CHAIR", "VISITOR_CHAIR"]),
+        MedicalCounter => ("MEDICAL_COUNTER", "Medical counter & scrub sink", aliases: ["SCRUB_SINK", "CLINIC_COUNTER"]),
+        NurseStation => ("NURSE_STATION", "Corridor nursing station", aliases: ["NURSING_STATION", "CHARTING_DESK"]),
+        TelemetryMonitor => ("TELEMETRY_MONITOR", "Vitals telemetry monitor & IV stand", aliases: ["VITALS_MONITOR", "ECG_MONITOR", "IV_STAND"]),
+        BiohazardBin => ("BIOHAZARD_BIN", "Biohazard & soiled-linen waste bins", aliases: ["SHARPS_BIN", "MEDICAL_WASTE", "LINEN_HAMPER"]),
+        LinenCart => ("LINEN_CART", "Clean linen & supply cart", aliases: ["CRASH_CART", "SUPPLY_CART"]),
+        ElevatorCar => ("ELEVATOR_CAR", "Passenger elevator", aliases: ["ELEVATOR", "PASSENGER_ELEVATOR"]),
+        ServiceElevator => ("SERVICE_ELEVATOR", "Hospital gurney / freight elevator", aliases: ["FREIGHT_ELEVATOR", "PATIENT_ELEVATOR"]),
+        LabBench => ("LAB_BENCH", "Laboratory workbench", aliases: ["SCIENCE_BENCH", "WORKBENCH"]),
+        DeskClutter => ("DESK_CLUTTER", "Scattered desk papers, mug & clutter", aliases: ["CLUTTER", "PAPERS", "TABLETOP_CLUTTER"]),
+        SolderingStation => ("SOLDERING_STATION", "Electronics soldering & rework bench", aliases: ["SOLDER_BENCH", "REWORK_STATION"]),
+        TestBench => ("TEST_BENCH", "Oscilloscope, wavegen & logic analyzer rig", aliases: ["OSCILLOSCOPE", "LOGIC_ANALYZER", "WAVE_GENERATOR"]),
+        Printer3dStation => ("PRINTER3D_STATION", "3D printer & curing station", aliases: ["3D_PRINTER", "PRINTER_3D", "PRINTER_3D_STATION", "RESIN_PRINTER"]),
+        AirCompressor => ("AIR_COMPRESSOR", "Lab / shop air compressor", aliases: ["COMPRESSOR"]),
+        CncMill => ("CNC_MILL", "Enclosed CNC milling machine", aliases: ["MILLING_MACHINE", "CNC_MACHINE"]),
+        ServerRack => ("SERVER_RACK", "42U compute & network server rack", aliases: ["DATA_RACK", "NETWORK_RACK"]),
+        FumeHood => ("FUME_HOOD", "Chemical fume hood & biosafety cabinet", aliases: ["BIOSAFETY_CABINET", "EXTRACTION_HOOD"]),
+        ShowerStall => ("SHOWER_STALL", "Walk-in glass shower stall", aliases: ["SHOWER", "GLASS_SHOWER"]),
+        SpaBath => ("SPA_BATH", "Jetted whirlpool spa bath", aliases: ["JETTED_TUB", "WHIRLPOOL_TUB", "SPA_TUB"]),
+        LinenCloset => ("LINEN_CLOSET", "Built-in towel & linen cabinet", aliases: ["TOWEL_CABINET", "BATH_CABINET"]),
+        WasherDryer => ("WASHER_DRYER", "Laundry washer & dryer pair", aliases: ["WASHING_MACHINE", "LAUNDRY_MACHINES"]),
+        SingleBed => ("SINGLE_BED", "Single / twin bed", aliases: ["TWIN_BED", "BUNK_BED"]),
+        FilingCabinet => ("FILING_CABINET", "Steel office filing cabinet", aliases: ["FILE_CABINET"]),
+        WaterCooler => ("WATER_COOLER", "Corridor / office water cooler", aliases: ["WATER_DISPENSER"]),
+        BrownstoneStoop => ("BROWNSTONE_STOOP", "Carved front entry stoop & rails", aliases: ["STOOP", "ENTRY_STEPS"]),
+        AwningCanopy => ("AWNING_CANOPY", "Storefront / market awning & lanterns", aliases: ["AWNING", "SHOP_CANOPY"]),
+    }
+}
+
+impl PropKind {
+    /// Whether this prop provides cross-floor vertical transit (`Stairwell`, `ElevatorCar`, `ServiceElevator`).
+    #[must_use]
+    pub const fn is_vertical_portal(self) -> bool {
+        matches!(
+            self,
+            Self::Stairwell | Self::ElevatorCar | Self::ServiceElevator
+        )
+    }
+
+    /// Whether this prop represents tabletop clutter placed on top of desks and workbenches.
+    #[must_use]
+    pub const fn is_tabletop_clutter(self) -> bool {
+        matches!(self, Self::DeskClutter)
+    }
+
+    /// Whether this prop renders an overhanging roof/canopy layer above walls and tokens.
+    #[must_use]
+    pub const fn is_overhead_canopy(self) -> bool {
+        matches!(
+            self,
+            Self::LargeTree | Self::MediumTree | Self::Gazebo | Self::AwningCanopy
+        )
     }
 }
 
@@ -278,6 +355,12 @@ pub struct MapPropPlacement {
     pub span_w_cm: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span_h_cm: Option<i32>,
+    /// Optional custom tint RGB `[r, g, b]` applied in 2D/3D renderers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tint_rgb: Option<[u8; 3]>,
+    /// When `true`, this prop is purely visual (never blocks movement, LoS, or provides cover).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub decorative: bool,
 }
 
 impl MapPropPlacement {
@@ -442,6 +525,8 @@ mod tests {
             center_y_cm: None,
             span_w_cm: None,
             span_h_cm: None,
+            tint_rgb: None,
+            decorative: false,
         }
     }
 
@@ -472,7 +557,13 @@ mod tests {
                 Some(k)
             );
         }
-        assert_eq!(PropKind::ALL.len(), 90);
+        assert_eq!(PropKind::ALL.len(), 118);
+        assert_eq!(parse_hex_rgb("#38bdf8"), Some([0x38, 0xbd, 0xf8]));
+        assert_eq!(format_rgb_hex([0x38, 0xbd, 0xf8]), "#38bdf8");
+        assert!(PropKind::ElevatorCar.is_vertical_portal());
+        assert!(PropKind::ServiceElevator.is_vertical_portal());
+        assert!(PropKind::DeskClutter.is_tabletop_clutter());
+        assert!(PropKind::AwningCanopy.is_overhead_canopy());
         assert_eq!(PropKind::from_code_str("sofa"), Some(PropKind::Sofa));
         assert_eq!(
             PropKind::from_code_str("nightstand"),
@@ -591,9 +682,13 @@ mod tests {
             center_y_cm: Some(475),
             span_w_cm: Some(300),
             span_h_cm: Some(100),
+            tint_rgb: Some([120, 180, 220]),
+            decorative: true,
         };
         assert_eq!(free_sofa.center_cm(), (525, 475));
         assert_eq!(free_sofa.local_span_cm(), (300, 100));
+        assert!(free_sofa.decorative);
+        assert_eq!(free_sofa.tint_rgb, Some([120, 180, 220]));
     }
 
     #[test]
@@ -611,6 +706,8 @@ mod tests {
                 center_y_cm: Some(325),
                 span_w_cm: Some(260),
                 span_h_cm: Some(110),
+                tint_rgb: None,
+                decorative: false,
             };
             let fp = p.footprint_m();
             let (wx, wy) = fp.local_offset_to_world(0.85, -0.35);

@@ -278,6 +278,36 @@ pub const BATTLEMAP_TEXTURE_SPECS: &[BattlemapTextureSpec] = &[
         span_px: 128,
         fallback_hex: "#d4cfc7",
     },
+    BattlemapTextureSpec {
+        pattern_id: "bm-clinical-vinyl",
+        asset_file: "clinical_vinyl.webp",
+        span_px: 128,
+        fallback_hex: "#d2dce0",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-linoleum-check",
+        asset_file: "linoleum_check.webp",
+        span_px: 128,
+        fallback_hex: "#cbd2d6",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-terrazzo",
+        asset_file: "terrazzo_stone.webp",
+        span_px: 128,
+        fallback_hex: "#d8d4cb",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-herringbone-brick",
+        asset_file: "herringbone_brick.webp",
+        span_px: 128,
+        fallback_hex: "#a2614c",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-server-tile",
+        asset_file: "server_raised_tile.webp",
+        span_px: 128,
+        fallback_hex: "#2d353e",
+    },
 ];
 
 fn floor_webp_spec_for_theme_seeded(
@@ -385,6 +415,35 @@ fn push_extra_vector_pattern_defs(out: &mut String) {
     out.push_str(
         r##"<pattern id="bm-roof-gravel" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#736f68"/><circle cx="10" cy="14" r="2" fill="#59554f"/><circle cx="24" cy="22" r="2" fill="#8b877f"/></pattern>"##,
     );
+    out.push_str(
+        r##"<pattern id="bm-clinical-vinyl" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#d2dce0"/><path d="M0 32H64M32 0V64" stroke="#b9c7ce" stroke-width=".9"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-linoleum-check" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#cbd2d6"/><rect width="24" height="24" fill="#b4bec4"/><rect x="24" y="24" width="24" height="24" fill="#b4bec4"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-terrazzo" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#d8d4cb"/><circle cx="14" cy="18" r="2.2" fill="#8e8376"/><circle cx="38" cy="12" r="1.8" fill="#b79678"/><circle cx="46" cy="42" r="2.5" fill="#7a8288"/><circle cx="18" cy="50" r="1.9" fill="#a86d5c"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-herringbone-brick" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#a2614c"/><path d="M0 12H24V24H48M12 24V48M36 0V24" fill="none" stroke="#c8beb3" stroke-width="1.3"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-server-tile" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#2d353e"/><rect x="2" y="2" width="44" height="44" fill="none" stroke="#475569" stroke-width="1.4"/><path d="M12 14h24M12 24h24M12 34h24" stroke="#38bdf8" stroke-opacity=".22" stroke-width="1.2"/></pattern>"##,
+    );
+}
+
+/// Resolves a base ground floor pattern override key (e.g. `"grass_lush"`, `"clinical_vinyl"`)
+/// onto `(pattern_id, asset_file, span_px, fallback_hex)`.
+#[must_use]
+pub fn ground_override_texture_spec(key: &str) -> Option<&'static BattlemapTextureSpec> {
+    let needle = key.trim().to_ascii_lowercase();
+    if needle.is_empty() {
+        return None;
+    }
+    BATTLEMAP_TEXTURE_SPECS.iter().find(|spec| {
+        spec.asset_file.strip_suffix(".webp") == Some(needle.as_str())
+            || spec.pattern_id == needle.as_str()
+    })
 }
 
 /// Appends architectural and material `<pattern>` definitions inside `<defs>` according to `mode`.
@@ -396,12 +455,15 @@ pub fn push_battlemap_material_defs(
     push_battlemap_material_defs_seeded(out, t, mode, 42);
 }
 
-/// Seed-aware variant of [`push_battlemap_material_defs`] selecting grass/hardwood palette varieties.
-pub fn push_battlemap_material_defs_seeded(
+/// Seed- and Editor-ground-aware variant of [`push_battlemap_material_defs`] selecting grass/hardwood varieties,
+/// optional `ground_floor_override` texture, and optional `ground_tint_rgb` multiply wash.
+pub fn push_battlemap_material_defs_with_ground(
     out: &mut String,
     t: &BattlemapArtTheme,
     mode: BattlemapTextureMode,
     seed: i64,
+    ground_override: Option<&str>,
+    ground_tint_rgb: Option<[u8; 3]>,
 ) {
     let _ = write!(
         out,
@@ -410,23 +472,64 @@ pub fn push_battlemap_material_defs_seeded(
         hatch = t.wall_hatch,
         plat = t.platform_fill,
     );
+    let override_spec = ground_override.and_then(ground_override_texture_spec);
 
     if !mode.is_painted() {
-        push_floor_pattern_def(out, t);
         push_surface_pattern_defs(out);
         push_extra_vector_pattern_defs(out);
+        if let Some(spec) = override_spec {
+            let s = spec.span_px;
+            let _ = write!(
+                out,
+                r##"<pattern id="bm-floor" width="{s}" height="{s}" patternUnits="userSpaceOnUse"><rect width="{s}" height="{s}" fill="url(#{pid})"/>"##,
+                pid = spec.pattern_id
+            );
+            if let Some(rgb) = ground_tint_rgb {
+                let hex = satya_schema::format_rgb_hex(rgb);
+                let _ = write!(
+                    out,
+                    r##"<rect width="{s}" height="{s}" fill="{hex}" fill-opacity=".30" style="mix-blend-mode:multiply"/>"##
+                );
+            }
+            out.push_str("</pattern>");
+        } else if let Some(rgb) = ground_tint_rgb {
+            let mut inner = String::new();
+            push_floor_pattern_def(&mut inner, t);
+            let hex = satya_schema::format_rgb_hex(rgb);
+            if let Some(body) = inner.strip_suffix("</pattern>") {
+                let _ = write!(
+                    out,
+                    r##"{body}<rect width="256" height="256" fill="{hex}" fill-opacity=".28" style="mix-blend-mode:multiply"/></pattern>"##
+                );
+            } else {
+                out.push_str(&inner);
+            }
+        } else {
+            push_floor_pattern_def(out, t);
+        }
         return;
     }
 
-    let (floor_file, floor_span, floor_fallback) = floor_webp_spec_for_theme_seeded(t, seed);
+    let (floor_file, floor_span, floor_fallback) = if let Some(spec) = override_spec {
+        (spec.asset_file, spec.span_px, spec.fallback_hex)
+    } else {
+        floor_webp_spec_for_theme_seeded(t, seed)
+    };
     let _ = write!(
         out,
         r##"<pattern id="bm-floor" width="{floor_span}" height="{floor_span}" patternUnits="userSpaceOnUse"><rect width="{floor_span}" height="{floor_span}" fill="{floor_fallback}"/><image href="{BATTLEMAP_TEXTURE_BASE_URL}/{floor_file}" width="{floor_span}" height="{floor_span}" preserveAspectRatio="none"/>"##,
     );
-    if t.id == "bar_interior" {
+    if t.id == "bar_interior" && override_spec.is_none() {
         let _ = write!(
             out,
             r##"<rect width="{floor_span}" height="{floor_span}" fill="#3b2310" fill-opacity=".22"/>"##
+        );
+    }
+    if let Some(rgb) = ground_tint_rgb {
+        let hex = satya_schema::format_rgb_hex(rgb);
+        let _ = write!(
+            out,
+            r##"<rect width="{floor_span}" height="{floor_span}" fill="{hex}" fill-opacity=".32" style="mix-blend-mode:multiply"/>"##
         );
     }
     out.push_str("</pattern>");
@@ -441,6 +544,16 @@ pub fn push_battlemap_material_defs_seeded(
             file = spec.asset_file,
         );
     }
+}
+
+/// Seed-aware variant of [`push_battlemap_material_defs`] selecting grass/hardwood palette varieties.
+pub fn push_battlemap_material_defs_seeded(
+    out: &mut String,
+    t: &BattlemapArtTheme,
+    mode: BattlemapTextureMode,
+    seed: i64,
+) {
+    push_battlemap_material_defs_with_ground(out, t, mode, seed, None, None);
 }
 
 /// Loads the persisted `localStorage` texture mode (`"painted"` / `"vector"`).
@@ -475,8 +588,8 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn texture_spec_catalog_covers_all_33_webp_assets() {
-        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 33);
+    fn texture_spec_catalog_covers_all_38_webp_assets() {
+        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 38);
         let pids: BTreeSet<&str> = BATTLEMAP_TEXTURE_SPECS
             .iter()
             .map(|s| s.pattern_id)
@@ -485,8 +598,8 @@ mod tests {
             .iter()
             .map(|s| s.asset_file)
             .collect();
-        assert_eq!(pids.len(), 33);
-        assert_eq!(files.len(), 33);
+        assert_eq!(pids.len(), 38);
+        assert_eq!(files.len(), 38);
 
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/textures/map2d");
         for spec in BATTLEMAP_TEXTURE_SPECS {

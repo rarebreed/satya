@@ -105,6 +105,7 @@ fn test_procedural_sector_presets_and_continuous_los_cover() {
         width_cm: 180,
         border_style_cm: 0,
         variant_seed: 1,
+        tint_rgb: None,
     };
     let trench_scene = TacticalSceneView {
         width_m: 12.0,
@@ -721,4 +722,210 @@ fn residential_architectures_vary_shapes_floors_decks_pools_and_non_sparse_rooms
     );
     assert!((tree_canopy_radius_m(PropKind::LargeTree) - 1.95).abs() < 1e-4);
     assert!((tree_canopy_radius_m(PropKind::MediumTree) - 1.35).abs() < 1e-4);
+}
+
+#[test]
+fn hospital_and_labs_have_realistic_rooms_elevators_baths_and_clutter() {
+    for (w, h) in [(24, 18), (48, 36)] {
+        let hosp = generate_procedural_sector(SectorPreset::Hospital, w, h, 42);
+        assert_eq!(hosp.floors.len(), 2);
+        let portal_centers = |fl: &satya_schema::MapFloorLevel, kind: PropKind| -> Vec<(i32, i32)> {
+            let mut v: Vec<_> = fl
+                .props
+                .iter()
+                .filter(|p| p.kind == kind)
+                .map(|p| p.center_cm())
+                .collect();
+            v.sort();
+            v
+        };
+        for pk in [
+            PropKind::Stairwell,
+            PropKind::ElevatorCar,
+            PropKind::ServiceElevator,
+        ] {
+            let f1 = portal_centers(&hosp.floors[0], pk);
+            let f2 = portal_centers(&hosp.floors[1], pk);
+            assert!(!f1.is_empty(), "Hospital {w}x{h} missing {pk:?}");
+            assert_eq!(f1, f2, "Hospital {w}x{h} portal {pk:?} must align across floors");
+        }
+        let all_props: Vec<_> = hosp
+            .floors
+            .iter()
+            .flat_map(|f| f.props.iter())
+            .collect();
+        for required in [
+            PropKind::NurseStation,
+            PropKind::TelemetryMonitor,
+            PropKind::MedicalCounter,
+            PropKind::BiohazardBin,
+            PropKind::LinenCart,
+            PropKind::Toilet,
+            PropKind::BathroomSink,
+            PropKind::HospitalBed,
+        ] {
+            assert!(
+                all_props.iter().any(|p| p.kind == required),
+                "Hospital {w}x{h} missing {required:?}"
+            );
+        }
+        assert!(
+            all_props.iter().any(|p| {
+                matches!(p.kind, PropKind::HospitalBed | PropKind::Cot | PropKind::Gurney)
+                    && p.rotation_deg % 90 != 0
+            }),
+            "Hospital {w}x{h} should include gently angled patient beds"
+        );
+    }
+
+    let lab_small = generate_procedural_sector(SectorPreset::MedLabSector, 20, 14, 11);
+    assert!(
+        !lab_small.props.iter().any(|p| p.kind == PropKind::Bed),
+        "MedLab should use clinical beds instead of residential Bed"
+    );
+    for pk in [
+        PropKind::LabBench,
+        PropKind::TestBench,
+        PropKind::SolderingStation,
+        PropKind::Printer3dStation,
+        PropKind::ServerRack,
+        PropKind::FumeHood,
+        PropKind::DeskClutter,
+    ] {
+        assert!(
+            lab_small.props.iter().any(|p| p.kind == pk),
+            "MedLab 20x14 missing {pk:?}"
+        );
+    }
+
+    let lab_big = generate_procedural_sector(SectorPreset::MedLabSector, 36, 26, 17);
+    assert!(lab_big.props.iter().any(|p| p.kind == PropKind::CncMill));
+    assert!(lab_big.props.iter().any(|p| p.kind == PropKind::ElevatorCar));
+    assert!(lab_big.props.iter().any(|p| p.kind == PropKind::AirCompressor));
+
+    let office = generate_procedural_sector(SectorPreset::OfficeFloor, 36, 26, 23);
+    for pk in [
+        PropKind::DeskClutter,
+        PropKind::FilingCabinet,
+        PropKind::WaterCooler,
+        PropKind::ServerRack,
+        PropKind::ElevatorCar,
+    ] {
+        assert!(
+            office.props.iter().any(|p| p.kind == pk),
+            "OfficeFloor 36x26 missing {pk:?}"
+        );
+    }
+}
+
+#[test]
+fn houses_cap_bathroom_size_and_urban_projects_presets_differ() {
+    for seed in 1_i64..=6 {
+        for preset in [
+            SectorPreset::SuburbanNeighborhood,
+            SectorPreset::LuxuryMansion,
+            SectorPreset::RuralCountryside,
+        ] {
+            let sec = generate_zoned_sector(preset, 36, 26, seed, None, None);
+            for fl in &sec.floors {
+                for sf in fl.surfaces.iter().filter(|s| {
+                    matches!(
+                        s.kind,
+                        SurfaceFeatureKind::CeramicTileFloor | SurfaceFeatureKind::MarbleFloor
+                    ) && s.points_cm.len() == 4
+                }) {
+                    let x0 = sf.points_cm.iter().map(|p| p.x_cm).min().unwrap_or(0) / 100;
+                    let y0 = sf.points_cm.iter().map(|p| p.y_cm).min().unwrap_or(0) / 100;
+                    let x1 = sf.points_cm.iter().map(|p| p.x_cm).max().unwrap_or(0) / 100;
+                    let y1 = sf.points_cm.iter().map(|p| p.y_cm).max().unwrap_or(0) / 100;
+                    let area_m2 = (x1 - x0) * (y1 - y0);
+                    let has_toilet = fl.props.iter().any(|p| {
+                        p.kind == PropKind::Toilet
+                            && p.x >= x0
+                            && p.x < x1
+                            && p.y >= y0
+                            && p.y < y1
+                    });
+                    if has_toilet {
+                        assert!(
+                            area_m2 <= 18,
+                            "{preset:?} seed {seed} floor {} generated oversized bathroom ({area_m2} m²)",
+                            fl.floor_index
+                        );
+                    }
+                }
+            }
+            assert!(
+                sec.props.iter().any(|p| p.kind == PropKind::Toilet)
+                    && sec.props.iter().any(|p| p.kind == PropKind::BathroomSink)
+                    && sec.props.iter().any(|p| {
+                        matches!(
+                            p.kind,
+                            PropKind::Bathtub | PropKind::ShowerStall | PropKind::SpaBath
+                        )
+                    }),
+                "{preset:?} seed {seed} missing toilet/sink/bath"
+            );
+        }
+    }
+
+    // Suburban yards leave majority of board open grass rather than wall-to-wall buildings.
+    let sub = generate_zoned_sector(SectorPreset::SuburbanNeighborhood, 36, 26, 4, None, None);
+    let bldg_area: i32 = sub
+        .surfaces
+        .iter()
+        .filter(|s| s.kind == SurfaceFeatureKind::InteriorFloor && s.points_cm.len() == 4)
+        .map(|s| {
+            let w = (s.points_cm.iter().map(|p| p.x_cm).max().unwrap_or(0)
+                - s.points_cm.iter().map(|p| p.x_cm).min().unwrap_or(0))
+                / 100;
+            let h = (s.points_cm.iter().map(|p| p.y_cm).max().unwrap_or(0)
+                - s.points_cm.iter().map(|p| p.y_cm).min().unwrap_or(0))
+                / 100;
+            w * h
+        })
+        .sum();
+    assert!(
+        bldg_area < (36 * 26) * 40 / 100,
+        "SuburbanNeighborhood building area {bldg_area} too large for generous yards"
+    );
+
+    // ProjectsHighDensity uses elevator slab apartments + LinoleumCheckFloor corridors.
+    let proj = generate_zoned_sector(SectorPreset::ProjectsHighDensity, 36, 26, 1, None, None);
+    assert!(proj.props.iter().any(|p| p.kind == PropKind::ElevatorCar));
+    assert!(
+        proj.surfaces
+            .iter()
+            .any(|s| s.kind == SurfaceFeatureKind::LinoleumCheckFloor)
+    );
+    assert!(!proj.props.iter().any(|p| p.kind == PropKind::BrownstoneStoop));
+
+    // UrbanResidential deterministically alternates Brownstones (seed % 3 != 2) & Chinatown Shophouses (seed % 3 == 2).
+    let brownstone = generate_zoned_sector(SectorPreset::UrbanResidential, 36, 26, 4, None, None);
+    assert!(
+        brownstone
+            .surfaces
+            .iter()
+            .any(|s| s.kind == SurfaceFeatureKind::BrickPaverWalk)
+    );
+    assert!(
+        brownstone
+            .props
+            .iter()
+            .any(|p| p.kind == PropKind::BrownstoneStoop)
+    );
+
+    let chinatown = generate_zoned_sector(SectorPreset::UrbanResidential, 36, 26, 2, None, None);
+    assert!(
+        chinatown
+            .surfaces
+            .iter()
+            .any(|s| s.kind == SurfaceFeatureKind::BrickPaverWalk)
+    );
+    assert!(
+        chinatown
+            .props
+            .iter()
+            .any(|p| p.kind == PropKind::AwningCanopy)
+    );
 }

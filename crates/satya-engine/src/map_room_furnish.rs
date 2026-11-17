@@ -368,6 +368,15 @@ impl Furnisher {
         }
     }
 
+    fn attach_desk_clutter(&mut self, anchor: MapPropPlacement, r: Room) {
+        let seed = self.rng.next() as u32;
+        let rot = (anchor.rotation_deg + self.rng.range(-12, 13)).rem_euclid(360);
+        let p = make_prop(PropKind::DeskClutter, anchor.x, anchor.y, rot, None, seed);
+        if p.x >= r.x0 && p.y >= r.y0 && p.x + p.w_cells <= r.x1 && p.y + p.h_cells <= r.y1 {
+            self.props.push(p);
+        }
+    }
+
     pub(crate) fn furnish(&mut self, role: Role, r: Room) {
         use PropKind as P;
         let area_scale = (r.area() / 36).clamp(1, 5) as usize;
@@ -490,8 +499,9 @@ impl Furnisher {
                 self.floor_clutter(P::FloorClothes, r);
             }
             Role::Laundry => {
-                let _ = self.against_any_wall(P::KitchenCounter, r, Some(r.w().clamp(1, 3)));
-                let _ = self.against_any_wall(P::Dresser, r, None);
+                let _ = self.against_any_wall(P::WasherDryer, r, None);
+                let _ = self.against_any_wall(P::MedicalCounter, r, Some(r.w().clamp(1, 2)));
+                let _ = self.against_any_wall(P::LinenCloset, r, None);
                 self.floor_clutter(P::FloorClothes, r);
                 let _ = self.in_corner(P::FireExtinguisher, r);
             }
@@ -520,16 +530,25 @@ impl Furnisher {
                     .or_else(|| self.against_any_wall(P::Desk, r, None));
                 if let Some(d) = desk {
                     self.beside_anchor(d, P::DeskLamp, r, false);
+                    self.attach_desk_clutter(d, r);
                 }
+                let _ = self.against_any_wall(P::FilingCabinet, r, None);
+                let prev = self.props.len();
                 self.scatter(P::Desk, r, area_scale.min(3), 0);
+                let placed_desks: Vec<MapPropPlacement> = self.props[prev..].to_vec();
+                for d in placed_desks {
+                    self.attach_desk_clutter(d, r);
+                }
                 let _ = self.against_any_wall(P::Bookshelf, r, None);
                 let _ = self.in_corner(P::StandingLamp, r);
                 let _ = self.in_corner(P::TrashCan, r);
                 let _ = self.in_corner(P::Planter, r);
             }
             Role::Bathroom | Role::MasterBath | Role::Restroom => {
-                if role != Role::Restroom {
-                    let _ = self.against_any_wall(P::Bathtub, r, None);
+                // Guarantee core sanitary fixtures first so tight layouts never drop toilet or vanity.
+                let _ = self.against_any_wall(P::Toilet, r, None);
+                if role == Role::Restroom {
+                    let _ = self.against_any_wall(P::Toilet, r, None);
                 }
                 let _ = self.against_any_wall(
                     P::BathroomSink,
@@ -540,9 +559,35 @@ impl Furnisher {
                         None
                     },
                 );
-                let _ = self.against_any_wall(P::Toilet, r, None);
-                if role == Role::Restroom {
-                    let _ = self.against_any_wall(P::Toilet, r, None);
+                if role != Role::Restroom {
+                    if role == Role::MasterBath {
+                        if r.w() >= 3 && r.h() >= 3 {
+                            let kind = if self.rng.chance(1, 2) {
+                                P::SpaBath
+                            } else {
+                                P::Bathtub
+                            };
+                            let _ = self
+                                .against_any_wall(kind, r, None)
+                                .or_else(|| self.against_any_wall(P::ShowerStall, r, None));
+                            if self.rng.chance(2, 3) {
+                                let _ = self.against_any_wall(P::ShowerStall, r, None);
+                            }
+                        } else {
+                            let _ = self
+                                .against_any_wall(P::Bathtub, r, None)
+                                .or_else(|| self.against_any_wall(P::ShowerStall, r, None));
+                        }
+                    } else if r.area() <= 8 || self.rng.chance(1, 2) {
+                        let _ = self
+                            .against_any_wall(P::ShowerStall, r, None)
+                            .or_else(|| self.against_any_wall(P::Bathtub, r, None));
+                    } else {
+                        let _ = self
+                            .against_any_wall(P::Bathtub, r, None)
+                            .or_else(|| self.against_any_wall(P::ShowerStall, r, None));
+                    }
+                    let _ = self.against_any_wall(P::LinenCloset, r, None);
                 }
                 self.center_rug(P::RunnerRug, r);
                 let _ = self.in_corner(P::TrashCan, r);
@@ -576,12 +621,21 @@ impl Furnisher {
                         .in_front(s, P::CoffeeTable, 1, r)
                         .or_else(|| self.in_front(s, P::CoffeeTable, 0, r));
                 }
+                let prev = self.props.len();
                 self.scatter(P::DeskT, r, (r.area() / 48).clamp(1, 4) as usize, 0);
                 let _ = self.against_any_wall(P::DeskL, r, None);
                 let _ = self.against_any_wall(P::DeskL, r, None);
                 let desk_count = ((r.area() / 22).clamp(1, 8)) as usize;
                 self.scatter(P::Desk, r, desk_count, 0);
+                let desks_added: Vec<MapPropPlacement> = self.props[prev..].to_vec();
+                for d in desks_added {
+                    self.attach_desk_clutter(d, r);
+                }
+                let _ = self.against_any_wall(P::FilingCabinet, r, None);
+                let _ = self.against_any_wall(P::FilingCabinet, r, None);
                 let _ = self.against_any_wall(P::Bookshelf, r, None);
+                let _ = self.in_corner(P::WaterCooler, r);
+                let _ = self.in_corner(P::TrashCan, r);
                 let _ = self.in_corner(P::FireExtinguisher, r);
                 self.scatter(P::Planter, r, (r.area() / 60).clamp(1, 4) as usize, 0);
             }
@@ -591,13 +645,15 @@ impl Furnisher {
                 if r.w() >= 6 && r.h() >= 5 {
                     let _ = self.try_place(P::DiningTable, cx - 1, cy, 0, None, r);
                     let _ = self.try_place(P::DiningTable, cx + 1, cy, 0, None, r);
-                } else {
-                    let _ = self.try_place(P::DiningTable, cx, cy, 0, None, r);
+                } else if let Some(dt) = self.try_place(P::DiningTable, cx, cy, 0, None, r) {
+                    self.attach_desk_clutter(dt, r);
                 }
                 if area_scale >= 2 {
                     self.scatter(P::Armchair, r, 2, 0);
                 }
                 let _ = self.against_any_wall(P::Bookshelf, r, None);
+                let _ = self.in_corner(P::WaterCooler, r);
+                let _ = self.in_corner(P::TrashCan, r);
                 let _ = self.against_any_wall(P::Planter, r, None);
             }
             Role::Breakroom => {
@@ -614,24 +670,40 @@ impl Furnisher {
                 let _ = self
                     .against_wall(P::Fridge, r, side, None)
                     .or_else(|| self.against_any_wall(P::Fridge, r, None));
+                let _ = self.in_corner(P::WaterCooler, r);
                 let _ = self.in_corner(P::TrashCan, r);
                 let _ = self.in_corner(P::FireExtinguisher, r);
+                let prev = self.props.len();
                 self.scatter(P::RoundTable, r, (r.area() / 24).clamp(2, 6) as usize, 0);
+                let tbls: Vec<MapPropPlacement> = self.props[prev..].to_vec();
+                for t in tbls.into_iter().take(2) {
+                    self.attach_desk_clutter(t, r);
+                }
             }
             Role::ServerCloset => {
-                for _ in 0..area_scale.min(3) {
-                    let _ = self.against_any_wall(P::SteelShelving, r, None);
+                for _ in 0..(area_scale * 2).clamp(2, 6) {
+                    let _ = self.against_any_wall(P::ServerRack, r, None);
                 }
-                let _ = self.against_any_wall(P::Desk, r, None);
+                let _ = self.against_any_wall(P::AirCompressor, r, None);
+                let _ = self.against_any_wall(P::TestBench, r, None);
+                if let Some(d) = self.against_any_wall(P::Desk, r, None) {
+                    self.attach_desk_clutter(d, r);
+                }
                 let _ = self.in_corner(P::FireExtinguisher, r);
-                let _ = self.against_any_wall(P::WoodCrate, r, None);
             }
         }
     }
 
     fn furnish_bedroom(&mut self, r: Room, is_master: bool) {
         use PropKind as P;
-        let bed = self.against_any_wall(P::Bed, r, None);
+        let bed_kind = if !is_master && r.area() <= 14 && self.rng.chance(1, 2) {
+            P::SingleBed
+        } else {
+            P::Bed
+        };
+        let bed = self
+            .against_any_wall(bed_kind, r, None)
+            .or_else(|| self.against_any_wall(P::Bed, r, None));
         if let Some(b) = bed {
             let bed_side = side_from_rot(b.rotation_deg);
             self.beside_anchor(b, P::Nightstand, r, is_master);
@@ -656,6 +728,7 @@ impl Furnisher {
             let _ = self.against_any_wall(P::Armchair, r, None);
         } else if let Some(d) = self.against_any_wall(P::Desk, r, None) {
             self.beside_anchor(d, P::DeskLamp, r, false);
+            self.attach_desk_clutter(d, r);
         }
         let _ = self.in_corner(P::StandingLamp, r);
         let _ = self.in_corner(P::Planter, r);
@@ -710,8 +783,8 @@ impl Furnisher {
     }
 }
 
-/// Emits a room-specific floor finish overlay (`CeramicTileFloor`, `MarbleFloor`, or `CarpetFloor`),
-/// returning `None` for rooms that retain the wing's hardwood `InteriorFloor` base.
+/// Emits a room-specific floor finish overlay (`CeramicTileFloor`, `MarbleFloor`, `SteelPlateFloor`,
+/// or `CarpetFloor`), returning `None` for rooms that retain the wing's hardwood `InteriorFloor` base.
 pub(crate) fn emit_room_floor_surface(
     r: Room,
     role: Role,
@@ -723,6 +796,7 @@ pub(crate) fn emit_room_floor_surface(
     }
     let kind = match role {
         Role::MasterBath => Some(SurfaceFeatureKind::MarbleFloor),
+        Role::ServerCloset => Some(SurfaceFeatureKind::SteelPlateFloor),
         Role::Bathroom
         | Role::Restroom
         | Role::Kitchen
@@ -768,5 +842,6 @@ pub(crate) fn emit_room_floor_surface(
         width_cm: 0,
         border_style_cm: 0,
         variant_seed,
+        tint_rgb: None,
     })
 }

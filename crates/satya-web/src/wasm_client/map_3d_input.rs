@@ -88,6 +88,7 @@ pub fn satya_select_map_floor(floor_idx: i32) {
     if !changed {
         return;
     }
+    crate::wasm_client::map_editor::reset_editor_selection_and_drafts(false);
     mark_map_wgpu_dirty();
     refresh_map_dom_and_wgpu();
     post_set_active_floor_if_in_session(floor_idx);
@@ -117,7 +118,7 @@ pub fn satya_move_token_to_floor(floor_idx: i32) {
             .map
             .props
             .iter()
-            .find(|p| p.kind == satya_schema::PropKind::Stairwell)
+            .find(|p| p.kind.is_vertical_portal())
             .map(|p| p.center_cm())
             .unwrap_or_else(|| ui.map.token_pos_cm(&prev_tok));
         let (nx_cm, ny_cm) = resolve_token_destination_cm(&ui.map, &sel_id, pref_x_cm, pref_y_cm)
@@ -286,6 +287,7 @@ pub fn satya_generate_procedural_map() {
     });
 
     mark_map_wgpu_dirty();
+    crate::wasm_client::map_editor::reset_editor_selection_and_drafts(true);
     refresh_map_dom_and_wgpu();
     crate::wasm_client::map_3d_wgpu::reset_3d_map_camera_for_board((w as f32, h as f32));
     post_generate_map_if_in_session(preset.as_str(), seed, w, h, scale);

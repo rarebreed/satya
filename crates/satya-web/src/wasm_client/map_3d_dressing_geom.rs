@@ -212,7 +212,10 @@ pub fn push_dressing_geometry(
         if cutaway {
             top = top.min(0.95);
         }
-        let rgb = spec.albedo_rgb;
+        let rgb = crate::wasm_client::map_3d_props_lab_urban::apply_prop_tint(
+            spec.albedo_rgb,
+            p.tint_rgb,
+        );
         match p.kind {
             PropKind::Rug => push_obb(verts, cx, cz, 0.002, 0.012, hx, hz, rot, rgb, 0.0),
             PropKind::ElevatedCatwalk => {
@@ -1212,6 +1215,46 @@ pub fn push_dressing_geometry(
             | PropKind::StreetDebris => {
                 let _ = crate::wasm_client::map_3d_props_extra::push_extra_prop_3d(
                     verts, p, cx, cz, hx, hz, top, cutaway, s,
+                );
+            }
+            PropKind::Cot
+            | PropKind::Gurney
+            | PropKind::ReclinerChair
+            | PropKind::MedicalCounter
+            | PropKind::NurseStation
+            | PropKind::TelemetryMonitor
+            | PropKind::BiohazardBin
+            | PropKind::LinenCart
+            | PropKind::ElevatorCar
+            | PropKind::ServiceElevator
+            | PropKind::LabBench
+            | PropKind::DeskClutter
+            | PropKind::SolderingStation
+            | PropKind::TestBench
+            | PropKind::Printer3dStation
+            | PropKind::AirCompressor
+            | PropKind::CncMill
+            | PropKind::ServerRack
+            | PropKind::FumeHood
+            | PropKind::ShowerStall
+            | PropKind::SpaBath
+            | PropKind::LinenCloset
+            | PropKind::WasherDryer
+            | PropKind::SingleBed
+            | PropKind::FilingCabinet
+            | PropKind::WaterCooler
+            | PropKind::BrownstoneStoop
+            | PropKind::AwningCanopy => {
+                let _ = crate::wasm_client::map_3d_props_lab_urban::push_lab_urban_prop_3d(
+                    verts,
+                    p,
+                    &ui.map.props,
+                    cx,
+                    cz,
+                    hx,
+                    hz,
+                    top,
+                    cutaway,
                 );
             }
             _ => {

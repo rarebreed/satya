@@ -519,6 +519,78 @@ BATTLEMAP_2D_TEXTURE_CATALOG: tuple[TextureSpec, ...] = (
             "and ZERO gaps."
         ),
     ),
+    TextureSpec(
+        id="clinical_vinyl",
+        filename="clinical_vinyl.webp",
+        label="Antiseptic Clinical Sheet Vinyl",
+        svg_span_px=128,
+        fallback_hex="#dce6e5",
+        delight_strength=0.82,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Antiseptic pale seafoam-white speckled medical and laboratory sheet vinyl floor "
+            "seen straight down; fine matte mineral micro-chips embedded in uniform hygienic "
+            "off-white hospital flooring with subtle thin heat-welded seam lines and crisp "
+            "clean matte finish."
+        ),
+    ),
+    TextureSpec(
+        id="linoleum_check",
+        filename="linoleum_check.webp",
+        label="Checkerboard Linoleum Corridor Tile",
+        svg_span_px=96,
+        fallback_hex="#d6d2c8",
+        delight_strength=0.80,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Institutional clinic and urban apartment corridor square checkerboard linoleum "
+            "tiles seen straight down; alternating muted warm-cream and soft slate-sage "
+            "vintage composite vinyl tiles with fine mottled flecks, thin dark seams, and "
+            "light pedestrian scuff patina."
+        ),
+    ),
+    TextureSpec(
+        id="terrazzo_stone",
+        filename="terrazzo_stone.webp",
+        label="Polished Terrazzo Stone Floor",
+        svg_span_px=128,
+        fallback_hex="#dedbd3",
+        delight_strength=0.82,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Polished hospital lobby and civic atrium warm-grey terrazzo floor seen straight "
+            "down; smooth pale stone cement matrix speckled with fine crushed marble, quartz, "
+            "and charcoal granite chips divided into square panels by thin muted brass strips."
+        ),
+    ),
+    TextureSpec(
+        id="herringbone_brick",
+        filename="herringbone_brick.webp",
+        label="Herringbone Clay Brick Pavers",
+        svg_span_px=96,
+        fallback_hex="#a85c48",
+        delight_strength=0.76,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Weathered Greenwich Village and Chinatown terracotta, russet, and burnt-sienna "
+            "clay sidewalk bricks laid in a crisp 45-degree herringbone bond pattern seen "
+            "straight down; hand-painted tumbled brick texture with dark sandy mortar joints."
+        ),
+    ),
+    TextureSpec(
+        id="server_raised_tile",
+        filename="server_raised_tile.webp",
+        label="Brushed-Steel Raised Access Floor",
+        svg_span_px=96,
+        fallback_hex="#7d8690",
+        delight_strength=0.80,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Data-center and cleanroom brushed cool-grey steel raised access floor panels "
+            "seen straight down; square modular metal floor tiles with crisp dark neoprene "
+            "gasket seams, corner screw recesses, and subtle fine perforated airflow grids."
+        ),
+    ),
 )
 
 _BY_ID: dict[str, TextureSpec] = {spec.id: spec for spec in BATTLEMAP_2D_TEXTURE_CATALOG}

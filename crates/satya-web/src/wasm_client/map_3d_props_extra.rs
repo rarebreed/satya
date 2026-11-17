@@ -31,7 +31,10 @@ pub(crate) fn push_extra_prop_3d(
 ) -> bool {
     let fp = p.footprint_m();
     let rot = fp.rot_deg;
-    let rgb = prop_spec(p.kind).albedo_rgb;
+    let rgb = crate::wasm_client::map_3d_props_lab_urban::apply_prop_tint(
+        prop_spec(p.kind).albedo_rgb,
+        p.tint_rgb,
+    );
     let (sn, cs) = (fp.sin_rot, fp.cos_rot);
     let rot_pt =
         |ox: f32, oz: f32| -> (f32, f32) { (cx + ox * cs - oz * sn, cz + ox * sn + oz * cs) };
@@ -698,6 +701,11 @@ pub fn push_translucent_canopies_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMap
                     rot,
                     [0.58, 0.44, 0.30],
                     TRANSLUCENT_CANOPY_ZONE,
+                );
+            }
+            PropKind::AwningCanopy => {
+                crate::wasm_client::map_3d_props_lab_urban::push_awning_canopy_3d(
+                    verts, p, cx, cz,
                 );
             }
             _ => {}

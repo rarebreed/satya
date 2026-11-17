@@ -44,6 +44,160 @@ pub(crate) fn token_initials(label: &str) -> String {
     s
 }
 
+fn push_editor_overlay_svg(out: &mut String, ui: &TacticalMapUiState, cf: f32) {
+    use crate::wasm_client::map_editor::{
+        EditorSelection, EditorTool, SurfaceBrushShape, rasterize_wall_stroke_edges, with_editor,
+    };
+    with_editor(|ed| {
+        if !ed.active {
+            return;
+        }
+        match ed.selection {
+            EditorSelection::Prop(idx) => {
+                if let Some(p) = ui.map.props.get(idx) {
+                    let (pcx, pcy) = p.center_m();
+                    let (psw, psh) = p.local_span_m();
+                    let (bw, bh) = ((psw * cf) + 8.0, (psh * cf) + 8.0);
+                    let arrow_y = -bh * 0.5 - 4.0;
+                    let _ = write!(
+                        out,
+                        r##"<g transform="translate({:.1} {:.1}) rotate({})" pointer-events="none"><rect x="{:.1}" y="{:.1}" width="{bw:.1}" height="{bh:.1}" rx="6" fill="#facc15" fill-opacity=".12" stroke="#facc15" stroke-width="3" stroke-dasharray="8 4"/><polygon points="0,{:.1} -7,{:.1} 7,{:.1}" fill="#facc15" stroke="#0f172a" stroke-width="1.2"/></g>"##,
+                        pcx * cf,
+                        pcy * cf,
+                        p.rotation_deg,
+                        -bw * 0.5,
+                        -bh * 0.5,
+                        arrow_y - 9.0,
+                        arrow_y,
+                        arrow_y,
+                    );
+                }
+            }
+            EditorSelection::Surface(idx) => {
+                if let Some(s) = ui.map.surfaces.get(idx)
+                    && !s.points_cm.is_empty()
+                {
+                    let pts: String = s
+                        .points_cm
+                        .iter()
+                        .map(|pt| {
+                            format!(
+                                "{:.1},{:.1}",
+                                (pt.x_cm as f32 / 100.0) * cf,
+                                (pt.y_cm as f32 / 100.0) * cf
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let tag = if s.shape == satya_schema::SurfaceShapeKind::RibbonSpline {
+                        "polyline"
+                    } else {
+                        "polygon"
+                    };
+                    let _ = write!(
+                        out,
+                        r##"<{tag} points="{pts}" fill="none" stroke="#c084fc" stroke-width="3.2" stroke-dasharray="9 5" pointer-events="none"/>"##
+                    );
+                }
+            }
+            EditorSelection::None => {}
+        }
+
+        if ed.tool == EditorTool::AddProp
+            && let Some((hx_m, hy_m)) = ui.hovered_point_m
+        {
+            let (px_m, py_m) = if ed.snap_half_m {
+                ((hx_m * 2.0).round() * 0.5, (hy_m * 2.0).round() * 0.5)
+            } else {
+                (hx_m, hy_m)
+            };
+            let p = make_prop_at_cm(
+                ed.prop_kind,
+                (px_m * 100.0).round() as i32,
+                (py_m * 100.0).round() as i32,
+                ed.prop_rotation_deg,
+                None,
+                0,
+            );
+            let (pcx, pcy) = p.center_m();
+            let (psw, psh) = p.local_span_m();
+            let (bw, bh) = (psw * cf, psh * cf);
+            let _ = write!(
+                out,
+                r##"<g transform="translate({:.1} {:.1}) rotate({})" pointer-events="none"><rect x="{:.1}" y="{:.1}" width="{bw:.1}" height="{bh:.1}" rx="5" fill="#38bdf8" fill-opacity=".20" stroke="#0284c7" stroke-width="2.6" stroke-dasharray="6 4"/></g>"##,
+                pcx * cf,
+                pcy * cf,
+                p.rotation_deg,
+                -bw * 0.5,
+                -bh * 0.5,
+            );
+        } else if ed.tool == EditorTool::PaintWall
+            && let (Some(st), Some(en)) = (ed.wall_drag_start, ed.wall_drag_cur)
+        {
+            let cell_m = ui.map.cell_size_m().max(0.25);
+            for r in rasterize_wall_stroke_edges(&ui.map, st, en) {
+                let (x1, y1, x2, y2) = match r.side {
+                    satya_schema::EdgeSide::North => (
+                        r.x as f32 * cell_m * cf,
+                        r.y as f32 * cell_m * cf,
+                        (r.x + 1) as f32 * cell_m * cf,
+                        r.y as f32 * cell_m * cf,
+                    ),
+                    satya_schema::EdgeSide::West => (
+                        r.x as f32 * cell_m * cf,
+                        r.y as f32 * cell_m * cf,
+                        r.x as f32 * cell_m * cf,
+                        (r.y + 1) as f32 * cell_m * cf,
+                    ),
+                };
+                let _ = write!(
+                    out,
+                    r##"<line x1="{x1:.1}" y1="{y1:.1}" x2="{x2:.1}" y2="{y2:.1}" stroke="#f59e0b" stroke-width="7" stroke-linecap="round" stroke-opacity=".85" pointer-events="none"/>"##
+                );
+            }
+        } else if ed.tool == EditorTool::PaintSurface {
+            if ed.surface_shape == SurfaceBrushShape::Rect
+                && let (Some(a), Some(b)) = (ed.surface_rect_start_cm, ed.surface_rect_cur_cm)
+            {
+                let x = (a.0.min(b.0) as f32 / 100.0) * cf;
+                let y = (a.1.min(b.1) as f32 / 100.0) * cf;
+                let w = ((a.0.max(b.0) - a.0.min(b.0)).max(20) as f32 / 100.0) * cf;
+                let h = ((a.1.max(b.1) - a.1.min(b.1)).max(20) as f32 / 100.0) * cf;
+                let _ = write!(
+                    out,
+                    r##"<rect x="{x:.1}" y="{y:.1}" width="{w:.1}" height="{h:.1}" rx="4" fill="#c084fc" fill-opacity=".22" stroke="#a855f7" stroke-width="3" stroke-dasharray="8 4" pointer-events="none"/>"##
+                );
+            } else if !ed.surface_draft_pts_cm.is_empty() {
+                let pts: String = ed
+                    .surface_draft_pts_cm
+                    .iter()
+                    .map(|pt| {
+                        format!(
+                            "{:.1},{:.1}",
+                            (pt.x_cm as f32 / 100.0) * cf,
+                            (pt.y_cm as f32 / 100.0) * cf
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let _ = write!(
+                    out,
+                    r##"<polyline points="{pts}" fill="none" stroke="#c084fc" stroke-width="3" stroke-dasharray="6 4" pointer-events="none"/>"##
+                );
+                for (i, pt) in ed.surface_draft_pts_cm.iter().enumerate() {
+                    let (px, py) = ((pt.x_cm as f32 / 100.0) * cf, (pt.y_cm as f32 / 100.0) * cf);
+                    let col = if i == 0 { "#facc15" } else { "#c084fc" };
+                    let r = if i == 0 { 7.0 } else { 5.0 };
+                    let _ = write!(
+                        out,
+                        r##"<circle cx="{px:.1}" cy="{py:.1}" r="{r:.1}" fill="{col}" stroke="#0f172a" stroke-width="1.5" pointer-events="none"/>"##
+                    );
+                }
+            }
+        }
+    });
+}
+
 /// Dynamic tactical overlay (inner markup of `#battlemap-overlay`): grid, reach strips, hover, LoS, tokens.
 #[must_use]
 pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
@@ -149,6 +303,8 @@ pub fn format_battlemap_overlay_inner(ui: &TacticalMapUiState) -> String {
             );
         }
     }
+
+    push_editor_overlay_svg(&mut out, ui, cf);
 
     if let Some(los) = ui.last_los.as_ref() {
         let (x1, y1) = (los.attacker_m.0 * cf, los.attacker_m.1 * cf);

@@ -710,5 +710,120 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
         Some("/api/characters/char-1/assets/asset-1")
     );
 
+    // 7. Editor authoring operations: prop move/rotate/tint/decorative, batch edges,
+    // surface add/remove, ground style overrides, replace_floor_geometry, and player 403 gate.
+    let add_bed_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map")
+        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                edit_prop: Some(satya_engine::map_dressing::make_prop_at_cm(
+                    satya_schema::PropKind::HospitalBed,
+                    850,
+                    550,
+                    12,
+                    None,
+                    9,
+                )),
+                ..Default::default()
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let add_bed_resp = tower::ServiceExt::oneshot(app.clone(), add_bed_req)
+        .await
+        .unwrap();
+    assert_eq!(add_bed_resp.status(), axum::http::StatusCode::OK);
+    let bed_map: GmMapUpdateRequest = serde_json::from_slice(
+        &axum::body::to_bytes(add_bed_resp.into_body(), 256 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    let bed_idx = bed_map
+        .props
+        .iter()
+        .rposition(|p| p.kind == satya_schema::PropKind::HospitalBed && p.center_cm() == (850, 550))
+        .expect("HospitalBed added");
+
+    let mut updated_bed = bed_map.props[bed_idx];
+    updated_bed.rotation_deg = 45;
+    updated_bed.tint_rgb = Some([0x38, 0xbd, 0xf8]);
+    updated_bed.decorative = true;
+    let patch_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map")
+        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                update_prop_at_index: Some((bed_idx, updated_bed)),
+                set_ground_floor_override: Some("clinical_vinyl".to_string()),
+                set_ground_tint_hex: Some("#d8e6ec".to_string()),
+                add_surface: Some(satya_schema::MapSurfaceFeature {
+                    kind: satya_schema::SurfaceFeatureKind::TerrazzoFloor,
+                    shape: satya_schema::SurfaceShapeKind::Polygon,
+                    points_cm: vec![
+                        satya_schema::MapPointCm::new(400, 400),
+                        satya_schema::MapPointCm::new(700, 400),
+                        satya_schema::MapPointCm::new(700, 700),
+                        satya_schema::MapPointCm::new(400, 700),
+                    ],
+                    width_cm: 0,
+                    border_style_cm: 0,
+                    variant_seed: 3,
+                    tint_rgb: Some([0xe0, 0xf2, 0xfe]),
+                }),
+                ..Default::default()
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let patch_resp = tower::ServiceExt::oneshot(app.clone(), patch_req)
+        .await
+        .unwrap();
+    assert_eq!(patch_resp.status(), axum::http::StatusCode::OK);
+    let patched: GmMapUpdateRequest = serde_json::from_slice(
+        &axum::body::to_bytes(patch_resp.into_body(), 256 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(patched.props[bed_idx].rotation_deg, 45);
+    assert_eq!(patched.props[bed_idx].tint_rgb, Some([0x38, 0xbd, 0xf8]));
+    assert!(patched.props[bed_idx].decorative);
+    assert_eq!(
+        patched.ground_floor_override.as_deref(),
+        Some("clinical_vinyl")
+    );
+    assert_eq!(patched.ground_tint_rgb, Some([0xd8, 0xe6, 0xec]));
+    assert!(
+        patched
+            .surfaces
+            .iter()
+            .any(|s| s.kind == satya_schema::SurfaceFeatureKind::TerrazzoFloor)
+    );
+
+    // Non-GM player cannot overwrite floor geometry or tint ground.
+    let p1_editor_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-3d/map")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                set_ground_floor_override: Some("terrazzo_stone".to_string()),
+                ..Default::default()
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let p1_editor_resp = tower::ServiceExt::oneshot(app.clone(), p1_editor_req)
+        .await
+        .unwrap();
+    assert_eq!(p1_editor_resp.status(), axum::http::StatusCode::FORBIDDEN);
+
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

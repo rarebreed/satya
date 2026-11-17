@@ -9,10 +9,12 @@ use std::collections::VecDeque;
 
 use satya_schema::{
     EconomicTier, MapFloorLevel, MapPointCm, MapPropPlacement, MapSurfaceFeature, MapWallEdge,
-    PropKind, SurfaceFeatureKind, SurfaceShapeKind,
+    SurfaceFeatureKind, SurfaceShapeKind,
 };
+#[cfg(test)]
+use satya_schema::PropKind;
 
-use crate::map_dressing::{PropObstruction, prop_spec};
+use crate::map_dressing::{PropObstruction, effective_obstruction};
 use crate::map_home_floorplan::{build_blueprint_floor, plan_home_blueprint};
 use crate::map_interior_gen::Room;
 use crate::tactical_map_geom::TOKEN_RADIUS_M;
@@ -79,6 +81,7 @@ impl LotBox {
             width_cm: 0,
             border_style_cm: corner_cm,
             variant_seed: seed,
+            tint_rgb: None,
         }
     }
 }
@@ -137,6 +140,7 @@ impl GeneratedHome {
                 wall_edges: b1.wall_edges,
                 props: b1.props,
                 surfaces: b1.surfaces,
+                ..Default::default()
             });
         }
         levels.push(MapFloorLevel {
@@ -146,6 +150,7 @@ impl GeneratedHome {
             wall_edges: ground_merged.wall_edges,
             props: ground_merged.props,
             surfaces: ground_merged.surfaces,
+            ..Default::default()
         });
         if let Some(f2) = self.upper {
             levels.push(MapFloorLevel {
@@ -155,6 +160,7 @@ impl GeneratedHome {
                 wall_edges: f2.wall_edges,
                 props: f2.props,
                 surfaces: f2.surfaces,
+                ..Default::default()
             });
         }
         levels.sort_by_key(|f| f.floor_index);
@@ -188,7 +194,7 @@ pub fn floor_lot_connected(
     };
     let mut open = vec![false; cols * rows];
     let mut first = None;
-    let stair = props.iter().find(|p| p.kind == PropKind::Stairwell);
+    let stair = props.iter().find(|p| p.kind.is_vertical_portal());
     let mut preferred = None;
     for iy in 0..rows {
         for ix in 0..cols {
@@ -279,11 +285,11 @@ pub(crate) fn trim_floor_props_to_connected(
         guard += 1;
         match props
             .iter()
-            .rposition(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle)
+            .rposition(|p| effective_obstruction(p) == PropObstruction::FullObstacle)
             .or_else(|| {
                 props
                     .iter()
-                    .rposition(|p| prop_spec(p.kind).obstruction == PropObstruction::HalfCover)
+                    .rposition(|p| effective_obstruction(p) == PropObstruction::HalfCover)
             }) {
             Some(i) => {
                 props.remove(i);

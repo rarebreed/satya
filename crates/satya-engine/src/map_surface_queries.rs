@@ -281,6 +281,7 @@ mod tests {
             width_cm: 0,
             border_style_cm: 0,
             variant_seed: 1,
+            tint_rgb: None,
         };
         let creek = MapSurfaceFeature {
             kind: SurfaceFeatureKind::CreekChannel,
@@ -289,6 +290,7 @@ mod tests {
             width_cm: 240,
             border_style_cm: 0,
             variant_seed: 2,
+            tint_rgb: None,
         };
         let bridge = MapSurfaceFeature {
             kind: SurfaceFeatureKind::BridgeDeck,
@@ -302,6 +304,7 @@ mod tests {
             width_cm: 0,
             border_style_cm: 10,
             variant_seed: 3,
+            tint_rgb: None,
         };
         let list = [bridge.clone(), creek.clone(), mulch.clone()];
         assert_eq!(

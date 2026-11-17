@@ -52,6 +52,7 @@ mod map_wgpu_runtime {
         pub camera: OrbitOrthoCamera,
         /// `(is_pan, start_x, start_y, last_x, last_y, moved_beyond_click)`
         pub drag_state: Option<(bool, i32, i32, i32, i32, bool)>,
+        pub editor_pointer_active: bool,
         pub scene_dirty: bool,
         pub shader_mode: String,
     }
@@ -64,6 +65,7 @@ mod map_wgpu_runtime {
                 listeners_attached: false,
                 camera: OrbitOrthoCamera::tactical_map_default(),
                 drag_state: None,
+                editor_pointer_active: false,
                 scene_dirty: true,
                 shader_mode: "pbr".to_string(),
             }
@@ -346,9 +348,24 @@ mod map_wgpu_runtime {
 
         let on_down = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
             ev.prevent_default();
+            if ev.button() == 0
+                && !ev.shift_key()
+                && crate::wasm_client::map_editor::is_editor_active()
+            {
+                let cam = with_map_ctrl(|c| c.camera);
+                if let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam) {
+                    with_map_ctrl(|c| {
+                        c.drag_state = None;
+                        c.editor_pointer_active = true;
+                    });
+                    crate::wasm_client::map_editor::handle_editor_pointer_down(mx, my);
+                    return;
+                }
+            }
             let is_pan = ev.shift_key() || ev.button() == 1 || ev.button() == 2;
             let (cx, cy) = (ev.client_x(), ev.client_y());
             with_map_ctrl(|c| {
+                c.editor_pointer_active = false;
                 c.drag_state = Some((is_pan, cx, cy, cx, cy, false));
             });
         });
@@ -377,7 +394,7 @@ mod map_wgpu_runtime {
 
         let on_canvas_hover = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
             let cam_opt = with_map_ctrl(|c| {
-                if c.drag_state.is_some() {
+                if c.drag_state.is_some() || c.editor_pointer_active {
                     None
                 } else {
                     Some(c.camera)
@@ -413,6 +430,19 @@ mod map_wgpu_runtime {
         on_canvas_leave.forget();
 
         let on_win_move = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
+            let ed_cam = with_map_ctrl(|c| {
+                if c.editor_pointer_active {
+                    Some(c.camera)
+                } else {
+                    None
+                }
+            });
+            if let Some(cam) = ed_cam {
+                if let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam) {
+                    crate::wasm_client::map_editor::handle_editor_pointer_move(mx, my);
+                }
+                return;
+            }
             let panned = with_map_ctrl(|c| {
                 let Some((is_pan, sx, sy, lx, ly, mut moved)) = c.drag_state else {
                     return false;
@@ -449,13 +479,25 @@ mod map_wgpu_runtime {
         on_win_move.forget();
 
         let on_up = Closure::<dyn FnMut(MouseEvent)>::new(move |ev: MouseEvent| {
-            let clicked_cam = with_map_ctrl(|c| {
+            let (ed_cam, clicked_cam) = with_map_ctrl(|c| {
+                if c.editor_pointer_active && ev.button() == 0 {
+                    c.editor_pointer_active = false;
+                    return (Some(c.camera), None);
+                }
+                c.editor_pointer_active = false;
                 let st = c.drag_state.take();
-                match st {
+                let click = match st {
                     Some((false, _, _, _, _, false)) if ev.button() == 0 => Some(c.camera),
                     _ => None,
-                }
+                };
+                (None, click)
             });
+            if let Some(cam) = ed_cam {
+                if let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam) {
+                    crate::wasm_client::map_editor::handle_editor_pointer_up(mx, my);
+                }
+                return;
+            }
             if let Some(cam) = clicked_cam
                 && let Some((mx, my)) = pick_metric_point_from_mouse(&ev, &cam)
             {
