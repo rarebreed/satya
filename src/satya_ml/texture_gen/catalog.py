@@ -591,6 +591,120 @@ BATTLEMAP_2D_TEXTURE_CATALOG: tuple[TextureSpec, ...] = (
             "gasket seams, corner screw recesses, and subtle fine perforated airflow grids."
         ),
     ),
+    TextureSpec(
+        id="spa_jacuzzi_water",
+        filename="spa_jacuzzi_water.webp",
+        label="Aerated Jacuzzi Spa Water",
+        svg_span_px=128,
+        fallback_hex="#3ec6dc",
+        delight_strength=0.72,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Aerated turquoise-aquamarine whirlpool jacuzzi spa water seen straight down; "
+            "swirling frothy white micro-bubble eddies, gentle concentric hydro-jet ripples, "
+            "and sunlit cyan caustics over pale ice-blue mosaic basin floor with NO rim or edges."
+        ),
+    ),
+    TextureSpec(
+        id="travertine_stone",
+        filename="travertine_stone.webp",
+        label="Honed Travertine Coping & Counter Stone",
+        svg_span_px=128,
+        fallback_hex="#ddd5c7",
+        delight_strength=0.78,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Continuous honed warm cream-ivory travertine and quartz-speckled limestone slab "
+            "seen straight down; subtle natural warm mineral veins, tiny soft sedimentary "
+            "pores, and matte architectural stone finish with ZERO tile grid lines and ZERO grout seams."
+        ),
+    ),
+    TextureSpec(
+        id="glazed_porcelain",
+        filename="glazed_porcelain.webp",
+        label="Satin Glazed Porcelain Enamel",
+        svg_span_px=96,
+        fallback_hex="#eef2f5",
+        delight_strength=0.82,
+        is_neutral_tint_mask=True,
+        prompt=_prompt(
+            "Continuous satin-glazed pearl-white architectural porcelain and molded ceramic "
+            "enamel surface seen straight down; ultra-subtle hand-painted gouache mineral "
+            "tonality and soft satin ceramic luster with ZERO grout lines, ZERO grid tiles, and ZERO cracks."
+        ),
+    ),
+    TextureSpec(
+        id="persian_rug",
+        filename="persian_rug.webp",
+        label="Neutral Hand-Knotted Kilim Rug Weave",
+        svg_span_px=128,
+        fallback_hex="#d4cdc3",
+        delight_strength=0.80,
+        is_neutral_tint_mask=True,
+        prompt=_prompt(
+            "Neutral pale oatmeal-putty hand-knotted kilim and woven wool rug pile texture "
+            "suitable for multiply tinting, seen straight down; repeating small hand-painted "
+            "geometric diamond and medallion yarn threads filling the entire frame edge-to-edge "
+            "with ZERO outer rug border or fringe."
+        ),
+    ),
+    TextureSpec(
+        id="tufted_leather",
+        filename="tufted_leather.webp",
+        label="Supple Pebbled Upholstery Leather",
+        svg_span_px=96,
+        fallback_hex="#d2ccc4",
+        delight_strength=0.80,
+        is_neutral_tint_mask=True,
+        prompt=_prompt(
+            "Neutral pale stone-putty supple pebbled full-grain upholstery leather surface "
+            "suitable for multiply tinting, seen straight down; fine organic grain pores and "
+            "soft hand-brushed tonal variation with ZERO buttons, ZERO pleats, ZERO stitching seams."
+        ),
+    ),
+    TextureSpec(
+        id="cedar_shingle",
+        filename="cedar_shingle.webp",
+        label="Hand-Split Cedar Roof Shingles",
+        svg_span_px=96,
+        fallback_hex="#825e42",
+        delight_strength=0.76,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Weathered hand-split red-cedar and warm sienna wood roof shakes overlapping in "
+            "neat horizontal courses seen straight down; rich timber grain, subtle silvered "
+            "patina, and crisp dark shadow butt lines under each shingle course."
+        ),
+    ),
+    TextureSpec(
+        id="tree_bark",
+        filename="tree_bark.webp",
+        label="Furrowed Oak & Walnut Tree Bark",
+        svg_span_px=96,
+        fallback_hex="#6b4c33",
+        delight_strength=0.74,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Rough furrowed oak and walnut tree trunk bark ridges running vertically seen "
+            "straight down; hand-painted umber, espresso, and muted grey-brown bark plates "
+            "with deep dark vertical fissures and tiny specks of muted sage lichen."
+        ),
+    ),
+    TextureSpec(
+        id="metallic_coat",
+        filename="metallic_coat.webp",
+        label="Satin Powder-Coated Painted Metal",
+        svg_span_px=128,
+        fallback_hex="#cfd4da",
+        delight_strength=0.82,
+        is_neutral_tint_mask=True,
+        prompt=_prompt(
+            "Neutral pale silver-putty satin painted automotive and powder-coated sheet metal "
+            "surface suitable for multiply tinting, seen straight down; ultra-fine hand-painted "
+            "metallic gouache stipple and subtle uniform satin patina with ZERO rivets, ZERO "
+            "panel lines, and ZERO harsh specular streaks."
+        ),
+    ),
 )
 
 _BY_ID: dict[str, TextureSpec] = {spec.id: spec for spec in BATTLEMAP_2D_TEXTURE_CATALOG}

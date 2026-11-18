@@ -446,19 +446,6 @@ impl OutdoorBuilder {
         })
     }
 
-    /// Appends an elevated [`SurfaceFeatureKind::BridgeDeck`] spanning perpendicularly across `channel_idx`
-    /// near normalized arc fraction `frac`.
-    pub(crate) fn add_bridge_deck_across(
-        &mut self,
-        channel_idx: usize,
-        frac: f32,
-        bridge_width_m: f32,
-        bridge_span_m: f32,
-    ) -> bool {
-        self.place_perpendicular_bridge(channel_idx, frac, bridge_width_m, bridge_span_m)
-            .is_some()
-    }
-
     /// Generates an organic undulating loop (`MulchZone` / `GardenBedZone`) that strictly stays off
     /// higher-priority roads, walkways, interior floors, and water channels by `pad_m`.
     pub(crate) fn try_add_organic_patch(
@@ -810,7 +797,7 @@ pub fn generate_outdoor_sector(
 
     match style {
         OutdoorStyle::WoodedPark => build_wooded_park(&mut b),
-        OutdoorStyle::GardenEstate => build_garden_estate(&mut b),
+        OutdoorStyle::GardenEstate => return build_garden_estate(b),
         OutdoorStyle::WoodlandCreek => build_woodland_creek(&mut b),
         OutdoorStyle::RoadsideDitch => build_roadside_ditch(&mut b),
     }
@@ -1185,6 +1172,7 @@ mod tests {
             SectorPreset::BotanicalGarden,
             SectorPreset::Farms,
             SectorPreset::RuralCountryside,
+            SectorPreset::GardenEstate,
         ] {
             for &(w, h) in &[(20, 14), (36, 26)] {
                 for seed in 1_i64..=16 {

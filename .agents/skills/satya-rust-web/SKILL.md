@@ -78,3 +78,5 @@ Read **only** the specific source file(s) and companion doc for your task (using
 10. **Session-Scoped Client Cache & Demo Seeding Hygiene**:
    - Reset all room/vault caches (`gm_documents`, `gm_memories`, `gm_omnisearch_active`, `session_npcs`, `selected_npc_id`) in `cleanup_client_session_state`.
    - Gate offline demo seeding (`ensure_default_demo_npc_if_empty`) strictly on `st.session_id.is_none() && st.session_npcs.is_empty()`, overwrite client vectors unconditionally from authoritative server responses (`st.session_npcs = resp.npcs;` without `if !is_empty()` guards), deduplicate optimistic vs. server NPC records by ID and case-insensitive name, and call `refresh_gm_omnisearch_if_active()` after vault/NPC mutations.
+11. **Seamless Intersecting Walkways in 2D SVG (`map_2d_art_surfaces.rs`)**:
+   - Batch intersecting same-kind walk polygons (`ConcreteWalk`, `StoneWalk`, `BrickPaverWalk`) in a two-pass border-then-fill draw (`collect_kind_rings_d`) so dark SVG outlines surround the merged walk silhouette instead of cutting across interior intersections.

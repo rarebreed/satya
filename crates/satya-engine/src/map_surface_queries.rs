@@ -105,8 +105,7 @@ pub fn surface_contains_point_m(surface: &MapSurfaceFeature, px_m: f32, py_m: f3
                         best_arc = arc_m + t * seg_len;
                         let qx = a.0 + (b.0 - a.0) * t;
                         let qy = a.1 + (b.1 - a.1) * t;
-                        best_left =
-                            (b.0 - a.0) * (py_m - qy) - (b.1 - a.1) * (px_m - qx) >= 0.0;
+                        best_left = (b.0 - a.0) * (py_m - qy) - (b.1 - a.1) * (px_m - qx) >= 0.0;
                     }
                     arc_m += seg_len;
                 }
@@ -359,8 +358,7 @@ impl PreSampledSurfaceEntry {
                         best_arc = cum_arc[i] + t * seg_len;
                         let qx = a.0 + (b.0 - a.0) * t;
                         let qy = a.1 + (b.1 - a.1) * t;
-                        best_left =
-                            (b.0 - a.0) * (py_m - qy) - (b.1 - a.1) * (px_m - qx) >= 0.0;
+                        best_left = (b.0 - a.0) * (py_m - qy) - (b.1 - a.1) * (px_m - qx) >= 0.0;
                     }
                 }
                 let local_hw = local_ribbon_half_width_m(
@@ -590,6 +588,49 @@ mod tests {
         .footprint_m();
         let dir_diag = fp_diag.local_dir_to_world(1.0, 0.0);
         assert!((dir_diag.0 - 0.8).abs() < 0.02 && (dir_diag.1 - 0.6).abs() < 0.02);
+    }
+
+    #[test]
+    fn ribbon_caps_bulge_outward_across_cardinal_and_diagonal_axes() {
+        use crate::map_surface_geom::{extrude_ribbon_strip_m, signed_area_2d};
+
+        let half_w = 0.925_f32;
+        let cases = [
+            ((5.0, 5.0), (12.0, 5.0)),
+            ((12.0, 5.0), (5.0, 5.0)),
+            ((5.0, 5.0), (5.0, 12.0)),
+            ((5.0, 12.0), (5.0, 5.0)),
+            ((4.0, 4.0), (10.0, 9.0)),
+        ];
+        for (a, b) in cases {
+            let mesh = extrude_ribbon_strip_m(&[a, b], half_w, true, true);
+            let ring = mesh.to_closed_ring_m();
+            let area = signed_area_2d(&ring).abs();
+            let seg_len = (b.0 - a.0).hypot(b.1 - a.1);
+            let rect_area = seg_len * 2.0 * half_w;
+            assert!(
+                area > rect_area + 2.0 * half_w * half_w,
+                "ribbon {a:?}->{b:?} endcap inverted (area={area:.2}, rect={rect_area:.2})"
+            );
+            let tx = (b.0 - a.0) / seg_len;
+            let ty = (b.1 - a.1) / seg_len;
+            let start_ext = ring
+                .iter()
+                .map(|&(px, py)| (a.0 - px) * tx + (a.1 - py) * ty)
+                .fold(f32::NEG_INFINITY, f32::max);
+            let end_ext = ring
+                .iter()
+                .map(|&(px, py)| (px - b.0) * tx + (py - b.1) * ty)
+                .fold(f32::NEG_INFINITY, f32::max);
+            assert!(
+                start_ext >= 0.9 * half_w,
+                "start cap did not bulge outward for {a:?}->{b:?}: {start_ext}"
+            );
+            assert!(
+                end_ext >= 0.9 * half_w,
+                "end cap did not bulge outward for {a:?}->{b:?}: {end_ext}"
+            );
+        }
     }
 
     #[test]

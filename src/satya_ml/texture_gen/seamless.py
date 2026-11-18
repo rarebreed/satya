@@ -203,7 +203,19 @@ def finalize_tile(
     if healed_rolled_rgb is not None:
         delit = blend_center_cross_heal(roll_half(delit), healed_rolled_rgb)
     quilted = toroidal_dp_quilt(delit, overlap_frac=0.14, feather_px=2)
-    return periodic_lanczos_resize(quilted, out_px=out_px)
+    best_tile = periodic_lanczos_resize(quilted, out_px=out_px)
+    best_score = max(wrap_seam_ratio(best_tile))
+    if best_score > 1.34:
+        for ov in (0.11, 0.17, 0.20, 0.23):
+            cand = periodic_lanczos_resize(
+                toroidal_dp_quilt(delit, overlap_frac=ov, feather_px=3),
+                out_px=out_px,
+            )
+            score = max(wrap_seam_ratio(cand))
+            if score < best_score:
+                best_tile = cand
+                best_score = score
+    return best_tile
 
 
 def render_contact_sheet_3x3(tile_rgb: np.ndarray, *, out_px: int = 768) -> np.ndarray:

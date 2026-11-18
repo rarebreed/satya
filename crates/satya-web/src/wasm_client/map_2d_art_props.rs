@@ -9,7 +9,7 @@
 //! (`PropKind` in `satya-engine`) will select glyphs explicitly with real ballistic material data.
 
 use crate::wasm_client::map_2d_art_furniture::{
-    COUNTER_STONES, FURNITURE_WOODS, wood_veneer_overlay,
+    COUNTER_STONES, FURNITURE_WOODS, travertine_overlay, wood_veneer_overlay,
 };
 use crate::wasm_client::map_2d_art_textures::BattlemapTextureMode;
 use std::f32::consts::TAU;
@@ -151,9 +151,15 @@ pub fn push_battlemap_prop_with_mode(
                 r##"<rect x="-28" y="-20" width="56" height="40" rx="7" fill="{f}"/><rect x="-28" y="-20" width="56" height="12" rx="5" fill="{f}"/><rect x="-26" y="-18.5" width="52" height="9" rx="4" fill="#000" fill-opacity=".16" stroke="none"/><rect x="-28" y="-14" width="9" height="34" rx="4" fill="{f}"/><rect x="19" y="-14" width="9" height="34" rx="4" fill="{f}"/><path d="M0 -7V19" fill="none" stroke-width="1.2" stroke-opacity=".55"/>"##
             );
             if painted {
-                out.push_str(
-                    r##"<rect x="-28" y="-20" width="56" height="40" rx="7" fill="url(#bm-fabric)" fill-opacity=".38" style="mix-blend-mode:multiply" stroke="none"/>"##,
-                );
+                if (variant & 1) == 1 {
+                    out.push_str(
+                        r##"<rect x="-28" y="-20" width="56" height="40" rx="7" fill="url(#bm-fabric)" fill-opacity=".38" style="mix-blend-mode:multiply" stroke="none"/>"##,
+                    );
+                } else {
+                    out.push_str(
+                        r##"<rect x="-28" y="-20" width="56" height="40" rx="7" fill="url(#bm-leather)" fill-opacity=".40" style="mix-blend-mode:multiply" stroke="none"/>"##,
+                    );
+                }
             }
         }
         BattlemapPropKind::Armchair => {
@@ -163,9 +169,15 @@ pub fn push_battlemap_prop_with_mode(
                 r##"<rect x="-20" y="-20" width="40" height="40" rx="8" fill="{f}"/><rect x="-20" y="-20" width="40" height="11" rx="5" fill="{f}"/><rect x="-18" y="-18.5" width="36" height="8" rx="4" fill="#000" fill-opacity=".16" stroke="none"/><rect x="-20" y="-13" width="8" height="33" rx="4" fill="{f}"/><rect x="12" y="-13" width="8" height="33" rx="4" fill="{f}"/><circle cx="21" cy="21" r="6" fill="#b38354" stroke-width="1.4"/>"##
             );
             if painted {
-                out.push_str(
-                    r##"<rect x="-20" y="-20" width="40" height="40" rx="8" fill="url(#bm-fabric)" fill-opacity=".38" style="mix-blend-mode:multiply" stroke="none"/>"##,
-                );
+                if (variant & 1) == 1 {
+                    out.push_str(
+                        r##"<rect x="-20" y="-20" width="40" height="40" rx="8" fill="url(#bm-fabric)" fill-opacity=".38" style="mix-blend-mode:multiply" stroke="none"/>"##,
+                    );
+                } else {
+                    out.push_str(
+                        r##"<rect x="-20" y="-20" width="40" height="40" rx="8" fill="url(#bm-leather)" fill-opacity=".40" style="mix-blend-mode:multiply" stroke="none"/>"##,
+                    );
+                }
             }
         }
         BattlemapPropKind::OfficeDesk => {
@@ -185,7 +197,12 @@ pub fn push_battlemap_prop_with_mode(
             let sink = if painted { "url(#bm-steel)" } else { "#b7c1c7" };
             let _ = write!(
                 out,
-                r##"<rect x="-28" y="-17" width="56" height="34" rx="3" fill="{top}"/><rect x="-24" y="-13" width="48" height="26" rx="2" fill="none" stroke-width="1" stroke-opacity=".35"/><rect x="-12" y="-8" width="22" height="16" rx="4" fill="{sink}"/><circle cx="-1" cy="-10.5" r="2.2" fill="#8b959b" stroke-width="1"/><circle cx="18" cy="1" r="5.5" fill="#e2b04a" stroke-width="1.2"/><circle cx="17" cy="0" r="1.6" fill="#b5462f" stroke="none"/>"##,
+                r##"<rect x="-28" y="-17" width="56" height="34" rx="3" fill="{top}"/>"##,
+            );
+            travertine_overlay(out, [-28.0, -17.0, 56.0, 34.0], 3.0, painted);
+            let _ = write!(
+                out,
+                r##"<rect x="-24" y="-13" width="48" height="26" rx="2" fill="none" stroke-width="1" stroke-opacity=".35"/><rect x="-12" y="-8" width="22" height="16" rx="4" fill="{sink}"/><circle cx="-1" cy="-10.5" r="2.2" fill="#8b959b" stroke-width="1"/><circle cx="18" cy="1" r="5.5" fill="#e2b04a" stroke-width="1.2"/><circle cx="17" cy="0" r="1.6" fill="#b5462f" stroke="none"/>"##,
             );
         }
         BattlemapPropKind::Planter => {

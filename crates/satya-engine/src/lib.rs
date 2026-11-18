@@ -52,7 +52,7 @@
 //! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
 //!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
 //! - [`tactical_map`], [`map_continuation`], [`tactical_map_geom`], [`tactical_map_inspect`], [`tactical_map_edges`], [`map_dressing`], [`barrier_ballistics`], [`map_interior_gen`],
-//!   [`map_outdoor_gen`], [`map_sector_gen`], [`map_gen_residential`], [`map_gen_commercial`], [`map_gen_zoning`], [`map_gen_civic_retail`], [`map_gen_agro_industrial`], [`map_world_graph`] & [`map_world_transitions`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, seamless edge-matched procedural continuation, multi-level floor stacks (`B1`/`1F`/`2F`), LoS/cover, hover inspection, thin
+//!   [`map_outdoor_gen`], [`map_pool_spa_gen`], [`map_sector_gen`], [`map_gen_residential`], [`map_gen_commercial`], [`map_gen_zoning`], [`map_gen_civic_retail`], [`map_gen_agro_industrial`], [`map_world_graph`] & [`map_world_transitions`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, seamless edge-matched procedural continuation, multi-level floor stacks (`B1`/`1F`/`2F`), LoS/cover, hover inspection, thin
 //!   edge walls/doors/windows, multi-cell prop catalog with per-material ballistic penetration vs. concealment
 //!   grading, and dressed procedural sectors across all 25 presets.
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor, Linnea Cho)
@@ -100,6 +100,7 @@ pub mod map_interior_topologies;
 pub mod map_narrative_manifest;
 pub mod map_outdoor_gen;
 pub mod map_outdoor_natural;
+pub mod map_pool_spa_gen;
 pub mod map_room_furnish;
 pub mod map_sector_gen;
 pub mod map_sector_scifi;

@@ -26,6 +26,7 @@ use crate::map_outdoor_gen::{OutdoorBuilder, RectM};
 use crate::map_outdoor_natural::{
     CurveProfile, CurveSpec, route_trail_across_bridge_m, synthesize_natural_curve_m,
 };
+use crate::map_pool_spa_gen::{OutdoorPoolSpaOpts, try_place_outdoor_pool_or_spa};
 use crate::map_surface_queries::prune_occluded_surfaces;
 use crate::tactical_map::{ProceduralSector, SectorPreset};
 
@@ -60,17 +61,17 @@ pub const fn default_zoning_and_tier(preset: SectorPreset) -> (ZoningContext, Ec
 
 /// Accumulates `B1` cellar and `2F` upper levels across one or more buildings in the sector.
 #[derive(Default)]
-struct FloorStack {
-    b1_edges: Vec<MapWallEdge>,
-    b1_props: Vec<MapPropPlacement>,
-    b1_surfaces: Vec<MapSurfaceFeature>,
-    f2_edges: Vec<MapWallEdge>,
-    f2_props: Vec<MapPropPlacement>,
-    f2_surfaces: Vec<MapSurfaceFeature>,
+pub(crate) struct FloorStack {
+    pub(crate) b1_edges: Vec<MapWallEdge>,
+    pub(crate) b1_props: Vec<MapPropPlacement>,
+    pub(crate) b1_surfaces: Vec<MapSurfaceFeature>,
+    pub(crate) f2_edges: Vec<MapWallEdge>,
+    pub(crate) f2_props: Vec<MapPropPlacement>,
+    pub(crate) f2_surfaces: Vec<MapSurfaceFeature>,
 }
 
 impl FloorStack {
-    fn absorb_ground(b: &mut OutdoorBuilder, ground: FloorContent) {
+    pub(crate) fn absorb_ground(b: &mut OutdoorBuilder, ground: FloorContent) {
         for e in ground.wall_edges {
             b.put_edge(e.x, e.y, e.side, e.kind, e.material);
         }
@@ -78,7 +79,12 @@ impl FloorStack {
         b.surfaces.extend(ground.surfaces);
     }
 
-    fn absorb_home(&mut self, b: &mut OutdoorBuilder, home: GeneratedHome, allow_basement: bool) {
+    pub(crate) fn absorb_home(
+        &mut self,
+        b: &mut OutdoorBuilder,
+        home: GeneratedHome,
+        allow_basement: bool,
+    ) {
         Self::absorb_ground(b, home.ground);
         if allow_basement && let Some(b1) = home.basement {
             self.b1_edges.extend(b1.wall_edges);
@@ -92,13 +98,13 @@ impl FloorStack {
         }
     }
 
-    fn absorb_upper(&mut self, f2: FloorContent) {
+    pub(crate) fn absorb_upper(&mut self, f2: FloorContent) {
         self.f2_edges.extend(f2.wall_edges);
         self.f2_props.extend(f2.props);
         self.f2_surfaces.extend(f2.surfaces);
     }
 
-    fn into_sector(mut self, b: OutdoorBuilder, w: i32, h: i32) -> ProceduralSector {
+    pub(crate) fn into_sector(mut self, b: OutdoorBuilder, w: i32, h: i32) -> ProceduralSector {
         let mut sec = b.finalize_connected();
         let mut floors = Vec::new();
         if !self.b1_edges.is_empty() {
@@ -217,8 +223,6 @@ fn dress_yard_props(b: &mut OutdoorBuilder, tier: EconomicTier, tree_budget: i32
     b.scatter_turf_prop_rot(PropKind::TrashCan, 1, 30, bounds);
     if matches!(tier, EconomicTier::LowIncome | EconomicTier::MiddleClass) {
         b.scatter_turf_prop_rot(PropKind::WoodCrate, 2, 30, bounds);
-    } else {
-        b.scatter_turf_prop_rot(PropKind::HotTub, 1, 0, bounds);
     }
     if !matches!(tier, EconomicTier::LowIncome) {
         b.scatter_turf_prop_rot(PropKind::GardenShed, 1, 0, bounds);
@@ -897,6 +901,35 @@ fn build_urban_rowhouse_neighborhood(
                 }
             }
         }
+
+        if matches!(
+            tier,
+            EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
+        ) {
+            let (rear_y0, rear_y1, rear_depth) = if street_north {
+                (lot_y1 as f32 + 0.6, (hf - 1.2).max(lot_y1 as f32 + 0.6), h - lot_y1)
+            } else {
+                (1.2_f32, (lot_y0 as f32 - 0.6).max(1.2), lot_y0)
+            };
+            if rear_depth >= 4 && b.rng.chance(9, 20) {
+                let rear_rect = RectM {
+                    x0: sx0 as f32 + 0.5,
+                    y0: rear_y0,
+                    x1: sx1 as f32 - 0.5,
+                    y1: rear_y1,
+                };
+                let prefer_spa = rear_depth < 6 || b.rng.chance(2, 3);
+                let _ = try_place_outdoor_pool_or_spa(
+                    b,
+                    rear_rect,
+                    OutdoorPoolSpaOpts {
+                        allow_pool: tier == EconomicTier::LuxuryMansion && rear_depth >= 6,
+                        allow_spa: true,
+                        prefer_spa_only: prefer_spa,
+                    },
+                );
+            }
+        }
     }
 
     let _ = b.place_vehicle_along_ribbon(PropKind::Car, street_idx, 0.28, 0.20, 6);
@@ -1038,6 +1071,38 @@ fn build_suburban_neighborhood(
     }
 
     let _ = b.place_vehicle_along_ribbon(PropKind::Car, street_idx, 0.62, 0.20, 7);
+    if !matches!(tier, EconomicTier::LowIncome) {
+        let has_pool = b
+            .surfaces
+            .iter()
+            .any(|s| s.kind == SurfaceFeatureKind::PoolWater);
+        let want_amenity = if matches!(
+            tier,
+            EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
+        ) {
+            b.rng.chance(3, 5)
+        } else {
+            b.rng.chance(3, 10)
+        };
+        if want_amenity {
+            let yard_bounds = RectM {
+                x0: 1.5,
+                y0: 1.5,
+                x1: wf - 1.5,
+                y1: hf - 1.5,
+            };
+            let prefer_spa = has_pool || b.rng.chance(2, 5);
+            let _ = try_place_outdoor_pool_or_spa(
+                b,
+                yard_bounds,
+                OutdoorPoolSpaOpts {
+                    allow_pool: !has_pool,
+                    allow_spa: true,
+                    prefer_spa_only: prefer_spa,
+                },
+            );
+        }
+    }
     let rich_landscape = !matches!(tier, EconomicTier::LowIncome);
     let tree_budget = if rich_landscape {
         (w * h / 65).clamp(4, 16)
@@ -1082,11 +1147,23 @@ fn build_luxury_mansion_site(
         },
     );
     let manor_pad_x = if comp.w() >= 18 { 3 } else { 2 };
-    let manor_y0 = if gate_south { comp.y0 + 1 } else { comp.y0 + 2 };
-    let manor_y1 = if gate_south {
-        (comp.y1 - 2).max(manor_y0 + 5)
+    let rear_lawn = if h >= 28 {
+        8
+    } else if h >= 26 {
+        7
+    } else if h >= 24 {
+        6
     } else {
-        (comp.y1 - 1).max(manor_y0 + 5)
+        0
+    };
+    let (manor_y0, manor_y1) = if gate_south {
+        let y0 = (comp.y0 + 1 + rear_lawn).min((comp.y1 - 13).max(comp.y0 + 1));
+        let y1 = (comp.y1 - 2).max(y0 + 5);
+        (y0, y1)
+    } else {
+        let y0 = comp.y0 + 2;
+        let y1 = (comp.y1 - 1 - rear_lawn).max((y0 + 11).min(comp.y1 - 1)).max(y0 + 5);
+        (y0, y1)
     };
     let manor = LotBox::new(
         (comp.x0 + manor_pad_x).min(comp.x1 - 7),
@@ -1140,6 +1217,40 @@ fn build_luxury_mansion_site(
         seed ^ 0x00E5_7A7E,
     );
     stack.absorb_home(b, home, true);
+
+    let has_pool = b
+        .surfaces
+        .iter()
+        .any(|s| s.kind == SurfaceFeatureKind::PoolWater);
+    let rear_court = if gate_south {
+        RectM {
+            x0: comp.x0 as f32 + 0.8,
+            y0: comp.y0 as f32 + 0.65,
+            x1: comp.x1 as f32 - 0.8,
+            y1: (manor.y0 as f32 - 0.65).max(comp.y0 as f32 + 0.65),
+        }
+    } else {
+        RectM {
+            x0: comp.x0 as f32 + 0.8,
+            y0: manor.y1 as f32 + 0.65,
+            x1: comp.x1 as f32 - 0.8,
+            y1: (comp.y1 as f32 - 0.65).max(manor.y1 as f32 + 0.65),
+        }
+    };
+    let comp_bounds = RectM {
+        x0: comp.x0 as f32 + 0.8,
+        y0: comp.y0 as f32 + 0.8,
+        x1: comp.x1 as f32 - 0.8,
+        y1: comp.y1 as f32 - 0.8,
+    };
+    let opts = OutdoorPoolSpaOpts {
+        allow_pool: !has_pool,
+        allow_spa: true,
+        prefer_spa_only: has_pool,
+    };
+    if !try_place_outdoor_pool_or_spa(b, rear_court, opts) {
+        let _ = try_place_outdoor_pool_or_spa(b, comp_bounds, opts);
+    }
 
     let _ = b.place_vehicle_along_ribbon(PropKind::Car, street_idx, 0.35, 0.20, 4);
     dress_yard_props(b, tier, (w * h / 80).clamp(4, 14), 5);
@@ -1306,6 +1417,32 @@ fn build_rural_countryside(
         x1: wf - 1.5,
         y1: hf - 1.5,
     };
+    if !matches!(tier, EconomicTier::LowIncome) {
+        let has_pool = b
+            .surfaces
+            .iter()
+            .any(|s| s.kind == SurfaceFeatureKind::PoolWater);
+        let want_amenity = if matches!(
+            tier,
+            EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
+        ) {
+            b.rng.chance(11, 20)
+        } else {
+            b.rng.chance(3, 10)
+        };
+        if want_amenity {
+            let prefer_spa = has_pool || b.rng.chance(1, 2);
+            let _ = try_place_outdoor_pool_or_spa(
+                b,
+                bounds,
+                OutdoorPoolSpaOpts {
+                    allow_pool: !has_pool,
+                    allow_spa: true,
+                    prefer_spa_only: prefer_spa,
+                },
+            );
+        }
+    }
     b.scatter_trees(PropKind::LargeTree, (w * h / 110).clamp(2, 8), 3.2, bounds);
     b.scatter_trees(PropKind::MediumTree, (w * h / 90).clamp(3, 10), 2.5, bounds);
     b.scatter_turf_prop_rot(PropKind::Boulder, 3, 25, bounds);

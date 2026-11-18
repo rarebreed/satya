@@ -729,16 +729,17 @@ fn hospital_and_labs_have_realistic_rooms_elevators_baths_and_clutter() {
     for (w, h) in [(24, 18), (48, 36)] {
         let hosp = generate_procedural_sector(SectorPreset::Hospital, w, h, 42);
         assert_eq!(hosp.floors.len(), 2);
-        let portal_centers = |fl: &satya_schema::MapFloorLevel, kind: PropKind| -> Vec<(i32, i32)> {
-            let mut v: Vec<_> = fl
-                .props
-                .iter()
-                .filter(|p| p.kind == kind)
-                .map(|p| p.center_cm())
-                .collect();
-            v.sort();
-            v
-        };
+        let portal_centers =
+            |fl: &satya_schema::MapFloorLevel, kind: PropKind| -> Vec<(i32, i32)> {
+                let mut v: Vec<_> = fl
+                    .props
+                    .iter()
+                    .filter(|p| p.kind == kind)
+                    .map(|p| p.center_cm())
+                    .collect();
+                v.sort();
+                v
+            };
         for pk in [
             PropKind::Stairwell,
             PropKind::ElevatorCar,
@@ -747,13 +748,12 @@ fn hospital_and_labs_have_realistic_rooms_elevators_baths_and_clutter() {
             let f1 = portal_centers(&hosp.floors[0], pk);
             let f2 = portal_centers(&hosp.floors[1], pk);
             assert!(!f1.is_empty(), "Hospital {w}x{h} missing {pk:?}");
-            assert_eq!(f1, f2, "Hospital {w}x{h} portal {pk:?} must align across floors");
+            assert_eq!(
+                f1, f2,
+                "Hospital {w}x{h} portal {pk:?} must align across floors"
+            );
         }
-        let all_props: Vec<_> = hosp
-            .floors
-            .iter()
-            .flat_map(|f| f.props.iter())
-            .collect();
+        let all_props: Vec<_> = hosp.floors.iter().flat_map(|f| f.props.iter()).collect();
         for required in [
             PropKind::NurseStation,
             PropKind::TelemetryMonitor,
@@ -771,8 +771,10 @@ fn hospital_and_labs_have_realistic_rooms_elevators_baths_and_clutter() {
         }
         assert!(
             all_props.iter().any(|p| {
-                matches!(p.kind, PropKind::HospitalBed | PropKind::Cot | PropKind::Gurney)
-                    && p.rotation_deg % 90 != 0
+                matches!(
+                    p.kind,
+                    PropKind::HospitalBed | PropKind::Cot | PropKind::Gurney
+                ) && p.rotation_deg % 90 != 0
             }),
             "Hospital {w}x{h} should include gently angled patient beds"
         );
@@ -800,8 +802,18 @@ fn hospital_and_labs_have_realistic_rooms_elevators_baths_and_clutter() {
 
     let lab_big = generate_procedural_sector(SectorPreset::MedLabSector, 36, 26, 17);
     assert!(lab_big.props.iter().any(|p| p.kind == PropKind::CncMill));
-    assert!(lab_big.props.iter().any(|p| p.kind == PropKind::ElevatorCar));
-    assert!(lab_big.props.iter().any(|p| p.kind == PropKind::AirCompressor));
+    assert!(
+        lab_big
+            .props
+            .iter()
+            .any(|p| p.kind == PropKind::ElevatorCar)
+    );
+    assert!(
+        lab_big
+            .props
+            .iter()
+            .any(|p| p.kind == PropKind::AirCompressor)
+    );
 
     let office = generate_procedural_sector(SectorPreset::OfficeFloor, 36, 26, 23);
     for pk in [
@@ -840,11 +852,7 @@ fn houses_cap_bathroom_size_and_urban_projects_presets_differ() {
                     let y1 = sf.points_cm.iter().map(|p| p.y_cm).max().unwrap_or(0) / 100;
                     let area_m2 = (x1 - x0) * (y1 - y0);
                     let has_toilet = fl.props.iter().any(|p| {
-                        p.kind == PropKind::Toilet
-                            && p.x >= x0
-                            && p.x < x1
-                            && p.y >= y0
-                            && p.y < y1
+                        p.kind == PropKind::Toilet && p.x >= x0 && p.x < x1 && p.y >= y0 && p.y < y1
                     });
                     if has_toilet {
                         assert!(
@@ -898,7 +906,12 @@ fn houses_cap_bathroom_size_and_urban_projects_presets_differ() {
             .iter()
             .any(|s| s.kind == SurfaceFeatureKind::LinoleumCheckFloor)
     );
-    assert!(!proj.props.iter().any(|p| p.kind == PropKind::BrownstoneStoop));
+    assert!(
+        !proj
+            .props
+            .iter()
+            .any(|p| p.kind == PropKind::BrownstoneStoop)
+    );
 
     // UrbanResidential deterministically alternates Brownstones (seed % 3 != 2) & Chinatown Shophouses (seed % 3 == 2).
     let brownstone = generate_zoned_sector(SectorPreset::UrbanResidential, 36, 26, 4, None, None);
@@ -928,4 +941,583 @@ fn houses_cap_bathroom_size_and_urban_projects_presets_differ() {
             .iter()
             .any(|p| p.kind == PropKind::AwningCanopy)
     );
+}
+
+#[test]
+fn garden_estate_furnishes_rooms_and_varies_creeks_pools_and_spas() {
+    let mut creek_seeds = 0usize;
+    let mut pool_seeds = 0usize;
+    let mut spa_seeds = 0usize;
+
+    for seed in 1_i64..=24 {
+        let sec = generate_procedural_sector(SectorPreset::GardenEstate, 48, 36, seed);
+        assert!(
+            sec.props.len() >= 18,
+            "GardenEstate seed={seed} too sparse overall ({} props)",
+            sec.props.len()
+        );
+        let indoor_furniture = sec
+            .props
+            .iter()
+            .filter(|p| {
+                matches!(
+                    p.kind,
+                    PropKind::Sofa
+                        | PropKind::Loveseat
+                        | PropKind::Bed
+                        | PropKind::DiningTable
+                        | PropKind::KitchenCounter
+                        | PropKind::Wardrobe
+                        | PropKind::Desk
+                        | PropKind::Bookshelf
+                        | PropKind::Toilet
+                        | PropKind::Bathtub
+                        | PropKind::BathroomSink
+                )
+            })
+            .count();
+        assert!(
+            indoor_furniture >= 8,
+            "GardenEstate seed={seed} sparsely furnished interior ({indoor_furniture} props)"
+        );
+        for p in sec
+            .props
+            .iter()
+            .filter(|p| matches!(p.kind, PropKind::Sofa | PropKind::Loveseat))
+        {
+            assert!(
+                !crate::tactical_map_geom::prop_crosses_wall_edge(p, &sec.wall_edges),
+                "GardenEstate seed={seed} sofa {:?} at {:?} crosses a wall",
+                p.kind,
+                p.center_cm()
+            );
+        }
+        let has_creek = sec
+            .surfaces
+            .iter()
+            .any(|s| s.kind == SurfaceFeatureKind::CreekChannel);
+        let has_bridge = sec
+            .surfaces
+            .iter()
+            .any(|s| s.kind == SurfaceFeatureKind::BridgeDeck);
+        if has_creek {
+            assert!(
+                has_bridge,
+                "GardenEstate seed={seed} has CreekChannel without BridgeDeck"
+            );
+            creek_seeds += 1;
+        }
+        if sec
+            .surfaces
+            .iter()
+            .any(|s| s.kind == SurfaceFeatureKind::PoolWater)
+        {
+            pool_seeds += 1;
+        }
+        if sec.props.iter().any(|p| p.kind == PropKind::HotTub) {
+            spa_seeds += 1;
+        }
+    }
+
+    assert!(
+        (3..=20).contains(&creek_seeds),
+        "Expected occasional GardenEstate creeks across 24 seeds, got {creek_seeds}"
+    );
+    assert!(
+        pool_seeds >= 4,
+        "Expected varied GardenEstate pools across 24 seeds, got {pool_seeds}"
+    );
+    assert!(
+        spa_seeds >= 4,
+        "Expected varied GardenEstate Jacuzzi/spas across 24 seeds, got {spa_seeds}"
+    );
+}
+
+#[test]
+fn housing_units_generate_varied_pool_shapes_and_spas_without_submerging_props() {
+    let mut pool_vertex_counts = BTreeSet::new();
+    let mut spa_styles = BTreeSet::new();
+
+    for seed in 1_i64..=20 {
+        let mut sectors = vec![
+            generate_zoned_sector(SectorPreset::LuxuryMansion, 36, 28, seed, None, None),
+            generate_zoned_sector(SectorPreset::SuburbanNeighborhood, 36, 28, seed, None, None),
+            generate_zoned_sector(SectorPreset::RuralCountryside, 36, 28, seed, None, None),
+            generate_zoned_sector(SectorPreset::UrbanResidential, 36, 26, seed, None, None),
+            generate_zoned_sector(SectorPreset::GardenEstate, 48, 36, seed, None, None),
+            generate_procedural_sector(SectorPreset::ResidentialApartment, 28, 22, seed),
+        ];
+
+        for sec in sectors.drain(..) {
+            let pools: Vec<_> = sec
+                .surfaces
+                .iter()
+                .filter(|s| s.kind == SurfaceFeatureKind::PoolWater)
+                .collect();
+            for pool in &pools {
+                pool_vertex_counts.insert(pool.points_cm.len());
+            }
+            for prop in &sec.props {
+                if prop.kind == PropKind::HotTub {
+                    spa_styles.insert(prop.variant_seed & 3);
+                }
+                if matches!(prop.kind, PropKind::HotTub | PropKind::ReclinerChair) {
+                    let fp = prop.footprint_m();
+                    for pool in &pools {
+                        assert!(
+                            !crate::map_surface_queries::surface_contains_point_m(
+                                pool, fp.cx_m, fp.cy_m
+                            ),
+                            "Prop {:?} at ({:.2}, {:.2}) submerged inside PoolWater (seed={seed})",
+                            prop.kind,
+                            fp.cx_m,
+                            fp.cy_m
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    assert!(
+        pool_vertex_counts.len() >= 3,
+        "Expected varied pool geometry vertex counts (oval/kidney/L-shaped/rounded), got {pool_vertex_counts:?}"
+    );
+    assert!(
+        spa_styles.len() >= 3,
+        "Expected at least 3 distinct HotTub spa styles across housing units, got {spa_styles:?}"
+    );
+}
+
+fn counter_flush_against_wall(
+    w: i32,
+    h: i32,
+    edges: &[MapWallEdge],
+    prop: &satya_schema::MapPropPlacement,
+) -> bool {
+    let idx = crate::tactical_map_edges::WallEdgeIndex::from_edges(w, h, edges);
+    let is_wall =
+        |k: Option<WallEdgeKind>| matches!(k, Some(WallEdgeKind::Wall | WallEdgeKind::Window));
+    match prop.rotation_deg.rem_euclid(360) {
+        90 => (0..prop.h_cells)
+            .all(|dy| is_wall(idx.get(prop.x + prop.w_cells, prop.y + dy, EdgeSide::West))),
+        180 => (0..prop.w_cells)
+            .all(|dx| is_wall(idx.get(prop.x + dx, prop.y + prop.h_cells, EdgeSide::North))),
+        270 => (0..prop.h_cells).all(|dy| is_wall(idx.get(prop.x, prop.y + dy, EdgeSide::West))),
+        _ => (0..prop.w_cells).all(|dx| is_wall(idx.get(prop.x + dx, prop.y, EdgeSide::North))),
+    }
+}
+
+fn room_cells_without_crossing_edges(
+    w: i32,
+    h: i32,
+    edges: &[MapWallEdge],
+    sx: i32,
+    sy: i32,
+) -> BTreeSet<(i32, i32)> {
+    let idx = crate::tactical_map_edges::WallEdgeIndex::from_edges(w, h, edges);
+    let mut visited = BTreeSet::new();
+    if sx < 0 || sx >= w || sy < 0 || sy >= h {
+        return visited;
+    }
+    let mut stack = vec![(sx, sy)];
+    visited.insert((sx, sy));
+    while let Some((x, y)) = stack.pop() {
+        if x > 0 && idx.get(x, y, EdgeSide::West).is_none() && visited.insert((x - 1, y)) {
+            stack.push((x - 1, y));
+        }
+        if x + 1 < w && idx.get(x + 1, y, EdgeSide::West).is_none() && visited.insert((x + 1, y)) {
+            stack.push((x + 1, y));
+        }
+        if y > 0 && idx.get(x, y, EdgeSide::North).is_none() && visited.insert((x, y - 1)) {
+            stack.push((x, y - 1));
+        }
+        if y + 1 < h && idx.get(x, y + 1, EdgeSide::North).is_none() && visited.insert((x, y + 1)) {
+            stack.push((x, y + 1));
+        }
+    }
+    visited
+}
+
+fn point_in_any_surface(
+    surfaces: &[satya_schema::MapSurfaceFeature],
+    kind: SurfaceFeatureKind,
+    x_m: f32,
+    y_m: f32,
+) -> bool {
+    surfaces.iter().any(|s| {
+        s.kind == kind && crate::map_surface_queries::surface_contains_point_m(s, x_m, y_m)
+    })
+}
+
+#[test]
+fn residential_units_have_hallways_wall_sinks_logical_room_caps_and_specialty_rooms() {
+    use crate::map_gen_residential::{CardinalEntry, generate_home_in_lot};
+
+    let tiers = [
+        EconomicTier::LowIncome,
+        EconomicTier::MiddleClass,
+        EconomicTier::UpperMiddleClass,
+        EconomicTier::LuxuryMansion,
+    ];
+
+    for tier in tiers {
+        for (lw, lh) in [(9, 7), (14, 10), (22, 15)] {
+            let (bw, bh) = (lw + 4, lh + 4);
+            let lot = LotBox::new(2, 2, 2 + lw, 2 + lh);
+            for seed in 1_u64..=16 {
+                let home = generate_home_in_lot(
+                    bw,
+                    bh,
+                    lot,
+                    tier,
+                    CardinalEntry::South,
+                    true,
+                    true,
+                    true,
+                    &[],
+                    seed,
+                );
+                let levels: Vec<&crate::map_gen_residential::FloorContent> = home
+                    .basement
+                    .iter()
+                    .chain(std::iter::once(&home.ground))
+                    .chain(home.upper.iter())
+                    .collect();
+
+                let total_washers: usize = levels
+                    .iter()
+                    .map(|fl| {
+                        fl.props
+                            .iter()
+                            .filter(|p| p.kind == PropKind::WasherDryer)
+                            .count()
+                    })
+                    .sum();
+                assert!(
+                    total_washers <= 1,
+                    "{tier:?} {lw}x{lh} seed={seed} emitted {total_washers} WasherDryer units across B1+1F+2F"
+                );
+                let total_stoves: usize = levels
+                    .iter()
+                    .map(|fl| {
+                        fl.props
+                            .iter()
+                            .filter(|p| p.kind == PropKind::Stove)
+                            .count()
+                    })
+                    .sum();
+                assert!(
+                    total_stoves <= 1,
+                    "{tier:?} {lw}x{lh} seed={seed} emitted {total_stoves} Stoves across B1+1F+2F"
+                );
+
+                for (li, fl) in levels.iter().enumerate() {
+                    let toilets = fl
+                        .props
+                        .iter()
+                        .filter(|p| p.kind == PropKind::Toilet)
+                        .count();
+                    assert!(
+                        toilets <= 2,
+                        "{tier:?} {lw}x{lh} seed={seed} level_idx={li} had {toilets} toilets"
+                    );
+                    for kc in fl
+                        .props
+                        .iter()
+                        .filter(|p| p.kind == PropKind::KitchenCounter)
+                    {
+                        assert!(
+                            counter_flush_against_wall(bw, bh, &fl.wall_edges, kc),
+                            "{tier:?} {lw}x{lh} seed={seed} level_idx={li} floating KitchenCounter at ({}, {})",
+                            kc.x,
+                            kc.y
+                        );
+                    }
+                }
+
+                // Locate South front entry door on 1F (interior to north, exterior to south).
+                let front_door = home
+                    .ground
+                    .wall_edges
+                    .iter()
+                    .find(|e| {
+                        e.side == EdgeSide::North
+                            && e.material == MaterialClass::SolidWood
+                            && matches!(e.kind, WallEdgeKind::DoorOpen | WallEdgeKind::DoorClosed)
+                            && e.x >= lot.x0
+                            && e.x < lot.x1
+                            && e.y > lot.y0
+                            && e.y <= lot.y1
+                            && point_in_any_surface(
+                                &home.ground.surfaces,
+                                SurfaceFeatureKind::InteriorFloor,
+                                e.x as f32 + 0.5,
+                                e.y as f32 - 0.5,
+                            )
+                            && !point_in_any_surface(
+                                &home.ground.surfaces,
+                                SurfaceFeatureKind::InteriorFloor,
+                                e.x as f32 + 0.5,
+                                e.y as f32 + 0.5,
+                            )
+                    })
+                    .unwrap_or_else(|| {
+                        panic!("{tier:?} {lw}x{lh} seed={seed} missing South front door")
+                    });
+                let (ex, ey) = (front_door.x, front_door.y - 1);
+                if (lw, lh) == (9, 7)
+                    && matches!(tier, EconomicTier::LowIncome | EconomicTier::MiddleClass)
+                {
+                    assert!(
+                        !point_in_any_surface(
+                            &home.ground.surfaces,
+                            SurfaceFeatureKind::MarbleFloor,
+                            ex as f32 + 0.5,
+                            ey as f32 + 0.5
+                        ),
+                        "Small {tier:?} 9x7 seed={seed} should open directly without MarbleFloor foyer"
+                    );
+                }
+                let entry_room =
+                    room_cells_without_crossing_edges(bw, bh, &home.ground.wall_edges, ex, ey);
+                let entry_bad = home.ground.props.iter().any(|p| {
+                    matches!(p.kind, PropKind::Toilet | PropKind::WasherDryer)
+                        && (p.y..p.y + p.h_cells).any(|py| {
+                            (p.x..p.x + p.w_cells)
+                                .any(|px| p.covers(px, py) && entry_room.contains(&(px, py)))
+                        })
+                });
+                assert!(
+                    !entry_bad,
+                    "{tier:?} {lw}x{lh} seed={seed} front door opened into Bathroom/Laundry"
+                );
+            }
+        }
+    }
+
+    // Verify all 5 large-home specialty rooms appear across LuxuryMansion 22x15 seeds.
+    let mut saw_garage = false;
+    let mut saw_home_gym = false;
+    let mut saw_library = false;
+    let mut saw_office = false;
+    let mut saw_sunroom = false;
+    let lot_big = LotBox::new(2, 2, 24, 17);
+    for seed in 1_u64..=24 {
+        let home = generate_home_in_lot(
+            26,
+            19,
+            lot_big,
+            EconomicTier::LuxuryMansion,
+            CardinalEntry::South,
+            true,
+            true,
+            true,
+            &[],
+            seed,
+        );
+        if home
+            .ground
+            .surfaces
+            .iter()
+            .any(|s| s.kind == SurfaceFeatureKind::StainedConcreteFloor)
+            && home
+                .ground
+                .wall_edges
+                .iter()
+                .any(|e| e.material == MaterialClass::SheetSteel)
+        {
+            saw_garage = true;
+        }
+        let levels: Vec<&crate::map_gen_residential::FloorContent> = home
+            .basement
+            .iter()
+            .chain(std::iter::once(&home.ground))
+            .chain(home.upper.iter())
+            .collect();
+        for fl in &levels {
+            if fl
+                .surfaces
+                .iter()
+                .any(|s| s.kind == SurfaceFeatureKind::LinoleumCheckFloor)
+                && fl.props.iter().any(|p| p.kind == PropKind::WaterCooler)
+            {
+                saw_home_gym = true;
+            }
+            if fl
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::Bookshelf)
+                .count()
+                >= 4
+            {
+                saw_library = true;
+            }
+            if fl
+                .props
+                .iter()
+                .any(|p| matches!(p.kind, PropKind::DeskL | PropKind::Desk))
+            {
+                saw_office = true;
+            }
+        }
+        for fl in std::iter::once(&home.ground).chain(home.upper.iter()) {
+            let wins = fl
+                .wall_edges
+                .iter()
+                .filter(|e| e.kind == WallEdgeKind::Window)
+                .count();
+            if wins >= 6 && fl.props.iter().any(|p| p.kind == PropKind::Planter) {
+                saw_sunroom = true;
+            }
+        }
+    }
+    assert!(
+        saw_garage,
+        "Expected LuxuryMansion 22x15 Garage across seeds"
+    );
+    assert!(
+        saw_home_gym,
+        "Expected LuxuryMansion 22x15 HomeGym across seeds"
+    );
+    assert!(
+        saw_library,
+        "Expected LuxuryMansion 22x15 Library across seeds"
+    );
+    assert!(
+        saw_office,
+        "Expected LuxuryMansion 22x15 Office across seeds"
+    );
+    assert!(
+        saw_sunroom,
+        "Expected LuxuryMansion 22x15 Sunroom across seeds"
+    );
+
+    // Verify GardenEstate (48x36) & ResidentialApartment (20x14 & 28x22) invariants.
+    for seed in 1_i64..=16 {
+        let estate = generate_procedural_sector(SectorPreset::GardenEstate, 48, 36, seed);
+        let mut total_washers = 0usize;
+        let mut total_stoves = 0usize;
+        for fl in &estate.floors {
+            for kc in fl
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::KitchenCounter)
+            {
+                assert!(
+                    counter_flush_against_wall(48, 36, &fl.wall_edges, kc),
+                    "GardenEstate seed={seed} floor={} floating KitchenCounter at ({}, {})",
+                    fl.floor_index,
+                    kc.x,
+                    kc.y
+                );
+            }
+            total_washers += fl
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::WasherDryer)
+                .count();
+            total_stoves += fl
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::Stove)
+                .count();
+            if fl.floor_index == 0 {
+                let toilets = fl
+                    .props
+                    .iter()
+                    .filter(|p| p.kind == PropKind::Toilet)
+                    .count();
+                assert!(
+                    toilets <= 3,
+                    "GardenEstate seed={seed} 1F had {toilets} toilets"
+                );
+            }
+        }
+        assert!(
+            total_washers <= 1,
+            "GardenEstate seed={seed} had {total_washers} WasherDryer units across floors"
+        );
+        assert!(
+            total_stoves <= 2,
+            "GardenEstate seed={seed} had {total_stoves} Stoves across floors"
+        );
+
+        for (aw, ah, max_toilets, check_direct_entry) in
+            [(20, 14, 2usize, true), (28, 22, 3usize, false)]
+        {
+            let apt = generate_procedural_sector(SectorPreset::ResidentialApartment, aw, ah, seed);
+            for kc in apt
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::KitchenCounter)
+            {
+                assert!(
+                    counter_flush_against_wall(aw, ah, &apt.wall_edges, kc),
+                    "ResidentialApartment {aw}x{ah} seed={seed} floating KitchenCounter at ({}, {})",
+                    kc.x,
+                    kc.y
+                );
+            }
+            let stoves = apt
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::Stove)
+                .count();
+            let washers = apt
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::WasherDryer)
+                .count();
+            let toilets = apt
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::Toilet)
+                .count();
+            assert_eq!(
+                stoves, 1,
+                "ResidentialApartment {aw}x{ah} seed={seed} expected 1 Stove, got {stoves}"
+            );
+            assert!(
+                washers <= 1,
+                "ResidentialApartment {aw}x{ah} seed={seed} had {washers} WasherDryer units"
+            );
+            assert!(
+                toilets <= max_toilets,
+                "ResidentialApartment {aw}x{ah} seed={seed} had {toilets} toilets (cap {max_toilets})"
+            );
+            if check_direct_entry {
+                assert!(
+                    !point_in_any_surface(
+                        &apt.surfaces,
+                        SurfaceFeatureKind::MarbleFloor,
+                        0.5,
+                        (ah / 2) as f32 + 0.5
+                    ),
+                    "Compact ResidentialApartment {aw}x{ah} seed={seed} should not place MarbleFloor foyer at West entry"
+                );
+            }
+            for sf in apt.surfaces.iter().filter(|s| {
+                matches!(
+                    s.kind,
+                    SurfaceFeatureKind::CeramicTileFloor | SurfaceFeatureKind::MarbleFloor
+                ) && s.points_cm.len() == 4
+            }) {
+                let x0 = sf.points_cm.iter().map(|p| p.x_cm).min().unwrap_or(0) / 100;
+                let y0 = sf.points_cm.iter().map(|p| p.y_cm).min().unwrap_or(0) / 100;
+                let x1 = sf.points_cm.iter().map(|p| p.x_cm).max().unwrap_or(0) / 100;
+                let y1 = sf.points_cm.iter().map(|p| p.y_cm).max().unwrap_or(0) / 100;
+                let has_toilet = apt.props.iter().any(|p| {
+                    p.kind == PropKind::Toilet && p.x >= x0 && p.x < x1 && p.y >= y0 && p.y < y1
+                });
+                if has_toilet {
+                    let area_m2 = (x1 - x0) * (y1 - y0);
+                    assert!(
+                        area_m2 <= 18,
+                        "ResidentialApartment {aw}x{ah} seed={seed} oversized bathroom ({area_m2} m²)"
+                    );
+                }
+            }
+        }
+    }
 }

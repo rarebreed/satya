@@ -1,16 +1,32 @@
 //! Multi-topology procedural site grammars for `GardenEstate` ("Walled Estate & Courtyard").
 //!
-//! Replaces the single fixed rectangular manor + box wall with three seeded architectural
-//! compound topologies across compact (`20×14`) through massive (`64×48` / `96×72`) arenas:
-//! - [`EstateTopology::ForecourtTurnaroundManor`]: Outer street approach, gate-pier entry,
-//!   circular turnaround drive around a sculptural parterre, grand manor & detached carriage house.
+//! Generates architectural residential compounds using [`crate::map_gen_residential::generate_home_in_lot`]
+//! and [`crate::map_gen_zoning::FloorStack`] (`B1`/`1F`/`2F` levels with aligned `Stairwell`s and
+//! wall-flush room furnishings), furnished brick carriage houses, occasional meandering
+//! [`SurfaceFeatureKind::CreekChannel`] streams with perpendicular [`SurfaceFeatureKind::BridgeDeck`]
+//! footbridges, randomized multi-shape [`SurfaceFeatureKind::PoolWater`] terraces, and styled
+//! Jacuzzi/Spa courts across compact (`20×14`) through massive (`96×72`) arenas:
+//! - [`EstateTopology::ForecourtTurnaroundManor`]: Outer avenue, gate-pier entry, circular
+//!   turnaround drive around a sculptural fountain parterre, multi-level grand manor & carriage house.
 //! - [`EstateTopology::LWingCarriageCompound`]: Quadrant-mirrored L-wing mansion framing a paved
-//!   terrace courtyard, opposite stable/carriage wing, parterres & sweeping driveway.
-//! - [`EstateTopology::CloisteredPavilionVilla`]: Dual wing pavilions flanking a pillared
-//!   cloister courtyard with sunken reflection garden, footbridge & perimeter shade orchard.
+//!   courtyard terrace, opposite carriage wing, pool/spa terrace & sweeping driveway.
+//! - [`EstateTopology::CloisteredPavilionVilla`]: Opposed main villa & guest pavilion flanking a
+//!   pillared cloister courtyard with water garden / pool / creek & perimeter shade orchard.
 
+use crate::map_gen_residential::{
+    CardinalEntry, LotBox, generate_annex_wing_in_lot, generate_home_in_lot,
+};
+use crate::map_gen_zoning::FloorStack;
+use crate::map_interior_gen::{Furnisher, Room};
 use crate::map_outdoor_gen::{OutdoorBuilder, RectM};
-use satya_schema::{EdgeSide, MaterialClass, PropKind, SurfaceFeatureKind, WallEdgeKind};
+use crate::map_outdoor_natural::{CurveProfile, CurveSpec, synthesize_natural_curve_m};
+use crate::map_pool_spa_gen::{OutdoorPoolSpaOpts, try_place_outdoor_pool_or_spa};
+use crate::map_surface_geom::sample_open_catmull_rom_m;
+use crate::map_surface_queries::surface_contains_point_m;
+use crate::tactical_map::ProceduralSector;
+use satya_schema::{
+    EconomicTier, EdgeSide, MaterialClass, PropKind, SurfaceFeatureKind, WallEdgeKind,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EstateTopology {
@@ -34,6 +50,9 @@ impl BoxI {
     const fn h(self) -> i32 {
         self.y1 - self.y0
     }
+    const fn lot(self) -> LotBox {
+        LotBox::new(self.x0, self.y0, self.x1, self.y1)
+    }
     fn rect_m(self, inset: f32) -> RectM {
         RectM {
             x0: self.x0 as f32 + inset,
@@ -45,21 +64,24 @@ impl BoxI {
 }
 
 /// Entry point for [`crate::map_outdoor_gen::OutdoorStyle::GardenEstate`].
-pub(crate) fn build_garden_estate(b: &mut OutdoorBuilder) {
-    if b.w < 24 || b.h < 18 {
-        build_compact_estate(b);
-        return;
+pub(crate) fn build_garden_estate(b: OutdoorBuilder) -> ProceduralSector {
+    let (w, h) = (b.w, b.h);
+    if w < 24 || h < 18 {
+        return build_compact_estate(b);
     }
+    let mut b = b;
     let topo = match b.rng.range(0, 3) {
         0 => EstateTopology::ForecourtTurnaroundManor,
         1 => EstateTopology::LWingCarriageCompound,
         _ => EstateTopology::CloisteredPavilionVilla,
     };
+    let mut stack = FloorStack::default();
     match topo {
-        EstateTopology::ForecourtTurnaroundManor => build_forecourt_turnaround(b),
-        EstateTopology::LWingCarriageCompound => build_lwing_compound(b),
-        EstateTopology::CloisteredPavilionVilla => build_cloistered_villa(b),
+        EstateTopology::ForecourtTurnaroundManor => build_forecourt_turnaround(&mut b, &mut stack),
+        EstateTopology::LWingCarriageCompound => build_lwing_compound(&mut b, &mut stack),
+        EstateTopology::CloisteredPavilionVilla => build_cloistered_villa(&mut b, &mut stack),
     }
+    stack.into_sector(b, w, h)
 }
 
 fn rect_poly(x0: f32, y0: f32, x1: f32, y1: f32) -> [(f32, f32); 4] {
@@ -158,8 +180,10 @@ fn build_compound_wall(
         }
     }
     let mid_y = (comp.y0 + comp.y1) / 2;
+    let board_mid = b.h / 2;
     for y in comp.y0..comp.y1 {
-        if y == mid_y || y == mid_y - 1 {
+        let is_gate_y = y == mid_y || y == mid_y - 1 || y == board_mid || y == board_mid - 1;
+        if is_gate_y {
             b.remove_edge(comp.x0, y, EdgeSide::West);
             b.remove_edge(comp.x1, y, EdgeSide::West);
             reserve_door_clearance(b, comp.x0, y, EdgeSide::West);
@@ -176,189 +200,9 @@ fn build_compound_wall(
     }
 }
 
-fn build_wing_shell(b: &mut OutdoorBuilder, r: BoxI, wall_mat: MaterialClass) {
-    b.add_poly(
-        SurfaceFeatureKind::InteriorFloor,
-        &rect_poly(r.x0 as f32, r.y0 as f32, r.x1 as f32, r.y1 as f32),
-        0,
-    );
-    for x in r.x0..r.x1 {
-        let kn = if (x - r.x0) % 3 == 1 && x + 1 < r.x1 {
-            WallEdgeKind::Window
-        } else {
-            WallEdgeKind::Wall
-        };
-        b.put_edge(x, r.y0, EdgeSide::North, kn, wall_mat);
-        b.put_edge(x, r.y1, EdgeSide::North, kn, wall_mat);
-    }
-    for y in r.y0..r.y1 {
-        let kw = if (y - r.y0) % 3 == 1 && y + 1 < r.y1 {
-            WallEdgeKind::Window
-        } else {
-            WallEdgeKind::Wall
-        };
-        b.put_edge(r.x0, y, EdgeSide::West, kw, wall_mat);
-        b.put_edge(r.x1, y, EdgeSide::West, kw, wall_mat);
-    }
-}
-
-fn partition_manor_rooms(b: &mut OutdoorBuilder, r: BoxI) -> Vec<BoxI> {
-    if r.w() < 6 || r.h() < 5 {
-        return vec![r];
-    }
-    let sx = r.x0 + r.w() / 2;
-    let sy = r.y0 + r.h() / 2;
-    for y in r.y0..r.y1 {
-        b.put_edge(
-            sx,
-            y,
-            EdgeSide::West,
-            WallEdgeKind::Wall,
-            MaterialClass::Drywall,
-        );
-    }
-    if r.h() >= 7 {
-        for x in r.x0..r.x1 {
-            b.put_edge(
-                x,
-                sy,
-                EdgeSide::North,
-                WallEdgeKind::Wall,
-                MaterialClass::Drywall,
-            );
-        }
-        put_door(
-            b,
-            sx,
-            r.y0 + (sy - r.y0) / 2,
-            EdgeSide::West,
-            false,
-            MaterialClass::SolidWood,
-        );
-        put_door(
-            b,
-            sx,
-            sy + (r.y1 - sy) / 2,
-            EdgeSide::West,
-            false,
-            MaterialClass::SolidWood,
-        );
-        put_door(
-            b,
-            r.x0 + (sx - r.x0) / 2,
-            sy,
-            EdgeSide::North,
-            false,
-            MaterialClass::SolidWood,
-        );
-        put_door(
-            b,
-            sx + (r.x1 - sx) / 2,
-            sy,
-            EdgeSide::North,
-            true,
-            MaterialClass::SolidWood,
-        );
-        vec![
-            BoxI {
-                x0: r.x0,
-                y0: r.y0,
-                x1: sx,
-                y1: sy,
-            },
-            BoxI {
-                x0: sx,
-                y0: r.y0,
-                x1: r.x1,
-                y1: sy,
-            },
-            BoxI {
-                x0: r.x0,
-                y0: sy,
-                x1: sx,
-                y1: r.y1,
-            },
-            BoxI {
-                x0: sx,
-                y0: sy,
-                x1: r.x1,
-                y1: r.y1,
-            },
-        ]
-    } else {
-        put_door(
-            b,
-            sx,
-            r.y0 + r.h() / 2,
-            EdgeSide::West,
-            false,
-            MaterialClass::SolidWood,
-        );
-        vec![
-            BoxI {
-                x0: r.x0,
-                y0: r.y0,
-                x1: sx,
-                y1: r.y1,
-            },
-            BoxI {
-                x0: sx,
-                y0: r.y0,
-                x1: r.x1,
-                y1: r.y1,
-            },
-        ]
-    }
-}
-
-fn furnish_estate_rooms(b: &mut OutdoorBuilder, rooms: &[BoxI]) {
-    for (idx, &rm) in rooms.iter().enumerate() {
-        let cx = ((rm.x0 + rm.x1) as f32 * 50.0) as i32;
-        let cy = ((rm.y0 + rm.y1) as f32 * 50.0) as i32;
-        let rot = (idx as i32 * 90) + b.rng.range(-12, 13);
-        let center_kind = match idx % 4 {
-            0 => PropKind::Sofa,
-            1 => PropKind::DiningTable,
-            2 => PropKind::Desk,
-            _ => PropKind::Bed,
-        };
-        b.try_place_cm(center_kind, cx, cy, rot, None, true);
-        if rm.w() >= 4 && rm.h() >= 4 {
-            let accent = match idx % 4 {
-                0 => PropKind::TvStand,
-                1 => PropKind::KitchenCounter,
-                2 => PropKind::Bookshelf,
-                _ => PropKind::Dresser,
-            };
-            b.try_place_cm(
-                accent,
-                rm.x0 * 100 + 75,
-                rm.y0 * 100 + 75,
-                (idx as i32 * 90).rem_euclid(360),
-                None,
-                true,
-            );
-            let third = match idx % 4 {
-                0 => PropKind::CoffeeTable,
-                1 => PropKind::Armchair,
-                2 => PropKind::StandingLamp,
-                _ => PropKind::Nightstand,
-            };
-            b.try_place_cm(
-                third,
-                rm.x1 * 100 - 75,
-                rm.y1 * 100 - 75,
-                ((idx as i32 * 90) + 180).rem_euclid(360),
-                None,
-                true,
-            );
-        }
-    }
-}
-
 fn build_carriage_house(b: &mut OutdoorBuilder, r: BoxI, bay_on_south: bool) {
     b.add_poly(
-        SurfaceFeatureKind::InteriorFloor,
+        SurfaceFeatureKind::StainedConcreteFloor,
         &rect_poly(r.x0 as f32, r.y0 as f32, r.x1 as f32, r.y1 as f32),
         0,
     );
@@ -413,23 +257,192 @@ fn build_carriage_house(b: &mut OutdoorBuilder, r: BoxI, bay_on_south: bool) {
         false,
         MaterialClass::SolidWood,
     );
-    b.try_place_cm(
-        PropKind::SteelShelving,
-        r.x0 * 100 + 75,
-        r.y0 * 100 + 75,
-        0,
-        None,
-        true,
+
+    let mut furn = Furnisher::new(b.w, b.h, b.rng.next());
+    furn.reserve_doors(&b.edges);
+    for &(sx, sy) in &b.spawn_pads_m {
+        furn.reserve_cell(sx.floor() as i32, sy.floor() as i32);
+    }
+    let rm = Room {
+        x0: r.x0,
+        y0: r.y0,
+        x1: r.x1,
+        y1: r.y1,
+    };
+    let _ = furn.against_any_wall(PropKind::SteelShelving, rm, None);
+    let _ = furn
+        .against_any_wall(PropKind::TestBench, rm, None)
+        .or_else(|| furn.against_any_wall(PropKind::SolderingStation, rm, None));
+    let _ = furn.against_any_wall(PropKind::AirCompressor, rm, None);
+    let _ = furn.against_any_wall(PropKind::WoodCrate, rm, None);
+    let _ = furn.against_any_wall(PropKind::WoodCrate, rm, None);
+    let _ = furn.against_any_wall(PropKind::DrumCluster, rm, None);
+    let _ = furn.in_corner(PropKind::FireExtinguisher, rm);
+    b.props.extend(furn.props);
+}
+
+fn try_add_estate_creek(b: &mut OutdoorBuilder, comp: BoxI, band: RectM, horizontal: bool) -> bool {
+    if band.x1 - band.x0 < 3.4 || band.y1 - band.y0 < 3.4 {
+        return false;
+    }
+    let (start_m, end_m, max_lat) = if horizontal {
+        let ym = 0.5 * (band.y0 + band.y1);
+        let lat = ((band.y1 - band.y0) * 0.34).clamp(0.45, 1.35);
+        (
+            (band.x0, ym + b.rng.f32_range(-lat * 0.4, lat * 0.4)),
+            (band.x1, ym + b.rng.f32_range(-lat * 0.4, lat * 0.4)),
+            lat,
+        )
+    } else {
+        let xm = 0.5 * (band.x0 + band.x1);
+        let lat = ((band.x1 - band.x0) * 0.34).clamp(0.45, 1.35);
+        (
+            (xm + b.rng.f32_range(-lat * 0.4, lat * 0.4), band.y0),
+            (xm + b.rng.f32_range(-lat * 0.4, lat * 0.4), band.y1),
+            lat,
+        )
+    };
+    let pts = synthesize_natural_curve_m(
+        &mut b.rng,
+        start_m,
+        end_m,
+        CurveSpec {
+            profile: CurveProfile::WildStream,
+            max_lateral_m: max_lat,
+            ribbon_half_w_m: 0.92,
+            clamp_rect: band,
+        },
     );
-    let crate_rot = b.rng.range(0, 45);
-    b.try_place_cm(
-        PropKind::WoodCrate,
-        r.x1 * 100 - 75,
-        r.y1 * 100 - 75,
-        crate_rot,
-        None,
-        true,
-    );
+    let dense = sample_open_catmull_rom_m(&pts, 4);
+    for &(px, py) in &dense {
+        for s in &b.surfaces {
+            if (s.kind.is_built_floor_or_deck()
+                || matches!(
+                    s.kind,
+                    SurfaceFeatureKind::AsphaltRoad
+                        | SurfaceFeatureKind::ConcreteWalk
+                        | SurfaceFeatureKind::BrickPaverWalk
+                        | SurfaceFeatureKind::StoneWalk
+                        | SurfaceFeatureKind::PoolWater
+                ))
+                && (surface_contains_point_m(s, px, py)
+                    || surface_contains_point_m(s, px + 0.9, py)
+                    || surface_contains_point_m(s, px - 0.9, py)
+                    || surface_contains_point_m(s, px, py + 0.9)
+                    || surface_contains_point_m(s, px, py - 0.9))
+            {
+                return false;
+            }
+        }
+        // Keep clear of building perimeter walls (compound perimeter walls become grilles).
+        for e in &b.edges {
+            let on_comp = (e.side == EdgeSide::West && (e.x == comp.x0 || e.x == comp.x1))
+                || (e.side == EdgeSide::North && (e.y == comp.y0 || e.y == comp.y1));
+            if on_comp {
+                continue;
+            }
+            let (ex, ey) = match e.side {
+                EdgeSide::West => (e.x as f32, e.y as f32 + 0.5),
+                EdgeSide::North => (e.x as f32 + 0.5, e.y as f32),
+            };
+            if (px - ex).hypot(py - ey) < 1.25 {
+                return false;
+            }
+        }
+    }
+
+    let width_cm = b.rng.range(165, 206);
+    let saved_surf_len = b.surfaces.len();
+    let saved_props_len = b.props.len();
+    let saved_pads_len = b.spawn_pads_m.len();
+    let creek_idx = b.add_ribbon(SurfaceFeatureKind::CreekChannel, &pts, width_cm);
+    let abutments_dry = |b: &OutdoorBuilder, neg: (f32, f32), pos: (f32, f32)| -> bool {
+        !b.surfaces.iter().any(|s| {
+            s.kind.is_water_or_channel()
+                && (surface_contains_point_m(s, neg.0, neg.1)
+                    || surface_contains_point_m(s, pos.0, pos.1))
+        })
+    };
+    let Some(primary_bridge) = b.place_perpendicular_bridge(creek_idx, 0.50, 2.2, 2.8) else {
+        b.surfaces.truncate(saved_surf_len);
+        b.props.truncate(saved_props_len);
+        b.spawn_pads_m.truncate(saved_pads_len);
+        return false;
+    };
+    if !abutments_dry(
+        b,
+        primary_bridge.abutment_neg_m,
+        primary_bridge.abutment_pos_m,
+    ) {
+        b.surfaces.truncate(saved_surf_len);
+        b.props.truncate(saved_props_len);
+        b.spawn_pads_m.truncate(saved_pads_len);
+        return false;
+    }
+
+    let grille_r = width_cm as f32 / 200.0 + 0.45;
+    let grille_edges: Vec<(i32, i32, EdgeSide)> = b
+        .edges
+        .iter()
+        .filter(|e| {
+            (e.side == EdgeSide::West && (e.x == comp.x0 || e.x == comp.x1))
+                || (e.side == EdgeSide::North && (e.y == comp.y0 || e.y == comp.y1))
+        })
+        .filter(|e| {
+            let (ex, ey) = match e.side {
+                EdgeSide::West => (e.x as f32, e.y as f32 + 0.5),
+                EdgeSide::North => (e.x as f32 + 0.5, e.y as f32),
+            };
+            dense
+                .iter()
+                .any(|&(px, py)| (px - ex).hypot(py - ey) <= grille_r)
+        })
+        .map(|e| (e.x, e.y, e.side))
+        .collect();
+    for (ex_i, ey_i, side) in grille_edges {
+        b.put_edge(
+            ex_i,
+            ey_i,
+            side,
+            WallEdgeKind::Window,
+            MaterialClass::SheetSteel,
+        );
+    }
+
+    let chord_len = (end_m.0 - start_m.0).hypot(end_m.1 - start_m.1);
+    if chord_len >= 18.0 {
+        let br2_surf_len = b.surfaces.len();
+        let br2_props_len = b.props.len();
+        let br2_pads_len = b.spawn_pads_m.len();
+        if let Some(br2) = b.place_perpendicular_bridge(creek_idx, 0.25, 2.0, 2.7)
+            && !abutments_dry(b, br2.abutment_neg_m, br2.abutment_pos_m)
+        {
+            b.surfaces.truncate(br2_surf_len);
+            b.props.truncate(br2_props_len);
+            b.spawn_pads_m.truncate(br2_pads_len);
+        }
+    }
+
+    let bank_off = width_cm as f32 / 200.0 + 0.72;
+    for (idx, frac) in [0.22_f32, 0.78_f32].iter().enumerate() {
+        let si = ((dense.len() - 1) as f32 * frac).round() as usize;
+        let (px, py) = dense[si.min(dense.len() - 1)];
+        let (bx, by) = if horizontal {
+            (px, py + if idx % 2 == 0 { bank_off } else { -bank_off })
+        } else {
+            (px + if idx % 2 == 0 { bank_off } else { -bank_off }, py)
+        };
+        let boulder_rot = b.rng.range(0, 360);
+        let _ = b.try_place_cm(
+            PropKind::Boulder,
+            OutdoorBuilder::cm(bx),
+            OutdoorBuilder::cm(by),
+            boulder_rot,
+            None,
+            false,
+        );
+    }
+    true
 }
 
 fn dress_estate_grounds(
@@ -490,8 +503,8 @@ fn dress_estate_grounds(
     );
 }
 
-/// Compact `20×14`-compatible estate with asymmetric manor, carriage apron, curved stone walk & hedges.
-fn build_compact_estate(b: &mut OutdoorBuilder) {
+/// Compact `20×14`-compatible estate with furnished multi-room manor, driveway & optional pool/spa or creek.
+fn build_compact_estate(mut b: OutdoorBuilder) -> ProceduralSector {
     let (w, h) = (b.w, b.h);
     let (wf, hf) = (w as f32, h as f32);
     let street_y = hf - 1.65;
@@ -506,35 +519,42 @@ fn build_compact_estate(b: &mut OutdoorBuilder) {
         ],
         320,
     );
-    let gate_x = (w / 3).max(4);
+    let manor_right = b.rng.chance(1, 2);
+    let mx0 = if manor_right { (w - 12).max(4) } else { 4 };
+    let mx1 = if manor_right {
+        (w - 4).max(mx0 + 6)
+    } else {
+        (mx0 + 8).min(w - 4)
+    };
+    let manor = BoxI {
+        x0: mx0,
+        y0: 2,
+        x1: mx1,
+        y1: (h - 4).max(8),
+    };
+    let gate_x = if manor_right {
+        4
+    } else {
+        (w - 7).max(manor.x1)
+    };
     b.add_ribbon(
         SurfaceFeatureKind::AsphaltRoad,
         &[
             (gate_x as f32 + 1.0, street_y),
             (gate_x as f32 + 1.1, hf - 3.5),
-            (gate_x as f32 + 1.4, (hf * 0.52).max(5.5)),
-            (gate_x as f32 + 3.2, (hf * 0.42).max(4.5)),
+            (gate_x as f32 + 1.3, (hf * 0.56).max(5.5)),
         ],
-        250,
+        240,
     );
-    let manor_right = b.rng.chance(1, 2);
-    let mx0 = if manor_right { (w / 2).max(9) } else { 2 };
-    let mx1 = if manor_right { w - 2 } else { (w / 2).max(8) };
-    let manor = BoxI {
-        x0: mx0,
-        y0: 2,
-        x1: mx1,
-        y1: (h - 5).max(7),
-    };
+    let walk_y = manor.y1 as f32 + 0.4;
     b.add_ribbon(
         SurfaceFeatureKind::StoneWalk,
         &[
-            (gate_x as f32 + 1.5, hf - 3.8),
-            (wf * 0.5, hf * 0.58),
-            ((manor.x0 + manor.x1) as f32 * 0.5, manor.y1 as f32 + 0.4),
-            ((manor.x0 + manor.x1) as f32 * 0.5, manor.y1 as f32 - 0.2),
+            (gate_x as f32 + 1.3, hf - 3.6),
+            (wf * 0.5, walk_y.min(hf - 3.4)),
+            ((manor.x0 + manor.x1) as f32 * 0.5, manor.y1 as f32),
         ],
-        160,
+        155,
     );
 
     let comp = BoxI {
@@ -543,47 +563,95 @@ fn build_compact_estate(b: &mut OutdoorBuilder) {
         x1: w - 1,
         y1: h - 3,
     };
-    build_compound_wall(b, comp, w / 2, 2, gate_x, 2);
-    build_wing_shell(b, manor, MaterialClass::Brick);
-    put_door(
-        b,
-        (manor.x0 + manor.x1) / 2,
-        manor.y1,
-        EdgeSide::North,
-        true,
-        MaterialClass::SolidWood,
-    );
-    put_door(
-        b,
-        manor.x0,
-        (manor.y0 + manor.y1) / 2,
-        EdgeSide::West,
+    build_compound_wall(&mut b, comp, w / 2, 2, gate_x, 2);
+
+    let pads = b.spawn_pads_m.clone();
+    let home = generate_home_in_lot(
+        w,
+        h,
+        manor.lot(),
+        EconomicTier::UpperMiddleClass,
+        CardinalEntry::South,
+        manor.w() >= 6 && manor.h() >= 5,
         false,
-        MaterialClass::SolidWood,
+        true,
+        &pads,
+        b.rng.next(),
     );
-    let rooms = partition_manor_rooms(b, manor);
-    furnish_estate_rooms(b, &rooms);
+    let mut stack = FloorStack::default();
+    stack.absorb_home(&mut b, home, false);
+
+    let open_rect = if manor_right {
+        RectM {
+            x0: 1.6,
+            y0: 1.6,
+            x1: (manor.x0 as f32 - 0.6).max(1.6),
+            y1: (hf - 4.0).max(2.0),
+        }
+    } else {
+        RectM {
+            x0: manor.x1 as f32 + 0.6,
+            y0: 1.6,
+            x1: (wf - 1.6).max(manor.x1 as f32 + 0.6),
+            y1: (hf - 4.0).max(2.0),
+        }
+    };
+    let has_pool = b
+        .surfaces
+        .iter()
+        .any(|s| s.kind == SurfaceFeatureKind::PoolWater);
+    let roll = b.rng.range(0, 100);
+    if roll < 45 {
+        let prefer_spa_only = has_pool || b.rng.chance(1, 2);
+        let _ = try_place_outdoor_pool_or_spa(
+            &mut b,
+            open_rect,
+            OutdoorPoolSpaOpts {
+                allow_pool: !has_pool,
+                allow_spa: true,
+                prefer_spa_only,
+            },
+        );
+    } else if roll < 75 {
+        let creek_band = RectM {
+            x0: open_rect.x0 + 0.4,
+            y0: open_rect.y0,
+            x1: (open_rect.x1 - 0.4).max(open_rect.x0 + 0.4),
+            y1: open_rect.y1,
+        };
+        let _ = try_add_estate_creek(&mut b, comp, creek_band, false);
+    } else {
+        let _ = b.try_place_cm(
+            PropKind::SmallFountain,
+            OutdoorBuilder::cm(0.5 * (open_rect.x0 + open_rect.x1)),
+            OutdoorBuilder::cm(open_rect.y0 + 2.2),
+            0,
+            None,
+            false,
+        );
+    }
 
     b.place_vehicle_along_ribbon(PropKind::Car, street, 0.32, 0.2, 5);
     place_rot_m(
-        b,
+        &mut b,
         PropKind::UtilityVan,
-        gate_x as f32 + 1.2,
-        hf - 4.4,
+        gate_x as f32 + 1.1,
+        hf - 4.3,
         78,
         103,
         true,
     );
     dress_estate_grounds(
-        b,
+        &mut b,
         comp.rect_m(0.8),
-        &[(wf * 0.28, 3.2, 0), (wf * 0.72, 3.2, 0)],
+        &[(wf * 0.28, 2.8, 0), (wf * 0.72, 2.8, 0)],
         4,
     );
+    stack.into_sector(b, w, h)
 }
 
 /// Topology 0: Street avenue, gate piers, elliptical turnaround around sculptural island, grand manor & carriage house.
-fn build_forecourt_turnaround(b: &mut OutdoorBuilder) {
+fn build_forecourt_turnaround(b: &mut OutdoorBuilder, stack: &mut FloorStack) {
     let (w, h) = (b.w, b.h);
     let (wf, hf) = (w as f32, h as f32);
     let gate_top = b.rng.chance(1, 2);
@@ -612,19 +680,58 @@ fn build_forecourt_turnaround(b: &mut OutdoorBuilder) {
         380,
     );
 
-    let rear_pad = if comp.h() >= 18 { 3 } else { 1 };
-    let manor_w = (comp.w() / 2).clamp(9, 26);
-    let manor_h = (comp.h() * 34 / 100).clamp(4, 15);
-    let mx0 = (w / 2 - manor_w / 2).clamp(comp.x0 + 3, comp.x1 - manor_w - 3);
+    let rear_pad = if comp.h() >= 22 {
+        5
+    } else if comp.h() >= 18 {
+        3
+    } else {
+        1
+    };
+    let carriage_w = (comp.w() / 6).clamp(4, 8);
+    let carriage_h = 5.min(comp.h() / 3).max(4);
+    let carriage_right = b.rng.chance(1, 2);
+    let cx0 = if carriage_right {
+        (w - 4 - carriage_w).min(comp.x1 - carriage_w - 2)
+    } else {
+        4.max(comp.x0 + 2)
+    };
+    let cy0 = if gate_top {
+        comp.y0 + 2
+    } else {
+        comp.y1 - carriage_h - 2
+    };
+    let carriage = BoxI {
+        x0: cx0,
+        y0: cy0,
+        x1: cx0 + carriage_w,
+        y1: cy0 + carriage_h,
+    };
+
+    let manor_w = (comp.w() * 52 / 100)
+        .clamp(10, 26)
+        .min((comp.w() - carriage_w - 6).max(10));
+    let manor_h = (comp.h() * 38 / 100).clamp(6, 15);
+    let desired_mx0 = (w / 2 - manor_w / 2).clamp(
+        4.max(comp.x0 + 2),
+        (w - 4 - manor_w).min(comp.x1 - manor_w - 2),
+    );
     let (my0, my1) = if gate_top {
         (comp.y1 - manor_h - rear_pad, comp.y1 - rear_pad)
     } else {
         (comp.y0 + rear_pad, comp.y0 + rear_pad + manor_h)
     };
+    let carriage_y_clear = cy0 + carriage_h + 2 <= my0 || cy0 >= my1 + 2;
+    let mx0 = if !carriage_y_clear && carriage_right && desired_mx0 + manor_w + 2 > cx0 {
+        (cx0 - 2 - manor_w).max(comp.x0 + 2)
+    } else if !carriage_y_clear && !carriage_right && desired_mx0 < cx0 + carriage_w + 2 {
+        (cx0 + carriage_w + 2).min(comp.x1 - 2 - manor_w)
+    } else {
+        desired_mx0
+    };
     let manor = BoxI {
         x0: mx0,
         y0: my0,
-        x1: mx0 + manor_w,
+        x1: (mx0 + manor_w).min(w - 4),
         y1: my1,
     };
 
@@ -692,26 +799,6 @@ fn build_forecourt_turnaround(b: &mut OutdoorBuilder) {
         ),
         120,
     );
-
-    let carriage_w = (comp.w() / 6).clamp(5, 8);
-    let carriage_h = 5.min(comp.h() / 3).max(4);
-    let carriage_right = b.rng.chance(1, 2);
-    let cx0 = if carriage_right {
-        comp.x1 - carriage_w - 1
-    } else {
-        comp.x0 + 1
-    };
-    let cy0 = if gate_top {
-        comp.y0 + 2
-    } else {
-        comp.y1 - carriage_h - 2
-    };
-    let carriage = BoxI {
-        x0: cx0,
-        y0: cy0,
-        x1: cx0 + carriage_w,
-        y1: cy0 + carriage_h,
-    };
     b.add_ribbon(
         SurfaceFeatureKind::AsphaltRoad,
         &[
@@ -727,20 +814,22 @@ fn build_forecourt_turnaround(b: &mut OutdoorBuilder) {
         ],
         240,
     );
+    let manor_front_y = if gate_top {
+        my0 as f32 - 0.6
+    } else {
+        my1 as f32 + 0.6
+    };
+    let walk_side_x = if carriage_right {
+        mx0 as f32 - 1.2
+    } else {
+        manor.x1 as f32 + 1.2
+    };
     b.add_ribbon(
         SurfaceFeatureKind::StoneWalk,
         &[
             (gx_m, loop_far_y),
-            (mx0 as f32 - 1.2, (my0 + my1) as f32 * 0.5),
-            (
-                (manor.x0 + manor.x1) as f32 * 0.5,
-                if gate_top {
-                    comp.y1 as f32 - 0.8
-                } else {
-                    comp.y0 as f32 + 0.8
-                },
-            ),
-            (manor.x1 as f32 + 1.2, (my0 + my1) as f32 * 0.5),
+            ((manor.x0 + manor.x1) as f32 * 0.5, manor_front_y),
+            (walk_side_x, (my0 + my1) as f32 * 0.5),
         ],
         170,
     );
@@ -753,37 +842,113 @@ fn build_forecourt_turnaround(b: &mut OutdoorBuilder) {
         if !gate_top { gate_x } else { w / 2 - 1 },
         if !gate_top { 3 } else { 2 },
     );
-    build_wing_shell(b, manor, MaterialClass::Brick);
-    let front_y = if gate_top { manor.y0 } else { manor.y1 };
-    let back_y = if gate_top { manor.y1 } else { manor.y0 };
-    put_door(
-        b,
-        (manor.x0 + manor.x1) / 2,
-        front_y,
-        EdgeSide::North,
+
+    let pads = b.spawn_pads_m.clone();
+    let entry = if gate_top {
+        CardinalEntry::North
+    } else {
+        CardinalEntry::South
+    };
+    let home = generate_home_in_lot(
+        w,
+        h,
+        manor.lot(),
+        EconomicTier::LuxuryMansion,
+        entry,
         true,
-        MaterialClass::SolidWood,
+        rear_pad >= 5,
+        true,
+        &pads,
+        b.rng.next(),
     );
-    put_door(
-        b,
-        (manor.x0 + manor.x1) / 2,
-        back_y,
-        EdgeSide::North,
-        false,
-        MaterialClass::SolidWood,
-    );
-    put_door(
-        b,
-        manor.x0,
-        (manor.y0 + manor.y1) / 2,
-        EdgeSide::West,
-        false,
-        MaterialClass::SolidWood,
-    );
-    let rooms = partition_manor_rooms(b, manor);
-    furnish_estate_rooms(b, &rooms);
+    stack.absorb_home(b, home, true);
 
     build_carriage_house(b, carriage, gate_top);
+
+    let has_pool = b
+        .surfaces
+        .iter()
+        .any(|s| s.kind == SurfaceFeatureKind::PoolWater);
+    let side_lawn = if carriage_right {
+        RectM {
+            x0: comp.x0 as f32 + 1.2,
+            y0: manor.y0 as f32 - 1.0,
+            x1: (manor.x0 as f32 - 1.5).max(comp.x0 as f32 + 1.2),
+            y1: manor.y1 as f32 + 1.0,
+        }
+    } else {
+        RectM {
+            x0: manor.x1 as f32 + 1.5,
+            y0: manor.y0 as f32 - 1.0,
+            x1: (comp.x1 as f32 - 1.2).max(manor.x1 as f32 + 1.5),
+            y1: manor.y1 as f32 + 1.0,
+        }
+    };
+    if b.rng.chance(3, 4) {
+        let prefer_spa_only = has_pool || b.rng.chance(1, 3);
+        let _ = try_place_outdoor_pool_or_spa(
+            b,
+            side_lawn,
+            OutdoorPoolSpaOpts {
+                allow_pool: !has_pool,
+                allow_spa: true,
+                prefer_spa_only,
+            },
+        );
+    }
+
+    if b.rng.chance(2, 5) {
+        let creek_band = if carriage_right {
+            RectM {
+                x0: manor.x1 as f32 + 1.8,
+                y0: if gate_top {
+                    carriage.y1 as f32 + 1.5
+                } else {
+                    comp.y0 as f32 + 1.2
+                },
+                x1: (comp.x1 as f32 - 1.0).max(manor.x1 as f32 + 1.8),
+                y1: if gate_top {
+                    comp.y1 as f32 - 1.2
+                } else {
+                    carriage.y0 as f32 - 1.5
+                },
+            }
+        } else {
+            RectM {
+                x0: comp.x0 as f32 + 1.0,
+                y0: if gate_top {
+                    carriage.y1 as f32 + 1.5
+                } else {
+                    comp.y0 as f32 + 1.2
+                },
+                x1: (manor.x0 as f32 - 1.8).max(comp.x0 as f32 + 1.0),
+                y1: if gate_top {
+                    comp.y1 as f32 - 1.2
+                } else {
+                    carriage.y0 as f32 - 1.5
+                },
+            }
+        };
+        if !try_add_estate_creek(b, comp, creek_band, false) && rear_pad >= 4 {
+            let rear_band = if gate_top {
+                RectM {
+                    x0: comp.x0 as f32 + 1.0,
+                    y0: manor.y1 as f32 + 1.2,
+                    x1: comp.x1 as f32 - 1.0,
+                    y1: comp.y1 as f32 - 0.6,
+                }
+            } else {
+                RectM {
+                    x0: comp.x0 as f32 + 1.0,
+                    y0: comp.y0 as f32 + 0.6,
+                    x1: comp.x1 as f32 - 1.0,
+                    y1: manor.y0 as f32 - 1.2,
+                }
+            };
+            let _ = try_add_estate_creek(b, comp, rear_band, true);
+        }
+    }
+
     b.try_place_cm(
         PropKind::MediumFountain,
         OutdoorBuilder::cm(gx_m),
@@ -817,7 +982,7 @@ fn build_forecourt_turnaround(b: &mut OutdoorBuilder) {
 }
 
 /// Topology 1: Quadrant-mirrored L-wing mansion, paved terrace court & detached stable/carriage wing.
-fn build_lwing_compound(b: &mut OutdoorBuilder) {
+fn build_lwing_compound(b: &mut OutdoorBuilder, stack: &mut FloorStack) {
     let (w, h) = (b.w, b.h);
     let (wf, hf) = (w as f32, h as f32);
     let flip_x = b.rng.chance(1, 2);
@@ -840,50 +1005,62 @@ fn build_lwing_compound(b: &mut OutdoorBuilder) {
         340,
     );
 
-    let bar_w = (comp.w() * 48 / 100).clamp(10, 24);
-    let bar_h = (comp.h() * 34 / 100).clamp(5, 11);
-    let wing_w = (bar_w / 2).clamp(5, 11);
-    let wing_h = (comp.h() * 32 / 100).clamp(5, 11);
+    let bar_w = (comp.w() * 48 / 100)
+        .clamp(9, 24)
+        .min((comp.w() - 7).max(9));
+    let bar_h = (comp.h() * 38 / 100).clamp(6, 12);
+    let wing_w = (bar_w / 2).clamp(6, 12);
+    let max_wing_h = (comp.y1 - 3) - (comp.y0 + 2 + bar_h);
+    let has_wing = max_wing_h >= 5;
+    let wing_h = if has_wing {
+        (comp.h() * 32 / 100).clamp(5, 11).min(max_wing_h)
+    } else {
+        0
+    };
 
     let (bar, wing, car) = if !flip_x {
+        let bx0 = 4.max(comp.x0 + 2);
+        let cx0 = (w - 9).min(comp.x1 - 7);
         (
             BoxI {
-                x0: comp.x0 + 2,
+                x0: bx0,
                 y0: comp.y0 + 2,
-                x1: comp.x0 + 2 + bar_w,
+                x1: (bx0 + bar_w).min(w - 4),
                 y1: comp.y0 + 2 + bar_h,
             },
             BoxI {
-                x0: comp.x0 + 2,
+                x0: bx0,
                 y0: comp.y0 + 2 + bar_h,
-                x1: comp.x0 + 2 + wing_w,
-                y1: (comp.y0 + 2 + bar_h + wing_h).min(comp.y1 - 3),
+                x1: (bx0 + wing_w).min(w - 4),
+                y1: comp.y0 + 2 + bar_h + wing_h,
             },
             BoxI {
-                x0: comp.x1 - 7,
+                x0: cx0,
                 y0: comp.y1 - 6,
-                x1: comp.x1 - 2,
+                x1: cx0 + 5,
                 y1: comp.y1 - 2,
             },
         )
     } else {
+        let bx1 = (w - 4).min(comp.x1 - 2);
+        let cx0 = 4.max(comp.x0 + 2);
         (
             BoxI {
-                x0: comp.x1 - 2 - bar_w,
+                x0: (bx1 - bar_w).max(4),
                 y0: comp.y0 + 2,
-                x1: comp.x1 - 2,
+                x1: bx1,
                 y1: comp.y0 + 2 + bar_h,
             },
             BoxI {
-                x0: comp.x1 - 2 - wing_w,
+                x0: (bx1 - wing_w).max(4),
                 y0: comp.y0 + 2 + bar_h,
-                x1: comp.x1 - 2,
-                y1: (comp.y0 + 2 + bar_h + wing_h).min(comp.y1 - 3),
+                x1: bx1,
+                y1: comp.y0 + 2 + bar_h + wing_h,
             },
             BoxI {
-                x0: comp.x0 + 2,
+                x0: cx0,
                 y0: comp.y1 - 6,
-                x1: comp.x0 + 7,
+                x1: cx0 + 5,
                 y1: comp.y1 - 2,
             },
         )
@@ -900,16 +1077,31 @@ fn build_lwing_compound(b: &mut OutdoorBuilder) {
 
     let (tx0, tx1) = if !flip_x {
         (
-            wing.x1 as f32 + 0.5,
+            if has_wing {
+                wing.x1 as f32 + 0.5
+            } else {
+                bar.x0 as f32 + 0.5
+            },
             (bar.x1 as f32 + 1.5).min(comp.x1 as f32 - 2.0),
         )
     } else {
         (
             (bar.x0 as f32 - 1.5).max(comp.x0 as f32 + 2.0),
-            wing.x0 as f32 - 0.5,
+            if has_wing {
+                wing.x0 as f32 - 0.5
+            } else {
+                bar.x1 as f32 - 0.5
+            },
         )
     };
-    let (ty0, ty1) = (bar.y1 as f32 + 0.4, wing.y1 as f32 - 0.2);
+    let (ty0, ty1) = if has_wing {
+        (bar.y1 as f32 + 0.4, wing.y1 as f32 - 0.2)
+    } else {
+        (
+            bar.y1 as f32 + 0.4,
+            (bar.y1 as f32 + 3.6).min(comp.y1 as f32 - 1.2),
+        )
+    };
     if tx1 - tx0 >= 3.0 && ty1 - ty0 >= 3.0 {
         b.add_poly(
             SurfaceFeatureKind::ConcreteWalk,
@@ -928,36 +1120,110 @@ fn build_lwing_compound(b: &mut OutdoorBuilder) {
     );
 
     build_compound_wall(b, comp, w / 2 - 1, 2, gate_x, 3);
-    build_wing_shell(b, bar, MaterialClass::Brick);
-    build_wing_shell(b, wing, MaterialClass::Brick);
-    put_door(
-        b,
-        (wing.x0 + wing.x1) / 2,
-        bar.y1,
-        EdgeSide::North,
+
+    let pads = b.spawn_pads_m.clone();
+    let bar_home = generate_home_in_lot(
+        w,
+        h,
+        bar.lot(),
+        EconomicTier::LuxuryMansion,
+        CardinalEntry::South,
         true,
-        MaterialClass::SolidWood,
-    );
-    put_door(
-        b,
-        if !flip_x { wing.x1 } else { wing.x0 },
-        (wing.y0 + wing.y1) / 2,
-        EdgeSide::West,
-        true,
-        MaterialClass::SolidWood,
-    );
-    put_door(
-        b,
-        if !flip_x { bar.x1 - 2 } else { bar.x0 + 2 },
-        bar.y1,
-        EdgeSide::North,
         false,
-        MaterialClass::SolidWood,
+        true,
+        &pads,
+        b.rng.next(),
     );
-    let mut rooms = partition_manor_rooms(b, bar);
-    rooms.push(wing);
-    furnish_estate_rooms(b, &rooms);
+    stack.absorb_home(b, bar_home, true);
+
+    if has_wing {
+        let wing_entry = if !flip_x {
+            CardinalEntry::East
+        } else {
+            CardinalEntry::West
+        };
+        let wing_home = generate_annex_wing_in_lot(
+            w,
+            h,
+            wing.lot(),
+            EconomicTier::UpperMiddleClass,
+            wing_entry,
+            false,
+            false,
+            false,
+            &pads,
+            b.rng.next(),
+        );
+        FloorStack::absorb_ground(b, wing_home.ground);
+
+        let seam_door_x = (wing.x0 + wing.x1) / 2;
+        put_door(
+            b,
+            seam_door_x,
+            bar.y1,
+            EdgeSide::North,
+            true,
+            MaterialClass::SolidWood,
+        );
+        // Clear non-portal props placed flush against the internal bar<->wing seam doorway.
+        b.props.retain(|p| {
+            p.kind.is_vertical_portal()
+                || !(p.covers(seam_door_x, bar.y1 - 1) || p.covers(seam_door_x, bar.y1))
+        });
+    }
+
     build_carriage_house(b, car, false);
+
+    let has_pool = b
+        .surfaces
+        .iter()
+        .any(|s| s.kind == SurfaceFeatureKind::PoolWater);
+    let side_lawn = if !flip_x {
+        RectM {
+            x0: bar.x1 as f32 + 1.5,
+            y0: comp.y0 as f32 + 1.2,
+            x1: comp.x1 as f32 - 1.2,
+            y1: (car.y0 as f32 - 1.2).max(comp.y0 as f32 + 1.2),
+        }
+    } else {
+        RectM {
+            x0: comp.x0 as f32 + 1.2,
+            y0: comp.y0 as f32 + 1.2,
+            x1: (bar.x0 as f32 - 1.5).max(comp.x0 as f32 + 1.2),
+            y1: (car.y0 as f32 - 1.2).max(comp.y0 as f32 + 1.2),
+        }
+    };
+    if b.rng.chance(2, 5) {
+        let creek_band = if !flip_x {
+            RectM {
+                x0: (bar.x1 as f32 + 1.5).max(tx1 + 1.0),
+                y0: comp.y0 as f32 + 0.8,
+                x1: comp.x1 as f32 - 0.8,
+                y1: (car.y0 as f32 - 1.2).max(comp.y0 as f32 + 0.8),
+            }
+        } else {
+            RectM {
+                x0: comp.x0 as f32 + 0.8,
+                y0: comp.y0 as f32 + 0.8,
+                x1: (bar.x0 as f32 - 1.5).min(tx0 - 1.0),
+                y1: (car.y0 as f32 - 1.2).max(comp.y0 as f32 + 0.8),
+            }
+        };
+        let _ = try_add_estate_creek(b, comp, creek_band, false);
+    }
+
+    if b.rng.chance(4, 5) {
+        let prefer_spa_only = has_pool || b.rng.chance(1, 3);
+        let _ = try_place_outdoor_pool_or_spa(
+            b,
+            side_lawn,
+            OutdoorPoolSpaOpts {
+                allow_pool: !has_pool,
+                allow_spa: true,
+                prefer_spa_only,
+            },
+        );
+    }
 
     b.try_place_cm(
         PropKind::RoundTable,
@@ -988,8 +1254,8 @@ fn build_lwing_compound(b: &mut OutdoorBuilder) {
     );
 }
 
-/// Topology 2: Twin opposed wing pavilions around a central cloistered garden courtyard & reflecting stream.
-fn build_cloistered_villa(b: &mut OutdoorBuilder) {
+/// Topology 2: Twin opposed wing pavilions around a central cloistered garden courtyard, pool/spa & occasional stream.
+fn build_cloistered_villa(b: &mut OutdoorBuilder, stack: &mut FloorStack) {
     let (w, h) = (b.w, b.h);
     let wf = w as f32;
     let comp = BoxI {
@@ -1004,20 +1270,21 @@ fn build_cloistered_villa(b: &mut OutdoorBuilder) {
         350,
     );
 
-    let west_w = (comp.w() / 4).clamp(5, 11);
-    let east_w = (comp.w() / 5).clamp(5, 9);
-    let v_pad = (comp.h() / 5).max(2);
+    let west_w = (comp.w() * 28 / 100).clamp(7, 13);
+    let east_w = (comp.w() * 24 / 100).clamp(6, 11);
+    let v_pad = (comp.h() / 5).max(3);
     let west_villa = BoxI {
-        x0: comp.x0 + 2,
+        x0: 4.max(comp.x0 + 2),
         y0: comp.y0 + v_pad,
-        x1: comp.x0 + 2 + west_w,
-        y1: comp.y1 - v_pad,
+        x1: 4.max(comp.x0 + 2) + west_w,
+        y1: (comp.y1 - v_pad).max(comp.y0 + v_pad + 6),
     };
+    let east_x1 = (w - 4).min(comp.x1 - 2);
     let east_pav = BoxI {
-        x0: comp.x1 - 2 - east_w,
+        x0: east_x1 - east_w,
         y0: comp.y0 + v_pad + 1,
-        x1: comp.x1 - 2,
-        y1: comp.y1 - v_pad - 1,
+        x1: east_x1,
+        y1: (comp.y1 - v_pad - 1).max(comp.y0 + v_pad + 6),
     };
 
     let court = BoxI {
@@ -1030,69 +1297,172 @@ fn build_cloistered_villa(b: &mut OutdoorBuilder) {
     let mid_y = (court.y0 + court.y1) as f32 * 0.5;
 
     let gate_x = w / 2 - 1;
+    let drive_end_y = (court.y0 as f32 - 1.4).max(comp.y0 as f32 + 1.4);
     b.add_ribbon(
         SurfaceFeatureKind::AsphaltRoad,
         &[
             (gate_x as f32 + 1.5, 2.0),
             (gate_x as f32 + 1.5, comp.y0 as f32 + 1.5),
-            (mid_x, court.y0 as f32 - 0.5),
+            (mid_x, drive_end_y),
         ],
         280,
     );
-    let cx0 = court.x0 as f32 + 0.9;
-    let cx1 = (court.x1 as f32 - 0.9).max(cx0 + 1.5);
+    let cx0 = (court.x0 as f32 + 0.9).min(mid_x - 0.5);
+    let cx1 = (court.x1 as f32 - 0.9).max(mid_x + 0.5);
     let cy0 = court.y0 as f32 + 0.9;
     let cy1 = (court.y1 as f32 - 0.9).max(cy0 + 1.5);
-    for seg in [
-        [(cx0, cy0), (cx1, cy0)],
-        [(cx1, cy0), (cx1, cy1)],
-        [(cx1, cy1), (cx0, cy1)],
-        [(cx0, cy1), (cx0, cy0)],
-        [(mid_x, cy0), (mid_x, (mid_y - 0.9).max(cy0 + 0.4))],
-        [(mid_x, (mid_y + 0.9).min(cy1 - 0.4)), (mid_x, cy1)],
-    ] {
-        b.add_ribbon(SurfaceFeatureKind::StoneWalk, &seg, 185);
+    b.add_ribbon(
+        SurfaceFeatureKind::StoneWalk,
+        &[(mid_x, drive_end_y), (mid_x, cy0)],
+        195,
+    );
+    b.add_ribbon(
+        SurfaceFeatureKind::StoneWalk,
+        &[(cx0, cy0), (cx1, cy0), (cx1, cy1), (cx0, cy1), (cx0, cy0)],
+        185,
+    );
+    if court.w() >= 4 {
+        b.add_ribbon(
+            SurfaceFeatureKind::StoneWalk,
+            &[(court.x0 as f32, mid_y), (cx0 + 0.4, mid_y)],
+            170,
+        );
+        b.add_ribbon(
+            SurfaceFeatureKind::StoneWalk,
+            &[(cx1 - 0.4, mid_y), (court.x1 as f32, mid_y)],
+            170,
+        );
     }
-    let basin_rx = ((court.w() as f32) * 0.25).clamp(1.3, 4.2);
-    let basin_ry = ((court.h() as f32) * 0.24).clamp(1.3, 3.6);
-    b.add_poly(
-        SurfaceFeatureKind::GardenBedZone,
-        &ellipse_poly(mid_x, mid_y, basin_rx, basin_ry, 18),
-        120,
-    );
-    let rill = b.add_ribbon(
-        SurfaceFeatureKind::CreekChannel,
-        &[
-            (mid_x - basin_rx * 0.65, mid_y),
-            (mid_x, mid_y - basin_ry * 0.35),
-            (mid_x + basin_rx * 0.65, mid_y),
-        ],
-        190,
-    );
-    b.add_bridge_deck_across(rill, 0.5, 1.8, 2.6);
 
     build_compound_wall(b, comp, gate_x, 3, w / 2 - 1, 2);
-    build_wing_shell(b, west_villa, MaterialClass::Brick);
-    build_wing_shell(b, east_pav, MaterialClass::ConcreteBlock);
-    put_door(
-        b,
-        west_villa.x1,
-        (west_villa.y0 + west_villa.y1) / 2,
-        EdgeSide::West,
+
+    let pads = b.spawn_pads_m.clone();
+    let west_home = generate_home_in_lot(
+        w,
+        h,
+        west_villa.lot(),
+        EconomicTier::LuxuryMansion,
+        CardinalEntry::East,
         true,
-        MaterialClass::SolidWood,
-    );
-    put_door(
-        b,
-        east_pav.x0,
-        (east_pav.y0 + east_pav.y1) / 2,
-        EdgeSide::West,
+        west_villa.x0 - comp.x0 >= 5,
         true,
-        MaterialClass::SolidWood,
+        &pads,
+        b.rng.next(),
     );
-    let mut rooms = partition_manor_rooms(b, west_villa);
-    rooms.extend(partition_manor_rooms(b, east_pav));
-    furnish_estate_rooms(b, &rooms);
+    stack.absorb_home(b, west_home, true);
+
+    let east_home = generate_annex_wing_in_lot(
+        w,
+        h,
+        east_pav.lot(),
+        EconomicTier::UpperMiddleClass,
+        CardinalEntry::West,
+        true,
+        false,
+        true,
+        &pads,
+        b.rng.next(),
+    );
+    stack.absorb_home(b, east_home, false);
+
+    let has_pool = b
+        .surfaces
+        .iter()
+        .any(|s| s.kind == SurfaceFeatureKind::PoolWater);
+    let south_garden = RectM {
+        x0: comp.x0 as f32 + 1.0,
+        y0: (west_villa.y1 as f32 + 0.8).max(court.y1 as f32 + 0.8),
+        x1: comp.x1 as f32 - 1.0,
+        y1: comp.y1 as f32 - 0.8,
+    };
+    let cloister_roll = b.rng.range(0, 100);
+    if cloister_roll < 42 && !has_pool {
+        let court_inner = RectM {
+            x0: cx0 + 1.0,
+            y0: cy0 + 1.0,
+            x1: (cx1 - 1.0).max(cx0 + 1.0),
+            y1: (cy1 - 1.0).max(cy0 + 1.0),
+        };
+        if !try_place_outdoor_pool_or_spa(
+            b,
+            court_inner,
+            OutdoorPoolSpaOpts {
+                allow_pool: true,
+                allow_spa: true,
+                prefer_spa_only: false,
+            },
+        ) {
+            if cy1 - cy0 >= 1.2 {
+                b.add_ribbon(
+                    SurfaceFeatureKind::StoneWalk,
+                    &[(mid_x, cy0), (mid_x, cy1)],
+                    175,
+                );
+            }
+            let _ = try_place_outdoor_pool_or_spa(
+                b,
+                south_garden,
+                OutdoorPoolSpaOpts {
+                    allow_pool: true,
+                    allow_spa: true,
+                    prefer_spa_only: false,
+                },
+            );
+        }
+    } else if cloister_roll < 82 {
+        if cy1 - cy0 >= 1.2 {
+            b.add_ribbon(
+                SurfaceFeatureKind::StoneWalk,
+                &[(mid_x, cy0), (mid_x, cy1)],
+                175,
+            );
+        }
+        if court.w() >= 6 && court.h() >= 6 {
+            let basin_rx = ((court.w() as f32) * 0.25).clamp(1.3, 4.0);
+            let basin_ry = ((court.h() as f32) * 0.22).clamp(1.2, 3.2);
+            b.add_poly(
+                SurfaceFeatureKind::StoneWalk,
+                &ellipse_poly(mid_x, mid_y, basin_rx + 0.75, basin_ry + 0.75, 18),
+                45,
+            );
+            b.add_poly(
+                SurfaceFeatureKind::GardenBedZone,
+                &ellipse_poly(mid_x, mid_y, basin_rx, basin_ry, 18),
+                120,
+            );
+            let _ = b.try_place_cm(
+                PropKind::MediumFountain,
+                OutdoorBuilder::cm(mid_x),
+                OutdoorBuilder::cm(mid_y),
+                0,
+                None,
+                true,
+            );
+        }
+        if b.rng.chance(1, 2) {
+            let _ = try_add_estate_creek(b, comp, south_garden, true);
+        }
+        let allow_pool = !has_pool && b.rng.chance(1, 2);
+        let prefer_spa_only = has_pool || b.rng.chance(1, 2);
+        let _ = try_place_outdoor_pool_or_spa(
+            b,
+            south_garden,
+            OutdoorPoolSpaOpts {
+                allow_pool,
+                allow_spa: true,
+                prefer_spa_only,
+            },
+        );
+    } else {
+        if cy1 - cy0 >= 1.2 {
+            b.add_ribbon(
+                SurfaceFeatureKind::StoneWalk,
+                &[(mid_x, cy0), (mid_x, cy1)],
+                175,
+            );
+        }
+        let _ = try_add_estate_creek(b, comp, south_garden, true);
+    }
 
     if court.w() >= 6 {
         for &(px, py) in &[

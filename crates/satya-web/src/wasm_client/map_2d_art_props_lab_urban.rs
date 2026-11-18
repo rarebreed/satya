@@ -7,7 +7,10 @@
 //! `WasherDryer`, `SingleBed`), office amenities (`FilingCabinet`, `WaterCooler`), and urban
 //! streetscapes (`BrownstoneStoop`, `AwningCanopy`).
 
-use crate::wasm_client::map_2d_art_furniture::{FURNITURE_WOODS, wood_veneer_overlay};
+use crate::wasm_client::map_2d_art_furniture::{
+    FURNITURE_WOODS, leather_overlay, metallic_coat_overlay, porcelain_overlay, travertine_overlay,
+    wood_veneer_overlay,
+};
 use crate::wasm_client::map_2d_art_props::{BATTLEMAP_INK, battlemap_mix_u64};
 use crate::wasm_client::map_2d_art_textures::BattlemapTextureMode;
 use satya_schema::{MapPropPlacement, PropKind, format_rgb_hex};
@@ -49,7 +52,9 @@ pub(crate) fn push_lab_urban_furniture_glyph(
     match kind {
         PropKind::Cot => {
             rect(out, [-l + 6.0, -t + 5.0, lw - 12.0, lh - 10.0], 3.0, "#4b5563", "");
-            rect(out, [-l + 9.0, -t + 8.0, lw - 18.0, lh - 16.0], 2.5, "#6b7b5c", thin);
+            let mat = [-l + 9.0, -t + 8.0, lw - 18.0, lh - 16.0];
+            rect(out, mat, 2.5, "#6b7b5c", thin);
+            leather_overlay(out, mat, 2.5, painted);
             rect(out, [-l + 10.0, -10.0, 12.0, 20.0], 2.0, "#e5e7eb", thin);
         }
         PropKind::Gurney => {
@@ -71,13 +76,17 @@ pub(crate) fn push_lab_urban_furniture_glyph(
         }
         PropKind::ReclinerChair => {
             let c = pick(v, &["#4f6d8a", "#5f7468", "#70607a"]);
-            rect(out, [-l + 8.0, -t + 7.0, lw - 16.0, lh - 14.0], 6.0, c, "");
+            let seat = [-l + 8.0, -t + 7.0, lw - 16.0, lh - 14.0];
+            rect(out, seat, 6.0, c, "");
+            leather_overlay(out, seat, 6.0, painted);
             rect(out, [-l + 8.0, -t + 7.0, lw - 16.0, 12.0], 4.0, "#334155", thin);
             rect(out, [-l + 11.0, 2.0, lw - 22.0, t - 10.0], 3.0, "#64748b", thin);
         }
         PropKind::MedicalCounter => {
-            rect(out, [-l + 3.0, -t + 4.0, lw - 6.0, lh - 10.0], 3.0, "#cbd5e1", "");
+            let top = [-l + 3.0, -t + 4.0, lw - 6.0, lh - 10.0];
+            rect(out, top, 3.0, "#cbd5e1", "");
             rect(out, [-l + 5.0, -t + 6.0, lw - 10.0, lh - 14.0], 2.0, "#f1f5f9", thin);
+            travertine_overlay(out, [-l + 5.0, -t + 6.0, lw - 10.0, lh - 14.0], 2.0, painted);
             rect(out, [l - 22.0, -t + 9.0, 14.0, 12.0], 2.0, "#94a3b8", thin);
             circle(out, l - 15.0, -t + 15.0, 2.0, "#334155", "stroke='none'");
         }
@@ -170,7 +179,9 @@ pub(crate) fn push_lab_urban_furniture_glyph(
         }
         PropKind::AirCompressor => {
             circle(out, -4.0, 0.0, 16.0, "#b91c1c", "");
-            rect(out, [-14.0, -9.0, 26.0, 18.0], 6.0, "#dc2626", thin);
+            let tank = [-14.0, -9.0, 26.0, 18.0];
+            rect(out, tank, 6.0, "#dc2626", thin);
+            metallic_coat_overlay(out, tank, 6.0, painted);
             circle(out, 12.0, 0.0, 6.0, "#cbd5e1", thin);
             circle(out, 0.0, 0.0, 5.0, "#1e293b", thin);
         }
@@ -183,7 +194,9 @@ pub(crate) fn push_lab_urban_furniture_glyph(
             rect(out, [l - 23.0, -t + 16.0, 10.0, 10.0], 1.0, "#38bdf8", r#"stroke="none""#);
         }
         PropKind::ServerRack => {
-            rect(out, [-l + 5.0, -t + 5.0, lw - 10.0, lh - 10.0], 2.5, "#0f172a", "");
+            let chassis = [-l + 5.0, -t + 5.0, lw - 10.0, lh - 10.0];
+            rect(out, chassis, 2.5, "#0f172a", "");
+            metallic_coat_overlay(out, chassis, 2.5, painted);
             rect(out, [-l + 9.0, -t + 9.0, lw - 18.0, lh - 18.0], 1.5, "#1e293b", thin);
             let _ = write!(
                 out,
@@ -199,19 +212,25 @@ pub(crate) fn push_lab_urban_furniture_glyph(
             );
         }
         PropKind::FumeHood => {
-            rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 3.0, "#e2e8f0", "");
+            let shell = [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0];
+            rect(out, shell, 3.0, "#e2e8f0", "");
+            porcelain_overlay(out, shell, 3.0, painted);
             rect(out, [-l + 8.0, -t + 10.0, lw - 16.0, lh - 18.0], 2.0, "#bae6fd", thin);
             rect(out, [-l + 12.0, t - 9.0, lw - 24.0, 4.0], 1.0, "#38bdf8", thin);
         }
         PropKind::ShowerStall => {
-            rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 4.0, "#e0f2fe", "");
+            let pan = [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0];
+            rect(out, pan, 4.0, "#e0f2fe", "");
+            porcelain_overlay(out, pan, 4.0, painted);
             rect(out, [-l + 7.0, -t + 7.0, lw - 14.0, lh - 14.0], 2.5, "#bae6fd", thin);
             circle(out, 0.0, 0.0, 4.0, "#64748b", thin);
             circle(out, 0.0, -t + 11.0, 4.5, "#94a3b8", thin);
         }
         PropKind::SpaBath => {
-            rect(out, [-l + 5.0, -t + 5.0, lw - 10.0, lh - 10.0], 10.0, "#f1f5f9", "");
-            rect(out, [-l + 12.0, -t + 12.0, lw - 24.0, lh - 24.0], 16.0, "#38bdf8", thin);
+            let shell = if painted { "url(#bm-porcelain)" } else { "#f1f5f9" };
+            let basin = if painted { "url(#bm-spa-water)" } else { "#38bdf8" };
+            rect(out, [-l + 5.0, -t + 5.0, lw - 10.0, lh - 10.0], 10.0, shell, "");
+            rect(out, [-l + 12.0, -t + 12.0, lw - 24.0, lh - 24.0], 16.0, basin, thin);
             for (jx, jy) in [(-14.0, -14.0), (14.0, -14.0), (-14.0, 14.0), (14.0, 14.0)] {
                 circle(out, jx, jy, 4.0, "#e0f2fe", r#"stroke="none" fill-opacity=".65""#);
             }
@@ -228,8 +247,12 @@ pub(crate) fn push_lab_urban_furniture_glyph(
         }
         PropKind::WasherDryer => {
             let half = lw * 0.5 - 6.0;
-            rect(out, [-l + 4.0, -t + 5.0, half, lh - 10.0], 3.0, "#f1f5f9", "");
-            rect(out, [2.0, -t + 5.0, half, lh - 10.0], 3.0, "#e2e8f0", "");
+            let left = [-l + 4.0, -t + 5.0, half, lh - 10.0];
+            let right = [2.0, -t + 5.0, half, lh - 10.0];
+            rect(out, left, 3.0, "#f1f5f9", "");
+            porcelain_overlay(out, left, 3.0, painted);
+            rect(out, right, 3.0, "#e2e8f0", "");
+            porcelain_overlay(out, right, 3.0, painted);
             circle(out, -l * 0.5, 2.0, 9.5, "#334155", thin);
             circle(out, l * 0.5, 2.0, 9.5, "#475569", thin);
         }
@@ -239,12 +262,16 @@ pub(crate) fn push_lab_urban_furniture_glyph(
             rect(out, [-l + 13.0, -t + 11.0, 16.0, lh - 22.0], 2.5, "#ffffff", thin);
         }
         PropKind::FilingCabinet => {
-            rect(out, [-l + 6.0, -t + 6.0, lw - 12.0, lh - 12.0], 2.5, "#64748b", "");
+            let body = [-l + 6.0, -t + 6.0, lw - 12.0, lh - 12.0];
+            rect(out, body, 2.5, "#64748b", "");
+            metallic_coat_overlay(out, body, 2.5, painted);
             rect(out, [-l + 9.0, -t + 9.0, lw - 18.0, 8.0], 1.0, "#94a3b8", thin);
             rect(out, [-6.0, t - 12.0, 12.0, 3.0], 1.0, "#cbd5e1", r#"stroke="none""#);
         }
         PropKind::WaterCooler => {
-            rect(out, [-12.0, -12.0, 24.0, 24.0], 4.0, "#e2e8f0", "");
+            let body = [-12.0, -12.0, 24.0, 24.0];
+            rect(out, body, 4.0, "#e2e8f0", "");
+            porcelain_overlay(out, body, 4.0, painted);
             circle(out, 0.0, 0.0, 9.0, "#38bdf8", thin);
             circle(out, -2.5, -2.5, 3.0, "#e0f2fe", r#"stroke="none""#);
         }

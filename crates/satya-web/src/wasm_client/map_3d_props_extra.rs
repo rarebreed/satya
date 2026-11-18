@@ -476,21 +476,153 @@ pub(crate) fn push_extra_prop_3d(
                 0.0,
             );
         }
-        PropKind::HotTub => {
-            push_obb(verts, cx, cz, 0.0, top, hx * 0.95, hz * 0.95, rot, rgb, 0.0);
-            push_obb(
-                verts,
-                cx,
-                cz,
-                top * 0.82,
-                top + 0.02,
-                hx * 0.76,
-                hz * 0.76,
-                rot,
-                [0.16, 0.68, 0.84],
-                -6.0,
-            );
-        }
+        PropKind::HotTub => match p.variant_seed & 3 {
+            0 => {
+                // CedarDeckTub: warm cedar cabinet + timber front step + aerated cyan water.
+                push_obb(verts, cx, cz, 0.0, top, hx * 0.94, hz * 0.94, rot, rgb, 0.0);
+                let (sx, sz) = rot_pt(0.0, hz * 0.96);
+                push_obb(
+                    verts,
+                    sx,
+                    sz,
+                    0.0,
+                    top * 0.34,
+                    hx * 0.52,
+                    0.18,
+                    rot,
+                    [0.45, 0.30, 0.18],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top * 0.82,
+                    top + 0.02,
+                    hx * 0.76,
+                    hz * 0.76,
+                    rot,
+                    [0.18, 0.74, 0.88],
+                    -6.0,
+                );
+            }
+            1 => {
+                // OctagonalTravertineSpa: 45-deg dual travertine OBB octagon + octagonal spa water.
+                let r = hx.min(hz) * 0.86;
+                let wr = r * 0.79;
+                for ang in [rot, rot + 45] {
+                    push_obb(
+                        verts,
+                        cx,
+                        cz,
+                        0.0,
+                        top,
+                        r,
+                        r,
+                        ang,
+                        [0.85, 0.82, 0.76],
+                        0.0,
+                    );
+                    push_obb(
+                        verts,
+                        cx,
+                        cz,
+                        top * 0.82,
+                        top + 0.02,
+                        wr,
+                        wr,
+                        ang,
+                        [0.18, 0.74, 0.88],
+                        -6.0,
+                    );
+                }
+            }
+            2 => {
+                // SunkenMosaicGrotto: low travertine grotto slab, perimeter stones & sunken turquoise pool.
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top * 0.62,
+                    hx * 0.95,
+                    hz * 0.95,
+                    rot,
+                    [0.82, 0.79, 0.73],
+                    0.0,
+                );
+                for (bx, bz, br) in [
+                    (-hx * 0.66, -hz * 0.62, 0.22),
+                    (hx * 0.64, -hz * 0.54, 0.20),
+                    (-hx * 0.56, hz * 0.62, 0.19),
+                ] {
+                    let (px, pz) = rot_pt(bx, bz);
+                    push_obb(
+                        verts,
+                        px,
+                        pz,
+                        0.0,
+                        top * 1.04,
+                        br,
+                        br * 0.88,
+                        rot + 24,
+                        [0.52, 0.50, 0.47],
+                        0.0,
+                    );
+                }
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top * 0.42,
+                    top * 0.64,
+                    hx * 0.72,
+                    hz * 0.70,
+                    rot,
+                    [0.14, 0.70, 0.84],
+                    -6.0,
+                );
+            }
+            _ => {
+                // ModernArchitecturalSpa: charcoal architectural frame + porcelain bezel + flush water.
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    0.0,
+                    top,
+                    hx * 0.96,
+                    hz * 0.96,
+                    rot,
+                    [0.18, 0.21, 0.24],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top * 0.80,
+                    top + 0.01,
+                    hx * 0.86,
+                    hz * 0.86,
+                    rot,
+                    [0.93, 0.95, 0.97],
+                    0.0,
+                );
+                push_obb(
+                    verts,
+                    cx,
+                    cz,
+                    top * 0.86,
+                    top + 0.02,
+                    hx * 0.75,
+                    hz * 0.75,
+                    rot,
+                    [0.20, 0.78, 0.90],
+                    -6.0,
+                );
+            }
+        },
         PropKind::FloorClothes | PropKind::FloorToys => {
             push_obb(
                 verts,
@@ -710,5 +842,30 @@ pub fn push_translucent_canopies_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMap
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use satya_engine::map_dressing::make_prop;
+
+    #[test]
+    fn hot_tub_3d_emits_distinct_finite_meshes_across_all_four_spa_styles() {
+        let mut vert_counts = Vec::new();
+        for variant_seed in 0..4_u32 {
+            let prop = make_prop(PropKind::HotTub, 4, 4, 0, None, variant_seed);
+            let mut verts = Vec::new();
+            assert!(push_extra_prop_3d(
+                &mut verts, &prop, 5.0, 5.0, 0.9, 0.9, 0.88, false, 1.0
+            ));
+            assert!(!verts.is_empty(), "HotTub style {variant_seed} emitted 0 verts");
+            assert!(verts.iter().all(|v| {
+                v.position.iter().all(|c| c.is_finite()) && v.normal.iter().all(|c| c.is_finite())
+            }));
+            vert_counts.push(verts.len());
+        }
+        assert!(vert_counts[1] > vert_counts[0]);
+        assert!(vert_counts[2] > vert_counts[0]);
     }
 }

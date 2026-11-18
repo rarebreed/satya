@@ -7,7 +7,9 @@
 //! `ConveyorBelt`, `IndustrialPress`, `PalletRack`, `Forklift`, `ShippingContainer`, `CropRow`,
 //! and `PlanterTable`).
 
-use crate::wasm_client::map_2d_art_furniture::{FURNITURE_WOODS, wood_veneer_overlay};
+use crate::wasm_client::map_2d_art_furniture::{
+    FURNITURE_WOODS, metallic_coat_overlay, wood_veneer_overlay,
+};
 use crate::wasm_client::map_2d_art_props::{BATTLEMAP_INK, battlemap_mix_u64};
 use satya_schema::PropKind;
 use std::fmt::Write as _;
@@ -312,13 +314,9 @@ pub(crate) fn push_facility_furniture_glyph(
             rect(out, [l * 0.15, -9.0, 16.0, 18.0], 2.0, "#b8864c", thin);
         }
         PropKind::IndustrialPress => {
-            rect(
-                out,
-                [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0],
-                5.0,
-                "#d97706",
-                "",
-            );
+            let hull = [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0];
+            rect(out, hull, 5.0, "#d97706", "");
+            metallic_coat_overlay(out, hull, 5.0, painted);
             rect(
                 out,
                 [-l + 12.0, -t + 12.0, lw - 24.0, lh - 24.0],
@@ -337,13 +335,9 @@ pub(crate) fn push_facility_furniture_glyph(
             circle(out, l * 0.34, 0.0, 11.0, "#94a3b8", thin);
         }
         PropKind::PalletRack => {
-            rect(
-                out,
-                [-l + 2.0, -t + 4.0, lw - 4.0, lh - 8.0],
-                2.0,
-                "#c2410c",
-                "",
-            );
+            let frame = [-l + 2.0, -t + 4.0, lw - 4.0, lh - 8.0];
+            rect(out, frame, 2.0, "#c2410c", "");
+            metallic_coat_overlay(out, frame, 2.0, painted);
             rect(
                 out,
                 [-l + 6.0, -t + 8.0, lw - 12.0, lh - 16.0],
@@ -365,13 +359,9 @@ pub(crate) fn push_facility_furniture_glyph(
             }
         }
         PropKind::Forklift => {
-            rect(
-                out,
-                [-l + 4.0, -t + 10.0, lw * 0.60, lh - 20.0],
-                6.0,
-                "#eab308",
-                "",
-            );
+            let cab = [-l + 4.0, -t + 10.0, lw * 0.60, lh - 20.0];
+            rect(out, cab, 6.0, "#eab308", "");
+            metallic_coat_overlay(out, cab, 6.0, painted);
             rect(
                 out,
                 [-l + 10.0, -t + 15.0, lw * 0.36, lh - 30.0],
@@ -403,7 +393,9 @@ pub(crate) fn push_facility_furniture_glyph(
         }
         PropKind::ShippingContainer => {
             let hull = pick(v, CONTAINER_HUES);
-            rect(out, [-l + 2.0, -t + 3.0, lw - 4.0, lh - 6.0], 2.5, hull, "");
+            let coords = [-l + 2.0, -t + 3.0, lw - 4.0, lh - 6.0];
+            rect(out, coords, 2.5, hull, "");
+            metallic_coat_overlay(out, coords, 2.5, painted);
             let ribs = ((lw - 16.0) / 16.0).round().max(6.0) as i32;
             let step = (lw - 16.0) / ribs as f32;
             for i in 0..=ribs {

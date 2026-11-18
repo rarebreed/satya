@@ -226,6 +226,31 @@ fn push_ring_d(out: &mut String, ring_m: &[(f32, f32)], cell_px: f32) {
     }
 }
 
+fn collect_kind_rings_d(
+    order: &[(usize, &MapSurfaceFeature)],
+    kind: SurfaceFeatureKind,
+    bw_m: f32,
+    bh_m: f32,
+    cell_px: f32,
+) -> String {
+    let mut batch_d = String::new();
+    for (_, s) in order {
+        if s.kind != kind {
+            continue;
+        }
+        let ring = match s.shape {
+            SurfaceShapeKind::RibbonSpline => {
+                extrude_surface_ribbon_m(s, bw_m, bh_m).to_closed_ring_m()
+            }
+            _ => sampled_closed_ring_m(s),
+        };
+        if ring.len() >= 3 {
+            push_ring_d(&mut batch_d, &ring, cell_px);
+        }
+    }
+    batch_d
+}
+
 fn emit_vector_surfaces_svg(
     out: &mut String,
     ui: &TacticalMapUiState,
@@ -276,6 +301,7 @@ fn emit_vector_surfaces_svg(
         );
     }
 
+    let mut walk_bordered = [false; 3];
     for &(_, s) in &order {
         let ring = match s.shape {
             SurfaceShapeKind::RibbonSpline => {
@@ -294,20 +320,33 @@ fn emit_vector_surfaces_svg(
                 let _ = write!(out, r##"<path d="{d}" fill="url(#bm-tarmac)"/>"##);
             }
             SurfaceFeatureKind::ConcreteWalk => {
+                if !walk_bordered[0] {
+                    walk_bordered[0] = true;
+                    let batch = collect_kind_rings_d(&order, s.kind, bw_m, bh_m, cell_px);
+                    let _ = write!(
+                        out,
+                        r##"<path d="{batch}" fill="none" stroke="#9e988c" stroke-width="2" stroke-linejoin="round"/>"##
+                    );
+                }
                 let fill = if painted {
                     "url(#bm-concrete)"
                 } else {
                     "#cac6bc"
                 };
-                let _ = write!(
-                    out,
-                    r##"<path d="{d}" fill="{fill}" stroke="#9e988c" stroke-width="2" stroke-linejoin="round"/>"##
-                );
+                let _ = write!(out, r##"<path d="{d}" fill="{fill}" stroke="none"/>"##);
             }
             SurfaceFeatureKind::StoneWalk => {
+                if !walk_bordered[1] {
+                    walk_bordered[1] = true;
+                    let batch = collect_kind_rings_d(&order, s.kind, bw_m, bh_m, cell_px);
+                    let _ = write!(
+                        out,
+                        r##"<path d="{batch}" fill="none" stroke="#8b8273" stroke-width="3.6" stroke-linejoin="round" opacity=".55"/><path d="{batch}" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.4" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                    );
+                }
                 let _ = write!(
                     out,
-                    r##"<path d="{d}" fill="none" stroke="#8b8273" stroke-width="3.6" stroke-linejoin="round" opacity=".55"/><path d="{d}" fill="url(#bm-paver)" stroke="{BATTLEMAP_INK}" stroke-width="1.4" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                    r##"<path d="{d}" fill="url(#bm-paver)" stroke="none"/>"##
                 );
             }
             SurfaceFeatureKind::GravelRoad => {
@@ -451,9 +490,14 @@ fn emit_vector_surfaces_svg(
                 } else {
                     "#38b6d6"
                 };
+                let coping = if painted {
+                    "url(#bm-travertine)"
+                } else {
+                    "#ddd6c7"
+                };
                 let _ = write!(
                     out,
-                    r##"<path d="{d}" fill="none" stroke="#ddd6c7" stroke-width="7.5" stroke-linejoin="round"/><path d="{d}" fill="{fill}" stroke="#277996" stroke-width="2.2" stroke-linejoin="round" filter="url(#bm-ink)"/><path d="{d}" fill="none" stroke="#b8f2ff" stroke-width="1.5" stroke-opacity=".55" stroke-linejoin="round"/>"##
+                    r##"<path d="{d}" fill="none" stroke="#3b3730" stroke-opacity=".42" stroke-width="9.0" stroke-linejoin="round"/><path d="{d}" fill="none" stroke="{coping}" stroke-width="7.5" stroke-linejoin="round"/><path d="{d}" fill="{fill}" stroke="#277996" stroke-width="2.2" stroke-linejoin="round" filter="url(#bm-ink)"/><path d="{d}" fill="none" stroke="#b8f2ff" stroke-width="1.5" stroke-opacity=".55" stroke-linejoin="round"/>"##
                 );
             }
             SurfaceFeatureKind::InteriorFloor => {
@@ -475,8 +519,11 @@ fn emit_vector_surfaces_svg(
             }
             SurfaceFeatureKind::LawnGrassZone => {
                 let fill = if painted {
-                    ["url(#bm-grass)", "url(#bm-grass-lush)", "url(#bm-grass-dry)"]
-                        [(s.variant_seed % 3) as usize]
+                    [
+                        "url(#bm-grass)",
+                        "url(#bm-grass-lush)",
+                        "url(#bm-grass-dry)",
+                    ][(s.variant_seed % 3) as usize]
                 } else {
                     ["#638045", "#4e8442", "#9e9555"][(s.variant_seed % 3) as usize]
                 };
@@ -486,15 +533,20 @@ fn emit_vector_surfaces_svg(
                 );
             }
             SurfaceFeatureKind::BrickPaverWalk => {
+                if !walk_bordered[2] {
+                    walk_bordered[2] = true;
+                    let batch = collect_kind_rings_d(&order, s.kind, bw_m, bh_m, cell_px);
+                    let _ = write!(
+                        out,
+                        r##"<path d="{batch}" fill="none" stroke="{BATTLEMAP_INK}" stroke-width="1.4" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
+                    );
+                }
                 let fill = if painted {
                     "url(#bm-herringbone-brick)"
                 } else {
                     "#a2614c"
                 };
-                let _ = write!(
-                    out,
-                    r##"<path d="{d}" fill="{fill}" stroke="{BATTLEMAP_INK}" stroke-width="1.4" stroke-linejoin="round" filter="url(#bm-ink)"/>"##
-                );
+                let _ = write!(out, r##"<path d="{d}" fill="{fill}" stroke="none"/>"##);
             }
             SurfaceFeatureKind::StainedConcreteFloor => {
                 let fill = if painted {

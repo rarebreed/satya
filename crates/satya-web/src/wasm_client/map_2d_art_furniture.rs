@@ -42,25 +42,54 @@ fn rect(out: &mut String, [x, y, w, h]: [f32; 4], rx: f32, fill: &str, extra: &s
     );
 }
 
-fn fabric_overlay(out: &mut String, [x, y, w, h]: [f32; 4], rx: f32) {
-    rect(
+fn multiply_overlay(out: &mut String, coords: [f32; 4], rx: f32, pattern: &str, opacity: &str) {
+    let _ = write!(
         out,
-        [x, y, w, h],
-        rx,
-        "url(#bm-fabric)",
-        r#"fill-opacity=".38" style="mix-blend-mode:multiply" stroke="none""#,
+        r#"<rect x="{:.1}" y="{:.1}" width="{:.1}" height="{:.1}" rx="{rx:.1}" fill="url({pattern})" fill-opacity="{opacity}" style="mix-blend-mode:multiply" stroke="none"/>"#,
+        coords[0],
+        coords[1],
+        coords[2].max(1.0),
+        coords[3].max(1.0),
     );
+}
+
+fn fabric_overlay(out: &mut String, coords: [f32; 4], rx: f32) {
+    multiply_overlay(out, coords, rx, "#bm-fabric", ".38");
 }
 
 pub(crate) fn wood_veneer_overlay(out: &mut String, coords: [f32; 4], rx: f32, painted: bool) {
     if painted {
-        rect(
-            out,
-            coords,
-            rx,
-            "url(#bm-wood-veneer)",
-            r#"fill-opacity=".42" style="mix-blend-mode:multiply" stroke="none""#,
-        );
+        multiply_overlay(out, coords, rx, "#bm-wood-veneer", ".42");
+    }
+}
+
+pub(crate) fn leather_overlay(out: &mut String, coords: [f32; 4], rx: f32, painted: bool) {
+    if painted {
+        multiply_overlay(out, coords, rx, "#bm-leather", ".40");
+    }
+}
+
+pub(crate) fn rug_weave_overlay(out: &mut String, coords: [f32; 4], rx: f32, painted: bool) {
+    if painted {
+        multiply_overlay(out, coords, rx, "#bm-rug-weave", ".42");
+    }
+}
+
+pub(crate) fn metallic_coat_overlay(out: &mut String, coords: [f32; 4], rx: f32, painted: bool) {
+    if painted {
+        multiply_overlay(out, coords, rx, "#bm-car-coat", ".38");
+    }
+}
+
+pub(crate) fn porcelain_overlay(out: &mut String, coords: [f32; 4], rx: f32, painted: bool) {
+    if painted {
+        multiply_overlay(out, coords, rx, "#bm-porcelain", ".36");
+    }
+}
+
+pub(crate) fn travertine_overlay(out: &mut String, coords: [f32; 4], rx: f32, painted: bool) {
+    if painted {
+        multiply_overlay(out, coords, rx, "#bm-travertine", ".40");
     }
 }
 
@@ -130,7 +159,12 @@ pub fn push_furniture_glyph_with_mode(
             rect(out, [-l + 3.0, -t + 14.0, 12.0, lh - 20.0], 5.0, f, "");
             rect(out, [l - 15.0, -t + 14.0, 12.0, lh - 20.0], 5.0, f, "");
             if painted {
-                fabric_overlay(out, [-l + 3.0, -t + 8.0, lw - 6.0, lh - 14.0], 8.0);
+                let coords = [-l + 3.0, -t + 8.0, lw - 6.0, lh - 14.0];
+                if (v & 1) == 1 {
+                    fabric_overlay(out, coords, 8.0);
+                } else {
+                    leather_overlay(out, coords, 8.0, painted);
+                }
             }
             let seats = p.w_cells.max(p.h_cells).max(2);
             let span = lw - 30.0;
@@ -166,9 +200,7 @@ pub fn push_furniture_glyph_with_mode(
                 c,
                 r#"stroke-width="1.2" opacity=".85""#,
             );
-            if painted {
-                fabric_overlay(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 2.0);
-            }
+            rug_weave_overlay(out, [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0], 2.0, painted);
             rect(
                 out,
                 [-l + 12.0, -t + 12.0, lw - 24.0, lh - 24.0],
@@ -222,10 +254,8 @@ pub fn push_furniture_glyph_with_mode(
             let f = pick(v, &["#8b2e2e", "#2f4f6b", "#5a3d2b"]);
             rect(out, [-l + 4.0, -t + 4.0, lw - 8.0, 24.0], 6.0, f, "");
             rect(out, [-l + 4.0, t - 28.0, lw - 8.0, 24.0], 6.0, f, "");
-            if painted {
-                fabric_overlay(out, [-l + 4.0, -t + 4.0, lw - 8.0, 24.0], 6.0);
-                fabric_overlay(out, [-l + 4.0, t - 28.0, lw - 8.0, 24.0], 6.0);
-            }
+            leather_overlay(out, [-l + 4.0, -t + 4.0, lw - 8.0, 24.0], 6.0, painted);
+            leather_overlay(out, [-l + 4.0, t - 28.0, lw - 8.0, 24.0], 6.0, painted);
             rect(
                 out,
                 [-l + 6.0, -t + 4.0, lw - 12.0, 8.0],
@@ -358,7 +388,9 @@ pub fn push_furniture_glyph_with_mode(
             let depth = lh * 0.62;
             let top = pick(v, COUNTER_STONES);
             let sink = if painted { "url(#bm-steel)" } else { "#b7c1c7" };
-            rect(out, [-l + 1.0, -t + 2.0, lw - 2.0, depth], 1.5, top, "");
+            let coords = [-l + 1.0, -t + 2.0, lw - 2.0, depth];
+            rect(out, coords, 1.5, top, "");
+            travertine_overlay(out, coords, 1.5, painted);
             let _ = write!(
                 out,
                 r#"<path d="M{:.1} {:.1}H{:.1}" {thin}/>"#,
@@ -480,6 +512,16 @@ pub fn push_furniture_glyph_with_mode(
         PropKind::BarStool => {
             circle(out, 0.0, 0.0, 11.0, "#2f3337", "");
             circle(out, 0.0, 0.0, 7.0, "#7a2f2f", r#"stroke-width="1""#);
+            if painted {
+                circle(
+                    out,
+                    0.0,
+                    0.0,
+                    7.0,
+                    "url(#bm-leather)",
+                    r#"fill-opacity=".40" style="mix-blend-mode:multiply" stroke="none""#,
+                );
+            }
         }
         PropKind::PoolTable => {
             let rim = [-l + 8.0, -t + 8.0, lw - 16.0, lh - 16.0];
@@ -540,7 +582,7 @@ pub fn push_furniture_glyph_with_mode(
                 out,
                 [-l + 4.0, -t + 6.0, lw - 8.0, lh - 12.0],
                 14.0,
-                "#f4f7f9",
+                if painted { "url(#bm-porcelain)" } else { "#f4f7f9" },
                 "",
             );
             rect(
@@ -553,10 +595,11 @@ pub fn push_furniture_glyph_with_mode(
             circle(out, l - 22.0, 0.0, 2.5, "#8b959b", r#"stroke-width="1""#);
         }
         PropKind::Toilet => {
-            rect(out, [-14.0, -t + 5.0, 28.0, 11.0], 3.0, "#f4f4f2", "");
+            let porcelain = if painted { "url(#bm-porcelain)" } else { "#f4f4f2" };
+            rect(out, [-14.0, -t + 5.0, 28.0, 11.0], 3.0, porcelain, "");
             let _ = write!(
                 out,
-                r##"<ellipse cx="0" cy="{:.1}" rx="11" ry="14" fill="#f4f4f2"/><ellipse cx="0" cy="{:.1}" rx="6" ry="8" fill="#cfe3ee" stroke-width="1"/>"##,
+                r##"<ellipse cx="0" cy="{:.1}" rx="11" ry="14" fill="{porcelain}"/><ellipse cx="0" cy="{:.1}" rx="6" ry="8" fill="#cfe3ee" stroke-width="1"/>"##,
                 -t + 31.0,
                 -t + 32.0
             );
@@ -570,7 +613,14 @@ pub fn push_furniture_glyph_with_mode(
             };
             let flare = battlemap_blob_path(0.0, 0.0, r * 1.38, 7, 0.24, u64::from(v) ^ 0x77);
             let _ = write!(out, r##"<path d="{flare}" fill="#593d26"/>"##);
-            circle(out, 0.0, 0.0, r, "#6e4d32", "");
+            circle(
+                out,
+                0.0,
+                0.0,
+                r,
+                if painted { "url(#bm-bark)" } else { "#6e4d32" },
+                "",
+            );
             circle(
                 out,
                 -r * 0.14,
@@ -808,6 +858,12 @@ pub fn push_furniture_glyph_with_mode(
                 corner_rx,
                 body,
                 "",
+            );
+            metallic_coat_overlay(
+                out,
+                [-l + 7.0, -t + 6.0, lw - 14.0, lh - 12.0],
+                corner_rx,
+                painted,
             );
             let (roof_y0, roof_h) = if van {
                 (-t + 18.0, lh * 0.56)
@@ -1064,7 +1120,13 @@ pub fn push_furniture_glyph_with_mode(
                 "#5e432b",
                 r#"stroke-width="1.4""#,
             );
-            rect(out, [bx0, by0, bw, bh], 7.0, "#6d4e33", "");
+            rect(
+                out,
+                [bx0, by0, bw, bh],
+                7.0,
+                if painted { "url(#bm-bark)" } else { "#6d4e33" },
+                "",
+            );
             let grain_end = if painted { "url(#bm-oak)" } else { "#c9a578" };
             let _ = write!(
                 out,

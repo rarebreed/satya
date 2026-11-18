@@ -7,15 +7,15 @@
 
 use std::collections::VecDeque;
 
+#[cfg(test)]
+use satya_schema::PropKind;
 use satya_schema::{
     EconomicTier, MapFloorLevel, MapPointCm, MapPropPlacement, MapSurfaceFeature, MapWallEdge,
     SurfaceFeatureKind, SurfaceShapeKind,
 };
-#[cfg(test)]
-use satya_schema::PropKind;
 
 use crate::map_dressing::{PropObstruction, effective_obstruction};
-use crate::map_home_floorplan::{build_blueprint_floor, plan_home_blueprint};
+use crate::map_home_floorplan::{HomeGenConfig, build_blueprint_floor, plan_home_blueprint};
 use crate::map_interior_gen::Room;
 use crate::tactical_map_geom::TOKEN_RADIUS_M;
 use crate::tactical_map_spatial::{SpatialObstacleIndex, SpatialWallFilter};
@@ -315,11 +315,73 @@ pub fn generate_home_in_lot(
     spawn_pads_m: &[(f32, f32)],
     seed: u64,
 ) -> GeneratedHome {
+    generate_home_in_lot_with_config(
+        board_w,
+        board_h,
+        lot,
+        tier,
+        entry_side,
+        allow_upper_floor,
+        allow_basement,
+        rear_door,
+        spawn_pads_m,
+        HomeGenConfig::PRIMARY,
+        seed,
+    )
+}
+
+/// Generates an attached estate guest or pavilion wing sharing the main residence's
+/// estate grounds while omitting duplicate kitchens, laundry rooms, and garages.
+#[allow(clippy::too_many_arguments)]
+#[must_use]
+pub fn generate_annex_wing_in_lot(
+    board_w: i32,
+    board_h: i32,
+    lot: LotBox,
+    tier: EconomicTier,
+    entry_side: CardinalEntry,
+    allow_upper_floor: bool,
+    allow_basement: bool,
+    rear_door: bool,
+    spawn_pads_m: &[(f32, f32)],
+    seed: u64,
+) -> GeneratedHome {
+    generate_home_in_lot_with_config(
+        board_w,
+        board_h,
+        lot,
+        tier,
+        entry_side,
+        allow_upper_floor,
+        allow_basement,
+        rear_door,
+        spawn_pads_m,
+        HomeGenConfig::ANNEX,
+        seed,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn generate_home_in_lot_with_config(
+    board_w: i32,
+    board_h: i32,
+    lot: LotBox,
+    tier: EconomicTier,
+    entry_side: CardinalEntry,
+    allow_upper_floor: bool,
+    allow_basement: bool,
+    rear_door: bool,
+    spawn_pads_m: &[(f32, f32)],
+    cfg: HomeGenConfig,
+    seed: u64,
+) -> GeneratedHome {
     let bp = plan_home_blueprint(
         lot,
         tier,
         entry_side,
-        allow_upper_floor || allow_basement,
+        allow_upper_floor,
+        allow_basement,
+        cfg,
         seed,
     );
     let ground = build_blueprint_floor(
@@ -331,6 +393,7 @@ pub fn generate_home_in_lot(
         0,
         rear_door,
         spawn_pads_m,
+        cfg,
         seed,
     );
     let upper = if allow_upper_floor
@@ -347,6 +410,7 @@ pub fn generate_home_in_lot(
             1,
             false,
             &[],
+            cfg,
             seed.wrapping_add(101),
         ))
     } else {
@@ -363,6 +427,7 @@ pub fn generate_home_in_lot(
                 -1,
                 false,
                 &[],
+                cfg,
                 seed.wrapping_add(202),
             ))
         } else {

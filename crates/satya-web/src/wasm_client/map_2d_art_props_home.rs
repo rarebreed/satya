@@ -5,7 +5,10 @@
 //! (ground timber deck + overhanging shingled cupola canopy), spas, HVAC units, sheds, grills,
 //! refuse bins/piles, and floor/street clutter.
 
-use crate::wasm_client::map_2d_art_furniture::{FURNITURE_WOODS, wood_veneer_overlay};
+use crate::wasm_client::map_2d_art_furniture::{
+    FURNITURE_WOODS, metallic_coat_overlay, porcelain_overlay, rug_weave_overlay,
+    wood_veneer_overlay,
+};
 use crate::wasm_client::map_2d_art_props::{BATTLEMAP_INK, battlemap_blob_path, battlemap_mix_u64};
 use crate::wasm_client::map_2d_art_textures::BattlemapTextureMode;
 use satya_schema::{MapPropPlacement, PropKind};
@@ -38,11 +41,15 @@ fn circle(out: &mut String, cx: f32, cy: f32, r: f32, fill: &str, extra: &str) {
 fn push_fountain_glyph(out: &mut String, l: f32, t: f32, tiers: u8, painted: bool) {
     let r = l.min(t) * 0.92;
     let basin_fill = if painted {
-        "url(#bm-pool-water)"
+        "url(#bm-spa-water)"
     } else {
         "#44b3cf"
     };
-    let rim_fill = if painted { "url(#bm-rock)" } else { "#cbc6bc" };
+    let rim_fill = if painted {
+        "url(#bm-travertine)"
+    } else {
+        "#cbc6bc"
+    };
     circle(out, 0.0, 0.0, r, rim_fill, "");
     circle(
         out,
@@ -206,13 +213,9 @@ pub(crate) fn push_home_furniture_glyph(
         }
         PropKind::BathroomSink => {
             let depth = lh * 0.64;
-            rect(
-                out,
-                [-l + 2.0, -t + 3.0, lw - 4.0, depth],
-                3.0,
-                "#eef1f4",
-                "",
-            );
+            let coords = [-l + 2.0, -t + 3.0, lw - 4.0, depth];
+            rect(out, coords, 3.0, "#eef1f4", "");
+            porcelain_overlay(out, coords, 3.0, painted);
             let rx = (l - 12.0).max(10.0);
             let ry = (depth * 0.34).max(7.0);
             let cy = -t + 5.0 + depth * 0.52;
@@ -301,15 +304,7 @@ pub(crate) fn push_home_furniture_glyph(
             let c = pick(v, RUG_PALETTE);
             let coords = [-l + 3.0, -t + 6.0, lw - 6.0, lh - 12.0];
             rect(out, coords, 2.0, c, r#"stroke-width="1.2" opacity=".88""#);
-            if painted {
-                rect(
-                    out,
-                    coords,
-                    2.0,
-                    "url(#bm-fabric)",
-                    r#"fill-opacity=".38" style="mix-blend-mode:multiply" stroke="none""#,
-                );
-            }
+            rug_weave_overlay(out, coords, 2.0, painted);
             rect(
                 out,
                 [-l + 10.0, -t + 12.0, lw - 20.0, lh - 24.0],
@@ -328,8 +323,8 @@ pub(crate) fn push_home_furniture_glyph(
                     0.0,
                     0.0,
                     r,
-                    "url(#bm-fabric)",
-                    r#"fill-opacity=".38" style="mix-blend-mode:multiply" stroke="none""#,
+                    "url(#bm-rug-weave)",
+                    r#"fill-opacity=".42" style="mix-blend-mode:multiply" stroke="none""#,
                 );
             }
             circle(
@@ -394,13 +389,9 @@ pub(crate) fn push_home_furniture_glyph(
             }
         }
         PropKind::BbqGrill => {
-            rect(
-                out,
-                [-l + 8.0, -t + 12.0, lw - 16.0, lh - 26.0],
-                4.0,
-                "#24272b",
-                "",
-            );
+            let hood = [-l + 8.0, -t + 12.0, lw - 16.0, lh - 26.0];
+            rect(out, hood, 4.0, "#24272b", "");
+            metallic_coat_overlay(out, hood, 4.0, painted);
             rect(
                 out,
                 [-l + 13.0, -t + 16.0, lw - 26.0, lh - 34.0],
@@ -425,6 +416,15 @@ pub(crate) fn push_home_furniture_glyph(
             let coords = [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0];
             rect(out, coords, 3.0, "#7a583b", "");
             wood_veneer_overlay(out, coords, 3.0, painted);
+            if painted {
+                rect(
+                    out,
+                    coords,
+                    3.0,
+                    "url(#bm-shingle)",
+                    r#"fill-opacity=".46" style="mix-blend-mode:multiply" stroke="none""#,
+                );
+            }
             let _ = write!(
                 out,
                 r##"<path d="M{:.1} 0H{:.1}" stroke="#3e2715" stroke-width="3.6"/>"##,
@@ -502,34 +502,149 @@ pub(crate) fn push_home_furniture_glyph(
             circle(out, 0.0, 0.0, 3.5, "#94a3b8", r#"stroke-width="1""#);
         }
         PropKind::HotTub => {
-            let rim = [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0];
-            rect(out, rim, 12.0, "#7d4b2d", "");
-            wood_veneer_overlay(out, rim, 12.0, painted);
-            rect(
-                out,
-                [-l + 13.0, -t + 13.0, lw - 26.0, lh - 26.0],
-                14.0,
-                if painted {
-                    "url(#bm-pool-water)"
-                } else {
-                    "#44bfd8"
-                },
-                r##"stroke="#e5eef2" stroke-width="4""##,
-            );
-            for (hx, hy) in [
-                (-l + 22.0, -t + 20.0),
-                (l - 22.0, -t + 20.0),
-                (-l + 22.0, t - 20.0),
-                (l - 22.0, t - 20.0),
-            ] {
-                circle(
-                    out,
-                    hx,
-                    hy,
-                    5.5,
-                    "#e0f7fc",
-                    r#"stroke="none" fill-opacity=".75""#,
-                );
+            let water = if painted {
+                "url(#bm-spa-water)"
+            } else {
+                "#44bfd8"
+            };
+            match v & 3 {
+                0 => {
+                    // CedarDeckTub: warm cedar surround, front timber step & 4 corner hydro-jets.
+                    let rim = [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0];
+                    rect(out, rim, 12.0, "#7d4b2d", "");
+                    wood_veneer_overlay(out, rim, 12.0, painted);
+                    rect(out, [-l * 0.55, t - 6.0, lw * 0.55, 6.0], 2.0, "#8b5a36", thin);
+                    rect(
+                        out,
+                        [-l + 13.0, -t + 13.0, lw - 26.0, lh - 26.0],
+                        14.0,
+                        water,
+                        r##"stroke="#e5eef2" stroke-width="3.6""##,
+                    );
+                    for (hx, hy) in [
+                        (-l + 22.0, -t + 20.0),
+                        (l - 22.0, -t + 20.0),
+                        (-l + 22.0, t - 20.0),
+                        (l - 22.0, t - 20.0),
+                    ] {
+                        circle(
+                            out,
+                            hx,
+                            hy,
+                            5.0,
+                            "#e0f7fc",
+                            r#"stroke="none" fill-opacity=".75""#,
+                        );
+                    }
+                }
+                1 => {
+                    // OctagonalTravertineSpa: 8-sided travertine coping, inner octagon water & radial jets.
+                    let ro = l.min(t) * 0.92;
+                    let ri = ro * 0.78;
+                    let mut outer_pts = String::new();
+                    let mut inner_pts = String::new();
+                    for i in 0..8 {
+                        let a = (i as f32 / 8.0) * TAU + TAU / 16.0;
+                        let (s, c) = a.sin_cos();
+                        let _ = write!(outer_pts, "{:.1},{:.1} ", c * ro, s * ro);
+                        let _ = write!(inner_pts, "{:.1},{:.1} ", c * ri, s * ri);
+                    }
+                    let coping = if painted {
+                        "url(#bm-travertine)"
+                    } else {
+                        "#ddd5c7"
+                    };
+                    let _ = write!(
+                        out,
+                        r##"<polygon points="{}" fill="{coping}" stroke-width="2.0"/><polygon points="{}" fill="{water}" stroke="#e5eef2" stroke-width="2.6"/>"##,
+                        outer_pts.trim(),
+                        inner_pts.trim()
+                    );
+                    for i in 0..8 {
+                        let a = (i as f32 / 8.0) * TAU + TAU / 16.0;
+                        let rj = ri * 0.72;
+                        circle(
+                            out,
+                            a.cos() * rj,
+                            a.sin() * rj,
+                            3.4,
+                            "#e0f7fc",
+                            r#"stroke="none" fill-opacity=".72""#,
+                        );
+                    }
+                }
+                2 => {
+                    // SunkenMosaicGrotto: organic stone rim, corner accent boulders & foam swirl arc.
+                    let ro = l.min(t) * 0.93;
+                    let rim_d = battlemap_blob_path(0.0, 0.0, ro, 10, 0.14, u64::from(v) ^ 0x3A);
+                    let coping = if painted {
+                        "url(#bm-travertine)"
+                    } else {
+                        "#cfc8bc"
+                    };
+                    let rock = if painted { "url(#bm-rock)" } else { "#8d867c" };
+                    let _ = write!(out, r#"<path d="{rim_d}" fill="{coping}" stroke-width="2.0"/>"#);
+                    for (idx, (bx, by, br)) in [
+                        (-l * 0.64, -t * 0.58, 9.5),
+                        (l * 0.62, -t * 0.52, 8.5),
+                        (-l * 0.54, t * 0.58, 8.0),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        let bd = battlemap_blob_path(
+                            bx,
+                            by,
+                            br,
+                            7,
+                            0.22,
+                            u64::from(v) ^ (idx as u64 * 19 + 7),
+                        );
+                        let _ = write!(out, r#"<path d="{bd}" fill="{rock}" stroke-width="1.3"/>"#);
+                    }
+                    let rx = (l - 17.0).max(12.0);
+                    let ry = (t - 17.0).max(12.0);
+                    let _ = write!(
+                        out,
+                        r##"<ellipse cx="0" cy="0" rx="{rx:.1}" ry="{ry:.1}" fill="{water}" stroke="#e5eef2" stroke-width="3.0"/><path d="M{:.1} 0A{:.1} {:.1} 0 1 1 0 {:.1}" fill="none" stroke="#e0f7fc" stroke-width="2.2" stroke-opacity=".68" stroke-linecap="round"/>"##,
+                        -rx * 0.55,
+                        rx * 0.55,
+                        ry * 0.55,
+                        ry * 0.55,
+                    );
+                }
+                _ => {
+                    // ModernArchitecturalSpa: charcoal chassis, porcelain bezel & infinity spillway.
+                    let outer = [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0];
+                    rect(out, outer, 6.0, "#2b3138", "");
+                    metallic_coat_overlay(out, outer, 6.0, painted);
+                    let porcelain = if painted {
+                        "url(#bm-porcelain)"
+                    } else {
+                        "#eef2f5"
+                    };
+                    rect(
+                        out,
+                        [-l + 9.0, -t + 9.0, lw - 18.0, lh - 18.0],
+                        4.0,
+                        porcelain,
+                        thin,
+                    );
+                    rect(
+                        out,
+                        [-l + 14.0, -t + 14.0, lw - 28.0, lh - 28.0],
+                        3.0,
+                        water,
+                        r##"stroke="#277996" stroke-width="1.6""##,
+                    );
+                    rect(
+                        out,
+                        [-l * 0.45, -t + 16.0, lw * 0.45, 4.0],
+                        1.5,
+                        "#cbd5e1",
+                        r#"stroke="none" fill-opacity=".82""#,
+                    );
+                }
             }
         }
         PropKind::FloorClothes => {
@@ -605,7 +720,7 @@ pub(crate) fn push_gazebo_canopy_glyph_with_mode(
         let _ = write!(hip_lines, "M0 0L{vx:.1} {vy:.1}");
     }
     let fill = if tex_mode.is_painted() {
-        "url(#bm-roof-gravel)"
+        "url(#bm-shingle)"
     } else {
         "#7b5e46"
     };
@@ -616,4 +731,81 @@ pub(crate) fn push_gazebo_canopy_glyph_with_mode(
         pts.trim(),
         (r * 0.14).max(7.0),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::wasm_client::map_2d_art_furniture::push_furniture_glyph_with_mode;
+    use satya_engine::map_dressing::make_prop;
+
+    #[test]
+    fn hot_tub_and_new_object_textures_render_valid_balanced_svg_in_painted_and_vector_modes() {
+        let mut painted_outputs = Vec::new();
+        for variant_seed in 0..4_u32 {
+            let spa = make_prop(PropKind::HotTub, 2, 2, 0, None, variant_seed);
+            let mut painted = String::new();
+            push_furniture_glyph_with_mode(&mut painted, &spa, 64.0, BattlemapTextureMode::Painted);
+            assert_eq!(painted.matches("<g ").count(), painted.matches("</g>").count());
+            assert!(
+                painted.contains("url(#bm-spa-water)"),
+                "HotTub style {variant_seed} missing url(#bm-spa-water): {painted}"
+            );
+            painted_outputs.push(painted);
+
+            let mut vector = String::new();
+            push_furniture_glyph_with_mode(
+                &mut vector,
+                &spa,
+                64.0,
+                BattlemapTextureMode::ProceduralVector,
+            );
+            assert_eq!(vector.matches("<g ").count(), vector.matches("</g>").count());
+            assert!(
+                !vector.contains("url(#bm-"),
+                "HotTub style {variant_seed} leaked texture ref in Vector mode: {vector}"
+            );
+        }
+        assert!(painted_outputs[0].contains("url(#bm-wood-veneer)"));
+        assert!(painted_outputs[1].contains("url(#bm-travertine)"));
+        assert!(painted_outputs[2].contains("url(#bm-rock)"));
+        assert!(painted_outputs[3].contains("url(#bm-porcelain)"));
+
+        let sofa_fabric = make_prop(PropKind::Sofa, 1, 1, 0, None, 1);
+        let sofa_leather = make_prop(PropKind::Sofa, 1, 1, 0, None, 0);
+        let rug = make_prop(PropKind::Rug, 3, 3, 0, None, 7);
+        let car = make_prop(PropKind::Car, 6, 4, 0, None, 3);
+        let tree = make_prop(PropKind::LargeTree, 8, 8, 0, None, 5);
+        let gazebo = make_prop(PropKind::Gazebo, 10, 10, 0, None, 2);
+
+        let mut svg = String::new();
+        push_furniture_glyph_with_mode(&mut svg, &sofa_fabric, 64.0, BattlemapTextureMode::Painted);
+        assert!(svg.contains("url(#bm-fabric)"));
+
+        svg.clear();
+        push_furniture_glyph_with_mode(&mut svg, &sofa_leather, 64.0, BattlemapTextureMode::Painted);
+        assert!(svg.contains("url(#bm-leather)"));
+
+        svg.clear();
+        push_furniture_glyph_with_mode(&mut svg, &rug, 64.0, BattlemapTextureMode::Painted);
+        assert!(svg.contains("url(#bm-rug-weave)"));
+
+        svg.clear();
+        push_furniture_glyph_with_mode(&mut svg, &car, 64.0, BattlemapTextureMode::Painted);
+        assert!(svg.contains("url(#bm-car-coat)"));
+
+        svg.clear();
+        push_furniture_glyph_with_mode(&mut svg, &tree, 64.0, BattlemapTextureMode::Painted);
+        assert!(svg.contains("url(#bm-bark)"));
+
+        svg.clear();
+        push_gazebo_canopy_glyph_with_mode(
+            &mut svg,
+            &gazebo,
+            64.0,
+            BattlemapTextureMode::Painted,
+        );
+        assert!(svg.contains("url(#bm-shingle)"));
+        assert!(svg.contains(r#"opacity=".50""#));
+    }
 }

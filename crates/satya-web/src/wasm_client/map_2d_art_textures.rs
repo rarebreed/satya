@@ -308,6 +308,54 @@ pub const BATTLEMAP_TEXTURE_SPECS: &[BattlemapTextureSpec] = &[
         span_px: 128,
         fallback_hex: "#2d353e",
     },
+    BattlemapTextureSpec {
+        pattern_id: "bm-spa-water",
+        asset_file: "spa_jacuzzi_water.webp",
+        span_px: 128,
+        fallback_hex: "#3ec6dc",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-travertine",
+        asset_file: "travertine_stone.webp",
+        span_px: 128,
+        fallback_hex: "#ddd5c7",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-porcelain",
+        asset_file: "glazed_porcelain.webp",
+        span_px: 96,
+        fallback_hex: "#eef2f5",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-rug-weave",
+        asset_file: "persian_rug.webp",
+        span_px: 128,
+        fallback_hex: "#d4cdc3",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-leather",
+        asset_file: "tufted_leather.webp",
+        span_px: 96,
+        fallback_hex: "#d2ccc4",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-shingle",
+        asset_file: "cedar_shingle.webp",
+        span_px: 96,
+        fallback_hex: "#825e42",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-bark",
+        asset_file: "tree_bark.webp",
+        span_px: 96,
+        fallback_hex: "#6b4c33",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-car-coat",
+        asset_file: "metallic_coat.webp",
+        span_px: 128,
+        fallback_hex: "#cfd4da",
+    },
 ];
 
 fn floor_webp_spec_for_theme_seeded(
@@ -429,6 +477,30 @@ fn push_extra_vector_pattern_defs(out: &mut String) {
     );
     out.push_str(
         r##"<pattern id="bm-server-tile" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#2d353e"/><rect x="2" y="2" width="44" height="44" fill="none" stroke="#475569" stroke-width="1.4"/><path d="M12 14h24M12 24h24M12 34h24" stroke="#38bdf8" stroke-opacity=".22" stroke-width="1.2"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-spa-water" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#3ec6dc"/><path d="M4 18q14-8 28 0t28 0M4 46q14-8 28 0t28 0" fill="none" stroke="#c8f8ff" stroke-opacity=".55" stroke-width="1.6"/><circle cx="16" cy="14" r="3" fill="#ecfeff" fill-opacity=".5"/><circle cx="46" cy="34" r="4" fill="#ecfeff" fill-opacity=".42"/><circle cx="24" cy="52" r="2.5" fill="#ecfeff" fill-opacity=".55"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-travertine" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#ddd5c7"/><path d="M0 16q22-5 44 2t20-2M0 44q20 4 40-3t24 3" fill="none" stroke="#bfb49f" stroke-opacity=".48" stroke-width="1.4"/><circle cx="18" cy="28" r="1.4" fill="#b0a48e" fill-opacity=".4"/><circle cx="50" cy="12" r="1.2" fill="#b0a48e" fill-opacity=".35"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-porcelain" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#eef2f5"/><path d="M6 12q14-4 28 2M10 34q16 3 30-3" fill="none" stroke="#ffffff" stroke-opacity=".65" stroke-width="1.4"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-rug-weave" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#d4cdc3"/><path d="M24 4L44 24L24 44L4 24Z" fill="none" stroke="#9f9282" stroke-opacity=".48" stroke-width="1.3"/><path d="M0 12h48M0 24h48M0 36h48" stroke="#ece6dc" stroke-opacity=".32" stroke-width="0.9"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-leather" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#d2ccc4"/><circle cx="12" cy="14" r="4" fill="none" stroke="#b0a89d" stroke-opacity=".35" stroke-width="1"/><circle cx="34" cy="28" r="4.5" fill="none" stroke="#b0a89d" stroke-opacity=".32" stroke-width="1"/><circle cx="16" cy="38" r="3.5" fill="none" stroke="#e8e2da" stroke-opacity=".35" stroke-width="0.9"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-shingle" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#825e42"/><path d="M0 16h48M0 32h48M0 48h48" stroke="#4d3320" stroke-width="1.6" stroke-opacity=".68"/><path d="M12 0v16M32 0v16M22 16v16M42 16v16M8 32v16M30 32v16" stroke="#5b3e26" stroke-width="1.2" stroke-opacity=".6"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-bark" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#6b4c33"/><path d="M8 0v48M20 0q3 24-2 48M32 0q-2 22 2 48M42 0v48" fill="none" stroke="#3e2918" stroke-width="1.8" stroke-opacity=".65"/><path d="M14 6v14M26 20v18M38 10v16" fill="none" stroke="#8b694c" stroke-width="1.1" stroke-opacity=".45"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-car-coat" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#cfd4da"/><circle cx="14" cy="18" r="1.2" fill="#ffffff" fill-opacity=".4"/><circle cx="36" cy="12" r="1" fill="#ffffff" fill-opacity=".35"/><circle cx="26" cy="36" r="1.2" fill="#9ea6b2" fill-opacity=".3"/></pattern>"##,
     );
 }
 
@@ -588,8 +660,8 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn texture_spec_catalog_covers_all_38_webp_assets() {
-        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 38);
+    fn texture_spec_catalog_covers_all_46_webp_assets() {
+        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 46);
         let pids: BTreeSet<&str> = BATTLEMAP_TEXTURE_SPECS
             .iter()
             .map(|s| s.pattern_id)
@@ -598,8 +670,17 @@ mod tests {
             .iter()
             .map(|s| s.asset_file)
             .collect();
-        assert_eq!(pids.len(), 38);
-        assert_eq!(files.len(), 38);
+        assert_eq!(pids.len(), 46);
+        assert_eq!(files.len(), 46);
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/textures/map2d");
+        for spec in BATTLEMAP_TEXTURE_SPECS {
+            assert!(
+                root.join(spec.asset_file).is_file(),
+                "missing texture asset {}",
+                spec.asset_file
+            );
+        }
 
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/textures/map2d");
         for spec in BATTLEMAP_TEXTURE_SPECS {

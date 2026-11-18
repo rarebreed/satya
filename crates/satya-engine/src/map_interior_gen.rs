@@ -5,12 +5,16 @@
 //! 2. **Rooms & Props**: BSP split / partitioned rooms with rule-based continuous `[0, 360°)` props;
 //!    door thresholds and spawn pads stay clear while tall props preserve full connectivity.
 
-use satya_schema::{EconomicTier, EdgeSide, MapWallEdge, MaterialClass, WallEdgeKind};
+use satya_schema::{
+    EconomicTier, EdgeSide, MapWallEdge, MaterialClass, PropKind, SurfaceFeatureKind, WallEdgeKind,
+};
 use serde::{Deserialize, Serialize};
 
-use crate::map_dressing::{PropObstruction, prop_spec};
+use crate::map_dressing::{PropObstruction, make_prop_at_cm, prop_spec};
+use crate::map_pool_spa_gen::{SpaStyle, spa_variant_seed};
 pub(crate) use crate::map_room_furnish::{Furnisher, Role, emit_room_floor_surface};
-use crate::map_surface_queries::prune_occluded_surfaces;
+use crate::map_surface_geom::vehicle_forward_rot_deg;
+use crate::map_surface_queries::{prune_occluded_surfaces, surface_contains_point_m};
 use crate::tactical_map::ProceduralSector;
 use crate::tactical_map_edges::WallEdgeIndex;
 use crate::tactical_map_geom::all_walkable_areas_connected;
@@ -254,41 +258,6 @@ impl Shell {
             self.put(x, y, side, WallEdgeKind::Window, MaterialClass::Glass);
         }
     }
-
-    pub(crate) fn bsp(
-        &mut self,
-        r: Room,
-        depth: u32,
-        min: i32,
-        max_depth: u32,
-        rooms: &mut Vec<Room>,
-    ) {
-        let can_v = r.w() >= 2 * min;
-        let can_h = r.h() >= 2 * min;
-        if depth >= max_depth || (!can_v && !can_h) || (depth > 0 && r.area() <= min * min * 2) {
-            rooms.push(r);
-            return;
-        }
-        let vertical = match (can_v, can_h) {
-            (true, true) if r.w() * 4 > r.h() * 5 => true,
-            (true, true) if r.h() * 4 > r.w() * 5 => false,
-            (true, true) => self.rng.chance(1, 2),
-            (v, _) => v,
-        };
-        if vertical {
-            let sx = self.rng.range(r.x0 + min, r.x1 - min + 1);
-            let door = self.rng.range(r.y0, r.y1);
-            self.partition_v(sx, r.y0, r.y1, &[door]);
-            self.bsp(Room { x1: sx, ..r }, depth + 1, min, max_depth, rooms);
-            self.bsp(Room { x0: sx, ..r }, depth + 1, min, max_depth, rooms);
-        } else {
-            let sy = self.rng.range(r.y0 + min, r.y1 - min + 1);
-            let door = self.rng.range(r.x0, r.x1);
-            self.partition_h(sy, r.x0, r.x1, &[door]);
-            self.bsp(Room { y1: sy, ..r }, depth + 1, min, max_depth, rooms);
-            self.bsp(Room { y0: sy, ..r }, depth + 1, min, max_depth, rooms);
-        }
-    }
 }
 
 /// Generates a furnished edge-walled interior sector (`width × height` cells, already clamped by caller).
@@ -333,23 +302,14 @@ pub fn generate_furnished_interior(
         }
         match style {
             InteriorStyle::Apartment => {
-                let mut rooms = Vec::new();
-                shell.bsp(whole, 0, 3, 3, &mut rooms);
-                rooms.sort_by_key(|r| -r.area());
-                let n = rooms.len();
-                for (i, r) in rooms.into_iter().enumerate() {
-                    let role = match i {
-                        0 => Role::Living,
-                        1 => Role::Kitchen,
-                        _ if i == n - 1 && n >= 4 => Role::Bathroom,
-                        _ if r.area() <= 8 || r.w() <= 2 || r.h() <= 2 => Role::Closet,
-                        2 => Role::MasterBedroom,
-                        3 => Role::Dining,
-                        _ if i % 2 == 0 => Role::Bedroom,
-                        _ => Role::Foyer,
-                    };
-                    rooms_roles.push((r, role));
-                }
+                crate::map_interior_topologies::partition_apartment_zone(
+                    &mut shell,
+                    whole,
+                    true,
+                    false,
+                    Some(mid_y),
+                    &mut rooms_roles,
+                );
                 shell.windows(4);
             }
             InteriorStyle::Bar => {
@@ -582,7 +542,115 @@ pub fn generate_furnished_interior(
             *er,
         );
     }
+    let pool_surfs: Vec<_> = surfaces
+        .iter()
+        .filter(|s| s.kind == SurfaceFeatureKind::PoolWater)
+        .cloned()
+        .collect();
+    let has_pool = !pool_surfs.is_empty();
+    let has_spa_deck = surfaces
+        .iter()
+        .any(|s| s.kind == SurfaceFeatureKind::WoodDeck);
     for pr in patio_rooms {
+        for yy in pr.y0..pr.y1 {
+            for xx in pr.x0..pr.x1 {
+                let cx = xx as f32 + 0.5;
+                let cy = yy as f32 + 0.5;
+                let in_pool = pool_surfs.iter().any(|ps| {
+                    [
+                        (0.0, 0.0),
+                        (-0.35, -0.35),
+                        (0.35, -0.35),
+                        (-0.35, 0.35),
+                        (0.35, 0.35),
+                    ]
+                    .iter()
+                    .any(|&(ox, oy)| surface_contains_point_m(ps, cx + ox, cy + oy))
+                });
+                if in_pool {
+                    furn.reserve_cell(xx, yy);
+                }
+            }
+        }
+        if style == InteriorStyle::Apartment && (has_pool || has_spa_deck) {
+            let pcx = (pr.x0 + pr.x1) as f32 * 0.5;
+            let pcy = (pr.y0 + pr.y1) as f32 * 0.5;
+            let spa_style = SpaStyle::ALL[(furn.rng.next() as usize) % SpaStyle::ALL.len()];
+            let spa_seed = spa_variant_seed(furn.rng.next() as u32, spa_style);
+            if has_spa_deck && !has_pool {
+                let hx = pr.x0 + (pr.w() - 2).max(0) / 2;
+                let hy = pr.y0 + (pr.h() - 2).max(0) / 2;
+                if furn
+                    .try_place(PropKind::HotTub, hx, hy, 0, None, pr)
+                    .is_some()
+                    && let Some(last) = furn.props.last_mut()
+                {
+                    last.variant_seed = spa_seed;
+                }
+            } else if has_pool && pr.w() >= 6 && pr.h() >= 5 {
+                let mut placed_tub = false;
+                for yy in pr.y0..=(pr.y1 - 2) {
+                    if placed_tub {
+                        break;
+                    }
+                    for xx in pr.x0..=(pr.x1 - 2) {
+                        if furn
+                            .try_place(PropKind::HotTub, xx, yy, 0, None, pr)
+                            .is_some()
+                        {
+                            if let Some(last) = furn.props.last_mut() {
+                                last.variant_seed = spa_seed;
+                            }
+                            placed_tub = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            let mut loungers = 0usize;
+            for yy in (pr.y0 + 1)..(pr.y1 - 1) {
+                for xx in (pr.x0 + 1)..(pr.x1 - 1) {
+                    if loungers >= 2 {
+                        break;
+                    }
+                    if (xx + yy) % 3 != 0 || furn.blocked[(yy * furn.w + xx) as usize] {
+                        continue;
+                    }
+                    let cx = xx as f32 + 0.5;
+                    let cy = yy as f32 + 0.5;
+                    let rot = vehicle_forward_rot_deg(pcx - cx, pcy - cy);
+                    let cand = make_prop_at_cm(
+                        PropKind::ReclinerChair,
+                        (cx * 100.0).round() as i32,
+                        (cy * 100.0).round() as i32,
+                        rot,
+                        None,
+                        furn.rng.next() as u32,
+                    );
+                    let fits = cand.x >= pr.x0
+                        && cand.y >= pr.y0
+                        && cand.x + cand.w_cells <= pr.x1
+                        && cand.y + cand.h_cells <= pr.y1
+                        && (cand.y..(cand.y + cand.h_cells)).all(|cy_i| {
+                            (cand.x..(cand.x + cand.w_cells)).all(|cx_i| {
+                                !cand.covers(cx_i, cy_i)
+                                    || !furn.blocked[(cy_i * furn.w + cx_i) as usize]
+                            })
+                        });
+                    if fits {
+                        for cy_i in cand.y..(cand.y + cand.h_cells) {
+                            for cx_i in cand.x..(cand.x + cand.w_cells) {
+                                if cand.covers(cx_i, cy_i) {
+                                    furn.reserve_cell(cx_i, cy_i);
+                                }
+                            }
+                        }
+                        furn.props.push(cand);
+                        loungers += 1;
+                    }
+                }
+            }
+        }
         furn.furnish_patio(pr);
     }
 

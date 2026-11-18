@@ -322,17 +322,21 @@ impl RibbonMesh2d {
     /// Returns a closed polygon ring tracing `left -> end cap -> reversed right -> start cap`.
     #[must_use]
     pub fn to_closed_ring_m(&self) -> Vec<(f32, f32)> {
-        if self.centerline.len() < 2 {
+        let n = self.centerline.len();
+        if n < 2 || self.left.len() < n || self.right.len() < n {
             return Vec::new();
         }
+        let (sx, sy, _) = unit_vec(self.centerline[1], self.centerline[0]);
+        let (ex, ey, _) = unit_vec(self.centerline[n - 2], self.centerline[n - 1]);
         let mut ring = Vec::with_capacity(self.left.len() + self.right.len() + 10);
         ring.extend_from_slice(&self.left);
         if self.cap_end {
             append_semicircle_cap(
                 &mut ring,
-                self.centerline[self.centerline.len() - 1],
+                self.centerline[n - 1],
                 self.left[self.left.len() - 1],
                 self.right[self.right.len() - 1],
+                (ex, ey),
                 4,
             );
         }
@@ -345,6 +349,7 @@ impl RibbonMesh2d {
                 self.centerline[0],
                 self.right[0],
                 self.left[0],
+                (sx, sy),
                 4,
             );
         }
@@ -373,22 +378,26 @@ impl RibbonMesh2d {
             indices.extend_from_slice(&[l0, r0, l1, r0, r1, l1]);
         }
         if self.cap_start {
+            let (sx, sy, _) = unit_vec(self.centerline[1], self.centerline[0]);
             append_cap_fan(
                 &mut verts,
                 &mut indices,
                 self.centerline[0],
                 self.right[0],
                 self.left[0],
+                (sx, sy),
                 5,
             );
         }
         if self.cap_end {
+            let (ex, ey, _) = unit_vec(self.centerline[n - 2], self.centerline[n - 1]);
             append_cap_fan(
                 &mut verts,
                 &mut indices,
                 self.centerline[n - 1],
                 self.left[n - 1],
                 self.right[n - 1],
+                (ex, ey),
                 5,
             );
         }
@@ -817,6 +826,7 @@ fn cap_arc_angles_and_radii(
     center: (f32, f32),
     from: (f32, f32),
     to: (f32, f32),
+    outward: (f32, f32),
 ) -> (f32, f32, f32, f32) {
     let a0 = (from.1 - center.1).atan2(from.0 - center.0);
     let a1 = (to.1 - center.1).atan2(to.0 - center.0);
@@ -827,6 +837,14 @@ fn cap_arc_angles_and_radii(
     while delta < -std::f32::consts::PI {
         delta += std::f32::consts::TAU;
     }
+    let mid = a0 + 0.5 * delta;
+    if mid.cos() * outward.0 + mid.sin() * outward.1 < 0.0 {
+        delta = if delta >= 0.0 {
+            delta - std::f32::consts::TAU
+        } else {
+            delta + std::f32::consts::TAU
+        };
+    }
     (a0, delta, dist_m(center, from), dist_m(center, to))
 }
 
@@ -835,9 +853,10 @@ fn append_semicircle_cap(
     center: (f32, f32),
     from: (f32, f32),
     to: (f32, f32),
+    outward: (f32, f32),
     steps: usize,
 ) {
-    let (a0, delta, r0, r1) = cap_arc_angles_and_radii(center, from, to);
+    let (a0, delta, r0, r1) = cap_arc_angles_and_radii(center, from, to, outward);
     for s in 1..steps {
         let frac = s as f32 / steps as f32;
         let ang = a0 + delta * frac;
@@ -852,9 +871,10 @@ fn append_cap_fan(
     center: (f32, f32),
     from: (f32, f32),
     to: (f32, f32),
+    outward: (f32, f32),
     steps: usize,
 ) {
-    let (a0, delta, r0, r1) = cap_arc_angles_and_radii(center, from, to);
+    let (a0, delta, r0, r1) = cap_arc_angles_and_radii(center, from, to, outward);
     let c_idx = verts.len() as u32;
     verts.push([center.0, center.1]);
     let mut prev_idx = verts.len() as u32;
