@@ -1521,3 +1521,218 @@ fn residential_units_have_hallways_wall_sinks_logical_room_caps_and_specialty_ro
         }
     }
 }
+
+fn suburban_house_envelopes(surfaces: &[satya_schema::MapSurfaceFeature]) -> Vec<LotBox> {
+    let boxes: Vec<LotBox> = surfaces
+        .iter()
+        .filter(|s| s.kind == SurfaceFeatureKind::InteriorFloor && !s.points_cm.is_empty())
+        .map(|s| {
+            let x0 = s.points_cm.iter().map(|p| p.x_cm).min().unwrap_or(0) / 100;
+            let y0 = s.points_cm.iter().map(|p| p.y_cm).min().unwrap_or(0) / 100;
+            let x1 = s.points_cm.iter().map(|p| p.x_cm).max().unwrap_or(0) / 100;
+            let y1 = s.points_cm.iter().map(|p| p.y_cm).max().unwrap_or(0) / 100;
+            LotBox::new(x0, y0, x1, y1)
+        })
+        .collect();
+    let connected = |a: LotBox, b: LotBox| -> bool {
+        let overlap_x = a.x0 < b.x1 && b.x0 < a.x1;
+        let overlap_y = a.y0 < b.y1 && b.y0 < a.y1;
+        let touch_x = a.x1 == b.x0 || b.x1 == a.x0;
+        let touch_y = a.y1 == b.y0 || b.y1 == a.y0;
+        (overlap_x && overlap_y) || (touch_x && overlap_y) || (touch_y && overlap_x)
+    };
+    let mut visited = vec![false; boxes.len()];
+    let mut envelopes = Vec::new();
+    for start in 0..boxes.len() {
+        if visited[start] {
+            continue;
+        }
+        visited[start] = true;
+        let mut stack = vec![start];
+        let mut env = boxes[start];
+        while let Some(cur) = stack.pop() {
+            let b = boxes[cur];
+            env = LotBox::new(
+                env.x0.min(b.x0),
+                env.y0.min(b.y0),
+                env.x1.max(b.x1),
+                env.y1.max(b.y1),
+            );
+            for nxt in 0..boxes.len() {
+                if !visited[nxt] && connected(b, boxes[nxt]) {
+                    visited[nxt] = true;
+                    stack.push(nxt);
+                }
+            }
+        }
+        envelopes.push(env);
+    }
+    envelopes.sort_by_key(|l| l.x0);
+    envelopes
+}
+
+#[test]
+fn suburban_neighborhood_varies_house_sizes_aspect_ratios_and_setbacks() {
+    use crate::map_surface_queries::PreparedSurfaceGrid;
+    use std::collections::HashSet;
+
+    let mut street_house_counts = BTreeSet::new();
+    let mut default_widths = BTreeSet::new();
+    let mut default_depths = BTreeSet::new();
+    let mut saw_one_story = false;
+    let mut saw_two_story = false;
+
+    for &(w, h) in &[(36, 26), (48, 36), (64, 48)] {
+        for seed in 1_i64..=18 {
+            let sec = generate_procedural_sector(SectorPreset::SuburbanNeighborhood, w, h, seed);
+            assert!(
+                all_walkable_areas_connected(w, h, &sec.wall_edges, &sec.props),
+                "SuburbanNeighborhood {w}x{h} seed={seed} failed 1F connectivity"
+            );
+            assert!(
+                sec.floors.len() >= 2,
+                "SuburbanNeighborhood {w}x{h} seed={seed} expected multi-floor output"
+            );
+
+            let houses = suburban_house_envelopes(&sec.surfaces);
+            assert!(
+                !houses.is_empty(),
+                "SuburbanNeighborhood {w}x{h} seed={seed} emitted zero houses"
+            );
+            for &house in &houses {
+                assert!(
+                    !(house.w() == 12 && house.h() == 12),
+                    "SuburbanNeighborhood {w}x{h} seed={seed} emitted 12x12 house {house:?}"
+                );
+                assert!(
+                    (house.w() - house.h()).abs() >= 2,
+                    "SuburbanNeighborhood {w}x{h} seed={seed} emitted near-square house {}x{}",
+                    house.w(),
+                    house.h()
+                );
+            }
+
+            for kc in sec
+                .props
+                .iter()
+                .filter(|p| p.kind == PropKind::KitchenCounter)
+            {
+                assert!(
+                    counter_flush_against_wall(w, h, &sec.wall_edges, kc),
+                    "SuburbanNeighborhood {w}x{h} seed={seed} floating 1F KitchenCounter at ({}, {})",
+                    kc.x,
+                    kc.y
+                );
+            }
+            for fl in &sec.floors {
+                for kc in fl
+                    .props
+                    .iter()
+                    .filter(|p| p.kind == PropKind::KitchenCounter)
+                {
+                    assert!(
+                        counter_flush_against_wall(w, h, &fl.wall_edges, kc),
+                        "SuburbanNeighborhood {w}x{h} seed={seed} floor {} floating KitchenCounter at ({}, {})",
+                        fl.floor_index,
+                        kc.x,
+                        kc.y
+                    );
+                }
+            }
+
+            let bldg_area: i32 = sec
+                .surfaces
+                .iter()
+                .filter(|s| s.kind == SurfaceFeatureKind::InteriorFloor && !s.points_cm.is_empty())
+                .map(|s| {
+                    let bw = (s.points_cm.iter().map(|p| p.x_cm).max().unwrap_or(0)
+                        - s.points_cm.iter().map(|p| p.x_cm).min().unwrap_or(0))
+                        / 100;
+                    let bh = (s.points_cm.iter().map(|p| p.y_cm).max().unwrap_or(0)
+                        - s.points_cm.iter().map(|p| p.y_cm).min().unwrap_or(0))
+                        / 100;
+                    bw * bh
+                })
+                .sum();
+            assert!(
+                bldg_area < (w * h) * 40 / 100,
+                "SuburbanNeighborhood {w}x{h} seed={seed} bldg_area={bldg_area} exceeds 40% cap"
+            );
+
+            let grid = PreparedSurfaceGrid::new(&sec.surfaces);
+            let emitted: HashSet<SurfaceFeatureKind> =
+                sec.surfaces.iter().map(|s| s.kind).collect();
+            let mut exposed: HashSet<SurfaceFeatureKind> = HashSet::new();
+            for gy in 1..(h * 4) {
+                for gx in 1..(w * 4) {
+                    if let Some(kind) = grid.topmost_kind_at_m(gx as f32 * 0.25, gy as f32 * 0.25) {
+                        exposed.insert(kind);
+                    }
+                }
+            }
+            for &kind in &emitted {
+                assert!(
+                    exposed.contains(&kind),
+                    "SuburbanNeighborhood {w}x{h} seed={seed}: {kind:?} 100% occluded"
+                );
+            }
+
+            if (w, h) == (48, 36) {
+                assert!(
+                    houses.len() >= 2,
+                    "SuburbanNeighborhood 48x36 seed={seed} expected >= 2 houses, got {}",
+                    houses.len()
+                );
+                let dims: BTreeSet<(i32, i32)> =
+                    houses.iter().map(|l| (l.w(), l.h())).collect();
+                assert!(
+                    dims.len() >= 2,
+                    "SuburbanNeighborhood 48x36 seed={seed} all houses had identical dims {dims:?}"
+                );
+                street_house_counts.insert(houses.len());
+                let f2 = sec.floors.iter().find(|f| f.floor_index == 1);
+                for &house in &houses {
+                    default_widths.insert(house.w());
+                    default_depths.insert(house.h());
+                    let has_upper = f2.is_some_and(|upper| {
+                        upper.surfaces.iter().any(|s| {
+                            if s.kind != SurfaceFeatureKind::InteriorFloor || s.points_cm.is_empty()
+                            {
+                                return false;
+                            }
+                            let fx0 = s.points_cm.iter().map(|p| p.x_cm).min().unwrap_or(0) / 100;
+                            let fx1 = s.points_cm.iter().map(|p| p.x_cm).max().unwrap_or(0) / 100;
+                            fx0 < house.x1 && fx1 > house.x0
+                        })
+                    });
+                    if has_upper {
+                        saw_two_story = true;
+                    } else {
+                        saw_one_story = true;
+                    }
+                }
+            }
+        }
+    }
+
+    assert!(
+        street_house_counts.contains(&2) && street_house_counts.contains(&3),
+        "Expected both 2-house and 3-house 48x36 streets, got {street_house_counts:?}"
+    );
+    assert!(
+        default_widths.len() >= 5
+            && default_widths.iter().any(|&x| x <= 11)
+            && default_widths.iter().any(|&x| x >= 15),
+        "Expected varied house widths (<=11 and >=15, >=5 distinct), got {default_widths:?}"
+    );
+    assert!(
+        default_depths.len() >= 4
+            && default_depths.iter().any(|&y| y <= 9)
+            && default_depths.iter().any(|&y| y >= 12),
+        "Expected varied house depths (<=9 and >=12, >=4 distinct), got {default_depths:?}"
+    );
+    assert!(
+        saw_one_story && saw_two_story,
+        "Expected both 1F-only and 2F houses on 48x36 streets (saw_one_story={saw_one_story}, saw_two_story={saw_two_story})"
+    );
+}
