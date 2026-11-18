@@ -269,6 +269,7 @@ pub(crate) fn plan_home_blueprint(
 
     let mut arm_wing = None;
     let mut patio_box = None;
+    let mut l_notch = None;
     let main_wing = match plan {
         HomePlanKind::LShaped => {
             let notch = match (entry_side, rng.chance(1, 2)) {
@@ -285,10 +286,26 @@ pub(crate) fn plan_home_blueprint(
                     NotchCorner::SouthWest
                 }
             };
-            let split_x =
-                (lot.x0 + lot.w() * rng.range(48, 60) / 100).clamp(lot.x0 + 5, lot.x1 - 4);
-            let split_y =
-                (lot.y0 + lot.h() * rng.range(46, 60) / 100).clamp(lot.y0 + 4, lot.y1 - 4);
+            l_notch = Some(notch);
+            let split_x = match notch {
+                NotchCorner::NorthEast | NotchCorner::SouthEast => {
+                    (lot.x0 + lot.w() * rng.range(38, 66) / 100).clamp(lot.x0 + 5, lot.x1 - 4)
+                }
+                NotchCorner::NorthWest | NotchCorner::SouthWest => {
+                    (lot.x0 + lot.w() * rng.range(34, 62) / 100).clamp(lot.x0 + 4, lot.x1 - 5)
+                }
+            };
+            let main_min_h = if lot.h() >= 11 { 7 } else { 5 };
+            let split_y = match notch {
+                NotchCorner::NorthEast | NotchCorner::NorthWest => {
+                    (lot.y0 + lot.h() * rng.range(36, 48) / 100)
+                        .clamp(lot.y0 + 4, (lot.y1 - main_min_h).max(lot.y0 + 4))
+                }
+                NotchCorner::SouthEast | NotchCorner::SouthWest => {
+                    (lot.y0 + lot.h() * rng.range(52, 66) / 100)
+                        .clamp((lot.y0 + main_min_h).min(lot.y1 - 4), lot.y1 - 4)
+                }
+            };
             let (m, a, n) = match notch {
                 NotchCorner::NorthEast => (
                     LotBox::new(lot.x0, split_y, lot.x1, lot.y1),
@@ -320,31 +337,47 @@ pub(crate) fn plan_home_blueprint(
         | HomePlanKind::FarmhouseSunroom => {
             if lot.h() >= 11 && !matches!(entry_side, CardinalEntry::West | CardinalEntry::East) {
                 let deck_d = if lot.h() >= 14 { 4 } else { 3 };
-                match entry_side {
-                    CardinalEntry::South => {
-                        patio_box = Some(LotBox::new(lot.x0, lot.y0, lot.x1, lot.y0 + deck_d));
-                        LotBox::new(lot.x0, lot.y0 + deck_d, lot.x1, lot.y1)
+                let would_square =
+                    (lot.h() - lot.w()).abs() >= 2 && (lot.h() - deck_d - lot.w()).abs() < 2;
+                if would_square {
+                    lot
+                } else {
+                    match entry_side {
+                        CardinalEntry::South => {
+                            patio_box =
+                                Some(LotBox::new(lot.x0, lot.y0, lot.x1, lot.y0 + deck_d));
+                            LotBox::new(lot.x0, lot.y0 + deck_d, lot.x1, lot.y1)
+                        }
+                        CardinalEntry::North => {
+                            patio_box =
+                                Some(LotBox::new(lot.x0, lot.y1 - deck_d, lot.x1, lot.y1));
+                            LotBox::new(lot.x0, lot.y0, lot.x1, lot.y1 - deck_d)
+                        }
+                        _ => lot,
                     }
-                    CardinalEntry::North => {
-                        patio_box = Some(LotBox::new(lot.x0, lot.y1 - deck_d, lot.x1, lot.y1));
-                        LotBox::new(lot.x0, lot.y0, lot.x1, lot.y1 - deck_d)
-                    }
-                    _ => lot,
                 }
             } else if lot.w() >= 13
                 && matches!(entry_side, CardinalEntry::West | CardinalEntry::East)
             {
                 let deck_w = if lot.w() >= 16 { 4 } else { 3 };
-                match entry_side {
-                    CardinalEntry::West => {
-                        patio_box = Some(LotBox::new(lot.x1 - deck_w, lot.y0, lot.x1, lot.y1));
-                        LotBox::new(lot.x0, lot.y0, lot.x1 - deck_w, lot.y1)
+                let would_square =
+                    (lot.w() - lot.h()).abs() >= 2 && (lot.w() - deck_w - lot.h()).abs() < 2;
+                if would_square {
+                    lot
+                } else {
+                    match entry_side {
+                        CardinalEntry::West => {
+                            patio_box =
+                                Some(LotBox::new(lot.x1 - deck_w, lot.y0, lot.x1, lot.y1));
+                            LotBox::new(lot.x0, lot.y0, lot.x1 - deck_w, lot.y1)
+                        }
+                        CardinalEntry::East => {
+                            patio_box =
+                                Some(LotBox::new(lot.x0, lot.y0, lot.x0 + deck_w, lot.y1));
+                            LotBox::new(lot.x0 + deck_w, lot.y0, lot.x1, lot.y1)
+                        }
+                        _ => lot,
                     }
-                    CardinalEntry::East => {
-                        patio_box = Some(LotBox::new(lot.x0, lot.y0, lot.x0 + deck_w, lot.y1));
-                        LotBox::new(lot.x0 + deck_w, lot.y0, lot.x1, lot.y1)
-                    }
-                    _ => lot,
                 }
             } else {
                 lot
@@ -405,6 +438,41 @@ pub(crate) fn plan_home_blueprint(
         }
         EconomicTier::LowIncome => (false, false),
     };
+
+    if !pool_in_patio {
+        if let (Some(p), Some(notch)) = (patio_box, l_notch) {
+            let pw = p.w().min(if hot_tub_in_patio { 5 } else { 4 });
+            let pd = p.h().min(if hot_tub_in_patio { 4 } else { 3 });
+            patio_box = Some(match notch {
+                NotchCorner::NorthEast => LotBox::new(p.x0, p.y1 - pd, p.x0 + pw, p.y1),
+                NotchCorner::NorthWest => LotBox::new(p.x1 - pw, p.y1 - pd, p.x1, p.y1),
+                NotchCorner::SouthEast => LotBox::new(p.x0, p.y0, p.x0 + pw, p.y0 + pd),
+                NotchCorner::SouthWest => LotBox::new(p.x1 - pw, p.y0, p.x1, p.y0 + pd),
+            });
+        } else if let Some(p) = patio_box {
+            if p.w() == lot.w() && p.w() >= 9 {
+                let min_pw = if hot_tub_in_patio { 5 } else { 4 };
+                let max_pw = (p.w() - 2).max(min_pw);
+                let pw = (p.w() * rng.range(48, 72) / 100).clamp(min_pw, max_pw);
+                let ax = match rng.range(0, 3) {
+                    0 => p.x0,
+                    1 => p.x0 + (p.w() - pw) / 2,
+                    _ => p.x1 - pw,
+                };
+                patio_box = Some(LotBox::new(ax, p.y0, ax + pw, p.y1));
+            } else if p.h() == lot.h() && p.h() >= 9 {
+                let min_ph = if hot_tub_in_patio { 5 } else { 4 };
+                let max_ph = (p.h() - 2).max(min_ph);
+                let ph = (p.h() * rng.range(48, 72) / 100).clamp(min_ph, max_ph);
+                let ay = match rng.range(0, 3) {
+                    0 => p.y0,
+                    1 => p.y0 + (p.h() - ph) / 2,
+                    _ => p.y1 - ph,
+                };
+                patio_box = Some(LotBox::new(p.x0, ay, p.x1, ay + ph));
+            }
+        }
+    }
 
     HomeBlueprint {
         plan,
@@ -1870,16 +1938,20 @@ fn connect_rooms_with_doors(shell: &mut Shell, tagged: &[(Room, Role, u8)], bp: 
     });
     let mut parent: Vec<usize> = (0..tagged.len()).collect();
     let mut carved = vec![false; borders.len()];
-    // Carve Hall/Foyer spine and circulation-to-room connections before cross-wing fallbacks.
-    for tier_limit in [2u8, 99u8] {
-        for (bi, bd) in borders.iter().enumerate() {
-            if pair_door_tier(tagged[bd.a].1, tagged[bd.b].1) > tier_limit {
-                continue;
-            }
-            let (ra, rb) = (dsu_find(&mut parent, bd.a), dsu_find(&mut parent, bd.b));
-            if ra != rb {
-                parent[rb] = ra;
-                carved[bi] = true;
+    // Connect each wing internally first (Hall/Foyer spine before fallbacks), then bridge across wings.
+    for require_same_wing in [true, false] {
+        for tier_limit in [2u8, 99u8] {
+            for (bi, bd) in borders.iter().enumerate() {
+                if (require_same_wing && !bd.same_wing)
+                    || pair_door_tier(tagged[bd.a].1, tagged[bd.b].1) > tier_limit
+                {
+                    continue;
+                }
+                let (ra, rb) = (dsu_find(&mut parent, bd.a), dsu_find(&mut parent, bd.b));
+                if ra != rb {
+                    parent[rb] = ra;
+                    carved[bi] = true;
+                }
             }
         }
     }

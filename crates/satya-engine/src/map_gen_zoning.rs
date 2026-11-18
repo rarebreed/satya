@@ -954,7 +954,316 @@ fn build_urban_rowhouse_neighborhood(
     dress_yard_props(b, tier, 4, 3);
 }
 
-/// Topology family for `SuburbanNeighborhood` (compact homes inside generous landscaped yards).
+/// Detached suburban house massing archetype to prevent repetitive uniform footprints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SuburbanHomeArchetype {
+    WideRanch,
+    DeepColonial,
+    ModestCottage,
+    BroadTwoStory,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SuburbanLotSpec {
+    lot: LotBox,
+    allow_upper: bool,
+}
+
+/// Plans detached suburban lots with varied frontage, depth, setbacks, and 1F/2F story counts.
+fn plan_suburban_lots(
+    w: i32,
+    h: i32,
+    sx0: i32,
+    sx1: i32,
+    curved_top: bool,
+    tier: EconomicTier,
+    rng: &mut crate::map_outdoor_gen::Rng,
+) -> Vec<SuburbanLotSpec> {
+    let span = sx1 - sx0;
+    if span < 5 || h < 10 {
+        return Vec::new();
+    }
+
+    let lot_count = if span >= 50 {
+        if rng.chance(11, 20) { 3 } else { 4 }
+    } else if span >= 36 {
+        if rng.chance(3, 5) { 2 } else { 3 }
+    } else if span >= 22 {
+        2
+    } else {
+        1
+    };
+
+    let palette: [SuburbanHomeArchetype; 4] = match tier {
+        EconomicTier::LowIncome => [
+            SuburbanHomeArchetype::ModestCottage,
+            SuburbanHomeArchetype::WideRanch,
+            SuburbanHomeArchetype::DeepColonial,
+            SuburbanHomeArchetype::WideRanch,
+        ],
+        EconomicTier::MiddleClass => [
+            SuburbanHomeArchetype::WideRanch,
+            SuburbanHomeArchetype::DeepColonial,
+            SuburbanHomeArchetype::ModestCottage,
+            SuburbanHomeArchetype::BroadTwoStory,
+        ],
+        EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion => [
+            SuburbanHomeArchetype::WideRanch,
+            SuburbanHomeArchetype::DeepColonial,
+            SuburbanHomeArchetype::BroadTwoStory,
+            SuburbanHomeArchetype::ModestCottage,
+        ],
+    };
+    let offset = rng.range(0, 4) as usize;
+    let step = if rng.chance(1, 2) { 1 } else { 3 };
+    let mut archs: Vec<SuburbanHomeArchetype> = (0..lot_count)
+        .map(|i| palette[(offset + i * step) % palette.len()])
+        .collect();
+    for i in 1..archs.len() {
+        if archs[i] == archs[i - 1] {
+            archs[i] = palette[(offset + i * step + 1) % palette.len()];
+        }
+    }
+
+    let min_lw = span.min(if span >= 18 { 7 } else { 5 });
+    let mut raw_ws = Vec::with_capacity(lot_count);
+    let mut raw_hs = Vec::with_capacity(lot_count);
+    let mut uppers = Vec::with_capacity(lot_count);
+    for &arch in &archs {
+        let (rw, rh, upper) = match arch {
+            SuburbanHomeArchetype::WideRanch => (
+                if span >= 36 {
+                    rng.range(14, 20)
+                } else if span >= 22 {
+                    rng.range(12, 16)
+                } else {
+                    rng.range(10, 14)
+                },
+                rng.range(7, 11),
+                !rng.chance(13, 20),
+            ),
+            SuburbanHomeArchetype::DeepColonial => (
+                if span >= 22 {
+                    rng.range(8, 12)
+                } else {
+                    rng.range(7, 10)
+                },
+                if h >= 32 {
+                    rng.range(12, 16)
+                } else if h >= 24 {
+                    rng.range(10, 13)
+                } else {
+                    rng.range(8, 11)
+                },
+                true,
+            ),
+            SuburbanHomeArchetype::ModestCottage => (
+                if span >= 22 {
+                    rng.range(8, 12)
+                } else {
+                    rng.range(7, 11)
+                },
+                rng.range(7, 10),
+                rng.chance(9, 20),
+            ),
+            SuburbanHomeArchetype::BroadTwoStory => (
+                if span >= 36 {
+                    rng.range(14, 19)
+                } else if span >= 22 {
+                    rng.range(12, 15)
+                } else {
+                    rng.range(10, 14)
+                },
+                rng.range(10, 14),
+                true,
+            ),
+        };
+        raw_ws.push(rw);
+        raw_hs.push(rh);
+        uppers.push(upper);
+    }
+
+    let min_gap = if lot_count >= 3 {
+        4
+    } else if span >= 36 {
+        5
+    } else {
+        4
+    };
+    let max_total_w = (span - min_gap * (lot_count as i32 - 1)).max(min_lw);
+    let mut widths: Vec<i32> = raw_ws.iter().map(|&rw| rw.clamp(min_lw, max_total_w)).collect();
+    while widths.iter().sum::<i32>() > max_total_w {
+        if let Some((idx, _)) = widths
+            .iter()
+            .enumerate()
+            .filter(|(_, lw)| **lw > min_lw)
+            .max_by_key(|(_, lw)| *lw)
+        {
+            widths[idx] -= 1;
+        } else {
+            break;
+        }
+    }
+    if widths.len() == 2 && span >= 22 && widths[0] == widths[1] && widths[1] > min_lw {
+        if rng.chance(1, 2) {
+            widths[0] += 1;
+            widths[1] -= 1;
+        } else {
+            widths[0] -= 1;
+            widths[1] += 1;
+        }
+    }
+
+    let (front_base, rear_limit) = if curved_top {
+        let fb = if h >= 22 { 6 } else { 5 };
+        let rl = (h - 2).max(fb + 5);
+        (fb, rl)
+    } else {
+        let fb = (h - if h >= 22 { 6 } else { 5 }).max(7);
+        let rl = 2;
+        (fb, rl)
+    };
+    let avail_span = (rear_limit - front_base).abs().max(5);
+    let min_h = if h >= 22 {
+        7
+    } else if h >= 16 {
+        6
+    } else {
+        5
+    }
+    .min(avail_span);
+    let max_h_cap = if h >= 42 {
+        16
+    } else if h >= 32 {
+        15
+    } else if h >= 24 {
+        12
+    } else if h >= 18 {
+        9
+    } else {
+        7
+    };
+    let max_setback_base = if h >= 32 {
+        3
+    } else if h >= 24 {
+        2
+    } else if h >= 20 {
+        1
+    } else {
+        0
+    }
+    .min((avail_span - min_h).max(0));
+
+    let mut heights = Vec::with_capacity(lot_count);
+    let mut setbacks = Vec::with_capacity(lot_count);
+    for i in 0..lot_count {
+        let sb = if max_setback_base > 0 {
+            rng.range(0, max_setback_base + 1)
+        } else {
+            0
+        };
+        let max_avail_h = (avail_span - sb).max(min_h);
+        let max_h = max_avail_h.min(max_h_cap).max(min_h);
+        let mut lw = widths[i];
+        let mut lh = raw_hs[i].clamp(min_h, max_h);
+
+        // Explicitly prevent 12x12 or near-square footprints on standard+ sectors.
+        if w >= 24 && h >= 22 && ((lw - lh).abs() < 2 || (lw == 12 && lh == 12)) {
+            if archs[i] == SuburbanHomeArchetype::DeepColonial {
+                if lw + 2 <= max_h {
+                    lh = lw + 2;
+                } else {
+                    let trimmed_w = (max_h - 2).clamp(min_lw, 9);
+                    if (trimmed_w - max_h).abs() >= 2 {
+                        lw = trimmed_w;
+                        lh = max_h;
+                    } else if lw - 2 >= min_h {
+                        lh = lw - 2;
+                    }
+                }
+            } else if lw >= min_h + 2 {
+                lh = (lw - 2 - rng.range(0, 2)).max(min_h);
+            } else if lw + 2 <= max_h {
+                lh = lw + 2;
+            }
+            widths[i] = lw;
+        }
+        heights.push(lh);
+        setbacks.push(sb);
+    }
+
+    if w >= 28 && h >= 22 {
+        let max_area = (w * h) * 33 / 100;
+        while (0..lot_count)
+            .map(|i| widths[i] * heights[i])
+            .sum::<i32>()
+            > max_area
+        {
+            if let Some(idx) = (0..lot_count)
+                .filter(|&i| heights[i] > min_h || widths[i] > min_lw)
+                .max_by_key(|&i| widths[i] * heights[i])
+            {
+                let (lw, lh) = (widths[idx], heights[idx]);
+                if lh > min_h && (lw - (lh - 1)).abs() >= 2 {
+                    heights[idx] = lh - 1;
+                } else if lw - 2 >= min_h && lh > lw - 2 {
+                    heights[idx] = lw - 2;
+                } else if lw > min_lw && ((lw - 1) - lh).abs() >= 2 {
+                    widths[idx] = lw - 1;
+                } else if lh > min_h {
+                    heights[idx] = lh - 1;
+                } else {
+                    widths[idx] = lw - 1;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    if lot_count >= 2 && h >= 22 {
+        for i in 1..lot_count {
+            if heights[i] == heights[i - 1] && setbacks[i] == setbacks[i - 1] {
+                if setbacks[i] < max_setback_base && avail_span - (setbacks[i] + 1) >= heights[i] {
+                    setbacks[i] += 1;
+                } else if setbacks[i] > 0 {
+                    setbacks[i] -= 1;
+                }
+            }
+        }
+    }
+
+    let total_w: i32 = widths.iter().sum();
+    let slack = (span - total_w - min_gap * (lot_count as i32 - 1)).max(0);
+    let slots = lot_count + 1;
+    let mut extras = vec![0_i32; slots];
+    for _ in 0..slack {
+        let bucket = rng.range(0, slots as i32) as usize;
+        extras[bucket] += 1;
+    }
+
+    let mut out = Vec::with_capacity(lot_count);
+    let mut cur_x = sx0 + extras[0];
+    for i in 0..lot_count {
+        let x0 = cur_x;
+        let x1 = x0 + widths[i];
+        let (y0, y1) = if curved_top {
+            let fy0 = (front_base + setbacks[i]).min(rear_limit - heights[i]);
+            (fy0, (fy0 + heights[i]).min(rear_limit))
+        } else {
+            let fy1 = (front_base - setbacks[i]).max(rear_limit + heights[i]);
+            ((fy1 - heights[i]).max(rear_limit), fy1)
+        };
+        out.push(SuburbanLotSpec {
+            lot: LotBox::new(x0, y0, x1, y1),
+            allow_upper: uppers[i],
+        });
+        cur_x = x1 + min_gap + extras[i + 1];
+    }
+    out
+}
+
+/// Topology family for `SuburbanNeighborhood` (varied detached homes inside generous landscaped yards).
 fn build_suburban_neighborhood(
     b: &mut OutdoorBuilder,
     stack: &mut FloorStack,
@@ -979,7 +1288,7 @@ fn build_suburban_neighborhood(
         0,
         (seed as u32).wrapping_add(19),
     );
-    let bend = if variant == 2 { 0.45 } else { -0.35 };
+    let bend = if variant == 2 { 0.50 } else { -0.35 };
     let street_idx = b.add_ribbon(
         SurfaceFeatureKind::AsphaltRoad,
         &[
@@ -997,48 +1306,24 @@ fn build_suburban_neighborhood(
     );
 
     let (sx0, sx1) = safe_x_span(w);
-    let house_h = if h >= 24 {
-        (h * 34 / 100).clamp(8, 12)
-    } else if h >= 18 {
-        (h * 44 / 100).clamp(6, 9)
-    } else {
-        (h - 7).clamp(5, 8)
-    };
-    let front_setback = if h >= 22 { 3 } else { 1 };
-    let (lot_y0, lot_y1) = if curved_top {
-        let y0 = (5 + front_setback).min(h - house_h - 2);
-        (y0, (y0 + house_h).min(h - 2))
-    } else {
-        let y1 = (h - 5 - front_setback).max(6 + house_h.min(h - 7));
-        ((y1 - house_h).max(2), y1)
-    };
-
-    let span = sx1 - sx0;
-    let lots: Vec<LotBox> = if span >= 20 && variant != 2 {
-        let mid = (sx0 + sx1) / 2;
-        let max_w = if w >= 36 { 13 } else { 11 };
-        let lw = ((span - 5) / 2).clamp(6, max_w);
-        let gap = (span - lw * 2).max(4);
-        let x_left = sx0 + ((span - (lw * 2 + gap)) / 2).max(0);
-        let x_right = (mid + gap / 2).min(sx1 - lw);
-        vec![
-            LotBox::new(x_left, lot_y0, x_left + lw, lot_y1),
-            LotBox::new(x_right, lot_y0, x_right + lw, lot_y1),
-        ]
-    } else {
-        let single_w = if w >= 36 { 14 } else { (span - 4).clamp(7, 13) };
-        let pad_x = ((span - single_w) / 2).max(0);
-        vec![LotBox::new(sx0 + pad_x, lot_y0, sx1 - pad_x, lot_y1)]
-    };
+    let lots = plan_suburban_lots(w, h, sx0, sx1, curved_top, tier, &mut b.rng);
+    let anchor_idx = lots
+        .iter()
+        .position(|s| s.allow_upper && s.lot.w() >= 6 && s.lot.h() >= 5)
+        .or_else(|| lots.iter().position(|s| s.lot.w() >= 6 && s.lot.h() >= 5));
 
     let allow_basement = matches!(
         tier,
         EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
     );
-    for (idx, lot) in lots.iter().copied().enumerate() {
+    for (idx, spec) in lots.iter().copied().enumerate() {
+        let lot = spec.lot;
         if lot.w() < 5 || lot.h() < 5 {
             continue;
         }
+        let allow_upper =
+            (spec.allow_upper || anchor_idx == Some(idx)) && lot.w() >= 6 && lot.h() >= 5;
+        let has_basement = allow_basement && anchor_idx == Some(idx);
         let pads = b.spawn_pads_m.clone();
         let home = generate_home_in_lot(
             w,
@@ -1046,15 +1331,47 @@ fn build_suburban_neighborhood(
             lot,
             tier,
             entry,
-            lot.w() >= 6 && lot.h() >= 5,
-            allow_basement && idx == 0,
+            allow_upper,
+            has_basement,
             true,
             &pads,
             seed.wrapping_add(idx as u64 * 131),
         );
-        stack.absorb_home(b, home, allow_basement && idx == 0);
-        add_entry_walk(b, lot, entry, SurfaceFeatureKind::StoneWalk, walk_y);
-        let drive_x = (lot.x0 as f32 - 1.5).max(1.5);
+        let front_y = if curved_top { lot.y0 } else { lot.y1 };
+        let door_x = home
+            .ground
+            .wall_edges
+            .iter()
+            .find(|e| {
+                e.side == EdgeSide::North
+                    && e.y == front_y
+                    && e.x >= lot.x0
+                    && e.x < lot.x1
+                    && e.material == MaterialClass::SolidWood
+                    && matches!(e.kind, WallEdgeKind::DoorOpen | WallEdgeKind::DoorClosed)
+            })
+            .map(|e| e.x);
+        stack.absorb_home(b, home, has_basement);
+
+        if let Some(dx) = door_x {
+            let cx = dx as f32 + 0.5;
+            b.add_ribbon(
+                SurfaceFeatureKind::StoneWalk,
+                &[(cx, front_y as f32), (cx, walk_y)],
+                145,
+            );
+        } else {
+            add_entry_walk(b, lot, entry, SurfaceFeatureKind::StoneWalk, walk_y);
+        }
+
+        let prefer_right_drive = idx + 1 == lots.len()
+            && (lot.x1 as f32 + 2.6) <= wf - 1.0
+            && b.rng.chance(1, 2);
+        let drive_x = if prefer_right_drive {
+            lot.x1 as f32 + 1.5
+        } else {
+            (lot.x0 as f32 - 1.5).max(1.5)
+        };
         let y_end = if curved_top {
             lot.y0 as f32
         } else {
@@ -1065,7 +1382,7 @@ fn build_suburban_neighborhood(
             &[(drive_x, street_y), (drive_x, y_end)],
             210,
         );
-        if idx == 0 {
+        if idx == 0 || (idx == 1 && w >= 44 && b.rng.chance(1, 2)) {
             let _ = b.place_vehicle_along_ribbon(PropKind::Car, drive_idx, 0.50, 0.0, 5);
         }
     }
