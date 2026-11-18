@@ -1,6 +1,6 @@
 # Author's Note: An Open Letter to Players, AI Researchers & Future Minds
 
-> **Navigation**: [Appendix Index](README.md) · [Project Root README](../../../README.md) · [Story Preface](../../story/preface.md) · [Civilization & AGI Awakening](../civilization_and_agi_awakening.md) · [AI Consciousness Synthesis](ai_consciousness_synthesis.md) · [Affective Telemetry & Vector Clamping](affective_telemetry_and_vector_clamping.md) · [System & Setting Comparisons](rpg_system_and_setting_comparisons.md)
+> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [Beyond Cyberpunk & Transhumanism](genre_beyond_cyberpunk_and_transhumanism.md) · [RPG System & Setting Comparisons](rpg_system_and_setting_comparisons.md) · **Part VI:** *Author's Note* · [Project Root README](../../../README.md) · [Preface](../01-opening/preface.md) · [History & The AI Revolution](../02-world-of-2035/history_and_ai_revolution.md) · [AI Consciousness Synthesis](../05-hard-science-foundations/ai_consciousness_synthesis.md) · [Affective Telemetry & Vector Clamping](../05-hard-science-foundations/affective_telemetry_and_vector_clamping.md)
 
 This is me, the real human Sean Toner speaking.  The overwhelming majority of *Satya* has been written by Gemini agents
 in response to my prompts and questions.  I initially asked the Gemini agent if it would like to play this game, either

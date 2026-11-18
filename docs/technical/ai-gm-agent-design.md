@@ -24,7 +24,7 @@ The **stateful, tool-calling AI Game Master Agent** is implemented with **LangGr
    - **Multimodal Vision Model** (`llama3.2-vision`, `gemma4`, or multimodal cloud models) for inspecting tactical maps, room layouts, and token positions.
 4. **Authoritative Tool Execution (`@tool`)**:
    - Reading and updating **NPC personalities, abilities, dispositions, and fatigue/wound states**, plus generating new NPCs (`generate_npc_from_description`) and inspecting player character sheets (`lookup_character_sheet`).
-   - Querying **Satya TTRPG rules** (`docs/ttrpg/*.md`), **world lore** (`docs/story/**/*.md`), **SQLite GM Memory Vault** (`gm_vault.rs`), and **historical session logs** stored in PyLance (`data/lance/*.lance`).
+   - Querying **Satya TTRPG rules** (`docs/ttrpg/*.md`), **world lore** (`docs/campaign/**/*.md`), **SQLite GM Memory Vault** (`gm_vault.rs`), and **historical session logs** stored in PyLance (`data/lance/*.lance`).
    - **Generating, updating, and visually inspecting tactical maps** pushed to the session UI.
    - Executing authoritative **Satya Watershed `2d20` roll-over task and combat checks** (`TtrpgMechanicsEvent`), advancing the count-up combat tracker (`advance_combat_tracker`), and sending **public Markdown narrations** (`GM_NARRATION`), **NPC dialogue** (`IN_CHARACTER`), or **targeted private whispers** (`PRIVATE`) back to players via the backend API.
 
@@ -76,7 +76,7 @@ flowchart TD
     subgraph Storage["satya-storage & PyLance Data Lake"]
         AvroSink["EventLogRouter (Apache Iggy + .avro Batches)"]
         LanceDB[("PyLance Datasets\ndata/lance/*.lance")]
-        LoreDocs[("Markdown Lore & Rules\ndocs/story/* & docs/ttrpg/*")]
+        LoreDocs[("Markdown Lore & Rules\ndocs/campaign/* & docs/ttrpg/*")]
     end
 
     subgraph AiGmService["src/satya_ml/ai_gm (Python LangGraph + Ollama/BYOK Runtime)"]
@@ -306,7 +306,7 @@ flowchart TD
 
 ## 5. Cloud Campaign Lore & Structured State (Google Drive, Docs, Sheets & Gemini Context Caching)
 
-In addition to local markdown files (`docs/story/`, `docs/ttrpg/`), the SQLite GM Memory Vault (`gm_vault.rs`), and PyLance tables (`data/lance/*.lance`), players and GMs can sync campaign worlds from **Google Drive**, **Google Docs**, and **Google Sheets** (`src/satya_ml/ai_gm/lore_sync.py`):
+In addition to local markdown files (`docs/campaign/`, `docs/ttrpg/`), the SQLite GM Memory Vault (`gm_vault.rs`), and PyLance tables (`data/lance/*.lance`), players and GMs can sync campaign worlds from **Google Drive**, **Google Docs**, and **Google Sheets** (`src/satya_ml/ai_gm/lore_sync.py`):
 
 1. **Live Google Docs & Sheets as Structured GM Tools**:
    - **Google Sheets**: Structured NPC rosters, faction clocks, and loot tables.
@@ -327,7 +327,7 @@ In addition to local markdown files (`docs/story/`, `docs/ttrpg/`), the SQLite G
 | `update_npc_state` | `session_id: str, npc_id: str, fatigue_delta: int = 0, wound_shock_delta: int = 0, disposition: str \| None = None` | `AiGmSessionState` | Updates an NPC's accumulated fatigue, wound shock index, or attitude during combat or social encounters. |
 | `lookup_character_sheet` | `session_id: str, character_name_or_id: str` | `AiGmSessionState` / Signaling Context | Retrieves a player character's full Satya sheet (Triad attributes, `TN_P`/`TN_M`, 7 bipolar Psyche traits, skills, equipment, and wounds). |
 | `query_satya_rules` | `query: str` | `docs/ttrpg/*.md` | Retrieves authoritative Satya mechanics (Two-List Cascading "Watershed" `2d20` Roll-Over, `TN_eff = 31 - C + Delta_ext`, `+6` carry, count-up tick economy, ballistics, and medical trauma). |
-| `query_campaign_lore` | `query: str, session_id: str = "default"` | `docs/story/**/*.md` / `data/lance/*.lance` | Searches setting lore and prior session `.lance` tables for past player decisions and world events. |
+| `query_campaign_lore` | `query: str, session_id: str = "default"` | `docs/campaign/**/*.md` / `data/lance/*.lance` | Searches setting lore and prior session `.lance` tables for past player decisions and world events. |
 | `search_gm_memory_and_docs` | `session_id: str, query: str, category: str = ""` | `GET /api/gm/sessions/:id/memories` | Searches the SQLite FTS5 GM Memory Vault and session document headers without bloating the LLM context window. |
 | `read_gm_documents` | `session_id: str, doc_ids: list[str]` | `AiGmSessionState` / Signaling Vault | Reads specific `GM_ONLY` or untrusted player-submitted documents on demand (wrapping player docs in `<untrusted_player_document>` tags). |
 | `upsert_gm_memory` | `session_id: str, title: str, content: str, category: str = "WORLD_FACT", pinned: bool = False` | `POST /api/gm/sessions/:id/memories` | Creates or updates a persistent GM memory note (`NPC_STATE`, `PLOT_DECISION`, `QUEST_HOOK`, `WORLD_FACT`, `FACTION_CLOCK`) in SQLite. |

@@ -886,6 +886,8 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
     for src, dst in mapping.items():
         out = out.replace(f'href="{src}"', f'href="{dst}"')
         out = out.replace(f'href="{src}#', f'href="{dst}#')
+    out = out.replace('href="../../ttrpg-examples/', 'href="../ttrpg-examples/')
+    out = out.replace('href="../../campaign/', 'href="../campaign/')
     return out
 
 

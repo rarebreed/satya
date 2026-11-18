@@ -103,7 +103,7 @@ pub fn resolve_pack_defaults(explicit_pack: Option<&str>) -> ResolvedPackDefault
             default_sector_preset: SectorPreset::UrbanCrossroads,
             hostile_token_label: "DAISE Tactical Agent".to_string(),
             ally_token_label: "Dr. Bandajara".to_string(),
-            lore_dirs: vec!["docs/campaign".to_string(), "docs/story".to_string()],
+            lore_dirs: vec!["docs/campaign".to_string()],
             npc_toml_file: "data/npcs/awakened_npcs.toml".to_string(),
         }
     };
@@ -327,6 +327,10 @@ fn collect_markdown_files(dir: &Path, out: &mut Vec<PathBuf>) {
             .extension()
             .and_then(|ext| ext.to_str())
             .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+            && !p
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.eq_ignore_ascii_case("SUMMARY.md"))
         {
             out.push(p);
         }

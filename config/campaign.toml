@@ -8,7 +8,7 @@ active_pack = "awakened"
 title = "Awakened (Near-Future Earth 2035)"
 default_sector_preset = "urban_crossroads"
 allow_scifi_sector_presets = false
-lore_dirs = ["docs/campaign", "docs/story"]
+lore_dirs = ["docs/campaign"]
 npc_toml_file = "data/npcs/awakened_npcs.toml"
 factions = [
   "Big Tech (Altruist / Translucent / Shen)",

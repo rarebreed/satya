@@ -20,7 +20,7 @@ Those formulas are great once you already play *Satya*, because nothing is vague
 - *How do you keep the GM's hidden target secret without bogging down the table?*
 - *How do you track `0.25`-second Ticks on notebook paper if you aren't using the Satya CARPG software?*
 
-That is what Guides `01` through `06` show you. Every guide follows one connected ***Awakened* (Earth 2035 AD)** mini-operation—***"Cold Storage at the St. Jude Annex"***—from Session Zero character lifepaths all the way through stealth infiltration, social confrontation, a stairwell brawl, a rain-lashed parking-deck firefight, and trauma triage.
+That is what Guides `01` through `06` show you. Every guide follows one connected ***Awakened* (Earth 2035 AD)** mini-operation—***"Cold Storage at the St. Jude Annex"***—from Session Zero character lifepaths all the way through stealth infiltration, social confrontation, a stairwell brawl, a rain-lashed parking-deck firefight, and trauma triage. *(For the full setting bible, see [`docs/campaign/SUMMARY.md`](../campaign/SUMMARY.md); GMs running Episode 1 can also inspect the GM-only scenario dossier in [`episode_01_st_jude_annex.md`](../campaign/04-chronicle-and-gm/episode_01_st_jude_annex.md).)*
 
 ---
 

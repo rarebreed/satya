@@ -1,18 +1,19 @@
 # Satya TTRPG Psyche, Morale & Social Combat
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/psyche_social.rs`](../../../crates/satya-engine/src/psyche_social.rs) (`PsycheTraitId`, `PurposeStrength`, `PsychologicalDriveState`, `MotivationTier`, `CombatMoraleCondition`, `evaluate_psyche_friction`, `evaluate_conviction_surge`, `evaluate_psychological_drives`, `evaluate_aggression_escalation`, `evaluate_combat_morale_check`) and [`crates/satya-engine/src/social_combat.rs`](../../../crates/satya-engine/src/social_combat.rs) (`RhetoricalVector`, `SocialLeverageTier`, `CognitiveDissonanceTier`, `SocialExchangeInput`, `compute_social_dissonance_check`, `evaluate_social_combat_exchange`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/psyche_social.rs`](../../../crates/satya-engine/src/psyche_social.rs) (`PsycheTraitId`, `PurposeStrength`, `PsychologicalDriveState`, `MotivationTier`, `CombatMoraleCondition`, `evaluate_psyche_friction`, `evaluate_conviction_surge`, `evaluate_psychological_drives`, `evaluate_aggression_escalation`, `evaluate_combat_morale_check`) and [`crates/satya-engine/src/social_combat.rs`](../../../crates/satya-engine/src/social_combat.rs) (`RhetoricalVector`, `SocialLeverageTier`, `CognitiveDissonanceTier`, `SocialExchangeInput`, `compute_social_dissonance_check`, `evaluate_social_combat_exchange`).  
+> **Guided Play Example**: See [Guide 04: Psyche, Friction, Morale & Social Combat](../../ttrpg-examples/04-psyche-morale-and-social-combat.md) (and [Guide 06 §3 for Suppression Morale Under Fire](../../ttrpg-examples/06-firefights-trauma-and-survival.md#3-suppression--morale-checks-dis-under-fire)).
 
 This chapter defines the canonical **Psyche Mechanics (Behavioral Friction, Trait Drift & Conviction Surges), Psychological Drives & Combat Morale, and Social Combat ("Mental Wounds" & Cognitive Dissonance)** for **Satya**. It builds directly upon:
 - **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for definitions of all mathematical symbols and subscripts such as $\text{TN}_P, \text{TN}_{GM}, \Delta_{\text{psyche}}, \Delta_{\text{mot}}, C_{\text{morale}}, \text{CMP}$),
 - **[Characteristics, Senses, Psyche & Aptitudes](../03-character/characteristics_and_aptitudes.md)** (for the Social Primary Characteristics `COM`, `PRE`, `ELO`, Mental Characteristics `MEM`, `ANA`, `INS`, `CRE`, `DIS`, `FOC`, and the nine Psyche Characteristics `EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`),
-- **[Skill System & Hierarchical Skill Trees](../03-character/skills_and_trees.md#38-tree-7-social-influence-interrogation--psychological-warfare-social-knowledge-fieldcraft)** (for Tree 7 Social, Influence & Interrogation skills), and
+- **[Skill System & Hierarchical Skill Trees](../03-character/skills_trees_tactical_and_social.md#38-tree-7-social-influence-interrogation--psychological-warfare-social-knowledge-fieldcraft)** (for Tree 7 Social, Influence & Interrogation skills), and
 - **[Combat Architecture & Tactical Pools](../05-combat/tactical_triad_and_pools.md)** (where Morale states directly constrain Tactical Pool allocations across `Tempo`, `Control`, and `Force`).
 
 ---
 
 ## 1. Acting Against One's Psyche: Friction Checks & Trait Drift
 
-While players always retain agency over their characters, acting in direct violation of a deeply ingrained **Psyche** trait ($P \ge 13$ or $P \le 7$; see **[Characteristics](../03-character/characteristics_and_aptitudes.md#7-psyche-the-invisible-traits-and-behavioral-architecture)**) creates internal psychological friction.
+While players always retain agency over their characters, acting in direct violation of a deeply ingrained **Psyche** trait ($P \ge 13$ or $P \le 7$; see **[Characteristics](../03-character/characteristics_and_aptitudes.md#7-psyche-the-invisible-traits--behavioral-architecture)**) creates internal psychological friction.
 
 ### 1.1 When a Psyche Friction Check Triggers
 
@@ -26,6 +27,8 @@ The GM calls for a **Psyche Friction Check** when a character attempts a deliber
 - A character with **High `Compassion` (`CPS 16`)** torturing a prisoner, clamping or erasing a pleading sentient AI instance, or leaving wounded civilians behind for tactical convenience.
 
 ### 1.2 Resolving the Friction Check (`DIS` vs. Psyche Deviation)
+
+> **See this in play**: [Guide 04 — Resolving a Psyche Friction Check](../../ttrpg-examples/04-psyche-morale-and-social-combat.md#11-resolving-a-psyche-friction-check-dis-vs-δ_psyche).
 
 1. Compute the trait's **Psyche Deviation** from neutral (`10`):
    $$\Delta_{\text{psyche}} = |P - 10|$$
@@ -47,6 +50,8 @@ Personality in Satya is not static stone; it is shaped by lived choices and trau
 ## 2. Purpose, Principles & Conviction Surges (Pushing Past Limits)
 
 Just as violating one's Psyche imposes friction, acting as a pure vessel of one's deepest **Psyche** drives or core **Principles** during a desperate crisis unlocks extraordinary reserves of resolve:
+
+> **See this in play**: [Guide 04 — Conviction Surges: Pushing Past Exhaustion on Principle](../../ttrpg-examples/04-psyche-morale-and-social-combat.md#3-conviction-surges-pushing-past-exhaustion-on-principle).
 
 - **Triggering a Conviction Surge (Once per Scene / Session)**:
   When a battered or exhausted character ($\Delta_{\text{int}} \ge +4$) takes a high-stakes risk that directly embodies an extreme Psyche trait ($P \ge 15$ or $P \le 6$):
@@ -113,6 +118,8 @@ Aggression starts from **Personality (`AGG` vs. `SLF` / `CPS`)** and **Situation
 
 Having a character be automatically immune to fear cheapens heroism; nothing is valuable without the cost of overcoming fear.
 
+> **See this in play**: [Guide 04 — Quick Reference: The Five Morale Conditions Under Fire](../../ttrpg-examples/04-psyche-morale-and-social-combat.md#4-quick-reference-the-five-morale-conditions-under-fire) and [Guide 06 — Suppression & Morale Checks (`DIS` Under Fire)](../../ttrpg-examples/06-firefights-trauma-and-survival.md#3-suppression--morale-checks-dis-under-fire).
+
 #### Psyche & OODA Tactical Behavior Table
 In physical firefights and melee engagements, NPCs and PCs under extreme shock make **Morale / Composure Checks** using **Discipline (`DIS`)** modified by their Psyche profile:
 
@@ -168,6 +175,8 @@ $$\text{TN}_P = 31 - C_{\text{morale}}, \qquad \text{TN}_{GM} = 21 - \Delta_{\te
 ## 4. Social Combat, Debate & Cognitive Dissonance ("Mental Wounds")
 
 Satya treats high-stakes debates, ideological arguments, courtroom cross-examinations, boardroom takeovers, and interrogations with the same tactical depth as physical firefights. Just as physical combat targets a body's structural integrity and blood volume, **Social Combat** targets a character's **Psyche** to inflict **Doubt**, **Ego Wounds**, and **Cognitive Dissonance**.
+
+> **See this in play**: [Guide 04 — Social Combat: Fighting With Proof, Empathy & Cognitive Dissonance](../../ttrpg-examples/04-psyche-morale-and-social-combat.md#2-social-combat-fighting-with-proof-empathy--cognitive-dissonance).
 
 ```mermaid
 flowchart LR

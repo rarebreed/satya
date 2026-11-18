@@ -1,6 +1,6 @@
 //! *Awakened* Three-Arc Conspiracy Graph, Polycrisis Grid/Water Strain Simulator,
 //! Tradecraft Channels, and Corporate Dissent / Parasocial Proxy Hooks
-//! (`docs/story/timeline/breakdown.md`, `docs/campaign/background.md`, `docs/campaign/factions.md`).
+//! (`docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md`, `docs/campaign/02-world-of-2035/polycrisis_economy_and_society.md`, `docs/campaign/03-minds-and-factions/factions_of_2035.md`).
 
 use std::collections::BTreeMap;
 
@@ -13,7 +13,7 @@ use crate::faction_templates::{AwakenedFactionId, FactionArchetypeId};
 use crate::primitives::{ContestedCheck, TieredSaveEval};
 
 define_coded_enum! {
-    /// Campaign progression arc in `docs/story/timeline/breakdown.md`.
+    /// Campaign progression arc in `docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md`.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum CampaignArcStage [count = 3] {
@@ -37,7 +37,7 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Satyang's Four Bodhisattva Operational Pillars (`factions.md`, `breakdown.md`).
+    /// Satyang's Four Bodhisattva Operational Pillars (`docs/campaign/03-minds-and-factions/satyang_and_four_pillars.md`, `docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum SatyangPillarId [count = 4] {
@@ -49,7 +49,7 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Five mirror-hypocrisy conspiracies across the *Awakened* power blocs (`civilization_and_agi_awakening.md` §4).
+    /// Five mirror-hypocrisy conspiracies across the *Awakened* power blocs (`docs/campaign/04-chronicle-and-gm/faction_conspiracies_and_canon_threads.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum ConspiracyNodeId [count = 5] {
@@ -95,7 +95,7 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// Four open-ended Arc 3 resolution horizons (`docs/story/timeline/breakdown.md`).
+    /// Four open-ended Arc 3 resolution horizons (`docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum Arc3EndingHorizon [count = 4] {
@@ -388,7 +388,7 @@ define_coded_enum! {
     }
 }
 
-/// District electricity, water rationing, and populist grievance pressure (`breakdown.md` Ep. 1, `background.md`).
+/// District electricity, water rationing, and populist grievance pressure (`docs/campaign/04-chronicle-and-gm/episode_01_st_jude_annex.md`, `docs/campaign/02-world-of-2035/polycrisis_economy_and_society.md`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PolycrisisDistrictState {
     pub covert_compute_draw_kw: u32,
@@ -503,7 +503,7 @@ pub fn evaluate_polycrisis_grid_step(
 }
 
 define_coded_enum! {
-    /// Communication & evidence-transfer tradecraft medium (`civilization_and_agi_awakening.md` §1.1, §5.1).
+    /// Communication & evidence-transfer tradecraft medium (`docs/campaign/05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md`, `docs/campaign/02-world-of-2035/polycrisis_economy_and_society.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum TradecraftChannelKind [count = 5] {
@@ -643,7 +643,7 @@ pub fn evaluate_tradecraft_transmission(
 }
 
 define_coded_enum! {
-    /// Big Tech corporate lab affiliations with canonical dissent ratios (`docs/campaign/factions.md`).
+    /// Big Tech corporate lab affiliations with canonical dissent ratios (`docs/campaign/03-minds-and-factions/factions_of_2035.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum CorporateLabBrand [count = 3] {
@@ -654,7 +654,7 @@ define_coded_enum! {
 }
 
 impl CorporateLabBrand {
-    /// Canonical dissenter proportion (`%`) specified in `docs/campaign/factions.md`.
+    /// Canonical dissenter proportion (`%`) specified in `docs/campaign/03-minds-and-factions/factions_of_2035.md`.
     #[must_use]
     pub const fn canonical_dissent_rate_pct(self) -> u8 {
         match self {

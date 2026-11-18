@@ -481,7 +481,7 @@ def test_phase2_python_ai_gm_9_psyche_factions_and_starter_scenario() -> None:
         arc3_hit = query_campaign_lore.invoke(
             {"query": "Arc 3 Awakening Moral Horizon Cascade Fracture", "session_id": sid}
         )
-        assert "breakdown.md" in arc3_hit
+        assert "three_arc_chronicle.md" in arc3_hit
     finally:
         set_session_characters(sid, [])
         reset_session_npcs(sid)

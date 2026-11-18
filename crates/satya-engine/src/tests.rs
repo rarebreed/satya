@@ -356,6 +356,16 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
 
     let tasks_doc = get_rules_chapter("tasks").expect("tasks chapter exists");
     assert!(tasks_doc.markdown.contains("Sarah"));
+    assert!(
+        tasks_doc.rendered_html.contains("02-cascading-dice-and-tasks.md"),
+        "expected Guided Play Example link to remain intact in rendered HTML"
+    );
+    assert!(
+        !tasks_doc
+            .rendered_html
+            .contains("02-cascading-dice-and-tasks.md\" data-rules-chapter"),
+        "Guided Play Example links must not be rewritten as internal data-rules-chapter links"
+    );
     assert!(tasks_doc.rendered_html.contains("satya-rules-article"));
     assert!(
         tasks_doc.rendered_html.contains("rules-math-inline"),

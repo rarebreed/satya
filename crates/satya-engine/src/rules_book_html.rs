@@ -43,7 +43,10 @@ pub fn escape_html_text(input: &str) -> String {
 /// to its canonical `chapter_id` if it points to one of the Satya Rules Book chapters.
 pub(crate) fn resolve_markdown_link_chapter_id(url: &str) -> Option<&'static str> {
     let path_part = url.split(['#', '?']).next().unwrap_or(url).trim();
-    if !path_part.ends_with(".md") {
+    if !path_part.ends_with(".md")
+        || path_part.contains("ttrpg-examples/")
+        || path_part.contains("campaign/")
+    {
         return None;
     }
     let file_name = path_part.rsplit('/').next().unwrap_or(path_part);

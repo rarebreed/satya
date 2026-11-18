@@ -1,6 +1,7 @@
 # Character Characteristics, Derived Metrics & Domain Aptitudes
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/characteristics.rs`](../../../crates/satya-engine/src/characteristics.rs) (`CharacteristicId`, `CharacteristicCategory`, `AptitudeDomain`, `CharacterAttributes`, `DerivedCharacteristics`, `compute_composite_controller`, `compute_gated_shortfall_penalty`, `study_time_multiplier`; full `32`-Characteristic scale including all `9` Psyche traits with `TRS` Trust and `CPS` Compassion).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/characteristics.rs`](../../../crates/satya-engine/src/characteristics.rs) (`CharacteristicId`, `CharacteristicCategory`, `AptitudeDomain`, `CharacterAttributes`, `DerivedCharacteristics`, `compute_composite_controller`, `compute_gated_shortfall_penalty`, `study_time_multiplier`; full `32`-Characteristic scale including all `9` Psyche traits with `TRS` Trust and `CPS` Compassion).  
+> **Guided Play Example**: See [Guide 01: Touring the Character Sheet (`32` Characteristics & `9` Aptitudes)](../../ttrpg-examples/01-lifepath-session-zero.md#2-touring-the-character-sheet-32-characteristics--9-aptitudes).
 
 This document defines the canonical **Character Characteristics and Aptitudes System** for **Satya**. It establishes the primary physical, mental, social, sensory, and psychological (`Psyche`) attributes that define a character, how they are scaled and represented, how secondary mechanical properties (such as **Power**, **Reach**, **Quick Thinking (`D_cog`)**, and **OODA Initiative**) are derived from them, how **Domain Aptitudes ($A \in [-2, +3]$)** accelerate learning, and how Characteristics anchor task resolution in the [`2d20` Cascading Engine](../02-core-mechanics/cascading_d20_and_tasks.md), the [Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md), and the [Skill System](skills_and_trees.md).
 
@@ -191,6 +192,8 @@ Combinations of the nine Psyche traits immediately generate nuanced personas for
 > [!NOTE]
 > **Psyche Mechanics in Play (Friction, Drift, Morale & Social Combat)**:
 > For the full rules on how **Psyche** traits govern **Psyche Friction Checks & Trait Drift**, **Conviction Surges**, **Combat Morale & Motivation**, and **Social Combat / Cognitive Dissonance ("Mental Wounds")**, see [Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md) and [Lifepath Hobbies, Life Events & Factions](lifepath_events_hobbies_and_factions.md).
+>
+> **See this in play**: [Guide 01 — Touring the Character Sheet (`32` Characteristics & `9` Aptitudes)](../../ttrpg-examples/01-lifepath-session-zero.md#2-touring-the-character-sheet-32-characteristics--9-aptitudes) and [Guide 04 — Psyche Friction, Morale & Social Combat](../../ttrpg-examples/04-psyche-morale-and-social-combat.md).
 
 ---
 

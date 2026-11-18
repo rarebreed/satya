@@ -78,10 +78,12 @@ Always build on the shared primitives in [`crates/satya-engine/src/primitives.rs
 > [!NOTE]
 > **`docs/ttrpg-examples/` Boundary**: Verbose human-only prose play tutorials live separately in [`docs/ttrpg-examples/`](../../../docs/ttrpg-examples/AGENTS.md) and are intentionally excluded from `STATIC_CHAPTERS` and PyLance RAG. Do **not** read, grep, or sync `docs/ttrpg-examples/` unless the user explicitly requests it.
 
+> Only the 18 `docs/ttrpg/*.md` chapters are embedded at compile time (`include_str!` in `rules_book.rs`); `docs/campaign/` and `docs/ttrpg-examples/` are **not** embedded in `satya-engine`. `pixi run build-book` (`docs/book/` HTML generation) triggers a `--release` `build-py` compile and is optional/on-demand unless requested or structurally needed.
+
 Whenever adding, renaming, or splitting a `docs/ttrpg/` markdown chapter or changing a canonical formula:
 1. Update [`docs/ttrpg/SUMMARY.md`](../../../docs/ttrpg/SUMMARY.md) (Table of Contents + Reciprocal Rust Engine Module Index) and ensure the chapter has a `> **Rust Engine Implementation**:` callout at the top.
 2. Update `STATIC_CHAPTERS` in [`crates/satya-engine/src/rules_book.rs`](../../../crates/satya-engine/src/rules_book.rs) and `resolve_markdown_link_chapter_id` in [`crates/satya-engine/src/rules_book_html.rs`](../../../crates/satya-engine/src/rules_book_html.rs).
 3. Update the relative link map in [`crates/satya-engine/src/bin/build_rules_book.rs`](../../../crates/satya-engine/src/bin/build_rules_book.rs).
 4. Update `BOOK_CHAPTER_SPECS` in [`src/satya_ml/build_rules_book.py`](../../../src/satya_ml/build_rules_book.py) and `CHAPTER_SPECS` in [`notebooks/satya_rules_book.py`](../../../notebooks/satya_rules_book.py).
 5. Update `_CANONICAL_RULES_FILES` in [`src/satya_ml/ai_gm/tools.py`](../../../src/satya_ml/ai_gm/tools.py).
-6. Run `cargo test --offline -p satya-engine` to verify `test_rules_book_catalog_search_and_tactical_pool_envelope` (ensuring zero raw LaTeX leaks, zero `&amp;amp;` double-escaping, quoted Mermaid labels, and valid currency strings).
+6. Run the targeted test `pixi run cargo test --offline -p satya-engine rules_book` (~2s) to verify `test_rules_book_catalog_search_and_tactical_pool_envelope` (ensuring zero raw LaTeX leaks, zero `&amp;amp;` double-escaping, quoted Mermaid labels, valid currency strings, and intact external cross-links) without running unrelated procedural map suites.

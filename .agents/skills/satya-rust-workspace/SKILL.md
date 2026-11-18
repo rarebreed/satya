@@ -55,8 +55,9 @@ Domain-specific workflows and module maps:
 
 ## 4. Editing Hygiene, Strict `LF` (`\n`), & Cross-Crate Compilation
 
-1. **Always Use `LF` (`\n`) — Never `CRLF` (`\r\n`)**:
-   - Every created or modified file (`.rs`, `.py`, `.md`, `.css`, `.toml`, `.avsc`, `.json`, `.html`) **must** use `LF` (`\n`). On Windows inside the sandbox, `path.write_bytes(...)` (`O_TRUNC` on existing files) can fail with `OSError: [Errno 22] Invalid argument`; normalize `CRLF` files cleanly using `write_file(..., Overwrite: true)` (passing `\n` line endings) or an atomic temp-file + `os.replace(...)`, and never use PowerShell `Set-Content` / `Out-File` or `"..."` strings containing backticks/`$`.
+1. **Line Endings & `.gitattributes` (`* text=auto eol=lf`)**:
+   - Repository [`.gitattributes`](../../../.gitattributes) enforces `* text=auto eol=lf`, so Git already normalizes tracked text files to `LF` in the index (`i/lf`) and on fresh checkouts.
+   - Write **new** files with `LF` (`\n`) and never use PowerShell `Set-Content` / `Out-File` (or `"..."` strings containing backticks/`$`). Do **not** waste extra audit or conversion passes rewriting existing Windows working-tree files (`w/crlf`) unless a byte-exact test, parser, or shell script requires `LF` on disk (and if you do need to rewrite one in the Windows sandbox, prefer `write_file(..., Overwrite: true)` or atomic temp-file + `os.replace(...)`, since `path.write_bytes(...)` `O_TRUNC` can fail with `OSError: [Errno 22]`).
 2. **Never Issue Parallel `edit_file` Calls on the Same File**:
    - On Windows, apply multiple edits to different regions of the same file sequentially, or combine them safely so stale targets/handles cannot conflict.
 3. **Run Cross-Crate `cargo check --offline` Early**:
@@ -67,6 +68,15 @@ Domain-specific workflows and module maps:
 ## 5. Pixi Verification & Git Worktree Workflow
 
 Always invoke tools via `pixi run ...` (never call `.pixi/envs/default/*.exe` directly or hardcode external `uv` Python paths). Run Cargo invocations sequentially so `target/` locks do not contend:
+
+### Scoped Verification Matrix (Fast Path Before Full Suites)
+
+| Change Scope | Exact Fast Commands | Avoid Running Unnecessarily |
+| :--- | :--- | :--- |
+| **Non-embedded Docs Only** (`docs/campaign/`, `docs/ttrpg-examples/`, `docs/technical/`, `README.md`) | Link/anchor validation; `pixi run build-rag` (only if `docs/campaign/` changed); targeted `PYTHONPATH=src pixi run python -m pytest tests/test_awakened_part1_and_hybrid_rag.py tests/test_phase1_2_awakened_hooks_and_maps.py` | **Zero** `cargo clippy` / `cargo test`, **zero** `satya-signaling` integration suites, and avoid `pixi run test-py` / `build-book` (`build-py` `--release` trigger) |
+| **Rules Book Markdown** (`docs/ttrpg/*.md` — embedded via `include_str!` in `rules_book.rs`) | `pixi run cargo test --offline -p satya-engine rules_book` (~2s) | Full `satya-engine` procedural map tests, `satya-signaling` tests (unless `crates/satya-signaling` code changed), and `pixi run build-book` (optional/on-demand only) |
+| **Python-Only** (`src/satya_ml/`, `tests/` without `.rs` or `docs/ttrpg/` edits) | `pixi run pyrefly check <edited_files>` and `PYTHONPATH=src pixi run python -m pytest <targeted_files_or_-n_auto>` | `pixi run test-py` (forces `depends-on = ["build-py"]` release Rust build) |
+| **Targeted Rust Crate Edits** (`crates/satya-signaling`, `crates/satya-engine`, etc.) | Filtered `pixi run cargo test --offline -p <crate> <filter>` (e.g., `omnisearch` for `campaign_lore.rs`) while iterating | Full multi-crate `clippy` / `test` suites until cross-crate verification or explicit full-suite checks are needed |
 
 - **Core Rust Workspace (5 non-PyO3 crates)**:
   ```powershell

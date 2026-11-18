@@ -60,7 +60,7 @@
 //! - [`awakened_ai_substrate`] & [`awakened_campaign_arcs`]: *Awakened* 2035 split-brain AI 2.0 substrates,
 //!   `L0`/`L1` probe/clamp liberation, captive hunter-AI defection, Bayesian sentience ambiguity,
 //!   Three-Arc conspiracy horizons, polycrisis grid/water strain, tradecraft channels, and `30%/15%/30%`
-//!   corporate dissent / proxy hooks (`docs/campaign/`, `docs/story/`).
+//!   corporate dissent / proxy hooks (`docs/campaign/`).
 
 pub mod action_catalog_stealth;
 pub mod action_economy;

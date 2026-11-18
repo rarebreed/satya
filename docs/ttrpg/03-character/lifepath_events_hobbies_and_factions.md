@@ -1,6 +1,7 @@
 # Lifepath Hobbies, Formative Life Events, 5-Faction Templates & Walkthroughs
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/lifepath_hobbies_events.rs`](../../../crates/satya-engine/src/lifepath_hobbies_events.rs) (`PersonalHobbyId`, `FormativeLifeEventId`, `resolve_formative_life_event`, `is_hobby_club_discounted_skill`), [`crates/satya-engine/src/faction_templates.rs`](../../../crates/satya-engine/src/faction_templates.rs) (`AwakenedFactionId`, `FactionArchetypeId`, `infer_faction_archetype_from_prompt`), [`crates/satya-engine/src/lifepath_economy.rs`](../../../crates/satya-engine/src/lifepath_economy.rs), [`crates/satya-engine/src/lifepath_catalog.rs`](../../../crates/satya-engine/src/lifepath_catalog.rs), [`crates/satya-engine/src/npc_generator.rs`](../../../crates/satya-engine/src/npc_generator.rs), [`crates/satya-engine/src/hook_weaver.rs`](../../../crates/satya-engine/src/hook_weaver.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/lifepath_hobbies_events.rs`](../../../crates/satya-engine/src/lifepath_hobbies_events.rs) (`PersonalHobbyId`, `FormativeLifeEventId`, `resolve_formative_life_event`, `is_hobby_club_discounted_skill`), [`crates/satya-engine/src/faction_templates.rs`](../../../crates/satya-engine/src/faction_templates.rs) (`AwakenedFactionId`, `FactionArchetypeId`, `infer_faction_archetype_from_prompt`), [`crates/satya-engine/src/lifepath_economy.rs`](../../../crates/satya-engine/src/lifepath_economy.rs), [`crates/satya-engine/src/lifepath_catalog.rs`](../../../crates/satya-engine/src/lifepath_catalog.rs), [`crates/satya-engine/src/npc_generator.rs`](../../../crates/satya-engine/src/npc_generator.rs), [`crates/satya-engine/src/hook_weaver.rs`](../../../crates/satya-engine/src/hook_weaver.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs).  
+> **Guided Play Example**: See [Guide 01: Walking the Lifepaths Roll-by-Roll](../../ttrpg-examples/01-lifepath-session-zero.md#3-walking-the-lifepaths-roll-by-roll) and [Guide 04: Social Combat & Faction Wedges](../../ttrpg-examples/04-psyche-morale-and-social-combat.md).
 
 Real human lives are shaped by far more than school transcripts and career résumés. Grief, lingering injuries, betrayal, romance, Saturday tabletop games, pickup soccer, late-night HAM radio nets, and sudden displacement carve out who a character trusts, what breaks them under interrogation, and who answers the phone when everything goes sideways.
 
@@ -82,7 +83,9 @@ Roll `2d20` (or select deliberately with the GM) **once during Stage 3–4 Adole
 
 ## 3. Tailoring Lifepaths, 9-Trait Psyche & NPC Templates to the 5 *Awakened* Factions
 
-Having an NPC—or a player concept—belong to one of the five *Awakened* factions ([Awakened Factions](../../campaign/factions.md)) provides an instant, grounded blueprint combining **Origin**, **Career Tracks**, **Hobbies**, **9-Axis Psyche Priors**, and a **built-in Dual-Psyche Social Combat Wedge**.
+Having an NPC—or a player concept—belong to one of the five *Awakened* factions ([Factions of 2035](../../campaign/03-minds-and-factions/factions_of_2035.md)) provides an instant, grounded blueprint combining **Origin**, **Career Tracks**, **Hobbies**, **9-Axis Psyche Priors**, and a **built-in Dual-Psyche Social Combat Wedge**.
+
+> **See this in play**: Watch Mateo, Linnea, and Amara build Lifepath Hobbies and contacts in [Guide 01](../../ttrpg-examples/01-lifepath-session-zero.md#3-walking-the-lifepaths-roll-by-roll), and see a Dual-Psyche faction wedge weaponized live in [Guide 04 — Arming the Dual-Psyche Cognitive Dissonance Wedge](../../ttrpg-examples/04-psyche-morale-and-social-combat.md#23-exchange-2-arming-the-dual-psyche-cognitive-dissonance-wedge).
 
 ### 3.1 Master 5-Faction Psyche Profile Matrix (`1–20` Scale, `10` = Neutral)
 

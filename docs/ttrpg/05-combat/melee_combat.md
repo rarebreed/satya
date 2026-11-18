@@ -1,6 +1,7 @@
 # Satya TTRPG Melee Combat, Close-Quarters Tactics & The Tactical Triad
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`ReachBand`, `MeleeDamageType`, `MeleeWeaponProfile`, `TacticalAllocationArchetype`, `TacticalTriadContestInput`, `evaluate_tactical_triad_contest`, `resolve_grappling_or_throw`, `canonical_melee_weapons`), [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain`, `CombatMoveCategory`, `CombatTechniqueId`, `COMBAT_TECHNIQUE_CATALOG`, `evaluate_technique_with_triad`, `resolve_technique_exchange`), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_viktor_vs_elena_melee`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`ReachBand`, `MeleeDamageType`, `MeleeWeaponProfile`, `TacticalAllocationArchetype`, `TacticalTriadContestInput`, `evaluate_tactical_triad_contest`, `resolve_grappling_or_throw`, `canonical_melee_weapons`), [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain`, `CombatMoveCategory`, `CombatTechniqueId`, `COMBAT_TECHNIQUE_CATALOG`, `evaluate_technique_with_triad`, `resolve_technique_exchange`), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_viktor_vs_elena_melee`).  
+> **Guided Play Example**: See [Guide 05: Close-Quarters Melee & The Tactical Triad](../../ttrpg-examples/05-melee-and-tactical-triad.md).
 
 Melee combat in **Satya** is fundamentally different from ranged firefights—not only in its physical mechanics of reach, leverage, balance (`Root`), and structural defense (`Guard`), but also in its psychological immediacy. This chapter builds directly upon the core combat engine, **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**, **[Count-Up Action Clock](../02-core-mechanics/action_economy_and_ooda.md)**, **[Morale System](../04-psyche-and-social/psyche_morale_and_social_combat.md)**, and **["Envelope & Fill" Tactical Pool Architecture ($P_{\text{base}} = C_{\text{combat}} + 3N$)](tactical_triad_and_pools.md)**.
 
@@ -60,6 +61,8 @@ How quickly you pull off a maneuver and how rapidly you cover or yield ground is
 
 **Control** (`Ceiling:` $C_{\max} = \max(\text{KIN}, \text{DEX}) - \text{Arm/Head Wounds}$) combines two inseparable halves of martial discipline: **Precision (Accuracy)** and **Guard (Structural Protection)**.
 
+> **See this in play**: [Guide 05 — Exchange 2: `Parry` & Seizing the Initiative (`C_def > C_att`)](../../ttrpg-examples/05-melee-and-tactical-triad.md#32-exchange-2-parry--seizing-the-initiative-c_def--c_att).
+
 1. **Precision & Technical Leverage**:
    - Targeting anatomical weak points (chin, liver, carotid, unarmored joints; see **[Hit Locations](../06-health-and-survival/health_and_trauma.md#1-hit-locations--specificity-of-damage-effects)**) or threading a blade thrust past a shield.
    - Executing technical grappling transitions—wrist locks, kimuras, rear-naked chokes, disarms, and off-balancing setups (*Kuzushi*) that rely on body mechanics (`KIN`/`DEX`) rather than brute muscle.
@@ -73,6 +76,8 @@ How quickly you pull off a maneuver and how rapidly you cover or yield ground is
 ### 2.3 Force *(Kinetic Impact & Grounded Root)*
 
 **Force** (`Ceiling:` $F_{\max} = \text{FOR} - \text{Arm/Shoulder/Torso Wounds}$) measures how much physical mass, kinetic energy (`POW`), and grounded stability (`Root`) are committed to the action:
+
+> **See this in play**: [Guide 05 — Exchange 3: Clinch Polarity Flip (`Reach 0`) & *Kuzushi* `Throw` vs. `Root`](../../ttrpg-examples/05-melee-and-tactical-triad.md#33-exchange-3-clinch-polarity-flip-reach-0--kuzushi-throw-vs-root).
 
 1. **Impact & Stopping Power (`Magnitude`)**:
    - Scales the character's derived **Power ($\text{POW} = \frac{\text{FOR} \times \text{SPD}}{10}$)** according to commitment relative to baseline $B$:
@@ -177,7 +182,7 @@ At the start of an engagement, each fighter declares (or the AI GM selects based
 
 ## 4. Melee Weapons, Reach Tiers & Base Action Costs (`TC`)
 
-Unlike generic RPGs where weapons are differentiated only by a damage die (`1d6` vs. `1d8`), melee weapons in Satya have distinct **Reach Tiers**, **Base Tick Costs (`TC`)**, **Control/Parry Modifiers**, and **Damage Profiles** (Blunt/Crushing, Incising/Slashing, or Piercing/Impaling; see **[Ranged Combat & Armor](ranged_combat_and_armor.md#2-armor-penetration--behind-armor-blunt-trauma-babt)** for how armor resists Edged vs. Blunt trauma):
+Unlike generic RPGs where weapons are differentiated only by a damage die (`1d6` vs. `1d8`), melee weapons in Satya have distinct **Reach Tiers**, **Base Tick Costs (`TC`)**, **Control/Parry Modifiers**, and **Damage Profiles** (Blunt/Crushing, Incising/Slashing, or Piercing/Impaling; see **[Ranged Combat & Armor](ranged_combat_and_armor.md#82-resolving-armor-vs-incoming-hits-penetration-vs-babt)** for how armor resists Edged vs. Blunt trauma):
 
 | Weapon / Unarmed Mode | Governing Skill (`Control`) | Reach Tier | Base `TC` | Guard / Parry Mod | Force & Trauma Profile |
 | :--- | :--- | :---: | :---: | :---: | :--- |

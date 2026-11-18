@@ -321,7 +321,7 @@ def test_part2_hybrid_rag_synonyms_tables_rust_symbols_and_visibility_wall() -> 
 
     # 4. ### subsection lore lookup -> AI Theory of Consciousness
     gm_lore = query_campaign_lore.invoke({"query": "Nagarjuna tetralemma Landauer"})
-    assert "background.md" in gm_lore
+    assert "ai_minds_and_consciousness.md" in gm_lore or "ai_consciousness_synthesis.md" in gm_lore
     assert "nagarjuna" in gm_lore.lower() or "landauer" in gm_lore.lower()
 
     # 5. Strict player-vs-GM visibility wall
@@ -332,14 +332,29 @@ def test_part2_hybrid_rag_synonyms_tables_rust_symbols_and_visibility_wall() -> 
         top_k=8,
     )
     assert all(h["visibility"] == "PUBLIC" for h in player_hits)
-    assert not any("breakdown.md" in h["source_path"] or "prologue.md" in h["source_path"] for h in player_hits)
+    assert not any(
+        "/04-chronicle-and-gm/" in h["source_path"]
+        or "prologue.md" in h["source_path"]
+        or "satyang_and_four_pillars.md" in h["source_path"]
+        for h in player_hits
+    )
 
     player_tool_out = lookup_public_lore_and_npcs.invoke(
         {"query": "Nagarjuna consciousness Bandajara", "scope": "LORE", "session_id": "test-vis-wall"}
     )
     joined_player = json.dumps(player_tool_out).lower()
-    assert "breakdown.md" not in joined_player
+    assert "04-chronicle-and-gm" not in joined_player
     assert "gm_conspiracy_secret" not in joined_player
+
+    public_faction_hits = idx.search(
+        "Humanis Primaris DAISE Altruist",
+        corpora=["campaign_lore"],
+        caller_role="player",
+        top_k=6,
+    )
+    assert public_faction_hits
+    assert all(h["visibility"] == "PUBLIC" for h in public_faction_hits)
+    assert any("factions_of_2035.md" in h["source_path"] for h in public_faction_hits)
 
     gm_secret_hits = idx.search(
         "Blue Lotus Manjusri shackled hunter-killer",

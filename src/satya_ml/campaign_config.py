@@ -102,7 +102,7 @@ def _builtin_fallback_pack(pack_name: str) -> dict[str, Any]:
         "title": "Awakened (Near-Future Earth 2035)",
         "default_sector_preset": "urban_crossroads",
         "allow_scifi_sector_presets": False,
-        "lore_dirs": ["docs/campaign", "docs/story"],
+        "lore_dirs": ["docs/campaign"],
         "npc_toml_file": "data/npcs/awakened_npcs.toml",
         "factions": ["Big Tech (Altruist / Translucent / Shen)", "Satyang", "Humanis Primaris", "Rogue AI", "DAISE"],
         "starter_scenario": {

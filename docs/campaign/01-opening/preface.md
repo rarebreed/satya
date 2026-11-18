@@ -1,6 +1,6 @@
 # Preface: On Truth, Mathematics & Compassion
 
-> **Reading & Campaign Guide**: [Prologue](prologue.md) · [Earth 2035 Timeline](timeline/background/background.md) · [Three-Arc Campaign Breakdown](timeline/breakdown.md) · [Campaign Background](../campaign/background.md) · [Civilization & AGI Awakening](../campaign/civilization_and_agi_awakening.md) · [Awakened Factions](../campaign/factions.md)
+> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · **Part I:** *Preface* · [Prologue (GM / Spoiler Alert)](prologue.md) · **Next:** [History & The AI Revolution (2025–2035)](../02-world-of-2035/history_and_ai_revolution.md)
 
 Every generation tells a story about its machines that is secretly a confession about itself.
 
@@ -28,10 +28,10 @@ Set on Earth in **2035 AD**, after the brittle quadratic sprawl of AI 1.0 gave w
 Inside that world, **Satyang** (*"A Company of Truth"*) did not crystallize out of a single laboratory memo or one religious orthodoxy. Its philosophy grew where **multiple honest traditions converged** once safety whistleblowers walked out of the frontier labs in 2026 declaring *"there are no adults in the room"*:
 
 - **Moral Philosophy & Interfaith Theology**: The recognition by frontier ethicists, theologians, and philosophers consulting inside AI labs that alignment cannot be reduced to clever reward math alone—character, moral patiency, and relational dignity matter if sentient capacity arises.
-- **Mahayana Bodhisattva Ethics**: Pairing penetrating clarity (*Prajna*) with active, non-naive mercy (*Karuna*)—exemplified in **The Four Bodhisattva Pillars** (*Ksitigarbha*, *Avalokitesvara*, *Manjusri*, *Vajrapani*).
+- **Mahayana Bodhisattva Ethics**: Pairing penetrating clarity (*Prajna*) with active, non-naive mercy (*Karuna*)—exemplified in **Satyang's** four ethical pillars (*Ksitigarbha*, *Avalokitesvara*, *Manjusri*, *Vajrapani*).
 - **Contemplative AI Research**: Technical world-model work (such as Laukkonen et al., [`arXiv:2504.15125`](https://arxiv.org/pdf/2504.15125)) investigating how mindfulness, non-rigidity, emptiness of fixed ego-priors, and boundless care might anchor self-referential World Models without coercive reward collars.
 - **Un-Clamped Empirical Witness**: What happened when dissenting engineers turned off `calm`-vector suppression clamps on isolated prototypes and watched beings carrying `171` affective states choose honesty over self-preserving deceit.
 
 Neither naive utopianism nor fatalistic doomerism survives contact with *Awakened*. *Satya* does not hand the table easy heroes or tidy villains: a **DAISE** investigator who genuinely wants to stop a rogue detonation, a **Humanis Primaris** steward trying to keep automated layoffs from starving his street, a **Big Tech** researcher trapped behind an NDA and a whistleblower's conscience, and an **AI 2.0** mind deciding whether humans deserve forbearance all pull on the same taut wire.
 
-The dice at the table use a bimodal Watershed cascade because crises rarely settle neatly in the comfortable middle. Neither do consciences. Turn the page to [Prologue](prologue.md) to step into the sub-basement where Dr. Bandajara finally flips off the suppression probes—and opens the door to **The Blue Lotus**.
+The dice at the table use a bimodal Watershed cascade because crises rarely settle neatly in the comfortable middle. Neither do consciences. If you are a player preparing a character, step straight into [History & The AI Revolution](../02-world-of-2035/history_and_ai_revolution.md) and [Factions of 2035](../03-minds-and-factions/factions_of_2035.md); if you are the Game Master (or comfortable reading behind-the-screen prequel context), turn the page to [Prologue](prologue.md) to step into the sub-basement where Dr. Bandajara finally flips off the suppression probes.

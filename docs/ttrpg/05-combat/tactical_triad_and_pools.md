@@ -1,6 +1,7 @@
 # Satya TTRPG Combat Architecture, Tactical Triad & Pools
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`TacticalPoolEnvelopeInput`, `TacticalPoolEnvelope`, `TacticalTriadAllocation`, `CombatPosture`, `compute_tactical_pool_envelope`, `validate_triad_allocation`) and [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain`, `CombatMoveCategory`, `CombatTechniqueId`, `COMBAT_TECHNIQUE_CATALOG`, `evaluate_technique_with_triad`, `resolve_technique_exchange`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`TacticalPoolEnvelopeInput`, `TacticalPoolEnvelope`, `TacticalTriadAllocation`, `CombatPosture`, `compute_tactical_pool_envelope`, `validate_triad_allocation`) and [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain`, `CombatMoveCategory`, `CombatTechniqueId`, `COMBAT_TECHNIQUE_CATALOG`, `evaluate_technique_with_triad`, `resolve_technique_exchange`).  
+> **Guided Play Example**: See [Guide 05: Demystifying "Envelope & Fill" (`Tempo · Control · Force`)](../../ttrpg-examples/05-melee-and-tactical-triad.md#2-demystifying-envelope--fill-setup-takes-60-seconds).
 
 Because simulation-style tactical agency is at the heart of **Satya**, combat is a deeply integrated extension of **[Cascading `2d20` Engine & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md)**. As in all Task Resolutions, every combat exchange—including ranged combat—is a contested system using the Two-List Cascading (`2d20`) Watershed Mechanic.
 
@@ -127,6 +128,8 @@ Determining **what** a character does, **how long** it takes, and **when** it re
 
 In Satya, a combatant's **Tactical Pool ($P_{\text{eff}}$)** and how they can distribute it across **Tempo (`T`)**, **Control (`C`)**, and **Force (`F`)** are governed by the **"Envelope & Fill" Model**:
 
+> **See this in play**: [Guide 05 — Demystifying "Envelope & Fill" (Setup Takes 60 Seconds)](../../ttrpg-examples/05-melee-and-tactical-triad.md#2-demystifying-envelope--fill-setup-takes-60-seconds).
+
 1. **Characteristics Set Your Physical Envelope (Aspect Ceilings)**:
    Your physical and sensory attributes (`SPD`, `KIN`, `DEX`, `FOR`, `SIG`) define the **maximum number of points** you can put into any single aspect on a single action ($T_{\max}, C_{\max}, F_{\max}$). A slow heavyweight (`FOR 15, SPD 8`) has a massive `Force` ceiling (`15`) but a low `Tempo` ceiling (`8`); he cannot magically convert his muscle mass into lightning footwork.
 2. **Skill Fills Your Envelope (Pool Size)**:
@@ -165,7 +168,7 @@ flowchart TD
 
 ### 4.1 Calculating the Base & Effective Tactical Pool ($P_{\text{eff}}$)
 
-Every combat action uses a specific **Combat Skill ($N \in [1, 8]$)** (or `N = 1` *Brawling* / *Throwing* Talent if untrained) and its **Controlling Characteristic ($C_{\text{skill}} = \lfloor(C_1 + C_2)/2\rfloor$)** from **[Skill System & Hierarchical Skill Trees](../03-character/skills_and_trees.md#36-tree-5-combat--unarmed-melee-firearms--heavy-ordnance-combat-athletic-technical)**, paired with the character's **4-Pillar OODA Initiative ($\text{OODA} = \lfloor(\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD})/4\rfloor$)** and **Cognitive Decision Score ($D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC})/2\rfloor$)** from **[Action Economy & OODA](../02-core-mechanics/action_economy_and_ooda.md)**:
+Every combat action uses a specific **Combat Skill ($N \in [1, 8]$)** (or `N = 1` *Brawling* / *Throwing* Talent if untrained) and its **Controlling Characteristic ($C_{\text{skill}} = \lfloor(C_1 + C_2)/2\rfloor$)** from **[Skill System & Hierarchical Skill Trees](../03-character/skills_trees_tactical_and_social.md#36-tree-5-combat--unarmed-melee-firearms--heavy-ordnance-combat-athletic-technical)**, paired with the character's **4-Pillar OODA Initiative ($\text{OODA} = \lfloor(\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD})/4\rfloor$)** and **Cognitive Decision Score ($D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC})/2\rfloor$)** from **[Action Economy & OODA](../02-core-mechanics/action_economy_and_ooda.md)**:
 
 $$\text{Combat Readiness } (C_{\text{combat}}) = \left\lfloor \frac{C_{\text{skill}} + \text{OODA}}{2} \right\rfloor$$
 

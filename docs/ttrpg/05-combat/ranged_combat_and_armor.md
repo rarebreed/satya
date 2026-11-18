@@ -1,6 +1,7 @@
 # Satya TTRPG Ranged Combat, Granular Ballistics, Firearms Engineering & Armor
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/ranged_combat.rs`](../../../crates/satya-engine/src/ranged_combat.rs) (`RangedFireModeId`, `ArmorProfileId`, `ArmorProfile`, `evaluate_ranged_recoil_and_suppression`, `resolve_armor_impact`, `canonical_armor_catalog`), [`crates/satya-engine/src/barrier_ballistics.rs`](../../../crates/satya-engine/src/barrier_ballistics.rs) (`MATERIAL_BALLISTIC_PROFILES`, `evaluate_ballistic_shot`, `collect_ray_barriers`, `BarrierPenetrationVerdict`), [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain::Ranged`, `CombatMoveCategory::RangedShot`, `CombatMoveCategory::RangedManeuver`, `CombatTechniqueId`, `evaluate_technique_with_triad`), [`crates/satya-engine/src/ballistics.rs`](../../../crates/satya-engine/src/ballistics.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_mateo_vs_vance_firefight`). Companion chapter to **[Granular Ballistics, Ammunition Physics & Firearm Engineering (`firearms_and_ballistics.md`)](firearms_and_ballistics.md)**.
+> **Rust Engine Implementation**: [`crates/satya-engine/src/ranged_combat.rs`](../../../crates/satya-engine/src/ranged_combat.rs) (`RangedFireModeId`, `ArmorProfileId`, `ArmorProfile`, `evaluate_ranged_recoil_and_suppression`, `resolve_armor_impact`, `canonical_armor_catalog`), [`crates/satya-engine/src/barrier_ballistics.rs`](../../../crates/satya-engine/src/barrier_ballistics.rs) (`MATERIAL_BALLISTIC_PROFILES`, `evaluate_ballistic_shot`, `collect_ray_barriers`, `BarrierPenetrationVerdict`), [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain::Ranged`, `CombatMoveCategory::RangedShot`, `CombatMoveCategory::RangedManeuver`, `CombatTechniqueId`, `evaluate_technique_with_triad`), [`crates/satya-engine/src/ballistics.rs`](../../../crates/satya-engine/src/ballistics.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_mateo_vs_vance_firefight`). Companion chapter to **[Granular Ballistics, Ammunition Physics & Firearm Engineering (`firearms_and_ballistics.md`)](firearms_and_ballistics.md)**.  
+> **Guided Play Example**: See [Guide 06: Firefights, Ballistics, Zero-HP Trauma & Survival](../../ttrpg-examples/06-firefights-trauma-and-survival.md).
 
 This chapter defines the canonical rules for **Ranged Firefights, Internal/External/Terminal Ballistics, Granular Firearm Engineering, Ammunition Physics, Weapon Reliability (`Rel`), and Body Armor (`PR` vs. Behind-Armor Blunt Trauma `BABT`)** in **Satya**. It builds directly upon:
 - **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for all mathematical variables and ballistics/combat symbols $E_k, m_{\text{proj}}, m_{\text{prop}}, L_{\text{bbl}}, \text{OAL}, M_{\text{wpn}}, \Delta_{\text{CoG}}, \tau_{\text{tol}}, \text{Acc}, W_{\text{yaw}}, \text{Pen}, R, \text{PR}_{\text{Edged}}, \text{PR}_{\text{Ballistic}}, \text{BABT}, \text{Rel}$),
@@ -13,6 +14,8 @@ This chapter defines the canonical rules for **Ranged Firefights, Internal/Exter
 ## 2. Ranged Combat in the Tactical Triad (`Tempo`, `Control`, `Force`)
 
 Ranged combat uses the exact same **Tempo, Control, and Force** triad on the **[Count-Up Action Clock](../02-core-mechanics/action_economy_and_ooda.md)** (`1 Tick = 0.25s`, `4 Ticks = 1.0s`) as close-quarters combat:
+
+> **See this in play**: [Guide 06 — Ranged Triad, Bracing, Recoil Climb & Weapon Jams](../../ttrpg-examples/06-firefights-trauma-and-survival.md#2-ranged-triad-bracing-recoil-climb--weapon-jams).
 
 - **Tempo (`T` — Aim Speed, Target Acquisition & CQB Handling)**: Governs how many ticks (`TC`) you spend bringing the weapon to bear—from a fast point-shoot or hip-fire snapshot (high **Tempo**, lower `TC`) to a deliberate multi-tick sighted shot (low **Tempo**, higher **Control**). Modified by the weapon's **Overall Length ($\text{OAL}$)** and **Center of Gravity ($\Delta_{\text{CoG}}$)**.
 - **Control (`C` — Sight Alignment, Trigger Squeeze & Cover Exposure)**: Governs marksmanship precision (`DEX/SIG` or `DEX/FOC`), called shots to bypass armor, AND how much of your body is exposed out of cover while firing (`Guard`).
@@ -79,7 +82,9 @@ While tight tolerance reduces reliability, superior **metallurgy, surface treatm
 
 ### 6.2 When Malfunctions Trigger, Clear Jam Time ($\text{TC}_{\text{clear}}$) & Strip Time ($\text{TC}_{\text{strip}}$)
 
-Satya integrates weapon malfunctions directly into the **[`2d20` Cascade Outcome Tiers](../02-core-mechanics/cascading_d20_and_tasks.md#2-signed-outcome-spectrum--n-to-n-botch-rules--outcometier)** without requiring a separate roll on every shot:
+Satya integrates weapon malfunctions directly into the **[`2d20` Cascade Outcome Tiers](../02-core-mechanics/cascading_d20_and_tasks.md#5-step-5-the-7-way-contested-outcome-matrix-contestedoutcomekind--outcometier)** without requiring a separate roll on every shot:
+
+> **See this in play**: [Guide 06 — The `"Switch"` Gunner's Unbraced Burst & Drum Jam (`Rel -2`)](../../ttrpg-examples/06-firefights-trauma-and-survival.md#22-the-switch-gunners-unbraced-burst--drum-jam-rel--2).
 
 1. **Minor Malfunction (`Stovepipe / Failure-to-Feed / Misfire`)**:
    - **Trigger**: On **`SuccessWithComplication`** (`total_successes >= 1` AND `raw_botches >= 1`), if $\text{raw\_botches} > \text{Rel}$, the current shot resolves normally, **but** the weapon fails to cycle the *next* round!
@@ -157,6 +162,8 @@ Every piece of protective gear is defined by **six granular attributes**:
 ### 8.2 Resolving Armor vs. Incoming Hits (`Penetration` vs. `BABT`)
 
 When an attack hits an armored Hit Location with $\text{Net Successes } \Delta M \ge 1$:
+
+> **See this in play**: [Guide 06 — Hit 1: Stopped by Kevlar, Cracked by `BABT`](../../ttrpg-examples/06-firefights-trauma-and-survival.md#41-hit-1-stopped-by-kevlar-cracked-by-babt).
 1. **Compute Effective Penetration and Effective Raw Impact**:
    $$\text{Effective Pen} = \text{Base Pen} + \left\lfloor \frac{\Delta M}{2} \right\rfloor, \qquad \text{Effective Raw Impact} = \text{Raw Impact} + \left\lfloor \frac{\Delta M}{2} \right\rfloor$$
 2. **Compare $\text{Effective Pen}$ against the Struck Zone's Active $\text{PR}$**:

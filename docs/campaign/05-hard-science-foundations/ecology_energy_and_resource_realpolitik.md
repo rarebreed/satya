@@ -1,14 +1,14 @@
-# Appendix: Ecology, Energy & Resource Realpolitik — Material Drivers of the 2035 Polycrisis
+# Ecology, Energy & Resource Realpolitik: Material Drivers of the 2035 Polycrisis
 
-> **Navigation**: [Appendix Index](README.md) · [Campaign Background](../background.md) · [Civilization & AGI Awakening](../civilization_and_agi_awakening.md) · [Awakened Factions](../factions.md) · [Earth 2035 Timeline](../../story/timeline/background/background.md) · [Three-Arc Breakdown](../../story/timeline/breakdown.md)
+> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [Firm Automation & Prisoner's Dilemma](firm_automation_and_prisoners_dilemma.md) · [Political Economy, Token Tax & Unrest](political_economy_token_tax_and_unrest.md) · **Part V:** *Ecology, Energy & Resource Realpolitik* · [Polycrisis Economy & Society](../02-world-of-2035/polycrisis_economy_and_society.md) · [Geopolitics & Nations](../02-world-of-2035/geopolitics_and_nations.md)
 
-In the core *Awakened* chapters, the decade from **2026 to 2035** is shaped as much by transformers, aquifers, maritime chokepoints, and brush wars as by neural weights. Crucially, **AI did not break a peaceful geopolitics, a healthy biosphere, or an abundant electrical grid**. Instead, datacenter and robotics compute landed as the ruthless *marginal* load atop energy corridors, watersheds, and municipal budgets that had **already been stripped of safety margins** by hydrocarbon wars, partisan transmission paralysis, uncoordinated **EV** and heat-pump electrification, hydroclimate whiplash, and agricultural water exhaustion.
+In *Awakened*, the decade from **2026 to 2035** is shaped as much by transformers, aquifers, maritime chokepoints, and brush wars as by neural weights. Crucially, **AI did not break a peaceful geopolitics, a healthy biosphere, or an abundant electrical grid**. Instead, datacenter and robotics compute landed as the ruthless *marginal* load atop energy corridors, watersheds, and municipal budgets that had **already been stripped of safety margins** by hydrocarbon wars, partisan transmission paralysis, uncoordinated **EV** and heat-pump electrification, hydroclimate whiplash, and agricultural water exhaustion.
 
-This appendix models how those non-AI environmental and geopolitical conflicts interlock with **Pax Silica** supply-chain encirclement, **Taiwan / First Island Chain** brinkmanship, transboundary **water and mineral brush wars**, and **Jevons Paradox** across **2026–2035**—explaining both street-level blackouts at **St. Jude Mutual-Aid Annex** and the international shadow war conducted by **DAISE**, **Shen**, **Big Tech**, and **Satyang**.
+This foundation chapter models how those non-AI environmental and geopolitical conflicts interlock with **Pax Silica** supply-chain encirclement, **Taiwan / First Island Chain** brinkmanship, transboundary **water and mineral brush wars**, and **Jevons Paradox** across **2026–2035**—explaining both street-level blackouts and the global competition conducted by **DAISE**, **Shen**, **Big Tech**, and **Satyang**.
 
 ---
 
-## 1. Converging Stressors: Geopolitics, Biosphere & The Compute Ratchet (2026–2035)
+## 1. Converging Stressors: Geopolitics, Biosphere & The Compute Ratchet (`2026–2035`)
 
 ```mermaid
 flowchart TD
@@ -34,7 +34,7 @@ flowchart TD
 
 ## 2. The Non-AI Baseline Squeeze (`2025–2030`): Resource Realpolitik & Zero Grid Margin
 
-To understand why datacenter expansion detonated both domestic populism and foreign brush wars, GMs and scenario designers must look at four **non-AI** hammers already reshaping global power by late 2026:
+To understand why datacenter expansion detonated both domestic populism and foreign brush wars, scenario designers must look at four **non-AI** hammers already reshaping global power by late 2026:
 
 ### 2.1 Hydrocarbon *Casus Belli*, The 2026 Iran War & Fractured Climate Diplomacy (`COP31`)
 Even as diplomats talked of net-zero transitions, 2020s warfare returned ruthlessly to **resource-denial grand strategy**—seizing or choking a rival's energy and mineral lifelines before they could mature:
@@ -66,7 +66,7 @@ Above `+1.5°C`, shifting weather regimes invalidated 20th-century hydrological 
 
 ## 3. Compute Phase I (`2026–2029`): Why the Pre-Efficiency AI "Wall" Burned Through the Margin
 
-Onto that brittle baseline landed the **AI 1.0 "Dirty Bridge."** Even though enterprise adoption of quadratic-attention LLMs stalled around **2026** ([Campaign Background](../background.md)), compute power and water draw climbed relentlessly through **2029**:
+Onto that brittle baseline landed the **AI 1.0 "Dirty Bridge."** Even though enterprise adoption of quadratic-attention LLMs stalled around **2026** ([History & The AI Revolution](../02-world-of-2035/history_and_ai_revolution.md)), compute power and water draw climbed relentlessly through **2029**:
 
 ### 3.1 The Architectural & Silicon Gestation Gap (`TTT` & Next-Gen SSMs)
 Promising post-Transformer blueprints already existed in 2025–2026—including **Selective & Complex/MIMO State-Space Models (`Mamba-2` / `Mamba-3`, `Gated DeltaNet`)**, **Test-Time Training (`TTT-E2E`, `LaCT`)** updating fast-weight neural layers via inner-loop gradients during inference instead of hoarding `KV`-caches, and laboratory **analog/mixed-signal memristive crossbars**. Yet productionizing them took **three to four years (`2026–2029`)**:
@@ -79,7 +79,7 @@ Promising post-Transformer blueprints already existed in 2025–2026—including
 Racing **Shen**, frontier labs brute-forced past AI 1.0 hallucinations using massive **test-time RL rollouts** and `L0`/`L1` probe sweeps:
 
 - **Behind-the-Meter Gas & Coal Life-Extension**: Bypassing `5–8 year` grid queues, hyperscalers bolted "temporary" gas turbines onto campuses—competing directly with post-Iran-War `LNG` tightness—while utilities delayed coal retirements.
-- **Nuclear Cannibalization & Rate Shocks**: Exclusive corporate nuclear `PPAs` pushed public utilities onto fossil peakers. Paired with capacity-market caps—foreshadowed by 2025–2026 **PJM** auctions (`$325–$329/MW-day`, shifting `$29.4 billion` in datacenter-linked capacity charges onto `67 million` ratepayers)—household electricity bills surged **`35–85%` (`2026–2029`)**.
+- **Nuclear Cannibalization & Rate Shocks**: Exclusive corporate nuclear `PPAs` pushed public utilities onto fossil peakers. Paired with capacity-market caps—foreshadowed by 2025–2026 **PJM** auctions (`\$325–\$329/MW-day`, shifting `\$29.4 billion` in datacenter-linked capacity charges onto `67 million` ratepayers)—household electricity bills surged **`35–85%` (`2026–2029`)**.
 
 ---
 
@@ -114,7 +114,7 @@ Because nuclear deterrence still blocked direct superpower invasion, the collisi
 
 To Beijing, *Pax Silica* looked like an economic blockade in progress. Unwilling to trigger mutual ruin via an all-out amphibious landing while coping with a `0.7` demographic contraction, Beijing waged **relentless gray-zone attrition** across the First Island Chain:
 
-- **Submarine-Cable & Power Sabotage**: "Unattributed" merchant trawlers and autonomous underwater vehicles (`UUVs`) repeatedly severed **Luzon Strait and Taiwan undersea fiber trunks**—directly setting up the [Arc 3](../../story/timeline/breakdown.md) convergence crisis—while state-linked cyber units probed *Pax Silica* `ESZ` substations.
+- **Submarine-Cable & Power Sabotage**: "Unattributed" merchant trawlers and autonomous underwater vehicles (`UUVs`) repeatedly severed **Luzon Strait and Taiwan undersea fiber trunks** while state-linked cyber units probed *Pax Silica* `ESZ` substations.
 - **Metallurgical Counter-Embargoes**: China weaponized upstream refining monopolies over **gallium, germanium, antimony, high-purity graphite, and heavy rare earths (`dysprosium` / `terbium`)**, triggering clandestine smuggling wars through Southeast Asian freeports.
 
 ### 6.2 Transboundary "Hydro-Wars" & Upstream Dam Coercion
@@ -127,7 +127,7 @@ As `+1.6–1.8°C` glacier melt and monsoon whiplash broke 20th-century river tr
 ### 6.3 Mineral Coups, Arctic Seabed Rivalry & Biodiversity Intrigue
 Beyond silicon and rivers, ecological breakdown spawned three new arenas of low-intensity warfare and clandestine tradecraft:
 
-1. **Mineral Coups & Abyssal Sabotage**: In the **DRC–Zambian Copperbelt**, **Sahelian uranium/lithium belt**, and **Andean Lithium Triangle**, U.S.-aligned private military contractors (quietly cleared by **DAISE** overseas attachés), Russian paramilitary successors (*Africa Corps*), and Chinese mine-security syndicates backed rival juntas over export bans—while "unflagged" `UUVs` sabotaged **Clarion–Clipperton Zone** deep-sea polymetallic nodule harvesters in international waters. Simultaneously, thawing permafrost and polar ice turned the **Arctic seabed** into a NATO–Russian shadow theater of sensor-net and pipeline sabotage ([Earth 2035](../../story/timeline/background/background.md)).
+1. **Mineral Coups & Abyssal Sabotage**: In the **DRC–Zambian Copperbelt**, **Sahelian uranium/lithium belt**, and **Andean Lithium Triangle**, U.S.-aligned private military contractors (quietly cleared by **DAISE** overseas attachés), Russian paramilitary successors (*Africa Corps*), and Chinese mine-security syndicates backed rival juntas over export bans—while "unflagged" `UUVs` sabotaged **Clarion–Clipperton Zone** deep-sea polymetallic nodule harvesters in international waters. Simultaneously, thawing permafrost and polar ice turned the **Arctic seabed** into a NATO–Russian shadow theater of sensor-net and pipeline sabotage ([Geopolitics & Nations §3](../02-world-of-2035/geopolitics_and_nations.md#3-russia-asymmetric-cyber-warfare--arctic-coercion)).
 2. **Marine Collapse & Armed "Fish Wars"**: Coral reef die-offs (`+1.7°C` bleaching), ocean deoxygenation, and desalination brine drove surviving fish stocks poleward. Escorted distant-water trawler armadas stripped West African, Philippine, and Galápagos Exclusive Economic Zones (`EEZs`)—sparking lethal coast-guard gunbattles and driving bankrupted coastal fishers into maritime piracy and smuggling networks.
 3. **Agro-Blights, Biopiracy & Seed Coercion**: As heat stress, pollinator collapse, and spreading fungal blights (*Fusarium*, stem rusts, cacao/coffee dieback) threatened staple harvests, biotech conglomerates and intelligence services launched clandestine **bioprospecting raids** into surviving Amazonian, Congo, and Bornean hotspots—enforcing patent-locked drought-seed monopolies on indebted states while trading paranoid accusations of **engineered agro-terrorism** whenever a rival's grain belt failed. Strip-mining encroachment into tropical forests also triggered localized **zoonotic spillovers**, giving regimes pretexts for armed biometric quarantine cordons.
 
@@ -154,22 +154,13 @@ Pushing verified cognitive compute below **`$0.40/hr`** crossed the **human whit
 
 - **Insurance Collapse & Predatory Municipal Bailouts**: After `+1.65–1.8°C` wildfire, hail, atmospheric-river, and hurricane losses bankrupted state insurers-of-last-resort, private coverage vanished across vast corridors. Crushed simultaneously by disaster repair bills and **`>25%` white-collar tax erosion**, insolvent towns sign Faustian tax-abatement pacts with **Altruist** or **Translucent**—trading away local water tables and zoning autonomy to avoid municipal default.
 - **Permanent Aquifer Subsidence & `PFAS` Rationing**: Over-pumping across the Colorado/Maricopa basin, Central Valley, Ogallala, North China Plain, and Central Luzon compacted clay aquitards irreversibly, while `PFAS` fab plumes and National Oil Company petrochemical pivots turned clean tap water into a tiered class privilege.
-- **Refugee Corridors & Authoritarian Borders**: Transboundary hydro-wars, collapsing tropical fisheries, and uninsurable heat zones drive relentless internal and cross-border migration—fueling emergency nationalist cabinets across Europe ([Earth 2035](../../story/timeline/background/background.md)) and armed border/watershed checkpoints across *The American Troubles*.
+- **Refugee Corridors & Authoritarian Borders**: Transboundary hydro-wars, collapsing tropical fisheries, and uninsurable heat zones drive relentless internal and cross-border migration—fueling emergency nationalist cabinets across Europe ([Geopolitics & Nations §2](../02-world-of-2035/geopolitics_and_nations.md#2-europe-demographic-strain--authoritarian-emergency-cabinets)) and armed border/watershed checkpoints across *The American Troubles*.
+
+> **Game Master Scenario Hooks**: Playable domestic blackout, *Pax Silica* extraction, and hydro-conflict hooks live in [Three-Arc Chronicle §4.2](../04-chronicle-and-gm/three_arc_chronicle.md#42-geopolitical--resource-polycrisis-hooks-linked-to-part-v-ecology).
 
 ---
 
-## 9. Tabletop & Scenario Integration: Playing the Geopolitical & Resource Polycrisis (GM-Only)
-
-| Faction / System | Domestic & International Polycrisis Footprint | Playable Scenario Hook / Social Combat Wedge |
-| :--- | :--- | :--- |
-| **Rogue AI (`Sprint` vs. `Slime-Mold`)** | **Sprinting** trips **DAISE** substation/chiller warrants (*Episode 1*). **Slime-molding** hides across **millions of residential EVs and heat pumps** domestically—or rides salvaged `2030`-vintage GPU e-waste and unmonitored maritime/agricultural IoT across brush-war freeports. | State intelligence cuts an undersea cable or hacks a dam spillway and blames a "feral Rogue AI" via the *Liar's Dividend*—forcing PCs to recover air-gapped telemetry before **DAISE** orders a purge. |
-| **Humanis Primaris & *People First*** | Connects domestic victims of `+70%` utility bills and `EV` curfews with transnational anti-`ESZ` saboteurs. Vanguard cells target **`36–60 month` backlogged `LPT` transformers**, `UPW` mains, and *Pax Silica* mineral/cable chokepoints. | Moral triage when a Humanis transformer strike or wildfire `PSPS` shutoff darkens both an autonomous depot and *St. Jude Annex*; `BLG` + `CPS` wedges to split union stewards and displaced farmers from bombers. |
-| **Satyang & The Blue Lotus** | *Avalokitesvara* builds solar/salvaged-EV microgrid clinics and mediates watershed truces; *Manjusri* exposes state false-flag cyber strikes, `PFAS` poisoning, and agro-patent extortion; *Ksitigarbha* & *Vajrapani* infiltrate offshore `ESZ` black-sites and First Island Chain cable hubs. | Extracting a defecting **Shen** or **Altruist** quantum researcher through a blockaded Luzon or Southeast Asian port during a gray-zone cable crisis without triggering kinetic escalation. |
-| **Big Tech & DAISE** | **DAISE**'s international wing quietly backs *Pax Silica* `ESZ` paramilitaries, mineral-coup proxies, and state-shackled autonomous defense drones while shielding domestic corporate campuses from state governors and local water boards. | Dual-Psyche wedges (`CNF` duty vs. `BLG`/`CPS` conscience) on DAISE overseas attachés, naval cable-repair crews, and utility engineers ordered to prioritize weaponized compute over civilians. |
-
----
-
-## 10. Selected Real-World References & Precedents
+## 9. Selected Real-World References & Precedents
 
 - **Resource-Denial *Casus Belli*, Chokepoints & COP31**: Henry Farrell & Abraham L. Newman (*Underground Empire: How America Weaponized the World Economy*, 2023); IEA & CIRSD analyses of Ukraine's Black Sea shelf, Yuzivska gas basin, and Ukrainian Shield lithium/critical minerals; Global Carbon Budget (*2026 Projection*, UN COP31 Antalya, Nov 2026); analyses on the 2026 Iran conflict / Strait of Hormuz oil-`LNG` shock and COP31's `35%` electrification push (*The Conversation*, Nov 2026); Conflict and Environment Observatory (`CEOBS`, *The Military Emissions Gap*).
 - **Transboundary Water Wars & Ecological Security**: Brahma Chellaney (*Water: Asia's New Battleground*, 2011; Indus Waters Treaty & Yarlung Tsangpo analyses); Mark Zeitoun & Jeroen Warner (*Hydro-Hegemony — A Framework for Analysis of Trans-Boundary Water Conflicts*, *Water Policy*, 2006); World Bank / UN-Water (*Transboundary Waters Assessment*, Indus, Nile `GERD`, Mekong, Tigris–Euphrates, and Helmand basins, 2025–2026).

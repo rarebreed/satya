@@ -1,6 +1,7 @@
 # Satya TTRPG Health, Anatomical Trauma, Fatigue & Mental Conditions
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/health_survival.rs`](../../../crates/satya-engine/src/health_survival.rs) (`HitLocationZone`, `FatigueLevel`, `StructuralWoundTier`, `FractureBiomechanics`, `HemorrhageGrade`, `BloodLossStage`, `WoundShockTier`, `lookup_hit_location_1d20`, `evaluate_fatigue_state`, `evaluate_asphyxiation`, `evaluate_blood_loss_state`, `evaluate_wound_shock_save`) and [`crates/satya-engine/src/status_and_triage.rs`](../../../crates/satya-engine/src/status_and_triage.rs) (`PhysiologicalStatusEffect`, `MentalTraumaCondition`, `MedicalInterventionKind`, `evaluate_mental_trauma_shock`, `evaluate_medical_triage`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/health_survival.rs`](../../../crates/satya-engine/src/health_survival.rs) (`HitLocationZone`, `FatigueLevel`, `StructuralWoundTier`, `FractureBiomechanics`, `HemorrhageGrade`, `BloodLossStage`, `WoundShockTier`, `lookup_hit_location_1d20`, `evaluate_fatigue_state`, `evaluate_asphyxiation`, `evaluate_blood_loss_state`, `evaluate_wound_shock_save`) and [`crates/satya-engine/src/status_and_triage.rs`](../../../crates/satya-engine/src/status_and_triage.rs) (`PhysiologicalStatusEffect`, `MentalTraumaCondition`, `MedicalInterventionKind`, `evaluate_mental_trauma_shock`, `evaluate_medical_triage`).  
+> **Guided Play Example**: See [Guide 05 §3.4 (`Exertion` & `Fatigue`)](../../ttrpg-examples/05-melee-and-tactical-triad.md#34-exchange-4-watching-exertion-marks-vs-fatigue-threshold) and [Guide 06 §4–§5 (`BABT`, Hemorrhage & `6s` Tourniquet Triage)](../../ttrpg-examples/06-firefights-trauma-and-survival.md#4-zero-hit-points-armor-pr-vs-babt-hit-locations--hemorrhage).
 
 This chapter defines the canonical **Health, Anatomical Trauma, Physiological Status, and Mental Condition System** for **Satya** (for definitions of all mathematical variables and trauma/stamina symbols such as $\text{FT}, \text{WSR}, T_{\max}, C_{\max}, F_{\max}, \text{TN}_P, \text{TN}_{GM}$, see the **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**). As established in **[Combat Architecture, Tactical Triad & Pools](../05-combat/tactical_triad_and_pools.md)**, Satya completely rejects ablative "Hit Points" (`HP`). A human being is not a uniform sack of numeric points that operates at `100%` efficiency until reaching `0`.
 
@@ -84,6 +85,8 @@ Short-term physical damage represents reversible metabolic exhaustion, lactic ac
 
 Every character has a **Fatigue Threshold (`FT`)** derived from their **Fitness (`FIT`)** and **Discipline (`DIS`)**:
 
+> **See this in play**: [Guide 05 — Exchange 4: Watching `Exertion Marks` vs. `Fatigue Threshold`](../../ttrpg-examples/05-melee-and-tactical-triad.md#34-exchange-4-watching-exertion-marks-vs-fatigue-threshold).
+
 $$\text{Fatigue Threshold (FT)} = \text{FIT} + \left\lfloor \frac{\text{DIS}}{2} \right\rfloor$$
 
 *(At human average `FIT 10, DIS 10`, $\text{FT} = 15$ Exertion Marks per Fatigue Level).*
@@ -120,7 +123,7 @@ Long-term physical trauma damages the body's structural skeleton, musculature, v
 
 ### 3.1 Structural Wound Severity Tiers (`Tiers 1–5`)
 
-When a strike or projectile hits a target (after resolving Armor Protection Rating $\text{PR}$ vs. Penetration $\text{Pen}$ and Behind-Armor Blunt Trauma $\text{BABT}$; see **[Ranged Combat, Granular Ballistics & Armor](../05-combat/ranged_combat_and_armor.md#4-terminal-ballistics-how-kinetic-energy-caliber--inverse-accuracy-determine-damage)**), the net **Effective Trauma Magnitude**—derived for firearms from **Impact Kinetic Energy ($I_{\text{KE}}$)**, **Caliber Crush ($I_{\text{cal}}$)**, **Inverse Accuracy Projectile Wobble/Yaw ($W_{\text{yaw}}$)**, and $+\lfloor \Delta M / 2 \rfloor$ cascade successes—inflicts one of **5 Structural Wound Tiers** on the struck Hit Location:
+When a strike or projectile hits a target (after resolving Armor Protection Rating $\text{PR}$ vs. Penetration $\text{Pen}$ and Behind-Armor Blunt Trauma $\text{BABT}$; see **[Firearm Engineering & Terminal Ballistics](../05-combat/firearms_and_ballistics.md#4-terminal-ballistics-how-kinetic-energy-caliber--inverse-accuracy-determine-damage)**), the net **Effective Trauma Magnitude**—derived for firearms from **Impact Kinetic Energy ($I_{\text{KE}}$)**, **Caliber Crush ($I_{\text{cal}}$)**, **Inverse Accuracy Projectile Wobble/Yaw ($W_{\text{yaw}}$)**, and $+\lfloor \Delta M / 2 \rfloor$ cascade successes—inflicts one of **5 Structural Wound Tiers** on the struck Hit Location:
 
 | Wound Tier *(Net Effective Trauma)* | Clinical Severity | Aspect Ceiling Penalty ($T_{\max}, C_{\max}, F_{\max}$) | Wound Shock Added (`wound_shock_index`) | Typical Tissue, Bone & Vascular Damage *(Note: Penetrating rounds with Wobble $W_{\text{yaw}} \ge 2$ inflict **`+1` Bleed Grade** from tumbling/keyholing cavitation!)* |
 | :---: | :--- | :---: | :---: | :--- |
@@ -147,6 +150,8 @@ Skeletal integrity is the mechanical frame through which muscles transmit **Forc
 ### 3.3 Hemorrhaging & Blood Volume (`bleed_rate`)
 
 Every human character has a baseline **Blood Volume Track of `10.0 Units`** (representing `~5.0 liters` of circulating blood, where `1 Unit ≈ 500 mL`, roughly one standard blood donation bag).
+
+> **See this in play**: [Guide 06 — Hit 2: Unarmored Thigh Wound, Shock & `10.0`-Unit Bleeding](../../ttrpg-examples/06-firefights-trauma-and-survival.md#42-hit-2-unarmored-thigh-wound-shock--100-unit-bleeding).
 
 #### The Four Hemorrhage Grades
 
@@ -221,6 +226,8 @@ When a character suffers a catastrophic failure on a **Discipline (`DIS`) Morale
 ---
 
 ## 6. Medical Triage, Stabilization & Healing Timelines
+
+> **See this in play**: [Guide 06 — `4-Tick` Quick-Release & `6`-Second `CAT` Tourniquet](../../ttrpg-examples/06-firefights-trauma-and-survival.md#51-4-tick-quick-release--6-second-cat-tourniquet) and [What Happens Tomorrow Morning](../../ttrpg-examples/06-firefights-trauma-and-survival.md#53-what-happens-tomorrow-morning-why-violence--weather-have-weight).
 
 1. **The "Golden Hour" & Field Stabilization (*First Aid / Paramedicine* `DEX/DIS`)**:
    - Halting **Grade 2–4 Hemorrhage** (via tourniquets, hemostatic packing, and pressure dressings) and clearing obstructed airways within the first `60 minutes` (`14,400 ticks`) prevents death from hypovolemic shock.

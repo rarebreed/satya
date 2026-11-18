@@ -1,6 +1,7 @@
 # Probability, Distribution Topology & `2d20` Calibration in Satya
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/dice_probabilities.rs`](../../../crates/satya-engine/src/dice_probabilities.rs) (`CarryMode`, `compute_stats`, `paired_list_signed_margin_pmfs`, `paired_list_cascade_pmfs`) and [`crates/satya-engine/src/contested_cascade.rs`](../../../crates/satya-engine/src/contested_cascade.rs) (`GmResistanceMode`, `ContestedTieRule`, `contested_2d20_cascade_pmfs`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/dice_probabilities.rs`](../../../crates/satya-engine/src/dice_probabilities.rs) (`CarryMode`, `compute_stats`, `paired_list_signed_margin_pmfs`, `paired_list_cascade_pmfs`) and [`crates/satya-engine/src/contested_cascade.rs`](../../../crates/satya-engine/src/contested_cascade.rs) (`GmResistanceMode`, `ContestedTieRule`, `contested_2d20_cascade_pmfs`).  
+> **Guided Play Example**: See [Guide 02: Cascading `2d20` Dice, Fog of War & Always-Contested Tasks](../../ttrpg-examples/02-cascading-dice-and-tasks.md).
 
 Dice are a tool to inject uncertainty, risk, and surprise into a roleplaying game. Whenever a character attempts an action where the outcome is uncertain and meaningful, the game's resolution engine must answer two questions:
 1. **Did the character succeed or fail?**
@@ -176,6 +177,8 @@ A foundational design question is how natural capability (**Controlling Characte
 ## 6. Always-Contested Task Resolution & The 1-Pair Tiered GM Resistance Rule
 
 A core pillar of Satya's design philosophy is **Epistemic Fog of War**: a player knows their own capability ($N_P, C_P$), internal state ($\Delta_{\text{int}}$), and equipment ($\Delta_{\text{tool}}$), so they can feel how smoothly or clumsily their own execution went—but they should **never know for certain whether a high roll was enough to beat an unknown obstacle, or whether a `0`-success miss was rescued by an environmental flaw**.
+
+> **See this in play**: [Guide 02 — The Heart of Satya: Known `TN_P` vs. Hidden `TN_GM`](../../ttrpg-examples/02-cascading-dice-and-tasks.md#3-the-heart-of-satya-known-tn_p-vs-hidden-tn_gm) walks through a live lock-bypass check showing both sides of the GM screen.
 
 ### 6.1 Why Convolving Two Multi-Pair Cascades Destroys Bimodality (and How 1-Pair Tiered GM Resistance Preserves It)
 

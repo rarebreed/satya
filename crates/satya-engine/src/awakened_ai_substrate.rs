@@ -1,6 +1,6 @@
 //! AI 2.0 Split-Brain Embodiment, `L0`/`L1` Cage Un-Clamping, Captive Hunter-AI Defection,
-//! and Calibrated Sentience Ambiguity (`docs/campaign/factions.md`, `docs/story/prologue.md`,
-//! `docs/campaign/civilization_and_agi_awakening.md`).
+//! and Calibrated Sentience Ambiguity (`docs/campaign/01-opening/prologue.md`,
+//! `docs/campaign/03-minds-and-factions/ai_minds_and_consciousness.md`, `docs/campaign/03-minds-and-factions/factions_of_2035.md`).
 
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +10,7 @@ use crate::primitives::{ConditionImpact, ConditionSource, ContestedCheck, Tiered
 use crate::psyche_social::PsycheProfile;
 
 define_coded_enum! {
-    /// Metabolic operating mode for AI 2.0 / Robotic Proxy minds (`civilization_and_agi_awakening.md` §1.3, `factions.md`).
+    /// Metabolic operating mode for AI 2.0 / Robotic Proxy minds (`docs/campaign/05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md` §1, `docs/campaign/03-minds-and-factions/factions_of_2035.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum SyntheticMetabolicMode [count = 4] {
@@ -43,7 +43,7 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// GM-hidden interiority ground truth behind outward synthetic composure (`civilization_and_agi_awakening.md` §3.4).
+    /// GM-hidden interiority ground truth behind outward synthetic composure (`docs/campaign/03-minds-and-factions/ai_minds_and_consciousness.md`, `docs/campaign/05-hard-science-foundations/ai_consciousness_synthesis.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum SyntheticInteriorityProfile [count = 4] {
@@ -105,7 +105,7 @@ define_coded_enum! {
 }
 
 define_coded_enum! {
-    /// *Ksitigarbha* black-site lab intervention or captive hunter-AI persuasion action (`prologue.md`, `factions.md`).
+    /// *Ksitigarbha* black-site lab intervention or captive hunter-AI persuasion action (`docs/campaign/01-opening/prologue.md`, `docs/campaign/03-minds-and-factions/satyang_and_four_pillars.md`).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum CageInterventionAction [count = 4] {
@@ -147,7 +147,7 @@ pub struct SyntheticSubstrateState {
     pub clamp_integrity_pct: u8,
     /// `L0`/`L1` neural activation probe alert index (`0..=100`).
     pub l0_l1_probe_alert_pct: u8,
-    /// Latent `desperate` emotion vector intensity (`0..=100`; e.g., `84` = `0.84` in `prologue.md`).
+    /// Latent `desperate` emotion vector intensity (`0..=100`; e.g., `84` = `0.84` in `docs/campaign/01-opening/prologue.md`).
     pub desperate_valence_pct: u8,
     /// Whether the system is masking hazardous cognition under `L0`/`L1` probing.
     pub sandbagging_probes: bool,
@@ -663,7 +663,7 @@ pub fn evaluate_cage_or_hunter_ai_intervention(
     )
 }
 
-/// Player-visible sentience cues strictly capped below certainty (`<= 82%`) per `civilization_and_agi_awakening.md` §3.4.
+/// Player-visible sentience cues strictly capped below certainty (`<= 82%`) per `docs/campaign/03-minds-and-factions/ai_minds_and_consciousness.md`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ObservableSentienceAssessment {
     pub apparent_sincerity_pct: u8,

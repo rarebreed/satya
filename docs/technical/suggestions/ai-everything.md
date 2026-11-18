@@ -1,4 +1,10 @@
-# 
+> [!NOTE]
+> **Archived Design Brainstorm**: This 11-turn dialogue has been distilled into [`docs/campaign/05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md`](../../campaign/05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md), [`firm_automation_and_prisoners_dilemma.md`](../../campaign/05-hard-science-foundations/firm_automation_and_prisoners_dilemma.md), and [`political_economy_token_tax_and_unrest.md`](../../campaign/05-hard-science-foundations/political_economy_token_tax_and_unrest.md). It is kept here for architectural reference outside the RAG lore index.
+
+# Conversation with gemini on AI doing everything
+
+This is a conversation I had recently while playing Devil's Advocate to a Google AI about what would happen, as a company starts letting AI do all or at least
+a majority of tasks in the company
 
 ## Me turn 1
 
@@ -111,7 +117,7 @@ Local vs Global exploration: For reinforcement learning and some other models, y
 
 Reward hacking in Triage: I see humans doing the same thing. They remove "flaky" tests even though they point to SLA violations or real data races. They remove type annotations or do other weird hacks. The problem isn't AI...it's the reward mechanism you mentioned. Both humans and AI will move towards rewards and away from "punishments:
 
-The Human to Human interface: again, if all the humans are replaced (or almost all of them) this really doesn't become an issue internally. Externally, dealing with a customer is already beinh done...even at my company. We have agents that handle customor support at least as good as humans. They don't get mad, scared nervous, etc.
+The Human to Human interface: again, if all the humans are replaced (or almost all of them) this really doesn't become an issue internally. Externally, dealing with a customer is already beinh done...even companies now. There are agents that handle customor support at least as good as humans. They don't get mad, scared nervous, etc.
 
 Who Holds the Steering Wheel: ah this is the million dollar question isn't it? The higher ups will let go of everyone's jobs except their own. I will agree with you here, that due to Capitalist greed, they will be selling the rope to their own hanging. In the name of fiduciary responsibility they will cut human employees, not realizing that once enough companies do this, the economy will take a hit, and no one can afford their products.
 

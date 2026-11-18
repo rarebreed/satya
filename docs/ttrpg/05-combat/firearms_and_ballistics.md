@@ -1,6 +1,7 @@
 # Satya TTRPG Granular Ballistics, Ammunition Physics & Firearm Engineering
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/ballistics.rs`](../../../crates/satya-engine/src/ballistics.rs) (`AmmoCaliber`, `BulletConstruction`, `AmmoQuality`, `MuzzleAttachment`, `FirearmActionType`, `FeedMechanism`, `CenterOfGravityProfile`, `BarrelQualityTier`, `BarrelMountType`, `ToleranceSpec`, `ManufacturingQuality`, `CartridgeBallisticSpec`, `GranularFirearmSpec`, `compute_impact_kinetic_energy_joules`, `evaluate_firearm_ballistics`). Companion chapter to **[Ranged Combat, Weapon Reliability, Master Catalogs & Armor (`ranged_combat_and_armor.md`)](ranged_combat_and_armor.md)**.
+> **Rust Engine Implementation**: [`crates/satya-engine/src/ballistics.rs`](../../../crates/satya-engine/src/ballistics.rs) (`AmmoCaliber`, `BulletConstruction`, `AmmoQuality`, `MuzzleAttachment`, `FirearmActionType`, `FeedMechanism`, `CenterOfGravityProfile`, `BarrelQualityTier`, `BarrelMountType`, `ToleranceSpec`, `ManufacturingQuality`, `CartridgeBallisticSpec`, `GranularFirearmSpec`, `compute_impact_kinetic_energy_joules`, `evaluate_firearm_ballistics`). Companion chapter to **[Ranged Combat, Weapon Reliability, Master Catalogs & Armor (`ranged_combat_and_armor.md`)](ranged_combat_and_armor.md)**.  
+> **Guided Play Example**: See [Guide 06: Firefights, Ballistics, Zero-HP Trauma & Survival](../../ttrpg-examples/06-firefights-trauma-and-survival.md).
 
 This chapter defines the canonical rules for **Ranged Firefights, Internal/External/Terminal Ballistics, Granular Firearm Engineering, Ammunition Physics, Weapon Reliability (`Rel`), and Body Armor (`PR` vs. Behind-Armor Blunt Trauma `BABT`)** in **Satya**. It builds directly upon:
 - **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for all mathematical variables and ballistics/combat symbols $E_k, m_{\text{proj}}, m_{\text{prop}}, L_{\text{bbl}}, \text{OAL}, M_{\text{wpn}}, \Delta_{\text{CoG}}, \tau_{\text{tol}}, \text{Acc}, W_{\text{yaw}}, \text{Pen}, R, \text{PR}_{\text{Edged}}, \text{PR}_{\text{Ballistic}}, \text{BABT}, \text{Rel}$),
@@ -226,6 +227,8 @@ $$\text{Wobble / Yaw Factor } (W_{\text{yaw}}) = \text{clamp}\!\big(0,\; 3,\; \m
 
 Combining all three terms yields the weapon's **Raw Ballistic Impact** and **Base Armor Penetration (`Pen`)**:
 
+> **See this in play**: [Guide 06 — Zero Hit Points: Armor (`PR` vs. `BABT`), Hit Locations & Hemorrhage](../../ttrpg-examples/06-firefights-trauma-and-survival.md#4-zero-hit-points-armor-pr-vs-babt-hit-locations--hemorrhage).
+
 $$\text{Raw Ballistic Impact} = I_{\text{KE}} + I_{\text{cal}} + W_{\text{yaw}}$$
 
 $$\text{Base Armor Penetration (Pen)} = \max\!\left(1,\; I_{\text{KE}} + \text{SD}_{\text{bonus}} + \Delta\text{Pen}_{\text{ammo}} - \left\lfloor \frac{I_{\text{cal}}}{2} \right\rfloor - \left\lfloor \frac{W_{\text{yaw}}}{2} \right\rfloor\right)$$
@@ -280,6 +283,8 @@ $$\text{Acc} = \text{round}\!\Big(\Delta\text{Acc}_{\text{action}} + \Delta\text
 
 #### 1. Weapon Weight ($M_{\text{wpn}}$) & Recoil Physics ($R$)
 By conservation of momentum, the free recoil velocity of a firearm is inversely proportional to its mass ($M_{\text{wpn}}$ in $\text{kg}$), while the upward torque depends on the cartridge impulse ($m_{\text{proj}}, m_{\text{prop}}$):
+
+> **See this in play**: [Guide 06 — The `"Switch"` Gunner's Unbraced Burst & Drum Jam (`Rel -2`)](../../ttrpg-examples/06-firefights-trauma-and-survival.md#22-the-switch-gunners-unbraced-burst--drum-jam-rel--2).
 
 $$\text{Base Weapon Recoil } (R_{\text{wpn}}) = \max\!\left(1,\; \text{round}\!\left(\frac{0.025 \cdot m_{\text{proj}} + 0.14 \cdot m_{\text{prop}}}{\sqrt{M_{\text{wpn}}}}\right) + \Delta R_{\text{CoG}} + \Delta R_{\text{muzzle}} + \Delta R_{\text{action}}\right)$$
 

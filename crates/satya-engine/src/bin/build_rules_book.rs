@@ -340,7 +340,8 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
         out = out.replace(&format!("href=\"{src}\""), &format!("href=\"{dst}\""));
         out = out.replace(&format!("href=\"{src}#"), &format!("href=\"{dst}#"));
     }
-    out
+    out.replace("href=\"../../ttrpg-examples/", "href=\"../ttrpg-examples/")
+        .replace("href=\"../../campaign/", "href=\"../campaign/")
 }
 
 fn wrap_book_page_html(

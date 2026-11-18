@@ -1,6 +1,7 @@
 # An RPG for a More Civilized Age — Design Philosophy & Goals of Satya
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/lib.rs`](../../../crates/satya-engine/src/lib.rs) (top-level CARPG simulation crate), [`crates/satya-engine/src/rules_book.rs`](../../../crates/satya-engine/src/rules_book.rs) (`canonical_rules_chapters`, `search_rules_book`), and [`crates/satya-engine/src/rules_book_html.rs`](../../../crates/satya-engine/src/rules_book_html.rs) (`render_rules_markdown_to_html`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/lib.rs`](../../../crates/satya-engine/src/lib.rs) (top-level CARPG simulation crate), [`crates/satya-engine/src/rules_book.rs`](../../../crates/satya-engine/src/rules_book.rs) (`canonical_rules_chapters`, `search_rules_book`), and [`crates/satya-engine/src/rules_book_html.rs`](../../../crates/satya-engine/src/rules_book_html.rs) (`render_rules_markdown_to_html`).  
+> **Guided Play Example**: See [Guided Examples of Play Overview](../../ttrpg-examples/README.md) and [Guide 01: Why There Is No "Point-Buy Shopping Cart"](../../ttrpg-examples/01-lifepath-session-zero.md#1-why-there-is-no-point-buy-shopping-cart), plus [RPG System & Setting Comparisons](../../campaign/06-essays-and-comparisons/rpg_system_and_setting_comparisons.md).
 
 So, what's so special about **Satya**? Is this some old-school OD&D clone? To explain what Satya is, and the audience this game is catering to, I need to tell a little story first.
 
@@ -205,7 +206,7 @@ in fact, the difficulty of what the hero faces that makes them and their action 
 
 ## 5. Goals of Satya: Solving 17 Structural Flaws of Traditional RPGs
 
-*(Note: For a complete reference of all mathematical variables, subscripts, and formulas used below, see the **[Mathematical Notation, Variables & Formula Glossary](mathematical_notation_glossary.md)**).*
+*(Note: For a complete reference of all mathematical variables, subscripts, and formulas used below, see the **[Mathematical Notation, Variables & Formula Glossary](mathematical_notation_glossary.md)**. To watch these principles at an actual table before diving into the math, read the **[Guided Examples of Play Overview](../../ttrpg-examples/README.md)**.)*
 
 **Satya** has been in the back of my mind for over 25 years. While I don't play as many games as I used to, I am still
 an avid reader and buyer of games. I still see the same designs over and over which I have become disillusioned with. So

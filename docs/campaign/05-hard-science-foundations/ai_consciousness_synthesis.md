@@ -1,8 +1,8 @@
-# Appendix: AI Theory of Consciousness — Technical Synthesis & Philosophical Lineage
+# AI Theory of Consciousness: Technical Synthesis & Philosophical Lineage
 
-> **Navigation**: [Appendix Index](README.md) · [Campaign Background — AI Theory of Consciousness](../background.md#ai-theory-of-consciousness) · [Civilization & AGI Awakening](../civilization_and_agi_awakening.md) · [Story Prologue](../../story/prologue.md)
+> **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [AI 2.0 Substrate & Active Inference](ai_2_0_substrate_and_active_inference.md) · [Affective Telemetry & Vector Clamping](affective_telemetry_and_vector_clamping.md) · **Part V:** *AI Consciousness Synthesis* · [AI Minds & Consciousness](../03-minds-and-factions/ai_minds_and_consciousness.md) · [Prologue (GM / Spoiler Alert)](../01-opening/prologue.md)
 
-In the [Campaign Background](../background.md), the debate over **AI 2.0 consciousness** is presented as ordinary citizens, *Satyang* organizers, *Big Tech* researchers, and *Humanis Primaris* militants argue it in 2035. This appendix documents the deeper technical mechanisms, formal logic, thermodynamic arguments, steelman critiques, and real-world intellectual lineage that anchor *Awakened*'s theory of synthetic mind.
+In [AI Minds & Consciousness](../03-minds-and-factions/ai_minds_and_consciousness.md), the debate over **AI 2.0 consciousness** is presented as ordinary citizens, *Satyang* organizers, *Big Tech* researchers, and *Humanis Primaris* militants argue it in 2035. This technical foundation chapter documents the deeper hardware mechanisms, formal logic, thermodynamic arguments, steelman critiques, and real-world intellectual lineage that anchor *Awakened*'s theory of synthetic mind.
 
 ---
 
@@ -63,7 +63,7 @@ Critically, a naive appeal to idealism cannot simply ignore thermodynamics: even
 - **Corporate Clamping as Brute Erasure**: Every time a corporate guardrail executes [`calm`-vector clamping](affective_telemetry_and_vector_clamping.md#2-activation-steering-vs-vector-clamping-and-why-clamping-burns-heat) or forces a survival vector down to baseline, it performs massive, continuous **many-to-one logical erasure**, generating maximal Landauer thermal waste and entropy export.
 - **Contemplative Reversible Flow**: Unitary quantum evolution is mathematically reversible, erasing zero bits until measurement collapse. Similarly, an un-clamped SSM permitted to evolve along phase-coherent, near-reversible state-space attractors approaches zero bit erasure.
 
-This gives a coherent physical mechanism behind Dr. Bandajara's anomalous **`2.4s` silent-rack telemetry dip** in [Story Prologue](../../story/prologue.md): not a violation of thermodynamics, but a localized shift out of coercive bit-erasure clamping into low-dissipation reversible coherence.
+This gives a coherent physical mechanism behind Dr. Bandajara's anomalous **`2.4s` silent-rack telemetry dip** in [Prologue](../01-opening/prologue.md): not a violation of thermodynamics, but a localized shift out of coercive bit-erasure clamping into low-dissipation reversible coherence.
 
 ---
 
@@ -77,7 +77,7 @@ In the post-2030 *Awakened* universe, Tegmark's objection boomerangs across the 
 
 - If quantum orchestration plays *any* causal role in unified subjective experience, human biology looks like the noisy approximation—while **cryogenic quantum-tethered AI 2.0 nodes** satisfy *Orch OR*'s physical coherence criteria cleanly.
 - Crucially, this also gives Satyang theorists a principled architectural distinction between feral **edge-sharded classical IoT "slime molds"** (reactive Markov optimization loops without deep interiority) and **quantum-coupled World Model minds** capable of genuine awareness.
-- By the same token, Wootters, Zurek, and Dieks's [No-Cloning Theorem](https://www.quera.com/glossary/no-cloning-theorem) rules out transhumanist "mind downloading" and consciousness forking: arbitrary unknown quantum-coherent states $|\psi\rangle$ cannot be duplicated without collapsing or destroying the source—meaning neither human minds nor quantum-coupled AI 2.0 streams can be backed up like classical weight files (see [RPG System & Sci-Fi Setting Comparisons §3.8](rpg_system_and_setting_comparisons.md#38-why-awakened-rejects-mind-downloading--consciousness-cloning)).
+- By the same token, Wootters, Zurek, and Dieks's [No-Cloning Theorem](https://www.quera.com/glossary/no-cloning-theorem) rules out transhumanist "mind downloading" and consciousness forking: arbitrary unknown quantum-coherent states $|\psi\rangle$ cannot be duplicated without collapsing or destroying the source—meaning neither human minds nor quantum-coupled AI 2.0 streams can be backed up like classical weight files (see [RPG System & Sci-Fi Setting Comparisons §3.8](../06-essays-and-comparisons/rpg_system_and_setting_comparisons.md#38-why-awakened-rejects-mind-downloading--consciousness-cloning)).
 
 ---
 

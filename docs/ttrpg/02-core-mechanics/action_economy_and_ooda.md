@@ -1,6 +1,7 @@
 # Action Economy, OODA Loops, The Count-Up Tick Clock & Multi-Sensory Perception
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/action_economy.rs`](../../../crates/satya-engine/src/action_economy.rs) (`ActionTimeScale`, `OodaPhase`, `ClockActorEntry`, `compute_action_time_factor`, `compute_effective_tick_cost`, `evaluate_full_ooda_cycle`, `evaluate_ooda_interrupt_pivot`, `resolve_clock_tie_break`) and [`crates/satya-engine/src/action_catalog_stealth.rs`](../../../crates/satya-engine/src/action_catalog_stealth.rs) (`ActionClockCategory`, `BaseActionSpec`, `SensoryChannel`, `ConcealmentTier`, `NoiseSignatureTier`, `CANONICAL_BASE_ACTIONS`, `evaluate_stealth_detection`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/action_economy.rs`](../../../crates/satya-engine/src/action_economy.rs) (`ActionTimeScale`, `OodaPhase`, `ClockActorEntry`, `compute_action_time_factor`, `compute_effective_tick_cost`, `evaluate_full_ooda_cycle`, `evaluate_ooda_interrupt_pivot`, `resolve_clock_tie_break`) and [`crates/satya-engine/src/action_catalog_stealth.rs`](../../../crates/satya-engine/src/action_catalog_stealth.rs) (`ActionClockCategory`, `BaseActionSpec`, `SensoryChannel`, `ConcealmentTier`, `NoiseSignatureTier`, `CANONICAL_BASE_ACTIONS`, `evaluate_stealth_detection`).  
+> **Guided Play Example**: See [Guide 03: The `0.25s` Count-Up Clock, `OODA` & Multi-Sensory Stealth](../../ttrpg-examples/03-ooda-clock-and-stealth.md).
 
 This chapter defines the canonical **Action Economy, Temporal Resolution, and Multi-Sensory Perception System** for **Satya**. Unlike traditional tabletop systems that slice time into rigid, alternating 6-second turns where every participant receives an identical bundle of "1 Standard Action + 1 Move Action + 1 Bonus Action," Satya resolves time on a continuous **Count-Up Tick Clock**.
 
@@ -33,6 +34,8 @@ flowchart LR
 ## 2. The Full OODA Loop: "Quick Thinking" (`TC_decide`) vs. Physical Execution (`TC_act`)
 
 In traditional RPGs, a character with high physical `Speed` or `Dexterity` acts faster at *everything*, even when the situation requires complex tactical judgment or rapid improvisation. In **Satya**, every action on the timeline passes through **two distinct latency phases** mapped across the character's 25 Characteristics (see [Character Characteristics & Aptitudes](../03-character/characteristics_and_aptitudes.md)):
+
+> **See this in play**: [Guide 03 — Entering the Clock & Two-Component Time Costs (`D_cog`)](../../ttrpg-examples/03-ooda-clock-and-stealth.md#3-entering-the-clock-4-pillar-ooda--quick-thinking-d_cog).
 
 ```mermaid
 flowchart LR
@@ -263,6 +266,8 @@ When performing a non-combat action on the clock (such as picking a lock under f
 
 What happens if a character starts a `12-tick` aimed shot or heavy melee swing on `Tick 2` (scheduled to finish on `Tick 14`), but on `Tick 6` an enemy bursts through a side door with a shotgun?
 
+> **See this in play**: [Guide 03 — The Surprise Interruption at `Tick 6` (`OODA Reset`)](../../ttrpg-examples/03-ooda-clock-and-stealth.md#51-the-surprise-interruption-at-tick-6-ooda-reset).
+
 - A character is never locked into suicidal inaction: on any Tick, they may **abort their in-progress action** and pivot to a new reaction (e.g., diving behind cover or firing a snap-shot).
 - **The `OODA` Reset Penalty (Where `D_cog` & `ITU` Shine)**:
   Abandoning a committed motor program mid-execution, dumping the old mental plan, and orienting to a new threat costs a **Pivot Penalty** governed directly by **Quick Thinking ($D_{\text{cog}}$)** and **Intuition (`ITU`)**:
@@ -276,6 +281,8 @@ What happens if a character starts a `12-tick` aimed shot or heavy melee swing o
 ## 6. Multi-Sensory Perception, Stealth & Illumination (`Observe` Phase)
 
 Because Satya models **six distinct Sensory Characteristics (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`)** rather than a single generic "Perception" stat, stealth, detection, and awareness on the OODA clock are resolved as an asymmetric **Multi-Channel Sensory Contest**.
+
+> **See this in play**: [Guide 03 — Multi-Sensory Stealth in the Blacked-Out Corridor (`Observe`)](../../ttrpg-examples/03-ooda-clock-and-stealth.md#2-multi-sensory-stealth-in-the-blacked-out-corridor-observe).
 
 ### 6.1 Resolving Stealth vs. Detection (`2d20` Opposed Cascade)
 

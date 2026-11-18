@@ -1,6 +1,7 @@
 # Satya TTRPG Movement, Encumbrance, Vehicles & Environmental Survival
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/environment_vehicles.rs`](../../../crates/satya-engine/src/environment_vehicles.rs) (`MovementGait`, `EncumbranceTier`, `VehicleClass`, `VehicleProfile`, `evaluate_movement_velocities`, `evaluate_special_locomotion`, `evaluate_encumbrance`, `evaluate_vehicle_triad_exchange`, `evaluate_collision_and_gloc`, `canonical_vehicle_catalog`) and [`crates/satya-engine/src/environmental_hazards.rs`](../../../crates/satya-engine/src/environmental_hazards.rs) (`DehydrationStage`, `StarvationPhase`, `HypothermiaStage`, `HeatIllnessStage`, `HypoxiaZone`, `ToxinClass`, `evaluate_dehydration`, `evaluate_starvation`, `evaluate_thermal_stress`, `evaluate_sleep_deprivation`, `evaluate_altitude_hypoxia`, `evaluate_toxin_or_pathogen`, `evaluate_radiation_exposure`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/environment_vehicles.rs`](../../../crates/satya-engine/src/environment_vehicles.rs) (`MovementGait`, `EncumbranceTier`, `VehicleClass`, `VehicleProfile`, `evaluate_movement_velocities`, `evaluate_special_locomotion`, `evaluate_encumbrance`, `evaluate_vehicle_triad_exchange`, `evaluate_collision_and_gloc`, `canonical_vehicle_catalog`) and [`crates/satya-engine/src/environmental_hazards.rs`](../../../crates/satya-engine/src/environmental_hazards.rs) (`DehydrationStage`, `StarvationPhase`, `HypothermiaStage`, `HeatIllnessStage`, `HypoxiaZone`, `ToxinClass`, `evaluate_dehydration`, `evaluate_starvation`, `evaluate_thermal_stress`, `evaluate_sleep_deprivation`, `evaluate_altitude_hypoxia`, `evaluate_toxin_or_pathogen`, `evaluate_radiation_exposure`).  
+> **Guided Play Example**: See [Guide 06 §5 (`4-Tick` Pack Quick-Release & Vehicle Triad Escape)](../../ttrpg-examples/06-firefights-trauma-and-survival.md#5-quick-release-pack-6-second-tourniquet--vehicle-escape).
 
 This chapter defines the canonical **Movement, Load-Bearing Encumbrance, Vehicular Pursuits & G-Force Physics, and Environmental Survival Systems** for **Satya** (for definitions of all mathematical variables and formulas such as $\text{SF}, V_{\text{sprint}}, W_{\text{req}}, \text{CLO}, \text{Sv}$, see the **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**). In keeping with Satya's simulation philosophy, movement speed is not an arbitrary fixed integer (`"30 feet per turn"`) shared by every human regardless of stature, conditioning, or backpack weight, nor are environmental hazards hand-waved when operators deploy into deserts, mountains, maritime storms, or depressurized orbital habitats.
 
@@ -106,6 +107,8 @@ $$\text{Effective Load } (L_{\text{eff}}) = \sum \big(\text{Item Mass}_i \times 
 
 Compare the character's **Effective Load ($L_{\text{eff}}$)** against multiples of their **Base Comfort Load ($L_{\text{base}}$)**:
 
+> **See this in play**: Watch how dumping a heavy pack immediately drops `Tier 2` encumbrance in [Guide 06 — `4-Tick` Quick-Release & `6`-Second `CAT` Tourniquet](../../ttrpg-examples/06-firefights-trauma-and-survival.md#51-4-tick-quick-release--6-second-cat-tourniquet).
+
 | Encumbrance Tier | Load Ratio ($L_{\text{eff}} / L_{\text{base}}$) | Weight at `70 kg, FOR 10` ($L_{\text{base}} = 12\text{ kg}$) | Tempo Cap ($T_{\max}$) & `KIN` Penalty | Time Multiplier ($\Delta_{\text{enc}}$ to `action_time_factor`) | Exertion & Stamina Impact |
 | :--- | :---: | :---: | :---: | :---: | :--- |
 | **Tier 0: Unencumbered** | $\le 1.0 \times L_{\text{base}}$ | `0 – 12.0 kg` | `0` | `+0.00` (`+0%`) | Normal exertion and recovery. |
@@ -120,9 +123,11 @@ Compare the character's **Effective Load ($L_{\text{eff}}$)** against multiples 
 
 Satya's **[Tactical Triad (`Tempo`, `Control`, `Force`)](../05-combat/tactical_triad_and_pools.md)** scales seamlessly from close-quarters foot combat to **vehicular pursuits, aerial dogfights, and orbital docking**:
 
+> **See this in play**: [Guide 06 — Cover Materials, Vehicle Triad Getaway & Survival Realities](../../ttrpg-examples/06-firefights-trauma-and-survival.md#52-cover-materials-vehicle-triad-getaway--survival-realities).
+
 1. **The Vehicle as a Physical Envelope**:
    - A vehicle provides its own mechanical **Envelope Ceilings**: **Top Speed / Acceleration (`Vehicle Tempo Cap`)**, **Handling & Braking (`Vehicle Control Cap`)**, and **Chassis Mass & Armor (`Vehicle Force / Root Cap`)**.
-   - The driver/pilot fills this envelope using their **[Driving / Piloting Skill ($N$)](../03-character/skills_and_trees.md#37-tree-6-athletics-vehicles-aviation--drone-operations-athletic-technical-fieldcraft)** and **`SPD / KIN`** (or **`DEX / FOC`** for remote drones), bounded by the vehicle's ceilings!
+   - The driver/pilot fills this envelope using their **[Driving / Piloting Skill ($N$)](../03-character/skills_trees_tactical_and_social.md#37-tree-6-athletics-vehicles-aviation--drone-operations-athletic-technical-fieldcraft)** and **`SPD / KIN`** (or **`DEX / FOC`** for remote drones), bounded by the vehicle's ceilings!
 2. **Tactical Triad in a Chase or Dogfight**:
    - **Tempo ($T$)**: Throttle commitment—closing or opening the **Chase Range Band** (`Bumper-to-Bumper` $\leftrightarrow$ `Close [15m]` $\leftrightarrow$ `Medium [50m]` $\leftrightarrow$ `Long [150m+]` $\leftrightarrow$ `Lost Visual`).
    - **Control ($C$)**: Steering precision—threading through oncoming traffic, drifting a hairpin corner without spinning out, holding a steady platform for passengers firing from windows, and evading PIT maneuvers.

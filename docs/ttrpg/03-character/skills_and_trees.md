@@ -1,6 +1,7 @@
 # Satya TTRPG Skill System & Hierarchical Skill Trees
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/skills_trees.rs`](../../../crates/satya-engine/src/skills_trees.rs) (`SkillTreeId`, `SkillType`, `SkillCategory`, `AccessTier`, `SkillNode`, `evaluate_skill_prerequisites`, `evaluate_skill_tree_default`, `compute_skill_controller`) and [`crates/satya-engine/src/skills_catalog.rs`](../../../crates/satya-engine/src/skills_catalog.rs) (`CANONICAL_SKILL_TREES` — Trees 1–4 in this chapter; Trees 5–8 in **[`skills_trees_tactical_and_social.md`](skills_trees_tactical_and_social.md)**).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/skills_trees.rs`](../../../crates/satya-engine/src/skills_trees.rs) (`SkillTreeId`, `SkillType`, `SkillCategory`, `AccessTier`, `SkillNode`, `evaluate_skill_prerequisites`, `evaluate_skill_tree_default`, `compute_skill_controller`) and [`crates/satya-engine/src/skills_catalog.rs`](../../../crates/satya-engine/src/skills_catalog.rs) (`CANONICAL_SKILL_TREES` — Trees 1–4 in this chapter; Trees 5–8 in **[`skills_trees_tactical_and_social.md`](skills_trees_tactical_and_social.md)**).  
+> **Guided Play Example**: See [Guide 01: Walking the Lifepaths Roll-by-Roll](../../ttrpg-examples/01-lifepath-session-zero.md#3-walking-the-lifepaths-roll-by-roll) and [Guide 02: `KNO -> PHY` Teamwork](../../ttrpg-examples/02-cascading-dice-and-tasks.md#5-teamwork-kno---phy-snowball-stakes--extended-clocks).
 
 This chapter defines the canonical **Skill System, Skill Classifications, and the 8 Hierarchical Skill Trees** for **Satya** (set on near-future Earth, 5 years in the future, ca. 2031–2035). It integrates directly with:
 - **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)** (for definitions of all mathematical variables and subscripts such as $N, C_P, \text{TN}_P, \text{TN}_{GM}, \Delta_{\text{tool}}, \Delta_{\text{ext}}$),
@@ -81,7 +82,7 @@ To prevent immersion-breaking character builds, every skill is gated by an **Acc
 
 ### 2.4 Tool Dependency Tags (`[Tool]`)
 
-Every skill in the tables below carries a tool dependency tag (see **[Cascading `2d20` Engine & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md#44-tool-dependency-classification-tool--2035-smart-tech-modifiers)** for the full Tool Tier $\Delta_{\text{ext}}$ table):
+Every skill in the tables below carries a tool dependency tag (see **[Cascading `2d20` Engine & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md#22-tool-dependency-tiers-tool--20312035-smart-tech-modifiers)** for the full Tool Tier $\Delta_{\text{ext}}$ table):
 - **`[Tool: None]`**: Relies entirely on the body, voice, senses, or mind.
 - **`[Tool: Situational]`**: Unassisted basic tasks work at $\Delta_{\text{ext}} = 0$, while complex tasks require tools or suffer an Improvised Penalty (`+4` to `+12`).
 - **`[Tool: Mandatory]`**: Cannot be rolled at all without the required weapon, instrument, vehicle, lab, or computing rig.

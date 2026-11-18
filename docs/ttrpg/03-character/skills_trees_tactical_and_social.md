@@ -1,6 +1,7 @@
 # Satya TTRPG Hierarchical Skill Trees 5–8: Combat, Vehicles, Social & Tradecraft
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/skills_trees.rs`](../../../crates/satya-engine/src/skills_trees.rs) (`SkillTreeId`, `SkillNode`, `evaluate_skill_prerequisites`, `evaluate_skill_tree_default`) and [`crates/satya-engine/src/skills_catalog.rs`](../../../crates/satya-engine/src/skills_catalog.rs) (`CANONICAL_SKILL_TREES` — Trees 5–8). Companion chapter to **[Skill System & Hierarchical Skill Trees 1–4 (`skills_and_trees.md`)](skills_and_trees.md)**.
+> **Rust Engine Implementation**: [`crates/satya-engine/src/skills_trees.rs`](../../../crates/satya-engine/src/skills_trees.rs) (`SkillTreeId`, `SkillNode`, `evaluate_skill_prerequisites`, `evaluate_skill_tree_default`) and [`crates/satya-engine/src/skills_catalog.rs`](../../../crates/satya-engine/src/skills_catalog.rs) (`CANONICAL_SKILL_TREES` — Trees 5–8). Companion chapter to **[Skill System & Hierarchical Skill Trees 1–4 (`skills_and_trees.md`)](skills_and_trees.md)**.  
+> **Guided Play Example**: See [Guide 03 (Stealth)](../../ttrpg-examples/03-ooda-clock-and-stealth.md#2-multi-sensory-stealth-in-the-blacked-out-corridor-observe), [Guide 04 (Social Combat)](../../ttrpg-examples/04-psyche-morale-and-social-combat.md#2-social-combat-fighting-with-proof-empathy--cognitive-dissonance), [Guide 05 (Melee)](../../ttrpg-examples/05-melee-and-tactical-triad.md), and [Guide 06 (Firearms, Vehicles & Triage)](../../ttrpg-examples/06-firefights-trauma-and-survival.md).
 
 ### 3.6 Tree 5: Combat — Unarmed, Melee, Firearms & Heavy Ordnance (`Combat`, `Athletic`, `Technical`)
 

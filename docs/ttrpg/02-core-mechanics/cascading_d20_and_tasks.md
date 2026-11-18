@@ -1,6 +1,7 @@
 # Core `2d20` Watershed Cascade & Always-Contested Task Resolution
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/dice_probabilities.rs`](../../../crates/satya-engine/src/dice_probabilities.rs) (`CascadeTaskParams`, `CarryMode`, `CascadeOutcomeKind`, `evaluate_satya_cascade_task`), [`crates/satya-engine/src/contested_cascade.rs`](../../../crates/satya-engine/src/contested_cascade.rs) (`ContestedCascadeTaskParams`, `GmResistanceMode`, `ContestedOutcomeKind`, `evaluate_contested_cascade_task`), [`crates/satya-engine/src/task_resolution.rs`](../../../crates/satya-engine/src/task_resolution.rs) (`TaskGateClass`, `ToolDependencyTier`, `ExtendedProjectClock`), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_sarah_lockpicking_walkthrough`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/dice_probabilities.rs`](../../../crates/satya-engine/src/dice_probabilities.rs) (`CascadeTaskParams`, `CarryMode`, `CascadeOutcomeKind`, `evaluate_satya_cascade_task`), [`crates/satya-engine/src/contested_cascade.rs`](../../../crates/satya-engine/src/contested_cascade.rs) (`ContestedCascadeTaskParams`, `GmResistanceMode`, `ContestedOutcomeKind`, `evaluate_contested_cascade_task`), [`crates/satya-engine/src/task_resolution.rs`](../../../crates/satya-engine/src/task_resolution.rs) (`TaskGateClass`, `ToolDependencyTier`, `ExtendedProjectClock`), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`simulate_sarah_lockpicking_walkthrough`).  
+> **Guided Play Example**: See [Guide 02: Cascading `2d20` Dice, Fog of War & Always-Contested Tasks](../../ttrpg-examples/02-cascading-dice-and-tasks.md) for a step-by-step table walkthrough behind St. Jude Annex.
 
 Whenever a character performs an action with meaningful stakes and uncertainty that can influence the narrative or tactical situation, the Game Master (or the Satya AI Game Master via `ContestedCascadeTaskParams` and `evaluate_satya_cascade_task` in [`crates/satya-engine/src/dice_probabilities.rs`](../../../crates/satya-engine/src/dice_probabilities.rs)) calls for an **Always-Contested Task Resolution** roll.
 
@@ -33,6 +34,8 @@ flowchart LR
 ## 2. Step 1: Task Gate Classifications, Prerequisites & Tools
 
 Before any dice are rolled, the GM determines **whether the character is qualified and equipped** to attempt the task.
+
+> **See this in play**: [Guide 02 — Step 1 of Every Task: Gates (`Class A / B / C`) & Tools](../../ttrpg-examples/02-cascading-dice-and-tasks.md#2-step-1-of-every-task-gates-class-a--b--c--tools).
 
 ### 2.1 Three Task Gate Classifications (`Class A / B / C`)
 
@@ -197,6 +200,8 @@ Simultaneously, the GM resolves the opposing resistance using one of two modes (
 
 Once both the Player $(S_P, B_P, M_P)$ and the GM $(S_{GM}, B_{GM}, M_{GM})$ have rolled, compute the **Net Signed Margin ($\Delta M = M_P - M_{GM}$)** and resolve the contested check using `ContestedTieRule::HybridSignedMargin`:
 
+> **See this in play**: [Guide 02 — Watching the 7 Contested Outcomes Play Out](../../ttrpg-examples/02-cascading-dice-and-tasks.md#4-watching-the-7-contested-outcomes-play-out).
+
 ### 5.1 How Successes, Ties, Floor Breaches & GM Botches Interact
 - **To Win Cleanly ($S_P > S_{GM}$):** The player must roll **strictly more successes** than the GM's resistance roll ($S_P > S_{GM}$).
   - If the player suffered a Floor Breach ($B_P \ge 1$) during their cascade and the GM did not botch ($M_{GM} \ge 0$), the win becomes a **`SuccessWithFloorBreach` (`PartialSuccess`)**.
@@ -223,6 +228,9 @@ Once both the Player $(S_P, B_P, M_P)$ and the GM $(S_{GM}, B_{GM}, M_{GM})$ hav
 ## 6. Complementary Skills, Composite Tasks & Extended Project Clocks
 
 ### 6.1 Complementary Knowledge-to-Physical Synergy (`KNO` $\to$ `PHY`)
+
+> **See this in play**: [Guide 02 — Teamwork (`KNO -> PHY`), Snowball Stakes & Extended Clocks](../../ttrpg-examples/02-cascading-dice-and-tasks.md#5-teamwork-kno---phy-snowball-stakes--extended-clocks).
+
 When a character uses an analytical or academic **Knowledge (`KNO`)** skill to plan, diagnose, or calculate a physical or technical execution (e.g., *Clinical Diagnostics* before *Paramedicine*, *Basic Electronics* before *Lockpicking* an electronic strike plate, *Trigonometry* before *Precision Rifle*, or *Mechanical Engineering* before placing *Military Demolitions*), resolve the `KNO` setup roll first:
 - **`3+` Successes (`ExtraordinarySuccess`)**: Grants **`-4` to $\Delta_{\text{ext}}$** AND boosts positive carry $\delta_{\text{over}}$ from `+6` to **`+8`** on the execution roll.
 - **`1–2` Successes (`Success`)**: Grants **`-2` to $\Delta_{\text{ext}}$** on the execution roll.

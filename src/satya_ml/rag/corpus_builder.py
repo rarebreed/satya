@@ -1,7 +1,7 @@
 """Corpus extractors for Satya's Hybrid PyLance RAG database:
 1. `docs/ttrpg/` Rules Book (H1/H2/H3 breadcrumb chunks + header-preserving 12-row table slices).
 2. `crates/satya-engine/src/*.rs` & `crates/satya-py/src/*.rs` Rust engine symbol cards & `Origin:` links.
-3. `docs/campaign/` & `docs/story/` lore chunks tagged with `PUBLIC` / `ARC2_SATYANG` / `GM_CONSPIRACY_SECRET`.
+3. `docs/campaign/` lore chunks tagged with `PUBLIC` / `ARC2_SATYANG` / `GM_CONSPIRACY_SECRET`.
 """
 
 from __future__ import annotations
@@ -44,12 +44,12 @@ _RUST_TO_DOC_HINTS: dict[str, str] = {
     "faction_templates.rs": "docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md",
     "hook_weaver_lifepath.rs": "docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md",
     "npc_generator.rs": "docs/ttrpg/03-character/lifepaths_and_economy.md",
-    "awakened_ai_substrate.rs": "docs/campaign/civilization_and_agi_awakening.md",
-    "awakened_campaign_arcs.rs": "docs/story/timeline/breakdown.md",
+    "awakened_ai_substrate.rs": "docs/campaign/03-minds-and-factions/ai_minds_and_consciousness.md",
+    "awakened_campaign_arcs.rs": "docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md",
 }
 
 _TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
-_DOC_PATH_RE = re.compile(r"(docs/(?:ttrpg|campaign|story)/[A-Za-z0-9_./-]+\.md)")
+_DOC_PATH_RE = re.compile(r"(docs/(?:ttrpg|campaign)/[A-Za-z0-9_./-]+\.md)")
 _CAMEL_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 _SECRET_BODY_MARKERS = (
     "mirror-hypocris",
@@ -447,7 +447,7 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
 def classify_lore_visibility(rel_posix: str, breadcrumb: str, content: str) -> str:
     """Tag lore sections into `GM_CONSPIRACY_SECRET`, `ARC2_SATYANG`, or `PUBLIC`."""
     rel_low = rel_posix.lower()
-    if rel_low.endswith("docs/story/timeline/breakdown.md") or rel_low.endswith("docs/story/prologue.md"):
+    if rel_low.endswith("/04-chronicle-and-gm/") or "/04-chronicle-and-gm/" in rel_low or rel_low.endswith("/prologue.md"):
         return "GM_CONSPIRACY_SECRET"
 
     combined_low = f"{breadcrumb}\n{content}".lower()
@@ -455,9 +455,8 @@ def classify_lore_visibility(rel_posix: str, breadcrumb: str, content: str) -> s
         return "GM_CONSPIRACY_SECRET"
 
     crumb_low = breadcrumb.lower()
-    if any(marker in crumb_low for marker in _SATYANG_ARC2_MARKERS) or (
-        rel_low.endswith("docs/campaign/factions.md")
-        and any(marker in combined_low for marker in _SATYANG_ARC2_MARKERS)
+    if rel_low.endswith("/satyang_and_four_pillars.md") or any(
+        marker in crumb_low for marker in _SATYANG_ARC2_MARKERS
     ):
         return "ARC2_SATYANG"
 
@@ -465,13 +464,15 @@ def classify_lore_visibility(rel_posix: str, breadcrumb: str, content: str) -> s
 
 
 def build_campaign_lore_chunks(repo_root: Path) -> list[dict[str, Any]]:
-    """Index `docs/campaign/` and `docs/story/` into visibility-tagged chunks."""
-    lore_dirs = [repo_root / "docs" / "campaign", repo_root / "docs" / "story"]
+    """Index `docs/campaign/` into visibility-tagged chunks."""
+    lore_dirs = [repo_root / "docs" / "campaign"]
     chunks: list[dict[str, Any]] = []
     for base in lore_dirs:
         if not base.exists():
             continue
         for md_path in sorted(base.rglob("*.md")):
+            if md_path.name.upper() == "SUMMARY.MD":
+                continue
             try:
                 text = md_path.read_text(encoding="utf-8", errors="ignore")
             except OSError:

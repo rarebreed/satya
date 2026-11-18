@@ -1,6 +1,7 @@
 # Lifepath Character Creation, Socioeconomic Upkeep (`SQM`), `[Access]` Gates & `Heat`
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/lifepath_economy.rs`](../../../crates/satya-engine/src/lifepath_economy.rs) (`LifepathStageId`, `SocioeconomicTier`, `CareerTermAdvancementInput`, `MonthlyUpkeepInput`, `BlackMarketAcquisitionInput`, `OperationalHeatState`, `compute_lifepath_skill_progression`, `evaluate_career_term_advancement`, `evaluate_monthly_upkeep`, `evaluate_black_market_acquisition`, `evaluate_operational_heat`), [`crates/satya-engine/src/lifepath_catalog.rs`](../../../crates/satya-engine/src/lifepath_catalog.rs) (`CareerTemplateId`, `CareerTrackTemplate`, `CANONICAL_CAREER_TEMPLATES`), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`build_mateo_vance_lifepath`, `build_priya_nair_lifepath`).
+> **Rust Engine Implementation**: [`crates/satya-engine/src/lifepath_economy.rs`](../../../crates/satya-engine/src/lifepath_economy.rs) (`LifepathStageId`, `SocioeconomicTier`, `CareerTermAdvancementInput`, `MonthlyUpkeepInput`, `BlackMarketAcquisitionInput`, `OperationalHeatState`, `compute_lifepath_skill_progression`, `evaluate_career_term_advancement`, `evaluate_monthly_upkeep`, `evaluate_black_market_acquisition`, `evaluate_operational_heat`), [`crates/satya-engine/src/lifepath_catalog.rs`](../../../crates/satya-engine/src/lifepath_catalog.rs) (`CareerTemplateId`, `CareerTrackTemplate`, `CANONICAL_CAREER_TEMPLATES`), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`build_mateo_vance_lifepath`, `build_priya_nair_lifepath`).  
+> **Guided Play Example**: See [Guide 01: Session Zero — Lifepaths, Characteristics, Economy & Heat](../../ttrpg-examples/01-lifepath-session-zero.md).
 
 In **Satya**, characters are not assembled from an unconstrained point-buy shopping cart where an academic researcher can arbitrarily purchase *Heavy Machine Guns* or a street teen can buy *Aerospace Engineering* without knowing *Algebra*. Instead, characters are created chronologically through **Lifepath Stages**, and their ongoing campaign operations are grounded by their **Socioeconomic Tier (`SQM`)**, **Black-Market `[Access]` Procurement Gates**, and **Operational `Heat`**.
 
@@ -11,6 +12,8 @@ This chapter builds directly on [Character Characteristics & Aptitudes](characte
 ## 1. Chronological Lifepath Architecture
 
 At every lifepath stage, the character's **Socioeconomic Class**, **School Quality (`SQM`)**, **Discipline (`DIS`)**, **Mental Primary Characteristics (`ANA`, `MEM`, `INS`, `CRE`, `FOC`)**, **Aptitudes (`APT`)**, and **Life Events** determine which skill trees open and how high those skills advance:
+
+> **See this in play**: [Guide 01 — Walking the Lifepaths Roll-by-Roll](../../ttrpg-examples/01-lifepath-session-zero.md#3-walking-the-lifepaths-roll-by-roll) walks through generating three complete characters across urban poor, middle-class academic, and rural frontier tracks.
 
 ```mermaid
 flowchart LR
@@ -257,6 +260,8 @@ Rather than treating every skill rank as a flat 1-for-1 point purchase—which w
 ## 2. Campaign Economy, Upkeep (`SQM 1–10`), `[Access]` Procurement & `Heat`
 
 Rather than forcing players to track every cup of coffee while ignoring how a street operative acquires a military-grade anti-materiel rifle, Satya uses a two-tier economic model anchored by the character's post-Lifepath **Socioeconomic / Material Tier (`SQM 1–10`)**:
+
+> **See this in play**: [Guide 01 — Living in 2035: `SQM` Upkeep, `[Access]` Procurement & `Heat`](../../ttrpg-examples/01-lifepath-session-zero.md#4-living-in-2035-sqm-upkeep-access-procurement--heat).
 
 ### 3.1 Socioeconomic Tier (`SQM 1–10`) & Lifestyle Upkeep
 

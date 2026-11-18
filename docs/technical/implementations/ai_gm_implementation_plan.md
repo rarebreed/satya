@@ -75,7 +75,7 @@ flowchart LR
 3. **NPC Data & Tool Suite (`src/satya_ml/ai_gm/tools.py` & `data/npcs/sector_4_npcs.toml`)**:
    - Seed starter NPC profiles in `data/npcs/sector_4_npcs.toml` (e.g., *Captain Vance*, *Station SecOps Sentry*, *Dr. Aris Thorne*) with Satya attribute TNs, skills, preferred `CombatStance`, fatigue, and disposition.
    - Implement `@tool` functions:
-     - **Lore, Rules & NPCs**: `lookup_npc_profile`, `update_npc_state`, `query_satya_rules` (searches `docs/ttrpg/*.md`), `query_campaign_lore` (searches `docs/story/**/*.md` + `data/lance/*.lance`).
+     - **Lore, Rules & NPCs**: `lookup_npc_profile`, `update_npc_state`, `query_satya_rules` (searches `docs/ttrpg/*.md`), `query_campaign_lore` (searches `docs/campaign/**/*.md` + `data/lance/*.lance`).
      - **Session Mechanics & Communication**: `roll_satya_d20_check` (`POST /api/gm/sessions/:id/roll`), `whisper_to_player` (`POST /api/gm/sessions/:id/chat` with `PRIVATE`), `narrate_to_session` (`POST /api/gm/sessions/:id/chat` with `PUBLIC` + `GM_NARRATION` or `IN_CHARACTER`).
    - Add optional MCP client bridge (`src/satya_ml/ai_gm/mcp_bridge.py`) using `MultiServerMCPClient` so external Tier 2 ruleset or Tier 3 lore MCP servers can be attached per session.
 
