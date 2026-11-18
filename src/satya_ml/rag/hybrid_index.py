@@ -190,6 +190,23 @@ def _build_visibility_and_corpus_filter(
     return " AND ".join(clauses) if clauses else "corpus != ''"
 
 
+def _dataset_mtime(lance_path: Path) -> float:
+    """Return latest mtime across PyLance manifest/data directories (safe on Windows NTFS)."""
+    latest = 0.0
+    for candidate in (
+        lance_path / "_versions" / "latest_version_hint.json",
+        lance_path / "_versions",
+        lance_path / "data",
+        lance_path,
+    ):
+        try:
+            if candidate.exists():
+                latest = max(latest, candidate.stat().st_mtime)
+        except OSError:
+            pass
+    return latest
+
+
 class SatyaHybridRagIndex:
     """Thread-safe Hybrid PyLance BM25/FTS + 384-d cosine vector + RRF retrieval engine."""
 
@@ -207,6 +224,7 @@ class SatyaHybridRagIndex:
         self._rows: list[dict[str, Any]] = []
         self._fts_ready = False
         self._backend = "uninitialized"
+        self._last_cleanup: dict[str, int] = {}
         self._load_or_build(force_rebuild=force_rebuild)
 
     def _source_signature(self) -> tuple[int, float]:
@@ -239,7 +257,7 @@ class SatyaHybridRagIndex:
                 ds = lance.dataset(str(self.lance_path))
                 if ds.count_rows() > 0:
                     _, latest_mtime = self._source_signature()
-                    lance_mtime = self.lance_path.stat().st_mtime
+                    lance_mtime = _dataset_mtime(self.lance_path)
                     if lance_mtime >= latest_mtime - 2.0 or os.environ.get("PYTEST_XDIST_WORKER"):
                         self._dataset = ds
                         self._backend = "pylance_disk"
@@ -263,9 +281,10 @@ class SatyaHybridRagIndex:
 
         self.rebuild()
 
-    def rebuild(self) -> int:
+    def rebuild(self, *, retain_versions: int = 2) -> int:
         """Re-extract all 3 corpora, compute 384-d embeddings, write PyLance dataset & FTS index."""
         import lance
+        from satya_ml.lance_ingest import prune_lance_versions
 
         raw_chunks = build_all_knowledge_chunks(self.repo_root)
         rows: list[dict[str, Any]] = []
@@ -290,8 +309,32 @@ class SatyaHybridRagIndex:
                 self._fts_ready = True
             except Exception:
                 self._fts_ready = False
+            if self._backend == "pylance_disk":
+                self._last_cleanup = prune_lance_versions(ds, retain_versions=retain_versions)
+                try:
+                    ds = lance.dataset(str(self.lance_path))
+                except Exception:
+                    pass
+            else:
+                self._last_cleanup = {}
             self._dataset = ds
         return len(rows)
+
+    def cleanup_versions(self, *, retain_versions: int = 2) -> dict[str, int]:
+        """Prune superseded MVCC versions on the on-disk RAG PyLance dataset."""
+        import lance
+        from satya_ml.lance_ingest import prune_lance_versions
+
+        with self._lock:
+            if self._dataset is None or self._backend != "pylance_disk":
+                self._last_cleanup = {}
+                return {}
+            self._last_cleanup = prune_lance_versions(self._dataset, retain_versions=retain_versions)
+            try:
+                self._dataset = lance.dataset(str(self.lance_path))
+            except Exception:
+                pass
+            return dict(self._last_cleanup)
 
     def stats(self) -> dict[str, Any]:
         counts: dict[str, int] = {}
@@ -301,6 +344,12 @@ class SatyaHybridRagIndex:
             v = str(row.get("visibility") or "PUBLIC")
             counts[c] = counts.get(c, 0) + 1
             vis_counts[v] = vis_counts.get(v, 0) + 1
+        active_versions = 0
+        if self._dataset is not None and self._backend == "pylance_disk":
+            try:
+                active_versions = len(self._dataset.versions())
+            except Exception:
+                active_versions = 0
         return {
             "backend": self._backend,
             "fts_ready": self._fts_ready,
@@ -308,6 +357,8 @@ class SatyaHybridRagIndex:
             "by_corpus": counts,
             "by_visibility": vis_counts,
             "lance_path": str(self.lance_path),
+            "active_versions": active_versions,
+            "last_cleanup": dict(self._last_cleanup),
         }
 
     def search(

@@ -129,6 +129,8 @@ Detailed across all 18 chapters of [`docs/ttrpg/`](docs/ttrpg/SUMMARY.md) (and m
 | ***Traveller*** *(Far Future)* | FTL Jump drives, gravitics, Tech Levels `0–15+` | Variable per TL; secondary to human nobles | Iconic adult Lifepath aging; `STR/DEX/END` pools | Inherits *Traveller*'s adult lifepath spirit, narrowed onto Earth 2035 with `1–20` controllers & `13`-zone trauma |
 | ***Twilight: 2000* & *Blade Runner RPG*** | Strict small-arms grit (*T2K*) or retro-noir bio-Replicants (*BR*) | None (*T2K*); Voight-Kampff empathy (*BR*) | Scarcity & trauma (*T2K*); investigative stress (*BR*) | Unites *T2K*-grade ballistics/morale with *Blade Runner*-grade personhood noir rooted in real 2026 AI papers |
 
+> **Deep-Dive Genre Essay**: See [**Beyond Neon & Cortical Stacks: Why *Awakened* (and *Satya*) Is Neither Cyberpunk Nor Classical Transhumanism**](docs/campaign/appendix/why_awakened_is_not_cyberpunk_or_transhumanism.md) for why the setting rejects corporate-over-state supremacy, omnipotent "The Man" control, memetic brainwashing, and mind downloading.
+
 ---
 
 ## 6. Polyglot CARPG Workspace Architecture

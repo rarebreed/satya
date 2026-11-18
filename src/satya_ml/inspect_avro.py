@@ -58,7 +58,12 @@ def inspect_topics(base_dir: Path) -> None:
     else:
         for ds_path in sorted(lance_dir.glob("*.lance")):
             ds = lance.dataset(str(ds_path))
-            print(f"- {ds_path.name}: {ds.count_rows()} total rows | schema columns: {ds.schema.names}")
+            print(
+                f"- {ds_path.name}: {ds.count_rows()} total rows | "
+                f"fragments={len(ds.get_fragments())} | "
+                f"versions={len(ds.versions())} | "
+                f"schema columns: {ds.schema.names}"
+            )
 
 
 def main() -> None:

@@ -64,6 +64,7 @@ serve-ai-player = { cmd = "python -m satya_ml.ai_player.server", depends-on = ["
 # --- Avro, Apache Iggy & PyLance Data Pipeline ---
 compact-to-lance = { cmd = "python -m satya_ml.lance_ingest", env = { PYTHONPATH = "src" }, description = "Compact flushed .avro topic batches into .lance AI datasets" }
 build-rag = { cmd = "python -m satya_ml.rag --rebuild", env = { PYTHONPATH = "src" }, description = "Build hybrid PyLance BM25/FTS + 384-d semantic vector RAG index over rules, Rust symbols & lore" }
+clean-lance = { cmd = "python -m satya_ml.lance_ingest --clean-only", env = { PYTHONPATH = "src" }, description = "Compact small fragments and prune old MVCC versions across all .lance tables in data/lance/" }
 inspect-schemas = { cmd = "python -m satya_ml.inspect_avro --schemas", env = { PYTHONPATH = "src" }, description = "Validate and display all versioned .avsc schemas in schemas/" }
 inspect-topics = { cmd = "python -m satya_ml.inspect_avro --topics", env = { PYTHONPATH = "src" }, description = "Inspect flushed .avro batch watermarks and .lance table row counts" }
 ml-pipeline = { depends-on = ["compact-to-lance", "build-rag", "inspect-topics"], description = "Run incremental Avro-to-PyLance compaction, RAG index build, and print dataset summary" }

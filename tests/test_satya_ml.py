@@ -53,7 +53,12 @@ def space_opera_pack() -> Any:
     finally:
         set_campaign_pack_override(None)
         reset_session_npcs()
-from satya_ml.lance_ingest import compact_topic_to_lance, read_avro_batch_with_metadata
+from satya_ml.lance_ingest import (
+    clean_all_lance_datasets,
+    compact_character_assets_to_lance,
+    compact_topic_to_lance,
+    read_avro_batch_with_metadata,
+)
 
 
 def test_all_versioned_avro_schemas_parse_with_fastavro() -> None:
@@ -1008,3 +1013,101 @@ def test_ai_gm_langgraph_and_fastapi_bridge(space_opera_pack: Any) -> None:
         assert len(synced_map.get("tokens", [])) >= 1
     finally:
         set_chat_model_override(None)
+
+
+def test_lance_multi_batch_fragment_compaction_and_version_cleanup() -> None:
+    """Verify multi-batch topic appends compact small fragments and prune old MVCC versions."""
+    repo_root = Path(__file__).resolve().parent.parent
+    tmp_path = repo_root / "target" / f"py_lance_clean_{uuid.uuid4().hex}"
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    try:
+        schema_raw = json.loads(
+            (repo_root / "schemas" / "v1" / "session_lifecycle_event.avsc").read_text(encoding="utf-8")
+        )
+        parsed_schema = fastavro.schema.parse_schema(schema_raw)
+        part_dir = tmp_path / "topics" / "session-lifecycle" / "schema_version=v1" / "partition=0"
+        part_dir.mkdir(parents=True, exist_ok=True)
+        topic_dir = tmp_path / "topics" / "session-lifecycle"
+        lance_root = tmp_path / "lance"
+        lance_root.mkdir(parents=True, exist_ok=True)
+        state_file = lance_root / "_watermarks.json"
+
+        def _make_record(seq: int) -> dict[str, Any]:
+            return {
+                "metadata": {
+                    "event_id": f"ev-{seq}",
+                    "sequence_num": seq,
+                    "schema_subject": "satya.session.lifecycle",
+                    "schema_version": 1,
+                    "schema_fingerprint_crc64": b"\x01\x02\x03\x04\x05\x06\x07\x08",
+                    "session_id": "ep-clean",
+                    "session_mode": "TTRPG",
+                    "client_timestamp_us": 1700000000000000 + seq * 1000,
+                    "ingest_timestamp_us": 1700000000000000 + seq * 1000,
+                    "timezone_offset_min": -240,
+                },
+                "lifecycle_type": "SESSION_CREATED",
+                "actor": {
+                    "user_id": "u-gm",
+                    "username": "gm_sean",
+                    "display_name": "Sean (GM)",
+                    "participant_kind": "HUMAN",
+                    "role": "GM",
+                    "character_id": None,
+                    "ai_agent_info": None,
+                },
+                "target_participant": None,
+                "password_protected": False,
+                "roster_snapshot": [],
+                "reason": f"Batch record {seq}",
+            }
+
+        for batch_idx in range(3):
+            start_off = batch_idx * 2
+            end_off = start_off + 1
+            batch_file = part_dir / f"batch_{start_off:010d}_{end_off:010d}.avro"
+            with batch_file.open("wb") as fp:
+                fastavro.writer(
+                    fp,
+                    parsed_schema,
+                    [_make_record(start_off + 1), _make_record(end_off + 1)],
+                    metadata={
+                        "satya.start_offset": str(start_off),
+                        "satya.end_offset": str(end_off),
+                        "satya.schema_version": "1",
+                    },
+                )
+            ingested = compact_topic_to_lance(topic_dir, lance_root, state_file)
+            assert ingested == 2
+
+        assets_dir = tmp_path / "assets" / "char-1"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        (assets_dir / "a1_portrait.png").write_bytes(b"\x89PNG\r\n\x1a\nfake-png-payload")
+        for _ in range(3):
+            assert compact_character_assets_to_lance(tmp_path / "assets", lance_root) == 1
+
+        topic_lance = lance_root / "session-lifecycle.lance"
+        assets_lance = lance_root / "character-assets.lance"
+        if topic_lance.exists():
+            ds_topic = lance.dataset(str(topic_lance))
+            assert ds_topic.count_rows() == 6
+            assert len(ds_topic.get_fragments()) == 1
+            assert len(ds_topic.versions()) <= 2
+
+            if assets_lance.exists():
+                ds_assets = lance.dataset(str(assets_lance))
+                assert ds_assets.count_rows() == 1
+                assert len(ds_assets.versions()) <= 2
+
+            summary = clean_all_lance_datasets(lance_root, retain_versions=1)
+            assert summary["session-lifecycle.lance"]["active_versions"] == 1
+            ds_topic_after = lance.dataset(str(topic_lance))
+            assert ds_topic_after.count_rows() == 6
+            assert len(ds_topic_after.versions()) == 1
+            if assets_lance.exists():
+                assert summary["character-assets.lance"]["active_versions"] == 1
+                ds_assets_after = lance.dataset(str(assets_lance))
+                assert ds_assets_after.count_rows() == 1
+                assert len(ds_assets_after.versions()) == 1
+    finally:
+        shutil.rmtree(tmp_path, ignore_errors=True)

@@ -379,3 +379,69 @@ def test_human_prose_examples_excluded_from_rag_corpus() -> None:
         str(chunk.get("source_path", "")).startswith("docs/ttrpg-examples")
         for chunk in chunks
     )
+
+
+def test_rag_ntfs_versions_mtime_freshness_and_mvcc_version_pruning() -> None:
+    import os
+    import shutil
+    import time
+    import uuid
+    import lance
+    from satya_ml.rag.hybrid_index import SatyaHybridRagIndex
+
+    tmp_dir = ROOT / "target" / f"py_rag_maint_{uuid.uuid4().hex}"
+    try:
+        (tmp_dir / "docs" / "ttrpg").mkdir(parents=True, exist_ok=True)
+        (tmp_dir / "docs" / "campaign").mkdir(parents=True, exist_ok=True)
+        (tmp_dir / "crates" / "satya-engine" / "src").mkdir(parents=True, exist_ok=True)
+
+        rules_md = tmp_dir / "docs" / "ttrpg" / "sample_rules.md"
+        rules_md.write_text("# Sample Rules\n\n## Two-List Cascading\n\nRoll 2d20 under TN.\n", encoding="utf-8")
+        (tmp_dir / "docs" / "campaign" / "sample_lore.md").write_text(
+            "# Sample Lore\n\n## Public Overview\n\nNew Haven grid.\n",
+            encoding="utf-8",
+        )
+        (tmp_dir / "crates" / "satya-engine" / "src" / "sample_mod.rs").write_text(
+            "pub fn sample_check(tn: i32) -> i32 { tn }\n",
+            encoding="utf-8",
+        )
+
+        tmp_lance = tmp_dir / "lance" / "satya-knowledge-rag.lance"
+        idx = SatyaHybridRagIndex(repo_root=tmp_dir, lance_dir=tmp_lance, force_rebuild=True)
+        idx.rebuild()
+        idx.rebuild()
+
+        if idx.stats()["backend"] == "pylance_disk":
+            ds = lance.dataset(str(tmp_lance))
+            assert len(ds.versions()) <= 2
+            assert len(list((tmp_lance / "data").glob("*.lance"))) == 1
+            assert len([p for p in (tmp_lance / "_indices").iterdir() if p.is_dir()]) <= 1
+
+            ver_before = ds.version
+            # Simulate Windows NTFS keeping the parent .lance folder's st_mtime frozen while _versions is newer.
+            os.utime(tmp_lance, (1_600_000_000, 1_600_000_000))
+            saved_xdist = os.environ.pop("PYTEST_XDIST_WORKER", None)
+            try:
+                idx_reused = SatyaHybridRagIndex(repo_root=tmp_dir, lance_dir=tmp_lance, force_rebuild=False)
+                assert idx_reused.stats()["total_chunks"] == idx.stats()["total_chunks"]
+                assert lance.dataset(str(tmp_lance)).version == ver_before
+
+                future_ts = time.time() + 10.0
+                rules_md.write_text(
+                    "# Sample Rules\n\n## Two-List Cascading\n\nRoll 2d20 under TN (updated).\n",
+                    encoding="utf-8",
+                )
+                os.utime(rules_md, (future_ts, future_ts))
+
+                idx_rebuilt = SatyaHybridRagIndex(repo_root=tmp_dir, lance_dir=tmp_lance, force_rebuild=False)
+                ds_after = lance.dataset(str(tmp_lance))
+                assert ds_after.version > ver_before
+                assert len(ds_after.versions()) <= 2
+
+                idx_rebuilt.cleanup_versions(retain_versions=1)
+                assert len(lance.dataset(str(tmp_lance)).versions()) == 1
+            finally:
+                if saved_xdist is not None:
+                    os.environ["PYTEST_XDIST_WORKER"] = saved_xdist
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
