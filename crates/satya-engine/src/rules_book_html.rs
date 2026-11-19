@@ -492,8 +492,58 @@ fn find_closing_inline_math_dollar(chars: &[char], start: usize) -> Option<usize
     None
 }
 
+fn resolve_markdown_image_src(url: &str) -> String {
+    let trimmed = url.trim();
+    if let Some(rest) = trimmed.strip_prefix("../../assets/") {
+        format!("/docs-assets/{rest}")
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn parse_bracket_paren(chars: &[char], bracket_start: usize) -> Option<(String, String, usize)> {
+    if bracket_start >= chars.len() || chars[bracket_start] != '[' {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut bracket_idx = None;
+    for (offset, &ch) in chars[bracket_start..].iter().enumerate() {
+        if ch == '[' {
+            depth += 1;
+        } else if ch == ']' {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                bracket_idx = Some(bracket_start + offset);
+                break;
+            }
+        }
+    }
+    let b_idx = bracket_idx?;
+    if b_idx + 1 >= chars.len() || chars[b_idx + 1] != '(' {
+        return None;
+    }
+    let close_paren = chars[b_idx + 2..].iter().position(|&c| c == ')')?;
+    let paren_idx = b_idx + 2 + close_paren;
+    let label: String = chars[bracket_start + 1..b_idx].iter().collect();
+    let url: String = chars[b_idx + 2..paren_idx].iter().collect();
+    Some((label, url, paren_idx + 1))
+}
+
+fn parse_standalone_markdown_image(trimmed: &str) -> Option<(String, String)> {
+    if !trimmed.starts_with("![") || !trimmed.ends_with(')') {
+        return None;
+    }
+    let chars: Vec<char> = trimmed.chars().collect();
+    let (alt, url, end_idx) = parse_bracket_paren(&chars, 1)?;
+    if end_idx == chars.len() {
+        Some((alt, url))
+    } else {
+        None
+    }
+}
+
 /// Formats inline Markdown syntax (inline code `` `...` ``, display math `$$...$$`, inline math `$...$`,
-/// bold `**...**`, italic `*...*`, and links `[label](href)`).
+/// bold `**...**`, italic `*...*`, images `![alt](src)`, and links `[label](href)`).
 pub fn format_inline_markdown(line: &str) -> String {
     let mut result = String::with_capacity(line.len() + 48);
     let chars: Vec<char> = line.chars().collect();
@@ -584,44 +634,35 @@ pub fn format_inline_markdown(line: &str) -> String {
             }
         }
 
-        if chars[i] == '[' {
-            let mut depth = 0usize;
-            let mut bracket_idx = None;
-            for (offset, &ch) in chars[i..].iter().enumerate() {
-                if ch == '[' {
-                    depth += 1;
-                } else if ch == ']' {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        bracket_idx = Some(i + offset);
-                        break;
-                    }
-                }
+        if chars[i] == '!'
+            && let Some((alt, url, next_i)) = parse_bracket_paren(&chars, i + 1)
+        {
+            let resolved_src = resolve_markdown_image_src(&url);
+            result.push_str("<img class=\"rules-image\" src=\"");
+            result.push_str(&escape_html_text(&resolved_src));
+            result.push_str("\" alt=\"");
+            result.push_str(&escape_html_text(&alt));
+            result.push_str("\" loading=\"lazy\"/>");
+            i = next_i;
+            continue;
+        }
+
+        if let Some((label, url, next_i)) = parse_bracket_paren(&chars, i) {
+            result.push_str("<a class=\"rules-link\" href=\"");
+            result.push_str(&escape_html_text(&url));
+            result.push('"');
+            if let Some(target_chapter) = resolve_markdown_link_chapter_id(&url) {
+                result.push_str(" data-rules-chapter=\"");
+                result.push_str(target_chapter);
+                result.push_str("\" onclick=\"if(window.satyaSelectRulesChapter){window.satyaSelectRulesChapter('");
+                result.push_str(target_chapter);
+                result.push_str("');return false;}\"");
             }
-            if let Some(b_idx) = bracket_idx
-                && b_idx + 1 < chars.len()
-                && chars[b_idx + 1] == '('
-                && let Some(close_paren) = chars[b_idx + 2..].iter().position(|&c| c == ')')
-            {
-                let paren_idx = b_idx + 2 + close_paren;
-                let label: String = chars[i + 1..b_idx].iter().collect();
-                let url: String = chars[b_idx + 2..paren_idx].iter().collect();
-                result.push_str("<a class=\"rules-link\" href=\"");
-                result.push_str(&escape_html_text(&url));
-                result.push('"');
-                if let Some(target_chapter) = resolve_markdown_link_chapter_id(&url) {
-                    result.push_str(" data-rules-chapter=\"");
-                    result.push_str(target_chapter);
-                    result.push_str("\" onclick=\"if(window.satyaSelectRulesChapter){window.satyaSelectRulesChapter('");
-                    result.push_str(target_chapter);
-                    result.push_str("');return false;}\"");
-                }
-                result.push('>');
-                result.push_str(&format_inline_markdown(&label));
-                result.push_str("</a>");
-                i = paren_idx + 1;
-                continue;
-            }
+            result.push('>');
+            result.push_str(&format_inline_markdown(&label));
+            result.push_str("</a>");
+            i = next_i;
+            continue;
         }
 
         match chars[i] {
@@ -861,6 +902,23 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
             continue;
         }
 
+        if let Some((alt, url)) = parse_standalone_markdown_image(trimmed) {
+            let resolved_src = resolve_markdown_image_src(&url);
+            html.push_str("<figure class=\"rules-figure\"><img class=\"rules-image\" src=\"");
+            html.push_str(&escape_html_text(&resolved_src));
+            html.push_str("\" alt=\"");
+            html.push_str(&escape_html_text(&alt));
+            html.push_str("\" loading=\"lazy\"/>");
+            if !alt.trim().is_empty() {
+                html.push_str("<figcaption class=\"rules-figcaption\">");
+                html.push_str(&format_inline_markdown(alt.trim()));
+                html.push_str("</figcaption>");
+            }
+            html.push_str("</figure>");
+            i += 1;
+            continue;
+        }
+
         if trimmed.starts_with('>') {
             let mut quote_lines = Vec::new();
             while i < lines.len() && lines[i].trim().starts_with('>') {
@@ -1003,6 +1061,7 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
                 || (p_trim.starts_with('|') && p_trim.ends_with('|'))
                 || p_trim.starts_with("- ")
                 || p_trim.starts_with("* ")
+                || p_trim.starts_with("![")
                 || p_trim == "---"
             {
                 break;

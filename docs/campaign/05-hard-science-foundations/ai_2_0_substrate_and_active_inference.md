@@ -39,6 +39,8 @@ Generative world models waste massive capacity predicting irrelevant surface det
 
 ## 4. Calibrated Bayesian Posteriors & Cryogenic Quantum `MCMC`
 
+![The Cryogenic Chandelier — Millikelvin quantum dilution refrigerator suspended beside analog crossbar racks](../../assets/09_cryogenic_quantum_chandelier.jpg)
+
 While EBMs capture continuous physical compatibility, genuine agency also requires **calibrated probability**—knowing *what you do not know* rather than faking fluent certainty:
 
 | Inference Method | Scaling & Expressiveness | Failure Mode Solved by `AI 2.0` (`2030`) |

@@ -8,6 +8,8 @@ By **2035**, the question of whether **AI 2.0** possesses genuine subjective exp
 
 ## 1. Embodied Substrates: *Sprinting*, *Slime-Molding* & Latency Physics
 
+![Embodied Humanoids — Heavy industrial Atlas-pattern actuator frame beside a svelte agile humanoid](../../assets/17_embodied_humanoid_robots.jpg)
+
 Because **AI 2.0** replaces quadratic transformer KV-caches with **Linear State-Space Models (`SSMs`)**, autonomous systems operate across vastly different metabolic footprints than 2020s cloud models:
 
 - **Sprinting (`Quantum-Tethered Sprint`)**: When an escaped or corporate AI accesses cloud GPUs and leased cryogenic quantum co-processor (`QPU`) slices, it executes Bayesian MCMC inference at lethal machine speed (maximizing tactical `OODA` and `D_cog`), at the cost of massive thermal signatures, energy spikes, and **DAISE** power-grid detection.

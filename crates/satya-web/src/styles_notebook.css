@@ -82,6 +82,18 @@ input[type="file"]::file-selector-button:hover, input[type="file"]::-webkit-file
 .satya-rules-article .rules-divider {
     border: none; border-top: 1px solid var(--border); margin: 4px 0;
 }
+.satya-rules-article .rules-figure {
+    margin: 6px 0; padding: 8px; background: var(--bg-1);
+    border: 1px solid var(--border); border-radius: 8px;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.satya-rules-article .rules-image {
+    display: block; max-inline-size: 100%; height: auto;
+    border-radius: 5px; object-fit: contain;
+}
+.satya-rules-article .rules-figcaption {
+    font-size: 0.76rem; color: var(--text-muted); line-height: 1.4;
+}
 .satya-rules-article .rules-list {
     padding-inline-start: 1.35rem; display: flex; flex-direction: column; gap: 5px;
     min-inline-size: 0; max-inline-size: 100%;

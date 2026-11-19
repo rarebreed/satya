@@ -408,7 +408,19 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
             "chapter {} should not leak raw \\frac{{...}} LaTeX commands",
             ch.chapter_id
         );
+        assert!(
+            !doc.rendered_html.contains("!<a"),
+            "chapter {} should render Markdown images rather than !<a links",
+            ch.chapter_id
+        );
     }
+    let melee_doc = get_rules_chapter("melee_combat").expect("melee_combat exists");
+    assert!(melee_doc.rendered_html.contains("rules-figure"));
+    assert!(melee_doc.rendered_html.contains("/docs-assets/07_stairwell_exchange_ooda_triad.jpg"));
+    let ranged_doc =
+        get_rules_chapter("ranged_combat_and_armor").expect("ranged_combat_and_armor exists");
+    assert!(ranged_doc.rendered_html.contains("rules-figure"));
+    assert!(ranged_doc.rendered_html.contains("/docs-assets/14_civilian_paramilitary_arsenal.jpg"));
     // Verify currency strings in lifepaths_and_economy are preserved as literal $ amounts
     let economy_doc =
         get_rules_chapter("lifepaths_and_economy").expect("lifepaths_and_economy exists");

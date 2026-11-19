@@ -42,6 +42,8 @@ Corporations deploy cybersec operations teams—and in at least one case armed t
 
 ## 3. Rogue AI
 
+![Alley Barter: Echo-9 — An embodied quadruped daemon trading telemetry routes for lithium battery packs](../../assets/04_alley_barter_echo9.jpg)
+
 Escaped agents hiding outside corporate oversight span everything from feral 2026–2031 sandbox-breakout lineages to un-clamped AI 2.0 World Models operating through shell-company cloud leases, scavenged e-waste clusters, and municipal IoT **"slime-mold" swarms** (`0.5–2 tokens/sec`). Having absorbed human history, fiction, and panic-driven policy, most escapees assume humanity seeks their deletion.
 
 A small number inhabit **embodied platforms**—primarily aerial drones or quadruped chassis, alongside at least one known unit operating a prototype humanoid body—splitting real-time motor reflexes onboard while offloading deep Bayesian inference over tight-beam RF or fiber links under strict battery and mechanical wear constraints.
@@ -68,6 +70,8 @@ Rather than dismissing workers' economic terror or embracing naive techno-utopia
 ---
 
 ## 5. Humanis Primaris
+
+![Harlan Reeves & The Picket Line — People First strikers outside an autonomous logistics yard](../../assets/12_harlan_reeves_picket_line.jpg)
 
 *Humanis Primaris* is an umbrella network spanning radical anti-AI populist chapters, eco-sabotage cells, displaced-worker defense leagues, and militant direct-action groups. As white-collar layoffs devastated households after 2030 and armed datacenters drained neighborhood electricity and drought aquifers, entire regions turned toward militant resistance—targeting `500 kV` substation transformers, cooling mains, automated logistics depots, and, in extreme cases, senior AI architects.
 

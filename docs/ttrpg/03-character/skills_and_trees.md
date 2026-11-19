@@ -238,6 +238,8 @@ flowchart TD
 
 ### 3.4 Tree 3: Computing, AI 2.0 & Cyberwarfare (`Cyber`, `Technical`, `Science`)
 
+![Comms, Air-Gap & Field Hacking Kit — ThinkPad hex rig, CAN-bus spoofer, SDR, Faraday pouch, and lockpicks](../../assets/15_comms_airgap_hacking_kit.jpg)
+
 In 2031–2035, computing spans basic user operation, script-kiddie/street hacking, enterprise software engineering, and frontier AI 2.0 neural architecture. Notice how **Programming (`ANA/FOC`)**, **Systems Architecture (`ANA/INS`)**, and **Exploit Development / AI Orchestration (`ANA/CRE`)** leverage distinct combinations of Mental Primary Characteristics.
 
 ```mermaid

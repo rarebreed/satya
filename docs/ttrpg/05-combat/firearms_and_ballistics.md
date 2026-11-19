@@ -254,6 +254,8 @@ When a shot hits (scoring $\text{Net Successes } \Delta M \ge 1$ on the `2d20` c
 
 ## 5. Firearm Architecture, Accuracy ($\text{Acc}$) & Recoil Engineering
 
+![Short-Stroke Piston Rifles — Monolithic Spear-pattern battle rifle and HK416 CQB carbine on the armory mat](../../assets/13_short_stroke_piston_rifles.jpg)
+
 A weapon's **Intrinsic Accuracy ($\text{Acc} \in [-4, +4]$)** measures its mechanical precision (dispersion in **Minutes of Angle, $\text{MOA}$**, where $1.0\text{ MOA} \approx 2.9\text{ cm}$ at `100m`). In Satya, $\text{Acc}$ is not an arbitrary bonus—it is the sum of **seven physical engineering factors**:
 
 $$\text{Acc} = \text{round}\!\Big(\Delta\text{Acc}_{\text{action}} + \Delta\text{Acc}_{\text{weight}} + \Delta\text{Acc}_{\text{CoG}} + \Delta\text{Acc}_{\text{bbl\_len}} + Q_{\text{bbl}} + \Delta\text{Acc}_{\text{mount}} + \tau_{\text{tol}} + Q_{\text{ammo}}\Big)$$

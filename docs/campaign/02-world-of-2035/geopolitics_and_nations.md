@@ -8,6 +8,8 @@ Across the **2035** map, neither liberal democracies nor autocracies escaped the
 
 ## 1. The United States & "The American Troubles"
 
+![The 500 kV Chokepoint — Saboteurs approaching a substation Large Power Transformer ahead of a federal patrol](../../assets/06_500kv_chokepoint_sabotage.jpg)
+
 By the early 2030s, the United States entered what historians now call **"The American Troubles."** Caught in bipartisan paralysis—with pro-market hawks insisting deregulation was mandatory to beat **Shen** and Beijing, and cautious centrists imposing only cosmetic fines after witnessing Chinese robotic demonstrations—ordinary workers felt abandoned by both legacy parties:
 
 - **Substation Sabotage & Federalization (`DAISE`)**: Localized rolling blackouts, municipal water rationing near hyperscale compute campuses, **Humanis Primaris** `500 kV` transformer bombings, and assassination attempts against prominent AI executives led Congress to consolidate oversight into the cabinet-level **Department of AI Security and Enforcement (DAISE)** with sweeping domestic surveillance, inspection-warrant, and infrastructure-continuity powers.

@@ -99,6 +99,8 @@ flowchart TD
 
 ### 3.7 Tree 6: Athletics, Vehicles, Aviation & Drone Operations (`Athletic`, `Technical`, `Fieldcraft`)
 
+![Near-Future Aerial UAVs & Autonomous Land Drones — Six-wheeled mule UGV, quadruped, quadrotor, and V-tail ISR craft](../../assets/16_aerial_uavs_and_land_drones.jpg)
+
 Athletics and vehicle handling directly showcase **Fitness (`FIT`)**, **Speed (`SPD`)**, **Force (`FOR`)**, and **Kinesthesis (`KIN`)** (body awareness in 3D space—essential for parkour, gymnastics, motorcycles, and rotary-wing VTOL aircraft; see **[Movement, Vehicles & Environment](../06-health-and-survival/movement_vehicles_and_environment.md)**).
 
 ```mermaid

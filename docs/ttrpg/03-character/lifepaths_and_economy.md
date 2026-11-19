@@ -259,6 +259,8 @@ Rather than treating every skill rank as a flat 1-for-1 point purchase—which w
 
 ## 2. Campaign Economy, Upkeep (`SQM 1–10`), `[Access]` Procurement & `Heat`
 
+![The Liability Sink — SQM 3 professionals surviving on automated sign-off quotas and overdue bills](../../assets/10_liability_sink_sqm3.jpg)
+
 Rather than forcing players to track every cup of coffee while ignoring how a street operative acquires a military-grade anti-materiel rifle, Satya uses a two-tier economic model anchored by the character's post-Lifepath **Socioeconomic / Material Tier (`SQM 1–10`)**:
 
 > **See this in play**: [Guide 01 — Living in 2035: `SQM` Upkeep, `[Access]` Procurement & `Heat`](../../ttrpg-examples/01-lifepath-session-zero.md#4-living-in-2035-sqm-upkeep-access-procurement--heat).

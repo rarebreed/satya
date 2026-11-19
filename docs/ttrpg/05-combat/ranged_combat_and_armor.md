@@ -109,6 +109,8 @@ Satya integrates weapon malfunctions directly into the **[`2d20` Cascade Outcome
 
 ## 7. Master Granular Firearms Catalog (`2032–2035` Benchmark Weapons)
 
+![Civilian & Paramilitary Arsenal — Chassis bolt-action precision rifle, 12-gauge pump shotgun, and striker service pistol](../../assets/14_civilian_paramilitary_arsenal.jpg)
+
 Every weapon below is derived directly from the engineering equations in **Sections 3–6**:
 
 | Weapon Model & Archetype | Ammunition (`Caliber` · `Mass` · `Powder`) | Feed System & Capacity | Action Type | Weight (`Unloaded / Loaded`) | Length (`OAL / Barrel` & Mount) | Center of Gravity ($\Delta_{\text{CoG}}$) | Tolerance ($\tau_{\text{tol}}$) & Mfg ($Q_{\text{mfg}}$) | Accuracy ($\text{Acc}$ / `MOA`) | Reliability ($\text{Rel}$) | Clear Jam (`Minor / Major`) | Strip Time ($\text{TC}_{\text{strip}}$) | Recoil ($R_{\text{wpn}}$) & Base `TC` | Damage (`Raw Impact` / `Base Pen` / `Wobble`) | Cost & `[Access]` |

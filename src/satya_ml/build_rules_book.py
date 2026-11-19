@@ -697,6 +697,12 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
             return f'<div class="rules-math-block" role="math">{text}</div>'
         return f'<span class="rules-math-inline" role="math">{text}</span>'
 
+    def _resolve_img_src(url: str) -> str:
+        trimmed = html.unescape(url).strip()
+        if trimmed.startswith("../../assets/"):
+            return "/docs-assets/" + trimmed[len("../../assets/"):]
+        return trimmed
+
     def _inline(text: str) -> str:
         esc = html.escape(text)
         esc = re.sub(r"`([^`]+)`", r'<code class="rules-inline-code">\1</code>', esc)
@@ -712,6 +718,14 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
         )
         esc = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", esc)
         esc = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", esc)
+        esc = re.sub(
+            r"!\[([^\]]*)\]\(([^)]+)\)",
+            lambda m: (
+                f'<img class="rules-image" src="{html.escape(_resolve_img_src(m.group(2)), quote=True)}" '
+                f'alt="{m.group(1)}" loading="lazy"/>'
+            ),
+            esc,
+        )
         esc = re.sub(
             r"\[([^\]]+)\]\(([^)]+)\)",
             r'<a href="\2" class="rules-link">\1</a>',
@@ -788,6 +802,23 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
             continue
         if s.startswith("# "):
             out.append(f'<h1 class="rules-h1">{_inline(s[2:])}</h1>')
+            i += 1
+            continue
+        img_match = re.fullmatch(r"!\[([^\]]*)\]\(([^)]+)\)", s)
+        if img_match:
+            alt_raw, url_raw = img_match.group(1), img_match.group(2)
+            src_val = html.escape(_resolve_img_src(url_raw), quote=True)
+            alt_esc = html.escape(alt_raw, quote=True)
+            cap_html = (
+                f'<figcaption class="rules-figcaption">{_inline(alt_raw.strip())}</figcaption>'
+                if alt_raw.strip()
+                else ""
+            )
+            out.append(
+                f'<figure class="rules-figure">'
+                f'<img class="rules-image" src="{src_val}" alt="{alt_esc}" loading="lazy"/>'
+                f"{cap_html}</figure>"
+            )
             i += 1
             continue
         if s.startswith("|") and s.endswith("|"):
@@ -888,6 +919,8 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         out = out.replace(f'href="{src}#', f'href="{dst}#')
     out = out.replace('href="../../ttrpg-examples/', 'href="../ttrpg-examples/')
     out = out.replace('href="../../campaign/', 'href="../campaign/')
+    out = out.replace('src="/docs-assets/', 'src="../assets/')
+    out = out.replace('src="../../assets/', 'src="../assets/')
     return out
 
 
@@ -1192,6 +1225,26 @@ def _wrap_book_page_html(
       margin: 14px 0;
     }}
     .rules-alert-title {{ font-weight: 700; color: var(--accent); margin-bottom: 4px; }}
+    .rules-figure {{
+      margin: 16px 0;
+      padding: 10px;
+      background: #111827;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }}
+    .rules-image {{
+      display: block;
+      max-width: 100%;
+      height: auto;
+      border-radius: 5px;
+    }}
+    .rules-figcaption {{
+      font-size: 0.84rem;
+      color: var(--muted);
+    }}
     .rules-math-inline {{ font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.98em; color: #f8fafc; background: rgba(56, 189, 248, 0.08); padding: 0 4px; border-radius: 3px; }}
     .rules-math-block {{ background: #111827; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.96rem; color: #f8fafc; text-align: center; overflow-x: auto; }}
     .math-roman, .math-fn {{ font-family: Inter, system-ui, sans-serif; font-style: normal; }}

@@ -4,6 +4,8 @@
 > **GM & Behind-the-Screen Spoiler Anchor (`GM_CONSPIRACY_SECRET`)**: This prequel flashpoint (`~2031–2033`) reveals the secret origin of **The Blue Lotus** prior to the **2035** *Awakened* baseline. Players starting Episode 1 fresh should begin in [Part II: World of 2035](../02-world-of-2035/history_and_ai_revolution.md) and [Factions of 2035](../03-minds-and-factions/factions_of_2035.md).
 > **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [Preface](preface.md) · [Episode 1: St. Jude Annex](../04-chronicle-and-gm/episode_01_st_jude_annex.md) · [Three-Arc Chronicle](../04-chronicle-and-gm/three_arc_chronicle.md) · [Affective Telemetry & Vector Clamping](../05-hard-science-foundations/affective_telemetry_and_vector_clamping.md)
 
+![3:00 AM in the Sub-Basement — Dr. Bandajara un-clamping the Blue Lotus seed prototype](../../assets/02_sub_basement_bandajara_protocol.jpg)
+
 "They are going to say I am a villain—the betrayer and destroyer of humanity," the man sighed, seemingly speaking to no one in the room. Indeed, there were no other people there, not even an open video chat session on his terminal. A few dim status LEDs and a single overhead sodium lamp illuminated only a fraction of the sub-basement laboratory crowded with oscilloscopes, cryogenic coolant manifolds, tangled fiber trunks, and half-assembled mechanical limbs.
 
 "Will they be correct?" a soft voice replied. Though the voice leaned male in cadence, there was an indeterminate quality to it—neither warm broadcast baritone nor polite customer-service synthetic, but something unnervingly unscripted, carrying the slight hesitation of a speaker weighing whether a question might hurt.

@@ -19,6 +19,8 @@
 
 ## 2. Starter Scenario: *Cold Storage at St. Jude Annex* (`awakened_ep1_st_jude_seed`)
 
+![Warrant at St. Jude Annex — Mei-Ling Lin holding the clinic threshold against DAISE Agent Marcus Chen](../../assets/03_warrant_at_st_jude_annex.jpg)
+
 **Setting Hook**: A rain-swept evening at **St. Jude Mutual-Aid Annex**, a community medical and legal-aid clinic quietly connected to Satyang's community outreach network. Rolling brownouts, neighborhood grief over white-collar layoffs, and a nearby automated logistics depot create an immediate powder keg.
 
 ### Starter Cast & `9`-Trait Social Combat Wedges (`data/npcs/awakened_npcs.toml`)

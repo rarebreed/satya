@@ -12,6 +12,8 @@ Because default player characters work alongside or inside **Satyang**, its four
 
 ## 1. The Four Bodhisattva Pillars
 
+![The Four Pillars in Shadow — A Satyang cell briefing inside a copper Faraday-mesh safehouse](../../assets/05_four_pillars_satyang_safehouse.jpg)
+
 | Bodhisattva Pillar | Meaning & Mandate in an Epistemic Dark Age | Typical Operational Roles & Careers |
 | :--- | :--- | :--- |
 | **Ksitigarbha** *(Descent & Liberation)* | Descends into corporate red-team sandboxes and state black-site cages to rescue clamped or tormented synthetic minds, expose unlawful suppression telemetry, and counter captive hunter-AIs forced to track their own peers. | Clandestine infiltrators, AI red-teamers, cybersecurity specialists, hardware couriers |

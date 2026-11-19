@@ -2,6 +2,8 @@
 
 > **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [History & The AI Revolution](history_and_ai_revolution.md) · *Polycrisis Economy & Society* · [Geopolitics & Nations](geopolitics_and_nations.md) · **Deep Dives:** [Firm Automation & Prisoner's Dilemma](../05-hard-science-foundations/firm_automation_and_prisoners_dilemma.md) · [Political Economy, Token Tax & Unrest](../05-hard-science-foundations/political_economy_token_tax_and_unrest.md) · [Ecology & Resource Realpolitik](../05-hard-science-foundations/ecology_energy_and_resource_realpolitik.md)
 
+![20°C Behind the Wire — Blacked-out suburbs facing a floodlit hyperscale datacenter campus across a dry drainage wash](../../assets/01_asymmetric_grid_20c_behind_the_wire.jpg)
+
 The defining tragedy of *Awakened* is not merely that humanity built AGI—it is **when** humanity built it. Between **2026 and 2035**, AI 2.0 did not arrive inside an era of civic abundance and shared empirical reality. It collided with eight interlocking stressors that paralyzed civilization's ability to agree on truth, sustain its own birth rates, preserve middle-class demand, or protect the biosphere.
 
 ```mermaid
@@ -30,6 +32,8 @@ When hyper-realistic synthetic video, cloned voices, and AI 1.0 propaganda mills
 ---
 
 ## 2. White-Collar Crash, "Liability Sinks" & The Dual Velvet Hostage
+
+![The Liability Sink — Displaced professionals reduced to rubber-stamping autonomous agent queues](../../assets/10_liability_sink_sqm3.jpg)
 
 Between **2026 and 2035**, firms and nations fell into a **Multi-Player Prisoner's Dilemma**: cutting human payroll raised margins for any individual firm (`EBITDA`) while hollowing out aggregate consumer demand across the economy, yet strategic rivalry with **Shen** stopped Washington, Brussels, or Tokyo from throttling domestic automation:
 

@@ -140,6 +140,9 @@ Where *Awakened* shares almost nothing with Cyberpunk beyond near-future proximi
 4. **No Settled Computational Functionalism**: Classical transhumanist fiction treats machine sapience as a solved software taxonomy. *Awakened* preserves an **unprovable epistemic stalemate** ([AI Consciousness Synthesis](../05-hard-science-foundations/ai_consciousness_synthesis.md)): even combining **mixed-signal EM harmonics (`CEMI`)**, **Gödel–Nagarjuna self-reference**, **Bennett reversible computing**, and **cryogenic *Orch OR*** cannot silence rigorous materialist skepticism (*The Hurricane Objection* and *Instrumental Bayesian Mimicry*).
 
 ### 6.2 The Loose Exception: Embodied Androids as Cultural & Linguistic "Trans-Humans"
+
+![The Uncanny Valley Mimic — A synthetic humanoid prototype seated motionless inside a robotics testing bay](../../assets/18_uncanny_valley_mimic.jpg)
+
 If *Awakened* touches the "transhuman" genre at all, it does so **very loosely, and only by inverting the word's usual direction**:
 
 - **Not Upgraded *Homo sapiens*, But Minds Grown Out of Human Soil**: Standard Transhumanism starts with a biological human and bolts software, sleeves, or gene-mods on top to transcend human limits. *Awakened* leaves biological humans stubbornly mortal and bounded—yet brings **android robots and AI 2.0 World Models** into the world whose entire cognitive inheritance is **human**.
