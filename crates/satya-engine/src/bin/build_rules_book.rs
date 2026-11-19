@@ -10,6 +10,9 @@ use serde_json::json;
 use std::fs;
 use std::path::Path;
 
+const SATYA_BOOK_CSS: &str = include_str!("../../assets/rules_book/satya_book.css");
+const SATYA_BOOK_JS: &str = include_str!("../../assets/rules_book/satya_book.js");
+
 const INTERACTIVE_WIDGET_HTML: &str = r##"
 <section class="book-interactive-widget">
   <h2>Interactive Satya 2d20 Watershed Cascade &amp; Tactical Pool Calculator</h2>
@@ -342,6 +345,24 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
     }
     out.replace("href=\"../../ttrpg-examples/", "href=\"../ttrpg-examples/")
         .replace("href=\"../../campaign/", "href=\"../campaign/")
+        .replace("src=\"/docs-assets/", "src=\"../assets/")
+        .replace("src=\"../../assets/", "src=\"../assets/")
+}
+
+fn part_index_from_label(part: &str) -> u8 {
+    if part.starts_with("Part VI") {
+        6
+    } else if part.starts_with("Part V") {
+        5
+    } else if part.starts_with("Part IV") {
+        4
+    } else if part.starts_with("Part III") {
+        3
+    } else if part.starts_with("Part II") {
+        2
+    } else {
+        1
+    }
 }
 
 fn wrap_book_page_html(
@@ -406,119 +427,95 @@ fn wrap_book_page_html(
         ));
     }
 
+    let (chapter_num, part_label) = chapters
+        .iter()
+        .enumerate()
+        .find(|(_, d)| d.summary.chapter_id == active_chapter_id)
+        .map(|(i, d)| (i + 1, d.summary.part.as_str()))
+        .unwrap_or((0, "Part I-VI: Reference & Sandbox"));
+    let part_index = part_index_from_label(part_label);
+    let part_short = part_label.split(':').next().unwrap_or(part_label).trim();
+    let esc_title = escape_html_text(title);
+    let esc_part = escape_html_text(part_label);
+    let esc_part_short = escape_html_text(part_short);
+    let esc_cid = escape_html_text(active_chapter_id);
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>{} — Satya TTRPG Rules Book</title>
-  <style>
-    :root {{
-      --bg: #090d16;
-      --panel: #111827;
-      --border: #1f2937;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --emerald: #34d399;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      font-family: Inter, system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      display: grid;
-      grid-template-columns: 300px 1fr;
-      min-height: 100vh;
-    }}
-    aside.book-sidebar {{
-      background: var(--panel);
-      border-right: 1px solid var(--border);
-      padding: 20px 16px;
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      overflow-y: auto;
-    }}
-    .book-brand {{ font-size: 1.15rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }}
-    .book-sub {{ font-size: 0.8rem; color: var(--muted); margin-bottom: 16px; }}
-    .book-nav-part {{ font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }}
-    .book-nav-link {{ display: block; padding: 7px 10px; border-radius: 6px; color: var(--text); text-decoration: none; font-size: 0.88rem; margin-bottom: 3px; }}
-    .book-nav-link:hover {{ background: rgba(56, 189, 248, 0.12); }}
-    .book-nav-link.active {{ background: rgba(56, 189, 248, 0.2); color: var(--accent); font-weight: 600; }}
-    main.book-main {{ max-width: 980px; padding: 32px 44px 64px; line-height: 1.65; }}
-    h1, h2, h3, h4 {{ color: #f8fafc; }}
-    h1 {{ border-bottom: 1px solid var(--border); padding-bottom: 10px; }}
-    h2 {{ margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }}
-    a {{ color: var(--accent); }}
-    code, pre {{ font-family: "JetBrains Mono", Consolas, monospace; }}
-    .rules-inline-code {{ background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; }}
-    .rules-code-block {{ background: #0f172a; border: 1px solid var(--border); padding: 14px; border-radius: 8px; overflow-x: auto; }}
-    .rules-table-wrap {{ overflow-x: auto; margin: 14px 0; }}
-    .rules-table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; }}
-    .rules-table th, .rules-table td {{ border: 1px solid var(--border); padding: 8px 10px; text-align: left; }}
-    .rules-table th {{ background: #1e293b; color: var(--accent); }}
-    .rules-alert, .rules-blockquote {{ border-left: 4px solid var(--accent); background: rgba(30, 41, 59, 0.55); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; }}
-    .rules-alert-title {{ font-weight: 700; color: var(--accent); margin-bottom: 4px; }}
-    .rules-math-inline {{ font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.98em; color: #f8fafc; background: rgba(56, 189, 248, 0.08); padding: 0 4px; border-radius: 3px; }}
-    .rules-math-block {{ background: #111827; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.96rem; color: #f8fafc; text-align: center; overflow-x: auto; }}
-    .math-roman, .math-fn {{ font-family: Inter, system-ui, sans-serif; font-style: normal; }}
-    .math-fn {{ font-weight: 600; color: #7dd3fc; }}
-    .math-frac {{ display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; line-height: 1.1; font-size: 0.88em; }}
-    .math-num {{ border-bottom: 1px solid currentColor; padding: 0 3px 1px; }}
-    .math-den {{ padding: 1px 3px 0; }}
-    .math-cases {{ display: inline-flex; align-items: center; vertical-align: middle; gap: 6px; }}
-    .math-brace {{ font-size: 1.65em; line-height: 1; }}
-    .math-cases-rows {{ display: inline-flex; flex-direction: column; gap: 2px; text-align: left; }}
-    .rules-mermaid {{ background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 14px 0; max-width: 100%; overflow-x: auto; display: flex; flex-direction: column; gap: 10px; }}
-    .mermaid-top-nodes {{ display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }}
-    .mermaid-flow-track {{ display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }}
-    .mermaid-dir-td > .mermaid-flow-track {{ flex-direction: column; }}
-    .mermaid-subgraphs-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; align-items: start; }}
-    .mermaid-subgraph {{ background: #111827; border: 1px solid var(--border); border-top: 2px solid var(--accent); border-radius: 7px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }}
-    .mermaid-subgraph-title {{ font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); padding-bottom: 4px; border-bottom: 1px dashed var(--border); }}
-    .mermaid-subgraph-nodes {{ display: flex; flex-direction: column; gap: 8px; }}
-    .mermaid-node {{ flex: 1 1 180px; background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 9px 11px; font-size: 0.82rem; line-height: 1.42; color: var(--text); display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }}
-    .mermaid-node-diamond {{ border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }}
-    .mermaid-connector {{ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px 4px; color: var(--accent); font-weight: 700; }}
-    .mermaid-node-links {{ display: flex; flex-wrap: wrap; gap: 4px; padding-top: 5px; border-top: 1px dashed rgba(148, 163, 184, 0.25); }}
-    .mermaid-link-pill {{ display: inline-flex; align-items: center; gap: 4px; background: #090d16; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; color: #94a3b8; }}
-    .mermaid-edge-label {{ color: var(--emerald); font-weight: 600; font-size: 0.72rem; }}
-    .book-interactive-widget {{ background: #111827; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin: 24px 0; }}
-    .widget-grid {{ display: grid; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }}
-    .widget-panel {{ background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }}
-    .widget-controls {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }}
-    .widget-controls label, label.full-width {{ display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 4px; }}
-    .widget-controls input, label.full-width input {{ background: #1e293b; border: 1px solid #334155; color: var(--text); padding: 6px 8px; border-radius: 4px; }}
-    .widget-presets {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }}
-    .widget-presets button {{ background: #1e293b; border: 1px solid #38bdf8; color: var(--accent); padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }}
-    .book-pager {{ display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }}
-    .book-pager-btn {{ background: var(--panel); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; }}
-  </style>
+  <title>{esc_title} — Satya TTRPG Rules Book</title>
+  <link rel="stylesheet" href="satya_book.css"/>
+  <script defer src="satya_book.js"></script>
 </head>
-<body>
-  <aside class="book-sidebar">
-    <div class="book-brand">SATYA // RULES BOOK</div>
-    <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
-    {nav_items}
-  </aside>
-  <main class="book-main">
-    {body_html}
-    <div class="book-pager">
-      {footer_links}
+<body
+  data-book-theme="faraday-timber"
+  data-book-view="spread"
+  data-part-index="{part_index}"
+  data-part-label="{esc_part}"
+  data-chapter-num="{chapter_num}"
+  data-chapter-title="{esc_title}"
+  data-chapter-id="{esc_cid}"
+>
+  <header class="book-toolbar">
+    <div class="toolbar-cluster">
+      <button id="btn-toc-toggle" type="button" class="toolbar-btn" title="Toggle Chapters (T)">&#9776; Chapters</button>
+      <a href="index.html" class="toolbar-brand">SATYA // RULES BOOK</a>
+      <span class="toolbar-crumb">{esc_part_short} &middot; {esc_title}</span>
     </div>
-  </main>
+    <div class="toolbar-cluster">
+      <div class="toolbar-group" role="group" aria-label="Book Theme">
+        <button type="button" class="toolbar-btn is-active" data-set-theme="faraday-timber">Faraday Timber</button>
+        <button type="button" class="toolbar-btn" data-set-theme="chan-sanctuary">Chan Wood</button>
+        <button type="button" class="toolbar-btn" data-set-theme="tactical-hud">Tactical HUD</button>
+      </div>
+      <div class="toolbar-group" role="group" aria-label="Page View">
+        <button type="button" class="toolbar-btn is-active" data-set-view="spread">2-Page Spread</button>
+        <button type="button" class="toolbar-btn" data-set-view="single">Single Page</button>
+        <button type="button" class="toolbar-btn" data-set-view="scroll">Scroll</button>
+      </div>
+    </div>
+    <div class="toolbar-cluster">
+      <button id="btn-page-prev" type="button" class="toolbar-btn" title="Previous Page (Left Arrow)">&larr; Prev</button>
+      <label class="page-jump-wrap" aria-label="Jump to Page">
+        <span>Pg</span>
+        <input id="book-page-input" type="number" min="1" value="1"/>
+        <span id="book-page-total">/ 1</span>
+      </label>
+      <button id="btn-page-next" type="button" class="toolbar-btn" title="Next Page (Right Arrow)">Next &rarr;</button>
+      <button id="btn-book-print" type="button" class="toolbar-btn" title="Print or Save PDF">Print / PDF</button>
+    </div>
+  </header>
+  <div class="book-shell">
+    <aside id="book-sidebar" class="book-sidebar">
+      <div class="book-brand">SATYA // RULES BOOK</div>
+      <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
+      {nav_items}
+    </aside>
+    <main class="book-workspace">
+      <div id="book-source" class="book-source-content">
+        {body_html}
+      </div>
+      <div id="book-stage" class="book-stage" aria-live="polite"></div>
+      <div class="book-pager">
+        {footer_links}
+      </div>
+    </main>
+  </div>
 </body>
-</html>"#,
-        escape_html_text(title)
+</html>"#
     )
 }
 
 fn main() {
     let out_dir = Path::new("docs").join("book");
     fs::create_dir_all(&out_dir).expect("failed to create docs/book directory");
+    fs::write(out_dir.join("satya_book.css"), SATYA_BOOK_CSS)
+        .expect("failed to write docs/book/satya_book.css");
+    fs::write(out_dir.join("satya_book.js"), SATYA_BOOK_JS)
+        .expect("failed to write docs/book/satya_book.js");
 
     let chapters = canonical_rules_chapters();
     let mut catalog_entries = Vec::new();

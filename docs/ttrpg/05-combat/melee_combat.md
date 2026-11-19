@@ -9,7 +9,7 @@ Melee combat in **Satya** is fundamentally different from ranged firefights—no
 
 ## 1. Anatomy of a Melee Exchange
 
-![The Stairwell Exchange — Control and Root trapping a lunging opponent's pistol wrist within 0.25 seconds](../../assets/07_stairwell_exchange_ooda_triad.jpg)
+![The Stairwell Exchange — Control and Root trapping a lunging opponent's pistol wrist within 0.25 seconds](../../assets/07_stairwell_exchange_ooda_triad.jpg#column)
 
 Unlike traditional RPGs where two fighters stand toe-to-toe trading static "I swing / You swing" turns, a melee fight in Satya is a continuous, asymmetric contest for **distance (Reach)**, **timing (Tempo)**, **structural openings (Control / Guard)**, and **grounded kinetic power (Force / Root)**:
 

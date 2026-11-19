@@ -547,6 +547,90 @@ fn test_contested_cascade_hybrid_and_live_rolls() {
 }
 
 #[test]
+fn test_rules_book_ttrpg_layout_directives_and_sidebars() {
+    let md = r#"
+![Quarter Inset](../../assets/33_whistleblower_crossroads_linnea.jpg#quarter)
+
+![Floated Inset](../../assets/08_zero_hp_parking_deck_triage.jpg#quarter-left)
+
+![Tall Panel](../../assets/07_stairwell_exchange_ooda_triad.jpg#column)
+
+![Half Banner](../../assets/31_ordinary_mortals_analog_table.jpg#half)
+
+![Full Plate](../../assets/23_sarah_lockpicking_cascade.jpg#full)
+
+![Panoramic Spread](../../assets/14_civilian_paramilitary_arsenal.jpg#spread)
+
+> [!SIDEBAR] The Law of Carry
+> Every success injects $+6$ into the next pair.
+>
+> - Bullet one
+> - Bullet two
+>
+> | Stat | Val |
+> | :--- | :--- |
+> | `C` | `12` |
+
+> [!EXAMPLE] At the Table: Lockpick
+> Sarah rolls `4x2d20`.
+
+> [!DOSSIER] Intercept 09-Alpha
+> Air-gapped drive recovered.
+
+> [!LORE] Safehouse Notes
+> Copper Faraday mesh.
+
+> [!STATBLOCK] Recon Mk-IV
+> Standard tactical armor.
+
+<!-- pagebreak -->
+
+<!-- colbreak -->
+
+<!-- raw comment --> <script>alert(1)</script>
+"#;
+    let html = render_rules_markdown_to_html(md);
+
+    for (hint, img) in [
+        ("quarter", "33_whistleblower_crossroads_linnea.jpg"),
+        ("quarter-left", "08_zero_hp_parking_deck_triage.jpg"),
+        ("column", "07_stairwell_exchange_ooda_triad.jpg"),
+        ("half", "31_ordinary_mortals_analog_table.jpg"),
+        ("full", "23_sarah_lockpicking_cascade.jpg"),
+        ("spread", "14_civilian_paramilitary_arsenal.jpg"),
+    ] {
+        assert!(
+            html.contains(&format!(r#"class="rules-figure rules-figure--{hint}" data-layout="{hint}""#)),
+            "missing figure layout class for #{hint}"
+        );
+        assert!(
+            html.contains(&format!(r#"src="/docs-assets/{img}""#)),
+            "layout fragment #{hint} should be stripped from img src for {img}"
+        );
+        assert!(!html.contains(&format!("{img}#{hint}")));
+    }
+
+    assert!(html.contains(r#"<aside class="rules-alert rules-sidebar">"#));
+    assert!(html.contains(r#"<div class="rules-alert-title">The Law of Carry</div>"#));
+    assert!(html.contains("<li>Bullet one</li>"));
+    assert!(html.contains("<table class=\"rules-table\">"));
+    assert!(html.contains(r#"<aside class="rules-alert rules-example">"#));
+    assert!(html.contains(r#"<div class="rules-alert-title">At the Table: Lockpick</div>"#));
+    assert!(html.contains(r#"<aside class="rules-alert rules-dossier">"#));
+    assert!(html.contains(r#"<div class="rules-alert-title">Intercept 09-Alpha</div>"#));
+    assert!(html.contains(r#"<div class="rules-alert-title">Safehouse Notes</div>"#));
+    assert!(html.contains(r#"<aside class="rules-alert rules-statblock">"#));
+    assert!(html.contains(r#"<div class="rules-alert-title">Recon Mk-IV</div>"#));
+
+    assert!(html.contains(r#"<div class="rules-page-break" data-break="page" aria-hidden="true"></div>"#));
+    assert!(html.contains(r#"<div class="rules-col-break" data-break="column" aria-hidden="true"></div>"#));
+
+    assert!(!html.contains("<script>"));
+    assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+    assert!(html.contains("&lt;!-- raw comment --&gt;"));
+}
+
+#[test]
 fn test_task_gate_classes_and_tool_dependency_tiers() {
     // Class A untrained (N=0, no talent) -> N=1, gate_delta_ext = +4
     let res_a = resolve_task_gate_and_tools(

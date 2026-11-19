@@ -260,7 +260,7 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                         rel="noopener"
                         class="btn btn-sm btn-secondary"
                     >
-                        "Static Marimo Book"
+                        "Open TTRPG Rules Book"
                     </a>
                 </div>
             </div>

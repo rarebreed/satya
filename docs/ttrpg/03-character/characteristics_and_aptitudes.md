@@ -155,7 +155,7 @@ Rather than lumping all five senses and sixth-sense danger awareness into a sing
 
 ## 7. Psyche: The Invisible Traits & Behavioral Architecture
 
-![The 9-Axis Psyche: Whistleblower Crossroads — Linnea Cho weighing a corporate access badge against a copper-wrapped air-gapped micro-drive](../../assets/33_whistleblower_crossroads_linnea.jpg)
+![The 9-Axis Psyche: Whistleblower Crossroads — Linnea Cho weighing a corporate access badge against a copper-wrapped air-gapped micro-drive](../../assets/33_whistleblower_crossroads_linnea.jpg#quarter)
 
 ### 7.1 Design Philosophy: Quantifying `Role` Playing & NPC Agency
 

@@ -174,7 +174,7 @@ $$\text{TN}_P = 31 - C_{\text{morale}}, \qquad \text{TN}_{GM} = 21 - \Delta_{\te
 
 ## 4. Social Combat, Debate & Cognitive Dissonance ("Mental Wounds")
 
-![Warrant at St. Jude Annex — Social combat standoff pitting duty against protecting bystanders](../../assets/03_warrant_at_st_jude_annex.jpg)
+![Warrant at St. Jude Annex — Social combat standoff pitting duty against protecting bystanders](../../assets/03_warrant_at_st_jude_annex.jpg#full)
 
 Satya treats high-stakes debates, ideological arguments, courtroom cross-examinations, boardroom takeovers, and interrogations with the same tactical depth as physical firefights. Just as physical combat targets a body's structural integrity and blood volume, **Social Combat** targets a character's **Psyche** to inflict **Doubt**, **Ego Wounds**, and **Cognitive Dissonance**.
 

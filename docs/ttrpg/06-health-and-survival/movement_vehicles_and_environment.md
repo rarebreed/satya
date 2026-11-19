@@ -121,7 +121,7 @@ Compare the character's **Effective Load ($L_{\text{eff}}$)** against multiples 
 
 ## 3. Vehicles, High-Speed Chases & Crash / G-Force Physics
 
-![The Vehicle Triad Pursuit — A stripped manual hatchback drifting around an overpass pier ahead of an armored DAISE interceptor SUV](../../assets/24_vehicle_triad_pursuit.jpg)
+![The Vehicle Triad Pursuit — A stripped manual hatchback drifting around an overpass pier ahead of an armored DAISE interceptor SUV](../../assets/24_vehicle_triad_pursuit.jpg#full)
 
 Satya's **[Tactical Triad (`Tempo`, `Control`, `Force`)](../05-combat/tactical_triad_and_pools.md)** scales seamlessly from close-quarters foot combat to **vehicular pursuits, aerial dogfights, and orbital docking**:
 

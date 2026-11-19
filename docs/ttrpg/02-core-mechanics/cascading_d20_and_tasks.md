@@ -259,7 +259,7 @@ When characters are between active scenes—recovering from surgery, engineering
 
 ### 7.1 Worked Example 1: Sarah's Lockpicking Task (Player Cascade vs. Hidden 1-Pair Tiered GM Roll)
 
-![Sarah's Lockpicking Cascade — Picking a steel service door lock under 2d20 fog of war as a patrol flashlight rounds the brick corner](../../assets/23_sarah_lockpicking_cascade.jpg)
+![Sarah's Lockpicking Cascade — Picking a steel service door lock under 2d20 fog of war as a patrol flashlight rounds the brick corner](../../assets/23_sarah_lockpicking_cascade.jpg#full)
 
 > **Scenario**: Sarah needs to pick the mechanical pin-tumbler cylinder on a heavy hardened-steel bike lock in a dimly lit alley before a security patrol rounds the corner. Crucially, Sarah knows her own skill, hands, and tools, **but she does not know whether the lock inside the weathered casing is a cheap standard core ($\Delta_{\text{ext}} = 0$) or fitted with anti-pick security spool pins ($\Delta_{\text{ext}} = +4$)**.
 

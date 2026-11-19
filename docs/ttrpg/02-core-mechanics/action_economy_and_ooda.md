@@ -280,7 +280,7 @@ What happens if a character starts a `12-tick` aimed shot or heavy melee swing o
 
 ## 6. Multi-Sensory Perception, Stealth & Illumination (`Observe` Phase)
 
-![Slicing the Pie — An operative peeking around a concrete utility corner with an inspection mirror as a patrol quadruped rounds the corridor](../../assets/28_ooda_corridor_slicing_pie.jpg)
+![Slicing the Pie — An operative peeking around a concrete utility corner with an inspection mirror as a patrol quadruped rounds the corridor](../../assets/28_ooda_corridor_slicing_pie.jpg#column)
 
 Because Satya models **six distinct Sensory Characteristics (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`)** rather than a single generic "Perception" stat, stealth, detection, and awareness on the OODA clock are resolved as an asymmetric **Multi-Channel Sensory Contest**.
 

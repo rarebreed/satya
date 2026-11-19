@@ -60,7 +60,7 @@ In other words, Satya is designed to dispel two pervasive myths:
 
 ## 2. Design Philosophy of Combat in Satya
 
-![The Tactical Triad PAL Gym — Slipping off centerline with Tempo and Control to jam a heavy rooted Force hook](../../assets/29_tactical_triad_pal_gym.jpg)
+![The Tactical Triad PAL Gym — Slipping off centerline with Tempo and Control to jam a heavy rooted Force hook](../../assets/29_tactical_triad_pal_gym.jpg#half)
 
 Most combat in RPGs is neither realistic nor narratively interesting. Most games typically allow each participant in the combat an equal number of actions and reactions. And even games that let characters have more actions than others still allow automatic defensive reactions, and generally apply an evenness or "fairness" to combat. Combat, however, is anything but fair—and if you are playing fair, either you are in a sporting duel, or you are doing it wrong. Most games show this fairness by trading action for action:
 

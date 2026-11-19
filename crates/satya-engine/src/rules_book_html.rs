@@ -492,6 +492,30 @@ fn find_closing_inline_math_dollar(chars: &[char], start: usize) -> Option<usize
     None
 }
 
+fn split_image_url_and_layout(url: &str) -> (&str, Option<&'static str>) {
+    let trimmed = url.trim();
+    let Some((base, frag)) = trimmed.split_once('#') else {
+        return (trimmed, None);
+    };
+    let layout = match frag.trim().to_ascii_lowercase().as_str() {
+        "quarter" => Some("quarter"),
+        "quarter-left" | "float-left" => Some("quarter-left"),
+        "quarter-right" | "float-right" => Some("quarter-right"),
+        "column" | "tall" => Some("column"),
+        "half" => Some("half"),
+        "half-top" => Some("half-top"),
+        "half-bottom" => Some("half-bottom"),
+        "full" | "full-page" => Some("full"),
+        "spread" | "double-spread" => Some("spread"),
+        _ => None,
+    };
+    if layout.is_some() {
+        (base.trim_end(), layout)
+    } else {
+        (trimmed, None)
+    }
+}
+
 fn resolve_markdown_image_src(url: &str) -> String {
     let trimmed = url.trim();
     if let Some(rest) = trimmed.strip_prefix("../../assets/") {
@@ -499,6 +523,11 @@ fn resolve_markdown_image_src(url: &str) -> String {
     } else {
         trimmed.to_string()
     }
+}
+
+fn resolve_markdown_image_with_layout(url: &str) -> (String, Option<&'static str>) {
+    let (base_url, layout) = split_image_url_and_layout(url);
+    (resolve_markdown_image_src(base_url), layout)
 }
 
 fn parse_bracket_paren(chars: &[char], bracket_start: usize) -> Option<(String, String, usize)> {
@@ -637,8 +666,13 @@ pub fn format_inline_markdown(line: &str) -> String {
         if chars[i] == '!'
             && let Some((alt, url, next_i)) = parse_bracket_paren(&chars, i + 1)
         {
-            let resolved_src = resolve_markdown_image_src(&url);
-            result.push_str("<img class=\"rules-image\" src=\"");
+            let (resolved_src, layout) = resolve_markdown_image_with_layout(&url);
+            result.push_str("<img class=\"rules-image");
+            if let Some(hint) = layout {
+                result.push_str(" rules-image--");
+                result.push_str(hint);
+            }
+            result.push_str("\" src=\"");
             result.push_str(&escape_html_text(&resolved_src));
             result.push_str("\" alt=\"");
             result.push_str(&escape_html_text(&alt));
@@ -759,6 +793,8 @@ fn consume_list_item_body<'a>(
         let is_new_block = next_trim.is_empty()
             || next_trim == "---"
             || next_trim == "***"
+            || next_trim.eq_ignore_ascii_case("<!-- pagebreak -->")
+            || next_trim.eq_ignore_ascii_case("<!-- colbreak -->")
             || next_trim.starts_with('#')
             || next_trim.starts_with("```")
             || next_trim.starts_with('>')
@@ -816,6 +852,241 @@ fn consume_list_item_body<'a>(
     i
 }
 
+fn is_ordered_list_line(trimmed: &str) -> Option<&str> {
+    let (prefix, rest) = trimmed.split_once(". ")?;
+    if !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_digit()) {
+        Some(rest)
+    } else {
+        None
+    }
+}
+
+fn render_markdown_table(html: &mut String, lines: &[&str], mut i: usize) -> usize {
+    let mut table_rows = Vec::new();
+    while i < lines.len() {
+        let row_trim = lines[i].trim();
+        if row_trim.starts_with('|') && row_trim.ends_with('|') {
+            table_rows.push(row_trim);
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    html.push_str("<div class=\"rules-table-wrap\"><table class=\"rules-table\">");
+    let mut header_emitted = false;
+    for row_str in &table_rows {
+        let cells = split_markdown_table_cells(row_str);
+        let is_sep = cells
+            .iter()
+            .all(|c| !c.is_empty() && c.chars().all(|ch| ch == '-' || ch == ':' || ch == ' '));
+        if is_sep {
+            continue;
+        }
+        if !header_emitted {
+            html.push_str("<thead><tr>");
+            for cell in &cells {
+                html.push_str("<th>");
+                html.push_str(&format_inline_markdown(cell));
+                html.push_str("</th>");
+            }
+            html.push_str("</tr></thead><tbody>");
+            header_emitted = true;
+        } else {
+            html.push_str("<tr>");
+            for cell in &cells {
+                html.push_str("<td>");
+                html.push_str(&format_inline_markdown(cell));
+                html.push_str("</td>");
+            }
+            html.push_str("</tr>");
+        }
+    }
+    if header_emitted {
+        html.push_str("</tbody>");
+    }
+    html.push_str("</table></div>");
+    i
+}
+
+struct CalloutSpec {
+    tag: &'static str,
+    classes: &'static str,
+    label: Option<String>,
+    body_start: usize,
+}
+
+fn parse_callout_header(first: &str) -> CalloutSpec {
+    const TAGS: &[(&str, &str, &str, &str)] = &[
+        ("[!NOTE]", "blockquote", "rules-alert rules-alert-note", "NOTE"),
+        ("[!TIP]", "blockquote", "rules-alert rules-alert-tip", "TIP"),
+        (
+            "[!IMPORTANT]",
+            "blockquote",
+            "rules-alert rules-alert-important",
+            "IMPORTANT",
+        ),
+        (
+            "[!WARNING]",
+            "blockquote",
+            "rules-alert rules-alert-warning",
+            "WARNING",
+        ),
+        (
+            "[!CAUTION]",
+            "blockquote",
+            "rules-alert rules-alert-caution",
+            "CAUTION",
+        ),
+        ("[!SIDEBAR]", "aside", "rules-alert rules-sidebar", "SIDEBAR"),
+        (
+            "[!EXAMPLE]",
+            "aside",
+            "rules-alert rules-example",
+            "AT THE TABLE",
+        ),
+        (
+            "[!DOSSIER]",
+            "aside",
+            "rules-alert rules-dossier",
+            "FIELD DOSSIER",
+        ),
+        ("[!LORE]", "aside", "rules-alert rules-dossier", "FIELD DOSSIER"),
+        (
+            "[!STATBLOCK]",
+            "aside",
+            "rules-alert rules-statblock",
+            "SPECIFICATION",
+        ),
+    ];
+    let first_trim = first.trim();
+    for &(prefix, html_tag, classes, default_label) in TAGS {
+        if first_trim.len() >= prefix.len()
+            && first_trim[..prefix.len()].eq_ignore_ascii_case(prefix)
+            && (first_trim.len() == prefix.len()
+                || first_trim.as_bytes()[prefix.len()].is_ascii_whitespace())
+        {
+            let custom = first_trim[prefix.len()..].trim();
+            let label = if custom.is_empty() {
+                default_label.to_string()
+            } else {
+                custom.to_string()
+            };
+            return CalloutSpec {
+                tag: html_tag,
+                classes,
+                label: Some(label),
+                body_start: 1,
+            };
+        }
+    }
+    CalloutSpec {
+        tag: "blockquote",
+        classes: "rules-blockquote",
+        label: None,
+        body_start: 0,
+    }
+}
+
+fn render_callout_body(html: &mut String, quote_lines: &[&str]) {
+    let mut q = 0;
+    while q < quote_lines.len() {
+        let trimmed = quote_lines[q].trim();
+        if trimmed.is_empty() {
+            q += 1;
+            continue;
+        }
+        if trimmed == "---" || trimmed == "***" {
+            html.push_str("<hr class=\"rules-divider\"/>");
+            q += 1;
+            continue;
+        }
+        if trimmed.starts_with("$$") {
+            let mut math_lines = vec![trimmed];
+            if !trimmed.ends_with("$$") || trimmed.len() == 2 {
+                q += 1;
+                while q < quote_lines.len() {
+                    math_lines.push(quote_lines[q].trim());
+                    if quote_lines[q].trim().ends_with("$$") {
+                        break;
+                    }
+                    q += 1;
+                }
+            }
+            q += 1;
+            html.push_str(&render_latex_math_to_html(&math_lines.join("\n"), true));
+            continue;
+        }
+        if let Some(h_text) = trimmed
+            .strip_prefix("#### ")
+            .or_else(|| trimmed.strip_prefix("### "))
+            .or_else(|| trimmed.strip_prefix("## "))
+        {
+            html.push_str("<h4 class=\"rules-callout-heading\">");
+            html.push_str(&format_inline_markdown(h_text));
+            html.push_str("</h4>");
+            q += 1;
+            continue;
+        }
+        if trimmed.starts_with('|') && trimmed.ends_with('|') {
+            q = render_markdown_table(html, quote_lines, q);
+            continue;
+        }
+        if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+            html.push_str("<ul class=\"rules-list\">");
+            while q < quote_lines.len() {
+                let item_trim = quote_lines[q].trim();
+                if let Some(rest) = item_trim
+                    .strip_prefix("- ")
+                    .or_else(|| item_trim.strip_prefix("* "))
+                {
+                    q = consume_list_item_body(html, quote_lines, q + 1, rest);
+                } else {
+                    break;
+                }
+            }
+            html.push_str("</ul>");
+            continue;
+        }
+        if is_ordered_list_line(trimmed).is_some() {
+            html.push_str("<ol class=\"rules-list rules-list-ordered\">");
+            while q < quote_lines.len() {
+                let item_trim = quote_lines[q].trim();
+                if let Some(rest) = is_ordered_list_line(item_trim) {
+                    q = consume_list_item_body(html, quote_lines, q + 1, rest);
+                } else {
+                    break;
+                }
+            }
+            html.push_str("</ol>");
+            continue;
+        }
+
+        let mut q_para = Vec::new();
+        while q < quote_lines.len() {
+            let p_trim = quote_lines[q].trim();
+            if p_trim.is_empty()
+                || p_trim == "---"
+                || p_trim == "***"
+                || p_trim.starts_with('#')
+                || p_trim.starts_with("$$")
+                || (p_trim.starts_with('|') && p_trim.ends_with('|'))
+                || p_trim.starts_with("- ")
+                || p_trim.starts_with("* ")
+                || is_ordered_list_line(p_trim).is_some()
+            {
+                break;
+            }
+            q_para.push(p_trim);
+            q += 1;
+        }
+        if !q_para.is_empty() {
+            html.push_str("<p>");
+            html.push_str(&format_inline_markdown(&q_para.join(" ")));
+            html.push_str("</p>");
+        }
+    }
+}
+
 /// Renders a canonical Satya TTRPG Markdown chapter into structured, safe HTML suitable for
 /// the `satya-web` Rules Book pane and static book export.
 pub fn render_rules_markdown_to_html(markdown: &str) -> String {
@@ -836,6 +1107,22 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
 
         if trimmed == "---" || trimmed == "***" {
             html.push_str("<hr class=\"rules-divider\"/>");
+            i += 1;
+            continue;
+        }
+
+        if trimmed.eq_ignore_ascii_case("<!-- pagebreak -->") {
+            html.push_str(
+                "<div class=\"rules-page-break\" data-break=\"page\" aria-hidden=\"true\"></div>",
+            );
+            i += 1;
+            continue;
+        }
+
+        if trimmed.eq_ignore_ascii_case("<!-- colbreak -->") {
+            html.push_str(
+                "<div class=\"rules-col-break\" data-break=\"column\" aria-hidden=\"true\"></div>",
+            );
             i += 1;
             continue;
         }
@@ -903,8 +1190,15 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
         }
 
         if let Some((alt, url)) = parse_standalone_markdown_image(trimmed) {
-            let resolved_src = resolve_markdown_image_src(&url);
-            html.push_str("<figure class=\"rules-figure\"><img class=\"rules-image\" src=\"");
+            let (resolved_src, layout) = resolve_markdown_image_with_layout(&url);
+            html.push_str("<figure class=\"rules-figure");
+            if let Some(hint) = layout {
+                html.push_str(" rules-figure--");
+                html.push_str(hint);
+                html.push_str("\" data-layout=\"");
+                html.push_str(hint);
+            }
+            html.push_str("\"><img class=\"rules-image\" src=\"");
             html.push_str(&escape_html_text(&resolved_src));
             html.push_str("\" alt=\"");
             html.push_str(&escape_html_text(&alt));
@@ -922,94 +1216,33 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
         if trimmed.starts_with('>') {
             let mut quote_lines = Vec::new();
             while i < lines.len() && lines[i].trim().starts_with('>') {
-                let stripped = lines[i].trim().strip_prefix('>').unwrap_or("").trim_start();
+                let after_gt = lines[i].trim().strip_prefix('>').unwrap_or("");
+                let stripped = after_gt.strip_prefix(' ').unwrap_or(after_gt);
                 quote_lines.push(stripped);
                 i += 1;
             }
             let first = quote_lines.first().copied().unwrap_or("");
-            let (alert_class, alert_label, start_idx) = if first.starts_with("[!NOTE]") {
-                ("rules-alert rules-alert-note", Some("NOTE"), 1)
-            } else if first.starts_with("[!TIP]") {
-                ("rules-alert rules-alert-tip", Some("TIP"), 1)
-            } else if first.starts_with("[!IMPORTANT]") {
-                ("rules-alert rules-alert-important", Some("IMPORTANT"), 1)
-            } else if first.starts_with("[!WARNING]") {
-                ("rules-alert rules-alert-warning", Some("WARNING"), 1)
-            } else if first.starts_with("[!CAUTION]") {
-                ("rules-alert rules-alert-caution", Some("CAUTION"), 1)
-            } else {
-                ("rules-blockquote", None, 0)
-            };
+            let spec = parse_callout_header(first);
 
-            html.push_str("<blockquote class=\"");
-            html.push_str(alert_class);
+            html.push('<');
+            html.push_str(spec.tag);
+            html.push_str(" class=\"");
+            html.push_str(spec.classes);
             html.push_str("\">");
-            if let Some(label) = alert_label {
+            if let Some(label) = spec.label {
                 html.push_str("<div class=\"rules-alert-title\">");
-                html.push_str(label);
+                html.push_str(&format_inline_markdown(&label));
                 html.push_str("</div>");
             }
-            let mut q_para = Vec::new();
-            for &qline in &quote_lines[start_idx..] {
-                if qline.is_empty() {
-                    if !q_para.is_empty() {
-                        html.push_str("<p>");
-                        html.push_str(&format_inline_markdown(&q_para.join(" ")));
-                        html.push_str("</p>");
-                        q_para.clear();
-                    }
-                } else {
-                    q_para.push(qline);
-                }
-            }
-            if !q_para.is_empty() {
-                html.push_str("<p>");
-                html.push_str(&format_inline_markdown(&q_para.join(" ")));
-                html.push_str("</p>");
-            }
-            html.push_str("</blockquote>");
+            render_callout_body(&mut html, &quote_lines[spec.body_start..]);
+            html.push_str("</");
+            html.push_str(spec.tag);
+            html.push('>');
             continue;
         }
 
         if trimmed.starts_with('|') && trimmed.ends_with('|') {
-            let mut table_rows = Vec::new();
-            while i < lines.len() {
-                let row_trim = lines[i].trim();
-                if row_trim.starts_with('|') && row_trim.ends_with('|') {
-                    table_rows.push(row_trim);
-                    i += 1;
-                } else {
-                    break;
-                }
-            }
-            html.push_str("<div class=\"rules-table-wrap\"><table class=\"rules-table\">");
-            for (row_idx, row_str) in table_rows.iter().enumerate() {
-                let cells = split_markdown_table_cells(row_str);
-                let is_sep = cells.iter().all(|c| {
-                    !c.is_empty() && c.chars().all(|ch| ch == '-' || ch == ':' || ch == ' ')
-                });
-                if is_sep {
-                    continue;
-                }
-                if row_idx == 0 {
-                    html.push_str("<thead><tr>");
-                    for cell in &cells {
-                        html.push_str("<th>");
-                        html.push_str(&format_inline_markdown(cell));
-                        html.push_str("</th>");
-                    }
-                    html.push_str("</tr></thead><tbody>");
-                } else {
-                    html.push_str("<tr>");
-                    for cell in &cells {
-                        html.push_str("<td>");
-                        html.push_str(&format_inline_markdown(cell));
-                        html.push_str("</td>");
-                    }
-                    html.push_str("</tr>");
-                }
-            }
-            html.push_str("</tbody></table></div>");
+            i = render_markdown_table(&mut html, &lines, i);
             continue;
         }
 
@@ -1030,17 +1263,11 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
             continue;
         }
 
-        let is_ordered = trimmed.split_once(". ").is_some_and(|(prefix, _)| {
-            !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_digit())
-        });
-        if is_ordered {
+        if is_ordered_list_line(trimmed).is_some() {
             html.push_str("<ol class=\"rules-list rules-list-ordered\">");
             while i < lines.len() {
                 let item_trim = lines[i].trim();
-                if let Some((prefix, rest)) = item_trim.split_once(". ")
-                    && !prefix.is_empty()
-                    && prefix.chars().all(|c| c.is_ascii_digit())
-                {
+                if let Some(rest) = is_ordered_list_line(item_trim) {
                     i = consume_list_item_body(&mut html, &lines, i + 1, rest);
                 } else {
                     break;
@@ -1063,6 +1290,9 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
                 || p_trim.starts_with("* ")
                 || p_trim.starts_with("![")
                 || p_trim == "---"
+                || p_trim == "***"
+                || p_trim.eq_ignore_ascii_case("<!-- pagebreak -->")
+                || p_trim.eq_ignore_ascii_case("<!-- colbreak -->")
             {
                 break;
             }

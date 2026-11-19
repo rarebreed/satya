@@ -119,7 +119,7 @@ $$\text{Fatigue Threshold (FT)} = \text{FIT} + \left\lfloor \frac{\text{DIS}}{2}
 
 ## 3. Physical Long-Term Damage: Broken Bones, Hemorrhaging & Shock
 
-![Zero Hit Points: Parking-Deck Triage — Behind-armor blunt impact and emergency windlass tourniquet under fire](../../assets/08_zero_hp_parking_deck_triage.jpg)
+![Zero Hit Points: Parking-Deck Triage — Behind-armor blunt impact and emergency windlass tourniquet under fire](../../assets/08_zero_hp_parking_deck_triage.jpg#quarter)
 
 Long-term physical trauma damages the body's structural skeleton, musculature, vasculature, and organs. Unlike Fatigue, structural wounds do not vanish after a short rest; they require medical stabilization, surgery, and weeks or months of biological healing.
 

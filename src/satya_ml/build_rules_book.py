@@ -697,11 +697,49 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
             return f'<div class="rules-math-block" role="math">{text}</div>'
         return f'<span class="rules-math-inline" role="math">{text}</span>'
 
+    _IMAGE_LAYOUT_MAP = {
+        "quarter": "quarter",
+        "quarter-left": "quarter-left",
+        "float-left": "quarter-left",
+        "quarter-right": "quarter-right",
+        "float-right": "quarter-right",
+        "column": "column",
+        "tall": "column",
+        "half": "half",
+        "half-top": "half-top",
+        "half-bottom": "half-bottom",
+        "full": "full",
+        "full-page": "full",
+        "spread": "spread",
+        "double-spread": "spread",
+    }
+
+    def _split_img_url_and_layout(url: str) -> tuple[str, str | None]:
+        trimmed = html.unescape(url).strip()
+        if "#" in trimmed:
+            base, frag = trimmed.split("#", 1)
+            layout = _IMAGE_LAYOUT_MAP.get(frag.strip().lower())
+            if layout is not None:
+                return base.rstrip(), layout
+        return trimmed, None
+
     def _resolve_img_src(url: str) -> str:
         trimmed = html.unescape(url).strip()
         if trimmed.startswith("../../assets/"):
             return "/docs-assets/" + trimmed[len("../../assets/"):]
         return trimmed
+
+    def _resolve_img_with_layout(url: str) -> tuple[str, str | None]:
+        base, layout = _split_img_url_and_layout(url)
+        return _resolve_img_src(base), layout
+
+    def _inline_img_repl(match: re.Match[str]) -> str:
+        src_val, layout = _resolve_img_with_layout(match.group(2))
+        cls = f"rules-image rules-image--{layout}" if layout else "rules-image"
+        return (
+            f'<img class="{cls}" src="{html.escape(src_val, quote=True)}" '
+            f'alt="{match.group(1)}" loading="lazy"/>'
+        )
 
     def _inline(text: str) -> str:
         esc = html.escape(text)
@@ -718,14 +756,7 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
         )
         esc = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", esc)
         esc = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", esc)
-        esc = re.sub(
-            r"!\[([^\]]*)\]\(([^)]+)\)",
-            lambda m: (
-                f'<img class="rules-image" src="{html.escape(_resolve_img_src(m.group(2)), quote=True)}" '
-                f'alt="{m.group(1)}" loading="lazy"/>'
-            ),
-            esc,
-        )
+        esc = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", _inline_img_repl, esc)
         esc = re.sub(
             r"\[([^\]]+)\]\(([^)]+)\)",
             r'<a href="\2" class="rules-link">\1</a>',
@@ -733,9 +764,134 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
         )
         return esc
 
+    def _is_ordered_line(txt: str) -> str | None:
+        m = re.match(r"^(\d+)\.\s+(.*)$", txt)
+        return m.group(2) if m else None
+
+    def _render_table(block_lines: list[str], idx: int) -> int:
+        t_rows: list[str] = []
+        while idx < len(block_lines) and block_lines[idx].strip().startswith("|") and block_lines[idx].strip().endswith("|"):
+            t_rows.append(block_lines[idx].strip())
+            idx += 1
+        out.append('<div class="rules-table-wrap"><table class="rules-table">')
+        header_emitted = False
+        for r_str in t_rows:
+            cells = [c.strip() for c in r_str.strip("|").split("|")]
+            if all(c and all(ch in "-: " for ch in c) for c in cells):
+                continue
+            if not header_emitted:
+                out.append(
+                    "<thead><tr>"
+                    + "".join(f"<th>{_inline(c)}</th>" for c in cells)
+                    + "</tr></thead><tbody>"
+                )
+                header_emitted = True
+            else:
+                out.append("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in cells) + "</tr>")
+        if header_emitted:
+            out.append("</tbody>")
+        out.append("</table></div>")
+        return idx
+
+    _CALLOUT_TAGS: tuple[tuple[str, str, str, str], ...] = (
+        ("[!NOTE]", "blockquote", "rules-alert rules-alert-note", "NOTE"),
+        ("[!TIP]", "blockquote", "rules-alert rules-alert-tip", "TIP"),
+        ("[!IMPORTANT]", "blockquote", "rules-alert rules-alert-important", "IMPORTANT"),
+        ("[!WARNING]", "blockquote", "rules-alert rules-alert-warning", "WARNING"),
+        ("[!CAUTION]", "blockquote", "rules-alert rules-alert-caution", "CAUTION"),
+        ("[!SIDEBAR]", "aside", "rules-alert rules-sidebar", "SIDEBAR"),
+        ("[!EXAMPLE]", "aside", "rules-alert rules-example", "AT THE TABLE"),
+        ("[!DOSSIER]", "aside", "rules-alert rules-dossier", "FIELD DOSSIER"),
+        ("[!LORE]", "aside", "rules-alert rules-dossier", "FIELD DOSSIER"),
+        ("[!STATBLOCK]", "aside", "rules-alert rules-statblock", "SPECIFICATION"),
+    )
+
+    def _parse_callout(first_line: str) -> tuple[str, str, str | None, int]:
+        ft = first_line.strip()
+        ft_low = ft.lower()
+        for prefix, tag, cls, default_lbl in _CALLOUT_TAGS:
+            p_low = prefix.lower()
+            if ft_low.startswith(p_low) and (len(ft) == len(prefix) or ft[len(prefix)].isspace()):
+                custom = ft[len(prefix):].strip()
+                return tag, cls, (custom if custom else default_lbl), 1
+        return "blockquote", "rules-blockquote", None, 0
+
+    def _render_callout_body(q_lines: list[str]) -> None:
+        q = 0
+        while q < len(q_lines):
+            qt = q_lines[q].strip()
+            if not qt:
+                q += 1
+                continue
+            if qt in {"---", "***"}:
+                out.append('<hr class="rules-divider"/>')
+                q += 1
+                continue
+            if qt.startswith("$$"):
+                m_buf = [qt]
+                if not qt.endswith("$$") or len(qt) == 2:
+                    q += 1
+                    while q < len(q_lines):
+                        m_buf.append(q_lines[q].strip())
+                        if q_lines[q].strip().endswith("$$"):
+                            break
+                        q += 1
+                q += 1
+                out.append(_render_latex("\n".join(m_buf), True))
+                continue
+            if qt.startswith(("#### ", "### ", "## ")):
+                h_txt = qt.split(" ", 1)[1].strip()
+                out.append(f'<h4 class="rules-callout-heading">{_inline(h_txt)}</h4>')
+                q += 1
+                continue
+            if qt.startswith("|") and qt.endswith("|"):
+                q = _render_table(q_lines, q)
+                continue
+            if qt.startswith("- ") or qt.startswith("* "):
+                out.append('<ul class="rules-list">')
+                while q < len(q_lines) and (q_lines[q].strip().startswith("- ") or q_lines[q].strip().startswith("* ")):
+                    out.append(f"<li>{_inline(q_lines[q].strip()[2:])}</li>")
+                    q += 1
+                out.append("</ul>")
+                continue
+            if _is_ordered_line(qt) is not None:
+                out.append('<ol class="rules-list rules-list-ordered">')
+                while q < len(q_lines):
+                    rest = _is_ordered_line(q_lines[q].strip())
+                    if rest is not None:
+                        out.append(f"<li>{_inline(rest)}</li>")
+                        q += 1
+                    else:
+                        break
+                out.append("</ol>")
+                continue
+            p_buf: list[str] = []
+            while q < len(q_lines):
+                pt = q_lines[q].strip()
+                if (
+                    not pt
+                    or pt in {"---", "***"}
+                    or pt.startswith(("#", "$$", "- ", "* "))
+                    or (pt.startswith("|") and pt.endswith("|"))
+                    or _is_ordered_line(pt) is not None
+                ):
+                    break
+                p_buf.append(pt)
+                q += 1
+            if p_buf:
+                out.append(f"<p>{_inline(' '.join(p_buf))}</p>")
+
     while i < len(lines):
         s = lines[i].strip()
         if not s:
+            i += 1
+            continue
+        if s.lower() == "<!-- pagebreak -->":
+            out.append('<div class="rules-page-break" data-break="page" aria-hidden="true"></div>')
+            i += 1
+            continue
+        if s.lower() == "<!-- colbreak -->":
+            out.append('<div class="rules-col-break" data-break="column" aria-hidden="true"></div>')
             i += 1
             continue
         if s.startswith("$$"):
@@ -784,7 +940,7 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
                     f"{html.escape(chr(10).join(buf))}</code></pre>"
                 )
             continue
-        if s == "---":
+        if s in {"---", "***"}:
             out.append('<hr class="rules-divider"/>')
             i += 1
             continue
@@ -807,39 +963,39 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
         img_match = re.fullmatch(r"!\[([^\]]*)\]\(([^)]+)\)", s)
         if img_match:
             alt_raw, url_raw = img_match.group(1), img_match.group(2)
-            src_val = html.escape(_resolve_img_src(url_raw), quote=True)
+            resolved_src, layout = _resolve_img_with_layout(url_raw)
+            src_val = html.escape(resolved_src, quote=True)
             alt_esc = html.escape(alt_raw, quote=True)
+            fig_cls = f"rules-figure rules-figure--{layout}" if layout else "rules-figure"
+            layout_attr = f' data-layout="{layout}"' if layout else ""
             cap_html = (
                 f'<figcaption class="rules-figcaption">{_inline(alt_raw.strip())}</figcaption>'
                 if alt_raw.strip()
                 else ""
             )
             out.append(
-                f'<figure class="rules-figure">'
+                f'<figure class="{fig_cls}"{layout_attr}>'
                 f'<img class="rules-image" src="{src_val}" alt="{alt_esc}" loading="lazy"/>'
                 f"{cap_html}</figure>"
             )
             i += 1
             continue
-        if s.startswith("|") and s.endswith("|"):
-            t_rows: list[str] = []
-            while i < len(lines) and lines[i].strip().startswith("|") and lines[i].strip().endswith("|"):
-                t_rows.append(lines[i].strip())
+        if s.startswith(">"):
+            q_lines: list[str] = []
+            while i < len(lines) and lines[i].strip().startswith(">"):
+                after_gt = lines[i].strip()[1:]
+                q_lines.append(after_gt[1:] if after_gt.startswith(" ") else after_gt)
                 i += 1
-            out.append('<div class="rules-table-wrap"><table class="rules-table">')
-            for r_idx, r_str in enumerate(t_rows):
-                cells = [c.strip() for c in r_str.strip("|").split("|")]
-                if all(c and all(ch in "-: " for ch in c) for c in cells):
-                    continue
-                if r_idx == 0:
-                    out.append(
-                        "<thead><tr>"
-                        + "".join(f"<th>{_inline(c)}</th>" for c in cells)
-                        + "</tr></thead><tbody>"
-                    )
-                else:
-                    out.append("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in cells) + "</tr>")
-            out.append("</tbody></table></div>")
+            first_q = q_lines[0] if q_lines else ""
+            tag, cls, lbl, body_start = _parse_callout(first_q)
+            out.append(f'<{tag} class="{cls}">')
+            if lbl is not None:
+                out.append(f'<div class="rules-alert-title">{_inline(lbl)}</div>')
+            _render_callout_body(q_lines[body_start:])
+            out.append(f"</{tag}>")
+            continue
+        if s.startswith("|") and s.endswith("|"):
+            i = _render_table(lines, i)
             continue
         if s.startswith("- ") or s.startswith("* "):
             out.append('<ul class="rules-list">')
@@ -847,6 +1003,17 @@ def render_markdown_to_html_python(markdown_text: str) -> str:
                 out.append(f"<li>{_inline(lines[i].strip()[2:])}</li>")
                 i += 1
             out.append("</ul>")
+            continue
+        if _is_ordered_line(s) is not None:
+            out.append('<ol class="rules-list rules-list-ordered">')
+            while i < len(lines):
+                rest = _is_ordered_line(lines[i].strip())
+                if rest is not None:
+                    out.append(f"<li>{_inline(rest)}</li>")
+                    i += 1
+                else:
+                    break
+            out.append("</ol>")
             continue
         out.append(f"<p>{_inline(s)}</p>")
         i += 1
@@ -1079,6 +1246,20 @@ window.addEventListener('DOMContentLoaded', satyaBookRecalc);
 """
 
 
+def _part_index_from_label(part_label: str) -> int:
+    if part_label.startswith("Part VI"):
+        return 6
+    if part_label.startswith("Part V"):
+        return 5
+    if part_label.startswith("Part IV"):
+        return 4
+    if part_label.startswith("Part III"):
+        return 3
+    if part_label.startswith("Part II"):
+        return 2
+    return 1
+
+
 def _wrap_book_page_html(
     title: str,
     active_chapter_id: str,
@@ -1091,11 +1272,17 @@ def _wrap_book_page_html(
         "0. Table of Contents &amp; Interactive Sandbox</a>"
     ]
     current_part = ""
+    chapter_num = 0
+    part_label = "Part I-VI: Reference & Sandbox"
     for idx, spec in enumerate(BOOK_CHAPTER_SPECS, start=1):
         if spec["part"] != current_part:
             current_part = spec["part"]
             nav_items.append(f'<div class="book-nav-part">{html.escape(current_part)}</div>')
-        cls = "book-nav-link active" if spec["chapter_id"] == active_chapter_id else "book-nav-link"
+        is_active = spec["chapter_id"] == active_chapter_id
+        if is_active:
+            chapter_num = idx
+            part_label = spec["part"]
+        cls = "book-nav-link active" if is_active else "book-nav-link"
         nav_items.append(
             f'<a href="{spec["chapter_id"]}.html" class="{cls}">'
             f"{idx}. {html.escape(spec['title'])}</a>"
@@ -1113,248 +1300,76 @@ def _wrap_book_page_html(
             f'<a class="book-pager-btn" href="{next_spec["chapter_id"]}.html">Next: {html.escape(next_spec["title"])} &rarr;</a>'
         )
 
+    part_index = _part_index_from_label(part_label)
+    part_short = part_label.split(":", 1)[0].strip()
+    esc_title = html.escape(title)
+    esc_part = html.escape(part_label)
+    esc_part_short = html.escape(part_short)
+    esc_cid = html.escape(active_chapter_id)
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>{html.escape(title)} — Satya TTRPG Rules Book</title>
-  <style>
-    :root {{
-      --bg: #090d16;
-      --panel: #111827;
-      --border: #1f2937;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --emerald: #34d399;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      font-family: Inter, system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      display: grid;
-      grid-template-columns: 300px 1fr;
-      min-height: 100vh;
-    }}
-    aside.book-sidebar {{
-      background: var(--panel);
-      border-right: 1px solid var(--border);
-      padding: 20px 16px;
-      position: sticky;
-      top: 0;
-      height: 100vh;
-      overflow-y: auto;
-    }}
-    .book-brand {{
-      font-size: 1.15rem;
-      font-weight: 700;
-      color: var(--accent);
-      margin-bottom: 4px;
-    }}
-    .book-sub {{
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-bottom: 16px;
-    }}
-    .book-nav-part {{
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-      margin: 14px 0 6px;
-      font-weight: 600;
-    }}
-    .book-nav-link {{
-      display: block;
-      padding: 7px 10px;
-      border-radius: 6px;
-      color: var(--text);
-      text-decoration: none;
-      font-size: 0.88rem;
-      margin-bottom: 3px;
-    }}
-    .book-nav-link:hover {{ background: rgba(56, 189, 248, 0.12); }}
-    .book-nav-link.active {{
-      background: rgba(56, 189, 248, 0.2);
-      color: var(--accent);
-      font-weight: 600;
-    }}
-    main.book-main {{
-      max-width: 980px;
-      padding: 32px 44px 64px;
-      line-height: 1.65;
-    }}
-    h1, h2, h3, h4 {{ color: #f8fafc; }}
-    h1 {{ border-bottom: 1px solid var(--border); padding-bottom: 10px; }}
-    h2 {{ margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 6px; }}
-    a {{ color: var(--accent); }}
-    code, pre {{ font-family: "JetBrains Mono", Consolas, monospace; }}
-    .rules-inline-code {{
-      background: #1e293b;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 0.88em;
-    }}
-    .rules-code-block {{
-      background: #0f172a;
-      border: 1px solid var(--border);
-      padding: 14px;
-      border-radius: 8px;
-      overflow-x: auto;
-    }}
-    .rules-table-wrap {{ overflow-x: auto; margin: 14px 0; }}
-    .rules-table {{
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-    }}
-    .rules-table th, .rules-table td {{
-      border: 1px solid var(--border);
-      padding: 8px 10px;
-      text-align: left;
-    }}
-    .rules-table th {{ background: #1e293b; color: var(--accent); }}
-    .rules-alert, .rules-blockquote {{
-      border-left: 4px solid var(--accent);
-      background: rgba(30, 41, 59, 0.55);
-      padding: 10px 16px;
-      border-radius: 0 8px 8px 0;
-      margin: 14px 0;
-    }}
-    .rules-alert-title {{ font-weight: 700; color: var(--accent); margin-bottom: 4px; }}
-    .rules-figure {{
-      margin: 16px 0;
-      padding: 10px;
-      background: #111827;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }}
-    .rules-image {{
-      display: block;
-      max-width: 100%;
-      height: auto;
-      border-radius: 5px;
-    }}
-    .rules-figcaption {{
-      font-size: 0.84rem;
-      color: var(--muted);
-    }}
-    .rules-math-inline {{ font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.98em; color: #f8fafc; background: rgba(56, 189, 248, 0.08); padding: 0 4px; border-radius: 3px; }}
-    .rules-math-block {{ background: #111827; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 0.96rem; color: #f8fafc; text-align: center; overflow-x: auto; }}
-    .math-roman, .math-fn {{ font-family: Inter, system-ui, sans-serif; font-style: normal; }}
-    .math-fn {{ font-weight: 600; color: #7dd3fc; }}
-    .math-frac {{ display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 3px; line-height: 1.1; font-size: 0.88em; }}
-    .math-num {{ border-bottom: 1px solid currentColor; padding: 0 3px 1px; }}
-    .math-den {{ padding: 1px 3px 0; }}
-    .math-cases {{ display: inline-flex; align-items: center; vertical-align: middle; gap: 6px; }}
-    .math-brace {{ font-size: 1.65em; line-height: 1; }}
-    .math-cases-rows {{ display: inline-flex; flex-direction: column; gap: 2px; text-align: left; }}
-    .rules-mermaid {{ background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 14px 0; max-width: 100%; overflow-x: auto; display: flex; flex-direction: column; gap: 10px; }}
-    .mermaid-top-nodes {{ display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }}
-    .mermaid-flow-track {{ display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }}
-    .mermaid-dir-td > .mermaid-flow-track {{ flex-direction: column; }}
-    .mermaid-subgraphs-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; align-items: start; }}
-    .mermaid-subgraph {{ background: #111827; border: 1px solid var(--border); border-top: 2px solid var(--accent); border-radius: 7px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }}
-    .mermaid-subgraph-title {{ font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); padding-bottom: 4px; border-bottom: 1px dashed var(--border); }}
-    .mermaid-subgraph-nodes {{ display: flex; flex-direction: column; gap: 8px; }}
-    .mermaid-node {{ flex: 1 1 180px; background: #1e293b; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 9px 11px; font-size: 0.82rem; line-height: 1.42; color: var(--text); display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }}
-    .mermaid-node-diamond {{ border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); }}
-    .mermaid-connector {{ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 2px 4px; color: var(--accent); font-weight: 700; }}
-    .mermaid-node-links {{ display: flex; flex-wrap: wrap; gap: 4px; padding-top: 5px; border-top: 1px dashed rgba(148, 163, 184, 0.25); }}
-    .mermaid-link-pill {{ display: inline-flex; align-items: center; gap: 4px; background: #090d16; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 0.72rem; color: #94a3b8; }}
-    .mermaid-edge-label {{ color: var(--emerald); font-weight: 600; font-size: 0.72rem; }}
-    .book-interactive-widget {{
-      background: #111827;
-      border: 1px solid #334155;
-      border-radius: 10px;
-      padding: 20px;
-      margin: 24px 0;
-    }}
-    .widget-grid {{
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px;
-    }}
-    .widget-panel {{
-      background: #0f172a;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px;
-    }}
-    .widget-controls {{
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 10px;
-    }}
-    .widget-controls label, label.full-width {{
-      display: flex;
-      flex-direction: column;
-      font-size: 0.8rem;
-      color: var(--muted);
-      gap: 4px;
-    }}
-    .widget-controls input, label.full-width input {{
-      background: #1e293b;
-      border: 1px solid #334155;
-      color: var(--text);
-      padding: 6px 8px;
-      border-radius: 4px;
-    }}
-    .widget-presets {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin: 8px 0;
-    }}
-    .widget-presets button {{
-      background: #1e293b;
-      border: 1px solid #38bdf8;
-      color: var(--accent);
-      padding: 5px 10px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 0.8rem;
-    }}
-    .book-pager {{
-      display: flex;
-      justify-content: space-between;
-      margin-top: 40px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border);
-    }}
-    .book-pager-btn {{
-      background: var(--panel);
-      border: 1px solid var(--border);
-      padding: 8px 14px;
-      border-radius: 6px;
-      text-decoration: none;
-    }}
-    @media (max-width: 900px) {{
-      body {{ grid-template-columns: 1fr; }}
-      aside.book-sidebar {{ position: static; height: auto; }}
-      .widget-grid {{ grid-template-columns: 1fr; }}
-    }}
-  </style>
+  <title>{esc_title} — Satya TTRPG Rules Book</title>
+  <link rel="stylesheet" href="satya_book.css"/>
+  <script defer src="satya_book.js"></script>
 </head>
-<body>
-  <aside class="book-sidebar">
-    <div class="book-brand">SATYA // RULES BOOK</div>
-    <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
-    {"".join(nav_items)}
-  </aside>
-  <main class="book-main">
-    {body_html}
-    <div class="book-pager">
-      {"".join(footer_links)}
+<body
+  data-book-theme="faraday-timber"
+  data-book-view="spread"
+  data-part-index="{part_index}"
+  data-part-label="{esc_part}"
+  data-chapter-num="{chapter_num}"
+  data-chapter-title="{esc_title}"
+  data-chapter-id="{esc_cid}"
+>
+  <header class="book-toolbar">
+    <div class="toolbar-cluster">
+      <button id="btn-toc-toggle" type="button" class="toolbar-btn" title="Toggle Chapters (T)">&#9776; Chapters</button>
+      <a href="index.html" class="toolbar-brand">SATYA // RULES BOOK</a>
+      <span class="toolbar-crumb">{esc_part_short} &middot; {esc_title}</span>
     </div>
-  </main>
+    <div class="toolbar-cluster">
+      <div class="toolbar-group" role="group" aria-label="Book Theme">
+        <button type="button" class="toolbar-btn is-active" data-set-theme="faraday-timber">Faraday Timber</button>
+        <button type="button" class="toolbar-btn" data-set-theme="chan-sanctuary">Chan Wood</button>
+        <button type="button" class="toolbar-btn" data-set-theme="tactical-hud">Tactical HUD</button>
+      </div>
+      <div class="toolbar-group" role="group" aria-label="Page View">
+        <button type="button" class="toolbar-btn is-active" data-set-view="spread">2-Page Spread</button>
+        <button type="button" class="toolbar-btn" data-set-view="single">Single Page</button>
+        <button type="button" class="toolbar-btn" data-set-view="scroll">Scroll</button>
+      </div>
+    </div>
+    <div class="toolbar-cluster">
+      <button id="btn-page-prev" type="button" class="toolbar-btn" title="Previous Page (Left Arrow)">&larr; Prev</button>
+      <label class="page-jump-wrap" aria-label="Jump to Page">
+        <span>Pg</span>
+        <input id="book-page-input" type="number" min="1" value="1"/>
+        <span id="book-page-total">/ 1</span>
+      </label>
+      <button id="btn-page-next" type="button" class="toolbar-btn" title="Next Page (Right Arrow)">Next &rarr;</button>
+      <button id="btn-book-print" type="button" class="toolbar-btn" title="Print or Save PDF">Print / PDF</button>
+    </div>
+  </header>
+  <div class="book-shell">
+    <aside id="book-sidebar" class="book-sidebar">
+      <div class="book-brand">SATYA // RULES BOOK</div>
+      <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
+      {"".join(nav_items)}
+    </aside>
+    <main class="book-workspace">
+      <div id="book-source" class="book-source-content">
+        {body_html}
+      </div>
+      <div id="book-stage" class="book-stage" aria-live="polite"></div>
+      <div class="book-pager">
+        {"".join(footer_links)}
+      </div>
+    </main>
+  </div>
 </body>
 </html>
 """
@@ -1368,6 +1383,17 @@ def build_static_rules_book(
     root = repo_root or _default_repo_root()
     out_dir = output_dir or (root / "docs" / "book")
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    assets_dir = root / "crates" / "satya-engine" / "assets" / "rules_book"
+    if not assets_dir.exists():
+        assets_dir = _default_repo_root() / "crates" / "satya-engine" / "assets" / "rules_book"
+    asset_files: list[str] = []
+    for asset_name in ("satya_book.css", "satya_book.js"):
+        src_asset = assets_dir / asset_name
+        dst_asset = out_dir / asset_name
+        if src_asset.exists():
+            dst_asset.write_text(src_asset.read_text(encoding="utf-8"), encoding="utf-8")
+            asset_files.append(str(dst_asset))
 
     catalog_chapters: list[dict[str, Any]] = []
     generated_files: list[str] = []
@@ -1499,6 +1525,7 @@ def build_static_rules_book(
         "chapter_count": len(catalog_chapters),
         "total_words": total_words,
         "generated_files": generated_files,
+        "asset_files": asset_files,
         "using_satya_py": using_satya_py_backend(),
     }
 

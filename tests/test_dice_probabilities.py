@@ -374,11 +374,18 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
     assert summary["chapter_count"] == 18
     assert summary["using_satya_py"] is True
     assert summary["total_words"] > 10_000
+    assert len(summary["generated_files"]) == 20
+    assert len(summary["asset_files"]) == 2
+    assert (tmp_path / "satya_book.css").exists()
+    assert (tmp_path / "satya_book.js").exists()
     assert (tmp_path / "index.html").exists()
     assert (tmp_path / "design_philosophy.html").exists()
     assert (tmp_path / "notation_glossary.html").exists()
     assert (tmp_path / "tasks.html").exists()
     tasks_html = (tmp_path / "tasks.html").read_text(encoding="utf-8")
+    assert "satya_book.css" in tasks_html
+    assert "satya_book.js" in tasks_html
+    assert "rules-figure--full" in tasks_html
     assert "rules-math-inline" in tasks_html
     assert "rules-math-block" in tasks_html
     assert "rules-mermaid" in tasks_html
@@ -391,11 +398,33 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
     assert (tmp_path / "psyche_and_social.html").exists()
     assert (tmp_path / "tactical_triad.html").exists()
     assert (tmp_path / "melee_combat.html").exists()
+    assert "rules-figure--column" in (tmp_path / "melee_combat.html").read_text(encoding="utf-8")
     assert (tmp_path / "ranged_combat_and_armor.html").exists()
+    assert "rules-figure--spread" in (tmp_path / "ranged_combat_and_armor.html").read_text(encoding="utf-8")
     assert (tmp_path / "action_economy.html").exists()
     assert (tmp_path / "health_and_trauma.html").exists()
     assert (tmp_path / "movement_and_environment.html").exists()
     assert (tmp_path / "catalog.json").exists()
+
+    # Verify Python fallback renderer also supports TTRPG sidebars, image hints, and breaks
+    import satya_ml.build_rules_book as brb
+    orig_py = brb._satya_py
+    try:
+        brb._satya_py = None
+        fallback_html = brb.render_markdown_to_html_python(
+            "![Banner](../../assets/31_ordinary_mortals_analog_table.jpg#half)\n\n"
+            "> [!SIDEBAR] Field Note\n"
+            "> - Keep low\n\n"
+            "<!-- pagebreak -->\n"
+        )
+        assert 'class="rules-figure rules-figure--half" data-layout="half"' in fallback_html
+        assert 'src="/docs-assets/31_ordinary_mortals_analog_table.jpg"' in fallback_html
+        assert '<aside class="rules-alert rules-sidebar">' in fallback_html
+        assert '<div class="rules-alert-title">Field Note</div>' in fallback_html
+        assert '<li>Keep low</li>' in fallback_html
+        assert 'data-break="page"' in fallback_html
+    finally:
+        brb._satya_py = orig_py
 
     # Multi-chapter AI GM rules search
     melee_res = query_satya_rules.invoke({"query": "Tactical Triad Tempo Control Force Kuzushi"})
