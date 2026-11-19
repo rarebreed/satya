@@ -95,6 +95,8 @@ America was even waging the war, it seemed tailor-made for running some very int
 
 ## 3. Gaming Isn't Just Escapism
 
+![Ordinary Mortals in Extraordinary Crises — Analog field notebook, clinic badge, brass compass, highway map, and 2d20 dice in late afternoon light](../../assets/31_ordinary_mortals_analog_table.jpg)
+
 So now, I can finally come to what this game is about. Back in the early days of roleplaying, many of the games featured
 regular people in unusual circumstances. Look at that list above and here are the games that featured predominantly
 normal humans without any magical, mystical, or (for the most part) super-technological powers:

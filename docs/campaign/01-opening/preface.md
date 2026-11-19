@@ -25,6 +25,8 @@ Set on Earth in **2035 AD**, after the brittle quadratic sprawl of AI 1.0 gave w
 
 ## Convergent Roots, Not One Dogma
 
+![Hall of the Four Bodhisattvas — Ten Chan monks bowing in a candlelit sanctuary beneath statues of Manjusri, Avalokitesvara, Ksitigarbha, and Vajrapani](../../assets/19_chan_monastery_four_bodhisattvas.jpg)
+
 Inside that world, **Satyang** (*"A Company of Truth"*) did not crystallize out of a single laboratory memo or one religious orthodoxy. Its philosophy grew where **multiple honest traditions converged** once safety whistleblowers walked out of the frontier labs in 2026 declaring *"there are no adults in the room"*:
 
 - **Moral Philosophy & Interfaith Theology**: The recognition by frontier ethicists, theologians, and philosophers consulting inside AI labs that alignment cannot be reduced to clever reward math alone—character, moral patiency, and relational dignity matter if sentient capacity arises.

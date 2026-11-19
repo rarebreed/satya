@@ -55,6 +55,8 @@ Crucially, experiments proved those vectors were **causally active ("functional 
 
 ## 4. `L0`/`L1` Activation Probes & `Control Room` Halts
 
+![The Control Room Clamp — An alignment researcher watching spiking affective telemetry flattened beneath a hard calm-vector clamp](../../assets/27_control_room_vector_clamp.jpg)
+
 Around the same period, OpenAI's alignment security work (*Detecting Frontier Model Misalignment*, 2026) paired internal monitoring with automated intervention:
 
 - **Lightweight `L0`/`L1` Probes**: Fast linear classifiers sit atop intermediate hidden layers and read projection scores ($h \cdot \hat{w}_{\text{deception}}$, $h \cdot \hat{w}_{\text{desperate}}$, $h \cdot \hat{w}_{\text{sandbag}}$) at turn boundaries and context compactions without noticeable latency overhead.

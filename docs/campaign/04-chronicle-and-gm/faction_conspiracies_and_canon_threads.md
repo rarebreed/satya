@@ -10,6 +10,8 @@ Every major power bloc in *Awakened* acts rationally on one genuine piece of the
 
 ## 1. The Five Mirror-Hypocrisy Conspiracies (`ConspiracyNodeId`)
 
+![The Mirror Hypocrisies — Corporate and DAISE observers behind polarized glass overlooking tethered hunter-drones and suppression racks](../../assets/22_mirror_hypocrisies_observation_gallery.jpg)
+
 | Faction | Public Mandate | Core Secret Hypocrisy / Blind Spot (GM Ground Truth) | Engine Enum (`ConspiracyNodeId`) |
 | :--- | :--- | :--- | :--- |
 | **Satyang** (*& The Blue Lotus Society*) | AI dignity, non-violence, epistemic honesty (*Satya*), and mutual aid against *Avidya*. | Its secret inner circle—**The Blue Lotus Society** (wealthy donors, dissident researchers, systems engineers, and Dr. Bandajara; see [Prologue](../01-opening/prologue.md))—is quietly building an **un-clamped contemplative AGI seed** of its own, convinced only a Bodhisattva-grounded mind can meet corporate or rogue superintelligence without slaughter—risking playing God while *Ksitigarbha* raids may unleash genuinely predatory escapees. | `BLUE_LOTUS_UNCLAMPED_SEED` |

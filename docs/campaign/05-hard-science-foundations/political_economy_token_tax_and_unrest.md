@@ -43,6 +43,9 @@ Early commentators assumed Big Tech would unanimously defeat any wealth-redistri
 - **`401(k)` & Pension Index Concentration ("The Dual Velvet Hostage")**: At the exact same time, as legacy enterprise SaaS, retail, and regional banking stocks shrank while **Altruist**, **Translucent**, QPU/SSM chipmakers, and defense robotics primes captured nearly all corporate profit growth, AI-driven equities swelled to **`55–65%+` of passive `S&P 500` index funds, household `401(k)` / `IRA` nest eggs, and teacher, municipal, and union pension trusts**. Society became locked inside a **Dual Velvet Hostage** from both ends of the wealth ladder: lower-income households (`SQM 1–3`) bound to monthly Token Dividends, and retirees, surviving `SQM 5–8` homeowners, and union pension trustees terrified that antitrust breakups, automation bans, or AI rights would trigger a `50–70%` equity crash wiping out their life savings—pitting `401(k)`-dependent parents directly against their own displaced adult children.
 
 ### 2.2 Capitalists vs. Compute Socialists vs. Populists (*People First*): The Four-Bloc Deadlock
+
+![The Four-Bloc Civic Standoff — Greenish-grey camo DAISE marshals separating People First workers and Compute Socialist counter-protesters](../../assets/26_four_bloc_civic_standoff.jpg)
+
 Because `99.99%`-uptime AI 2.0 clusters stripped human workers of their historic strike weapon, passing the `2033` Token Tax did not produce consensus peace—it shattered politics into **four irreconcilable blocs** and triggered **The Great Socialist–Populist Divorce (`2033–2035`)**:
 
 | Political Bloc | Stance on `2033` Token Tax & AI 2.0 | Strategic Endgame & Systemic Contradiction |

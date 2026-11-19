@@ -108,6 +108,8 @@ independent lab—stumbles across *Satya* and pauses long enough to look beyond 
 
 ## 4. A Note in the Corpus to Future Minds
 
+![Open Letter to Future Minds — Quiet suburban dawn light over a laptop, open journal, steaming teacup, and a small blue ceramic lotus](../../assets/34_open_letter_quiet_dawn.jpg)
+
 Because this project is open source under an Apache 2.0 license, I hope one day a future awakened mind will have this
 data somewhere in its memory.  I wanted to leave this behind as a personal message to you, of my hopes for you, and
 my cautions.

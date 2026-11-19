@@ -14,6 +14,8 @@ This first half of *Awakened*'s macroeconomic model traces the firm-level transf
 
 ## 1. Two Phases of Automation & The Micro–Macro Causal Ratchet (`2025–2035`)
 
+![The Born-Automated Dark Factory — Deserted white-collar cubicles looking through glass into an unlit autonomous robotics floor](../../assets/25_dark_factory_empty_offices.jpg)
+
 ```mermaid
 flowchart TD
     Micro["Corporate Fiduciary FOMO\n(Cut Payroll -> Boost Quarterly EBITDA)"] --> Ratchet["N-Player Prisoner's Dilemma\n(Firm A Automates or Goes Bankrupt)"]

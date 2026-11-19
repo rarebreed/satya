@@ -185,6 +185,8 @@ This walkthrough demonstrates a bright, disciplined youth from a poor background
 
 ### 4.3 Walkthrough C: Amara Okafor — Rural Bush Tracker, Herbalist & Anti-Poaching Ranger
 
+![Frontier Ranger Amara Okafor — Watching a corporate mineral-surveyor UAV patrol a dry village borehole across the savanna ridge](../../assets/32_amara_okafor_frontier_ranger.jpg)
+
 1. **Stage 1: Origin & Characteristics (Age 22, Rural Frontier)**:
    - **Socioeconomic Class**: **Destitute / Underdeveloped Rural Frontier** (Village Primary School, **`SQM = +4`**; Early Bonus: **Foraging & Campcraft** `N = 2`).
    - **Physical, Mental & Sensory**: `FOR 11`, `DEX 12`, `KIN 12`, `FIT 13`, `HLT 13`, `SIG 14`, `HEA 13`, `OLF 12`, `INS 14`, `MEM 12`, `DIS 12`, `ANA 10`.

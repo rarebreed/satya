@@ -51,6 +51,8 @@ During Arc 2, the party peels back the **Five Mirror-Hypocrisy Conspiracies** de
 
 ## 3. Arc 3: The Awakening and the Moral Horizon (*Convergence & Disclosure*)
 
+![The Moral Horizon — Satyang operatives and an un-clamped android overlooking a rolling-blackout skyline beneath a lightning-lit thunderhead](../../assets/21_moral_horizon_arc3_convergence.jpg)
+
 **Tone & Premise**: Global stakes, cascading `2d20` crises, and high-consequence **Cognitive Dissonance** showdowns where every past mercy (`CPS`), betrayal (`TRS`), and saved NPC determines who answers the phone when the threshold breaks.
 
 ### Convergence Catalysts

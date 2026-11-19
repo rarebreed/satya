@@ -96,6 +96,8 @@ The **first systemic domestic fracture** hits grid-choked clusters (`Northern Vi
 
 ## 5. *Pax Silica*, The Dual Mineral Rush & Peripheral Sacrifice Zones (`2026–2033`)
 
+![The Pax Silica Sacrifice Zone — Central Luzon farmers with a motorized trike and carabao facing a fortified 3 GW Economic Security Zone across a dry canal](../../assets/20_luzon_pax_silica_sacrifice_zone.jpg)
+
 Internationally, resource demand fused the post-Hormuz **EV / `BESS` / copper transition** (`75–85%` of initial mineral volume) with **Pax Silica**—the U.S. State Department's flagship techno-alliance (*"Silicon Peace"*, launched December 2025 and expanded via the **San Francisco Declaration**) treating silicon, compute, rare earths, gallium, and energy corridors like 20th-century oil to sever reliance on China and **Shen**.
 
 Fast-tracking a duplicate supply chain inside deregulated **Economic Security Zones (`ESZs`)** exported severe socio-ecological upheaval:

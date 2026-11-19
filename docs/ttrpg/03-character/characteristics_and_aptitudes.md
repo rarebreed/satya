@@ -155,6 +155,8 @@ Rather than lumping all five senses and sixth-sense danger awareness into a sing
 
 ## 7. Psyche: The Invisible Traits & Behavioral Architecture
 
+![The 9-Axis Psyche: Whistleblower Crossroads — Linnea Cho weighing a corporate access badge against a copper-wrapped air-gapped micro-drive](../../assets/33_whistleblower_crossroads_linnea.jpg)
+
 ### 7.1 Design Philosophy: Quantifying `Role` Playing & NPC Agency
 
 Most TTRPGs lack a set of characteristics that quantify and guide behavior—an ironic omission given that many players are drawn to **`role` playing** rather than **`roll` playing**, and given pop culture's fascination with personality frameworks (Myers-Briggs, the Big Five, the Enneagram, or "Alpha/Sigma" archetypes). Furthermore, both human Game Masters and the **Satya AI Game Master** need a concise, structured personality vector to make NPCs feel like distinct human beings with predictable blind spots, loyalties, and breaking points rather than interchangeable stat blocks.
