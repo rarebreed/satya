@@ -528,6 +528,18 @@ pub fn satya_ttrpg_skill_keydown(ev: KeyboardEvent) {
 /// Evaluates and emits a Satya Two-List Cascading (`2d20`) TTRPG task resolution event (`ROLL_TTRPG_TASK`) over the WebSocket.
 #[wasm_bindgen]
 pub fn satya_roll_task() {
+    if with_state(|st| {
+        st.session_id.is_some()
+            && st
+                .self_participant
+                .as_ref()
+                .is_some_and(|p| p.role == satya_schema::SessionRole::Observer)
+    }) {
+        crate::wasm_client::chat_and_ttrpg::append_system_notice(
+            "Observers are in read-only spectator mode and cannot roll TTRPG task checks.",
+        );
+        return;
+    }
     let skill_raw = input_value("ttrpg-skill").trim().to_string();
     let skill_name = if skill_raw.is_empty() {
         "Athletics".to_string()

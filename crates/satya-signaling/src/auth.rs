@@ -615,8 +615,16 @@ impl AuthAndSessionManager {
         // Validate role for session creation
         match session_mode {
             SessionMode::Ttrpg => {
-                if !matches!(role, SessionRole::Gm | SessionRole::Player) {
-                    anyhow::bail!("TTRPG session creator must be GM or PLAYER (with AI GM)");
+                if !matches!(
+                    role,
+                    SessionRole::Gm | SessionRole::Player | SessionRole::Observer
+                ) {
+                    anyhow::bail!(
+                        "TTRPG session creator must be GM, or PLAYER/OBSERVER with AI GM enabled"
+                    );
+                }
+                if role == SessionRole::Observer && !enable_ai_gm {
+                    anyhow::bail!("OBSERVER TTRPG session creator requires AI GM enabled");
                 }
             }
             SessionMode::Meeting => {
@@ -715,6 +723,9 @@ impl AuthAndSessionManager {
         role: SessionRole,
         display_name_override: Option<String>,
     ) -> anyhow::Result<(String, SessionMode, Participant, Vec<Participant>)> {
+        if role == SessionRole::AiGm {
+            anyhow::bail!("Human participants cannot join with the AI_GM role");
+        }
         let sid = session_id.trim();
         if !self.sessions.read().await.contains_key(sid) {
             let _ = self.rehydrate_session_from_db(sid).await;
@@ -1108,16 +1119,20 @@ impl AuthAndSessionManager {
                 .iter()
                 .filter(|p| p.participant_kind == ParticipantKind::Human)
                 .count();
+            let has_active_ai_players = remaining_roster.iter().any(|p| {
+                p.participant_kind == ParticipantKind::AiAgent && p.role == SessionRole::Player
+            });
 
-            // Scrub ephemeral BYOK credentials and non-persistent GM docs when the sponsoring user leaves or no humans remain
-            if remaining_human_count == 0 {
-                session.ai_gm_vault = None;
-                session.gm_documents.retain(|d| d.is_persistent);
-                session.gm_memories.retain(|m| m.is_persistent);
-            } else if let Some(vault) = session.ai_gm_vault.as_mut()
+            // Scrub sponsoring BYOK API keys when the sponsor departs, and purge transient state when empty
+            if let Some(vault) = session.ai_gm_vault.as_mut()
                 && vault.sponsor_user_id == user_id
             {
                 vault.api_key = None;
+            }
+            if remaining_human_count == 0 && !has_active_ai_players {
+                session.ai_gm_vault = None;
+                session.gm_documents.retain(|d| d.is_persistent);
+                session.gm_memories.retain(|m| m.is_persistent);
             }
 
             SessionDisconnectSummary {

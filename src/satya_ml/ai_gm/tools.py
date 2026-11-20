@@ -1223,7 +1223,7 @@ def lookup_character_sheet(
 
 @tool
 def get_combat_tracker_state(session_id: str = "default") -> dict[str, Any]:
-    """Read the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.5s`, `1 Window = 20 Ticks = 10.0s`) and combatant readiness for `session_id`."""
+    """Read the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.25s`, `1 Window = 20 Ticks = 5.0s`) and combatant readiness for `session_id`."""
     base = _signaling_base_url()
     if base:
         tracker = _http_get_json(f"{base}/api/gm/sessions/{session_id}/combat", timeout=2.0)
@@ -1234,39 +1234,140 @@ def get_combat_tracker_state(session_id: str = "default") -> dict[str, Any]:
 
 
 def compute_character_tactical_envelope(char_sheet: dict[str, Any]) -> dict[str, int]:
-    """Compute a character's Satya Tactical Pool (`P_base`, `P_eff`, Neutral `B`, `T_max`, `C_max`, `F_max`, and OODA `starting_tick`)."""
-    chars = char_sheet.get("characteristics") or {}
-    apts = char_sheet.get("aptitudes") or {}
-    str_val = int(chars.get("str", chars.get("STR", 10)))
-    end_val = int(chars.get("end", chars.get("END", 10)))
-    agi_val = int(chars.get("agi", chars.get("AGI", 10)))
-    dex_val = int(chars.get("dex", chars.get("DEX", 10)))
-    per_val = int(chars.get("per", chars.get("PER", 10)))
-    wil_val = int(chars.get("wil", chars.get("WIL", 10)))
-    int_val = int(chars.get("int_attr", chars.get("INT", 10)))
+    """Compute a character's Satya Tactical Pool (`P_base`, `P_eff`, Neutral `B`, `T_max`, `C_max`, `F_max`, and OODA `starting_tick`) via Rust `satya_py`."""
+    raw_chars = char_sheet.get("characteristics") or {}
+    chars = {str(k).lower(): v for k, v in raw_chars.items() if isinstance(v, (int, float))}
 
-    coord = int(apts.get("coord", (agi_val + dex_val) // 2))
-    vig = int(apts.get("vig", (str_val + end_val) // 2))
-    focus = int(apts.get("focus", (per_val + wil_val) // 2))
-    ooda = int(apts.get("ooda", (per_val + int_val + agi_val) // 3))
+    def _stat(*keys: str, default: int = 10) -> int:
+        for k in keys:
+            if k in chars:
+                return int(chars[k])
+        return default
+
+    spd = _stat("spd", "agi")
+    for_stat = _stat("for_stat", "for", "str")
+    dex = _stat("dex")
+    kin = _stat("kin", "end")
+    sig = _stat("sig", "per")
+    ins = _stat("ins", "per")
+    itu = _stat("itu", "per")
+    dis = _stat("dis", "wil")
+    fit = _stat("fit", "end", "kin")
+    ana = _stat("ana", "int_attr", "int")
+    cre = _stat("cre", "ana", "int_attr")
+    foc = _stat("foc", "wil")
+    mass_kg = float(chars.get("mas_kg", chars.get("mass_kg", 75.0)))
 
     skills = char_sheet.get("skills") or {}
-    skill_n = max([int(v) for v in skills.values() if isinstance(v, (int, float))] or [2])
-    delta_int = int(char_sheet.get("fatigue_tier", 0))
+    combat_skill_names = (
+        "unarmed",
+        "melee",
+        "firearms",
+        "ballistics",
+        "archery",
+        "tactics",
+        "cqc",
+        "marksmanship",
+        "blades",
+        "brawling",
+    )
+    combat_ranks = [
+        int(v)
+        for k, v in skills.items()
+        if isinstance(v, (int, float)) and any(tok in str(k).lower() for tok in combat_skill_names)
+    ]
+    all_ranks = [int(v) for v in skills.values() if isinstance(v, (int, float))]
+    skill_n = int(
+        char_sheet.get(
+            "combat_skill_n",
+            char_sheet.get("skill_n", max(combat_ranks or all_ranks or [2])),
+        )
+    )
+    skill_c = int(
+        char_sheet.get(
+            "combat_skill_c",
+            char_sheet.get("skill_c", (spd + dex) // 2 + min(skill_n, 4)),
+        )
+    )
+    fatigue_tier = max(0, int(char_sheet.get("fatigue_tier", char_sheet.get("fatigue_level", 0))))
+    wound_shock = max(
+        0,
+        int(char_sheet.get("wound_shock_index", char_sheet.get("wound_shock_tier", 0))),
+    )
+    leg_pen = max(0, int(char_sheet.get("leg_wound_penalty", 0)))
+    arm_pen = max(0, int(char_sheet.get("arm_head_wound_penalty", 0)))
+    torso_pen = max(0, int(char_sheet.get("torso_shoulder_wound_penalty", 0)))
+    raw_morale = str(char_sheet.get("morale_state") or "steady").strip().lower()
+    morale_state = "high" if raw_morale == "resolute" else raw_morale
+    is_ranged = bool(char_sheet.get("is_ranged", False))
 
-    p_base = (coord + vig + focus) // 3 + skill_n
-    p_eff = max(0, p_base - delta_int)
-    neutral_b = p_base // 3
-    return {
-        "p_base": p_base,
-        "p_eff": p_eff,
-        "neutral_baseline": neutral_b,
-        "max_tempo": agi_val // 2 + skill_n,
-        "max_control": dex_val // 2 + skill_n,
-        "max_force": str_val // 2 + skill_n,
-        "ooda": ooda,
-        "starting_tick": max(1, 15 - ooda),
-    }
+    try:
+        from satya_ml.dice_probabilities import _ensure_satya_py_loaded
+
+        satya_mod = _ensure_satya_py_loaded()
+        env = satya_mod.compute_tactical_pool(
+            spd=spd,
+            for_stat=for_stat,
+            dex=dex,
+            kin=kin,
+            sig=sig,
+            ins=ins,
+            itu=itu,
+            dis=dis,
+            fit=fit,
+            mass_kg=mass_kg,
+            skill_c=skill_c,
+            skill_n=skill_n,
+            is_ranged=is_ranged,
+            fatigue_level=fatigue_tier,
+            wound_shock_index=wound_shock,
+            leg_wound_penalty=leg_pen,
+            arm_head_wound_penalty=arm_pen,
+            torso_shoulder_wound_penalty=torso_pen,
+            morale_state=morale_state,
+            ana=ana,
+            cre=cre,
+            foc=foc,
+        )
+        ooda_val = int(env.ooda_init)
+        return {
+            "p_base": int(env.p_base),
+            "p_eff": int(env.p_eff),
+            "neutral_baseline": int(env.neutral_baseline_b),
+            "max_tempo": int(env.tempo_cap),
+            "max_control": int(env.control_cap),
+            "max_force": int(env.force_cap),
+            "ooda": ooda_val,
+            "starting_tick": max(1, 15 - ooda_val),
+        }
+    except Exception:
+        d_cog = (max(ana, cre) + foc) // 2
+        ooda_val = (itu + ins + d_cog + spd) // 4
+        c_combat = (skill_c + ooda_val) // 2
+        p_base = c_combat + 3 * skill_n
+        morale_mod = {
+            "high": 2,
+            "conviction": 2,
+            "conviction_surge": 2,
+            "rage": 2,
+            "wavering": -2,
+            "shaken": -2,
+            "broken": -4,
+            "panic": -4,
+        }.get(morale_state, 0)
+        p_eff = max(0, p_base - fatigue_tier - 2 * wound_shock + morale_mod)
+        overflow = max(0, (skill_n - 3) // 2) if skill_n >= 5 else 0
+        ctrl_stat = ((dex + sig) // 2) if is_ranged else ((dex + kin) // 2)
+        return {
+            "p_base": p_base,
+            "p_eff": p_eff,
+            "neutral_baseline": p_base // 3,
+            "max_tempo": max(0, ((spd + kin) // 2) + overflow - leg_pen),
+            "max_control": max(0, ctrl_stat + overflow - arm_pen),
+            "max_force": max(0, ((for_stat + spd) // 2) + overflow - torso_pen),
+            "ooda": ooda_val,
+            "starting_tick": max(1, 15 - ooda_val),
+        }
 
 
 @tool
@@ -1280,7 +1381,7 @@ def advance_combat_tracker(
     zone_label: str | None = None,
     session_id: str = "default",
 ) -> dict[str, Any]:
-    """Advance (or reset when `tick_delta <= 0`) the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.5s`), update a combatant's stance/tick/position, and sync the stubbed Tactical Map."""
+    """Advance (or reset when `tick_delta <= 0`) the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.25s`), update a combatant's stance/tick/position, and sync the stubbed Tactical Map."""
     payload: dict[str, Any] = {
         "tick_delta": int(tick_delta),
         "combat_active": True,

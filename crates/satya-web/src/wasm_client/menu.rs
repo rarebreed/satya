@@ -280,9 +280,30 @@ pub fn satya_spawn_session_ai_player() {
         let display_name = input_value("menu-ai-player-name").trim().to_string();
         let persona_prompt = input_value("menu-ai-player-persona").trim().to_string();
         let auto_respond = input_checked("menu-ai-player-auto");
+        let base_label = display_name
+            .strip_suffix("(AI Player)")
+            .unwrap_or(&display_name)
+            .trim();
+        let mut slug = String::new();
+        let mut prev_dash = false;
+        for ch in base_label.to_ascii_lowercase().chars() {
+            if ch.is_ascii_alphanumeric() {
+                slug.push(ch);
+                prev_dash = false;
+            } else if !prev_dash && !slug.is_empty() {
+                slug.push('-');
+                prev_dash = true;
+            }
+        }
+        let slug = slug.trim_end_matches('-');
+        let user_id = if slug.is_empty() {
+            "ai-player-1".to_string()
+        } else {
+            format!("ai-{slug}")
+        };
 
         let cfg = AiPlayerConfig {
-            user_id: Some("ai-player-1".to_string()),
+            user_id: Some(user_id),
             display_name: if display_name.is_empty() {
                 None
             } else {
@@ -327,7 +348,7 @@ pub fn satya_step_session_ai_player() {
             return;
         };
         let req = StepAiPlayerRequest {
-            user_id: Some("ai-player-1".to_string()),
+            user_id: None,
             prompt: None,
             auto_trigger_gm: true,
         };

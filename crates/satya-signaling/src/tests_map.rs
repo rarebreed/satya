@@ -70,6 +70,7 @@ async fn test_ai_player_spawn_step_context_isolation_and_rally_budget() {
         .join("users_ai_player.db")
         .to_string_lossy()
         .to_string();
+    cfg.ai_gm.service_url = "http://127.0.0.1:59999".to_string();
 
     let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
     let app = build_router(state.clone());
@@ -824,6 +825,587 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
         .await
         .unwrap();
     assert_eq!(p1_editor_resp.status(), axum::http::StatusCode::FORBIDDEN);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn test_observer_ai_gm_session_isolation_escalation_blocks_and_autonomous_rally() {
+    let mut cfg = StorageConfig::default();
+    let temp_dir =
+        std::env::temp_dir().join(format!("satya_sig_obs_wave1_{}", Uuid::now_v7()));
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir
+        .join("users_obs_wave1.db")
+        .to_string_lossy()
+        .to_string();
+    cfg.ai_gm.service_url = "http://127.0.0.1:59999".to_string();
+
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+    let app = build_router(state.clone());
+    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+
+    let obs_auth = state
+        .auth
+        .register_user("obs_wave1", "satya-truth-2026", "Observer Wave1")
+        .await
+        .unwrap();
+    let obs_user = state
+        .auth
+        .verify_auth_token(&obs_auth.auth_token)
+        .await
+        .unwrap();
+    let p2_auth = state
+        .auth
+        .register_user("p2_wave1", "satya-truth-2026", "Player2 Wave1")
+        .await
+        .unwrap();
+    let p2_user = state
+        .auth
+        .verify_auth_token(&p2_auth.auth_token)
+        .await
+        .unwrap();
+
+    // 1. Observer creation requires enable_ai_gm == true
+    assert!(
+        state
+            .auth
+            .create_session(
+                &obs_user,
+                "ep-obs-wave1",
+                "room-pass",
+                SessionMode::Ttrpg,
+                SessionRole::Observer,
+                Some("Observer One".to_string()),
+                false,
+            )
+            .await
+            .is_err()
+    );
+    state
+        .auth
+        .create_session(
+            &obs_user,
+            "ep-obs-wave1",
+            "room-pass",
+            SessionMode::Ttrpg,
+            SessionRole::Observer,
+            Some("Observer One".to_string()),
+            true,
+        )
+        .await
+        .unwrap();
+
+    // 2. join_session blocks SessionRole::AiGm; resume_session blocks escalation to Gm/Host/AiGm
+    assert!(
+        state
+            .auth
+            .join_session(
+                &p2_user,
+                "ep-obs-wave1",
+                "room-pass",
+                SessionRole::AiGm,
+                None,
+            )
+            .await
+            .is_err()
+    );
+    state
+        .auth
+        .join_session(
+            &p2_user,
+            "ep-obs-wave1",
+            "room-pass",
+            SessionRole::Player,
+            Some("P2".to_string()),
+        )
+        .await
+        .unwrap();
+    assert!(
+        state
+            .auth
+            .leave_session("ep-obs-wave1", &p2_auth.user_id)
+            .await
+            .is_some()
+    );
+    for bad_role in [SessionRole::Gm, SessionRole::Host, SessionRole::AiGm] {
+        assert!(
+            state
+                .auth
+                .resume_session(
+                    &p2_user,
+                    &satya_schema::ResumeSessionRequest {
+                        session_id: "ep-obs-wave1".to_string(),
+                        session_password: Some("room-pass".to_string()),
+                        join_token: None,
+                        role: Some(bad_role),
+                        display_name: None,
+                    },
+                )
+                .await
+                .is_err(),
+            "Non-host Player must not escalate to {bad_role:?} on resume"
+        );
+    }
+
+    // 3. Observer can sponsor/orchestrate AI GM BYOK vault while remaining barred from GM secrets
+    let cfg_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-obs-wave1/gm-config")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::json!({
+                    "provider": "ollama",
+                    "model_id": "gemma4:12b",
+                    "api_key": "sk-obs-sponsor-key"
+                })
+                .to_string(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(cfg_resp.status(), axum::http::StatusCode::OK);
+
+    // Seed GM_ONLY document, GM memory, map tokens, and GM_ONLY combatant via GM service
+    state
+        .auth
+        .add_session_gm_document(
+            "ep-obs-wave1",
+            "ai-gm-ep-obs-wave1",
+            satya_schema::GmDocumentRecord {
+                doc_id: "doc-obs-secret".to_string(),
+                session_id: "ep-obs-wave1".to_string(),
+                uploader_user_id: "ai-gm-ep-obs-wave1".to_string(),
+                uploader_display_name: "AI GM".to_string(),
+                title: "Observer Secret Doc".to_string(),
+                source_kind: satya_schema::GmDocumentSource::DirectTextUpload,
+                google_file_id: None,
+                visibility: MessageVisibility::GmOnly,
+                sanitized_content: "OBS_SECRET_DOC_TOKEN_99".to_string(),
+                char_count: 23,
+                safety_flagged: false,
+                is_persistent: false,
+                campaign_tag: Some("ep-obs-wave1".to_string()),
+                created_at_us: 1000,
+            },
+        )
+        .await
+        .unwrap();
+
+    let mem_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-obs-wave1/memories")
+            .header("Authorization", format!("Bearer {gm_svc_tok}"))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::UpsertGmMemoryRequest {
+                    memory_id: Some("mem-obs-secret".to_string()),
+                    campaign_tag: Some("ep-obs-wave1".to_string()),
+                    category: satya_schema::GmMemoryCategory::NpcSecret,
+                    title: "Secret Ambush".to_string(),
+                    content: "OBS_SECRET_MEMORY_99".to_string(),
+                    is_pinned: false,
+                    is_persistent: false,
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(mem_resp.status(), axum::http::StatusCode::OK);
+
+    let gm_map_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/gm/sessions/ep-obs-wave1/map")
+            .header("Authorization", format!("Bearer {gm_svc_tok}"))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&GmMapUpdateRequest {
+                    map_id: "map-obs".to_string(),
+                    title: "Clinic Lobby".to_string(),
+                    image_url: String::new(),
+                    grid_width: 12,
+                    grid_height: 10,
+                    cell_size_cm: 100,
+                    tokens: vec![
+                        satya_schema::TokenPlacement {
+                            entity_id: "tok-pub".to_string(),
+                            label: "Public Medic".to_string(),
+                            x: 3,
+                            y: 3,
+                            visibility: MessageVisibility::Public,
+                        },
+                        satya_schema::TokenPlacement {
+                            entity_id: "tok-hidden".to_string(),
+                            label: "Hidden Assassin".to_string(),
+                            x: 9,
+                            y: 8,
+                            visibility: MessageVisibility::GmOnly,
+                        },
+                    ],
+                    ..GmMapUpdateRequest::default()
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(gm_map_resp.status(), axum::http::StatusCode::OK);
+
+    let gm_combat_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/gm/sessions/ep-obs-wave1/combat")
+            .header("Authorization", format!("Bearer {gm_svc_tok}"))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::UpdateCombatTrackerRequest {
+                    combat_active: Some(true),
+                    entity_id: Some("tok-hidden".to_string()),
+                    ..Default::default()
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(gm_combat_resp.status(), axum::http::StatusCode::OK);
+
+    // Observer cannot view GM memories or unowned GM docs (redacted empty) and is blocked from GM mutations
+    for secret_uri in [
+        "/api/sessions/ep-obs-wave1/memories",
+        "/api/sessions/ep-obs-wave1/docs",
+    ] {
+        let resp = tower::ServiceExt::oneshot(
+            app.clone(),
+            axum::http::Request::builder()
+                .method("GET")
+                .uri(secret_uri)
+                .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+        let body = String::from_utf8_lossy(
+            &axum::body::to_bytes(resp.into_body(), 64 * 1024)
+                .await
+                .unwrap(),
+        )
+        .to_string();
+        assert!(!body.contains("OBS_SECRET_MEMORY_99"));
+        assert!(!body.contains("OBS_SECRET_DOC_TOKEN_99"));
+    }
+
+    let obs_mem_post = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-obs-wave1/memories")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::json!({"category": "SCENE_STATE", "title": "t", "content": "c"})
+                    .to_string(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert!(obs_mem_post.status().is_client_error());
+
+    for (method, uri, body_opt) in [
+        (
+            "POST",
+            "/api/sessions/ep-obs-wave1/combat",
+            Some(serde_json::json!({"tick_delta": 1}).to_string()),
+        ),
+        (
+            "POST",
+            "/api/sessions/ep-obs-wave1/npcs/generate",
+            Some(serde_json::json!({"prompt": "guard"}).to_string()),
+        ),
+        (
+            "POST",
+            "/api/sessions/ep-obs-wave1/map",
+            Some(serde_json::to_string(&satya_schema::GenerateSessionMapRequest::default()).unwrap()),
+        ),
+        (
+            "POST",
+            "/api/sessions/ep-obs-wave1/map/move",
+            Some(
+                serde_json::json!({"entity_id": "tok-pub", "to_x": 4, "to_y": 4}).to_string(),
+            ),
+        ),
+    ] {
+        let mut builder = axum::http::Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token));
+        let req = if let Some(b) = body_opt {
+            builder = builder.header("Content-Type", "application/json");
+            builder.body(axum::body::Body::from(b)).unwrap()
+        } else {
+            builder.body(axum::body::Body::empty()).unwrap()
+        };
+        let resp = tower::ServiceExt::oneshot(app.clone(), req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            axum::http::StatusCode::FORBIDDEN,
+            "Observer must be rejected with 403 on {method} {uri}"
+        );
+    }
+
+    // Observer receives redacted combat tracker, map, export, and strictly PUBLIC omnisearch lore
+    let obs_combat_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/sessions/ep-obs-wave1/combat")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(obs_combat_resp.status(), axum::http::StatusCode::OK);
+    let obs_combat_str = String::from_utf8_lossy(
+        &axum::body::to_bytes(obs_combat_resp.into_body(), 64 * 1024)
+            .await
+            .unwrap(),
+    )
+    .to_string();
+    assert!(!obs_combat_str.contains("tok-hidden"));
+
+    let obs_map_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/sessions/ep-obs-wave1/map")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(obs_map_resp.status(), axum::http::StatusCode::OK);
+    let obs_map_str = String::from_utf8_lossy(
+        &axum::body::to_bytes(obs_map_resp.into_body(), 64 * 1024)
+            .await
+            .unwrap(),
+    )
+    .to_string();
+    assert!(obs_map_str.contains("tok-pub"));
+    assert!(!obs_map_str.contains("tok-hidden"));
+
+    let export_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/sessions/ep-obs-wave1/export")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(export_resp.status(), axum::http::StatusCode::OK);
+    let export_bytes = axum::body::to_bytes(export_resp.into_body(), 256 * 1024)
+        .await
+        .unwrap();
+    let export_str = String::from_utf8_lossy(&export_bytes);
+    assert!(!export_str.contains("OBS_SECRET_DOC_TOKEN_99"));
+    assert!(!export_str.contains("OBS_SECRET_MEMORY_99"));
+    assert!(!export_str.contains("tok-hidden"));
+    let bundle: satya_schema::SessionSnapshotBundle =
+        serde_json::from_slice(&export_bytes).unwrap();
+    assert!(bundle.gm_documents.is_empty());
+    assert!(bundle.gm_memories.is_empty());
+
+    let lookup_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/sessions/ep-obs-wave1/lookup?q=polycrisis&scope=CAMPAIGN")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(lookup_resp.status(), axum::http::StatusCode::OK);
+    let lookup_json: satya_schema::GmOmnisearchResponse = serde_json::from_slice(
+        &axum::body::to_bytes(lookup_resp.into_body(), 128 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        lookup_json
+            .hits
+            .iter()
+            .any(|h| h.source_kind == satya_schema::GmLookupSourceKind::CampaignLore)
+    );
+    assert!(
+        !lookup_json
+            .hits
+            .iter()
+            .any(|h| h.item_id.contains("04-chronicle-and-gm"))
+    );
+
+    // 4. Observer orchestrates AI Player + AI GM rally without any human Player in the room
+    let spawn_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-obs-wave1/ai-players")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::AiPlayerConfig {
+                    user_id: Some("ai-player-mateo".to_string()),
+                    display_name: None,
+                    character_id: None,
+                    persona_prompt: Some("Field medic".to_string()),
+                    provider: Some("ollama".to_string()),
+                    model_id: Some("gemma4:12b".to_string()),
+                    service_url: None,
+                    auto_respond: true,
+                    max_rally_turns: 2,
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(spawn_resp.status(), axum::http::StatusCode::OK);
+
+    let step_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-obs-wave1/ai-players/step")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::StepAiPlayerRequest {
+                    user_id: Some("ai-player-mateo".to_string()),
+                    prompt: Some("Check the clinic triage desk".to_string()),
+                    auto_trigger_gm: true,
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(step_resp.status(), axum::http::StatusCode::OK);
+
+    let gm_chat_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/gm/sessions/ep-obs-wave1/chat")
+            .header("Authorization", format!("Bearer {gm_svc_tok}"))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&satya_schema::GmChatRequest {
+                    visibility: MessageVisibility::Public,
+                    recipient_user_ids: Vec::new(),
+                    channel_context: satya_schema::ChannelContext::GmNarration,
+                    body: "The clinic lights flicker across triage.".to_string(),
+                    model_id: None,
+                    speaker_override: None,
+                })
+                .unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(gm_chat_resp.status(), axum::http::StatusCode::OK);
+
+    // 5. leave_session scrubs sponsor BYOK key while keeping session alive if AI Player remains,
+    // and clears vault once no humans or AI Players remain.
+    assert!(
+        state
+            .auth
+            .leave_session("ep-obs-wave1", &obs_auth.user_id)
+            .await
+            .is_some()
+    );
+    let (_, vault_mid) = state
+        .auth
+        .get_session_gm_context("ep-obs-wave1")
+        .await
+        .expect("session preserved while active AI Player remains");
+    assert!(
+        vault_mid
+            .as_ref()
+            .and_then(|v| v.api_key.as_ref())
+            .is_none(),
+        "Departing sponsor API key must be scrubbed immediately"
+    );
+
+    let _ = state
+        .auth
+        .resume_session(
+            &obs_user,
+            &satya_schema::ResumeSessionRequest {
+                session_id: "ep-obs-wave1".to_string(),
+                session_password: Some("room-pass".to_string()),
+                join_token: None,
+                role: Some(SessionRole::Observer),
+                display_name: None,
+            },
+        )
+        .await
+        .unwrap();
+    let del_ai_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("DELETE")
+            .uri("/api/sessions/ep-obs-wave1/ai-players/ai-player-mateo")
+            .header("Authorization", format!("Bearer {}", obs_auth.auth_token))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(del_ai_resp.status(), axum::http::StatusCode::OK);
+
+    assert!(
+        state
+            .auth
+            .leave_session("ep-obs-wave1", &obs_auth.user_id)
+            .await
+            .is_some()
+    );
+    let (_, vault_end) = state
+        .auth
+        .get_session_gm_context("ep-obs-wave1")
+        .await
+        .unwrap();
+    assert!(vault_end.is_none());
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

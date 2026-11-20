@@ -472,7 +472,7 @@ class SatyaHybridRagIndex:
                 rrf += 1.15 / (50.0 + fts_ranks[cid])
             if q_low and (q_low in str(row.get("symbol_or_section") or "").lower()):
                 rrf += 0.025
-            if arc_low.startswith("ARC_1") and row.get("visibility") == "ARC2_SATYANG":
+            if (arc_low.startswith("ARC_1") or arc_low.startswith("ARC1")) and row.get("visibility") == "ARC2_SATYANG":
                 rrf *= 0.85
             fused.append((rrf, row))
 
@@ -485,7 +485,7 @@ class SatyaHybridRagIndex:
             results.append(item)
             seen_ids.add(str(row["chunk_id"]))
 
-        if include_linked_rust and len(results) > 0:
+        if include_linked_rust and is_gm and len(results) > 0:
             doc_paths = {
                 str(r.get("linked_doc_path") or "")
                 for r in results

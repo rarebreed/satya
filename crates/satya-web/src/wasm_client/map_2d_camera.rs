@@ -301,6 +301,9 @@ pub fn can_author_map(self_part: Option<&Participant>, roster: &[Participant]) -
     if roster.is_empty() && self_part.is_none() {
         return true;
     }
+    if self_part.is_some_and(|p| p.role == SessionRole::Observer) {
+        return false;
+    }
     let has_human_gm = roster
         .iter()
         .any(|p| p.role == SessionRole::Gm && p.participant_kind == ParticipantKind::Human);

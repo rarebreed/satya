@@ -380,7 +380,7 @@ pub fn inspect_map_point(
         if spec.floor_layer || !prop_contains_point(p, x_m, y_m, true) {
             continue;
         }
-        if matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree) {
+        if !p.decorative && matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree) {
             let in_trunk = prop_contains_point(p, x_m, y_m, false);
             return Some(MapHoverInspection {
                 category: MapHoverCategory::SolidProp,
@@ -408,7 +408,8 @@ pub fn inspect_map_point(
                 target_ref: format!("prop:{idx}"),
             });
         }
-        if matches!(p.kind, PropKind::Car | PropKind::UtilityVan)
+        if !p.decorative
+            && matches!(p.kind, PropKind::Car | PropKind::UtilityVan)
             && vehicle_point_is_engine_bay(p, x_m, y_m)
         {
             return Some(MapHoverInspection {
@@ -763,5 +764,35 @@ mod tests {
         );
         // Clicking deep inside the car cabin (500, 450) rejects.
         assert!(resolve_token_destination_cm(&req, "pc1", 500, 450).is_err());
+    }
+
+    #[test]
+    fn test_decorative_tree_and_vehicle_report_visual_only_no_cover() {
+        let mut car = make_prop_at_cm(PropKind::Car, 500, 450, 0, None, 0);
+        car.decorative = true;
+        let (eng_dx, eng_dy) = car.footprint_m().local_dir_to_world(0.0, 2.0);
+        let mut tree = make_prop_at_cm(PropKind::LargeTree, 200, 200, 0, None, 0);
+        tree.decorative = true;
+
+        let mut req = sample_req();
+        req.props = vec![car, tree];
+
+        let car_cab = inspect_map_point(&req, "Suburban Park", 5.0, 4.5).unwrap();
+        assert_eq!(car_cab.cover_label, "Visual Only (No Cover)");
+        assert!(car_cab.subtitle.contains("Visual Only"));
+
+        let car_eng =
+            inspect_map_point(&req, "Suburban Park", 5.0 + eng_dx, 4.5 + eng_dy).unwrap();
+        assert_eq!(car_eng.cover_label, "Visual Only (No Cover)");
+        assert!(car_eng.subtitle.contains("Visual Only"));
+        assert!(!car_eng.title.contains("Engine Block"));
+
+        let tree_trunk = inspect_map_point(&req, "Suburban Park", 2.0, 2.0).unwrap();
+        assert_eq!(tree_trunk.cover_label, "Visual Only (No Cover)");
+        assert!(tree_trunk.subtitle.contains("Visual Only"));
+
+        let tree_canopy = inspect_map_point(&req, "Suburban Park", 2.75, 2.0).unwrap();
+        assert_eq!(tree_canopy.cover_label, "Visual Only (No Cover)");
+        assert!(tree_canopy.subtitle.contains("Visual Only"));
     }
 }

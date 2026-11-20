@@ -179,6 +179,20 @@ pub fn satya_load_gm_doc_preset(preset_kind: String) {
 /// to `POST /api/sessions/:session_id/docs`.
 #[wasm_bindgen]
 pub fn satya_submit_gm_document() {
+    if with_state(|st| {
+        st.session_id.is_some()
+            && st
+                .self_participant
+                .as_ref()
+                .is_some_and(|p| p.role == satya_schema::SessionRole::Observer)
+    }) {
+        set_feedback(
+            "gm-doc-feedback",
+            "Observers cannot submit GM vault documents.",
+            true,
+        );
+        return;
+    }
     spawn_local(async move {
         let Some((sid, tok)) = active_session_and_token_or_feedback(
             "gm-doc-feedback",

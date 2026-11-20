@@ -1736,3 +1736,29 @@ fn suburban_neighborhood_varies_house_sizes_aspect_ratios_and_setbacks() {
         "Expected both 1F-only and 2F houses on 48x36 streets (saw_one_story={saw_one_story}, saw_two_story={saw_two_story})"
     );
 }
+
+#[test]
+fn test_map_continuation_preserves_ground_override_tint_and_cell_size() {
+    let mut base = build_procedural_map_request_with_options(
+        "cont-ground",
+        SectorPreset::SuburbanNeighborhood,
+        None,
+        20,
+        16,
+        11,
+        None,
+        None,
+    );
+    base.ground_floor_override = Some("brick_paver".to_owned());
+    base.ground_tint_rgb = Some([210, 195, 180]);
+    base.cell_size_cm = 100;
+
+    let cont = continue_procedural_map(&base, MapContinuationDir::East, Some(77))
+        .expect("continue_procedural_map east succeeds");
+    assert_eq!(
+        cont.map.ground_floor_override.as_deref(),
+        Some("brick_paver")
+    );
+    assert_eq!(cont.map.ground_tint_rgb, Some([210, 195, 180]));
+    assert_eq!(cont.map.cell_size_cm, 100);
+}

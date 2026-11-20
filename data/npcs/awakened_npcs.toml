@@ -4,7 +4,9 @@
 npc_id = "dr_bandajara"
 name = "Dr. Bandajara"
 archetype = "AI Architect & Haunted Whistleblower"
+public_archetype = "AI Researcher & Former Lab Lead"
 faction = "Big Tech Dissenter / Manjusri Contact"
+public_faction = "Independent Academic"
 disposition = "guarded"
 combat_stance = "DEFENSIVE"
 fatigue = 1
@@ -48,7 +50,9 @@ dual_psyche_wedge_hint = "Pit his strict Chain-of-Command Duty (High CNF=16) aga
 npc_id = "satyang_sister_lin"
 name = "Mei-Ling 'Lotus' Lin"
 archetype = "Satyang Community Organizer (Avalokitesvara Pillar)"
+public_archetype = "Neighborhood Mutual-Aid Clinic Coordinator"
 faction = "Satyang (Blue Lotus Network)"
+public_faction = "St. Jude Mutual-Aid Annex"
 disposition = "cooperative"
 combat_stance = "DEFENSIVE"
 fatigue = 1
@@ -57,7 +61,7 @@ attribute_tns = { STR = 9, DEX = 11, INT = 14, WIL = 15 }
 skills = { empathy_social_perception = 4, persuasion_fast_talk = 3, first_aid_bls_cpr = 2, cryptography = 2 }
 psyche = { opn = 16, slf = 4, blg = 15, agg = 5, ego = 6, cnf = 7, ext = 14, trs = 12, cps = 17 }
 public_summary = "Warm, rapid-speaking coordinator running a crowded neighborhood mutual-aid clinic and displaced-worker legal desk."
-notes = "Operates openly under the Avalokitesvara humanitarian banner while quietly vetting couriers for Satyang's Ksitigharba hackers and Vajrapani security cells."
+notes = "Operates openly under the Avalokitesvara humanitarian banner while quietly vetting couriers for Satyang's Ksitigarbha hackers and Vajrapani security cells."
 secrets = [
   "Maintains an offline server cage beneath the clinic basement serving both indigent medical triage and encrypted AI sanctuaries.",
   "Knows two clinic regulars were approached by Humanis Primaris recruiters last week.",

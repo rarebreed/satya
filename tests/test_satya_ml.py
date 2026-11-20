@@ -956,7 +956,7 @@ def test_ai_gm_langgraph_and_fastapi_bridge(space_opera_pack: Any) -> None:
                         content="In Satya Action Mode, combat starts at Tick 1 (`Tick_start = max(1, 15 - OODA)`). Allocate your Tactical Pool `P_eff = T + C + F` in the Task Resolution & Action Pool drawer."
                     )
                 return AIMessage(
-                    content="> **[ACTION MODE · Window 1 · Tick 1 (0.5s)]**\nSelect a Combat Technique (`Snap Shot [Base 3 TC]`) and your `Tempo / Control / Force` split."
+                    content="> **[ACTION MODE · Window 1 · Tick 1 (0.25s)]**\nSelect a Combat Technique (`Snap Shot [Base 3 TC]`) and your `Tempo / Control / Force` split."
                 )
 
         set_chat_model_override(RulesAndActionModeModel())

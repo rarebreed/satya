@@ -48,6 +48,7 @@ fn surface_crossing_kind(kind: SurfaceFeatureKind) -> Option<u8> {
         SurfaceFeatureKind::CreekChannel | SurfaceFeatureKind::DrainageDitch => Some(1),
         SurfaceFeatureKind::DirtTrail
         | SurfaceFeatureKind::StoneWalk
+        | SurfaceFeatureKind::BrickPaverWalk
         | SurfaceFeatureKind::ConcreteWalk => Some(2),
         _ => None,
     }

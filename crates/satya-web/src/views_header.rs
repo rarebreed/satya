@@ -423,7 +423,7 @@ pub fn HeaderBar() -> impl IntoView {
                                             id="menu-ai-player-name"
                                             name="menu_ai_player_name"
                                             type="text"
-                                            value="Kaelen Voss (AI Player)"
+                                            value="Mateo Vance (AI Player)"
                                         />
                                     </label>
                                     <label for="menu-ai-player-persona">

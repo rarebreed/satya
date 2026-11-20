@@ -288,7 +288,7 @@ def format_action_mode_hud_block(
 
     return (
         f"[ACTION MODE — TACTICAL CLOCK, MAP & T/C/F POOLS]: "
-        f"Window {rnd} · Tick {tck} ({tck * 0.5:.1f}s) | "
+        f"Window {rnd} · Tick {tck} ({tck * 0.25:.2f}s) | "
         f"Timeline: {'; '.join(comb_parts) if comb_parts else 'initializing'} | "
         f"Tactical Pools: {'; '.join(pool_parts) if pool_parts else 'default P_eff=11 (B=3, T/C/F caps 7/7/7)'} | "
         f"Tactical Map Stub: {map_summary}"
@@ -306,6 +306,9 @@ Rules:
 def _classify_tool_tier(tool_name: str) -> tuple[str, str]:
     if tool_name in {
         "generate_tactical_map",
+        "continue_tactical_map",
+        "switch_tactical_map_floor",
+        "register_spatial_clue_pin",
         "move_map_token",
         "inspect_tactical_map",
         "get_combat_tracker_state",
@@ -324,6 +327,11 @@ def _classify_tool_tier(tool_name: str) -> tuple[str, str]:
         "query_engine_and_rules_rag",
         "configure_scenario_director",
         "trigger_scenario_beat",
+        "perform_empathy_read",
+        "deliver_social_argument",
+        "resolve_psyche_dissonance_or_surge",
+        "get_world_clocks_and_heat",
+        "advance_faction_or_heat_clock",
         "verify_forensic_audit_proof",
         "inspect_synthetic_or_proxy_telemetry",
         "evaluate_npc_morale_or_trigger",
@@ -480,6 +488,7 @@ def build_ai_gm_graph(
             set_session_operating_mode(session_id, operating_mode, human_gm_user_id)
             set_session_llm_config(session_id, cfg)
             npcs = get_session_npcs(session_id)
+            world_ledger = get_session_world_ledger(session_id)
 
             new_messages: list[BaseMessage] = []
             existing_msgs = state.get("messages") or []
@@ -516,7 +525,7 @@ def build_ai_gm_graph(
                     prompt_text = (
                         f"[OUT_OF_CHARACTER RULES / TABLE QUESTION — Do NOT echo this bracketed header, advance story time, or treat as an in-character action! "
                         f"Answer {actor_name}'s specific rules/mechanics question directly and concisely using the relevant Satya mechanics "
-                        f"(such as Count-Up Tick Timeline `Tick_start = max(1, 15 - OODA)` / `1 Tick = 0.5s`, "
+                        f"(such as Count-Up Tick Timeline `Tick_start = max(1, 15 - OODA)` / `1 Tick = 0.25s`, "
                         f"Tactical Triad `P_eff = T + C + F`, `Effective TC = max(1, Base TC - floor((T - B) / 2))`, `Control Delta_ext = -(C - B)`, `Force +floor((F - B) / 2)` Shock/Damage, "
                         f"and the `Task Resolution & Action Pool` drawer when asked about combat/pools).]\n"
                         f"[Session={session_id} | Mode={operating_mode} | Channel=OUT_OF_CHARACTER] {actor_name}: {content}"
@@ -834,7 +843,7 @@ def build_ai_gm_graph(
                         f"{mandate_text}\n"
                         f"{hud_block}\n"
                         "[ACTION MODE MANDATE]: Transition immediately into **Combat Action Mode**! "
-                        "Include the `> **[ACTION MODE · Window 1 · Tick 1 (0.5s)]**` HUD header, list each combatant's `Next Action Tick` and map coordinates, "
+                        "Include the `> **[ACTION MODE · Window 1 · Tick 1 (0.25s)]**` HUD header, list each combatant's `Next Action Tick` and map coordinates, "
                         "display the player's **Tactical Pool** (`P_eff`, Neutral `B`, `T_max/C_max/F_max`), and offer concrete **Combat Technique + `Tempo / Control / Force` (`T/C/F`)** options "
                         "(e.g., `Snap Shot [Base 3 TC]`, `Combat Sighted Shot [Base 6 TC]`, `Cover Peek [Base 3 TC]`, `Thrust / Punch [Base 3 TC]`, `Grab / Takedown [Base 4 TC]`)."
                     )
@@ -1087,7 +1096,7 @@ def build_ai_gm_graph(
             t_name = tc.get("name", "")
             t_args = dict(tc.get("args") or {})
             t_id = tc.get("id") or f"call-{uuid.uuid4().hex[:8]}"
-            if "session_id" not in t_args and t_name in {
+            _session_scoped_tools = {
                 "lookup_npc_profile",
                 "update_npc_state",
                 "generate_npc_from_description",
@@ -1097,12 +1106,16 @@ def build_ai_gm_graph(
                 "upsert_gm_memory",
                 "search_gm_memory_and_docs",
                 "generate_tactical_map",
+                "continue_tactical_map",
+                "switch_tactical_map_floor",
                 "move_map_token",
                 "inspect_tactical_map",
+                "register_spatial_clue_pin",
                 "roll_satya_d20_check",
                 "whisper_to_player",
                 "narrate_to_session",
                 "query_campaign_lore",
+                "query_engine_and_rules_rag",
                 "read_gm_documents",
                 "configure_scenario_director",
                 "trigger_scenario_beat",
@@ -1111,8 +1124,27 @@ def build_ai_gm_graph(
                 "resolve_psyche_dissonance_or_surge",
                 "get_world_clocks_and_heat",
                 "advance_faction_or_heat_clock",
-            }:
-                t_args["session_id"] = session_id
+                "verify_forensic_audit_proof",
+                "inspect_synthetic_or_proxy_telemetry",
+                "evaluate_npc_morale_or_trigger",
+                "manage_synthetic_substrate_and_embodiment",
+                "intervene_ai_cage_or_hunter_ai",
+                "update_campaign_arc_and_conspiracies",
+                "manage_polycrisis_grid_and_strain",
+                "transmit_via_tradecraft_channel",
+            }
+            if "session_id" not in t_args:
+                tool_obj = tool_map.get(t_name)
+                has_session_arg = t_name in _session_scoped_tools
+                if not has_session_arg and tool_obj is not None:
+                    args_dict = getattr(tool_obj, "args", None)
+                    model_fields = getattr(getattr(tool_obj, "args_schema", None), "model_fields", None)
+                    if (isinstance(args_dict, dict) and "session_id" in args_dict) or (
+                        isinstance(model_fields, dict) and "session_id" in model_fields
+                    ):
+                        has_session_arg = True
+                if has_session_arg:
+                    t_args["session_id"] = session_id
 
             # Normalize list/non-string arguments emitted by local models (e.g. `query=[]`)
             for str_key in (

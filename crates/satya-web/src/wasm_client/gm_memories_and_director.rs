@@ -79,6 +79,20 @@ pub(crate) fn sync_local_gm_memories_dom(memories: &[GmMemoryNoteRecord]) {
 /// Creates or updates a persistent GM memory note via `POST /api/sessions/:session_id/memories`.
 #[wasm_bindgen]
 pub fn satya_submit_gm_memory() {
+    if crate::wasm_client::state::with_state(|st| {
+        st.session_id.is_some()
+            && st
+                .self_participant
+                .as_ref()
+                .is_some_and(|p| p.role == satya_schema::SessionRole::Observer)
+    }) {
+        set_feedback(
+            "gm-doc-feedback",
+            "Observers cannot create or edit GM memory notes.",
+            true,
+        );
+        return;
+    }
     spawn_local(async move {
         let Some((sid, tok)) = active_session_and_token_or_feedback(
             "gm-doc-feedback",

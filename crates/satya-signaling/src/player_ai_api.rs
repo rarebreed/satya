@@ -3,8 +3,8 @@
 //! player-attributed chat/roll execution, and AI-to-AI rally turn budget enforcement.
 
 use crate::gm_api::{
-    apply_combat_action_to_mechanics_and_tracker, should_trigger_ai_gm_for_chat,
-    trigger_ai_gm_chat_reply, verify_gm_service_header,
+    apply_combat_action_to_mechanics_and_tracker, evaluate_roll_combat_action_and_triad,
+    should_trigger_ai_gm_for_chat, trigger_ai_gm_chat_reply, verify_gm_service_header,
 };
 use crate::state::SignalingAppState;
 use axum::{
@@ -16,9 +16,9 @@ use axum::{
 use rand::Rng;
 use satya_engine::{CascadeTaskParams, evaluate_satya_cascade_task};
 use satya_schema::{
-    AiPlayerConfig, ChannelContext, ChatMessageEvent, MessageVisibility, Participant,
-    PlayerAiChatRequest, PlayerAiRollRequest, ServerWsPacket, SessionMode, SessionRole,
-    StepAiPlayerRequest, WgpuDiceSpec, subjects,
+    AiPlayerConfig, CanvasEventType, ChannelContext, ChatMessageEvent, MessageVisibility,
+    Participant, PlayerAiChatRequest, PlayerAiRollRequest, ServerWsPacket, SessionMode,
+    SessionRole, StepAiPlayerRequest, TabletopCanvasEvent, WgpuDiceSpec, subjects,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -84,15 +84,23 @@ pub async fn list_session_ai_players_handler(
         )
             .into_response();
     };
-    if state.auth.verify_auth_token(auth_hdr).await.is_none() {
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({ "error": "Invalid or expired auth token" })),
         )
             .into_response();
-    }
+    };
 
     let sid = session_id.trim();
+    let roster = state.auth.get_session_roster(sid).await;
+    if !roster.iter().any(|p| p.user_id == user.user_id) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Caller is not an active participant in this session" })),
+        )
+            .into_response();
+    }
     let players: Vec<SessionAiPlayerEntry> = state
         .ai_players
         .read()
@@ -133,16 +141,25 @@ pub async fn upsert_session_ai_player_handler(
         )
             .into_response();
     };
-    if state.auth.verify_auth_token(auth_hdr).await.is_none() {
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({ "error": "Invalid or expired auth token" })),
         )
             .into_response();
+    };
+    let sid = session_id.trim().to_string();
+    if !crate::npcs::can_caller_orchestrate_ai_session(&state, &sid, &user).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Only the session GM or host can configure AI Players" })),
+        )
+            .into_response();
     }
 
-    let sid = session_id.trim().to_string();
     let default_cfg = &state.storage.config().ai_gm;
+    let pack_defaults =
+        crate::campaign_lore::resolve_pack_defaults(Some(state.campaign_pack.as_str()));
     let uid = req
         .user_id
         .as_deref()
@@ -155,7 +172,7 @@ pub async fn upsert_session_ai_player_handler(
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .unwrap_or("Kaelen Voss (AI Player)")
+        .unwrap_or(&pack_defaults.default_ai_player_name)
         .to_string();
     let provider = req
         .provider
@@ -207,11 +224,15 @@ pub async fn upsert_session_ai_player_handler(
         max_rally_turns: req.max_rally_turns.clamp(1, 10),
     };
 
-    // Add to active session roster so `party_turn_gate_node` and clients see the AI Player
+    // Add to active session roster & combat tracker so `party_turn_gate_node` and clients see the AI Player
     let roster_opt = {
         let mut sessions_guard = state.auth.sessions.write().await;
         if let Some(session) = sessions_guard.get_mut(&sid) {
             session.roster.insert(uid.clone(), participant.clone());
+            crate::auth::AuthAndSessionManager::sync_combatant_into_tracker(
+                &mut session.combat_tracker,
+                &participant,
+            );
             Some(session.roster.values().cloned().collect::<Vec<_>>())
         } else {
             None
@@ -265,15 +286,22 @@ pub async fn remove_session_ai_player_handler(
         )
             .into_response();
     };
-    if state.auth.verify_auth_token(auth_hdr).await.is_none() {
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({ "error": "Invalid or expired auth token" })),
         )
             .into_response();
-    }
+    };
 
     let sid = session_id.trim();
+    if !crate::npcs::can_caller_orchestrate_ai_session(&state, sid, &user).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Only the session GM or host can remove AI Players" })),
+        )
+            .into_response();
+    }
     let uid = player_user_id.trim();
     if let Some(map) = state.ai_players.write().await.get_mut(sid) {
         map.remove(uid);
@@ -282,6 +310,7 @@ pub async fn remove_session_ai_player_handler(
     let mut roster = Vec::new();
     if let Some(session) = state.auth.sessions.write().await.get_mut(sid) {
         session.roster.remove(uid);
+        session.combat_tracker.combatants.retain(|c| c.entity_id != uid);
         roster = session.roster.values().cloned().collect();
     }
     if !roster.is_empty()
@@ -318,15 +347,22 @@ pub async fn step_session_ai_player_handler(
         )
             .into_response();
     };
-    if state.auth.verify_auth_token(auth_hdr).await.is_none() {
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
         return (
             StatusCode::UNAUTHORIZED,
             Json(json!({ "error": "Invalid or expired auth token" })),
         )
             .into_response();
-    }
+    };
 
     let sid = session_id.trim().to_string();
+    if !crate::npcs::can_caller_orchestrate_ai_session(&state, &sid, &user).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Only the session GM or host can step AI Players" })),
+        )
+            .into_response();
+    }
     state.reset_ai_rally_counter(&sid).await;
 
     let entries: Vec<SessionAiPlayerEntry> = {
@@ -467,6 +503,15 @@ pub async fn player_ai_session_context_handler(
 
     let raw_ledger = crate::world_clocks::get_or_init_world_ledger(&state, sid).await;
     let filtered_world_ledger = satya_engine::filter_world_ledger_for_viewer(&raw_ledger, false);
+    let pack_defaults =
+        crate::campaign_lore::resolve_pack_defaults(Some(state.campaign_pack.as_str()));
+    let filtered_combat_tracker = gm_ctx.combat_tracker.as_ref().map(|t| {
+        crate::auth::AuthAndSessionManager::filter_combat_tracker_for_viewer(
+            t,
+            gm_ctx.active_map.as_ref(),
+            false,
+        )
+    });
 
     (
         StatusCode::OK,
@@ -476,14 +521,14 @@ pub async fn player_ai_session_context_handler(
             "player_display_name": ai_entry
                 .as_ref()
                 .map(|e| e.participant.display_name.clone())
-                .unwrap_or_else(|| "Kaelen Voss (AI Player)".to_string()),
+                .unwrap_or_else(|| pack_defaults.default_ai_player_name.clone()),
             "persona_prompt": ai_entry
                 .as_ref()
                 .map(|e| e.persona_prompt.clone())
                 .unwrap_or_default(),
             "roster": gm_ctx.roster,
             "character_sheet": bound_sheet,
-            "combat_tracker": gm_ctx.combat_tracker,
+            "combat_tracker": filtered_combat_tracker,
             "active_map": filtered_active_map,
             "public_npcs": public_npcs,
             "world_ledger": filtered_world_ledger,
@@ -520,6 +565,8 @@ pub async fn player_ai_session_chat_handler(
         .get(sid)
         .and_then(|m| m.get(req.user_id.trim()))
         .cloned();
+    let pack_defaults =
+        crate::campaign_lore::resolve_pack_defaults(Some(state.campaign_pack.as_str()));
 
     let sender = ai_entry
         .as_ref()
@@ -535,7 +582,7 @@ pub async fn player_ai_session_chat_handler(
                 req.user_id.trim(),
                 req.display_name
                     .as_deref()
-                    .unwrap_or("Kaelen Voss (AI Player)"),
+                    .unwrap_or(&pack_defaults.default_ai_player_name),
                 None,
                 "ollama/gemma4:12b",
                 "tactical-party-player",
@@ -587,7 +634,21 @@ pub async fn player_ai_session_chat_handler(
     .to_string();
     state.send_to_users(sid, &delivery_ids, &pkt_str).await;
 
-    let max_rally = ai_entry.as_ref().map(|e| e.max_rally_turns).unwrap_or(2);
+    let (max_rally, active_ai_count) = {
+        let guard = state.ai_players.read().await;
+        let room = guard.get(sid);
+        let cap = ai_entry.as_ref().map(|e| e.max_rally_turns).unwrap_or(2);
+        let count = room
+            .map(|m| m.values().filter(|e| e.auto_respond).count())
+            .unwrap_or(1)
+            .max(1);
+        (cap, count)
+    };
+    let eff_rally_cap = if active_ai_count > 1 {
+        max_rally.saturating_mul(active_ai_count as u32).min(12)
+    } else {
+        max_rally
+    };
     if req.auto_trigger_gm
         && ctx.session_mode == SessionMode::Ttrpg
         && let Some(ai_gm) = ctx
@@ -603,22 +664,33 @@ pub async fn player_ai_session_chat_handler(
             req.channel_context,
             &req.body,
         )
-        && state.try_consume_ai_rally_turn(sid, max_rally).await
+        && state.try_consume_ai_rally_turn(sid, eff_rally_cap).await
     {
-        trigger_ai_gm_chat_reply(
-            &state,
-            sid,
-            ctx.session_mode,
-            &ai_gm,
-            &sender,
-            &chat_event.message_id,
-            "CHAT",
-            req.visibility,
-            Some(req.channel_context),
-            &req.body,
-            &ctx.roster,
-        )
-        .await;
+        let state_clone = state.clone();
+        let sid_clone = sid.to_string();
+        let session_mode = ctx.session_mode;
+        let sender_clone = sender.clone();
+        let msg_id_clone = chat_event.message_id.clone();
+        let vis = req.visibility;
+        let ch_ctx = req.channel_context;
+        let body_clone = req.body.clone();
+        let roster_clone = ctx.roster.clone();
+        tokio::spawn(async move {
+            trigger_ai_gm_chat_reply(
+                &state_clone,
+                &sid_clone,
+                session_mode,
+                &ai_gm,
+                &sender_clone,
+                &msg_id_clone,
+                "CHAT",
+                vis,
+                Some(ch_ctx),
+                &body_clone,
+                &roster_clone,
+            )
+            .await;
+        });
     }
 
     (StatusCode::OK, Json(chat_event)).into_response()
@@ -644,6 +716,8 @@ pub async fn player_ai_session_roll_handler(
             .into_response();
     };
 
+    let pack_defaults =
+        crate::campaign_lore::resolve_pack_defaults(Some(state.campaign_pack.as_str()));
     let actor = state
         .ai_players
         .read()
@@ -662,7 +736,7 @@ pub async fn player_ai_session_roll_handler(
                 req.user_id.trim(),
                 req.actor_display_name
                     .as_deref()
-                    .unwrap_or("Kaelen Voss (AI Player)"),
+                    .unwrap_or(&pack_defaults.default_ai_player_name),
                 None,
                 "ollama/gemma4:12b",
                 "tactical-party-player",
@@ -672,7 +746,20 @@ pub async fn player_ai_session_roll_handler(
     let n_pairs = req.skill_rank.clamp(1, 10);
     let control_c = req.attribute_tn.clamp(1, 20);
     let int_mod = req.internal_mod.clamp(-2, 10);
-    let ext_mod = req.difficulty_mod.clamp(-10, 16);
+    let tech_delta_ext = evaluate_roll_combat_action_and_triad(
+        req.combat_technique.as_deref(),
+        req.tempo_pool,
+        req.control_pool,
+        req.force_pool,
+        None,
+        control_c,
+        n_pairs,
+        int_mod.max(0),
+        0.0,
+    )
+    .map(|(res, _)| res.technique_delta_ext)
+    .unwrap_or(0);
+    let ext_mod = (req.difficulty_mod + tech_delta_ext).clamp(-10, 16);
     let (rolled_pairs, physics_seed) = {
         let mut rng = rand::thread_rng();
         let pairs: Vec<(i32, i32)> = (0..n_pairs)
@@ -708,14 +795,21 @@ pub async fn player_ai_session_roll_handler(
         int_mod.max(0),
         0.0,
     );
-    if let Some(note) = req
+    let base_note = format!(
+        "cascade(tn_eff={}, signed_margin={:+}, {:?})",
+        params.tn_eff(),
+        outcome.signed_margin,
+        outcome.outcome_kind
+    );
+    mech_ev.notes = match req
         .notes
         .as_ref()
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
     {
-        mech_ev.notes = Some(note.to_string());
-    }
+        Some(note) => Some(format!("{base_note} | {note}")),
+        None => Some(base_note),
+    };
 
     apply_combat_action_to_mechanics_and_tracker(
         &state,
@@ -749,6 +843,28 @@ pub async fn player_ai_session_roll_handler(
         outcomes: mech_ev.dice_rolled_d20.clone(),
         visibility: MessageVisibility::Public,
     };
+    if let Ok(canvas_meta) = state.storage.registry().build_metadata(
+        state.next_seq(),
+        subjects::TABLETOP_CANVAS,
+        1,
+        sid,
+        ctx.session_mode,
+    ) {
+        let canvas_ev = TabletopCanvasEvent {
+            metadata: canvas_meta,
+            canvas_event_type: CanvasEventType::WgpuDiceSpawned,
+            actor: actor.clone(),
+            map_id: ctx.active_map.as_ref().map(|m| m.map_id.clone()),
+            map_title: ctx.active_map.as_ref().map(|m| m.title.clone()),
+            image_url: ctx.active_map.as_ref().map(|m| m.image_url.clone()),
+            grid_width: ctx.active_map.as_ref().map(|m| m.grid_width),
+            grid_height: ctx.active_map.as_ref().map(|m| m.grid_height),
+            token_placements: Vec::new(),
+            wgpu_dice_roll: Some(dice_spec.clone()),
+            terrain_notes: req.notes.clone(),
+        };
+        let _ = state.storage.log_tabletop_canvas(&canvas_ev).await;
+    }
     if let Ok(dice_pkt) = serde_json::to_string(&ServerWsPacket::WgpuDiceRoll {
         actor: actor.clone(),
         spec: dice_spec,
@@ -811,6 +927,30 @@ pub async fn trigger_ai_player_turn(
         None => (None, None),
     };
     let ephemeral_key = vault_opt.as_ref().and_then(|v| v.api_key.clone());
+    let filtered_active_map = ctx_opt
+        .as_ref()
+        .and_then(|c| c.active_map.as_ref())
+        .map(|m| crate::map_handlers::filter_map_for_role(m, SessionRole::Player));
+    let filtered_tracker = ctx_opt
+        .as_ref()
+        .and_then(|c| c.combat_tracker.as_ref())
+        .map(|t| {
+            crate::auth::AuthAndSessionManager::filter_combat_tracker_for_viewer(
+                t,
+                ctx_opt.as_ref().and_then(|c| c.active_map.as_ref()),
+                false,
+            )
+        });
+    let bound_sheet = ctx_opt.as_ref().and_then(|c| {
+        let target_cid = entry.participant.character_id.as_deref();
+        c.session_characters
+            .iter()
+            .find(|s| {
+                target_cid.is_some_and(|cid| s.character_id == cid)
+                    || s.owner_user_id == entry.participant.user_id
+            })
+            .cloned()
+    });
 
     let payload = json!({
         "session_id": session_id,
@@ -818,8 +958,9 @@ pub async fn trigger_ai_player_turn(
         "player_display_name": entry.participant.display_name,
         "persona_prompt": entry.persona_prompt,
         "roster": ctx_opt.as_ref().map(|c| c.roster.clone()).unwrap_or_default(),
-        "combat_tracker": ctx_opt.as_ref().map(|c| c.combat_tracker.clone()),
-        "active_map": ctx_opt.as_ref().and_then(|c| c.active_map.clone()),
+        "character_sheet": bound_sheet,
+        "combat_tracker": filtered_tracker,
+        "active_map": filtered_active_map,
         "content": prompt_text,
         "auto_trigger_gm": auto_trigger_gm,
         "provider": entry.provider,

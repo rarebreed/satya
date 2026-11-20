@@ -37,10 +37,13 @@ pub fn can_viewer_see_npc_secrets(
     if session_id.is_none() {
         return true;
     }
-    if let Some(me) = self_part
-        && me.role == SessionRole::Gm
-    {
-        return true;
+    if let Some(me) = self_part {
+        if me.role == SessionRole::Observer {
+            return false;
+        }
+        if matches!(me.role, SessionRole::Gm | SessionRole::Host) {
+            return true;
+        }
     }
     if !roster.is_empty() {
         let has_human_gm = roster

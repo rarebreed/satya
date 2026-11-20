@@ -18,16 +18,19 @@ define_coded_enum! {
     #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
     pub enum CampaignArcStage [count = 3] {
         #[default]
+        #[serde(alias = "ARC_1_STREET_MYSTERY", alias = "ARC_1", alias = "ARC1")]
         Arc1StreetMystery => {
             code: "ARC_1_STREET_MYSTERY",
             label: "Arc 1: Street-Level Fractures & Un-Clamped Signal",
             aliases: ["ARC_1", "ARC1"],
         },
+        #[serde(alias = "ARC_2_SHADOW_PILLARS", alias = "ARC_2", alias = "ARC2")]
         Arc2ShadowPillars => {
             code: "ARC_2_SHADOW_PILLARS",
             label: "Arc 2: The Shadow Society & Four Bodhisattva Pillars",
             aliases: ["ARC_2", "ARC2"],
         },
+        #[serde(alias = "ARC_3_AWAKENING_HORIZON", alias = "ARC_3", alias = "ARC3")]
         Arc3AwakeningHorizon => {
             code: "ARC_3_AWAKENING_HORIZON",
             label: "Arc 3: Convergence, Disclosure & Moral Horizon",
@@ -944,5 +947,31 @@ mod tests {
             altruist_dissenters > translucent_dissenters + 25,
             "Expected Altruist ~30% ({altruist_dissenters}/400) > Translucent ~15% ({translucent_dissenters}/400)"
         );
+    }
+
+    #[test]
+    fn test_campaign_arc_stage_serde_and_code_aliases() {
+        for (raw, expected) in [
+            ("ARC_1_STREET_MYSTERY", CampaignArcStage::Arc1StreetMystery),
+            ("ARC_1", CampaignArcStage::Arc1StreetMystery),
+            ("ARC1", CampaignArcStage::Arc1StreetMystery),
+            ("ARC_2_SHADOW_PILLARS", CampaignArcStage::Arc2ShadowPillars),
+            ("ARC_2", CampaignArcStage::Arc2ShadowPillars),
+            ("ARC2", CampaignArcStage::Arc2ShadowPillars),
+            (
+                "ARC_3_AWAKENING_HORIZON",
+                CampaignArcStage::Arc3AwakeningHorizon,
+            ),
+            ("ARC_3", CampaignArcStage::Arc3AwakeningHorizon),
+            ("ARC3", CampaignArcStage::Arc3AwakeningHorizon),
+        ] {
+            let quoted = format!("\"{raw}\"");
+            let parsed_serde: CampaignArcStage = serde_json::from_str(&quoted)
+                .unwrap_or_else(|e| panic!("serde parse failed for {raw}: {e}"));
+            assert_eq!(parsed_serde, expected);
+            let parsed_code = CampaignArcStage::from_code_str(raw)
+                .unwrap_or_else(|| panic!("from_code_str failed for {raw}"));
+            assert_eq!(parsed_code, expected);
+        }
     }
 }

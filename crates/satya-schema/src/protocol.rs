@@ -558,7 +558,7 @@ pub struct SessionGmMemoriesResponse {
     pub memories: Vec<GmMemoryNoteRecord>,
 }
 
-/// Per-combatant readiness and stance entry on the Satya Count-Up Tick timeline (`1 Tick = 0.5s`).
+/// Per-combatant readiness and stance entry on the Satya Count-Up Tick timeline (`1 Tick = 0.25s`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CombatantTickEntry {
     pub entity_id: String,
@@ -583,7 +583,7 @@ pub struct CombatantTickEntry {
     pub zone_label: Option<String>,
 }
 
-/// Authoritative Satya Count-Up Tick Combat Tracker state for a session (`1 Tick = 0.5s`, `1 Window = 20 Ticks`).
+/// Authoritative Satya Count-Up Tick Combat Tracker state for a session (`1 Tick = 0.25s`, `1 Window = 20 Ticks = 5.0s`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CombatTrackerState {
     pub session_id: String,

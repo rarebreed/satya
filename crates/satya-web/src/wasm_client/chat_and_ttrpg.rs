@@ -272,6 +272,16 @@ pub fn satya_send_chat() {
             msg_body
         }
         Ok(Some(crate::chat_cmd::ChatCommand::Roll { expr_raw, pipeline })) => {
+            if with_state(|st| {
+                st.session_id.is_some()
+                    && st
+                        .self_participant
+                        .as_ref()
+                        .is_some_and(|p| p.role == satya_schema::SessionRole::Observer)
+            }) {
+                append_system_notice("Observers are in read-only spectator mode and cannot roll dice into active play.");
+                return;
+            }
             let outcome = match pipeline.evaluate_with_roller(&expr_raw, roll_browser_die_i64) {
                 Ok(out) => out,
                 Err(err) => {

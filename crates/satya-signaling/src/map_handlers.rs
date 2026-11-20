@@ -10,17 +10,19 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
+use satya_engine::map_surface_queries::topmost_surface_at_m;
 use satya_engine::tactical_map::{
     SectorPreset, build_procedural_map_request, generate_procedural_sector,
 };
 use satya_engine::tactical_map_geom::{
     TOKEN_RADIUS_M, circle_collides_obstacles, migrate_legacy_tiles_to_vector,
-    resolve_token_destination_cm,
+    prop_contains_point, resolve_token_destination_cm,
 };
 use satya_schema::{
     CanvasEventType, GmMapUpdateRequest, MessageVisibility, MoveMapTokenRequest, Participant,
-    ParticipantKind, ServerWsPacket, SessionMode, SessionRole, TabletopCanvasEvent, TokenPlacement,
-    TokenVisualSpec, UpdateCombatTrackerRequest, sanitize_portrait_url, subjects,
+    ParticipantKind, PropKind, ServerWsPacket, SessionMode, SessionRole, SurfaceFeatureKind,
+    TabletopCanvasEvent, TokenPlacement, TokenVisualSpec, UpdateCombatTrackerRequest,
+    sanitize_portrait_url, subjects,
 };
 use serde_json::json;
 use std::collections::HashSet;
@@ -34,6 +36,38 @@ pub fn can_role_see_gm_only_tokens(role: SessionRole) -> bool {
         role,
         SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
     )
+}
+
+/// Returns `true` when either the source position or destination on `from_floor`/`to_floor` is
+/// within `2.5m` (`250cm`) of a vertical portal (`Stairwell`, `ElevatorCar`, `ServiceElevator`, etc.).
+pub(crate) fn is_near_vertical_portal(
+    map: &GmMapUpdateRequest,
+    from_floor: i32,
+    to_floor: i32,
+    from_cm: Option<(i32, i32)>,
+    to_cm: (i32, i32),
+) -> bool {
+    let near_pt = |pcx: f32, pcy: f32, (qx, qy): (i32, i32)| -> bool {
+        (pcx - qx as f32).hypot(pcy - qy as f32) <= 250.0
+    };
+    let check_prop = |p: &satya_schema::MapPropPlacement| -> bool {
+        if !p.kind.is_vertical_portal() {
+            return false;
+        }
+        let (cx, cy) = p.center_cm();
+        near_pt(cx as f32, cy as f32, to_cm)
+            || from_cm.is_some_and(|fc| near_pt(cx as f32, cy as f32, fc))
+    };
+    if map.floors.is_empty() {
+        map.props.iter().any(check_prop)
+    } else {
+        map.floors
+            .iter()
+            .filter(|f| f.floor_index == from_floor || f.floor_index == to_floor)
+            .flat_map(|f| f.props.iter())
+            .any(check_prop)
+            || map.props.iter().any(check_prop)
+    }
 }
 
 /// Filters `MessageVisibility::GmOnly` tokens (and their `token_visuals`) from `map` when `role` is a non-GM player or observer.
@@ -127,7 +161,12 @@ pub(crate) fn ensure_vector_map_ready(map: &mut GmMapUpdateRequest) {
         map.tiles.clear();
         return;
     }
-    if map.wall_edges.is_empty() && map.props.is_empty() && map.floors.is_empty() {
+    if map.wall_edges.is_empty()
+        && map.props.is_empty()
+        && map.floors.is_empty()
+        && map.surfaces.is_empty()
+        && map.tokens.is_empty()
+    {
         let p = map
             .theme_preset
             .as_deref()
@@ -162,17 +201,34 @@ pub(crate) fn find_unblocked_spawn_pos_cm(
     let pref_x_m = (preferred_x_cm as f32 / 100.0).clamp(0.45, (board_w_m - 0.45).max(0.45));
     let pref_y_m = (preferred_y_cm as f32 / 100.0).clamp(0.45, (board_h_m - 0.45).max(0.45));
     let is_free = |cx_m: f32, cy_m: f32| -> bool {
-        !circle_collides_obstacles(
-            board_w_m,
-            board_h_m,
-            &map.wall_edges,
-            &map.props,
-            cx_m,
-            cy_m,
-            TOKEN_RADIUS_M,
-        ) && occupied_m
-            .iter()
-            .all(|&(ox, oy)| (cx_m - ox).hypot(cy_m - oy) >= TOKEN_RADIUS_M * 2.1)
+        let on_water = matches!(
+            topmost_surface_at_m(&map.surfaces, cx_m, cy_m).map(|s| s.kind),
+            Some(
+                SurfaceFeatureKind::PoolWater
+                    | SurfaceFeatureKind::CreekChannel
+                    | SurfaceFeatureKind::DrainageDitch
+            )
+        );
+        let on_hazard_prop = map.props.iter().any(|p| {
+            matches!(
+                p.kind,
+                PropKind::HazardSpill | PropKind::CreekWater | PropKind::DrainageDitch
+            ) && prop_contains_point(p, cx_m, cy_m, true)
+        });
+        !on_water
+            && !on_hazard_prop
+            && !circle_collides_obstacles(
+                board_w_m,
+                board_h_m,
+                &map.wall_edges,
+                &map.props,
+                cx_m,
+                cy_m,
+                TOKEN_RADIUS_M,
+            )
+            && occupied_m
+                .iter()
+                .all(|&(ox, oy)| (cx_m - ox).hypot(cy_m - oy) >= TOKEN_RADIUS_M * 2.1)
     };
     if is_free(pref_x_m, pref_y_m) {
         return (
@@ -336,12 +392,20 @@ pub async fn session_move_map_token_handler(
             .into_response();
     };
 
+    if caller_part.role == SessionRole::Observer {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Observers are in read-only spectator mode and cannot move tokens" })),
+        )
+            .into_response();
+    }
+
     let has_human_gm = ctx.roster.iter().any(|p| {
         p.participant_kind == ParticipantKind::Human
             && matches!(p.role, SessionRole::Gm | SessionRole::Host)
     });
-    let caller_is_gm_or_solo =
-        matches!(caller_part.role, SessionRole::Gm | SessionRole::Host) || !has_human_gm;
+    let caller_is_gm_or_solo = matches!(caller_part.role, SessionRole::Gm | SessionRole::Host)
+        || (!has_human_gm && caller_part.role == SessionRole::Player);
     let owns_token = req.entity_id == user.user_id
         || caller_part
             .character_id
@@ -403,9 +467,13 @@ pub async fn session_move_map_token_handler(
             )
                 .into_response();
         }
-        let target_floor = req
-            .to_floor
-            .unwrap_or_else(|| map.token_floor(&req.entity_id));
+        let current_floor = map.token_floor(&req.entity_id);
+        let existing_pos = map
+            .tokens
+            .iter()
+            .find(|t| t.entity_id == req.entity_id)
+            .map(|t| map.token_pos_cm(t));
+        let target_floor = req.to_floor.unwrap_or(current_floor);
         let (final_x_cm, final_y_cm) = match if target_floor == map.active_floor {
             resolve_token_destination_cm(&map, &req.entity_id, req_x_cm, req_y_cm)
         } else {
@@ -419,6 +487,27 @@ pub async fn session_move_map_token_handler(
             }
         };
 
+        if target_floor != current_floor
+            && !matches!(caller_part.role, SessionRole::Gm | SessionRole::Host)
+            && !is_near_vertical_portal(
+                &map,
+                current_floor,
+                target_floor,
+                existing_pos,
+                (final_x_cm, final_y_cm),
+            )
+        {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": format!(
+                        "Cross-floor movement ({current_floor} -> {target_floor}) requires proximity within 2.5m of a stairwell, elevator, ladder, or escalator"
+                    )
+                })),
+            )
+                .into_response();
+        }
+
         let cell_cm = map.cell_size_cm.max(25);
         let final_gx = (final_x_cm / cell_cm).clamp(0, (map.grid_width - 1).max(0));
         let final_gy = (final_y_cm / cell_cm).clamp(0, (map.grid_height - 1).max(0));
@@ -431,11 +520,6 @@ pub async fn session_move_map_token_handler(
         };
 
         let mut auto_facing: Option<i32> = req.facing_deg;
-        let existing_pos = map
-            .tokens
-            .iter()
-            .find(|t| t.entity_id == req.entity_id)
-            .map(|t| map.token_pos_cm(t));
         if let Some((prev_x_cm, prev_y_cm)) = existing_pos {
             if auto_facing.is_none() && (prev_x_cm != final_x_cm || prev_y_cm != final_y_cm) {
                 let dx = (final_x_cm - prev_x_cm) as f32;

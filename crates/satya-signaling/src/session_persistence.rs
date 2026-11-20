@@ -729,6 +729,17 @@ impl AuthAndSessionManager {
                     }
                 }
             });
+            if resolved_role == SessionRole::AiGm {
+                anyhow::bail!("Human participants cannot resume with the AI_GM role");
+            }
+            if matches!(
+                saved_role,
+                Some(SessionRole::Observer | SessionRole::Player | SessionRole::Participant)
+            ) && matches!(resolved_role, SessionRole::Gm | SessionRole::Host)
+                && session.host_user_id != user.user_id
+            {
+                anyhow::bail!("Cannot escalate role from PLAYER/OBSERVER to GM/HOST");
+            }
 
             let resolved_display_name = req
                 .display_name

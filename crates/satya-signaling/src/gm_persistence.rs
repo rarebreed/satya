@@ -248,11 +248,7 @@ impl AuthAndSessionManager {
                 .roster
                 .get(caller_user_id)
                 .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
-            let has_human_gm = session.roster.values().any(|p| {
-                p.participant_kind == ParticipantKind::Human
-                    && matches!(p.role, SessionRole::Gm | SessionRole::Host)
-            });
-            let is_gm = matches!(caller.role, SessionRole::Gm | SessionRole::Host) || !has_human_gm;
+            let is_gm = matches!(caller.role, SessionRole::Gm | SessionRole::Host);
 
             if let Some(idx) = session.gm_documents.iter().position(|d| d.doc_id == did) {
                 if !is_gm && session.gm_documents[idx].uploader_user_id != caller_user_id {
@@ -371,11 +367,7 @@ impl AuthAndSessionManager {
                     let caller = session.roster.get(author_user_id).ok_or_else(|| {
                         anyhow::anyhow!("Caller is not an active participant in '{sid}'")
                     })?;
-                    let has_human_gm = session.roster.values().any(|p| {
-                        p.participant_kind == ParticipantKind::Human
-                            && matches!(p.role, SessionRole::Gm | SessionRole::Host)
-                    });
-                    if has_human_gm && !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+                    if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
                         anyhow::bail!("Only the session Game Master can edit GM memory notes");
                     }
                 }
@@ -599,11 +591,7 @@ impl AuthAndSessionManager {
                         .roster
                         .get(uid)
                         .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
-                    let has_human_gm = session.roster.values().any(|p| {
-                        p.participant_kind == ParticipantKind::Human
-                            && matches!(p.role, SessionRole::Gm | SessionRole::Host)
-                    });
-                    if has_human_gm && !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+                    if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
                         anyhow::bail!(
                             "Only the session Game Master can modify GM memory persistence"
                         );
@@ -714,11 +702,7 @@ impl AuthAndSessionManager {
                     .roster
                     .get(uid)
                     .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
-                let has_human_gm = session.roster.values().any(|p| {
-                    p.participant_kind == ParticipantKind::Human
-                        && matches!(p.role, SessionRole::Gm | SessionRole::Host)
-                });
-                if has_human_gm && !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+                if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
                     return Ok((session.campaign_tag.clone(), Vec::new()));
                 }
             }
@@ -752,11 +736,7 @@ impl AuthAndSessionManager {
                         .roster
                         .get(uid)
                         .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
-                    let has_human_gm = session.roster.values().any(|p| {
-                        p.participant_kind == ParticipantKind::Human
-                            && matches!(p.role, SessionRole::Gm | SessionRole::Host)
-                    });
-                    if has_human_gm && !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+                    if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
                         anyhow::bail!("Only the session Game Master can delete GM memory notes");
                     }
                 }
@@ -818,6 +798,9 @@ impl AuthAndSessionManager {
 
     /// Synchronizes a [`Participant`] into a [`CombatTrackerState`] if not already listed.
     pub fn sync_combatant_into_tracker(tracker: &mut CombatTrackerState, part: &Participant) {
+        if part.role != SessionRole::Player {
+            return;
+        }
         if tracker
             .combatants
             .iter()
@@ -841,6 +824,34 @@ impl AuthAndSessionManager {
             grid_y: Some(6 + (idx / 4) * 2),
             zone_label: Some("Core Sector".to_string()),
         });
+    }
+
+    /// Returns a role-filtered copy of [`CombatTrackerState`], stripping combatants bound to `GM_ONLY` tokens for non-GM viewers.
+    pub fn filter_combat_tracker_for_viewer(
+        tracker: &CombatTrackerState,
+        active_map: Option<&GmMapUpdateRequest>,
+        can_see_gm: bool,
+    ) -> CombatTrackerState {
+        if can_see_gm {
+            return tracker.clone();
+        }
+        let Some(map) = active_map else {
+            return tracker.clone();
+        };
+        let hidden_ids: std::collections::BTreeSet<&str> = map
+            .tokens
+            .iter()
+            .filter(|t| t.visibility == MessageVisibility::GmOnly)
+            .map(|t| t.entity_id.as_str())
+            .collect();
+        if hidden_ids.is_empty() {
+            return tracker.clone();
+        }
+        let mut filtered = tracker.clone();
+        filtered
+            .combatants
+            .retain(|c| !hidden_ids.contains(c.entity_id.as_str()));
+        filtered
     }
 
     /// Stubbed hook for future Procedural Environment & Tactical Map Generation.
@@ -1159,10 +1170,6 @@ impl AuthAndSessionManager {
             let guard = self.sessions.read().await;
             if let Some(session) = guard.get(sid) {
                 let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
-                let has_human_gm = roster_vec.iter().any(|p| {
-                    p.participant_kind == ParticipantKind::Human
-                        && matches!(p.role, SessionRole::Gm | SessionRole::Host)
-                });
                 let is_gm = if is_gm_service {
                     true
                 } else if let Some(uid) = caller_user_id {
@@ -1170,7 +1177,10 @@ impl AuthAndSessionManager {
                         .roster
                         .get(uid)
                         .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
-                    matches!(caller.role, SessionRole::Gm | SessionRole::Host) || !has_human_gm
+                    matches!(
+                        caller.role,
+                        SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
+                    )
                 } else {
                     false
                 };
@@ -1338,13 +1348,18 @@ impl AuthAndSessionManager {
             norm_scope.as_str(),
             "ALL" | "COMBAT" | "COMBAT_TRACKER" | "MAP" | "TACTICAL_MAP"
         ) {
+            let visible_tracker = Self::filter_combat_tracker_for_viewer(
+                &combat_tracker,
+                active_map.as_ref(),
+                caller_is_gm,
+            );
             let combat_summary = format!(
-                "Window {} · Tick {} ({:.1}s) | Active: {} | Combatants: {}",
-                combat_tracker.round,
-                combat_tracker.tick,
-                f64::from(combat_tracker.tick) * 0.5,
-                combat_tracker.combat_active,
-                combat_tracker
+                "Window {} · Tick {} ({:.2}s) | Active: {} | Combatants: {}",
+                visible_tracker.round,
+                visible_tracker.tick,
+                f64::from(visible_tracker.tick) * 0.25,
+                visible_tracker.combat_active,
+                visible_tracker
                     .combatants
                     .iter()
                     .map(|c| format!(
@@ -1364,9 +1379,12 @@ impl AuthAndSessionManager {
                     item_id: format!("combat_{sid}"),
                     title: format!(
                         "Combat Tracker — Window {} · Tick {}",
-                        combat_tracker.round, combat_tracker.tick
+                        visible_tracker.round, visible_tracker.tick
                     ),
-                    subtitle: format!("{} Combatants on Timeline", combat_tracker.combatants.len()),
+                    subtitle: format!(
+                        "{} Combatants on Timeline",
+                        visible_tracker.combatants.len()
+                    ),
                     snippet: combat_summary,
                     is_persistent: true,
                     score: sc.max(15),
@@ -1377,6 +1395,7 @@ impl AuthAndSessionManager {
                 let tok_str = map
                     .tokens
                     .iter()
+                    .filter(|t| caller_is_gm || t.visibility != MessageVisibility::GmOnly)
                     .map(|t| format!("{} at ({},{})", t.label, t.x, t.y))
                     .collect::<Vec<_>>()
                     .join(", ");
@@ -1386,7 +1405,11 @@ impl AuthAndSessionManager {
                     map.grid_width,
                     map.grid_height,
                     if tok_str.is_empty() { "none" } else { &tok_str },
-                    map.notes.as_deref().unwrap_or("none")
+                    if caller_is_gm {
+                        map.notes.as_deref().unwrap_or("none")
+                    } else {
+                        "none"
+                    }
                 );
                 let map_sc = score_text(&map_summary, &map.title);
                 if map_sc > 0 || norm_scope.contains("MAP") {
@@ -1619,11 +1642,41 @@ pub async fn get_session_combat_tracker_handler(
     Path(session_id): Path<String>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    if let Err(err_resp) = resolve_user_or_gm_service(&state, &headers).await {
-        return err_resp.into_response();
+    let (user_opt, is_gm_service) = match resolve_user_or_gm_service(&state, &headers).await {
+        Ok(v) => v,
+        Err(err_resp) => return err_resp.into_response(),
+    };
+    if !is_gm_service && let Some(ref user) = user_opt {
+        let roster = state.auth.get_session_roster(&session_id).await;
+        if !roster.iter().any(|p| p.user_id == user.user_id) {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Caller is not an active participant in this session" })),
+            )
+                .into_response();
+        }
     }
+    let can_see_gm = crate::npcs::can_caller_view_gm_secrets(
+        &state,
+        &session_id,
+        user_opt.as_ref(),
+        is_gm_service,
+    )
+    .await;
     match state.auth.get_session_combat_tracker(&session_id).await {
-        Some(tracker) => (StatusCode::OK, Json(tracker)).into_response(),
+        Some(tracker) => {
+            let active_map = state
+                .auth
+                .get_session_gm_context(&session_id)
+                .await
+                .and_then(|(ctx, _)| ctx.active_map);
+            let filtered = AuthAndSessionManager::filter_combat_tracker_for_viewer(
+                &tracker,
+                active_map.as_ref(),
+                can_see_gm,
+            );
+            (StatusCode::OK, Json(filtered)).into_response()
+        }
         None => (
             StatusCode::NOT_FOUND,
             Json(json!({ "error": format!("Session '{session_id}' not found") })),
@@ -1639,8 +1692,23 @@ pub async fn update_session_combat_tracker_handler(
     headers: HeaderMap,
     Json(req): Json<UpdateCombatTrackerRequest>,
 ) -> impl IntoResponse {
-    if let Err(err_resp) = resolve_user_or_gm_service(&state, &headers).await {
-        return err_resp.into_response();
+    let (user_opt, is_gm_service) = match resolve_user_or_gm_service(&state, &headers).await {
+        Ok(v) => v,
+        Err(err_resp) => return err_resp.into_response(),
+    };
+    if !crate::npcs::can_caller_view_gm_secrets(
+        &state,
+        &session_id,
+        user_opt.as_ref(),
+        is_gm_service,
+    )
+    .await
+    {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Only the Game Master can update the Combat Tracker" })),
+        )
+            .into_response();
     }
     match state
         .auth

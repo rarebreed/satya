@@ -72,7 +72,20 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
         obj.insert("cell_size_cm".to_string(), json!(100));
     }
 
-    let mut synthesized_visuals: Vec<TokenVisualSpec> = Vec::new();
+    struct TokenVisualOverride {
+        entity_id: String,
+        model_preset: Option<String>,
+        color_hex: Option<String>,
+        facing_deg: Option<i32>,
+        elevation_cm: Option<i32>,
+        floor_index: Option<i32>,
+        stance_pose: Option<String>,
+        portrait_url: Option<String>,
+        pos_x_cm: Option<i32>,
+        pos_y_cm: Option<i32>,
+    }
+
+    let mut visual_overrides: Vec<TokenVisualOverride> = Vec::new();
     if let Some(tokens_val) = obj.get_mut("tokens").and_then(Value::as_array_mut) {
         for (idx, tok_val) in tokens_val.iter_mut().enumerate() {
             if let Some(tok) = tok_val.as_object_mut() {
@@ -107,36 +120,53 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
                 tok.entry("visibility")
                     .or_insert_with(|| Value::String("PUBLIC".to_string()));
 
-                let pos_x_cm = tok
-                    .get("pos_x_cm")
+                let pos_x_cm = tok.get("pos_x_cm").and_then(Value::as_i64).map(|v| v as i32);
+                let pos_y_cm = tok.get("pos_y_cm").and_then(Value::as_i64).map(|v| v as i32);
+                let floor_index = tok
+                    .get("floor_index")
                     .and_then(Value::as_i64)
                     .map(|v| v as i32);
-                let pos_y_cm = tok
-                    .get("pos_y_cm")
+                let elevation_cm = tok
+                    .get("elevation_cm")
                     .and_then(Value::as_i64)
                     .map(|v| v as i32);
-                if pos_x_cm.is_some() || pos_y_cm.is_some() {
-                    let facing_deg =
-                        tok.get("facing_deg").and_then(Value::as_i64).unwrap_or(0) as i32;
-                    let color_hex = tok
-                        .get("color_hex")
-                        .and_then(Value::as_str)
-                        .unwrap_or("#38bdf8")
-                        .to_string();
-                    let model_preset = tok
-                        .get("model_preset")
-                        .and_then(Value::as_str)
-                        .unwrap_or("operative_light")
-                        .to_string();
-                    synthesized_visuals.push(TokenVisualSpec {
+                let facing_deg = tok
+                    .get("facing_deg")
+                    .and_then(Value::as_i64)
+                    .map(|v| v as i32);
+                let color_hex = tok
+                    .get("color_hex")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                let model_preset = tok
+                    .get("model_preset")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                let stance_pose = tok
+                    .get("stance_pose")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                let portrait_url = tok
+                    .get("portrait_url")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+
+                if pos_x_cm.is_some()
+                    || pos_y_cm.is_some()
+                    || floor_index.is_some()
+                    || elevation_cm.is_some()
+                    || stance_pose.is_some()
+                    || portrait_url.is_some()
+                {
+                    visual_overrides.push(TokenVisualOverride {
                         entity_id,
                         model_preset,
                         color_hex,
                         facing_deg,
-                        elevation_cm: 0,
-                        floor_index: 0,
-                        stance_pose: "idle".to_string(),
-                        portrait_url: None,
+                        elevation_cm,
+                        floor_index,
+                        stance_pose,
+                        portrait_url,
                         pos_x_cm,
                         pos_y_cm,
                     });
@@ -167,13 +197,54 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
     let mut map: GmMapUpdateRequest = serde_json::from_value(root)
         .map_err(|e| format!("Failed to deserialize GmMapUpdateRequest: {e}"))?;
 
-    for vis in synthesized_visuals {
-        if !map
+    for ov in visual_overrides {
+        if let Some(existing) = map
             .token_visuals
-            .iter()
-            .any(|v| v.entity_id == vis.entity_id)
+            .iter_mut()
+            .find(|v| v.entity_id == ov.entity_id)
         {
-            map.token_visuals.push(vis);
+            if let Some(p) = ov.model_preset {
+                existing.model_preset = p;
+            }
+            if let Some(c) = ov.color_hex {
+                existing.color_hex = c;
+            }
+            if let Some(f) = ov.facing_deg {
+                existing.facing_deg = f;
+            }
+            if let Some(e) = ov.elevation_cm {
+                existing.elevation_cm = e;
+            }
+            if let Some(fl) = ov.floor_index {
+                existing.floor_index = fl;
+            }
+            if let Some(s) = ov.stance_pose {
+                existing.stance_pose = s;
+            }
+            if let Some(u) = ov.portrait_url {
+                existing.portrait_url = Some(u);
+            }
+            if let Some(x) = ov.pos_x_cm {
+                existing.pos_x_cm = Some(x);
+            }
+            if let Some(y) = ov.pos_y_cm {
+                existing.pos_y_cm = Some(y);
+            }
+        } else {
+            map.token_visuals.push(TokenVisualSpec {
+                entity_id: ov.entity_id,
+                model_preset: ov
+                    .model_preset
+                    .unwrap_or_else(|| "operative_light".to_string()),
+                color_hex: ov.color_hex.unwrap_or_else(|| "#38bdf8".to_string()),
+                facing_deg: ov.facing_deg.unwrap_or(0),
+                elevation_cm: ov.elevation_cm.unwrap_or(0),
+                floor_index: ov.floor_index.unwrap_or(map.active_floor),
+                stance_pose: ov.stance_pose.unwrap_or_else(|| "idle".to_string()),
+                portrait_url: ov.portrait_url,
+                pos_x_cm: ov.pos_x_cm,
+                pos_y_cm: ov.pos_y_cm,
+            });
         }
     }
 
@@ -182,16 +253,35 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
     Ok(map)
 }
 
+fn map_for_floor(
+    mut map: GmMapUpdateRequest,
+    floor_index: Option<i32>,
+) -> PyResult<GmMapUpdateRequest> {
+    if let Some(f) = floor_index
+        && !map.floors.is_empty()
+        && map.active_floor != f
+        && !map.switch_active_floor(f)
+    {
+        return Err(to_py_err(format!(
+            "Floor {f} not present on tactical map '{}'",
+            map.map_id
+        )));
+    }
+    Ok(map)
+}
+
 /// Checks whether a circle of radius `radius_m` at continuous `(x_m, y_m)` collides with board
 /// bounds, walls, closed doors, windows, or solid props.
 #[pyfunction]
+#[pyo3(signature = (map_json, x_m, y_m, radius_m, floor_index=None))]
 pub fn check_tactical_token_collision(
     map_json: &str,
     x_m: f32,
     y_m: f32,
     radius_m: f32,
+    floor_index: Option<i32>,
 ) -> PyResult<bool> {
-    let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let map = map_for_floor(parse_flexible_map_json(map_json).map_err(to_py_err)?, floor_index)?;
     let (board_w_m, board_h_m) = map.board_size_m();
     Ok(circle_collides_obstacles(
         board_w_m,
@@ -206,19 +296,25 @@ pub fn check_tactical_token_collision(
 
 /// Resolves continuous destination `(target_x_cm, target_y_cm)` against obstacles and other tokens.
 #[pyfunction]
+#[pyo3(signature = (map_json, moving_entity_id, target_x_cm, target_y_cm, floor_index=None))]
 pub fn resolve_tactical_token_destination_cm(
     map_json: &str,
     moving_entity_id: &str,
     target_x_cm: i32,
     target_y_cm: i32,
+    floor_index: Option<i32>,
 ) -> PyResult<(i32, i32)> {
-    let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let raw_map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let target_floor =
+        floor_index.or_else(|| (!raw_map.floors.is_empty()).then(|| raw_map.token_floor(moving_entity_id)));
+    let map = map_for_floor(raw_map, target_floor)?;
     resolve_token_destination_cm(&map, moving_entity_id, target_x_cm, target_y_cm)
         .map_err(to_py_err)
 }
 
 /// Evaluates continuous Line-of-Sight, cover grade, and recommended `Δ_ext` between two positions in meters.
 #[pyfunction]
+#[pyo3(signature = (map_json, x1_m, y1_m, x2_m, y2_m, floor_index=None))]
 pub fn evaluate_tactical_los_and_cover(
     py: Python<'_>,
     map_json: &str,
@@ -226,8 +322,9 @@ pub fn evaluate_tactical_los_and_cover(
     y1_m: f32,
     x2_m: f32,
     y2_m: f32,
+    floor_index: Option<i32>,
 ) -> PyResult<Py<PyDict>> {
-    let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let map = map_for_floor(parse_flexible_map_json(map_json).map_err(to_py_err)?, floor_index)?;
     let scene = TacticalSceneView::from_map(&map);
     let eval = evaluate_los_continuous(&scene, (x1_m, y1_m), (x2_m, y2_m));
     let d = PyDict::new(py);
@@ -241,14 +338,16 @@ pub fn evaluate_tactical_los_and_cover(
 
 /// Inspects any continuous `(x_m, y_m)` map coordinate (token, wall/door, prop, or ground surface).
 #[pyfunction]
+#[pyo3(signature = (map_json, theme_name, x_m, y_m, floor_index=None))]
 pub fn inspect_tactical_map_point(
     py: Python<'_>,
     map_json: &str,
     theme_name: &str,
     x_m: f32,
     y_m: f32,
+    floor_index: Option<i32>,
 ) -> PyResult<Option<Py<PyDict>>> {
-    let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let map = map_for_floor(parse_flexible_map_json(map_json).map_err(to_py_err)?, floor_index)?;
     let Some(info) = inspect_map_point(&map, theme_name, x_m, y_m) else {
         return Ok(None);
     };
@@ -284,9 +383,12 @@ pub fn generate_procedural_tactical_sector_json(
     let preset = SectorPreset::from_code_str(preset_or_theme).unwrap_or_default();
     let tier_opt = economic_tier.and_then(EconomicTier::from_code_str);
     let zoning_opt = zoning.and_then(ZoningContext::from_code_str);
-    let (default_w, default_h) = match scale.map(MapScalePreset::parse_loose) {
-        Some(s) => preset.resolve_scale_dimensions(s),
-        None => (16, 12),
+    let (default_w, default_h) = if let Some(s) = scale.map(MapScalePreset::parse_loose) {
+        preset.resolve_scale_dimensions(s)
+    } else if width.is_none() && height.is_none() {
+        preset.resolve_scale_dimensions(MapScalePreset::Auto)
+    } else {
+        (16, 12)
     };
     let w = width.unwrap_or(default_w);
     let h = height.unwrap_or(default_h);
@@ -459,14 +561,14 @@ mod tests {
         assert_eq!(parsed.token_pos_cm(&parsed.tokens[0]), (250, 550));
 
         // Out-of-bounds collision and open walkable spot resolution
-        assert!(check_tactical_token_collision(&py_dict_json, 0.10, 5.0, 0.30).unwrap());
+        assert!(check_tactical_token_collision(&py_dict_json, 0.10, 5.0, 0.30, None).unwrap());
         let mut resolved = None;
         for gy in 2..9 {
             for gx in 2..10 {
                 let cx = gx * 100 + 50;
                 let cy = gy * 100 + 50;
                 if let Ok(pt) =
-                    resolve_tactical_token_destination_cm(&py_dict_json, "tok-vance", cx, cy)
+                    resolve_tactical_token_destination_cm(&py_dict_json, "tok-vance", cx, cy, None)
                 {
                     resolved = Some(pt);
                     break;
@@ -484,5 +586,98 @@ mod tests {
         assert!(los.distance_m > 6.0);
         let hit = inspect_map_point(&parsed, "Sector 4 Docking Bay", 2.5, 5.5).unwrap();
         assert_eq!(hit.category, MapHoverCategory::Token);
+    }
+
+    #[test]
+    fn test_wave1_multifloor_parse_auto_scale_and_floor_spatial_queries() {
+        // 1. Omitted dimensions + omitted scale resolve via MapScalePreset::Auto
+        let auto_json = generate_procedural_tactical_sector_json(
+            "map-auto",
+            "hospital",
+            Some("Auto Hospital"),
+            None,
+            None,
+            51,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let auto_val: Value = serde_json::from_str(&auto_json).unwrap();
+        let w = auto_val["grid_width"].as_i64().unwrap();
+        let h = auto_val["grid_height"].as_i64().unwrap();
+        assert!(w >= 16 && h >= 12);
+        assert!(auto_val["floors"].as_array().unwrap().len() >= 2);
+
+        // 2. parse_flexible_map_json merges token_visuals without clobbering floor_index
+        let merged_json = serde_json::json!({
+            "map_id": "map-merge",
+            "title": "Hospital Floors",
+            "grid_width": 20,
+            "grid_height": 16,
+            "active_floor": 0,
+            "floors": [
+                {"floor_index": 0, "label": "1F", "wall_edges": [], "props": [], "surfaces": []},
+                {"floor_index": 1, "label": "2F", "wall_edges": [], "props": [], "surfaces": []}
+            ],
+            "tokens": [
+                {
+                    "entity_id": "tok-f1",
+                    "label": "Nurse Lin",
+                    "x": 3,
+                    "y": 4,
+                    "pos_x_cm": 350,
+                    "pos_y_cm": 450
+                }
+            ],
+            "token_visuals": [
+                {
+                    "entity_id": "tok-f1",
+                    "floor_index": 1,
+                    "color_hex": "#34d399"
+                }
+            ]
+        })
+        .to_string();
+        let merged = parse_flexible_map_json(&merged_json).unwrap();
+        assert_eq!(merged.token_floor("tok-f1"), 1);
+
+        // 3. Explicit floor_index on spatial queries hits floor 1 vs floor 0 geometry cleanly
+        let collides_f1 =
+            check_tactical_token_collision(&auto_json, 0.05, 0.05, 0.30, Some(1)).unwrap();
+        assert!(collides_f1);
+
+        let f1_parsed = map_for_floor(parse_flexible_map_json(&auto_json).unwrap(), Some(1)).unwrap();
+        let mut f1_clear = None;
+        for gy in 2..((f1_parsed.grid_height - 2).max(3)) {
+            for gx in 2..((f1_parsed.grid_width - 2).max(3)) {
+                let cx = gx * 100 + 50;
+                let cy = gy * 100 + 50;
+                if let Ok(pt) =
+                    resolve_tactical_token_destination_cm(&auto_json, "tok-f1", cx, cy, Some(1))
+                {
+                    f1_clear = Some(pt);
+                    break;
+                }
+            }
+            if f1_clear.is_some() {
+                break;
+            }
+        }
+        assert!(f1_clear.is_some());
+
+        Python::initialize();
+        Python::attach(|py| {
+            let los_f1 =
+                evaluate_tactical_los_and_cover(py, &auto_json, 2.5, 2.5, 8.5, 2.5, Some(1))
+                    .unwrap();
+            assert!(los_f1.bind(py).contains("cover_grade").unwrap());
+
+            let hover_f1 =
+                inspect_tactical_map_point(py, &auto_json, "Auto Hospital", 2.5, 2.5, Some(1))
+                    .unwrap()
+                    .expect("hover on floor 1 returns inspection dict");
+            assert!(hover_f1.bind(py).contains("category").unwrap());
+        });
     }
 }

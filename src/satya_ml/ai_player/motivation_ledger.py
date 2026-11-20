@@ -69,8 +69,18 @@ def redact_public_npc_entry(raw_npc: dict[str, Any]) -> dict[str, Any]:
     return {
         "npc_id": str(raw_npc.get("character_id") or raw_npc.get("npc_id") or ""),
         "name": str(raw_npc.get("character_name") or raw_npc.get("name") or "Unknown NPC"),
-        "role": str(raw_npc.get("callsign_or_role") or raw_npc.get("archetype") or "NPC"),
-        "faction": str(raw_npc.get("faction_id") or raw_npc.get("faction") or "Independent"),
+        "role": str(
+            raw_npc.get("public_archetype")
+            or raw_npc.get("callsign_or_role")
+            or raw_npc.get("archetype")
+            or "NPC"
+        ),
+        "faction": str(
+            raw_npc.get("public_faction")
+            or raw_npc.get("faction_id")
+            or raw_npc.get("faction")
+            or "Independent"
+        ),
         "disposition": str(raw_npc.get("disposition") or "wary"),
         "public_summary": str(raw_npc.get("public_summary") or raw_npc.get("notes") or ""),
         "apparent_condition": str(raw_npc.get("apparent_condition") or "Healthy & Alert"),
@@ -97,6 +107,12 @@ def sanitize_map_dict_for_player(raw_map: dict[str, Any] | None) -> dict[str, An
     if not isinstance(raw_map, dict) or not raw_map.get("map_id"):
         return None
     cell_cm = max(25, int(raw_map.get("cell_size_cm", 100) or 100))
+    default_floor = int(raw_map.get("active_floor", 0) or 0)
+    vis_by_eid = {
+        str(v.get("entity_id") or ""): v
+        for v in (raw_map.get("token_visuals") or [])
+        if isinstance(v, dict) and v.get("entity_id")
+    }
     public_tokens: list[dict[str, Any]] = []
     hidden_ids: set[str] = set()
     for t in raw_map.get("tokens") or []:
@@ -111,6 +127,17 @@ def sanitize_map_dict_for_player(raw_map: dict[str, Any] | None) -> dict[str, An
         eid = str(t.get("entity_id") or t.get("token_id") or "")
         gx = int(t.get("x") if t.get("x") is not None else t.get("grid_x", 0))
         gy = int(t.get("y") if t.get("y") is not None else t.get("grid_y", 0))
+        vis_rec = vis_by_eid.get(eid) or {}
+        floor_idx = int(
+            t.get("floor_index")
+            if t.get("floor_index") is not None
+            else vis_rec.get("floor_index", default_floor)
+        )
+        elev_cm = int(
+            t.get("elevation_cm")
+            if t.get("elevation_cm") is not None
+            else vis_rec.get("elevation_cm", 0)
+        )
         public_tokens.append(
             {
                 "token_id": str(t.get("token_id") or eid),
@@ -122,6 +149,8 @@ def sanitize_map_dict_for_player(raw_map: dict[str, Any] | None) -> dict[str, An
                 "grid_y": gy,
                 "pos_x_cm": t.get("pos_x_cm") if t.get("pos_x_cm") is not None else gx * cell_cm + cell_cm // 2,
                 "pos_y_cm": t.get("pos_y_cm") if t.get("pos_y_cm") is not None else gy * cell_cm + cell_cm // 2,
+                "floor_index": floor_idx,
+                "elevation_cm": elev_cm,
                 "faction": str(t.get("faction") or "NEUTRAL"),
                 "visibility": "PUBLIC",
             }
@@ -472,6 +501,8 @@ def inspect_surroundings(
     sheet = ctx.get("character_sheet") or {}
     tokens = clean_map.get("tokens") or []
     self_tok = _find_self_token(tokens, player_user_id, sheet)
+    active_floor = int(clean_map.get("active_floor", 0) or 0)
+    self_floor = int((self_tok or {}).get("floor_index", active_floor))
     px_m = float(x_m) if x_m is not None else (float((self_tok or {}).get("pos_x_cm", 250)) / 100.0)
     py_m = float(y_m) if y_m is not None else (float((self_tok or {}).get("pos_y_cm", 250)) / 100.0)
 
@@ -486,6 +517,7 @@ def inspect_surroundings(
                 str(clean_map.get("theme") or "urban_crossroads"),
                 px_m,
                 py_m,
+                floor_index=self_floor,
             )
         except Exception:
             point_info = None
@@ -505,10 +537,14 @@ def inspect_surroundings(
             continue
         tx_m = float(tok.get("pos_x_cm", 150)) / 100.0
         ty_m = float(tok.get("pos_y_cm", 150)) / 100.0
+        tok_floor = int(tok.get("floor_index", active_floor))
+        same_floor = tok_floor == self_floor
         los_cover = None
-        if hasattr(satya_py, "evaluate_tactical_los_and_cover"):
+        if same_floor and hasattr(satya_py, "evaluate_tactical_los_and_cover"):
             try:
-                los_cover = satya_py.evaluate_tactical_los_and_cover(map_json, px_m, py_m, tx_m, ty_m)
+                los_cover = satya_py.evaluate_tactical_los_and_cover(
+                    map_json, px_m, py_m, tx_m, ty_m, floor_index=self_floor
+                )
             except Exception:
                 los_cover = None
         visible_contacts.append(
@@ -517,6 +553,8 @@ def inspect_surroundings(
                 "label": lbl,
                 "x_m": round(tx_m, 2),
                 "y_m": round(ty_m, 2),
+                "floor_index": tok_floor,
+                "same_floor": same_floor,
                 "distance_m": round(math.hypot(tx_m - px_m, ty_m - py_m), 2),
                 "los_and_cover": los_cover,
             }
@@ -525,7 +563,7 @@ def inspect_surroundings(
     return {
         "map_id": clean_map.get("map_id"),
         "title": clean_map.get("title"),
-        "observer_m": {"x_m": round(px_m, 2), "y_m": round(py_m, 2)},
+        "observer_m": {"x_m": round(px_m, 2), "y_m": round(py_m, 2), "floor_index": self_floor},
         "point_under_cursor": point_info,
         "zones": manifest.get("zones", [])[:6],
         "cardinal_exits": manifest.get("cardinal_exits", [])[:4],

@@ -17,10 +17,11 @@ use satya_schema::{
     PropKind, SurfaceFeatureKind,
 };
 
-use crate::map_dressing::{PropObstruction, prop_spec};
+use crate::map_dressing::{PropObstruction, effective_obstruction};
+use crate::map_surface_geom::topmost_surface_at_m;
 use crate::map_world_graph::{bootstrap_world_sectors_if_empty, preview_continuation_tooltip};
 use crate::tactical_map::{TacticalSceneView, evaluate_los_continuous};
-use crate::tactical_map_geom::{TOKEN_RADIUS_M, circle_collides_obstacles};
+use crate::tactical_map_geom::{TOKEN_RADIUS_M, circle_collides_obstacles, prop_contains_point};
 
 // ============================================================================
 // §1 Sector Narrative Manifest DTOs
@@ -176,7 +177,13 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         PropKind::HospitalBed
         | PropKind::SurgicalTable
         | PropKind::ImagingScanner
-        | PropKind::PrivacyCurtain => Some(("clinical_medical", "Clinical / Triage Bay")),
+        | PropKind::PrivacyCurtain
+        | PropKind::Cot
+        | PropKind::Gurney
+        | PropKind::MedicalCounter
+        | PropKind::TelemetryMonitor
+        | PropKind::BiohazardBin
+        | PropKind::LinenCart => Some(("clinical_medical", "Clinical / Triage Bay")),
         PropKind::DisplayRack | PropKind::CheckoutCounter | PropKind::MallKiosk => {
             Some(("retail_concourse", "Retail Concourse / Counter"))
         }
@@ -184,12 +191,22 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::IndustrialPress
         | PropKind::PalletRack
         | PropKind::Forklift
-        | PropKind::ShippingContainer => {
-            Some(("industrial_logistics", "Industrial / Logistics Floor"))
-        }
-        PropKind::Desk | PropKind::DeskL | PropKind::DeskT | PropKind::Bookshelf => {
-            Some(("office_ops", "Command / Office Suite"))
-        }
+        | PropKind::ShippingContainer
+        | PropKind::AirCompressor
+        | PropKind::CncMill => Some(("industrial_logistics", "Industrial / Logistics Floor")),
+        PropKind::LabBench
+        | PropKind::SolderingStation
+        | PropKind::TestBench
+        | PropKind::Printer3dStation
+        | PropKind::ServerRack
+        | PropKind::FumeHood => Some(("lab_workshop", "Laboratory / Technical Bay")),
+        PropKind::Desk
+        | PropKind::DeskL
+        | PropKind::DeskT
+        | PropKind::Bookshelf
+        | PropKind::DeskClutter
+        | PropKind::FilingCabinet
+        | PropKind::WaterCooler => Some(("office_ops", "Command / Office Suite")),
         PropKind::BarCounter
         | PropKind::BackBarShelf
         | PropKind::Booth
@@ -197,12 +214,23 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::Jukebox => Some(("hospitality_lounge", "Bar / Hospitality Lounge")),
         PropKind::Sofa
         | PropKind::Loveseat
+        | PropKind::ReclinerChair
         | PropKind::Bed
+        | PropKind::SingleBed
+        | PropKind::DiningTable
         | PropKind::KitchenCounter
         | PropKind::Stove
+        | PropKind::Fridge
         | PropKind::Nightstand
         | PropKind::Dresser
+        | PropKind::Wardrobe
         | PropKind::BathroomSink
+        | PropKind::Toilet
+        | PropKind::Bathtub
+        | PropKind::ShowerStall
+        | PropKind::SpaBath
+        | PropKind::LinenCloset
+        | PropKind::WasherDryer
         | PropKind::TvStand
         | PropKind::Stereo
         | PropKind::RunnerRug
@@ -211,13 +239,17 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::StandingLamp
         | PropKind::FloorClothes
         | PropKind::FloorToys => Some(("residential_quarters", "Living Quarters / Unit")),
-        PropKind::Car | PropKind::UtilityVan | PropKind::JerseyBarrier | PropKind::StreetDebris => {
-            Some(("vehicle_perimeter", "Curbside / Vehicle Perimeter"))
-        }
+        PropKind::Car
+        | PropKind::UtilityVan
+        | PropKind::JerseyBarrier
+        | PropKind::StreetDebris
+        | PropKind::AwningCanopy => Some(("vehicle_perimeter", "Curbside / Vehicle Perimeter")),
         PropKind::CropRow
         | PropKind::PlanterTable
         | PropKind::LargeTree
         | PropKind::MediumTree
+        | PropKind::Hedge
+        | PropKind::Bush
         | PropKind::Boulder
         | PropKind::SmallFountain
         | PropKind::MediumFountain
@@ -225,9 +257,10 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::Gazebo
         | PropKind::BbqGrill
         | PropKind::GardenShed
-        | PropKind::HotTub => Some(("exterior_grounds", "Exterior / Greenbelt Grounds")),
+        | PropKind::HotTub
+        | PropKind::BrownstoneStoop => Some(("exterior_grounds", "Exterior / Greenbelt Grounds")),
         PropKind::FireExtinguisher => Some(("office_ops", "Safety & Utility Fixture")),
-        PropKind::TrashCan | PropKind::GarbagePile | PropKind::AcUnit => {
+        PropKind::TrashCan | PropKind::GarbagePile | PropKind::Dumpster | PropKind::AcUnit => {
             Some(("utility_service", "Service / Utility Yard"))
         }
         PropKind::Stairwell | PropKind::ElevatorCar | PropKind::ServiceElevator => {
@@ -287,15 +320,32 @@ fn find_clear_anchor_near(
                 let y = (target_y_m + dy as f32).clamp(1.0, (h_m - 1.0).max(1.0));
                 let x_m = (x * 100.0).round() / 100.0;
                 let y_m = (y * 100.0).round() / 100.0;
-                if !circle_collides_obstacles(
-                    w_m,
-                    h_m,
-                    &map.wall_edges,
-                    &map.props,
-                    x_m,
-                    y_m,
-                    TOKEN_RADIUS_M,
-                ) {
+                let in_water_or_hazard = matches!(
+                    topmost_surface_at_m(&map.surfaces, x_m, y_m).map(|s| s.kind),
+                    Some(
+                        SurfaceFeatureKind::PoolWater
+                            | SurfaceFeatureKind::CreekChannel
+                            | SurfaceFeatureKind::DrainageDitch
+                    )
+                ) || map.props.iter().any(|p| {
+                    !p.decorative
+                        && matches!(
+                            p.kind,
+                            PropKind::HazardSpill | PropKind::CreekWater | PropKind::DrainageDitch
+                        )
+                        && prop_contains_point(p, x_m, y_m, false)
+                });
+                if !in_water_or_hazard
+                    && !circle_collides_obstacles(
+                        w_m,
+                        h_m,
+                        &map.wall_edges,
+                        &map.props,
+                        x_m,
+                        y_m,
+                        TOKEN_RADIUS_M,
+                    )
+                {
                     return Some(WalkableAnchorPoint {
                         label: label.to_string(),
                         floor_index,
@@ -352,7 +402,7 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
             continue;
         };
         let fp = p.footprint_m();
-        let obs = prop_spec(p.kind).obstruction;
+        let obs = effective_obstruction(p);
         let entry = grouped
             .entry(format!("prop_{zone_key}"))
             .or_insert_with(|| Acc {
@@ -802,6 +852,73 @@ mod tests {
             whispers
                 .iter()
                 .any(|w| w.pin_id == "pin-blood-swab" && w.characteristic_code == "SIG")
+        );
+    }
+
+    #[test]
+    fn test_walkable_anchors_avoid_pool_water_and_label_brick_paver_walk() {
+        use satya_schema::{MapPointCm, MapSurfaceFeature, SurfaceFeatureKind, SurfaceShapeKind};
+
+        let mut map = build_procedural_map_request_with_options(
+            "map-pool-walk",
+            SectorPreset::Warehouse,
+            None,
+            16,
+            14,
+            21,
+            None,
+            None,
+        );
+        map.wall_edges.clear();
+        map.props.clear();
+        map.surfaces = vec![
+            MapSurfaceFeature {
+                kind: SurfaceFeatureKind::PoolWater,
+                shape: SurfaceShapeKind::Polygon,
+                points_cm: vec![
+                    MapPointCm::new(400, 400),
+                    MapPointCm::new(1100, 400),
+                    MapPointCm::new(1100, 1000),
+                    MapPointCm::new(400, 1000),
+                ],
+                width_cm: 0,
+                border_style_cm: 0,
+                variant_seed: 1,
+                tint_rgb: None,
+            },
+            MapSurfaceFeature {
+                kind: SurfaceFeatureKind::BrickPaverWalk,
+                shape: SurfaceShapeKind::Polygon,
+                points_cm: vec![
+                    MapPointCm::new(100, 100),
+                    MapPointCm::new(350, 100),
+                    MapPointCm::new(350, 350),
+                    MapPointCm::new(100, 350),
+                ],
+                width_cm: 0,
+                border_style_cm: 0,
+                variant_seed: 2,
+                tint_rgb: None,
+            },
+        ];
+
+        assert_eq!(
+            surface_semantic_label(SurfaceFeatureKind::BrickPaverWalk),
+            "Pedestrian Plaza / Walk"
+        );
+        let center_anchor = find_clear_anchor_near(&map, 8.0, 7.0, 0, "poolside")
+            .expect("should find clear dry anchor outside PoolWater");
+        let top = crate::map_surface_geom::topmost_surface_at_m(
+            &map.surfaces,
+            center_anchor.x_m,
+            center_anchor.y_m,
+        );
+        assert_ne!(
+            top.map(|s| s.kind),
+            Some(SurfaceFeatureKind::PoolWater),
+            "anchor landed inside PoolWater at ({}, {})",
+            center_anchor.x_m,
+            center_anchor.y_m
         );
     }
 }

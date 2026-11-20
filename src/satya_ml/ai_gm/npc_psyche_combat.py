@@ -174,7 +174,13 @@ def modulate_npc_combat_selection(
     reckless_rage = False
     non_lethal_restraint = False
 
-    if morale_state in {"broken", "panic"}:
+    if morale_state == "panic":
+        technique = "withdrawal_disengage_cover"
+        t_pool = max(2, t_pool)
+        c_pool = 0
+        f_pool = 0
+        retreat_or_surrender = True
+    elif morale_state == "broken":
         technique = "withdrawal_disengage_cover"
         t_pool = max(2, t_pool)
         c_pool = max(2, c_pool + 1)

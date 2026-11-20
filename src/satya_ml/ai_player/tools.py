@@ -123,6 +123,16 @@ def sanitize_player_visible_context(raw_ctx: dict[str, Any], player_user_id: str
 
     # Sanitize tactical map (preserve geometry/exits while strictly removing GM_ONLY tokens & spatial_pins)
     raw_map = raw_ctx.get("active_map")
+    hidden_token_ids: set[str] = set()
+    if isinstance(raw_map, dict):
+        for t in raw_map.get("tokens") or []:
+            if not isinstance(t, dict):
+                continue
+            tvis = str(t.get("visibility") or "PUBLIC").upper()
+            if t.get("hidden") or t.get("is_hidden") or t.get("gm_only") or tvis == "GM_ONLY":
+                for idk in ("entity_id", "token_id"):
+                    if t.get(idk):
+                        hidden_token_ids.add(str(t[idk]))
     public_map = sanitize_map_dict_for_player(raw_map)
     if isinstance(public_map, dict) and isinstance(raw_map, dict):
         public_map.setdefault("map_image_url", raw_map.get("map_image_url", ""))
@@ -141,6 +151,12 @@ def sanitize_player_visible_context(raw_ctx: dict[str, Any], player_user_id: str
         "tick": 1,
         "combatants": [],
     })
+    if hidden_token_ids and isinstance(combat_tracker.get("combatants"), list):
+        combat_tracker["combatants"] = [
+            c
+            for c in combat_tracker["combatants"]
+            if isinstance(c, dict) and str(c.get("entity_id") or "") not in hidden_token_ids
+        ]
 
     default_name = str(get_pack_default_ai_player().get("character_name") or "Mateo Vance")
     return {

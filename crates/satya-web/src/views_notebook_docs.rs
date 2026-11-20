@@ -62,7 +62,7 @@ pub fn NotebookReferencePanes() -> impl IntoView {
         >
             <div class="pane-toolbar">
                 <div class="model-controls-row">
-                    <span class="subtitle">"Satya Count-Up Tick Timeline (1 Tick = 0.5s) · 30 Combat Techniques × TCF Triad"</span>
+                    <span class="subtitle">"Satya Count-Up Tick Timeline (1 Tick = 0.25s) · 30 Combat Techniques × TCF Triad"</span>
                     <label class="inline-label" for="ttrpg-stance">
                         <span>"Combat Action / Technique"</span>
                         <select id="ttrpg-stance">

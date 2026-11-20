@@ -159,18 +159,7 @@ async fn handle_ws_client(
 
                     if session_mode == SessionMode::Ttrpg
                         && self_participant.participant_kind == ParticipantKind::Human
-                        && let Some(ai_gm) = current_roster
-                            .iter()
-                            .find(|p| p.role == SessionRole::AiGm)
-                            .cloned()
-                        && should_trigger_ai_gm_for_chat(
-                            &current_roster,
-                            &ai_gm,
-                            visibility,
-                            &recipient_user_ids,
-                            channel_context,
-                            &body,
-                        )
+                        && self_participant.role != SessionRole::Observer
                     {
                         let state_clone = state.clone();
                         let session_id_clone = session_id.clone();
@@ -178,25 +167,54 @@ async fn handle_ws_client(
                         let msg_id_clone = chat_event.message_id.clone();
                         let body_clone = body.clone();
                         let roster_clone = current_roster.clone();
-                        tokio::spawn(async move {
-                            state_clone.reset_ai_rally_counter(&session_id_clone).await;
-                            trigger_ai_gm_chat_reply(
-                                &state_clone,
-                                &session_id_clone,
-                                session_mode,
+
+                        if let Some(ai_gm) = current_roster
+                            .iter()
+                            .find(|p| p.role == SessionRole::AiGm)
+                            .cloned()
+                            && should_trigger_ai_gm_for_chat(
+                                &current_roster,
                                 &ai_gm,
-                                &self_part_clone,
-                                &msg_id_clone,
-                                "CHAT",
                                 visibility,
-                                Some(channel_context),
-                                &body_clone,
-                                &roster_clone,
+                                &recipient_user_ids,
+                                channel_context,
+                                &body,
                             )
-                            .await;
-                            if visibility == MessageVisibility::Public
-                                && channel_context == ChannelContext::InCharacter
-                            {
+                        {
+                            tokio::spawn(async move {
+                                state_clone.reset_ai_rally_counter(&session_id_clone).await;
+                                trigger_ai_gm_chat_reply(
+                                    &state_clone,
+                                    &session_id_clone,
+                                    session_mode,
+                                    &ai_gm,
+                                    &self_part_clone,
+                                    &msg_id_clone,
+                                    "CHAT",
+                                    visibility,
+                                    Some(channel_context),
+                                    &body_clone,
+                                    &roster_clone,
+                                )
+                                .await;
+                                if visibility == MessageVisibility::Public
+                                    && channel_context == ChannelContext::InCharacter
+                                {
+                                    trigger_auto_ai_players_for_human_turn(
+                                        &state_clone,
+                                        &session_id_clone,
+                                        &self_part_clone,
+                                        &body_clone,
+                                    )
+                                    .await;
+                                }
+                            });
+                        } else if self_participant.role == SessionRole::Player
+                            && visibility == MessageVisibility::Public
+                            && channel_context == ChannelContext::InCharacter
+                        {
+                            tokio::spawn(async move {
+                                state_clone.reset_ai_rally_counter(&session_id_clone).await;
                                 trigger_auto_ai_players_for_human_turn(
                                     &state_clone,
                                     &session_id_clone,
@@ -204,8 +222,8 @@ async fn handle_ws_client(
                                     &body_clone,
                                 )
                                 .await;
-                            }
-                        });
+                            });
+                        }
                     }
                 }
             }
@@ -334,6 +352,40 @@ async fn handle_ws_client(
                 control_pool,
                 force_pool,
             } => {
+                if self_participant.role == SessionRole::Observer {
+                    if let Ok(meta) = state.storage.registry().build_metadata(
+                        state.next_seq(),
+                        subjects::CHAT_MESSAGE,
+                        1,
+                        &session_id,
+                        session_mode,
+                    ) {
+                        let body = "Observers are in read-only spectator mode and cannot roll TTRPG task checks as active PCs.".to_string();
+                        let notice = ChatMessageEvent {
+                            metadata: meta,
+                            message_id: Uuid::now_v7().to_string(),
+                            sender: self_participant.clone(),
+                            visibility: MessageVisibility::Private,
+                            recipients: vec![self_participant.clone()],
+                            channel_context: ChannelContext::SystemNotice,
+                            reply_to_message_id: None,
+                            char_count: body.chars().count() as i32,
+                            word_count: body.split_whitespace().count() as i32,
+                            body,
+                            composition_time_ms: 0,
+                            is_edited: false,
+                        };
+                        let pkt_str = json!({
+                            "type": "CHAT_EVENT",
+                            "event": notice,
+                        })
+                        .to_string();
+                        state
+                            .send_to_users(&session_id, std::slice::from_ref(&user_id), &pkt_str)
+                            .await;
+                    }
+                    continue;
+                }
                 let n_pairs = skill_level.clamp(1, 10);
                 let c_val = control_c.clamp(1, 20);
                 let int_mod = internal_mod.clamp(-2, 10);

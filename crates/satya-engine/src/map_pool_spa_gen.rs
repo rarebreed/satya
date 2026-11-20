@@ -885,7 +885,7 @@ fn try_place_outdoor_spa_vignette(b: &mut OutdoorBuilder, cand_rect: RectM) -> b
     let seed = spa_variant_seed(b.rng.next() as u32, style);
     let rot = b.rng.range(0, 4) * 45;
 
-    let mut placed_grotto_pool = false;
+    let mut grotto_pool: Option<MapSurfaceFeature> = None;
     if style == SpaStyle::SunkenMosaicGrotto
         && pad_kind == SurfaceFeatureKind::StoneWalk
         && pad_s >= 4.8
@@ -908,10 +908,10 @@ fn try_place_outdoor_spa_vignette(b: &mut OutdoorBuilder, cand_rect: RectM) -> b
             25,
             None,
         );
-        placed_grotto_pool = true;
+        grotto_pool = Some(pool_ref);
     }
 
-    if !placed_grotto_pool
+    if grotto_pool.is_none()
         && place_terrace_prop(b, None, PropKind::HotTub, cx, cy, rot, Some(seed))
         && pad_s >= 4.6
         && b.rng.chance(1, 2)
@@ -928,12 +928,28 @@ fn try_place_outdoor_spa_vignette(b: &mut OutdoorBuilder, cand_rect: RectM) -> b
 
     for &(lx, ly) in &[(pad.x0 + 0.62, cy), (pad.x1 - 0.62, cy)] {
         let lrot = vehicle_forward_rot_deg(cx - lx, cy - ly);
-        let _ = place_terrace_prop(b, None, PropKind::ReclinerChair, lx, ly, lrot, None);
+        let _ = place_terrace_prop(
+            b,
+            grotto_pool.as_ref(),
+            PropKind::ReclinerChair,
+            lx,
+            ly,
+            lrot,
+            None,
+        );
     }
-    let _ = place_terrace_prop(b, None, PropKind::RoundTable, cx, pad.y1 - 0.65, 0, None);
     let _ = place_terrace_prop(
         b,
+        grotto_pool.as_ref(),
+        PropKind::RoundTable,
+        cx,
+        pad.y1 - 0.65,
+        0,
         None,
+    );
+    let _ = place_terrace_prop(
+        b,
+        grotto_pool.as_ref(),
         PropKind::Planter,
         pad.x0 + 0.55,
         pad.y0 + 0.55,
@@ -942,7 +958,7 @@ fn try_place_outdoor_spa_vignette(b: &mut OutdoorBuilder, cand_rect: RectM) -> b
     );
     let _ = place_terrace_prop(
         b,
-        None,
+        grotto_pool.as_ref(),
         PropKind::Planter,
         pad.x1 - 0.55,
         pad.y0 + 0.55,

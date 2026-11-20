@@ -249,24 +249,40 @@ impl AuthAndSessionManager {
             let session = guard
                 .get(sid)
                 .ok_or_else(|| anyhow::anyhow!("Session '{sid}' not found"))?;
+            let is_gm = matches!(role, SessionRole::Gm | SessionRole::Host);
             let roster_vec: Vec<Participant> = session.roster.values().cloned().collect();
-            let memories = if matches!(role, SessionRole::Gm | SessionRole::Host) {
+            let memories = if is_gm {
                 session.gm_memories.clone()
             } else {
                 Vec::new()
             };
+            let filtered_map = session.active_map.as_ref().map(|m| {
+                if is_gm {
+                    m.clone()
+                } else {
+                    crate::map_handlers::filter_map_for_role(m, role)
+                }
+            });
+            let filtered_tracker = Self::filter_combat_tracker_for_viewer(
+                &session.combat_tracker,
+                session.active_map.as_ref(),
+                is_gm,
+            );
             (
                 roster_vec,
-                session.active_map.clone(),
-                Some(session.combat_tracker.clone()),
+                filtered_map,
+                Some(filtered_tracker),
                 memories,
             )
         };
 
-        let gm_documents = self
-            .list_session_gm_documents_for_user(sid, &user.user_id)
-            .await
-            .unwrap_or_default();
+        let gm_documents = if role == SessionRole::Observer {
+            Vec::new()
+        } else {
+            self.list_session_gm_documents_for_user(sid, &user.user_id)
+                .await
+                .unwrap_or_default()
+        };
 
         let session_characters = self.load_session_characters_from_db(sid, &roster).await;
 

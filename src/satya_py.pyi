@@ -384,7 +384,7 @@ def evaluate_two_component_action_cost(
     min_total_tc_floor: int = 2,
     fatigue_level: int = 0,
     wound_shock_index: float = 0.0,
-    encumbrance_tier: int = 1,
+    encumbrance_tier: int = 0,
     status_time_penalty: float = 0.0,
     is_concussed_or_dazed: bool = False,
 ) -> dict[str, Any]: ...
@@ -536,7 +536,16 @@ def evaluate_combat_technique_triad(
     weapon_is_braced: bool = False,
     fatigue_level: int = 0,
     wound_shock_index: float = 0.0,
-    encumbrance_tier: int = 1,
+    encumbrance_tier: int = 0,
+    skill_c: int = 10,
+    spd: int = 10,
+    for_stat: int = 10,
+    dex: int = 10,
+    kin: int = 10,
+    ins: int = 10,
+    foc: int = 10,
+    mas_kg: float = 70.0,
+    morale_state: str = "steady",
 ) -> dict[str, Any]: ...
 
 
@@ -549,12 +558,14 @@ def check_tactical_token_collision(
     x_m: float,
     y_m: float,
     radius_m: float,
+    floor_index: int | None = None,
 ) -> bool: ...
 def resolve_tactical_token_destination_cm(
     map_json: str,
     moving_entity_id: str,
     target_x_cm: int,
     target_y_cm: int,
+    floor_index: int | None = None,
 ) -> tuple[int, int]: ...
 def evaluate_tactical_los_and_cover(
     map_json: str,
@@ -562,12 +573,14 @@ def evaluate_tactical_los_and_cover(
     y1_m: float,
     x2_m: float,
     y2_m: float,
+    floor_index: int | None = None,
 ) -> dict[str, Any]: ...
 def inspect_tactical_map_point(
     map_json: str,
     theme_name: str,
     x_m: float,
     y_m: float,
+    floor_index: int | None = None,
 ) -> dict[str, Any] | None: ...
 def generate_procedural_tactical_sector_json(
     map_id: str,

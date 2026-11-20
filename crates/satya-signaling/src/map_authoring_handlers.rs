@@ -132,12 +132,20 @@ pub async fn session_generate_or_edit_map_handler(
             .into_response();
     };
 
+    if caller_part.role == SessionRole::Observer {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Observers have read-only spectatorship on the tactical map" })),
+        )
+            .into_response();
+    }
+
     let has_human_gm = ctx.roster.iter().any(|p| {
         p.participant_kind == ParticipantKind::Human
             && matches!(p.role, SessionRole::Gm | SessionRole::Host)
     });
-    let caller_is_gm_or_solo =
-        matches!(caller_part.role, SessionRole::Gm | SessionRole::Host) || !has_human_gm;
+    let caller_is_gm_or_solo = matches!(caller_part.role, SessionRole::Gm | SessionRole::Host)
+        || (!has_human_gm && caller_part.role == SessionRole::Player);
 
     // Branch A0-Floor: Switch active multi-floor level snapshot (`B1` / `1F` / `2F`, ...)
     if let Some(target_floor) = req.set_active_floor {

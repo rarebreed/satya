@@ -71,6 +71,13 @@ pub async fn update_session_gm_config_handler(
         )
             .into_response();
     };
+    if !crate::npcs::can_caller_orchestrate_ai_session(&state, &session_id, &user).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Only the session GM or host can configure the AI GM" })),
+        )
+            .into_response();
+    }
 
     match state
         .auth
@@ -212,6 +219,61 @@ pub async fn gm_session_chat_handler(
         .send_to_users(&session_id, &delivery_ids, &pkt_str)
         .await;
 
+    // In Observer / AI-only sessions (no human Players), rally auto-responding AI Players after AI GM narration.
+    if req.visibility == MessageVisibility::Public
+        && matches!(
+            req.channel_context,
+            ChannelContext::GmNarration | ChannelContext::InCharacter
+        )
+        && !req.body.contains("[Party Turn Queue")
+        && !req.body.contains("[Action Mode Tick Queue")
+        && !ctx
+            .roster
+            .iter()
+            .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Player)
+    {
+        let auto_entries: Vec<crate::player_ai_api::SessionAiPlayerEntry> = state
+            .ai_players
+            .read()
+            .await
+            .get(session_id.trim())
+            .map(|m| m.values().filter(|e| e.auto_respond).cloned().collect())
+            .unwrap_or_default();
+        let ai_count = auto_entries.len() as u32;
+        if !auto_entries.is_empty() {
+            let base_rally = auto_entries[0].max_rally_turns;
+            let eff_rally = if ai_count > 1 {
+                base_rally.saturating_mul(ai_count).min(12)
+            } else {
+                base_rally
+            };
+            if state
+                .try_consume_ai_rally_turn(session_id.trim(), eff_rally)
+                .await
+            {
+                let state_clone = state.clone();
+                let sid_clone = session_id.clone();
+                let body_clone = req.body.clone();
+                tokio::spawn(async move {
+                    let prompt = format!(
+                        "GM Update / Scene Progression: \"{}\". Respond in character or declare your character's next action.",
+                        body_clone
+                    );
+                    for entry in &auto_entries {
+                        crate::player_ai_api::trigger_ai_player_turn(
+                            &state_clone,
+                            &sid_clone,
+                            entry,
+                            &prompt,
+                            true,
+                        )
+                        .await;
+                    }
+                });
+            }
+        }
+    }
+
     (StatusCode::OK, Json(chat_event)).into_response()
 }
 
@@ -247,6 +309,15 @@ pub async fn gm_session_roll_handler(
     if !req.actor_display_name.trim().is_empty() {
         actor.display_name = req.actor_display_name.trim().to_string();
     }
+    if let Some(tracker) = ctx.combat_tracker.as_ref() {
+        let name_needle = req.actor_display_name.trim();
+        if let Some(matched) = tracker.combatants.iter().find(|c| {
+            !name_needle.is_empty()
+                && (c.display_name.eq_ignore_ascii_case(name_needle) || c.entity_id == name_needle)
+        }) {
+            actor.user_id = matched.entity_id.clone();
+        }
+    }
 
     let target_participants: Vec<Participant> = ctx
         .roster
@@ -259,7 +330,20 @@ pub async fn gm_session_roll_handler(
     let c_val = req.attribute_tn.clamp(1, 20);
     let int_mod = req.internal_mod.unwrap_or(req.fatigue_level).clamp(-2, 10);
     let tool_mod = req.known_tool_mod.clamp(-4, 12);
-    let ext_mod = req.difficulty_rating.clamp(-10, 16);
+    let tech_delta_ext = evaluate_roll_combat_action_and_triad(
+        req.combat_technique.as_deref(),
+        req.tempo_pool,
+        req.control_pool,
+        req.force_pool,
+        req.combat_stance,
+        c_val,
+        n_pairs,
+        req.fatigue_level.max(0),
+        req.wound_shock_index,
+    )
+    .map(|(res, _)| res.technique_delta_ext)
+    .unwrap_or(0);
+    let ext_mod = (req.difficulty_rating + tech_delta_ext).clamp(-10, 16);
     let parsed_tie_rule = match req.tie_rule.as_deref() {
         Some("strict_signed_margin") => ContestedTieRule::StrictSignedMargin,
         Some("active_player_wins_ties") => ContestedTieRule::ActivePlayerWinsTies,
@@ -501,7 +585,11 @@ pub async fn gm_session_map_handler(
         );
         req.wall_edges = sec.wall_edges;
         req.props = sec.props;
+        req.surfaces = sec.surfaces;
+        req.floors = sec.floors;
+        req.active_floor = sec.active_floor;
     }
+    req.sync_active_floor_snapshot();
 
     let _ = state
         .auth
@@ -898,10 +986,9 @@ pub async fn apply_combat_action_to_mechanics_and_tracker(
         .await
         && let Some((ctx, _)) = state.auth.get_session_gm_context(session_id).await
         && let Some(map) = ctx.active_map
-        && let Ok(map_pkt) =
-            serde_json::to_string(&ServerWsPacket::MapUpdated { map: Box::new(map) })
     {
-        state.broadcast_to_session(session_id, &map_pkt).await;
+        crate::map_handlers::broadcast_role_filtered_map(state, session_id, &ctx.roster, &map)
+            .await;
     }
 
     let triad_note = format!(

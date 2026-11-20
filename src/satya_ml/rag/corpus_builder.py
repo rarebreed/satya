@@ -59,6 +59,7 @@ _RUST_TO_DOC_HINTS: dict[str, str] = {
     "npc_generator.rs": "docs/ttrpg/03-character/lifepaths_and_economy.md",
     "awakened_ai_substrate.rs": "docs/campaign/03-minds-and-factions/ai_minds_and_consciousness.md",
     "awakened_campaign_arcs.rs": "docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md",
+    "awakened_systems_py.rs": "docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md",
 }
 
 _TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
@@ -67,8 +68,10 @@ _CAMEL_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 _SECRET_BODY_MARKERS = (
     "mirror-hypocris",
     "gm-only",
+    "gm reference",
     "gm ground truth",
     "gm truth",
+    "secret architect",
     "shackled hunter-killer",
     "military robotics",
     "un-clamped seed",
@@ -253,6 +256,8 @@ def build_ttrpg_rules_chunks(repo_root: Path) -> list[dict[str, Any]]:
             seen.add(p.resolve())
             ordered_files.append((p, label))
     for p in sorted(ttrpg_dir.rglob("*.md")):
+        if p.name.upper() == "SUMMARY.MD":
+            continue
         if p.resolve() not in seen:
             rel_name = p.relative_to(ttrpg_dir).as_posix()
             ordered_files.append((p, rel_name))
@@ -269,11 +274,17 @@ def build_ttrpg_rules_chunks(repo_root: Path) -> list[dict[str, Any]]:
             content = sec["content"]
             breadcrumb = sec["breadcrumb"]
             symbol = sec["symbol_or_section"]
+            combined_low = f"{breadcrumb}\n{content}".lower()
+            vis = (
+                "GM_CONSPIRACY_SECRET"
+                if any(marker in combined_low for marker in _SECRET_BODY_MARKERS)
+                else "PUBLIC"
+            )
             chunks.append(
                 {
                     "chunk_id": _make_chunk_id("ttrpg_rules", rel_posix, symbol, idx, content),
                     "corpus": "ttrpg_rules",
-                    "visibility": "PUBLIC",
+                    "visibility": vis,
                     "source_path": rel_posix,
                     "symbol_or_section": symbol,
                     "breadcrumb": breadcrumb,
@@ -301,6 +312,32 @@ def _extract_brace_block(lines: list[str], start_idx: int, max_lines: int = 45) 
         if started and depth <= 0:
             break
     return "\n".join(collected).strip(), idx
+
+
+_SECRET_RUST_FILES: tuple[str, ...] = (
+    "awakened_campaign_arcs.rs",
+    "awakened_ai_substrate.rs",
+    "awakened_systems_py.rs",
+    "awakened_py.rs",
+)
+
+
+def classify_rust_symbol_visibility(rel_posix: str, linked_doc: str, breadcrumb: str, content: str) -> str:
+    """Tag `rust_engine` symbol cards with `GM_CONSPIRACY_SECRET`, `ARC2_SATYANG`, or `PUBLIC`."""
+    rel_low = rel_posix.lower()
+    if rel_low.endswith(_SECRET_RUST_FILES):
+        return "GM_CONSPIRACY_SECRET"
+    if linked_doc:
+        linked_vis = classify_lore_visibility(linked_doc, breadcrumb, content)
+        if linked_vis != "PUBLIC":
+            return linked_vis
+    combined_low = f"{breadcrumb}\n{content}".lower()
+    if any(marker in combined_low for marker in _SECRET_BODY_MARKERS):
+        return "GM_CONSPIRACY_SECRET"
+    crumb_low = f"{breadcrumb}\n{linked_doc}".lower()
+    if any(marker in crumb_low for marker in _SATYANG_ARC2_MARKERS):
+        return "ARC2_SATYANG"
+    return "PUBLIC"
 
 
 def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
@@ -345,14 +382,15 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
 
             if mod_doc_text:
                 card = f"[Rust Module `{crate_label}::{rs_path.stem}`]\nOrigin: {module_linked_doc or 'crates/' + crate_label}\n{mod_doc_text}"
+                mod_crumb = f"{crate_label} > {rs_path.name} > module"
                 chunks.append(
                     {
                         "chunk_id": _make_chunk_id("rust_engine", rel_posix, rs_path.stem, 0, card),
                         "corpus": "rust_engine",
-                        "visibility": "PUBLIC",
+                        "visibility": classify_rust_symbol_visibility(rel_posix, module_linked_doc, mod_crumb, card),
                         "source_path": rel_posix,
                         "symbol_or_section": rs_path.stem,
-                        "breadcrumb": f"{crate_label} > {rs_path.name} > module",
+                        "breadcrumb": mod_crumb,
                         "linked_doc_path": module_linked_doc,
                         "content": card,
                         "search_text": _identifier_search_expansion(f"{rs_path.stem} {module_linked_doc}\n{card}"),
@@ -373,14 +411,15 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
                             enum_name = m_enum.group(1)
                             break
                     card = f"[Rust Enum `{crate_label}::{enum_name}` — `{rel_posix}`]\n```rust\n{block}\n```"
+                    enum_crumb = f"{crate_label} > {rs_path.name} > enum {enum_name}"
                     chunks.append(
                         {
                             "chunk_id": _make_chunk_id("rust_engine", rel_posix, enum_name, idx_counter, card),
                             "corpus": "rust_engine",
-                            "visibility": "PUBLIC",
+                            "visibility": classify_rust_symbol_visibility(rel_posix, module_linked_doc, enum_crumb, card),
                             "source_path": rel_posix,
                             "symbol_or_section": enum_name,
-                            "breadcrumb": f"{crate_label} > {rs_path.name} > enum {enum_name}",
+                            "breadcrumb": enum_crumb,
                             "linked_doc_path": module_linked_doc,
                             "content": card,
                             "search_text": _identifier_search_expansion(f"{enum_name} {module_linked_doc}\n{card}"),
@@ -435,14 +474,15 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
                                 f"[Rust {kind} `{crate_label}::{sym_name}` — `{rel_posix}`]\n"
                                 f"{header}\n```rust\n{attr_str}{sig_block}\n```"
                             ).strip()
+                            sym_crumb = f"{crate_label} > {rs_path.name} > {sym_name}"
                             chunks.append(
                                 {
                                     "chunk_id": _make_chunk_id("rust_engine", rel_posix, sym_name, idx_counter, card),
                                     "corpus": "rust_engine",
-                                    "visibility": "PUBLIC",
+                                    "visibility": classify_rust_symbol_visibility(rel_posix, linked, sym_crumb, card),
                                     "source_path": rel_posix,
                                     "symbol_or_section": sym_name,
-                                    "breadcrumb": f"{crate_label} > {rs_path.name} > {sym_name}",
+                                    "breadcrumb": sym_crumb,
                                     "linked_doc_path": linked,
                                     "content": card,
                                     "search_text": _identifier_search_expansion(

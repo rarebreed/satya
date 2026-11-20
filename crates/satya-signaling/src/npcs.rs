@@ -86,10 +86,10 @@ async fn prepare_npc_request(
 
 /// Determines whether the caller is allowed to see GM-only NPC stats, Psyche traits, and secrets.
 ///
-/// Returns `true` when:
+/// Returns `true` strictly when:
 /// - The caller is the AI GM service (`is_gm_service == true`), OR
-/// - The caller has `SessionRole::Gm` in the session roster, OR
-/// - The session has no human `SessionRole::Gm` (e.g. Solo / Autonomous AI-GM mode where the player IS the table host).
+/// - The caller is an active session roster member holding `SessionRole::Gm`, `SessionRole::Host`,
+///   or `SessionRole::AiGm` (never `Observer`, `Player`, or non-members).
 pub(crate) async fn can_caller_view_gm_secrets(
     state: &SignalingAppState,
     session_id: &str,
@@ -103,19 +103,40 @@ pub(crate) async fn can_caller_view_gm_secrets(
         return false;
     };
     let roster = state.auth.get_session_roster(session_id).await;
-    if roster.is_empty() {
+    roster.iter().any(|p| {
+        p.user_id == user.user_id
+            && matches!(
+                p.role,
+                SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
+            )
+    })
+}
+
+/// Determines whether the caller may orchestrate AI GM / AI Player configuration and stepping
+/// without exposing GM secrets (allows active `Gm`/`Host`, or active `host_user_id` as `Player`/`Observer`
+/// when no Human GM is present).
+pub(crate) async fn can_caller_orchestrate_ai_session(
+    state: &SignalingAppState,
+    session_id: &str,
+    user: &UserAccount,
+) -> bool {
+    let guard = state.auth.sessions.read().await;
+    let Some(session) = guard.get(session_id.trim()) else {
+        return false;
+    };
+    let Some(caller) = session.roster.get(&user.user_id) else {
+        return false;
+    };
+    if matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
         return true;
     }
-    let caller_is_gm = roster
-        .iter()
-        .any(|p| p.user_id == user.user_id && p.role == SessionRole::Gm);
-    if caller_is_gm {
-        return true;
-    }
-    let has_human_gm = roster
-        .iter()
-        .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm);
+    let has_human_gm = session.roster.values().any(|p| {
+        p.participant_kind == ParticipantKind::Human
+            && matches!(p.role, SessionRole::Gm | SessionRole::Host)
+    });
     !has_human_gm
+        && session.host_user_id == user.user_id
+        && matches!(caller.role, SessionRole::Player | SessionRole::Observer)
 }
 
 fn compute_apparent_condition(sheet: &CharacterSheetRecord) -> String {
@@ -138,7 +159,7 @@ pub async fn generate_session_npc_handler(
 ) -> impl IntoResponse {
     let sid = session_id.trim();
     let (user_opt, is_gm_service, can_see_gm) =
-        match prepare_npc_request(&state, &headers, sid, false).await {
+        match prepare_npc_request(&state, &headers, sid, true).await {
             Ok(v) => v,
             Err(resp) => return *resp,
         };

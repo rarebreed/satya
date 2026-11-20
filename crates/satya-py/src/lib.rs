@@ -1564,7 +1564,7 @@ pub fn compute_dual_skill_pool(skill_n1: usize, skill_n2: usize) -> usize {
 
 /// Evaluates a two-component ($\text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$) action cost per `action_economy_and_ooda.md` (§2.3, §5.1–§5.3).
 #[pyfunction]
-#[pyo3(signature = (base_tc_decide, base_tc_act, d_cog, skill_level_n=1, apply_cognitive_offset=true, tempo_allocated=0, weapon_balance_b=0, min_total_tc_floor=2, fatigue_level=0, wound_shock_index=0.0, encumbrance_tier=1, status_time_penalty=0.0, is_concussed_or_dazed=false))]
+#[pyo3(signature = (base_tc_decide, base_tc_act, d_cog, skill_level_n=1, apply_cognitive_offset=true, tempo_allocated=0, weapon_balance_b=0, min_total_tc_floor=2, fatigue_level=0, wound_shock_index=0.0, encumbrance_tier=0, status_time_penalty=0.0, is_concussed_or_dazed=false))]
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_two_component_action_cost(
     py: Python<'_>,
@@ -1585,7 +1585,7 @@ pub fn evaluate_two_component_action_cost(
     let tf = satya_engine::ActionTimeFactorParams {
         fatigue_level,
         wound_shock_index,
-        encumbrance_tier: satya_engine::EncumbranceTier::from_tier_number(encumbrance_tier),
+        encumbrance_tier: satya_engine::EncumbranceTier::from_load_tier_0_to_4(encumbrance_tier),
         status_time_penalty,
         is_concussed_or_dazed,
     };
@@ -1710,20 +1710,11 @@ pub fn evaluate_psyche_friction_check(
     player_pairs: Vec<(i32, i32)>,
     gm_pair: (i32, i32),
 ) -> PyResult<String> {
-    let trait_id = match trait_code.trim().to_ascii_uppercase().as_str() {
-        "OPN" | "OPENNESS" => satya_engine::PsycheTraitId::Openness,
-        "SLF" | "SELFISHNESS" => satya_engine::PsycheTraitId::Selfishness,
-        "BLG" | "BELONGING" => satya_engine::PsycheTraitId::Belonging,
-        "AGG" | "AGGRESSION" => satya_engine::PsycheTraitId::Aggression,
-        "EGO" => satya_engine::PsycheTraitId::Ego,
-        "CNF" | "CONFORMITY" => satya_engine::PsycheTraitId::Conformity,
-        "EXT" | "EXTRAVERSION" => satya_engine::PsycheTraitId::Extraversion,
-        other => {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "unknown Psyche trait '{other}'; expected OPN, SLF, BLG, AGG, EGO, CNF, or EXT"
-            )));
-        }
-    };
+    let trait_id = satya_engine::PsycheTraitId::from_code_str(trait_code.trim()).ok_or_else(|| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "unknown Psyche trait '{trait_code}'; expected OPN, SLF, BLG, AGG, EGO, CNF, EXT, TRS, or CPS"
+        ))
+    })?;
     let pole = if violates_high_pole {
         satya_engine::PsycheViolationPole::HighPole
     } else {
@@ -2027,7 +2018,16 @@ pub fn list_combat_techniques(
     weapon_is_braced=false,
     fatigue_level=0,
     wound_shock_index=0.0,
-    encumbrance_tier=1
+    encumbrance_tier=0,
+    skill_c=10,
+    spd=10,
+    for_stat=10,
+    dex=10,
+    kin=10,
+    ins=10,
+    foc=10,
+    mas_kg=70.0,
+    morale_state="steady"
 ))]
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_combat_technique_triad(
@@ -2048,6 +2048,15 @@ pub fn evaluate_combat_technique_triad(
     fatigue_level: i32,
     wound_shock_index: f64,
     encumbrance_tier: u8,
+    skill_c: i32,
+    spd: i32,
+    for_stat: i32,
+    dex: i32,
+    kin: i32,
+    ins: i32,
+    foc: i32,
+    mas_kg: f64,
+    morale_state: &str,
 ) -> PyResult<Py<PyDict>> {
     let tech_id =
         satya_engine::CombatTechniqueId::from_code_str(technique_id).ok_or_else(|| {
@@ -2060,10 +2069,26 @@ pub fn evaluate_combat_technique_triad(
             "unknown combat domain '{domain}'; expected 'unarmed_martial_arts', 'armed_melee', or 'ranged'"
         ))
     })?;
+    let chars = satya_engine::CharacterCharacteristics {
+        spd,
+        for_stat,
+        dex,
+        kin,
+        ins,
+        foc,
+        mas_kg,
+        ..Default::default()
+    };
+    let morale = satya_engine::MoraleState::from_code_str(morale_state)
+        .unwrap_or(satya_engine::MoraleState::Steady);
     let envelope = satya_engine::compute_tactical_pool(&satya_engine::TacticalPoolParams {
+        chars,
+        skill_c,
         skill_n: skill_level_n,
         is_ranged: dom == satya_engine::CombatDomain::Ranged,
         fatigue_level,
+        wound_shock_index: wound_shock_index.round() as i32,
+        morale_state: morale,
         ..Default::default()
     });
     let res =
@@ -2076,7 +2101,9 @@ pub fn evaluate_combat_technique_triad(
             time_factor_params: satya_engine::ActionTimeFactorParams {
                 fatigue_level,
                 wound_shock_index,
-                encumbrance_tier: satya_engine::EncumbranceTier::from_tier_number(encumbrance_tier),
+                encumbrance_tier: satya_engine::EncumbranceTier::from_load_tier_0_to_4(
+                    encumbrance_tier,
+                ),
                 status_time_penalty: 0.0,
                 is_concussed_or_dazed: false,
             },
@@ -2256,7 +2283,7 @@ mod tests {
         assert!(triad.valid);
 
         let chapters = list_rules_chapters();
-        assert_eq!(chapters.len(), 18);
+        assert_eq!(chapters.len(), 24);
 
         let hits = search_rules_book("Tactical Triad", 3);
         assert!(!hits.is_empty());
@@ -2265,5 +2292,137 @@ mod tests {
         assert!(!reg.list_schemas().is_empty());
         let pii_json = reg.extract_pii_manifest().unwrap();
         assert!(pii_json.contains("satya"));
+    }
+
+    #[test]
+    fn test_wave1_py_psyche_encumbrance_and_triad_parity() {
+        // 1. All 9 Psyche traits including TRS and CPS resolve cleanly
+        for code in ["TRS", "CPS"] {
+            let json_str = evaluate_psyche_friction_check(
+                code,
+                6,
+                false,
+                12,
+                false,
+                0,
+                0,
+                vec![(14, 10), (11, 9)],
+                (10, 8),
+            )
+            .unwrap_or_else(|e| panic!("evaluate_psyche_friction_check({code}) failed: {e}"));
+            let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+            assert_eq!(parsed["triggered"], serde_json::json!(true));
+            assert_eq!(parsed["delta_psyche"], serde_json::json!(4));
+        }
+
+        // 2. Two-component action cost honors encumbrance_tier (Tier 4 > Tier 0)
+        Python::initialize();
+        Python::attach(|py| {
+            let light = evaluate_two_component_action_cost(
+                py, 2, 4, 12, 2, true, 0, 0, 2, 0, 0.0, 0, 0.0, false,
+            )
+            .unwrap();
+            let heavy = evaluate_two_component_action_cost(
+                py, 2, 4, 12, 2, true, 0, 0, 2, 0, 0.0, 4, 0.0, false,
+            )
+            .unwrap();
+            let light_dict = light.bind(py);
+            let heavy_dict = heavy.bind(py);
+            let light_tf: f64 = light_dict
+                .get_item("physical_time_factor")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            let heavy_tf: f64 = heavy_dict
+                .get_item("physical_time_factor")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            assert!(
+                heavy_tf > light_tf,
+                "Tier 4 time factor {heavy_tf} should exceed Tier 0 {light_tf}"
+            );
+
+            // 3. evaluate_combat_technique_triad honors custom stats, encumbrance_tier, and morale_state
+            let res_steady = evaluate_combat_technique_triad(
+                py,
+                "snap_shot",
+                2,
+                2,
+                1,
+                "ranged",
+                2,
+                4,
+                1.0,
+                0,
+                0,
+                0,
+                0,
+                false,
+                0,
+                0.0,
+                0,
+                14,
+                13,
+                12,
+                13,
+                12,
+                12,
+                12,
+                75.0,
+                "steady",
+            )
+            .unwrap();
+            let res_shaken = evaluate_combat_technique_triad(
+                py,
+                "snap_shot",
+                2,
+                2,
+                6,
+                "ranged",
+                2,
+                4,
+                1.0,
+                0,
+                0,
+                0,
+                0,
+                false,
+                0,
+                0.0,
+                4,
+                14,
+                13,
+                12,
+                13,
+                12,
+                12,
+                12,
+                75.0,
+                "shaken",
+            )
+            .unwrap();
+            assert!(
+                res_steady
+                    .bind(py)
+                    .get_item("valid")
+                    .unwrap()
+                    .unwrap()
+                    .extract::<bool>()
+                    .unwrap()
+            );
+            assert!(
+                !res_shaken
+                    .bind(py)
+                    .get_item("valid")
+                    .unwrap()
+                    .unwrap()
+                    .extract::<bool>()
+                    .unwrap(),
+                "Shaken morale caps Force <= Neutral B so Force=6 must be invalid"
+            );
+        });
     }
 }

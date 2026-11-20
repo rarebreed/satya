@@ -405,7 +405,8 @@ pub(crate) fn stitch_continued_floors(
                 wall_edges: base.wall_edges.clone(),
                 props: base.props.clone(),
                 surfaces: base.surfaces.clone(),
-                ..Default::default()
+                ground_floor_override: base.ground_floor_override.clone(),
+                ground_tint_rgb: base.ground_tint_rgb,
             });
         }
         if let Some(dst) = base

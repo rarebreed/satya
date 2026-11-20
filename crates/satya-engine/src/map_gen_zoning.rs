@@ -525,8 +525,8 @@ fn build_apartment_slab_floor(
             v_slab_wall(&mut edges, dx, cy1, slab.y1, &[], MaterialClass::ConcreteBlock);
         }
         let stair_x = slab.x0 + 1;
-        let elev_x = (slab.x1 - 3).max(stair_x + 2);
-        props.push(make_prop(PropKind::Stairwell, stair_x, cy0, 0, None, s));
+        let elev_x = (slab.x1 - 3).max(stair_x + 3);
+        props.push(make_prop(PropKind::Stairwell, stair_x, cy0, 90, None, s));
         props.push(make_prop(PropKind::ElevatorCar, elev_x, cy0, 0, None, s + 1));
         for (i, win) in xs.windows(2).enumerate() {
             dress_compact_apartment_unit(
@@ -578,7 +578,7 @@ fn build_apartment_slab_floor(
             h_slab_wall(&mut edges, dy, cx1, slab.x1, &[], MaterialClass::ConcreteBlock);
         }
         let stair_y = slab.y0 + 1;
-        let elev_y = (slab.y1 - 3).max(stair_y + 2);
+        let elev_y = (slab.y1 - 3).max(stair_y + 3);
         props.push(make_prop(PropKind::Stairwell, cx0, stair_y, 0, None, s));
         props.push(make_prop(PropKind::ElevatorCar, cx0, elev_y, 0, None, s + 1));
         for (i, win) in ys.windows(2).enumerate() {

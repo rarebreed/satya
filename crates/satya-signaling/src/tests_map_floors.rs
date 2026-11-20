@@ -427,3 +427,227 @@ async fn multi_floor_mansion_generation_floor_switch_and_cross_floor_token_move(
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[tokio::test]
+async fn test_cross_floor_move_requires_vertical_portal_proximity() {
+    let mut cfg = StorageConfig::default();
+    let temp_dir =
+        std::env::temp_dir().join(format!("satya_sig_map_portal_{}", Uuid::now_v7()));
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir
+        .join("users_map_portal.db")
+        .to_string_lossy()
+        .to_string();
+    cfg.ai_gm.service_url = "http://127.0.0.1:59999".to_string();
+
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+    let app = build_router(state.clone());
+
+    let gm_auth = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let gm_user = state.auth.verify_auth_token(&gm_auth.auth_token).await.unwrap();
+    let _ = state
+        .auth
+        .create_session(
+            &gm_user,
+            "ep-map-portal",
+            "room-pass",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            Some("Sean (GM)".to_string()),
+            false,
+        )
+        .await
+        .unwrap();
+
+    let p1_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let p1_user = state.auth.verify_auth_token(&p1_auth.auth_token).await.unwrap();
+    let _ = state
+        .auth
+        .join_session(
+            &p1_user,
+            "ep-map-portal",
+            "room-pass",
+            SessionRole::Player,
+            Some("Sara".to_string()),
+        )
+        .await
+        .unwrap();
+
+    let gen_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-portal/map")
+        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
+                preset: "luxury_mansion".to_string(),
+                grid_width: 24,
+                grid_height: 18,
+                cell_size_cm: 100,
+                seed: Some(42),
+                populate_roster_tokens: true,
+                ..Default::default()
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let gen_resp = tower::ServiceExt::oneshot(app.clone(), gen_req)
+        .await
+        .unwrap();
+    assert_eq!(gen_resp.status(), axum::http::StatusCode::OK);
+    let mansion_map: GmMapUpdateRequest = serde_json::from_slice(
+        &axum::body::to_bytes(gen_resp.into_body(), 256 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+
+    let portals_cm: Vec<(i32, i32)> = mansion_map
+        .floors
+        .iter()
+        .flat_map(|f| f.props.iter())
+        .chain(mansion_map.props.iter())
+        .filter(|p| p.kind.is_vertical_portal())
+        .map(|p| p.center_cm())
+        .collect();
+    let &(stair_x_cm, stair_y_cm) = portals_cm.first().expect("mansion has vertical portal");
+
+    // Pick a walkable cell on both 1F and 2F more than 3.5m away from any vertical portal
+    let mut f2_view = mansion_map.clone();
+    f2_view.switch_active_floor(1);
+    let mut far_cm = None;
+    'search: for gy in 1..(mansion_map.grid_height - 1) {
+        for gx in 1..(mansion_map.grid_width - 1) {
+            let cx = gx * 100 + 50;
+            let cy = gy * 100 + 50;
+            let far_from_portals = portals_cm.iter().all(|&(px, py)| {
+                ((cx - px) as f32).hypot((cy - py) as f32) > 350.0
+            });
+            if far_from_portals
+                && satya_engine::resolve_token_destination_cm(&mansion_map, &p1_auth.user_id, cx, cy)
+                    .is_ok()
+                && satya_engine::resolve_token_destination_cm(&f2_view, &p1_auth.user_id, cx, cy)
+                    .is_ok()
+            {
+                far_cm = Some((cx, cy));
+                break 'search;
+            }
+        }
+    }
+    let (far_x_cm, far_y_cm) = far_cm.expect("found walkable far cell away from stairwells");
+
+    // First position player on Floor 0 at the far cell
+    let prep_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-portal/map/move")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::MoveMapTokenRequest {
+                entity_id: p1_auth.user_id.clone(),
+                label: None,
+                to_x: far_x_cm / 100,
+                to_y: far_y_cm / 100,
+                to_x_cm: Some(far_x_cm),
+                to_y_cm: Some(far_y_cm),
+                to_floor: Some(0),
+                facing_deg: None,
+                model_preset: None,
+                color_hex: None,
+                stance_pose: None,
+                portrait_url: None,
+                visibility: None,
+                remove: false,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let prep_resp = tower::ServiceExt::oneshot(app.clone(), prep_req)
+        .await
+        .unwrap();
+    assert_eq!(prep_resp.status(), axum::http::StatusCode::OK);
+
+    // Switching floor far from any stairwell/elevator is rejected (400 Bad Request)
+    let far_jump_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-portal/map/move")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::MoveMapTokenRequest {
+                entity_id: p1_auth.user_id.clone(),
+                label: None,
+                to_x: far_x_cm / 100,
+                to_y: far_y_cm / 100,
+                to_x_cm: Some(far_x_cm),
+                to_y_cm: Some(far_y_cm),
+                to_floor: Some(1),
+                facing_deg: None,
+                model_preset: None,
+                color_hex: None,
+                stance_pose: None,
+                portrait_url: None,
+                visibility: None,
+                remove: false,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let far_jump_resp = tower::ServiceExt::oneshot(app.clone(), far_jump_req)
+        .await
+        .unwrap();
+    assert_eq!(far_jump_resp.status(), axum::http::StatusCode::BAD_REQUEST);
+
+    // Moving onto/near the stairwell (`<= 2.5m`) succeeds
+    let near_jump_req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/sessions/ep-map-portal/map/move")
+        .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&satya_schema::MoveMapTokenRequest {
+                entity_id: p1_auth.user_id.clone(),
+                label: None,
+                to_x: stair_x_cm / 100,
+                to_y: stair_y_cm / 100,
+                to_x_cm: Some(stair_x_cm),
+                to_y_cm: Some(stair_y_cm),
+                to_floor: Some(1),
+                facing_deg: None,
+                model_preset: None,
+                color_hex: None,
+                stance_pose: None,
+                portrait_url: None,
+                visibility: None,
+                remove: false,
+            })
+            .unwrap(),
+        ))
+        .unwrap();
+    let near_jump_resp = tower::ServiceExt::oneshot(app.clone(), near_jump_req)
+        .await
+        .unwrap();
+    assert_eq!(near_jump_resp.status(), axum::http::StatusCode::OK);
+    let moved: GmMapUpdateRequest = serde_json::from_slice(
+        &axum::body::to_bytes(near_jump_resp.into_body(), 256 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(moved.token_floor(&p1_auth.user_id), 1);
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

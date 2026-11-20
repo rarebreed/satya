@@ -351,6 +351,9 @@ def build_ai_player_graph(
             }:
                 t_args.setdefault("session_id", session_id)
                 t_args.setdefault("player_user_id", player_user_id)
+            if t_name == "perform_player_empathy_read" and chat_model is None:
+                # Prevent live LLMs from spoofing net_successes in Empathy checks.
+                t_args.pop("net_successes", None)
 
             redacted_args_json = redact_sensitive_text(json.dumps(t_args))
             with span_scope(f"mcp.player_tool.{t_name}", new_lineage_id=f"ptool-{t_id}") as span_id:

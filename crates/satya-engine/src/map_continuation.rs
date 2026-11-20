@@ -13,7 +13,7 @@ use satya_schema::{
     WallEdgeKind,
 };
 
-use crate::map_dressing::{PropObstruction, make_prop_at_cm, prop_spec};
+use crate::map_dressing::{PropObstruction, effective_obstruction, make_prop_at_cm, prop_spec};
 use crate::map_world_graph::{
     bootstrap_world_sectors_if_empty, compute_sector_boundary_profile, format_stitched_world_notes,
     orient_sector_to_shared_road, partition_continuation_seam_by_world_sectors,
@@ -193,7 +193,7 @@ fn extract_seam_slice(
         };
         edges.push(edge_slot_at(&map.wall_edges, ex, ey, side));
         let blocked = map.props.iter().any(|p| {
-            prop_spec(p.kind).obstruction == PropObstruction::FullObstacle
+            effective_obstruction(p) == PropObstruction::FullObstacle
                 && prop_intersects_circle(p, cell_x, cell_y, TOKEN_RADIUS_M)
         });
         src_clear.push(!blocked);
@@ -477,7 +477,7 @@ fn ensure_seam_connectivity(
     while !all_walkable_areas_connected(w, h, edges, props) {
         match props
             .iter()
-            .rposition(|p| prop_spec(p.kind).obstruction == PropObstruction::FullObstacle)
+            .rposition(|p| effective_obstruction(p) == PropObstruction::FullObstacle)
         {
             Some(i) => {
                 props.remove(i);
@@ -674,10 +674,11 @@ pub fn continue_procedural_map(
             upsert_edge(&mut base.wall_edges, e);
         }
         for s in sec.surfaces {
-            base.surfaces.push(s.translated(x_off * 100, y_off * 100));
+            base.surfaces
+                .push(s.translated(x_off * cell_cm, y_off * cell_cm));
         }
         for p in sec.props {
-            let shifted = translate_prop(p, x_off, y_off, 100);
+            let shifted = translate_prop(p, x_off, y_off, cell_cm);
             if prop_spec(shifted.kind).floor_layer {
                 new_floor_props.push(shifted);
             } else {

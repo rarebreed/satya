@@ -135,9 +135,13 @@ pub async fn player_ai_move_map_token_handler(
         )
             .into_response();
     }
-    let target_floor = req
-        .to_floor
-        .unwrap_or_else(|| map.token_floor(&req.entity_id));
+    let current_floor = map.token_floor(&req.entity_id);
+    let existing_pos = map
+        .tokens
+        .iter()
+        .find(|t| t.entity_id == req.entity_id)
+        .map(|t| map.token_pos_cm(t));
+    let target_floor = req.to_floor.unwrap_or(current_floor);
     let (final_x_cm, final_y_cm) = match if target_floor == map.active_floor {
         resolve_token_destination_cm(&map, &req.entity_id, req_x_cm, req_y_cm)
     } else {
@@ -151,16 +155,31 @@ pub async fn player_ai_move_map_token_handler(
         }
     };
 
+    if target_floor != current_floor
+        && !crate::map_handlers::is_near_vertical_portal(
+            &map,
+            current_floor,
+            target_floor,
+            existing_pos,
+            (final_x_cm, final_y_cm),
+        )
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": format!(
+                    "Cross-floor movement ({current_floor} -> {target_floor}) requires proximity within 2.5m of a stairwell, elevator, ladder, or escalator"
+                )
+            })),
+        )
+            .into_response();
+    }
+
     let cell_cm = map.cell_size_cm.max(25);
     let final_gx = (final_x_cm / cell_cm).clamp(0, (map.grid_width - 1).max(0));
     let final_gy = (final_y_cm / cell_cm).clamp(0, (map.grid_height - 1).max(0));
 
     let mut auto_facing: Option<i32> = req.facing_deg;
-    let existing_pos = map
-        .tokens
-        .iter()
-        .find(|t| t.entity_id == req.entity_id)
-        .map(|t| map.token_pos_cm(t));
     if let Some((prev_x_cm, prev_y_cm)) = existing_pos {
         if auto_facing.is_none() && (prev_x_cm != final_x_cm || prev_y_cm != final_y_cm) {
             let dx = (final_x_cm - prev_x_cm) as f32;

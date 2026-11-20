@@ -217,9 +217,10 @@ pub fn satya_generate_procedural_map() {
             built.token_visuals.clear();
             let mid_y = built.grid_height / 2;
             for (idx, p) in roster.iter().enumerate() {
-                if p.participant_kind == satya_schema::ParticipantKind::AiAgent
-                    && p.role == satya_schema::SessionRole::AiGm
-                {
+                if matches!(
+                    p.role,
+                    satya_schema::SessionRole::AiGm | satya_schema::SessionRole::Observer
+                ) {
                     continue;
                 }
                 let pref_y_cm =

@@ -172,6 +172,18 @@ pub fn satya_reset_dice_camera() {
 /// Triggers a quick 3D dice roll from the `3D Dice` notebook tab and updates the 3D dice tray readout.
 #[wasm_bindgen]
 pub fn satya_quick_3d_dice_roll(notation: String) {
+    if with_state(|st| {
+        st.session_id.is_some()
+            && st
+                .self_participant
+                .as_ref()
+                .is_some_and(|p| p.role == SessionRole::Observer)
+    }) {
+        append_system_notice(
+            "Observers are in read-only spectator mode and cannot broadcast dice rolls.",
+        );
+        return;
+    }
     let cmd_str = format!("/roll {notation}");
     let Ok(Some(crate::chat_cmd::ChatCommand::Roll { expr_raw, pipeline })) =
         crate::chat_cmd::parse_chat_command(&cmd_str)
@@ -324,6 +336,15 @@ pub fn satya_load_skill_preset(skill_name: String, skill_level: i32, control_c: 
 /// Advances (or resets when `delta == 0`) the Satya Count-Up Tick Timeline (`1 Tick = 0.25s`, `20 Ticks = 5.0s`) in the `Combat Tracker` notebook tab and persists the updated state to SQLite when in a live session.
 #[wasm_bindgen]
 pub fn satya_advance_combat_tick(delta: i32) {
+    if with_state(|st| {
+        st.session_id.is_some()
+            && st
+                .self_participant
+                .as_ref()
+                .is_some_and(|p| p.role == SessionRole::Observer)
+    }) {
+        return;
+    }
     let (round, tick, session_opt, token_opt) = with_state_mut(|st| {
         if delta <= 0 {
             st.combat_round = 1;
@@ -370,11 +391,15 @@ pub fn satya_advance_combat_tick(delta: i32) {
 
 /// Formats the HTML chip list of active session combatants and their continuous Count-Up Tick readiness (`1 Tick = 0.25s`, `Tick_start = max(1, 15 - OODA - Awareness)`) for `#combat-tracker-list`.
 pub fn format_combat_tracker_html(roster: &[Participant], round: u32, tick: u32) -> String {
-    if roster.is_empty() {
-        return r#"<span class="pill pill-muted">Join or create a session to populate active combatants.</span>"#.to_string();
-    }
-    roster
+    let combatants: Vec<&Participant> = roster
         .iter()
+        .filter(|p| p.role == SessionRole::Player)
+        .collect();
+    if combatants.is_empty() {
+        return r#"<span class="pill pill-muted">No active player combatants in roster.</span>"#.to_string();
+    }
+    combatants
+        .into_iter()
         .enumerate()
         .map(|(idx, p)| {
             let ooda = (13 - (idx as i32)).clamp(8, 16);

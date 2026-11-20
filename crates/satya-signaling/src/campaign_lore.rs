@@ -16,6 +16,7 @@ pub struct ResolvedPackDefaults {
     pub default_sector_preset: SectorPreset,
     pub hostile_token_label: String,
     pub ally_token_label: String,
+    pub default_ai_player_name: String,
     pub lore_dirs: Vec<String>,
     pub npc_toml_file: String,
 }
@@ -94,6 +95,7 @@ pub fn resolve_pack_defaults(explicit_pack: Option<&str>) -> ResolvedPackDefault
             default_sector_preset: SectorPreset::OrbitalAirlock,
             hostile_token_label: "SecOps Sentry".to_string(),
             ally_token_label: "Capt. Vance".to_string(),
+            default_ai_player_name: "Kaelen Voss (AI Player)".to_string(),
             lore_dirs: Vec::new(),
             npc_toml_file: "data/npcs/space_opera_npcs.toml".to_string(),
         }
@@ -103,6 +105,7 @@ pub fn resolve_pack_defaults(explicit_pack: Option<&str>) -> ResolvedPackDefault
             default_sector_preset: SectorPreset::UrbanCrossroads,
             hostile_token_label: "DAISE Tactical Agent".to_string(),
             ally_token_label: "Dr. Bandajara".to_string(),
+            default_ai_player_name: "Mateo Vance (AI Player)".to_string(),
             lore_dirs: vec!["docs/campaign".to_string()],
             npc_toml_file: "data/npcs/awakened_npcs.toml".to_string(),
         }
@@ -167,15 +170,31 @@ fn toml_npc_to_session_entry(entry: &toml::Table, is_gm: bool) -> Option<Session
         .and_then(|v| v.as_str())
         .unwrap_or(&npc_id)
         .to_string();
-    let archetype = entry
+    let full_archetype = entry
         .get("archetype")
         .and_then(|v| v.as_str())
-        .unwrap_or("Contact")
-        .to_string();
-    let faction = entry
-        .get("faction")
-        .and_then(|v| v.as_str())
-        .map(ToString::to_string);
+        .unwrap_or("Contact");
+    let archetype = if !is_gm {
+        entry
+            .get("public_archetype")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or(full_archetype)
+            .to_string()
+    } else {
+        full_archetype.to_string()
+    };
+    let full_faction = entry.get("faction").and_then(|v| v.as_str());
+    let faction = if !is_gm {
+        entry
+            .get("public_faction")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .or(full_faction)
+            .map(ToString::to_string)
+    } else {
+        full_faction.map(ToString::to_string)
+    };
     let disposition = entry
         .get("disposition")
         .and_then(|v| v.as_str())
@@ -360,6 +379,21 @@ fn score_text_match(query_lower: &str, keywords: &[String], title: &str, body: &
     score
 }
 
+fn is_public_campaign_lore(rel_label: &str, body: &str) -> bool {
+    let rel_low = rel_label.to_ascii_lowercase().replace('\\', "/");
+    if rel_low.contains("04-chronicle-and-gm/")
+        || rel_low.ends_with("/prologue.md")
+        || rel_low.ends_with("satyang_and_four_pillars.md")
+        || rel_low.ends_with("summary.md")
+    {
+        return false;
+    }
+    let body_low = body.to_ascii_lowercase();
+    !["gm reference", "secret architect", "gm-only", "gm ground truth", "gm_conspiracy_secret", "mirror-hypocris"]
+        .iter()
+        .any(|marker| body_low.contains(marker))
+}
+
 /// Appends ranked [`GmLookupSourceKind::CampaignLore`] (Markdown + TOML) and
 /// [`GmLookupSourceKind::SessionNpc`] (SQLite `session_npcs` + pack starter TOML)
 /// hits into `hits`, redacting GM secrets unless `is_gm` is true.
@@ -381,11 +415,10 @@ pub async fn append_omnisearch_lore_and_npc_hits(
     let pack = resolve_pack_defaults(Some(state.campaign_pack.as_str()));
     let root = workspace_root();
 
-    let include_lore = is_gm
-        && matches!(
-            norm_scope.as_str(),
-            "ALL" | "LORE" | "CAMPAIGN" | "CAMPAIGN_LORE" | "DOCS" | "SETTING"
-        );
+    let include_lore = matches!(
+        norm_scope.as_str(),
+        "ALL" | "LORE" | "CAMPAIGN" | "CAMPAIGN_LORE" | "DOCS" | "SETTING"
+    );
     let include_npcs = matches!(
         norm_scope.as_str(),
         "ALL"
@@ -417,7 +450,7 @@ pub async fn append_omnisearch_lore_and_npc_hits(
                     } else {
                         format!("## {}", section.trim())
                     };
-                    if body.is_empty() {
+                    if body.is_empty() || (!is_gm && !is_public_campaign_lore(&rel_label, &body)) {
                         continue;
                     }
                     let heading = body

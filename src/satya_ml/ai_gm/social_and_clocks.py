@@ -38,6 +38,8 @@ from satya_ml.dice_probabilities import _ensure_satya_py_loaded
 
 _SESSION_WORLD_LEDGERS: dict[str, dict[str, Any]] = {}
 _SESSION_SOCIAL_COMPOSURE: dict[tuple[str, str], dict[str, Any]] = {}
+_SESSION_CONVICTION_SURGES: dict[tuple[str, str], bool] = {}
+_SESSION_PSYCHE_DRIFT_MARKS: dict[tuple[str, str, str], int] = {}
 
 _DEFAULT_PSYCHE: dict[str, int] = {
     "opn": 10,
@@ -128,14 +130,26 @@ def compute_faction_standing_social_leverage(session_id: str, npc: dict[str, Any
 
 
 def reset_social_and_world_state(session_id: str | None = None) -> None:
-    """Clear in-memory fallback world ledgers and NPC social composure states."""
+    """Clear in-memory fallback world ledgers, NPC social composure, surge/drift tracking, and spatial pins."""
     if session_id is None:
         _SESSION_WORLD_LEDGERS.clear()
         _SESSION_SOCIAL_COMPOSURE.clear()
+        _SESSION_CONVICTION_SURGES.clear()
+        _SESSION_PSYCHE_DRIFT_MARKS.clear()
     else:
         _SESSION_WORLD_LEDGERS.pop(session_id, None)
         for key in [k for k in _SESSION_SOCIAL_COMPOSURE if k[0] == session_id]:
             _SESSION_SOCIAL_COMPOSURE.pop(key, None)
+        for key in [k for k in _SESSION_CONVICTION_SURGES if k[0] == session_id]:
+            _SESSION_CONVICTION_SURGES.pop(key, None)
+        for key in [k for k in _SESSION_PSYCHE_DRIFT_MARKS if k[0] == session_id]:
+            _SESSION_PSYCHE_DRIFT_MARKS.pop(key, None)
+    try:
+        from satya_ml.ai_gm.maps import clear_session_spatial_pins
+
+        clear_session_spatial_pins(session_id)
+    except Exception:
+        pass
     try:
         from satya_ml.ai_gm.audit_and_first_contact import reset_session_audit_proofs
 
@@ -506,26 +520,38 @@ def resolve_psyche_dissonance_or_surge(
         return res
 
     if norm_mode in {"conviction_surge", "surge"}:
+        surge_key = (session_id, npc_key or "party")
+        already_used = _SESSION_CONVICTION_SURGES.get(surge_key, False)
         eff_psyche = psyche_json.strip() or json.dumps(_parse_psyche_dict(_resolve_npc_profile(target_id, session_id)))
-        return json.loads(
+        res = json.loads(
             _satya_py().evaluate_conviction_surge_json(
                 eff_psyche,
                 int(current_delta_int),
-                False,
+                already_used,
                 principle or None,
             )
         )
+        if res.get("eligible"):
+            _SESSION_CONVICTION_SURGES[surge_key] = True
+        return res
 
     if norm_mode in {"drift_mark", "drift"}:
-        return json.loads(
+        trait_key = (violated_trait or "OPN").strip().upper()
+        drift_key = (session_id, npc_key or "party", trait_key)
+        cur_marks = _SESSION_PSYCHE_DRIFT_MARKS.get(drift_key, 0)
+        res = json.loads(
             _satya_py().apply_psyche_drift_mark_json(
                 int(trait_score),
-                0,
+                cur_marks,
                 int(marks_added),
                 int(dis),
                 None,
             )
         )
+        _SESSION_PSYCHE_DRIFT_MARKS[drift_key] = int(
+            res.get("remaining_drift_marks", 0) or 0
+        )
+        return res
 
     raise ValueError(f"Unsupported mode '{mode}'; expected 'dissonance', 'conviction_surge', or 'drift_mark'.")
 

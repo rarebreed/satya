@@ -296,7 +296,7 @@ def update_campaign_arc_and_conspiracies(
         update["discovered_node"] = discovered_node.strip().upper()
     if discovery_tier.strip():
         req_tier = discovery_tier.strip().upper()
-        if req_tier == "AUDIT_VERIFIED" and proof_clean and not proof_verified:
+        if req_tier == "AUDIT_VERIFIED" and not proof_verified:
             req_tier = "WITNESSED"
         update["discovery_tier"] = req_tier
     if proof_clean and proof_verified:
