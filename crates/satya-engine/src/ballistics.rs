@@ -15,18 +15,31 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Canonical Ammunition Caliber identifiers (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §3.2 Table, lines 172–176).
+/// Canonical Ammunition Caliber identifiers (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §3.2 Table;
+/// `docs/ttrpg/05-combat/arsenal_explosives_and_tactical_gear.md` §1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AmmoCaliberId {
+    /// `.22 LR` Subsonic/High-Velocity Rimfire (`5.6 mm`, `40 gr` bullet, `1.8 gr` powder, $L_{\text{opt}} = 40\text{ cm}$, $E_{\text{chem}} = 180\text{ J}$).
+    Rimfire22Lr,
+    /// `.380 ACP (9×17mm Short)` (`9.0 mm`, `95 gr` bullet, `3.2 gr` powder, $L_{\text{opt}} = 9.5\text{ cm}$, $E_{\text{chem}} = 275\text{ J}$).
+    Acp380,
     /// `9×19mm Parabellum` (`9.0 mm`, `124 gr` bullet, `5.2 gr` powder, $L_{\text{opt}} = 12\text{ cm}$, $E_{\text{chem}} = 515\text{ J}$).
     Parabellum9x19,
     /// `.45 ACP` (`11.43 mm`, `230 gr` bullet, `5.6 gr` powder, $L_{\text{opt}} = 12.7\text{ cm}$, $E_{\text{chem}} = 505\text{ J}$).
     Acp45,
+    /// `10mm Auto` (`10.0 mm`, `180 gr` bullet, `9.2 gr` powder, $L_{\text{opt}} = 12.7\text{ cm}$, $E_{\text{chem}} = 880\text{ J}$).
+    Auto10mm,
+    /// `4.6×30mm HK AP` (`4.6 mm`, `31 gr` bullet, `6.8 gr` powder, $L_{\text{opt}} = 18\text{ cm}$, $E_{\text{chem}} = 520\text{ J}$).
+    Hk46x30,
     /// `5.7×28mm` (`5.7 mm`, `40 gr` bullet, `7.2 gr` powder, $L_{\text{opt}} = 26\text{ cm}$, $E_{\text{chem}} = 540\text{ J}$).
     Fn57x28,
     /// `.357 Magnum` (`9.1 mm`, `158 gr` bullet, `14.5 gr` powder, $L_{\text{opt}} = 15\text{ cm}$, $E_{\text{chem}} = 980\text{ J}$).
     Magnum357,
+    /// `.300 AAC Blackout Subsonic` (`7.62 mm`, `220 gr` bullet, `10.5 gr` powder, $L_{\text{opt}} = 22.9\text{ cm}$, $E_{\text{chem}} = 680\text{ J}$).
+    Blackout300Subsonic,
+    /// `.300 AAC Blackout Supersonic` (`7.62 mm`, `110 gr` bullet, `19.5 gr` powder, $L_{\text{opt}} = 22.9\text{ cm}$, $E_{\text{chem}} = 1840\text{ J}$).
+    Blackout300Supersonic,
     /// `5.56×45mm NATO` (`5.56 mm`, `62 gr` bullet, `27.0 gr` powder, $L_{\text{opt}} = 50.8\text{ cm}$, $E_{\text{chem}} = 1795\text{ J}$).
     Nato556x45,
     /// `7.62×39mm` (`7.62 mm`, `123 gr` bullet, `25.5 gr` powder, $L_{\text{opt}} = 41.5\text{ cm}$, $E_{\text{chem}} = 2100\text{ J}$).
@@ -769,6 +782,376 @@ pub const CANONICAL_FIREARM_PRESETS: &[(&str, GranularFirearmSpec)] = &[
             20,
             80,
             5200
+        )
+    ),
+    firearm_preset!(
+        "ruger_mk4_suppressed_22lr",
+        "Ruger Mk IV Integrally Suppressed Covert (.22 LR)",
+        (
+            Rimfire22Lr,
+            ".22 LR Subsonic 40gr Lead Solid",
+            5.6,
+            40.0,
+            1.8,
+            40.0,
+            180.0,
+            130.0,
+            1.0,
+            0,
+            0.5,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            10,
+            SingleAction,
+            0.95,
+            1.05,
+            28.0,
+            14.0,
+            0.5,
+            StandardPistolMount,
+            SoundSuppressor,
+            ChamberNeutral,
+            0.5,
+            1,
+            6,
+            16,
+            24,
+            1150
+        )
+    ),
+    firearm_preset!(
+        "walther_ppk_380",
+        "Walther PPK/S Pocket Backup (.380 ACP)",
+        (
+            Acp380,
+            ".380 ACP 95gr JHP",
+            9.0,
+            95.0,
+            3.2,
+            9.5,
+            275.0,
+            140.0,
+            1.35,
+            0,
+            0.0,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            7,
+            DelayedBlowback,
+            0.59,
+            0.68,
+            15.5,
+            8.3,
+            0.0,
+            StandardPistolMount,
+            BareCrown,
+            ChamberNeutral,
+            0.0,
+            1,
+            6,
+            16,
+            24,
+            680
+        )
+    ),
+    firearm_preset!(
+        "glock20_10mm",
+        "Glock 20 Gen5 Heavy Duty / Backcountry (10mm Auto)",
+        (
+            Auto10mm,
+            "10mm Auto 180gr Full-Power JHP",
+            10.0,
+            180.0,
+            9.2,
+            12.7,
+            880.0,
+            210.0,
+            1.45,
+            1,
+            0.5,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            15,
+            StrikerFired,
+            0.87,
+            1.15,
+            20.5,
+            11.7,
+            0.5,
+            StandardPistolMount,
+            BareCrown,
+            ChamberNeutral,
+            0.0,
+            1,
+            8,
+            20,
+            28,
+            720
+        )
+    ),
+    firearm_preset!(
+        "mp7a2_46x30",
+        "HK MP7A2 Personal Defense Weapon (4.6x30mm)",
+        (
+            Hk46x30,
+            "4.6x30mm DM11 AP (31gr Steel Penetrator)",
+            4.6,
+            31.0,
+            6.8,
+            18.0,
+            520.0,
+            240.0,
+            1.0,
+            3,
+            0.5,
+            true
+        ),
+        (
+            DetachableBoxMagazine,
+            40,
+            ShortStrokeGasPiston,
+            1.90,
+            2.25,
+            41.5,
+            18.0,
+            1.0,
+            FreeFloating,
+            SoundSuppressor,
+            ChamberNeutral,
+            0.5,
+            2,
+            6,
+            18,
+            32,
+            2450
+        )
+    ),
+    firearm_preset!(
+        "honey_badger_300blk_sub",
+        "Q Honey Badger Integrally Suppressed (.300 BLK Sub)",
+        (
+            Blackout300Subsonic,
+            ".300 AAC Blackout 220gr Subsonic OTM",
+            7.62,
+            220.0,
+            10.5,
+            22.9,
+            680.0,
+            320.0,
+            1.25,
+            2,
+            0.5,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            30,
+            DirectImpingement,
+            2.05,
+            2.65,
+            64.0,
+            17.8,
+            1.0,
+            FreeFloating,
+            SoundSuppressor,
+            ChamberNeutral,
+            0.5,
+            2,
+            8,
+            22,
+            48,
+            3300
+        )
+    ),
+    firearm_preset!(
+        "mcx_rattler_300blk_super",
+        "SIG MCX Rattler LT Short Carbine (.300 BLK Super)",
+        (
+            Blackout300Supersonic,
+            ".300 AAC Blackout 110gr TAC-TX Supersonic",
+            7.62,
+            110.0,
+            19.5,
+            22.9,
+            1840.0,
+            460.0,
+            1.35,
+            2,
+            0.5,
+            true
+        ),
+        (
+            DetachableBoxMagazine,
+            30,
+            ShortStrokeGasPiston,
+            2.70,
+            3.20,
+            60.0,
+            22.9,
+            1.0,
+            FreeFloating,
+            FlashHider,
+            ChamberNeutral,
+            0.5,
+            2,
+            8,
+            22,
+            44,
+            2950
+        )
+    ),
+    firearm_preset!(
+        "saiga12_mag_shotgun",
+        "Saiga-12K Mag-Fed Semi-Auto Shotgun (12-Gauge)",
+        (
+            Gauge12,
+            "12-Gauge 00 Buck / Breaching Slug",
+            18.5,
+            437.0,
+            32.0,
+            51.0,
+            3150.0,
+            140.0,
+            1.35,
+            1,
+            0.0,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            10,
+            LongStrokeGasPiston,
+            3.60,
+            4.45,
+            94.0,
+            48.0,
+            0.0,
+            ClampedNonFreeFloated,
+            BareCrown,
+            ModerateForward,
+            -0.5,
+            1,
+            8,
+            22,
+            36,
+            1450
+        )
+    ),
+    firearm_preset!(
+        "m249_saw_556",
+        "FN M249 SAW Squad Automatic Weapon (5.56x45mm)",
+        (
+            Nato556x45,
+            "5.56x45mm NATO M855A1 Belt",
+            5.56,
+            62.0,
+            27.0,
+            50.8,
+            1795.0,
+            520.0,
+            1.15,
+            2,
+            0.0,
+            true
+        ),
+        (
+            BeltFed,
+            200,
+            OpenBoltOrAutoSwitch,
+            7.50,
+            10.20,
+            104.0,
+            46.5,
+            0.5,
+            ClampedNonFreeFloated,
+            FlashHider,
+            ModerateForward,
+            -0.5,
+            1,
+            12,
+            34,
+            90,
+            6200
+        )
+    ),
+    firearm_preset!(
+        "trg42_338_lapua",
+        "Sako TRG-42 Long-Range Precision (.338 Lapua)",
+        (
+            Lapua338,
+            ".338 Lapua Magnum 250gr Scenar / AP",
+            8.6,
+            250.0,
+            90.0,
+            69.0,
+            6600.0,
+            1350.0,
+            1.15,
+            4,
+            1.0,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            5,
+            BoltAction,
+            5.80,
+            6.40,
+            120.0,
+            69.0,
+            1.5,
+            FreeFloating,
+            MuzzleBrakeCompensator,
+            ChamberNeutral,
+            1.0,
+            2,
+            6,
+            20,
+            80,
+            7800
+        )
+    ),
+    firearm_preset!(
+        "barrett_m107_50bmg",
+        "Barrett M107A1 Anti-Materiel Rifle (.50 BMG)",
+        (
+            Bmg50,
+            ".50 BMG 660gr M33 / Mk211 API",
+            12.7,
+            660.0,
+            235.0,
+            91.0,
+            18050.0,
+            1700.0,
+            1.0,
+            5,
+            0.5,
+            false
+        ),
+        (
+            DetachableBoxMagazine,
+            10,
+            ShortStrokeGasPiston,
+            13.50,
+            15.20,
+            144.8,
+            73.7,
+            1.0,
+            FreeFloating,
+            MuzzleBrakeCompensator,
+            ModerateForward,
+            0.5,
+            2,
+            10,
+            32,
+            120,
+            13500
         )
     ),
 ];

@@ -1,5 +1,5 @@
 //! Canonical Satya TTRPG Rules Book catalog and multi-chapter search engine
-//! (`docs/ttrpg/SUMMARY.md`, Parts I–VI, Chapters 1–18).
+//! (`docs/ttrpg/SUMMARY.md`, Parts I–VII, Chapters 1–23).
 
 use satya_schema::{
     RulesBookCatalogResponse, RulesChapterDocument, RulesChapterSummary, RulesSearchHit,
@@ -72,11 +72,21 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
     StaticChapterSpec {
         chapter_id: "action_economy",
         part: "Part II: Core Mechanics, Task Resolution & Action Economy",
-        title: "Action Economy, OODA Loop, Time Scales & Stealth",
+        title: "Action Economy, OODA Loop & Time Scales",
         relative_path: "02-core-mechanics/action_economy_and_ooda.md",
-        description: "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Full OODA Loop & Quick Thinking (D_cog), Count-Up Clock mechanics, Base TC tables, action_time_factor, and Multi-Sensory Stealth & Detection.",
+        description: "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Full OODA Loop & Quick Thinking (D_cog), Count-Up Clock mechanics, Base TC tables, action_time_factor, and the Observe clock bridge.",
         embedded_markdown: include_str!(
             "../../../docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md"
+        ),
+    },
+    StaticChapterSpec {
+        chapter_id: "stealth_and_awareness",
+        part: "Part II: Core Mechanics, Task Resolution & Action Economy",
+        title: "Stealth, Passive Awareness, Observation & Investigation",
+        relative_path: "02-core-mechanics/stealth_awareness_and_investigation.md",
+        description: "Passive Awareness (0 Ticks, AWR) vs. Active Observation (6 Ticks, 6-sense isolation), Attention States & Watch Fatigue, 4-stage Alertness Ladder, Acoustic/Thermal/RF/Social Stealth, Tail Craft (SDR), and Forensic Trace Decay.",
+        embedded_markdown: include_str!(
+            "../../../docs/ttrpg/02-core-mechanics/stealth_awareness_and_investigation.md"
         ),
     },
     StaticChapterSpec {
@@ -110,9 +120,9 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
     StaticChapterSpec {
         chapter_id: "lifepaths_and_economy",
         part: "Part III: Character Architecture, Skills, Lifepaths & Economy",
-        title: "Lifepath Character Creation, Socioeconomic Upkeep & Heat",
+        title: "Lifepath Character Creation, Socioeconomic Upkeep, Contacts, Cover & Heat",
         relative_path: "03-character/lifepaths_and_economy.md",
-        description: "Chronological Lifepath education & 14 career tracks (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
+        description: "Chronological Lifepath education & 14 career tracks (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, Operational Heat, Contacts & Favors, Cover Identities, and Safehouses.",
         embedded_markdown: include_str!(
             "../../../docs/ttrpg/03-character/lifepaths_and_economy.md"
         ),
@@ -172,6 +182,16 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
         embedded_markdown: include_str!("../../../docs/ttrpg/05-combat/ranged_combat_and_armor.md"),
     },
     StaticChapterSpec {
+        chapter_id: "arsenal_and_explosives",
+        part: "Part V: Combat Architecture, Close Quarters & Firefights",
+        title: "Expanded Arsenal, Explosives, Breaching & Tactical Gear",
+        relative_path: "05-combat/arsenal_explosives_and_tactical_gear.md",
+        description: "Six extra calibers (.22 LR to .300 BLK), 10 expanded firearms (#13-#22 through .338 Lapua & .50 BMG), 5 specialty 12-Gauge shells, bows/crossbows & less-lethal systems, explosives/blast overpressure (1.5x indoor reflection), breaching vs. MaterialClass PR, and optics/gear.",
+        embedded_markdown: include_str!(
+            "../../../docs/ttrpg/05-combat/arsenal_explosives_and_tactical_gear.md"
+        ),
+    },
+    StaticChapterSpec {
         chapter_id: "health_and_trauma",
         part: "Part VI: Health, Trauma, Movement, Vehicles & Survival",
         title: "Health, Anatomical Trauma, Fatigue & Mental Conditions",
@@ -182,13 +202,43 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
         ),
     },
     StaticChapterSpec {
-        chapter_id: "movement_and_environment",
+        chapter_id: "movement_and_vehicles",
         part: "Part VI: Health, Trauma, Movement, Vehicles & Survival",
-        title: "Movement, Encumbrance, Vehicles & Environmental Survival",
-        relative_path: "06-health-and-survival/movement_vehicles_and_environment.md",
-        description: "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, Vehicles & High-Speed Chases, Hydration, Starvation, Temperature (Hypothermia/Heatstroke), Hypoxia, and Toxins.",
+        title: "Movement, Encumbrance & Vehicles",
+        relative_path: "06-health-and-survival/movement_encumbrance_and_vehicles.md",
+        description: "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, bulk/stowage slots, Vehicles & Chases, 2035 Vehicle Catalog, firing platforms, and component trauma.",
         embedded_markdown: include_str!(
-            "../../../docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md"
+            "../../../docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md"
+        ),
+    },
+    StaticChapterSpec {
+        chapter_id: "environmental_hazards",
+        part: "Part VI: Health, Trauma, Movement, Vehicles & Survival",
+        title: "Environmental Hazards, Survival & Field Pharmacology",
+        relative_path: "06-health-and-survival/environmental_hazards_and_survival.md",
+        description: "Hydration, Starvation, Cold/Heat (CLO), Sleep, Hypoxia/Vacuum, Toxins, Radiation, Falling, Fire & Smoke, Electricity & EMP, Weather/Diving Pressure, Wound Sepsis, and Field Pharmacology.",
+        embedded_markdown: include_str!(
+            "../../../docs/ttrpg/06-health-and-survival/environmental_hazards_and_survival.md"
+        ),
+    },
+    StaticChapterSpec {
+        chapter_id: "engineering_and_weapon_design",
+        part: "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+        title: "Engineering, Workshops & Custom Weapon/Armor Design",
+        relative_path: "07-engineering-and-tech/engineering_and_weapon_design.md",
+        description: "4-tier Workshop Facilities (tau_max & Q_mfg ceilings), Project Clocks, Prototype Quirks, Bullet Construction & 17-caliber Custom Firearm Designer (wrapping ballistics.rs), Custom Melee/Shields, and Body Armor.",
+        embedded_markdown: include_str!(
+            "../../../docs/ttrpg/07-engineering-and-tech/engineering_and_weapon_design.md"
+        ),
+    },
+    StaticChapterSpec {
+        chapter_id: "robotics_and_ai_architecture",
+        part: "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+        title: "Robotics, Drones, AI 2.0 Architectures & Cyber-Prosthetics",
+        relative_path: "07-engineering-and-tech/robotics_drones_and_ai_architecture.md",
+        description: "Modular Drones/UGVs (6 chassis, 8 modules, battery endurance), Chassis Trauma & EMP, AI 2.0 Architecture Engineering & Verification Debt (bridging SyntheticMetabolicMode), and Clinical Cyber-Prosthetics & Myomer Augmentations.",
+        embedded_markdown: include_str!(
+            "../../../docs/ttrpg/07-engineering-and-tech/robotics_drones_and_ai_architecture.md"
         ),
     },
 ];
@@ -250,6 +300,22 @@ fn resolve_chapter_alias(needle: &str) -> &str {
         "world-and-equipment-stubs" | "systems/world-and-equipment-stubs" => {
             "ranged-combat-and-armor"
         }
+        "stealth-awareness-and-investigation" | "stealth-and-investigation" => {
+            "stealth-and-awareness"
+        }
+        "arsenal-explosives-and-tactical-gear" | "explosives-and-arsenal" => {
+            "arsenal-and-explosives"
+        }
+        "movement-and-environment" | "movement-vehicles-and-environment" => {
+            "movement-and-vehicles"
+        }
+        "weapon-design" | "engineering-design" | "custom-weapons" => {
+            "engineering-and-weapon-design"
+        }
+        "robotics-drones-and-ai-architecture"
+        | "robotics-and-drones"
+        | "cyber-prosthetics"
+        | "ai-architecture" => "robotics-and-ai-architecture",
         other => other,
     }
 }

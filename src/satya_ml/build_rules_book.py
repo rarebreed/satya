@@ -64,9 +64,16 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
     {
         "chapter_id": "action_economy",
         "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
-        "title": "Action Economy, OODA Loop, Time Scales & Stealth",
+        "title": "Action Economy, OODA Loop & Time Scales",
         "relative_path": "02-core-mechanics/action_economy_and_ooda.md",
-        "description": "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Full OODA Loop & Quick Thinking (D_cog), Count-Up Clock mechanics, Base TC tables, action_time_factor, and Multi-Sensory Stealth & Detection.",
+        "description": "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Full OODA Loop & Quick Thinking (D_cog), Count-Up Clock mechanics, Base TC tables, action_time_factor, and the Observe clock bridge.",
+    },
+    {
+        "chapter_id": "stealth_and_awareness",
+        "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
+        "title": "Stealth, Passive Awareness, Observation & Investigation",
+        "relative_path": "02-core-mechanics/stealth_awareness_and_investigation.md",
+        "description": "Passive Awareness (0 Ticks, AWR) vs. Active Observation (6 Ticks, 6-sense isolation), Attention States & Watch Fatigue, 4-stage Alertness Ladder, Acoustic/Thermal/RF/Social Stealth, Tail Craft (SDR), and Forensic Trace Decay.",
     },
     {
         "chapter_id": "characteristics",
@@ -92,9 +99,9 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
     {
         "chapter_id": "lifepaths_and_economy",
         "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
-        "title": "Lifepath Character Creation, Socioeconomic Upkeep & Heat",
+        "title": "Lifepath Character Creation, Socioeconomic Upkeep, Contacts, Cover & Heat",
         "relative_path": "03-character/lifepaths_and_economy.md",
-        "description": "Chronological Lifepath education & 14 career tracks (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
+        "description": "Chronological Lifepath education & 14 career tracks (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, Operational Heat, Contacts & Favors, Cover Identities, and Safehouses.",
     },
     {
         "chapter_id": "lifepath_events_hobbies_and_factions",
@@ -139,6 +146,13 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
         "description": "Ranged fire modes & Recoil Ratings (R), Suppression vs. Morale, Armor Penetration (PR) vs. Behind-Armor Blunt Trauma (BABT), Weapon Reliability (Rel) & Malfunctions, and firefight walkthroughs.",
     },
     {
+        "chapter_id": "arsenal_and_explosives",
+        "part": "Part V: Combat Architecture, Close Quarters & Firefights",
+        "title": "Expanded Arsenal, Explosives, Breaching & Tactical Gear",
+        "relative_path": "05-combat/arsenal_explosives_and_tactical_gear.md",
+        "description": "Six extra calibers (.22 LR to .300 BLK), 10 expanded firearms (#13-#22 through .338 Lapua & .50 BMG), 5 specialty 12-Gauge shells, bows/crossbows & less-lethal systems, explosives/blast overpressure (1.5x indoor reflection), breaching vs. MaterialClass PR, and optics/gear.",
+    },
+    {
         "chapter_id": "health_and_trauma",
         "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
         "title": "Health, Anatomical Trauma, Fatigue & Mental Conditions",
@@ -146,11 +160,32 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
         "description": "1d20 Hit Locations & Called Shots, Fatigue, Structural Wounds, Broken Bones, Hemorrhaging & Blood Volume, Wound Shock, Status Effects, and Mental Trauma.",
     },
     {
-        "chapter_id": "movement_and_environment",
+        "chapter_id": "movement_and_vehicles",
         "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
-        "title": "Movement, Encumbrance, Vehicles & Environmental Survival",
-        "relative_path": "06-health-and-survival/movement_vehicles_and_environment.md",
-        "description": "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, Vehicles & High-Speed Chases, Hydration, Starvation, Temperature (Hypothermia/Heatstroke), Hypoxia, and Toxins.",
+        "title": "Movement, Encumbrance & Vehicles",
+        "relative_path": "06-health-and-survival/movement_encumbrance_and_vehicles.md",
+        "description": "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, bulk/stowage slots, Vehicles & Chases, 2035 Vehicle Catalog, firing platforms, and component trauma.",
+    },
+    {
+        "chapter_id": "environmental_hazards",
+        "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
+        "title": "Environmental Hazards, Survival & Field Pharmacology",
+        "relative_path": "06-health-and-survival/environmental_hazards_and_survival.md",
+        "description": "Hydration, Starvation, Cold/Heat (CLO), Sleep, Hypoxia/Vacuum, Toxins, Radiation, Falling, Fire & Smoke, Electricity & EMP, Weather/Diving Pressure, Wound Sepsis, and Field Pharmacology.",
+    },
+    {
+        "chapter_id": "engineering_and_weapon_design",
+        "part": "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+        "title": "Engineering, Workshops & Custom Weapon/Armor Design",
+        "relative_path": "07-engineering-and-tech/engineering_and_weapon_design.md",
+        "description": "4-tier Workshop Facilities (tau_max & Q_mfg ceilings), Project Clocks, Prototype Quirks, Bullet Construction & 17-caliber Custom Firearm Designer (wrapping ballistics.rs), Custom Melee/Shields, and Body Armor.",
+    },
+    {
+        "chapter_id": "robotics_and_ai_architecture",
+        "part": "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+        "title": "Robotics, Drones, AI 2.0 Architectures & Cyber-Prosthetics",
+        "relative_path": "07-engineering-and-tech/robotics_drones_and_ai_architecture.md",
+        "description": "Modular Drones/UGVs (6 chassis, 8 modules, battery endurance), Chassis Trauma & EMP, AI 2.0 Architecture Engineering & Verification Debt (bridging SyntheticMetabolicMode), and Clinical Cyber-Prosthetics & Myomer Augmentations.",
     },
 ]
 
@@ -161,6 +196,19 @@ _LEGACY_CHAPTER_ALIASES: dict[str, str] = {
     "social-interactions": "psyche-and-social",
     "combat": "tactical-triad",
     "world-and-equipment-stubs": "ranged-combat-and-armor",
+    "stealth-awareness-and-investigation": "stealth-and-awareness",
+    "stealth-and-investigation": "stealth-and-awareness",
+    "arsenal-explosives-and-tactical-gear": "arsenal-and-explosives",
+    "explosives-and-arsenal": "arsenal-and-explosives",
+    "movement-and-environment": "movement-and-vehicles",
+    "movement-vehicles-and-environment": "movement-and-vehicles",
+    "weapon-design": "engineering-and-weapon-design",
+    "engineering-design": "engineering-and-weapon-design",
+    "custom-weapons": "engineering-and-weapon-design",
+    "robotics-drones-and-ai-architecture": "robotics-and-ai-architecture",
+    "robotics-and-drones": "robotics-and-ai-architecture",
+    "cyber-prosthetics": "robotics-and-ai-architecture",
+    "ai-architecture": "robotics-and-ai-architecture",
 }
 
 
@@ -236,7 +284,7 @@ def search_rules_book_python(
     max_results: int = 5,
     repo_root: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Search across all 18 canonical Satya Rules Book chapters and return ranked section dicts."""
+    """Search across all 23 canonical Satya Rules Book chapters and return ranked section dicts."""
     if _satya_py is not None:
         try:
             if len(_satya_py.list_rules_chapters()) == len(BOOK_CHAPTER_SPECS):
@@ -1043,6 +1091,9 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         "02-core-mechanics/action_economy_and_ooda.md": "action_economy.html",
         "../02-core-mechanics/action_economy_and_ooda.md": "action_economy.html",
         "action_economy_and_ooda.md": "action_economy.html",
+        "02-core-mechanics/stealth_awareness_and_investigation.md": "stealth_and_awareness.html",
+        "../02-core-mechanics/stealth_awareness_and_investigation.md": "stealth_and_awareness.html",
+        "stealth_awareness_and_investigation.md": "stealth_and_awareness.html",
         "03-character/characteristics_and_aptitudes.md": "characteristics.html",
         "../03-character/characteristics_and_aptitudes.md": "characteristics.html",
         "characteristics_and_aptitudes.md": "characteristics.html",
@@ -1073,12 +1124,27 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         "05-combat/ranged_combat_and_armor.md": "ranged_combat_and_armor.html",
         "../05-combat/ranged_combat_and_armor.md": "ranged_combat_and_armor.html",
         "ranged_combat_and_armor.md": "ranged_combat_and_armor.html",
+        "05-combat/arsenal_explosives_and_tactical_gear.md": "arsenal_and_explosives.html",
+        "../05-combat/arsenal_explosives_and_tactical_gear.md": "arsenal_and_explosives.html",
+        "arsenal_explosives_and_tactical_gear.md": "arsenal_and_explosives.html",
         "06-health-and-survival/health_and_trauma.md": "health_and_trauma.html",
         "../06-health-and-survival/health_and_trauma.md": "health_and_trauma.html",
         "health_and_trauma.md": "health_and_trauma.html",
-        "06-health-and-survival/movement_vehicles_and_environment.md": "movement_and_environment.html",
-        "../06-health-and-survival/movement_vehicles_and_environment.md": "movement_and_environment.html",
-        "movement_vehicles_and_environment.md": "movement_and_environment.html",
+        "06-health-and-survival/movement_encumbrance_and_vehicles.md": "movement_and_vehicles.html",
+        "../06-health-and-survival/movement_encumbrance_and_vehicles.md": "movement_and_vehicles.html",
+        "movement_encumbrance_and_vehicles.md": "movement_and_vehicles.html",
+        "06-health-and-survival/environmental_hazards_and_survival.md": "environmental_hazards.html",
+        "../06-health-and-survival/environmental_hazards_and_survival.md": "environmental_hazards.html",
+        "environmental_hazards_and_survival.md": "environmental_hazards.html",
+        "06-health-and-survival/movement_vehicles_and_environment.md": "movement_and_vehicles.html",
+        "../06-health-and-survival/movement_vehicles_and_environment.md": "movement_and_vehicles.html",
+        "movement_vehicles_and_environment.md": "movement_and_vehicles.html",
+        "07-engineering-and-tech/engineering_and_weapon_design.md": "engineering_and_weapon_design.html",
+        "../07-engineering-and-tech/engineering_and_weapon_design.md": "engineering_and_weapon_design.html",
+        "engineering_and_weapon_design.md": "engineering_and_weapon_design.html",
+        "07-engineering-and-tech/robotics_drones_and_ai_architecture.md": "robotics_and_ai_architecture.html",
+        "../07-engineering-and-tech/robotics_drones_and_ai_architecture.md": "robotics_and_ai_architecture.html",
+        "robotics_drones_and_ai_architecture.md": "robotics_and_ai_architecture.html",
     }
     out = rendered_html
     for src, dst in mapping.items():
@@ -1247,6 +1313,8 @@ window.addEventListener('DOMContentLoaded', satyaBookRecalc);
 
 
 def _part_index_from_label(part_label: str) -> int:
+    if part_label.startswith("Part VII"):
+        return 7
     if part_label.startswith("Part VI"):
         return 6
     if part_label.startswith("Part V"):
@@ -1273,7 +1341,7 @@ def _wrap_book_page_html(
     ]
     current_part = ""
     chapter_num = 0
-    part_label = "Part I-VI: Reference & Sandbox"
+    part_label = "Part I-VII: Reference & Sandbox"
     for idx, spec in enumerate(BOOK_CHAPTER_SPECS, start=1):
         if spec["part"] != current_part:
             current_part = spec["part"]
@@ -1379,7 +1447,7 @@ def build_static_rules_book(
     output_dir: Path | None = None,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Compile all 18 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
+    """Compile all 23 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
     root = repo_root or _default_repo_root()
     out_dir = output_dir or (root / "docs" / "book")
     out_dir.mkdir(parents=True, exist_ok=True)

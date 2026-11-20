@@ -308,7 +308,7 @@ fn test_probability_md_k20_calibration_and_game_engine_evaluator() {
 #[test]
 fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
     let chapters = list_rules_chapters();
-    assert_eq!(chapters.len(), 18);
+    assert_eq!(chapters.len(), 23);
     assert!(chapters.iter().any(|c| c.chapter_id == "design_philosophy"));
     assert!(chapters.iter().any(|c| c.chapter_id == "notation_glossary"));
     assert!(chapters.iter().any(|c| c.chapter_id == "tasks"));
@@ -316,6 +316,12 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
         chapters
             .iter()
             .any(|c| c.chapter_id == "task_requirements_catalog")
+    );
+    assert!(chapters.iter().any(|c| c.chapter_id == "action_economy"));
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "stealth_and_awareness")
     );
     assert!(chapters.iter().any(|c| c.chapter_id == "skills_and_trees"));
     assert!(
@@ -346,12 +352,32 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
             .iter()
             .any(|c| c.chapter_id == "ranged_combat_and_armor")
     );
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "arsenal_and_explosives")
+    );
     assert!(chapters.iter().any(|c| c.chapter_id == "action_economy"));
     assert!(chapters.iter().any(|c| c.chapter_id == "health_and_trauma"));
     assert!(
         chapters
             .iter()
-            .any(|c| c.chapter_id == "movement_and_environment")
+            .any(|c| c.chapter_id == "movement_and_vehicles")
+    );
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "environmental_hazards")
+    );
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "engineering_and_weapon_design")
+    );
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "robotics_and_ai_architecture")
     );
 
     let tasks_doc = get_rules_chapter("tasks").expect("tasks chapter exists");
@@ -429,6 +455,66 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
     assert!(get_rules_chapter("satya_d20_rules").is_some());
     assert!(get_rules_chapter("combat").is_some());
     assert!(get_rules_chapter("skill-design").is_some());
+    assert!(get_rules_chapter("movement_and_environment").is_some());
+    assert_eq!(
+        get_rules_chapter("stealth-awareness-and-investigation")
+            .expect("stealth alias resolves")
+            .summary
+            .chapter_id,
+        "stealth_and_awareness"
+    );
+    assert_eq!(
+        get_rules_chapter("arsenal-explosives-and-tactical-gear")
+            .expect("arsenal alias resolves")
+            .summary
+            .chapter_id,
+        "arsenal_and_explosives"
+    );
+    assert_eq!(
+        get_rules_chapter("weapon-design")
+            .expect("weapon-design alias resolves")
+            .summary
+            .chapter_id,
+        "engineering_and_weapon_design"
+    );
+    assert_eq!(
+        get_rules_chapter("cyber-prosthetics")
+            .expect("cyber-prosthetics alias resolves")
+            .summary
+            .chapter_id,
+        "robotics_and_ai_architecture"
+    );
+    assert!(
+        get_rules_chapter("engineering_and_weapon_design")
+            .expect("engineering doc exists")
+            .rendered_html
+            .contains("$45,000")
+    );
+    assert!(
+        get_rules_chapter("robotics_and_ai_architecture")
+            .expect("robotics doc exists")
+            .rendered_html
+            .contains("$10,900")
+    );
+
+    let stealth_hits = search_rules_book("Passive Awareness Alertness Ladder SDR", 3);
+    assert!(!stealth_hits.is_empty());
+    assert_eq!(stealth_hits[0].chapter_id, "stealth_and_awareness");
+
+    let arsenal_hits = search_rules_book(
+        "Linear Shaped Breaching Charge Blast Overpressure Thermite",
+        3,
+    );
+    assert!(!arsenal_hits.is_empty());
+    assert_eq!(arsenal_hits[0].chapter_id, "arsenal_and_explosives");
+
+    let eng_hits = search_rules_book("Workshop Facility Custom Firearm Prototype Quirk", 3);
+    assert!(!eng_hits.is_empty());
+    assert_eq!(eng_hits[0].chapter_id, "engineering_and_weapon_design");
+
+    let robo_hits = search_rules_book("Verification Debt Modular Drone Myomer Cyber-Prosthetics", 3);
+    assert!(!robo_hits.is_empty());
+    assert_eq!(robo_hits[0].chapter_id, "robotics_and_ai_architecture");
 
     let health_hits = search_rules_book("hemorrhaging broken bones blinded catatonia", 5);
     assert!(!health_hits.is_empty());

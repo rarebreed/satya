@@ -38,17 +38,21 @@
 //! - [`psyche_social`] & [`social_combat`]: Psyche Friction Checks, Long-Term Psyche Drift, Conviction Surges,
 //!   Combat Morale, Argument Vectors, Social Composure, and Cognitive Dissonance resolution
 //!   (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §1–§4).
-//! - [`combat`], [`combat_techniques`], [`ranged_combat`] & [`ballistics`]: Tactical Triad ("Envelope & Fill" — `Tempo`, `Control`, `Force`),
-//!   30-entry Canonical Combat Technique Catalog (`Control`, `Strike`, `Intercept`, `Maneuver`, `RangedShot`, `RangedManeuver`),
-//!   Melee Weapons, Reach & Clinch Polarity Flip, Kuzushi Throws, Granular Ballistics & Firearms Engineering
-//!   ($E_k, I_{\text{KE}}, I_{\text{cal}}, W_{\text{yaw}}, \text{Acc}, \text{Rel}$), Ranged Fire Modes, Recoil Bracing,
-//!   Suppression, Armor `PR` vs. `BABT`, and Weapon Malfunctions
-//!   (`docs/ttrpg/05-combat/tactical_triad_and_pools.md`, `melee_combat.md`, `ranged_combat_and_armor.md`).
+//! - [`combat`], [`combat_techniques`], [`ranged_combat`], [`ballistics`] & [`explosives_and_arsenal`]: Tactical Triad ("Envelope & Fill" — `Tempo`, `Control`, `Force`),
+//!   Multi-Opponent splitting/flanking/elevation/object targeting, 30-entry Canonical Combat Technique Catalog,
+//!   22-entry Melee & Shield Catalog, 17-entry Granular Firearms & Ammunition Physics ($E_k, I_{\text{KE}}, I_{\text{cal}}, W_{\text{yaw}}, \text{Acc}, \text{Rel}$),
+//!   Specialty Shotgun Loads, Muscle/Less-Lethal Systems, Explosives & Breaching, Optics/Gear, Armor `PR` vs. `BABT`, and Malfunctions
+//!   (`docs/ttrpg/05-combat/tactical_triad_and_pools.md`, `melee_combat.md`, `ranged_combat_and_armor.md`, `arsenal_explosives_and_tactical_gear.md`).
 //! - [`health_survival`], [`status_and_triage`], [`environment_vehicles`] & [`environmental_hazards`]:
 //!   `1d20` Hit Locations & Called Shots, Fatigue Levels (`0–5`), Asphyxiation, Structural Wounds (`Tiers 1–5`),
 //!   Fractures, Hemorrhaging & Hypovolemic Shock, `WSR` Saves, Physiological & Mental Trauma Conditions,
 //!   Combat Movement Gaits, Encumbrance (`Tiers 0–4`), Vehicular Chases & High-G Physics, and Environmental
-//!   Survival (`docs/ttrpg/06-health-and-survival/health_and_trauma.md`, `movement_vehicles_and_environment.md`).
+//!   Survival (`docs/ttrpg/06-health-and-survival/health_and_trauma.md`, `movement_encumbrance_and_vehicles.md`, `environmental_hazards_and_survival.md`).
+//! - [`engineering_design`] & [`robotics_and_ai_design`]: Workshop Tiers (`FieldBenchImprovised` to
+//!   `AerospaceCleanroomLab`), Project Clocks & Prototype Quirks, Custom Firearm/Ammo/Melee/Armor Designers,
+//!   Modular Drones & UGVs, Chassis Trauma & EMP, AI 2.0 Architecture Engineering & Verification Debt,
+//!   and Clinical Cyber-Prosthetics & Myomer/Neural Augmentations
+//!   (`docs/ttrpg/07-engineering-and-tech/engineering_and_weapon_design.md`, `robotics_drones_and_ai_architecture.md`).
 //! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
 //!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
 //! - [`tactical_map`], [`map_continuation`], [`tactical_map_geom`], [`tactical_map_inspect`], [`tactical_map_edges`], [`map_dressing`], [`barrier_ballistics`], [`map_interior_gen`],
@@ -76,8 +80,10 @@ pub mod contested_cascade;
 pub mod dice_pools;
 pub mod dice_probabilities;
 pub mod economy_gear;
+pub mod engineering_design;
 pub mod environment_vehicles;
 pub mod environmental_hazards;
+pub mod explosives_and_arsenal;
 pub mod faction_templates;
 pub mod health_survival;
 pub mod hook_weaver;
@@ -113,6 +119,7 @@ pub mod npc_generator;
 pub mod primitives;
 pub mod psyche_social;
 pub mod ranged_combat;
+pub mod robotics_and_ai_design;
 pub mod rules_book;
 pub mod rules_book_html;
 pub mod skills_catalog;
@@ -140,6 +147,7 @@ pub use dice_pools::{
     SARLE_BIMODAL_THRESHOLD, try_median_gated_bimodal_pmf, try_order_statistic_pmf,
 };
 pub use dice_probabilities::*;
+pub use engineering_design::*;
 pub use faction_templates::*;
 pub use health_survival::*;
 pub use hook_weaver::*;
@@ -152,6 +160,7 @@ pub use map_surface_geom::*;
 pub use npc_generator::*;
 pub use primitives::*;
 pub use psyche_social::*;
+pub use robotics_and_ai_design::*;
 pub use rules_book::*;
 pub use skills_trees::*;
 pub use tactical_map::*;

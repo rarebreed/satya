@@ -186,6 +186,8 @@ As **Blood Volume Lost** increases from `0` toward `10 Units`, the character suf
   - **`CleanFailure`**: The character is **`Stunned` for `8 Ticks` (`2 seconds`)**, drops to their knees or Prone, and must make an immediate **Morale Check**.
   - **`BotchFailure`** *(or any failure at `wound_shock_index >= 4`)*: Neurogenic syncope—the character blacks out and falls **Unconscious**!
 
+- **Thermal Burns, Falling, Electricity & Diving Barotrauma**: Non-ballistic environmental trauma (thermal burn degrees `1–3`, gravitational fall trauma, electrical voltage shocks, and decompression bends) maps directly onto the exact same **Structural Wound Tiers (`1–5`)** and **Wound Shock (`WSR`)** system; see **[Environmental Hazards, Survival & Field Pharmacology](environmental_hazards_and_survival.md)**.
+
 ---
 
 ## 4. Acute Physiological & Sensory Status Conditions
@@ -242,3 +244,5 @@ When a character suffers a catastrophic failure on a **Discipline (`DIS`) Morale
      - **Tier 2 (Moderate / Hairline Fracture / Grade II Tear)**: `2–4 weeks`.
      - **Tier 3 (Complete Fracture / Major Surgery)**: `6–12 weeks` (transitions to a Tier 1 `-2` stiffness penalty during final rehabilitation).
      - **Tier 4–5 (Maiming / Amputation)**: Permanent structural loss unless reconstructed via **2031–2035 Cybernetic / Myomer Prosthetics** or bio-printed tissue grafts.
+4. **Wound Infection, Sepsis & Field Pharmacology**:
+   - Untreated contaminated wounds, deep burns, and perforated gut injuries require daily **`HLT` Sepsis saves**, mitigated by broad-spectrum antibiotics; see **[Environmental Hazards §6 (Wound Infection, Sepsis & Field Pharmacology)](environmental_hazards_and_survival.md#6-wound-infection-sepsis--field-pharmacology)** for Sepsis Stages (`0–3`) and canonical combat drugs (stimulants, analgesics, beta-blockers, antiemetics, and sedatives).

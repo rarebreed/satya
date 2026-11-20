@@ -1,25 +1,25 @@
-//! # Tactical Triad Extensions, Melee Combat, Ranged Firepower, Armor & Reliability (`05-combat`)
+//! # Tactical Triad Extensions, Melee Combat, Ranged Firepower, Armor & Arsenal (`05-combat`)
 //!
 //! Canonical Rust implementation of `docs/ttrpg/05-combat/`:
 //! - **`docs/ttrpg/05-combat/tactical_triad_and_pools.md`**: Tactical Pool ("Envelope & Fill", `§3`),
 //!   Tempo & Decision Tick Modifier ($\Delta\text{TC}_{\text{decide}} = -\lfloor(D_{\text{cog}}-10)/2\rfloor$, `§4.1`),
-//!   Control (`§4.2`), Force (`§4.3`), and Exertion Mark accumulation against Fatigue Threshold
-//!   ($\text{FT} = \text{FIT} + \lfloor\text{DIS}/2\rfloor$, `§4.4`).
+//!   Control (`§4.2`), Force (`§4.3`), Exertion Mark accumulation (`§4.4`), and Multi-Opponent Pool
+//!   Splitting, Flanking, Elevation & Object Targeting (`§4.6`).
 //! - **`docs/ttrpg/05-combat/melee_combat.md`**: Contested Melee Exchanges (`§1`), Interrupting Telegraphed
 //!   Strikes (`§1.2`), Counter-Hits & Seizing the Initiative (`§2.2`), Kuzushi Throws vs. Root (`§2.3`, `§5.2`),
-//!   Starting Combat Modes (`§3.3`), Melee Weapon Catalog & Reach/Clinch Polarity Flip (`§4`), and Viktor vs. Elena
-//!   Walkthrough (`§5.1`).
-//! - **`docs/ttrpg/05-combat/ranged_combat_and_armor.md`**: Ranged Fire Modes (`§2.1`), Recoil Bracing ($F \ge R$)
-//!   & Muzzle Climb Dispersion (`§2.2`), Suppressive Fire Morale Shock ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$, `§2.3`),
-//!   Effective Penetration & Impact Scaling (`§4.2`), Weapon Reliability (`Rel` in `-4..=+4`) & Malfunction Mechanics
-//!   (`§6.1–§6.2`), and Armor Profiles Catalog (`§8.1`) & Penetration (`PR`) vs. Behind-Armor Blunt Trauma (`BABT`, `§8.2`).
+//!   Starting Combat Modes (`§3.3`), 22-Entry Melee Weapon & Shield Catalog (`§4–§4.1`), and Viktor vs. Elena (`§5.1`).
+//! - **`docs/ttrpg/05-combat/ranged_combat_and_armor.md`** & **`arsenal_explosives_and_tactical_gear.md`**:
+//!   Ranged Fire Modes, Recoil Bracing, Suppression, Armor `PR` vs. `BABT`, Malfunctions, Expanded Calibers,
+//!   Muscle/Less-Lethal Systems, Explosives & Breaching, and Optics/Gear.
 
 use std::ops::Deref;
 
+use satya_schema::MaterialClass;
 use serde::{Deserialize, Serialize};
 
 use crate::action_economy::compute_delta_tc_decide;
 pub use crate::ballistics::*;
+use crate::barrier_ballistics::material_ballistic_profile;
 use crate::characteristics::{
     CharacterCharacteristics, compute_d_cog_score, compute_fatigue_threshold_score,
     compute_mmf_momentum_factor, compute_ooda_score, compute_pow_striking_power,
@@ -28,6 +28,7 @@ use crate::primitives::{ConditionImpact, StaticCatalog, Triad};
 use crate::{define_coded_enum, impl_static_catalog};
 
 pub use crate::combat_techniques::*;
+pub use crate::explosives_and_arsenal::*;
 pub use crate::ranged_combat::*;
 // ============================================================================
 // Combat Tactical Pool ("Envelope & Fill" — Tempo, Control, Force) Calculator
@@ -621,7 +622,8 @@ pub enum CombatEngagementMode {
     Aggressive,
 }
 
-/// Canonical Melee Weapon & Unarmed Attack identifiers from `docs/ttrpg/05-combat/melee_combat.md` §4.
+/// Canonical 22-entry Melee Weapon, Breaching Tool & Shield identifiers
+/// (`docs/ttrpg/05-combat/melee_combat.md` §4–§4.1).
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -632,16 +634,48 @@ pub enum MeleeWeaponId {
     ExpandableBatonTonfaClub = 3,
     MacheteWakizashiTacticalBlade = 4,
     TwoHandedStaffSpearRiotShield = 5,
+    BrassKnucklesSapGloves = 6,
+    ImprovisedBottleBrickWrench = 7,
+    FoldingPocketKnifeBoxCutter = 8,
+    StilettoIcepickDirk = 9,
+    TacticalTomahawkHatchet = 10,
+    HeavyFlashlightMaglite = 11,
+    BaseballBatLeadPipe = 12,
+    CrowbarPrybar = 13,
+    TwoHandedSledgehammerFireAxe = 14,
+    HalliganBreachingBar = 15,
+    KatanaLongsword = 16,
+    KukriBoloChopper = 17,
+    StunBatonShockProd = 18,
+    BoStaffSteelPipeLong = 19,
+    PolycarbonateRiotShield = 20,
+    BallisticBreacherShieldNij3 = 21,
 }
 
 impl MeleeWeaponId {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 22] = [
         Self::UnarmedJabLowKickClinchKnee,
         Self::UnarmedHaymakerHighKickThrow,
         Self::CombatKnifeKarambitShiv,
         Self::ExpandableBatonTonfaClub,
         Self::MacheteWakizashiTacticalBlade,
         Self::TwoHandedStaffSpearRiotShield,
+        Self::BrassKnucklesSapGloves,
+        Self::ImprovisedBottleBrickWrench,
+        Self::FoldingPocketKnifeBoxCutter,
+        Self::StilettoIcepickDirk,
+        Self::TacticalTomahawkHatchet,
+        Self::HeavyFlashlightMaglite,
+        Self::BaseballBatLeadPipe,
+        Self::CrowbarPrybar,
+        Self::TwoHandedSledgehammerFireAxe,
+        Self::HalliganBreachingBar,
+        Self::KatanaLongsword,
+        Self::KukriBoloChopper,
+        Self::StunBatonShockProd,
+        Self::BoStaffSteelPipeLong,
+        Self::PolycarbonateRiotShield,
+        Self::BallisticBreacherShieldNij3,
     ];
 
     /// Canonical carried physical mass in kilograms (`kg`) for encumbrance calculations.
@@ -649,10 +683,35 @@ impl MeleeWeaponId {
     pub const fn mass_kg(self) -> f64 {
         match self {
             Self::UnarmedJabLowKickClinchKnee | Self::UnarmedHaymakerHighKickThrow => 0.0,
+            Self::FoldingPocketKnifeBoxCutter => 0.12,
+            Self::StilettoIcepickDirk => 0.22,
+            Self::BrassKnucklesSapGloves => 0.25,
             Self::CombatKnifeKarambitShiv => 0.35,
             Self::ExpandableBatonTonfaClub => 0.65,
+            Self::ImprovisedBottleBrickWrench => 0.70,
+            Self::KukriBoloChopper | Self::StunBatonShockProd => 0.75,
+            Self::TacticalTomahawkHatchet | Self::HeavyFlashlightMaglite => 0.85,
             Self::MacheteWakizashiTacticalBlade => 0.95,
+            Self::BaseballBatLeadPipe => 1.10,
+            Self::KatanaLongsword => 1.25,
+            Self::BoStaffSteelPipeLong => 1.40,
+            Self::CrowbarPrybar => 1.80,
+            Self::PolycarbonateRiotShield => 3.20,
             Self::TwoHandedStaffSpearRiotShield => 3.40,
+            Self::HalliganBreachingBar => 4.20,
+            Self::TwoHandedSledgehammerFireAxe => 4.50,
+            Self::BallisticBreacherShieldNij3 => 9.80,
+        }
+    }
+
+    /// Passive shield ballistic & edged resistance `(PR_Edged, PR_Ballistic, BTD)` when actively held
+    /// (`docs/ttrpg/05-combat/melee_combat.md` §4.1).
+    #[must_use]
+    pub const fn shield_ballistic_protection(self) -> Option<(i32, i32, i32)> {
+        match self {
+            Self::PolycarbonateRiotShield | Self::TwoHandedStaffSpearRiotShield => Some((5, 1, 4)),
+            Self::BallisticBreacherShieldNij3 => Some((6, 6, 6)),
+            _ => None,
         }
     }
 }
@@ -665,9 +724,9 @@ pub struct MeleeWeaponProfile {
     pub min_reach: i32,
     pub max_reach: i32,
     pub base_tc: i32,
-    /// Passive Guard bonus added to `Control` when parrying/defending (`-1..=+3`).
+    /// Passive Guard bonus added to `Control` when parrying/defending (`-1..=+4`).
     pub guard_bonus: i32,
-    /// Multiplier applied to $\text{POW} \times (F / B)$ strike impact (`1.0`, `1.2`, `1.25`, etc.).
+    /// Multiplier applied to $\text{POW} \times (F / B)$ strike impact (`0.9`, `1.0`, `1.2`, `1.6`, etc.).
     pub pow_multiplier: f64,
     /// Flat bonus added to base trauma or bleed (`+2` knife bleed, `+4` tactical blade trauma).
     pub flat_trauma_or_bleed_bonus: i32,
@@ -693,8 +752,9 @@ macro_rules! mw {
     };
 }
 
-/// Canonical 6-entry Melee Weapon & Unarmed Attack Catalog (`docs/ttrpg/05-combat/melee_combat.md` §4).
-pub const MELEE_WEAPON_CATALOG: [MeleeWeaponProfile; 6] = [
+/// Canonical 22-entry Melee Weapon, Breaching Tool & Shield Catalog
+/// (`docs/ttrpg/05-combat/melee_combat.md` §4–§4.1).
+pub const MELEE_WEAPON_CATALOG: [MeleeWeaponProfile; 22] = [
     mw!(
         UnarmedJabLowKickClinchKnee,
         "Unarmed (Jab / Low Kick / Clinch Knee)",
@@ -767,6 +827,198 @@ pub const MELEE_WEAPON_CATALOG: [MeleeWeaponProfile; 6] = [
         2,
         true
     ),
+    mw!(
+        BrassKnucklesSapGloves,
+        "Brass Knuckles / Weighted Sap Gloves",
+        1,
+        1,
+        7,
+        0,
+        1.15,
+        1,
+        0,
+        false
+    ),
+    mw!(
+        ImprovisedBottleBrickWrench,
+        "Improvised Bottle / Brick / Mechanic Wrench",
+        1,
+        1,
+        8,
+        -1,
+        1.10,
+        1,
+        0,
+        false
+    ),
+    mw!(
+        FoldingPocketKnifeBoxCutter,
+        "Folding Pocket Knife / Box Cutter",
+        1,
+        1,
+        6,
+        -1,
+        0.90,
+        1,
+        0,
+        false
+    ),
+    mw!(
+        StilettoIcepickDirk,
+        "Stiletto / Icepick / Narrow Armor-Gap Dirk",
+        1,
+        1,
+        6,
+        -1,
+        0.95,
+        3,
+        0,
+        false
+    ),
+    mw!(
+        TacticalTomahawkHatchet,
+        "Tactical Tomahawk / Camp Hatchet",
+        2,
+        2,
+        9,
+        0,
+        1.30,
+        3,
+        1,
+        false
+    ),
+    mw!(
+        HeavyFlashlightMaglite,
+        "Heavy Aircraft-Aluminum Flashlight / D-Cell Torch",
+        1,
+        2,
+        8,
+        0,
+        1.15,
+        1,
+        0,
+        false
+    ),
+    mw!(
+        BaseballBatLeadPipe,
+        "Aluminum Baseball Bat / Lead Pipe",
+        2,
+        2,
+        9,
+        0,
+        1.30,
+        2,
+        1,
+        false
+    ),
+    mw!(
+        CrowbarPrybar,
+        "Hardened Steel Crowbar / Wrecking Prybar",
+        2,
+        2,
+        9,
+        1,
+        1.25,
+        2,
+        1,
+        false
+    ),
+    mw!(
+        TwoHandedSledgehammerFireAxe,
+        "Two-Handed Sledgehammer / Fire Axe",
+        2,
+        3,
+        12,
+        -1,
+        1.60,
+        4,
+        1,
+        false
+    ),
+    mw!(
+        HalliganBreachingBar,
+        "Halligan Entry & Breaching Bar",
+        2,
+        3,
+        11,
+        1,
+        1.45,
+        3,
+        2,
+        false
+    ),
+    mw!(
+        KatanaLongsword,
+        "Katana / Tactical Longsword (Two-Handed Edge)",
+        3,
+        3,
+        9,
+        2,
+        1.30,
+        4,
+        1,
+        false
+    ),
+    mw!(
+        KukriBoloChopper,
+        "Heavy Kukri / Bolo Field Chopper",
+        2,
+        2,
+        8,
+        0,
+        1.25,
+        3,
+        0,
+        false
+    ),
+    mw!(
+        StunBatonShockProd,
+        "High-Voltage Stun Baton / Shock Prod",
+        2,
+        2,
+        8,
+        1,
+        1.05,
+        2,
+        0,
+        false
+    ),
+    mw!(
+        BoStaffSteelPipeLong,
+        "Bo Staff / 1.8m Long Steel Rebar Pole",
+        3,
+        4,
+        9,
+        3,
+        1.15,
+        0,
+        2,
+        true
+    ),
+    mw!(
+        PolycarbonateRiotShield,
+        "Clear Polycarbonate Riot Shield (PR 5 Edged / PR 1 Ballistic)",
+        1,
+        2,
+        9,
+        4,
+        0.90,
+        0,
+        4,
+        false
+    ),
+    mw!(
+        BallisticBreacherShieldNij3,
+        "NIJ III/RF1 Ballistic Breacher Shield (PR 6 Ballistic / BTD 6)",
+        1,
+        2,
+        11,
+        4,
+        1.05,
+        1,
+        6,
+        false
+    ),
 ];
 
 impl_static_catalog!(MeleeWeaponId => MeleeWeaponProfile : MELEE_WEAPON_CATALOG);
@@ -776,15 +1028,12 @@ impl MeleeWeaponId {
     #[must_use]
     pub const fn combat_domain(self) -> crate::combat_techniques::CombatDomain {
         match self {
-            Self::UnarmedJabLowKickClinchKnee | Self::UnarmedHaymakerHighKickThrow => {
+            Self::UnarmedJabLowKickClinchKnee
+            | Self::UnarmedHaymakerHighKickThrow
+            | Self::BrassKnucklesSapGloves => {
                 crate::combat_techniques::CombatDomain::UnarmedMartialArts
             }
-            Self::CombatKnifeKarambitShiv
-            | Self::ExpandableBatonTonfaClub
-            | Self::MacheteWakizashiTacticalBlade
-            | Self::TwoHandedStaffSpearRiotShield => {
-                crate::combat_techniques::CombatDomain::ArmedMelee
-            }
+            _ => crate::combat_techniques::CombatDomain::ArmedMelee,
         }
     }
 }
@@ -924,4 +1173,214 @@ pub fn check_melee_interrupt_before_impact(
     let interrupted =
         counter_land_tick < telegraphed_land_tick && counter_inflicts_shock_or_knockback;
     (interrupted, counter_land_tick)
+}
+
+// ============================================================================
+// Multi-Opponent Pool Splitting, Flanking, Elevation & Object Targeting (§4.6)
+// ============================================================================
+
+/// Multi-opponent engagement geometry and verticality context
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.6).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MultiOpponentThreatContext {
+    /// Total simultaneous foes currently pressing or engaging the combatant (`1..`).
+    pub simultaneous_opponents: usize,
+    /// True if doorway, narrow stairwell, or wall behind the defender prevents surround vectors.
+    pub in_chokepoint_or_wall_at_back: bool,
+    /// True if an attack originates outside the defender's forward visual arc (`> 90 deg` flank or rear).
+    pub flanked_rear_or_blindside: bool,
+    /// Vertical height differential (`actor_elevation_m - target_elevation_m`; positive = high ground).
+    pub elevation_diff_m: f64,
+}
+
+/// Output of validating split Triad allocations across multiple simultaneous threats or attacks
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MultiOpponentPoolEvaluation {
+    /// Cognitive attention tax deducted from `P_eff` (`-2` per foe past the first, cap `-6`, `-2` in chokepoint).
+    pub attention_tax_pool_penalty: i32,
+    /// Remaining Tactical Pool available to split across separate foe actions/defenses.
+    pub available_split_pool: i32,
+    /// Subtractive penalty to `Control Cap` against blindside/flanking attacks (`4` when flanked, else `0`).
+    pub flank_control_cap_penalty: i32,
+    /// Defense penalty ($\Delta_{\text{ext}}$) against a flanking/rear strike (`4` when flanked, else `0`).
+    pub flank_defender_delta_ext: i32,
+    /// Aim / defense shift from elevation (`-2` high ground bonus, `+2` low ground penalty, `0` level).
+    pub elevation_delta_ext_mod: i32,
+    /// Extra melee Reach tier granted when attacking downward from `>= 1.5 m` elevation (`+1`).
+    pub elevation_melee_reach_bonus: i32,
+    pub total_allocated: i32,
+    pub allocation_valid: bool,
+    pub violations: Vec<String>,
+}
+
+/// Evaluate Multi-Opponent Pool Splitting, Flanking penalties, and Elevation advantages
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.6).
+#[must_use]
+pub fn evaluate_multi_opponent_pool_split(
+    env: &TacticalPoolEnvelope,
+    ctx: &MultiOpponentThreatContext,
+    split_allocations: &[Triad<i32>],
+) -> MultiOpponentPoolEvaluation {
+    let raw_tax = ((ctx.simultaneous_opponents.saturating_sub(1) as i32) * 2).min(6);
+    let attention_tax_pool_penalty = if ctx.in_chokepoint_or_wall_at_back {
+        (raw_tax - 2).max(0)
+    } else {
+        raw_tax
+    };
+    let available_split_pool = (env.p_eff - attention_tax_pool_penalty).max(0);
+    let flank_control_cap_penalty = if ctx.flanked_rear_or_blindside { 4 } else { 0 };
+    let flank_defender_delta_ext = flank_control_cap_penalty;
+    let effective_control_cap = (env.caps.control - flank_control_cap_penalty).max(0);
+
+    let (elevation_delta_ext_mod, elevation_melee_reach_bonus) = if ctx.elevation_diff_m >= 1.5 {
+        (-2, 1)
+    } else if ctx.elevation_diff_m <= -1.5 {
+        (2, 0)
+    } else {
+        (0, 0)
+    };
+
+    let mut total_allocated = 0;
+    let mut violations = Vec::new();
+    for (idx, alloc) in split_allocations.iter().enumerate() {
+        if alloc.has_negative() {
+            violations.push(format!("Split #{idx} contains a negative axis value."));
+        }
+        if alloc.tempo > env.caps.tempo {
+            violations.push(format!(
+                "Split #{idx} Tempo {} exceeds Tempo Cap {}.",
+                alloc.tempo, env.caps.tempo
+            ));
+        }
+        if alloc.control > effective_control_cap {
+            violations.push(format!(
+                "Split #{idx} Control {} exceeds flanked Control Cap {}.",
+                alloc.control, effective_control_cap
+            ));
+        }
+        if alloc.force > env.caps.force {
+            violations.push(format!(
+                "Split #{idx} Force {} exceeds Force Cap {}.",
+                alloc.force, env.caps.force
+            ));
+        }
+        total_allocated += alloc.sum();
+    }
+    if total_allocated > available_split_pool {
+        violations.push(format!(
+            "Total split allocation {total_allocated} exceeds available post-tax pool {available_split_pool}."
+        ));
+    }
+
+    MultiOpponentPoolEvaluation {
+        attention_tax_pool_penalty,
+        available_split_pool,
+        flank_control_cap_penalty,
+        flank_defender_delta_ext,
+        elevation_delta_ext_mod,
+        elevation_melee_reach_bonus,
+        total_allocated,
+        allocation_valid: violations.is_empty(),
+        violations,
+    }
+}
+
+/// Physical size and Structural Integrity (`SI`) category of an inanimate object target
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ObjectTargetClass {
+    /// Padlock shackle, CCTV lens, optic housing, handgun slide (`+4` $\Delta_{\text{ext}}$, `SI 2`).
+    SmallPrecisionTarget,
+    /// Deadbolt strike plate, door hinge, drone rotor, vehicle tire (`+2` $\Delta_{\text{ext}}$, `SI 4`).
+    MediumComponentTarget,
+    /// Timber door slab, interior bulkhead, car door panel (`+0` $\Delta_{\text{ext}}$, `SI 8`).
+    LargeStructuralTarget,
+    /// Concrete pillar, safe hinge, vault frame, engine block (`-2` $\Delta_{\text{ext}}$, `SI 14`).
+    HeavyFortifiedBarrier,
+}
+
+impl ObjectTargetClass {
+    /// Angular aim penalty/bonus ($\Delta_{\text{ext}}$) based on target physical size.
+    #[must_use]
+    pub const fn size_delta_ext(self) -> i32 {
+        match self {
+            Self::SmallPrecisionTarget => 4,
+            Self::MediumComponentTarget => 2,
+            Self::LargeStructuralTarget => 0,
+            Self::HeavyFortifiedBarrier => -2,
+        }
+    }
+
+    /// Default Structural Integrity (`SI`) threshold before destruction, snapping, or breach.
+    #[must_use]
+    pub const fn structural_integrity(self) -> i32 {
+        match self {
+            Self::SmallPrecisionTarget => 2,
+            Self::MediumComponentTarget => 4,
+            Self::LargeStructuralTarget => 8,
+            Self::HeavyFortifiedBarrier => 14,
+        }
+    }
+}
+
+/// Terminal outcome of shooting, striking, or prying an inanimate object or barrier
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ObjectDamageEvaluation {
+    pub target_class: ObjectTargetClass,
+    pub material: MaterialClass,
+    pub size_delta_ext: i32,
+    pub barrier_pr: i32,
+    pub effective_pen: i32,
+    pub effective_impact: i32,
+    pub structural_damage: i32,
+    pub remaining_integrity: i32,
+    pub destroyed_or_breached: bool,
+    pub deflected_or_bounced: bool,
+}
+
+/// Evaluate shooting or striking an object, lock, sensor, or door using `MaterialClass`
+/// `barrier_pr` and [`ObjectTargetClass`] `Structural Integrity`
+/// (`docs/ttrpg/05-combat/tactical_triad_and_pools.md` §4.6).
+#[must_use]
+pub fn evaluate_object_targeting(
+    target_class: ObjectTargetClass,
+    material: MaterialClass,
+    base_pen: i32,
+    raw_impact: i32,
+    net_successes: i32,
+    current_integrity_override: Option<i32>,
+) -> ObjectDamageEvaluation {
+    let barrier_pr = material_ballistic_profile(material).barrier_pr;
+    let bonus = net_successes.max(0).div_euclid(2);
+    let effective_pen = base_pen + bonus;
+    let effective_impact = raw_impact + bonus;
+
+    let structural_damage = if effective_pen > barrier_pr {
+        (effective_impact - barrier_pr).max(1)
+    } else if effective_impact >= barrier_pr + 4 {
+        (effective_impact - barrier_pr - 2).max(1)
+    } else {
+        0
+    };
+
+    let start_si = current_integrity_override
+        .unwrap_or_else(|| target_class.structural_integrity())
+        .max(0);
+    let remaining_integrity = (start_si - structural_damage).max(0);
+
+    ObjectDamageEvaluation {
+        target_class,
+        material,
+        size_delta_ext: target_class.size_delta_ext(),
+        barrier_pr,
+        effective_pen,
+        effective_impact,
+        structural_damage,
+        remaining_integrity,
+        destroyed_or_breached: remaining_integrity == 0,
+        deflected_or_bounced: structural_damage == 0,
+    }
 }

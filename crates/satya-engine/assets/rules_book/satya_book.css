@@ -163,13 +163,14 @@ body[data-book-theme="tactical-hud"] {
   --fig-mat: #121b2b;
 }
 
-/* Part I-VI Thumb-Index Tab Colors */
+/* Part I-VII Thumb-Index Tab Colors */
 body[data-part-index="1"] { --part-idx: 1; --part-color: #8b5e34; }
 body[data-part-index="2"] { --part-idx: 2; --part-color: #2c5282; }
 body[data-part-index="3"] { --part-idx: 3; --part-color: #3b6b52; }
 body[data-part-index="4"] { --part-idx: 4; --part-color: #8c3b4a; }
 body[data-part-index="5"] { --part-idx: 5; --part-color: #9b3a2b; }
 body[data-part-index="6"] { --part-idx: 6; --part-color: #24616c; }
+body[data-part-index="7"] { --part-idx: 7; --part-color: #4c4a8a; }
 
 * { box-sizing: border-box; }
 

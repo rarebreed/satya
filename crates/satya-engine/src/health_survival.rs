@@ -14,7 +14,7 @@
 //! - **§4–§6 Status Effects, Mental Trauma & Medical Triage (`§4`, `§5.1–§5.2`, `§6.1–§6.3`)**: The Physiological/Sensory
 //!   Status Conditions, the 4 Acute Mental Trauma Tiers (`OODA Freeze`, `Panic/Feral Rage`, `Dissociation`, `Catatonia`),
 //!   Field Analgesics, and Weekly `HLT` Healing Recovery Cascades.
-//! - **`movement_vehicles_and_environment.md`**: Implemented in and re-exported from [`crate::environment_vehicles`].
+//! - **`movement_encumbrance_and_vehicles.md`** & **`environmental_hazards_and_survival.md`**: Implemented in and re-exported from [`crate::environment_vehicles`] and [`crate::environmental_hazards`].
 
 use serde::{Deserialize, Serialize};
 

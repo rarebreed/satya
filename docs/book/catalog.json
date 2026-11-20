@@ -1,7 +1,7 @@
 {
   "book_title": "Satya: A Grounded Tabletop Role-Playing System",
   "using_satya_py": true,
-  "chapter_count": 18,
+  "chapter_count": 23,
   "chapters": [
     {
       "chapter_id": "design_philosophy",
@@ -121,9 +121,9 @@
     {
       "chapter_id": "action_economy",
       "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
-      "title": "Action Economy, OODA Loop, Time Scales & Stealth",
+      "title": "Action Economy, OODA Loop & Time Scales",
       "relative_path": "02-core-mechanics/action_economy_and_ooda.md",
-      "description": "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Full OODA Loop & Quick Thinking (D_cog), Count-Up Clock mechanics, Base TC tables, action_time_factor, and Multi-Sensory Stealth & Detection.",
+      "description": "Temporal calibration (4 ticks = 1s, 240 ticks = 1 min), Full OODA Loop & Quick Thinking (D_cog), Count-Up Clock mechanics, Base TC tables, action_time_factor, and the Observe clock bridge.",
       "headings": [
         "1. Temporal Calibration: Ticks, Seconds & Minutes",
         "2. The Full OODA Loop: \"Quick Thinking\" (`TC_decide`) vs. Physical Execution (`TC_act`)",
@@ -143,11 +143,32 @@
         "5.3 Layer 3: Combat & Athletic Physical Execution (`Tempo` $T$ & `SPD`)",
         "5.4 Layer 4: Non-Combat Physical, Technical & Mental Actions (`Characteristic Speed Scaling`)",
         "5.5 Aborting or Changing a Committed Action (`OODA Reset / Action Pivot`)",
-        "6. Multi-Sensory Perception, Stealth & Illumination (`Observe` Phase)",
-        "6.1 Resolving Stealth vs. Detection (`2d20` Opposed Cascade)",
-        "6.2 Illumination, Visibility & Acoustic Modifiers ($\\Delta_{\\text{ext}}$)"
+        "6. Multi-Sensory Perception, Stealth & Illumination (`Observe` Phase)"
       ],
       "html_file": "action_economy.html"
+    },
+    {
+      "chapter_id": "stealth_and_awareness",
+      "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
+      "title": "Stealth, Passive Awareness, Observation & Investigation",
+      "relative_path": "02-core-mechanics/stealth_awareness_and_investigation.md",
+      "description": "Passive Awareness (0 Ticks, AWR) vs. Active Observation (6 Ticks, 6-sense isolation), Attention States & Watch Fatigue, 4-stage Alertness Ladder, Acoustic/Thermal/RF/Social Stealth, Tail Craft (SDR), and Forensic Trace Decay.",
+      "headings": [
+        "1. Passive Awareness vs. Active Observation (`ObservationMode`)",
+        "1.1 Observer Attention States (`ObserverAttentionState`) & Watch Duty Fatigue",
+        "1.2 Explicit 6-Sense Channel Isolation (`ActiveSensoryChannel`)",
+        "2. Escalating Alertness & Suspicion Ladder (`AlertnessLevel`)",
+        "3. Multi-Spectrum & Social Stealth",
+        "3.1 Visual Stealth, Movement Gait, Encumbrance & Illumination",
+        "3.2 Acoustic Surfaces & Ambient Noise Masking",
+        "3.3 Thermal / IR Signatures & Digital RF Hygiene",
+        "3.4 Social Stealth (\"Hiding in Plain Sight\")",
+        "4. Surveillance, Tail Craft, Forensic Clues & Post-Truth Verification",
+        "4.1 Urban Surveillance & Surveillance Detection Routes (`SDR`)",
+        "4.2 Forensic Clue Discovery & Trace Evidence Decay",
+        "4.3 2035 Post-Truth Verification: Deepfakes & Synth-Media Audits"
+      ],
+      "html_file": "stealth_and_awareness.html"
     },
     {
       "chapter_id": "characteristics",
@@ -215,9 +236,9 @@
     {
       "chapter_id": "lifepaths_and_economy",
       "part": "Part III: Character Architecture, Skills, Lifepaths & Economy",
-      "title": "Lifepath Character Creation, Socioeconomic Upkeep & Heat",
+      "title": "Lifepath Character Creation, Socioeconomic Upkeep, Contacts, Cover & Heat",
       "relative_path": "03-character/lifepaths_and_economy.md",
-      "description": "Chronological Lifepath education & 14 career tracks (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, and Operational Heat.",
+      "description": "Chronological Lifepath education & 14 career tracks (Ages 0-18+), DIS + Mental + APT advancement rolls, Socioeconomic Tier (SQM 1-10) upkeep, Black-Market [Access] gates, Operational Heat, Contacts & Favors, Cover Identities, and Safehouses.",
       "headings": [
         "1. Chronological Lifepath Architecture",
         "1.1 Stage 1: Socioeconomic Origin & School Quality (Ages 0\u20135)",
@@ -229,7 +250,10 @@
         "1.7 Per-Term Skill Point (`SP`) Budgets & The 5-Factor Skill Cost Formula",
         "2. Campaign Economy, Upkeep (`SQM 1\u201310`), `[Access]` Procurement & `Heat`",
         "3.1 Socioeconomic Tier (`SQM 1\u201310`) & Lifestyle Upkeep",
-        "3.2 Black-Market Procurement (`[Access]` Gates) & Law Enforcement `Heat`"
+        "3.2 Black-Market Procurement (`[Access]` Gates) & Law Enforcement `Heat`",
+        "3.3 Contacts, Networks & Favors",
+        "3.4 Layered Cover Identities & Paper Trails",
+        "3.5 Safehouses, Bolt-Holes & Compromise Checks"
       ],
       "html_file": "lifepaths_and_economy.html"
     },
@@ -300,6 +324,7 @@
         "4.3 Physical & Psychological Modifiers to the Pool",
         "4.4 Mechanical Resolution of Tempo, Control, and Force",
         "4.5 Orthogonality: Technique Selection (*What You Do*) vs. Triad Allocation (*How You Execute It*)",
+        "4.6 Multi-Opponent Pool Splitting, Flanking, Elevation & Object Targeting",
         "5. Companion Combat Chapters"
       ],
       "html_file": "tactical_triad.html"
@@ -321,7 +346,8 @@
         "3.2 The Six Core Tactical Triad Allocations (`TC`, `TF`, `CF`, `Pure T/C/F`)",
         "3.2 Focused Allocations (All-In Commitment)",
         "3.3 Starting Combat Modes",
-        "4. Melee Weapons, Reach Tiers & Base Action Costs (`TC`)",
+        "4. Melee Weapons, Reach Tiers & Shields (`22`-Entry Catalog)",
+        "4.1 Riot & Ballistic Shields (`shield_ballistic_protection`)",
         "5. Complete Worked Examples",
         "5.1 Worked Example 1: Heavy Street Bruiser (Viktor) vs. Trained Kickboxer (Elena)",
         "5.2 Worked Example 2: Clinch, Off-Balancing (`Kuzushi`) & Hip Throw vs. `Root`"
@@ -373,6 +399,24 @@
       "html_file": "ranged_combat_and_armor.html"
     },
     {
+      "chapter_id": "arsenal_and_explosives",
+      "part": "Part V: Combat Architecture, Close Quarters & Firefights",
+      "title": "Expanded Arsenal, Explosives, Breaching & Tactical Gear",
+      "relative_path": "05-combat/arsenal_explosives_and_tactical_gear.md",
+      "description": "Six extra calibers (.22 LR to .300 BLK), 10 expanded firearms (#13-#22 through .338 Lapua & .50 BMG), 5 specialty 12-Gauge shells, bows/crossbows & less-lethal systems, explosives/blast overpressure (1.5x indoor reflection), breaching vs. MaterialClass PR, and optics/gear.",
+      "headings": [
+        "1. Expanded Firearms, Specialty Calibers & Shotgun Loads",
+        "1.1 Six Additional Calibers (`.22 LR` through `.300 BLK` & Magnum)",
+        "1.2 Ten Expanded Benchmark Firearms (`#13\u2013#22` Extending Chapter 17)",
+        "1.3 Specialty `12-Gauge` Shotgun Loads (`ShotgunLoadId`)",
+        "2. Muscle-Powered & Less-Lethal Weapons (`NonFirearmWeaponId`)",
+        "3. Explosives, Blast Overpressure, Fragmentation & Tactical Breaching",
+        "3.1 Tactical Breaching (`evaluate_explosive_breach`)",
+        "4. Optics, Ballistic Computers & Tactical Field Gear (`TacticalOpticOrGearId`)"
+      ],
+      "html_file": "arsenal_and_explosives.html"
+    },
+    {
       "chapter_id": "health_and_trauma",
       "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
       "title": "Health, Anatomical Trauma, Fatigue & Mental Conditions",
@@ -400,11 +444,11 @@
       "html_file": "health_and_trauma.html"
     },
     {
-      "chapter_id": "movement_and_environment",
+      "chapter_id": "movement_and_vehicles",
       "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
-      "title": "Movement, Encumbrance, Vehicles & Environmental Survival",
-      "relative_path": "06-health-and-survival/movement_vehicles_and_environment.md",
-      "description": "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, Vehicles & High-Speed Chases, Hydration, Starvation, Temperature (Hypothermia/Heatstroke), Hypoxia, and Toxins.",
+      "title": "Movement, Encumbrance & Vehicles",
+      "relative_path": "06-health-and-survival/movement_encumbrance_and_vehicles.md",
+      "description": "Combat movement gaits (m/tick), overland travel, FOR & MAS Encumbrance tiers, bulk/stowage slots, Vehicles & Chases, 2035 Vehicle Catalog, firing platforms, and component trauma.",
       "headings": [
         "1. Movement Architecture: Combat & Non-Combat Gaits",
         "1.1 Baseline Velocity Formulas (`SPD`, `FIT` & `HGT`)",
@@ -415,14 +459,84 @@
         "2.1 Calculating Base Comfort Load ($L_{\\text{base}}$)",
         "2.2 Ergonomic Load Multipliers (How Weight Is Carried)",
         "2.3 The Five Encumbrance Tiers (`Tiers 0\u20134`)",
-        "3. Vehicles, High-Speed Chases & Crash / G-Force Physics",
-        "4. Environment & Survival Systems: Water, Food, Temperature & Atmosphere",
-        "4.1 Hydration & Water Deprivation",
-        "4.2 Nutrition, Caloric Deficit & Starvation",
-        "4.3 Temperature Extremes: Cold (Hypothermia) & Heat (Hyperthermia)",
-        "4.4 Sleep Deprivation, Atmospheric Pressure, Radiation & Toxins"
+        "2.4 Bulk, Stowage Volume & Quick-Access Slots",
+        "3. Vehicles, High-Speed Chases, Component Damage & G-Force Physics",
+        "3.4 Canonical 2035 Vehicle Catalog",
+        "3.5 Firing From Moving Vehicles & Passenger Stabilization",
+        "3.6 Vehicle Component Trauma & EV Battery Thermal Runaway"
       ],
-      "html_file": "movement_and_environment.html"
+      "html_file": "movement_and_vehicles.html"
+    },
+    {
+      "chapter_id": "environmental_hazards",
+      "part": "Part VI: Health, Trauma, Movement, Vehicles & Survival",
+      "title": "Environmental Hazards, Survival & Field Pharmacology",
+      "relative_path": "06-health-and-survival/environmental_hazards_and_survival.md",
+      "description": "Hydration, Starvation, Cold/Heat (CLO), Sleep, Hypoxia/Vacuum, Toxins, Radiation, Falling, Fire & Smoke, Electricity & EMP, Weather/Diving Pressure, Wound Sepsis, and Field Pharmacology.",
+      "headings": [
+        "1. Metabolic & Atmospheric Survival: Water, Food, Temperature & Atmosphere",
+        "1.1 Hydration & Water Deprivation",
+        "1.2 Nutrition, Caloric Deficit & Starvation",
+        "1.3 Temperature Extremes: Cold (Hypothermia) & Heat (Hyperthermia)",
+        "1.4 Sleep Deprivation & Circadian Debt",
+        "1.5 Altitude & Atmospheric Hypoxia",
+        "1.6 Toxins, Venoms, Chemical Agents & Pathogens (`HLT` Saves)",
+        "1.7 Ionizing Radiation (`Sievert / Gray` Exposure Tiers)",
+        "2. Falling & Gravity Impact Physics",
+        "2.1 Impact Velocity, Breakfall & Trauma Formula",
+        "3. Fire, Thermal Burns & Smoke Inhalation",
+        "3.1 Fire Exposure & Extinguishing",
+        "3.2 Burn Severity Degrees (`BurnDegree`)",
+        "3.3 Smoke Inhalation & Carbon Monoxide (`CO`)",
+        "4. Electricity, High Voltage & EMP / Surge Hazards",
+        "5. Dynamic Weather, Wind, Footing & Underwater Diving Pressure",
+        "5.1 Wind Intensity & Surface Traction",
+        "5.2 Underwater Depth Pressure, Nitrogen Narcosis & Decompression Sickness (\"The Bends\")",
+        "6. Wound Infection, Sepsis & Field Pharmacology",
+        "6.1 Untreated Wound Infection & Sepsis Progression",
+        "6.2 Canonical Field Pharmacology & Combat Drugs"
+      ],
+      "html_file": "environmental_hazards.html"
+    },
+    {
+      "chapter_id": "engineering_and_weapon_design",
+      "part": "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+      "title": "Engineering, Workshops & Custom Weapon/Armor Design",
+      "relative_path": "07-engineering-and-tech/engineering_and_weapon_design.md",
+      "description": "4-tier Workshop Facilities (tau_max & Q_mfg ceilings), Project Clocks, Prototype Quirks, Bullet Construction & 17-caliber Custom Firearm Designer (wrapping ballistics.rs), Custom Melee/Shields, and Body Armor.",
+      "headings": [
+        "1. Engineering R&D Pipeline: Workshops, Project Clocks & Quirks",
+        "1.1 Workshop Facility Tiers (`WorkshopFacilityTier`)",
+        "1.2 Project Clock Complexity (`ProjectClockComplexity`)",
+        "1.3 Prototype Quirks (`PrototypeQuirkId`) & Masterwork Finish",
+        "2. Custom Firearm & Ammunition Designer",
+        "2.1 Custom Bullet Construction & Handloading (`BulletConstructionKind`)",
+        "3. Custom Melee Weapon & Body Armor Designer",
+        "3.1 Custom Blades, Breaching Tools & Shields (`evaluate_custom_melee_design`)",
+        "3.2 Custom Body Armor Assembly (`evaluate_custom_armor_design`)",
+        "4. Worked Example: CNC Suppressed `.300 BLK` Carbine vs. Garage Improv"
+      ],
+      "html_file": "engineering_and_weapon_design.html"
+    },
+    {
+      "chapter_id": "robotics_and_ai_architecture",
+      "part": "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+      "title": "Robotics, Drones, AI 2.0 Architectures & Cyber-Prosthetics",
+      "relative_path": "07-engineering-and-tech/robotics_drones_and_ai_architecture.md",
+      "description": "Modular Drones/UGVs (6 chassis, 8 modules, battery endurance), Chassis Trauma & EMP, AI 2.0 Architecture Engineering & Verification Debt (bridging SyntheticMetabolicMode), and Clinical Cyber-Prosthetics & Myomer Augmentations.",
+      "headings": [
+        "1. Modular Drones & Autonomous Ground Vehicles (UGVs)",
+        "1.1 Drone & UGV Chassis Catalog (`DroneChassisClass`)",
+        "1.2 Modular Payloads (`DroneModuleId`) & Real Battery Endurance",
+        "2. Autonomous Chassis Trauma, Thermal Runaway & EMP",
+        "3. AI 2.0 Architecture Engineering, Human\u2013AI Co-Design & Verification Debt",
+        "3.1 Human\u2013AI Co-Design & Verification Debt ($D_{\\text{verify}}$)",
+        "4. Cyber-Prosthetics & Myomer/Neural Augmentations",
+        "4.1 Clinical 2035 Augmentation Catalog (`CyberAugmentId`)",
+        "4.2 Rejection Physiology, Proprioceptive Friction & EMP Hardening",
+        "5. Worked Example: Shrouded Recon FPV, Co-Design Debt & Clinical Suite"
+      ],
+      "html_file": "robotics_and_ai_architecture.html"
     }
   ]
 }

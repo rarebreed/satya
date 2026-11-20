@@ -101,7 +101,7 @@ flowchart TD
 
 ![Near-Future Aerial UAVs & Autonomous Land Drones — Six-wheeled mule UGV, quadruped, quadrotor, and V-tail ISR craft](../../assets/16_aerial_uavs_and_land_drones.jpg#spread)
 
-Athletics and vehicle handling directly showcase **Fitness (`FIT`)**, **Speed (`SPD`)**, **Force (`FOR`)**, and **Kinesthesis (`KIN`)** (body awareness in 3D space—essential for parkour, gymnastics, motorcycles, and rotary-wing VTOL aircraft; see **[Movement, Vehicles & Environment](../06-health-and-survival/movement_vehicles_and_environment.md)**).
+Athletics and vehicle handling directly showcase **Fitness (`FIT`)**, **Speed (`SPD`)**, **Force (`FOR`)**, and **Kinesthesis (`KIN`)** (body awareness in 3D space—essential for parkour, gymnastics, motorcycles, and rotary-wing VTOL aircraft; see **[Movement, Encumbrance & Vehicles](../06-health-and-survival/movement_encumbrance_and_vehicles.md)**).
 
 ```mermaid
 flowchart TD
@@ -330,3 +330,6 @@ flowchart TD
 | **Musical Instrument (Specific)** | `PHY` | `Artistic` | `DEX/HEA` | `DEX 9, HEA 9` | None *(paired with `CRE/DIS`)* | `Universal` / `Artistic` | `Mandatory` |
 | **Graphic Design, Sculpture & 3D Synth-Art** | `PHY/KNO` | `Artistic`, `Cyber` | `CRE/DEX` | `CRE 9, DEX 9, SIG 9` | *Drawing* $\ge 2$ | `Universal` / `Artistic` | `Mandatory` |
 | **Culinary Arts & Mixology** | `PHY/KNO` | `Artistic`, `Technical` | `TAS/OLF` | — | None *(paired with `CRE/DEX`)* | `Universal` / `Vocational` | `Mandatory` |
+
+> [!TIP]
+> **Using Tradecraft Skills in Play**: For **Observation (`Passive AWR` vs. `Active 6-Sense Scan`)**, **Stealth**, **Surveillance & Tail Craft (`SDR`)**, and **Forensics**, see [Stealth, Passive Awareness, Observation & Investigation](../02-core-mechanics/stealth_awareness_and_investigation.md). For **Forgery & Identity Washing**, **Black Market Logistics**, and **Streetwise** favor brokering, see [Contacts, Cover Identities & Safehouses](lifepaths_and_economy.md#33-contacts-networks--favors).

@@ -57,6 +57,9 @@ pub(crate) fn resolve_markdown_link_chapter_id(url: &str) -> Option<&'static str
         "cascading_d20_and_tasks.md" | "satya_d20_rules.md" | "tasks.md" => Some("tasks"),
         "task_requirements_catalog.md" => Some("task_requirements_catalog"),
         "action_economy_and_ooda.md" | "action_economy.md" => Some("action_economy"),
+        "stealth_awareness_and_investigation.md" | "stealth_and_awareness.md" => {
+            Some("stealth_and_awareness")
+        }
         "characteristics_and_aptitudes.md" | "characteristics.md" => Some("characteristics"),
         "skills_and_trees.md" | "skill-design.md" => Some("skills_and_trees"),
         "skills_trees_tactical_and_social.md" => Some("skills_trees_tactical_and_social"),
@@ -71,9 +74,22 @@ pub(crate) fn resolve_markdown_link_chapter_id(url: &str) -> Option<&'static str
         "ranged_combat_and_armor.md" | "world_and_equipment_stubs.md" => {
             Some("ranged_combat_and_armor")
         }
+        "arsenal_explosives_and_tactical_gear.md" | "arsenal_and_explosives.md" => {
+            Some("arsenal_and_explosives")
+        }
         "health_and_trauma.md" => Some("health_and_trauma"),
-        "movement_vehicles_and_environment.md" | "movement_and_environment.md" => {
-            Some("movement_and_environment")
+        "movement_encumbrance_and_vehicles.md"
+        | "movement_and_vehicles.md"
+        | "movement_vehicles_and_environment.md"
+        | "movement_and_environment.md" => Some("movement_and_vehicles"),
+        "environmental_hazards_and_survival.md" | "environmental_hazards.md" => {
+            Some("environmental_hazards")
+        }
+        "engineering_and_weapon_design.md" | "weapon_design.md" => {
+            Some("engineering_and_weapon_design")
+        }
+        "robotics_drones_and_ai_architecture.md" | "robotics_and_ai_architecture.md" => {
+            Some("robotics_and_ai_architecture")
         }
         _ => None,
     }

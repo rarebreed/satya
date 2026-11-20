@@ -182,22 +182,44 @@ At the start of an engagement, each fighter declares (or the AI GM selects based
 
 ---
 
-## 4. Melee Weapons, Reach Tiers & Base Action Costs (`TC`)
+## 4. Melee Weapons, Reach Tiers & Shields (`22`-Entry Catalog)
 
-Unlike generic RPGs where weapons are differentiated only by a damage die (`1d6` vs. `1d8`), melee weapons in Satya have distinct **Reach Tiers**, **Base Tick Costs (`TC`)**, **Control/Parry Modifiers**, and **Damage Profiles** (Blunt/Crushing, Incising/Slashing, or Piercing/Impaling; see **[Ranged Combat & Armor](ranged_combat_and_armor.md#82-resolving-armor-vs-incoming-hits-penetration-vs-babt)** for how armor resists Edged vs. Blunt trauma):
+Unlike generic RPGs where weapons are differentiated only by a damage die (`1d6` vs. `1d8`), melee weapons, breaching tools, and shields in Satya (`MELEE_WEAPON_CATALOG` in `combat.rs`) have distinct **Reach Tiers**, **Base Tick Costs (`TC`)**, **Guard / Block Modifiers**, **`POW` Multipliers**, and **Trauma / Bleed Profiles** (Blunt/Crushing, Incising/Slashing, or Piercing/Impaling; see **[Ranged Combat & Armor](ranged_combat_and_armor.md#82-resolving-armor-vs-incoming-hits-penetration-vs-babt)**):
 
-| Weapon / Unarmed Mode | Governing Skill (`Control`) | Reach Tier | Base `TC` | Guard / Parry Mod | Force & Trauma Profile |
-| :--- | :--- | :---: | :---: | :---: | :--- |
-| **Unarmed Jab / Low Kick / Clinch Knee** | *Brawling* (`FOR/SPD`) or *Striking* (`SPD/KIN`) | `1` *(Close / Body)* | `8` | `+0` | Blunt (`POW × F/B`); targets head (daze), ribs, liver (shock), or legs ($-T_{\max}$). |
-| **Unarmed Haymaker / High Kick / Throw** | *Striking* (`SPD/KIN`) or *Grappling* (`KIN/FOR`) | `1–2` *(Close / Step)* | `10` | `-1` *(Kick)* / `+1` *(Throw)* | Heavy Blunt or Takedown vs. opponent's `Root` ($F + \text{MMF}$). |
-| **Combat Knife / Karambit / Shiv** | *Knife Fighting* (`SPD/DEX`) or *Simple Melee* (`FOR/DEX`) | `1` *(Close)* | `7` | `-1` *(vs. long weapons)* | Piercing / Lacerating; high bleed & tendon cuts (slashes $T_{\max}, C_{\max}, F_{\max}$ even at moderate `Force`). |
-| **Expandable Baton / Tonfa / Club** | *Riot Batons & Impact* (`FOR/DEX`) | `2` *(Medium)* | `8` | **`+2` Control** *(Parry/Block)* | Focused Blunt impact; excels at fracturing wrists/clavicles ($-C_{\max}, -F_{\max}$) and joint locks. |
-| **Machete / Wakizashi / Tactical Blade** | *Fencing & Long Blades* (`SPD/DEX`) | `2–3` *(Medium-Long)* | `9` | **`+1` Control** | Deep Lacerating / Impaling; severe arterial hemorrhage and structural limb damage. |
-| **Two-Handed Staff / Spear / Riot Shield + Baton** | *Polearms & Staff* (`KIN/FOR`) | `4` *(Long)* | `10–11` | **`+3` Control** *(Keep-Out / Frame)* | High leverage (`+2` effective `Force` on blocks/sweeps); penalizes opponents trying to enter Reach `1` by `+4` $\Delta_{\text{ext}}$ unless they beat the wielder's `Tempo`. |
+| `#` | Weapon / Shield (`MeleeWeaponId`) | Governing Skill (`Control`) | Reach | Base `TC` | Guard (`Block`) | `POW` Mult & Flat Bonus | Mass / Operational Profile |
+| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| `0` | **Unarmed (Jab / Low Kick / Clinch Knee)** | *Brawling* (`FOR/SPD`) or *Striking* (`SPD/KIN`) | `1` | `8` | `+0` (`+0`) | `1.00×` (`+0`) | `0.0 kg` · Blunt; targets jaw, liver shock, or calf ($-T_{\max}$). |
+| `1` | **Unarmed (Haymaker / High Kick / Throw)** | *Striking* (`SPD/KIN`) or *Grappling* (`KIN/FOR`) | `1–2` | `10` | `-1` (`+0`) | `1.25×` (`+0`) | `0.0 kg` · High-commitment strike or throw vs. `Root`. |
+| `2` | **Combat Knife / Karambit / Shiv** | *Knife Fighting* (`SPD/DEX`) or *Simple Melee* | `1` | `7` | `-1` (`+0`) | `1.00×` (`+2 Bleed`) | `0.35 kg` · Piercing/lacerating; severe tendon cuts & bleeding. |
+| `3` | **Expandable Baton / Tonfa / Club** | *Riot Batons & Impact* (`FOR/DEX`) | `2` | `8` | `+2` (`+0`) | `1.20×` (`+0`) | `0.65 kg` · Blunt; fractures wrists/clavicles ($-C_{\max}, -F_{\max}$). |
+| `4` | **Machete / Wakizashi / Tactical Blade** | *Fencing & Long Blades* (`SPD/DEX`) | `2–3` | `9` | `+1` (`+0`) | `1.15×` (`+4 Trauma`) | `0.95 kg` · Deep slashing/impaling & arterial hemorrhage. |
+| `5` | **Two-Handed Staff / Spear / Shield (`Standard`)** | *Polearms & Staff* (`KIN/FOR`) | **`4`** | `10` | **`+3`** (`+2`) | `1.20×` (`+0`) | `3.40 kg` · **`Keep-Out`** (`+4` $\Delta_{\text{ext}}$ vs shorter reach). |
+| `6` | **Brass Knuckles / Weighted Sap Gloves** | *Brawling* / *Striking* (`FOR/SPD`) | `1` | `7` | `+0` (`+0`) | `1.15×` (`+1`) | `0.25 kg` · Concealable blunt multiplier; amplifies jaw/orbital fractures. |
+| `7` | **Improvised Bottle / Brick / Mechanic Wrench** | *Simple Melee* (`FOR/DEX`) | `1` | `8` | `-1` (`+0`) | `1.10×` (`+1`) | `0.70 kg` · Unbalanced alley/garage impact (`Botch` shatters glass). |
+| `8` | **Folding Pocket Knife / Box Cutter** | *Knife Fighting* (`SPD/DEX`) | `1` | **`6`** | `-1` (`+0`) | `0.90×` (`+1`) | `0.12 kg` · Fast concealment slasher; shallow vs thick coats. |
+| `9` | **Stiletto / Icepick / Narrow Armor-Gap Dirk** | *Knife Fighting* (`SPD/DEX`) | `1` | **`6`** | `-1` (`+0`) | `0.95×` (**`+3 Pen`**) | `0.22 kg` · Parts Kevlar fibers (`PR_Icepick`!) and exploits joint gaps. |
+| `10` | **Tactical Tomahawk / Camp Hatchet** | *Simple Melee* (`FOR/DEX`) | `2` | `9` | `+0` (`+1`) | `1.30×` (`+3`) | `0.85 kg` · Chopping edge + rear spike breaks padlocks and helmets. |
+| `11` | **Heavy Aircraft-Aluminum Flashlight / D-Cell Torch** | *Riot Batons* / *Simple Melee* | `1–2` | `8` | `+0` (`+0`) | `1.15×` (`+1`) | `0.85 kg` · Legal civilian club; blinding strobe flash (`+2 SIG` in dark). |
+| `12` | **Aluminum Baseball Bat / Lead Pipe** | *Simple Melee* (`FOR/DEX`) | `2` | `9` | `+0` (`+1`) | `1.30×` (`+2`) | `1.10 kg` · Sweeping two-hand blunt arc; brutal `BABT` through soft armor. |
+| `13` | **Hardened Steel Crowbar / Wrecking Prybar** | *Simple Melee* (`FOR/DEX`) | `2` | `9` | `+1` (`+1`) | `1.25×` (`+2`) | `1.80 kg` · Dual-use pry tool (`-2` mechanical door force) + hooked sweep. |
+| `14` | **Two-Handed Sledgehammer / Fire Axe** | *Heavy Melee / Two-Handed* (`FOR/MAS`) | `2–3` | `12` | `-1` (`+1`) | **`1.60×`** (`+4`) | `4.50 kg` · Massive inertia; shatters doors, studs, and clavicles (`BABT`). |
+| `15` | **Halligan Entry & Breaching Bar** | *Simple Melee* (`FOR/DEX`) | `2–3` | `11` | `+1` (`+2`) | `1.45×` (`+3`) | `4.20 kg` · Firefighter fork/adze/pike leverages locked steel frames (`-4` pry). |
+| `16` | **Katana / Tactical Longsword** | *Fencing & Long Blades* (`SPD/DEX`) | `3` | `9` | **`+2`** (`+1`) | `1.30×` (`+4 Trauma`) | `1.25 kg` · Balanced two-handed blade; devastating draw cuts & thrusts. |
+| `17` | **Heavy Kukri / Bolo Field Chopper** | *Fencing* / *Simple Melee* | `2` | `8` | `+0` (`+0`) | `1.25×` (`+3`) | `0.75 kg` · Forward-curved chopping geometry; deep limb laceration. |
+| `18` | **High-Voltage Stun Baton / Shock Prod** | *Riot Batons & Impact* (`FOR/DEX`) | `2` | `8` | `+1` (`+0`) | `1.05×` (`+2 Shock`) | `0.75 kg` · Conductive shock tip triggers `HLT` stun save (`-1` vs thick armor). |
+| `19` | **Bo Staff / `1.8 m` Long Steel Rebar Pole** | *Polearms & Staff* (`KIN/FOR`) | `3–4` | `9` | **`+3`** (`+2`) | `1.15×` (`+0`) | `1.40 kg` · **`Keep-Out`** (`+4` $\Delta_{\text{ext}}$ vs entry) + agile two-ended sweeps. |
+| `20` | **Clear Polycarbonate Riot Shield** | *Riot Batons* / *Polearms* | `1–2` | `9` | **`+4`** (**`+4`**) | `0.90×` (`+0`) | `3.20 kg` · Mobile cover (`PR 5` Edged, `PR 1` Ballistic, `BTD 4`). |
+| `21` | **NIJ III/RF1 Ballistic Breacher Shield** | *Riot Batons* / *Tactical Handgun* | `1–2` | `11` | **`+4`** (**`+6`**) | `1.05×` (`+1`) | `9.80 kg` · Heavy steel/UHMWPE shield (`PR 6` Ballistic/Edged, `BTD 6`). |
 
 > [!TIP]
-> **How Reach Advantage Works**:
-> When Fighter A holds a longer Reach weapon (e.g., Reach `3` Blade or Reach `4` Staff) against Fighter B (`Reach 1` Knife or Unarmed) at standoff distance, Fighter B must **spend `Tempo` to step inside the arc** (`+2` $\Delta_{\text{ext}}$ per step of Reach disadvantage). Once Fighter B successfully steps inside into **Clinch Range (`Reach 1`)**, the polarity flips: the long weapon is crowded (`+4` $\Delta_{\text{ext}}$ to the long-weapon wielder), while the knife or grappler operates at full efficiency!
+> **How Reach Advantage & Clinch Polarity Work**:
+> When Fighter A holds a longer Reach weapon (e.g., Reach `3` Katana or Reach `4` Bo Staff with **`Keep-Out`**) against Fighter B (`Reach 1` Knife or Unarmed) at standoff distance, Fighter B suffers **`+2` $\Delta_{\text{ext}}$ per step of Reach disadvantage** (minimum `+4` against `Keep-Out` weapons) unless Fighter B out-speeds them with **higher `Tempo` ($T_{\text{att}} > T_{\text{def}}$)**. Once inside **Clinch Range (`Reach 1`)**, polarity flips: Reach `3+` weapons are crowded (`+4` $\Delta_{\text{ext}}$), while knives and grapplers strike unimpeded!
+
+### 4.1 Riot & Ballistic Shields (`shield_ballistic_protection`)
+
+Actively bracing with a shield uses a **`Block`** (`Base TC 6`, adds `block_sweep_force_bonus` `+4` or `+6`!) or provides directional mobile cover (`PR_Edged / PR_Ballistic / BTD`) against attacks from your front arc:
+- **Clear Polycarbonate Riot Shield (`3.20 kg`)**: Rated **`PR 5` Edged / `PR 1` Ballistic / `BTD 4`**—virtually impervious to bottles, bricks, batons, knives, and thrown projectiles during crowd control, **but perforated cleanly by firearms (`9mm`+) and heavy crossbows**.
+- **NIJ III / RF1 Ballistic Breacher Shield (`9.80 kg`)**: Rated **`PR 6` Edged / `PR 6` Ballistic / `BTD 6`**—stops handgun rounds, `12-Gauge` buckshot/slugs, and standard `5.56mm` / `7.62×39mm` FMJ (`BABT` soaked cleanly by `BTD 6`), allowing one-handed *Tactical Handgun* fire through the viewport notch (`OODA` teamwork stack), while still vulnerable to armor-piercing rifle fire (`.308 M80A1`, `6.5CM`, `.338`+), grenades, and flanking (`§4.6` of `tactical_triad_and_pools.md`).
 
 ---
 

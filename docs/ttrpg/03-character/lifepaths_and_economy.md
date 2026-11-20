@@ -1,6 +1,6 @@
-# Lifepath Character Creation, Socioeconomic Upkeep (`SQM`), `[Access]` Gates & `Heat`
+# Lifepath Character Creation, Socioeconomic Upkeep (`SQM`), Contacts, Cover Identities & `Heat`
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/lifepath_economy.rs`](../../../crates/satya-engine/src/lifepath_economy.rs) (`LifepathStageId`, `SocioeconomicTier`, `CareerTermAdvancementInput`, `MonthlyUpkeepInput`, `BlackMarketAcquisitionInput`, `OperationalHeatState`, `compute_lifepath_skill_progression`, `evaluate_career_term_advancement`, `evaluate_monthly_upkeep`, `evaluate_black_market_acquisition`, `evaluate_operational_heat`), [`crates/satya-engine/src/lifepath_catalog.rs`](../../../crates/satya-engine/src/lifepath_catalog.rs) (`CareerTemplateId`, `CareerTrackTemplate`, `CANONICAL_CAREER_TEMPLATES`), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs) (`build_mateo_vance_lifepath`, `build_priya_nair_lifepath`).  
+> **Rust Engine Implementation**: [`crates/satya-engine/src/lifepath_economy.rs`](../../../crates/satya-engine/src/lifepath_economy.rs) (`LifepathStageId`, `SocioeconomicTier`, `CareerTermAdvancementInput`, `MonthlyUpkeepInput`, `BlackMarketAcquisitionInput`, `OperationalHeatState`), [`crates/satya-engine/src/economy_gear.rs`](../../../crates/satya-engine/src/economy_gear.rs) (`ContactProfile`, `FavorSeverityTier`, `CoverIdentityTier`, `COVER_IDENTITY_CATALOG`, `SafehouseTier`, `SAFEHOUSE_CATALOG`, `evaluate_operational_heat`, `evaluate_contact_favor_request`, `evaluate_cover_identity_scrutiny`, `evaluate_cover_identity_burn`, `evaluate_safehouse_compromise_check`), [`crates/satya-engine/src/lifepath_catalog.rs`](../../../crates/satya-engine/src/lifepath_catalog.rs), and [`crates/satya-engine/src/walkthroughs.rs`](../../../crates/satya-engine/src/walkthroughs.rs).  
 > **Guided Play Example**: See [Guide 01: Session Zero — Lifepaths, Characteristics, Economy & Heat](../../ttrpg-examples/01-lifepath-session-zero.md).
 
 In **Satya**, characters are not assembled from an unconstrained point-buy shopping cart where an academic researcher can arbitrarily purchase *Heavy Machine Guns* or a street teen can buy *Aerospace Engineering* without knowing *Algebra*. Instead, characters are created chronologically through **Lifepath Stages**, and their ongoing campaign operations are grounded by their **Socioeconomic Tier (`SQM`)**, **Black-Market `[Access]` Procurement Gates**, and **Operational `Heat`**.
@@ -286,3 +286,61 @@ Rather than forcing players to track every cup of coffee while ignoring how a st
      - **`Heat 3–5` (*Detective Task Force & APB*)**: Facial recognition alerts on public transit/cameras (`+4` $\Delta_{\text{ext}}$ to travel openly); known safe-houses surveilled.
      - **`Heat 6–8` (*Federal / Corporate Strike Team*)**: Active manhunt, frozen bank accounts (`SQM` temporarily locked to cash-in-hand), tactical SWAT/SecOps response within minutes of a spotted signature.
      - **`Heat 9–10` (*Burned / Most Wanted*)**: Shoot-on-sight or high-priority rendition; requires burning identity (*Forgery, Counterfeiting & Identity Washing* `DEX/CRE`) and relocating out of theater.
+
+---
+
+### 3.3 Contacts, Networks & Favors
+
+Street brokers, corrupt clerks, clinic physicians, and intelligence handlers are tracked using three compact integers (`ContactProfile` in `economy_gear.rs`):
+
+- **Reach / Access Tier (`1–4`)**: `1` (Street / Local Precinct), `2` (Municipal / Licensed Guild), `3` (Regional Syndicate / Federal / Military), `4` (National Boardroom / Sovereign Black-Ops). Calling a contact whose Reach falls short of `required_reach_tier` adds **`+4` $\Delta_{\text{ext}}$ per tier gap**.
+- **Reliability / Trust (`1–5`)**: `1` (Strictly Transactional, `+2` $\Delta_{\text{ext}}$), `2` (Neutral Associate, `+0`), `3` (Dependable Ally, `-2`), `4` (Trusted Confidant, `-4`), `5` (Ride-or-Die, `-6`). Formula: `-(Trust - 2) * 2`.
+- **Exposure / Burn Risk (`0–5`)**: Current heat resting directly on the contact (`+1` $\Delta_{\text{ext}}$ per point of exposure).
+
+Calling in a favor uses **Black Market Logistics (`INS/ELO`)**, **Streetwise (`INS/PRE`)**, or **Persuasion / Etiquette (`ELO/PRE`)** via `evaluate_contact_favor_request` against hidden GM resistance:
+
+$$\Delta_{\text{ext, favor}} = \text{Favor Base} - 2(\text{Trust} - 2) + \text{Exposure} + \max(0, \text{Heat} - 2) + 4 \cdot \max(0, \text{ReqReach} - \text{Reach})$$
+
+| Favor Scope (`FavorSeverityTier`) | Base $\Delta_{\text{ext}}$ | Outcome by Contested `2d20` Result |
+| :--- | :---: | :--- |
+| **`Minor`** *(Tip-off, safe intro, `[Access I]` lookup)* | **`+0`** | **`ExtraordinarySuccess`**: Delivered early at **`0.75x` fee**, `0` exposure.<br/>**`CleanSuccess`**: Granted cleanly at `1.0x` fee (`+1` exposure on `Major` only). |
+| **`Moderate`** *(Forged transit papers, `[Access II–III]` fencing, temp harbor)* | **`+4`** | **`GrazingTie` / `LuckyBreak` / `FloorBreach`**: Granted at **`1.5x` fee OR an open reciprocal favor owed** (`+1` exposure). |
+| **`Major`** *(Scrubbing active warrants, Class IV exploit, hot exfil)* | **`+8`** | **`CleanFailure`**: Refused politely (`+1` exposure). **`BotchFailure`**: Surveillance flagged call—**contact burned** (`+3` exposure, **`+2` Personal `Heat`**)! |
+
+---
+
+### 3.4 Layered Cover Identities & Paper Trails
+
+Living underground with `Operational Heat >= 3` requires compartmented aliases (`CoverIdentityTier`, `COVER_IDENTITY_CATALOG` in `economy_gear.rs`). Higher tiers absorb more scrutiny (**$\text{PR}_{\text{id}}$**) and let an operative shed Heat when cleanly abandoned (`evaluate_cover_identity_burn`):
+
+| Cover Tier (`CoverIdentityTier`) | Cost (`USD`) | `[Access]` & Forgery $N_{\text{min}}$ | Scrutiny Resistance ($\text{PR}_{\text{id}}$) | Biometric Linked? | Flag / Burn Cover Heat | Clean Burn Heat Shed |
+| :--- | :---: | :--- | :---: | :---: | :---: | :---: |
+| **Tier 1: Paper-Only Burnable ID** | `$600` | `Class I` · *Forgery* `N >= 1` | **`+2`** (`-2` $\Delta_{\text{ext}}$) | No (`+6` on bio-scan) | `Flag >= 4` / `Burn >= 6` | **`-2 Heat`** |
+| **Tier 2: Database-Seeded Alias** | `$3,500` | `Class II` · *Forgery* `N >= 2` | **`+4`** (`-4` $\Delta_{\text{ext}}$) | No (`+6` on bio-scan) | `Flag >= 6` / `Burn >= 9` | **`-4 Heat`** |
+| **Tier 3: Deep Biometric / Credit Legend** | `$18,000` | `Class III` · *Forgery* `N >= 3` | **`+6`** (`-6` $\Delta_{\text{ext}}$) | **Yes** | `Flag >= 6` / `Burn >= 9` | **`-4 Heat`** |
+| **Tier 4: State / Syndicate Ghost Cover** | `$85,000` | `Class IV` · *Forgery* `N >= 4` | **`+8`** (`-8` $\Delta_{\text{ext}}$) | **Yes** | `Flag >= 7` / `Burn >= 10` | **`-6 Heat`** |
+
+- **Checkpoint Scrutiny Levels (`evaluate_cover_identity_scrutiny`)**:
+  - `CasualVisualCheck` (`+0` base): Bouncer, hotel desk, routine glance.
+  - `DatabaseOrBorderTerminal` (`+4` base): Police stop, commercial flight check-in, bank teller.
+  - `BiometricAuditOrFederalCrossCheck` (`+8` base): Airport iris/gait scanner or corporate zero-trust gate (**adds `+6` penalty** to Tier 1/2 non-biometric aliases).
+  - Using an already-flagged cover adds **`+4` $\Delta_{\text{ext}}$**; a burned cover automatically fails any terminal scan short of `ExtraordinarySuccess`. Proactively ditching a cover *before* biometric cross-linking sheds its full `Clean Burn` reduction from personal `Heat` (halved if biometrics already cross-linked).
+
+---
+
+### 3.5 Safehouses, Bolt-Holes & Compromise Checks
+
+Every clandestine crew needs physical refuge off primary tax/lease registries (`SafehouseTier`, `SAFEHOUSE_CATALOG` in `economy_gear.rs`):
+
+| Safehouse Tier (`SafehouseTier`) | Upkeep (`SQM` / Monthly) | Physical Lock Breach ($\Delta_{\text{ext}}$) | Faraday RF Shield? | Workshop / Medical Mod ($\Delta_{\text{tool}}$) | Compromise Resistance |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Off-Grid Squat / Cash Motel** | `SQM 1` · `$450 / mo` | `+0` | No | `+0` / `+0` | `+0` |
+| **Subleased Shell Apartment** | `SQM 4` · `$2,400 / mo` | `+4` | No | `+0` / `-2` | **`-2`** $\Delta_{\text{ext}}$ |
+| **Hardened Faraday Workshop** | `SQM 6` · `$8,500 / mo` | `+6` | **Yes** *(Blocks RF pings)* | **`-2` / `-2`** | **`-4`** $\Delta_{\text{ext}}$ |
+| **Sovereign / Corporate Redoubt** | `SQM 8` · `$35,000 / mo` | `+8` | **Yes** *(Blocks RF pings)* | **`-4` / `-4`** | **`-6`** $\Delta_{\text{ext}}$ |
+
+- **Returning Hot Compromise Check (`evaluate_safehouse_compromise_check`)**: Whenever an operative returns to a safehouse carrying **`Heat >= 4`** (`+2` per point above `Heat 3`), while **actively tailed (`+4`)**, or with unshielded electronics (`+4` unless the safehouse is **Faraday RF-shielded**), roll **Counter-Surveillance** or **Stealth**:
+  - `CleanSuccess` / `ExtraordinarySuccess`: Location remains cold (`SecureUndetected`).
+  - `GrazingTie` / `LuckyBreak` / `FloorBreach`: Hostile spotters narrowed the city block (`Watched`, `15 min` lead; prepare to relocate).
+  - `CleanFailure`: Drones/van logged ingress—`5 minutes` to evacuate via bolt-hole (`must_abandon = true`).
+  - `BotchFailure`: **`CompromisedRaidImminent`**—strike team inbound in **`2 minutes`**!

@@ -285,23 +285,55 @@ def test_rules_book_builder_and_tactical_pool_bridge() -> None:
         search_rules_book_python,
     )
 
-    assert len(BOOK_CHAPTER_SPECS) == 18
+    assert len(BOOK_CHAPTER_SPECS) == 23
     summary = build_static_rules_book()
-    assert summary["chapter_count"] == 18
+    assert summary["chapter_count"] == 23
     assert summary["using_satya_py"] is True
-    assert len(summary["generated_files"]) == 20  # 18 chapters + index.html + catalog.json
+    assert len(summary["generated_files"]) == 25  # 23 chapters + index.html + catalog.json
 
     hits_melee = search_rules_book_python("Tactical Triad Tempo Control Force", max_results=3)
     assert hits_melee
     assert any(h["chapter_id"] in {"melee_combat", "combat"} for h in hits_melee)
 
+    hits_arsenal = search_rules_book_python(
+        "Linear Shaped Breaching Charge Blast Overpressure Thermite", max_results=3
+    )
+    assert hits_arsenal
+    assert any(h["chapter_id"] == "arsenal_and_explosives" for h in hits_arsenal)
+
+    hits_stealth = search_rules_book_python(
+        "Passive Awareness Alertness Ladder thermal acoustic", max_results=3
+    )
+    assert hits_stealth
+    assert any(h["chapter_id"] == "stealth_and_awareness" for h in hits_stealth)
+
+    hits_cover = search_rules_book_python(
+        "Cover Identity Safehouse Contact Favor", max_results=3
+    )
+    assert hits_cover
+    assert any(h["chapter_id"] == "lifepaths_and_economy" for h in hits_cover)
+
     hits_health = search_rules_book_python("hemorrhaging broken bones blinded catatonia", max_results=3)
     assert hits_health
     assert hits_health[0]["chapter_id"] == "health_and_trauma"
 
-    hits_env = search_rules_book_python("hypothermia dehydration encumbrance m/tick", max_results=3)
+    hits_mov = search_rules_book_python("encumbrance m/tick vehicle thermal runaway", max_results=3)
+    assert hits_mov
+    assert hits_mov[0]["chapter_id"] == "movement_and_vehicles"
+
+    hits_env = search_rules_book_python("hypothermia dehydration sepsis falling electrical", max_results=3)
     assert hits_env
-    assert hits_env[0]["chapter_id"] == "movement_and_environment"
+    assert hits_env[0]["chapter_id"] == "environmental_hazards"
+
+    hits_eng = search_rules_book_python("Workshop Facility Custom Firearm Prototype Quirk", max_results=3)
+    assert hits_eng
+    assert hits_eng[0]["chapter_id"] == "engineering_and_weapon_design"
+
+    hits_robo = search_rules_book_python(
+        "Verification Debt Modular Drone Myomer Cyber-Prosthetics", max_results=3
+    )
+    assert hits_robo
+    assert hits_robo[0]["chapter_id"] == "robotics_and_ai_architecture"
 
     hits_ticks = search_rules_book_python("240 ticks in a minute 4 ticks per second", max_results=3)
     assert hits_ticks
@@ -371,10 +403,10 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
 
     # Build static HTML book into tmp_path and into docs/book
     summary = build_rules_book(output_dir=tmp_path)
-    assert summary["chapter_count"] == 18
+    assert summary["chapter_count"] == 23
     assert summary["using_satya_py"] is True
     assert summary["total_words"] > 10_000
-    assert len(summary["generated_files"]) == 20
+    assert len(summary["generated_files"]) == 25
     assert len(summary["asset_files"]) == 2
     assert (tmp_path / "satya_book.css").exists()
     assert (tmp_path / "satya_book.js").exists()
@@ -401,9 +433,20 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
     assert "rules-figure--column" in (tmp_path / "melee_combat.html").read_text(encoding="utf-8")
     assert (tmp_path / "ranged_combat_and_armor.html").exists()
     assert "rules-figure--spread" in (tmp_path / "ranged_combat_and_armor.html").read_text(encoding="utf-8")
+    assert (tmp_path / "arsenal_and_explosives.html").exists()
     assert (tmp_path / "action_economy.html").exists()
+    assert (tmp_path / "stealth_and_awareness.html").exists()
     assert (tmp_path / "health_and_trauma.html").exists()
-    assert (tmp_path / "movement_and_environment.html").exists()
+    assert (tmp_path / "movement_and_vehicles.html").exists()
+    assert (tmp_path / "environmental_hazards.html").exists()
+    assert (tmp_path / "engineering_and_weapon_design.html").exists()
+    assert 'data-part-index="7"' in (tmp_path / "engineering_and_weapon_design.html").read_text(
+        encoding="utf-8"
+    )
+    assert (tmp_path / "robotics_and_ai_architecture.html").exists()
+    assert 'data-part-index="7"' in (tmp_path / "robotics_and_ai_architecture.html").read_text(
+        encoding="utf-8"
+    )
     assert (tmp_path / "catalog.json").exists()
 
     # Verify Python fallback renderer also supports TTRPG sidebars, image hints, and breaks

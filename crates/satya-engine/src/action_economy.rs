@@ -37,7 +37,7 @@ pub enum TemporalLayer {
 }
 
 /// The 5 Canonical Encumbrance Tiers (`Tiers 0–4`) governing physical action speed, Tempo Cap, `KIN`,
-/// and stealth noise/silhouette (`action_economy_and_ooda.md` §5.1, §6.1; `movement_vehicles_and_environment.md` §2.3).
+/// and stealth noise/silhouette (`action_economy_and_ooda.md` §5.1, §6.1; `movement_encumbrance_and_vehicles.md` §2.3).
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
 )]
@@ -110,7 +110,7 @@ impl EncumbranceTier {
         }
     }
 
-    /// Whether the character can perform an All-Out Sprint (`false` at `Tier 3+`, `movement_vehicles_and_environment.md` §2.3).
+    /// Whether the character can perform an All-Out Sprint (`false` at `Tier 3+`, `movement_encumbrance_and_vehicles.md` §2.3).
     #[must_use]
     pub const fn can_sprint(self) -> bool {
         self.tier_number() < 3
@@ -139,7 +139,7 @@ impl EncumbranceTier {
         }
     }
 
-    /// Physical `action_time_factor` delta ($\Delta_{\text{enc}}$) (§5.1, `movement_vehicles_and_environment.md` §2.3).
+    /// Physical `action_time_factor` delta ($\Delta_{\text{enc}}$) (§5.1, `movement_encumbrance_and_vehicles.md` §2.3).
     ///
     /// Note: Applies **only** to physical $\text{TC}_{\text{act}}$; purely mental actions ignore physical load.
     #[must_use]

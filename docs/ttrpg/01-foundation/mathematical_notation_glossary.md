@@ -101,7 +101,7 @@ Used in [Characteristics, Senses, Psyche & Aptitudes](../03-character/characteri
 
 ## 4. Action Economy, OODA Loop, Psyche & Social Combat Variables
 
-Used in [Action Economy, OODA Loop & Stealth](../02-core-mechanics/action_economy_and_ooda.md) and [Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md):
+Used in [Action Economy, OODA Loop & Time Scales](../02-core-mechanics/action_economy_and_ooda.md), [Stealth, Passive Awareness, Observation & Investigation](../02-core-mechanics/stealth_awareness_and_investigation.md), [Lifepaths, Contacts, Cover Identities & Heat](../03-character/lifepaths_and_economy.md), and [Psyche, Morale & Social Combat](../04-psyche-and-social/psyche_morale_and_social_combat.md):
 
 | Symbol / Abbr | Full Name | Scale / Range | Definition & Formula |
 | :--- | :--- | :---: | :--- |
@@ -109,7 +109,11 @@ Used in [Action Economy, OODA Loop & Stealth](../02-core-mechanics/action_econom
 | $D_{\text{cog}}$ | **Cognitive Decision Score ("Quick Thinking")** | `1–20` *(Avg `10`)* | Speed of mental orientation and tactical decision-making: $D_{\text{cog}} = \lfloor(\max(\text{ANA}, \text{CRE}) + \text{FOC}) / 2\rfloor$. |
 | $\text{OODA}$ | **4-Pillar OODA Loop Score** | `1–20` *(Avg `10`)* | Observe–Orient–Decide–Act composite reflex score: $\text{OODA} = \lfloor(\text{ITU} + \text{INS} + D_{\text{cog}} + \text{SPD}) / 4\rfloor$. |
 | $\text{TC}$ *(or $\text{TC}_{\text{base}}, \text{TC}_{\text{eff}}$)* | **Tick Cost (Action Duration)** | $\ge 1\text{ Tick}$ | Number of Ticks required to complete an action ($\text{TC} = \text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$), modified by invested Tempo ($T - B$) and `action_time_factor`. |
-| $\text{AWR}$ | **Perceptual Awareness Score** | `0–20` | Situational sensory alertness across Sight (`SIG`), Hearing (`HEA`), and Intuition (`ITU`). |
+| $\text{AWR}$ | **Perceptual Awareness Score** | `1–20` *(Avg `10`)* | Passive background awareness across Sight/Hearing, Focus, and Intuition: $\text{AWR} = \lfloor(\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU})/3\rfloor$. |
+| $\Delta_{\text{watch}}$ | **Watch Duty Fatigue** | $0\text{–}4$ | Static sentry / monitor alertness penalty: $\Delta_{\text{watch}} = \min(4, \lfloor \text{watch\_hours} / 2.0 \rfloor)$. |
+| **Alertness Level** | **Escalating Suspicion Ladder** | `Level 0–3` | Four-tier sentry state (`0 Unaware` [`+10` Freeze] $\to$ `1 Suspicious` [`+4` Freeze] $\to$ `2 Searching` $\to$ `3 Compromised`). |
+| $\text{PR}_{\text{id}}$ | **Cover Identity Scrutiny Resistance** | $2, 4, 6, 8$ | Resistance granted by a layered Cover Identity (`Tier 1–4`), subtracted from checkpoint inspection $\Delta_{\text{ext}}$. |
+| **Reach / Trust / Exposure** | **Contact Favor Vector** | `1–4` / `1–5` / `0–5` | Contact `[Access]` reach, reliability loyalty (`-2` $\Delta_{\text{ext}}$ per Trust above `2`), and active surveillance exposure. |
 | $P$ | **Psyche Trait Score** | `1–20` *(Neutral `10`)* | Score in a specific Psyche trait (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`). |
 | $\Delta_{\text{psyche}}$ | **Psyche Deviation** | $0\text{–}10$ | Distance of a Psyche trait from neutral (`10`): $\Delta_{\text{psyche}} = |P - 10|$. Sets hidden GM resistance $\text{TN}_{GM} = 21 - \Delta_{\text{psyche}}$ on a Psyche Friction Check. |
 | $\Delta_{\text{mot}}$ | **Situational Motivation Modifier** | $-4$ to $+6$ | Shift to a combatant's Morale Controller based on what they are fighting for (e.g., protecting family/crew vs. mercenary paycheck). |
@@ -121,13 +125,16 @@ Used in [Action Economy, OODA Loop & Stealth](../02-core-mechanics/action_econom
 
 ## 5. Combat Tactical Triad ("Envelope & Fill"), Ballistics & Survival Variables
 
-Used in [Tactical Triad & Combat Pools](../05-combat/tactical_triad_and_pools.md), [Melee Combat](../05-combat/melee_combat.md), [Ranged Combat & Armor](../05-combat/ranged_combat_and_armor.md), [Health & Trauma](../06-health-and-survival/health_and_trauma.md), and [Movement, Vehicles & Environment](../06-health-and-survival/movement_vehicles_and_environment.md):
+Used in [Tactical Triad & Combat Pools](../05-combat/tactical_triad_and_pools.md), [Melee Combat](../05-combat/melee_combat.md), [Ranged Combat & Armor](../05-combat/ranged_combat_and_armor.md), [Expanded Arsenal, Explosives & Breaching](../05-combat/arsenal_explosives_and_tactical_gear.md), [Health & Trauma](../06-health-and-survival/health_and_trauma.md), [Movement, Encumbrance & Vehicles](../06-health-and-survival/movement_encumbrance_and_vehicles.md), and [Environmental Hazards, Survival & Field Pharmacology](../06-health-and-survival/environmental_hazards_and_survival.md):
 
 | Symbol / Abbr | Full Name | Scale / Range | Definition & Formula |
 | :--- | :--- | :---: | :--- |
 | $C_{\text{combat}}$ | **Combat Readiness Controller** | `1–20` *(Avg `10`)* | Composite combat attribute combining the weapon/martial skill's controller $C_{\text{skill}}$ with `OODA`: $C_{\text{combat}} = \lfloor(C_{\text{skill}} + \text{OODA}) / 2\rfloor$. |
 | $P_{\text{base}}$ | **Base Tactical Pool ("The Fill")** | $10\text{–}44$ | Total unmodified points available to allocate across the Tactical Triad: $P_{\text{base}} = C_{\text{combat}} + 3N$. |
 | $P_{\text{eff}}$ | **Effective Tactical Pool** | $\ge 0$ | Tactical Pool remaining after subtracting `-2` per tier of Fatigue (`fatigue_level`), `-2` per tier of Wound Shock (`wound_shock_index`), and Morale modifier $\Delta P_{\text{morale}}$. |
+| $\Delta P_{\text{outnumbered}}$ | **Multi-Opponent Attention Tax** | `0` to `-6` | Deducted from $P_{\text{eff}}$ when splitting across $M \ge 2$ simultaneous foes (`-2` per extra foe, cap `-6`, reduced by `+2` in a chokepoint/back-to-wall). |
+| $\text{SI}$ | **Object Structural Integrity** | `2, 4, 8, 14` | Damage buffer of inanimate targets (`SmallPrecision 2`, `MediumComponent 4`, `LargeStructural 8`, `HeavyFortified 14`) defeated when `Effective Pen > PR_barrier`. |
+| **Breach `PR` / Standoff** | **Demolition Penetration & Backblast** | `PR 0–10+` | Explosive breaching capacity compared against `MaterialClass` $\text{PR}_{\text{barrier}}$; friendly stack inside `safe_standoff_m` suffers full backblast, while indoor enclosed rooms multiply blast trauma by **`1.5×`**. |
 | $B$ | **Neutral Triad Baseline** | $\lfloor P_{\text{eff}} / 3 \rfloor$ | Equal one-third split of the combatant's Effective Tactical Pool ($B = \lfloor P_{\text{eff}} / 3 \rfloor$). Investing Tempo $T > B$ speeds up actions; $T < B$ slows them down. |
 | $T, C, F$ | **Allocated Tempo, Control & Force** | $T + C + F = P_{\text{eff}}$ | Points from $P_{\text{eff}}$ allocated into **Tempo** ($T$ — speed, initiative, evasion), **Control** ($C$ — precision, guard, recoil control), and **Force** ($F$ — strike power, recoil bracing, root). |
 | $T_{\max}, C_{\max}, F_{\max}$ | **Aspect Ceilings ("The Envelope")** | `0–20` each | Maximum points that can be invested into each aspect on a single action, anchored by physical characteristics (`SPD` $\to T_{\max}$, `DEX`/`KIN`/`SIG` $\to C_{\max}$, `FOR` $\to F_{\max}$) and reduced by localized anatomical wounds. |
@@ -152,3 +159,10 @@ Used in [Tactical Triad & Combat Pools](../05-combat/tactical_triad_and_pools.md
 | $W_{\text{req}}$ | **Daily Water Requirement** | $3.0\text{–}10.0\text{ L/day}$ | Liters of water required per 24 hours based on ambient temperature and physical exertion. |
 | $\text{CLO}$ | **Clothing Thermal Insulation Rating** | $\mathbb{R}$ | Thermal protection rating of clothing/suits against hypothermia ($\Delta_{\text{cold}}$) vs. heat retention ($\Delta_{\text{heat}}$). |
 | $\text{Sv}$ | **Sievert (Ionizing Radiation Dose)** | $\ge 0\text{ Sv}$ | Unit of cumulative acute ionizing radiation exposure (`< 0.5 Sv` subclinical to `> 6.0 Sv` lethal acute radiation syndrome). |
+| $M_{\text{surface}}$ | **Landing Surface Hardness Multiplier** | $0.50\text{–}1.35$ | Multiplier scaling gravitational fall trauma (`0.50` snow/awning, `0.75` dirt/water `<= 15 m`, `1.00` concrete, `1.35` jagged steel). |
+| $P_{\text{atm}}$ | **Ambient Hydrostatic Pressure** | $\ge 1.0\text{ atm}$ | Underwater pressure ($P_{\text{atm}} = 1.0 + \text{depth\_m}/10.0$) governing open-circuit air consumption and decompression sickness risk. |
+| **Burn Degree** | **Clinical Thermal Burn Severity** | `Degree 1–3` | Superficial (`Raw 1–2`), partial thickness (`Raw 3–6`, plasma dehydration & `+4` Sepsis), or full thickness (`Raw 7+`, limb locked `0`, `+8` Sepsis). |
+| **Sepsis Stage** | **Wound Infection & Systemic Sepsis** | `Stage 0–3` | Daily `HLT` save track (`Stage 0 Clean` $\to$ `Stage 1 Localized` $\to$ `Stage 2 Systemic` $\to$ `Stage 3 Septic Shock`), countered by antibiotics (`-6` $\Delta_{\text{ext}}$). |
+| $E_{\text{bat}}, P_{\text{draw}}, T_{\text{endurance}}$ | **Drone Battery Capacity, Total Draw & Endurance** | $\text{Wh}, \text{W}, \text{min}$ | Drone/UGV endurance formula: $T_{\text{endurance}} = \frac{E_{\text{bat}}}{P_{\text{base}} + P_{\text{autonomy}} + \sum P_{\text{mod}}} \times 60\text{ min}$. |
+| $D_{\text{verify}}, G_{\text{over}}$ | **AI Co-Design Verification Debt & Overreach Gap** | $\ge 0$ | Overreach Gap $G_{\text{over}} = \max(0, L_{\text{AI}} - N_{\text{human}})$ when delegating R&D past human domain mastery; accrues latent bug/drift Debt scrubbed only via formal audit checks. |
+| $Q_{\text{surg}}, R_{\text{reject}}$ | **Surgical Quality & Immunosuppressant Rejection** | $\Delta_{\text{int}} \in [0, 6]$ | Clinical penalty from multiple cyber-prosthetics (`count - 2` compliant or `count` missed doses, plus `max(0, -Q_surg)`); `4+` systems add `(count - 3) * 2` proprioceptive $\Delta_{\text{ext}}$. |

@@ -822,27 +822,32 @@ _CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
     ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 4: Cascading 2d20 Engine & Task Resolution"),
     ("02-core-mechanics/task_requirements_catalog.md", "Ch. 5: Master Task Requirements Catalog"),
     ("01-foundation/mathematical_notation_glossary.md", "Ch. 2: Mathematical Notation, Variables & Formula Glossary"),
-    ("02-core-mechanics/action_economy_and_ooda.md", "Ch. 6: Action Economy, OODA Loop, Time Scales & Stealth"),
+    ("02-core-mechanics/action_economy_and_ooda.md", "Ch. 6: Action Economy, OODA Loop & Time Scales"),
+    ("02-core-mechanics/stealth_awareness_and_investigation.md", "Ch. 7: Stealth, Passive Awareness, Observation & Investigation"),
     ("01-foundation/probability_and_calibration.md", "Ch. 3: Probability & Mathematical Calibration"),
-    ("03-character/characteristics_and_aptitudes.md", "Ch. 7: Characteristics, Senses, Psyche & Aptitudes"),
-    ("03-character/skills_and_trees.md", "Ch. 8: Skill System & Hierarchical Skill Trees (Trees 1-4)"),
-    ("03-character/skills_trees_tactical_and_social.md", "Ch. 9: Hierarchical Skill Trees (Trees 5-8: Combat, Vehicles, Social & Tradecraft)"),
-    ("03-character/lifepaths_and_economy.md", "Ch. 10: Lifepath Creation, Socioeconomic Upkeep & Heat"),
-    ("03-character/lifepath_events_hobbies_and_factions.md", "Ch. 11: Lifepath Hobbies, Formative Life Events, Faction Templates & Walkthroughs"),
-    ("04-psyche-and-social/psyche_morale_and_social_combat.md", "Ch. 12: Psyche, Morale & Social Combat"),
-    ("05-combat/tactical_triad_and_pools.md", "Ch. 13: Combat Architecture, Tactical Triad & Pools"),
-    ("05-combat/melee_combat.md", "Ch. 14: Melee Combat & Close-Quarters Tactics"),
-    ("05-combat/firearms_and_ballistics.md", "Ch. 15: Firearm Engineering & Internal/External/Terminal Ballistics"),
-    ("05-combat/ranged_combat_and_armor.md", "Ch. 16: Ranged Combat, Suppression, Armor & Reliability"),
-    ("06-health-and-survival/health_and_trauma.md", "Ch. 17: Health, Anatomical Trauma, Fatigue & Mental Conditions"),
-    ("06-health-and-survival/movement_vehicles_and_environment.md", "Ch. 18: Movement, Encumbrance, Vehicles & Survival"),
+    ("03-character/characteristics_and_aptitudes.md", "Ch. 8: Characteristics, Senses, Psyche & Aptitudes"),
+    ("03-character/skills_and_trees.md", "Ch. 9: Skill System & Hierarchical Skill Trees (Trees 1-4)"),
+    ("03-character/skills_trees_tactical_and_social.md", "Ch. 10: Hierarchical Skill Trees (Trees 5-8: Combat, Vehicles, Social & Tradecraft)"),
+    ("03-character/lifepaths_and_economy.md", "Ch. 11: Lifepath Creation, Socioeconomic Upkeep, Contacts & Cover"),
+    ("03-character/lifepath_events_hobbies_and_factions.md", "Ch. 12: Lifepath Hobbies, Formative Life Events, Faction Templates & Walkthroughs"),
+    ("04-psyche-and-social/psyche_morale_and_social_combat.md", "Ch. 13: Psyche, Morale & Social Combat"),
+    ("05-combat/tactical_triad_and_pools.md", "Ch. 14: Combat Architecture, Tactical Triad & Pools"),
+    ("05-combat/melee_combat.md", "Ch. 15: Melee Combat & Close-Quarters Tactics"),
+    ("05-combat/firearms_and_ballistics.md", "Ch. 16: Firearm Engineering & Internal/External/Terminal Ballistics"),
+    ("05-combat/ranged_combat_and_armor.md", "Ch. 17: Ranged Combat, Suppression, Armor & Reliability"),
+    ("05-combat/arsenal_explosives_and_tactical_gear.md", "Ch. 18: Expanded Arsenal, Explosives, Breaching & Tactical Gear"),
+    ("06-health-and-survival/health_and_trauma.md", "Ch. 19: Health, Anatomical Trauma, Fatigue & Mental Conditions"),
+    ("06-health-and-survival/movement_encumbrance_and_vehicles.md", "Ch. 20: Movement, Encumbrance & Vehicles"),
+    ("06-health-and-survival/environmental_hazards_and_survival.md", "Ch. 21: Environmental Hazards, Survival & Field Pharmacology"),
+    ("07-engineering-and-tech/engineering_and_weapon_design.md", "Ch. 22: Engineering, Workshops & Custom Weapon/Armor Design"),
+    ("07-engineering-and-tech/robotics_drones_and_ai_architecture.md", "Ch. 23: Robotics, Drones, AI 2.0 Architectures & Cyber-Prosthetics"),
     ("01-foundation/design_philosophy.md", "Ch. 1: Design Philosophy & Goals of Satya"),
 )
 
 
 @tool
 def query_satya_rules(query: str) -> str:
-    """Search the 18-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), and social dissonance."""
+    """Search the 23-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, stealth/investigation, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), expanded firearms/explosives/breaching, engineering/weapon design, robotics/drones, AI 2.0 architectures, cyber-prosthetics, and social dissonance."""
     ttrpg_dir = _repo_root() / "docs" / "ttrpg"
     default_rules_path = ttrpg_dir / "02-core-mechanics" / "cascading_d20_and_tasks.md"
     if not default_rules_path.exists():

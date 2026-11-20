@@ -1,30 +1,31 @@
-//! # Movement Architecture, Encumbrance, Vehicles, Chases & Environmental Survival (`06-health-and-survival/movement_vehicles_and_environment.md`)
+//! # Movement Architecture, Encumbrance, Vehicles & Chases (`06-health-and-survival/movement_encumbrance_and_vehicles.md`)
 //!
-//! Canonical Rust implementation of `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md`:
+//! Canonical Rust implementation of `docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md`:
 //! - **§1 Movement Architecture (`§1.1–§1.4`)**: Stride Factor ($\text{SF} = \text{HGT}/1.75$), Maximum Sprint Velocity
 //!   ($V_{\text{sprint}} = (4.0 + 0.35\times\text{SPD}_{\text{eff}})\times\text{SF}$), 5 Combat Movement Gaits,
 //!   Jumping/Climbing/Swimming/Zero-G EVA, and Overland Travel Paces & Terrain Multipliers.
-//! - **§2 Encumbrance & Load-Bearing (`§2.1–§2.3`, `Tiers 0–4`)**: Base Comfort Load
+//! - **§2 Encumbrance & Load-Bearing (`§2.1–§2.4`, `Tiers 0–4`)**: Base Comfort Load
 //!   ($L_{\text{base}} = (\text{MAS}/70.0)\times(\text{FOR}\times 1.2\text{ kg})$), Ergonomic Load Multipliers
-//!   (`×0.8` to `×1.5` and Powered Exo-Rig offsets), and the 5 Encumbrance Tiers (`0–4`).
-//! - **§3 Vehicles, Chases & High-G / Crash Physics (`§3.1–§3.3`)**: Vehicle Envelope Ceilings (`Tempo`, `Control`, `Force/Root`),
-//!   Chase Range Bands, Collision Kinetic Trauma, and High-G `G-LOC` Checks.
-//! - **§4 Environmental Survival (`§4.1–§4.4`)**: Hydration & Dehydration (`Stages 0–4` with Fatigue Floors),
-//!   Caloric Deficit & Starvation, Thermal Extremes (`CLO` Suit Tiers, Hypothermia, Frostbite, Heatstroke),
-//!   Sleep Deprivation (`24h/48h/72h+`), Altitude/Vacuum Hypoxia, 4-Parameter Toxins, and Ionizing Radiation (`Sv`).
+//!   (`×0.8` to `×1.5` and Powered Exo-Rig offsets), the 5 Encumbrance Tiers (`0–4`), and Bulk/Quick-Access slots.
+//! - **§3 Vehicles, Chases, Firing Platforms & Component Damage (`§3.1–§3.6`)**: Vehicle Envelope Ceilings
+//!   (`Tempo`, `Control`, `Force/Root`), Chase Range Bands, Collision Kinetic Trauma, High-G `G-LOC` Checks,
+//!   Canonical 10-Vehicle Catalog (`VEHICLE_CATALOG`), Firing Platforms, and Component Trauma / EV Thermal Runaway.
+//! - **Environmental Survival & Acute Hazards**: Re-exported from [`crate::environmental_hazards`] (`environmental_hazards_and_survival.md`).
 
 use serde::{Deserialize, Serialize};
 
 use crate::action_economy::{EncumbranceTier, StealthGait};
-use crate::primitives::{ConditionImpact, ConditionSource, Triad};
+use crate::economy_gear::BlackMarketRestrictionClass;
+use crate::primitives::{ConditionImpact, ConditionSource, StaticCatalog, Triad};
+use crate::{define_coded_enum, impl_static_catalog};
 
 pub use crate::environmental_hazards::*;
 // ============================================================================
-// 1. Movement Architecture, Combat Gaits, Special Modes & Overland (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.1–§1.4)
+// 1. Movement Architecture, Combat Gaits, Special Modes & Overland (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.1–§1.4)
 // ============================================================================
 
 /// Baseline Stride Factor ($\text{SF}$) and Sprint Velocity ($V_{\text{sprint}}$)
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.1).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SprintVelocityMetrics {
     pub stride_factor_sf: f64,
@@ -35,7 +36,7 @@ pub struct SprintVelocityMetrics {
 }
 
 /// Computes Stride Factor ($\text{SF}$) and Maximum Sprint Velocity ($V_{\text{sprint}}$)
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.1).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.1).
 #[must_use]
 pub fn compute_stride_and_sprint_velocity(spd_eff: i32, hgt_m: f64) -> SprintVelocityMetrics {
     let spd = spd_eff.clamp(0, 25);
@@ -54,7 +55,7 @@ pub fn compute_stride_and_sprint_velocity(spd_eff: i32, hgt_m: f64) -> SprintVel
 }
 
 /// The 5 Canonical Tactical Combat Movement Gaits
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.2 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CombatMovementGait {
@@ -72,7 +73,7 @@ pub enum CombatMovementGait {
 
 impl CombatMovementGait {
     /// Fraction of $V_{\text{sprint}}$ (`0.08`, `0.18`, `0.35`, `0.65`, `1.00`,
-    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
+    /// `docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.2 Table).
     #[must_use]
     pub const fn sprint_fraction(self) -> f64 {
         match self {
@@ -85,7 +86,7 @@ impl CombatMovementGait {
     }
 
     /// Extra Recoil (`R`) added when firing a ranged weapon while moving at this gait (`0`, `0`, `+2`, `+4`, or un-aimable,
-    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
+    /// `docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.2 Table).
     #[must_use]
     pub const fn ranged_recoil_adder(self) -> i32 {
         match self {
@@ -97,7 +98,7 @@ impl CombatMovementGait {
     }
 
     /// Exertion Marks accumulated per `20 Ticks` (`5 seconds`) of continuous movement in this gait
-    /// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
+    /// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.2 Table).
     #[must_use]
     pub const fn exertion_marks_per_20_ticks(self) -> i32 {
         match self {
@@ -124,7 +125,7 @@ impl From<CombatMovementGait> for StealthGait {
 }
 
 /// Complete combat movement and triad interaction metrics for a chosen [`CombatMovementGait`]
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.2 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CombatGaitEvaluation {
     pub gait: CombatMovementGait,
@@ -139,7 +140,7 @@ pub struct CombatGaitEvaluation {
 }
 
 /// Evaluates velocity (`m/s`, `m/Tick`, distance per `10 Ticks`) and Tactical Triad constraints for a [`CombatMovementGait`]
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2 Table).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.2 Table).
 #[must_use]
 pub fn evaluate_combat_movement_gait(
     gait: CombatMovementGait,
@@ -174,7 +175,7 @@ pub fn evaluate_combat_movement_gait(
     }
 }
 
-/// Jump & Vault distances in meters (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.1).
+/// Jump & Vault distances in meters (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.3.1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct JumpDistances {
     /// Running Broad Jump: $2.0 + 0.25\times\text{POW} + 0.3\times\text{Successes}$ (`4.5 m` baseline at `POW 10`).
@@ -187,7 +188,7 @@ pub struct JumpDistances {
 }
 
 /// Computes Running Broad Jump, Standing Broad Jump, Running High Jump, and Ledge-Grab Scaling heights
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.1).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.3.1).
 #[must_use]
 pub fn compute_jump_distances(pow: f64, hgt_m: f64, cascade_successes: i32) -> JumpDistances {
     let p = pow.max(0.0);
@@ -208,7 +209,7 @@ pub fn compute_jump_distances(pow: f64, hgt_m: f64, cascade_successes: i32) -> J
 }
 
 /// Evaluates vertical climbing speed and `FOR`/`KIN` check difficulty
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.2).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.3.2).
 ///
 /// Returns `(speed_m_per_tick, speed_m_per_s, requires_check, total_delta_ext)`:
 /// - Ladder or knotted rope: `0.5 m/Tick` (`2.0 m/s`) without a check (`(0.5, 2.0, false, 0)`).
@@ -233,7 +234,7 @@ pub const fn evaluate_climbing_movement(
 }
 
 /// Evaluates surface swimming speed (`20%` of $V_{\text{sprint}}$) and water encumbrance hazards
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.3).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.3.3).
 ///
 /// Returns `(swim_speed_m_per_sec, swim_speed_m_per_tick, stay_afloat_delta_ext, sinks_at_1m_per_sec)`.
 #[must_use]
@@ -261,7 +262,7 @@ pub fn evaluate_swimming_movement(
 }
 
 /// Evaluates a Microgravity / Zero-G EVA push-off or thruster maneuver
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.3.4).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.3.4).
 ///
 /// Returns `(velocity_m_per_s, is_adrift_tempo_zero)` where $v = \text{Impulse} / \text{MAS}$ and
 /// a failed `KIN` maneuver check leaves the character **Adrift** (`Tempo = 0` until grabbing a handhold or firing thrusters).
@@ -279,7 +280,7 @@ pub fn evaluate_zero_g_maneuver(
     (velocity_m_per_s, !maneuver_check_succeeded)
 }
 
-/// Non-Combat Overland Travel Pace (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4 Table).
+/// Non-Combat Overland Travel Pace (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.4 Table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OverlandTravelPace {
@@ -294,7 +295,7 @@ pub enum OverlandTravelPace {
 }
 
 /// Terrain multiplier to movement speed and exertion
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OverlandTerrainKind {
@@ -310,7 +311,7 @@ pub enum OverlandTerrainKind {
 
 impl OverlandTerrainKind {
     /// Speed multiplier (`1.00`, `0.75`, `0.50`, `0.25`,
-    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4).
+    /// `docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.4).
     #[must_use]
     pub const fn speed_multiplier(self) -> f64 {
         match self {
@@ -322,7 +323,7 @@ impl OverlandTerrainKind {
     }
 
     /// Extra Exertion Marks per travel interval (`0`, `0`, `1`, `2`,
-    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4).
+    /// `docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.4).
     #[must_use]
     pub const fn extra_exertion_marks(self) -> i32 {
         match self {
@@ -334,7 +335,7 @@ impl OverlandTerrainKind {
 }
 
 /// Evaluates effective overland travel speed (`km/h`) and daily range (`km` over `8 hours`)
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.4).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.4).
 #[must_use]
 pub fn evaluate_overland_travel(
     pace: OverlandTravelPace,
@@ -352,11 +353,11 @@ pub fn evaluate_overland_travel(
 }
 
 // ============================================================================
-// 2. Encumbrance & Load-Bearing Architecture: Tiers 0–4 (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.1–§2.3)
+// 2. Encumbrance & Load-Bearing Architecture: Tiers 0–4 (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §2.1–§2.3)
 // ============================================================================
 
 /// Ergonomic distribution method for carried equipment
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.2).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §2.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CarryErgonomicMethod {
@@ -372,7 +373,7 @@ pub enum CarryErgonomicMethod {
 
 impl CarryErgonomicMethod {
     /// Canonical ergonomic mass multiplier (`0.8`, `1.0`, `1.3`, `1.5`,
-    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.2).
+    /// `docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §2.2).
     #[must_use]
     pub const fn ergonomic_factor(self) -> f64 {
         match self {
@@ -385,7 +386,7 @@ impl CarryErgonomicMethod {
 }
 
 /// A carried item or load group with physical mass (`kg`) and [`CarryErgonomicMethod`]
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.2).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §2.2).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CarriedLoadItem {
     pub mass_kg: f64,
@@ -488,12 +489,12 @@ pub fn lookup_field_gear_preset(id: &str) -> Option<FieldGearItem> {
     )
 }
 
-/// The 5 Canonical Encumbrance Tiers (`Tiers 0–4`) from `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.3 Table,
+/// The 5 Canonical Encumbrance Tiers (`Tiers 0–4`) from `docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §2.3 Table,
 /// unified with [`crate::action_economy::EncumbranceTier`].
 pub type LoadEncumbranceTier = EncumbranceTier;
 
 /// Complete evaluation of a character's Base Comfort Load ($L_{\text{base}}$), Effective Load ($L_{\text{eff}}$),
-/// and resulting [`LoadEncumbranceTier`] (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.1–§2.3).
+/// and resulting [`LoadEncumbranceTier`] (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §2.1–§2.3).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct EncumbranceEvaluation {
     /// Base Uninhibited Comfort Load $L_{\text{base}} = (\text{MAS}/70.0) \times (\text{FOR} \times 1.2\text{ kg})$.
@@ -513,7 +514,7 @@ pub struct EncumbranceEvaluation {
 }
 
 /// Computes Base Comfort Load $L_{\text{base}} = (\text{MAS}/70.0) \times (\text{FOR} \times 1.2\text{ kg})$
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.1).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §2.1).
 #[must_use]
 pub fn compute_base_comfort_load_kg(mas_kg: f64, for_stat: i32) -> f64 {
     let mas = mas_kg.max(20.0);
@@ -522,7 +523,7 @@ pub fn compute_base_comfort_load_kg(mas_kg: f64, for_stat: i32) -> f64 {
 }
 
 /// Evaluates a character's carried items and powered exoskeleton offset against their Base Comfort Load ($L_{\text{base}}$)
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §2.1–§2.3).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §2.1–§2.3).
 #[must_use]
 pub fn evaluate_encumbrance_load(
     mas_kg: f64,
@@ -566,11 +567,11 @@ impl ConditionSource for EncumbranceEvaluation {
 }
 
 // ============================================================================
-// 3. Vehicles, High-Speed Chases & Crash / G-Force Physics (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.1–§3.3)
+// 3. Vehicles, High-Speed Chases & Crash / G-Force Physics (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.1–§3.3)
 // ============================================================================
 
 /// Chase Range Bands in a vehicular pursuit or aerial dogfight
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.2).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChaseRangeBand {
@@ -588,7 +589,7 @@ pub enum ChaseRangeBand {
 
 impl ChaseRangeBand {
     /// Shifts the range band by `steps` (`-1` closes distance toward `BumperToBumper`, `+1` opens distance toward `LostVisual`,
-    /// `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.2).
+    /// `docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.2).
     #[must_use]
     pub const fn shift(self, steps: i32) -> Self {
         const BANDS: [ChaseRangeBand; 5] = [
@@ -618,7 +619,7 @@ impl ChaseRangeBand {
 }
 
 /// Mechanical Envelope Ceilings of a ground, maritime, aerial, or orbital vehicle
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.1).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.1).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VehicleEnvelopeProfile {
     pub name: String,
@@ -628,7 +629,7 @@ pub struct VehicleEnvelopeProfile {
 }
 
 /// Outcome of a Vehicular Chase Exchange
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.1–§3.2).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.1–§3.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VehicleChaseOutcome {
     /// Pilot's effective `(tempo, control, force)` triad clamped to the vehicle's envelope ceilings.
@@ -639,7 +640,7 @@ pub struct VehicleChaseOutcome {
 
 /// Evaluates a driver/pilot's Effective Vehicular Triad Ceilings (bounded by both pilot attributes and the
 /// [`VehicleEnvelopeProfile`]) and resolves a chase exchange
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.1–§3.2).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.1–§3.2).
 #[must_use]
 pub fn evaluate_vehicle_chase_exchange(
     vehicle: &VehicleEnvelopeProfile,
@@ -679,7 +680,7 @@ pub fn evaluate_vehicle_chase_exchange(
 }
 
 /// Evaluates **Collision Kinetic Trauma** and **High-G Blackout (`G-LOC`)**
-/// (`docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §3.3).
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.3).
 ///
 /// Returns `(raw_collision_blunt_trauma, g_loc_delta_ext, suffers_tunnel_vision_dazzled, suffers_g_loc_unconscious)`.
 #[must_use]
@@ -724,4 +725,515 @@ pub fn evaluate_collision_and_g_force(
         suffers_tunnel_vision_dazzled,
         suffers_g_loc_unconscious,
     )
+}
+
+// ============================================================================
+// 2.4 Bulk, Stowage Volume & Quick-Access Slots (`movement_encumbrance_and_vehicles.md` §2.4)
+// ============================================================================
+
+/// Combined mass encumbrance and bulk stowage evaluation (`movement_encumbrance_and_vehicles.md` §2.4).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BulkLoadAssessment {
+    pub encumbrance: EncumbranceEvaluation,
+    pub has_unslung_bulky_load: bool,
+    /// Effective tier applied to Stealth, Parkour, and Climbing checks (`+1` tier if carrying awkward > 80 cm loads).
+    pub agility_and_stealth_effective_tier: LoadEncumbranceTier,
+    pub quick_access_retrieve_ticks: i32,
+    pub stowed_pack_retrieve_ticks: i32,
+    pub pack_quick_release_ticks: i32,
+}
+
+impl ConditionSource for BulkLoadAssessment {
+    fn to_condition_impact(&self) -> ConditionImpact {
+        self.encumbrance.to_condition_impact()
+    }
+}
+
+/// Evaluates carried load mass alongside unslung bulky-object penalties and stowage access tick timings
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §2.4).
+#[must_use]
+pub fn evaluate_encumbrance_with_bulk(
+    mas_kg: f64,
+    for_stat: i32,
+    items: &[CarriedLoadItem],
+    exo_frame_offset_kg: f64,
+    has_unslung_bulky_item_over_80cm: bool,
+) -> BulkLoadAssessment {
+    let encumbrance = evaluate_encumbrance_load(mas_kg, for_stat, items, exo_frame_offset_kg);
+    let eff_tier_num = if has_unslung_bulky_item_over_80cm {
+        encumbrance.tier.tier_number().saturating_add(1).min(4)
+    } else {
+        encumbrance.tier.tier_number()
+    };
+    BulkLoadAssessment {
+        encumbrance,
+        has_unslung_bulky_load: has_unslung_bulky_item_over_80cm,
+        agility_and_stealth_effective_tier: LoadEncumbranceTier::from_load_tier_0_to_4(eff_tier_num),
+        quick_access_retrieve_ticks: 6,
+        stowed_pack_retrieve_ticks: 32,
+        pack_quick_release_ticks: 4,
+    }
+}
+
+// ============================================================================
+// 3.4–3.6 Canonical Vehicle Catalog, Firing Platforms & Component Trauma
+// ============================================================================
+
+define_coded_enum! {
+    /// Broad locomotion and chassis class for vehicles (`movement_encumbrance_and_vehicles.md` §3.4).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum VehicleClass [count = 6] {
+        Motorcycle => { code: "MOTORCYCLE", label: "Motorcycle / Two-Wheeled EV" },
+        PassengerCar => { code: "PASSENGER_CAR", label: "Passenger Car / Hatchback" },
+        SuvOrUtility => { code: "SUV_OR_UTILITY", label: "SUV / Utility Van / Pickup" },
+        HeavyArmoredTruck => { code: "HEAVY_ARMORED_TRUCK", label: "Heavy Armored Truck" },
+        Watercraft => { code: "WATERCRAFT", label: "Tactical Watercraft / RHIB" },
+        RotorcraftVtol => { code: "ROTORCRAFT_VTOL", label: "Helicopter / Tiltrotor VTOL" },
+    }
+}
+
+define_coded_enum! {
+    /// Canonical 10-entry 2035 Vehicle Catalog identifiers (`movement_encumbrance_and_vehicles.md` §3.4).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    #[repr(usize)]
+    pub enum VehicleId [count = 10] {
+        ElectricCommuterMoto => {
+            code: "ELECTRIC_COMMUTER_MOTO",
+            label: "Urban Electric Commuter Moto",
+            aliases: ["MOTO", "ELECTRIC_MOTO"],
+        },
+        CompactUrbanEv => {
+            code: "COMPACT_URBAN_EV",
+            label: "Compact Urban EV Hatchback",
+            aliases: ["HATCHBACK", "COMPACT_EV"],
+        },
+        MidsizeCivilianSedan => {
+            code: "MIDSIZE_CIVILIAN_SEDAN",
+            label: "Midsize Civilian Sedan",
+            aliases: ["SEDAN"],
+        },
+        ArmoredSecopsSuv => {
+            code: "ARMORED_SECOPS_SUV",
+            label: "Armored SecOps / DAISE Interceptor SUV",
+            aliases: ["SECOPS_SUV", "DAISE_SUV", "ARMORED_SUV"],
+        },
+        CommercialUtilityVan => {
+            code: "COMMERCIAL_UTILITY_VAN",
+            label: "Commercial Utility / Surveillance Van",
+            aliases: ["UTILITY_VAN", "SURVEILLANCE_VAN"],
+        },
+        OffroadTechnicalPickup => {
+            code: "OFFROAD_TECHNICAL_PICKUP",
+            label: "4x4 Off-Road Pickup / Technical",
+            aliases: ["PICKUP", "TECHNICAL"],
+        },
+        ArmoredCashTruck => {
+            code: "ARMORED_CASH_TRUCK",
+            label: "Heavy Armored Transport / Cash Truck",
+            aliases: ["ARMORED_TRUCK", "CASH_TRUCK"],
+        },
+        RigidHullPatrolBoat => {
+            code: "RIGID_HULL_PATROL_BOAT",
+            label: "Rigid-Hull Tactical Patrol Boat (RHIB)",
+            aliases: ["RHIB", "PATROL_BOAT"],
+        },
+        LightUtilityHelicopter => {
+            code: "LIGHT_UTILITY_HELICOPTER",
+            label: "Light Twin-Turbine Utility Helicopter",
+            aliases: ["HELICOPTER", "UTILITY_HELI"],
+        },
+        TiltrotorSecurityVtol => {
+            code: "TILTROTOR_SECURITY_VTOL",
+            label: "2035 Autonomous-Assisted Tiltrotor VTOL",
+            aliases: ["VTOL", "TILTROTOR"],
+        },
+    }
+}
+
+/// Static specification entry for a canonical vehicle in `VEHICLE_CATALOG`
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.4).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VehicleCatalogSpec {
+    pub id: VehicleId,
+    pub name: &'static str,
+    pub class: VehicleClass,
+    pub caps: Triad<i32>,
+    pub curb_mass_kg: f64,
+    pub cabin_pr: i32,
+    pub glass_pr: i32,
+    pub engine_pr: i32,
+    pub top_speed_kmh: i32,
+    pub crew: u8,
+    pub passengers: u8,
+    pub is_ev_powertrain: bool,
+    pub cost_usd: i32,
+    pub restriction_class: Option<BlackMarketRestrictionClass>,
+    pub access_label: &'static str,
+}
+
+impl VehicleCatalogSpec {
+    /// Converts this catalog entry into a [`VehicleEnvelopeProfile`] for chase resolution.
+    #[must_use]
+    pub fn to_envelope_profile(&self) -> VehicleEnvelopeProfile {
+        VehicleEnvelopeProfile {
+            name: self.name.to_string(),
+            caps: self.caps,
+            mass_kg: self.curb_mass_kg,
+            armor_pr: self.cabin_pr,
+        }
+    }
+}
+
+macro_rules! veh_spec {
+    (
+        $id:ident, $name:literal, $cls:ident, ($t:expr, $c:expr, $f:expr),
+        $mass:expr, ($cab_pr:expr, $gls_pr:expr, $eng_pr:expr),
+        $top_kmh:expr, ($crew:expr, $pax:expr), $ev:expr, $cost:expr, $restr:expr, $acc:literal
+    ) => {
+        VehicleCatalogSpec {
+            id: VehicleId::$id,
+            name: $name,
+            class: VehicleClass::$cls,
+            caps: Triad::new($t, $c, $f),
+            curb_mass_kg: $mass,
+            cabin_pr: $cab_pr,
+            glass_pr: $gls_pr,
+            engine_pr: $eng_pr,
+            top_speed_kmh: $top_kmh,
+            crew: $crew,
+            passengers: $pax,
+            is_ev_powertrain: $ev,
+            cost_usd: $cost,
+            restriction_class: $restr,
+            access_label: $acc,
+        }
+    };
+}
+
+/// Canonical 10-entry 2035 Vehicle Catalog (`movement_encumbrance_and_vehicles.md` §3.4).
+pub const VEHICLE_CATALOG: [VehicleCatalogSpec; 10] = [
+    veh_spec!(
+        ElectricCommuterMoto,
+        "Urban Electric Commuter Moto",
+        Motorcycle,
+        (16, 15, 4),
+        195.0,
+        (0, 0, 3),
+        145,
+        (1, 1),
+        true,
+        9_500,
+        None,
+        "Universal"
+    ),
+    veh_spec!(
+        CompactUrbanEv,
+        "Compact Urban EV Hatchback",
+        PassengerCar,
+        (12, 13, 8),
+        1_450.0,
+        (3, 1, 6),
+        165,
+        (1, 3),
+        true,
+        28_000,
+        None,
+        "Universal"
+    ),
+    veh_spec!(
+        MidsizeCivilianSedan,
+        "Midsize Civilian Sedan",
+        PassengerCar,
+        (13, 12, 10),
+        1_750.0,
+        (3, 1, 9),
+        205,
+        (1, 4),
+        false,
+        38_000,
+        None,
+        "Universal"
+    ),
+    veh_spec!(
+        ArmoredSecopsSuv,
+        "Armored SecOps / DAISE Interceptor SUV",
+        SuvOrUtility,
+        (13, 11, 15),
+        3_400.0,
+        (8, 6, 9),
+        210,
+        (1, 5),
+        false,
+        185_000,
+        Some(BlackMarketRestrictionClass::Class3MilitaryOrdnanceFullAuto),
+        "Class III: Restricted"
+    ),
+    veh_spec!(
+        CommercialUtilityVan,
+        "Commercial Utility / Surveillance Van",
+        SuvOrUtility,
+        (10, 9, 13),
+        2_500.0,
+        (3, 1, 9),
+        155,
+        (1, 7),
+        false,
+        46_000,
+        None,
+        "Universal"
+    ),
+    veh_spec!(
+        OffroadTechnicalPickup,
+        "4x4 Off-Road Pickup / Technical",
+        SuvOrUtility,
+        (11, 10, 14),
+        2_400.0,
+        (3, 1, 9),
+        170,
+        (1, 4),
+        false,
+        52_000,
+        None,
+        "Universal"
+    ),
+    veh_spec!(
+        ArmoredCashTruck,
+        "Heavy Armored Transport / Cash Truck",
+        HeavyArmoredTruck,
+        (8, 7, 18),
+        8_500.0,
+        (9, 7, 10),
+        120,
+        (2, 6),
+        false,
+        260_000,
+        Some(BlackMarketRestrictionClass::Class2LawEnforcementParamilitary),
+        "Class I/III: Licensed/Restricted"
+    ),
+    veh_spec!(
+        RigidHullPatrolBoat,
+        "Rigid-Hull Tactical Patrol Boat (RHIB)",
+        Watercraft,
+        (13, 12, 9),
+        1_900.0,
+        (3, 1, 6),
+        85,
+        (1, 7),
+        false,
+        95_000,
+        Some(BlackMarketRestrictionClass::Class1LicensedCivilian),
+        "Class I: Licensed"
+    ),
+    veh_spec!(
+        LightUtilityHelicopter,
+        "Light Twin-Turbine Utility Helicopter",
+        RotorcraftVtol,
+        (16, 13, 10),
+        2_800.0,
+        (2, 1, 5),
+        260,
+        (2, 6),
+        false,
+        2_400_000,
+        Some(BlackMarketRestrictionClass::Class2LawEnforcementParamilitary),
+        "Class I/III: Licensed/Restricted"
+    ),
+    veh_spec!(
+        TiltrotorSecurityVtol,
+        "2035 Autonomous-Assisted Tiltrotor VTOL",
+        RotorcraftVtol,
+        (18, 14, 13),
+        5_200.0,
+        (6, 5, 7),
+        420,
+        (2, 8),
+        false,
+        6_800_000,
+        Some(BlackMarketRestrictionClass::Class3MilitaryOrdnanceFullAuto),
+        "Class III/IV: Restricted"
+    ),
+];
+
+impl_static_catalog!(VehicleId => VehicleCatalogSpec : VEHICLE_CATALOG);
+
+/// Returns all canonical 2035 vehicle specifications (`movement_encumbrance_and_vehicles.md` §3.4).
+#[must_use]
+pub const fn canonical_vehicle_catalog() -> &'static [VehicleCatalogSpec] {
+    VehicleId::CATALOG
+}
+
+/// Stability condition when firing ranged weapons from a moving vehicle (`movement_encumbrance_and_vehicles.md` §3.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VehicleFiringPlatformCondition {
+    StationaryIdling,
+    SmoothCruise,
+    EvasiveWeave,
+    OffRoadHardDrift,
+}
+
+/// Ranged shooter modifiers imposed by firing from a moving vehicle (`movement_encumbrance_and_vehicles.md` §3.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VehicleFiringPlatformEval {
+    pub shooter_delta_ext: i32,
+    pub recoil_adder: i32,
+    pub effective_ranged_control_cap: i32,
+}
+
+/// Evaluates shooter difficulty, recoil penalty, and effective ranged Control Cap when firing from a vehicle
+/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.5).
+#[must_use]
+pub const fn evaluate_vehicle_firing_platform(
+    condition: VehicleFiringPlatformCondition,
+    is_pintle_or_gimbal_mounted: bool,
+    base_ranged_control_cap: i32,
+) -> VehicleFiringPlatformEval {
+    let c_cap = if base_ranged_control_cap < 0 {
+        0
+    } else {
+        base_ranged_control_cap
+    };
+    let (base_ext, base_r, unmounted_cap): (i32, i32, i32) = match condition {
+        VehicleFiringPlatformCondition::StationaryIdling => (0, 0, c_cap),
+        VehicleFiringPlatformCondition::SmoothCruise => (2, 2, c_cap),
+        VehicleFiringPlatformCondition::EvasiveWeave => (4, 4, c_cap.div_euclid(2)),
+        VehicleFiringPlatformCondition::OffRoadHardDrift => (6, 6, c_cap.div_euclid(3)),
+    };
+    if is_pintle_or_gimbal_mounted {
+        let mounted_cap = match condition {
+            VehicleFiringPlatformCondition::OffRoadHardDrift => c_cap.div_euclid(2),
+            _ => c_cap,
+        };
+        let mounted_r = match condition {
+            VehicleFiringPlatformCondition::StationaryIdling => -3,
+            _ => base_r.div_euclid(2),
+        };
+        VehicleFiringPlatformEval {
+            shooter_delta_ext: base_ext.div_euclid(2),
+            recoil_adder: mounted_r,
+            effective_ranged_control_cap: mounted_cap,
+        }
+    } else {
+        VehicleFiringPlatformEval {
+            shooter_delta_ext: base_ext,
+            recoil_adder: base_r,
+            effective_ranged_control_cap: unmounted_cap,
+        }
+    }
+}
+
+/// Targeted mechanical subsystem on a vehicle (`movement_encumbrance_and_vehicles.md` §3.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VehicleComponentZone {
+    TiresWheels,
+    WindshieldCabin,
+    EngineDriveMotor,
+    FuelOrEvBatteryPack,
+}
+
+/// Outcome of targeting a specific vehicle subsystem (`movement_encumbrance_and_vehicles.md` §3.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VehicleComponentDamageEval {
+    pub zone: VehicleComponentZone,
+    pub zone_pr: i32,
+    pub penetrated: bool,
+    pub residual_occupant_impact: i32,
+    pub vehicle_control_cap_penalty: i32,
+    pub requires_driver_control_check: bool,
+    pub propulsion_disabled: bool,
+    pub triggers_ev_thermal_runaway: bool,
+    pub thermal_runaway_onset_ticks: i32,
+}
+
+/// Evaluates vehicle component armor penetration, tire blowouts, propulsion disabling, occupant bleed-through,
+/// and EV lithium battery thermal runaway (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §3.6).
+#[must_use]
+pub const fn evaluate_vehicle_component_damage(
+    vehicle: &VehicleCatalogSpec,
+    zone: VehicleComponentZone,
+    uses_run_flat_tires: bool,
+    hits_ballistic_glass: bool,
+    effective_pen: i32,
+    effective_raw_impact: i32,
+) -> VehicleComponentDamageEval {
+    let zone_pr = match zone {
+        VehicleComponentZone::TiresWheels => {
+            if uses_run_flat_tires {
+                2
+            } else {
+                1
+            }
+        }
+        VehicleComponentZone::WindshieldCabin => {
+            if hits_ballistic_glass {
+                vehicle.glass_pr
+            } else {
+                vehicle.cabin_pr
+            }
+        }
+        VehicleComponentZone::EngineDriveMotor => vehicle.engine_pr,
+        VehicleComponentZone::FuelOrEvBatteryPack => 5,
+    };
+    let penetrated = effective_pen > zone_pr;
+    let residual = if penetrated && effective_raw_impact > zone_pr {
+        effective_raw_impact - zone_pr
+    } else {
+        0
+    };
+    match zone {
+        VehicleComponentZone::TiresWheels => VehicleComponentDamageEval {
+            zone,
+            zone_pr,
+            penetrated,
+            residual_occupant_impact: 0,
+            vehicle_control_cap_penalty: if penetrated {
+                if uses_run_flat_tires { 2 } else { 4 }
+            } else {
+                0
+            },
+            requires_driver_control_check: penetrated,
+            propulsion_disabled: false,
+            triggers_ev_thermal_runaway: false,
+            thermal_runaway_onset_ticks: 0,
+        },
+        VehicleComponentZone::WindshieldCabin => VehicleComponentDamageEval {
+            zone,
+            zone_pr,
+            penetrated,
+            residual_occupant_impact: residual,
+            vehicle_control_cap_penalty: 0,
+            requires_driver_control_check: false,
+            propulsion_disabled: false,
+            triggers_ev_thermal_runaway: false,
+            thermal_runaway_onset_ticks: 0,
+        },
+        VehicleComponentZone::EngineDriveMotor => VehicleComponentDamageEval {
+            zone,
+            zone_pr,
+            penetrated,
+            residual_occupant_impact: 0,
+            vehicle_control_cap_penalty: 0,
+            requires_driver_control_check: false,
+            propulsion_disabled: penetrated && residual >= 4,
+            triggers_ev_thermal_runaway: false,
+            thermal_runaway_onset_ticks: 0,
+        },
+        VehicleComponentZone::FuelOrEvBatteryPack => {
+            let triggers_ev_thermal_runaway = penetrated && vehicle.is_ev_powertrain;
+            VehicleComponentDamageEval {
+                zone,
+                zone_pr,
+                penetrated,
+                residual_occupant_impact: 0,
+                vehicle_control_cap_penalty: 0,
+                requires_driver_control_check: false,
+                propulsion_disabled: penetrated && vehicle.is_ev_powertrain,
+                triggers_ev_thermal_runaway,
+                thermal_runaway_onset_ticks: if triggers_ev_thermal_runaway { 8 } else { 0 },
+            }
+        }
+    }
 }

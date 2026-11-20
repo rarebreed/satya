@@ -90,6 +90,9 @@ Every cartridge in Satya is defined by **six physical and operational parameters
    - **Match-Grade / Precision Hand-Loaded (`Q_ammo = +1.0`)**: Extruded temperature-stable propellant weighed to $\pm 0.02\text{ gr}$ and concentric cases (`+1.0` Accuracy).
 6. **Feed System & Capacity**: How ammunition is stored and presented to the breech (detailed in **Section 3.3**).
 
+> [!NOTE]
+> For six additional calibers (`.22 LR`, `.380 ACP`, `10mm Auto`, `4.6×30mm`, `.300 BLK` Subsonic & Supersonic) and specialty `12-Gauge` shells (`Breacher`, `Dragon's Breath`, `Beanbag`), see **[Expanded Arsenal, Explosives, Breaching & Tactical Gear](arsenal_explosives_and_tactical_gear.md#1-expanded-firearms-specialty-calibers--shotgun-loads)**.
+
 ---
 
 ### 3.1 How Kinetic Energy ($E_k$) Is Calculated

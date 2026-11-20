@@ -216,7 +216,7 @@ flowchart TD
 
 ### 5.1 Layer 1: Systemic Health, Fatigue & Encumbrance (`action_time_factor`)
 
-Physical exhaustion, systemic trauma shock, heavy gear load, and neurological status conditions degrade both physical execution and mental processing (detailed in [Health, Anatomical Trauma, Fatigue & Mental Conditions](../06-health-and-survival/health_and_trauma.md) and [Movement, Vehicles, Encumbrance & Environmental Survival](../06-health-and-survival/movement_vehicles_and_environment.md)):
+Physical exhaustion, systemic trauma shock, heavy gear load, and neurological status conditions degrade both physical execution and mental processing (detailed in [Health, Anatomical Trauma, Fatigue & Mental Conditions](../06-health-and-survival/health_and_trauma.md), [Movement, Encumbrance & Vehicles](../06-health-and-survival/movement_encumbrance_and_vehicles.md), and [Environmental Hazards, Survival & Field Pharmacology](../06-health-and-survival/environmental_hazards_and_survival.md)):
 
 $$\text{action\_time\_factor} = 1.0 + (0.10 \times \text{fatigue\_level}) + (0.25 \times \text{wound\_shock\_index}) + \Delta_{\text{enc}} + \Delta_{\text{status}}$$
 
@@ -282,26 +282,13 @@ What happens if a character starts a `12-tick` aimed shot or heavy melee swing o
 
 ![Slicing the Pie — An operative peeking around a concrete utility corner with an inspection mirror as a patrol quadruped rounds the corridor](../../assets/28_ooda_corridor_slicing_pie.jpg#column)
 
-Because Satya models **six distinct Sensory Characteristics (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`)** rather than a single generic "Perception" stat, stealth, detection, and awareness on the OODA clock are resolved as an asymmetric **Multi-Channel Sensory Contest**.
+> **See this in play**: [Guide 03 — Multi-Sensory Stealth in the Blacked-Out Corridor (`Observe`)](../../ttrpg-examples/03-ooda-clock-and-stealth.md#2-multi-sensory-stealth-in-the-blacked-out-corridor-observe).  
+> **Complete Stealth, Awareness & Investigation Reference**: See **[Stealth, Passive Awareness, Active Observation & Investigation (`stealth_awareness_and_investigation.md`)](stealth_awareness_and_investigation.md)** for full Passive (`0 Ticks`, `AWR`) vs. Active (`6 Ticks`) rules, Attention States & Watch Fatigue, the 4-stage Alertness Ladder, Acoustic/Thermal/RF/Social Stealth, Tail Craft (`SDR`), and Forensic Trace Decay.
 
-> **See this in play**: [Guide 03 — Multi-Sensory Stealth in the Blacked-Out Corridor (`Observe`)](../../ttrpg-examples/03-ooda-clock-and-stealth.md#2-multi-sensory-stealth-in-the-blacked-out-corridor-observe).
+Because Satya models **six distinct Sensory Characteristics (`SIG`, `HEA`, `TAC`, `OLF`, `TAS`, `ITU`)** rather than a single generic "Perception" stat, the OODA `Observe` phase operates in two clock regimes:
 
-### 6.1 Resolving Stealth vs. Detection (`2d20` Opposed Cascade)
-
-- **The Infiltrator** rolls **Stealth & Sneaking (`KIN / FOC`)** (or *Camouflage & Concealment* `INS/CRE` if stationary in a hide site, or *Surveillance & Urban Tail* `FOC/SIG` in a crowd).
-  - **Movement Gait & Encumbrance Modifiers**: Moving at a **Stealth Creep** (`0.34 m/Tick`) imposes `+0` $\Delta_{\text{ext}}$; moving at a **Combat Glide** imposes `+4` $\Delta_{\text{ext}}$; **Running** imposes `+8` $\Delta_{\text{ext}}$. Each **Encumbrance Tier** above Tier 1 adds **`+2` $\Delta_{\text{ext}}$** (gear rattle and footfall weight).
-- **The Observer / Sentry** rolls **Observation & Awareness** using the **specific sensory channel** suited to the environment:
-  - **Visual Channel (`SIG / FOC`)**: Governed by **Illumination**, **Concealment/Cover**, and **Target Motion**.
-  - **Auditory Channel (`HEA / FOC`)**: Governed by **Ambient Noise**, **Surface Material** (gravel/broken glass vs. concrete), and **Weapon Suppression**.
-  - **Olfactory Channel (`OLF / INS`)**: Detects smoke, fuel, blood, sweat, or chemical residues in enclosed spaces (or K9/animal trackers).
-  - **Intuitive Channel (`ITU / INS`)**: Subconscious "sixth sense" when being watched by a sniper or stalked in an eerie environment—can alert the target to drop behind cover even before `SIG` or `HEA` pinpoints the attacker's coordinates!
-
-### 6.2 Illumination, Visibility & Acoustic Modifiers ($\Delta_{\text{ext}}$)
-
-| Environmental Condition | Visual Check (`SIG`) $\Delta_{\text{ext}}$ | Visual Stealth Bonus ($\Delta_{\text{ext}}$) | Countermeasures & Sensor Interaction |
-| :--- | :---: | :---: | :--- |
-| **Bright Daylight / Well-Lit Room** | `+0` | `+4` *(Harder to hide)* | Requires solid cover or urban crowd blending. |
-| **Dusk / Twilight / Urban Streetlights / Shadows** | `+2` | `-2` | Flashlights create a cone of `+0` light but reveal the holder (`-6` to spot holder). |
-| **Moonlight / Starlight / Power Outage Indoors** | `+6` | `-6` | **Gen-3+ Night Vision (`NVG`)** reduces visual penalty to `+1` (but narrows FOV, `-2` `OODA`). |
-| **Dense Fog / Heavy Rain / Thick Smoke** | `+8` | `-8` | **Thermal / FLIR Optics** cut through smoke/darkness (`+0`), unless target wears thermal-baffled cloak. |
-| **Pitch Black (Subterranean / Windowless Vault)** | **Impossible (`Blinded`)** | **Auto-Concealed vs. `SIG`** | Observer must rely on **Hearing (`HEA`)**, **Tactile (`TAC`)**, or active **IR / LiDAR**. |
+1. **Background Passive Awareness (`0 Ticks`, GM-Hidden)**:
+   - Unalerted guards and bystanders use their derived General Awareness score $\text{AWR} = \lfloor(\max(\text{SIG}, \text{HEA}) + \text{FOC} + \text{ITU})/3\rfloor$ with degraded dice pairs (`N = 1` when `Distracted` or `RoutinePatrolBored`, or $\lfloor N/2 \rfloor$ when `VigilantWatch`) plus Watch Duty Fatigue (`+1` per `2 hrs`, max `+4`).
+2. **Deliberate Active Observation (`6 Ticks` / `1.5s` `ActiveScanRoomOrSectorSweep`)**:
+   - Spending **`6 Ticks`** (`ActiveScanRoomOrSectorSweep`) lets an observer commit to a specific sensory channel (`SIG/FOC`, `HEA/FOC`, `TAC/FOC`, `OLF/INS`, `TAS/INS`, `ITU/INS`), unlock their **full *Observation* / *Surveillance* skill pairs $N$**, and bring electro-optical sensors (**`Gen3PlusNvg`** or **`ThermalFlir`**) to bear.
+   - Any **`GrazingTieSuccess`** or **`SuccessWithFloorBreach`** by a sneaking infiltrator advances the observer along the **4-Stage Alertness Ladder (`Level 0 Unaware` $\to$ `Level 1 Suspicious` [`+4` Surprise Freeze] $\to$ `Level 2 Searching` $\to$ `Level 3 Compromised`)** rather than triggering instant all-knowing combat (`evaluate_alertness_transition`).

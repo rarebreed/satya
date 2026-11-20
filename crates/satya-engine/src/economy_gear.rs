@@ -1,6 +1,7 @@
 //! Socioeconomic Origin, Campaign Upkeep (`SQM 1–10`), Black-Market `[Access]` Procurement,
-//! Operational `Heat` (`0–10`), and Post-School Skill Point (`SP`) Ledger & Study Progression
-//! (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1, §1.6–§1.7, §3.1–§3.2;
+//! Operational `Heat` (`0–10`), Contacts & Favors, Cover Identities, Safehouses, and Post-School
+//! Skill Point (`SP`) Ledger & Study Progression
+//! (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1, §1.6–§1.7, §3.1–§3.5;
 //! `docs/ttrpg/03-character/characteristics_and_aptitudes.md` §9.1.3).
 
 use std::collections::BTreeMap;
@@ -8,16 +9,18 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::characteristics::{CharacterAptitudes, CharacterCharacteristics};
-use crate::define_coded_enum;
+use crate::dice_probabilities::{ContestedOutcomeKind, ContestedTieRule};
 use crate::lifepath_economy::{LifepathBaselineResult, LifepathBuildConfig};
 use crate::lifepath_hobbies_events::{
     HOBBY_CLUB_DISCOUNT_MAX_LEVEL, HOBBY_CLUB_EXPERIENCE_DISCOUNT_MULTIPLIER, PersonalHobbyId,
     is_hobby_club_discounted_skill,
 };
+use crate::primitives::{ContestedCheck, TieredSaveEval};
 use crate::skills_trees::{
     SkillStepCostBreakdown, SkillTrainingMode, compute_skill_step_sp_cost,
     validate_skill_advancement,
 };
+use crate::{define_coded_enum, impl_static_catalog};
 
 define_coded_enum! {
     /// Socioeconomic Class from Stage 1 (`Ages 0–5`) (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1.1).
@@ -820,6 +823,696 @@ pub fn compute_lifepath_skill_progression(
         hours_to_next_level: hours_to_next,
         cumulative_thresholds,
     }
+}
+
+// ============================================================================
+// Phase 2 Expansion (§3.3–§3.5): Contacts & Favors, Cover Identities & Safehouses
+// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.3–§3.5)
+// ============================================================================
+
+/// Campaign Contact profile (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ContactProfile {
+    /// Institutional reach / `[Access]` breadth (`1` Street/Local .. `4` National/Boardroom/Agency).
+    pub reach_access_tier: u8,
+    /// Loyalty & reliability (`1` Transactional .. `5` Ride-or-Die).
+    pub reliability_trust: u8,
+    /// Current surveillance / compromise exposure (`0` Clean .. `5` Under Active Audit).
+    pub exposure_burn_risk: u8,
+}
+
+/// Scope and political/logistical risk of a requested favor (`lifepaths_and_economy.md` §3.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum FavorSeverityTier {
+    /// Minor: tip-off, local introduction, or routine `[Access I]` lookup (`+0` $\Delta_{\text{ext}}$).
+    Minor,
+    /// Moderate: forged transit pass, `[Access II–III]` fencing, temporary safe harbor (`+4` $\Delta_{\text{ext}}$).
+    Moderate,
+    /// Major: scrubbing active arrest warrants, breaking into Class IV networks, high-risk exfil (`+8` $\Delta_{\text{ext}}$).
+    Major,
+}
+
+impl FavorSeverityTier {
+    /// Base hidden external difficulty ($\Delta_{\text{ext}}$) of the favor.
+    #[must_use]
+    pub const fn base_delta_ext(self) -> i32 {
+        match self {
+            Self::Minor => 0,
+            Self::Moderate => 4,
+            Self::Major => 8,
+        }
+    }
+}
+
+/// Resolution outcome of requesting a favor from a campaign Contact (`lifepaths_and_economy.md` §3.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ContactFavorOutcomeKind {
+    GrantedCleanlyWithBonus,
+    GrantedCleanly,
+    GrantedWithReciprocalDebt,
+    DeclinedContactIntact,
+    BurnedOrCompromised,
+}
+
+/// Detailed mechanical output of [`evaluate_contact_favor_request`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContactFavorEffect {
+    pub outcome_kind: ContactFavorOutcomeKind,
+    pub total_hidden_delta_ext: i32,
+    pub favor_granted: bool,
+    pub cost_multiplier: f64,
+    pub reciprocal_favor_owed: bool,
+    pub exposure_increase: u8,
+    pub contact_burned: bool,
+    pub caller_heat_added: u8,
+    pub summary: &'static str,
+}
+
+/// Resolve a Contact Favor request using `1-Pair Tiered GM Resistance`
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.3).
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_contact_favor_request(
+    contact: ContactProfile,
+    favor: FavorSeverityTier,
+    required_reach_tier: u8,
+    jurisdiction_heat: u8,
+    requester_skill_n: usize,
+    requester_control_c: i32,
+    internal_mod: i32,
+    player_pairs: &[(i32, i32)],
+    gm_pair: (i32, i32),
+    tie_rule: ContestedTieRule,
+) -> ContestedCheck<ContactFavorEffect> {
+    let trust_clamped = contact.reliability_trust.clamp(1, 5) as i32;
+    let reliability_mod = -(trust_clamped - 2) * 2;
+    let exposure_mod = contact.exposure_burn_risk.min(5) as i32;
+    let heat_mod = if jurisdiction_heat >= 3 {
+        (jurisdiction_heat.min(10) - 2) as i32
+    } else {
+        0
+    };
+    let reach_shortfall_mod = (required_reach_tier
+        .clamp(1, 4)
+        .saturating_sub(contact.reach_access_tier.clamp(1, 4)) as i32)
+        * 4;
+    let total_hidden_delta_ext =
+        favor.base_delta_ext() + reliability_mod + exposure_mod + heat_mod + reach_shortfall_mod;
+
+    let eval = TieredSaveEval::evaluate(
+        requester_skill_n,
+        requester_control_c,
+        internal_mod,
+        0,
+        total_hidden_delta_ext,
+        tie_rule,
+        player_pairs,
+        gm_pair,
+    );
+
+    let effect = eval.classify_4way(
+        |_| ContactFavorEffect {
+            outcome_kind: ContactFavorOutcomeKind::GrantedCleanlyWithBonus,
+            total_hidden_delta_ext,
+            favor_granted: true,
+            cost_multiplier: 0.75,
+            reciprocal_favor_owed: false,
+            exposure_increase: 0,
+            contact_burned: false,
+            caller_heat_added: 0,
+            summary: "Trusted Priority Favor: delivered ahead of schedule at 0.75x fee with zero blowback.",
+        },
+        |roll| match roll.contested_kind {
+            ContestedOutcomeKind::CleanSuccess => ContactFavorEffect {
+                outcome_kind: ContactFavorOutcomeKind::GrantedCleanly,
+                total_hidden_delta_ext,
+                favor_granted: true,
+                cost_multiplier: 1.0,
+                reciprocal_favor_owed: false,
+                exposure_increase: if favor == FavorSeverityTier::Major {
+                    1
+                } else {
+                    0
+                },
+                contact_burned: false,
+                caller_heat_added: 0,
+                summary: "Favor Granted Cleanly: contact fulfills request at standard rate.",
+            },
+            _ => ContactFavorEffect {
+                outcome_kind: ContactFavorOutcomeKind::GrantedWithReciprocalDebt,
+                total_hidden_delta_ext,
+                favor_granted: true,
+                cost_multiplier: 1.5,
+                reciprocal_favor_owed: true,
+                exposure_increase: 1,
+                contact_burned: false,
+                caller_heat_added: 0,
+                summary: "Favor Granted at Reciprocal Cost: requires 1.5x fee OR an open return favor owed.",
+            },
+        },
+        |_| ContactFavorEffect {
+            outcome_kind: ContactFavorOutcomeKind::DeclinedContactIntact,
+            total_hidden_delta_ext,
+            favor_granted: false,
+            cost_multiplier: 1.0,
+            reciprocal_favor_owed: false,
+            exposure_increase: 1,
+            contact_burned: false,
+            caller_heat_added: 0,
+            summary: "Politely Refused: heat or reach limits prevented delivery, but relationship stays intact (+1 exposure).",
+        },
+        |_| ContactFavorEffect {
+            outcome_kind: ContactFavorOutcomeKind::BurnedOrCompromised,
+            total_hidden_delta_ext,
+            favor_granted: false,
+            cost_multiplier: 1.5,
+            reciprocal_favor_owed: false,
+            exposure_increase: 3,
+            contact_burned: true,
+            caller_heat_added: 2,
+            summary: "Contact Burned: surveillance flagged the outreach; contact severed or turned (+2 Heat)!",
+        },
+    );
+
+    ContestedCheck::new(eval, effect)
+}
+
+define_coded_enum! {
+    /// Four tiers of Layered Cover Identities & Paper Trails (`lifepaths_and_economy.md` §3.4).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    #[repr(usize)]
+    pub enum CoverIdentityTier [count = 4] {
+        /// Tier 1: Paper-Only Burnable ID (`$600`, `PR_id +2`, `Forgery N >= 1`).
+        Tier1PaperOnlyBurnableId => {
+            code: "COVER_TIER_1_PAPER",
+            label: "Tier 1: Paper-Only / Burnable Local ID",
+            aliases: ["TIER_1_PAPER_ONLY", "PAPER_ID"],
+        },
+        /// Tier 2: Database-Seeded Alias (`$3,500`, `PR_id +4`, `Forgery N >= 2`).
+        Tier2DatabaseSeededAlias => {
+            code: "COVER_TIER_2_DB_ALIAS",
+            label: "Tier 2: Database-Seeded Commercial & Transit Alias",
+            aliases: ["TIER_2_DATABASE_ALIAS", "DB_ALIAS"],
+        },
+        /// Tier 3: Deep Biometric / Credit Legend (`$18,000`, `PR_id +6`, `Forgery N >= 3`).
+        Tier3DeepBiometricCreditLegend => {
+            code: "COVER_TIER_3_BIOMETRIC",
+            label: "Tier 3: Deep Biometric, Tax & Credit Legend",
+            aliases: ["TIER_3_BIOMETRIC_LEGEND", "BIOMETRIC_COVER"],
+        },
+        /// Tier 4: State / Syndicate Ghost Cover (`$85,000`, `PR_id +8`, `Forgery N >= 4`).
+        Tier4StateSyndicateGhostCover => {
+            code: "COVER_TIER_4_GHOST",
+            label: "Tier 4: Sovereign / Syndicate Black-Ops Ghost Cover",
+            aliases: ["TIER_4_GHOST_COVER", "GHOST_COVER"],
+        },
+    }
+}
+
+/// Canonical specification for a Cover Identity tier (`lifepaths_and_economy.md` §3.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct CoverIdentitySpec {
+    pub tier: CoverIdentityTier,
+    pub cost_usd: u32,
+    pub access_class: BlackMarketRestrictionClass,
+    pub forgery_n_min: usize,
+    pub scrutiny_resistance_pr_id: i32,
+    pub biometric_linked: bool,
+    pub flag_heat_threshold: u8,
+    pub burn_heat_threshold: u8,
+    pub clean_burn_heat_shed: u8,
+}
+
+const COVER_IDENTITY_CATALOG_ARRAY: [CoverIdentitySpec; 4] = [
+    CoverIdentitySpec {
+        tier: CoverIdentityTier::Tier1PaperOnlyBurnableId,
+        cost_usd: 600,
+        access_class: BlackMarketRestrictionClass::Class1LicensedCivilian,
+        forgery_n_min: 1,
+        scrutiny_resistance_pr_id: 2,
+        biometric_linked: false,
+        flag_heat_threshold: 4,
+        burn_heat_threshold: 6,
+        clean_burn_heat_shed: 2,
+    },
+    CoverIdentitySpec {
+        tier: CoverIdentityTier::Tier2DatabaseSeededAlias,
+        cost_usd: 3_500,
+        access_class: BlackMarketRestrictionClass::Class2LawEnforcementParamilitary,
+        forgery_n_min: 2,
+        scrutiny_resistance_pr_id: 4,
+        biometric_linked: false,
+        flag_heat_threshold: 6,
+        burn_heat_threshold: 9,
+        clean_burn_heat_shed: 4,
+    },
+    CoverIdentitySpec {
+        tier: CoverIdentityTier::Tier3DeepBiometricCreditLegend,
+        cost_usd: 18_000,
+        access_class: BlackMarketRestrictionClass::Class3MilitaryOrdnanceFullAuto,
+        forgery_n_min: 3,
+        scrutiny_resistance_pr_id: 6,
+        biometric_linked: true,
+        flag_heat_threshold: 6,
+        burn_heat_threshold: 9,
+        clean_burn_heat_shed: 4,
+    },
+    CoverIdentitySpec {
+        tier: CoverIdentityTier::Tier4StateSyndicateGhostCover,
+        cost_usd: 85_000,
+        access_class: BlackMarketRestrictionClass::Class4StrategicStateSecret,
+        forgery_n_min: 4,
+        scrutiny_resistance_pr_id: 8,
+        biometric_linked: true,
+        flag_heat_threshold: 7,
+        burn_heat_threshold: 10,
+        clean_burn_heat_shed: 6,
+    },
+];
+
+impl_static_catalog!(CoverIdentityTier => CoverIdentitySpec : COVER_IDENTITY_CATALOG_ARRAY);
+
+/// Canonical 4-tier Cover Identity reference catalog (`lifepaths_and_economy.md` §3.4).
+pub const COVER_IDENTITY_CATALOG: &[CoverIdentitySpec] = &COVER_IDENTITY_CATALOG_ARRAY;
+
+/// Return the full canonical 4-tier Cover Identity catalog.
+#[must_use]
+pub const fn canonical_cover_identity_catalog() -> &'static [CoverIdentitySpec] {
+    COVER_IDENTITY_CATALOG
+}
+
+/// Checkpoint / authority inspection depth against a Cover Identity (`lifepaths_and_economy.md` §3.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CoverScrutinyLevel {
+    /// Bouncer, hotel clerk, or glance at physical card (`+0` base).
+    CasualVisualCheck,
+    /// Police traffic stop, bank counter, or transit gate (`+4` base).
+    DatabaseOrBorderTerminal,
+    /// Federal/corporate iris-gait biometric cross-check (`+8` base; `+6` extra if cover is non-biometric).
+    BiometricAuditOrFederalCrossCheck,
+}
+
+impl CoverScrutinyLevel {
+    /// Base inspection difficulty ($\Delta_{\text{ext}}$).
+    #[must_use]
+    pub const fn delta_ext(self) -> i32 {
+        match self {
+            Self::CasualVisualCheck => 0,
+            Self::DatabaseOrBorderTerminal => 4,
+            Self::BiometricAuditOrFederalCrossCheck => 8,
+        }
+    }
+}
+
+/// Resolution output for a Cover Identity inspection or checkpoint test (`lifepaths_and_economy.md` §3.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoverIdentityScrutinyEffect {
+    pub tier: CoverIdentityTier,
+    pub passed: bool,
+    pub total_hidden_delta_ext: i32,
+    pub cover_flagged: bool,
+    pub cover_burned: bool,
+    pub cover_heat_added: u8,
+    pub personal_heat_bleed: u8,
+    pub summary: &'static str,
+}
+
+/// Evaluate passing a checkpoint, background check, or biometric terminal using a Cover Identity
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.4).
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_cover_identity_scrutiny(
+    tier: CoverIdentityTier,
+    scrutiny: CoverScrutinyLevel,
+    cover_heat: u8,
+    holder_skill_n: usize,
+    holder_control_c: i32,
+    internal_mod: i32,
+    player_pairs: &[(i32, i32)],
+    gm_pair: (i32, i32),
+    tie_rule: ContestedTieRule,
+) -> ContestedCheck<CoverIdentityScrutinyEffect> {
+    let spec = tier.spec();
+    let flagged_penalty = if cover_heat >= spec.flag_heat_threshold {
+        4
+    } else {
+        0
+    };
+    let already_burned = cover_heat >= spec.burn_heat_threshold;
+    let biometric_mismatch_penalty = if scrutiny == CoverScrutinyLevel::BiometricAuditOrFederalCrossCheck
+        && !spec.biometric_linked
+    {
+        6
+    } else {
+        0
+    };
+    let total_hidden_delta_ext = scrutiny.delta_ext()
+        + flagged_penalty
+        + biometric_mismatch_penalty
+        + if already_burned { 8 } else { 0 }
+        - spec.scrutiny_resistance_pr_id;
+
+    let eval = TieredSaveEval::evaluate(
+        holder_skill_n,
+        holder_control_c,
+        internal_mod,
+        0,
+        total_hidden_delta_ext,
+        tie_rule,
+        player_pairs,
+        gm_pair,
+    );
+
+    let is_extraordinary =
+        eval.contested_roll.contested_kind == ContestedOutcomeKind::ExtraordinarySuccess;
+    let effect = if already_burned && !is_extraordinary {
+        CoverIdentityScrutinyEffect {
+            tier,
+            passed: false,
+            total_hidden_delta_ext,
+            cover_flagged: true,
+            cover_burned: true,
+            cover_heat_added: 4,
+            personal_heat_bleed: 2,
+            summary: "Burned Cover Detected: terminal immediately flagged dead alias; detain alert triggered!",
+        }
+    } else {
+        eval.classify_4way(
+            |_| CoverIdentityScrutinyEffect {
+                tier,
+                passed: true,
+                total_hidden_delta_ext,
+                cover_flagged: false,
+                cover_burned: false,
+                cover_heat_added: 0,
+                personal_heat_bleed: 0,
+                summary: "Verified Clean: cover legend cleared inspection with zero audit residue.",
+            },
+            |roll| match roll.contested_kind {
+                ContestedOutcomeKind::CleanSuccess => CoverIdentityScrutinyEffect {
+                    tier,
+                    passed: true,
+                    total_hidden_delta_ext,
+                    cover_flagged: false,
+                    cover_burned: false,
+                    cover_heat_added: 0,
+                    personal_heat_bleed: 0,
+                    summary: "Passed Inspection: credentials accepted as authentic.",
+                },
+                _ => CoverIdentityScrutinyEffect {
+                    tier,
+                    passed: true,
+                    total_hidden_delta_ext,
+                    cover_flagged: true,
+                    cover_burned: false,
+                    cover_heat_added: 2,
+                    personal_heat_bleed: 0,
+                    summary: "Waved Through With Flag: checkpoint logged a secondary review (+2 Cover Heat).",
+                },
+            },
+            |_| CoverIdentityScrutinyEffect {
+                tier,
+                passed: false,
+                total_hidden_delta_ext,
+                cover_flagged: true,
+                cover_burned: false,
+                cover_heat_added: 3,
+                personal_heat_bleed: 1,
+                summary: "Inspection Rejected: manual supervisor hold triggered (+3 Cover Heat, +1 Personal Heat).",
+            },
+            |_| CoverIdentityScrutinyEffect {
+                tier,
+                passed: false,
+                total_hidden_delta_ext,
+                cover_flagged: true,
+                cover_burned: true,
+                cover_heat_added: 5,
+                personal_heat_bleed: 3,
+                summary: "Biometric/Paper Trail Mismatch: cover burned and cross-linked (+3 Personal Heat)!",
+            },
+        )
+    };
+
+    ContestedCheck::new(eval, effect)
+}
+
+/// Outcome of proactively burning and discarding a Cover Identity (`lifepaths_and_economy.md` §3.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoverBurnResult {
+    pub tier: CoverIdentityTier,
+    pub previous_personal_heat: u8,
+    pub heat_shed: u8,
+    pub new_personal_heat: u8,
+    pub biometric_crosslinked: bool,
+}
+
+/// Proactively burn a Cover Identity before federal cross-linking to deflect pursuit Heat
+/// (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.4).
+#[must_use]
+pub const fn evaluate_cover_identity_burn(
+    tier: CoverIdentityTier,
+    current_personal_heat: u8,
+    biometric_crosslinked: bool,
+) -> CoverBurnResult {
+    let spec = tier.spec();
+    let heat_shed = if biometric_crosslinked {
+        spec.clean_burn_heat_shed / 2
+    } else {
+        spec.clean_burn_heat_shed
+    };
+    let clamped_heat = if current_personal_heat > 10 {
+        10
+    } else {
+        current_personal_heat
+    };
+    CoverBurnResult {
+        tier,
+        previous_personal_heat: clamped_heat,
+        heat_shed,
+        new_personal_heat: clamped_heat.saturating_sub(heat_shed),
+        biometric_crosslinked,
+    }
+}
+
+define_coded_enum! {
+    /// Four tiers of Operational Safehouses & Bolt-Holes (`lifepaths_and_economy.md` §3.5).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    #[repr(usize)]
+    pub enum SafehouseTier [count = 4] {
+        /// Cash-only motel / off-grid squat (`$450/mo`, no Faraday, `+0` breach protection).
+        OffGridSquatMotel => {
+            code: "SAFEHOUSE_SQUAT_MOTEL",
+            label: "Off-Grid Squat / Cash Motel",
+            aliases: ["SQUAT_MOTEL", "TIER_1_SAFEHOUSE"],
+        },
+        /// Subleased shell apartment (`$2,400/mo`, `+4` lock breach, basic trauma kit `-2`).
+        SubleasedShellApartment => {
+            code: "SAFEHOUSE_SHELL_APT",
+            label: "Subleased Shell Apartment",
+            aliases: ["SHELL_APARTMENT", "TIER_2_SAFEHOUSE"],
+        },
+        /// Hardened Faraday workshop (`$8,500/mo`, Faraday RF shield, `+6` breach, `-2` workshop & medical).
+        HardenedFaradayWorkshop => {
+            code: "SAFEHOUSE_FARADAY_SHOP",
+            label: "Hardened Faraday Workshop & Bolt-Hole",
+            aliases: ["FARADAY_WORKSHOP", "TIER_3_SAFEHOUSE"],
+        },
+        /// Sovereign/corporate redoubt (`$35,000/mo`, Faraday RF shield, `+8` breach, `-4` workshop & surgical suite).
+        SovereignCorporateRedoubt => {
+            code: "SAFEHOUSE_REDOUBT",
+            label: "Sovereign / Corporate Redoubt",
+            aliases: ["CORPORATE_REDOUBT", "TIER_4_SAFEHOUSE"],
+        },
+    }
+}
+
+/// Canonical specification for a Safehouse tier (`lifepaths_and_economy.md` §3.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct SafehouseSpec {
+    pub tier: SafehouseTier,
+    pub min_sqm_upkeep: u8,
+    pub monthly_cost_usd: u32,
+    pub physical_breach_delta_ext: i32,
+    pub faraday_rf_shielded: bool,
+    pub workshop_tool_delta_mod: i32,
+    pub medical_stabilization_delta_mod: i32,
+    pub compromise_resistance_bonus: i32,
+}
+
+const SAFEHOUSE_CATALOG_ARRAY: [SafehouseSpec; 4] = [
+    SafehouseSpec {
+        tier: SafehouseTier::OffGridSquatMotel,
+        min_sqm_upkeep: 1,
+        monthly_cost_usd: 450,
+        physical_breach_delta_ext: 0,
+        faraday_rf_shielded: false,
+        workshop_tool_delta_mod: 0,
+        medical_stabilization_delta_mod: 0,
+        compromise_resistance_bonus: 0,
+    },
+    SafehouseSpec {
+        tier: SafehouseTier::SubleasedShellApartment,
+        min_sqm_upkeep: 4,
+        monthly_cost_usd: 2_400,
+        physical_breach_delta_ext: 4,
+        faraday_rf_shielded: false,
+        workshop_tool_delta_mod: 0,
+        medical_stabilization_delta_mod: -2,
+        compromise_resistance_bonus: 2,
+    },
+    SafehouseSpec {
+        tier: SafehouseTier::HardenedFaradayWorkshop,
+        min_sqm_upkeep: 6,
+        monthly_cost_usd: 8_500,
+        physical_breach_delta_ext: 6,
+        faraday_rf_shielded: true,
+        workshop_tool_delta_mod: -2,
+        medical_stabilization_delta_mod: -2,
+        compromise_resistance_bonus: 4,
+    },
+    SafehouseSpec {
+        tier: SafehouseTier::SovereignCorporateRedoubt,
+        min_sqm_upkeep: 8,
+        monthly_cost_usd: 35_000,
+        physical_breach_delta_ext: 8,
+        faraday_rf_shielded: true,
+        workshop_tool_delta_mod: -4,
+        medical_stabilization_delta_mod: -4,
+        compromise_resistance_bonus: 6,
+    },
+];
+
+impl_static_catalog!(SafehouseTier => SafehouseSpec : SAFEHOUSE_CATALOG_ARRAY);
+
+/// Canonical 4-tier Safehouse & Bolt-Hole reference catalog (`lifepaths_and_economy.md` §3.5).
+pub const SAFEHOUSE_CATALOG: &[SafehouseSpec] = &SAFEHOUSE_CATALOG_ARRAY;
+
+/// Return the full canonical 4-tier Safehouse catalog.
+#[must_use]
+pub const fn canonical_safehouse_catalog() -> &'static [SafehouseSpec] {
+    SAFEHOUSE_CATALOG
+}
+
+/// Compromise posture of a Safehouse after operatives return hot (`lifepaths_and_economy.md` §3.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SafehouseCompromiseStatus {
+    SecureUndetected,
+    WatchedSurveillancePlanted,
+    CompromisedRaidImminent,
+}
+
+/// Detailed result of [`evaluate_safehouse_compromise_check`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SafehouseCompromiseEffect {
+    pub tier: SafehouseTier,
+    pub status: SafehouseCompromiseStatus,
+    pub total_hidden_delta_ext: i32,
+    pub faraday_blocked_rf_leak: bool,
+    pub warning_lead_min: i32,
+    pub must_abandon: bool,
+    pub summary: &'static str,
+}
+
+/// Evaluate whether returning hot (`Heat >= 4`), trailed, or with active RF devices compromises
+/// a Safehouse (`docs/ttrpg/03-character/lifepaths_and_economy.md` §3.5).
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_safehouse_compromise_check(
+    tier: SafehouseTier,
+    returning_heat: u8,
+    actively_tailed: bool,
+    rf_hygiene_breached: bool,
+    operator_skill_n: usize,
+    operator_control_c: i32,
+    internal_mod: i32,
+    operator_pairs: &[(i32, i32)],
+    gm_pair: (i32, i32),
+    tie_rule: ContestedTieRule,
+) -> ContestedCheck<SafehouseCompromiseEffect> {
+    let spec = tier.spec();
+    let heat_penalty = if returning_heat >= 4 {
+        (returning_heat.min(10) - 3) as i32 * 2
+    } else {
+        0
+    };
+    let tail_penalty = if actively_tailed { 4 } else { 0 };
+    let faraday_blocked_rf_leak = rf_hygiene_breached && spec.faraday_rf_shielded;
+    let rf_penalty = if rf_hygiene_breached && !spec.faraday_rf_shielded {
+        4
+    } else {
+        0
+    };
+    let total_hidden_delta_ext =
+        heat_penalty + tail_penalty + rf_penalty - spec.compromise_resistance_bonus;
+
+    let eval = TieredSaveEval::evaluate(
+        operator_skill_n,
+        operator_control_c,
+        internal_mod,
+        0,
+        total_hidden_delta_ext,
+        tie_rule,
+        operator_pairs,
+        gm_pair,
+    );
+
+    let effect = eval.classify_4way(
+        |_| SafehouseCompromiseEffect {
+            tier,
+            status: SafehouseCompromiseStatus::SecureUndetected,
+            total_hidden_delta_ext,
+            faraday_blocked_rf_leak,
+            warning_lead_min: 0,
+            must_abandon: false,
+            summary: "Safehouse Cold & Secure: countersurveillance protocols scrubbed any pursuit vector.",
+        },
+        |roll| match roll.contested_kind {
+            ContestedOutcomeKind::CleanSuccess => SafehouseCompromiseEffect {
+                tier,
+                status: SafehouseCompromiseStatus::SecureUndetected,
+                total_hidden_delta_ext,
+                faraday_blocked_rf_leak,
+                warning_lead_min: 0,
+                must_abandon: false,
+                summary: "Safehouse Remains Uncompromised: no hostile spotters logged location.",
+            },
+            _ => SafehouseCompromiseEffect {
+                tier,
+                status: SafehouseCompromiseStatus::WatchedSurveillancePlanted,
+                total_hidden_delta_ext,
+                faraday_blocked_rf_leak,
+                warning_lead_min: 15,
+                must_abandon: false,
+                summary: "Street Block Flagged: hostile scouts narrowed neighborhood; vacate before next daylight shift (15 min lead).",
+            },
+        },
+        |_| SafehouseCompromiseEffect {
+            tier,
+            status: SafehouseCompromiseStatus::WatchedSurveillancePlanted,
+            total_hidden_delta_ext,
+            faraday_blocked_rf_leak,
+            warning_lead_min: 5,
+            must_abandon: true,
+            summary: "Safehouse Surveilled: drones/van spotted ingress; 5 minutes to exfil via bolt-hole.",
+        },
+        |_| SafehouseCompromiseEffect {
+            tier,
+            status: SafehouseCompromiseStatus::CompromisedRaidImminent,
+            total_hidden_delta_ext,
+            faraday_blocked_rf_leak,
+            warning_lead_min: 2,
+            must_abandon: true,
+            summary: "Compromised — Strike Team En Route: breach imminent in 2 minutes!",
+        },
+    );
+
+    ContestedCheck::new(eval, effect)
 }
 
 #[cfg(test)]

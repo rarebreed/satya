@@ -207,7 +207,7 @@ pub fn evaluate_ranged_recoil_and_suppression(
 }
 
 /// Evaluates Ranged Recoil Bracing and Suppressive Fire using the canonical 5-gait movement model
-/// from `docs/ttrpg/06-health-and-survival/movement_vehicles_and_environment.md` §1.2
+/// from `docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.2
 /// (`+0` Crawl/Creep, `+2` Combat Glide, `+4` Bounding Run).
 pub fn evaluate_ranged_recoil_with_gait(
     allocated_force: i32,

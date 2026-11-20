@@ -1901,7 +1901,7 @@ pub fn evaluate_health_fatigue_and_bleed(
     Ok(d.unbind())
 }
 
-/// Evaluates Sprint Velocity ($V_{\text{sprint}}$) and Load-Bearing Encumbrance (`Tiers 0–4`, `movement_vehicles_and_environment.md` §1–§2).
+/// Evaluates Sprint Velocity ($V_{\text{sprint}}$) and Load-Bearing Encumbrance (`Tiers 0–4`, `movement_encumbrance_and_vehicles.md` §1–§2).
 #[pyfunction]
 #[pyo3(signature = (spd_eff=10, hgt_m=1.75, mas_kg=70.0, for_stat=10, carried_mass_kg=12.0, exo_offset_kg=0.0))]
 pub fn evaluate_movement_and_encumbrance(

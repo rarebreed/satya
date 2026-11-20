@@ -1,4 +1,4 @@
-//! CLI utility (`cargo run -p satya-engine --bin build-rules-book`) that compiles all 18 canonical
+//! CLI utility (`cargo run -p satya-engine --bin build-rules-book`) that compiles all 23 canonical
 //! chapters of the Satya TTRPG Rules Book (`docs/ttrpg/`) into static HTML pages and `catalog.json`
 //! inside `docs/book/`.
 
@@ -227,6 +227,18 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
         ),
         ("action_economy_and_ooda.md", "action_economy.html"),
         (
+            "02-core-mechanics/stealth_awareness_and_investigation.md",
+            "stealth_and_awareness.html",
+        ),
+        (
+            "../02-core-mechanics/stealth_awareness_and_investigation.md",
+            "stealth_and_awareness.html",
+        ),
+        (
+            "stealth_awareness_and_investigation.md",
+            "stealth_and_awareness.html",
+        ),
+        (
             "03-character/characteristics_and_aptitudes.md",
             "characteristics.html",
         ),
@@ -317,6 +329,18 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
         ),
         ("ranged_combat_and_armor.md", "ranged_combat_and_armor.html"),
         (
+            "05-combat/arsenal_explosives_and_tactical_gear.md",
+            "arsenal_and_explosives.html",
+        ),
+        (
+            "../05-combat/arsenal_explosives_and_tactical_gear.md",
+            "arsenal_and_explosives.html",
+        ),
+        (
+            "arsenal_explosives_and_tactical_gear.md",
+            "arsenal_and_explosives.html",
+        ),
+        (
             "06-health-and-survival/health_and_trauma.md",
             "health_and_trauma.html",
         ),
@@ -326,16 +350,64 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
         ),
         ("health_and_trauma.md", "health_and_trauma.html"),
         (
+            "06-health-and-survival/movement_encumbrance_and_vehicles.md",
+            "movement_and_vehicles.html",
+        ),
+        (
+            "../06-health-and-survival/movement_encumbrance_and_vehicles.md",
+            "movement_and_vehicles.html",
+        ),
+        (
+            "movement_encumbrance_and_vehicles.md",
+            "movement_and_vehicles.html",
+        ),
+        (
+            "06-health-and-survival/environmental_hazards_and_survival.md",
+            "environmental_hazards.html",
+        ),
+        (
+            "../06-health-and-survival/environmental_hazards_and_survival.md",
+            "environmental_hazards.html",
+        ),
+        (
+            "environmental_hazards_and_survival.md",
+            "environmental_hazards.html",
+        ),
+        (
             "06-health-and-survival/movement_vehicles_and_environment.md",
-            "movement_and_environment.html",
+            "movement_and_vehicles.html",
         ),
         (
             "../06-health-and-survival/movement_vehicles_and_environment.md",
-            "movement_and_environment.html",
+            "movement_and_vehicles.html",
         ),
         (
             "movement_vehicles_and_environment.md",
-            "movement_and_environment.html",
+            "movement_and_vehicles.html",
+        ),
+        (
+            "07-engineering-and-tech/engineering_and_weapon_design.md",
+            "engineering_and_weapon_design.html",
+        ),
+        (
+            "../07-engineering-and-tech/engineering_and_weapon_design.md",
+            "engineering_and_weapon_design.html",
+        ),
+        (
+            "engineering_and_weapon_design.md",
+            "engineering_and_weapon_design.html",
+        ),
+        (
+            "07-engineering-and-tech/robotics_drones_and_ai_architecture.md",
+            "robotics_and_ai_architecture.html",
+        ),
+        (
+            "../07-engineering-and-tech/robotics_drones_and_ai_architecture.md",
+            "robotics_and_ai_architecture.html",
+        ),
+        (
+            "robotics_drones_and_ai_architecture.md",
+            "robotics_and_ai_architecture.html",
         ),
     ];
     let mut out = rendered_html.to_string();
@@ -350,7 +422,9 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
 }
 
 fn part_index_from_label(part: &str) -> u8 {
-    if part.starts_with("Part VI") {
+    if part.starts_with("Part VII") {
+        7
+    } else if part.starts_with("Part VI") {
         6
     } else if part.starts_with("Part V") {
         5
@@ -432,7 +506,7 @@ fn wrap_book_page_html(
         .enumerate()
         .find(|(_, d)| d.summary.chapter_id == active_chapter_id)
         .map(|(i, d)| (i + 1, d.summary.part.as_str()))
-        .unwrap_or((0, "Part I-VI: Reference & Sandbox"));
+        .unwrap_or((0, "Part I-VII: Reference & Sandbox"));
     let part_index = part_index_from_label(part_label);
     let part_short = part_label.split(':').next().unwrap_or(part_label).trim();
     let esc_title = escape_html_text(title);

@@ -1,6 +1,6 @@
 # Satya TTRPG Combat Architecture, Tactical Triad & Pools
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`TacticalPoolEnvelopeInput`, `TacticalPoolEnvelope`, `TacticalTriadAllocation`, `CombatPosture`, `compute_tactical_pool_envelope`, `validate_triad_allocation`) and [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain`, `CombatMoveCategory`, `CombatTechniqueId`, `COMBAT_TECHNIQUE_CATALOG`, `evaluate_technique_with_triad`, `resolve_technique_exchange`).  
+> **Rust Engine Implementation**: [`crates/satya-engine/src/combat.rs`](../../../crates/satya-engine/src/combat.rs) (`TacticalPoolEnvelopeInput`, `TacticalPoolEnvelope`, `TacticalTriadAllocation`, `CombatPosture`, `compute_tactical_pool_envelope`, `validate_triad_allocation`, `evaluate_multi_opponent_pool_split`, `ObjectTargetClass`, `evaluate_object_targeting`), [`crates/satya-engine/src/combat_techniques.rs`](../../../crates/satya-engine/src/combat_techniques.rs) (`CombatDomain`, `CombatMoveCategory`, `CombatTechniqueId`, `COMBAT_TECHNIQUE_CATALOG`), and [`crates/satya-engine/src/explosives_and_arsenal.rs`](../../../crates/satya-engine/src/explosives_and_arsenal.rs).  
 > **Guided Play Example**: See [Guide 05: Demystifying "Envelope & Fill" (`Tempo · Control · Force`)](../../ttrpg-examples/05-melee-and-tactical-triad.md#2-demystifying-envelope--fill-setup-takes-60-seconds).
 
 Because simulation-style tactical agency is at the heart of **Satya**, combat is a deeply integrated extension of **[Cascading `2d20` Engine & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md)**. As in all Task Resolutions, every combat exchange—including ranged combat—is a contested system using the Two-List Cascading (`2d20`) Watershed Mechanic.
@@ -236,9 +236,30 @@ A crucial design principle in Satya is separating **which Combat Technique** a f
 2. **The Triad Allocation (`T / C / F`) Shapes the Execution**:
    A quick, guarded jab (`Tempo + Control`, low `Force`) and a wide-open knockout haymaker (`Force`, low `Tempo` and `Control`) are **both `Punch` strikes**. The technique sets the baseline hand-strike biomechanics (`Reach 1`, `Base TC 7`, `1.00× POW`, `Guard +0`), while your **Tactical Triad allotment** determines whether it finishes in `4 ticks` as a tight probe or winds up for `10 ticks` as a devastating finisher! Similarly, a `Kick` can be thrown as a fast range-finding teep (`Tempo + Control`) or a full-power roundhouse (`Force`), and any **Control Technique** (`Grab`, `Disarm`, `Takedown`, `Throw`, `Trap`, `Lock`, `Push`) uses **Tempo** for entry speed, **Control** for technical leverage/*Kuzushi* and Guard retention, and **Force** for uprooting power or joint torque.
 
+### 4.6 Multi-Opponent Pool Splitting, Flanking, Elevation & Object Targeting
+
+When a combatant is outnumbered, attacked from a blindside, fighting across staircases/rooftops, or shooting through locks and car tires rather than people, `combat.rs` resolves the geometry uniformly on top of $P_{\text{eff}}$:
+
+1. **Multi-Opponent Pool Splitting & Attention Tax (`evaluate_multi_opponent_pool_split`)**:
+   - **Attention Tax ($\Delta P_{\text{outnumbered}}$)**: Engaging or defending against $M \ge 2$ simultaneous active foes deducts **`-2` points from $P_{\text{eff}}$ per extra opponent beyond the first, capped at `-6`** (`4+` foes). Fighting in a **narrow doorway, stairwell, or with a solid wall at your back reduces the tax by `+2` points** (down to `0` vs `2` foes).
+   - **Independent Split Allocations**: You may divide your remaining available pool into multiple separate `T / C / F` allocations on one exchange (e.g., an `8 / 6 / 4` strike at Threat A and a `4 / 6 / 0` `Parry`/`Dodge` held against Threat B); each split still obeys individual $T_{\max}, C_{\max}, F_{\max}$ caps and cannot be negative.
+2. **Flanking & Blindside Arcs (`> 90°` off forward facing)**:
+   - Attacks originating from the flank or rear slash the defender's **`Control Cap` by `-4`** and impose **`+4` $\Delta_{\text{ext}}$** against active `Parry`/`Dodge`/`Block` reactions unless the defender already spotted the flanker.
+3. **Elevation Advantage (`±1.5 m` Height Differential)**:
+   - Holding high ground (`>= +1.5 m` rooftop, stairwell landing, truck bed) grants **`-2` $\Delta_{\text{ext}}$** on attacks/defenses and **`+1` melee Reach tier** when striking downward; fighting uphill against elevated foes imposes **`+2` $\Delta_{\text{ext}}$**.
+4. **Targeting Inanimate Objects, Locks & Vehicles (`evaluate_object_targeting`)**:
+   - Declare an [`ObjectTargetClass`](../../../crates/satya-engine/src/combat.rs) size modifier and compare `Effective Pen` against `MaterialClass` $\text{PR}_{\text{barrier}}$ (`barrier_ballistics.rs`) and `Structural Integrity (SI)`:
+     - **`SmallPrecisionTarget`** (*Padlock shackle, CCTV lens, optic housing, pistol slide*): **`+4` $\Delta_{\text{ext}}$**, **`SI 2`**.
+     - **`MediumComponentTarget`** (*Deadbolt strike plate, door hinge, drone rotor, vehicle tire*): **`+2` $\Delta_{\text{ext}}$**, **`SI 4`**.
+     - **`LargeStructuralTarget`** (*Timber door slab, interior bulkhead, car door panel*): **`+0` $\Delta_{\text{ext}}$**, **`SI 8`**.
+     - **`HeavyFortifiedBarrier`** (*Concrete pillar, safe hinge, vault frame, engine block*): **`-2` $\Delta_{\text{ext}}$**, **`SI 14`**.
+   - If $\text{Effective Pen} > \text{PR}_{\text{barrier}}$, object loses $\max(1, \text{Effective Impact} - \text{PR}_{\text{barrier}})$ `SI` (`0` damage = ricochet/deflected unless blunt crush exceeds `PR + 4`).
+
 ---
 
 ## 5. Companion Combat Chapters
 
-- **[Melee Combat, Close-Quarters Tactics & The Tactical Triad](melee_combat.md)**: Close-quarters Reach Tiers, `Guard` & Seizing the Initiative, `Root` vs. throws/sweeps, the Six Core Tactical Allocations (`TC`, `TF`, `CF`, `Pure T/C/F`), Melee Weapon Profiles, and the complete **Viktor vs. Elena** melee walkthrough.
+- **[Melee Combat, Close-Quarters Tactics & The Tactical Triad](melee_combat.md)**: Close-quarters Reach Tiers, `Guard` & Seizing the Initiative, `Root` vs. throws/sweeps, the Six Core Tactical Allocations (`TC`, `TF`, `CF`, `Pure T/C/F`), 22-entry Melee & Shield Catalog, and the complete **Viktor vs. Elena** melee walkthrough.
+- **[Granular Ballistics, Ammunition Physics & Firearm Engineering](firearms_and_ballistics.md)**: Cartridge thermodynamics, internal/external/terminal ballistics, action mechanisms, tolerance vs. reliability, and mass/CoG/OAL geometry.
 - **[Ranged Combat, Suppression, Armor & Weapon Reliability](ranged_combat_and_armor.md)**: Ranged fire modes & Recoil Ratings (`R`), Suppression vs. Morale, Armor Penetration (`PR`) vs. Behind-Armor Blunt Trauma (`BABT`), Weapon Reliability (`Rel`) & Malfunctions, and the **Mateo vs. Sgt. Vance** & **Sniper Overwatch** walkthroughs.
+- **[Expanded Arsenal, Explosives, Breaching & Tactical Gear](arsenal_explosives_and_tactical_gear.md)**: 6 extra calibers (`.22 LR` to `.300 BLK`), 10 expanded firearms (up to `.50 BMG`), specialty shotgun loads, bows/less-lethal systems, explosives/blast overpressure/breaching, and weapon optics.

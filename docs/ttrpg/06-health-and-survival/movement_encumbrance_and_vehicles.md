@@ -1,9 +1,9 @@
-# Satya TTRPG Movement, Encumbrance, Vehicles & Environmental Survival
+# Satya TTRPG Movement, Encumbrance & Vehicles
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/environment_vehicles.rs`](../../../crates/satya-engine/src/environment_vehicles.rs) (`MovementGait`, `EncumbranceTier`, `VehicleClass`, `VehicleProfile`, `evaluate_movement_velocities`, `evaluate_special_locomotion`, `evaluate_encumbrance`, `evaluate_vehicle_triad_exchange`, `evaluate_collision_and_gloc`, `canonical_vehicle_catalog`) and [`crates/satya-engine/src/environmental_hazards.rs`](../../../crates/satya-engine/src/environmental_hazards.rs) (`DehydrationStage`, `StarvationPhase`, `HypothermiaStage`, `HeatIllnessStage`, `HypoxiaZone`, `ToxinClass`, `evaluate_dehydration`, `evaluate_starvation`, `evaluate_thermal_stress`, `evaluate_sleep_deprivation`, `evaluate_altitude_hypoxia`, `evaluate_toxin_or_pathogen`, `evaluate_radiation_exposure`).  
+> **Rust Engine Implementation**: [`crates/satya-engine/src/environment_vehicles.rs`](../../../crates/satya-engine/src/environment_vehicles.rs) (`SprintVelocityMetrics`, `CombatMovementGait`, `OverlandTravelPace`, `OverlandTerrainKind`, `CarryErgonomicMethod`, `LoadEncumbranceTier`, `BulkLoadAssessment`, `ChaseRangeBand`, `VehicleEnvelopeProfile`, `VehicleClass`, `VehicleId`, `VehicleCatalogSpec`, `VehicleFiringPlatformCondition`, `VehicleComponentZone`, `compute_stride_and_sprint_velocity`, `evaluate_combat_movement_gait`, `evaluate_overland_travel`, `compute_base_comfort_load_kg`, `evaluate_encumbrance_load`, `evaluate_encumbrance_with_bulk`, `canonical_vehicle_catalog`, `evaluate_vehicle_chase_exchange`, `evaluate_vehicle_firing_platform`, `evaluate_vehicle_component_damage`, `evaluate_collision_and_g_force`). Companion chapter to **[Environmental Hazards, Survival & Field Pharmacology](environmental_hazards_and_survival.md)**.  
 > **Guided Play Example**: See [Guide 06 §5 (`4-Tick` Pack Quick-Release & Vehicle Triad Escape)](../../ttrpg-examples/06-firefights-trauma-and-survival.md#5-quick-release-pack-6-second-tourniquet--vehicle-escape).
 
-This chapter defines the canonical **Movement, Load-Bearing Encumbrance, Vehicular Pursuits & G-Force Physics, and Environmental Survival Systems** for **Satya** (for definitions of all mathematical variables and formulas such as $\text{SF}, V_{\text{sprint}}, W_{\text{req}}, \text{CLO}, \text{Sv}$, see the **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**). In keeping with Satya's simulation philosophy, movement speed is not an arbitrary fixed integer (`"30 feet per turn"`) shared by every human regardless of stature, conditioning, or backpack weight, nor are environmental hazards hand-waved when operators deploy into deserts, mountains, maritime storms, or depressurized orbital habitats.
+This chapter defines the canonical **Movement, Load-Bearing Encumbrance, and Vehicular Pursuits, Firing Platforms & Component Physics** for **Satya** (for definitions of all mathematical variables and formulas such as $\text{SF}, V_{\text{sprint}}, L_{\text{base}}, L_{\text{eff}}, T_{\max}, C_{\max}, F_{\max}$, see the **[Mathematical Notation, Variables & Formula Glossary](../01-foundation/mathematical_notation_glossary.md)**). In keeping with Satya's simulation philosophy, movement speed is not an arbitrary fixed integer (`"30 feet per turn"`) shared by every human regardless of stature, conditioning, or backpack weight, nor is vehicular combat hand-waved when chases erupt across rain-slicked expressways or maritime channels.
 
 ---
 
@@ -49,7 +49,7 @@ On the **[Count-Up Action Clock](../02-core-mechanics/action_economy_and_ooda.md
    - **Rough Wall / Drainpipe / Rock Face**: `0.15 m/Tick` (`0.6 m/s`), requiring a *Climbing* (`FOR/KIN`) cascade check with $\Delta_{\text{ext}}$ set by surface holds and **Encumbrance Tier** (`+2` per Encumbrance Tier).
 3. **Swimming (*Swimming & Diving* `FIT/KIN`)**:
    - Unencumbered surface swim speed is **`20%` of $V_{\text{sprint}}$** (`1.5 m/s` or `0.38 m/Tick` at `SPD 10, FIT 10`).
-   - **Encumbrance in Water**: Tier 2 (`Tactical Load`) imposes **`+4` $\Delta_{\text{ext}}$** to stay afloat; Tier 3+ (`Heavy Load` / steel plates without flotation) drags the character downward at `1.0 m/s` unless jettisoned (`12 ticks` quick-release cutout)!
+   - **Encumbrance in Water**: Tier 2 (`Tactical Load`) imposes **`+4` $\Delta_{\text{ext}}$** to stay afloat; Tier 3+ (`Heavy Load` / steel plates without flotation) drags the character downward at `1.0 m/s` unless jettisoned (`12 ticks` quick-release cutout)! For underwater depth pressure, Nitrogen Narcosis, and Decompression Sickness, see **[Environmental Hazards §5](environmental_hazards_and_survival.md#5-dynamic-weather-wind-footing--underwater-diving-pressure)**.
 4. **Zero-G / Microgravity EVA Movement (*Zero-G Maneuver* `KIN/INS`)**:
    - In orbital or deep-space microgravity, movement follows Newtonian momentum: pushing off a bulkhead imparts a constant velocity vector ($v = \text{Impulse} / \text{MAS}$) that continues indefinitely until arrested by a handhold, mag-boot lock, or RCS thruster burst.
    - Missing a *Zero-G Maneuver* check while translating across an open bay leaves the character **Adrift** (`Tempo = 0` for directional changes unless firing a thruster or tether).
@@ -117,9 +117,19 @@ Compare the character's **Effective Load ($L_{\text{eff}}$)** against multiples 
 | **Tier 3: Heavy / March Load** | $2.51\text{–}4.0 \times L_{\text{base}}$ | `30.1 – 48.0 kg` | **`-6` $T_{\max}$**, **`-4` `KIN`** | **`+0.25` (`+25%`)** | Heavy rucksack; **cannot Sprint** (capped at Bounding Run); dropping rucksack (`4 ticks` quick-release) immediately restores Tier 1/2! |
 | **Tier 4: Overloaded / Staggering** | $4.01\text{–}6.0 \times L_{\text{base}}$ | `48.1 – 72.0 kg` | **`-10` $T_{\max}$**, **`-8` `KIN`** | **`+0.50` (`+50%`)** | Walking/staggering only (`0.3 m/Tick`); `+2` Exertion Marks every `20 ticks`. Maximum deadlift/drag limit is $8 \times L_{\text{base}}$. |
 
+### 2.4 Bulk, Stowage Volume & Quick-Access Slots
+
+Mass alone does not capture the difference between dense lead magazines on a chest rig and an awkward 1.1-meter breaching ram or sealed server tower tucked under one arm:
+
+1. **Quick-Access Webbing vs. Stowed Pack**:
+   - **Quick-Access Chest Rig / Duty Belt (`6 Ticks` `[1.5s]` Retrieve)**: Holds immediate-use magazines, `IFAK`, radio, sidearm, and `1–2` compact grenades/tools (`<= 6` ready pouches).
+   - **Stowed Rucksack / Courier Bag (`24–40 Ticks` `[6–10s]` Retrieve)**: Bulk spares, demo kits, spare batteries, and laptops live inside closed packs (`4 Ticks` `[1.0s]` quick-release jettison buckle).
+2. **Awkward / Bulky Load Penalty (`+1` Effective Agility Tier)**:
+   - Carrying an unslung rigid object with **Overall Length $> 80\text{ cm}$** or awkward bulky geometry (e.g., an unbagged precision rifle, rigid server chassis, sealed cryocase, or fireman-carried casualty) shifts the character's **effective Encumbrance Tier by `+1` tier** (capped at Tier 4) specifically for **Stealth**, **Parkour / Squeezing**, and **Climbing** $\Delta_{\text{ext}}$ checks—even if total body mass remains within Tier 0 or Tier 1!
+
 ---
 
-## 3. Vehicles, High-Speed Chases & Crash / G-Force Physics
+## 3. Vehicles, High-Speed Chases, Component Damage & G-Force Physics
 
 ![The Vehicle Triad Pursuit — A stripped manual hatchback drifting around an overpass pier ahead of an armored DAISE interceptor SUV](../../assets/24_vehicle_triad_pursuit.jpg#full)
 
@@ -140,117 +150,45 @@ Satya's **[Tactical Triad (`Tempo`, `Control`, `Force`)](../05-combat/tactical_t
 
 ---
 
-## 4. Environment & Survival Systems: Water, Food, Temperature & Atmosphere
+### 3.4 Canonical 2035 Vehicle Catalog
 
-Environmental survival in Satya operates through the exact same physiological levers as combat trauma: **Internal Cascade Modifiers ($\Delta_{\text{int}}$)**, **Fatigue Levels (`fatigue_level`)**, **Wound Shock (`wound_shock_index`)**, and temporary **Characteristic Degradation (`HLT`, `FIT`, `DEX`, `FOC`, `ANA`)**.
+Each vehicle below provides its **Tactical Envelope Ceilings (`Tempo / Control / Force`)**, physical **Curb Mass (`kg`)**, **Cabin vs. Engine Armor Protection (`PR`)**, **Top Speed (`km/h`)**, **Crew + Passengers**, **Street/Market Cost**, and **`[Access]` Gate** (for full material penetration physics across vehicle hulls and glass, see **[Ranged Combat §8.3](ranged_combat_and_armor.md#83-tactical-concealment-vs-structural-cover--barrier-penetration-pr_barrier)**):
 
-```mermaid
-flowchart LR
-    subgraph Env["Environmental Stressors"]
-        Wat["<b>Water Deprivation</b><br/>3–10 L/day Need<br/>Dehydration Stages 0–4"]
-        Food["<b>Caloric Deficit</b><br/>2,500–4,500 kcal/day<br/>Starvation & Catabolism"]
-        Temp["<b>Thermal Extremes</b><br/>Cold (Hypothermia / Frostbite)<br/>Heat (Hyperthermia / Heatstroke)"]
-        Atm["<b>Atmosphere, Sleep & Toxins</b><br/>Sleep Debt · Altitude Hypoxia<br/>Smoke/Vacuum · Radiation"]
-    end
-
-    subgraph Mech["Unified Satya Mechanical Impact"]
-        Int["<b>Internal Difficulty (+Δ_int)</b><br/>Raises Failure Carry δ_under = 6 + Δ_int"]
-        Cap["<b>Characteristic & Ceiling Erosion</b><br/>Lowers FIT, HLT, DEX, FOC, ANA<br/>& Tactical Pool P_eff"]
-        Save["<b>Contested Physiological Saves</b><br/>HLT / FIT / DIS vs. Hidden TN_GM"]
-    end
-
-    Env --> Mech
-```
+| Vehicle Model & Archetype | Class | Envelope (`T / C / F`) | Curb Mass | Armor (`Cabin / Engine PR`) | Top Speed | Crew + Pax | Cost & `[Access]` |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **1. Urban Electric Commuter Moto** | `Motorcycle` | `16 / 15 / 4` | `195 kg` | `PR 0` *(Exposed)* / `PR 3` | `145 km/h` | `1 + 1` | **`$9,500`** · `[Universal]` |
+| **2. Compact Urban EV Hatchback** | `PassengerCar` | `12 / 13 / 8` | `1,450 kg` | `PR 3` / `PR 6` *(EV Motor)* | `165 km/h` | `1 + 3` | **`$28,000`** · `[Universal]` |
+| **3. Midsize Civilian Sedan** | `PassengerCar` | `13 / 12 / 10` | `1,750 kg` | `PR 3` / `PR 9` *(IC Block)* | `205 km/h` | `1 + 4` | **`$38,000`** · `[Universal]` |
+| **4. Armored SecOps / DAISE Interceptor SUV** | `SuvOrUtility` | `13 / 11 / 15` | `3,400 kg` | **`PR 8`** *(Glass `PR 6`)* / `PR 9` | `210 km/h` | `1 + 5` | **`$185,000`** · `[Class III: Restricted]` |
+| **5. Commercial Utility / Surveillance Van** | `SuvOrUtility` | `10 / 9 / 13` | `2,500 kg` | `PR 3` / `PR 9` | `155 km/h` | `1 + 7` | **`$46,000`** · `[Universal]` |
+| **6. 4×4 Off-Road Pickup / Technical** | `SuvOrUtility` | `11 / 10 / 14` | `2,400 kg` | `PR 3` / `PR 9` | `170 km/h` | `1 + 4` *(+ Bed)* | **`$52,000`** · `[Universal]` |
+| **7. Heavy Armored Transport / Cash Truck** | `HeavyArmoredTruck` | `8 / 7 / 18` | `8,500 kg` | **`PR 9`** / `PR 10` | `120 km/h` | `2 + 6` | **`$260,000`** · `[Class I/III]` |
+| **8. Rigid-Hull Tactical Patrol Boat (`RHIB`)** | `Watercraft` | `13 / 12 / 9` | `1,900 kg` | `PR 3` / `PR 6` | `85 km/h` | `1 + 7` | **`$95,000`** · `[Class I: Licensed]` |
+| **9. Light Twin-Turbine Utility Helicopter** | `RotorcraftVtol` | `16 / 13 / 10` | `2,800 kg` | `PR 2` / `PR 5` *(Turbine)* | `260 km/h` | `2 + 6` | **`$2,400,000`** · `[Class I/III]` |
+| **10. 2035 Autonomous-Assisted Tiltrotor VTOL** | `RotorcraftVtol` | `18 / 14 / 13` | `5,200 kg` | **`PR 6`** / `PR 7` | `420 km/h` | `2 + 8` | **`$6,800,000`** · `[Class III/IV]` |
 
 ---
 
-### 4.1 Hydration & Water Deprivation
+### 3.5 Firing From Moving Vehicles & Passenger Stabilization
 
-Water is the most acute survival resource after breathable air. A human can survive weeks without food, but in arid heat or heavy combat exertion, lethal dehydration occurs within **`24 to 72 hours`**.
+Passengers firing handguns or rifles out of moving windows, pickup beds, or helicopter doors face lateral G-forces, suspension bounce, and air blast that disrupt sight alignment (**Control**) and recoil recovery (**Force**):
 
-#### Daily Water Requirement ($W_{\text{req}}$)
-- **Temperate Climate, Low Activity**: **`3.0 Liters / Day`** (`3.0 kg` mass).
-- **Heavy Physical Labor / Forced March**: **`5.0 Liters / Day`**.
-- **Hot / Arid Desert or Tropical Jungle (`> 35°C`) + Tactical Gear**: **`8.0 to 10.0 Liters / Day`** (`0.5–0.8 L/hour` sweat loss during daytime movement!).
-
-#### The Five Stages of Dehydration
-
-For every **25% of Daily Water Requirement missed** (or every `2 Liters` of unreplaced sweat deficit), the character advances **+1 Dehydration Stage**:
-
-| Stage | Body Water Deficit | Internal Mod ($\Delta_{\text{int}}$) | Characteristic & Stamina Penalties | Physiological Symptoms & `HLT` Saves |
-| :---: | :---: | :---: | :--- | :--- |
-| **Stage 0** | `< 2%` | `0` | None | Euhydrated baseline. |
-| **Stage 1: Thirsty** | `2–4%` (`~1.5–2.5 L`) | **`+2`** | **`-1` `FIT`**, **`-1` `FOC`**, **`+1` `fatigue_level` floor** | Dry mouth, dark urine, mild headache. Cleared in `30 min` by drinking `1.5 L` water. |
-| **Stage 2: Parched** | `5–7%` (`~3.5–5.0 L`) | **`+4`** | **`-3` `FIT`**, **`-2` `SPD/HLT/ANA`**, **`+2` `fatigue_level` floor** | Tachycardia, orthostatic **`Dizzy`** (`-2 KIN`), muscle cramps, cessation of sweating (high **Heatstroke** risk). |
-| **Stage 3: Severe** | `8–10%` (`~6.0–7.0 L`) | **`+8`** | **`-6` `FIT/HLT/ANA/FOC`**, **`+4` `fatigue_level` floor** | Sunken eyes, oliguria, delirium/hallucinations (`INS 4`); must roll **`HLT`** every `4 hours` or collapse **Unconscious**. Requires oral rehydration salts or IV saline. |
-| **Stage 4: Lethal** | `> 12%` (`> 8.5 L`) | **`+10`** | **Comatose (`All Caps = 0`)** | Hypovolemic shock, acute renal failure, and fatal cardiac arrest within **`1–6 hours`** without IV fluid resuscitation. |
-
-> [!NOTE]
-> **Fatigue Floor**: A Dehydration Stage's "`fatigue_level` floor" means the character **cannot reduce their `fatigue_level` below that number** through rest or sleep until they rehydrate!
+| Platform Stability Condition | Shooter $\Delta_{\text{ext}}$ | Recoil Adder ($\Delta R$) | Ranged `Control Cap` Limit | Pintle / Gimbal Mount Effect |
+| :--- | :---: | :---: | :---: | :--- |
+| **1. Stationary / Idling** | `+0` | `+0` | Uncapped ($C_{\max}$) | Acts as **Braced Rest (`-3 R`)**. |
+| **2. Smooth Cruise (`Highway / Calm Sea`)** | **`+2`** | **`+2`** | Uncapped ($C_{\max}$) | Halved (`+1` $\Delta_{\text{ext}}$, `+1 R`). |
+| **3. Evasive Weave / Active Chase** | **`+4`** | **`+4`** | **$\lfloor C_{\max} / 2 \rfloor$** | Halved (`+2` $\Delta_{\text{ext}}$, `+2 R`, uncapped). |
+| **4. Off-Road / Hard Drift / Rotor Banking** | **`+6`** | **`+6`** | **$\lfloor C_{\max} / 3 \rfloor$** | Halved (`+3` $\Delta_{\text{ext}}$, `+3 R`, cap $\lfloor C_{\max}/2 \rfloor$). |
 
 ---
 
-### 4.2 Nutrition, Caloric Deficit & Starvation
+### 3.6 Vehicle Component Trauma & EV Battery Thermal Runaway
 
-- **Daily Caloric Requirement**:
-  - **Sedentary / Watch Duty**: `2,000–2,400 kcal/day` (`~0.5 kg` dry field rations).
-  - **Standard Patrol / Active Operations**: `3,200–3,800 kcal/day` (`~0.75 kg` MRE / nutrient ration).
-  - **Arctic Cold or Heavy Mountain March**: `4,500–6,000 kcal/day` (`~1.2 kg` high-fat rations).
-- **Short-Term Fasting & Glycogen Depletion (`Days 1–3` Without Food)**:
-  - **First `24 Hours`**: Mild hunger pangs (`+0` mechanical penalty for characters with `DIS >= 10`; `+1` $\Delta_{\text{int}}$ if `DIS < 10`).
-  - **`48–72 Hours` (Glycogen Depletion & Early Ketosis)**: Liver glycogen empties; blood glucose dips. Imposes **`+2` to $\Delta_{\text{int}}$**, **`+1` `fatigue_level` floor**, and **`-2` to `FOC` and `FIT`**.
-- **Prolonged Caloric Deficit & Starvation (`Days 4–30+`)**:
-  - For every **`3 Days` of total starvation** (or every cumulative `10,000 kcal` deficit), the character must make a **`HLT` check ($\Delta_{\text{ext}} = +2 \times \text{Week}$)**:
-    - **Catabolic Muscle & Mass Loss**: Body Mass (**`MAS`**) drops by **`-1.5 kg`**, and **`Force (FOR)`**, **`Fitness (FIT)`**, and **`Health (HLT)`** each erode by **`-1` point** (`+2` $\Delta_{\text{int}}$ per week).
-    - When **`HLT` or `FOR` reaches `0`** (typically after `30–45 days` without food depending on starting `MAS` and `HLT`), fatal organ failure occurs.
+Instead of shooting generically at a vehicle's "hit points," attackers use Called Shots against critical vehicle subsystems. Compare the projectile's **Effective Penetration ($\text{Pen}_{\text{eff}}$)** against the struck zone's **Protection Rating ($\text{PR}$)**:
 
----
-
-### 4.3 Temperature Extremes: Cold (Hypothermia) & Heat (Hyperthermia)
-
-Human core body temperature must remain within a narrow window around **`37.0°C` (`98.6°F`)**. Both extreme cold and extreme heat are governed by the balance between **Ambient Effective Temperature** (including windchill or humidity), **Clothing Insulation / Cooling (`CLO` Rating)**, and **Metabolic Heat Production**.
-
-| Clothing / Suit Tier | Comfort Zone (Light Activity) | Cold Protection Bonus ($\Delta_{\text{cold}}$) | Heat Retention Penalty ($\Delta_{\text{heat}}$) |
-| :--- | :---: | :---: | :---: |
-| **Light Streetwear / Tropical Uniform** | `+18°C` to `+32°C` | `+0` | `+0` |
-| **Cold-Weather Field Jacket & Layers** | `-5°C` to `+15°C` | **`-4` to $\Delta_{\text{ext}}$** vs. Cold | **`+4` to $\Delta_{\text{ext}}$** in Heat `> 28°C` |
-| **Extreme Arctic Parka / ECWCS Level 7** | `-35°C` to `-5°C` | **`-8` to $\Delta_{\text{ext}}$** vs. Cold | **`+8` to $\Delta_{\text{ext}}$** in Heat `> 20°C` |
-| **Sealed NBC / Heavy Ballistic Armor** | `+10°C` to `+22°C` | `-2` vs. Cold | **`+6` to $\Delta_{\text{ext}}$** *(blocks sweat evaporation!)* |
-| **Climate-Controlled EVA / Exo-Rig** | `-150°C` to `+80°C` | **Immune** *(while battery lasts)* | **Immune** *(while coolant/power lasts)* |
-
-#### A. Cold Exposure, Hypothermia & Frostbite
-When exposed to temperatures below their clothing's comfort threshold (accelerated `×10` if **submerged in cold water** or soaked in rain with high wind), the character rolls **`HLT / FIT`** every **Hour** (or every **`5 Minutes`** in freezing water):
-1. **Cold Stress & Shivering (Core `36.0–35.0°C`)**: Peripheral vasoconstriction numbs fingers and toes. **`Dexterity (DEX)` and `Tactile (TAC)` reduced by `-3`**; **`+2` $\Delta_{\text{int}}$**; `+1` `fatigue_level` from constant shivering.
-2. **Mild-to-Moderate Hypothermia (Core `34.9–32.0°C`)**: Violent shivering gives way to muscle rigidity and apathy. **`DEX`, `TAC`, `SPD`, `KIN`, `ANA`, and `FOC` reduced by `-6`**; **`+0.30` `action_time_factor`**; **`+6` $\Delta_{\text{int}}$**.
-3. **Severe Hypothermia (Core `< 32.0°C`)**: Shivering stops; paradoxical undressing/delirium, followed by **Unconsciousness** and ventricular fibrillation.
-4. **Frostbite (Localized Tissue Freezing)**: In sub-zero windchill (`< -10°C`), exposed skin (fingers, nose, ears, toes) requires a separate **`HLT` check** or suffers **Tier 1 (`Frostnip`: `-2 DEX/TAC`)** to **Tier 3/4 (`Deep Frostbite`: gangrene / permanent digit amputation)** structural damage.
-
-#### B. Heat Exposure, Heat Exhaustion & Heatstroke
-When operating in high ambient temperatures (`> 32°C` dry or `> 26°C` at high humidity), especially while wearing body armor or performing high-exertion combat/marching:
-- **Sweat Multiplier**: Water consumption requirement increases by **`×2` to `×4`** (`0.5–1.0 L/hour`).
-- Every **Hour** (or every **`15 Minutes`** of heavy combat/marching in armor), the character rolls **`FIT / HLT`**:
-  1. **Heat Cramps (Stage 1)**: Painful spasms in calves and abdomen; **`-2` to $T_{\max}$ and $F_{\max}$**, **`+1` `fatigue_level`**.
-  2. **Heat Exhaustion (Stage 2 — Core `38.5–39.9°C`)**: Profuse sweating, pallor, throbbing headache, **`Dizzy`** (`-4 KIN`) and **`Nausea`** (`+4` $\Delta_{\text{int}}$); **`+3` `fatigue_level`**. Must stop exertion, remove armor, and cool/hydrate in shade immediately.
-  3. **Heatstroke (Stage 3 — Core `>= 40.0°C` / `104°F` — Medical Emergency)**: Thermoregulation fails completely; skin becomes hot and dry, CNS dysfunction triggers delirium, seizures, and **Coma**. Inflicts **`+1` Tier of systemic organ trauma every `15 minutes`** until core temperature is rapidly cooled (ice bath, evaporative cooling).
-
----
-
-### 4.4 Sleep Deprivation, Atmospheric Pressure, Radiation & Toxins
-
-1. **Sleep Deprivation & Circadian Debt**:
-   - Humans require **`6–8 hours` of sleep per `24-hour` cycle** (`4 hours` minimum maintenance with a successful `DIS` check).
-   - **24 Hours Awake**: **`+2` $\Delta_{\text{int}}$**, **`-1` to `FOC`, `INS`, `ITU`, and `OODA`**.
-   - **48 Hours Awake**: **`+4` $\Delta_{\text{int}}$**, **`-3` to `FOC`, `ANA`, `INS`, `ITU`, `MEM`, `OODA`**, **`+2` `fatigue_level` floor**.
-   - **72+ Hours Awake**: **`+8` $\Delta_{\text{int}}$**, **`-6` to all Mental & Sensory Characteristics**; auditory/visual micro-hallucinations; whenever stationary for more than `5 minutes`, must pass a **`DIS` check ($\Delta_{\text{ext}} = +6$)** or fall into an involuntary **Microsleep (`Unconscious`)**.
-2. **Altitude & Atmospheric Hypoxia**:
-   - Above **`2,500 meters` (`8,200 ft`)** unacclimatized (or in a partially depressurized habitat with low $\text{pO}_2$): **`Fitness (FIT)` is reduced by `-2` per `1,000 meters`** above `2,000 m`.
-   - Above **`5,500 meters`** without supplemental oxygen: Acute Mountain Sickness (`Dizzy`, `Nausea`), progressing to **HAPE / HACE** (High-Altitude Pulmonary / Cerebral Edema — `HLT` checks every `6 hours`).
-   - **Hard Vacuum / Explosive Decompression (`0 atm`)**: Ebullism and rapid deoxygenation of venous blood in the lungs reduces useful consciousness to **`12–16 seconds` (`48–64 Ticks`)**, with `-2` `HLT` cold/barotrauma per `20 ticks` after unconsciousness.
-3. **Toxins, Venoms, Chemical Agents & Pathogens (`HLT` Saves)**:
-   - Model every poison, nerve agent, or biological pathogen with **Four Parameters**: **Vector** (*Inhalation*, *Contact*, *Ingestion*, *Injection/Wound*), **Onset Delay** (*Ticks*, *Minutes*, or *Days*), **Virulence ($\Delta_{\text{ext}}$ on the victim's `HLT` cascade save)**, and **Target Effect** (e.g., *Tear Gas / CS*: `Onset 4 ticks, Virulence +2, Effect: Blinded/Dazzled + Coughing`; *Neurotoxin / Sarin*: `Onset 12 ticks, Virulence +10, Effect: Paralysis + Asphyxiation + Convulsions`).
-4. **Ionizing Radiation (`Sievert / Gray` Exposure Tiers)**:
-   - Tracked in cumulative **Acute Dose Equivalents (`Sv`)**:
-     - `< 0.5 Sv`: Subclinical (no acute symptoms).
-     - `0.5 – 1.5 Sv` (*Mild ARS*): `Nausea` and `+1` `fatigue_level` after `6–12 hours`; temporary `-2 HLT`.
-     - `1.5 – 4.0 Sv` (*Moderate-Severe Hematopoietic ARS*): Vomiting within `2 hours`, hair loss, severe leukopenia (`HLT` halved against infection over `2–6 weeks`; requires bone-marrow/stem-cell therapy).
-     - `> 6.0 Sv` (*Lethal GI / Neurovascular ARS*): Acute shock, internal mucosal hemorrhage, fatal within days without advanced 2035 nanomedical regeneration.
+| Target Vehicle Zone | Called Shot $\Delta_{\text{ext}}$ | Typical `PR` *(Civilian / Armored)* | Mechanical Effect When Overmatched ($\text{Pen}_{\text{eff}} > \text{PR}$) |
+| :--- | :---: | :---: | :--- |
+| **Tires / Wheels** | **`+4`** | **`PR 1`** *(Run-Flat `PR 2`)* | Tire blows out: slashes **Vehicle `Control Cap` by `-4` per blown tire** (run-flats cap penalty at `-2`) and forces an immediate Driver `Control` check ($\Delta_{\text{ext}} = +4$) to avoid a spinout! |
+| **Windshield / Cabin** | **`+2`** | Glass **`PR 1` / `PR 6`**<br/>Door **`PR 3` / `PR 8`** | Perforating shot transfers residual impact ($\text{Impact}_{\text{eff}} - \text{PR}$) directly into the targeted seat's occupant (resolved against worn body armor). |
+| **Engine / Drive Motor** | **`+4`** | IC Block **`PR 9`–`10`**<br/>EV Motor **`PR 6`** | Severe internal damage (`Residual Impact >= 4` or `2+` penetrating hits) stalls propulsion—dropping **Vehicle `Tempo Cap = 0`** as the vehicle coasts to a halt. |
+| **Fuel Tank / EV Lithium Battery Pack** | **`+6`** | **`PR 5`** *(Armored Skid Tray)* | **IC Fuel Leak**: Fuel slick / ignition risk on spark. **EV Lithium Pack Penetration**: Triggers an intense **`1,000°C+` Thermal Runaway Fire** within **`8 Ticks` (`2.0s`)**, filling the cabin with `Toxic Lithium Fumes` and engulfing the vehicle (`Raw 7` thermal trauma per `4 Ticks` — see **[Environmental Hazards §3](environmental_hazards_and_survival.md#3-fire-thermal-burns--smoke-inhalation)**)! |

@@ -1120,3 +1120,1162 @@ fn test_combat_techniques_catalog_and_tcf_orthogonality() {
     assert_eq!(aimed_braced.ranged_effective_acc_bonus, 3);
     assert_eq!(aimed_braced.technique_delta_ext, -6);
 }
+
+#[test]
+fn test_vehicle_catalog_firing_platforms_component_damage_and_bulk_load() {
+    assert_eq!(canonical_vehicle_catalog().len(), 10);
+    assert_eq!(
+        VehicleId::from_code_str("ARMORED_SUV"),
+        Some(VehicleId::ArmoredSecopsSuv)
+    );
+    let suv = VehicleId::ArmoredSecopsSuv.spec();
+    let sedan = VehicleId::MidsizeCivilianSedan.spec();
+    let ev = VehicleId::CompactUrbanEv.spec();
+    assert_eq!(suv.cabin_pr, 8);
+    assert_eq!(sedan.cabin_pr, 3);
+    assert_eq!(suv.to_envelope_profile().caps, Triad::new(13, 11, 15));
+
+    // Bulk load shifts Tier 0 -> Tier 1 for Stealth/Parkour when carrying awkward >80cm item
+    let bulk = evaluate_encumbrance_with_bulk(
+        70.0,
+        10,
+        &[CarriedLoadItem {
+            mass_kg: 10.0,
+            carry_method: CarryErgonomicMethod::BalancedWebbingOrRucksack,
+        }],
+        0.0,
+        true,
+    );
+    assert_eq!(bulk.encumbrance.tier, LoadEncumbranceTier::Tier0Unencumbered);
+    assert_eq!(
+        bulk.agility_and_stealth_effective_tier,
+        LoadEncumbranceTier::Tier1LightPatrolLoad
+    );
+    assert_eq!(bulk.pack_quick_release_ticks, 4);
+
+    // Firing from moving vehicles
+    let weave_free =
+        evaluate_vehicle_firing_platform(VehicleFiringPlatformCondition::EvasiveWeave, false, 12);
+    assert_eq!(
+        (
+            weave_free.shooter_delta_ext,
+            weave_free.recoil_adder,
+            weave_free.effective_ranged_control_cap
+        ),
+        (4, 4, 6)
+    );
+    let weave_pintle =
+        evaluate_vehicle_firing_platform(VehicleFiringPlatformCondition::EvasiveWeave, true, 12);
+    assert_eq!(
+        (
+            weave_pintle.shooter_delta_ext,
+            weave_pintle.recoil_adder,
+            weave_pintle.effective_ranged_control_cap
+        ),
+        (2, 2, 12)
+    );
+
+    // Vehicle component trauma
+    let tire_hit = evaluate_vehicle_component_damage(
+        sedan,
+        VehicleComponentZone::TiresWheels,
+        false,
+        false,
+        3,
+        6,
+    );
+    assert!(tire_hit.penetrated && tire_hit.requires_driver_control_check);
+    assert_eq!(tire_hit.vehicle_control_cap_penalty, 4);
+
+    let suv_stopped = evaluate_vehicle_component_damage(
+        suv,
+        VehicleComponentZone::WindshieldCabin,
+        false,
+        false,
+        6,
+        8,
+    );
+    assert!(!suv_stopped.penetrated);
+    assert_eq!(suv_stopped.residual_occupant_impact, 0);
+
+    let ev_battery_hit = evaluate_vehicle_component_damage(
+        ev,
+        VehicleComponentZone::FuelOrEvBatteryPack,
+        false,
+        false,
+        6,
+        8,
+    );
+    assert!(ev_battery_hit.penetrated);
+    assert!(ev_battery_hit.triggers_ev_thermal_runaway);
+    assert!(ev_battery_hit.propulsion_disabled);
+    assert_eq!(ev_battery_hit.thermal_runaway_onset_ticks, 8);
+}
+
+#[test]
+fn test_acute_environmental_hazards_falling_fire_shock_weather_diving_sepsis() {
+    // Falling & breakfall mitigation + water surface tension above 15m
+    let fall_7m = evaluate_fall_impact(7.0, LandingSurfaceClass::HardwoodAsphaltConcrete, 0, false);
+    assert_eq!(fall_7m.raw_fall_trauma, 7);
+    assert_eq!(fall_7m.wound_tier, Some(StructuralWoundTier::Tier3SevereFracture));
+    let fall_7m_parkour =
+        evaluate_fall_impact(7.0, LandingSurfaceClass::HardwoodAsphaltConcrete, 2, false);
+    assert_eq!(fall_7m_parkour.raw_fall_trauma, 3);
+    assert_eq!(fall_7m_parkour.wound_tier, Some(StructuralWoundTier::Tier2Moderate));
+    assert!(fall_7m_parkour.redirected_off_vitals);
+    let fall_12m =
+        evaluate_fall_impact(12.0, LandingSurfaceClass::HardwoodAsphaltConcrete, 0, false);
+    assert_eq!(fall_12m.wound_tier, Some(StructuralWoundTier::Tier5CatastrophicLethal));
+    let water_bellyflop =
+        evaluate_fall_impact(20.0, LandingSurfaceClass::PackedDirtTurfWater, 0, false);
+    let water_clean_dive =
+        evaluate_fall_impact(20.0, LandingSurfaceClass::PackedDirtTurfWater, 0, true);
+    assert!((water_bellyflop.surface_multiplier - 1.0).abs() < 1e-6);
+    assert!((water_clean_dive.surface_multiplier - 0.75).abs() < 1e-6);
+
+    // Fire burns & smoke inhalation
+    let burn_2nd = evaluate_burn_trauma(4, 2);
+    assert_eq!(burn_2nd.degree, BurnDegree::SecondDegreePartialThickness);
+    assert_eq!((burn_2nd.dehydration_stages_added, burn_2nd.sepsis_delta_ext), (1, 4));
+    let burn_3rd = evaluate_burn_trauma(FireExposureSource::IndustrialOrEvThermalRunaway.base_raw_trauma(), 1);
+    assert_eq!(burn_3rd.degree, BurnDegree::ThirdDegreeFullThickness);
+    assert!(burn_3rd.locks_limb_zero);
+
+    let smoke_raw = evaluate_smoke_inhalation(
+        SmokeDensityTier::HeavyStructuralSmoke,
+        RespiratoryProtectionTier::None,
+        true,
+    );
+    assert!(!smoke_raw.is_immune && smoke_raw.inflicts_dazzled && smoke_raw.fatigue_added == 1);
+    let smoke_mask = evaluate_smoke_inhalation(
+        SmokeDensityTier::HeavyStructuralSmoke,
+        RespiratoryProtectionTier::ParticulateOrCbrnRespirator,
+        true,
+    );
+    assert!(smoke_mask.is_immune && smoke_mask.delta_int == 0);
+
+    // Electrical shock (TieredSaveEval)
+    let taser_fail = evaluate_electrical_shock(
+        ElectricalHazardTier::TaserCewPulsed,
+        false,
+        false,
+        10,
+        10,
+        &[(3, 4)],
+        (16, 15),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(taser_fail.locks_triad_for_pulse);
+    assert_eq!(taser_fail.stun_clock_freeze_ticks, 8);
+    let wet_mains = evaluate_electrical_shock(
+        ElectricalHazardTier::HouseholdMains120To240V,
+        true,
+        false,
+        10,
+        10,
+        &[(12, 12)],
+        (10, 9),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!((wet_mains.effective_raw_trauma, wet_mains.effective_save_delta_ext), (5, 6));
+    assert!(wet_mains.tetanic_grip_lock);
+
+    // Wind & black ice traction
+    let gale_ice = evaluate_weather_and_footing(
+        WindIntensityTier::Gale36To65Kmh,
+        SurfaceTractionTier::BlackIce,
+        400.0,
+        false,
+    );
+    assert_eq!((gale_ice.ballistic_delta_ext, gale_ice.micro_uav_delta_ext), (6, 4));
+    assert_eq!(gale_ice.hea_stealth_masking_bonus, -2);
+    assert!(gale_ice.caps_gait_at_combat_glide);
+    let ice_crampons = evaluate_weather_and_footing(
+        WindIntensityTier::CalmUnder15Kmh,
+        SurfaceTractionTier::BlackIce,
+        50.0,
+        true,
+    );
+    assert!(!ice_crampons.caps_gait_at_combat_glide && ice_crampons.sprint_dodge_delta_ext == 0);
+
+    // Diving pressure, Nitrogen Narcosis, and Decompression Sickness
+    let dive_air_50 = evaluate_diving_pressure_and_deco(
+        50.0,
+        BreathingGasMix::CompressedAir,
+        15.0,
+        1,
+        10,
+        &[(4, 4)],
+        (16, 16),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!((dive_air_50.ambient_pressure_atm - 6.0).abs() < 1e-6);
+    assert_eq!(dive_air_50.nitrogen_narcosis_stat_penalty, 6);
+    assert!(dive_air_50.deco_check_required);
+    assert_ne!(dive_air_50.deco_sickness, DecompressionSicknessTier::None);
+    let dive_trimix_50 = evaluate_diving_pressure_and_deco(
+        50.0,
+        BreathingGasMix::TrimixHeliox,
+        6.0,
+        0,
+        10,
+        &[(12, 12)],
+        (8, 8),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(dive_trimix_50.nitrogen_narcosis_stat_penalty, 0);
+    assert!(!dive_trimix_50.deco_check_required);
+
+    // Sepsis & Field Pharmacology + ConditionSource aggregation
+    let sepsis_up = evaluate_wound_sepsis(
+        SepsisStage::Stage0Clean,
+        WoundContaminationLevel::DirtyFieldOrSecondDegreeBurn,
+        false,
+        10,
+        &[(9, 10)],
+        (15, 14),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(sepsis_up.stage, SepsisStage::Stage1LocalizedInfection);
+    let sepsis_botch = evaluate_wound_sepsis(
+        SepsisStage::Stage0Clean,
+        WoundContaminationLevel::DirtyFieldOrSecondDegreeBurn,
+        false,
+        10,
+        &[(6, 7)],
+        (15, 14),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(sepsis_botch.stage, SepsisStage::Stage2SystemicSepsis);
+    let sepsis_abx = evaluate_wound_sepsis(
+        SepsisStage::Stage1LocalizedInfection,
+        WoundContaminationLevel::DirtyFieldOrSecondDegreeBurn,
+        true,
+        12,
+        &[(14, 15)],
+        (8, 9),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(sepsis_abx.stage, SepsisStage::Stage0Clean);
+
+    assert_eq!(canonical_field_pharmacology_catalog().len(), 6);
+    assert_eq!(
+        FieldDrugId::from_code_str("PROPRANOLOL"),
+        Some(FieldDrugId::MarksmanshipBetaBlocker)
+    );
+    let combined = aggregate_condition_impacts([
+        &fall_7m as &dyn ConditionSource,
+        &burn_2nd as &dyn ConditionSource,
+        &smoke_raw as &dyn ConditionSource,
+    ]);
+    assert_eq!(combined.delta_int, 4);
+    assert_eq!(combined.wound_shock_added, 3);
+    assert_eq!(combined.fatigue_added, 1);
+}
+
+#[test]
+fn test_stealth_passive_vs_active_alertness_spectrum_tail_and_forensics() {
+    // 1. Watch Fatigue & Observer Attention State pair caps
+    assert_eq!(compute_watch_duty_fatigue_delta_ext(0.0), 0);
+    assert_eq!(compute_watch_duty_fatigue_delta_ext(3.5), 1);
+    assert_eq!(compute_watch_duty_fatigue_delta_ext(5.2), 2);
+    assert_eq!(compute_watch_duty_fatigue_delta_ext(12.0), 4);
+
+    assert_eq!(
+        ObserverAttentionState::RoutinePatrolBored
+            .effective_observation_pairs(ObservationMode::PassiveAwareness, 4),
+        1
+    );
+    assert_eq!(
+        ObserverAttentionState::VigilantWatch
+            .effective_observation_pairs(ObservationMode::PassiveAwareness, 5),
+        2
+    );
+    assert_eq!(
+        ObserverAttentionState::HighAlertHunting
+            .effective_observation_pairs(ObservationMode::PassiveAwareness, 4),
+        4
+    );
+    assert_eq!(
+        ObserverAttentionState::DistractedEngrossed
+            .effective_observation_pairs(ObservationMode::ActiveObservation, 3),
+        3
+    );
+
+    // 2. Alertness & Suspicion Ladder transitions
+    let step_up = evaluate_alertness_transition(
+        AlertnessLevel::Level0Unaware,
+        ContestedOutcomeKind::GrazingTieSuccess,
+    );
+    assert_eq!(step_up.new_level, AlertnessLevel::Level1AnomalySuspicious);
+    assert_eq!(step_up.surprise_freeze_ticks, 4);
+    assert_eq!(
+        step_up.recommended_attention_state,
+        ObserverAttentionState::HighAlertHunting
+    );
+    assert!(!step_up.calls_backup);
+
+    let reset_down = evaluate_alertness_transition(
+        AlertnessLevel::Level1AnomalySuspicious,
+        ContestedOutcomeKind::ExtraordinarySuccess,
+    );
+    assert_eq!(reset_down.new_level, AlertnessLevel::Level0Unaware);
+    assert_eq!(reset_down.surprise_freeze_ticks, 10);
+
+    let clean_fail = evaluate_alertness_transition(
+        AlertnessLevel::Level0Unaware,
+        ContestedOutcomeKind::CleanFailure,
+    );
+    assert_eq!(clean_fail.new_level, AlertnessLevel::Level2AlertedSearching);
+    assert!(clean_fail.calls_backup);
+    assert!(!clean_fail.triggered_combat_clock);
+
+    let botch_combat = evaluate_alertness_transition(
+        AlertnessLevel::Level1AnomalySuspicious,
+        ContestedOutcomeKind::BotchFailure,
+    );
+    assert_eq!(
+        botch_combat.new_level,
+        AlertnessLevel::Level3LocatedCompromised
+    );
+    assert!(botch_combat.triggered_combat_clock);
+    assert_eq!(botch_combat.surprise_freeze_ticks, 0);
+
+    // 3. Multi-Spectrum Stealth (Acoustic + Rain + FLIR Thermal Cloak + RF Ping + Watch Fatigue)
+    let mara = CharacterCharacteristics {
+        kin: 13,
+        itu: 12,
+        pre: 14,
+        cre: 12,
+        ..Default::default()
+    };
+    let guard = CharacterCharacteristics {
+        sig: 12,
+        hea: 10,
+        foc: 11,
+        itu: 10,
+        ..Default::default()
+    };
+    let passive_flir = evaluate_multi_spectrum_stealth_modifiers(&MultiSpectrumStealthParams {
+        infiltrator: mara.clone(),
+        infiltrator_gait: StealthGait::StealthCreep,
+        infiltrator_encumbrance: EncumbranceTier::Tier2TacticalFightingLoad,
+        infiltrator_camouflage_bonus_delta_ext: -4,
+        acoustic_surface: AcousticSurfaceKind::GravelOrDryLeaves,
+        ambient_noise: AmbientNoiseMask::HvacOrSteadyRain,
+        thermal_profile: ThermalStealthProfile::ThermalBaffledCloak,
+        rf_hygiene: DigitalRfHygiene::ActiveSmartphoneOrBleTrail,
+        social_wardrobe_fit: None,
+        cover_identity_pr_bonus: 0,
+        observer: guard.clone(),
+        observation_mode: ObservationMode::PassiveAwareness,
+        observer_attention: ObserverAttentionState::RoutinePatrolBored,
+        observer_skill_n: 4,
+        watch_hours_elapsed: 5.0,
+        observer_channel: ActiveSensoryChannel::VisualSigFoc,
+        illumination: IlluminationCondition::PitchBlackTotalDarkness,
+        countermeasure: VisualCountermeasure::ThermalFlir,
+        sensor_sweep_tool_delta_mod: 0,
+    });
+    assert!(!passive_flir.is_social_stealth);
+    assert_eq!(passive_flir.infiltrator_controller_c, 12);
+    assert_eq!(passive_flir.infiltrator_delta_ext, 8);
+    assert_eq!(
+        passive_flir.effective_observation_mode,
+        ObservationMode::PassiveAwareness
+    );
+    assert_eq!(passive_flir.observer_controller_c, 11);
+    assert_eq!(passive_flir.observer_effective_pairs_n, 1);
+    assert_eq!(passive_flir.observer_action_ticks, 0);
+    assert_eq!(passive_flir.watch_fatigue_delta_ext, 2);
+    assert_eq!(passive_flir.observer_delta_ext, 20);
+    assert!(passive_flir.auto_pings_heat_3_plus);
+
+    let active_hot = evaluate_multi_spectrum_stealth_modifiers(&MultiSpectrumStealthParams {
+        infiltrator: mara.clone(),
+        infiltrator_gait: StealthGait::StationaryCamouflaged,
+        infiltrator_encumbrance: EncumbranceTier::Tier0Unencumbered,
+        infiltrator_camouflage_bonus_delta_ext: -4,
+        acoustic_surface: AcousticSurfaceKind::BrokenGlassOrMetalGrate,
+        ambient_noise: AmbientNoiseMask::QuietSuburbanNight,
+        thermal_profile: ThermalStealthProfile::HotEquipmentOrSuppressor,
+        rf_hygiene: DigitalRfHygiene::AirGappedFaradayPouch,
+        social_wardrobe_fit: None,
+        cover_identity_pr_bonus: 0,
+        observer: guard.clone(),
+        observation_mode: ObservationMode::PassiveAwareness,
+        observer_attention: ObserverAttentionState::HighAlertHunting,
+        observer_skill_n: 4,
+        watch_hours_elapsed: 0.5,
+        observer_channel: ActiveSensoryChannel::VisualSigFoc,
+        illumination: IlluminationCondition::PitchBlackTotalDarkness,
+        countermeasure: VisualCountermeasure::ThermalFlir,
+        sensor_sweep_tool_delta_mod: -2,
+    });
+    assert_eq!(
+        active_hot.effective_observation_mode,
+        ObservationMode::ActiveObservation
+    );
+    assert_eq!(active_hot.observer_effective_pairs_n, 4);
+    assert_eq!(active_hot.observer_action_ticks, 6);
+    assert_eq!(active_hot.observer_delta_ext, -8);
+    assert!(!active_hot.auto_pings_heat_3_plus);
+
+    // 4. Social Stealth ("Hiding in Plain Sight") with Cover Identity PR_id
+    let social_blend = evaluate_multi_spectrum_stealth_modifiers(&MultiSpectrumStealthParams {
+        infiltrator: mara,
+        infiltrator_gait: StealthGait::CombatGlide,
+        infiltrator_encumbrance: EncumbranceTier::Tier0Unencumbered,
+        infiltrator_camouflage_bonus_delta_ext: 0,
+        acoustic_surface: AcousticSurfaceKind::ConcreteAsphaltOrTile,
+        ambient_noise: AmbientNoiseMask::UrbanTrafficOrCrowd,
+        thermal_profile: ThermalStealthProfile::UnshieldedStandard,
+        rf_hygiene: DigitalRfHygiene::AirGappedFaradayPouch,
+        social_wardrobe_fit: Some(SocialStealthWardrobeFit::AuthenticUniformOrCredentials),
+        cover_identity_pr_bonus: 6,
+        observer: guard,
+        observation_mode: ObservationMode::ActiveObservation,
+        observer_attention: ObserverAttentionState::VigilantWatch,
+        observer_skill_n: 3,
+        watch_hours_elapsed: 0.0,
+        observer_channel: ActiveSensoryChannel::SixthSenseItuIns,
+        illumination: IlluminationCondition::BrightDaylight,
+        countermeasure: VisualCountermeasure::None,
+        sensor_sweep_tool_delta_mod: 0,
+    });
+    assert!(social_blend.is_social_stealth);
+    assert_eq!(social_blend.infiltrator_controller_c, 13);
+    assert_eq!(social_blend.infiltrator_delta_ext, -8);
+
+    // 5. Urban Surveillance & SDR Tail Craft
+    let tight_tie = evaluate_surveillance_tail_exchange(
+        TailStance::TightTail,
+        3,
+        14,
+        0,
+        -2,
+        0,
+        &[(10, 9), (4, 4), (4, 4)],
+        (13, 12),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(tight_tie.tail_maintained);
+    assert!(tight_tie.sdr_alert_triggered);
+    assert!(tight_tie.target_burned_shadower);
+
+    let loose_botch = evaluate_surveillance_tail_exchange(
+        TailStance::LooseTail,
+        2,
+        10,
+        0,
+        0,
+        4,
+        &[(4, 4), (3, 3)],
+        (13, 13),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(!loose_botch.tail_maintained);
+    assert!(loose_botch.target_burned_shadower);
+
+    // 6. Forensic Trace Decay & Clue Discovery Tiers
+    assert_eq!(
+        ForensicDecayContext::RainOrHeavyWeather.decay_delta_ext(12.0),
+        8
+    );
+    assert_eq!(
+        ForensicDecayContext::ProfessionallyScrubbed.decay_delta_ext(24.0),
+        7
+    );
+    let hidden_link = evaluate_forensic_clue_search(
+        ForensicDecayContext::IndoorsControlled,
+        10.0,
+        2,
+        4,
+        15,
+        0,
+        -2,
+        &[(12, 11), (10, 10), (9, 8), (8, 8)],
+        (8, 8),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(
+        hidden_link.discovery_tier,
+        ClueDiscoveryTier::HiddenLinkOrZeroCostBreakthrough
+    );
+    assert!(hidden_link.hidden_link_zero_extra_time);
+
+    let botched_sweep = evaluate_forensic_clue_search(
+        ForensicDecayContext::RainOrHeavyWeather,
+        12.0,
+        4,
+        2,
+        10,
+        0,
+        0,
+        &[(4, 4), (4, 3)],
+        (14, 13),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(botched_sweep.discovery_tier, ClueDiscoveryTier::NoClueFound);
+    assert!(botched_sweep.evidence_contaminated_or_delayed);
+    assert!(botched_sweep.false_lead_generated);
+}
+
+#[test]
+fn test_contacts_favors_cover_identities_and_safehouse_compromise() {
+    let contact = ContactProfile {
+        reach_access_tier: 3,
+        reliability_trust: 4,
+        exposure_burn_risk: 1,
+    };
+    let clean_favor = evaluate_contact_favor_request(
+        contact,
+        FavorSeverityTier::Major,
+        3,
+        5,
+        3,
+        14,
+        0,
+        &[(11, 10), (9, 8), (5, 5)],
+        (7, 6),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(
+        clean_favor.outcome_kind,
+        ContactFavorOutcomeKind::GrantedCleanly
+    );
+    assert!(clean_favor.favor_granted && !clean_favor.contact_burned);
+    assert_eq!(clean_favor.total_hidden_delta_ext, 8);
+    assert_eq!(clean_favor.exposure_increase, 1);
+
+    let debt_favor = evaluate_contact_favor_request(
+        contact,
+        FavorSeverityTier::Major,
+        3,
+        5,
+        3,
+        14,
+        0,
+        &[(11, 10), (5, 5), (5, 5)],
+        (8, 7),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(
+        debt_favor.outcome_kind,
+        ContactFavorOutcomeKind::GrantedWithReciprocalDebt
+    );
+    assert!(debt_favor.reciprocal_favor_owed);
+    assert!((debt_favor.cost_multiplier - 1.5).abs() < 1e-6);
+
+    let burned_favor = evaluate_contact_favor_request(
+        contact,
+        FavorSeverityTier::Major,
+        4,
+        6,
+        2,
+        10,
+        0,
+        &[(4, 4), (4, 4)],
+        (13, 13),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(
+        burned_favor.outcome_kind,
+        ContactFavorOutcomeKind::BurnedOrCompromised
+    );
+    assert!(burned_favor.contact_burned);
+    assert_eq!(burned_favor.caller_heat_added, 2);
+
+    // Layered Cover Identities & Scrutiny
+    assert_eq!(canonical_cover_identity_catalog().len(), 4);
+    assert_eq!(
+        CoverIdentityTier::from_code_str("COVER_TIER_3_BIOMETRIC"),
+        Some(CoverIdentityTier::Tier3DeepBiometricCreditLegend)
+    );
+
+    let tier2_bio_audit = evaluate_cover_identity_scrutiny(
+        CoverIdentityTier::Tier2DatabaseSeededAlias,
+        CoverScrutinyLevel::BiometricAuditOrFederalCrossCheck,
+        4,
+        3,
+        13,
+        0,
+        &[(5, 5), (5, 4), (4, 4)],
+        (12, 12),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(tier2_bio_audit.total_hidden_delta_ext, 10);
+    assert!(!tier2_bio_audit.passed);
+    assert!(tier2_bio_audit.cover_burned);
+
+    let tier3_bio_clean = evaluate_cover_identity_scrutiny(
+        CoverIdentityTier::Tier3DeepBiometricCreditLegend,
+        CoverScrutinyLevel::BiometricAuditOrFederalCrossCheck,
+        2,
+        3,
+        14,
+        0,
+        &[(12, 11), (10, 9), (9, 8)],
+        (8, 8),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(tier3_bio_clean.total_hidden_delta_ext, 2);
+    assert!(tier3_bio_clean.passed && !tier3_bio_clean.cover_flagged);
+
+    let clean_burn =
+        evaluate_cover_identity_burn(CoverIdentityTier::Tier3DeepBiometricCreditLegend, 7, false);
+    assert_eq!((clean_burn.heat_shed, clean_burn.new_personal_heat), (4, 3));
+    let dirty_burn =
+        evaluate_cover_identity_burn(CoverIdentityTier::Tier3DeepBiometricCreditLegend, 7, true);
+    assert_eq!((dirty_burn.heat_shed, dirty_burn.new_personal_heat), (2, 5));
+
+    // Safehouses & Returning-Hot Compromise Checks
+    assert_eq!(canonical_safehouse_catalog().len(), 4);
+    let faraday_safe = evaluate_safehouse_compromise_check(
+        SafehouseTier::HardenedFaradayWorkshop,
+        5,
+        false,
+        true,
+        3,
+        13,
+        0,
+        &[(12, 11), (10, 9), (8, 8)],
+        (8, 8),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(faraday_safe.faraday_blocked_rf_leak);
+    assert_eq!(faraday_safe.total_hidden_delta_ext, 0);
+    assert_eq!(
+        faraday_safe.status,
+        SafehouseCompromiseStatus::SecureUndetected
+    );
+
+    let motel_raid = evaluate_safehouse_compromise_check(
+        SafehouseTier::OffGridSquatMotel,
+        6,
+        true,
+        true,
+        2,
+        10,
+        0,
+        &[(4, 4), (4, 3)],
+        (12, 12),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(motel_raid.total_hidden_delta_ext, 14);
+    assert_eq!(
+        motel_raid.status,
+        SafehouseCompromiseStatus::CompromisedRaidImminent
+    );
+    assert!(motel_raid.must_abandon);
+    assert_eq!(motel_raid.warning_lead_min, 2);
+}
+
+#[test]
+fn test_multi_opponent_pool_split_flanking_elevation_objects_and_22_melee_catalog() {
+    use satya_schema::MaterialClass;
+
+    assert_eq!(canonical_melee_weapon_catalog().len(), 22);
+    assert_eq!(MeleeWeaponId::ALL.len(), 22);
+    assert_eq!(
+        MeleeWeaponId::PolycarbonateRiotShield.shield_ballistic_protection(),
+        Some((5, 1, 4))
+    );
+    assert_eq!(
+        MeleeWeaponId::BallisticBreacherShieldNij3.shield_ballistic_protection(),
+        Some((6, 6, 6))
+    );
+    assert_eq!(
+        MeleeWeaponId::CombatKnifeKarambitShiv.shield_ballistic_protection(),
+        None
+    );
+
+    let env = compute_tactical_pool(&TacticalPoolParams {
+        chars: CharacterCharacteristics {
+            spd: 12,
+            for_stat: 12,
+            kin: 13,
+            dex: 12,
+            sig: 12,
+            ins: 12,
+            itu: 12,
+            ana: 11,
+            foc: 12,
+            ..Default::default()
+        },
+        skill_c: 12,
+        skill_n: 4,
+        is_ranged: false,
+        ..Default::default()
+    });
+    assert_eq!(env.p_eff, 23);
+
+    // 3 foes in chokepoint (-2 tax -> 21 split pool), splitting strike + parry guard
+    let choke_split = evaluate_multi_opponent_pool_split(
+        &env,
+        &MultiOpponentThreatContext {
+            simultaneous_opponents: 3,
+            in_chokepoint_or_wall_at_back: true,
+            flanked_rear_or_blindside: false,
+            elevation_diff_m: 2.0,
+        },
+        &[Triad::new(6, 5, 4), Triad::new(2, 4, 0)],
+    );
+    assert_eq!(choke_split.attention_tax_pool_penalty, 2);
+    assert_eq!(choke_split.available_split_pool, 21);
+    assert!(choke_split.allocation_valid);
+    assert_eq!(choke_split.elevation_delta_ext_mod, -2);
+    assert_eq!(choke_split.elevation_melee_reach_bonus, 1);
+
+    // Flanked blindside reduces Control Cap by -4 (13 -> 9) and penalizes defense by +4
+    let flanked_invalid = evaluate_multi_opponent_pool_split(
+        &env,
+        &MultiOpponentThreatContext {
+            simultaneous_opponents: 2,
+            in_chokepoint_or_wall_at_back: false,
+            flanked_rear_or_blindside: true,
+            elevation_diff_m: 0.0,
+        },
+        &[Triad::new(4, 11, 2)],
+    );
+    assert_eq!(flanked_invalid.flank_control_cap_penalty, 4);
+    assert_eq!(flanked_invalid.flank_defender_delta_ext, 4);
+    assert!(!flanked_invalid.allocation_valid);
+
+    // Targeting Inanimate Objects / Locks / Barriers
+    let padlock_hit = evaluate_object_targeting(
+        ObjectTargetClass::SmallPrecisionTarget,
+        MaterialClass::SheetSteel,
+        6,
+        7,
+        2,
+        None,
+    );
+    assert_eq!(padlock_hit.size_delta_ext, 4);
+    assert!(padlock_hit.structural_damage >= 2);
+    assert!(padlock_hit.destroyed_or_breached);
+
+    let pistol_vs_vault = evaluate_object_targeting(
+        ObjectTargetClass::HeavyFortifiedBarrier,
+        MaterialClass::ArmorSteel,
+        2,
+        7,
+        2,
+        None,
+    );
+    assert!(pistol_vs_vault.deflected_or_bounced);
+    assert_eq!(pistol_vs_vault.structural_damage, 0);
+}
+
+#[test]
+fn test_expanded_firearms_bows_less_lethal_explosives_breaching_and_optics() {
+    use satya_schema::MaterialClass;
+
+    assert_eq!(CANONICAL_FIREARM_PRESETS.len(), 17);
+    let m107 = lookup_firearm_preset("barrett_m107_50bmg").expect(".50 BMG preset exists");
+    let m107_200 = evaluate_granular_firearm_ballistics(m107, 200.0);
+    assert!(m107_200.base_armor_pen >= 10);
+    assert!(m107_200.raw_ballistic_impact >= 11);
+
+    let sub_300 =
+        lookup_firearm_preset("honey_badger_300blk_sub").expect(".300 BLK subsonic exists");
+    assert_eq!(sub_300.ammo.caliber_id, AmmoCaliberId::Blackout300Subsonic);
+    assert_eq!(sub_300.muzzle_device, MuzzleDeviceType::SoundSuppressor);
+    let sub_eval = evaluate_granular_firearm_ballistics(sub_300, 25.0);
+    assert!(sub_eval.base_recoil_r <= 3);
+
+    assert_eq!(canonical_shotgun_load_catalog().len(), 5);
+    assert!(ShotgunLoadId::DragonsBreathIncendiary.spec().causes_ignition_check);
+    assert_eq!(
+        ShotgunLoadId::BreacherFrangibleLockBuster.spec().base_pen,
+        6
+    );
+
+    assert_eq!(canonical_non_firearm_weapon_catalog().len(), 6);
+    assert!(NonFirearmWeaponId::CompoundBow70Lb.spec().acoustic_stealth_mod_hea <= -10);
+
+    // TASER blocked by NIJ IIIA vest (PR 4 >= 2) vs incapacitating unarmored botch
+    let taser_vest = evaluate_less_lethal_exposure(
+        NonFirearmWeaponId::TaserCewDualProbe,
+        4,
+        false,
+        2,
+        10,
+        2,
+        0,
+        &[(4, 4), (4, 4)],
+        (12, 12),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(taser_vest.mitigated_by_ppe_or_armor);
+    assert!(!taser_vest.incapacitated_or_paralyzed);
+
+    let taser_drop = evaluate_less_lethal_exposure(
+        NonFirearmWeaponId::TaserCewDualProbe,
+        0,
+        false,
+        2,
+        10,
+        2,
+        0,
+        &[(4, 4), (4, 4)],
+        (12, 12),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(!taser_drop.mitigated_by_ppe_or_armor);
+    assert!(taser_drop.incapacitated_or_paralyzed);
+    assert_eq!(taser_drop.lock_or_stun_ticks, 20);
+    assert_eq!(
+        taser_drop.effect.to_condition_impact().triad_locked_zero,
+        Triad::splat(true)
+    );
+
+    let oc_respirator = evaluate_less_lethal_exposure(
+        NonFirearmWeaponId::OcPepperSprayStream,
+        0,
+        true,
+        2,
+        10,
+        2,
+        0,
+        &[(3, 3), (3, 3)],
+        (12, 12),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(oc_respirator.mitigated_by_ppe_or_armor);
+
+    // Explosives, 1.5x indoor blast reflection, cover blocking & breaching
+    assert_eq!(canonical_explosive_ordnance_catalog().len(), 7);
+    let open_conc = evaluate_blast_and_fragmentation(
+        ExplosiveOrdnanceId::Mk3A2ConcussionGrenade,
+        2.0,
+        false,
+        false,
+        0,
+    );
+    let indoor_conc = evaluate_blast_and_fragmentation(
+        ExplosiveOrdnanceId::Mk3A2ConcussionGrenade,
+        2.0,
+        true,
+        false,
+        0,
+    );
+    assert!(indoor_conc.blast_overpressure_trauma > open_conc.blast_overpressure_trauma);
+    assert!(indoor_conc.causes_eardrum_tinnitus);
+
+    let frag_cover = evaluate_blast_and_fragmentation(
+        ExplosiveOrdnanceId::M67FragmentationGrenade,
+        3.0,
+        false,
+        false,
+        6,
+    );
+    assert_eq!(frag_cover.frag_hit_count, 0);
+
+    let flash_room = evaluate_blast_and_fragmentation(
+        ExplosiveOrdnanceId::M84FlashbangStunGrenade,
+        3.0,
+        true,
+        false,
+        0,
+    );
+    assert_eq!(flash_room.blinded_ticks, 32);
+    assert_eq!(flash_room.to_condition_impact().clock_freeze_ticks, 8);
+
+    let shaped_ok = evaluate_explosive_breach(
+        ExplosiveOrdnanceId::LinearShapedBreachingCharge,
+        MaterialClass::ReinforcedConcrete,
+        1,
+        3.5,
+        true,
+    );
+    assert!(shaped_ok.clean_breach_created);
+    assert!(!shaped_ok.friendly_caught_in_backblast);
+    assert_eq!(shaped_ok.interior_defender_stun_ticks, 12);
+
+    let c4_close = evaluate_explosive_breach(
+        ExplosiveOrdnanceId::C4SemtexBlock500g,
+        MaterialClass::ArmorSteel,
+        1,
+        5.0,
+        false,
+    );
+    assert!(c4_close.clean_breach_created);
+    assert!(c4_close.friendly_caught_in_backblast);
+
+    assert_eq!(canonical_tactical_optics_gear_catalog().len(), 8);
+    assert_eq!(
+        TacticalOpticOrGearId::from_code_str("OPTIC_2035_BALLISTIC_AI"),
+        Some(TacticalOpticOrGearId::SmartBallisticComputerScope2035)
+    );
+}
+
+#[test]
+fn test_engineering_workshop_custom_firearm_melee_armor_and_quirks() {
+    use crate::ballistics::{
+        AmmoCaliberId, BarrelMountingType, CenterOfGravityProfile, FirearmActionType,
+        MuzzleDeviceType, WeaponFeedType,
+    };
+
+    assert_eq!(canonical_workshop_facility_catalog().len(), 4);
+    assert_eq!(canonical_project_complexity_catalog().len(), 4);
+    assert_eq!(PrototypeQuirkId::ALL.len(), 5);
+    assert_eq!(BulletConstructionKind::ALL.len(), 6);
+
+    // Masterwork CNC custom .300 BLK suppressed subsonic carbine (matches Ch. 22 Worked Example)
+    let cnc_bp = CustomFirearmBlueprint {
+        name: "Covert Whisper-300 (.300 BLK Sub)",
+        caliber: AmmoCaliberId::Blackout300Subsonic,
+        bullet: BulletConstructionKind::MatchOtm,
+        handload_quality_q: 0.0,
+        action_type: FirearmActionType::DirectImpingement,
+        feed_type: WeaponFeedType::DetachableBoxMagazine,
+        capacity_rounds: 20,
+        barrel_length_cm: 22.9,
+        overall_length_cm: 66.0,
+        unloaded_weight_kg: 2.2,
+        barrel_mounting: BarrelMountingType::FreeFloating,
+        muzzle_device: MuzzleDeviceType::SoundSuppressor,
+        center_of_gravity: CenterOfGravityProfile::ChamberNeutral,
+        requested_tolerance_tau: 0.5,
+        requested_barrel_quality_q: 1.0,
+        requested_mfg_quality_q: 1,
+        workshop: WorkshopFacilityTier::CommercialCncMachineShop,
+        complexity: ProjectClockComplexity::CustomSubassembly,
+        build_outcome: BuildOutcomeQuality::MasterworkExtraordinary,
+    };
+    let cnc_res = build_custom_firearm_design(&cnc_bp, 50.0);
+    assert!(!cnc_res.clamped_by_workshop);
+    assert!(cnc_res.masterwork_bonus_applied);
+    assert_eq!(cnc_res.spec.manufacturing_quality_q, 2);
+    assert!(cnc_res.quirks.is_empty());
+    assert_eq!(cnc_res.ballistics.accuracy_acc, 4);
+    assert_eq!(cnc_res.ballistics.reliability_rel, 1);
+    assert_eq!(cnc_res.ballistics.raw_ballistic_impact, 5);
+    assert_eq!(cnc_res.ballistics.base_armor_pen, 4);
+    assert_eq!(cnc_res.estimated_cost_usd, 3542);
+    assert_eq!(
+        cnc_res.access_class,
+        BlackMarketRestrictionClass::Class3MilitaryOrdnanceFullAuto
+    );
+
+    // Same blueprint rushed on an improvised field bench clamps specs and adds quirks
+    let mut field_bp = cnc_bp.clone();
+    field_bp.workshop = WorkshopFacilityTier::FieldBenchImprovised;
+    field_bp.build_outcome = BuildOutcomeQuality::RushedOrBreached;
+    let field_res = build_custom_firearm_design(&field_bp, 50.0);
+    assert!(field_res.clamped_by_workshop);
+    assert!(!field_res.masterwork_bonus_applied);
+    assert_eq!(field_res.spec.tolerance_tau, -0.5);
+    assert_eq!(field_res.spec.barrel_quality_q, -1.0);
+    assert_eq!(field_res.spec.manufacturing_quality_q, -1);
+    assert_eq!(field_res.ballistics.accuracy_acc, 1);
+    assert_eq!(field_res.ballistics.reliability_rel, 0);
+    assert!(
+        field_res
+            .quirks
+            .contains(&PrototypeQuirkId::FinickyAmmoTolerance)
+    );
+    assert!(
+        field_res
+            .quirks
+            .contains(&PrototypeQuirkId::ThermalDriftBarrel)
+    );
+    assert!(
+        field_res
+            .quirks
+            .contains(&PrototypeQuirkId::ProprietaryPartsOnly)
+    );
+
+    // Overpressure +P & AP handloads verify bullet construction physics
+    let ap_9mm = build_custom_ammunition_profile(
+        AmmoCaliberId::Parabellum9x19,
+        BulletConstructionKind::ArmorPiercingAp,
+        0.5,
+    );
+    assert_eq!(ap_9mm.sectional_density_pen_bonus, 2);
+    assert_eq!(ap_9mm.ammo_quality_q, 1.0);
+
+    // Custom Melee Weapon & Shield + Body Armor
+    let ti_sword = evaluate_custom_melee_design(
+        MeleeChassisClass::SwordOrMachete,
+        MeleeMaterialGrade::TitaniumCarbideEdge,
+        MeleeErgonomicTuning::SpeedLightened,
+        WorkshopFacilityTier::CommercialCncMachineShop,
+        BuildOutcomeQuality::MasterworkExtraordinary,
+    );
+    assert_eq!(ti_sword.base_tc, 6);
+    assert_eq!(ti_sword.guard_bonus, 2);
+    assert_eq!(ti_sword.durability_rel_mod, 3);
+    assert!(ti_sword.weight_kg < 0.70);
+
+    let ceramic_vest = evaluate_custom_armor_design(
+        ArmorMaterialArchitecture::BoronCarbideCeramic,
+        ArmorCoverageTier::TacticalCarrier,
+        WorkshopFacilityTier::CommercialCncMachineShop,
+        BuildOutcomeQuality::MasterworkExtraordinary,
+    );
+    assert_eq!(ceramic_vest.pr_ballistic, 8);
+    assert_eq!(ceramic_vest.blunt_trauma_dampening_btd, 7);
+    assert_eq!(ceramic_vest.dex_encumbrance_penalty, -1);
+
+    let kitchen_ceramic = evaluate_custom_armor_design(
+        ArmorMaterialArchitecture::BoronCarbideCeramic,
+        ArmorCoverageTier::TacticalCarrier,
+        WorkshopFacilityTier::HomeGarageShop,
+        BuildOutcomeQuality::CleanStandard,
+    );
+    assert_eq!(kitchen_ceramic.pr_ballistic, 7);
+    assert!(
+        kitchen_ceramic
+            .quirks
+            .contains(&PrototypeQuirkId::ProprietaryPartsOnly)
+    );
+}
+
+#[test]
+fn test_modular_drones_chassis_trauma_ai_codesign_debt_and_cyber_prosthetics() {
+    assert_eq!(canonical_drone_chassis_catalog().len(), 6);
+    assert_eq!(canonical_drone_module_catalog().len(), 8);
+    assert_eq!(canonical_ai_architecture_catalog().len(), 5);
+    assert_eq!(canonical_cyber_augment_catalog().len(), 8);
+
+    // Shrouded FPV Recon Quadrotor (matches Ch. 23 Worked Example)
+    let recon_fpv = evaluate_modular_drone_design(
+        DroneChassisClass::TacticalQuadrotorFpv,
+        &[
+            DroneModuleId::ElectroOpticalFlirGimbal,
+            DroneModuleId::AcousticNoiseShroud,
+            DroneModuleId::MeshRelayTransceiver,
+        ],
+        0,
+        20.0,
+    );
+    assert!(recon_fpv.airworthy_or_mobile);
+    assert!((recon_fpv.payload_mass_kg - 0.95).abs() < 1e-6);
+    assert!((recon_fpv.total_mass_kg - 2.75).abs() < 1e-6);
+    assert!((recon_fpv.endurance_min - 28.5).abs() < 0.1);
+    assert_eq!(recon_fpv.acoustic_hea_mod, 2);
+    assert_eq!(recon_fpv.total_cost_usd, 10900);
+    assert_eq!(
+        recon_fpv.access_class,
+        BlackMarketRestrictionClass::Class2LawEnforcementParamilitary
+    );
+
+    // Overloaded micro-scout cannot take off
+    let overloaded = evaluate_modular_drone_design(
+        DroneChassisClass::MicroScoutQuadrotor,
+        &[DroneModuleId::ElectroOpticalFlirGimbal],
+        0,
+        0.0,
+    );
+    assert!(!overloaded.airworthy_or_mobile);
+    assert_eq!(overloaded.effective_top_speed_mps, 0.0);
+
+    // Battery pack perforation triggers thermal runaway; hardened EMP reboots in 8 Ticks
+    let battery_hit = evaluate_robot_chassis_damage(
+        4,
+        2,
+        ChassisHitZone::BatteryPackOrPowerbus,
+        4,
+        6,
+        2,
+        true,
+        true,
+    );
+    assert!(battery_hit.perforated);
+    assert!(battery_hit.thermal_battery_fire_triggered);
+    assert_eq!(battery_hit.emp_reboot_ticks, 8);
+    assert!(!battery_hit.comms_or_autonomy_degraded);
+
+    let unshielded_emp = evaluate_robot_chassis_damage(
+        4,
+        2,
+        ChassisHitZone::ChassisFrame,
+        1,
+        2,
+        0,
+        true,
+        false,
+    );
+    assert!(!unshielded_emp.perforated);
+    assert_eq!(unshielded_emp.emp_reboot_ticks, 40);
+    assert!(unshielded_emp.comms_or_autonomy_degraded);
+
+    // AI 2.0 Architecture bridges to SyntheticMetabolicMode
+    assert_eq!(
+        AiArchitectureParadigm::SplitBrainDualSubstrate2035
+            .spec()
+            .default_metabolic_mode,
+        SyntheticMetabolicMode::QuantumTetheredSprint
+    );
+
+    // Human-AI Co-Design sprint (L_AI=4 vs N_human=2 -> overreach_gap=2) + Neuro-Symbolic Audit
+    let sprint = evaluate_human_ai_codesign_session(
+        AiArchitectureParadigm::SparseMoETransformer,
+        2,
+        4,
+        14,
+        0,
+        0,
+        &[(12, 11), (11, 10)],
+        (8, 8),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(sprint.overreach_gap, 2);
+    assert!(sprint.clock_successes_gained >= 3);
+    assert_eq!(sprint.verification_debt_added, 2);
+
+    let audit = evaluate_verification_debt_audit(
+        sprint.verification_debt_added,
+        AiArchitectureParadigm::NeuroSymbolicVerifier,
+        3,
+        15,
+        0,
+        &[(14, 13), (12, 11), (11, 10)],
+        (7, 7),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(audit.debt_scrubbed, 2);
+    assert_eq!(audit.remaining_debt, 0);
+    assert!(audit.audit_clean_certified);
+
+    // Clinical Cyber-Prosthetics Loadout (3 compliant hardened systems vs 4 uncompliant)
+    let clinical_3 = evaluate_cyber_augmentation_loadout(
+        &[
+            CyberAugmentId::MyomerCyberArm,
+            CyberAugmentId::CorticalOodaCoProcessor,
+            CyberAugmentId::CochlearCommsAndAcousticFilter,
+        ],
+        1,
+        true,
+        true,
+    );
+    assert_eq!(clinical_3.triad_cap_bonuses, Triad::new(0, 0, 2));
+    assert_eq!(clinical_3.d_cog_bonus, 2);
+    assert_eq!(clinical_3.ooda_bonus, 2);
+    assert_eq!(clinical_3.hea_bonus, 2);
+    assert!(clinical_3.immune_to_tinnitus);
+    assert_eq!(clinical_3.total_install_cost_usd, 130_000);
+    assert_eq!(clinical_3.monthly_maintenance_usd, 1040);
+    assert_eq!(clinical_3.rejection_delta_int, 1);
+    assert_eq!(clinical_3.psyche_proprioceptive_friction_delta_ext, 0);
+    assert_eq!(clinical_3.emp_reboot_ticks, 4);
+    assert_eq!(clinical_3.to_condition_impact().delta_int, 1);
+
+    let uncompliant_4 = evaluate_cyber_augmentation_loadout(
+        &[
+            CyberAugmentId::MyomerCyberArm,
+            CyberAugmentId::CarbonMyomerCyberLegs,
+            CyberAugmentId::CorticalOodaCoProcessor,
+            CyberAugmentId::SubdermalAramidMeshWeave,
+        ],
+        -1,
+        false,
+        false,
+    );
+    assert_eq!(uncompliant_4.rejection_delta_int, 5);
+    assert_eq!(uncompliant_4.psyche_proprioceptive_friction_delta_ext, 2);
+    assert_eq!(uncompliant_4.emp_vulnerable_count, 4);
+    assert_eq!(uncompliant_4.emp_reboot_ticks, 20);
+}
