@@ -536,6 +536,8 @@ fn test_ssr_gm_vault_rules_book_npcs_and_markdown_chat() {
     }
     assert!(html.contains("Cascading 2d20 Engine &amp; Task Resolution"));
     assert!(html.contains(".rules-book-viewport"));
+    assert!(!html.contains("Worked Book Examples"));
+    assert!(!html.contains("satyaLoadRulesExample"));
     assert!(html.contains("height: max(680px, calc(100dvh - 76px))"));
     assert!(html.contains("min-height: clamp(360px, 48dvh, 560px)"));
     assert!(html.contains(".chat-card > .chat-composer"));

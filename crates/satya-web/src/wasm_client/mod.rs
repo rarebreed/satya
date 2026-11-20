@@ -256,7 +256,6 @@ macro_rules! for_all_window_callbacks {
             "satyaAdvanceCombatTick" => satya_advance_combat_tick(i32),
             "satyaSelectRulesChapter" => satya_select_rules_chapter(String),
             "satyaSearchRulesBook" => satya_search_rules_book(),
-            "satyaLoadRulesExample" => satya_load_rules_example(String),
 
             // GM Document Vault & Google Drive Picker
             "satyaLinkGoogleAccount" => satya_link_google_account(),

@@ -46,31 +46,6 @@ const COMBAT_STANCE_TABLE_ROWS: &[(&str, &str, &str, &str, &str)] = &[
     ),
 ];
 
-/// Worked Rules Book example presets (`(preset_id, button_label)`).
-const WORKED_BOOK_EXAMPLES: &[(&str, &str)] = &[
-    (
-        "sarah_lockpick",
-        "Sarah's Lockpick (N=3, C=12, Δ_tool=0, Δ_int=+2, Δ_ext=+4)",
-    ),
-    (
-        "marcus_surgery",
-        "Marcus's Trauma Surgery (N=4, C=14, Δ_tool=-2, Δ_int=-1, Δ_ext=+4)",
-    ),
-    (
-        "elena_hack",
-        "Elena's Intrusion Hack (N=3, C=15, Δ_tool=-2, Δ_ext=+2)",
-    ),
-    ("elena_probe", "Elena's Sword Probe (N=5, C=16, Δ_ext=+2)"),
-    (
-        "viktor_cleave",
-        "Viktor's Greatsword Cleave (N=4, C=13, Δ_ext=+3)",
-    ),
-    (
-        "social_persuasion",
-        "Social Rhetoric (N=3, C=15, Δ_int=+2, Δ_ext=+3)",
-    ),
-];
-
 /// Renders the Combat Tracker, Rules Book, [`NotebookGmAndNpcPanes`], and Apache Iggy panes
 /// inside `.notebook-body`.
 #[component]
@@ -262,33 +237,6 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                     >
                         "Open TTRPG Rules Book"
                     </a>
-                </div>
-            </div>
-            <div class="roster-bar">
-                <span class="roster-title">"Worked Book Examples (Click to Load into 2d20 Task Roller):"</span>
-                <div class="preset-users">
-                    {WORKED_BOOK_EXAMPLES
-                        .iter()
-                        .copied()
-                        .map(|(preset_id, label)| {
-                            let onclick_js =
-                                format!("window.satyaLoadRulesExample('{preset_id}')");
-                            view! {
-                                <button
-                                    type="button"
-                                    class="btn-chip"
-                                    onclick=onclick_js
-                                    on:click=move |_| {
-                                        wasm_client::satya_load_rules_example(
-                                            preset_id.to_string(),
-                                        )
-                                    }
-                                >
-                                    {label}
-                                </button>
-                            }
-                        })
-                        .collect_view()}
                 </div>
             </div>
             <div

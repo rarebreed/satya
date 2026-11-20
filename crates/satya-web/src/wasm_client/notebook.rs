@@ -544,31 +544,3 @@ pub fn satya_search_rules_book() {
     results_el.set_inner_html(&items);
     set_display("rules-search-results", "flex");
 }
-
-/// Loads a canonical worked example from the Satya Rules Book into the Center-Bottom `2d20`
-/// Task Resolution drawer (`#ttrpg-drawer`) and recalculates the exact probability preview.
-#[wasm_bindgen]
-pub fn satya_load_rules_example(preset: String) {
-    let p = satya_engine::get_canonical_task_preset(&preset);
-    let was_collapsed = with_state_mut(|st| {
-        let prev = st.ttrpg_collapsed;
-        st.ttrpg_collapsed = false;
-        prev
-    });
-    if was_collapsed {
-        sync_workspace_drawers_dom();
-    }
-    set_input_value("ttrpg-skill", p.skill_name);
-    set_input_value("ttrpg-skill-level", &p.player_skill_n.to_string());
-    set_input_value("ttrpg-control-c", &p.player_control_c.to_string());
-    set_input_value("ttrpg-internal-mod", &p.player_internal_mod.to_string());
-    set_input_value("ttrpg-tool-mod", &p.player_known_tool_mod.to_string());
-    set_input_value(
-        "ttrpg-external-mod",
-        &p.hidden_external_difficulty.to_string(),
-    );
-    set_select_value("ttrpg-carry-mode", "markov_step");
-    set_select_value("ttrpg-botch-rule", "closest_miss");
-    set_text("char-stat-control", &p.player_control_c.to_string());
-    satya_update_cascade_preview();
-}
