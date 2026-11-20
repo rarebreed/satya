@@ -1,4 +1,4 @@
-//! CLI utility (`cargo run -p satya-engine --bin build-rules-book`) that compiles all 23 canonical
+//! CLI utility (`cargo run -p satya-engine --bin build-rules-book`) that compiles all 24 canonical
 //! chapters of the Satya TTRPG Rules Book (`docs/ttrpg/`) into static HTML pages and `catalog.json`
 //! inside `docs/book/`.
 
@@ -408,6 +408,18 @@ fn rewrite_chapter_links(rendered_html: &str) -> String {
         (
             "robotics_drones_and_ai_architecture.md",
             "robotics_and_ai_architecture.html",
+        ),
+        (
+            "07-engineering-and-tech/electronic_warfare_and_surveillance.md",
+            "electronic_warfare.html",
+        ),
+        (
+            "../07-engineering-and-tech/electronic_warfare_and_surveillance.md",
+            "electronic_warfare.html",
+        ),
+        (
+            "electronic_warfare_and_surveillance.md",
+            "electronic_warfare.html",
         ),
     ];
     let mut out = rendered_html.to_string();

@@ -34,6 +34,7 @@ CANONICAL_TTRPG_FILES: tuple[tuple[str, str], ...] = (
     ("06-health-and-survival/environmental_hazards_and_survival.md", "Ch. 21: Environmental Hazards, Survival & Field Pharmacology"),
     ("07-engineering-and-tech/engineering_and_weapon_design.md", "Ch. 22: Engineering, Workshops & Custom Weapon/Armor Design"),
     ("07-engineering-and-tech/robotics_drones_and_ai_architecture.md", "Ch. 23: Robotics, Drones, AI 2.0 Architectures & Cyber-Prosthetics"),
+    ("07-engineering-and-tech/electronic_warfare_and_surveillance.md", "Ch. 24: Electronic Warfare, 2035 Surveillance, ECM & ECCM"),
     ("01-foundation/design_philosophy.md", "Ch. 1: Design Philosophy & Goals of Satya"),
 )
 
@@ -45,6 +46,7 @@ _RUST_TO_DOC_HINTS: dict[str, str] = {
     "explosives_and_arsenal.rs": "docs/ttrpg/05-combat/arsenal_explosives_and_tactical_gear.md",
     "engineering_design.rs": "docs/ttrpg/07-engineering-and-tech/engineering_and_weapon_design.md",
     "robotics_and_ai_design.rs": "docs/ttrpg/07-engineering-and-tech/robotics_drones_and_ai_architecture.md",
+    "electronic_warfare.rs": "docs/ttrpg/07-engineering-and-tech/electronic_warfare_and_surveillance.md",
     "psyche_social.rs": "docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md",
     "social_combat.rs": "docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md",
     "ballistics.rs": "docs/ttrpg/05-combat/firearms_and_ballistics.md",

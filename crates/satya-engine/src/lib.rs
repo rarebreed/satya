@@ -48,11 +48,12 @@
 //!   Fractures, Hemorrhaging & Hypovolemic Shock, `WSR` Saves, Physiological & Mental Trauma Conditions,
 //!   Combat Movement Gaits, Encumbrance (`Tiers 0–4`), Vehicular Chases & High-G Physics, and Environmental
 //!   Survival (`docs/ttrpg/06-health-and-survival/health_and_trauma.md`, `movement_encumbrance_and_vehicles.md`, `environmental_hazards_and_survival.md`).
-//! - [`engineering_design`] & [`robotics_and_ai_design`]: Workshop Tiers (`FieldBenchImprovised` to
+//! - [`engineering_design`], [`robotics_and_ai_design`] & [`electronic_warfare`]: Workshop Tiers (`FieldBenchImprovised` to
 //!   `AerospaceCleanroomLab`), Project Clocks & Prototype Quirks, Custom Firearm/Ammo/Melee/Armor Designers,
 //!   Modular Drones & UGVs, Chassis Trauma & EMP, AI 2.0 Architecture Engineering & Verification Debt,
-//!   and Clinical Cyber-Prosthetics & Myomer/Neural Augmentations
-//!   (`docs/ttrpg/07-engineering-and-tech/engineering_and_weapon_design.md`, `robotics_drones_and_ai_architecture.md`).
+//!   Clinical Cyber-Prosthetics & Myomer/Neural Augmentations, and 2035 Surveillance, Network Intrusion,
+//!   ECM vs. ECCM & Custom EW Hardware
+//!   (`docs/ttrpg/07-engineering-and-tech/engineering_and_weapon_design.md`, `robotics_drones_and_ai_architecture.md`, `electronic_warfare_and_surveillance.md`).
 //! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
 //!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
 //! - [`tactical_map`], [`map_continuation`], [`tactical_map_geom`], [`tactical_map_inspect`], [`tactical_map_edges`], [`map_dressing`], [`barrier_ballistics`], [`map_interior_gen`],
@@ -80,6 +81,7 @@ pub mod contested_cascade;
 pub mod dice_pools;
 pub mod dice_probabilities;
 pub mod economy_gear;
+pub mod electronic_warfare;
 pub mod engineering_design;
 pub mod environment_vehicles;
 pub mod environmental_hazards;
@@ -147,6 +149,7 @@ pub use dice_pools::{
     SARLE_BIMODAL_THRESHOLD, try_median_gated_bimodal_pmf, try_order_statistic_pmf,
 };
 pub use dice_probabilities::*;
+pub use electronic_warfare::*;
 pub use engineering_design::*;
 pub use faction_templates::*;
 pub use health_survival::*;

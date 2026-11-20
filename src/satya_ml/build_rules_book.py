@@ -187,6 +187,13 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
         "relative_path": "07-engineering-and-tech/robotics_drones_and_ai_architecture.md",
         "description": "Modular Drones/UGVs (6 chassis, 8 modules, battery endurance), Chassis Trauma & EMP, AI 2.0 Architecture Engineering & Verification Debt (bridging SyntheticMetabolicMode), and Clinical Cyber-Prosthetics & Myomer Augmentations.",
     },
+    {
+        "chapter_id": "electronic_warfare",
+        "part": "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+        "title": "Electronic Warfare, 2035 Surveillance, ECM & ECCM",
+        "relative_path": "07-engineering-and-tech/electronic_warfare_and_surveillance.md",
+        "description": "7-node 2035 Surveillance Stack, 4-phase Network Intrusion & hard Air-Gap rule, 6 ECM & 5 ECCM methods, active RF DF Triangulation paradox, Optical/Fiber RF immunity, AI uplink severing, and Custom EW Hardware Designer.",
+    },
 ]
 
 _LEGACY_CHAPTER_ALIASES: dict[str, str] = {
@@ -209,6 +216,10 @@ _LEGACY_CHAPTER_ALIASES: dict[str, str] = {
     "robotics-and-drones": "robotics-and-ai-architecture",
     "cyber-prosthetics": "robotics-and-ai-architecture",
     "ai-architecture": "robotics-and-ai-architecture",
+    "electronic-warfare-and-surveillance": "electronic-warfare",
+    "ecm-eccm": "electronic-warfare",
+    "ew": "electronic-warfare",
+    "surveillance-and-ew": "electronic-warfare",
 }
 
 
@@ -284,7 +295,7 @@ def search_rules_book_python(
     max_results: int = 5,
     repo_root: Path | None = None,
 ) -> list[dict[str, Any]]:
-    """Search across all 23 canonical Satya Rules Book chapters and return ranked section dicts."""
+    """Search across all 24 canonical Satya Rules Book chapters and return ranked section dicts."""
     if _satya_py is not None:
         try:
             if len(_satya_py.list_rules_chapters()) == len(BOOK_CHAPTER_SPECS):
@@ -1145,6 +1156,9 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
         "07-engineering-and-tech/robotics_drones_and_ai_architecture.md": "robotics_and_ai_architecture.html",
         "../07-engineering-and-tech/robotics_drones_and_ai_architecture.md": "robotics_and_ai_architecture.html",
         "robotics_drones_and_ai_architecture.md": "robotics_and_ai_architecture.html",
+        "07-engineering-and-tech/electronic_warfare_and_surveillance.md": "electronic_warfare.html",
+        "../07-engineering-and-tech/electronic_warfare_and_surveillance.md": "electronic_warfare.html",
+        "electronic_warfare_and_surveillance.md": "electronic_warfare.html",
     }
     out = rendered_html
     for src, dst in mapping.items():
@@ -1447,7 +1461,7 @@ def build_static_rules_book(
     output_dir: Path | None = None,
     repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Compile all 23 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
+    """Compile all 24 `docs/ttrpg/` chapters into static HTML pages and `catalog.json` inside `docs/book/`."""
     root = repo_root or _default_repo_root()
     out_dir = output_dir or (root / "docs" / "book")
     out_dir.mkdir(parents=True, exist_ok=True)

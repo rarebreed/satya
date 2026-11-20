@@ -193,6 +193,12 @@ def _():
             "23. Robotics, Drones, AI 2.0 Architectures & Cyber-Prosthetics",
             "07-engineering-and-tech/robotics_drones_and_ai_architecture.md",
         ),
+        (
+            "electronic_warfare",
+            "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+            "24. Electronic Warfare, 2035 Surveillance, ECM & ECCM",
+            "07-engineering-and-tech/electronic_warfare_and_surveillance.md",
+        ),
     ]
 
     chapters_by_id = {}

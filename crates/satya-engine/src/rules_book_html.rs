@@ -91,6 +91,9 @@ pub(crate) fn resolve_markdown_link_chapter_id(url: &str) -> Option<&'static str
         "robotics_drones_and_ai_architecture.md" | "robotics_and_ai_architecture.md" => {
             Some("robotics_and_ai_architecture")
         }
+        "electronic_warfare_and_surveillance.md" | "electronic_warfare.md" => {
+            Some("electronic_warfare")
+        }
         _ => None,
     }
 }

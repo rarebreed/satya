@@ -285,11 +285,11 @@ def test_rules_book_builder_and_tactical_pool_bridge() -> None:
         search_rules_book_python,
     )
 
-    assert len(BOOK_CHAPTER_SPECS) == 23
+    assert len(BOOK_CHAPTER_SPECS) == 24
     summary = build_static_rules_book()
-    assert summary["chapter_count"] == 23
+    assert summary["chapter_count"] == 24
     assert summary["using_satya_py"] is True
-    assert len(summary["generated_files"]) == 25  # 23 chapters + index.html + catalog.json
+    assert len(summary["generated_files"]) == 26  # 24 chapters + index.html + catalog.json
 
     hits_melee = search_rules_book_python("Tactical Triad Tempo Control Force", max_results=3)
     assert hits_melee
@@ -334,6 +334,12 @@ def test_rules_book_builder_and_tactical_pool_bridge() -> None:
     )
     assert hits_robo
     assert hits_robo[0]["chapter_id"] == "robotics_and_ai_architecture"
+
+    hits_ew = search_rules_book_python(
+        "ECM ECCM Frequency Hopping Triangulation Air-Gapped SCADA", max_results=3
+    )
+    assert hits_ew
+    assert hits_ew[0]["chapter_id"] == "electronic_warfare"
 
     hits_ticks = search_rules_book_python("240 ticks in a minute 4 ticks per second", max_results=3)
     assert hits_ticks
@@ -403,10 +409,10 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
 
     # Build static HTML book into tmp_path and into docs/book
     summary = build_rules_book(output_dir=tmp_path)
-    assert summary["chapter_count"] == 23
+    assert summary["chapter_count"] == 24
     assert summary["using_satya_py"] is True
     assert summary["total_words"] > 10_000
-    assert len(summary["generated_files"]) == 25
+    assert len(summary["generated_files"]) == 26
     assert len(summary["asset_files"]) == 2
     assert (tmp_path / "satya_book.css").exists()
     assert (tmp_path / "satya_book.js").exists()
@@ -445,6 +451,10 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
     )
     assert (tmp_path / "robotics_and_ai_architecture.html").exists()
     assert 'data-part-index="7"' in (tmp_path / "robotics_and_ai_architecture.html").read_text(
+        encoding="utf-8"
+    )
+    assert (tmp_path / "electronic_warfare.html").exists()
+    assert 'data-part-index="7"' in (tmp_path / "electronic_warfare.html").read_text(
         encoding="utf-8"
     )
     assert (tmp_path / "catalog.json").exists()

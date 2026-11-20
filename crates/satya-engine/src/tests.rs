@@ -308,7 +308,7 @@ fn test_probability_md_k20_calibration_and_game_engine_evaluator() {
 #[test]
 fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
     let chapters = list_rules_chapters();
-    assert_eq!(chapters.len(), 23);
+    assert_eq!(chapters.len(), 24);
     assert!(chapters.iter().any(|c| c.chapter_id == "design_philosophy"));
     assert!(chapters.iter().any(|c| c.chapter_id == "notation_glossary"));
     assert!(chapters.iter().any(|c| c.chapter_id == "tasks"));
@@ -378,6 +378,11 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
         chapters
             .iter()
             .any(|c| c.chapter_id == "robotics_and_ai_architecture")
+    );
+    assert!(
+        chapters
+            .iter()
+            .any(|c| c.chapter_id == "electronic_warfare")
     );
 
     let tasks_doc = get_rules_chapter("tasks").expect("tasks chapter exists");
@@ -484,6 +489,13 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
             .chapter_id,
         "robotics_and_ai_architecture"
     );
+    assert_eq!(
+        get_rules_chapter("ecm-eccm")
+            .expect("ecm-eccm alias resolves")
+            .summary
+            .chapter_id,
+        "electronic_warfare"
+    );
     assert!(
         get_rules_chapter("engineering_and_weapon_design")
             .expect("engineering doc exists")
@@ -495,6 +507,12 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
             .expect("robotics doc exists")
             .rendered_html
             .contains("$10,900")
+    );
+    assert!(
+        get_rules_chapter("electronic_warfare")
+            .expect("electronic_warfare doc exists")
+            .rendered_html
+            .contains("$6,500")
     );
 
     let stealth_hits = search_rules_book("Passive Awareness Alertness Ladder SDR", 3);
@@ -515,6 +533,13 @@ fn test_rules_book_catalog_search_and_tactical_pool_envelope() {
     let robo_hits = search_rules_book("Verification Debt Modular Drone Myomer Cyber-Prosthetics", 3);
     assert!(!robo_hits.is_empty());
     assert_eq!(robo_hits[0].chapter_id, "robotics_and_ai_architecture");
+
+    let ew_hits = search_rules_book(
+        "ECM ECCM Frequency Hopping Triangulation Air-Gapped SCADA",
+        3,
+    );
+    assert!(!ew_hits.is_empty());
+    assert_eq!(ew_hits[0].chapter_id, "electronic_warfare");
 
     let health_hits = search_rules_book("hemorrhaging broken bones blinded catatonia", 5);
     assert!(!health_hits.is_empty());

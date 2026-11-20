@@ -1,5 +1,5 @@
 //! Canonical Satya TTRPG Rules Book catalog and multi-chapter search engine
-//! (`docs/ttrpg/SUMMARY.md`, Parts I–VII, Chapters 1–23).
+//! (`docs/ttrpg/SUMMARY.md`, Parts I–VII, Chapters 1–24).
 
 use satya_schema::{
     RulesBookCatalogResponse, RulesChapterDocument, RulesChapterSummary, RulesSearchHit,
@@ -241,6 +241,16 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
             "../../../docs/ttrpg/07-engineering-and-tech/robotics_drones_and_ai_architecture.md"
         ),
     },
+    StaticChapterSpec {
+        chapter_id: "electronic_warfare",
+        part: "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+        title: "Electronic Warfare, 2035 Surveillance, ECM & ECCM",
+        relative_path: "07-engineering-and-tech/electronic_warfare_and_surveillance.md",
+        description: "7-node 2035 Surveillance Stack, 4-phase Network Intrusion & hard Air-Gap rule, 6 ECM & 5 ECCM methods, active RF DF Triangulation paradox, Optical/Fiber RF immunity, AI uplink severing, and Custom EW Hardware Designer.",
+        embedded_markdown: include_str!(
+            "../../../docs/ttrpg/07-engineering-and-tech/electronic_warfare_and_surveillance.md"
+        ),
+    },
 ];
 
 fn load_chapter_markdown(spec: &StaticChapterSpec) -> String {
@@ -316,6 +326,9 @@ fn resolve_chapter_alias(needle: &str) -> &str {
         | "robotics-and-drones"
         | "cyber-prosthetics"
         | "ai-architecture" => "robotics-and-ai-architecture",
+        "electronic-warfare-and-surveillance" | "ecm-eccm" | "ew" | "surveillance-and-ew" => {
+            "electronic-warfare"
+        }
         other => other,
     }
 }

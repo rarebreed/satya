@@ -2279,3 +2279,144 @@ fn test_modular_drones_chassis_trauma_ai_codesign_debt_and_cyber_prosthetics() {
     assert_eq!(uncompliant_4.emp_vulnerable_count, 4);
     assert_eq!(uncompliant_4.emp_reboot_ticks, 20);
 }
+
+#[test]
+fn test_electronic_warfare_surveillance_ecm_eccm_triangulation_and_ew_designer() {
+    assert_eq!(canonical_surveillance_node_catalog().len(), 7);
+    assert_eq!(NetworkIntrusionPhase::ALL.len(), 4);
+    assert_eq!(canonical_ecm_method_catalog().len(), 6);
+    assert_eq!(canonical_eccm_hardening_catalog().len(), 5);
+    assert_eq!(EwHardwareRole::ALL.len(), 5);
+
+    // Hard Air-Gap enforcement: remote exploit blocked, physical tap succeeds
+    let airgap_blocked = evaluate_network_or_sensor_intrusion(
+        SurveillanceNodeKind::AirGappedScadaEnclave,
+        NetworkIntrusionPhase::CredentialOrExploitEntry,
+        false,
+        14,
+        0,
+        -2,
+        &[(15, 14), (13, 12), (12, 12)],
+        (6, 6),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(airgap_blocked.access_blocked_by_air_gap);
+    assert!(!airgap_blocked.access_gained);
+
+    let tapped_ok = evaluate_network_or_sensor_intrusion(
+        SurveillanceNodeKind::AirGappedScadaEnclave,
+        NetworkIntrusionPhase::LateralMovementAndEscalation,
+        true,
+        16,
+        0,
+        -4,
+        &[(16, 15), (15, 14), (14, 14), (13, 12)],
+        (6, 6),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(!tapped_ok.access_blocked_by_air_gap);
+    assert!(tapped_ok.access_gained);
+    assert!(tapped_ok.silent_persistence);
+    assert_eq!(tapped_ok.ids_trace_added, 0);
+
+    // Ch. 24 Worked Example 1: DirectionalTightBeamJammer vs FHSS at 90m for 3.0 min
+    let fhss_jam = evaluate_ecm_vs_eccm_contest(
+        EcmMethodId::DirectionalTightBeamJammer,
+        EccmHardeningId::FhssFrequencyHoppingSpread,
+        90.0,
+        3.0,
+        14,
+        0,
+        &[(14, 13), (12, 12), (11, 10)],
+        (7, 7),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(!fhss_jam.blocked_by_optical_or_fiber_immunity);
+    assert_eq!(fhss_jam.net_ew_advantage, 2);
+    assert!(fhss_jam.jam_or_spoof_succeeded);
+    assert!(fhss_jam.target_uplink_severed);
+    assert_eq!(
+        fhss_jam.forced_metabolic_mode,
+        Some(SyntheticMetabolicMode::SeveredFaradayReflex)
+    );
+    assert_eq!(fhss_jam.triangulation_signature_r_df, 5);
+    assert!(!fhss_jam.triangulation_lock_triggered);
+
+    // Ch. 24 Worked Example 2a: Broadband barrage vs AI Adaptive Radio locks DF emitter
+    let broadband_locked = evaluate_ecm_vs_eccm_contest(
+        EcmMethodId::BroadbandRfBarrageJammer,
+        EccmHardeningId::AiAdaptiveCognitiveRadio2035,
+        110.0,
+        4.0,
+        13,
+        0,
+        &[(11, 10), (10, 9)],
+        (10, 10),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert_eq!(broadband_locked.triangulation_signature_r_df, 13);
+    assert!(broadband_locked.triangulation_lock_triggered);
+
+    // Ch. 24 Worked Example 2b: Optical / Fiber tether is immune to active RF jamming
+    let fiber_immune = evaluate_ecm_vs_eccm_contest(
+        EcmMethodId::BroadbandRfBarrageJammer,
+        EccmHardeningId::OpticalLaserOrFiberTether,
+        40.0,
+        2.0,
+        16,
+        0,
+        &[(18, 17), (16, 15)],
+        (5, 5),
+        ContestedTieRule::HybridSignedMargin,
+    );
+    assert!(fiber_immune.blocked_by_optical_or_fiber_immunity);
+    assert!(!fiber_immune.jam_or_spoof_succeeded);
+    assert!(!fiber_immune.target_uplink_severed);
+    assert_eq!(fiber_immune.forced_metabolic_mode, None);
+
+    // Ch. 24 Worked Example 3: Custom Baffled PortableJammerPod (CNC Masterwork vs FieldBench Rushed)
+    let cnc_pod = evaluate_custom_ew_hardware_design(&CustomEwHardwareBlueprint {
+        role: EwHardwareRole::PortableJammerPod,
+        requested_ew_power: 4,
+        rf_stealth_baffled: true,
+        battery_wh: 120.0,
+        workshop: WorkshopFacilityTier::CommercialCncMachineShop,
+        complexity: ProjectClockComplexity::CustomSubassembly,
+        build_outcome: BuildOutcomeQuality::MasterworkExtraordinary,
+    });
+    assert!(!cnc_pod.clamped_by_workshop);
+    assert!(cnc_pod.masterwork_bonus_applied);
+    assert_eq!(cnc_pod.effective_ew_power, 5);
+    assert_eq!(cnc_pod.rf_beacon_signature_delta, 4);
+    assert!((cnc_pod.power_draw_w - 58.0).abs() < 1e-6);
+    assert!((cnc_pod.battery_endurance_min - 124.1).abs() < 0.1);
+    assert!((cnc_pod.mass_kg - 3.55).abs() < 1e-6);
+    assert_eq!(cnc_pod.estimated_cost_usd, 6497);
+    assert_eq!(
+        cnc_pod.access_class,
+        BlackMarketRestrictionClass::Class3MilitaryOrdnanceFullAuto
+    );
+
+    let field_pod = evaluate_custom_ew_hardware_design(&CustomEwHardwareBlueprint {
+        role: EwHardwareRole::PortableJammerPod,
+        requested_ew_power: 5,
+        rf_stealth_baffled: false,
+        battery_wh: 90.0,
+        workshop: WorkshopFacilityTier::FieldBenchImprovised,
+        complexity: ProjectClockComplexity::FieldModification,
+        build_outcome: BuildOutcomeQuality::RushedOrBreached,
+    });
+    assert!(field_pod.clamped_by_workshop);
+    assert_eq!(field_pod.effective_ew_power, 2);
+    assert_eq!(field_pod.rf_beacon_signature_delta, 8);
+    assert!(
+        field_pod
+            .quirks
+            .contains(&PrototypeQuirkId::HairTriggerOrLoudAction)
+    );
+    assert!(
+        field_pod
+            .quirks
+            .contains(&PrototypeQuirkId::ProprietaryPartsOnly)
+    );
+}

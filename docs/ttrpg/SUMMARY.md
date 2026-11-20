@@ -7,7 +7,7 @@ This manifest defines the canonical chapter ordering, identifiers, categories, c
 
 > [!TIP]
 > **New Human GM or Player? Start With Prose Play Examples First!**
-> The 23 chapters below are written as a terse, mathematical rules specification (`docs/ttrpg/`). If you want step-by-step table dialogue, dice walkthroughs, and GM coaching showing how the rules play in practice, see **[Satya Guided Examples of Play](../ttrpg-examples/README.md)** (`docs/ttrpg-examples/`). For the *Awakened* 2035 setting lore, see the **[Campaign Compendium](../campaign/SUMMARY.md)**; for how *Satya* compares to *D&D*, *GURPS*, *Phoenix Command*, and *Cyberpunk*, see **[RPG System & Setting Comparisons](../campaign/06-essays-and-comparisons/rpg_system_and_setting_comparisons.md)**.
+> The 24 chapters below are written as a terse, mathematical rules specification (`docs/ttrpg/`). If you want step-by-step table dialogue, dice walkthroughs, and GM coaching showing how the rules play in practice, see **[Satya Guided Examples of Play](../ttrpg-examples/README.md)** (`docs/ttrpg-examples/`). For the *Awakened* 2035 setting lore, see the **[Campaign Compendium](../campaign/SUMMARY.md)**; for how *Satya* compares to *D&D*, *GURPS*, *Phoenix Command*, and *Cyberpunk*, see **[RPG System & Setting Comparisons](../campaign/06-essays-and-comparisons/rpg_system_and_setting_comparisons.md)**.
 
 ---
 
@@ -72,6 +72,8 @@ This manifest defines the canonical chapter ordering, identifiers, categories, c
     - 4-tier Workshop Facilities ($\Delta_{\text{tool}}$, $\tau_{\max}$, $Q_{\text{bbl},\max}$, $Q_{\text{mfg},\max}$), Extended Project Clock Complexity tiers (`FieldModification` to `NextGenBreakthrough`), Masterwork bonuses & Prototype Quirks, Bullet Construction & 17-caliber Custom Firearm Designer (wrapping `ballistics.rs`), and Custom Melee/Armor Designers.
 23. [Robotics, Drones, AI 2.0 Architectures & Cyber-Prosthetics](07-engineering-and-tech/robotics_drones_and_ai_architecture.md) (`id: robotics_and_ai_architecture`)
     - 6-chassis Modular Drones/UGVs & 8 payload modules, payload utilization & real battery endurance ($T_{\text{endurance}}$ min), Chassis Trauma & Li-ion thermal fires / EMP reboot ticks, AI 2.0 Architecture Paradigms bridged to `SyntheticMetabolicMode`, Human–AI Co-Design Overreach Debt & Formal Audits, and 8-entry Clinical Cyber-Prosthetics & Myomer/Neural Augmentations (`ConditionSource`, rejection $\Delta_{\text{int}}$, proprioceptive friction, EMP hardening).
+24. [Electronic Warfare, 2035 Surveillance, ECM & ECCM](07-engineering-and-tech/electronic_warfare_and_surveillance.md) (`id: electronic_warfare`)
+    - 7-entry 2035 Surveillance Stack (`ALPR` to `AirGappedScadaEnclave`), 4-phase Network Intrusion & hard Air-Gap rule, 6 ECM & 5 ECCM catalogs, Active-Emission RF `DF` Triangulation paradox ($R_{\text{DF}}$), Optical/Fiber RF immunity, severing AI 2.0 uplinks into `SeveredFaradayReflex`, and Custom EW Hardware Designer.
 
 ---
 
@@ -102,3 +104,4 @@ This manifest defines the canonical chapter ordering, identifiers, categories, c
 | [`06-health-and-survival/environmental_hazards_and_survival.md`](06-health-and-survival/environmental_hazards_and_survival.md) | `environmental_hazards` | [`environmental_hazards.rs`](../../crates/satya-engine/src/environmental_hazards.rs) |
 | [`07-engineering-and-tech/engineering_and_weapon_design.md`](07-engineering-and-tech/engineering_and_weapon_design.md) | `engineering_and_weapon_design` | [`engineering_design.rs`](../../crates/satya-engine/src/engineering_design.rs), [`ballistics.rs`](../../crates/satya-engine/src/ballistics.rs), [`ranged_combat.rs`](../../crates/satya-engine/src/ranged_combat.rs) |
 | [`07-engineering-and-tech/robotics_drones_and_ai_architecture.md`](07-engineering-and-tech/robotics_drones_and_ai_architecture.md) | `robotics_and_ai_architecture` | [`robotics_and_ai_design.rs`](../../crates/satya-engine/src/robotics_and_ai_design.rs), [`awakened_ai_substrate.rs`](../../crates/satya-engine/src/awakened_ai_substrate.rs), [`environmental_hazards.rs`](../../crates/satya-engine/src/environmental_hazards.rs) |
+| [`07-engineering-and-tech/electronic_warfare_and_surveillance.md`](07-engineering-and-tech/electronic_warfare_and_surveillance.md) | `electronic_warfare` | [`electronic_warfare.rs`](../../crates/satya-engine/src/electronic_warfare.rs), [`engineering_design.rs`](../../crates/satya-engine/src/engineering_design.rs), [`awakened_ai_substrate.rs`](../../crates/satya-engine/src/awakened_ai_substrate.rs) |

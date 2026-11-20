@@ -841,13 +841,14 @@ _CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
     ("06-health-and-survival/environmental_hazards_and_survival.md", "Ch. 21: Environmental Hazards, Survival & Field Pharmacology"),
     ("07-engineering-and-tech/engineering_and_weapon_design.md", "Ch. 22: Engineering, Workshops & Custom Weapon/Armor Design"),
     ("07-engineering-and-tech/robotics_drones_and_ai_architecture.md", "Ch. 23: Robotics, Drones, AI 2.0 Architectures & Cyber-Prosthetics"),
+    ("07-engineering-and-tech/electronic_warfare_and_surveillance.md", "Ch. 24: Electronic Warfare, 2035 Surveillance, ECM & ECCM"),
     ("01-foundation/design_philosophy.md", "Ch. 1: Design Philosophy & Goals of Satya"),
 )
 
 
 @tool
 def query_satya_rules(query: str) -> str:
-    """Search the 23-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, stealth/investigation, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), expanded firearms/explosives/breaching, engineering/weapon design, robotics/drones, AI 2.0 architectures, cyber-prosthetics, and social dissonance."""
+    """Search the 24-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, stealth/investigation, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), expanded firearms/explosives/breaching, engineering/weapon design, robotics/drones, AI 2.0 architectures, cyber-prosthetics, electronic warfare (`ECM`/`ECCM`), and social dissonance."""
     ttrpg_dir = _repo_root() / "docs" / "ttrpg"
     default_rules_path = ttrpg_dir / "02-core-mechanics" / "cascading_d20_and_tasks.md"
     if not default_rules_path.exists():

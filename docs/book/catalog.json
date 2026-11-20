@@ -1,7 +1,7 @@
 {
   "book_title": "Satya: A Grounded Tabletop Role-Playing System",
   "using_satya_py": true,
-  "chapter_count": 23,
+  "chapter_count": 24,
   "chapters": [
     {
       "chapter_id": "design_philosophy",
@@ -537,6 +537,23 @@
         "5. Worked Example: Shrouded Recon FPV, Co-Design Debt & Clinical Suite"
       ],
       "html_file": "robotics_and_ai_architecture.html"
+    },
+    {
+      "chapter_id": "electronic_warfare",
+      "part": "Part VII: Engineering, Robotics, AI Architectures & Electronic Warfare",
+      "title": "Electronic Warfare, 2035 Surveillance, ECM & ECCM",
+      "relative_path": "07-engineering-and-tech/electronic_warfare_and_surveillance.md",
+      "description": "7-node 2035 Surveillance Stack, 4-phase Network Intrusion & hard Air-Gap rule, 6 ECM & 5 ECCM methods, active RF DF Triangulation paradox, Optical/Fiber RF immunity, AI uplink severing, and Custom EW Hardware Designer.",
+      "headings": [
+        "1. The 2035 Surveillance Stack & Network Intrusion",
+        "1.1 Surveillance Node Catalog (`SurveillanceNodeKind`)",
+        "1.2 Four-Phase Intrusion Workflow & The Hard Air-Gap Rule",
+        "2. Electronic Countermeasures (`ECM`) & The Active-Emission Paradox",
+        "3. Electronic Counter-Countermeasures (`ECCM`) & Contested EW",
+        "4. Custom EW Hardware Designer (`evaluate_custom_ew_hardware_design`)",
+        "5. Worked Example: Tight-Beam Jamming, Fiber Immunity & Custom Jammer Pod"
+      ],
+      "html_file": "electronic_warfare.html"
     }
   ]
 }
