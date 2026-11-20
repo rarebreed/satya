@@ -1,6 +1,6 @@
 /* ============================================================================
  * Satya TTRPG Rules Book — Multi-Theme Paginated Spread & Print Stylesheet
- * Themes: faraday-timber (default), chan-sanctuary, tactical-hud
+ * Themes: sangha-robes (default), chan-sanctuary, tactical-hud
  * ============================================================================ */
 
 :root {
@@ -13,56 +13,57 @@
   --page-h: 1056px;
   --book-scale: 1;
   --part-idx: 1;
-  --part-color: #8b5e34;
+  --part-color: #5c5851;
 
-  /* Default Theme: faraday-timber (Warm Archival Paper + Smoked Cedar & Copper Mesh) */
-  --desk-bg: #181411;
-  --desk-radial: radial-gradient(circle at 50% 20%, #2a221c 0%, #14100d 75%);
-  --toolbar-bg: #1e1712;
-  --toolbar-border: #4a3525;
-  --toolbar-text: #efe6d5;
-  --toolbar-muted: #b6a691;
-  --toolbar-accent: #d4894f;
+  /* Default Theme: sangha-robes (Korean Seon Grey, Japanese Zen Black & Vietnamese Thiền Saffron/Brown/Orange) */
+  --desk-bg: #111110;
+  --desk-radial: radial-gradient(circle at 50% 20%, #282623 0%, #10100f 76%);
+  --toolbar-bg: #171615;
+  --toolbar-border: #46433e;
+  --toolbar-text: #efece5;
+  --toolbar-muted: #aba59b;
+  --toolbar-accent: #e09a2b;
 
-  --page-bg: #f5efe2;
-  --page-bg-alt: #ede3cf;
-  --page-paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.032'/%3E%3C/svg%3E");
-  --page-shadow: 0 18px 45px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --page-bg: #f1efea;
+  --page-bg-alt: #e4e1d9;
+  --page-paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.036'/%3E%3C/svg%3E");
+  --page-shadow: 0 18px 45px rgba(0, 0, 0, 0.58), 0 2px 8px rgba(0, 0, 0, 0.36);
 
-  --beam-bg: linear-gradient(180deg, #271b13 0%, #3a271b 45%, #241811 100%);
-  --beam-inner: #b86b35;
-  --beam-hairline: #d9a06c;
-  --beam-text: #f3ead8;
-  --beam-muted: #cbb79c;
-  --corner-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M2 2h32v5H7v27H2z' fill='%23b86b35'/%3E%3Cpath d='M11 11h14v3H14v11h-3z' fill='%23d9a06c'/%3E%3C/svg%3E");
+  --beam-outer-edge: #524f49;
+  --beam-bg: linear-gradient(180deg, #161514 0%, #252422 48%, #141312 100%);
+  --beam-inner: #d4891e;
+  --beam-hairline: #c86419;
+  --beam-text: #f3efe6;
+  --beam-muted: #c2bbb0;
+  --corner-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath d='M2 2h32v4H6v28H2z' fill='%23d4891e'/%3E%3Cpath d='M9 9h17v3H12v14H9z' fill='%23c85a19'/%3E%3Crect x='15' y='15' width='5' height='5' fill='%23e4a842'/%3E%3C/svg%3E");
 
-  --ink: #1e1a16;
-  --ink-muted: #5a5044;
-  --ink-heading: #192638;
-  --accent: #a65221;
-  --accent-deep: #1d3c5c;
-  --seal-red: #9b2c2c;
-  --emerald: #1f6d52;
-  --rule: #cbbba0;
-  --rule-strong: #8c7457;
+  --ink: #1b1a18;
+  --ink-muted: #55514a;
+  --ink-heading: #131210;
+  --accent: #a84912;
+  --accent-deep: #5e3c23;
+  --seal-red: #9e3915;
+  --emerald: #445c3c;
+  --rule: #c2bdb3;
+  --rule-strong: #7a7368;
 
-  --table-head-bg: #243549;
-  --table-head-ink: #f7f1e5;
-  --table-stripe: rgba(140, 116, 87, 0.08);
-  --code-bg: #ebe1ce;
-  --code-border: #cbbba0;
-  --math-bg: #eee5d3;
+  --table-head-bg: #232220;
+  --table-head-ink: #f6ecd7;
+  --table-stripe: rgba(94, 60, 35, 0.07);
+  --code-bg: #e5e2da;
+  --code-border: #c0bab0;
+  --math-bg: #eae5da;
 
-  --sidebar-bg: #eae0cc;
-  --sidebar-border: #3a271b;
-  --sidebar-accent: #b86b35;
-  --example-bg: #faf6eb;
-  --example-line: rgba(30, 58, 95, 0.08);
-  --dossier-bg: #e7eceb;
-  --dossier-accent: #9b2c2c;
-  --statblock-bg: #e7edf3;
-  --statblock-accent: #1d3c5c;
-  --fig-mat: #ebe1ce;
+  --sidebar-bg: #e5e2da;
+  --sidebar-border: #252422;
+  --sidebar-accent: #c85a19;
+  --example-bg: #f6f3ec;
+  --example-line: rgba(94, 60, 35, 0.085);
+  --dossier-bg: #e1e0dc;
+  --dossier-accent: #9e3915;
+  --statblock-bg: #e8e1d5;
+  --statblock-accent: #5e3c23;
+  --fig-mat: #e2dfd7;
 }
 
 body[data-book-theme="chan-sanctuary"] {
@@ -76,6 +77,7 @@ body[data-book-theme="chan-sanctuary"] {
 
   --page-bg: #f8f4ea;
   --page-bg-alt: #efe7d6;
+  --beam-outer-edge: rgba(0, 0, 0, 0.45);
   --beam-bg: linear-gradient(180deg, #2d1b10 0%, #442919 48%, #26160d 100%);
   --beam-inner: #b38435;
   --beam-hairline: #d4b068;
@@ -127,6 +129,7 @@ body[data-book-theme="tactical-hud"] {
     linear-gradient(90deg, rgba(56, 189, 248, 0.035) 1px, transparent 1px);
   --page-shadow: 0 22px 54px rgba(0, 0, 0, 0.78), 0 0 0 1px rgba(56, 189, 248, 0.18);
 
+  --beam-outer-edge: rgba(0, 0, 0, 0.45);
   --beam-bg: linear-gradient(180deg, #0b1322 0%, #152238 55%, #0c1424 100%);
   --beam-inner: #38bdf8;
   --beam-hairline: #f59e0b;
@@ -171,6 +174,14 @@ body[data-part-index="4"] { --part-idx: 4; --part-color: #8c3b4a; }
 body[data-part-index="5"] { --part-idx: 5; --part-color: #9b3a2b; }
 body[data-part-index="6"] { --part-idx: 6; --part-color: #24616c; }
 body[data-part-index="7"] { --part-idx: 7; --part-color: #4c4a8a; }
+
+body[data-book-theme="sangha-robes"][data-part-index="1"] { --part-color: #5c5851; }
+body[data-book-theme="sangha-robes"][data-part-index="2"] { --part-color: #9c5f0f; }
+body[data-book-theme="sangha-robes"][data-part-index="3"] { --part-color: #6b4426; }
+body[data-book-theme="sangha-robes"][data-part-index="4"] { --part-color: #ab4916; }
+body[data-book-theme="sangha-robes"][data-part-index="5"] { --part-color: #2b2a28; }
+body[data-book-theme="sangha-robes"][data-part-index="6"] { --part-color: #4a5d3f; }
+body[data-book-theme="sangha-robes"][data-part-index="7"] { --part-color: #853d1c; }
 
 * { box-sizing: border-box; }
 
@@ -531,7 +542,7 @@ body[data-book-view="spread"] .book-page--recto::after {
   position: relative;
   background: var(--beam-bg);
   color: var(--beam-text);
-  border-top: 7px solid rgba(0, 0, 0, 0.45);
+  border-top: 7px solid var(--beam-outer-edge);
   border-bottom: 3px solid var(--beam-inner);
   box-shadow: 0 2px 0 0 var(--page-bg), 0 3px 0 0 var(--beam-hairline);
   padding: 0 42px;
@@ -589,7 +600,7 @@ body[data-book-theme="tactical-hud"] .page-header {
   background: var(--beam-bg);
   color: var(--beam-muted);
   border-top: 3px solid var(--beam-inner);
-  border-bottom: 8px solid rgba(0, 0, 0, 0.5);
+  border-bottom: 8px solid var(--beam-outer-edge);
   box-shadow: 0 -2px 0 0 var(--page-bg), 0 -3px 0 0 var(--beam-hairline);
   padding: 0 42px;
   display: flex;
@@ -947,6 +958,10 @@ p.chapter-dropcap::first-letter {
   overflow-x: auto;
   overflow-y: hidden;
   break-inside: avoid;
+}
+
+body[data-book-theme="sangha-robes"] .rules-table-wrap {
+  border-top-color: var(--beam-inner);
 }
 
 .rules-table {

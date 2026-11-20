@@ -537,7 +537,7 @@ fn wrap_book_page_html(
   <script defer src="satya_book.js"></script>
 </head>
 <body
-  data-book-theme="faraday-timber"
+  data-book-theme="sangha-robes"
   data-book-view="spread"
   data-part-index="{part_index}"
   data-part-label="{esc_part}"
@@ -553,7 +553,7 @@ fn wrap_book_page_html(
     </div>
     <div class="toolbar-cluster">
       <div class="toolbar-group" role="group" aria-label="Book Theme">
-        <button type="button" class="toolbar-btn is-active" data-set-theme="faraday-timber">Faraday Timber</button>
+        <button type="button" class="toolbar-btn is-active" data-set-theme="sangha-robes" title="Korean Seon grey, Japanese Zen black &amp; Vietnamese Thiền saffron robes">Sangha Robes</button>
         <button type="button" class="toolbar-btn" data-set-theme="chan-sanctuary">Chan Wood</button>
         <button type="button" class="toolbar-btn" data-set-theme="tactical-hud">Tactical HUD</button>
       </div>

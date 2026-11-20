@@ -423,6 +423,12 @@ def test_rules_book_interactive_calculators_and_static_builder(tmp_path) -> None
     tasks_html = (tmp_path / "tasks.html").read_text(encoding="utf-8")
     assert "satya_book.css" in tasks_html
     assert "satya_book.js" in tasks_html
+    assert 'data-book-theme="sangha-robes"' in tasks_html
+    assert 'data-set-theme="sangha-robes"' in tasks_html
+    assert "Sangha Robes" in tasks_html
+    assert "faraday-timber" not in tasks_html
+    assert "sangha-robes" in (tmp_path / "satya_book.css").read_text(encoding="utf-8")
+    assert "sangha-robes" in (tmp_path / "satya_book.js").read_text(encoding="utf-8")
     assert "rules-figure--full" in tasks_html
     assert "rules-math-inline" in tasks_html
     assert "rules-math-block" in tasks_html

@@ -8,7 +8,7 @@
   const THEME_KEY = "satya.book.theme";
   const VIEW_KEY = "satya.book.view";
   const TOC_KEY = "satya.book.toc";
-  const VALID_THEMES = new Set(["faraday-timber", "chan-sanctuary", "tactical-hud"]);
+  const VALID_THEMES = new Set(["sangha-robes", "chan-sanctuary", "tactical-hud"]);
   const VALID_VIEWS = new Set(["spread", "single", "scroll"]);
   const MAX_PAGES_PER_CHAPTER = 120;
 
@@ -1019,7 +1019,7 @@
   }
 
   function applyTheme(theme) {
-    const chosen = VALID_THEMES.has(theme) ? theme : "faraday-timber";
+    const chosen = VALID_THEMES.has(theme) ? theme : "sangha-robes";
     document.body.dataset.bookTheme = chosen;
     try {
       localStorage.setItem(THEME_KEY, chosen);
@@ -1133,7 +1133,7 @@
     resolveAssetUrls(sourceEl);
     bindUi();
 
-    let savedTheme = "faraday-timber";
+    let savedTheme = "sangha-robes";
     let savedView = window.innerWidth >= 1024 ? "spread" : "single";
     let savedToc = document.body.dataset.chapterId === "index" ? "1" : "0";
     try {
