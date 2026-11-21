@@ -526,3 +526,19 @@ input[type="file"]::file-selector-button:hover, input[type="file"]::-webkit-file
     color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px;
     padding: 8px 10px; font-family: inherit; font-size: 0.8rem; line-height: 1.45;
 }
+
+@media (max-width: 1240px) {
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) :is(.rules-book-viewport, .wizard-stage-container, .char-sheet-stage-container) {
+        flex: 0 0 auto;
+        max-height: 75dvh;
+    }
+}
+
+@media (max-width: 900px) {
+    .rules-book-viewport,
+    .wizard-stage-container,
+    .char-sheet-stage-container {
+        flex: 0 0 auto;
+        max-height: 75dvh;
+    }
+}

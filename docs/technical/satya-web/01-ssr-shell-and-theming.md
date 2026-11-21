@@ -111,7 +111,10 @@ On desktop viewports (`> 1240px`), `#workspace-panel.workspace-columns` defines 
 ```
 
 - **Gate-Open Height Compensation**: When `#auth-card` or `#session-card` is temporarily toggled open during an active session, `.workspace-grid:has(.gate-container > :not([style*="display: none"])) .workspace-columns` reduces workspace height to `max(680px, calc(100dvh - 300px))` so internal `.chat-log` and `.notebook-body` scrollbars remain within the viewport.
-- **Narrow / Tablet Viewport (`@media (max-width: 1240px)`)**: Collapses all column combinations to `grid-template-columns: minmax(0, 1fr); height: auto;`, hides `#workspace-col-splitter`, and clamps `.chat-card` to `clamp(460px, 68dvh, 780px)` for natural vertical scrolling.
+- **Responsive Zoom & Narrow Viewport Breakpoints (`styles.css`, `styles_stages.css`, `styles_notebook.css`)**:
+  - **`<= 1240px`**: Stacks the 3-column all-docked workspace to `grid-template-columns: minmax(0, 1fr); flex: 0 0 auto; height: auto;` while keeping 2-column states (`webcam-collapsed`, `webcam-undocked`, `center-collapsed`) side-by-side with tightened tracks (`minmax(360px, 1.35fr)` / `minmax(320px, 1.05fr)`) so 110–133% desktop zoom preserves side-by-side workspace columns.
+  - **`<= 900px`**: Stacks all remaining multi-column modes cleanly (preserving `.center-collapsed.webcam-collapsed` at `minmax(0, 1fr) auto` down to `640px`), resetting `.notebook-card`/`.notebook-body`/`.notebook-pane` in `styles_stages.css` and `.rules-book-viewport`/`.wizard-stage-container`/`.char-sheet-stage-container` in `styles_notebook.css` after their base rules so `Tabletop Notebook` never collapses and cards never overlap.
+  - **`<= 640px`**: Stacks `.center-collapsed.webcam-collapsed` to `minmax(0, 1fr)` with horizontal drawer rail buttons.
 
 ### 2.2 Resizable Left/Center Column Splitter (`#workspace-col-splitter`)
 

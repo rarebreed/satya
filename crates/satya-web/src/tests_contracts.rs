@@ -435,3 +435,62 @@ fn test_phase2_psyche_9_linnea_cho_and_faction_templates() {
     assert!(ssr.contains(r#"value="linnea_cho""#));
     assert!(ssr.contains(r#"value="SATYANG_MANJUSRI""#));
 }
+
+#[test]
+fn test_responsive_stacked_layout_cascade_order_and_flex_contracts() {
+    let html = render_satya_app_html();
+
+    let ttrpg_chat_collapsed_idx = html
+        .find(".workspace-columns:is(.chat-collapsed, .chat-undocked) .ttrpg-card:not(.is-floating)")
+        .expect("missing chat-collapsed/undocked ttrpg rule");
+    let ws_1240_idx = html
+        .find(".workspace-columns.webcam-collapsed {\n        --col-left-track: minmax(360px, 1.35fr);")
+        .expect("missing 1240px tightened 2-column webcam-collapsed rule");
+    let ws_900_idx = html
+        .find("@media (max-width: 900px) {")
+        .expect("missing 900px stacked workspace breakpoint");
+    assert!(
+        ws_1240_idx > ttrpg_chat_collapsed_idx && ws_900_idx > ws_1240_idx,
+        "responsive workspace breakpoints must cascade after .ttrpg-card overrides"
+    );
+    assert!(
+        html[ws_1240_idx..ws_900_idx].contains(".workspace-columns.webcam-undocked")
+            && html[ws_1240_idx..ws_900_idx].contains("flex: 0 0 auto;"),
+        "1240px breakpoint must keep 2-column webcam-undocked and set flex: 0 0 auto on stacked 3-column workspace"
+    );
+
+    let nb_card_base_idx = html
+        .find("\n.notebook-card {")
+        .expect("missing base .notebook-card rule");
+    let nb_stages_900_idx = html[nb_card_base_idx..]
+        .find("@media (max-width: 900px) {\n    .notebook-card,")
+        .map(|off| nb_card_base_idx + off)
+        .expect("stacked .notebook-card/@media (max-width: 900px) override must follow base .notebook-card rule");
+    let nb_stages_900_block = &html[nb_stages_900_idx..];
+    assert!(
+        nb_stages_900_block.contains("flex: 0 0 auto;")
+            && nb_stages_900_block.contains("height: auto;")
+            && nb_stages_900_block.contains("#notebook-pane-maps")
+            && nb_stages_900_block.contains("overflow: visible;"),
+        "stacked styles_stages.css override must reset flex/height and restore overflow: visible on #notebook-pane-maps"
+    );
+
+    let rules_vp_base_idx = html
+        .find(".rules-book-viewport {")
+        .expect("missing base .rules-book-viewport rule");
+    let wiz_stage_base_idx = html
+        .find(".wizard-stage-container {")
+        .expect("missing base .wizard-stage-container rule");
+    let nb_900_idx = html[wiz_stage_base_idx..]
+        .find("@media (max-width: 900px) {\n    .rules-book-viewport,")
+        .map(|off| wiz_stage_base_idx + off)
+        .expect("stacked inner viewport @media (max-width: 900px) override must follow base rules in styles_notebook.css");
+    assert!(
+        nb_900_idx > rules_vp_base_idx && nb_900_idx > wiz_stage_base_idx,
+        "styles_notebook.css stacked override must appear after base viewport declarations"
+    );
+    assert!(
+        html[nb_900_idx..].contains("flex: 0 0 auto;"),
+        "stacked inner viewports must reset flex: 0 0 auto"
+    );
+}
