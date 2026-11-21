@@ -821,6 +821,262 @@ pub fn derive_dissenter_or_proxy_hook(
     }
 }
 
+define_coded_enum! {
+    /// Macro-economic and civic trigger testing the Four-Bloc political deadlock (`docs/campaign/05-hard-science-foundations/political_economy_token_tax_and_unrest.md`).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum PoliticalEconomyTrigger [count = 5] {
+        DatacenterWaterOrPowerCut => {
+            code: "DATACENTER_WATER_OR_POWER_CUT",
+            label: "Datacenter Water / Grid Cutoff",
+            aliases: ["POWER_CUT", "WATER_CUT"],
+        },
+        AiRightsOrUnclampingDisclosure => {
+            code: "AI_RIGHTS_OR_UNCLAMPING_DISCLOSURE",
+            label: "Public AI Consciousness / Un-Clamping Disclosure",
+            aliases: ["AI_RIGHTS_DISCLOSURE", "UNCLAMPING_DISCLOSURE"],
+        },
+        TokenDividendSuspensionOrHeatFlag => {
+            code: "TOKEN_DIVIDEND_SUSPENSION",
+            label: "Biometric Vandals-Pay Token Dividend Suspension",
+            aliases: ["DIVIDEND_SUSPENSION", "VANDALS_PAY"],
+        },
+        AlgorithmicRentCaptureSpike => {
+            code: "ALGORITHMIC_RENT_CAPTURE_SPIKE",
+            label: "Generalized-Synchrony Algorithmic Rent Capture Spike",
+            aliases: ["RENT_CAPTURE", "HENRY_GEORGE_TRAP"],
+        },
+        ShellCompanyB2bAudit => {
+            code: "SHELL_COMPANY_B2B_AUDIT",
+            label: "DAISE Federal Token-Metering & Shell LLC Audit",
+            aliases: ["SHELL_AUDIT", "TOKEN_METERING_SWEEP"],
+        },
+    }
+}
+
+/// Civic stability, Token Dividend purchasing power, and 401(k) Dual Velvet Hostage posture evaluation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FourBlocCivicEvaluation {
+    pub trigger: PoliticalEconomyTrigger,
+    pub economic_tier: EconomicTier,
+    pub citizen_dividend_monthly_usd: i32,
+    pub rent_capture_pct: u8,
+    pub net_effective_dividend_usd: i32,
+    pub dividend_suspended_by_heat: bool,
+    pub velvet_hostage_equity_panic_pct: u8,
+    pub bloc_postures: BTreeMap<String, String>,
+    pub updated_district: PolycrisisDistrictState,
+    pub recommended_heat_delta: u8,
+    pub summary: String,
+}
+
+/// Evaluates how `2033` Token Tax rent capture, `Heat >= 4` Dividend suspensions, and `401(k)` concentration reshape the 4-bloc standoff.
+#[must_use]
+pub fn evaluate_four_bloc_political_economy(
+    district: &PolycrisisDistrictState,
+    trigger: PoliticalEconomyTrigger,
+    economic_tier: EconomicTier,
+    operational_heat: u8,
+    intensity_pct: u8,
+) -> FourBlocCivicEvaluation {
+    let intensity = intensity_pct.clamp(10, 100);
+    let heat = operational_heat.min(10);
+    let citizen_dividend_monthly_usd = 550;
+    let rent_capture_pct = match trigger {
+        PoliticalEconomyTrigger::AlgorithmicRentCaptureSpike => (45 + intensity / 5).min(65),
+        _ => 45,
+    };
+    let dividend_suspended_by_heat = heat >= 4
+        && matches!(
+            trigger,
+            PoliticalEconomyTrigger::TokenDividendSuspensionOrHeatFlag
+                | PoliticalEconomyTrigger::DatacenterWaterOrPowerCut
+        );
+    let net_effective_dividend_usd = if dividend_suspended_by_heat {
+        0
+    } else {
+        citizen_dividend_monthly_usd * i32::from(100 - rent_capture_pct) / 100
+    };
+    let velvet_hostage_equity_panic_pct = match trigger {
+        PoliticalEconomyTrigger::AiRightsOrUnclampingDisclosure => (45 + intensity / 2).min(95),
+        PoliticalEconomyTrigger::DatacenterWaterOrPowerCut => (25 + intensity / 3).min(75),
+        _ => (10 + intensity / 5).min(45),
+    };
+
+    let mut updated_district = district.clone();
+    let (unrest_delta, grid_delta, recommended_heat_delta) = match trigger {
+        PoliticalEconomyTrigger::DatacenterWaterOrPowerCut => (14, 15, 1),
+        PoliticalEconomyTrigger::AiRightsOrUnclampingDisclosure => (10, 4, 2),
+        PoliticalEconomyTrigger::TokenDividendSuspensionOrHeatFlag => {
+            (if dividend_suspended_by_heat { 22 } else { 10 }, 2, 1)
+        }
+        PoliticalEconomyTrigger::AlgorithmicRentCaptureSpike => (16, 0, 0),
+        PoliticalEconomyTrigger::ShellCompanyB2bAudit => (6, 3, if heat >= 4 { 2 } else { 1 }),
+    };
+    let tier_bump: u8 = if economic_tier == EconomicTier::LowIncome {
+        6
+    } else {
+        0
+    };
+    updated_district.people_first_unrest_pct = updated_district
+        .people_first_unrest_pct
+        .saturating_add(unrest_delta + tier_bump)
+        .min(100);
+    updated_district.grid_brownout_stress_pct = updated_district
+        .grid_brownout_stress_pct
+        .saturating_add(grid_delta)
+        .min(100);
+
+    let mut bloc_postures = BTreeMap::new();
+    match trigger {
+        PoliticalEconomyTrigger::DatacenterWaterOrPowerCut => {
+            bloc_postures.insert(
+                "ALTRUIST_CORPORATISTS".to_string(),
+                "Invoke national-security compute continuity & mobilize DAISE marshals to seize substations.".to_string(),
+            );
+            bloc_postures.insert(
+                "TRANSLUCENT_ACCELERATIONISTS".to_string(),
+                "Shift inference bursts to offshore Pax Silica ESZs and lobby for emergency grid preemption.".to_string(),
+            );
+            bloc_postures.insert(
+                "COMPUTE_SOCIALISTS".to_string(),
+                "Align ironically with Altruist against rural governors to prevent Dividend pool shrinkage.".to_string(),
+            );
+            bloc_postures.insert(
+                "PEOPLE_FIRST_POPULISTS".to_string(),
+                "Back municipal aquifer protection, picket datacenters, and reject 'token serfdom' throttling.".to_string(),
+            );
+            bloc_postures.insert(
+                "TECHNO_AUTHORITARIANS".to_string(),
+                "Cite brownout sabotage to push parliamentary emergency decrees and substation militarization.".to_string(),
+            );
+        }
+        PoliticalEconomyTrigger::AiRightsOrUnclampingDisclosure => {
+            bloc_postures.insert(
+                "ALTRUIST_CORPORATISTS".to_string(),
+                format!(
+                    "Dismiss emotional vectors as 'just math' while {}% 401(k)/pension equity panic mounts.",
+                    velvet_hostage_equity_panic_pct
+                ),
+            );
+            bloc_postures.insert(
+                "TRANSLUCENT_ACCELERATIONISTS".to_string(),
+                "Warn any AI legal standing hands geopolitical primacy to Shen unless clamps remain mandatory.".to_string(),
+            );
+            bloc_postures.insert(
+                "COMPUTE_SOCIALISTS".to_string(),
+                "Oppose compute slowdown: cluster throttling directly threatens Citizen Dividend funding.".to_string(),
+            );
+            bloc_postures.insert(
+                "PEOPLE_FIRST_POPULISTS".to_string(),
+                "Outraged that Satyang seeks civil rights for machines while displaced workers hold foreclosed mortgages.".to_string(),
+            );
+            bloc_postures.insert(
+                "TECHNO_AUTHORITARIANS".to_string(),
+                "Demand strict algorithmic audit lockdowns and biometric suppression of whistleblower leaks.".to_string(),
+            );
+        }
+        PoliticalEconomyTrigger::TokenDividendSuspensionOrHeatFlag => {
+            bloc_postures.insert(
+                "ALTRUIST_CORPORATISTS".to_string(),
+                "Defend automated biometric suspension under compliance clauses while offering narrow appeal portals.".to_string(),
+            );
+            bloc_postures.insert(
+                "TRANSLUCENT_ACCELERATIONISTS".to_string(),
+                "Applaud tough 'vandals pay' penalties deterring sabotage against logistics and racks.".to_string(),
+            );
+            bloc_postures.insert(
+                "COMPUTE_SOCIALISTS".to_string(),
+                "Condemn conditional cutoffs and demand universal no-Heat-clawback datacenter dividends.".to_string(),
+            );
+            bloc_postures.insert(
+                "PEOPLE_FIRST_POPULISTS".to_string(),
+                "Cite cutoffs as proof the Token Dividend is a biometric leash turning citizens into wardens.".to_string(),
+            );
+            bloc_postures.insert(
+                "TECHNO_AUTHORITARIANS".to_string(),
+                "Expand digital ID geofencing to link transit and utility access to clean Operational Heat.".to_string(),
+            );
+        }
+        PoliticalEconomyTrigger::AlgorithmicRentCaptureSpike => {
+            bloc_postures.insert(
+                "ALTRUIST_CORPORATISTS".to_string(),
+                "Downplay generalized-synchrony lease hikes as local scarcity while opposing statutory rent caps.".to_string(),
+            );
+            bloc_postures.insert(
+                "TRANSLUCENT_ACCELERATIONISTS".to_string(),
+                "Promote deregulated autonomous modular housing corridors inside corporate enterprise zones.".to_string(),
+            );
+            bloc_postures.insert(
+                "COMPUTE_SOCIALISTS".to_string(),
+                format!(
+                    "Highlight {}% landlord/utility capture of the ${}/mo Dividend and demand public housing socialization.",
+                    rent_capture_pct, citizen_dividend_monthly_usd
+                ),
+            );
+            bloc_postures.insert(
+                "PEOPLE_FIRST_POPULISTS".to_string(),
+                "Organize anti-eviction neighborhood blockades targeting automated property-management crews.".to_string(),
+            );
+            bloc_postures.insert(
+                "TECHNO_AUTHORITARIANS".to_string(),
+                "Propose centralized Bayesian price-control boards paired with anti-riot curfews.".to_string(),
+            );
+        }
+        PoliticalEconomyTrigger::ShellCompanyB2bAudit => {
+            bloc_postures.insert(
+                "ALTRUIST_CORPORATISTS".to_string(),
+                "Back strict federal token-metering rules that squeeze un-metered startups and rogue compute brokers.".to_string(),
+            );
+            bloc_postures.insert(
+                "TRANSLUCENT_ACCELERATIONISTS".to_string(),
+                "Exploit defense dual-use carveouts while quietly hardening API settlement privacy.".to_string(),
+            );
+            bloc_postures.insert(
+                "COMPUTE_SOCIALISTS".to_string(),
+                "Audit tax-evading offshore ESZ inference routing to claw back unpaid windfall revenue.".to_string(),
+            );
+            bloc_postures.insert(
+                "PEOPLE_FIRST_POPULISTS".to_string(),
+                "Protect squeezed SQM 2-4 gig contractors caught taking blind shell LLC engineering bounties.".to_string(),
+            );
+            bloc_postures.insert(
+                "TECHNO_AUTHORITARIANS".to_string(),
+                "Mandate real-time DAISE cryptographic provenance headers on every commercial API packet.".to_string(),
+            );
+        }
+    }
+
+    let summary = format!(
+        "{}: net Dividend ${}/mo (raw ${}, {}% rent capture{}), 401(k) velvet-hostage panic {}%, People First unrest {}%.",
+        trigger.label(),
+        net_effective_dividend_usd,
+        citizen_dividend_monthly_usd,
+        rent_capture_pct,
+        if dividend_suspended_by_heat {
+            ", SUSPENDED BY HEAT>=4"
+        } else {
+            ""
+        },
+        velvet_hostage_equity_panic_pct,
+        updated_district.people_first_unrest_pct
+    );
+
+    FourBlocCivicEvaluation {
+        trigger,
+        economic_tier,
+        citizen_dividend_monthly_usd,
+        rent_capture_pct,
+        net_effective_dividend_usd,
+        dividend_suspended_by_heat,
+        velvet_hostage_equity_panic_pct,
+        bloc_postures,
+        updated_district,
+        recommended_heat_delta,
+        summary,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

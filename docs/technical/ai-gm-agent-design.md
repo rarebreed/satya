@@ -18,7 +18,7 @@ The **stateful, tool-calling AI Game Master Agent** is implemented with **LangGr
    - Coordinates multi-player sessions via **`party_turn_gate_node`** (waiting until all active human `PLAYER`s in a Narrative round or at the lowest Action Mode tick declare their actions/rolls before invoking the LLM) and resolves NPC turns via **`npc_action_resolution_node`** (executing autonomous Count-Up Tick `2d20` technique + `T/C/F` rolls in Action Mode and injecting scene NPC reaction directives in Narrative Mode).
    - Includes a dedicated **`scenario_director_node`** supporting **Scenario-Driven** (non-railroaded overarching plot adaptation), **Free-Form** (weighted probability sandbox), and **Hybrid** flows across **12 TTRPG scenario event sub-routines** with player/GM-tunable probability dials (`event_weights`).
 2. **Rich Markdown Session Chat Input & Output**:
-   - Both players (`#chat-input` multi-line Markdown `<textarea>`) and the AI GM (`narrate_to_session`, `whisper_to_player`, and `publish_gm_response`) compose and render rich Markdown via `satya_engine::render_rules_markdown_to_html` (bold/italics, `> ` comms/handout blockquotes and `[!WARNING]` alerts, bulleted action hooks, Markdown tables, inline code, LaTeX math `$...$`, and `mermaid` diagrams).
+   - Both players (`#chat-input` multi-line Markdown `<textarea>`) and the AI GM (`narrate_to_session`, `whisper_to_player`, and `publish_gm_response`) compose and render rich Markdown via `satya_rules_book::render_rules_markdown_to_html` (bold/italics, `> ` comms/handout blockquotes and `[!WARNING]` alerts, bulleted action hooks, Markdown tables, inline code, LaTeX math `$...$`, and `mermaid` diagrams).
 3. **Local LLM + Hosted BYOK + Vision Inference**:
    - **Reasoning & Tool-Calling Model** (local Ollama `gemma4:12b`/`qwen3`/`llama3.1`, or hosted BYOK `Gemini`, `OpenAI`, `Claude`) for rules adjudication, NPC roleplay, and structured tool execution.
    - **Multimodal Vision Model** (`llama3.2-vision`, `gemma4`, or multimodal cloud models) for inspecting tactical maps, room layouts, and token positions.
@@ -215,7 +215,7 @@ flowchart TD
 When combat begins (either via a `combat_encounter` Scenario Director beat, `advance_combat_tracker`, or a player rolling a combat technique from `#ttrpg-drawer`), the session transitions into **Action Mode** (`combat_active = true`):
 
 1. **Count-Up Tick Timeline & OODA Initiative**:
-   - Combatants enter the timeline at $\text{Tick}_{\text{start}} = \max(1, 15 - \text{OODA})$ (`1 Tick = 0.5s`, `1 Window = 20 Ticks = 10.0s`).
+   - Combatants enter the timeline at $\text{Tick}_{\text{start}} = \max(1, 15 - \text{OODA})$ (`1 Tick = 0.25s`, `1 Window = 20 Ticks = 5.0s`).
    - Every combat action advances the acting combatant's `next_action_tick` by its two-component `Effective TC` ($\text{TC}_{\text{decide}} + \text{TC}_{\text{act}}$, compressed by allocated `Tempo` above the neutral baseline $B = \lfloor P_{\text{base}} / 3 \rfloor$).
 2. **`Task Resolution & Action Pool` (`#ttrpg-drawer`) Technique & `T/C/F` Controls (`ttrpg_drawer_triad.rs`)**:
    - Players select an **Action / Combat Technique** (`#ttrpg-action-technique`: `Non-Combat Task` or any technique from `COMBAT_TECHNIQUE_CATALOG` grouped under `Strikes`, `Control & Grappling`, `Intercepts & Footwork Maneuvers`, and `Ranged Fire & Maneuvers`).

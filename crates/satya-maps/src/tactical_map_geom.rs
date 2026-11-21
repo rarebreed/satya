@@ -671,7 +671,8 @@ pub fn resolve_token_destination_cm(
     Ok(((x * 100.0).round() as i32, (y * 100.0).round() as i32))
 }
 
-/// Returns `true` when two prop footprints overlap in continuous XZ ground coordinates.
+/// Returns `true` when two prop OBB footprints overlap in continuous XZ ground coordinates
+/// (using exact 2D Separating Axis Theorem projection with a tiny `2 cm` inward skin so flush walls/desks touch cleanly).
 #[must_use]
 pub fn props_overlap_continuous(a: &MapPropPlacement, b: &MapPropPlacement) -> bool {
     let afp = a.footprint_m();
@@ -691,28 +692,32 @@ pub fn props_overlap_continuous(a: &MapPropPlacement, b: &MapPropPlacement) -> b
     {
         return false;
     }
-    // Check dense sample across a's center and corners against b's exact shape (and vice versa).
-    for (fp, q) in [(afp, b), (bfp, a)] {
-        let hx = fp.span_w_m * 0.44;
-        let hy = fp.span_h_m * 0.44;
-        for &(ox, oy) in &[
-            (0.0, 0.0),
-            (-hx, -hy),
-            (hx, -hy),
-            (-hx, hy),
-            (hx, hy),
-            (0.0, -hy),
-            (0.0, hy),
-            (-hx, 0.0),
-            (hx, 0.0),
-        ] {
-            let (wx, wy) = fp.local_offset_to_world(ox, oy);
-            if prop_contains_point(q, wx, wy, false) {
-                return true;
-            }
+
+    let ahx = (afp.hx_m - 0.02).max(0.05);
+    let ahy = (afp.hy_m - 0.02).max(0.05);
+    let bhx = (bfp.hx_m - 0.02).max(0.05);
+    let bhy = (bfp.hy_m - 0.02).max(0.05);
+    let arad = (afp.rot_deg as f32).to_radians();
+    let brad = (bfp.rot_deg as f32).to_radians();
+    let (asin, acos) = arad.sin_cos();
+    let (bsin, bcos) = brad.sin_cos();
+    let ax = (acos, asin);
+    let ay = (-asin, acos);
+    let bx = (bcos, bsin);
+    let by = (-bsin, bcos);
+    let d = (bfp.cx_m - afp.cx_m, bfp.cy_m - afp.cy_m);
+
+    for axis in [ax, ay, bx, by] {
+        let proj_d = (d.0 * axis.0 + d.1 * axis.1).abs();
+        let r_a = ahx * (ax.0 * axis.0 + ax.1 * axis.1).abs()
+            + ahy * (ay.0 * axis.0 + ay.1 * axis.1).abs();
+        let r_b = bhx * (bx.0 * axis.0 + bx.1 * axis.1).abs()
+            + bhy * (by.0 * axis.0 + by.1 * axis.1).abs();
+        if proj_d >= r_a + r_b {
+            return false;
         }
     }
-    false
+    true
 }
 
 /// Returns `true` when the interior of `prop` genuinely slices across segment `a..b`

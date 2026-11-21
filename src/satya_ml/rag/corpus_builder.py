@@ -1,6 +1,6 @@
 """Corpus extractors for Satya's Hybrid PyLance RAG database:
 1. `docs/ttrpg/` Rules Book (H1/H2/H3 breadcrumb chunks + header-preserving 12-row table slices).
-2. `crates/satya-engine/src/*.rs` & `crates/satya-py/src/*.rs` Rust engine symbol cards & `Origin:` links.
+2. `crates/{satya-engine,satya-campaign,satya-maps,satya-py}/src/*.rs` Rust symbol cards & `Origin:` links.
 3. `docs/campaign/` lore chunks tagged with `PUBLIC` / `ARC2_SATYANG` / `GM_CONSPIRACY_SECRET`.
 """
 
@@ -40,7 +40,6 @@ CANONICAL_TTRPG_FILES: tuple[tuple[str, str], ...] = (
 
 _RUST_TO_DOC_HINTS: dict[str, str] = {
     "lib.rs": "docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md",
-    "domain.rs": "docs/ttrpg/03-character/skills_and_trees.md",
     "contested_cascade.rs": "docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md",
     "action_catalog_stealth.rs": "docs/ttrpg/02-core-mechanics/stealth_awareness_and_investigation.md",
     "explosives_and_arsenal.rs": "docs/ttrpg/05-combat/arsenal_explosives_and_tactical_gear.md",
@@ -52,14 +51,33 @@ _RUST_TO_DOC_HINTS: dict[str, str] = {
     "ballistics.rs": "docs/ttrpg/05-combat/firearms_and_ballistics.md",
     "barrier_ballistics.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
     "economy_gear.rs": "docs/ttrpg/03-character/lifepaths_and_economy.md",
+    "character_audit.rs": "docs/ttrpg/03-character/lifepaths_and_economy.md",
     "environment_vehicles.rs": "docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md",
     "environmental_hazards.rs": "docs/ttrpg/06-health-and-survival/environmental_hazards_and_survival.md",
     "faction_templates.rs": "docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md",
+    "hook_weaver.rs": "docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md",
     "hook_weaver_lifepath.rs": "docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md",
     "npc_generator.rs": "docs/ttrpg/03-character/lifepaths_and_economy.md",
+    "world_clocks.rs": "docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md",
     "awakened_ai_substrate.rs": "docs/campaign/03-minds-and-factions/ai_minds_and_consciousness.md",
     "awakened_campaign_arcs.rs": "docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md",
     "awakened_systems_py.rs": "docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md",
+    "hooks_and_npc_py.rs": "docs/ttrpg/03-character/lifepath_events_hobbies_and_factions.md",
+    "psyche_social_py.rs": "docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md",
+    "tactical_map_py.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "map_continuation.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "map_continuation_ribbons.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "map_narrative_manifest.rs": "docs/ttrpg/02-core-mechanics/stealth_awareness_and_investigation.md",
+    "map_surface_geom.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "map_surface_queries.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "map_world_graph.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "map_world_transitions.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "tactical_map.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "tactical_map_edges.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "tactical_map_geom.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "tactical_map_inspect.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "tactical_map_reach.rs": "docs/ttrpg/05-combat/ranged_combat_and_armor.md",
+    "tactical_map_spatial.rs": "docs/ttrpg/02-core-mechanics/stealth_awareness_and_investigation.md",
 }
 
 _TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
@@ -79,6 +97,8 @@ _SECRET_BODY_MARKERS = (
     "parasocial proxy manipulation",
     "gm_conspiracy_secret",
     "arc 3 convergence",
+    "blue lotus",
+    "inner blue lotus",
 )
 _SATYANG_ARC2_MARKERS = (
     "bodhisattva pillar",
@@ -318,7 +338,6 @@ _SECRET_RUST_FILES: tuple[str, ...] = (
     "awakened_campaign_arcs.rs",
     "awakened_ai_substrate.rs",
     "awakened_systems_py.rs",
-    "awakened_py.rs",
 )
 
 
@@ -356,8 +375,8 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
         if not src_dir.exists():
             continue
         for rs_path in sorted(src_dir.glob("*.rs")):
-            # Skip pure 3D/map procedural geometry builders that don't encode rules or AI GM symbols.
-            if rs_path.name.startswith((
+            # Skip pure 3D/map procedural geometry builders and test files.
+            if rs_path.name == "tests.rs" or rs_path.name.startswith((
                 "map_gen_", "map_outdoor", "map_sector", "map_dressing", "map_surface",
                 "map_interior", "map_home_", "map_room_", "map_estate_", "map_urban_",
                 "map_pool_", "tactical_map_mesh", "tests_",

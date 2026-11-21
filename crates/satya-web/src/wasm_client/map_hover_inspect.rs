@@ -73,6 +73,27 @@ pub fn format_map_hover_tooltip_html(ins: &MapHoverInspection) -> String {
     } else {
         String::new()
     };
+    let acoustic_row = if ins.acoustic_stealth_delta_ext != 0 {
+        format!(
+            r#"<div><span class="muted">Acoustics:</span> {:+} Δ_ext</div>"#,
+            ins.acoustic_stealth_delta_ext
+        )
+    } else {
+        String::new()
+    };
+    let faraday_row = if ins.in_faraday_zone {
+        r#"<div><span class="muted">EM Shielding:</span> Faraday Enclosed</div>"#.to_string()
+    } else {
+        String::new()
+    };
+    let light_row = if ins.ambient_light_delta_ext != 0 {
+        format!(
+            r#"<div><span class="muted">Lighting:</span> {:+} Δ_ext</div>"#,
+            ins.ambient_light_delta_ext
+        )
+    } else {
+        String::new()
+    };
     format!(
         r#"<div class="map-hover-tip-head"><span class="map-hover-badge {cls}">{badge}</span> <strong>{}</strong> <span class="mono muted">({:.2}m, {:.2}m)</span></div>
 <div class="map-hover-tip-sub">{}</div>
@@ -82,6 +103,9 @@ pub fn format_map_hover_tooltip_html(ins: &MapHoverInspection) -> String {
   <div><span class="muted">Cover / LoS:</span> {}</div>
   {rot_row}
   {elev_row}
+  {acoustic_row}
+  {faraday_row}
+  {light_row}
 </div>"#,
         escape_html(&ins.title),
         ins.world_x_m,

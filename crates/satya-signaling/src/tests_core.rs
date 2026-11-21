@@ -378,6 +378,7 @@ async fn test_gm_backend_api_byok_vault_and_copilot_vs_autonomous_modes() {
                 persona_id: "harsh-reality-arbiter".to_string(),
                 api_key: Some("ephemeral-secret-key-xyz999".to_string()),
                 base_url: None,
+                clear_api_key: false,
             })
             .unwrap(),
         ))
@@ -462,6 +463,7 @@ async fn test_gm_backend_api_byok_vault_and_copilot_vs_autonomous_modes() {
                         fatigue_level: 1,
                         wound_shock_index: 0.0,
                         notes: Some("Sentry reacts to corridor movement".to_string()),
+                        visibility: None,
                     })
                     .unwrap(),
                 ))

@@ -82,7 +82,7 @@ With the **`GM_ONLY` Document Vault** (`gm_documents` in [`gm_docs.rs`](../../cr
 3. **Post-Turn Vocal Prosody & Conversational Dynamics (`interaction-dynamics.lance` + `chat-messages.lance`)**:
    - **Positive Engagement Signals ($R^+$)**:
      - Immediate increase in player vocal RMS energy (`rms_energy_mean`, `rms_energy_peak`) and pitch variance (`pitch_hz_estimate`) in `interaction-dynamics.lance` during the 30–60 seconds following a `GM_NARRATION` or `IN_CHARACTER` turn.
-     - Short `preceding_silence_ms` (players immediately jump in to respond in-character), balanced party `dominance_ratio`, and active engagement with Markdown action hooks (`- `) or in-world blockquote handouts (`> `) rendered by `satya_engine::render_rules_markdown_to_html`.
+     - Short `preceding_silence_ms` (players immediately jump in to respond in-character), balanced party `dominance_ratio`, and active engagement with Markdown action hooks (`- `) or in-world blockquote handouts (`> `) rendered by `satya_rules_book::render_rules_markdown_to_html`.
    - **Negative Engagement Signals ($R^-$)**:
      - `LongSilence` events following a bloated or confusing GM narration, or an immediate switch from `IN_CHARACTER` to `OUT_OF_CHARACTER` clarification complaints (e.g., *"Wait, didn't my character note say I already knew Dr. Thorne?"*).
 4. **7 Bipolar Psyche Traits & NPC Secret Dossiers (`session_npcs` & `character-sheets.lance`)**:
@@ -160,7 +160,7 @@ Every completed turn in `ai-gm-trajectories.lance` (`schemas/v1/ai_gm_trajectory
 ## 4. Use Case 3: Combat Action Mode Pacing, Tactical Triad (`Tempo / Control / Force`) Policy & Death-Spiral Predictor
 
 ### 4.1 Training Signal in `ttrpg-mechanics.lance`, `character-sheets.lance` & `tabletop-canvas.lance`
-Satya's combat engine (`crates/satya-engine/src/{combat.rs, combat_techniques.rs, ranged_combat.rs, health_survival.rs}`) resolves tactical encounters on a **Count-Up Action Tick Clock** (`1 Tick = 0.5s`, `1 Window = 20 Ticks = 10.0s`) with:
+Satya's combat engine (`crates/satya-engine/src/{combat.rs, combat_techniques.rs, ranged_combat.rs, health_survival.rs}`) resolves tactical encounters on a **Count-Up Action Tick Clock** (`1 Tick = 0.25s`, `1 Window = 20 Ticks = 5.0s`) with:
 - **OODA Initiative**: $\text{Tick}_{\text{start}} = \max(1, 15 - \text{OODA})$.
 - **Two-List Cascading ("Watershed") `2d20` Roll-Over**: $N$ sequential `2d20` pairs against $\text{TN}_{\text{eff}} = 31 - C_{\text{eff}} + \Delta_{\text{ext}}$, with `+6` momentum carry on success and $-\delta_{\text{under}}$ penalty carry on failure.
 - **30 Canonical Combat Techniques & 3-Aspect Tactical Triad (`Tempo / Control / Force`, `T/C/F`)**: Actors allocate their effective Tactical Pool ($P_{\text{eff}} = T + C + F$, reduced by fatigue and wound shock from $P_{\text{base}}$) across:

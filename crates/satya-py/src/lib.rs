@@ -2,7 +2,9 @@
 //!
 //! PyO3 Python extension module (`satya_py`) exposing [`satya_engine`] (exact combinatorial & DP dice
 //! probability distributions, Two-List `2d20` Watershed Cascade task resolution, Combat Tactical Pool
-//! "Envelope & Fill" calculator, and canonical Rules Book catalog/search) and [`satya_schema`]
+//! "Envelope & Fill" calculator), [`satya_rules_book`] (canonical 24-chapter Rules Book catalog/search),
+//! [`satya_maps`] (continuous metric tactical battlemaps & terrain continuation), [`satya_campaign`]
+//! (*Awakened* 2035 NPC/factions/substrates/hooks), and [`satya_schema`]
 //! (Apache Avro Schema Registry, `CRC-64-AVRO` wire framing, and GDPR PII manifest inspection) to Python
 //! and Marimo notebooks.
 
@@ -12,6 +14,7 @@ pub mod awakened_systems_py;
 pub mod hooks_and_npc_py;
 pub mod psyche_social_py;
 pub mod tactical_map_py;
+pub mod tech_and_gear_py;
 pub use hooks_and_npc_py::*;
 pub use tactical_map_py::*;
 
@@ -2153,9 +2156,9 @@ pub fn evaluate_combat_technique_triad(
     Ok(d.unbind())
 }
 
-/// PyO3 module definition for `satya_py`.
-#[pymodule]
-pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+/// PyO3 native extension module (`satya_py._native`).
+#[pymodule(name = "_native")]
+pub fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDistributionStats>()?;
     m.add_class::<PySignedCascadeResult>()?;
     m.add_class::<PyCascadeStepTrace>()?;
@@ -2226,6 +2229,7 @@ pub fn satya_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     hooks_and_npc_py::register_hooks_and_npc_functions(m)?;
     psyche_social_py::register_psyche_social_functions(m)?;
     awakened_systems_py::register_awakened_systems_functions(m)?;
+    tech_and_gear_py::register_tech_and_gear_functions(m)?;
 
     Ok(())
 }

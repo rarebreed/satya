@@ -24,11 +24,29 @@ pub fn parse_gm_doc_source(raw: &str) -> GmDocumentSource {
     }
 }
 
+/// Returns `true` when the active viewer is offline or has GM Vault management privileges
+/// (excludes `Observer` and non-GM `Player` viewers).
+pub(crate) fn viewer_can_manage_gm_vault() -> bool {
+    with_state(|st| {
+        st.session_id.is_none()
+            || (crate::wasm_client::npcs::can_viewer_see_npc_secrets(
+                st.session_id.as_deref(),
+                st.self_participant.as_ref(),
+                &st.roster,
+                st.viewer_can_see_gm_secrets,
+            ) && st
+                .self_participant
+                .as_ref()
+                .is_some_and(|p| p.role != satya_schema::SessionRole::Observer))
+    })
+}
+
 /// Formats the HTML list of sanitized `GM_ONLY` documents for `#gm-docs-list`.
 pub fn format_gm_documents_list_html(docs: &[GmDocumentRecord]) -> String {
     if docs.is_empty() {
         return r#"<span class="pill pill-muted">No GM_ONLY documents submitted in this session yet.</span>"#.to_string();
     }
+    let show_controls = viewer_can_manage_gm_vault();
     docs.iter()
         .rev()
         .map(|d| {
@@ -55,12 +73,20 @@ pub fn format_gm_documents_list_html(docs: &[GmDocumentRecord]) -> String {
             } else {
                 r#" <span class="pill pill-muted" title="Session-only unless marked persistent">Session-Only</span>"#.to_string()
             };
-            let js_id = escape_js_single_quoted_attr(&d.doc_id);
-            let next_persist = !d.is_persistent;
-            let toggle_btn_label = if d.is_persistent {
-                "Unmark Persistent"
+            let controls_html = if show_controls {
+                let js_id = escape_js_single_quoted_attr(&d.doc_id);
+                let next_persist = !d.is_persistent;
+                let toggle_btn_label = if d.is_persistent {
+                    "Unmark Persistent"
+                } else {
+                    "Mark Persistent"
+                };
+                format!(
+                    r#"<button type="button" class="btn-chip" onclick="window.satyaToggleGmDocPersistence('{js_id}', {next_persist})">{toggle_btn_label}</button>
+                            <button type="button" class="btn-chip" onclick="window.satyaDeleteGmDocument('{js_id}')">Delete</button>"#
+                )
             } else {
-                "Mark Persistent"
+                String::new()
             };
             format!(
                 r#"<div class="gm-doc-card">
@@ -68,8 +94,7 @@ pub fn format_gm_documents_list_html(docs: &[GmDocumentRecord]) -> String {
                         <strong>{}</strong>
                         <div class="btn-row-compact">
                             <span class="pill pill-iggy">{src_label} · {} chars · GM_ONLY</span>{persist_badge}{flag_badge}
-                            <button type="button" class="btn-chip" onclick="window.satyaToggleGmDocPersistence('{js_id}', {next_persist})">{toggle_btn_label}</button>
-                            <button type="button" class="btn-chip" onclick="window.satyaDeleteGmDocument('{js_id}')">Delete</button>
+                            {controls_html}
                         </div>
                     </div>
                     <div class="subtitle">Submitted by <strong>{}</strong></div>
@@ -284,6 +309,14 @@ pub fn satya_submit_gm_document() {
 /// Toggles `is_persistent` on an existing `GM_ONLY` document via `POST /api/sessions/:session_id/docs/:doc_id/persist`.
 #[wasm_bindgen]
 pub fn satya_toggle_gm_doc_persistence(doc_id: String, is_persistent: bool) {
+    if !viewer_can_manage_gm_vault() {
+        set_feedback(
+            "gm-doc-feedback",
+            "Only the Game Master or solo Host can change GM document persistence.",
+            true,
+        );
+        return;
+    }
     spawn_local(async move {
         let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
             let updated = with_state_mut(|st| {

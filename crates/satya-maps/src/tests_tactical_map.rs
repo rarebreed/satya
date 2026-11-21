@@ -1761,3 +1761,429 @@ fn test_map_continuation_preserves_ground_override_tint_and_cell_size() {
     assert_eq!(cont.map.ground_tint_rgb, Some([210, 195, 180]));
     assert_eq!(cont.map.cell_size_cm, 100);
 }
+
+#[test]
+fn wave2_ballistics_floor_props_corner_peek_and_window_materials() {
+    use crate::barrier_ballistics::{
+        BallisticShotQuery, BarrierPenetrationVerdict, evaluate_ballistic_shot,
+    };
+    use crate::map_dressing::{is_non_blocking_prop, make_prop_at_cm};
+    use crate::tactical_map_geom::props_overlap_continuous;
+    use crate::tactical_map_inspect::inspect_map_point;
+    use satya_engine::ballistics::lookup_firearm_preset;
+
+    // 1. Floor-layer props must be non-blocking for placement and ballistics.
+    for kind in [
+        PropKind::DeskLamp,
+        PropKind::BarStool,
+        PropKind::StandingLamp,
+        PropKind::FireExtinguisher,
+    ] {
+        let p = make_prop(kind, 5, 5, 0, None, 0);
+        assert!(
+            is_non_blocking_prop(&p),
+            "{kind:?} should be non-blocking for ballistics/placement"
+        );
+        let props = [p];
+        let scene = TacticalSceneView {
+            width_m: 12.0,
+            height_m: 10.0,
+            edges: &[],
+            props: &props,
+            surfaces: &[],
+        };
+        let shot = evaluate_ballistic_shot(BallisticShotQuery {
+            scene: &scene,
+            attacker_m: (2.5, 5.5),
+            target_m: (9.5, 5.5),
+            firearm: lookup_firearm_preset("sig_p320_9mm").unwrap(),
+            net_successes: 0,
+            hit_frame_or_stud: false,
+        });
+        assert_eq!(
+            shot.verdict,
+            BarrierPenetrationVerdict::Unobstructed,
+            "{kind:?} unexpectedly blocked ballistic shot: {:?}",
+            shot.barriers
+        );
+    }
+
+    // 2. Narrow orthogonal OBB crossing (X-cross) must be detected by SAT overlap.
+    let bar_h = make_prop_at_cm(PropKind::JerseyBarrier, 500, 500, 0, Some(220), 0);
+    let bar_v = make_prop_at_cm(PropKind::JerseyBarrier, 500, 500, 90, Some(220), 0);
+    assert!(
+        props_overlap_continuous(&bar_h, &bar_v),
+        "Orthogonal crossing barriers must overlap under 2D OBB SAT"
+    );
+
+    // 3. Corner-peek (`HighCover`) through an intervening vehicle must evaluate vehicle barrier PR.
+    let pillar = make_prop(PropKind::StructuralPillar, 4, 5, 0, None, 0);
+    let car = make_prop(PropKind::Car, 7, 3, 0, None, 0);
+    let props = [pillar, car];
+    let scene = TacticalSceneView {
+        width_m: 14.0,
+        height_m: 12.0,
+        edges: &[],
+        props: &props,
+        surfaces: &[],
+    };
+    let peek_shot = evaluate_ballistic_shot(BallisticShotQuery {
+        scene: &scene,
+        attacker_m: (3.2, 5.5),
+        target_m: (11.5, 5.5),
+        firearm: lookup_firearm_preset("sig_p320_9mm").unwrap(),
+        net_successes: 0,
+        hit_frame_or_stud: false,
+    });
+    assert_eq!(peek_shot.sight_cover_grade, CoverGrade::HighCover);
+    assert!(
+        !peek_shot.barriers.is_empty(),
+        "Corner-peek shot through a Car must still evaluate intervening barriers"
+    );
+
+    // 4. DerelictCorridor & Glass windows vs SheetSteel grilles in inspect.
+    let derelict = generate_procedural_sector(SectorPreset::DerelictCorridor, 20, 14, 7);
+    let derelict_windows: Vec<_> = derelict
+        .wall_edges
+        .iter()
+        .filter(|e| e.kind == WallEdgeKind::Window)
+        .collect();
+    if !derelict_windows.is_empty() {
+        assert!(
+            derelict_windows
+                .iter()
+                .all(|e| e.material == MaterialClass::Glass),
+            "DerelictCorridor windows should be Glass, got {derelict_windows:?}"
+        );
+    }
+
+    let mut req = build_procedural_map_request(
+        "inspect-grille",
+        SectorPreset::OfficeFloor,
+        None,
+        12,
+        10,
+        1,
+    );
+    req.wall_edges.clear();
+    req.props.clear();
+    req.wall_edges.push(MapWallEdge {
+        x: 5,
+        y: 5,
+        side: EdgeSide::North,
+        kind: WallEdgeKind::Window,
+        material: MaterialClass::SheetSteel,
+    });
+    let hit = inspect_map_point(&req, "Grille Test", 5.5, 5.02).expect("inspect steel grille");
+    assert_eq!(hit.title, "Iron / Steel Security Grille");
+}
+
+#[test]
+fn wave2_zoning_hospital_park_reach_and_whisper_redaction() {
+    use crate::map_narrative_manifest::{
+        evaluate_passive_movement_perceptions, extract_sector_narrative_manifest_for_floor,
+    };
+    use satya_schema::{MessageVisibility, TokenPlacement};
+
+    // 1. ProjectsHighDensity, compact Hospital, and WoodedPark layout checks.
+    for seed in 1_i64..=8 {
+        let proj =
+            generate_procedural_sector(SectorPreset::ProjectsHighDensity, 24, 18, seed);
+        assert!(
+            all_walkable_areas_connected(24, 18, &proj.wall_edges, &proj.props),
+            "ProjectsHighDensity seed={seed} disconnected"
+        );
+        let hosp = generate_procedural_sector(SectorPreset::Hospital, 14, 16, seed);
+        for p in hosp.props.iter().filter(|p| p.kind == PropKind::ElevatorCar) {
+            assert!(
+                !crate::tactical_map_geom::prop_crosses_wall_edge(p, &hosp.wall_edges),
+                "Compact Hospital seed={seed} ElevatorCar crosses wall: {p:?}"
+            );
+        }
+        let park = generate_procedural_sector(SectorPreset::WoodedPark, 24, 18, seed);
+        assert!(
+            park.props
+                .iter()
+                .any(|p| matches!(p.kind, PropKind::PicnicTable | PropKind::ParkBench)),
+            "WoodedPark seed={seed} missing plaza seating"
+        );
+    }
+
+    // 2. Knight-step blocking & TOKEN_RADIUS_M (0.30m) clearance in compute_reachable_continuous.
+    let pillar = make_prop(PropKind::StructuralPillar, 6, 5, 0, None, 0);
+    let props = [pillar];
+    let scene = TacticalSceneView {
+        width_m: 12.0,
+        height_m: 12.0,
+        edges: &[],
+        props: &props,
+        surfaces: &[],
+    };
+    let field = compute_reachable_continuous(
+        &scene,
+        &[],
+        GaitReachQuery {
+            start_m: (4.5, 5.5),
+            spd_eff: 4,
+            hgt_m: 1.75,
+            gait: CombatMovementGait::CombatGlideTacticalWalk,
+            tick_budget: 2,
+        },
+    );
+    // (5.75, 5.5) is only 0.25m from StructuralPillar west face at x=6.0m -> must be blocked by TOKEN_RADIUS_M (0.30m).
+    assert!(
+        field.distance_m_at(5.80, 5.5).is_none(),
+        "Reach field must respect TOKEN_RADIUS_M=0.30m around solid props"
+    );
+
+    // 3. GmOnly token whisper redaction + decorative HazardSpill guard + multi-floor manifest.
+    let mut map = build_procedural_map_request("whisp", SectorPreset::OfficeFloor, None, 20, 14, 5);
+    map.props.clear();
+    let mut dec_spill = make_prop(PropKind::HazardSpill, 6, 6, 0, None, 0);
+    dec_spill.decorative = true;
+    map.props.push(dec_spill);
+    map.tokens = vec![
+        TokenPlacement {
+            entity_id: "pc_1".to_owned(),
+            label: "Rook".to_owned(),
+            x: 5,
+            y: 6,
+            visibility: MessageVisibility::Public,
+        },
+        TokenPlacement {
+            entity_id: "npc_secret".to_owned(),
+            label: "TOP_SECRET_ASSASSIN_99".to_owned(),
+            x: 7,
+            y: 6,
+            visibility: MessageVisibility::GmOnly,
+        },
+    ];
+    let whispers = evaluate_passive_movement_perceptions(&map, "pc_1", &[], &[]);
+    assert!(
+        whispers
+            .iter()
+            .all(|w| !w.whisper_text.contains("TOP_SECRET_ASSASSIN_99")
+                && !w.whisper_text.contains("hazard spill")),
+        "GmOnly label or decorative HazardSpill leaked in whispers: {whispers:?}"
+    );
+    let mf = extract_sector_narrative_manifest_for_floor(&map, Some(0));
+    assert_eq!(mf.active_floor, 0);
+}
+
+#[test]
+fn test_all_presets_never_panic_at_small_sector_dimensions() {
+    for preset in SectorPreset::ALL {
+        for (w, h) in [(16, 12), (12, 10), (8, 8)] {
+            let sec = generate_procedural_sector(preset, w, h, 17);
+            assert!(
+                !sec.props.is_empty() || !sec.wall_edges.is_empty() || !sec.surfaces.is_empty(),
+                "{preset:?} at ({w}, {h}) produced an empty sector"
+            );
+            if preset == SectorPreset::Hospital && (w, h) == (16, 12) {
+                assert_eq!(sec.floors.len(), 2, "Hospital 16x12 should stay multi-floor");
+            }
+        }
+    }
+}
+
+#[test]
+fn test_wave5_awakened_presets_spatial_bridges_and_blast_breach() {
+    use crate::barrier_ballistics::evaluate_spatial_blast_and_breach;
+    use crate::tactical_map_inspect::{evaluate_surveillance_detection_at_point, inspect_map_point};
+    use satya_engine::explosives_and_arsenal::ExplosiveOrdnanceId;
+    use satya_schema::{
+        GmMapUpdateRequest, MapSurveillanceNode, MessageVisibility, TokenPlacement,
+    };
+
+    // 1. All 4 Awakened 2035 presets generate cleanly and attach spatial metadata.
+    let bunker_req = build_procedural_map_request_with_options(
+        "map-bunker",
+        SectorPreset::CorporateServerBunker,
+        None,
+        24,
+        18,
+        2035,
+        None,
+        None,
+    );
+    assert!(
+        !bunker_req.faraday_zones.is_empty(),
+        "CorporateServerBunker should declare a Faraday vault zone"
+    );
+    assert!(
+        !bunker_req.surveillance_nodes.is_empty(),
+        "CorporateServerBunker should declare surveillance nodes"
+    );
+    let fz = &bunker_req.faraday_zones[0];
+    let fz_x_m = (fz.x0_cm + fz.x1_cm) as f32 / 200.0;
+    let fz_y_m = (fz.y0_cm + fz.y1_cm) as f32 / 200.0;
+    let bunker_ins = inspect_map_point(&bunker_req, "Corporate Bunker", fz_x_m, fz_y_m).unwrap();
+    assert!(bunker_ins.in_faraday_zone);
+    assert!(bunker_ins.acoustic_surface.is_some());
+    assert!(bunker_ins.traction_tier.is_some());
+
+    let clinic_req = build_procedural_map_request_with_options(
+        "map-clinic-annex",
+        SectorPreset::CommunityClinicAnnex,
+        None,
+        24,
+        18,
+        2036,
+        None,
+        None,
+    );
+    assert!(
+        clinic_req.floors.iter().any(|f| f.floor_index == -1),
+        "CommunityClinicAnnex 24x18 should include B1 seed vault floor"
+    );
+    let mut clinic_b1 = clinic_req.clone();
+    assert!(clinic_b1.switch_active_floor(-1));
+    let c_fz = &clinic_b1.faraday_zones[0];
+    let clinic_ins = inspect_map_point(
+        &clinic_b1,
+        "Clinic Vault",
+        (c_fz.x0_cm + c_fz.x1_cm) as f32 / 200.0,
+        (c_fz.y0_cm + c_fz.y1_cm) as f32 / 200.0,
+    )
+    .unwrap();
+    assert!(clinic_ins.in_faraday_zone);
+
+    let safehouse_req = build_procedural_map_request_with_options(
+        "map-safehouse",
+        SectorPreset::SatyangSafehouse,
+        None,
+        24,
+        18,
+        2037,
+        None,
+        None,
+    );
+    assert!(!safehouse_req.faraday_zones.is_empty());
+
+    let depot_req = build_procedural_map_request_with_options(
+        "map-depot",
+        SectorPreset::BrownoutLogisticsDepot,
+        None,
+        24,
+        18,
+        2038,
+        None,
+        None,
+    );
+    assert!(!depot_req.surveillance_nodes.is_empty());
+
+    // 2. Surveillance cone LoS detection respects powered flag and intervening walls.
+    let mut surv_map = GmMapUpdateRequest {
+        map_id: "map-surv".to_string(),
+        title: "Surveillance Test".to_string(),
+        grid_width: 12,
+        grid_height: 10,
+        surveillance_nodes: vec![MapSurveillanceNode {
+            node_id: "cam-east".to_string(),
+            label: "Hallway Cam".to_string(),
+            node_kind_code: "DOME_CAMERA".to_string(),
+            floor_index: 0,
+            x_cm: 200,
+            y_cm: 550,
+            facing_deg: 90,
+            fov_deg: 90,
+            range_cm: 600,
+            powered: true,
+            visibility: MessageVisibility::GmOnly,
+        }],
+        ..Default::default()
+    };
+    let hits_open = evaluate_surveillance_detection_at_point(&surv_map, 5.5, 5.5, 0, false);
+    assert_eq!(hits_open.len(), 1);
+    assert_eq!(hits_open[0].node_id, "cam-east");
+    assert!(
+        evaluate_surveillance_detection_at_point(&surv_map, 5.5, 5.5, 0, true).is_empty(),
+        "Blackout suppresses powered surveillance cameras"
+    );
+
+    // Wall across (4, 5, WEST) blocks camera LoS through cell center (5.5m)
+    surv_map.wall_edges.push(MapWallEdge {
+        x: 4,
+        y: 5,
+        side: EdgeSide::West,
+        kind: WallEdgeKind::Wall,
+        material: MaterialClass::ConcreteBlock,
+    });
+    assert!(evaluate_surveillance_detection_at_point(&surv_map, 5.5, 5.5, 0, false).is_empty());
+
+    // Unpowered camera detects nothing even with clear LoS
+    surv_map.wall_edges.clear();
+    surv_map.surveillance_nodes[0].powered = false;
+    assert!(evaluate_surveillance_detection_at_point(&surv_map, 5.5, 5.5, 0, false).is_empty());
+
+    // 3. Enclosed-room blast overpressure and drywall breach
+    let mut blast_map = GmMapUpdateRequest {
+        map_id: "map-blast".to_string(),
+        title: "Enclosed Room".to_string(),
+        grid_width: 12,
+        grid_height: 10,
+        wall_edges: vec![
+            MapWallEdge {
+                x: 4,
+                y: 3,
+                side: EdgeSide::North,
+                kind: WallEdgeKind::Wall,
+                material: MaterialClass::Drywall,
+            },
+            MapWallEdge {
+                x: 4,
+                y: 5,
+                side: EdgeSide::North,
+                kind: WallEdgeKind::Wall,
+                material: MaterialClass::Drywall,
+            },
+            MapWallEdge {
+                x: 4,
+                y: 3,
+                side: EdgeSide::West,
+                kind: WallEdgeKind::Wall,
+                material: MaterialClass::ConcreteBlock,
+            },
+            MapWallEdge {
+                x: 4,
+                y: 4,
+                side: EdgeSide::West,
+                kind: WallEdgeKind::Wall,
+                material: MaterialClass::ConcreteBlock,
+            },
+            MapWallEdge {
+                x: 5,
+                y: 3,
+                side: EdgeSide::West,
+                kind: WallEdgeKind::Wall,
+                material: MaterialClass::ConcreteBlock,
+            },
+            MapWallEdge {
+                x: 5,
+                y: 4,
+                side: EdgeSide::West,
+                kind: WallEdgeKind::Wall,
+                material: MaterialClass::ConcreteBlock,
+            },
+        ],
+        tokens: vec![TokenPlacement {
+            entity_id: "tok-target".to_string(),
+            label: "Guard".to_string(),
+            x: 4,
+            y: 4,
+            visibility: MessageVisibility::Public,
+        }],
+        ..Default::default()
+    };
+    let outcome = evaluate_spatial_blast_and_breach(
+        &mut blast_map,
+        (4.5, 4.9),
+        0,
+        ExplosiveOrdnanceId::C4SemtexBlock500g,
+        2,
+        true,
+    );
+    assert!(outcome.enclosed_room);
+    assert!(outcome.breached_edges_count >= 1);
+    assert_eq!(outcome.token_exposures.len(), 1);
+}

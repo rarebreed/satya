@@ -206,7 +206,7 @@ pub fn point_near_protected_surface_m(
     })
 }
 
-enum PreSampledSurfaceShape {
+pub(crate) enum PreSampledSurfaceShape {
     Empty,
     Ring(Vec<(f32, f32)>),
     Ribbon {
@@ -218,18 +218,18 @@ enum PreSampledSurfaceShape {
     },
 }
 
-struct PreSampledSurfaceEntry {
-    kind: SurfaceFeatureKind,
-    prio: u8,
-    min_x: f32,
-    min_y: f32,
-    max_x: f32,
-    max_y: f32,
-    shape: PreSampledSurfaceShape,
+pub(crate) struct PreSampledSurfaceEntry {
+    pub(crate) kind: SurfaceFeatureKind,
+    pub(crate) prio: u8,
+    pub(crate) min_x: f32,
+    pub(crate) min_y: f32,
+    pub(crate) max_x: f32,
+    pub(crate) max_y: f32,
+    pub(crate) shape: PreSampledSurfaceShape,
 }
 
 impl PreSampledSurfaceEntry {
-    fn from_feature(s: &MapSurfaceFeature) -> Self {
+    pub(crate) fn from_feature(s: &MapSurfaceFeature) -> Self {
         let prio = s.kind.layer_priority();
         if s.points_cm.is_empty() {
             return Self {

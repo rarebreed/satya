@@ -414,11 +414,11 @@ async fn maybe_bind_and_broadcast_session(
     record: &CharacterSheetRecord,
     session_id_opt: Option<&str>,
     emit_bind_event: bool,
-) {
+) -> anyhow::Result<()> {
     let Some(sid) = session_id_opt.map(str::trim).filter(|s| !s.is_empty()) else {
-        return;
+        return Ok(());
     };
-    if let Ok((_, updated_roster)) = state
+    let (_, updated_roster) = state
         .auth
         .bind_character_to_session(
             sid,
@@ -426,24 +426,23 @@ async fn maybe_bind_and_broadcast_session(
             &record.character_id,
             &record.character_name,
         )
-        .await
-    {
-        if emit_bind_event {
-            let _ = emit_character_sheet_event(
-                state,
-                user,
-                CharacterEventType::CharacterBoundToSession,
-                record,
-                Some(sid),
-            )
-            .await;
-        }
-        if let Ok(sync_msg) = serde_json::to_string(&ServerWsPacket::RosterSync {
-            roster: updated_roster,
-        }) {
-            state.broadcast_to_session(sid, &sync_msg).await;
-        }
+        .await?;
+    if emit_bind_event {
+        let _ = emit_character_sheet_event(
+            state,
+            user,
+            CharacterEventType::CharacterBoundToSession,
+            record,
+            Some(sid),
+        )
+        .await;
     }
+    if let Ok(sync_msg) = serde_json::to_string(&ServerWsPacket::RosterSync {
+        roster: updated_roster,
+    }) {
+        state.broadcast_to_session(sid, &sync_msg).await;
+    }
+    Ok(())
 }
 
 /// Lists all character sheets owned by the authenticated player (`GET /api/characters`).
@@ -578,7 +577,7 @@ pub async fn save_character_handler(
         .unwrap_or_default();
 
     if req.bind_to_session {
-        maybe_bind_and_broadcast_session(
+        let _ = maybe_bind_and_broadcast_session(
             &state,
             &user,
             &req.character,
@@ -756,7 +755,7 @@ pub async fn import_character_handler(
         .unwrap_or_default();
 
     if req.bind_to_session {
-        maybe_bind_and_broadcast_session(
+        let _ = maybe_bind_and_broadcast_session(
             &state,
             &user,
             &imported_record,
@@ -810,7 +809,15 @@ pub async fn bind_character_session_handler(
             .into_response();
     }
 
-    maybe_bind_and_broadcast_session(&state, &user, &record, Some(&req.session_id), true).await;
+    if let Err(err) =
+        maybe_bind_and_broadcast_session(&state, &user, &record, Some(&req.session_id), true).await
+    {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": err.to_string() })),
+        )
+            .into_response();
+    }
 
     (
         StatusCode::OK,

@@ -6,7 +6,7 @@ use crate::gm_api::{
     apply_combat_action_to_mechanics_and_tracker, evaluate_roll_combat_action_and_triad,
     should_trigger_ai_gm_for_chat, trigger_ai_gm_chat_reply, verify_gm_service_header,
 };
-use crate::state::SignalingAppState;
+use crate::state::{MAX_AUTONOMOUS_RALLY_ROUNDS, SessionRallyState, SignalingAppState};
 use axum::{
     Json,
     extract::{Path, Query, State},
@@ -18,7 +18,8 @@ use satya_engine::{CascadeTaskParams, evaluate_satya_cascade_task};
 use satya_schema::{
     AiPlayerConfig, CanvasEventType, ChannelContext, ChatMessageEvent, MessageVisibility,
     Participant, PlayerAiChatRequest, PlayerAiRollRequest, ServerWsPacket, SessionMode,
-    SessionRole, StepAiPlayerRequest, TabletopCanvasEvent, WgpuDiceSpec, subjects,
+    SessionRole, StepAiPlayerRequest, TabletopCanvasEvent, UpdateAiRallyRequest, WgpuDiceSpec,
+    subjects,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -49,25 +50,158 @@ pub(crate) fn default_ai_player_uid() -> String {
     "ai-player-1".to_string()
 }
 
+/// Validates an external or custom AI Player `service_url` against loopback and configured allowlists (C2 SSRF guard).
+pub(crate) fn validate_ai_player_service_url(
+    raw_url: &str,
+    allowed_origins: &[String],
+) -> anyhow::Result<String> {
+    let trimmed = raw_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        anyhow::bail!("service_url cannot be empty");
+    }
+    let after_scheme = trimmed
+        .strip_prefix("http://")
+        .or_else(|| trimmed.strip_prefix("https://"))
+        .ok_or_else(|| anyhow::anyhow!("service_url must use http:// or https:// scheme"))?;
+    let host_port = after_scheme.split(['/', '?', '#']).next().unwrap_or("");
+    if host_port.is_empty() || host_port.contains('@') {
+        anyhow::bail!("Invalid authority in AI Player service_url");
+    }
+    let host = if let Some(rest) = host_port.strip_prefix('[') {
+        rest.split(']').next().unwrap_or("").to_ascii_lowercase()
+    } else {
+        host_port
+            .split(':')
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase()
+    };
+    let is_loopback = matches!(host.as_str(), "127.0.0.1" | "localhost" | "::1");
+    let scheme_and_authority = if trimmed.starts_with("https://") {
+        format!("https://{host_port}")
+    } else {
+        format!("http://{host_port}")
+    };
+    let in_allowlist = allowed_origins.iter().any(|allowed| {
+        let norm = allowed.trim().trim_end_matches('/');
+        !norm.is_empty() && norm.eq_ignore_ascii_case(&scheme_and_authority)
+    });
+    if !is_loopback && !in_allowlist {
+        anyhow::bail!(
+            "Untrusted AI Player service_url host '{host}'; only loopback or configured allowlist origins are permitted"
+        );
+    }
+    Ok(trimmed.to_string())
+}
+
 impl SignalingAppState {
-    /// Resets the consecutive AI-to-AI rally turn counter for `session_id` (called when a human acts or steps a turn).
+    /// Resets the consecutive AI-to-AI rally turn counter for `session_id` (and clears pause state).
     pub async fn reset_ai_rally_counter(&self, session_id: &str) {
-        self.ai_rally_counters
-            .write()
-            .await
-            .insert(session_id.trim().to_string(), 0);
+        let mut guard = self.ai_rally_counters.write().await;
+        let entry = guard.entry(session_id.trim().to_string()).or_default();
+        entry.rounds_used = 0;
+        entry.paused = false;
     }
 
-    /// Atomically checks and increments the AI-to-AI rally counter for `session_id` against `max_rally_turns`.
-    pub async fn try_consume_ai_rally_turn(&self, session_id: &str, max_rally_turns: u32) -> bool {
-        let cap = max_rally_turns.clamp(1, 10);
+    /// Returns `true` when autonomous AI Player rallying is currently paused for `session_id`.
+    pub async fn is_ai_rally_paused(&self, session_id: &str) -> bool {
+        self.ai_rally_counters
+            .read()
+            .await
+            .get(session_id.trim())
+            .is_some_and(|s| s.paused)
+    }
+
+    /// Updates pause state, max rounds (`1..=MAX_AUTONOMOUS_RALLY_ROUNDS`), or resets counter for `session_id`.
+    pub async fn update_ai_rally_state(
+        &self,
+        session_id: &str,
+        req: &UpdateAiRallyRequest,
+    ) -> SessionRallyState {
         let mut guard = self.ai_rally_counters.write().await;
-        let current = guard.entry(session_id.trim().to_string()).or_insert(0);
-        if *current >= cap {
+        let st = guard.entry(session_id.trim().to_string()).or_default();
+        if let Some(p) = req.paused {
+            st.paused = p;
+        }
+        if let Some(max_r) = req.max_rally_rounds {
+            st.max_rounds = max_r.clamp(1, MAX_AUTONOMOUS_RALLY_ROUNDS);
+        }
+        if req.reset_counter == Some(true) {
+            st.rounds_used = 0;
+        }
+        *st
+    }
+
+    /// Atomically checks and increments the AI-to-AI rally round counter against `max_rally_turns`.
+    pub async fn try_consume_ai_rally_turn(&self, session_id: &str, max_rally_turns: u32) -> bool {
+        let mut guard = self.ai_rally_counters.write().await;
+        let st = guard.entry(session_id.trim().to_string()).or_default();
+        if st.paused {
             return false;
         }
-        *current += 1;
+        let cap = if max_rally_turns > 0 {
+            max_rally_turns.clamp(1, MAX_AUTONOMOUS_RALLY_ROUNDS)
+        } else {
+            st.max_rounds.clamp(1, MAX_AUTONOMOUS_RALLY_ROUNDS)
+        };
+        if st.rounds_used >= cap {
+            return false;
+        }
+        st.rounds_used += 1;
         true
+    }
+
+    /// Hydrates `self.ai_players` and roster AI Player entries from SQLite `session_ai_players` if not yet in memory.
+    pub async fn ensure_session_ai_players_loaded(&self, session_id: &str) {
+        let sid = session_id.trim();
+        let persisted = self.auth.load_session_ai_players_from_db(sid).await;
+        if persisted.is_empty() {
+            return;
+        }
+        let mut ai_guard = self.ai_players.write().await;
+        let room_map = ai_guard.entry(sid.to_string()).or_default();
+        let mut sessions_guard = self.auth.sessions.write().await;
+        let mut session_opt = sessions_guard.get_mut(sid);
+        let default_cfg = &self.storage.config().ai_gm;
+        for cfg in persisted {
+            let Some(uid) = cfg.user_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+                continue;
+            };
+            let display_name = cfg.display_name.as_deref().unwrap_or(uid).to_string();
+            let provider = cfg
+                .provider
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or(&default_cfg.default_provider)
+                .to_string();
+            let model_id = cfg
+                .model_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or(&default_cfg.reasoning_model)
+                .to_string();
+            let participant = Participant::ai_player(
+                uid,
+                &display_name,
+                cfg.character_id.clone(),
+                &format!("{provider}/{model_id}"),
+                "tactical-party-player",
+            );
+            if let Some(ref mut sess) = session_opt {
+                sess.roster.entry(uid.to_string()).or_insert_with(|| participant.clone());
+            }
+            room_map.entry(uid.to_string()).or_insert_with(|| SessionAiPlayerEntry {
+                participant,
+                persona_prompt: cfg.persona_prompt.unwrap_or_default(),
+                provider,
+                model_id,
+                service_url: cfg.service_url,
+                auto_respond: cfg.auto_respond,
+                max_rally_turns: cfg.max_rally_turns.clamp(1, MAX_AUTONOMOUS_RALLY_ROUNDS),
+            });
+        }
     }
 }
 
@@ -93,14 +227,19 @@ pub async fn list_session_ai_players_handler(
     };
 
     let sid = session_id.trim();
-    let roster = state.auth.get_session_roster(sid).await;
-    if !roster.iter().any(|p| p.user_id == user.user_id) {
+    if state
+        .auth
+        .resolve_authorized_member_role(sid, &user)
+        .await
+        .is_err()
+    {
         return (
             StatusCode::FORBIDDEN,
             Json(json!({ "error": "Caller is not an active participant in this session" })),
         )
             .into_response();
     }
+    state.ensure_session_ai_players_loaded(sid).await;
     let players: Vec<SessionAiPlayerEntry> = state
         .ai_players
         .read()
@@ -108,20 +247,64 @@ pub async fn list_session_ai_players_handler(
         .get(sid)
         .map(|m| m.values().cloned().collect())
         .unwrap_or_default();
-    let rally_count = state
+    let rally_state = state
         .ai_rally_counters
         .read()
         .await
         .get(sid)
         .copied()
-        .unwrap_or(0);
+        .unwrap_or_default();
 
     (
         StatusCode::OK,
         Json(json!({
             "session_id": sid,
             "ai_players": players,
-            "rally_turns_used": rally_count,
+            "rally_turns_used": rally_state.rounds_used,
+            "max_rally_rounds": rally_state.max_rounds,
+            "rally_paused": rally_state.paused,
+        })),
+    )
+        .into_response()
+}
+
+/// Updates pause/resume or round cap for autonomous AI Player rallies at `POST /api/sessions/:session_id/ai-players/rally`.
+pub async fn update_session_ai_rally_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    Path(session_id): Path<String>,
+    headers: HeaderMap,
+    Json(req): Json<UpdateAiRallyRequest>,
+) -> impl IntoResponse {
+    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Missing Authorization header" })),
+        )
+            .into_response();
+    };
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or expired auth token" })),
+        )
+            .into_response();
+    };
+    let sid = session_id.trim();
+    if !crate::npcs::can_caller_orchestrate_ai_session(&state, sid, &user).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Only the session GM or host can control autonomous AI rallies" })),
+        )
+            .into_response();
+    }
+    let st = state.update_ai_rally_state(sid, &req).await;
+    (
+        StatusCode::OK,
+        Json(json!({
+            "session_id": sid,
+            "rally_turns_used": st.rounds_used,
+            "max_rally_rounds": st.max_rounds,
+            "rally_paused": st.paused,
         })),
     )
         .into_response()
@@ -167,6 +350,34 @@ pub async fn upsert_session_ai_player_handler(
         .filter(|s| !s.is_empty())
         .unwrap_or("ai-player-1")
         .to_string();
+    if !uid.starts_with("ai-player-") {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "AI Player user_id must start with 'ai-player-'" })),
+        )
+            .into_response();
+    }
+    let validated_service_url = if let Some(raw_url) = req
+        .service_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        match validate_ai_player_service_url(raw_url, &default_cfg.allowed_ai_player_service_urls)
+        {
+            Ok(u) => Some(u),
+            Err(err) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": err.to_string() })),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        None
+    };
+
     let display_name = req
         .display_name
         .as_deref()
@@ -204,47 +415,65 @@ pub async fn upsert_session_ai_player_handler(
     let participant = Participant::ai_player(
         &uid,
         &display_name,
-        char_id,
+        char_id.clone(),
         &format!("{provider}/{model_id}"),
         "tactical-party-player",
     );
 
     let entry = SessionAiPlayerEntry {
         participant: participant.clone(),
-        persona_prompt,
-        provider,
-        model_id,
-        service_url: req
-            .service_url
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string),
+        persona_prompt: persona_prompt.clone(),
+        provider: provider.clone(),
+        model_id: model_id.clone(),
+        service_url: validated_service_url.clone(),
         auto_respond: req.auto_respond,
-        max_rally_turns: req.max_rally_turns.clamp(1, 10),
+        max_rally_turns: req.max_rally_turns.clamp(1, MAX_AUTONOMOUS_RALLY_ROUNDS),
     };
 
     // Add to active session roster & combat tracker so `party_turn_gate_node` and clients see the AI Player
-    let roster_opt = {
+    let roster_res: Result<Vec<satya_schema::Participant>, (StatusCode, String)> = {
         let mut sessions_guard = state.auth.sessions.write().await;
         if let Some(session) = sessions_guard.get_mut(&sid) {
-            session.roster.insert(uid.clone(), participant.clone());
-            crate::auth::AuthAndSessionManager::sync_combatant_into_tracker(
-                &mut session.combat_tracker,
-                &participant,
-            );
-            Some(session.roster.values().cloned().collect::<Vec<_>>())
+            if let Some(existing) = session.roster.get(&uid)
+                && (existing.participant_kind == satya_schema::ParticipantKind::Human
+                    || existing.role == SessionRole::AiGm)
+            {
+                Err((
+                    StatusCode::CONFLICT,
+                    format!("Roster slot '{uid}' is already occupied by a Human or AI GM participant"),
+                ))
+            } else {
+                session.roster.insert(uid.clone(), participant.clone());
+                crate::auth::AuthAndSessionManager::sync_combatant_into_tracker(
+                    &mut session.combat_tracker,
+                    &participant,
+                );
+                Ok(session.roster.values().cloned().collect::<Vec<_>>())
+            }
         } else {
-            None
+            Err((StatusCode::NOT_FOUND, format!("Session '{sid}' not found")))
         }
     };
-    let Some(roster) = roster_opt else {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(json!({ "error": format!("Session '{sid}' not found") })),
-        )
-            .into_response();
+    let roster = match roster_res {
+        Ok(r) => r,
+        Err((status, msg)) => return (status, Json(json!({ "error": msg }))).into_response(),
     };
+
+    let persist_cfg = AiPlayerConfig {
+        user_id: Some(uid.clone()),
+        display_name: Some(display_name),
+        character_id: char_id,
+        persona_prompt: Some(persona_prompt),
+        provider: Some(provider),
+        model_id: Some(model_id),
+        service_url: validated_service_url,
+        auto_respond: req.auto_respond,
+        max_rally_turns: req.max_rally_turns.clamp(1, MAX_AUTONOMOUS_RALLY_ROUNDS),
+    };
+    state
+        .auth
+        .upsert_session_ai_player_to_db(&sid, &persist_cfg)
+        .await;
 
     state
         .ai_players
@@ -254,6 +483,16 @@ pub async fn upsert_session_ai_player_handler(
         .or_default()
         .insert(uid.clone(), entry.clone());
     state.reset_ai_rally_counter(&sid).await;
+    let _ = state
+        .update_ai_rally_state(
+            &sid,
+            &UpdateAiRallyRequest {
+                paused: Some(false),
+                max_rally_rounds: Some(entry.max_rally_turns),
+                reset_counter: Some(true),
+            },
+        )
+        .await;
 
     if let Ok(sync_msg) = serde_json::to_string(&ServerWsPacket::RosterSync {
         roster: roster.clone(),
@@ -306,6 +545,7 @@ pub async fn remove_session_ai_player_handler(
     if let Some(map) = state.ai_players.write().await.get_mut(sid) {
         map.remove(uid);
     }
+    state.auth.delete_session_ai_player_from_db(sid, uid).await;
 
     let mut roster = Vec::new();
     if let Some(session) = state.auth.sessions.write().await.get_mut(sid) {
@@ -366,9 +606,10 @@ pub async fn step_session_ai_player_handler(
         )
             .into_response();
     }
+    state.ensure_session_ai_players_loaded(&sid).await;
     state.reset_ai_rally_counter(&sid).await;
 
-    let entries: Vec<SessionAiPlayerEntry> = {
+    let mut entries: Vec<SessionAiPlayerEntry> = {
         let guard = state.ai_players.read().await;
         let Some(room_players) = guard.get(&sid) else {
             return (
@@ -390,6 +631,7 @@ pub async fn step_session_ai_player_handler(
                 .into_response();
         }
     };
+    entries.sort_by(|a, b| a.participant.user_id.cmp(&b.participant.user_id));
 
     if entries.is_empty() {
         return (
@@ -407,10 +649,26 @@ pub async fn step_session_ai_player_handler(
         .unwrap_or("Take your character's turn in the current scene or combat tick.")
         .to_string();
 
-    let mut stepped_ids = Vec::new();
-    for entry in entries {
-        stepped_ids.push(entry.participant.user_id.clone());
-        trigger_ai_player_turn(&state, &sid, &entry, &prompt, req.auto_trigger_gm).await;
+    let stepped_ids: Vec<String> = entries
+        .iter()
+        .map(|e| e.participant.user_id.clone())
+        .collect();
+    let fail_fast = state.storage.config().ai_gm.fail_fast_when_offline;
+    if entries.len() > 1 && fail_fast {
+        let state_clone = state.clone();
+        let sid_clone = sid.clone();
+        let prompt_clone = prompt.clone();
+        let auto_gm = req.auto_trigger_gm;
+        tokio::spawn(async move {
+            for entry in entries {
+                trigger_ai_player_turn(&state_clone, &sid_clone, &entry, &prompt_clone, auto_gm)
+                    .await;
+            }
+        });
+    } else {
+        for entry in entries {
+            trigger_ai_player_turn(&state, &sid, &entry, &prompt, req.auto_trigger_gm).await;
+        }
     }
 
     (
@@ -637,22 +895,10 @@ pub async fn player_ai_session_chat_handler(
     .to_string();
     state.send_to_users(sid, &delivery_ids, &pkt_str).await;
 
-    let (max_rally, active_ai_count) = {
-        let guard = state.ai_players.read().await;
-        let room = guard.get(sid);
-        let cap = ai_entry.as_ref().map(|e| e.max_rally_turns).unwrap_or(2);
-        let count = room
-            .map(|m| m.values().filter(|e| e.auto_respond).count())
-            .unwrap_or(1)
-            .max(1);
-        (cap, count)
-    };
-    let eff_rally_cap = if active_ai_count > 1 {
-        max_rally.saturating_mul(active_ai_count as u32).min(12)
-    } else {
-        max_rally
-    };
+    // Always allow AI GM to resolve an AI Player's message when auto_trigger_gm == true and rallies are not paused
+    // (rally round limits are advanced once per complete AI GM narration round in gm_api.rs).
     if req.auto_trigger_gm
+        && !state.is_ai_rally_paused(sid).await
         && ctx.session_mode == SessionMode::Ttrpg
         && let Some(ai_gm) = ctx
             .roster
@@ -667,7 +913,6 @@ pub async fn player_ai_session_chat_handler(
             req.channel_context,
             &req.body,
         )
-        && state.try_consume_ai_rally_turn(sid, eff_rally_cap).await
     {
         let state_clone = state.clone();
         let sid_clone = sid.to_string();
@@ -919,17 +1164,48 @@ pub async fn trigger_ai_player_turn(
     auto_trigger_gm: bool,
 ) {
     let ai_cfg = state.storage.config().ai_gm.clone();
-    let target_url = entry
+    let raw_target_url = entry
         .service_url
         .clone()
         .or_else(|| std::env::var("SATYA_AI_PLAYER_URL").ok())
         .unwrap_or_else(|| ai_cfg.service_url.clone());
+    let target_url =
+        match validate_ai_player_service_url(&raw_target_url, &ai_cfg.allowed_ai_player_service_urls)
+        {
+            Ok(u) => u,
+            Err(err) => {
+                tracing::error!(
+                    session_id = %session_id,
+                    player_user_id = %entry.participant.user_id,
+                    "Blocked AI Player dispatch to untrusted service URL: {err}"
+                );
+                if let Some((ctx, _)) = state.auth.get_session_gm_context(session_id).await {
+                    let msg = format!(
+                        "[AI Player Blocked] Refused dispatch for {} due to untrusted service_url: {err}",
+                        entry.participant.display_name
+                    );
+                    state
+                        .broadcast_system_notice_to_humans(
+                            session_id,
+                            ctx.session_mode,
+                            &entry.participant,
+                            &ctx.roster,
+                            &msg,
+                        )
+                        .await;
+                }
+                return;
+            }
+        };
 
     let (ctx_opt, vault_opt) = match state.auth.get_session_gm_context(session_id).await {
         Some((c, v)) => (Some(c), v),
         None => (None, None),
     };
-    let ephemeral_key = vault_opt.as_ref().and_then(|v| v.api_key.clone());
+    let ephemeral_key = vault_opt
+        .as_ref()
+        .filter(|v| v.provider.eq_ignore_ascii_case(&entry.provider))
+        .and_then(|v| v.api_key.clone());
     let filtered_active_map = ctx_opt
         .as_ref()
         .and_then(|c| c.active_map.as_ref())
@@ -970,7 +1246,7 @@ pub async fn trigger_ai_player_turn(
         "model_id": entry.model_id,
     });
 
-    if post_ai_player_event_to_fastapi(
+    match post_ai_player_event_to_fastapi(
         &target_url,
         &ai_cfg.service_token,
         ephemeral_key.as_deref(),
@@ -979,18 +1255,33 @@ pub async fn trigger_ai_player_turn(
         ai_cfg.request_timeout_secs,
     )
     .await
-    .is_ok()
     {
-        return;
-    }
-
-    if ai_cfg.fail_fast_when_offline {
-        tracing::error!(
-            session_id = %session_id,
-            player_user_id = %entry.participant.user_id,
-            "AI Player service at {target_url} unreachable (fail_fast_when_offline=true)"
-        );
-        return;
+        Ok(()) => return,
+        Err(err) => {
+            if ai_cfg.fail_fast_when_offline {
+                tracing::error!(
+                    session_id = %session_id,
+                    player_user_id = %entry.participant.user_id,
+                    "AI Player service at {target_url} failed ({err}; fail_fast_when_offline=true)"
+                );
+                if let Some(ctx) = ctx_opt.as_ref() {
+                    let msg = format!(
+                        "[AI Player Service Error] {} turn dispatch failed against {target_url} ({err}).",
+                        entry.participant.display_name
+                    );
+                    state
+                        .broadcast_system_notice_to_humans(
+                            session_id,
+                            ctx.session_mode,
+                            &entry.participant,
+                            &ctx.roster,
+                            &msg,
+                        )
+                        .await;
+                }
+                return;
+            }
+        }
     }
 
     // Deterministic offline fallback for unit/integration tests (`fail_fast_when_offline == false`)

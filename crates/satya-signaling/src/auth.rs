@@ -127,6 +127,9 @@ pub struct SessionDisconnectSummary {
     pub remaining_roster: Vec<Participant>,
     /// Count of human participants remaining in the session (`0` triggers `SESSION_ENDED`).
     pub remaining_human_count: usize,
+    /// Whether active autonomous AI Players remain in the session (`SESSION_ENDED` suppressed while true).
+    #[serde(default)]
+    pub has_active_ai_players: bool,
 }
 
 /// Manages SQLx-backed Argon2id user registration/login, account-level RBAC (`USER` vs. `ADMIN`),
@@ -270,6 +273,21 @@ impl AuthAndSessionManager {
                 session_id    TEXT PRIMARY KEY,
                 ledger_json   TEXT NOT NULL,
                 updated_at_us INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS session_ai_players (
+                session_id       TEXT NOT NULL,
+                user_id          TEXT NOT NULL,
+                display_name     TEXT NOT NULL,
+                character_id     TEXT,
+                persona_prompt   TEXT NOT NULL,
+                provider         TEXT NOT NULL,
+                model_id         TEXT NOT NULL,
+                service_url      TEXT,
+                auto_respond     INTEGER NOT NULL DEFAULT 1,
+                max_rally_turns  INTEGER NOT NULL DEFAULT 2,
+                updated_at_us    INTEGER NOT NULL,
+                PRIMARY KEY (session_id, user_id)
             );
             "#,
         )
@@ -634,14 +652,47 @@ impl AuthAndSessionManager {
             }
         }
 
+        let sid = session_id.trim();
+        let live_meta = {
+            let guard = self.sessions.read().await;
+            guard.get(sid).map(|s| {
+                let has_active_participants = s.roster.values().any(|p| {
+                    p.participant_kind == ParticipantKind::Human
+                        || (p.participant_kind == ParticipantKind::AiAgent
+                            && p.role == SessionRole::Player)
+                });
+                (
+                    s.host_user_id.clone(),
+                    s.password_hash.clone(),
+                    s.active_map.clone(),
+                    s.created_at_us,
+                    has_active_participants,
+                )
+            })
+        };
+        if let Some((_, _, _, _, true)) = live_meta {
+            anyhow::bail!(
+                "Session '{sid}' is already live; use /api/sessions/join or /api/sessions/resume"
+            );
+        }
+
+        let db_meta = self.load_saved_session_meta_from_db(sid).await;
+        let existing_meta = db_meta.or_else(|| {
+            live_meta.map(|(h, pw, am, cr, _)| (h, pw, am, cr))
+        });
+
         let (password_hash, saved_active_map, created_at_us) =
-            if let Some((saved_hash, saved_map, saved_created_us)) =
-                self.load_saved_session_meta_from_db(sid).await
-            {
-                if !Self::verify_secret(session_password, &saved_hash) {
-                    anyhow::bail!("Invalid session password for existing session '{sid}'");
+            if let Some((saved_host, saved_pw_hash, saved_map, saved_created_at)) = existing_meta {
+                let password_ok = Self::verify_secret(session_password, &saved_pw_hash);
+                let saved_role = self.load_saved_participant_role(sid, &user.user_id).await;
+                let role_ok = !matches!(role, SessionRole::Gm | SessionRole::Host)
+                    || matches!(saved_role, Some(SessionRole::Gm | SessionRole::Host));
+                if saved_host != user.user_id || !password_ok || !role_ok {
+                    anyhow::bail!(
+                        "Session '{sid}' already exists; use /api/sessions/join or /api/sessions/resume"
+                    );
                 }
-                (saved_hash, saved_map, saved_created_us)
+                (saved_pw_hash, saved_map, saved_created_at)
             } else {
                 (
                     Self::hash_secret(session_password)?,
@@ -672,8 +723,12 @@ impl AuthAndSessionManager {
         }
 
         let roster_vec: Vec<Participant> = roster.values().cloned().collect();
-        let persisted_docs = self.load_persistent_gm_docs_from_db(sid).await;
-        let persisted_memories = self.load_persistent_gm_memories_from_db(sid).await;
+        let persisted_docs = self
+            .load_persistent_gm_docs_from_db(sid, Some(&user.user_id))
+            .await;
+        let persisted_memories = self
+            .load_persistent_gm_memories_from_db(sid, Some(&user.user_id))
+            .await;
         let combat_tracker = self.load_or_init_combat_tracker(sid, &roster_vec).await;
 
         let session_obj = ProtectedSession {
@@ -733,6 +788,7 @@ impl AuthAndSessionManager {
         let saved_cid = self
             .load_saved_participant_character_id(sid, &user.user_id)
             .await;
+        let saved_role = self.load_saved_participant_role(sid, &user.user_id).await;
 
         let (mode, self_participant, roster_vec) = {
             let mut sessions = self.sessions.write().await;
@@ -742,6 +798,21 @@ impl AuthAndSessionManager {
 
             if !Self::verify_secret(session_password, &session.password_hash) {
                 anyhow::bail!("Invalid session password for session '{sid}'");
+            }
+
+            if matches!(role, SessionRole::Gm | SessionRole::Host) {
+                let existing_role = session
+                    .roster
+                    .get(&user.user_id)
+                    .map(|p| p.role)
+                    .or(saved_role);
+                if session.host_user_id != user.user_id
+                    || !matches!(existing_role, Some(SessionRole::Gm | SessionRole::Host))
+                {
+                    anyhow::bail!(
+                        "Cannot join as GM/HOST without existing session GM/HOST authorization"
+                    );
+                }
             }
 
             let mut self_participant = Participant::human(
@@ -793,6 +864,14 @@ impl AuthAndSessionManager {
             .unwrap_or_default()
     }
 
+    /// Returns `true` if `user_id` is the recorded `host_user_id` for `session_id`.
+    pub(crate) async fn is_session_host(&self, session_id: &str, user_id: &str) -> bool {
+        let guard = self.sessions.read().await;
+        guard
+            .get(session_id.trim())
+            .is_some_and(|s| s.host_user_id == user_id)
+    }
+
     /// Configures or updates the in-memory AI GM provider, model, and ephemeral BYOK API key for `session_id`,
     /// updating the `Participant::ai_gm` entry in the session roster (without exposing `api_key`).
     pub async fn configure_session_ai_gm(
@@ -817,7 +896,7 @@ impl AuthAndSessionManager {
             cfg.provider.trim().to_lowercase()
         };
         let clean_model = if cfg.model_id.trim().is_empty() {
-            "qwen2.5:14b".to_string()
+            "gemma4:12b".to_string()
         } else {
             cfg.model_id.trim().to_string()
         };
@@ -832,6 +911,23 @@ impl AuthAndSessionManager {
             format!("{clean_provider}/{clean_model}")
         };
 
+        let new_api_key = if let Some(explicit_key) = cfg
+            .api_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            Some(explicit_key.to_string())
+        } else if cfg.clear_api_key {
+            None
+        } else {
+            session
+                .ai_gm_vault
+                .as_ref()
+                .filter(|v| v.provider.eq_ignore_ascii_case(&clean_provider))
+                .and_then(|v| v.api_key.clone())
+        };
+
         session.ai_gm_vault = Some(SessionAiGmVault {
             sponsor_user_id: sponsor_user_id.to_string(),
             provider: clean_provider,
@@ -840,7 +936,7 @@ impl AuthAndSessionManager {
             temperature: cfg.temperature,
             persona_id: clean_persona.clone(),
             base_url: cfg.base_url.filter(|s| !s.trim().is_empty()),
-            api_key: cfg.api_key.filter(|s| !s.trim().is_empty()),
+            api_key: new_api_key,
         });
 
         let ai_uid = format!("ai-gm-{sid}");
@@ -1010,14 +1106,19 @@ impl AuthAndSessionManager {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
 
+        let can_set_campaign_tag = matches!(
+            uploader.role,
+            SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
+        );
         doc.uploader_user_id = uploader.user_id.clone();
         doc.uploader_display_name = uploader.display_name.clone();
-        if doc
-            .campaign_tag
-            .as_deref()
-            .map(str::trim)
-            .unwrap_or("")
-            .is_empty()
+        if !can_set_campaign_tag
+            || doc
+                .campaign_tag
+                .as_deref()
+                .map(str::trim)
+                .unwrap_or("")
+                .is_empty()
         {
             doc.campaign_tag = Some(session.campaign_tag.clone());
         }
@@ -1109,6 +1210,22 @@ impl AuthAndSessionManager {
         session_id: &str,
         user_id: &str,
     ) -> Option<SessionDisconnectSummary> {
+        self.leave_session_with_options(session_id, user_id, true, None)
+            .await
+    }
+
+    /// Removes `user_id` from `session_id` with control over explicit leaves vs. transient WebSocket drops.
+    ///
+    /// On transient WS disconnects (`explicit_leave == false`) when autonomous AI Players remain in the
+    /// session, the sponsor's BYOK key is retained for a short reload grace window (scrubbed by caller if
+    /// the sponsor does not reconnect), and only `closing_join_token` is revoked rather than newer tabs' tokens.
+    pub async fn leave_session_with_options(
+        &self,
+        session_id: &str,
+        user_id: &str,
+        explicit_leave: bool,
+        closing_join_token: Option<&str>,
+    ) -> Option<SessionDisconnectSummary> {
         let sid = session_id.trim();
         let summary = {
             let mut sessions = self.sessions.write().await;
@@ -1123,8 +1240,11 @@ impl AuthAndSessionManager {
                 p.participant_kind == ParticipantKind::AiAgent && p.role == SessionRole::Player
             });
 
-            // Scrub sponsoring BYOK API keys when the sponsor departs, and purge transient state when empty
-            if let Some(vault) = session.ai_gm_vault.as_mut()
+            // Scrub sponsoring BYOK API keys immediately on explicit leave (or when no AI Players remain);
+            // transient WS drops with active AI Players rely on the 30s reconnect grace scrubber.
+            let defer_byok_scrub = !explicit_leave && has_active_ai_players;
+            if !defer_byok_scrub
+                && let Some(vault) = session.ai_gm_vault.as_mut()
                 && vault.sponsor_user_id == user_id
             {
                 vault.api_key = None;
@@ -1141,14 +1261,36 @@ impl AuthAndSessionManager {
                 departed_participant,
                 remaining_roster,
                 remaining_human_count,
+                has_active_ai_players,
             }
         };
 
-        self.join_tokens.write().await.retain(|_, claims| {
-            !(claims.session_id == sid && claims.participant.user_id == user_id)
-        });
+        let mut jtok_guard = self.join_tokens.write().await;
+        if explicit_leave {
+            jtok_guard.retain(|_, claims| {
+                !(claims.session_id == sid && claims.participant.user_id == user_id)
+            });
+        } else if let Some(tok) = closing_join_token {
+            jtok_guard.remove(tok);
+        }
 
         Some(summary)
+    }
+
+    /// Scrubs a departed sponsor's BYOK key if they have still not rejoined `session_id` after the reload grace period.
+    pub async fn scrub_sponsor_byok_key_if_absent(&self, session_id: &str, sponsor_user_id: &str) {
+        let mut sessions = self.sessions.write().await;
+        let Some(session) = sessions.get_mut(session_id.trim()) else {
+            return;
+        };
+        if session.roster.contains_key(sponsor_user_id) {
+            return;
+        }
+        if let Some(vault) = session.ai_gm_vault.as_mut()
+            && vault.sponsor_user_id == sponsor_user_id
+        {
+            vault.api_key = None;
+        }
     }
 
     /// Revokes an authentication token and disconnects the user from any active sessions they are participating in.
@@ -1216,6 +1358,9 @@ impl AuthAndSessionManager {
                 .roster
                 .get_mut(user_id)
                 .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
+            if part.role == SessionRole::Observer {
+                anyhow::bail!("Observers cannot bind character sheets to a session");
+            }
             part.character_id = Some(character_id.to_string());
             if !character_name.trim().is_empty() {
                 part.display_name = character_name.trim().to_string();

@@ -10,6 +10,7 @@ pub mod map_continuation_ribbons;
 pub mod map_dressing;
 pub mod map_estate_grammars;
 pub mod map_gen_agro_industrial;
+pub mod map_gen_awakened;
 pub mod map_gen_civic_retail;
 pub mod map_gen_commercial;
 pub mod map_gen_residential;

@@ -223,13 +223,13 @@ fn build_carriage_house(b: &mut OutdoorBuilder, r: BoxI, bay_on_south: bool) {
         );
     }
     for y in r.y0..r.y1 {
-        let kw = if y == r.y0 + 1 {
-            WallEdgeKind::Window
+        let (kw, mat) = if y == r.y0 + 1 {
+            (WallEdgeKind::Window, MaterialClass::Glass)
         } else {
-            WallEdgeKind::Wall
+            (WallEdgeKind::Wall, MaterialClass::Brick)
         };
-        b.put_edge(r.x0, y, EdgeSide::West, kw, MaterialClass::Brick);
-        b.put_edge(r.x1, y, EdgeSide::West, kw, MaterialClass::Brick);
+        b.put_edge(r.x0, y, EdgeSide::West, kw, mat);
+        b.put_edge(r.x1, y, EdgeSide::West, kw, mat);
     }
     let bay_y = if bay_on_south { r.y1 } else { r.y0 };
     let mid_x = (r.x0 + r.x1) / 2;
@@ -520,17 +520,29 @@ fn build_compact_estate(mut b: OutdoorBuilder) -> ProceduralSector {
         320,
     );
     let manor_right = b.rng.chance(1, 2);
-    let mx0 = if manor_right { (w - 12).max(4) } else { 4 };
-    let mx1 = if manor_right {
-        (w - 4).max(mx0 + 6)
+    let mx0 = if w < 14 {
+        1
+    } else if manor_right {
+        (w - 12).max(4)
     } else {
-        (mx0 + 8).min(w - 4)
+        4
+    };
+    let mx1 = if w < 14 {
+        (w - 1).max(mx0 + 2)
+    } else if manor_right {
+        (w - 4).max(mx0 + 6).min(w - 1)
+    } else {
+        (mx0 + 8).min(w - 4).max(mx0 + 2)
     };
     let manor = BoxI {
         x0: mx0,
-        y0: 2,
+        y0: if h < 12 { 1 } else { 2 },
         x1: mx1,
-        y1: (h - 4).max(8),
+        y1: if h < 12 {
+            (h - 2).max(4).min(h - 1)
+        } else {
+            (h - 4).max(8).min(h - 1)
+        },
     };
     let gate_x = if manor_right {
         4

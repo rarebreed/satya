@@ -1408,3 +1408,258 @@ async fn test_observer_ai_gm_session_isolation_escalation_blocks_and_autonomous_
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[tokio::test]
+async fn test_wave5_gm_only_surveillance_filter_and_passive_movement_whisper() {
+    let mut cfg = StorageConfig::default();
+    let temp_dir = std::env::temp_dir().join(format!("satya_sig_w5_surv_{}", Uuid::now_v7()));
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir
+        .join("users_w5_surv.db")
+        .to_string_lossy()
+        .to_string();
+    cfg.ai_gm.service_url = "http://127.0.0.1:59999".to_string();
+
+    let state = SignalingAppState::new(cfg, &temp_dir).await.unwrap();
+    let app = build_router(state.clone());
+    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+
+    let gm_auth = state
+        .auth
+        .register_user("gm_w5", "satya-truth-2026", "GM W5")
+        .await
+        .unwrap();
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
+    let p1_auth = state
+        .auth
+        .register_user("p1_w5", "satya-truth-2026", "Mateo W5")
+        .await
+        .unwrap();
+    let p1_user = state
+        .auth
+        .verify_auth_token(&p1_auth.auth_token)
+        .await
+        .unwrap();
+    let obs_auth = state
+        .auth
+        .register_user("obs_w5", "satya-truth-2026", "Observer W5")
+        .await
+        .unwrap();
+    let obs_user = state
+        .auth
+        .verify_auth_token(&obs_auth.auth_token)
+        .await
+        .unwrap();
+
+    state
+        .auth
+        .create_session(
+            &gm_user,
+            "ep-wave5-surv",
+            "room-pass",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            Some("GM".to_string()),
+            true,
+        )
+        .await
+        .unwrap();
+    state
+        .auth
+        .join_session(
+            &p1_user,
+            "ep-wave5-surv",
+            "room-pass",
+            SessionRole::Player,
+            Some("Mateo".to_string()),
+        )
+        .await
+        .unwrap();
+    state
+        .auth
+        .join_session(
+            &obs_user,
+            "ep-wave5-surv",
+            "room-pass",
+            SessionRole::Observer,
+            Some("Watcher".to_string()),
+        )
+        .await
+        .unwrap();
+
+    let seeded_map = GmMapUpdateRequest {
+        map_id: "map-w5-surv".to_string(),
+        title: "St. Jude Clinic Annex".to_string(),
+        image_url: String::new(),
+        grid_width: 12,
+        grid_height: 10,
+        cell_size_cm: 100,
+        props: vec![satya_maps::map_dressing::make_prop(
+            satya_schema::PropKind::HazardSpill,
+            5,
+            4,
+            0,
+            Some(1),
+            0,
+        )],
+        tokens: vec![satya_schema::TokenPlacement {
+            entity_id: p1_auth.user_id.clone(),
+            label: "Mateo".to_string(),
+            x: 2,
+            y: 4,
+            visibility: MessageVisibility::Public,
+        }],
+        surveillance_nodes: vec![
+            satya_schema::MapSurveillanceNode {
+                node_id: "cam-public".to_string(),
+                label: "Clinic Vestibule Camera".to_string(),
+                node_kind_code: "DOME_CAMERA".to_string(),
+                floor_index: 0,
+                x_cm: 150,
+                y_cm: 150,
+                facing_deg: 0,
+                fov_deg: 90,
+                range_cm: 600,
+                powered: true,
+                visibility: MessageVisibility::Public,
+            },
+            satya_schema::MapSurveillanceNode {
+                node_id: "cam-covert-gm".to_string(),
+                label: "COVERT_GM_PINHOLE_77".to_string(),
+                node_kind_code: "COVERT_MIC".to_string(),
+                floor_index: 0,
+                x_cm: 550,
+                y_cm: 450,
+                facing_deg: 180,
+                fov_deg: 120,
+                range_cm: 600,
+                powered: true,
+                visibility: MessageVisibility::GmOnly,
+            },
+        ],
+        ..GmMapUpdateRequest::default()
+    };
+
+    // 1. Direct unit check of filter_map_for_role
+    let player_filtered = filter_map_for_role(&seeded_map, SessionRole::Player);
+    assert_eq!(player_filtered.surveillance_nodes.len(), 1);
+    assert_eq!(player_filtered.surveillance_nodes[0].node_id, "cam-public");
+
+    let observer_filtered = filter_map_for_role(&seeded_map, SessionRole::Observer);
+    assert_eq!(observer_filtered.surveillance_nodes.len(), 1);
+    assert_eq!(observer_filtered.surveillance_nodes[0].node_id, "cam-public");
+
+    let gm_filtered = filter_map_for_role(&seeded_map, SessionRole::Gm);
+    assert_eq!(gm_filtered.surveillance_nodes.len(), 2);
+
+    // 2. Seed map via GM service API and check HTTP map redaction for Observer & Player
+    let gm_map_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/gm/sessions/ep-wave5-surv/map")
+            .header("Authorization", format!("Bearer {gm_svc_tok}"))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&seeded_map).unwrap(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(gm_map_resp.status(), axum::http::StatusCode::OK);
+
+    for auth_tok in [&p1_auth.auth_token, &obs_auth.auth_token] {
+        let resp = tower::ServiceExt::oneshot(
+            app.clone(),
+            axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/sessions/ep-wave5-surv/map")
+                .header("Authorization", format!("Bearer {auth_tok}"))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(resp.status(), axum::http::StatusCode::OK);
+        let body = String::from_utf8_lossy(
+            &axum::body::to_bytes(resp.into_body(), 64 * 1024)
+                .await
+                .unwrap(),
+        )
+        .to_string();
+        assert!(body.contains("cam-public"));
+        assert!(!body.contains("cam-covert-gm"));
+        assert!(!body.contains("COVERT_GM_PINHOLE_77"));
+    }
+
+    // 3. Moving Mateo near the non-decorative HazardSpill triggers private passive whisper
+    //    delivered to Player + GM while staying invisible to Observer.
+    let move_resp = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/sessions/ep-wave5-surv/map/move")
+            .header("Authorization", format!("Bearer {}", p1_auth.auth_token))
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::json!({
+                    "entity_id": p1_auth.user_id,
+                    "to_x": 4,
+                    "to_y": 4
+                })
+                .to_string(),
+            ))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(move_resp.status(), axum::http::StatusCode::OK);
+
+    let (p1_chats, _) = state
+        .auth
+        .load_visible_events_from_db("ep-wave5-surv", &p1_auth.user_id, SessionRole::Player, true)
+        .await;
+    assert!(
+        p1_chats
+            .iter()
+            .any(|c| c.body.contains("[Passive OLF]") && c.visibility == MessageVisibility::Private),
+        "Moving player should receive private passive perception whisper: {p1_chats:?}"
+    );
+
+    let (gm_chats, _) = state
+        .auth
+        .load_visible_events_from_db("ep-wave5-surv", &gm_auth.user_id, SessionRole::Gm, true)
+        .await;
+    assert!(
+        gm_chats
+            .iter()
+            .any(|c| c.body.contains("[Passive OLF]") && c.visibility == MessageVisibility::Private),
+        "GM should receive copy of private passive perception whisper: {gm_chats:?}"
+    );
+
+    let (obs_chats, _) = state
+        .auth
+        .load_visible_events_from_db(
+            "ep-wave5-surv",
+            &obs_auth.user_id,
+            SessionRole::Observer,
+            true,
+        )
+        .await;
+    assert!(
+        obs_chats.iter().all(|c| !c.body.contains("[Passive")),
+        "Observer must never receive player-private passive perception whispers: {obs_chats:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}

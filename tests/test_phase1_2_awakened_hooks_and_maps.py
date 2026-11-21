@@ -68,7 +68,7 @@ def test_awakened_campaign_pack_is_default_and_switchable() -> None:
     try:
         assert get_active_campaign_pack_name() == "awakened"
 
-        profiles = load_all_npc_profiles(sid)
+        profiles = load_all_npc_profiles()
         assert "dr_bandajara" in profiles
         assert "daise_agent_chen" in profiles
         assert "captain_vance" not in profiles
@@ -99,7 +99,7 @@ def test_awakened_campaign_pack_is_default_and_switchable() -> None:
         reset_session_npcs()
         reset_player_session_context()
         assert get_active_campaign_pack_name() == "space_opera"
-        assert "captain_vance" in load_all_npc_profiles(sid)
+        assert "captain_vance" in load_all_npc_profiles()
         assert get_pack_default_ai_player()["character_name"] == "Kaelen Voss"
         assert get_pack_combat_spawn()["entity_id"] == "secops_breach_lead"
         assert infer_sector_preset("Uncharted Deck Junction") == "orbital_airlock"

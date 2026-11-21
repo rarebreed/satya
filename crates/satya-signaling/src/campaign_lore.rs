@@ -102,7 +102,7 @@ pub fn resolve_pack_defaults(explicit_pack: Option<&str>) -> ResolvedPackDefault
     } else {
         ResolvedPackDefaults {
             pack_name: pack_name.clone(),
-            default_sector_preset: SectorPreset::UrbanCrossroads,
+            default_sector_preset: SectorPreset::CommunityClinicAnnex,
             hostile_token_label: "DAISE Tactical Agent".to_string(),
             ally_token_label: "Dr. Bandajara".to_string(),
             default_ai_player_name: "Mateo Vance (AI Player)".to_string(),
@@ -396,6 +396,12 @@ fn is_public_campaign_lore(rel_label: &str, body: &str) -> bool {
         "gm ground truth",
         "gm_conspiracy_secret",
         "mirror-hypocris",
+        "blue lotus",
+        "inner blue lotus",
+        "arc2_satyang",
+        "shadow-board",
+        "conspiracy truth",
+        "do not reveal",
     ]
     .iter()
     .any(|marker| body_low.contains(marker))

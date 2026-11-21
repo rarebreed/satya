@@ -507,7 +507,7 @@ def test_satya_py_contested_cascade_and_plotly_builders() -> None:
     )
 
     assert using_satya_py_backend() is True
-    assert sum_dice_pool_pmf.__module__ == "satya_py"
+    assert sum_dice_pool_pmf.__module__ in {"satya_py", "satya_py._native", "_native"}
 
     kind, net_m = classify_contested_outcome(2, 0, 2, 2, 0, 2, "hybrid_signed_margin")
     assert kind == "GRAZING_TIE_SUCCESS"
@@ -533,11 +533,12 @@ def test_satya_py_contested_cascade_and_plotly_builders() -> None:
 
 
 def test_satya_py_stub_matches_compiled_extension_exports() -> None:
-    """Verify that `src/satya_py.pyi` declares every public class, function, and member of `satya_py`."""
+    """Verify `src/satya_py/_native.pyi` matches `satya_py._native` and all submodules are exported."""
     import ast
     import satya_py
+    from satya_py import _native
 
-    stub_path = Path(__file__).resolve().parent.parent / "src" / "satya_py.pyi"
+    stub_path = Path(__file__).resolve().parent.parent / "src" / "satya_py" / "_native.pyi"
     tree = ast.parse(stub_path.read_text(encoding="utf-8"))
 
     stub_exports = {
@@ -545,8 +546,13 @@ def test_satya_py_stub_matches_compiled_extension_exports() -> None:
         for node in tree.body
         if isinstance(node, (ast.ClassDef, ast.FunctionDef)) and not node.name.startswith("_")
     }
-    runtime_exports = {name for name in dir(satya_py) if not name.startswith("_")}
+    runtime_exports = {name for name in dir(_native) if not name.startswith("_")}
     assert stub_exports == runtime_exports
+
+    top_exports = {name for name in dir(satya_py) if not name.startswith("_")}
+    assert runtime_exports.issubset(top_exports)
+    for submod in ("dice", "combat", "rules", "maps", "campaign", "psyche", "awakened", "tech", "schema"):
+        assert submod in top_exports
 
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
@@ -560,7 +566,7 @@ def test_satya_py_stub_matches_compiled_extension_exports() -> None:
                     and not item.target.id.startswith("_")
                 ):
                     stub_members.add(item.target.id)
-            cls_obj = getattr(satya_py, node.name)
+            cls_obj = getattr(_native, node.name)
             runtime_members = {name for name in dir(cls_obj) if not name.startswith("_")}
             assert stub_members == runtime_members, f"Stub mismatch on {node.name}"
 

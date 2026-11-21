@@ -86,6 +86,138 @@ pub struct GmRollRequest {
     /// Optional adjudication notes.
     #[serde(default)]
     pub notes: Option<String>,
+    /// Optional visibility override (`PUBLIC` default, or `GM_ONLY` for hidden NPC checks).
+    #[serde(default)]
+    pub visibility: Option<MessageVisibility>,
+}
+
+fn is_zero_i32(v: &i32) -> bool {
+    *v == 0
+}
+
+fn default_faraday_attenuation_db() -> u8 {
+    80
+}
+
+fn default_sensor_fov_deg() -> i32 {
+    90
+}
+
+fn default_sensor_range_cm() -> i32 {
+    1200
+}
+
+fn default_visibility_public() -> MessageVisibility {
+    MessageVisibility::Public
+}
+
+/// Enclosed copper-mesh / `ReinforcedConcrete` RF attenuation zone severing remote AI uplinks (`Ch. 24`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MapFaradayZone {
+    pub zone_id: String,
+    pub label: String,
+    #[serde(default)]
+    pub floor_index: i32,
+    pub x0_cm: i32,
+    pub y0_cm: i32,
+    pub x1_cm: i32,
+    pub y1_cm: i32,
+    #[serde(default = "default_faraday_attenuation_db")]
+    pub attenuation_db: u8,
+    #[serde(default = "default_true_flag")]
+    pub forces_severed_faraday_reflex: bool,
+}
+
+impl MapFaradayZone {
+    /// Returns `true` when `(x_m, y_m)` on `floor_index` lies inside this Faraday enclosure.
+    #[must_use]
+    pub fn contains_point_m(&self, x_m: f32, y_m: f32, floor_index: i32) -> bool {
+        if self.floor_index != floor_index {
+            return false;
+        }
+        let x_min = (self.x0_cm.min(self.x1_cm) as f32) / 100.0;
+        let x_max = (self.x0_cm.max(self.x1_cm) as f32) / 100.0;
+        let y_min = (self.y0_cm.min(self.y1_cm) as f32) / 100.0;
+        let y_max = (self.y0_cm.max(self.y1_cm) as f32) / 100.0;
+        x_m >= x_min && x_m <= x_max && y_m >= y_min && y_m <= y_max
+    }
+
+    /// Returns a copy translated by `(dx_cm, dy_cm)`.
+    #[must_use]
+    pub fn translated(&self, dx_cm: i32, dy_cm: i32) -> Self {
+        let mut out = self.clone();
+        out.x0_cm += dx_cm;
+        out.x1_cm += dx_cm;
+        out.y0_cm += dy_cm;
+        out.y1_cm += dy_cm;
+        out
+    }
+
+    /// Mirrors this zone across X (`flip_x = true`) or Y (`flip_x = false`), preserving `x0 <= x1, y0 <= y1`.
+    #[must_use]
+    pub fn mirrored(&self, span_w_cm: i32, span_h_cm: i32, flip_x: bool) -> Self {
+        let mut out = self.clone();
+        if flip_x {
+            let a = span_w_cm - self.x1_cm;
+            let b = span_w_cm - self.x0_cm;
+            out.x0_cm = a.min(b);
+            out.x1_cm = a.max(b);
+        } else {
+            let a = span_h_cm - self.y1_cm;
+            let b = span_h_cm - self.y0_cm;
+            out.y0_cm = a.min(b);
+            out.y1_cm = a.max(b);
+        }
+        out
+    }
+}
+
+/// Active 2035 surveillance sensor node (`ALPR`, biometric gait checkpoint, acoustic gunshot array, SCADA, turret).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MapSurveillanceNode {
+    pub node_id: String,
+    pub label: String,
+    pub node_kind_code: String,
+    #[serde(default)]
+    pub floor_index: i32,
+    pub x_cm: i32,
+    pub y_cm: i32,
+    #[serde(default)]
+    pub facing_deg: i32,
+    #[serde(default = "default_sensor_fov_deg")]
+    pub fov_deg: i32,
+    #[serde(default = "default_sensor_range_cm")]
+    pub range_cm: i32,
+    #[serde(default = "default_true_flag")]
+    pub powered: bool,
+    #[serde(default = "default_visibility_public")]
+    pub visibility: MessageVisibility,
+}
+
+impl MapSurveillanceNode {
+    /// Returns a copy translated by `(dx_cm, dy_cm)`.
+    #[must_use]
+    pub fn translated(&self, dx_cm: i32, dy_cm: i32) -> Self {
+        let mut out = self.clone();
+        out.x_cm += dx_cm;
+        out.y_cm += dy_cm;
+        out
+    }
+
+    /// Mirrors node coordinates and facing yaw across X (`flip_x = true`) or Y (`flip_x = false`).
+    #[must_use]
+    pub fn mirrored(&self, span_w_cm: i32, span_h_cm: i32, flip_x: bool) -> Self {
+        let mut out = self.clone();
+        let yaw = self.facing_deg.rem_euclid(360);
+        if flip_x {
+            out.x_cm = span_w_cm - self.x_cm;
+            out.facing_deg = (360 - yaw).rem_euclid(360);
+        } else {
+            out.y_cm = span_h_cm - self.y_cm;
+            out.facing_deg = (180 - yaw).rem_euclid(360);
+        }
+        out
+    }
 }
 
 /// HTTP request body for `POST /api/gm/sessions/:session_id/map` (and `ServerWsPacket::MapUpdated` state).
@@ -146,6 +278,15 @@ pub struct GmMapUpdateRequest {
     /// Optional Editor Mode base ground color tint RGB override for the active floor.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ground_tint_rgb: Option<[u8; 3]>,
+    /// Additive ambient lighting $\Delta_{\text{ext}}$ (`0` standard, `+3` blackout / low-light).
+    #[serde(default, skip_serializing_if = "is_zero_i32")]
+    pub ambient_light_delta_ext: i32,
+    /// Faraday-shielded sub-basements, copper-mesh rooms, or enclosures (`Ch. 24`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub faraday_zones: Vec<MapFaradayZone>,
+    /// Fixed 2035 surveillance cameras, ALPR poles, biometric checkpoints, and acoustic arrays (`Ch. 24`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub surveillance_nodes: Vec<MapSurveillanceNode>,
 }
 
 impl Default for GmMapUpdateRequest {
@@ -171,6 +312,9 @@ impl Default for GmMapUpdateRequest {
             world_sectors: Vec::new(),
             ground_floor_override: None,
             ground_tint_rgb: None,
+            ambient_light_delta_ext: 0,
+            faraday_zones: Vec::new(),
+            surveillance_nodes: Vec::new(),
         }
     }
 }
@@ -635,4 +779,24 @@ pub struct PlayerAiRollRequest {
     pub force_pool: Option<i32>,
     #[serde(default)]
     pub notes: Option<String>,
+}
+
+/// HTTP request body for `POST /api/player-ai/sessions/:session_id/door` called by `satya_ml.ai_player`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerAiDoorRequest {
+    pub user_id: String,
+    pub cell_x: i32,
+    pub cell_y: i32,
+    pub side: EdgeSide,
+}
+
+/// HTTP request body for `POST /api/sessions/:session_id/ai-players/rally` to pause/resume or adjust autonomous rally caps.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateAiRallyRequest {
+    #[serde(default)]
+    pub paused: Option<bool>,
+    #[serde(default)]
+    pub max_rally_rounds: Option<u32>,
+    #[serde(default)]
+    pub reset_counter: Option<bool>,
 }

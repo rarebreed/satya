@@ -163,7 +163,7 @@ stage_op      = ( "hi" , "(" , n , ")" ) | bare_int | ( "lo" , "(" , n , ")" )
     - **Polymorphic `gte(n)` / `lte(n)`**: Applied to a `RollValue::List`, filters dice matching $\ge n$ / $\le n$ (success-counting pool); applied after `sum` to a `RollValue::Scalar`, evaluates a pass/fail `RollValue::Check` (`4d6 |> 3 |> sum |> gte(14)`).
 - **Input Ergonomics & XSS-Safe Markdown (`chat_and_ttrpg.rs`)**:
   - `ChatInputHistory` provides shell-style `ArrowUp` / `ArrowDown` command recall (activating only on single-line inputs so multi-line Markdown drafts still navigate lines naturally) while preserving any uncommitted draft line.
-  - Incoming chat and AI GM narratives render through `satya_engine::render_rules_markdown_to_html` (escaping raw `<`/`>`/`&` before formatting tables, fenced code blocks, callouts, and inline emphasis), filterable in real time via `data-msg-kind` (`ALL`, `PUBLIC`, `PRIVATE`, `AI_GM`, `MECHANICS`).
+  - Incoming chat and AI GM narratives render through `satya_rules_book::render_rules_markdown_to_html` (escaping raw `<`/`>`/`&` before formatting tables, fenced code blocks, callouts, and inline emphasis), filterable in real time via `data-msg-kind` (`ALL`, `PUBLIC`, `PRIVATE`, `AI_GM`, `MECHANICS`).
 
 ### 3.2 Contested vs Uncontested `2d20` Cascade Odds & 30-Technique Triad Allocator
 
@@ -189,7 +189,7 @@ $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{tool}} + \Delta_{\text{ext}}$$
 
 ## 4. 10-Tab Notebook Hub, GM Vault, Scenario Director, NPCs & Admin Inspector
 
-### 4.1 10-Tab Notebook Architecture, Combat Tracker & 17-Chapter Rules Book (`notebook.rs`)
+### 4.1 10-Tab Notebook Architecture, Combat Tracker & 24-Chapter Rules Book (`notebook.rs`)
 
 `NOTEBOOK_TABS` (`NOTEBOOK_TAB_SPECS`) coordinates 10 specialized right-hand workspace panels (`#notebook-panel-*`):
 
@@ -200,7 +200,7 @@ $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{tool}} + \Delta_{\text{ext}}$$
 5. `wizard` — 6-Step Lifepath & 8-Tree Skill Creation Wizard (`04-character-wizard-sheet-and-vault.md`)
 6. `npcs` — Role-Aware NPC Roster & GM Secret Cards (`npcs.rs`)
 7. `combat` — **Count-Up Tick Combat Tracker**: Continuous timeline (`tick = 0, 1, 2, ...` where **`1 Tick = 0.25s`**), sorting combatants by lowest `next_action_tick` (tie-broken by `OODA`), offering `+1t (0.25s)`, `+4t (1.0s)`, and `Next Actor` steppers synchronized across all clients via `POST /api/sessions/:id/combat`.
-8. `rules` — **17-Chapter Embedded Rules Book**: Instant full-text search (`satya_engine::search_rules_book`) and rendered Markdown chapter reader (`satya_engine::rules_book_catalog`) available 100% offline inside Wasm.
+8. `rules` — **24-Chapter Embedded Rules Book**: Instant full-text search (`satya_rules_book::search_rules_book`) and rendered Markdown chapter reader (`satya_rules_book::rules_book_catalog`) available 100% offline inside Wasm.
 9. `docs` — `GM_ONLY` Document Vault, Google Drive Picker, GM Memories, 12-Dial Scenario Director & 6-Source Omnisearch.
 10. `iggy` — **Admin-Only (`AccountRole::Admin`)** Apache Iggy WAL & Avro Schema Registry Inspector.
 

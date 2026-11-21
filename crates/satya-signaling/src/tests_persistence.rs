@@ -4,6 +4,7 @@
 //! and Portable `.satyasession` Snapshot Export/Import.
 
 use super::*;
+use crate::auth::AuthAndSessionManager;
 use axum::http::StatusCode;
 use satya_schema::{
     ChannelContext, GmMapUpdateRequest, GmRollRequest, MessageVisibility, SessionMode, SessionRole,
@@ -1095,6 +1096,7 @@ async fn test_session_save_resume_across_logout_restart_and_transcript_snapshot_
                         fatigue_level: 0,
                         wound_shock_index: 0.0,
                         notes: Some("Bypassing airlock sensors".to_string()),
+                        visibility: None,
                     })
                     .unwrap(),
                 ))
@@ -1966,6 +1968,490 @@ async fn test_npc_dedup_unpersist_and_delete_across_teardown() {
             .iter()
             .any(|n| n.character_id == vesper.npc.character_id)
     );
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[tokio::test]
+async fn wave2_auth_escalation_ssrf_idor_byok_and_visibility_hardening() {
+    use axum::body::{Body, to_bytes};
+    use axum::http::Request;
+    use satya_schema::{
+        AiGmProviderConfig, AiPlayerConfig, CombatTrackerState, CombatantTickEntry,
+        GmMemoryCategory, ImportSessionSnapshotRequest, ResumeSessionRequest,
+        SessionHistorySnapshot, UpsertGmMemoryRequest,
+    };
+    use tower::ServiceExt;
+
+    let temp_dir = std::env::temp_dir().join(format!("satya_wave2_sec_{}", Uuid::now_v7()));
+    let mut cfg = StorageConfig::default();
+    for topic_cfg in cfg.topics.values_mut() {
+        topic_cfg.local_path = temp_dir
+            .join(&topic_cfg.local_path)
+            .to_string_lossy()
+            .to_string();
+    }
+    cfg.auth.database_url = temp_dir.join("wave2.db").to_string_lossy().to_string();
+    cfg.ai_gm.fail_fast_when_offline = false;
+
+    let state = SignalingAppState::new(cfg.clone(), &temp_dir)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let gm_auth = state
+        .auth
+        .authenticate_user("gm_sean", "satya-truth-2026")
+        .await
+        .unwrap();
+    let sara_auth = state
+        .auth
+        .authenticate_user("sara_valkyrie", "satya-truth-2026")
+        .await
+        .unwrap();
+    let marcus_auth = state
+        .auth
+        .authenticate_user("marcus_recon", "satya-truth-2026")
+        .await
+        .unwrap();
+    let gm_user = state.auth.verify_auth_token(&gm_auth.auth_token).await.unwrap();
+    let sara_user = state
+        .auth
+        .verify_auth_token(&sara_auth.auth_token)
+        .await
+        .unwrap();
+    let marcus_user = state
+        .auth
+        .verify_auth_token(&marcus_auth.auth_token)
+        .await
+        .unwrap();
+
+    // C1a: Observer creates AI-GM session, then cannot escalate to GM on resume; nor can stranger or joined player.
+    state
+        .auth
+        .create_session(
+            &sara_user,
+            "w2-obs-room",
+            "secret-pass",
+            SessionMode::Ttrpg,
+            SessionRole::Observer,
+            Some("Observer Sara".to_string()),
+            true,
+        )
+        .await
+        .unwrap();
+    assert!(
+        state
+            .auth
+            .create_session(
+                &marcus_user,
+                "w2-obs-room",
+                "secret-pass",
+                SessionMode::Ttrpg,
+                SessionRole::Gm,
+                None,
+                true,
+            )
+            .await
+            .is_err(),
+        "Duplicate create_session must fail"
+    );
+    assert!(
+        state
+            .auth
+            .resume_session(
+                &sara_user,
+                &ResumeSessionRequest {
+                    session_id: "w2-obs-room".to_string(),
+                    session_password: Some("secret-pass".to_string()),
+                    join_token: None,
+                    role: Some(SessionRole::Gm),
+                    display_name: None,
+                },
+            )
+            .await
+            .is_err(),
+        "Observer host must not escalate to GM on resume"
+    );
+    assert!(
+        state
+            .auth
+            .resume_session(
+                &marcus_user,
+                &ResumeSessionRequest {
+                    session_id: "w2-obs-room".to_string(),
+                    session_password: Some("secret-pass".to_string()),
+                    join_token: None,
+                    role: Some(SessionRole::Gm),
+                    display_name: None,
+                },
+            )
+            .await
+            .is_err(),
+        "Stranger must not escalate to GM on resume"
+    );
+    assert!(
+        state
+            .auth
+            .join_session(
+                &marcus_user,
+                "w2-obs-room",
+                "secret-pass",
+                SessionRole::Gm,
+                None,
+            )
+            .await
+            .is_err(),
+        "Non-host must not join as GM"
+    );
+
+    // H3: BYOK key is preserved on same-provider model change and cleared on clear_api_key=true.
+    let gm_svc_tok = state.storage.config().ai_gm.service_token.clone();
+    state
+        .auth
+        .configure_session_ai_gm(
+            "w2-obs-room",
+            &sara_user.user_id,
+            AiGmProviderConfig {
+                provider: "openai".to_string(),
+                model_id: "gpt-4o".to_string(),
+                vision_model_id: None,
+                temperature: 0.4,
+                persona_id: "harsh-reality-arbiter".to_string(),
+                base_url: None,
+                api_key: Some("sk-keep-me".to_string()),
+                clear_api_key: false,
+            },
+        )
+        .await
+        .unwrap();
+    state
+        .auth
+        .configure_session_ai_gm(
+            "w2-obs-room",
+            &sara_user.user_id,
+            AiGmProviderConfig {
+                provider: "openai".to_string(),
+                model_id: "gpt-4o-mini".to_string(),
+                vision_model_id: None,
+                temperature: 0.4,
+                persona_id: "harsh-reality-arbiter".to_string(),
+                base_url: None,
+                api_key: None,
+                clear_api_key: false,
+            },
+        )
+        .await
+        .unwrap();
+    let (_, vault_after_keep) = state
+        .auth
+        .get_session_gm_context("w2-obs-room")
+        .await
+        .unwrap();
+    assert_eq!(
+        vault_after_keep.and_then(|v| v.api_key).as_deref(),
+        Some("sk-keep-me")
+    );
+    state
+        .auth
+        .configure_session_ai_gm(
+            "w2-obs-room",
+            &sara_user.user_id,
+            AiGmProviderConfig {
+                provider: "openai".to_string(),
+                model_id: "gpt-4o-mini".to_string(),
+                vision_model_id: None,
+                temperature: 0.4,
+                persona_id: "harsh-reality-arbiter".to_string(),
+                base_url: None,
+                api_key: None,
+                clear_api_key: true,
+            },
+        )
+        .await
+        .unwrap();
+    let (_, vault_after_clear) = state
+        .auth
+        .get_session_gm_context("w2-obs-room")
+        .await
+        .unwrap();
+    assert!(vault_after_clear.and_then(|v| v.api_key).is_none());
+
+    // C2 + H4: SSRF service_url & roster-slot collision rejected; valid AI Player persisted.
+    let ssrf_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/w2-obs-room/ai-players")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&AiPlayerConfig {
+                        user_id: Some("ai-player-1".to_string()),
+                        display_name: Some("Scout".to_string()),
+                        character_id: None,
+                        persona_prompt: None,
+                        provider: Some("ollama".to_string()),
+                        model_id: Some("gemma4:12b".to_string()),
+                        service_url: Some("http://169.254.169.254/latest".to_string()),
+                        auto_respond: true,
+                        max_rally_turns: 2,
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ssrf_resp.status(), StatusCode::BAD_REQUEST);
+
+    let ok_ai_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/w2-obs-room/ai-players")
+                .header("Authorization", format!("Bearer {}", sara_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&AiPlayerConfig {
+                        user_id: Some("ai-player-1".to_string()),
+                        display_name: Some("Scout".to_string()),
+                        character_id: None,
+                        persona_prompt: None,
+                        provider: Some("ollama".to_string()),
+                        model_id: Some("gemma4:12b".to_string()),
+                        service_url: Some("http://127.0.0.1:8090".to_string()),
+                        auto_respond: true,
+                        max_rally_turns: 3,
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ok_ai_resp.status(), StatusCode::OK);
+    assert!(
+        !state
+            .auth
+            .load_session_ai_players_from_db("w2-obs-room")
+            .await
+            .is_empty()
+    );
+
+    // C4 + C5: Create a GM session with secret memory & GM_ONLY combatant; test non-member & cross-session DELETE.
+    state
+        .auth
+        .create_session(
+            &gm_user,
+            "w2-gm-vault",
+            "gm-pass",
+            SessionMode::Ttrpg,
+            SessionRole::Gm,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+    let created_mem: satya_schema::GmMemoryNoteRecord = serde_json::from_slice(
+        &to_bytes(
+            app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/sessions/w2-gm-vault/memories")
+                        .header("Authorization", format!("Bearer {}", gm_auth.auth_token))
+                        .header("Content-Type", "application/json")
+                        .body(Body::from(
+                            serde_json::to_vec(&UpsertGmMemoryRequest {
+                                memory_id: Some("mem-w2-secret-1".to_string()),
+                                campaign_tag: Some("w2-gm-vault".to_string()),
+                                category: GmMemoryCategory::QuestHook,
+                                title: "Secret Vault Note".to_string(),
+                                content: "GM_ONLY_PLOT".to_string(),
+                                is_pinned: true,
+                                is_persistent: true,
+                            })
+                            .unwrap(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+                .into_body(),
+            64 * 1024,
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+
+    // Nonexistent session DELETE must fail AND must not delete w2-gm-vault's memory.
+    let idor_del = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!(
+                    "/api/sessions/nonexistent-sid-999/memories/{}",
+                    created_mem.memory_id
+                ))
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(idor_del.status(), StatusCode::OK);
+
+    // Non-member GET /npcs and /world-ledger must fail with 403 FORBIDDEN.
+    let non_member_npc = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/w2-gm-vault/npcs")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(non_member_npc.status(), StatusCode::FORBIDDEN);
+
+    let non_member_ledger = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/sessions/w2-gm-vault/world-ledger")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(non_member_ledger.status(), StatusCode::FORBIDDEN);
+
+    // C5: GM_ONLY combatant stripped even when active_map == None.
+    let mut tracker = CombatTrackerState::default();
+    tracker.combatants.push(CombatantTickEntry {
+        entity_id: "hidden-sniper".to_string(),
+        display_name: "Hidden Sniper".to_string(),
+        role_or_faction: "Enemy".to_string(),
+        ooda_score: 12,
+        next_action_tick: 1,
+        active_stance: None,
+        fatigue_level: 0,
+        wound_shock: 0,
+        grid_x: Some(2),
+        grid_y: Some(2),
+        zone_label: None,
+        visibility: MessageVisibility::GmOnly,
+    });
+    let filtered_ct = AuthAndSessionManager::filter_combat_tracker_for_viewer(&tracker, None, false);
+    assert!(filtered_ct.combatants.is_empty());
+
+    // C3: Importing over existing session by non-GM fails.
+    let (_, _, _, mut marcus_part) = state
+        .auth
+        .join_session(&marcus_user, "w2-gm-vault", "gm-pass", SessionRole::Player, None)
+        .await
+        .unwrap();
+    let _ = &mut marcus_part;
+    let export_bundle: satya_schema::SessionSnapshotBundle = state
+        .auth
+        .export_session_snapshot("w2-gm-vault", &gm_user)
+        .await
+        .unwrap();
+    let hijack_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions/import")
+                .header("Authorization", format!("Bearer {}", marcus_auth.auth_token))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&ImportSessionSnapshotRequest {
+                        bundle: export_bundle,
+                        session_id_override: Some("w2-gm-vault".to_string()),
+                        session_password: "new-password".to_string(),
+                        role: Some(SessionRole::Gm),
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(hijack_resp.status(), StatusCode::BAD_REQUEST);
+
+    // H8: GM_ONLY roll stays off player/observer sockets.
+    let (gm_tx, mut gm_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (pl_tx, mut pl_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    {
+        let mut sock_guard = state.active_sockets.write().await;
+        let room = sock_guard.entry("w2-gm-vault".to_string()).or_default();
+        room.insert(gm_user.user_id.clone(), (101, gm_tx));
+        room.insert(marcus_user.user_id.clone(), (102, pl_tx));
+    }
+    let roll_resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/gm/sessions/w2-gm-vault/roll")
+                .header("Authorization", format!("Bearer {gm_svc_tok}"))
+                .header("Content-Type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&GmRollRequest {
+                        actor_display_name: "Secret Assassin".to_string(),
+                        skill_name: "Stealth".to_string(),
+                        attribute_tn: 14,
+                        pool_size: 2,
+                        known_tool_mod: 0,
+                        difficulty_rating: 0,
+                        internal_mod: None,
+                        delta_over: None,
+                        gm_resistance_mode: None,
+                        tie_rule: None,
+                        carry_mode: None,
+                        botch_rule: None,
+                        fatigue_level: 0,
+                        wound_shock_index: 0.0,
+                        combat_stance: None,
+                        combat_technique: None,
+                        tempo_pool: None,
+                        control_pool: None,
+                        force_pool: None,
+                        target_user_ids: Vec::new(),
+                        notes: Some("GM_ONLY_AMBUSH".to_string()),
+                        visibility: Some(MessageVisibility::GmOnly),
+                    })
+                    .unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(roll_resp.status(), StatusCode::OK);
+    assert!(gm_rx.try_recv().is_ok());
+    assert!(pl_rx.try_recv().is_err(), "GM_ONLY roll leaked to player socket");
+
+    // H2: Stale conn_id unregister does not drop active newer tab.
+    assert!(
+        !state
+            .unregister_ws_socket("w2-gm-vault", &marcus_user.user_id, 999)
+            .await
+    );
+    assert!(state.has_active_ws_socket("w2-gm-vault", &marcus_user.user_id).await);
+
+    // Silence unused imports warning if SessionHistorySnapshot isn't matched explicitly.
+    let _snap_check: Option<SessionHistorySnapshot> = None;
+    assert!(_snap_check.is_none());
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

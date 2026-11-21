@@ -178,7 +178,7 @@ pub fn floor_lot_connected(
     edges: &[MapWallEdge],
     props: &[MapPropPlacement],
 ) -> bool {
-    if lot.w() <= 0 || lot.h() <= 0 {
+    if lot.w() <= 0 || lot.h() <= 0 || lot.x0 < 0 || lot.y0 < 0 {
         return false;
     }
     let bw = board_w.max(lot.x1) as f32;

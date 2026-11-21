@@ -215,6 +215,14 @@ SCENARIO_DIRECTOR_TASKS: dict[str, dict[str, Any]] = {
 _SESSION_SCENARIO_DIRECTORS: dict[str, dict[str, Any]] = {}
 
 
+def reset_session_scenario_director(session_id: str | None = None) -> None:
+    """Clear in-memory Scenario Director state for `session_id` (or all sessions)."""
+    if session_id is None:
+        _SESSION_SCENARIO_DIRECTORS.clear()
+    else:
+        _SESSION_SCENARIO_DIRECTORS.pop(session_id, None)
+
+
 def default_event_weights() -> dict[str, float]:
     """Return a fresh copy of the default probability weights for all 12 TTRPG event sub-routines."""
     return {slug: float(spec["default_weight"]) for slug, spec in SCENARIO_DIRECTOR_TASKS.items()}

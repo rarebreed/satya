@@ -140,9 +140,10 @@ pub(crate) fn mirror_sector_surfaces(
     surfaces: &mut [MapSurfaceFeature],
     cw: i32,
     ch: i32,
+    cell_cm: i32,
     horizontal_flip: bool,
 ) {
-    let (w_cm, h_cm) = (cw * 100, ch * 100);
+    let (w_cm, h_cm) = (cw * cell_cm.max(25), ch * cell_cm.max(25));
     for s in surfaces {
         *s = s.mirrored(w_cm, h_cm, horizontal_flip);
     }
@@ -209,21 +210,26 @@ fn find_chunk_entry_coord(
 }
 
 /// Aligns `sec`'s orientation (`mirror_sector`) and splices smooth cross-seam spline bridges or legacy tiles.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn align_chunk_ribbons(
     sec: &mut ProceduralSector,
     preset: SectorPreset,
     ribbons: &[RibbonAnchor],
     cw: i32,
     ch: i32,
+    cell_cm: i32,
     dir: MapContinuationDir,
-    mirror_fn: fn(&mut ProceduralSector, i32, i32, bool),
+    road_oriented: bool,
+    mirror_fn: fn(&mut ProceduralSector, i32, i32, i32, bool),
 ) {
     if ribbons.is_empty() {
         return;
     }
     let horizontal_seam = matches!(dir, MapContinuationDir::North | MapContinuationDir::South);
     let entry_side = dir.opposite();
-    let allow_mirror = preset.outdoor_style().is_some() || preset == SectorPreset::UrbanCrossroads;
+    let allow_mirror =
+        (preset.outdoor_style().is_some() || preset == SectorPreset::UrbanCrossroads)
+            && !road_oriented;
 
     if allow_mirror
         && let Some(primary) = ribbons.first()
@@ -236,25 +242,26 @@ pub(crate) fn align_chunk_ribbons(
         };
         let flipped_t = span_max - dst_t;
         if (flipped_t - primary.local_t_m).abs() + 0.5 < (dst_t - primary.local_t_m).abs() {
-            mirror_fn(sec, cw, ch, horizontal_seam);
+            mirror_fn(sec, cw, ch, cell_cm, horizontal_seam);
         }
     }
 
     let mut legacy_additions = Vec::new();
     let mut new_bridges = Vec::new();
     for anchor in ribbons {
-        let dst_opt = find_chunk_entry_coord(sec, &anchor.target, cw, ch, entry_side);
-        let dst_t = dst_opt.unwrap_or(anchor.local_t_m);
+        let Some(dst_t) = find_chunk_entry_coord(sec, &anchor.target, cw, ch, entry_side) else {
+            continue;
+        };
         match anchor.target {
             RibbonTargetKind::Surface(kind) => {
-                // Smooth 3-point bridge overlapping (-0.4m .. 0 .. +2.2m) into the adjacent chunk.
+                // Smooth 3-point bridge overlapping (-0.4m .. 0 .. +1.6m) into matching neighbor ribbon.
                 let (seam_n, inward) = match entry_side {
                     MapContinuationDir::North => (0.0_f32, 1.0_f32),
                     MapContinuationDir::South => (ch as f32, -1.0_f32),
                     MapContinuationDir::West => (0.0_f32, 1.0_f32),
                     MapContinuationDir::East => (cw as f32, -1.0_f32),
                 };
-                let reach_in = if dst_opt.is_some() { 1.6_f32 } else { 2.4_f32 };
+                let reach_in = 1.6_f32;
                 let mid_t = 0.5 * (anchor.local_t_m + dst_t);
                 let pt_m = |n_pos: f32, t_pos: f32| -> (f32, f32) {
                     if horizontal_seam {
@@ -286,7 +293,6 @@ pub(crate) fn align_chunk_ribbons(
                     tint_rgb: None,
                 };
                 if kind.is_road_or_pavement() {
-                    // Protect seam bridges from any overlapping organic mulch/flowerbed centroid inside `sec`.
                     sec.surfaces.retain(|s| {
                         s.kind.layer_priority() >= SurfaceFeatureKind::DirtTrail.layer_priority()
                             || !knots_m
@@ -372,6 +378,7 @@ pub(crate) fn mirror_floor_levels(
     floors: &mut [MapFloorLevel],
     cw: i32,
     ch: i32,
+    cell_cm: i32,
     horizontal_flip: bool,
 ) {
     for fl in floors {
@@ -379,19 +386,25 @@ pub(crate) fn mirror_floor_levels(
             mirror_edge_axis(e, cw, ch, horizontal_flip);
         }
         for p in &mut fl.props {
-            *p = mirror_prop_axis(*p, cw, ch, horizontal_flip);
+            *p = mirror_prop_axis(*p, cw, ch, cell_cm, horizontal_flip);
         }
-        mirror_sector_surfaces(&mut fl.surfaces, cw, ch, horizontal_flip);
+        mirror_sector_surfaces(&mut fl.surfaces, cw, ch, cell_cm, horizontal_flip);
     }
 }
 
-/// Merges non-ground floor levels (`B1`, `2F`, etc.) from a newly continued sector chunk into `base.floors`.
+/// Merges non-ground floor levels (`B1`, `2F`, etc.) from a newly continued sector chunk into `base.floors`
+/// and reconciles shared-seam doors/partitions so upper and basement levels connect across chunks.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn stitch_continued_floors(
     base: &mut GmMapUpdateRequest,
     sec_floors: &[MapFloorLevel],
     x_off: i32,
     y_off: i32,
+    cw: i32,
+    ch: i32,
     cell_cm: i32,
+    dir: MapContinuationDir,
+    preset: SectorPreset,
 ) {
     for src in sec_floors {
         if src.floor_index == 0 {
@@ -415,6 +428,23 @@ pub(crate) fn stitch_continued_floors(
             .find(|f| f.floor_index == src.floor_index)
         {
             for e in &src.wall_edges {
+                let is_outer_seam_edge = match dir {
+                    MapContinuationDir::East => {
+                        e.side == satya_schema::EdgeSide::West && e.x == 0
+                    }
+                    MapContinuationDir::West => {
+                        e.side == satya_schema::EdgeSide::West && e.x == cw
+                    }
+                    MapContinuationDir::South => {
+                        e.side == satya_schema::EdgeSide::North && e.y == 0
+                    }
+                    MapContinuationDir::North => {
+                        e.side == satya_schema::EdgeSide::North && e.y == ch
+                    }
+                };
+                if is_outer_seam_edge {
+                    continue;
+                }
                 let mut shifted = *e;
                 shifted.x += x_off;
                 shifted.y += y_off;
@@ -441,6 +471,21 @@ pub(crate) fn stitch_continued_floors(
                 dst.surfaces
                     .push(s.translated(x_off * cell_cm, y_off * cell_cm));
             }
+            let seam_coord = match dir {
+                MapContinuationDir::East => x_off,
+                MapContinuationDir::West => cw,
+                MapContinuationDir::South => y_off,
+                MapContinuationDir::North => ch,
+            };
+            crate::map_continuation::ensure_floor_seam_connectivity(
+                base.grid_width,
+                base.grid_height,
+                &mut dst.wall_edges,
+                &mut dst.props,
+                preset,
+                dir,
+                seam_coord,
+            );
         } else {
             let mut added = src.clone();
             translate_floor_levels(std::slice::from_mut(&mut added), x_off, y_off, cell_cm);

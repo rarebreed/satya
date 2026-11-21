@@ -9,6 +9,7 @@ from satya_ml.ai_player.graph import AiPlayerSessionState, build_ai_player_graph
 from satya_ml.ai_player.tools import (
     get_builtin_player_tools,
     get_player_session_context,
+    inspect_my_gear_and_cyber_loadout,
     inspect_public_tactical_map,
     read_my_character_sheet,
     roll_player_d20_action,
@@ -21,6 +22,7 @@ __all__ = [
     "build_ai_player_graph",
     "get_builtin_player_tools",
     "get_player_session_context",
+    "inspect_my_gear_and_cyber_loadout",
     "inspect_public_tactical_map",
     "read_my_character_sheet",
     "roll_player_d20_action",

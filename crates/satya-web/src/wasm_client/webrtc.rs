@@ -10,16 +10,16 @@ use crate::wasm_client::auth_session::render_roster;
 use crate::wasm_client::chat_and_ttrpg::{
     append_system_notice, render_chat_event, render_mechanics_event,
 };
-use crate::wasm_client::dom::{document, escape_html, get_element, set_text, window};
+use crate::wasm_client::dom::{document, escape_html, fetch_json, get_element, set_text, window};
 use crate::wasm_client::notebook::{
-    render_gm_document_added, render_map_updated, render_wgpu_dice_roll,
+    refresh_combat_tracker, render_gm_document_added, render_map_updated, render_wgpu_dice_roll,
 };
 use crate::wasm_client::state::{PeerEntry, with_state, with_state_mut};
 use crate::wasm_client::telemetry::satya_refresh_metrics;
-use js_sys::{Array, Float32Array, Reflect};
+use js_sys::{Array, Float32Array, Function, Reflect};
 use satya_schema::{
-    ClientWsPacket, InteractionTurnType, Participant, ParticipantKind, ServerWsPacket,
-    WebRtcEventKind,
+    ClientWsPacket, InteractionTurnType, Participant, ParticipantKind, ResumeSessionRequest,
+    ServerWsPacket, SessionEnterResponse, WebRtcEventKind,
 };
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
@@ -54,17 +54,25 @@ pub(crate) fn connect_signaling_websocket() {
 
     with_state_mut(|st| {
         if let Some(old_ws) = st.ws.take() {
+            old_ws.set_onclose(None);
+            old_ws.set_onerror(None);
             let _ = old_ws.close();
         }
     });
 
     let url = format!("{proto}//{host}/ws/session?join_token={join_tok}");
     let Ok(ws) = WebSocket::new(&url) else {
+        schedule_ws_reconnect_with_backoff();
         return;
     };
 
     let sid_clone = session_id;
     let onopen = Closure::<dyn FnMut()>::new(move || {
+        with_state_mut(|st| {
+            st.ws_reconnect_attempts = 0;
+            st.ws_reconnect_scheduled = false;
+            st.ws_reconnect_suppressed = false;
+        });
         append_system_notice(&format!(
             "Connected to WebRTC Signaling & Apache Iggy Event Hub for '{sid_clone}' (Rust/Wasm client)."
         ));
@@ -83,9 +91,107 @@ pub(crate) fn connect_signaling_websocket() {
     ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
     onmessage.forget();
 
+    let onclose = Closure::<dyn FnMut()>::new(move || {
+        with_state_mut(|st| {
+            st.ws = None;
+        });
+        schedule_ws_reconnect_with_backoff();
+    });
+    ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
+    onclose.forget();
+
+    let onerror = Closure::<dyn FnMut()>::new(move || {
+        schedule_ws_reconnect_with_backoff();
+    });
+    ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+    onerror.forget();
+
     with_state_mut(|st| {
         st.ws = Some(ws);
     });
+}
+
+fn schedule_ws_reconnect_with_backoff() {
+    let Some(win) = window() else {
+        return;
+    };
+    let delay_ms = with_state_mut(|st| {
+        if st.ws_reconnect_suppressed
+            || st.ws_reconnect_scheduled
+            || st.auth_token.is_none()
+            || st.session_id.is_none()
+            || st.ws_reconnect_attempts >= 10
+        {
+            return None;
+        }
+        st.ws_reconnect_attempts += 1;
+        st.ws_reconnect_scheduled = true;
+        let exp = st.ws_reconnect_attempts.saturating_sub(1).min(4);
+        Some((1000i32 << exp).min(15_000))
+    });
+    let Some(delay_ms) = delay_ms else {
+        return;
+    };
+    let cb = Closure::once_into_js(move || {
+        spawn_local(async move {
+            let resume_ctx = with_state_mut(|st| {
+                st.ws_reconnect_scheduled = false;
+                if st.ws_reconnect_suppressed {
+                    return None;
+                }
+                if let Some(ws) = &st.ws
+                    && ws.ready_state() == WebSocket::OPEN
+                {
+                    return None;
+                }
+                let tok = st.auth_token.clone()?;
+                let sid = st.session_id.clone()?;
+                let jtok = st.join_token.clone();
+                let role = st.self_participant.as_ref().map(|p| p.role);
+                Some((tok, sid, jtok, role))
+            });
+            let Some((tok, sid, join_token, role)) = resume_ctx else {
+                return;
+            };
+            let req = ResumeSessionRequest {
+                session_id: sid,
+                session_password: None,
+                join_token,
+                role,
+                display_name: None,
+            };
+            match fetch_json::<_, SessionEnterResponse>(
+                "POST",
+                "/api/sessions/resume",
+                Some(&tok),
+                Some(&req),
+            )
+            .await
+            {
+                Ok(enter_data) => {
+                    let suppressed = with_state_mut(|st| {
+                        if st.ws_reconnect_suppressed {
+                            return true;
+                        }
+                        st.join_token = Some(enter_data.join_token);
+                        st.self_participant = Some(enter_data.self_participant);
+                        st.roster = enter_data.roster;
+                        false
+                    });
+                    if !suppressed {
+                        render_roster();
+                        connect_signaling_websocket();
+                    }
+                }
+                Err(_) => {
+                    schedule_ws_reconnect_with_backoff();
+                }
+            }
+        });
+    });
+    if let Some(func) = cb.dyn_ref::<Function>() {
+        let _ = win.set_timeout_with_callback_and_timeout_and_arguments_0(func, delay_ms);
+    }
 }
 
 fn handle_server_packet(pkt: ServerWsPacket) {
@@ -97,6 +203,7 @@ fn handle_server_packet(pkt: ServerWsPacket) {
             render_roster();
             crate::wasm_client::map_2d_camera::sync_map_camera_and_edge_controls_dom();
             initiate_webrtc_mesh(false);
+            refresh_combat_tracker();
             satya_refresh_metrics();
         }
         ServerWsPacket::PeerDisconnected {
@@ -133,6 +240,7 @@ fn handle_server_packet(pkt: ServerWsPacket) {
         }
         ServerWsPacket::MapUpdated { map } => {
             render_map_updated(&map);
+            refresh_combat_tracker();
             append_system_notice(&format!(
                 "Tactical map updated: {} ({}x{}, {} tokens)",
                 map.map_id,

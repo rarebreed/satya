@@ -8,34 +8,14 @@ engines, and Rules Book interactive simulators are implemented in Rust in
 
 from __future__ import annotations
 
-from pathlib import Path
-import shutil
-import sys
-from typing import TYPE_CHECKING, Dict, Literal
+from typing import TYPE_CHECKING, Any, Dict, Literal
 
 if TYPE_CHECKING:
     import plotly.graph_objects as go
 
 
-def _ensure_satya_py_loaded():
-    """Import `satya_py`, syncing `src/satya_py.pyd` from the newest `target/` DLL if needed."""
-    src_dir = Path(__file__).resolve().parent.parent
-    repo_root = src_dir.parent
-    pyd_path = src_dir / "satya_py.pyd"
-    candidates = [
-        repo_root / "target" / profile / "satya_py.dll"
-        for profile in ("release", "debug")
-    ]
-    existing = [p for p in candidates if p.exists()]
-    if existing:
-        newest = max(existing, key=lambda p: p.stat().st_mtime)
-        if not pyd_path.exists() or newest.stat().st_mtime > pyd_path.stat().st_mtime:
-            try:
-                shutil.copy2(newest, pyd_path)
-            except OSError:
-                pass
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
+def _ensure_satya_py_loaded() -> Any:
+    """Import and return the hybrid ``satya_py`` engine package."""
     import satya_py as _mod
 
     return _mod

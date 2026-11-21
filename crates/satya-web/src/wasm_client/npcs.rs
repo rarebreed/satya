@@ -25,8 +25,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
 /// Pure role-and-roster policy determining whether a viewer can inspect GM-only NPC secrets.
-/// Returns `true` when offline (`session_id.is_none()`), the viewer is GM, the roster lacks a human GM,
-/// or the roster is not yet populated and `fallback` (`viewer_can_see_gm_secrets`) is `true`.
+/// Returns `true` when offline (`session_id.is_none()`), or when the viewer is `GM`/`Host`/`AiGm`;
+/// always returns `false` for `Observer` or for a non-GM `Player` when a Human GM is in the roster;
+/// otherwise defers to server-provided `fallback` (`viewer_can_see_gm_secrets`).
 #[must_use]
 pub fn can_viewer_see_npc_secrets(
     session_id: Option<&str>,
@@ -41,15 +42,18 @@ pub fn can_viewer_see_npc_secrets(
         if me.role == SessionRole::Observer {
             return false;
         }
-        if matches!(me.role, SessionRole::Gm | SessionRole::Host) {
+        if matches!(
+            me.role,
+            SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
+        ) {
             return true;
         }
     }
-    if !roster.is_empty() {
-        let has_human_gm = roster
-            .iter()
-            .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm);
-        return !has_human_gm;
+    if roster
+        .iter()
+        .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Gm)
+    {
+        return false;
     }
     fallback
 }
@@ -715,12 +719,26 @@ mod tests {
             &gm_roster,
             true
         ));
-        // 4. Active session where viewer is Player with ONLY an AI GM -> true
-        assert!(can_viewer_see_npc_secrets(
+        // 4. Active session where viewer is Player with ONLY an AI GM -> respects server fallback (redacted when false)
+        assert!(!can_viewer_see_npc_secrets(
             Some("sess-1"),
             hp,
             &ai_roster,
             false
+        ));
+        assert!(can_viewer_see_npc_secrets(
+            Some("sess-1"),
+            hp,
+            &ai_roster,
+            true
+        ));
+        // 4b. Observer NEVER sees GM secrets even if fallback is true
+        let observer = Participant::human("u-obs", "obs", "Observer", SessionRole::Observer);
+        assert!(!can_viewer_see_npc_secrets(
+            Some("sess-1"),
+            Some(&observer),
+            &ai_roster,
+            true
         ));
         // 5. Empty roster before initial ROSTER_SYNC -> defers to server fallback flag
         assert!(!can_viewer_see_npc_secrets(Some("sess-1"), hp, &[], false));

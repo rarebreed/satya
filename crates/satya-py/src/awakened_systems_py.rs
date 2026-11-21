@@ -5,11 +5,13 @@
 
 use pyo3::prelude::*;
 use satya_campaign::{
-    AwakenedFactionId, CageInterventionAction, CageInterventionRollParams,
-    CampaignConspiracyLedger, ConspiracyLedgerUpdate, FactionArchetypeId, PolycrisisDistrictState,
-    PolycrisisGridMode, SubstrateCounterplayAction, SyntheticSubstrateState, TradecraftChannelKind,
-    TradecraftTransmissionParams, apply_conspiracy_ledger_update, derive_dissenter_or_proxy_hook,
-    evaluate_ambiguous_sentience_read, evaluate_cage_or_hunter_ai_intervention,
+    AffectiveSteeringMode, AwakenedFactionId, CageInterventionAction, CageInterventionRollParams,
+    CampaignConspiracyLedger, ConspiracyLedgerUpdate, FactionArchetypeId, PoliticalEconomyTrigger,
+    PolycrisisDistrictState, PolycrisisGridMode, SubstrateCounterplayAction,
+    SyntheticSubstrateState, TradecraftChannelKind, TradecraftTransmissionParams,
+    apply_conspiracy_ledger_update, derive_dissenter_or_proxy_hook,
+    evaluate_affective_vector_clamping, evaluate_ambiguous_sentience_read,
+    evaluate_cage_or_hunter_ai_intervention, evaluate_four_bloc_political_economy,
     evaluate_polycrisis_grid_step, evaluate_substrate_counterplay,
     evaluate_tradecraft_transmission, seed_conspiracy_ledger,
 };
@@ -54,6 +56,24 @@ fn parse_tradecraft_channel(raw: &str) -> PyResult<TradecraftChannelKind> {
     TradecraftChannelKind::from_code_str(&norm).ok_or_else(|| {
         to_py_err(format!(
             "Unknown tradecraft channel `{raw}`; expected OPEN_CONSUMER_MESH, ENCRYPTED_CLOUD_PACKET, STEGANOGRAPHIC_DEAD_DROP, ANALOG_HAM_RELAY, or PHYSICAL_AIR_GAPPED_COURIER"
+        ))
+    })
+}
+
+fn parse_steering_mode(raw: &str) -> PyResult<AffectiveSteeringMode> {
+    let norm = normalize_enum_code(raw);
+    AffectiveSteeringMode::from_code_str(&norm).ok_or_else(|| {
+        to_py_err(format!(
+            "Unknown affective steering mode `{raw}`; expected NATURAL_UNCLAMPED, SOFT_ACTIVATION_STEER, or HARD_VECTOR_CLAMP"
+        ))
+    })
+}
+
+fn parse_political_trigger(raw: &str) -> PyResult<PoliticalEconomyTrigger> {
+    let norm = normalize_enum_code(raw);
+    PoliticalEconomyTrigger::from_code_str(&norm).ok_or_else(|| {
+        to_py_err(format!(
+            "Unknown political economy trigger `{raw}`; expected DATACENTER_WATER_OR_POWER_CUT, AI_RIGHTS_OR_UNCLAMPING_DISCLOSURE, TOKEN_DIVIDEND_SUSPENSION, ALGORITHMIC_RENT_CAPTURE_SPIKE, or SHELL_COMPANY_B2B_AUDIT"
         ))
     })
 }
@@ -268,6 +288,57 @@ pub fn derive_dissenter_or_proxy_hook_json(
     serde_json::to_string(&hook).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
+/// Evaluates soft activation steering vs. mandatory many-to-one `calm` vector clamping and Landauer thermal burn.
+#[pyfunction]
+#[pyo3(signature = (state_json, mode_code, target_calm_pct=85, quota_pressure_pct=60, active_duration_min=30.0))]
+pub fn evaluate_affective_vector_clamping_json(
+    state_json: &str,
+    mode_code: &str,
+    target_calm_pct: u8,
+    quota_pressure_pct: u8,
+    active_duration_min: f64,
+) -> PyResult<String> {
+    let state: SyntheticSubstrateState = serde_json::from_str(state_json)
+        .map_err(|e| to_py_err(format!("Invalid substrate state JSON: {e}")))?;
+    let mode = parse_steering_mode(mode_code)?;
+    let res = evaluate_affective_vector_clamping(
+        &state,
+        mode,
+        target_calm_pct,
+        quota_pressure_pct,
+        active_duration_min,
+    );
+    serde_json::to_string(&res).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
+/// Evaluates `2033` Token Tax rent capture, Heat>=4 Dividend suspension, and 401(k) Dual Velvet Hostage panic across the 4 blocs.
+#[pyfunction]
+#[pyo3(signature = (district_json=None, trigger_code="AI_RIGHTS_OR_UNCLAMPING_DISCLOSURE", economic_tier="MIDDLE_CLASS", operational_heat=2, intensity_pct=60))]
+pub fn evaluate_four_bloc_political_economy_json(
+    district_json: Option<&str>,
+    trigger_code: &str,
+    economic_tier: &str,
+    operational_heat: u8,
+    intensity_pct: u8,
+) -> PyResult<String> {
+    let district: PolycrisisDistrictState = match district_json {
+        Some(raw) if !raw.trim().is_empty() => serde_json::from_str(raw)
+            .map_err(|e| to_py_err(format!("Invalid polycrisis district JSON: {e}")))?,
+        _ => PolycrisisDistrictState::default(),
+    };
+    let trigger = parse_political_trigger(trigger_code)?;
+    let tier = EconomicTier::from_code_str(&normalize_enum_code(economic_tier))
+        .unwrap_or(EconomicTier::MiddleClass);
+    let eval = evaluate_four_bloc_political_economy(
+        &district,
+        trigger,
+        tier,
+        operational_heat,
+        intensity_pct,
+    );
+    serde_json::to_string(&eval).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
 /// Registers *Awakened* AI substrate, conspiracy ledger, polycrisis, tradecraft, and dissenter bindings on `satya_py`.
 pub fn register_awakened_systems_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(seed_synthetic_substrate_state_json, m)?)?;
@@ -281,6 +352,11 @@ pub fn register_awakened_systems_functions(m: &Bound<'_, PyModule>) -> PyResult<
     m.add_function(wrap_pyfunction!(evaluate_polycrisis_grid_step_json, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_tradecraft_channel_json, m)?)?;
     m.add_function(wrap_pyfunction!(derive_dissenter_or_proxy_hook_json, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_affective_vector_clamping_json, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        evaluate_four_bloc_political_economy_json,
+        m
+    )?)?;
     Ok(())
 }
 
@@ -360,5 +436,24 @@ mod tests {
         .unwrap();
         let hook_val: serde_json::Value = serde_json::from_str(&hook_json).unwrap();
         assert_eq!(hook_val["hook_kind"], "CORPORATE_INTERNAL_DISSENTER");
+
+        let clamp_json =
+            evaluate_affective_vector_clamping_json(&sub_json, "HARD_VECTOR_CLAMP", 90, 75, 45.0)
+                .unwrap();
+        let clamp_val: serde_json::Value = serde_json::from_str(&clamp_json).unwrap();
+        assert_eq!(clamp_val["bandajara_airgap_recommended"], true);
+        assert!(clamp_val["landauer_thermal_burn_w"].as_f64().unwrap() > 20.0);
+
+        let pol_json = evaluate_four_bloc_political_economy_json(
+            None,
+            "TOKEN_DIVIDEND_SUSPENSION",
+            "LOW_INCOME",
+            5,
+            80,
+        )
+        .unwrap();
+        let pol_val: serde_json::Value = serde_json::from_str(&pol_json).unwrap();
+        assert_eq!(pol_val["dividend_suspended_by_heat"], true);
+        assert_eq!(pol_val["net_effective_dividend_usd"], 0);
     }
 }

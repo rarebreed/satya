@@ -33,8 +33,9 @@ except ImportError:  # pragma: no cover
         return _FallbackToolWrapper(fn)
 
 
+from satya_py import campaign as _campaign, psyche as _psyche
+
 from satya_ml.campaign_config import get_active_campaign_pack_name, get_pack_starter_npcs
-from satya_ml.dice_probabilities import _ensure_satya_py_loaded
 
 _SESSION_WORLD_LEDGERS: dict[str, dict[str, Any]] = {}
 _SESSION_SOCIAL_COMPOSURE: dict[tuple[str, str], dict[str, Any]] = {}
@@ -59,6 +60,11 @@ _NPC_FACTION_ALIASES: dict[str, str] = {
     "government_daise": "daise",
     "directorate": "daise",
     "big_tech": "big_tech",
+    "altruist": "big_tech",
+    "altruist-ai": "big_tech",
+    "altruist_ai": "big_tech",
+    "translucent": "big_tech",
+    "shen": "big_tech",
     "helios": "big_tech",
     "helios-synthetics": "big_tech",
     "bandajara": "big_tech",
@@ -162,10 +168,18 @@ def reset_social_and_world_state(session_id: str | None = None) -> None:
         reset_awakened_systems_state(session_id)
     except Exception:
         pass
+    try:
+        from satya_ml.ai_gm.tech_and_tradecraft import reset_tech_and_tradecraft_state
 
+        reset_tech_and_tradecraft_state(session_id)
+    except Exception:
+        pass
+    try:
+        from satya_ml.ai_gm.scenario_director import reset_session_scenario_director
 
-def _satya_py() -> Any:
-    return _ensure_satya_py_loaded()
+        reset_session_scenario_director(session_id)
+    except Exception:
+        pass
 
 
 def _parse_psyche_dict(raw_npc: dict[str, Any]) -> dict[str, int]:
@@ -244,14 +258,13 @@ def get_session_world_ledger(session_id: str) -> dict[str, Any]:
         req["economic_tier"] = tier
     if zoning:
         req["zoning"] = zoning
-    resp_json = _satya_py().seed_or_update_world_ledger_json(
+    data = _campaign.seed_or_update_world_ledger(
         session_id,
         None,
-        json.dumps(req) if req else None,
+        req if req else None,
         get_active_campaign_pack_name(),
         session_id,
     )
-    data = json.loads(resp_json)
     ledger = dict(data["ledger"])
     _SESSION_WORLD_LEDGERS[session_id] = ledger
     return dict(ledger)
@@ -271,14 +284,13 @@ def update_session_world_ledger(session_id: str, update_req: dict[str, Any]) -> 
         return remote
 
     current = get_session_world_ledger(session_id)
-    resp_json = _satya_py().seed_or_update_world_ledger_json(
+    data = _campaign.seed_or_update_world_ledger(
         session_id,
-        json.dumps(current),
-        json.dumps(clean_req),
+        current,
+        clean_req,
         get_active_campaign_pack_name(),
         session_id,
     )
-    data = json.loads(resp_json)
     _SESSION_WORLD_LEDGERS[session_id] = dict(data["ledger"])
     return data
 
@@ -329,8 +341,10 @@ def perform_empathy_read(
 ) -> dict[str, Any]:
     """Reveal `1..=20` Psyche traits (`1` trait at 1 success, `2` + wedge tension at 2, full 9 + `-2 Delta_ext` leverage at 3+)."""
     npc = _resolve_npc_profile(target_npc_id_or_name, session_id)
-    psyche_str = target_psyche_json.strip() or json.dumps(_parse_psyche_dict(npc))
-    res = json.loads(_satya_py().evaluate_empathy_read_json(psyche_str, int(net_successes)))
+    psyche_val: dict[str, Any] | str = (
+        target_psyche_json.strip() if target_psyche_json.strip() else _parse_psyche_dict(npc)
+    )
+    res = _psyche.evaluate_empathy_read(psyche_val, int(net_successes))
     res["target_npc_id"] = str(npc.get("npc_id") or target_npc_id_or_name)
     res["target_name"] = str(npc.get("name") or target_npc_id_or_name)
     return res
@@ -424,16 +438,14 @@ def deliver_social_argument(
     dis = int(attr_tns.get("dis") or npc.get("dis") or 12)
     foc = int(attr_tns.get("foc") or npc.get("foc") or 12)
     prior_state = _SESSION_SOCIAL_COMPOSURE.get((session_id, npc_key))
-    outcome = json.loads(
-        _satya_py().evaluate_social_exchange_json(
-            psyche_str,
-            json.dumps(upgraded_vectors),
-            int(net_successes),
-            json.dumps(prior_state) if prior_state else None,
-            dis,
-            foc,
-            ego_wound_dis_check_passed,
-        )
+    outcome = _psyche.evaluate_social_exchange(
+        psyche_str,
+        upgraded_vectors,
+        int(net_successes),
+        prior_state,
+        dis,
+        foc,
+        ego_wound_dis_check_passed,
     )
     if isinstance(outcome.get("updated_state"), dict):
         _SESSION_SOCIAL_COMPOSURE[(session_id, npc_key)] = dict(outcome["updated_state"])
@@ -506,14 +518,12 @@ def resolve_psyche_dissonance_or_surge(
                 "lashed_out_from_ego_wound": False,
             },
         )
-        res = json.loads(
-            _satya_py().resolve_cognitive_dissonance_json(
-                json.dumps(composure),
-                int(dis),
-                resolution_path,
-                violated_trait or None,
-                int(dis_check_successes),
-            )
+        res = _psyche.resolve_cognitive_dissonance(
+            composure,
+            int(dis),
+            resolution_path,
+            violated_trait or None,
+            int(dis_check_successes),
         )
         if isinstance(res.get("updated_state"), dict) and npc_key:
             _SESSION_SOCIAL_COMPOSURE[(session_id, npc_key)] = dict(res["updated_state"])
@@ -522,14 +532,12 @@ def resolve_psyche_dissonance_or_surge(
     if norm_mode in {"conviction_surge", "surge"}:
         surge_key = (session_id, npc_key or "party")
         already_used = _SESSION_CONVICTION_SURGES.get(surge_key, False)
-        eff_psyche = psyche_json.strip() or json.dumps(_parse_psyche_dict(_resolve_npc_profile(target_id, session_id)))
-        res = json.loads(
-            _satya_py().evaluate_conviction_surge_json(
-                eff_psyche,
-                int(current_delta_int),
-                already_used,
-                principle or None,
-            )
+        eff_psyche = psyche_json.strip() or _parse_psyche_dict(_resolve_npc_profile(target_id, session_id))
+        res = _psyche.evaluate_conviction_surge(
+            eff_psyche,
+            int(current_delta_int),
+            already_used,
+            principle or None,
         )
         if res.get("eligible"):
             _SESSION_CONVICTION_SURGES[surge_key] = True
@@ -539,14 +547,12 @@ def resolve_psyche_dissonance_or_surge(
         trait_key = (violated_trait or "OPN").strip().upper()
         drift_key = (session_id, npc_key or "party", trait_key)
         cur_marks = _SESSION_PSYCHE_DRIFT_MARKS.get(drift_key, 0)
-        res = json.loads(
-            _satya_py().apply_psyche_drift_mark_json(
-                int(trait_score),
-                cur_marks,
-                int(marks_added),
-                int(dis),
-                None,
-            )
+        res = _psyche.apply_psyche_drift_mark(
+            int(trait_score),
+            cur_marks,
+            int(marks_added),
+            int(dis),
+            None,
         )
         _SESSION_PSYCHE_DRIFT_MARKS[drift_key] = int(
             res.get("remaining_drift_marks", 0) or 0

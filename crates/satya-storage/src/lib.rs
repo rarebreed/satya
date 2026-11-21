@@ -179,6 +179,13 @@ pub struct AiGmConfig {
     /// unit/integration tests), falls back to deterministic in-process replies when `service_url` is offline.
     #[serde(default)]
     pub fail_fast_when_offline: bool,
+    /// Optional allowlist of trusted non-loopback AI Player `service_url` origins (`http://` / `https://`).
+    /// When empty, only loopback (`127.0.0.1`, `localhost`, `[::1]`) URLs are allowed.
+    #[serde(default)]
+    pub allowed_ai_player_service_urls: Vec<String>,
+    /// Optional allowlist of trusted non-loopback custom provider `base_url` origins.
+    #[serde(default)]
+    pub allowed_provider_base_urls: Vec<String>,
 }
 
 /// Top-level wrapper for `config/ai.toml` containing `[ai_gm]`.
@@ -228,14 +235,16 @@ impl Default for AiGmConfig {
             service_token: "satya_gm_secret_dev_token".to_string(),
             default_provider: "ollama".to_string(),
             ollama_base_url: "http://127.0.0.1:11434".to_string(),
-            reasoning_model: "qwen2.5:14b".to_string(),
-            vision_model: "llama3.2-vision".to_string(),
+            reasoning_model: "gemma4:12b".to_string(),
+            vision_model: "gemma4:12b".to_string(),
             persona_id: "harsh-reality-arbiter".to_string(),
             campaign_pack: default_campaign_pack(),
             temperature: 0.35,
             connect_timeout_ms: default_ai_gm_connect_timeout_ms(),
             request_timeout_secs: default_ai_gm_request_timeout_secs(),
             fail_fast_when_offline: false,
+            allowed_ai_player_service_urls: Vec::new(),
+            allowed_provider_base_urls: Vec::new(),
         }
     }
 }

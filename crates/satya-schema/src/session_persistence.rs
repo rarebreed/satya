@@ -8,6 +8,7 @@ use crate::events::{ChatMessageEvent, MessageVisibility, TtrpgMechanicsEvent};
 use crate::protocol::{
     CombatTrackerState, GmDocumentRecord, GmMapUpdateRequest, GmMemoryNoteRecord,
 };
+use crate::protocol_map_ai::AiPlayerConfig;
 use crate::types::{Participant, SessionMode, SessionRole};
 use serde::{Deserialize, Serialize};
 
@@ -145,6 +146,9 @@ pub struct SessionSnapshotBundle {
     /// Chronological TTRPG mechanics/dice rolls.
     #[serde(default)]
     pub mechanics_events: Vec<TtrpgMechanicsEvent>,
+    /// Configured autonomous AI Players (sanitized metadata, no ephemeral API keys).
+    #[serde(default)]
+    pub ai_players: Vec<AiPlayerConfig>,
 }
 
 /// HTTP request body for `POST /api/sessions/import` restoring a `.satyasession` snapshot bundle.

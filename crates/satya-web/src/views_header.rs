@@ -380,7 +380,7 @@ pub fn HeaderBar() -> impl IntoView {
                                         />
                                     </label>
                                     <label for="menu-ai-gm-key">
-                                        <span>"Ephemeral BYOK API Key"</span>
+                                        <span>"Ephemeral BYOK API Key (leave blank to keep)"</span>
                                         <input
                                             id="menu-ai-gm-key"
                                             name="menu_ai_gm_key"
@@ -392,6 +392,13 @@ pub fn HeaderBar() -> impl IntoView {
                                             placeholder="In-memory session key only"
                                         />
                                     </label>
+                                    <label class="recip-option" for="menu-ai-gm-clear-key">
+                                        <input
+                                            id="menu-ai-gm-clear-key"
+                                            type="checkbox"
+                                        />
+                                        <span>"Clear Stored Session BYOK Key"</span>
+                                    </label>
                                     <button
                                         type="button"
                                         id="btn-apply-ai-gm-config"
@@ -400,6 +407,15 @@ pub fn HeaderBar() -> impl IntoView {
                                         on:click=move |_| wasm_client::satya_update_session_gm_config()
                                     >
                                         "Apply Session AI GM Config"
+                                    </button>
+                                    <button
+                                        type="button"
+                                        id="btn-start-ai-opening-scene"
+                                        class="btn btn-sm btn-secondary"
+                                        onclick="window.satyaTriggerAiGmOpeningScene()"
+                                        on:click=move |_| wasm_client::satya_trigger_ai_gm_opening_scene()
+                                    >
+                                        "Start AI GM Opening Scene"
                                     </button>
                                     <div id="menu-ai-gm-feedback" class="feedback-box" aria-live="polite"></div>
                                 </div>
@@ -426,6 +442,44 @@ pub fn HeaderBar() -> impl IntoView {
                                             value="Mateo Vance (AI Player)"
                                         />
                                     </label>
+                                    <label for="menu-ai-player-provider">
+                                        <span>"AI Player Provider"</span>
+                                        <select
+                                            id="menu-ai-player-provider"
+                                            name="menu_ai_player_provider"
+                                            onchange="window.satyaMenuAiPlayerProviderChanged()"
+                                            on:change=move |_| wasm_client::satya_menu_ai_player_provider_changed()
+                                        >
+                                            {AI_GM_PROVIDER_OPTIONS
+                                                .iter()
+                                                .copied()
+                                                .map(|(val, label)| {
+                                                    view! { <option value=val>{label}</option> }
+                                                })
+                                                .collect_view()}
+                                        </select>
+                                    </label>
+                                    <label for="menu-ai-player-model">
+                                        <span>"AI Player Model ID"</span>
+                                        <input
+                                            id="menu-ai-player-model"
+                                            name="menu_ai_player_model"
+                                            type="text"
+                                            autocorrect="off"
+                                            autocapitalize="off"
+                                            spellcheck="false"
+                                            value="gemma4:12b"
+                                        />
+                                    </label>
+                                    <label for="menu-ai-player-character-id">
+                                        <span>"Bound Character ID (Optional)"</span>
+                                        <input
+                                            id="menu-ai-player-character-id"
+                                            name="menu_ai_player_character_id"
+                                            type="text"
+                                            placeholder="Leave blank or char_..."
+                                        />
+                                    </label>
                                     <label for="menu-ai-player-persona">
                                         <span>"Playstyle / Persona"</span>
                                         <input
@@ -443,24 +497,66 @@ pub fn HeaderBar() -> impl IntoView {
                                         />
                                         <span>"Auto-Respond to Party Turn Gate"</span>
                                     </label>
-                                    <button
-                                        type="button"
-                                        id="btn-spawn-ai-player"
-                                        class="btn btn-sm btn-accent"
-                                        onclick="window.satyaSpawnSessionAiPlayer()"
-                                        on:click=move |_| wasm_client::satya_spawn_session_ai_player()
-                                    >
-                                        "Spawn / Update AI Player"
-                                    </button>
-                                    <button
-                                        type="button"
-                                        id="btn-step-ai-player"
-                                        class="btn btn-sm btn-secondary"
-                                        onclick="window.satyaStepSessionAiPlayer()"
-                                        on:click=move |_| wasm_client::satya_step_session_ai_player()
-                                    >
-                                        "Step AI Player Turn"
-                                    </button>
+                                    <div class="btn-row-compact">
+                                        <button
+                                            type="button"
+                                            id="btn-spawn-ai-player"
+                                            class="btn btn-sm btn-accent"
+                                            onclick="window.satyaSpawnSessionAiPlayer()"
+                                            on:click=move |_| wasm_client::satya_spawn_session_ai_player()
+                                        >
+                                            "Spawn / Update AI Player"
+                                        </button>
+                                        <button
+                                            type="button"
+                                            id="btn-step-ai-player"
+                                            class="btn btn-sm btn-secondary"
+                                            onclick="window.satyaStepSessionAiPlayer()"
+                                            on:click=move |_| wasm_client::satya_step_session_ai_player()
+                                        >
+                                            "Step AI Player Turn"
+                                        </button>
+                                        <button
+                                            type="button"
+                                            id="btn-remove-ai-player"
+                                            class="btn btn-sm btn-danger"
+                                            onclick="window.satyaRemoveSessionAiPlayer()"
+                                            on:click=move |_| wasm_client::satya_remove_session_ai_player()
+                                        >
+                                            "Remove AI Player"
+                                        </button>
+                                    </div>
+                                    <label for="menu-ai-rally-max-rounds">
+                                        <span>"Max Autonomous Rally Rounds (1-10)"</span>
+                                        <input
+                                            id="menu-ai-rally-max-rounds"
+                                            name="menu_ai_rally_max_rounds"
+                                            type="number"
+                                            min="1"
+                                            max="10"
+                                            value="5"
+                                        />
+                                    </label>
+                                    <div class="btn-row-compact">
+                                        <button
+                                            type="button"
+                                            id="btn-toggle-ai-rally"
+                                            class="btn btn-sm btn-secondary"
+                                            onclick="window.satyaToggleAiRallyPaused()"
+                                            on:click=move |_| wasm_client::satya_toggle_ai_rally_paused()
+                                        >
+                                            "Pause / Resume Rally"
+                                        </button>
+                                        <button
+                                            type="button"
+                                            id="btn-apply-ai-rally"
+                                            class="btn btn-sm btn-secondary"
+                                            onclick="window.satyaUpdateAiRallySettings()"
+                                            on:click=move |_| wasm_client::satya_update_ai_rally_settings()
+                                        >
+                                            "Apply Rally Settings"
+                                        </button>
+                                    </div>
                                     <div id="menu-ai-player-feedback" class="feedback-box" aria-live="polite"></div>
                                 </div>
                             </div>

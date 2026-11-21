@@ -54,8 +54,8 @@ class SessionLlmConfig:
     """Per-session LLM provider configuration for the AI GM."""
 
     provider: ProviderName = "ollama"
-    model_id: str = "qwen3:8b"
-    vision_model_id: str | None = "qwen2.5vl:7b"
+    model_id: str = "gemma4:12b"
+    vision_model_id: str | None = "gemma4:12b"
     temperature: float = 0.35
     base_url: str | None = "http://127.0.0.1:11434"
     num_ctx: int = 16384
@@ -71,9 +71,33 @@ class SessionLlmConfig:
         return self.model_id
 
 
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+_OFFICIAL_PROVIDER_HOSTS: dict[str, frozenset[str]] = {
+    "openai": frozenset({"api.openai.com"}),
+    "anthropic": frozenset({"api.anthropic.com"}),
+    "google_genai": frozenset({"generativelanguage.googleapis.com"}),
+    "ollama": _LOOPBACK_HOSTS,
+}
+
+
+def _is_custom_non_loopback_base_url(provider: str, base_url: str | None) -> bool:
+    raw = str(base_url or "").strip()
+    if not raw:
+        return False
+    from urllib.parse import urlparse
+
+    host = (urlparse(raw).hostname or "").strip().lower()
+    if not host:
+        return True
+    if host in _LOOPBACK_HOSTS:
+        return False
+    return host not in _OFFICIAL_PROVIDER_HOSTS.get(provider, frozenset())
+
+
 def build_gm_chat_model(cfg: SessionLlmConfig, *, for_vision: bool = False) -> Any:
     """Instantiate a LangChain BaseChatModel supporting tool-calling and multimodal inputs."""
     target_model = cfg.target_model_id(for_vision=for_vision)
+    custom_remote_base = _is_custom_non_loopback_base_url(cfg.provider, cfg.base_url)
 
     if cfg.provider == "ollama":
         from langchain_ollama import ChatOllama
@@ -87,10 +111,13 @@ def build_gm_chat_model(cfg: SessionLlmConfig, *, for_vision: bool = False) -> A
             reasoning=cfg.reasoning,
         )
 
+    if custom_remote_base and not (cfg.api_key and cfg.api_key.strip()):
+        raise ValueError("Explicit BYOK api_key is required when using a custom provider base_url")
+
     if cfg.provider == "google_genai":
         from langchain_google_genai import ChatGoogleGenerativeAI
 
-        api_key = (
+        api_key = cfg.api_key if custom_remote_base else (
             cfg.api_key
             or os.environ.get("GOOGLE_API_KEY")
             or os.environ.get("GEMINI_API_KEY")
@@ -108,7 +135,9 @@ def build_gm_chat_model(cfg: SessionLlmConfig, *, for_vision: bool = False) -> A
     if cfg.provider == "openai":
         from langchain_openai import ChatOpenAI
 
-        api_key = cfg.api_key or os.environ.get("OPENAI_API_KEY")
+        api_key = cfg.api_key if custom_remote_base else (
+            cfg.api_key or os.environ.get("OPENAI_API_KEY")
+        )
         if not api_key:
             raise ValueError("Missing API key for provider 'openai'")
         kwargs: dict[str, Any] = {
@@ -123,7 +152,9 @@ def build_gm_chat_model(cfg: SessionLlmConfig, *, for_vision: bool = False) -> A
     if cfg.provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 
-        api_key = cfg.api_key or os.environ.get("ANTHROPIC_API_KEY")
+        api_key = cfg.api_key if custom_remote_base else (
+            cfg.api_key or os.environ.get("ANTHROPIC_API_KEY")
+        )
         if not api_key:
             raise ValueError("Missing API key for provider 'anthropic'")
         return ChatAnthropic(

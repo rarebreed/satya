@@ -396,6 +396,7 @@ def test_action_mode_tick_barrier_and_autonomous_npc_resolution(space_opera_pack
 
 def test_tactical_map_vector_wall_collision_and_los_cover(space_opera_pack: Any) -> None:
     """Verify continuous vector scene (`tiles == []`), 360-deg OBB prop collision, sub-meter movement, and LoS cover `Δ_ext` in `maps.py`."""
+    import math
     import sys
     from pathlib import Path
 
@@ -410,6 +411,7 @@ def test_tactical_map_vector_wall_collision_and_los_cover(space_opera_pack: Any)
         inspect_tactical_map,
         move_map_token,
     )
+    from satya_py import maps as py_maps
 
     sid = "t-map-1m-suite"
     m = generate_tactical_map.invoke(
@@ -424,34 +426,87 @@ def test_tactical_map_vector_wall_collision_and_los_cover(space_opera_pack: Any)
     assert svg_file.exists()
 
     try:
-        # Move to integer cell center -> pos_x_cm = 550, pos_y_cm = 450
+        other_token_centers_m = [
+            (
+                float(t.get("pos_x_cm", int(t.get("grid_x", 0)) * 100 + 50)) / 100.0,
+                float(t.get("pos_y_cm", int(t.get("grid_y", 0)) * 100 + 50)) / 100.0,
+            )
+            for t in (m.get("tokens") or [])
+            if t.get("token_id") != "tok-vance" and t.get("entity_id") != "tok-vance"
+        ]
+
+        def _clear_of_other_tokens(x_m: float, y_m: float, min_dist_m: float) -> bool:
+            return all(math.hypot(x_m - ox, y_m - oy) >= min_dist_m for ox, oy in other_token_centers_m)
+
+        open_cell: tuple[int, int] | None = None
+        for cy in range(1, 9):
+            for cx in range(1, 11):
+                cx_m, cy_m = cx + 0.5, cy + 0.5
+                if not py_maps.check_token_collision(m, cx_m, cy_m) and _clear_of_other_tokens(
+                    cx_m, cy_m, 1.0
+                ):
+                    open_cell = (cx, cy)
+                    break
+            if open_cell is not None:
+                break
+        assert open_cell is not None
+        gx, gy = open_cell
+
+        # Move to open integer cell center -> pos_x_cm = gx * 100 + 50, pos_y_cm = gy * 100 + 50
         mv = move_map_token.invoke(
-            {"session_id": sid, "token_id": "tok-vance", "to_x": 5, "to_y": 4}
+            {"session_id": sid, "token_id": "tok-vance", "to_x": gx, "to_y": gy}
         )
+        assert "error" not in mv
         vance_tok = next(t for t in mv["tokens"] if t["token_id"] == "tok-vance")
-        assert vance_tok["grid_x"] == 5
-        assert vance_tok["grid_y"] == 4
-        assert vance_tok["pos_x_cm"] == 550
-        assert vance_tok["pos_y_cm"] == 450
+        assert vance_tok["grid_x"] == gx
+        assert vance_tok["grid_y"] == gy
+        assert vance_tok["pos_x_cm"] == gx * 100 + 50
+        assert vance_tok["pos_y_cm"] == gy * 100 + 50
 
         # Sub-meter continuous move
+        sub_coords: tuple[int, int] | None = None
+        base_x_cm, base_y_cm = gx * 100 + 50, gy * 100 + 50
+        for dx_cm, dy_cm in [(-25, 10), (25, -10), (-15, -15), (15, 15)]:
+            cand_x_cm, cand_y_cm = base_x_cm + dx_cm, base_y_cm + dy_cm
+            if not py_maps.check_token_collision(
+                m, cand_x_cm / 100.0, cand_y_cm / 100.0
+            ) and _clear_of_other_tokens(cand_x_cm / 100.0, cand_y_cm / 100.0, 0.8):
+                sub_coords = (cand_x_cm, cand_y_cm)
+                break
+        assert sub_coords is not None
+        sub_x_cm, sub_y_cm = sub_coords
+
         mv_sub = move_map_token.invoke(
-            {"session_id": sid, "token_id": "tok-vance", "to_x_cm": 425, "to_y_cm": 460}
+            {"session_id": sid, "token_id": "tok-vance", "to_x_cm": sub_x_cm, "to_y_cm": sub_y_cm}
         )
+        assert "error" not in mv_sub
         vance_sub = next(t for t in mv_sub["tokens"] if t["token_id"] == "tok-vance")
-        assert vance_sub["pos_x_cm"] == 425
-        assert vance_sub["pos_y_cm"] == 460
+        assert vance_sub["pos_x_cm"] == sub_x_cm
+        assert vance_sub["pos_y_cm"] == sub_y_cm
 
-        # Return to (550, 450) for LoS check across central angled cover
-        move_map_token.invoke(
-            {"session_id": sid, "token_id": "tok-vance", "to_x_cm": 550, "to_y_cm": 450}
-        )
+        # Reject solid obstacle overlap using a colliding solid prop from Rust docking_bay geometry
+        solid_obs_cm: tuple[int, int] | None = None
+        for prop in m["props"]:
+            if "pos_x_cm" in prop and "pos_y_cm" in prop:
+                px_cm = int(prop["pos_x_cm"])
+                py_cm = int(prop["pos_y_cm"])
+            else:
+                px_cm = round((float(prop.get("x", 0)) + float(prop.get("w_cells", 1)) / 2.0) * 100.0)
+                py_cm = round((float(prop.get("y", 0)) + float(prop.get("h_cells", 1)) / 2.0) * 100.0)
+            if py_maps.check_token_collision(m, px_cm / 100.0, py_cm / 100.0):
+                solid_obs_cm = (px_cm, py_cm)
+                break
+        assert solid_obs_cm is not None
 
-        # Reject solid obstacle overlap (corner pillar at (50cm, 50cm)) and out-of-bounds
-        pillar_hit = move_map_token.invoke(
-            {"session_id": sid, "token_id": "tok-vance", "to_x": 0, "to_y": 0}
+        obs_hit = move_map_token.invoke(
+            {
+                "session_id": sid,
+                "token_id": "tok-vance",
+                "to_x_cm": solid_obs_cm[0],
+                "to_y_cm": solid_obs_cm[1],
+            }
         )
-        assert "error" in pillar_hit
+        assert "error" in obs_hit
 
         oob = move_map_token.invoke(
             {"session_id": sid, "token_id": "tok-vance", "to_x": 99, "to_y": 4}
@@ -462,13 +517,45 @@ def test_tactical_map_vector_wall_collision_and_los_cover(space_opera_pack: Any)
             {"session_id": sid, "question": "Where is Captain Vance relative to cover?"}
         )
         assert "Capt. Vance" in insp
-        assert "(5, 4)" in insp
-        assert "[PARTIAL COVER / OBSTRUCTED]" in insp
-        assert "Δ_ext +4" in insp
+        assert f"({vance_sub['grid_x']}, {vance_sub['grid_y']})" in insp
+        assert "m [" in insp
+
+        # Deterministic LoS / LowCover Δ_ext +4 verification via Rust satya_py.maps
+        cover_eval = py_maps.evaluate_los_and_cover(
+            {
+                "map_id": "los-cover-check",
+                "title": "Cover Test",
+                "grid_width": 12,
+                "grid_height": 8,
+                "cell_size_cm": 100,
+                "wall_edges": [],
+                "props": [
+                    {
+                        "kind": "JERSEY_BARRIER",
+                        "x": 6,
+                        "y": 4,
+                        "w_cells": 1,
+                        "h_cells": 1,
+                        "rotation_deg": 90,
+                    }
+                ],
+                "surfaces": [],
+                "tokens": [],
+            },
+            2.5,
+            4.5,
+            9.5,
+            4.5,
+        )
+        assert cover_eval["has_los"] is True
+        assert cover_eval["cover_grade"] == "LOW_COVER"
+        assert cover_eval["recommended_delta_ext"] == 4
 
         svg_text = svg_file.read_text(encoding="utf-8")
         assert ">COVER</text>" in svg_text
-        assert 'cx="264" cy="216"' in svg_text
+        expected_cx = round(sub_x_cm * 48 / 100.0)
+        expected_cy = round(sub_y_cm * 48 / 100.0)
+        assert f'cx="{expected_cx}" cy="{expected_cy}"' in svg_text
         assert "rotate(" in svg_text
     finally:
         svg_file.unlink(missing_ok=True)

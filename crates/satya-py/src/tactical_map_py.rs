@@ -5,18 +5,29 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use satya_engine::ballistics::lookup_firearm_preset;
+use satya_engine::environment_vehicles::CombatMovementGait;
+use satya_engine::explosives_and_arsenal::ExplosiveOrdnanceId;
+use satya_maps::barrier_ballistics::{
+    BallisticShotQuery, evaluate_ballistic_shot, evaluate_spatial_blast_and_breach,
+};
+use satya_maps::map_dressing::make_prop_at_cm;
 use satya_maps::map_narrative_manifest::{
     SpatialSensoryPin, evaluate_passive_movement_perceptions, extract_sector_narrative_manifest,
 };
 use satya_maps::tactical_map::{
-    SectorPreset, TacticalSceneView, build_procedural_map_request_with_options,
-    continue_procedural_map, evaluate_los_continuous,
+    GaitReachQuery, SectorPreset, TacticalSceneView, build_procedural_map_request_with_options,
+    compute_reachable_continuous, continue_procedural_map_with_preset, evaluate_los_continuous,
 };
-use satya_maps::tactical_map_geom::{circle_collides_obstacles, resolve_token_destination_cm};
+use satya_maps::tactical_map_geom::{
+    circle_collides_obstacles, place_prop_on_map, remove_prop_at_point,
+    resolve_token_destination_cm,
+};
 use satya_maps::tactical_map_inspect::{MapHoverCategory, inspect_map_point};
 use satya_schema::{
-    CharacterSheetRecord, EconomicTier, GmMapUpdateRequest, MapContinuationDir, MapScalePreset,
-    TokenVisualSpec, ZoningContext,
+    CharacterSheetRecord, EconomicTier, EdgeSide, GmMapUpdateRequest, MapContinuationDir,
+    MapScalePreset, MapWallEdge, MaterialClass, PropKind, TokenVisualSpec, WallEdgeKind,
+    ZoningContext,
 };
 use serde_json::{Map, Value, json};
 
@@ -31,6 +42,45 @@ fn hover_category_code(category: MapHoverCategory) -> &'static str {
         MapHoverCategory::SolidProp => "SOLID_PROP",
         MapHoverCategory::SurfaceProp => "SURFACE_PROP",
         MapHoverCategory::Ground => "GROUND",
+    }
+}
+
+fn normalize_wall_edges_and_props(container: &mut Map<String, Value>) {
+    if let Some(edges_val) = container.get_mut("wall_edges").and_then(Value::as_array_mut) {
+        for edge_val in edges_val.iter_mut() {
+            if let Some(edge) = edge_val.as_object_mut()
+                && edge.get("material").and_then(Value::as_str) == Some("CONCRETE")
+            {
+                edge.insert(
+                    "material".to_string(),
+                    Value::String("CONCRETE_BLOCK".to_string()),
+                );
+            }
+        }
+    }
+    if let Some(props_val) = container.get_mut("props").and_then(Value::as_array_mut) {
+        for prop_val in props_val.iter_mut() {
+            if let Some(prop) = prop_val.as_object_mut() {
+                for (primary, alias) in [
+                    ("x", "origin_x"),
+                    ("y", "origin_y"),
+                    ("w_cells", "span_w"),
+                    ("h_cells", "span_h"),
+                ] {
+                    if prop.contains_key(primary) {
+                        prop.remove(alias);
+                    } else if let Some(v) = prop.remove(alias) {
+                        prop.insert(primary.to_string(), v);
+                    }
+                }
+                if prop.get("material").and_then(Value::as_str) == Some("CONCRETE") {
+                    prop.insert(
+                        "material".to_string(),
+                        Value::String("CONCRETE_BLOCK".to_string()),
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -161,6 +211,9 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
                     || pos_y_cm.is_some()
                     || floor_index.is_some()
                     || elevation_cm.is_some()
+                    || model_preset.is_some()
+                    || color_hex.is_some()
+                    || facing_deg.is_some()
                     || stance_pose.is_some()
                     || portrait_url.is_some()
                 {
@@ -181,21 +234,11 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
         }
     }
 
-    if let Some(props_val) = obj.get_mut("props").and_then(Value::as_array_mut) {
-        for prop_val in props_val.iter_mut() {
-            if let Some(prop) = prop_val.as_object_mut() {
-                for (primary, alias) in [
-                    ("x", "origin_x"),
-                    ("y", "origin_y"),
-                    ("w_cells", "span_w"),
-                    ("h_cells", "span_h"),
-                ] {
-                    if prop.contains_key(primary) {
-                        prop.remove(alias);
-                    } else if let Some(v) = prop.remove(alias) {
-                        prop.insert(primary.to_string(), v);
-                    }
-                }
+    normalize_wall_edges_and_props(obj);
+    if let Some(floors_val) = obj.get_mut("floors").and_then(Value::as_array_mut) {
+        for floor_val in floors_val.iter_mut() {
+            if let Some(floor) = floor_val.as_object_mut() {
+                normalize_wall_edges_and_props(floor);
             }
         }
     }
@@ -254,8 +297,6 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
         }
     }
 
-    // Ensure normalized wall edges match canonical JSON if callers omitted defaults.
-    let _ = Map::new();
     Ok(map)
 }
 
@@ -378,6 +419,18 @@ pub fn inspect_tactical_map_point(
     d.set_item("world_x_m", info.world_x_m)?;
     d.set_item("world_y_m", info.world_y_m)?;
     d.set_item("target_ref", info.target_ref)?;
+    d.set_item(
+        "acoustic_surface",
+        info.acoustic_surface
+            .map(|a| serialize_enum_code(&a)),
+    )?;
+    d.set_item("acoustic_stealth_delta_ext", info.acoustic_stealth_delta_ext)?;
+    d.set_item(
+        "traction_tier",
+        info.traction_tier.map(|t| serialize_enum_code(&t)),
+    )?;
+    d.set_item("in_faraday_zone", info.in_faraday_zone)?;
+    d.set_item("ambient_light_delta_ext", info.ambient_light_delta_ext)?;
     Ok(Some(d.unbind()))
 }
 
@@ -395,16 +448,12 @@ pub fn generate_procedural_tactical_sector_json(
     zoning: Option<&str>,
     scale: Option<&str>,
 ) -> PyResult<String> {
-    let preset = SectorPreset::from_code_str(preset_or_theme).unwrap_or_default();
+    let preset = SectorPreset::from_code_str(preset_or_theme)
+        .ok_or_else(|| to_py_err(format!("Unknown sector preset '{preset_or_theme}'")))?;
     let tier_opt = economic_tier.and_then(EconomicTier::from_code_str);
     let zoning_opt = zoning.and_then(ZoningContext::from_code_str);
-    let (default_w, default_h) = if let Some(s) = scale.map(MapScalePreset::parse_loose) {
-        preset.resolve_scale_dimensions(s)
-    } else if width.is_none() && height.is_none() {
-        preset.resolve_scale_dimensions(MapScalePreset::Auto)
-    } else {
-        (16, 12)
-    };
+    let effective_scale = scale.map(MapScalePreset::parse_loose).unwrap_or(MapScalePreset::Auto);
+    let (default_w, default_h) = preset.resolve_scale_dimensions(effective_scale);
     let w = width.unwrap_or(default_w);
     let h = height.unwrap_or(default_h);
     let req = build_procedural_map_request_with_options(
@@ -415,16 +464,25 @@ pub fn generate_procedural_tactical_sector_json(
 
 /// Stitches an adjacent macro-world neighbor sector in `direction` (`NORTH`/`SOUTH`/`EAST`/`WEST`).
 #[pyfunction]
-#[pyo3(signature = (map_json, direction, seed=None))]
+#[pyo3(signature = (map_json, direction, seed=None, preset_override=None))]
 pub fn continue_procedural_tactical_map_json(
     map_json: &str,
     direction: &str,
     seed: Option<i64>,
+    preset_override: Option<&str>,
 ) -> PyResult<String> {
     let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
     let dir = MapContinuationDir::from_code_str(direction)
         .ok_or_else(|| to_py_err(format!("Invalid continuation direction '{direction}'")))?;
-    let outcome = continue_procedural_map(&map, dir, seed).map_err(to_py_err)?;
+    let override_preset = match preset_override.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(raw) => Some(
+            SectorPreset::from_code_str(raw)
+                .ok_or_else(|| to_py_err(format!("Unknown continuation preset '{raw}'")))?,
+        ),
+        None => None,
+    };
+    let outcome =
+        continue_procedural_map_with_preset(&map, dir, seed, override_preset).map_err(to_py_err)?;
     serde_json::to_string(&outcome.map).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
@@ -441,7 +499,7 @@ pub fn switch_tactical_map_floor_json(map_json: &str, target_floor_index: i32) -
     serde_json::to_string(&map).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
-/// Extracts a semantic [`satya_engine::SectorNarrativeManifest`] JSON overview from a tactical map.
+/// Extracts a semantic [`satya_maps::SectorNarrativeManifest`] JSON overview from a tactical map.
 #[pyfunction]
 pub fn extract_sector_narrative_manifest_json(map_json: &str) -> PyResult<String> {
     let map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
@@ -474,6 +532,469 @@ pub fn evaluate_passive_movement_perceptions_json(
     serde_json::to_string(&whispers).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
+fn serialize_enum_code<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
+fn lookup_firearm_flexible(
+    id: &str,
+) -> Option<&'static satya_engine::ballistics::GranularFirearmSpec> {
+    lookup_firearm_preset(id).or_else(|| {
+        let norm = id.trim().to_ascii_lowercase().replace(['-', ' '], "_");
+        lookup_firearm_preset(&norm)
+    })
+}
+
+fn parse_movement_gait(raw: &str) -> PyResult<CombatMovementGait> {
+    let norm = raw.trim().to_ascii_uppercase().replace(['-', ' '], "_");
+    match norm.as_str() {
+        "PRONE" | "PRONE_LOW_CRAWL" | "CRAWL" => Ok(CombatMovementGait::ProneLowCrawl),
+        "STEALTH" | "STEALTH_CREEP" | "STEALTH_CREEP_CROUCH_WALK" | "CROUCH_WALK" | "CROUCH" => {
+            Ok(CombatMovementGait::StealthCreepCrouchWalk)
+        }
+        "COMBAT_GLIDE" | "COMBAT_GLIDE_TACTICAL_WALK" | "TACTICAL_WALK" | "WALK" => {
+            Ok(CombatMovementGait::CombatGlideTacticalWalk)
+        }
+        "BOUNDING_RUN" | "BOUNDING_RUN_HUSTLE" | "HUSTLE" | "RUN" => {
+            Ok(CombatMovementGait::BoundingRunHustle)
+        }
+        "SPRINT" | "ALL_OUT_SPRINT" => Ok(CombatMovementGait::AllOutSprint),
+        _ => Err(to_py_err(format!("Unknown movement gait '{raw}'"))),
+    }
+}
+
+fn parse_ordnance_code(raw: &str) -> PyResult<ExplosiveOrdnanceId> {
+    let trimmed = raw.trim();
+    let norm = trimmed.to_ascii_uppercase().replace(['-', ' '], "_");
+    ExplosiveOrdnanceId::from_code_str(trimmed)
+        .or_else(|| ExplosiveOrdnanceId::from_code_str(&norm))
+        .ok_or_else(|| to_py_err(format!("Unknown explosive ordnance '{raw}'")))
+}
+
+fn floor_occupied_tokens_m(
+    map: &GmMapUpdateRequest,
+    exclude_entity_id: Option<&str>,
+) -> Vec<(f32, f32)> {
+    let multi = map.has_multiple_floors();
+    map.tokens
+        .iter()
+        .filter(|t| Some(t.entity_id.as_str()) != exclude_entity_id)
+        .filter(|t| !multi || map.token_floor(&t.entity_id) == map.active_floor)
+        .map(|t| {
+            let (tx_cm, ty_cm) = map.token_pos_cm(t);
+            (tx_cm as f32 / 100.0, ty_cm as f32 / 100.0)
+        })
+        .collect()
+}
+
+/// Evaluates continuous ballistic range, cover, multi-barrier wall/prop perforation, and residual
+/// impact between `(x1_m, y1_m)` and `(x2_m, y2_m)`.
+#[pyfunction]
+#[pyo3(signature = (map_json, x1_m, y1_m, x2_m, y2_m, firearm_preset_id="hk416_carbine_556", net_successes=0, hit_frame_or_stud=false, floor_index=None))]
+#[expect(clippy::too_many_arguments)]
+pub fn evaluate_ballistic_shot_on_map_json(
+    map_json: &str,
+    x1_m: f32,
+    y1_m: f32,
+    x2_m: f32,
+    y2_m: f32,
+    firearm_preset_id: &str,
+    net_successes: i32,
+    hit_frame_or_stud: bool,
+    floor_index: Option<i32>,
+) -> PyResult<String> {
+    let firearm = lookup_firearm_flexible(firearm_preset_id)
+        .ok_or_else(|| to_py_err(format!("Unknown firearm preset '{firearm_preset_id}'")))?;
+    let map = map_for_floor(
+        parse_flexible_map_json(map_json).map_err(to_py_err)?,
+        floor_index,
+    )?;
+    let scene = TacticalSceneView::from_map(&map);
+    let eval = evaluate_ballistic_shot(BallisticShotQuery {
+        scene: &scene,
+        attacker_m: (x1_m, y1_m),
+        target_m: (x2_m, y2_m),
+        firearm,
+        net_successes,
+        hit_frame_or_stud,
+    });
+    serde_json::to_string(&eval).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
+/// Computes continuous `0.25m` 16-directional gait reachability strips around `(x_m, y_m)`.
+#[pyfunction]
+#[pyo3(signature = (map_json, x_m, y_m, spd_eff=10, hgt_m=1.75, gait_code="COMBAT_GLIDE", tick_budget=4, floor_index=None, exclude_entity_id=None))]
+#[expect(clippy::too_many_arguments)]
+pub fn compute_reachable_zone_json(
+    map_json: &str,
+    x_m: f32,
+    y_m: f32,
+    spd_eff: i32,
+    hgt_m: f64,
+    gait_code: &str,
+    tick_budget: u32,
+    floor_index: Option<i32>,
+    exclude_entity_id: Option<&str>,
+) -> PyResult<String> {
+    let gait = parse_movement_gait(gait_code)?;
+    let map = map_for_floor(
+        parse_flexible_map_json(map_json).map_err(to_py_err)?,
+        floor_index,
+    )?;
+    let scene = TacticalSceneView::from_map(&map);
+    let occupied = floor_occupied_tokens_m(&map, exclude_entity_id);
+    let budget = tick_budget.max(1);
+    let field = compute_reachable_continuous(
+        &scene,
+        &occupied,
+        GaitReachQuery {
+            start_m: (x_m, y_m),
+            spd_eff,
+            hgt_m: hgt_m.max(0.5),
+            gait,
+            tick_budget: budget,
+        },
+    );
+    let strips = field.merged_row_runs();
+    let max_nominal_reach_m = ((field.m_per_tick * budget as f32) * 100.0).round() / 100.0;
+    let reachable_cell_count = field
+        .cost_mm
+        .iter()
+        .filter(|&&c| c != i32::MAX && c > 0)
+        .count();
+    let out = json!({
+        "floor_index": map.active_floor,
+        "start_m": [x_m, y_m],
+        "gait": gait,
+        "tick_budget": budget,
+        "step_m": field.step_m,
+        "m_per_tick": field.m_per_tick,
+        "max_nominal_reach_m": max_nominal_reach_m,
+        "reachable_cell_count": reachable_cell_count,
+        "strips": strips,
+    });
+    serde_json::to_string(&out).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
+/// Evaluates indoor blast overpressure, barrier-shielded shrapnel, and structural wall breaches.
+#[pyfunction]
+#[pyo3(signature = (map_json, x_m, y_m, ordnance_code="M67_FRAG", demolitions_net_successes=0, apply_wall_breaches=true, floor_index=None))]
+pub fn evaluate_spatial_blast_and_breach_json(
+    map_json: &str,
+    x_m: f32,
+    y_m: f32,
+    ordnance_code: &str,
+    demolitions_net_successes: i32,
+    apply_wall_breaches: bool,
+    floor_index: Option<i32>,
+) -> PyResult<String> {
+    let ordnance = parse_ordnance_code(ordnance_code)?;
+    let mut map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let target_floor = floor_index.unwrap_or(map.active_floor);
+    if !map.floors.is_empty() && !map.has_floor(target_floor) {
+        return Err(to_py_err(format!(
+            "Floor {target_floor} not present on tactical map '{}'",
+            map.map_id
+        )));
+    }
+    let outcome = evaluate_spatial_blast_and_breach(
+        &mut map,
+        (x_m, y_m),
+        target_floor,
+        ordnance,
+        demolitions_net_successes,
+        apply_wall_breaches,
+    );
+    let out = json!({
+        "outcome": outcome,
+        "updated_map": map,
+    });
+    serde_json::to_string(&out).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
+fn require_i32_field(val: &Value, key: &str) -> PyResult<i32> {
+    val.get(key)
+        .and_then(Value::as_i64)
+        .map(|v| v as i32)
+        .ok_or_else(|| to_py_err(format!("Missing integer field '{key}'")))
+}
+
+fn require_f32_field(val: &Value, key: &str) -> PyResult<f32> {
+    val.get(key)
+        .and_then(Value::as_f64)
+        .map(|v| v as f32)
+        .ok_or_else(|| to_py_err(format!("Missing numeric field '{key}'")))
+}
+
+fn parse_edge_side_field(val: &Value) -> PyResult<EdgeSide> {
+    let raw = val
+        .get("side")
+        .and_then(Value::as_str)
+        .ok_or_else(|| to_py_err("Missing string field 'side'"))?;
+    EdgeSide::from_code_str(raw).ok_or_else(|| to_py_err(format!("Unknown edge side '{raw}'")))
+}
+
+/// Applies an authoritative vector map edit (`TOGGLE_DOOR`, `SET_EDGE`, `REMOVE_EDGE`,
+/// `PLACE_PROP`, `REMOVE_PROP`, `SET_BLACKOUT`, `BLAST_OR_BREACH`) and returns updated map JSON.
+#[pyfunction]
+#[pyo3(signature = (map_json, action_json, floor_index=None))]
+pub fn edit_tactical_map_feature_json(
+    map_json: &str,
+    action_json: &str,
+    floor_index: Option<i32>,
+) -> PyResult<String> {
+    let action_val: Value = serde_json::from_str(action_json)
+        .map_err(|e| to_py_err(format!("Invalid action JSON: {e}")))?;
+    let action_name = action_val
+        .get("action")
+        .and_then(Value::as_str)
+        .ok_or_else(|| to_py_err("Missing string field 'action'"))?
+        .trim()
+        .to_ascii_uppercase()
+        .replace(['-', ' '], "_");
+
+    let raw_map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
+    let orig_floor = raw_map.active_floor;
+    let mut map = map_for_floor(raw_map, floor_index)?;
+    let edited_floor = map.active_floor;
+
+    let edit_summary: Value = match action_name.as_str() {
+        "TOGGLE_DOOR" => {
+            let x = require_i32_field(&action_val, "x")?;
+            let y = require_i32_field(&action_val, "y")?;
+            let side = parse_edge_side_field(&action_val)?;
+            let edge = map
+                .wall_edges
+                .iter_mut()
+                .find(|e| e.x == x && e.y == y && e.side == side)
+                .ok_or_else(|| {
+                    to_py_err(format!("No edge found at ({x}, {y}, {})", side.as_str()))
+                })?;
+            let next_kind = match edge.kind {
+                WallEdgeKind::DoorClosed => WallEdgeKind::DoorOpen,
+                WallEdgeKind::DoorOpen => WallEdgeKind::DoorClosed,
+                other => {
+                    return Err(to_py_err(format!(
+                        "Edge at ({x}, {y}, {}) is {}, not a door",
+                        side.as_str(),
+                        other.as_str()
+                    )));
+                }
+            };
+            edge.kind = next_kind;
+            json!({
+                "x": x,
+                "y": y,
+                "side": side.as_str(),
+                "kind": next_kind.as_str(),
+            })
+        }
+        "SET_EDGE" => {
+            let x = require_i32_field(&action_val, "x")?;
+            let y = require_i32_field(&action_val, "y")?;
+            let side = parse_edge_side_field(&action_val)?;
+            let in_bounds = match side {
+                EdgeSide::West => x >= 0 && x <= map.grid_width && y >= 0 && y < map.grid_height,
+                EdgeSide::North => x >= 0 && x < map.grid_width && y >= 0 && y <= map.grid_height,
+            };
+            if !in_bounds {
+                return Err(to_py_err(format!(
+                    "Edge coordinates ({x}, {y}, {}) out of map bounds ({}x{})",
+                    side.as_str(),
+                    map.grid_width,
+                    map.grid_height
+                )));
+            }
+            let kind_raw = action_val
+                .get("kind")
+                .or_else(|| action_val.get("edge_kind"))
+                .and_then(Value::as_str)
+                .ok_or_else(|| to_py_err("Missing 'kind' for SET_EDGE"))?;
+            let kind = WallEdgeKind::from_code_str(kind_raw)
+                .ok_or_else(|| to_py_err(format!("Unknown wall edge kind '{kind_raw}'")))?;
+            let mat_raw = action_val
+                .get("material")
+                .and_then(Value::as_str)
+                .unwrap_or("DRYWALL");
+            let material = MaterialClass::from_code_str(mat_raw)
+                .ok_or_else(|| to_py_err(format!("Unknown material class '{mat_raw}'")))?;
+            let new_edge = MapWallEdge {
+                x,
+                y,
+                side,
+                kind,
+                material,
+            };
+            if let Some(slot) = map
+                .wall_edges
+                .iter_mut()
+                .find(|e| e.x == x && e.y == y && e.side == side)
+            {
+                *slot = new_edge;
+            } else {
+                map.wall_edges.push(new_edge);
+            }
+            json!({
+                "x": x,
+                "y": y,
+                "side": side.as_str(),
+                "kind": kind.as_str(),
+                "material": material.as_str(),
+            })
+        }
+        "REMOVE_EDGE" => {
+            let x = require_i32_field(&action_val, "x")?;
+            let y = require_i32_field(&action_val, "y")?;
+            let side = parse_edge_side_field(&action_val)?;
+            let idx = map
+                .wall_edges
+                .iter()
+                .position(|e| e.x == x && e.y == y && e.side == side)
+                .ok_or_else(|| {
+                    to_py_err(format!("No edge found at ({x}, {y}, {})", side.as_str()))
+                })?;
+            let removed = map.wall_edges.remove(idx);
+            json!({
+                "removed_kind": removed.kind.as_str(),
+                "x": x,
+                "y": y,
+                "side": side.as_str(),
+            })
+        }
+        "PLACE_PROP" => {
+            let prop_raw = action_val
+                .get("prop_kind")
+                .or_else(|| action_val.get("kind"))
+                .and_then(Value::as_str)
+                .ok_or_else(|| to_py_err("Missing 'prop_kind' for PLACE_PROP"))?;
+            let norm_prop = prop_raw
+                .trim()
+                .to_ascii_uppercase()
+                .replace(['-', ' '], "_");
+            let kind = PropKind::from_code_str(prop_raw)
+                .or_else(|| PropKind::from_code_str(&norm_prop))
+                .ok_or_else(|| to_py_err(format!("Unknown prop kind '{prop_raw}'")))?;
+            let x_m = require_f32_field(&action_val, "x_m")?;
+            let y_m = require_f32_field(&action_val, "y_m")?;
+            let rotation_deg = action_val
+                .get("rotation_deg")
+                .and_then(Value::as_i64)
+                .unwrap_or(0) as i32;
+            let length_cm = action_val
+                .get("length_cm")
+                .and_then(Value::as_i64)
+                .map(|v| v as i32);
+            let variant_seed = action_val
+                .get("variant_seed")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as u32;
+            let placement = make_prop_at_cm(
+                kind,
+                (x_m * 100.0).round() as i32,
+                (y_m * 100.0).round() as i32,
+                rotation_deg,
+                length_cm,
+                variant_seed,
+            );
+            let occupied = floor_occupied_tokens_m(&map, None);
+            let board_size_m = map.board_size_m();
+            let placed = place_prop_on_map(
+                &mut map.props,
+                &map.wall_edges,
+                &occupied,
+                board_size_m,
+                placement,
+            )
+            .map_err(to_py_err)?;
+            json!({
+                "placed_kind": placed.kind.as_str(),
+                "x_m": placed.center_m().0,
+                "y_m": placed.center_m().1,
+                "rotation_deg": placed.rotation_deg,
+            })
+        }
+        "REMOVE_PROP" => {
+            let x_m = require_f32_field(&action_val, "x_m")?;
+            let y_m = require_f32_field(&action_val, "y_m")?;
+            let removed = remove_prop_at_point(&mut map.props, x_m, y_m)
+                .ok_or_else(|| to_py_err(format!("No prop found near ({x_m:.2}m, {y_m:.2}m)")))?;
+            json!({
+                "removed_kind": removed.kind.as_str(),
+                "x_m": removed.center_m().0,
+                "y_m": removed.center_m().1,
+            })
+        }
+        "SET_BLACKOUT" => {
+            let blackout_active = action_val
+                .get("blackout_active")
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
+            let explicit_delta = action_val
+                .get("ambient_light_delta_ext")
+                .and_then(Value::as_i64)
+                .map(|v| v as i32);
+            map.ambient_light_delta_ext = explicit_delta.unwrap_or(if blackout_active {
+                map.ambient_light_delta_ext.max(3)
+            } else {
+                0
+            });
+            for node in &mut map.surveillance_nodes {
+                node.powered = !blackout_active;
+            }
+            json!({
+                "blackout_active": blackout_active,
+                "ambient_light_delta_ext": map.ambient_light_delta_ext,
+                "surveillance_nodes_updated": map.surveillance_nodes.len(),
+            })
+        }
+        "BLAST_OR_BREACH" => {
+            let x_m = require_f32_field(&action_val, "x_m")?;
+            let y_m = require_f32_field(&action_val, "y_m")?;
+            let ordnance_raw = action_val
+                .get("ordnance_code")
+                .and_then(Value::as_str)
+                .unwrap_or("M67_FRAG");
+            let ordnance = parse_ordnance_code(ordnance_raw)?;
+            let demos = action_val
+                .get("demolitions_net_successes")
+                .and_then(Value::as_i64)
+                .unwrap_or(0) as i32;
+            let apply_breach = action_val
+                .get("apply_wall_breaches")
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
+            let outcome = evaluate_spatial_blast_and_breach(
+                &mut map,
+                (x_m, y_m),
+                edited_floor,
+                ordnance,
+                demos,
+                apply_breach,
+            );
+            json!({ "blast_outcome": outcome })
+        }
+        other => {
+            return Err(to_py_err(format!("Unknown map edit action '{other}'")));
+        }
+    };
+
+    map.sync_active_floor_snapshot();
+    if !map.floors.is_empty() && map.active_floor != orig_floor {
+        let _ = map.switch_active_floor(orig_floor);
+    }
+
+    let out = json!({
+        "action": action_name,
+        "edited_floor_index": edited_floor,
+        "edit_summary": edit_summary,
+        "updated_map": map,
+    });
+    serde_json::to_string(&out).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+}
+
 /// Registers tactical map spatial bindings on the `satya_py` Python module.
 pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(check_tactical_token_collision, m)?)?;
@@ -491,6 +1012,13 @@ pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> 
         evaluate_passive_movement_perceptions_json,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(evaluate_ballistic_shot_on_map_json, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_reachable_zone_json, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        evaluate_spatial_blast_and_breach_json,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(edit_tactical_map_feature_json, m)?)?;
     Ok(())
 }
 
@@ -547,7 +1075,7 @@ mod tests {
         assert!(!parsed.props.is_empty());
 
         let east_json =
-            continue_procedural_tactical_map_json(&sector_json, "EAST", Some(99)).unwrap();
+            continue_procedural_tactical_map_json(&sector_json, "EAST", Some(99), None).unwrap();
         let east_map = parse_flexible_map_json(&east_json).unwrap();
         assert_eq!(east_map.world_sectors.len(), 2);
         assert!(east_map.grid_width > 12);
@@ -695,5 +1223,197 @@ mod tests {
                     .expect("hover on floor 1 returns inspection dict");
             assert!(hover_f1.bind(py).contains("category").unwrap());
         });
+    }
+
+    #[test]
+    fn test_parse_flexible_map_json_normalizes_legacy_concrete_material() {
+        let legacy_json = serde_json::json!({
+            "map_id": "map-legacy-concrete",
+            "title": "Legacy Concrete Clinic",
+            "grid_width": 12,
+            "grid_height": 10,
+            "wall_edges": [
+                {"x": 5, "y": 5, "side": "WEST", "kind": "WALL", "material": "CONCRETE"}
+            ],
+            "props": [],
+            "floors": [
+                {
+                    "floor_index": 0,
+                    "label": "1F",
+                    "wall_edges": [
+                        {"x": 2, "y": 3, "side": "NORTH", "kind": "WALL", "material": "CONCRETE"}
+                    ],
+                    "props": [],
+                    "surfaces": []
+                }
+            ],
+            "tokens": []
+        })
+        .to_string();
+
+        let parsed = parse_flexible_map_json(&legacy_json).unwrap();
+        assert_eq!(
+            parsed.wall_edges[0].material,
+            satya_schema::MaterialClass::ConcreteBlock
+        );
+        assert_eq!(
+            parsed.floors[0].wall_edges[0].material,
+            satya_schema::MaterialClass::ConcreteBlock
+        );
+    }
+
+    #[test]
+    fn test_wave5_py_spatial_ballistics_reach_blast_and_edits() {
+        let bunker_json = generate_procedural_tactical_sector_json(
+            "map-bunker-py",
+            "corporate_server_bunker",
+            Some("Substation QPU Bunker"),
+            Some(20),
+            Some(16),
+            2035,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let bunker_val: Value = serde_json::from_str(&bunker_json).unwrap();
+        let fz = &bunker_val["faraday_zones"][0];
+        let fz_x = ((fz["x0_cm"].as_f64().unwrap() + fz["x1_cm"].as_f64().unwrap()) / 200.0) as f32;
+        let fz_y = ((fz["y0_cm"].as_f64().unwrap() + fz["y1_cm"].as_f64().unwrap()) / 200.0) as f32;
+
+        Python::initialize();
+        Python::attach(|py| {
+            let pt = inspect_tactical_map_point(py, &bunker_json, "Bunker", fz_x, fz_y, Some(0))
+                .unwrap()
+                .expect("point inside Faraday zone inspects cleanly");
+            let pt_dict = pt.bind(py);
+            assert!(pt_dict.get_item("in_faraday_zone").unwrap().unwrap().extract::<bool>().unwrap());
+            assert!(pt_dict.contains("acoustic_surface").unwrap());
+            assert!(pt_dict.contains("traction_tier").unwrap());
+            assert!(pt_dict.contains("ambient_light_delta_ext").unwrap());
+        });
+
+        let base_map = serde_json::json!({
+            "map_id": "map-spatial-edit",
+            "title": "Clinic Annex Bay",
+            "grid_width": 12,
+            "grid_height": 10,
+            "wall_edges": [],
+            "props": [],
+            "surfaces": [],
+            "surveillance_nodes": [
+                {
+                    "node_id": "cam-1",
+                    "label": "Door Dome Cam",
+                    "node_kind_code": "DOME_CAMERA",
+                    "floor_index": 0,
+                    "x_cm": 600,
+                    "y_cm": 200,
+                    "facing_deg": 90,
+                    "fov_deg": 90,
+                    "range_cm": 600,
+                    "powered": true,
+                    "visibility": "PUBLIC"
+                }
+            ],
+            "tokens": []
+        })
+        .to_string();
+
+        let edge_res: Value = serde_json::from_str(
+            &edit_tactical_map_feature_json(
+                &base_map,
+                r#"{"action":"SET_EDGE","x":6,"y":5,"side":"NORTH","kind":"WALL","material":"DRYWALL"}"#,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let after_wall = serde_json::to_string(&edge_res["updated_map"]).unwrap();
+
+        let shot: Value = serde_json::from_str(
+            &evaluate_ballistic_shot_on_map_json(
+                &after_wall,
+                6.5,
+                4.2,
+                6.5,
+                5.8,
+                "hk416_carbine_556",
+                2,
+                false,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(shot["weapon_name"].as_str().unwrap().contains("HK416"));
+        assert!(shot["effective_delta_ext"].as_i64().is_some());
+
+        let reach: Value = serde_json::from_str(
+            &compute_reachable_zone_json(&after_wall, 2.5, 2.5, 11, 1.75, "COMBAT_GLIDE", 3, None, None)
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(reach["reachable_cell_count"].as_u64().unwrap() > 0);
+        assert!(!reach["strips"].as_array().unwrap().is_empty());
+
+        let door_set: Value = serde_json::from_str(
+            &edit_tactical_map_feature_json(
+                &after_wall,
+                r#"{"action":"SET_EDGE","x":4,"y":5,"side":"NORTH","kind":"DOOR_CLOSED","material":"SOLID_WOOD"}"#,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let toggled: Value = serde_json::from_str(
+            &edit_tactical_map_feature_json(
+                &serde_json::to_string(&door_set["updated_map"]).unwrap(),
+                r#"{"action":"TOGGLE_DOOR","x":4,"y":5,"side":"NORTH"}"#,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(toggled["edit_summary"]["kind"], "DOOR_OPEN");
+
+        let placed: Value = serde_json::from_str(
+            &edit_tactical_map_feature_json(
+                &after_wall,
+                r#"{"action":"PLACE_PROP","prop_kind":"WOOD_CRATE","x_m":3.5,"y_m":3.5,"rotation_deg":15}"#,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let removed: Value = serde_json::from_str(
+            &edit_tactical_map_feature_json(
+                &serde_json::to_string(&placed["updated_map"]).unwrap(),
+                r#"{"action":"REMOVE_PROP","x_m":3.5,"y_m":3.5}"#,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(removed["edit_summary"]["removed_kind"], "WOOD_CRATE");
+
+        let blackout: Value = serde_json::from_str(
+            &edit_tactical_map_feature_json(
+                &after_wall,
+                r#"{"action":"SET_BLACKOUT","blackout_active":true}"#,
+                None,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(blackout["updated_map"]["ambient_light_delta_ext"].as_i64().unwrap() >= 3);
+        assert_eq!(blackout["updated_map"]["surveillance_nodes"][0]["powered"], false);
+
+        let blast: Value = serde_json::from_str(
+            &evaluate_spatial_blast_and_breach_json(&after_wall, 6.5, 4.9, "C4", 2, true, None)
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(blast["outcome"]["breached_edges_count"].as_u64().unwrap() >= 1);
     }
 }

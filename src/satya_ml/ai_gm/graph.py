@@ -311,6 +311,9 @@ def _classify_tool_tier(tool_name: str) -> tuple[str, str]:
         "register_spatial_clue_pin",
         "move_map_token",
         "inspect_tactical_map",
+        "inspect_tactical_map_point",
+        "compute_token_reachable_zone",
+        "edit_tactical_map_feature",
         "get_combat_tracker_state",
         "advance_combat_tracker",
         "roll_satya_d20_check",
@@ -335,11 +338,17 @@ def _classify_tool_tier(tool_name: str) -> tuple[str, str]:
         "verify_forensic_audit_proof",
         "inspect_synthetic_or_proxy_telemetry",
         "evaluate_npc_morale_or_trigger",
+        "evaluate_ballistic_shot_on_map",
         "manage_synthetic_substrate_and_embodiment",
         "intervene_ai_cage_or_hunter_ai",
         "update_campaign_arc_and_conspiracies",
         "manage_polycrisis_grid_and_strain",
         "transmit_via_tradecraft_channel",
+        "resolve_stealth_surveillance_or_forensics",
+        "resolve_contact_cover_or_safehouse",
+        "resolve_explosive_vehicle_or_hazard",
+        "resolve_ew_drone_or_engineering",
+        "evaluate_part5_clamping_or_political_economy",
     }:
         return "TIER_2_RULESET_ENGINE", "satya-d20-rules"
     return "TIER_3_LORE_PROVIDER", "satya-campaign-lore"
@@ -492,13 +501,15 @@ def build_ai_gm_graph(
 
             new_messages: list[BaseMessage] = []
             existing_msgs = state.get("messages") or []
-            if not existing_msgs:
-                sys_prompt = (
-                    CO_PILOT_SYSTEM_PROMPT
-                    if operating_mode == "co_pilot"
-                    else AUTONOMOUS_SYSTEM_PROMPT
-                )
-                new_messages.append(SystemMessage(content=sys_prompt))
+            sys_prompt = (
+                CO_PILOT_SYSTEM_PROMPT
+                if operating_mode == "co_pilot"
+                else AUTONOMOUS_SYSTEM_PROMPT
+            )
+            existing_sys = next((m for m in existing_msgs if isinstance(m, SystemMessage)), None)
+            if existing_sys is None or str(getattr(existing_sys, "content", "")) != sys_prompt:
+                sys_id = getattr(existing_sys, "id", None) or f"sys-prompt-{session_id}"
+                new_messages.append(SystemMessage(content=sys_prompt, id=sys_id))
 
             if trigger:
                 actor_name = (trigger.get("actor") or {}).get("display_name", "Player")
@@ -583,7 +594,7 @@ def build_ai_gm_graph(
                             session_id,
                             combat_tracker or {},
                             session_chars,
-                            active_map if isinstance(active_map, dict) else None,
+                            dict(active_map) if isinstance(active_map, dict) else None,
                         )
                     )
                 pinned_memories = [m for m in session_memories if m.get("is_pinned")]
@@ -778,11 +789,12 @@ def build_ai_gm_graph(
                     if session_chars
                     else None
                 )
-                narrative_manifest = (
+                raw_manifest = (
                     active_map.get("narrative_manifest")
                     if isinstance(active_map, dict)
                     else None
                 )
+                narrative_manifest = dict(raw_manifest) if isinstance(raw_manifest, dict) else None
                 world_ledger = state.get("world_ledger") or get_session_world_ledger(session_id)
                 beat = select_next_scenario_beat(
                     session_id=session_id,
@@ -1133,18 +1145,17 @@ def build_ai_gm_graph(
                 "manage_polycrisis_grid_and_strain",
                 "transmit_via_tradecraft_channel",
             }
-            if "session_id" not in t_args:
-                tool_obj = tool_map.get(t_name)
-                has_session_arg = t_name in _session_scoped_tools
-                if not has_session_arg and tool_obj is not None:
-                    args_dict = getattr(tool_obj, "args", None)
-                    model_fields = getattr(getattr(tool_obj, "args_schema", None), "model_fields", None)
-                    if (isinstance(args_dict, dict) and "session_id" in args_dict) or (
-                        isinstance(model_fields, dict) and "session_id" in model_fields
-                    ):
-                        has_session_arg = True
-                if has_session_arg:
-                    t_args["session_id"] = session_id
+            tool_obj = tool_map.get(t_name)
+            has_session_arg = t_name in _session_scoped_tools
+            if not has_session_arg and tool_obj is not None:
+                args_dict = getattr(tool_obj, "args", None)
+                model_fields = getattr(getattr(tool_obj, "args_schema", None), "model_fields", None)
+                if (isinstance(args_dict, dict) and "session_id" in args_dict) or (
+                    isinstance(model_fields, dict) and "session_id" in model_fields
+                ):
+                    has_session_arg = True
+            if has_session_arg:
+                t_args["session_id"] = session_id
 
             # Normalize list/non-string arguments emitted by local models (e.g. `query=[]`)
             for str_key in (
@@ -1281,7 +1292,7 @@ def build_ai_gm_graph(
             channel = "IN_CHARACTER"
         invocations = list(state.get("tool_invocations") or [])
         already_narrated = any(
-            inv.get("tool_name") in {"narrate_to_session", "whisper_to_player"}
+            inv.get("tool_name") == "narrate_to_session" and not inv.get("is_error")
             for inv in invocations
         )
 

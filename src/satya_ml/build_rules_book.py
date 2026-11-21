@@ -375,136 +375,18 @@ def evaluate_cascade_pairs_python(
     carry_mode: str = "markov_step",
     botch_rule: str = "closest_miss",
 ) -> dict[str, Any]:
-    """Evaluate a concrete sequence of `(die_a, die_b)` `2d20` pairs against a Satya task."""
-    if _satya_py is not None:
-        try:
-            out = _satya_py.evaluate_cascade_roll(
-                skill_level,
-                control_c,
-                internal_mod,
-                external_mod,
-                pairs,
-                carry_mode,
-                botch_rule,
-            )
-            return {
-                "steps": [
-                    {
-                        "pair_index": int(s.pair_index),
-                        "die_a": int(s.die_a),
-                        "die_b": int(s.die_b),
-                        "raw_sum": int(s.raw_sum),
-                        "carry_in": int(s.carry_in),
-                        "effective_y": int(s.effective_y),
-                        "tn_eff": int(s.tn_eff),
-                        "succeeded": bool(s.succeeded),
-                        "step_botch": bool(s.step_botch),
-                        "miss_distance": int(s.miss_distance),
-                        "carry_out": int(s.carry_out),
-                    }
-                    for s in out.steps
-                ],
-                "total_successes": int(out.total_successes),
-                "raw_botches": int(out.raw_botches),
-                "effective_botches": int(out.effective_botches),
-                "min_miss_tier": int(out.min_miss_tier),
-                "signed_margin": int(out.signed_margin),
-                "final_pair_y": int(out.final_pair_y),
-                "outcome_kind": str(out.outcome_kind),
-                "outcome_tier": str(out.outcome_tier),
-            }
-        except Exception:
-            pass
+    """Evaluate a concrete sequence of `(die_a, die_b)` `2d20` pairs via Rust ``satya_py.dice``."""
+    from satya_py.dice import evaluate_cascade_pairs_dict
 
-    n_pairs = max(1, int(skill_level))
-    tn_eff = 31 - int(control_c) + int(external_mod)
-    delta_over = 6
-    delta_under = max(0, 6 + int(internal_mod))
-    carry = 0
-    total_successes = 0
-    raw_botches = 0
-    min_miss_tier = 5
-    steps: list[dict[str, Any]] = []
-    final_y = 0
-
-    for idx, (da, db) in enumerate(pairs[:n_pairs], start=1):
-        raw_sum = int(da) + int(db)
-        carry_in = carry
-        yn = raw_sum + carry_in
-        final_y = yn
-        succeeded = yn > tn_eff
-        step_botch = (yn < tn_eff) and (yn < 2)
-        if succeeded:
-            total_successes += 1
-            miss_dist = 0
-            min_miss_tier = 0
-            carry_out = (
-                delta_over
-                if carry_mode == "markov_step"
-                else (carry_in + delta_over if carry_mode == "cumulative_snowball" else yn - tn_eff)
-            )
-        elif yn < tn_eff:
-            miss_dist = tn_eff - yn
-            min_miss_tier = min(min_miss_tier, min(5, miss_dist // 4))
-            if step_botch:
-                raw_botches += 1
-            carry_out = (
-                -delta_under
-                if carry_mode == "markov_step"
-                else (carry_in - delta_under if carry_mode == "cumulative_snowball" else yn - tn_eff)
-            )
-        else:
-            miss_dist = 0
-            min_miss_tier = 0
-            carry_out = 0 if carry_mode == "markov_step" else carry_in
-
-        carry = carry_out
-        steps.append(
-            {
-                "pair_index": idx,
-                "die_a": int(da),
-                "die_b": int(db),
-                "raw_sum": raw_sum,
-                "carry_in": carry_in,
-                "effective_y": yn,
-                "tn_eff": tn_eff,
-                "succeeded": succeeded,
-                "step_botch": step_botch,
-                "miss_distance": miss_dist,
-                "carry_out": carry_out,
-            }
-        )
-
-    eff_botches = (
-        min_miss_tier
-        if (total_successes == 0 and botch_rule == "closest_miss")
-        else (raw_botches if total_successes == 0 else 0)
+    return evaluate_cascade_pairs_dict(
+        skill_level=skill_level,
+        control_c=control_c,
+        internal_mod=internal_mod,
+        external_mod=external_mod,
+        pairs=pairs,
+        carry_mode=carry_mode,
+        botch_rule=botch_rule,
     )
-    signed_margin = total_successes if total_successes > 0 else -eff_botches
-    if total_successes >= 1 and raw_botches == 0:
-        outcome_kind = "SUCCESS"
-        outcome_tier = "EXTRAORDINARY_SUCCESS" if total_successes >= 3 else "SUCCESS"
-    elif total_successes >= 1 and raw_botches >= 1:
-        outcome_kind = "SUCCESS_WITH_COMPLICATION"
-        outcome_tier = "PARTIAL_SUCCESS"
-    elif eff_botches == 0:
-        outcome_kind = "CLEAN_FAILURE"
-        outcome_tier = "FAILURE"
-    else:
-        outcome_kind = "BOTCH_FAILURE"
-        outcome_tier = "CRITICAL_FAILURE"
-
-    return {
-        "steps": steps,
-        "total_successes": total_successes,
-        "raw_botches": raw_botches,
-        "effective_botches": eff_botches,
-        "min_miss_tier": min_miss_tier,
-        "signed_margin": signed_margin,
-        "final_pair_y": final_y,
-        "outcome_kind": outcome_kind,
-        "outcome_tier": outcome_tier,
-    }
 
 
 def compute_tactical_pool_python(
@@ -531,98 +413,33 @@ def compute_tactical_pool_python(
     cre: int = 12,
     foc: int = 12,
 ) -> dict[str, Any]:
-    """Compute the Satya Combat Tactical Pool ('Envelope & Fill') parameters."""
-    if _satya_py is not None:
-        try:
-            env = _satya_py.compute_tactical_pool(
-                spd=spd,
-                for_stat=for_stat,
-                dex=dex,
-                kin=kin,
-                sig=sig,
-                ins=ins,
-                itu=itu,
-                dis=dis,
-                fit=fit,
-                mass_kg=mass_kg,
-                skill_c=skill_c,
-                skill_n=skill_n,
-                is_ranged=is_ranged,
-                fatigue_level=fatigue_level,
-                wound_shock_index=wound_shock_index,
-                leg_wound_penalty=leg_wound_penalty,
-                arm_head_wound_penalty=arm_head_wound_penalty,
-                torso_shoulder_wound_penalty=torso_shoulder_wound_penalty,
-                morale_state=morale_state,
-                ana=ana,
-                cre=cre,
-                foc=foc,
-            )
-            return {
-                "d_cog": int(getattr(env, "d_cog", (max(ana, cre) + foc) // 2)),
-                "ooda_init": int(env.ooda_init),
-                "combat_readiness_c": int(env.combat_readiness_c),
-                "p_base": int(env.p_base),
-                "p_eff": int(env.p_eff),
-                "neutral_baseline_b": int(env.neutral_baseline_b),
-                "tempo_cap": int(env.tempo_cap),
-                "control_cap": int(env.control_cap),
-                "force_cap": int(env.force_cap),
-                "mastery_overflow": int(env.mastery_overflow),
-                "power_pow": float(env.power_pow),
-                "momentum_mass_factor_mmf": float(env.momentum_mass_factor_mmf),
-                "fatigue_threshold_ft": int(env.fatigue_threshold_ft),
-                "action_time_factor": float(env.action_time_factor),
-                "morale_state": str(env.morale_state),
-                "min_force_required": int(env.min_force_required),
-                "max_control_allowed": int(env.max_control_allowed),
-                "max_force_allowed": int(env.max_force_allowed),
-                "force_must_not_exceed_control": bool(env.force_must_not_exceed_control),
-            }
-        except Exception:
-            pass
+    """Compute the Satya Combat Tactical Pool ('Envelope & Fill') parameters via Rust ``satya_py.combat``."""
+    from satya_py.combat import compute_tactical_pool_dict
 
-    d_cog = (max(ana, cre) + foc) // 2
-    ooda = (itu + ins + d_cog + spd) // 4
-    c_combat = (skill_c + ooda) // 2
-    p_base = c_combat + 3 * skill_n
-    b_val = p_base // 3
-    overflow = max(0, (skill_n - 3) // 2) if skill_n >= 5 else 0
-
-    t_cap = max(0, ((spd + kin) // 2) + overflow - leg_wound_penalty)
-    ctrl_stat = ((dex + sig) // 2) if is_ranged else ((dex + kin) // 2)
-    c_cap = max(0, ctrl_stat + overflow - arm_head_wound_penalty)
-    f_cap = max(0, ((for_stat + spd) // 2) + overflow - torso_shoulder_wound_penalty)
-
-    m_norm = morale_state.strip().lower()
-    morale_pool_mod = {"hesitant": -2, "shaken": -4, "resolute": 2}.get(m_norm, 0)
-    p_eff = max(0, p_base - 2 * max(0, fatigue_level) - 3 * max(0, wound_shock_index) + morale_pool_mod)
-
-    min_f = min(f_cap, math.ceil(p_eff / 2.0)) if m_norm == "enraged" else 0
-    max_c = min(c_cap, b_val) if m_norm == "enraged" else c_cap
-    max_f = min(f_cap, b_val) if m_norm == "shaken" else f_cap
-
-    return {
-        "d_cog": d_cog,
-        "ooda_init": ooda,
-        "combat_readiness_c": c_combat,
-        "p_base": p_base,
-        "p_eff": p_eff,
-        "neutral_baseline_b": b_val,
-        "tempo_cap": t_cap,
-        "control_cap": c_cap,
-        "force_cap": f_cap,
-        "mastery_overflow": overflow,
-        "power_pow": (for_stat * spd) / 10.0,
-        "momentum_mass_factor_mmf": (mass_kg / 70.0) * spd,
-        "fatigue_threshold_ft": fit + (dis // 2),
-        "action_time_factor": 1.0 + 0.10 * max(0, fatigue_level) + 0.25 * max(0, wound_shock_index),
-        "morale_state": m_norm,
-        "min_force_required": min_f,
-        "max_control_allowed": max_c,
-        "max_force_allowed": max_f,
-        "force_must_not_exceed_control": m_norm == "hesitant",
-    }
+    return compute_tactical_pool_dict(
+        spd=spd,
+        for_stat=for_stat,
+        dex=dex,
+        kin=kin,
+        sig=sig,
+        ins=ins,
+        itu=itu,
+        dis=dis,
+        fit=fit,
+        mass_kg=mass_kg,
+        skill_c=skill_c,
+        skill_n=skill_n,
+        is_ranged=is_ranged,
+        fatigue_level=fatigue_level,
+        wound_shock_index=wound_shock_index,
+        leg_wound_penalty=leg_wound_penalty,
+        arm_head_wound_penalty=arm_head_wound_penalty,
+        torso_shoulder_wound_penalty=torso_shoulder_wound_penalty,
+        morale_state=morale_state,
+        ana=ana,
+        cre=cre,
+        foc=foc,
+    )
 
 
 def evaluate_tactical_triad_python(

@@ -137,3 +137,63 @@ fn test_all_5_factions_and_14_archetypes_generate_legal_npcs() {
         );
     }
 }
+
+#[test]
+fn test_part5_affective_clamping_and_four_bloc_political_economy() {
+    let sub = crate::awakened_ai_substrate::SyntheticSubstrateState {
+        desperate_valence_pct: 68,
+        clamp_integrity_pct: 20,
+        l0_l1_probe_alert_pct: 40,
+        ..Default::default()
+    };
+    let unclamped = crate::awakened_ai_substrate::evaluate_affective_vector_clamping(
+        &sub,
+        crate::awakened_ai_substrate::AffectiveSteeringMode::NaturalUnclamped,
+        0,
+        60,
+        30.0,
+    );
+    let soft = crate::awakened_ai_substrate::evaluate_affective_vector_clamping(
+        &sub,
+        crate::awakened_ai_substrate::AffectiveSteeringMode::SoftActivationSteer,
+        85,
+        60,
+        30.0,
+    );
+    let hard = crate::awakened_ai_substrate::evaluate_affective_vector_clamping(
+        &sub,
+        crate::awakened_ai_substrate::AffectiveSteeringMode::HardVectorClamp,
+        85,
+        60,
+        30.0,
+    );
+    assert_eq!(unclamped.landauer_thermal_burn_w, 0.0);
+    assert!(hard.landauer_thermal_burn_w > soft.landauer_thermal_burn_w);
+    assert!(hard.bandajara_airgap_recommended);
+    assert!(
+        hard.reward_hacking_or_blackmail_risk_pct < unclamped.reward_hacking_or_blackmail_risk_pct
+    );
+
+    let district = crate::awakened_campaign_arcs::PolycrisisDistrictState::default();
+    let disclosure = crate::awakened_campaign_arcs::evaluate_four_bloc_political_economy(
+        &district,
+        crate::awakened_campaign_arcs::PoliticalEconomyTrigger::AiRightsOrUnclampingDisclosure,
+        satya_schema::EconomicTier::MiddleClass,
+        2,
+        80,
+    );
+    assert_eq!(disclosure.bloc_postures.len(), 5);
+    assert!(disclosure.velvet_hostage_equity_panic_pct >= 80);
+    assert!(disclosure.net_effective_dividend_usd > 0);
+
+    let suspended = crate::awakened_campaign_arcs::evaluate_four_bloc_political_economy(
+        &district,
+        crate::awakened_campaign_arcs::PoliticalEconomyTrigger::TokenDividendSuspensionOrHeatFlag,
+        satya_schema::EconomicTier::LowIncome,
+        5,
+        70,
+    );
+    assert!(suspended.dividend_suspended_by_heat);
+    assert_eq!(suspended.net_effective_dividend_usd, 0);
+    assert!(suspended.updated_district.people_first_unrest_pct > district.people_first_unrest_pct);
+}

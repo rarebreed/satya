@@ -28,8 +28,9 @@ except ImportError:  # pragma: no cover
         return _FallbackToolWrapper(fn)
 
 
+from satya_py import psyche as _psyche
+
 from satya_ml.ai_gm.social_and_clocks import _parse_psyche_dict, _resolve_npc_profile
-from satya_ml.dice_probabilities import _ensure_satya_py_loaded
 
 
 def extract_npc_psyche_dict(npc: dict[str, Any]) -> dict[str, int]:
@@ -81,13 +82,12 @@ def evaluate_npc_morale_or_trigger(
     dis = int(attr_tns.get("dis") or npc.get("dis") or 12)
     current_morale = str(npc.get("morale_state") or "steady").strip().lower()
     fatigue = max(0, int(npc.get("fatigue", 0) or 0))
-    satya_py = _ensure_satya_py_loaded()
 
     norm_mode = mode.strip().lower().replace("-", "_")
     if norm_mode == "emotional_trigger":
-        pairs_raw = roll_pairs_json.strip() or json.dumps(_roll_2d20_pairs(1))
-        raw_out = satya_py.evaluate_emotional_trigger_json(
-            psyche_json,
+        pairs_raw = json.loads(roll_pairs_json) if roll_pairs_json.strip() else _roll_2d20_pairs(1)
+        engine_res = _psyche.evaluate_emotional_trigger(
+            psyche,
             dis,
             current_morale,
             fatigue,
@@ -95,7 +95,6 @@ def evaluate_npc_morale_or_trigger(
             int(wound_tier),
             pairs_raw,
         )
-        engine_res = json.loads(raw_out)
         new_morale = str(engine_res.get("new_morale_state") or current_morale).lower()
         delta_int_inflicted = int(engine_res.get("delta_int_inflicted", 0) or 0)
     elif norm_mode == "combat_morale":
@@ -106,21 +105,20 @@ def evaluate_npc_morale_or_trigger(
             "position_overrun_flanked_or_ambushed": bool(position_overrun_flanked_or_ambushed),
         }
         n_p = 2 if is_veteran_or_sere else 1
-        p_pairs = roll_pairs_json.strip() or json.dumps(_roll_2d20_pairs(n_p))
-        g_pair = gm_pair_json.strip() or json.dumps(_roll_2d20_pairs(1)[0])
-        raw_out = satya_py.evaluate_combat_morale_roll_json(
-            psyche_json,
+        p_pairs = json.loads(roll_pairs_json) if roll_pairs_json.strip() else _roll_2d20_pairs(n_p)
+        g_pair = json.loads(gm_pair_json) if gm_pair_json.strip() else _roll_2d20_pairs(1)[0]
+        engine_res = _psyche.evaluate_combat_morale_roll(
+            psyche,
             dis,
             motivation_kind,
             bool(command_intact),
             fatigue,
-            json.dumps(sit),
+            sit,
             bool(is_veteran_or_sere),
             current_morale,
             p_pairs,
             g_pair,
         )
-        engine_res = json.loads(raw_out)
         roll_out = engine_res.get("roll_outcome") if isinstance(engine_res.get("roll_outcome"), dict) else {}
         new_morale = str(
             roll_out.get("new_morale")

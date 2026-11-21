@@ -244,7 +244,7 @@ def _(CHAPTER_SPECS, chapters_by_id, mo, using_satya_py_backend):
     chapter_options = {
         f"{spec[2]} ({spec[1]})": spec[0] for spec in CHAPTER_SPECS
     }
-    chapter_options["All 18 Chapters (Complete Rules Compendium)"] = "ALL"
+    chapter_options["All 24 Chapters (Complete Rules Compendium)"] = "ALL"
 
     chapter_dropdown = mo.ui.dropdown(
         options=chapter_options,
@@ -253,7 +253,7 @@ def _(CHAPTER_SPECS, chapters_by_id, mo, using_satya_py_backend):
     )
     search_input = mo.ui.text(
         value="",
-        placeholder="Search across all 18 chapters (e.g., TN_eff, Tempo, Kuzushi, Dissonance)...",
+        placeholder="Search across all 24 chapters (e.g., TN_eff, Tempo, Kuzushi, Dissonance)...",
         label="Search Rules Book",
     )
 
@@ -262,7 +262,7 @@ def _(CHAPTER_SPECS, chapters_by_id, mo, using_satya_py_backend):
             mo.md(
                 f"""
                 # Satya TTRPG Rules Book & Interactive Mechanics Compendium
-                **18 Canonical Chapters · {total_words:,} Words · Engine Backend: `{backend_badge}`**
+                **24 Canonical Chapters · {total_words:,} Words · Engine Backend: `{backend_badge}`**
 
                 Browse individual chapters from `docs/ttrpg/` below, search across the entire ruleset, or experiment directly with the four interactive mechanics laboratories (**2d20 Watershed Cascade**, **Lifepath Skill Progression**, **Combat Tactical Pool & Melee Triad**, and **Social Cognitive Dissonance**).
                 """

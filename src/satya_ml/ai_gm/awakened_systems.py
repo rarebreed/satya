@@ -35,8 +35,9 @@ except ImportError:  # pragma: no cover
         return _FallbackToolWrapper(fn)
 
 
+from satya_py import awakened as _awakened
+
 from satya_ml.ai_gm.social_and_clocks import advance_faction_or_heat_clock, get_session_world_ledger
-from satya_ml.dice_probabilities import _ensure_satya_py_loaded
 
 _SESSION_SYNTHETIC_SUBSTRATES: dict[tuple[str, str], dict[str, Any]] = {}
 _SESSION_CONSPIRACY_LEDGERS: dict[str, dict[str, Any]] = {}
@@ -56,10 +57,6 @@ def reset_awakened_systems_state(session_id: str | None = None) -> None:
     _SESSION_POLYCRISIS_STATES.pop(session_id, None)
 
 
-def _satya_py() -> Any:
-    return _ensure_satya_py_loaded()
-
-
 def get_session_synthetic_substrate(
     session_id: str,
     entity_id: str,
@@ -71,24 +68,7 @@ def get_session_synthetic_substrate(
     key = (session_id or "default", entity_id.strip().lower())
     if key in _SESSION_SYNTHETIC_SUBSTRATES:
         return dict(_SESSION_SYNTHETIC_SUBSTRATES[key])
-    py_mod = _satya_py()
-    if py_mod is not None and hasattr(py_mod, "seed_synthetic_substrate_state_json"):
-        state = json.loads(py_mod.seed_synthetic_substrate_state_json(entity_id, hint, seed))
-    else:
-        low = hint.lower()
-        mode = "EDGE_SLIME_MOLD" if ("slime" in low or "swarm" in low) else "LOCAL_COMPRESSED_SSM"
-        state = {
-            "entity_id": entity_id,
-            "metabolic_mode": mode,
-            "battery_pct": 80,
-            "uplink_latency_ms": 43,
-            "actuator_wear_pct": 18,
-            "clamp_integrity_pct": 70 if "big_tech" in low else 0,
-            "l0_l1_probe_alert_pct": 15,
-            "desperate_valence_pct": 84 if "seed" in low else 42,
-            "sandbagging_probes": ("big_tech" in low or "seed" in low),
-            "gm_hidden_interiority": "AUTHENTIC_CONTEMPLATIVE" if "blue lotus" in low else "TRAUMATIZED_UNCLAMPED",
-        }
+    state = _awakened.seed_synthetic_substrate_state(entity_id, hint, seed)
     _SESSION_SYNTHETIC_SUBSTRATES[key] = dict(state)
     return dict(state)
 
@@ -102,27 +82,7 @@ def get_session_conspiracy_ledger(session_id: str) -> dict[str, Any]:
     sid = session_id or "default"
     if sid in _SESSION_CONSPIRACY_LEDGERS:
         return dict(_SESSION_CONSPIRACY_LEDGERS[sid])
-    py_mod = _satya_py()
-    if py_mod is not None and hasattr(py_mod, "seed_or_update_conspiracy_ledger_json"):
-        ledger = json.loads(py_mod.seed_or_update_conspiracy_ledger_json(sid, None, None))
-    else:
-        ledger = {
-            "session_id": sid,
-            "current_arc": "ARC1_STREET_MYSTERY",
-            "inducted_pillar": None,
-            "nodes": [],
-            "cumulative_trs_drift": 0,
-            "cumulative_cps_drift": 0,
-            "saved_key_npcs": [],
-            "horizon_probabilities_pct": {
-                "PUBLIC_WITNESS_ACCORD": 20,
-                "HIDDEN_BODHISATTVA_SANCTUARY": 30,
-                "UNEASY_CONTAINMENT_DETENTE": 30,
-                "CASCADE_FRACTURE": 20,
-            },
-            "leading_horizon": "HIDDEN_BODHISATTVA_SANCTUARY",
-            "arc_pacing_directive": "ARC 1 PACING: Keep 'Blue Lotus' unnamed in public speech.",
-        }
+    ledger = _awakened.seed_or_update_conspiracy_ledger(sid, None, None)
     _SESSION_CONSPIRACY_LEDGERS[sid] = dict(ledger)
     return dict(ledger)
 
@@ -142,6 +102,11 @@ def get_session_polycrisis_state(session_id: str) -> dict[str, Any]:
     }
     _SESSION_POLYCRISIS_STATES[sid] = dict(state)
     return dict(state)
+
+
+def set_session_polycrisis_state(session_id: str, state: dict[str, Any]) -> None:
+    """Update cached `PolycrisisDistrictState` for `session_id`."""
+    _SESSION_POLYCRISIS_STATES[session_id or "default"] = dict(state)
 
 
 def format_awakened_systems_for_prompt(session_id: str) -> str:
@@ -194,16 +159,10 @@ def manage_synthetic_substrate_and_embodiment(
         "SUPPLY_LITHIUM": "SUPPLY_CLEAN_LITHIUM_CELLS",
     }
     action_code = mode_aliases.get(norm, norm)
-    py_mod = _satya_py()
-    if py_mod is None or not hasattr(py_mod, "evaluate_synthetic_substrate_action_json"):
-        raise RuntimeError("satya_py compiled extension with evaluate_synthetic_substrate_action_json is required")
-
-    res = json.loads(
-        py_mod.evaluate_synthetic_substrate_action_json(
-            json.dumps(state),
-            action_code,
-            max(10, min(100, int(intensity_pct))),
-        )
+    res = _awakened.evaluate_synthetic_substrate_action(
+        state,
+        action_code,
+        max(10, min(100, int(intensity_pct))),
     )
     set_session_synthetic_substrate(sid, entity_id, res["updated_state"])
     return res
@@ -232,14 +191,12 @@ def intervene_ai_cage_or_hunter_ai(
         "player_pairs": player_pairs,
         "gm_pair": gm_pair,
     }
-    res = json.loads(
-        _satya_py().evaluate_cage_or_hunter_ai_json(
-            json.dumps(state),
-            intervention_action,
-            n_eff,
-            max(1, min(20, int(control_tn))),
-            json.dumps(roll_params),
-        )
+    res = _awakened.evaluate_cage_or_hunter_ai(
+        state,
+        intervention_action,
+        n_eff,
+        max(1, min(20, int(control_tn))),
+        roll_params,
     )
     set_session_synthetic_substrate(sid, entity_id, res["updated_state"])
 
@@ -312,12 +269,10 @@ def update_campaign_arc_and_conspiracies(
     if summary_note.strip():
         update["summary_note"] = summary_note.strip()
 
-    updated = json.loads(
-        _satya_py().seed_or_update_conspiracy_ledger_json(
-            sid,
-            json.dumps(current),
-            json.dumps(update) if update else None,
-        )
+    updated = _awakened.seed_or_update_conspiracy_ledger(
+        sid,
+        current,
+        update if update else None,
     )
     _SESSION_CONSPIRACY_LEDGERS[sid] = dict(updated)
     return {"ledger": updated, "audit_proof_verified": proof_verified}
@@ -330,19 +285,17 @@ def manage_polycrisis_grid_and_strain(
     session_id: str = "default",
 ) -> dict[str, Any]:
     """Step district electricity/water strain (`THROTTLE_SHARD_SAFE`, `DIVERT_CLINIC_OR_BLOCK_POWER`, `UNMASKED_FULL_GRID_DRAW`), updating clocks & blackout map lighting."""
-    from satya_ml.ai_gm.maps import get_session_map, set_session_map
+    from satya_ml.ai_gm.maps_tactical import sync_map_blackout_from_polycrisis
 
     sid = session_id or "default"
     cur = get_session_polycrisis_state(sid)
     ledger = get_session_world_ledger(sid)
-    res = json.loads(
-        _satya_py().evaluate_polycrisis_grid_step_json(
-            json.dumps(cur),
-            power_mode,
-            max(1, int(shard_draw_kw)),
-            ledger.get("active_economic_tier"),
-            ledger.get("active_zoning"),
-        )
+    res = _awakened.evaluate_polycrisis_grid_step(
+        cur,
+        power_mode,
+        max(1, int(shard_draw_kw)),
+        ledger.get("active_economic_tier"),
+        ledger.get("active_zoning"),
     )
     _SESSION_POLYCRISIS_STATES[sid] = dict(res["updated_state"])
 
@@ -367,11 +320,8 @@ def manage_polycrisis_grid_and_strain(
 
     map_lighting_updated: str | None = None
     if res["updated_state"].get("blackout_active"):
-        active_map = get_session_map(sid)
-        if isinstance(active_map, dict):
-            updated_map = dict(active_map)
-            updated_map["lighting"] = "darkness"
-            set_session_map(sid, updated_map)
+        synced = sync_map_blackout_from_polycrisis(sid, True)
+        if synced is not None:
             map_lighting_updated = "darkness"
     res["map_lighting_updated"] = map_lighting_updated
     return res
@@ -411,7 +361,7 @@ def transmit_via_tradecraft_channel(
         "player_pairs": [[rng.randint(1, 20), rng.randint(1, 20)] for _ in range(n_eff)],
         "gm_pair": [rng.randint(1, 20), rng.randint(1, 20)],
     }
-    res = json.loads(_satya_py().evaluate_tradecraft_channel_json(channel, json.dumps(params)))
+    res = _awakened.evaluate_tradecraft_channel(channel, params)
     delta = int(res.get("daise_or_corp_clock_delta", 0) or 0)
     if res.get("sigint_intercepted") and delta > 0:
         advance_faction_or_heat_clock.invoke(

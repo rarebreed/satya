@@ -302,6 +302,10 @@ const PRESET_ART_THEME_MAP: &[(&str, &str)] = &[
     ("botanical_garden", "park_grounds"),
     ("manufacturing_plant", "industrial"),
     ("warehouse", "industrial"),
+    ("community_clinic_annex", "clinic"),
+    ("corporate_server_bunker", "industrial"),
+    ("satyang_safehouse", "modern_interior"),
+    ("brownout_logistics_depot", "industrial"),
 ];
 
 pub fn battlemap_theme_for_map(

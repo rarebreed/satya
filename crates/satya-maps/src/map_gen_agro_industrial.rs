@@ -544,7 +544,9 @@ fn generate_botanical_garden(w: i32, h: i32, seed: i64) -> ProceduralSector {
     }
 
     // Winding StoneWalk promenade linking East/West borders & conservatory, plus meandering DirtTrail spurs.
-    let walk_y = ((cy1 as f32 + stream_y) * 0.5 - 0.25).clamp(cy1 as f32 + 1.1, stream_y - 1.4);
+    let walk_y_lo = cy1 as f32 + 1.1;
+    let walk_y_hi = (stream_y - 1.4).max(walk_y_lo);
+    let walk_y = ((cy1 as f32 + stream_y) * 0.5 - 0.25).clamp(walk_y_lo, walk_y_hi);
     let walk_rect = RectM {
         x0: 1.0,
         y0: cy1 as f32 + 0.9,

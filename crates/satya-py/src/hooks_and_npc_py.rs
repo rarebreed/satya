@@ -39,8 +39,8 @@ pub fn compile_party_motivational_hooks_json(
     serde_json::to_string(&manifest).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
 }
 
-/// Generates a full, rules-legal [`satya_engine::GeneratedNpcResult`] (including structured
-/// [`satya_engine::NpcMotivationalProfile`]) serialized as JSON.
+/// Generates a full, rules-legal [`satya_campaign::GeneratedNpcResult`] (including structured
+/// [`satya_campaign::NpcMotivationalProfile`]) serialized as JSON.
 #[pyfunction]
 #[pyo3(signature = (prompt, template=None, name_override=None, career_terms=2, seed=0, pack_id=None))]
 pub fn generate_npc_profile_json(

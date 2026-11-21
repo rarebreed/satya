@@ -140,7 +140,11 @@ impl Furnisher {
     }
 
     fn free(&self, x: i32, y: i32, fw: i32, fh: i32, r: Room) -> bool {
-        x >= r.x0
+        x >= 0
+            && y >= 0
+            && x + fw <= self.w
+            && y + fh <= self.h
+            && x >= r.x0
             && y >= r.y0
             && x + fw <= r.x1
             && y + fh <= r.y1
@@ -149,7 +153,11 @@ impl Furnisher {
     }
 
     fn free_prop(&self, p: &MapPropPlacement, r: Room) -> bool {
-        p.x >= r.x0
+        p.x >= 0
+            && p.y >= 0
+            && p.x + p.w_cells <= self.w
+            && p.y + p.h_cells <= self.h
+            && p.x >= r.x0
             && p.y >= r.y0
             && p.x + p.w_cells <= r.x1
             && p.y + p.h_cells <= r.y1
@@ -172,7 +180,14 @@ impl Furnisher {
         let p = make_prop(kind, x, y, rot, len, seed);
         let decal = prop_spec(kind).floor_layer;
         let fits = if decal {
-            x >= r.x0 && y >= r.y0 && x + p.w_cells <= r.x1 && y + p.h_cells <= r.y1
+            x >= 0
+                && y >= 0
+                && x + p.w_cells <= self.w
+                && y + p.h_cells <= self.h
+                && x >= r.x0
+                && y >= r.y0
+                && x + p.w_cells <= r.x1
+                && y + p.h_cells <= r.y1
         } else {
             self.free_prop(&p, r)
         };

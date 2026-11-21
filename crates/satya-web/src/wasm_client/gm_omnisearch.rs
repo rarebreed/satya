@@ -53,6 +53,7 @@ pub fn format_gm_omnisearch_hits_html(resp: &GmOmnisearchResponse) -> String {
             escape_html(&resp.scope)
         );
     }
+    let can_manage = crate::wasm_client::gm_docs::viewer_can_manage_gm_vault();
     resp.hits
         .iter()
         .map(|h| {
@@ -79,26 +80,31 @@ pub fn format_gm_omnisearch_hits_html(resp: &GmOmnisearchResponse) -> String {
             } else {
                 ""
             };
-            let actions_html = match h.source_kind {
-                GmLookupSourceKind::GmDocument => format_vault_hit_actions_html(
-                    "satyaToggleGmDocPersistence",
-                    Some("satyaDeleteGmDocument"),
-                    &h.item_id,
-                    h.is_persistent,
-                ),
-                GmLookupSourceKind::GmMemory => format_vault_hit_actions_html(
-                    "satyaToggleGmMemoryPersistence",
-                    Some("satyaDeleteGmMemory"),
-                    &h.item_id,
-                    h.is_persistent,
-                ),
-                GmLookupSourceKind::SessionNpc => format_vault_hit_actions_html(
-                    "satyaToggleNpcPersistence",
-                    (!h.subtitle.starts_with("Starter NPC")).then_some("satyaDeleteSessionNpc"),
-                    &h.item_id,
-                    h.is_persistent,
-                ),
-                _ => String::new(),
+            let actions_html = if can_manage {
+                match h.source_kind {
+                    GmLookupSourceKind::GmDocument => format_vault_hit_actions_html(
+                        "satyaToggleGmDocPersistence",
+                        Some("satyaDeleteGmDocument"),
+                        &h.item_id,
+                        h.is_persistent,
+                    ),
+                    GmLookupSourceKind::GmMemory => format_vault_hit_actions_html(
+                        "satyaToggleGmMemoryPersistence",
+                        Some("satyaDeleteGmMemory"),
+                        &h.item_id,
+                        h.is_persistent,
+                    ),
+                    GmLookupSourceKind::SessionNpc => format_vault_hit_actions_html(
+                        "satyaToggleNpcPersistence",
+                        (!h.subtitle.starts_with("Starter NPC"))
+                            .then_some("satyaDeleteSessionNpc"),
+                        &h.item_id,
+                        h.is_persistent,
+                    ),
+                    _ => String::new(),
+                }
+            } else {
+                String::new()
             };
             format!(
                 r#"<div class="gm-doc-card">

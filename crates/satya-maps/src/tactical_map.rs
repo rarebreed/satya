@@ -14,9 +14,9 @@
 
 use satya_schema::tactical_map_dto::MapScalePreset;
 use satya_schema::{
-    CoverGrade, EconomicTier, GmMapUpdateRequest, MapFloorLevel, MapPropPlacement,
-    MapSurfaceFeature, MapWallEdge, MessageVisibility, SurfaceFeatureKind, TokenPlacement,
-    TokenVisualSpec, WallEdgeKind, ZoningContext,
+    CoverGrade, EconomicTier, GmMapUpdateRequest, MapFaradayZone, MapFloorLevel, MapPropPlacement,
+    MapSurfaceFeature, MapSurveillanceNode, MapWallEdge, MessageVisibility, SurfaceFeatureKind,
+    TokenPlacement, TokenVisualSpec, WallEdgeKind, ZoningContext,
 };
 use serde::{Deserialize, Serialize};
 
@@ -73,7 +73,7 @@ define_coded_enum! {
     /// Canonical procedural sector layout presets for `1.0m` tactical battlemaps.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
     #[serde(rename_all = "snake_case")]
-    pub enum SectorPreset [count = 25] {
+    pub enum SectorPreset [count = 29] {
         #[default]
         ResidentialApartment => {
             code: "residential_apartment",
@@ -225,6 +225,30 @@ define_coded_enum! {
             subtitle: "High-bay pallet rack aisles, forklifts, shipping containers, dispatch office & loading dock apron",
             aliases: ["depot", "distribution_center", "storage_warehouse", "fulfillment"],
         },
+        CommunityClinicAnnex => {
+            code: "community_clinic_annex",
+            label: "Community Clinic Annex (2035)",
+            subtitle: "2035 mutual-aid clinic (1F triage & B1 cold-storage Faraday vault) with service alley and transformer pad",
+            aliases: ["st_jude", "st_jude_annex", "clinic_annex", "mutual_aid_clinic"],
+        },
+        CorporateServerBunker => {
+            code: "corporate_server_bunker",
+            label: "Corporate AI 2.0 Server Bunker",
+            subtitle: "Hardened ReinforcedConcrete QPU compute bunker with biometric mantrap, Faraday vault & air-gapped SCADA",
+            aliases: ["server_bunker", "datacenter", "data_center", "qpu_bunker", "compute_bunker"],
+        },
+        SatyangSafehouse => {
+            code: "satyang_safehouse",
+            label: "Satyang Copper-Mesh Safehouse",
+            subtitle: "Clandestine cover shophouse (1F) over copper-mesh Faraday cellar (B1) with SIGINT bench and rear alley egress",
+            aliases: ["safehouse", "copper_mesh", "sanctuary"],
+        },
+        BrownoutLogisticsDepot => {
+            code: "brownout_logistics_depot",
+            label: "Brownout Logistics Depot & Substation",
+            subtitle: "Automated courier logistics warehouse adjoining a fenced 500 kV electrical substation yard and cooling shelter",
+            aliases: ["logistics_depot", "substation", "wet_bulb", "wet_bulb_block", "brownout_depot"],
+        },
     }
 }
 
@@ -235,8 +259,17 @@ pub struct SectorPresetGroup {
     pub presets: &'static [SectorPreset],
 }
 
-/// Canonical grouped `<optgroup>` hierarchy covering all `25` [`SectorPreset`] variants without overlap.
+/// Canonical grouped `<optgroup>` hierarchy covering all `29` [`SectorPreset`] variants without overlap.
 pub const SECTOR_PRESET_GROUPS: &[SectorPresetGroup] = &[
+    SectorPresetGroup {
+        label: "Awakened 2035 Venues",
+        presets: &[
+            SectorPreset::CommunityClinicAnnex,
+            SectorPreset::CorporateServerBunker,
+            SectorPreset::SatyangSafehouse,
+            SectorPreset::BrownoutLogisticsDepot,
+        ],
+    },
     SectorPresetGroup {
         label: "Urban & Commercial",
         presets: &[
@@ -372,7 +405,8 @@ impl SectorPreset {
             Self::ResidentialApartment
             | Self::CornerBar
             | Self::DerelictCorridor
-            | Self::OrbitalAirlock => (24, 18),
+            | Self::OrbitalAirlock
+            | Self::SatyangSafehouse => (24, 18),
             Self::OfficeFloor
             | Self::UrbanCrossroads
             | Self::WoodedPark
@@ -380,7 +414,9 @@ impl SectorPreset {
             | Self::RoadsideDitch
             | Self::MedLabSector
             | Self::UrbanResidential
-            | Self::ProjectsHighDensity => (36, 26),
+            | Self::ProjectsHighDensity
+            | Self::CommunityClinicAnnex
+            | Self::CorporateServerBunker => (36, 26),
             Self::GardenEstate
             | Self::DockingBay
             | Self::SuburbanNeighborhood
@@ -393,7 +429,8 @@ impl SectorPreset {
             | Self::Farms
             | Self::BotanicalGarden
             | Self::ManufacturingPlant
-            | Self::Warehouse => (48, 36),
+            | Self::Warehouse
+            | Self::BrownoutLogisticsDepot => (48, 36),
         }
     }
 
@@ -421,6 +458,8 @@ pub struct ProceduralSector {
     pub surfaces: Vec<MapSurfaceFeature>,
     pub floors: Vec<MapFloorLevel>,
     pub active_floor: i32,
+    pub faraday_zones: Vec<MapFaradayZone>,
+    pub surveillance_nodes: Vec<MapSurveillanceNode>,
 }
 
 /// Generates a [`ProceduralSector`] honoring optional decoupled [`EconomicTier`] and [`ZoningContext`] overrides.
@@ -437,6 +476,15 @@ pub fn generate_procedural_sector_with_options(
         width.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM),
         height.clamp(MIN_SECTOR_DIM, MAX_SECTOR_DIM),
     );
+    if matches!(
+        preset,
+        SectorPreset::CommunityClinicAnnex
+            | SectorPreset::CorporateServerBunker
+            | SectorPreset::SatyangSafehouse
+            | SectorPreset::BrownoutLogisticsDepot
+    ) {
+        return crate::map_gen_awakened::generate_awakened_sector(preset, w, h, seed);
+    }
     if preset.is_zoned_preset() {
         return crate::map_gen_zoning::generate_zoned_sector(
             preset,
@@ -673,6 +721,61 @@ pub fn evaluate_los_continuous(
 
 /// Builds a complete vector [`GmMapUpdateRequest`] with continuous centimeter token coordinates,
 /// thin structural [`MapWallEdge`]s, `360°` oriented props, vector ground surfaces, and multi-floor stacks.
+fn find_unblocked_starter_cell(
+    w: i32,
+    h: i32,
+    edges: &[MapWallEdge],
+    props: &[MapPropPlacement],
+    surfaces: &[MapSurfaceFeature],
+    ideal: (i32, i32),
+    occupied_cells: &[(i32, i32)],
+) -> (i32, i32) {
+    let bw = w.max(1) as f32;
+    let bh = h.max(1) as f32;
+    for r in 0..=w.max(h) {
+        for dy in -r..=r {
+            for dx in -r..=r {
+                if dx.abs() != r && dy.abs() != r {
+                    continue;
+                }
+                let cx = ideal.0 + dx;
+                let cy = ideal.1 + dy;
+                if cx < 1 || cy < 1 || cx >= w - 1 || cy >= h - 1 {
+                    continue;
+                }
+                if occupied_cells.contains(&(cx, cy)) {
+                    continue;
+                }
+                let x_m = cx as f32 + 0.5;
+                let y_m = cy as f32 + 0.5;
+                let wet_or_hazard = matches!(
+                    topmost_surface_at_m(surfaces, x_m, y_m).map(|s| s.kind),
+                    Some(
+                        SurfaceFeatureKind::PoolWater
+                            | SurfaceFeatureKind::CreekChannel
+                            | SurfaceFeatureKind::DrainageDitch
+                    )
+                );
+                if wet_or_hazard {
+                    continue;
+                }
+                if !circle_collides_obstacles(
+                    bw,
+                    bh,
+                    edges,
+                    props,
+                    x_m,
+                    y_m,
+                    crate::tactical_map_geom::TOKEN_RADIUS_M,
+                ) {
+                    return (cx, cy);
+                }
+            }
+        }
+    }
+    (ideal.0.clamp(1, (w - 2).max(1)), ideal.1.clamp(1, (h - 2).max(1)))
+}
+
 #[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn build_procedural_map_request_with_options(
@@ -693,6 +796,8 @@ pub fn build_procedural_map_request_with_options(
         surfaces,
         floors,
         active_floor,
+        faraday_zones,
+        surveillance_nodes,
     } = generate_procedural_sector_with_options(preset, w, h, seed, economic_tier, zoning);
     let mid_y = h / 2;
     let title = title_override
@@ -701,13 +806,42 @@ pub fn build_procedural_map_request_with_options(
         .unwrap_or_else(|| preset.full_name())
         .to_string();
 
-    let sara_y = (mid_y - 1).max(1);
+    let mut placed_cells: Vec<(i32, i32)> = Vec::new();
+    let sara_cell = find_unblocked_starter_cell(
+        w,
+        h,
+        &wall_edges,
+        &props,
+        &surfaces,
+        (2, (mid_y - 1).max(1)),
+        &placed_cells,
+    );
+    placed_cells.push(sara_cell);
+    let marcus_cell = find_unblocked_starter_cell(
+        w,
+        h,
+        &wall_edges,
+        &props,
+        &surfaces,
+        (2, mid_y),
+        &placed_cells,
+    );
+    placed_cells.push(marcus_cell);
+    let sentry_cell = find_unblocked_starter_cell(
+        w,
+        h,
+        &wall_edges,
+        &props,
+        &surfaces,
+        (w - 3, mid_y),
+        &placed_cells,
+    );
     let starters = [
         (
             "tok-sara",
             "Sara (Valkyrie)",
-            2,
-            sara_y,
+            sara_cell.0,
+            sara_cell.1,
             "valkyrie_rig",
             "#38bdf8",
             90,
@@ -716,8 +850,8 @@ pub fn build_procedural_map_request_with_options(
         (
             "tok-marcus",
             "Marcus (Recon)",
-            2,
-            mid_y,
+            marcus_cell.0,
+            marcus_cell.1,
             "recon_mk4",
             "#22d3ee",
             90,
@@ -726,8 +860,8 @@ pub fn build_procedural_map_request_with_options(
         (
             "tok-secops-1",
             "SecOps Sentry",
-            w - 3,
-            mid_y,
+            sentry_cell.0,
+            sentry_cell.1,
             "secops_sentry",
             "#f87171",
             270,
@@ -801,6 +935,9 @@ pub fn build_procedural_map_request_with_options(
         world_sectors: vec![root_cell],
         ground_floor_override: None,
         ground_tint_rgb: None,
+        ambient_light_delta_ext: 0,
+        faraday_zones,
+        surveillance_nodes,
     }
 }
 

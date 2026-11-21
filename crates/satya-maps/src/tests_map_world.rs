@@ -260,7 +260,7 @@ fn phase5_sector_preset_groups_and_aliases_roundtrip() {
         }
     }
     assert_eq!(flat.len(), SectorPreset::ALL.len());
-    assert_eq!(flat.len(), 25);
+    assert_eq!(flat.len(), 29);
     for p in SectorPreset::ALL {
         assert!(
             seen.contains(p.as_str()),
@@ -286,6 +286,10 @@ fn phase5_sector_preset_groups_and_aliases_roundtrip() {
         ("mall", SectorPreset::ShoppingMall),
         ("farm", SectorPreset::Farms),
         ("botanical", SectorPreset::BotanicalGarden),
+        ("st_jude", SectorPreset::CommunityClinicAnnex),
+        ("server_bunker", SectorPreset::CorporateServerBunker),
+        ("safehouse", SectorPreset::SatyangSafehouse),
+        ("substation", SectorPreset::BrownoutLogisticsDepot),
     ];
     for (alias, expected) in checks {
         assert_eq!(
@@ -460,4 +464,52 @@ fn phase5_agro_industrial_sectors_and_plaza_transition() {
             .map(|c| (&c.preset, c.economic_tier))
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn wave2_multifloor_continuation_and_preset_override() {
+    use crate::map_continuation::continue_procedural_map_with_preset;
+    use satya_schema::{EdgeSide, MapFloorLevel, MapWallEdge, WallEdgeKind};
+
+    let mut base = build_procedural_map_request(
+        "multi-cont",
+        SectorPreset::UrbanResidential,
+        None,
+        24,
+        20,
+        42,
+    );
+    base.cell_size_cm = 150;
+    // Strip floor 0 to simulate a non-zero-only multi-floor base map (e.g. 2F penthouse only),
+    // plus add an active upper floor with an outer seam edge that continuation should stitch cleanly.
+    base.floors = vec![MapFloorLevel {
+        floor_index: 1,
+        label: "2F".to_owned(),
+        elevation_cm: 300,
+        ground_floor_override: None,
+        ground_tint_rgb: None,
+        wall_edges: vec![MapWallEdge {
+            x: 24,
+            y: 10,
+            side: EdgeSide::West,
+            kind: WallEdgeKind::Wall,
+            material: satya_schema::MaterialClass::Drywall,
+        }],
+        props: Vec::new(),
+        surfaces: Vec::new(),
+    }];
+    base.active_floor = 1;
+    base.wall_edges = base.floors[0].wall_edges.clone();
+
+    let out = continue_procedural_map_with_preset(
+        &base,
+        MapContinuationDir::East,
+        Some(99),
+        Some(SectorPreset::ShoppingPlaza),
+    )
+    .expect("continue_procedural_map_with_preset succeeds");
+    assert_eq!(out.map.cell_size_cm, 150);
+    assert_eq!(out.map.active_floor, 1);
+    assert!(out.map.grid_width > 24);
+    assert!(out.map.world_sectors.len() >= 2);
 }

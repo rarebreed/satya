@@ -24,6 +24,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from satya_py import maps as _maps
+
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model
 from satya_ml.campaign_config import (
     get_active_campaign_pack,
@@ -64,26 +66,20 @@ _SESSION_MAPS: dict[str, dict[str, Any]] = {}
 _SESSION_LLM_CONFIGS: dict[str, SessionLlmConfig] = {}
 
 
-def _load_satya_py() -> Any | None:
-    try:
-        from satya_ml.dice_probabilities import _ensure_satya_py_loaded
-
-        return _ensure_satya_py_loaded()
-    except Exception:
-        return None
-
-
-_SATYA_PY = _load_satya_py()
-
-
 def using_satya_py_map_backend() -> bool:
-    """Return ``True`` when the compiled Rust ``satya_py`` spatial map backend is active."""
-    return _SATYA_PY is not None and hasattr(_SATYA_PY, "evaluate_tactical_los_and_cover")
+    """Return ``True``; all tactical map collision, LoS, and procedural generation runs via Rust ``satya_py.maps``."""
+    return True
+
 
 _TOKEN_RADIUS_M = 0.30
+# Used strictly for SVG background paint ordering in render_tactical_svg();
+# Rust satya-maps owns authoritative collision and LoS classification.
 _NON_SOLID_PROP_KINDS = {
     "RUG",
+    "RUNNER_RUG",
+    "ROUND_RUG",
     "MULCH_BED",
+    "GARDEN_BED",
     "GARDEN_EDGING",
     "CREEK_WATER",
     "DRAINAGE_DITCH",
@@ -93,9 +89,42 @@ _NON_SOLID_PROP_KINDS = {
     "ASPHALT_DRIVE",
     "ELEVATED_CATWALK",
     "STAIRWELL",
+    "ELEVATOR_CAR",
+    "SERVICE_ELEVATOR",
     "HAZARD_SPILL",
+    "BAR_STOOL",
+    "DESK_LAMP",
+    "STANDING_LAMP",
+    "FIRE_EXTINGUISHER",
+    "GAZEBO",
+    "FLOOR_CLOTHES",
+    "FLOOR_TOYS",
+    "STREET_DEBRIS",
+    "TELEMETRY_MONITOR",
+    "BIOHAZARD_BIN",
+    "DESK_CLUTTER",
+    "WATER_COOLER",
+    "BROWNSTONE_STOOP",
+    "AWNING_CANOPY",
 }
-_CONCEALMENT_PROP_KINDS = {"BUSH", "MEDIUM_TREE", "LARGE_TREE", "PRIVACY_CURTAIN", "CROP_ROW"}
+_SCIFI_SECTOR_PRESET_REMAP = {
+    "orbital_airlock": "corporate_server_bunker",
+    "docking_bay": "brownout_logistics_depot",
+    "derelict_corridor": "satyang_safehouse",
+    "med_lab": "community_clinic_annex",
+}
+
+
+def clear_session_map_caches(session_id: str | None = None) -> None:
+    """Clear in-memory tactical map, LLM config, and spatial pin caches for `session_id` (or all)."""
+    if session_id is None:
+        _SESSION_MAPS.clear()
+        _SESSION_LLM_CONFIGS.clear()
+        _SESSION_SPATIAL_PINS.clear()
+    else:
+        _SESSION_MAPS.pop(session_id, None)
+        _SESSION_LLM_CONFIGS.pop(session_id, None)
+        _SESSION_SPATIAL_PINS.pop(session_id, None)
 
 
 def _repo_root() -> Path:
@@ -113,7 +142,9 @@ def _signaling_base_url() -> str:
 
 
 def _gm_service_token() -> str:
-    return os.environ.get("SATYA_GM_SERVICE_TOKEN", "satya_gm_secret_dev_token")
+    from satya_ml.ai_gm.tools import _gm_service_token as _shared_gm_service_token
+
+    return _shared_gm_service_token()
 
 
 def _gm_headers() -> dict[str, str]:
@@ -147,9 +178,38 @@ def get_session_llm_config(session_id: str) -> SessionLlmConfig | None:
 
 
 def infer_sector_preset(theme: str) -> str:
-    """Map a free-text scene theme to one of the 25 canonical `satya-engine` `SectorPreset` codes."""
+    """Map a free-text scene theme to one of the 29 canonical `satya-engine` `SectorPreset` codes."""
     low = (theme or "").lower()
     words = set(low.replace("-", " ").replace("_", " ").split())
+    if "community_clinic_annex" in low or any(
+        k in low for k in ("community clinic", "clinic annex", "free clinic", "triage annex", "street clinic")
+    ):
+        return "community_clinic_annex"
+    if "corporate_server_bunker" in low or any(
+        k in low
+        for k in ("server bunker", "corporate bunker", "data bunker", "data center", "black site", "server vault", "faraday vault")
+    ) or "scif" in words:
+        return "corporate_server_bunker"
+    if "satyang_safehouse" in low or any(
+        k in low
+        for k in (
+            "satyang safehouse",
+            "satyang cell",
+            "satyang relay",
+            "satyang hideout",
+            "satyang enclave",
+            "awakened safehouse",
+            "cell safehouse",
+            "dissident safehouse",
+            "mesh safehouse",
+            "relay safehouse",
+        )
+    ):
+        return "satyang_safehouse"
+    if "brownout_logistics_depot" in low or any(
+        k in low for k in ("brownout", "ration depot", "microgrid depot")
+    ):
+        return "brownout_logistics_depot"
     if any(k in low for k in ("creek", "stream", "brook", "river", "ravine")):
         return "woodland_creek"
     if any(k in low for k in ("ditch", "trench", "culvert", "country lane")):
@@ -164,7 +224,7 @@ def infer_sector_preset(theme: str) -> str:
         return "shopping_plaza"
     if any(k in low for k in ("botanical_garden", "botanical garden", "botanical", "conservatory", "arboretum", "greenhouse")):
         return "botanical_garden"
-    if any(k in low for k in ("luxury mansion", "luxury_mansion", "manor", "penthouse estate")):
+    if any(k in low for k in ("luxury mansion", "luxury_mansion", "manor", "penthouse estate", "mansion")):
         return "luxury_mansion"
     if any(k in low for k in ("projects_high_density", "projects", "public housing", "tenement", "housing block")):
         return "projects_high_density"
@@ -175,6 +235,8 @@ def infer_sector_preset(theme: str) -> str:
     if any(k in low for k in ("farms", "farmland", "cropland", "orchard", "pasture", "acreage", "barn")) or "farm" in words:
         return "farms"
     if any(k in low for k in ("warehouse", "distribution center", "logistics", "pallet rack", "freight depot")):
+        if any(k in low for k in ("brownout", "blackout", "microgrid", "ration depot", "logistics depot")):
+            return "brownout_logistics_depot"
         return "warehouse"
     if (
         any(
@@ -208,7 +270,7 @@ def infer_sector_preset(theme: str) -> str:
         return "downtown_commercial"
     if any(k in low for k in ("urban_residential", "urban residential", "townhouse", "brownstone", "rowhouse", "condo")):
         return "urban_residential"
-    if any(k in low for k in ("estate", "compound", "courtyard", "garden", "yard", "villa", "mansion")):
+    if any(k in low for k in ("estate", "compound", "courtyard", "garden", "yard", "villa")):
         return "garden_estate"
     if any(k in low for k in ("park", "woods", "forest", "trail", "clearing", "grove")):
         return "wooded_park"
@@ -224,210 +286,11 @@ def infer_sector_preset(theme: str) -> str:
         return "med_lab"
     if any(k in low for k in ("urban", "street", "road", "city", "crossroad")):
         return "urban_crossroads"
-    if any(k in low for k in ("corridor", "derelict", "breach", "tunnel")):
+    if any(k in low for k in ("corridor", "derelict", "breach", "tunnel", "bunker")):
         return "derelict_corridor"
     if any(k in low for k in ("orbital", "airlock", "station")):
         return "orbital_airlock"
     return str(get_active_campaign_pack().get("default_sector_preset") or "urban_crossroads")
-
-
-def _make_prop(
-    prop_id: str,
-    kind: str,
-    center_x_cm: int,
-    center_y_cm: int,
-    span_w_cm: int,
-    span_h_cm: int,
-    rotation_deg: int = 0,
-    cover_height_cm: int = 95,
-    material: str = "REINFORCED_CONCRETE",
-    label: str | None = None,
-) -> dict[str, Any]:
-    origin_x = max(0, (center_x_cm - span_w_cm // 2) // 100)
-    origin_y = max(0, (center_y_cm - span_h_cm // 2) // 100)
-    w_cells = max(1, (span_w_cm + 99) // 100)
-    h_cells = max(1, (span_h_cm + 99) // 100)
-    return {
-        "id": prop_id,
-        "kind": kind,
-        "x": origin_x,
-        "y": origin_y,
-        "w_cells": w_cells,
-        "h_cells": h_cells,
-        "center_x_cm": center_x_cm,
-        "center_y_cm": center_y_cm,
-        "span_w_cm": span_w_cm,
-        "span_h_cm": span_h_cm,
-        "rotation_deg": rotation_deg % 360,
-        "cover_height_cm": cover_height_cm,
-        "material": material,
-        "label": label or kind.replace("_", " ").title(),
-    }
-
-
-def build_procedural_vector_scene(
-    width: int,
-    height: int,
-    preset: str = "",
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Generate thin perimeter/partition `wall_edges` and 360°-oriented `props` (zero tile grid)."""
-    preset = preset or str(get_active_campaign_pack().get("default_sector_preset") or "urban_crossroads")
-    wall_edges: list[dict[str, Any]] = []
-    props: list[dict[str, Any]] = []
-
-    if width >= 6 and height >= 6:
-        for gx in range(width):
-            wall_edges.append(
-                {"x": gx, "y": 0, "side": "NORTH", "kind": "WALL", "material": "CONCRETE_BLOCK"}
-            )
-            wall_edges.append(
-                {"x": gx, "y": height, "side": "NORTH", "kind": "WALL", "material": "CONCRETE_BLOCK"}
-            )
-        door_y = height // 2
-        for gy in range(height):
-            wall_edges.append(
-                {
-                    "x": 0,
-                    "y": gy,
-                    "side": "WEST",
-                    "kind": "DOOR_OPEN" if gy == door_y else "WALL",
-                    "material": "SHEET_STEEL" if gy == door_y else "CONCRETE_BLOCK",
-                }
-            )
-            wall_edges.append(
-                {
-                    "x": width,
-                    "y": gy,
-                    "side": "WEST",
-                    "kind": "DOOR_CLOSED" if gy == door_y else "WALL",
-                    "material": "SHEET_STEEL" if gy == door_y else "CONCRETE_BLOCK",
-                }
-            )
-
-    # Structural corner column in the NW quadrant (`(0, 0)` cell corner, 90x90cm)
-    props.append(
-        _make_prop(
-            "prop-nw-pillar",
-            "STRUCTURAL_PILLAR",
-            50,
-            50,
-            90,
-            90,
-            rotation_deg=0,
-            cover_height_cm=240,
-            material="REINFORCED_CONCRETE",
-            label="Corner Pillar",
-        )
-    )
-
-    # Central tactical cover barrier angled 15 deg
-    mid_x = max(2, width // 2 - 1)
-    mid_y = max(2, height // 2 - 1)
-    props.append(
-        _make_prop(
-            "prop-center-cover",
-            "JERSEY_BARRIER",
-            mid_x * 100 + 200,
-            mid_y * 100 + 75,
-            140,
-            80,
-            rotation_deg=15,
-            cover_height_cm=95,
-            material="REINFORCED_CONCRETE",
-            label="COVER",
-        )
-    )
-
-    if width >= 10 and height >= 8:
-        if preset == "docking_bay":
-            props.append(
-                _make_prop(
-                    "prop-bay-crate",
-                    "WOOD_CRATE",
-                    max(2, width // 3) * 100 + 50,
-                    max(2, height - 3) * 100 + 50,
-                    95,
-                    95,
-                    rotation_deg=30,
-                    cover_height_cm=110,
-                    material="SOLID_WOOD",
-                )
-            )
-            props.append(
-                _make_prop(
-                    "prop-bay-spill",
-                    "HAZARD_SPILL",
-                    min(width - 3, (width * 2) // 3) * 100 + 50,
-                    250,
-                    160,
-                    110,
-                    rotation_deg=20,
-                    cover_height_cm=0,
-                    material="FOLIAGE",
-                )
-            )
-        elif preset == "med_lab":
-            wall_edges.append(
-                {
-                    "x": max(2, width // 3),
-                    "y": 2,
-                    "side": "WEST",
-                    "kind": "WALL",
-                    "material": "DRYWALL",
-                }
-            )
-            wall_edges.append(
-                {
-                    "x": max(2, width // 3),
-                    "y": 3,
-                    "side": "WEST",
-                    "kind": "DOOR_CLOSED",
-                    "material": "SHEET_STEEL",
-                }
-            )
-            props.append(
-                _make_prop(
-                    "prop-med-spill",
-                    "HAZARD_SPILL",
-                    min(width - 3, (width * 2) // 3) * 100 + 50,
-                    max(2, height - 3) * 100 + 50,
-                    150,
-                    100,
-                    rotation_deg=35,
-                    cover_height_cm=0,
-                    material="FOLIAGE",
-                )
-            )
-        elif preset == "urban_crossroads":
-            props.append(
-                _make_prop(
-                    "prop-urban-catwalk",
-                    "ELEVATED_CATWALK",
-                    250,
-                    250,
-                    180,
-                    120,
-                    rotation_deg=0,
-                    cover_height_cm=0,
-                    material="SHEET_STEEL",
-                )
-            )
-        else:
-            props.append(
-                _make_prop(
-                    "prop-flank-crate",
-                    "WOOD_CRATE",
-                    max(2, width // 3) * 100 + 50,
-                    250,
-                    95,
-                    95,
-                    rotation_deg=25,
-                    cover_height_cm=95,
-                    material="SOLID_WOOD",
-                )
-            )
-
-    return wall_edges, props
 
 
 def _infer_model_preset(label: str, is_hidden: bool = False) -> str:
@@ -498,33 +361,6 @@ def _wall_edge_segment_m(edge: dict[str, Any]) -> tuple[float, float, float, flo
     return (ex, ey, ex + 1.0, ey)
 
 
-def _point_to_segment_dist_m(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
-    vx = bx - ax
-    vy = by - ay
-    seg_len2 = vx * vx + vy * vy
-    if seg_len2 <= 1e-9:
-        return math.hypot(px - ax, py - ay)
-    t = max(0.0, min(1.0, ((px - ax) * vx + (py - ay) * vy) / seg_len2))
-    return math.hypot(px - (ax + t * vx), py - (ay + t * vy))
-
-
-def _segments_intersect_m(
-    ax: float, ay: float, bx: float, by: float, cx: float, cy: float, dx: float, dy: float
-) -> bool:
-    def cross(px: float, py: float, qx: float, qy: float, rx: float, ry: float) -> float:
-        return (qx - px) * (ry - py) - (qy - py) * (rx - px)
-
-    d1 = cross(cx, cy, dx, dy, ax, ay)
-    d2 = cross(cx, cy, dx, dy, bx, by)
-    d3 = cross(ax, ay, bx, by, cx, cy)
-    d4 = cross(ax, ay, bx, by, dx, dy)
-    if ((d1 > 1e-6 and d2 < -1e-6) or (d1 < -1e-6 and d2 > 1e-6)) and (
-        (d3 > 1e-6 and d4 < -1e-6) or (d3 < -1e-6 and d4 > 1e-6)
-    ):
-        return True
-    return False
-
-
 def _prop_center_span_rot_m(prop: dict[str, Any]) -> tuple[float, float, float, float, float]:
     if prop.get("center_x_cm") is not None and prop.get("center_y_cm") is not None:
         cx_m = float(prop["center_x_cm"]) / 100.0
@@ -542,51 +378,6 @@ def _prop_center_span_rot_m(prop: dict[str, Any]) -> tuple[float, float, float, 
     return (cx_m, cy_m, sw_m * 0.5, sh_m * 0.5, rot_rad)
 
 
-def _circle_hits_prop_obb(px_m: float, py_m: float, radius_m: float, prop: dict[str, Any]) -> bool:
-    cx, cy, hx, hy, rot = _prop_center_span_rot_m(prop)
-    dx = px_m - cx
-    dy = py_m - cy
-    c = math.cos(-rot)
-    s = math.sin(-rot)
-    lx = dx * c - dy * s
-    ly = dx * s + dy * c
-    qx = max(-hx, min(hx, lx))
-    qy = max(-hy, min(hy, ly))
-    return math.hypot(lx - qx, ly - qy) < radius_m
-
-
-def _segment_hits_prop_obb(
-    x1_m: float, y1_m: float, x2_m: float, y2_m: float, prop: dict[str, Any]
-) -> bool:
-    cx, cy, hx, hy, rot = _prop_center_span_rot_m(prop)
-    c = math.cos(-rot)
-    s = math.sin(-rot)
-    dx1, dy1 = x1_m - cx, y1_m - cy
-    dx2, dy2 = x2_m - cx, y2_m - cy
-    lx1, ly1 = dx1 * c - dy1 * s, dx1 * s + dy1 * c
-    lx2, ly2 = dx2 * c - dy2 * s, dx2 * s + dy2 * c
-
-    t0, t1 = 0.0, 1.0
-    vx, vy = lx2 - lx1, ly2 - ly1
-    for p, q in ((-vx, lx1 + hx), (vx, hx - lx1), (-vy, ly1 + hy), (vy, hy - ly1)):
-        if abs(p) <= 1e-8:
-            if q < 0.0:
-                return False
-        else:
-            r = q / p
-            if p < 0.0:
-                if r > t1:
-                    return False
-                if r > t0:
-                    t0 = r
-            else:
-                if r < t0:
-                    return False
-                if r < t1:
-                    t1 = r
-    return t0 <= t1
-
-
 def _evaluate_pair_los_and_cover(
     wall_edges: list[dict[str, Any]],
     props: list[dict[str, Any]],
@@ -595,89 +386,40 @@ def _evaluate_pair_los_and_cover(
     x2_m: float,
     y2_m: float,
 ) -> tuple[float, str, int]:
-    """Analytical 2D segment/OBB raycast returning `(distance_m, cover_tag, recommended_delta_ext)`."""
+    """Evaluate 2D segment/OBB LoS & cover via Rust ``satya_py.maps.evaluate_los_and_cover``."""
     dist_m = round(math.hypot(x1_m - x2_m, y1_m - y2_m), 1)
     if dist_m <= 1e-4:
         return (0.0, " [CLEAR LOS]", 0)
 
-    if _SATYA_PY is not None and using_satya_py_map_backend():
-        try:
-            scene_json = json.dumps(
-                {
-                    "map_id": "los",
-                    "title": "los",
-                    "image_url": "",
-                    "grid_width": max(240, int(max(x1_m, x2_m)) + 8),
-                    "grid_height": max(180, int(max(y1_m, y2_m)) + 8),
-                    "wall_edges": wall_edges,
-                    "props": props,
-                }
-            )
-            ev_ab = _SATYA_PY.evaluate_tactical_los_and_cover(
-                scene_json, x1_m, y1_m, x2_m, y2_m
-            )
-            ev_ba = _SATYA_PY.evaluate_tactical_los_and_cover(
-                scene_json, x2_m, y2_m, x1_m, y1_m
-            )
-            best = (
-                ev_ab
-                if int(ev_ab.get("recommended_delta_ext", 0))
-                >= int(ev_ba.get("recommended_delta_ext", 0))
-                else ev_ba
-            )
-            delta = int(best.get("recommended_delta_ext", 0))
-            grade = str(best.get("cover_grade", "CLEAR")).upper()
-            dist_py = round(float(best.get("distance_m", dist_m)), 1)
-            if grade == "BLOCKED":
-                return (dist_py, f" [PARTIAL COVER / OBSTRUCTED] (Blocked LoS Δ_ext +{delta})", delta)
-            if grade == "HIGH_COVER":
-                return (dist_py, f" [PARTIAL COVER / OBSTRUCTED] (High Cover Δ_ext +{delta})", delta)
-            if grade == "LOW_COVER":
-                return (dist_py, f" [PARTIAL COVER / OBSTRUCTED] (Low Cover Δ_ext +{delta})", delta)
-            if grade == "CONCEALMENT":
-                return (dist_py, f" [CONCEALMENT] (Foliage/Screen Δ_ext +{delta})", delta)
-            return (dist_py, " [CLEAR LOS]", 0)
-        except Exception:
-            pass
-
-    blocked = False
-    low_cover = False
-    concealment = False
-
-    for edge in wall_edges:
-        kind = str(edge.get("kind", "WALL")).upper()
-        if kind == "DOOR_OPEN":
-            continue
-        ax, ay, bx, by = _wall_edge_segment_m(edge)
-        if _segments_intersect_m(x1_m, y1_m, x2_m, y2_m, ax, ay, bx, by):
-            if kind in {"WALL", "DOOR_CLOSED"}:
-                blocked = True
-                break
-            if kind == "WINDOW":
-                low_cover = True
-
-    if not blocked:
-        for prop in props:
-            kind = str(prop.get("kind", "")).upper()
-            if kind in _NON_SOLID_PROP_KINDS:
-                continue
-            if _segment_hits_prop_obb(x1_m, y1_m, x2_m, y2_m, prop):
-                ch = int(prop.get("cover_height_cm", 95))
-                if kind in _CONCEALMENT_PROP_KINDS:
-                    concealment = True
-                elif ch >= 170:
-                    blocked = True
-                    break
-                elif ch >= 60:
-                    low_cover = True
-
-    if blocked:
-        return (dist_m, " [PARTIAL COVER / OBSTRUCTED] (Blocked LoS Δ_ext +16)", 16)
-    if low_cover:
-        return (dist_m, " [PARTIAL COVER / OBSTRUCTED] (Low Cover Δ_ext +4)", 4)
-    if concealment:
-        return (dist_m, " [CONCEALMENT] (Foliage/Screen Δ_ext +3)", 3)
-    return (dist_m, " [CLEAR LOS]", 0)
+    scene = {
+        "map_id": "los",
+        "title": "los",
+        "image_url": "",
+        "grid_width": max(240, int(max(x1_m, x2_m)) + 8),
+        "grid_height": max(180, int(max(y1_m, y2_m)) + 8),
+        "wall_edges": wall_edges,
+        "props": props,
+    }
+    ev_ab = _maps.evaluate_los_and_cover(scene, x1_m, y1_m, x2_m, y2_m)
+    ev_ba = _maps.evaluate_los_and_cover(scene, x2_m, y2_m, x1_m, y1_m)
+    best = (
+        ev_ab
+        if int(ev_ab.get("recommended_delta_ext", 0))
+        >= int(ev_ba.get("recommended_delta_ext", 0))
+        else ev_ba
+    )
+    delta = int(best.get("recommended_delta_ext", 0))
+    grade = str(best.get("cover_grade", "CLEAR")).upper()
+    dist_py = round(float(best.get("distance_m", dist_m)), 1)
+    if grade == "BLOCKED":
+        return (dist_py, f" [PARTIAL COVER / OBSTRUCTED] (Blocked LoS Δ_ext +{delta})", delta)
+    if grade == "HIGH_COVER":
+        return (dist_py, f" [PARTIAL COVER / OBSTRUCTED] (High Cover Δ_ext +{delta})", delta)
+    if grade == "LOW_COVER":
+        return (dist_py, f" [PARTIAL COVER / OBSTRUCTED] (Low Cover Δ_ext +{delta})", delta)
+    if grade == "CONCEALMENT":
+        return (dist_py, f" [CONCEALMENT] (Foliage/Screen Δ_ext +{delta})", delta)
+    return (dist_py, " [CLEAR LOS]", 0)
 
 
 def render_tactical_svg(
@@ -845,17 +587,54 @@ def render_tactical_svg(
     return "\n".join(lines)
 
 
-def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None:
+def _merge_tokens_with_visuals(map_state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Merge `token_visuals[]` metadata (floor, elevation, continuous cm coords, pose, preset) into `tokens`."""
     active_floor = int(map_state.get("active_floor", 0))
     vis_by_eid = {
         str(v.get("entity_id") or ""): v
         for v in (map_state.get("token_visuals") or [])
         if isinstance(v, dict) and v.get("entity_id")
     }
+    merged: list[dict[str, Any]] = []
+    for raw in map_state.get("tokens") or []:
+        if not isinstance(raw, dict):
+            continue
+        tok = dict(raw)
+        eid = str(tok.get("entity_id") or tok.get("token_id") or "")
+        vis_rec = vis_by_eid.get(eid) or {}
+        for k in (
+            "floor_index",
+            "elevation_cm",
+            "pos_x_cm",
+            "pos_y_cm",
+            "stance_pose",
+            "portrait_url",
+            "model_preset",
+            "color_hex",
+            "facing_deg",
+        ):
+            if tok.get(k) is None and vis_rec.get(k) is not None:
+                tok[k] = vis_rec[k]
+        if tok.get("floor_index") is None:
+            tok["floor_index"] = active_floor
+        merged.append(normalize_token(tok))
+    return merged
+
+
+def _build_wire_tokens_and_visuals(
+    map_state: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    active_floor = int(map_state.get("active_floor", 0))
+    vis_by_eid = {
+        str(v.get("entity_id") or ""): v
+        for v in (map_state.get("token_visuals") or [])
+        if isinstance(v, dict) and v.get("entity_id")
+    }
+    norm_tokens = _merge_tokens_with_visuals(map_state)
     wire_tokens = [
         {
-            "entity_id": str(t.get("entity_id", t.get("token_id", "tok"))),
-            "label": t["label"],
+            "entity_id": str(t.get("entity_id") or t.get("token_id") or f"tok-{i}"),
+            "label": str(t.get("label") or t.get("token_id") or f"Token {i}"),
             "x": int(t.get("grid_x", t.get("x", 0))),
             "y": int(t.get("grid_y", t.get("y", 0))),
             "visibility": (
@@ -864,15 +643,15 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
                 else "PUBLIC"
             ),
         }
-        for t in map_state.get("tokens", [])
+        for i, t in enumerate(norm_tokens)
     ]
     wire_visuals = []
-    for t in map_state.get("tokens", []):
-        eid = str(t.get("entity_id", t.get("token_id", "tok")))
+    for i, t in enumerate(norm_tokens):
+        eid = str(t.get("entity_id") or t.get("token_id") or f"tok-{i}")
         vis_rec = vis_by_eid.get(eid) or {}
         visual_item: dict[str, Any] = {
             "entity_id": eid,
-            "model_preset": str(t.get("model_preset") or vis_rec.get("model_preset") or _infer_model_preset(t["label"])),
+            "model_preset": str(t.get("model_preset") or vis_rec.get("model_preset") or _infer_model_preset(str(t.get("label", "")))),
             "color_hex": str(t.get("color_hex") or vis_rec.get("color_hex") or "#38bdf8"),
             "facing_deg": int(t.get("facing_deg") if t.get("facing_deg") is not None else vis_rec.get("facing_deg", 90)),
             "elevation_cm": int(t.get("elevation_cm") if t.get("elevation_cm") is not None else vis_rec.get("elevation_cm", 0)),
@@ -885,6 +664,11 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
         if portrait is not None:
             visual_item["portrait_url"] = portrait
         wire_visuals.append(visual_item)
+    return wire_tokens, wire_visuals
+
+
+def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None:
+    wire_tokens, wire_visuals = _build_wire_tokens_and_visuals(map_state)
     wire_payload = {
         "map_id": map_state["map_id"],
         "title": map_state.get("title", map_state.get("theme", "Tactical Map")),
@@ -908,6 +692,9 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
         "world_sectors",
         "ground_floor_override",
         "ground_tint_rgb",
+        "ambient_light_delta_ext",
+        "faraday_zones",
+        "surveillance_nodes",
     ):
         if opt_key in map_state and map_state[opt_key] is not None:
             wire_payload[opt_key] = map_state[opt_key]
@@ -976,34 +763,7 @@ def _build_rust_map_json(map_state: dict[str, Any]) -> str:
     grid_w = int(map_state.get("grid_width", 16))
     grid_h = int(map_state.get("grid_height", 12))
     active_floor = int(map_state.get("active_floor", 0))
-    tokens = list(map_state.get("tokens") or [])
-    wire_tokens = [
-        {
-            "entity_id": str(t.get("entity_id") or t.get("token_id") or f"tok-{i}"),
-            "label": str(t.get("label") or t.get("token_id") or f"Token {i}"),
-            "x": int(t.get("grid_x", t.get("x", 0))),
-            "y": int(t.get("grid_y", t.get("y", 0))),
-            "visibility": "GM_ONLY"
-            if t.get("is_hidden", False)
-            else str(t.get("visibility") or "PUBLIC"),
-        }
-        for i, t in enumerate(tokens)
-    ]
-    wire_visuals = [
-        {
-            "entity_id": str(t.get("entity_id") or t.get("token_id") or f"tok-{i}"),
-            "model_preset": str(t.get("model_preset") or _infer_model_preset(str(t.get("label", "")))),
-            "color_hex": str(t.get("color_hex") or "#38bdf8"),
-            "facing_deg": int(t.get("facing_deg", 90)),
-            "elevation_cm": int(t.get("elevation_cm", 0)),
-            "floor_index": int(t.get("floor_index", active_floor)),
-            "stance_pose": str(t.get("stance_pose") or "aimed"),
-            "portrait_url": t.get("portrait_url"),
-            "pos_x_cm": int(t.get("pos_x_cm", int(t.get("grid_x", t.get("x", 0))) * 100 + 50)),
-            "pos_y_cm": int(t.get("pos_y_cm", int(t.get("grid_y", t.get("y", 0))) * 100 + 50)),
-        }
-        for i, t in enumerate(tokens)
-    ]
+    wire_tokens, wire_visuals = _build_wire_tokens_and_visuals(map_state)
     payload: dict[str, Any] = {
         "map_id": str(map_state.get("map_id", "map")),
         "title": str(map_state.get("title", map_state.get("theme", "Tactical Map"))),
@@ -1021,22 +781,29 @@ def _build_rust_map_json(map_state: dict[str, Any]) -> str:
         "notes": map_state.get("notes"),
         "active_floor": active_floor,
     }
-    for opt_key in ("surfaces", "floors", "world_sectors", "ground_floor_override", "ground_tint_rgb"):
+    for opt_key in (
+        "surfaces",
+        "floors",
+        "world_sectors",
+        "ground_floor_override",
+        "ground_tint_rgb",
+        "ambient_light_delta_ext",
+        "faraday_zones",
+        "surveillance_nodes",
+    ):
         if opt_key in map_state and map_state[opt_key] is not None:
             payload[opt_key] = map_state[opt_key]
     return json.dumps(payload)
 
 
 def _extract_narrative_manifest(map_state: dict[str, Any]) -> dict[str, Any]:
-    """Compute semantic `SectorNarrativeManifest` dict via `satya_py` when available."""
-    if _SATYA_PY is not None and hasattr(_SATYA_PY, "extract_sector_narrative_manifest_json"):
-        try:
-            raw = _SATYA_PY.extract_sector_narrative_manifest_json(_build_rust_map_json(map_state))
-            parsed = json.loads(raw)
-            if isinstance(parsed, dict):
-                return parsed
-        except Exception:
-            pass
+    """Compute semantic `SectorNarrativeManifest` dict via Rust ``satya_py.maps``."""
+    try:
+        parsed = _maps.extract_narrative_manifest(_build_rust_map_json(map_state))
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
     return {}
 
 
@@ -1067,20 +834,13 @@ def _check_rust_collision(
     y_m: float,
     floor_index: int | None = None,
 ) -> bool:
-    """Invoke `satya_py.check_tactical_token_collision` forwarding `floor_index` when supported."""
-    if _SATYA_PY is None:
-        return False
-    if floor_index is not None:
-        try:
-            return bool(
-                _SATYA_PY.check_tactical_token_collision(
-                    map_json_str, x_m, y_m, _TOKEN_RADIUS_M, floor_index=floor_index
-                )
-            )
-        except TypeError:
-            pass
-    return bool(
-        _SATYA_PY.check_tactical_token_collision(map_json_str, x_m, y_m, _TOKEN_RADIUS_M)
+    """Invoke ``satya_py.maps.check_token_collision`` forwarding `floor_index`."""
+    return _maps.check_token_collision(
+        map_json_str,
+        x_m,
+        y_m,
+        _TOKEN_RADIUS_M,
+        floor_index=floor_index,
     )
 
 
@@ -1093,8 +853,6 @@ def _find_unblocked_token_pos_cm(
     floor_index: int | None = None,
 ) -> tuple[int, int]:
     """Adjust `(pref_x_cm, pref_y_cm)` to a collision-free continuous coordinate inside the sector."""
-    if _SATYA_PY is None or not hasattr(_SATYA_PY, "check_tactical_token_collision"):
-        return pref_x_cm, pref_y_cm
     min_cm = 55
     max_x = max(min_cm + 10, grid_w * 100 - 55)
     max_y = max(min_cm + 10, grid_h * 100 - 55)
@@ -1161,109 +919,90 @@ def generate_tactical_map(
     zoning: str | None = None,
     scale: str | None = None,
 ) -> dict[str, Any]:
-    """Generate a continuous vector 3D/2D tactical battlemap (backed by `satya-engine` 25-preset procedural multi-floor sectors) and broadcast `MAP_UPDATED`."""
+    """Generate a continuous vector 3D/2D tactical battlemap (backed by `satya-maps` procedural multi-floor sectors) and broadcast `MAP_UPDATED`."""
     map_id = f"map-{uuid.uuid4().hex[:8]}"
     preset = infer_sector_preset(theme)
-    use_legacy_small = (
-        width is not None
-        and height is not None
-        and (int(width) < 16 or int(height) < 16)
-        and scale is None
+    if not bool(get_active_campaign_pack().get("allow_scifi_sector_presets", True)):
+        preset = _SCIFI_SECTOR_PRESET_REMAP.get(preset, preset)
+
+    req_w = int(width) if width is not None else None
+    req_h = int(height) if height is not None else None
+    engine_map = _maps.generate_procedural_sector(
+        map_id,
+        preset,
+        theme,
+        req_w,
+        req_h,
+        int(seed),
+        economic_tier,
+        zoning,
+        scale,
     )
-
-    w = 16
-    h = 12
-    wall_edges: list[dict[str, Any]] = []
-    props: list[dict[str, Any]] = []
-    surfaces: list[dict[str, Any]] = []
-    floors: list[dict[str, Any]] = []
-    active_floor = 0
-    world_sectors: list[dict[str, Any]] = []
-    used_rust_procedural = False
-    notes = f"Continuous Vector Tactical Diorama & SVG battlemap for {theme} ({preset})"
-
-    if (
-        not use_legacy_small
-        and _SATYA_PY is not None
-        and hasattr(_SATYA_PY, "generate_procedural_tactical_sector_json")
-    ):
-        req_w = int(width) if width is not None else (24 if scale is None else None)
-        req_h = int(height) if height is not None else (20 if scale is None else None)
-        try:
-            raw_json = _SATYA_PY.generate_procedural_tactical_sector_json(
-                map_id,
-                preset,
-                theme,
-                req_w,
-                req_h,
-                int(seed),
-                economic_tier,
-                zoning,
-                scale,
-            )
-            engine_map = json.loads(raw_json)
-            w = int(engine_map.get("grid_width", req_w or 24))
-            h = int(engine_map.get("grid_height", req_h or 20))
-            wall_edges = list(engine_map.get("wall_edges") or [])
-            props = list(engine_map.get("props") or [])
-            surfaces = list(engine_map.get("surfaces") or [])
-            floors = list(engine_map.get("floors") or [])
-            active_floor = int(engine_map.get("active_floor", 0))
-            world_sectors = list(engine_map.get("world_sectors") or [])
-            ground_floor_override = engine_map.get("ground_floor_override")
-            ground_tint_rgb = engine_map.get("ground_tint_rgb")
-            notes = str(engine_map.get("notes") or notes)
-            used_rust_procedural = True
-        except Exception:
-            used_rust_procedural = False
-            ground_floor_override = None
-            ground_tint_rgb = None
-    else:
-        ground_floor_override = None
-        ground_tint_rgb = None
-
-    if not used_rust_procedural:
-        w = max(4, min(int(width if width is not None else 16), 32))
-        h = max(4, min(int(height if height is not None else 12), 32))
-        wall_edges, props = build_procedural_vector_scene(w, h, preset)
+    w = int(engine_map.get("grid_width", req_w or 24))
+    h = int(engine_map.get("grid_height", req_h or 20))
+    wall_edges = list(engine_map.get("wall_edges") or [])
+    props = list(engine_map.get("props") or [])
+    surfaces = list(engine_map.get("surfaces") or [])
+    floors = list(engine_map.get("floors") or [])
+    active_floor = int(engine_map.get("active_floor", 0))
+    world_sectors = list(engine_map.get("world_sectors") or [])
+    ambient_light_delta_ext = int(engine_map.get("ambient_light_delta_ext", 0) or 0)
+    faraday_zones = list(engine_map.get("faraday_zones") or [])
+    surveillance_nodes = list(engine_map.get("surveillance_nodes") or [])
+    ground_floor_override = engine_map.get("ground_floor_override")
+    ground_tint_rgb = engine_map.get("ground_tint_rgb")
+    notes = str(
+        engine_map.get("notes")
+        or f"Continuous Vector Tactical Diorama & SVG battlemap for {theme} ({preset})"
+    )
 
     tiles: list[str] = []
     raw_tokens = list(initial_tokens or [])
     if not raw_tokens:
         raw_tokens = get_pack_default_tokens(w, h)
-    tokens = [normalize_token(t) for t in raw_tokens]
+    tokens = _merge_tokens_with_visuals({"active_floor": active_floor, "tokens": raw_tokens})
 
-    if used_rust_procedural:
-        probe_json = _build_rust_map_json(
-            {
-                "map_id": map_id,
-                "title": theme,
-                "grid_width": w,
-                "grid_height": h,
-                "wall_edges": wall_edges,
-                "props": props,
-                "surfaces": surfaces,
-                "floors": floors,
-                "active_floor": active_floor,
-                "tokens": [],
-            }
+    probe_json = _build_rust_map_json(
+        {
+            "map_id": map_id,
+            "title": theme,
+            "grid_width": w,
+            "grid_height": h,
+            "wall_edges": wall_edges,
+            "props": props,
+            "surfaces": surfaces,
+            "floors": floors,
+            "active_floor": active_floor,
+            "tokens": [],
+        }
+    )
+    for tok in tokens:
+        px_cm = int(tok.get("pos_x_cm", 250))
+        py_cm = int(tok.get("pos_y_cm", 250))
+        tok_floor = int(tok.get("floor_index", active_floor))
+        tok["floor_index"] = tok_floor
+        tok["elevation_cm"] = next(
+            (
+                int(fl.get("elevation_cm", tok_floor * 300))
+                for fl in floors
+                if isinstance(fl, dict) and int(fl.get("floor_index", 0)) == tok_floor
+            ),
+            tok_floor * 300,
         )
-        for tok in tokens:
-            px_cm = int(tok.get("pos_x_cm", 250))
-            py_cm = int(tok.get("pos_y_cm", 250))
-            tok_floor = int(tok.get("floor_index", active_floor))
-            tok["floor_index"] = tok_floor
-            nx_cm, ny_cm = _find_unblocked_token_pos_cm(
-                probe_json, w, h, px_cm, py_cm, floor_index=tok_floor
-            )
-            tok["pos_x_cm"] = nx_cm
-            tok["pos_y_cm"] = ny_cm
-            tok["grid_x"] = max(0, min(w - 1, nx_cm // 100))
-            tok["grid_y"] = max(0, min(h - 1, ny_cm // 100))
-            tok["x"] = tok["grid_x"]
-            tok["y"] = tok["grid_y"]
-            tok.setdefault("entity_id", tok.get("token_id"))
+        nx_cm, ny_cm = _find_unblocked_token_pos_cm(
+            probe_json, w, h, px_cm, py_cm, floor_index=tok_floor
+        )
+        tok["pos_x_cm"] = nx_cm
+        tok["pos_y_cm"] = ny_cm
+        tok["grid_x"] = max(0, min(w - 1, nx_cm // 100))
+        tok["grid_y"] = max(0, min(h - 1, ny_cm // 100))
+        tok["x"] = tok["grid_x"]
+        tok["y"] = tok["grid_y"]
+        tok.setdefault("entity_id", tok.get("token_id"))
 
+    _, wire_visuals = _build_wire_tokens_and_visuals(
+        {"active_floor": active_floor, "tokens": tokens}
+    )
     filename = f"{session_id}_{map_id}.svg"
     map_state: dict[str, Any] = {
         "event_type": "MAP_GENERATED",
@@ -1280,18 +1019,21 @@ def generate_tactical_map(
         "floors": floors,
         "active_floor": active_floor,
         "world_sectors": world_sectors,
+        "ambient_light_delta_ext": ambient_light_delta_ext,
+        "faraday_zones": faraday_zones,
+        "surveillance_nodes": surveillance_nodes,
         "image_url": f"/maps/{filename}",
         "map_image_url": f"/maps/{filename}",
         "grid_width": w,
         "grid_height": h,
         "tokens": tokens,
+        "token_visuals": wire_visuals,
         "notes": notes,
     }
-    if used_rust_procedural:
-        if ground_floor_override is not None:
-            map_state["ground_floor_override"] = ground_floor_override
-        if ground_tint_rgb is not None:
-            map_state["ground_tint_rgb"] = ground_tint_rgb
+    if ground_floor_override is not None:
+        map_state["ground_floor_override"] = ground_floor_override
+    if ground_tint_rgb is not None:
+        map_state["ground_tint_rgb"] = ground_tint_rgb
     return _write_and_sync_map_state(session_id, map_state)
 
 
@@ -1306,18 +1048,22 @@ def continue_tactical_map(
     cur = get_session_map(session_id)
     if cur is None:
         return {"error": f"No active tactical map for session '{session_id}'."}
-    if _SATYA_PY is None or not hasattr(_SATYA_PY, "continue_procedural_tactical_map_json"):
-        return {"error": "Compiled satya_py continuation engine is unavailable."}
     working = dict(cur)
-    if preset_override and preset_override.strip():
-        working["theme_preset"] = infer_sector_preset(preset_override)
+    working["tokens"] = _merge_tokens_with_visuals(working)
+    preset_override_arg = (
+        infer_sector_preset(preset_override)
+        if (preset_override and preset_override.strip())
+        else None
+    )
+    if preset_override_arg:
+        working["theme_preset"] = preset_override_arg
     try:
-        raw_json = _SATYA_PY.continue_procedural_tactical_map_json(
+        cont = _maps.continue_procedural_map(
             _build_rust_map_json(working),
             direction.strip().upper(),
             int(seed) if seed else None,
+            preset_override_arg,
         )
-        cont = json.loads(raw_json)
     except Exception as exc:
         return {"error": f"Failed to continue map '{direction}': {exc}"}
 
@@ -1331,6 +1077,17 @@ def continue_tactical_map(
     updated["floors"] = list(cont.get("floors") or [])
     updated["active_floor"] = int(cont.get("active_floor", 0))
     updated["world_sectors"] = list(cont.get("world_sectors") or [])
+    updated["ambient_light_delta_ext"] = int(
+        cont.get("ambient_light_delta_ext", cur.get("ambient_light_delta_ext", 0)) or 0
+    )
+    updated["faraday_zones"] = list(cont.get("faraday_zones") or [])
+    updated["surveillance_nodes"] = list(cont.get("surveillance_nodes") or [])
+    if "token_visuals" in cont and isinstance(cont.get("token_visuals"), list):
+        updated["token_visuals"] = list(cont["token_visuals"])
+    if "tokens" in cont and isinstance(cont.get("tokens"), list):
+        updated["tokens"] = _merge_tokens_with_visuals(cont)
+    else:
+        updated["tokens"] = _merge_tokens_with_visuals(updated)
     if "ground_floor_override" in cont:
         updated["ground_floor_override"] = cont["ground_floor_override"]
     else:
@@ -1350,14 +1107,11 @@ def switch_tactical_map_floor(session_id: str, target_floor_index: int) -> dict[
     cur = get_session_map(session_id)
     if cur is None:
         return {"error": f"No active tactical map for session '{session_id}'."}
-    if _SATYA_PY is None or not hasattr(_SATYA_PY, "switch_tactical_map_floor_json"):
-        return {"error": "Compiled satya_py floor-switching engine is unavailable."}
     try:
-        raw_json = _SATYA_PY.switch_tactical_map_floor_json(
+        switched = _maps.switch_map_floor(
             _build_rust_map_json(cur),
             int(target_floor_index),
         )
-        switched = json.loads(raw_json)
     except Exception as exc:
         return {"error": f"Failed to switch floor to {target_floor_index}: {exc}"}
 
@@ -1368,6 +1122,14 @@ def switch_tactical_map_floor(session_id: str, target_floor_index: int) -> dict[
     updated["props"] = list(switched.get("props") or [])
     updated["surfaces"] = list(switched.get("surfaces") or [])
     updated["floors"] = list(switched.get("floors") or [])
+    updated["tokens"] = _merge_tokens_with_visuals(cur)
+    updated["token_visuals"] = _build_wire_tokens_and_visuals(
+        {
+            "active_floor": updated["active_floor"],
+            "tokens": updated["tokens"],
+            "token_visuals": cur.get("token_visuals") or [],
+        }
+    )[1]
     return _write_and_sync_map_state(session_id, updated)
 
 
@@ -1441,7 +1203,7 @@ def move_map_token(
         }
 
     active_floor = int(map_state.get("active_floor", 0))
-    tokens = [normalize_token(t) for t in map_state.get("tokens", [])]
+    tokens = _merge_tokens_with_visuals(map_state)
     matched_tok = next(
         (
             tok
@@ -1457,42 +1219,24 @@ def move_map_token(
         if to_floor is not None
         else int(matched_tok.get("floor_index", active_floor) if matched_tok is not None else active_floor)
     )
+    target_elev_cm = next(
+        (
+            int(fl.get("elevation_cm", target_floor * 300))
+            for fl in (map_state.get("floors") or [])
+            if isinstance(fl, dict) and int(fl.get("floor_index", 0)) == target_floor
+        ),
+        target_floor * 300,
+    )
 
     tx_m = tx_cm / 100.0
     ty_m = ty_cm / 100.0
     wall_edges, props = _extract_floor_geometry(map_state, target_floor)
     rust_map_json = _build_rust_map_json(map_state)
 
-    py_checked = False
-    if using_satya_py_map_backend():
-        try:
-            collides = _check_rust_collision(rust_map_json, tx_m, ty_m, floor_index=target_floor)
-            py_checked = True
-            if collides:
-                return {
-                    "error": f"Target position ({tx_m:.2f}m, {ty_m:.2f}m) on floor {target_floor} collides with a wall or solid obstacle."
-                }
-        except Exception:
-            py_checked = False
-
-    if not py_checked:
-        for edge in wall_edges:
-            kind = str(edge.get("kind", "WALL")).upper()
-            if kind in {"WALL", "DOOR_CLOSED", "WINDOW"}:
-                ax, ay, bx, by = _wall_edge_segment_m(edge)
-                if _point_to_segment_dist_m(tx_m, ty_m, ax, ay, bx, by) < _TOKEN_RADIUS_M:
-                    return {
-                        "error": f"Target position ({tx_m:.2f}m, {ty_m:.2f}m) is blocked by {kind} edge."
-                    }
-
-        for prop in props:
-            kind = str(prop.get("kind", "")).upper()
-            if kind in _NON_SOLID_PROP_KINDS:
-                continue
-            if _circle_hits_prop_obb(tx_m, ty_m, _TOKEN_RADIUS_M, prop):
-                return {
-                    "error": f"Target position ({tx_m:.2f}m, {ty_m:.2f}m) overlaps solid obstacle {kind}."
-                }
+    if _check_rust_collision(rust_map_json, tx_m, ty_m, floor_index=target_floor):
+        return {
+            "error": f"Target position ({tx_m:.2f}m, {ty_m:.2f}m) on floor {target_floor} collides with a wall or solid obstacle."
+        }
 
     tx_cell = max(0, min(grid_w - 1, tx_cm // 100))
     ty_cell = max(0, min(grid_h - 1, ty_cm // 100))
@@ -1509,6 +1253,7 @@ def move_map_token(
         matched_tok["x"] = tx_cell
         matched_tok["y"] = ty_cell
         matched_tok["floor_index"] = target_floor
+        matched_tok["elevation_cm"] = target_elev_cm
         moved_entity_id = str(matched_tok.get("entity_id") or matched_tok.get("token_id") or token_id)
     else:
         tokens.append(
@@ -1522,6 +1267,7 @@ def move_map_token(
                     "grid_x": tx_cell,
                     "grid_y": ty_cell,
                     "floor_index": target_floor,
+                    "elevation_cm": target_elev_cm,
                     "color_hex": "#a78bfa",
                 }
             )
@@ -1546,69 +1292,73 @@ def move_map_token(
     updated.pop("passive_whispers", None)
     updated["event_type"] = "TOKEN_MOVED"
     updated["tokens"] = tokens
+    updated["token_visuals"] = _build_wire_tokens_and_visuals(
+        {
+            "active_floor": active_floor,
+            "tokens": tokens,
+            "token_visuals": map_state.get("token_visuals") or [],
+        }
+    )[1]
 
     pins = list(_SESSION_SPATIAL_PINS.get(session_id) or [])
-    if _SATYA_PY is not None and hasattr(_SATYA_PY, "evaluate_passive_movement_perceptions_json"):
+    try:
+        from satya_py.campaign import normalize_character_sheet_record
+        from satya_ml.ai_gm.tools import get_session_characters
+
+        raw_chars = get_session_characters(session_id)
+        observers = [normalize_character_sheet_record(c, i) for i, c in enumerate(raw_chars)]
+        if sensory_tns:
+            matched_obs = next((o for o in observers if o["character_id"] == moved_entity_id), None)
+            if matched_obs is None:
+                matched_obs = normalize_character_sheet_record({"character_id": moved_entity_id, "character_name": moved_entity_id})
+                observers.append(matched_obs)
+            for sk, sv in sensory_tns.items():
+                sk_low = str(sk).lower()
+                if sk_low in matched_obs["characteristics"] and isinstance(sv, (int, float)):
+                    matched_obs["characteristics"][sk_low] = int(sv)
+
+        updated_rust_json = _build_rust_map_json(updated)
         try:
-            from satya_ml.ai_gm.hooks import normalize_character_sheet_record
-            from satya_ml.ai_gm.tools import get_session_characters
-
-            raw_chars = get_session_characters(session_id)
-            observers = [normalize_character_sheet_record(c, i) for i, c in enumerate(raw_chars)]
-            if sensory_tns:
-                matched_obs = next((o for o in observers if o["character_id"] == moved_entity_id), None)
-                if matched_obs is None:
-                    matched_obs = normalize_character_sheet_record({"character_id": moved_entity_id, "character_name": moved_entity_id})
-                    observers.append(matched_obs)
-                for sk, sv in sensory_tns.items():
-                    sk_low = str(sk).lower()
-                    if sk_low in matched_obs["characteristics"] and isinstance(sv, (int, float)):
-                        matched_obs["characteristics"][sk_low] = int(sv)
-
-            updated_rust_json = _build_rust_map_json(updated)
-            pins_json = json.dumps(pins) if pins else None
-            try:
-                raw_whispers = _SATYA_PY.evaluate_passive_movement_perceptions_json(
-                    updated_rust_json, moved_entity_id, json.dumps(observers), pins_json
-                )
-            except Exception:
-                raw_whispers = _SATYA_PY.evaluate_passive_movement_perceptions_json(
-                    updated_rust_json, moved_entity_id, "[]", pins_json
-                )
-            whispers = json.loads(raw_whispers)
-            if isinstance(whispers, list) and whispers:
-                updated["passive_whispers"] = whispers
-                triggered_ids = {str(w.get("pin_id")): str(w.get("observer_id")) for w in whispers}
-                pin_by_id = {str(p.get("pin_id")): p for p in _SESSION_SPATIAL_PINS.get(session_id, [])}
-                for w in whispers:
-                    pin = pin_by_id.get(str(w.get("pin_id")))
-                    proof_tag = str(pin.get("grants_audit_proof_tag") or "").strip() if pin else ""
-                    if proof_tag and pin is not None:
-                        existing_pid = str(pin.get("minted_audit_proof_id") or "").strip()
-                        if not existing_pid:
-                            from satya_ml.ai_gm.audit_and_first_contact import record_audit_proof_token
-
-                            token = record_audit_proof_token(
-                                session_id=session_id,
-                                subject_or_faction=proof_tag,
-                                summary=str(w.get("whisper_text") or pin.get("whisper_text") or proof_tag),
-                                source_kind="spatial_pin_discovery",
-                                pin_id=str(pin.get("pin_id")),
-                            )
-                            existing_pid = token["proof_id"]
-                            pin["minted_audit_proof_id"] = existing_pid
-                        w["minted_audit_proof_id"] = existing_pid
-                        w["grants_audit_proof_tag"] = proof_tag
-                for pin in _SESSION_SPATIAL_PINS.get(session_id, []):
-                    pid = str(pin.get("pin_id"))
-                    if pid in triggered_ids and pin.get("one_shot", True):
-                        obs_id = triggered_ids[pid]
-                        rev = list(pin.get("revealed_to") or [])
-                        if obs_id not in rev:
-                            rev.append(obs_id)
-                            pin["revealed_to"] = rev
+            whispers = _maps.evaluate_passive_perceptions(
+                updated_rust_json, moved_entity_id, observers, pins or None
+            )
         except Exception:
-            pass
+            whispers = _maps.evaluate_passive_perceptions(
+                updated_rust_json, moved_entity_id, [], pins or None
+            )
+        if whispers:
+            updated["passive_whispers"] = whispers
+            triggered_ids = {str(w.get("pin_id")): str(w.get("observer_id")) for w in whispers}
+            pin_by_id = {str(p.get("pin_id")): p for p in _SESSION_SPATIAL_PINS.get(session_id, [])}
+            for w in whispers:
+                pin = pin_by_id.get(str(w.get("pin_id")))
+                proof_tag = str(pin.get("grants_audit_proof_tag") or "").strip() if pin else ""
+                if proof_tag and pin is not None:
+                    existing_pid = str(pin.get("minted_audit_proof_id") or "").strip()
+                    if not existing_pid:
+                        from satya_ml.ai_gm.audit_and_first_contact import record_audit_proof_token
+
+                        token = record_audit_proof_token(
+                            session_id=session_id,
+                            subject_or_faction=proof_tag,
+                            summary=str(w.get("whisper_text") or pin.get("whisper_text") or proof_tag),
+                            source_kind="spatial_pin_discovery",
+                            pin_id=str(pin.get("pin_id")),
+                        )
+                        existing_pid = token["proof_id"]
+                        pin["minted_audit_proof_id"] = existing_pid
+                    w["minted_audit_proof_id"] = existing_pid
+                    w["grants_audit_proof_tag"] = proof_tag
+            for pin in _SESSION_SPATIAL_PINS.get(session_id, []):
+                pid = str(pin.get("pin_id"))
+                if pid in triggered_ids and pin.get("one_shot", True):
+                    obs_id = triggered_ids[pid]
+                    rev = list(pin.get("revealed_to") or [])
+                    if obs_id not in rev:
+                        rev.append(obs_id)
+                        pin["revealed_to"] = rev
+    except Exception:
+        pass
 
     set_session_map(session_id, updated)
     _sync_map_with_signaling(session_id, updated)
@@ -1624,12 +1374,10 @@ def inspect_tactical_map(session_id: str, question: str) -> str:
 
     width = int(map_state.get("grid_width", 16))
     height = int(map_state.get("grid_height", 12))
-    tokens = map_state.get("tokens", [])
+    tokens = _merge_tokens_with_visuals(map_state)
     preset = str(map_state.get("theme_preset") or infer_sector_preset(str(map_state.get("theme", ""))))
     wall_edges = list(map_state.get("wall_edges") or [])
     props = list(map_state.get("props") or [])
-    if not wall_edges and not props:
-        wall_edges, props = build_procedural_vector_scene(width, height, preset)
 
     prop_notes = [
         f"{p.get('kind')}@({p.get('center_x_cm', 0) / 100.0:.2f}m,{p.get('center_y_cm', 0) / 100.0:.2f}m {p.get('rotation_deg', 0)}deg)"
@@ -1850,3 +1598,20 @@ def ensure_or_sync_procedural_tactical_map_stub(
         set_session_map(session_id, existing)
         _sync_map_with_signaling(session_id, existing)
     return existing
+
+
+from satya_ml.ai_gm.maps_tactical import (  # noqa: E402
+    compute_token_reachable_zone,
+    edit_tactical_map_feature,
+    evaluate_ballistic_shot_on_map,
+    inspect_tactical_map_point,
+    sync_map_blackout_from_polycrisis,
+)
+
+__all_tactical_tools__ = [
+    "compute_token_reachable_zone",
+    "edit_tactical_map_feature",
+    "evaluate_ballistic_shot_on_map",
+    "inspect_tactical_map_point",
+    "sync_map_blackout_from_polycrisis",
+]

@@ -26,8 +26,23 @@ from satya_ml.ai_gm.maps import (
     set_session_map,
     switch_tactical_map_floor,
 )
+from satya_ml.ai_gm.maps_tactical import (
+    compute_token_reachable_zone,
+    edit_tactical_map_feature,
+    evaluate_ballistic_shot_on_map,
+    inspect_tactical_map_point,
+    sync_map_blackout_from_polycrisis,
+)
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model, redact_api_key
 from satya_ml.ai_gm.npc_psyche_combat import evaluate_npc_morale_or_trigger
+from satya_ml.ai_gm.tech_and_tradecraft import (
+    evaluate_part5_clamping_or_political_economy,
+    reset_tech_and_tradecraft_state,
+    resolve_contact_cover_or_safehouse,
+    resolve_ew_drone_or_engineering,
+    resolve_explosive_vehicle_or_hazard,
+    resolve_stealth_surveillance_or_forensics,
+)
 from satya_ml.ai_gm.party_coordinator import (
     evaluate_party_turn_gate,
     execute_ready_npc_actions,
@@ -37,8 +52,12 @@ from satya_ml.ai_gm.party_coordinator import (
 __all__ = [
     "SessionLlmConfig",
     "build_gm_chat_model",
+    "compute_token_reachable_zone",
     "continue_tactical_map",
+    "edit_tactical_map_feature",
+    "evaluate_ballistic_shot_on_map",
     "evaluate_npc_morale_or_trigger",
+    "evaluate_part5_clamping_or_political_economy",
     "evaluate_party_turn_gate",
     "execute_ready_npc_actions",
     "extract_active_human_players",
@@ -46,6 +65,7 @@ __all__ = [
     "get_session_map",
     "inspect_synthetic_or_proxy_telemetry",
     "inspect_tactical_map",
+    "inspect_tactical_map_point",
     "intervene_ai_cage_or_hunter_ai",
     "manage_polycrisis_grid_and_strain",
     "manage_synthetic_substrate_and_embodiment",
@@ -55,8 +75,14 @@ __all__ = [
     "register_spatial_clue_pin",
     "render_tactical_svg",
     "reset_awakened_systems_state",
+    "reset_tech_and_tradecraft_state",
+    "resolve_contact_cover_or_safehouse",
+    "resolve_ew_drone_or_engineering",
+    "resolve_explosive_vehicle_or_hazard",
+    "resolve_stealth_surveillance_or_forensics",
     "set_session_map",
     "switch_tactical_map_floor",
+    "sync_map_blackout_from_polycrisis",
     "transmit_via_tradecraft_channel",
     "update_campaign_arc_and_conspiracies",
     "verify_forensic_audit_proof",

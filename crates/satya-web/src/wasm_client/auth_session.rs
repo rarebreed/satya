@@ -294,6 +294,7 @@ pub fn satya_create_session() {
                 persona_id: "harsh-reality-arbiter".to_string(),
                 api_key,
                 base_url: None,
+                clear_api_key: false,
             })
         } else {
             None
@@ -413,6 +414,10 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
 
     let session_mode = data.session_mode;
     let is_gm = data.self_participant.role == SessionRole::Gm;
+    let initial_can_see_secrets = matches!(
+        data.self_participant.role,
+        SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
+    );
     let history = data.history;
     with_state_mut(|st| {
         st.session_id = Some(data.session_id);
@@ -421,6 +426,12 @@ pub(crate) fn enter_session(data: SessionEnterResponse) {
         st.self_participant = Some(data.self_participant);
         st.roster = data.roster;
         st.selected_recipients.clear();
+        st.ws_reconnect_suppressed = false;
+        st.ws_reconnect_attempts = 0;
+        st.ws_reconnect_scheduled = false;
+        st.combat_combatants.clear();
+        st.viewer_can_see_gm_secrets = initial_can_see_secrets;
+        st.ai_rally_paused = false;
     });
 
     sync_gm_context_button_visibility(is_gm);
@@ -466,8 +477,16 @@ pub fn cleanup_client_session_state() {
             }
         }
         if let Some(ws) = st.ws.take() {
+            ws.set_onclose(None);
+            ws.set_onerror(None);
             let _ = ws.close();
         }
+        st.ws_reconnect_suppressed = true;
+        st.ws_reconnect_attempts = 0;
+        st.ws_reconnect_scheduled = false;
+        st.combat_combatants.clear();
+        st.viewer_can_see_gm_secrets = false;
+        st.ai_rally_paused = false;
         st.gm_documents.clear();
         st.gm_memories.clear();
         st.gm_omnisearch_active = false;
@@ -504,7 +523,8 @@ pub fn cleanup_client_session_state() {
 #[wasm_bindgen]
 pub fn satya_leave_session() {
     spawn_local(async move {
-        let (session_id, auth_token, peer_ids, audio_muted, video_muted) = with_state(|st| {
+        let (session_id, auth_token, peer_ids, audio_muted, video_muted) = with_state_mut(|st| {
+            st.ws_reconnect_suppressed = true;
             (
                 st.session_id.clone(),
                 st.auth_token.clone(),
@@ -573,7 +593,8 @@ pub fn satya_leave_session() {
 pub fn satya_logout() {
     spawn_local(async move {
         let (auth_token, username, active_sid, peer_ids, audio_muted, video_muted) =
-            with_state(|st| {
+            with_state_mut(|st| {
+                st.ws_reconnect_suppressed = true;
                 (
                     st.auth_token.clone(),
                     st.user

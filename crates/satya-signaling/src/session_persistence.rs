@@ -14,7 +14,7 @@ use axum::{
 };
 use chrono::Utc;
 use satya_schema::{
-    AuthSuccessResponse, CharacterSheetRecord, ChatMessageEvent, GmMapUpdateRequest,
+    AiPlayerConfig, AuthSuccessResponse, CharacterSheetRecord, ChatMessageEvent, GmMapUpdateRequest,
     LifecycleEventType, MessageVisibility, Participant, ParticipantKind, ResumeSessionRequest,
     SavedSessionSummary, SavedSessionsListResponse, ServerWsPacket, SessionEnterResponse,
     SessionHistorySnapshot, SessionLifecycleEvent, SessionMode, SessionRole, TtrpgMechanicsEvent,
@@ -48,26 +48,27 @@ impl AuthAndSessionManager {
             .unwrap_or(0)
     }
 
-    /// Loads `(password_hash, active_map, created_at_us)` for an existing saved session if present.
+    /// Loads `(host_user_id, password_hash, active_map, created_at_us)` for an existing saved session if present.
     pub(crate) async fn load_saved_session_meta_from_db(
         &self,
         session_id: &str,
-    ) -> Option<(String, Option<GmMapUpdateRequest>, i64)> {
+    ) -> Option<(String, String, Option<GmMapUpdateRequest>, i64)> {
         let row = sqlx::query(
-            "SELECT password_hash, active_map_json, created_at_us FROM saved_sessions WHERE session_id = ?1",
+            "SELECT host_user_id, password_hash, active_map_json, created_at_us FROM saved_sessions WHERE session_id = ?1",
         )
         .bind(session_id)
         .fetch_optional(&self.db_pool)
         .await
         .ok()??;
 
+        let host_user_id: String = row.try_get("host_user_id").ok()?;
         let password_hash: String = row.try_get("password_hash").ok()?;
         let active_map_json: Option<String> = row.try_get("active_map_json").ok().flatten();
         let active_map = active_map_json
             .as_deref()
             .and_then(|raw| serde_json::from_str::<GmMapUpdateRequest>(raw).ok());
         let created_at_us: i64 = row.try_get("created_at_us").ok()?;
-        Some((password_hash, active_map, created_at_us))
+        Some((host_user_id, password_hash, active_map, created_at_us))
     }
 
     /// Loads the previously bound `character_id` for `(session_id, user_id)` if saved.
@@ -87,6 +88,123 @@ impl AuthAndSessionManager {
         .flatten()
         .flatten()
         .filter(|s| !s.trim().is_empty())
+    }
+
+    /// Loads the previously saved [`SessionRole`] for `(session_id, user_id)` if present.
+    pub(crate) async fn load_saved_participant_role(
+        &self,
+        session_id: &str,
+        user_id: &str,
+    ) -> Option<SessionRole> {
+        sqlx::query_scalar::<_, String>(
+            "SELECT role FROM session_participants WHERE session_id = ?1 AND user_id = ?2",
+        )
+        .bind(session_id)
+        .bind(user_id)
+        .fetch_optional(&self.db_pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|s| session_role_from_db(&s))
+    }
+
+    /// Persists an autonomous AI Player's metadata (never secrets) into SQLite `session_ai_players`.
+    pub(crate) async fn upsert_session_ai_player_to_db(
+        &self,
+        session_id: &str,
+        cfg: &AiPlayerConfig,
+    ) {
+        let Some(uid) = cfg.user_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+            return;
+        };
+        let now_us = Utc::now().timestamp_micros();
+        let _ = sqlx::query(
+            r#"
+            INSERT INTO session_ai_players (
+                session_id, user_id, display_name, character_id, persona_prompt,
+                provider, model_id, service_url, auto_respond, max_rally_turns, updated_at_us
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            ON CONFLICT(session_id, user_id) DO UPDATE SET
+                display_name = excluded.display_name,
+                character_id = excluded.character_id,
+                persona_prompt = excluded.persona_prompt,
+                provider = excluded.provider,
+                model_id = excluded.model_id,
+                service_url = excluded.service_url,
+                auto_respond = excluded.auto_respond,
+                max_rally_turns = excluded.max_rally_turns,
+                updated_at_us = excluded.updated_at_us
+            "#,
+        )
+        .bind(session_id)
+        .bind(uid)
+        .bind(cfg.display_name.as_deref().unwrap_or(uid))
+        .bind(cfg.character_id.as_deref())
+        .bind(cfg.persona_prompt.as_deref().unwrap_or(""))
+        .bind(cfg.provider.as_deref().unwrap_or("ollama"))
+        .bind(cfg.model_id.as_deref().unwrap_or("gemma4:12b"))
+        .bind(cfg.service_url.as_deref())
+        .bind(if cfg.auto_respond { 1_i64 } else { 0_i64 })
+        .bind(i64::from(cfg.max_rally_turns))
+        .bind(now_us)
+        .execute(&self.db_pool)
+        .await;
+    }
+
+    /// Removes a persisted AI Player configuration from `session_ai_players`.
+    pub(crate) async fn delete_session_ai_player_from_db(
+        &self,
+        session_id: &str,
+        player_user_id: &str,
+    ) {
+        let _ = sqlx::query(
+            "DELETE FROM session_ai_players WHERE session_id = ?1 AND user_id = ?2",
+        )
+        .bind(session_id.trim())
+        .bind(player_user_id.trim())
+        .execute(&self.db_pool)
+        .await;
+    }
+
+    /// Loads persisted [`AiPlayerConfig`] entries for `session_id` from SQLite `session_ai_players`.
+    pub(crate) async fn load_session_ai_players_from_db(
+        &self,
+        session_id: &str,
+    ) -> Vec<AiPlayerConfig> {
+        let Ok(rows) = sqlx::query(
+            r#"
+            SELECT user_id, display_name, character_id, persona_prompt,
+                   provider, model_id, service_url, auto_respond, max_rally_turns
+            FROM session_ai_players
+            WHERE session_id = ?1
+            ORDER BY user_id ASC
+            "#,
+        )
+        .bind(session_id.trim())
+        .fetch_all(&self.db_pool)
+        .await
+        else {
+            return Vec::new();
+        };
+        rows.into_iter()
+            .filter_map(|r| {
+                Some(AiPlayerConfig {
+                    user_id: Some(r.try_get::<String, _>("user_id").ok()?),
+                    display_name: r.try_get::<String, _>("display_name").ok(),
+                    character_id: r.try_get::<Option<String>, _>("character_id").ok().flatten(),
+                    persona_prompt: r.try_get::<String, _>("persona_prompt").ok(),
+                    provider: r.try_get::<String, _>("provider").ok(),
+                    model_id: r.try_get::<String, _>("model_id").ok(),
+                    service_url: r.try_get::<Option<String>, _>("service_url").ok().flatten(),
+                    auto_respond: r.try_get::<i64, _>("auto_respond").unwrap_or(1) != 0,
+                    max_rally_turns: r
+                        .try_get::<i64, _>("max_rally_turns")
+                        .unwrap_or(2)
+                        .clamp(1, 10) as u32,
+                })
+            })
+            .collect()
     }
 
     /// Persists session metadata to the SQLite `saved_sessions` table (never storing BYOK API keys).
@@ -302,17 +420,47 @@ impl AuthAndSessionManager {
             }
         }
 
+        let persisted_ai_players = self.load_session_ai_players_from_db(sid).await;
+        for ai_cfg in &persisted_ai_players {
+            let Some(uid) = ai_cfg.user_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+                continue;
+            };
+            let display_name = ai_cfg.display_name.as_deref().unwrap_or(uid);
+            let prov = ai_cfg.provider.as_deref().unwrap_or("ollama");
+            let model = ai_cfg.model_id.as_deref().unwrap_or("gemma4:12b");
+            let composite = if model.contains('/') {
+                model.to_string()
+            } else {
+                format!("{prov}/{model}")
+            };
+            let ai_part = Participant::ai_player(
+                uid,
+                display_name,
+                ai_cfg.character_id.clone(),
+                &composite,
+                "tactical-party-player",
+            );
+            roster.insert(uid.to_string(), ai_part);
+        }
+
         let roster_vec: Vec<Participant> = roster.values().cloned().collect();
-        let mut gm_documents = self.load_persistent_gm_docs_from_db(sid).await;
-        let mut gm_memories = self.load_persistent_gm_memories_from_db(sid).await;
+        let mut gm_documents = self
+            .load_persistent_gm_docs_from_db(sid, Some(&host_user_id))
+            .await;
+        let mut gm_memories = self
+            .load_persistent_gm_memories_from_db(sid, Some(&host_user_id))
+            .await;
         if !campaign_tag.trim().is_empty() && !campaign_tag.eq_ignore_ascii_case(sid) {
-            for doc in self.load_persistent_gm_docs_from_db(&campaign_tag).await {
+            for doc in self
+                .load_persistent_gm_docs_from_db(&campaign_tag, Some(&host_user_id))
+                .await
+            {
                 if !gm_documents.iter().any(|d| d.doc_id == doc.doc_id) {
                     gm_documents.push(doc);
                 }
             }
             for mem in self
-                .load_persistent_gm_memories_from_db(&campaign_tag)
+                .load_persistent_gm_memories_from_db(&campaign_tag, Some(&host_user_id))
                 .await
             {
                 let dup_npc = mem.memory_id.starts_with("mem_npc_")
@@ -528,14 +676,23 @@ impl AuthAndSessionManager {
             .load_visible_events_from_db(sid, &participant.user_id, participant.role, has_human_gm)
             .await;
 
+        let can_see_gm_secrets = matches!(
+            participant.role,
+            SessionRole::Gm | SessionRole::Host | SessionRole::AiGm
+        );
         let (active_map, combat_tracker) = {
             let guard = self.sessions.read().await;
             if let Some(s) = guard.get(sid) {
+                let filtered_tracker = Self::filter_combat_tracker_for_viewer(
+                    &s.combat_tracker,
+                    s.active_map.as_ref(),
+                    can_see_gm_secrets,
+                );
                 (
                     s.active_map
                         .as_ref()
                         .map(|m| crate::map_handlers::filter_map_for_role(m, participant.role)),
-                    Some(s.combat_tracker.clone()),
+                    Some(filtered_tracker),
                 )
             } else {
                 (None, None)
@@ -732,13 +889,10 @@ impl AuthAndSessionManager {
             if resolved_role == SessionRole::AiGm {
                 anyhow::bail!("Human participants cannot resume with the AI_GM role");
             }
-            if matches!(
-                saved_role,
-                Some(SessionRole::Observer | SessionRole::Player | SessionRole::Participant)
-            ) && matches!(resolved_role, SessionRole::Gm | SessionRole::Host)
-                && session.host_user_id != user.user_id
+            if matches!(resolved_role, SessionRole::Gm | SessionRole::Host)
+                && !matches!(saved_role, Some(SessionRole::Gm | SessionRole::Host))
             {
-                anyhow::bail!("Cannot escalate role from PLAYER/OBSERVER to GM/HOST");
+                anyhow::bail!("Cannot escalate role to GM/HOST on session resume");
             }
 
             let resolved_display_name = req
@@ -898,6 +1052,9 @@ pub async fn resume_session_handler(
             }) {
                 state.broadcast_to_session(&req.session_id, &sync_pkt).await;
             }
+            state
+                .ensure_session_ai_players_loaded(&req.session_id)
+                .await;
 
             (
                 StatusCode::OK,

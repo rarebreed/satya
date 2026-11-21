@@ -406,8 +406,9 @@ pub(crate) fn orient_sector_to_shared_road(
     sec: &mut ProceduralSector,
     cw: i32,
     ch: i32,
+    cell_cm: i32,
     preferred_road_side: Option<MapContinuationDir>,
-    mirror_fn: fn(&mut ProceduralSector, i32, i32, bool),
+    mirror_fn: fn(&mut ProceduralSector, i32, i32, i32, bool),
 ) {
     let Some(target_side) = preferred_road_side else {
         return;
@@ -421,7 +422,7 @@ pub(crate) fn orient_sector_to_shared_road(
             target_side,
             MapContinuationDir::East | MapContinuationDir::West
         );
-        mirror_fn(sec, cw, ch, horizontal_flip);
+        mirror_fn(sec, cw, ch, cell_cm, horizontal_flip);
     }
 }
 

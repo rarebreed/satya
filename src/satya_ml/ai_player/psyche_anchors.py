@@ -2,53 +2,20 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from satya_ml.ai_gm.hooks import normalize_character_sheet_record
-from satya_ml.dice_probabilities import _ensure_satya_py_loaded
-
-
-def _fallback_extract_lifepath_anchors(character_sheet: dict[str, Any]) -> dict[str, Any]:
-    lp = character_sheet.get("lifepath_config")
-    if not isinstance(lp, dict):
-        raw_lp = character_sheet.get("lifepath_config_json")
-        if isinstance(raw_lp, str) and raw_lp.strip():
-            try:
-                lp = json.loads(raw_lp)
-            except Exception:
-                lp = {}
-    if not isinstance(lp, dict):
-        lp = {}
-    hobbies = []
-    if lp.get("youth_hobby"):
-        hobbies.append({"hobby_code": str(lp["youth_hobby"]), "grounded_contact_role": "Off-duty contact"})
-    for code in lp.get("personal_hobbies") or []:
-        hobbies.append({"hobby_code": str(code), "grounded_contact_role": "Off-duty contact"})
-    return {
-        "faction_id": character_sheet.get("faction_id") or lp.get("faction_id"),
-        "faction_archetype": character_sheet.get("faction_archetype") or lp.get("faction_archetype"),
-        "faction_label": None,
-        "faction_wedge_hint": None,
-        "hobby_contacts": hobbies,
-        "formative_anchors": [],
-    }
+from satya_py.campaign import (
+    extract_character_lifepath_anchors,
+    normalize_character_sheet_record,
+)
 
 
 def extract_anchors_for_player(character_sheet: dict[str, Any] | None) -> dict[str, Any]:
-    """Call `satya_py.extract_character_lifepath_anchors_json` for the AI Player sheet."""
+    """Call Rust ``satya_py.campaign.extract_character_lifepath_anchors`` for the AI Player sheet."""
     if not isinstance(character_sheet, dict) or not character_sheet:
         return {}
     norm = normalize_character_sheet_record(character_sheet)
-    satya_py = _ensure_satya_py_loaded()
-    if satya_py is not None and hasattr(satya_py, "extract_character_lifepath_anchors_json"):
-        try:
-            parsed = json.loads(satya_py.extract_character_lifepath_anchors_json(json.dumps(norm)))
-            if isinstance(parsed, dict):
-                return parsed
-        except Exception:
-            pass
-    return _fallback_extract_lifepath_anchors(norm)
+    return extract_character_lifepath_anchors(norm)
 
 
 def sync_character_9axis_and_lifepath_anchors(

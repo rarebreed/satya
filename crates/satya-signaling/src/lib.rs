@@ -221,12 +221,24 @@ pub fn build_router(state: Arc<SignalingAppState>) -> Router {
             post(step_session_ai_player_handler),
         )
         .route(
+            "/api/sessions/:session_id/ai-players/rally",
+            post(update_session_ai_rally_handler),
+        )
+        .route(
+            "/api/sessions/:session_id/ai-gm/opening-scene",
+            post(trigger_ai_gm_opening_scene_handler),
+        )
+        .route(
             "/api/sessions/:session_id/ai-players/:player_user_id",
             delete(remove_session_ai_player_handler),
         )
         .route(
             "/api/player-ai/sessions/:session_id/context",
             get(player_ai_session_context_handler),
+        )
+        .route(
+            "/api/player-ai/sessions/:session_id/door",
+            post(player_ai_session_door_handler),
         )
         .route(
             "/api/player-ai/sessions/:session_id/chat",

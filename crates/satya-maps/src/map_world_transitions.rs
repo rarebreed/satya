@@ -43,26 +43,29 @@ impl MacroZoneFamily {
             | SectorPreset::UrbanCrossroads
             | SectorPreset::ShoppingPlaza
             | SectorPreset::ShoppingMall => Self::CommercialCore,
-            SectorPreset::UrbanResidential | SectorPreset::ProjectsHighDensity => {
-                Self::UrbanResidential
-            }
             SectorPreset::SuburbanNeighborhood
             | SectorPreset::LuxuryMansion
             | SectorPreset::GardenEstate => Self::SuburbanEstate,
-            SectorPreset::Hospital => Self::CivicCampus,
-            SectorPreset::ManufacturingPlant | SectorPreset::Warehouse => Self::IndustrialDistrict,
+            SectorPreset::Hospital | SectorPreset::CommunityClinicAnnex => Self::CivicCampus,
+            SectorPreset::ManufacturingPlant
+            | SectorPreset::Warehouse
+            | SectorPreset::BrownoutLogisticsDepot => Self::IndustrialDistrict,
             SectorPreset::WoodedPark
             | SectorPreset::WoodlandCreek
             | SectorPreset::BotanicalGarden
             | SectorPreset::RoadsideDitch => Self::NaturalWoodland,
             SectorPreset::RuralCountryside | SectorPreset::Farms => Self::RuralFarmland,
+            SectorPreset::UrbanResidential
+            | SectorPreset::ProjectsHighDensity
+            | SectorPreset::SatyangSafehouse => Self::UrbanResidential,
             SectorPreset::ResidentialApartment
             | SectorPreset::OfficeFloor
             | SectorPreset::CornerBar => Self::IndoorWing,
             SectorPreset::DockingBay
             | SectorPreset::MedLabSector
             | SectorPreset::DerelictCorridor
-            | SectorPreset::OrbitalAirlock => Self::FacilityWing,
+            | SectorPreset::OrbitalAirlock
+            | SectorPreset::CorporateServerBunker => Self::FacilityWing,
         }
     }
 }
@@ -194,12 +197,14 @@ pub fn select_neighbor_sector_transition(
                         plain(next_p, 1, road_opp)
                     }
                 } else if is_plaza_or_mall && roll < 55 {
-                    let next_p = if sub_roll < 45 {
+                    let next_p = if sub_roll < 36 {
                         SectorPreset::DowntownCommercial
-                    } else if sub_roll < 80 {
+                    } else if sub_roll < 64 {
                         SectorPreset::ShoppingPlaza
-                    } else {
+                    } else if sub_roll < 86 {
                         SectorPreset::ShoppingMall
+                    } else {
+                        SectorPreset::Hospital
                     };
                     if next_p.is_zoned_preset() {
                         zoned(
@@ -212,6 +217,12 @@ pub fn select_neighbor_sector_transition(
                     } else {
                         plain(next_p, 1, road_opp)
                     }
+                } else if !is_plaza_or_mall && (82..90).contains(&roll) {
+                    plain(SectorPreset::Hospital, 0, road_opp)
+                } else if !is_plaza_or_mall && (90..96).contains(&roll) {
+                    plain(SectorPreset::Warehouse, 0, road_opp)
+                } else if !is_plaza_or_mall && roll >= 96 {
+                    plain(SectorPreset::ShoppingMall, 0, road_opp)
                 } else if sub_roll < 70 {
                     zoned(
                         SectorPreset::UrbanResidential,
@@ -627,14 +638,21 @@ pub fn select_neighbor_sector_transition(
                         road_opp,
                     )
                 } else if roll < 70 {
+                    let next_p = if sub_roll < 65 {
+                        SectorPreset::LuxuryMansion
+                    } else {
+                        SectorPreset::GardenEstate
+                    };
                     zoned(
-                        SectorPreset::LuxuryMansion,
+                        next_p,
                         ZoningContext::SuburbanNeighborhood,
                         EconomicTier::LuxuryMansion,
                         0,
                         road_opp,
                     )
-                } else if roll < 85 {
+                } else if roll < 76 {
+                    plain(SectorPreset::BotanicalGarden, 0, road_opp)
+                } else if roll < 86 {
                     plain(SectorPreset::WoodedPark, 0, road_opp)
                 } else {
                     zoned(

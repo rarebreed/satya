@@ -26,7 +26,20 @@ pub fn satya_click_map_cell(gx: i32, gy: i32) {
     handle_map_grid_cell_clicked(gx, gy);
 }
 
+fn local_user_is_observer_in_session() -> bool {
+    with_state(|st| {
+        st.session_id.is_some()
+            && st
+                .self_participant
+                .as_ref()
+                .is_some_and(|p| p.role == satya_schema::SessionRole::Observer)
+    })
+}
+
 fn post_set_active_floor_if_in_session(floor_idx: i32) {
+    if !crate::wasm_client::map_2d_camera::local_user_can_author_map() {
+        return;
+    }
     let (auth_token, session_id) = with_state(|st| (st.auth_token.clone(), st.session_id.clone()));
     let (Some(token), Some(sid)) = (auth_token, session_id) else {
         return;
@@ -97,6 +110,10 @@ pub fn satya_select_map_floor(floor_idx: i32) {
 /// Moves the currently selected miniature to `floor_idx` (preferring an aligned stairwell landing).
 #[wasm_bindgen]
 pub fn satya_move_token_to_floor(floor_idx: i32) {
+    if local_user_is_observer_in_session() {
+        return;
+    }
+    let can_switch_server_floor = crate::wasm_client::map_2d_camera::local_user_can_author_map();
     let mut move_req: Option<MoveMapTokenRequest> = None;
     with_map_ui_mut(|ui| {
         let Some(sel_id) = ui.selected_entity_id.clone() else {
@@ -173,16 +190,19 @@ pub fn satya_move_token_to_floor(floor_idx: i32) {
                     Some(&req),
                 )
                 .await;
-                if let Ok(updated) = fetch_json::<_, GmMapUpdateRequest>(
-                    "POST",
-                    &format!("/api/sessions/{sid}/map"),
-                    Some(&token),
-                    Some(&floor_req),
-                )
-                .await
+                if can_switch_server_floor
+                    && let Ok(updated) = fetch_json::<_, GmMapUpdateRequest>(
+                        "POST",
+                        &format!("/api/sessions/{sid}/map"),
+                        Some(&token),
+                        Some(&floor_req),
+                    )
+                    .await
                 {
                     apply_incoming_map_update(&updated);
-                } else if let Ok(updated) = move_res {
+                    return;
+                }
+                if let Ok(updated) = move_res {
                     apply_incoming_map_update(&updated);
                 }
             });
@@ -193,6 +213,9 @@ pub fn satya_move_token_to_floor(floor_idx: i32) {
 /// Generates a new procedural continuous vector tactical sector from `#map-preset-select` (syncing if in a session).
 #[wasm_bindgen]
 pub fn satya_generate_procedural_map() {
+    if !crate::wasm_client::map_2d_camera::local_user_can_author_map() {
+        return;
+    }
     let raw_preset = select_value("map-preset-select");
     let preset = SectorPreset::from_code_str(&raw_preset).unwrap_or_default();
     let raw_scale = select_value("map-scale-select");
@@ -450,6 +473,9 @@ pub fn satya_update_map_tactical_controls() {
 /// Updates the `.glb` miniature preset or faction hex color of the currently selected map token.
 #[wasm_bindgen]
 pub fn satya_update_selected_token_visual() {
+    if local_user_is_observer_in_session() {
+        return;
+    }
     let model_preset = select_value("map-token-model-select");
     let color_hex = input_value("map-token-color");
     let mut sync_req: Option<MoveMapTokenRequest> = None;
@@ -614,6 +640,10 @@ pub fn handle_map_point_clicked(x_m: f32, y_m: f32) {
         {
             ui.selected_entity_id = Some(clicked_id);
             ui.recompute_overlays();
+            return;
+        }
+
+        if local_user_is_observer_in_session() {
             return;
         }
 

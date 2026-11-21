@@ -188,6 +188,7 @@ pub async fn create_session_handler(
                         persona_id: defaults.persona_id.clone(),
                         api_key: None,
                         base_url: Some(defaults.ollama_base_url.clone()),
+                        clear_api_key: false,
                     }
                 });
                 if let Ok((_, updated_roster)) = state

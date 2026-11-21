@@ -12,11 +12,41 @@ use crate::wasm_client::options::{
     normalize_density_id, normalize_font_id, normalize_font_size_id, normalize_style_id,
     normalize_theme_id,
 };
-use satya_schema::{AiGmProviderConfig, AiPlayerConfig, StepAiPlayerRequest};
+use satya_schema::{
+    AiGmProviderConfig, AiPlayerConfig, StepAiPlayerRequest, UpdateAiRallyRequest,
+};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
+
+fn ai_player_uid_from_name(display_name: &str) -> String {
+    let base_label = display_name
+        .strip_suffix("(AI Player)")
+        .unwrap_or(display_name)
+        .trim();
+    let mut slug = String::new();
+    let mut prev_dash = false;
+    for ch in base_label.to_ascii_lowercase().chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch);
+            prev_dash = false;
+        } else if !prev_dash && !slug.is_empty() {
+            slug.push('-');
+            prev_dash = true;
+        }
+    }
+    let slug = slug.trim_end_matches('-');
+    if slug.is_empty() {
+        "ai-player-1".to_string()
+    } else if slug.starts_with("ai-player-") {
+        slug.to_string()
+    } else if let Some(rest) = slug.strip_prefix("ai-") {
+        format!("ai-player-{rest}")
+    } else {
+        format!("ai-player-{slug}")
+    }
+}
 
 fn close_hamburger_dropdown() {
     set_display("hamburger-menu-dropdown", "none");
@@ -234,9 +264,15 @@ pub fn satya_update_session_gm_config() {
             model_raw
         };
         let key_raw = input_value("menu-ai-gm-key").trim().to_string();
+        let clear_api_key = input_checked("menu-ai-gm-clear-key");
         // Scrub ephemeral BYOK password field from DOM immediately after reading
         set_input_value("menu-ai-gm-key", "");
-        let api_key = if key_raw.is_empty() {
+        if let Some(cb) =
+            get_element("menu-ai-gm-clear-key").and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+        {
+            cb.set_checked(false);
+        }
+        let api_key = if key_raw.is_empty() || clear_api_key {
             None
         } else {
             Some(key_raw)
@@ -250,6 +286,7 @@ pub fn satya_update_session_gm_config() {
             persona_id: "harsh-reality-arbiter".to_string(),
             api_key,
             base_url: None,
+            clear_api_key,
         };
         let path = format!("/api/sessions/{sid}/gm-config");
         match fetch_json::<_, serde_json::Value>("POST", &path, Some(&tok), Some(&cfg)).await {
@@ -267,6 +304,43 @@ pub fn satya_update_session_gm_config() {
     });
 }
 
+/// Triggers the AI GM to open the session with an introductory scene via `POST /api/sessions/:id/ai-gm/opening-scene`.
+#[wasm_bindgen]
+pub fn satya_trigger_ai_gm_opening_scene() {
+    spawn_local(async move {
+        let Some((sid, tok)) = active_session_and_token_or_feedback(
+            "menu-ai-gm-feedback",
+            "Join or create an active session first.",
+        ) else {
+            return;
+        };
+        let path = format!("/api/sessions/{sid}/ai-gm/opening-scene");
+        match fetch_json::<(), serde_json::Value>("POST", &path, Some(&tok), None).await {
+            Ok(_) => {
+                crate::wasm_client::state::with_state_mut(|st| {
+                    st.ai_rally_paused = false;
+                });
+                set_text("btn-toggle-ai-rally", "Pause Rally");
+                set_feedback(
+                    "menu-ai-gm-feedback",
+                    "AI GM opening scene narration triggered.",
+                    false,
+                );
+            }
+            Err(err) => {
+                set_feedback("menu-ai-gm-feedback", &err, true);
+            }
+        }
+    });
+}
+
+/// Updates `#menu-ai-player-model` with the recommended default model when `#menu-ai-player-provider` changes.
+#[wasm_bindgen]
+pub fn satya_menu_ai_player_provider_changed() {
+    let provider = select_value("menu-ai-player-provider");
+    set_input_value("menu-ai-player-model", default_model_for_provider(&provider));
+}
+
 /// Spawns or updates an AI Player test agent in the active session via `POST /api/sessions/:id/ai-players`.
 #[wasm_bindgen]
 pub fn satya_spawn_session_ai_player() {
@@ -280,53 +354,167 @@ pub fn satya_spawn_session_ai_player() {
         let display_name = input_value("menu-ai-player-name").trim().to_string();
         let persona_prompt = input_value("menu-ai-player-persona").trim().to_string();
         let auto_respond = input_checked("menu-ai-player-auto");
-        let base_label = display_name
-            .strip_suffix("(AI Player)")
-            .unwrap_or(&display_name)
-            .trim();
-        let mut slug = String::new();
-        let mut prev_dash = false;
-        for ch in base_label.to_ascii_lowercase().chars() {
-            if ch.is_ascii_alphanumeric() {
-                slug.push(ch);
-                prev_dash = false;
-            } else if !prev_dash && !slug.is_empty() {
-                slug.push('-');
-                prev_dash = true;
-            }
-        }
-        let slug = slug.trim_end_matches('-');
-        let user_id = if slug.is_empty() {
-            "ai-player-1".to_string()
-        } else {
-            format!("ai-{slug}")
-        };
+        let provider_raw = select_value("menu-ai-player-provider").trim().to_string();
+        let model_raw = input_value("menu-ai-player-model").trim().to_string();
+        let char_raw = input_value("menu-ai-player-character-id").trim().to_string();
+        let user_id = ai_player_uid_from_name(&display_name);
+        let max_rally = input_value("menu-ai-rally-max-rounds")
+            .trim()
+            .parse::<u32>()
+            .unwrap_or(5)
+            .clamp(1, 10);
 
         let cfg = AiPlayerConfig {
-            user_id: Some(user_id),
+            user_id: Some(user_id.clone()),
             display_name: if display_name.is_empty() {
                 None
             } else {
                 Some(display_name)
             },
-            character_id: None,
+            character_id: if char_raw.is_empty() {
+                None
+            } else {
+                Some(char_raw)
+            },
             persona_prompt: if persona_prompt.is_empty() {
                 None
             } else {
                 Some(persona_prompt)
             },
-            provider: None,
-            model_id: None,
+            provider: if provider_raw.is_empty() {
+                None
+            } else {
+                Some(provider_raw)
+            },
+            model_id: if model_raw.is_empty() {
+                None
+            } else {
+                Some(model_raw)
+            },
             service_url: None,
             auto_respond,
-            max_rally_turns: 2,
+            max_rally_turns: max_rally,
         };
         let path = format!("/api/sessions/{sid}/ai-players");
         match fetch_json::<_, serde_json::Value>("POST", &path, Some(&tok), Some(&cfg)).await {
             Ok(_) => {
                 set_feedback(
                     "menu-ai-player-feedback",
-                    "AI Player active in session roster.",
+                    &format!("AI Player '{user_id}' active in session roster."),
+                    false,
+                );
+            }
+            Err(err) => {
+                set_feedback("menu-ai-player-feedback", &err, true);
+            }
+        }
+    });
+}
+
+/// Removes the named AI Player from the active session via `DELETE /api/sessions/:id/ai-players/:uid`.
+#[wasm_bindgen]
+pub fn satya_remove_session_ai_player() {
+    spawn_local(async move {
+        let Some((sid, tok)) = active_session_and_token_or_feedback(
+            "menu-ai-player-feedback",
+            "Join or create an active session first.",
+        ) else {
+            return;
+        };
+        let display_name = input_value("menu-ai-player-name").trim().to_string();
+        let uid = ai_player_uid_from_name(&display_name);
+        let path = format!("/api/sessions/{sid}/ai-players/{uid}");
+        match fetch_json::<(), serde_json::Value>("DELETE", &path, Some(&tok), None).await {
+            Ok(_) => {
+                set_feedback(
+                    "menu-ai-player-feedback",
+                    &format!("Removed AI Player '{uid}' from session."),
+                    false,
+                );
+            }
+            Err(err) => {
+                set_feedback("menu-ai-player-feedback", &err, true);
+            }
+        }
+    });
+}
+
+/// Toggles autonomous AI rally pause/resume via `POST /api/sessions/:id/ai-players/rally`.
+#[wasm_bindgen]
+pub fn satya_toggle_ai_rally_paused() {
+    spawn_local(async move {
+        let Some((sid, tok)) = active_session_and_token_or_feedback(
+            "menu-ai-player-feedback",
+            "Join or create an active session first.",
+        ) else {
+            return;
+        };
+        let next_paused = crate::wasm_client::state::with_state(|st| !st.ai_rally_paused);
+        let req = UpdateAiRallyRequest {
+            paused: Some(next_paused),
+            max_rally_rounds: None,
+            reset_counter: None,
+        };
+        let path = format!("/api/sessions/{sid}/ai-players/rally");
+        match fetch_json::<_, serde_json::Value>("POST", &path, Some(&tok), Some(&req)).await {
+            Ok(_) => {
+                crate::wasm_client::state::with_state_mut(|st| {
+                    st.ai_rally_paused = next_paused;
+                });
+                set_text(
+                    "btn-toggle-ai-rally",
+                    if next_paused {
+                        "Resume Rally"
+                    } else {
+                        "Pause Rally"
+                    },
+                );
+                set_feedback(
+                    "menu-ai-player-feedback",
+                    if next_paused {
+                        "Autonomous AI rally paused."
+                    } else {
+                        "Autonomous AI rally resumed."
+                    },
+                    false,
+                );
+            }
+            Err(err) => {
+                set_feedback("menu-ai-player-feedback", &err, true);
+            }
+        }
+    });
+}
+
+/// Updates the session `max_rally_rounds` budget via `POST /api/sessions/:id/ai-players/rally`.
+#[wasm_bindgen]
+pub fn satya_update_ai_rally_settings() {
+    spawn_local(async move {
+        let Some((sid, tok)) = active_session_and_token_or_feedback(
+            "menu-ai-player-feedback",
+            "Join or create an active session first.",
+        ) else {
+            return;
+        };
+        let rounds = input_value("menu-ai-rally-max-rounds")
+            .trim()
+            .parse::<u32>()
+            .unwrap_or(5)
+            .clamp(1, 10);
+        let req = UpdateAiRallyRequest {
+            paused: None,
+            max_rally_rounds: Some(rounds),
+            reset_counter: Some(true),
+        };
+        let path = format!("/api/sessions/{sid}/ai-players/rally");
+        match fetch_json::<_, serde_json::Value>("POST", &path, Some(&tok), Some(&req)).await {
+            Ok(_) => {
+                crate::wasm_client::state::with_state_mut(|st| {
+                    st.ai_rally_max_rounds = rounds;
+                });
+                set_feedback(
+                    "menu-ai-player-feedback",
+                    &format!("Applied max rally cap ({rounds} rounds) and reset counter."),
                     false,
                 );
             }

@@ -8,12 +8,16 @@
 
 use serde::{Deserialize, Serialize};
 
+use satya_engine::action_catalog_stealth::AcousticSurfaceKind;
+use satya_engine::environmental_hazards::SurfaceTractionTier;
 use satya_schema::{
     CoverGrade, EdgeSide, GmMapUpdateRequest, MapPropPlacement, MapWallEdge, MaterialClass,
-    MessageVisibility, PropKind, TacticalTileKind, TokenPlacement, WallEdgeKind,
+    MessageVisibility, PropKind, SurfaceFeatureKind, TacticalTileKind, TokenPlacement,
+    WallEdgeKind,
 };
 
 use crate::map_dressing::{effective_obstruction, make_prop, prop_spec};
+use crate::tactical_map::{TacticalSceneView, evaluate_los_continuous};
 use crate::tactical_map_geom::{
     EDGE_PICK_HALF_THICK_M, TOKEN_PICK_RADIUS_M, TOKEN_RADIUS_M, distance_point_to_segment,
     edge_endpoints_m, prop_contains_point, vehicle_point_is_engine_bay,
@@ -21,17 +25,18 @@ use crate::tactical_map_geom::{
 use crate::tactical_map_spatial::{SpatialObstacleIndex, SpatialWallFilter};
 
 /// High-level map object class reported by [`inspect_map_point`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum MapHoverCategory {
     Token,
     EdgeBarrier,
     SolidProp,
     SurfaceProp,
+    #[default]
     Ground,
 }
 
 /// Unified object & ground inspection snapshot for both 2D SVG and 3D WebGPU viewports.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct MapHoverInspection {
     pub category: MapHoverCategory,
     pub title: String,
@@ -45,6 +50,193 @@ pub struct MapHoverInspection {
     pub world_y_m: f32,
     /// Stable highlight reference (`entity_id`, `"edge:x:y:side"`, `"prop:idx"`, or `"ground"`).
     pub target_ref: String,
+    #[serde(default)]
+    pub acoustic_surface: Option<AcousticSurfaceKind>,
+    #[serde(default)]
+    pub acoustic_stealth_delta_ext: i32,
+    #[serde(default)]
+    pub traction_tier: Option<SurfaceTractionTier>,
+    #[serde(default)]
+    pub in_faraday_zone: bool,
+    #[serde(default)]
+    pub ambient_light_delta_ext: i32,
+}
+
+/// Maps a continuous [`SurfaceFeatureKind`] to its Ch. 7 acoustic stealth surface class.
+#[must_use]
+pub const fn surface_acoustic_kind(kind: SurfaceFeatureKind) -> AcousticSurfaceKind {
+    match kind {
+        SurfaceFeatureKind::LawnGrassZone
+        | SurfaceFeatureKind::CarpetFloor
+        | SurfaceFeatureKind::MulchZone
+        | SurfaceFeatureKind::GardenBedZone => AcousticSurfaceKind::ThickCarpetOrTurf,
+        SurfaceFeatureKind::InteriorFloor | SurfaceFeatureKind::WoodDeck => {
+            AcousticSurfaceKind::HardwoodOrCreakyStairs
+        }
+        SurfaceFeatureKind::GravelRoad
+        | SurfaceFeatureKind::DirtTrail
+        | SurfaceFeatureKind::DefensiveTrench
+        | SurfaceFeatureKind::DrainageDitch => AcousticSurfaceKind::GravelOrDryLeaves,
+        SurfaceFeatureKind::SteelPlateFloor | SurfaceFeatureKind::BridgeDeck => {
+            AcousticSurfaceKind::BrokenGlassOrMetalGrate
+        }
+        SurfaceFeatureKind::CreekChannel
+        | SurfaceFeatureKind::StoneWalk
+        | SurfaceFeatureKind::BrickPaverWalk
+        | SurfaceFeatureKind::ConcreteWalk
+        | SurfaceFeatureKind::AsphaltRoad
+        | SurfaceFeatureKind::PoolWater
+        | SurfaceFeatureKind::StainedConcreteFloor
+        | SurfaceFeatureKind::CeramicTileFloor
+        | SurfaceFeatureKind::MarbleFloor
+        | SurfaceFeatureKind::ClinicalVinylFloor
+        | SurfaceFeatureKind::LinoleumCheckFloor
+        | SurfaceFeatureKind::TerrazzoFloor => AcousticSurfaceKind::ConcreteAsphaltOrTile,
+    }
+}
+
+/// Maps a continuous [`SurfaceFeatureKind`] and weather flag to its Ch. 21 footing traction tier.
+#[must_use]
+pub const fn surface_traction_tier(
+    kind: SurfaceFeatureKind,
+    wet_weather: bool,
+) -> SurfaceTractionTier {
+    match kind {
+        SurfaceFeatureKind::CreekChannel
+        | SurfaceFeatureKind::DrainageDitch
+        | SurfaceFeatureKind::PoolWater
+        | SurfaceFeatureKind::DefensiveTrench
+        | SurfaceFeatureKind::GravelRoad
+        | SurfaceFeatureKind::MulchZone
+        | SurfaceFeatureKind::GardenBedZone => SurfaceTractionTier::MudGravelOilSlick,
+        SurfaceFeatureKind::DirtTrail | SurfaceFeatureKind::LawnGrassZone => {
+            if wet_weather {
+                SurfaceTractionTier::MudGravelOilSlick
+            } else {
+                SurfaceTractionTier::DrySolid
+            }
+        }
+        SurfaceFeatureKind::AsphaltRoad
+        | SurfaceFeatureKind::ConcreteWalk
+        | SurfaceFeatureKind::BrickPaverWalk
+        | SurfaceFeatureKind::StoneWalk
+        | SurfaceFeatureKind::WoodDeck
+        | SurfaceFeatureKind::BridgeDeck => {
+            if wet_weather {
+                SurfaceTractionTier::WetRainPavement
+            } else {
+                SurfaceTractionTier::DrySolid
+            }
+        }
+        SurfaceFeatureKind::InteriorFloor
+        | SurfaceFeatureKind::StainedConcreteFloor
+        | SurfaceFeatureKind::CeramicTileFloor
+        | SurfaceFeatureKind::MarbleFloor
+        | SurfaceFeatureKind::CarpetFloor
+        | SurfaceFeatureKind::ClinicalVinylFloor
+        | SurfaceFeatureKind::LinoleumCheckFloor
+        | SurfaceFeatureKind::TerrazzoFloor
+        | SurfaceFeatureKind::SteelPlateFloor => SurfaceTractionTier::DrySolid,
+    }
+}
+
+/// Optional floor-prop acoustic override (`Rug`, `ElevatedCatwalk`, `StreetDebris`, `Stairwell`).
+#[must_use]
+pub const fn prop_acoustic_override(kind: PropKind) -> Option<AcousticSurfaceKind> {
+    match kind {
+        PropKind::Rug | PropKind::RunnerRug | PropKind::RoundRug => {
+            Some(AcousticSurfaceKind::ThickCarpetOrTurf)
+        }
+        PropKind::ElevatedCatwalk | PropKind::StreetDebris => {
+            Some(AcousticSurfaceKind::BrokenGlassOrMetalGrate)
+        }
+        PropKind::Stairwell => Some(AcousticSurfaceKind::HardwoodOrCreakyStairs),
+        _ => None,
+    }
+}
+
+/// Detection result from a fixed map [`satya_schema::MapSurveillanceNode`] against a continuous point.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SurveillanceDetectionHit {
+    pub node_id: String,
+    pub label: String,
+    pub node_kind_code: String,
+    pub distance_m: f32,
+    pub has_los: bool,
+    pub detected: bool,
+}
+
+/// Evaluates all surveillance nodes on `floor_index` against continuous coordinate `(x_m, y_m)`.
+///
+/// When `blackout_active` is `true`, grid-powered cameras/checkpoints/turrets go offline while
+/// battery/air-gapped `AIR_GAPPED_SCADA` enclaves remain active.
+#[must_use]
+pub fn evaluate_surveillance_detection_at_point(
+    map: &GmMapUpdateRequest,
+    x_m: f32,
+    y_m: f32,
+    floor_index: i32,
+    blackout_active: bool,
+) -> Vec<SurveillanceDetectionHit> {
+    if map.surveillance_nodes.is_empty() {
+        return Vec::new();
+    }
+    let floor_view = if floor_index == map.active_floor {
+        None
+    } else {
+        let mut cloned = map.clone();
+        if cloned.switch_active_floor(floor_index) {
+            Some(cloned)
+        } else {
+            return Vec::new();
+        }
+    };
+    let scene_map = floor_view.as_ref().unwrap_or(map);
+    let scene = TacticalSceneView::from_map(scene_map);
+    let mut hits = Vec::new();
+
+    for node in &map.surveillance_nodes {
+        if node.floor_index != floor_index || !node.powered {
+            continue;
+        }
+        if blackout_active && node.node_kind_code != "AIR_GAPPED_SCADA" {
+            continue;
+        }
+        let nx_m = node.x_cm as f32 / 100.0;
+        let ny_m = node.y_cm as f32 / 100.0;
+        let dx = x_m - nx_m;
+        let dy = y_m - ny_m;
+        let dist_m = dx.hypot(dy);
+        let max_range_m = (node.range_cm.max(0) as f32) / 100.0;
+        if dist_m > max_range_m {
+            continue;
+        }
+        let in_fov = if node.fov_deg >= 360 || dist_m <= 0.1 {
+            true
+        } else {
+            let bearing_deg = (dx.atan2(-dy).to_degrees() + 360.0).rem_euclid(360.0);
+            let facing = node.facing_deg.rem_euclid(360) as f32;
+            let diff = ((bearing_deg - facing + 540.0) % 360.0) - 180.0;
+            diff.abs() <= (node.fov_deg.max(0) as f32) * 0.5
+        };
+        if !in_fov {
+            continue;
+        }
+        let los = evaluate_los_continuous(&scene, (nx_m, ny_m), (x_m, y_m));
+        let is_acoustic = node.node_kind_code == "ACOUSTIC_GUNSHOT_ARRAY";
+        let detected = is_acoustic || los.has_los;
+        if detected {
+            hits.push(SurveillanceDetectionHit {
+                node_id: node.node_id.clone(),
+                label: node.label.clone(),
+                node_kind_code: node.node_kind_code.clone(),
+                distance_m: (dist_m * 100.0).round() / 100.0,
+                has_los: los.has_los,
+                detected,
+            });
+        }
+    }
+    hits
 }
 
 /// Migrates legacy tile-array maps (`tiles` non-empty) into vector `wall_edges` + `props`, leaving
@@ -269,6 +461,15 @@ fn theme_is_interior(theme_name: &str) -> bool {
         "bar",
         "interior",
         "room",
+        "hospital",
+        "mall",
+        "lab",
+        "clinic",
+        "airlock",
+        "corridor",
+        "bay",
+        "plant",
+        "manufacturing",
     ]
     .iter()
     .any(|kw| lower.contains(kw))
@@ -278,6 +479,40 @@ fn theme_is_interior(theme_name: &str) -> bool {
 /// object or underlying ground surface in priority order:
 /// Tokens -> Wall/Door/Window Edges -> Solid Props (incl. engine block & trunk vs. canopy) ->
 /// Surface/Catwalk/Hazard Props -> Base Ground/Floor.
+fn attach_environment_context(
+    req: &GmMapUpdateRequest,
+    x_m: f32,
+    y_m: f32,
+    prop_kind: Option<PropKind>,
+    mut ins: MapHoverInspection,
+) -> MapHoverInspection {
+    let top_surf = crate::map_surface_geom::topmost_surface_at_m(&req.surfaces, x_m, y_m);
+    let floor_prop_acoustic = req
+        .props
+        .iter()
+        .rev()
+        .filter(|p| prop_spec(p.kind).floor_layer && prop_contains_point(p, x_m, y_m, false))
+        .find_map(|p| prop_acoustic_override(p.kind));
+    let acoustic = prop_kind
+        .and_then(prop_acoustic_override)
+        .or(floor_prop_acoustic)
+        .or_else(|| top_surf.map(|s| surface_acoustic_kind(s.kind)))
+        .unwrap_or(AcousticSurfaceKind::ConcreteAsphaltOrTile);
+    ins.acoustic_surface = Some(acoustic);
+    ins.acoustic_stealth_delta_ext = acoustic.infiltrator_stealth_delta_ext();
+    ins.traction_tier = Some(
+        top_surf
+            .map(|s| surface_traction_tier(s.kind, false))
+            .unwrap_or(SurfaceTractionTier::DrySolid),
+    );
+    ins.in_faraday_zone = req
+        .faraday_zones
+        .iter()
+        .any(|z| z.contains_point_m(x_m, y_m, req.active_floor));
+    ins.ambient_light_delta_ext = req.ambient_light_delta_ext;
+    ins
+}
+
 #[must_use]
 pub fn inspect_map_point(
     req: &GmMapUpdateRequest,
@@ -285,6 +520,16 @@ pub fn inspect_map_point(
     x_m: f32,
     y_m: f32,
 ) -> Option<MapHoverInspection> {
+    inspect_map_point_raw(req, theme_name, x_m, y_m)
+        .map(|(ins, prop_kind)| attach_environment_context(req, x_m, y_m, prop_kind, ins))
+}
+
+fn inspect_map_point_raw(
+    req: &GmMapUpdateRequest,
+    theme_name: &str,
+    x_m: f32,
+    y_m: f32,
+) -> Option<(MapHoverInspection, Option<PropKind>)> {
     let (bw, bh) = req.board_size_m();
     if x_m < 0.0 || y_m < 0.0 || x_m > bw || y_m > bh {
         return None;
@@ -312,19 +557,23 @@ pub fn inspect_map_point(
         let stance = vis.map_or("ready", |v| v.stance_pose.as_str());
         let elev_cm = vis.map_or(0, |v| v.elevation_cm);
         let facing = vis.map(|v| v.facing_deg);
-        return Some(MapHoverInspection {
-            category: MapHoverCategory::Token,
-            title: tok.label.clone(),
-            subtitle: format!("{vis_tag} · {stance} · ({x_m:.2}m, {y_m:.2}m)"),
-            material_label: "Actor".to_owned(),
-            cover_label: "Mobile Miniature".to_owned(),
-            height_cm: 175,
-            elevation_cm: elev_cm,
-            rotation_deg: facing,
-            world_x_m: x_m,
-            world_y_m: y_m,
-            target_ref: tok.entity_id.clone(),
-        });
+        return Some((
+            MapHoverInspection {
+                category: MapHoverCategory::Token,
+                title: tok.label.clone(),
+                subtitle: format!("{vis_tag} · {stance} · ({x_m:.2}m, {y_m:.2}m)"),
+                material_label: "Actor".to_owned(),
+                cover_label: "Mobile Miniature".to_owned(),
+                height_cm: 175,
+                elevation_cm: elev_cm,
+                rotation_deg: facing,
+                world_x_m: x_m,
+                world_y_m: y_m,
+                target_ref: tok.entity_id.clone(),
+                ..Default::default()
+            },
+            None,
+        ));
     }
 
     // 2. Thin edge walls / doors / windows.
@@ -349,29 +598,43 @@ pub fn inspect_map_point(
                 215,
             ),
             WallEdgeKind::DoorOpen => ("Open Doorway".to_owned(), "Open Passage".to_owned(), 215),
-            WallEdgeKind::Window => (
-                "Glazed Window".to_owned(),
-                "Half Cover / Clear Sightline".to_owned(),
-                180,
-            ),
+            WallEdgeKind::Window => {
+                if edge.material == MaterialClass::SheetSteel {
+                    (
+                        "Iron / Steel Security Grille".to_owned(),
+                        "Half Cover / Clear Sightline (Security Grille)".to_owned(),
+                        220,
+                    )
+                } else {
+                    (
+                        "Glazed Window".to_owned(),
+                        "Half Cover / Clear Sightline".to_owned(),
+                        180,
+                    )
+                }
+            }
         };
         let orient_deg = match edge.side {
             EdgeSide::North => 0,
             EdgeSide::West => 90,
         };
-        return Some(MapHoverInspection {
-            category: MapHoverCategory::EdgeBarrier,
-            title,
-            subtitle: "Structural Edge".to_owned(),
-            material_label: edge.material.label().to_owned(),
-            cover_label,
-            height_cm,
-            elevation_cm: 0,
-            rotation_deg: Some(orient_deg),
-            world_x_m: x_m,
-            world_y_m: y_m,
-            target_ref: format!("edge:{}:{}:{:?}", edge.x, edge.y, edge.side),
-        });
+        return Some((
+            MapHoverInspection {
+                category: MapHoverCategory::EdgeBarrier,
+                title,
+                subtitle: "Structural Edge".to_owned(),
+                material_label: edge.material.label().to_owned(),
+                cover_label,
+                height_cm,
+                elevation_cm: 0,
+                rotation_deg: Some(orient_deg),
+                world_x_m: x_m,
+                world_y_m: y_m,
+                target_ref: format!("edge:{}:{}:{:?}", edge.x, edge.y, edge.side),
+                ..Default::default()
+            },
+            None,
+        ));
     }
 
     // 3. Solid / three-dimensional props (newest on top; vehicle & tree parts broken out).
@@ -382,49 +645,57 @@ pub fn inspect_map_point(
         }
         if !p.decorative && matches!(p.kind, PropKind::LargeTree | PropKind::MediumTree) {
             let in_trunk = prop_contains_point(p, x_m, y_m, false);
-            return Some(MapHoverInspection {
-                category: MapHoverCategory::SolidProp,
-                title: if in_trunk {
-                    format!("{} — Trunk", p.kind.label())
-                } else {
-                    format!("{} — Canopy", p.kind.label())
+            return Some((
+                MapHoverInspection {
+                    category: MapHoverCategory::SolidProp,
+                    title: if in_trunk {
+                        format!("{} — Trunk", p.kind.label())
+                    } else {
+                        format!("{} — Canopy", p.kind.label())
+                    },
+                    subtitle: format!("{} · {}°", p.kind.label(), p.rotation_deg),
+                    material_label: if in_trunk {
+                        MaterialClass::LiveWood.label().to_owned()
+                    } else {
+                        MaterialClass::Foliage.label().to_owned()
+                    },
+                    cover_label: if in_trunk {
+                        "Full Cover (Solid Trunk)".to_owned()
+                    } else {
+                        "Overhead Concealment".to_owned()
+                    },
+                    height_cm: spec.height_cm,
+                    elevation_cm: if in_trunk { 0 } else { 210 },
+                    rotation_deg: Some(p.rotation_deg),
+                    world_x_m: x_m,
+                    world_y_m: y_m,
+                    target_ref: format!("prop:{idx}"),
+                    ..Default::default()
                 },
-                subtitle: format!("{} · {}°", p.kind.label(), p.rotation_deg),
-                material_label: if in_trunk {
-                    MaterialClass::LiveWood.label().to_owned()
-                } else {
-                    MaterialClass::Foliage.label().to_owned()
-                },
-                cover_label: if in_trunk {
-                    "Full Cover (Solid Trunk)".to_owned()
-                } else {
-                    "Overhead Concealment".to_owned()
-                },
-                height_cm: spec.height_cm,
-                elevation_cm: if in_trunk { 0 } else { 210 },
-                rotation_deg: Some(p.rotation_deg),
-                world_x_m: x_m,
-                world_y_m: y_m,
-                target_ref: format!("prop:{idx}"),
-            });
+                Some(p.kind),
+            ));
         }
         if !p.decorative
             && matches!(p.kind, PropKind::Car | PropKind::UtilityVan)
             && vehicle_point_is_engine_bay(p, x_m, y_m)
         {
-            return Some(MapHoverInspection {
-                category: MapHoverCategory::SolidProp,
-                title: format!("{} — Engine Block", p.kind.label()),
-                subtitle: "Front Hood Hard Cover".to_owned(),
-                material_label: MaterialClass::ArmorSteel.label().to_owned(),
-                cover_label: "Half Cover (Engine Armor)".to_owned(),
-                height_cm: spec.height_cm.min(115),
-                elevation_cm: 0,
-                rotation_deg: Some(p.rotation_deg),
-                world_x_m: x_m,
-                world_y_m: y_m,
-                target_ref: format!("prop:{idx}"),
-            });
+            return Some((
+                MapHoverInspection {
+                    category: MapHoverCategory::SolidProp,
+                    title: format!("{} — Engine Block", p.kind.label()),
+                    subtitle: "Front Hood Hard Cover".to_owned(),
+                    material_label: MaterialClass::ArmorSteel.label().to_owned(),
+                    cover_label: "Half Cover (Engine Armor)".to_owned(),
+                    height_cm: spec.height_cm.min(115),
+                    elevation_cm: 0,
+                    rotation_deg: Some(p.rotation_deg),
+                    world_x_m: x_m,
+                    world_y_m: y_m,
+                    target_ref: format!("prop:{idx}"),
+                    ..Default::default()
+                },
+                Some(p.kind),
+            ));
         }
         let mat_label = spec.material.label().to_owned();
         let eff_obs = effective_obstruction(p);
@@ -437,23 +708,27 @@ pub fn inspect_map_point(
         } else {
             cover_label_for_grade(eff_obs.cover_grade())
         };
-        return Some(MapHoverInspection {
-            category: MapHoverCategory::SolidProp,
-            title: p.kind.label().to_owned(),
-            subtitle: if p.decorative {
-                format!("Visual Only · {}°", p.rotation_deg)
-            } else {
-                format!("Solid Prop · {}°", p.rotation_deg)
+        return Some((
+            MapHoverInspection {
+                category: MapHoverCategory::SolidProp,
+                title: p.kind.label().to_owned(),
+                subtitle: if p.decorative {
+                    format!("Visual Only · {}°", p.rotation_deg)
+                } else {
+                    format!("Solid Prop · {}°", p.rotation_deg)
+                },
+                material_label: mat_label,
+                cover_label: cover.to_owned(),
+                height_cm: spec.height_cm,
+                elevation_cm: 0,
+                rotation_deg: Some(p.rotation_deg),
+                world_x_m: x_m,
+                world_y_m: y_m,
+                target_ref: format!("prop:{idx}"),
+                ..Default::default()
             },
-            material_label: mat_label,
-            cover_label: cover.to_owned(),
-            height_cm: spec.height_cm,
-            elevation_cm: 0,
-            rotation_deg: Some(p.rotation_deg),
-            world_x_m: x_m,
-            world_y_m: y_m,
-            target_ref: format!("prop:{idx}"),
-        });
+            Some(p.kind),
+        ));
     }
 
     // 4. Elevated bridge decks override underlying ground channels; then floor-layer props; then vector surfaces.
@@ -461,19 +736,23 @@ pub fn inspect_map_point(
     if let Some(surf) = top_surf
         && surf.kind == satya_schema::SurfaceFeatureKind::BridgeDeck
     {
-        return Some(MapHoverInspection {
-            category: MapHoverCategory::SurfaceProp,
-            title: surf.kind.label().to_owned(),
-            subtitle: "Elevated Bridge / Overpass (+15 cm)".to_owned(),
-            material_label: surf.kind.material().label().to_owned(),
-            cover_label: "Walkable Surface".to_owned(),
-            height_cm: 15,
-            elevation_cm: 15,
-            rotation_deg: None,
-            world_x_m: x_m,
-            world_y_m: y_m,
-            target_ref: "surface:bridge".to_owned(),
-        });
+        return Some((
+            MapHoverInspection {
+                category: MapHoverCategory::SurfaceProp,
+                title: surf.kind.label().to_owned(),
+                subtitle: "Elevated Bridge / Overpass (+15 cm)".to_owned(),
+                material_label: surf.kind.material().label().to_owned(),
+                cover_label: "Walkable Surface".to_owned(),
+                height_cm: 15,
+                elevation_cm: 15,
+                rotation_deg: None,
+                world_x_m: x_m,
+                world_y_m: y_m,
+                target_ref: "surface:bridge".to_owned(),
+                ..Default::default()
+            },
+            None,
+        ));
     }
 
     for (idx, p) in req.props.iter().enumerate().rev() {
@@ -527,19 +806,23 @@ pub fn inspect_map_point(
         } else {
             ("Surface Layer".to_owned(), "Walkable Surface".to_owned(), 0)
         };
-        return Some(MapHoverInspection {
-            category: MapHoverCategory::SurfaceProp,
-            title: p.kind.label().to_owned(),
-            subtitle,
-            material_label: spec.material.label().to_owned(),
-            cover_label,
-            height_cm: spec.height_cm,
-            elevation_cm,
-            rotation_deg: Some(p.rotation_deg),
-            world_x_m: x_m,
-            world_y_m: y_m,
-            target_ref: format!("prop:{idx}"),
-        });
+        return Some((
+            MapHoverInspection {
+                category: MapHoverCategory::SurfaceProp,
+                title: p.kind.label().to_owned(),
+                subtitle,
+                material_label: spec.material.label().to_owned(),
+                cover_label,
+                height_cm: spec.height_cm,
+                elevation_cm,
+                rotation_deg: Some(p.rotation_deg),
+                world_x_m: x_m,
+                world_y_m: y_m,
+                target_ref: format!("prop:{idx}"),
+                ..Default::default()
+            },
+            Some(p.kind),
+        ));
     }
 
     if let Some(surf) = top_surf {
@@ -584,19 +867,23 @@ pub fn inspect_map_point(
                 sec.sector_y
             ));
         }
-        return Some(MapHoverInspection {
-            category: MapHoverCategory::SurfaceProp,
-            title: kind.label().to_owned(),
-            subtitle,
-            material_label: kind.material().label().to_owned(),
-            cover_label,
-            height_cm: 0,
-            elevation_cm,
-            rotation_deg: None,
-            world_x_m: x_m,
-            world_y_m: y_m,
-            target_ref: format!("surface:{}", kind.as_str()),
-        });
+        return Some((
+            MapHoverInspection {
+                category: MapHoverCategory::SurfaceProp,
+                title: kind.label().to_owned(),
+                subtitle,
+                material_label: kind.material().label().to_owned(),
+                cover_label,
+                height_cm: 0,
+                elevation_cm,
+                rotation_deg: None,
+                world_x_m: x_m,
+                world_y_m: y_m,
+                target_ref: format!("surface:{}", kind.as_str()),
+                ..Default::default()
+            },
+            None,
+        ));
     }
 
     // 5. Bare ground / floor fallback (scoped to local stitched WorldSectorCell when present).
@@ -634,19 +921,23 @@ pub fn inspect_map_point(
     } else {
         format!("Clear Terrain · ({x_m:.2}m, {y_m:.2}m)")
     };
-    Some(MapHoverInspection {
-        category: MapHoverCategory::Ground,
-        title,
-        subtitle,
-        material_label,
-        cover_label: "No Cover".to_owned(),
-        height_cm: 0,
-        elevation_cm: 0,
-        rotation_deg: None,
-        world_x_m: x_m,
-        world_y_m: y_m,
-        target_ref: "ground".to_owned(),
-    })
+    Some((
+        MapHoverInspection {
+            category: MapHoverCategory::Ground,
+            title,
+            subtitle,
+            material_label,
+            cover_label: "No Cover".to_owned(),
+            height_cm: 0,
+            elevation_cm: 0,
+            rotation_deg: None,
+            world_x_m: x_m,
+            world_y_m: y_m,
+            target_ref: "ground".to_owned(),
+            ..Default::default()
+        },
+        None,
+    ))
 }
 
 #[cfg(test)]

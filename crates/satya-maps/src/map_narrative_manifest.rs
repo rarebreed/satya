@@ -193,7 +193,14 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::Forklift
         | PropKind::ShippingContainer
         | PropKind::AirCompressor
-        | PropKind::CncMill => Some(("industrial_logistics", "Industrial / Logistics Floor")),
+        | PropKind::CncMill
+        | PropKind::WoodCrate
+        | PropKind::DrumCluster
+        | PropKind::SteelShelving
+        | PropKind::ElevatedCatwalk
+        | PropKind::StructuralPillar => {
+            Some(("industrial_logistics", "Industrial / Logistics Floor"))
+        }
         PropKind::LabBench
         | PropKind::SolderingStation
         | PropKind::TestBench
@@ -209,11 +216,16 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::WaterCooler => Some(("office_ops", "Command / Office Suite")),
         PropKind::BarCounter
         | PropKind::BackBarShelf
+        | PropKind::BarStool
         | PropKind::Booth
         | PropKind::PoolTable
         | PropKind::Jukebox => Some(("hospitality_lounge", "Bar / Hospitality Lounge")),
         PropKind::Sofa
         | PropKind::Loveseat
+        | PropKind::Armchair
+        | PropKind::CoffeeTable
+        | PropKind::Rug
+        | PropKind::RoundTable
         | PropKind::ReclinerChair
         | PropKind::Bed
         | PropKind::SingleBed
@@ -245,20 +257,33 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::StreetDebris
         | PropKind::AwningCanopy => Some(("vehicle_perimeter", "Curbside / Vehicle Perimeter")),
         PropKind::CropRow
+        | PropKind::Planter
         | PropKind::PlanterTable
         | PropKind::LargeTree
         | PropKind::MediumTree
         | PropKind::Hedge
         | PropKind::Bush
         | PropKind::Boulder
+        | PropKind::FallenLog
+        | PropKind::ParkBench
+        | PropKind::PicnicTable
         | PropKind::SmallFountain
         | PropKind::MediumFountain
         | PropKind::LargeFountain
         | PropKind::Gazebo
         | PropKind::BbqGrill
         | PropKind::GardenShed
+        | PropKind::GardenBed
+        | PropKind::GardenEdging
+        | PropKind::MulchBed
         | PropKind::HotTub
         | PropKind::BrownstoneStoop => Some(("exterior_grounds", "Exterior / Greenbelt Grounds")),
+        PropKind::CreekWater | PropKind::DrainageDitch => {
+            Some(("waterway_channel", "Waterway / Drainage Cut"))
+        }
+        PropKind::StonePath | PropKind::AsphaltDrive | PropKind::GravelPath | PropKind::DirtPath => {
+            Some(("road_walkway", "Roadway / Pedestrian Path"))
+        }
         PropKind::FireExtinguisher => Some(("office_ops", "Safety & Utility Fixture")),
         PropKind::TrashCan | PropKind::GarbagePile | PropKind::Dumpster | PropKind::AcUnit => {
             Some(("utility_service", "Service / Utility Yard"))
@@ -268,7 +293,6 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         }
         PropKind::NurseStation => Some(("nurse_station", "Nursing Station / Triage Hub")),
         PropKind::HazardSpill => Some(("hazard_spill", "Hazardous Spill Zone")),
-        _ => None,
     }
 }
 
@@ -301,14 +325,18 @@ fn surface_semantic_label(kind: SurfaceFeatureKind) -> &'static str {
     }
 }
 
-fn find_clear_anchor_near(
-    map: &GmMapUpdateRequest,
+#[allow(clippy::too_many_arguments)]
+fn find_clear_anchor_near_slice(
+    w_m: f32,
+    h_m: f32,
+    wall_edges: &[satya_schema::MapWallEdge],
+    props: &[satya_schema::MapPropPlacement],
+    surfaces: &[satya_schema::MapSurfaceFeature],
     target_x_m: f32,
     target_y_m: f32,
     floor_index: i32,
     label: &str,
 ) -> Option<WalkableAnchorPoint> {
-    let (w_m, h_m) = map.board_size_m();
     let max_r: i32 = 6;
     for ring in 0_i32..=max_r {
         for dy in -ring..=ring {
@@ -321,13 +349,13 @@ fn find_clear_anchor_near(
                 let x_m = (x * 100.0).round() / 100.0;
                 let y_m = (y * 100.0).round() / 100.0;
                 let in_water_or_hazard = matches!(
-                    topmost_surface_at_m(&map.surfaces, x_m, y_m).map(|s| s.kind),
+                    topmost_surface_at_m(surfaces, x_m, y_m).map(|s| s.kind),
                     Some(
                         SurfaceFeatureKind::PoolWater
                             | SurfaceFeatureKind::CreekChannel
                             | SurfaceFeatureKind::DrainageDitch
                     )
-                ) || map.props.iter().any(|p| {
+                ) || props.iter().any(|p| {
                     !p.decorative
                         && matches!(
                             p.kind,
@@ -339,8 +367,8 @@ fn find_clear_anchor_near(
                     && !circle_collides_obstacles(
                         w_m,
                         h_m,
-                        &map.wall_edges,
-                        &map.props,
+                        wall_edges,
+                        props,
                         x_m,
                         y_m,
                         TOKEN_RADIUS_M,
@@ -364,6 +392,16 @@ fn find_clear_anchor_near(
 /// Distill an entire procedural vector [`GmMapUpdateRequest`] into semantic zones, exits, floors, and anchors.
 #[must_use]
 pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarrativeManifest {
+    extract_sector_narrative_manifest_for_floor(map, None)
+}
+
+/// Distill a procedural vector [`GmMapUpdateRequest`] into semantic zones, exits, floors, and anchors
+/// (extracting all floors when `target_floor_index` is `None`, or a single floor when `Some(floor)`).
+#[must_use]
+pub fn extract_sector_narrative_manifest_for_floor(
+    map: &GmMapUpdateRequest,
+    target_floor_index: Option<i32>,
+) -> SectorNarrativeManifest {
     let (width_m, height_m) = map.board_size_m();
     let floors: Vec<FloorSummary> = if map.floors.is_empty() {
         vec![FloorSummary {
@@ -389,75 +427,121 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
     struct Acc {
         category: String,
         label: String,
+        floor_index: i32,
         sum_x: f32,
         sum_y: f32,
         count: usize,
         cover_props: usize,
         concealment_props: usize,
     }
-    let mut grouped: BTreeMap<String, Acc> = BTreeMap::new();
+    let mut grouped: BTreeMap<(i32, String), Acc> = BTreeMap::new();
 
-    for p in &map.props {
-        let Some((zone_key, zone_label)) = prop_semantic_zone(p.kind) else {
-            continue;
-        };
-        let fp = p.footprint_m();
-        let obs = effective_obstruction(p);
-        let entry = grouped
-            .entry(format!("prop_{zone_key}"))
-            .or_insert_with(|| Acc {
-                category: "Interior / Prop Cluster".to_string(),
-                label: zone_label.to_string(),
-                sum_x: 0.0,
-                sum_y: 0.0,
-                count: 0,
-                cover_props: 0,
-                concealment_props: 0,
-            });
-        entry.sum_x += fp.cx_m;
-        entry.sum_y += fp.cy_m;
-        entry.count += 1;
-        match obs {
-            PropObstruction::HalfCover | PropObstruction::FullObstacle => entry.cover_props += 1,
-            PropObstruction::Concealment => entry.concealment_props += 1,
-            PropObstruction::FloorLayer => {}
-        }
-    }
-
-    for surf in &map.surfaces {
-        if surf.points_cm.is_empty() {
-            continue;
-        }
-        let (sx, sy) = surf
-            .points_cm
+    type FloorSlice<'a> = (
+        i32,
+        &'a [satya_schema::MapWallEdge],
+        &'a [satya_schema::MapPropPlacement],
+        &'a [satya_schema::MapSurfaceFeature],
+    );
+    let floor_slices: Vec<FloorSlice<'_>> = if map.floors.is_empty() {
+        vec![(
+            map.active_floor,
+            &map.wall_edges,
+            &map.props,
+            &map.surfaces,
+        )]
+    } else {
+        map.floors
             .iter()
-            .fold((0.0_f32, 0.0_f32), |(ax, ay), pt| {
-                let (mx, my) = pt.to_m();
-                (ax + mx, ay + my)
-            });
-        let n = surf.points_cm.len() as f32;
-        let key = format!("surf_{}", surf.kind.as_str().to_ascii_lowercase());
-        let entry = grouped.entry(key).or_insert_with(|| Acc {
-            category: "Terrain Surface".to_string(),
-            label: surface_semantic_label(surf.kind).to_string(),
-            sum_x: 0.0,
-            sum_y: 0.0,
-            count: 0,
-            cover_props: 0,
-            concealment_props: 0,
-        });
-        entry.sum_x += sx / n;
-        entry.sum_y += sy / n;
-        entry.count += 1;
+            .filter(|f| target_floor_index.is_none_or(|tf| tf == f.floor_index))
+            .map(|f| {
+                if f.floor_index == map.active_floor {
+                    (
+                        f.floor_index,
+                        map.wall_edges.as_slice(),
+                        map.props.as_slice(),
+                        map.surfaces.as_slice(),
+                    )
+                } else {
+                    (
+                        f.floor_index,
+                        f.wall_edges.as_slice(),
+                        f.props.as_slice(),
+                        f.surfaces.as_slice(),
+                    )
+                }
+            })
+            .collect()
+    };
+
+    for &(fl_idx, _edges, props, surfaces) in &floor_slices {
+        for p in props {
+            let Some((zone_key, zone_label)) = prop_semantic_zone(p.kind) else {
+                continue;
+            };
+            let fp = p.footprint_m();
+            let obs = effective_obstruction(p);
+            let entry = grouped
+                .entry((fl_idx, format!("prop_{zone_key}")))
+                .or_insert_with(|| Acc {
+                    category: "Interior / Prop Cluster".to_string(),
+                    label: zone_label.to_string(),
+                    floor_index: fl_idx,
+                    sum_x: 0.0,
+                    sum_y: 0.0,
+                    count: 0,
+                    cover_props: 0,
+                    concealment_props: 0,
+                });
+            entry.sum_x += fp.cx_m;
+            entry.sum_y += fp.cy_m;
+            entry.count += 1;
+            match obs {
+                PropObstruction::HalfCover | PropObstruction::FullObstacle => {
+                    entry.cover_props += 1
+                }
+                PropObstruction::Concealment => entry.concealment_props += 1,
+                PropObstruction::FloorLayer => {}
+            }
+        }
+
+        for surf in surfaces {
+            if surf.points_cm.is_empty() {
+                continue;
+            }
+            let (sx, sy) = surf
+                .points_cm
+                .iter()
+                .fold((0.0_f32, 0.0_f32), |(ax, ay), pt| {
+                    let (mx, my) = pt.to_m();
+                    (ax + mx, ay + my)
+                });
+            let n = surf.points_cm.len() as f32;
+            let key = format!("surf_{}", surf.kind.as_str().to_ascii_lowercase());
+            let entry = grouped
+                .entry((fl_idx, key))
+                .or_insert_with(|| Acc {
+                    category: "Terrain Surface".to_string(),
+                    label: surface_semantic_label(surf.kind).to_string(),
+                    floor_index: fl_idx,
+                    sum_x: 0.0,
+                    sum_y: 0.0,
+                    count: 0,
+                    cover_props: 0,
+                    concealment_props: 0,
+                });
+            entry.sum_x += sx / n;
+            entry.sum_y += sy / n;
+            entry.count += 1;
+        }
     }
 
     let mut zones: Vec<NarrativeZoneSummary> = grouped
         .into_iter()
-        .map(|(zone_id, acc)| NarrativeZoneSummary {
+        .map(|((_, zone_id), acc)| NarrativeZoneSummary {
             zone_id,
             category: acc.category,
             label: acc.label,
-            floor_index: map.active_floor,
+            floor_index: acc.floor_index,
             center_m: (
                 ((acc.sum_x / acc.count as f32) * 100.0).round() / 100.0,
                 ((acc.sum_y / acc.count as f32) * 100.0).round() / 100.0,
@@ -470,6 +554,7 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
     zones.sort_by(|a, b| {
         b.feature_count
             .cmp(&a.feature_count)
+            .then_with(|| a.floor_index.cmp(&b.floor_index))
             .then_with(|| a.zone_id.cmp(&b.zone_id))
     });
 
@@ -488,6 +573,15 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
             let mut crossing_count = 0_usize;
             let mut max_walled = 0_u8;
             for cell in &sectors {
+                let is_frontier = match dir {
+                    MapContinuationDir::North => cell.origin_y == 0,
+                    MapContinuationDir::South => cell.origin_y + cell.height >= map.grid_height,
+                    MapContinuationDir::West => cell.origin_x == 0,
+                    MapContinuationDir::East => cell.origin_x + cell.width >= map.grid_width,
+                };
+                if !is_frontier {
+                    continue;
+                }
                 let edge = cell.boundary.edge(dir);
                 has_road |= edge.has_any_road();
                 has_water |= edge.has_water();
@@ -513,9 +607,21 @@ pub fn extract_sector_narrative_manifest(map: &GmMapUpdateRequest) -> SectorNarr
         ("south_flank", width_m * 0.5, (height_m - 2.5).max(2.0)),
     ];
     let mut walkable_anchors = Vec::new();
-    for (label, ax, ay) in candidate_anchors {
-        if let Some(anchor) = find_clear_anchor_near(map, ax, ay, map.active_floor, label) {
-            walkable_anchors.push(anchor);
+    for &(fl_idx, edges, props, surfaces) in &floor_slices {
+        for (label, ax, ay) in candidate_anchors {
+            if let Some(anchor) = find_clear_anchor_near_slice(
+                width_m,
+                height_m,
+                edges,
+                props,
+                surfaces,
+                ax,
+                ay,
+                fl_idx,
+                label,
+            ) {
+                walkable_anchors.push(anchor);
+            }
         }
     }
 
@@ -650,7 +756,7 @@ fn synthesize_environment_pins(
 ) -> Vec<SpatialSensoryPin> {
     let mut pins = Vec::new();
     for (idx, prop) in map.props.iter().enumerate() {
-        if prop.kind == PropKind::HazardSpill {
+        if !prop.decorative && prop.kind == PropKind::HazardSpill {
             let fp = prop.footprint_m();
             pins.push(SpatialSensoryPin {
                 pin_id: format!("env_hazard_{idx}"),
@@ -679,8 +785,7 @@ fn synthesize_environment_pins(
                 difficulty_tn: 13,
                 max_range_m: 7.5,
                 whisper_text: format!(
-                    "Faint shifting weight and gear rustle near ({tx:.1}m, {ty:.1}m) betray an unseen presence ({}).",
-                    tok.label
+                    "Faint shifting weight and gear rustle near ({tx:.1}m, {ty:.1}m) betray an unseen presence."
                 ),
                 revealed_to: Vec::new(),
             });
@@ -714,30 +819,32 @@ pub fn evaluate_passive_movement_perceptions(
     let mut whispers = Vec::new();
     let mut seen_keys: BTreeSet<(String, String)> = BTreeSet::new();
 
-    // 1. Evaluate moved token's passive senses against custom pins + environmental hazards + GmOnly threats.
-    let env_pins = synthesize_environment_pins(map, moved_entity_id);
-    let moved_sheet = sheet_by_id.get(moved_entity_id).copied();
-    for pin in custom_pins.iter().chain(env_pins.iter()) {
-        if pin.floor_index != moved_floor {
-            continue;
-        }
-        if pin.revealed_to.iter().any(|id| id == moved_entity_id) {
-            continue;
-        }
-        if let Some(w) = evaluate_single_pin(
-            &scene,
-            moved_entity_id,
-            &moved_tok.label,
-            moved_pos,
-            moved_sheet,
-            pin,
-        ) && seen_keys.insert((w.observer_id.clone(), w.pin_id.clone()))
-        {
-            whispers.push(w);
+    // 1. Evaluate moved public token's passive senses against custom pins + environmental hazards + GmOnly threats.
+    if moved_tok.visibility != MessageVisibility::GmOnly {
+        let env_pins = synthesize_environment_pins(map, moved_entity_id);
+        let moved_sheet = sheet_by_id.get(moved_entity_id).copied();
+        for pin in custom_pins.iter().chain(env_pins.iter()) {
+            if pin.floor_index != moved_floor {
+                continue;
+            }
+            if pin.revealed_to.iter().any(|id| id == moved_entity_id) {
+                continue;
+            }
+            if let Some(w) = evaluate_single_pin(
+                &scene,
+                moved_entity_id,
+                &moved_tok.label,
+                moved_pos,
+                moved_sheet,
+                pin,
+            ) && seen_keys.insert((w.observer_id.clone(), w.pin_id.clone()))
+            {
+                whispers.push(w);
+            }
         }
     }
 
-    // 2. If the moved token itself is GmOnly, check whether stationary public observers detect it.
+    // 2. If the moved token itself is GmOnly, check whether stationary public observers detect it (redacting its secret label).
     if moved_tok.visibility == MessageVisibility::GmOnly {
         let threat_pin = SpatialSensoryPin {
             pin_id: format!("moving_threat_{}", moved_tok.entity_id),
@@ -748,8 +855,8 @@ pub fn evaluate_passive_movement_perceptions(
             difficulty_tn: 12,
             max_range_m: 14.0,
             whisper_text: format!(
-                "Movement catches your eye at ({:.1}m, {:.1}m): {} is repositioning nearby.",
-                moved_pos.0, moved_pos.1, moved_tok.label
+                "Movement catches your eye at ({:.1}m, {:.1}m): an unseen figure is repositioning nearby.",
+                moved_pos.0, moved_pos.1
             ),
             revealed_to: Vec::new(),
         };
@@ -906,8 +1013,18 @@ mod tests {
             surface_semantic_label(SurfaceFeatureKind::BrickPaverWalk),
             "Pedestrian Plaza / Walk"
         );
-        let center_anchor = find_clear_anchor_near(&map, 8.0, 7.0, 0, "poolside")
-            .expect("should find clear dry anchor outside PoolWater");
+        let center_anchor = find_clear_anchor_near_slice(
+            map.grid_width as f32,
+            map.grid_height as f32,
+            &map.wall_edges,
+            &map.props,
+            &map.surfaces,
+            8.0,
+            7.0,
+            0,
+            "poolside",
+        )
+        .expect("should find clear dry anchor outside PoolWater");
         let top = crate::map_surface_geom::topmost_surface_at_m(
             &map.surfaces,
             center_anchor.x_m,

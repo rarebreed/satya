@@ -144,11 +144,29 @@ pub async fn session_generate_or_edit_map_handler(
         p.participant_kind == ParticipantKind::Human
             && matches!(p.role, SessionRole::Gm | SessionRole::Host)
     });
+    let human_player_count = ctx
+        .roster
+        .iter()
+        .filter(|p| {
+            p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Player
+        })
+        .count();
+    let is_session_host = state.auth.is_session_host(&session_id, &user.user_id).await;
     let caller_is_gm_or_solo = matches!(caller_part.role, SessionRole::Gm | SessionRole::Host)
-        || (!has_human_gm && caller_part.role == SessionRole::Player);
+        || (!has_human_gm
+            && caller_part.role == SessionRole::Player
+            && is_session_host
+            && human_player_count == 1);
 
     // Branch A0-Floor: Switch active multi-floor level snapshot (`B1` / `1F` / `2F`, ...)
     if let Some(target_floor) = req.set_active_floor {
+        if !caller_is_gm_or_solo {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(json!({ "error": "Only the Game Master or Solo Host can switch the session's shared active floor" })),
+            )
+                .into_response();
+        }
         let Some(mut map) = ctx.active_map.clone() else {
             return (
                 StatusCode::CONFLICT,

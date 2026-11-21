@@ -37,8 +37,9 @@ except ImportError:  # pragma: no cover
         return _FallbackToolWrapper(fn)
 
 
+from satya_py import maps as _maps, psyche as _psyche, rules as _rules
+
 from satya_ml.campaign_config import get_pack_starter_npcs
-from satya_ml.dice_probabilities import _ensure_satya_py_loaded
 
 _PLAYER_MOTIVATION_LEDGERS: dict[tuple[str, str], dict[str, Any]] = {}
 
@@ -147,8 +148,24 @@ def sanitize_map_dict_for_player(raw_map: dict[str, Any] | None) -> dict[str, An
                 "y": gy,
                 "grid_x": gx,
                 "grid_y": gy,
-                "pos_x_cm": t.get("pos_x_cm") if t.get("pos_x_cm") is not None else gx * cell_cm + cell_cm // 2,
-                "pos_y_cm": t.get("pos_y_cm") if t.get("pos_y_cm") is not None else gy * cell_cm + cell_cm // 2,
+                "pos_x_cm": (
+                    t.get("pos_x_cm")
+                    if t.get("pos_x_cm") is not None
+                    else (
+                        vis_rec.get("pos_x_cm")
+                        if vis_rec.get("pos_x_cm") is not None
+                        else gx * cell_cm + cell_cm // 2
+                    )
+                ),
+                "pos_y_cm": (
+                    t.get("pos_y_cm")
+                    if t.get("pos_y_cm") is not None
+                    else (
+                        vis_rec.get("pos_y_cm")
+                        if vis_rec.get("pos_y_cm") is not None
+                        else gy * cell_cm + cell_cm // 2
+                    )
+                ),
                 "floor_index": floor_idx,
                 "elevation_cm": elev_cm,
                 "faction": str(t.get("faction") or "NEUTRAL"),
@@ -180,9 +197,18 @@ def sanitize_map_dict_for_player(raw_map: dict[str, Any] | None) -> dict[str, An
         "tokens": public_tokens,
         "token_visuals": clean_visuals,
     }
-    for geom_key in ("tiles", "wall_edges", "surfaces", "props", "floors", "world_sectors", "image_url", "notes"):
+    for geom_key in ("tiles", "wall_edges", "surfaces", "props", "floors", "world_sectors", "image_url"):
         if raw_map.get(geom_key) is not None:
             out[geom_key] = copy.deepcopy(raw_map[geom_key])
+    out["ambient_light_delta_ext"] = int(raw_map.get("ambient_light_delta_ext", 0) or 0)
+    if raw_map.get("faraday_zones") is not None:
+        out["faraday_zones"] = copy.deepcopy(raw_map["faraday_zones"])
+    if raw_map.get("surveillance_nodes") is not None:
+        out["surveillance_nodes"] = [
+            copy.deepcopy(node)
+            for node in (raw_map.get("surveillance_nodes") or [])
+            if isinstance(node, dict) and str(node.get("visibility") or "PUBLIC").upper() != "GM_ONLY"
+        ]
     if clean_manifest is not None:
         out["narrative_manifest"] = clean_manifest
     return out
@@ -331,33 +357,60 @@ def _find_self_token(
     return None
 
 
+def _extract_floor_slice(clean_map: dict[str, Any], floor_idx: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    for fl in clean_map.get("floors") or []:
+        if isinstance(fl, dict) and int(fl.get("floor_index", 0)) == floor_idx:
+            return list(fl.get("wall_edges") or []), list(fl.get("props") or [])
+    return list(clean_map.get("wall_edges") or []), list(clean_map.get("props") or [])
+
+
 def summarize_public_map_for_player(
     active_map: dict[str, Any] | None,
     player_user_id: str,
     character_sheet: dict[str, Any] | None = None,
 ) -> str:
-    """Summarize player coordinates, nearby visible tokens, rooms/zones, and cardinal exits."""
+    """Summarize player coordinates, same-floor distances, floor portals/doors, zones, and exits."""
     clean_map = sanitize_map_dict_for_player(active_map)
     if not clean_map:
         return ""
-    cell_cm = max(25, int(clean_map.get("cell_size_cm", 100) or 100))
     tokens = clean_map.get("tokens") or []
     self_tok = _find_self_token(tokens, player_user_id, character_sheet)
-    parts = [f"Map '{clean_map['title']}' ({clean_map['grid_width']}x{clean_map['grid_height']}m, Floor {clean_map['active_floor']})"]
+    active_floor = int(clean_map.get("active_floor", 0) or 0)
+    self_floor = int((self_tok or {}).get("floor_index", active_floor))
+    parts = [f"Map '{clean_map['title']}' ({clean_map['grid_width']}x{clean_map['grid_height']}m, ViewFloor {active_floor}, MyFloor {self_floor})"]
     if self_tok is not None:
         sx = float(self_tok.get("pos_x_cm", 50)) / 100.0
         sy = float(self_tok.get("pos_y_cm", 50)) / 100.0
-        parts.append(f"My Pos: ({sx:.1f}m, {sy:.1f}m)")
+        parts.append(f"My Pos: ({sx:.1f}m, {sy:.1f}m) on Floor {self_floor}")
         others: list[str] = []
         for t in tokens:
             if t is self_tok:
                 continue
             tx = float(t.get("pos_x_cm", 50)) / 100.0
             ty = float(t.get("pos_y_cm", 50)) / 100.0
-            dist = math.hypot(tx - sx, ty - sy)
-            others.append(f"{t.get('label')}@({tx:.1f},{ty:.1f}, {dist:.1f}m)")
+            t_floor = int(t.get("floor_index", active_floor))
+            if t_floor == self_floor:
+                dist = math.hypot(tx - sx, ty - sy)
+                others.append(f"{t.get('label')}@({tx:.1f},{ty:.1f}, F{t_floor}, {dist:.1f}m)")
+            else:
+                others.append(f"{t.get('label')}@({tx:.1f},{ty:.1f}, Floor {t_floor} — different floor)")
         if others:
             parts.append("Visible Tokens: " + ", ".join(others[:6]))
+    walls, props = _extract_floor_slice(clean_map, self_floor)
+    portals = [
+        f"{p.get('kind')}@({float(p.get('center_x_cm', 0))/100.0:.1f},{float(p.get('center_y_cm', 0))/100.0:.1f})"
+        for p in props
+        if isinstance(p, dict) and str(p.get("kind") or "").upper() in {"STAIRWELL", "ELEVATOR_CAR", "SERVICE_ELEVATOR"}
+    ]
+    if portals:
+        parts.append("Portals(F" + str(self_floor) + "): " + ", ".join(portals[:4]))
+    doors = [
+        f"({e.get('x')},{e.get('y')},{e.get('side')}):{e.get('kind')}"
+        for e in walls
+        if isinstance(e, dict) and str(e.get("kind") or "").upper() in {"DOOR_CLOSED", "DOOR_OPEN"}
+    ]
+    if doors:
+        parts.append("Doors(F" + str(self_floor) + "): " + ", ".join(doors[:5]))
     manifest = clean_map.get("narrative_manifest") or {}
     if isinstance(manifest, dict):
         zones = [str(z.get("label") or z.get("category") or "") for z in (manifest.get("zones") or [])[:4] if isinstance(z, dict)]
@@ -385,7 +438,7 @@ def move_player_map_token(
 ) -> dict[str, Any]:
     """Move ONLY your own character miniature to `(target_x, target_y)` meters with wall-collision enforcement."""
     from satya_ml.ai_player.tools import (
-        _http_post_json,
+        _http_post_json_detailed,
         _signaling_base_url,
         get_player_session_context,
         set_player_session_context,
@@ -412,27 +465,39 @@ def move_player_map_token(
     if stance_pose.strip():
         payload["stance_pose"] = stance_pose.strip()
 
-    remote = _http_post_json(
+    remote, status_code, err_body = _http_post_json_detailed(
         f"{_signaling_base_url()}/api/player-ai/sessions/{session_id}/map/move?user_id={urllib.parse.quote(player_user_id)}",
         payload,
         timeout=3.0,
     )
+    if status_code is not None and remote is None:
+        return {"error": err_body or f"Server rejected move (HTTP {status_code})", "status_code": status_code}
     if isinstance(remote, dict) and remote.get("map_id"):
         sanitized = sanitize_map_dict_for_player(remote)
         if sanitized:
             ctx["active_map"] = sanitized
             set_player_session_context(session_id, player_user_id, ctx)
-            return {"status": "moved", "entity_id": entity_id, "x_m": target_x, "y_m": target_y, "active_map": sanitized}
+            moved_tok = _find_self_token(sanitized.get("tokens") or [], player_user_id, sheet)
+            res_x_m = round(float((moved_tok or {}).get("pos_x_cm", req_x_cm)) / 100.0, 2)
+            res_y_m = round(float((moved_tok or {}).get("pos_y_cm", req_y_cm)) / 100.0, 2)
+            res_floor = int((moved_tok or {}).get("floor_index", sanitized.get("active_floor", 0)))
+            return {
+                "status": "moved",
+                "entity_id": entity_id,
+                "x_m": res_x_m,
+                "y_m": res_y_m,
+                "floor_index": res_floor,
+                "active_map": sanitized,
+            }
 
     if not clean_map:
         return {"error": "No active tactical map in session context."}
 
-    satya_py = _ensure_satya_py_loaded()
     final_x_cm, final_y_cm = req_x_cm, req_y_cm
-    if hasattr(satya_py, "resolve_tactical_token_destination_cm") and clean_map.get("wall_edges") is not None:
+    if clean_map.get("wall_edges") is not None:
         try:
-            final_x_cm, final_y_cm = satya_py.resolve_tactical_token_destination_cm(
-                json.dumps(clean_map),
+            final_x_cm, final_y_cm = _maps.resolve_token_destination_cm(
+                clean_map,
                 entity_id,
                 req_x_cm,
                 req_y_cm,
@@ -506,24 +571,28 @@ def inspect_surroundings(
     px_m = float(x_m) if x_m is not None else (float((self_tok or {}).get("pos_x_cm", 250)) / 100.0)
     py_m = float(y_m) if y_m is not None else (float((self_tok or {}).get("pos_y_cm", 250)) / 100.0)
 
-    satya_py = _ensure_satya_py_loaded()
-    map_json = json.dumps(clean_map)
     point_info = None
     manifest: dict[str, Any] = dict(clean_map.get("narrative_manifest") or {})
-    if hasattr(satya_py, "inspect_tactical_map_point"):
+    try:
+        point_info = _maps.inspect_map_point(
+            clean_map,
+            str(clean_map.get("theme") or "urban_crossroads"),
+            px_m,
+            py_m,
+            floor_index=self_floor,
+        )
+    except Exception:
+        point_info = None
+    if not manifest:
         try:
-            point_info = satya_py.inspect_tactical_map_point(
-                map_json,
-                str(clean_map.get("theme") or "urban_crossroads"),
-                px_m,
-                py_m,
-                floor_index=self_floor,
-            )
-        except Exception:
-            point_info = None
-    if not manifest and hasattr(satya_py, "extract_sector_narrative_manifest_json"):
-        try:
-            manifest = json.loads(satya_py.extract_sector_narrative_manifest_json(map_json))
+            floor_map = clean_map
+            if self_floor != active_floor and clean_map.get("floors"):
+                floor_map = dict(clean_map)
+                floor_walls, floor_props = _extract_floor_slice(clean_map, self_floor)
+                floor_map["active_floor"] = self_floor
+                floor_map["wall_edges"] = floor_walls
+                floor_map["props"] = floor_props
+            manifest = _maps.extract_narrative_manifest(floor_map)
         except Exception:
             manifest = {}
     manifest.pop("spatial_pins", None)
@@ -540,10 +609,10 @@ def inspect_surroundings(
         tok_floor = int(tok.get("floor_index", active_floor))
         same_floor = tok_floor == self_floor
         los_cover = None
-        if same_floor and hasattr(satya_py, "evaluate_tactical_los_and_cover"):
+        if same_floor:
             try:
-                los_cover = satya_py.evaluate_tactical_los_and_cover(
-                    map_json, px_m, py_m, tx_m, ty_m, floor_index=self_floor
+                los_cover = _maps.evaluate_los_and_cover(
+                    clean_map, px_m, py_m, tx_m, ty_m, floor_index=self_floor
                 )
             except Exception:
                 los_cover = None
@@ -555,18 +624,76 @@ def inspect_surroundings(
                 "y_m": round(ty_m, 2),
                 "floor_index": tok_floor,
                 "same_floor": same_floor,
-                "distance_m": round(math.hypot(tx_m - px_m, ty_m - py_m), 2),
+                "distance_m": round(math.hypot(tx_m - px_m, ty_m - py_m), 2) if same_floor else None,
                 "los_and_cover": los_cover,
             }
         )
 
+    floor_walls, floor_props = _extract_floor_slice(clean_map, self_floor)
+    portals = [
+        {
+            "kind": p.get("kind"),
+            "label": p.get("label"),
+            "x_m": round(float(p.get("center_x_cm", 0)) / 100.0, 2),
+            "y_m": round(float(p.get("center_y_cm", 0)) / 100.0, 2),
+        }
+        for p in floor_props
+        if isinstance(p, dict) and str(p.get("kind") or "").upper() in {"STAIRWELL", "ELEVATOR_CAR", "SERVICE_ELEVATOR"}
+    ]
+    doors = [
+        {
+            "cell_x": e.get("x"),
+            "cell_y": e.get("y"),
+            "side": e.get("side"),
+            "kind": e.get("kind"),
+        }
+        for e in floor_walls
+        if isinstance(e, dict) and str(e.get("kind") or "").upper() in {"DOOR_CLOSED", "DOOR_OPEN"}
+    ]
+
+    surveillance_nodes = [
+        {
+            "node_id": str(n.get("node_id") or ""),
+            "node_kind_code": str(n.get("node_kind_code") or ""),
+            "label": str(n.get("label") or ""),
+            "x_m": round(float(n.get("x_cm", 0) or 0) / 100.0, 2),
+            "y_m": round(float(n.get("y_cm", 0) or 0) / 100.0, 2),
+            "range_m": round(float(n.get("range_cm", 0) or 0) / 100.0, 2),
+            "facing_deg": int(n.get("facing_deg", 0) or 0),
+            "fov_deg": int(n.get("fov_deg", 90) or 90),
+            "powered": bool(n.get("powered", True)),
+            "floor_index": int(n.get("floor_index", 0) or 0),
+        }
+        for n in (clean_map.get("surveillance_nodes") or [])
+        if isinstance(n, dict)
+        and int(n.get("floor_index", 0) or 0) == self_floor
+        and str(n.get("visibility") or "PUBLIC").upper() != "GM_ONLY"
+    ]
+    pt = point_info if isinstance(point_info, dict) else {}
+    footing_and_environment = {
+        "acoustic_surface": pt.get("acoustic_surface"),
+        "acoustic_stealth_delta_ext": int(pt.get("acoustic_stealth_delta_ext", 0) or 0),
+        "traction_tier": pt.get("traction_tier"),
+        "in_faraday_zone": bool(pt.get("in_faraday_zone", False)),
+        "ambient_light_delta_ext": int(
+            pt.get(
+                "ambient_light_delta_ext",
+                clean_map.get("ambient_light_delta_ext", 0) or 0,
+            )
+            or 0
+        ),
+    }
     return {
         "map_id": clean_map.get("map_id"),
         "title": clean_map.get("title"),
         "observer_m": {"x_m": round(px_m, 2), "y_m": round(py_m, 2), "floor_index": self_floor},
         "point_under_cursor": point_info,
+        "footing_and_environment": footing_and_environment,
+        "visible_surveillance_nodes": surveillance_nodes,
         "zones": manifest.get("zones", [])[:6],
         "cardinal_exits": manifest.get("cardinal_exits", [])[:4],
+        "vertical_portals": portals[:6],
+        "doors": doors[:12],
         "visible_tokens": visible_contacts,
     }
 
@@ -591,21 +718,56 @@ def lookup_public_lore_and_npcs(
         return remote
 
     ctx = get_player_session_context(session_id, player_user_id)
-    satya_py = _ensure_satya_py_loaded()
     norm_scope = (scope or "ALL").strip().upper()
     q_low = query.strip().lower()
     hits: list[dict[str, Any]] = []
 
-    if norm_scope in {"ALL", "RULES", "RULES_BOOK"} and hasattr(satya_py, "search_rules_book"):
-        for r in satya_py.search_rules_book(query.strip() or "cascade", 4):
-            hits.append(
-                {
-                    "source_kind": "RULES_BOOK",
-                    "item_id": r.chapter_id,
-                    "title": f"{r.chapter_title} — {r.section_heading}",
-                    "snippet": str(r.snippet)[:360],
-                }
+    if norm_scope in {"ALL", "RULES", "RULES_BOOK"}:
+        added_rag_rules = False
+        try:
+            from satya_ml.rag.hybrid_index import get_satya_rag_index
+
+            rag_rules = get_satya_rag_index().search(
+                query.strip() or "cascade",
+                corpora=["ttrpg_rules"],
+                caller_role="player",
+                top_k=4,
+                include_linked_rust=False,
             )
+            for rh in rag_rules:
+                if rh.get("visibility") != "PUBLIC":
+                    continue
+                hits.append(
+                    {
+                        "source_kind": "RULES_BOOK",
+                        "item_id": str(rh.get("chunk_id") or ""),
+                        "title": str(rh.get("breadcrumb") or rh.get("symbol_or_section") or "Rules"),
+                        "snippet": str(rh.get("content") or "")[:360],
+                    }
+                )
+                added_rag_rules = True
+        except Exception:
+            added_rag_rules = False
+
+        if not added_rag_rules:
+            from satya_ml.rag.corpus_builder import _SATYANG_ARC2_MARKERS, _SECRET_BODY_MARKERS
+
+            for r in _rules.search_rules_book(query.strip() or "cascade", 8):
+                blob = f"{r.chapter_title} {r.section_heading} {r.snippet}".lower()
+                if any(m in blob for m in _SECRET_BODY_MARKERS) or any(
+                    m in blob for m in _SATYANG_ARC2_MARKERS
+                ):
+                    continue
+                hits.append(
+                    {
+                        "source_kind": "RULES_BOOK",
+                        "item_id": r.chapter_id,
+                        "title": f"{r.chapter_title} — {r.section_heading}",
+                        "snippet": str(r.snippet)[:360],
+                    }
+                )
+                if len([h for h in hits if h["source_kind"] == "RULES_BOOK"]) >= 4:
+                    break
 
     if norm_scope in {"ALL", "NPC", "NPCS", "SESSION_NPC", "CHARACTERS", "LORE"}:
         seen: set[str] = set()
@@ -660,6 +822,7 @@ def lookup_public_lore_and_npcs(
                     corpora=rag_corpora,
                     caller_role="player",
                     top_k=4,
+                    include_linked_rust=False,
                 ):
                     if rag_hit.get("visibility") != "PUBLIC":
                         continue
@@ -712,6 +875,33 @@ def _lookup_npc_psyche_only_for_empathy(
     return out
 
 
+def _is_npc_visibly_present_to_player(ctx: dict[str, Any], target_npc_name: str) -> bool:
+    needle = target_npc_name.strip().lower()
+    if not needle:
+        return False
+    pub_npcs = ctx.get("public_npcs") or []
+    active_map = sanitize_map_dict_for_player(ctx.get("active_map"))
+    vis_tokens = (active_map or {}).get("tokens") or []
+    # Check against explicit public_npcs / public map tokens if present; reject hidden GM_ONLY NPCs.
+    if pub_npcs or vis_tokens:
+        for npc in pub_npcs:
+            if not isinstance(npc, dict):
+                continue
+            cid = str(npc.get("npc_id") or npc.get("character_id") or "").lower()
+            nm = str(npc.get("name") or npc.get("character_name") or "").lower()
+            if needle == cid or (cid and needle in cid) or (nm and needle in nm):
+                return True
+        for tok in vis_tokens:
+            if not isinstance(tok, dict):
+                continue
+            eid = str(tok.get("entity_id") or tok.get("token_id") or "").lower()
+            lbl = str(tok.get("label") or "").lower()
+            if needle == eid or (eid and needle in eid) or (lbl and needle in lbl):
+                return True
+        return False
+    return True
+
+
 @tool
 def perform_player_empathy_read(
     target_npc_name: str,
@@ -723,9 +913,19 @@ def perform_player_empathy_read(
     from satya_ml.ai_player.tools import get_player_session_context, roll_player_d20_action
 
     ctx = get_player_session_context(session_id, player_user_id)
+    if not _is_npc_visibly_present_to_player(ctx, target_npc_name):
+        return {"error": f"Target '{target_npc_name}' is not visibly present in the public scene."}
+
     sheet = ctx.get("character_sheet") or {}
-    attr_tns = sheet.get("attribute_tns") or {}
+    attr_tns = sheet.get("characteristics") or sheet.get("attribute_tns") or {}
     skills = sheet.get("skills") or {}
+    empathy_rank = (
+        skills.get("empathy_social_perception")
+        or skills.get("Empathy")
+        or skills.get("intuition")
+        or skills.get("Intuition")
+        or 2
+    )
     roll_res: dict[str, Any] | None = None
 
     if net_successes is None:
@@ -733,14 +933,14 @@ def perform_player_empathy_read(
             {
                 "check_category": "INS / ITU Empathy & Read Person",
                 "attribute_tn": int(attr_tns.get("ins", 12) or 12),
-                "skill_rank": max(1, int(skills.get("Empathy", skills.get("Intuition", 2)) or 2)),
+                "skill_rank": max(1, int(empathy_rank)),
                 "note": f"Reading {target_npc_name}'s demeanor and intentions",
                 "session_id": session_id,
                 "player_user_id": player_user_id,
             }
         )
-        raw_suc = roll_res.get("total_successes")
-        if raw_suc is None:
+        raw_suc = roll_res.get("total_successes") if isinstance(roll_res, dict) else None
+        if raw_suc is None and isinstance(roll_res, dict):
             raw_suc = roll_res.get("successes_counted", 0)
         eff_successes = int(raw_suc or 0)
     else:
@@ -758,8 +958,7 @@ def perform_player_empathy_read(
         }
 
     psyche = _lookup_npc_psyche_only_for_empathy(target_npc_name, session_id)
-    satya_py = _ensure_satya_py_loaded()
-    res = json.loads(satya_py.evaluate_empathy_read_json(json.dumps(psyche), eff_successes))
+    res = _psyche.evaluate_empathy_read(psyche, eff_successes)
     ledger = ensure_or_sync_motivation_ledger(session_id, player_user_id, sheet)
     trait_labels = [f"{t['code']}={t['score']}" for t in res.get("revealed_traits") or []]
     mutable_ledger = _PLAYER_MOTIVATION_LEDGERS[(session_id, player_user_id)]

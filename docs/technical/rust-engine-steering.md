@@ -1,7 +1,7 @@
 # Rust Domain & Game Engine Steering Guide (`satya-engine`)
 
 > [!NOTE]
-> The canonical, agent-loaded rulebook for `crates/satya-engine` (`Triad<T>`, `ContestedCheck<D>`, `ConditionImpact`, `define_coded_enum!`, static `const` catalogs, continuous metric `tactical_map*` geometry, sign conventions, and `docs/ttrpg/` sync) lives in [`.agents/skills/satya-rust-engine/SKILL.md`](../../.agents/skills/satya-rust-engine/SKILL.md).
+> The canonical, agent-loaded rulebook for `crates/satya-engine` (`Triad<T>`, `ContestedCheck<D>`, `ConditionImpact`, `define_coded_enum!`, static `const` catalogs, sign conventions, and `docs/ttrpg/` sync, paired with `crates/satya-maps` for continuous metric `tactical_map*` geometry) lives in [`.agents/skills/satya-rust-engine/SKILL.md`](../../.agents/skills/satya-rust-engine/SKILL.md).
 
 ## Related References
 

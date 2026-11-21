@@ -107,10 +107,17 @@ def _format_player_context_header(ctx: dict[str, Any]) -> str:
     role = sheet.get("callsign_or_role") or sheet.get("archetype") or "Operative"
     skills = sheet.get("skills") or {}
     skills_str = ", ".join(f"{k}(N={v})" for k, v in list(skills.items())[:5])
-    attr_tns = sheet.get("attribute_tns") or {}
+    attr_tns = sheet.get("characteristics") or sheet.get("attribute_tns") or {}
     attrs_str = ", ".join(f"{k}={v}" for k, v in attr_tns.items())
-    psyche = sheet.get("psyche_traits") or {}
-    psyche_str = ", ".join(f"{k}={v:+d}" for k, v in list(psyche.items())[:4])
+    psyche = sheet.get("psyche") or sheet.get("psyche_traits") or {}
+    psyche_items: list[str] = []
+    for k, v in list(psyche.items())[:4]:
+        if isinstance(v, (int, float)):
+            iv = int(v)
+            psyche_items.append(f"{k}={iv}" if iv >= 1 else f"{k}={iv:+d}")
+        else:
+            psyche_items.append(f"{k}={v}")
+    psyche_str = ", ".join(psyche_items)
 
     parts = [
         f"My Character: {cname} ({role})",
@@ -160,10 +167,30 @@ def _format_player_context_header(ctx: dict[str, Any]) -> str:
 
     clean_parts = [p for p in parts if p]
     header = "[AI Player Character & Public Scene Index]: " + " || ".join(clean_parts)
+    blocks = [header]
+
+    recent_msgs = [m for m in (ctx.get("recent_messages") or []) if isinstance(m, dict)][-12:]
+    if recent_msgs:
+        msg_lines = ["Recent Scene Messages & Whispers:"]
+        for m in recent_msgs:
+            vis = str(m.get("visibility") or "PUBLIC").upper()
+            vis_tag = "[PRIVATE WHISPER]" if vis == "PRIVATE" else (f"[{vis}]" if vis != "PUBLIC" else "[PUBLIC]")
+            sender = (
+                m.get("sender_display_name")
+                or (m.get("sender") or {}).get("display_name")
+                or m.get("sender_user_id")
+                or "Speaker"
+            )
+            body = str(m.get("body") or m.get("content") or "").strip()
+            if body:
+                msg_lines.append(f"- {vis_tag} {sender}: {body[:260]}")
+        if len(msg_lines) > 1:
+            blocks.append("\n".join(msg_lines))
+
     ledger_block = format_motivation_ledger_for_prompt(ctx.get("motivation_ledger"))
     if ledger_block:
-        return f"{header}\n{ledger_block}"
-    return header
+        blocks.append(ledger_block)
+    return "\n".join(blocks)
 
 
 def build_ai_player_graph(
@@ -291,31 +318,34 @@ def build_ai_player_graph(
 
         tool_rounds = _count_turn_tool_rounds(messages)
         with span_scope("player_decision_node"):
-            if tool_rounds >= 3:
-                synth_msgs = list(messages) + [
-                    HumanMessage(
-                        content=(
-                            "[SYSTEM: You have completed your dice rolls and tool checks for this turn. "
-                            "Now write your character's in-character action/dialogue response in Markdown.]"
-                        )
-                    )
-                ]
-                response = base_model.invoke(synth_msgs)
-            else:
-                response = model_with_tools.invoke(messages)
-                if (
-                    tool_rounds >= 1
-                    and not (getattr(response, "tool_calls", None) or [])
-                    and not _extract_ai_message_text(response)
-                ):
+            try:
+                if tool_rounds >= 3:
                     synth_msgs = list(messages) + [
                         HumanMessage(
                             content=(
-                                "[SYSTEM: Write your character's in-character action and dialogue based on the tool/roll results above.]"
+                                "[SYSTEM: You have completed your dice rolls and tool checks for this turn. "
+                                "Now write your character's in-character action/dialogue response in Markdown.]"
                             )
                         )
                     ]
                     response = base_model.invoke(synth_msgs)
+                else:
+                    response = model_with_tools.invoke(messages)
+                    if (
+                        tool_rounds >= 1
+                        and not (getattr(response, "tool_calls", None) or [])
+                        and not _extract_ai_message_text(response)
+                    ):
+                        synth_msgs = list(messages) + [
+                            HumanMessage(
+                                content=(
+                                    "[SYSTEM: Write your character's in-character action and dialogue based on the tool/roll results above.]"
+                                )
+                            )
+                        ]
+                        response = base_model.invoke(synth_msgs)
+            except Exception as exc:
+                response = AIMessage(content=f"[AI Player LLM Error: {exc}]")
             return {"messages": [response]}
 
     def player_tool_node(state: AiPlayerSessionState) -> dict[str, Any]:
@@ -342,6 +372,7 @@ def build_ai_player_graph(
                 "read_my_character_sheet",
                 "inspect_public_tactical_map",
                 "move_player_map_token",
+                "toggle_player_door",
                 "inspect_surroundings",
                 "lookup_public_lore_and_npcs",
                 "perform_player_empathy_read",
@@ -349,8 +380,8 @@ def build_ai_player_graph(
                 "roll_player_d20_action",
                 "send_player_chat",
             }:
-                t_args.setdefault("session_id", session_id)
-                t_args.setdefault("player_user_id", player_user_id)
+                t_args["session_id"] = session_id
+                t_args["player_user_id"] = player_user_id
             if t_name == "perform_player_empathy_read" and chat_model is None:
                 # Prevent live LLMs from spoofing net_successes in Empathy checks.
                 t_args.pop("net_successes", None)
@@ -457,10 +488,18 @@ def build_ai_player_graph(
                 reply_text = f"**{display_name}** attempts `{cat}` -> **{deg}** (`{succ}` successes)."
 
         invocations = list(state.get("tool_invocations") or [])
-        already_sent_chat = any(
-            inv.get("tool_name") == "send_player_chat" and not inv.get("is_error")
-            for inv in invocations
-        )
+
+        def _is_public_chat_inv(inv: dict[str, Any]) -> bool:
+            if inv.get("tool_name") != "send_player_chat" or inv.get("is_error"):
+                return False
+            try:
+                args_obj = json.loads(str(inv.get("arguments_json") or "{}"))
+            except Exception:
+                args_obj = {}
+            vis = str(args_obj.get("visibility") or "PUBLIC").upper()
+            return vis == "PUBLIC"
+
+        already_sent_chat = any(_is_public_chat_inv(inv) for inv in invocations)
         trigger = state.get("trigger_event") or {}
         auto_trigger_gm = bool(trigger.get("auto_trigger_gm", True))
 

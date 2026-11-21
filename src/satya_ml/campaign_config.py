@@ -100,7 +100,7 @@ def _builtin_fallback_pack(pack_name: str) -> dict[str, Any]:
     return {
         "name": "awakened",
         "title": "Awakened (Near-Future Earth 2035)",
-        "default_sector_preset": "urban_crossroads",
+        "default_sector_preset": "community_clinic_annex",
         "allow_scifi_sector_presets": False,
         "lore_dirs": ["docs/campaign"],
         "npc_toml_file": "data/npcs/awakened_npcs.toml",
@@ -276,7 +276,7 @@ def get_pack_starter_scenario(pack_override: str | None = None) -> dict[str, Any
     """Return the active campaign pack's non-railroaded Episode 1 premise and planned beats."""
     pack = get_active_campaign_pack(pack_override)
     resolved_name = str(pack.get("name") or "awakened")
-    scenario = copy.deepcopy(
+    scenario: dict[str, Any] = copy.deepcopy(
         pack.get("starter_scenario")
         or _builtin_fallback_pack(resolved_name).get("starter_scenario")
         or {}

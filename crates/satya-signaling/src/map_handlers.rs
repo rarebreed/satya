@@ -10,6 +10,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
+use satya_maps::map_narrative_manifest::evaluate_passive_movement_perceptions;
 use satya_maps::map_surface_queries::topmost_surface_at_m;
 use satya_maps::tactical_map::{
     SectorPreset, build_procedural_map_request, generate_procedural_sector,
@@ -19,10 +20,10 @@ use satya_maps::tactical_map_geom::{
     resolve_token_destination_cm,
 };
 use satya_schema::{
-    CanvasEventType, GmMapUpdateRequest, MessageVisibility, MoveMapTokenRequest, Participant,
-    ParticipantKind, PropKind, ServerWsPacket, SessionMode, SessionRole, SurfaceFeatureKind,
-    TabletopCanvasEvent, TokenPlacement, TokenVisualSpec, UpdateCombatTrackerRequest,
-    sanitize_portrait_url, subjects,
+    CanvasEventType, ChannelContext, CharacterSheetRecord, ChatMessageEvent, GmMapUpdateRequest,
+    MessageVisibility, MoveMapTokenRequest, Participant, ParticipantKind, PropKind, ServerWsPacket,
+    SessionMode, SessionRole, SurfaceFeatureKind, TabletopCanvasEvent, TokenPlacement,
+    TokenVisualSpec, UpdateCombatTrackerRequest, sanitize_portrait_url, subjects,
 };
 use serde_json::json;
 use std::collections::HashSet;
@@ -38,8 +39,9 @@ pub fn can_role_see_gm_only_tokens(role: SessionRole) -> bool {
     )
 }
 
-/// Returns `true` when either the source position or destination on `from_floor`/`to_floor` is
-/// within `2.5m` (`250cm`) of a vertical portal (`Stairwell`, `ElevatorCar`, `ServiceElevator`, etc.).
+/// Returns `true` when crossing between `from_floor` and `to_floor` has a vertical portal
+/// (`Stairwell`, `ElevatorCar`, `ServiceElevator`, etc.) within `2.5m` (`250cm`) on BOTH
+/// `from_floor` (near `from_cm`, when present) AND `to_floor` (near `to_cm`).
 pub(crate) fn is_near_vertical_portal(
     map: &GmMapUpdateRequest,
     from_floor: i32,
@@ -50,33 +52,74 @@ pub(crate) fn is_near_vertical_portal(
     let near_pt = |pcx: f32, pcy: f32, (qx, qy): (i32, i32)| -> bool {
         (pcx - qx as f32).hypot(pcy - qy as f32) <= 250.0
     };
-    let check_prop = |p: &satya_schema::MapPropPlacement| -> bool {
+    let floor_props = |floor_idx: i32| -> &[satya_schema::MapPropPlacement] {
+        if map.floors.is_empty() {
+            &map.props
+        } else {
+            map.floors
+                .iter()
+                .find(|f| f.floor_index == floor_idx)
+                .map(|f| f.props.as_slice())
+                .unwrap_or(&[])
+        }
+    };
+    let dest_ok = floor_props(to_floor).iter().any(|p| {
         if !p.kind.is_vertical_portal() {
             return false;
         }
         let (cx, cy) = p.center_cm();
         near_pt(cx as f32, cy as f32, to_cm)
-            || from_cm.is_some_and(|fc| near_pt(cx as f32, cy as f32, fc))
+    });
+    if !dest_ok {
+        return false;
+    }
+    let Some(fc) = from_cm else {
+        return true;
     };
-    if map.floors.is_empty() {
-        map.props.iter().any(check_prop)
+    floor_props(from_floor).iter().any(|p| {
+        if !p.kind.is_vertical_portal() {
+            return false;
+        }
+        let (cx, cy) = p.center_cm();
+        near_pt(cx as f32, cy as f32, fc)
+    })
+}
+
+/// Returns the `(x_cm, y_cm)` center of the closest vertical portal on `to_floor` to `anchor_cm`.
+pub(crate) fn find_target_floor_portal_center_cm(
+    map: &GmMapUpdateRequest,
+    to_floor: i32,
+    anchor_cm: (i32, i32),
+) -> Option<(i32, i32)> {
+    let props = if map.floors.is_empty() {
+        map.props.as_slice()
     } else {
         map.floors
             .iter()
-            .filter(|f| f.floor_index == from_floor || f.floor_index == to_floor)
-            .flat_map(|f| f.props.iter())
-            .any(check_prop)
-            || map.props.iter().any(check_prop)
-    }
+            .find(|f| f.floor_index == to_floor)
+            .map(|f| f.props.as_slice())
+            .unwrap_or(&[])
+    };
+    props
+        .iter()
+        .filter(|p| p.kind.is_vertical_portal())
+        .map(|p| p.center_cm())
+        .min_by(|&(ax, ay), &(bx, by)| {
+            let da = ((ax - anchor_cm.0) as f32).hypot((ay - anchor_cm.1) as f32);
+            let db = ((bx - anchor_cm.0) as f32).hypot((by - anchor_cm.1) as f32);
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        })
 }
 
-/// Filters `MessageVisibility::GmOnly` tokens (and their `token_visuals`) from `map` when `role` is a non-GM player or observer.
+/// Filters `MessageVisibility::GmOnly` tokens (and their `token_visuals`), `GM_ONLY` surveillance nodes,
+/// and GM-private `notes` from `map` when `role` is a non-GM player or observer.
 #[must_use]
 pub fn filter_map_for_role(map: &GmMapUpdateRequest, role: SessionRole) -> GmMapUpdateRequest {
     if can_role_see_gm_only_tokens(role) {
         return map.clone();
     }
     let mut filtered = map.clone();
+    filtered.notes = None;
     filtered
         .tokens
         .retain(|tok| tok.visibility != MessageVisibility::GmOnly);
@@ -89,6 +132,104 @@ pub fn filter_map_for_role(map: &GmMapUpdateRequest, role: SessionRole) -> GmMap
         .token_visuals
         .retain(|v| visible_ids.contains(v.entity_id.as_str()));
     filtered
+        .surveillance_nodes
+        .retain(|node| node.visibility != MessageVisibility::GmOnly);
+    filtered
+}
+
+/// Borrowed session snapshot passed to [`dispatch_passive_movement_whispers`].
+pub struct PassiveWhisperContext<'a> {
+    pub roster: &'a [Participant],
+    pub session_characters: &'a [CharacterSheetRecord],
+    pub session_mode: SessionMode,
+    pub ai_gm_participant: Option<&'a Participant>,
+}
+
+/// Evaluates `satya-maps` passive movement perception checks (`SIG`/`HEA`/`OLF`/`ITU`) triggered by
+/// moving `moved_entity_id` and records/delivers private whispers strictly to each observing player
+/// (plus any Human GM/Host, never leaking to Observers or uninvolved peers).
+pub async fn dispatch_passive_movement_whispers(
+    state: &SignalingAppState,
+    session_id: &str,
+    moved_entity_id: &str,
+    map: &GmMapUpdateRequest,
+    ctx: &PassiveWhisperContext<'_>,
+) {
+    let whispers =
+        evaluate_passive_movement_perceptions(map, moved_entity_id, ctx.session_characters, &[]);
+    if whispers.is_empty() {
+        return;
+    }
+    let default_cfg = &state.storage.config().ai_gm;
+    let sender = ctx.ai_gm_participant.cloned().unwrap_or_else(|| {
+        Participant::ai_gm(
+            session_id,
+            &format!(
+                "{}/{}",
+                default_cfg.default_provider, default_cfg.reasoning_model
+            ),
+            &default_cfg.persona_id,
+        )
+    });
+
+    for w in whispers {
+        let Some(target) = ctx.roster.iter().find(|p| {
+            p.user_id == w.observer_id || p.character_id.as_deref() == Some(w.observer_id.as_str())
+        }) else {
+            continue;
+        };
+        if matches!(target.role, SessionRole::Observer | SessionRole::AiGm) {
+            continue;
+        }
+        let mut recipient_ids = vec![target.user_id.clone()];
+        for p in ctx.roster {
+            if matches!(p.role, SessionRole::Gm | SessionRole::Host)
+                && !recipient_ids.contains(&p.user_id)
+            {
+                recipient_ids.push(p.user_id.clone());
+            }
+        }
+        let (recipients, delivery_ids) = SignalingAppState::resolve_message_targets(
+            &sender,
+            MessageVisibility::Private,
+            &recipient_ids,
+            ctx.roster,
+        );
+        let Ok(meta) = state.storage.registry().build_metadata(
+            state.next_seq(),
+            subjects::CHAT_MESSAGE,
+            1,
+            session_id,
+            ctx.session_mode,
+        ) else {
+            continue;
+        };
+        let body = format!("[Passive {}] {}", w.characteristic_code, w.whisper_text);
+        let chat_event = ChatMessageEvent {
+            metadata: meta,
+            message_id: Uuid::now_v7().to_string(),
+            sender: sender.clone(),
+            visibility: MessageVisibility::Private,
+            recipients,
+            channel_context: ChannelContext::GmNarration,
+            reply_to_message_id: None,
+            char_count: body.chars().count() as i32,
+            word_count: body.split_whitespace().count() as i32,
+            body,
+            composition_time_ms: 0,
+            is_edited: false,
+        };
+        state
+            .auth
+            .record_chat_event_to_db(session_id, &chat_event)
+            .await;
+        let pkt_str = json!({
+            "type": "CHAT_EVENT",
+            "event": chat_event,
+        })
+        .to_string();
+        state.send_to_users(session_id, &delivery_ids, &pkt_str).await;
+    }
 }
 
 /// Broadcasts `ServerWsPacket::MapUpdated` to connected sockets in `session_id`, delivering the full
@@ -210,10 +351,12 @@ pub(crate) fn find_unblocked_spawn_pos_cm(
             )
         );
         let on_hazard_prop = map.props.iter().any(|p| {
-            matches!(
-                p.kind,
-                PropKind::HazardSpill | PropKind::CreekWater | PropKind::DrainageDitch
-            ) && prop_contains_point(p, cx_m, cy_m, true)
+            !p.decorative
+                && matches!(
+                    p.kind,
+                    PropKind::HazardSpill | PropKind::CreekWater | PropKind::DrainageDitch
+                )
+                && prop_contains_point(p, cx_m, cy_m, true)
         });
         !on_water
             && !on_hazard_prop
@@ -404,8 +547,19 @@ pub async fn session_move_map_token_handler(
         p.participant_kind == ParticipantKind::Human
             && matches!(p.role, SessionRole::Gm | SessionRole::Host)
     });
+    let human_player_count = ctx
+        .roster
+        .iter()
+        .filter(|p| {
+            p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Player
+        })
+        .count();
+    let is_session_host = state.auth.is_session_host(&session_id, &user.user_id).await;
     let caller_is_gm_or_solo = matches!(caller_part.role, SessionRole::Gm | SessionRole::Host)
-        || (!has_human_gm && caller_part.role == SessionRole::Player);
+        || (!has_human_gm
+            && caller_part.role == SessionRole::Player
+            && is_session_host
+            && human_player_count == 1);
     let owns_token = req.entity_id == user.user_id
         || caller_part
             .character_id
@@ -474,11 +628,22 @@ pub async fn session_move_map_token_handler(
             .find(|t| t.entity_id == req.entity_id)
             .map(|t| map.token_pos_cm(t));
         let target_floor = req.to_floor.unwrap_or(current_floor);
-        let (final_x_cm, final_y_cm) = match if target_floor == map.active_floor {
+        let (final_x_cm, final_y_cm) = match if target_floor == map.active_floor && target_floor == current_floor {
             resolve_token_destination_cm(&map, &req.entity_id, req_x_cm, req_y_cm)
         } else {
             let mut floor_view = map.clone();
             floor_view.switch_active_floor(target_floor);
+            if target_floor != current_floor
+                && let Some((px_cm, py_cm)) =
+                    find_target_floor_portal_center_cm(&map, target_floor, (req_x_cm, req_y_cm))
+            {
+                let f_cell = floor_view.cell_size_cm.max(25);
+                if let Some(tok) = floor_view.tokens.iter_mut().find(|t| t.entity_id == req.entity_id) {
+                    tok.x = (px_cm / f_cell).clamp(0, (floor_view.grid_width - 1).max(0));
+                    tok.y = (py_cm / f_cell).clamp(0, (floor_view.grid_height - 1).max(0));
+                }
+                floor_view.set_token_pos_cm(&req.entity_id, px_cm, py_cm);
+            }
             resolve_token_destination_cm(&floor_view, &req.entity_id, req_x_cm, req_y_cm)
         } {
             Ok(coords) => coords,
@@ -670,6 +835,21 @@ pub async fn session_move_map_token_handler(
     .await;
 
     broadcast_role_filtered_map(&state, &session_id, &ctx.roster, &map).await;
+    if !req.remove {
+        dispatch_passive_movement_whispers(
+            &state,
+            &session_id,
+            &req.entity_id,
+            &map,
+            &PassiveWhisperContext {
+                roster: &ctx.roster,
+                session_characters: &ctx.session_characters,
+                session_mode: ctx.session_mode,
+                ai_gm_participant: ctx.ai_gm_participant.as_ref(),
+            },
+        )
+        .await;
+    }
     (
         StatusCode::OK,
         Json(filter_map_for_role(&map, caller_part.role)),

@@ -103,26 +103,49 @@ impl AuthAndSessionManager {
         Ok(())
     }
 
-    /// Loads all persistent [`GmDocumentRecord`]s matching `session_or_campaign_tag` from SQLite.
+    /// Loads persistent [`GmDocumentRecord`]s matching `session_or_campaign_tag` from SQLite,
+    /// enforcing owner/host scoping when `owner_user_id` is supplied so unrelated GMs cannot inherit each other's docs.
     pub async fn load_persistent_gm_docs_from_db(
         &self,
         session_or_campaign_tag: &str,
+        owner_user_id: Option<&str>,
     ) -> Vec<GmDocumentRecord> {
         let key = session_or_campaign_tag.trim();
-        let Ok(rows) = sqlx::query(
-            r#"
-            SELECT doc_id, session_id, campaign_tag, uploader_user_id, uploader_display_name,
-                   title, source_kind, google_file_id, sanitized_content, char_count,
-                   safety_flagged, created_at_us
-            FROM gm_documents
-            WHERE session_id = ?1 OR campaign_tag = ?1 COLLATE NOCASE
-            ORDER BY created_at_us ASC
-            "#,
-        )
-        .bind(key)
-        .fetch_all(self.db_pool())
-        .await
-        else {
+        let query_res = if let Some(uid) = owner_user_id {
+            sqlx::query(
+                r#"
+                SELECT doc_id, session_id, campaign_tag, uploader_user_id, uploader_display_name,
+                       title, source_kind, google_file_id, sanitized_content, char_count,
+                       safety_flagged, created_at_us
+                FROM gm_documents
+                WHERE (session_id = ?1 OR campaign_tag = ?1 COLLATE NOCASE)
+                  AND (uploader_user_id = ?2 OR EXISTS(
+                      SELECT 1 FROM saved_sessions s
+                      WHERE s.session_id = gm_documents.session_id AND s.host_user_id = ?2
+                  ))
+                ORDER BY created_at_us ASC
+                "#,
+            )
+            .bind(key)
+            .bind(uid)
+            .fetch_all(self.db_pool())
+            .await
+        } else {
+            sqlx::query(
+                r#"
+                SELECT doc_id, session_id, campaign_tag, uploader_user_id, uploader_display_name,
+                       title, source_kind, google_file_id, sanitized_content, char_count,
+                       safety_flagged, created_at_us
+                FROM gm_documents
+                WHERE session_id = ?1 OR campaign_tag = ?1 COLLATE NOCASE
+                ORDER BY created_at_us ASC
+                "#,
+            )
+            .bind(key)
+            .fetch_all(self.db_pool())
+            .await
+        };
+        let Ok(rows) = query_res else {
             return Vec::new();
         };
 
@@ -239,7 +262,7 @@ impl AuthAndSessionManager {
     ) -> anyhow::Result<bool> {
         let sid = session_id.trim();
         let did = doc_id.trim();
-        let (removed_in_mem, is_gm) = {
+        let (removed_in_mem, is_gm, session_ctag, host_uid) = {
             let mut guard = self.sessions.write().await;
             let session = guard
                 .get_mut(sid)
@@ -249,6 +272,8 @@ impl AuthAndSessionManager {
                 .get(caller_user_id)
                 .ok_or_else(|| anyhow::anyhow!("Caller is not an active participant in '{sid}'"))?;
             let is_gm = matches!(caller.role, SessionRole::Gm | SessionRole::Host);
+            let ctag = session.campaign_tag.clone();
+            let huid = session.host_user_id.clone();
 
             if let Some(idx) = session.gm_documents.iter().position(|d| d.doc_id == did) {
                 if !is_gm && session.gm_documents[idx].uploader_user_id != caller_user_id {
@@ -257,29 +282,49 @@ impl AuthAndSessionManager {
                     );
                 }
                 session.gm_documents.remove(idx);
-                (true, is_gm)
+                (true, is_gm, ctag, huid)
             } else {
-                (false, is_gm)
+                (false, is_gm, ctag, huid)
             }
         };
 
-        if !removed_in_mem
-            && !is_gm
-            && let Ok(Some(uploader_uid)) = sqlx::query_scalar::<_, String>(
-                "SELECT uploader_user_id FROM gm_documents WHERE doc_id = ?1",
+        if !removed_in_mem {
+            let row = sqlx::query(
+                "SELECT uploader_user_id, session_id, campaign_tag FROM gm_documents WHERE doc_id = ?1",
             )
             .bind(did)
             .fetch_optional(self.db_pool())
-            .await
-            && uploader_uid != caller_user_id
-        {
-            anyhow::bail!("Only the session GM or document uploader can delete this document");
+            .await?;
+            let Some(row) = row else {
+                return Ok(false);
+            };
+            let row_sid: String = row.try_get("session_id").unwrap_or_default();
+            let row_ctag: String = row.try_get("campaign_tag").unwrap_or_default();
+            let uploader_uid: String = row.try_get("uploader_user_id").unwrap_or_default();
+            let owned_campaign = !session_ctag.is_empty()
+                && row_ctag.eq_ignore_ascii_case(&session_ctag)
+                && uploader_uid == host_uid;
+            if row_sid != sid && !owned_campaign {
+                anyhow::bail!("Document '{did}' does not belong to session '{sid}'");
+            }
+            if !is_gm && uploader_uid != caller_user_id {
+                anyhow::bail!("Only the session GM or document uploader can delete this document");
+            }
         }
 
-        let res = sqlx::query("DELETE FROM gm_documents WHERE doc_id = ?1")
-            .bind(did)
-            .execute(self.db_pool())
-            .await?;
+        let res = sqlx::query(
+            r#"
+            DELETE FROM gm_documents
+            WHERE doc_id = ?1
+              AND (session_id = ?2 OR (campaign_tag = ?3 COLLATE NOCASE AND uploader_user_id = ?4))
+            "#,
+        )
+        .bind(did)
+        .bind(sid)
+        .bind(&session_ctag)
+        .bind(&host_uid)
+        .execute(self.db_pool())
+        .await?;
         Ok(removed_in_mem || res.rows_affected() > 0)
     }
 
@@ -302,25 +347,47 @@ impl AuthAndSessionManager {
         })
     }
 
-    /// Loads all persistent [`GmMemoryNoteRecord`]s matching `session_or_campaign_tag` from SQLite.
+    /// Loads persistent [`GmMemoryNoteRecord`]s matching `session_or_campaign_tag` from SQLite,
+    /// enforcing owner/host scoping when `owner_user_id` is supplied so unrelated GMs cannot inherit each other's notes.
     pub async fn load_persistent_gm_memories_from_db(
         &self,
         session_or_campaign_tag: &str,
+        owner_user_id: Option<&str>,
     ) -> Vec<GmMemoryNoteRecord> {
         let key = session_or_campaign_tag.trim();
-        let Ok(rows) = sqlx::query(
-            r#"
-            SELECT memory_id, session_id, campaign_tag, author_user_id, author_display_name,
-                   category, title, content, is_pinned, is_persistent, updated_at_us
-            FROM gm_memories
-            WHERE session_id = ?1 OR campaign_tag = ?1 COLLATE NOCASE
-            ORDER BY is_pinned DESC, updated_at_us DESC
-            "#,
-        )
-        .bind(key)
-        .fetch_all(self.db_pool())
-        .await
-        else {
+        let query_res = if let Some(uid) = owner_user_id {
+            sqlx::query(
+                r#"
+                SELECT memory_id, session_id, campaign_tag, author_user_id, author_display_name,
+                       category, title, content, is_pinned, is_persistent, updated_at_us
+                FROM gm_memories
+                WHERE (session_id = ?1 OR campaign_tag = ?1 COLLATE NOCASE)
+                  AND (author_user_id = ?2 OR EXISTS(
+                      SELECT 1 FROM saved_sessions s
+                      WHERE s.session_id = gm_memories.session_id AND s.host_user_id = ?2
+                  ))
+                ORDER BY is_pinned DESC, updated_at_us DESC
+                "#,
+            )
+            .bind(key)
+            .bind(uid)
+            .fetch_all(self.db_pool())
+            .await
+        } else {
+            sqlx::query(
+                r#"
+                SELECT memory_id, session_id, campaign_tag, author_user_id, author_display_name,
+                       category, title, content, is_pinned, is_persistent, updated_at_us
+                FROM gm_memories
+                WHERE session_id = ?1 OR campaign_tag = ?1 COLLATE NOCASE
+                ORDER BY is_pinned DESC, updated_at_us DESC
+                "#,
+            )
+            .bind(key)
+            .fetch_all(self.db_pool())
+            .await
+        };
+        let Ok(rows) = query_res else {
             return Vec::new();
         };
 
@@ -358,6 +425,13 @@ impl AuthAndSessionManager {
             .memory_id
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
+            .map(|id| {
+                if id == "mem-scenario-director" {
+                    format!("mem-scenario-director-{sid}")
+                } else {
+                    id
+                }
+            })
             .unwrap_or_else(|| format!("mem_{}", Uuid::now_v7()));
 
         let record = {
@@ -564,8 +638,25 @@ impl AuthAndSessionManager {
         campaign_tag: Option<String>,
     ) -> anyhow::Result<GmMemoryNoteRecord> {
         let sid = session_id.trim();
-        let mid = memory_id.trim();
+        let mut mid = memory_id.trim().to_string();
+        if mid == "mem-scenario-director" {
+            mid = format!("mem-scenario-director-{sid}");
+        }
         let now_us = Utc::now().timestamp_micros();
+        if !self.sessions.read().await.contains_key(sid) {
+            let _ = self.rehydrate_session_from_db(sid).await;
+        }
+
+        let (session_ctag, host_uid) = {
+            let guard = self.sessions.read().await;
+            if let Some(session) = guard.get(sid) {
+                (session.campaign_tag.clone(), session.host_user_id.clone())
+            } else if is_gm_service {
+                (sid.to_string(), String::new())
+            } else {
+                anyhow::bail!("Session '{sid}' does not exist");
+            }
+        };
 
         let db_fallback = sqlx::query(
             r#"
@@ -573,9 +664,14 @@ impl AuthAndSessionManager {
                    category, title, content, is_pinned, is_persistent, updated_at_us
             FROM gm_memories
             WHERE memory_id = ?1
+              AND (session_id = ?2
+                   OR (campaign_tag = ?3 COLLATE NOCASE AND (?4 = '' OR author_user_id = ?4)))
             "#,
         )
-        .bind(mid)
+        .bind(&mid)
+        .bind(sid)
+        .bind(&session_ctag)
+        .bind(&host_uid)
         .fetch_optional(self.db_pool())
         .await
         .ok()
@@ -657,10 +753,19 @@ impl AuthAndSessionManager {
         if record.is_persistent {
             self.persist_gm_memory_to_db(&record).await?;
         } else {
-            let _ = sqlx::query("DELETE FROM gm_memories WHERE memory_id = ?1")
-                .bind(&record.memory_id)
-                .execute(self.db_pool())
-                .await;
+            let _ = sqlx::query(
+                r#"
+                DELETE FROM gm_memories
+                WHERE memory_id = ?1
+                  AND (session_id = ?2 OR (campaign_tag = ?3 COLLATE NOCASE AND author_user_id = ?4))
+                "#,
+            )
+            .bind(&record.memory_id)
+            .bind(sid)
+            .bind(&session_ctag)
+            .bind(&record.author_user_id)
+            .execute(self.db_pool())
+            .await;
             if record.memory_id.starts_with("mem_npc_")
                 && let Some(npc_name) = extract_npc_name_from_memory_title(&record.title)
             {
@@ -711,7 +816,7 @@ impl AuthAndSessionManager {
         drop(guard);
 
         if is_gm_service {
-            let db_mems = self.load_persistent_gm_memories_from_db(sid).await;
+            let db_mems = self.load_persistent_gm_memories_from_db(sid, None).await;
             return Ok((sid.to_string(), db_mems));
         }
         anyhow::bail!("Session '{sid}' does not exist")
@@ -726,64 +831,89 @@ impl AuthAndSessionManager {
         memory_id: &str,
     ) -> anyhow::Result<bool> {
         let sid = session_id.trim();
-        let mid = memory_id.trim();
-        let (removed_in_mem, mem_meta) = {
+        let mut mid = memory_id.trim().to_string();
+        if mid == "mem-scenario-director" {
+            mid = format!("mem-scenario-director-{sid}");
+        }
+        if !self.sessions.read().await.contains_key(sid) {
+            let _ = self.rehydrate_session_from_db(sid).await;
+        }
+        let (removed_in_mem, mem_meta, session_ctag, host_uid) = {
             let mut guard = self.sessions.write().await;
-            if let Some(session) = guard.get_mut(sid) {
-                if !is_gm_service {
-                    let uid = caller_user_id.unwrap_or("");
-                    let caller = session
-                        .roster
-                        .get(uid)
-                        .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
-                    if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
-                        anyhow::bail!("Only the session Game Master can delete GM memory notes");
-                    }
+            let session = guard
+                .get_mut(sid)
+                .ok_or_else(|| anyhow::anyhow!("Session '{sid}' does not exist"))?;
+            if !is_gm_service {
+                let uid = caller_user_id.unwrap_or("");
+                let caller = session
+                    .roster
+                    .get(uid)
+                    .ok_or_else(|| anyhow::anyhow!("Caller is not in session '{sid}'"))?;
+                if !matches!(caller.role, SessionRole::Gm | SessionRole::Host) {
+                    anyhow::bail!("Only the session Game Master can delete GM memory notes");
                 }
-                let meta = session
-                    .gm_memories
-                    .iter()
-                    .find(|m| m.memory_id == mid)
-                    .map(|m| (m.title.clone(), m.campaign_tag.clone()));
-                let prev_len = session.gm_memories.len();
-                session.gm_memories.retain(|m| m.memory_id != mid);
-                if mid.starts_with("mem_npc_")
-                    && let Some((ref title, _)) = meta
-                    && let Some(npc_name) = extract_npc_name_from_memory_title(title)
-                {
-                    session.gm_memories.retain(|m| {
-                        !m.memory_id.starts_with("mem_npc_")
-                            || extract_npc_name_from_memory_title(&m.title).as_deref()
-                                != Some(npc_name.as_str())
-                    });
-                }
-                (session.gm_memories.len() != prev_len, meta)
-            } else {
-                (false, None)
             }
+            let ctag = session.campaign_tag.clone();
+            let huid = session.host_user_id.clone();
+            let meta = session
+                .gm_memories
+                .iter()
+                .find(|m| m.memory_id == mid)
+                .map(|m| (m.title.clone(), m.campaign_tag.clone()));
+            let prev_len = session.gm_memories.len();
+            session.gm_memories.retain(|m| m.memory_id != mid);
+            if mid.starts_with("mem_npc_")
+                && let Some((ref title, _)) = meta
+                && let Some(npc_name) = extract_npc_name_from_memory_title(title)
+            {
+                session.gm_memories.retain(|m| {
+                    !m.memory_id.starts_with("mem_npc_")
+                        || extract_npc_name_from_memory_title(&m.title).as_deref()
+                            != Some(npc_name.as_str())
+                });
+            }
+            (session.gm_memories.len() != prev_len, meta, ctag, huid)
         };
 
         let db_meta = if mem_meta.is_some() {
             mem_meta
         } else {
-            sqlx::query("SELECT title, campaign_tag FROM gm_memories WHERE memory_id = ?1")
-                .bind(mid)
-                .fetch_optional(self.db_pool())
-                .await
-                .ok()
-                .flatten()
-                .and_then(|r| {
-                    Some((
-                        r.try_get::<String, _>("title").ok()?,
-                        r.try_get::<String, _>("campaign_tag").ok()?,
-                    ))
-                })
+            sqlx::query(
+                r#"
+                SELECT title, campaign_tag FROM gm_memories
+                WHERE memory_id = ?1
+                  AND (session_id = ?2 OR (campaign_tag = ?3 COLLATE NOCASE AND author_user_id = ?4))
+                "#,
+            )
+            .bind(&mid)
+            .bind(sid)
+            .bind(&session_ctag)
+            .bind(&host_uid)
+            .fetch_optional(self.db_pool())
+            .await
+            .ok()
+            .flatten()
+            .and_then(|r| {
+                Some((
+                    r.try_get::<String, _>("title").ok()?,
+                    r.try_get::<String, _>("campaign_tag").ok()?,
+                ))
+            })
         };
 
-        let res = sqlx::query("DELETE FROM gm_memories WHERE memory_id = ?1")
-            .bind(mid)
-            .execute(self.db_pool())
-            .await?;
+        let res = sqlx::query(
+            r#"
+            DELETE FROM gm_memories
+            WHERE memory_id = ?1
+              AND (session_id = ?2 OR (campaign_tag = ?3 COLLATE NOCASE AND author_user_id = ?4))
+            "#,
+        )
+        .bind(&mid)
+        .bind(sid)
+        .bind(&session_ctag)
+        .bind(&host_uid)
+        .execute(self.db_pool())
+        .await?;
 
         if mid.starts_with("mem_npc_")
             && let Some((title, ctag)) = db_meta
@@ -823,10 +953,12 @@ impl AuthAndSessionManager {
             grid_x: Some(4 + (idx % 4) * 2),
             grid_y: Some(6 + (idx / 4) * 2),
             zone_label: Some("Core Sector".to_string()),
+            visibility: MessageVisibility::Public,
         });
     }
 
-    /// Returns a role-filtered copy of [`CombatTrackerState`], stripping combatants bound to `GM_ONLY` tokens for non-GM viewers.
+    /// Returns a role-filtered copy of [`CombatTrackerState`], stripping combatants marked `GM_ONLY`
+    /// or bound to `GM_ONLY` map tokens for non-GM viewers (even when `active_map` is `None`).
     pub fn filter_combat_tracker_for_viewer(
         tracker: &CombatTrackerState,
         active_map: Option<&GmMapUpdateRequest>,
@@ -835,22 +967,20 @@ impl AuthAndSessionManager {
         if can_see_gm {
             return tracker.clone();
         }
-        let Some(map) = active_map else {
-            return tracker.clone();
-        };
-        let hidden_ids: std::collections::BTreeSet<&str> = map
-            .tokens
-            .iter()
-            .filter(|t| t.visibility == MessageVisibility::GmOnly)
-            .map(|t| t.entity_id.as_str())
-            .collect();
-        if hidden_ids.is_empty() {
-            return tracker.clone();
-        }
+        let hidden_ids: std::collections::BTreeSet<&str> = active_map
+            .map(|map| {
+                map.tokens
+                    .iter()
+                    .filter(|t| t.visibility == MessageVisibility::GmOnly)
+                    .map(|t| t.entity_id.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut filtered = tracker.clone();
-        filtered
-            .combatants
-            .retain(|c| !hidden_ids.contains(c.entity_id.as_str()));
+        filtered.combatants.retain(|c| {
+            c.visibility != MessageVisibility::GmOnly
+                && !hidden_ids.contains(c.entity_id.as_str())
+        });
         filtered
     }
 
@@ -895,23 +1025,24 @@ impl AuthAndSessionManager {
                 Some(z) if !z.is_empty() => format!("{} [{}]", c.display_name, z),
                 _ => c.display_name.clone(),
             };
+            // Match strictly by exact entity_id first, then exact display_name/label (never starts_with).
             let existing_id = map
                 .tokens
                 .iter()
-                .find(|t| t.entity_id == c.entity_id || t.label.starts_with(&c.display_name))
-                .map(|t| (t.entity_id.clone(), t.x, t.y));
-            if let Some((eid, prev_x, prev_y)) = existing_id {
+                .find(|t| t.entity_id == c.entity_id)
+                .or_else(|| {
+                    map.tokens
+                        .iter()
+                        .find(|t| t.label == c.display_name || t.label == label)
+                })
+                .map(|t| t.entity_id.clone());
+            if let Some(eid) = existing_id {
                 if let Some(tok) = map.tokens.iter_mut().find(|t| t.entity_id == eid) {
-                    tok.x = x;
-                    tok.y = y;
+                    // Never overwrite live tactical map coordinates of an already-placed token from stale combat_tracker state.
                     tok.label = label;
-                }
-                if prev_x != x || prev_y != y {
-                    map.set_token_pos_cm(
-                        &eid,
-                        x * cell_cm + cell_cm / 2,
-                        y * cell_cm + cell_cm / 2,
-                    );
+                    if c.visibility == MessageVisibility::GmOnly {
+                        tok.visibility = MessageVisibility::GmOnly;
+                    }
                 }
             } else {
                 map.tokens.push(TokenPlacement {
@@ -919,7 +1050,7 @@ impl AuthAndSessionManager {
                     label,
                     x,
                     y,
-                    visibility: MessageVisibility::Public,
+                    visibility: c.visibility,
                 });
                 map.set_token_pos_cm(
                     &c.entity_id,
@@ -982,6 +1113,36 @@ impl AuthAndSessionManager {
             .flatten()
             .and_then(|r| r.try_get::<String, _>("state_json").ok())
             .and_then(|s| serde_json::from_str::<CombatTrackerState>(&s).ok())
+    }
+
+    /// Persists `tracker` JSON into the `session_combat_state` SQLite table.
+    pub async fn persist_combat_tracker_to_db(
+        &self,
+        session_id: &str,
+        tracker: &CombatTrackerState,
+    ) {
+        let sid = session_id.trim();
+        let updated_at_us = if tracker.updated_at_us > 0 {
+            tracker.updated_at_us
+        } else {
+            Utc::now().timestamp_micros()
+        };
+        if let Ok(json_str) = serde_json::to_string(tracker) {
+            let _ = sqlx::query(
+                r#"
+                INSERT INTO session_combat_state (session_id, state_json, updated_at_us)
+                VALUES (?1, ?2, ?3)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    state_json = excluded.state_json,
+                    updated_at_us = excluded.updated_at_us
+                "#,
+            )
+            .bind(sid)
+            .bind(json_str)
+            .bind(updated_at_us)
+            .execute(self.db_pool())
+            .await;
+        }
     }
 
     /// Updates the authoritative [`CombatTrackerState`] for `session_id` and persists it to SQLite.
@@ -1066,6 +1227,7 @@ impl AuthAndSessionManager {
                             .zone_label
                             .clone()
                             .or_else(|| Some("Entry Bulkhead".to_string())),
+                        visibility: MessageVisibility::Public,
                     });
                 }
             }
@@ -1075,22 +1237,7 @@ impl AuthAndSessionManager {
             snap
         };
 
-        if let Ok(json_str) = serde_json::to_string(&updated) {
-            let _ = sqlx::query(
-                r#"
-                INSERT INTO session_combat_state (session_id, state_json, updated_at_us)
-                VALUES (?1, ?2, ?3)
-                ON CONFLICT(session_id) DO UPDATE SET
-                    state_json = excluded.state_json,
-                    updated_at_us = excluded.updated_at_us
-                "#,
-            )
-            .bind(sid)
-            .bind(json_str)
-            .bind(now_us)
-            .execute(self.db_pool())
-            .await;
-        }
+        self.persist_combat_tracker_to_db(sid, &updated).await;
 
         Ok(updated)
     }
@@ -1194,8 +1341,8 @@ impl AuthAndSessionManager {
                     is_gm,
                 )
             } else if is_gm_service {
-                let docs = self.load_persistent_gm_docs_from_db(sid).await;
-                let mems = self.load_persistent_gm_memories_from_db(sid).await;
+                let docs = self.load_persistent_gm_docs_from_db(sid, None).await;
+                let mems = self.load_persistent_gm_memories_from_db(sid, None).await;
                 let tracker = self.load_or_init_combat_tracker(sid, &[]).await;
                 (sid.to_string(), Vec::new(), docs, mems, tracker, None, true)
             } else {

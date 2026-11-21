@@ -110,22 +110,31 @@ pub(crate) async fn delete_npc_records_by_id(
     character_id: &str,
 ) -> bool {
     let pool = state.auth.db_pool();
-    let deleted = sqlx::query("DELETE FROM session_npcs WHERE character_id = ?1")
-        .bind(character_id)
-        .execute(pool)
-        .await
-        .map(|r| r.rows_affected() > 0)
-        .unwrap_or(false);
-    let _ = sqlx::query("DELETE FROM session_characters WHERE user_id = ?1 OR character_id = ?2")
-        .bind(format!("npc:{character_id}"))
+    let deleted = sqlx::query(
+        "DELETE FROM session_npcs WHERE character_id = ?1 AND (session_id = ?2 OR campaign_tag = ?2 COLLATE NOCASE)",
+    )
+    .bind(character_id)
+    .bind(sid)
+    .execute(pool)
+    .await
+    .map(|r| r.rows_affected() > 0)
+    .unwrap_or(false);
+    let _ = sqlx::query(
+        "DELETE FROM session_characters WHERE session_id = ?1 AND (user_id = ?2 OR character_id = ?3)",
+    )
+    .bind(sid)
+    .bind(format!("npc:{character_id}"))
+    .bind(character_id)
+    .execute(pool)
+    .await;
+    if deleted {
+        let _ = sqlx::query(
+            "DELETE FROM characters WHERE character_id = ?1 AND character_id LIKE 'npc_%' AND NOT EXISTS(SELECT 1 FROM session_npcs n WHERE n.character_id = ?1)",
+        )
         .bind(character_id)
         .execute(pool)
         .await;
-    let _ =
-        sqlx::query("DELETE FROM characters WHERE character_id = ?1 AND character_id LIKE 'npc_%'")
-            .bind(character_id)
-            .execute(pool)
-            .await;
+    }
     let _ = state
         .auth
         .delete_session_gm_memory(

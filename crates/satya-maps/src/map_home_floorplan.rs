@@ -2356,8 +2356,32 @@ pub(crate) fn build_blueprint_floor(
         furn.furnish(role, room);
     }
     if floor_idx == -1 {
-        let _ = furn.against_any_wall(PropKind::SteelShelving, bp.main_wing.as_room(), None);
-        furn.scatter(PropKind::WoodCrate, bp.main_wing.as_room(), 2, 0);
+        let mut placed_shelf = false;
+        for &(room, role, _) in &tagged_rooms {
+            if !matches!(role, Role::Hall)
+                && furn
+                    .against_any_wall(PropKind::SteelShelving, room, None)
+                    .is_some()
+            {
+                placed_shelf = true;
+                break;
+            }
+        }
+        if !placed_shelf {
+            for &(room, _, _) in &tagged_rooms {
+                if furn
+                    .against_any_wall(PropKind::SteelShelving, room, None)
+                    .is_some()
+                {
+                    break;
+                }
+            }
+        }
+        let scatter_room = tagged_rooms
+            .first()
+            .map(|&(r, _, _)| r)
+            .unwrap_or_else(|| bp.main_wing.as_room());
+        furn.scatter(PropKind::WoodCrate, scatter_room, 2, 0);
     }
 
     let mut surfaces =

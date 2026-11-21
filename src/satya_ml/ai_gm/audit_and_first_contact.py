@@ -28,13 +28,14 @@ except ImportError:  # pragma: no cover
         return _FallbackToolWrapper(fn)
 
 
+from satya_py import awakened as _awakened, campaign as _campaign, psyche as _psyche
+
 from satya_ml.ai_gm.social_and_clocks import (
     _parse_psyche_dict,
     _resolve_npc_profile,
     advance_faction_or_heat_clock,
     get_session_world_ledger,
 )
-from satya_ml.dice_probabilities import _ensure_satya_py_loaded
 
 _SESSION_AUDIT_PROOFS: dict[str, dict[str, dict[str, Any]]] = {}
 
@@ -91,8 +92,8 @@ def _subject_tokens(npc: dict[str, Any]) -> set[str]:
             expanded.update({"daise", "government_daise"})
         if "satyang" in item or "truth" in item:
             expanded.add("satyang")
-        if "bandajara" in item:
-            expanded.update({"dr_bandajara", "bandajara", "big_tech"})
+        if any(tok in item for tok in ("bandajara", "altruist", "translucent", "shen")):
+            expanded.update({"dr_bandajara", "bandajara", "altruist", "translucent", "shen", "big_tech"})
         if "echo" in item or "rogue" in item:
             expanded.update({"rogue_ai", "rogue_proxy_echo", "echo-9", "echo_9"})
         if "humanis" in item or "reeves" in item:
@@ -122,12 +123,7 @@ def find_matching_audit_proof(
 
 
 def _character_has_osint_or_deepfake_anchor(session_id: str, actor_character_id: str = "") -> bool:
-    from satya_ml.ai_gm.hooks import normalize_character_sheet_record
     from satya_ml.ai_gm.tools import get_session_characters
-
-    satya_py = _ensure_satya_py_loaded()
-    if satya_py is None or not hasattr(satya_py, "extract_character_lifepath_anchors_json"):
-        return False
 
     needle = actor_character_id.strip().lower()
     for idx, raw_ch in enumerate(get_session_characters(session_id)):
@@ -138,8 +134,7 @@ def _character_has_osint_or_deepfake_anchor(session_id: str, actor_character_id:
         if needle and needle not in {cid, cname}:
             continue
         try:
-            norm = normalize_character_sheet_record(raw_ch, idx)
-            anchors = json.loads(satya_py.extract_character_lifepath_anchors_json(json.dumps(norm)))
+            anchors = _campaign.extract_character_lifepath_anchors(raw_ch, idx)
         except Exception:
             continue
         if any(h.get("hobby_code") == "CITIZEN_OSINT_DEEPFAKE" for h in anchors.get("hobby_contacts") or []):
@@ -310,21 +305,16 @@ def inspect_synthetic_or_proxy_telemetry(
             source_kind="vulnerability_olive_branch",
         )
         minted_proof_id = proof["proof_id"]
-        satya_py = _ensure_satya_py_loaded()
-        res_delta = 0
-        if satya_py is not None and hasattr(satya_py, "evaluate_social_exchange_json"):
-            ex = json.loads(
-                satya_py.evaluate_social_exchange_json(
-                    json.dumps(psyche),
-                    json.dumps(["verified_audit_proof"]),
-                    max(1, succ),
-                    None,
-                    12,
-                    12,
-                    None,
-                )
-            )
-            res_delta = int(ex.get("argument_eval", {}).get("net_delta_ext", 0) or 0)
+        ex = _psyche.evaluate_social_exchange(
+            psyche,
+            ["verified_audit_proof"],
+            max(1, succ),
+            None,
+            12,
+            12,
+            None,
+        )
+        res_delta = int(ex.get("argument_eval", {}).get("net_delta_ext", 0) or 0)
         if res_delta <= 0 and npc_key in get_session_npcs(session_id):
             updated_npc = dict(get_session_npcs(session_id)[npc_key])
             updated_npc["disposition"] = "receptive_parley"
@@ -339,36 +329,16 @@ def inspect_synthetic_or_proxy_telemetry(
             f"containment paranoia (TRS={psyche['trs']}, OPN={psyche['opn']}, CPS={psyche['cps']})."
         )
     )
-    sentience_ambiguity: dict[str, Any] = {}
-    gm_only_interiority: dict[str, Any] = {}
-    try:
-        from satya_ml.ai_gm.awakened_systems import get_session_synthetic_substrate
+    from satya_ml.ai_gm.awakened_systems import get_session_synthetic_substrate
 
-        sub_state = get_session_synthetic_substrate(session_id, npc_key, hint=joined_hint)
-        satya_mod = _ensure_satya_py_loaded()
-        if satya_mod is not None and hasattr(satya_mod, "evaluate_ambiguous_sentience_read_json"):
-            amb = json.loads(
-                satya_mod.evaluate_ambiguous_sentience_read_json(
-                    json.dumps(sub_state),
-                    json.dumps(psyche),
-                    max(0, succ),
-                )
-            )
-            sentience_ambiguity = dict(amb.get("player_observable") or {})
-            gm_only_interiority = dict(amb.get("gm_only_truth") or {})
-    except Exception:
-        pass
-    if not sentience_ambiguity:
-        sincerity = min(45 if is_swarm else 82, 24 if is_swarm else 56 + min(4, max(0, succ)) * 6)
-        sentience_ambiguity = {
-            "apparent_sincerity_pct": sincerity,
-            "bayesian_mimicry_hypothesis_pct": 100 - sincerity,
-            "observable_cues": telemetry_cues,
-            "epistemic_warning": (
-                f"No external instrument proves qualia: {sincerity}% consistent with authentic experience vs. "
-                f"{100 - sincerity}% Bayesian survival mimicry."
-            ),
-        }
+    sub_state = get_session_synthetic_substrate(session_id, npc_key, hint=joined_hint)
+    amb = _awakened.evaluate_ambiguous_sentience_read(
+        sub_state,
+        psyche,
+        max(0, succ),
+    )
+    sentience_ambiguity = dict(amb.get("player_observable") or {})
+    gm_only_interiority = dict(amb.get("gm_only_truth") or {})
 
     return {
         "target_npc_id": npc_key,

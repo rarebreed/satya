@@ -232,23 +232,63 @@ pub async fn gm_session_chat_handler(
             .iter()
             .any(|p| p.participant_kind == ParticipantKind::Human && p.role == SessionRole::Player)
     {
-        let auto_entries: Vec<crate::player_ai_api::SessionAiPlayerEntry> = state
+        state
+            .ensure_session_ai_players_loaded(session_id.trim())
+            .await;
+        let mut auto_entries: Vec<crate::player_ai_api::SessionAiPlayerEntry> = state
             .ai_players
             .read()
             .await
             .get(session_id.trim())
             .map(|m| m.values().filter(|e| e.auto_respond).cloned().collect())
             .unwrap_or_default();
-        let ai_count = auto_entries.len() as u32;
+        auto_entries.sort_by(|a, b| a.participant.user_id.cmp(&b.participant.user_id));
+
+        // When Action Mode combat is active, only trigger the AI Player(s) due at the earliest active tick.
+        if let Some(tracker) = ctx.combat_tracker.as_ref().filter(|t| t.combat_active) {
+            let min_tick = tracker
+                .combatants
+                .iter()
+                .filter(|c| {
+                    auto_entries
+                        .iter()
+                        .any(|e| e.participant.user_id == c.entity_id)
+                        || ctx.roster.iter().any(|p| {
+                            p.user_id == c.entity_id
+                                && p.participant_kind == ParticipantKind::Human
+                                && p.role == SessionRole::Player
+                        })
+                })
+                .map(|c| c.next_action_tick)
+                .min();
+            if let Some(due_tick) = min_tick {
+                let due_entries: Vec<_> = auto_entries
+                    .iter()
+                    .filter(|e| {
+                        tracker
+                            .combatants
+                            .iter()
+                            .find(|c| c.entity_id == e.participant.user_id)
+                            .is_none_or(|c| c.next_action_tick <= due_tick)
+                    })
+                    .cloned()
+                    .collect();
+                if !due_entries.is_empty() {
+                    auto_entries = due_entries;
+                }
+            }
+        }
+
         if !auto_entries.is_empty() {
-            let base_rally = auto_entries[0].max_rally_turns;
-            let eff_rally = if ai_count > 1 {
-                base_rally.saturating_mul(ai_count).min(12)
-            } else {
-                base_rally
-            };
+            let configured_rounds = state
+                .ai_rally_counters
+                .read()
+                .await
+                .get(session_id.trim())
+                .map(|s| s.max_rounds)
+                .unwrap_or(auto_entries[0].max_rally_turns);
             if state
-                .try_consume_ai_rally_turn(session_id.trim(), eff_rally)
+                .try_consume_ai_rally_turn(session_id.trim(), configured_rounds)
                 .await
             {
                 let state_clone = state.clone();
@@ -489,12 +529,24 @@ pub async fn gm_session_roll_handler(
         .record_mechanics_event_to_db(&session_id, &mech_ev)
         .await;
 
+    let is_gm_only = req.visibility == Some(MessageVisibility::GmOnly)
+        || ctx.active_map.as_ref().is_some_and(|map| {
+            map.tokens
+                .iter()
+                .any(|t| t.entity_id == actor.user_id && t.visibility == MessageVisibility::GmOnly)
+        });
+    let roll_vis = if is_gm_only {
+        MessageVisibility::GmOnly
+    } else {
+        MessageVisibility::Public
+    };
+
     // Also emit Topic 7 (`tabletop-canvas`) WgpuDiceSpawned event & broadcast 3D dice seed
     let dice_spec = WgpuDiceSpec {
         dice_notation: format!("{n_pairs}x2d20"),
         physics_seed,
         outcomes: mech_ev.dice_rolled_d20.clone(),
-        visibility: MessageVisibility::Public,
+        visibility: roll_vis,
     };
     if let Ok(canvas_meta) = state.storage.registry().build_metadata(
         state.next_seq(),
@@ -519,11 +571,24 @@ pub async fn gm_session_roll_handler(
         let _ = state.storage.log_tabletop_canvas(&canvas_ev).await;
     }
 
+    let gm_recipient_ids: Vec<String> = ctx
+        .roster
+        .iter()
+        .filter(|p| matches!(p.role, SessionRole::Gm | SessionRole::Host | SessionRole::AiGm))
+        .map(|p| p.user_id.clone())
+        .collect();
+
     if let Ok(wgpu_pkt) = serde_json::to_string(&ServerWsPacket::WgpuDiceRoll {
         actor,
         spec: dice_spec,
     }) {
-        state.broadcast_to_session(&session_id, &wgpu_pkt).await;
+        if is_gm_only {
+            state
+                .send_to_users(&session_id, &gm_recipient_ids, &wgpu_pkt)
+                .await;
+        } else {
+            state.broadcast_to_session(&session_id, &wgpu_pkt).await;
+        }
     }
 
     let pkt_str = json!({
@@ -531,7 +596,13 @@ pub async fn gm_session_roll_handler(
         "event": mech_ev
     })
     .to_string();
-    state.broadcast_to_session(&session_id, &pkt_str).await;
+    if is_gm_only {
+        state
+            .send_to_users(&session_id, &gm_recipient_ids, &pkt_str)
+            .await;
+    } else {
+        state.broadcast_to_session(&session_id, &pkt_str).await;
+    }
 
     (StatusCode::OK, Json(mech_ev)).into_response()
 }
@@ -590,6 +661,35 @@ pub async fn gm_session_map_handler(
         req.active_floor = sec.active_floor;
     }
     req.sync_active_floor_snapshot();
+
+    // H10: Sync updated token grid coordinates back into session.combat_tracker before persisting map.
+    {
+        let mut sessions_guard = state.auth.sessions.write().await;
+        if let Some(session) = sessions_guard.get_mut(session_id.trim()) {
+            let mut changed = false;
+            for c in &mut session.combat_tracker.combatants {
+                if let Some(tok) = req
+                    .tokens
+                    .iter()
+                    .find(|t| t.entity_id == c.entity_id || t.label == c.display_name)
+                    && (c.grid_x != Some(tok.x) || c.grid_y != Some(tok.y))
+                {
+                    c.grid_x = Some(tok.x);
+                    c.grid_y = Some(tok.y);
+                    changed = true;
+                }
+            }
+            if changed {
+                session.combat_tracker.updated_at_us = chrono::Utc::now().timestamp_micros();
+                let ct_clone = session.combat_tracker.clone();
+                drop(sessions_guard);
+                state
+                    .auth
+                    .persist_combat_tracker_to_db(session_id.trim(), &ct_clone)
+                    .await;
+            }
+        }
+    }
 
     let _ = state
         .auth
@@ -1341,46 +1441,17 @@ pub async fn trigger_ai_gm_chat_reply(
                     let _ = state.storage.log_session_log(&log_ev).await;
                 }
 
-                // Emit fail-fast system notice to the triggering player / GM
-                let req_ids = vec![triggering_player.user_id.clone()];
-                let (recipients, delivery_ids) = SignalingAppState::resolve_message_targets(
-                    ai_gm,
-                    MessageVisibility::Private,
-                    &req_ids,
-                    roster,
-                );
-                if let Ok(meta) = state.storage.registry().build_metadata(
-                    state.next_seq(),
-                    subjects::CHAT_MESSAGE,
-                    1,
-                    session_id,
-                    session_mode,
-                ) {
-                    let ev = ChatMessageEvent {
-                        metadata: meta,
-                        message_id: Uuid::now_v7().to_string(),
-                        sender: ai_gm.clone(),
-                        visibility: MessageVisibility::Private,
-                        recipients,
-                        channel_context: ChannelContext::SystemNotice,
-                        reply_to_message_id: None,
-                        body: err_msg.clone(),
-                        char_count: err_msg.chars().count() as i32,
-                        word_count: err_msg.split_whitespace().count() as i32,
-                        composition_time_ms: 0,
-                        is_edited: false,
-                    };
-                    let _ = state.storage.log_chat_message(&ev).await;
-                    state.auth.record_chat_event_to_db(session_id, &ev).await;
-                    let pkt_str = json!({
-                        "type": "CHAT_EVENT",
-                        "event": ev
-                    })
-                    .to_string();
-                    state
-                        .send_to_users(session_id, &delivery_ids, &pkt_str)
-                        .await;
-                }
+                // Emit fail-fast system notice to all connected human participants (including Observers)
+                // so AI Player timeouts/failures are never swallowed when no Player socket is present.
+                state
+                    .broadcast_system_notice_to_humans(
+                        session_id,
+                        session_mode,
+                        ai_gm,
+                        roster,
+                        &err_msg,
+                    )
+                    .await;
                 return;
             }
         }
@@ -1450,4 +1521,96 @@ pub async fn trigger_ai_gm_chat_reply(
             .send_to_users(session_id, &delivery_ids, &pkt_str)
             .await;
     }
+}
+
+/// Requests an immediate AI GM opening scene narration at `POST /api/sessions/:session_id/ai-gm/opening-scene`.
+pub async fn trigger_ai_gm_opening_scene_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    Path(session_id): Path<String>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let Some(auth_hdr) = headers.get("Authorization").and_then(|h| h.to_str().ok()) else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Missing Authorization header" })),
+        )
+            .into_response();
+    };
+    let Some(user) = state.auth.verify_auth_token(auth_hdr).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or expired auth token" })),
+        )
+            .into_response();
+    };
+    let sid = session_id.trim().to_string();
+    if !crate::npcs::can_caller_orchestrate_ai_session(&state, &sid, &user).await {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Only the session GM or host can trigger the opening scene" })),
+        )
+            .into_response();
+    }
+
+    let Some((ctx, _)) = state.auth.get_session_gm_context(&sid).await else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": format!("Session '{sid}' not found") })),
+        )
+            .into_response();
+    };
+    let Some(ai_gm) = ctx.ai_gm_participant.clone() else {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "No AI GM participant is enabled in this session" })),
+        )
+            .into_response();
+    };
+    let caller_part = ctx
+        .roster
+        .iter()
+        .find(|p| p.user_id == user.user_id)
+        .cloned()
+        .unwrap_or_else(|| {
+            Participant::human(
+                &user.user_id,
+                &user.username,
+                user.display_name.clone(),
+                SessionRole::Observer,
+            )
+        });
+
+    state.reset_ai_rally_counter(&sid).await;
+    state.ensure_session_ai_players_loaded(&sid).await;
+
+    let state_clone = state.clone();
+    let sid_clone = sid.clone();
+    let trigger_id = Uuid::now_v7().to_string();
+    let session_mode = ctx.session_mode;
+    let roster_clone = ctx.roster.clone();
+    tokio::spawn(async move {
+        trigger_ai_gm_chat_reply(
+            &state_clone,
+            &sid_clone,
+            session_mode,
+            &ai_gm,
+            &caller_part,
+            &trigger_id,
+            "SCENARIO_BEAT",
+            MessageVisibility::Public,
+            Some(ChannelContext::GmNarration),
+            "Begin the session with a concrete, grounded opening scene describing the immediate surroundings, active tactical stakes, and the characters present.",
+            &roster_clone,
+        )
+        .await;
+    });
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "status": "opening_scene_triggered",
+            "session_id": sid,
+        })),
+    )
+        .into_response()
 }

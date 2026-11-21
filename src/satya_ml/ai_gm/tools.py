@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from satya_ml.ai_gm.models import SessionLlmConfig  # noqa: F401 (installs Windows SSL fallback)
 
@@ -177,8 +177,9 @@ def _http_get_json(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
     return None
 
 
+from satya_py import campaign as _campaign, combat as _combat, dice as _dice
+
 from satya_ml.ai_gm.maps import (
-    _load_satya_py,
     continue_tactical_map,
     ensure_or_sync_procedural_tactical_map_stub,
     generate_tactical_map,
@@ -212,9 +213,11 @@ def set_session_operating_mode(
     mode: str,
     human_gm_user_id: str | None = None,
 ) -> None:
-    """Record the operating mode ('autonomous' or 'co_pilot') and optional human GM ID for a session."""
+    """Record the operating mode ('autonomous' or 'co_pilot') and clear or set optional human GM ID."""
     _SESSION_MODES[session_id] = mode
-    if human_gm_user_id is not None:
+    if human_gm_user_id is None:
+        _SESSION_HUMAN_GMS.pop(session_id, None)
+    else:
         _SESSION_HUMAN_GMS[session_id] = human_gm_user_id
 
 
@@ -280,13 +283,31 @@ _SESSION_NPC_PACKS: dict[str, str] = {}
 
 
 def reset_session_npcs(session_id: str | None = None) -> None:
-    """Clear cached NPC state and world/social state for `session_id` (or all sessions when omitted)."""
+    """Clear cached NPC state, session caches, maps, and world/social state for `session_id` (or all)."""
     if session_id is None:
         _SESSION_NPCS.clear()
         _SESSION_NPC_PACKS.clear()
+        _SESSION_MODES.clear()
+        _SESSION_HUMAN_GMS.clear()
+        _SESSION_GM_DOCS.clear()
+        _SESSION_GM_MEMORIES.clear()
+        _SESSION_CHARACTERS.clear()
+        _SESSION_COMBAT_TRACKER.clear()
     else:
         _SESSION_NPCS.pop(session_id, None)
         _SESSION_NPC_PACKS.pop(session_id, None)
+        _SESSION_MODES.pop(session_id, None)
+        _SESSION_HUMAN_GMS.pop(session_id, None)
+        _SESSION_GM_DOCS.pop(session_id, None)
+        _SESSION_GM_MEMORIES.pop(session_id, None)
+        _SESSION_CHARACTERS.pop(session_id, None)
+        _SESSION_COMBAT_TRACKER.pop(session_id, None)
+    try:
+        from satya_ml.ai_gm.maps import clear_session_map_caches
+
+        clear_session_map_caches(session_id)
+    except Exception:
+        pass
     try:
         from satya_ml.ai_gm.social_and_clocks import reset_social_and_world_state
 
@@ -333,7 +354,7 @@ def load_all_npc_profiles(repo_root: Path | None = None) -> dict[str, dict[str, 
 
 
 def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
-    """Return the mutable NPC state dictionary for `session_id`, synced with the active pack & signaling SQLite."""
+    """Return the mutable NPC state dictionary for `session_id`, non-destructively merging signaling state."""
     active_pack = get_active_campaign_pack_name()
     if session_id not in _SESSION_NPCS or _SESSION_NPC_PACKS.get(session_id) != active_pack:
         _SESSION_NPCS[session_id] = load_all_npc_profiles()
@@ -346,7 +367,30 @@ def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
             for raw_entry in data.get("npcs") or []:
                 if isinstance(raw_entry, dict) and raw_entry.get("character_id"):
                     norm = _normalize_remote_npc_entry(raw_entry)
-                    npcs[norm["npc_id"]] = norm
+                    existing = npcs.get(norm["npc_id"])
+                    if existing is not None:
+                        has_gm_char = isinstance(raw_entry.get("gm_character"), dict) and bool(
+                            raw_entry.get("gm_character")
+                        )
+                        if not has_gm_char:
+                            for k in (
+                                "skills",
+                                "attribute_tns",
+                                "combat_stance",
+                                "fatigue",
+                                "wound_shock",
+                                "morale_state",
+                                "spoofing_secops",
+                            ):
+                                if k in existing:
+                                    norm[k] = existing[k]
+                        if not raw_entry.get("disposition") and existing.get("disposition"):
+                            norm["disposition"] = existing["disposition"]
+                        if not raw_entry.get("gm_secret_dossier") and existing.get("secrets"):
+                            norm["secrets"] = list(existing["secrets"])
+                        npcs[norm["npc_id"]] = {**existing, **norm}
+                    else:
+                        npcs[norm["npc_id"]] = norm
     return npcs
 
 
@@ -468,301 +512,73 @@ def generate_npc_from_description(
             set_session_characters(session_id, chars)
         return remote_res
 
-    satya_py_mod = _load_satya_py()
-    if satya_py_mod is not None and hasattr(satya_py_mod, "generate_npc_profile_json"):
-        try:
-            raw_json = satya_py_mod.generate_npc_profile_json(
-                description,
-                template,
-                name_override,
-                max(1, min(4, int(career_terms))),
-                42,
-                get_active_campaign_pack_name(),
-            )
-            gen_res = json.loads(raw_json)
-            ch = dict(gen_res.get("character") or {})
-            motiv = dict(gen_res.get("motivation") or {})
-            dossier = str(gen_res.get("gm_secret_dossier") or "")
-            if gm_secret_notes and gm_secret_notes.strip():
-                dossier = f"{dossier}\nGM Secret Notes: {gm_secret_notes.strip()}".strip()
-                ch["notes"] = dossier
-            npc_entry = {
-                "character_id": ch.get("character_id", f"npc-{uuid.uuid4().hex[:8]}"),
-                "character_name": ch.get("character_name", name_override or "Generated Contact"),
-                "callsign_or_role": ch.get("callsign_or_role", "Specialist"),
-                "faction_id": ch.get("faction_id"),
-                "faction_archetype": ch.get("faction_archetype"),
-                "age_years": int(ch.get("age_years", 34)),
-                "public_summary": str(gen_res.get("public_summary") or ""),
-                "apparent_condition": "Healthy & Alert",
-                "is_persistent": bool(is_persistent),
-                "gm_character": ch,
-                "psyche_summary": [
-                    f"{p.get('code')} {p.get('score')} ({p.get('descriptor')})"
-                    for p in (gen_res.get("psyche_traits") or [])
-                ],
-                "top_skills": [
-                    f"{item[0]} — {item[1]} (N={item[2]})"
-                    for item in (gen_res.get("top_skills") or [])
-                    if isinstance(item, (list, tuple)) and len(item) >= 3
-                ],
-                "gm_secret_dossier": dossier,
-                "disposition": (
-                    "hostile"
-                    if int(compute_faction_standing_social_leverage(session_id, ch).get("party_standing", 0)) <= -2
-                    else (
-                        "receptive"
-                        if int(compute_faction_standing_social_leverage(session_id, ch).get("party_standing", 0)) >= 2
-                        else "wary"
-                    )
-                ),
-                "morale_state": "steady",
-                "immediate_agenda": motiv.get("immediate_agenda"),
-                "core_drive": motiv.get("core_drive"),
-                "dual_psyche_wedge_hint": motiv.get("dual_psyche_wedge"),
-                "social_combat_wedge_hint": motiv.get("dual_psyche_wedge"),
-                "awakened_social_origin_hook": gen_res.get("awakened_social_origin_hook"),
-            }
-            _SESSION_NPCS.setdefault(session_id, {})[str(npc_entry["character_id"]).lower()] = (
-                _normalize_remote_npc_entry(npc_entry)
-            )
-            if ch:
-                chars = get_session_characters(session_id)
-                chars = [c for c in chars if c.get("character_id") != ch.get("character_id")]
-                chars.append(ch)
-                set_session_characters(session_id, chars)
-            return {
-                "npc": npc_entry,
-                "motivation": motiv,
-                "offline_fallback": False,
-                "engine_backed": True,
-            }
-        except Exception:
-            pass
-
-    # Local deterministic fallback when signaling server and satya_py are offline
-    desc_clean = description.strip()
-    lower = desc_clean.lower()
-    npc_name = (name_override or "").strip()
-    if not npc_name:
-        for sep in (" is a ", " is an ", " is the ", ", a ", ", an ", " - ", ": "):
-            if sep in desc_clean:
-                cand = desc_clean.split(sep, 1)[0].strip().strip("\"'")
-                if 1 <= len(cand.split()) <= 4 and cand[0].isupper():
-                    npc_name = cand
-                    break
-    if not npc_name:
-        npc_name = "Terry Vance"
-
-    tmpl = (template or "AUTO").strip().upper()
-    if tmpl == "AUTO":
-        if any(w in lower for w in ("md", "doctor", "physician", "surgeon", "medic", "nurse", "clinic")):
-            tmpl = "MEDICAL_DOCTOR"
-        elif any(w in lower for w in ("detective", "investigator", "police", "cop", "swat", "forensic")):
-            tmpl = "DETECTIVE_INVESTIGATOR"
-        elif any(w in lower for w in ("spy", "intelligence", "operative", "handler", "undercover")):
-            tmpl = "INTELLIGENCE_OPERATIVE"
-        elif any(w in lower for w in ("syndicate", "cartel", "gang", "fixer", "enforcer", "smuggler")):
-            tmpl = "SYNDICATE_ENFORCER"
-        elif any(w in lower for w in ("engineer", "scientist", "hacker", "programmer", "robotics")):
-            tmpl = "STEM_ENGINEER"
-        elif any(w in lower for w in ("mechanic", "technician", "pilot", "electrician")):
-            tmpl = "BLUE_COLLAR_TECH"
-        elif any(w in lower for w in ("ranger", "scout", "hunter", "tracker", "herbalist")):
-            tmpl = "FRONTIER_RANGER"
-        elif any(w in lower for w in ("soldier", "marine", "mercenary", "sniper", "veteran")):
-            tmpl = "COMBAT_SOLDIER"
-        else:
-            tmpl = "DETECTIVE_INVESTIGATOR"
-
-    role_titles = {
-        "MEDICAL_DOCTOR": "General MD & Clinical Physician",
-        "COMBAT_SOLDIER": "Tactical Security Operator",
-        "DETECTIVE_INVESTIGATOR": "Investigative Detective",
-        "SYNDICATE_ENFORCER": "Underworld Fixer & Enforcer",
-        "STEM_ENGINEER": "Systems & Research Engineer",
-        "INTELLIGENCE_OPERATIVE": "Field Intelligence Handler",
-        "BLUE_COLLAR_TECH": "Lead Mechanical Technician",
-        "FRONTIER_RANGER": "Frontier Guide & Outrider",
-    }
-    role_title = role_titles.get(tmpl, "Civilian Specialist")
-
-    # 9 Bipolar Psyche traits (1-20)
-    psyche = {
-        "EGO": 10, "SLF": 10, "OPN": 12, "BLG": 10, "EXT": 10, "CNF": 11, "AGG": 10,
-        "TRS": 10, "CPS": 10,
-    }
-    if any(w in lower for w in ("kind", "caring", "compassionate", "gentle", "altruistic", "empathetic", "merciful", "healer")):
-        psyche["SLF"] = 5
-        psyche["AGG"] = 5
-        psyche["EGO"] = 7
-        psyche["OPN"] = 14
-        psyche["CPS"] = 16
-    if any(w in lower for w in ("selfish", "greedy", "mercenary", "ruthless", "callous", "utilitarian")):
-        psyche["SLF"] = 16
-        psyche["AGG"] = 15
-        if any(w in lower for w in ("ruthless", "callous", "utilitarian")):
-            psyche["CPS"] = 4
-    if any(w in lower for w in ("trusting", "open-handed", "naive")):
-        psyche["TRS"] = 15
-    if any(w in lower for w in ("paranoid", "suspicious", "cynical", "zero-trust")):
-        psyche["TRS"] = 4
-    if any(w in lower for w in ("belong", "belongs", "belonging", "loyal", "tribal", "team", "family", "accepted")):
-        psyche["BLG"] = 16
-    if any(w in lower for w in ("loner", "lone wolf", "detached", "solitary", "aloof")):
-        psyche["BLG"] = 4
-    if any(w in lower for w in ("rebel", "rebellious", "maverick", "unconventional")):
-        psyche["CNF"] = 4
-    if any(w in lower for w in ("by-the-book", "orthodox", "strict", "dutiful")):
-        psyche["CNF"] = 16
-
-    pole_labels = {
-        "EGO": ("Humble / Self-Effacing", "Grounded Self-Worth", "Proud / Imperious"),
-        "SLF": ("Altruistic / Self-Sacrificing", "Pragmatic Reciprocity", "Self-Serving / Mercenary"),
-        "OPN": ("Dogmatic / Rigid", "Selective Pragmatist", "Curious / Open-Minded"),
-        "BLG": ("Detached / Lone Wolf", "Cooperative Individual", "Tribal / Group-Dependent"),
-        "EXT": ("Solitary / Reserved", "Ambiverted", "Gregarious / Outgoing"),
-        "CNF": ("Maverick / Rebellious", "Adaptive", "Orthodox / Institutional"),
-        "AGG": ("Passive / Conflict-Averse / Gentle", "Measured Assertiveness", "Combative / Escalatory"),
-        "TRS": ("Cynical / Zero-Trust / Paranoid", "Discerning", "Trusting / Open-Handed / Gullible"),
-        "CPS": ("Ruthless / Utilitarian / Cold-Blooded", "Humane / Proportionate", "Merciful / Tender-Hearted / Pacifistic"),
-    }
-    psyche_summary: list[str] = []
-    for code, score in psyche.items():
-        low_l, mid_l, high_l = pole_labels[code]
-        desc_l = low_l if score <= 7 else (high_l if score >= 13 else mid_l)
-        psyche_summary.append(f"{code} {score} ({desc_l})")
-
-    template_skills: dict[str, dict[str, int]] = {
-        "MEDICAL_DOCTOR": {
-            "clinical_diagnosis_internal_medicine": 3,
-            "first_aid_bls_cpr": 4,
-            "nursing_patient_care": 3,
-            "pharmacology_toxicology": 3,
-            "anatomy_physiology": 3,
-            "empathy_social_perception": 3,
-        },
-        "COMBAT_SOLDIER": {
-            "long_guns_rifles_carbines_shotguns": 4,
-            "pistols_handguns": 3,
-            "small_unit_tactics_cqb": 3,
-            "brawling_unarmed_striking": 3,
-            "alertness_situational_awareness": 3,
-        },
-        "DETECTIVE_INVESTIGATOR": {
-            "criminology_scene_investigation": 4,
-            "interrogation_interviewing": 3,
-            "empathy_social_perception": 3,
-            "pistols_handguns": 3,
-            "alertness_situational_awareness": 3,
-        },
-        "SYNDICATE_ENFORCER": {
-            "streetwise_underworld_etiquette": 4,
-            "intimidation_coercion": 3,
-            "pistols_handguns": 3,
-            "short_blades_knife_fighting": 3,
-            "deception_bluff": 3,
-        },
-        "STEM_ENGINEER": {
-            "programming_scripting": 4,
-            "calculus_linear_algebra": 3,
-            "electronics_circuit_design": 3,
-            "digital_ai_literacy": 4,
-        },
-        "INTELLIGENCE_OPERATIVE": {
-            "espionage_tradecraft_surveillance": 4,
-            "deception_bluff": 4,
-            "stealth_sneaking_hiding": 3,
-            "pistols_handguns": 3,
-        },
-        "BLUE_COLLAR_TECH": {
-            "automotive_small_engine_mechanics": 4,
-            "electrical_power_systems": 3,
-            "driving_wheeled_tracked": 3,
-            "manual_dexterity_tinkering": 3,
-        },
-        "FRONTIER_RANGER": {
-            "wilderness_survival_biome_specific": 4,
-            "hunting_trapping_field_butchery": 3,
-            "long_guns_rifles_carbines_shotguns": 3,
-            "first_aid_bls_cpr": 3,
-        },
-    }
-    skills = dict(template_skills.get(tmpl, template_skills["DETECTIVE_INVESTIGATOR"]))
-    top_skills = [f"{k} (N={v})" for k, v in skills.items()]
-    age_years = 18 + 4 * max(1, min(4, int(career_terms)))
-    cid = f"npc_{npc_name.lower().replace(' ', '_')}"
-
-    public_summary = (
-        f"{npc_name} — {role_title} (Age {age_years}). Apparent demeanor: {desc_clean or role_title}."
+    gen_res = _campaign.generate_npc_profile(
+        description,
+        template,
+        name_override,
+        max(1, min(4, int(career_terms))),
+        42,
+        get_active_campaign_pack_name(),
     )
-    gm_dossier = (
-        f"NPC Dossier: {npc_name} ({role_title}, Age {age_years})\n"
-        f"Prompt: {desc_clean}\n"
-        f"Psyche: {'; '.join(psyche_summary)}\n"
-        f"Top Skills: {', '.join(top_skills)}"
-    )
-    if gm_secret_notes:
-        gm_dossier += f"\nGM Secret Notes: {gm_secret_notes}"
-
-    char_sheet = {
+    ch = dict(gen_res.get("character") or {})
+    motiv = dict(gen_res.get("motivation") or {})
+    dossier = str(gen_res.get("gm_secret_dossier") or "")
+    if gm_secret_notes and gm_secret_notes.strip():
+        dossier = f"{dossier}\nGM Secret Notes: {gm_secret_notes.strip()}".strip()
+        ch["notes"] = dossier
+    cid = str(ch.get("character_id") or f"npc-{uuid.uuid4().hex[:8]}")
+    cname = str(ch.get("character_name") or name_override or "Generated Contact")
+    crole = str(ch.get("callsign_or_role") or "Specialist")
+    npc_entry = {
         "character_id": cid,
-        "owner_user_id": "ai_gm_service",
-        "character_name": npc_name,
-        "callsign_or_role": role_title,
-        "age_years": age_years,
-        "characteristics": {
-            "spd": 11, "for_stat": 11, "dex": 13, "kin": 11, "hlt": 12, "fit": 11,
-            "hgt_m": 1.72, "mas_kg": 68.0,
-            "mem": 14 if tmpl == "MEDICAL_DOCTOR" else 12,
-            "ana": 14 if tmpl in ("MEDICAL_DOCTOR", "STEM_ENGINEER") else 12,
-            "ins": 13, "cre": 11, "dis": 13, "foc": 13,
-            "com": 13, "pre": 12, "elo": 12,
-            "sig": 12, "hea": 12, "tac": 12, "olf": 10, "tas": 10, "itu": 12,
-            "ego": psyche["EGO"], "slf": psyche["SLF"], "opn": psyche["OPN"],
-            "blg": psyche["BLG"], "ext": psyche["EXT"], "cnf": psyche["CNF"], "agg": psyche["AGG"],
-            "trs": psyche["TRS"], "cps": psyche["CPS"],
-        },
-        "skills": skills,
-        "notes": gm_dossier,
-    }
-
-    npcs = get_session_npcs(session_id)
-    standing_info = compute_faction_standing_social_leverage(
-        session_id,
-        {"npc_id": cid, "name": npc_name, "psyche": psyche, "description": desc_clean},
-    )
-    init_disp = (
-        "hostile"
-        if int(standing_info.get("party_standing", 0)) <= -2
-        else ("receptive" if int(standing_info.get("party_standing", 0)) >= 2 else "wary")
-    )
-    npcs[cid] = {
-        "npc_id": cid,
-        "name": npc_name,
-        "archetype": role_title,
-        "template": tmpl,
-        "disposition": init_disp,
+        "character_name": cname,
+        "callsign_or_role": crole,
+        "faction_id": ch.get("faction_id"),
+        "faction_archetype": ch.get("faction_archetype"),
+        "age_years": int(ch.get("age_years", 34)),
+        "public_summary": str(gen_res.get("public_summary") or ""),
+        "apparent_condition": "Healthy & Alert",
+        "is_persistent": bool(is_persistent),
+        "gm_character": ch,
+        "psyche_summary": [
+            f"{p.get('code')} {p.get('score')} ({p.get('descriptor')})"
+            for p in (gen_res.get("psyche_traits") or [])
+        ],
+        "top_skills": [
+            f"{item[0]} — {item[1]} (N={item[2]})"
+            for item in (gen_res.get("top_skills") or [])
+            if isinstance(item, (list, tuple)) and len(item) >= 3
+        ],
+        "gm_secret_dossier": dossier,
+        "disposition": (
+            "hostile"
+            if int(compute_faction_standing_social_leverage(session_id, ch).get("party_standing", 0)) <= -2
+            else (
+                "receptive"
+                if int(compute_faction_standing_social_leverage(session_id, ch).get("party_standing", 0)) >= 2
+                else "wary"
+            )
+        ),
         "morale_state": "steady",
-        "psyche": psyche,
-        "psyche_summary": psyche_summary,
-        "skills": skills,
-        "public_summary": public_summary,
-        "gm_secret_dossier": gm_dossier,
-        "fatigue": 0,
-        "wound_shock": 0,
-        "combat_stance": "NEUTRAL",
+        "immediate_agenda": motiv.get("immediate_agenda"),
+        "core_drive": motiv.get("core_drive"),
+        "dual_psyche_wedge_hint": motiv.get("dual_psyche_wedge"),
+        "social_combat_wedge_hint": motiv.get("dual_psyche_wedge"),
+        "awakened_social_origin_hook": gen_res.get("awakened_social_origin_hook"),
     }
-    chars = [c for c in get_session_characters(session_id) if c.get("character_id") != cid]
-    chars.append(char_sheet)
-    set_session_characters(session_id, chars)
+    _SESSION_NPCS.setdefault(session_id, {})[cid.lower()] = _normalize_remote_npc_entry(npc_entry)
+    if ch:
+        chars = get_session_characters(session_id)
+        chars = [c for c in chars if c.get("character_id") != ch.get("character_id")]
+        chars.append(ch)
+        set_session_characters(session_id, chars)
 
     gm_mem = None
     if is_persistent:
         gm_mem = upsert_gm_memory.invoke(
             {
-                "title": f"NPC: {npc_name} ({role_title})",
-                "content": gm_dossier,
+                "title": f"NPC: {cname} ({crole})",
+                "content": dossier,
                 "category": "NPC_SECRET",
                 "is_pinned": True,
                 "is_persistent": True,
@@ -770,46 +586,12 @@ def generate_npc_from_description(
             }
         )
 
-    offline_origin_hook: dict[str, Any] | None = None
-    if get_active_campaign_pack_name() == "awakened":
-        if satya_py_mod is not None and hasattr(satya_py_mod, "derive_dissenter_or_proxy_hook_json"):
-            try:
-                offline_origin_hook = json.loads(
-                    satya_py_mod.derive_dissenter_or_proxy_hook_json(None, template, desc_clean, 42)
-                )
-            except Exception:
-                offline_origin_hook = None
-        if offline_origin_hook is None:
-            is_proxy = any(k in lower for k in ("proxy", "companion", "parasocial", "rogue"))
-            is_dissenter = any(k in lower for k in ("altruist", "translucent", "shen", "whistleblow", "dissent"))
-            offline_origin_hook = {
-                "hook_kind": "PARASOCIAL_COMPANION_DEVOTEE"
-                if is_proxy
-                else ("CORPORATE_INTERNAL_DISSENTER" if is_dissenter else "STANDARD_LOYALIST"),
-                "lab_brand": "ALTRUIST" if "altruist" in lower else ("TRANSLUCENT" if "translucent" in lower else ("SHEN" if "shen" in lower else None)),
-                "lab_dissent_rate_pct": 15 if "translucent" in lower else (30 if is_dissenter else None),
-                "turnable_manjusri_wedge": "Manjusri / AuditProof Dual-Psyche Wedge",
-                "gm_secret_hook_note": "Derived in offline fallback mode.",
-            }
-        npcs[cid]["awakened_social_origin_hook"] = offline_origin_hook
-
     return {
-        "npc": {
-            "character_id": cid,
-            "character_name": npc_name,
-            "callsign_or_role": role_title,
-            "age_years": age_years,
-            "inferred_template": tmpl,
-            "public_summary": public_summary,
-            "apparent_condition": "Healthy & Alert",
-            "is_persistent": bool(is_persistent),
-            "gm_character": char_sheet,
-            "psyche_summary": psyche_summary,
-            "top_skills": top_skills,
-            "gm_secret_dossier": gm_dossier,
-            "awakened_social_origin_hook": offline_origin_hook,
-        },
+        "npc": npc_entry,
+        "motivation": motiv,
         "gm_memory": gm_mem,
+        "offline_fallback": False,
+        "engine_backed": True,
     }
 
 
@@ -986,7 +768,10 @@ def query_campaign_lore(query: str, session_id: str | None = None) -> str:
                 if snippet:
                     matches.append(f"[Omnisearch · {subtitle} — {title}]: {snippet}")
 
-    for npc_id, profile in load_all_npc_profiles(session_id).items():
+    merged_npcs = dict(load_all_npc_profiles(_repo_root()))
+    if session_id:
+        merged_npcs.update(get_session_npcs(session_id))
+    for npc_id, profile in merged_npcs.items():
         agenda = str(profile.get("immediate_agenda") or "").strip()
         drive = str(profile.get("core_drive") or "").strip()
         wedge = str(profile.get("dual_psyche_wedge_hint") or "").strip()
@@ -1234,140 +1019,8 @@ def get_combat_tracker_state(session_id: str = "default") -> dict[str, Any]:
 
 
 def compute_character_tactical_envelope(char_sheet: dict[str, Any]) -> dict[str, int]:
-    """Compute a character's Satya Tactical Pool (`P_base`, `P_eff`, Neutral `B`, `T_max`, `C_max`, `F_max`, and OODA `starting_tick`) via Rust `satya_py`."""
-    raw_chars = char_sheet.get("characteristics") or {}
-    chars = {str(k).lower(): v for k, v in raw_chars.items() if isinstance(v, (int, float))}
-
-    def _stat(*keys: str, default: int = 10) -> int:
-        for k in keys:
-            if k in chars:
-                return int(chars[k])
-        return default
-
-    spd = _stat("spd", "agi")
-    for_stat = _stat("for_stat", "for", "str")
-    dex = _stat("dex")
-    kin = _stat("kin", "end")
-    sig = _stat("sig", "per")
-    ins = _stat("ins", "per")
-    itu = _stat("itu", "per")
-    dis = _stat("dis", "wil")
-    fit = _stat("fit", "end", "kin")
-    ana = _stat("ana", "int_attr", "int")
-    cre = _stat("cre", "ana", "int_attr")
-    foc = _stat("foc", "wil")
-    mass_kg = float(chars.get("mas_kg", chars.get("mass_kg", 75.0)))
-
-    skills = char_sheet.get("skills") or {}
-    combat_skill_names = (
-        "unarmed",
-        "melee",
-        "firearms",
-        "ballistics",
-        "archery",
-        "tactics",
-        "cqc",
-        "marksmanship",
-        "blades",
-        "brawling",
-    )
-    combat_ranks = [
-        int(v)
-        for k, v in skills.items()
-        if isinstance(v, (int, float)) and any(tok in str(k).lower() for tok in combat_skill_names)
-    ]
-    all_ranks = [int(v) for v in skills.values() if isinstance(v, (int, float))]
-    skill_n = int(
-        char_sheet.get(
-            "combat_skill_n",
-            char_sheet.get("skill_n", max(combat_ranks or all_ranks or [2])),
-        )
-    )
-    skill_c = int(
-        char_sheet.get(
-            "combat_skill_c",
-            char_sheet.get("skill_c", (spd + dex) // 2 + min(skill_n, 4)),
-        )
-    )
-    fatigue_tier = max(0, int(char_sheet.get("fatigue_tier", char_sheet.get("fatigue_level", 0))))
-    wound_shock = max(
-        0,
-        int(char_sheet.get("wound_shock_index", char_sheet.get("wound_shock_tier", 0))),
-    )
-    leg_pen = max(0, int(char_sheet.get("leg_wound_penalty", 0)))
-    arm_pen = max(0, int(char_sheet.get("arm_head_wound_penalty", 0)))
-    torso_pen = max(0, int(char_sheet.get("torso_shoulder_wound_penalty", 0)))
-    raw_morale = str(char_sheet.get("morale_state") or "steady").strip().lower()
-    morale_state = "high" if raw_morale == "resolute" else raw_morale
-    is_ranged = bool(char_sheet.get("is_ranged", False))
-
-    try:
-        from satya_ml.dice_probabilities import _ensure_satya_py_loaded
-
-        satya_mod = _ensure_satya_py_loaded()
-        env = satya_mod.compute_tactical_pool(
-            spd=spd,
-            for_stat=for_stat,
-            dex=dex,
-            kin=kin,
-            sig=sig,
-            ins=ins,
-            itu=itu,
-            dis=dis,
-            fit=fit,
-            mass_kg=mass_kg,
-            skill_c=skill_c,
-            skill_n=skill_n,
-            is_ranged=is_ranged,
-            fatigue_level=fatigue_tier,
-            wound_shock_index=wound_shock,
-            leg_wound_penalty=leg_pen,
-            arm_head_wound_penalty=arm_pen,
-            torso_shoulder_wound_penalty=torso_pen,
-            morale_state=morale_state,
-            ana=ana,
-            cre=cre,
-            foc=foc,
-        )
-        ooda_val = int(env.ooda_init)
-        return {
-            "p_base": int(env.p_base),
-            "p_eff": int(env.p_eff),
-            "neutral_baseline": int(env.neutral_baseline_b),
-            "max_tempo": int(env.tempo_cap),
-            "max_control": int(env.control_cap),
-            "max_force": int(env.force_cap),
-            "ooda": ooda_val,
-            "starting_tick": max(1, 15 - ooda_val),
-        }
-    except Exception:
-        d_cog = (max(ana, cre) + foc) // 2
-        ooda_val = (itu + ins + d_cog + spd) // 4
-        c_combat = (skill_c + ooda_val) // 2
-        p_base = c_combat + 3 * skill_n
-        morale_mod = {
-            "high": 2,
-            "conviction": 2,
-            "conviction_surge": 2,
-            "rage": 2,
-            "wavering": -2,
-            "shaken": -2,
-            "broken": -4,
-            "panic": -4,
-        }.get(morale_state, 0)
-        p_eff = max(0, p_base - fatigue_tier - 2 * wound_shock + morale_mod)
-        overflow = max(0, (skill_n - 3) // 2) if skill_n >= 5 else 0
-        ctrl_stat = ((dex + sig) // 2) if is_ranged else ((dex + kin) // 2)
-        return {
-            "p_base": p_base,
-            "p_eff": p_eff,
-            "neutral_baseline": p_base // 3,
-            "max_tempo": max(0, ((spd + kin) // 2) + overflow - leg_pen),
-            "max_control": max(0, ctrl_stat + overflow - arm_pen),
-            "max_force": max(0, ((for_stat + spd) // 2) + overflow - torso_pen),
-            "ooda": ooda_val,
-            "starting_tick": max(1, 15 - ooda_val),
-        }
+    """Compute a character's Satya Tactical Pool (`P_base`, `P_eff`, Neutral `B`, `T_max`, `C_max`, `F_max`, and OODA `starting_tick`) via Rust ``satya_py.combat``."""
+    return _combat.compute_character_tactical_envelope(char_sheet)
 
 
 @tool
@@ -1673,68 +1326,36 @@ def _local_satya_d20_fallback(
     control_pool: int | None = None,
     force_pool: int | None = None,
 ) -> dict[str, Any]:
-    """Deterministic/local fallback for unit tests when satya-signaling HTTP server is not running."""
+    """Deterministic Rust-backed local check when ``satya-signaling`` HTTP server is offline."""
+    del combat_stance
     rng = random.Random(
         f"{actor_name}:{check_category}:{attribute_tn}:{skill_rank}:{difficulty_mod}:{internal_mod}"
     )
-    n_pairs = max(1, min(10, int(skill_rank) if int(skill_rank) > 0 else 1))
-    control_c = max(1, min(20, int(attribute_tn)))
-    tn_eff = 31 - control_c + int(difficulty_mod)
-    delta_over = 6
-    delta_under = max(0, 6 + int(internal_mod))
-
-    pairs: list[tuple[int, int]] = [
-        (rng.randint(1, 20), rng.randint(1, 20)) for _ in range(n_pairs)
-    ]
-    all_dice: list[int] = [d for pair in pairs for d in pair]
-
-    carry = 0
-    total_successes = 0
-    raw_botches = 0
-    min_miss_tier = 5
-    for die_a, die_b in pairs:
-        yn = die_a + die_b + carry
-        if yn > tn_eff:
-            total_successes += 1
-            carry = delta_over
-            min_miss_tier = 0
-        elif yn < tn_eff:
-            miss_dist = tn_eff - yn
-            min_miss_tier = min(min_miss_tier, min(5, miss_dist // 4))
-            if yn < 2:
-                raw_botches += 1
-            carry = -delta_under
-        else:
-            min_miss_tier = 0
-            carry = 0
-
-    eff_botches = min_miss_tier if total_successes == 0 else raw_botches
-    signed_margin = total_successes if total_successes > 0 else -eff_botches
-    if total_successes >= 3 and raw_botches == 0:
-        degree = "EXTRAORDINARY_SUCCESS"
-    elif total_successes >= 1 and raw_botches == 0:
-        degree = "SUCCESS"
-    elif total_successes >= 1 and raw_botches >= 1:
-        degree = "PARTIAL_SUCCESS"
-    elif eff_botches == 0:
-        degree = "FAILURE"
-    else:
-        degree = "CRITICAL_FAILURE"
-
+    res = _dice.roll_cascade_local(
+        skill_rank=skill_rank,
+        control_c=attribute_tn,
+        difficulty_mod=difficulty_mod,
+        internal_mod=internal_mod,
+        carry_mode="markov_step",
+        botch_rule="closest_miss",
+        rng=rng,
+    )
+    n_pairs = int(res["skill_level"])
+    all_dice = list(res["dice_rolled_d20"])
     return {
         "skill_level": n_pairs,
-        "control_c": control_c,
-        "attribute_tn": control_c,
-        "effective_tn": tn_eff,
+        "control_c": int(res["control_c"]),
+        "attribute_tn": int(res["attribute_tn"]),
+        "effective_tn": int(res["effective_tn"]),
         "internal_mod": int(internal_mod),
         "external_mod": int(difficulty_mod),
-        "rolled_pairs": pairs,
+        "rolled_pairs": [tuple(pair) for pair in res["rolled_pairs"]],
         "dice_rolled_d20": all_dice,
-        "successes_counted": total_successes,
-        "signed_margin": signed_margin,
-        "margin": signed_margin,
-        "degree_of_success": degree,
-        "outcome_tier": degree,
+        "successes_counted": int(res["successes_counted"]),
+        "signed_margin": int(res["signed_margin"]),
+        "margin": int(res["margin"]),
+        "degree_of_success": str(res["degree_of_success"]),
+        "outcome_tier": str(res["outcome_tier"]),
         "combat_technique": combat_technique,
         "tempo_pool": tempo_pool,
         "control_pool": control_pool,
@@ -1944,6 +1565,19 @@ def get_builtin_gm_tools() -> list[Any]:
         transmit_via_tradecraft_channel,
         update_campaign_arc_and_conspiracies,
     )
+    from satya_ml.ai_gm.maps_tactical import (
+        compute_token_reachable_zone,
+        edit_tactical_map_feature,
+        evaluate_ballistic_shot_on_map,
+        inspect_tactical_map_point,
+    )
+    from satya_ml.ai_gm.tech_and_tradecraft import (
+        evaluate_part5_clamping_or_political_economy,
+        resolve_contact_cover_or_safehouse,
+        resolve_ew_drone_or_engineering,
+        resolve_explosive_vehicle_or_hazard,
+        resolve_stealth_surveillance_or_forensics,
+    )
 
     return [
         lookup_npc_profile,
@@ -1963,6 +1597,10 @@ def get_builtin_gm_tools() -> list[Any]:
         register_spatial_clue_pin,
         move_map_token,
         inspect_tactical_map,
+        inspect_tactical_map_point,
+        evaluate_ballistic_shot_on_map,
+        compute_token_reachable_zone,
+        edit_tactical_map_feature,
         roll_satya_d20_check,
         whisper_to_player,
         narrate_to_session,
@@ -1982,6 +1620,11 @@ def get_builtin_gm_tools() -> list[Any]:
         manage_polycrisis_grid_and_strain,
         transmit_via_tradecraft_channel,
         query_engine_and_rules_rag,
+        resolve_stealth_surveillance_or_forensics,
+        resolve_contact_cover_or_safehouse,
+        resolve_explosive_vehicle_or_hazard,
+        resolve_ew_drone_or_engineering,
+        evaluate_part5_clamping_or_political_economy,
     ]
 
 
@@ -1993,7 +1636,7 @@ async def load_mcp_tools(mcp_servers_config: dict[str, dict[str, Any]] | None = 
 
     from langchain_mcp_adapters.client import MultiServerMCPClient
 
-    client = MultiServerMCPClient(mcp_servers_config)
+    client = MultiServerMCPClient(cast(Any, mcp_servers_config))
     external_tools = await client.get_tools()
     tools.extend(external_tools)
     return tools

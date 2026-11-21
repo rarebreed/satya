@@ -737,8 +737,7 @@ impl OutdoorBuilder {
                     wall_edges: self.edges,
                     props: self.props,
                     surfaces: self.surfaces,
-                    floors: Vec::new(),
-                    active_floor: 0,
+                    ..ProceduralSector::default()
                 };
             }
             match self
@@ -754,8 +753,7 @@ impl OutdoorBuilder {
                         wall_edges: self.edges,
                         props: self.props,
                         surfaces: self.surfaces,
-                        floors: Vec::new(),
-                        active_floor: 0,
+                        ..ProceduralSector::default()
                     };
                 }
             }

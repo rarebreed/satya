@@ -17,9 +17,9 @@ use axum::{
 use satya_maps::tactical_map::build_procedural_map_request;
 use satya_maps::tactical_map_geom::resolve_token_destination_cm;
 use satya_schema::{
-    CanvasEventType, GmLookupHit, GmLookupSourceKind, GmOmnisearchResponse, MessageVisibility,
-    MoveMapTokenRequest, SessionRole, TokenPlacement, TokenVisualSpec, UpdateCombatTrackerRequest,
-    sanitize_portrait_url,
+    CanvasEventType, EdgeSide, GmLookupHit, GmLookupSourceKind, GmOmnisearchResponse,
+    MessageVisibility, MoveMapTokenRequest, PlayerAiDoorRequest, SessionRole, TokenPlacement,
+    TokenVisualSpec, UpdateCombatTrackerRequest, WallEdgeKind, sanitize_portrait_url,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -142,11 +142,25 @@ pub async fn player_ai_move_map_token_handler(
         .find(|t| t.entity_id == req.entity_id)
         .map(|t| map.token_pos_cm(t));
     let target_floor = req.to_floor.unwrap_or(current_floor);
-    let (final_x_cm, final_y_cm) = match if target_floor == map.active_floor {
+    let (final_x_cm, final_y_cm) = match if target_floor == map.active_floor && target_floor == current_floor {
         resolve_token_destination_cm(&map, &req.entity_id, req_x_cm, req_y_cm)
     } else {
         let mut floor_view = map.clone();
         floor_view.switch_active_floor(target_floor);
+        if target_floor != current_floor
+            && let Some((px_cm, py_cm)) = crate::map_handlers::find_target_floor_portal_center_cm(
+                &map,
+                target_floor,
+                (req_x_cm, req_y_cm),
+            )
+        {
+            let f_cell = floor_view.cell_size_cm.max(25);
+            if let Some(tok) = floor_view.tokens.iter_mut().find(|t| t.entity_id == req.entity_id) {
+                tok.x = (px_cm / f_cell).clamp(0, (floor_view.grid_width - 1).max(0));
+                tok.y = (py_cm / f_cell).clamp(0, (floor_view.grid_height - 1).max(0));
+            }
+            floor_view.set_token_pos_cm(&req.entity_id, px_cm, py_cm);
+        }
         resolve_token_destination_cm(&floor_view, &req.entity_id, req_x_cm, req_y_cm)
     } {
         Ok(coords) => coords,
@@ -315,10 +329,181 @@ pub async fn player_ai_move_map_token_handler(
     )
     .await;
     broadcast_role_filtered_map(&state, sid, &ctx.roster, &map).await;
+    crate::map_handlers::dispatch_passive_movement_whispers(
+        &state,
+        sid,
+        &req.entity_id,
+        &map,
+        &crate::map_handlers::PassiveWhisperContext {
+            roster: &ctx.roster,
+            session_characters: &ctx.session_characters,
+            session_mode: ctx.session_mode,
+            ai_gm_participant: ctx.ai_gm_participant.as_ref(),
+        },
+    )
+    .await;
 
     (
         StatusCode::OK,
         Json(filter_map_for_role(&map, SessionRole::Player)),
+    )
+        .into_response()
+}
+
+/// Toggles an unlocked door (`DoorClosed` <-> `DoorOpen`) within `2.0m` (`200cm`) of an AI Player's
+/// current token position on the same floor (`POST /api/player-ai/sessions/:session_id/door`).
+pub async fn player_ai_session_door_handler(
+    State(state): State<Arc<SignalingAppState>>,
+    Path(session_id): Path<String>,
+    headers: HeaderMap,
+    Json(req): Json<PlayerAiDoorRequest>,
+) -> impl IntoResponse {
+    if let Err(err_resp) = verify_gm_service_header(&state, &headers) {
+        return err_resp.into_response();
+    }
+    let sid = session_id.trim();
+    state.ensure_session_ai_players_loaded(sid).await;
+    let Some((ctx, _)) = state.auth.get_session_gm_context(sid).await else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": format!("Session '{sid}' not found") })),
+        )
+            .into_response();
+    };
+    let uid = req.user_id.trim();
+    let actor = state
+        .ai_players
+        .read()
+        .await
+        .get(sid)
+        .and_then(|m| m.get(uid))
+        .map(|e| e.participant.clone())
+        .or_else(|| ctx.roster.iter().find(|p| p.user_id == uid).cloned());
+    let Some(actor) = actor else {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": format!("AI Player '{uid}' is not a participant in session '{sid}'") })),
+        )
+            .into_response();
+    };
+
+    let Some(mut map) = ctx.active_map else {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "No active tactical map in this session" })),
+        )
+            .into_response();
+    };
+    ensure_vector_map_ready(&mut map);
+
+    let tok_opt = map
+        .tokens
+        .iter()
+        .find(|t| t.entity_id == uid)
+        .or_else(|| {
+            actor
+                .character_id
+                .as_deref()
+                .and_then(|cid| map.tokens.iter().find(|t| t.entity_id == cid))
+        })
+        .cloned();
+    let Some(tok) = tok_opt else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": format!("Token for '{uid}' is not placed on the tactical map") })),
+        )
+            .into_response();
+    };
+
+    let tok_floor = map.token_floor(&tok.entity_id);
+    let (tx_cm, ty_cm) = map.token_pos_cm(&tok);
+    let cell_cm = map.cell_size_cm.max(25);
+    let (ex_cm, ey_cm) = match req.side {
+        EdgeSide::North => (
+            (req.cell_x * cell_cm + cell_cm / 2) as f32,
+            (req.cell_y * cell_cm) as f32,
+        ),
+        EdgeSide::West => (
+            (req.cell_x * cell_cm) as f32,
+            (req.cell_y * cell_cm + cell_cm / 2) as f32,
+        ),
+    };
+    if (ex_cm - tx_cm as f32).hypot(ey_cm - ty_cm as f32) > 200.0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Target door edge is farther than 2.0m (200cm) from AI Player token" })),
+        )
+            .into_response();
+    }
+
+    let toggled_kind = if tok_floor == map.active_floor {
+        let Some(edge) = map.wall_edges.iter_mut().find(|e| {
+            e.x == req.cell_x
+                && e.y == req.cell_y
+                && e.side == req.side
+                && matches!(e.kind, WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen)
+        }) else {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "No door exists at the requested cell edge on this floor" })),
+            )
+                .into_response();
+        };
+        edge.kind = match edge.kind {
+            WallEdgeKind::DoorClosed => WallEdgeKind::DoorOpen,
+            WallEdgeKind::DoorOpen => WallEdgeKind::DoorClosed,
+            other => other,
+        };
+        let nk = edge.kind;
+        map.sync_active_floor_snapshot();
+        nk
+    } else if let Some(fl) = map.floors.iter_mut().find(|f| f.floor_index == tok_floor) {
+        let Some(edge) = fl.wall_edges.iter_mut().find(|e| {
+            e.x == req.cell_x
+                && e.y == req.cell_y
+                && e.side == req.side
+                && matches!(e.kind, WallEdgeKind::DoorClosed | WallEdgeKind::DoorOpen)
+        }) else {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "No door exists at the requested cell edge on this floor" })),
+            )
+                .into_response();
+        };
+        edge.kind = match edge.kind {
+            WallEdgeKind::DoorClosed => WallEdgeKind::DoorOpen,
+            WallEdgeKind::DoorOpen => WallEdgeKind::DoorClosed,
+            other => other,
+        };
+        edge.kind
+    } else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": format!("Floor {tok_floor} not found on tactical map") })),
+        )
+            .into_response();
+    };
+
+    let _ = state.auth.set_session_active_map(sid, map.clone()).await;
+    log_map_canvas_event(
+        &state,
+        sid,
+        ctx.session_mode,
+        CanvasEventType::MapUpdated,
+        &actor,
+        &map,
+    )
+    .await;
+    broadcast_role_filtered_map(&state, sid, &ctx.roster, &map).await;
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "status": "toggled",
+            "floor_index": tok_floor,
+            "new_kind": toggled_kind,
+            "map": filter_map_for_role(&map, SessionRole::Player),
+        })),
     )
         .into_response()
 }

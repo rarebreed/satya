@@ -307,9 +307,13 @@ pub fn can_author_map(self_part: Option<&Participant>, roster: &[Participant]) -
     let has_human_gm = roster
         .iter()
         .any(|p| p.role == SessionRole::Gm && p.participant_kind == ParticipantKind::Human);
+    let human_count = roster
+        .iter()
+        .filter(|p| p.participant_kind == ParticipantKind::Human)
+        .count();
     let is_gm_or_host =
         self_part.is_some_and(|p| matches!(p.role, SessionRole::Gm | SessionRole::Host));
-    is_gm_or_host || !has_human_gm
+    is_gm_or_host || (!has_human_gm && human_count <= 1)
 }
 
 /// Checks whether the local browser user is permitted to continue or edit the active session map.

@@ -144,9 +144,14 @@ macro_rules! for_all_window_callbacks {
             "satyaAiGmProviderChanged" => satya_ai_gm_provider_changed(),
             "satyaMenuAiGmProviderChanged" => satya_menu_ai_gm_provider_changed(),
             "satyaUpdateSessionGmConfig" => satya_update_session_gm_config(),
+            "satyaTriggerAiGmOpeningScene" => satya_trigger_ai_gm_opening_scene(),
             "satyaToggleAiPlayerSettings" => satya_toggle_ai_player_settings(),
+            "satyaMenuAiPlayerProviderChanged" => satya_menu_ai_player_provider_changed(),
             "satyaSpawnSessionAiPlayer" => satya_spawn_session_ai_player(),
             "satyaStepSessionAiPlayer" => satya_step_session_ai_player(),
+            "satyaRemoveSessionAiPlayer" => satya_remove_session_ai_player(),
+            "satyaToggleAiRallyPaused" => satya_toggle_ai_rally_paused(),
+            "satyaUpdateAiRallySettings" => satya_update_ai_rally_settings(),
 
             // WebRTC Media, Drawers & Telemetry
             "satyaStartCamera" => satya_start_camera(),

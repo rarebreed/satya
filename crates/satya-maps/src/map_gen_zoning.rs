@@ -169,6 +169,73 @@ fn safe_x_span(w: i32) -> (i32, i32) {
     (pad, (w - pad).max(pad + 4).min(w - 1))
 }
 
+/// Finds the actual exterior door coordinate along `entry` for `lot`.
+fn find_lot_front_door_coord(
+    edges: &[MapWallEdge],
+    lot: LotBox,
+    entry: CardinalEntry,
+) -> Option<i32> {
+    edges
+        .iter()
+        .find(|e| {
+            matches!(e.kind, WallEdgeKind::DoorOpen | WallEdgeKind::DoorClosed)
+                && match entry {
+                    CardinalEntry::North => {
+                        e.side == EdgeSide::North && e.y == lot.y0 && e.x >= lot.x0 && e.x < lot.x1
+                    }
+                    CardinalEntry::South => {
+                        e.side == EdgeSide::North && e.y == lot.y1 && e.x >= lot.x0 && e.x < lot.x1
+                    }
+                    CardinalEntry::West => {
+                        e.side == EdgeSide::West && e.x == lot.x0 && e.y >= lot.y0 && e.y < lot.y1
+                    }
+                    CardinalEntry::East => {
+                        e.side == EdgeSide::West && e.x == lot.x1 && e.y >= lot.y0 && e.y < lot.y1
+                    }
+                }
+        })
+        .map(|e| match entry {
+            CardinalEntry::North | CardinalEntry::South => e.x,
+            CardinalEntry::West | CardinalEntry::East => e.y,
+        })
+}
+
+/// Places an upstairs stairwell inside a commercial 1F bay without slicing 1F partition walls.
+fn place_commercial_stairwell_safe(
+    b: &mut OutdoorBuilder,
+    bay: LotBox,
+    st_x: i32,
+    st_y: i32,
+    rot_deg: i32,
+) {
+    let candidates = [
+        (st_x, st_y, rot_deg),
+        (bay.x0, bay.y0, 0),
+        (bay.x0 + 1, bay.y0, 0),
+        ((bay.x1 - 2).max(bay.x0), bay.y0, 0),
+        (bay.x0, (bay.y1 - 3).max(bay.y0), 0),
+        (bay.x0, bay.y0, 90),
+    ];
+    let picked = candidates
+        .into_iter()
+        .map(|(x, y, r)| make_prop(PropKind::Stairwell, x, y, r, None, 0))
+        .find(|cand| {
+            cand.x >= bay.x0
+                && cand.y >= bay.y0
+                && cand.x + cand.w_cells <= bay.x1
+                && cand.y + cand.h_cells <= bay.y1
+                && !crate::tactical_map_geom::prop_crosses_wall_edge(cand, &b.edges)
+        });
+    let Some(stair_prop) = picked else {
+        return;
+    };
+    b.props.retain(|existing| {
+        prop_spec(existing.kind).floor_layer
+            || !crate::tactical_map_geom::props_overlap_continuous(existing, &stair_prop)
+    });
+    b.props.push(stair_prop);
+}
+
 /// Emits a front walk spur from a building entrance to the sidewalk or curb with exposed yard length.
 fn add_entry_walk(
     b: &mut OutdoorBuilder,
@@ -538,8 +605,9 @@ fn build_apartment_slab_floor(
 
     let horiz_corr = slab.w() >= slab.h() && slab.h() >= 6;
     let corr_box = if horiz_corr {
-        let cy0 = (slab.y0 + slab.h() / 2 - 1).clamp(slab.y0 + 2, slab.y1 - 3);
-        let cy1 = (cy0 + 2).min(slab.y1 - 2);
+        let cy0_lo = slab.y0 + 2;
+        let cy0 = (slab.y0 + slab.h() / 2 - 1).clamp(cy0_lo, (slab.y1 - 3).max(cy0_lo));
+        let cy1 = (cy0 + 2).min((slab.y1 - 2).max(cy0 + 1)).min(slab.y1);
         if floor_idx == 0 {
             for e in edges.iter_mut() {
                 if (e.x == slab.x0 || e.x == slab.x1)
@@ -626,8 +694,9 @@ fn build_apartment_slab_floor(
         }
         LotBox::new(slab.x0, cy0, slab.x1, cy1)
     } else {
-        let cx0 = (slab.x0 + slab.w() / 2 - 1).clamp(slab.x0 + 2, slab.x1 - 4);
-        let cx1 = (cx0 + 2).min(slab.x1 - 2);
+        let cx0_lo = slab.x0 + 2;
+        let cx0 = (slab.x0 + slab.w() / 2 - 1).clamp(cx0_lo, (slab.x1 - 4).max(cx0_lo));
+        let cx1 = (cx0 + 2).min((slab.x1 - 2).max(cx0 + 1)).min(slab.x1);
         if floor_idx == 0 {
             for e in edges.iter_mut() {
                 if (e.y == slab.y0 || e.y == slab.y1)
@@ -786,22 +855,44 @@ fn build_projects_complex(
     };
 
     for (i, slab) in slabs.iter().copied().enumerate() {
+        let horiz_corr = slab.w() >= slab.h() && slab.h() >= 6;
         let f1 = build_apartment_slab_floor(w, h, slab, 0, seed + i as u64 * 101);
         let f2 = build_apartment_slab_floor(w, h, slab, 1, seed + i as u64 * 101);
         FloorStack::absorb_ground(b, f1);
         stack.absorb_upper(f2);
-        let walk_entry = if street_north {
-            CardinalEntry::North
+        if horiz_corr {
+            let cy0_lo = slab.y0 + 2;
+            let cy0 = (slab.y0 + slab.h() / 2 - 1).clamp(cy0_lo, (slab.y1 - 3).max(cy0_lo));
+            let door_ym = cy0 as f32 + 1.0;
+            let flank_x = if i == 0 && slab.x0 >= 2 {
+                slab.x0 as f32 - 0.75
+            } else {
+                slab.x1 as f32 + 0.75
+            };
+            let entry_x = if i == 0 && slab.x0 >= 2 {
+                slab.x0 as f32
+            } else {
+                slab.x1 as f32
+            };
+            b.add_ribbon(
+                SurfaceFeatureKind::ConcreteWalk,
+                &[(flank_x, walk_y), (flank_x, door_ym), (entry_x, door_ym)],
+                145,
+            );
         } else {
-            CardinalEntry::South
-        };
-        add_entry_walk(
-            b,
-            slab,
-            walk_entry,
-            SurfaceFeatureKind::ConcreteWalk,
-            walk_y,
-        );
+            let walk_entry = if street_north {
+                CardinalEntry::North
+            } else {
+                CardinalEntry::South
+            };
+            add_entry_walk(
+                b,
+                slab,
+                walk_entry,
+                SurfaceFeatureKind::ConcreteWalk,
+                walk_y,
+            );
+        }
     }
 
     let _ = b.place_vehicle_along_ribbon(PropKind::Car, street_idx, 0.25, 0.20, 5);
@@ -938,16 +1029,7 @@ fn build_urban_rowhouse_neighborhood(
                     seed.wrapping_add(0x2F00 + i as u64 * 89),
                 );
                 for st in &upstairs.stair_anchors {
-                    let stair_prop =
-                        make_prop(PropKind::Stairwell, st.x, st.y, st.rot_deg, None, 0);
-                    b.props.retain(|existing| {
-                        prop_spec(existing.kind).floor_layer
-                            || !crate::tactical_map_geom::props_overlap_continuous(
-                                existing,
-                                &stair_prop,
-                            )
-                    });
-                    b.props.push(stair_prop);
+                    place_commercial_stairwell_safe(b, bay, st.x, st.y, st.rot_deg);
                 }
                 if let Some(f2) = upstairs.upper {
                     stack.absorb_upper(f2);
@@ -993,17 +1075,22 @@ fn build_urban_rowhouse_neighborhood(
                 &pads,
                 seed.wrapping_add(i as u64 * 97),
             );
+            let door_x = find_lot_front_door_coord(&home.ground.wall_edges, unit_lot, entry);
             stack.absorb_home(b, home, allow_basement && i == 0);
-            add_entry_walk(
-                b,
-                unit_lot,
-                entry,
+            let walk_x = door_x.map_or((unit_lot.x0 + unit_lot.x1) as f32 * 0.5, |x| x as f32 + 0.5);
+            let front_y = if street_north {
+                unit_lot.y0 as f32
+            } else {
+                unit_lot.y1 as f32
+            };
+            b.add_ribbon(
                 SurfaceFeatureKind::BrickPaverWalk,
-                walk_y,
+                &[(walk_x, front_y), (walk_x, walk_y)],
+                145,
             );
 
-            let mx = unit_lot.x0 + unit_lot.w() / 2;
-            let stoop_x = (mx - 1).clamp(unit_lot.x0, unit_lot.x1 - 2);
+            let mx = door_x.unwrap_or(unit_lot.x0 + unit_lot.w() / 2);
+            let stoop_x = mx.clamp(unit_lot.x0, unit_lot.x1 - 2);
             let stoop_y = if street_north {
                 (unit_lot.y0 - 2).max(1)
             } else {
@@ -1585,16 +1672,15 @@ fn build_luxury_mansion_site(
     );
 
     let (sx0, sx1) = safe_x_span(w);
-    let comp = LotBox::new(
-        sx0.max(3),
-        if gate_south { 2 } else { 3 },
-        sx1.min(w - 3),
-        if gate_south {
-            (h - 3).max(10)
-        } else {
-            (h - 2).max(10)
-        },
-    );
+    let comp_x0 = sx0.max(3).min((w - 2).max(1));
+    let comp_x1 = sx1.min(w - 3).max((comp_x0 + 2).min(w - 1));
+    let comp_y0 = (if gate_south { 2 } else { 3 }).min((h - 3).max(1));
+    let comp_y1 = if gate_south {
+        (h - 3).max(10.min(h - 1))
+    } else {
+        (h - 2).max(10.min(h - 1))
+    };
+    let comp = LotBox::new(comp_x0, comp_y0, comp_x1, comp_y1);
     let manor_pad_x = if comp.w() >= 18 { 3 } else { 2 };
     let rear_lawn = if h >= 28 {
         8
@@ -1607,27 +1693,44 @@ fn build_luxury_mansion_site(
     };
     let (manor_y0, manor_y1) = if gate_south {
         let y0 = (comp.y0 + 1 + rear_lawn).min((comp.y1 - 13).max(comp.y0 + 1));
-        let y1 = (comp.y1 - 2).max(y0 + 5);
-        (y0, y1)
+        let y1 = (comp.y1 - 2).max(y0 + 5).min(h - 1);
+        (y0.min((y1 - 2).max(1)), y1)
     } else {
-        let y0 = comp.y0 + 2;
+        let y0 = (comp.y0 + 2).min((comp.y1 - 2).max(1));
         let y1 = (comp.y1 - 1 - rear_lawn)
             .max((y0 + 11).min(comp.y1 - 1))
-            .max(y0 + 5);
+            .max(y0 + 5)
+            .min(h - 1);
         (y0, y1)
     };
-    let manor = LotBox::new(
-        (comp.x0 + manor_pad_x).min(comp.x1 - 7),
-        manor_y0,
-        (comp.x1 - manor_pad_x).max(comp.x0 + 8),
-        manor_y1,
-    );
+    let manor_x0 = (comp.x0 + manor_pad_x)
+        .min((comp.x1 - 7).max(1))
+        .clamp(1, (w - 3).max(1));
+    let manor_x1 = (comp.x1 - manor_pad_x)
+        .max((comp.x0 + 8).min(w - 1))
+        .clamp((manor_x0 + 2).min(w - 1), w - 1);
+    let manor = LotBox::new(manor_x0, manor_y0, manor_x1, manor_y1);
     let entry = if gate_south {
         CardinalEntry::South
     } else {
         CardinalEntry::North
     };
-    let gate_x = (manor.x0 + manor.x1) / 2;
+    let pads = b.spawn_pads_m.clone();
+    let home = generate_home_in_lot(
+        w,
+        h,
+        manor,
+        tier,
+        entry,
+        true,
+        true,
+        true,
+        &pads,
+        seed ^ 0x00E5_7A7E,
+    );
+    let gate_x =
+        find_lot_front_door_coord(&home.ground.wall_edges, manor, entry).unwrap_or((manor.x0 + manor.x1) / 2);
+    stack.absorb_home(b, home, true);
 
     let approach_y = if gate_south {
         manor.y1 as f32
@@ -1654,20 +1757,6 @@ fn build_luxury_mansion_site(
     }
 
     add_estate_perimeter(b, comp, gate_x, gate_south);
-    let pads = b.spawn_pads_m.clone();
-    let home = generate_home_in_lot(
-        w,
-        h,
-        manor,
-        tier,
-        entry,
-        true,
-        true,
-        true,
-        &pads,
-        seed ^ 0x00E5_7A7E,
-    );
-    stack.absorb_home(b, home, true);
 
     let has_pool = b
         .surfaces
@@ -1804,7 +1893,21 @@ fn build_rural_countryside(
     } else {
         CardinalEntry::South
     };
-    let entry_m = (lot.x0 + lot.x1) as f32 * 0.5;
+    let pads = b.spawn_pads_m.clone();
+    let home = generate_home_in_lot(
+        w,
+        h,
+        lot,
+        tier,
+        entry,
+        lot.w() >= 8 && lot.h() >= 6,
+        tier == EconomicTier::LuxuryMansion,
+        true,
+        &pads,
+        seed ^ 0x00A9_41CE,
+    );
+    let entry_m = find_lot_front_door_coord(&home.ground.wall_edges, lot, entry)
+        .map_or((lot.x0 + lot.x1) as f32 * 0.5, |c| c as f32 + 0.5);
     let drive_end_y = if variant == 1 {
         lot.y0 as f32
     } else {
@@ -1845,20 +1948,6 @@ fn build_rural_countryside(
         );
         b.add_ribbon(SurfaceFeatureKind::DirtTrail, &foot_pts, 130);
     }
-
-    let pads = b.spawn_pads_m.clone();
-    let home = generate_home_in_lot(
-        w,
-        h,
-        lot,
-        tier,
-        entry,
-        lot.w() >= 8 && lot.h() >= 6,
-        tier == EconomicTier::LuxuryMansion,
-        true,
-        &pads,
-        seed ^ 0x00A9_41CE,
-    );
     stack.absorb_home(b, home, tier == EconomicTier::LuxuryMansion);
 
     let _ = b.place_vehicle_along_ribbon(PropKind::UtilityVan, lane_idx, 0.30, 0.1, 10);
@@ -1995,16 +2084,7 @@ fn build_downtown_commercial(
                 seed.wrapping_add(0x2F00 + i as u64),
             );
             for st in &upstairs.stair_anchors {
-                let stair_prop = make_prop(PropKind::Stairwell, st.x, st.y, st.rot_deg, None, 0);
-                // Clear any ground-floor solid prop overlapped by the vertical stairwell landing.
-                b.props.retain(|existing| {
-                    prop_spec(existing.kind).floor_layer
-                        || !crate::tactical_map_geom::props_overlap_continuous(
-                            existing,
-                            &stair_prop,
-                        )
-                });
-                b.props.push(stair_prop);
+                place_commercial_stairwell_safe(b, bay, st.x, st.y, st.rot_deg);
             }
             if let Some(f2) = upstairs.upper {
                 stack.absorb_upper(f2);

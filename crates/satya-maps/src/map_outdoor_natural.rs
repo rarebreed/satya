@@ -1679,8 +1679,8 @@ pub(crate) fn build_wooded_park(b: &mut OutdoorBuilder) {
     place_rot_m(
         b,
         PropKind::PicnicTable,
-        clear_x + 1.4,
-        clear_y + 0.7,
+        clear_x + 2.4,
+        clear_y + 1.2,
         0,
         90,
         true,
@@ -1688,8 +1688,8 @@ pub(crate) fn build_wooded_park(b: &mut OutdoorBuilder) {
     place_rot_m(
         b,
         PropKind::BbqGrill,
-        clear_x + 2.0,
-        clear_y + 0.7,
+        clear_x + 2.8,
+        clear_y - 0.9,
         0,
         360,
         true,
@@ -1697,7 +1697,7 @@ pub(crate) fn build_wooded_park(b: &mut OutdoorBuilder) {
     place_rot_m(
         b,
         PropKind::ParkBench,
-        clear_x - 1.4,
+        clear_x - 2.4,
         clear_y,
         -25,
         26,
@@ -1706,8 +1706,8 @@ pub(crate) fn build_wooded_park(b: &mut OutdoorBuilder) {
     place_rot_m(
         b,
         PropKind::TrashCan,
-        clear_x - 1.8,
-        clear_y + 0.4,
+        clear_x - 2.8,
+        clear_y + 1.1,
         0,
         360,
         true,

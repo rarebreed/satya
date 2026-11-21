@@ -7,12 +7,10 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use satya_schema::{MapSurfaceFeature, SurfaceFeatureKind, SurfaceShapeKind};
+use satya_schema::SurfaceFeatureKind;
 use serde::{Deserialize, Serialize};
 
-use crate::map_surface_geom::{
-    distance_point_to_polyline_m, point_in_ring_m, sample_open_catmull_rom_m, sampled_closed_ring_m,
-};
+use crate::map_surface_queries::PreparedSurfaceGrid;
 use crate::tactical_map::TacticalSceneView;
 use crate::tactical_map_geom::{NAV_STEP_M, TOKEN_RADIUS_M};
 use crate::tactical_map_spatial::{SpatialObstacleIndex, SpatialWallFilter};
@@ -165,97 +163,6 @@ pub struct GaitReachQuery {
     pub tick_budget: u32,
 }
 
-enum PreSampledShape {
-    Ribbon { pts: Vec<(f32, f32)>, half_w: f32 },
-    Ring { pts: Vec<(f32, f32)> },
-}
-
-struct PreSampledSurface {
-    kind: SurfaceFeatureKind,
-    prio: u8,
-    min_x: f32,
-    min_y: f32,
-    max_x: f32,
-    max_y: f32,
-    shape: PreSampledShape,
-}
-
-impl PreSampledSurface {
-    fn from_feature(s: &MapSurfaceFeature) -> Option<Self> {
-        if s.points_cm.is_empty() {
-            return None;
-        }
-        let prio = s.kind.layer_priority();
-        match s.shape {
-            SurfaceShapeKind::RibbonSpline => {
-                let raw: Vec<(f32, f32)> = s.points_cm.iter().map(|p| p.to_m()).collect();
-                let pts = sample_open_catmull_rom_m(&raw, 6);
-                let half_w = (s.width_cm.max(10) as f32) / 200.0;
-                let (mut min_x, mut min_y, mut max_x, mut max_y) = (
-                    f32::INFINITY,
-                    f32::INFINITY,
-                    f32::NEG_INFINITY,
-                    f32::NEG_INFINITY,
-                );
-                for &(x, y) in &pts {
-                    min_x = min_x.min(x - half_w);
-                    min_y = min_y.min(y - half_w);
-                    max_x = max_x.max(x + half_w);
-                    max_y = max_y.max(y + half_w);
-                }
-                Some(Self {
-                    kind: s.kind,
-                    prio,
-                    min_x,
-                    min_y,
-                    max_x,
-                    max_y,
-                    shape: PreSampledShape::Ribbon { pts, half_w },
-                })
-            }
-            SurfaceShapeKind::OrganicClosed | SurfaceShapeKind::Polygon => {
-                let pts = sampled_closed_ring_m(s);
-                if pts.len() < 3 {
-                    return None;
-                }
-                let (mut min_x, mut min_y, mut max_x, mut max_y) = (
-                    f32::INFINITY,
-                    f32::INFINITY,
-                    f32::NEG_INFINITY,
-                    f32::NEG_INFINITY,
-                );
-                for &(x, y) in &pts {
-                    min_x = min_x.min(x);
-                    min_y = min_y.min(y);
-                    max_x = max_x.max(x);
-                    max_y = max_y.max(y);
-                }
-                Some(Self {
-                    kind: s.kind,
-                    prio,
-                    min_x,
-                    min_y,
-                    max_x,
-                    max_y,
-                    shape: PreSampledShape::Ring { pts },
-                })
-            }
-        }
-    }
-
-    fn contains(&self, px: f32, py: f32) -> bool {
-        if px < self.min_x || px > self.max_x || py < self.min_y || py > self.max_y {
-            return false;
-        }
-        match &self.shape {
-            PreSampledShape::Ribbon { pts, half_w } => {
-                distance_point_to_polyline_m(px, py, pts) <= *half_w
-            }
-            PreSampledShape::Ring { pts } => point_in_ring_m(px, py, pts),
-        }
-    }
-}
-
 /// Computes a smooth `0.25m` 16-directional metric [`ReachableField`] around `query.start_m`.
 #[must_use]
 pub fn compute_reachable_continuous(
@@ -283,11 +190,7 @@ pub fn compute_reachable_continuous(
     let total = cols * rows;
     let mut walkable = vec![false; total];
     let mut cost_mult = vec![1.0_f32; total];
-    let sampled_surfaces: Vec<PreSampledSurface> = scene
-        .surfaces
-        .iter()
-        .filter_map(PreSampledSurface::from_feature)
-        .collect();
+    let surface_grid = PreparedSurfaceGrid::new(scene.surfaces);
 
     let sx = ((query.start_m.0 / step_m).floor() as isize).clamp(0, cols as isize - 1) as usize;
     let sy = ((query.start_m.1 / step_m).floor() as isize).clamp(0, rows as isize - 1) as usize;
@@ -319,17 +222,15 @@ pub fn compute_reachable_continuous(
             });
             let idx = iy * cols + ix;
             walkable[idx] = !occupied
-                && !spatial.any_move_blocking_prop_intersects_circle(px, py, 0.22)
-                && !spatial.circle_hits_wall(px, py, 0.20, SpatialWallFilter::MovementBlocking);
+                && !spatial.any_move_blocking_prop_intersects_circle(px, py, TOKEN_RADIUS_M)
+                && !spatial.circle_hits_wall(
+                    px,
+                    py,
+                    TOKEN_RADIUS_M,
+                    SpatialWallFilter::MovementBlocking,
+                );
             if walkable[idx] {
-                let mut best_surf: Option<SurfaceFeatureKind> = None;
-                let mut best_prio = 0u8;
-                for s in &sampled_surfaces {
-                    if (best_surf.is_none() || s.prio >= best_prio) && s.contains(px, py) {
-                        best_surf = Some(s.kind);
-                        best_prio = s.prio;
-                    }
-                }
+                let best_surf = surface_grid.topmost_kind_at_m(px, py);
                 let mut m = best_surf.map_or(1.0, SurfaceFeatureKind::move_cost_mult);
                 if best_surf != Some(SurfaceFeatureKind::BridgeDeck) {
                     m = spatial.max_prop_move_cost_at(px, py, m);
@@ -386,10 +287,15 @@ pub fn compute_reachable_continuous(
             if !walkable[nidx] {
                 continue;
             }
-            if dx.abs() == 2 || dy.abs() == 2 {
+            if dx.abs() == 2 {
                 let mx = (node.ix as isize + dx / 2) as usize;
+                if !walkable[node.iy * cols + mx] || !walkable[ny * cols + mx] {
+                    continue;
+                }
+            }
+            if dy.abs() == 2 {
                 let my = (node.iy as isize + dy / 2) as usize;
-                if !walkable[my * cols + mx] {
+                if !walkable[my * cols + node.ix] || !walkable[my * cols + nx] {
                     continue;
                 }
             }

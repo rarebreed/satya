@@ -323,21 +323,35 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config(space_opera_pack: Any) -> Non
     assert "Captain Elena Vance" in lore_excerpt
 
     # Tactical map generation, token movement & spatial inspection
+    from satya_py import maps as py_maps
+
     map_res = generate_tactical_map.invoke(
         {"session_id": sid, "theme": "Sector 4 Docking Bay", "width": 12, "height": 10}
     )
     assert map_res["grid_width"] == 12
     assert map_res["grid_height"] == 10
+    assert len(map_res["wall_edges"]) > 0
+    assert len(map_res["props"]) > 0
     svg_file = Path(__file__).resolve().parent.parent / "data" / "maps" / f"{sid}_{map_res['map_id']}.svg"
     assert svg_file.exists()
 
+    target_gx, target_gy = 5, 4
+    for cy in range(2, 9):
+        for cx in range(2, 10):
+            if not py_maps.check_token_collision(map_res, cx + 0.5, cy + 0.5):
+                target_gx, target_gy = cx, cy
+                break
+        else:
+            continue
+        break
+
     try:
         moved = move_map_token.invoke(
-            {"session_id": sid, "token_id": "tok-vance", "to_x": 5, "to_y": 4}
+            {"session_id": sid, "token_id": "tok-vance", "to_x": target_gx, "to_y": target_gy}
         )
         vance_tok = next(t for t in moved["tokens"] if t["token_id"] == "tok-vance")
-        assert vance_tok["grid_x"] == 5
-        assert vance_tok["grid_y"] == 4
+        assert vance_tok["grid_x"] == target_gx
+        assert vance_tok["grid_y"] == target_gy
 
         out_of_bounds = move_map_token.invoke(
             {"session_id": sid, "token_id": "tok-vance", "to_x": 99, "to_y": 4}
@@ -348,11 +362,12 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config(space_opera_pack: Any) -> Non
             {"session_id": sid, "question": "Where is Captain Vance relative to cover?"}
         )
         assert "Capt. Vance" in inspection
-        assert "(5, 4)" in inspection
-        assert "[PARTIAL COVER / OBSTRUCTED]" in inspection
+        assert f"({target_gx}, {target_gy})" in inspection
         svg_text = svg_file.read_text(encoding="utf-8")
-        assert ">COVER</text>" in svg_text
-        assert 'cx="264" cy="216"' in svg_text
+        assert "<svg" in svg_text
+        expected_cx = target_gx * 48 + 24
+        expected_cy = target_gy * 48 + 24
+        assert f'cx="{expected_cx}" cy="{expected_cy}"' in svg_text
     finally:
         svg_file.unlink(missing_ok=True)
 

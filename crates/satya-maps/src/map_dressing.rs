@@ -228,10 +228,13 @@ pub const fn effective_obstruction(p: &MapPropPlacement) -> PropObstruction {
     }
 }
 
-/// Whether `p` is purely visual/walkable (`p.decorative` or `prop_spec(p.kind).floor_layer`).
+/// Whether `p` is purely visual/walkable (`p.decorative`, `floor_layer`, or `PropObstruction::FloorLayer`).
 #[must_use]
 pub const fn is_non_blocking_prop(p: &MapPropPlacement) -> bool {
-    p.decorative || prop_spec(p.kind).floor_layer
+    let spec = prop_spec(p.kind);
+    p.decorative
+        || spec.floor_layer
+        || matches!(spec.obstruction, PropObstruction::FloorLayer)
 }
 
 /// Effective movement cost multiplier for `p` (`1.0` whenever `p.decorative` is `true`).

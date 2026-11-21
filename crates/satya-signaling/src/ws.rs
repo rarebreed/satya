@@ -53,13 +53,15 @@ pub async fn ws_session_handler(
     let Some(claims) = state.auth.verify_join_token(&query.join_token).await else {
         return (StatusCode::UNAUTHORIZED, "Invalid join_token").into_response();
     };
-    ws.on_upgrade(move |socket| handle_ws_client(socket, claims, state))
+    let join_token = query.join_token;
+    ws.on_upgrade(move |socket| handle_ws_client(socket, claims, state, join_token))
 }
 
 async fn handle_ws_client(
     socket: WebSocket,
     claims: JoinTokenClaims,
     state: Arc<SignalingAppState>,
+    join_token: String,
 ) {
     let (mut ws_tx, mut ws_rx) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
@@ -68,13 +70,16 @@ async fn handle_ws_client(
     let session_mode = claims.session_mode;
     let self_participant = claims.participant.clone();
     let user_id = self_participant.user_id.clone();
+    let conn_id = state
+        .next_conn_id
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
     {
         let mut guard = state.active_sockets.write().await;
         guard
             .entry(session_id.clone())
             .or_default()
-            .insert(user_id.clone(), tx);
+            .insert(user_id.clone(), (conn_id, tx));
     }
 
     // Broadcast updated roster to all connected peers in this session
@@ -112,6 +117,39 @@ async fn handle_ws_client(
                 body,
                 composition_time_ms,
             } => {
+                if self_participant.role == SessionRole::Observer
+                    && (channel_context != ChannelContext::OutOfCharacter
+                        || visibility != MessageVisibility::Public)
+                {
+                    let notice_text = "Observers may only send Public Out-Of-Character (OOC) messages and cannot whisper or declare In-Character actions.";
+                    if let Ok(meta) = state.storage.registry().build_metadata(
+                        state.next_seq(),
+                        subjects::CHAT_MESSAGE,
+                        1,
+                        &session_id,
+                        session_mode,
+                    ) {
+                        let err_ev = ChatMessageEvent {
+                            metadata: meta,
+                            message_id: Uuid::now_v7().to_string(),
+                            sender: self_participant.clone(),
+                            visibility: MessageVisibility::Private,
+                            recipients: vec![self_participant.clone()],
+                            channel_context: ChannelContext::SystemNotice,
+                            reply_to_message_id: None,
+                            body: notice_text.to_string(),
+                            char_count: notice_text.chars().count() as i32,
+                            word_count: notice_text.split_whitespace().count() as i32,
+                            composition_time_ms: 0,
+                            is_edited: false,
+                        };
+                        let pkt_str = json!({ "type": "CHAT_EVENT", "event": err_ev }).to_string();
+                        state
+                            .send_to_users(&session_id, std::slice::from_ref(&user_id), &pkt_str)
+                            .await;
+                    }
+                    continue;
+                }
                 let (recipients, delivery_ids) = SignalingAppState::resolve_message_targets(
                     &self_participant,
                     visibility,
@@ -167,6 +205,14 @@ async fn handle_ws_client(
                         let msg_id_clone = chat_event.message_id.clone();
                         let body_clone = body.clone();
                         let roster_clone = current_roster.clone();
+                        let multi_human_players = current_roster
+                            .iter()
+                            .filter(|p| {
+                                p.participant_kind == ParticipantKind::Human
+                                    && p.role == SessionRole::Player
+                            })
+                            .count()
+                            >= 2;
 
                         if let Some(ai_gm) = current_roster
                             .iter()
@@ -197,7 +243,9 @@ async fn handle_ws_client(
                                     &roster_clone,
                                 )
                                 .await;
-                                if visibility == MessageVisibility::Public
+                                if self_part_clone.role == SessionRole::Player
+                                    && !multi_human_players
+                                    && visibility == MessageVisibility::Public
                                     && channel_context == ChannelContext::InCharacter
                                 {
                                     trigger_auto_ai_players_for_human_turn(
@@ -209,9 +257,18 @@ async fn handle_ws_client(
                                     .await;
                                 }
                             });
-                        } else if self_participant.role == SessionRole::Player
-                            && visibility == MessageVisibility::Public
-                            && channel_context == ChannelContext::InCharacter
+                        } else if visibility == MessageVisibility::Public
+                            && ((self_participant.role == SessionRole::Player
+                                && channel_context == ChannelContext::InCharacter
+                                && (!multi_human_players
+                                    || current_roster
+                                        .iter()
+                                        .all(|p| p.role != SessionRole::AiGm)))
+                                || (self_participant.role == SessionRole::Gm
+                                    && matches!(
+                                        channel_context,
+                                        ChannelContext::GmNarration | ChannelContext::InCharacter
+                                    )))
                         {
                             tokio::spawn(async move {
                                 state_clone.reset_ai_rally_counter(&session_id_clone).await;
@@ -694,13 +751,20 @@ async fn handle_ws_client(
                                 &roster_clone,
                             )
                             .await;
-                            trigger_auto_ai_players_for_human_turn(
-                                &state_clone,
-                                &session_id_clone,
-                                &self_part_clone,
-                                &narration,
-                            )
-                            .await;
+                            if self_part_clone.role == SessionRole::Player
+                                && !current_roster.iter().filter(|p| {
+                                    p.participant_kind == ParticipantKind::Human
+                                        && p.role == SessionRole::Player
+                                }).count().ge(&2)
+                            {
+                                trigger_auto_ai_players_for_human_turn(
+                                    &state_clone,
+                                    &session_id_clone,
+                                    &self_part_clone,
+                                    &narration,
+                                )
+                                .await;
+                            }
                         });
                     }
                 }
@@ -708,6 +772,9 @@ async fn handle_ws_client(
             ClientWsPacket::LeaveSession { reason } => {
                 let disc_reason =
                     reason.unwrap_or_else(|| "User disconnected from session".to_string());
+                let _ = state
+                    .unregister_ws_socket(&session_id, &user_id, conn_id)
+                    .await;
                 if let Some(summary) = state.auth.leave_session(&session_id, &user_id).await {
                     state
                         .process_session_disconnect(
@@ -723,7 +790,31 @@ async fn handle_ws_client(
     }
 
     forward_task.abort();
-    if let Some(summary) = state.auth.leave_session(&session_id, &user_id).await {
+    if state
+        .unregister_ws_socket(&session_id, &user_id, conn_id)
+        .await
+        && let Some(summary) = state
+            .auth
+            .leave_session_with_options(&session_id, &user_id, false, Some(&join_token))
+            .await
+    {
+        if summary.has_active_ai_players {
+            let grace_state = state.clone();
+            let grace_sid = session_id.clone();
+            let grace_uid = user_id.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                if !grace_state
+                    .has_active_ws_socket(&grace_sid, &grace_uid)
+                    .await
+                {
+                    grace_state
+                        .auth
+                        .scrub_sponsor_byok_key_if_absent(&grace_sid, &grace_uid)
+                        .await;
+                }
+            });
+        }
         state
             .process_session_disconnect(
                 &summary,
@@ -731,10 +822,5 @@ async fn handle_ws_client(
                 "WebSocket connection closed",
             )
             .await;
-    } else {
-        let mut guard = state.active_sockets.write().await;
-        if let Some(room_map) = guard.get_mut(&session_id) {
-            room_map.remove(&user_id);
-        }
     }
 }

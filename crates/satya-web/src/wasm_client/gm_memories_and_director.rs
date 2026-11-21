@@ -22,6 +22,7 @@ pub fn format_gm_memories_list_html(memories: &[GmMemoryNoteRecord]) -> String {
     if memories.is_empty() {
         return r#"<span class="pill pill-muted">No persistent GM memory notes saved for this campaign/session yet.</span>"#.to_string();
     }
+    let show_controls = crate::wasm_client::gm_docs::viewer_can_manage_gm_vault();
     memories
         .iter()
         .map(|m| {
@@ -38,21 +39,28 @@ pub fn format_gm_memories_list_html(memories: &[GmMemoryNoteRecord]) -> String {
             } else {
                 r#" <span class="pill pill-muted">Session-Only</span>"#.to_string()
             };
-            let next_persist = !m.is_persistent;
-            let toggle_label = if m.is_persistent {
-                "Unmark Persistent"
+            let controls_html = if show_controls {
+                let next_persist = !m.is_persistent;
+                let toggle_label = if m.is_persistent {
+                    "Unmark Persistent"
+                } else {
+                    "Mark Persistent"
+                };
+                let js_id = escape_js_single_quoted_attr(&m.memory_id);
+                format!(
+                    r#"<button type="button" class="btn-chip" onclick="window.satyaToggleGmMemoryPersistence('{js_id}', {next_persist})">{toggle_label}</button>
+                            <button type="button" class="btn-chip" onclick="window.satyaDeleteGmMemory('{js_id}')">Delete</button>"#
+                )
             } else {
-                "Mark Persistent"
+                String::new()
             };
-            let js_id = escape_js_single_quoted_attr(&m.memory_id);
             format!(
                 r#"<div class="gm-doc-card">
                     <div class="gm-doc-header">
                         <strong>[{}] {}</strong>
                         <div class="btn-row-compact">
                             {pin_badge}{persist_badge}
-                            <button type="button" class="btn-chip" onclick="window.satyaToggleGmMemoryPersistence('{js_id}', {next_persist})">{toggle_label}</button>
-                            <button type="button" class="btn-chip" onclick="window.satyaDeleteGmMemory('{js_id}')">Delete</button>
+                            {controls_html}
                         </div>
                     </div>
                     <div class="subtitle">Recorded by <strong>{}</strong></div>
@@ -79,16 +87,10 @@ pub(crate) fn sync_local_gm_memories_dom(memories: &[GmMemoryNoteRecord]) {
 /// Creates or updates a persistent GM memory note via `POST /api/sessions/:session_id/memories`.
 #[wasm_bindgen]
 pub fn satya_submit_gm_memory() {
-    if crate::wasm_client::state::with_state(|st| {
-        st.session_id.is_some()
-            && st
-                .self_participant
-                .as_ref()
-                .is_some_and(|p| p.role == satya_schema::SessionRole::Observer)
-    }) {
+    if !crate::wasm_client::gm_docs::viewer_can_manage_gm_vault() {
         set_feedback(
             "gm-doc-feedback",
-            "Observers cannot create or edit GM memory notes.",
+            "Only the Game Master or solo Host can create or edit GM memory notes.",
             true,
         );
         return;
@@ -144,6 +146,14 @@ pub fn satya_submit_gm_memory() {
 /// Toggles `is_persistent` on a GM memory note via `POST /api/sessions/:session_id/memories/:memory_id/persist`.
 #[wasm_bindgen]
 pub fn satya_toggle_gm_memory_persistence(memory_id: String, is_persistent: bool) {
+    if !crate::wasm_client::gm_docs::viewer_can_manage_gm_vault() {
+        set_feedback(
+            "gm-doc-feedback",
+            "Only the Game Master or solo Host can change GM memory persistence.",
+            true,
+        );
+        return;
+    }
     let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
         let updated = with_state_mut(|st| {
             let mut label = None;
@@ -215,6 +225,14 @@ pub fn satya_toggle_gm_memory_persistence(memory_id: String, is_persistent: bool
 /// Deletes a `GM_ONLY` document via `DELETE /api/sessions/:session_id/docs/:doc_id`.
 #[wasm_bindgen]
 pub fn satya_delete_gm_document(doc_id: String) {
+    if !crate::wasm_client::gm_docs::viewer_can_manage_gm_vault() {
+        set_feedback(
+            "gm-doc-feedback",
+            "Only the Game Master or solo Host can delete GM documents.",
+            true,
+        );
+        return;
+    }
     let apply_local = |id: &str| {
         let docs = with_state_mut(|st| {
             st.gm_documents.retain(|d| d.doc_id != id);
@@ -246,6 +264,14 @@ pub fn satya_delete_gm_document(doc_id: String) {
 /// Deletes a GM memory note via `DELETE /api/sessions/:session_id/memories/:memory_id`.
 #[wasm_bindgen]
 pub fn satya_delete_gm_memory(memory_id: String) {
+    if !crate::wasm_client::gm_docs::viewer_can_manage_gm_vault() {
+        set_feedback(
+            "gm-doc-feedback",
+            "Only the Game Master or solo Host can delete GM memory notes.",
+            true,
+        );
+        return;
+    }
     let Some((sid, tok)) = active_session_and_token_or_feedback("", "") else {
         let mems = with_state_mut(|st| {
             st.gm_memories.retain(|m| m.memory_id != memory_id);
@@ -519,6 +545,14 @@ pub fn build_scenario_director_config_json(
 /// `mem-scenario-director` in the SQLite GM Vault (`POST /api/sessions/:session_id/memories`).
 #[wasm_bindgen]
 pub fn satya_save_scenario_director_config() {
+    if !crate::wasm_client::gm_docs::viewer_can_manage_gm_vault() {
+        set_feedback(
+            "gm-doc-feedback",
+            "Only the Game Master or solo Host can save Scenario Director configuration.",
+            true,
+        );
+        return;
+    }
     let flow_mode = select_value("scenario-flow-mode");
     let premise = input_value("scenario-premise");
     let planned_raw = input_value("scenario-planned-beats");
@@ -563,8 +597,9 @@ pub fn satya_save_scenario_director_config() {
             return;
         };
 
+        let scoped_mem_id = format!("mem-scenario-director-{sid}");
         let req = UpsertGmMemoryRequest {
-            memory_id: Some("mem-scenario-director".to_string()),
+            memory_id: Some(scoped_mem_id.clone()),
             campaign_tag: if ctag_raw.is_empty() {
                 None
             } else {
@@ -581,7 +616,9 @@ pub fn satya_save_scenario_director_config() {
             Ok(_) => {
                 set_feedback(
                     "gm-doc-feedback",
-                    "Saved & pinned Scenario Director configuration (`mem-scenario-director`) to the Campaign/Session SQLite GM Vault.",
+                    &format!(
+                        "Saved & pinned Scenario Director configuration (`{scoped_mem_id}`) to the Campaign/Session SQLite GM Vault."
+                    ),
                     false,
                 );
                 satya_refresh_gm_memories();
@@ -605,8 +642,10 @@ pub fn satya_refresh_gm_memories() {
         if let Ok(resp) =
             fetch_json::<(), SessionGmMemoriesResponse>("GET", &url, Some(&tok), None).await
         {
+            let scoped_id = format!("mem-scenario-director-{sid}");
             if let Some(dir_mem) = resp.memories.iter().find(|m| {
-                m.memory_id == "mem-scenario-director"
+                m.memory_id == scoped_id
+                    || m.memory_id == "mem-scenario-director"
                     || m.title == "Scenario Director & Campaign Pacing Guide"
             }) {
                 apply_scenario_director_json_to_dom(&dir_mem.content);

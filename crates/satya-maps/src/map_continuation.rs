@@ -242,32 +242,54 @@ pub(crate) fn mirror_prop_axis(
     p: MapPropPlacement,
     cw: i32,
     ch: i32,
+    cell_cm: i32,
     horizontal_flip: bool,
 ) -> MapPropPlacement {
+    let cell_cm = cell_cm.max(25);
     let (cx_cm, cy_cm) = p.center_cm();
     let (sw_cm, sh_cm) = p.local_span_cm();
     let len_cm = prop_spec(p.kind).stretchable.then_some(sw_cm.max(sh_cm));
     let mut out = if horizontal_flip {
         let rot = (360 - p.rotation_deg).rem_euclid(360);
-        make_prop_at_cm(p.kind, cw * 100 - cx_cm, cy_cm, rot, len_cm, p.variant_seed)
+        make_prop_at_cm(p.kind, cw * cell_cm - cx_cm, cy_cm, rot, len_cm, p.variant_seed)
     } else {
         let rot = (180 - p.rotation_deg).rem_euclid(360);
-        make_prop_at_cm(p.kind, cx_cm, ch * 100 - cy_cm, rot, len_cm, p.variant_seed)
+        make_prop_at_cm(p.kind, cx_cm, ch * cell_cm - cy_cm, rot, len_cm, p.variant_seed)
     };
+    out.span_w_cm = p.span_w_cm;
+    out.span_h_cm = p.span_h_cm;
     out.tint_rgb = p.tint_rgb;
     out.decorative = p.decorative;
     out
 }
 
-pub(crate) fn mirror_sector(sec: &mut ProceduralSector, cw: i32, ch: i32, horizontal_flip: bool) {
+pub(crate) fn mirror_sector(
+    sec: &mut ProceduralSector,
+    cw: i32,
+    ch: i32,
+    cell_cm: i32,
+    horizontal_flip: bool,
+) {
     for e in &mut sec.wall_edges {
         mirror_edge_axis(e, cw, ch, horizontal_flip);
     }
     for p in &mut sec.props {
-        *p = mirror_prop_axis(*p, cw, ch, horizontal_flip);
+        *p = mirror_prop_axis(*p, cw, ch, cell_cm, horizontal_flip);
     }
-    mirror_sector_surfaces(&mut sec.surfaces, cw, ch, horizontal_flip);
-    crate::map_continuation_ribbons::mirror_floor_levels(&mut sec.floors, cw, ch, horizontal_flip);
+    for z in &mut sec.faraday_zones {
+        *z = z.mirrored(cw * cell_cm, ch * cell_cm, horizontal_flip);
+    }
+    for n in &mut sec.surveillance_nodes {
+        *n = n.mirrored(cw * cell_cm, ch * cell_cm, horizontal_flip);
+    }
+    mirror_sector_surfaces(&mut sec.surfaces, cw, ch, cell_cm, horizontal_flip);
+    crate::map_continuation_ribbons::mirror_floor_levels(
+        &mut sec.floors,
+        cw,
+        ch,
+        cell_cm,
+        horizontal_flip,
+    );
 }
 
 #[derive(Clone, Copy)]
@@ -402,6 +424,18 @@ fn reconcile_chunk_entry_seam(
     });
 }
 
+pub(crate) fn ensure_floor_seam_connectivity(
+    w: i32,
+    h: i32,
+    edges: &mut Vec<MapWallEdge>,
+    props: &mut Vec<MapPropPlacement>,
+    preset: SectorPreset,
+    dir: MapContinuationDir,
+    seam_coord: i32,
+) {
+    ensure_seam_connectivity(w, h, edges, props, preset, dir, seam_coord);
+}
+
 fn ensure_seam_connectivity(
     w: i32,
     h: i32,
@@ -493,6 +527,17 @@ pub fn continue_procedural_map(
     dir: MapContinuationDir,
     explicit_seed: Option<i64>,
 ) -> Result<MapContinuationOutcome, &'static str> {
+    continue_procedural_map_with_preset(existing, dir, explicit_seed, None)
+}
+
+/// Procedurally generates an edge-matched sector strip in `dir` (with an optional neighbor [`SectorPreset`] override)
+/// and stitches it seamlessly onto `existing`.
+pub fn continue_procedural_map_with_preset(
+    existing: &GmMapUpdateRequest,
+    dir: MapContinuationDir,
+    explicit_seed: Option<i64>,
+    preset_override: Option<SectorPreset>,
+) -> Result<MapContinuationOutcome, &'static str> {
     let old_w = existing.grid_width;
     let old_h = existing.grid_height;
     if old_w < 8 || old_h < 8 {
@@ -541,10 +586,15 @@ pub fn continue_procedural_map(
     };
 
     let prev_active_floor = base.active_floor;
+    let base_floor = if base.floors.iter().any(|f| f.floor_index == 0) {
+        0
+    } else {
+        prev_active_floor
+    };
     if base.has_multiple_floors() {
         base.sync_active_floor_snapshot();
-        if prev_active_floor != 0 {
-            base.switch_active_floor(0);
+        if prev_active_floor != base_floor {
+            base.switch_active_floor(base_floor);
         }
     }
 
@@ -583,6 +633,12 @@ pub fn continue_procedural_map(
     for s in &mut base.surfaces {
         *s = s.translated(dx_cells * cell_cm, dy_cells * cell_cm);
     }
+    for z in &mut base.faraday_zones {
+        *z = z.translated(dx_cells * cell_cm, dy_cells * cell_cm);
+    }
+    for n in &mut base.surveillance_nodes {
+        *n = n.translated(dx_cells * cell_cm, dy_cells * cell_cm);
+    }
     for c in &mut existing_sectors {
         c.shift_origin(dx_cells, dy_cells);
     }
@@ -605,13 +661,24 @@ pub fn continue_procedural_map(
     let mut last_chunk_preset = root_preset;
     for (idx, (plan, slice)) in chunk_plans.iter().zip(seam_slices.iter()).enumerate() {
         let chunk_seed = next_continuation_seed(seed, idx as i32 + 1, slice.t_len, dir);
-        let spec = select_neighbor_sector_transition(
+        let mut spec = select_neighbor_sector_transition(
             &plan.source_cell,
             &existing_sectors,
             plan.target_sector_coord,
             dir,
             chunk_seed,
         );
+        if let Some(ov) = preset_override {
+            spec.preset = ov;
+            if ov.is_zoned_preset() {
+                let (dz, dt) = crate::map_gen_zoning::default_zoning_and_tier(ov);
+                spec.zoning = Some(dz);
+                spec.economic_tier = Some(dt);
+            } else {
+                spec.zoning = None;
+                spec.economic_tier = None;
+            }
+        }
         last_chunk_preset = spec.preset;
         let (x_off, y_off, cw, ch) = match dir {
             MapContinuationDir::East => (old_w, slice.t0, strip_depth, slice.t_len),
@@ -627,14 +694,23 @@ pub fn continue_procedural_map(
             spec.economic_tier,
             spec.zoning,
         );
-        orient_sector_to_shared_road(&mut sec, cw, ch, spec.preferred_road_side, mirror_sector);
+        orient_sector_to_shared_road(
+            &mut sec,
+            cw,
+            ch,
+            cell_cm,
+            spec.preferred_road_side,
+            mirror_sector,
+        );
         align_chunk_ribbons(
             &mut sec,
             spec.preset,
             &slice.ribbons,
             cw,
             ch,
+            cell_cm,
             dir,
+            spec.preferred_road_side.is_some(),
             mirror_sector,
         );
         reconcile_chunk_entry_seam(
@@ -685,12 +761,24 @@ pub fn continue_procedural_map(
                 new_solid_props.push(shifted);
             }
         }
+        for z in sec.faraday_zones {
+            base.faraday_zones
+                .push(z.translated(x_off * cell_cm, y_off * cell_cm));
+        }
+        for n in sec.surveillance_nodes {
+            base.surveillance_nodes
+                .push(n.translated(x_off * cell_cm, y_off * cell_cm));
+        }
         crate::map_continuation_ribbons::stitch_continued_floors(
             &mut base,
             &sec.floors,
             x_off,
             y_off,
+            cw,
+            ch,
             cell_cm,
+            dir,
+            spec.preset,
         );
     }
     base.world_sectors = existing_sectors;
@@ -703,6 +791,7 @@ pub fn continue_procedural_map(
         .unwrap_or(base.props.len());
     base.props.splice(first_solid..first_solid, new_floor_props);
     base.props.extend(new_solid_props);
+    crate::map_surface_queries::prune_occluded_surfaces(&mut base.surfaces, new_w, new_h);
 
     let seam_coord = match dir {
         MapContinuationDir::East => old_w,
@@ -739,13 +828,13 @@ pub fn continue_procedural_map(
     }
 
     if !base.floors.is_empty() {
-        if let Some(f0) = base.floors.iter_mut().find(|f| f.floor_index == 0) {
+        if let Some(f0) = base.floors.iter_mut().find(|f| f.floor_index == base_floor) {
             f0.wall_edges = base.wall_edges.clone();
             f0.props = base.props.clone();
             f0.surfaces = base.surfaces.clone();
         }
         base.floors.sort_by_key(|f| f.floor_index);
-        if prev_active_floor != 0 {
+        if prev_active_floor != base_floor {
             base.switch_active_floor(prev_active_floor);
         }
     }

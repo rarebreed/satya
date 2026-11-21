@@ -635,32 +635,22 @@ pub(crate) fn build_derelict_corridor(b: &mut SectorBuilder) {
                 || x == mid_x - 1
                 || x == w - 4
                 || (w >= 24 && (x == w / 4 + 1 || x == (3 * w) / 4 - 1));
-            let top_kind = if top_door {
-                WallEdgeKind::DoorOpen
+            let (top_kind, top_mat) = if top_door {
+                (WallEdgeKind::DoorOpen, MaterialClass::ConcreteBlock)
             } else if x % 4 == 1 {
-                WallEdgeKind::Window
+                (WallEdgeKind::Window, MaterialClass::Glass)
             } else {
-                WallEdgeKind::Wall
+                (WallEdgeKind::Wall, MaterialClass::ConcreteBlock)
             };
-            let bot_kind = if bot_door {
-                WallEdgeKind::DoorClosed
+            let (bot_kind, bot_mat) = if bot_door {
+                (WallEdgeKind::DoorClosed, MaterialClass::ConcreteBlock)
             } else if x % 4 == 2 {
-                WallEdgeKind::Window
+                (WallEdgeKind::Window, MaterialClass::Glass)
             } else {
-                WallEdgeKind::Wall
+                (WallEdgeKind::Wall, MaterialClass::ConcreteBlock)
             };
-            b.put_edge(
-                (x, y_top),
-                EdgeSide::North,
-                top_kind,
-                MaterialClass::ConcreteBlock,
-            );
-            b.put_edge(
-                (x, y_bot),
-                EdgeSide::North,
-                bot_kind,
-                MaterialClass::ConcreteBlock,
-            );
+            b.put_edge((x, y_top), EdgeSide::North, top_kind, top_mat);
+            b.put_edge((x, y_bot), EdgeSide::North, bot_kind, bot_mat);
         }
         let divs: Vec<i32> = if w >= 28 {
             vec![w / 4, w / 2, (3 * w) / 4]

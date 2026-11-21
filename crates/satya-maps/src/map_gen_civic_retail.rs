@@ -331,6 +331,9 @@ fn furnish_patient_room(
     surfaces: &mut Vec<MapSurfaceFeature>,
     s: u32,
 ) {
+    if room.w() <= 0 || room.h() <= 0 {
+        return;
+    }
     if let Some(bath) =
         add_ensuite_bathroom(room, corridor_on_south, edges, props, surfaces, s + 70)
     {
@@ -377,10 +380,14 @@ fn furnish_patient_room(
     } else {
         (room.y0 + (room.h() / 3).max(1)) * 100 + 30
     };
+    let bx_lo = room.x0 * 100 + 110;
+    let bx_hi = (room.x1 * 100 - 110).max(bx_lo);
+    let by_lo = room.y0 * 100 + 85;
+    let by_hi = (room.y1 * 100 - 85).max(by_lo);
     let centered_bed = make_prop_at_cm(
         bed_kind,
-        cx_cm.clamp(room.x0 * 100 + 110, room.x1 * 100 - 110),
-        cy_cm.clamp(room.y0 * 100 + 85, room.y1 * 100 - 85),
+        cx_cm.clamp(bx_lo, bx_hi),
+        cy_cm.clamp(by_lo, by_hi),
         angle_offset,
         None,
         s + 10,
@@ -556,13 +563,42 @@ fn furnish_patient_room(
 fn hospital_corridor_bounds(lot: LotBox) -> (i32, i32, i32, i32, i32, i32) {
     let bw = lot.w();
     let bh = lot.h();
-    let mid_y = (lot.y0 + bh / 2).clamp(lot.y0 + 3, lot.y1 - 4);
-    let corr_h = if bh >= 13 { 3 } else { 2 };
-    let corr_y0 = (mid_y - corr_h / 2).clamp(lot.y0 + 3, lot.y1 - 5);
-    let corr_y1 = (corr_y0 + corr_h).min(lot.y1 - 3);
-    let tx0 = (lot.x0 + bw / 2 - 2).max(lot.x0 + 4);
-    let tx1 = (tx0 + 4).min(lot.x1 - 4);
+    let v_pad = if bh >= 8 { 3 } else { 2.min((bh - 1).max(0) / 2) };
+    let corr_h = if bh >= 13 { 3 } else { 2.min((bh - 2 * v_pad).max(1)) };
+    let mid_lo = lot.y0 + v_pad;
+    let mid_hi = (lot.y1 - v_pad - 1).max(mid_lo);
+    let mid_y = (lot.y0 + bh / 2).clamp(mid_lo, mid_hi);
+    let cy0_lo = lot.y0 + v_pad;
+    let cy0_hi = (lot.y1 - v_pad - corr_h).max(cy0_lo);
+    let corr_y0 = (mid_y - corr_h / 2).clamp(cy0_lo, cy0_hi);
+    let corr_y1 = (corr_y0 + corr_h)
+        .min(lot.y1 - v_pad)
+        .max(corr_y0 + 1)
+        .min(lot.y1);
+    let wing_pad = if bw >= 12 { 4 } else { (bw / 3).max(1) };
+    let tx_span = if bw >= 12 { 4 } else { (bw - 2 * wing_pad).max(1) };
+    let tx0_lo = lot.x0 + wing_pad;
+    let tx0_hi = (lot.x1 - wing_pad - tx_span).max(tx0_lo);
+    let tx0 = (lot.x0 + bw / 2 - tx_span / 2).clamp(tx0_lo, tx0_hi);
+    let tx1 = (tx0 + tx_span)
+        .min(lot.x1 - wing_pad)
+        .max(tx0 + 1)
+        .min(lot.x1);
     (corr_y0, corr_y1, tx0, tx1, bw, bh)
+}
+
+fn hospital_core_x_span(lot: LotBox, tx0: i32) -> (i32, i32) {
+    let bw = lot.w();
+    let pad = if bw >= 10 { 3 } else { (bw / 3).max(1) };
+    let nx_a_lo = lot.x0 + pad;
+    let nx_a_hi = tx0.max(nx_a_lo).min((lot.x1 - pad - 1).max(nx_a_lo));
+    let nx_a = (lot.x0 + bw / 3).clamp(nx_a_lo, nx_a_hi);
+    let min_core = if bw >= 10 { 4 } else { 2 };
+    let nx_b = (nx_a + (bw / 3).max(min_core))
+        .min(lot.x1 - pad)
+        .max(nx_a + 1)
+        .min(lot.x1);
+    (nx_a, nx_b)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -577,12 +613,11 @@ fn fill_hospital_floor(
     is_upper: bool,
     seed: u64,
 ) {
-    let (corr_y0, corr_y1, tx0, tx1, bw, _bh) = hospital_corridor_bounds(lot);
+    let (corr_y0, corr_y1, tx0, tx1, _bw, _bh) = hospital_corridor_bounds(lot);
     let s = seed as u32;
 
     // North-Central Stairwell & Elevator Lobby bay `[nx_a, nx_b) × [lot.y0, corr_y0)`.
-    let nx_a = (lot.x0 + bw / 3).clamp(lot.x0 + 3, tx0);
-    let nx_b = (nx_a + (bw / 3).max(4)).min(lot.x1 - 3);
+    let (nx_a, nx_b) = hospital_core_x_span(lot, tx0);
 
     // Main E-W corridor floor finish (Terrazzo), while triage/waiting keeps InteriorFloor exposed.
     surfaces.push(hospital_poly_surface(
@@ -679,14 +714,31 @@ fn fill_hospital_floor(
         None,
         s,
     ));
-    props.push(make_prop(
-        PropKind::ElevatorCar,
-        elev_pass_xy.0,
-        elev_pass_xy.1,
-        0,
-        None,
-        s + 1,
-    ));
+    let elev_candidates = [
+        make_prop(
+            PropKind::ElevatorCar,
+            elev_pass_xy.0,
+            elev_pass_xy.1,
+            0,
+            None,
+            s + 1,
+        ),
+        make_prop(PropKind::ElevatorCar, nx_a, corr_y0, 0, None, s + 1),
+        make_prop(
+            PropKind::ElevatorCar,
+            (nx_b - 2).max(nx_a),
+            corr_y0,
+            0,
+            None,
+            s + 1,
+        ),
+    ];
+    for cand in elev_candidates {
+        if !crate::tactical_map_geom::prop_crosses_wall_edge(&cand, edges) {
+            props.push(cand);
+            break;
+        }
+    }
     props.push(make_prop(
         PropKind::ServiceElevator,
         elev_serv_xy.0,
@@ -1042,7 +1094,7 @@ fn generate_hospital(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let by0 = 1;
     let by1 = (h - 4).max(by0 + 7);
     let lot = LotBox::new(bx0, by0, bx1, by1);
-    let (corr_y0, _corr_y1, tx0, tx1, bw, _bh) = hospital_corridor_bounds(lot);
+    let (corr_y0, _corr_y1, tx0, tx1, _bw, _bh) = hospital_corridor_bounds(lot);
 
     // Exterior ambulance bay AsphaltRoad & covered ER ConcreteWalk canopy (strictly South of building).
     let road_y = h as f32 - 1.35;
@@ -1080,7 +1132,7 @@ fn generate_hospital(w: i32, h: i32, seed: i64) -> ProceduralSector {
     );
 
     enclose_campus_shell(&mut b, lot, MaterialClass::ReinforcedConcrete, 3);
-    let er_x = (tx0 + (tx1 - tx0) / 2 - 1).max(bx0 + 3);
+    let er_x = (tx0 + (tx1 - tx0) / 2 - 1).clamp(bx0 + 1, (bx1 - 2).max(bx0 + 1));
     // Wide ER double sliding glass doors + West/East campus doors near main corridor.
     b.put_edge(
         er_x,
@@ -1132,9 +1184,9 @@ fn generate_hospital(w: i32, h: i32, seed: i64) -> ProceduralSector {
         MaterialClass::SheetSteel,
     );
 
-    let nx_a = (lot.x0 + bw / 3).clamp(lot.x0 + 3, tx0);
+    let (nx_a, _nx_b) = hospital_core_x_span(lot, tx0);
     let stair_xy = (nx_a, by0);
-    let elev_pass_xy = ((nx_a + 2).min(bx1 - 3), by0);
+    let elev_pass_xy = ((nx_a + 2).min((bx1 - 3).max(nx_a)), by0);
     let elev_serv_xy = (tx0, corr_y0);
 
     let mut f1_props = Vec::new();
@@ -1454,8 +1506,10 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let conc_y0 = (h / 2 - conc_half).clamp(4, (h - 7).max(4));
     let conc_y1 = (h / 2 + conc_half).clamp(conc_y0 + 3, (h - 4).max(conc_y0 + 3));
     let trans_half = if w >= 36 { 3 } else { 2 };
-    let cx0 = (w / 2 - trans_half).clamp(4, w - 7);
-    let cx1 = (w / 2 + trans_half).clamp(cx0 + 3, w - 4);
+    let cx0_lo = 4.min((w - 3).max(1));
+    let cx0 = (w / 2 - trans_half).clamp(cx0_lo, (w - 7).max(cx0_lo));
+    let cx1_lo = (cx0 + 3).min((w - 1).max(cx0 + 1));
+    let cx1 = (w / 2 + trans_half).clamp(cx1_lo, (w - 4).max(cx1_lo));
 
     let full_lot = LotBox::new(0, 0, w, h);
     let floor_seed = (seed as u32).wrapping_add(0x4A11);
@@ -1631,9 +1685,10 @@ fn generate_shopping_mall(w: i32, h: i32, seed: i64) -> ProceduralSector {
         None,
         floor_seed + 1,
     ));
+    let kiosk_x_lo = 3.min((w - 1).max(0));
     let kiosk_2f = make_prop(
         PropKind::MallKiosk,
-        (w / 2 - 1).clamp(3, w - 4),
+        (w / 2 - 1).clamp(kiosk_x_lo, (w - 4).max(kiosk_x_lo)),
         conc_y0 + 1,
         0,
         None,

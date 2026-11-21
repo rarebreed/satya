@@ -114,6 +114,18 @@ pub struct SatyaWasmState {
     pub combat_round: u32,
     /// Current Satya Action-Count (Tick) clock in the Combat Tracker tab.
     pub combat_tick: u32,
+    /// Authoritative server `CombatantTickEntry` rows received for the active session.
+    pub combat_combatants: Vec<satya_schema::CombatantTickEntry>,
+    /// Number of consecutive automatic WebSocket reconnect attempts for the active session.
+    pub ws_reconnect_attempts: u32,
+    /// Set to `true` on explicit leave/logout to suppress automatic WebSocket reconnection.
+    pub ws_reconnect_suppressed: bool,
+    /// Prevents scheduling duplicate overlapping WebSocket reconnect timers.
+    pub ws_reconnect_scheduled: bool,
+    /// Local UI mirror of whether autonomous AI Player rallies are currently paused.
+    pub ai_rally_paused: bool,
+    /// Local UI mirror of the per-round autonomous AI rally limit (`1..=10`).
+    pub ai_rally_max_rounds: u32,
     /// Whether the current user has linked a Google account (`drive.file` scope).
     pub google_linked: bool,
     /// Ephemeral browser-side Google OAuth 2.0 `drive.file` access token (if authenticated via Google Identity Services).
@@ -184,6 +196,12 @@ impl Default for SatyaWasmState {
             column_resizing: false,
             combat_round: 1,
             combat_tick: 0,
+            combat_combatants: Vec::new(),
+            ws_reconnect_attempts: 0,
+            ws_reconnect_suppressed: false,
+            ws_reconnect_scheduled: false,
+            ai_rally_paused: false,
+            ai_rally_max_rounds: 5,
             google_linked: false,
             google_access_token: None,
             google_oauth_client_id: None,
@@ -193,7 +211,7 @@ impl Default for SatyaWasmState {
             gm_omnisearch_active: false,
             session_npcs: Vec::new(),
             selected_npc_id: None,
-            viewer_can_see_gm_secrets: true,
+            viewer_can_see_gm_secrets: false,
             wizard: crate::wasm_client::wizard::CharacterWizardState::default(),
             character_sheet: crate::wasm_client::character_sheet::CharacterSheetState::default(),
         }

@@ -15,15 +15,23 @@
 //!   perforated by full-power `7.62×51mm NATO` (`Pen 7`) and `6.5mm Creedmoor` (`Pen 8`)**. `ReinforcedConcrete`
 //!   (`9 PR`) and `ArmorSteel` (`10 PR`) require anti-materiel calibres (`.338 Lapua` AP / `.50 BMG`).
 
-use satya_schema::{CoverGrade, MaterialClass, PropKind, WallEdgeKind};
+use satya_schema::{CoverGrade, EdgeSide, GmMapUpdateRequest, MaterialClass, PropKind, WallEdgeKind};
 use serde::{Deserialize, Serialize};
 
-use crate::map_dressing::{PropObstruction, prop_spec};
+use crate::map_dressing::PropObstruction;
+use crate::map_surface_geom::topmost_surface_at_m;
 use crate::tactical_map::{TacticalSceneView, evaluate_los_continuous};
-use crate::tactical_map_geom::{PropRayHit, intersect_segment_edge, intersect_segment_prop};
+use crate::tactical_map_geom::{
+    PropRayHit, distance_point_to_segment, edge_endpoints_m, intersect_segment_edge,
+    intersect_segment_prop,
+};
 use satya_engine::ballistics::{GranularFirearmSpec, evaluate_granular_firearm_ballistics};
 pub use satya_engine::ballistics::{
     MATERIAL_BALLISTIC_PROFILES, MaterialBallisticProfile, material_ballistic_profile,
+};
+use satya_engine::explosives_and_arsenal::{
+    BlastExposureEvaluation, ExplosiveBreachEvaluation, ExplosiveOrdnanceId,
+    evaluate_blast_and_fragmentation, evaluate_explosive_breach,
 };
 use satya_engine::ranged_combat::{
     ArmorImpactOutcome, ArmorProfile, WeaponDamageType, resolve_armor_impact,
@@ -209,6 +217,9 @@ pub fn collect_ray_barriers(
     }
 
     for p in scene.props {
+        if crate::map_dressing::is_non_blocking_prop(p) {
+            continue;
+        }
         if let Some(hit) = intersect_segment_prop(p, attacker_m, target_m) {
             let enter_m = hit.t_enter * seg_len;
             let braced_skip = hit.obstruction != PropObstruction::FullObstacle
@@ -217,7 +228,6 @@ pub fn collect_ray_barriers(
             if braced_skip {
                 continue;
             }
-            let _ = prop_spec(p.kind);
             ordered.push((enter_m, None, prop_barrier_entry(p.kind, hit)));
         }
     }
@@ -252,9 +262,9 @@ pub fn evaluate_ballistic_shot(query: BallisticShotQuery<'_>) -> BallisticShotEv
     let initial_pen = bal.base_armor_pen + bonus_margin;
     let initial_impact = bal.raw_ballistic_impact + bonus_margin;
 
-    // When corner-peeking clears a solid pillar (`CoverGrade::HighCover`), no barrier blocks the leaned ray.
     let barriers = if los.cover_grade == CoverGrade::HighCover {
-        Vec::new()
+        let peek_origin = los.ray_points_m.first().copied().unwrap_or(query.attacker_m);
+        collect_ray_barriers(query.scene, peek_origin, query.target_m)
     } else {
         collect_ray_barriers(query.scene, query.attacker_m, query.target_m)
     };
@@ -374,6 +384,209 @@ pub fn evaluate_ballistic_shot(query: BallisticShotQuery<'_>) -> BallisticShotEv
         stud_stop_risk_pct,
         barriers,
         summary_label,
+    }
+}
+
+/// Blast exposure computed for a single token on the detonated floor (`Ch. 18`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpatialBlastTokenExposure {
+    pub entity_id: String,
+    pub label: String,
+    pub distance_m: f64,
+    pub intervening_barrier_pr: i32,
+    pub is_prone: bool,
+    pub exposure: BlastExposureEvaluation,
+}
+
+/// Structural wall/door/window edge evaluated against explosive breaching (`Ch. 18`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpatialBreachedEdge {
+    pub x: i32,
+    pub y: i32,
+    pub side: EdgeSide,
+    pub kind: WallEdgeKind,
+    pub material: MaterialClass,
+    pub breach: ExplosiveBreachEvaluation,
+}
+
+/// Complete spatial detonation + wall-breach result for a battlemap floor (`Ch. 18`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpatialBlastAndBreachOutcome {
+    pub ordnance: ExplosiveOrdnanceId,
+    pub floor_index: i32,
+    pub origin_m: (f32, f32),
+    pub enclosed_room: bool,
+    pub wall_breaches_applied: bool,
+    pub breached_edges_count: usize,
+    pub token_exposures: Vec<SpatialBlastTokenExposure>,
+    pub edge_breaches: Vec<SpatialBreachedEdge>,
+}
+
+/// Returns `true` when `origin_m` sits inside an interior floor zone or is enclosed on `>= 3` cardinal rays.
+#[must_use]
+pub fn is_point_in_enclosed_room(scene: &TacticalSceneView<'_>, origin_m: (f32, f32)) -> bool {
+    if topmost_surface_at_m(scene.surfaces, origin_m.0, origin_m.1)
+        .is_some_and(|s| s.kind.is_interior_surface())
+    {
+        return true;
+    }
+    let probes = [
+        (origin_m.0, origin_m.1 - 8.0),
+        (origin_m.0, origin_m.1 + 8.0),
+        (origin_m.0 + 8.0, origin_m.1),
+        (origin_m.0 - 8.0, origin_m.1),
+    ];
+    let hit_count = probes
+        .into_iter()
+        .filter(|&far_m| {
+            scene.edges.iter().any(|e| {
+                matches!(
+                    e.kind,
+                    WallEdgeKind::Wall | WallEdgeKind::DoorClosed | WallEdgeKind::Window
+                ) && intersect_segment_edge(origin_m, far_m, e).is_some()
+            })
+        })
+        .count();
+    hit_count >= 3
+}
+
+/// Evaluates indoor blast overpressure (`1.5x` reflection), barrier-shielded shrapnel/blast for
+/// every token on `floor_index`, and optional structural wall/door breaching within `1.25 m`.
+pub fn evaluate_spatial_blast_and_breach(
+    map: &mut GmMapUpdateRequest,
+    origin_m: (f32, f32),
+    floor_index: i32,
+    ordnance: ExplosiveOrdnanceId,
+    demolitions_net_successes: i32,
+    apply_wall_breaches: bool,
+) -> SpatialBlastAndBreachOutcome {
+    let floor_view = if floor_index == map.active_floor {
+        None
+    } else {
+        let mut cloned = map.clone();
+        if !cloned.switch_active_floor(floor_index) {
+            return SpatialBlastAndBreachOutcome {
+                ordnance,
+                floor_index,
+                origin_m,
+                enclosed_room: false,
+                wall_breaches_applied: false,
+                breached_edges_count: 0,
+                token_exposures: Vec::new(),
+                edge_breaches: Vec::new(),
+            };
+        }
+        Some(cloned)
+    };
+    let scene_map = floor_view.as_ref().unwrap_or(map);
+    let scene = TacticalSceneView::from_map(scene_map);
+    let enclosed_room = is_point_in_enclosed_room(&scene, origin_m);
+
+    let spec = ordnance.spec();
+    let max_eval_radius_m = spec.frag_radius_m.max(6.0) + 2.0;
+
+    let mut token_exposures = Vec::new();
+    for tok in &map.tokens {
+        if map.token_floor(&tok.entity_id) != floor_index {
+            continue;
+        }
+        let (cx, cy) = map.token_pos_cm(tok);
+        let tx_m = cx as f32 / 100.0;
+        let ty_m = cy as f32 / 100.0;
+        let dist_m = f64::from(((tx_m - origin_m.0).powi(2) + (ty_m - origin_m.1).powi(2)).sqrt());
+        if dist_m > max_eval_radius_m {
+            continue;
+        }
+        let barriers = collect_ray_barriers(&scene, origin_m, (tx_m, ty_m));
+        let intervening_barrier_pr: i32 = barriers
+            .iter()
+            .filter(|b| b.barrier_pr > 0)
+            .map(|b| b.barrier_pr)
+            .sum();
+        let is_prone = map
+            .visual_for(&tok.entity_id)
+            .is_some_and(|v| v.stance_pose.eq_ignore_ascii_case("prone"));
+        let rounded_dist = (dist_m * 100.0).round() / 100.0;
+        let exposure = evaluate_blast_and_fragmentation(
+            ordnance,
+            rounded_dist,
+            enclosed_room,
+            is_prone,
+            intervening_barrier_pr,
+        );
+        token_exposures.push(SpatialBlastTokenExposure {
+            entity_id: tok.entity_id.clone(),
+            label: tok.label.clone(),
+            distance_m: rounded_dist,
+            intervening_barrier_pr,
+            is_prone,
+            exposure,
+        });
+    }
+
+    let mut edge_breaches = Vec::new();
+    let mut breached_keys = Vec::new();
+    if spec.breach_pr > 0 {
+        for edge in scene.edges {
+            if !matches!(
+                edge.kind,
+                WallEdgeKind::Wall | WallEdgeKind::DoorClosed | WallEdgeKind::Window
+            ) {
+                continue;
+            }
+            let (a, b) = edge_endpoints_m(edge);
+            let (seg_dist, _) = distance_point_to_segment(origin_m.0, origin_m.1, a, b);
+            if seg_dist <= 1.25 {
+                let breach = evaluate_explosive_breach(
+                    ordnance,
+                    edge.material,
+                    demolitions_net_successes,
+                    4.0,
+                    enclosed_room,
+                );
+                if breach.clean_breach_created {
+                    breached_keys.push((edge.x, edge.y, edge.side));
+                }
+                edge_breaches.push(SpatialBreachedEdge {
+                    x: edge.x,
+                    y: edge.y,
+                    side: edge.side,
+                    kind: edge.kind,
+                    material: edge.material,
+                    breach,
+                });
+            }
+        }
+    }
+
+    let breached_edges_count = if apply_wall_breaches && !breached_keys.is_empty() {
+        let mut removed = 0usize;
+        if let Some(fl) = map.floors.iter_mut().find(|f| f.floor_index == floor_index) {
+            let before = fl.wall_edges.len();
+            fl.wall_edges
+                .retain(|e| !breached_keys.contains(&(e.x, e.y, e.side)));
+            removed = before.saturating_sub(fl.wall_edges.len());
+        }
+        if floor_index == map.active_floor {
+            let before = map.wall_edges.len();
+            map.wall_edges
+                .retain(|e| !breached_keys.contains(&(e.x, e.y, e.side)));
+            removed = removed.max(before.saturating_sub(map.wall_edges.len()));
+        }
+        removed
+    } else {
+        0
+    };
+
+    SpatialBlastAndBreachOutcome {
+        ordnance,
+        floor_index,
+        origin_m,
+        enclosed_room,
+        wall_breaches_applied: apply_wall_breaches && breached_edges_count > 0,
+        breached_edges_count,
+        token_exposures,
+        edge_breaches,
     }
 }
 

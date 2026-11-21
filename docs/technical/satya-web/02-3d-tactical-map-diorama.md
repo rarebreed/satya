@@ -10,13 +10,13 @@ This document is the authoritative technical reference for the **Tactical Map (`
 
 ## 1. End-to-End Architecture & State Topology
 
-All deterministic spatial rules — procedural sector generation (`tiles: []`), `0.30m` token-disc collision with `<= 0.35m` slide/snap clamping, 16-directional `0.25m` Dijkstra reachability (`ReachableField`), analytical 2D segment/OBB raycasting LoS, and cursor hover inspection (`inspect_map_point`) — execute in pure, host-testable Rust inside `satya_engine::{tactical_map, tactical_map_geom}`. `wasm_client/map_3d.rs` owns `TacticalMapUiState`, synchronizes edits over REST/WebSocket, and drives both the event-driven WebGPU diorama (`map_3d_wgpu.rs`) and the synchronized 2D `<svg>` battlemap (`#tabletop-map-svg-fallback`).
+All deterministic spatial rules — procedural sector generation (`tiles: []`), `0.30m` token-disc collision with `<= 0.35m` slide/snap clamping, 16-directional `0.25m` Dijkstra reachability (`ReachableField`), analytical 2D segment/OBB raycasting LoS, and cursor hover inspection (`inspect_map_point`) — execute in pure, host-testable Rust inside `satya_maps::{tactical_map, tactical_map_geom}`. `wasm_client/map_3d.rs` owns `TacticalMapUiState`, synchronizes edits over REST/WebSocket, and drives both the event-driven WebGPU diorama (`map_3d_wgpu.rs`) and the synchronized 2D `<svg>` battlemap (`#tabletop-map-svg-fallback`).
 
 ```mermaid
 flowchart TD
     DOM["#notebook-pane-maps Controls & Canvas\n(#map-preset-select, #map-gait-select, #map-click-mode-select,\n#wgpu-map-canvas, #tabletop-map-svg-fallback, #map-hover-tooltip,\n#btn-map-continue-north/south/west/east)"]
     UI["map_3d.rs :: MAP_UI_STATE (TacticalMapUiState)\nmap (GmMapUpdateRequest) · selected_entity_id · hovered_point_m\nhover_inspection · inspect_mode · camera_2d · reachable_strips · last_los"]
-    Eng["satya_engine::{tactical_map, tactical_map_geom, map_continuation}\nresolve_token_destination_cm · compute_reachable_field_continuous\nevaluate_los_continuous · inspect_map_point · continue_procedural_map"]
+    Eng["satya_maps::{tactical_map, tactical_map_geom, map_continuation}\nresolve_token_destination_cm · compute_reachable_field_continuous\nevaluate_los_continuous · inspect_map_point · continue_procedural_map"]
     Geom["map_3d_wgpu.rs :: build_tactical_diorama_vertices\nDeck Floor (zone_id = -1.0) · Thin Wall Edges · 360deg OBB Props\nEmerald Reach Strips · Gold Selection Ring · Cyan Hover · y=1.05m LoS Beam"]
     GPU["wgpu_shared.rs + MapDioramaPipeline (SHARED_GLB_DIORAMA_WGSL)\nPass 1: Static Diorama VBO/IBO (1 Identity Instance)\nPass 2: Instanced .glb Miniatures (miniature_meshes Cache)"]
     Rest["satya-signaling REST & /ws/session\nPOST /api/sessions/:id/map · POST /api/sessions/:id/map/move\nServerWsPacket::MapUpdated + Apache Iggy WAL"]
@@ -112,7 +112,7 @@ When a token moves continuously by $(\Delta x_{\text{m}}, \Delta y_{\text{m}})$ 
 
 ## 3. Procedural Sector Generation & Multi-Peer Synchronization
 
-### 3.1 Deterministic `SectorPreset` Catalog (`satya_engine::tactical_map`)
+### 3.1 Deterministic `SectorPreset` Catalog (`satya_maps::tactical_map`)
 
 `generate_procedural_sector(preset, width, height, seed)` clamps sector dimensions to `8m..=48m` (`tiles: Vec::new()`) and dispatches across `map_interior_gen`, `map_outdoor_gen`, `map_outdoor_natural`, and `map_sector_gen` so **all 12** presets emit thin [`MapWallEdge`](../../../crates/satya-schema/src/tactical_map_dressing_dto.rs) architecture (except open natural terrain `WoodedPark` and `WoodlandCreek`) and continuous `360°`-oriented [`MapPropPlacement`](../../../crates/satya-schema/src/tactical_map_dressing_dto.rs) props (all `52` variants including `StructuralPillar`, `ElevatedCatwalk`, and `HazardSpill`) carrying per-material ballistic ratings, while verifying continuous `0.50m`-sample connectivity across doors (`verify_sector_connectivity_continuous`).
 
@@ -282,7 +282,7 @@ Clicking **Apply `Δ_ext` to Roller (`#btn-map-apply-cover`)** inside `#map-tact
 
 ### 6.5 Illustrated 2D Battlemap, Boundary Continuation, & Docked Hover Inspector
 
-See **[`06-2d-battlemap-art.md`](06-2d-battlemap-art.md)** for the full illustrated 2D `<svg>` pipeline (`map_2d_art*.rs`, `map_2d_tokens.rs`), `BattlemapCamera2d` zoom/pan & edge-matched procedural continuation (`map_2d_camera.rs` + `satya_engine::map_continuation`), paper/ink filter styles (`#map-ink-style-select`), continuous token portrait discs, GM `360°` prop-brush (`#map-prop-brush-select`, `#btn-map-prop-rotate`, `#map-prop-rot-deg`, `#btn-map-snap-toggle`) controls, and docked top-right Object & Ground Hover Inspector (`[Alt / I]` `#map-hover-tooltip` + fixed-width `#map-hover-coords-pill`).
+See **[`06-2d-battlemap-art.md`](06-2d-battlemap-art.md)** for the full illustrated 2D `<svg>` pipeline (`map_2d_art*.rs`, `map_2d_tokens.rs`), `BattlemapCamera2d` zoom/pan & edge-matched procedural continuation (`map_2d_camera.rs` + `satya_maps::map_continuation`), paper/ink filter styles (`#map-ink-style-select`), continuous token portrait discs, GM `360°` prop-brush (`#map-prop-brush-select`, `#btn-map-prop-rotate`, `#map-prop-rot-deg`, `#btn-map-snap-toggle`) controls, and docked top-right Object & Ground Hover Inspector (`[Alt / I]` `#map-hover-tooltip` + fixed-width `#map-hover-coords-pill`).
 
 ---
 
@@ -291,8 +291,8 @@ See **[`06-2d-battlemap-art.md`](06-2d-battlemap-art.md)** for the full illustra
 All spatial math, SVG/HUD formatters, procedural layouts, seamless sector stitching, continuous reachability, analytical LoS, hover inspection, and 2D/3D camera unprojection invariants run offline on the host target without a browser:
 
 ```bash
-cargo test --offline -p satya-engine tactical_map
-cargo test --offline -p satya-engine map_continuation
+cargo test --offline -p satya-maps tactical_map
+cargo test --offline -p satya-maps map_continuation
 cargo test --offline -p satya-web map_
 ```
 

@@ -17,15 +17,19 @@ capabilities:
 from __future__ import annotations
 
 import hashlib
+import json
+import random
+import urllib.parse
+import urllib.request
 from typing import Any
+
+from satya_py import combat as _combat, dice as _dice, rules as _rules, tech as _tech
 
 from satya_ml.ai_gm.tools import (
     _gm_headers,
     _http_get_json,
-    _http_post_json,
     _signaling_base_url,
     compute_character_tactical_envelope,
-    query_satya_rules,
     tool,
 )
 from satya_ml.ai_player.motivation_ledger import (
@@ -43,13 +47,104 @@ from satya_ml.ai_player.motivation_ledger import (
     update_my_motivation_journal,
 )
 from satya_ml.campaign_config import get_pack_default_ai_player
-from satya_ml.dice_probabilities import _ensure_satya_py_loaded
-
 
 try:
-    import satya_py
+    import httpx
 except ImportError:  # pragma: no cover
-    satya_py = None  # type: ignore[assignment]
+    httpx = None  # type: ignore[assignment]
+
+_PLAYER_RNG = random.SystemRandom()
+
+
+def _http_post_json_detailed(
+    url: str,
+    payload: dict[str, Any],
+    timeout: float = 2.5,
+) -> tuple[dict[str, Any] | None, int | None, str | None]:
+    """POST JSON returning `(parsed_json, status_code, error_body)`.
+    `status_code` is `None` only on network/transport failure (offline).
+    """
+    if not url.startswith(("http://", "https://")):
+        return None, None, "invalid_url"
+    headers = _gm_headers()
+    if httpx is not None:
+        try:
+            tm: Any = (
+                httpx.Timeout(timeout, connect=0.25)
+                if ("127.0.0.1" in url or "localhost" in url)
+                else timeout
+            )
+            with httpx.Client(timeout=tm) as client:
+                resp = client.post(url, headers=headers, json=payload)
+                if resp.status_code == 200:
+                    return dict(resp.json()), 200, None
+                return None, int(resp.status_code), (resp.text or f"HTTP {resp.status_code}")[:400]
+        except Exception:
+            return None, None, None
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        eff_timeout = min(timeout, 0.25) if ("127.0.0.1" in url or "localhost" in url) else timeout
+        with urllib.request.urlopen(req, timeout=eff_timeout) as resp:
+            if resp.status == 200:
+                return dict(json.loads(resp.read().decode("utf-8"))), 200, None
+            return None, int(resp.status), f"HTTP {resp.status}"
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")[:400] if hasattr(exc, "read") else str(exc)
+        return None, int(exc.code), body or f"HTTP {exc.code}"
+    except Exception:
+        return None, None, None
+
+
+@tool
+def query_satya_rules_public(query: str, top_k: int = 4) -> str:
+    """Search ONLY `PUBLIC` Satya `2d20` rules knowledge (never returning `GM_CONSPIRACY_SECRET` or `ARC2_SATYANG` chunks)."""
+    q = str(query or "").strip() or "cascade 2d20"
+    k = max(1, min(8, int(top_k)))
+    try:
+        from satya_ml.rag.hybrid_index import get_satya_rag_index
+
+        hits = get_satya_rag_index().search(
+            q,
+            corpora=["ttrpg_rules"],
+            caller_role="player",
+            top_k=k,
+            include_linked_rust=False,
+        )
+        if hits:
+            lines = []
+            for h in hits:
+                title = str(h.get("breadcrumb") or h.get("symbol_or_section") or "Rules")
+                body = str(h.get("content") or "").strip()[:500]
+                lines.append(f"[{title}]: {body}")
+            return "\n\n".join(lines)
+    except Exception:
+        pass
+
+    # Scoped fallback if RAG index cannot initialize: filter against secret body markers.
+    try:
+        from satya_ml.rag.corpus_builder import _SATYANG_ARC2_MARKERS, _SECRET_BODY_MARKERS
+
+        lines = []
+        for hit in _rules.search_rules_book(q, max(k * 2, 6)):
+            blob = f"{hit.chapter_title} {hit.section_heading} {hit.snippet}".lower()
+            if any(m in blob for m in _SECRET_BODY_MARKERS) or any(
+                m in blob for m in _SATYANG_ARC2_MARKERS
+            ):
+                continue
+            lines.append(f"[{hit.chapter_title} — {hit.section_heading}]: {hit.snippet}")
+            if len(lines) >= k:
+                break
+        if lines:
+            return "\n\n".join(lines)
+    except Exception:
+        pass
+    return f"No public rules entries matched '{q}'."
 
 
 # Strict player-scoped context cache keyed by `f"{session_id}:{player_user_id}"`
@@ -94,8 +189,6 @@ def sanitize_player_visible_context(raw_ctx: dict[str, Any], player_user_id: str
             ):
                 own_char = dict(c)
                 break
-        if own_char is None and bound_chars:
-            own_char = dict(bound_chars[0])
     if own_char is None:
         own_char = {
             **get_pack_default_ai_player(),
@@ -301,23 +394,24 @@ def roll_player_d20_action(
         "notes": note or f"{display_name} player roll ({check_category})",
     }
 
-    remote = _http_post_json(
+    remote, status_code, err_body = _http_post_json_detailed(
         f"{_signaling_base_url()}/api/player-ai/sessions/{session_id}/roll",
         payload,
         timeout=3.0,
     )
+    if status_code is not None and remote is None:
+        return {"error": err_body or f"Server rejected roll (HTTP {status_code})", "status_code": status_code}
     if isinstance(remote, dict) and not remote.get("error"):
         return remote
 
-    # Deterministic local fallback using compiled Rust `satya_py` when running offline unit tests
-    satya_lib = _ensure_satya_py_loaded()
+    # Offline fallback (only when server is genuinely unreachable: status_code is None)
     c_stat = max(1, min(30, int(attribute_tn)))
     n_pairs = max(1, min(10, int(skill_rank)))
     b_val = int(env.get("neutral_baseline", 4))
     control_delta = -(c_alloc - b_val) if tech_clean else 0
     base_tc = 3 if tech_clean in {"snap_shot", "cover_peek", "thrust", "punch"} else 6
     eff_tc = max(1, base_tc - max(0, (t_alloc - b_val) // 2)) if tech_clean else None
-    if tech_clean and hasattr(satya_lib, "evaluate_combat_technique_triad"):
+    if tech_clean:
         dom = (
             "ranged"
             if tech_clean
@@ -337,7 +431,7 @@ def roll_player_d20_action(
             )
         )
         try:
-            triad_eval = satya_lib.evaluate_combat_technique_triad(
+            triad_eval = _combat.evaluate_combat_technique_triad(
                 tech_clean,
                 t_alloc,
                 c_alloc,
@@ -354,32 +448,26 @@ def roll_player_d20_action(
             pass
 
     delta_ext = int(difficulty_mod) + control_delta
-    if hasattr(satya_lib, "CascadeTaskParams"):
-        tn_eff = int(
-            satya_lib.CascadeTaskParams(
-                n_pairs,
-                c_stat,
-                int(internal_mod),
-                delta_ext,
-                "markov_step",
-                "closest_miss",
-            ).tn_eff()
-        )
-    else:
-        tn_eff = max(2, min(39, 31 - c_stat + delta_ext))
+    tn_eff = int(
+        _dice.CascadeTaskParams(
+            n_pairs,
+            c_stat,
+            int(internal_mod),
+            delta_ext,
+            "markov_step",
+            "closest_miss",
+        ).tn_eff()
+    )
 
     rolled_pairs: list[list[int]] = []
     pair_tuples: list[tuple[int, int]] = []
-    for idx in range(n_pairs):
-        digest = hashlib.sha256(
-            f"{session_id}|{player_user_id}|{check_category}|{idx}".encode("utf-8")
-        ).digest()
-        d1 = (int.from_bytes(digest[0:4], "big") % 20) + 1
-        d2 = (int.from_bytes(digest[4:8], "big") % 20) + 1
+    for _ in range(n_pairs):
+        d1 = _PLAYER_RNG.randint(1, 20)
+        d2 = _PLAYER_RNG.randint(1, 20)
         rolled_pairs.append([d1, d2])
         pair_tuples.append((d1, d2))
 
-    outcome = satya_lib.evaluate_cascade_roll(
+    outcome = _dice.evaluate_cascade_roll(
         n_pairs,
         c_stat,
         int(internal_mod),
@@ -433,11 +521,47 @@ def roll_player_d20_action(
 
 
 @tool
+def toggle_player_door(
+    cell_x: int,
+    cell_y: int,
+    side: str = "NORTH",
+    session_id: str = "default",
+    player_user_id: str = "ai-player-1",
+) -> dict[str, Any]:
+    """Open or close an unlocked door edge (`NORTH` or `WEST` on grid cell `(cell_x, cell_y)`) within 2.0m of your token."""
+    norm_side = side.strip().upper()
+    if norm_side not in {"NORTH", "WEST"}:
+        return {"error": f"Door side must be 'NORTH' or 'WEST', got '{side}'."}
+    payload = {
+        "user_id": player_user_id,
+        "cell_x": int(cell_x),
+        "cell_y": int(cell_y),
+        "side": norm_side,
+    }
+    remote, status_code, err_body = _http_post_json_detailed(
+        f"{_signaling_base_url()}/api/player-ai/sessions/{session_id}/door",
+        payload,
+        timeout=3.0,
+    )
+    if status_code is not None and remote is None:
+        return {"error": err_body or f"Door toggle rejected (HTTP {status_code})", "status_code": status_code}
+    if isinstance(remote, dict) and remote.get("map_id"):
+        sanitized = sanitize_map_dict_for_player(remote)
+        if sanitized:
+            ctx = get_player_session_context(session_id, player_user_id)
+            ctx["active_map"] = sanitized
+            set_player_session_context(session_id, player_user_id, ctx)
+            return {"status": "toggled", "cell_x": int(cell_x), "cell_y": int(cell_y), "side": norm_side, "active_map": sanitized}
+    return {"error": "Signaling server unreachable to toggle door."}
+
+
+@tool
 def send_player_chat(
     message: str,
     channel_context: str = "IN_CHARACTER",
     visibility: str = "PUBLIC",
     recipient_user_ids: list[str] | None = None,
+    auto_trigger_gm: bool = True,
     session_id: str = "default",
     player_user_id: str = "ai-player-1",
 ) -> dict[str, Any]:
@@ -452,12 +576,15 @@ def send_player_chat(
         "recipient_user_ids": list(recipient_user_ids or []),
         "channel_context": channel_context.upper(),
         "body": message,
+        "auto_trigger_gm": bool(auto_trigger_gm),
     }
-    remote = _http_post_json(
+    remote, status_code, err_body = _http_post_json_detailed(
         f"{_signaling_base_url()}/api/player-ai/sessions/{session_id}/chat",
         payload,
         timeout=3.0,
     )
+    if status_code is not None and remote is None:
+        return {"error": err_body or f"Server rejected chat (HTTP {status_code})", "status_code": status_code}
     if isinstance(remote, dict) and not remote.get("error"):
         return remote
     return {
@@ -471,17 +598,94 @@ def send_player_chat(
     }
 
 
+def _parse_loadout_code_list(raw_json: str, field_name: str) -> list[str]:
+    import json
+
+    stripped = raw_json.strip()
+    if not stripped:
+        return []
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{field_name} must be a JSON array of strings: {exc}") from exc
+    if not isinstance(parsed, list):
+        raise ValueError(f"{field_name} must be a JSON array of strings.")
+    return [str(entry).strip().upper() for entry in parsed if str(entry).strip()]
+
+
+def _extract_loadout_code(entry: Any) -> str:
+    if isinstance(entry, dict):
+        raw = entry.get("code") or entry.get("id") or entry.get("name") or ""
+    else:
+        raw = entry
+    return str(raw).strip().upper()
+
+
+@tool
+def inspect_my_gear_and_cyber_loadout(
+    augment_codes_json: str = "[]",
+    drone_chassis: str = "",
+    drone_modules_json: str = "[]",
+    surgical_quality_q: int = 0,
+    emp_hardened: bool = False,
+    immunosuppressant_compliant: bool = True,
+    session_id: str = "default",
+    player_user_id: str = "",
+) -> dict[str, Any]:
+    """Evaluate only this player's cybernetic augmentation loadout (Ch. 20) and optional drone configuration (Ch. 24) via Rust `satya_py.tech`."""
+    uid = player_user_id.strip() or "ai-player-1"
+    ctx = get_player_session_context(session_id, uid)
+    sheet = ctx.get("character_sheet") or {}
+
+    sheet_augments = sheet.get("cyber_augments") or []
+    extra_augments = _parse_loadout_code_list(augment_codes_json, "augment_codes_json")
+    evaluated_augments: list[str] = []
+    seen_augments: set[str] = set()
+    for item in [*sheet_augments, *extra_augments]:
+        code = _extract_loadout_code(item)
+        if code and code not in seen_augments:
+            seen_augments.add(code)
+            evaluated_augments.append(code)
+
+    cyber_loadout = _tech.evaluate_cyber_augmentation_loadout(
+        augment_codes=evaluated_augments,
+        surgical_quality_q=surgical_quality_q,
+        emp_hardened=emp_hardened,
+        immunosuppressant_compliant=immunosuppressant_compliant,
+    )
+
+    chassis = drone_chassis.strip().upper()
+    drone_loadout: dict[str, Any] | None = None
+    if chassis:
+        drone_modules = _parse_loadout_code_list(drone_modules_json, "drone_modules_json")
+        drone_loadout = _tech.evaluate_modular_drone_design(
+            chassis_code=chassis,
+            module_codes=drone_modules,
+        )
+
+    return {
+        "session_id": str(ctx.get("session_id") or session_id),
+        "player_user_id": str(ctx.get("player_user_id") or uid),
+        "character_id": str(sheet.get("character_id") or ""),
+        "evaluated_augments": evaluated_augments,
+        "cyber_loadout": cyber_loadout,
+        "drone_loadout": drone_loadout,
+    }
+
+
 def get_builtin_player_tools() -> list[Any]:
     """Return the player-scoped `@tool` list bound to the AI Player LangGraph agent."""
     return [
         read_my_character_sheet,
         inspect_public_tactical_map,
         move_player_map_token,
+        toggle_player_door,
         inspect_surroundings,
         lookup_public_lore_and_npcs,
         perform_player_empathy_read,
         update_my_motivation_journal,
-        query_satya_rules,
+        query_satya_rules_public,
         roll_player_d20_action,
         send_player_chat,
+        inspect_my_gear_and_cyber_loadout,
     ]

@@ -348,7 +348,7 @@ def test_wave1_ai_gm_maps_multifloor_tokens_sync_and_stub_preservation(monkeypat
         "active_floor": 0,
         "ground_floor_override": "terrazzo_stone",
         "ground_tint_rgb": [200, 210, 220],
-        "wall_edges": [{"x": 5, "y": 5, "side": "WEST", "kind": "WALL", "material": "CONCRETE"}],
+        "wall_edges": [{"x": 5, "y": 5, "side": "WEST", "kind": "WALL", "material": "CONCRETE_BLOCK"}],
         "props": [],
         "floors": [
             {"floor_index": 0, "label": "1F", "wall_edges": [], "props": [], "surfaces": []},
@@ -356,7 +356,7 @@ def test_wave1_ai_gm_maps_multifloor_tokens_sync_and_stub_preservation(monkeypat
                 "floor_index": 1,
                 "label": "2F",
                 "wall_edges": [
-                    {"x": 4, "y": 4, "side": "NORTH", "kind": "WALL", "material": "CONCRETE"}
+                    {"x": 4, "y": 4, "side": "NORTH", "kind": "WALL", "material": "CONCRETE_BLOCK"}
                 ],
                 "props": [],
                 "surfaces": [],
@@ -456,7 +456,7 @@ def test_wave1_rag_visibility_wall_excludes_summary_secrets_and_gm_rust_links() 
 
         assert (
             classify_rust_symbol_visibility(
-                "crates/satya-engine/src/awakened_campaign_arcs.rs",
+                "crates/satya-campaign/src/awakened_campaign_arcs.rs",
                 "",
                 "seed_conspiracy",
                 "normal code",
@@ -500,7 +500,7 @@ def test_wave1_rag_visibility_wall_excludes_summary_secrets_and_gm_rust_links() 
             {
                 "chunk_id": "rust-secret-1",
                 "corpus": "rust_engine",
-                "source_path": "crates/satya-engine/src/awakened_campaign_arcs.rs",
+                "source_path": "crates/satya-campaign/src/awakened_campaign_arcs.rs",
                 "breadcrumb": "awakened_campaign_arcs",
                 "symbol_or_section": "secret_conspiracy_node",
                 "content": "GM conspiracy matrix linked to combat.md",

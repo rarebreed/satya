@@ -279,7 +279,16 @@ impl AuthAndSessionManager {
                 .unwrap_or_default()
         };
 
-        let session_characters = self.load_session_characters_from_db(sid, &roster).await;
+        let is_gm = matches!(role, SessionRole::Gm | SessionRole::Host);
+        let mut session_characters = self.load_session_characters_from_db(sid, &roster).await;
+        if !is_gm {
+            for sheet in &mut session_characters {
+                if sheet.owner_user_id != user.user_id {
+                    sheet.notes = None;
+                }
+            }
+        }
+        let ai_players = self.load_session_ai_players_from_db(sid).await;
 
         Ok(SessionSnapshotBundle {
             format_version: 1,
@@ -295,6 +304,7 @@ impl AuthAndSessionManager {
             session_characters,
             chat_events,
             mechanics_events,
+            ai_players,
         })
     }
 
@@ -326,12 +336,34 @@ impl AuthAndSessionManager {
             anyhow::bail!("session_password cannot be empty when importing a session");
         }
 
+        let live_exists = self.sessions.read().await.contains_key(&target_sid);
+        let saved_exists = self
+            .load_saved_session_meta_from_db(&target_sid)
+            .await
+            .is_some();
+        if live_exists || saved_exists {
+            let authorized = match self.resolve_authorized_member_role(&target_sid, user).await {
+                Ok((_, member_role, _)) => {
+                    matches!(member_role, SessionRole::Gm | SessionRole::Host)
+                }
+                Err(_) => false,
+            };
+            if !authorized {
+                anyhow::bail!(
+                    "Session '{target_sid}' already exists; only an authorized GM/HOST may import over it"
+                );
+            }
+        }
+
         let password_hash = Self::hash_secret(&req.session_password)?;
         let session_mode = req.bundle.session_mode;
         let role = req.role.unwrap_or(match session_mode {
             SessionMode::Ttrpg => SessionRole::Gm,
             SessionMode::Meeting => SessionRole::Host,
         });
+        if role == SessionRole::AiGm {
+            anyhow::bail!("Human participants cannot import a session with the AI_GM role");
+        }
 
         let mut self_participant = Participant::human(
             &user.user_id,
@@ -354,6 +386,38 @@ impl AuthAndSessionManager {
                 ai_p.user_id = format!("ai-gm-{target_sid}");
                 roster.insert(ai_p.user_id.clone(), ai_p);
             }
+        }
+        for mut ai_cfg in req.bundle.ai_players.clone() {
+            let raw_uid = ai_cfg
+                .user_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or("ai-player-1");
+            if !raw_uid.starts_with("ai-player-") {
+                continue;
+            }
+            let uid = raw_uid.to_string();
+            ai_cfg.user_id = Some(uid.clone());
+            // Strip untrusted service URLs from portable `.satyasession` bundles to block SSRF smuggling.
+            ai_cfg.service_url = None;
+            self.upsert_session_ai_player_to_db(&target_sid, &ai_cfg)
+                .await;
+            let prov = ai_cfg.provider.as_deref().unwrap_or("ollama");
+            let model = ai_cfg.model_id.as_deref().unwrap_or("gemma4:12b");
+            let composite = if model.contains('/') {
+                model.to_string()
+            } else {
+                format!("{prov}/{model}")
+            };
+            let ai_p = Participant::ai_player(
+                &uid,
+                ai_cfg.display_name.as_deref().unwrap_or(&uid),
+                ai_cfg.character_id.clone(),
+                &composite,
+                "tactical-party-player",
+            );
+            roster.insert(uid, ai_p);
         }
         let roster_vec: Vec<Participant> = roster.values().cloned().collect();
 
@@ -386,6 +450,10 @@ impl AuthAndSessionManager {
         let mut gm_documents = req.bundle.gm_documents;
         for doc in &mut gm_documents {
             doc.session_id = target_sid.clone();
+            let sid_prefix = format!("{target_sid}::");
+            if !doc.doc_id.starts_with(&sid_prefix) {
+                doc.doc_id = format!("{sid_prefix}{}", doc.doc_id);
+            }
             if doc.is_persistent {
                 let _ = self.persist_gm_doc_to_db(doc).await;
             }
@@ -394,6 +462,10 @@ impl AuthAndSessionManager {
         let mut gm_memories = req.bundle.gm_memories;
         for mem in &mut gm_memories {
             mem.session_id = target_sid.clone();
+            let sid_prefix = format!("{target_sid}::");
+            if !mem.memory_id.starts_with(&sid_prefix) && !mem.memory_id.starts_with("mem_npc_") {
+                mem.memory_id = format!("{sid_prefix}{}", mem.memory_id);
+            }
             if mem.is_persistent {
                 let _ = sqlx::query(
                     r#"
@@ -610,6 +682,9 @@ pub async fn import_session_snapshot_handler(
                 .as_ref()
                 .map(|c| c.session_id.clone())
                 .unwrap_or_default();
+            if !sid.is_empty() {
+                state.ensure_session_ai_players_loaded(&sid).await;
+            }
             (
                 StatusCode::OK,
                 Json(json!(SessionEnterResponse {

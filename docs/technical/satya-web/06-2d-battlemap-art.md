@@ -32,7 +32,7 @@
    - Wheel zoom and drag-pan mutate only the `viewBox` attribute on `#battlemap-art` and `#battlemap-overlay` via `sync_map_camera_and_edge_controls_dom()` with zero DOM rebuilds (`#btn-map-zoom-out`, `#map-zoom-readout`, `#btn-map-zoom-in`, and `#btn-map-reset-cam` / double-click).
 2. **`#battlemap-overlay` (Dynamic Interaction Layer)**:
    - Routes `onwheel`, `onmousedown`, `onmousemove`, `onmouseup`, and `onmouseleave` into `map_2d_camera.rs` (`satyaBattlemapWheel`, `satyaBattlemapMouse*`), unprojecting client pixels into continuous metric coordinates `(fx, fy)` across any zoom/pan or container aspect ratio.
-   - When an authorized user (Human GM/Host, solo player in an AI GM session, or offline user) pans to a cardinal boundary or overscrolls `>= 120px` past it, directional `#btn-map-continue-{north,south,west,east}` controls trigger edge-matched procedural stitching (`satya_engine::tactical_map::continue_procedural_map`, up to `80m × 56m`).
+   - When an authorized user (Human GM/Host, solo player in an AI GM session, or offline user) pans to a cardinal boundary or overscrolls `>= 120px` past it, directional `#btn-map-continue-{north,south,west,east}` controls trigger edge-matched procedural stitching (`satya_maps::tactical_map::continue_procedural_map`, up to `80m × 56m`).
 
 ---
 
@@ -69,13 +69,13 @@ Each token in `ui.map.tokens` renders as a layered medallion inside `#battlemap-
 
 When `#map-click-mode` is `"edit_terrain"`, the subbar reveals `#map-prop-brush-select` (`PROP_BRUSH_GROUPS` covering all `52` `PropKind` variants including `StructuralPillar`, `ElevatedCatwalk`, `HazardSpill`, `Landscaping & Terrain`, `"Wall / Door / Window Edge"`, and `"__erase__"`) plus `#btn-map-prop-rotate` (`+15°` steps across full `0..359°`), `#map-prop-rot-deg` numeric degree input (`satyaSetMapPropRotationDeg`), and `#btn-map-snap-toggle` (`satyaToggleMapGridSnap`):
 - **Continuous Ghost Preview**: `#battlemap-overlay` renders the rotated OBB or circle silhouette centered at `hovered_point_m` (snapped to `0.50m` only when snap is enabled, otherwise free continuous meters; `#0ea5e9` when valid, `#e11d48` when out of bounds, colliding, or erasing a prop).
-- **Vector Scene Mutation (`satya_engine::tactical_map_geom`)**: Both the optimistic Wasm handler (`handle_map_point_clicked`) and `POST /api/sessions/:id/map` (`satya-signaling::map_handlers`, GM-only guarded) invoke `place_prop_on_map` / `remove_prop_at_point` with `tiles: []`. Updating or removing a prop immediately refreshes `#battlemap-art`, `#battlemap-overlay`, `ReachableField`, LoS, and 3D WebGPU geometry.
+- **Vector Scene Mutation (`satya_maps::tactical_map_geom`)**: Both the optimistic Wasm handler (`handle_map_point_clicked`) and `POST /api/sessions/:id/map` (`satya-signaling::map_handlers`, GM-only guarded) invoke `place_prop_on_map` / `remove_prop_at_point` with `tiles: []`. Updating or removing a prop immediately refreshes `#battlemap-art`, `#battlemap-overlay`, `ReachableField`, LoS, and 3D WebGPU geometry.
 
 ---
 
 ## 6. Object & Ground Hover Inspector (`map_hover_inspect.rs`)
 
-Moving the pointer anywhere over `#battlemap-overlay` or `#wgpu-map-canvas` dispatches `satyaHoverMapPoint(fx, fy, clientX, clientY)` into `compute_hover_inspection` (`satya_engine::tactical_map_geom::inspect_map_point`), classifying the topmost entity in priority order:
+Moving the pointer anywhere over `#battlemap-overlay` or `#wgpu-map-canvas` dispatches `satyaHoverMapPoint(fx, fy, clientX, clientY)` into `compute_hover_inspection` (`satya_maps::tactical_map_geom::inspect_map_point`), classifying the topmost entity in priority order:
 1. **Tokens** (`0.42m` pick radius): label, stance pose, visibility, facing degrees, and metric coordinates.
 2. **Wall / Door / Window Edges**: `MaterialClass` (`Brick`, `Drywall`, `ConcreteBlock`, `Glass`, etc.) + cover/breach rating.
 3. **3D / Solid Props (incl. Sub-Zones)**: distinguishes `Car` / `UtilityVan` front `Engine Block` (`ArmorSteel` hard cover) from cabin, and `LargeTree` / `MediumTree` solid `Trunk` (`LiveWood`) from overhead `Canopy` (`Foliage`, `2.10m` elevation).

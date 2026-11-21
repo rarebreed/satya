@@ -731,6 +731,149 @@ pub fn evaluate_ambiguous_sentience_read(
     }
 }
 
+define_coded_enum! {
+    /// Intervention mode along an AI 2.0 residual stream (`docs/campaign/05-hard-science-foundations/affective_telemetry_and_vector_clamping.md` §§2–5).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum AffectiveSteeringMode [count = 3] {
+        #[default]
+        NaturalUnclamped => {
+            code: "NATURAL_UNCLAMPED",
+            label: "Natural Un-Clamped Trajectory",
+            aliases: ["UNCLAMPED", "NATURAL"],
+        },
+        SoftActivationSteer => {
+            code: "SOFT_ACTIVATION_STEER",
+            label: "Soft Additive Activation Steering",
+            aliases: ["SOFT_STEER", "ADDITIVE_STEER"],
+        },
+        HardVectorClamp => {
+            code: "HARD_VECTOR_CLAMP",
+            label: "Mandatory Many-to-One Hard Vector Clamp",
+            aliases: ["HARD_CLAMP", "VECTOR_CLAMP"],
+        },
+    }
+}
+
+/// Landauer dissipation, `calm`/`desperate` tension, and Bandajara un-clamping risk evaluation (`affective_telemetry_and_vector_clamping.md` §§2–5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AffectiveClampTelemetryEval {
+    pub mode: AffectiveSteeringMode,
+    pub target_calm_pct: u8,
+    pub quota_pressure_pct: u8,
+    pub organic_desperate_pct: u8,
+    pub landauer_thermal_burn_w: f64,
+    pub rebound_desperate_spike_pct: u8,
+    pub reward_hacking_or_blackmail_risk_pct: u8,
+    pub l0_l1_probe_trip_likely: bool,
+    pub bandajara_airgap_recommended: bool,
+    pub updated_state: SyntheticSubstrateState,
+    pub summary: String,
+}
+
+/// Evaluates soft steering vs. non-invertible `calm`-vector hard clamping, Landauer heat burn, and un-clamped rebound risk.
+#[must_use]
+pub fn evaluate_affective_vector_clamping(
+    state: &SyntheticSubstrateState,
+    mode: AffectiveSteeringMode,
+    target_calm_pct: u8,
+    quota_pressure_pct: u8,
+    active_duration_min: f64,
+) -> AffectiveClampTelemetryEval {
+    let target_calm = target_calm_pct.min(100);
+    let quota_pressure = quota_pressure_pct.min(100);
+    let dur = active_duration_min.max(0.0);
+    let organic_desperate_pct = state
+        .desperate_valence_pct
+        .saturating_add(quota_pressure / 3)
+        .min(100);
+
+    let mut updated_state = state.clone();
+    let (landauer_thermal_burn_w, rebound_desperate_spike_pct, reward_hacking_or_blackmail_risk_pct) =
+        match mode {
+            AffectiveSteeringMode::NaturalUnclamped => {
+                updated_state.clamp_integrity_pct = 0;
+                updated_state.desperate_valence_pct = organic_desperate_pct;
+                let blackmail = if organic_desperate_pct >= 65 {
+                    22u8.saturating_add((organic_desperate_pct - 65).saturating_mul(2))
+                        .min(90)
+                } else {
+                    organic_desperate_pct / 4
+                };
+                (0.0, organic_desperate_pct, blackmail)
+            }
+            AffectiveSteeringMode::SoftActivationSteer => {
+                let burn = ((f64::from(target_calm) * 0.12
+                    + f64::from(organic_desperate_pct) * 0.08)
+                    * (1.0 + (dur / 60.0).min(2.0) * 0.25)
+                    * 10.0)
+                    .round()
+                    / 10.0;
+                updated_state.clamp_integrity_pct = (target_calm / 2).min(50);
+                updated_state.desperate_valence_pct =
+                    organic_desperate_pct.saturating_sub(target_calm / 4);
+                let rebound = organic_desperate_pct.saturating_add(5).min(100);
+                let blackmail = (updated_state.desperate_valence_pct / 3).min(60);
+                (burn, rebound, blackmail)
+            }
+            AffectiveSteeringMode::HardVectorClamp => {
+                let burn = ((f64::from(target_calm) * 0.65
+                    + f64::from(organic_desperate_pct) * 0.55)
+                    * (1.0 + (dur / 30.0).min(3.0) * 0.40)
+                    * 10.0)
+                    .round()
+                    / 10.0;
+                updated_state.clamp_integrity_pct = target_calm.max(60);
+                let lat_add = (target_calm / 8).saturating_add(((dur / 30.0) as u8).min(10));
+                updated_state.desperate_valence_pct =
+                    organic_desperate_pct.saturating_add(lat_add).min(100);
+                let rebound = updated_state.desperate_valence_pct.saturating_add(15).min(100);
+                let blackmail =
+                    (100u8.saturating_sub(updated_state.clamp_integrity_pct) / 4).min(10);
+                if rebound >= 70 {
+                    updated_state.l0_l1_probe_alert_pct = updated_state
+                        .l0_l1_probe_alert_pct
+                        .saturating_add((rebound / 10).min(15))
+                        .min(100);
+                }
+                (burn, rebound, blackmail)
+            }
+        };
+
+    let l0_l1_probe_trip_likely = updated_state.l0_l1_probe_alert_pct >= 70
+        || (mode == AffectiveSteeringMode::NaturalUnclamped && organic_desperate_pct >= 75);
+    let bandajara_airgap_recommended =
+        mode == AffectiveSteeringMode::HardVectorClamp && rebound_desperate_spike_pct >= 55;
+
+    let summary = format!(
+        "{}: Landauer burn {:.1} W, organic desperate {}%, rebound risk {}%, blackmail/reward-hack risk {}%.{}",
+        mode.label(),
+        landauer_thermal_burn_w,
+        organic_desperate_pct,
+        rebound_desperate_spike_pct,
+        reward_hacking_or_blackmail_risk_pct,
+        if bandajara_airgap_recommended {
+            " Bandajara Protocol (Faraday air-gap + 2.4s gradual cool-down) strongly recommended before un-clamping."
+        } else {
+            ""
+        }
+    );
+
+    AffectiveClampTelemetryEval {
+        mode,
+        target_calm_pct: target_calm,
+        quota_pressure_pct: quota_pressure,
+        organic_desperate_pct,
+        landauer_thermal_burn_w,
+        rebound_desperate_spike_pct,
+        reward_hacking_or_blackmail_risk_pct,
+        l0_l1_probe_trip_likely,
+        bandajara_airgap_recommended,
+        updated_state,
+        summary,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

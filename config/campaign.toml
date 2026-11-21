@@ -6,7 +6,7 @@ active_pack = "awakened"
 
 [packs.awakened]
 title = "Awakened (Near-Future Earth 2035)"
-default_sector_preset = "urban_crossroads"
+default_sector_preset = "community_clinic_annex"
 allow_scifi_sector_presets = false
 lore_dirs = ["docs/campaign"]
 npc_toml_file = "data/npcs/awakened_npcs.toml"

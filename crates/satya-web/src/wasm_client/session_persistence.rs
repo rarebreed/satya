@@ -206,9 +206,11 @@ pub(crate) fn replay_session_history_snapshot(history: Option<SessionHistorySnap
         if let Some(ct) = hist.combat_tracker {
             let tick = ct.tick;
             let round = ct.round.max(1);
+            let combatants = ct.combatants;
             with_state_mut(|st| {
                 st.combat_tick = tick;
                 st.combat_round = round;
+                st.combat_combatants = combatants;
             });
             let elapsed_sec = f64::from(tick) * SECONDS_PER_TICK;
             set_text(

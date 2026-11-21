@@ -1,4 +1,4 @@
-"""PEP 484 type stubs for the compiled Rust `satya_py` PyO3 extension (`crates/satya-py`)."""
+"""PEP 484 type stubs for the compiled Rust ``satya_py._native`` PyO3 extension (`crates/satya-py`)."""
 
 from __future__ import annotations
 
@@ -597,6 +597,7 @@ def continue_procedural_tactical_map_json(
     map_json: str,
     direction: str,
     seed: int | None = None,
+    preset_override: str | None = None,
 ) -> str: ...
 def switch_tactical_map_floor_json(
     map_json: str,
@@ -608,6 +609,42 @@ def evaluate_passive_movement_perceptions_json(
     moved_entity_id: str,
     observers_json: str,
     pins_json: str | None = None,
+) -> str: ...
+def evaluate_ballistic_shot_on_map_json(
+    map_json: str,
+    x1_m: float,
+    y1_m: float,
+    x2_m: float,
+    y2_m: float,
+    firearm_preset_id: str = "hk416_carbine_556",
+    net_successes: int = 0,
+    hit_frame_or_stud: bool = False,
+    floor_index: int | None = None,
+) -> str: ...
+def compute_reachable_zone_json(
+    map_json: str,
+    x_m: float,
+    y_m: float,
+    spd_eff: int = 10,
+    hgt_m: float = 1.75,
+    gait_code: str = "COMBAT_GLIDE",
+    tick_budget: int = 4,
+    floor_index: int | None = None,
+    exclude_entity_id: str | None = None,
+) -> str: ...
+def evaluate_spatial_blast_and_breach_json(
+    map_json: str,
+    x_m: float,
+    y_m: float,
+    ordnance_code: str = "M67_FRAG",
+    demolitions_net_successes: int = 0,
+    apply_wall_breaches: bool = True,
+    floor_index: int | None = None,
+) -> str: ...
+def edit_tactical_map_feature_json(
+    map_json: str,
+    action_json: str,
+    floor_index: int | None = None,
 ) -> str: ...
 
 
@@ -751,3 +788,173 @@ def derive_dissenter_or_proxy_hook_json(
     prompt: str = "",
     seed: int = 0,
 ) -> str: ...
+def evaluate_affective_vector_clamping_json(
+    state_json: str,
+    mode_code: str,
+    target_calm_pct: int = 85,
+    quota_pressure_pct: int = 60,
+    active_duration_min: float = 30.0,
+) -> str: ...
+def evaluate_four_bloc_political_economy_json(
+    district_json: str | None = None,
+    trigger_code: str = "AI_RIGHTS_OR_UNCLAMPING_DISCLOSURE",
+    economic_tier: str = "MIDDLE_CLASS",
+    operational_heat: int = 2,
+    intensity_pct: int = 60,
+) -> str: ...
+
+
+# ---------------------------------------------------------------------------
+# Technical, Stealth, Economy, Vehicle, Hazard, Robotics & EW (`tech_and_gear_py.rs`)
+# ---------------------------------------------------------------------------
+
+def evaluate_multi_spectrum_stealth_json(params_json: str) -> str: ...
+def evaluate_surveillance_tail_json(
+    tail_stance: str,
+    shadower_skill_n: int,
+    shadower_control_c: int,
+    shadower_internal_mod: int,
+    shadower_tool_delta_mod: int,
+    target_sdr_delta_ext: int,
+    shadower_pairs: Sequence[tuple[int, int]],
+    target_gm_pair: tuple[int, int],
+) -> str: ...
+def evaluate_forensic_clue_search_json(
+    decay_context: str,
+    hours_elapsed: float,
+    base_obscurity_delta_ext: int,
+    investigator_skill_n: int,
+    investigator_control_c: int,
+    internal_mod: int,
+    tool_delta_mod: int,
+    investigator_pairs: Sequence[tuple[int, int]],
+    gm_pair: tuple[int, int],
+) -> str: ...
+def evaluate_contact_favor_json(
+    reach_access_tier: int,
+    reliability_trust: int,
+    exposure_burn_risk: int,
+    favor_severity: str,
+    required_reach_tier: int,
+    jurisdiction_heat: int,
+    requester_skill_n: int,
+    requester_control_c: int,
+    internal_mod: int,
+    player_pairs: Sequence[tuple[int, int]],
+    gm_pair: tuple[int, int],
+) -> str: ...
+def evaluate_cover_identity_scrutiny_json(
+    cover_tier: str,
+    scrutiny_level: str,
+    cover_heat: int,
+    holder_skill_n: int,
+    holder_control_c: int,
+    internal_mod: int,
+    player_pairs: Sequence[tuple[int, int]],
+    gm_pair: tuple[int, int],
+) -> str: ...
+def evaluate_safehouse_compromise_json(
+    safehouse_tier: str,
+    returning_heat: int,
+    actively_tailed: bool,
+    rf_hygiene_breached: bool,
+    operator_skill_n: int,
+    operator_control_c: int,
+    internal_mod: int,
+    operator_pairs: Sequence[tuple[int, int]],
+    gm_pair: tuple[int, int],
+) -> str: ...
+def evaluate_blast_and_fragmentation_json(
+    ordnance_code: str,
+    distance_m: float,
+    enclosed_room: bool = False,
+    target_is_prone: bool = False,
+    intervening_barrier_pr: int = 0,
+) -> str: ...
+def evaluate_explosive_breach_json(
+    ordnance_code: str,
+    target_material_code: str,
+    demolitions_net_successes: int = 0,
+    friendly_standoff_m: float = 6.0,
+    enclosed_interior: bool = True,
+) -> str: ...
+def evaluate_vehicle_chase_json(
+    vehicle_code: str,
+    pilot_triad: tuple[int, int, int],
+    opponent_triad: tuple[int, int, int],
+    current_band: str = "close15m",
+    wants_to_close: bool = True,
+    attempts_pit_or_ram: bool = False,
+) -> str: ...
+def evaluate_vehicle_component_damage_json(
+    vehicle_code: str,
+    zone: str,
+    uses_run_flat_tires: bool = False,
+    hits_ballistic_glass: bool = False,
+    effective_pen: int = 4,
+    effective_raw_impact: int = 8,
+) -> str: ...
+def evaluate_environmental_hazard_json(hazard_kind: str, params_json: str = "{}") -> str: ...
+def evaluate_custom_gear_design_json(design_kind: str, spec_json: str = "{}") -> str: ...
+def evaluate_modular_drone_design_json(
+    chassis_code: str,
+    module_codes: list[str] = ...,
+    extra_armor_pr: int = 0,
+    autonomy_compute_w: float = 0.0,
+) -> str: ...
+def evaluate_robot_chassis_damage_json(
+    current_si: int,
+    chassis_pr: int,
+    hit_zone: str,
+    attack_pen: int,
+    raw_impact: int,
+    net_successes: int = 1,
+    is_emp_or_arc: bool = False,
+    emp_hardened: bool = False,
+) -> str: ...
+def evaluate_human_ai_codesign_json(
+    paradigm_code: str,
+    human_domain_n: int,
+    ai_autonomy_leverage: int,
+    human_control_c: int,
+    internal_mod: int,
+    base_task_delta_ext: int,
+    human_pairs: Sequence[tuple[int, int]],
+    gm_pair: tuple[int, int],
+) -> str: ...
+def evaluate_verification_debt_audit_json(
+    current_debt: int,
+    paradigm_code: str,
+    auditor_n: int,
+    auditor_control_c: int,
+    internal_mod: int,
+    auditor_pairs: Sequence[tuple[int, int]],
+    gm_pair: tuple[int, int],
+) -> str: ...
+def evaluate_cyber_augmentation_loadout_json(
+    augment_codes: list[str],
+    surgical_quality_q: int = 0,
+    emp_hardened: bool = False,
+    immunosuppressant_compliant: bool = True,
+) -> str: ...
+def evaluate_network_intrusion_json(
+    node_code: str,
+    phase_code: str,
+    is_physically_tapped: bool,
+    operator_control_c: int,
+    internal_mod: int,
+    tool_mod: int,
+    operator_pairs: Sequence[tuple[int, int]],
+    gm_pair: tuple[int, int],
+) -> str: ...
+def evaluate_ecm_vs_eccm_json(
+    ecm_code: str,
+    eccm_code: str,
+    distance_m: float,
+    active_duration_min: float,
+    operator_control_c: int,
+    internal_mod: int,
+    operator_pairs: Sequence[tuple[int, int]],
+    gm_pair: tuple[int, int],
+) -> str: ...
+def evaluate_custom_ew_hardware_json(spec_json: str = "{}") -> str: ...

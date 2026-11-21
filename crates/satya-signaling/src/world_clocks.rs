@@ -187,8 +187,15 @@ pub async fn get_session_world_ledger_handler(
     };
     let sid = session_id.trim();
     if let Some(ref user) = user_opt {
-        let roster = state.auth.get_session_roster(sid).await;
-        if !roster.is_empty() && !roster.iter().any(|p| p.user_id == user.user_id) {
+        if !state.auth.sessions.read().await.contains_key(sid) {
+            let _ = state.auth.rehydrate_session_from_db(sid).await;
+        }
+        if state
+            .auth
+            .resolve_authorized_member_role(sid, user)
+            .await
+            .is_err()
+        {
             return (
                 StatusCode::FORBIDDEN,
                 Json(json!({ "error": "Caller is not an active participant in this session" })),

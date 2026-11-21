@@ -71,6 +71,22 @@ async fn prepare_npc_request(
             "session_id cannot be empty",
         )));
     }
+    if let Some(ref user) = user_opt {
+        if !state.auth.sessions.read().await.contains_key(sid) {
+            let _ = state.auth.rehydrate_session_from_db(sid).await;
+        }
+        if state
+            .auth
+            .resolve_authorized_member_role(sid, user)
+            .await
+            .is_err()
+        {
+            return Err(Box::new(json_err(
+                StatusCode::FORBIDDEN,
+                "Caller is not a participant in this session",
+            )));
+        }
+    }
     let can_see_gm = can_caller_view_gm_secrets(state, sid, user_opt.as_ref(), is_gm_service).await;
     if require_gm && !can_see_gm {
         return Err(Box::new(json_err(

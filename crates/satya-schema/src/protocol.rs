@@ -107,6 +107,9 @@ pub struct AiGmProviderConfig {
     /// Optional custom base URL (e.g. for local Ollama or custom OpenAI-compatible gateway).
     #[serde(default)]
     pub base_url: Option<String>,
+    /// Explicitly clear an existing in-memory BYOK API key when updating provider settings.
+    #[serde(default)]
+    pub clear_api_key: bool,
 }
 
 fn default_gm_temperature() -> f32 {
@@ -558,6 +561,10 @@ pub struct SessionGmMemoriesResponse {
     pub memories: Vec<GmMemoryNoteRecord>,
 }
 
+fn default_public_visibility() -> MessageVisibility {
+    MessageVisibility::Public
+}
+
 /// Per-combatant readiness and stance entry on the Satya Count-Up Tick timeline (`1 Tick = 0.25s`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CombatantTickEntry {
@@ -581,6 +588,9 @@ pub struct CombatantTickEntry {
     /// Optional named tactical zone or cover position stub (e.g. `"Core Console"`, `"Entry Bulkhead"`).
     #[serde(default)]
     pub zone_label: Option<String>,
+    /// Visibility tier of this combatant entry (`PUBLIC` default, or `GM_ONLY` for hidden foes).
+    #[serde(default = "default_public_visibility")]
+    pub visibility: MessageVisibility,
 }
 
 /// Authoritative Satya Count-Up Tick Combat Tracker state for a session (`1 Tick = 0.25s`, `1 Window = 20 Ticks = 5.0s`).
