@@ -11,8 +11,8 @@ use crate::wasm_client::map_3d::{
 };
 use crate::wasm_client::state::with_state;
 use satya_engine::ballistics::lookup_firearm_preset;
-use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
-use satya_engine::tactical_map_geom::{TOKEN_PICK_RADIUS_M, resolve_token_destination_cm};
+use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
+use satya_maps::tactical_map_geom::{TOKEN_PICK_RADIUS_M, resolve_token_destination_cm};
 use satya_schema::tactical_map_dto::MapScalePreset;
 use satya_schema::{
     GenerateSessionMapRequest, GmMapUpdateRequest, MessageVisibility, MoveMapTokenRequest,
@@ -303,8 +303,7 @@ pub fn continue_session_map_in_direction(dir: satya_schema::MapContinuationDir) 
     let has_session = auth_token.is_some() && session_id.is_some();
 
     let next_action = with_map_ui_mut(|ui| {
-        if ui.continuation_in_flight || !satya_engine::tactical_map::can_continue_map(&ui.map, dir)
-        {
+        if ui.continuation_in_flight || !satya_maps::tactical_map::can_continue_map(&ui.map, dir) {
             return None;
         }
         ui.seed_counter = ui.seed_counter.wrapping_add(193);
@@ -320,8 +319,7 @@ pub fn continue_session_map_in_direction(dir: satya_schema::MapContinuationDir) 
             Some((seed, preset, None))
         } else {
             let outcome =
-                satya_engine::tactical_map::continue_procedural_map(&ui.map, dir, Some(seed))
-                    .ok()?;
+                satya_maps::tactical_map::continue_procedural_map(&ui.map, dir, Some(seed)).ok()?;
             ui.pending_stitch_nudge = Some(dir);
             Some((seed, preset, Some(outcome.map)))
         }

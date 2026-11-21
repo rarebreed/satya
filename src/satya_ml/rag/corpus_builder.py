@@ -344,6 +344,8 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
     """Extract high-signal Rust symbol cards (`define_coded_enum!`, `pub struct/fn`, `#[pyfunction]`, module `//!`)."""
     src_roots = [
         (repo_root / "crates" / "satya-engine" / "src", "satya-engine"),
+        (repo_root / "crates" / "satya-campaign" / "src", "satya-campaign"),
+        (repo_root / "crates" / "satya-maps" / "src", "satya-maps"),
         (repo_root / "crates" / "satya-py" / "src", "satya-py"),
     ]
     chunks: list[dict[str, Any]] = []
@@ -355,7 +357,11 @@ def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
             continue
         for rs_path in sorted(src_dir.glob("*.rs")):
             # Skip pure 3D/map procedural geometry builders that don't encode rules or AI GM symbols.
-            if rs_path.name.startswith(("map_gen_", "map_outdoor", "map_sector", "map_dressing", "map_surface", "tactical_map_mesh")):
+            if rs_path.name.startswith((
+                "map_gen_", "map_outdoor", "map_sector", "map_dressing", "map_surface",
+                "map_interior", "map_home_", "map_room_", "map_estate_", "map_urban_",
+                "map_pool_", "tactical_map_mesh", "tests_",
+            )):
                 continue
             try:
                 raw_text = rs_path.read_text(encoding="utf-8", errors="ignore")

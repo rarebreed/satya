@@ -740,13 +740,9 @@ fn prop_slices_wall_segment(p: &MapPropPlacement, a: (f32, f32), b: (f32, f32)) 
                 (hx - WALL_SKIN_EPS_M).max(0.05),
                 (hy - WALL_SKIN_EPS_M).max(0.05),
             ),
-            LocalShape::Circle { cx, cy, r } => intersect_segment_circle(
-                la,
-                lb,
-                cx,
-                cy,
-                (r - WALL_SKIN_EPS_M).max(0.05),
-            ),
+            LocalShape::Circle { cx, cy, r } => {
+                intersect_segment_circle(la, lb, cx, cy, (r - WALL_SKIN_EPS_M).max(0.05))
+            }
             _ => None,
         };
         if let Some((t0, t1)) = hit

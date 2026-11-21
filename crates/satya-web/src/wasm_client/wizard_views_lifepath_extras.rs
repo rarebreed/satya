@@ -5,9 +5,10 @@
 use crate::wasm_client::dom::{escape_html, set_feedback};
 use crate::wasm_client::state::with_state_mut;
 use crate::wasm_client::wizard::{CharacterWizardState, render_character_wizard};
+use satya_campaign::{FactionArchetypeId, FactionArchetypeSpec};
 use satya_engine::{
-    CareerTermConfig, FactionArchetypeId, FactionArchetypeSpec, FormativeLifeEventId,
-    LifeEventChoiceBranch, LifepathBuildConfig, PersonalHobbyId, resolve_formative_life_event,
+    CareerTermConfig, FormativeLifeEventId, LifeEventChoiceBranch, LifepathBuildConfig,
+    PersonalHobbyId, resolve_formative_life_event,
 };
 use wasm_bindgen::prelude::*;
 
@@ -54,7 +55,7 @@ pub fn apply_faction_template_to_wizard(
     let arch = FactionArchetypeId::from_code_str(trimmed)?;
     let spec = arch.spec();
 
-    wiz.lifepath.faction_archetype = Some(arch);
+    wiz.lifepath.faction_archetype = Some(arch.as_str().to_string());
     wiz.lifepath.origin_roll_2d20 = spec.origin_roll_2d20;
     wiz.lifepath.stage4_path_override = Some(spec.stage4_path);
     if let Some(hs) = spec.stage4a_hs_track {
@@ -283,7 +284,11 @@ fn format_life_event_select_and_branch_html(
 /// Renders the optional *Awakened* 5-Faction Quick-Start Archetype selector at the top of Step 4.
 #[must_use]
 pub fn format_faction_quickstart_fieldset_html(st: &CharacterWizardState) -> String {
-    let cur = st.lifepath.faction_archetype;
+    let cur = st
+        .lifepath
+        .faction_archetype
+        .as_deref()
+        .and_then(FactionArchetypeId::from_code_str);
     let none_sel = if cur.is_none() { " selected" } else { "" };
     let mut opts =
         format!(r#"<option value="NONE"{none_sel}>-- Custom / Independent Lifepath --</option>"#);

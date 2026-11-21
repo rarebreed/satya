@@ -1,6 +1,6 @@
 //! Markdown, LaTeX Math, and Mermaid Flowchart to HTML rendering engine for the Satya TTRPG Rules Book.
 
-pub use crate::rules_book::render_mermaid_to_html;
+pub use crate::render_mermaid_to_html;
 
 pub fn extract_markdown_headings(markdown: &str) -> Vec<String> {
     let mut headings = Vec::new();
@@ -936,7 +936,12 @@ struct CalloutSpec {
 
 fn parse_callout_header(first: &str) -> CalloutSpec {
     const TAGS: &[(&str, &str, &str, &str)] = &[
-        ("[!NOTE]", "blockquote", "rules-alert rules-alert-note", "NOTE"),
+        (
+            "[!NOTE]",
+            "blockquote",
+            "rules-alert rules-alert-note",
+            "NOTE",
+        ),
         ("[!TIP]", "blockquote", "rules-alert rules-alert-tip", "TIP"),
         (
             "[!IMPORTANT]",
@@ -956,7 +961,12 @@ fn parse_callout_header(first: &str) -> CalloutSpec {
             "rules-alert rules-alert-caution",
             "CAUTION",
         ),
-        ("[!SIDEBAR]", "aside", "rules-alert rules-sidebar", "SIDEBAR"),
+        (
+            "[!SIDEBAR]",
+            "aside",
+            "rules-alert rules-sidebar",
+            "SIDEBAR",
+        ),
         (
             "[!EXAMPLE]",
             "aside",
@@ -969,7 +979,12 @@ fn parse_callout_header(first: &str) -> CalloutSpec {
             "rules-alert rules-dossier",
             "FIELD DOSSIER",
         ),
-        ("[!LORE]", "aside", "rules-alert rules-dossier", "FIELD DOSSIER"),
+        (
+            "[!LORE]",
+            "aside",
+            "rules-alert rules-dossier",
+            "FIELD DOSSIER",
+        ),
         (
             "[!STATBLOCK]",
             "aside",

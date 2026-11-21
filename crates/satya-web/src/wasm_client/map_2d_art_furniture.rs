@@ -582,7 +582,11 @@ pub fn push_furniture_glyph_with_mode(
                 out,
                 [-l + 4.0, -t + 6.0, lw - 8.0, lh - 12.0],
                 14.0,
-                if painted { "url(#bm-porcelain)" } else { "#f4f7f9" },
+                if painted {
+                    "url(#bm-porcelain)"
+                } else {
+                    "#f4f7f9"
+                },
                 "",
             );
             rect(
@@ -595,7 +599,11 @@ pub fn push_furniture_glyph_with_mode(
             circle(out, l - 22.0, 0.0, 2.5, "#8b959b", r#"stroke-width="1""#);
         }
         PropKind::Toilet => {
-            let porcelain = if painted { "url(#bm-porcelain)" } else { "#f4f4f2" };
+            let porcelain = if painted {
+                "url(#bm-porcelain)"
+            } else {
+                "#f4f4f2"
+            };
             rect(out, [-14.0, -t + 5.0, 28.0, 11.0], 3.0, porcelain, "");
             let _ = write!(
                 out,
@@ -1431,7 +1439,7 @@ pub fn push_tree_canopy_glyph_with_mode(
     let (cx_m, cy_m) = p.center_m();
     let (cx, cy) = (cx_m * cell_px, cy_m * cell_px);
     let v = p.variant_seed;
-    let r = satya_engine::tactical_map_geom::tree_canopy_radius_m(p.kind) * cell_px;
+    let r = satya_maps::tactical_map_geom::tree_canopy_radius_m(p.kind) * cell_px;
     let outer = pick(v, CANOPY_OUTER);
     let mid = pick(v, CANOPY_MID);
     let sun = pick(v, CANOPY_SUN);
@@ -1499,7 +1507,7 @@ pub fn push_tree_canopy_glyph_with_mode(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use satya_engine::map_dressing::make_prop;
+    use satya_maps::map_dressing::make_prop;
 
     #[test]
     fn every_prop_kind_renders_a_balanced_group() {

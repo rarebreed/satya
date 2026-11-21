@@ -199,7 +199,7 @@ pub fn NotebookReferencePanes() -> impl IntoView {
                             onchange="window.satyaSelectRulesChapter('')"
                             on:change=move |_| wasm_client::satya_select_rules_chapter(String::new())
                         >
-                            {satya_engine::list_rules_chapters()
+                            {satya_rules_book::list_rules_chapters()
                                 .into_iter()
                                 .enumerate()
                                 .map(|(idx, ch)| {

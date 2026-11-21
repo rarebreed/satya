@@ -184,13 +184,13 @@ mod map_wgpu_runtime {
                     let [wx, wz] = metric_to_world_xz(tx_m, ty_m, bw_m, bh_m);
                     let on_catwalk = ui.map.props.iter().any(|p| {
                         p.kind == PropKind::ElevatedCatwalk
-                            && satya_engine::tactical_map_geom::prop_contains_point(
+                            && satya_maps::tactical_map_geom::prop_contains_point(
                                 p, tx_m, ty_m, false,
                             )
                     });
                     let on_bridge = !on_catwalk
                         && matches!(
-                            satya_engine::map_surface_geom::topmost_surface_at_m(
+                            satya_maps::map_surface_geom::topmost_surface_at_m(
                                 &ui.map.surfaces,
                                 tx_m,
                                 ty_m

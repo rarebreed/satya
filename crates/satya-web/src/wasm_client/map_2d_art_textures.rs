@@ -653,8 +653,8 @@ mod tests {
     use super::*;
     use crate::wasm_client::map_2d_art::{battlemap_art_cache_key, format_battlemap_art_layer};
     use crate::wasm_client::map_3d::TacticalMapUiState;
-    use satya_engine::map_dressing::make_prop_at_cm;
-    use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+    use satya_maps::map_dressing::make_prop_at_cm;
+    use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
     use satya_schema::{EdgeSide, MapWallEdge, MaterialClass, PropKind, WallEdgeKind};
     use std::collections::BTreeSet;
     use std::path::Path;

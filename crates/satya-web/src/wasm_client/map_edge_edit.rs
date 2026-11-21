@@ -14,8 +14,8 @@ use crate::wasm_client::map_3d::{
     refresh_map_dom_and_wgpu, with_map_ui_mut,
 };
 use crate::wasm_client::state::with_state;
-use satya_engine::map_dressing::{make_prop_at_cm, normalize_prop_rotation_deg};
-use satya_engine::tactical_map_geom::{place_prop_on_map, remove_prop_at_point};
+use satya_maps::map_dressing::{make_prop_at_cm, normalize_prop_rotation_deg};
+use satya_maps::tactical_map_geom::{place_prop_on_map, remove_prop_at_point};
 use satya_schema::{
     EdgeSide, GenerateSessionMapRequest, GmMapUpdateRequest, MapEdgeRef, MapPropPlacement,
     MapWallEdge, MaterialClass, PropKind, WallEdgeKind,

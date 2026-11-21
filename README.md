@@ -138,9 +138,20 @@ Detailed across all 18 chapters of [`docs/ttrpg/`](docs/ttrpg/SUMMARY.md) (and m
 ```mermaid
 flowchart LR
     Web["satya-web (Leptos SSR + Wasm + WebGPU 3D Maps & Dice)"] <-->|"HTTP / WS + WebRTC"| Sig["satya-signaling (Axum Server, Auth, GM Vault & AI Bridge)"]
-    Engine["satya-engine (Pure Rust 2d20, Triad, Ballistics, Psyche & Rules)"] --> Web
+    Engine["satya-engine (Pure Rust 2d20, Triad, Ballistics & Psyche)"] --> Web
+    Maps["satya-maps (Continuous 1.0m Battlemap, LoS & Procedural Sectors)"] --> Web
+    Campaign["satya-campaign (Awakened 2035 Factions, Hooks, NPCs & Clocks)"] --> Web
+    Book["satya-rules-book (Embedded docs/ttrpg/ Catalog, Search & HTML)"] --> Web
+    Engine --> Maps
+    Engine --> Campaign
+    Maps --> Sig
+    Campaign --> Sig
+    Book --> Sig
     Engine --> Sig
     Engine --> PyO3["satya-py (PyO3 Extension)"]
+    Maps --> PyO3
+    Campaign --> PyO3
+    Book --> PyO3
     Schema["satya-schema (Wire Contracts & Avro Schemas)"] --> Web
     Schema --> Sig
     Schema --> Store["satya-storage (Apache Iggy WAL + Avro Sink)"]
@@ -152,7 +163,10 @@ flowchart LR
 
 | Path | Role in the Workspace |
 | :--- | :--- |
-| [`crates/satya-engine`](crates/satya-engine) | Deterministic Rust simulation engine (`2d20` cascades, `0.25s` OODA ticks, `T/C/F` Triad, 4-chain ballistics, `13`-zone trauma, `9`-axis Psyche, lifepaths, procedural maps). |
+| [`crates/satya-engine`](crates/satya-engine) | Deterministic core TTRPG rules simulation engine (`2d20` cascades, `0.25s` OODA ticks, `T/C/F` Triad, 4-chain ballistics, `13`-zone trauma, `9`-axis Psyche, lifepaths, engineering/EW). |
+| [`crates/satya-maps`](crates/satya-maps) | Continuous metric (`f32` m / `i32` cm) battlemap geometry, LoS/cover, barrier ballistics, gait reachability, and procedural sector/interior/outdoor generators. |
+| [`crates/satya-campaign`](crates/satya-campaign) | *Awakened* 2035 AI substrates, conspiracy arcs, 5 Faction / 14 Archetype blueprints, party hook weaver, prompt-driven NPC generator, and world clocks. |
+| [`crates/satya-rules-book`](crates/satya-rules-book) | Embedded `docs/ttrpg/` rules book catalog, multi-chapter search, Markdown/LaTeX/Mermaid HTML renderer, and optional `build-rules-book` CLI. |
 | [`crates/satya-schema`](crates/satya-schema) | Shared wire DTOs, `.satyachar`/`.satyasession` persistence, and versioned Apache Avro schemas (`schemas/`). |
 | [`crates/satya-web`](crates/satya-web) | 100% Rust Leptos one-shot SSR + `wasm32` browser client, 2D SVG & 3D WebGPU tactical map/dice/GLB stages, 6-step Character Wizard, and P2P WebRTC chat. |
 | [`crates/satya-signaling`](crates/satya-signaling) | Axum HTTP/WebSocket hub (`satya-server`), Argon2 auth, SQLite GM Memory Vault, Drive sync, and async AI GM bridge. |

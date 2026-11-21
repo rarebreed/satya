@@ -5,8 +5,8 @@
 //! - `GET  /api/gm/sessions/:session_id/world-ledger`
 //! - `POST /api/gm/sessions/:session_id/world-ledger`
 //!
-//! Couples campaign-pack faction progress clocks with [`satya_engine::default_zoning_and_tier`]
-//! and [`satya_engine::apply_world_ledger_update`], automatically stripping `gm_secret_agenda`
+//! Couples campaign-pack faction progress clocks with [`satya_maps::default_zoning_and_tier`]
+//! and [`satya_campaign::apply_world_ledger_update`], automatically stripping `gm_secret_agenda`
 //! for non-GM player viewers in human-GM sessions.
 
 use std::sync::Arc;
@@ -18,11 +18,11 @@ use axum::{
     response::IntoResponse,
 };
 use chrono::Utc;
-use satya_engine::map_gen_zoning::default_zoning_and_tier;
-use satya_engine::{
-    SectorPreset, apply_world_ledger_update, filter_world_ledger_for_viewer,
-    seed_default_world_ledger,
+use satya_campaign::{
+    apply_world_ledger_update, filter_world_ledger_for_viewer, seed_default_world_ledger,
 };
+use satya_maps::SectorPreset;
+use satya_maps::map_gen_zoning::default_zoning_and_tier;
 use satya_schema::{SessionWorldLedger, UpdateWorldLedgerRequest, WorldLedgerUpdateResponse};
 use serde_json::json;
 use sqlx::{Row, SqlitePool};

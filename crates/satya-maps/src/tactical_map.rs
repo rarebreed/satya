@@ -20,7 +20,6 @@ use satya_schema::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::define_coded_enum;
 pub use crate::map_continuation::*;
 use crate::map_dressing::PropObstruction;
 use crate::map_interior_gen::{InteriorStyle, generate_furnished_interior};
@@ -36,6 +35,7 @@ use crate::tactical_map_geom::{
     circle_collides_obstacles, intersect_segment_edge, intersect_segment_prop,
 };
 pub use crate::tactical_map_reach::*;
+use satya_engine::define_coded_enum;
 
 /// Borrowed view of everything continuous spatial rules need: board extents in meters,
 /// thin wall/door/window edges, `360°` oriented props, and vector ground surfaces.

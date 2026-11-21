@@ -671,15 +671,11 @@ pub fn build_custom_firearm_design(
     let comp = bp.complexity.spec();
     let ammo = build_custom_ammunition_profile(bp.caliber, bp.bullet, bp.handload_quality_q);
 
-    let tau_clamped = bp
-        .requested_tolerance_tau
-        .clamp(-1.5, wf.max_tolerance_tau);
+    let tau_clamped = bp.requested_tolerance_tau.clamp(-1.5, wf.max_tolerance_tau);
     let barrel_q_clamped = bp
         .requested_barrel_quality_q
         .clamp(-2.0, wf.max_barrel_quality_q);
-    let mut mfg_q = bp
-        .requested_mfg_quality_q
-        .clamp(-2, wf.max_mfg_quality_q);
+    let mut mfg_q = bp.requested_mfg_quality_q.clamp(-2, wf.max_mfg_quality_q);
 
     let clamped_by_workshop = bp.requested_tolerance_tau > wf.max_tolerance_tau + 1e-6
         || bp.requested_barrel_quality_q > wf.max_barrel_quality_q + 1e-6
@@ -758,10 +754,8 @@ pub fn build_custom_firearm_design(
         + muzzle_cost)
         .round() as i32;
 
-    let access_class = if matches!(
-        bp.action_type,
-        FirearmActionType::OpenBoltOrAutoSwitch
-    ) || bp.feed_type == WeaponFeedType::BeltFed
+    let access_class = if matches!(bp.action_type, FirearmActionType::OpenBoltOrAutoSwitch)
+        || bp.feed_type == WeaponFeedType::BeltFed
         || bp.muzzle_device == MuzzleDeviceType::SoundSuppressor
         || bp.bullet == BulletConstructionKind::ArmorPiercingAp
         || matches!(bp.caliber, AmmoCaliberId::Lapua338 | AmmoCaliberId::Bmg50)
@@ -905,22 +899,24 @@ pub fn evaluate_custom_melee_design(
         base_cost,
         base_succ,
     ): (i32, i32, i32, i32, f64, i32, i32, bool, f64, f64, i32) = match chassis {
-            MeleeChassisClass::Knife => (0, 1, 5, 0, 0.9, 2, 0, false, 0.35, 180.0, 4),
-            MeleeChassisClass::BatonOrClub => (1, 1, 6, 1, 1.0, 1, 1, false, 0.65, 220.0, 4),
-            MeleeChassisClass::SwordOrMachete => (1, 2, 7, 1, 1.25, 3, 1, false, 1.05, 450.0, 8),
-            MeleeChassisClass::AxeOrBreacher => (1, 2, 8, 0, 1.35, 4, 1, false, 1.35, 380.0, 8),
-            MeleeChassisClass::Polearm => (2, 3, 9, 2, 1.2, 2, 2, true, 1.60, 320.0, 8),
-            MeleeChassisClass::BallisticOrRiotShield => (0, 1, 10, 4, 0.85, 0, 5, false, 4.20, 1200.0, 8),
-        };
+        MeleeChassisClass::Knife => (0, 1, 5, 0, 0.9, 2, 0, false, 0.35, 180.0, 4),
+        MeleeChassisClass::BatonOrClub => (1, 1, 6, 1, 1.0, 1, 1, false, 0.65, 220.0, 4),
+        MeleeChassisClass::SwordOrMachete => (1, 2, 7, 1, 1.25, 3, 1, false, 1.05, 450.0, 8),
+        MeleeChassisClass::AxeOrBreacher => (1, 2, 8, 0, 1.35, 4, 1, false, 1.35, 380.0, 8),
+        MeleeChassisClass::Polearm => (2, 3, 9, 2, 1.2, 2, 2, true, 1.60, 320.0, 8),
+        MeleeChassisClass::BallisticOrRiotShield => {
+            (0, 1, 10, 4, 0.85, 0, 5, false, 4.20, 1200.0, 8)
+        }
+    };
 
     let (mat_trauma, mat_weight_mult, mat_durability, mat_cost_mult): (i32, f64, i32, f64) =
         match material {
-        MeleeMaterialGrade::MildScrapSteel => (-1, 1.15, -2, 0.5),
-        MeleeMaterialGrade::SpringCarbonSteel => (0, 1.00, 0, 1.0),
-        MeleeMaterialGrade::ToolSteelS7 => (1, 1.00, 2, 2.2),
-        MeleeMaterialGrade::TitaniumCarbideEdge => (0, 0.72, 1, 4.0),
-        MeleeMaterialGrade::CarbonPolyComposite => (-1, 0.62, 1, 2.8),
-    };
+            MeleeMaterialGrade::MildScrapSteel => (-1, 1.15, -2, 0.5),
+            MeleeMaterialGrade::SpringCarbonSteel => (0, 1.00, 0, 1.0),
+            MeleeMaterialGrade::ToolSteelS7 => (1, 1.00, 2, 2.2),
+            MeleeMaterialGrade::TitaniumCarbideEdge => (0, 0.72, 1, 4.0),
+            MeleeMaterialGrade::CarbonPolyComposite => (-1, 0.62, 1, 2.8),
+        };
 
     let (tc_shift, trauma_shift, guard_shift, weight_mult): (i32, i32, i32, f64) = match tuning {
         MeleeErgonomicTuning::Balanced => (0, 0, 0, 1.0),

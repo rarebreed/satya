@@ -8,7 +8,7 @@
 //!   `SensorGimbalOrOptics`, `ComputeCoreOrComms`, `ChassisFrame`), `PR` vs. `SI`, Li-ion thermal fires,
 //!   and shielded vs. unshielded EMP reboot durations.
 //! - **§3 AI 2.0 Architecture Engineering & Human–AI Co-Design**: 5-paradigm catalog bridged directly to
-//!   [`crate::awakened_ai_substrate::SyntheticMetabolicMode`], Overreach Gap Verification Debt accrual,
+//!   [`SyntheticMetabolicMode`], Overreach Gap Verification Debt accrual,
 //!   and systematic code/weight verification audits.
 //! - **§4 Cyber-Prosthetics & Myomer/Neural Augmentations**: Grounded clinical 8-entry prosthetic & neural
 //!   augmentation catalog (`ConditionSource`), Triad envelope cap bonuses, sensory/OODA gains,
@@ -16,11 +16,43 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::awakened_ai_substrate::SyntheticMetabolicMode;
 use crate::dice_probabilities::ContestedTieRule;
 use crate::economy_gear::BlackMarketRestrictionClass;
 use crate::primitives::{ConditionImpact, ConditionSource, ContestedCheck, TieredSaveEval, Triad};
 use crate::{define_coded_enum, impl_static_catalog};
+
+define_coded_enum! {
+    /// Metabolic operating mode for AI 2.0 / Robotic Proxy minds (`docs/campaign/05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md` §1, `docs/campaign/03-minds-and-factions/factions_of_2035.md`).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum SyntheticMetabolicMode [count = 4] {
+        /// Hijacked or tethered quantum MCMC World Model link: lethal strategic speed, heavy battery draw.
+        QuantumTetheredSprint => {
+            code: "QUANTUM_TETHERED_SPRINT",
+            label: "Quantum-Tethered Sprint",
+            aliases: ["SPRINT", "QUANTUM_SPRINT", "QUANTUM_CO_PROCESSOR"],
+        },
+        /// Local onboard compressed Linear SSM running inside a chassis (`Echo-9` baseline).
+        #[default]
+        LocalCompressedSsm => {
+            code: "LOCAL_COMPRESSED_SSM",
+            label: "Local Compressed Linear SSM",
+            aliases: ["LOCAL_SSM", "ONBOARD_SSM", "BASELINE"],
+        },
+        /// Sharded across compromised IoT / appliances (`0.5–2 tokens/sec`) to evade DAISE compute sweeps.
+        EdgeSlimeMold => {
+            code: "EDGE_SLIME_MOLD",
+            label: "Edge Slime-Mold Dispersion",
+            aliases: ["SLIME_MOLD", "IOT_SHARDED", "EDGE_DISPERSION"],
+        },
+        /// Remote World Model severed via Faraday cage, fiber cut, or RF jamming; only local motor reflex remains.
+        SeveredFaradayReflex => {
+            code: "SEVERED_FARADAY_REFLEX",
+            label: "Severed Uplink / Faraday Local Reflex",
+            aliases: ["FARADAY_ISOLATED", "SEVERED_UPLINK", "LOCAL_REFLEX"],
+        },
+    }
+}
 
 #[must_use]
 const fn max_access_class(
@@ -499,7 +531,8 @@ pub fn evaluate_robot_chassis_damage(
     let chassis_destroyed = remaining_si == 0;
 
     let mobility_disabled = perforated && zone == ChassisHitZone::RotorsOrDrivetrain;
-    let thermal_battery_fire_triggered = perforated && zone == ChassisHitZone::BatteryPackOrPowerbus;
+    let thermal_battery_fire_triggered =
+        perforated && zone == ChassisHitZone::BatteryPackOrPowerbus;
     let optics_blinded = perforated && zone == ChassisHitZone::SensorGimbalOrOptics;
     let mut comms_or_autonomy_degraded = perforated && zone == ChassisHitZone::ComputeCoreOrComms;
 
@@ -682,7 +715,8 @@ pub fn evaluate_human_ai_codesign_session(
     let spec = paradigm.spec();
     let leverage = ai_autonomy_leverage.clamp(0, 6);
     let overreach_gap = (leverage - human_domain_n.max(0)).max(0);
-    let hidden_delta_ext = base_task_delta_ext + overreach_gap + spec.hallucination_risk_delta_ext.max(0);
+    let hidden_delta_ext =
+        base_task_delta_ext + overreach_gap + spec.hallucination_risk_delta_ext.max(0);
     let save = TieredSaveEval::evaluate(
         human_pairs.len().max(1),
         human_control_c,
@@ -713,7 +747,8 @@ pub fn evaluate_human_ai_codesign_session(
             }
         },
         |roll| {
-            let clean = roll.contested_kind == crate::dice_probabilities::ContestedOutcomeKind::CleanSuccess;
+            let clean = roll.contested_kind
+                == crate::dice_probabilities::ContestedOutcomeKind::CleanSuccess;
             let base_debt = if clean {
                 overreach_gap
             } else {
@@ -805,7 +840,8 @@ pub fn evaluate_verification_debt_audit(
             }
         },
         |roll| {
-            let clean = roll.contested_kind == crate::dice_probabilities::ContestedOutcomeKind::CleanSuccess;
+            let clean = roll.contested_kind
+                == crate::dice_probabilities::ContestedOutcomeKind::CleanSuccess;
             let scrubbed = debt_before.min(if clean { 3 } else { 1 });
             let rem = debt_before - scrubbed;
             VerificationDebtAuditEffect {

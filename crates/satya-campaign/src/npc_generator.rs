@@ -4,7 +4,7 @@
 //!
 //! Converts a natural-language NPC description (e.g., `"Terry is a kind general MD, but needs to feel like she belongs"`)
 //! and/or an archetype template (`NpcTemplateKind`) into:
-//! 1. A 100% rules-legal [`satya_schema::CharacterSheetRecord`] passing [`crate::verify_character_sheet_legality`],
+//! 1. A 100% rules-legal [`satya_schema::CharacterSheetRecord`] passing [`satya_engine::verify_character_sheet_legality`],
 //!    complete with 32 Characteristics, 9 bipolar Psyche traits (`EGO`, `SLF`, `OPN`, `BLG`, `EXT`, `CNF`, `AGG`, `TRS`, `CPS`),
 //!    9 Domain Aptitudes, 5-Stage Lifepath history, and 8-Tree skills.
 //! 2. A public player-safe summary (`public_summary`) vs. GM-only secret/psyche dossier (`gm_secret_dossier`).
@@ -14,30 +14,30 @@ use std::collections::BTreeMap;
 use satya_schema::{CharacterSheetRecord, CharacterVerificationStatus};
 use serde::{Deserialize, Serialize};
 
-use crate::character_audit::{
-    aptitudes_to_record, characteristics_to_record, verify_character_sheet_legality,
-};
-use crate::characteristics::{
-    CharacterAptitudes, CharacterCharacteristics, CharacteristicCategory, CharacteristicCode,
-    CharacteristicRollMethod, PsychePole, psyche_pole_descriptor, roll_aptitude_pool_11_drop_2,
-    roll_characteristic_group_pool, roll_characteristic_method1, roll_correlated_height_mass,
-};
-use crate::define_coded_enum;
-use crate::economy_gear::{
-    auto_allocate_career_and_elective_skills, compute_skill_allocation_sp_ledger,
-    preview_next_skill_step_sp,
-};
 use crate::faction_templates::{FactionArchetypeId, infer_faction_archetype_from_prompt};
 use crate::hook_weaver::{
     NpcMotivationalProfile, apply_prompt_psyche_and_skill_cues, derive_npc_motivational_profile,
 };
-use crate::lifepath_catalog::{
+use satya_engine::character_audit::{
+    aptitudes_to_record, characteristics_to_record, verify_character_sheet_legality,
+};
+use satya_engine::characteristics::{
+    CharacterAptitudes, CharacterCharacteristics, CharacteristicCategory, CharacteristicCode,
+    CharacteristicRollMethod, PsychePole, psyche_pole_descriptor, roll_aptitude_pool_11_drop_2,
+    roll_characteristic_group_pool, roll_characteristic_method1, roll_correlated_height_mass,
+};
+use satya_engine::define_coded_enum;
+use satya_engine::economy_gear::{
+    auto_allocate_career_and_elective_skills, compute_skill_allocation_sp_ledger,
+    preview_next_skill_step_sp,
+};
+use satya_engine::lifepath_catalog::{
     CareerTermTrack, HighSchoolTrack, RuralYouthArchetype, Stage4Path, StreetGangArchetype,
 };
-use crate::lifepath_economy::{
+use satya_engine::lifepath_economy::{
     CareerTermConfig, LifepathBuildConfig, compute_lifepath_baseline_from_config,
 };
-use crate::skills_trees::{lookup_skill_node, validate_skill_advancement};
+use satya_engine::skills_trees::{lookup_skill_node, validate_skill_advancement};
 
 define_coded_enum! {
     /// High-level NPC archetype template for prompt- and template-driven NPC generation.
@@ -880,7 +880,7 @@ pub fn generate_npc_from_prompt_with_pack(
             .as_ref()
             .and_then(|s| s.preferred_hobbies.first().copied()),
         adolescent_life_event_roll_2d20: None,
-        faction_archetype: faction_arch,
+        faction_archetype: faction_arch.map(|a| a.as_str().to_string()),
         ..LifepathBuildConfig::default()
     };
 
@@ -1057,7 +1057,7 @@ pub fn generate_npc_from_prompt_with_pack(
 
 fn try_advance_skill_legally(
     sk_id: &str,
-    baseline: &crate::lifepath_economy::LifepathBaselineResult,
+    baseline: &satya_engine::lifepath_economy::LifepathBaselineResult,
     cfg: &LifepathBuildConfig,
     chars: &CharacterCharacteristics,
     aptitudes: &CharacterAptitudes,

@@ -4,43 +4,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::contested_cascade::ContestedTieRule;
-use crate::define_coded_enum;
-use crate::primitives::{ConditionImpact, ConditionSource, ContestedCheck, TieredSaveEval, Triad};
-use crate::psyche_social::PsycheProfile;
-
-define_coded_enum! {
-    /// Metabolic operating mode for AI 2.0 / Robotic Proxy minds (`docs/campaign/05-hard-science-foundations/ai_2_0_substrate_and_active_inference.md` §1, `docs/campaign/03-minds-and-factions/factions_of_2035.md`).
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-    pub enum SyntheticMetabolicMode [count = 4] {
-        /// Hijacked or tethered quantum MCMC World Model link: lethal strategic speed, heavy battery draw.
-        QuantumTetheredSprint => {
-            code: "QUANTUM_TETHERED_SPRINT",
-            label: "Quantum-Tethered Sprint",
-            aliases: ["SPRINT", "QUANTUM_SPRINT", "QUANTUM_CO_PROCESSOR"],
-        },
-        /// Local onboard compressed Linear SSM running inside a chassis (`Echo-9` baseline).
-        #[default]
-        LocalCompressedSsm => {
-            code: "LOCAL_COMPRESSED_SSM",
-            label: "Local Compressed Linear SSM",
-            aliases: ["LOCAL_SSM", "ONBOARD_SSM", "BASELINE"],
-        },
-        /// Sharded across compromised IoT / appliances (`0.5–2 tokens/sec`) to evade DAISE compute sweeps.
-        EdgeSlimeMold => {
-            code: "EDGE_SLIME_MOLD",
-            label: "Edge Slime-Mold Dispersion",
-            aliases: ["SLIME_MOLD", "IOT_SHARDED", "EDGE_DISPERSION"],
-        },
-        /// Remote World Model severed via Faraday cage, fiber cut, or RF jamming; only local motor reflex remains.
-        SeveredFaradayReflex => {
-            code: "SEVERED_FARADAY_REFLEX",
-            label: "Severed Uplink / Faraday Local Reflex",
-            aliases: ["FARADAY_ISOLATED", "SEVERED_UPLINK", "LOCAL_REFLEX"],
-        },
-    }
-}
+use satya_engine::contested_cascade::ContestedTieRule;
+use satya_engine::define_coded_enum;
+use satya_engine::primitives::{
+    ConditionImpact, ConditionSource, ContestedCheck, TieredSaveEval, Triad,
+};
+use satya_engine::psyche_social::PsycheProfile;
+pub use satya_engine::robotics_and_ai_design::SyntheticMetabolicMode;
 
 define_coded_enum! {
     /// GM-hidden interiority ground truth behind outward synthetic composure (`docs/campaign/03-minds-and-factions/ai_minds_and_consciousness.md`, `docs/campaign/05-hard-science-foundations/ai_consciousness_synthesis.md`).

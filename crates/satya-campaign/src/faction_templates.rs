@@ -4,10 +4,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::define_coded_enum;
-use crate::lifepath_catalog::{CareerTermTrack, HighSchoolTrack, Stage4Path};
-use crate::lifepath_hobbies_events::PersonalHobbyId;
-use crate::psyche_social::PsycheProfile;
+use satya_engine::define_coded_enum;
+use satya_engine::lifepath_catalog::{CareerTermTrack, HighSchoolTrack, Stage4Path};
+use satya_engine::lifepath_hobbies_events::PersonalHobbyId;
+use satya_engine::psyche_social::PsycheProfile;
 
 define_coded_enum! {
     /// The 5 canonical ideological & operational factions of the *Awakened* (2035) campaign.

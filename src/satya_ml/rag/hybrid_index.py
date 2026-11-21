@@ -235,6 +235,8 @@ class SatyaHybridRagIndex:
             self.repo_root / "docs" / "campaign",
             self.repo_root / "docs" / "story",
             self.repo_root / "crates" / "satya-engine" / "src",
+            self.repo_root / "crates" / "satya-campaign" / "src",
+            self.repo_root / "crates" / "satya-maps" / "src",
             self.repo_root / "crates" / "satya-py" / "src",
         ):
             if not d.exists():

@@ -10,13 +10,13 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
-use satya_engine::map_surface_queries::topmost_surface_at_m;
-use satya_engine::tactical_map::{
+use satya_maps::map_surface_queries::topmost_surface_at_m;
+use satya_maps::tactical_map::{
     SectorPreset, build_procedural_map_request, generate_procedural_sector,
 };
-use satya_engine::tactical_map_geom::{
-    TOKEN_RADIUS_M, circle_collides_obstacles, migrate_legacy_tiles_to_vector,
-    prop_contains_point, resolve_token_destination_cm,
+use satya_maps::tactical_map_geom::{
+    TOKEN_RADIUS_M, circle_collides_obstacles, migrate_legacy_tiles_to_vector, prop_contains_point,
+    resolve_token_destination_cm,
 };
 use satya_schema::{
     CanvasEventType, GmMapUpdateRequest, MessageVisibility, MoveMapTokenRequest, Participant,

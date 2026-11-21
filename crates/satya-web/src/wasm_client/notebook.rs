@@ -396,7 +396,8 @@ pub fn format_combat_tracker_html(roster: &[Participant], round: u32, tick: u32)
         .filter(|p| p.role == SessionRole::Player)
         .collect();
     if combatants.is_empty() {
-        return r#"<span class="pill pill-muted">No active player combatants in roster.</span>"#.to_string();
+        return r#"<span class="pill pill-muted">No active player combatants in roster.</span>"#
+            .to_string();
     }
     combatants
         .into_iter()
@@ -497,8 +498,8 @@ pub fn default_rules_book_chapter_html() -> String {
 
 /// Formats `(rendered_html, pill_text)` for a canonical Satya TTRPG Rules Book chapter.
 pub fn format_rules_chapter_html(chapter_id: &str) -> (String, String) {
-    let doc = satya_engine::get_rules_chapter(chapter_id)
-        .or_else(|| satya_engine::get_rules_chapter("tasks"));
+    let doc = satya_rules_book::get_rules_chapter(chapter_id)
+        .or_else(|| satya_rules_book::get_rules_chapter("tasks"));
     let Some(doc) = doc else {
         return (
             r#"<div class="rules-book-empty">Rules chapter not found.</div>"#.to_string(),
@@ -544,7 +545,7 @@ pub fn satya_search_rules_book() {
         set_display("rules-search-results", "none");
         return;
     }
-    let hits = satya_engine::search_rules_book(&query, 8);
+    let hits = satya_rules_book::search_rules_book(&query, 8);
     if hits.is_empty() {
         results_el.set_inner_html(&format!(
             r#"<div class="pill pill-muted">No rules sections matched "{}"</div>"#,

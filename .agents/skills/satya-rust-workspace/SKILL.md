@@ -2,10 +2,10 @@
 name: satya-rust-workspace
 description: >-
   Universal Rust architecture, modularization, and anti-bloat steering guide for all
-  crates in the Satya workspace (satya-schema, satya-engine, satya-web, satya-py,
-  satya-signaling, satya-storage). Activate this skill whenever creating, modifying,
-  or refactoring any Rust (.rs), Python (.py), stylesheet (.css), or documentation
-  (.md) file in the repository.
+  crates in the Satya workspace (satya-schema, satya-rules-book, satya-engine,
+  satya-maps, satya-campaign, satya-web, satya-py, satya-signaling, satya-storage).
+  Activate this skill whenever creating, modifying, or refactoring any Rust (.rs),
+  Python (.py), stylesheet (.css), or documentation (.md) file in the repository.
 ---
 
 # Satya Rust Workspace Steering Skill (`satya-rust-workspace`)
@@ -74,14 +74,14 @@ Always invoke tools via `pixi run ...` (never call `.pixi/envs/default/*.exe` di
 | Change Scope | Exact Fast Commands | Avoid Running Unnecessarily |
 | :--- | :--- | :--- |
 | **Non-embedded Docs Only** (`docs/campaign/`, `docs/ttrpg-examples/`, `docs/technical/`, `README.md`) | Link/anchor validation; `pixi run build-rag` (only if `docs/campaign/` changed); targeted `PYTHONPATH=src pixi run python -m pytest tests/test_awakened_part1_and_hybrid_rag.py tests/test_phase1_2_awakened_hooks_and_maps.py` | **Zero** `cargo clippy` / `cargo test`, **zero** `satya-signaling` integration suites, and avoid `pixi run test-py` / `build-book` (`build-py` `--release` trigger) |
-| **Rules Book Markdown** (`docs/ttrpg/*.md` — embedded via `include_str!` in `rules_book.rs`) | `pixi run cargo test --offline -p satya-engine rules_book` (~2s) | Full `satya-engine` procedural map tests, `satya-signaling` tests (unless `crates/satya-signaling` code changed), and `pixi run build-book` (optional/on-demand only) |
+| **Rules Book Markdown** (`docs/ttrpg/*.md` — embedded via `include_str!` in `satya-rules-book`) | `pixi run test-rules-book` (~1s) | Full `satya-engine` / `satya-maps` suites, `satya-signaling` integration tests, and `pixi run build-book` (optional/on-demand only) |
 | **Python-Only** (`src/satya_ml/`, `tests/` without `.rs` or `docs/ttrpg/` edits) | `pixi run pyrefly check <edited_files>` and `PYTHONPATH=src pixi run python -m pytest <targeted_files_or_-n_auto>` | `pixi run test-py` (forces `depends-on = ["build-py"]` release Rust build) |
-| **Targeted Rust Crate Edits** (`crates/satya-signaling`, `crates/satya-engine`, etc.) | Filtered `pixi run cargo test --offline -p <crate> <filter>` (e.g., `omnisearch` for `campaign_lore.rs`) while iterating | Full multi-crate `clippy` / `test` suites until cross-crate verification or explicit full-suite checks are needed |
+| **Targeted Rust Crate Edits** (`crates/satya-{signaling,engine,maps,campaign,rules-book}`) | `pixi run test-{rules-book,engine,maps,campaign}` or filtered `pixi run cargo test --offline -p <crate> <filter>` while iterating | Full multi-crate `clippy` / `test` suites until cross-crate verification or explicit full-suite checks are needed |
 
-- **Core Rust Workspace (5 non-PyO3 crates)**:
+- **Core Rust Workspace (8 non-PyO3 crates)**:
   ```powershell
-  pixi run cargo clippy --offline -p satya-schema -p satya-engine -p satya-web -p satya-signaling -p satya-storage --all-targets -- -D warnings
-  pixi run cargo test --offline -p satya-schema -p satya-engine -p satya-web -p satya-signaling -p satya-storage
+  pixi run cargo clippy --offline -p satya-schema -p satya-rules-book -p satya-engine -p satya-maps -p satya-campaign -p satya-web -p satya-signaling -p satya-storage --all-targets -- -D warnings
+  pixi run cargo test --offline -p satya-schema -p satya-rules-book -p satya-engine -p satya-maps -p satya-campaign -p satya-web -p satya-signaling -p satya-storage
   ```
 - **PyO3 Extension (`satya-py`)**: use `--no-default-features` (`auto-initialize` off) for Rust unit tests/clippy, and `pixi run build-py` to compile release `src/satya_py.pyd`:
   ```powershell

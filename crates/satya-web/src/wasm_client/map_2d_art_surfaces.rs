@@ -10,7 +10,7 @@
 
 use std::fmt::Write as _;
 
-use satya_engine::map_surface_geom::{
+use satya_maps::map_surface_geom::{
     extrude_surface_ribbon_m, point_masked_by_higher_surface, sample_open_catmull_rom_m,
     sampled_closed_ring_m,
 };
@@ -829,7 +829,7 @@ pub(crate) fn push_ground_dressing_and_lanes_svg(
                 && [(0.0, 0.0), (rm, 0.0), (-rm, 0.0), (0.0, rm), (0.0, -rm)]
                     .into_iter()
                     .any(|(dx, dy)| {
-                        satya_engine::map_surface_geom::topmost_surface_at_m(
+                        satya_maps::map_surface_geom::topmost_surface_at_m(
                             &ui.map.surfaces,
                             xm + dx,
                             ym + dy,
@@ -873,7 +873,7 @@ pub(crate) fn push_ground_dressing_and_lanes_svg(
                     let masked =
                         point_masked_by_higher_surface(&ui.map.surfaces, min_prio, pt.0, pt.1)
                             || roads[..r_idx].iter().any(|prev| {
-                                satya_engine::map_surface_geom::surface_contains_point_m(
+                                satya_maps::map_surface_geom::surface_contains_point_m(
                                     prev, pt.0, pt.1,
                                 )
                             });
@@ -934,7 +934,7 @@ pub(crate) fn push_ground_dressing_and_lanes_svg(
 mod tests {
     use super::*;
     use crate::wasm_client::map_2d_art::{battlemap_art_cache_key, format_battlemap_art_layer};
-    use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+    use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
     use satya_schema::MapPointCm;
 
     #[test]

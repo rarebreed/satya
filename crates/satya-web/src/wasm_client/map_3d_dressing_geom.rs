@@ -4,13 +4,13 @@
 //! - **Thin edge walls** (`0.14m` thick) colored by [`MaterialClass`], with closed door slabs, open door
 //!   leaves swung into the cell, and windows as waist-high sills (plus lintels in full-height mode).
 //! - **Multi-cell props**: one body box per footprint, sized from the
-//!   `satya_engine::map_dressing::PROP_CATALOG` height and albedo, with a lighter top cap. Trees get a
+//!   `satya_maps::map_dressing::PROP_CATALOG` height and albedo, with a lighter top cap. Trees get a
 //!   canopy and cars a cabin. Tall props clamp to cutaway height when wall cutaway is on.
 
 use crate::wasm_client::glb_model::GlbVertex;
 use crate::wasm_client::map_3d::{TacticalMapUiState, metric_to_world_xz};
 use crate::wasm_client::map_3d_wgpu::{push_box, push_quad};
-use satya_engine::map_dressing::prop_spec;
+use satya_maps::map_dressing::prop_spec;
 use satya_schema::{EdgeSide, MaterialClass, PropKind, WallEdgeKind};
 
 const WALL_HALF_THICK_M: f32 = 0.07;

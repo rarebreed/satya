@@ -275,7 +275,11 @@ fn build_docking_bay_scaled(b: &mut SectorBuilder) {
     );
 }
 
-fn attach_desk_clutter(b: &mut SectorBuilder, desk: satya_schema::MapPropPlacement, rot_offset: i32) {
+fn attach_desk_clutter(
+    b: &mut SectorBuilder,
+    desk: satya_schema::MapPropPlacement,
+    rot_offset: i32,
+) {
     let seed = (b.rng.next() & 0xffff_ffff) as u32;
     b.push_floor_decal(make_prop(
         PropKind::DeskClutter,

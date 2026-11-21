@@ -103,7 +103,10 @@ fn build_hermite_cubic_spans(knots: &[(f32, f32)], tension: f32) -> Vec<[(f32, f
         let t = if i == 0 {
             (knots[1].0 - knots[0].0, knots[1].1 - knots[0].1)
         } else if i + 1 == n {
-            (knots[n - 1].0 - knots[n - 2].0, knots[n - 1].1 - knots[n - 2].1)
+            (
+                knots[n - 1].0 - knots[n - 2].0,
+                knots[n - 1].1 - knots[n - 2].1,
+            )
         } else {
             (
                 0.5 * (knots[i + 1].0 - knots[i - 1].0),
@@ -133,8 +136,10 @@ fn select_curve_archetype(
     chord_len_m: f32,
     spec: CurveSpec,
 ) -> CurveArchetype {
-    let oxbow_eligible = matches!(profile, CurveProfile::WildStream | CurveProfile::ForestTrail)
-        && chord_len_m >= 10.0
+    let oxbow_eligible = matches!(
+        profile,
+        CurveProfile::WildStream | CurveProfile::ForestTrail
+    ) && chord_len_m >= 10.0
         && spec.max_lateral_m >= (spec.ribbon_half_w_m * 2.4).max(2.3);
     if oxbow_eligible && rng.chance(6, 100) {
         return CurveArchetype::TightOxbowOrSwitchback;
@@ -251,12 +256,7 @@ pub(crate) fn synthesize_natural_curve_m(
             let t2 = rng.f32_range(0.58, 0.84);
             let y1 = side * amp * rng.f32_range(0.55, 1.32);
             let y2 = side * amp * rng.f32_range(0.45, 1.28);
-            vec![[
-                (0.0, 0.0),
-                (len * t1, y1),
-                (len * t2, y2),
-                (len, 0.0),
-            ]]
+            vec![[(0.0, 0.0), (len * t1, y1), (len * t2, y2), (len, 0.0)]]
         }
         CurveArchetype::AsymmetricWhipBend => {
             let late = rng.chance(1, 2);
@@ -290,12 +290,7 @@ pub(crate) fn synthesize_natural_curve_m(
             let t2 = rng.f32_range(0.56, 0.82);
             let y1 = side * amp * rng.f32_range(0.50, 1.35);
             let y2 = -side * amp * rng.f32_range(0.45, 1.35);
-            vec![[
-                (0.0, 0.0),
-                (len * t1, y1),
-                (len * t2, y2),
-                (len, 0.0),
-            ]]
+            vec![[(0.0, 0.0), (len * t1, y1), (len * t2, y2), (len, 0.0)]]
         }
         CurveArchetype::DoglegStep => {
             let s1 = rng.f32_range(0.24, 0.42);
@@ -306,7 +301,10 @@ pub(crate) fn synthesize_natural_curve_m(
             } else {
                 -side * amp * rng.f32_range(0.25, 0.60)
             };
-            build_hermite_cubic_spans(&[(0.0, 0.0), (len * s1, y1), (len * s2, y2), (len, 0.0)], 0.85)
+            build_hermite_cubic_spans(
+                &[(0.0, 0.0), (len * s1, y1), (len * s2, y2), (len, 0.0)],
+                0.85,
+            )
         }
         CurveArchetype::MultiBendWander => {
             let k = rng.range(3, 6) as usize;
@@ -476,8 +474,7 @@ fn push_away_from_keepout(
     min_clear_m: f32,
     clamp_rect: RectM,
 ) -> (f32, f32) {
-    if keepout_pts.len() < 2
-        || distance_point_to_polyline_m(pt.0, pt.1, keepout_pts) >= min_clear_m
+    if keepout_pts.len() < 2 || distance_point_to_polyline_m(pt.0, pt.1, keepout_pts) >= min_clear_m
     {
         return pt;
     }
@@ -495,11 +492,12 @@ fn push_away_from_keepout(
     }
     let to_pt = (pt.0 - best_q.0, pt.1 - best_q.1);
     let to_bank = (bank_anchor.0 - best_q.0, bank_anchor.1 - best_q.1);
-    let raw_dir = if to_pt.0 * to_bank.0 + to_pt.1 * to_bank.1 > 0.0 && to_pt.0.hypot(to_pt.1) > 1e-3 {
-        to_pt
-    } else {
-        to_bank
-    };
+    let raw_dir =
+        if to_pt.0 * to_bank.0 + to_pt.1 * to_bank.1 > 0.0 && to_pt.0.hypot(to_pt.1) > 1e-3 {
+            to_pt
+        } else {
+            to_bank
+        };
     let dir_len = raw_dir.0.hypot(raw_dir.1).max(1e-4);
     let ux = raw_dir.0 / dir_len;
     let uy = raw_dir.1 / dir_len;
@@ -680,7 +678,13 @@ fn add_bridge_connector_spur(
     );
     b.add_ribbon(
         SurfaceFeatureKind::DirtTrail,
-        &[p_a, bridge.abutment_neg_m, bridge.center_m, bridge.abutment_pos_m, p_b],
+        &[
+            p_a,
+            bridge.abutment_neg_m,
+            bridge.center_m,
+            bridge.abutment_pos_m,
+            p_b,
+        ],
         175,
     );
 }
@@ -782,11 +786,12 @@ pub(crate) fn build_woodland_creek(b: &mut OutdoorBuilder) {
         }
         CreekTopology::BraidedConfluence => {
             let main_left = b.rng.chance(1, 2);
-            let start_x = wf * if main_left {
-                b.rng.f32_range(0.22, 0.42)
-            } else {
-                b.rng.f32_range(0.58, 0.78)
-            };
+            let start_x = wf
+                * if main_left {
+                    b.rng.f32_range(0.22, 0.42)
+                } else {
+                    b.rng.f32_range(0.58, 0.78)
+                };
             let end_x = wf * b.rng.f32_range(0.30, 0.70);
             let main_pts = synthesize_natural_curve_m(
                 &mut b.rng,
@@ -804,8 +809,18 @@ pub(crate) fn build_woodland_creek(b: &mut OutdoorBuilder) {
             let (jx, jy) = main_pts[j_idx];
 
             let trib_start = match b.rng.range(0, 3) {
-                0 => (wf * if main_left { b.rng.f32_range(0.68, 0.86) } else { b.rng.f32_range(0.14, 0.32) }, -0.4),
-                1 => (if main_left { wf + 0.4 } else { -0.4 }, hf * b.rng.f32_range(0.14, 0.40)),
+                0 => (
+                    wf * if main_left {
+                        b.rng.f32_range(0.68, 0.86)
+                    } else {
+                        b.rng.f32_range(0.14, 0.32)
+                    },
+                    -0.4,
+                ),
+                1 => (
+                    if main_left { wf + 0.4 } else { -0.4 },
+                    hf * b.rng.f32_range(0.14, 0.40),
+                ),
                 _ => (wf * if main_left { 0.76 } else { 0.24 }, -0.4),
             };
             let trib_pts = synthesize_natural_curve_m(
@@ -822,9 +837,15 @@ pub(crate) fn build_woodland_creek(b: &mut OutdoorBuilder) {
             let trib_ravine_cm = (ravine_w_cm * 3) / 4;
             let trib_creek_cm = (creek_w_cm * 3) / 4;
             b.add_ribbon(SurfaceFeatureKind::DefensiveTrench, &main_pts, ravine_w_cm);
-            b.add_ribbon(SurfaceFeatureKind::DefensiveTrench, &trib_pts, trib_ravine_cm);
-            let main_shoal = offset_polyline_along_normal_m(&main_pts, &mut b.rng, 0.45, channel_clamp);
-            let trib_shoal = offset_polyline_along_normal_m(&trib_pts, &mut b.rng, 0.36, channel_clamp);
+            b.add_ribbon(
+                SurfaceFeatureKind::DefensiveTrench,
+                &trib_pts,
+                trib_ravine_cm,
+            );
+            let main_shoal =
+                offset_polyline_along_normal_m(&main_pts, &mut b.rng, 0.45, channel_clamp);
+            let trib_shoal =
+                offset_polyline_along_normal_m(&trib_pts, &mut b.rng, 0.36, channel_clamp);
             b.add_ribbon(SurfaceFeatureKind::GravelRoad, &main_shoal, shoal_w_cm);
             b.add_ribbon(SurfaceFeatureKind::GravelRoad, &trib_shoal, creek_w_cm + 80);
             let main_idx = b.add_ribbon(SurfaceFeatureKind::CreekChannel, &main_pts, creek_w_cm);
@@ -858,8 +879,18 @@ pub(crate) fn build_woodland_creek(b: &mut OutdoorBuilder) {
         }
         CreekTopology::DiagonalSweepRavine => {
             let flip = b.rng.chance(1, 2);
-            let x_a = wf * if flip { b.rng.f32_range(0.66, 0.84) } else { b.rng.f32_range(0.16, 0.34) };
-            let x_b = wf * if flip { b.rng.f32_range(0.16, 0.34) } else { b.rng.f32_range(0.66, 0.84) };
+            let x_a = wf
+                * if flip {
+                    b.rng.f32_range(0.66, 0.84)
+                } else {
+                    b.rng.f32_range(0.16, 0.34)
+                };
+            let x_b = wf
+                * if flip {
+                    b.rng.f32_range(0.16, 0.34)
+                } else {
+                    b.rng.f32_range(0.66, 0.84)
+                };
             let pts = synthesize_natural_curve_m(
                 &mut b.rng,
                 (x_a, -0.4),
@@ -891,12 +922,20 @@ pub(crate) fn build_woodland_creek(b: &mut OutdoorBuilder) {
             b.add_ribbon(SurfaceFeatureKind::GravelRoad, &shoal_pts, shoal_w_cm);
             let creek = b.add_ribbon(SurfaceFeatureKind::CreekChannel, &pts, creek_w_cm);
 
-            let ty0 = hf * if flip { b.rng.f32_range(0.24, 0.44) } else { b.rng.f32_range(0.56, 0.76) };
-            let ty1 = hf * if flip { b.rng.f32_range(0.56, 0.76) } else { b.rng.f32_range(0.24, 0.44) };
+            let ty0 = hf
+                * if flip {
+                    b.rng.f32_range(0.24, 0.44)
+                } else {
+                    b.rng.f32_range(0.56, 0.76)
+                };
+            let ty1 = hf
+                * if flip {
+                    b.rng.f32_range(0.56, 0.76)
+                } else {
+                    b.rng.f32_range(0.24, 0.44)
+                };
             let br_frac = b.rng.f32_range(0.40, 0.62);
-            if let Some(bridge) =
-                b.place_perpendicular_bridge(creek, br_frac, 2.3, bridge_span_m)
-            {
+            if let Some(bridge) = b.place_perpendicular_bridge(creek, br_frac, 2.3, bridge_span_m) {
                 let trail_pts = route_trail_across_bridge_m(
                     &mut b.rng,
                     (-0.3, ty0),
@@ -961,7 +1000,11 @@ pub(crate) fn build_woodland_creek(b: &mut OutdoorBuilder) {
             let br_creek_cm = (creek_w_cm * 2) / 3;
             let br_ravine_cm = br_creek_cm + 190;
             b.add_ribbon(SurfaceFeatureKind::DefensiveTrench, &pts, ravine_w_cm);
-            b.add_ribbon(SurfaceFeatureKind::DefensiveTrench, &branch_pts, br_ravine_cm);
+            b.add_ribbon(
+                SurfaceFeatureKind::DefensiveTrench,
+                &branch_pts,
+                br_ravine_cm,
+            );
             let main_shoal = offset_polyline_along_normal_m(&pts, &mut b.rng, 0.46, channel_clamp);
             b.add_ribbon(SurfaceFeatureKind::GravelRoad, &main_shoal, shoal_w_cm);
             let creek = b.add_ribbon(SurfaceFeatureKind::CreekChannel, &pts, creek_w_cm);
@@ -970,9 +1013,7 @@ pub(crate) fn build_woodland_creek(b: &mut OutdoorBuilder) {
             let br_frac = b.rng.f32_range(0.76, 0.86);
             let ty0 = hf * b.rng.f32_range(0.60, 0.84);
             let ty1 = hf * b.rng.f32_range(0.60, 0.84);
-            if let Some(bridge) =
-                b.place_perpendicular_bridge(creek, br_frac, 2.3, bridge_span_m)
-            {
+            if let Some(bridge) = b.place_perpendicular_bridge(creek, br_frac, 2.3, bridge_span_m) {
                 let trail_pts = route_trail_across_bridge_m(
                     &mut b.rng,
                     (-0.3, ty0),
@@ -1184,10 +1225,7 @@ pub(crate) fn build_roadside_ditch(b: &mut OutdoorBuilder) {
             let pref_frac = b.rng.f32_range(0.36, 0.64);
             if let Some(bridge) = b.place_perpendicular_bridge(ditch, pref_frac, 2.4, 2.8) {
                 let road_side_x = if west_side { -1.0 } else { 1.0 };
-                let start_pt = (
-                    bridge.center_m.0 + road_side_x * 2.4,
-                    bridge.center_m.1,
-                );
+                let start_pt = (bridge.center_m.0 + road_side_x * 2.4, bridge.center_m.1);
                 let end_y = (bridge.center_m.1 + b.rng.f32_range(-2.6, 2.6)).clamp(1.5, hf - 1.5);
                 let end_pt = (if west_side { wf - 0.4 } else { 0.4 }, end_y);
                 let trail_pts = route_trail_across_bridge_m(
@@ -1383,9 +1421,17 @@ pub(crate) fn build_wooded_park(b: &mut OutdoorBuilder) {
     let ry = if north_road { 1.75 } else { hf - 1.75 };
     let road_rect = RectM {
         x0: 1.0,
-        y0: if north_road { 1.15 } else { (hf - 3.35).max(hf * 0.65) },
+        y0: if north_road {
+            1.15
+        } else {
+            (hf - 3.35).max(hf * 0.65)
+        },
         x1: wf - 1.0,
-        y1: if north_road { 3.35_f32.min(hf * 0.35) } else { hf - 1.15 },
+        y1: if north_road {
+            3.35_f32.min(hf * 0.35)
+        } else {
+            hf - 1.15
+        },
     };
     let road_y0 = ry + b.rng.f32_range(-0.25, 0.25);
     let road_y1 = ry + b.rng.f32_range(-0.25, 0.25);
@@ -1412,7 +1458,11 @@ pub(crate) fn build_wooded_park(b: &mut OutdoorBuilder) {
         x0: 1.0,
         y0: if north_road { 3.8 } else { 1.2 },
         x1: (wf - 1.0).max(3.0),
-        y1: if north_road { hf - 1.2 } else { (hf - 3.8).max(3.0) },
+        y1: if north_road {
+            hf - 1.2
+        } else {
+            (hf - 3.8).max(3.0)
+        },
     };
     let walk_clamp = full_rect(b, 0.9);
 
@@ -1506,10 +1556,14 @@ pub(crate) fn build_wooded_park(b: &mut OutdoorBuilder) {
             let mut loop_pts: Vec<(f32, f32)> = (0..n_ring)
                 .map(|i| {
                     let ang = TAU * (i as f32 / n_ring as f32);
-                    let harm = 1.0 + 0.18 * (2.0 * ang + phase).sin() + 0.12 * (3.0 * ang - phase).cos();
+                    let harm =
+                        1.0 + 0.18 * (2.0 * ang + phase).sin() + 0.12 * (3.0 * ang - phase).cos();
                     let jx = rx * harm * b.rng.f32_range(0.90, 1.12);
                     let jy = ry_l * harm * b.rng.f32_range(0.90, 1.12);
-                    clamp_pt((clear_x + jx * ang.cos(), clear_y + jy * ang.sin()), park_rect)
+                    clamp_pt(
+                        (clear_x + jx * ang.cos(), clear_y + jy * ang.sin()),
+                        park_rect,
+                    )
                 })
                 .collect();
             if let Some(&first) = loop_pts.first() {
@@ -1621,19 +1675,43 @@ pub(crate) fn build_wooded_park(b: &mut OutdoorBuilder) {
     }
 
     b.place_vehicle_along_ribbon(PropKind::Car, road, 0.26, 0.15, 6);
+    place_rot_m(b, PropKind::MediumFountain, clear_x, clear_y, 0, 360, true);
     place_rot_m(
         b,
-        PropKind::MediumFountain,
-        clear_x,
-        clear_y,
+        PropKind::PicnicTable,
+        clear_x + 1.4,
+        clear_y + 0.7,
+        0,
+        90,
+        true,
+    );
+    place_rot_m(
+        b,
+        PropKind::BbqGrill,
+        clear_x + 2.0,
+        clear_y + 0.7,
         0,
         360,
         true,
     );
-    place_rot_m(b, PropKind::PicnicTable, clear_x + 1.4, clear_y + 0.7, 0, 90, true);
-    place_rot_m(b, PropKind::BbqGrill, clear_x + 2.0, clear_y + 0.7, 0, 360, true);
-    place_rot_m(b, PropKind::ParkBench, clear_x - 1.4, clear_y, -25, 26, true);
-    place_rot_m(b, PropKind::TrashCan, clear_x - 1.8, clear_y + 0.4, 0, 360, true);
+    place_rot_m(
+        b,
+        PropKind::ParkBench,
+        clear_x - 1.4,
+        clear_y,
+        -25,
+        26,
+        true,
+    );
+    place_rot_m(
+        b,
+        PropKind::TrashCan,
+        clear_x - 1.8,
+        clear_y + 0.4,
+        0,
+        360,
+        true,
+    );
     if b.w >= 26 && b.h >= 20 {
         b.scatter_turf_prop_rot(PropKind::Gazebo, 1, 0, full_rect(b, 3.0));
     }

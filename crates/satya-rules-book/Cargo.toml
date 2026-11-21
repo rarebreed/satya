@@ -1,0 +1,21 @@
+[package]
+name = "satya-rules-book"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[features]
+default = []
+book-builder = ["dep:satya-engine"]
+
+[[bin]]
+name = "build-rules-book"
+path = "src/bin/build_rules_book.rs"
+required-features = ["book-builder"]
+
+[dependencies]
+satya-schema = { path = "../satya-schema" }
+serde.workspace = true
+serde_json.workspace = true
+satya-engine = { path = "../satya-engine", optional = true }

@@ -18,7 +18,10 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 satya-schema = { path = "../satya-schema" }
+satya-rules-book = { path = "../satya-rules-book" }
 satya-engine = { path = "../satya-engine" }
+satya-maps = { path = "../satya-maps" }
+satya-campaign = { path = "../satya-campaign" }
 leptos.workspace = true
 serde.workspace = true
 serde_json.workspace = true

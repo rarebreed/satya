@@ -113,9 +113,23 @@ fn push_editor_overlay_3d(
             EditorSelection::Surface(idx) => {
                 if let Some(s) = ui.map.surfaces.get(idx) {
                     for pt in &s.points_cm {
-                        let [vx, vz] =
-                            metric_to_world_xz(pt.x_cm as f32 / 100.0, pt.y_cm as f32 / 100.0, bw_m, bh_m);
-                        push_box(verts, vx, vz, 0.025, 0.09, 0.10, 0.10, [0.76, 0.36, 0.96], 0.0);
+                        let [vx, vz] = metric_to_world_xz(
+                            pt.x_cm as f32 / 100.0,
+                            pt.y_cm as f32 / 100.0,
+                            bw_m,
+                            bh_m,
+                        );
+                        push_box(
+                            verts,
+                            vx,
+                            vz,
+                            0.025,
+                            0.09,
+                            0.10,
+                            0.10,
+                            [0.76, 0.36, 0.96],
+                            0.0,
+                        );
                     }
                 }
             }
@@ -130,7 +144,7 @@ fn push_editor_overlay_3d(
             } else {
                 (hx_m, hy_m)
             };
-            let p = satya_engine::map_dressing::make_prop_at_cm(
+            let p = satya_maps::map_dressing::make_prop_at_cm(
                 ed.prop_kind,
                 (px_m * 100.0).round() as i32,
                 (py_m * 100.0).round() as i32,
@@ -187,8 +201,12 @@ fn push_editor_overlay_3d(
                 push_box(verts, wx, wz, 0.022, 0.055, hx, hz, [0.76, 0.36, 0.96], 0.0);
             } else {
                 for (i, pt) in ed.surface_draft_pts_cm.iter().enumerate() {
-                    let [vx, vz] =
-                        metric_to_world_xz(pt.x_cm as f32 / 100.0, pt.y_cm as f32 / 100.0, bw_m, bh_m);
+                    let [vx, vz] = metric_to_world_xz(
+                        pt.x_cm as f32 / 100.0,
+                        pt.y_cm as f32 / 100.0,
+                        bw_m,
+                        bh_m,
+                    );
                     let col = if i == 0 {
                         [0.98, 0.80, 0.16]
                     } else {
@@ -232,8 +250,13 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
                 "bm-asphalt" | "bm-concrete" | "bm-stained-concrete" => -7.0_f32,
                 "bm-clinical-vinyl" | "bm-linoleum-check" | "bm-terrazzo" | "bm-ceramic"
                 | "bm-marble" | "bm-vinyl" => -8.0_f32,
-                "bm-stone" | "bm-gravel" | "bm-gravel-pea" | "bm-gravel-slate" | "bm-brick"
-                | "bm-herringbone-brick" | "bm-wood-deck" => -3.0_f32,
+                "bm-stone"
+                | "bm-gravel"
+                | "bm-gravel-pea"
+                | "bm-gravel-slate"
+                | "bm-brick"
+                | "bm-herringbone-brick"
+                | "bm-wood-deck" => -3.0_f32,
                 _ => -1.0_f32,
             };
             (
@@ -310,11 +333,11 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
     let catwalk_elevation = |xm: f32, ym: f32| -> f32 {
         if ui.map.props.iter().any(|p| {
             p.kind == PropKind::ElevatedCatwalk
-                && satya_engine::tactical_map_geom::prop_contains_point(p, xm, ym, false)
+                && satya_maps::tactical_map_geom::prop_contains_point(p, xm, ym, false)
         }) {
             1.48
         } else if matches!(
-            satya_engine::map_surface_geom::topmost_surface_at_m(&ui.map.surfaces, xm, ym)
+            satya_maps::map_surface_geom::topmost_surface_at_m(&ui.map.surfaces, xm, ym)
                 .map(|s| s.kind),
             Some(satya_schema::SurfaceFeatureKind::BridgeDeck)
         ) {
@@ -482,16 +505,14 @@ mod tests {
         assert!((wall_cut_max_y - 0.61).abs() < 1e-3);
 
         ui.map.wall_edges.clear();
-        ui.map
-            .props
-            .push(satya_engine::map_dressing::make_prop_at_cm(
-                satya_schema::PropKind::ElevatedCatwalk,
-                200,
-                200,
-                0,
-                None,
-                1,
-            ));
+        ui.map.props.push(satya_maps::map_dressing::make_prop_at_cm(
+            satya_schema::PropKind::ElevatedCatwalk,
+            200,
+            200,
+            0,
+            None,
+            1,
+        ));
         let plat_verts = build_tactical_diorama_vertices(&ui);
         assert!(
             plat_verts
@@ -507,36 +528,30 @@ mod tests {
             wall_cutaway: false,
             ..Default::default()
         };
-        ui.map
-            .props
-            .push(satya_engine::map_dressing::make_prop_at_cm(
-                PropKind::LargeTree,
-                450,
-                450,
-                0,
-                None,
-                1,
-            ));
-        ui.map
-            .props
-            .push(satya_engine::map_dressing::make_prop_at_cm(
-                PropKind::MediumTree,
-                850,
-                450,
-                0,
-                None,
-                2,
-            ));
-        ui.map
-            .props
-            .push(satya_engine::map_dressing::make_prop_at_cm(
-                PropKind::Gazebo,
-                1300,
-                700,
-                0,
-                None,
-                3,
-            ));
+        ui.map.props.push(satya_maps::map_dressing::make_prop_at_cm(
+            PropKind::LargeTree,
+            450,
+            450,
+            0,
+            None,
+            1,
+        ));
+        ui.map.props.push(satya_maps::map_dressing::make_prop_at_cm(
+            PropKind::MediumTree,
+            850,
+            450,
+            0,
+            None,
+            2,
+        ));
+        ui.map.props.push(satya_maps::map_dressing::make_prop_at_cm(
+            PropKind::Gazebo,
+            1300,
+            700,
+            0,
+            None,
+            3,
+        ));
         let (verts_full, opaque_full) = build_tactical_diorama_layered(&ui);
         assert!(verts_full.len() as u32 > opaque_full);
         assert!(

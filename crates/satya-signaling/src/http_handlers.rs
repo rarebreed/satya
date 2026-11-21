@@ -8,7 +8,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse},
 };
-use satya_engine::{build_rules_catalog_response, get_rules_chapter};
+use satya_rules_book::{build_rules_catalog_response, get_rules_chapter};
 use satya_schema::{
     AccountRole, AiGmProviderConfig, CreateSessionRequest, JoinSessionRequest, LeaveSessionRequest,
     LifecycleEventType, LoginRequest, LogoutRequest, Participant, RegisterRequest,

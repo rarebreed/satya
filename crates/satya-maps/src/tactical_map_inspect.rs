@@ -481,7 +481,8 @@ pub fn inspect_map_point(
         if !spec.floor_layer || !prop_contains_point(p, x_m, y_m, false) {
             continue;
         }
-        let (subtitle, cover_label, elevation_cm) = if p.decorative && !p.kind.is_vertical_portal() {
+        let (subtitle, cover_label, elevation_cm) = if p.decorative && !p.kind.is_vertical_portal()
+        {
             (
                 "Visual Only Layer".to_owned(),
                 "Visual Only (No Cover)".to_owned(),
@@ -781,8 +782,7 @@ mod tests {
         assert_eq!(car_cab.cover_label, "Visual Only (No Cover)");
         assert!(car_cab.subtitle.contains("Visual Only"));
 
-        let car_eng =
-            inspect_map_point(&req, "Suburban Park", 5.0 + eng_dx, 4.5 + eng_dy).unwrap();
+        let car_eng = inspect_map_point(&req, "Suburban Park", 5.0 + eng_dx, 4.5 + eng_dy).unwrap();
         assert_eq!(car_eng.cover_label, "Visual Only (No Cover)");
         assert!(car_eng.subtitle.contains("Visual Only"));
         assert!(!car_eng.title.contains("Engine Block"));

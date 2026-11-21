@@ -15,11 +15,11 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
-use satya_engine::map_dressing::make_prop;
-use satya_engine::tactical_map::{
+use satya_maps::map_dressing::make_prop;
+use satya_maps::tactical_map::{
     SectorPreset, build_procedural_map_request, build_procedural_map_request_with_options,
 };
-use satya_engine::tactical_map_geom::{
+use satya_maps::tactical_map_geom::{
     place_prop_on_map, remove_prop_at_point, update_prop_on_map_at_index,
 };
 use satya_schema::{
@@ -257,11 +257,13 @@ pub async fn session_generate_or_edit_map_handler(
                 y: edge_ref.y,
                 side: edge_ref.side,
                 kind,
-                material: req.set_edge_material.unwrap_or(if kind == WallEdgeKind::Window {
-                    MaterialClass::Glass
-                } else {
-                    MaterialClass::Drywall
-                }),
+                material: req
+                    .set_edge_material
+                    .unwrap_or(if kind == WallEdgeKind::Window {
+                        MaterialClass::Glass
+                    } else {
+                        MaterialClass::Drywall
+                    }),
             }),
             (None, None) => {}
         }
@@ -321,7 +323,8 @@ pub async fn session_generate_or_edit_map_handler(
             }
             for sf in &snap.surfaces {
                 if let Err(msg) = validate_surface_geometry(sf) {
-                    return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg }))).into_response();
+                    return (StatusCode::BAD_REQUEST, Json(json!({ "error": msg })))
+                        .into_response();
                 }
             }
             map.wall_edges = snap.wall_edges;
@@ -480,12 +483,12 @@ pub async fn session_generate_or_edit_map_handler(
                 p,
                 req.title.as_deref(),
                 raw_w.clamp(
-                    satya_engine::tactical_map::MIN_SECTOR_DIM,
-                    satya_engine::tactical_map::MAX_SECTOR_DIM,
+                    satya_maps::tactical_map::MIN_SECTOR_DIM,
+                    satya_maps::tactical_map::MAX_SECTOR_DIM,
                 ),
                 raw_h.clamp(
-                    satya_engine::tactical_map::MIN_SECTOR_DIM,
-                    satya_engine::tactical_map::MAX_SECTOR_DIM,
+                    satya_maps::tactical_map::MIN_SECTOR_DIM,
+                    satya_maps::tactical_map::MAX_SECTOR_DIM,
                 ),
                 req.seed.unwrap_or(42),
             )
@@ -616,15 +619,15 @@ pub async fn session_generate_or_edit_map_handler(
         }
         let mut base_map = ctx.active_map.clone().unwrap_or_else(|| {
             if req.preset.trim().is_empty() {
-                satya_engine::tactical_map::default_starter_vector_map(req.seed.unwrap_or(1337))
+                satya_maps::tactical_map::default_starter_vector_map(req.seed.unwrap_or(1337))
             } else {
                 let preset = SectorPreset::from_code_str(&req.preset).unwrap_or_default();
                 build_procedural_map_request(
                     &format!("map-{}", preset.as_str()),
                     preset,
                     req.title.as_deref(),
-                    satya_engine::tactical_map::CONTINUATION_STRIP_W,
-                    satya_engine::tactical_map::CONTINUATION_STRIP_H,
+                    satya_maps::tactical_map::CONTINUATION_STRIP_W,
+                    satya_maps::tactical_map::CONTINUATION_STRIP_H,
                     req.seed.unwrap_or(1337),
                 )
             }
@@ -633,14 +636,13 @@ pub async fn session_generate_or_edit_map_handler(
         if base_map.theme_preset.is_none() && !req.preset.trim().is_empty() {
             base_map.theme_preset = Some(req.preset.clone());
         }
-        let map =
-            match satya_engine::tactical_map::continue_procedural_map(&base_map, dir, req.seed) {
-                Ok(outcome) => outcome.map,
-                Err(err) => {
-                    return (StatusCode::BAD_REQUEST, Json(json!({ "error": err })))
-                        .into_response();
-                }
-            };
+        let map = match satya_maps::tactical_map::continue_procedural_map(&base_map, dir, req.seed)
+        {
+            Ok(outcome) => outcome.map,
+            Err(err) => {
+                return (StatusCode::BAD_REQUEST, Json(json!({ "error": err }))).into_response();
+            }
+        };
 
         let _ = state
             .auth
@@ -681,12 +683,12 @@ pub async fn session_generate_or_edit_map_handler(
         .map(|s| preset.resolve_scale_dimensions(s))
         .unwrap_or((req.grid_width, req.grid_height));
     let width = raw_w.clamp(
-        satya_engine::tactical_map::MIN_SECTOR_DIM,
-        satya_engine::tactical_map::MAX_SECTOR_DIM,
+        satya_maps::tactical_map::MIN_SECTOR_DIM,
+        satya_maps::tactical_map::MAX_SECTOR_DIM,
     );
     let height = raw_h.clamp(
-        satya_engine::tactical_map::MIN_SECTOR_DIM,
-        satya_engine::tactical_map::MAX_SECTOR_DIM,
+        satya_maps::tactical_map::MIN_SECTOR_DIM,
+        satya_maps::tactical_map::MAX_SECTOR_DIM,
     );
     let seed = req.seed.unwrap_or(42);
     let mut map = build_procedural_map_request_with_options(

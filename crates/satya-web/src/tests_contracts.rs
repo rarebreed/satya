@@ -415,8 +415,8 @@ fn test_phase2_psyche_9_linnea_cho_and_faction_templates() {
     let spec = wasm_client::apply_faction_template_to_wizard(&mut wiz, "SATYANG_MANJUSRI")
         .expect("valid faction archetype code");
     assert_eq!(
-        wiz.lifepath.faction_archetype,
-        Some(satya_engine::FactionArchetypeId::SatyangManjusri)
+        wiz.lifepath.faction_archetype.as_deref(),
+        Some("SATYANG_MANJUSRI")
     );
     assert_eq!(wiz.characteristics.opn, spec.psyche.opn);
     assert_eq!(wiz.characteristics.cps, spec.psyche.cps);

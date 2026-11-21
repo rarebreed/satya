@@ -1,7 +1,7 @@
 # Faction Conspiracies, Mirror Hypocrisies & Open Canon Threads
 
 > [!CAUTION]
-> **GM Eyes Only (`GM_CONSPIRACY_SECRET`)**: Reveals the five mid-campaign Mirror-Hypocrisy conspiracies (`ConspiracyNodeId` in [`crates/satya-engine/src/awakened_campaign_arcs.rs`](../../../crates/satya-engine/src/awakened_campaign_arcs.rs)) and open setting mysteries intended to be uncovered through investigation in Arcs 1–3. Players should read [Factions of 2035](../03-minds-and-factions/factions_of_2035.md) instead.
+> **GM Eyes Only (`GM_CONSPIRACY_SECRET`)**: Reveals the five mid-campaign Mirror-Hypocrisy conspiracies (`ConspiracyNodeId` in [`crates/satya-campaign/src/awakened_campaign_arcs.rs`](../../../crates/satya-campaign/src/awakened_campaign_arcs.rs)) and open setting mysteries intended to be uncovered through investigation in Arcs 1–3. Players should read [Factions of 2035](../03-minds-and-factions/factions_of_2035.md) instead.
 > **Campaign Navigation**: [Campaign Summary](../SUMMARY.md) · [Prologue (Prequel)](../01-opening/prologue.md) · [Episode 1: St. Jude Annex](episode_01_st_jude_annex.md) · [Three-Arc Chronicle](three_arc_chronicle.md) · **Part IV:** *Faction Conspiracies & Canon Threads*
 
 Every major power bloc in *Awakened* acts rationally on one genuine piece of the 2035 polycrisis—while concealing a hidden hypocrisy or moral blind spot that drives Arc 2 and Arc 3 twists.

@@ -11,11 +11,11 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::character_audit::characteristics_from_record;
-use crate::characteristics::{CharacterCharacteristics, PsychePole, psyche_pole_descriptor};
 use crate::npc_generator::{NpcTemplateKind, any_cue};
-use crate::psyche_social::{HasPsyche, PsycheTraitId};
-use crate::skills_trees::lookup_skill_node;
+use satya_engine::character_audit::characteristics_from_record;
+use satya_engine::characteristics::{CharacterCharacteristics, PsychePole, psyche_pole_descriptor};
+use satya_engine::psyche_social::{HasPsyche, PsycheTraitId};
+use satya_engine::skills_trees::lookup_skill_node;
 use satya_schema::{CharacterCharacteristicsRecord, CharacterSheetRecord};
 
 // ============================================================================

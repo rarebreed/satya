@@ -768,7 +768,9 @@ pub fn evaluate_encumbrance_with_bulk(
     BulkLoadAssessment {
         encumbrance,
         has_unslung_bulky_load: has_unslung_bulky_item_over_80cm,
-        agility_and_stealth_effective_tier: LoadEncumbranceTier::from_load_tier_0_to_4(eff_tier_num),
+        agility_and_stealth_effective_tier: LoadEncumbranceTier::from_load_tier_0_to_4(
+            eff_tier_num,
+        ),
         quick_access_retrieve_ticks: 6,
         stowed_pack_retrieve_ticks: 32,
         pack_quick_release_ticks: 4,

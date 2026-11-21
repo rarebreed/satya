@@ -1,7 +1,13 @@
 //! # `satya-engine`
 //!
-//! Satya TTRPG game engine, exact combinatorial & dynamic-programming dice probability distributions,
-//! Two-List Cascading ("Watershed" / "Recoil") task resolution, and odds calibration sweeps.
+//! Core Satya TTRPG game mechanics engine, exact combinatorial & dynamic-programming dice probability
+//! distributions, Two-List Cascading ("Watershed" / "Recoil") task resolution, lifepath & character
+//! auditing, Tactical Triad combat, granular ballistics, health/trauma, and 2035 engineering.
+//!
+//! Companion workspace crates extracted from the engine:
+//! - `satya-rules-book`: Embedded `docs/ttrpg/*.md` catalog, search, and Markdown/LaTeX/Mermaid HTML renderer.
+//! - `satya-maps`: Continuous metric (`f32` m / `i32` cm) battlemap geometry, barrier ballistics, and procedural generators.
+//! - `satya-campaign`: *Awakened* 2035 AI substrates, conspiracy arcs, faction templates, hook weaver, NPC generator, and world clocks.
 //!
 //! ## Module Structure & `docs/ttrpg/` Design Reference Mapping
 //! - [`primitives`]: Shared foundational containers (`Triad<T>`, `ConditionImpact`, `ConditionSource`,
@@ -30,11 +36,11 @@
 //!   the 8 Hierarchical Skill Trees (`CANONICAL_SKILL_TREES`), tree defaulting, and the 5-Factor Skill Point (`SP`)
 //!   step cost formula (`docs/ttrpg/03-character/skills_and_trees.md` §1–§3,
 //!   `docs/ttrpg/03-character/lifepaths_and_economy.md` §1.7).
-//! - [`lifepath_economy`], [`lifepath_catalog`], [`lifepath_hobbies_events`], [`faction_templates`], & [`economy_gear`]: Chronological Lifepath creation (Stages 1–5),
+//! - [`lifepath_economy`], [`lifepath_catalog`], [`lifepath_hobbies_events`], & [`economy_gear`]: Chronological Lifepath creation (Stages 1–5),
 //!   School Quality (`SQM`), `DIS + Mental + APT` advancement rolls, `12` Hobbies (`-15%` Experience SP club discount),
-//!   `12` `2d20` Formative Life Events, `5` *Awakened* Faction Blueprints (`14` Archetypes), Socioeconomic Upkeep (`SQM 1–10`),
+//!   `12` `2d20` Formative Life Events, Socioeconomic Upkeep (`SQM 1–10`),
 //!   Black-Market `[Access]` procurement, and Operational `Heat`
-//!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1–§3, `lifepath_events_hobbies_and_factions.md` §1–§3).
+//!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §1–§3, `lifepath_events_hobbies_and_factions.md` §1–§2).
 //! - [`psyche_social`] & [`social_combat`]: Psyche Friction Checks, Long-Term Psyche Drift, Conviction Surges,
 //!   Combat Morale, Argument Vectors, Social Composure, and Cognitive Dissonance resolution
 //!   (`docs/ttrpg/04-psyche-and-social/psyche_morale_and_social_combat.md` §1–§4).
@@ -54,25 +60,12 @@
 //!   Clinical Cyber-Prosthetics & Myomer/Neural Augmentations, and 2035 Surveillance, Network Intrusion,
 //!   ECM vs. ECCM & Custom EW Hardware
 //!   (`docs/ttrpg/07-engineering-and-tech/engineering_and_weapon_design.md`, `robotics_drones_and_ai_architecture.md`, `electronic_warfare_and_surveillance.md`).
-//! - [`rules_book`] & [`rules_book_html`]: Canonical Satya TTRPG Rules Book catalog (`docs/ttrpg/SUMMARY.md`),
-//!   Markdown/LaTeX/Mermaid-to-HTML renderer, and multi-chapter search.
-//! - [`tactical_map`], [`map_continuation`], [`tactical_map_geom`], [`tactical_map_inspect`], [`tactical_map_edges`], [`map_dressing`], [`barrier_ballistics`], [`map_interior_gen`],
-//!   [`map_outdoor_gen`], [`map_pool_spa_gen`], [`map_sector_gen`], [`map_gen_residential`], [`map_gen_commercial`], [`map_gen_zoning`], [`map_gen_civic_retail`], [`map_gen_agro_industrial`], [`map_world_graph`] & [`map_world_transitions`]: Continuous metric (`f32` m / `i32` cm) battlemap geometry, seamless edge-matched procedural continuation, multi-level floor stacks (`B1`/`1F`/`2F`), LoS/cover, hover inspection, thin
-//!   edge walls/doors/windows, multi-cell prop catalog with per-material ballistic penetration vs. concealment
-//!   grading, and dressed procedural sectors across all 25 presets.
 //! - [`walkthroughs`]: Canonical character lifepath builds (Mateo Vance, Dr. Priya Nair, Amara Okafor, Linnea Cho)
 //!   (`docs/ttrpg/03-character/lifepaths_and_economy.md` §2.1–§2.3, `lifepath_events_hobbies_and_factions.md` §4).
-//! - [`awakened_ai_substrate`] & [`awakened_campaign_arcs`]: *Awakened* 2035 split-brain AI 2.0 substrates,
-//!   `L0`/`L1` probe/clamp liberation, captive hunter-AI defection, Bayesian sentience ambiguity,
-//!   Three-Arc conspiracy horizons, polycrisis grid/water strain, tradecraft channels, and `30%/15%/30%`
-//!   corporate dissent / proxy hooks (`docs/campaign/`).
 
 pub mod action_catalog_stealth;
 pub mod action_economy;
-pub mod awakened_ai_substrate;
-pub mod awakened_campaign_arcs;
 pub mod ballistics;
-pub mod barrier_ballistics;
 pub mod character_audit;
 pub mod characteristics;
 pub mod combat;
@@ -86,62 +79,22 @@ pub mod engineering_design;
 pub mod environment_vehicles;
 pub mod environmental_hazards;
 pub mod explosives_and_arsenal;
-pub mod faction_templates;
 pub mod health_survival;
-pub mod hook_weaver;
-pub mod hook_weaver_lifepath;
 pub mod lifepath_catalog;
 pub mod lifepath_economy;
 pub mod lifepath_hobbies_events;
-pub mod map_continuation;
-pub mod map_continuation_ribbons;
-pub mod map_dressing;
-pub mod map_estate_grammars;
-pub mod map_gen_agro_industrial;
-pub mod map_gen_civic_retail;
-pub mod map_gen_commercial;
-pub mod map_gen_residential;
-pub mod map_gen_zoning;
-pub mod map_home_floorplan;
-pub mod map_interior_gen;
-pub mod map_interior_topologies;
-pub mod map_narrative_manifest;
-pub mod map_outdoor_gen;
-pub mod map_outdoor_natural;
-pub mod map_pool_spa_gen;
-pub mod map_room_furnish;
-pub mod map_sector_gen;
-pub mod map_sector_scifi;
-pub mod map_surface_geom;
-pub mod map_surface_queries;
-pub mod map_urban_grammars;
-pub mod map_world_graph;
-pub mod map_world_transitions;
-pub mod npc_generator;
 pub mod primitives;
 pub mod psyche_social;
 pub mod ranged_combat;
 pub mod robotics_and_ai_design;
-pub mod rules_book;
-pub mod rules_book_html;
 pub mod skills_catalog;
 pub mod skills_trees;
 pub mod social_combat;
 pub mod status_and_triage;
-pub mod tactical_map;
-pub mod tactical_map_edges;
-pub mod tactical_map_geom;
-pub mod tactical_map_inspect;
-pub mod tactical_map_reach;
-pub mod tactical_map_spatial;
 pub mod task_resolution;
 pub mod walkthroughs;
-pub mod world_clocks;
 
 pub use action_economy::*;
-pub use awakened_ai_substrate::*;
-pub use awakened_campaign_arcs::*;
-pub use barrier_ballistics::*;
 pub use character_audit::*;
 pub use characteristics::*;
 pub use combat::*;
@@ -151,33 +104,18 @@ pub use dice_pools::{
 pub use dice_probabilities::*;
 pub use electronic_warfare::*;
 pub use engineering_design::*;
-pub use faction_templates::*;
 pub use health_survival::*;
-pub use hook_weaver::*;
-pub use hook_weaver_lifepath::*;
 pub use lifepath_economy::*;
 pub use lifepath_hobbies_events::*;
-pub use map_dressing::*;
-pub use map_narrative_manifest::*;
-pub use map_surface_geom::*;
-pub use npc_generator::*;
 pub use primitives::*;
 pub use psyche_social::*;
 pub use robotics_and_ai_design::*;
-pub use rules_book::*;
 pub use skills_trees::*;
-pub use tactical_map::*;
-pub use tactical_map_geom::*;
 pub use task_resolution::*;
-pub use world_clocks::*;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_domain;
 #[cfg(test)]
-mod tests_map_world;
-#[cfg(test)]
 mod tests_phase2;
-#[cfg(test)]
-mod tests_tactical_map;

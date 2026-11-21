@@ -1,19 +1,19 @@
 //! PyO3 bindings for continuous metric tactical map generation, token collision/destination
 //! validation, analytical LoS/cover evaluation, and cursor hover inspection powered by
-//! [`satya_engine`].
+//! [`satya_maps`].
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use satya_engine::map_narrative_manifest::{
+use satya_maps::map_narrative_manifest::{
     SpatialSensoryPin, evaluate_passive_movement_perceptions, extract_sector_narrative_manifest,
 };
-use satya_engine::tactical_map::{
+use satya_maps::tactical_map::{
     SectorPreset, TacticalSceneView, build_procedural_map_request_with_options,
     continue_procedural_map, evaluate_los_continuous,
 };
-use satya_engine::tactical_map_geom::{circle_collides_obstacles, resolve_token_destination_cm};
-use satya_engine::tactical_map_inspect::{MapHoverCategory, inspect_map_point};
+use satya_maps::tactical_map_geom::{circle_collides_obstacles, resolve_token_destination_cm};
+use satya_maps::tactical_map_inspect::{MapHoverCategory, inspect_map_point};
 use satya_schema::{
     CharacterSheetRecord, EconomicTier, GmMapUpdateRequest, MapContinuationDir, MapScalePreset,
     TokenVisualSpec, ZoningContext,
@@ -120,8 +120,14 @@ pub(crate) fn parse_flexible_map_json(map_json: &str) -> Result<GmMapUpdateReque
                 tok.entry("visibility")
                     .or_insert_with(|| Value::String("PUBLIC".to_string()));
 
-                let pos_x_cm = tok.get("pos_x_cm").and_then(Value::as_i64).map(|v| v as i32);
-                let pos_y_cm = tok.get("pos_y_cm").and_then(Value::as_i64).map(|v| v as i32);
+                let pos_x_cm = tok
+                    .get("pos_x_cm")
+                    .and_then(Value::as_i64)
+                    .map(|v| v as i32);
+                let pos_y_cm = tok
+                    .get("pos_y_cm")
+                    .and_then(Value::as_i64)
+                    .map(|v| v as i32);
                 let floor_index = tok
                     .get("floor_index")
                     .and_then(Value::as_i64)
@@ -281,7 +287,10 @@ pub fn check_tactical_token_collision(
     radius_m: f32,
     floor_index: Option<i32>,
 ) -> PyResult<bool> {
-    let map = map_for_floor(parse_flexible_map_json(map_json).map_err(to_py_err)?, floor_index)?;
+    let map = map_for_floor(
+        parse_flexible_map_json(map_json).map_err(to_py_err)?,
+        floor_index,
+    )?;
     let (board_w_m, board_h_m) = map.board_size_m();
     Ok(circle_collides_obstacles(
         board_w_m,
@@ -305,8 +314,8 @@ pub fn resolve_tactical_token_destination_cm(
     floor_index: Option<i32>,
 ) -> PyResult<(i32, i32)> {
     let raw_map = parse_flexible_map_json(map_json).map_err(to_py_err)?;
-    let target_floor =
-        floor_index.or_else(|| (!raw_map.floors.is_empty()).then(|| raw_map.token_floor(moving_entity_id)));
+    let target_floor = floor_index
+        .or_else(|| (!raw_map.floors.is_empty()).then(|| raw_map.token_floor(moving_entity_id)));
     let map = map_for_floor(raw_map, target_floor)?;
     resolve_token_destination_cm(&map, moving_entity_id, target_x_cm, target_y_cm)
         .map_err(to_py_err)
@@ -324,7 +333,10 @@ pub fn evaluate_tactical_los_and_cover(
     y2_m: f32,
     floor_index: Option<i32>,
 ) -> PyResult<Py<PyDict>> {
-    let map = map_for_floor(parse_flexible_map_json(map_json).map_err(to_py_err)?, floor_index)?;
+    let map = map_for_floor(
+        parse_flexible_map_json(map_json).map_err(to_py_err)?,
+        floor_index,
+    )?;
     let scene = TacticalSceneView::from_map(&map);
     let eval = evaluate_los_continuous(&scene, (x1_m, y1_m), (x2_m, y2_m));
     let d = PyDict::new(py);
@@ -347,7 +359,10 @@ pub fn inspect_tactical_map_point(
     y_m: f32,
     floor_index: Option<i32>,
 ) -> PyResult<Option<Py<PyDict>>> {
-    let map = map_for_floor(parse_flexible_map_json(map_json).map_err(to_py_err)?, floor_index)?;
+    let map = map_for_floor(
+        parse_flexible_map_json(map_json).map_err(to_py_err)?,
+        floor_index,
+    )?;
     let Some(info) = inspect_map_point(&map, theme_name, x_m, y_m) else {
         return Ok(None);
     };
@@ -647,7 +662,8 @@ mod tests {
             check_tactical_token_collision(&auto_json, 0.05, 0.05, 0.30, Some(1)).unwrap();
         assert!(collides_f1);
 
-        let f1_parsed = map_for_floor(parse_flexible_map_json(&auto_json).unwrap(), Some(1)).unwrap();
+        let f1_parsed =
+            map_for_floor(parse_flexible_map_json(&auto_json).unwrap(), Some(1)).unwrap();
         let mut f1_clear = None;
         for gy in 2..((f1_parsed.grid_height - 2).max(3)) {
             for gx in 2..((f1_parsed.grid_width - 2).max(3)) {

@@ -8,7 +8,6 @@ use satya_schema::{
     SurfaceFeatureKind, WallEdgeKind, ZoningContext,
 };
 
-use crate::environment_vehicles::CombatMovementGait;
 use crate::map_continuation::{MAX_STITCHED_MAP_W, can_continue_map, continue_procedural_map};
 use crate::map_dressing::{PropObstruction, make_prop, prop_spec, props_share_covered_cell};
 use crate::map_gen_residential::{LotBox, floor_lot_connected};
@@ -22,6 +21,7 @@ use crate::tactical_map::{
 use crate::tactical_map_geom::{
     TOKEN_RADIUS_M, all_walkable_areas_connected, circle_collides_obstacles, tree_canopy_radius_m,
 };
+use satya_engine::environment_vehicles::CombatMovementGait;
 
 #[test]
 fn test_procedural_sector_presets_and_continuous_los_cover() {
@@ -1683,8 +1683,7 @@ fn suburban_neighborhood_varies_house_sizes_aspect_ratios_and_setbacks() {
                     "SuburbanNeighborhood 48x36 seed={seed} expected >= 2 houses, got {}",
                     houses.len()
                 );
-                let dims: BTreeSet<(i32, i32)> =
-                    houses.iter().map(|l| (l.w(), l.h())).collect();
+                let dims: BTreeSet<(i32, i32)> = houses.iter().map(|l| (l.w(), l.h())).collect();
                 assert!(
                     dims.len() >= 2,
                     "SuburbanNeighborhood 48x36 seed={seed} all houses had identical dims {dims:?}"

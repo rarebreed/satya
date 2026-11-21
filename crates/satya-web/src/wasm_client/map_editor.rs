@@ -20,11 +20,13 @@ use crate::wasm_client::map_3d::{
     apply_incoming_map_update, mark_map_wgpu_dirty, refresh_map_dom_and_wgpu, with_map_ui,
     with_map_ui_mut,
 };
-use crate::wasm_client::map_edge_edit::{EDGE_PICK_TOLERANCE_CELLS, apply_edge_kind, nearest_edge_at};
+use crate::wasm_client::map_edge_edit::{
+    EDGE_PICK_TOLERANCE_CELLS, apply_edge_kind, nearest_edge_at,
+};
 use crate::wasm_client::state::with_state;
-use satya_engine::map_dressing::{make_prop_at_cm, rotated_aabb_half_extents_cm};
-use satya_engine::map_surface_geom::surface_contains_point_m;
-use satya_engine::tactical_map_geom::prop_contains_point;
+use satya_maps::map_dressing::{make_prop_at_cm, rotated_aabb_half_extents_cm};
+use satya_maps::map_surface_geom::surface_contains_point_m;
+use satya_maps::tactical_map_geom::prop_contains_point;
 use satya_schema::{
     EdgeSide, GenerateSessionMapRequest, GmMapUpdateRequest, MapFloorLevel, MapPointCm,
     MapPropPlacement, MapSurfaceFeature, MapWallEdge, MaterialClass, PropKind, SurfaceFeatureKind,
@@ -343,10 +345,18 @@ impl Default for MapEditorState {
     }
 }
 
-fn clamp_prop_center_cm(map: &GmMapUpdateRequest, cx_cm: i32, cy_cm: i32, snap_half: bool) -> (i32, i32) {
+fn clamp_prop_center_cm(
+    map: &GmMapUpdateRequest,
+    cx_cm: i32,
+    cy_cm: i32,
+    snap_half: bool,
+) -> (i32, i32) {
     let (bw_cm, bh_cm) = map.board_size_cm();
     let (sx, sy) = if snap_half {
-        (((cx_cm as f32 / 50.0).round() as i32) * 50, ((cy_cm as f32 / 50.0).round() as i32) * 50)
+        (
+            ((cx_cm as f32 / 50.0).round() as i32) * 50,
+            ((cy_cm as f32 / 50.0).round() as i32) * 50,
+        )
     } else {
         (cx_cm, cy_cm)
     };
@@ -361,7 +371,10 @@ fn snap_point_cm(map: &GmMapUpdateRequest, wx_m: f32, wy_m: f32, snap_half: bool
     let raw_x = (wx_m * 100.0).round() as i32;
     let raw_y = (wy_m * 100.0).round() as i32;
     let (sx, sy) = if snap_half {
-        (((raw_x as f32 / 50.0).round() as i32) * 50, ((raw_y as f32 / 50.0).round() as i32) * 50)
+        (
+            ((raw_x as f32 / 50.0).round() as i32) * 50,
+            ((raw_y as f32 / 50.0).round() as i32) * 50,
+        )
     } else {
         (raw_x, raw_y)
     };
@@ -489,11 +502,7 @@ pub fn pick_surface_at_m(surfaces: &[MapSurfaceFeature], wx_m: f32, wy_m: f32) -
 
 /// Picks either the topmost prop or (if none) the topmost ground surface at `(wx_m, wy_m)`.
 #[must_use]
-pub fn pick_prop_or_surface_at(
-    map: &GmMapUpdateRequest,
-    wx_m: f32,
-    wy_m: f32,
-) -> EditorSelection {
+pub fn pick_prop_or_surface_at(map: &GmMapUpdateRequest, wx_m: f32, wy_m: f32) -> EditorSelection {
     if let Some(p_idx) = pick_prop_at_m(&map.props, wx_m, wy_m) {
         EditorSelection::Prop(p_idx)
     } else if let Some(s_idx) = pick_surface_at_m(&map.surfaces, wx_m, wy_m) {
@@ -572,7 +581,9 @@ impl MapEditorState {
                 self.history.push_undo(snapshot_active_floor(map));
                 let seed = (map.seed.unwrap_or(42) as u32)
                     .wrapping_mul(31)
-                    .wrapping_add((cx_cm as u32).wrapping_mul(17) ^ (cy_cm as u32).wrapping_mul(53));
+                    .wrapping_add(
+                        (cx_cm as u32).wrapping_mul(17) ^ (cy_cm as u32).wrapping_mul(53),
+                    );
                 let mut prop = make_prop_at_cm(
                     self.prop_kind,
                     cx_cm,
@@ -697,12 +708,7 @@ impl MapEditorState {
         }
     }
 
-    pub fn on_pointer_move(
-        &mut self,
-        map: &mut GmMapUpdateRequest,
-        wx_m: f32,
-        wy_m: f32,
-    ) -> bool {
+    pub fn on_pointer_move(&mut self, map: &mut GmMapUpdateRequest, wx_m: f32, wy_m: f32) -> bool {
         if !wx_m.is_finite() || !wy_m.is_finite() {
             return false;
         }
@@ -918,11 +924,7 @@ impl MapEditorState {
         self.set_selected_prop_rotation(map, (cur + delta_deg).rem_euclid(360))
     }
 
-    pub fn set_selected_prop_rotation(
-        &mut self,
-        map: &mut GmMapUpdateRequest,
-        deg: i32,
-    ) -> bool {
+    pub fn set_selected_prop_rotation(&mut self, map: &mut GmMapUpdateRequest, deg: i32) -> bool {
         let EditorSelection::Prop(idx) = self.selection else {
             return false;
         };
@@ -967,7 +969,11 @@ impl MapEditorState {
         true
     }
 
-    pub fn set_selected_tint(&mut self, map: &mut GmMapUpdateRequest, tint: Option<[u8; 3]>) -> bool {
+    pub fn set_selected_tint(
+        &mut self,
+        map: &mut GmMapUpdateRequest,
+        tint: Option<[u8; 3]>,
+    ) -> bool {
         match self.selection {
             EditorSelection::Prop(idx) if idx < map.props.len() => {
                 self.history.push_undo(snapshot_active_floor(map));
@@ -1200,9 +1206,7 @@ pub fn handle_editor_pointer_up(wx_m: f32, wy_m: f32) {
     if !is_editor_active() {
         return;
     }
-    let out = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.on_pointer_up(&mut ui.map, wx_m, wy_m))
-    });
+    let out = with_map_ui_mut(|ui| with_editor_mut(|ed| ed.on_pointer_up(&mut ui.map, wx_m, wy_m)));
     commit_outcome_and_refresh(out);
 }
 
@@ -1401,7 +1405,11 @@ pub fn sync_map_editor_dom() {
 
     set_text(
         "btn-map-editor-toggle",
-        if active { "Editor: ON [E]" } else { "Editor [E]" },
+        if active {
+            "Editor: ON [E]"
+        } else {
+            "Editor [E]"
+        },
     );
     set_class(
         "btn-map-editor-toggle",
@@ -1436,19 +1444,35 @@ pub fn sync_map_editor_dom() {
 
     set_display(
         "map-editor-panel-prop",
-        if tool == EditorTool::AddProp { "flex" } else { "none" },
+        if tool == EditorTool::AddProp {
+            "flex"
+        } else {
+            "none"
+        },
     );
     set_display(
         "map-editor-panel-wall",
-        if tool == EditorTool::PaintWall { "flex" } else { "none" },
+        if tool == EditorTool::PaintWall {
+            "flex"
+        } else {
+            "none"
+        },
     );
     set_display(
         "map-editor-panel-surface",
-        if tool == EditorTool::PaintSurface { "flex" } else { "none" },
+        if tool == EditorTool::PaintSurface {
+            "flex"
+        } else {
+            "none"
+        },
     );
     set_display(
         "map-editor-panel-ground",
-        if tool == EditorTool::GroundStyle { "flex" } else { "none" },
+        if tool == EditorTool::GroundStyle {
+            "flex"
+        } else {
+            "none"
+        },
     );
 
     set_input_checked("map-editor-snap-chk", snap);
@@ -1469,16 +1493,23 @@ pub fn sync_map_editor_dom() {
     set_select_value("map-editor-ground-override", &ground_ov);
     set_input_value("map-editor-ground-tint", &ground_tint_hex);
 
-    let show_draft_btns = tool == EditorTool::PaintSurface
-        && surf_shape != SurfaceBrushShape::Rect
-        && draft_len > 0;
+    let show_draft_btns =
+        tool == EditorTool::PaintSurface && surf_shape != SurfaceBrushShape::Rect && draft_len > 0;
     set_display(
         "btn-editor-surface-finish",
-        if show_draft_btns { "inline-flex" } else { "none" },
+        if show_draft_btns {
+            "inline-flex"
+        } else {
+            "none"
+        },
     );
     set_display(
         "btn-editor-surface-cancel",
-        if show_draft_btns { "inline-flex" } else { "none" },
+        if show_draft_btns {
+            "inline-flex"
+        } else {
+            "none"
+        },
     );
 
     let hint = match tool {
@@ -1508,7 +1539,10 @@ pub fn sync_map_editor_dom() {
     set_text("map-editor-status-pill", hint);
 
     let has_sel = sel != EditorSelection::None && !sel_label.is_empty();
-    set_display("map-editor-inspector", if has_sel { "flex" } else { "none" });
+    set_display(
+        "map-editor-inspector",
+        if has_sel { "flex" } else { "none" },
+    );
     if has_sel {
         set_text("map-editor-sel-label", &sel_label);
         let is_prop = matches!(sel, EditorSelection::Prop(_));
@@ -1664,9 +1698,7 @@ pub fn satya_clear_editor_brush_tint() {
 /// Commits the in-progress polygon or ribbon surface draft onto the active floor.
 #[wasm_bindgen]
 pub fn satya_finish_editor_surface() {
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.finish_draft_surface(&mut ui.map))
-    });
+    let ok = with_map_ui_mut(|ui| with_editor_mut(|ed| ed.finish_draft_surface(&mut ui.map)));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1701,9 +1733,8 @@ pub fn satya_apply_editor_ground_style() {
 /// Clears base ground override & tint back to the sector theme default.
 #[wasm_bindgen]
 pub fn satya_clear_editor_ground_style() {
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.set_ground_style(&mut ui.map, None, None))
-    });
+    let ok =
+        with_map_ui_mut(|ui| with_editor_mut(|ed| ed.set_ground_style(&mut ui.map, None, None)));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1714,9 +1745,8 @@ pub fn satya_clear_editor_ground_style() {
 /// Rotates the currently selected object by `delta_deg` (`-15` or `+15`).
 #[wasm_bindgen]
 pub fn satya_editor_rotate_selected(delta_deg: i32) {
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.rotate_selected_prop(&mut ui.map, delta_deg))
-    });
+    let ok =
+        with_map_ui_mut(|ui| with_editor_mut(|ed| ed.rotate_selected_prop(&mut ui.map, delta_deg)));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1731,9 +1761,8 @@ pub fn satya_editor_set_selected_rot() {
     let Ok(deg) = raw.trim().parse::<i32>() else {
         return;
     };
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.set_selected_prop_rotation(&mut ui.map, deg))
-    });
+    let ok =
+        with_map_ui_mut(|ui| with_editor_mut(|ed| ed.set_selected_prop_rotation(&mut ui.map, deg)));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1744,9 +1773,8 @@ pub fn satya_editor_set_selected_rot() {
 /// Stretches/shrinks the selected object's local width span by `delta_cm`.
 #[wasm_bindgen]
 pub fn satya_editor_stretch_selected(delta_cm: i32) {
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.stretch_selected_prop(&mut ui.map, delta_cm))
-    });
+    let ok =
+        with_map_ui_mut(|ui| with_editor_mut(|ed| ed.stretch_selected_prop(&mut ui.map, delta_cm)));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1761,9 +1789,8 @@ pub fn satya_editor_set_selected_tint() {
     let Some(rgb) = parse_hex_rgb(&hex) else {
         return;
     };
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.set_selected_tint(&mut ui.map, Some(rgb)))
-    });
+    let ok =
+        with_map_ui_mut(|ui| with_editor_mut(|ed| ed.set_selected_tint(&mut ui.map, Some(rgb))));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1774,9 +1801,7 @@ pub fn satya_editor_set_selected_tint() {
 /// Removes any color tint from the currently selected object or ground zone.
 #[wasm_bindgen]
 pub fn satya_editor_clear_selected_tint() {
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.set_selected_tint(&mut ui.map, None))
-    });
+    let ok = with_map_ui_mut(|ui| with_editor_mut(|ed| ed.set_selected_tint(&mut ui.map, None)));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1805,9 +1830,8 @@ pub fn satya_editor_set_selected_surface_kind() {
     let Some(kind) = SurfaceFeatureKind::from_code_str(&raw) else {
         return;
     };
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.set_selected_surface_kind(&mut ui.map, kind))
-    });
+    let ok =
+        with_map_ui_mut(|ui| with_editor_mut(|ed| ed.set_selected_surface_kind(&mut ui.map, kind)));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1818,9 +1842,7 @@ pub fn satya_editor_set_selected_surface_kind() {
 /// Duplicates the currently selected object offset `(+0.6m, +0.6m)`.
 #[wasm_bindgen]
 pub fn satya_editor_duplicate_selected() {
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.duplicate_selected(&mut ui.map))
-    });
+    let ok = with_map_ui_mut(|ui| with_editor_mut(|ed| ed.duplicate_selected(&mut ui.map)));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1831,9 +1853,7 @@ pub fn satya_editor_duplicate_selected() {
 /// Deletes the currently selected object or ground zone (`Delete` / `Backspace`).
 #[wasm_bindgen]
 pub fn satya_editor_delete_selected() {
-    let ok = with_map_ui_mut(|ui| {
-        with_editor_mut(|ed| ed.delete_selected(&mut ui.map))
-    });
+    let ok = with_map_ui_mut(|ui| with_editor_mut(|ed| ed.delete_selected(&mut ui.map)));
     commit_outcome_and_refresh(EditorPointerOutcome {
         needs_redraw: ok,
         needs_server_sync: ok,
@@ -1844,11 +1864,12 @@ pub fn satya_editor_delete_selected() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+    use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
 
     #[test]
     fn editor_select_drag_rotate_stretch_tint_decorative_duplicate_and_30_step_undo() {
-        let mut map = build_procedural_map_request("ed", SectorPreset::OfficeFloor, None, 20, 14, 7);
+        let mut map =
+            build_procedural_map_request("ed", SectorPreset::OfficeFloor, None, 20, 14, 7);
         map.props.clear();
         map.wall_edges.clear();
         map.surfaces.clear();
@@ -1867,7 +1888,10 @@ mod tests {
         ed.prop_tint_rgb = Some([200, 100, 50]);
         ed.on_pointer_down(&mut map, 5.0, 5.0);
         assert_eq!(map.props.len(), 2);
-        assert_eq!(pick_prop_or_surface_at(&map, 5.0, 5.0), EditorSelection::Prop(1));
+        assert_eq!(
+            pick_prop_or_surface_at(&map, 5.0, 5.0),
+            EditorSelection::Prop(1)
+        );
 
         // 2. Drag move + 0.5m snap
         ed.tool = EditorTool::SelectMove;
@@ -1900,7 +1924,11 @@ mod tests {
         ed.on_pointer_move(&mut map, 5.0, 2.0);
         assert!(ed.on_pointer_up(&mut map, 5.0, 2.0).needs_server_sync);
         assert_eq!(map.wall_edges.len(), 3);
-        assert!(map.wall_edges.iter().all(|e| e.material == MaterialClass::Brick));
+        assert!(
+            map.wall_edges
+                .iter()
+                .all(|e| e.material == MaterialClass::Brick)
+        );
 
         // 5. Rect, Polygon & Ribbon surface creation + Ground override
         ed.tool = EditorTool::PaintSurface;
@@ -1909,7 +1937,10 @@ mod tests {
         ed.on_pointer_down(&mut map, 10.0, 4.0);
         ed.on_pointer_move(&mut map, 14.0, 8.0);
         assert!(ed.on_pointer_up(&mut map, 14.0, 8.0).needs_server_sync);
-        assert_eq!(pick_prop_or_surface_at(&map, 12.0, 6.0), EditorSelection::Surface(0));
+        assert_eq!(
+            pick_prop_or_surface_at(&map, 12.0, 6.0),
+            EditorSelection::Surface(0)
+        );
 
         ed.surface_shape = SurfaceBrushShape::Ribbon;
         ed.surface_kind = SurfaceFeatureKind::BrickPaverWalk;
@@ -1919,12 +1950,20 @@ mod tests {
         assert!(ed.finish_draft_surface(&mut map));
         assert_eq!(map.surfaces.len(), 2);
 
-        assert!(ed.set_ground_style(&mut map, Some("clinical_vinyl".to_string()), Some([220, 240, 255])));
+        assert!(ed.set_ground_style(
+            &mut map,
+            Some("clinical_vinyl".to_string()),
+            Some([220, 240, 255])
+        ));
         assert_eq!(map.ground_floor_override.as_deref(), Some("clinical_vinyl"));
 
         // 6. 30-step Undo/Redo ring capacity & roundtrip
         for i in 0..35 {
-            ed.set_ground_style(&mut map, Some("grass_lush".to_string()), Some([i as u8, 200, 100]));
+            ed.set_ground_style(
+                &mut map,
+                Some("grass_lush".to_string()),
+                Some([i as u8, 200, 100]),
+            );
         }
         assert_eq!(ed.history.undo_stack.len(), MAX_EDITOR_UNDO);
         assert!(ed.history.undo(&mut map));

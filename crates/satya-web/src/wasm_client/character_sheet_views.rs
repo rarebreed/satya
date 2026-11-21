@@ -12,11 +12,12 @@ use crate::wasm_client::character_sheet::{
 pub use crate::wasm_client::character_sheet_equip_views::*;
 use crate::wasm_client::dom::{escape_html, escape_js_single_quoted_attr};
 use crate::wasm_client::wizard_views_skills::format_trained_skill_chips_html;
+use satya_campaign::{AwakenedFactionId, FactionArchetypeId};
 use satya_engine::{
-    AptitudeCode, AwakenedFactionId, CANONICAL_SKILL_TREES, CharacteristicCode, FactionArchetypeId,
-    PopulationTier, SkillTreeId, SkillType, compute_academic_study_controller,
-    compute_aptitude_min_c_relief, compute_aptitude_training_time_multiplier,
-    compute_stride_and_sprint_velocity, psyche_deviation, psyche_pole_descriptor,
+    AptitudeCode, CANONICAL_SKILL_TREES, CharacteristicCode, PopulationTier, SkillTreeId,
+    SkillType, compute_academic_study_controller, compute_aptitude_min_c_relief,
+    compute_aptitude_training_time_multiplier, compute_stride_and_sprint_velocity,
+    psyche_deviation, psyche_pole_descriptor,
 };
 
 /// Returns the initial SSR HTML for `#char-sheet-stage-container`.

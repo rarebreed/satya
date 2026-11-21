@@ -21,8 +21,8 @@ use crate::wasm_client::map_3d::{
     TacticalMapUiState, mark_map_wgpu_dirty, refresh_map_wgpu_if_active, resolve_token_visual,
     with_map_ui, with_map_ui_mut,
 };
-use satya_engine::map_dressing::make_prop_at_cm;
-use satya_engine::tactical_map_geom::MapHoverCategory;
+use satya_maps::map_dressing::make_prop_at_cm;
+use satya_maps::tactical_map_geom::MapHoverCategory;
 use satya_schema::{CoverGrade, PropKind};
 use std::cell::Cell;
 use std::fmt::Write as _;
@@ -508,7 +508,7 @@ pub fn satya_toggle_battlemap_grid() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+    use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
     use satya_schema::{MessageVisibility, TokenPlacement};
 
     #[test]
@@ -565,7 +565,7 @@ mod tests {
     #[ignore]
     fn export_phase4_showcase_svgs() {
         use crate::wasm_client::map_2d_art::{BATTLEMAP_PAD_PX, BattlemapInkStyle};
-        use satya_engine::map_dressing::make_prop_at_cm;
+        use satya_maps::map_dressing::make_prop_at_cm;
         let Ok(out_dir) = std::env::var("SATYA_SVG_PREVIEW_DIR") else {
             return;
         };
@@ -587,7 +587,7 @@ mod tests {
             .map(|t| ui.map.token_pos_m(t))
             .collect();
         let (bw_m, bh_m) = ui.map.board_size_m();
-        let _ = satya_engine::tactical_map_geom::place_prop_on_map(
+        let _ = satya_maps::tactical_map_geom::place_prop_on_map(
             &mut ui.map.props,
             &ui.map.wall_edges,
             &occupied,

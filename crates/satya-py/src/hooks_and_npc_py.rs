@@ -3,7 +3,7 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use satya_engine::{
+use satya_campaign::{
     AwakenedFactionId, FactionArchetypeId, NpcGenerationParams, NpcTemplateKind,
     compile_party_hooks, derive_dissenter_or_proxy_hook, extract_character_lifepath_anchors,
     generate_npc_from_prompt_with_pack,

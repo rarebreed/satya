@@ -20,7 +20,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use chrono::Utc;
-use satya_engine::{
+use satya_campaign::{
     FactionArchetypeId, NpcGenerationParams, NpcTemplateKind, generate_npc_from_prompt_with_pack,
 };
 use satya_schema::{

@@ -19,16 +19,16 @@ use crate::wasm_client::dom::{
     set_text,
 };
 use satya_engine::ballistics::lookup_firearm_preset;
-use satya_engine::barrier_ballistics::{
+use satya_engine::environment_vehicles::CombatMovementGait;
+use satya_maps::barrier_ballistics::{
     BallisticShotEvaluation, BallisticShotQuery, BarrierPenetrationVerdict, evaluate_ballistic_shot,
 };
-use satya_engine::environment_vehicles::CombatMovementGait;
-use satya_engine::tactical_map::{
+use satya_maps::tactical_map::{
     GaitReachQuery, ReachableField, ReachableStrip, SectorPreset, TacticalLosEvaluation,
     TacticalSceneView, build_procedural_map_request, compute_reachable_continuous,
     evaluate_los_continuous,
 };
-use satya_engine::tactical_map_geom::{
+use satya_maps::tactical_map_geom::{
     MapHoverInspection, TOKEN_PICK_RADIUS_M, migrate_legacy_tiles_to_vector,
 };
 use satya_schema::{CoverGrade, GmMapUpdateRequest, MessageVisibility, TokenPlacement};
@@ -705,7 +705,7 @@ pub fn apply_incoming_map_update(incoming: &GmMapUpdateRequest) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use satya_engine::tactical_map_geom::resolve_token_destination_cm;
+    use satya_maps::tactical_map_geom::resolve_token_destination_cm;
 
     #[test]
     fn test_world_xz_and_grid_cell_roundtrip_and_svg_hud_formatters() {

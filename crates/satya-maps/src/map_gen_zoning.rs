@@ -420,7 +420,14 @@ fn dress_compact_apartment_unit(
         edges,
         props,
         bay,
-        make_prop(PropKind::BathroomSink, bay.x1 - 1, (bay.y0 + 1).min(bay.y1 - 1), 90, None, s + 3),
+        make_prop(
+            PropKind::BathroomSink,
+            bay.x1 - 1,
+            (bay.y0 + 1).min(bay.y1 - 1),
+            90,
+            None,
+            s + 3,
+        ),
     );
     let _ = place_unit_prop_checked(
         edges,
@@ -440,7 +447,14 @@ fn dress_compact_apartment_unit(
             edges,
             props,
             bay,
-            make_prop(PropKind::Sofa, (bay.x0 + 1).min(bay.x1 - 2), bay.y1 - 1, 180, None, s + 5),
+            make_prop(
+                PropKind::Sofa,
+                (bay.x0 + 1).min(bay.x1 - 2),
+                bay.y1 - 1,
+                180,
+                None,
+                s + 5,
+            ),
         );
     }
     let _ = place_unit_prop_checked(
@@ -453,7 +467,14 @@ fn dress_compact_apartment_unit(
         edges,
         props,
         bay,
-        make_prop(PropKind::TrashCan, bay.x0, (bay.y0 + 1).min(bay.y1 - 1), 0, None, s + 7),
+        make_prop(
+            PropKind::TrashCan,
+            bay.x0,
+            (bay.y0 + 1).min(bay.y1 - 1),
+            0,
+            None,
+            s + 7,
+        ),
     );
 }
 
@@ -477,8 +498,20 @@ fn build_apartment_slab_floor(
         } else {
             (WallEdgeKind::Wall, MaterialClass::ConcreteBlock)
         };
-        edges.push(MapWallEdge { x, y: slab.y0, side: EdgeSide::North, kind: k, material: m });
-        edges.push(MapWallEdge { x, y: slab.y1, side: EdgeSide::North, kind: k, material: m });
+        edges.push(MapWallEdge {
+            x,
+            y: slab.y0,
+            side: EdgeSide::North,
+            kind: k,
+            material: m,
+        });
+        edges.push(MapWallEdge {
+            x,
+            y: slab.y1,
+            side: EdgeSide::North,
+            kind: k,
+            material: m,
+        });
     }
     for y in slab.y0..slab.y1 {
         let win = (y - slab.y0) % 3 == 1 && y + 1 < slab.y1;
@@ -487,8 +520,20 @@ fn build_apartment_slab_floor(
         } else {
             (WallEdgeKind::Wall, MaterialClass::ConcreteBlock)
         };
-        edges.push(MapWallEdge { x: slab.x0, y, side: EdgeSide::West, kind: k, material: m });
-        edges.push(MapWallEdge { x: slab.x1, y, side: EdgeSide::West, kind: k, material: m });
+        edges.push(MapWallEdge {
+            x: slab.x0,
+            y,
+            side: EdgeSide::West,
+            kind: k,
+            material: m,
+        });
+        edges.push(MapWallEdge {
+            x: slab.x1,
+            y,
+            side: EdgeSide::West,
+            kind: k,
+            material: m,
+        });
     }
 
     let horiz_corr = slab.w() >= slab.h() && slab.h() >= 6;
@@ -518,16 +563,51 @@ fn build_apartment_slab_floor(
             ndoors.push((win[0] + win[1]) / 2);
             sdoors.push(((win[0] + win[1]) / 2).clamp(win[0], win[1] - 1));
         }
-        h_slab_wall(&mut edges, cy0, slab.x0, slab.x1, &ndoors, MaterialClass::Drywall);
-        h_slab_wall(&mut edges, cy1, slab.x0, slab.x1, &sdoors, MaterialClass::Drywall);
+        h_slab_wall(
+            &mut edges,
+            cy0,
+            slab.x0,
+            slab.x1,
+            &ndoors,
+            MaterialClass::Drywall,
+        );
+        h_slab_wall(
+            &mut edges,
+            cy1,
+            slab.x0,
+            slab.x1,
+            &sdoors,
+            MaterialClass::Drywall,
+        );
         for &dx in xs.iter().skip(1).take(xs.len().saturating_sub(2)) {
-            v_slab_wall(&mut edges, dx, slab.y0, cy0, &[], MaterialClass::ConcreteBlock);
-            v_slab_wall(&mut edges, dx, cy1, slab.y1, &[], MaterialClass::ConcreteBlock);
+            v_slab_wall(
+                &mut edges,
+                dx,
+                slab.y0,
+                cy0,
+                &[],
+                MaterialClass::ConcreteBlock,
+            );
+            v_slab_wall(
+                &mut edges,
+                dx,
+                cy1,
+                slab.y1,
+                &[],
+                MaterialClass::ConcreteBlock,
+            );
         }
         let stair_x = slab.x0 + 1;
         let elev_x = (slab.x1 - 3).max(stair_x + 3);
         props.push(make_prop(PropKind::Stairwell, stair_x, cy0, 90, None, s));
-        props.push(make_prop(PropKind::ElevatorCar, elev_x, cy0, 0, None, s + 1));
+        props.push(make_prop(
+            PropKind::ElevatorCar,
+            elev_x,
+            cy0,
+            0,
+            None,
+            s + 1,
+        ));
         for (i, win) in xs.windows(2).enumerate() {
             dress_compact_apartment_unit(
                 LotBox::new(win[0], slab.y0, win[1], cy0),
@@ -571,16 +651,51 @@ fn build_apartment_slab_floor(
             wdoors.push((win[0] + win[1]) / 2);
             edoors.push(((win[0] + win[1]) / 2).clamp(win[0], win[1] - 1));
         }
-        v_slab_wall(&mut edges, cx0, slab.y0, slab.y1, &wdoors, MaterialClass::Drywall);
-        v_slab_wall(&mut edges, cx1, slab.y0, slab.y1, &edoors, MaterialClass::Drywall);
+        v_slab_wall(
+            &mut edges,
+            cx0,
+            slab.y0,
+            slab.y1,
+            &wdoors,
+            MaterialClass::Drywall,
+        );
+        v_slab_wall(
+            &mut edges,
+            cx1,
+            slab.y0,
+            slab.y1,
+            &edoors,
+            MaterialClass::Drywall,
+        );
         for &dy in ys.iter().skip(1).take(ys.len().saturating_sub(2)) {
-            h_slab_wall(&mut edges, dy, slab.x0, cx0, &[], MaterialClass::ConcreteBlock);
-            h_slab_wall(&mut edges, dy, cx1, slab.x1, &[], MaterialClass::ConcreteBlock);
+            h_slab_wall(
+                &mut edges,
+                dy,
+                slab.x0,
+                cx0,
+                &[],
+                MaterialClass::ConcreteBlock,
+            );
+            h_slab_wall(
+                &mut edges,
+                dy,
+                cx1,
+                slab.x1,
+                &[],
+                MaterialClass::ConcreteBlock,
+            );
         }
         let stair_y = slab.y0 + 1;
         let elev_y = (slab.y1 - 3).max(stair_y + 3);
         props.push(make_prop(PropKind::Stairwell, cx0, stair_y, 0, None, s));
-        props.push(make_prop(PropKind::ElevatorCar, cx0, elev_y, 0, None, s + 1));
+        props.push(make_prop(
+            PropKind::ElevatorCar,
+            cx0,
+            elev_y,
+            0,
+            None,
+            s + 1,
+        ));
         for (i, win) in ys.windows(2).enumerate() {
             dress_compact_apartment_unit(
                 LotBox::new(slab.x0, win[0], cx0, win[1]),
@@ -680,7 +795,13 @@ fn build_projects_complex(
         } else {
             CardinalEntry::South
         };
-        add_entry_walk(b, slab, walk_entry, SurfaceFeatureKind::ConcreteWalk, walk_y);
+        add_entry_walk(
+            b,
+            slab,
+            walk_entry,
+            SurfaceFeatureKind::ConcreteWalk,
+            walk_y,
+        );
     }
 
     let _ = b.place_vehicle_along_ribbon(PropKind::Car, street_idx, 0.25, 0.20, 5);
@@ -762,12 +883,8 @@ fn build_urban_rowhouse_neighborhood(
         let count = (span / 7).clamp(2, 4);
         let each_w = ((span - gap * (count - 1)) / count).max(5);
         let arch_base = (seed as usize) % StoreArchetype::ALL.len();
-        const AWNING_COLORS: [[u8; 3]; 4] = [
-            [212, 48, 38],
-            [32, 138, 90],
-            [222, 162, 42],
-            [30, 114, 140],
-        ];
+        const AWNING_COLORS: [[u8; 3]; 4] =
+            [[212, 48, 38], [32, 138, 90], [222, 162, 42], [30, 114, 140]];
         for i in 0..count {
             let lx0 = sx0 + i * (each_w + gap);
             let lx1 = (lx0 + each_w).min(sx1);
@@ -788,7 +905,13 @@ fn build_urban_rowhouse_neighborhood(
                 seed.wrapping_add(i as u64 * 173),
             );
             FloorStack::absorb_ground(b, store);
-            add_entry_walk(b, bay, CardinalEntry::South, SurfaceFeatureKind::BrickPaverWalk, walk_y);
+            add_entry_walk(
+                b,
+                bay,
+                CardinalEntry::South,
+                SurfaceFeatureKind::BrickPaverWalk,
+                walk_y,
+            );
 
             let mut awning = make_prop(
                 PropKind::AwningCanopy,
@@ -815,7 +938,8 @@ fn build_urban_rowhouse_neighborhood(
                     seed.wrapping_add(0x2F00 + i as u64 * 89),
                 );
                 for st in &upstairs.stair_anchors {
-                    let stair_prop = make_prop(PropKind::Stairwell, st.x, st.y, st.rot_deg, None, 0);
+                    let stair_prop =
+                        make_prop(PropKind::Stairwell, st.x, st.y, st.rot_deg, None, 0);
                     b.props.retain(|existing| {
                         prop_spec(existing.kind).floor_layer
                             || !crate::tactical_map_geom::props_overlap_continuous(
@@ -870,7 +994,13 @@ fn build_urban_rowhouse_neighborhood(
                 seed.wrapping_add(i as u64 * 97),
             );
             stack.absorb_home(b, home, allow_basement && i == 0);
-            add_entry_walk(b, unit_lot, entry, SurfaceFeatureKind::BrickPaverWalk, walk_y);
+            add_entry_walk(
+                b,
+                unit_lot,
+                entry,
+                SurfaceFeatureKind::BrickPaverWalk,
+                walk_y,
+            );
 
             let mx = unit_lot.x0 + unit_lot.w() / 2;
             let stoop_x = (mx - 1).clamp(unit_lot.x0, unit_lot.x1 - 2);
@@ -907,7 +1037,11 @@ fn build_urban_rowhouse_neighborhood(
             EconomicTier::UpperMiddleClass | EconomicTier::LuxuryMansion
         ) {
             let (rear_y0, rear_y1, rear_depth) = if street_north {
-                (lot_y1 as f32 + 0.6, (hf - 1.2).max(lot_y1 as f32 + 0.6), h - lot_y1)
+                (
+                    lot_y1 as f32 + 0.6,
+                    (hf - 1.2).max(lot_y1 as f32 + 0.6),
+                    h - lot_y1,
+                )
             } else {
                 (1.2_f32, (lot_y0 as f32 - 0.6).max(1.2), lot_y0)
             };
@@ -1091,7 +1225,10 @@ fn plan_suburban_lots(
         4
     };
     let max_total_w = (span - min_gap * (lot_count as i32 - 1)).max(min_lw);
-    let mut widths: Vec<i32> = raw_ws.iter().map(|&rw| rw.clamp(min_lw, max_total_w)).collect();
+    let mut widths: Vec<i32> = raw_ws
+        .iter()
+        .map(|&rw| rw.clamp(min_lw, max_total_w))
+        .collect();
     while widths.iter().sum::<i32>() > max_total_w {
         if let Some((idx, _)) = widths
             .iter()
@@ -1194,11 +1331,7 @@ fn plan_suburban_lots(
 
     if w >= 28 && h >= 22 {
         let max_area = (w * h) * 33 / 100;
-        while (0..lot_count)
-            .map(|i| widths[i] * heights[i])
-            .sum::<i32>()
-            > max_area
-        {
+        while (0..lot_count).map(|i| widths[i] * heights[i]).sum::<i32>() > max_area {
             if let Some(idx) = (0..lot_count)
                 .filter(|&i| heights[i] > min_h || widths[i] > min_lw)
                 .max_by_key(|&i| widths[i] * heights[i])
@@ -1364,9 +1497,8 @@ fn build_suburban_neighborhood(
             add_entry_walk(b, lot, entry, SurfaceFeatureKind::StoneWalk, walk_y);
         }
 
-        let prefer_right_drive = idx + 1 == lots.len()
-            && (lot.x1 as f32 + 2.6) <= wf - 1.0
-            && b.rng.chance(1, 2);
+        let prefer_right_drive =
+            idx + 1 == lots.len() && (lot.x1 as f32 + 2.6) <= wf - 1.0 && b.rng.chance(1, 2);
         let drive_x = if prefer_right_drive {
             lot.x1 as f32 + 1.5
         } else {
@@ -1479,7 +1611,9 @@ fn build_luxury_mansion_site(
         (y0, y1)
     } else {
         let y0 = comp.y0 + 2;
-        let y1 = (comp.y1 - 1 - rear_lawn).max((y0 + 11).min(comp.y1 - 1)).max(y0 + 5);
+        let y1 = (comp.y1 - 1 - rear_lawn)
+            .max((y0 + 11).min(comp.y1 - 1))
+            .max(y0 + 5);
         (y0, y1)
     };
     let manor = LotBox::new(

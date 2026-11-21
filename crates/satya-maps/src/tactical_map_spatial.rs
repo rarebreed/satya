@@ -361,11 +361,11 @@ const fn cy_out(py: f32, radius_m: f32, height_m: f32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::environment_vehicles::CombatMovementGait;
     use crate::tactical_map::{
         SectorPreset, TacticalSceneView, compute_reachable_continuous, generate_procedural_sector,
     };
     use crate::tactical_map_geom::all_walkable_areas_connected;
+    use satya_engine::environment_vehicles::CombatMovementGait;
 
     #[test]
     fn spatial_index_matches_bruteforce_collision_on_generated_sectors() {

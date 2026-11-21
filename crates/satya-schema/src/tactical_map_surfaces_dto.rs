@@ -6,7 +6,7 @@
 //! and 3D WebGPU without `1m` row-run stair-stepping.
 //!
 //! Re-exported through [`crate::tactical_map_dto`]. Geometry evaluation, spline extrusion,
-//! triangulation, and priority queries live in `satya_engine::map_surface_geom`.
+//! triangulation, and priority queries live in `satya_maps::map_surface_geom`.
 
 use crate::define_wire_enum;
 use crate::tactical_map_dressing_dto::MaterialClass;

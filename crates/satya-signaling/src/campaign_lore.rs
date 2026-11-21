@@ -3,7 +3,7 @@
 
 use crate::npcs::load_session_npcs_for_omnisearch;
 use crate::state::SignalingAppState;
-use satya_engine::SectorPreset;
+use satya_maps::SectorPreset;
 use satya_schema::{GmLookupHit, GmLookupSourceKind, SessionNpcEntry};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -389,9 +389,16 @@ fn is_public_campaign_lore(rel_label: &str, body: &str) -> bool {
         return false;
     }
     let body_low = body.to_ascii_lowercase();
-    !["gm reference", "secret architect", "gm-only", "gm ground truth", "gm_conspiracy_secret", "mirror-hypocris"]
-        .iter()
-        .any(|marker| body_low.contains(marker))
+    ![
+        "gm reference",
+        "secret architect",
+        "gm-only",
+        "gm ground truth",
+        "gm_conspiracy_secret",
+        "mirror-hypocris",
+    ]
+    .iter()
+    .any(|marker| body_low.contains(marker))
 }
 
 /// Appends ranked [`GmLookupSourceKind::CampaignLore`] (Markdown + TOML) and
@@ -558,7 +565,7 @@ pub async fn append_omnisearch_lore_and_npc_hits(
     );
     if include_world_clocks {
         let raw_ledger = crate::world_clocks::get_or_init_world_ledger(state, session_id).await;
-        let ledger = satya_engine::filter_world_ledger_for_viewer(&raw_ledger, is_gm);
+        let ledger = satya_campaign::filter_world_ledger_for_viewer(&raw_ledger, is_gm);
         for clock in &ledger.faction_clocks {
             let mut body = format!(
                 "{} {}/{} standing {:+} {}",

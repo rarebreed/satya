@@ -7,8 +7,8 @@ use satya_schema::{
     EconomicTier, FactionClockRecord, SessionWorldLedger, UpdateWorldLedgerRequest, ZoningContext,
 };
 
-use crate::economy_gear::evaluate_operational_heat;
 use crate::faction_templates::AwakenedFactionId;
+use satya_engine::economy_gear::evaluate_operational_heat;
 
 /// Seeds default faction clocks, `Heat = 0` status, and jurisdiction response profile for `pack_id`.
 #[must_use]

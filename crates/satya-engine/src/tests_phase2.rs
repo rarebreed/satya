@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use satya_schema::CharacterSheetRecord;
 
 use crate::character_audit::{
@@ -11,8 +9,6 @@ use crate::characteristics::{
 };
 use crate::combat::MoraleState;
 use crate::economy_gear::preview_next_skill_step_sp_with_hobbies;
-use crate::faction_templates::{AwakenedFactionId, FactionArchetypeId};
-use crate::hook_weaver::{HookCategory, compile_party_hooks, derive_npc_motivational_profile};
 use crate::lifepath_catalog::CareerTermTrack;
 use crate::lifepath_economy::{
     LifepathBuildConfig, compute_lifepath_baseline_from_config, compute_skill_allocation_sp_ledger,
@@ -20,7 +16,6 @@ use crate::lifepath_economy::{
 use crate::lifepath_hobbies_events::{
     FormativeLifeEventId, LifeEventChoiceBranch, PersonalHobbyId, resolve_formative_life_event,
 };
-use crate::npc_generator::{NpcGenerationParams, NpcTemplateKind, generate_npc_from_prompt};
 use crate::psyche_social::{
     CombatMotivationKind, EmotionalTriggerKind, PsycheProfile, PsycheTraitId,
     evaluate_combat_motivation_modifier, evaluate_emotional_trigger,
@@ -28,102 +23,6 @@ use crate::psyche_social::{
 use crate::skills_trees::lookup_skill_node;
 use crate::social_combat::{SocialArgumentVector, compute_argument_psyche_modifier};
 use crate::walkthroughs::build_linnea_cho_lifepath;
-
-#[test]
-fn test_derive_motivational_profile_highlights_dual_psyche_wedge() {
-    let npc_gen = generate_npc_from_prompt(&NpcGenerationParams {
-        prompt: "Terry is a kind general MD, but needs to feel like she belongs".to_string(),
-        name_override: None,
-        template: NpcTemplateKind::Auto,
-        faction_archetype: None,
-        career_terms: 2,
-        seed: 9101,
-        owner_user_id: "gm".to_string(),
-    });
-    let profile = derive_npc_motivational_profile(
-        &npc_gen.character.characteristics,
-        npc_gen.inferred_template,
-        "Terry is a kind general MD, but needs to feel like she belongs",
-        &npc_gen.character.granted_access_tags,
-        "awakened",
-    );
-    assert!(
-        profile.negotiation_lever.contains("BLG=16") || profile.negotiation_lever.contains("SLF=5")
-    );
-    assert!(profile.dual_psyche_wedge.contains("Wedge"));
-    assert!(!profile.dominant_poles.is_empty());
-}
-
-#[test]
-fn test_compile_party_hooks_generates_character_and_entanglement_hooks() {
-    let mut pc1 = CharacterSheetRecord {
-        character_id: "pc-maya".to_string(),
-        character_name: "Maya Chen".to_string(),
-        callsign_or_role: "Field Diagnostician".to_string(),
-        origin_label: "Metro Clinic".to_string(),
-        operational_heat: 5,
-        granted_access_tags: vec!["DAISE_MED_L2".to_string()],
-        ..CharacterSheetRecord::default()
-    };
-    pc1.characteristics.opn = 17;
-    pc1.characteristics.blg = 16;
-    pc1.characteristics.cps = 16;
-    pc1.skills
-        .insert("clinical_diagnosis_internal_medicine".to_string(), 5);
-
-    let mut pc2 = CharacterSheetRecord {
-        character_id: "pc-reeves".to_string(),
-        character_name: "Harlan Reeves".to_string(),
-        callsign_or_role: "Humanis Liaison".to_string(),
-        ..CharacterSheetRecord::default()
-    };
-    pc2.characteristics.opn = 5;
-    pc2.characteristics.cnf = 16;
-    pc2.characteristics.trs = 4;
-
-    let mut ctx = BTreeMap::new();
-    ctx.insert("location".to_string(), "St. Jude Triage Annex".to_string());
-    ctx.insert("sector_preset".to_string(), "hospital".to_string());
-
-    let manifest = compile_party_hooks(&[pc1, pc2], &ctx, "awakened");
-    assert_eq!(manifest.pack_id, "awakened");
-    assert!(
-        manifest
-            .hooks
-            .iter()
-            .any(|h| h.category == HookCategory::IdentityPsyche)
-    );
-    assert!(
-        manifest
-            .hooks
-            .iter()
-            .any(|h| h.category == HookCategory::SkillSpotlight)
-    );
-    assert!(
-        manifest
-            .hooks
-            .iter()
-            .any(|h| h.category == HookCategory::CredentialAccess)
-    );
-    assert!(
-        manifest
-            .hooks
-            .iter()
-            .any(|h| h.category == HookCategory::OperationalHeat)
-    );
-    assert!(
-        manifest
-            .party_entanglements
-            .iter()
-            .any(|e| e.tension_axis.contains("OPN") || e.tension_axis.contains("TRS"))
-    );
-    assert!(
-        manifest
-            .hooks
-            .windows(2)
-            .all(|w| w[0].salience >= w[1].salience)
-    );
-}
 
 #[test]
 fn test_expanded_32_characteristics_and_9_psyche_traits() {
@@ -343,38 +242,6 @@ fn test_12_formative_life_events_and_branches() {
     );
     assert_eq!(silent.sqm_delta, 1);
     assert_eq!(whistle.heat_delta, 1);
-}
-
-#[test]
-fn test_all_5_factions_and_14_archetypes_generate_legal_npcs() {
-    assert_eq!(AwakenedFactionId::ALL.len(), 5);
-    assert_eq!(FactionArchetypeId::ALL.len(), 14);
-    for arch in FactionArchetypeId::ALL {
-        let res = generate_npc_from_prompt(&NpcGenerationParams {
-            prompt: String::new(),
-            name_override: Some(format!("NPC {}", arch.as_str())),
-            template: NpcTemplateKind::Auto,
-            faction_archetype: Some(arch),
-            career_terms: 2,
-            seed: 777,
-            owner_user_id: "gm_user".to_string(),
-        });
-        assert_eq!(res.psyche_traits.len(), 9);
-        assert_eq!(
-            res.character.faction_id.as_deref(),
-            Some(arch.faction().as_str())
-        );
-        assert_eq!(
-            res.character.faction_archetype.as_deref(),
-            Some(arch.as_str())
-        );
-        let audit = verify_character_sheet_legality(&res.character);
-        assert!(
-            audit.is_legal,
-            "Faction archetype {:?} failed legality audit: {:?}",
-            arch, audit.violations
-        );
-    }
 }
 
 #[test]

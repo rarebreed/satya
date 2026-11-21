@@ -7,10 +7,10 @@ use std::collections::BTreeMap;
 use satya_schema::{EconomicTier, ZoningContext};
 use serde::{Deserialize, Serialize};
 
-use crate::contested_cascade::ContestedTieRule;
-use crate::define_coded_enum;
 use crate::faction_templates::{AwakenedFactionId, FactionArchetypeId};
-use crate::primitives::{ContestedCheck, TieredSaveEval};
+use satya_engine::contested_cascade::ContestedTieRule;
+use satya_engine::define_coded_enum;
+use satya_engine::primitives::{ContestedCheck, TieredSaveEval};
 
 define_coded_enum! {
     /// Campaign progression arc in `docs/campaign/04-chronicle-and-gm/three_arc_chronicle.md`.

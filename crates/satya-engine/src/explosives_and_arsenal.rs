@@ -1,19 +1,17 @@
 //! # Expanded Arsenal, Shotgun Specialty Loads, Muscle/Less-Lethal, Explosives & Tactical Gear
 //! (`docs/ttrpg/05-combat/arsenal_explosives_and_tactical_gear.md` §1–§4).
 //!
-//! Companion module to [crate::ballistics] (`17` canonical firearms across `17` calibers) and
-//! [crate::barrier_ballistics] (`MaterialClass` barriers). Re-exported through [crate::combat] so all
+//! Companion module to [crate::ballistics] (`17` canonical firearms across `17` calibers and
+//! `MaterialClass` barriers) and `satya_maps::barrier_ballistics`. Re-exported through [crate::combat] so all
 //! downstream callers via `satya_engine::*` receive the full Phase 3 arsenal surface automatically.
 
 use satya_schema::MaterialClass;
 use serde::{Deserialize, Serialize};
 
-use crate::barrier_ballistics::material_ballistic_profile;
+use crate::ballistics::material_ballistic_profile;
 use crate::dice_probabilities::{ContestedOutcomeKind, ContestedTieRule};
 use crate::economy_gear::BlackMarketRestrictionClass;
-use crate::primitives::{
-    ConditionImpact, ConditionSource, ContestedCheck, TieredSaveEval, Triad,
-};
+use crate::primitives::{ConditionImpact, ConditionSource, ContestedCheck, TieredSaveEval, Triad};
 use crate::ranged_combat::WeaponDamageType;
 use crate::{define_coded_enum, impl_static_catalog};
 
@@ -691,13 +689,13 @@ pub fn evaluate_blast_and_fragmentation(
     let mut blast_overpressure_trauma = if spec.peak_blast_trauma <= 0 {
         0
     } else {
-        let raw = ((spec.peak_blast_trauma as f64) * (1.5 / (1.0 + dist_eff * 0.65))).round() as i32;
+        let raw =
+            ((spec.peak_blast_trauma as f64) * (1.5 / (1.0 + dist_eff * 0.65))).round() as i32;
         raw.clamp(0, spec.peak_blast_trauma)
     };
 
     if enclosed_room && blast_overpressure_trauma > 0 && d <= spec.frag_radius_m.max(6.0) {
-        blast_overpressure_trauma =
-            ((blast_overpressure_trauma as f64) * 1.5).round() as i32;
+        blast_overpressure_trauma = ((blast_overpressure_trauma as f64) * 1.5).round() as i32;
     }
     if target_is_prone && blast_overpressure_trauma > 0 {
         blast_overpressure_trauma = (blast_overpressure_trauma - 2).max(1);
@@ -737,8 +735,8 @@ pub fn evaluate_blast_and_fragmentation(
     } else {
         0
     };
-    let causes_eardrum_tinnitus =
-        blast_overpressure_trauma >= 4 || (spec.flash_stun_delta_ext >= 6 && d <= spec.frag_radius_m);
+    let causes_eardrum_tinnitus = blast_overpressure_trauma >= 4
+        || (spec.flash_stun_delta_ext >= 6 && d <= spec.frag_radius_m);
 
     BlastExposureEvaluation {
         ordnance,

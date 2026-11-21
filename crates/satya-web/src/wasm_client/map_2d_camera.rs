@@ -16,7 +16,7 @@ use crate::wasm_client::map_3d_input::{
 use crate::wasm_client::map_3d_wgpu::{current_3d_map_zoom_and_pan, zoom_3d_map_camera_by};
 use crate::wasm_client::map_hover_inspect::{satya_hover_map_point, satya_leave_map_hover};
 use crate::wasm_client::state::with_state;
-use satya_engine::tactical_map::{can_continue_map, preview_continuation_tooltip};
+use satya_maps::tactical_map::{can_continue_map, preview_continuation_tooltip};
 use satya_schema::{
     GmMapUpdateRequest, MapContinuationDir, Participant, ParticipantKind, SessionRole,
 };
@@ -618,11 +618,12 @@ pub fn satya_battlemap_mouse_move(buttons: i32, client_x: f32, client_y: f32) {
     if did_pan {
         sync_map_camera_and_edge_controls_dom();
     } else if let Some((fx, fy)) = hover_metric {
-        let editor_moved = if (buttons & 1) != 0 && crate::wasm_client::map_editor::is_editor_active() {
-            crate::wasm_client::map_editor::handle_editor_pointer_move(fx, fy)
-        } else {
-            false
-        };
+        let editor_moved =
+            if (buttons & 1) != 0 && crate::wasm_client::map_editor::is_editor_active() {
+                crate::wasm_client::map_editor::handle_editor_pointer_move(fx, fy)
+            } else {
+                false
+            };
         if !editor_moved {
             satya_hover_map_point(fx, fy, client_x, client_y);
         }
@@ -730,7 +731,7 @@ pub fn satya_continue_map_dir(dir_code: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+    use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
 
     #[test]
     fn viewbox_default_matches_legacy_20x14_and_fit_zoom_covers_80x56() {

@@ -11,7 +11,10 @@ path = "src/bin/satya-server.rs"
 
 [dependencies]
 satya-schema = { path = "../satya-schema" }
+satya-rules-book = { path = "../satya-rules-book" }
 satya-engine = { path = "../satya-engine" }
+satya-maps = { path = "../satya-maps" }
+satya-campaign = { path = "../satya-campaign" }
 satya-storage = { path = "../satya-storage" }
 satya-web = { path = "../satya-web" }
 argon2.workspace = true

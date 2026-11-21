@@ -14,8 +14,8 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
-use satya_engine::tactical_map::build_procedural_map_request;
-use satya_engine::tactical_map_geom::resolve_token_destination_cm;
+use satya_maps::tactical_map::build_procedural_map_request;
+use satya_maps::tactical_map_geom::resolve_token_destination_cm;
 use satya_schema::{
     CanvasEventType, GmLookupHit, GmLookupSourceKind, GmOmnisearchResponse, MessageVisibility,
     MoveMapTokenRequest, SessionRole, TokenPlacement, TokenVisualSpec, UpdateCombatTrackerRequest,
@@ -356,7 +356,7 @@ pub async fn player_ai_public_lookup_handler(
 
     if matches!(norm_scope.as_str(), "ALL" | "RULES" | "RULES_BOOK") {
         let rule_query = if q_trim.is_empty() { "cascade" } else { q_trim };
-        for r in satya_engine::search_rules_book(rule_query, 5) {
+        for r in satya_rules_book::search_rules_book(rule_query, 5) {
             if seen_ids.insert(r.chapter_id.clone()) {
                 hits.push(GmLookupHit {
                     source_kind: GmLookupSourceKind::RulesBook,

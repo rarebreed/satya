@@ -1171,8 +1171,9 @@ pub fn evaluate_electrical_shock(
 
     let locks_triad_for_pulse =
         tier == ElectricalHazardTier::TaserCewPulsed && effective_raw_trauma > 0;
-    let tetanic_grip_lock =
-        tier == ElectricalHazardTier::HouseholdMains120To240V && effective_raw_trauma > 0 && !insulated_ppe;
+    let tetanic_grip_lock = tier == ElectricalHazardTier::HouseholdMains120To240V
+        && effective_raw_trauma > 0
+        && !insulated_ppe;
     let stun_clock_freeze_ticks = if !passed && tier == ElectricalHazardTier::TaserCewPulsed {
         8
     } else {
@@ -1184,7 +1185,8 @@ pub fn evaluate_electrical_shock(
             ElectricalHazardTier::IndustrialThreePhase480VTo5kV
                 | ElectricalHazardTier::HighTensionOrLightning10kVPlus
         );
-    let cardiac_arrest_risk = (!passed && tier == ElectricalHazardTier::HighTensionOrLightning10kVPlus)
+    let cardiac_arrest_risk = (!passed
+        && tier == ElectricalHazardTier::HighTensionOrLightning10kVPlus)
         || (is_botch && tier == ElectricalHazardTier::IndustrialThreePhase480VTo5kV);
 
     ContestedCheck::new(
@@ -1198,7 +1200,11 @@ pub fn evaluate_electrical_shock(
             stun_clock_freeze_ticks,
             causes_unconscious,
             cardiac_arrest_risk,
-            wound_shock_added: if effective_raw_trauma > 0 { base_shock } else { 0 },
+            wound_shock_added: if effective_raw_trauma > 0 {
+                base_shock
+            } else {
+                0
+            },
             electronics_reboot_ticks: reboot_ticks,
         },
     )

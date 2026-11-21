@@ -916,7 +916,8 @@ pub fn evaluate_contact_favor_request(
     };
     let reach_shortfall_mod = (required_reach_tier
         .clamp(1, 4)
-        .saturating_sub(contact.reach_access_tier.clamp(1, 4)) as i32)
+        .saturating_sub(contact.reach_access_tier.clamp(1, 4))
+        as i32)
         * 4;
     let total_hidden_delta_ext =
         favor.base_delta_ext() + reliability_mod + exposure_mod + heat_mod + reach_shortfall_mod;
@@ -1163,7 +1164,8 @@ pub fn evaluate_cover_identity_scrutiny(
         0
     };
     let already_burned = cover_heat >= spec.burn_heat_threshold;
-    let biometric_mismatch_penalty = if scrutiny == CoverScrutinyLevel::BiometricAuditOrFederalCrossCheck
+    let biometric_mismatch_penalty = if scrutiny
+        == CoverScrutinyLevel::BiometricAuditOrFederalCrossCheck
         && !spec.biometric_linked
     {
         6

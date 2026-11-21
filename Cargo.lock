@@ -2890,9 +2890,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "satya-campaign"
+version = "0.1.0"
+dependencies = [
+ "satya-engine",
+ "satya-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "satya-engine"
 version = "0.1.0"
 dependencies = [
+ "satya-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "satya-maps"
+version = "0.1.0"
+dependencies = [
+ "satya-engine",
  "satya-schema",
  "serde",
  "serde_json",
@@ -2903,6 +2923,19 @@ name = "satya-py"
 version = "0.1.0"
 dependencies = [
  "pyo3",
+ "satya-campaign",
+ "satya-engine",
+ "satya-maps",
+ "satya-rules-book",
+ "satya-schema",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "satya-rules-book"
+version = "0.1.0"
+dependencies = [
  "satya-engine",
  "satya-schema",
  "serde",
@@ -2934,7 +2967,10 @@ dependencies = [
  "futures",
  "hex",
  "rand 0.8.8",
+ "satya-campaign",
  "satya-engine",
+ "satya-maps",
+ "satya-rules-book",
  "satya-schema",
  "satya-storage",
  "satya-web",
@@ -2979,7 +3015,10 @@ dependencies = [
  "js-sys",
  "leptos",
  "naga",
+ "satya-campaign",
  "satya-engine",
+ "satya-maps",
+ "satya-rules-book",
  "satya-schema",
  "serde",
  "serde_json",

@@ -8,8 +8,8 @@
 use crate::wasm_client::glb_model::GlbVertex;
 use crate::wasm_client::map_3d::{TacticalMapUiState, metric_to_world_xz};
 use crate::wasm_client::map_3d_dressing_geom::{lighten, push_obb};
-use satya_engine::map_dressing::prop_spec;
-use satya_engine::tactical_map_geom::tree_canopy_radius_m;
+use satya_maps::map_dressing::prop_spec;
+use satya_maps::tactical_map_geom::tree_canopy_radius_m;
 use satya_schema::{MapPropPlacement, PropKind};
 
 /// Translucent foliage/gazebo canopy zone sentinel in `SHARED_GLB_DIORAMA_WGSL`.
@@ -511,18 +511,7 @@ pub(crate) fn push_extra_prop_3d(
                 let r = hx.min(hz) * 0.86;
                 let wr = r * 0.79;
                 for ang in [rot, rot + 45] {
-                    push_obb(
-                        verts,
-                        cx,
-                        cz,
-                        0.0,
-                        top,
-                        r,
-                        r,
-                        ang,
-                        [0.85, 0.82, 0.76],
-                        0.0,
-                    );
+                    push_obb(verts, cx, cz, 0.0, top, r, r, ang, [0.85, 0.82, 0.76], 0.0);
                     push_obb(
                         verts,
                         cx,
@@ -836,9 +825,7 @@ pub fn push_translucent_canopies_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMap
                 );
             }
             PropKind::AwningCanopy => {
-                crate::wasm_client::map_3d_props_lab_urban::push_awning_canopy_3d(
-                    verts, p, cx, cz,
-                );
+                crate::wasm_client::map_3d_props_lab_urban::push_awning_canopy_3d(verts, p, cx, cz);
             }
             _ => {}
         }
@@ -848,7 +835,7 @@ pub fn push_translucent_canopies_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMap
 #[cfg(test)]
 mod tests {
     use super::*;
-    use satya_engine::map_dressing::make_prop;
+    use satya_maps::map_dressing::make_prop;
 
     #[test]
     fn hot_tub_3d_emits_distinct_finite_meshes_across_all_four_spa_styles() {
@@ -859,7 +846,10 @@ mod tests {
             assert!(push_extra_prop_3d(
                 &mut verts, &prop, 5.0, 5.0, 0.9, 0.9, 0.88, false, 1.0
             ));
-            assert!(!verts.is_empty(), "HotTub style {variant_seed} emitted 0 verts");
+            assert!(
+                !verts.is_empty(),
+                "HotTub style {variant_seed} emitted 0 verts"
+            );
             assert!(verts.iter().all(|v| {
                 v.position.iter().all(|c| c.is_finite()) && v.normal.iter().all(|c| c.is_finite())
             }));

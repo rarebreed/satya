@@ -1146,7 +1146,10 @@ fn test_vehicle_catalog_firing_platforms_component_damage_and_bulk_load() {
         0.0,
         true,
     );
-    assert_eq!(bulk.encumbrance.tier, LoadEncumbranceTier::Tier0Unencumbered);
+    assert_eq!(
+        bulk.encumbrance.tier,
+        LoadEncumbranceTier::Tier0Unencumbered
+    );
     assert_eq!(
         bulk.agility_and_stealth_effective_tier,
         LoadEncumbranceTier::Tier1LightPatrolLoad
@@ -1217,15 +1220,24 @@ fn test_acute_environmental_hazards_falling_fire_shock_weather_diving_sepsis() {
     // Falling & breakfall mitigation + water surface tension above 15m
     let fall_7m = evaluate_fall_impact(7.0, LandingSurfaceClass::HardwoodAsphaltConcrete, 0, false);
     assert_eq!(fall_7m.raw_fall_trauma, 7);
-    assert_eq!(fall_7m.wound_tier, Some(StructuralWoundTier::Tier3SevereFracture));
+    assert_eq!(
+        fall_7m.wound_tier,
+        Some(StructuralWoundTier::Tier3SevereFracture)
+    );
     let fall_7m_parkour =
         evaluate_fall_impact(7.0, LandingSurfaceClass::HardwoodAsphaltConcrete, 2, false);
     assert_eq!(fall_7m_parkour.raw_fall_trauma, 3);
-    assert_eq!(fall_7m_parkour.wound_tier, Some(StructuralWoundTier::Tier2Moderate));
+    assert_eq!(
+        fall_7m_parkour.wound_tier,
+        Some(StructuralWoundTier::Tier2Moderate)
+    );
     assert!(fall_7m_parkour.redirected_off_vitals);
     let fall_12m =
         evaluate_fall_impact(12.0, LandingSurfaceClass::HardwoodAsphaltConcrete, 0, false);
-    assert_eq!(fall_12m.wound_tier, Some(StructuralWoundTier::Tier5CatastrophicLethal));
+    assert_eq!(
+        fall_12m.wound_tier,
+        Some(StructuralWoundTier::Tier5CatastrophicLethal)
+    );
     let water_bellyflop =
         evaluate_fall_impact(20.0, LandingSurfaceClass::PackedDirtTurfWater, 0, false);
     let water_clean_dive =
@@ -1236,8 +1248,14 @@ fn test_acute_environmental_hazards_falling_fire_shock_weather_diving_sepsis() {
     // Fire burns & smoke inhalation
     let burn_2nd = evaluate_burn_trauma(4, 2);
     assert_eq!(burn_2nd.degree, BurnDegree::SecondDegreePartialThickness);
-    assert_eq!((burn_2nd.dehydration_stages_added, burn_2nd.sepsis_delta_ext), (1, 4));
-    let burn_3rd = evaluate_burn_trauma(FireExposureSource::IndustrialOrEvThermalRunaway.base_raw_trauma(), 1);
+    assert_eq!(
+        (burn_2nd.dehydration_stages_added, burn_2nd.sepsis_delta_ext),
+        (1, 4)
+    );
+    let burn_3rd = evaluate_burn_trauma(
+        FireExposureSource::IndustrialOrEvThermalRunaway.base_raw_trauma(),
+        1,
+    );
     assert_eq!(burn_3rd.degree, BurnDegree::ThirdDegreeFullThickness);
     assert!(burn_3rd.locks_limb_zero);
 
@@ -1277,7 +1295,13 @@ fn test_acute_environmental_hazards_falling_fire_shock_weather_diving_sepsis() {
         (10, 9),
         ContestedTieRule::HybridSignedMargin,
     );
-    assert_eq!((wet_mains.effective_raw_trauma, wet_mains.effective_save_delta_ext), (5, 6));
+    assert_eq!(
+        (
+            wet_mains.effective_raw_trauma,
+            wet_mains.effective_save_delta_ext
+        ),
+        (5, 6)
+    );
     assert!(wet_mains.tetanic_grip_lock);
 
     // Wind & black ice traction
@@ -1287,7 +1311,10 @@ fn test_acute_environmental_hazards_falling_fire_shock_weather_diving_sepsis() {
         400.0,
         false,
     );
-    assert_eq!((gale_ice.ballistic_delta_ext, gale_ice.micro_uav_delta_ext), (6, 4));
+    assert_eq!(
+        (gale_ice.ballistic_delta_ext, gale_ice.micro_uav_delta_ext),
+        (6, 4)
+    );
     assert_eq!(gale_ice.hea_stealth_masking_bonus, -2);
     assert!(gale_ice.caps_gait_at_combat_glide);
     let ice_crampons = evaluate_weather_and_footing(
@@ -1885,14 +1912,23 @@ fn test_expanded_firearms_bows_less_lethal_explosives_breaching_and_optics() {
     assert!(sub_eval.base_recoil_r <= 3);
 
     assert_eq!(canonical_shotgun_load_catalog().len(), 5);
-    assert!(ShotgunLoadId::DragonsBreathIncendiary.spec().causes_ignition_check);
+    assert!(
+        ShotgunLoadId::DragonsBreathIncendiary
+            .spec()
+            .causes_ignition_check
+    );
     assert_eq!(
         ShotgunLoadId::BreacherFrangibleLockBuster.spec().base_pen,
         6
     );
 
     assert_eq!(canonical_non_firearm_weapon_catalog().len(), 6);
-    assert!(NonFirearmWeaponId::CompoundBow70Lb.spec().acoustic_stealth_mod_hea <= -10);
+    assert!(
+        NonFirearmWeaponId::CompoundBow70Lb
+            .spec()
+            .acoustic_stealth_mod_hea
+            <= -10
+    );
 
     // TASER blocked by NIJ IIIA vest (PR 4 >= 2) vs incapacitating unarmored botch
     let taser_vest = evaluate_less_lethal_exposure(
@@ -2188,16 +2224,8 @@ fn test_modular_drones_chassis_trauma_ai_codesign_debt_and_cyber_prosthetics() {
     assert_eq!(battery_hit.emp_reboot_ticks, 8);
     assert!(!battery_hit.comms_or_autonomy_degraded);
 
-    let unshielded_emp = evaluate_robot_chassis_damage(
-        4,
-        2,
-        ChassisHitZone::ChassisFrame,
-        1,
-        2,
-        0,
-        true,
-        false,
-    );
+    let unshielded_emp =
+        evaluate_robot_chassis_damage(4, 2, ChassisHitZone::ChassisFrame, 1, 2, 0, true, false);
     assert!(!unshielded_emp.perforated);
     assert_eq!(unshielded_emp.emp_reboot_ticks, 40);
     assert!(unshielded_emp.comms_or_autonomy_degraded);

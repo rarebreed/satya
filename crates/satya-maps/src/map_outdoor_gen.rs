@@ -113,9 +113,9 @@ fn scan_bridge_bank_reach(
         let px = pos.0 + axis.0 * dir_sign * d;
         let py = pos.1 + axis.1 * dir_sign * d;
         let in_soft_bounds = px >= 0.55 && px <= bw - 0.55 && py >= 0.55 && py <= bh - 0.55;
-        let hits_building = surfaces
-            .iter()
-            .any(|surf| surf.kind.is_built_floor_or_deck() && surface_contains_point_m(surf, px, py));
+        let hits_building = surfaces.iter().any(|surf| {
+            surf.kind.is_built_floor_or_deck() && surface_contains_point_m(surf, px, py)
+        });
         let in_water = surfaces
             .iter()
             .any(|surf| surf.kind.is_water_or_channel() && surface_contains_point_m(surf, px, py));
@@ -338,33 +338,20 @@ impl OutdoorBuilder {
                 continue;
             };
             let (sx, sy) = (-ty, tx);
-            let scan_neg = scan_bridge_bank_reach(
-                &self.surfaces,
-                pos,
-                (sx, sy),
-                -1.0,
-                max_scan_m,
-                (wf, hf),
-            );
-            let scan_pos = scan_bridge_bank_reach(
-                &self.surfaces,
-                pos,
-                (sx, sy),
-                1.0,
-                max_scan_m,
-                (wf, hf),
-            );
+            let scan_neg =
+                scan_bridge_bank_reach(&self.surfaces, pos, (sx, sy), -1.0, max_scan_m, (wf, hf));
+            let scan_pos =
+                scan_bridge_bank_reach(&self.surfaces, pos, (sx, sy), 1.0, max_scan_m, (wf, hf));
             let reach_cap = min_span_m * 0.5 + 0.65;
             let shift_s = (0.5 * (scan_pos.reach_m - scan_neg.reach_m)).clamp(-0.55, 0.55);
             let center = (pos.0 + sx * shift_s, pos.1 + sy * shift_s);
-            let hs_desired = (0.5
-                * (scan_neg.reach_m.min(reach_cap) + scan_pos.reach_m.min(reach_cap))
-                + 0.60)
-            .max(min_span_m * 0.5);
-            let x_slack = (wf - 0.30 - center.0 - (tx * hw).abs())
-                .min(center.0 - 0.30 - (tx * hw).abs());
-            let y_slack = (hf - 0.30 - center.1 - (ty * hw).abs())
-                .min(center.1 - 0.30 - (ty * hw).abs());
+            let hs_desired =
+                (0.5 * (scan_neg.reach_m.min(reach_cap) + scan_pos.reach_m.min(reach_cap)) + 0.60)
+                    .max(min_span_m * 0.5);
+            let x_slack =
+                (wf - 0.30 - center.0 - (tx * hw).abs()).min(center.0 - 0.30 - (tx * hw).abs());
+            let y_slack =
+                (hf - 0.30 - center.1 - (ty * hw).abs()).min(center.1 - 0.30 - (ty * hw).abs());
             let hs_cap_x = if sx.abs() > 1e-4 {
                 (x_slack / sx.abs()).max(0.75)
             } else {
@@ -407,8 +394,7 @@ impl OutdoorBuilder {
                 }
             }
 
-            let score =
-                sagitta_m * 3.5 + (cand_frac - preferred_frac).abs() * 0.9 + hazard_penalty;
+            let score = sagitta_m * 3.5 + (cand_frac - preferred_frac).abs() * 0.9 + hazard_penalty;
             if best.as_ref().is_none_or(|b| score < b.score) {
                 best = Some(Candidate {
                     score,
@@ -1229,7 +1215,10 @@ mod tests {
                             let mut min_s = 0.0_f32;
                             for i in 0..cl.len() - 1 {
                                 let (d, t) = crate::tactical_map_geom::distance_point_to_segment(
-                                    center.0, center.1, cl[i], cl[i + 1],
+                                    center.0,
+                                    center.1,
+                                    cl[i],
+                                    cl[i + 1],
                                 );
                                 if d < min_d {
                                     min_d = d;
@@ -1237,8 +1226,7 @@ mod tests {
                                 }
                             }
                             let frac = (min_s / total).clamp(0.0, 1.0);
-                            let contains_center =
-                                surface_contains_point_m(ch, center.0, center.1);
+                            let contains_center = surface_contains_point_m(ch, center.0, center.1);
                             let prio = ch.kind.layer_priority();
                             let better = match best_chan {
                                 None => true,
@@ -1265,8 +1253,7 @@ mod tests {
                             dist_to_cl < 2.0,
                             "{preset:?} {w}x{h} seed {seed}: bridge center far from channel ({dist_to_cl}m)"
                         );
-                        let (_, t_chan, _) =
-                            ribbon_macro_chord_at_fraction(ch, frac, 1.6).unwrap();
+                        let (_, t_chan, _) = ribbon_macro_chord_at_fraction(ch, frac, 1.6).unwrap();
 
                         let rx = p[1].0 - p[0].0;
                         let ry = p[1].1 - p[0].1;

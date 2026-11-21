@@ -1,6 +1,6 @@
 # An RPG for a More Civilized Age — Design Philosophy & Goals of Satya
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/lib.rs`](../../../crates/satya-engine/src/lib.rs) (top-level CARPG simulation crate), [`crates/satya-engine/src/rules_book.rs`](../../../crates/satya-engine/src/rules_book.rs) (`canonical_rules_chapters`, `search_rules_book`), and [`crates/satya-engine/src/rules_book_html.rs`](../../../crates/satya-engine/src/rules_book_html.rs) (`render_rules_markdown_to_html`).  
+> **Rust Engine Implementation**: [`crates/satya-engine/src/lib.rs`](../../../crates/satya-engine/src/lib.rs) (core CARPG simulation crate), [`crates/satya-rules-book/src/lib.rs`](../../../crates/satya-rules-book/src/lib.rs) (`canonical_rules_chapters`, `search_rules_book`), and [`crates/satya-rules-book/src/rules_book_html.rs`](../../../crates/satya-rules-book/src/rules_book_html.rs) (`render_rules_markdown_to_html`).  
 > **Guided Play Example**: See [Guided Examples of Play Overview](../../ttrpg-examples/README.md) and [Guide 01: Why There Is No "Point-Buy Shopping Cart"](../../ttrpg-examples/01-lifepath-session-zero.md#1-why-there-is-no-point-buy-shopping-cart), plus [RPG System & Setting Comparisons](../../campaign/06-essays-and-comparisons/rpg_system_and_setting_comparisons.md).
 
 So, what's so special about **Satya**? Is this some old-school OD&D clone? To explain what Satya is, and the audience this game is catering to, I need to tell a little story first.

@@ -436,7 +436,7 @@ Satya records complete structured character and NPC lifecycles:
 
 ### 10.2 Three Character & Persona Models
 1. **Campaign-Conditioned Prompt-to-NPC Generator (Upgrading `generate_npc_from_prompt`)**:
-   - Upgrades `satya_engine::generate_npc_from_prompt` (`crates/satya-engine/src/npc_generator.rs`) by training a small structured generator on `(GenerateNpcRequest.prompt, campaign_tag_lore_summary, active_quest_hooks) -> (NpcTemplateKind, skill_priorities, psyche_vector, public_summary, gm_secret_dossier)` from Human-GM-refined entries in `session_npcs` and `gm_memories` (`NPC_SECRET`).
+   - Upgrades `satya_campaign::generate_npc_from_prompt` (`crates/satya-campaign/src/npc_generator.rs`) by training a small structured generator on `(GenerateNpcRequest.prompt, campaign_tag_lore_summary, active_quest_hooks) -> (NpcTemplateKind, skill_priorities, psyche_vector, public_summary, gm_secret_dossier)` from Human-GM-refined entries in `session_npcs` and `gm_memories` (`NPC_SECRET`).
    - Rolls up rules-legal (`VerifiedOfficial`) NPCs whose secret motives and backstories automatically tie into the session's active `gm_documents` and `FACTION_CLOCK` notes.
 2. **Interactive Character Wizard & Lifepath Co-Pilot**:
    - Suggests cohesive 8-tree skill packages, equipment loadouts, and backstory hooks in Steps 1–6 of the Character Creation Wizard conditioned on a player's concept prompt and the campaign's `campaign_tag` lore.

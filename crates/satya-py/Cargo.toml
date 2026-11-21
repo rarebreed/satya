@@ -16,7 +16,10 @@ extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 pyo3.workspace = true
+satya-rules-book = { path = "../satya-rules-book" }
 satya-engine = { path = "../satya-engine" }
+satya-maps = { path = "../satya-maps" }
+satya-campaign = { path = "../satya-campaign" }
 satya-schema = { path = "../satya-schema" }
 serde.workspace = true
 serde_json.workspace = true

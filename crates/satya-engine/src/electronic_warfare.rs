@@ -16,13 +16,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::awakened_ai_substrate::SyntheticMetabolicMode;
 use crate::dice_probabilities::{ContestedOutcomeKind, ContestedTieRule};
 use crate::economy_gear::BlackMarketRestrictionClass;
 use crate::engineering_design::{
     BuildOutcomeQuality, ProjectClockComplexity, PrototypeQuirkId, WorkshopFacilityTier,
 };
 use crate::primitives::{ContestedCheck, TieredSaveEval};
+use crate::robotics_and_ai_design::SyntheticMetabolicMode;
 use crate::{define_coded_enum, impl_static_catalog};
 
 #[must_use]
@@ -609,11 +609,12 @@ pub fn evaluate_ecm_vs_eccm_contest(
     let ecm_spec = ecm.spec();
     let eccm_spec = eccm.spec();
 
-    let range_penalty = if ecm_spec.effective_radius_m > 0.0 && distance_m > ecm_spec.effective_radius_m {
-        (((distance_m / ecm_spec.effective_radius_m).ceil() as i32) - 1).clamp(0, 3) * 4
-    } else {
-        0
-    };
+    let range_penalty =
+        if ecm_spec.effective_radius_m > 0.0 && distance_m > ecm_spec.effective_radius_m {
+            (((distance_m / ecm_spec.effective_radius_m).ceil() as i32) - 1).clamp(0, 3) * 4
+        } else {
+            0
+        };
     let net_ew_advantage = ecm_spec.ecm_power - eccm_spec.eccm_rating;
     let triangulation_signature_r_df = if ecm_spec.is_active_rf_emitter {
         ecm_spec.rf_beacon_signature_delta
@@ -858,8 +859,9 @@ pub fn evaluate_custom_ew_hardware_design(
         quirks.push(PrototypeQuirkId::ProprietaryPartsOnly);
     }
 
-    let power_draw_w: f64 =
-        base_power_w + f64::from(effective_ew_power) * 4.0 + if bp.rf_stealth_baffled { 3.0 } else { 0.0 };
+    let power_draw_w: f64 = base_power_w
+        + f64::from(effective_ew_power) * 4.0
+        + if bp.rf_stealth_baffled { 3.0 } else { 0.0 };
     let battery_endurance_min = if power_draw_w > 0.0 {
         ((bp.battery_wh.max(1.0) / power_draw_w) * 60.0 * 10.0).round() / 10.0
     } else {

@@ -321,8 +321,8 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
         .props
         .iter()
         .find(|p| {
-            satya_engine::map_dressing::prop_spec(p.kind).obstruction
-                == satya_engine::map_dressing::PropObstruction::FullObstacle
+            satya_maps::map_dressing::prop_spec(p.kind).obstruction
+                == satya_maps::map_dressing::PropObstruction::FullObstacle
         })
         .map(|p| p.center_cm())
         .unwrap_or((-50, -50));
@@ -394,14 +394,14 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
             (1..generated_map.grid_width - 1).map(move |xx| (xx * 100 + 42, yy * 100 + 28))
         })
         .find(|&(x_cm, y_cm)| {
-            !satya_engine::tactical_map_geom::circle_collides_obstacles(
+            !satya_maps::tactical_map_geom::circle_collides_obstacles(
                 board_w_m,
                 board_h_m,
                 &generated_map.wall_edges,
                 &generated_map.props,
                 x_cm as f32 / 100.0,
                 y_cm as f32 / 100.0,
-                satya_engine::tactical_map_geom::TOKEN_RADIUS_M,
+                satya_maps::tactical_map_geom::TOKEN_RADIUS_M,
             )
         })
         .expect("unblocked sub-meter spot");
@@ -530,7 +530,7 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
     let sofa = (2..p1_map.grid_height - 2)
         .flat_map(|yy| (2..p1_map.grid_width - 2).map(move |xx| (xx * 100 + 50, yy * 100 + 50)))
         .find_map(|(cx_cm, cy_cm)| {
-            let candidate = satya_engine::map_dressing::make_prop_at_cm(
+            let candidate = satya_maps::map_dressing::make_prop_at_cm(
                 satya_schema::PropKind::Sofa,
                 cx_cm,
                 cy_cm,
@@ -539,7 +539,7 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
                 12,
             );
             let mut probe = p1_map.props.clone();
-            satya_engine::tactical_map_geom::place_prop_on_map(
+            satya_maps::tactical_map_geom::place_prop_on_map(
                 &mut probe,
                 &p1_map.wall_edges,
                 &occupied_tokens_m,
@@ -720,7 +720,7 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
         .header("Content-Type", "application/json")
         .body(axum::body::Body::from(
             serde_json::to_vec(&satya_schema::GenerateSessionMapRequest {
-                edit_prop: Some(satya_engine::map_dressing::make_prop_at_cm(
+                edit_prop: Some(satya_maps::map_dressing::make_prop_at_cm(
                     satya_schema::PropKind::HospitalBed,
                     850,
                     550,
@@ -832,8 +832,7 @@ async fn test_tactical_map_generation_token_move_wall_collision_and_gm_only_filt
 #[tokio::test]
 async fn test_observer_ai_gm_session_isolation_escalation_blocks_and_autonomous_rally() {
     let mut cfg = StorageConfig::default();
-    let temp_dir =
-        std::env::temp_dir().join(format!("satya_sig_obs_wave1_{}", Uuid::now_v7()));
+    let temp_dir = std::env::temp_dir().join(format!("satya_sig_obs_wave1_{}", Uuid::now_v7()));
     for topic_cfg in cfg.topics.values_mut() {
         topic_cfg.local_path = temp_dir
             .join(&topic_cfg.local_path)
@@ -1146,14 +1145,14 @@ async fn test_observer_ai_gm_session_isolation_escalation_blocks_and_autonomous_
         (
             "POST",
             "/api/sessions/ep-obs-wave1/map",
-            Some(serde_json::to_string(&satya_schema::GenerateSessionMapRequest::default()).unwrap()),
+            Some(
+                serde_json::to_string(&satya_schema::GenerateSessionMapRequest::default()).unwrap(),
+            ),
         ),
         (
             "POST",
             "/api/sessions/ep-obs-wave1/map/move",
-            Some(
-                serde_json::json!({"entity_id": "tok-pub", "to_x": 4, "to_y": 4}).to_string(),
-            ),
+            Some(serde_json::json!({"entity_id": "tok-pub", "to_x": 4, "to_y": 4}).to_string()),
         ),
     ] {
         let mut builder = axum::http::Request::builder()

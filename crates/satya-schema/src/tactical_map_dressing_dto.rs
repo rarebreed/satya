@@ -78,7 +78,7 @@ define_wire_enum! {
 
 define_wire_enum! {
     /// Physical construction material of a wall edge or prop, graded against projectile caliber,
-    /// impact energy, and penetration in `satya_engine::barrier_ballistics` (`0 PR` concealment through `10 PR` armor steel).
+    /// impact energy, and penetration in `satya_maps::barrier_ballistics` (`0 PR` concealment through `10 PR` armor steel).
     #[derive(Default)]
     pub enum MaterialClass [count = 16] {
         #[default]
@@ -103,7 +103,7 @@ define_wire_enum! {
 
 define_wire_enum! {
     /// Catalog of placeable continuous props & surface zones. Dimensions, heights, and materials are in
-    /// `satya_engine::map_dressing::prop_spec`.
+    /// `satya_maps::map_dressing::prop_spec`.
     pub enum PropKind [count = 118] {
         Sofa => ("SOFA", "Sofa (3-seat)"),
         Loveseat => ("LOVESEAT", "Loveseat"),

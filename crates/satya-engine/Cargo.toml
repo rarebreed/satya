@@ -5,10 +5,6 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
-[[bin]]
-name = "build-rules-book"
-path = "src/bin/build_rules_book.rs"
-
 [dependencies]
 satya-schema = { path = "../satya-schema" }
 serde.workspace = true

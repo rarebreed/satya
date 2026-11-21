@@ -268,12 +268,7 @@ impl AuthAndSessionManager {
                 session.active_map.as_ref(),
                 is_gm,
             );
-            (
-                roster_vec,
-                filtered_map,
-                Some(filtered_tracker),
-                memories,
-            )
+            (roster_vec, filtered_map, Some(filtered_tracker), memories)
         };
 
         let gm_documents = if role == SessionRole::Observer {

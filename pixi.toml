@@ -47,6 +47,10 @@ build-wasm = { cmd = "wasm-pack build crates/satya-web --target web --no-opt --o
 
 # --- Granular & Unified Test Suites ---
 test-schema = { cmd = "cargo test -p satya-schema", description = "Run Avro schema, CRC-64 fingerprint, and v1->v2 evolution tests" }
+test-rules-book = { cmd = "cargo test -p satya-rules-book", description = "Run Satya Rules Book Markdown/LaTeX/Mermaid/search tests" }
+test-engine = { cmd = "cargo test -p satya-engine", description = "Run core Satya TTRPG mechanics, dice, character, combat, and tech tests" }
+test-maps = { cmd = "cargo test -p satya-maps", description = "Run continuous metric tactical map, barrier ballistics, and procedural generator tests" }
+test-campaign = { cmd = "cargo test -p satya-campaign", description = "Run Awakened campaign arcs, faction templates, hook weaver, NPC generator, and world clocks tests" }
 test-storage = { cmd = "cargo test -p satya-storage", description = "Run Apache Iggy & offset-tracked Avro micro-batching tests" }
 test-signaling = { cmd = "cargo test -p satya-signaling", description = "Run Argon2 auth, session password, disconnect, and private routing tests" }
 test-web = { cmd = "cargo test -p satya-web", depends-on = ["check-wasm"], description = "Run Leptos SSR and Rust/Wasm client unit tests (after wasm32 compile gate)" }

@@ -174,7 +174,7 @@ pub fn satya_search_gm_omnisearch() {
         query.as_str()
     };
     if matches!(norm_scope.as_str(), "ALL" | "RULES" | "RULES_BOOK") {
-        for r in satya_engine::search_rules_book(q_for_rules, 5) {
+        for r in satya_rules_book::search_rules_book(q_for_rules, 5) {
             hits.push(GmLookupHit {
                 source_kind: GmLookupSourceKind::RulesBook,
                 item_id: r.chapter_id,

@@ -431,8 +431,7 @@ async fn multi_floor_mansion_generation_floor_switch_and_cross_floor_token_move(
 #[tokio::test]
 async fn test_cross_floor_move_requires_vertical_portal_proximity() {
     let mut cfg = StorageConfig::default();
-    let temp_dir =
-        std::env::temp_dir().join(format!("satya_sig_map_portal_{}", Uuid::now_v7()));
+    let temp_dir = std::env::temp_dir().join(format!("satya_sig_map_portal_{}", Uuid::now_v7()));
     for topic_cfg in cfg.topics.values_mut() {
         topic_cfg.local_path = temp_dir
             .join(&topic_cfg.local_path)
@@ -453,7 +452,11 @@ async fn test_cross_floor_move_requires_vertical_portal_proximity() {
         .authenticate_user("gm_sean", "satya-truth-2026")
         .await
         .unwrap();
-    let gm_user = state.auth.verify_auth_token(&gm_auth.auth_token).await.unwrap();
+    let gm_user = state
+        .auth
+        .verify_auth_token(&gm_auth.auth_token)
+        .await
+        .unwrap();
     let _ = state
         .auth
         .create_session(
@@ -473,7 +476,11 @@ async fn test_cross_floor_move_requires_vertical_portal_proximity() {
         .authenticate_user("sara_valkyrie", "satya-truth-2026")
         .await
         .unwrap();
-    let p1_user = state.auth.verify_auth_token(&p1_auth.auth_token).await.unwrap();
+    let p1_user = state
+        .auth
+        .verify_auth_token(&p1_auth.auth_token)
+        .await
+        .unwrap();
     let _ = state
         .auth
         .join_session(
@@ -533,13 +540,13 @@ async fn test_cross_floor_move_requires_vertical_portal_proximity() {
         for gx in 1..(mansion_map.grid_width - 1) {
             let cx = gx * 100 + 50;
             let cy = gy * 100 + 50;
-            let far_from_portals = portals_cm.iter().all(|&(px, py)| {
-                ((cx - px) as f32).hypot((cy - py) as f32) > 350.0
-            });
+            let far_from_portals = portals_cm
+                .iter()
+                .all(|&(px, py)| ((cx - px) as f32).hypot((cy - py) as f32) > 350.0);
             if far_from_portals
-                && satya_engine::resolve_token_destination_cm(&mansion_map, &p1_auth.user_id, cx, cy)
+                && satya_maps::resolve_token_destination_cm(&mansion_map, &p1_auth.user_id, cx, cy)
                     .is_ok()
-                && satya_engine::resolve_token_destination_cm(&f2_view, &p1_auth.user_id, cx, cy)
+                && satya_maps::resolve_token_destination_cm(&f2_view, &p1_auth.user_id, cx, cy)
                     .is_ok()
             {
                 far_cm = Some((cx, cy));

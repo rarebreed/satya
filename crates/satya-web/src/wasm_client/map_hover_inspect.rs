@@ -16,7 +16,7 @@ use crate::wasm_client::map_3d::{
     TacticalMapUiState, format_map_tactical_hud_html, mark_map_wgpu_dirty,
     refresh_map_wgpu_if_active, with_map_ui, with_map_ui_mut,
 };
-use satya_engine::tactical_map_geom::{MapHoverCategory, MapHoverInspection, inspect_map_point};
+use satya_maps::tactical_map_geom::{MapHoverCategory, MapHoverInspection, inspect_map_point};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
@@ -345,7 +345,7 @@ pub fn handle_map_global_keyup(ev: &web_sys::KeyboardEvent) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use satya_engine::map_dressing::make_prop_at_cm;
+    use satya_maps::map_dressing::make_prop_at_cm;
     use satya_schema::{
         EdgeSide, MapWallEdge, MaterialClass, PropKind, TokenPlacement, WallEdgeKind,
     };

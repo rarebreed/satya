@@ -513,7 +513,13 @@ pub(crate) fn push_home_furniture_glyph(
                     let rim = [-l + 4.0, -t + 4.0, lw - 8.0, lh - 8.0];
                     rect(out, rim, 12.0, "#7d4b2d", "");
                     wood_veneer_overlay(out, rim, 12.0, painted);
-                    rect(out, [-l * 0.55, t - 6.0, lw * 0.55, 6.0], 2.0, "#8b5a36", thin);
+                    rect(
+                        out,
+                        [-l * 0.55, t - 6.0, lw * 0.55, 6.0],
+                        2.0,
+                        "#8b5a36",
+                        thin,
+                    );
                     rect(
                         out,
                         [-l + 13.0, -t + 13.0, lw - 26.0, lh - 26.0],
@@ -583,7 +589,10 @@ pub(crate) fn push_home_furniture_glyph(
                         "#cfc8bc"
                     };
                     let rock = if painted { "url(#bm-rock)" } else { "#8d867c" };
-                    let _ = write!(out, r#"<path d="{rim_d}" fill="{coping}" stroke-width="2.0"/>"#);
+                    let _ = write!(
+                        out,
+                        r#"<path d="{rim_d}" fill="{coping}" stroke-width="2.0"/>"#
+                    );
                     for (idx, (bx, by, br)) in [
                         (-l * 0.64, -t * 0.58, 9.5),
                         (l * 0.62, -t * 0.52, 8.5),
@@ -737,7 +746,7 @@ pub(crate) fn push_gazebo_canopy_glyph_with_mode(
 mod tests {
     use super::*;
     use crate::wasm_client::map_2d_art_furniture::push_furniture_glyph_with_mode;
-    use satya_engine::map_dressing::make_prop;
+    use satya_maps::map_dressing::make_prop;
 
     #[test]
     fn hot_tub_and_new_object_textures_render_valid_balanced_svg_in_painted_and_vector_modes() {
@@ -746,7 +755,10 @@ mod tests {
             let spa = make_prop(PropKind::HotTub, 2, 2, 0, None, variant_seed);
             let mut painted = String::new();
             push_furniture_glyph_with_mode(&mut painted, &spa, 64.0, BattlemapTextureMode::Painted);
-            assert_eq!(painted.matches("<g ").count(), painted.matches("</g>").count());
+            assert_eq!(
+                painted.matches("<g ").count(),
+                painted.matches("</g>").count()
+            );
             assert!(
                 painted.contains("url(#bm-spa-water)"),
                 "HotTub style {variant_seed} missing url(#bm-spa-water): {painted}"
@@ -760,7 +772,10 @@ mod tests {
                 64.0,
                 BattlemapTextureMode::ProceduralVector,
             );
-            assert_eq!(vector.matches("<g ").count(), vector.matches("</g>").count());
+            assert_eq!(
+                vector.matches("<g ").count(),
+                vector.matches("</g>").count()
+            );
             assert!(
                 !vector.contains("url(#bm-"),
                 "HotTub style {variant_seed} leaked texture ref in Vector mode: {vector}"
@@ -783,7 +798,12 @@ mod tests {
         assert!(svg.contains("url(#bm-fabric)"));
 
         svg.clear();
-        push_furniture_glyph_with_mode(&mut svg, &sofa_leather, 64.0, BattlemapTextureMode::Painted);
+        push_furniture_glyph_with_mode(
+            &mut svg,
+            &sofa_leather,
+            64.0,
+            BattlemapTextureMode::Painted,
+        );
         assert!(svg.contains("url(#bm-leather)"));
 
         svg.clear();
@@ -799,12 +819,7 @@ mod tests {
         assert!(svg.contains("url(#bm-bark)"));
 
         svg.clear();
-        push_gazebo_canopy_glyph_with_mode(
-            &mut svg,
-            &gazebo,
-            64.0,
-            BattlemapTextureMode::Painted,
-        );
+        push_gazebo_canopy_glyph_with_mode(&mut svg, &gazebo, 64.0, BattlemapTextureMode::Painted);
         assert!(svg.contains("url(#bm-shingle)"));
         assert!(svg.contains(r#"opacity=".50""#));
     }

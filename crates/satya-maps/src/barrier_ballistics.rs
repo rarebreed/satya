@@ -18,76 +18,16 @@
 use satya_schema::{CoverGrade, MaterialClass, PropKind, WallEdgeKind};
 use serde::{Deserialize, Serialize};
 
-use crate::ballistics::{GranularFirearmSpec, evaluate_granular_firearm_ballistics};
 use crate::map_dressing::{PropObstruction, prop_spec};
-use crate::ranged_combat::{
-    ArmorImpactOutcome, ArmorProfile, WeaponDamageType, resolve_armor_impact,
-};
 use crate::tactical_map::{TacticalSceneView, evaluate_los_continuous};
 use crate::tactical_map_geom::{PropRayHit, intersect_segment_edge, intersect_segment_prop};
-
-/// Static ballistic resistance profile for one [`MaterialClass`] (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.3).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MaterialBallisticProfile {
-    pub material: MaterialClass,
-    /// Barrier Penetration Resistance (`0..=10`) on the same integer scale as [`crate::ballistics::GranularBallisticsEvaluation::base_armor_pen`].
-    pub barrier_pr: i32,
-    /// Stronger internal structural member `PR` (`Some(3)` for `2×4` wood studs inside `Drywall`; `Some(5)` for `Appliance` compressors).
-    pub stud_or_frame_pr: Option<i32>,
-    /// Probability (`0..=100`) that a random shot through this material strikes its internal stud/frame.
-    pub stud_hit_chance_pct: u8,
-    /// Approximate kinetic energy shed (Joules) when perforating a standard thickness of this material.
-    pub energy_loss_joules: f64,
-    /// Post-barrier projectile tumble / keyholing added (`0..=2`).
-    pub wobble_added: i32,
-    /// Granular/fibrous media (`Brick`, `ConcreteBlock`, `Earth`, `LiveWood`, `ReinforcedConcrete`) penalize
-    /// ultra-light `< 60 gr` low-momentum PDW darts by `-2 Pen`.
-    pub is_granular_medium: bool,
-}
-
-macro_rules! mat_profiles {
-    ($( $mat:ident: pr $pr:literal, frame $fpr:expr, pct $pct:literal, loss $ej:literal J, yaw $yaw:literal, granular $gran:ident );+ $(;)?) => {
-        /// Ballistic barrier table in [`MaterialClass::ALL`] declaration order (indexed by `mat as usize`).
-        pub const MATERIAL_BALLISTIC_PROFILES: [MaterialBallisticProfile; MaterialClass::ALL.len()] = [
-            $(MaterialBallisticProfile {
-                material: MaterialClass::$mat,
-                barrier_pr: $pr,
-                stud_or_frame_pr: $fpr,
-                stud_hit_chance_pct: $pct,
-                energy_loss_joules: $ej as f64,
-                wobble_added: $yaw,
-                is_granular_medium: $gran,
-            }),+
-        ];
-    };
-}
-
-mat_profiles! {
-    Drywall:            pr 1,  frame Some(3), pct 10, loss 80 J,   yaw 0, granular false;
-    Brick:              pr 6,  frame None,    pct 0,  loss 1550 J, yaw 2, granular true;
-    ConcreteBlock:      pr 6,  frame None,    pct 0,  loss 1600 J, yaw 2, granular true;
-    ReinforcedConcrete: pr 9,  frame None,    pct 0,  loss 3400 J, yaw 2, granular true;
-    Glass:              pr 1,  frame None,    pct 0,  loss 60 J,   yaw 1, granular false;
-    SolidWood:          pr 3,  frame None,    pct 0,  loss 380 J,  yaw 1, granular false;
-    WoodFurniture:      pr 2,  frame None,    pct 0,  loss 190 J,  yaw 1, granular false;
-    Upholstery:         pr 1,  frame None,    pct 0,  loss 90 J,   yaw 0, granular false;
-    SheetSteel:         pr 3,  frame None,    pct 0,  loss 410 J,  yaw 1, granular false;
-    ArmorSteel:         pr 10, frame None,    pct 0,  loss 4200 J, yaw 2, granular false;
-    Appliance:          pr 3,  frame Some(5), pct 25, loss 450 J,  yaw 1, granular false;
-    Ceramic:            pr 2,  frame None,    pct 0,  loss 210 J,  yaw 1, granular false;
-    Earth:              pr 7,  frame None,    pct 0,  loss 2100 J, yaw 2, granular true;
-    Foliage:            pr 0,  frame None,    pct 0,  loss 5 J,    yaw 0, granular false;
-    LiveWood:           pr 7,  frame None,    pct 0,  loss 2000 J, yaw 2, granular true;
-    VehicleBody:        pr 3,  frame None,    pct 0,  loss 420 J,  yaw 1, granular false;
-}
-
-/// Ballistic resistance profile for `material`.
-#[must_use]
-pub const fn material_ballistic_profile(
-    material: MaterialClass,
-) -> &'static MaterialBallisticProfile {
-    &MATERIAL_BALLISTIC_PROFILES[material as usize]
-}
+use satya_engine::ballistics::{GranularFirearmSpec, evaluate_granular_firearm_ballistics};
+pub use satya_engine::ballistics::{
+    MATERIAL_BALLISTIC_PROFILES, MaterialBallisticProfile, material_ballistic_profile,
+};
+use satya_engine::ranged_combat::{
+    ArmorImpactOutcome, ArmorProfile, WeaponDamageType, resolve_armor_impact,
+};
 
 /// One physical barrier (thin wall/door/window edge, multi-cell prop, or legacy cover/wall cell)
 /// intersected along a shot ray.
@@ -440,9 +380,9 @@ pub fn evaluate_ballistic_shot(query: BallisticShotQuery<'_>) -> BallisticShotEv
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ballistics::lookup_firearm_preset;
     use crate::map_dressing::{make_prop, make_prop_at_cm};
-    use crate::ranged_combat::{ArmorProfileId, canonical_armor_catalog};
+    use satya_engine::ballistics::lookup_firearm_preset;
+    use satya_engine::ranged_combat::{ArmorProfileId, canonical_armor_catalog};
     use satya_schema::{EdgeSide, MapWallEdge};
 
     fn shot_across_prop(

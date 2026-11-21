@@ -225,11 +225,7 @@ fn place_indoor_checked(
     true
 }
 
-fn hospital_poly_surface(
-    kind: SurfaceFeatureKind,
-    bx: LotBox,
-    seed: u32,
-) -> MapSurfaceFeature {
+fn hospital_poly_surface(kind: SurfaceFeatureKind, bx: LotBox, seed: u32) -> MapSurfaceFeature {
     bx.polygon_feature(kind, 0, seed)
 }
 
@@ -389,7 +385,11 @@ fn furnish_patient_room(
         None,
         s + 10,
     );
-    let fallback_y = if corridor_on_south { room.y1 - 2 } else { room.y0 + 1 };
+    let fallback_y = if corridor_on_south {
+        room.y1 - 2
+    } else {
+        room.y0 + 1
+    };
     let bed_placed = if place_indoor_checked(edges, props, room, centered_bed) {
         Some(centered_bed)
     } else {
@@ -448,16 +448,38 @@ fn furnish_patient_room(
     }
 
     // Staff medical counter & scrub sink, visitor chair/loveseat, waste & linen bins.
-    let counter_y = if corridor_on_south { room.y1 - 1 } else { room.y0 };
-    let seat_y = if corridor_on_south { room.y0 + 2 } else { room.y1 - 2 };
+    let counter_y = if corridor_on_south {
+        room.y1 - 1
+    } else {
+        room.y0
+    };
+    let seat_y = if corridor_on_south {
+        room.y0 + 2
+    } else {
+        room.y1 - 2
+    };
     let seat_kind = if room.w() >= 6 && idx.is_multiple_of(2) {
         PropKind::Loveseat
     } else {
         PropKind::ReclinerChair
     };
     for cand in [
-        make_prop(PropKind::MedicalCounter, room.x0, room.y0, 0, Some(2), s + 20),
-        make_prop(PropKind::MedicalCounter, room.x0, counter_y, 0, None, s + 21),
+        make_prop(
+            PropKind::MedicalCounter,
+            room.x0,
+            room.y0,
+            0,
+            Some(2),
+            s + 20,
+        ),
+        make_prop(
+            PropKind::MedicalCounter,
+            room.x0,
+            counter_y,
+            0,
+            None,
+            s + 21,
+        ),
     ] {
         if place_indoor_checked(edges, props, room, cand) {
             break;
@@ -503,11 +525,22 @@ fn furnish_patient_room(
         ),
     );
     for cand in [
-        make_prop(PropKind::LinenCart, room.x0, (room.y0 + 1).min(room.y1 - 1), 0, None, s + 25),
+        make_prop(
+            PropKind::LinenCart,
+            room.x0,
+            (room.y0 + 1).min(room.y1 - 1),
+            0,
+            None,
+            s + 25,
+        ),
         make_prop(
             PropKind::LinenCart,
             (room.x1 - 2).max(room.x0),
-            if corridor_on_south { room.y1 - 1 } else { room.y0 },
+            if corridor_on_south {
+                room.y1 - 1
+            } else {
+                room.y0
+            },
             0,
             None,
             s + 26,
@@ -584,14 +617,7 @@ fn fill_hospital_floor(
         MaterialClass::Drywall,
     );
     for &(sx0, _sx1) in ne_spans.iter().skip(1) {
-        v_partition_on_edges(
-            edges,
-            sx0,
-            lot.y0,
-            corr_y0,
-            &[],
-            MaterialClass::Drywall,
-        );
+        v_partition_on_edges(edges, sx0, lot.y0, corr_y0, &[], MaterialClass::Drywall);
     }
 
     // South-West surgical suite spans & South-East imaging + patient spans.
@@ -676,7 +702,14 @@ fn fill_hospital_floor(
             edges,
             props,
             nw_room,
-            make_prop(PropKind::HospitalBed, nw_room.x0, nw_room.y0, 0, None, s + 3),
+            make_prop(
+                PropKind::HospitalBed,
+                nw_room.x0,
+                nw_room.y0,
+                0,
+                None,
+                s + 3,
+            ),
         );
         let _ = place_indoor_checked(
             edges,
@@ -708,7 +741,14 @@ fn fill_hospital_floor(
             edges,
             props,
             nw_room,
-            make_prop(PropKind::BiohazardBin, nw_room.x0, nw_room.y1 - 1, 0, None, s + 6),
+            make_prop(
+                PropKind::BiohazardBin,
+                nw_room.x0,
+                nw_room.y1 - 1,
+                0,
+                None,
+                s + 6,
+            ),
         );
     } else {
         let _ = place_indoor_checked(
@@ -747,7 +787,14 @@ fn fill_hospital_floor(
             edges,
             props,
             nw_room,
-            make_prop(PropKind::WaterCooler, nw_room.x0, nw_room.y1 - 1, 0, None, s + 6),
+            make_prop(
+                PropKind::WaterCooler,
+                nw_room.x0,
+                nw_room.y1 - 1,
+                0,
+                None,
+                s + 6,
+            ),
         );
     }
 
@@ -781,7 +828,14 @@ fn fill_hospital_floor(
                 edges,
                 props,
                 bay,
-                make_prop(PropKind::TelemetryMonitor, (sx + 2).min(bay.x1 - 1), sy, 0, None, s + 41),
+                make_prop(
+                    PropKind::TelemetryMonitor,
+                    (sx + 2).min(bay.x1 - 1),
+                    sy,
+                    0,
+                    None,
+                    s + 41,
+                ),
             );
             let _ = place_indoor_checked(
                 edges,
@@ -800,7 +854,14 @@ fn fill_hospital_floor(
                 edges,
                 props,
                 bay,
-                make_prop(PropKind::BiohazardBin, bay.x1 - 1, bay.y1 - 1, 0, None, s + 43),
+                make_prop(
+                    PropKind::BiohazardBin,
+                    bay.x1 - 1,
+                    bay.y1 - 1,
+                    0,
+                    None,
+                    s + 43,
+                ),
             );
             for cand in [
                 make_prop(
@@ -811,7 +872,14 @@ fn fill_hospital_floor(
                     Some(2),
                     s + 44,
                 ),
-                make_prop(PropKind::PrivacyCurtain, bay.x0, bay.y0 + 1, 90, Some(2), s + 45),
+                make_prop(
+                    PropKind::PrivacyCurtain,
+                    bay.x0,
+                    bay.y0 + 1,
+                    90,
+                    Some(2),
+                    s + 45,
+                ),
             ] {
                 if place_indoor_checked(edges, props, bay, cand) {
                     break;
@@ -860,13 +928,27 @@ fn fill_hospital_floor(
                 edges,
                 props,
                 bay,
-                make_prop(PropKind::MedicalCounter, bay.x0, bay.y1 - 1, 0, Some(2), s + 53),
+                make_prop(
+                    PropKind::MedicalCounter,
+                    bay.x0,
+                    bay.y1 - 1,
+                    0,
+                    Some(2),
+                    s + 53,
+                ),
             );
             let _ = place_indoor_checked(
                 edges,
                 props,
                 bay,
-                make_prop(PropKind::BiohazardBin, bay.x1 - 1, bay.y1 - 1, 0, None, s + 54),
+                make_prop(
+                    PropKind::BiohazardBin,
+                    bay.x1 - 1,
+                    bay.y1 - 1,
+                    0,
+                    None,
+                    s + 54,
+                ),
             );
         } else {
             furnish_patient_room(
@@ -943,7 +1025,14 @@ fn fill_hospital_floor(
         edges,
         props,
         lot,
-        make_prop(PropKind::FireExtinguisher, lot.x0, corr_y0, 0, None, s + 751),
+        make_prop(
+            PropKind::FireExtinguisher,
+            lot.x0,
+            corr_y0,
+            0,
+            None,
+            s + 751,
+        ),
     );
 }
 
@@ -993,13 +1082,55 @@ fn generate_hospital(w: i32, h: i32, seed: i64) -> ProceduralSector {
     enclose_campus_shell(&mut b, lot, MaterialClass::ReinforcedConcrete, 3);
     let er_x = (tx0 + (tx1 - tx0) / 2 - 1).max(bx0 + 3);
     // Wide ER double sliding glass doors + West/East campus doors near main corridor.
-    b.put_edge(er_x, by1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(er_x + 1, by1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx0, corr_y0, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx0, corr_y0 + 1, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx1, corr_y0, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx1, corr_y0 + 1, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::Glass);
-    b.put_edge(bx0 + 1, by0, EdgeSide::North, WallEdgeKind::DoorClosed, MaterialClass::SheetSteel);
+    b.put_edge(
+        er_x,
+        by1,
+        EdgeSide::North,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        er_x + 1,
+        by1,
+        EdgeSide::North,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx0,
+        corr_y0,
+        EdgeSide::West,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx0,
+        corr_y0 + 1,
+        EdgeSide::West,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx1,
+        corr_y0,
+        EdgeSide::West,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx1,
+        corr_y0 + 1,
+        EdgeSide::West,
+        WallEdgeKind::DoorOpen,
+        MaterialClass::Glass,
+    );
+    b.put_edge(
+        bx0 + 1,
+        by0,
+        EdgeSide::North,
+        WallEdgeKind::DoorClosed,
+        MaterialClass::SheetSteel,
+    );
 
     let nx_a = (lot.x0 + bw / 3).clamp(lot.x0 + 3, tx0);
     let stair_xy = (nx_a, by0);

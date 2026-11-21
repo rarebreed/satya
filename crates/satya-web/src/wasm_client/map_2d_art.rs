@@ -23,7 +23,7 @@ pub use crate::wasm_client::map_2d_art_walls::*;
 pub use crate::wasm_client::map_2d_camera::*;
 pub use crate::wasm_client::map_2d_tokens::*;
 
-use satya_engine::map_dressing::prop_spec;
+use satya_maps::map_dressing::prop_spec;
 
 use crate::wasm_client::map_3d::TacticalMapUiState;
 use satya_schema::PropKind;
@@ -417,7 +417,10 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
         }
     }
     if let Some(rgb) = ui.map.ground_tint_rgb {
-        acc = fnv(acc, (u64::from(rgb[0]) << 16) | (u64::from(rgb[1]) << 8) | u64::from(rgb[2]) | 0x100_0000);
+        acc = fnv(
+            acc,
+            (u64::from(rgb[0]) << 16) | (u64::from(rgb[1]) << 8) | u64::from(rgb[2]) | 0x100_0000,
+        );
     }
     for e in &ui.map.wall_edges {
         for v in [
@@ -581,12 +584,7 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
     {
         push_furniture_glyph_with_mode(&mut out, p, CELL_F, tex_mode);
     }
-    for p in ui
-        .map
-        .props
-        .iter()
-        .filter(|p| p.kind.is_tabletop_clutter())
-    {
+    for p in ui.map.props.iter().filter(|p| p.kind.is_tabletop_clutter()) {
         push_furniture_glyph_with_mode(&mut out, p, CELL_F, tex_mode);
     }
     out.push_str("</g>");
@@ -697,7 +695,7 @@ mod tests {
 
     #[test]
     fn every_theme_renders_vector_scene_and_props() {
-        use satya_engine::map_dressing::make_prop_at_cm;
+        use satya_maps::map_dressing::make_prop_at_cm;
         let mut ui = TacticalMapUiState::default();
         ui.map.props.push(make_prop_at_cm(
             PropKind::ElevatedCatwalk,
@@ -727,7 +725,7 @@ mod tests {
 
     #[test]
     fn furnished_presets_render_edge_walls_and_multi_cell_props() {
-        use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+        use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
         for preset in SectorPreset::ALL {
             let mut ui = TacticalMapUiState {
                 map: build_procedural_map_request("t", preset, None, 20, 14, 42),
@@ -809,7 +807,7 @@ mod tests {
 
     #[test]
     fn phase4_ink_styles_portrait_discs_and_prop_hover_preview() {
-        use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+        use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
 
         let mut ui = TacticalMapUiState {
             map: build_procedural_map_request(

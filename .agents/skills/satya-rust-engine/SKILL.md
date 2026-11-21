@@ -8,9 +8,9 @@ description: >-
   character creation math, combat, ballistics, or docs/ttrpg/ markdown chapters.
 ---
 
-# Satya Rust Game Engine Steering Skill (`satya-rust-engine`)
+# Satya Rust Game Engine, Maps, Campaign & Rules Book Skill (`satya-rust-engine`)
 
-Use this skill alongside [`satya-rust-workspace`](../satya-rust-workspace/SKILL.md) whenever reading, adding, or refactoring code in [`crates/satya-engine`](../../../crates/satya-engine) or TTRPG design chapters in [`docs/ttrpg/`](../../../docs/ttrpg).
+Use this skill alongside [`satya-rust-workspace`](../satya-rust-workspace/SKILL.md) whenever reading, adding, or refactoring code in [`crates/satya-engine`](../../../crates/satya-engine), [`crates/satya-maps`](../../../crates/satya-maps), [`crates/satya-campaign`](../../../crates/satya-campaign), [`crates/satya-rules-book`](../../../crates/satya-rules-book), or TTRPG design chapters in [`docs/ttrpg/`](../../../docs/ttrpg).
 
 ---
 
@@ -33,9 +33,9 @@ Always build on the shared primitives in [`crates/satya-engine/src/primitives.rs
 
 ---
 
-## 3. Continuous Metric Tactical Maps & Geometry
+## 3. Continuous Metric Tactical Maps & Geometry (`crates/satya-maps`)
 
-- **Spatial Core**: `tactical_map.rs` (procedural sectors, `evaluate_los_continuous`, `compute_reachable_continuous`), `tactical_map_{geom,inspect,edges,reach,spatial}.rs`, `map_dressing.rs`, `map_surface_{geom,queries}.rs`, and `barrier_ballistics.rs`.
+- **Spatial Core**: `tactical_map.rs` (procedural sectors, `evaluate_los_continuous`, `compute_reachable_continuous`), `tactical_map_{geom,inspect,edges,reach,spatial}.rs`, `map_dressing.rs`, `map_surface_{geom,queries}.rs`, and `barrier_ballistics.rs` (all in [`crates/satya-maps`](../../../crates/satya-maps)).
 - **Procedural Generators**: `map_interior_{gen,topologies}.rs`, `map_home_floorplan.rs`, `map_room_furnish.rs`, `map_outdoor_{gen,natural}.rs`, `map_estate_grammars.rs`, `map_sector_{gen,scifi}.rs`, `map_urban_grammars.rs`, and `map_gen_{residential,commercial,zoning,civic_retail,agro_industrial}.rs`.
 - **Continuation & World Graph**: `map_continuation*.rs`, `map_world_{graph,transitions}.rs`, and `map_narrative_manifest.rs`.
 - **Metric Units (`_m` / `_cm`) & `PropFootprintM`**: Use `f32` meters (`_m`) for all raycast/OBB/circle math and `i32` centimeters (`_cm`) on wire DTOs (`GmMapUpdateRequest`, `TokenVisualSpec`, `MapPropPlacement`). Extract OBB center/half-extents/rotation directly via `p.footprint_m()` (`satya_schema::PropFootprintM`) rather than re-implementing rotation transforms.
@@ -52,7 +52,7 @@ Always build on the shared primitives in [`crates/satya-engine/src/primitives.rs
   - *Mandatory Structural Layout Assertions*: Do **not** rely solely on `all_walkable_areas_connected` or `!prop_crosses_wall_edge` in map generator tests — both pass when fixtures float in open spaces or entries open into bathrooms. New/updated generator tests must assert: (a) every `KitchenCounter` has `Wall | Window` edges along its full backed span according to `rotation_deg`, (b) edge-bounded single-room flood-fills from front entry doors never contain `Toilet`/`WasherDryer` (and omit `MarbleFloor` foyers on small dwellings), and (c) whole-building counts respect `WasherDryer <= 1`, `Stove <= 1`, and per-floor bath caps.
 - **6-Step Full-Stack Checklist for New `PropKind` / `SurfaceFeatureKind` / WebP Textures**:
   1. `crates/satya-schema`: Add variant to `define_wire_enum!` (`count = N`); verify `serde` `SCREAMING_SNAKE_CASE` matches the primary wire code on digit boundaries (e.g. `Printer3dStation` -> `"PRINTER3D_STATION"` primary + `"PRINTER_3D_STATION"` alias).
-  2. `crates/satya-engine/src/map_dressing.rs`: Register `PropSpec` in `PROP_CATALOG`.
+  2. `crates/satya-maps/src/map_dressing.rs`: Register `PropSpec` in `PROP_CATALOG`.
   3. `src/satya_ml/texture_gen/catalog.py` & `tests/test_texture_gen_seamless.py`: Register new WebP tiles, generate/seam-check, and run `pixi run verify-textures`.
   4. `crates/satya-web/src/wasm_client/`: Implement 2D SVG glyph (`map_2d_art*.rs` + `BATTLEMAP_TEXTURE_SPECS`), 3D mesh (`map_3d*.rs`), and add the variant uniquely to `PROP_BRUSH_GROUPS` (`map_edge_edit.rs`).
   5. `crates/satya-web` tests verify all `PropKind::ALL` variants render balanced `<g>`/`</g>` SVG and unique brush membership.
@@ -78,12 +78,12 @@ Always build on the shared primitives in [`crates/satya-engine/src/primitives.rs
 > [!NOTE]
 > **`docs/ttrpg-examples/` Boundary**: Verbose human-only prose play tutorials live separately in [`docs/ttrpg-examples/`](../../../docs/ttrpg-examples/AGENTS.md) and are intentionally excluded from `STATIC_CHAPTERS` and PyLance RAG. Do **not** read, grep, or sync `docs/ttrpg-examples/` unless the user explicitly requests it.
 
-> Only the 18 `docs/ttrpg/*.md` chapters are embedded at compile time (`include_str!` in `rules_book.rs`); `docs/campaign/` and `docs/ttrpg-examples/` are **not** embedded in `satya-engine`. `pixi run build-book` (`docs/book/` HTML generation) triggers a `--release` `build-py` compile and is optional/on-demand unless requested or structurally needed.
+> Only the 25 `docs/ttrpg/*.md` chapters are embedded at compile time (`include_str!` in [`crates/satya-rules-book/src/lib.rs`](../../../crates/satya-rules-book/src/lib.rs)); `docs/campaign/` and `docs/ttrpg-examples/` are **not** embedded in Rust. `pixi run build-book` (`docs/book/` HTML generation) triggers a `--release` `build-py` compile and is optional/on-demand unless requested or structurally needed.
 
 Whenever adding, renaming, or splitting a `docs/ttrpg/` markdown chapter or changing a canonical formula:
 1. Update [`docs/ttrpg/SUMMARY.md`](../../../docs/ttrpg/SUMMARY.md) (Table of Contents + Reciprocal Rust Engine Module Index) and ensure the chapter has a `> **Rust Engine Implementation**:` callout at the top.
-2. Update `STATIC_CHAPTERS` in [`crates/satya-engine/src/rules_book.rs`](../../../crates/satya-engine/src/rules_book.rs) and `resolve_markdown_link_chapter_id` in [`crates/satya-engine/src/rules_book_html.rs`](../../../crates/satya-engine/src/rules_book_html.rs).
-3. Update the relative link map in [`crates/satya-engine/src/bin/build_rules_book.rs`](../../../crates/satya-engine/src/bin/build_rules_book.rs).
+2. Update `STATIC_CHAPTERS` in [`crates/satya-rules-book/src/lib.rs`](../../../crates/satya-rules-book/src/lib.rs) and `resolve_markdown_link_chapter_id` in [`crates/satya-rules-book/src/rules_book_html.rs`](../../../crates/satya-rules-book/src/rules_book_html.rs).
+3. Update the relative link map in [`crates/satya-rules-book/src/bin/build_rules_book.rs`](../../../crates/satya-rules-book/src/bin/build_rules_book.rs).
 4. Update `BOOK_CHAPTER_SPECS` in [`src/satya_ml/build_rules_book.py`](../../../src/satya_ml/build_rules_book.py) and `CHAPTER_SPECS` in [`notebooks/satya_rules_book.py`](../../../notebooks/satya_rules_book.py).
 5. Update `_CANONICAL_RULES_FILES` in [`src/satya_ml/ai_gm/tools.py`](../../../src/satya_ml/ai_gm/tools.py).
-6. Run the targeted test `pixi run cargo test --offline -p satya-engine rules_book` (~2s) to verify `test_rules_book_catalog_search_and_tactical_pool_envelope` (ensuring zero raw LaTeX leaks, zero `&amp;amp;` double-escaping, quoted Mermaid labels, valid currency strings, and intact external cross-links) without running unrelated procedural map suites.
+6. Run the targeted test `pixi run test-rules-book` (~1s) to verify `test_rules_book_catalog_search_and_rendering` (ensuring zero raw LaTeX leaks, zero `&amp;amp;` double-escaping, quoted Mermaid labels, valid currency strings, and intact external cross-links) without running unrelated procedural map or engine suites.

@@ -1209,7 +1209,7 @@ pub fn compute_tactical_pool(
 /// Returns the ordered list of chapter metadata summaries in the Satya TTRPG Rules Book (`docs/ttrpg/`).
 #[pyfunction]
 pub fn list_rules_chapters() -> Vec<PyRulesChapterSummary> {
-    satya_engine::list_rules_chapters()
+    satya_rules_book::list_rules_chapters()
         .into_iter()
         .map(PyRulesChapterSummary::from)
         .collect()
@@ -1218,14 +1218,14 @@ pub fn list_rules_chapters() -> Vec<PyRulesChapterSummary> {
 /// Looks up a single chapter in the Satya TTRPG Rules Book by its `chapter_id` slug.
 #[pyfunction]
 pub fn get_rules_chapter(chapter_id: &str) -> Option<PyRulesChapterDocument> {
-    satya_engine::get_rules_chapter(chapter_id).map(PyRulesChapterDocument::from)
+    satya_rules_book::get_rules_chapter(chapter_id).map(PyRulesChapterDocument::from)
 }
 
 /// Searches across all chapters of the Satya TTRPG Rules Book (`docs/ttrpg/`) and returns ranked section hits.
 #[pyfunction]
 #[pyo3(signature = (query, max_results=5))]
 pub fn search_rules_book(query: &str, max_results: usize) -> Vec<PyRulesSearchHit> {
-    satya_engine::search_rules_book(query, max_results)
+    satya_rules_book::search_rules_book(query, max_results)
         .into_iter()
         .map(PyRulesSearchHit::from)
         .collect()
@@ -1234,7 +1234,7 @@ pub fn search_rules_book(query: &str, max_results: usize) -> Vec<PyRulesSearchHi
 /// Renders a Satya TTRPG Markdown string into safe HTML.
 #[pyfunction]
 pub fn render_rules_markdown_to_html(markdown: &str) -> String {
-    satya_engine::render_rules_markdown_to_html(markdown)
+    satya_rules_book::render_rules_markdown_to_html(markdown)
 }
 
 /// Classifies a single `(player, gm)` state realization into a contested outcome kind and net margin.

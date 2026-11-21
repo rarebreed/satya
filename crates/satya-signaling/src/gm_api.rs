@@ -558,7 +558,7 @@ pub async fn gm_session_map_handler(
         req.cell_size_cm = 100;
     }
     if !req.tiles.is_empty() {
-        satya_engine::tactical_map_geom::migrate_legacy_tiles_to_vector(
+        satya_maps::tactical_map_geom::migrate_legacy_tiles_to_vector(
             &req.tiles,
             req.grid_width.max(1),
             req.grid_height.max(1),
@@ -575,9 +575,9 @@ pub async fn gm_session_map_handler(
             .theme_preset
             .as_deref()
             .or(Some(req.title.as_str()))
-            .and_then(satya_engine::tactical_map::SectorPreset::from_code_str)
+            .and_then(satya_maps::tactical_map::SectorPreset::from_code_str)
             .unwrap_or_default();
-        let sec = satya_engine::tactical_map::generate_procedural_sector(
+        let sec = satya_maps::tactical_map::generate_procedural_sector(
             preset,
             req.grid_width,
             req.grid_height,

@@ -3,14 +3,14 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use satya_campaign::{apply_world_ledger_update, seed_default_world_ledger};
 use satya_engine::{
     BattlefieldMoraleSituation, CombatMotivationKind, ConvictionPrincipleArchetype,
     DissonanceResolutionPath, EmotionalTriggerKind, MoraleState, PsycheProfile, PsycheTraitId,
-    SocialArgumentVector, SocialComposureState, apply_psyche_drift_mark, apply_world_ledger_update,
+    SocialArgumentVector, SocialComposureState, apply_psyche_drift_mark,
     compute_battlefield_morale_delta, evaluate_combat_morale_roll,
     evaluate_combat_motivation_modifier, evaluate_conviction_surge, evaluate_emotional_trigger,
     evaluate_empathy_read, evaluate_social_exchange_wounds, resolve_cognitive_dissonance,
-    seed_default_world_ledger,
 };
 use satya_schema::{
     EconomicTier, SessionWorldLedger, UpdateWorldLedgerRequest, WorldLedgerUpdateResponse,

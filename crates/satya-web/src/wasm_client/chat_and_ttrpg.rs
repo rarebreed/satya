@@ -279,7 +279,9 @@ pub fn satya_send_chat() {
                         .as_ref()
                         .is_some_and(|p| p.role == satya_schema::SessionRole::Observer)
             }) {
-                append_system_notice("Observers are in read-only spectator mode and cannot roll dice into active play.");
+                append_system_notice(
+                    "Observers are in read-only spectator mode and cannot roll dice into active play.",
+                );
                 return;
             }
             let outcome = match pipeline.evaluate_with_roller(&expr_raw, roll_browser_die_i64) {
@@ -413,7 +415,7 @@ pub fn format_timestamp_us(timestamp_us: i64) -> (String, String) {
 }
 
 /// Renders a Markdown chat message body into sanitized, XSS-safe HTML via
-/// [`satya_engine::render_rules_markdown_to_html`], supporting bold, italic, inline/fenced code,
+/// [`satya_rules_book::render_rules_markdown_to_html`], supporting bold, italic, inline/fenced code,
 /// bullet/numbered lists, blockquotes/callouts (`> [!NOTE]`), tables, links, LaTeX math (`$...$`),
 /// and Mermaid flowcharts while escaping raw HTML tags.
 #[must_use]
@@ -424,7 +426,7 @@ pub fn format_chat_markdown_html(markdown: &str) -> String {
     }
     format!(
         r#"<div class="chat-markdown-body">{}</div>"#,
-        satya_engine::render_rules_markdown_to_html(trimmed)
+        satya_rules_book::render_rules_markdown_to_html(trimmed)
     )
 }
 

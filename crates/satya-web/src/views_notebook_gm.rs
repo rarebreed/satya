@@ -175,7 +175,7 @@ pub fn NotebookGmAndNpcPanes() -> impl IntoView {
                                 .map(|(code, label)| view! { <option value=code>{label}</option> })
                                 .collect_view()}
                             <optgroup label="Awakened Campaign Faction Archetypes">
-                                {satya_engine::FactionArchetypeId::ALL
+                                {satya_campaign::FactionArchetypeId::ALL
                                     .iter()
                                     .copied()
                                     .map(|arch| {

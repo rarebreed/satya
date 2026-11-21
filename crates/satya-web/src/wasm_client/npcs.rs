@@ -14,7 +14,7 @@ use crate::wasm_client::gm_memories_and_director::{
 use crate::wasm_client::gm_omnisearch::refresh_gm_omnisearch_if_active;
 use crate::wasm_client::notebook::satya_select_notebook_tab;
 use crate::wasm_client::state::{with_state, with_state_mut};
-use satya_engine::{
+use satya_campaign::{
     FactionArchetypeId, NpcGenerationParams, NpcTemplateKind, generate_npc_from_prompt,
 };
 use satya_schema::{

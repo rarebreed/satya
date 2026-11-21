@@ -1466,9 +1466,9 @@ def build_static_rules_book(
     out_dir = output_dir or (root / "docs" / "book")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    assets_dir = root / "crates" / "satya-engine" / "assets" / "rules_book"
+    assets_dir = root / "crates" / "satya-rules-book" / "assets" / "rules_book"
     if not assets_dir.exists():
-        assets_dir = _default_repo_root() / "crates" / "satya-engine" / "assets" / "rules_book"
+        assets_dir = _default_repo_root() / "crates" / "satya-rules-book" / "assets" / "rules_book"
     asset_files: list[str] = []
     for asset_name in ("satya_book.css", "satya_book.js"):
         src_asset = assets_dir / asset_name

@@ -10,13 +10,13 @@ use std::collections::BinaryHeap;
 use satya_schema::{MapSurfaceFeature, SurfaceFeatureKind, SurfaceShapeKind};
 use serde::{Deserialize, Serialize};
 
-use crate::environment_vehicles::{CombatMovementGait, compute_stride_and_sprint_velocity};
 use crate::map_surface_geom::{
     distance_point_to_polyline_m, point_in_ring_m, sample_open_catmull_rom_m, sampled_closed_ring_m,
 };
 use crate::tactical_map::TacticalSceneView;
 use crate::tactical_map_geom::{NAV_STEP_M, TOKEN_RADIUS_M};
 use crate::tactical_map_spatial::{SpatialObstacleIndex, SpatialWallFilter};
+use satya_engine::environment_vehicles::{CombatMovementGait, compute_stride_and_sprint_velocity};
 
 /// Merged horizontal reachable contour strip (`0.25m` band) for crisp SVG and WebGPU overlays.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

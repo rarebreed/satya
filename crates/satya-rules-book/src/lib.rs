@@ -5,6 +5,8 @@ use satya_schema::{
     RulesBookCatalogResponse, RulesChapterDocument, RulesChapterSummary, RulesSearchHit,
 };
 
+pub mod rules_book_html;
+
 pub use crate::rules_book_html::{
     escape_html_text, extract_markdown_headings, format_inline_markdown, render_latex_math_to_html,
     render_rules_markdown_to_html, slugify_heading,
@@ -316,9 +318,7 @@ fn resolve_chapter_alias(needle: &str) -> &str {
         "arsenal-explosives-and-tactical-gear" | "explosives-and-arsenal" => {
             "arsenal-and-explosives"
         }
-        "movement-and-environment" | "movement-vehicles-and-environment" => {
-            "movement-and-vehicles"
-        }
+        "movement-and-environment" | "movement-vehicles-and-environment" => "movement-and-vehicles",
         "weapon-design" | "engineering-design" | "custom-weapons" => {
             "engineering-and-weapon-design"
         }
@@ -456,14 +456,6 @@ pub fn build_rules_catalog_response(
         search_hits,
     }
 }
-
-pub use crate::combat::{
-    MoraleState, TacticalPoolEnvelope, TacticalPoolEnvelopeSummary, TacticalPoolParams,
-    TacticalTriadContestOutcome, TacticalTriadEvaluation, compute_tactical_pool,
-    compute_tactical_pool_envelope, evaluate_tactical_triad, evaluate_tactical_triad_contest,
-};
-pub use crate::lifepath_economy::{LifepathSkillProgression, compute_lifepath_skill_progression};
-pub use crate::psyche_social::{SocialDissonanceOutcome, compute_social_dissonance_check};
 
 #[derive(Debug, Clone)]
 struct MermaidNode {
@@ -898,3 +890,6 @@ pub fn render_mermaid_to_html(diagram_src: &str) -> String {
     html.push_str("</div>");
     html
 }
+
+#[cfg(test)]
+mod tests;

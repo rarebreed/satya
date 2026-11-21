@@ -297,14 +297,12 @@ pub(crate) fn plan_home_blueprint(
             };
             let main_min_h = if lot.h() >= 11 { 7 } else { 5 };
             let split_y = match notch {
-                NotchCorner::NorthEast | NotchCorner::NorthWest => {
-                    (lot.y0 + lot.h() * rng.range(36, 48) / 100)
-                        .clamp(lot.y0 + 4, (lot.y1 - main_min_h).max(lot.y0 + 4))
-                }
-                NotchCorner::SouthEast | NotchCorner::SouthWest => {
-                    (lot.y0 + lot.h() * rng.range(52, 66) / 100)
-                        .clamp((lot.y0 + main_min_h).min(lot.y1 - 4), lot.y1 - 4)
-                }
+                NotchCorner::NorthEast | NotchCorner::NorthWest => (lot.y0
+                    + lot.h() * rng.range(36, 48) / 100)
+                    .clamp(lot.y0 + 4, (lot.y1 - main_min_h).max(lot.y0 + 4)),
+                NotchCorner::SouthEast | NotchCorner::SouthWest => (lot.y0
+                    + lot.h() * rng.range(52, 66) / 100)
+                    .clamp((lot.y0 + main_min_h).min(lot.y1 - 4), lot.y1 - 4),
             };
             let (m, a, n) = match notch {
                 NotchCorner::NorthEast => (
@@ -344,13 +342,11 @@ pub(crate) fn plan_home_blueprint(
                 } else {
                     match entry_side {
                         CardinalEntry::South => {
-                            patio_box =
-                                Some(LotBox::new(lot.x0, lot.y0, lot.x1, lot.y0 + deck_d));
+                            patio_box = Some(LotBox::new(lot.x0, lot.y0, lot.x1, lot.y0 + deck_d));
                             LotBox::new(lot.x0, lot.y0 + deck_d, lot.x1, lot.y1)
                         }
                         CardinalEntry::North => {
-                            patio_box =
-                                Some(LotBox::new(lot.x0, lot.y1 - deck_d, lot.x1, lot.y1));
+                            patio_box = Some(LotBox::new(lot.x0, lot.y1 - deck_d, lot.x1, lot.y1));
                             LotBox::new(lot.x0, lot.y0, lot.x1, lot.y1 - deck_d)
                         }
                         _ => lot,
@@ -367,13 +363,11 @@ pub(crate) fn plan_home_blueprint(
                 } else {
                     match entry_side {
                         CardinalEntry::West => {
-                            patio_box =
-                                Some(LotBox::new(lot.x1 - deck_w, lot.y0, lot.x1, lot.y1));
+                            patio_box = Some(LotBox::new(lot.x1 - deck_w, lot.y0, lot.x1, lot.y1));
                             LotBox::new(lot.x0, lot.y0, lot.x1 - deck_w, lot.y1)
                         }
                         CardinalEntry::East => {
-                            patio_box =
-                                Some(LotBox::new(lot.x0, lot.y0, lot.x0 + deck_w, lot.y1));
+                            patio_box = Some(LotBox::new(lot.x0, lot.y0, lot.x0 + deck_w, lot.y1));
                             LotBox::new(lot.x0 + deck_w, lot.y0, lot.x1, lot.y1)
                         }
                         _ => lot,

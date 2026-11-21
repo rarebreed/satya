@@ -2,7 +2,10 @@
 resolver = "2"
 members = [
     "crates/satya-schema",
+    "crates/satya-rules-book",
     "crates/satya-engine",
+    "crates/satya-maps",
+    "crates/satya-campaign",
     "crates/satya-storage",
     "crates/satya-signaling",
     "crates/satya-web",

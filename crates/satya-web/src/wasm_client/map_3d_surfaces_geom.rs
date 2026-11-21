@@ -6,7 +6,7 @@
 //! road-intersection curb masking, ditch/trench berm masking under bridges, and curved
 //! flower-bed stone edging.
 
-use satya_engine::map_surface_geom::{
+use satya_maps::map_surface_geom::{
     extrude_surface_ribbon_m, point_masked_by_higher_surface, sample_open_catmull_rom_m,
     sampled_closed_ring_m, surface_contains_point_m, triangulate_simple_polygon_m,
 };
@@ -613,7 +613,7 @@ pub fn push_vector_surfaces_3d(verts: &mut Vec<GlbVertex>, ui: &TacticalMapUiSta
 mod tests {
     use super::*;
     use crate::wasm_client::map_3d_wgpu::build_tactical_diorama_vertices;
-    use satya_engine::tactical_map::{SectorPreset, build_procedural_map_request};
+    use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
 
     #[test]
     fn vector_surfaces_build_upward_finite_3d_geometry_across_outdoor_and_urban_presets() {

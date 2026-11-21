@@ -19,7 +19,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::action_economy::compute_delta_tc_decide;
 pub use crate::ballistics::*;
-use crate::barrier_ballistics::material_ballistic_profile;
 use crate::characteristics::{
     CharacterCharacteristics, compute_d_cog_score, compute_fatigue_threshold_score,
     compute_mmf_momentum_factor, compute_ooda_score, compute_pow_striking_power,

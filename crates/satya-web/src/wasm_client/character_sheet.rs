@@ -804,17 +804,17 @@ pub fn apply_wizard_to_character_sheet(st: &mut crate::wasm_client::state::Satya
     sheet.character_id = format!("char-{slug}");
     sheet.preset_id = "custom_wizard".to_string();
     sheet.character_name = st.wizard.character_name.clone();
-    sheet.faction_id = st
+    let arch = st
         .wizard
         .lifepath
         .faction_archetype
-        .map(|a| a.faction().as_str().to_string());
-    sheet.faction_archetype = st
-        .wizard
-        .lifepath
-        .faction_archetype
-        .map(|a| a.as_str().to_string());
-    sheet.callsign_or_role = match st.wizard.lifepath.faction_archetype {
+        .as_deref()
+        .and_then(satya_campaign::FactionArchetypeId::from_code_str);
+    sheet.faction_id = arch.map(|a| a.faction().as_str().to_string());
+    sheet.faction_archetype = arch
+        .map(|a| a.as_str().to_string())
+        .or_else(|| st.wizard.lifepath.faction_archetype.clone());
+    sheet.callsign_or_role = match arch {
         Some(arch) => format!("{} ({})", arch.label(), baseline.origin.label),
         None => format!("Custom Lifepath Operator ({})", baseline.origin.label),
     };

@@ -12,12 +12,12 @@ use serde_json::Value;
 
 use satya_schema::CharacterSheetRecord;
 
-use crate::character_audit::characteristics_from_record;
-use crate::characteristics::{CharacteristicCode, psyche_pole_descriptor};
 use crate::faction_templates::{AwakenedFactionId, FactionArchetypeId};
 use crate::hook_weaver::{HookCategory, MotivationalHookCard, PartyEntanglementHook};
-use crate::lifepath_economy::LifepathBuildConfig;
-use crate::lifepath_hobbies_events::{
+use satya_engine::character_audit::characteristics_from_record;
+use satya_engine::characteristics::{CharacteristicCode, psyche_pole_descriptor};
+use satya_engine::lifepath_economy::LifepathBuildConfig;
+use satya_engine::lifepath_hobbies_events::{
     FormativeLifeEventId, LifeEventChoiceBranch, PersonalHobbyId, resolve_formative_life_event,
 };
 
@@ -185,11 +185,15 @@ pub fn extract_character_lifepath_anchors(
         .filter(|s| !s.is_empty())
     {
         if let Ok(cfg) = serde_json::from_str::<LifepathBuildConfig>(raw_json) {
+            let cfg_arch = cfg
+                .faction_archetype
+                .as_deref()
+                .and_then(FactionArchetypeId::from_code_str);
             if parsed_archetype.is_none() {
-                parsed_archetype = cfg.faction_archetype;
+                parsed_archetype = cfg_arch;
             }
             if parsed_faction.is_none() {
-                parsed_faction = cfg.faction_archetype.map(FactionArchetypeId::faction);
+                parsed_faction = cfg_arch.map(FactionArchetypeId::faction);
             }
             for hobby in cfg.collected_hobbies() {
                 push_hobby_if_new(&mut seen_hobbies, &mut hobby_contacts, hobby);
@@ -622,14 +626,14 @@ pub fn compile_psyche_polarity_entanglements(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lifepath_economy::CareerTermConfig;
+    use satya_engine::lifepath_economy::CareerTermConfig;
 
     #[test]
     fn test_extract_and_compile_lifepath_hobbies_events_and_faction_wedges() {
         let cfg = LifepathBuildConfig {
             youth_hobby: Some(PersonalHobbyId::CitizenOsintDeepfakeVerification),
             adolescent_life_event_roll_2d20: Some(38),
-            faction_archetype: Some(FactionArchetypeId::SatyangManjusri),
+            faction_archetype: Some("SATYANG_MANJUSRI".to_string()),
             career_terms: vec![CareerTermConfig {
                 life_event_roll_2d20: Some(40),
                 ..CareerTermConfig::default()

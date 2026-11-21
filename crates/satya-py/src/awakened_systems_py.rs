@@ -4,7 +4,7 @@
 //! ledger, polycrisis power/water strain, tradecraft channels, and dissenter/proxy hooks.
 
 use pyo3::prelude::*;
-use satya_engine::{
+use satya_campaign::{
     AwakenedFactionId, CageInterventionAction, CageInterventionRollParams,
     CampaignConspiracyLedger, ConspiracyLedgerUpdate, FactionArchetypeId, PolycrisisDistrictState,
     PolycrisisGridMode, SubstrateCounterplayAction, SyntheticSubstrateState, TradecraftChannelKind,

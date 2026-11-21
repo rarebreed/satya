@@ -16,7 +16,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::characteristics::{CharacterAptitudes, CharacterCharacteristics};
 pub use crate::economy_gear::*;
-use crate::faction_templates::FactionArchetypeId;
 pub use crate::lifepath_catalog::*;
 use crate::lifepath_hobbies_events::{
     LifeEventChoiceBranch, PersonalHobbyId, resolve_formative_life_event,
@@ -375,8 +374,9 @@ pub struct LifepathBuildConfig {
     pub adolescent_life_event_roll_2d20: Option<i32>,
     #[serde(default)]
     pub adolescent_life_event_choice: LifeEventChoiceBranch,
+    /// Optional canonical `SCREAMING_SNAKE_CASE` faction archetype code (e.g. `"SATYANG_MANJUSRI"`).
     #[serde(default)]
-    pub faction_archetype: Option<FactionArchetypeId>,
+    pub faction_archetype: Option<String>,
 }
 
 impl Default for LifepathBuildConfig {

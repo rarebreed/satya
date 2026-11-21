@@ -868,9 +868,9 @@ impl AuthAndSessionManager {
             return None;
         }
         let map = active_map.get_or_insert_with(|| {
-            let mut built = satya_engine::tactical_map::build_procedural_map_request(
+            let mut built = satya_maps::tactical_map::build_procedural_map_request(
                 &format!("map-action-stub-{session_id}"),
-                satya_engine::tactical_map::SectorPreset::default(),
+                satya_maps::tactical_map::SectorPreset::default(),
                 Some(&format!("Action Mode Tactical Grid ({session_id})")),
                 16,
                 12,
@@ -1225,7 +1225,7 @@ impl AuthAndSessionManager {
         // 1. Rules Book Search
         if matches!(norm_scope.as_str(), "ALL" | "RULES" | "RULES_BOOK") {
             let rule_query = if q_trim.is_empty() { "cascade" } else { q_trim };
-            for r in satya_engine::search_rules_book(rule_query, 5) {
+            for r in satya_rules_book::search_rules_book(rule_query, 5) {
                 let excerpt: String = r.snippet.chars().take(360).collect();
                 hits.push(GmLookupHit {
                     source_kind: GmLookupSourceKind::RulesBook,

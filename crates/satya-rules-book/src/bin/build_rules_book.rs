@@ -1,11 +1,11 @@
-//! CLI utility (`cargo run -p satya-engine --bin build-rules-book`) that compiles all 24 canonical
-//! chapters of the Satya TTRPG Rules Book (`docs/ttrpg/`) into static HTML pages and `catalog.json`
-//! inside `docs/book/`.
+//! CLI utility (`cargo run -p satya-rules-book --features book-builder --bin build-rules-book`)
+//! that compiles all 24 canonical chapters of the Satya TTRPG Rules Book (`docs/ttrpg/`) into
+//! static HTML pages and `catalog.json` inside `docs/book/`.
 
 use satya_engine::{
-    BotchRule, CarryMode, MarginAggregation, canonical_rules_chapters, compute_stats,
-    escape_html_text, paired_list_signed_margin_pmfs, render_rules_markdown_to_html,
+    BotchRule, CarryMode, MarginAggregation, compute_stats, paired_list_signed_margin_pmfs,
 };
+use satya_rules_book::{canonical_rules_chapters, escape_html_text, render_rules_markdown_to_html};
 use serde_json::json;
 use std::fs;
 use std::path::Path;

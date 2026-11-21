@@ -310,7 +310,10 @@ pub async fn remove_session_ai_player_handler(
     let mut roster = Vec::new();
     if let Some(session) = state.auth.sessions.write().await.get_mut(sid) {
         session.roster.remove(uid);
-        session.combat_tracker.combatants.retain(|c| c.entity_id != uid);
+        session
+            .combat_tracker
+            .combatants
+            .retain(|c| c.entity_id != uid);
         roster = session.roster.values().cloned().collect();
     }
     if !roster.is_empty()
@@ -502,7 +505,7 @@ pub async fn player_ai_session_context_handler(
     }
 
     let raw_ledger = crate::world_clocks::get_or_init_world_ledger(&state, sid).await;
-    let filtered_world_ledger = satya_engine::filter_world_ledger_for_viewer(&raw_ledger, false);
+    let filtered_world_ledger = satya_campaign::filter_world_ledger_for_viewer(&raw_ledger, false);
     let pack_defaults =
         crate::campaign_lore::resolve_pack_defaults(Some(state.campaign_pack.as_str()));
     let filtered_combat_tracker = gm_ctx.combat_tracker.as_ref().map(|t| {
