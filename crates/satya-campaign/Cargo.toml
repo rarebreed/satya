@@ -10,3 +10,4 @@ satya-schema = { path = "../satya-schema" }
 satya-engine = { path = "../satya-engine" }
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true

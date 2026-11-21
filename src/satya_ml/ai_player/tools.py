@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import random
 import urllib.parse
 import urllib.request
 from typing import Any
 
 from satya_py import combat as _combat, dice as _dice, rules as _rules, tech as _tech
 
+from satya_ml.ai_gm.rolls import roll_2d20_pairs
 from satya_ml.ai_gm.tools import (
     _gm_headers,
     _http_get_json,
@@ -52,8 +52,6 @@ try:
     import httpx
 except ImportError:  # pragma: no cover
     httpx = None  # type: ignore[assignment]
-
-_PLAYER_RNG = random.SystemRandom()
 
 
 def _http_post_json_detailed(
@@ -459,13 +457,8 @@ def roll_player_d20_action(
         ).tn_eff()
     )
 
-    rolled_pairs: list[list[int]] = []
-    pair_tuples: list[tuple[int, int]] = []
-    for _ in range(n_pairs):
-        d1 = _PLAYER_RNG.randint(1, 20)
-        d2 = _PLAYER_RNG.randint(1, 20)
-        rolled_pairs.append([d1, d2])
-        pair_tuples.append((d1, d2))
+    pair_tuples = roll_2d20_pairs(n_pairs)
+    rolled_pairs = [[d1, d2] for d1, d2 in pair_tuples]
 
     outcome = _dice.evaluate_cascade_roll(
         n_pairs,

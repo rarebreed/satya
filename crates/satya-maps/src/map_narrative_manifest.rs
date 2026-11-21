@@ -207,6 +207,20 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
         | PropKind::Printer3dStation
         | PropKind::ServerRack
         | PropKind::FumeHood => Some(("lab_workshop", "Laboratory / Technical Bay")),
+        PropKind::CryoComputeCluster
+        | PropKind::BioServerVat
+        | PropKind::AirGappedTerminal => Some(("lab_workshop", "Cryo-Compute / Air-Gapped Vault")),
+        PropKind::BiometricTurnstile
+        | PropKind::SecurityCameraMast
+        | PropKind::DroneDockPad => {
+            Some(("security_checkpoint", "Security Checkpoint / Sensor Perimeter"))
+        }
+        PropKind::HvTransformer | PropKind::DieselGenerator | PropKind::BatteryBankWall => {
+            Some(("power_substation", "High-Voltage Substation / Microgrid"))
+        }
+        PropKind::WaterPurifierKiosk => {
+            Some(("utility_service", "Public Utility / Relief Station"))
+        }
         PropKind::Desk
         | PropKind::DeskL
         | PropKind::DeskT
@@ -298,10 +312,13 @@ fn prop_semantic_zone(kind: PropKind) -> Option<(&'static str, &'static str)> {
 
 fn surface_semantic_label(kind: SurfaceFeatureKind) -> &'static str {
     match kind {
-        SurfaceFeatureKind::AsphaltRoad | SurfaceFeatureKind::GravelRoad => "Roadway Corridor",
+        SurfaceFeatureKind::AsphaltRoad
+        | SurfaceFeatureKind::GravelRoad
+        | SurfaceFeatureKind::FloodedAsphalt => "Roadway Corridor",
         SurfaceFeatureKind::ConcreteWalk
         | SurfaceFeatureKind::StoneWalk
         | SurfaceFeatureKind::BrickPaverWalk => "Pedestrian Plaza / Walk",
+        SurfaceFeatureKind::SubstationGrating => "Utility Substation Yard",
         SurfaceFeatureKind::WoodDeck => "Timber Deck / Porch",
         SurfaceFeatureKind::PoolWater => "Swimming Pool Basin",
         SurfaceFeatureKind::InteriorFloor
@@ -312,7 +329,9 @@ fn surface_semantic_label(kind: SurfaceFeatureKind) -> &'static str {
         | SurfaceFeatureKind::ClinicalVinylFloor
         | SurfaceFeatureKind::LinoleumCheckFloor
         | SurfaceFeatureKind::TerrazzoFloor
-        | SurfaceFeatureKind::SteelPlateFloor => "Building Interior Wing",
+        | SurfaceFeatureKind::SteelPlateFloor
+        | SurfaceFeatureKind::FaradayCopperFloor
+        | SurfaceFeatureKind::AntiStaticCleanroomFloor => "Building Interior Wing",
         SurfaceFeatureKind::BridgeDeck => "Bridge / Overpass Span",
         SurfaceFeatureKind::CreekChannel | SurfaceFeatureKind::DrainageDitch => {
             "Waterway / Drainage Cut"

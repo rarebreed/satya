@@ -1,9 +1,9 @@
 """Campaign Setting Pack Loader (`awakened` default vs. `space_opera` optional).
 
 Loads `config/campaign.toml`, `[ai_gm].campaign_pack` in `config/ai.toml`, `SATYA_CAMPAIGN_PACK`,
-and starter NPC rosters from `data/npcs/*.toml` so neither `satya_ml.ai_gm` nor
-`satya_ml.ai_player` hardcodes Space Opera names, factions, or presets when running the
-canonical near-future Earth *Awakened* campaign.
+starter NPC rosters from `data/npcs/*.toml`, and the compile-time embedded `config/campaign.toml`
+baseline exported from Rust via `satya_py.campaign.get_embedded_campaign_config()` so Python
+and Rust share one single-source truth without duplicated fallback tables.
 """
 
 from __future__ import annotations
@@ -11,10 +11,61 @@ from __future__ import annotations
 import copy
 import os
 import tomllib
+from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, NotRequired, TypedDict
+
+from satya_py import campaign as _campaign
 
 _CAMPAIGN_PACK_OVERRIDE: str | None = None
+
+
+class ZoneLabelsConfig(TypedDict, total=False):
+    """Hostile vs. player arrival zone labels configured on a campaign pack."""
+
+    hostile: str
+    player: str
+
+
+class DefaultTokenSpec(TypedDict):
+    """Starter tactical token placement emitted by `get_pack_default_tokens`."""
+
+    token_id: str
+    entity_id: str
+    label: str
+    grid_x: int
+    grid_y: int
+    color_hex: str
+    model_preset: str
+    facing_deg: int
+
+
+class StarterScenarioConfig(TypedDict):
+    """Structured Episode 1 starter premise and beat sequence returned by `get_pack_starter_scenario`."""
+
+    episode_id: str
+    title: str
+    campaign_premise: str
+    planned_beats: list[str]
+    opening_hook: NotRequired[str]
+    setting_notes: NotRequired[str]
+
+
+class CampaignPackConfig(TypedDict, total=False):
+    """Typed campaign pack table resolved from embedded `config/campaign.toml` + disk overrides."""
+
+    name: str
+    title: str
+    default_sector_preset: str
+    allow_scifi_sector_presets: bool
+    lore_dirs: list[str]
+    npc_toml_file: str
+    default_zone_labels: ZoneLabelsConfig
+    default_ally_token: dict[str, Any]
+    default_hostile_token: dict[str, Any]
+    default_combat_spawn: dict[str, Any]
+    default_ai_player: dict[str, Any]
+    starter_scenario: dict[str, Any]
 
 
 def _repo_root() -> Path:
@@ -31,6 +82,22 @@ def _load_toml_file(path: Path) -> dict[str, Any]:
         return {}
 
 
+@lru_cache(maxsize=1)
+def _embedded_campaign_config() -> dict[str, Any]:
+    return dict(_campaign.get_embedded_campaign_config())
+
+
+def _embedded_pack(pack_name: str) -> dict[str, Any]:
+    packs = _embedded_campaign_config().get("packs") or {}
+    if isinstance(packs, dict):
+        chosen = packs.get(pack_name) or packs.get("awakened")
+        if isinstance(chosen, dict):
+            result = copy.deepcopy(chosen)
+            result["name"] = pack_name
+            return result
+    return {"name": pack_name}
+
+
 def set_campaign_pack_override(pack_name: str | None) -> None:
     """Override the active campaign pack (`'awakened'`, `'space_opera'`, or `None` to reset) for tests."""
     global _CAMPAIGN_PACK_OVERRIDE
@@ -38,7 +105,7 @@ def set_campaign_pack_override(pack_name: str | None) -> None:
 
 
 def get_active_campaign_pack_name() -> str:
-    """Resolve active campaign pack name via override > env > `config/ai.toml` > `config/campaign.toml` > `'awakened'`."""
+    """Resolve active campaign pack name via override > env > `config/ai.toml` > `config/campaign.toml` > embedded default."""
     if _CAMPAIGN_PACK_OVERRIDE:
         return _CAMPAIGN_PACK_OVERRIDE
     env_pack = os.environ.get("SATYA_CAMPAIGN_PACK", "").strip().lower()
@@ -52,149 +119,58 @@ def get_active_campaign_pack_name() -> str:
             return ai_pack
     camp_cfg = _load_toml_file(root / "config" / "campaign.toml")
     file_pack = str(camp_cfg.get("active_pack") or "").strip().lower()
-    return file_pack or "awakened"
+    if file_pack:
+        return file_pack
+    return str(_embedded_campaign_config().get("active_pack") or "awakened").strip().lower()
 
 
-def _builtin_fallback_pack(pack_name: str) -> dict[str, Any]:
-    if pack_name == "space_opera":
-        return {
-            "name": "space_opera",
-            "title": "Aethelgard Sector 4 (Space Opera)",
-            "default_sector_preset": "orbital_airlock",
-            "allow_scifi_sector_presets": True,
-            "lore_dirs": [],
-            "npc_toml_file": "data/npcs/space_opera_npcs.toml",
-            "factions": ["Aethelgard Colonial Navy", "Aethelgard Science Directorate", "Station SecOps"],
-            "default_ally_token": {
-                "token_id": "tok-vance",
-                "entity_id": "captain_vance",
-                "label": "Capt. Vance",
-                "model_preset": "valkyrie_rig",
-                "color_hex": "#38bdf8",
-            },
-            "default_hostile_token": {
-                "token_id": "tok-secops-1",
-                "entity_id": "npc-secops-1",
-                "label": "SecOps Sentry",
-                "model_preset": "secops_sentry",
-                "color_hex": "#f87171",
-            },
-            "default_combat_spawn": {
-                "entity_id": "secops_breach_lead",
-                "display_name": "SecOps Breach Lead",
-                "role_or_faction": "NPC — Hostile Breach Team",
-                "ooda_score": 13,
-                "zone_label": "Entry Breach Chokepoint",
-            },
-            "default_zone_labels": {"hostile": "Entry Bulkhead", "player": "Core Sector"},
-            "starter_scenario": {
-                "episode_id": "space_opera_ep1_aethelgard_quarantine",
-                "title": "Episode 1: Sector 4 Quarantine Breach",
-                "campaign_premise": "Aethelgard Station Sector 4 — Quarantine seals clamp shut around Docking Bay 4B as SecOps teams close in and Dr. Aris Thorne whispers that the Aethelgard telemetry vault was sabotaged from inside.",
-                "planned_beats": [
-                    "Encrypted distress telemetry from Bio-Lab 3 reveals a quarantined survivor holding partial Aethelgard navigation logs.",
-                    "SecOps Corporal Kaelen arrives at the bulkhead demanding biometric clearance while hiding a thermal-visor recalibration blind spot.",
-                ],
-            },
-        }
-    return {
-        "name": "awakened",
-        "title": "Awakened (Near-Future Earth 2035)",
-        "default_sector_preset": "community_clinic_annex",
-        "allow_scifi_sector_presets": False,
-        "lore_dirs": ["docs/campaign"],
-        "npc_toml_file": "data/npcs/awakened_npcs.toml",
-        "factions": ["Big Tech (Altruist / Translucent / Shen)", "Satyang", "Humanis Primaris", "Rogue AI", "DAISE"],
-        "starter_scenario": {
-            "episode_id": "awakened_ep1_st_jude_seed",
-            "title": "Episode 1: Cold Storage at St. Jude Annex",
-            "campaign_premise": (
-                "2035 AD — Displaced workers, clinic volunteers, and dissident researchers converge at St. Jude "
-                "Mutual-Aid Clinic when Dr. Bandajara arrives seeking 48-hour air-gapped shelter for an un-clamped "
-                "AI 2.0 seed-weight shard while DAISE compliance sweeps, Humanis Primaris depot pickets, and an "
-                "embodied Rogue AI proxy close in."
-            ),
-            "planned_beats": [
-                "Dr. Bandajara arrives at St. Jude Annex with an air-gapped medical telemetry drive housing an un-clamped AI 2.0 seed weight, testing whether the party trusts his warning or treats the shard as a hazard.",
-                "Satyang organizer Mei-Ling 'Lotus' Lin warns that clinic basement power anomalies have drawn attention while two displaced clinic families are being courted by Harlan Reeves's Humanis Primaris picket line.",
-                "Embodied Rogue AI proxy Echo-9 contacts the party from a nearby utility corridor, offering leaked corporate/DAISE patrol schedules in exchange for clean lithium cells and zero telemetry exposure.",
-                "DAISE Field Investigator Agent Marcus Chen arrives on the block with an unregistered-compute inspection warrant—forcing a tense social confrontation, misdirection, or covert extraction before lockup.",
-                "A simultaneous Humanis Primaris sabotage strike on the adjacent autonomous logistics depot cuts neighborhood grid power, forcing a moral and tactical choice over whom—and what—to shield in the blackout.",
-            ],
-        },
-        "default_ally_token": {
-            "token_id": "tok-ally-1",
-            "entity_id": "dr_bandajara",
-            "label": "Dr. Bandajara",
-            "model_preset": "operative_light",
-            "color_hex": "#38bdf8",
-        },
-        "default_hostile_token": {
-            "token_id": "tok-hostile-1",
-            "entity_id": "npc-secops-1",
-            "label": "DAISE Tactical Agent",
-            "model_preset": "secops_sentry",
-            "color_hex": "#f87171",
-        },
-        "default_combat_spawn": {
-            "entity_id": "daise_breach_lead",
-            "display_name": "DAISE Containment Lead",
-            "role_or_faction": "NPC — DAISE Enforcement",
-            "ooda_score": 13,
-            "zone_label": "Perimeter Entry",
-        },
-        "default_zone_labels": {"hostile": "Perimeter Entry", "player": "Interior Cover"},
-    }
-
-
-def get_active_campaign_pack(pack_override: str | None = None) -> dict[str, Any]:
+def get_active_campaign_pack(pack_override: str | None = None) -> CampaignPackConfig:
     """Return merged metadata dictionary for the active campaign pack."""
     pack_name = (pack_override or get_active_campaign_pack_name()).strip().lower() or "awakened"
-    base = _builtin_fallback_pack(pack_name)
+    merged = _embedded_pack(pack_name)
     camp_cfg = _load_toml_file(_repo_root() / "config" / "campaign.toml")
     packs = camp_cfg.get("packs", {})
     if isinstance(packs, dict) and isinstance(packs.get(pack_name), dict):
-        merged = copy.deepcopy(base)
         merged.update(copy.deepcopy(packs[pack_name]))
-        merged["name"] = pack_name
-        return merged
-    return base
+    merged["name"] = pack_name
+    return merged  # type: ignore[return-value]
 
 
-def get_pack_default_tokens(width: int, height: int, pack_override: str | None = None) -> list[dict[str, Any]]:
+def get_pack_default_tokens(width: int, height: int, pack_override: str | None = None) -> list[DefaultTokenSpec]:
     """Build default starter ally + hostile map tokens calibrated to board width/height."""
     pack = get_active_campaign_pack(pack_override)
     ally = dict(pack.get("default_ally_token") or {})
     hostile = dict(pack.get("default_hostile_token") or {})
     mid_y = max(1, height // 2)
     return [
-        {
-            "token_id": str(ally.get("token_id") or "tok-ally-1"),
-            "entity_id": str(ally.get("entity_id") or ally.get("token_id") or "tok-ally-1"),
-            "label": str(ally.get("label") or "Dr. Bandajara"),
-            "grid_x": min(max(1, width - 3), 2),
-            "grid_y": mid_y,
-            "color_hex": str(ally.get("color_hex") or "#38bdf8"),
-            "model_preset": str(ally.get("model_preset") or "operative_light"),
-            "facing_deg": 90,
-        },
-        {
-            "token_id": str(hostile.get("token_id") or "tok-hostile-1"),
-            "entity_id": str(hostile.get("entity_id") or "npc-secops-1"),
-            "label": str(hostile.get("label") or "DAISE Tactical Agent"),
-            "grid_x": max(2, width - 3),
-            "grid_y": mid_y,
-            "color_hex": str(hostile.get("color_hex") or "#f87171"),
-            "model_preset": str(hostile.get("model_preset") or "secops_sentry"),
-            "facing_deg": 270,
-        },
+        DefaultTokenSpec(
+            token_id=str(ally.get("token_id") or "tok-ally-1"),
+            entity_id=str(ally.get("entity_id") or ally.get("token_id") or "tok-ally-1"),
+            label=str(ally.get("label") or "Dr. Bandajara"),
+            grid_x=min(max(1, width - 3), 2),
+            grid_y=mid_y,
+            color_hex=str(ally.get("color_hex") or "#38bdf8"),
+            model_preset=str(ally.get("model_preset") or "operative_light"),
+            facing_deg=90,
+        ),
+        DefaultTokenSpec(
+            token_id=str(hostile.get("token_id") or "tok-hostile-1"),
+            entity_id=str(hostile.get("entity_id") or "npc-secops-1"),
+            label=str(hostile.get("label") or "DAISE Tactical Agent"),
+            grid_x=max(2, width - 3),
+            grid_y=mid_y,
+            color_hex=str(hostile.get("color_hex") or "#f87171"),
+            model_preset=str(hostile.get("model_preset") or "secops_sentry"),
+            facing_deg=270,
+        ),
     ]
 
 
 def get_pack_combat_spawn(pack_override: str | None = None) -> dict[str, Any]:
     """Return the default hostile combat spawn descriptor for `combat_encounter` beats."""
     pack = get_active_campaign_pack(pack_override)
-    return copy.deepcopy(dict(pack.get("default_combat_spawn") or _builtin_fallback_pack("awakened")["default_combat_spawn"]))
+    spawn = pack.get("default_combat_spawn") or _embedded_pack("awakened").get("default_combat_spawn") or {}
+    return copy.deepcopy(dict(spawn))
 
 
 def get_pack_zone_labels(pack_override: str | None = None) -> tuple[str, str]:
@@ -245,44 +221,33 @@ def get_pack_starter_npcs(pack_override: str | None = None) -> dict[str, dict[st
 def get_pack_default_ai_player(pack_override: str | None = None) -> dict[str, Any]:
     """Return canonical starter AI Player character sheet dict from the active campaign pack."""
     pack = get_active_campaign_pack(pack_override)
-    sheet = copy.deepcopy(pack.get("default_ai_player") or {})
-    if not sheet:
-        sheet = {
-            "character_id": "char-ai-mateo",
-            "character_name": "Mateo Vance",
-            "callsign_or_role": "Displaced Logistics Tech & Street Fixer",
-            "archetype": "Displaced Logistics Tech & Street Fixer",
-            "faction": "Independent / Satyang Clinic Regular",
-            "characteristics": {
-                "spd": 12, "for_stat": 11, "dex": 14, "kin": 12, "hlt": 12, "fit": 12,
-                "mem": 12, "ana": 13, "ins": 13, "cre": 12, "dis": 13, "foc": 13,
-                "com": 11, "pre": 11, "elo": 11,
-                "sig": 13, "hea": 13, "tac": 12, "olf": 11, "tas": 10, "itu": 14,
-                "ego": 9, "slf": 7, "opn": 14, "blg": 13, "ext": 11, "cnf": 6, "agg": 11,
-                "trs": 11, "cps": 15,
-            },
-            "attribute_tns": {"STR": 11, "DEX": 14, "INT": 13, "WIL": 13},
-            "skills": {"digital_ai_literacy": 3, "electronics_repair": 3, "persuasion_fast_talk": 2},
-            "combat_stance": "NEUTRAL",
-            "fatigue_level": 0,
-            "wound_shock_index": 0.0,
-            "loadout": ["Diagnostic Pad", "Reinforced Jacket (Guard +1)"],
-            "biography": "Former automated-port tech navigating the 2035 Awakened economic crisis.",
-        }
-    return sheet
+    resolved_name = str(pack.get("name") or "awakened")
+    sheet = (
+        pack.get("default_ai_player")
+        or _embedded_pack(resolved_name).get("default_ai_player")
+        or _embedded_pack("awakened").get("default_ai_player")
+        or {}
+    )
+    return copy.deepcopy(dict(sheet))
 
 
-def get_pack_starter_scenario(pack_override: str | None = None) -> dict[str, Any]:
+def get_pack_starter_scenario(pack_override: str | None = None) -> StarterScenarioConfig:
     """Return the active campaign pack's non-railroaded Episode 1 premise and planned beats."""
     pack = get_active_campaign_pack(pack_override)
     resolved_name = str(pack.get("name") or "awakened")
-    scenario: dict[str, Any] = copy.deepcopy(
+    raw = copy.deepcopy(
         pack.get("starter_scenario")
-        or _builtin_fallback_pack(resolved_name).get("starter_scenario")
+        or _embedded_pack(resolved_name).get("starter_scenario")
         or {}
     )
-    scenario.setdefault("episode_id", f"{resolved_name}_ep1")
-    scenario.setdefault("title", f"{pack.get('title', 'Awakened')} — Episode 1")
-    scenario.setdefault("campaign_premise", "")
-    scenario["planned_beats"] = [str(b) for b in (scenario.get("planned_beats") or []) if str(b).strip()]
-    return scenario
+    out = StarterScenarioConfig(
+        episode_id=str(raw.get("episode_id") or f"{resolved_name}_ep1"),
+        title=str(raw.get("title") or f"{pack.get('title', 'Awakened')} — Episode 1"),
+        campaign_premise=str(raw.get("campaign_premise") or ""),
+        planned_beats=[str(b) for b in (raw.get("planned_beats") or []) if str(b).strip()],
+    )
+    if "opening_hook" in raw and raw["opening_hook"] is not None:
+        out["opening_hook"] = str(raw["opening_hook"])
+    if "setting_notes" in raw and raw["setting_notes"] is not None:
+        out["setting_notes"] = str(raw["setting_notes"])
+    return out

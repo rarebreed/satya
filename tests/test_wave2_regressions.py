@@ -568,7 +568,7 @@ def test_wave2_h9_satya_py_presets_override_and_python_map_sync(
     import satya_py
 
     with pytest.raises(ValueError):
-        satya_py.generate_procedural_tactical_sector_json(
+        satya_py.generate_procedural_sector(
             "m-bad",
             "nonexistent_biome_xyz",
             None,
@@ -577,7 +577,7 @@ def test_wave2_h9_satya_py_presets_override_and_python_map_sync(
             42,
         )
 
-    auto_json = satya_py.generate_procedural_tactical_sector_json(
+    auto_obj = satya_py.generate_procedural_sector(
         "m-auto",
         "hospital",
         "Auto Clinic",
@@ -585,7 +585,6 @@ def test_wave2_h9_satya_py_presets_override_and_python_map_sync(
         None,
         19,
     )
-    auto_obj = json.loads(auto_json)
     assert int(auto_obj["grid_width"]) >= 16
     assert int(auto_obj["grid_height"]) >= 12
 
@@ -612,13 +611,12 @@ def test_wave2_h9_satya_py_presets_override_and_python_map_sync(
         }
     ]
 
-    cont_json = satya_py.continue_procedural_tactical_map_json(
-        json.dumps(auto_obj),
+    cont_obj = satya_py.continue_procedural_map(
+        auto_obj,
         "EAST",
         55,
         "warehouse",
     )
-    cont_obj = json.loads(cont_json)
     assert any(
         str(s.get("theme_preset") or s.get("preset") or "") == "warehouse"
         for s in (cont_obj.get("world_sectors") or [])

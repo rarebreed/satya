@@ -533,13 +533,50 @@ def test_satya_py_contested_cascade_and_plotly_builders() -> None:
 
 
 def test_satya_py_stub_matches_compiled_extension_exports() -> None:
-    """Verify `src/satya_py/_native.pyi` matches `satya_py._native` and all submodules are exported."""
+    """Verify ``src/satya_py/_native.pyi`` matches ``satya_py._native`` exports, signatures & defaults."""
     import ast
+    import inspect
     import satya_py
-    from satya_py import _native
+    from satya_py import _native, _stubgen
 
     stub_path = Path(__file__).resolve().parent.parent / "src" / "satya_py" / "_native.pyi"
-    tree = ast.parse(stub_path.read_text(encoding="utf-8"))
+    stub_text = stub_path.read_text(encoding="utf-8")
+    assert stub_text == _stubgen.generate_native_stub(), "_native.pyi is out of sync; run `pixi run gen-stubs`"
+    tree = ast.parse(stub_text)
+
+    _empty = object()
+
+    def _ast_params(fn_node: ast.FunctionDef, *, strip_receiver: bool) -> list[tuple[str, Any]]:
+        pos_args = list(fn_node.args.posonlyargs) + list(fn_node.args.args)
+        defaults = [_empty] * (len(pos_args) - len(fn_node.args.defaults)) + [
+            ast.literal_eval(d) for d in fn_node.args.defaults
+        ]
+        if strip_receiver and pos_args and pos_args[0].arg in {"self", "cls"}:
+            pos_args = pos_args[1:]
+            defaults = defaults[1:]
+        out = [(arg.arg, default) for arg, default in zip(pos_args, defaults, strict=True)]
+        for kw_arg, kw_default in zip(fn_node.args.kwonlyargs, fn_node.args.kw_defaults, strict=True):
+            out.append((kw_arg.arg, _empty if kw_default is None else ast.literal_eval(kw_default)))
+        return out
+
+    def _runtime_params(obj: Any) -> list[tuple[str, Any]]:
+        sig = inspect.signature(obj)
+        out: list[tuple[str, Any]] = []
+        for idx, param in enumerate(sig.parameters.values()):
+            if idx == 0 and param.name in {"self", "cls"}:
+                continue
+            out.append((param.name, _empty if param.default is inspect.Parameter.empty else param.default))
+        return out
+
+    def _assert_same_sig(label: str, stub_params: list[tuple[str, Any]], rt_params: list[tuple[str, Any]]) -> None:
+        assert [p[0] for p in stub_params] == [p[0] for p in rt_params], f"Param names differ on {label}"
+        for (s_name, s_def), (_r_name, r_def) in zip(stub_params, rt_params, strict=True):
+            if s_def is _empty or r_def is _empty:
+                assert s_def is r_def, f"Default presence mismatch on {label}.{s_name}: stub={s_def!r} rt={r_def!r}"
+            else:
+                assert type(s_def) is type(r_def) and s_def == r_def, (
+                    f"Default mismatch on {label}.{s_name}: stub={s_def!r} rt={r_def!r}"
+                )
 
     stub_exports = {
         node.name
@@ -551,15 +588,26 @@ def test_satya_py_stub_matches_compiled_extension_exports() -> None:
 
     top_exports = {name for name in dir(satya_py) if not name.startswith("_")}
     assert runtime_exports.issubset(top_exports)
+    assert runtime_exports.issubset(set(satya_py.__all__))
     for submod in ("dice", "combat", "rules", "maps", "campaign", "psyche", "awakened", "tech", "schema"):
         assert submod in top_exports
 
     for node in tree.body:
-        if isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
+        if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+            rt_fn = getattr(_native, node.name)
+            _assert_same_sig(
+                node.name,
+                _ast_params(node, strip_receiver=False),
+                _runtime_params(rt_fn),
+            )
+        elif isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
             stub_members: set[str] = set()
+            stub_methods: dict[str, ast.FunctionDef] = {}
             for item in node.body:
-                if isinstance(item, ast.FunctionDef) and not item.name.startswith("_"):
-                    stub_members.add(item.name)
+                if isinstance(item, ast.FunctionDef):
+                    stub_methods[item.name] = item
+                    if not item.name.startswith("_"):
+                        stub_members.add(item.name)
                 elif (
                     isinstance(item, ast.AnnAssign)
                     and isinstance(item.target, ast.Name)
@@ -569,4 +617,22 @@ def test_satya_py_stub_matches_compiled_extension_exports() -> None:
             cls_obj = getattr(_native, node.name)
             runtime_members = {name for name in dir(cls_obj) if not name.startswith("_")}
             assert stub_members == runtime_members, f"Stub mismatch on {node.name}"
+            if getattr(cls_obj, "__text_signature__", None) is not None:
+                assert "__init__" in stub_methods, f"Missing __init__ in stub for {node.name}"
+                _assert_same_sig(
+                    f"{node.name}.__init__",
+                    _ast_params(stub_methods["__init__"], strip_receiver=True),
+                    _runtime_params(cls_obj),
+                )
+            for mname, mnode in stub_methods.items():
+                if mname.startswith("_"):
+                    continue
+                rt_member = getattr(cls_obj, mname)
+                if callable(rt_member) and getattr(rt_member, "__text_signature__", None) is not None:
+                    _assert_same_sig(
+                        f"{node.name}.{mname}",
+                        _ast_params(mnode, strip_receiver=True),
+                        _runtime_params(rt_member),
+                    )
+
 

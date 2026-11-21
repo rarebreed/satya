@@ -334,7 +334,7 @@ pub fn battlemap_theme_for_preset(code: Option<&str>) -> &'static BattlemapArtTh
         .unwrap_or(&BATTLEMAP_ART_THEMES[0])
 }
 
-fn grid_dims(ui: &TacticalMapUiState) -> (i32, i32) {
+pub(crate) fn grid_dims(ui: &TacticalMapUiState) -> (i32, i32) {
     (ui.map.grid_width.max(1), ui.map.grid_height.max(1))
 }
 
@@ -474,6 +474,44 @@ pub fn battlemap_art_cache_key(ui: &TacticalMapUiState) -> String {
             acc = fnv(acc, pt.y_cm as u64);
         }
     }
+    acc = fnv(acc, ui.map.ambient_light_delta_ext as u64);
+    for z in &ui.map.faraday_zones {
+        for b in z.zone_id.bytes() {
+            acc = fnv(acc, u64::from(b));
+        }
+        for v in [
+            z.floor_index,
+            z.x0_cm,
+            z.y0_cm,
+            z.x1_cm,
+            z.y1_cm,
+            i32::from(z.attenuation_db),
+        ] {
+            acc = fnv(acc, v as u64);
+        }
+    }
+    for n in &ui.map.surveillance_nodes {
+        for b in n.node_id.bytes().chain(n.node_kind_code.bytes()) {
+            acc = fnv(acc, u64::from(b));
+        }
+        for v in [
+            n.floor_index,
+            n.x_cm,
+            n.y_cm,
+            n.facing_deg,
+            n.fov_deg,
+            n.range_cm,
+            i32::from(n.powered),
+            match n.visibility {
+                satya_schema::MessageVisibility::Public => 0,
+                satya_schema::MessageVisibility::Private => 1,
+                satya_schema::MessageVisibility::GmOnly => 2,
+                satya_schema::MessageVisibility::HostOnly => 3,
+            },
+        ] {
+            acc = fnv(acc, v as u64);
+        }
+    }
     format!("{acc:016x}")
 }
 
@@ -604,6 +642,9 @@ pub fn format_battlemap_art_layer(ui: &TacticalMapUiState) -> String {
         }
         out.push_str("</g>");
     }
+
+    // 5b. Active-floor Faraday shielding enclosures, surveillance FOV cones, and blackout wash
+    crate::wasm_client::map_2d_art_props_awakened::push_spatial_overlays_svg(&mut out, ui, CELL_F);
 
     // 6. Paper grain / ink finish + optional color-matrix group close
     if style.uses_color_tint() {
@@ -867,5 +908,45 @@ mod tests {
         ui.hovered_point_m = Some((5.5, 5.5));
         let brush_ov = format_battlemap_overlay_inner(&ui);
         assert!(brush_ov.contains(r#"stroke-dasharray="7 4""#));
+    }
+
+    #[test]
+    fn wave6_awakened_spatial_overlays_and_cache_key_invalidation() {
+        use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
+
+        let mut ui = TacticalMapUiState {
+            map: build_procedural_map_request(
+                "w6-2d",
+                SectorPreset::CorporateServerBunker,
+                None,
+                22,
+                16,
+                55,
+            ),
+            ..Default::default()
+        };
+        let key_base = battlemap_art_cache_key(&ui);
+        let art_base = format_battlemap_art_layer(&ui);
+        assert!(art_base.contains("bm-faraday-zone"));
+        assert!(art_base.contains("FARADAY -"));
+        assert!(art_base.contains("bm-surv-fov"));
+        assert!(!art_base.contains("bm-blackout-wash"));
+        assert_eq!(art_base.matches("<g").count(), art_base.matches("</g>").count());
+
+        ui.map.ambient_light_delta_ext = 3;
+        let key_blackout = battlemap_art_cache_key(&ui);
+        assert_ne!(key_blackout, key_base);
+        let art_blackout = format_battlemap_art_layer(&ui);
+        assert!(art_blackout.contains("bm-blackout-wash"));
+
+        if let Some(node) = ui.map.surveillance_nodes.first_mut() {
+            node.powered = !node.powered;
+        }
+        let key_powered = battlemap_art_cache_key(&ui);
+        assert_ne!(key_powered, key_blackout);
+        if let Some(node) = ui.map.surveillance_nodes.first_mut() {
+            node.visibility = satya_schema::MessageVisibility::GmOnly;
+        }
+        assert_ne!(battlemap_art_cache_key(&ui), key_powered);
     }
 }

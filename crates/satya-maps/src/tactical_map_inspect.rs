@@ -70,16 +70,17 @@ pub const fn surface_acoustic_kind(kind: SurfaceFeatureKind) -> AcousticSurfaceK
         | SurfaceFeatureKind::CarpetFloor
         | SurfaceFeatureKind::MulchZone
         | SurfaceFeatureKind::GardenBedZone => AcousticSurfaceKind::ThickCarpetOrTurf,
-        SurfaceFeatureKind::InteriorFloor | SurfaceFeatureKind::WoodDeck => {
-            AcousticSurfaceKind::HardwoodOrCreakyStairs
-        }
+        SurfaceFeatureKind::InteriorFloor
+        | SurfaceFeatureKind::WoodDeck
+        | SurfaceFeatureKind::FaradayCopperFloor => AcousticSurfaceKind::HardwoodOrCreakyStairs,
         SurfaceFeatureKind::GravelRoad
         | SurfaceFeatureKind::DirtTrail
         | SurfaceFeatureKind::DefensiveTrench
-        | SurfaceFeatureKind::DrainageDitch => AcousticSurfaceKind::GravelOrDryLeaves,
-        SurfaceFeatureKind::SteelPlateFloor | SurfaceFeatureKind::BridgeDeck => {
-            AcousticSurfaceKind::BrokenGlassOrMetalGrate
-        }
+        | SurfaceFeatureKind::DrainageDitch
+        | SurfaceFeatureKind::FloodedAsphalt => AcousticSurfaceKind::GravelOrDryLeaves,
+        SurfaceFeatureKind::SteelPlateFloor
+        | SurfaceFeatureKind::BridgeDeck
+        | SurfaceFeatureKind::SubstationGrating => AcousticSurfaceKind::BrokenGlassOrMetalGrate,
         SurfaceFeatureKind::CreekChannel
         | SurfaceFeatureKind::StoneWalk
         | SurfaceFeatureKind::BrickPaverWalk
@@ -91,7 +92,8 @@ pub const fn surface_acoustic_kind(kind: SurfaceFeatureKind) -> AcousticSurfaceK
         | SurfaceFeatureKind::MarbleFloor
         | SurfaceFeatureKind::ClinicalVinylFloor
         | SurfaceFeatureKind::LinoleumCheckFloor
-        | SurfaceFeatureKind::TerrazzoFloor => AcousticSurfaceKind::ConcreteAsphaltOrTile,
+        | SurfaceFeatureKind::TerrazzoFloor
+        | SurfaceFeatureKind::AntiStaticCleanroomFloor => AcousticSurfaceKind::ConcreteAsphaltOrTile,
     }
 }
 
@@ -108,7 +110,8 @@ pub const fn surface_traction_tier(
         | SurfaceFeatureKind::DefensiveTrench
         | SurfaceFeatureKind::GravelRoad
         | SurfaceFeatureKind::MulchZone
-        | SurfaceFeatureKind::GardenBedZone => SurfaceTractionTier::MudGravelOilSlick,
+        | SurfaceFeatureKind::GardenBedZone
+        | SurfaceFeatureKind::FloodedAsphalt => SurfaceTractionTier::MudGravelOilSlick,
         SurfaceFeatureKind::DirtTrail | SurfaceFeatureKind::LawnGrassZone => {
             if wet_weather {
                 SurfaceTractionTier::MudGravelOilSlick
@@ -121,7 +124,8 @@ pub const fn surface_traction_tier(
         | SurfaceFeatureKind::BrickPaverWalk
         | SurfaceFeatureKind::StoneWalk
         | SurfaceFeatureKind::WoodDeck
-        | SurfaceFeatureKind::BridgeDeck => {
+        | SurfaceFeatureKind::BridgeDeck
+        | SurfaceFeatureKind::SubstationGrating => {
             if wet_weather {
                 SurfaceTractionTier::WetRainPavement
             } else {
@@ -136,18 +140,20 @@ pub const fn surface_traction_tier(
         | SurfaceFeatureKind::ClinicalVinylFloor
         | SurfaceFeatureKind::LinoleumCheckFloor
         | SurfaceFeatureKind::TerrazzoFloor
-        | SurfaceFeatureKind::SteelPlateFloor => SurfaceTractionTier::DrySolid,
+        | SurfaceFeatureKind::SteelPlateFloor
+        | SurfaceFeatureKind::FaradayCopperFloor
+        | SurfaceFeatureKind::AntiStaticCleanroomFloor => SurfaceTractionTier::DrySolid,
     }
 }
 
-/// Optional floor-prop acoustic override (`Rug`, `ElevatedCatwalk`, `StreetDebris`, `Stairwell`).
+/// Optional floor-prop acoustic override (`Rug`, `ElevatedCatwalk`, `StreetDebris`, `Stairwell`, `DroneDockPad`).
 #[must_use]
 pub const fn prop_acoustic_override(kind: PropKind) -> Option<AcousticSurfaceKind> {
     match kind {
         PropKind::Rug | PropKind::RunnerRug | PropKind::RoundRug => {
             Some(AcousticSurfaceKind::ThickCarpetOrTurf)
         }
-        PropKind::ElevatedCatwalk | PropKind::StreetDebris => {
+        PropKind::ElevatedCatwalk | PropKind::StreetDebris | PropKind::DroneDockPad => {
             Some(AcousticSurfaceKind::BrokenGlassOrMetalGrate)
         }
         PropKind::Stairwell => Some(AcousticSurfaceKind::HardwoodOrCreakyStairs),

@@ -614,3 +614,44 @@ def test_eager_mode_small_custom_tools_and_external_mcp_packs() -> None:
         reset_session_npcs(sid_eager)
         reset_session_npcs(sid_small)
         reset_session_npcs(sid_ext)
+
+
+def test_satya_gm_tool_spec_registry_parity() -> None:
+    """Verify `@satya_gm_tool` single-source metadata derives all packs, OOC tools, tiers, and scoping."""
+    from pathlib import Path
+    from satya_ml.ai_gm.tool_spec import (
+        classify_registered_tool_tier,
+        get_core_tool_names,
+        get_ooc_readonly_tool_names,
+        get_registered_tool_specs,
+        is_registered_session_scoped,
+    )
+
+    specs = get_registered_tool_specs(include_meta=False)
+    builtin_tools = get_builtin_gm_tools()
+    assert len(specs) == 45
+    assert set(specs) == {t.name for t in builtin_tools}
+    assert set(CORE_GM_TOOL_NAMES) == set(get_core_tool_names())
+    assert set(OOC_READONLY_TOOL_NAMES) == set(get_ooc_readonly_tool_names())
+    assert len(OOC_READONLY_TOOL_NAMES) == 7
+
+    for pack_id, pack_spec in DEFERRED_TOOL_PACKS.items():
+        expected = {n for n, sp in specs.items() if sp.pack == pack_id}
+        assert set(pack_spec.tool_names) == expected
+
+    for name, sp in specs.items():
+        assert _classify_tool_tier(name) == classify_registered_tool_tier(name)
+        assert _classify_tool_tier(name) == (sp.tier, sp.tier_label)
+
+    assert is_registered_session_scoped("query_satya_rules") is False
+    assert is_registered_session_scoped(LOAD_GM_TOOLS_NAME) is False
+    assert is_registered_session_scoped("lookup_npc_profile") is True
+
+    root = Path(__file__).resolve().parent.parent / "src" / "satya_ml"
+    fallback_files = [
+        p.relative_to(root).as_posix()
+        for p in root.rglob("*.py")
+        if "_FallbackToolWrapper" in p.read_text(encoding="utf-8")
+    ]
+    assert fallback_files == ["ai_gm/tool_spec.py"]
+

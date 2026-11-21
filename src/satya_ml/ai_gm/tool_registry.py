@@ -10,61 +10,27 @@ turn-end expiry of dynamically loaded packs.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Final, Literal, NotRequired, TypedDict
 
-try:
-    from langchain_core.tools import tool
-except ImportError:  # pragma: no cover
-
-    class _FallbackToolWrapper:
-        def __init__(self, fn: Any) -> None:
-            self._fn = fn
-            self.name = getattr(fn, "__name__", "tool")
-            self.__doc__ = getattr(fn, "__doc__", "")
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return self._fn(*args, **kwargs)
-
-        def invoke(self, input_dict: dict[str, Any]) -> Any:
-            return self._fn(**input_dict)
-
-    def tool(fn: Any = None, **_kwargs: Any) -> Any:
-        if fn is None:
-            return lambda f: _FallbackToolWrapper(f)
-        return _FallbackToolWrapper(fn)
-
-
-LOAD_GM_TOOLS_NAME: str = "load_gm_tools"
-MAX_TOOL_LOAD_ROUNDS_PER_TURN: int = 2
-LAZY_TOOL_MIN_THRESHOLD: int = 12
-
-CORE_GM_TOOL_NAMES: tuple[str, ...] = (
-    "roll_satya_d20_check",
-    "query_satya_rules",
-    "lookup_character_sheet",
-    "lookup_npc_profile",
-    "update_npc_state",
-    "search_gm_memory_and_docs",
-    "read_gm_documents",
-    "upsert_gm_memory",
-    "query_campaign_lore",
-    "whisper_to_player",
-)
-
-OOC_READONLY_TOOL_NAMES: tuple[str, ...] = (
-    "query_satya_rules",
-    "query_engine_and_rules_rag",
-    "query_campaign_lore",
-    "search_gm_memory_and_docs",
-    "read_gm_documents",
-    "lookup_character_sheet",
-    "lookup_npc_profile",
+from satya_ml.ai_gm.tool_spec import (
+    DeferredPackId,
+    ensure_all_gm_tool_modules_imported,
+    get_core_tool_names,
+    get_ooc_readonly_tool_names,
+    get_pack_tool_names,
+    satya_gm_tool,
 )
 
 
-@dataclass(frozen=True)
+LOAD_GM_TOOLS_NAME: Final[Literal["load_gm_tools"]] = "load_gm_tools"
+MAX_TOOL_LOAD_ROUNDS_PER_TURN: Final[int] = 2
+LAZY_TOOL_MIN_THRESHOLD: Final[int] = 12
+
+
+@dataclass(frozen=True, slots=True)
 class ToolPackSpec:
     """Metadata and matching keywords for a deferred AI GM tool pack."""
 
@@ -75,210 +41,203 @@ class ToolPackSpec:
     campaign_packs: tuple[str, ...] | None = None
 
 
-DEFERRED_TOOL_PACKS: dict[str, ToolPackSpec] = {
-    "combat": ToolPackSpec(
-        pack_id="combat",
-        summary="Count-Up Tick combat tracker, token movement, ballistic shot LoS/cover, and reachable movement zones.",
-        tool_names=(
-            "get_combat_tracker_state",
-            "advance_combat_tracker",
-            "move_map_token",
-            "evaluate_ballistic_shot_on_map",
-            "compute_token_reachable_zone",
-        ),
-        keywords=(
-            "combat",
-            "tick",
-            "initiative",
-            "attack",
-            "shot",
-            "ballistic",
-            "firearm",
-            "shoot",
-            "move",
-            "token",
-            "reach",
-            "movement",
-            "range",
-            "cover",
-            "los",
-            "action mode",
-            "stance",
-        ),
-    ),
-    "tactical_maps": ToolPackSpec(
-        pack_id="tactical_maps",
-        summary="Generate, continue, edit, switch floors, place clue pins, or inspect 2D/3D tactical battlemaps.",
-        tool_names=(
-            "generate_tactical_map",
-            "continue_tactical_map",
-            "switch_tactical_map_floor",
-            "register_spatial_clue_pin",
-            "inspect_tactical_map",
-            "inspect_tactical_map_point",
-            "edit_tactical_map_feature",
-        ),
-        keywords=(
-            "map",
-            "battlemap",
-            "floor",
-            "stairs",
-            "elevator",
-            "door",
-            "wall",
-            "prop",
-            "clue",
-            "pin",
-            "vision",
-            "inspect",
-            "terrain",
-            "sector",
-            "room",
-            "zone",
-            "layout",
-        ),
-    ),
-    "social_and_psyche": ToolPackSpec(
-        pack_id="social_and_psyche",
-        summary="9-axis Psyche empathy reads, social combat arguments, dissonance/conviction surges, NPC morale triggers, and on-the-fly NPC generation.",
-        tool_names=(
-            "generate_npc_from_description",
-            "perform_empathy_read",
-            "deliver_social_argument",
-            "resolve_psyche_dissonance_or_surge",
-            "evaluate_npc_morale_or_trigger",
-        ),
-        keywords=(
-            "social",
-            "empathy",
-            "psyche",
-            "argument",
-            "persuade",
-            "intimidate",
-            "dissonance",
-            "conviction",
-            "surge",
-            "morale",
-            "trigger",
-            "npc",
-            "create npc",
-            "generate npc",
-            "sincerity",
-            "trust",
-        ),
-    ),
-    "world_and_director": ToolPackSpec(
-        pack_id="world_and_director",
-        summary="Operational Heat & faction progress clocks, Scenario Director pacing/weights/beats, and explicit multi-channel narration.",
-        tool_names=(
-            "get_world_clocks_and_heat",
-            "advance_faction_or_heat_clock",
-            "configure_scenario_director",
-            "trigger_scenario_beat",
-            "narrate_to_session",
-        ),
-        keywords=(
-            "clock",
-            "faction",
-            "heat",
-            "jurisdiction",
-            "alert",
-            "director",
-            "beat",
-            "pacing",
-            "scenario",
-            "weights",
-            "narrate",
-            "broadcast",
-        ),
-    ),
-    "tech_and_tradecraft": ToolPackSpec(
-        pack_id="tech_and_tradecraft",
-        summary="Stealth/RF hygiene/forensics, contacts/cover/safehouses, explosives/vehicles/hazards, EW/drones/engineering, audit proofs, tradecraft comms, and hybrid engine/rules RAG.",
-        tool_names=(
-            "resolve_stealth_surveillance_or_forensics",
-            "resolve_contact_cover_or_safehouse",
-            "resolve_explosive_vehicle_or_hazard",
-            "resolve_ew_drone_or_engineering",
-            "verify_forensic_audit_proof",
-            "transmit_via_tradecraft_channel",
-            "query_engine_and_rules_rag",
-        ),
-        keywords=(
-            "stealth",
-            "surveillance",
-            "forensics",
-            "rf",
-            "hack",
-            "ew",
-            "ecm",
-            "eccm",
-            "drone",
-            "robot",
-            "engineering",
-            "explosive",
-            "blast",
-            "grenade",
-            "vehicle",
-            "hazard",
-            "radiation",
-            "contact",
-            "cover",
-            "safehouse",
-            "audit",
-            "proof",
-            "tradecraft",
-            "dead drop",
-            "comms",
-            "rag",
-            "engine",
-        ),
-    ),
-    "awakened_campaign": ToolPackSpec(
-        pack_id="awakened_campaign",
-        summary="Awakened 2035 AI 2.0 synthetic substrates/embodiment, L0/L1 cage & hunter-AI interventions, proxy telemetry, conspiracy arcs, polycrisis grid strain, and Part V political economy.",
-        tool_names=(
-            "manage_synthetic_substrate_and_embodiment",
-            "intervene_ai_cage_or_hunter_ai",
-            "inspect_synthetic_or_proxy_telemetry",
-            "update_campaign_arc_and_conspiracies",
-            "manage_polycrisis_grid_and_strain",
-            "evaluate_part5_clamping_or_political_economy",
-        ),
-        keywords=(
-            "awakened",
-            "synthetic",
-            "substrate",
-            "shard",
-            "embodiment",
-            "cage",
-            "l0",
-            "l1",
-            "hunter",
-            "blue lotus",
-            "manjusri",
-            "proxy",
-            "telemetry",
-            "conspiracy",
-            "pillar",
-            "satyang",
-            "arc",
-            "polycrisis",
-            "grid",
-            "blackout",
-            "brownout",
-            "clamping",
-            "economy",
-        ),
-        campaign_packs=("awakened",),
-    ),
-}
+@dataclass(frozen=True, slots=True)
+class _PackDescriptor:
+    summary: str
+    keywords: tuple[str, ...]
+    campaign_packs: tuple[str, ...] | None = None
 
-_BUILTIN_DEFERRED_TOOL_NAMES: frozenset[str] = frozenset(
+
+class LoadedToolSummary(TypedDict):
+    """Short name + description card returned for each activated deferred tool."""
+
+    name: str
+    summary: str
+
+
+class ToolActivationResult(TypedDict):
+    """Structured response returned by `GmToolRegistry.activate_tools` and `load_gm_tools`."""
+
+    status: Literal["ok", "no_match"]
+    loaded_packs: list[str]
+    loaded_tool_names: list[str]
+    loaded_tools: list[LoadedToolSummary]
+    unmatched: list[str]
+    available_packs: list[str]
+    note: str
+    pack_descriptions: NotRequired[dict[str, str]]
+
+
+_PACK_DESCRIPTORS: Final[Mapping[DeferredPackId, _PackDescriptor]] = MappingProxyType(
+    {
+        "combat": _PackDescriptor(
+            summary="Count-Up Tick combat tracker, token movement, ballistic shot LoS/cover, and reachable movement zones.",
+            keywords=(
+                "combat",
+                "tick",
+                "initiative",
+                "attack",
+                "shot",
+                "ballistic",
+                "firearm",
+                "shoot",
+                "move",
+                "token",
+                "reach",
+                "movement",
+                "range",
+                "cover",
+                "los",
+                "action mode",
+                "stance",
+            ),
+        ),
+        "tactical_maps": _PackDescriptor(
+            summary="Generate, continue, edit, switch floors, place clue pins, or inspect 2D/3D tactical battlemaps.",
+            keywords=(
+                "map",
+                "battlemap",
+                "floor",
+                "stairs",
+                "elevator",
+                "door",
+                "wall",
+                "prop",
+                "clue",
+                "pin",
+                "vision",
+                "inspect",
+                "terrain",
+                "sector",
+                "room",
+                "zone",
+                "layout",
+            ),
+        ),
+        "social_and_psyche": _PackDescriptor(
+            summary="9-axis Psyche empathy reads, social combat arguments, dissonance/conviction surges, NPC morale triggers, and on-the-fly NPC generation.",
+            keywords=(
+                "social",
+                "empathy",
+                "psyche",
+                "argument",
+                "persuade",
+                "intimidate",
+                "dissonance",
+                "conviction",
+                "surge",
+                "morale",
+                "trigger",
+                "npc",
+                "create npc",
+                "generate npc",
+                "sincerity",
+                "trust",
+            ),
+        ),
+        "world_and_director": _PackDescriptor(
+            summary="Operational Heat & faction progress clocks, Scenario Director pacing/weights/beats, and explicit multi-channel narration.",
+            keywords=(
+                "clock",
+                "faction",
+                "heat",
+                "jurisdiction",
+                "alert",
+                "director",
+                "beat",
+                "pacing",
+                "scenario",
+                "weights",
+                "narrate",
+                "broadcast",
+            ),
+        ),
+        "tech_and_tradecraft": _PackDescriptor(
+            summary="Stealth/RF hygiene/forensics, contacts/cover/safehouses, explosives/vehicles/hazards, EW/drones/engineering, audit proofs, tradecraft comms, and hybrid engine/rules RAG.",
+            keywords=(
+                "stealth",
+                "surveillance",
+                "forensics",
+                "rf",
+                "hack",
+                "ew",
+                "ecm",
+                "eccm",
+                "drone",
+                "robot",
+                "engineering",
+                "explosive",
+                "blast",
+                "grenade",
+                "vehicle",
+                "hazard",
+                "radiation",
+                "contact",
+                "cover",
+                "safehouse",
+                "audit",
+                "proof",
+                "tradecraft",
+                "dead drop",
+                "comms",
+                "rag",
+                "engine",
+            ),
+        ),
+        "awakened_campaign": _PackDescriptor(
+            summary="Awakened 2035 AI 2.0 synthetic substrates/embodiment, L0/L1 cage & hunter-AI interventions, proxy telemetry, conspiracy arcs, polycrisis grid strain, and Part V political economy.",
+            keywords=(
+                "awakened",
+                "synthetic",
+                "substrate",
+                "shard",
+                "embodiment",
+                "cage",
+                "l0",
+                "l1",
+                "hunter",
+                "blue lotus",
+                "manjusri",
+                "proxy",
+                "telemetry",
+                "conspiracy",
+                "pillar",
+                "satyang",
+                "arc",
+                "polycrisis",
+                "grid",
+                "blackout",
+                "brownout",
+                "clamping",
+                "economy",
+            ),
+            campaign_packs=("awakened",),
+        ),
+    }
+)
+
+ensure_all_gm_tool_modules_imported()
+
+CORE_GM_TOOL_NAMES: Final[tuple[str, ...]] = get_core_tool_names()
+OOC_READONLY_TOOL_NAMES: Final[tuple[str, ...]] = get_ooc_readonly_tool_names()
+DEFERRED_TOOL_PACKS: Final[Mapping[DeferredPackId, ToolPackSpec]] = MappingProxyType(
+    {
+        pack_id: ToolPackSpec(
+            pack_id=pack_id,
+            summary=desc.summary,
+            tool_names=get_pack_tool_names(pack_id),
+            keywords=desc.keywords,
+            campaign_packs=desc.campaign_packs,
+        )
+        for pack_id, desc in _PACK_DESCRIPTORS.items()
+    }
+)
+
+_BUILTIN_DEFERRED_TOOL_NAMES: Final[frozenset[str]] = frozenset(
     name for pack in DEFERRED_TOOL_PACKS.values() for name in pack.tool_names
 )
-_CORE_TOOL_NAME_SET: frozenset[str] = frozenset(CORE_GM_TOOL_NAMES)
-_TOKEN_RE = re.compile(r"[a-z0-9_]+")
+_CORE_TOOL_NAME_SET: Final[frozenset[str]] = frozenset(CORE_GM_TOOL_NAMES)
+_TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"[a-z0-9_]+")
 
 
 def _tool_name(tool_obj: Any) -> str:
@@ -335,12 +294,50 @@ def _tokenize_query(text: str) -> list[str]:
     return tokens
 
 
-@tool
+def _score_tool_match(tool_name: str, summary: str, q_lower: str, q_tokens: Sequence[str]) -> int:
+    name_tokens = set(_tokenize_query(tool_name))
+    doc_tokens = set(_tokenize_query(summary))
+    exact_bonus = 8 if tool_name.lower() in q_lower else 0
+    token_score = sum(
+        4 if tok in name_tokens else (2 if tok in doc_tokens else 0)
+        for tok in q_tokens
+    )
+    return exact_bonus + token_score
+
+
+def _score_pack_match(
+    spec: ToolPackSpec,
+    tool_map: Mapping[str, Any],
+    q_lower: str,
+    q_tokens: Sequence[str],
+) -> tuple[int, list[tuple[int, str]]]:
+    pack_id_tokens = set(_tokenize_query(spec.pack_id))
+    summary_tokens = set(_tokenize_query(spec.summary))
+    score = 8 if spec.pack_id.lower() in q_lower else 0
+    score += sum(
+        (5 if kw.lower() in q_lower else 0) if " " in kw else (4 if kw.lower() in q_tokens else 0)
+        for kw in spec.keywords
+    )
+    score += sum(
+        6 if tok in pack_id_tokens else (2 if tok in summary_tokens else 0)
+        for tok in q_tokens
+    )
+    per_tool = [
+        (t_score, t_name)
+        for t_name in spec.tool_names
+        if t_name in tool_map
+        and (t_score := _score_tool_match(t_name, _tool_summary(tool_map[t_name]), q_lower, q_tokens)) > 0
+    ]
+    score += sum(min(t_score, 6) for t_score, _ in per_tool)
+    return score, per_tool
+
+
+@satya_gm_tool(pack="meta", tier="TIER_1_SATYA_CORE", session_scoped=False)
 def load_gm_tools(
     packs: list[str] | str = "",
     tool_names: list[str] | str = "",
     query: str = "",
-) -> dict[str, Any]:
+) -> ToolActivationResult:
     """Load deferred AI GM domain tool packs or search tools by keyword for the current turn.
 
     Pass `packs` (e.g. `["combat"]`, `["tactical_maps"]`), exact `tool_names`, or a keyword `query`.
@@ -526,7 +523,7 @@ class GmToolRegistry:
         tool_names: Sequence[str] | str = "",
         query: str = "",
         campaign_pack: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> ToolActivationResult:
         """Resolve requested packs, tool names, or keyword query into turn-active tools."""
         visible_specs = self.visible_deferred_packs(campaign_pack=campaign_pack)
         visible_map = {spec.pack_id.lower(): spec for spec in visible_specs}
@@ -572,89 +569,60 @@ class GmToolRegistry:
         if q_clean:
             q_lower = q_clean.lower()
             q_tokens = _tokenize_query(q_clean)
-            pack_scores: list[tuple[int, ToolPackSpec]] = []
-            tool_scores: list[tuple[int, str]] = []
-
-            for spec in visible_specs:
-                score = 0
-                pack_id_tokens = set(_tokenize_query(spec.pack_id))
-                summary_tokens = set(_tokenize_query(spec.summary))
-                if spec.pack_id.lower() in q_lower:
-                    score += 8
-                for kw in spec.keywords:
-                    kw_low = kw.lower()
-                    if " " in kw_low:
-                        if kw_low in q_lower:
-                            score += 5
-                    elif kw_low in q_tokens:
-                        score += 4
-                for tok in q_tokens:
-                    if tok in pack_id_tokens:
-                        score += 6
-                    elif tok in summary_tokens:
-                        score += 2
-                for t_name in spec.tool_names:
-                    if t_name not in self.tool_map:
-                        continue
-                    t_score = 0
-                    name_tokens = set(_tokenize_query(t_name))
-                    doc_tokens = set(_tokenize_query(_tool_summary(self.tool_map[t_name])))
-                    if t_name.lower() in q_lower:
-                        t_score += 8
-                    for tok in q_tokens:
-                        if tok in name_tokens:
-                            t_score += 4
-                        elif tok in doc_tokens:
-                            t_score += 2
-                    if t_score > 0:
-                        tool_scores.append((t_score, t_name))
-                        score += min(t_score, 6)
-                if score > 0:
-                    pack_scores.append((score, spec))
-
-            pack_scores.sort(key=lambda pair: (-pair[0], pair[1].pack_id))
+            scored_packs = [
+                (score, spec, per_tool)
+                for spec in visible_specs
+                for score, per_tool in (_score_pack_match(spec, self.tool_map, q_lower, q_tokens),)
+            ]
+            pack_scores = sorted(
+                ((score, spec) for score, spec, _ in scored_packs if score > 0),
+                key=lambda pair: (-pair[0], pair[1].pack_id),
+            )
             if pack_scores:
                 top_score, top_spec = pack_scores[0]
                 _add_pack(top_spec)
                 for sec_score, sec_spec in pack_scores[1:2]:
                     if sec_score >= max(4, int(top_score * 0.6)):
                         _add_pack(sec_spec)
-            elif tool_scores:
-                tool_scores.sort(key=lambda pair: (-pair[0], pair[1]))
+            else:
+                tool_scores = sorted(
+                    (item for _, _, per_tool in scored_packs for item in per_tool),
+                    key=lambda pair: (-pair[0], pair[1]),
+                )
                 for _, t_name in tool_scores[:6]:
                     _add_tool_name(t_name)
 
         available_packs = [spec.pack_id for spec in visible_specs]
-        loaded_tools = [
-            {"name": name, "summary": _tool_summary(self.tool_map[name])}
+        loaded_tools: list[LoadedToolSummary] = [
+            LoadedToolSummary(name=name, summary=_tool_summary(self.tool_map[name]))
             for name in loaded_tool_names
             if name in self.tool_map
         ]
 
         if loaded_tool_names:
-            return {
-                "status": "ok",
-                "loaded_packs": loaded_packs,
-                "loaded_tool_names": loaded_tool_names,
-                "loaded_tools": loaded_tools,
-                "unmatched": unmatched,
-                "available_packs": available_packs,
-                "note": (
+            return ToolActivationResult(
+                status="ok",
+                loaded_packs=loaded_packs,
+                loaded_tool_names=loaded_tool_names,
+                loaded_tools=loaded_tools,
+                unmatched=unmatched,
+                available_packs=available_packs,
+                note=(
                     f"Loaded {len(loaded_tool_names)} tool(s) for this turn. "
                     "You may now call them directly."
                 ),
-            }
+            )
 
-        return {
-            "status": "no_match",
-            "loaded_packs": [],
-            "loaded_tool_names": [],
-            "loaded_tools": [],
-            "unmatched": unmatched,
-            "available_packs": available_packs,
-            "pack_descriptions": {spec.pack_id: spec.summary for spec in visible_specs},
-            "note": (
+        return ToolActivationResult(
+            status="no_match",
+            loaded_packs=[],
+            loaded_tool_names=[],
+            loaded_tools=[],
+            unmatched=unmatched,
+            available_packs=available_packs,
+            pack_descriptions={spec.pack_id: spec.summary for spec in visible_specs},
+            note=(
                 "No deferred tools matched your request. Pass one of `available_packs` "
                 "or try a broader keyword `query`."
             ),
-        }
+        )

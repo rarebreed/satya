@@ -705,6 +705,65 @@ BATTLEMAP_2D_TEXTURE_CATALOG: tuple[TextureSpec, ...] = (
             "panel lines, and ZERO harsh specular streaks."
         ),
     ),
+    TextureSpec(
+        id="faraday_copper_mesh",
+        filename="faraday_copper_mesh.webp",
+        label="Grounded Faraday Copper-Mesh Deck",
+        svg_span_px=128,
+        fallback_hex="#8a5634",
+        delight_strength=0.80,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Top-down hand-painted brushed burnished copper electromagnetic shielding floor panels "
+            "seen straight down; woven copper-wire Faraday mesh lattice texture pressed over dark "
+            "bronze backing sheets with thin grounded copper seam strips, crisp subtle ink bevels, "
+            "and satin metallic warmth edge-to-edge."
+        ),
+    ),
+    TextureSpec(
+        id="esd_cleanroom_tile",
+        filename="esd_cleanroom_tile.webp",
+        label="Anti-Static ESD Cleanroom Floor",
+        svg_span_px=128,
+        fallback_hex="#cfdbe0",
+        delight_strength=0.82,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Seamless pale cool-slate anti-static epoxy cleanroom floor tiles seen straight down; "
+            "matte light icy blue-grey resin tiles with tiny conductive graphite micro-flecks, thin "
+            "recessed copper grounding grid seams, and clean laboratory precision."
+        ),
+    ),
+    TextureSpec(
+        id="substation_grating",
+        filename="substation_grating.webp",
+        label="Industrial Steel Cable-Trench Grating",
+        svg_span_px=128,
+        fallback_hex="#3b444e",
+        delight_strength=0.78,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Galvanized dark gunmetal perforated industrial steel floor grating over shadowy "
+            "recessed electrical cable trenches seen straight down; crisp hand-inked cross-bar "
+            "steel grating mesh, faint amber/copper insulated conduit glints deep underneath, "
+            "and subtle oil-weathered steel patina."
+        ),
+    ),
+    TextureSpec(
+        id="flooded_asphalt",
+        filename="flooded_asphalt.webp",
+        label="Rain-Flooded Cracked Urban Asphalt",
+        svg_span_px=192,
+        fallback_hex="#2d3942",
+        delight_strength=0.78,
+        is_neutral_tint_mask=False,
+        prompt=_prompt(
+            "Dark rain-slick cracked urban asphalt road surface pooled with shallow monsoon runoff "
+            "puddles seen straight down; weathered wet charcoal bitumen and fine gravel grit mixed "
+            "with murky reflective teal-slate rainwater sheets, organic puddle shorelines, NO street "
+            "paint lines, NO curbs, and NO cast directional shadows."
+        ),
+    ),
 )
 
 _BY_ID: dict[str, TextureSpec] = {spec.id: spec for spec in BATTLEMAP_2D_TEXTURE_CATALOG}

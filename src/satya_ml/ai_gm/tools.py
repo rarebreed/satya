@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from satya_ml.ai_gm.models import SessionLlmConfig  # noqa: F401 (installs Windows SSL fallback)
 
@@ -26,26 +26,13 @@ try:
 except ImportError:  # pragma: no cover
     httpx = None  # type: ignore[assignment]
 
-try:
-    from langchain_core.tools import tool
-except ImportError:  # pragma: no cover
-
-    class _FallbackToolWrapper:
-        def __init__(self, fn: Any) -> None:
-            self._fn = fn
-            self.name = getattr(fn, "__name__", "tool")
-            self.__doc__ = getattr(fn, "__doc__", "")
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return self._fn(*args, **kwargs)
-
-        def invoke(self, input_dict: dict[str, Any]) -> Any:
-            return self._fn(**input_dict)
-
-    def tool(fn: Any = None, **_kwargs: Any) -> Any:
-        if fn is None:
-            return lambda f: _FallbackToolWrapper(f)
-        return _FallbackToolWrapper(fn)
+from satya_ml.ai_gm.tool_spec import (
+    SessionStore,
+    get_builtin_tool_objects,
+    run_session_reset_hooks,
+    satya_gm_tool,
+    tool,
+)
 
 
 def _repo_root() -> Path:
@@ -199,13 +186,13 @@ from satya_ml.campaign_config import (
 
 # In-memory per-session caches for NPC states, operating mode, human GM ID, GM_ONLY documents,
 # persistent GM memories, bound character sheets, and combat tracker state
-_SESSION_NPCS: dict[str, dict[str, dict[str, Any]]] = {}
-_SESSION_MODES: dict[str, str] = {}
-_SESSION_HUMAN_GMS: dict[str, str | None] = {}
-_SESSION_GM_DOCS: dict[str, list[dict[str, Any]]] = {}
-_SESSION_GM_MEMORIES: dict[str, list[dict[str, Any]]] = {}
-_SESSION_CHARACTERS: dict[str, list[dict[str, Any]]] = {}
-_SESSION_COMBAT_TRACKER: dict[str, dict[str, Any]] = {}
+_SESSION_NPCS: Final[SessionStore[dict[str, dict[str, Any]]]] = SessionStore()
+_SESSION_MODES: Final[SessionStore[str]] = SessionStore()
+_SESSION_HUMAN_GMS: Final[SessionStore[str | None]] = SessionStore()
+_SESSION_GM_DOCS: Final[SessionStore[list[dict[str, Any]]]] = SessionStore()
+_SESSION_GM_MEMORIES: Final[SessionStore[list[dict[str, Any]]]] = SessionStore()
+_SESSION_CHARACTERS: Final[SessionStore[list[dict[str, Any]]]] = SessionStore()
+_SESSION_COMBAT_TRACKER: Final[SessionStore[dict[str, Any]]] = SessionStore()
 
 
 def set_session_operating_mode(
@@ -279,41 +266,15 @@ def get_session_combat_tracker(session_id: str) -> dict[str, Any]:
     return dict(_SESSION_COMBAT_TRACKER[session_id])
 
 
-_SESSION_NPC_PACKS: dict[str, str] = {}
+_SESSION_NPC_PACKS: Final[SessionStore[str]] = SessionStore()
 
 
 def reset_session_npcs(session_id: str | None = None) -> None:
-    """Clear cached NPC state, session caches, maps, and world/social state for `session_id` (or all)."""
-    if session_id is None:
-        _SESSION_NPCS.clear()
-        _SESSION_NPC_PACKS.clear()
-        _SESSION_MODES.clear()
-        _SESSION_HUMAN_GMS.clear()
-        _SESSION_GM_DOCS.clear()
-        _SESSION_GM_MEMORIES.clear()
-        _SESSION_CHARACTERS.clear()
-        _SESSION_COMBAT_TRACKER.clear()
-    else:
-        _SESSION_NPCS.pop(session_id, None)
-        _SESSION_NPC_PACKS.pop(session_id, None)
-        _SESSION_MODES.pop(session_id, None)
-        _SESSION_HUMAN_GMS.pop(session_id, None)
-        _SESSION_GM_DOCS.pop(session_id, None)
-        _SESSION_GM_MEMORIES.pop(session_id, None)
-        _SESSION_CHARACTERS.pop(session_id, None)
-        _SESSION_COMBAT_TRACKER.pop(session_id, None)
-    try:
-        from satya_ml.ai_gm.maps import clear_session_map_caches
+    """Clear cached NPC state, session caches, maps, and all registered GM session state for `session_id` (or all)."""
+    run_session_reset_hooks(session_id)
 
-        clear_session_map_caches(session_id)
-    except Exception:
-        pass
-    try:
-        from satya_ml.ai_gm.social_and_clocks import reset_social_and_world_state
 
-        reset_social_and_world_state(session_id)
-    except Exception:
-        pass
+reset_session_gm_state = reset_session_npcs
 
 
 def _normalize_remote_npc_entry(entry: dict[str, Any]) -> dict[str, Any]:
@@ -399,7 +360,7 @@ def get_session_npcs(session_id: str) -> dict[str, dict[str, Any]]:
 # ============================================================================
 
 
-@tool
+@satya_gm_tool(pack="core", tier="TIER_2_RULESET_ENGINE", ooc_readonly=True)
 def lookup_npc_profile(npc_id: str, session_id: str = "default") -> dict[str, Any]:
     """Read an NPC's Satya d20 profile, attribute TNs, skills, psyche, agenda, combat stance, and secrets."""
     npcs = get_session_npcs(session_id)
@@ -415,7 +376,7 @@ def lookup_npc_profile(npc_id: str, session_id: str = "default") -> dict[str, An
     }
 
 
-@tool
+@satya_gm_tool(pack="core", tier="TIER_2_RULESET_ENGINE")
 def update_npc_state(
     npc_id: str,
     fatigue_delta: int = 0,
@@ -473,7 +434,7 @@ def update_npc_state(
     return npc
 
 
-@tool
+@satya_gm_tool(pack="social_and_psyche", tier="TIER_2_RULESET_ENGINE")
 def generate_npc_from_description(
     description: str,
     template: str = "AUTO",
@@ -628,7 +589,12 @@ _CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
 )
 
 
-@tool
+@satya_gm_tool(
+    pack="core",
+    tier="TIER_2_RULESET_ENGINE",
+    ooc_readonly=True,
+    session_scoped=False,
+)
 def query_satya_rules(query: str) -> str:
     """Search the 24-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20xN` cascade mechanics, task resolution, stealth/investigation, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), expanded firearms/explosives/breaching, engineering/weapon design, robotics/drones, AI 2.0 architectures, cyber-prosthetics, electronic warfare (`ECM`/`ECCM`), and social dissonance."""
     ttrpg_dir = _repo_root() / "docs" / "ttrpg"
@@ -744,7 +710,7 @@ def query_satya_rules(query: str) -> str:
     return top_excerpts[:4500]
 
 
-@tool
+@satya_gm_tool(pack="core", tier="TIER_3_LORE_PROVIDER", ooc_readonly=True)
 def query_campaign_lore(query: str, session_id: str | None = None) -> str:
     """Search campaign Markdown lore (`lore_dirs`), active-pack & DB NPC dossiers, Signaling Omnisearch (`scope=LORE`), and archived PyLance chat history."""
     q_clean = query.strip()
@@ -906,7 +872,7 @@ def format_gm_document_block(d: dict[str, Any]) -> str:
     )
 
 
-@tool
+@satya_gm_tool(pack="core", tier="TIER_3_LORE_PROVIDER", ooc_readonly=True)
 def read_gm_documents(
     session_id: str = "default",
     query: str | list[str] | None = None,
@@ -952,7 +918,7 @@ def read_gm_documents(
     return combined
 
 
-@tool
+@satya_gm_tool(pack="core", tier="TIER_2_RULESET_ENGINE", ooc_readonly=True)
 def lookup_character_sheet(
     character_name_or_id: str = "",
     session_id: str = "default",
@@ -1006,7 +972,7 @@ def lookup_character_sheet(
     }
 
 
-@tool
+@satya_gm_tool(pack="combat", tier="TIER_1_SATYA_CORE")
 def get_combat_tracker_state(session_id: str = "default") -> dict[str, Any]:
     """Read the persistent Satya Count-Up Tick Timeline (`1 Tick = 0.25s`, `1 Window = 20 Ticks = 5.0s`) and combatant readiness for `session_id`."""
     base = _signaling_base_url()
@@ -1023,7 +989,7 @@ def compute_character_tactical_envelope(char_sheet: dict[str, Any]) -> dict[str,
     return _combat.compute_character_tactical_envelope(char_sheet)
 
 
-@tool
+@satya_gm_tool(pack="combat", tier="TIER_1_SATYA_CORE")
 def advance_combat_tracker(
     tick_delta: int = 1,
     entity_id: str | None = None,
@@ -1132,7 +1098,7 @@ def advance_combat_tracker(
     return tracker
 
 
-@tool
+@satya_gm_tool(pack="core", tier="TIER_3_LORE_PROVIDER")
 def upsert_gm_memory(
     title: str,
     content: str,
@@ -1183,7 +1149,7 @@ def upsert_gm_memory(
     return local_note
 
 
-@tool
+@satya_gm_tool(pack="core", tier="TIER_3_LORE_PROVIDER", ooc_readonly=True)
 def search_gm_memory_and_docs(
     query: str | list[str] = "",
     scope: str = "ALL",
@@ -1370,7 +1336,7 @@ def _local_satya_d20_fallback(
     }
 
 
-@tool
+@satya_gm_tool(pack="core", tier="TIER_1_SATYA_CORE")
 def roll_satya_d20_check(
     session_id: str,
     actor_name: str,
@@ -1463,7 +1429,7 @@ from satya_ml.ai_gm.social_and_clocks import (
 )
 
 
-@tool
+@satya_gm_tool(pack="core", tier="TIER_1_SATYA_CORE")
 def whisper_to_player(session_id: str, target_user_id: str, content: str) -> dict[str, Any]:
     """Send a private `PRIVATE` Markdown message from the AI GM to a single player (`target_user_id`).
 
@@ -1492,7 +1458,7 @@ def whisper_to_player(session_id: str, target_user_id: str, content: str) -> dic
     }
 
 
-@tool
+@satya_gm_tool(pack="world_and_director", tier="TIER_1_SATYA_CORE")
 def narrate_to_session(
     session_id: str,
     content: str,
@@ -1556,76 +1522,8 @@ def narrate_to_session(
 
 
 def get_builtin_gm_tools() -> list[Any]:
-    """Return the built-in Tier 1 / Tier 2 / Tier 3 Satya AI GM tools."""
-    from satya_ml.ai_gm.awakened_systems import (
-        intervene_ai_cage_or_hunter_ai,
-        manage_polycrisis_grid_and_strain,
-        manage_synthetic_substrate_and_embodiment,
-        query_engine_and_rules_rag,
-        transmit_via_tradecraft_channel,
-        update_campaign_arc_and_conspiracies,
-    )
-    from satya_ml.ai_gm.maps_tactical import (
-        compute_token_reachable_zone,
-        edit_tactical_map_feature,
-        evaluate_ballistic_shot_on_map,
-        inspect_tactical_map_point,
-    )
-    from satya_ml.ai_gm.tech_and_tradecraft import (
-        evaluate_part5_clamping_or_political_economy,
-        resolve_contact_cover_or_safehouse,
-        resolve_ew_drone_or_engineering,
-        resolve_explosive_vehicle_or_hazard,
-        resolve_stealth_surveillance_or_forensics,
-    )
-
-    return [
-        lookup_npc_profile,
-        update_npc_state,
-        generate_npc_from_description,
-        lookup_character_sheet,
-        get_combat_tracker_state,
-        advance_combat_tracker,
-        upsert_gm_memory,
-        search_gm_memory_and_docs,
-        query_satya_rules,
-        query_campaign_lore,
-        read_gm_documents,
-        generate_tactical_map,
-        continue_tactical_map,
-        switch_tactical_map_floor,
-        register_spatial_clue_pin,
-        move_map_token,
-        inspect_tactical_map,
-        inspect_tactical_map_point,
-        evaluate_ballistic_shot_on_map,
-        compute_token_reachable_zone,
-        edit_tactical_map_feature,
-        roll_satya_d20_check,
-        whisper_to_player,
-        narrate_to_session,
-        configure_scenario_director,
-        trigger_scenario_beat,
-        perform_empathy_read,
-        deliver_social_argument,
-        resolve_psyche_dissonance_or_surge,
-        verify_forensic_audit_proof,
-        inspect_synthetic_or_proxy_telemetry,
-        evaluate_npc_morale_or_trigger,
-        get_world_clocks_and_heat,
-        advance_faction_or_heat_clock,
-        manage_synthetic_substrate_and_embodiment,
-        intervene_ai_cage_or_hunter_ai,
-        update_campaign_arc_and_conspiracies,
-        manage_polycrisis_grid_and_strain,
-        transmit_via_tradecraft_channel,
-        query_engine_and_rules_rag,
-        resolve_stealth_surveillance_or_forensics,
-        resolve_contact_cover_or_safehouse,
-        resolve_explosive_vehicle_or_hazard,
-        resolve_ew_drone_or_engineering,
-        evaluate_part5_clamping_or_political_economy,
-    ]
+    """Return the built-in Tier 1 / Tier 2 / Tier 3 Satya AI GM tools derived from `@satya_gm_tool`."""
+    return get_builtin_tool_objects()
 
 
 async def load_mcp_tools(mcp_servers_config: dict[str, dict[str, Any]] | None = None) -> list[Any]:

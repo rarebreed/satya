@@ -1,4 +1,4 @@
-"""Campaign lifepaths, motivational hooks, NPC generation & world ledgers backed by Rust."""
+"""Campaign lifepaths, motivational hooks, NPC generation, campaign packs & world ledgers backed by Rust."""
 
 from __future__ import annotations
 
@@ -8,12 +8,13 @@ from typing import Any
 
 from satya_py._native import (
     audit_canonical_lifepath_character,
-    compile_party_motivational_hooks_json,
+    compile_party_motivational_hooks as _native_compile_party_motivational_hooks,
     compute_lifepath_skill_progression,
     evaluate_educational_advancement_roll,
-    extract_character_lifepath_anchors_json,
-    generate_npc_profile_json,
-    seed_or_update_world_ledger_json,
+    extract_character_lifepath_anchors as _native_extract_character_lifepath_anchors,
+    generate_npc_profile,
+    get_embedded_campaign_config,
+    seed_or_update_world_ledger,
 )
 
 _DEFAULT_CHARACTERISTICS: dict[str, Any] = {
@@ -148,39 +149,13 @@ def compile_party_motivational_hooks(
     scene_context: dict[str, Any] | str | None = None,
     pack_id: str | None = None,
 ) -> dict[str, Any]:
-    """Normalize party CharacterSheetRecords and compile a `PartyHookManifest` via Rust."""
-    if isinstance(characters, str):
-        sheets_json = characters
-    else:
-        norm = [normalize_character_sheet_record(dict(c), i) for i, c in enumerate(characters) if isinstance(c, dict)]
-        sheets_json = json.dumps(norm)
-    scene_json = (
-        None
-        if scene_context is None
-        else (scene_context if isinstance(scene_context, str) else json.dumps(scene_context))
+    """Normalize party `CharacterSheetRecord` dicts and compile a `PartyHookManifest` via Rust."""
+    payload: Any = (
+        characters
+        if isinstance(characters, str)
+        else [normalize_character_sheet_record(dict(c), i) for i, c in enumerate(characters) if isinstance(c, dict)]
     )
-    raw = compile_party_motivational_hooks_json(sheets_json, scene_json, pack_id)
-    return dict(json.loads(raw))
-
-
-def generate_npc_profile(
-    prompt: str,
-    template: str | None = None,
-    name_override: str | None = None,
-    career_terms: int = 2,
-    seed: int = 0,
-    pack_id: str | None = None,
-) -> dict[str, Any]:
-    """Generate a full Satya NPC profile, skills, 9-axis Psyche & origin hook via Rust."""
-    raw = generate_npc_profile_json(
-        prompt,
-        template,
-        name_override,
-        int(career_terms),
-        int(seed),
-        pack_id,
-    )
-    return dict(json.loads(raw))
+    return _native_compile_party_motivational_hooks(payload, scene_context, pack_id)
 
 
 def extract_character_lifepath_anchors(
@@ -188,54 +163,22 @@ def extract_character_lifepath_anchors(
     index: int = 0,
 ) -> dict[str, Any]:
     """Extract hobby contacts, formative anchors & faction wedge hints from a character sheet."""
-    char_json = (
+    payload: Any = (
         character
         if isinstance(character, str)
-        else json.dumps(normalize_character_sheet_record(dict(character), index))
+        else normalize_character_sheet_record(dict(character), index)
     )
-    raw = extract_character_lifepath_anchors_json(char_json)
-    return dict(json.loads(raw))
-
-
-def seed_or_update_world_ledger(
-    session_id: str,
-    current_ledger: dict[str, Any] | str | None = None,
-    update_req: dict[str, Any] | str | None = None,
-    pack_id: str | None = None,
-    campaign_tag: str | None = None,
-) -> dict[str, Any]:
-    """Seed or mutate a session's `SessionWorldLedger` via Rust."""
-    cur_json = (
-        None
-        if current_ledger is None
-        else (current_ledger if isinstance(current_ledger, str) else json.dumps(current_ledger))
-    )
-    upd_json = (
-        None
-        if update_req is None
-        else (update_req if isinstance(update_req, str) else json.dumps(update_req))
-    )
-    raw = seed_or_update_world_ledger_json(
-        session_id,
-        cur_json,
-        upd_json,
-        pack_id,
-        campaign_tag,
-    )
-    return dict(json.loads(raw))
+    return _native_extract_character_lifepath_anchors(payload)
 
 
 __all__ = [
     "audit_canonical_lifepath_character",
     "compile_party_motivational_hooks",
-    "compile_party_motivational_hooks_json",
     "compute_lifepath_skill_progression",
     "evaluate_educational_advancement_roll",
     "extract_character_lifepath_anchors",
-    "extract_character_lifepath_anchors_json",
     "generate_npc_profile",
-    "generate_npc_profile_json",
+    "get_embedded_campaign_config",
     "normalize_character_sheet_record",
     "seed_or_update_world_ledger",
-    "seed_or_update_world_ledger_json",
 ]

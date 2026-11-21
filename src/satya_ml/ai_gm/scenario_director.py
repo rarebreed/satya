@@ -10,16 +10,9 @@ from __future__ import annotations
 
 import json
 import random
-from typing import Any
+from typing import Any, Final
 
-try:
-    from langchain_core.tools import tool
-except ImportError:  # pragma: no cover
-
-    def tool(fn: Any = None, **_kwargs: Any) -> Any:
-        if fn is None:
-            return lambda f: f
-        return fn
+from satya_ml.ai_gm.tool_spec import SessionStore, satya_gm_tool
 
 
 SCENARIO_DIRECTOR_TASKS: dict[str, dict[str, Any]] = {
@@ -212,15 +205,12 @@ SCENARIO_DIRECTOR_TASKS: dict[str, dict[str, Any]] = {
     },
 }
 
-_SESSION_SCENARIO_DIRECTORS: dict[str, dict[str, Any]] = {}
+_SESSION_SCENARIO_DIRECTORS: Final[SessionStore[dict[str, Any]]] = SessionStore()
 
 
 def reset_session_scenario_director(session_id: str | None = None) -> None:
     """Clear in-memory Scenario Director state for `session_id` (or all sessions)."""
-    if session_id is None:
-        _SESSION_SCENARIO_DIRECTORS.clear()
-    else:
-        _SESSION_SCENARIO_DIRECTORS.pop(session_id, None)
+    _SESSION_SCENARIO_DIRECTORS.reset(session_id)
 
 
 def default_event_weights() -> dict[str, float]:
@@ -691,7 +681,7 @@ def select_next_scenario_beat(
     return beat_record
 
 
-@tool
+@satya_gm_tool(pack="world_and_director", tier="TIER_2_RULESET_ENGINE")
 def configure_scenario_director(
     session_id: str,
     campaign_premise: str = "",
@@ -776,7 +766,7 @@ def configure_scenario_director(
     }
 
 
-@tool
+@satya_gm_tool(pack="world_and_director", tier="TIER_2_RULESET_ENGINE")
 def trigger_scenario_beat(
     session_id: str,
     task_slug: str = "auto",

@@ -19,7 +19,7 @@ use crate::wasm_client::map_3d_wgpu::push_quad;
 /// Emits a horizontal triangle at elevation `y`, enforcing `+Y` CCW winding so
 /// downward-winding ear-clipped or strip triangles are never backface-culled.
 #[inline]
-fn push_tri_up(
+pub(crate) fn push_tri_up(
     verts: &mut Vec<GlbVertex>,
     a_xz: [f32; 2],
     mut b_xz: [f32; 2],
@@ -165,6 +165,10 @@ fn surface_style(kind: SurfaceFeatureKind, variant_seed: u32) -> ([f32; 3], f32)
         SurfaceFeatureKind::LinoleumCheckFloor => ([0.72, 0.76, 0.78], -8.0),
         SurfaceFeatureKind::TerrazzoFloor => ([0.81, 0.79, 0.75], -8.0),
         SurfaceFeatureKind::SteelPlateFloor => ([0.20, 0.24, 0.29], -1.0),
+        SurfaceFeatureKind::FaradayCopperFloor => ([0.54, 0.34, 0.20], -1.0),
+        SurfaceFeatureKind::AntiStaticCleanroomFloor => ([0.81, 0.86, 0.88], -8.0),
+        SurfaceFeatureKind::SubstationGrating => ([0.23, 0.27, 0.31], -1.0),
+        SurfaceFeatureKind::FloodedAsphalt => ([0.18, 0.22, 0.26], -6.0),
     }
 }
 

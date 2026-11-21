@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from langchain_core.tools import tool
+from satya_ml.ai_gm.tool_spec import satya_gm_tool
 
 from satya_py import maps as _maps
 
@@ -42,7 +42,7 @@ def sync_map_blackout_from_polycrisis(session_id: str, blackout_active: bool) ->
     if not isinstance(cur, dict):
         return None
     res = _maps.edit_map_feature(
-        gm_maps._build_rust_map_json(cur),
+        gm_maps._build_rust_map_payload(cur),
         {
             "action": "SET_BLACKOUT",
             "blackout_active": bool(blackout_active),
@@ -55,7 +55,7 @@ def sync_map_blackout_from_polycrisis(session_id: str, blackout_active: bool) ->
     return gm_maps._write_and_sync_map_state(sid, updated)
 
 
-@tool
+@satya_gm_tool(pack="tactical_maps", tier="TIER_1_SATYA_CORE")
 def inspect_tactical_map_point(
     x_m: float,
     y_m: float,
@@ -70,7 +70,7 @@ def inspect_tactical_map_point(
         return {"error": f"No tactical map exists for session '{sid}'."}
     try:
         hit = _maps.inspect_map_point(
-            gm_maps._build_rust_map_json(cur),
+            gm_maps._build_rust_map_payload(cur),
             str(cur.get("theme", cur.get("title", "Tactical Map"))),
             float(x_m),
             float(y_m),
@@ -92,7 +92,7 @@ def inspect_tactical_map_point(
     return hit
 
 
-@tool
+@satya_gm_tool(pack="combat", tier="TIER_2_RULESET_ENGINE")
 def evaluate_ballistic_shot_on_map(
     attacker_x_m: float,
     attacker_y_m: float,
@@ -112,7 +112,7 @@ def evaluate_ballistic_shot_on_map(
         return {"error": f"No tactical map exists for session '{sid}'."}
     try:
         res = _maps.evaluate_ballistic_shot(
-            gm_maps._build_rust_map_json(cur),
+            gm_maps._build_rust_map_payload(cur),
             float(attacker_x_m),
             float(attacker_y_m),
             float(target_x_m),
@@ -128,7 +128,7 @@ def evaluate_ballistic_shot_on_map(
     return res
 
 
-@tool
+@satya_gm_tool(pack="combat", tier="TIER_1_SATYA_CORE")
 def compute_token_reachable_zone(
     entity_id: str = "",
     x_m: float | None = None,
@@ -178,7 +178,7 @@ def compute_token_reachable_zone(
 
     try:
         res = _maps.compute_reachable_zone(
-            gm_maps._build_rust_map_json(cur),
+            gm_maps._build_rust_map_payload(cur),
             float(resolved_x),
             float(resolved_y),
             spd_eff=int(spd_eff),
@@ -196,7 +196,7 @@ def compute_token_reachable_zone(
     return res
 
 
-@tool
+@satya_gm_tool(pack="tactical_maps", tier="TIER_1_SATYA_CORE")
 def edit_tactical_map_feature(
     action: str,
     x: int | None = None,
@@ -271,7 +271,7 @@ def edit_tactical_map_feature(
 
     try:
         res = _maps.edit_map_feature(
-            gm_maps._build_rust_map_json(cur),
+            gm_maps._build_rust_map_payload(cur),
             payload,
             floor_index=floor_index,
         )

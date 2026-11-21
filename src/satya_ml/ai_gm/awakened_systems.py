@@ -10,51 +10,60 @@
 from __future__ import annotations
 
 import json
-import random
-from typing import Any
-
-try:
-    from langchain_core.tools import tool
-except ImportError:  # pragma: no cover
-
-    class _FallbackToolWrapper:
-        def __init__(self, fn: Any) -> None:
-            self._fn = fn
-            self.name = getattr(fn, "__name__", "tool")
-            self.__doc__ = getattr(fn, "__doc__", "")
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return self._fn(*args, **kwargs)
-
-        def invoke(self, input_dict: dict[str, Any]) -> Any:
-            return self._fn(**input_dict)
-
-    def tool(fn: Any = None, **_kwargs: Any) -> Any:
-        if fn is None:
-            return lambda f: _FallbackToolWrapper(f)
-        return _FallbackToolWrapper(fn)
-
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any, Final, Literal
 
 from satya_py import awakened as _awakened
 
+from satya_ml.ai_gm.rolls import ContestedRollRequest
 from satya_ml.ai_gm.social_and_clocks import advance_faction_or_heat_clock, get_session_world_ledger
+from satya_ml.ai_gm.tool_spec import CompositeSessionStore, SessionStore, satya_gm_tool
 
-_SESSION_SYNTHETIC_SUBSTRATES: dict[tuple[str, str], dict[str, Any]] = {}
-_SESSION_CONSPIRACY_LEDGERS: dict[str, dict[str, Any]] = {}
-_SESSION_POLYCRISIS_STATES: dict[str, dict[str, Any]] = {}
+type SubstrateActionCode = Literal[
+    "HIJACK_CLOUD_QUANTUM_SPRINT",
+    "SEVER_FIBER_OR_FARADAY",
+    "JAM_RF_UPLINK",
+    "DRAIN_OR_STALL_BATTERY",
+    "SUPPLY_CLEAN_LITHIUM_CELLS",
+]
+type RagCorpusName = Literal["ttrpg_rules", "rust_engine", "campaign_lore"]
+
+_SUBSTRATE_ACTION_ALIASES: Final[Mapping[str, SubstrateActionCode]] = MappingProxyType(
+    {
+        "QUANTUM_TETHERED_SPRINT": "HIJACK_CLOUD_QUANTUM_SPRINT",
+        "SEVERED_FARADAY_REFLEX": "SEVER_FIBER_OR_FARADAY",
+        "FARADAY": "SEVER_FIBER_OR_FARADAY",
+        "JAM_RF": "JAM_RF_UPLINK",
+        "DRAIN_BATTERY": "DRAIN_OR_STALL_BATTERY",
+        "SUPPLY_LITHIUM": "SUPPLY_CLEAN_LITHIUM_CELLS",
+    }
+)
+_RAG_SCOPE_CORPORA: Final[Mapping[str, tuple[RagCorpusName, ...]]] = MappingProxyType(
+    {
+        "rules": ("ttrpg_rules",),
+        "ttrpg_rules": ("ttrpg_rules",),
+        "rust": ("rust_engine",),
+        "code": ("rust_engine",),
+        "rust_engine": ("rust_engine",),
+        "lore": ("campaign_lore",),
+        "campaign_lore": ("campaign_lore",),
+        "all": ("ttrpg_rules", "rust_engine", "campaign_lore"),
+    }
+)
+
+_SESSION_SYNTHETIC_SUBSTRATES: Final[CompositeSessionStore[tuple[str, str], dict[str, Any]]] = (
+    CompositeSessionStore()
+)
+_SESSION_CONSPIRACY_LEDGERS: Final[SessionStore[dict[str, Any]]] = SessionStore()
+_SESSION_POLYCRISIS_STATES: Final[SessionStore[dict[str, Any]]] = SessionStore()
 
 
 def reset_awakened_systems_state(session_id: str | None = None) -> None:
     """Clear per-session synthetic substrates, conspiracy ledgers, and polycrisis states."""
-    if session_id is None:
-        _SESSION_SYNTHETIC_SUBSTRATES.clear()
-        _SESSION_CONSPIRACY_LEDGERS.clear()
-        _SESSION_POLYCRISIS_STATES.clear()
-        return
-    for k in [key for key in _SESSION_SYNTHETIC_SUBSTRATES if key[0] == session_id]:
-        _SESSION_SYNTHETIC_SUBSTRATES.pop(k, None)
-    _SESSION_CONSPIRACY_LEDGERS.pop(session_id, None)
-    _SESSION_POLYCRISIS_STATES.pop(session_id, None)
+    _SESSION_SYNTHETIC_SUBSTRATES.reset(session_id)
+    _SESSION_CONSPIRACY_LEDGERS.reset(session_id)
+    _SESSION_POLYCRISIS_STATES.reset(session_id)
 
 
 def get_session_synthetic_substrate(
@@ -125,7 +134,7 @@ def format_awakened_systems_for_prompt(session_id: str) -> str:
             f"Polycrisis Grid: stress={ps.get('grid_brownout_stress_pct')}% "
             f"clinic_throttled={ps.get('clinic_equipment_throttled')} blackout={ps.get('blackout_active')}"
         )
-    subs = [v for (s, _), v in _SESSION_SYNTHETIC_SUBSTRATES.items() if s == sid]
+    subs = _SESSION_SYNTHETIC_SUBSTRATES.for_session(sid)
     if subs:
         sub_str = ", ".join(
             f"{st.get('entity_id')}:{st.get('metabolic_mode')}(bat={st.get('battery_pct')}%,lat={st.get('uplink_latency_ms')}ms)"
@@ -135,7 +144,11 @@ def format_awakened_systems_for_prompt(session_id: str) -> str:
     return " | ".join(parts)
 
 
-@tool
+@satya_gm_tool(
+    pack="awakened_campaign",
+    tier="TIER_2_RULESET_ENGINE",
+    campaign_packs=("awakened",),
+)
 def manage_synthetic_substrate_and_embodiment(
     entity_id: str,
     action_or_mode: str = "INSPECT",
@@ -150,15 +163,7 @@ def manage_synthetic_substrate_and_embodiment(
     if norm in {"", "INSPECT", "STATUS"}:
         return {"entity_id": entity_id, "state": state, "mutated": False}
 
-    mode_aliases = {
-        "QUANTUM_TETHERED_SPRINT": "HIJACK_CLOUD_QUANTUM_SPRINT",
-        "SEVERED_FARADAY_REFLEX": "SEVER_FIBER_OR_FARADAY",
-        "FARADAY": "SEVER_FIBER_OR_FARADAY",
-        "JAM_RF": "JAM_RF_UPLINK",
-        "DRAIN_BATTERY": "DRAIN_OR_STALL_BATTERY",
-        "SUPPLY_LITHIUM": "SUPPLY_CLEAN_LITHIUM_CELLS",
-    }
-    action_code = mode_aliases.get(norm, norm)
+    action_code = _SUBSTRATE_ACTION_ALIASES.get(norm, norm)
     res = _awakened.evaluate_synthetic_substrate_action(
         state,
         action_code,
@@ -168,7 +173,11 @@ def manage_synthetic_substrate_and_embodiment(
     return res
 
 
-@tool
+@satya_gm_tool(
+    pack="awakened_campaign",
+    tier="TIER_2_RULESET_ENGINE",
+    campaign_packs=("awakened",),
+)
 def intervene_ai_cage_or_hunter_ai(
     entity_id: str,
     intervention_action: str,
@@ -182,20 +191,20 @@ def intervene_ai_cage_or_hunter_ai(
 
     sid = session_id or "default"
     state = get_session_synthetic_substrate(sid, entity_id, hint=entity_id)
-    rng = random.SystemRandom()
-    n_eff = max(1, min(10, int(skill_rank)))
-    player_pairs = [[rng.randint(1, 20), rng.randint(1, 20)] for _ in range(n_eff)]
-    gm_pair = [rng.randint(1, 20), rng.randint(1, 20)]
+    roll = ContestedRollRequest(
+        skill_n=max(1, min(10, int(skill_rank))),
+        control_c=max(1, min(20, int(control_tn))),
+    )
     roll_params = {
         "delta_ext": int(difficulty_mod),
-        "player_pairs": player_pairs,
-        "gm_pair": gm_pair,
+        "player_pairs": [list(p) for p in roll.resolved_pairs()],
+        "gm_pair": list(roll.resolved_gm_pair()),
     }
     res = _awakened.evaluate_cage_or_hunter_ai(
         state,
         intervention_action,
-        n_eff,
-        max(1, min(20, int(control_tn))),
+        roll.skill_n,
+        roll.control_c,
         roll_params,
     )
     set_session_synthetic_substrate(sid, entity_id, res["updated_state"])
@@ -220,7 +229,11 @@ def intervene_ai_cage_or_hunter_ai(
     return res
 
 
-@tool
+@satya_gm_tool(
+    pack="awakened_campaign",
+    tier="TIER_2_RULESET_ENGINE",
+    campaign_packs=("awakened",),
+)
 def update_campaign_arc_and_conspiracies(
     session_id: str = "default",
     explicit_arc: str = "",
@@ -278,7 +291,11 @@ def update_campaign_arc_and_conspiracies(
     return {"ledger": updated, "audit_proof_verified": proof_verified}
 
 
-@tool
+@satya_gm_tool(
+    pack="awakened_campaign",
+    tier="TIER_2_RULESET_ENGINE",
+    campaign_packs=("awakened",),
+)
 def manage_polycrisis_grid_and_strain(
     power_mode: str = "THROTTLE_SHARD_SAFE",
     shard_draw_kw: int = 18,
@@ -327,7 +344,7 @@ def manage_polycrisis_grid_and_strain(
     return res
 
 
-@tool
+@satya_gm_tool(pack="tech_and_tradecraft", tier="TIER_2_RULESET_ENGINE")
 def transmit_via_tradecraft_channel(
     channel: str,
     skill_rank: int = 3,
@@ -351,15 +368,17 @@ def transmit_via_tradecraft_channel(
             has_hobby = True
             break
 
-    rng = random.SystemRandom()
-    n_eff = max(1, min(10, int(skill_rank)))
+    roll = ContestedRollRequest(
+        skill_n=max(1, min(10, int(skill_rank))),
+        control_c=max(1, min(20, int(control_tn))),
+    )
     params = {
-        "skill_n": n_eff,
-        "control_c": max(1, min(20, int(control_tn))),
+        "skill_n": roll.skill_n,
+        "control_c": roll.control_c,
         "operational_heat": op_heat,
         "has_hobby_anchor": has_hobby,
-        "player_pairs": [[rng.randint(1, 20), rng.randint(1, 20)] for _ in range(n_eff)],
-        "gm_pair": [rng.randint(1, 20), rng.randint(1, 20)],
+        "player_pairs": [list(p) for p in roll.resolved_pairs()],
+        "gm_pair": list(roll.resolved_gm_pair()),
     }
     res = _awakened.evaluate_tradecraft_channel(channel, params)
     delta = int(res.get("daise_or_corp_clock_delta", 0) or 0)
@@ -375,7 +394,11 @@ def transmit_via_tradecraft_channel(
     return res
 
 
-@tool
+@satya_gm_tool(
+    pack="tech_and_tradecraft",
+    tier="TIER_2_RULESET_ENGINE",
+    ooc_readonly=True,
+)
 def query_engine_and_rules_rag(
     query: str,
     scope: str = "all",
@@ -386,17 +409,7 @@ def query_engine_and_rules_rag(
     from satya_ml.rag.hybrid_index import get_satya_rag_index
 
     norm_scope = (scope or "all").strip().lower()
-    scope_map = {
-        "rules": ["ttrpg_rules"],
-        "ttrpg_rules": ["ttrpg_rules"],
-        "rust": ["rust_engine"],
-        "code": ["rust_engine"],
-        "rust_engine": ["rust_engine"],
-        "lore": ["campaign_lore"],
-        "campaign_lore": ["campaign_lore"],
-        "all": ["ttrpg_rules", "rust_engine", "campaign_lore"],
-    }
-    corpora = scope_map.get(norm_scope, ["ttrpg_rules", "rust_engine", "campaign_lore"])
+    corpora = list(_RAG_SCOPE_CORPORA.get(norm_scope, _RAG_SCOPE_CORPORA["all"]))
     arc_stage = str(get_session_conspiracy_ledger(session_id or "default").get("current_arc") or "ARC_3")
     idx = get_satya_rag_index()
     hits = idx.search(

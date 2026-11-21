@@ -1224,14 +1224,16 @@ pub enum WindIntensityTier {
     StormHurricane65PlusKmh,
 }
 
-/// Surface traction and footing tier (`environmental_hazards_and_survival.md` §5.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SurfaceTractionTier {
-    DrySolid,
-    WetRainPavement,
-    MudGravelOilSlick,
-    BlackIce,
+crate::define_coded_enum! {
+    /// Surface traction and footing tier (`environmental_hazards_and_survival.md` §5.1).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum SurfaceTractionTier [count = 4] {
+        DrySolid => { code: "dry_solid", label: "Dry Solid Footing" },
+        WetRainPavement => { code: "wet_rain_pavement", label: "Wet Rain Pavement" },
+        MudGravelOilSlick => { code: "mud_gravel_oil_slick", label: "Mud / Gravel / Oil Slick" },
+        BlackIce => { code: "black_ice", label: "Black Ice" },
+    }
 }
 
 /// Combined wind, ballistic drift, drone stability, auditory masking, and traction evaluation

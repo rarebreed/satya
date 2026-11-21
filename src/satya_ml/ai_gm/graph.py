@@ -318,55 +318,9 @@ Rules:
 
 
 def _classify_tool_tier(tool_name: str) -> tuple[str, str]:
-    if tool_name in {
-        LOAD_GM_TOOLS_NAME,
-        "generate_tactical_map",
-        "continue_tactical_map",
-        "switch_tactical_map_floor",
-        "register_spatial_clue_pin",
-        "move_map_token",
-        "inspect_tactical_map",
-        "inspect_tactical_map_point",
-        "compute_token_reachable_zone",
-        "edit_tactical_map_feature",
-        "get_combat_tracker_state",
-        "advance_combat_tracker",
-        "roll_satya_d20_check",
-        "whisper_to_player",
-        "narrate_to_session",
-    }:
-        return "TIER_1_SATYA_CORE", "satya-core"
-    if tool_name in {
-        "lookup_npc_profile",
-        "update_npc_state",
-        "generate_npc_from_description",
-        "lookup_character_sheet",
-        "query_satya_rules",
-        "query_engine_and_rules_rag",
-        "configure_scenario_director",
-        "trigger_scenario_beat",
-        "perform_empathy_read",
-        "deliver_social_argument",
-        "resolve_psyche_dissonance_or_surge",
-        "get_world_clocks_and_heat",
-        "advance_faction_or_heat_clock",
-        "verify_forensic_audit_proof",
-        "inspect_synthetic_or_proxy_telemetry",
-        "evaluate_npc_morale_or_trigger",
-        "evaluate_ballistic_shot_on_map",
-        "manage_synthetic_substrate_and_embodiment",
-        "intervene_ai_cage_or_hunter_ai",
-        "update_campaign_arc_and_conspiracies",
-        "manage_polycrisis_grid_and_strain",
-        "transmit_via_tradecraft_channel",
-        "resolve_stealth_surveillance_or_forensics",
-        "resolve_contact_cover_or_safehouse",
-        "resolve_explosive_vehicle_or_hazard",
-        "resolve_ew_drone_or_engineering",
-        "evaluate_part5_clamping_or_political_economy",
-    }:
-        return "TIER_2_RULESET_ENGINE", "satya-d20-rules"
-    return "TIER_3_LORE_PROVIDER", "satya-campaign-lore"
+    from satya_ml.ai_gm.tool_spec import classify_registered_tool_tier
+
+    return classify_registered_tool_tier(tool_name)
 
 
 def fetch_session_context_from_rust(session_id: str) -> dict[str, Any] | None:
@@ -1214,52 +1168,23 @@ def build_ai_gm_graph(
             t_name = tc.get("name", "")
             t_args = dict(tc.get("args") or {})
             t_id = tc.get("id") or f"call-{uuid.uuid4().hex[:8]}"
-            _session_scoped_tools = {
-                "lookup_npc_profile",
-                "update_npc_state",
-                "generate_npc_from_description",
-                "lookup_character_sheet",
-                "get_combat_tracker_state",
-                "advance_combat_tracker",
-                "upsert_gm_memory",
-                "search_gm_memory_and_docs",
-                "generate_tactical_map",
-                "continue_tactical_map",
-                "switch_tactical_map_floor",
-                "move_map_token",
-                "inspect_tactical_map",
-                "register_spatial_clue_pin",
-                "roll_satya_d20_check",
-                "whisper_to_player",
-                "narrate_to_session",
-                "query_campaign_lore",
-                "query_engine_and_rules_rag",
-                "read_gm_documents",
-                "configure_scenario_director",
-                "trigger_scenario_beat",
-                "perform_empathy_read",
-                "deliver_social_argument",
-                "resolve_psyche_dissonance_or_surge",
-                "get_world_clocks_and_heat",
-                "advance_faction_or_heat_clock",
-                "verify_forensic_audit_proof",
-                "inspect_synthetic_or_proxy_telemetry",
-                "evaluate_npc_morale_or_trigger",
-                "manage_synthetic_substrate_and_embodiment",
-                "intervene_ai_cage_or_hunter_ai",
-                "update_campaign_arc_and_conspiracies",
-                "manage_polycrisis_grid_and_strain",
-                "transmit_via_tradecraft_channel",
-            }
+            from satya_ml.ai_gm.tool_spec import is_registered_session_scoped
+
             tool_obj = tool_map.get(t_name)
-            has_session_arg = t_name != LOAD_GM_TOOLS_NAME and t_name in _session_scoped_tools
-            if t_name != LOAD_GM_TOOLS_NAME and not has_session_arg and tool_obj is not None:
-                args_dict = getattr(tool_obj, "args", None)
-                model_fields = getattr(getattr(tool_obj, "args_schema", None), "model_fields", None)
-                if (isinstance(args_dict, dict) and "session_id" in args_dict) or (
-                    isinstance(model_fields, dict) and "session_id" in model_fields
-                ):
-                    has_session_arg = True
+            reg_scoped = is_registered_session_scoped(t_name)
+            if t_name == LOAD_GM_TOOLS_NAME:
+                has_session_arg = False
+            elif reg_scoped is not None:
+                has_session_arg = reg_scoped
+            else:
+                has_session_arg = False
+                if tool_obj is not None:
+                    args_dict = getattr(tool_obj, "args", None)
+                    model_fields = getattr(getattr(tool_obj, "args_schema", None), "model_fields", None)
+                    if (isinstance(args_dict, dict) and "session_id" in args_dict) or (
+                        isinstance(model_fields, dict) and "session_id" in model_fields
+                    ):
+                        has_session_arg = True
             if has_session_arg:
                 t_args["session_id"] = session_id
 

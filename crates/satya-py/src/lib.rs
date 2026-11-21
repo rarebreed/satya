@@ -13,12 +13,13 @@
 pub mod awakened_systems_py;
 pub mod hooks_and_npc_py;
 pub mod psyche_social_py;
+pub mod py_bridge;
 pub mod tactical_map_py;
 pub mod tech_and_gear_py;
 pub use hooks_and_npc_py::*;
 pub use tactical_map_py::*;
 
-use pyo3::exceptions::PyValueError;
+use py_bridge::{PyJsonDict, parse_coded_enum, to_py_err, to_py_object};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use satya_engine::{
@@ -35,10 +36,6 @@ use satya_schema::{
 };
 use std::collections::BTreeMap;
 use std::str::FromStr;
-
-fn to_py_err(msg: impl Into<String>) -> PyErr {
-    PyValueError::new_err(msg.into())
-}
 
 /// Summary moments of a discrete probability mass function (`PMF`).
 #[pyclass(name = "DistributionStats", get_all)]
@@ -1006,15 +1003,7 @@ pub fn order_statistic_pmf(
 #[pyfunction]
 #[pyo3(signature = (pool_size, sides, mode="furthest"))]
 pub fn center_distance_selection_pmf(pool_size: usize, sides: i32, mode: &str) -> PyResult<Pmf> {
-    let m = match mode.trim().to_ascii_lowercase().as_str() {
-        "closest" | "focus" => CenterDistanceMode::Closest,
-        "furthest" | "chaos" => CenterDistanceMode::Furthest,
-        other => {
-            return Err(to_py_err(format!(
-                "invalid center distance mode '{other}' (expected 'closest' or 'furthest')"
-            )));
-        }
-    };
+    let m = parse_coded_enum::<CenterDistanceMode>(mode, "center distance mode")?;
     Ok(satya_engine::center_distance_selection_pmf(
         pool_size, sides, m,
     ))
@@ -1516,11 +1505,8 @@ pub fn resolve_task_gate_and_tools(
         },
         _ => TaskGateClass::ClassA,
     };
-    let dep = match tool_dependency.trim().to_ascii_lowercase().as_str() {
-        "mandatory" => ToolDependency::Mandatory,
-        "situational" => ToolDependency::Situational,
-        _ => ToolDependency::None,
-    };
+    let dep = parse_coded_enum::<ToolDependency>(tool_dependency, "tool_dependency")
+        .unwrap_or(ToolDependency::None);
     let tier = ToolQualityTier::from_key(tool_tier);
     PyTaskGateResolution::from(satya_engine::resolve_task_gate_and_tools(
         gate,
@@ -1678,31 +1664,32 @@ pub fn evaluate_educational_advancement_roll(
 /// Audits a skill unlock attempt against a canonical Lifepath preset (`"mateo_vance"`, `"priya_nair"`, `"amara_okafor"`, or `"linnea_cho"`, `lifepaths_and_economy.md` §2.1–§2.3 & `lifepath_events_hobbies_and_factions.md` §4.4).
 #[pyfunction]
 pub fn audit_canonical_lifepath_character(
+    py: Python<'_>,
     preset_name: &str,
     skill_id: &str,
     target_level: usize,
-) -> PyResult<String> {
+) -> PyResult<PyJsonDict> {
     let profile = match preset_name.trim().to_ascii_lowercase().as_str() {
         "mateo" | "mateo_vance" => satya_engine::build_mateo_vance_lifepath(),
         "priya" | "priya_nair" | "dr_priya_nair" => satya_engine::build_priya_nair_lifepath(),
         "amara" | "amara_okafor" => satya_engine::build_amara_okafor_lifepath(),
         "linnea" | "linnea_cho" => satya_engine::build_linnea_cho_lifepath(),
         other => {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+            return Err(to_py_err(format!(
                 "unknown lifepath preset '{other}'; expected 'mateo_vance', 'priya_nair', 'amara_okafor', or 'linnea_cho'"
             )));
         }
     };
     let validation = profile.audit_skill_unlock(skill_id, target_level);
-    serde_json::to_string(&validation)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    to_py_object(py, &validation)
 }
 
-/// Evaluates a Contested Psyche Friction Check (`psyche_morale_and_social_combat.md` §1.2) and returns a JSON report.
+/// Evaluates a Contested Psyche Friction Check (`psyche_morale_and_social_combat.md` §1.2) and returns a native dict report.
 #[pyfunction]
 #[pyo3(signature = (trait_code, trait_score, violates_high_pole, dis, has_sere_training, delta_int, delta_ext, player_pairs, gm_pair))]
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_psyche_friction_check(
+    py: Python<'_>,
     trait_code: &str,
     trait_score: i32,
     violates_high_pole: bool,
@@ -1712,9 +1699,9 @@ pub fn evaluate_psyche_friction_check(
     delta_ext: i32,
     player_pairs: Vec<(i32, i32)>,
     gm_pair: (i32, i32),
-) -> PyResult<String> {
+) -> PyResult<PyJsonDict> {
     let trait_id = satya_engine::PsycheTraitId::from_code_str(trait_code.trim()).ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err(format!(
+        to_py_err(format!(
             "unknown Psyche trait '{trait_code}'; expected OPN, SLF, BLG, AGG, EGO, CNF, EXT, TRS, or CPS"
         ))
     })?;
@@ -1733,21 +1720,21 @@ pub fn evaluate_psyche_friction_check(
         delta_ext,
     };
     let out = satya_engine::evaluate_psyche_friction_roll(&params, &player_pairs, gm_pair);
-    serde_json::to_string(&out)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    to_py_object(py, &out)
 }
 
 /// Evaluates Ranged Recoil Bracing ($F \ge R$) and Suppressive Fire Morale Shock ($\Delta_{\text{morale}} = \lfloor F / 2 \rfloor$, `ranged_combat_and_armor.md` §1.2–§1.3).
 #[pyfunction]
 pub fn evaluate_ranged_recoil_and_suppression(
     py: Python<'_>,
-    _allocated_tempo: i32,
-    _allocated_control: i32,
+    allocated_tempo: i32,
+    allocated_control: i32,
     allocated_force: i32,
     weapon_recoil_r: i32,
     is_bounding_on_move: bool,
     is_suppressive_or_full_auto: bool,
 ) -> PyResult<Py<PyDict>> {
+    let _ = (allocated_tempo, allocated_control);
     let res = satya_engine::evaluate_ranged_recoil_and_suppression(
         allocated_force,
         weapon_recoil_r,
@@ -1782,24 +1769,12 @@ pub fn resolve_canonical_armor_impact(
 ) -> PyResult<Py<PyDict>> {
     let catalog = satya_engine::canonical_armor_catalog();
     let armor = catalog.get(armor_index).ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err(format!(
+        to_py_err(format!(
             "armor_index {armor_index} out of range (0..{})",
             catalog.len()
         ))
     })?;
-    let dtype = match damage_type.trim().to_ascii_lowercase().as_str() {
-        "edged" | "slash" | "stab" => satya_engine::WeaponDamageType::Edged,
-        "icepick" | "flechette" | "icepick_or_flechette" => {
-            satya_engine::WeaponDamageType::IcepickOrFlechette
-        }
-        "ballistic" | "bullet" => satya_engine::WeaponDamageType::Ballistic,
-        "blunt" => satya_engine::WeaponDamageType::Blunt,
-        other => {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "unknown damage_type '{other}'; expected edged, icepick, ballistic, or blunt"
-            )));
-        }
-    };
+    let dtype = parse_coded_enum::<satya_engine::WeaponDamageType>(damage_type, "damage_type")?;
     let out = satya_engine::resolve_armor_impact(
         armor,
         dtype,
@@ -2300,28 +2275,29 @@ mod tests {
 
     #[test]
     fn test_wave1_py_psyche_encumbrance_and_triad_parity() {
-        // 1. All 9 Psyche traits including TRS and CPS resolve cleanly
-        for code in ["TRS", "CPS"] {
-            let json_str = evaluate_psyche_friction_check(
-                code,
-                6,
-                false,
-                12,
-                false,
-                0,
-                0,
-                vec![(14, 10), (11, 9)],
-                (10, 8),
-            )
-            .unwrap_or_else(|e| panic!("evaluate_psyche_friction_check({code}) failed: {e}"));
-            let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
-            assert_eq!(parsed["triggered"], serde_json::json!(true));
-            assert_eq!(parsed["delta_psyche"], serde_json::json!(4));
-        }
-
-        // 2. Two-component action cost honors encumbrance_tier (Tier 4 > Tier 0)
         Python::initialize();
         Python::attach(|py| {
+            // 1. All 9 Psyche traits including TRS and CPS resolve cleanly
+            for code in ["TRS", "CPS"] {
+                let res = evaluate_psyche_friction_check(
+                    py,
+                    code,
+                    6,
+                    false,
+                    12,
+                    false,
+                    0,
+                    0,
+                    vec![(14, 10), (11, 9)],
+                    (10, 8),
+                )
+                .unwrap_or_else(|e| panic!("evaluate_psyche_friction_check({code}) failed: {e}"));
+                let parsed = py_bridge::py_to_value(res.bind(py)).unwrap();
+                assert_eq!(parsed["triggered"], serde_json::json!(true));
+                assert_eq!(parsed["delta_psyche"], serde_json::json!(4));
+            }
+
+            // 2. Two-component action cost honors encumbrance_tier (Tier 4 > Tier 0)
             let light = evaluate_two_component_action_cost(
                 py, 2, 4, 12, 2, true, 0, 0, 2, 0, 0.0, 0, 0.0, false,
             )

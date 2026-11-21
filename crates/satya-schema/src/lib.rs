@@ -37,6 +37,7 @@ pub use protocol::*;
 pub use registry::*;
 pub use session_persistence::*;
 pub use types::*;
+pub use wire_enum::CodedEnum;
 
 #[cfg(test)]
 mod tests {

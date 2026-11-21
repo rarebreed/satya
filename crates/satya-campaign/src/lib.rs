@@ -6,6 +6,7 @@
 
 pub mod awakened_ai_substrate;
 pub mod awakened_campaign_arcs;
+pub mod campaign_packs;
 pub mod faction_templates;
 pub mod hook_weaver;
 pub mod hook_weaver_lifepath;
@@ -14,6 +15,7 @@ pub mod world_clocks;
 
 pub use awakened_ai_substrate::*;
 pub use awakened_campaign_arcs::*;
+pub use campaign_packs::*;
 pub use faction_templates::*;
 pub use hook_weaver::*;
 pub use hook_weaver_lifepath::*;

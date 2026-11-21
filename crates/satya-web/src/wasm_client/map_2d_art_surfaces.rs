@@ -603,6 +603,50 @@ fn emit_vector_surfaces_svg(
                     r##"<path d="{d}" fill="{fill}" stroke="#475569" stroke-width="1.4" stroke-linejoin="round"/>"##
                 );
             }
+            SurfaceFeatureKind::FaradayCopperFloor => {
+                let fill = if painted {
+                    "url(#bm-faraday-copper)"
+                } else {
+                    "#8a5634"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#b45309" stroke-width="1.5" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::AntiStaticCleanroomFloor => {
+                let fill = if painted {
+                    "url(#bm-esd-cleanroom)"
+                } else {
+                    "#cfdbe0"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#94a3b8" stroke-width="1.2" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::SubstationGrating => {
+                let fill = if painted {
+                    "url(#bm-substation-grate)"
+                } else {
+                    "#3b444e"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#1e293b" stroke-width="1.4" stroke-linejoin="round"/>"##
+                );
+            }
+            SurfaceFeatureKind::FloodedAsphalt => {
+                let fill = if painted {
+                    "url(#bm-flooded-asphalt)"
+                } else {
+                    "#2d3942"
+                };
+                let _ = write!(
+                    out,
+                    r##"<path d="{d}" fill="{fill}" stroke="#0ea5e9" stroke-opacity=".45" stroke-width="1.4" stroke-linejoin="round"/>"##
+                );
+            }
             SurfaceFeatureKind::CeramicTileFloor => {
                 let terra = s.variant_seed & 1 == 1;
                 let fill = if painted {

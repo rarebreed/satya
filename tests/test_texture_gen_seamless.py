@@ -42,7 +42,7 @@ def _synthetic_pebble_patch(h: int = 256, w: int = 256, seed: int = 7) -> np.nda
 
 
 def test_catalog_and_pilot_selection() -> None:
-    assert len(BATTLEMAP_2D_TEXTURE_CATALOG) == 46
+    assert len(BATTLEMAP_2D_TEXTURE_CATALOG) == 50
     assert PILOT_4_IDS == ("grass_meadow", "gravel_shoal", "asphalt_road", "wood_oak")
 
     ids = [s.id for s in BATTLEMAP_2D_TEXTURE_CATALOG]
@@ -77,6 +77,10 @@ def test_catalog_and_pilot_selection() -> None:
         "cedar_shingle",
         "tree_bark",
         "metallic_coat",
+        "faraday_copper_mesh",
+        "esd_cleanroom_tile",
+        "substation_grating",
+        "flooded_asphalt",
     ):
         assert extra_id in ids
     filenames = [s.filename for s in BATTLEMAP_2D_TEXTURE_CATALOG]

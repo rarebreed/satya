@@ -488,3 +488,271 @@ def test_wave4_ai_player_gear_and_cyber_loadout_isolation() -> None:
         assert "SECRET_PLAYER_A_SHOULD_NOT_SEE" not in blob
     finally:
         reset_player_session_context(sid)
+
+
+def test_wave4_pydantic_discriminated_unions_and_legacy_compat() -> None:
+    """Verify typed Pydantic v2 discriminated-union schemas replace `params_json` while keeping legacy callers working."""
+    import pytest
+    from pydantic import ValidationError
+    from satya_ml.ai_gm.social_and_clocks import reset_social_and_world_state
+    from satya_ml.ai_gm.tech_and_tradecraft import (
+        BlastRequest,
+        ContactFavorRequest,
+        ContestedRollRequest,
+        CoverScrutinyRequest,
+        CustomEwHardwareRequest,
+        CustomGearDesignRequest,
+        EcmVsEccmRequest,
+        EnvironmentalHazardRequest,
+        ExplosiveBreachRequest,
+        ForensicsRequest,
+        HeatContestedRequest,
+        HumanAiCodesignRequest,
+        NetworkIntrusionRequest,
+        OrdnanceRequest,
+        PassthroughRequest,
+        SafehouseCompromiseRequest,
+        StealthRequest,
+        SurveillanceTailRequest,
+        VehicleChaseRequest,
+        VehicleDamageRequest,
+        VehicleRequest,
+        VerificationDebtAuditRequest,
+        resolve_contact_cover_or_safehouse,
+        resolve_ew_drone_or_engineering,
+        resolve_explosive_vehicle_or_hazard,
+        resolve_stealth_surveillance_or_forensics,
+    )
+
+    for cls in (ContactFavorRequest, CoverScrutinyRequest, SafehouseCompromiseRequest):
+        assert issubclass(cls, HeatContestedRequest)
+        assert issubclass(cls, ContestedRollRequest)
+    for cls in (
+        SurveillanceTailRequest,
+        ForensicsRequest,
+        NetworkIntrusionRequest,
+        EcmVsEccmRequest,
+        HumanAiCodesignRequest,
+        VerificationDebtAuditRequest,
+    ):
+        assert issubclass(cls, ContestedRollRequest)
+    for cls in (BlastRequest, ExplosiveBreachRequest):
+        assert issubclass(cls, OrdnanceRequest)
+    for cls in (VehicleChaseRequest, VehicleDamageRequest):
+        assert issubclass(cls, VehicleRequest)
+    for cls in (
+        StealthRequest,
+        EnvironmentalHazardRequest,
+        CustomEwHardwareRequest,
+        CustomGearDesignRequest,
+    ):
+        assert issubclass(cls, PassthroughRequest)
+
+    union_tools = (
+        resolve_stealth_surveillance_or_forensics,
+        resolve_contact_cover_or_safehouse,
+        resolve_explosive_vehicle_or_hazard,
+        resolve_ew_drone_or_engineering,
+    )
+    for tl in union_tools:
+        fields = tl.args_schema.model_fields
+        assert "params_json" not in fields
+        assert "request" in fields and "session_id" in fields
+        schema_str = json.dumps(tl.args_schema.model_json_schema())
+        assert '"discriminator"' in schema_str and '"mode"' in schema_str
+
+    sid = f"w4-union-{uuid.uuid4().hex[:8]}"
+    try:
+        # Structured nested request invocation (legacy role-prefixed aliases)
+        tail_legacy = resolve_stealth_surveillance_or_forensics.invoke(
+            {
+                "request": {
+                    "mode": "TAIL",
+                    "tail_stance": "TIGHT_TAIL",
+                    "shadower_skill_n": 2,
+                    "shadower_control_c": 14,
+                    "shadower_pairs": [[16, 15], [15, 14]],
+                    "target_gm_pair": [5, 6],
+                },
+                "session_id": sid,
+            }
+        )
+        assert tail_legacy["tail_maintained"] is True
+
+        # Canonical shared base fields (`skill_n`, `control_c`, `heat`, `player_pairs`, `gm_pair`)
+        tail_canon = resolve_stealth_surveillance_or_forensics.invoke(
+            {
+                "request": {
+                    "mode": "TAIL",
+                    "tail_stance": "TIGHT_TAIL",
+                    "skill_n": 2,
+                    "control_c": 14,
+                    "player_pairs": [[16, 15], [15, 14]],
+                    "gm_pair": [5, 6],
+                },
+                "session_id": sid,
+            }
+        )
+        assert tail_canon["tail_maintained"] is True
+
+        favor_canon = resolve_contact_cover_or_safehouse.invoke(
+            {
+                "request": {
+                    "mode": "CONTACT",
+                    "reach_access_tier": 3,
+                    "reliability_trust": 4,
+                    "exposure_burn_risk": 1,
+                    "favor_severity": "MODERATE",
+                    "required_reach_tier": 2,
+                    "heat": 2,
+                    "skill_n": 2,
+                    "control_c": 14,
+                    "player_pairs": [[16, 14], [15, 15]],
+                    "gm_pair": [7, 8],
+                },
+                "session_id": sid,
+            }
+        )
+        assert favor_canon["favor_granted"] is True
+
+        cover_canon = resolve_contact_cover_or_safehouse.invoke(
+            {
+                "request": {
+                    "mode": "COVER",
+                    "cover_tier": "COVER_TIER_2_DB_ALIAS",
+                    "scrutiny_level": "BIOMETRIC_AUDIT_OR_FEDERAL_CROSS_CHECK",
+                    "heat": 6,
+                    "skill_n": 2,
+                    "control_c": 10,
+                    "player_pairs": [[3, 4], [4, 5]],
+                    "gm_pair": [18, 17],
+                },
+                "session_id": sid,
+            }
+        )
+        assert cover_canon["cover_burned"] is True
+
+        # Structured flat request + mode alias invocation
+        breach = resolve_explosive_vehicle_or_hazard.invoke(
+            {
+                "mode": "EXPLOSIVE_BREACH",
+                "ordnance_code": "LINEAR_SHAPED_BREACH",
+                "target_material_code": "CONCRETE",
+                "demolitions_net_successes": 2,
+                "session_id": sid,
+            }
+        )
+        assert breach["clean_breach_created"] is True
+
+        # Invalid discriminator / invalid typed field rejected cleanly by Pydantic v2
+        with pytest.raises(ValidationError):
+            resolve_contact_cover_or_safehouse.invoke(
+                {"request": {"mode": "INVALID_MODE"}, "session_id": sid}
+            )
+        with pytest.raises(ValidationError):
+            resolve_ew_drone_or_engineering.invoke(
+                {"request": {"mode": "CHASSIS_DAMAGE", "current_si": "not-an-int"}, "session_id": sid}
+            )
+    finally:
+        reset_social_and_world_state(sid)
+
+
+def test_python314_abc_protocols_session_stores_and_psyche_unions() -> None:
+    """Verify ABC execution contracts, structural Protocols, SessionStore auto-reset, and Psyche unions."""
+    from abc import ABC
+    import pytest
+    from satya_ml.ai_gm.npc_psyche_combat import evaluate_npc_morale_or_trigger
+    from satya_ml.ai_gm.rolls import (
+        ContestedRollRequest,
+        ContextToolRequest,
+        ContextualExecutable,
+        Executable,
+        ToolRequest,
+    )
+    from satya_ml.ai_gm.social_and_clocks import (
+        DissonanceRequest,
+        reset_social_and_world_state,
+        resolve_psyche_dissonance_or_surge,
+    )
+    from satya_ml.ai_gm.tech_and_tradecraft import BlastRequest, ContactFavorRequest
+    from satya_ml.ai_gm.tool_spec import CompositeSessionStore, SessionStore, run_session_reset_hooks
+
+    assert issubclass(ToolRequest, ABC)
+    assert issubclass(ContextToolRequest, ABC)
+
+    class _IncompleteRequest(ToolRequest):
+        x: int = 1
+
+    class _IncompleteContextRequest(ContextToolRequest[int]):
+        x: int = 1
+
+    with pytest.raises(TypeError):
+        _IncompleteRequest()  # type: ignore[abstract]
+    with pytest.raises(TypeError):
+        _IncompleteContextRequest()  # type: ignore[abstract]
+
+    blast = BlastRequest()
+    favor = ContactFavorRequest()
+    assert isinstance(blast, Executable)
+    assert isinstance(favor, ContextualExecutable)
+    assert not isinstance(ContestedRollRequest(skill_n=2), Executable)
+
+    # ContestedRollRequest works standalone as a validated 2d20 roll helper
+    roll = ContestedRollRequest.model_validate(
+        {"shadower_skill_n": 3, "control_tn": 15, "roll_pairs_json": "[[14, 15]]"}
+    )
+    assert roll.skill_n == 3
+    assert roll.control_c == 15
+    assert roll.resolved_pairs() == [(14, 15)]
+    assert len(ContestedRollRequest(skill_n=2).resolved_pairs()) == 2
+
+    # Generic SessionStore / CompositeSessionStore auto-reset with run_session_reset_hooks
+    single_store: SessionStore[int] = SessionStore()
+    comp_store: CompositeSessionStore[tuple[str, str], str] = CompositeSessionStore()
+    sid_a = f"store-a-{uuid.uuid4().hex[:6]}"
+    sid_b = f"store-b-{uuid.uuid4().hex[:6]}"
+    single_store[sid_a] = 10
+    single_store[sid_b] = 20
+    comp_store[(sid_a, "x")] = "alpha"
+    comp_store[(sid_b, "y")] = "beta"
+    run_session_reset_hooks(sid_a)
+    assert sid_a not in single_store and sid_b in single_store
+    assert (sid_a, "x") not in comp_store and comp_store.for_session(sid_b) == ["beta"]
+    single_store.reset(sid_b)
+    comp_store.reset(sid_b)
+
+    # Structured nested calls on converted Psyche & Morale unions
+    sid_p = f"psyche-union-{uuid.uuid4().hex[:8]}"
+    try:
+        diss = resolve_psyche_dissonance_or_surge.invoke(
+            {
+                "request": {
+                    "mode": "dissonance",
+                    "target_id": "daise_agent_chen",
+                    "resolution_path": "compartmentalization",
+                    "dis": 14,
+                },
+                "session_id": sid_p,
+            }
+        )
+        assert diss["residual_delta_int_until_rest"] == 2
+        assert isinstance(DissonanceRequest(), ContextToolRequest)
+
+        morale = evaluate_npc_morale_or_trigger.invoke(
+            {
+                "npc_id": "daise_agent_chen",
+                "request": {
+                    "mode": "combat_morale",
+                    "motivation_kind": "neutral_or_survival",
+                    "player_pairs": [[4, 5]],
+                    "gm_pair": [18, 17],
+                },
+                "session_id": sid_p,
+            }
+        )
+        assert morale["mode"] == "combat_morale"
+        assert morale["status"] == "evaluated"
+    finally:
+        reset_social_and_world_state(sid_p)
+
+

@@ -104,7 +104,7 @@ define_wire_enum! {
 define_wire_enum! {
     /// Catalog of placeable continuous props & surface zones. Dimensions, heights, and materials are in
     /// `satya_maps::map_dressing::prop_spec`.
-    pub enum PropKind [count = 118] {
+    pub enum PropKind [count = 128] {
         Sofa => ("SOFA", "Sofa (3-seat)"),
         Loveseat => ("LOVESEAT", "Loveseat"),
         Armchair => ("ARMCHAIR", "Armchair"),
@@ -223,6 +223,16 @@ define_wire_enum! {
         WaterCooler => ("WATER_COOLER", "Corridor / office water cooler", aliases: ["WATER_DISPENSER"]),
         BrownstoneStoop => ("BROWNSTONE_STOOP", "Carved front entry stoop & rails", aliases: ["STOOP", "ENTRY_STEPS"]),
         AwningCanopy => ("AWNING_CANOPY", "Storefront / market awning & lanterns", aliases: ["AWNING", "SHOP_CANOPY"]),
+        CryoComputeCluster => ("CRYO_COMPUTE_CLUSTER", "Cryogenic QPU compute cluster", aliases: ["CRYO_RACK", "QPU_RACK"]),
+        BioServerVat => ("BIO_SERVER_VAT", "Cryogenic seed / bio-compute vat", aliases: ["CRYO_VAT", "SEED_VAT"]),
+        AirGappedTerminal => ("AIR_GAPPED_TERMINAL", "Optical-diode air-gapped terminal", aliases: ["OFFLINE_TERMINAL", "FARADAY_TERMINAL"]),
+        BiometricTurnstile => ("BIOMETRIC_TURNSTILE", "Biometric gait & iris checkpoint gate", aliases: ["TURNSTILE", "SECURITY_GATE"]),
+        SecurityCameraMast => ("SECURITY_CAMERA_MAST", "ALPR & acoustic surveillance sensor mast", aliases: ["CAMERA_POLE", "SENSOR_MAST"]),
+        DroneDockPad => ("DRONE_DOCK_PAD", "Inductive UAV launch & recharge pad", aliases: ["UAV_PAD", "DRONE_PAD"]),
+        HvTransformer => ("HV_TRANSFORMER", "500 kV high-voltage substation transformer", aliases: ["TRANSFORMER", "SUBSTATION_TRANSFORMER"]),
+        DieselGenerator => ("DIESEL_GENERATOR", "Backup diesel microgrid generator", aliases: ["GENERATOR", "BACKUP_GENERATOR"]),
+        BatteryBankWall => ("BATTERY_BANK_WALL", "Modular LFP microgrid battery cabinet", aliases: ["BATTERY_BANK", "POWER_WALL"]),
+        WaterPurifierKiosk => ("WATER_PURIFIER_KIOSK", "Municipal ration water & misting kiosk", aliases: ["WATER_KIOSK", "MISTING_STATION"]),
     }
 }
 
@@ -557,7 +567,7 @@ mod tests {
                 Some(k)
             );
         }
-        assert_eq!(PropKind::ALL.len(), 118);
+        assert_eq!(PropKind::ALL.len(), 128);
         assert_eq!(parse_hex_rgb("#38bdf8"), Some([0x38, 0xbd, 0xf8]));
         assert_eq!(format_rgb_hex([0x38, 0xbd, 0xf8]), "#38bdf8");
         assert!(PropKind::ElevatorCar.is_vertical_portal());

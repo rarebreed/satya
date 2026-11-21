@@ -2,35 +2,16 @@
 
 from __future__ import annotations
 
-import json
-import random
-from typing import Any
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Annotated, Any, ClassVar, Literal, TypedDict
 
-try:
-    from langchain_core.tools import tool
-except ImportError:  # pragma: no cover
-
-    class _FallbackToolWrapper:
-        def __init__(self, fn: Any) -> None:
-            self._fn = fn
-            self.name = getattr(fn, "__name__", "tool")
-            self.__doc__ = getattr(fn, "__doc__", "")
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return self._fn(*args, **kwargs)
-
-        def invoke(self, input_dict: dict[str, Any]) -> Any:
-            return self._fn(**input_dict)
-
-    def tool(fn: Any = None, **_kwargs: Any) -> Any:
-        if fn is None:
-            return lambda f: _FallbackToolWrapper(f)
-        return _FallbackToolWrapper(fn)
-
-
+from pydantic import Field
 from satya_py import psyche as _psyche
 
+from satya_ml.ai_gm.rolls import ContestedRollRequest, ContextToolRequest, UnionToolInput
 from satya_ml.ai_gm.social_and_clocks import _parse_psyche_dict, _resolve_npc_profile
+from satya_ml.ai_gm.tool_spec import satya_gm_tool
 
 
 def extract_npc_psyche_dict(npc: dict[str, Any]) -> dict[str, int]:
@@ -38,84 +19,96 @@ def extract_npc_psyche_dict(npc: dict[str, Any]) -> dict[str, int]:
     return _parse_psyche_dict(npc)
 
 
-def _roll_2d20_pairs(count: int) -> list[list[int]]:
-    return [[random.randint(1, 20), random.randint(1, 20)] for _ in range(max(1, count))]
-
-
 def _lookup_mutable_npc_key(npcs: dict[str, dict[str, Any]], needle: str) -> str | None:
     low = needle.strip().lower()
     if low in npcs:
         return low
-    for cid, prof in npcs.items():
-        if low == str(prof.get("name") or "").strip().lower() or low in cid or low in str(prof.get("name") or "").lower():
-            return cid
-    return None
+    return next(
+        (
+            cid
+            for cid, prof in npcs.items()
+            if low == str(prof.get("name") or "").strip().lower()
+            or low in cid
+            or low in str(prof.get("name") or "").lower()
+        ),
+        None,
+    )
 
 
-@tool
-def evaluate_npc_morale_or_trigger(
-    npc_id: str,
-    mode: str = "emotional_trigger",
-    trigger_kind: str = "betrayed_by_trusted_ally",
-    wound_tier: int = 1,
-    motivation_kind: str = "neutral_or_survival",
-    command_intact: bool = True,
-    ally_casualty_ratio: float = 0.0,
-    outnumbered_ratio: float = 1.0,
-    leader_incapacitated_or_comms_cut: bool = False,
-    position_overrun_flanked_or_ambushed: bool = False,
-    is_veteran_or_sere: bool = False,
-    roll_pairs_json: str = "",
-    gm_pair_json: str = "",
-    session_id: str = "default",
-) -> dict[str, Any]:
-    """Evaluate an NPC's `9`-axis Emotional Trigger (`mode='emotional_trigger'`) or Battlefield Morale Check (`mode='combat_morale'`) and update their session morale state."""
-    from satya_ml.ai_gm.tools import get_session_npcs
+class _MoraleContext(TypedDict):
+    psyche: dict[str, int]
+    dis: int
+    current_morale: str
+    fatigue: int
 
-    npcs = get_session_npcs(session_id)
-    target_key = _lookup_mutable_npc_key(npcs, npc_id)
-    npc = dict(npcs[target_key]) if target_key is not None else _resolve_npc_profile(npc_id, session_id)
-    psyche = extract_npc_psyche_dict(npc)
-    psyche_json = json.dumps(psyche)
 
-    attr_tns = npc.get("attribute_tns") if isinstance(npc.get("attribute_tns"), dict) else {}
-    dis = int(attr_tns.get("dis") or npc.get("dis") or 12)
-    current_morale = str(npc.get("morale_state") or "steady").strip().lower()
-    fatigue = max(0, int(npc.get("fatigue", 0) or 0))
+class _MoraleOutcome(TypedDict):
+    new_morale: str
+    delta_int_inflicted: int
+    engine_result: dict[str, Any]
 
-    norm_mode = mode.strip().lower().replace("-", "_")
-    if norm_mode == "emotional_trigger":
-        pairs_raw = json.loads(roll_pairs_json) if roll_pairs_json.strip() else _roll_2d20_pairs(1)
+
+type NpcMoraleMode = Literal["emotional_trigger", "combat_morale"]
+
+
+class EmotionalTriggerRequest(ContestedRollRequest, ContextToolRequest[_MoraleContext, _MoraleOutcome]):
+    """Ch. 9 NPC emotional trigger check evaluated against 9-axis Psyche traits."""
+
+    mode: Literal["emotional_trigger"] = "emotional_trigger"
+    skill_n: int = Field(default=1, ge=1)
+    trigger_kind: str = "betrayed_by_trusted_ally"
+    wound_tier: int = 1
+
+    def execute(self, context: _MoraleContext, /) -> _MoraleOutcome:
+        pairs_raw = [list(pair) for pair in self.resolved_pairs(1)]
         engine_res = _psyche.evaluate_emotional_trigger(
-            psyche,
-            dis,
-            current_morale,
-            fatigue,
-            trigger_kind,
-            int(wound_tier),
+            context["psyche"],
+            context["dis"],
+            context["current_morale"],
+            context["fatigue"],
+            self.trigger_kind,
+            int(self.wound_tier),
             pairs_raw,
         )
-        new_morale = str(engine_res.get("new_morale_state") or current_morale).lower()
-        delta_int_inflicted = int(engine_res.get("delta_int_inflicted", 0) or 0)
-    elif norm_mode == "combat_morale":
+        new_morale = str(engine_res.get("new_morale_state") or context["current_morale"]).lower()
+        return _MoraleOutcome(
+            new_morale=new_morale,
+            delta_int_inflicted=int(engine_res.get("delta_int_inflicted", 0) or 0),
+            engine_result=engine_res,
+        )
+
+
+class CombatMoraleRequest(ContestedRollRequest, ContextToolRequest[_MoraleContext, _MoraleOutcome]):
+    """Contested battlefield morale check factoring command cohesion, casualties, and fatigue."""
+
+    mode: Literal["combat_morale"] = "combat_morale"
+    motivation_kind: str = "neutral_or_survival"
+    command_intact: bool = True
+    ally_casualty_ratio: float = 0.0
+    outnumbered_ratio: float = 1.0
+    leader_incapacitated_or_comms_cut: bool = False
+    position_overrun_flanked_or_ambushed: bool = False
+    is_veteran_or_sere: bool = False
+
+    def execute(self, context: _MoraleContext, /) -> _MoraleOutcome:
         sit = {
-            "ally_casualty_ratio": max(0.0, float(ally_casualty_ratio)),
-            "outnumbered_ratio": max(0.0, float(outnumbered_ratio)),
-            "leader_incapacitated_or_comms_cut": bool(leader_incapacitated_or_comms_cut),
-            "position_overrun_flanked_or_ambushed": bool(position_overrun_flanked_or_ambushed),
+            "ally_casualty_ratio": max(0.0, float(self.ally_casualty_ratio)),
+            "outnumbered_ratio": max(0.0, float(self.outnumbered_ratio)),
+            "leader_incapacitated_or_comms_cut": bool(self.leader_incapacitated_or_comms_cut),
+            "position_overrun_flanked_or_ambushed": bool(self.position_overrun_flanked_or_ambushed),
         }
-        n_p = 2 if is_veteran_or_sere else 1
-        p_pairs = json.loads(roll_pairs_json) if roll_pairs_json.strip() else _roll_2d20_pairs(n_p)
-        g_pair = json.loads(gm_pair_json) if gm_pair_json.strip() else _roll_2d20_pairs(1)[0]
+        n_p = 2 if self.is_veteran_or_sere else 1
+        p_pairs = [list(pair) for pair in self.resolved_pairs(n_p)]
+        g_pair = list(self.resolved_gm_pair())
         engine_res = _psyche.evaluate_combat_morale_roll(
-            psyche,
-            dis,
-            motivation_kind,
-            bool(command_intact),
-            fatigue,
+            context["psyche"],
+            context["dis"],
+            self.motivation_kind,
+            bool(self.command_intact),
+            context["fatigue"],
             sit,
-            bool(is_veteran_or_sere),
-            current_morale,
+            bool(self.is_veteran_or_sere),
+            context["current_morale"],
             p_pairs,
             g_pair,
         )
@@ -123,11 +116,70 @@ def evaluate_npc_morale_or_trigger(
         new_morale = str(
             roll_out.get("new_morale")
             or (roll_out.get("effect") or {}).get("new_morale")
-            or current_morale
+            or context["current_morale"]
         ).lower()
-        delta_int_inflicted = 0
-    else:
-        raise ValueError(f"Unsupported morale evaluation mode '{mode}'; expected 'emotional_trigger' or 'combat_morale'.")
+        return _MoraleOutcome(
+            new_morale=new_morale,
+            delta_int_inflicted=0,
+            engine_result=engine_res,
+        )
+
+
+type NpcMoraleUnion = EmotionalTriggerRequest | CombatMoraleRequest
+NpcMoraleRequest = Annotated[
+    EmotionalTriggerRequest | CombatMoraleRequest,
+    Field(discriminator="mode"),
+]
+
+
+class NpcMoraleToolInput(UnionToolInput):
+    _mode_aliases: ClassVar[Mapping[str, NpcMoraleMode]] = MappingProxyType(
+        {
+            "TRIGGER": "emotional_trigger",
+            "MORALE": "combat_morale",
+        }
+    )
+    _default_mode: ClassVar[str] = "emotional_trigger"
+    _mode_case: ClassVar[Literal["upper", "lower"]] = "lower"
+    _outer_keys: ClassVar[tuple[str, ...]] = ("npc_id", "session_id")
+
+    npc_id: str
+    request: NpcMoraleRequest
+
+
+@satya_gm_tool(
+    pack="social_and_psyche",
+    tier="TIER_2_RULESET_ENGINE",
+    args_schema=NpcMoraleToolInput,
+)
+def evaluate_npc_morale_or_trigger(
+    npc_id: str,
+    request: NpcMoraleUnion,
+    session_id: str = "default",
+) -> dict[str, Any]:
+    """Evaluate an NPC's `9`-axis Emotional Trigger (`emotional_trigger`) or Battlefield Morale Check (`combat_morale`) and update their session morale state."""
+    from satya_ml.ai_gm.tools import get_session_npcs
+
+    npcs = get_session_npcs(session_id)
+    target_key = _lookup_mutable_npc_key(npcs, npc_id)
+    npc = dict(npcs[target_key]) if target_key is not None else _resolve_npc_profile(npc_id, session_id)
+    psyche = extract_npc_psyche_dict(npc)
+
+    attr_tns = npc.get("attribute_tns") if isinstance(npc.get("attribute_tns"), dict) else {}
+    dis = int(attr_tns.get("dis") or npc.get("dis") or 12)
+    current_morale = str(npc.get("morale_state") or "steady").strip().lower()
+    fatigue = max(0, int(npc.get("fatigue", 0) or 0))
+
+    outcome = request.execute(
+        _MoraleContext(
+            psyche=psyche,
+            dis=dis,
+            current_morale=current_morale,
+            fatigue=fatigue,
+        )
+    )
+    new_morale = outcome["new_morale"]
+    delta_int_inflicted = outcome["delta_int_inflicted"]
 
     npc["morale_state"] = new_morale
     if delta_int_inflicted > 0:
@@ -146,7 +198,7 @@ def evaluate_npc_morale_or_trigger(
         "status": "evaluated",
         "npc_id": str(npc.get("npc_id") or npc_id),
         "npc_name": str(npc.get("name") or npc_id),
-        "mode": norm_mode,
+        "mode": request.mode,
         "previous_morale": current_morale,
         "new_morale_state": new_morale,
         "delta_int_inflicted": delta_int_inflicted,
@@ -154,7 +206,7 @@ def evaluate_npc_morale_or_trigger(
         "combat_stance": npc.get("combat_stance", "NEUTRAL"),
         "cps": psyche["cps"],
         "trs": psyche["trs"],
-        "engine_result": engine_res,
+        "engine_result": outcome["engine_result"],
     }
 
 

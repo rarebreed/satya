@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 define_wire_enum! {
     /// Classification of a continuous vector terrain surface feature.
     #[derive(Default)]
-    pub enum SurfaceFeatureKind [count = 24] {
+    pub enum SurfaceFeatureKind [count = 28] {
         #[default]
         MulchZone => ("MULCH_ZONE", "Organic Bark Mulch"),
         GardenBedZone => ("GARDEN_BED_ZONE", "Curved Garden Bed"),
@@ -41,11 +41,15 @@ define_wire_enum! {
         TerrazzoFloor => ("TERRAZZO_FLOOR", "Polished Terrazzo Stone Floor"),
         SteelPlateFloor => ("STEEL_PLATE_FLOOR", "Raised Brushed-Steel Access Floor"),
         BridgeDeck => ("BRIDGE_DECK", "Bridge / Culvert Deck"),
+        FaradayCopperFloor => ("FARADAY_COPPER_FLOOR", "Grounded Faraday Copper-Mesh Deck", aliases: ["COPPER_MESH_FLOOR"]),
+        AntiStaticCleanroomFloor => ("ANTI_STATIC_CLEANROOM_FLOOR", "Anti-Static ESD Cleanroom Floor", aliases: ["ESD_FLOOR", "CLEANROOM_FLOOR"]),
+        SubstationGrating => ("SUBSTATION_GRATING", "Industrial Cable-Trench Grating", aliases: ["METAL_GRATING", "CABLE_GRATING"]),
+        FloodedAsphalt => ("FLOODED_ASPHALT", "Rain-Flooded Urban Asphalt", aliases: ["STANDING_WATER", "FLOODED_STREET"]),
     }
 }
 
 impl SurfaceFeatureKind {
-    /// Deterministic compositing & masking z-priority (`BridgeDeck > SteelPlateFloor > TerrazzoFloor > LinoleumCheckFloor > ClinicalVinylFloor > CarpetFloor > MarbleFloor > CeramicTileFloor > StainedConcreteFloor > InteriorFloor > PoolWater > WoodDeck > AsphaltRoad > ConcreteWalk > BrickPaverWalk > StoneWalk > CreekChannel > DrainageDitch > GravelRoad > DefensiveTrench > DirtTrail > LawnGrassZone > GardenBedZone > MulchZone`).
+    /// Deterministic compositing & masking z-priority (`BridgeDeck > FaradayCopperFloor > SubstationGrating > SteelPlateFloor > AntiStaticCleanroomFloor > TerrazzoFloor > LinoleumCheckFloor > ClinicalVinylFloor > CarpetFloor > MarbleFloor > CeramicTileFloor > StainedConcreteFloor > InteriorFloor > PoolWater > WoodDeck > FloodedAsphalt > AsphaltRoad > ConcreteWalk > BrickPaverWalk > StoneWalk > CreekChannel > DrainageDitch > GravelRoad > DefensiveTrench > DirtTrail > LawnGrassZone > GardenBedZone > MulchZone`).
     #[must_use]
     pub const fn layer_priority(self) -> u8 {
         match self {
@@ -61,6 +65,7 @@ impl SurfaceFeatureKind {
             Self::BrickPaverWalk => 42,
             Self::ConcreteWalk => 45,
             Self::AsphaltRoad => 50,
+            Self::FloodedAsphalt => 52,
             Self::WoodDeck => 56,
             Self::PoolWater => 58,
             Self::InteriorFloor => 60,
@@ -71,7 +76,10 @@ impl SurfaceFeatureKind {
             Self::ClinicalVinylFloor => 65,
             Self::LinoleumCheckFloor => 66,
             Self::TerrazzoFloor => 67,
-            Self::SteelPlateFloor => 68,
+            Self::AntiStaticCleanroomFloor => 68,
+            Self::SteelPlateFloor => 69,
+            Self::SubstationGrating => 70,
+            Self::FaradayCopperFloor => 71,
             Self::BridgeDeck => 74,
         }
     }
@@ -81,7 +89,7 @@ impl SurfaceFeatureKind {
     pub const fn move_cost_mult(self) -> f32 {
         match self {
             Self::CreekChannel | Self::DrainageDitch | Self::PoolWater => 2.0,
-            Self::DefensiveTrench => 1.5,
+            Self::DefensiveTrench | Self::FloodedAsphalt => 1.5,
             Self::GardenBedZone => 1.25,
             _ => 1.0,
         }
@@ -104,19 +112,23 @@ impl SurfaceFeatureKind {
             | Self::CeramicTileFloor
             | Self::MarbleFloor
             | Self::ClinicalVinylFloor
-            | Self::LinoleumCheckFloor => MaterialClass::Ceramic,
+            | Self::LinoleumCheckFloor
+            | Self::AntiStaticCleanroomFloor => MaterialClass::Ceramic,
             Self::ConcreteWalk
             | Self::AsphaltRoad
+            | Self::FloodedAsphalt
             | Self::StainedConcreteFloor
             | Self::TerrazzoFloor => MaterialClass::ReinforcedConcrete,
             Self::InteriorFloor | Self::WoodDeck => MaterialClass::SolidWood,
             Self::CarpetFloor => MaterialClass::Upholstery,
-            Self::SteelPlateFloor => MaterialClass::SheetSteel,
+            Self::SteelPlateFloor | Self::FaradayCopperFloor | Self::SubstationGrating => {
+                MaterialClass::SheetSteel
+            }
             Self::BridgeDeck => MaterialClass::ConcreteBlock,
         }
     }
 
-    /// Whether this surface is an indoor room floor surface (wood, tile, vinyl, terrazzo, steel, or carpet).
+    /// Whether this surface is an indoor room floor surface (wood, tile, vinyl, terrazzo, steel, copper-mesh, cleanroom, or carpet).
     #[must_use]
     pub const fn is_interior_surface(self) -> bool {
         matches!(
@@ -130,6 +142,8 @@ impl SurfaceFeatureKind {
                 | Self::LinoleumCheckFloor
                 | Self::TerrazzoFloor
                 | Self::SteelPlateFloor
+                | Self::FaradayCopperFloor
+                | Self::AntiStaticCleanroomFloor
         )
     }
 
@@ -156,9 +170,13 @@ impl SurfaceFeatureKind {
                 | Self::LinoleumCheckFloor
                 | Self::TerrazzoFloor
                 | Self::SteelPlateFloor
+                | Self::FaradayCopperFloor
+                | Self::AntiStaticCleanroomFloor
+                | Self::SubstationGrating
                 | Self::WoodDeck
                 | Self::PoolWater
                 | Self::AsphaltRoad
+                | Self::FloodedAsphalt
                 | Self::ConcreteWalk
                 | Self::BrickPaverWalk
                 | Self::StoneWalk
@@ -341,7 +359,13 @@ mod tests {
                 > SurfaceFeatureKind::MulchZone.layer_priority()
         );
 
-        assert_eq!(SurfaceFeatureKind::ALL.len(), 24);
+        assert_eq!(SurfaceFeatureKind::ALL.len(), 28);
+        assert!(SurfaceFeatureKind::FaradayCopperFloor.is_interior_surface());
+        assert!(SurfaceFeatureKind::AntiStaticCleanroomFloor.is_interior_surface());
+        assert!(SurfaceFeatureKind::SubstationGrating.is_road_or_pavement());
+        assert!(SurfaceFeatureKind::FloodedAsphalt.is_road_or_pavement());
+        assert!(!SurfaceFeatureKind::FloodedAsphalt.is_interior_surface());
+        assert_eq!(SurfaceFeatureKind::FloodedAsphalt.move_cost_mult(), 1.5);
         assert!(SurfaceFeatureKind::ClinicalVinylFloor.is_interior_surface());
         assert!(SurfaceFeatureKind::TerrazzoFloor.is_interior_surface());
         assert!(SurfaceFeatureKind::SteelPlateFloor.is_interior_surface());

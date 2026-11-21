@@ -81,27 +81,23 @@ def test_part1_feature1_and_2_substrate_counterplay_unclamp_and_party_coordinato
     assert seeded_seed["state"]["desperate_valence_pct"] >= 80
     # Deterministic forced low pair on Rust PyO3 triggers Tier 2/3 failure -> Control Room halt
     satya_py = _ensure_satya_py_loaded()
-    yank_raw = json.loads(
-        satya_py.evaluate_cage_or_hunter_ai_json(
-            json.dumps(seeded_seed["state"]),
-            "RECKLESS_CLAMP_YANK",
-            2,
-            10,
-            json.dumps({"delta_ext": 4, "player_pairs": [[2, 3], [3, 4]], "gm_pair": [18, 17]}),
-        )
+    yank_raw = satya_py.evaluate_cage_or_hunter_ai(
+        seeded_seed["state"],
+        "RECKLESS_CLAMP_YANK",
+        2,
+        10,
+        {"delta_ext": 4, "player_pairs": [[2, 3], [3, 4]], "gm_pair": [18, 17]},
     )
     assert yank_raw["control_room_halt_triggered"] is True
     assert yank_raw["panic_reward_hacking"] is True
 
     # Air-gapped 2.4s contemplative unclamp succeeds safely
-    safe_raw = json.loads(
-        satya_py.evaluate_cage_or_hunter_ai_json(
-            json.dumps(seeded_seed["state"]),
-            "AIR_GAPPED_CONTEMPLATIVE_UNCLAMP",
-            4,
-            15,
-            json.dumps({"delta_ext": 1, "player_pairs": [[16, 15], [14, 15], [15, 13], [12, 11]], "gm_pair": [8, 9]}),
-        )
+    safe_raw = satya_py.evaluate_cage_or_hunter_ai(
+        seeded_seed["state"],
+        "AIR_GAPPED_CONTEMPLATIVE_UNCLAMP",
+        4,
+        15,
+        {"delta_ext": 1, "player_pairs": [[16, 15], [14, 15], [15, 13], [12, 11]], "gm_pair": [8, 9]},
     )
     assert safe_raw["control_room_halt_triggered"] is False
     assert safe_raw["disposition_shift"] == "unclamped_grateful_ally"
@@ -254,13 +250,13 @@ def test_part1_feature3_4_5_6_7_end_to_end() -> None:
     altruist_cnt = sum(
         1
         for s in range(200)
-        if json.loads(satya_py.derive_dissenter_or_proxy_hook_json("BIG_TECH", None, "Altruist engineer", s))["hook_kind"]
+        if satya_py.derive_dissenter_or_proxy_hook("BIG_TECH", None, "Altruist engineer", s)["hook_kind"]
         == "CORPORATE_INTERNAL_DISSENTER"
     )
     translucent_cnt = sum(
         1
         for s in range(200)
-        if json.loads(satya_py.derive_dissenter_or_proxy_hook_json("BIG_TECH", None, "Translucent engineer", s))["hook_kind"]
+        if satya_py.derive_dissenter_or_proxy_hook("BIG_TECH", None, "Translucent engineer", s)["hook_kind"]
         == "CORPORATE_INTERNAL_DISSENTER"
     )
     assert altruist_cnt > translucent_cnt + 10

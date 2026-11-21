@@ -54,21 +54,43 @@ pub fn compute_stride_and_sprint_velocity(spd_eff: i32, hgt_m: f64) -> SprintVel
     }
 }
 
-/// The 5 Canonical Tactical Combat Movement Gaits
-/// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.2 Table).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CombatMovementGait {
-    /// **1. Prone / Low Crawl** (`8%` of $V_{\text{sprint}}$): `+4` low cover bonus vs. ranged; melee `Tempo Cap -4`; `+1` Exertion Mark / `20 ticks`.
-    ProneLowCrawl,
-    /// **2. Stealth Creep / Crouch-Walk** (`18%` of $V_{\text{sprint}}$): `+0` $\Delta_{\text{ext}}$ on Stealth; full `Control` uncapped.
-    StealthCreepCrouchWalk,
-    /// **3. Combat Glide / Tactical Walk** (`35%` of $V_{\text{sprint}}$): Simultaneous aimed fire at `+2` Recoil (`R`), `0` Exertion Marks.
-    CombatGlideTacticalWalk,
-    /// **4. Bounding Run / Hustle** (`65%` of $V_{\text{sprint}}$): Requires `Tempo >= B`; `+4` Recoil (`R`); caps ranged `Control` at $\lfloor C_{\max}/2\rfloor$; `+1` Exertion Mark / `20 ticks`.
-    BoundingRunHustle,
-    /// **5. All-Out Sprint (`Pure Tempo`)** (`100%` of $V_{\text{sprint}}$): Requires `Force = 0, Control <= 2`; cannot fire aimed shots; `+2` Exertion Marks / `20 ticks`.
-    AllOutSprint,
+crate::define_coded_enum! {
+    /// The 5 Canonical Tactical Combat Movement Gaits
+    /// (`docs/ttrpg/06-health-and-survival/movement_encumbrance_and_vehicles.md` §1.2 Table).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum CombatMovementGait [count = 5] {
+        /// **1. Prone / Low Crawl** (`8%` of $V_{\text{sprint}}$): `+4` low cover bonus vs. ranged; melee `Tempo Cap -4`; `+1` Exertion Mark / `20 ticks`.
+        ProneLowCrawl => {
+            code: "prone_low_crawl",
+            label: "Prone / Low Crawl",
+            aliases: ["PRONE", "CRAWL", "prone_crawl"]
+        },
+        /// **2. Stealth Creep / Crouch-Walk** (`18%` of $V_{\text{sprint}}$): `+0` $\Delta_{\text{ext}}$ on Stealth; full `Control` uncapped.
+        StealthCreepCrouchWalk => {
+            code: "stealth_creep_crouch_walk",
+            label: "Stealth Creep / Crouch-Walk",
+            aliases: ["STEALTH", "STEALTH_CREEP", "CROUCH_WALK", "CROUCH"]
+        },
+        /// **3. Combat Glide / Tactical Walk** (`35%` of $V_{\text{sprint}}$): Simultaneous aimed fire at `+2` Recoil (`R`), `0` Exertion Marks.
+        CombatGlideTacticalWalk => {
+            code: "combat_glide_tactical_walk",
+            label: "Combat Glide / Tactical Walk",
+            aliases: ["COMBAT_GLIDE", "TACTICAL_WALK", "WALK"]
+        },
+        /// **4. Bounding Run / Hustle** (`65%` of $V_{\text{sprint}}$): Requires `Tempo >= B`; `+4` Recoil (`R`); caps ranged `Control` at $\lfloor C_{\max}/2\rfloor$; `+1` Exertion Mark / `20 ticks`.
+        BoundingRunHustle => {
+            code: "bounding_run_hustle",
+            label: "Bounding Run / Hustle",
+            aliases: ["BOUNDING_RUN", "HUSTLE", "RUN"]
+        },
+        /// **5. All-Out Sprint (`Pure Tempo`)** (`100%` of $V_{\text{sprint}}$): Requires `Force = 0, Control <= 2`; cannot fire aimed shots; `+2` Exertion Marks / `20 ticks`.
+        AllOutSprint => {
+            code: "all_out_sprint",
+            label: "All-Out Sprint",
+            aliases: ["SPRINT"]
+        },
+    }
 }
 
 impl CombatMovementGait {

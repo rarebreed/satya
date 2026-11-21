@@ -56,16 +56,18 @@ impl TaskGateClass {
     }
 }
 
-/// Tool Dependency classification per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§2.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ToolDependency {
-    /// `[Tool: None]` — Purely physical, perceptual, social, or cognitive tasks requiring no equipment.
-    None,
-    /// `[Tool: Situational]` — Can be attempted bare-handed or with improvised gear at a heavy $\Delta_{\text{tool}}$ penalty.
-    Situational,
-    /// `[Tool: Mandatory]` — Physically impossible without appropriate instruments (`[Locked]` if `NoTools`).
-    Mandatory,
+crate::define_coded_enum! {
+    /// Tool Dependency classification per `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§2.2).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum ToolDependency [count = 3] {
+        /// `[Tool: None]` — Purely physical, perceptual, social, or cognitive tasks requiring no equipment.
+        None => { code: "none", label: "Tool: None", aliases: ["", "no_tool"] },
+        /// `[Tool: Situational]` — Can be attempted bare-handed or with improvised gear at a heavy $\Delta_{\text{tool}}$ penalty.
+        Situational => { code: "situational", label: "Tool: Situational" },
+        /// `[Tool: Mandatory]` — Physically impossible without appropriate instruments (`[Locked]` if `NoTools`).
+        Mandatory => { code: "mandatory", label: "Tool: Mandatory" },
+    }
 }
 
 impl ToolDependency {

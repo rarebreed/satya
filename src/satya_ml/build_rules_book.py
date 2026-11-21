@@ -12,7 +12,7 @@ import json
 import math
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Final
 
 from satya_ml.dice_probabilities import (
     compute_stats,
@@ -267,27 +267,29 @@ def load_chapter_markdown_by_id(chapter_id: str, repo_root: Path | None = None) 
     return f"# Chapter `{chapter_id}` not found"
 
 
-_SEARCH_STOPWORDS = {
-    "in",
-    "on",
-    "at",
-    "to",
-    "of",
-    "by",
-    "or",
-    "an",
-    "as",
-    "is",
-    "it",
-    "be",
-    "the",
-    "and",
-    "for",
-    "per",
-    "with",
-    "from",
-    "into",
-}
+_SEARCH_STOPWORDS: Final[frozenset[str]] = frozenset(
+    {
+        "in",
+        "on",
+        "at",
+        "to",
+        "of",
+        "by",
+        "or",
+        "an",
+        "as",
+        "is",
+        "it",
+        "be",
+        "the",
+        "and",
+        "for",
+        "per",
+        "with",
+        "from",
+        "into",
+    }
+)
 
 
 def search_rules_book_python(

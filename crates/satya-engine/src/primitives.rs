@@ -522,6 +522,22 @@ macro_rules! define_coded_enum {
                 Self::from_code_str(s).ok_or_else(|| format!("unknown {}: {s}", stringify!($Name)))
             }
         }
+
+        impl $crate::CodedEnum for $Name {
+            const ALL: &'static [Self] = &Self::ALL;
+
+            fn code(self) -> &'static str {
+                self.as_str()
+            }
+
+            fn label(self) -> &'static str {
+                self.label()
+            }
+
+            fn from_code_str(raw: &str) -> Option<Self> {
+                Self::from_code_str(raw)
+            }
+        }
     };
 }
 

@@ -21,8 +21,11 @@ import math
 import os
 import urllib.request
 import uuid
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Final, Literal
 
 from satya_py import maps as _maps
 
@@ -38,32 +41,49 @@ try:
 except ImportError:  # pragma: no cover
     httpx = None  # type: ignore[assignment]
 
+from satya_ml.ai_gm.tool_spec import SessionStore, satya_gm_tool
+
 try:
     from langchain_core.messages import HumanMessage
-    from langchain_core.tools import tool
 except ImportError:  # pragma: no cover
     HumanMessage = None  # type: ignore[assignment,misc]
 
-    class _FallbackToolWrapper:
-        def __init__(self, fn: Any) -> None:
-            self._fn = fn
-            self.name = getattr(fn, "__name__", "tool")
-            self.__doc__ = getattr(fn, "__doc__", "")
 
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return self._fn(*args, **kwargs)
+type SensoryChannel = Literal["SIGHT", "HEARING", "OLFACTION", "INTUITION"]
+type SectorPresetId = Literal[
+    "community_clinic_annex",
+    "corporate_server_bunker",
+    "satyang_safehouse",
+    "brownout_logistics_depot",
+    "woodland_creek",
+    "roadside_ditch",
+    "med_lab",
+    "hospital",
+    "shopping_mall",
+    "shopping_plaza",
+    "botanical_garden",
+    "luxury_mansion",
+    "projects_high_density",
+    "suburban_neighborhood",
+    "rural_countryside",
+    "farms",
+    "warehouse",
+    "manufacturing_plant",
+    "downtown_commercial",
+    "urban_residential",
+    "garden_estate",
+    "wooded_park",
+    "corner_bar",
+    "office_floor",
+    "residential_apartment",
+    "docking_bay",
+    "urban_crossroads",
+    "derelict_corridor",
+    "orbital_airlock",
+]
 
-        def invoke(self, input_dict: dict[str, Any]) -> Any:
-            return self._fn(**input_dict)
-
-    def tool(fn: Any = None, **_kwargs: Any) -> Any:
-        if fn is None:
-            return lambda f: _FallbackToolWrapper(f)
-        return _FallbackToolWrapper(fn)
-
-
-_SESSION_MAPS: dict[str, dict[str, Any]] = {}
-_SESSION_LLM_CONFIGS: dict[str, SessionLlmConfig] = {}
+_SESSION_MAPS: Final[SessionStore[dict[str, Any]]] = SessionStore()
+_SESSION_LLM_CONFIGS: Final[SessionStore[SessionLlmConfig]] = SessionStore()
 
 
 def using_satya_py_map_backend() -> bool:
@@ -71,67 +91,68 @@ def using_satya_py_map_backend() -> bool:
     return True
 
 
-_TOKEN_RADIUS_M = 0.30
+_TOKEN_RADIUS_M: Final[float] = 0.30
 # Used strictly for SVG background paint ordering in render_tactical_svg();
 # Rust satya-maps owns authoritative collision and LoS classification.
-_NON_SOLID_PROP_KINDS = {
-    "RUG",
-    "RUNNER_RUG",
-    "ROUND_RUG",
-    "MULCH_BED",
-    "GARDEN_BED",
-    "GARDEN_EDGING",
-    "CREEK_WATER",
-    "DRAINAGE_DITCH",
-    "GRAVEL_PATH",
-    "DIRT_PATH",
-    "STONE_PATH",
-    "ASPHALT_DRIVE",
-    "ELEVATED_CATWALK",
-    "STAIRWELL",
-    "ELEVATOR_CAR",
-    "SERVICE_ELEVATOR",
-    "HAZARD_SPILL",
-    "BAR_STOOL",
-    "DESK_LAMP",
-    "STANDING_LAMP",
-    "FIRE_EXTINGUISHER",
-    "GAZEBO",
-    "FLOOR_CLOTHES",
-    "FLOOR_TOYS",
-    "STREET_DEBRIS",
-    "TELEMETRY_MONITOR",
-    "BIOHAZARD_BIN",
-    "DESK_CLUTTER",
-    "WATER_COOLER",
-    "BROWNSTONE_STOOP",
-    "AWNING_CANOPY",
-}
-_SCIFI_SECTOR_PRESET_REMAP = {
-    "orbital_airlock": "corporate_server_bunker",
-    "docking_bay": "brownout_logistics_depot",
-    "derelict_corridor": "satyang_safehouse",
-    "med_lab": "community_clinic_annex",
-}
+_NON_SOLID_PROP_KINDS: Final[frozenset[str]] = frozenset(
+    {
+        "RUG",
+        "RUNNER_RUG",
+        "ROUND_RUG",
+        "MULCH_BED",
+        "GARDEN_BED",
+        "GARDEN_EDGING",
+        "CREEK_WATER",
+        "DRAINAGE_DITCH",
+        "GRAVEL_PATH",
+        "DIRT_PATH",
+        "STONE_PATH",
+        "ASPHALT_DRIVE",
+        "ELEVATED_CATWALK",
+        "STAIRWELL",
+        "ELEVATOR_CAR",
+        "SERVICE_ELEVATOR",
+        "HAZARD_SPILL",
+        "BAR_STOOL",
+        "DESK_LAMP",
+        "STANDING_LAMP",
+        "FIRE_EXTINGUISHER",
+        "GAZEBO",
+        "FLOOR_CLOTHES",
+        "FLOOR_TOYS",
+        "STREET_DEBRIS",
+        "TELEMETRY_MONITOR",
+        "BIOHAZARD_BIN",
+        "DESK_CLUTTER",
+        "WATER_COOLER",
+        "BROWNSTONE_STOOP",
+        "AWNING_CANOPY",
+    }
+)
+_SCIFI_SECTOR_PRESET_REMAP: Final[Mapping[str, SectorPresetId]] = MappingProxyType(
+    {
+        "orbital_airlock": "corporate_server_bunker",
+        "docking_bay": "brownout_logistics_depot",
+        "derelict_corridor": "satyang_safehouse",
+        "med_lab": "community_clinic_annex",
+    }
+)
 
 
 def clear_session_map_caches(session_id: str | None = None) -> None:
     """Clear in-memory tactical map, LLM config, and spatial pin caches for `session_id` (or all)."""
-    if session_id is None:
-        _SESSION_MAPS.clear()
-        _SESSION_LLM_CONFIGS.clear()
-        _SESSION_SPATIAL_PINS.clear()
-    else:
-        _SESSION_MAPS.pop(session_id, None)
-        _SESSION_LLM_CONFIGS.pop(session_id, None)
-        _SESSION_SPATIAL_PINS.pop(session_id, None)
+    _SESSION_MAPS.reset(session_id)
+    _SESSION_LLM_CONFIGS.reset(session_id)
+    _SESSION_SPATIAL_PINS.reset(session_id)
 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
-_OFFLINE_SIGNALING_VALUES = frozenset({"", "0", "false", "none", "off", "offline", "disabled"})
+_OFFLINE_SIGNALING_VALUES: Final[frozenset[str]] = frozenset(
+    {"", "0", "false", "none", "off", "offline", "disabled"}
+)
 
 
 def _signaling_base_url() -> str:
@@ -177,22 +198,31 @@ def get_session_llm_config(session_id: str) -> SessionLlmConfig | None:
     return _SESSION_LLM_CONFIGS.get(session_id)
 
 
-def infer_sector_preset(theme: str) -> str:
-    """Map a free-text scene theme to one of the 29 canonical `satya-engine` `SectorPreset` codes."""
-    low = (theme or "").lower()
-    words = set(low.replace("-", " ").replace("_", " ").split())
-    if "community_clinic_annex" in low or any(
-        k in low for k in ("community clinic", "clinic annex", "free clinic", "triage annex", "street clinic")
-    ):
-        return "community_clinic_annex"
-    if "corporate_server_bunker" in low or any(
-        k in low
-        for k in ("server bunker", "corporate bunker", "data bunker", "data center", "black site", "server vault", "faraday vault")
-    ) or "scif" in words:
-        return "corporate_server_bunker"
-    if "satyang_safehouse" in low or any(
-        k in low
-        for k in (
+@dataclass(frozen=True, slots=True)
+class _SectorPresetRule:
+    """Ordered phrase/word matcher rule mapping scene text to a `satya-engine` `SectorPreset`."""
+
+    preset_id: SectorPresetId
+    phrases: tuple[str, ...]
+    whole_words: tuple[str, ...] = ()
+    secondary_phrases: tuple[str, ...] = ()
+
+    def matches(self, low: str, words: set[str]) -> bool:
+        """Return ``True`` when scene text satisfies primary and optional secondary terms."""
+        primary_hit = any(k in low for k in self.phrases) or any(w in words for w in self.whole_words)
+        if not primary_hit:
+            return False
+        return not self.secondary_phrases or any(k in low for k in self.secondary_phrases)
+
+
+# Specific phrases and setting venues appear ahead of generic keywords.
+_SECTOR_PRESET_RULES: Final[tuple[_SectorPresetRule, ...]] = (
+    _SectorPresetRule("community_clinic_annex", ("community_clinic_annex", "community clinic", "clinic annex", "free clinic", "triage annex", "street clinic")),
+    _SectorPresetRule("corporate_server_bunker", ("corporate_server_bunker", "server bunker", "corporate bunker", "data bunker", "data center", "black site", "server vault", "faraday vault"), ("scif",)),
+    _SectorPresetRule(
+        "satyang_safehouse",
+        (
+            "satyang_safehouse",
             "satyang safehouse",
             "satyang cell",
             "satyang relay",
@@ -203,94 +233,47 @@ def infer_sector_preset(theme: str) -> str:
             "dissident safehouse",
             "mesh safehouse",
             "relay safehouse",
-        )
-    ):
-        return "satyang_safehouse"
-    if "brownout_logistics_depot" in low or any(
-        k in low for k in ("brownout", "ration depot", "microgrid depot")
-    ):
-        return "brownout_logistics_depot"
-    if any(k in low for k in ("creek", "stream", "brook", "river", "ravine")):
-        return "woodland_creek"
-    if any(k in low for k in ("ditch", "trench", "culvert", "country lane")):
-        return "roadside_ditch"
-    if any(k in low for k in ("med_lab", "med-lab", "medlab", "biolab")):
-        return "med_lab"
-    if any(k in low for k in ("hospital", "medical center", "emergency room", "inpatient", "operating room", "triage")):
-        return "hospital"
-    if any(k in low for k in ("shopping_mall", "shopping mall", "enclosed mall", "galleria", "food court")):
-        return "shopping_mall"
-    if any(k in low for k in ("shopping_plaza", "shopping plaza", "outdoor plaza", "retail plaza", "lifestyle center", "plaza")):
-        return "shopping_plaza"
-    if any(k in low for k in ("botanical_garden", "botanical garden", "botanical", "conservatory", "arboretum", "greenhouse")):
-        return "botanical_garden"
-    if any(k in low for k in ("luxury mansion", "luxury_mansion", "manor", "penthouse estate", "mansion")):
-        return "luxury_mansion"
-    if any(k in low for k in ("projects_high_density", "projects", "public housing", "tenement", "housing block")):
-        return "projects_high_density"
-    if any(k in low for k in ("suburban_neighborhood", "suburb", "suburban", "cul-de-sac", "neighborhood")):
-        return "suburban_neighborhood"
-    if any(k in low for k in ("rural_countryside", "rural", "countryside", "farmhouse", "homestead")):
-        return "rural_countryside"
-    if any(k in low for k in ("farms", "farmland", "cropland", "orchard", "pasture", "acreage", "barn")) or "farm" in words:
-        return "farms"
-    if any(k in low for k in ("warehouse", "distribution center", "logistics", "pallet rack", "freight depot")):
-        if any(k in low for k in ("brownout", "blackout", "microgrid", "ration depot", "logistics depot")):
-            return "brownout_logistics_depot"
-        return "warehouse"
-    if (
-        any(
-            k in low
-            for k in (
-                "manufacturing_plant",
-                "manufacturing plant",
-                "manufacturing",
-                "factory",
-                "assembly line",
-                "foundry",
-                "stamping",
-                "industrial plant",
-            )
-        )
-        or "plant" in words
-    ):
-        return "manufacturing_plant"
-    if any(
-        k in low
-        for k in (
-            "downtown_commercial",
-            "downtown commercial",
-            "retail strip",
-            "shopping strip",
-            "storefront",
-            "strip mall",
-            "commercial center",
-        )
-    ):
-        return "downtown_commercial"
-    if any(k in low for k in ("urban_residential", "urban residential", "townhouse", "brownstone", "rowhouse", "condo")):
-        return "urban_residential"
-    if any(k in low for k in ("estate", "compound", "courtyard", "garden", "yard", "villa")):
-        return "garden_estate"
-    if any(k in low for k in ("park", "woods", "forest", "trail", "clearing", "grove")):
-        return "wooded_park"
-    if any(k in low for k in ("bar", "pub", "tavern", "club", "lounge", "saloon")):
-        return "corner_bar"
-    if any(k in low for k in ("office", "corporate", "agency", "cubicle", "suite", "commercial")):
-        return "office_floor"
-    if any(k in low for k in ("apartment", "flat", "safehouse", "house", "home", "residential", "motel")):
-        return "residential_apartment"
-    if any(k in low for k in ("dock", "cargo", "hangar", "bay")):
-        return "docking_bay"
-    if any(k in low for k in ("med", "trauma", "lab", "clinic", "ward")):
-        return "med_lab"
-    if any(k in low for k in ("urban", "street", "road", "city", "crossroad")):
-        return "urban_crossroads"
-    if any(k in low for k in ("corridor", "derelict", "breach", "tunnel", "bunker")):
-        return "derelict_corridor"
-    if any(k in low for k in ("orbital", "airlock", "station")):
-        return "orbital_airlock"
-    return str(get_active_campaign_pack().get("default_sector_preset") or "urban_crossroads")
+        ),
+    ),
+    _SectorPresetRule("brownout_logistics_depot", ("brownout_logistics_depot", "brownout", "ration depot", "microgrid depot")),
+    _SectorPresetRule("woodland_creek", ("creek", "stream", "brook", "river", "ravine")),
+    _SectorPresetRule("roadside_ditch", ("ditch", "trench", "culvert", "country lane")),
+    _SectorPresetRule("med_lab", ("med_lab", "med-lab", "medlab", "biolab")),
+    _SectorPresetRule("hospital", ("hospital", "medical center", "emergency room", "inpatient", "operating room", "triage")),
+    _SectorPresetRule("shopping_mall", ("shopping_mall", "shopping mall", "enclosed mall", "galleria", "food court")),
+    _SectorPresetRule("shopping_plaza", ("shopping_plaza", "shopping plaza", "outdoor plaza", "retail plaza", "lifestyle center", "plaza")),
+    _SectorPresetRule("botanical_garden", ("botanical_garden", "botanical garden", "botanical", "conservatory", "arboretum", "greenhouse")),
+    _SectorPresetRule("luxury_mansion", ("luxury mansion", "luxury_mansion", "manor", "penthouse estate", "mansion")),
+    _SectorPresetRule("projects_high_density", ("projects_high_density", "projects", "public housing", "tenement", "housing block")),
+    _SectorPresetRule("suburban_neighborhood", ("suburban_neighborhood", "suburb", "suburban", "cul-de-sac", "neighborhood")),
+    _SectorPresetRule("rural_countryside", ("rural_countryside", "rural", "countryside", "farmhouse", "homestead")),
+    _SectorPresetRule("farms", ("farms", "farmland", "cropland", "orchard", "pasture", "acreage", "barn"), ("farm",)),
+    _SectorPresetRule("brownout_logistics_depot", ("warehouse", "distribution center", "logistics", "pallet rack", "freight depot"), (), ("brownout", "blackout", "microgrid", "ration depot", "logistics depot")),
+    _SectorPresetRule("warehouse", ("warehouse", "distribution center", "logistics", "pallet rack", "freight depot")),
+    _SectorPresetRule("manufacturing_plant", ("manufacturing_plant", "manufacturing plant", "manufacturing", "factory", "assembly line", "foundry", "stamping", "industrial plant"), ("plant",)),
+    _SectorPresetRule("downtown_commercial", ("downtown_commercial", "downtown commercial", "retail strip", "shopping strip", "storefront", "strip mall", "commercial center")),
+    _SectorPresetRule("urban_residential", ("urban_residential", "urban residential", "townhouse", "brownstone", "rowhouse", "condo")),
+    _SectorPresetRule("garden_estate", ("estate", "compound", "courtyard", "garden", "yard", "villa")),
+    _SectorPresetRule("wooded_park", ("park", "woods", "forest", "trail", "clearing", "grove")),
+    _SectorPresetRule("corner_bar", ("bar", "pub", "tavern", "club", "lounge", "saloon")),
+    _SectorPresetRule("office_floor", ("office", "corporate", "agency", "cubicle", "suite", "commercial")),
+    _SectorPresetRule("residential_apartment", ("apartment", "flat", "safehouse", "house", "home", "residential", "motel")),
+    _SectorPresetRule("docking_bay", ("dock", "cargo", "hangar", "bay")),
+    _SectorPresetRule("med_lab", ("med", "trauma", "lab", "clinic", "ward")),
+    _SectorPresetRule("urban_crossroads", ("urban", "street", "road", "city", "crossroad")),
+    _SectorPresetRule("derelict_corridor", ("corridor", "derelict", "breach", "tunnel", "bunker")),
+    _SectorPresetRule("orbital_airlock", ("orbital", "airlock", "station")),
+)
+
+
+def infer_sector_preset(theme: str) -> str:
+    """Map a free-text scene theme to one of the 29 canonical `satya-engine` `SectorPreset` codes."""
+    low = (theme or "").lower()
+    words = set(low.replace("-", " ").replace("_", " ").split())
+    return next(
+        (rule.preset_id for rule in _SECTOR_PRESET_RULES if rule.matches(low, words)),
+        str(get_active_campaign_pack().get("default_sector_preset") or "urban_crossroads"),
+    )
 
 
 def _infer_model_preset(label: str, is_hidden: bool = False) -> str:
@@ -304,7 +287,7 @@ def _infer_model_preset(label: str, is_hidden: bool = False) -> str:
     return "operative_light"
 
 
-def normalize_token(tok: dict[str, Any]) -> dict[str, Any]:
+def normalize_token(tok: Mapping[str, Any]) -> dict[str, Any]:
     """Normalize a token placement dictionary to include continuous `pos_x_cm`/`pos_y_cm`, derived cell coords, and `.glb` fields."""
     if tok.get("pos_x_cm") is not None and tok.get("pos_y_cm") is not None:
         px_cm = int(tok["pos_x_cm"])
@@ -725,24 +708,26 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
         pass
 
 
-_SESSION_SPATIAL_PINS: dict[str, list[dict[str, Any]]] = {}
+_SESSION_SPATIAL_PINS: Final[SessionStore[list[dict[str, Any]]]] = SessionStore()
 
-_CHANNEL_ALIAS_MAP: dict[str, str] = {
-    "SIG": "SIGHT",
-    "SIGHT": "SIGHT",
-    "VISUAL": "SIGHT",
-    "HEA": "HEARING",
-    "HEARING": "HEARING",
-    "SOUND": "HEARING",
-    "AUDITORY": "HEARING",
-    "OLF": "OLFACTION",
-    "OLFACTION": "OLFACTION",
-    "SMELL": "OLFACTION",
-    "SCENT": "OLFACTION",
-    "ITU": "INTUITION",
-    "INTUITION": "INTUITION",
-    "INSTINCT": "INTUITION",
-}
+_CHANNEL_ALIAS_MAP: Final[Mapping[str, SensoryChannel]] = MappingProxyType(
+    {
+        "SIG": "SIGHT",
+        "SIGHT": "SIGHT",
+        "VISUAL": "SIGHT",
+        "HEA": "HEARING",
+        "HEARING": "HEARING",
+        "SOUND": "HEARING",
+        "AUDITORY": "HEARING",
+        "OLF": "OLFACTION",
+        "OLFACTION": "OLFACTION",
+        "SMELL": "OLFACTION",
+        "SCENT": "OLFACTION",
+        "ITU": "INTUITION",
+        "INTUITION": "INTUITION",
+        "INSTINCT": "INTUITION",
+    }
+)
 
 
 def get_session_spatial_pins(session_id: str) -> list[dict[str, Any]]:
@@ -752,14 +737,11 @@ def get_session_spatial_pins(session_id: str) -> list[dict[str, Any]]:
 
 def clear_session_spatial_pins(session_id: str | None = None) -> None:
     """Clear spatial clue pins for `session_id` (or all sessions when omitted)."""
-    if session_id is None:
-        _SESSION_SPATIAL_PINS.clear()
-    else:
-        _SESSION_SPATIAL_PINS.pop(session_id, None)
+    _SESSION_SPATIAL_PINS.reset(session_id)
 
 
-def _build_rust_map_json(map_state: dict[str, Any]) -> str:
-    """Build a canonical `GmMapUpdateRequest`-compatible JSON string from a Python map state."""
+def _build_rust_map_payload(map_state: dict[str, Any]) -> dict[str, Any]:
+    """Build a canonical `GmMapUpdateRequest`-compatible payload dict from a Python map state."""
     grid_w = int(map_state.get("grid_width", 16))
     grid_h = int(map_state.get("grid_height", 12))
     active_floor = int(map_state.get("active_floor", 0))
@@ -793,13 +775,13 @@ def _build_rust_map_json(map_state: dict[str, Any]) -> str:
     ):
         if opt_key in map_state and map_state[opt_key] is not None:
             payload[opt_key] = map_state[opt_key]
-    return json.dumps(payload)
+    return payload
 
 
 def _extract_narrative_manifest(map_state: dict[str, Any]) -> dict[str, Any]:
     """Compute semantic `SectorNarrativeManifest` dict via Rust ``satya_py.maps``."""
     try:
-        parsed = _maps.extract_narrative_manifest(_build_rust_map_json(map_state))
+        parsed = _maps.extract_narrative_manifest(_build_rust_map_payload(map_state))
         if isinstance(parsed, dict):
             return parsed
     except Exception:
@@ -829,14 +811,14 @@ def _extract_floor_geometry(
 
 
 def _check_rust_collision(
-    map_json_str: str,
+    map_payload: dict[str, Any] | str,
     x_m: float,
     y_m: float,
     floor_index: int | None = None,
 ) -> bool:
     """Invoke ``satya_py.maps.check_token_collision`` forwarding `floor_index`."""
     return _maps.check_token_collision(
-        map_json_str,
+        map_payload,
         x_m,
         y_m,
         _TOKEN_RADIUS_M,
@@ -845,7 +827,7 @@ def _check_rust_collision(
 
 
 def _find_unblocked_token_pos_cm(
-    map_json_str: str,
+    map_payload: dict[str, Any] | str,
     grid_w: int,
     grid_h: int,
     pref_x_cm: int,
@@ -859,7 +841,7 @@ def _find_unblocked_token_pos_cm(
     px = max(min_cm, min(max_x, int(pref_x_cm)))
     py = max(min_cm, min(max_y, int(pref_y_cm)))
     try:
-        if not _check_rust_collision(map_json_str, px / 100.0, py / 100.0, floor_index):
+        if not _check_rust_collision(map_payload, px / 100.0, py / 100.0, floor_index):
             return px, py
         for radius_steps in range(1, max(grid_w, grid_h) * 2):
             delta = radius_steps * 50
@@ -869,7 +851,7 @@ def _find_unblocked_token_pos_cm(
             ):
                 cx = max(min_cm, min(max_x, px + dx))
                 cy = max(min_cm, min(max_y, py + dy))
-                if not _check_rust_collision(map_json_str, cx / 100.0, cy / 100.0, floor_index):
+                if not _check_rust_collision(map_payload, cx / 100.0, cy / 100.0, floor_index):
                     return cx, cy
     except Exception:
         pass
@@ -907,7 +889,7 @@ def _write_and_sync_map_state(session_id: str, map_state: dict[str, Any]) -> dic
     return map_state
 
 
-@tool
+@satya_gm_tool(pack="tactical_maps", tier="TIER_1_SATYA_CORE")
 def generate_tactical_map(
     session_id: str,
     theme: str,
@@ -957,12 +939,12 @@ def generate_tactical_map(
     )
 
     tiles: list[str] = []
-    raw_tokens = list(initial_tokens or [])
-    if not raw_tokens:
-        raw_tokens = get_pack_default_tokens(w, h)
-    tokens = _merge_tokens_with_visuals({"active_floor": active_floor, "tokens": raw_tokens})
+    raw_tokens: Sequence[Mapping[str, Any]] = (
+        list(initial_tokens) if initial_tokens else get_pack_default_tokens(w, h)
+    )
+    tokens = _merge_tokens_with_visuals({"active_floor": active_floor, "tokens": list(raw_tokens)})
 
-    probe_json = _build_rust_map_json(
+    probe_json = _build_rust_map_payload(
         {
             "map_id": map_id,
             "title": theme,
@@ -1037,7 +1019,7 @@ def generate_tactical_map(
     return _write_and_sync_map_state(session_id, map_state)
 
 
-@tool
+@satya_gm_tool(pack="tactical_maps", tier="TIER_1_SATYA_CORE")
 def continue_tactical_map(
     session_id: str,
     direction: str,
@@ -1059,7 +1041,7 @@ def continue_tactical_map(
         working["theme_preset"] = preset_override_arg
     try:
         cont = _maps.continue_procedural_map(
-            _build_rust_map_json(working),
+            _build_rust_map_payload(working),
             direction.strip().upper(),
             int(seed) if seed else None,
             preset_override_arg,
@@ -1101,7 +1083,7 @@ def continue_tactical_map(
     return _write_and_sync_map_state(session_id, updated)
 
 
-@tool
+@satya_gm_tool(pack="tactical_maps", tier="TIER_1_SATYA_CORE")
 def switch_tactical_map_floor(session_id: str, target_floor_index: int) -> dict[str, Any]:
     """Switch the active vertical floor (`floor_index` such as `-1`, `0`, `1`) on a multi-story procedural map."""
     cur = get_session_map(session_id)
@@ -1109,7 +1091,7 @@ def switch_tactical_map_floor(session_id: str, target_floor_index: int) -> dict[
         return {"error": f"No active tactical map for session '{session_id}'."}
     try:
         switched = _maps.switch_map_floor(
-            _build_rust_map_json(cur),
+            _build_rust_map_payload(cur),
             int(target_floor_index),
         )
     except Exception as exc:
@@ -1133,7 +1115,7 @@ def switch_tactical_map_floor(session_id: str, target_floor_index: int) -> dict[
     return _write_and_sync_map_state(session_id, updated)
 
 
-@tool
+@satya_gm_tool(pack="tactical_maps", tier="TIER_1_SATYA_CORE")
 def register_spatial_clue_pin(
     session_id: str,
     pin_id: str,
@@ -1175,7 +1157,7 @@ def register_spatial_clue_pin(
     }
 
 
-@tool
+@satya_gm_tool(pack="combat", tier="TIER_1_SATYA_CORE")
 def move_map_token(
     session_id: str,
     token_id: str,
@@ -1231,7 +1213,7 @@ def move_map_token(
     tx_m = tx_cm / 100.0
     ty_m = ty_cm / 100.0
     wall_edges, props = _extract_floor_geometry(map_state, target_floor)
-    rust_map_json = _build_rust_map_json(map_state)
+    rust_map_json = _build_rust_map_payload(map_state)
 
     if _check_rust_collision(rust_map_json, tx_m, ty_m, floor_index=target_floor):
         return {
@@ -1317,7 +1299,7 @@ def move_map_token(
                 if sk_low in matched_obs["characteristics"] and isinstance(sv, (int, float)):
                     matched_obs["characteristics"][sk_low] = int(sv)
 
-        updated_rust_json = _build_rust_map_json(updated)
+        updated_rust_json = _build_rust_map_payload(updated)
         try:
             whispers = _maps.evaluate_passive_perceptions(
                 updated_rust_json, moved_entity_id, observers, pins or None
@@ -1365,7 +1347,7 @@ def move_map_token(
     return updated
 
 
-@tool
+@satya_gm_tool(pack="tactical_maps", tier="TIER_1_SATYA_CORE")
 def inspect_tactical_map(session_id: str, question: str) -> str:
     """Inspect the active continuous tactical map geometry, floors, zones, exits, token positions, metric distances, cover `Δ_ext`, and optional VLM analysis."""
     map_state = get_session_map(session_id)

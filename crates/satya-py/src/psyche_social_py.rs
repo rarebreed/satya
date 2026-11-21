@@ -1,43 +1,40 @@
 //! PyO3 bindings for Satya's Social Combat, Psyche Friction/Drift, Conviction Surges,
 //! and Faction/Heat World Clocks (`psyche_social`, `social_combat`, `world_clocks`).
 
-use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use satya_campaign::{apply_world_ledger_update, seed_default_world_ledger};
 use satya_engine::{
     BattlefieldMoraleSituation, CombatMotivationKind, ConvictionPrincipleArchetype,
     DissonanceResolutionPath, EmotionalTriggerKind, MoraleState, PsycheProfile, PsycheTraitId,
-    SocialArgumentVector, SocialComposureState, apply_psyche_drift_mark,
-    compute_battlefield_morale_delta, evaluate_combat_morale_roll,
-    evaluate_combat_motivation_modifier, evaluate_conviction_surge, evaluate_emotional_trigger,
-    evaluate_empathy_read, evaluate_social_exchange_wounds, resolve_cognitive_dissonance,
+    SocialArgumentVector, SocialComposureState, compute_battlefield_morale_delta,
+    evaluate_combat_motivation_modifier, evaluate_social_exchange_wounds,
 };
 use satya_schema::{
     EconomicTier, SessionWorldLedger, UpdateWorldLedgerRequest, WorldLedgerUpdateResponse,
     ZoningContext,
 };
+use serde::Deserialize;
+use serde_json::{Map, Value, json};
 
-pub(crate) fn to_py_err(msg: impl Into<String>) -> PyErr {
-    PyValueError::new_err(msg.into())
-}
+use super::py_bridge::{
+    PyJsonDict, PyJsonInput, PyListInput, from_py_object, opt_from_py_object, parse_coded_enum,
+    py_to_json_value, to_py_err, to_py_object,
+};
 
-fn read_i32(map: &serde_json::Map<String, serde_json::Value>, keys: &[&str], default: i32) -> i32 {
+fn read_i32(map: &Map<String, Value>, keys: &[&str], default: i32) -> i32 {
     for k in keys {
-        if let Some(v) = map.get(*k)
-            && let Some(n) = v.as_i64()
-        {
+        if let Some(n) = map.get(*k).and_then(Value::as_i64) {
             return (n as i32).clamp(1, 20);
         }
     }
     default
 }
 
-pub(crate) fn parse_psyche_profile_json(raw: &str) -> PyResult<PsycheProfile> {
-    let val: serde_json::Value =
-        serde_json::from_str(raw).map_err(|e| to_py_err(format!("Invalid psyche JSON: {e}")))?;
+/// Normalizes a psyche mapping (`characteristics` / `psyche` / `psyche_traits` / flat dict) to [`PsycheProfile`].
+pub(crate) fn parse_psyche_profile_value(val: &Value) -> PyResult<PsycheProfile> {
     let root = val
         .as_object()
-        .ok_or_else(|| to_py_err("Psyche JSON must be an object"))?;
+        .ok_or_else(|| to_py_err("Psyche payload must be a mapping/object"))?;
     let map = root
         .get("characteristics")
         .or_else(|| root.get("psyche"))
@@ -67,7 +64,6 @@ fn normalize_vector_code_and_hints(raw: &str) -> (String, bool, bool) {
         || lower.contains("greater good");
 
     let base = raw.split('(').next().unwrap_or(raw).trim();
-
     let mut snake = String::with_capacity(base.len() + 8);
     let mut prev_is_lower_or_digit = false;
     let mut prev_is_underscore = true;
@@ -91,19 +87,15 @@ fn normalize_vector_code_and_hints(raw: &str) -> (String, bool, bool) {
             prev_is_underscore = false;
         }
     }
-    let norm = snake.trim_matches('_').to_string();
-    (norm, audit_hint, triage_hint)
+    (snake.trim_matches('_').to_string(), audit_hint, triage_hint)
 }
 
-fn map_vector_code(
-    raw: &str,
-    flags: Option<&serde_json::Map<String, serde_json::Value>>,
-) -> PyResult<SocialArgumentVector> {
+fn map_vector_code(raw: &str, flags: Option<&Map<String, Value>>) -> PyResult<SocialArgumentVector> {
     let (norm, audit_hint, triage_hint) = normalize_vector_code_and_hints(raw);
     let flag = |key: &str| -> bool {
         flags
             .and_then(|m| m.get(key))
-            .and_then(|v| v.as_bool())
+            .and_then(Value::as_bool)
             .unwrap_or(false)
     };
     match norm.as_str() {
@@ -180,12 +172,10 @@ fn map_vector_code(
     }
 }
 
-fn parse_social_vectors_json(raw: &str) -> PyResult<Vec<SocialArgumentVector>> {
-    let val: serde_json::Value =
-        serde_json::from_str(raw).map_err(|e| to_py_err(format!("Invalid vectors JSON: {e}")))?;
+fn parse_social_vectors_value(val: Value) -> PyResult<Vec<SocialArgumentVector>> {
     let arr = val
         .as_array()
-        .ok_or_else(|| to_py_err("Social vectors JSON must be an array"))?;
+        .ok_or_else(|| to_py_err("Social vectors payload must be a sequence/list"))?;
     let mut out = Vec::with_capacity(arr.len());
     for item in arr {
         if let Some(s) = item.as_str() {
@@ -203,31 +193,59 @@ fn parse_social_vectors_json(raw: &str) -> PyResult<Vec<SocialArgumentVector>> {
                 out.push(map_vector_code(name, Some(obj))?);
             }
         } else {
-            return Err(to_py_err("Each vector entry must be a string or object"));
+            return Err(to_py_err("Each vector entry must be a string or dict"));
         }
     }
     Ok(out)
 }
 
-fn parse_trait_id(raw: &str) -> PyResult<PsycheTraitId> {
-    PsycheTraitId::from_code_str(raw)
-        .ok_or_else(|| to_py_err(format!("Unknown PsycheTraitId '{raw}'")))
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct PyBattlefieldSituation {
+    ally_casualty_ratio: f64,
+    outnumbered_ratio: f64,
+    leader_incapacitated_or_comms_cut: bool,
+    position_overrun_flanked_or_ambushed: bool,
+    ammo_fraction_remaining: f64,
+    tracks_ammo: bool,
+    primary_weapon_compromised: bool,
+    attacks_ineffective_against_heavy_armor: bool,
+    started_fatigued_or_sleep_deprived: bool,
+    additional_suppression_or_shock_delta: i32,
+}
+
+impl From<PyBattlefieldSituation> for BattlefieldMoraleSituation {
+    fn from(s: PyBattlefieldSituation) -> Self {
+        Self {
+            ally_casualty_ratio: s.ally_casualty_ratio,
+            outnumbered_ratio: s.outnumbered_ratio,
+            leader_incapacitated_or_comms_cut: s.leader_incapacitated_or_comms_cut,
+            position_overrun_flanked_or_ambushed: s.position_overrun_flanked_or_ambushed,
+            ammo_fraction_remaining: s.ammo_fraction_remaining,
+            tracks_ammo: s.tracks_ammo,
+            primary_weapon_compromised: s.primary_weapon_compromised,
+            attacks_ineffective_against_heavy_armor: s.attacks_ineffective_against_heavy_armor,
+            started_fatigued_or_sleep_deprived: s.started_fatigued_or_sleep_deprived,
+            additional_suppression_or_shock_delta: s.additional_suppression_or_shock_delta,
+        }
+    }
 }
 
 /// Evaluates an Empathy & Read Person check (`INS/ITU` or `INS/ELO`) against a target's Psyche.
 #[pyfunction]
-#[pyo3(signature = (target_psyche_json, net_successes))]
-pub fn evaluate_empathy_read_json(
-    target_psyche_json: &str,
+#[pyo3(signature = (target_psyche, net_successes))]
+pub fn evaluate_empathy_read(
+    py: Python<'_>,
+    target_psyche: PyJsonInput<'_>,
     net_successes: i32,
-) -> PyResult<String> {
-    let psyche = parse_psyche_profile_json(target_psyche_json)?;
-    let res = evaluate_empathy_read(&psyche, net_successes);
-    let revealed: Vec<serde_json::Value> = res
+) -> PyResult<PyJsonDict> {
+    let psyche = parse_psyche_profile_value(&py_to_json_value(&target_psyche, "target_psyche")?)?;
+    let res = satya_engine::evaluate_empathy_read(&psyche, net_successes);
+    let revealed: Vec<Value> = res
         .revealed_traits
         .iter()
         .map(|&(tid, score)| {
-            serde_json::json!({
+            json!({
                 "trait_id": serde_json::to_value(tid).unwrap_or_default(),
                 "code": tid.code(),
                 "label": tid.label(),
@@ -235,78 +253,78 @@ pub fn evaluate_empathy_read_json(
             })
         })
         .collect();
-    serde_json::to_string(&serde_json::json!({
-        "net_successes": res.net_successes,
-        "revealed_traits": revealed,
-        "detects_psyche_wedge_tension": res.detects_psyche_wedge_tension,
-        "leverage_delta_ext_bonus": res.leverage_delta_ext_bonus,
-    }))
-    .map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    to_py_object(
+        py,
+        &json!({
+            "net_successes": res.net_successes,
+            "revealed_traits": revealed,
+            "detects_psyche_wedge_tension": res.detects_psyche_wedge_tension,
+            "leverage_delta_ext_bonus": res.leverage_delta_ext_bonus,
+        }),
+    )
 }
 
 /// Evaluates a Contested Social Exchange against a target's Psyche profile and `SocialComposureState`.
 #[pyfunction]
 #[pyo3(signature = (
-    target_psyche_json,
-    vectors_json,
+    target_psyche,
+    vectors,
     net_successes,
-    composure_state_json=None,
+    composure_state=None,
     target_dis=12,
     target_foc=12,
     ego_wound_dis_check_passed=None
 ))]
-pub fn evaluate_social_exchange_json(
-    target_psyche_json: &str,
-    vectors_json: &str,
+pub fn evaluate_social_exchange(
+    py: Python<'_>,
+    target_psyche: PyJsonInput<'_>,
+    vectors: PyListInput<'_>,
     net_successes: i32,
-    composure_state_json: Option<&str>,
+    composure_state: Option<PyJsonInput<'_>>,
     target_dis: i32,
     target_foc: i32,
     ego_wound_dis_check_passed: Option<bool>,
-) -> PyResult<String> {
-    let psyche = parse_psyche_profile_json(target_psyche_json)?;
-    let vectors = parse_social_vectors_json(vectors_json)?;
-    let state: SocialComposureState = match composure_state_json {
-        Some(raw) if !raw.trim().is_empty() => serde_json::from_str(raw)
-            .map_err(|e| to_py_err(format!("Invalid composure_state_json: {e}")))?,
-        _ => SocialComposureState::new(target_dis, target_foc),
-    };
+) -> PyResult<PyJsonDict> {
+    let psyche = parse_psyche_profile_value(&py_to_json_value(&target_psyche, "target_psyche")?)?;
+    let parsed_vectors = parse_social_vectors_value(py_to_json_value(&vectors, "vectors")?)?;
+    let state = opt_from_py_object::<SocialComposureState>(composure_state, "composure_state")?
+        .unwrap_or_else(|| SocialComposureState::new(target_dis, target_foc));
     let outcome = evaluate_social_exchange_wounds(
         &psyche,
         &state,
-        &vectors,
+        &parsed_vectors,
         net_successes,
         ego_wound_dis_check_passed,
     );
-    serde_json::to_string(&outcome).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    to_py_object(py, &outcome)
 }
 
 /// Resolves active Cognitive Dissonance via one of the 4 canonical Dissonance Resolution Paths.
 #[pyfunction]
 #[pyo3(signature = (
-    composure_state_json,
+    composure_state,
     dis=12,
     resolution_path="compartmentalization",
     violated_trait=None,
     dis_check_successes=1
 ))]
-pub fn resolve_cognitive_dissonance_json(
-    composure_state_json: &str,
+pub fn resolve_cognitive_dissonance(
+    py: Python<'_>,
+    composure_state: PyJsonInput<'_>,
     dis: i32,
     resolution_path: &str,
     violated_trait: Option<&str>,
     dis_check_successes: i32,
-) -> PyResult<String> {
-    let state: SocialComposureState = serde_json::from_str(composure_state_json)
-        .map_err(|e| to_py_err(format!("Invalid composure_state_json: {e}")))?;
-    let path_norm = resolution_path
-        .trim()
-        .to_ascii_lowercase()
-        .replace('-', "_");
+) -> PyResult<PyJsonDict> {
+    let state: SocialComposureState = from_py_object(&composure_state, "composure_state")?;
+    let path_norm = resolution_path.trim().to_ascii_lowercase().replace('-', "_");
     let path = match path_norm.as_str() {
         "conversion_defection" | "conversion" | "defection" => {
             DissonanceResolutionPath::ConversionDefection {
-                violated_trait: parse_trait_id(violated_trait.unwrap_or("OPN"))?,
+                violated_trait: parse_coded_enum::<PsycheTraitId>(
+                    violated_trait.unwrap_or("OPN"),
+                    "PsycheTraitId",
+                )?,
             }
         }
         "dogmatic_denial" | "denial" => DissonanceResolutionPath::DogmaticDenial {
@@ -326,20 +344,20 @@ pub fn resolve_cognitive_dissonance_json(
             )));
         }
     };
-    let outcome = resolve_cognitive_dissonance(&state, dis, path);
-    serde_json::to_string(&outcome).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    to_py_object(py, &satya_engine::resolve_cognitive_dissonance(&state, dis, path))
 }
 
 /// Evaluates whether a character triggers a Conviction Surge under severe internal strain.
 #[pyfunction]
-#[pyo3(signature = (psyche_json, current_delta_int, already_used_this_scene=false, principle=None))]
-pub fn evaluate_conviction_surge_json(
-    psyche_json: &str,
+#[pyo3(signature = (psyche, current_delta_int, already_used_this_scene=false, principle=None))]
+pub fn evaluate_conviction_surge(
+    py: Python<'_>,
+    psyche: PyJsonInput<'_>,
     current_delta_int: i32,
     already_used_this_scene: bool,
     principle: Option<&str>,
-) -> PyResult<String> {
-    let psyche = parse_psyche_profile_json(psyche_json)?;
+) -> PyResult<PyJsonDict> {
+    let parsed_psyche = parse_psyche_profile_value(&py_to_json_value(&psyche, "psyche")?)?;
     let parsed_principle = match principle.map(str::trim).filter(|s| !s.is_empty()) {
         None => None,
         Some(raw) => match raw.to_ascii_lowercase().replace('-', "_").as_str() {
@@ -350,71 +368,69 @@ pub fn evaluate_conviction_surge_json(
             "unbowed_defiance" | "defiance" => Some(ConvictionPrincipleArchetype::UnbowedDefiance),
             "iconoclastic_truth" | "truth" => Some(ConvictionPrincipleArchetype::IconoclasticTruth),
             _ => Some(ConvictionPrincipleArchetype::ExtremeTraitEmbodiment(
-                parse_trait_id(raw)?,
+                parse_coded_enum::<PsycheTraitId>(raw, "PsycheTraitId")?,
             )),
         },
     };
-    let res = evaluate_conviction_surge(
-        &psyche,
-        current_delta_int,
-        already_used_this_scene,
-        parsed_principle,
-    );
-    serde_json::to_string(&res).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    to_py_object(
+        py,
+        &satya_engine::evaluate_conviction_surge(
+            &parsed_psyche,
+            current_delta_int,
+            already_used_this_scene,
+            parsed_principle,
+        ),
+    )
 }
 
 /// Applies Psyche Drift Marks toward `target_pole_score` (default `10` equilibrium).
 #[pyfunction]
 #[pyo3(signature = (trait_score, current_marks=0, marks_added=1, dis=12, target_pole_score=None))]
-pub fn apply_psyche_drift_mark_json(
+pub fn apply_psyche_drift_mark(
+    py: Python<'_>,
     trait_score: i32,
     current_marks: i32,
     marks_added: i32,
     dis: i32,
     target_pole_score: Option<i32>,
-) -> PyResult<String> {
-    let res = apply_psyche_drift_mark(
-        trait_score,
-        current_marks,
-        marks_added,
-        dis,
-        target_pole_score,
-    );
-    serde_json::to_string(&res).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+) -> PyResult<PyJsonDict> {
+    to_py_object(
+        py,
+        &satya_engine::apply_psyche_drift_mark(
+            trait_score,
+            current_marks,
+            marks_added,
+            dis,
+            target_pole_score,
+        ),
+    )
 }
 
-/// Seeds or updates a [`SessionWorldLedger`] (faction clocks + `Heat` x [`EconomicTier`]) as JSON.
+/// Seeds or updates a [`SessionWorldLedger`] (faction clocks + `Heat` x [`EconomicTier`]) returning a native Python dict.
 #[pyfunction]
-#[pyo3(signature = (session_id, current_ledger_json=None, update_req_json=None, pack_id=None, campaign_tag=None))]
-pub fn seed_or_update_world_ledger_json(
+#[pyo3(signature = (session_id, current_ledger=None, update_req=None, pack_id=None, campaign_tag=None))]
+pub fn seed_or_update_world_ledger(
+    py: Python<'_>,
     session_id: &str,
-    current_ledger_json: Option<&str>,
-    update_req_json: Option<&str>,
+    current_ledger: Option<PyJsonInput<'_>>,
+    update_req: Option<PyJsonInput<'_>>,
     pack_id: Option<&str>,
     campaign_tag: Option<&str>,
-) -> PyResult<String> {
-    let update_req: Option<UpdateWorldLedgerRequest> = match update_req_json {
-        Some(raw) if !raw.trim().is_empty() => Some(
-            serde_json::from_str(raw)
-                .map_err(|e| to_py_err(format!("Invalid update_req_json: {e}")))?,
-        ),
-        _ => None,
-    };
-
-    let mut ledger: SessionWorldLedger = match current_ledger_json {
-        Some(raw) if !raw.trim().is_empty() => serde_json::from_str(raw)
-            .map_err(|e| to_py_err(format!("Invalid current_ledger_json: {e}")))?,
-        _ => {
+) -> PyResult<PyJsonDict> {
+    let parsed_update =
+        opt_from_py_object::<UpdateWorldLedgerRequest>(update_req, "update_req")?;
+    let mut ledger = opt_from_py_object::<SessionWorldLedger>(current_ledger, "current_ledger")?
+        .unwrap_or_else(|| {
             let eff_pack = pack_id
-                .or_else(|| update_req.as_ref().and_then(|r| r.pack_id.as_deref()))
+                .or_else(|| parsed_update.as_ref().and_then(|r| r.pack_id.as_deref()))
                 .map(str::trim)
                 .filter(|s| !s.is_empty())
                 .unwrap_or("awakened");
-            let tier = update_req
+            let tier = parsed_update
                 .as_ref()
                 .and_then(|r| r.economic_tier)
                 .unwrap_or(EconomicTier::MiddleClass);
-            let zoning = update_req
+            let zoning = parsed_update
                 .as_ref()
                 .and_then(|r| r.zoning)
                 .unwrap_or(ZoningContext::UrbanResidential);
@@ -425,24 +441,18 @@ pub fn seed_or_update_world_ledger_json(
                 tier,
                 zoning,
             )
-        }
+        });
+    let triggered_events = match parsed_update {
+        Some(ref req) => apply_world_ledger_update(&mut ledger, req),
+        None => Vec::new(),
     };
-
-    let triggered_events = if let Some(ref req) = update_req {
-        apply_world_ledger_update(&mut ledger, req)
-    } else {
-        Vec::new()
-    };
-
-    serde_json::to_string(&WorldLedgerUpdateResponse {
-        ledger,
-        triggered_events,
-    })
-    .map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
-}
-
-fn parse_morale_state_code(raw: &str) -> MoraleState {
-    MoraleState::from_code_str(raw).unwrap_or(MoraleState::Steady)
+    to_py_object(
+        py,
+        &WorldLedgerUpdateResponse {
+            ledger,
+            triggered_events,
+        },
+    )
 }
 
 fn parse_combat_motivation_kind(raw: &str, command_intact: bool) -> CombatMotivationKind {
@@ -488,302 +498,258 @@ fn parse_emotional_trigger_kind(raw: &str, wound_tier: i32) -> PyResult<Emotiona
     }
 }
 
-fn parse_roll_pairs(raw: Option<&str>, fallback: Vec<(i32, i32)>) -> PyResult<Vec<(i32, i32)>> {
-    match raw {
-        Some(s) if !s.trim().is_empty() => serde_json::from_str::<Vec<(i32, i32)>>(s)
-            .map_err(|e| to_py_err(format!("Invalid roll_pairs JSON: {e}"))),
-        _ => Ok(fallback),
-    }
-}
-
-fn parse_battlefield_morale_situation(raw: &str) -> PyResult<BattlefieldMoraleSituation> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Ok(BattlefieldMoraleSituation::default());
-    }
-    let val: serde_json::Value = serde_json::from_str(trimmed)
-        .map_err(|e| to_py_err(format!("Invalid situation JSON: {e}")))?;
-    let mut sit = BattlefieldMoraleSituation::default();
-    if let Some(obj) = val.as_object() {
-        if let Some(v) = obj.get("ally_casualty_ratio").and_then(|v| v.as_f64()) {
-            sit.ally_casualty_ratio = v;
-        }
-        if let Some(v) = obj.get("outnumbered_ratio").and_then(|v| v.as_f64()) {
-            sit.outnumbered_ratio = v;
-        }
-        if let Some(v) = obj
-            .get("leader_incapacitated_or_comms_cut")
-            .and_then(|v| v.as_bool())
-        {
-            sit.leader_incapacitated_or_comms_cut = v;
-        }
-        if let Some(v) = obj
-            .get("position_overrun_flanked_or_ambushed")
-            .and_then(|v| v.as_bool())
-        {
-            sit.position_overrun_flanked_or_ambushed = v;
-        }
-        if let Some(v) = obj.get("ammo_fraction_remaining").and_then(|v| v.as_f64()) {
-            sit.ammo_fraction_remaining = v;
-        }
-        if let Some(v) = obj.get("tracks_ammo").and_then(|v| v.as_bool()) {
-            sit.tracks_ammo = v;
-        }
-        if let Some(v) = obj
-            .get("primary_weapon_compromised")
-            .and_then(|v| v.as_bool())
-        {
-            sit.primary_weapon_compromised = v;
-        }
-        if let Some(v) = obj
-            .get("attacks_ineffective_against_heavy_armor")
-            .and_then(|v| v.as_bool())
-        {
-            sit.attacks_ineffective_against_heavy_armor = v;
-        }
-        if let Some(v) = obj
-            .get("started_fatigued_or_sleep_deprived")
-            .and_then(|v| v.as_bool())
-        {
-            sit.started_fatigued_or_sleep_deprived = v;
-        }
-        if let Some(v) = obj
-            .get("additional_suppression_or_shock_delta")
-            .and_then(|v| v.as_i64())
-        {
-            sit.additional_suppression_or_shock_delta = v as i32;
-        }
-    }
-    Ok(sit)
-}
-
 /// Evaluates [`evaluate_combat_motivation_modifier`] (`§3.2`) for an NPC/PC Psyche profile.
 #[pyfunction]
-#[pyo3(signature = (target_psyche_json, motivation_kind, command_intact=true))]
-pub fn evaluate_combat_motivation_json(
-    target_psyche_json: &str,
+#[pyo3(signature = (target_psyche, motivation_kind, command_intact=true))]
+pub fn evaluate_combat_motivation(
+    py: Python<'_>,
+    target_psyche: PyJsonInput<'_>,
     motivation_kind: &str,
     command_intact: bool,
-) -> PyResult<String> {
-    let psyche = parse_psyche_profile_json(target_psyche_json)?;
+) -> PyResult<PyJsonDict> {
+    let psyche = parse_psyche_profile_value(&py_to_json_value(&target_psyche, "target_psyche")?)?;
     let kind = parse_combat_motivation_kind(motivation_kind, command_intact);
-    let mod_res = evaluate_combat_motivation_modifier(&psyche, kind);
-    serde_json::to_string(&mod_res).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    to_py_object(py, &evaluate_combat_motivation_modifier(&psyche, kind))
 }
 
 /// Evaluates a `DIS` Composure check against a canonical [`EmotionalTriggerKind`] (`§3.3`).
 #[pyfunction]
-#[pyo3(signature = (target_psyche_json, dis, current_morale, current_delta_int, trigger_kind, wound_tier=1, roll_pairs_json=None))]
+#[pyo3(signature = (target_psyche, dis, current_morale, current_delta_int, trigger_kind, wound_tier=1, roll_pairs=None))]
 #[allow(clippy::too_many_arguments)]
-pub fn evaluate_emotional_trigger_json(
-    target_psyche_json: &str,
+pub fn evaluate_emotional_trigger(
+    py: Python<'_>,
+    target_psyche: PyJsonInput<'_>,
     dis: i32,
     current_morale: &str,
     current_delta_int: i32,
     trigger_kind: &str,
     wound_tier: i32,
-    roll_pairs_json: Option<&str>,
-) -> PyResult<String> {
-    let psyche = parse_psyche_profile_json(target_psyche_json)?;
-    let morale = parse_morale_state_code(current_morale);
+    roll_pairs: Option<PyListInput<'_>>,
+) -> PyResult<PyJsonDict> {
+    let psyche = parse_psyche_profile_value(&py_to_json_value(&target_psyche, "target_psyche")?)?;
+    let morale = MoraleState::from_code_str(current_morale).unwrap_or(MoraleState::Steady);
     let trigger = parse_emotional_trigger_kind(trigger_kind, wound_tier)?;
-    let pairs = parse_roll_pairs(roll_pairs_json, vec![(11, 10)])?;
-    let outcome =
-        evaluate_emotional_trigger(&psyche, dis, morale, current_delta_int, trigger, &pairs);
-    serde_json::to_string(&outcome).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    let pairs = opt_from_py_object::<Vec<(i32, i32)>>(roll_pairs, "roll_pairs")?
+        .unwrap_or_else(|| vec![(11, 10)]);
+    to_py_object(
+        py,
+        &satya_engine::evaluate_emotional_trigger(
+            &psyche,
+            dis,
+            morale,
+            current_delta_int,
+            trigger,
+            &pairs,
+        ),
+    )
 }
 
 /// Evaluates a Contested Combat Morale Roll (`§3.4`) combining motivation & battlefield penalties.
 #[pyfunction]
-#[pyo3(signature = (target_psyche_json, dis, motivation_kind, command_intact, delta_int, situation_json, is_veteran_or_sere, current_morale, player_pairs_json, gm_pair_json))]
+#[pyo3(signature = (target_psyche, dis, motivation_kind, command_intact, delta_int, situation, is_veteran_or_sere, current_morale, player_pairs, gm_pair))]
 #[allow(clippy::too_many_arguments)]
-pub fn evaluate_combat_morale_roll_json(
-    target_psyche_json: &str,
+pub fn evaluate_combat_morale_roll(
+    py: Python<'_>,
+    target_psyche: PyJsonInput<'_>,
     dis: i32,
     motivation_kind: &str,
     command_intact: bool,
     delta_int: i32,
-    situation_json: &str,
+    situation: PyJsonInput<'_>,
     is_veteran_or_sere: bool,
     current_morale: &str,
-    player_pairs_json: &str,
-    gm_pair_json: &str,
-) -> PyResult<String> {
-    let psyche = parse_psyche_profile_json(target_psyche_json)?;
+    player_pairs: PyListInput<'_>,
+    gm_pair: PyListInput<'_>,
+) -> PyResult<PyJsonDict> {
+    let psyche = parse_psyche_profile_value(&py_to_json_value(&target_psyche, "target_psyche")?)?;
     let mot = parse_combat_motivation_kind(motivation_kind, command_intact);
     let mot_mod = evaluate_combat_motivation_modifier(&psyche, mot);
-    let sit = parse_battlefield_morale_situation(situation_json)?;
-    let delta_morale =
-        compute_battlefield_morale_delta(&sit, psyche.cnf) + mot_mod.command_breakdown_morale_shock;
-    let morale = parse_morale_state_code(current_morale);
-    let player_pairs: Vec<(i32, i32)> = serde_json::from_str(player_pairs_json)
-        .map_err(|e| to_py_err(format!("Invalid player_pairs JSON: {e}")))?;
-    let gm_pair: (i32, i32) = serde_json::from_str(gm_pair_json)
-        .map_err(|e| to_py_err(format!("Invalid gm_pair JSON: {e}")))?;
-
-    let roll_outcome = evaluate_combat_morale_roll(
+    let sit_parsed: PyBattlefieldSituation =
+        opt_from_py_object::<PyBattlefieldSituation>(Some(situation), "situation")?
+            .unwrap_or_default();
+    let delta_morale = compute_battlefield_morale_delta(&sit_parsed.into(), psyche.cnf)
+        + mot_mod.command_breakdown_morale_shock;
+    let morale = MoraleState::from_code_str(current_morale).unwrap_or(MoraleState::Steady);
+    let p_pairs: Vec<(i32, i32)> = from_py_object(&player_pairs, "player_pairs")?;
+    let g_pair: (i32, i32) = from_py_object(&gm_pair, "gm_pair")?;
+    let roll_outcome = satya_engine::evaluate_combat_morale_roll(
         dis,
         mot_mod.delta_mot,
         delta_int,
         delta_morale,
         is_veteran_or_sere,
         morale,
-        &player_pairs,
-        gm_pair,
+        &p_pairs,
+        g_pair,
     );
-    let payload = serde_json::json!({
-        "delta_mot": mot_mod.delta_mot,
-        "delta_morale": delta_morale,
-        "command_breakdown_morale_shock": mot_mod.command_breakdown_morale_shock,
-        "conviction_surge_pool_bonus": mot_mod.conviction_surge_pool_bonus,
-        "roll_outcome": roll_outcome,
-    });
-    serde_json::to_string(&payload).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    to_py_object(
+        py,
+        &json!({
+            "delta_mot": mot_mod.delta_mot,
+            "delta_morale": delta_morale,
+            "command_breakdown_morale_shock": mot_mod.command_breakdown_morale_shock,
+            "conviction_surge_pool_bonus": mot_mod.conviction_surge_pool_bonus,
+            "roll_outcome": roll_outcome,
+        }),
+    )
 }
 
 /// Registers social combat, psyche, and world-clock helpers on the `satya_py` module.
 pub fn register_psyche_social_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(evaluate_empathy_read_json, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_social_exchange_json, m)?)?;
-    m.add_function(wrap_pyfunction!(resolve_cognitive_dissonance_json, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_conviction_surge_json, m)?)?;
-    m.add_function(wrap_pyfunction!(apply_psyche_drift_mark_json, m)?)?;
-    m.add_function(wrap_pyfunction!(seed_or_update_world_ledger_json, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_combat_motivation_json, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_emotional_trigger_json, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_combat_morale_roll_json, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_empathy_read, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_social_exchange, m)?)?;
+    m.add_function(wrap_pyfunction!(resolve_cognitive_dissonance, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_conviction_surge, m)?)?;
+    m.add_function(wrap_pyfunction!(apply_psyche_drift_mark, m)?)?;
+    m.add_function(wrap_pyfunction!(seed_or_update_world_ledger, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_combat_motivation, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_emotional_trigger, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_combat_morale_roll, m)?)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::py_bridge::py_to_value;
+    use pyo3::types::PyString;
 
     #[test]
     fn test_psyche_social_and_world_clock_py_roundtrip() {
-        let npc_psyche = r#"{"opn": 16, "slf": 5, "blg": 16, "agg": 7, "ego": 10, "cnf": 14, "ext": 11, "trs": 6, "cps": 16}"#;
-        let emp_json = evaluate_empathy_read_json(npc_psyche, 2).unwrap();
-        let emp_val: serde_json::Value = serde_json::from_str(&emp_json).unwrap();
-        assert_eq!(emp_val["revealed_traits"].as_array().unwrap().len(), 2);
-        assert_eq!(emp_val["detects_psyche_wedge_tension"], true);
+        Python::initialize();
+        Python::attach(|py| {
+            let py_s = |s: &str| PyString::new(py, s).into_any();
+            let npc_psyche = r#"{"opn": 16, "slf": 5, "blg": 16, "agg": 7, "ego": 10, "cnf": 14, "ext": 11, "trs": 6, "cps": 16}"#;
 
-        let emp3_json = evaluate_empathy_read_json(npc_psyche, 3).unwrap();
-        let emp3_val: serde_json::Value = serde_json::from_str(&emp3_json).unwrap();
-        assert_eq!(emp3_val["revealed_traits"].as_array().unwrap().len(), 9);
+            let emp = evaluate_empathy_read(py, py_s(npc_psyche), 2).unwrap();
+            let emp_val = py_to_value(emp.bind(py)).unwrap();
+            assert_eq!(emp_val["revealed_traits"].as_array().unwrap().len(), 2);
+            assert_eq!(emp_val["detects_psyche_wedge_tension"], true);
 
-        let ex_json = evaluate_social_exchange_json(
-            npc_psyche,
-            r#"["group_loyalty", "break_law_orders"]"#,
-            2,
-            None,
-            12,
-            12,
-            None,
-        )
-        .unwrap();
-        let ex_val: serde_json::Value = serde_json::from_str(&ex_json).unwrap();
-        assert_eq!(ex_val["argument_eval"]["triggers_dual_psyche_wedge"], true);
-        assert_eq!(ex_val["dissonance_stacks_added"], 2);
+            let emp3 = evaluate_empathy_read(py, py_s(npc_psyche), 3).unwrap();
+            assert_eq!(
+                py_to_value(emp3.bind(py)).unwrap()["revealed_traits"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                9
+            );
 
-        let ex_9axis_json = evaluate_social_exchange_json(
-            npc_psyche,
-            r#"["moral_sanctity", "transparency_good_faith"]"#,
-            2,
-            None,
-            12,
-            12,
-            None,
-        )
-        .unwrap();
-        let ex_9axis_val: serde_json::Value = serde_json::from_str(&ex_9axis_json).unwrap();
-        assert_eq!(
-            ex_9axis_val["argument_eval"]["triggers_dual_psyche_wedge"],
-            true
-        );
+            let ex = evaluate_social_exchange(
+                py,
+                py_s(npc_psyche),
+                py_s(r#"["group_loyalty", "break_law_orders"]"#),
+                2,
+                None,
+                12,
+                12,
+                None,
+            )
+            .unwrap();
+            let ex_val = py_to_value(ex.bind(py)).unwrap();
+            assert_eq!(ex_val["argument_eval"]["triggers_dual_psyche_wedge"], true);
+            assert_eq!(ex_val["dissonance_stacks_added"], 2);
 
-        let ex_pascal_json = evaluate_social_exchange_json(
-            npc_psyche,
-            r#"["TransparencyVulnerabilityGoodFaith (with verifiable audit proof)", "MoralSanctityWitnessedSufferingMercy", "EmpiricalEvidenceLogicNovelIdeas"]"#,
-            2,
-            None,
-            12,
-            12,
-            None,
-        )
-        .unwrap();
-        let ex_pascal_val: serde_json::Value = serde_json::from_str(&ex_pascal_json).unwrap();
-        assert_eq!(ex_pascal_val["argument_eval"]["resonance_delta_ext"], -16);
-        assert_eq!(ex_pascal_val["argument_eval"]["clash_delta_ext"], 0);
+            let ex_9axis = evaluate_social_exchange(
+                py,
+                py_s(npc_psyche),
+                py_s(r#"["moral_sanctity", "transparency_good_faith"]"#),
+                2,
+                None,
+                12,
+                12,
+                None,
+            )
+            .unwrap();
+            assert_eq!(
+                py_to_value(ex_9axis.bind(py)).unwrap()["argument_eval"]
+                    ["triggers_dual_psyche_wedge"],
+                true
+            );
 
-        let ledger_json = seed_or_update_world_ledger_json(
-            "sess-py-wc",
-            None,
-            Some(r#"{"economic_tier":"LUXURY_MANSION","incident_severity":"loud_firefight","faction_id":"daise","clock_delta":2}"#),
-            Some("awakened"),
-            None,
-        )
-        .unwrap();
-        let ledger_val: serde_json::Value = serde_json::from_str(&ledger_json).unwrap();
-        assert_eq!(ledger_val["ledger"]["operational_heat"], 4);
-        assert!(
-            !ledger_val["triggered_events"]
-                .as_array()
-                .unwrap()
-                .is_empty()
-        );
+            let ex_pascal = evaluate_social_exchange(
+                py,
+                py_s(npc_psyche),
+                py_s(
+                    r#"["TransparencyVulnerabilityGoodFaith (with verifiable audit proof)", "MoralSanctityWitnessedSufferingMercy", "EmpiricalEvidenceLogicNovelIdeas"]"#,
+                ),
+                2,
+                None,
+                12,
+                12,
+                None,
+            )
+            .unwrap();
+            let ex_pascal_val = py_to_value(ex_pascal.bind(py)).unwrap();
+            assert_eq!(ex_pascal_val["argument_eval"]["resonance_delta_ext"], -16);
+            assert_eq!(ex_pascal_val["argument_eval"]["clash_delta_ext"], 0);
+
+            let ledger = seed_or_update_world_ledger(
+                py,
+                "sess-py-wc",
+                None,
+                Some(py_s(
+                    r#"{"economic_tier":"LUXURY_MANSION","incident_severity":"loud_firefight","faction_id":"daise","clock_delta":2}"#,
+                )),
+                Some("awakened"),
+                None,
+            )
+            .unwrap();
+            let ledger_val = py_to_value(ledger.bind(py)).unwrap();
+            assert_eq!(ledger_val["ledger"]["operational_heat"], 4);
+            assert!(!ledger_val["triggered_events"].as_array().unwrap().is_empty());
+        });
     }
 
     #[test]
     fn test_combat_motivation_triggers_and_morale_roll_roundtrip() {
-        let high_trust_compassionate = r#"{"trs": 16, "cps": 16, "blg": 12, "cnf": 14}"#;
-        let hardened_low_trust = r#"{"trs": 4, "cps": 6, "blg": 8, "cnf": 10}"#;
+        Python::initialize();
+        Python::attach(|py| {
+            let py_s = |s: &str| PyString::new(py, s).into_any();
+            let high_trust_compassionate = r#"{"trs": 16, "cps": 16, "blg": 12, "cnf": 14}"#;
+            let hardened_low_trust = r#"{"trs": 4, "cps": 6, "blg": 8, "cnf": 10}"#;
 
-        let mot_val: serde_json::Value = serde_json::from_str(
-            &evaluate_combat_motivation_json(
-                high_trust_compassionate,
+            let mot = evaluate_combat_motivation(
+                py,
+                py_s(high_trust_compassionate),
                 "shielding_innocents_sanctity_of_life",
                 true,
             )
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(mot_val["delta_mot"], 2);
+            .unwrap();
+            assert_eq!(py_to_value(mot.bind(py)).unwrap()["delta_mot"], 2);
 
-        let betray_high: serde_json::Value = serde_json::from_str(
-            &evaluate_emotional_trigger_json(
-                high_trust_compassionate,
+            let betray_high = evaluate_emotional_trigger(
+                py,
+                py_s(high_trust_compassionate),
                 10,
                 "steady",
                 0,
                 "betrayed_by_trusted_ally",
                 1,
-                Some("[[5, 5]]"),
+                Some(py_s("[[5, 5]]")),
             )
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(betray_high["susceptible"], true);
-        assert_eq!(betray_high["new_morale_state"], "wavering");
-        assert_eq!(betray_high["delta_int_inflicted"], 2);
+            .unwrap();
+            let bh_val = py_to_value(betray_high.bind(py)).unwrap();
+            assert_eq!(bh_val["susceptible"], true);
+            assert_eq!(bh_val["new_morale_state"], "wavering");
+            assert_eq!(bh_val["delta_int_inflicted"], 2);
 
-        let betray_low: serde_json::Value = serde_json::from_str(
-            &evaluate_emotional_trigger_json(
-                hardened_low_trust,
+            let betray_low = evaluate_emotional_trigger(
+                py,
+                py_s(hardened_low_trust),
                 10,
                 "steady",
                 0,
                 "betrayed_by_trusted_ally",
                 1,
-                Some("[[5, 5]]"),
+                Some(py_s("[[5, 5]]")),
             )
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(betray_low["susceptible"], false);
+            .unwrap();
+            assert_eq!(py_to_value(betray_low.bind(py)).unwrap()["susceptible"], false);
 
-        let mercy_trig: serde_json::Value = serde_json::from_str(
-            &evaluate_emotional_trigger_json(
-                high_trust_compassionate,
+            let mercy_trig = evaluate_emotional_trigger(
+                py,
+                py_s(high_trust_compassionate),
                 12,
                 "rage",
                 0,
@@ -791,31 +757,30 @@ mod tests {
                 1,
                 None,
             )
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(mercy_trig["susceptible"], true);
-        assert_eq!(mercy_trig["new_morale_state"], "steady");
-        assert_eq!(mercy_trig["unlocks_protective_conviction"], true);
+            .unwrap();
+            let mt_val = py_to_value(mercy_trig.bind(py)).unwrap();
+            assert_eq!(mt_val["susceptible"], true);
+            assert_eq!(mt_val["new_morale_state"], "steady");
+            assert_eq!(mt_val["unlocks_protective_conviction"], true);
 
-        let morale_roll: serde_json::Value = serde_json::from_str(
-            &evaluate_combat_morale_roll_json(
-                high_trust_compassionate,
+            let morale_roll = evaluate_combat_morale_roll(
+                py,
+                py_s(high_trust_compassionate),
                 10,
                 "shielding_innocents_sanctity_of_life",
                 true,
                 0,
-                r#"{"ally_casualty_ratio": 0.6, "outnumbered_ratio": 2.5}"#,
+                py_s(r#"{"ally_casualty_ratio": 0.6, "outnumbered_ratio": 2.5}"#),
                 false,
                 "steady",
-                "[[4, 3]]",
-                "[19, 18]",
+                py_s("[[4, 3]]"),
+                py_s("[19, 18]"),
             )
-            .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(morale_roll["delta_mot"], 2);
-        assert_eq!(morale_roll["delta_morale"], 6);
-        assert!(morale_roll["roll_outcome"]["new_morale"].is_string());
+            .unwrap();
+            let mr_val = py_to_value(morale_roll.bind(py)).unwrap();
+            assert_eq!(mr_val["delta_mot"], 2);
+            assert_eq!(mr_val["delta_morale"], 6);
+            assert!(mr_val["roll_outcome"]["new_morale"].is_string());
+        });
     }
 }

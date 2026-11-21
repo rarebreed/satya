@@ -347,14 +347,16 @@ pub fn order_statistic_pmf(pool_size: usize, sides: i32, k_rank_from_lowest: usi
 // 5. Distance-from-Center Selection: Focus vs. Neutral vs. Chaos (U-Shaped)
 // ---------------------------------------------------------------------------
 
-/// Selection mode for [`center_distance_selection_pmf`].
-///
-/// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CenterDistanceMode {
-    Closest,
-    Furthest,
+crate::define_coded_enum! {
+    /// Selection mode for [`center_distance_selection_pmf`].
+    ///
+    /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§1).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum CenterDistanceMode [count = 2] {
+        Closest => { code: "closest", label: "Closest to Center", aliases: ["focus"] },
+        Furthest => { code: "furthest", label: "Furthest from Center", aliases: ["farthest", "chaos"] },
+    }
 }
 
 /// Roll `pool_size` `dK` and pick the die closest to or furthest from the center $(K+1)/2$.

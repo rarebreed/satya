@@ -3,6 +3,17 @@
 //! Generates `ALL`, `as_str()`, `code()`, `label()`, and case-insensitive alias-aware `from_code_str()`,
 //! alongside `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Hash`, `Serialize`, and `Deserialize`.
 
+/// Shared interface implemented by every `define_wire_enum!` and `define_coded_enum!` enum.
+pub trait CodedEnum: Copy + Eq + 'static {
+    const ALL: &'static [Self];
+
+    fn code(self) -> &'static str;
+
+    fn label(self) -> &'static str;
+
+    fn from_code_str(raw: &str) -> Option<Self>;
+}
+
 /// Declares a fieldless `SCREAMING_SNAKE_CASE` wire enum with `ALL`, `as_str`, `code`, `label`,
 /// and case-insensitive alias-aware `from_code_str`.
 #[macro_export]
@@ -62,11 +73,29 @@ macro_rules! define_wire_enum {
                 None
             }
         }
+
+        impl $crate::CodedEnum for $Name {
+            const ALL: &'static [Self] = &Self::ALL;
+
+            fn code(self) -> &'static str {
+                self.code()
+            }
+
+            fn label(self) -> &'static str {
+                self.label()
+            }
+
+            fn from_code_str(raw: &str) -> Option<Self> {
+                Self::from_code_str(raw)
+            }
+        }
     };
 }
 
 #[cfg(test)]
 mod tests {
+    use super::CodedEnum;
+
     define_wire_enum! {
         #[derive(Default)]
         pub enum SampleWireKind [count = 2] {
@@ -105,5 +134,11 @@ mod tests {
             serde_json::from_str::<SampleWireKind>(&wire).unwrap(),
             SampleWireKind::Beta
         );
+        fn assert_coded<T: CodedEnum + std::fmt::Debug>(val: T, exp: &str) {
+            assert_eq!(val.code(), exp);
+            assert_eq!(T::from_code_str(exp), Some(val));
+            assert_eq!(T::ALL.len(), 2);
+        }
+        assert_coded(SampleWireKind::Beta, "BETA");
     }
 }

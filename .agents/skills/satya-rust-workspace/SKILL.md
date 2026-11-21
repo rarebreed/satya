@@ -36,8 +36,11 @@ Domain-specific workflows and module maps:
    - Never redefine a struct, enum, geometry helper, or mathematical formula in a downstream crate (`satya-web`, `satya-signaling`, `satya-py`, `src/satya_ml/`) when a canonical definition already exists in `satya-schema` or `satya-engine` (`MapPropPlacement::footprint_m()`, `PropFootprintM`).
 2. **Declarative Macros & Static Lookup Tables Over Repetitive Code**:
    - Use `satya_schema::define_wire_enum!` for `SCREAMING_SNAKE_CASE` wire enums (`aliases`, `as_str`, `code`, `label`, `from_code_str`), `satya_engine::define_coded_enum!` for domain enums, `bind_window_callbacks!` for Wasm globals, and `&'static [...]` `const` slice tables instead of runtime heap `Vec` catalogs.
-3. **Maximum 5–6 Positional Parameters**:
-   - When a function requires more than 6 inputs (`clippy::too_many_arguments`), group related parameters into a typed configuration/context struct.
+3. **Prefer Idiomatic High-Leverage Abstractions Over Verbose Procedural Plumbing**:
+   - **Rust**: Use shared traits + generic parsers (e.g., `CodedEnum` / `FromStr` generic helpers generating valid-value errors from `T::ALL`) instead of per-enum `parse_*` boilerplate; use Serde tagged enums (`#[serde(tag = "action", rename_all = "SCREAMING_SNAKE_CASE")]`) and `#[serde(flatten)]` instead of manual `serde_json::Value` field probing; use PyO3 `FromPyObject`/`IntoPyObject` newtypes or `pythonize` rather than repeated manual JSON encode/decode wrappers.
+   - **Python**: Use single-source registration decorators, `ABC` (`@abstractmethod`) + structural `Protocol` contracts, PEP 695 generics (`class SessionStore[T]`) / `type` aliases / `TypedDict` / `Final` + `MappingProxyType` tables, Pydantic v2 discriminated unions (`Annotated[..., Field(discriminator=...)]`), and functional helpers (`next(...)`, `sum(...)`, pure predicates) instead of `if/elif` chains, duplicated roll/reset boilerplate, mutable lookup dicts, or untyped `params_json: str` blobs.
+4. **Maximum 5–6 Positional Parameters**:
+   - When a function requires more than 6 inputs (`clippy::too_many_arguments`), group related parameters into a typed configuration/context struct or a scoped builder struct (e.g., `FloorCanvas<'a>` instead of threading `edges, w, h` through every helper). Never paper over avoidable parameter sprawl with `#[expect(clippy::too_many_arguments)]`.
 
 ---
 
@@ -83,7 +86,7 @@ Always invoke tools via `pixi run ...` (never call `.pixi/envs/default/*.exe` di
   pixi run cargo clippy --offline -p satya-schema -p satya-rules-book -p satya-engine -p satya-maps -p satya-campaign -p satya-web -p satya-signaling -p satya-storage --all-targets -- -D warnings
   pixi run cargo test --offline -p satya-schema -p satya-rules-book -p satya-engine -p satya-maps -p satya-campaign -p satya-web -p satya-signaling -p satya-storage
   ```
-- **PyO3 Extension (`satya-py`)**: use `--no-default-features` (`auto-initialize` off) for Rust unit tests/clippy, and `pixi run build-py` to compile release `src/satya_py.pyd`:
+- **PyO3 Extension (`satya-py`)**: use `--no-default-features` (`auto-initialize` off) for Rust unit tests/clippy, and `pixi run build-py` to compile release `src/satya_py/_native.pyd`:
   ```powershell
   pixi run cargo clippy --offline --no-default-features -p satya-py --all-targets -- -D warnings
   pixi run cargo test --offline --no-default-features -p satya-py

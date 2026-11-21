@@ -132,6 +132,21 @@ pub const PROP_BRUSH_GROUPS: &[(&str, &[PropKind])] = &[
         ],
     ),
     (
+        "Awakened 2035 & Grid",
+        &[
+            PropKind::CryoComputeCluster,
+            PropKind::BioServerVat,
+            PropKind::AirGappedTerminal,
+            PropKind::BiometricTurnstile,
+            PropKind::SecurityCameraMast,
+            PropKind::DroneDockPad,
+            PropKind::HvTransformer,
+            PropKind::DieselGenerator,
+            PropKind::BatteryBankWall,
+            PropKind::WaterPurifierKiosk,
+        ],
+    ),
+    (
         "Outdoors & Vehicles",
         &[
             PropKind::LargeTree,

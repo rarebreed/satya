@@ -210,6 +210,16 @@ prop_catalog! {
     WaterCooler: 1 x 1, FloorLayer, Appliance, 122 cm, [0.72, 0.84, 0.92], floor;
     BrownstoneStoop: 2 x 2, FloorLayer, Brick, 72 cm, [0.58, 0.38, 0.30], floor;
     AwningCanopy: 2 x 1, FloorLayer, Upholstery, 255 cm, [0.72, 0.22, 0.20], stretch, floor;
+    CryoComputeCluster: 2 x 1, FullObstacle, ArmorSteel, 220 cm, [0.16, 0.24, 0.30];
+    BioServerVat: 1 x 1, FullObstacle, Glass, 175 cm, [0.22, 0.64, 0.72];
+    AirGappedTerminal: 1 x 1, HalfCover, SheetSteel, 125 cm, [0.24, 0.30, 0.36];
+    BiometricTurnstile: 2 x 1, HalfCover, SheetSteel, 110 cm, [0.46, 0.52, 0.58];
+    SecurityCameraMast: 1 x 1, HalfCover, SheetSteel, 240 cm, [0.34, 0.38, 0.42];
+    DroneDockPad: 2 x 2, FloorLayer, SheetSteel, 8 cm, [0.26, 0.30, 0.35], floor;
+    HvTransformer: 2 x 2, FullObstacle, ArmorSteel, 230 cm, [0.38, 0.43, 0.46];
+    DieselGenerator: 2 x 1, FullObstacle, SheetSteel, 155 cm, [0.64, 0.48, 0.16];
+    BatteryBankWall: 2 x 1, FullObstacle, SheetSteel, 190 cm, [0.22, 0.28, 0.34], stretch;
+    WaterPurifierKiosk: 1 x 1, HalfCover, SheetSteel, 165 cm, [0.32, 0.62, 0.78];
 }
 
 /// Catalog entry for `kind`.

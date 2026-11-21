@@ -356,6 +356,30 @@ pub const BATTLEMAP_TEXTURE_SPECS: &[BattlemapTextureSpec] = &[
         span_px: 128,
         fallback_hex: "#cfd4da",
     },
+    BattlemapTextureSpec {
+        pattern_id: "bm-faraday-copper",
+        asset_file: "faraday_copper_mesh.webp",
+        span_px: 128,
+        fallback_hex: "#8a5634",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-esd-cleanroom",
+        asset_file: "esd_cleanroom_tile.webp",
+        span_px: 128,
+        fallback_hex: "#cfdbe0",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-substation-grate",
+        asset_file: "substation_grating.webp",
+        span_px: 128,
+        fallback_hex: "#3b444e",
+    },
+    BattlemapTextureSpec {
+        pattern_id: "bm-flooded-asphalt",
+        asset_file: "flooded_asphalt.webp",
+        span_px: 192,
+        fallback_hex: "#2d3942",
+    },
 ];
 
 fn floor_webp_spec_for_theme_seeded(
@@ -501,6 +525,18 @@ fn push_extra_vector_pattern_defs(out: &mut String) {
     );
     out.push_str(
         r##"<pattern id="bm-car-coat" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#cfd4da"/><circle cx="14" cy="18" r="1.2" fill="#ffffff" fill-opacity=".4"/><circle cx="36" cy="12" r="1" fill="#ffffff" fill-opacity=".35"/><circle cx="26" cy="36" r="1.2" fill="#9ea6b2" fill-opacity=".3"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-faraday-copper" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#8a5634"/><path d="M0 16H32M16 0V32M0 8H32M8 0V32M0 24H32M24 0V32" stroke="#d97706" stroke-opacity=".45" stroke-width="1"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-esd-cleanroom" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#cfdbe0"/><path d="M0 24H48M24 0V48" stroke="#94a3b8" stroke-width="1"/><circle cx="24" cy="24" r="1.3" fill="#475569" fill-opacity=".45"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-substation-grate" width="24" height="24" patternUnits="userSpaceOnUse"><rect width="24" height="24" fill="#3b444e"/><path d="M0 6H24M0 18H24M6 0V24M18 0V24" stroke="#1e293b" stroke-width="1.6"/></pattern>"##,
+    );
+    out.push_str(
+        r##"<pattern id="bm-flooded-asphalt" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="#2d3942"/><ellipse cx="26" cy="30" rx="18" ry="10" fill="#1e3a4c" fill-opacity=".55"/><path d="M12 30q14-6 28 0" fill="none" stroke="#7dd3fc" stroke-opacity=".35" stroke-width="1.2"/></pattern>"##,
     );
 }
 
@@ -660,8 +696,8 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn texture_spec_catalog_covers_all_46_webp_assets() {
-        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 46);
+    fn texture_spec_catalog_covers_all_50_webp_assets() {
+        assert_eq!(BATTLEMAP_TEXTURE_SPECS.len(), 50);
         let pids: BTreeSet<&str> = BATTLEMAP_TEXTURE_SPECS
             .iter()
             .map(|s| s.pattern_id)
@@ -670,8 +706,8 @@ mod tests {
             .iter()
             .map(|s| s.asset_file)
             .collect();
-        assert_eq!(pids.len(), 46);
-        assert_eq!(files.len(), 46);
+        assert_eq!(pids.len(), 50);
+        assert_eq!(files.len(), 50);
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../assets/textures/map2d");
         for spec in BATTLEMAP_TEXTURE_SPECS {

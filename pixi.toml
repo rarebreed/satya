@@ -82,5 +82,7 @@ notebook-rules = { cmd = "marimo edit notebooks/satya_rules_book.py", depends-on
 notebook-rules-app = { cmd = "marimo run notebooks/satya_rules_book.py", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Alias for rules-book-app: launch the Satya TTRPG Rules Book Marimo web app" }
 build-book = { cmd = "python -m satya_ml.build_rules_book", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Generate static HTML Rules Book pages and catalog.json into docs/book/" }
 check-py-ext = { cmd = "cargo check -p satya-py", description = "Type-check the satya-py PyO3 Python extension crate" }
+gen-stubs = { cmd = "python -m satya_py._stubgen", depends-on = ["build-py"], env = { PYTHONPATH = "src" }, description = "Auto-generate src/satya_py/_native.pyi from Rust sources and compiled satya_py._native signatures" }
+check-stubs = { cmd = "python -m satya_py._stubgen --check", env = { PYTHONPATH = "src" }, description = "Verify src/satya_py/_native.pyi matches Rust sources and compiled satya_py._native signatures" }
 gen-textures = { cmd = "python -m satya_ml.texture_gen", env = { PYTHONPATH = "src" }, description = "Generate and seam-heal 2D battlemap WebP textures via Gemini Nano Banana" }
 verify-textures = { cmd = "python -m satya_ml.texture_gen --verify-only", env = { PYTHONPATH = "src" }, description = "Verify 2D battlemap WebP tiles exist and pass seamless wrap checks" }

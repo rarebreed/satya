@@ -4,29 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any
-
-try:
-    from langchain_core.tools import tool
-except ImportError:  # pragma: no cover
-
-    class _FallbackToolWrapper:
-        def __init__(self, fn: Any) -> None:
-            self._fn = fn
-            self.name = getattr(fn, "__name__", "tool")
-            self.__doc__ = getattr(fn, "__doc__", "")
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return self._fn(*args, **kwargs)
-
-        def invoke(self, input_dict: dict[str, Any]) -> Any:
-            return self._fn(**input_dict)
-
-    def tool(fn: Any = None, **_kwargs: Any) -> Any:
-        if fn is None:
-            return lambda f: _FallbackToolWrapper(f)
-        return _FallbackToolWrapper(fn)
-
+from typing import Any, Final
 
 from satya_py import awakened as _awakened, campaign as _campaign, psyche as _psyche
 
@@ -36,16 +14,14 @@ from satya_ml.ai_gm.social_and_clocks import (
     advance_faction_or_heat_clock,
     get_session_world_ledger,
 )
+from satya_ml.ai_gm.tool_spec import SessionStore, satya_gm_tool
 
-_SESSION_AUDIT_PROOFS: dict[str, dict[str, dict[str, Any]]] = {}
+_SESSION_AUDIT_PROOFS: Final[SessionStore[dict[str, dict[str, Any]]]] = SessionStore()
 
 
 def reset_session_audit_proofs(session_id: str | None = None) -> None:
     """Clear verified forensic audit-proof tokens for `session_id` or all sessions."""
-    if session_id is None:
-        _SESSION_AUDIT_PROOFS.clear()
-        return
-    _SESSION_AUDIT_PROOFS.pop(session_id, None)
+    _SESSION_AUDIT_PROOFS.reset(session_id)
 
 
 def record_audit_proof_token(
@@ -144,7 +120,7 @@ def _character_has_osint_or_deepfake_anchor(session_id: str, actor_character_id:
     return False
 
 
-@tool
+@satya_gm_tool(pack="tech_and_tradecraft", tier="TIER_2_RULESET_ENGINE")
 def verify_forensic_audit_proof(
     evidence_label: str,
     target_npc_or_faction: str,
@@ -224,7 +200,11 @@ def verify_forensic_audit_proof(
     }
 
 
-@tool
+@satya_gm_tool(
+    pack="awakened_campaign",
+    tier="TIER_2_RULESET_ENGINE",
+    campaign_packs=("awakened",),
+)
 def inspect_synthetic_or_proxy_telemetry(
     target_npc_id_or_signal: str,
     approach: str = "passive_telemetry",

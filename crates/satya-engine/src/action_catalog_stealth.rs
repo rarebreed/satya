@@ -904,15 +904,17 @@ pub const fn evaluate_alertness_transition(
     }
 }
 
-/// Floor/terrain acoustic signature during movement (`stealth_awareness_and_investigation.md` §3.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum AcousticSurfaceKind {
-    ThickCarpetOrTurf,
-    ConcreteAsphaltOrTile,
-    HardwoodOrCreakyStairs,
-    GravelOrDryLeaves,
-    BrokenGlassOrMetalGrate,
+crate::define_coded_enum! {
+    /// Floor/terrain acoustic signature during movement (`stealth_awareness_and_investigation.md` §3.2).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+    pub enum AcousticSurfaceKind [count = 5] {
+        ThickCarpetOrTurf => { code: "THICK_CARPET_OR_TURF", label: "Thick Carpet / Turf" },
+        ConcreteAsphaltOrTile => { code: "CONCRETE_ASPHALT_OR_TILE", label: "Concrete / Asphalt / Tile" },
+        HardwoodOrCreakyStairs => { code: "HARDWOOD_OR_CREAKY_STAIRS", label: "Hardwood / Creaky Stairs" },
+        GravelOrDryLeaves => { code: "GRAVEL_OR_DRY_LEAVES", label: "Gravel / Dry Leaves" },
+        BrokenGlassOrMetalGrate => { code: "BROKEN_GLASS_OR_METAL_GRATE", label: "Broken Glass / Metal Grate" },
+    }
 }
 
 impl AcousticSurfaceKind {

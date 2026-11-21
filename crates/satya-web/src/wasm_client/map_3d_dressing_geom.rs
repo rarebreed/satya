@@ -1257,6 +1257,25 @@ pub fn push_dressing_geometry(
                     cutaway,
                 );
             }
+            PropKind::CryoComputeCluster
+            | PropKind::BioServerVat
+            | PropKind::AirGappedTerminal
+            | PropKind::BiometricTurnstile
+            | PropKind::SecurityCameraMast
+            | PropKind::DroneDockPad
+            | PropKind::HvTransformer
+            | PropKind::DieselGenerator
+            | PropKind::BatteryBankWall
+            | PropKind::WaterPurifierKiosk => {
+                let _ = crate::wasm_client::map_3d_props_awakened::push_awakened_prop_3d(
+                    verts,
+                    p,
+                    [cx, cz],
+                    [hx, hz],
+                    top,
+                    cutaway,
+                );
+            }
             _ => {
                 let cap = (top * 0.08).clamp(0.02, 0.06);
                 push_obb(verts, cx, cz, 0.0, top - cap, hx, hz, rot, rgb, 0.0);

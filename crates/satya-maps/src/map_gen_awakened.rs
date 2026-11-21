@@ -1,7 +1,10 @@
 //! # *Awakened* 2035 Procedural Venue Generators (`map_gen_awakened`)
 //!
-//! Four scenario-grounded 2035 near-future battlemap generators built strictly on existing
-//! validated [`PropKind`] and [`SurfaceFeatureKind`] variants:
+//! Four scenario-grounded 2035 near-future battlemap generators pairing bespoke 2035 props
+//! (`CryoComputeCluster`, `BioServerVat`, `AirGappedTerminal`, `BiometricTurnstile`,
+//! `SecurityCameraMast`, `DroneDockPad`, `HvTransformer`, `DieselGenerator`, `BatteryBankWall`,
+//! `WaterPurifierKiosk`) and surfaces (`FaradayCopperFloor`, `AntiStaticCleanroomFloor`,
+//! `SubstationGrating`, `FloodedAsphalt`) with Faraday shielding and surveillance metadata:
 //! - [`SectorPreset::CommunityClinicAnnex`] (*Episode 1: Cold Storage at St. Jude Annex*, `1F` + `B1` vault)
 //! - [`SectorPreset::CorporateServerBunker`] (Hardened AI 2.0 cryo-compute hall + biometric mantrap)
 //! - [`SectorPreset::SatyangSafehouse`] (Covert copper-mesh shophouse & `B1` SIGINT sanctuary)
@@ -18,118 +21,115 @@ use crate::map_outdoor_gen::OutdoorBuilder;
 use crate::map_surface_queries::prune_occluded_surfaces;
 use crate::tactical_map::{ProceduralSector, SectorPreset};
 
-#[expect(clippy::too_many_arguments)]
-fn upsert_edge(
-    edges: &mut Vec<MapWallEdge>,
+struct FloorCanvas<'a> {
+    edges: &'a mut Vec<MapWallEdge>,
     w: i32,
     h: i32,
-    x: i32,
-    y: i32,
-    side: EdgeSide,
-    kind: WallEdgeKind,
-    material: MaterialClass,
-) {
-    let valid = match side {
-        EdgeSide::West => x >= 0 && x <= w && y >= 0 && y < h,
-        EdgeSide::North => x >= 0 && x < w && y >= 0 && y <= h,
-    };
-    if !valid {
-        return;
-    }
-    let e = MapWallEdge {
-        x,
-        y,
-        side,
-        kind,
-        material,
-    };
-    match edges
-        .iter_mut()
-        .find(|o| o.x == x && o.y == y && o.side == side)
-    {
-        Some(slot) => *slot = e,
-        None => edges.push(e),
-    }
 }
 
-fn enclose_lot(
-    edges: &mut Vec<MapWallEdge>,
-    w: i32,
-    h: i32,
-    lot: LotBox,
-    wall_mat: MaterialClass,
-    win_step: i32,
-) {
-    for x in lot.x0..lot.x1 {
-        let win = win_step > 0 && (x - lot.x0) % win_step == 1 && x + 1 < lot.x1;
-        let (k, m) = if win {
-            (WallEdgeKind::Window, MaterialClass::Glass)
-        } else {
-            (WallEdgeKind::Wall, wall_mat)
-        };
-        upsert_edge(edges, w, h, x, lot.y0, EdgeSide::North, k, m);
-        upsert_edge(edges, w, h, x, lot.y1, EdgeSide::North, k, m);
+impl<'a> FloorCanvas<'a> {
+    fn new(edges: &'a mut Vec<MapWallEdge>, w: i32, h: i32) -> Self {
+        Self { edges, w, h }
     }
-    for y in lot.y0..lot.y1 {
-        let win = win_step > 0 && (y - lot.y0) % win_step == 1 && y + 1 < lot.y1;
-        let (k, m) = if win {
-            (WallEdgeKind::Window, MaterialClass::Glass)
-        } else {
-            (WallEdgeKind::Wall, wall_mat)
-        };
-        upsert_edge(edges, w, h, lot.x0, y, EdgeSide::West, k, m);
-        upsert_edge(edges, w, h, lot.x1, y, EdgeSide::West, k, m);
-    }
-}
 
-#[expect(clippy::too_many_arguments)]
-fn build_v_partition(
-    edges: &mut Vec<MapWallEdge>,
-    w: i32,
-    h: i32,
-    x: i32,
-    y0: i32,
-    y1: i32,
-    door_y: i32,
-    open: bool,
-    wall_mat: MaterialClass,
-) {
-    let dk = if open {
-        WallEdgeKind::DoorOpen
-    } else {
-        WallEdgeKind::DoorClosed
-    };
-    for y in y0..y1 {
-        if y == door_y {
-            upsert_edge(edges, w, h, x, y, EdgeSide::West, dk, MaterialClass::SheetSteel);
-        } else {
-            upsert_edge(edges, w, h, x, y, EdgeSide::West, WallEdgeKind::Wall, wall_mat);
+    fn upsert(
+        &mut self,
+        x: i32,
+        y: i32,
+        side: EdgeSide,
+        kind: WallEdgeKind,
+        material: MaterialClass,
+    ) {
+        let valid = match side {
+            EdgeSide::West => x >= 0 && x <= self.w && y >= 0 && y < self.h,
+            EdgeSide::North => x >= 0 && x < self.w && y >= 0 && y <= self.h,
+        };
+        if !valid {
+            return;
+        }
+        let e = MapWallEdge {
+            x,
+            y,
+            side,
+            kind,
+            material,
+        };
+        match self
+            .edges
+            .iter_mut()
+            .find(|o| o.x == x && o.y == y && o.side == side)
+        {
+            Some(slot) => *slot = e,
+            None => self.edges.push(e),
         }
     }
-}
 
-#[expect(clippy::too_many_arguments)]
-fn build_h_partition(
-    edges: &mut Vec<MapWallEdge>,
-    w: i32,
-    h: i32,
-    y: i32,
-    x0: i32,
-    x1: i32,
-    door_x: i32,
-    open: bool,
-    wall_mat: MaterialClass,
-) {
-    let dk = if open {
-        WallEdgeKind::DoorOpen
-    } else {
-        WallEdgeKind::DoorClosed
-    };
-    for x in x0..x1 {
-        if x == door_x {
-            upsert_edge(edges, w, h, x, y, EdgeSide::North, dk, MaterialClass::SheetSteel);
+    fn enclose(&mut self, lot: LotBox, wall_mat: MaterialClass, win_step: i32) {
+        for x in lot.x0..lot.x1 {
+            let win = win_step > 0 && (x - lot.x0) % win_step == 1 && x + 1 < lot.x1;
+            let (k, m) = if win {
+                (WallEdgeKind::Window, MaterialClass::Glass)
+            } else {
+                (WallEdgeKind::Wall, wall_mat)
+            };
+            self.upsert(x, lot.y0, EdgeSide::North, k, m);
+            self.upsert(x, lot.y1, EdgeSide::North, k, m);
+        }
+        for y in lot.y0..lot.y1 {
+            let win = win_step > 0 && (y - lot.y0) % win_step == 1 && y + 1 < lot.y1;
+            let (k, m) = if win {
+                (WallEdgeKind::Window, MaterialClass::Glass)
+            } else {
+                (WallEdgeKind::Wall, wall_mat)
+            };
+            self.upsert(lot.x0, y, EdgeSide::West, k, m);
+            self.upsert(lot.x1, y, EdgeSide::West, k, m);
+        }
+    }
+
+    fn v_partition(
+        &mut self,
+        x: i32,
+        y0: i32,
+        y1: i32,
+        door_y: i32,
+        open: bool,
+        wall_mat: MaterialClass,
+    ) {
+        let dk = if open {
+            WallEdgeKind::DoorOpen
         } else {
-            upsert_edge(edges, w, h, x, y, EdgeSide::North, WallEdgeKind::Wall, wall_mat);
+            WallEdgeKind::DoorClosed
+        };
+        for y in y0..y1 {
+            if y == door_y {
+                self.upsert(x, y, EdgeSide::West, dk, MaterialClass::SheetSteel);
+            } else {
+                self.upsert(x, y, EdgeSide::West, WallEdgeKind::Wall, wall_mat);
+            }
+        }
+    }
+
+    fn h_partition(
+        &mut self,
+        y: i32,
+        x0: i32,
+        x1: i32,
+        door_x: i32,
+        open: bool,
+        wall_mat: MaterialClass,
+    ) {
+        let dk = if open {
+            WallEdgeKind::DoorOpen
+        } else {
+            WallEdgeKind::DoorClosed
+        };
+        for x in x0..x1 {
+            if x == door_x {
+                self.upsert(x, y, EdgeSide::North, dk, MaterialClass::SheetSteel);
+            } else {
+                self.upsert(x, y, EdgeSide::North, WallEdgeKind::Wall, wall_mat);
+            }
         }
     }
 }
@@ -209,10 +209,15 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
     let lot = safe_interior_lot(w, h, has_street);
     let s = (b.rng.next() & 0xffff_ffff) as u32;
 
-    // Non-overlapping exterior ribbons/zones around `lot`.
     if w >= 12 && lot.x0 >= 3 {
         let alley = LotBox::new(0, lot.y0, lot.x0, lot.y1);
         b.surfaces.push(alley.polygon_feature(SurfaceFeatureKind::BrickPaverWalk, 0, s + 1));
+        if lot.h() >= 5 {
+            b.surfaces.push(
+                LotBox::new(0, lot.y1 - 2, 2.min(lot.x0), lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::FloodedAsphalt, 0, s + 12),
+            );
+        }
     }
     if w >= 12 && lot.x1 + 3 <= w {
         let util = LotBox::new(lot.x1, lot.y0, w, lot.y1);
@@ -227,7 +232,6 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
         }
     }
 
-    // 1F interior zoning & shell.
     let split_x = lot.x0 + lot.w() / 2;
     let split_y = lot.y0 + lot.h() / 2;
     let has_two_wings = lot.w() >= 10 && lot.h() >= 7;
@@ -244,66 +248,19 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
         b.surfaces.push(lot.polygon_feature(SurfaceFeatureKind::ClinicalVinylFloor, 0, s + 6));
     }
 
-    enclose_lot(&mut b.edges, w, h, lot, MaterialClass::Brick, 3);
-    // Exterior doors: South triage entrance + West service alley door + East emergency exit.
     let front_door_x = lot.x0 + (lot.w() / 4).max(1);
-    upsert_edge(
-        &mut b.edges,
-        w,
-        h,
-        front_door_x,
-        lot.y1,
-        EdgeSide::North,
-        WallEdgeKind::DoorOpen,
-        MaterialClass::Glass,
-    );
-    upsert_edge(
-        &mut b.edges,
-        w,
-        h,
-        lot.x0,
-        lot.y0 + 1,
-        EdgeSide::West,
-        WallEdgeKind::DoorClosed,
-        MaterialClass::SheetSteel,
-    );
-    upsert_edge(
-        &mut b.edges,
-        w,
-        h,
-        lot.x1,
-        lot.y0 + 1,
-        EdgeSide::West,
-        WallEdgeKind::DoorClosed,
-        MaterialClass::SheetSteel,
-    );
-
-    if has_two_wings {
-        build_v_partition(
-            &mut b.edges,
-            w,
-            h,
-            split_x,
-            lot.y0,
-            lot.y1,
-            lot.y0 + lot.h() / 2,
-            true,
-            MaterialClass::Drywall,
-        );
-        build_h_partition(
-            &mut b.edges,
-            w,
-            h,
-            split_y,
-            split_x,
-            lot.x1,
-            split_x + (lot.x1 - split_x) / 2,
-            false,
-            MaterialClass::Drywall,
-        );
+    {
+        let mut fc = FloorCanvas::new(&mut b.edges, w, h);
+        fc.enclose(lot, MaterialClass::Brick, 3);
+        fc.upsert(front_door_x, lot.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::Glass);
+        fc.upsert(lot.x0, lot.y0 + 1, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::SheetSteel);
+        fc.upsert(lot.x1, lot.y0 + 1, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::SheetSteel);
+        if has_two_wings {
+            fc.v_partition(split_x, lot.y0, lot.y1, lot.y0 + lot.h() / 2, true, MaterialClass::Drywall);
+            fc.h_partition(split_y, split_x, lot.x1, split_x + (lot.x1 - split_x) / 2, false, MaterialClass::Drywall);
+        }
     }
 
-    // Aligned vertical circulation (`Stairwell` + `ServiceElevator` when room allows).
     let portal_x = if has_two_wings { split_x - 2 } else { lot.x0 };
     let portal_y = lot.y0;
     let has_multi_floor = w >= 20 && h >= 14 && has_two_wings;
@@ -324,19 +281,19 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
         make_prop(PropKind::ServiceElevator, split_x.min(lot.x1 - 3), lot.y0, 0, None, s + 11),
     );
 
-    // 1F clinic furnishings (always including HalfCover props cleanly).
     let clinic_props = if has_two_wings {
         vec![
             make_prop(PropKind::NurseStation, lot.x0 + 1, lot.y1 - 3, 0, None, s + 20),
-            make_prop(PropKind::ReclinerChair, lot.x0, lot.y0 + 2, 90, None, s + 21),
-            make_prop(PropKind::WaterCooler, split_x - 1, lot.y1 - 1, 0, None, s + 22),
-            make_prop(PropKind::HospitalBed, lot.x1 - 2, lot.y0, 90, None, s + 23),
-            make_prop(PropKind::PrivacyCurtain, lot.x1 - 3, lot.y0 + 1, 0, None, s + 24),
-            make_prop(PropKind::TelemetryMonitor, lot.x1 - 1, lot.y0 + 2, 0, None, s + 25),
-            make_prop(PropKind::Cot, split_x, split_y + 1, 0, None, s + 26),
-            make_prop(PropKind::MedicalCounter, lot.x1 - 2, lot.y1 - 1, 0, Some(2), s + 27),
-            make_prop(PropKind::BiohazardBin, lot.x1 - 1, split_y + 1, 0, None, s + 28),
-            make_prop(PropKind::LinenCart, split_x + 1, lot.y1 - 1, 0, None, s + 29),
+            make_prop(PropKind::BiometricTurnstile, front_door_x + 1, lot.y1 - 1, 0, None, s + 21),
+            make_prop(PropKind::ReclinerChair, lot.x0, lot.y0 + 2, 90, None, s + 22),
+            make_prop(PropKind::WaterPurifierKiosk, split_x - 1, lot.y1 - 1, 0, None, s + 23),
+            make_prop(PropKind::HospitalBed, lot.x1 - 2, lot.y0, 90, None, s + 24),
+            make_prop(PropKind::PrivacyCurtain, lot.x1 - 3, lot.y0 + 1, 0, None, s + 25),
+            make_prop(PropKind::TelemetryMonitor, lot.x1 - 1, lot.y0 + 2, 0, None, s + 26),
+            make_prop(PropKind::Cot, split_x, split_y + 1, 0, None, s + 27),
+            make_prop(PropKind::MedicalCounter, lot.x1 - 2, lot.y1 - 1, 0, Some(2), s + 28),
+            make_prop(PropKind::BiohazardBin, lot.x1 - 1, split_y + 1, 0, None, s + 29),
+            make_prop(PropKind::LinenCart, split_x + 1, lot.y1 - 1, 0, None, s + 30),
         ]
     } else {
         vec![
@@ -349,19 +306,26 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
         let _ = try_push_prop(&b.edges, &mut b.props, &b.spawn_pads_m, w, h, cand);
     }
 
-    // Exterior props: West service alley, East transformer pad, South street triage van.
     if w >= 12 && lot.x0 >= 3 {
-        let _ = b.try_place_cm(PropKind::Dumpster, 120, (lot.y0 as f32 * 100.0) as i32 + 90, 90, None, true);
-        let _ = b.try_place_cm(PropKind::StreetDebris, 160, (lot.y1 as f32 * 100.0) as i32 - 120, 15, None, true);
+        let _ = b.try_place_cm(PropKind::Dumpster, 120, lot.y0 * 100 + 90, 90, None, true);
+        let _ = b.try_place_cm(PropKind::StreetDebris, 160, lot.y1 * 100 - 120, 15, None, true);
     }
     if w >= 12 && lot.x1 + 3 <= w {
         let _ = b.try_place_cm(PropKind::AcUnit, lot.x1 * 100 + 150, lot.y0 * 100 + 80, 0, None, true);
-        let _ = b.try_place_cm(PropKind::AirCompressor, lot.x1 * 100 + 150, lot.y0 * 100 + 200, 90, None, true);
+        let _ = b.try_place_cm(PropKind::DieselGenerator, lot.x1 * 100 + 150, lot.y0 * 100 + 220, 90, None, true);
     }
     if has_street {
         let _ = b.try_place_cm(
             PropKind::JerseyBarrier,
             (front_door_x - 2).max(1) * 100 + 50,
+            lot.y1 * 100 + 50,
+            0,
+            None,
+            true,
+        );
+        let _ = b.try_place_cm(
+            PropKind::WaterPurifierKiosk,
+            (front_door_x + 2).min(w - 2) * 100 + 50,
             lot.y1 * 100 + 50,
             0,
             None,
@@ -377,14 +341,6 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
                 true,
             );
         }
-        let _ = b.try_place_cm(
-            PropKind::TrashCan,
-            (front_door_x + 2).min(w - 2) * 100 + 50,
-            lot.y1 * 100 + 50,
-            0,
-            None,
-            true,
-        );
     }
 
     trim_floor_props_to_connected(w, h, LotBox::new(0, 0, w, h), &b.edges, &mut b.props);
@@ -393,30 +349,23 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
     let mut floors = Vec::new();
     let faraday_zones = if has_multi_floor {
         let mut b1_edges = Vec::new();
-        enclose_lot(&mut b1_edges, w, h, lot, MaterialClass::ReinforcedConcrete, 0);
-        build_v_partition(
-            &mut b1_edges,
-            w,
-            h,
-            split_x,
-            lot.y0,
-            lot.y1,
-            lot.y0 + lot.h() / 2,
-            false,
-            MaterialClass::ArmorSteel,
-        );
+        {
+            let mut b1_fc = FloorCanvas::new(&mut b1_edges, w, h);
+            b1_fc.enclose(lot, MaterialClass::ReinforcedConcrete, 0);
+            b1_fc.v_partition(split_x, lot.y0, lot.y1, lot.y0 + lot.h() / 2, false, MaterialClass::ArmorSteel);
+        }
         let mut b1_props = Vec::new();
         let b1_candidates = [
             make_prop(PropKind::Stairwell, portal_x.max(lot.x0), portal_y, 0, None, s + 40),
             make_prop(PropKind::ServiceElevator, split_x.min(lot.x1 - 3), lot.y0, 0, None, s + 41),
-            make_prop(PropKind::AirCompressor, lot.x0, lot.y1 - 1, 0, None, s + 42),
+            make_prop(PropKind::DieselGenerator, lot.x0, lot.y1 - 1, 0, None, s + 42),
             make_prop(PropKind::SteelShelving, lot.x0, lot.y0 + 2, 0, None, s + 43),
             make_prop(PropKind::LabBench, lot.x0 + 1, lot.y1 - 2, 0, None, s + 44),
             make_prop(PropKind::HazardSpill, split_x - 2, lot.y1 - 2, 0, None, s + 45),
-            make_prop(PropKind::ServerRack, lot.x1 - 1, lot.y0 + 1, 0, Some(2), s + 46),
-            make_prop(PropKind::ServerRack, lot.x1 - 1, lot.y1 - 2, 0, None, s + 47),
-            make_prop(PropKind::FumeHood, split_x + 1, lot.y1 - 1, 0, None, s + 48),
-            make_prop(PropKind::TestBench, split_x + 1, lot.y0 + 2, 0, None, s + 49),
+            make_prop(PropKind::CryoComputeCluster, lot.x1 - 2, lot.y0 + 1, 0, None, s + 46),
+            make_prop(PropKind::BioServerVat, lot.x1 - 1, lot.y1 - 2, 0, None, s + 47),
+            make_prop(PropKind::AirGappedTerminal, split_x + 1, lot.y1 - 1, 0, None, s + 48),
+            make_prop(PropKind::BatteryBankWall, split_x + 1, lot.y0 + 2, 0, None, s + 49),
         ];
         for cand in b1_candidates {
             let _ = try_push_prop(&b1_edges, &mut b1_props, &b.spawn_pads_m, w, h, cand);
@@ -424,9 +373,9 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
         trim_floor_props_to_connected(w, h, lot, &b1_edges, &mut b1_props);
         let mut b1_surfaces = vec![
             LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 50),
+                .polygon_feature(SurfaceFeatureKind::AntiStaticCleanroomFloor, 0, s + 50),
             LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::SteelPlateFloor, 0, s + 51),
+                .polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 51),
         ];
         prune_occluded_surfaces(&mut b1_surfaces, w, h);
         floors.push(MapFloorLevel {
@@ -436,7 +385,7 @@ fn generate_community_clinic_annex(w: i32, h: i32, seed: i64) -> ProceduralSecto
             wall_edges: b1_edges,
             props: b1_props,
             surfaces: b1_surfaces,
-            ground_floor_override: Some("concrete_stained".to_string()),
+            ground_floor_override: Some("faraday_copper_mesh".to_string()),
             ground_tint_rgb: None,
         });
         floors.push(MapFloorLevel {
@@ -524,9 +473,15 @@ fn generate_corporate_server_bunker(w: i32, h: i32, seed: i64) -> ProceduralSect
     }
     if has_apron {
         b.surfaces.push(
-            LotBox::new(0, lot.y1, w, h)
-                .polygon_feature(SurfaceFeatureKind::AsphaltRoad, 0, s + 3),
+            LotBox::new(0, lot.y1, w, (lot.y1 + 1).min(h))
+                .polygon_feature(SurfaceFeatureKind::ConcreteWalk, 0, s + 3),
         );
+        if lot.y1 + 2 <= h {
+            b.surfaces.push(
+                LotBox::new(0, lot.y1 + 1, w, h)
+                    .polygon_feature(SurfaceFeatureKind::AsphaltRoad, 0, s + 4),
+            );
+        }
     }
 
     let split_x = lot.x0 + (lot.w() * 2 / 5).max(2);
@@ -536,117 +491,87 @@ fn generate_corporate_server_bunker(w: i32, h: i32, seed: i64) -> ProceduralSect
     if has_wings {
         b.surfaces.push(
             LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::TerrazzoFloor, 0, s + 4),
+                .polygon_feature(SurfaceFeatureKind::AntiStaticCleanroomFloor, 0, s + 5),
         );
         b.surfaces.push(
             LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
-                .polygon_feature(SurfaceFeatureKind::SteelPlateFloor, 0, s + 5),
+                .polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 6),
         );
+        if lot.x1 - split_x >= 4 && lot.h() >= 5 {
+            b.surfaces.push(
+                LotBox::new(lot.x1 - 1, lot.y0 + 1, lot.x1, lot.y1 - 1)
+                    .polygon_feature(SurfaceFeatureKind::SubstationGrating, 0, s + 7),
+            );
+        }
     } else {
-        b.surfaces.push(lot.polygon_feature(SurfaceFeatureKind::SteelPlateFloor, 0, s + 5));
+        b.surfaces.push(lot.polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 6));
     }
 
-    enclose_lot(&mut b.edges, w, h, lot, MaterialClass::ReinforcedConcrete, 0);
-    // West mantrap entry & East egress airlock + South loading hatch.
-    upsert_edge(
-        &mut b.edges,
-        w,
-        h,
-        lot.x0,
-        lot.y0 + lot.h() / 2,
-        EdgeSide::West,
-        WallEdgeKind::DoorClosed,
-        MaterialClass::ArmorSteel,
-    );
-    upsert_edge(
-        &mut b.edges,
-        w,
-        h,
-        lot.x1,
-        lot.y0 + lot.h() / 2,
-        EdgeSide::West,
-        WallEdgeKind::DoorClosed,
-        MaterialClass::ArmorSteel,
-    );
-    upsert_edge(
-        &mut b.edges,
-        w,
-        h,
-        lot.x0 + lot.w() / 2,
-        lot.y1,
-        EdgeSide::North,
-        WallEdgeKind::DoorOpen,
-        MaterialClass::SheetSteel,
-    );
-
-    if has_wings {
-        // Glazed control room / server hall divider.
-        for y in lot.y0..lot.y1 {
-            if y == breaker_y {
-                upsert_edge(
-                    &mut b.edges,
-                    w,
-                    h,
-                    split_x,
-                    y,
-                    EdgeSide::West,
-                    WallEdgeKind::DoorClosed,
-                    MaterialClass::ArmorSteel,
-                );
-            } else {
-                upsert_edge(
-                    &mut b.edges,
-                    w,
-                    h,
-                    split_x,
-                    y,
-                    EdgeSide::West,
-                    WallEdgeKind::Window,
-                    MaterialClass::Glass,
-                );
+    {
+        let mut fc = FloorCanvas::new(&mut b.edges, w, h);
+        fc.enclose(lot, MaterialClass::ReinforcedConcrete, 0);
+        fc.upsert(lot.x0, lot.y0 + lot.h() / 2, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::ArmorSteel);
+        fc.upsert(lot.x1, lot.y0 + lot.h() / 2, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::ArmorSteel);
+        fc.upsert(lot.x0 + lot.w() / 2, lot.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
+        if has_wings {
+            for y in lot.y0..lot.y1 {
+                if y == breaker_y {
+                    fc.upsert(split_x, y, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::ArmorSteel);
+                } else {
+                    fc.upsert(split_x, y, EdgeSide::West, WallEdgeKind::Window, MaterialClass::Glass);
+                }
             }
+            fc.h_partition(breaker_y, split_x + 2, lot.x1, (split_x + 2).min(lot.x1 - 1), true, MaterialClass::ArmorSteel);
         }
-        build_h_partition(
-            &mut b.edges,
-            w,
-            h,
-            breaker_y,
-            split_x + 2,
-            lot.x1,
-            (split_x + 2).min(lot.x1 - 1),
-            true,
-            MaterialClass::ArmorSteel,
-        );
     }
 
     let cands = if has_wings {
         vec![
             make_prop(PropKind::DeskL, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
-            make_prop(PropKind::TelemetryMonitor, lot.x0, lot.y1 - 1, 0, None, s + 11),
+            make_prop(PropKind::BiometricTurnstile, lot.x0, lot.y0 + lot.h() / 2 + 1, 0, None, s + 11),
             make_prop(PropKind::FilingCabinet, split_x - 1, lot.y1 - 1, 0, None, s + 12),
             make_prop(PropKind::FireExtinguisher, split_x - 1, lot.y0, 0, None, s + 13),
-            make_prop(PropKind::ServerRack, split_x + 1, lot.y0 + 1, 0, Some(2), s + 14),
-            make_prop(PropKind::ServerRack, lot.x1 - 2, lot.y0 + 1, 0, Some(2), s + 15),
-            make_prop(PropKind::ElevatedCatwalk, split_x + 2, lot.y0 + 3, 90, Some(3), s + 16),
-            make_prop(PropKind::AirCompressor, lot.x1 - 1, breaker_y + 1, 0, None, s + 17),
-            make_prop(PropKind::TestBench, split_x + 1, lot.y1 - 1, 0, None, s + 18),
-            make_prop(PropKind::SolderingStation, lot.x1 - 2, lot.y1 - 1, 0, None, s + 19),
+            make_prop(PropKind::CryoComputeCluster, split_x + 1, lot.y0 + 1, 0, None, s + 14),
+            make_prop(PropKind::CryoComputeCluster, lot.x1 - 2, lot.y0 + 1, 0, None, s + 15),
+            make_prop(PropKind::BioServerVat, split_x + 2, lot.y0 + 3, 0, None, s + 16),
+            make_prop(PropKind::BatteryBankWall, lot.x1 - 2, breaker_y + 1, 0, None, s + 17),
+            make_prop(PropKind::AirGappedTerminal, split_x + 1, lot.y1 - 1, 0, None, s + 18),
+            make_prop(PropKind::ServerRack, lot.x1 - 1, lot.y1 - 1, 0, None, s + 19),
             make_prop(PropKind::SteelShelving, lot.x0 + 1, lot.y1 - 1, 0, None, s + 20),
         ]
     } else {
         vec![
-            make_prop(PropKind::Desk, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
-            make_prop(PropKind::ServerRack, lot.x1 - 2, lot.y0 + 1, 0, None, s + 11),
-            make_prop(PropKind::TestBench, lot.x0 + 1, lot.y1 - 2, 0, None, s + 12),
+            make_prop(PropKind::AirGappedTerminal, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
+            make_prop(PropKind::CryoComputeCluster, lot.x1 - 2, lot.y0 + 1, 0, None, s + 11),
+            make_prop(PropKind::BioServerVat, lot.x0 + 1, lot.y1 - 2, 0, None, s + 12),
         ]
     };
     for cand in cands {
         let _ = try_push_prop(&b.edges, &mut b.props, &b.spawn_pads_m, w, h, cand);
     }
 
+    if w >= 16 && lot.x1 + 3 <= w {
+        let _ = b.try_place_cm(PropKind::DroneDockPad, lot.x1 * 100 + 150, lot.y0 * 100 + 200, 0, None, true);
+    }
     if has_apron {
-        let _ = b.try_place_cm(PropKind::JerseyBarrier, (lot.x0 * 100 + 150).min(w * 100 - 150), lot.y1 * 100 + 80, 0, None, true);
-        let _ = b.try_place_cm(PropKind::Car, (lot.x1 - 2).max(4) * 100, (lot.y1 + 2).min(h - 1) * 100, 90, None, true);
+        let _ = b.try_place_cm(
+            PropKind::JerseyBarrier,
+            (lot.x0 * 100 + 150).min(w * 100 - 150),
+            lot.y1 * 100 + 50,
+            0,
+            None,
+            true,
+        );
+        if lot.y1 + 2 <= h {
+            let _ = b.try_place_cm(
+                PropKind::Car,
+                (lot.x1 - 2).max(4) * 100,
+                (lot.y1 + 2).min(h - 1) * 100,
+                90,
+                None,
+                true,
+            );
+        }
     }
 
     trim_floor_props_to_connected(w, h, LotBox::new(0, 0, w, h), &b.edges, &mut b.props);
@@ -728,6 +653,12 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
             LotBox::new(0, lot.y0, lot.x0, lot.y1)
                 .polygon_feature(SurfaceFeatureKind::BrickPaverWalk, 0, s + 1),
         );
+        if lot.h() >= 5 {
+            b.surfaces.push(
+                LotBox::new(0, lot.y1 - 2, 2.min(lot.x0), lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::FloodedAsphalt, 0, s + 8),
+            );
+        }
     }
     if has_street {
         b.surfaces.push(
@@ -757,41 +688,15 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
         b.surfaces.push(lot.polygon_feature(SurfaceFeatureKind::InteriorFloor, 0, s + 4));
     }
 
-    enclose_lot(&mut b.edges, w, h, lot, MaterialClass::Brick, 3);
     let front_door_x = lot.x0 + 1;
-    // Dual egress: South street entrance + North/West rear escape door.
-    upsert_edge(
-        &mut b.edges,
-        w,
-        h,
-        front_door_x,
-        lot.y1,
-        EdgeSide::North,
-        WallEdgeKind::DoorOpen,
-        MaterialClass::SolidWood,
-    );
-    upsert_edge(
-        &mut b.edges,
-        w,
-        h,
-        lot.x0,
-        lot.y0 + 1,
-        EdgeSide::West,
-        WallEdgeKind::DoorClosed,
-        MaterialClass::SolidWood,
-    );
-    if has_wings {
-        build_v_partition(
-            &mut b.edges,
-            w,
-            h,
-            split_x,
-            lot.y0,
-            lot.y1,
-            lot.y0 + lot.h() / 2,
-            false,
-            MaterialClass::Drywall,
-        );
+    {
+        let mut fc = FloorCanvas::new(&mut b.edges, w, h);
+        fc.enclose(lot, MaterialClass::Brick, 3);
+        fc.upsert(front_door_x, lot.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SolidWood);
+        fc.upsert(lot.x0, lot.y0 + 1, EdgeSide::West, WallEdgeKind::DoorClosed, MaterialClass::SolidWood);
+        if has_wings {
+            fc.v_partition(split_x, lot.y0, lot.y1, lot.y0 + lot.h() / 2, false, MaterialClass::Drywall);
+        }
     }
 
     let portal_x = lot.x1 - 2;
@@ -823,23 +728,9 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
         let _ = b.try_place_cm(PropKind::Dumpster, 120, lot.y0 * 100 + 100, 90, None, true);
     }
     if has_street {
-        let _ = b.try_place_cm(
-            PropKind::AwningCanopy,
-            front_door_x * 100 + 100,
-            lot.y1 * 100 + 40,
-            0,
-            None,
-            true,
-        );
+        let _ = b.try_place_cm(PropKind::AwningCanopy, front_door_x * 100 + 100, lot.y1 * 100 + 40, 0, None, true);
         if lot.y1 + 2 <= h {
-            let _ = b.try_place_cm(
-                PropKind::Car,
-                (lot.x1 - 2).max(4) * 100,
-                (lot.y1 + 2).min(h - 1) * 100,
-                90,
-                None,
-                true,
-            );
+            let _ = b.try_place_cm(PropKind::Car, (lot.x1 - 2).max(4) * 100, (lot.y1 + 2).min(h - 1) * 100, 90, None, true);
         }
     }
 
@@ -849,25 +740,18 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
     let mut floors = Vec::new();
     let faraday_zone = if has_multi_floor {
         let mut b1_edges = Vec::new();
-        enclose_lot(&mut b1_edges, w, h, lot, MaterialClass::ReinforcedConcrete, 0);
-        build_v_partition(
-            &mut b1_edges,
-            w,
-            h,
-            split_x,
-            lot.y0,
-            lot.y1,
-            lot.y0 + lot.h() / 2,
-            false,
-            MaterialClass::ReinforcedConcrete,
-        );
+        {
+            let mut b1_fc = FloorCanvas::new(&mut b1_edges, w, h);
+            b1_fc.enclose(lot, MaterialClass::ReinforcedConcrete, 0);
+            b1_fc.v_partition(split_x, lot.y0, lot.y1, lot.y0 + lot.h() / 2, false, MaterialClass::ReinforcedConcrete);
+        }
         let mut b1_props = Vec::new();
         for cand in [
             make_prop(PropKind::Stairwell, portal_x.max(split_x + 1), portal_y, 0, None, s + 30),
             make_prop(PropKind::Rug, lot.x0 + 1, lot.y0 + 1, 0, None, s + 31),
-            make_prop(PropKind::TestBench, lot.x0, lot.y0 + 1, 0, None, s + 32),
+            make_prop(PropKind::AirGappedTerminal, lot.x0, lot.y0 + 1, 0, None, s + 32),
             make_prop(PropKind::SolderingStation, lot.x0, lot.y1 - 2, 0, None, s + 33),
-            make_prop(PropKind::Printer3dStation, split_x - 2, lot.y1 - 2, 0, None, s + 34),
+            make_prop(PropKind::BatteryBankWall, split_x - 2, lot.y1 - 1, 0, None, s + 34),
             make_prop(PropKind::ServerRack, split_x - 1, lot.y0 + 1, 0, None, s + 35),
             make_prop(PropKind::SteelShelving, lot.x1 - 2, lot.y1 - 1, 0, None, s + 36),
             make_prop(PropKind::WoodCrate, split_x + 1, lot.y1 - 2, 0, None, s + 37),
@@ -875,9 +759,13 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
             let _ = try_push_prop(&b1_edges, &mut b1_props, &b.spawn_pads_m, w, h, cand);
         }
         trim_floor_props_to_connected(w, h, lot, &b1_edges, &mut b1_props);
-        let b1_surfaces = vec![
-            lot.polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 39),
+        let mut b1_surfaces = vec![
+            LotBox::new(lot.x0, lot.y0, split_x, lot.y1)
+                .polygon_feature(SurfaceFeatureKind::FaradayCopperFloor, 0, s + 39),
+            LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
+                .polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 40),
         ];
+        prune_occluded_surfaces(&mut b1_surfaces, w, h);
         floors.push(MapFloorLevel {
             floor_index: -1,
             label: "B1 · Copper-Mesh Cellar".to_string(),
@@ -885,7 +773,7 @@ fn generate_satyang_safehouse(w: i32, h: i32, seed: i64) -> ProceduralSector {
             wall_edges: b1_edges,
             props: b1_props,
             surfaces: b1_surfaces,
-            ground_floor_override: Some("concrete_stained".to_string()),
+            ground_floor_override: Some("faraday_copper_mesh".to_string()),
             ground_tint_rgb: None,
         });
         floors.push(MapFloorLevel {
@@ -940,6 +828,18 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
     let lot = safe_interior_lot(w, h, has_street);
     let s = (b.rng.next() & 0xffff_ffff) as u32;
 
+    if w >= 12 && lot.x0 >= 3 {
+        b.surfaces.push(
+            LotBox::new(0, lot.y0, lot.x0, lot.y1)
+                .polygon_feature(SurfaceFeatureKind::ConcreteWalk, 0, s + 9),
+        );
+        if lot.h() >= 5 {
+            b.surfaces.push(
+                LotBox::new(0, lot.y1 - 2, 2.min(lot.x0), lot.y1)
+                    .polygon_feature(SurfaceFeatureKind::FloodedAsphalt, 0, s + 8),
+            );
+        }
+    }
     if has_street {
         b.surfaces.push(
             LotBox::new(0, lot.y1, w, (lot.y1 + 1).min(h))
@@ -953,7 +853,6 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
         }
     }
 
-    // Divide interior lot into West Logistics Warehouse and East Fenced 500 kV Substation Yard.
     let split_x = lot.x0 + (lot.w() * 3 / 5).max(2);
     let has_substation = lot.w() >= 10 && lot.h() >= 7;
     if has_substation {
@@ -965,30 +864,24 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
             LotBox::new(split_x, lot.y0, lot.x1, lot.y1)
                 .polygon_feature(SurfaceFeatureKind::GravelRoad, 0, s + 4),
         );
-        // Warehouse shell (`ConcreteBlock`) + Substation fenced perimeter (`SheetSteel` with wide gate).
-        let wh_lot = LotBox::new(lot.x0, lot.y0, split_x, lot.y1);
-        enclose_lot(&mut b.edges, w, h, wh_lot, MaterialClass::ConcreteBlock, 4);
-        let sub_lot = LotBox::new(split_x, lot.y0, lot.x1, lot.y1);
-        enclose_lot(&mut b.edges, w, h, sub_lot, MaterialClass::SheetSteel, 0);
-        // Open loading bays & substation access gate.
+        let pad_y1 = lot.y0 + (lot.h() / 2).max(2);
+        b.surfaces.push(
+            LotBox::new(split_x, lot.y0, lot.x1, pad_y1)
+                .polygon_feature(SurfaceFeatureKind::SubstationGrating, 0, s + 5),
+        );
         let door_y = lot.y0 + lot.h() / 2;
-        upsert_edge(&mut b.edges, w, h, lot.x0, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
-        upsert_edge(&mut b.edges, w, h, split_x, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
-        upsert_edge(&mut b.edges, w, h, lot.x1, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
-        upsert_edge(&mut b.edges, w, h, lot.x0 + 2, lot.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
+        let mut fc = FloorCanvas::new(&mut b.edges, w, h);
+        fc.enclose(LotBox::new(lot.x0, lot.y0, split_x, lot.y1), MaterialClass::ConcreteBlock, 4);
+        fc.enclose(LotBox::new(split_x, lot.y0, lot.x1, lot.y1), MaterialClass::SheetSteel, 0);
+        fc.upsert(lot.x0, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
+        fc.upsert(split_x, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
+        fc.upsert(lot.x1, door_y, EdgeSide::West, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
+        fc.upsert(lot.x0 + 2, lot.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
     } else {
         b.surfaces.push(lot.polygon_feature(SurfaceFeatureKind::StainedConcreteFloor, 0, s + 3));
-        enclose_lot(&mut b.edges, w, h, lot, MaterialClass::ConcreteBlock, 4);
-        upsert_edge(
-            &mut b.edges,
-            w,
-            h,
-            lot.x0 + lot.w() / 2,
-            lot.y1,
-            EdgeSide::North,
-            WallEdgeKind::DoorOpen,
-            MaterialClass::SheetSteel,
-        );
+        let mut fc = FloorCanvas::new(&mut b.edges, w, h);
+        fc.enclose(lot, MaterialClass::ConcreteBlock, 4);
+        fc.upsert(lot.x0 + lot.w() / 2, lot.y1, EdgeSide::North, WallEdgeKind::DoorOpen, MaterialClass::SheetSteel);
     }
 
     let cands = if has_substation {
@@ -999,17 +892,18 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
             make_prop(PropKind::WoodCrate, split_x - 2, lot.y1 - 2, 0, None, s + 13),
             make_prop(PropKind::Desk, lot.x0 + 1, lot.y0 + 3, 0, None, s + 14),
             make_prop(PropKind::FilingCabinet, lot.x0, lot.y1 - 1, 0, None, s + 15),
-            make_prop(PropKind::IndustrialPress, split_x + 1, lot.y0 + 1, 0, None, s + 16),
-            make_prop(PropKind::AirCompressor, lot.x1 - 2, lot.y0 + 1, 0, None, s + 17),
-            make_prop(PropKind::AcUnit, lot.x1 - 2, lot.y1 - 2, 0, None, s + 18),
-            make_prop(PropKind::JerseyBarrier, split_x + 1, lot.y1 - 1, 0, None, s + 19),
-            make_prop(PropKind::HazardSpill, split_x + 2, lot.y0 + 2, 0, None, s + 20),
+            make_prop(PropKind::HvTransformer, split_x + 1, lot.y0, 0, None, s + 16),
+            make_prop(PropKind::DieselGenerator, lot.x1 - 2, lot.y0 + 1, 0, None, s + 17),
+            make_prop(PropKind::BatteryBankWall, lot.x1 - 2, lot.y1 - 1, 0, None, s + 18),
+            make_prop(PropKind::SecurityCameraMast, split_x, lot.y1 - 1, 0, None, s + 19),
+            make_prop(PropKind::JerseyBarrier, split_x + 2, lot.y1 - 1, 0, None, s + 20),
+            make_prop(PropKind::HazardSpill, split_x + 2, lot.y0 + 2, 0, None, s + 21),
         ]
     } else {
         vec![
             make_prop(PropKind::PalletRack, lot.x0 + 1, lot.y0 + 1, 0, None, s + 10),
-            make_prop(PropKind::WoodCrate, lot.x1 - 2, lot.y1 - 2, 0, None, s + 11),
-            make_prop(PropKind::AcUnit, lot.x0 + 1, lot.y1 - 2, 0, None, s + 12),
+            make_prop(PropKind::DieselGenerator, lot.x1 - 2, lot.y1 - 2, 0, None, s + 11),
+            make_prop(PropKind::WoodCrate, lot.x0 + 1, lot.y1 - 2, 0, None, s + 12),
         ]
     };
     for cand in cands {
@@ -1018,12 +912,13 @@ fn generate_brownout_logistics_depot(w: i32, h: i32, seed: i64) -> ProceduralSec
 
     if w >= 16 && h >= 14 {
         let _ = b.try_place_cm(PropKind::ShippingContainer, (w - 3) * 100 + 50, lot.y0 * 100 + 200, 90, None, true);
+        let _ = b.try_place_cm(PropKind::DroneDockPad, (w - 3) * 100 + 50, (lot.y0 + 4).min(lot.y1 - 2) * 100, 0, None, true);
     }
     if has_street {
         let can_x = (lot.x0 + 2).min(w - 3) * 100;
         let _ = b.try_place_cm(PropKind::AwningCanopy, can_x, lot.y1 * 100 + 40, 0, None, true);
         let _ = b.try_place_cm(PropKind::ParkBench, can_x + 200, lot.y1 * 100 + 45, 0, None, true);
-        let _ = b.try_place_cm(PropKind::WaterCooler, can_x - 100, lot.y1 * 100 + 45, 0, None, true);
+        let _ = b.try_place_cm(PropKind::WaterPurifierKiosk, can_x - 100, lot.y1 * 100 + 45, 0, None, true);
         if lot.y1 + 2 <= h {
             let _ = b.try_place_cm(
                 PropKind::UtilityVan,

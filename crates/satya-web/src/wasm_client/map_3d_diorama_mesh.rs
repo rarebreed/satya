@@ -429,6 +429,7 @@ pub fn build_tactical_diorama_layered(ui: &TacticalMapUiState) -> (Vec<GlbVertex
 
     let opaque_vcount = verts.len() as u32;
     crate::wasm_client::map_3d_props_extra::push_translucent_canopies_3d(&mut verts, ui);
+    crate::wasm_client::map_3d_props_awakened::push_spatial_overlays_3d(&mut verts, ui);
     (verts, opaque_vcount)
 }
 
@@ -580,5 +581,70 @@ mod tests {
             assert!((v.bary_zone[3] + 1.0).abs() < 1e-5);
         }
         assert_eq!(&combined[6..], model.vertices.as_slice());
+    }
+
+    #[test]
+    fn wave6_awakened_props_and_translucent_spatial_overlays_render_cleanly() {
+        use satya_maps::map_dressing::make_prop;
+        use satya_maps::tactical_map::{SectorPreset, build_procedural_map_request};
+        use satya_schema::{MapSurveillanceNode, MessageVisibility, PropKind};
+
+        let mut map = build_procedural_map_request(
+            "w6-3d",
+            SectorPreset::CorporateServerBunker,
+            None,
+            24,
+            18,
+            91,
+        );
+        let awakened_kinds = [
+            PropKind::CryoComputeCluster,
+            PropKind::BioServerVat,
+            PropKind::AirGappedTerminal,
+            PropKind::BiometricTurnstile,
+            PropKind::SecurityCameraMast,
+            PropKind::DroneDockPad,
+            PropKind::HvTransformer,
+            PropKind::DieselGenerator,
+            PropKind::BatteryBankWall,
+            PropKind::WaterPurifierKiosk,
+        ];
+        for (i, &kind) in awakened_kinds.iter().enumerate() {
+            map.props
+                .push(make_prop(kind, 2 + (i as i32) * 2, 2, (i as i32 * 45) % 360, None, i as u32));
+        }
+        map.surveillance_nodes.push(MapSurveillanceNode {
+            node_id: "cam-offline".to_string(),
+            label: "Offline Cam".to_string(),
+            node_kind_code: "DOME_CAMERA".to_string(),
+            floor_index: map.active_floor,
+            x_cm: 650,
+            y_cm: 450,
+            facing_deg: 90,
+            fov_deg: 90,
+            range_cm: 800,
+            powered: false,
+            visibility: MessageVisibility::Public,
+        });
+
+        let ui = TacticalMapUiState {
+            map,
+            wall_cutaway: true,
+            ..Default::default()
+        };
+        let (verts, opaque_vcount) = build_tactical_diorama_layered(&ui);
+        assert!(opaque_vcount > 0);
+        assert!(
+            verts.len() > opaque_vcount as usize,
+            "expected translucent Faraday/surveillance vertices after opaque_vcount"
+        );
+        for v in &verts[opaque_vcount as usize..] {
+            assert!(
+                (v.bary_zone[3] + 0.35).abs() < 1e-4,
+                "post-opaque vertex must carry TRANSLUCENT_CANOPY_ZONE (-0.35), got {}",
+                v.bary_zone[3]
+            );
+            assert!(v.position.iter().all(|c| c.is_finite()));
+        }
     }
 }

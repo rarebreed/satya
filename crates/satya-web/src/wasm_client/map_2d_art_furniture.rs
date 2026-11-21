@@ -1379,6 +1379,20 @@ pub fn push_furniture_glyph_with_mode(
                 out, p.kind, lw, lh, painted, v,
             );
         }
+        PropKind::CryoComputeCluster
+        | PropKind::BioServerVat
+        | PropKind::AirGappedTerminal
+        | PropKind::BiometricTurnstile
+        | PropKind::SecurityCameraMast
+        | PropKind::DroneDockPad
+        | PropKind::HvTransformer
+        | PropKind::DieselGenerator
+        | PropKind::BatteryBankWall
+        | PropKind::WaterPurifierKiosk => {
+            let _ = crate::wasm_client::map_2d_art_props_awakened::push_awakened_furniture_glyph(
+                out, p.kind, lw, lh, painted, v,
+            );
+        }
         PropKind::Armchair | PropKind::Planter | PropKind::WoodCrate | PropKind::DrumCluster => {}
     }
     if p.kind != PropKind::AwningCanopy

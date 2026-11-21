@@ -1,56 +1,54 @@
-//! PyO3 bindings for Satya's Motivational Hook Weaver (`hook_weaver`) and
-//! prompt-driven NPC generator (`npc_generator`) for the AI Game Master.
+//! PyO3 bindings for Satya's Motivational Hook Weaver (`hook_weaver`),
+//! prompt-driven NPC generator (`npc_generator`), and embedded `config/campaign.toml`.
 
-use pyo3::exceptions::PyValueError;
+use std::collections::BTreeMap;
+
 use pyo3::prelude::*;
 use satya_campaign::{
     AwakenedFactionId, FactionArchetypeId, NpcGenerationParams, NpcTemplateKind,
-    compile_party_hooks, derive_dissenter_or_proxy_hook, extract_character_lifepath_anchors,
+    compile_party_hooks, derive_dissenter_or_proxy_hook, embedded_campaign_config,
     generate_npc_from_prompt_with_pack,
 };
 use satya_schema::CharacterSheetRecord;
-use std::collections::BTreeMap;
 
-fn to_py_err(msg: impl Into<String>) -> PyErr {
-    PyValueError::new_err(msg.into())
-}
+use super::py_bridge::{
+    PyJsonDict, PyJsonInput, PyListInput, opt_from_py_object, py_to_json_value, to_py_object,
+};
 
 /// Compiles per-character motivational hook cards and pairwise party entanglement wedges from
-/// JSON-encoded [`CharacterSheetRecord`] sheets and scene context metadata.
+/// [`CharacterSheetRecord`] mappings/JSON and scene context metadata.
 #[pyfunction]
-#[pyo3(signature = (party_sheets_json, scene_context_json=None, pack_id=None))]
-pub fn compile_party_motivational_hooks_json(
-    party_sheets_json: &str,
-    scene_context_json: Option<&str>,
+#[pyo3(signature = (characters, scene_context=None, pack_id=None))]
+pub fn compile_party_motivational_hooks(
+    py: Python<'_>,
+    characters: PyListInput<'_>,
+    scene_context: Option<PyJsonInput<'_>>,
     pack_id: Option<&str>,
-) -> PyResult<String> {
-    let party: Vec<CharacterSheetRecord> = serde_json::from_str(party_sheets_json)
-        .map_err(|e| to_py_err(format!("Invalid party sheets JSON: {e}")))?;
-    let scene_context: BTreeMap<String, String> = match scene_context_json {
-        Some(raw) if !raw.trim().is_empty() => serde_json::from_str(raw)
-            .map_err(|e| to_py_err(format!("Invalid scene context JSON: {e}")))?,
-        _ => BTreeMap::new(),
-    };
+) -> PyResult<PyJsonDict> {
+    let party: Vec<CharacterSheetRecord> =
+        super::py_bridge::from_py_object(&characters, "party characters")?;
+    let ctx = opt_from_py_object::<BTreeMap<String, String>>(scene_context, "scene_context")?
+        .unwrap_or_default();
     let effective_pack = pack_id
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or("awakened");
-    let manifest = compile_party_hooks(&party, &scene_context, effective_pack);
-    serde_json::to_string(&manifest).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    to_py_object(py, &compile_party_hooks(&party, &ctx, effective_pack))
 }
 
 /// Generates a full, rules-legal [`satya_campaign::GeneratedNpcResult`] (including structured
-/// [`satya_campaign::NpcMotivationalProfile`]) serialized as JSON.
+/// [`satya_campaign::NpcMotivationalProfile`]) returned as a native Python dict.
 #[pyfunction]
 #[pyo3(signature = (prompt, template=None, name_override=None, career_terms=2, seed=0, pack_id=None))]
-pub fn generate_npc_profile_json(
+pub fn generate_npc_profile(
+    py: Python<'_>,
     prompt: &str,
     template: Option<&str>,
     name_override: Option<&str>,
     career_terms: usize,
     seed: u64,
     pack_id: Option<&str>,
-) -> PyResult<String> {
+) -> PyResult<PyJsonDict> {
     let parsed_faction_archetype = template.and_then(FactionArchetypeId::from_code_str);
     let parsed_template = if parsed_faction_archetype.is_some() {
         NpcTemplateKind::Auto
@@ -75,8 +73,8 @@ pub fn generate_npc_profile_json(
         },
         effective_pack,
     );
-    let mut payload =
-        serde_json::to_value(&result).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))?;
+    let mut payload = serde_json::to_value(&result)
+        .map_err(|e| super::py_bridge::to_py_err(format!("NPC encode failed: {e}")))?;
     if effective_pack.eq_ignore_ascii_case("awakened")
         && let Some(obj) = payload.as_object_mut()
     {
@@ -95,92 +93,102 @@ pub fn generate_npc_profile_json(
             obj.insert("awakened_social_origin_hook".to_string(), hook_val);
         }
     }
-    serde_json::to_string(&payload).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+    super::py_bridge::value_to_bound_py(py, &payload).map(|b| b.unbind())
 }
 
 /// Extracts canonical Faction, Personal Hobby Contacts & Formative Life Event anchors from a
-/// JSON-encoded [`CharacterSheetRecord`] for the AI GM and Embodied AI Player.
+/// [`CharacterSheetRecord`] dict or JSON string.
 #[pyfunction]
-#[pyo3(signature = (character_json))]
-pub fn extract_character_lifepath_anchors_json(character_json: &str) -> PyResult<String> {
-    let record: CharacterSheetRecord = serde_json::from_str(character_json)
-        .map_err(|e| to_py_err(format!("Invalid character JSON: {e}")))?;
-    let anchors = extract_character_lifepath_anchors(&record);
-    serde_json::to_string(&anchors).map_err(|e| to_py_err(format!("JSON encode failed: {e}")))
+#[pyo3(signature = (character))]
+pub fn extract_character_lifepath_anchors(
+    py: Python<'_>,
+    character: PyJsonInput<'_>,
+) -> PyResult<PyJsonDict> {
+    let val = py_to_json_value(&character, "character")?;
+    let record: CharacterSheetRecord = serde_json::from_value(val)
+        .map_err(|e| super::py_bridge::to_py_err(format!("Invalid character record: {e}")))?;
+    to_py_object(py, &satya_campaign::extract_character_lifepath_anchors(&record))
 }
 
-/// Registers motivational hook and NPC generator helpers on the `satya_py` module.
+/// Returns the single-source compile-time embedded `config/campaign.toml` structure (`active_pack`, `packs`).
+#[pyfunction]
+pub fn get_embedded_campaign_config(py: Python<'_>) -> PyResult<PyJsonDict> {
+    to_py_object(py, embedded_campaign_config())
+}
+
+/// Registers motivational hook, NPC generator, and campaign config helpers on the `satya_py` module.
 pub fn register_hooks_and_npc_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(compile_party_motivational_hooks_json, m)?)?;
-    m.add_function(wrap_pyfunction!(generate_npc_profile_json, m)?)?;
-    m.add_function(wrap_pyfunction!(
-        extract_character_lifepath_anchors_json,
-        m
-    )?)?;
+    m.add_function(wrap_pyfunction!(compile_party_motivational_hooks, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_npc_profile, m)?)?;
+    m.add_function(wrap_pyfunction!(extract_character_lifepath_anchors, m)?)?;
+    m.add_function(wrap_pyfunction!(get_embedded_campaign_config, m)?)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::py_bridge::py_to_value;
+    use pyo3::types::{PyList, PyString};
 
     #[test]
     fn test_hooks_and_npc_py_roundtrip() {
-        let npc_json = generate_npc_profile_json(
-            "Dr. Bandajara is a compassionate field surgeon who refuses to abandon clinics",
-            None,
-            Some("Dr. Bandajara"),
-            2,
-            101,
-            Some("awakened"),
-        )
-        .unwrap();
-        let npc_val: serde_json::Value = serde_json::from_str(&npc_json).unwrap();
-        assert_eq!(npc_val["character"]["character_name"], "Dr. Bandajara");
-        assert!(
-            npc_val["motivation"]["core_drive"]
-                .as_str()
-                .unwrap_or("")
-                .len()
-                > 10
-        );
+        Python::initialize();
+        Python::attach(|py| {
+            let cfg = get_embedded_campaign_config(py).unwrap();
+            let cfg_val = py_to_value(cfg.bind(py)).unwrap();
+            assert_eq!(cfg_val["active_pack"], "awakened");
+            assert_eq!(
+                cfg_val["packs"]["awakened"]["default_sector_preset"],
+                "community_clinic_annex"
+            );
 
-        let sheets_json = serde_json::to_string(&vec![npc_val["character"].clone()]).unwrap();
-        let hooks_json = compile_party_motivational_hooks_json(
-            &sheets_json,
-            Some(r#"{"location":"St. Jude Clinic","sector_preset":"hospital"}"#),
-            Some("awakened"),
-        )
-        .unwrap();
-        let hooks_val: serde_json::Value = serde_json::from_str(&hooks_json).unwrap();
-        assert_eq!(hooks_val["pack_id"], "awakened");
-        assert!(!hooks_val["hooks"].as_array().unwrap().is_empty());
+            let npc = generate_npc_profile(
+                py,
+                "Dr. Bandajara is a compassionate field surgeon who refuses to abandon clinics",
+                None,
+                Some("Dr. Bandajara"),
+                2,
+                101,
+                Some("awakened"),
+            )
+            .unwrap();
+            let npc_val = py_to_value(npc.bind(py)).unwrap();
+            assert_eq!(npc_val["character"]["character_name"], "Dr. Bandajara");
+            assert!(npc_val["motivation"]["core_drive"].as_str().unwrap_or("").len() > 10);
 
-        let satyang_json = generate_npc_profile_json(
-            "Archivist monitoring clinic power draws",
-            Some("SATYANG_MANJUSRI"),
-            Some("Linnea Cho"),
-            3,
-            303,
-            Some("awakened"),
-        )
-        .unwrap();
-        let satyang_val: serde_json::Value = serde_json::from_str(&satyang_json).unwrap();
-        assert_eq!(satyang_val["psyche_traits"].as_array().unwrap().len(), 9);
-        assert_eq!(satyang_val["character"]["faction_id"], "SATYANG");
-        assert_eq!(
-            satyang_val["character"]["faction_archetype"],
-            "SATYANG_MANJUSRI"
-        );
-        assert!(satyang_val["awakened_social_origin_hook"]["hook_kind"].is_string());
+            let char_obj = npc.bind(py).get_item("character").unwrap();
+            let sheets = PyList::new(py, [&char_obj]).unwrap().into_any();
+            let ctx = PyString::new(py, r#"{"location":"St. Jude Clinic","sector_preset":"hospital"}"#)
+                .into_any();
+            let hooks =
+                compile_party_motivational_hooks(py, sheets, Some(ctx), Some("awakened")).unwrap();
+            let hooks_val = py_to_value(hooks.bind(py)).unwrap();
+            assert_eq!(hooks_val["pack_id"], "awakened");
+            assert!(!hooks_val["hooks"].as_array().unwrap().is_empty());
 
-        let anchors_raw = extract_character_lifepath_anchors_json(
-            &serde_json::to_string(&satyang_val["character"]).unwrap(),
-        )
-        .unwrap();
-        let anchors_val: serde_json::Value = serde_json::from_str(&anchors_raw).unwrap();
-        assert_eq!(anchors_val["faction_id"], "SATYANG");
-        assert_eq!(anchors_val["faction_archetype"], "SATYANG_MANJUSRI");
-        assert!(!anchors_val["hobby_contacts"].as_array().unwrap().is_empty());
+            let satyang = generate_npc_profile(
+                py,
+                "Archivist monitoring clinic power draws",
+                Some("SATYANG_MANJUSRI"),
+                Some("Linnea Cho"),
+                3,
+                303,
+                Some("awakened"),
+            )
+            .unwrap();
+            let satyang_val = py_to_value(satyang.bind(py)).unwrap();
+            assert_eq!(satyang_val["psyche_traits"].as_array().unwrap().len(), 9);
+            assert_eq!(satyang_val["character"]["faction_id"], "SATYANG");
+            assert_eq!(satyang_val["character"]["faction_archetype"], "SATYANG_MANJUSRI");
+            assert!(satyang_val["awakened_social_origin_hook"]["hook_kind"].is_string());
+
+            let sat_char = satyang.bind(py).get_item("character").unwrap();
+            let anchors = extract_character_lifepath_anchors(py, sat_char).unwrap();
+            let anchors_val = py_to_value(anchors.bind(py)).unwrap();
+            assert_eq!(anchors_val["faction_id"], "SATYANG");
+            assert_eq!(anchors_val["faction_archetype"], "SATYANG_MANJUSRI");
+            assert!(!anchors_val["hobby_contacts"].as_array().unwrap().is_empty());
+        });
     }
 }

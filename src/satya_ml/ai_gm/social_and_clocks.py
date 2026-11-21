@@ -9,78 +9,89 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from abc import ABC
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Annotated, Any, ClassVar, Final, Literal
 
-try:
-    from langchain_core.tools import tool
-except ImportError:  # pragma: no cover
-
-    class _FallbackToolWrapper:
-        def __init__(self, fn: Any) -> None:
-            self._fn = fn
-            self.name = getattr(fn, "__name__", "tool")
-            self.__doc__ = getattr(fn, "__doc__", "")
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return self._fn(*args, **kwargs)
-
-        def invoke(self, input_dict: dict[str, Any]) -> Any:
-            return self._fn(**input_dict)
-
-    def tool(fn: Any = None, **_kwargs: Any) -> Any:
-        if fn is None:
-            return lambda f: _FallbackToolWrapper(f)
-        return _FallbackToolWrapper(fn)
-
-
+from pydantic import Field
 from satya_py import campaign as _campaign, psyche as _psyche
 
+from satya_ml.ai_gm.rolls import ContextToolRequest, UnionToolInput, parse_json_obj
+from satya_ml.ai_gm.tool_spec import (
+    CompositeSessionStore,
+    SessionStore,
+    run_session_reset_hooks,
+    satya_gm_tool,
+)
 from satya_ml.campaign_config import get_active_campaign_pack_name, get_pack_starter_npcs
 
-_SESSION_WORLD_LEDGERS: dict[str, dict[str, Any]] = {}
-_SESSION_SOCIAL_COMPOSURE: dict[tuple[str, str], dict[str, Any]] = {}
-_SESSION_CONVICTION_SURGES: dict[tuple[str, str], bool] = {}
-_SESSION_PSYCHE_DRIFT_MARKS: dict[tuple[str, str, str], int] = {}
+type FactionId = Literal["daise", "big_tech", "satyang", "humanis_primaris", "rogue_ai"]
+type PsycheResolutionMode = Literal["dissonance", "conviction_surge", "drift_mark"]
 
-_DEFAULT_PSYCHE: dict[str, int] = {
-    "opn": 10,
-    "slf": 10,
-    "blg": 10,
-    "agg": 10,
-    "ego": 10,
-    "cnf": 10,
-    "ext": 10,
-    "trs": 10,
-    "cps": 10,
-}
+_SESSION_WORLD_LEDGERS: Final[SessionStore[dict[str, Any]]] = SessionStore()
+_SESSION_SOCIAL_COMPOSURE: Final[CompositeSessionStore[tuple[str, str], dict[str, Any]]] = (
+    CompositeSessionStore()
+)
+_SESSION_CONVICTION_SURGES: Final[CompositeSessionStore[tuple[str, str], bool]] = (
+    CompositeSessionStore()
+)
+_SESSION_PSYCHE_DRIFT_MARKS: Final[CompositeSessionStore[tuple[str, str, str], int]] = (
+    CompositeSessionStore()
+)
 
+_DEFAULT_PSYCHE: Final[Mapping[str, int]] = MappingProxyType(
+    {
+        "opn": 10,
+        "slf": 10,
+        "blg": 10,
+        "agg": 10,
+        "ego": 10,
+        "cnf": 10,
+        "ext": 10,
+        "trs": 10,
+        "cps": 10,
+    }
+)
 
-_NPC_FACTION_ALIASES: dict[str, str] = {
-    "daise": "daise",
-    "government_daise": "daise",
-    "directorate": "daise",
-    "big_tech": "big_tech",
-    "altruist": "big_tech",
-    "altruist-ai": "big_tech",
-    "altruist_ai": "big_tech",
-    "translucent": "big_tech",
-    "shen": "big_tech",
-    "helios": "big_tech",
-    "helios-synthetics": "big_tech",
-    "bandajara": "big_tech",
-    "dr_bandajara": "big_tech",
-    "satyang": "satyang",
-    "truth": "satyang",
-    "truth_cell": "satyang",
-    "humanis_primaris": "humanis_primaris",
-    "humanis": "humanis_primaris",
-    "reeves": "humanis_primaris",
-    "rogue_ai": "rogue_ai",
-    "rogue_proxy_echo": "rogue_ai",
-    "echo": "rogue_ai",
-    "echo-9": "rogue_ai",
-    "echo_9": "rogue_ai",
-}
+_NPC_FACTION_ALIASES: Final[Mapping[str, FactionId]] = MappingProxyType(
+    {
+        "daise": "daise",
+        "government_daise": "daise",
+        "directorate": "daise",
+        "big_tech": "big_tech",
+        "altruist": "big_tech",
+        "altruist-ai": "big_tech",
+        "altruist_ai": "big_tech",
+        "translucent": "big_tech",
+        "shen": "big_tech",
+        "helios": "big_tech",
+        "helios-synthetics": "big_tech",
+        "bandajara": "big_tech",
+        "dr_bandajara": "big_tech",
+        "satyang": "satyang",
+        "truth": "satyang",
+        "truth_cell": "satyang",
+        "humanis_primaris": "humanis_primaris",
+        "humanis": "humanis_primaris",
+        "reeves": "humanis_primaris",
+        "rogue_ai": "rogue_ai",
+        "rogue_proxy_echo": "rogue_ai",
+        "echo": "rogue_ai",
+        "echo-9": "rogue_ai",
+        "echo_9": "rogue_ai",
+    }
+)
+
+_TRANSPARENCY_VECTOR_NAMES: Final[frozenset[str]] = frozenset(
+    {
+        "transparency_good_faith",
+        "transparency_vulnerability_good_faith",
+        "trust_alliance_guarantee_reciprocity",
+        "transparency",
+        "good_faith",
+    }
+)
 
 
 def compute_faction_standing_social_leverage(session_id: str, npc: dict[str, Any]) -> dict[str, Any]:
@@ -92,29 +103,36 @@ def compute_faction_standing_social_leverage(session_id: str, npc: dict[str, Any
         for k in ("faction_id", "faction", "faction_archetype", "npc_id", "name")
         if npc.get(k)
     ]
-    matched_id: str | None = None
-    for blob in candidate_blobs:
-        for alias, canonical in _NPC_FACTION_ALIASES.items():
-            if alias == blob or alias in blob:
-                matched_id = canonical
-                break
-        if matched_id:
-            break
-
+    matched_id: str | None = next(
+        (
+            canonical
+            for blob in candidate_blobs
+            for alias, canonical in _NPC_FACTION_ALIASES.items()
+            if alias in blob
+        ),
+        None,
+    )
+    matched_clock = next(
+        (
+            clk
+            for clk in clocks
+            if isinstance(clk, dict)
+            and (cid := str(clk.get("faction_id") or "").strip().lower()) is not None
+            and (cname := str(clk.get("faction_name") or "").strip().lower()) is not None
+            and (
+                (matched_id and cid == matched_id)
+                or any(
+                    cid and (cid in blob or blob in cid or (cname and blob in cname))
+                    for blob in candidate_blobs
+                )
+            )
+        ),
+        None,
+    )
     party_standing = 0
-    if matched_id or candidate_blobs:
-        for clk in clocks:
-            if not isinstance(clk, dict):
-                continue
-            cid = str(clk.get("faction_id") or "").strip().lower()
-            cname = str(clk.get("faction_name") or "").strip().lower()
-            if (matched_id and cid == matched_id) or any(
-                cid and (cid in blob or blob in cid or (cname and blob in cname))
-                for blob in candidate_blobs
-            ):
-                matched_id = cid or matched_id
-                party_standing = int(clk.get("party_standing", 0) or 0)
-                break
+    if matched_clock is not None:
+        matched_id = str(matched_clock.get("faction_id") or "").strip().lower() or matched_id
+        party_standing = int(matched_clock.get("party_standing", 0) or 0)
 
     if party_standing == 0:
         return {
@@ -136,50 +154,8 @@ def compute_faction_standing_social_leverage(session_id: str, npc: dict[str, Any
 
 
 def reset_social_and_world_state(session_id: str | None = None) -> None:
-    """Clear in-memory fallback world ledgers, NPC social composure, surge/drift tracking, and spatial pins."""
-    if session_id is None:
-        _SESSION_WORLD_LEDGERS.clear()
-        _SESSION_SOCIAL_COMPOSURE.clear()
-        _SESSION_CONVICTION_SURGES.clear()
-        _SESSION_PSYCHE_DRIFT_MARKS.clear()
-    else:
-        _SESSION_WORLD_LEDGERS.pop(session_id, None)
-        for key in [k for k in _SESSION_SOCIAL_COMPOSURE if k[0] == session_id]:
-            _SESSION_SOCIAL_COMPOSURE.pop(key, None)
-        for key in [k for k in _SESSION_CONVICTION_SURGES if k[0] == session_id]:
-            _SESSION_CONVICTION_SURGES.pop(key, None)
-        for key in [k for k in _SESSION_PSYCHE_DRIFT_MARKS if k[0] == session_id]:
-            _SESSION_PSYCHE_DRIFT_MARKS.pop(key, None)
-    try:
-        from satya_ml.ai_gm.maps import clear_session_spatial_pins
-
-        clear_session_spatial_pins(session_id)
-    except Exception:
-        pass
-    try:
-        from satya_ml.ai_gm.audit_and_first_contact import reset_session_audit_proofs
-
-        reset_session_audit_proofs(session_id)
-    except Exception:
-        pass
-    try:
-        from satya_ml.ai_gm.awakened_systems import reset_awakened_systems_state
-
-        reset_awakened_systems_state(session_id)
-    except Exception:
-        pass
-    try:
-        from satya_ml.ai_gm.tech_and_tradecraft import reset_tech_and_tradecraft_state
-
-        reset_tech_and_tradecraft_state(session_id)
-    except Exception:
-        pass
-    try:
-        from satya_ml.ai_gm.scenario_director import reset_session_scenario_director
-
-        reset_session_scenario_director(session_id)
-    except Exception:
-        pass
+    """Clear per-session world ledgers, NPC social state, and all registered GM session caches."""
+    run_session_reset_hooks(session_id)
 
 
 def _parse_psyche_dict(raw_npc: dict[str, Any]) -> dict[str, int]:
@@ -209,16 +185,21 @@ def _resolve_npc_profile(target_npc_id_or_name: str, session_id: str) -> dict[st
 
     needle = target_npc_id_or_name.strip().lower()
     npcs = dict(get_session_npcs(session_id))
-    starter = get_pack_starter_npcs()
-    for cid, npc in starter.items():
+    for cid, npc in get_pack_starter_npcs().items():
         npcs.setdefault(cid, npc)
 
     if needle in npcs:
         return dict(npcs[needle])
-    for cid, npc in npcs.items():
-        if str(npc.get("name") or "").strip().lower() == needle or needle in cid or needle in str(npc.get("name") or "").lower():
-            return dict(npc)
-    return {"npc_id": needle or "npc-unknown", "name": target_npc_id_or_name or "NPC"}
+    return next(
+        (
+            dict(npc)
+            for cid, npc in npcs.items()
+            if str(npc.get("name") or "").strip().lower() == needle
+            or needle in cid
+            or needle in str(npc.get("name") or "").lower()
+        ),
+        {"npc_id": needle or "npc-unknown", "name": target_npc_id_or_name or "NPC"},
+    )
 
 
 def _seed_map_jurisdiction(session_id: str) -> tuple[str | None, str | None]:
@@ -332,7 +313,7 @@ def format_world_ledger_for_prompt(ledger: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
-@tool
+@satya_gm_tool(pack="social_and_psyche", tier="TIER_2_RULESET_ENGINE")
 def perform_empathy_read(
     target_npc_id_or_name: str,
     net_successes: int = 1,
@@ -342,7 +323,9 @@ def perform_empathy_read(
     """Reveal `1..=20` Psyche traits (`1` trait at 1 success, `2` + wedge tension at 2, full 9 + `-2 Delta_ext` leverage at 3+)."""
     npc = _resolve_npc_profile(target_npc_id_or_name, session_id)
     psyche_val: dict[str, Any] | str = (
-        target_psyche_json.strip() if target_psyche_json.strip() else _parse_psyche_dict(npc)
+        parse_json_obj(target_psyche_json) or target_psyche_json.strip()
+        if target_psyche_json.strip()
+        else _parse_psyche_dict(npc)
     )
     res = _psyche.evaluate_empathy_read(psyche_val, int(net_successes))
     res["target_npc_id"] = str(npc.get("npc_id") or target_npc_id_or_name)
@@ -350,18 +333,7 @@ def perform_empathy_read(
     return res
 
 
-_TRANSPARENCY_VECTOR_NAMES: frozenset[str] = frozenset(
-    {
-        "transparency_good_faith",
-        "transparency_vulnerability_good_faith",
-        "trust_alliance_guarantee_reciprocity",
-        "transparency",
-        "good_faith",
-    }
-)
-
-
-@tool
+@satya_gm_tool(pack="social_and_psyche", tier="TIER_2_RULESET_ENGINE")
 def deliver_social_argument(
     target_npc_id_or_name: str,
     argument_vectors: list[str] | str,
@@ -388,26 +360,18 @@ def deliver_social_argument(
 
     npc = _resolve_npc_profile(target_npc_id_or_name, session_id)
     npc_key = str(npc.get("npc_id") or target_npc_id_or_name).strip().lower()
-    if target_psyche_json.strip():
-        try:
-            psyche_dict = json.loads(target_psyche_json)
-            if isinstance(psyche_dict, dict):
-                npc_for_standing = {**npc, "psyche": psyche_dict}
-            else:
-                npc_for_standing = npc
-        except Exception:
-            npc_for_standing = npc
-        psyche_str = target_psyche_json.strip()
+    raw_psyche = target_psyche_json.strip()
+    if raw_psyche:
+        parsed_psyche = parse_json_obj(raw_psyche)
+        npc_for_standing = {**npc, "psyche": parsed_psyche} if parsed_psyche else npc
+        psyche_payload: dict[str, Any] | str = parsed_psyche or raw_psyche
     else:
         npc_for_standing = npc
-        psyche_str = json.dumps(_parse_psyche_dict(npc))
+        psyche_payload = _parse_psyche_dict(npc)
 
     if isinstance(argument_vectors, str):
         stripped = argument_vectors.strip()
-        if stripped.startswith("["):
-            vec_list = json.loads(stripped)
-        else:
-            vec_list = [v.strip() for v in stripped.split(",") if v.strip()]
+        vec_list = json.loads(stripped) if stripped.startswith("[") else [v.strip() for v in stripped.split(",") if v.strip()]
     else:
         vec_list = list(argument_vectors)
 
@@ -439,7 +403,7 @@ def deliver_social_argument(
     foc = int(attr_tns.get("foc") or npc.get("foc") or 12)
     prior_state = _SESSION_SOCIAL_COMPOSURE.get((session_id, npc_key))
     outcome = _psyche.evaluate_social_exchange(
-        psyche_str,
+        psyche_payload,
         upgraded_vectors,
         int(net_successes),
         prior_state,
@@ -486,29 +450,28 @@ def deliver_social_argument(
     return outcome
 
 
-@tool
-def resolve_psyche_dissonance_or_surge(
-    mode: str = "dissonance",
-    target_id: str = "",
-    resolution_path: str = "compartmentalization",
-    violated_trait: str = "OPN",
-    dis: int = 12,
-    dis_check_successes: int = 1,
-    psyche_json: str = "",
-    current_delta_int: int = 4,
-    principle: str = "",
-    trait_score: int = 10,
-    marks_added: int = 1,
-    session_id: str = "default",
-) -> dict[str, Any]:
-    """Resolve Cognitive Dissonance paths (`dissonance`: `conversion_defection`, `dogmatic_denial`, `compartmentalization`, `emotional_lashing_out` across the 9 Psyche traits `EGO, SLF, OPN, BLG, EXT, CNF, AGG, TRS, CPS`), dramatic `Conviction Surge` (`conviction_surge`: `altruistic_or_tribal_sacrifice`, `boundless_compassion` for `CPS >= 15`, `unbowed_defiance`, `iconoclastic_truth`), or `Psyche Drift Marks` (`drift_mark`)."""
-    norm_mode = mode.strip().lower().replace("-", "_")
-    npc_key = target_id.strip().lower()
-    if norm_mode == "dissonance":
+class _PsycheTargetRequest(ContextToolRequest[str], ABC):
+    """Abstract base for session-bound Psyche resolution modes targeting an NPC or PC."""
+
+    target_id: str = ""
+
+    def npc_key(self) -> str:
+        return self.target_id.strip().lower()
+
+
+class DissonanceRequest(_PsycheTargetRequest):
+    mode: Literal["dissonance"] = "dissonance"
+    resolution_path: str = "compartmentalization"
+    violated_trait: str = "OPN"
+    dis: int = 12
+    dis_check_successes: int = 1
+
+    def execute(self, session_id: str, /) -> dict[str, Any]:
+        key = self.npc_key()
         composure = _SESSION_SOCIAL_COMPOSURE.get(
-            (session_id, npc_key),
+            (session_id, key),
             {
-                "max_cmp": max(1, (dis + 12) // 4),
+                "max_cmp": max(1, (self.dis + 12) // 4),
                 "current_cmp": 0,
                 "doubt_fractures": 1,
                 "dissonance_index": 2,
@@ -520,38 +483,59 @@ def resolve_psyche_dissonance_or_surge(
         )
         res = _psyche.resolve_cognitive_dissonance(
             composure,
-            int(dis),
-            resolution_path,
-            violated_trait or None,
-            int(dis_check_successes),
+            int(self.dis),
+            self.resolution_path,
+            self.violated_trait or None,
+            int(self.dis_check_successes),
         )
-        if isinstance(res.get("updated_state"), dict) and npc_key:
-            _SESSION_SOCIAL_COMPOSURE[(session_id, npc_key)] = dict(res["updated_state"])
+        if isinstance(res.get("updated_state"), dict) and key:
+            _SESSION_SOCIAL_COMPOSURE[(session_id, key)] = dict(res["updated_state"])
         return res
 
-    if norm_mode in {"conviction_surge", "surge"}:
-        surge_key = (session_id, npc_key or "party")
+
+class ConvictionSurgeRequest(_PsycheTargetRequest):
+    mode: Literal["conviction_surge"] = "conviction_surge"
+    psyche_json: str = ""
+    current_delta_int: int = 4
+    principle: str = ""
+
+    def execute(self, session_id: str, /) -> dict[str, Any]:
+        key = self.npc_key()
+        surge_key = (session_id, key or "party")
         already_used = _SESSION_CONVICTION_SURGES.get(surge_key, False)
-        eff_psyche = psyche_json.strip() or _parse_psyche_dict(_resolve_npc_profile(target_id, session_id))
+        raw_p = self.psyche_json.strip()
+        eff_psyche: dict[str, Any] | str = (
+            parse_json_obj(raw_p) or raw_p
+            if raw_p
+            else _parse_psyche_dict(_resolve_npc_profile(self.target_id, session_id))
+        )
         res = _psyche.evaluate_conviction_surge(
             eff_psyche,
-            int(current_delta_int),
+            int(self.current_delta_int),
             already_used,
-            principle or None,
+            self.principle or None,
         )
         if res.get("eligible"):
             _SESSION_CONVICTION_SURGES[surge_key] = True
         return res
 
-    if norm_mode in {"drift_mark", "drift"}:
-        trait_key = (violated_trait or "OPN").strip().upper()
-        drift_key = (session_id, npc_key or "party", trait_key)
+
+class PsycheDriftMarkRequest(_PsycheTargetRequest):
+    mode: Literal["drift_mark"] = "drift_mark"
+    violated_trait: str = "OPN"
+    dis: int = 12
+    trait_score: int = 10
+    marks_added: int = 1
+
+    def execute(self, session_id: str, /) -> dict[str, Any]:
+        trait_key = (self.violated_trait or "OPN").strip().upper()
+        drift_key = (session_id, self.npc_key() or "party", trait_key)
         cur_marks = _SESSION_PSYCHE_DRIFT_MARKS.get(drift_key, 0)
         res = _psyche.apply_psyche_drift_mark(
-            int(trait_score),
+            int(self.trait_score),
             cur_marks,
-            int(marks_added),
-            int(dis),
+            int(self.marks_added),
+            int(self.dis),
             None,
         )
         _SESSION_PSYCHE_DRIFT_MARKS[drift_key] = int(
@@ -559,16 +543,47 @@ def resolve_psyche_dissonance_or_surge(
         )
         return res
 
-    raise ValueError(f"Unsupported mode '{mode}'; expected 'dissonance', 'conviction_surge', or 'drift_mark'.")
+
+type PsycheResolutionUnion = DissonanceRequest | ConvictionSurgeRequest | PsycheDriftMarkRequest
+PsycheResolutionRequest = Annotated[
+    DissonanceRequest | ConvictionSurgeRequest | PsycheDriftMarkRequest,
+    Field(discriminator="mode"),
+]
 
 
-@tool
+class PsycheResolutionToolInput(UnionToolInput):
+    _mode_aliases: ClassVar[Mapping[str, PsycheResolutionMode]] = MappingProxyType(
+        {
+            "surge": "conviction_surge",
+            "drift": "drift_mark",
+        }
+    )
+    _default_mode: ClassVar[str] = "dissonance"
+    _mode_case: ClassVar[Literal["upper", "lower"]] = "lower"
+
+    request: PsycheResolutionRequest
+
+
+@satya_gm_tool(
+    pack="social_and_psyche",
+    tier="TIER_2_RULESET_ENGINE",
+    args_schema=PsycheResolutionToolInput,
+)
+def resolve_psyche_dissonance_or_surge(
+    request: PsycheResolutionUnion,
+    session_id: str = "default",
+) -> dict[str, Any]:
+    """Resolve Cognitive Dissonance paths (`dissonance`: `conversion_defection`, `dogmatic_denial`, `compartmentalization`, `emotional_lashing_out` across the 9 Psyche traits `EGO, SLF, OPN, BLG, EXT, CNF, AGG, TRS, CPS`), dramatic `Conviction Surge` (`conviction_surge`), or `Psyche Drift Marks` (`drift_mark`)."""
+    return request.execute(session_id or "default")
+
+
+@satya_gm_tool(pack="world_and_director", tier="TIER_2_RULESET_ENGINE")
 def get_world_clocks_and_heat(session_id: str = "default") -> dict[str, Any]:
     """Inspect current Operational `Heat` (`0-10`), sector jurisdiction response profile, and faction progress clocks."""
     return get_session_world_ledger(session_id)
 
 
-@tool
+@satya_gm_tool(pack="world_and_director", tier="TIER_2_RULESET_ENGINE")
 def advance_faction_or_heat_clock(
     faction_id: str = "",
     clock_delta: int = 0,

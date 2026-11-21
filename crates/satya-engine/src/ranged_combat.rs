@@ -440,19 +440,25 @@ pub const fn canonical_armor_catalog() -> &'static [ArmorProfile] {
     ArmorProfileId::CATALOG
 }
 
-/// Incoming weapon damage type for Armor `PR` vs. `BABT` resolution
-/// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.2).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WeaponDamageType {
-    /// Standard Edged / Slashing / Stabbing weapon (`PR_Edged`).
-    Edged,
-    /// Narrow-point Icepick thrust or Flechette needle (`pr_icepick_flechette`).
-    IcepickOrFlechette,
-    /// Ballistic firearm projectile or high-velocity fragment (`PR_Ballistic`).
-    Ballistic,
-    /// Pure Blunt impact (`BABT = max(0, Effective Raw Impact - BTD)`).
-    Blunt,
+crate::define_coded_enum! {
+    /// Incoming weapon damage type for Armor `PR` vs. `BABT` resolution
+    /// (`docs/ttrpg/05-combat/ranged_combat_and_armor.md` §8.2).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum WeaponDamageType [count = 4] {
+        /// Standard Edged / Slashing / Stabbing weapon (`PR_Edged`).
+        Edged => { code: "edged", label: "Edged / Slashing", aliases: ["slash", "stab"] },
+        /// Narrow-point Icepick thrust or Flechette needle (`pr_icepick_flechette`).
+        IcepickOrFlechette => {
+            code: "icepick_or_flechette",
+            label: "Icepick / Flechette",
+            aliases: ["icepick", "flechette"]
+        },
+        /// Ballistic firearm projectile or high-velocity fragment (`PR_Ballistic`).
+        Ballistic => { code: "ballistic", label: "Ballistic / Fragment", aliases: ["bullet"] },
+        /// Pure Blunt impact (`BABT = max(0, Effective Raw Impact - BTD)`).
+        Blunt => { code: "blunt", label: "Blunt Trauma" },
+    }
 }
 
 /// Result of resolving an attack's Penetration (`Effective Pen`) and Impact against an [`ArmorProfile`]

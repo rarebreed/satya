@@ -40,10 +40,16 @@ fn read_toml_table(path: &Path) -> Option<toml::Table> {
     raw.parse::<toml::Table>().ok()
 }
 
+fn load_campaign_config(root: &Path) -> satya_campaign::CampaignConfigFile {
+    satya_campaign::load_campaign_config_from_path(&root.join("config/campaign.toml"))
+        .unwrap_or_else(|| satya_campaign::embedded_campaign_config().clone())
+}
+
 /// Resolves the active campaign pack name via:
 /// `SATYA_CAMPAIGN_PACK` env > non-default `explicit_pack` (`state.campaign_pack`) >
 /// `config/ai.toml` `[ai_gm].campaign_pack` > `config/campaign.toml` `active_pack` > `"awakened"`.
 pub fn resolve_active_pack_name(explicit_pack: Option<&str>) -> String {
+    let default_pack = satya_campaign::default_active_pack_name();
     if let Ok(env_val) = std::env::var("SATYA_CAMPAIGN_PACK") {
         let trimmed = env_val.trim().to_ascii_lowercase();
         if !trimmed.is_empty() {
@@ -52,7 +58,7 @@ pub fn resolve_active_pack_name(explicit_pack: Option<&str>) -> String {
     }
     if let Some(exp) = explicit_pack {
         let trimmed = exp.trim().to_ascii_lowercase();
-        if !trimmed.is_empty() && trimmed != "awakened" {
+        if !trimmed.is_empty() && trimmed != default_pack {
             return trimmed;
         }
     }
@@ -69,13 +75,10 @@ pub fn resolve_active_pack_name(explicit_pack: Option<&str>) -> String {
             return trimmed;
         }
     }
-    if let Some(camp_tbl) = read_toml_table(&root.join("config/campaign.toml"))
-        && let Some(active) = camp_tbl.get("active_pack").and_then(|v| v.as_str())
-    {
-        let trimmed = active.trim().to_ascii_lowercase();
-        if !trimmed.is_empty() {
-            return trimmed;
-        }
+    let cfg = load_campaign_config(&root);
+    let active = cfg.active_pack.trim().to_ascii_lowercase();
+    if !active.is_empty() {
+        return active;
     }
     if let Some(exp) = explicit_pack {
         let trimmed = exp.trim().to_ascii_lowercase();
@@ -83,77 +86,43 @@ pub fn resolve_active_pack_name(explicit_pack: Option<&str>) -> String {
             return trimmed;
         }
     }
-    "awakened".to_string()
+    default_pack.to_string()
 }
 
-/// Resolves full pack defaults (sector preset fallback, token labels, lore dirs, NPC TOML).
+/// Resolves full pack defaults (sector preset fallback, token labels, lore dirs, NPC TOML)
+/// directly from `config/campaign.toml` and `satya_campaign::embedded_campaign_config()`.
 pub fn resolve_pack_defaults(explicit_pack: Option<&str>) -> ResolvedPackDefaults {
     let pack_name = resolve_active_pack_name(explicit_pack);
-    let mut defaults = if pack_name == "space_opera" {
-        ResolvedPackDefaults {
-            pack_name: pack_name.clone(),
-            default_sector_preset: SectorPreset::OrbitalAirlock,
-            hostile_token_label: "SecOps Sentry".to_string(),
-            ally_token_label: "Capt. Vance".to_string(),
-            default_ai_player_name: "Kaelen Voss (AI Player)".to_string(),
-            lore_dirs: Vec::new(),
-            npc_toml_file: "data/npcs/space_opera_npcs.toml".to_string(),
-        }
+    let root = workspace_root();
+    let cfg = load_campaign_config(&root);
+    let embedded = satya_campaign::embedded_campaign_config();
+    let pack = cfg
+        .packs
+        .get(&pack_name)
+        .or_else(|| embedded.packs.get(&pack_name))
+        .or_else(|| cfg.packs.get(cfg.active_pack.as_str()))
+        .or_else(|| satya_campaign::embedded_pack_spec(&pack_name))
+        .expect("embedded campaign config defines at least one pack");
+
+    let ai_name = pack.default_ai_player.character_name.trim();
+    let default_ai_player_name = if ai_name.is_empty() {
+        "AI Player".to_string()
+    } else if ai_name.ends_with("(AI Player)") {
+        ai_name.to_string()
     } else {
-        ResolvedPackDefaults {
-            pack_name: pack_name.clone(),
-            default_sector_preset: SectorPreset::CommunityClinicAnnex,
-            hostile_token_label: "DAISE Tactical Agent".to_string(),
-            ally_token_label: "Dr. Bandajara".to_string(),
-            default_ai_player_name: "Mateo Vance (AI Player)".to_string(),
-            lore_dirs: vec!["docs/campaign".to_string()],
-            npc_toml_file: "data/npcs/awakened_npcs.toml".to_string(),
-        }
+        format!("{ai_name} (AI Player)")
     };
 
-    let root = workspace_root();
-    if let Some(camp_tbl) = read_toml_table(&root.join("config/campaign.toml"))
-        && let Some(pack_tbl) = camp_tbl
-            .get("packs")
-            .and_then(|v| v.as_table())
-            .and_then(|t| t.get(&pack_name))
-            .and_then(|v| v.as_table())
-    {
-        if let Some(code) = pack_tbl
-            .get("default_sector_preset")
-            .and_then(|v| v.as_str())
-            && let Some(parsed) = SectorPreset::from_code_str(code)
-        {
-            defaults.default_sector_preset = parsed;
-        }
-        if let Some(lbl) = pack_tbl
-            .get("default_hostile_token")
-            .and_then(|v| v.as_table())
-            .and_then(|t| t.get("label"))
-            .and_then(|v| v.as_str())
-        {
-            defaults.hostile_token_label = lbl.to_string();
-        }
-        if let Some(lbl) = pack_tbl
-            .get("default_ally_token")
-            .and_then(|v| v.as_table())
-            .and_then(|t| t.get("label"))
-            .and_then(|v| v.as_str())
-        {
-            defaults.ally_token_label = lbl.to_string();
-        }
-        if let Some(dirs) = pack_tbl.get("lore_dirs").and_then(|v| v.as_array()) {
-            defaults.lore_dirs = dirs
-                .iter()
-                .filter_map(|v| v.as_str().map(ToString::to_string))
-                .collect();
-        }
-        if let Some(npc_file) = pack_tbl.get("npc_toml_file").and_then(|v| v.as_str()) {
-            defaults.npc_toml_file = npc_file.to_string();
-        }
+    ResolvedPackDefaults {
+        pack_name,
+        default_sector_preset: SectorPreset::from_code_str(&pack.default_sector_preset)
+            .unwrap_or(SectorPreset::CommunityClinicAnnex),
+        hostile_token_label: pack.default_hostile_token.label.clone(),
+        ally_token_label: pack.default_ally_token.label.clone(),
+        default_ai_player_name,
+        lore_dirs: pack.lore_dirs.clone(),
+        npc_toml_file: pack.npc_toml_file.clone(),
     }
-
-    defaults
 }
 
 fn toml_npc_to_session_entry(entry: &toml::Table, is_gm: bool) -> Option<SessionNpcEntry> {

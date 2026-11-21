@@ -110,6 +110,7 @@ pub use lifepath_hobbies_events::*;
 pub use primitives::*;
 pub use psyche_social::*;
 pub use robotics_and_ai_design::*;
+pub use satya_schema::CodedEnum;
 pub use skills_trees::*;
 pub use task_resolution::*;
 

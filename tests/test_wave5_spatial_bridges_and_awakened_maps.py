@@ -299,3 +299,109 @@ def test_ai_player_inspect_surroundings_footing_and_surveillance_visibility() ->
         assert "SECRET_COVERT_PINHOLE_99" not in str(obs)
     finally:
         reset_player_session_context()
+
+
+def test_wave6_awakened_props_and_surfaces_bridge() -> None:
+    set_campaign_pack_override(None)
+    sid = f"wave6-gm-{uuid.uuid4().hex[:6]}"
+    try:
+        bunker = generate_tactical_map.invoke(
+            {
+                "session_id": sid,
+                "theme": "Corporate Server Bunker",
+                "width": 24,
+                "height": 18,
+                "seed": 2035,
+            }
+        )
+        assert bunker.get("faraday_zones"), "Expected Faraday zone on Corporate Server Bunker"
+        place_cryo = edit_tactical_map_feature.invoke(
+            {
+                "action": "PLACE_PROP",
+                "prop_kind": "CRYO_COMPUTE_CLUSTER",
+                "x_m": 5.5,
+                "y_m": 5.5,
+                "rotation_deg": 0,
+                "session_id": sid,
+            }
+        )
+        assert place_cryo["event_type"] == "MAP_FEATURE_EDITED"
+        place_hv = edit_tactical_map_feature.invoke(
+            {
+                "action": "PLACE_PROP",
+                "prop_kind": "HV_TRANSFORMER",
+                "x_m": 8.5,
+                "y_m": 5.5,
+                "rotation_deg": 0,
+                "session_id": sid,
+            }
+        )
+        assert place_hv["event_type"] == "MAP_FEATURE_EDITED"
+
+        updated = get_session_map(sid)
+        assert updated is not None
+        prop_kinds = {p.get("kind") for p in updated.get("props", [])}
+        assert "CRYO_COMPUTE_CLUSTER" in prop_kinds
+        assert "HV_TRANSFORMER" in prop_kinds
+        before_count = len(updated["props"])
+
+        removed = edit_tactical_map_feature.invoke(
+            {
+                "action": "REMOVE_PROP",
+                "x_m": 8.5,
+                "y_m": 5.5,
+                "session_id": sid,
+            }
+        )
+        assert removed["event_type"] == "MAP_FEATURE_EDITED"
+        after_map = get_session_map(sid)
+        assert after_map is not None
+        assert len(after_map["props"]) == before_count - 1
+
+        fz = bunker["faraday_zones"][0]
+        fz_x = (fz["x0_cm"] + fz["x1_cm"]) / 200.0
+        fz_y = (fz["y0_cm"] + fz["y1_cm"]) / 200.0
+        fz_pt = inspect_tactical_map_point.invoke({"x_m": fz_x, "y_m": fz_y, "session_id": sid})
+        assert fz_pt["in_faraday_zone"] is True
+        assert fz_pt["acoustic_surface"] is not None
+        assert fz_pt["traction_tier"] is not None
+
+        depot = generate_tactical_map.invoke(
+            {
+                "session_id": sid,
+                "theme": "Brownout Logistics Depot",
+                "width": 24,
+                "height": 18,
+                "seed": 2035,
+            }
+        )
+        surface_kinds = {s.get("kind") for s in depot.get("surfaces", [])}
+        assert "FLOODED_ASPHALT" in surface_kinds
+
+        flood_test_map = {
+            "map_id": "wave6-flood-surface",
+            "title": "Flooded Asphalt Probe",
+            "image_url": "",
+            "grid_width": 12,
+            "grid_height": 10,
+            "props": [],
+            "wall_edges": [],
+            "surfaces": [
+                {
+                    "kind": "FLOODED_ASPHALT",
+                    "shape": "POLYGON",
+                    "points_cm": [
+                        {"x_cm": 100, "y_cm": 100},
+                        {"x_cm": 500, "y_cm": 100},
+                        {"x_cm": 500, "y_cm": 500},
+                        {"x_cm": 100, "y_cm": 500},
+                    ],
+                }
+            ],
+        }
+        set_session_map(sid, flood_test_map)
+        flood_pt = inspect_tactical_map_point.invoke({"x_m": 3.0, "y_m": 3.0, "session_id": sid})
+        assert flood_pt["traction_tier"] == "mud_gravel_oil_slick"
+        assert flood_pt["acoustic_surface"] == "GRAVEL_OR_DRY_LEAVES"
+    finally:
+        set_campaign_pack_override(None)
