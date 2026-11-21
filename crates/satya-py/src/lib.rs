@@ -14,9 +14,11 @@ pub mod awakened_systems_py;
 pub mod hooks_and_npc_py;
 pub mod psyche_social_py;
 pub mod py_bridge;
+pub mod schema_py;
 pub mod tactical_map_py;
 pub mod tech_and_gear_py;
 pub use hooks_and_npc_py::*;
+pub use schema_py::PySchemaRegistry;
 pub use tactical_map_py::*;
 
 use py_bridge::{PyJsonDict, parse_coded_enum, to_py_err, to_py_object};
@@ -31,10 +33,7 @@ use satya_engine::{
     TacticalTriadEvaluation, TaskGateClass, TaskGateResolution, ToolDependency, ToolQualityTier,
     compute_contested_cascade_odds_with_mode,
 };
-use satya_schema::{
-    PiiFieldDescriptor, RulesChapterDocument, RulesChapterSummary, RulesSearchHit, SchemaRegistry,
-};
-use std::collections::BTreeMap;
+use satya_schema::{RulesChapterDocument, RulesChapterSummary, RulesSearchHit};
 use std::str::FromStr;
 
 /// Summary moments of a discrete probability mass function (`PMF`).
@@ -868,48 +867,6 @@ impl From<RulesSearchHit> for PyRulesSearchHit {
             snippet: h.snippet,
             score: h.score,
         }
-    }
-}
-
-/// Python wrapper around [`satya_schema::SchemaRegistry`] providing `CRC-64-AVRO` fingerprinting,
-/// 15-byte binary wire framing, and schema-driven GDPR PII manifest inspection.
-#[pyclass(name = "SchemaRegistry")]
-pub struct PySchemaRegistry {
-    inner: SchemaRegistry,
-}
-
-#[pymethods]
-impl PySchemaRegistry {
-    /// Initializes a [`SchemaRegistry`] populated with all built-in Satya `.avsc` schemas.
-    #[new]
-    pub fn new() -> PyResult<Self> {
-        let inner =
-            SchemaRegistry::new_with_builtin_schemas().map_err(|e| to_py_err(e.to_string()))?;
-        Ok(Self { inner })
-    }
-
-    /// Returns a list of `(subject, version, fingerprint_hex)` for all registered schemas.
-    pub fn list_schemas(&self) -> Vec<(String, u16, String)> {
-        let mut out: Vec<(String, u16, String)> = self
-            .inner
-            .all_schemas()
-            .into_iter()
-            .map(|s| (s.subject.clone(), s.version, s.fingerprint_hex()))
-            .collect();
-        out.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
-        out
-    }
-
-    /// Extracts all custom `satya.*` PII/GDPR field annotations across registered schemas as a JSON string.
-    pub fn extract_pii_manifest(&self) -> PyResult<String> {
-        let mut all_specs: BTreeMap<String, Vec<PiiFieldDescriptor>> = BTreeMap::new();
-        for reg in self.inner.all_schemas() {
-            let specs = reg.extract_pii_field_manifest();
-            if !specs.is_empty() {
-                all_specs.insert(format!("{}@v{}", reg.subject, reg.version), specs);
-            }
-        }
-        serde_json::to_string_pretty(&all_specs).map_err(|e| to_py_err(e.to_string()))
     }
 }
 
@@ -2151,7 +2108,6 @@ pub fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRulesChapterSummary>()?;
     m.add_class::<PyRulesChapterDocument>()?;
     m.add_class::<PyRulesSearchHit>()?;
-    m.add_class::<PySchemaRegistry>()?;
 
     m.add_function(wrap_pyfunction!(normalize_pmf, m)?)?;
     m.add_function(wrap_pyfunction!(compute_stats, m)?)?;
@@ -2205,6 +2161,7 @@ pub fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     psyche_social_py::register_psyche_social_functions(m)?;
     awakened_systems_py::register_awakened_systems_functions(m)?;
     tech_and_gear_py::register_tech_and_gear_functions(m)?;
+    schema_py::register_schema_functions(m)?;
 
     Ok(())
 }

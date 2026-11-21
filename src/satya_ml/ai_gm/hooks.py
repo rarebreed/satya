@@ -7,13 +7,11 @@ and Party Entanglement Wedges into `sync_session_context` and `ScenarioDirector`
 
 from __future__ import annotations
 
-import json
+from collections.abc import Mapping
 from typing import Any
 
-from satya_py.campaign import (
-    compile_party_motivational_hooks as _rust_compile_party_hooks,
-    normalize_character_sheet_record,
-)
+from satya_py.campaign import compile_party_motivational_hooks as _rust_compile_party_hooks
+from satya_py.schema import normalize_character_sheet_record
 
 from satya_ml.campaign_config import get_active_campaign_pack_name
 
@@ -25,11 +23,7 @@ def compile_player_motivational_hooks(
 ) -> dict[str, Any]:
     """Compile bound PC CharacterSheetRecords into a `PartyHookManifest` dictionary via Rust."""
     resolved_pack = (pack_id or get_active_campaign_pack_name()).strip().lower() or "awakened"
-    clean_chars = [
-        normalize_character_sheet_record(dict(c), i)
-        for i, c in enumerate(characters or [])
-        if isinstance(c, dict)
-    ]
+    clean_chars = [dict(c) for c in (characters or []) if isinstance(c, Mapping)]
     if not clean_chars:
         return {
             "pack_id": resolved_pack,

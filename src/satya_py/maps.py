@@ -14,6 +14,8 @@ from satya_py._native import (
     extract_narrative_manifest,
     generate_procedural_sector,
     inspect_tactical_map_point,
+    list_non_solid_prop_kinds,
+    normalize_tactical_map,
     resolve_tactical_token_destination_cm,
     switch_map_floor,
 )
@@ -38,6 +40,8 @@ __all__ = [
     "generate_procedural_sector",
     "inspect_map_point",
     "inspect_tactical_map_point",
+    "list_non_solid_prop_kinds",
+    "normalize_tactical_map",
     "resolve_tactical_token_destination_cm",
     "resolve_token_destination_cm",
     "switch_map_floor",

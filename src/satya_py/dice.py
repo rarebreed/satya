@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Sequence
-from typing import Any
+from typing import Final, TypedDict
 
 from satya_py._native import (
     CascadeRollOutcome,
@@ -43,34 +43,82 @@ from satya_py._native import (
     sum_dice_pool_pmf,
 )
 
+_RNG: Final[random.SystemRandom] = random.SystemRandom()
 
-def _format_cascade_outcome_dict(out: CascadeRollOutcome) -> dict[str, Any]:
-    return {
-        "steps": [
-            {
-                "pair_index": int(s.pair_index),
-                "die_a": int(s.die_a),
-                "die_b": int(s.die_b),
-                "raw_sum": int(s.raw_sum),
-                "carry_in": int(s.carry_in),
-                "effective_y": int(s.effective_y),
-                "tn_eff": int(s.tn_eff),
-                "succeeded": bool(s.succeeded),
-                "step_botch": bool(s.step_botch),
-                "miss_distance": int(s.miss_distance),
-                "carry_out": int(s.carry_out),
-            }
+
+class CascadeStepDict(TypedDict):
+    """Per-pair trace record produced from Rust `CascadeStepTrace`."""
+
+    pair_index: int
+    die_a: int
+    die_b: int
+    raw_sum: int
+    carry_in: int
+    effective_y: int
+    tn_eff: int
+    succeeded: bool
+    step_botch: bool
+    miss_distance: int
+    carry_out: int
+
+
+class CascadeOutcomeDict(TypedDict):
+    """Plain dictionary representation of Rust `CascadeRollOutcome`."""
+
+    steps: list[CascadeStepDict]
+    total_successes: int
+    raw_botches: int
+    effective_botches: int
+    min_miss_tier: int
+    signed_margin: int
+    final_pair_y: int
+    outcome_kind: str
+    outcome_tier: str
+
+
+class LocalCascadeRollDict(CascadeOutcomeDict):
+    """Full roll + summary envelope returned by `roll_cascade_local`."""
+
+    skill_level: int
+    control_c: int
+    attribute_tn: int
+    effective_tn: int
+    internal_mod: int
+    external_mod: int
+    rolled_pairs: list[list[int]]
+    dice_rolled_d20: list[int]
+    successes_counted: int
+    margin: int
+    degree_of_success: str
+
+
+def _format_cascade_outcome_dict(out: CascadeRollOutcome) -> CascadeOutcomeDict:
+    return CascadeOutcomeDict(
+        steps=[
+            CascadeStepDict(
+                pair_index=int(s.pair_index),
+                die_a=int(s.die_a),
+                die_b=int(s.die_b),
+                raw_sum=int(s.raw_sum),
+                carry_in=int(s.carry_in),
+                effective_y=int(s.effective_y),
+                tn_eff=int(s.tn_eff),
+                succeeded=bool(s.succeeded),
+                step_botch=bool(s.step_botch),
+                miss_distance=int(s.miss_distance),
+                carry_out=int(s.carry_out),
+            )
             for s in out.steps
         ],
-        "total_successes": int(out.total_successes),
-        "raw_botches": int(out.raw_botches),
-        "effective_botches": int(out.effective_botches),
-        "min_miss_tier": int(out.min_miss_tier),
-        "signed_margin": int(out.signed_margin),
-        "final_pair_y": int(out.final_pair_y),
-        "outcome_kind": str(out.outcome_kind),
-        "outcome_tier": str(out.outcome_tier),
-    }
+        total_successes=int(out.total_successes),
+        raw_botches=int(out.raw_botches),
+        effective_botches=int(out.effective_botches),
+        min_miss_tier=int(out.min_miss_tier),
+        signed_margin=int(out.signed_margin),
+        final_pair_y=int(out.final_pair_y),
+        outcome_kind=str(out.outcome_kind),
+        outcome_tier=str(out.outcome_tier),
+    )
 
 
 def evaluate_cascade_pairs_dict(
@@ -81,7 +129,7 @@ def evaluate_cascade_pairs_dict(
     pairs: Sequence[tuple[int, int]],
     carry_mode: str = "markov_step",
     botch_rule: str = "closest_miss",
-) -> dict[str, Any]:
+) -> CascadeOutcomeDict:
     """Evaluate concrete `(die_a, die_b)` pairs via Rust and return a plain dictionary."""
     clean_pairs = [(int(a), int(b)) for a, b in pairs]
     out = evaluate_cascade_roll(
@@ -106,7 +154,7 @@ def roll_cascade_local(
     *,
     rng: random.Random | None = None,
     pairs: Sequence[tuple[int, int]] | None = None,
-) -> dict[str, Any]:
+) -> LocalCascadeRollDict:
     """Draw `N` `2d20` pairs and evaluate them deterministically with Rust ``CascadeTaskParams``."""
     n_pairs = max(1, min(10, int(skill_rank) if int(skill_rank) > 0 else 1))
     c_stat = max(1, min(20, int(control_c)))
@@ -120,7 +168,7 @@ def roll_cascade_local(
     )
     tn_eff = int(params.tn_eff())
     if pairs is None:
-        roller = rng if rng is not None else random.SystemRandom()
+        roller = rng if rng is not None else _RNG
         pair_tuples = [(roller.randint(1, 20), roller.randint(1, 20)) for _ in range(n_pairs)]
     else:
         pair_tuples = [(int(a), int(b)) for a, b in list(pairs)[:n_pairs]]
@@ -129,26 +177,34 @@ def roll_cascade_local(
     res = _format_cascade_outcome_dict(out)
     rolled_pairs = [[a, b] for a, b in pair_tuples]
     all_dice = [d for pair in pair_tuples for d in pair]
-    res.update(
-        {
-            "skill_level": n_pairs,
-            "control_c": c_stat,
-            "attribute_tn": c_stat,
-            "effective_tn": tn_eff,
-            "internal_mod": int(internal_mod),
-            "external_mod": int(difficulty_mod),
-            "rolled_pairs": rolled_pairs,
-            "dice_rolled_d20": all_dice,
-            "successes_counted": int(out.total_successes),
-            "margin": int(out.signed_margin),
-            "degree_of_success": str(out.outcome_tier),
-        }
+    return LocalCascadeRollDict(
+        steps=res["steps"],
+        total_successes=res["total_successes"],
+        raw_botches=res["raw_botches"],
+        effective_botches=res["effective_botches"],
+        min_miss_tier=res["min_miss_tier"],
+        signed_margin=res["signed_margin"],
+        final_pair_y=res["final_pair_y"],
+        outcome_kind=res["outcome_kind"],
+        outcome_tier=res["outcome_tier"],
+        skill_level=n_pairs,
+        control_c=c_stat,
+        attribute_tn=c_stat,
+        effective_tn=tn_eff,
+        internal_mod=int(internal_mod),
+        external_mod=int(difficulty_mod),
+        rolled_pairs=rolled_pairs,
+        dice_rolled_d20=all_dice,
+        successes_counted=int(out.total_successes),
+        margin=int(out.signed_margin),
+        degree_of_success=str(out.outcome_tier),
     )
-    return res
 
 
 __all__ = [
+    "CascadeOutcomeDict",
     "CascadeRollOutcome",
+    "CascadeStepDict",
     "CascadeStepTrace",
     "CascadeTaskParams",
     "ComplementarySynergyResult",
@@ -158,6 +214,7 @@ __all__ = [
     "DistributionStats",
     "ExtendedProjectClock",
     "ExtendedProjectStepResult",
+    "LocalCascadeRollDict",
     "SignedCascadeResult",
     "TaskGateResolution",
     "center_distance_selection_pmf",

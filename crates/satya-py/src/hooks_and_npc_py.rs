@@ -9,14 +9,14 @@ use satya_campaign::{
     compile_party_hooks, derive_dissenter_or_proxy_hook, embedded_campaign_config,
     generate_npc_from_prompt_with_pack,
 };
-use satya_schema::CharacterSheetRecord;
 
 use super::py_bridge::{
-    PyJsonDict, PyJsonInput, PyListInput, opt_from_py_object, py_to_json_value, to_py_object,
+    PyJsonDict, PyJsonInput, PyListInput, opt_from_py_object, py_to_json_value, to_py_err,
+    to_py_object,
 };
 
 /// Compiles per-character motivational hook cards and pairwise party entanglement wedges from
-/// [`CharacterSheetRecord`] mappings/JSON and scene context metadata.
+/// [`satya_schema::CharacterSheetRecord`] mappings/JSON and scene context metadata.
 #[pyfunction]
 #[pyo3(signature = (characters, scene_context=None, pack_id=None))]
 pub fn compile_party_motivational_hooks(
@@ -25,8 +25,8 @@ pub fn compile_party_motivational_hooks(
     scene_context: Option<PyJsonInput<'_>>,
     pack_id: Option<&str>,
 ) -> PyResult<PyJsonDict> {
-    let party: Vec<CharacterSheetRecord> =
-        super::py_bridge::from_py_object(&characters, "party characters")?;
+    let chars_val = py_to_json_value(&characters, "party characters")?;
+    let party = super::schema_py::parse_flexible_character_list(chars_val).map_err(to_py_err)?;
     let ctx = opt_from_py_object::<BTreeMap<String, String>>(scene_context, "scene_context")?
         .unwrap_or_default();
     let effective_pack = pack_id
@@ -97,16 +97,16 @@ pub fn generate_npc_profile(
 }
 
 /// Extracts canonical Faction, Personal Hobby Contacts & Formative Life Event anchors from a
-/// [`CharacterSheetRecord`] dict or JSON string.
+/// partial or full [`satya_schema::CharacterSheetRecord`] dict or JSON string.
 #[pyfunction]
-#[pyo3(signature = (character))]
+#[pyo3(signature = (character, index=0))]
 pub fn extract_character_lifepath_anchors(
     py: Python<'_>,
     character: PyJsonInput<'_>,
+    index: usize,
 ) -> PyResult<PyJsonDict> {
     let val = py_to_json_value(&character, "character")?;
-    let record: CharacterSheetRecord = serde_json::from_value(val)
-        .map_err(|e| super::py_bridge::to_py_err(format!("Invalid character record: {e}")))?;
+    let record = super::schema_py::parse_flexible_character_record(val, index).map_err(to_py_err)?;
     to_py_object(py, &satya_campaign::extract_character_lifepath_anchors(&record))
 }
 
@@ -184,11 +184,33 @@ mod tests {
             assert!(satyang_val["awakened_social_origin_hook"]["hook_kind"].is_string());
 
             let sat_char = satyang.bind(py).get_item("character").unwrap();
-            let anchors = extract_character_lifepath_anchors(py, sat_char).unwrap();
+            let anchors = extract_character_lifepath_anchors(py, sat_char, 0).unwrap();
             let anchors_val = py_to_value(anchors.bind(py)).unwrap();
             assert_eq!(anchors_val["faction_id"], "SATYANG");
             assert_eq!(anchors_val["faction_archetype"], "SATYANG_MANJUSRI");
             assert!(!anchors_val["hobby_contacts"].as_array().unwrap().is_empty());
+
+            let partial_json = PyString::new(
+                py,
+                r#"{"character_name":"Partial Runner","characteristics":{"for":14,"trs":4,"cps":17},"youth_hobby":"CITIZEN_OSINT_DEEPFAKE","faction_archetype":"SATYANG_MANJUSRI"}"#,
+            )
+            .into_any();
+            let partial_anchors = extract_character_lifepath_anchors(py, partial_json.clone(), 2).unwrap();
+            let pa_val = py_to_value(partial_anchors.bind(py)).unwrap();
+            assert_eq!(pa_val["faction_id"], "SATYANG");
+            assert_eq!(pa_val["faction_archetype"], "SATYANG_MANJUSRI");
+            assert_eq!(
+                pa_val["hobby_contacts"][0]["hobby_code"],
+                "CITIZEN_OSINT_DEEPFAKE"
+            );
+
+            let partial_party = PyList::new(py, [&partial_json]).unwrap().into_any();
+            let partial_hooks =
+                compile_party_motivational_hooks(py, partial_party, None, Some("awakened"))
+                    .unwrap();
+            let ph_val = py_to_value(partial_hooks.bind(py)).unwrap();
+            assert!(ph_val["character_profiles"]["pc-0"].is_object());
+            assert!(!ph_val["hooks"].as_array().unwrap().is_empty());
         });
     }
 }

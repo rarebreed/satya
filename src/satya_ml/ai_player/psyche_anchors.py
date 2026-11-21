@@ -4,18 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from satya_py.campaign import (
-    extract_character_lifepath_anchors,
-    normalize_character_sheet_record,
-)
+from satya_py.campaign import extract_character_lifepath_anchors
 
 
 def extract_anchors_for_player(character_sheet: dict[str, Any] | None) -> dict[str, Any]:
     """Call Rust ``satya_py.campaign.extract_character_lifepath_anchors`` for the AI Player sheet."""
     if not isinstance(character_sheet, dict) or not character_sheet:
         return {}
-    norm = normalize_character_sheet_record(character_sheet)
-    return extract_character_lifepath_anchors(norm)
+    return extract_character_lifepath_anchors(character_sheet)
 
 
 def sync_character_9axis_and_lifepath_anchors(

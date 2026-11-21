@@ -170,6 +170,13 @@ class SchemaRegistry:
     def __init__(self) -> None: ...
     def list_schemas(self) -> list[tuple[str, int, str]]: ...
     def extract_pii_manifest(self) -> str: ...
+    def get_schema_json(self, subject: str, version: int) -> str: ...
+    def extract_record_fields(
+        self,
+        subject: str,
+        version: int,
+        record_name: str | None = None,
+    ) -> list[str]: ...
 
 class SignedCascadeResult:
     signed_margin_pmf: dict[int, float]
@@ -233,7 +240,7 @@ class TaskGateResolution:
 
 
 # ---------------------------------------------------------------------------
-# Core dice probabilities, cascading task params, combat pools, rules book & Avro schema registry (`lib.rs`)
+# Core dice probabilities, cascading task params, combat pools & rules book (`lib.rs`)
 # ---------------------------------------------------------------------------
 
 def audit_canonical_lifepath_character(
@@ -514,6 +521,18 @@ def sum_dice_pool_pmf(pos_dice: int, sides: int, neg_dice: int = 0) -> dict[int,
 
 
 # ---------------------------------------------------------------------------
+# Canonical satya-schema DTO normalization, validation, wire enums & Avro schema registry (`schema_py.rs`)
+# ---------------------------------------------------------------------------
+
+def list_schema_dto_names() -> list[str]: ...
+def list_wire_enum_codes(enum_name: str) -> list[str]: ...
+def normalize_character_sheet_record(raw: Mapping[str, Any] | str, index: int = 0) -> dict[str, Any]: ...
+def normalize_tactical_map(map_state: Mapping[str, Any] | str) -> dict[str, Any]: ...
+def schema_default_record(dto_name: str) -> dict[str, Any]: ...
+def validate_schema_dto(dto_name: str, payload: Mapping[str, Any] | str) -> dict[str, Any]: ...
+
+
+# ---------------------------------------------------------------------------
 # Continuous metric tactical maps, LoS/cover, reachability, ballistics & spatial edits (`tactical_map_py.rs`)
 # ---------------------------------------------------------------------------
 
@@ -599,6 +618,7 @@ def inspect_tactical_map_point(
     y_m: float,
     floor_index: int | None = None,
 ) -> dict[str, Any] | None: ...
+def list_non_solid_prop_kinds() -> list[str]: ...
 def resolve_tactical_token_destination_cm(
     map_state: Mapping[str, Any] | str,
     moving_entity_id: str,
@@ -618,7 +638,7 @@ def compile_party_motivational_hooks(
     scene_context: Mapping[str, Any] | str | None = None,
     pack_id: str | None = None,
 ) -> dict[str, Any]: ...
-def extract_character_lifepath_anchors(character: Mapping[str, Any] | str) -> dict[str, Any]: ...
+def extract_character_lifepath_anchors(character: Mapping[str, Any] | str, index: int = 0) -> dict[str, Any]: ...
 def generate_npc_profile(
     prompt: str,
     template: str | None = None,

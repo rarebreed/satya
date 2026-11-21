@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, Final, TypedDict
 
 from satya_py._native import (
     TacticalPoolEnvelope,
@@ -21,6 +22,56 @@ from satya_py._native import (
     resolve_canonical_armor_impact,
     resolve_hit_location_d20,
 )
+
+_COMBAT_SKILL_TOKENS: Final[tuple[str, ...]] = (
+    "unarmed",
+    "melee",
+    "firearms",
+    "ballistics",
+    "archery",
+    "tactics",
+    "cqc",
+    "marksmanship",
+    "blades",
+    "brawling",
+)
+
+
+class TacticalPoolDict(TypedDict):
+    """Plain dictionary projection of Rust `TacticalPoolEnvelope`."""
+
+    d_cog: int
+    ooda_init: int
+    combat_readiness_c: int
+    p_base: int
+    p_eff: int
+    neutral_baseline_b: int
+    tempo_cap: int
+    control_cap: int
+    force_cap: int
+    mastery_overflow: int
+    power_pow: float
+    momentum_mass_factor_mmf: float
+    fatigue_threshold_ft: int
+    action_time_factor: float
+    morale_state: str
+    min_force_required: int
+    max_control_allowed: int
+    max_force_allowed: int
+    force_must_not_exceed_control: bool
+
+
+class CharacterTacticalEnvelope(TypedDict):
+    """Compact tactical envelope and initial tick summary for character sheets."""
+
+    p_base: int
+    p_eff: int
+    neutral_baseline: int
+    max_tempo: int
+    max_control: int
+    max_force: int
+    ooda: int
+    starting_tick: int
 
 
 def compute_tactical_pool_dict(
@@ -46,7 +97,7 @@ def compute_tactical_pool_dict(
     ana: int = 12,
     cre: int = 12,
     foc: int = 12,
-) -> dict[str, Any]:
+) -> TacticalPoolDict:
     """Compute a Satya Tactical Pool Envelope via Rust and return a plain dictionary."""
     env = compute_tactical_pool(
         spd=spd,
@@ -72,39 +123,38 @@ def compute_tactical_pool_dict(
         cre=cre,
         foc=foc,
     )
-    return {
-        "d_cog": int(env.d_cog),
-        "ooda_init": int(env.ooda_init),
-        "combat_readiness_c": int(env.combat_readiness_c),
-        "p_base": int(env.p_base),
-        "p_eff": int(env.p_eff),
-        "neutral_baseline_b": int(env.neutral_baseline_b),
-        "tempo_cap": int(env.tempo_cap),
-        "control_cap": int(env.control_cap),
-        "force_cap": int(env.force_cap),
-        "mastery_overflow": int(env.mastery_overflow),
-        "power_pow": float(env.power_pow),
-        "momentum_mass_factor_mmf": float(env.momentum_mass_factor_mmf),
-        "fatigue_threshold_ft": int(env.fatigue_threshold_ft),
-        "action_time_factor": float(env.action_time_factor),
-        "morale_state": str(env.morale_state),
-        "min_force_required": int(env.min_force_required),
-        "max_control_allowed": int(env.max_control_allowed),
-        "max_force_allowed": int(env.max_force_allowed),
-        "force_must_not_exceed_control": bool(env.force_must_not_exceed_control),
-    }
+    return TacticalPoolDict(
+        d_cog=int(env.d_cog),
+        ooda_init=int(env.ooda_init),
+        combat_readiness_c=int(env.combat_readiness_c),
+        p_base=int(env.p_base),
+        p_eff=int(env.p_eff),
+        neutral_baseline_b=int(env.neutral_baseline_b),
+        tempo_cap=int(env.tempo_cap),
+        control_cap=int(env.control_cap),
+        force_cap=int(env.force_cap),
+        mastery_overflow=int(env.mastery_overflow),
+        power_pow=float(env.power_pow),
+        momentum_mass_factor_mmf=float(env.momentum_mass_factor_mmf),
+        fatigue_threshold_ft=int(env.fatigue_threshold_ft),
+        action_time_factor=float(env.action_time_factor),
+        morale_state=str(env.morale_state),
+        min_force_required=int(env.min_force_required),
+        max_control_allowed=int(env.max_control_allowed),
+        max_force_allowed=int(env.max_force_allowed),
+        force_must_not_exceed_control=bool(env.force_must_not_exceed_control),
+    )
 
 
-def compute_character_tactical_envelope(char_sheet: dict[str, Any]) -> dict[str, int]:
+def compute_character_tactical_envelope(
+    char_sheet: Mapping[str, Any],
+) -> CharacterTacticalEnvelope:
     """Compute a normalized character sheet's Satya Tactical Pool and OODA `starting_tick` via Rust."""
     raw_chars = char_sheet.get("characteristics") or {}
     chars = {str(k).lower(): v for k, v in raw_chars.items() if isinstance(v, (int, float))}
 
     def _stat(*keys: str, default: int = 10) -> int:
-        for k in keys:
-            if k in chars:
-                return int(chars[k])
-        return default
+        return next((int(chars[k]) for k in keys if k in chars), default)
 
     spd = _stat("spd", "agi")
     for_stat = _stat("for_stat", "for", "str")
@@ -121,22 +171,10 @@ def compute_character_tactical_envelope(char_sheet: dict[str, Any]) -> dict[str,
     mass_kg = float(chars.get("mas_kg", chars.get("mass_kg", 75.0)))
 
     skills = char_sheet.get("skills") or {}
-    combat_skill_names = (
-        "unarmed",
-        "melee",
-        "firearms",
-        "ballistics",
-        "archery",
-        "tactics",
-        "cqc",
-        "marksmanship",
-        "blades",
-        "brawling",
-    )
     combat_ranks = [
         int(v)
         for k, v in skills.items()
-        if isinstance(v, (int, float)) and any(tok in str(k).lower() for tok in combat_skill_names)
+        if isinstance(v, (int, float)) and any(tok in str(k).lower() for tok in _COMBAT_SKILL_TOKENS)
     ]
     all_ranks = [int(v) for v in skills.values() if isinstance(v, (int, float))]
     skill_n = int(
@@ -188,19 +226,21 @@ def compute_character_tactical_envelope(char_sheet: dict[str, Any]) -> dict[str,
         foc=foc,
     )
     ooda_val = int(env.ooda_init)
-    return {
-        "p_base": int(env.p_base),
-        "p_eff": int(env.p_eff),
-        "neutral_baseline": int(env.neutral_baseline_b),
-        "max_tempo": int(env.tempo_cap),
-        "max_control": int(env.control_cap),
-        "max_force": int(env.force_cap),
-        "ooda": ooda_val,
-        "starting_tick": max(1, 15 - ooda_val),
-    }
+    return CharacterTacticalEnvelope(
+        p_base=int(env.p_base),
+        p_eff=int(env.p_eff),
+        neutral_baseline=int(env.neutral_baseline_b),
+        max_tempo=int(env.tempo_cap),
+        max_control=int(env.control_cap),
+        max_force=int(env.force_cap),
+        ooda=ooda_val,
+        starting_tick=max(1, 15 - ooda_val),
+    )
 
 
 __all__ = [
+    "CharacterTacticalEnvelope",
+    "TacticalPoolDict",
     "TacticalPoolEnvelope",
     "TacticalTriadEvaluation",
     "compute_character_tactical_envelope",

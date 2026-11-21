@@ -16,8 +16,11 @@ import tomllib
 import urllib.parse
 import urllib.request
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final, cast
+
+from satya_py.combat import CharacterTacticalEnvelope
 
 from satya_ml.ai_gm.models import SessionLlmConfig  # noqa: F401 (installs Windows SSL fallback)
 
@@ -262,6 +265,7 @@ def get_session_combat_tracker(session_id: str) -> dict[str, Any]:
             "round": 1,
             "tick": 1,
             "combatants": [],
+            "updated_at_us": 0,
         }
     return dict(_SESSION_COMBAT_TRACKER[session_id])
 
@@ -984,7 +988,9 @@ def get_combat_tracker_state(session_id: str = "default") -> dict[str, Any]:
     return get_session_combat_tracker(session_id)
 
 
-def compute_character_tactical_envelope(char_sheet: dict[str, Any]) -> dict[str, int]:
+def compute_character_tactical_envelope(
+    char_sheet: Mapping[str, Any],
+) -> CharacterTacticalEnvelope:
     """Compute a character's Satya Tactical Pool (`P_base`, `P_eff`, Neutral `B`, `T_max`, `C_max`, `F_max`, and OODA `starting_tick`) via Rust ``satya_py.combat``."""
     return _combat.compute_character_tactical_envelope(char_sheet)
 

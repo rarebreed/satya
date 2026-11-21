@@ -29,7 +29,8 @@ class _RustSourceSpec:
 
 
 _RUST_SOURCES: Final[tuple[_RustSourceSpec, ...]] = (
-    _RustSourceSpec("lib.rs", "Core dice probabilities, cascading task params, combat pools, rules book & Avro schema registry"),
+    _RustSourceSpec("lib.rs", "Core dice probabilities, cascading task params, combat pools & rules book"),
+    _RustSourceSpec("schema_py.rs", "Canonical satya-schema DTO normalization, validation, wire enums & Avro schema registry"),
     _RustSourceSpec("tactical_map_py.rs", "Continuous metric tactical maps, LoS/cover, reachability, ballistics & spatial edits"),
     _RustSourceSpec("hooks_and_npc_py.rs", "Motivational hook weaver, procedural NPCs, lifepath anchors & embedded campaign config"),
     _RustSourceSpec("psyche_social_py.rs", "9-axis Psyche, social combat, cognitive dissonance, morale & world ledgers"),

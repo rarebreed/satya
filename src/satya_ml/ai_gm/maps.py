@@ -27,7 +27,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, Literal
 
-from satya_py import maps as _maps
+from satya_py import maps as _maps, schema as _schema
 
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model
 from satya_ml.campaign_config import (
@@ -92,43 +92,8 @@ def using_satya_py_map_backend() -> bool:
 
 
 _TOKEN_RADIUS_M: Final[float] = 0.30
-# Used strictly for SVG background paint ordering in render_tactical_svg();
-# Rust satya-maps owns authoritative collision and LoS classification.
-_NON_SOLID_PROP_KINDS: Final[frozenset[str]] = frozenset(
-    {
-        "RUG",
-        "RUNNER_RUG",
-        "ROUND_RUG",
-        "MULCH_BED",
-        "GARDEN_BED",
-        "GARDEN_EDGING",
-        "CREEK_WATER",
-        "DRAINAGE_DITCH",
-        "GRAVEL_PATH",
-        "DIRT_PATH",
-        "STONE_PATH",
-        "ASPHALT_DRIVE",
-        "ELEVATED_CATWALK",
-        "STAIRWELL",
-        "ELEVATOR_CAR",
-        "SERVICE_ELEVATOR",
-        "HAZARD_SPILL",
-        "BAR_STOOL",
-        "DESK_LAMP",
-        "STANDING_LAMP",
-        "FIRE_EXTINGUISHER",
-        "GAZEBO",
-        "FLOOR_CLOTHES",
-        "FLOOR_TOYS",
-        "STREET_DEBRIS",
-        "TELEMETRY_MONITOR",
-        "BIOHAZARD_BIN",
-        "DESK_CLUTTER",
-        "WATER_COOLER",
-        "BROWNSTONE_STOOP",
-        "AWNING_CANOPY",
-    }
-)
+# Sourced from Rust `satya_maps::map_dressing::PROP_CATALOG` (zero Python enum list drift).
+_NON_SOLID_PROP_KINDS: Final[frozenset[str]] = frozenset(_maps.list_non_solid_prop_kinds())
 _SCIFI_SECTOR_PRESET_REMAP: Final[Mapping[str, SectorPresetId]] = MappingProxyType(
     {
         "orbital_airlock": "corporate_server_bunker",
@@ -355,9 +320,18 @@ def _prop_center_span_rot_m(prop: dict[str, Any]) -> tuple[float, float, float, 
         sh = float(prop.get("h_cells", prop.get("span_h", 1)))
         cx_m = ox + sw * 0.5
         cy_m = oy + sh * 0.5
-    sw_m = float(prop.get("span_w_cm", int(prop.get("w_cells", prop.get("span_w", 1))) * 100)) / 100.0
-    sh_m = float(prop.get("span_h_cm", int(prop.get("h_cells", prop.get("span_h", 1))) * 100)) / 100.0
-    rot_rad = math.radians(float(prop.get("rotation_deg", 0)))
+    rot_deg = float(prop.get("rotation_deg", 0))
+    if prop.get("span_w_cm") is not None and prop.get("span_h_cm") is not None:
+        sw_m = float(prop["span_w_cm"]) / 100.0
+        sh_m = float(prop["span_h_cm"]) / 100.0
+    else:
+        w_cells = int(prop.get("w_cells", prop.get("span_w", 1)))
+        h_cells = int(prop.get("h_cells", prop.get("span_h", 1)))
+        sw_m = float(w_cells if w_cells > 0 else 1)
+        sh_m = float(h_cells if h_cells > 0 else 1)
+        if int(rot_deg) % 180 == 90:
+            sw_m, sh_m = sh_m, sw_m
+    rot_rad = math.radians(rot_deg)
     return (cx_m, cy_m, sw_m * 0.5, sh_m * 0.5, rot_rad)
 
 
@@ -608,79 +582,19 @@ def _build_wire_tokens_and_visuals(
     map_state: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     active_floor = int(map_state.get("active_floor", 0))
-    vis_by_eid = {
-        str(v.get("entity_id") or ""): v
-        for v in (map_state.get("token_visuals") or [])
-        if isinstance(v, dict) and v.get("entity_id")
-    }
-    norm_tokens = _merge_tokens_with_visuals(map_state)
-    wire_tokens = [
+    merged = _merge_tokens_with_visuals(map_state)
+    norm = _schema.normalize_tactical_map(
         {
-            "entity_id": str(t.get("entity_id") or t.get("token_id") or f"tok-{i}"),
-            "label": str(t.get("label") or t.get("token_id") or f"Token {i}"),
-            "x": int(t.get("grid_x", t.get("x", 0))),
-            "y": int(t.get("grid_y", t.get("y", 0))),
-            "visibility": (
-                "GM_ONLY"
-                if (t.get("is_hidden", False) or str(t.get("visibility", "")).upper() == "GM_ONLY")
-                else "PUBLIC"
-            ),
+            "active_floor": active_floor,
+            "tokens": merged,
+            "token_visuals": list(map_state.get("token_visuals") or []),
         }
-        for i, t in enumerate(norm_tokens)
-    ]
-    wire_visuals = []
-    for i, t in enumerate(norm_tokens):
-        eid = str(t.get("entity_id") or t.get("token_id") or f"tok-{i}")
-        vis_rec = vis_by_eid.get(eid) or {}
-        visual_item: dict[str, Any] = {
-            "entity_id": eid,
-            "model_preset": str(t.get("model_preset") or vis_rec.get("model_preset") or _infer_model_preset(str(t.get("label", "")))),
-            "color_hex": str(t.get("color_hex") or vis_rec.get("color_hex") or "#38bdf8"),
-            "facing_deg": int(t.get("facing_deg") if t.get("facing_deg") is not None else vis_rec.get("facing_deg", 90)),
-            "elevation_cm": int(t.get("elevation_cm") if t.get("elevation_cm") is not None else vis_rec.get("elevation_cm", 0)),
-            "floor_index": int(t.get("floor_index") if t.get("floor_index") is not None else vis_rec.get("floor_index", active_floor)),
-            "stance_pose": str(t.get("stance_pose") or vis_rec.get("stance_pose") or "aimed"),
-            "pos_x_cm": int(t.get("pos_x_cm", int(t.get("grid_x", t.get("x", 0))) * 100 + 50)),
-            "pos_y_cm": int(t.get("pos_y_cm", int(t.get("grid_y", t.get("y", 0))) * 100 + 50)),
-        }
-        portrait = t.get("portrait_url") if t.get("portrait_url") is not None else vis_rec.get("portrait_url")
-        if portrait is not None:
-            visual_item["portrait_url"] = portrait
-        wire_visuals.append(visual_item)
-    return wire_tokens, wire_visuals
+    )
+    return list(norm.get("tokens") or []), list(norm.get("token_visuals") or [])
 
 
 def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None:
-    wire_tokens, wire_visuals = _build_wire_tokens_and_visuals(map_state)
-    wire_payload = {
-        "map_id": map_state["map_id"],
-        "title": map_state.get("title", map_state.get("theme", "Tactical Map")),
-        "image_url": map_state.get("image_url", map_state.get("map_image_url", "")),
-        "grid_width": int(map_state["grid_width"]),
-        "grid_height": int(map_state["grid_height"]),
-        "cell_size_cm": int(map_state.get("cell_size_cm", 100)),
-        "theme_preset": map_state.get("theme_preset", infer_sector_preset(str(map_state.get("theme", "")))),
-        "seed": int(map_state.get("seed", 42)),
-        "tiles": list(map_state.get("tiles", [])),
-        "wall_edges": list(map_state.get("wall_edges", [])),
-        "props": list(map_state.get("props", [])),
-        "tokens": wire_tokens,
-        "token_visuals": wire_visuals,
-        "notes": map_state.get("notes"),
-    }
-    for opt_key in (
-        "surfaces",
-        "floors",
-        "active_floor",
-        "world_sectors",
-        "ground_floor_override",
-        "ground_tint_rgb",
-        "ambient_light_delta_ext",
-        "faraday_zones",
-        "surveillance_nodes",
-    ):
-        if opt_key in map_state and map_state[opt_key] is not None:
-            wire_payload[opt_key] = map_state[opt_key]
+    wire_payload = _build_rust_map_payload(map_state)
     base = _signaling_base_url()
     if not base:
         return
@@ -741,41 +655,16 @@ def clear_session_spatial_pins(session_id: str | None = None) -> None:
 
 
 def _build_rust_map_payload(map_state: dict[str, Any]) -> dict[str, Any]:
-    """Build a canonical `GmMapUpdateRequest`-compatible payload dict from a Python map state."""
-    grid_w = int(map_state.get("grid_width", 16))
-    grid_h = int(map_state.get("grid_height", 12))
-    active_floor = int(map_state.get("active_floor", 0))
-    wire_tokens, wire_visuals = _build_wire_tokens_and_visuals(map_state)
-    payload: dict[str, Any] = {
-        "map_id": str(map_state.get("map_id", "map")),
-        "title": str(map_state.get("title", map_state.get("theme", "Tactical Map"))),
-        "image_url": str(map_state.get("image_url", map_state.get("map_image_url", ""))),
-        "grid_width": grid_w,
-        "grid_height": grid_h,
-        "cell_size_cm": int(map_state.get("cell_size_cm", 100)),
-        "theme_preset": str(map_state.get("theme_preset", "urban_crossroads")),
-        "seed": int(map_state.get("seed", 42)),
-        "tiles": list(map_state.get("tiles") or []),
-        "wall_edges": list(map_state.get("wall_edges") or []),
-        "props": list(map_state.get("props") or []),
-        "tokens": wire_tokens,
-        "token_visuals": wire_visuals,
-        "notes": map_state.get("notes"),
-        "active_floor": active_floor,
-    }
-    for opt_key in (
-        "surfaces",
-        "floors",
-        "world_sectors",
-        "ground_floor_override",
-        "ground_tint_rgb",
-        "ambient_light_delta_ext",
-        "faraday_zones",
-        "surveillance_nodes",
-    ):
-        if opt_key in map_state and map_state[opt_key] is not None:
-            payload[opt_key] = map_state[opt_key]
-    return payload
+    """Build a canonical `GmMapUpdateRequest`-compatible payload dict via Rust ``satya_py.schema``."""
+    payload = dict(map_state)
+    if not payload.get("theme_preset"):
+        theme = str(payload.get("theme") or payload.get("title") or "").strip()
+        payload["theme_preset"] = infer_sector_preset(theme) if theme else "urban_crossroads"
+    if payload.get("seed") is None:
+        payload["seed"] = 42
+    if payload.get("tokens"):
+        payload["tokens"] = _merge_tokens_with_visuals(map_state)
+    return _schema.normalize_tactical_map(payload)
 
 
 def _extract_narrative_manifest(map_state: dict[str, Any]) -> dict[str, Any]:
@@ -1284,20 +1173,35 @@ def move_map_token(
 
     pins = list(_SESSION_SPATIAL_PINS.get(session_id) or [])
     try:
-        from satya_py.campaign import normalize_character_sheet_record
         from satya_ml.ai_gm.tools import get_session_characters
 
-        raw_chars = get_session_characters(session_id)
-        observers = [normalize_character_sheet_record(c, i) for i, c in enumerate(raw_chars)]
+        observers: list[dict[str, Any]] = [
+            dict(c) for c in get_session_characters(session_id) if isinstance(c, Mapping)
+        ]
         if sensory_tns:
-            matched_obs = next((o for o in observers if o["character_id"] == moved_entity_id), None)
-            if matched_obs is None:
-                matched_obs = normalize_character_sheet_record({"character_id": moved_entity_id, "character_name": moved_entity_id})
+            matched_idx = next(
+                (
+                    i
+                    for i, o in enumerate(observers)
+                    if str(o.get("character_id") or f"pc-{i}") == moved_entity_id
+                ),
+                None,
+            )
+            if matched_idx is None:
+                matched_obs: dict[str, Any] = {
+                    "character_id": moved_entity_id,
+                    "character_name": moved_entity_id,
+                    "characteristics": {},
+                }
                 observers.append(matched_obs)
+            else:
+                matched_obs = dict(observers[matched_idx])
+                matched_obs["characteristics"] = dict(matched_obs.get("characteristics") or {})
+                observers[matched_idx] = matched_obs
+            chars_map = matched_obs["characteristics"]
             for sk, sv in sensory_tns.items():
-                sk_low = str(sk).lower()
-                if sk_low in matched_obs["characteristics"] and isinstance(sv, (int, float)):
-                    matched_obs["characteristics"][sk_low] = int(sv)
+                if isinstance(sv, (int, float)):
+                    chars_map[str(sk).lower()] = int(sv)
 
         updated_rust_json = _build_rust_map_payload(updated)
         try:

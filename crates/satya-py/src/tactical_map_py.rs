@@ -8,7 +8,7 @@ use satya_engine::ballistics::lookup_firearm_preset;
 use satya_engine::environment_vehicles::CombatMovementGait;
 use satya_engine::explosives_and_arsenal::ExplosiveOrdnanceId;
 use satya_maps::barrier_ballistics::BallisticShotQuery;
-use satya_maps::map_dressing::make_prop_at_cm;
+use satya_maps::map_dressing::{PROP_CATALOG, PropObstruction, make_prop_at_cm};
 use satya_maps::map_narrative_manifest::{
     SpatialSensoryPin, evaluate_passive_movement_perceptions, extract_sector_narrative_manifest,
 };
@@ -22,9 +22,9 @@ use satya_maps::tactical_map_geom::{
 };
 use satya_maps::tactical_map_inspect::{MapHoverCategory, inspect_map_point};
 use satya_schema::{
-    CharacterSheetRecord, CodedEnum, EconomicTier, EdgeSide, GmMapUpdateRequest,
-    MapContinuationDir, MapScalePreset, MapWallEdge, MaterialClass, PropKind, TokenVisualSpec,
-    WallEdgeKind, ZoningContext,
+    CodedEnum, EconomicTier, EdgeSide, GmMapUpdateRequest, MapContinuationDir, MapScalePreset,
+    MapWallEdge, MaterialClass, PropKind, TokenVisualSpec, WallEdgeKind, ZoningContext,
+    default_floor_badge,
 };
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -83,12 +83,61 @@ fn normalize_wall_edges_and_props(container: &mut Map<String, Value>) {
     }
 }
 
+fn infer_model_preset(label: &str, is_hidden: bool) -> &'static str {
+    let low = label.to_ascii_lowercase();
+    if low.contains("valkyrie") || low.contains("sara") {
+        "valkyrie_rig"
+    } else if low.contains("recon") || low.contains("marcus") || low.contains("vance") {
+        "recon_mk4"
+    } else if is_hidden
+        || low.contains("sentry")
+        || low.contains("secops")
+        || low.contains("hostile")
+    {
+        "secops_sentry"
+    } else {
+        "operative_light"
+    }
+}
+
+fn strip_null_fields(map: &mut Map<String, Value>, keys: &[&str]) {
+    for &k in keys {
+        if map.get(k).is_some_and(Value::is_null) {
+            map.remove(k);
+        }
+    }
+}
+
 /// Normalizes flexible Python `map_state` values into a canonical [`GmMapUpdateRequest`]
 /// without mutating locked `v1` wire structs.
 pub(crate) fn parse_flexible_map_value(mut root: Value) -> Result<GmMapUpdateRequest, String> {
     let obj = root
         .as_object_mut()
         .ok_or_else(|| "Tactical map payload must be a dict/object".to_string())?;
+
+    strip_null_fields(
+        obj,
+        &[
+            "map_id",
+            "title",
+            "image_url",
+            "grid_width",
+            "grid_height",
+            "cell_size_cm",
+            "tiles",
+            "wall_edges",
+            "props",
+            "tokens",
+            "token_visuals",
+            "surfaces",
+            "floors",
+            "world_sectors",
+            "active_floor",
+            "ambient_light_delta_ext",
+            "faraday_zones",
+            "surveillance_nodes",
+        ],
+    );
 
     if !obj.contains_key("map_id") {
         obj.insert("map_id".to_string(), json!("py-map"));
@@ -118,9 +167,19 @@ pub(crate) fn parse_flexible_map_value(mut root: Value) -> Result<GmMapUpdateReq
     if !obj.contains_key("cell_size_cm") {
         obj.insert("cell_size_cm".to_string(), json!(100));
     }
+    let cell_cm = obj
+        .get("cell_size_cm")
+        .and_then(Value::as_i64)
+        .unwrap_or(100)
+        .max(25);
+    let cell_cm_i32 = cell_cm as i32;
 
     struct TokenVisualOverride {
         entity_id: String,
+        label: String,
+        is_hidden: bool,
+        gx: i32,
+        gy: i32,
         model_preset: Option<String>,
         color_hex: Option<String>,
         facing_deg: Option<i32>,
@@ -140,37 +199,84 @@ pub(crate) fn parse_flexible_map_value(mut root: Value) -> Result<GmMapUpdateReq
                     .get("entity_id")
                     .or_else(|| tok.get("token_id"))
                     .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
                     .map(str::to_string)
                     .unwrap_or_else(|| format!("tok-{idx}"));
-                tok.entry("entity_id")
-                    .or_insert_with(|| Value::String(entity_id.clone()));
+                tok.insert("entity_id".to_string(), Value::String(entity_id.clone()));
 
                 let label = tok
                     .get("label")
                     .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
                     .unwrap_or(&entity_id)
                     .to_string();
-                tok.entry("label").or_insert_with(|| Value::String(label));
+                tok.insert("label".to_string(), Value::String(label.clone()));
 
                 let gx = tok
                     .get("x")
                     .or_else(|| tok.get("grid_x"))
                     .and_then(Value::as_i64)
-                    .unwrap_or(0);
+                    .unwrap_or_else(|| {
+                        tok.get("pos_x_cm")
+                            .and_then(Value::as_i64)
+                            .map(|cm| (cm / cell_cm).max(0))
+                            .unwrap_or(0)
+                    });
                 let gy = tok
                     .get("y")
                     .or_else(|| tok.get("grid_y"))
                     .and_then(Value::as_i64)
-                    .unwrap_or(0);
-                tok.entry("x").or_insert_with(|| json!(gx));
-                tok.entry("y").or_insert_with(|| json!(gy));
-                tok.entry("visibility")
-                    .or_insert_with(|| Value::String("PUBLIC".to_string()));
+                    .unwrap_or_else(|| {
+                        tok.get("pos_y_cm")
+                            .and_then(Value::as_i64)
+                            .map(|cm| (cm / cell_cm).max(0))
+                            .unwrap_or(0)
+                    });
+                if tok.get("x").is_none_or(Value::is_null) {
+                    tok.insert("x".to_string(), json!(gx));
+                }
+                if tok.get("y").is_none_or(Value::is_null) {
+                    tok.insert("y".to_string(), json!(gy));
+                }
+
+                let raw_vis = tok
+                    .get("visibility")
+                    .and_then(Value::as_str)
+                    .unwrap_or("PUBLIC")
+                    .trim()
+                    .to_ascii_uppercase();
+                let is_hidden = tok.get("is_hidden").and_then(Value::as_bool).unwrap_or(false)
+                    || tok.get("hidden").and_then(Value::as_bool).unwrap_or(false)
+                    || tok.get("gm_only").and_then(Value::as_bool).unwrap_or(false)
+                    || raw_vis == "GM_ONLY";
+                let norm_vis = if is_hidden {
+                    "GM_ONLY"
+                } else {
+                    match raw_vis.as_str() {
+                        "GM_ONLY" => "GM_ONLY",
+                        "PRIVATE" => "PRIVATE",
+                        "HOST_ONLY" => "HOST_ONLY",
+                        _ => "PUBLIC",
+                    }
+                };
+                tok.insert("visibility".to_string(), Value::String(norm_vis.to_string()));
 
                 let opt_i32 = |k: &str| tok.get(k).and_then(Value::as_i64).map(|v| v as i32);
-                let opt_str = |k: &str| tok.get(k).and_then(Value::as_str).map(str::to_string);
+                let opt_str = |k: &str| {
+                    tok.get(k)
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string)
+                };
                 let ov = TokenVisualOverride {
                     entity_id,
+                    label,
+                    is_hidden,
+                    gx: gx as i32,
+                    gy: gy as i32,
                     model_preset: opt_str("model_preset"),
                     color_hex: opt_str("color_hex"),
                     facing_deg: opt_i32("facing_deg"),
@@ -201,6 +307,17 @@ pub(crate) fn parse_flexible_map_value(mut root: Value) -> Result<GmMapUpdateReq
     if let Some(floors_val) = obj.get_mut("floors").and_then(Value::as_array_mut) {
         for floor_val in floors_val.iter_mut() {
             if let Some(floor) = floor_val.as_object_mut() {
+                strip_null_fields(
+                    floor,
+                    &["wall_edges", "props", "surfaces", "elevation_cm"],
+                );
+                if floor.get("label").is_none_or(Value::is_null) {
+                    let fidx = floor
+                        .get("floor_index")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(0) as i32;
+                    floor.insert("label".to_string(), Value::String(default_floor_badge(fidx)));
+                }
                 normalize_wall_edges_and_props(floor);
             }
         }
@@ -247,17 +364,26 @@ pub(crate) fn parse_flexible_map_value(mut root: Value) -> Result<GmMapUpdateReq
                 entity_id: ov.entity_id,
                 model_preset: ov
                     .model_preset
-                    .unwrap_or_else(|| "operative_light".to_string()),
+                    .unwrap_or_else(|| infer_model_preset(&ov.label, ov.is_hidden).to_string()),
                 color_hex: ov.color_hex.unwrap_or_else(|| "#38bdf8".to_string()),
                 facing_deg: ov.facing_deg.unwrap_or(0),
                 elevation_cm: ov.elevation_cm.unwrap_or(0),
                 floor_index: ov.floor_index.unwrap_or(map.active_floor),
                 stance_pose: ov.stance_pose.unwrap_or_else(|| "idle".to_string()),
                 portrait_url: ov.portrait_url,
-                pos_x_cm: ov.pos_x_cm,
-                pos_y_cm: ov.pos_y_cm,
+                pos_x_cm: ov
+                    .pos_x_cm
+                    .or_else(|| Some(ov.gx * cell_cm_i32 + cell_cm_i32 / 2)),
+                pos_y_cm: ov
+                    .pos_y_cm
+                    .or_else(|| Some(ov.gy * cell_cm_i32 + cell_cm_i32 / 2)),
             });
         }
+    }
+
+    if !map.tokens.is_empty() {
+        map.token_visuals
+            .retain(|v| map.tokens.iter().any(|t| t.entity_id == v.entity_id));
     }
 
     Ok(map)
@@ -486,12 +612,8 @@ pub fn evaluate_passive_perceptions(
 ) -> PyResult<PyJsonList> {
     let map = parse_flexible_map_obj(&map_state)?;
     let obs_val = py_to_json_value(&observers, "observers")?;
-    let parsed_obs: Vec<CharacterSheetRecord> = if obs_val.is_null() {
-        Vec::new()
-    } else {
-        serde_json::from_value(obs_val)
-            .map_err(|e| to_py_err(format!("Invalid observers: {e}")))?
-    };
+    let parsed_obs =
+        super::schema_py::parse_flexible_character_list(obs_val).map_err(to_py_err)?;
     let parsed_pins: Vec<SpatialSensoryPin> =
         super::py_bridge::opt_from_py_object(pins, "sensory pins")?.unwrap_or_default();
     to_py_object(
@@ -922,6 +1044,21 @@ pub fn edit_map_feature(
     )
 }
 
+/// Returns canonical `PropKind` codes that are walkable floor layers (never solid obstacles).
+pub(crate) fn non_solid_prop_kind_codes() -> Vec<String> {
+    PROP_CATALOG
+        .iter()
+        .filter(|spec| spec.floor_layer || matches!(spec.obstruction, PropObstruction::FloorLayer))
+        .map(|spec| spec.kind.as_str().to_string())
+        .collect()
+}
+
+/// Lists all canonical non-solid/floor-layer `PropKind` codes from `satya-maps`'s `PROP_CATALOG`.
+#[pyfunction]
+pub fn list_non_solid_prop_kinds() -> Vec<String> {
+    non_solid_prop_kind_codes()
+}
+
 /// Registers tactical map spatial bindings on the `satya_py` Python module.
 pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(check_tactical_token_collision, m)?)?;
@@ -937,6 +1074,7 @@ pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(compute_reachable_zone, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_spatial_blast_and_breach, m)?)?;
     m.add_function(wrap_pyfunction!(edit_map_feature, m)?)?;
+    m.add_function(wrap_pyfunction!(list_non_solid_prop_kinds, m)?)?;
     Ok(())
 }
 

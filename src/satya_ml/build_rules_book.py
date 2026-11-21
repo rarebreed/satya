@@ -12,7 +12,11 @@ import json
 import math
 from pathlib import Path
 import re
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from satya_py.combat import TacticalPoolDict
+    from satya_py.dice import CascadeOutcomeDict
 
 from satya_ml.dice_probabilities import (
     compute_stats,
@@ -376,7 +380,7 @@ def evaluate_cascade_pairs_python(
     pairs: list[tuple[int, int]],
     carry_mode: str = "markov_step",
     botch_rule: str = "closest_miss",
-) -> dict[str, Any]:
+) -> CascadeOutcomeDict:
     """Evaluate a concrete sequence of `(die_a, die_b)` `2d20` pairs via Rust ``satya_py.dice``."""
     from satya_py.dice import evaluate_cascade_pairs_dict
 
@@ -414,7 +418,7 @@ def compute_tactical_pool_python(
     ana: int = 12,
     cre: int = 12,
     foc: int = 12,
-) -> dict[str, Any]:
+) -> TacticalPoolDict:
     """Compute the Satya Combat Tactical Pool ('Envelope & Fill') parameters via Rust ``satya_py.combat``."""
     from satya_py.combat import compute_tactical_pool_dict
 

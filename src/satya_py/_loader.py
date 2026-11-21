@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import Final
+
+_BUILD_PROFILES: Final[tuple[str, ...]] = ("release", "debug")
 
 
 def _sync_extension_if_newer(pkg_dir: Path, repo_root: Path) -> None:
     pyd_path = pkg_dir / "_native.pyd"
-    candidates = [
-        repo_root / "target" / profile / "satya_py.dll"
-        for profile in ("release", "debug")
-    ]
+    candidates = [repo_root / "target" / profile / "satya_py.dll" for profile in _BUILD_PROFILES]
     existing = [p for p in candidates if p.exists()]
     if not existing:
         return
@@ -25,7 +25,7 @@ def _sync_extension_if_newer(pkg_dir: Path, repo_root: Path) -> None:
             pass
 
 
-def ensure_native_loaded() -> Any:
+def ensure_native_loaded() -> ModuleType:
     """Ensure ``satya_py._native`` is synchronized from ``target/`` and return the module."""
     pkg_dir = Path(__file__).resolve().parent
     repo_root = pkg_dir.parent.parent
