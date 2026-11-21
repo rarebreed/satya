@@ -53,7 +53,7 @@
       "relative_path": "01-foundation/probability_and_calibration.md",
       "description": "Mathematical foundation, distribution topology (skewness, modality, tail behavior), scale invariance across K, avoiding the Skilled Botch Paradox, and the 1-Pair Tiered GM Resistance Rule.",
       "headings": [
-        "1. Mathematical Structure of the Two-List Cascading (\"Watershed\") Process",
+        "1. Mathematical Structure of the `2d20xN` Cascade Process",
         "1.1 Midpoint-Anchored Roll-Over Targets ($\\text{TN}_P$ and Hidden $\\text{TN}_{GM}$)",
         "1.2 State Transition & Carry-Over Topology (`markov_step` vs. `cumulative_snowball`)",
         "2. Eliminating the \"Skilled Botch Paradox\"",
@@ -78,9 +78,9 @@
     {
       "chapter_id": "tasks",
       "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
-      "title": "Cascading 2d20 Engine & Task Resolution",
+      "title": "2d20xN Cascade Engine & Task Resolution",
       "relative_path": "02-core-mechanics/cascading_d20_and_tasks.md",
-      "description": "Canonical Two-List Cascading (2d20) dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, 5-step Task Pipeline, Tool Tiers, Gate Classifications, and Extended Project Clocks.",
+      "description": "Canonical 2d20xN cascade dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, 5-step Task Pipeline, Tool Tiers, Gate Classifications, and Extended Project Clocks.",
       "headings": [
         "1. The Always-Contested Task Resolution Pipeline",
         "2. Step 1: Task Gate Classifications, Prerequisites & Tools",

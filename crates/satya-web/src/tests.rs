@@ -534,7 +534,7 @@ fn test_ssr_gm_vault_rules_book_npcs_and_markdown_chat() {
     ] {
         assert!(html.contains(&format!(r#"value="{chapter_val}""#)));
     }
-    assert!(html.contains("Cascading 2d20 Engine &amp; Task Resolution"));
+    assert!(html.contains("2d20xN Cascade Engine &amp; Task Resolution"));
     assert!(html.contains(".rules-book-viewport"));
     assert!(!html.contains("Worked Book Examples"));
     assert!(!html.contains("satyaLoadRulesExample"));

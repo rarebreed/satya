@@ -48,8 +48,19 @@ from satya_ml.ai_gm.party_coordinator import (
     execute_ready_npc_actions,
     extract_active_human_players,
 )
+from satya_ml.ai_gm.tool_registry import (
+    CORE_GM_TOOL_NAMES,
+    DEFERRED_TOOL_PACKS,
+    GmToolRegistry,
+    OOC_READONLY_TOOL_NAMES,
+    load_gm_tools,
+)
 
 __all__ = [
+    "CORE_GM_TOOL_NAMES",
+    "DEFERRED_TOOL_PACKS",
+    "GmToolRegistry",
+    "OOC_READONLY_TOOL_NAMES",
     "SessionLlmConfig",
     "build_gm_chat_model",
     "compute_token_reachable_zone",
@@ -67,6 +78,7 @@ __all__ = [
     "inspect_tactical_map",
     "inspect_tactical_map_point",
     "intervene_ai_cage_or_hunter_ai",
+    "load_gm_tools",
     "manage_polycrisis_grid_and_strain",
     "manage_synthetic_substrate_and_embodiment",
     "move_map_token",

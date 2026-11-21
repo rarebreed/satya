@@ -74,7 +74,7 @@ Used primarily in [Probability & Calibration](probability_and_calibration.md) an
 | $\text{Var}(X)$ *(or $\sigma^2$)* | **Variance** | $\mathbb{R}_{\ge 0}$ | Expected squared deviation from the mean: $\sigma^2 = \sum_x (x - \mu)^2 P(X = x)$ (where $\sigma = \sqrt{\sigma^2}$ is the standard deviation). |
 | $\mu_3$ & $\gamma_1$ | **Third Central Moment & Skewness** | $\mathbb{R}$ | Measures distribution asymmetry: $\mu_3 = \sum_x (x - \mu)^3 P(X = x)$ and $\gamma_1 = \mu_3 / \sigma^3$ ($\gamma_1 > 0$ = right-skewed tail; $\gamma_1 < 0$ = left-skewed tail). |
 | $\kappa_{\text{excess}}$ | **Excess Kurtosis** | $\mathbb{R}$ | Measures tail heaviness / peak flatness relative to a normal bell curve: $\kappa_{\text{excess}} = (\mu_4 / \sigma^4) - 3$. |
-| $\text{BC}$ | **Sarle's Bimodality Coefficient** | $0.0\text{–}1.0$ | Diagnostic metric for whether a distribution is unimodal or bimodal: $\text{BC} = (\gamma_1^2 + 1) / (\kappa_{\text{excess}} + 3)$. Values **$\text{BC} > 0.555$ ($5/9$)** indicate a **bimodal ("watershed")** distribution. |
+| $\text{BC}$ | **Sarle's Bimodality Coefficient** | $0.0\text{–}1.0$ | Diagnostic metric for whether a distribution is unimodal or bimodal: $\text{BC} = (\gamma_1^2 + 1) / (\kappa_{\text{excess}} + 3)$. Values **$\text{BC} > 0.555$ ($5/9$)** indicate a **bimodal** distribution. |
 
 ---
 

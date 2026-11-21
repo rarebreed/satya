@@ -282,10 +282,18 @@ def handle_ai_gm_event(
         api_key=raw_provider_key,
     )
 
+    raw_lazy: bool | None
+    if "lazy_tool_loading" in p_cfg:
+        raw_lazy = bool(p_cfg.get("lazy_tool_loading"))
+    elif os.environ.get("SATYA_AI_GM_LAZY_TOOLS", "").strip():
+        raw_lazy = None
+    else:
+        raw_lazy = bool(file_cfg.get("lazy_tool_loading", True))
     graph = build_ai_gm_graph(
         llm_cfg,
         chat_model=_CHAT_MODEL_OVERRIDE,
         checkpointer=_SHARED_CHECKPOINTER,
+        lazy_tool_loading=raw_lazy,
     )
 
     op_mode = "co_pilot" if "co_pilot" in payload.operating_mode.lower() else "autonomous"
@@ -421,10 +429,16 @@ def handle_scenario_beat(
         reasoning=bool(raw_reasoning) if raw_reasoning is not None else False,
         api_key=x_satya_provider_key if isinstance(x_satya_provider_key, str) else None,
     )
+    raw_lazy: bool | None = (
+        None
+        if os.environ.get("SATYA_AI_GM_LAZY_TOOLS", "").strip()
+        else bool(file_cfg.get("lazy_tool_loading", True))
+    )
     graph = build_ai_gm_graph(
         llm_cfg,
         chat_model=_CHAT_MODEL_OVERRIDE,
         checkpointer=_SHARED_CHECKPOINTER,
+        lazy_tool_loading=raw_lazy,
     )
     op_mode = "co_pilot" if "co_pilot" in payload.operating_mode.lower() else "autonomous"
     with turn_telemetry_scope(payload.session_id, traceparent=traceparent) as telemetry:

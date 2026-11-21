@@ -19,7 +19,7 @@ description: >-
 Every new LangGraph AI GM tool must update all 5 sites together:
 1. **Define `@tool` & Session Store**: Implement in a focused domain module under `src/satya_ml/ai_gm/` using `session_id: str = "default"`.
 2. **Session Reset Hook**: Clear any module `_SESSION_*` dict inside `reset_social_and_world_state(session_id)` (`social_and_clocks.py`) so parallel/multi-test sessions never leak state.
-3. **Tool Registry**: Import and append the tool to `get_builtin_gm_tools()` in `src/satya_ml/ai_gm/tools.py`.
+3. **Tool Registry**: Import and append the tool to `get_builtin_gm_tools()` in `src/satya_ml/ai_gm/tools.py`, and add its exact name to `CORE_GM_TOOL_NAMES` or the appropriate domain pack in `DEFERRED_TOOL_PACKS` (`src/satya_ml/ai_gm/tool_registry.py`).
 4. **Telemetry Tier Classification**: Register the exact tool name in `_classify_tool_tier()` in `src/satya_ml/ai_gm/graph.py` (`TIER_1_CORE_DICE`, `TIER_2_RULESET_ENGINE`, or `TIER_3_OPTIONAL_FLAVOR`).
 5. **Package Re-Export**: Export in `src/satya_ml/ai_gm/__init__.py`.
 

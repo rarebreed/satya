@@ -13,11 +13,11 @@ Most tabletop RPGs answer these questions using one of two classic probability d
 
 In **Satya**—a Computer-Assisted RPG (CARPG)—we want the **shape (topology) of the probability distribution itself** (its skewness, modality, and tail behavior) to reflect the narrative reality of the task. A master performing a routine task, a novice attempting a desperate gamble, and an exhausted veteran fighting through injury should not just sit at different points on the same bell curve—they should experience fundamentally different probability distributions.
 
-This chapter details the mathematical foundation and calibration rationale behind Satya's **Two-List Cascading ("Watershed") `2d20` Mechanic** (for definitions of all mathematical variables and subscripts such as $\text{TN}_P$, $\text{TN}_{GM}$, $C_P$, $\delta_{\text{over}}$, and $\delta_{\text{under}}$, see the **[Mathematical Notation, Variables & Formula Glossary](mathematical_notation_glossary.md)**; for the step-by-step gameplay procedure, task gates, and worked examples, see **[Core `2d20` Cascade & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md)**).
+This chapter details the mathematical foundation and calibration rationale behind Satya's **`2d20xN` Cascade Mechanic** (for definitions of all mathematical variables and subscripts such as $\text{TN}_P$, $\text{TN}_{GM}$, $C_P$, $\delta_{\text{over}}$, and $\delta_{\text{under}}$, see the **[Mathematical Notation, Variables & Formula Glossary](mathematical_notation_glossary.md)**; for the step-by-step gameplay procedure, task gates, and worked examples, see **[Core `2d20xN` Cascade & Task Resolution](../02-core-mechanics/cascading_d20_and_tasks.md)**).
 
 ---
 
-## 1. Mathematical Structure of the Two-List Cascading ("Watershed") Process
+## 1. Mathematical Structure of the `2d20xN` Cascade Process
 
 Instead of rolling a single die or summing an independent pool, a task roll in Satya consists of $N$ sequential **pairs** of 20-sided dice (`K = 20`), where **$N \in [1, 8]$ is the character's Skill Level**:
 $$\text{List A} = (A_1, A_2, \dots, A_N), \qquad \text{List B} = (B_1, B_2, \dots, B_N)$$
@@ -59,7 +59,7 @@ Satya supports two primary state-transition modes in [`paired_list_signed_margin
 - **Single-Step Markov Carry (`markov_step` / `CarryMode::MarkovStep` — Standard Resolution):**
   Pair $n$ receives a single $+\delta_{\text{over}}$ (`+6`) if Pair $n-1$ succeeded, or a single $-\delta_{\text{under}}$ ($-(6 + \Delta_{\text{int}})$) if Pair $n-1$ failed. Mathematically, this forms a **first-order Markov chain** over `{Success, Failure}` states. It allows a skilled character who misses Pair 1 to fight through the $-\delta_{\text{under}}$ penalty on Pair 2 or 3, recover their footing, and flip the cascade back into positive $+\delta_{\text{over}}$ momentum.
 - **Cumulative Snowball Carry (`cumulative_snowball` / `CarryMode::CumulativeSnowball` — High-Stakes Resolution):**
-  Carry-over compounds across every step ($\text{Carry}_{n+1} = \text{Carry}_n \pm \delta$, yielding `+6, +12, +18...` on streaks of success, or `-6, -12, -18...` on streaks of failure). This splits the probability distribution into a stark **bimodal ("watershed") distribution** where early momentum snowballs into effortless mastery and early failure locks out recovery.
+  Carry-over compounds across every step ($\text{Carry}_{n+1} = \text{Carry}_n \pm \delta$, yielding `+6, +12, +18...` on streaks of success, or `-6, -12, -18...` on streaks of failure). This splits the probability distribution into a stark **bimodal (U-shaped) distribution** where early momentum snowballs into effortless mastery and early failure locks out recovery.
 
 ---
 
@@ -184,11 +184,11 @@ A core pillar of Satya's design philosophy is **Epistemic Fog of War**: a player
 
 If the GM rolled an independent multi-pair cascade ($N_{GM} = 3$) against the player's cascade ($N_P = 5$), the net margin $\Delta M = M_P - M_{GM}$ would be the **cross-correlation (convolution of $P_P(m)$ with $P_{GM}(-m)$)** of two distributions:
 - **Variance Inflation & Skewness Cancellation:** Because $\text{Var}(M_P - M_{GM}) = \text{Var}(M_P) + \text{Var}(M_{GM})$ and the third central moment subtracts ($\mu_3(M_P - M_{GM}) = \mu_3(M_P) - \mu_3(M_{GM})$), a symmetric multi-pair GM cascade cancels out the player's skewness and pulls the net distribution back toward a Gaussian bell curve.
-- **Valley In-Filling in High-Stakes (`CumulativeSnowball`) Mode:** In uncontested `CumulativeSnowball` ($N_P = 5, C_P = 10$), the player's distribution is starkly bimodal (**Sarle's Bimodality Coefficient $\text{BC} = 0.678 > 0.555$**), with peaks at `-1` and `+5` separated by a deep watershed valley at `+1..+3`. If the GM also rolls a bimodal $N_{GM} = 3$ cascade (peaks at `-1` and `+3`), then **`Player High (+5) - GM High (+3) = +2`** and **`Player Low (-1) - GM Low (-1) = 0`** dump **`16.0%`** of the total probability mass directly into the middle of the valley—collapsing $\text{BC}$ from **`0.678` (bimodal)** down to **`0.453` (unimodal)**!
+- **Valley In-Filling in High-Stakes (`CumulativeSnowball`) Mode:** In uncontested `CumulativeSnowball` ($N_P = 5, C_P = 10$), the player's distribution is starkly bimodal (**Sarle's Bimodality Coefficient $\text{BC} = 0.678 > 0.555$**), with peaks at `-1` and `+5` separated by a deep bimodal valley at `+1..+3`. If the GM also rolls a bimodal $N_{GM} = 3$ cascade (peaks at `-1` and `+3`), then **`Player High (+5) - GM High (+3) = +2`** and **`Player Low (-1) - GM Low (-1) = 0`** dump **`16.0%`** of the total probability mass directly into the middle of the valley—collapsing $\text{BC}$ from **`0.678` (bimodal)** down to **`0.453` (unimodal)**!
 
 By contrast, when the GM rolls a **Single `2d20` Pair (`1-Pair Tiered GM Resistance`)** for environmental and passive tasks:
 - The GM's single `2d20` roll is a compact, unimodal triangular distribution with no multi-step carry-over.
-- Convolving the player's $N_P$-pair cascade with a single `2d20` GM pair **preserves the bimodal watershed (`BC = 0.585 > 0.555`) and negative skewness (`-0.146`)** in `CumulativeSnowball`, while requiring only **one hidden `2d20` roll** from the GM.
+- Convolving the player's $N_P$-pair cascade with a single `2d20` GM pair **preserves the bimodal split (`BC = 0.585 > 0.555`) and negative skewness (`-0.146`)** in `CumulativeSnowball`, while requiring only **one hidden `2d20` roll** from the GM.
 
 ### 6.2 The Canonical 4-Point Over-Tier & Under-Botch Formula (`TieredSinglePair { step_size: 4 }`)
 

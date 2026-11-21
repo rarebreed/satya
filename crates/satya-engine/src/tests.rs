@@ -1,4 +1,4 @@
-//! Unit tests for `satya-engine` probability distributions, Two-List `2d20` Watershed Cascade,
+//! Unit tests for `satya-engine` probability distributions, `2d20xN` Cascade,
 //! Task Resolution gates/tools/clocks, and Tactical Pool "Envelope & Fill".
 
 use super::*;

@@ -177,7 +177,7 @@ pub fn sum_dice_pool_pmf(pos_dice: usize, sides: i32, neg_dice: usize) -> Pmf {
 /// If `crit_on_one_double` is `true`, rolling a `1` on a hit counts as `2` successes—modeling classic
 /// roll-under `2d20` critical-`1` success-counting pools for comparative distribution analysis
 /// (`docs/ttrpg/01-foundation/probability_and_calibration.md` §1), whereas Satya itself is a Roll-Over
-/// `2d20` Two-List Cascade system (`docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` §3.2).
+/// `2d20xN` Cascade system (`docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` §3.2).
 pub fn count_successes_pmf(
     pool_size: usize,
     sides: i32,

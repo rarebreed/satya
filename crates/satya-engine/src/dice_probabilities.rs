@@ -12,7 +12,7 @@
 //! - Exploding dice & Gumbel keep-highest pools ([`single_exploding_die_pmf`], [`exploding_pool_keep_highest_pmf`]).
 //! - Order statistics ([`order_statistic_pmf`]), center-distance Focus vs. Chaos ([`center_distance_selection_pmf`]),
 //!   median-gated bimodal pools ([`median_gated_bimodal_pmf`]), and multiplicative log-normal pools ([`multiplicative_pool_pmf`]).
-//! - Two-List Cascading ("Watershed" / "Recoil") exact DP engines ([`paired_list_cascade_pmfs`], [`paired_list_signed_margin_pmfs`]).
+//! - `2d20xN` Cascade (positive feedback / "Recoil" inverted) exact DP engines ([`paired_list_cascade_pmfs`], [`paired_list_signed_margin_pmfs`]).
 //! - Game-engine live roll evaluator ([`CascadeTaskParams`], [`CascadeRollOutcome`], [`evaluate_cascade_roll`], [`evaluate_satya_cascade_task`])
 //!   for resolving sequential `2dK` pairs with Four-Factor Task Calibration (`Skill N`, `Control C`, `Internal Mod`, `External Mod`).
 
@@ -34,11 +34,11 @@ pub use crate::dice_pools::{
 
 pub use crate::contested_cascade::*;
 // ---------------------------------------------------------------------------
-// 8. Paired-List Cascading / Contagious Dice (The Watershed Mechanic)
+// 8. 2d20xN Cascade / Contagious Dice Engine
 // ---------------------------------------------------------------------------
 
 define_coded_enum! {
-    /// Carry-over propagation rule governing how `mod_{n+1}` is calculated from step `n` in the Two-List Cascade.
+    /// Carry-over propagation rule governing how `mod_{n+1}` is calculated from step `n` in the `2d20xN` Cascade.
     ///
     /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§2.1–§2.2),
     /// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1), and
@@ -154,8 +154,8 @@ impl MarginAggregation {
     }
 }
 
-/// Computes exact PMFs `(success_count_pmf, final_pair_value_pmf)` for the Two-List Cascading
-/// ("Watershed" or "Recoil") Dice Mechanic.
+/// Computes exact PMFs `(success_count_pmf, final_pair_value_pmf)` for the `2d20xN` Cascade
+/// (positive feedback or "Recoil" inverted) Dice Mechanic.
 ///
 /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§2–§4) and
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.2).
@@ -312,7 +312,7 @@ pub(crate) fn run_cascade_dp(
     (state_probs, final_y_pmf, overshoot_raw)
 }
 
-/// Computes the full `-N..=+N` Signed Outcome Spectrum (Degrees of Failure & Success) for the Two-List Cascade.
+/// Computes the full `-N..=+N` Signed Outcome Spectrum (Degrees of Failure & Success) for the `2d20xN` Cascade.
 ///
 /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§3–§4) and
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.3).
@@ -401,7 +401,7 @@ pub fn paired_list_signed_margin_pmfs(
 // 9. Game-Engine Live Task Resolution (Four-Factor Cascade Evaluator)
 // ---------------------------------------------------------------------------
 
-/// Four-Factor Task configuration for Satya's Two-List Cascading ("Watershed") resolution engine
+/// Four-Factor Task configuration for Satya's `2d20xN` Cascade resolution engine
 /// as specified in `docs/ttrpg/01-foundation/probability_and_calibration.md` (§4) and
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§1, §3.1–§3.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -513,7 +513,7 @@ impl CascadeTaskParams {
 }
 
 define_coded_enum! {
-    /// High-level narrative outcome category of a resolved Two-List Cascade roll.
+    /// High-level narrative outcome category of a resolved `2d20xN` Cascade roll.
     ///
     /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§3.2) and
     /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.3, §5).
@@ -561,7 +561,7 @@ impl CascadeOutcomeKind {
     }
 }
 
-/// Step-by-step trace for a single pair $(A_n, B_n)$ in a resolved Two-List Cascade roll.
+/// Step-by-step trace for a single pair $(A_n, B_n)$ in a resolved `2d20xN` Cascade roll.
 ///
 /// Origin: `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.1) and
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.2).
@@ -580,7 +580,7 @@ pub struct CascadeStepTrace {
     pub carry_out: i32,
 }
 
-/// Complete game-engine resolution of a rolled Two-List Cascade check.
+/// Complete game-engine resolution of a rolled `2d20xN` Cascade check.
 ///
 /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§3–§4) and
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.3).
@@ -598,8 +598,8 @@ pub struct CascadeRollOutcome {
     pub outcome_tier: OutcomeTier,
 }
 
-/// Evaluates a concrete list of rolled `(A_n, B_n)` dice pairs using the exact Two-List Cascading
-/// ("Watershed" / "Recoil") state machine.
+/// Evaluates a concrete list of rolled `(A_n, B_n)` dice pairs using the exact `2d20xN` Cascade
+/// (positive feedback or "Recoil" inverted) state machine.
 ///
 /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§2–§4) and
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3.1–§3.3).
@@ -754,7 +754,7 @@ pub(crate) fn build_cascade_mechanics_event(
     }
 }
 
-/// Evaluates a Two-List Cascading ("Watershed") `2d20` task roll per
+/// Evaluates a `2d20xN` Cascade task roll per
 /// `docs/ttrpg/01-foundation/probability_and_calibration.md` (§4) and
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` (§3), with action tick telemetry per
 /// `docs/ttrpg/02-core-mechanics/action_economy_and_ooda.md` (§3.1, §5.1),

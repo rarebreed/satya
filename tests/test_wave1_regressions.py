@@ -481,10 +481,10 @@ def test_wave1_rag_visibility_wall_excludes_summary_secrets_and_gm_rust_links() 
                 "source_path": "docs/ttrpg/combat.md",
                 "breadcrumb": "Combat > Core Loop",
                 "symbol_or_section": "Core Loop",
-                "content": "Two-list cascading combat tick clock resolution.",
+                "content": "2d20xN cascading combat tick clock resolution.",
                 "linked_doc_path": "docs/ttrpg/combat.md",
                 "visibility": "PUBLIC",
-                "search_text": "Two-list cascading combat tick clock resolution.",
+                "search_text": "2d20xN cascading combat tick clock resolution.",
             },
             {
                 "chunk_id": "lore-arc2-1",

@@ -1,4 +1,4 @@
-//! Satya Two-List Cascading ("Watershed") `2d20` Task Drawer: live exact Contested & Uncontested
+//! Satya `2d20xN` Cascade Task Drawer: live exact Contested & Uncontested
 //! combinatorial/DP probability previews, searchable canonical skill combobox (`#ttrpg-skill-dropdown`),
 //! and `ROLL_TTRPG_TASK` WebSocket submission.
 
@@ -28,7 +28,7 @@ pub fn format_cascade_odds_preview(params: &satya_engine::CascadeTaskParams) -> 
 }
 
 /// Computes and formats the live exact Contested (`1-Pair Tiered GM Resistance`) and Uncontested
-/// Combinatorial & DP probability readout for the Satya Two-List Cascading ("Watershed") `2d20`
+/// Combinatorial & DP probability readout for the Satya `2d20xN` Cascade
 /// task drawer (`#ttrpg-odds-pill` and `#ttrpg-odds-readout`).
 #[must_use]
 pub fn format_contested_cascade_odds_summary(
@@ -192,7 +192,7 @@ pub fn format_contested_cascade_odds_summary(
 }
 
 /// Computes and formats the live exact Combinatorial & DP probability readout for the
-/// Satya Two-List Cascading ("Watershed") `2d20` task drawer (`#ttrpg-odds-pill` and `#ttrpg-odds-readout`).
+/// Satya `2d20xN` Cascade task drawer (`#ttrpg-odds-pill` and `#ttrpg-odds-readout`).
 #[must_use]
 pub fn format_cascade_odds_summary(
     skill_level_n: usize,
@@ -525,7 +525,7 @@ pub fn satya_ttrpg_skill_keydown(ev: KeyboardEvent) {
     }
 }
 
-/// Evaluates and emits a Satya Two-List Cascading (`2d20`) TTRPG task resolution event (`ROLL_TTRPG_TASK`) over the WebSocket.
+/// Evaluates and emits a Satya `2d20xN` Cascade TTRPG task resolution event (`ROLL_TTRPG_TASK`) over the WebSocket.
 #[wasm_bindgen]
 pub fn satya_roll_task() {
     if with_state(|st| {

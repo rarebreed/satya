@@ -20,6 +20,9 @@ num_predict = 2048
 # Disable unbounded hidden thinking tokens (`think: false`) by default on local Ollama turns so `gemma4:12b`
 # emits tool calls and Markdown replies directly in `message.content` without starving the context window.
 reasoning = false
+# Bind only the ~10 core AI GM tools + `load_gm_tools` by default and load specialized
+# domain packs lazily per turn (auto-expiring at the end of each turn).
+lazy_tool_loading = true
 # Tuned environment defaults applied when `pixi run serve-ai-gm` auto-starts a managed `ollama serve` subprocess
 # (ideal for 16 GB VRAM GPUs like the AMD Radeon RX 7800 XT; logs redirected to `data/logs/ollama.log`).
 ollama_num_parallel = 1

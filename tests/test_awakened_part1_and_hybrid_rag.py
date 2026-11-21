@@ -411,7 +411,7 @@ def test_rag_ntfs_versions_mtime_freshness_and_mvcc_version_pruning() -> None:
         (tmp_dir / "crates" / "satya-engine" / "src").mkdir(parents=True, exist_ok=True)
 
         rules_md = tmp_dir / "docs" / "ttrpg" / "sample_rules.md"
-        rules_md.write_text("# Sample Rules\n\n## Two-List Cascading\n\nRoll 2d20 under TN.\n", encoding="utf-8")
+        rules_md.write_text("# Sample Rules\n\n## 2d20xN Cascade\n\nRoll 2d20 under TN.\n", encoding="utf-8")
         (tmp_dir / "docs" / "campaign" / "sample_lore.md").write_text(
             "# Sample Lore\n\n## Public Overview\n\nNew Haven grid.\n",
             encoding="utf-8",
@@ -443,7 +443,7 @@ def test_rag_ntfs_versions_mtime_freshness_and_mvcc_version_pruning() -> None:
 
                 future_ts = time.time() + 10.0
                 rules_md.write_text(
-                    "# Sample Rules\n\n## Two-List Cascading\n\nRoll 2d20 under TN (updated).\n",
+                    "# Sample Rules\n\n## 2d20xN Cascade\n\nRoll 2d20 under TN (updated).\n",
                     encoding="utf-8",
                 )
                 os.utime(rules_md, (future_ts, future_ts))

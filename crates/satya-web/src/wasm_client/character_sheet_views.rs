@@ -424,7 +424,7 @@ pub fn format_talents_and_skills_tables_html(sheet: &CharacterSheetState) -> Str
             <div class="char-section-header">
                 <div>
                     <h3>2. Innate Talents (`TAL`) &amp; Trained 8-Tree Skills (`PHY`, `KNO`, `PHY/KNO`)</h3>
-                    <span class="subtitle">Click any row's <strong>Load 2d20</strong> button to populate the Center-Bottom Two-List Cascading Die Roller.</span>
+                    <span class="subtitle">Click any row's <strong>Load 2d20</strong> button to populate the Center-Bottom 2d20xN Cascade Die Roller.</span>
                 </div>
                 <div class="model-controls-row">
                     <label class="inline-label" for="char-sheet-tree-filter">

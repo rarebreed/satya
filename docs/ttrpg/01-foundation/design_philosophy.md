@@ -290,8 +290,8 @@ rolling more dice for higher skill accidentally increases the chance of rolling 
 
 #### How Satya Solves This
 
-Satya uses an **Always-Contested Two-List Cascading ("Watershed") `2d20` Dice Mechanic** (see [Probability &
-Calibration](probability_and_calibration.md) and [Core `2d20` Cascade & Task
+Satya uses an **Always-Contested `2d20xN` Cascade Dice Mechanic** (see [Probability &
+Calibration](probability_and_calibration.md) and [Core `2d20xN` Cascade & Task
 Resolution](../02-core-mechanics/cascading_d20_and_tasks.md)). Rolling $N_P$ sequential pairs of `2d20` where each pair
 passes positive momentum ($+\delta_{\text{over}} = +6$) or negative stumble penalty ($-\delta_{\text{under}} = -(6 +
 \Delta_{\text{int}})$) to the next pair dynamically reshapes the probability distribution's **skewness, modality, and
@@ -304,7 +304,7 @@ tails**:
   \Delta_{\text{int}}$) without penalizing Pair 1—meaning an exhausted master who hits their first motion flows through
   on muscle memory, while a stumble cascades into a heavy penalty.
 - **1-Pair Tiered GM Resistance ($\text{TN}_{GM} = 21 - \Delta_{\text{ext}}$, `4`-pt Over-Tiers)** opposes the player's
-  cascade with a single hidden `2d20` roll by the GM, preserving the player's bimodal watershed topology (`BC = 0.585 >
+  cascade with a single hidden `2d20` roll by the GM, preserving the player's bimodal cascade topology (`BC = 0.585 >
   0.555` in high-stakes snowball mode) while keeping task difficulty hidden.
 
 ### 5.5 Innate Talents vs. Learned Physical and Knowledge Skills

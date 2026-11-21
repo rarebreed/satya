@@ -358,7 +358,7 @@ def roll_player_d20_action(
     session_id: str = "default",
     player_user_id: str = "ai-player-1",
 ) -> dict[str, Any]:
-    """Execute an authoritative Satya Two-List Cascading (`2d20`) skill check or Combat Technique + `Tempo / Control / Force` (`T/C/F`) roll as your Player Character."""
+    """Execute an authoritative Satya `2d20xN` cascade skill check or Combat Technique + `Tempo / Control / Force` (`T/C/F`) roll as your Player Character."""
     ctx = get_player_session_context(session_id, player_user_id)
     default_sheet = get_pack_default_ai_player()
     sheet = dict(ctx.get("character_sheet") or default_sheet)

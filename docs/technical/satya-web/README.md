@@ -1,6 +1,6 @@
 # `satya-web` — Full-Stack Leptos SSR & Rust/WebAssembly Architecture
 
-[`crates/satya-web`](../../../crates/satya-web) is the full-stack browser frontend and Server-Side Rendering (SSR) shell for the **Satya** WebRTC Audio/Video, `2d20` Watershed TTRPG, Autonomous AI Game Master, and Apache Iggy + Avro + PyLance Event Streaming platform. Written in 100% Rust (`leptos` SSR, `wasm-bindgen`, `web-sys`, and `wgpu` WebGPU), it compiles into both the native `satya-server` binary (serving zero-FOUC HTML at `GET /`) and the browser WebAssembly bundle served under `/pkg/satya_web_bg.wasm`.
+[`crates/satya-web`](../../../crates/satya-web) is the full-stack browser frontend and Server-Side Rendering (SSR) shell for the **Satya** WebRTC Audio/Video, `2d20xN` Cascade TTRPG, Autonomous AI Game Master, and Apache Iggy + Avro + PyLance Event Streaming platform. Written in 100% Rust (`leptos` SSR, `wasm-bindgen`, `web-sys`, and `wgpu` WebGPU), it compiles into both the native `satya-server` binary (serving zero-FOUC HTML at `GET /`) and the browser WebAssembly bundle served under `/pkg/satya_web_bg.wasm`.
 
 ---
 

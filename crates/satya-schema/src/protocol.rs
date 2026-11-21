@@ -234,7 +234,7 @@ pub enum ClientWsPacket {
         /// Preceding silence duration in milliseconds.
         preceding_silence_ms: i64,
     },
-    /// Requests server-authoritative evaluation of a Satya Two-List Cascading ("Watershed") `2d20` skill or combat task.
+    /// Requests server-authoritative evaluation of a Satya `2d20xN` cascade skill or combat task.
     RollTtrpgTask {
         /// Name of the skill being tested (e.g. `"Trauma Surgery"`).
         skill_name: String,

@@ -15,7 +15,7 @@ const SATYA_BOOK_JS: &str = include_str!("../../assets/rules_book/satya_book.js"
 
 const INTERACTIVE_WIDGET_HTML: &str = r##"
 <section class="book-interactive-widget">
-  <h2>Interactive Satya 2d20 Watershed Cascade &amp; Tactical Pool Calculator</h2>
+  <h2>Interactive Satya 2d20xN Cascade &amp; Tactical Pool Calculator</h2>
   <p class="widget-sub">
     Powered by the Satya Four-Factor Cascade formula
     (<code>TN_eff = 31 - C + &Delta;_ext</code>, <code>&delta;_over = +6</code>, <code>&delta;_under = -(6 + &Delta;_int)</code>)
@@ -23,7 +23,7 @@ const INTERACTIVE_WIDGET_HTML: &str = r##"
   </p>
   <div class="widget-grid">
     <div class="widget-panel">
-      <h3>1. 2d20 Watershed Cascade Simulator</h3>
+      <h3>1. 2d20xN Cascade Simulator</h3>
       <div class="widget-controls">
         <label>Skill Level (N Pairs: 1..8)
           <input id="bk-n" type="number" min="1" max="8" value="4" onchange="satyaBookRecalc()"/>
@@ -577,7 +577,7 @@ fn wrap_book_page_html(
   <div class="book-shell">
     <aside id="book-sidebar" class="book-sidebar">
       <div class="book-brand">SATYA // RULES BOOK</div>
-      <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
+      <div class="book-sub">2d20xN Cascade &amp; Tactical Triad</div>
       {nav_items}
     </aside>
     <main class="book-workspace">

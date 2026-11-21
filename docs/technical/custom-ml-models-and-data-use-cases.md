@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Because Satya ingests every session event, vocal prosody turn, Watershed `2d20` mechanics check, character sheet lifecycle event, AI GM / AI Player tool trajectory, and plain-text trace-prefixed log line through **Apache Iggy $\rightarrow$ Apache Avro (`CRC-64-AVRO`) $\rightarrow$ PyLance (`data/lance/*.lance`)**—alongside structured **SQLite Campaign Vaults** (`gm_documents`, `gm_memories`, `session_npcs`, `characters`, `session_combat_state`, and `.satyasession` snapshots)—the platform naturally accumulates a rich, multi-modal, causally linked dataset.
+Because Satya ingests every session event, vocal prosody turn, `2d20xN` cascade mechanics check, character sheet lifecycle event, AI GM / AI Player tool trajectory, and plain-text trace-prefixed log line through **Apache Iggy $\rightarrow$ Apache Avro (`CRC-64-AVRO`) $\rightarrow$ PyLance (`data/lance/*.lance`)**—alongside structured **SQLite Campaign Vaults** (`gm_documents`, `gm_memories`, `session_npcs`, `characters`, `session_combat_state`, and `.satyasession` snapshots)—the platform naturally accumulates a rich, multi-modal, causally linked dataset.
 
 While early phases of Satya rely on off-the-shelf local Ollama models (`gemma4:12b`, `qwen3:14b`, `qwen2.5:14b`, `llama3.2-vision`) or BYOK cloud APIs (`Gemini`, `OpenAI`, `Claude`), our unified PyLance data lake and SQLite campaign vaults enable training **specialized, lightweight custom models** tailored to campaign-grounded roleplaying, player/GM note synthesis, rules adjudication, tactical `Tempo / Control / Force` (`T/C/F`) combat, proactive Scenario Director pacing, and automated system debugging.
 
@@ -11,7 +11,7 @@ flowchart LR
     subgraph DataLake["1. PyLance Data Lake (data/lance/*.lance) & SQLite Campaign Vaults"]
         Chat[("chat-messages.lance\n(Markdown IC/OOC/GM Narration + Whispers)")]
         Dyn[("interaction-dynamics.lance\n(Vocal RMS Energy, Pitch, Silence, Overlap)")]
-        Mech[("ttrpg-mechanics.lance\n(Watershed 2d20, 30 Techniques, T/C/F Pools)")]
+        Mech[("ttrpg-mechanics.lance\n(2d20xN Cascade, 30 Techniques, T/C/F Pools)")]
         Chars[("character-sheets.lance\n(Lifepath, 30 Stats, 7 Psyche Traits, Notes)")]
         Canvas[("tabletop-canvas.lance\n(Tactical Grids, Zones, Tokens, wgpu Seeds)")]
         Traj[("ai-gm-trajectories.lance\n(7-Node AI GM & 4-Node AI Player Traces)")]
@@ -153,7 +153,7 @@ Every completed turn in `ai-gm-trajectories.lance` (`schemas/v1/ai_gm_trajectory
 ### 3.3 Distillation Workflow
 - Filter `ai-gm-trajectories.lance` where `turn_status == "COMPLETED"` and all `tool_invocations[*].is_error == false`.
 - Format each trajectory as a multi-turn tool-calling conversation (including negative rejection examples where `<untrusted_player_document>` blocks attempt prompt injection) and fine-tune local `gemma4:12b`, `qwen3:14b`, or `qwen2.5:7b` models.
-- Produces a specialized **Satya MCP Operator LoRA** that masters on-demand GM Vault retrieval, exact Watershed `2d20` + `T/C/F` tool parameters, `OUT_OF_CHARACTER` rules Q&A routing, and strict `CO_PILOT` vs. `AUTONOMOUS` visibility discipline.
+- Produces a specialized **Satya MCP Operator LoRA** that masters on-demand GM Vault retrieval, exact `2d20xN` cascade + `T/C/F` tool parameters, `OUT_OF_CHARACTER` rules Q&A routing, and strict `CO_PILOT` vs. `AUTONOMOUS` visibility discipline.
 
 ---
 
@@ -162,7 +162,7 @@ Every completed turn in `ai-gm-trajectories.lance` (`schemas/v1/ai_gm_trajectory
 ### 4.1 Training Signal in `ttrpg-mechanics.lance`, `character-sheets.lance` & `tabletop-canvas.lance`
 Satya's combat engine (`crates/satya-engine/src/{combat.rs, combat_techniques.rs, ranged_combat.rs, health_survival.rs}`) resolves tactical encounters on a **Count-Up Action Tick Clock** (`1 Tick = 0.25s`, `1 Window = 20 Ticks = 5.0s`) with:
 - **OODA Initiative**: $\text{Tick}_{\text{start}} = \max(1, 15 - \text{OODA})$.
-- **Two-List Cascading ("Watershed") `2d20` Roll-Over**: $N$ sequential `2d20` pairs against $\text{TN}_{\text{eff}} = 31 - C_{\text{eff}} + \Delta_{\text{ext}}$, with `+6` momentum carry on success and $-\delta_{\text{under}}$ penalty carry on failure.
+- **`2d20xN` Cascade Roll-Over**: $N$ sequential `2d20` pairs against $\text{TN}_{\text{eff}} = 31 - C_{\text{eff}} + \Delta_{\text{ext}}$, with `+6` momentum carry on success and $-\delta_{\text{under}}$ penalty carry on failure.
 - **30 Canonical Combat Techniques & 3-Aspect Tactical Triad (`Tempo / Control / Force`, `T/C/F`)**: Actors allocate their effective Tactical Pool ($P_{\text{eff}} = T + C + F$, reduced by fatigue and wound shock from $P_{\text{base}}$) across:
   - **Tempo ($T$)**: Compresses $\text{TC}_{\text{act}}$ below the neutral baseline $B = \lfloor P_{\text{base}} / 3 \rfloor$ so the combatant acts again sooner on `next_action_tick`.
   - **Control ($C$)**: Boosts guard defense, root stability, precision $\Delta_{\text{int}}$, and grapple leverage.
@@ -251,7 +251,7 @@ Testing a real-time multiplayer TTRPG and meeting platform requires realistic, t
 Satya combines two complementary synthetic data engines:
 1. **Closed-Loop Multi-Agent Self-Play (`satya_ml.ai_player` $\leftrightarrow$ `satya_ml.ai_gm`)**:
    - The isolated 4-node AI Player agent (`src/satya_ml/ai_player/graph.py`) and player-scoped signaling API (`/api/player-ai/sessions/:id/{context,chat,roll}`) allow spawning 1–5 autonomous AI party members alongside the 7-node AI GM (governed by `max_rally_turns`).
-   - Because `satya-signaling` enforces strict epistemic boundaries (stripping `GM_ONLY` documents, GM memories, and NPC secret dossiers from player context) and executes real `satya-engine` Watershed `2d20` + `T/C/F` checks, self-play rallies generate causally valid multi-player trajectories across `chat-messages`, `ttrpg-mechanics`, `tabletop-canvas`, and `ai-gm-trajectories`.
+   - Because `satya-signaling` enforces strict epistemic boundaries (stripping `GM_ONLY` documents, GM memories, and NPC secret dossiers from player context) and executes real `satya-engine` `2d20xN` cascade + `T/C/F` checks, self-play rallies generate causally valid multi-player trajectories across `chat-messages`, `ttrpg-mechanics`, `tabletop-canvas`, and `ai-gm-trajectories`.
 2. **Multi-Topic Latent Diffusion Model (LDM) for High-Throughput Telemetry & Biometric/Network Simulation**:
    - While LLM self-play excels at semantic reasoning and tool chains, running 100+ concurrent LLM sessions is compute-heavy and does not synthesize continuous acoustic prosody (`interaction-dynamics.lance`: `rms_energy_mean`, `pitch_hz_estimate`, `preceding_silence_ms`) or network jitter spikes (`webrtc-telemetry.lance`: `rtt_ms`, `packet_loss_rate`).
    - A **Latent Diffusion Model (LDM)** maps heterogeneous discrete + continuous topic windows into a shared latent space $z_0 \in \mathbb{R}^{L \times k}$, generating thousands of 10-topic `.avro` batches or `.satyasession` snapshots per minute.
@@ -468,7 +468,7 @@ Beyond the 10 Apache Iggy / Avro topics compacted into `data/lance/*.lance`, Sat
 | :--- | :--- | :--- | :--- | :---: |
 | **1. `chat-messages.lance`** | Avro Topic 4 (`v1` ID 4, `v2` ID 7) | Markdown `PUBLIC`, `PRIVATE`, `GM_ONLY` messages; `IN_CHARACTER`, `OUT_OF_CHARACTER`, `GM_NARRATION`; `composition_time_ms`, `sentiment_score`, `detected_intent`. | Dialogue flow, Markdown formatting patterns, OOC vs. IC classification, Co-Pilot private draft $\rightarrow$ public Human GM rewrite pairs ($y_l \rightarrow y_w$). | **1, 4, 6, 7, 8, 9** |
 | **2. `interaction-dynamics.lance`** | Avro Topic 5 (`v1` ID 5) | `rms_energy_mean/peak`, `pitch_hz_estimate`, `preceding_silence_ms`, `InterruptionOverlap`, `LongSilence`, `dominance_ratio`. | Ground-truth **non-verbal player engagement reward ($R^+ / R^-$)** after GM narrations and Scenario Director beats; quiet-player detection. | **1, 4, 6, 8** |
-| **3. `ttrpg-mechanics.lance`** | Avro Topic 6 (`v1` ID 6) | Watershed `2d20` rolls, 30 `combat_technique` codes, `Tempo / Control / Force` (`T/C/F`) pool splits, `Effective TC`, `fatigue_level`, `wound_shock_index`. | Optimal `T/C/F` pool allocation policies, combat attrition & death-spiral trajectories, technique success distributions. | **2, 3, 6, 8, 9** |
+| **3. `ttrpg-mechanics.lance`** | Avro Topic 6 (`v1` ID 6) | `2d20xN` cascade rolls, 30 `combat_technique` codes, `Tempo / Control / Force` (`T/C/F`) pool splits, `Effective TC`, `fatigue_level`, `wound_shock_index`. | Optimal `T/C/F` pool allocation policies, combat attrition & death-spiral trajectories, technique success distributions. | **2, 3, 6, 8, 9** |
 | **4. `character-sheets.lance`** | Avro Topic 10 (`v1` ID 11) & SQLite `characters` | 6-step Lifepath (`stage_history`, `lifepath_config_json`), 30 stats, 9 aptitudes, 8-tree skills, **7 bipolar Psyche traits**, `hit_zones`, `notes`, `verification_status`. | Psyche-conditioned roleplay & decision policies, lifepath skill co-occurrence priors, player-written backstory `notes` for GM hook weaving. | **1, 3, 6, 7, 8, 9** |
 | **5. `tabletop-canvas.lance`** | Avro Topic 7 (`v1` ID 8) & `session_combat_state` | Tactical map SVG/URLs, `grid_width/height`, `token_placements` (`x, y, zone_label`), `terrain_notes`, 3D `wgpu` physics seeds. | Spatial token movement trajectories, cover/choke-point utilization, scene-to-battlemap layout pairs for procedural generation. | **3, 6, 10** |
 | **6. `ai-gm-trajectories.lance`** | Avro Topic 8 (`v1` ID 9) | Ordered Tier 1/2/3 MCP `tool_invocations`, `operating_mode`, `rag_sources_used`, token counts, latency, `turn_status`. | Frontier-to-local tool-calling distillation, Omnisearch positive/negative retrieval pairs (`rag_sources_used`), trajectory error analysis. | **2, 5, 7, 8** |

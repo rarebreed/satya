@@ -264,7 +264,7 @@ def _(CHAPTER_SPECS, chapters_by_id, mo, using_satya_py_backend):
                 # Satya TTRPG Rules Book & Interactive Mechanics Compendium
                 **24 Canonical Chapters · {total_words:,} Words · Engine Backend: `{backend_badge}`**
 
-                Browse individual chapters from `docs/ttrpg/` below, search across the entire ruleset, or experiment directly with the four interactive mechanics laboratories (**2d20 Watershed Cascade**, **Lifepath Skill Progression**, **Combat Tactical Pool & Melee Triad**, and **Social Cognitive Dissonance**).
+                Browse individual chapters from `docs/ttrpg/` below, search across the entire ruleset, or experiment directly with the four interactive mechanics laboratories (**2d20xN Cascade**, **Lifepath Skill Progression**, **Combat Tactical Pool & Melee Triad**, and **Social Cognitive Dissonance**).
                 """
             ),
             mo.hstack([chapter_dropdown, search_input], justify="start"),
@@ -358,7 +358,7 @@ def _(mo):
             mo.md(
                 r"""
                 ---
-                ## Interactive Lab 1: `2d20` Two-List Cascading ("Watershed") Task Simulator (Chapters 2–4)
+                ## Interactive Lab 1: `2d20xN` Cascade Task Simulator (Chapters 2–4)
                 $$\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}, \qquad \delta_{\text{over}} = 6, \qquad \delta_{\text{under}} = \max(0, 6 + \Delta_{\text{int}})$$
                 """
             ),

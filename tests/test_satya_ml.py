@@ -317,7 +317,7 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config(space_opera_pack: Any) -> Non
     # Rules & lore retrieval
     rules_excerpt = query_satya_rules.invoke({"query": "skills target number degree of success"})
     assert len(rules_excerpt) > 50
-    assert "Two-List Cascading" in rules_excerpt or "2d20" in rules_excerpt
+    assert "2d20xN" in rules_excerpt or "2d20" in rules_excerpt
     assert "OutcomeTier" in rules_excerpt or "31 - C" in rules_excerpt
     lore_excerpt = query_campaign_lore.invoke({"query": "Aethelgard", "session_id": sid})
     assert "Captain Elena Vance" in lore_excerpt

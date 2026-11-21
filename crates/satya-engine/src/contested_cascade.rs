@@ -1,9 +1,9 @@
-//! # Contested & Hybrid-Contested Two-List Cascade Resolution Engine
+//! # Contested & Hybrid-Contested `2d20xN` Cascade Resolution Engine
 //! (docs/ttrpg/01-foundation/probability_and_calibration.md §6.1–§6.3;
 //! docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md §4.1–§4.2, §5).
 //!
-//! Separated from [crate::dice_probabilities] so uncontested 2d20 Cascade DP/evaluation
-//! and Contested / Hybrid-Contested Two-List Cascade resolution each fit comfortably in
+//! Separated from [crate::dice_probabilities] so uncontested `2d20xN` Cascade DP/evaluation
+//! and Contested / Hybrid-Contested `2d20xN` Cascade resolution each fit comfortably in
 //! a single read window.
 
 use std::collections::HashMap;
@@ -21,7 +21,7 @@ use crate::dice_probabilities::{
     run_cascade_dp,
 };
 // ---------------------------------------------------------------------------
-// 10. Contested & Hybrid-Contested Two-List Cascade Resolution Engine
+// 10. Contested & Hybrid-Contested 2d20xN Cascade Resolution Engine
 // ---------------------------------------------------------------------------
 
 define_coded_enum! {
@@ -138,7 +138,7 @@ impl Default for GmResistanceMode {
     }
 }
 
-/// Configuration for a Contested Two-List Cascade check (Player vs. GM Environment or Active Opponent).
+/// Configuration for a Contested `2d20xN` Cascade check (Player vs. GM Environment or Active Opponent).
 ///
 /// Origin: `docs/ttrpg/01-foundation/probability_and_calibration.md` (§6.1–§6.3),
 /// `docs/ttrpg/01-foundation/mathematical_notation_glossary.md` (§2.2), and
@@ -541,7 +541,7 @@ pub fn compute_contested_cascade_odds_with_mode(
     }
 }
 
-/// Evaluates an Always-Contested Two-List Cascading (`2d20`) task roll per
+/// Evaluates an Always-Contested `2d20xN` Cascade task roll per
 /// `docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md` and returns both the
 /// [`TtrpgMechanicsEvent`] telemetry record (including §5 Tick Cost duration modifiers for
 /// `ExtraordinarySuccess` and `GrazingTieSuccess`) and the [`ContestedCascadeRollOutcome`].

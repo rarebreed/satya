@@ -210,7 +210,7 @@ async fn test_axum_http_endpoints_and_leptos_render() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/api/rules?q=Watershed")
+                .uri("/api/rules?q=2d20xN")
                 .body(Body::empty())
                 .unwrap(),
         )

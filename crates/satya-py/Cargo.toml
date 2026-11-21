@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "PyO3 Python bindings for satya-engine (2d20 Watershed Cascade, Tactical Pool, Rules Book) and satya-schema (Avro Schema Registry & GDPR PII tools)."
+description = "PyO3 Python bindings for satya-engine (2d20xN Cascade, Tactical Pool, Rules Book) and satya-schema (Avro Schema Registry & GDPR PII tools)."
 
 [lib]
 name = "satya_py"

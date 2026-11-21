@@ -1,4 +1,4 @@
-"""Probability mass functions, Watershed 2d20 cascades & task gates backed by Rust."""
+"""Probability mass functions, 2d20xN cascades & task gates backed by Rust."""
 
 from __future__ import annotations
 

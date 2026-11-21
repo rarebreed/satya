@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 CANONICAL_TTRPG_FILES: tuple[tuple[str, str], ...] = (
-    ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 4: Cascading 2d20 Engine & Task Resolution"),
+    ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 4: 2d20xN Cascade Engine & Task Resolution"),
     ("02-core-mechanics/task_requirements_catalog.md", "Ch. 5: Master Task Requirements Catalog"),
     ("01-foundation/mathematical_notation_glossary.md", "Ch. 2: Mathematical Notation, Variables & Formula Glossary"),
     ("02-core-mechanics/action_economy_and_ooda.md", "Ch. 6: Action Economy, OODA Loop & Time Scales"),

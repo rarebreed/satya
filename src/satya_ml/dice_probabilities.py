@@ -1,7 +1,7 @@
 """Plotly visualizations and Python facade for Satya TTRPG dice mechanics.
 
 All exact combinatorial and dynamic-programming probability mass functions (PMFs),
-summary statistics (mean, std, skewness, excess kurtosis), Two-List Cascading ("Watershed")
+summary statistics (mean, std, skewness, excess kurtosis), `2d20xN` Cascade
 engines, and Rules Book interactive simulators are implemented in Rust in
 `crates/satya-engine` and exposed to Python via the `satya_py` PyO3 extension (`crates/satya-py`).
 """
@@ -303,7 +303,7 @@ def plot_order_statistics_and_chaos() -> "go.Figure":
 
 
 def plot_paired_list_watershed(num_pairs: int = 5, sides: int = 6) -> "go.Figure":
-    """Visualize the User's Two-List Cascading Dice Mechanic (The Watershed Repeller).
+    """Visualize Satya's 2d20xN Cascade Dice Mechanic (Bimodal Divide).
 
     Left subplot: How increasing feedback delta morphs a Bell Curve -> Flat Plateau -> Bimodal U-Curve.
     Right subplot: How changing the Controlling Characteristic C morphs J-Curve -> U-Curve -> Reverse-J.
@@ -321,7 +321,7 @@ def plot_paired_list_watershed(num_pairs: int = 5, sides: int = 6) -> "go.Figure
     deltas = [
         ("delta = 0 (Independent / Bell Curve)", 0, SATYA_PALETTE[0]),
         ("delta = 2 (Critical Flattening / Plateau)", 2, SATYA_PALETTE[4]),
-        ("delta = 3 (Bimodal Watershed U-Curve)", 3, SATYA_PALETTE[1]),
+        ("delta = 3 (Bimodal Cascade U-Curve)", 3, SATYA_PALETTE[1]),
         ("delta = 4 (Strong Streak Lock-In)", 4, SATYA_PALETTE[2]),
     ]
     for label, d, color in deltas:
@@ -383,7 +383,7 @@ def plot_paired_list_watershed(num_pairs: int = 5, sides: int = 6) -> "go.Figure
     fig.update_yaxes(title_text="Probability (%)", row=1, col=2)
     return _apply_satya_theme(
         fig,
-        "4. Two-List Cascading Dice: Characteristic C as an Unstable Watershed Divide",
+        "4. 2d20xN Cascading Dice: Characteristic C as a Bimodal Divide",
     )
 
 
@@ -457,7 +457,7 @@ def plot_cascade_final_pair_and_trap(num_pairs: int = 5, sides: int = 6) -> "go.
     fig.update_yaxes(title_text="Probability (%)", row=1, col=2)
     return _apply_satya_theme(
         fig,
-        "5. Two-List Cascade Details: Bimodal Final Value vs. The Linear Margin Trap",
+        "5. 2d20xN Cascade Details: Bimodal Final Value vs. The Linear Margin Trap",
     )
 
 
@@ -590,7 +590,7 @@ def plot_multiplicative_lognormal() -> "go.Figure":
 
 
 def plot_positive_vs_negative_feedback(num_pairs: int = 5, sides: int = 6) -> "go.Figure":
-    """Compare Positive Feedback (Watershed Repeller) vs. Negative Feedback (Recoil Attractor).
+    """Compare Positive Feedback (Bimodal Repeller) vs. Negative Feedback (Recoil Attractor).
 
     When rolling UNDER C adds +delta and rolling OVER C subtracts -delta (`invert_feedback=True`):
     - Left subplot: Streaks are suppressed -> Success count compresses into a razor-sharp Sub-Binomial spike.
@@ -602,7 +602,7 @@ def plot_positive_vs_negative_feedback(num_pairs: int = 5, sides: int = 6) -> "g
         rows=1,
         cols=2,
         subplot_titles=(
-            f"Success Counts at C=7: Watershed U-Curve vs. Recoil Spike ({num_pairs}x 2d{sides})",
+            f"Success Counts at C=7: Bimodal U-Curve vs. Recoil Spike ({num_pairs}x 2d{sides})",
             "Cumulative Mode at C=11: Negative Feedback Locks Peak onto C!",
         ),
     )
@@ -618,7 +618,7 @@ def plot_positive_vs_negative_feedback(num_pairs: int = 5, sides: int = 6) -> "g
     )
 
     for label, pmf, color in [
-        ("Over Adds / Under Subtracts (Watershed U-Curve)", pos_succ, SATYA_PALETTE[1]),
+        ("Over Adds / Under Subtracts (Bimodal U-Curve)", pos_succ, SATYA_PALETTE[1]),
         ("No Carry (Standard Binomial Bell)", ind_succ, SATYA_PALETTE[0]),
         ("Under Adds / Over Subtracts (Recoil Spike)", neg_succ, SATYA_PALETTE[3]),
     ]:

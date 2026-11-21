@@ -1,7 +1,7 @@
 //! # `satya-engine`
 //!
 //! Core Satya TTRPG game mechanics engine, exact combinatorial & dynamic-programming dice probability
-//! distributions, Two-List Cascading ("Watershed" / "Recoil") task resolution, lifepath & character
+//! distributions, `2d20xN` Cascade ("Recoil" inverted) task resolution, lifepath & character
 //! auditing, Tactical Triad combat, granular ballistics, health/trauma, and 2035 engineering.
 //!
 //! Companion workspace crates extracted from the engine:
@@ -16,7 +16,7 @@
 //! - [`dice_pools`]: Exact discrete probability mass functions (`Pmf`), statistical moments
 //!   (`DistributionStats`, Sarle's $\text{BC}$), and comparative dice pool topology benchmarks
 //!   (`docs/ttrpg/01-foundation/probability_and_calibration.md` §1).
-//! - [`dice_probabilities`] & [`contested_cascade`]: Two-List Cascading (`2d20`) dynamic-programming engines,
+//! - [`dice_probabilities`] & [`contested_cascade`]: `2d20xN` Cascade dynamic-programming engines,
 //!   Four-Factor task evaluators (`CascadeTaskParams`, `CascadeRollOutcome`), and 1-Pair Tiered GM Resistance
 //!   contested evaluators (`ContestedCascadeTaskParams`, `ContestedOutcomeKind`)
 //!   (`docs/ttrpg/01-foundation/probability_and_calibration.md` §1–§6,

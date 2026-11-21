@@ -2,7 +2,7 @@
 
 ## 1. Overview & Architectural Context
 
-Satya is a polyglot **Rust + Python** platform combining real-time WebRTC audio/video, Markdown-enabled targeted session chat, Satya Two-List Cascading ("Watershed") `2d20` Roll-Over TTRPG mechanics, and an Apache Iggy + Apache Avro + PyLance event-streaming pipeline.
+Satya is a polyglot **Rust + Python** platform combining real-time WebRTC audio/video, Markdown-enabled targeted session chat, Satya `2d20xN` cascade roll-over TTRPG mechanics, and an Apache Iggy + Apache Avro + PyLance event-streaming pipeline.
 
 The signaling server (`satya-signaling`) and shared wire schemas (`satya-schema`) model an autonomous or co-pilot AI Game Master participant via:
 - `ParticipantKind::AiAgent` and `SessionRole::AiGm`
@@ -26,7 +26,7 @@ The **stateful, tool-calling AI Game Master Agent** is implemented with **LangGr
    - Reading and updating **NPC personalities, abilities, dispositions, and fatigue/wound states**, plus generating new NPCs (`generate_npc_from_description`) and inspecting player character sheets (`lookup_character_sheet`).
    - Querying **Satya TTRPG rules** (`docs/ttrpg/*.md`), **world lore** (`docs/campaign/**/*.md`), **SQLite GM Memory Vault** (`gm_vault.rs`), and **historical session logs** stored in PyLance (`data/lance/*.lance`).
    - **Generating, updating, and visually inspecting tactical maps** pushed to the session UI.
-   - Executing authoritative **Satya Watershed `2d20` roll-over task and combat checks** (`TtrpgMechanicsEvent`), advancing the count-up combat tracker (`advance_combat_tracker`), and sending **public Markdown narrations** (`GM_NARRATION`), **NPC dialogue** (`IN_CHARACTER`), or **targeted private whispers** (`PRIVATE`) back to players via the backend API.
+   - Executing authoritative **Satya `2d20xN` cascade roll-over task and combat checks** (`TtrpgMechanicsEvent`), advancing the count-up combat tracker (`advance_combat_tracker`), and sending **public Markdown narrations** (`GM_NARRATION`), **NPC dialogue** (`IN_CHARACTER`), or **targeted private whispers** (`PRIVATE`) back to players via the backend API.
 
 ### 1.1 Three TTRPG Operating Topologies: Autonomous AI GM vs. AI GM Assistant (Co-Pilot)
 
@@ -111,7 +111,7 @@ flowchart TD
 | **Rust Signaling, Vault & GM API** | `crates/satya-signaling/src/{gm_api.rs,gm_persistence.rs,ws.rs}` | Exposes `/api/gm/sessions/:id/{context,chat,roll,map,combat,memories,documents,trajectory}`, evaluates Combat Technique + `Tempo / Control / Force` Triad rolls (`evaluate_roll_combat_action_and_triad`), synchronizes the Action Mode `CombatTrackerState` and Tactical Map stub (`sync_or_generate_tactical_map_stub`), and routes frames over `/ws/session`. |
 | **Web Client, Markdown Chat & Action Pool Drawer** | `crates/satya-web/src/{views_workspace.rs,wasm_client/{chat_and_ttrpg.rs,ttrpg_drawer_triad.rs}}` | Provides the multi-line Markdown `#chat-input` composer, renders Markdown chat bodies via `satya_engine::render_rules_markdown_to_html`, and hosts the `Task Resolution & Action Pool` (`#ttrpg-drawer`) Combat Technique selector (`#ttrpg-action-technique`) and `Tempo / Control / Force` (`T/C/F`) pool controls with live `Effective TC` preview. |
 | **LangGraph Agent Runtime & Party/NPC Coordinator** | `src/satya_ml/ai_gm/{graph.py,party_coordinator.py}` | Defines `AiGmSessionState`, `is_ooc_or_rules_query`, `format_action_mode_hud_block`, `evaluate_party_turn_gate`, `execute_ready_npc_actions`, and the 7-node LangGraph `StateGraph` (`sync_session_context -> party_turn_gate_node -> scenario_director_node -> npc_action_resolution_node -> gm_supervisor_node <-> tool_execution_node -> publish_gm_response`). |
-| **LangChain Tool Suite & Map Stubs** | `src/satya_ml/ai_gm/{tools.py,maps.py}` | Implements `@tool` functions for NPC lookup/generation, Satya Watershed `2d20` rules/rolls (with `combat_technique` & `T/C/F` pools), GM Memory Vault, tactical maps/vision, procedural tactical map stub synchronization (`ensure_or_sync_procedural_tactical_map_stub`), combat tracker, and the Scenario Director. |
+| **LangChain Tool Suite & Map Stubs** | `src/satya_ml/ai_gm/{tools.py,maps.py}` | Implements `@tool` functions for NPC lookup/generation, Satya `2d20xN` cascade rules/rolls (with `combat_technique` & `T/C/F` pools), GM Memory Vault, tactical maps/vision, procedural tactical map stub synchronization (`ensure_or_sync_procedural_tactical_map_stub`), combat tracker, and the Scenario Director. |
 | **Model Provider Factory** | `src/satya_ml/ai_gm/models.py` | Configures `ChatOllama` and hosted BYOK (`ChatGoogleGenerativeAI`, `ChatOpenAI`, `ChatAnthropic`) instances for tool-calling reasoning and multimodal map vision. |
 
 ---
@@ -279,14 +279,14 @@ flowchart TD
     end
 
     subgraph Tier1["Tier 1: Satya Core Table MCP (Hosted in satya-signaling)"]
-        WgpuDice["roll_satya_d20_check()\nBroadcasts physics seed + 2d20 Watershed outcome"]
+        WgpuDice["roll_satya_d20_check()\nBroadcasts physics seed + 2d20xN cascade outcome"]
         MapGrid["generate_tactical_map() / move_map_token()\nSyncs 2D/3D canvas state"]
         CombatClock["get_combat_tracker_state() / advance_combat_tracker()\nCount-up initiative & fatigue clock"]
         ChatWhisper["narrate_to_session() / whisper_to_player()\nRoutes Markdown PUBLIC / PRIVATE / GM_ONLY frames"]
     end
 
     subgraph Tier2["Tier 2: Game Engine Ruleset & Actor MCP"]
-        SatyaRules["query_satya_rules()\n(Watershed 2d20 roll-over, stances, ballistics, wounds)"]
+        SatyaRules["query_satya_rules()\n(2d20xN cascade roll-over, stances, ballistics, wounds)"]
         NpcChar["lookup_npc_profile() / generate_npc_from_description()\nlookup_character_sheet() / update_npc_state()"]
         Director["configure_scenario_director() / trigger_scenario_beat()\n(Hybrid plot + weighted event probability dials)"]
     end
@@ -301,6 +301,14 @@ flowchart TD
     Supervisor --> Tier2
     Supervisor --> Tier3
 ```
+
+### 4.1 Lazy Tool-Pack Loading (`tool_registry.py` & `lazy_tool_loading = true`)
+
+To prevent binding all 45+ JSON tool schemas on every supervisor LLM call (especially for local Ollama models such as `gemma4:12b` at `num_ctx = 16384`), [`src/satya_ml/ai_gm/tool_registry.py`](../../src/satya_ml/ai_gm/tool_registry.py) partitions the tool suite into an always-on **Core (`10` tools)** plus **6 deferred domain packs (`35` tools)** (`combat`, `tactical_maps`, `social_and_psyche`, `world_and_director`, `tech_and_tradecraft`, and `awakened_campaign`, plus dynamic `mcp_<server>` / `external_mcp` packs for external `MultiServerMCPClient` tools):
+
+- **Default narrative turn (`11` tools):** Binds `CORE_GM_TOOL_NAMES` (`roll_satya_d20_check`, `query_satya_rules`, `lookup_character_sheet`, `lookup_npc_profile`, `update_npc_state`, `search_gm_memory_and_docs`, `read_gm_documents`, `upsert_gm_memory`, `query_campaign_lore`, `whisper_to_player`) + the `load_gm_tools` discovery meta-tool, alongside a compact `[Deferred Tool Packs]` index in the system prompt (omitting `awakened_campaign` when another campaign pack is active).
+- **Zero-round-trip state auto-activation:** When `combat_active = true` (including `combat_encounter` scenario beats), the `combat` pack (`5` tools) is pre-bound automatically (`16` tools total). When `is_ooc_or_rules_query` matches an out-of-character or rules question, only the `7` read-only lookup/rules/RAG tools + `load_gm_tools` (`8` tools total) are bound.
+- **Turn-scoped expiry & fair round budget:** `load_gm_tools` discovery rounds do not consume the 3-round execution budget (capped separately at `MAX_TOOL_LOAD_ROUNDS_PER_TURN = 2`), and `sync_session_context` clears `loaded_tool_packs` / `loaded_tool_names` at the start of every new turn so dynamically loaded packs never accumulate across turns. Set `lazy_tool_loading = false` in `config/ai.toml` (or `SATYA_AI_GM_LAZY_TOOLS=0`) to bind all tools eagerly.
 
 ---
 
@@ -326,7 +334,7 @@ In addition to local markdown files (`docs/campaign/`, `docs/ttrpg/`), the SQLit
 | `generate_npc_from_description` | `session_id: str, name: str, description: str, role_or_archetype: str = "operative"` | `satya_ml.ai_gm.tools` | Generates a balanced Satya NPC with 7 attributes, skills, and Psyche traits from a natural-language description and registers them in the session. |
 | `update_npc_state` | `session_id: str, npc_id: str, fatigue_delta: int = 0, wound_shock_delta: int = 0, disposition: str \| None = None` | `AiGmSessionState` | Updates an NPC's accumulated fatigue, wound shock index, or attitude during combat or social encounters. |
 | `lookup_character_sheet` | `session_id: str, character_name_or_id: str` | `AiGmSessionState` / Signaling Context | Retrieves a player character's full Satya sheet (Triad attributes, `TN_P`/`TN_M`, 7 bipolar Psyche traits, skills, equipment, and wounds). |
-| `query_satya_rules` | `query: str` | `docs/ttrpg/*.md` | Retrieves authoritative Satya mechanics (Two-List Cascading "Watershed" `2d20` Roll-Over, `TN_eff = 31 - C + Delta_ext`, `+6` carry, count-up tick economy, ballistics, and medical trauma). |
+| `query_satya_rules` | `query: str` | `docs/ttrpg/*.md` | Retrieves authoritative Satya mechanics (`2d20xN` cascade roll-over, `TN_eff = 31 - C + Delta_ext`, `+6` carry, count-up tick economy, ballistics, and medical trauma). |
 | `query_campaign_lore` | `query: str, session_id: str = "default"` | `docs/campaign/**/*.md` / `data/lance/*.lance` | Searches setting lore and prior session `.lance` tables for past player decisions and world events. |
 | `search_gm_memory_and_docs` | `session_id: str, query: str, category: str = ""` | `GET /api/gm/sessions/:id/memories` | Searches the SQLite FTS5 GM Memory Vault and session document headers without bloating the LLM context window. |
 | `read_gm_documents` | `session_id: str, doc_ids: list[str]` | `AiGmSessionState` / Signaling Vault | Reads specific `GM_ONLY` or untrusted player-submitted documents on demand (wrapping player docs in `<untrusted_player_document>` tags). |
@@ -348,7 +356,7 @@ In addition to local markdown files (`docs/campaign/`, `docs/ttrpg/`), the SQLit
 | `inspect_tactical_map` | `session_id: str, tactical_question: str` | Multimodal Vision LLM | Inspects the active tactical map image to evaluate line-of-sight, cover, choke points, or token distances. |
 | `get_combat_tracker_state` | `session_id: str` | `GET /api/gm/sessions/:id/combat` | Reads the active count-up tick initiative clock, combatants, stances, and spatial coordinates (`grid_x`, `grid_y`, `zone_label`). |
 | `advance_combat_tracker` | `tick_delta: int = 1, entity_id: str \| None = None, active_stance: str \| None = None, next_action_tick: int \| None = None, grid_x: int \| None = None, grid_y: int \| None = None, zone_label: str \| None = None, session_id: str = "default"` | `POST /api/gm/sessions/:id/combat` | Starts/resets Action Mode (`tick_delta <= 0`) or advances the Count-Up Tick timeline, updates a combatant's stance/tick/grid position, and synchronizes the procedural tactical map stub (`ensure_or_sync_procedural_tactical_map_stub`). |
-| `roll_satya_d20_check` | `session_id: str, actor_name: str, check_category: str = "SKILL_CHECK", attribute_tn: int = 12, skill_rank: int = 2, difficulty_mod: int = 0, internal_mod: int = 0, carry_mode: str = "markov_step", combat_stance: str \| None = None, combat_technique: str \| None = None, tempo_pool: int \| None = None, control_pool: int \| None = None, force_pool: int \| None = None, note: str \| None = None` | `POST /api/gm/sessions/:id/roll` | Executes an authoritative server-side Satya Watershed `2d20` roll-over check (including optional `combat_technique` and `Tempo / Control / Force` pool split), triggers synchronized 3D `wgpu` dice physics, advances the actor's Action Mode tick, logs to Apache Iggy (`ttrpg-mechanics`), and returns the structured outcome. |
+| `roll_satya_d20_check` | `session_id: str, actor_name: str, check_category: str = "SKILL_CHECK", attribute_tn: int = 12, skill_rank: int = 2, difficulty_mod: int = 0, internal_mod: int = 0, carry_mode: str = "markov_step", combat_stance: str \| None = None, combat_technique: str \| None = None, tempo_pool: int \| None = None, control_pool: int \| None = None, force_pool: int \| None = None, note: str \| None = None` | `POST /api/gm/sessions/:id/roll` | Executes an authoritative server-side Satya `2d20xN` cascade roll-over check (including optional `combat_technique` and `Tempo / Control / Force` pool split), triggers synchronized 3D `wgpu` dice physics, advances the actor's Action Mode tick, logs to Apache Iggy (`ttrpg-mechanics`), and returns the structured outcome. |
 | `whisper_to_player` | `session_id: str, target_user_id: str, content: str` | `POST /api/gm/sessions/:id/chat` | Sends a `MessageVisibility::Private` Markdown whisper from the AI GM to a specific player. |
 | `narrate_to_session` | `session_id: str, content: str, channel: str = "IN_CHARACTER", is_hidden_cot: bool = False` | `POST /api/gm/sessions/:id/chat` | Broadcasts a `MessageVisibility::Public` Markdown message as `GM_NARRATION`, `IN_CHARACTER`, or `OUT_OF_CHARACTER`. |
 
@@ -359,7 +367,7 @@ In addition to local markdown files (`docs/campaign/`, `docs/ttrpg/`), the SQLit
 ### 7.1 Rust Signaling GM Endpoints (`satya-signaling`)
 - `GET /api/gm/sessions/:session_id/context` — Returns session mode, AI GM participant info, active roster, character sheets, combat tracker state, and compact GM Vault headers.
 - `POST /api/gm/sessions/:session_id/chat` — Emits public Markdown narrations, NPC dialogue, or private whispers (`ChatMessageEvent`).
-- `POST /api/gm/sessions/:session_id/roll` — Evaluates authoritative Satya Watershed `2d20` checks (`TtrpgMechanicsEvent`) and broadcasts 3D `wgpu` dice physics seeds.
+- `POST /api/gm/sessions/:session_id/roll` — Evaluates authoritative Satya `2d20xN` cascade checks (`TtrpgMechanicsEvent`) and broadcasts 3D `wgpu` dice physics seeds.
 - `POST /api/gm/sessions/:session_id/map` — Publishes tactical map updates (`TabletopCanvasEvent`).
 - `GET / POST /api/gm/sessions/:session_id/combat` — Reads or mutates the count-up combat tracker state.
 - `GET / POST /api/gm/sessions/:session_id/memories` — Searches or upserts persistent GM Memory Vault entries in SQLite (`gm_vault.rs`).

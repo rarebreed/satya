@@ -88,7 +88,7 @@ Story-first games excel at simulating television writer's rooms: if a crew hits 
 ### 2.5 *Shadowrun*, *World of Darkness*, & *Modiphius `2d20`*
 - **Dot Compression & Dice Fistfuls**: Systems using `1–5` dot scales compress wildly different human capabilities into six coarse buckets while throwing 15–25 dice per roll. *Satya* spans `1–20` (`0.0–100.0` spectrum) and `0–10` skill pairs (`1–8` human cap), distinguishing a novice (`N = 1`) from an apprentice (`N = 2`), journeyman (`N = 3`), veteran (`N = 5`), and grandmaster (`N = 8`) without exponential dice buckets.
 - **No "Skilled Botch Paradox"**: Classic *World of Darkness* and early pool systems suffered from mathematical flaws where rolling *more* dice for higher skill could increase critical failure odds. *Satya*'s `closest_miss` botch evaluation ensures higher skill `N` **strictly and monotonically reduces botch probability** (see [Probability & Calibration](../../ttrpg/01-foundation/probability_and_calibration.md)).
-- **True `2d20` Differentiation**: Unlike *Modiphius 2d20* (which rolls `2d20` once against a flat `Attr + Skill` sum and feeds a shared Momentum/Doom metacurrency pool), *Satya* runs **sequential cascading pairs** (`N` pairs) against `TN_P = 31 - C_P + Δ_tool` opposed by hidden GM resistance (`TN_GM = 21 - Δ_ext`), creating genuine watershed risk without meta-points.
+- **True `2d20` Differentiation**: Unlike *Modiphius 2d20* (which rolls `2d20` once against a flat `Attr + Skill` sum and feeds a shared Momentum/Doom metacurrency pool), *Satya* runs **sequential cascading pairs** (`N` pairs, the `2d20xN` cascade) against `TN_P = 31 - C_P + Δ_tool` opposed by hidden GM resistance (`TN_GM = 21 - Δ_ext`), creating genuine cascading momentum and risk without meta-points.
 
 ---
 

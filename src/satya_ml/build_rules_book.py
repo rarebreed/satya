@@ -50,9 +50,9 @@ BOOK_CHAPTER_SPECS: list[dict[str, str]] = [
     {
         "chapter_id": "tasks",
         "part": "Part II: Core Mechanics, Task Resolution & Action Economy",
-        "title": "Cascading 2d20 Engine & Task Resolution",
+        "title": "2d20xN Cascade Engine & Task Resolution",
         "relative_path": "02-core-mechanics/cascading_d20_and_tasks.md",
-        "description": "Canonical Two-List Cascading (2d20) dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, 5-step Task Pipeline, Tool Tiers, Gate Classifications, and Extended Project Clocks.",
+        "description": "Canonical 2d20xN cascade dice mechanic, TN_eff = 31 - C + Delta_ext, carry modes, signed outcome tiers, 5-step Task Pipeline, Tool Tiers, Gate Classifications, and Extended Project Clocks.",
     },
     {
         "chapter_id": "task_requirements_catalog",
@@ -990,7 +990,7 @@ def _rewrite_chapter_links(rendered_html: str) -> str:
 
 _INTERACTIVE_WIDGET_HTML = """
 <section class="book-interactive-widget">
-  <h2>Interactive Satya 2d20 Watershed Cascade &amp; Tactical Pool Calculator</h2>
+  <h2>Interactive Satya 2d20xN Cascade &amp; Tactical Pool Calculator</h2>
   <p class="widget-sub">
     Powered by the Satya Four-Factor Cascade formula
     (<code>TN_eff = 31 - C + &Delta;_ext</code>, <code>&delta;_over = +6</code>, <code>&delta;_under = -(6 + &Delta;_int)</code>)
@@ -998,7 +998,7 @@ _INTERACTIVE_WIDGET_HTML = """
   </p>
   <div class="widget-grid">
     <div class="widget-panel">
-      <h3>1. 2d20 Watershed Cascade Simulator</h3>
+      <h3>1. 2d20xN Cascade Simulator</h3>
       <div class="widget-controls">
         <label>Skill Level (N Pairs: 1..8)
           <input id="bk-n" type="number" min="1" max="8" value="4" onchange="satyaBookRecalc()"/>
@@ -1256,7 +1256,7 @@ def _wrap_book_page_html(
   <div class="book-shell">
     <aside id="book-sidebar" class="book-sidebar">
       <div class="book-brand">SATYA // RULES BOOK</div>
-      <div class="book-sub">2d20 Watershed Cascade &amp; Tactical Triad</div>
+      <div class="book-sub">2d20xN Cascade &amp; Tactical Triad</div>
       {"".join(nav_items)}
     </aside>
     <main class="book-workspace">

@@ -1,6 +1,6 @@
 # Satya TTRPG Master Task Requirements Catalog (Section 8)
 
-> **Rust Engine Implementation**: [`crates/satya-engine/src/task_resolution.rs`](../../../crates/satya-engine/src/task_resolution.rs) (`BenchmarkTaskSpec`, `CANONICAL_BENCHMARK_TASKS`, `evaluate_task_gate`, `evaluate_tool_modifier`, `evaluate_kno_to_phy_synergy`, `compute_dual_skill_pairs`). Companion chapter to **[Core `2d20` Watershed Cascade & Always-Contested Task Resolution (`cascading_d20_and_tasks.md`)](cascading_d20_and_tasks.md)**.  
+> **Rust Engine Implementation**: [`crates/satya-engine/src/task_resolution.rs`](../../../crates/satya-engine/src/task_resolution.rs) (`BenchmarkTaskSpec`, `CANONICAL_BENCHMARK_TASKS`, `evaluate_task_gate`, `evaluate_tool_modifier`, `evaluate_kno_to_phy_synergy`, `compute_dual_skill_pairs`). Companion chapter to **[Core `2d20xN` Cascade & Always-Contested Task Resolution (`cascading_d20_and_tasks.md`)](cascading_d20_and_tasks.md)**.  
 > **Guided Play Example**: See [Guide 02: Gates (`Class A / B / C`) & Tool Modifiers in Play](../../ttrpg-examples/02-cascading-dice-and-tasks.md#2-step-1-of-every-task-gates-class-a--b--c--tools).
 
 ## 8. Master Task Requirements Table (Skills, Prerequisites, Tools & Hidden GM Resistance)

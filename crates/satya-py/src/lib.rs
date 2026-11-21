@@ -1,7 +1,7 @@
 //! # `satya-py`
 //!
 //! PyO3 Python extension module (`satya_py`) exposing [`satya_engine`] (exact combinatorial & DP dice
-//! probability distributions, Two-List `2d20` Watershed Cascade task resolution, Combat Tactical Pool
+//! probability distributions, `2d20xN` Cascade task resolution, Combat Tactical Pool
 //! "Envelope & Fill" calculator), [`satya_rules_book`] (canonical 24-chapter Rules Book catalog/search),
 //! [`satya_maps`] (continuous metric tactical battlemaps & terrain continuation), [`satya_campaign`]
 //! (*Awakened* 2035 NPC/factions/substrates/hooks), and [`satya_schema`]
@@ -81,7 +81,7 @@ impl PyDistributionStats {
     }
 }
 
-/// Complete PMF and summary probabilities for a signed Two-List Cascading ("Watershed") roll.
+/// Complete PMF and summary probabilities for a signed `2d20xN` Cascade roll.
 #[pyclass(name = "SignedCascadeResult", get_all)]
 #[derive(Debug, Clone)]
 pub struct PySignedCascadeResult {
@@ -387,7 +387,7 @@ impl From<ContestedCascadeRollOutcome> for PyContestedCascadeRollOutcome {
     }
 }
 
-/// Always-Contested Two-List Cascade task configuration (Player vs. 1-Pair Tiered GM Resistance or Full Cascade NPC).
+/// Always-Contested `2d20xN` Cascade task configuration (Player vs. 1-Pair Tiered GM Resistance or Full Cascade NPC).
 #[pyclass(name = "ContestedCascadeTaskParams")]
 #[derive(Debug, Clone)]
 pub struct PyContestedCascadeTaskParams {
@@ -1040,7 +1040,7 @@ pub fn multiplicative_pool_pmf(pool_size: usize, sides: i32) -> Pmf {
     satya_engine::multiplicative_pool_pmf(pool_size, sides)
 }
 
-/// Exact PMF for the Two-List Cascading ("Watershed" / "Recoil") mechanic, returning `(success_pmf, final_y_pmf)`.
+/// Exact PMF for the `2d20xN` Cascade (positive feedback or "Recoil" inverted) mechanic, returning `(success_pmf, final_y_pmf)`.
 #[pyfunction]
 #[pyo3(signature = (num_pairs, sides, characteristic_c, delta_over=3, delta_under=3, mode="markov_step", count_under_as_success=false, invert_feedback=false))]
 pub fn paired_list_cascade_pmfs(
@@ -1066,7 +1066,7 @@ pub fn paired_list_cascade_pmfs(
     ))
 }
 
-/// Exact PMF for the Signed Two-List Cascading ("Watershed" / "Recoil") mechanic over `-num_pairs..=+num_pairs`.
+/// Exact PMF for the Signed `2d20xN` Cascade (positive feedback or "Recoil" inverted) mechanic over `-num_pairs..=+num_pairs`.
 #[pyfunction]
 #[pyo3(signature = (num_pairs, sides, characteristic_c, delta_over=3, delta_under=3, mode="markov_step", count_under_as_success=true, invert_feedback=false, botch_rule="closest_miss", margin_aggregation="piecewise_zero_floor"))]
 pub fn paired_list_signed_margin_pmfs(
@@ -1257,7 +1257,7 @@ pub fn classify_contested_outcome(
     Ok((kind.as_str().to_string(), net_margin))
 }
 
-/// Computes exact combinatorial probabilities for a Contested Two-List Cascade check.
+/// Computes exact combinatorial probabilities for a Contested `2d20xN` Cascade check.
 #[pyfunction]
 #[pyo3(signature = (
     player_skill_n,

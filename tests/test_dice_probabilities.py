@@ -104,7 +104,7 @@ def test_median_gated_bimodal() -> None:
 
 
 def test_paired_list_watershed_cascade() -> None:
-    """Verify the two-list cascading dice mechanic transforms bell curve into a bimodal U-curve."""
+    """Verify the 2d20xN cascading dice mechanic transforms bell curve into a bimodal U-curve."""
     # Delta = 0 -> standard Binomial bell curve peaking at 2-3 out of 5
     bell_succ, _ = paired_list_cascade_pmfs(
         num_pairs=5, sides=6, characteristic_c=7, delta_over=0, delta_under=0
@@ -112,7 +112,7 @@ def test_paired_list_watershed_cascade() -> None:
     assert bell_succ[2] > bell_succ[0]
     assert bell_succ[3] > bell_succ[5]
 
-    # Delta = 4 -> watershed U-curve where streaks (0 and 5) beat middle split (2 and 3),
+    # Delta = 4 -> bimodal U-curve where streaks (0 and 5) beat middle split (2 and 3),
     # and Final Pair Y_N splits into two symmetric humps at 3 (7-4) and 11 (7+4) with a valley at 7
     u_succ, markov_final_y = paired_list_cascade_pmfs(
         num_pairs=5, sides=6, characteristic_c=7, delta_over=4, delta_under=4, mode="markov_step"

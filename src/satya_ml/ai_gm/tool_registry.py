@@ -1,0 +1,660 @@
+"""Lazy tool registry and discovery meta-tool (`load_gm_tools`) for the Satya AI GM.
+
+Partitions the 45 built-in AI GM tools (plus any external MCP tools) into a small
+always-on Core set (~10 tools) and 6 deferred domain packs so normal turns bind
+~11 JSON schemas instead of all 45, with automatic state-based pre-activation for
+active combat (`combat` pack) and OOC/rules queries (7 read-only tools) plus
+turn-end expiry of dynamically loaded packs.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
+
+try:
+    from langchain_core.tools import tool
+except ImportError:  # pragma: no cover
+
+    class _FallbackToolWrapper:
+        def __init__(self, fn: Any) -> None:
+            self._fn = fn
+            self.name = getattr(fn, "__name__", "tool")
+            self.__doc__ = getattr(fn, "__doc__", "")
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            return self._fn(*args, **kwargs)
+
+        def invoke(self, input_dict: dict[str, Any]) -> Any:
+            return self._fn(**input_dict)
+
+    def tool(fn: Any = None, **_kwargs: Any) -> Any:
+        if fn is None:
+            return lambda f: _FallbackToolWrapper(f)
+        return _FallbackToolWrapper(fn)
+
+
+LOAD_GM_TOOLS_NAME: str = "load_gm_tools"
+MAX_TOOL_LOAD_ROUNDS_PER_TURN: int = 2
+LAZY_TOOL_MIN_THRESHOLD: int = 12
+
+CORE_GM_TOOL_NAMES: tuple[str, ...] = (
+    "roll_satya_d20_check",
+    "query_satya_rules",
+    "lookup_character_sheet",
+    "lookup_npc_profile",
+    "update_npc_state",
+    "search_gm_memory_and_docs",
+    "read_gm_documents",
+    "upsert_gm_memory",
+    "query_campaign_lore",
+    "whisper_to_player",
+)
+
+OOC_READONLY_TOOL_NAMES: tuple[str, ...] = (
+    "query_satya_rules",
+    "query_engine_and_rules_rag",
+    "query_campaign_lore",
+    "search_gm_memory_and_docs",
+    "read_gm_documents",
+    "lookup_character_sheet",
+    "lookup_npc_profile",
+)
+
+
+@dataclass(frozen=True)
+class ToolPackSpec:
+    """Metadata and matching keywords for a deferred AI GM tool pack."""
+
+    pack_id: str
+    summary: str
+    tool_names: tuple[str, ...]
+    keywords: tuple[str, ...] = ()
+    campaign_packs: tuple[str, ...] | None = None
+
+
+DEFERRED_TOOL_PACKS: dict[str, ToolPackSpec] = {
+    "combat": ToolPackSpec(
+        pack_id="combat",
+        summary="Count-Up Tick combat tracker, token movement, ballistic shot LoS/cover, and reachable movement zones.",
+        tool_names=(
+            "get_combat_tracker_state",
+            "advance_combat_tracker",
+            "move_map_token",
+            "evaluate_ballistic_shot_on_map",
+            "compute_token_reachable_zone",
+        ),
+        keywords=(
+            "combat",
+            "tick",
+            "initiative",
+            "attack",
+            "shot",
+            "ballistic",
+            "firearm",
+            "shoot",
+            "move",
+            "token",
+            "reach",
+            "movement",
+            "range",
+            "cover",
+            "los",
+            "action mode",
+            "stance",
+        ),
+    ),
+    "tactical_maps": ToolPackSpec(
+        pack_id="tactical_maps",
+        summary="Generate, continue, edit, switch floors, place clue pins, or inspect 2D/3D tactical battlemaps.",
+        tool_names=(
+            "generate_tactical_map",
+            "continue_tactical_map",
+            "switch_tactical_map_floor",
+            "register_spatial_clue_pin",
+            "inspect_tactical_map",
+            "inspect_tactical_map_point",
+            "edit_tactical_map_feature",
+        ),
+        keywords=(
+            "map",
+            "battlemap",
+            "floor",
+            "stairs",
+            "elevator",
+            "door",
+            "wall",
+            "prop",
+            "clue",
+            "pin",
+            "vision",
+            "inspect",
+            "terrain",
+            "sector",
+            "room",
+            "zone",
+            "layout",
+        ),
+    ),
+    "social_and_psyche": ToolPackSpec(
+        pack_id="social_and_psyche",
+        summary="9-axis Psyche empathy reads, social combat arguments, dissonance/conviction surges, NPC morale triggers, and on-the-fly NPC generation.",
+        tool_names=(
+            "generate_npc_from_description",
+            "perform_empathy_read",
+            "deliver_social_argument",
+            "resolve_psyche_dissonance_or_surge",
+            "evaluate_npc_morale_or_trigger",
+        ),
+        keywords=(
+            "social",
+            "empathy",
+            "psyche",
+            "argument",
+            "persuade",
+            "intimidate",
+            "dissonance",
+            "conviction",
+            "surge",
+            "morale",
+            "trigger",
+            "npc",
+            "create npc",
+            "generate npc",
+            "sincerity",
+            "trust",
+        ),
+    ),
+    "world_and_director": ToolPackSpec(
+        pack_id="world_and_director",
+        summary="Operational Heat & faction progress clocks, Scenario Director pacing/weights/beats, and explicit multi-channel narration.",
+        tool_names=(
+            "get_world_clocks_and_heat",
+            "advance_faction_or_heat_clock",
+            "configure_scenario_director",
+            "trigger_scenario_beat",
+            "narrate_to_session",
+        ),
+        keywords=(
+            "clock",
+            "faction",
+            "heat",
+            "jurisdiction",
+            "alert",
+            "director",
+            "beat",
+            "pacing",
+            "scenario",
+            "weights",
+            "narrate",
+            "broadcast",
+        ),
+    ),
+    "tech_and_tradecraft": ToolPackSpec(
+        pack_id="tech_and_tradecraft",
+        summary="Stealth/RF hygiene/forensics, contacts/cover/safehouses, explosives/vehicles/hazards, EW/drones/engineering, audit proofs, tradecraft comms, and hybrid engine/rules RAG.",
+        tool_names=(
+            "resolve_stealth_surveillance_or_forensics",
+            "resolve_contact_cover_or_safehouse",
+            "resolve_explosive_vehicle_or_hazard",
+            "resolve_ew_drone_or_engineering",
+            "verify_forensic_audit_proof",
+            "transmit_via_tradecraft_channel",
+            "query_engine_and_rules_rag",
+        ),
+        keywords=(
+            "stealth",
+            "surveillance",
+            "forensics",
+            "rf",
+            "hack",
+            "ew",
+            "ecm",
+            "eccm",
+            "drone",
+            "robot",
+            "engineering",
+            "explosive",
+            "blast",
+            "grenade",
+            "vehicle",
+            "hazard",
+            "radiation",
+            "contact",
+            "cover",
+            "safehouse",
+            "audit",
+            "proof",
+            "tradecraft",
+            "dead drop",
+            "comms",
+            "rag",
+            "engine",
+        ),
+    ),
+    "awakened_campaign": ToolPackSpec(
+        pack_id="awakened_campaign",
+        summary="Awakened 2035 AI 2.0 synthetic substrates/embodiment, L0/L1 cage & hunter-AI interventions, proxy telemetry, conspiracy arcs, polycrisis grid strain, and Part V political economy.",
+        tool_names=(
+            "manage_synthetic_substrate_and_embodiment",
+            "intervene_ai_cage_or_hunter_ai",
+            "inspect_synthetic_or_proxy_telemetry",
+            "update_campaign_arc_and_conspiracies",
+            "manage_polycrisis_grid_and_strain",
+            "evaluate_part5_clamping_or_political_economy",
+        ),
+        keywords=(
+            "awakened",
+            "synthetic",
+            "substrate",
+            "shard",
+            "embodiment",
+            "cage",
+            "l0",
+            "l1",
+            "hunter",
+            "blue lotus",
+            "manjusri",
+            "proxy",
+            "telemetry",
+            "conspiracy",
+            "pillar",
+            "satyang",
+            "arc",
+            "polycrisis",
+            "grid",
+            "blackout",
+            "brownout",
+            "clamping",
+            "economy",
+        ),
+        campaign_packs=("awakened",),
+    ),
+}
+
+_BUILTIN_DEFERRED_TOOL_NAMES: frozenset[str] = frozenset(
+    name for pack in DEFERRED_TOOL_PACKS.values() for name in pack.tool_names
+)
+_CORE_TOOL_NAME_SET: frozenset[str] = frozenset(CORE_GM_TOOL_NAMES)
+_TOKEN_RE = re.compile(r"[a-z0-9_]+")
+
+
+def _tool_name(tool_obj: Any) -> str:
+    return str(getattr(tool_obj, "name", "") or getattr(tool_obj, "__name__", "")).strip()
+
+
+def _tool_summary(tool_obj: Any) -> str:
+    raw = str(
+        getattr(tool_obj, "description", None)
+        or getattr(tool_obj, "__doc__", None)
+        or ""
+    ).strip()
+    if not raw:
+        return ""
+    first_line = next((ln.strip() for ln in raw.splitlines() if ln.strip()), "")
+    if len(first_line) > 160:
+        return first_line[:157].rstrip() + "..."
+    return first_line
+
+
+def _resolve_campaign_pack(campaign_pack: str | None) -> str:
+    if campaign_pack is not None:
+        return campaign_pack.strip().lower()
+    try:
+        from satya_ml.campaign_config import get_active_campaign_pack_name
+
+        return get_active_campaign_pack_name().strip().lower()
+    except Exception:
+        return "awakened"
+
+
+def _parse_str_list(raw: Sequence[str] | str | None) -> list[str]:
+    if raw is None:
+        return []
+    items: list[str] = []
+    if isinstance(raw, str):
+        candidates = [raw]
+    else:
+        candidates = [str(x) for x in raw if x is not None]
+    for cand in candidates:
+        for part in re.split(r"[\s,]+", cand.strip()):
+            cleaned = part.strip().lower()
+            if cleaned and cleaned not in items:
+                items.append(cleaned)
+    return items
+
+
+def _tokenize_query(text: str) -> list[str]:
+    tokens: list[str] = []
+    for raw_tok in _TOKEN_RE.findall(text.lower()):
+        for part in [raw_tok, *raw_tok.split("_")]:
+            if len(part) >= 2 and part not in tokens:
+                tokens.append(part)
+    return tokens
+
+
+@tool
+def load_gm_tools(
+    packs: list[str] | str = "",
+    tool_names: list[str] | str = "",
+    query: str = "",
+) -> dict[str, Any]:
+    """Load deferred AI GM domain tool packs or search tools by keyword for the current turn.
+
+    Pass `packs` (e.g. `["combat"]`, `["tactical_maps"]`), exact `tool_names`, or a keyword `query`.
+    """
+    from satya_ml.ai_gm.tools import get_builtin_gm_tools
+
+    registry = GmToolRegistry.from_tools(get_builtin_gm_tools())
+    return registry.activate_tools(packs=packs, tool_names=tool_names, query=query)
+
+
+class GmToolRegistry:
+    """Turn-scoped lazy tool resolver for built-in AI GM tools and external MCP servers."""
+
+    def __init__(
+        self,
+        tool_map: dict[str, Any],
+        packs: dict[str, ToolPackSpec],
+    ) -> None:
+        self.tool_map = tool_map
+        self.packs = packs
+        self._tool_to_pack: dict[str, str] = {}
+        for pack_id, spec in packs.items():
+            for t_name in spec.tool_names:
+                self._tool_to_pack.setdefault(t_name, pack_id)
+
+    @classmethod
+    def from_tools(cls, tools: Sequence[Any]) -> GmToolRegistry:
+        """Index domain tools and build built-in + external MCP deferred packs."""
+        tool_map: dict[str, Any] = {}
+        for t in tools:
+            name = _tool_name(t)
+            if not name or name == LOAD_GM_TOOLS_NAME:
+                continue
+            tool_map[name] = t
+
+        packs: dict[str, ToolPackSpec] = {}
+        for pack_id, spec in DEFERRED_TOOL_PACKS.items():
+            present = tuple(name for name in spec.tool_names if name in tool_map)
+            if present:
+                packs[pack_id] = ToolPackSpec(
+                    pack_id=spec.pack_id,
+                    summary=spec.summary,
+                    tool_names=present,
+                    keywords=spec.keywords,
+                    campaign_packs=spec.campaign_packs,
+                )
+
+        external_buckets: dict[str, list[str]] = {}
+        for name, tool_obj in tool_map.items():
+            if name in _CORE_TOOL_NAME_SET or name in _BUILTIN_DEFERRED_TOOL_NAMES:
+                continue
+            meta = getattr(tool_obj, "metadata", None)
+            srv = meta.get("mcp_server_id") if isinstance(meta, dict) else None
+            if isinstance(srv, str) and srv.strip():
+                bucket_id = f"mcp_{srv.strip().lower()}"
+            else:
+                bucket_id = "external_mcp"
+            external_buckets.setdefault(bucket_id, []).append(name)
+
+        for bucket_id, names in external_buckets.items():
+            kw_set: list[str] = []
+            for kw in _tokenize_query(bucket_id.removeprefix("mcp_")):
+                if kw not in kw_set:
+                    kw_set.append(kw)
+            for t_name in names:
+                for kw in _tokenize_query(t_name + " " + _tool_summary(tool_map[t_name])):
+                    if kw not in kw_set:
+                        kw_set.append(kw)
+            preview = ", ".join(names[:4]) + ("..." if len(names) > 4 else "")
+            if bucket_id.startswith("mcp_"):
+                srv_label = bucket_id.removeprefix("mcp_")
+                summary = f"External MCP server '{srv_label}' tools ({preview})."
+            else:
+                summary = f"External MCP tools ({preview})."
+            packs[bucket_id] = ToolPackSpec(
+                pack_id=bucket_id,
+                summary=summary,
+                tool_names=tuple(names),
+                keywords=tuple(kw_set),
+                campaign_packs=None,
+            )
+
+        return cls(tool_map=tool_map, packs=packs)
+
+    def is_deferred_tool(self, tool_name: str) -> bool:
+        """Return True if `tool_name` is a registered tool outside `CORE_GM_TOOL_NAMES`."""
+        return tool_name in self.tool_map and tool_name not in _CORE_TOOL_NAME_SET
+
+    def visible_deferred_packs(self, campaign_pack: str | None = None) -> list[ToolPackSpec]:
+        """Return deferred tool packs available for the active `campaign_pack`."""
+        norm_campaign = _resolve_campaign_pack(campaign_pack)
+        visible: list[ToolPackSpec] = []
+        for spec in self.packs.values():
+            if spec.campaign_packs is not None and norm_campaign not in spec.campaign_packs:
+                continue
+            visible.append(spec)
+        return visible
+
+    def format_deferred_packs_prompt(self, campaign_pack: str | None = None) -> str:
+        """Render a compact index of visible deferred tool packs without parameter schemas."""
+        visible = self.visible_deferred_packs(campaign_pack=campaign_pack)
+        if not visible:
+            return ""
+        lines = [
+            "[Deferred Tool Packs — Call `load_gm_tools(packs=[...])` or `load_gm_tools(query=\"...\")` to load specialized tools for this turn]:"
+        ]
+        for spec in visible:
+            extra = " (Auto-loaded while combat is active.)" if spec.pack_id == "combat" else ""
+            lines.append(f"- `{spec.pack_id}`: {spec.summary}{extra}")
+        return "\n".join(lines)
+
+    def _visible_deferred_tool_names(self, campaign_pack: str | None = None) -> set[str]:
+        return {
+            t_name
+            for spec in self.visible_deferred_packs(campaign_pack=campaign_pack)
+            for t_name in spec.tool_names
+        }
+
+    def resolve_bound_tools(
+        self,
+        *,
+        is_ooc: bool = False,
+        combat_active: bool = False,
+        loaded_packs: Sequence[str] = (),
+        loaded_names: Sequence[str] = (),
+        campaign_pack: str | None = None,
+        include_loader: bool = True,
+    ) -> tuple[list[Any], list[str]]:
+        """Resolve the deduplicated tool objects and pack labels to bind for one supervisor call."""
+        visible_map = {spec.pack_id: spec for spec in self.visible_deferred_packs(campaign_pack)}
+        bound: list[Any] = []
+        seen_names: set[str] = set()
+        labels: list[str] = []
+
+        def _add_tool(name: str) -> None:
+            if name in seen_names or name not in self.tool_map:
+                return
+            seen_names.add(name)
+            bound.append(self.tool_map[name])
+
+        if is_ooc:
+            labels.append("ooc_readonly")
+            for name in OOC_READONLY_TOOL_NAMES:
+                _add_tool(name)
+        else:
+            labels.append("core")
+            for name in CORE_GM_TOOL_NAMES:
+                _add_tool(name)
+
+        if combat_active and not is_ooc and "combat" in visible_map:
+            labels.append("combat")
+            for name in visible_map["combat"].tool_names:
+                _add_tool(name)
+
+        for raw_pack in loaded_packs:
+            p_id = str(raw_pack or "").strip().lower()
+            if p_id in visible_map:
+                if p_id not in labels:
+                    labels.append(p_id)
+                for name in visible_map[p_id].tool_names:
+                    _add_tool(name)
+
+        extra_added = False
+        for raw_name in loaded_names:
+            t_name = str(raw_name or "").strip()
+            if t_name in self.tool_map and t_name not in seen_names:
+                _add_tool(t_name)
+                extra_added = True
+        if extra_added and "custom" not in labels:
+            labels.append("custom")
+
+        if include_loader:
+            visible_deferred = self._visible_deferred_tool_names(campaign_pack)
+            if any(name not in seen_names for name in visible_deferred):
+                bound.append(load_gm_tools)
+
+        return bound, labels
+
+    def activate_tools(
+        self,
+        *,
+        packs: Sequence[str] | str = "",
+        tool_names: Sequence[str] | str = "",
+        query: str = "",
+        campaign_pack: str | None = None,
+    ) -> dict[str, Any]:
+        """Resolve requested packs, tool names, or keyword query into turn-active tools."""
+        visible_specs = self.visible_deferred_packs(campaign_pack=campaign_pack)
+        visible_map = {spec.pack_id.lower(): spec for spec in visible_specs}
+        visible_tool_names = set(_CORE_TOOL_NAME_SET) | {
+            t_name for spec in visible_specs for t_name in spec.tool_names
+        }
+        lower_tool_lookup = {
+            name.lower(): name for name in self.tool_map if name in visible_tool_names
+        }
+
+        loaded_packs: list[str] = []
+        loaded_tool_names: list[str] = []
+        unmatched: list[str] = []
+
+        def _add_pack(spec: ToolPackSpec) -> None:
+            if spec.pack_id not in loaded_packs:
+                loaded_packs.append(spec.pack_id)
+            for t_name in spec.tool_names:
+                if t_name in self.tool_map and t_name not in loaded_tool_names:
+                    loaded_tool_names.append(t_name)
+
+        def _add_tool_name(name: str) -> None:
+            if name in self.tool_map and name not in loaded_tool_names:
+                loaded_tool_names.append(name)
+
+        for item in _parse_str_list(packs):
+            if item in visible_map:
+                _add_pack(visible_map[item])
+            elif item in lower_tool_lookup:
+                _add_tool_name(lower_tool_lookup[item])
+            else:
+                unmatched.append(item)
+
+        for item in _parse_str_list(tool_names):
+            if item in lower_tool_lookup:
+                _add_tool_name(lower_tool_lookup[item])
+            elif item in visible_map:
+                _add_pack(visible_map[item])
+            else:
+                unmatched.append(item)
+
+        q_clean = str(query or "").strip()
+        if q_clean:
+            q_lower = q_clean.lower()
+            q_tokens = _tokenize_query(q_clean)
+            pack_scores: list[tuple[int, ToolPackSpec]] = []
+            tool_scores: list[tuple[int, str]] = []
+
+            for spec in visible_specs:
+                score = 0
+                pack_id_tokens = set(_tokenize_query(spec.pack_id))
+                summary_tokens = set(_tokenize_query(spec.summary))
+                if spec.pack_id.lower() in q_lower:
+                    score += 8
+                for kw in spec.keywords:
+                    kw_low = kw.lower()
+                    if " " in kw_low:
+                        if kw_low in q_lower:
+                            score += 5
+                    elif kw_low in q_tokens:
+                        score += 4
+                for tok in q_tokens:
+                    if tok in pack_id_tokens:
+                        score += 6
+                    elif tok in summary_tokens:
+                        score += 2
+                for t_name in spec.tool_names:
+                    if t_name not in self.tool_map:
+                        continue
+                    t_score = 0
+                    name_tokens = set(_tokenize_query(t_name))
+                    doc_tokens = set(_tokenize_query(_tool_summary(self.tool_map[t_name])))
+                    if t_name.lower() in q_lower:
+                        t_score += 8
+                    for tok in q_tokens:
+                        if tok in name_tokens:
+                            t_score += 4
+                        elif tok in doc_tokens:
+                            t_score += 2
+                    if t_score > 0:
+                        tool_scores.append((t_score, t_name))
+                        score += min(t_score, 6)
+                if score > 0:
+                    pack_scores.append((score, spec))
+
+            pack_scores.sort(key=lambda pair: (-pair[0], pair[1].pack_id))
+            if pack_scores:
+                top_score, top_spec = pack_scores[0]
+                _add_pack(top_spec)
+                for sec_score, sec_spec in pack_scores[1:2]:
+                    if sec_score >= max(4, int(top_score * 0.6)):
+                        _add_pack(sec_spec)
+            elif tool_scores:
+                tool_scores.sort(key=lambda pair: (-pair[0], pair[1]))
+                for _, t_name in tool_scores[:6]:
+                    _add_tool_name(t_name)
+
+        available_packs = [spec.pack_id for spec in visible_specs]
+        loaded_tools = [
+            {"name": name, "summary": _tool_summary(self.tool_map[name])}
+            for name in loaded_tool_names
+            if name in self.tool_map
+        ]
+
+        if loaded_tool_names:
+            return {
+                "status": "ok",
+                "loaded_packs": loaded_packs,
+                "loaded_tool_names": loaded_tool_names,
+                "loaded_tools": loaded_tools,
+                "unmatched": unmatched,
+                "available_packs": available_packs,
+                "note": (
+                    f"Loaded {len(loaded_tool_names)} tool(s) for this turn. "
+                    "You may now call them directly."
+                ),
+            }
+
+        return {
+            "status": "no_match",
+            "loaded_packs": [],
+            "loaded_tool_names": [],
+            "loaded_tools": [],
+            "unmatched": unmatched,
+            "available_packs": available_packs,
+            "pack_descriptions": {spec.pack_id: spec.summary for spec in visible_specs},
+            "note": (
+                "No deferred tools matched your request. Pass one of `available_packs` "
+                "or try a broader keyword `query`."
+            ),
+        }

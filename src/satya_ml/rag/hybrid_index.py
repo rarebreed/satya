@@ -54,7 +54,7 @@ _STOPWORDS = frozenset(
 # 64 semantic concept buckets bridging colloquial TTRPG / lore queries to exact Satya terminology.
 _CONCEPT_GROUPS: tuple[tuple[str, ...], ...] = (
     ("underwater", "drowning", "suffocating", "suffocation", "asphyxiation", "breath", "air", "hypoxia", "o2", "choking"),
-    ("watershed", "cascading", "2d20", "two_list", "two-list", "ordered", "pair", "margin", "tier", "outcome"),
+    ("2d20xn", "nx2d20", "cascade", "cascading", "2d20", "watershed", "two_list", "two-list", "ordered", "pair", "margin", "tier", "outcome"),
     ("complementary", "synergy", "supporting", "dual_skill", "supporting_characteristic", "lockpicking"),
     ("tempo", "control", "force", "tactical_triad", "triad", "envelope", "pool", "stance"),
     ("melee", "clinch", "grapple", "throw", "knife", "blitz", "parry", "blade", "cqc"),

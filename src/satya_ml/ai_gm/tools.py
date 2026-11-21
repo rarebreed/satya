@@ -601,7 +601,7 @@ def generate_npc_from_description(
 
 
 _CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
-    ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 4: Cascading 2d20 Engine & Task Resolution"),
+    ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 4: 2d20xN Cascade Engine & Task Resolution"),
     ("02-core-mechanics/task_requirements_catalog.md", "Ch. 5: Master Task Requirements Catalog"),
     ("01-foundation/mathematical_notation_glossary.md", "Ch. 2: Mathematical Notation, Variables & Formula Glossary"),
     ("02-core-mechanics/action_economy_and_ooda.md", "Ch. 6: Action Economy, OODA Loop & Time Scales"),
@@ -630,7 +630,7 @@ _CANONICAL_RULES_FILES: tuple[tuple[str, str], ...] = (
 
 @tool
 def query_satya_rules(query: str) -> str:
-    """Search the 24-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20` Watershed Cascade mechanics, task resolution, stealth/investigation, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), expanded firearms/explosives/breaching, engineering/weapon design, robotics/drones, AI 2.0 architectures, cyber-prosthetics, electronic warfare (`ECM`/`ECCM`), and social dissonance."""
+    """Search the 24-chapter Satya TTRPG Rules Book (`docs/ttrpg/`) for `2d20xN` cascade mechanics, task resolution, stealth/investigation, characteristics, skill ontology, tactical combat (`Tempo`/`Control`/`Force`), expanded firearms/explosives/breaching, engineering/weapon design, robotics/drones, AI 2.0 architectures, cyber-prosthetics, electronic warfare (`ECM`/`ECCM`), and social dissonance."""
     ttrpg_dir = _repo_root() / "docs" / "ttrpg"
     default_rules_path = ttrpg_dir / "02-core-mechanics" / "cascading_d20_and_tasks.md"
     if not default_rules_path.exists():
@@ -1387,7 +1387,7 @@ def roll_satya_d20_check(
     force_pool: int | None = None,
     note: str | None = None,
 ) -> dict[str, Any]:
-    """Execute a server-authoritative Satya Two-List Cascading (`2d20`) check (with optional `combat_technique` and `tempo_pool` / `control_pool` / `force_pool` Tactical Triad split) via `POST /api/gm/sessions/:id/roll`."""
+    """Execute a server-authoritative Satya `2d20xN` cascade check (with optional `combat_technique` and `tempo_pool` / `control_pool` / `force_pool` Tactical Triad split) via `POST /api/gm/sessions/:id/roll`."""
     n_pairs = max(1, min(10, int(skill_rank) if int(skill_rank) > 0 else 1))
     payload = {
         "actor_display_name": actor_name,
@@ -1638,5 +1638,16 @@ async def load_mcp_tools(mcp_servers_config: dict[str, dict[str, Any]] | None = 
 
     client = MultiServerMCPClient(cast(Any, mcp_servers_config))
     external_tools = await client.get_tools()
+    if len(mcp_servers_config) == 1:
+        server_id = next(iter(mcp_servers_config))
+        for ext_tool in external_tools:
+            meta = getattr(ext_tool, "metadata", None)
+            if isinstance(meta, dict):
+                meta.setdefault("mcp_server_id", server_id)
+            elif meta is None:
+                try:
+                    ext_tool.metadata = {"mcp_server_id": server_id}
+                except Exception:
+                    pass
     tools.extend(external_tools)
     return tools

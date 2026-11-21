@@ -154,7 +154,7 @@ def _(mo, plot_paired_list_watershed):
         [
             mo.md(
                 """
-                ## 5. Two-List Cascading / Contagious Dice: Characteristic $C$ as a Watershed Repeller
+                ## 5. `2d20xN` Cascading Dice: Characteristic $C$ as a Bimodal Repeller
                 Two lists of $N$ dice are rolled ($A_1\\dots A_N$ and $B_1\\dots B_N$). At each index $n$, the paired sum $Y_n = A_n + B_n + \\text{mod}_n$ is compared to the controlling characteristic $C$:
                 - If $Y_n < C$, we **subtract** $\\delta_{\\text{under}}$ from pair $n+1$ (pushing $n+1$ *further under* $C$).
                 - If $Y_n > C$, we **add** $\\delta_{\\text{over}}$ to pair $n+1$ (pushing $n+1$ *further over* $C$).
@@ -172,7 +172,7 @@ def _(mo, plot_cascade_final_pair_and_trap):
         [
             mo.md(
                 """
-                ## 6. Two-List Cascade Final Value ($Y_N$) & The Linear Margin Trap
+                ## 6. `2d20xN` Cascade Final Value ($Y_N$) & The Linear Margin Trap
                 - **Left Subplot**: Non-linear step carry ($\\pm 4$) splits the final pair $Y_N$ into **two distinct humps** straddling $C=7$.
                 - **Right Subplot (The Linear Margin Trap)**: Carrying the exact linear margin $(Y_n - C)$ yields **Lévy's Arcsine U-curve** for success counts (gold bars), but telescopes into a Gaussian bell curve if you only inspect the final value $Y_N$ (red line).
                 """
@@ -190,7 +190,7 @@ def _(mo, plot_positive_vs_negative_feedback):
             mo.md(
                 """
                 ## 7. Flipping the Rule (`invert_feedback=True`): Recoil Spike & Homeostatic Attractor
-                When rolling **under** $C$ adds $+\\delta$ to step $n+1$ and rolling **over** $C$ subtracts $-\\delta$ from step $n+1$, $C$ flips from a **Watershed Repeller** into a **Homeostatic Attractor**:
+                When rolling **under** $C$ adds $+\\delta$ to step $n+1$ and rolling **over** $C$ subtracts $-\\delta$ from step $n+1$, $C$ flips from a **Bimodal Repeller** into a **Homeostatic Attractor**:
                 - **Left Subplot**: Streaks are suppressed, compressing success counts into a razor-sharp **Sub-Binomial Spike**.
                 - **Right Subplot**: In `cumulative_snowball` mode, $C=11$ acts like a magnet, pulling the $2\\text{d}6$ peak away from $7$ and locking it directly onto $C=11$!
                 """

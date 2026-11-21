@@ -54,9 +54,9 @@ const STATIC_CHAPTERS: &[StaticChapterSpec] = &[
     StaticChapterSpec {
         chapter_id: "tasks",
         part: "Part II: Core Mechanics, Task Resolution & Action Economy",
-        title: "Cascading 2d20 Engine & Task Resolution",
+        title: "2d20xN Cascade Engine & Task Resolution",
         relative_path: "02-core-mechanics/cascading_d20_and_tasks.md",
-        description: "Canonical Two-List Cascading (2d20) dice mechanic, Player Personal Target TN_P = 31 - C_P + Delta_tool vs. Hidden GM Resistance Target TN_GM = 21 - Delta_ext (1-Pair Tiered GM Resistance), carry modes, 7-Way Contested Outcome Matrix, 5-step Task Pipeline, Tool Tiers, Gate Classifications, Extended Project Clocks, and Sarah's lockpicking walkthrough.",
+        description: "Canonical 2d20xN cascade dice mechanic, Player Personal Target TN_P = 31 - C_P + Delta_tool vs. Hidden GM Resistance Target TN_GM = 21 - Delta_ext (1-Pair Tiered GM Resistance), carry modes, 7-Way Contested Outcome Matrix, 5-step Task Pipeline, Tool Tiers, Gate Classifications, Extended Project Clocks, and Sarah's lockpicking walkthrough.",
         embedded_markdown: include_str!(
             "../../../docs/ttrpg/02-core-mechanics/cascading_d20_and_tasks.md"
         ),

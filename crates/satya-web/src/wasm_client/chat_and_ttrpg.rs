@@ -1,7 +1,7 @@
 //! Targeted Session Chat composer, recipient selection, context toggles, message filtering,
 //! UTC/local timestamp formatting, and Markdown/mechanics chat bubble rendering.
 //!
-//! Two-List Cascading (`2d20`) odds previews, searchable canonical skill combobox handlers, and
+//! `2d20xN` cascade odds previews, searchable canonical skill combobox handlers, and
 //! `satya_roll_task` live in [`crate::wasm_client::ttrpg_drawer_cascade`] and are re-exported here.
 
 pub use crate::wasm_client::ttrpg_drawer_cascade::*;

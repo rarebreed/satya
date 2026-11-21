@@ -529,7 +529,7 @@ pub struct StorageMetricsViewResponse {
 pub struct RulesChapterSummary {
     /// Canonical chapter slug identifier (e.g. `"satya_d20_rules"`, `"tasks"`, `"combat"`, `"melee_combat"`).
     pub chapter_id: String,
-    /// Book part/section grouping label (e.g. `"Part II: Core 2d20 Watershed Resolution & Probability"`).
+    /// Book part/section grouping label (e.g. `"Part II: Core 2d20xN Cascade Resolution & Probability"`).
     pub part: String,
     /// Human-readable chapter title.
     pub title: String,
