@@ -700,3 +700,54 @@ input[type="range"].dice-opacity-slider:focus-visible {
     cursor: pointer;
     margin: 0;
 }
+
+@media (max-width: 1240px) {
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) .notebook-card,
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) .notebook-body,
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) .notebook-pane {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: auto;
+        overflow: visible;
+    }
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) :is(#notebook-pane-rules, #notebook-pane-wizard, #notebook-pane-character, #notebook-pane-dice, #notebook-pane-maps) {
+        overflow: visible;
+    }
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) .tabletop-map-viewport {
+        flex: 0 0 auto;
+        height: clamp(380px, 56dvh, 580px);
+        min-height: 360px;
+    }
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) .wgpu-dice-tray {
+        flex: 0 0 auto;
+    }
+    .workspace-columns:not(.webcam-collapsed):not(.webcam-undocked):not(.center-collapsed) .wgpu-dice-history {
+        flex: 0 0 auto;
+        max-height: 280px;
+    }
+}
+
+@media (max-width: 900px) {
+    .notebook-card,
+    .notebook-body,
+    .notebook-pane {
+        flex: 0 0 auto;
+        height: auto;
+        min-height: auto;
+        overflow: visible;
+    }
+    #notebook-pane-rules,
+    #notebook-pane-wizard,
+    #notebook-pane-character,
+    #notebook-pane-dice,
+    #notebook-pane-maps {
+        overflow: visible;
+    }
+    .tabletop-map-viewport {
+        flex: 0 0 auto;
+        height: clamp(380px, 56dvh, 580px);
+        min-height: 360px;
+    }
+    .wgpu-dice-tray { flex: 0 0 auto; }
+    .wgpu-dice-history { flex: 0 0 auto; max-height: 280px; }
+}
