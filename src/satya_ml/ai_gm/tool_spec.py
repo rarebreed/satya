@@ -8,10 +8,18 @@ from __future__ import annotations
 
 import importlib
 import inspect
-from collections.abc import Callable, Iterator, Mapping, MutableMapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, cast
+
+from satya_py.enums import McpServerTier
+
+from satya_ml.session_store import (
+    CompositeSessionStore,
+    GM_SESSION_REGISTRY,
+    SessionStore,
+)
 
 try:
     from langchain_core.tools import tool
@@ -94,8 +102,6 @@ class ToolSpec:
 
 
 _REGISTERED_GM_TOOLS: Final[dict[str, ToolSpec]] = {}
-_SESSION_RESET_HOOKS: Final[list[Callable[[str | None], None]]] = []
-_ACTIVE_RESET_KEYS: Final[set[str | None]] = set()
 _IMPORTING_MODULES: bool = False
 
 
@@ -103,90 +109,12 @@ def register_session_reset_hook(
     fn: Callable[[str | None], None],
 ) -> Callable[[str | None], None]:
     """Register a per-module cleanup callback `(session_id | None) -> None` for session resets."""
-    if fn not in _SESSION_RESET_HOOKS:
-        _SESSION_RESET_HOOKS.append(fn)
-    return fn
-
-
-class SessionStore[T](MutableMapping[str, T]):
-    """Per-session mapping keyed by `session_id` that auto-registers with `run_session_reset_hooks`."""
-
-    __slots__ = ("_data",)
-
-    def __init__(self) -> None:
-        self._data: dict[str, T] = {}
-        register_session_reset_hook(self.reset)
-
-    def __getitem__(self, session_id: str) -> T:
-        return self._data[session_id]
-
-    def __setitem__(self, session_id: str, value: T) -> None:
-        self._data[session_id] = value
-
-    def __delitem__(self, session_id: str) -> None:
-        del self._data[session_id]
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._data)
-
-    def __len__(self) -> int:
-        return len(self._data)
-
-    def reset(self, session_id: str | None = None) -> None:
-        """Clear all sessions (when `session_id is None`) or drop a single session."""
-        if session_id is None:
-            self._data.clear()
-            return
-        self._data.pop(session_id, None)
-
-
-class CompositeSessionStore[K: tuple[str, ...], T](MutableMapping[K, T]):
-    """Per-session composite-key mapping (first tuple item is `session_id`) with auto-reset."""
-
-    __slots__ = ("_data",)
-
-    def __init__(self) -> None:
-        self._data: dict[K, T] = {}
-        register_session_reset_hook(self.reset)
-
-    def __getitem__(self, key: K) -> T:
-        return self._data[key]
-
-    def __setitem__(self, key: K, value: T) -> None:
-        self._data[key] = value
-
-    def __delitem__(self, key: K) -> None:
-        del self._data[key]
-
-    def __iter__(self) -> Iterator[K]:
-        return iter(self._data)
-
-    def __len__(self) -> int:
-        return len(self._data)
-
-    def for_session(self, session_id: str) -> list[T]:
-        """Return stored entries whose leading `session_id` element matches."""
-        return [val for key, val in self._data.items() if key[0] == session_id]
-
-    def reset(self, session_id: str | None = None) -> None:
-        """Clear all composite entries or drop every key belonging to `session_id`."""
-        if session_id is None:
-            self._data.clear()
-            return
-        for key in [k for k in self._data if k[0] == session_id]:
-            del self._data[key]
+    return GM_SESSION_REGISTRY.register(fn)
 
 
 def run_session_reset_hooks(session_id: str | None = None) -> None:
     """Invoke every registered GM session-reset hook once (reentrancy-safe)."""
-    if session_id in _ACTIVE_RESET_KEYS:
-        return
-    _ACTIVE_RESET_KEYS.add(session_id)
-    try:
-        for hook in list(_SESSION_RESET_HOOKS):
-            hook(session_id)
-    finally:
-        _ACTIVE_RESET_KEYS.discard(session_id)
+    GM_SESSION_REGISTRY.reset(session_id)
 
 
 def satya_gm_tool(
@@ -273,7 +201,8 @@ def classify_registered_tool_tier(tool_name: str) -> tuple[ToolTier, ToolTierLab
     spec = _REGISTERED_GM_TOOLS.get(tool_name)
     if spec is not None:
         return (spec.tier, spec.tier_label)
-    return ("TIER_3_LORE_PROVIDER", TIER_LABELS["TIER_3_LORE_PROVIDER"])
+    default_tier = cast(ToolTier, McpServerTier.TIER_3_LORE_PROVIDER.value)
+    return (default_tier, TIER_LABELS[default_tier])
 
 
 def is_registered_session_scoped(tool_name: str) -> bool | None:

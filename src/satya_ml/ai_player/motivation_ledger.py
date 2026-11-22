@@ -13,37 +13,32 @@ import json
 import math
 import re
 import urllib.parse
-from typing import Any
+from typing import Any, Final
 
 from satya_ml.ai_gm.tool_spec import tool
-
+from satya_ml.session_store import CompositeSessionStore, PLAYER_SESSION_REGISTRY
 
 from satya_py import maps as _maps, psyche as _psyche, rules as _rules
 
 from satya_ml.campaign_config import get_pack_starter_npcs
 
-_PLAYER_MOTIVATION_LEDGERS: dict[tuple[str, str], dict[str, Any]] = {}
+_PLAYER_MOTIVATION_LEDGERS: Final[CompositeSessionStore[tuple[str, str], dict[str, Any]]] = (
+    CompositeSessionStore(registry=PLAYER_SESSION_REGISTRY)
+)
 
 _PSYCHE_POLE_HINTS: dict[str, tuple[str, str, str]] = {
-    "opn": ("OPN (Openness)", "Dogmatic / Pragmatic Traditionalist", "Idealistic / Novelty-Seeking Truth-Seeker"),
-    "slf": ("SLF (Selfishness)", "Altruistic / Self-Sacrificing Protector", "Self-Preserving / Opportunistic"),
-    "blg": ("BLG (Belonging)", "Lonely Outsider / Detachment", "Fiercely Loyal to Crew & Community"),
-    "agg": ("AGG (Aggression)", "Conciliatory / Harm-Averse Diplomat", "Confrontational / Escalation-Prone"),
-    "ego": ("EGO (Pride/Status)", "Self-Effacing / Humble", "Proud / Legacy- and Reputation-Driven"),
-    "cnf": ("CNF (Conformity)", "Iconoclastic / Anti-Authoritarian Rebel", "Protocol-Bound / Dutifully Lawful"),
-    "ext": ("EXT (Extraversion)", "Reserved / Guarded Observer", "Expressive / Socially Energized"),
-    "trs": ("TRS (Trust)", "Cynical / Zero-Trust / Paranoid", "Trusting / Open-Handed"),
-    "cps": ("CPS (Compassion)", "Ruthless / Utilitarian", "Merciful / Tender-Hearted Protector"),
+    str(row["code"]).lower(): (
+        f"{row['code']} ({row['label']})",
+        str(row["low_pole"]),
+        str(row["high_pole"]),
+    )
+    for row in _psyche.list_psyche_trait_descriptors()
 }
 
 
 def reset_player_motivation_ledgers(session_id: str | None = None) -> None:
     """Clear persisted AI Player `MotivationLedger` states for `session_id` or all sessions."""
-    if session_id is None:
-        _PLAYER_MOTIVATION_LEDGERS.clear()
-        return
-    for key in [k for k in _PLAYER_MOTIVATION_LEDGERS if k[0] == session_id]:
-        _PLAYER_MOTIVATION_LEDGERS.pop(key, None)
+    _PLAYER_MOTIVATION_LEDGERS.reset(session_id)
 
 
 def redact_public_npc_entry(raw_npc: dict[str, Any]) -> dict[str, Any]:
@@ -88,111 +83,85 @@ def sanitize_map_dict_for_player(raw_map: dict[str, Any] | None) -> dict[str, An
     """Preserve public map geometry/exits while strictly removing `GM_ONLY` tokens and `spatial_pins`."""
     if not isinstance(raw_map, dict) or not raw_map.get("map_id"):
         return None
-    cell_cm = max(25, int(raw_map.get("cell_size_cm", 100) or 100))
-    default_floor = int(raw_map.get("active_floor", 0) or 0)
-    vis_by_eid = {
-        str(v.get("entity_id") or ""): v
-        for v in (raw_map.get("token_visuals") or [])
-        if isinstance(v, dict) and v.get("entity_id")
-    }
-    public_tokens: list[dict[str, Any]] = []
-    hidden_ids: set[str] = set()
+
+    clean = _maps.sanitize_tactical_map_for_player(raw_map)
+    clean.pop("notes", None)
+
+    cell_cm = max(25, int(clean.get("cell_size_cm") or raw_map.get("cell_size_cm") or 100))
+    default_floor = int(clean.get("active_floor", raw_map.get("active_floor", 0)) or 0)
+    raw_tokens_by_id: dict[str, dict[str, Any]] = {}
     for t in raw_map.get("tokens") or []:
         if not isinstance(t, dict):
             continue
-        vis = str(t.get("visibility") or "PUBLIC").upper()
-        if t.get("hidden") or t.get("is_hidden") or t.get("gm_only") or vis == "GM_ONLY":
-            for id_key in ("entity_id", "token_id"):
-                if t.get(id_key):
-                    hidden_ids.add(str(t[id_key]))
+        for id_key in ("entity_id", "token_id"):
+            if t.get(id_key):
+                raw_tokens_by_id[str(t[id_key])] = t
+    vis_by_eid = {
+        str(v.get("entity_id") or ""): v
+        for v in (clean.get("token_visuals") or [])
+        if isinstance(v, dict) and v.get("entity_id")
+    }
+
+    public_tokens: list[dict[str, Any]] = []
+    for tok in clean.get("tokens") or []:
+        if not isinstance(tok, dict):
             continue
-        eid = str(t.get("entity_id") or t.get("token_id") or "")
-        gx = int(t.get("x") if t.get("x") is not None else t.get("grid_x", 0))
-        gy = int(t.get("y") if t.get("y") is not None else t.get("grid_y", 0))
+        eid = str(tok.get("entity_id") or "")
+        gx = int(tok.get("x", 0) or 0)
+        gy = int(tok.get("y", 0) or 0)
+        raw_tok = raw_tokens_by_id.get(eid) or {}
         vis_rec = vis_by_eid.get(eid) or {}
-        floor_idx = int(
-            t.get("floor_index")
-            if t.get("floor_index") is not None
-            else vis_rec.get("floor_index", default_floor)
-        )
-        elev_cm = int(
-            t.get("elevation_cm")
-            if t.get("elevation_cm") is not None
-            else vis_rec.get("elevation_cm", 0)
-        )
+        pos_x_cm = vis_rec.get("pos_x_cm")
+        pos_y_cm = vis_rec.get("pos_y_cm")
         public_tokens.append(
             {
-                "token_id": str(t.get("token_id") or eid),
+                "token_id": str(raw_tok.get("token_id") or eid),
                 "entity_id": eid,
-                "label": str(t.get("label") or eid),
+                "label": str(tok.get("label") or eid),
                 "x": gx,
                 "y": gy,
                 "grid_x": gx,
                 "grid_y": gy,
                 "pos_x_cm": (
-                    t.get("pos_x_cm")
-                    if t.get("pos_x_cm") is not None
-                    else (
-                        vis_rec.get("pos_x_cm")
-                        if vis_rec.get("pos_x_cm") is not None
-                        else gx * cell_cm + cell_cm // 2
-                    )
+                    pos_x_cm
+                    if pos_x_cm is not None
+                    else raw_tok.get("pos_x_cm", gx * cell_cm + cell_cm // 2)
                 ),
                 "pos_y_cm": (
-                    t.get("pos_y_cm")
-                    if t.get("pos_y_cm") is not None
-                    else (
-                        vis_rec.get("pos_y_cm")
-                        if vis_rec.get("pos_y_cm") is not None
-                        else gy * cell_cm + cell_cm // 2
-                    )
+                    pos_y_cm
+                    if pos_y_cm is not None
+                    else raw_tok.get("pos_y_cm", gy * cell_cm + cell_cm // 2)
                 ),
-                "floor_index": floor_idx,
-                "elevation_cm": elev_cm,
-                "faction": str(t.get("faction") or "NEUTRAL"),
-                "visibility": "PUBLIC",
+                "floor_index": int(
+                    vis_rec.get("floor_index")
+                    if vis_rec.get("floor_index") is not None
+                    else raw_tok.get("floor_index", default_floor)
+                ),
+                "elevation_cm": int(
+                    vis_rec.get("elevation_cm")
+                    if vis_rec.get("elevation_cm") is not None
+                    else raw_tok.get("elevation_cm", 0)
+                ),
+                "faction": str(raw_tok.get("faction") or "NEUTRAL"),
+                "visibility": str(tok.get("visibility") or "PUBLIC"),
             }
         )
-
-    clean_visuals = [
-        dict(v)
-        for v in (raw_map.get("token_visuals") or [])
-        if isinstance(v, dict) and str(v.get("entity_id") or "") not in hidden_ids
-    ]
+    clean["tokens"] = public_tokens
+    if not clean.get("title"):
+        clean["title"] = str(raw_map.get("title") or "Tactical Sector")
+    if not clean.get("theme"):
+        clean["theme"] = str(
+            raw_map.get("theme") or raw_map.get("theme_preset") or "urban_crossroads"
+        )
+    for extra_key in ("theme_preset", "seed", "tiles", "world_sectors", "image_url"):
+        if raw_map.get(extra_key) is not None and clean.get(extra_key) is None:
+            clean[extra_key] = copy.deepcopy(raw_map[extra_key])
     raw_manifest = raw_map.get("narrative_manifest")
-    clean_manifest = (
-        {k: copy.deepcopy(v) for k, v in raw_manifest.items() if k != "spatial_pins"}
-        if isinstance(raw_manifest, dict)
-        else None
-    )
-    out: dict[str, Any] = {
-        "map_id": str(raw_map.get("map_id")),
-        "title": str(raw_map.get("title") or "Tactical Sector"),
-        "theme": str(raw_map.get("theme") or raw_map.get("theme_preset") or "urban_crossroads"),
-        "theme_preset": raw_map.get("theme_preset"),
-        "seed": raw_map.get("seed", 42),
-        "grid_width": int(raw_map.get("grid_width", 16) or 16),
-        "grid_height": int(raw_map.get("grid_height", 12) or 12),
-        "cell_size_cm": cell_cm,
-        "active_floor": int(raw_map.get("active_floor", 0) or 0),
-        "tokens": public_tokens,
-        "token_visuals": clean_visuals,
-    }
-    for geom_key in ("tiles", "wall_edges", "surfaces", "props", "floors", "world_sectors", "image_url"):
-        if raw_map.get(geom_key) is not None:
-            out[geom_key] = copy.deepcopy(raw_map[geom_key])
-    out["ambient_light_delta_ext"] = int(raw_map.get("ambient_light_delta_ext", 0) or 0)
-    if raw_map.get("faraday_zones") is not None:
-        out["faraday_zones"] = copy.deepcopy(raw_map["faraday_zones"])
-    if raw_map.get("surveillance_nodes") is not None:
-        out["surveillance_nodes"] = [
-            copy.deepcopy(node)
-            for node in (raw_map.get("surveillance_nodes") or [])
-            if isinstance(node, dict) and str(node.get("visibility") or "PUBLIC").upper() != "GM_ONLY"
-        ]
-    if clean_manifest is not None:
-        out["narrative_manifest"] = clean_manifest
-    return out
+    if isinstance(raw_manifest, dict):
+        clean["narrative_manifest"] = {
+            k: copy.deepcopy(v) for k, v in raw_manifest.items() if k != "spatial_pins"
+        }
+    return clean
 
 
 def _extract_psyche_scores(sheet: dict[str, Any] | None) -> dict[str, int]:

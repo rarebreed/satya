@@ -21,7 +21,10 @@ pub use hooks_and_npc_py::*;
 pub use schema_py::PySchemaRegistry;
 pub use tactical_map_py::*;
 
-use py_bridge::{PyJsonDict, parse_coded_enum, to_py_err, to_py_object};
+use py_bridge::{
+    PyEnum, PyJsonDict, PyJsonInput, from_py_object, parse_coded_enum, to_py_err, to_py_object,
+    unwrap_py_enum_or,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use satya_engine::{
@@ -33,8 +36,7 @@ use satya_engine::{
     TacticalTriadEvaluation, TaskGateClass, TaskGateResolution, ToolDependency, ToolQualityTier,
     compute_contested_cascade_odds_with_mode,
 };
-use satya_schema::{RulesChapterDocument, RulesChapterSummary, RulesSearchHit};
-use std::str::FromStr;
+use satya_schema::{CodedEnum, RulesChapterDocument, RulesChapterSummary, RulesSearchHit};
 
 /// Summary moments of a discrete probability mass function (`PMF`).
 #[pyclass(name = "DistributionStats", get_all)]
@@ -164,41 +166,50 @@ impl From<CascadeStepTrace> for PyCascadeStepTrace {
 }
 
 /// Complete step-by-step evaluation result of a concrete Satya `2d20` cascade roll.
-#[pyclass(name = "CascadeRollOutcome", get_all)]
+#[pyclass(name = "CascadeRollOutcome")]
 #[derive(Debug, Clone)]
 pub struct PyCascadeRollOutcome {
     /// Per-pair trace across all $N$ rolled pairs.
+    #[pyo3(get)]
     pub steps: Vec<PyCascadeStepTrace>,
     /// Total successes scored across all $N$ pairs (`0..=N`).
+    #[pyo3(get)]
     pub total_successes: i32,
     /// Raw floor breaches ($Y_n < 2$) across all $N$ pairs.
+    #[pyo3(get)]
     pub raw_botches: i32,
     /// Effective botch severity (`0..=N`) under the active botch rule when `total_successes == 0`.
+    #[pyo3(get)]
     pub effective_botches: i32,
     /// Closest-miss tier (`0..=5`) below $\text{TN}_{\text{eff}}$.
+    #[pyo3(get)]
     pub min_miss_tier: i32,
     /// Unified signed outcome margin in `-N..=+N`.
+    #[pyo3(get)]
     pub signed_margin: i32,
     /// Effective value $Y_N$ of the final pair in the chain.
+    #[pyo3(get)]
     pub final_pair_y: i32,
     /// High-level cascade outcome classification (`"SUCCESS"`, `"SUCCESS_WITH_COMPLICATION"`, `"CLEAN_FAILURE"`, `"BOTCH_FAILURE"`).
+    #[pyo3(get)]
     pub outcome_kind: String,
     /// Canonical Avro `OutcomeTier` string (`"EXTRAORDINARY_SUCCESS"`, `"SUCCESS"`, `"PARTIAL_SUCCESS"`, `"FAILURE"`, `"CRITICAL_FAILURE"`).
+    #[pyo3(get)]
     pub outcome_tier: String,
+    inner: CascadeRollOutcome,
 }
 
 impl From<CascadeRollOutcome> for PyCascadeRollOutcome {
     fn from(o: CascadeRollOutcome) -> Self {
-        let outcome_tier = serde_json::to_value(o.outcome_tier)
-            .ok()
-            .and_then(|v| v.as_str().map(str::to_string))
-            .unwrap_or_else(|| format!("{:?}", o.outcome_tier));
-        let outcome_kind = serde_json::to_value(o.outcome_kind)
-            .ok()
-            .and_then(|v| v.as_str().map(str::to_string))
-            .unwrap_or_else(|| format!("{:?}", o.outcome_kind));
+        let outcome_tier = o.outcome_tier.code().to_string();
+        let outcome_kind = o.outcome_kind.code().to_string();
         Self {
-            steps: o.steps.into_iter().map(PyCascadeStepTrace::from).collect(),
+            steps: o
+                .steps
+                .iter()
+                .cloned()
+                .map(PyCascadeStepTrace::from)
+                .collect(),
             total_successes: o.total_successes,
             raw_botches: o.raw_botches,
             effective_botches: o.effective_botches,
@@ -207,7 +218,16 @@ impl From<CascadeRollOutcome> for PyCascadeRollOutcome {
             final_pair_y: o.final_pair_y,
             outcome_kind,
             outcome_tier,
+            inner: o,
         }
+    }
+}
+
+#[pymethods]
+impl PyCascadeRollOutcome {
+    /// Serializes the canonical Rust [`CascadeRollOutcome`] directly to a Python `dict`.
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<PyJsonDict> {
+        to_py_object(py, &self.inner)
     }
 }
 
@@ -222,21 +242,19 @@ pub struct PyCascadeTaskParams {
 impl PyCascadeTaskParams {
     /// Creates a new `K = 20` (`2d20`) Satya task parameter set with $\text{TN}_{\text{eff}} = 31 - C + \Delta_{\text{ext}}$.
     #[new]
-    #[pyo3(signature = (skill_level=3, control_c=10, internal_mod=0, external_mod=0, carry_mode="markov_step", botch_rule="closest_miss"))]
+    #[pyo3(signature = (skill_level=3, control_c=10, internal_mod=0, external_mod=0, carry_mode=None, botch_rule=None))]
     pub fn new(
         skill_level: usize,
         control_c: i32,
         internal_mod: i32,
         external_mod: i32,
-        carry_mode: &str,
-        botch_rule: &str,
+        carry_mode: Option<PyEnum<CarryMode>>,
+        botch_rule: Option<PyEnum<BotchRule>>,
     ) -> PyResult<Self> {
-        let cm = CarryMode::from_str(carry_mode).map_err(to_py_err)?;
-        let br = BotchRule::from_str(botch_rule).map_err(to_py_err)?;
         let mut inner =
             CascadeTaskParams::new_k20(skill_level, control_c, internal_mod, external_mod);
-        inner.carry_mode = cm;
-        inner.botch_rule = br;
+        inner.carry_mode = unwrap_py_enum_or(carry_mode, CarryMode::MarkovStep);
+        inner.botch_rule = unwrap_py_enum_or(botch_rule, BotchRule::ClosestMiss);
         Ok(Self { inner })
     }
 
@@ -375,7 +393,7 @@ impl From<ContestedCascadeRollOutcome> for PyContestedCascadeRollOutcome {
             net_successes: o.net_successes,
             net_signed_margin: o.net_signed_margin,
             contested_kind: o.contested_kind.as_str().to_string(),
-            outcome_tier: format!("{:?}", o.outcome_tier).to_uppercase(),
+            outcome_tier: o.outcome_tier.code().to_string(),
             duration_multiplier,
             next_linked_action_delta_ext,
             grazing_strain_cost,
@@ -402,7 +420,7 @@ impl PyContestedCascadeTaskParams {
         hidden_external_difficulty=0,
         gm_mode="tiered_single_pair",
         gm_pairs=1,
-        tie_rule="hybrid_signed_margin",
+        tie_rule=None,
         delta_over=6,
     ))]
     pub fn new(
@@ -413,14 +431,10 @@ impl PyContestedCascadeTaskParams {
         hidden_external_difficulty: i32,
         gm_mode: &str,
         gm_pairs: usize,
-        tie_rule: &str,
+        tie_rule: Option<PyEnum<ContestedTieRule>>,
         delta_over: i32,
     ) -> Self {
-        let parsed_tie = match tie_rule.trim().to_ascii_lowercase().as_str() {
-            "strict_signed_margin" | "strict" => ContestedTieRule::StrictSignedMargin,
-            "active_player_wins_ties" | "active" => ContestedTieRule::ActivePlayerWinsTies,
-            _ => ContestedTieRule::HybridSignedMargin,
-        };
+        let parsed_tie = unwrap_py_enum_or(tie_rule, ContestedTieRule::HybridSignedMargin);
         let mut inner = if gm_mode.trim().eq_ignore_ascii_case("full_cascade") {
             ContestedCascadeTaskParams::new_hybrid_environment(
                 player_skill_n.clamp(1, 10),
@@ -726,6 +740,11 @@ impl PyTacticalPoolEnvelope {
             satya_engine::Triad::new(tempo, control, force),
         ))
     }
+
+    /// Serializes the canonical Rust [`TacticalPoolEnvelope`] directly to a Python `dict`.
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<PyJsonDict> {
+        to_py_object(py, &self.inner)
+    }
 }
 
 /// Evaluation of a specific `Tempo + Control + Force` Tactical Triad allocation.
@@ -769,6 +788,135 @@ impl From<TacticalTriadEvaluation> for PyTacticalTriadEvaluation {
             archetype_label: e.archetype_label,
         }
     }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(default)]
+struct TacticalPoolEnvelopeInput {
+    d_cog: i32,
+    ooda_init: i32,
+    combat_readiness_c: i32,
+    p_base: i32,
+    p_eff: i32,
+    neutral_baseline_b: i32,
+    tempo_cap: i32,
+    control_cap: i32,
+    force_cap: i32,
+    mastery_overflow: i32,
+    power_pow: f64,
+    momentum_mass_factor_mmf: f64,
+    fatigue_threshold_ft: i32,
+    action_time_factor: f64,
+    morale_state: MoraleState,
+    min_force_required: i32,
+    max_control_allowed: i32,
+    max_force_allowed: i32,
+    force_must_not_exceed_control: bool,
+}
+
+impl Default for TacticalPoolEnvelopeInput {
+    fn default() -> Self {
+        let e = satya_engine::compute_tactical_pool(&TacticalPoolParams::default());
+        Self {
+            d_cog: e.d_cog,
+            ooda_init: e.ooda_init,
+            combat_readiness_c: e.combat_readiness_c,
+            p_base: e.p_base,
+            p_eff: e.p_eff,
+            neutral_baseline_b: e.neutral_baseline_b,
+            tempo_cap: e.tempo_cap,
+            control_cap: e.control_cap,
+            force_cap: e.force_cap,
+            mastery_overflow: e.mastery_overflow,
+            power_pow: e.power_pow,
+            momentum_mass_factor_mmf: e.momentum_mass_factor_mmf,
+            fatigue_threshold_ft: e.fatigue_threshold_ft,
+            action_time_factor: e.action_time_factor,
+            morale_state: e.morale_state,
+            min_force_required: e.min_force_required,
+            max_control_allowed: e.max_control_allowed,
+            max_force_allowed: e.max_force_allowed,
+            force_must_not_exceed_control: e.force_must_not_exceed_control,
+        }
+    }
+}
+
+impl From<TacticalPoolEnvelopeInput> for TacticalPoolEnvelope {
+    fn from(v: TacticalPoolEnvelopeInput) -> Self {
+        Self {
+            d_cog: v.d_cog,
+            ooda_init: v.ooda_init,
+            combat_readiness_c: v.combat_readiness_c,
+            p_base: v.p_base,
+            p_eff: v.p_eff,
+            neutral_baseline_b: v.neutral_baseline_b,
+            caps: satya_engine::Triad::new(v.tempo_cap, v.control_cap, v.force_cap),
+            tempo_cap: v.tempo_cap,
+            control_cap: v.control_cap,
+            force_cap: v.force_cap,
+            mastery_overflow: v.mastery_overflow,
+            power_pow: v.power_pow,
+            momentum_mass_factor_mmf: v.momentum_mass_factor_mmf,
+            fatigue_threshold_ft: v.fatigue_threshold_ft,
+            action_time_factor: v.action_time_factor,
+            morale_state: v.morale_state,
+            min_force_required: v.min_force_required,
+            max_control_allowed: v.max_control_allowed,
+            max_force_allowed: v.max_force_allowed,
+            force_must_not_exceed_control: v.force_must_not_exceed_control,
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+struct TacticalTriadDict {
+    tempo: i32,
+    control: i32,
+    force: i32,
+    valid: bool,
+    violations: Vec<String>,
+    effective_tc: i32,
+    strike_impact: f64,
+    effective_root: f64,
+    exertion_marks_gained: i32,
+    archetype_label: String,
+}
+
+impl From<TacticalTriadEvaluation> for TacticalTriadDict {
+    fn from(e: TacticalTriadEvaluation) -> Self {
+        Self {
+            tempo: e.tempo,
+            control: e.control,
+            force: e.force,
+            valid: e.valid,
+            violations: e.violations,
+            effective_tc: e.effective_tc,
+            strike_impact: e.strike_impact,
+            effective_root: e.effective_root,
+            exertion_marks_gained: e.exertion_marks_gained,
+            archetype_label: e.archetype_label,
+        }
+    }
+}
+
+/// Validates and scores a `(Tempo, Control, Force)` allocation against a dict-encoded [`TacticalPoolEnvelope`].
+#[pyfunction]
+pub fn evaluate_tactical_triad_from_dict(
+    py: Python<'_>,
+    envelope: PyJsonInput<'_>,
+    base_weapon_tc: i32,
+    tempo: i32,
+    control: i32,
+    force: i32,
+) -> PyResult<PyJsonDict> {
+    let parsed: TacticalPoolEnvelopeInput = from_py_object(&envelope, "tactical_pool_envelope")?;
+    let env = TacticalPoolEnvelope::from(parsed);
+    let eval = satya_engine::evaluate_tactical_triad(
+        &env,
+        base_weapon_tc,
+        satya_engine::Triad::new(tempo, control, force),
+    );
+    to_py_object(py, &TacticalTriadDict::from(eval))
 }
 
 /// Metadata summary for a canonical chapter in the Satya TTRPG Rules Book.
@@ -958,9 +1106,13 @@ pub fn order_statistic_pmf(
 
 /// Exact PMF when rolling $N\text{d}K$ and selecting the die closest to (`"closest"`) or furthest from (`"furthest"`) the midpoint.
 #[pyfunction]
-#[pyo3(signature = (pool_size, sides, mode="furthest"))]
-pub fn center_distance_selection_pmf(pool_size: usize, sides: i32, mode: &str) -> PyResult<Pmf> {
-    let m = parse_coded_enum::<CenterDistanceMode>(mode, "center distance mode")?;
+#[pyo3(signature = (pool_size, sides, mode=None))]
+pub fn center_distance_selection_pmf(
+    pool_size: usize,
+    sides: i32,
+    mode: Option<PyEnum<CenterDistanceMode>>,
+) -> PyResult<Pmf> {
+    let m = unwrap_py_enum_or(mode, CenterDistanceMode::Furthest);
     Ok(satya_engine::center_distance_selection_pmf(
         pool_size, sides, m,
     ))
@@ -988,18 +1140,18 @@ pub fn multiplicative_pool_pmf(pool_size: usize, sides: i32) -> Pmf {
 
 /// Exact PMF for the `2d20xN` Cascade (positive feedback or "Recoil" inverted) mechanic, returning `(success_pmf, final_y_pmf)`.
 #[pyfunction]
-#[pyo3(signature = (num_pairs, sides, characteristic_c, delta_over=3, delta_under=3, mode="markov_step", count_under_as_success=false, invert_feedback=false))]
+#[pyo3(signature = (num_pairs, sides, characteristic_c, delta_over=3, delta_under=3, mode=None, count_under_as_success=false, invert_feedback=false))]
 pub fn paired_list_cascade_pmfs(
     num_pairs: usize,
     sides: i32,
     characteristic_c: i32,
     delta_over: i32,
     delta_under: i32,
-    mode: &str,
+    mode: Option<PyEnum<CarryMode>>,
     count_under_as_success: bool,
     invert_feedback: bool,
 ) -> PyResult<(Pmf, Pmf)> {
-    let cm = CarryMode::from_str(mode).map_err(to_py_err)?;
+    let cm = unwrap_py_enum_or(mode, CarryMode::MarkovStep);
     Ok(satya_engine::paired_list_cascade_pmfs(
         num_pairs,
         sides,
@@ -1014,22 +1166,22 @@ pub fn paired_list_cascade_pmfs(
 
 /// Exact PMF for the Signed `2d20xN` Cascade (positive feedback or "Recoil" inverted) mechanic over `-num_pairs..=+num_pairs`.
 #[pyfunction]
-#[pyo3(signature = (num_pairs, sides, characteristic_c, delta_over=3, delta_under=3, mode="markov_step", count_under_as_success=true, invert_feedback=false, botch_rule="closest_miss", margin_aggregation="piecewise_zero_floor"))]
+#[pyo3(signature = (num_pairs, sides, characteristic_c, delta_over=3, delta_under=3, mode=None, count_under_as_success=true, invert_feedback=false, botch_rule=None, margin_aggregation=None))]
 pub fn paired_list_signed_margin_pmfs(
     num_pairs: usize,
     sides: i32,
     characteristic_c: i32,
     delta_over: i32,
     delta_under: i32,
-    mode: &str,
+    mode: Option<PyEnum<CarryMode>>,
     count_under_as_success: bool,
     invert_feedback: bool,
-    botch_rule: &str,
-    margin_aggregation: &str,
+    botch_rule: Option<PyEnum<BotchRule>>,
+    margin_aggregation: Option<PyEnum<MarginAggregation>>,
 ) -> PyResult<PySignedCascadeResult> {
-    let cm = CarryMode::from_str(mode).map_err(to_py_err)?;
-    let br = BotchRule::from_str(botch_rule).map_err(to_py_err)?;
-    let ma = MarginAggregation::from_str(margin_aggregation).map_err(to_py_err)?;
+    let cm = unwrap_py_enum_or(mode, CarryMode::MarkovStep);
+    let br = unwrap_py_enum_or(botch_rule, BotchRule::ClosestMiss);
+    let ma = unwrap_py_enum_or(margin_aggregation, MarginAggregation::PiecewiseZeroFloor);
     Ok(PySignedCascadeResult::from(
         satya_engine::paired_list_signed_margin_pmfs(
             num_pairs,
@@ -1048,15 +1200,15 @@ pub fn paired_list_signed_margin_pmfs(
 
 /// Evaluates a concrete list of `(die_a, die_b)` `d20` pairs against a Four-Factor Satya task.
 #[pyfunction]
-#[pyo3(signature = (skill_level, control_c, internal_mod, external_mod, pairs, carry_mode="markov_step", botch_rule="closest_miss"))]
+#[pyo3(signature = (skill_level, control_c, internal_mod, external_mod, pairs, carry_mode=None, botch_rule=None))]
 pub fn evaluate_cascade_roll(
     skill_level: usize,
     control_c: i32,
     internal_mod: i32,
     external_mod: i32,
     pairs: Vec<(i32, i32)>,
-    carry_mode: &str,
-    botch_rule: &str,
+    carry_mode: Option<PyEnum<CarryMode>>,
+    botch_rule: Option<PyEnum<BotchRule>>,
 ) -> PyResult<PyCascadeRollOutcome> {
     let params = PyCascadeTaskParams::new(
         skill_level,
@@ -1090,7 +1242,7 @@ pub fn evaluate_cascade_roll(
     leg_wound_penalty=0,
     arm_head_wound_penalty=0,
     torso_shoulder_wound_penalty=0,
-    morale_state="steady",
+    morale_state=None,
     ana=10,
     cre=10,
     foc=10
@@ -1114,12 +1266,12 @@ pub fn compute_tactical_pool(
     leg_wound_penalty: i32,
     arm_head_wound_penalty: i32,
     torso_shoulder_wound_penalty: i32,
-    morale_state: &str,
+    morale_state: Option<PyEnum<MoraleState>>,
     ana: i32,
     cre: i32,
     foc: i32,
 ) -> PyResult<PyTacticalPoolEnvelope> {
-    let ms = MoraleState::from_str(morale_state).map_err(to_py_err)?;
+    let ms = unwrap_py_enum_or(morale_state, MoraleState::Steady);
     let params = TacticalPoolParams {
         chars: satya_engine::CharacterCharacteristics {
             spd,
@@ -1186,9 +1338,16 @@ pub fn render_rules_markdown_to_html(markdown: &str) -> String {
     satya_rules_book::render_rules_markdown_to_html(markdown)
 }
 
+#[derive(serde::Serialize)]
+struct WithBackend<T: serde::Serialize> {
+    #[serde(flatten)]
+    inner: T,
+    backend: &'static str,
+}
+
 /// Classifies a single `(player, gm)` state realization into a contested outcome kind and net margin.
 #[pyfunction]
-#[pyo3(signature = (sp, bp, mp, sg, bg, mg, tie_rule="hybrid_signed_margin"))]
+#[pyo3(signature = (sp, bp, mp, sg, bg, mg, tie_rule=None))]
 pub fn classify_contested_outcome(
     sp: i32,
     bp: i32,
@@ -1196,9 +1355,9 @@ pub fn classify_contested_outcome(
     sg: i32,
     bg: i32,
     mg: i32,
-    tie_rule: &str,
+    tie_rule: Option<PyEnum<ContestedTieRule>>,
 ) -> PyResult<(String, i32)> {
-    let tr = ContestedTieRule::from_str(tie_rule).map_err(to_py_err)?;
+    let tr = unwrap_py_enum_or(tie_rule, ContestedTieRule::HybridSignedMargin);
     let (kind, net_margin) = satya_engine::classify_contested_outcome(sp, bp, mp, sg, bg, mg, tr);
     Ok((kind.as_str().to_string(), net_margin))
 }
@@ -1212,26 +1371,26 @@ pub fn classify_contested_outcome(
     player_known_tool_mod=0,
     gm_pairs=1,
     hidden_external_difficulty=0,
-    tie_rule="hybrid_signed_margin",
-    carry_mode="markov_step",
+    tie_rule=None,
+    carry_mode=None,
     gm_mode="tiered_single_pair",
     gm_over_tier_step=4
 ))]
-pub fn compute_contested_cascade_odds<'py>(
-    py: Python<'py>,
+pub fn compute_contested_cascade_odds(
+    py: Python<'_>,
     player_skill_n: usize,
     player_control_c: i32,
     player_internal_mod: i32,
     player_known_tool_mod: i32,
     gm_pairs: usize,
     hidden_external_difficulty: i32,
-    tie_rule: &str,
-    carry_mode: &str,
+    tie_rule: Option<PyEnum<ContestedTieRule>>,
+    carry_mode: Option<PyEnum<CarryMode>>,
     gm_mode: &str,
     gm_over_tier_step: i32,
-) -> PyResult<Bound<'py, PyDict>> {
-    let cm = CarryMode::from_str(carry_mode).map_err(to_py_err)?;
-    let tr = ContestedTieRule::from_str(tie_rule).map_err(to_py_err)?;
+) -> PyResult<PyJsonDict> {
+    let cm = unwrap_py_enum_or(carry_mode, CarryMode::MarkovStep);
+    let tr = unwrap_py_enum_or(tie_rule, ContestedTieRule::HybridSignedMargin);
     let gm_res_mode = match gm_mode.trim().to_ascii_lowercase().as_str() {
         "tiered_single_pair" => GmResistanceMode::TieredSinglePair {
             step_size: gm_over_tier_step,
@@ -1257,31 +1416,13 @@ pub fn compute_contested_cascade_odds<'py>(
 
     let odds = compute_contested_cascade_odds_with_mode(&player, &gm, gm_res_mode, tr);
 
-    let dict = PyDict::new(py);
-    dict.set_item("net_signed_margin_pmf", odds.net_signed_margin_pmf)?;
-    dict.set_item("net_success_pmf", odds.net_success_pmf)?;
-    dict.set_item("prob_total_win", odds.prob_total_win)?;
-    dict.set_item(
-        "prob_clean_or_extraordinary_win",
-        odds.prob_clean_or_extraordinary_win,
-    )?;
-    dict.set_item(
-        "prob_extraordinary_success",
-        odds.prob_extraordinary_success,
-    )?;
-    dict.set_item("prob_clean_success", odds.prob_clean_success)?;
-    dict.set_item("prob_partial_success", odds.prob_partial_success)?;
-    dict.set_item("prob_floor_breach_partial", odds.prob_floor_breach_partial)?;
-    dict.set_item("prob_grazing_tie_partial", odds.prob_grazing_tie_partial)?;
-    dict.set_item("prob_lucky_break_partial", odds.prob_lucky_break_partial)?;
-    dict.set_item("prob_clean_failure", odds.prob_clean_failure)?;
-    dict.set_item("prob_botch_failure", odds.prob_botch_failure)?;
-    dict.set_item(
-        "net_margin_stats",
-        PyDistributionStats::from(odds.net_margin_stats),
-    )?;
-    dict.set_item("bimodality_coefficient", odds.bimodality_coefficient)?;
-    Ok(dict)
+    let obj = to_py_object(py, &odds)?;
+    {
+        let dict = obj.bind(py).cast::<PyDict>()?;
+        dict.set_item("net_signed_margin_pmf", odds.net_signed_margin_pmf)?;
+        dict.set_item("net_success_pmf", odds.net_success_pmf)?;
+    }
+    Ok(obj)
 }
 
 /// Computes the Satya Combat Tactical Pool ("Envelope & Fill") interactive lab summary.
@@ -1295,8 +1436,8 @@ pub fn compute_contested_cascade_odds<'py>(
     weapon_reach=2,
     opponent_reach=2
 ))]
-pub fn compute_tactical_pool_envelope<'py>(
-    py: Python<'py>,
+pub fn compute_tactical_pool_envelope(
+    py: Python<'_>,
     control_c: i32,
     skill_level: i32,
     delta_int: i32,
@@ -1304,7 +1445,7 @@ pub fn compute_tactical_pool_envelope<'py>(
     num_successes: i32,
     weapon_reach: i32,
     opponent_reach: i32,
-) -> PyResult<Bound<'py, PyDict>> {
+) -> PyResult<PyJsonDict> {
     let res = satya_engine::compute_tactical_pool_envelope(
         control_c,
         skill_level,
@@ -1314,17 +1455,13 @@ pub fn compute_tactical_pool_envelope<'py>(
         weapon_reach,
         opponent_reach,
     );
-    let dict = PyDict::new(py);
-    dict.set_item("base_envelope", res.base_envelope)?;
-    dict.set_item("raw_pool", res.raw_pool)?;
-    dict.set_item("effective_pool", res.effective_pool)?;
-    dict.set_item("overflow_wasted", res.overflow_wasted)?;
-    dict.set_item("reach_modifier", res.reach_modifier)?;
-    dict.set_item("max_tempo", res.max_tempo)?;
-    dict.set_item("max_control", res.max_control)?;
-    dict.set_item("max_force", res.max_force)?;
-    dict.set_item("backend", "satya_py (Rust PyO3)")?;
-    Ok(dict)
+    to_py_object(
+        py,
+        &WithBackend {
+            inner: res,
+            backend: "satya_py (Rust PyO3)",
+        },
+    )
 }
 
 /// Evaluates a Close-Quarters Tactical Triad (`Tempo`, `Control`, `Force`) contested exchange.
@@ -1340,8 +1477,8 @@ pub fn compute_tactical_pool_envelope<'py>(
     defender_guard=4,
     armor_dr=3
 ))]
-pub fn evaluate_tactical_triad_contest<'py>(
-    py: Python<'py>,
+pub fn evaluate_tactical_triad_contest(
+    py: Python<'_>,
     attacker_tempo: i32,
     attacker_control: i32,
     attacker_force: i32,
@@ -1351,7 +1488,7 @@ pub fn evaluate_tactical_triad_contest<'py>(
     attacker_root: i32,
     defender_guard: i32,
     armor_dr: i32,
-) -> PyResult<Bound<'py, PyDict>> {
+) -> PyResult<PyJsonDict> {
     let res = satya_engine::evaluate_tactical_triad_contest(
         satya_engine::Triad::new(attacker_tempo, attacker_control, attacker_force),
         satya_engine::Triad::new(defender_tempo, defender_control, defender_force),
@@ -1359,18 +1496,13 @@ pub fn evaluate_tactical_triad_contest<'py>(
         defender_guard,
         armor_dr,
     );
-    let dict = PyDict::new(py);
-    dict.set_item("net_tempo", res.net_tempo)?;
-    dict.set_item("net_control", res.net_control)?;
-    dict.set_item("seizes_initiative", res.seizes_initiative)?;
-    dict.set_item("guard_broken", res.guard_broken)?;
-    dict.set_item("throw_triggered", res.throw_triggered)?;
-    dict.set_item("penetrating_force", res.penetrating_force)?;
-    dict.set_item("next_tick_cost", res.next_tick_cost)?;
-    dict.set_item("archetype_label", res.archetype_label)?;
-    dict.set_item("outcome_summary", res.outcome_summary)?;
-    dict.set_item("backend", "satya_py (Rust PyO3)")?;
-    Ok(dict)
+    to_py_object(
+        py,
+        &WithBackend {
+            inner: res,
+            backend: "satya_py (Rust PyO3)",
+        },
+    )
 }
 
 /// Computes non-linear skill level `N` (`0..10`) from study hours using Chapter 6's exponential curve.
@@ -1381,27 +1513,24 @@ pub fn evaluate_tactical_triad_contest<'py>(
     instruction_quality=1.0,
     aptitude_bonus=0
 ))]
-pub fn compute_lifepath_skill_progression<'py>(
-    py: Python<'py>,
+pub fn compute_lifepath_skill_progression(
+    py: Python<'_>,
     hours_studied: f64,
     difficulty_multiplier: f64,
     instruction_quality: f64,
     aptitude_bonus: i32,
-) -> PyResult<Bound<'py, PyDict>> {
+) -> PyResult<PyJsonDict> {
     let res = satya_engine::compute_lifepath_skill_progression(
         hours_studied,
         difficulty_multiplier,
         instruction_quality,
         aptitude_bonus,
     );
-    let dict = PyDict::new(py);
-    dict.set_item("raw_hours", res.raw_hours)?;
-    dict.set_item("effective_hours", res.effective_hours)?;
-    dict.set_item("skill_level_n", res.skill_level_n)?;
-    dict.set_item("next_level_n", res.next_level_n)?;
-    dict.set_item("hours_to_next_level", res.hours_to_next_level)?;
-    dict.set_item("cumulative_thresholds", res.cumulative_thresholds)?;
-    Ok(dict)
+    let obj = to_py_object(py, &res)?;
+    obj.bind(py)
+        .cast::<PyDict>()?
+        .set_item("cumulative_thresholds", res.cumulative_thresholds)?;
+    Ok(obj)
 }
 
 /// Computes Cognitive Dissonance pressure and belief-shift outcome from Chapter 9.
@@ -1413,14 +1542,14 @@ pub fn compute_lifepath_skill_progression<'py>(
     shared_values_bonus=0,
     public_audience_pressure=0
 ))]
-pub fn compute_social_dissonance_check<'py>(
-    py: Python<'py>,
+pub fn compute_social_dissonance_check(
+    py: Python<'_>,
     argument_margin: i32,
     target_conviction: i32,
     evidence_tier: i32,
     shared_values_bonus: i32,
     public_audience_pressure: i32,
-) -> PyResult<Bound<'py, PyDict>> {
+) -> PyResult<PyJsonDict> {
     let res = satya_engine::compute_social_dissonance_check(
         argument_margin,
         target_conviction,
@@ -1428,12 +1557,7 @@ pub fn compute_social_dissonance_check<'py>(
         shared_values_bonus,
         public_audience_pressure,
     );
-    let dict = PyDict::new(py);
-    dict.set_item("dissonance_pressure", res.dissonance_pressure)?;
-    dict.set_item("resistance_threshold", res.resistance_threshold)?;
-    dict.set_item("net_dissonance_shift", res.net_dissonance_shift)?;
-    dict.set_item("social_outcome", res.social_outcome)?;
-    Ok(dict)
+    to_py_object(py, &res)
 }
 /// Evaluates Step 1 of the Satya Task Resolution Procedure (§2.1 Task Gate Classifications & §2.2 Tool Dependency Tiers).
 #[pyfunction]
@@ -1527,7 +1651,7 @@ pub fn evaluate_two_component_action_cost(
     encumbrance_tier: u8,
     status_time_penalty: f64,
     is_concussed_or_dazed: bool,
-) -> PyResult<Py<PyDict>> {
+) -> PyResult<PyJsonDict> {
     let tf = satya_engine::ActionTimeFactorParams {
         fatigue_level,
         wound_shock_index,
@@ -1546,20 +1670,7 @@ pub fn evaluate_two_component_action_cost(
         min_total_tc_floor,
         &tf,
     );
-    let d = PyDict::new(py);
-    d.set_item("base_tc_decide", res.base_tc_decide)?;
-    d.set_item("base_tc_act", res.base_tc_act)?;
-    d.set_item("base_total_tc", res.base_total_tc)?;
-    d.set_item("effective_d_cog", res.effective_d_cog)?;
-    d.set_item("delta_tc_decide", res.delta_tc_decide)?;
-    d.set_item("skill_reflex_compression", res.skill_reflex_compression)?;
-    d.set_item("effective_tc_decide", res.effective_tc_decide)?;
-    d.set_item("effective_tc_act", res.effective_tc_act)?;
-    d.set_item("physical_time_factor", res.physical_time_factor)?;
-    d.set_item("effective_total_tc", res.effective_total_tc)?;
-    d.set_item("wind_up_ticks", res.wind_up_ticks)?;
-    d.set_item("recovery_ticks", res.recovery_ticks)?;
-    Ok(d.unbind())
+    to_py_object(py, &res)
 }
 
 /// Computes Starting Tick on the continuous timeline, including Surprise / Ambush Orientation Freeze (`action_economy_and_ooda.md` §3.1).
@@ -1597,7 +1708,7 @@ pub fn evaluate_educational_advancement_roll(
     school_quality_modifier_sqm: i32,
     pair1: (i32, i32),
     pair2: (i32, i32),
-) -> PyResult<Py<PyDict>> {
+) -> PyResult<PyJsonDict> {
     let res = satya_engine::evaluate_educational_advancement_roll(
         dis,
         c_mental,
@@ -1605,17 +1716,7 @@ pub fn evaluate_educational_advancement_roll(
         school_quality_modifier_sqm,
         [pair1, pair2],
     );
-    let d = PyDict::new(py);
-    d.set_item("c_study", res.c_study)?;
-    d.set_item(
-        "school_quality_modifier_sqm",
-        res.school_quality_modifier_sqm,
-    )?;
-    d.set_item("tn_edu", res.tn_edu)?;
-    d.set_item("successes", res.successes)?;
-    d.set_item("skill_levels_gained", res.skill_levels_gained)?;
-    d.set_item("grants_early_tier_unlock", res.grants_early_tier_unlock)?;
-    Ok(d.unbind())
+    to_py_object(py, &res)
 }
 
 /// Audits a skill unlock attempt against a canonical Lifepath preset (`"mateo_vance"`, `"priya_nair"`, `"amara_okafor"`, or `"linnea_cho"`, `lifepaths_and_economy.md` §2.1–§2.3 & `lifepath_events_hobbies_and_factions.md` §4.4).
@@ -1647,7 +1748,7 @@ pub fn audit_canonical_lifepath_character(
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_psyche_friction_check(
     py: Python<'_>,
-    trait_code: &str,
+    trait_code: PyEnum<satya_engine::PsycheTraitId>,
     trait_score: i32,
     violates_high_pole: bool,
     dis: i32,
@@ -1657,11 +1758,7 @@ pub fn evaluate_psyche_friction_check(
     player_pairs: Vec<(i32, i32)>,
     gm_pair: (i32, i32),
 ) -> PyResult<PyJsonDict> {
-    let trait_id = satya_engine::PsycheTraitId::from_code_str(trait_code.trim()).ok_or_else(|| {
-        to_py_err(format!(
-            "unknown Psyche trait '{trait_code}'; expected OPN, SLF, BLG, AGG, EGO, CNF, EXT, TRS, or CPS"
-        ))
-    })?;
+    let trait_id = trait_code.0;
     let pole = if violates_high_pole {
         satya_engine::PsycheViolationPole::HighPole
     } else {
@@ -1690,7 +1787,7 @@ pub fn evaluate_ranged_recoil_and_suppression(
     weapon_recoil_r: i32,
     is_bounding_on_move: bool,
     is_suppressive_or_full_auto: bool,
-) -> PyResult<Py<PyDict>> {
+) -> PyResult<PyJsonDict> {
     let _ = (allocated_tempo, allocated_control);
     let res = satya_engine::evaluate_ranged_recoil_and_suppression(
         allocated_force,
@@ -1698,19 +1795,14 @@ pub fn evaluate_ranged_recoil_and_suppression(
         is_bounding_on_move,
         is_suppressive_or_full_auto,
     );
-    let d = PyDict::new(py);
-    d.set_item("effective_recoil_r", res.effective_recoil_r)?;
-    d.set_item("recoil_fully_braced", res.recoil_fully_braced)?;
-    d.set_item(
-        "unbraced_dispersion_delta_ext",
-        res.unbraced_dispersion_delta_ext,
-    )?;
-    d.set_item("suppression_morale_delta", res.suppression_morale_delta)?;
-    d.set_item(
-        "calm_return_fire_control_threshold",
-        res.calm_return_fire_control_threshold,
-    )?;
-    Ok(d.unbind())
+    to_py_object(py, &res)
+}
+
+#[derive(serde::Serialize)]
+struct ArmorImpactDict<'a> {
+    armor_name: &'a str,
+    #[serde(flatten)]
+    outcome: satya_engine::ArmorImpactOutcome,
 }
 
 /// Resolves Armor Penetration (`PR`) vs. Behind-Armor Blunt Trauma (`BABT`) against one of the 6 canonical armor profiles (`ranged_combat_and_armor.md` §2.1–§2.2).
@@ -1718,12 +1810,12 @@ pub fn evaluate_ranged_recoil_and_suppression(
 pub fn resolve_canonical_armor_impact(
     py: Python<'_>,
     armor_index: usize,
-    damage_type: &str,
+    damage_type: PyEnum<satya_engine::WeaponDamageType>,
     raw_impact: i32,
     base_pen: i32,
     net_successes: i32,
     hits_visor_weak_spot: bool,
-) -> PyResult<Py<PyDict>> {
+) -> PyResult<PyJsonDict> {
     let catalog = satya_engine::canonical_armor_catalog();
     let armor = catalog.get(armor_index).ok_or_else(|| {
         to_py_err(format!(
@@ -1731,26 +1823,28 @@ pub fn resolve_canonical_armor_impact(
             catalog.len()
         ))
     })?;
-    let dtype = parse_coded_enum::<satya_engine::WeaponDamageType>(damage_type, "damage_type")?;
     let out = satya_engine::resolve_armor_impact(
         armor,
-        dtype,
+        damage_type.0,
         raw_impact,
         base_pen,
         net_successes,
         hits_visor_weak_spot,
     );
-    let d = PyDict::new(py);
-    d.set_item("armor_name", armor.name)?;
-    d.set_item("effective_pen", out.effective_pen)?;
-    d.set_item("active_armor_pr", out.active_armor_pr)?;
-    d.set_item("penetrated", out.penetrated)?;
-    d.set_item("babt_trauma", out.babt_trauma)?;
-    d.set_item("penetrating_trauma", out.penetrating_trauma)?;
-    d.set_item("total_effective_trauma", out.total_effective_trauma)?;
-    d.set_item("causes_bleed", out.causes_bleed)?;
-    d.set_item("armor_pr_degradation", out.armor_pr_degradation)?;
-    Ok(d.unbind())
+    to_py_object(
+        py,
+        &ArmorImpactDict {
+            armor_name: armor.name,
+            outcome: out,
+        },
+    )
+}
+
+#[derive(serde::Serialize)]
+struct HitLocationDict<'a> {
+    #[serde(flatten)]
+    spec: &'a satya_engine::HitLocationSpec,
+    broad_called_shot_delta_ext: i32,
 }
 
 /// Resolves a `1d20` Anatomical Hit Location roll and Called Shot $\Delta_{\text{ext}}$ (`health_and_trauma.md` §1).
@@ -1761,25 +1855,35 @@ pub fn resolve_hit_location_d20(
     d20_roll: i32,
     attacker_control: i32,
     defender_control: i32,
-) -> PyResult<Py<PyDict>> {
+) -> PyResult<PyJsonDict> {
     let spec = satya_engine::resolve_hit_location_d20(d20_roll);
     let broad_called_shot_delta_ext = satya_engine::compute_called_shot_delta_ext(
         satya_engine::CalledShotZoneTier::BroadZone,
         attacker_control,
         defender_control,
     );
-    let d = PyDict::new(py);
-    d.set_item("name", spec.name)?;
-    d.set_item("d20_min", spec.d20_min)?;
-    d.set_item("d20_max", spec.d20_max)?;
-    d.set_item("called_shot_delta_ext", spec.called_shot_delta_ext)?;
-    d.set_item("broad_called_shot_delta_ext", broad_called_shot_delta_ext)?;
-    d.set_item("slashes_tempo_cap", spec.slashes_tempo_cap)?;
-    d.set_item("slashes_control_cap", spec.slashes_control_cap)?;
-    d.set_item("slashes_force_cap", spec.slashes_force_cap)?;
-    d.set_item("major_arterial_hazard", spec.major_arterial_hazard)?;
-    d.set_item("mechanical_notes", spec.mechanical_notes)?;
-    Ok(d.unbind())
+    to_py_object(
+        py,
+        &HitLocationDict {
+            spec: &spec,
+            broad_called_shot_delta_ext,
+        },
+    )
+}
+
+#[derive(serde::Serialize)]
+struct HealthFatigueAndBleedDict {
+    fatigue_condition: &'static str,
+    fatigue_delta_int: i32,
+    fatigue_pool_drain: i32,
+    fatigue_time_factor: f64,
+    spd_and_for_cap_penalty: i32,
+    can_sprint: bool,
+    breath_holding_capacity_ticks: i32,
+    resulting_fatigue_level: i32,
+    is_unconscious: bool,
+    remaining_blood_units: f64,
+    hypovolemic_shock_added: i32,
 }
 
 /// Evaluates Fatigue Level (`0–5`), Breath-Holding, Asphyxiation, and Bloodloss Hypovolemic Shock (`health_and_trauma.md` §2–§3).
@@ -1795,7 +1899,7 @@ pub fn evaluate_health_fatigue_and_bleed(
     asphyxia_ticks: i32,
     is_vascular_blood_choke: bool,
     blood_units_lost: f64,
-) -> PyResult<Py<PyDict>> {
+) -> PyResult<PyJsonDict> {
     let fat = satya_engine::evaluate_fatigue_level(fatigue_level);
     let asph = satya_engine::evaluate_breath_holding_and_asphyxiation(
         fit,
@@ -1806,25 +1910,40 @@ pub fn evaluate_health_fatigue_and_bleed(
         is_vascular_blood_choke,
     );
     let bleed = satya_engine::evaluate_blood_loss_progression(blood_units_lost, &[], 0);
-    let d = PyDict::new(py);
-    d.set_item("fatigue_condition", fat.condition_name)?;
-    d.set_item("fatigue_delta_int", fat.delta_int)?;
-    d.set_item("fatigue_pool_drain", fat.tactical_pool_drain)?;
-    d.set_item("fatigue_time_factor", fat.action_time_factor)?;
-    d.set_item("spd_and_for_cap_penalty", fat.spd_and_for_cap_penalty)?;
-    d.set_item("can_sprint", fat.can_sprint)?;
-    d.set_item(
-        "breath_holding_capacity_ticks",
-        asph.breath_holding_capacity_ticks,
-    )?;
-    d.set_item("resulting_fatigue_level", asph.resulting_fatigue_level)?;
-    d.set_item(
-        "is_unconscious",
-        fat.is_unconscious || asph.is_unconscious || bleed.immediate_unconsciousness_and_coma,
-    )?;
-    d.set_item("remaining_blood_units", bleed.remaining_blood_units)?;
-    d.set_item("hypovolemic_shock_added", bleed.added_wound_shock_index)?;
-    Ok(d.unbind())
+    to_py_object(
+        py,
+        &HealthFatigueAndBleedDict {
+            fatigue_condition: fat.condition_name,
+            fatigue_delta_int: fat.delta_int,
+            fatigue_pool_drain: fat.tactical_pool_drain,
+            fatigue_time_factor: fat.action_time_factor,
+            spd_and_for_cap_penalty: fat.spd_and_for_cap_penalty,
+            can_sprint: fat.can_sprint,
+            breath_holding_capacity_ticks: asph.breath_holding_capacity_ticks,
+            resulting_fatigue_level: asph.resulting_fatigue_level,
+            is_unconscious: fat.is_unconscious
+                || asph.is_unconscious
+                || bleed.immediate_unconsciousness_and_coma,
+            remaining_blood_units: bleed.remaining_blood_units,
+            hypovolemic_shock_added: bleed.added_wound_shock_index,
+        },
+    )
+}
+
+#[derive(serde::Serialize)]
+struct MovementAndEncumbranceDict {
+    stride_factor_sf: f64,
+    v_sprint_m_per_sec: f64,
+    v_sprint_m_per_tick: f64,
+    base_comfort_load_kg: f64,
+    effective_load_kg: f64,
+    load_ratio: f64,
+    encumbrance_tier_0_to_4: u8,
+    tempo_cap_penalty: i32,
+    kin_penalty: i32,
+    action_time_factor_delta: f64,
+    can_sprint: bool,
+    max_deadlift_drag_limit_kg: f64,
 }
 
 /// Evaluates Sprint Velocity ($V_{\text{sprint}}$) and Load-Bearing Encumbrance (`Tiers 0–4`, `movement_encumbrance_and_vehicles.md` §1–§2).
@@ -1838,7 +1957,7 @@ pub fn evaluate_movement_and_encumbrance(
     for_stat: i32,
     carried_mass_kg: f64,
     exo_offset_kg: f64,
-) -> PyResult<Py<PyDict>> {
+) -> PyResult<PyJsonDict> {
     let sprint = satya_engine::compute_stride_and_sprint_velocity(spd_eff, hgt_m);
     let enc = satya_engine::evaluate_encumbrance_load(
         mas_kg,
@@ -1849,20 +1968,30 @@ pub fn evaluate_movement_and_encumbrance(
         }],
         exo_offset_kg,
     );
-    let d = PyDict::new(py);
-    d.set_item("stride_factor_sf", sprint.stride_factor_sf)?;
-    d.set_item("v_sprint_m_per_sec", sprint.v_sprint_m_per_sec)?;
-    d.set_item("v_sprint_m_per_tick", sprint.v_sprint_m_per_tick)?;
-    d.set_item("base_comfort_load_kg", enc.base_comfort_load_kg)?;
-    d.set_item("effective_load_kg", enc.effective_load_kg)?;
-    d.set_item("load_ratio", enc.load_ratio)?;
-    d.set_item("encumbrance_tier_0_to_4", enc.tier.tier_number())?;
-    d.set_item("tempo_cap_penalty", enc.tempo_cap_penalty)?;
-    d.set_item("kin_penalty", enc.kin_penalty)?;
-    d.set_item("action_time_factor_delta", enc.action_time_factor_delta)?;
-    d.set_item("can_sprint", enc.can_sprint)?;
-    d.set_item("max_deadlift_drag_limit_kg", enc.max_deadlift_drag_limit_kg)?;
-    Ok(d.unbind())
+    to_py_object(
+        py,
+        &MovementAndEncumbranceDict {
+            stride_factor_sf: sprint.stride_factor_sf,
+            v_sprint_m_per_sec: sprint.v_sprint_m_per_sec,
+            v_sprint_m_per_tick: sprint.v_sprint_m_per_tick,
+            base_comfort_load_kg: enc.base_comfort_load_kg,
+            effective_load_kg: enc.effective_load_kg,
+            load_ratio: enc.load_ratio,
+            encumbrance_tier_0_to_4: enc.tier.tier_number(),
+            tempo_cap_penalty: enc.tempo_cap_penalty,
+            kin_penalty: enc.kin_penalty,
+            action_time_factor_delta: enc.action_time_factor_delta,
+            can_sprint: enc.can_sprint,
+            max_deadlift_drag_limit_kg: enc.max_deadlift_drag_limit_kg,
+        },
+    )
+}
+
+#[derive(serde::Serialize)]
+struct CombatTechniqueCatalogEntry<'a> {
+    #[serde(flatten)]
+    spec: &'a satya_engine::CombatTechniqueSpec,
+    category_label: &'static str,
 }
 
 /// Lists the canonical 30-move Combat Technique catalog (`combat_techniques.rs`), optionally filtered
@@ -1874,25 +2003,19 @@ pub fn list_combat_techniques(
     py: Python<'_>,
     domain: Option<&str>,
     category: Option<&str>,
-) -> PyResult<Vec<Py<PyDict>>> {
-    let domain_filter = match domain.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(raw) => Some(satya_engine::CombatDomain::from_code_str(raw).ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err(format!(
-                "unknown combat domain '{raw}'; expected 'unarmed_martial_arts', 'armed_melee', or 'ranged'"
-            ))
-        })?),
-        None => None,
-    };
-    let category_filter = match category.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(raw) => Some(
-            satya_engine::CombatMoveCategory::from_code_str(raw).ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(format!(
-                    "unknown combat move category '{raw}'; expected 'control', 'strike', 'intercept', 'maneuver', 'ranged_shot', or 'ranged_maneuver'"
-                ))
-            })?,
-        ),
-        None => None,
-    };
+) -> PyResult<Vec<PyJsonDict>> {
+    let domain_filter = domain
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|raw| parse_coded_enum::<satya_engine::CombatDomain>(raw, "combat domain"))
+        .transpose()?;
+    let category_filter = category
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|raw| {
+            parse_coded_enum::<satya_engine::CombatMoveCategory>(raw, "combat move category")
+        })
+        .transpose()?;
 
     let mut out = Vec::new();
     for spec in satya_engine::canonical_combat_technique_catalog() {
@@ -1906,31 +2029,47 @@ pub fn list_combat_techniques(
         {
             continue;
         }
-        let d = PyDict::new(py);
-        d.set_item("id", spec.id.as_str())?;
-        d.set_item("name", spec.name)?;
-        d.set_item("category", spec.category.as_str())?;
-        d.set_item("category_label", spec.category.label())?;
-        d.set_item("allowed_unarmed", spec.allowed_unarmed)?;
-        d.set_item("allowed_armed_melee", spec.allowed_armed_melee)?;
-        d.set_item("allowed_ranged", spec.allowed_ranged)?;
-        d.set_item("min_reach", spec.min_reach)?;
-        d.set_item("max_reach", spec.max_reach)?;
-        d.set_item("base_tc_decide", spec.base_tc_decide)?;
-        d.set_item("base_tc_act", spec.base_tc_act)?;
-        d.set_item("base_total_tc", spec.base_total_tc)?;
-        d.set_item("min_floor_ticks", spec.min_floor_ticks)?;
-        d.set_item("pow_multiplier", spec.pow_multiplier)?;
-        d.set_item("guard_mod", spec.guard_mod)?;
-        d.set_item("root_mod", spec.root_mod)?;
-        d.set_item("pen_mod", spec.pen_mod)?;
-        d.set_item("recoil_adder", spec.recoil_adder)?;
-        d.set_item("delta_ext_mod", spec.delta_ext_mod)?;
-        d.set_item("uses_full_weapon_acc", spec.uses_full_weapon_acc)?;
-        d.set_item("tcf_interplay_notes", spec.tcf_interplay_notes)?;
-        out.push(d.unbind());
+        out.push(to_py_object(
+            py,
+            &CombatTechniqueCatalogEntry {
+                spec,
+                category_label: spec.category.label(),
+            },
+        )?);
     }
     Ok(out)
+}
+
+#[derive(serde::Serialize)]
+struct TechniqueTriadEvalDict {
+    technique_id: &'static str,
+    technique_name: &'static str,
+    category: &'static str,
+    domain: &'static str,
+    tempo: i32,
+    control: i32,
+    force: i32,
+    valid: bool,
+    violations: Vec<String>,
+    effective_tc_decide: i32,
+    effective_tc_act: i32,
+    effective_total_tc: i32,
+    wind_up_ticks: i32,
+    recovery_ticks: i32,
+    effective_guard: i32,
+    effective_root: f64,
+    strike_impact: f64,
+    effective_pen_mod: i32,
+    block_damage_reduction: i32,
+    parry_counter_multiplier: i32,
+    feint_guard_strip_per_success: i32,
+    dodge_evasion_delta_ext: i32,
+    ranged_effective_recoil_r: i32,
+    ranged_unbraced_dispersion_delta_ext: i32,
+    ranged_effective_acc_bonus: i32,
+    technique_delta_ext: i32,
+    exertion_marks_gained: i32,
+    archetype_label: String,
 }
 
 /// Evaluates a canonical Combat Technique combined with a concrete `Tempo + Control + Force` (`TCF`)
@@ -1942,7 +2081,7 @@ pub fn list_combat_techniques(
     tempo,
     control,
     force,
-    domain="unarmed_martial_arts",
+    domain=None,
     skill_level_n=3,
     armed_weapon_base_tc=0,
     armed_weapon_pow_mult=1.0,
@@ -1962,16 +2101,16 @@ pub fn list_combat_techniques(
     ins=10,
     foc=10,
     mas_kg=70.0,
-    morale_state="steady"
+    morale_state=None
 ))]
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_combat_technique_triad(
     py: Python<'_>,
-    technique_id: &str,
+    technique_id: PyEnum<satya_engine::CombatTechniqueId>,
     tempo: i32,
     control: i32,
     force: i32,
-    domain: &str,
+    domain: Option<PyEnum<satya_engine::CombatDomain>>,
     skill_level_n: usize,
     armed_weapon_base_tc: i32,
     armed_weapon_pow_mult: f64,
@@ -1991,19 +2130,10 @@ pub fn evaluate_combat_technique_triad(
     ins: i32,
     foc: i32,
     mas_kg: f64,
-    morale_state: &str,
-) -> PyResult<Py<PyDict>> {
-    let tech_id =
-        satya_engine::CombatTechniqueId::from_code_str(technique_id).ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err(format!(
-                "unknown combat technique '{technique_id}'"
-            ))
-        })?;
-    let dom = satya_engine::CombatDomain::from_code_str(domain).ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err(format!(
-            "unknown combat domain '{domain}'; expected 'unarmed_martial_arts', 'armed_melee', or 'ranged'"
-        ))
-    })?;
+    morale_state: Option<PyEnum<MoraleState>>,
+) -> PyResult<PyJsonDict> {
+    let tech_id = technique_id.0;
+    let dom = unwrap_py_enum_or(domain, satya_engine::CombatDomain::UnarmedMartialArts);
     let chars = satya_engine::CharacterCharacteristics {
         spd,
         for_stat,
@@ -2014,8 +2144,7 @@ pub fn evaluate_combat_technique_triad(
         mas_kg,
         ..Default::default()
     };
-    let morale = satya_engine::MoraleState::from_code_str(morale_state)
-        .unwrap_or(satya_engine::MoraleState::Steady);
+    let morale = unwrap_py_enum_or(morale_state, MoraleState::Steady);
     let envelope = satya_engine::compute_tactical_pool(&satya_engine::TacticalPoolParams {
         chars,
         skill_c,
@@ -2050,42 +2179,39 @@ pub fn evaluate_combat_technique_triad(
             weapon_acc,
             weapon_is_braced,
         });
-    let d = PyDict::new(py);
-    d.set_item("technique_id", res.technique.as_str())?;
-    d.set_item("technique_name", res.technique.label())?;
-    d.set_item("category", res.category.as_str())?;
-    d.set_item("domain", res.domain.as_str())?;
-    d.set_item("tempo", res.alloc.tempo)?;
-    d.set_item("control", res.alloc.control)?;
-    d.set_item("force", res.alloc.force)?;
-    d.set_item("valid", res.valid)?;
-    d.set_item("violations", res.violations)?;
-    d.set_item("effective_tc_decide", res.action_cost.effective_tc_decide)?;
-    d.set_item("effective_tc_act", res.action_cost.effective_tc_act)?;
-    d.set_item("effective_total_tc", res.effective_tc)?;
-    d.set_item("wind_up_ticks", res.action_cost.wind_up_ticks)?;
-    d.set_item("recovery_ticks", res.action_cost.recovery_ticks)?;
-    d.set_item("effective_guard", res.effective_guard)?;
-    d.set_item("effective_root", res.effective_root)?;
-    d.set_item("strike_impact", res.strike_impact)?;
-    d.set_item("effective_pen_mod", res.effective_pen_mod)?;
-    d.set_item("block_damage_reduction", res.block_damage_reduction)?;
-    d.set_item("parry_counter_multiplier", res.parry_counter_multiplier)?;
-    d.set_item(
-        "feint_guard_strip_per_success",
-        res.feint_guard_strip_per_success,
-    )?;
-    d.set_item("dodge_evasion_delta_ext", res.dodge_evasion_delta_ext)?;
-    d.set_item("ranged_effective_recoil_r", res.ranged_effective_recoil_r)?;
-    d.set_item(
-        "ranged_unbraced_dispersion_delta_ext",
-        res.ranged_unbraced_dispersion_delta_ext,
-    )?;
-    d.set_item("ranged_effective_acc_bonus", res.ranged_effective_acc_bonus)?;
-    d.set_item("technique_delta_ext", res.technique_delta_ext)?;
-    d.set_item("exertion_marks_gained", res.exertion_marks_gained)?;
-    d.set_item("archetype_label", res.archetype_label)?;
-    Ok(d.unbind())
+    to_py_object(
+        py,
+        &TechniqueTriadEvalDict {
+            technique_id: res.technique.as_str(),
+            technique_name: res.technique.label(),
+            category: res.category.as_str(),
+            domain: res.domain.as_str(),
+            tempo: res.alloc.tempo,
+            control: res.alloc.control,
+            force: res.alloc.force,
+            valid: res.valid,
+            violations: res.violations,
+            effective_tc_decide: res.action_cost.effective_tc_decide,
+            effective_tc_act: res.action_cost.effective_tc_act,
+            effective_total_tc: res.effective_tc,
+            wind_up_ticks: res.action_cost.wind_up_ticks,
+            recovery_ticks: res.action_cost.recovery_ticks,
+            effective_guard: res.effective_guard,
+            effective_root: res.effective_root,
+            strike_impact: res.strike_impact,
+            effective_pen_mod: res.effective_pen_mod,
+            block_damage_reduction: res.block_damage_reduction,
+            parry_counter_multiplier: res.parry_counter_multiplier,
+            feint_guard_strip_per_success: res.feint_guard_strip_per_success,
+            dodge_evasion_delta_ext: res.dodge_evasion_delta_ext,
+            ranged_effective_recoil_r: res.ranged_effective_recoil_r,
+            ranged_unbraced_dispersion_delta_ext: res.ranged_unbraced_dispersion_delta_ext,
+            ranged_effective_acc_bonus: res.ranged_effective_acc_bonus,
+            technique_delta_ext: res.technique_delta_ext,
+            exertion_marks_gained: res.exertion_marks_gained,
+            archetype_label: res.archetype_label,
+        },
+    )
 }
 
 /// PyO3 native extension module (`satya_py._native`).
@@ -2125,6 +2251,7 @@ pub fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(paired_list_signed_margin_pmfs, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_cascade_roll, m)?)?;
     m.add_function(wrap_pyfunction!(compute_tactical_pool, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_tactical_triad_from_dict, m)?)?;
     m.add_function(wrap_pyfunction!(resolve_task_gate_and_tools, m)?)?;
     m.add_function(wrap_pyfunction!(compute_composite_characteristic, m)?)?;
     m.add_function(wrap_pyfunction!(
@@ -2172,7 +2299,15 @@ mod tests {
 
     #[test]
     fn test_satya_py_wrappers_cascade_tactical_pool_and_rules_book() {
-        let params = PyCascadeTaskParams::new(4, 11, 2, 2, "markov_step", "closest_miss").unwrap();
+        let params = PyCascadeTaskParams::new(
+            4,
+            11,
+            2,
+            2,
+            Some(PyEnum(CarryMode::MarkovStep)),
+            Some(PyEnum(BotchRule::ClosestMiss)),
+        )
+        .unwrap();
         assert_eq!(params.tn_eff(), 22);
         assert_eq!(params.effective_delta_under(), 8);
 
@@ -2191,6 +2326,9 @@ mod tests {
         let c_roll =
             sarah_contested.evaluate_contested_pairs(vec![(11, 9), (7, 6), (12, 10)], vec![(9, 9)]);
         assert_eq!(c_roll.contested_kind, "CLEAN_SUCCESS");
+        let grazing_tie =
+            sarah_contested.evaluate_contested_pairs(vec![(11, 10)], vec![(11, 10)]);
+        assert_eq!(grazing_tie.outcome_tier, "PARTIAL_SUCCESS");
 
         let gate_res =
             resolve_task_gate_and_tools("class_b", 0, 3, 4, "situational", "improvised", 1);
@@ -2210,8 +2348,28 @@ mod tests {
         assert_eq!(step.extra_material_pct, 25);
 
         let env = compute_tactical_pool(
-            12, 12, 13, 13, 11, 12, 12, 12, 12, 75.0, 14, 4, false, 0, 0, 0, 0, 0, "steady", 12,
-            12, 12,
+            12,
+            12,
+            13,
+            13,
+            11,
+            12,
+            12,
+            12,
+            12,
+            75.0,
+            14,
+            4,
+            false,
+            0,
+            0,
+            0,
+            0,
+            0,
+            Some(PyEnum(MoraleState::Steady)),
+            12,
+            12,
+            12,
         )
         .unwrap();
         assert!(env.p_eff > 0);
@@ -2235,10 +2393,13 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             // 1. All 9 Psyche traits including TRS and CPS resolve cleanly
-            for code in ["TRS", "CPS"] {
+            for tid in [
+                satya_engine::PsycheTraitId::Trust,
+                satya_engine::PsycheTraitId::Compassion,
+            ] {
                 let res = evaluate_psyche_friction_check(
                     py,
-                    code,
+                    PyEnum(tid),
                     6,
                     false,
                     12,
@@ -2248,11 +2409,57 @@ mod tests {
                     vec![(14, 10), (11, 9)],
                     (10, 8),
                 )
-                .unwrap_or_else(|e| panic!("evaluate_psyche_friction_check({code}) failed: {e}"));
+                .unwrap_or_else(|e| {
+                    panic!("evaluate_psyche_friction_check({}) failed: {e}", tid.code())
+                });
                 let parsed = py_bridge::py_to_value(res.bind(py)).unwrap();
                 assert_eq!(parsed["triggered"], serde_json::json!(true));
                 assert_eq!(parsed["delta_psyche"], serde_json::json!(4));
             }
+
+            // 1b. evaluate_tactical_triad_from_dict matches PyTacticalPoolEnvelope.evaluate_triad
+            let env = compute_tactical_pool(
+                12,
+                12,
+                13,
+                13,
+                11,
+                12,
+                12,
+                12,
+                12,
+                75.0,
+                14,
+                4,
+                false,
+                0,
+                0,
+                0,
+                0,
+                0,
+                Some(PyEnum(MoraleState::Steady)),
+                12,
+                12,
+                12,
+            )
+            .unwrap();
+            let env_dict = env.to_dict(py).unwrap();
+            let triad_class = env.evaluate_triad(8, 8, 8, 6);
+            let triad_dict = evaluate_tactical_triad_from_dict(
+                py,
+                env_dict.bind(py).clone(),
+                8,
+                8,
+                8,
+                6,
+            )
+            .unwrap();
+            let triad_val = py_bridge::py_to_value(triad_dict.bind(py)).unwrap();
+            assert_eq!(triad_val["valid"], serde_json::json!(triad_class.valid));
+            assert_eq!(
+                triad_val["effective_tc"],
+                serde_json::json!(triad_class.effective_tc)
+            );
 
             // 2. Two-component action cost honors encumbrance_tier (Tier 4 > Tier 0)
             let light = evaluate_two_component_action_cost(
@@ -2268,12 +2475,10 @@ mod tests {
             let light_tf: f64 = light_dict
                 .get_item("physical_time_factor")
                 .unwrap()
-                .unwrap()
                 .extract()
                 .unwrap();
             let heavy_tf: f64 = heavy_dict
                 .get_item("physical_time_factor")
-                .unwrap()
                 .unwrap()
                 .extract()
                 .unwrap();
@@ -2285,11 +2490,11 @@ mod tests {
             // 3. evaluate_combat_technique_triad honors custom stats, encumbrance_tier, and morale_state
             let res_steady = evaluate_combat_technique_triad(
                 py,
-                "snap_shot",
+                PyEnum(satya_engine::CombatTechniqueId::SnapShot),
                 2,
                 2,
                 1,
-                "ranged",
+                Some(PyEnum(satya_engine::CombatDomain::Ranged)),
                 2,
                 4,
                 1.0,
@@ -2309,16 +2514,16 @@ mod tests {
                 12,
                 12,
                 75.0,
-                "steady",
+                Some(PyEnum(MoraleState::Steady)),
             )
             .unwrap();
             let res_shaken = evaluate_combat_technique_triad(
                 py,
-                "snap_shot",
+                PyEnum(satya_engine::CombatTechniqueId::SnapShot),
                 2,
                 2,
                 6,
-                "ranged",
+                Some(PyEnum(satya_engine::CombatDomain::Ranged)),
                 2,
                 4,
                 1.0,
@@ -2338,14 +2543,13 @@ mod tests {
                 12,
                 12,
                 75.0,
-                "shaken",
+                Some(PyEnum(MoraleState::Wavering)),
             )
             .unwrap();
             assert!(
                 res_steady
                     .bind(py)
                     .get_item("valid")
-                    .unwrap()
                     .unwrap()
                     .extract::<bool>()
                     .unwrap()
@@ -2354,7 +2558,6 @@ mod tests {
                 !res_shaken
                     .bind(py)
                     .get_item("valid")
-                    .unwrap()
                     .unwrap()
                     .extract::<bool>()
                     .unwrap(),

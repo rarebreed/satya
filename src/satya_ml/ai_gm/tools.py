@@ -12,15 +12,20 @@ import math
 import os
 import random
 import re
-import tomllib
 import urllib.parse
-import urllib.request
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final, cast
 
 from satya_py.combat import CharacterTacticalEnvelope
+from satya_py.enums import (
+    ChannelContext,
+    CombatStance,
+    GmMemoryCategory,
+    MessageVisibility,
+    normalize_combat_stance,
+)
 
 from satya_ml.ai_gm.models import SessionLlmConfig  # noqa: F401 (installs Windows SSL fallback)
 
@@ -29,6 +34,7 @@ try:
 except ImportError:  # pragma: no cover
     httpx = None  # type: ignore[assignment]
 
+from satya_ml.ai_gm.telemetry import current_trace_headers, record_emitted_event_id
 from satya_ml.ai_gm.tool_spec import (
     SessionStore,
     get_builtin_tool_objects,
@@ -36,135 +42,41 @@ from satya_ml.ai_gm.tool_spec import (
     satya_gm_tool,
     tool,
 )
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent.parent.parent
-
-
-def load_ai_gm_toml_config(repo_root: Path | None = None) -> dict[str, Any]:
-    """Load `[ai_gm]` defaults from `config/ai.toml` if present."""
-    root = repo_root or _repo_root()
-    ai_toml_path = root / "config" / "ai.toml"
-    if not ai_toml_path.exists():
-        return {}
-    try:
-        raw = tomllib.loads(ai_toml_path.read_text(encoding="utf-8"))
-        if isinstance(raw.get("ai_gm"), dict):
-            return dict(raw["ai_gm"])
-        return dict(raw)
-    except Exception:
-        return {}
-
-
-_OFFLINE_SIGNALING_VALUES = frozenset({"", "0", "false", "none", "off", "offline", "disabled"})
+from satya_ml.signaling_client import (
+    OFFLINE_SIGNALING_VALUES as _OFFLINE_SIGNALING_VALUES,
+    gm_service_token,
+    http_get_json,
+    http_post_json,
+    httpx_timeout as _httpx_timeout,
+    load_ai_gm_toml_config,
+    repo_root as _repo_root,
+    service_auth_headers,
+    signaling_base_url,
+)
 
 
 def _signaling_base_url() -> str:
-    raw = os.environ.get("SATYA_SIGNALING_URL", "http://127.0.0.1:3000").strip()
-    if raw.lower() in _OFFLINE_SIGNALING_VALUES:
-        return ""
-    return raw.rstrip("/")
-
-
-def _is_loopback_url(url: str) -> bool:
-    return "127.0.0.1" in url or "localhost" in url
-
-
-def _httpx_timeout(url: str, timeout: float) -> Any:
-    if httpx is not None and _is_loopback_url(url):
-        return httpx.Timeout(timeout, connect=min(timeout, 0.25))
-    return timeout
+    return signaling_base_url()
 
 
 def _gm_service_token() -> str:
-    env_tok = os.environ.get("SATYA_GM_SERVICE_TOKEN")
-    if env_tok:
-        return env_tok
-    cfg_tok = load_ai_gm_toml_config().get("service_token")
-    if cfg_tok:
-        return str(cfg_tok)
-    return "satya_gm_secret_dev_token"
-
-
-from satya_ml.ai_gm.telemetry import current_trace_headers, record_emitted_event_id
+    return gm_service_token()
 
 
 def _gm_headers() -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {_gm_service_token()}",
-        "Content-Type": "application/json",
-        **current_trace_headers(),
-    }
-
-
-def _extract_and_record_event_id(res_dict: dict[str, Any]) -> None:
-    meta = res_dict.get("metadata")
-    if isinstance(meta, dict) and meta.get("event_id"):
-        record_emitted_event_id(str(meta["event_id"]))
-    elif res_dict.get("message_id"):
-        record_emitted_event_id(str(res_dict["message_id"]))
+    headers = service_auth_headers()
+    headers["Authorization"] = f"Bearer {_gm_service_token()}"
+    return headers
 
 
 def _http_post_json(url: str, payload: dict[str, Any], timeout: float = 2.5) -> dict[str, Any] | None:
     """POST JSON to `url` with GM service headers, returning parsed JSON on 200 OK or None on failure."""
-    if not url.startswith(("http://", "https://")):
-        return None
-    headers = _gm_headers()
-    if httpx is not None:
-        try:
-            with httpx.Client(timeout=_httpx_timeout(url, timeout)) as client:
-                resp = client.post(url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    data = dict(resp.json())
-                    _extract_and_record_event_id(data)
-                    return data
-        except Exception:
-            return None
-        return None
-
-    eff_timeout = min(timeout, 0.25) if _is_loopback_url(url) else timeout
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=eff_timeout) as resp:
-            if resp.status == 200:
-                data = dict(json.loads(resp.read().decode("utf-8")))
-                _extract_and_record_event_id(data)
-                return data
-    except Exception:
-        return None
-    return None
+    return http_post_json(url, payload, timeout=timeout)
 
 
 def _http_get_json(url: str, timeout: float = 2.5) -> dict[str, Any] | None:
     """GET JSON from `url` with GM service headers, returning parsed JSON on 200 OK or None on failure."""
-    if not url.startswith(("http://", "https://")):
-        return None
-    headers = _gm_headers()
-    if httpx is not None:
-        try:
-            with httpx.Client(timeout=_httpx_timeout(url, timeout)) as client:
-                resp = client.get(url, headers=headers)
-                if resp.status_code == 200:
-                    return dict(resp.json())
-        except Exception:
-            return None
-        return None
-
-    eff_timeout = min(timeout, 0.25) if _is_loopback_url(url) else timeout
-    try:
-        req = urllib.request.Request(url, headers=headers, method="GET")
-        with urllib.request.urlopen(req, timeout=eff_timeout) as resp:
-            if resp.status == 200:
-                return dict(json.loads(resp.read().decode("utf-8")))
-    except Exception:
-        return None
-    return None
+    return http_get_json(url, timeout=timeout)
 
 
 from satya_py import campaign as _campaign, combat as _combat, dice as _dice
@@ -301,7 +213,10 @@ def _normalize_remote_npc_entry(entry: dict[str, Any]) -> dict[str, Any]:
         "top_skills": list(entry.get("top_skills") or []),
         "skills": dict(gm_char.get("skills") or {}),
         "attribute_tns": dict(gm_char.get("attribute_tns") or {}),
-        "combat_stance": str(gm_char.get("combat_stance") or "NEUTRAL"),
+        "combat_stance": normalize_combat_stance(
+            gm_char.get("combat_stance"),
+            default=CombatStance.STABILITY,
+        ).value,
         "morale_state": str(entry.get("morale_state") or gm_char.get("morale_state") or "steady").lower(),
         "fatigue": int(gm_char.get("fatigue_level", 0) or 0),
         "wound_shock": int(gm_char.get("wound_shock_index", 0) or 0),
@@ -406,7 +321,10 @@ def update_npc_state(
     npc["fatigue"] = max(0, int(npc.get("fatigue", 0)) + int(fatigue_delta))
     npc["wound_shock"] = max(0, int(npc.get("wound_shock", 0)) + int(wound_shock_delta))
     if combat_stance is not None:
-        npc["combat_stance"] = combat_stance.upper()
+        npc["combat_stance"] = normalize_combat_stance(
+            combat_stance,
+            default=CombatStance.STABILITY,
+        ).value
     if disposition is not None:
         npc["disposition"] = disposition
     if immediate_agenda is not None:
@@ -1049,24 +967,35 @@ def advance_combat_tracker(
                 {
                     "entity_id": ch.get("character_id") or f"pc-{idx + 1}",
                     "display_name": ch.get("character_name") or f"Operative {idx + 1}",
-                    "is_npc": False,
+                    "role_or_faction": "PLAYER",
                     "ooda_score": env["ooda"],
                     "next_action_tick": env["starting_tick"],
-                    "active_stance": "NEUTRAL",
-                    "fatigue_tier": int(ch.get("fatigue_tier", 0)),
-                    "wound_shock_tier": 0,
+                    "active_stance": CombatStance.STABILITY.value,
+                    "fatigue_level": int(ch.get("fatigue_level", ch.get("fatigue_tier", 0))),
+                    "wound_shock": int(
+                        ch.get("wound_shock_index", ch.get("wound_shock_tier", 0))
+                    ),
                     "grid_x": 3 + (idx * 2),
                     "grid_y": 6,
                     "zone_label": player_zone,
+                    "visibility": MessageVisibility.PUBLIC.value,
                 }
             )
     if entity_id:
         matched = False
+        norm_stance: str | None = None
+        if active_stance is not None:
+            try:
+                norm_stance = normalize_combat_stance(
+                    active_stance, default=CombatStance.STABILITY
+                ).value
+            except ValueError:
+                norm_stance = active_stance
         for comb in combatants:
             if comb.get("entity_id") == entity_id:
                 matched = True
-                if active_stance:
-                    comb["active_stance"] = active_stance
+                if norm_stance:
+                    comb["active_stance"] = norm_stance
                 if next_action_tick is not None:
                     comb["next_action_tick"] = max(1, int(next_action_tick))
                 elif int(tick_delta) > 0:
@@ -1082,7 +1011,7 @@ def advance_combat_tracker(
                 {
                     "entity_id": entity_id,
                     "display_name": entity_id,
-                    "is_npc": True,
+                    "role_or_faction": "NPC",
                     "ooda_score": 10,
                     "next_action_tick": max(
                         1,
@@ -1090,12 +1019,13 @@ def advance_combat_tracker(
                         if next_action_tick is not None
                         else int(tracker.get("tick", 1)) + max(1, int(tick_delta)),
                     ),
-                    "active_stance": active_stance or "NEUTRAL",
-                    "fatigue_tier": 0,
-                    "wound_shock_tier": 0,
+                    "active_stance": norm_stance or CombatStance.STABILITY.value,
+                    "fatigue_level": 0,
+                    "wound_shock": 0,
                     "grid_x": int(grid_x) if grid_x is not None else 11,
                     "grid_y": int(grid_y) if grid_y is not None else 6,
                     "zone_label": zone_label or hostile_zone,
+                    "visibility": MessageVisibility.PUBLIC.value,
                 }
             )
     tracker["combatants"] = combatants
@@ -1108,15 +1038,15 @@ def advance_combat_tracker(
 def upsert_gm_memory(
     title: str,
     content: str,
-    category: str = "SCENE_STATE",
+    category: str = GmMemoryCategory.SCENE_STATE.value,
     is_pinned: bool = True,
     is_persistent: bool = True,
     session_id: str = "default",
 ) -> dict[str, Any]:
     """Save or update a persistent GM Memory Note (`SCENE_STATE`, `NPC_SECRET`, `QUEST_HOOK`, `RULING`, or `ROLLING_SUMMARY`) in the shared Human + AI GM SQLite Vault."""
     norm_cat = category.strip().upper()
-    if norm_cat not in {"SCENE_STATE", "NPC_SECRET", "QUEST_HOOK", "RULING", "ROLLING_SUMMARY"}:
-        norm_cat = "SCENE_STATE"
+    if norm_cat not in {m.value for m in GmMemoryCategory}:
+        norm_cat = GmMemoryCategory.SCENE_STATE.value
     payload = {
         "title": title.strip() or "Untitled GM Memory",
         "category": norm_cat,
@@ -1361,6 +1291,12 @@ def roll_satya_d20_check(
 ) -> dict[str, Any]:
     """Execute a server-authoritative Satya `2d20xN` cascade check (with optional `combat_technique` and `tempo_pool` / `control_pool` / `force_pool` Tactical Triad split) via `POST /api/gm/sessions/:id/roll`."""
     n_pairs = max(1, min(10, int(skill_rank) if int(skill_rank) > 0 else 1))
+    norm_stance = combat_stance
+    if combat_stance:
+        try:
+            norm_stance = normalize_combat_stance(combat_stance).value
+        except ValueError:
+            norm_stance = combat_stance
     payload = {
         "actor_display_name": actor_name,
         "target_user_ids": [],
@@ -1370,7 +1306,7 @@ def roll_satya_d20_check(
         "difficulty_rating": int(difficulty_mod),
         "internal_mod": int(internal_mod),
         "carry_mode": carry_mode,
-        "combat_stance": combat_stance,
+        "combat_stance": norm_stance,
         "combat_technique": combat_technique,
         "tempo_pool": int(tempo_pool) if tempo_pool is not None else None,
         "control_pool": int(control_pool) if control_pool is not None else None,
@@ -1393,7 +1329,7 @@ def roll_satya_d20_check(
         attribute_tn=int(attribute_tn),
         skill_rank=n_pairs,
         difficulty_mod=int(difficulty_mod),
-        combat_stance=combat_stance,
+        combat_stance=norm_stance,
         note=note,
         internal_mod=int(internal_mod),
         combat_technique=combat_technique,
@@ -1442,9 +1378,9 @@ def whisper_to_player(session_id: str, target_user_id: str, content: str) -> dic
     `content` supports full Markdown rendering (`**bold**`, `*italics*`, `> ` blockquotes/alerts, `- ` lists, tables, inline code, and `$...$` math).
     """
     payload = {
-        "visibility": "PRIVATE",
+        "visibility": MessageVisibility.PRIVATE.value,
         "recipient_user_ids": [target_user_id],
-        "channel_context": "GM_NARRATION",
+        "channel_context": ChannelContext.GM_NARRATION.value,
         "body": content,
         "model_id": None,
         "speaker_override": None,
@@ -1455,10 +1391,14 @@ def whisper_to_player(session_id: str, target_user_id: str, content: str) -> dic
         timeout=2.5,
     )
     if remote_res is not None:
-        return {"status": "sent", "visibility": "PRIVATE", "target_user_id": target_user_id}
+        return {
+            "status": "sent",
+            "visibility": MessageVisibility.PRIVATE.value,
+            "target_user_id": target_user_id,
+        }
     return {
         "status": "queued_local",
-        "visibility": "PRIVATE",
+        "visibility": MessageVisibility.PRIVATE.value,
         "target_user_id": target_user_id,
         "content": content,
     }
@@ -1468,7 +1408,7 @@ def whisper_to_player(session_id: str, target_user_id: str, content: str) -> dic
 def narrate_to_session(
     session_id: str,
     content: str,
-    channel: str = "IN_CHARACTER",
+    channel: str = ChannelContext.IN_CHARACTER.value,
     is_hidden_cot: bool = False,
 ) -> dict[str, Any]:
     """Publish AI GM Markdown narration to the session (`PUBLIC` in autonomous mode, or `PRIVATE` to Human GM in co-pilot mode).
@@ -1478,15 +1418,15 @@ def narrate_to_session(
     mode = get_session_operating_mode(session_id)
     human_gm_id = get_session_human_gm(session_id)
     if mode == "co_pilot" or channel == "GM_WHISPER":
-        visibility = "PRIVATE"
+        visibility = MessageVisibility.PRIVATE.value
         recipients = [human_gm_id] if human_gm_id else []
-        channel_ctx = "GM_NARRATION"
+        channel_ctx = ChannelContext.GM_NARRATION.value
     else:
-        visibility = "PUBLIC"
+        visibility = MessageVisibility.PUBLIC.value
         recipients = []
         norm_chan = (channel or "").strip().upper()
-        if norm_chan == "OUT_OF_CHARACTER":
-            channel_ctx = "OUT_OF_CHARACTER"
+        if norm_chan == ChannelContext.OUT_OF_CHARACTER.value:
+            channel_ctx = ChannelContext.OUT_OF_CHARACTER.value
             content = re.sub(
                 r"^\s*\[OUT_OF_CHARACTER[^\]]*\]\s*\n*",
                 "",
@@ -1494,10 +1434,10 @@ def narrate_to_session(
                 count=1,
                 flags=re.IGNORECASE,
             ).strip()
-        elif norm_chan == "IN_CHARACTER":
-            channel_ctx = "IN_CHARACTER"
+        elif norm_chan == ChannelContext.IN_CHARACTER.value:
+            channel_ctx = ChannelContext.IN_CHARACTER.value
         else:
-            channel_ctx = "GM_NARRATION"
+            channel_ctx = ChannelContext.GM_NARRATION.value
 
     payload = {
         "visibility": visibility,

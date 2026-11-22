@@ -17,9 +17,7 @@ capabilities:
 from __future__ import annotations
 
 import hashlib
-import json
 import urllib.parse
-import urllib.request
 from typing import Any
 
 from satya_py import combat as _combat, dice as _dice, rules as _rules, tech as _tech
@@ -47,11 +45,8 @@ from satya_ml.ai_player.motivation_ledger import (
     update_my_motivation_journal,
 )
 from satya_ml.campaign_config import get_pack_default_ai_player
-
-try:
-    import httpx
-except ImportError:  # pragma: no cover
-    httpx = None  # type: ignore[assignment]
+from satya_ml.session_store import CompositeSessionStore, PLAYER_SESSION_REGISTRY
+from satya_ml.signaling_client import http_post_json_detailed
 
 
 def _http_post_json_detailed(
@@ -59,44 +54,13 @@ def _http_post_json_detailed(
     payload: dict[str, Any],
     timeout: float = 2.5,
 ) -> tuple[dict[str, Any] | None, int | None, str | None]:
-    """POST JSON returning `(parsed_json, status_code, error_body)`.
-    `status_code` is `None` only on network/transport failure (offline).
-    """
-    if not url.startswith(("http://", "https://")):
-        return None, None, "invalid_url"
-    headers = _gm_headers()
-    if httpx is not None:
-        try:
-            tm: Any = (
-                httpx.Timeout(timeout, connect=0.25)
-                if ("127.0.0.1" in url or "localhost" in url)
-                else timeout
-            )
-            with httpx.Client(timeout=tm) as client:
-                resp = client.post(url, headers=headers, json=payload)
-                if resp.status_code == 200:
-                    return dict(resp.json()), 200, None
-                return None, int(resp.status_code), (resp.text or f"HTTP {resp.status_code}")[:400]
-        except Exception:
-            return None, None, None
-
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        eff_timeout = min(timeout, 0.25) if ("127.0.0.1" in url or "localhost" in url) else timeout
-        with urllib.request.urlopen(req, timeout=eff_timeout) as resp:
-            if resp.status == 200:
-                return dict(json.loads(resp.read().decode("utf-8"))), 200, None
-            return None, int(resp.status), f"HTTP {resp.status}"
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="ignore")[:400] if hasattr(exc, "read") else str(exc)
-        return None, int(exc.code), body or f"HTTP {exc.code}"
-    except Exception:
-        return None, None, None
+    """POST JSON returning `(parsed_json, status_code, error_body)`."""
+    return http_post_json_detailed(
+        url,
+        payload,
+        timeout=timeout,
+        record_event_id=False,
+    )
 
 
 @tool
@@ -145,23 +109,25 @@ def query_satya_rules_public(query: str, top_k: int = 4) -> str:
     return f"No public rules entries matched '{q}'."
 
 
-# Strict player-scoped context cache keyed by `f"{session_id}:{player_user_id}"`
-_PLAYER_CONTEXT_CACHE: dict[str, dict[str, Any]] = {}
+# Strict player-scoped context cache keyed by `(session_id, player_user_id)`
+_PLAYER_CONTEXT_CACHE: CompositeSessionStore[tuple[str, str], dict[str, Any]] = (
+    CompositeSessionStore(registry=PLAYER_SESSION_REGISTRY)
+)
 
 
 def reset_player_session_context(session_id: str | None = None) -> None:
     """Clear cached player-visible session contexts and `MotivationLedger` states."""
-    reset_player_motivation_ledgers(session_id)
     if session_id is None:
-        _PLAYER_CONTEXT_CACHE.clear()
+        PLAYER_SESSION_REGISTRY.reset(None)
         return
-    prefix = f"{session_id.strip() or 'default'}:"
-    for key in [k for k in _PLAYER_CONTEXT_CACHE if k.startswith(prefix)]:
-        _PLAYER_CONTEXT_CACHE.pop(key, None)
+    norm = session_id.strip() or "default"
+    PLAYER_SESSION_REGISTRY.reset(norm)
+    if norm != session_id:
+        PLAYER_SESSION_REGISTRY.reset(session_id)
 
 
-def _player_cache_key(session_id: str, player_user_id: str) -> str:
-    return f"{session_id.strip() or 'default'}:{player_user_id.strip() or 'ai-player-1'}"
+def _player_cache_key(session_id: str, player_user_id: str) -> tuple[str, str]:
+    return (session_id.strip() or "default", player_user_id.strip() or "ai-player-1")
 
 
 def sanitize_player_visible_context(raw_ctx: dict[str, Any], player_user_id: str) -> dict[str, Any]:
@@ -406,10 +372,10 @@ def roll_player_d20_action(
     c_stat = max(1, min(30, int(attribute_tn)))
     n_pairs = max(1, min(10, int(skill_rank)))
     b_val = int(env.get("neutral_baseline", 4))
-    control_delta = -(c_alloc - b_val) if tech_clean else 0
-    base_tc = 3 if tech_clean in {"snap_shot", "cover_peek", "thrust", "punch"} else 6
-    eff_tc = max(1, base_tc - max(0, (t_alloc - b_val) // 2)) if tech_clean else None
+    control_delta = 0
+    eff_tc: int | None = None
     if tech_clean:
+        base_tc = 3 if tech_clean in {"snap_shot", "cover_peek", "thrust", "punch"} else 6
         dom = (
             "ranged"
             if tech_clean
@@ -437,13 +403,31 @@ def roll_player_d20_action(
                 dom,
                 n_pairs,
             )
-            if isinstance(triad_eval, dict):
-                if triad_eval.get("effective_total_tc") is not None:
-                    eff_tc = int(triad_eval["effective_total_tc"])
-                if triad_eval.get("technique_delta_ext") is not None:
-                    control_delta = int(triad_eval["technique_delta_ext"])
+            eff_tc = (
+                int(triad_eval["effective_total_tc"])
+                if triad_eval.get("effective_total_tc") is not None
+                else None
+            )
+            control_delta = int(triad_eval.get("technique_delta_ext") or 0)
         except Exception:
-            pass
+            triad_eval = _combat.evaluate_tactical_triad_from_dict(
+                {
+                    "p_base": int(env.get("p_base", b_val * 3)),
+                    "p_eff": int(env.get("p_eff", b_val * 3)),
+                    "neutral_baseline_b": b_val,
+                    "tempo_cap": int(env.get("max_tempo", b_val + 4)),
+                    "control_cap": int(env.get("max_control", b_val + 4)),
+                    "force_cap": int(env.get("max_force", b_val + 4)),
+                    "max_control_allowed": int(env.get("max_control", b_val + 4)),
+                    "max_force_allowed": int(env.get("max_force", b_val + 4)),
+                },
+                base_tc,
+                t_alloc,
+                c_alloc,
+                f_alloc,
+            )
+            eff_tc = int(triad_eval["effective_tc"])
+            control_delta = -(c_alloc - b_val)
 
     delta_ext = int(difficulty_mod) + control_delta
     tn_eff = int(

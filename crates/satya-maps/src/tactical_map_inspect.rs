@@ -26,6 +26,7 @@ use crate::tactical_map_spatial::{SpatialObstacleIndex, SpatialWallFilter};
 
 /// High-level map object class reported by [`inspect_map_point`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum MapHoverCategory {
     Token,
     EdgeBarrier,

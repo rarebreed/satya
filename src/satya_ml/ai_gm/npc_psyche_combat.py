@@ -8,6 +8,7 @@ from typing import Annotated, Any, ClassVar, Literal, TypedDict
 
 from pydantic import Field
 from satya_py import psyche as _psyche
+from satya_py.enums import CombatStance
 
 from satya_ml.ai_gm.rolls import ContestedRollRequest, ContextToolRequest, UnionToolInput
 from satya_ml.ai_gm.social_and_clocks import _parse_psyche_dict, _resolve_npc_profile
@@ -185,10 +186,10 @@ def evaluate_npc_morale_or_trigger(
     if delta_int_inflicted > 0:
         npc["fatigue"] = fatigue + 1
     if new_morale in {"broken", "panic"}:
-        npc["combat_stance"] = "DEFENSIVE"
+        npc["combat_stance"] = CombatStance.STABILITY.value
         npc["disposition"] = "shaken_surrendering"
     elif new_morale == "rage":
-        npc["combat_stance"] = "AGGRESSIVE"
+        npc["combat_stance"] = CombatStance.POWER.value
         npc["disposition"] = "enraged"
 
     if target_key is not None:
@@ -203,7 +204,7 @@ def evaluate_npc_morale_or_trigger(
         "new_morale_state": new_morale,
         "delta_int_inflicted": delta_int_inflicted,
         "disposition": npc.get("disposition", "wary"),
-        "combat_stance": npc.get("combat_stance", "NEUTRAL"),
+        "combat_stance": npc.get("combat_stance", CombatStance.STABILITY.value),
         "cps": psyche["cps"],
         "trs": psyche["trs"],
         "engine_result": outcome["engine_result"],

@@ -15,9 +15,12 @@ Ensures that:
 from __future__ import annotations
 
 import time
-import uuid
 from typing import Any, Literal, TypedDict
 
+from satya_py import awakened as _awakened
+from satya_py.enums import CombatStance, McpServerTier, normalize_combat_stance
+
+from satya_ml.ai_gm.telemetry import build_tool_invocation_record
 from satya_ml.ai_gm.tools import (
     advance_combat_tracker,
     get_session_combat_tracker,
@@ -429,6 +432,13 @@ def evaluate_party_turn_gate(
     }
 
 
+def _safe_combat_stance(raw: Any) -> CombatStance:
+    try:
+        return normalize_combat_stance(raw, default=CombatStance.STABILITY)
+    except ValueError:
+        return CombatStance.STABILITY
+
+
 def _select_npc_combat_technique_and_triad(
     npc_profile: dict[str, Any],
     combatant: dict[str, Any],
@@ -437,9 +447,10 @@ def _select_npc_combat_technique_and_triad(
     skills = npc_profile.get("skills") or {}
     attr_tns = npc_profile.get("attribute_tns") or {}
     chars = (npc_profile.get("gm_character") or {}).get("characteristics") or {}
-    stance = str(
-        combatant.get("active_stance") or npc_profile.get("combat_stance") or "NEUTRAL"
+    raw_stance = str(
+        combatant.get("active_stance") or npc_profile.get("combat_stance") or ""
     ).upper()
+    stance = _safe_combat_stance(raw_stance)
 
     # Determine best combat skill & rank
     ranged_keys = (
@@ -475,7 +486,7 @@ def _select_npc_combat_technique_and_triad(
         skill_name = best_ranged_skill
         skill_n = max(1, best_ranged_n)
         control_c = dex_c
-        if "AIMED" in stance or "DEFENSIVE" in stance:
+        if stance == CombatStance.RANGED_AIMED or "DEFENSIVE" in raw_stance:
             technique = "combat_sighted_shot"
             t, c, f = 3, 5, 3
         else:
@@ -485,7 +496,7 @@ def _select_npc_combat_technique_and_triad(
         skill_name = best_melee_skill
         skill_n = max(1, best_melee_n)
         control_c = max(dex_c, str_c)
-        if "AGGRESSIVE" in stance or "POWER" in stance:
+        if stance == CombatStance.POWER:
             technique = "thrust"
             t, c, f = 4, 3, 4
         else:
@@ -601,6 +612,8 @@ def execute_ready_npc_actions(
             skill_name, technique, control_c, skill_n, t_pool, c_pool, f_pool, psyche_meta = (
                 modulate_npc_combat_selection(matched_prof, base_selection)
             )
+            base_tc = 6
+            neutral_b = 3
             substrate_note = ""
             substrate_disabled = False
             sub_eff_tc_delta = 0
@@ -619,33 +632,24 @@ def execute_ready_npc_actions(
 
                     sub_st = _SESSION_SYNTHETIC_SUBSTRATES.get((session_id or "default", eid.lower()))
                     if isinstance(sub_st, dict):
-                        if int(sub_st.get("battery_pct", 100)) <= 0:
+                        impact = _awakened.evaluate_substrate_condition_impact(sub_st)["condition_impact"]
+                        if impact.get("is_unconscious"):
                             substrate_disabled = True
                             substrate_note = "LITHIUM_BATTERY_DEPLETED"
                         else:
-                            sub_mode = str(sub_st.get("metabolic_mode") or "")
-                            if sub_mode == "QUANTUM_TETHERED_SPRINT":
-                                sub_int_mod = -1
-                                sub_eff_tc_delta = -1
-                            elif sub_mode == "EDGE_SLIME_MOLD":
-                                sub_int_mod = 2
-                                sub_eff_tc_delta = 3
-                            elif sub_mode == "SEVERED_FARADAY_REFLEX":
-                                sub_int_mod = 1
-                                sub_eff_tc_delta = 2
-                            if int(sub_st.get("battery_pct", 100)) <= 15:
-                                sub_int_mod += 3
-                                sub_eff_tc_delta += 2
-                            substrate_note = f"SUBSTRATE={sub_mode}"
+                            sub_int_mod = int(impact.get("delta_int", 0))
+                            sub_eff_tc_delta = int(
+                                round(base_tc * float(impact.get("action_time_factor_delta", 0.0)))
+                            )
+                            substrate_note = f"SUBSTRATE={str(sub_st.get('metabolic_mode') or '')}"
                 except Exception:
                     pass
 
-            base_tc = 6
-            neutral_b = 3
             eff_tc = max(2, base_tc - max(0, (t_pool - neutral_b) // 2) + sub_eff_tc_delta)
             next_tick = act_tick + eff_tc
 
             t0 = time.perf_counter()
+            roll_res: dict[str, Any]
             if substrate_disabled:
                 roll_res = {
                     "degree_of_success": substrate_note,
@@ -746,23 +750,25 @@ def execute_ready_npc_actions(
                     f"rolled `{pairs}` vs `TN_eff = {tn_eff}` -> **{deg}** (`{succ}` successes, signed margin `{margin:+d}`)."
                 )
             invocations.append(
-                {
-                    "step_index": len(invocations),
-                    "span_id": uuid.uuid4().hex[:16],
-                    "mcp_tier": "TIER_1_SATYA_CORE",
-                    "server_id": "satya-core",
-                    "tool_name": "advance_combat_tracker" if psyche_meta["retreat_or_surrender"] else "roll_satya_d20_check",
-                    "arguments_json": f'{{"actor_name": "{dname}", "combat_technique": "{technique}", "triad": "T{t_pool}/C{c_pool}/F{f_pool}", "morale": "{morale_upper}"}}',
-                    "result_summary_json": f"{deg} (successes={succ}, margin={margin:+d}, next_tick={next_tick})",
-                    "is_error": False,
-                    "duration_ms": dur_ms,
-                    "server_tier": "TIER_1_SATYA_CORE",
-                    "server_name": "satya-core",
-                    "arguments_redacted": f'{{"actor_name": "{dname}", "combat_technique": "{technique}"}}',
-                    "result_summary": f"{deg} (successes={succ}, margin={margin:+d})",
-                    "latency_ms": dur_ms,
-                    "succeeded": True,
-                }
+                build_tool_invocation_record(
+                    {
+                        "mcp_tier": McpServerTier.TIER_1_SATYA_CORE.value,
+                        "server_id": "satya-core",
+                        "tool_name": (
+                            "advance_combat_tracker"
+                            if psyche_meta["retreat_or_surrender"]
+                            else "roll_satya_d20_check"
+                        ),
+                        "arguments_json": f'{{"actor_name": "{dname}", "combat_technique": "{technique}", "triad": "T{t_pool}/C{c_pool}/F{f_pool}", "morale": "{morale_upper}"}}',
+                        "result_summary_json": f"{deg} (successes={succ}, margin={margin:+d}, next_tick={next_tick})",
+                        "is_error": False,
+                        "duration_ms": dur_ms,
+                        "arguments_redacted": f'{{"actor_name": "{dname}", "combat_technique": "{technique}"}}',
+                        "result_summary": f"{deg} (successes={succ}, margin={margin:+d})",
+                    },
+                    step_index=len(invocations),
+                    include_legacy_aliases=True,
+                )
             )
 
         if not summary_lines:
@@ -803,7 +809,7 @@ def execute_ready_npc_actions(
         name = str(prof.get("name") or npc_id)
         arch = str(prof.get("archetype") or "NPC")
         disp = str(prof.get("disposition") or "neutral")
-        stance = str(prof.get("combat_stance") or "NEUTRAL")
+        stance = _safe_combat_stance(prof.get("combat_stance")).value
         fat = int(prof.get("fatigue", 0))
         ws = int(prof.get("wound_shock", 0))
         skills_str = ", ".join(f"{k}:{v}" for k, v in list((prof.get("skills") or {}).items())[:3])

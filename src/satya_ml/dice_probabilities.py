@@ -49,12 +49,20 @@ from satya_py import (  # noqa: E402
     sum_dice_pool_pmf,
 )
 
+from satya_py.enums import (
+    BotchRule,
+    CarryMode,
+    CenterDistanceMode,
+    ContestedTieRule,
+)
+
 PMF = Dict[int, float]
 ContestedTieRuleLiteral = Literal[
     "hybrid_signed_margin",
     "strict_signed_margin",
     "active_player_wins_ties",
 ]
+ContestedTieRuleArg = ContestedTieRule | ContestedTieRuleLiteral
 
 
 def using_satya_py_backend() -> bool:
@@ -271,9 +279,9 @@ def plot_order_statistics_and_chaos() -> "go.Figure":
         )
 
     chaos_configs = [
-        ("Focused (3d20 Keep Closest to Center)", center_distance_selection_pmf(3, 20, "closest"), SATYA_PALETTE[0]),
+        ("Focused (3d20 Keep Closest to Center)", center_distance_selection_pmf(3, 20, CenterDistanceMode.CLOSEST.value), SATYA_PALETTE[0]),
         ("Neutral (1d20 Uniform)", single_die_pmf(20), SATYA_PALETTE[4]),
-        ("Chaotic (3d20 Keep Furthest - Bimodal U)", center_distance_selection_pmf(3, 20, "furthest"), SATYA_PALETTE[1]),
+        ("Chaotic (3d20 Keep Furthest - Bimodal U)", center_distance_selection_pmf(3, 20, CenterDistanceMode.FURTHEST.value), SATYA_PALETTE[1]),
         ("Median-Gated 3d20 (TN 11 - Two Humps)", median_gated_bimodal_pmf(3, 20, gate_tn=11), SATYA_PALETTE[2]),
     ]
     for label, pmf, color in chaos_configs:
@@ -795,9 +803,9 @@ def plot_signed_margin_spectrum(
             characteristic_c=tn_eff,
             delta_over=skill_bon,
             delta_under=fatigue_pen,
-            mode="cumulative_snowball",
+            mode=CarryMode.CUMULATIVE_SNOWBALL.value,
             count_under_as_success=False,
-            botch_rule="ceiling_breach",
+            botch_rule=BotchRule.CEILING_BREACH.value,
         )
         xs = list(res.signed_margin_pmf.keys())
         ys = [res.signed_margin_pmf[k] * 100 for k in xs]
@@ -828,9 +836,9 @@ def plot_signed_margin_spectrum(
             characteristic_c=hard_tn_eff,
             delta_over=skill_bon,
             delta_under=3,
-            mode="markov_step",
+            mode=CarryMode.MARKOV_STEP.value,
             count_under_as_success=False,
-            botch_rule="closest_miss",
+            botch_rule=BotchRule.CLOSEST_MISS.value,
         )
         xs = list(res_tier.signed_margin_pmf.keys())
         ys = [res_tier.signed_margin_pmf[k] * 100 for k in xs]

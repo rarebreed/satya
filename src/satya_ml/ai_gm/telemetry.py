@@ -8,14 +8,17 @@ Implements Section 3.4, Section 4, and Section 6.1 of
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import logging
 import re
-from typing import Any, Iterator
+from typing import Any
 import uuid
+
+from satya_py.enums import AiGmOperatingMode, AiGmTurnStatus, LogLevel, McpServerTier
 
 MAX_TURN_LOGS_DEFAULT = 32
 MAX_LOG_LINE_CHARS_DEFAULT = 512
@@ -285,15 +288,20 @@ def span_scope(
             _PARENT_LINEAGE_IDS_VAR.reset(tok_plids)
 
 
+_PYTHON_TO_AVRO_LOG_LEVEL: dict[str, str] = {
+    "WARNING": LogLevel.WARN.value,
+    "CRITICAL": LogLevel.FATAL.value,
+    LogLevel.TRACE.value: LogLevel.TRACE.value,
+    LogLevel.DEBUG.value: LogLevel.DEBUG.value,
+    LogLevel.INFO.value: LogLevel.INFO.value,
+    LogLevel.WARN.value: LogLevel.WARN.value,
+    LogLevel.ERROR.value: LogLevel.ERROR.value,
+    LogLevel.FATAL.value: LogLevel.FATAL.value,
+}
+
+
 def _map_python_level_to_avro(levelname: str) -> str:
-    upper = levelname.upper()
-    if upper == "WARNING":
-        return "WARN"
-    if upper == "CRITICAL":
-        return "FATAL"
-    if upper in {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"}:
-        return upper
-    return "INFO"
+    return _PYTHON_TO_AVRO_LOG_LEVEL.get(levelname.upper(), LogLevel.INFO.value)
 
 
 def format_bracketed_log_line(record: logging.LogRecord) -> str:
@@ -372,3 +380,127 @@ class SatyaTurnLogBufferHandler(logging.Handler):
                 "log_line": formatted_line,
             }
         )
+
+
+def build_tool_invocation_record(
+    inv: Mapping[str, Any],
+    *,
+    step_index: int,
+    include_legacy_aliases: bool = False,
+) -> dict[str, Any]:
+    """Build a canonical `McpToolInvocationRecord` dict from a tool trace mapping."""
+    tier = str(
+        inv.get("mcp_tier") or inv.get("server_tier") or McpServerTier.TIER_2_RULESET_ENGINE.value
+    )
+    server_id = str(inv.get("server_id") or inv.get("server_name") or "satya-d20-rules")
+    args_json = str(inv.get("arguments_json") or inv.get("arguments_redacted") or "{}")
+    summary_json = str(inv.get("result_summary_json") or inv.get("result_summary") or "")
+    is_error = (
+        bool(inv.get("is_error"))
+        if "is_error" in inv
+        else not bool(inv.get("succeeded", True))
+    )
+    duration_ms = int(inv.get("duration_ms") or inv.get("latency_ms") or 1)
+    record: dict[str, Any] = {
+        "step_index": int(inv.get("step_index", step_index)),
+        "span_id": str(inv.get("span_id") or uuid.uuid4().hex[:16]),
+        "mcp_tier": tier,
+        "server_id": server_id,
+        "tool_name": str(inv.get("tool_name") or ""),
+        "arguments_json": args_json,
+        "result_summary_json": summary_json,
+        "is_error": is_error,
+        "duration_ms": duration_ms,
+    }
+    if include_legacy_aliases:
+        record.update(
+            {
+                "server_tier": tier,
+                "server_name": server_id,
+                "arguments_redacted": str(inv.get("arguments_redacted") or args_json),
+                "result_summary": str(inv.get("result_summary") or summary_json),
+                "latency_ms": duration_ms,
+                "succeeded": not is_error,
+            }
+        )
+    return record
+
+
+def build_trajectory_report_payload(
+    *,
+    turn_id_prefix: str = "turn",
+    trace_id: str | None = None,
+    operating_mode: str | AiGmOperatingMode = AiGmOperatingMode.AUTONOMOUS,
+    trigger_actor: Mapping[str, Any],
+    trigger_event_id: str,
+    trigger_summary: str,
+    llm_provider: str,
+    reasoning_model_id: str,
+    vision_model_id: str | None = None,
+    ruleset_engine_id: str = "satya-d20",
+    tool_invocations: Sequence[Mapping[str, Any]] = (),
+    rag_tool_names: frozenset[str] | set[str] = frozenset(),
+    emitted_event_ids: Sequence[str] | None = None,
+    prompt_tokens: int = 32,
+    completion_tokens: int = 16,
+    cached_tokens: int = 0,
+    total_turn_latency_ms: int = 1,
+    turn_status: str | AiGmTurnStatus = AiGmTurnStatus.COMPLETED,
+    turn_logs: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Construct a strict `GmTrajectoryReportRequest` dictionary for `/api/gm/sessions/:id/trajectory`."""
+    norm_mode = (
+        operating_mode.value
+        if isinstance(operating_mode, AiGmOperatingMode)
+        else (
+            AiGmOperatingMode.CO_PILOT.value
+            if "co_pilot" in str(operating_mode).lower()
+            else AiGmOperatingMode.AUTONOMOUS.value
+        )
+    )
+    strict_tool_records = [
+        build_tool_invocation_record(inv, step_index=i)
+        for i, inv in enumerate(tool_invocations)
+    ]
+    rag_sources_used = [
+        rec["tool_name"]
+        for rec in strict_tool_records
+        if rec["tool_name"] in rag_tool_names
+    ]
+    active_trace_id = trace_id or get_current_trace_id() or uuid.uuid4().hex
+    resolved_emitted = (
+        get_current_emitted_event_ids()
+        if emitted_event_ids is None
+        else [str(eid) for eid in emitted_event_ids]
+    )
+    resolved_logs = (
+        get_current_turn_logs()
+        if turn_logs is None
+        else [dict(entry) for entry in turn_logs]
+    )
+    resolved_status = (
+        turn_status.value
+        if isinstance(turn_status, AiGmTurnStatus)
+        else str(turn_status)
+    )
+    return {
+        "turn_id": f"{turn_id_prefix}-{uuid.uuid4().hex[:10]}",
+        "trace_id": active_trace_id,
+        "operating_mode": norm_mode,
+        "trigger_actor": dict(trigger_actor),
+        "trigger_event_id": trigger_event_id,
+        "trigger_summary": trigger_summary,
+        "llm_provider": llm_provider,
+        "reasoning_model_id": reasoning_model_id,
+        "vision_model_id": vision_model_id,
+        "ruleset_engine_id": ruleset_engine_id,
+        "tool_invocations": strict_tool_records,
+        "rag_sources_used": rag_sources_used,
+        "emitted_event_ids": resolved_emitted,
+        "prompt_tokens": int(prompt_tokens),
+        "completion_tokens": int(completion_tokens),
+        "cached_tokens": int(cached_tokens),
+        "total_turn_latency_ms": int(total_turn_latency_ms),
+        "turn_status": resolved_status,
+        "turn_logs": resolved_logs,
+    }

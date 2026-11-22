@@ -338,7 +338,7 @@ impl AuthAndSessionManager {
             campaign_tag: r.try_get("campaign_tag").ok()?,
             author_user_id: r.try_get("author_user_id").ok()?,
             author_display_name: r.try_get("author_display_name").ok()?,
-            category: GmMemoryCategory::from_code_str(&cat_raw),
+            category: GmMemoryCategory::parse_loose(&cat_raw),
             title: r.try_get("title").ok()?,
             content: r.try_get("content").ok()?,
             is_pinned: pinned != 0,

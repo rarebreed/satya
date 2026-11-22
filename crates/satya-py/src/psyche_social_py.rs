@@ -13,12 +13,12 @@ use satya_schema::{
     EconomicTier, SessionWorldLedger, UpdateWorldLedgerRequest, WorldLedgerUpdateResponse,
     ZoningContext,
 };
-use serde::Deserialize;
+use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use super::py_bridge::{
-    PyJsonDict, PyJsonInput, PyListInput, from_py_object, opt_from_py_object, parse_coded_enum,
-    py_to_json_value, to_py_err, to_py_object,
+    PyEnum, PyJsonDict, PyJsonInput, PyJsonList, PyListInput, from_py_object, opt_from_py_object,
+    parse_coded_enum, py_to_json_value, to_py_err, to_py_object, unwrap_py_enum_or,
 };
 
 fn read_i32(map: &Map<String, Value>, keys: &[&str], default: i32) -> i32 {
@@ -199,38 +199,6 @@ fn parse_social_vectors_value(val: Value) -> PyResult<Vec<SocialArgumentVector>>
     Ok(out)
 }
 
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-struct PyBattlefieldSituation {
-    ally_casualty_ratio: f64,
-    outnumbered_ratio: f64,
-    leader_incapacitated_or_comms_cut: bool,
-    position_overrun_flanked_or_ambushed: bool,
-    ammo_fraction_remaining: f64,
-    tracks_ammo: bool,
-    primary_weapon_compromised: bool,
-    attacks_ineffective_against_heavy_armor: bool,
-    started_fatigued_or_sleep_deprived: bool,
-    additional_suppression_or_shock_delta: i32,
-}
-
-impl From<PyBattlefieldSituation> for BattlefieldMoraleSituation {
-    fn from(s: PyBattlefieldSituation) -> Self {
-        Self {
-            ally_casualty_ratio: s.ally_casualty_ratio,
-            outnumbered_ratio: s.outnumbered_ratio,
-            leader_incapacitated_or_comms_cut: s.leader_incapacitated_or_comms_cut,
-            position_overrun_flanked_or_ambushed: s.position_overrun_flanked_or_ambushed,
-            ammo_fraction_remaining: s.ammo_fraction_remaining,
-            tracks_ammo: s.tracks_ammo,
-            primary_weapon_compromised: s.primary_weapon_compromised,
-            attacks_ineffective_against_heavy_armor: s.attacks_ineffective_against_heavy_armor,
-            started_fatigued_or_sleep_deprived: s.started_fatigued_or_sleep_deprived,
-            additional_suppression_or_shock_delta: s.additional_suppression_or_shock_delta,
-        }
-    }
-}
-
 /// Evaluates an Empathy & Read Person check (`INS/ITU` or `INS/ELO`) against a target's Psyche.
 #[pyfunction]
 #[pyo3(signature = (target_psyche, net_successes))]
@@ -313,7 +281,7 @@ pub fn resolve_cognitive_dissonance(
     composure_state: PyJsonInput<'_>,
     dis: i32,
     resolution_path: &str,
-    violated_trait: Option<&str>,
+    violated_trait: Option<PyEnum<PsycheTraitId>>,
     dis_check_successes: i32,
 ) -> PyResult<PyJsonDict> {
     let state: SocialComposureState = from_py_object(&composure_state, "composure_state")?;
@@ -321,10 +289,7 @@ pub fn resolve_cognitive_dissonance(
     let path = match path_norm.as_str() {
         "conversion_defection" | "conversion" | "defection" => {
             DissonanceResolutionPath::ConversionDefection {
-                violated_trait: parse_coded_enum::<PsycheTraitId>(
-                    violated_trait.unwrap_or("OPN"),
-                    "PsycheTraitId",
-                )?,
+                violated_trait: unwrap_py_enum_or(violated_trait, PsycheTraitId::Openness),
             }
         }
         "dogmatic_denial" | "denial" => DissonanceResolutionPath::DogmaticDenial {
@@ -520,14 +485,13 @@ pub fn evaluate_emotional_trigger(
     py: Python<'_>,
     target_psyche: PyJsonInput<'_>,
     dis: i32,
-    current_morale: &str,
+    current_morale: PyEnum<MoraleState>,
     current_delta_int: i32,
     trigger_kind: &str,
     wound_tier: i32,
     roll_pairs: Option<PyListInput<'_>>,
 ) -> PyResult<PyJsonDict> {
     let psyche = parse_psyche_profile_value(&py_to_json_value(&target_psyche, "target_psyche")?)?;
-    let morale = MoraleState::from_code_str(current_morale).unwrap_or(MoraleState::Steady);
     let trigger = parse_emotional_trigger_kind(trigger_kind, wound_tier)?;
     let pairs = opt_from_py_object::<Vec<(i32, i32)>>(roll_pairs, "roll_pairs")?
         .unwrap_or_else(|| vec![(11, 10)]);
@@ -536,7 +500,7 @@ pub fn evaluate_emotional_trigger(
         &satya_engine::evaluate_emotional_trigger(
             &psyche,
             dis,
-            morale,
+            current_morale.0,
             current_delta_int,
             trigger,
             &pairs,
@@ -557,19 +521,18 @@ pub fn evaluate_combat_morale_roll(
     delta_int: i32,
     situation: PyJsonInput<'_>,
     is_veteran_or_sere: bool,
-    current_morale: &str,
+    current_morale: PyEnum<MoraleState>,
     player_pairs: PyListInput<'_>,
     gm_pair: PyListInput<'_>,
 ) -> PyResult<PyJsonDict> {
     let psyche = parse_psyche_profile_value(&py_to_json_value(&target_psyche, "target_psyche")?)?;
     let mot = parse_combat_motivation_kind(motivation_kind, command_intact);
     let mot_mod = evaluate_combat_motivation_modifier(&psyche, mot);
-    let sit_parsed: PyBattlefieldSituation =
-        opt_from_py_object::<PyBattlefieldSituation>(Some(situation), "situation")?
+    let sit_parsed: BattlefieldMoraleSituation =
+        opt_from_py_object::<BattlefieldMoraleSituation>(Some(situation), "situation")?
             .unwrap_or_default();
-    let delta_morale = compute_battlefield_morale_delta(&sit_parsed.into(), psyche.cnf)
+    let delta_morale = compute_battlefield_morale_delta(&sit_parsed, psyche.cnf)
         + mot_mod.command_breakdown_morale_shock;
-    let morale = MoraleState::from_code_str(current_morale).unwrap_or(MoraleState::Steady);
     let p_pairs: Vec<(i32, i32)> = from_py_object(&player_pairs, "player_pairs")?;
     let g_pair: (i32, i32) = from_py_object(&gm_pair, "gm_pair")?;
     let roll_outcome = satya_engine::evaluate_combat_morale_roll(
@@ -578,7 +541,7 @@ pub fn evaluate_combat_morale_roll(
         delta_int,
         delta_morale,
         is_veteran_or_sere,
-        morale,
+        current_morale.0,
         &p_pairs,
         g_pair,
     );
@@ -594,6 +557,32 @@ pub fn evaluate_combat_morale_roll(
     )
 }
 
+#[derive(Serialize)]
+struct PsycheTraitDescriptor {
+    code: &'static str,
+    label: &'static str,
+    low_pole: &'static str,
+    high_pole: &'static str,
+}
+
+/// Returns the canonical 9-trait Psyche descriptor catalog (`code`, `label`, `low_pole`, `high_pole`).
+#[pyfunction]
+pub fn list_psyche_trait_descriptors(py: Python<'_>) -> PyResult<PyJsonList> {
+    let rows: Vec<PsycheTraitDescriptor> = PsycheTraitId::ALL
+        .iter()
+        .map(|trait_id| {
+            let (low_pole, high_pole) = trait_id.pole_hints();
+            PsycheTraitDescriptor {
+                code: trait_id.code(),
+                label: trait_id.label(),
+                low_pole,
+                high_pole,
+            }
+        })
+        .collect();
+    to_py_object(py, &rows)
+}
+
 /// Registers social combat, psyche, and world-clock helpers on the `satya_py` module.
 pub fn register_psyche_social_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_empathy_read, m)?)?;
@@ -605,6 +594,7 @@ pub fn register_psyche_social_functions(m: &Bound<'_, PyModule>) -> PyResult<()>
     m.add_function(wrap_pyfunction!(evaluate_combat_motivation, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_emotional_trigger, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_combat_morale_roll, m)?)?;
+    m.add_function(wrap_pyfunction!(list_psyche_trait_descriptors, m)?)?;
     Ok(())
 }
 
@@ -722,7 +712,7 @@ mod tests {
                 py,
                 py_s(high_trust_compassionate),
                 10,
-                "steady",
+                PyEnum(MoraleState::Steady),
                 0,
                 "betrayed_by_trusted_ally",
                 1,
@@ -738,7 +728,7 @@ mod tests {
                 py,
                 py_s(hardened_low_trust),
                 10,
-                "steady",
+                PyEnum(MoraleState::Steady),
                 0,
                 "betrayed_by_trusted_ally",
                 1,
@@ -751,7 +741,7 @@ mod tests {
                 py,
                 py_s(high_trust_compassionate),
                 12,
-                "rage",
+                PyEnum(MoraleState::Rage),
                 0,
                 "seeing_innocent_suffering",
                 1,
@@ -772,7 +762,7 @@ mod tests {
                 0,
                 py_s(r#"{"ally_casualty_ratio": 0.6, "outnumbered_ratio": 2.5}"#),
                 false,
-                "steady",
+                PyEnum(MoraleState::Steady),
                 py_s("[[4, 3]]"),
                 py_s("[19, 18]"),
             )
@@ -781,6 +771,14 @@ mod tests {
             assert_eq!(mr_val["delta_mot"], 2);
             assert_eq!(mr_val["delta_morale"], 6);
             assert!(mr_val["roll_outcome"]["new_morale"].is_string());
+
+            let descriptors = list_psyche_trait_descriptors(py).unwrap();
+            let desc_val = py_to_value(descriptors.bind(py)).unwrap();
+            let arr = desc_val.as_array().unwrap();
+            assert_eq!(arr.len(), 9);
+            assert_eq!(arr[0]["code"], "OPN");
+            assert!(arr[0]["low_pole"].is_string());
+            assert!(arr[0]["high_pole"].is_string());
         });
     }
 }

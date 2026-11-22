@@ -12,6 +12,7 @@ from satya_py._native import (
     evaluate_empathy_read,
     evaluate_psyche_friction_check,
     evaluate_social_exchange,
+    list_psyche_trait_descriptors,
     resolve_cognitive_dissonance,
 )
 
@@ -25,5 +26,6 @@ __all__ = [
     "evaluate_empathy_read",
     "evaluate_psyche_friction_check",
     "evaluate_social_exchange",
+    "list_psyche_trait_descriptors",
     "resolve_cognitive_dissonance",
 ]

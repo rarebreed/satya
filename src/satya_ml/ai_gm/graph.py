@@ -39,11 +39,9 @@ from satya_ml.ai_gm.party_coordinator import (
     execute_ready_npc_actions,
 )
 from satya_ml.ai_gm.telemetry import (
+    build_tool_invocation_record,
+    build_trajectory_report_payload,
     ensure_turn_context,
-    get_current_emitted_event_ids,
-    get_current_trace_id,
-    get_current_turn_logs,
-    record_emitted_event_id,
     redact_sensitive_text,
     span_scope,
 )
@@ -61,6 +59,7 @@ from satya_ml.ai_gm.tool_registry import (
     MAX_TOOL_LOAD_ROUNDS_PER_TURN,
     load_gm_tools,
 )
+from satya_ml.signaling_client import http_get_json, http_post_json, http_post_json_detailed
 from satya_ml.ai_gm.tools import (
     _gm_headers,
     _signaling_base_url,
@@ -272,7 +271,7 @@ def format_action_mode_hud_block(
         name = c.get("display_name") or c.get("entity_id") or "Combatant"
         nat = int(c.get("next_action_tick", 1))
         ooda = int(c.get("ooda_score", 10))
-        stance = c.get("active_stance", "NEUTRAL")
+        stance = c.get("active_stance", "STABILITY")
         gx = c.get("grid_x")
         gy = c.get("grid_y")
         zone = c.get("zone_label")
@@ -328,22 +327,11 @@ def fetch_session_context_from_rust(session_id: str) -> dict[str, Any] | None:
     base = _signaling_base_url()
     if not base:
         return None
-    timeout: Any = (
-        httpx.Timeout(2.0, connect=0.25)
-        if ("127.0.0.1" in base or "localhost" in base)
-        else 2.0
+    return http_get_json(
+        f"{base}/api/gm/sessions/{session_id}/context",
+        timeout=2.0,
+        client_cls=httpx.Client,
     )
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.get(
-                f"{base}/api/gm/sessions/{session_id}/context",
-                headers=_gm_headers(),
-            )
-            if resp.status_code == 200:
-                return dict(resp.json())
-    except Exception:
-        pass
-    return None
 
 
 def report_trajectory_to_rust(session_id: str, payload: dict[str, Any]) -> None:
@@ -351,20 +339,13 @@ def report_trajectory_to_rust(session_id: str, payload: dict[str, Any]) -> None:
     base = _signaling_base_url()
     if not base:
         return
-    timeout: Any = (
-        httpx.Timeout(2.0, connect=0.25)
-        if ("127.0.0.1" in base or "localhost" in base)
-        else 2.0
+    http_post_json(
+        f"{base}/api/gm/sessions/{session_id}/trajectory",
+        payload,
+        timeout=2.0,
+        record_event_id=False,
+        client_cls=httpx.Client,
     )
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            client.post(
-                f"{base}/api/gm/sessions/{session_id}/trajectory",
-                headers=_gm_headers(),
-                json=payload,
-            )
-    except Exception:
-        pass
 
 
 def _extract_ai_message_text(msg: BaseMessage) -> str:
@@ -859,7 +840,7 @@ def build_ai_gm_graph(
                         {
                             "tick_delta": 0,
                             "entity_id": str(spawn.get("entity_id") or "daise_breach_lead"),
-                            "active_stance": str(spawn.get("active_stance") or "AGGRESSIVE"),
+                            "active_stance": str(spawn.get("active_stance") or "POWER"),
                             "next_action_tick": int(spawn.get("next_action_tick") or 5),
                             "grid_x": spawn_gx,
                             "grid_y": spawn_gy,
@@ -1284,25 +1265,20 @@ def build_ai_gm_graph(
                 step_idx = len(invocations)
                 summary_str = redact_sensitive_text(res_str[:500])
                 invocations.append(
-                    {
-                        # Canonical Rust McpToolInvocationRecord keys
-                        "step_index": step_idx,
-                        "span_id": tool_span_id,
-                        "mcp_tier": tier,
-                        "server_id": server_name,
-                        "tool_name": t_name,
-                        "arguments_json": redacted_args_json,
-                        "result_summary_json": summary_str,
-                        "is_error": is_err,
-                        "duration_ms": duration_ms,
-                        # Backward-compatible aliases for in-memory Python state consumers
-                        "server_tier": tier,
-                        "server_name": server_name,
-                        "arguments_redacted": redacted_args_json,
-                        "result_summary": summary_str,
-                        "latency_ms": duration_ms,
-                        "succeeded": not is_err,
-                    }
+                    build_tool_invocation_record(
+                        {
+                            "span_id": tool_span_id,
+                            "mcp_tier": tier,
+                            "server_id": server_name,
+                            "tool_name": t_name,
+                            "arguments_json": redacted_args_json,
+                            "result_summary_json": summary_str,
+                            "is_error": is_err,
+                            "duration_ms": duration_ms,
+                        },
+                        step_index=step_idx,
+                        include_legacy_aliases=True,
+                    )
                 )
                 tool_messages.append(ToolMessage(content=res_str, tool_call_id=t_id, name=t_name))
 
@@ -1392,46 +1368,29 @@ def build_ai_gm_graph(
                 )
                 base = _signaling_base_url()
                 if base:
-                    chat_timeout: Any = (
-                        httpx.Timeout(2.5, connect=0.25)
-                        if ("127.0.0.1" in base or "localhost" in base)
-                        else 2.5
+                    _, status_code, _ = http_post_json_detailed(
+                        f"{base}/api/gm/sessions/{session_id}/chat",
+                        {
+                            "visibility": visibility,
+                            "recipient_user_ids": recipients,
+                            "channel_context": reply_channel_ctx,
+                            "body": reply_text,
+                            "model_id": cfg.model_id,
+                            "speaker_override": None,
+                        },
+                        timeout=2.5,
+                        client_cls=httpx.Client,
                     )
-                    try:
-                        with httpx.Client(timeout=chat_timeout) as client:
-                            chat_resp = client.post(
-                                f"{base}/api/gm/sessions/{session_id}/chat",
-                                headers=_gm_headers(),
-                                json={
-                                    "visibility": visibility,
-                                    "recipient_user_ids": recipients,
-                                    "channel_context": reply_channel_ctx,
-                                    "body": reply_text,
-                                    "model_id": cfg.model_id,
-                                    "speaker_override": None,
-                                },
-                            )
-                            if chat_resp.status_code == 200:
-                                try:
-                                    chat_json = chat_resp.json()
-                                    if isinstance(chat_json, dict):
-                                        meta = chat_json.get("metadata")
-                                        if isinstance(meta, dict) and meta.get("event_id"):
-                                            record_emitted_event_id(str(meta["event_id"]))
-                                        elif chat_json.get("message_id"):
-                                            record_emitted_event_id(str(chat_json["message_id"]))
-                                except Exception:
-                                    pass
-                            logger.info(
-                                "[publish_gm_response] Posted GM reply (visibility=%s, recipients=%s, status=%d)",
-                                visibility,
-                                recipients,
-                                chat_resp.status_code,
-                            )
-                    except Exception as exc:
+                    if status_code is not None:
+                        logger.info(
+                            "[publish_gm_response] Posted GM reply (visibility=%s, recipients=%s, status=%d)",
+                            visibility,
+                            recipients,
+                            status_code,
+                        )
+                    else:
                         logger.warning(
-                            "[publish_gm_response] Could not post GM reply to satya-signaling: %s",
-                            exc,
+                            "[publish_gm_response] Could not post GM reply to satya-signaling"
                         )
 
             started_ms = state.get("turn_started_ms") or (time.perf_counter() * 1000.0)
@@ -1449,54 +1408,19 @@ def build_ai_gm_graph(
             raw_actor = trigger.get("actor") or default_actor
             trigger_actor = {**default_actor, **raw_actor}
 
-            strict_tool_records = [
-                {
-                    "step_index": int(inv.get("step_index", i)),
-                    "span_id": str(inv.get("span_id") or uuid.uuid4().hex[:16]),
-                    "mcp_tier": str(
-                        inv.get("mcp_tier") or inv.get("server_tier") or "TIER_2_RULESET_ENGINE"
-                    ),
-                    "server_id": str(
-                        inv.get("server_id") or inv.get("server_name") or "satya-d20-rules"
-                    ),
-                    "tool_name": str(inv.get("tool_name") or ""),
-                    "arguments_json": str(
-                        inv.get("arguments_json") or inv.get("arguments_redacted") or "{}"
-                    ),
-                    "result_summary_json": str(
-                        inv.get("result_summary_json") or inv.get("result_summary") or ""
-                    ),
-                    "is_error": bool(
-                        inv.get("is_error")
-                        if "is_error" in inv
-                        else not inv.get("succeeded", True)
-                    ),
-                    "duration_ms": int(inv.get("duration_ms") or inv.get("latency_ms") or 1),
-                }
-                for i, inv in enumerate(invocations)
-            ]
-
-            active_trace_id = get_current_trace_id() or uuid.uuid4().hex
-            turn_logs = get_current_turn_logs()
-            emitted_event_ids = get_current_emitted_event_ids()
-
-            trajectory_payload = {
-                "turn_id": f"turn-{uuid.uuid4().hex[:10]}",
-                "trace_id": active_trace_id,
-                "operating_mode": "CO_PILOT" if operating_mode == "co_pilot" else "AUTONOMOUS",
-                "trigger_actor": trigger_actor,
-                "trigger_event_id": str(trigger.get("event_id") or f"ev-{uuid.uuid4().hex[:8]}"),
-                "trigger_summary": str(trigger.get("content") or "AI GM Turn")[:240],
-                "llm_provider": cfg.provider,
-                "reasoning_model_id": cfg.model_id,
-                "vision_model_id": cfg.vision_model_id,
-                "ruleset_engine_id": "satya-d20",
-                "tool_invocations": strict_tool_records,
-                "rag_sources_used": [
-                    inv["tool_name"]
-                    for inv in invocations
-                    if inv["tool_name"]
-                    in {
+            trajectory_payload = build_trajectory_report_payload(
+                turn_id_prefix="turn",
+                operating_mode=operating_mode,
+                trigger_actor=trigger_actor,
+                trigger_event_id=str(trigger.get("event_id") or f"ev-{uuid.uuid4().hex[:8]}"),
+                trigger_summary=str(trigger.get("content") or "AI GM Turn")[:240],
+                llm_provider=cfg.provider,
+                reasoning_model_id=cfg.model_id,
+                vision_model_id=cfg.vision_model_id,
+                ruleset_engine_id="satya-d20",
+                tool_invocations=invocations,
+                rag_tool_names=frozenset(
+                    {
                         "lookup_npc_profile",
                         "lookup_character_sheet",
                         "get_combat_tracker_state",
@@ -1505,22 +1429,18 @@ def build_ai_gm_graph(
                         "query_campaign_lore",
                         "read_gm_documents",
                     }
-                ],
-                "emitted_event_ids": emitted_event_ids,
-                "prompt_tokens": max(32, len(str(trigger)) // 4),
-                "completion_tokens": max(16, len(reply_text) // 4),
-                "cached_tokens": 0,
-                "total_turn_latency_ms": latency_ms,
-                "turn_status": "COMPLETED",
-                "turn_logs": turn_logs,
-            }
+                ),
+                prompt_tokens=max(32, len(str(trigger)) // 4),
+                completion_tokens=max(16, len(reply_text) // 4),
+                total_turn_latency_ms=latency_ms,
+            )
             report_trajectory_to_rust(session_id, trajectory_payload)
 
             return {
                 "final_reply": reply_text,
                 "final_channel": channel,
-                "trace_id": active_trace_id,
-                "turn_logs": turn_logs,
+                "trace_id": trajectory_payload["trace_id"],
+                "turn_logs": trajectory_payload["turn_logs"],
             }
 
     workflow = StateGraph(AiGmSessionState)

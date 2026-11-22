@@ -14,7 +14,6 @@ import time
 import uuid
 from typing import Annotated, Any, Literal, TypedDict
 
-import httpx
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -27,19 +26,17 @@ from satya_ml.ai_gm.graph import (
 )
 from satya_ml.ai_gm.models import SessionLlmConfig, build_gm_chat_model
 from satya_ml.ai_gm.telemetry import (
+    build_tool_invocation_record,
+    build_trajectory_report_payload,
     ensure_turn_context,
-    get_current_emitted_event_ids,
-    get_current_trace_id,
-    get_current_turn_logs,
-    record_emitted_event_id,
     redact_sensitive_text,
     span_scope,
 )
 from satya_ml.ai_gm.tools import (
-    _gm_headers,
     _signaling_base_url,
     compute_character_tactical_envelope,
 )
+from satya_ml.signaling_client import http_post_json
 from satya_ml.ai_player.motivation_ledger import (
     ensure_or_sync_motivation_ledger,
     format_motivation_ledger_for_prompt,
@@ -412,17 +409,23 @@ def build_ai_player_graph(
                 duration_ms = int(max(1.0, (time.perf_counter() - started) * 1000.0))
                 summary_str = redact_sensitive_text(res_str[:500])
                 invocations.append(
-                    {
-                        "step_index": len(invocations),
-                        "span_id": span_id,
-                        "mcp_tier": "TIER_1_SATYA_CORE" if t_name != "query_satya_rules" else "TIER_2_RULESET_ENGINE",
-                        "server_id": "satya-player-agent",
-                        "tool_name": t_name,
-                        "arguments_json": redacted_args_json,
-                        "result_summary_json": summary_str,
-                        "is_error": is_err,
-                        "duration_ms": duration_ms,
-                    }
+                    build_tool_invocation_record(
+                        {
+                            "span_id": span_id,
+                            "mcp_tier": (
+                                "TIER_1_SATYA_CORE"
+                                if t_name != "query_satya_rules"
+                                else "TIER_2_RULESET_ENGINE"
+                            ),
+                            "server_id": "satya-player-agent",
+                            "tool_name": t_name,
+                            "arguments_json": redacted_args_json,
+                            "result_summary_json": summary_str,
+                            "is_error": is_err,
+                            "duration_ms": duration_ms,
+                        },
+                        step_index=len(invocations),
+                    )
                 )
                 tool_messages.append(ToolMessage(content=res_str, tool_call_id=t_id, name=t_name))
 
@@ -506,49 +509,30 @@ def build_ai_player_graph(
         with span_scope("publish_player_turn"):
             base = _signaling_base_url()
             if reply_text and not already_sent_chat and base:
-                timeout: Any = (
-                    httpx.Timeout(3.0, connect=0.25)
-                    if ("127.0.0.1" in base or "localhost" in base)
-                    else 3.0
+                res = http_post_json(
+                    f"{base}/api/player-ai/sessions/{session_id}/chat",
+                    {
+                        "user_id": player_user_id,
+                        "display_name": display_name,
+                        "visibility": "PUBLIC",
+                        "recipient_user_ids": [],
+                        "channel_context": "IN_CHARACTER",
+                        "body": reply_text,
+                        "auto_trigger_gm": auto_trigger_gm,
+                    },
+                    timeout=3.0,
                 )
-                try:
-                    with httpx.Client(timeout=timeout) as client:
-                        resp = client.post(
-                            f"{base}/api/player-ai/sessions/{session_id}/chat",
-                            headers=_gm_headers(),
-                            json={
-                                "user_id": player_user_id,
-                                "display_name": display_name,
-                                "visibility": "PUBLIC",
-                                "recipient_user_ids": [],
-                                "channel_context": "IN_CHARACTER",
-                                "body": reply_text,
-                                "auto_trigger_gm": auto_trigger_gm,
-                            },
-                        )
-                        if resp.status_code == 200:
-                            try:
-                                r_json = resp.json()
-                                if isinstance(r_json, dict) and r_json.get("message_id"):
-                                    record_emitted_event_id(str(r_json["message_id"]))
-                            except Exception:
-                                pass
-                except Exception as exc:
+                if res is None:
                     logger.debug(
-                        "[publish_player_turn] Offline or unreachable satya-signaling chat endpoint: %s",
-                        exc,
+                        "[publish_player_turn] Offline or unreachable satya-signaling chat endpoint"
                     )
 
             started_ms = state.get("turn_started_ms") or (time.perf_counter() * 1000.0)
             latency_ms = int(max(1.0, (time.perf_counter() * 1000.0) - started_ms))
-            active_trace_id = get_current_trace_id() or uuid.uuid4().hex
-            turn_logs = get_current_turn_logs()
-
-            trajectory_payload = {
-                "turn_id": f"pturn-{uuid.uuid4().hex[:10]}",
-                "trace_id": active_trace_id,
-                "operating_mode": "AUTONOMOUS",
-                "trigger_actor": {
+            trajectory_payload = build_trajectory_report_payload(
+                turn_id_prefix="pturn",
+                operating_mode="AUTONOMOUS",
+                trigger_actor={
                     "user_id": player_user_id,
                     "username": player_user_id,
                     "display_name": display_name,
@@ -557,34 +541,27 @@ def build_ai_player_graph(
                     "character_id": (state.get("character_sheet") or {}).get("character_id"),
                     "ai_agent_info": None,
                 },
-                "trigger_event_id": str(trigger.get("event_id") or f"pev-{uuid.uuid4().hex[:8]}"),
-                "trigger_summary": f"[AI Player {display_name}] {str(trigger.get('content') or 'Player Turn')[:180]}",
-                "llm_provider": cfg.provider,
-                "reasoning_model_id": cfg.model_id,
-                "vision_model_id": cfg.vision_model_id,
-                "ruleset_engine_id": "satya-d20-player",
-                "tool_invocations": invocations,
-                "rag_sources_used": [
-                    inv["tool_name"]
-                    for inv in invocations
-                    if inv["tool_name"]
-                    in {"read_my_character_sheet", "inspect_public_tactical_map", "query_satya_rules"}
-                ],
-                "emitted_event_ids": get_current_emitted_event_ids(),
-                "prompt_tokens": max(32, len(str(trigger)) // 4),
-                "completion_tokens": max(16, len(reply_text) // 4),
-                "cached_tokens": 0,
-                "total_turn_latency_ms": latency_ms,
-                "turn_status": "COMPLETED",
-                "turn_logs": turn_logs,
-            }
+                trigger_event_id=str(trigger.get("event_id") or f"pev-{uuid.uuid4().hex[:8]}"),
+                trigger_summary=f"[AI Player {display_name}] {str(trigger.get('content') or 'Player Turn')[:180]}",
+                llm_provider=cfg.provider,
+                reasoning_model_id=cfg.model_id,
+                vision_model_id=cfg.vision_model_id,
+                ruleset_engine_id="satya-d20-player",
+                tool_invocations=invocations,
+                rag_tool_names=frozenset(
+                    {"read_my_character_sheet", "inspect_public_tactical_map", "query_satya_rules"}
+                ),
+                prompt_tokens=max(32, len(str(trigger)) // 4),
+                completion_tokens=max(16, len(reply_text) // 4),
+                total_turn_latency_ms=latency_ms,
+            )
             report_trajectory_to_rust(session_id, trajectory_payload)
 
             return {
                 "final_reply": reply_text,
                 "final_channel": "IN_CHARACTER",
-                "trace_id": active_trace_id,
-                "turn_logs": turn_logs,
+                "trace_id": trajectory_payload["trace_id"],
+                "turn_logs": trajectory_payload["turn_logs"],
             }
 
     workflow = StateGraph(AiPlayerSessionState)

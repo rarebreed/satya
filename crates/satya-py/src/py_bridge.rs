@@ -1,8 +1,6 @@
 //! Shared PyO3 0.27 Zero-JSON bridge helpers (`PySerde<T>`, `PyEnum<T>`, `CodedEnum` parsing,
 //! native Python dict/list <-> `serde_json::Value` serialization) across `crates/satya-py`.
 
-use std::collections::BTreeMap;
-
 use pyo3::Borrowed;
 use pyo3::conversion::FromPyObjectOwned;
 use pyo3::exceptions::PyValueError;
@@ -97,6 +95,31 @@ impl<'a, 'py, T: CodedEnum> FromPyObject<'a, 'py> for PyEnum<T> {
         let raw: String = obj.extract()?;
         parse_coded_enum::<T>(&raw, std::any::type_name::<T>()).map(Self)
     }
+}
+
+/// PyO3 argument extractor for Serde string enums parsed case-insensitively (`snake_case` / `SCREAMING_SNAKE_CASE` / raw).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PySerdeEnum<T>(pub T);
+
+impl<'a, 'py, T: DeserializeOwned> FromPyObject<'a, 'py> for PySerdeEnum<T> {
+    type Error = PyErr;
+
+    fn extract(obj: Borrowed<'a, 'py, PyAny>) -> Result<Self, Self::Error> {
+        let raw: String = obj.extract()?;
+        parse_serde_enum_ci::<T>(&raw, std::any::type_name::<T>()).map(Self)
+    }
+}
+
+/// Unwraps an optional [`PyEnum<T>`] parameter, falling back to `default` when omitted (`None`).
+#[inline]
+pub fn unwrap_py_enum_or<T: CodedEnum>(opt: Option<PyEnum<T>>, default: T) -> T {
+    opt.map_or(default, |PyEnum(v)| v)
+}
+
+/// Unwraps an optional [`PySerdeEnum<T>`] parameter, falling back to `default` when omitted (`None`).
+#[inline]
+pub fn unwrap_py_serde_enum_or<T>(opt: Option<PySerdeEnum<T>>, default: T) -> T {
+    opt.map_or(default, |PySerdeEnum(v)| v)
 }
 
 /// Converts a [`Value`] directly into a bound Python object (`dict`, `list`, `bool`, `int`, `float`, `str`, `None`).
@@ -274,12 +297,12 @@ impl<'py, T: Serialize> IntoPyObject<'py> for PySerde<T> {
 }
 
 /// Helper to build a JSON-like `Value` normalization map for default-overlay inputs (e.g. `CharacterCharacteristics` with `"for"` alias).
-pub fn merge_object_defaults<T: Serialize + DeserializeOwned>(
+pub fn merge_object_defaults<T: Default + Serialize + DeserializeOwned>(
     override_val: Option<&Value>,
     aliases: &[(&str, &str)],
     context: &str,
 ) -> PyResult<T> {
-    let mut base = serde_json::to_value(BTreeMap::<String, Value>::new())
+    let mut base = serde_json::to_value(T::default())
         .map_err(|e| to_py_err(format!("{context} init failed: {e}")))?;
     if let Some(src) = override_val
         && !src.is_null()

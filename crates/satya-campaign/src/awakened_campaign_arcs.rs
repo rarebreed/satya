@@ -518,15 +518,43 @@ define_coded_enum! {
     }
 }
 
+fn default_tradecraft_skill_n() -> usize {
+    3
+}
+
+fn default_tradecraft_control_c() -> i32 {
+    12
+}
+
 /// Inputs for [`evaluate_tradecraft_transmission`].
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TradecraftTransmissionParams {
+    #[serde(default = "default_tradecraft_skill_n")]
     pub skill_n: usize,
+    #[serde(default = "default_tradecraft_control_c")]
     pub control_c: i32,
+    #[serde(default)]
     pub operational_heat: u8,
+    #[serde(default)]
     pub has_hobby_anchor: bool,
+    #[serde(default)]
     pub player_pairs: Vec<(i32, i32)>,
+    #[serde(default)]
     pub gm_pair: Option<(i32, i32)>,
+}
+
+impl Default for TradecraftTransmissionParams {
+    fn default() -> Self {
+        Self {
+            skill_n: default_tradecraft_skill_n(),
+            control_c: default_tradecraft_control_c(),
+            operational_heat: 0,
+            has_hobby_anchor: false,
+            player_pairs: Vec::new(),
+            gm_pair: None,
+        }
+    }
 }
 
 /// Resolution details for digital vs. steganographic vs. analog transmission security (Feature 6).

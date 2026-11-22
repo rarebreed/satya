@@ -8,15 +8,13 @@ Zero imports from other `satya_ml` modules so every AI GM and AI Player module c
 from __future__ import annotations
 
 import json
-import random
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Any, ClassVar, Final, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-_RNG: Final[random.SystemRandom] = random.SystemRandom()
+from satya_py.dice import roll_d20_pair, roll_d20_pairs
 
 type CanonicalRollField = Literal[
     "skill_n",
@@ -87,9 +85,9 @@ def parse_json_list(raw: str) -> list[Any] | None:
 
 
 def roll_2d20_pairs(count: int) -> list[tuple[int, int]]:
-    """Roll `max(1, min(10, count))` cryptographically random `2d20` pairs."""
+    """Roll `max(1, min(10, count))` cryptographically random `2d20` pairs via Rust CSPRNG."""
     n_eff = max(1, min(10, int(count)))
-    return [(_RNG.randint(1, 20), _RNG.randint(1, 20)) for _ in range(n_eff)]
+    return roll_d20_pairs(n_eff)
 
 
 def resolve_d20_pairs(pairs: Sequence[Sequence[int]] | None, count: int) -> list[tuple[int, int]]:
@@ -100,10 +98,10 @@ def resolve_d20_pairs(pairs: Sequence[Sequence[int]] | None, count: int) -> list
 
 
 def resolve_gm_pair(pair: Sequence[int] | None) -> tuple[int, int]:
-    """Return an explicit opposing `2d20` pair or roll one cryptographically random pair."""
+    """Return an explicit opposing `2d20` pair or roll one cryptographically random pair via Rust CSPRNG."""
     if pair is not None and len(pair) >= 2:
         return (int(pair[0]), int(pair[1]))
-    return roll_2d20_pairs(1)[0]
+    return roll_d20_pair()
 
 
 @runtime_checkable
@@ -182,6 +180,21 @@ class ContestedRollRequest(BaseModel):
 
     def resolved_gm_pair(self) -> tuple[int, int]:
         return resolve_gm_pair(self.gm_pair)
+
+    def to_rust_pairs_dict(
+        self,
+        default_count: int | None = None,
+        *,
+        include_internal_mod: bool = False,
+    ) -> dict[str, Any]:
+        """Serialize resolved `2d20` pairs (and optional `internal_mod`) for `satya_py` Rust evaluators."""
+        payload: dict[str, Any] = {
+            "player_pairs": [list(p) for p in self.resolved_pairs(default_count)],
+            "gm_pair": list(self.resolved_gm_pair()),
+        }
+        if include_internal_mod:
+            payload["internal_mod"] = self.internal_mod
+        return payload
 
 
 class UnionToolInput(BaseModel):

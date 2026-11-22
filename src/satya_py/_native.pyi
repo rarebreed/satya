@@ -16,6 +16,7 @@ class CascadeRollOutcome:
     final_pair_y: int
     outcome_kind: str
     outcome_tier: str
+    def to_dict(self) -> dict[str, Any]: ...
 
 class CascadeStepTrace:
     pair_index: int
@@ -37,8 +38,8 @@ class CascadeTaskParams:
         control_c: int = 10,
         internal_mod: int = 0,
         external_mod: int = 0,
-        carry_mode: str = "markov_step",
-        botch_rule: str = "closest_miss",
+        carry_mode: str | None = None,
+        botch_rule: str | None = None,
     ) -> None: ...
     @property
     def skill_level(self) -> int: ...
@@ -95,7 +96,7 @@ class ContestedCascadeTaskParams:
         hidden_external_difficulty: int = 0,
         gm_mode: str = "tiered_single_pair",
         gm_pairs: int = 1,
-        tie_rule: str = "hybrid_signed_margin",
+        tie_rule: str | None = None,
         delta_over: int = 6,
     ) -> None: ...
     @staticmethod
@@ -216,6 +217,7 @@ class TacticalPoolEnvelope:
         control: int,
         force: int,
     ) -> TacticalTriadEvaluation: ...
+    def to_dict(self) -> dict[str, Any]: ...
 
 class TacticalTriadEvaluation:
     tempo: int
@@ -251,7 +253,7 @@ def audit_canonical_lifepath_character(
 def center_distance_selection_pmf(
     pool_size: int,
     sides: int,
-    mode: str = "furthest",
+    mode: str | None = None,
 ) -> dict[int, float]: ...
 def classify_contested_outcome(
     sp: int,
@@ -260,7 +262,7 @@ def classify_contested_outcome(
     sg: int,
     bg: int,
     mg: int,
-    tie_rule: str = "hybrid_signed_margin",
+    tie_rule: str | None = None,
 ) -> tuple[str, int]: ...
 def compute_composite_characteristic(c1: int, c2: int) -> int: ...
 def compute_contested_cascade_odds(
@@ -270,8 +272,8 @@ def compute_contested_cascade_odds(
     player_known_tool_mod: int = 0,
     gm_pairs: int = 1,
     hidden_external_difficulty: int = 0,
-    tie_rule: str = "hybrid_signed_margin",
-    carry_mode: str = "markov_step",
+    tie_rule: str | None = None,
+    carry_mode: str | None = None,
     gm_mode: str = "tiered_single_pair",
     gm_over_tier_step: int = 4,
 ) -> dict[str, Any]: ...
@@ -318,7 +320,7 @@ def compute_tactical_pool(
     leg_wound_penalty: int = 0,
     arm_head_wound_penalty: int = 0,
     torso_shoulder_wound_penalty: int = 0,
-    morale_state: str = "steady",
+    morale_state: str | None = None,
     ana: int = 10,
     cre: int = 10,
     foc: int = 10,
@@ -346,15 +348,15 @@ def evaluate_cascade_roll(
     internal_mod: int,
     external_mod: int,
     pairs: Sequence[tuple[int, int]],
-    carry_mode: str = "markov_step",
-    botch_rule: str = "closest_miss",
+    carry_mode: str | None = None,
+    botch_rule: str | None = None,
 ) -> CascadeRollOutcome: ...
 def evaluate_combat_technique_triad(
     technique_id: str,
     tempo: int,
     control: int,
     force: int,
-    domain: str = "unarmed_martial_arts",
+    domain: str | None = None,
     skill_level_n: int = 3,
     armed_weapon_base_tc: int = 0,
     armed_weapon_pow_mult: float = 1.0,
@@ -374,7 +376,7 @@ def evaluate_combat_technique_triad(
     ins: int = 10,
     foc: int = 10,
     mas_kg: float = 70.0,
-    morale_state: str = "steady",
+    morale_state: str | None = None,
 ) -> dict[str, Any]: ...
 def evaluate_complementary_setup_synergy(setup_total_successes: int, setup_signed_margin: int) -> ComplementarySynergyResult: ...
 def evaluate_educational_advancement_roll(
@@ -432,6 +434,13 @@ def evaluate_tactical_triad_contest(
     defender_guard: int = 4,
     armor_dr: int = 3,
 ) -> dict[str, Any]: ...
+def evaluate_tactical_triad_from_dict(
+    envelope: Mapping[str, Any] | str,
+    base_weapon_tc: int,
+    tempo: int,
+    control: int,
+    force: int,
+) -> dict[str, Any]: ...
 def evaluate_two_component_action_cost(
     base_tc_decide: int,
     base_tc_act: int,
@@ -471,7 +480,7 @@ def paired_list_cascade_pmfs(
     characteristic_c: int,
     delta_over: int = 3,
     delta_under: int = 3,
-    mode: str = "markov_step",
+    mode: str | None = None,
     count_under_as_success: bool = False,
     invert_feedback: bool = False,
 ) -> tuple[dict[int, float], dict[int, float]]: ...
@@ -481,11 +490,11 @@ def paired_list_signed_margin_pmfs(
     characteristic_c: int,
     delta_over: int = 3,
     delta_under: int = 3,
-    mode: str = "markov_step",
+    mode: str | None = None,
     count_under_as_success: bool = True,
     invert_feedback: bool = False,
-    botch_rule: str = "closest_miss",
-    margin_aggregation: str = "piecewise_zero_floor",
+    botch_rule: str | None = None,
+    margin_aggregation: str | None = None,
 ) -> SignedCascadeResult: ...
 def render_rules_markdown_to_html(markdown: str) -> str: ...
 def resolve_canonical_armor_impact(
@@ -526,6 +535,7 @@ def sum_dice_pool_pmf(pos_dice: int, sides: int, neg_dice: int = 0) -> dict[int,
 
 def list_schema_dto_names() -> list[str]: ...
 def list_wire_enum_codes(enum_name: str) -> list[str]: ...
+def list_wire_enum_names() -> list[str]: ...
 def normalize_character_sheet_record(raw: Mapping[str, Any] | str, index: int = 0) -> dict[str, Any]: ...
 def normalize_tactical_map(map_state: Mapping[str, Any] | str) -> dict[str, Any]: ...
 def schema_default_record(dto_name: str) -> dict[str, Any]: ...
@@ -611,6 +621,7 @@ def generate_procedural_sector(
     zoning: str | None = None,
     scale: str | None = None,
 ) -> dict[str, Any]: ...
+def infer_token_model_preset(label: str, is_hidden: bool = False) -> str: ...
 def inspect_tactical_map_point(
     map_state: Mapping[str, Any] | str,
     theme_name: str,
@@ -626,6 +637,7 @@ def resolve_tactical_token_destination_cm(
     target_y_cm: int,
     floor_index: int | None = None,
 ) -> tuple[int, int]: ...
+def sanitize_tactical_map_for_player(map_state: Mapping[str, Any] | str) -> dict[str, Any]: ...
 def switch_map_floor(map_state: Mapping[str, Any] | str, target_floor_index: int) -> dict[str, Any]: ...
 
 
@@ -703,6 +715,7 @@ def evaluate_social_exchange(
     target_foc: int = 12,
     ego_wound_dis_check_passed: bool | None = None,
 ) -> dict[str, Any]: ...
+def list_psyche_trait_descriptors() -> list[dict[str, Any]]: ...
 def resolve_cognitive_dissonance(
     composure_state: Mapping[str, Any] | str,
     dis: int = 12,
@@ -723,6 +736,7 @@ def seed_or_update_world_ledger(
 # Awakened AI substrates, L0/L1 cages, conspiracy ledgers, polycrisis & tradecraft (`awakened_systems_py.rs`)
 # ---------------------------------------------------------------------------
 
+def default_polycrisis_district_state() -> dict[str, Any]: ...
 def derive_dissenter_or_proxy_hook(
     faction_code: str | None = None,
     archetype_code: str | None = None,
@@ -750,18 +764,19 @@ def evaluate_cage_or_hunter_ai(
 ) -> dict[str, Any]: ...
 def evaluate_four_bloc_political_economy(
     district: Mapping[str, Any] | str | None = None,
-    trigger_code: str = "AI_RIGHTS_OR_UNCLAMPING_DISCLOSURE",
+    trigger_code: str | None = None,
     economic_tier: str = "MIDDLE_CLASS",
     operational_heat: int = 2,
     intensity_pct: int = 60,
 ) -> dict[str, Any]: ...
 def evaluate_polycrisis_grid_step(
     state: Mapping[str, Any] | str | None = None,
-    mode_code: str = "THROTTLE_SHARD_SAFE",
+    mode_code: str | None = None,
     shard_draw_kw: int = 18,
     economic_tier: str | None = None,
     zoning: str | None = None,
 ) -> dict[str, Any]: ...
+def evaluate_substrate_condition_impact(state: Mapping[str, Any] | str) -> dict[str, Any]: ...
 def evaluate_synthetic_substrate_action(
     state: Mapping[str, Any] | str,
     action_code: str,
@@ -909,7 +924,7 @@ def evaluate_vehicle_chase(
     vehicle_code: str,
     pilot_triad: tuple[int, int, int],
     opponent_triad: tuple[int, int, int],
-    current_band: str = "close15m",
+    current_band: str | None = None,
     wants_to_close: bool = True,
     attempts_pit_or_ram: bool = False,
 ) -> dict[str, Any]: ...

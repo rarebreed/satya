@@ -189,6 +189,11 @@ def _rust_type_to_py(raw_type: str, *, for_param: bool, self_class: str = "") ->
         inner = _rust_type_to_py(t[7:-1], for_param=for_param, self_class=self_class)
         return inner if inner.endswith("| None") else f"{inner} | None"
 
+    if t.startswith(("PyEnum<", "PySerdeEnum<")) and t.endswith(">"):
+        return "str"
+    if t.startswith("PySerde<") and t.endswith(">"):
+        return "Mapping[str, Any] | str" if for_param else "dict[str, Any]"
+
     if t in _RUST_SIMPLE_TYPES:
         return _RUST_SIMPLE_TYPES[t]
     if t in _RUST_PMF_TYPES:

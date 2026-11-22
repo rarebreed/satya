@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Sequence
-from typing import Final, TypedDict
+from typing import Final, TypedDict, cast
 
 from satya_py._native import (
     CascadeRollOutcome,
@@ -92,33 +92,21 @@ class LocalCascadeRollDict(CascadeOutcomeDict):
     degree_of_success: str
 
 
+def roll_d20_pair(rng: random.Random | None = None) -> tuple[int, int]:
+    """Draw a single `(die_a, die_b)` `2d20` pair using `rng` or the canonical `SystemRandom` CSPRNG."""
+    roller = rng if rng is not None else _RNG
+    return (roller.randint(1, 20), roller.randint(1, 20))
+
+
+def roll_d20_pairs(count: int, rng: random.Random | None = None) -> list[tuple[int, int]]:
+    """Draw `max(1, min(10, count))` pairs of `(die_a, die_b)` `2d20` dice."""
+    n = max(1, min(10, int(count)))
+    roller = rng if rng is not None else _RNG
+    return [(roller.randint(1, 20), roller.randint(1, 20)) for _ in range(n)]
+
+
 def _format_cascade_outcome_dict(out: CascadeRollOutcome) -> CascadeOutcomeDict:
-    return CascadeOutcomeDict(
-        steps=[
-            CascadeStepDict(
-                pair_index=int(s.pair_index),
-                die_a=int(s.die_a),
-                die_b=int(s.die_b),
-                raw_sum=int(s.raw_sum),
-                carry_in=int(s.carry_in),
-                effective_y=int(s.effective_y),
-                tn_eff=int(s.tn_eff),
-                succeeded=bool(s.succeeded),
-                step_botch=bool(s.step_botch),
-                miss_distance=int(s.miss_distance),
-                carry_out=int(s.carry_out),
-            )
-            for s in out.steps
-        ],
-        total_successes=int(out.total_successes),
-        raw_botches=int(out.raw_botches),
-        effective_botches=int(out.effective_botches),
-        min_miss_tier=int(out.min_miss_tier),
-        signed_margin=int(out.signed_margin),
-        final_pair_y=int(out.final_pair_y),
-        outcome_kind=str(out.outcome_kind),
-        outcome_tier=str(out.outcome_tier),
-    )
+    return cast(CascadeOutcomeDict, out.to_dict())
 
 
 def evaluate_cascade_pairs_dict(
@@ -168,8 +156,7 @@ def roll_cascade_local(
     )
     tn_eff = int(params.tn_eff())
     if pairs is None:
-        roller = rng if rng is not None else _RNG
-        pair_tuples = [(roller.randint(1, 20), roller.randint(1, 20)) for _ in range(n_pairs)]
+        pair_tuples = roll_d20_pairs(n_pairs, rng=rng)
     else:
         pair_tuples = [(int(a), int(b)) for a, b in list(pairs)[:n_pairs]]
 
@@ -238,6 +225,8 @@ __all__ = [
     "paired_list_signed_margin_pmfs",
     "resolve_task_gate_and_tools",
     "roll_cascade_local",
+    "roll_d20_pair",
+    "roll_d20_pairs",
     "single_die_pmf",
     "single_exploding_die_pmf",
     "sum_dice_pool_pmf",

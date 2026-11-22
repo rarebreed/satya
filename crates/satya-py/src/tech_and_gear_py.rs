@@ -35,8 +35,7 @@ use satya_engine::engineering_design::{
     evaluate_custom_armor_design, evaluate_custom_melee_design,
 };
 use satya_engine::environment_vehicles::{
-    ChaseRangeBand, VEHICLE_CATALOG, VehicleComponentZone, VehicleId,
-    evaluate_vehicle_chase_exchange,
+    ChaseRangeBand, VehicleComponentZone, VehicleId, evaluate_vehicle_chase_exchange,
 };
 use satya_engine::environmental_hazards::{
     ElectricalHazardTier, HydrationEnvironment, LandingSurfaceClass, SepsisStage,
@@ -55,8 +54,9 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use super::py_bridge::{
-    PyJsonDict, PyJsonInput, normalize_code, normalize_material_code, parse_coded_enum,
-    parse_serde_enum_ci, py_to_json_value, to_py_err, to_py_object,
+    PyEnum, PyJsonDict, PyJsonInput, PySerdeEnum, merge_object_defaults, normalize_code,
+    parse_coded_enum, parse_serde_enum_ci, py_to_json_value, to_py_err, to_py_object,
+    unwrap_py_serde_enum_or,
 };
 
 const fn def_usize<const N: usize>() -> usize {
@@ -172,26 +172,6 @@ fn d_subassy() -> String {
 }
 fn d_sniffer() -> String {
     "PASSIVE_DF_SNIFFER".to_string()
-}
-
-fn parse_characteristics_value(val: Option<&Value>) -> PyResult<CharacterCharacteristics> {
-    let mut base = serde_json::to_value(CharacterCharacteristics::default())
-        .map_err(|e| to_py_err(format!("Default characteristics encode failed: {e}")))?;
-    if let Some(src) = val
-        && !src.is_null()
-    {
-        let src_obj = src
-            .as_object()
-            .ok_or_else(|| to_py_err("Characteristics override must be a mapping/object"))?;
-        if let Some(dst_obj) = base.as_object_mut() {
-            for (k, v) in src_obj {
-                let key = if k == "for" { "for_stat" } else { k.as_str() };
-                dst_obj.insert(key.to_string(), v.clone());
-            }
-        }
-    }
-    serde_json::from_value(base)
-        .map_err(|e| to_py_err(format!("Invalid CharacterCharacteristics: {e}")))
 }
 
 fn opt_serde<T: serde::de::DeserializeOwned>(
@@ -436,7 +416,11 @@ pub fn evaluate_multi_spectrum_stealth(
         .map_err(|e| to_py_err(format!("Invalid stealth params: {e}")))?;
 
     let eval_params = MultiSpectrumStealthParams {
-        infiltrator: parse_characteristics_value(raw.infiltrator.as_ref())?,
+        infiltrator: merge_object_defaults::<CharacterCharacteristics>(
+            raw.infiltrator.as_ref(),
+            &[("for", "for_stat")],
+            "characteristics",
+        )?,
         infiltrator_gait: opt_serde(
             raw.infiltrator_gait.as_deref(),
             "infiltrator_gait",
@@ -474,7 +458,11 @@ pub fn evaluate_multi_spectrum_stealth(
             _ => None,
         },
         cover_identity_pr_bonus: raw.cover_identity_pr_bonus,
-        observer: parse_characteristics_value(raw.observer.as_ref())?,
+        observer: merge_object_defaults::<CharacterCharacteristics>(
+            raw.observer.as_ref(),
+            &[("for", "for_stat")],
+            "characteristics",
+        )?,
         observation_mode: opt_serde(
             raw.observation_mode.as_deref(),
             "observation_mode",
@@ -512,7 +500,7 @@ pub fn evaluate_multi_spectrum_stealth(
 #[pyo3(signature = (tail_stance, shadower_skill_n, shadower_control_c, shadower_pairs, target_gm_pair, shadower_internal_mod=0, shadower_tool_delta_mod=0, target_sdr_delta_ext=0))]
 pub fn evaluate_surveillance_tail(
     py: Python<'_>,
-    tail_stance: &str,
+    tail_stance: PySerdeEnum<TailStance>,
     shadower_skill_n: usize,
     shadower_control_c: i32,
     shadower_pairs: Vec<(i32, i32)>,
@@ -521,11 +509,10 @@ pub fn evaluate_surveillance_tail(
     shadower_tool_delta_mod: i32,
     target_sdr_delta_ext: i32,
 ) -> PyResult<PyJsonDict> {
-    let stance: TailStance = parse_serde_enum_ci(tail_stance, "tail_stance")?;
     to_py_object(
         py,
         &evaluate_surveillance_tail_exchange(
-            stance,
+            tail_stance.0,
             shadower_skill_n,
             shadower_control_c,
             shadower_internal_mod,
@@ -543,7 +530,7 @@ pub fn evaluate_surveillance_tail(
 #[pyo3(signature = (decay_context, hours_elapsed, investigator_skill_n, investigator_control_c, investigator_pairs, gm_pair, base_obscurity_delta_ext=0, internal_mod=0, tool_delta_mod=0))]
 pub fn evaluate_forensic_clue_search(
     py: Python<'_>,
-    decay_context: &str,
+    decay_context: PySerdeEnum<ForensicDecayContext>,
     hours_elapsed: f64,
     investigator_skill_n: usize,
     investigator_control_c: i32,
@@ -553,11 +540,10 @@ pub fn evaluate_forensic_clue_search(
     internal_mod: i32,
     tool_delta_mod: i32,
 ) -> PyResult<PyJsonDict> {
-    let ctx: ForensicDecayContext = parse_serde_enum_ci(decay_context, "decay_context")?;
     to_py_object(
         py,
         &satya_engine::action_catalog_stealth::evaluate_forensic_clue_search(
-            ctx,
+            decay_context.0,
             hours_elapsed,
             base_obscurity_delta_ext,
             investigator_skill_n,
@@ -579,7 +565,7 @@ pub fn evaluate_contact_favor(
     reach_access_tier: u8,
     reliability_trust: u8,
     exposure_burn_risk: u8,
-    favor_severity: &str,
+    favor_severity: PySerdeEnum<FavorSeverityTier>,
     required_reach_tier: u8,
     jurisdiction_heat: u8,
     requester_skill_n: usize,
@@ -593,12 +579,11 @@ pub fn evaluate_contact_favor(
         reliability_trust,
         exposure_burn_risk,
     };
-    let favor: FavorSeverityTier = parse_serde_enum_ci(favor_severity, "favor_severity")?;
     to_py_object(
         py,
         &evaluate_contact_favor_request(
             contact,
-            favor,
+            favor_severity.0,
             required_reach_tier,
             jurisdiction_heat,
             requester_skill_n,
@@ -616,8 +601,8 @@ pub fn evaluate_contact_favor(
 #[pyo3(signature = (cover_tier, scrutiny_level, cover_heat, holder_skill_n, holder_control_c, player_pairs, gm_pair, internal_mod=0))]
 pub fn evaluate_cover_identity_scrutiny(
     py: Python<'_>,
-    cover_tier: &str,
-    scrutiny_level: &str,
+    cover_tier: PyEnum<CoverIdentityTier>,
+    scrutiny_level: PySerdeEnum<CoverScrutinyLevel>,
     cover_heat: u8,
     holder_skill_n: usize,
     holder_control_c: i32,
@@ -625,13 +610,11 @@ pub fn evaluate_cover_identity_scrutiny(
     gm_pair: (i32, i32),
     internal_mod: i32,
 ) -> PyResult<PyJsonDict> {
-    let tier = parse_coded_enum::<CoverIdentityTier>(cover_tier, "cover_tier")?;
-    let scrutiny: CoverScrutinyLevel = parse_serde_enum_ci(scrutiny_level, "scrutiny_level")?;
     to_py_object(
         py,
         &satya_engine::economy_gear::evaluate_cover_identity_scrutiny(
-            tier,
-            scrutiny,
+            cover_tier.0,
+            scrutiny_level.0,
             cover_heat,
             holder_skill_n,
             holder_control_c,
@@ -648,7 +631,7 @@ pub fn evaluate_cover_identity_scrutiny(
 #[pyo3(signature = (safehouse_tier, returning_heat, actively_tailed, rf_hygiene_breached, operator_skill_n, operator_control_c, operator_pairs, gm_pair, internal_mod=0))]
 pub fn evaluate_safehouse_compromise(
     py: Python<'_>,
-    safehouse_tier: &str,
+    safehouse_tier: PyEnum<SafehouseTier>,
     returning_heat: u8,
     actively_tailed: bool,
     rf_hygiene_breached: bool,
@@ -658,11 +641,10 @@ pub fn evaluate_safehouse_compromise(
     gm_pair: (i32, i32),
     internal_mod: i32,
 ) -> PyResult<PyJsonDict> {
-    let tier = parse_coded_enum::<SafehouseTier>(safehouse_tier, "safehouse_tier")?;
     to_py_object(
         py,
         &evaluate_safehouse_compromise_check(
-            tier,
+            safehouse_tier.0,
             returning_heat,
             actively_tailed,
             rf_hygiene_breached,
@@ -681,17 +663,16 @@ pub fn evaluate_safehouse_compromise(
 #[pyo3(signature = (ordnance_code, distance_m, enclosed_room=false, target_is_prone=false, intervening_barrier_pr=0))]
 pub fn evaluate_blast_and_fragmentation(
     py: Python<'_>,
-    ordnance_code: &str,
+    ordnance_code: PyEnum<ExplosiveOrdnanceId>,
     distance_m: f64,
     enclosed_room: bool,
     target_is_prone: bool,
     intervening_barrier_pr: i32,
 ) -> PyResult<PyJsonDict> {
-    let ordnance = parse_coded_enum::<ExplosiveOrdnanceId>(ordnance_code, "explosive ordnance")?;
     to_py_object(
         py,
         &satya_engine::explosives_and_arsenal::evaluate_blast_and_fragmentation(
-            ordnance,
+            ordnance_code.0,
             distance_m,
             enclosed_room,
             target_is_prone,
@@ -705,20 +686,17 @@ pub fn evaluate_blast_and_fragmentation(
 #[pyo3(signature = (ordnance_code, target_material_code, demolitions_net_successes=0, friendly_standoff_m=6.0, enclosed_interior=true))]
 pub fn evaluate_explosive_breach(
     py: Python<'_>,
-    ordnance_code: &str,
-    target_material_code: &str,
+    ordnance_code: PyEnum<ExplosiveOrdnanceId>,
+    target_material_code: PyEnum<MaterialClass>,
     demolitions_net_successes: i32,
     friendly_standoff_m: f64,
     enclosed_interior: bool,
 ) -> PyResult<PyJsonDict> {
-    let ordnance = parse_coded_enum::<ExplosiveOrdnanceId>(ordnance_code, "explosive ordnance")?;
-    let mat_norm = normalize_material_code(target_material_code);
-    let material = parse_coded_enum::<MaterialClass>(&mat_norm, "target_material")?;
     to_py_object(
         py,
         &satya_engine::explosives_and_arsenal::evaluate_explosive_breach(
-            ordnance,
-            material,
+            ordnance_code.0,
+            target_material_code.0,
             demolitions_net_successes,
             friendly_standoff_m,
             enclosed_interior,
@@ -726,29 +704,20 @@ pub fn evaluate_explosive_breach(
     )
 }
 
-fn resolve_vehicle_spec(
-    vehicle_code: &str,
-) -> PyResult<&'static satya_engine::environment_vehicles::VehicleCatalogSpec> {
-    if vehicle_code.trim().is_empty() {
-        return Ok(&VEHICLE_CATALOG[1]);
-    }
-    Ok(parse_coded_enum::<VehicleId>(vehicle_code, "vehicle_code")?.spec())
-}
-
 /// Evaluates a high-speed Vehicular Chase exchange bounded by the canonical vehicle envelope (Ch. 20 §3.1–§3.2).
 #[pyfunction]
-#[pyo3(signature = (vehicle_code, pilot_triad, opponent_triad, current_band="close15m", wants_to_close=true, attempts_pit_or_ram=false))]
+#[pyo3(signature = (vehicle_code, pilot_triad, opponent_triad, current_band=None, wants_to_close=true, attempts_pit_or_ram=false))]
 pub fn evaluate_vehicle_chase(
     py: Python<'_>,
-    vehicle_code: &str,
+    vehicle_code: PyEnum<VehicleId>,
     pilot_triad: (i32, i32, i32),
     opponent_triad: (i32, i32, i32),
-    current_band: &str,
+    current_band: Option<PySerdeEnum<ChaseRangeBand>>,
     wants_to_close: bool,
     attempts_pit_or_ram: bool,
 ) -> PyResult<PyJsonDict> {
-    let spec = resolve_vehicle_spec(vehicle_code)?;
-    let band: ChaseRangeBand = parse_serde_enum_ci(current_band, "current_band")?;
+    let spec = vehicle_code.0.spec();
+    let band = unwrap_py_serde_enum_or(current_band, ChaseRangeBand::Close15m);
     to_py_object(
         py,
         &evaluate_vehicle_chase_exchange(
@@ -767,20 +736,19 @@ pub fn evaluate_vehicle_chase(
 #[pyo3(signature = (vehicle_code, zone, uses_run_flat_tires=false, hits_ballistic_glass=false, effective_pen=4, effective_raw_impact=8))]
 pub fn evaluate_vehicle_component_damage(
     py: Python<'_>,
-    vehicle_code: &str,
-    zone: &str,
+    vehicle_code: PyEnum<VehicleId>,
+    zone: PySerdeEnum<VehicleComponentZone>,
     uses_run_flat_tires: bool,
     hits_ballistic_glass: bool,
     effective_pen: i32,
     effective_raw_impact: i32,
 ) -> PyResult<PyJsonDict> {
-    let spec = resolve_vehicle_spec(vehicle_code)?;
-    let zone_enum: VehicleComponentZone = parse_serde_enum_ci(zone, "vehicle_component_zone")?;
+    let spec = vehicle_code.0.spec();
     to_py_object(
         py,
         &satya_engine::environment_vehicles::evaluate_vehicle_component_damage(
             spec,
-            zone_enum,
+            zone.0,
             uses_run_flat_tires,
             hits_ballistic_glass,
             effective_pen,
@@ -1022,12 +990,11 @@ pub fn evaluate_custom_gear_design(
 #[pyo3(signature = (chassis_code, module_codes=None, extra_armor_pr=0, autonomy_compute_w=0.0))]
 pub fn evaluate_modular_drone_design(
     py: Python<'_>,
-    chassis_code: &str,
+    chassis_code: PyEnum<DroneChassisClass>,
     module_codes: Option<Vec<String>>,
     extra_armor_pr: i32,
     autonomy_compute_w: f64,
 ) -> PyResult<PyJsonDict> {
-    let chassis = parse_coded_enum::<DroneChassisClass>(chassis_code, "drone_chassis")?;
     let raw_mods = module_codes.unwrap_or_default();
     let mut modules = Vec::with_capacity(raw_mods.len());
     for raw in raw_mods {
@@ -1036,7 +1003,7 @@ pub fn evaluate_modular_drone_design(
     to_py_object(
         py,
         &satya_engine::robotics_and_ai_design::evaluate_modular_drone_design(
-            chassis,
+            chassis_code.0,
             &modules,
             extra_armor_pr,
             autonomy_compute_w,
@@ -1051,20 +1018,19 @@ pub fn evaluate_robot_chassis_damage(
     py: Python<'_>,
     current_si: i32,
     chassis_pr: i32,
-    hit_zone: &str,
+    hit_zone: PyEnum<ChassisHitZone>,
     attack_pen: i32,
     raw_impact: i32,
     net_successes: i32,
     is_emp_or_arc: bool,
     emp_hardened: bool,
 ) -> PyResult<PyJsonDict> {
-    let zone = parse_coded_enum::<ChassisHitZone>(hit_zone, "chassis_hit_zone")?;
     to_py_object(
         py,
         &satya_engine::robotics_and_ai_design::evaluate_robot_chassis_damage(
             current_si,
             chassis_pr,
-            zone,
+            hit_zone.0,
             attack_pen,
             raw_impact,
             net_successes,
@@ -1079,7 +1045,7 @@ pub fn evaluate_robot_chassis_damage(
 #[pyo3(signature = (paradigm_code, human_domain_n, ai_autonomy_leverage, human_control_c, human_pairs, gm_pair, internal_mod=0, base_task_delta_ext=0))]
 pub fn evaluate_human_ai_codesign(
     py: Python<'_>,
-    paradigm_code: &str,
+    paradigm_code: PyEnum<AiArchitectureParadigm>,
     human_domain_n: i32,
     ai_autonomy_leverage: i32,
     human_control_c: i32,
@@ -1088,12 +1054,10 @@ pub fn evaluate_human_ai_codesign(
     internal_mod: i32,
     base_task_delta_ext: i32,
 ) -> PyResult<PyJsonDict> {
-    let paradigm =
-        parse_coded_enum::<AiArchitectureParadigm>(paradigm_code, "ai_architecture_paradigm")?;
     to_py_object(
         py,
         &evaluate_human_ai_codesign_session(
-            paradigm,
+            paradigm_code.0,
             human_domain_n,
             ai_autonomy_leverage,
             human_control_c,
@@ -1112,20 +1076,18 @@ pub fn evaluate_human_ai_codesign(
 pub fn evaluate_verification_debt_audit(
     py: Python<'_>,
     current_debt: i32,
-    paradigm_code: &str,
+    paradigm_code: PyEnum<AiArchitectureParadigm>,
     auditor_n: i32,
     auditor_control_c: i32,
     auditor_pairs: Vec<(i32, i32)>,
     gm_pair: (i32, i32),
     internal_mod: i32,
 ) -> PyResult<PyJsonDict> {
-    let paradigm =
-        parse_coded_enum::<AiArchitectureParadigm>(paradigm_code, "ai_architecture_paradigm")?;
     to_py_object(
         py,
         &satya_engine::robotics_and_ai_design::evaluate_verification_debt_audit(
             current_debt,
-            paradigm,
+            paradigm_code.0,
             auditor_n,
             auditor_control_c,
             internal_mod,
@@ -1166,8 +1128,8 @@ pub fn evaluate_cyber_augmentation_loadout(
 #[pyo3(signature = (node_code, phase_code, is_physically_tapped, operator_control_c, operator_pairs, gm_pair, internal_mod=0, tool_mod=0))]
 pub fn evaluate_network_intrusion(
     py: Python<'_>,
-    node_code: &str,
-    phase_code: &str,
+    node_code: PyEnum<SurveillanceNodeKind>,
+    phase_code: PyEnum<NetworkIntrusionPhase>,
     is_physically_tapped: bool,
     operator_control_c: i32,
     operator_pairs: Vec<(i32, i32)>,
@@ -1175,13 +1137,11 @@ pub fn evaluate_network_intrusion(
     internal_mod: i32,
     tool_mod: i32,
 ) -> PyResult<PyJsonDict> {
-    let node = parse_coded_enum::<SurveillanceNodeKind>(node_code, "surveillance_node")?;
-    let phase = parse_coded_enum::<NetworkIntrusionPhase>(phase_code, "network_intrusion_phase")?;
     to_py_object(
         py,
         &evaluate_network_or_sensor_intrusion(
-            node,
-            phase,
+            node_code.0,
+            phase_code.0,
             is_physically_tapped,
             operator_control_c,
             internal_mod,
@@ -1198,8 +1158,8 @@ pub fn evaluate_network_intrusion(
 #[pyo3(signature = (ecm_code, eccm_code, distance_m, active_duration_min, operator_control_c, operator_pairs, gm_pair, internal_mod=0))]
 pub fn evaluate_ecm_vs_eccm(
     py: Python<'_>,
-    ecm_code: &str,
-    eccm_code: &str,
+    ecm_code: PyEnum<EcmMethodId>,
+    eccm_code: PyEnum<EccmHardeningId>,
     distance_m: f64,
     active_duration_min: f64,
     operator_control_c: i32,
@@ -1207,13 +1167,11 @@ pub fn evaluate_ecm_vs_eccm(
     gm_pair: (i32, i32),
     internal_mod: i32,
 ) -> PyResult<PyJsonDict> {
-    let ecm = parse_coded_enum::<EcmMethodId>(ecm_code, "ecm_method")?;
-    let eccm = parse_coded_enum::<EccmHardeningId>(eccm_code, "eccm_hardening")?;
     to_py_object(
         py,
         &evaluate_ecm_vs_eccm_contest(
-            ecm,
-            eccm,
+            ecm_code.0,
+            eccm_code.0,
             distance_m,
             active_duration_min,
             operator_control_c,
@@ -1297,7 +1255,7 @@ mod tests {
 
             let tail = evaluate_surveillance_tail(
                 py,
-                "TIGHT_TAIL",
+                PySerdeEnum(TailStance::TightTail),
                 2,
                 14,
                 vec![(16, 15), (14, 14)],
@@ -1311,7 +1269,7 @@ mod tests {
 
             let forensic = evaluate_forensic_clue_search(
                 py,
-                "PROFESSIONALLY_SCRUBBED",
+                PySerdeEnum(ForensicDecayContext::ProfessionallyScrubbed),
                 48.0,
                 3,
                 15,
@@ -1334,7 +1292,7 @@ mod tests {
                 2,
                 3,
                 1,
-                "MODERATE",
+                PySerdeEnum(FavorSeverityTier::Moderate),
                 2,
                 2,
                 2,
@@ -1348,8 +1306,8 @@ mod tests {
 
             let cover = evaluate_cover_identity_scrutiny(
                 py,
-                "COVER_TIER_2_DB_ALIAS",
-                "BIOMETRIC_AUDIT_OR_FEDERAL_CROSS_CHECK",
+                PyEnum(CoverIdentityTier::Tier2DatabaseSeededAlias),
+                PySerdeEnum(CoverScrutinyLevel::BiometricAuditOrFederalCrossCheck),
                 6,
                 2,
                 11,
@@ -1362,7 +1320,7 @@ mod tests {
 
             let safe = evaluate_safehouse_compromise(
                 py,
-                "SAFEHOUSE_FARADAY_SHOP",
+                PyEnum(SafehouseTier::HardenedFaradayWorkshop),
                 5,
                 false,
                 true,
@@ -1378,15 +1336,28 @@ mod tests {
                 true
             );
 
-            let blast = evaluate_blast_and_fragmentation(py, "M67_FRAG", 2.0, true, false, 0)
-                .unwrap();
+            let blast = evaluate_blast_and_fragmentation(
+                py,
+                PyEnum(ExplosiveOrdnanceId::M67FragmentationGrenade),
+                2.0,
+                true,
+                false,
+                0,
+            )
+            .unwrap();
             assert_eq!(
                 py_to_value(blast.bind(py)).unwrap()["enclosed_room_reflected"],
                 true
             );
-            let breach =
-                evaluate_explosive_breach(py, "LINEAR_SHAPED_BREACH", "CONCRETE", 2, 4.0, true)
-                    .unwrap();
+            let breach = evaluate_explosive_breach(
+                py,
+                PyEnum(ExplosiveOrdnanceId::LinearShapedBreachingCharge),
+                PyEnum(MaterialClass::ConcreteBlock),
+                2,
+                4.0,
+                true,
+            )
+            .unwrap();
             assert!(
                 py_to_value(breach.bind(py)).unwrap()["effective_breach_pr"]
                     .as_i64()
@@ -1396,10 +1367,10 @@ mod tests {
 
             let chase = evaluate_vehicle_chase(
                 py,
-                "COMPACT_URBAN_EV",
+                PyEnum(VehicleId::CompactUrbanEv),
                 (18, 16, 10),
                 (10, 10, 10),
-                "medium50m",
+                Some(PySerdeEnum(ChaseRangeBand::Medium50m)),
                 true,
                 false,
             )
@@ -1408,8 +1379,8 @@ mod tests {
 
             let v_dmg = evaluate_vehicle_component_damage(
                 py,
-                "COMPACT_URBAN_EV",
-                "fuel_or_ev_battery_pack",
+                PyEnum(VehicleId::CompactUrbanEv),
+                PySerdeEnum(VehicleComponentZone::FuelOrEvBatteryPack),
                 false,
                 false,
                 7,
@@ -1444,7 +1415,7 @@ mod tests {
 
             let drone = evaluate_modular_drone_design(
                 py,
-                "TACTICAL_FPV_QUAD",
+                PyEnum(DroneChassisClass::TacticalQuadrotorFpv),
                 Some(vec![
                     "EO_FLIR_GIMBAL".to_string(),
                     "SOLID_STATE_BATTERY".to_string(),
@@ -1460,14 +1431,23 @@ mod tests {
                     > 10.0
             );
 
-            let chassis_dmg =
-                evaluate_robot_chassis_damage(py, 6, 2, "BATTERY_PACK", 4, 8, 2, true, false)
-                    .unwrap();
+            let chassis_dmg = evaluate_robot_chassis_damage(
+                py,
+                6,
+                2,
+                PyEnum(ChassisHitZone::BatteryPackOrPowerbus),
+                4,
+                8,
+                2,
+                true,
+                false,
+            )
+            .unwrap();
             assert_eq!(py_to_value(chassis_dmg.bind(py)).unwrap()["emp_reboot_ticks"], 40);
 
             let codesign = evaluate_human_ai_codesign(
                 py,
-                "SPARSE_MOE",
+                PyEnum(AiArchitectureParadigm::SparseMoETransformer),
                 2,
                 5,
                 14,
@@ -1487,7 +1467,7 @@ mod tests {
             let audit = evaluate_verification_debt_audit(
                 py,
                 4,
-                "NEURO_SYMBOLIC",
+                PyEnum(AiArchitectureParadigm::NeuroSymbolicVerifier),
                 3,
                 15,
                 vec![(16, 15), (15, 14), (14, 12)],
@@ -1517,8 +1497,8 @@ mod tests {
 
             let scada = evaluate_network_intrusion(
                 py,
-                "AIR_GAPPED_SCADA",
-                "ENTRY",
+                PyEnum(SurveillanceNodeKind::AirGappedScadaEnclave),
+                PyEnum(NetworkIntrusionPhase::CredentialOrExploitEntry),
                 false,
                 15,
                 vec![(18, 17)],
@@ -1534,8 +1514,8 @@ mod tests {
 
             let optical = evaluate_ecm_vs_eccm(
                 py,
-                "BROADBAND_BARRAGE",
-                "OPTICAL_FIBER_TETHER",
+                PyEnum(EcmMethodId::BroadbandRfBarrageJammer),
+                PyEnum(EccmHardeningId::OpticalLaserOrFiberTether),
                 40.0,
                 5.0,
                 15,

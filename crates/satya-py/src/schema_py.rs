@@ -4,20 +4,18 @@
 use std::collections::BTreeMap;
 
 use pyo3::prelude::*;
-use satya_maps::tactical_map::SectorPreset;
 use satya_schema::{
     AiGmOperatingMode, AiGmTurnTriggerRequest, AnatomicalZoneRecord, ChannelContext,
     CharacterAptitudesRecord, CharacterAssetKind, CharacterAssetRef,
     CharacterCharacteristicsRecord, CharacterSheetRecord, CharacterVerificationStatus, CodedEnum,
-    CombatTrackerState, CombatantTickEntry, CoverGrade, EconomicTier, EdgeSide, FactionClockRecord,
-    GenerateNpcRequest, GmChatRequest, GmMapUpdateRequest, GmMemoryNoteRecord, GmRollRequest,
-    MapContinuationDir, MapScalePreset, MaterialClass, MessageVisibility, Participant,
-    PiiFieldDescriptor, PlayerAiChatRequest, PlayerAiDoorRequest, PlayerAiRollRequest, PropKind,
-    RegisteredSchema, SchemaRegistry, SessionMode, SessionNpcEntry, SessionRole,
-    SessionWorldLedger, StepAiPlayerRequest, StoreArchetype, SurfaceFeatureKind, TacticalTileKind,
-    TokenPlacement, TokenVisualSpec, UpdateAiRallyRequest, UpdateCombatTrackerRequest,
-    UpdateSessionNpcRequest, UpdateWorldLedgerRequest, UpsertGmMemoryRequest, WallEdgeKind,
-    ZoningContext,
+    CombatTrackerState, CombatantTickEntry, FactionClockRecord, GenerateNpcRequest, GmChatRequest,
+    GmMapUpdateRequest, GmMemoryNoteRecord, GmRollRequest, GmSessionLogEntry,
+    GmTrajectoryReportRequest, McpToolInvocationRecord, MessageVisibility, MoveMapTokenRequest,
+    Participant, PiiFieldDescriptor, PlayerAiChatRequest, PlayerAiDoorRequest,
+    PlayerAiRollRequest, RegisteredSchema, SchemaRegistry, SessionMode, SessionNpcEntry,
+    SessionRole, SessionWorldLedger, StepAiPlayerRequest, TokenPlacement, TokenVisualSpec,
+    UpdateAiRallyRequest, UpdateCombatTrackerRequest, UpdateSessionNpcRequest,
+    UpdateWorldLedgerRequest, UpsertGmMemoryRequest,
 };
 use serde_json::{Map, Value, json};
 
@@ -49,6 +47,10 @@ const SCHEMA_DTO_NAMES: &[&str] = &[
     "GmMapUpdateRequest",
     "GmMemoryNoteRecord",
     "GmRollRequest",
+    "GmSessionLogEntry",
+    "GmTrajectoryReportRequest",
+    "McpToolInvocationRecord",
+    "MoveMapTokenRequest",
     "Participant",
     "PlayerAiChatRequest",
     "PlayerAiDoorRequest",
@@ -643,6 +645,10 @@ pub fn validate_schema_dto(
         "gmmapupdaterequest" => GmMapUpdateRequest,
         "gmmemorynoterecord" => GmMemoryNoteRecord,
         "gmrollrequest" => GmRollRequest,
+        "gmsessionlogentry" => GmSessionLogEntry,
+        "gmtrajectoryreportrequest" => GmTrajectoryReportRequest,
+        "mcptoolinvocationrecord" => McpToolInvocationRecord,
+        "movemaptokenrequest" => MoveMapTokenRequest,
         "participant" => Participant,
         "playeraichatrequest" => PlayerAiChatRequest,
         "playeraidoorrequest" => PlayerAiDoorRequest,
@@ -670,30 +676,170 @@ fn coded_enum_codes<T: CodedEnum>() -> Vec<String> {
     T::ALL.iter().map(|v| v.code().to_string()).collect()
 }
 
-/// Returns canonical wire codes from [`CodedEnum::ALL`] (or `PROP_CATALOG`) for the requested schema/map enum.
+fn normalize_registry_key(raw: &str) -> String {
+    raw.trim().to_ascii_lowercase().replace(['-', '_'], "")
+}
+
+macro_rules! wire_enum_registry {
+    (
+        coded: [ $( ($canonical:literal, $EnumTy:ty) ),+ $(,)? ],
+        custom: [ $( ($custom_name:literal, $custom_fn:path) ),* $(,)? ]
+    ) => {
+        const WIRE_ENUM_NAMES: &[&str] = &[
+            $($canonical,)+
+            $($custom_name,)*
+        ];
+
+        fn lookup_wire_enum_codes(enum_name: &str) -> PyResult<Vec<String>> {
+            let norm = normalize_registry_key(enum_name);
+            $(
+                if norm == normalize_registry_key($canonical) {
+                    return Ok(coded_enum_codes::<$EnumTy>());
+                }
+            )+
+            $(
+                if norm == normalize_registry_key($custom_name) {
+                    return Ok($custom_fn());
+                }
+            )*
+            let valid = WIRE_ENUM_NAMES.join(", ");
+            Err(to_py_err(format!(
+                "Unknown wire enum '{enum_name}'; expected one of: {valid}"
+            )))
+        }
+    };
+}
+
+wire_enum_registry! {
+    coded: [
+        ("AcousticSurfaceKind", satya_engine::action_catalog_stealth::AcousticSurfaceKind),
+        ("AffectiveSteeringMode", satya_campaign::AffectiveSteeringMode),
+        ("AiArchitectureParadigm", satya_engine::robotics_and_ai_design::AiArchitectureParadigm),
+        ("AiGmOperatingMode", satya_schema::AiGmOperatingMode),
+        ("AiGmTurnStatus", satya_schema::AiGmTurnStatus),
+        ("AlertnessLevel", satya_engine::action_catalog_stealth::AlertnessLevel),
+        ("AptitudeCode", satya_engine::characteristics::AptitudeCode),
+        ("Arc3EndingHorizon", satya_campaign::Arc3EndingHorizon),
+        ("ArmorCoverageTier", satya_engine::engineering_design::ArmorCoverageTier),
+        ("ArmorMaterialArchitecture", satya_engine::engineering_design::ArmorMaterialArchitecture),
+        ("AwakenedFactionId", satya_campaign::AwakenedFactionId),
+        ("BlackMarketRestrictionClass", satya_engine::economy_gear::BlackMarketRestrictionClass),
+        ("BotchRule", satya_engine::dice_probabilities::BotchRule),
+        ("BulletConstructionKind", satya_engine::engineering_design::BulletConstructionKind),
+        ("CageInterventionAction", satya_campaign::CageInterventionAction),
+        ("CampaignArcStage", satya_campaign::CampaignArcStage),
+        ("CanonicalActionId", satya_engine::action_catalog_stealth::CanonicalActionId),
+        ("CareerTermTrack", satya_engine::lifepath_catalog::CareerTermTrack),
+        ("CarryMode", satya_engine::dice_probabilities::CarryMode),
+        ("CascadeOutcomeKind", satya_engine::dice_probabilities::CascadeOutcomeKind),
+        ("CenterDistanceMode", satya_engine::dice_pools::CenterDistanceMode),
+        ("ChannelContext", satya_schema::ChannelContext),
+        ("CharacteristicCode", satya_engine::characteristics::CharacteristicCode),
+        ("ChassisHitZone", satya_engine::robotics_and_ai_design::ChassisHitZone),
+        ("CombatDomain", satya_engine::combat_techniques::CombatDomain),
+        ("CombatMoveCategory", satya_engine::combat_techniques::CombatMoveCategory),
+        ("CombatMovementGait", satya_engine::environment_vehicles::CombatMovementGait),
+        ("CombatStance", satya_schema::CombatStance),
+        ("CombatTechniqueId", satya_engine::combat_techniques::CombatTechniqueId),
+        ("ConspiracyDiscoveryTier", satya_campaign::ConspiracyDiscoveryTier),
+        ("ConspiracyNodeId", satya_campaign::ConspiracyNodeId),
+        ("ContestedOutcomeKind", satya_engine::contested_cascade::ContestedOutcomeKind),
+        ("ContestedTieRule", satya_engine::contested_cascade::ContestedTieRule),
+        ("CorporateLabBrand", satya_campaign::CorporateLabBrand),
+        ("CoverGrade", satya_schema::CoverGrade),
+        ("CoverIdentityTier", satya_engine::economy_gear::CoverIdentityTier),
+        ("CyberAugmentId", satya_engine::robotics_and_ai_design::CyberAugmentId),
+        ("DroneChassisClass", satya_engine::robotics_and_ai_design::DroneChassisClass),
+        ("DroneModuleId", satya_engine::robotics_and_ai_design::DroneModuleId),
+        ("EccmHardeningId", satya_engine::electronic_warfare::EccmHardeningId),
+        ("EcmMethodId", satya_engine::electronic_warfare::EcmMethodId),
+        ("EconomicTier", satya_schema::EconomicTier),
+        ("EdgeSide", satya_schema::EdgeSide),
+        ("EwHardwareRole", satya_engine::electronic_warfare::EwHardwareRole),
+        ("ExplosiveOrdnanceId", satya_engine::explosives_and_arsenal::ExplosiveOrdnanceId),
+        ("FactionArchetypeId", satya_campaign::FactionArchetypeId),
+        ("FieldDrugId", satya_engine::environmental_hazards::FieldDrugId),
+        ("FormativeLifeEventId", satya_engine::lifepath_hobbies_events::FormativeLifeEventId),
+        ("GmLookupSourceKind", satya_schema::GmLookupSourceKind),
+        ("GmMemoryCategory", satya_schema::GmMemoryCategory),
+        ("HighSchoolTrack", satya_engine::lifepath_catalog::HighSchoolTrack),
+        ("LogLevel", satya_schema::LogLevel),
+        ("MapContinuationDir", satya_schema::MapContinuationDir),
+        ("MapScalePreset", satya_schema::MapScalePreset),
+        ("MarginAggregation", satya_engine::dice_probabilities::MarginAggregation),
+        ("MaterialClass", satya_schema::MaterialClass),
+        ("McpServerTier", satya_schema::McpServerTier),
+        ("MeleeChassisClass", satya_engine::engineering_design::MeleeChassisClass),
+        ("MeleeErgonomicTuning", satya_engine::engineering_design::MeleeErgonomicTuning),
+        ("MeleeMaterialGrade", satya_engine::engineering_design::MeleeMaterialGrade),
+        ("MessageVisibility", satya_schema::MessageVisibility),
+        ("MoraleState", satya_engine::combat::MoraleState),
+        ("NetworkIntrusionPhase", satya_engine::electronic_warfare::NetworkIntrusionPhase),
+        ("NonFirearmWeaponId", satya_engine::explosives_and_arsenal::NonFirearmWeaponId),
+        ("NpcTemplateKind", satya_campaign::NpcTemplateKind),
+        ("ObserverAttentionState", satya_engine::action_catalog_stealth::ObserverAttentionState),
+        ("OperationalHeatTier", satya_engine::economy_gear::OperationalHeatTier),
+        ("OutcomeTier", satya_schema::OutcomeTier),
+        ("ParticipantKind", satya_schema::ParticipantKind),
+        ("PersonalHobbyId", satya_engine::lifepath_hobbies_events::PersonalHobbyId),
+        ("PoliticalEconomyTrigger", satya_campaign::PoliticalEconomyTrigger),
+        ("PolycrisisGridMode", satya_campaign::PolycrisisGridMode),
+        ("ProjectClockComplexity", satya_engine::engineering_design::ProjectClockComplexity),
+        ("PropKind", satya_schema::PropKind),
+        ("PrototypeQuirkId", satya_engine::engineering_design::PrototypeQuirkId),
+        ("PsycheTraitId", satya_engine::psyche_social::PsycheTraitId),
+        ("RuralYouthArchetype", satya_engine::lifepath_catalog::RuralYouthArchetype),
+        ("SafehouseTier", satya_engine::economy_gear::SafehouseTier),
+        ("SatyangPillarId", satya_campaign::SatyangPillarId),
+        ("SectorPreset", satya_maps::tactical_map::SectorPreset),
+        ("SessionMode", satya_schema::SessionMode),
+        ("SessionRole", satya_schema::SessionRole),
+        ("ShotgunLoadId", satya_engine::explosives_and_arsenal::ShotgunLoadId),
+        ("SkillAccessTier", satya_engine::skills_trees::SkillAccessTier),
+        ("SkillCategory", satya_engine::skills_trees::SkillCategory),
+        ("SkillTreeId", satya_engine::skills_trees::SkillTreeId),
+        ("SkillType", satya_engine::skills_trees::SkillType),
+        ("SocialOriginHookKind", satya_campaign::SocialOriginHookKind),
+        ("SocioeconomicClass", satya_engine::economy_gear::SocioeconomicClass),
+        ("Stage4Path", satya_engine::lifepath_catalog::Stage4Path),
+        ("StoreArchetype", satya_schema::StoreArchetype),
+        ("StreetGangArchetype", satya_engine::lifepath_catalog::StreetGangArchetype),
+        ("SubstrateCounterplayAction", satya_campaign::SubstrateCounterplayAction),
+        ("SurfaceFeatureKind", satya_schema::SurfaceFeatureKind),
+        ("SurfaceShapeKind", satya_schema::SurfaceShapeKind),
+        ("SurfaceTractionTier", satya_engine::environmental_hazards::SurfaceTractionTier),
+        ("SurveillanceNodeKind", satya_engine::electronic_warfare::SurveillanceNodeKind),
+        ("SyntheticInteriorityProfile", satya_campaign::SyntheticInteriorityProfile),
+        ("SyntheticMetabolicMode", satya_engine::robotics_and_ai_design::SyntheticMetabolicMode),
+        ("TacticalOpticOrGearId", satya_engine::explosives_and_arsenal::TacticalOpticOrGearId),
+        ("TacticalTileKind", satya_schema::TacticalTileKind),
+        ("ToolDependency", satya_engine::task_resolution::ToolDependency),
+        ("TradecraftChannelKind", satya_campaign::TradecraftChannelKind),
+        ("VehicleClass", satya_engine::environment_vehicles::VehicleClass),
+        ("VehicleId", satya_engine::environment_vehicles::VehicleId),
+        ("WallEdgeKind", satya_schema::WallEdgeKind),
+        ("WeaponDamageType", satya_engine::ranged_combat::WeaponDamageType),
+        ("WorkshopFacilityTier", satya_engine::engineering_design::WorkshopFacilityTier),
+        ("ZoningContext", satya_schema::ZoningContext),
+    ],
+    custom: [
+        ("NonSolidPropKind", super::tactical_map_py::non_solid_prop_kind_codes),
+    ]
+}
+
+/// Returns canonical wire codes from [`CodedEnum::ALL`] (or `PROP_CATALOG`) for the requested schema/engine/map/campaign enum.
 #[pyfunction]
 #[pyo3(signature = (enum_name))]
 pub fn list_wire_enum_codes(enum_name: &str) -> PyResult<Vec<String>> {
-    let norm = enum_name.trim().to_ascii_lowercase().replace(['-', '_'], "");
-    match norm.as_str() {
-        "propkind" => Ok(coded_enum_codes::<PropKind>()),
-        "materialclass" => Ok(coded_enum_codes::<MaterialClass>()),
-        "walledgekind" => Ok(coded_enum_codes::<WallEdgeKind>()),
-        "edgeside" => Ok(coded_enum_codes::<EdgeSide>()),
-        "tacticaltilekind" => Ok(coded_enum_codes::<TacticalTileKind>()),
-        "covergrade" => Ok(coded_enum_codes::<CoverGrade>()),
-        "mapscalepreset" => Ok(coded_enum_codes::<MapScalePreset>()),
-        "economictier" => Ok(coded_enum_codes::<EconomicTier>()),
-        "zoningcontext" => Ok(coded_enum_codes::<ZoningContext>()),
-        "storearchetype" => Ok(coded_enum_codes::<StoreArchetype>()),
-        "surfacefeaturekind" => Ok(coded_enum_codes::<SurfaceFeatureKind>()),
-        "mapcontinuationdir" => Ok(coded_enum_codes::<MapContinuationDir>()),
-        "sectorpreset" => Ok(coded_enum_codes::<SectorPreset>()),
-        "nonsolidpropkind" => Ok(super::tactical_map_py::non_solid_prop_kind_codes()),
-        _ => Err(to_py_err(format!(
-            "Unknown wire enum '{enum_name}'; expected PropKind, MaterialClass, WallEdgeKind, EdgeSide, TacticalTileKind, CoverGrade, MapScalePreset, EconomicTier, ZoningContext, StoreArchetype, SurfaceFeatureKind, MapContinuationDir, SectorPreset, or NonSolidPropKind"
-        ))),
-    }
+    lookup_wire_enum_codes(enum_name)
+}
+
+/// Returns the sorted list of canonical wire/coded enum names supported by [`list_wire_enum_codes`].
+#[pyfunction]
+pub fn list_wire_enum_names() -> Vec<String> {
+    let mut names: Vec<String> = WIRE_ENUM_NAMES.iter().map(|s| (*s).to_string()).collect();
+    names.sort();
+    names
 }
 
 /// Registers [`PySchemaRegistry`] and `satya-schema` DTO normalization/validation helpers on `satya_py._native`.
@@ -705,6 +851,7 @@ pub fn register_schema_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(validate_schema_dto, m)?)?;
     m.add_function(wrap_pyfunction!(list_schema_dto_names, m)?)?;
     m.add_function(wrap_pyfunction!(list_wire_enum_codes, m)?)?;
+    m.add_function(wrap_pyfunction!(list_wire_enum_names, m)?)?;
     Ok(())
 }
 

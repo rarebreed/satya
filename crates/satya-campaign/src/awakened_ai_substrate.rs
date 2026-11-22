@@ -383,12 +383,34 @@ pub fn evaluate_substrate_counterplay(
     }
 }
 
+fn default_cage_delta_ext() -> i32 {
+    1
+}
+
+fn default_cage_gm_pair() -> (i32, i32) {
+    (10, 11)
+}
+
 /// Dice and difficulty inputs for [`evaluate_cage_or_hunter_ai_intervention`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CageInterventionRollParams {
+    #[serde(default = "default_cage_delta_ext")]
     pub delta_ext: i32,
+    #[serde(default)]
     pub player_pairs: Vec<(i32, i32)>,
+    #[serde(default = "default_cage_gm_pair")]
     pub gm_pair: (i32, i32),
+}
+
+impl Default for CageInterventionRollParams {
+    fn default() -> Self {
+        Self {
+            delta_ext: default_cage_delta_ext(),
+            player_pairs: Vec::new(),
+            gm_pair: default_cage_gm_pair(),
+        }
+    }
 }
 
 /// Outcome of intervening in corporate `L0`/`L1` probes, `calm`-vector clamps, or captive hunter-AI loyalty.

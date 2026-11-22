@@ -4,42 +4,42 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// High-level business operating mode for a Satya session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum SessionMode {
-    /// Tabletop roleplaying simulation mode (GM, AI GM, and players).
-    Ttrpg,
-    /// Multi-participant audio/video and chat meeting mode (Host and attendees).
-    Meeting,
+crate::define_wire_enum! {
+    /// High-level business operating mode for a Satya session.
+    pub enum SessionMode [count = 2] {
+        /// Tabletop roleplaying simulation mode (GM, AI GM, and players).
+        Ttrpg => ("TTRPG", "TTRPG Mode"),
+        /// Multi-participant audio/video and chat meeting mode (Host and attendees).
+        Meeting => ("MEETING", "Meeting Mode"),
+    }
 }
 
-/// Distinguishes human users from autonomous AI agent participants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ParticipantKind {
-    /// A human participant authenticated via username and password.
-    Human,
-    /// An autonomous AI agent participant (such as the Satya AI Game Master).
-    AiAgent,
+crate::define_wire_enum! {
+    /// Distinguishes human users from autonomous AI agent participants.
+    pub enum ParticipantKind [count = 2] {
+        /// A human participant authenticated via username and password.
+        Human => ("HUMAN", "Human"),
+        /// An autonomous AI agent participant (such as the Satya AI Game Master).
+        AiAgent => ("AI_AGENT", "AI Agent"),
+    }
 }
 
-/// Role assigned to a [`Participant`] within a TTRPG or Meeting session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum SessionRole {
-    /// Human Game Master adjudicating a TTRPG session.
-    Gm,
-    /// Autonomous AI Game Master adjudicating a TTRPG session.
-    AiGm,
-    /// Player character participant in a TTRPG session.
-    Player,
-    /// Host of a Meeting session.
-    Host,
-    /// Standard attendee in a Meeting session.
-    Participant,
-    /// Read/listen-only observer in a session.
-    Observer,
+crate::define_wire_enum! {
+    /// Role assigned to a [`Participant`] within a TTRPG or Meeting session.
+    pub enum SessionRole [count = 6] {
+        /// Human Game Master adjudicating a TTRPG session.
+        Gm => ("GM", "Game Master"),
+        /// Autonomous AI Game Master adjudicating a TTRPG session.
+        AiGm => ("AI_GM", "AI Game Master"),
+        /// Player character participant in a TTRPG session.
+        Player => ("PLAYER", "Player"),
+        /// Host of a Meeting session.
+        Host => ("HOST", "Host"),
+        /// Standard attendee in a Meeting session.
+        Participant => ("PARTICIPANT", "Participant"),
+        /// Read/listen-only observer in a session.
+        Observer => ("OBSERVER", "Observer"),
+    }
 }
 
 /// Metadata describing an autonomous AI agent participant's model and persona configuration.

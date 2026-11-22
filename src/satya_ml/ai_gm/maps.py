@@ -18,14 +18,17 @@ from __future__ import annotations
 import base64
 import json
 import math
-import os
-import urllib.request
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final, Literal
+
+try:
+    import httpx
+except ImportError:  # pragma: no cover
+    httpx = None  # type: ignore[assignment]
 
 from satya_py import maps as _maps, schema as _schema
 
@@ -35,13 +38,14 @@ from satya_ml.campaign_config import (
     get_pack_default_tokens,
     get_pack_zone_labels,
 )
-
-try:
-    import httpx
-except ImportError:  # pragma: no cover
-    httpx = None  # type: ignore[assignment]
-
 from satya_ml.ai_gm.tool_spec import SessionStore, satya_gm_tool
+from satya_ml.signaling_client import (
+    OFFLINE_SIGNALING_VALUES as _OFFLINE_SIGNALING_VALUES,
+    http_post_json,
+    repo_root as _repo_root,
+    service_auth_headers,
+    signaling_base_url,
+)
 
 try:
     from langchain_core.messages import HumanMessage
@@ -111,20 +115,8 @@ def clear_session_map_caches(session_id: str | None = None) -> None:
     _SESSION_SPATIAL_PINS.reset(session_id)
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent.parent.parent
-
-
-_OFFLINE_SIGNALING_VALUES: Final[frozenset[str]] = frozenset(
-    {"", "0", "false", "none", "off", "offline", "disabled"}
-)
-
-
 def _signaling_base_url() -> str:
-    raw = os.environ.get("SATYA_SIGNALING_URL", "http://127.0.0.1:3000").strip()
-    if raw.lower() in _OFFLINE_SIGNALING_VALUES:
-        return ""
-    return raw.rstrip("/")
+    return signaling_base_url()
 
 
 def _gm_service_token() -> str:
@@ -134,10 +126,9 @@ def _gm_service_token() -> str:
 
 
 def _gm_headers() -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {_gm_service_token()}",
-        "Content-Type": "application/json",
-    }
+    headers = service_auth_headers(include_trace=False)
+    headers["Authorization"] = f"Bearer {_gm_service_token()}"
+    return headers
 
 
 def get_session_map(session_id: str) -> dict[str, Any] | None:
@@ -242,14 +233,7 @@ def infer_sector_preset(theme: str) -> str:
 
 
 def _infer_model_preset(label: str, is_hidden: bool = False) -> str:
-    low = label.lower()
-    if "valkyrie" in low or "sara" in low:
-        return "valkyrie_rig"
-    if "recon" in low or "marcus" in low or "vance" in low:
-        return "recon_mk4"
-    if is_hidden or "sentry" in low or "secops" in low or "hostile" in low:
-        return "secops_sentry"
-    return "operative_light"
+    return _maps.infer_token_model_preset(label, is_hidden)
 
 
 def normalize_token(tok: Mapping[str, Any]) -> dict[str, Any]:
@@ -598,28 +582,14 @@ def _sync_map_with_signaling(session_id: str, map_state: dict[str, Any]) -> None
     base = _signaling_base_url()
     if not base:
         return
-    url = f"{base}/api/gm/sessions/{session_id}/map"
-    headers = _gm_headers()
-    loopback = "127.0.0.1" in url or "localhost" in url
-    if httpx is not None:
-        try:
-            timeout: Any = httpx.Timeout(2.0, connect=0.25) if loopback else 2.0
-            with httpx.Client(timeout=timeout) as client:
-                client.post(url, headers=headers, json=wire_payload)
-                return
-        except Exception:
-            return
-    try:
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(wire_payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=0.25 if loopback else 2.0):
-            pass
-    except Exception:
-        pass
+    http_post_json(
+        f"{base}/api/gm/sessions/{session_id}/map",
+        wire_payload,
+        timeout=2.0,
+        include_trace=False,
+        record_event_id=False,
+        client_cls=httpx.Client if httpx is not None else None,
+    )
 
 
 _SESSION_SPATIAL_PINS: Final[SessionStore[list[dict[str, Any]]]] = SessionStore()

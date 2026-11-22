@@ -477,37 +477,24 @@ pub struct ToggleGmDocumentPersistenceRequest {
     pub campaign_tag: Option<String>,
 }
 
-/// Semantic category for a persistent Game Master memory note (`gm_memories` table).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum GmMemoryCategory {
-    #[default]
-    SceneState,
-    NpcSecret,
-    QuestHook,
-    Ruling,
-    RollingSummary,
+crate::define_wire_enum! {
+    /// Semantic category for a persistent Game Master memory note (`gm_memories` table).
+    #[derive(Default)]
+    pub enum GmMemoryCategory [count = 5] {
+        #[default]
+        SceneState => ("SCENE_STATE", "Scene State"),
+        NpcSecret => ("NPC_SECRET", "NPC Secret", aliases: ["NPC", "SECRET"]),
+        QuestHook => ("QUEST_HOOK", "Quest Hook", aliases: ["QUEST", "HOOK"]),
+        Ruling => ("RULING", "Ruling", aliases: ["RULE"]),
+        RollingSummary => ("ROLLING_SUMMARY", "Rolling Summary", aliases: ["SUMMARY"]),
+    }
 }
 
 impl GmMemoryCategory {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::SceneState => "SCENE_STATE",
-            Self::NpcSecret => "NPC_SECRET",
-            Self::QuestHook => "QUEST_HOOK",
-            Self::Ruling => "RULING",
-            Self::RollingSummary => "ROLLING_SUMMARY",
-        }
-    }
-
-    pub fn from_code_str(raw: &str) -> Self {
-        match raw.trim().to_uppercase().as_str() {
-            "NPC_SECRET" | "NPC" | "SECRET" => Self::NpcSecret,
-            "QUEST_HOOK" | "QUEST" | "HOOK" => Self::QuestHook,
-            "RULING" | "RULE" => Self::Ruling,
-            "ROLLING_SUMMARY" | "SUMMARY" => Self::RollingSummary,
-            _ => Self::SceneState,
-        }
+    /// Parses a loose/legacy category string, defaulting unknown values to [`Self::SceneState`].
+    #[must_use]
+    pub fn parse_loose(raw: &str) -> Self {
+        Self::from_code_str(raw).unwrap_or_default()
     }
 }
 
@@ -647,18 +634,18 @@ pub struct UpdateCombatTrackerRequest {
     pub zone_label: Option<String>,
 }
 
-/// Source domain of a unified GM Omnisearch hit (`GET /api/sessions/:session_id/lookup`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum GmLookupSourceKind {
-    RulesBook,
-    GmDocument,
-    GmMemory,
-    CharacterSheet,
-    CombatTracker,
-    TacticalMap,
-    CampaignLore,
-    SessionNpc,
+crate::define_wire_enum! {
+    /// Source domain of a unified GM Omnisearch hit (`GET /api/sessions/:session_id/lookup`).
+    pub enum GmLookupSourceKind [count = 8] {
+        RulesBook => ("RULES_BOOK", "Rules Book"),
+        GmDocument => ("GM_DOCUMENT", "GM Document"),
+        GmMemory => ("GM_MEMORY", "GM Memory"),
+        CharacterSheet => ("CHARACTER_SHEET", "Character Sheet"),
+        CombatTracker => ("COMBAT_TRACKER", "Combat Tracker"),
+        TacticalMap => ("TACTICAL_MAP", "Tactical Map"),
+        CampaignLore => ("CAMPAIGN_LORE", "Campaign Lore"),
+        SessionNpc => ("SESSION_NPC", "Session NPC"),
+    }
 }
 
 /// Single ranked search or state lookup hit returned by `GET /api/sessions/:session_id/lookup`.

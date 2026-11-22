@@ -13,10 +13,12 @@ from satya_py._native import (
     evaluate_tactical_los_and_cover,
     extract_narrative_manifest,
     generate_procedural_sector,
+    infer_token_model_preset,
     inspect_tactical_map_point,
     list_non_solid_prop_kinds,
     normalize_tactical_map,
     resolve_tactical_token_destination_cm,
+    sanitize_tactical_map_for_player,
     switch_map_floor,
 )
 
@@ -38,11 +40,13 @@ __all__ = [
     "evaluate_tactical_los_and_cover",
     "extract_narrative_manifest",
     "generate_procedural_sector",
+    "infer_token_model_preset",
     "inspect_map_point",
     "inspect_tactical_map_point",
     "list_non_solid_prop_kinds",
     "normalize_tactical_map",
     "resolve_tactical_token_destination_cm",
     "resolve_token_destination_cm",
+    "sanitize_tactical_map_for_player",
     "switch_map_floor",
 ]

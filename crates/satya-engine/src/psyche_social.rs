@@ -18,7 +18,9 @@ use std::ops::{Index, IndexMut};
 
 use serde::{Deserialize, Serialize};
 
-use crate::characteristics::{CharacterCharacteristics, CharacteristicCode};
+use crate::characteristics::{
+    CharacterCharacteristics, CharacteristicCode, psyche_pole_descriptor,
+};
 use crate::combat::MoraleState;
 use crate::define_coded_enum;
 use crate::dice_probabilities::{
@@ -79,6 +81,16 @@ impl PsycheTraitId {
             Self::Trust => CharacteristicCode::TRS,
             Self::Compassion => CharacteristicCode::CPS,
         }
+    }
+
+    /// Returns `(low_pole_descriptor, high_pole_descriptor)` from [`psyche_pole_descriptor`].
+    #[must_use]
+    pub const fn pole_hints(self) -> (&'static str, &'static str) {
+        let code = self.to_characteristic_code();
+        (
+            psyche_pole_descriptor(code, 1),
+            psyche_pole_descriptor(code, 20),
+        )
     }
 }
 
@@ -793,6 +805,7 @@ pub fn evaluate_emotional_trigger(
 
 /// Battlefield situational inputs for Circumstantial Morale Penalties ($\Delta_{\text{morale}}$, `§3.4`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct BattlefieldMoraleSituation {
     pub ally_casualty_ratio: f64,
     pub outnumbered_ratio: f64,

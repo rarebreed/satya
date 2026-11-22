@@ -101,14 +101,7 @@ def get_session_polycrisis_state(session_id: str) -> dict[str, Any]:
     sid = session_id or "default"
     if sid in _SESSION_POLYCRISIS_STATES:
         return dict(_SESSION_POLYCRISIS_STATES[sid])
-    state = {
-        "covert_compute_draw_kw": 0,
-        "grid_brownout_stress_pct": 25,
-        "water_rationing_tier": 1,
-        "people_first_unrest_pct": 30,
-        "clinic_equipment_throttled": False,
-        "blackout_active": False,
-    }
+    state = _awakened.default_polycrisis_district_state()
     _SESSION_POLYCRISIS_STATES[sid] = dict(state)
     return dict(state)
 
@@ -197,8 +190,7 @@ def intervene_ai_cage_or_hunter_ai(
     )
     roll_params = {
         "delta_ext": int(difficulty_mod),
-        "player_pairs": [list(p) for p in roll.resolved_pairs()],
-        "gm_pair": list(roll.resolved_gm_pair()),
+        **roll.to_rust_pairs_dict(),
     }
     res = _awakened.evaluate_cage_or_hunter_ai(
         state,
@@ -377,8 +369,7 @@ def transmit_via_tradecraft_channel(
         "control_c": roll.control_c,
         "operational_heat": op_heat,
         "has_hobby_anchor": has_hobby,
-        "player_pairs": [list(p) for p in roll.resolved_pairs()],
-        "gm_pair": list(roll.resolved_gm_pair()),
+        **roll.to_rust_pairs_dict(),
     }
     res = _awakened.evaluate_tradecraft_channel(channel, params)
     delta = int(res.get("daise_or_corp_clock_delta", 0) or 0)

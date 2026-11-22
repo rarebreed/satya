@@ -455,61 +455,16 @@ def evaluate_tactical_triad_python(
     control: int,
     force: int,
 ) -> dict[str, Any]:
-    """Validate and score a `(Tempo, Control, Force)` allocation against `envelope`."""
-    violations: list[str] = []
-    if tempo < 0 or control < 0 or force < 0:
-        violations.append("Tempo, Control, and Force must be non-negative.")
-    total = tempo + control + force
-    if total > int(envelope["p_eff"]):
-        violations.append(f"Total T+C+F ({total}) exceeds P_eff ({envelope['p_eff']}).")
-    if tempo > int(envelope["tempo_cap"]):
-        violations.append(f"Tempo ({tempo}) exceeds T_max ({envelope['tempo_cap']}).")
-    if control > int(envelope["max_control_allowed"]):
-        violations.append(f"Control ({control}) exceeds C_max ({envelope['max_control_allowed']}).")
-    if force > int(envelope["max_force_allowed"]):
-        violations.append(f"Force ({force}) exceeds F_max ({envelope['max_force_allowed']}).")
-    if force < int(envelope["min_force_required"]):
-        violations.append(f"Force ({force}) is below Enraged minimum ({envelope['min_force_required']}).")
-    if envelope.get("force_must_not_exceed_control") and force > control:
-        violations.append(f"Hesitant morale requires Force ({force}) <= Control ({control}).")
+    """Validate and score a `(Tempo, Control, Force)` allocation via Rust `satya_py.combat`."""
+    from satya_py.combat import evaluate_tactical_triad_from_dict
 
-    b_val = max(1, int(envelope["neutral_baseline_b"]))
-    raw_tc = max(3, int(base_weapon_tc) - ((tempo - b_val) // 2))
-    eff_tc = max(3, int(round(raw_tc * float(envelope["action_time_factor"]))))
-    strike_impact = float(envelope["power_pow"]) * (float(max(0, force)) / float(b_val))
-    eff_root = float(max(0, force)) + float(envelope["momentum_mass_factor_mmf"])
-    exertion = 2 if (force > b_val + 4 or tempo > b_val + 4) else (1 if (total == envelope["p_eff"] and total > 0) else 0)
-
-    hi_t = tempo > b_val
-    hi_c = control > b_val
-    hi_f = force > b_val
-    if hi_t and hi_c and not hi_f:
-        arch = "Tempo + Control (TC): Probe, Feint & Evasive Counter"
-    elif hi_t and hi_f and not hi_c:
-        arch = "Tempo + Force (TF): Blitz, Charge & Snap Cleave"
-    elif hi_c and hi_f and not hi_t:
-        arch = "Control + Force (CF): Measured Execution & Joint Lock"
-    elif hi_t and not hi_c and not hi_f:
-        arch = "Pure Tempo (T): Disengage, Sprint & Panic Parry"
-    elif hi_c and not hi_t and not hi_f:
-        arch = "Pure Control (C): Total Guard & Aimed Precision"
-    elif hi_f and not hi_t and not hi_c:
-        arch = "Pure Force (F): Haymaker, Shield Bash & Break Grapple"
-    else:
-        arch = "Balanced Stance (Neutral Baseline)"
-
-    return {
-        "tempo": tempo,
-        "control": control,
-        "force": force,
-        "valid": len(violations) == 0,
-        "violations": violations,
-        "effective_tc": eff_tc,
-        "strike_impact": strike_impact,
-        "effective_root": eff_root,
-        "exertion_marks_gained": exertion,
-        "archetype_label": arch,
-    }
+    return evaluate_tactical_triad_from_dict(
+        envelope,
+        base_weapon_tc,
+        tempo,
+        control,
+        force,
+    )
 
 
 def render_markdown_to_html_python(markdown_text: str) -> str:

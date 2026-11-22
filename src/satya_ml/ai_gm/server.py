@@ -9,12 +9,18 @@ import threading
 import time
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field
 
+from satya_ml.agent_server import (
+    BaseTurnEventPayload,
+    SessionLockPool,
+    resolve_turn_llm_config,
+    verify_service_auth,
+)
 from satya_ml.ai_gm.graph import build_ai_gm_graph
-from satya_ml.ai_gm.models import SessionLlmConfig, redact_api_key
+from satya_ml.ai_gm.models import redact_api_key
 from satya_ml.ai_gm.ollama_runner import (
     ensure_ollama_running_and_logged,
     get_logs_dir,
@@ -25,11 +31,8 @@ from satya_ml.ai_gm.telemetry import (
     SatyaTurnLogBufferHandler,
     turn_telemetry_scope,
 )
-from satya_ml.ai_gm.tools import (
-    _gm_service_token,
-    load_ai_gm_toml_config,
-    set_session_scenario_director,
-)
+from satya_ml.ai_gm.tools import set_session_scenario_director
+from satya_ml.signaling_client import load_ai_gm_toml_config
 
 logger = logging.getLogger("satya_ml.ai_gm.server")
 
@@ -110,18 +113,12 @@ app.include_router(ai_player_router)
 
 _SHARED_CHECKPOINTER = MemorySaver()
 _CHAT_MODEL_OVERRIDE: Any | None = None
-_SESSION_LOCKS_GUARD = threading.Lock()
-_SESSION_TURN_LOCKS: dict[str, threading.Lock] = {}
+_SESSION_LOCK_POOL = SessionLockPool()
 
 
 def _get_session_lock(session_id: str) -> threading.Lock:
     """Return a per-session lock so concurrent player events serialize cleanly against the checkpointer."""
-    with _SESSION_LOCKS_GUARD:
-        lock = _SESSION_TURN_LOCKS.get(session_id)
-        if lock is None:
-            lock = threading.Lock()
-            _SESSION_TURN_LOCKS[session_id] = lock
-        return lock
+    return _SESSION_LOCK_POOL.acquire_lock(session_id)
 
 
 def set_chat_model_override(model: Any | None) -> None:
@@ -130,17 +127,14 @@ def set_chat_model_override(model: Any | None) -> None:
     _CHAT_MODEL_OVERRIDE = model
 
 
-class AiGmTurnEventPayload(BaseModel):
+class AiGmTurnEventPayload(BaseTurnEventPayload):
     """Payload dispatched by `satya-signaling` (`AiGmTurnTriggerRequest`) to `POST /internal/ai-gm/events`."""
 
-    session_id: str
     session_mode: str = "TTRPG"
     operating_mode: str = "AUTONOMOUS"
     human_gm_user_id: str | None = None
     # Support both Rust `AiGmTurnTriggerRequest` field names (`trigger_event_id`, `trigger_actor`, `context_text`)
     # and shorthand field names (`event_id`, `actor`, `content`)
-    trigger_event_id: str | None = None
-    event_id: str | None = None
     trigger_kind: str = "CHAT"
     trigger_actor: dict[str, Any] | None = None
     actor: dict[str, Any] = Field(default_factory=dict)
@@ -148,20 +142,10 @@ class AiGmTurnEventPayload(BaseModel):
     channel_context: str | None = None
     channel: str | None = None
     context_text: str | None = None
-    content: str | None = None
     roll_summary: str | None = None
     force_resolve_turn: bool = False
-    roster: list[dict[str, Any]] = Field(default_factory=list)
-    provider: str | None = None
-    model_id: str | None = None
-    vision_model_id: str | None = None
-    temperature: float | None = None
     persona_id: str | None = None
-    base_url: str | None = None
     provider_config: dict[str, Any] | None = None
-    trace_id: str | None = None
-    parent_span_id: str | None = None
-    lineage_id: str | None = None
 
 
 class ScenarioBeatRequestPayload(BaseModel):
@@ -184,9 +168,7 @@ class ScenarioBeatRequestPayload(BaseModel):
 
 
 def _verify_service_auth(authorization: str | None) -> None:
-    expected = f"Bearer {_gm_service_token()}"
-    if authorization != expected:
-        raise HTTPException(status_code=401, detail="Unauthorized GM bridge token")
+    verify_service_auth(authorization, detail="Unauthorized AI GM service token")
 
 
 @app.get("/health")
@@ -217,50 +199,13 @@ def handle_ai_gm_event(
     """Execute one LangGraph AI GM turn for `payload.session_id`."""
     _verify_service_auth(authorization)
 
+    llm_cfg, file_cfg = resolve_turn_llm_config(
+        payload,
+        default_temperature=0.35,
+        x_satya_provider_key=x_satya_provider_key,
+        provider_config=payload.provider_config,
+    )
     p_cfg = payload.provider_config or {}
-    file_cfg = load_ai_gm_toml_config()
-    provider = str(
-        payload.provider
-        or p_cfg.get("provider")
-        or file_cfg.get("default_provider")
-        or "ollama"
-    )
-    model_id = str(
-        payload.model_id
-        or p_cfg.get("model_id")
-        or file_cfg.get("reasoning_model")
-        or "gemma4:12b"
-    )
-    vision_model_id = (
-        payload.vision_model_id
-        or p_cfg.get("vision_model_id")
-        or file_cfg.get("vision_model")
-        or "gemma4:12b"
-    )
-    temperature = float(
-        payload.temperature
-        if payload.temperature is not None
-        else (
-            p_cfg.get("temperature")
-            if p_cfg.get("temperature") is not None
-            else (file_cfg.get("temperature") if file_cfg.get("temperature") is not None else 0.35)
-        )
-    )
-    base_url = (
-        payload.base_url
-        or p_cfg.get("base_url")
-        or file_cfg.get("ollama_base_url")
-        or "http://127.0.0.1:11434"
-    )
-    num_ctx = int(p_cfg.get("num_ctx") or file_cfg.get("num_ctx") or 16384)
-    num_predict = int(p_cfg.get("num_predict") or file_cfg.get("num_predict") or 2048)
-    raw_reasoning = (
-        p_cfg.get("reasoning")
-        if "reasoning" in p_cfg
-        else file_cfg.get("reasoning", False)
-    )
-    reasoning: bool | None = bool(raw_reasoning) if raw_reasoning is not None else False
-
     effective_actor = payload.trigger_actor or payload.actor
     effective_content = payload.context_text if payload.context_text is not None else payload.content
     effective_event_id = payload.trigger_event_id or payload.event_id
@@ -268,18 +213,6 @@ def handle_ai_gm_event(
         (x_satya_lineage_id if isinstance(x_satya_lineage_id, str) else None)
         or payload.lineage_id
         or effective_event_id
-    )
-    raw_provider_key = x_satya_provider_key if isinstance(x_satya_provider_key, str) else None
-    llm_cfg = SessionLlmConfig(
-        provider=provider,  # type: ignore[arg-type]
-        model_id=model_id,
-        vision_model_id=vision_model_id,
-        temperature=temperature,
-        base_url=base_url,
-        num_ctx=num_ctx,
-        num_predict=num_predict,
-        reasoning=reasoning,
-        api_key=raw_provider_key,
     )
 
     raw_lazy: bool | None
@@ -416,18 +349,10 @@ def handle_scenario_beat(
     if updates:
         set_session_scenario_director(payload.session_id, updates)
 
-    file_cfg = load_ai_gm_toml_config()
-    raw_reasoning = file_cfg.get("reasoning", False)
-    llm_cfg = SessionLlmConfig(
-        provider=str(payload.provider or file_cfg.get("default_provider") or "ollama"),  # type: ignore[arg-type]
-        model_id=str(payload.model_id or file_cfg.get("reasoning_model") or "gemma4:12b"),
-        vision_model_id=str(file_cfg.get("vision_model") or "gemma4:12b"),
-        temperature=float(file_cfg.get("temperature") or 0.35),
-        base_url=str(file_cfg.get("ollama_base_url") or "http://127.0.0.1:11434"),
-        num_ctx=int(file_cfg.get("num_ctx") or 16384),
-        num_predict=int(file_cfg.get("num_predict") or 2048),
-        reasoning=bool(raw_reasoning) if raw_reasoning is not None else False,
-        api_key=x_satya_provider_key if isinstance(x_satya_provider_key, str) else None,
+    llm_cfg, file_cfg = resolve_turn_llm_config(
+        payload,
+        default_temperature=0.35,
+        x_satya_provider_key=x_satya_provider_key,
     )
     raw_lazy: bool | None = (
         None

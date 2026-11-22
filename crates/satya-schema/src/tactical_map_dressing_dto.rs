@@ -84,7 +84,7 @@ define_wire_enum! {
         #[default]
         Drywall => ("DRYWALL", "Drywall / stud partition"),
         Brick => ("BRICK", "Brick masonry"),
-        ConcreteBlock => ("CONCRETE_BLOCK", "Concrete block (CMU)"),
+        ConcreteBlock => ("CONCRETE_BLOCK", "Concrete block (CMU)", aliases: ["CONCRETE"]),
         ReinforcedConcrete => ("REINFORCED_CONCRETE", "Reinforced concrete"),
         Glass => ("GLASS", "Glass"),
         SolidWood => ("SOLID_WOOD", "Solid hardwood", aliases: ["SOLID_OAK", "OAK", "WOOD"]),

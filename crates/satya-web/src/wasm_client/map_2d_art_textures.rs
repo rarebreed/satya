@@ -78,7 +78,7 @@ pub struct BattlemapTextureSpec {
     pub fallback_hex: &'static str,
 }
 
-/// Complete 33-tile battlemap texture catalog synchronized with `src/satya_ml/texture_gen/catalog.py`.
+/// Complete 50-tile battlemap texture catalog synchronized with `src/satya_ml/texture_gen/catalog.py`.
 pub const BATTLEMAP_TEXTURE_SPECS: &[BattlemapTextureSpec] = &[
     BattlemapTextureSpec {
         pattern_id: "bm-grass",

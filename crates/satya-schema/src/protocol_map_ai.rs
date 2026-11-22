@@ -3,12 +3,14 @@
 //! Companion to [`crate::protocol`], re-exported flatly via `pub use crate::protocol_map_ai::*;`.
 
 use crate::events::{
-    AiGmOperatingMode, ChannelContext, CombatStance, MessageVisibility, TokenPlacement,
+    AiGmOperatingMode, AiGmTurnStatus, ChannelContext, CombatStance, LogLevel,
+    McpToolInvocationRecord, MessageVisibility, TokenPlacement,
 };
 use crate::protocol::{GmMemoryNoteRecord, default_true_flag};
 use crate::tactical_map_dto::*;
-use crate::types::{Participant, SessionMode};
+use crate::types::{Participant, SessionMode, SessionRole};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 pub(crate) fn default_control_c() -> i32 {
     10
@@ -440,6 +442,32 @@ impl GmMapUpdateRequest {
         let y_cm = (y_m * 100.0).floor() as i32;
         self.sector_at_cm(x_cm, y_cm)
     }
+
+    /// Returns a role-filtered copy stripping `GM_ONLY` tokens (and orphaned `token_visuals`),
+    /// `GM_ONLY` surveillance nodes, and GM-private `notes` when `role` is a non-GM player or observer.
+    #[must_use]
+    pub fn filtered_for_role(&self, role: SessionRole) -> Self {
+        if matches!(role, SessionRole::Gm | SessionRole::AiGm | SessionRole::Host) {
+            return self.clone();
+        }
+        let mut filtered = self.clone();
+        filtered.notes = None;
+        filtered
+            .tokens
+            .retain(|tok| tok.visibility != MessageVisibility::GmOnly);
+        let visible_ids: HashSet<&str> = filtered
+            .tokens
+            .iter()
+            .map(|t| t.entity_id.as_str())
+            .collect();
+        filtered
+            .token_visuals
+            .retain(|v| visible_ids.contains(v.entity_id.as_str()));
+        filtered
+            .surveillance_nodes
+            .retain(|node| node.visibility != MessageVisibility::GmOnly);
+        filtered
+    }
 }
 
 /// Webhook payload dispatched from `satya-signaling` to the Python LangGraph service
@@ -799,4 +827,82 @@ pub struct UpdateAiRallyRequest {
     pub max_rally_rounds: Option<u32>,
     #[serde(default)]
     pub reset_counter: Option<bool>,
+}
+
+/// Single turn-scoped log entry piggybacked onto [`GmTrajectoryReportRequest`] for batch ingestion into `system-logs` (Topic 9).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GmSessionLogEntry {
+    /// Log severity level (`INFO`, `WARN`, `ERROR`, etc.).
+    pub level: LogLevel,
+    /// Optional 16-character hex W3C `span_id`.
+    #[serde(default)]
+    pub span_id: Option<String>,
+    /// Optional 16-character hex caller `parent_span_id`.
+    #[serde(default)]
+    pub parent_span_id: Option<String>,
+    /// Optional data artifact lineage ID produced or inspected at this step.
+    #[serde(default)]
+    pub lineage_id: Option<String>,
+    /// Upstream data artifact lineage IDs consumed at this step.
+    #[serde(default)]
+    pub parent_lineage_ids: Vec<String>,
+    /// Complete formatted plain-text log line prefixed with `[session=...] [trace=... span=...<-...] [lineage=...<-...]`.
+    pub log_line: String,
+}
+
+fn default_ruleset_id() -> String {
+    "satya-d20".to_string()
+}
+
+/// Request payload for `POST /api/gm/sessions/:session_id/trajectory`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GmTrajectoryReportRequest {
+    /// Unique UUIDv7 identifier for the completed LangGraph turn.
+    pub turn_id: String,
+    /// 32-character hex W3C `trace_id`.
+    pub trace_id: String,
+    /// Operating mode (`AUTONOMOUS` or `CO_PILOT`).
+    pub operating_mode: AiGmOperatingMode,
+    /// Triggering participant.
+    pub trigger_actor: Participant,
+    /// `event_id` or `message_id` that triggered the turn.
+    pub trigger_event_id: String,
+    /// Summary of the triggering action.
+    pub trigger_summary: String,
+    /// LLM provider identifier.
+    pub llm_provider: String,
+    /// Reasoning model ID.
+    pub reasoning_model_id: String,
+    /// Optional vision model ID.
+    #[serde(default)]
+    pub vision_model_id: Option<String>,
+    /// Ruleset engine ID (e.g. `"satya-d20"`).
+    #[serde(default = "default_ruleset_id")]
+    pub ruleset_engine_id: String,
+    /// Ordered tool invocations executed during the turn.
+    #[serde(default)]
+    pub tool_invocations: Vec<McpToolInvocationRecord>,
+    /// RAG/lore sources consulted.
+    #[serde(default)]
+    pub rag_sources_used: Vec<String>,
+    /// Emitted event IDs.
+    #[serde(default)]
+    pub emitted_event_ids: Vec<String>,
+    /// Prompt token count.
+    #[serde(default)]
+    pub prompt_tokens: i32,
+    /// Completion token count.
+    #[serde(default)]
+    pub completion_tokens: i32,
+    /// Cached token count.
+    #[serde(default)]
+    pub cached_tokens: i32,
+    /// Total turn latency in milliseconds.
+    #[serde(default)]
+    pub total_turn_latency_ms: i64,
+    /// Completion status of the turn.
+    pub turn_status: AiGmTurnStatus,
+    /// Bounded batch of turn-scoped `INFO`/`WARN`/`ERROR` log entries to persist to `system-logs` (Topic 9).
+    #[serde(default)]
+    pub turn_logs: Vec<GmSessionLogEntry>,
 }

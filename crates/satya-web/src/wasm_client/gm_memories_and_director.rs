@@ -104,7 +104,7 @@ pub fn satya_submit_gm_memory() {
         };
         let title = input_value("gm-memory-title").trim().to_string();
         let content = input_value("gm-memory-content").trim().to_string();
-        let category = GmMemoryCategory::from_code_str(&select_value("gm-memory-category"));
+        let category = GmMemoryCategory::parse_loose(&select_value("gm-memory-category"));
         let is_pinned = input_checked("gm-memory-pinned");
         let is_persistent = input_checked("gm-memory-persistent");
         let ctag_raw = input_value("gm-doc-campaign-tag").trim().to_string();

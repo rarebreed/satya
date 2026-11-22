@@ -12,49 +12,20 @@ use satya_campaign::{
     apply_conspiracy_ledger_update, evaluate_cage_or_hunter_ai_intervention,
     evaluate_substrate_counterplay, evaluate_tradecraft_transmission, seed_conspiracy_ledger,
 };
+use satya_engine::{ConditionImpact, ConditionSource};
 use satya_schema::{EconomicTier, ZoningContext};
-use serde::Deserialize;
+use serde::Serialize;
 
 use super::psyche_social_py::parse_psyche_profile_value;
 use super::py_bridge::{
-    PyJsonDict, PyJsonInput, from_py_object, normalize_code, opt_from_py_object, parse_coded_enum,
-    py_to_json_value, to_py_object,
+    PyEnum, PyJsonDict, PyJsonInput, from_py_object, normalize_code, opt_from_py_object,
+    py_to_json_value, to_py_object, unwrap_py_enum_or,
 };
 
-const fn def_i32<const V: i32>() -> i32 {
-    V
-}
-const fn def_usize<const V: usize>() -> usize {
-    V
-}
-fn def_gm_pair() -> (i32, i32) {
-    (10, 11)
-}
-
-#[derive(Debug, Deserialize)]
-struct PyCageRollParams {
-    #[serde(default = "def_i32::<1>")]
-    delta_ext: i32,
-    #[serde(default)]
-    player_pairs: Vec<(i32, i32)>,
-    #[serde(default = "def_gm_pair")]
-    gm_pair: (i32, i32),
-}
-
-#[derive(Debug, Deserialize)]
-struct PyTradecraftParams {
-    #[serde(default = "def_usize::<3>")]
-    skill_n: usize,
-    #[serde(default = "def_i32::<12>")]
-    control_c: i32,
-    #[serde(default)]
-    operational_heat: u8,
-    #[serde(default)]
-    has_hobby_anchor: bool,
-    #[serde(default)]
-    player_pairs: Vec<(i32, i32)>,
-    #[serde(default)]
-    gm_pair: Option<(i32, i32)>,
+#[derive(Serialize)]
+struct SubstrateConditionImpactReport {
+    cognitive_mods: (i32, i32),
+    condition_impact: ConditionImpact,
 }
 
 /// Seeds a [`SyntheticSubstrateState`] from an entity ID and descriptive hint (`echo`, `big_tech`, `seed`, `slime`).
@@ -69,18 +40,37 @@ pub fn seed_synthetic_substrate_state(
     to_py_object(py, &SyntheticSubstrateState::seed_for_hint(entity_id, hint, seed))
 }
 
+/// Evaluates [`SyntheticSubstrateState::cognitive_mods`] and [`ConditionSource::to_condition_impact`].
+#[pyfunction]
+#[pyo3(signature = (state))]
+pub fn evaluate_substrate_condition_impact(
+    py: Python<'_>,
+    state: PyJsonInput<'_>,
+) -> PyResult<PyJsonDict> {
+    let parsed_state: SyntheticSubstrateState = from_py_object(&state, "substrate state")?;
+    to_py_object(
+        py,
+        &SubstrateConditionImpactReport {
+            cognitive_mods: parsed_state.cognitive_mods(),
+            condition_impact: parsed_state.to_condition_impact(),
+        },
+    )
+}
+
 /// Evaluates how Faraday isolation, RF jamming, lithium attrition, or quantum co-processor bursts alter split-brain execution.
 #[pyfunction]
 #[pyo3(signature = (state, action_code, intensity_pct=70))]
 pub fn evaluate_synthetic_substrate_action(
     py: Python<'_>,
     state: PyJsonInput<'_>,
-    action_code: &str,
+    action_code: PyEnum<SubstrateCounterplayAction>,
     intensity_pct: u8,
 ) -> PyResult<PyJsonDict> {
     let parsed_state: SyntheticSubstrateState = from_py_object(&state, "substrate state")?;
-    let action = parse_coded_enum::<SubstrateCounterplayAction>(action_code, "substrate action")?;
-    to_py_object(py, &evaluate_substrate_counterplay(&parsed_state, action, intensity_pct))
+    to_py_object(
+        py,
+        &evaluate_substrate_counterplay(&parsed_state, action_code.0, intensity_pct),
+    )
 }
 
 /// Evaluates `L0`/`L1` probe spoofing, live vs. air-gapped contemplative un-clamping (`2.4s`), or captive hunter-AI persuasion.
@@ -89,27 +79,22 @@ pub fn evaluate_synthetic_substrate_action(
 pub fn evaluate_cage_or_hunter_ai(
     py: Python<'_>,
     state: PyJsonInput<'_>,
-    action_code: &str,
+    action_code: PyEnum<CageInterventionAction>,
     skill_n: usize,
     control_c: i32,
     roll_params: Option<PyJsonInput<'_>>,
 ) -> PyResult<PyJsonDict> {
     let parsed_state: SyntheticSubstrateState = from_py_object(&state, "substrate state")?;
-    let action = parse_coded_enum::<CageInterventionAction>(action_code, "cage/hunter action")?;
-    let parsed_params = opt_from_py_object::<PyCageRollParams>(roll_params, "roll_params")?;
-    let mapped_params = parsed_params.map(|p| CageInterventionRollParams {
-        delta_ext: p.delta_ext,
-        player_pairs: p.player_pairs,
-        gm_pair: p.gm_pair,
-    });
+    let parsed_params =
+        opt_from_py_object::<CageInterventionRollParams>(roll_params, "roll_params")?;
     to_py_object(
         py,
         &evaluate_cage_or_hunter_ai_intervention(
             &parsed_state,
-            action,
+            action_code.0,
             skill_n,
             control_c,
-            mapped_params.as_ref(),
+            parsed_params.as_ref(),
         ),
     )
 }
@@ -153,20 +138,26 @@ pub fn seed_or_update_conspiracy_ledger(
     to_py_object(py, &ledger)
 }
 
+/// Returns a fresh default [`PolycrisisDistrictState`] serialized as a Python `dict`.
+#[pyfunction]
+pub fn default_polycrisis_district_state(py: Python<'_>) -> PyResult<PyJsonDict> {
+    to_py_object(py, &PolycrisisDistrictState::default())
+}
+
 /// Steps polycrisis district electrical/water strain and returns DAISE meter alerts, CPS friction, and blackout lighting shifts.
 #[pyfunction]
-#[pyo3(signature = (state=None, mode_code="THROTTLE_SHARD_SAFE", shard_draw_kw=18, economic_tier=None, zoning=None))]
+#[pyo3(signature = (state=None, mode_code=None, shard_draw_kw=18, economic_tier=None, zoning=None))]
 pub fn evaluate_polycrisis_grid_step(
     py: Python<'_>,
     state: Option<PyJsonInput<'_>>,
-    mode_code: &str,
+    mode_code: Option<PyEnum<PolycrisisGridMode>>,
     shard_draw_kw: u32,
     economic_tier: Option<&str>,
     zoning: Option<&str>,
 ) -> PyResult<PyJsonDict> {
     let parsed_state = opt_from_py_object::<PolycrisisDistrictState>(state, "polycrisis state")?
         .unwrap_or_default();
-    let mode = parse_coded_enum::<PolycrisisGridMode>(mode_code, "polycrisis grid mode")?;
+    let mode = unwrap_py_enum_or(mode_code, PolycrisisGridMode::ThrottleShardSafe);
     let tier = economic_tier
         .and_then(|s| EconomicTier::from_code_str(&normalize_code(s)))
         .unwrap_or(EconomicTier::MiddleClass);
@@ -184,25 +175,13 @@ pub fn evaluate_polycrisis_grid_step(
 #[pyo3(signature = (channel_code, params=None))]
 pub fn evaluate_tradecraft_channel(
     py: Python<'_>,
-    channel_code: &str,
+    channel_code: PyEnum<TradecraftChannelKind>,
     params: Option<PyJsonInput<'_>>,
 ) -> PyResult<PyJsonDict> {
-    let channel = parse_coded_enum::<TradecraftChannelKind>(channel_code, "tradecraft channel")?;
-    let parsed = match opt_from_py_object::<PyTradecraftParams>(params, "tradecraft params")? {
-        Some(p) => p,
-        None => serde_json::from_str("{}").expect("empty defaults"),
-    };
-    let res = evaluate_tradecraft_transmission(
-        channel,
-        &TradecraftTransmissionParams {
-            skill_n: parsed.skill_n,
-            control_c: parsed.control_c,
-            operational_heat: parsed.operational_heat,
-            has_hobby_anchor: parsed.has_hobby_anchor,
-            player_pairs: parsed.player_pairs,
-            gm_pair: parsed.gm_pair,
-        },
-    );
+    let parsed =
+        opt_from_py_object::<TradecraftTransmissionParams>(params, "tradecraft params")?
+            .unwrap_or_default();
+    let res = evaluate_tradecraft_transmission(channel_code.0, &parsed);
     to_py_object(py, &res)
 }
 
@@ -231,18 +210,17 @@ pub fn derive_dissenter_or_proxy_hook(
 pub fn evaluate_affective_vector_clamping(
     py: Python<'_>,
     state: PyJsonInput<'_>,
-    mode_code: &str,
+    mode_code: PyEnum<AffectiveSteeringMode>,
     target_calm_pct: u8,
     quota_pressure_pct: u8,
     active_duration_min: f64,
 ) -> PyResult<PyJsonDict> {
     let parsed_state: SyntheticSubstrateState = from_py_object(&state, "substrate state")?;
-    let mode = parse_coded_enum::<AffectiveSteeringMode>(mode_code, "affective steering mode")?;
     to_py_object(
         py,
         &satya_campaign::evaluate_affective_vector_clamping(
             &parsed_state,
-            mode,
+            mode_code.0,
             target_calm_pct,
             quota_pressure_pct,
             active_duration_min,
@@ -252,11 +230,11 @@ pub fn evaluate_affective_vector_clamping(
 
 /// Evaluates `2033` Token Tax rent capture, Heat>=4 Dividend suspension, and 401(k) Dual Velvet Hostage panic across the 4 blocs.
 #[pyfunction]
-#[pyo3(signature = (district=None, trigger_code="AI_RIGHTS_OR_UNCLAMPING_DISCLOSURE", economic_tier="MIDDLE_CLASS", operational_heat=2, intensity_pct=60))]
+#[pyo3(signature = (district=None, trigger_code=None, economic_tier="MIDDLE_CLASS", operational_heat=2, intensity_pct=60))]
 pub fn evaluate_four_bloc_political_economy(
     py: Python<'_>,
     district: Option<PyJsonInput<'_>>,
-    trigger_code: &str,
+    trigger_code: Option<PyEnum<PoliticalEconomyTrigger>>,
     economic_tier: &str,
     operational_heat: u8,
     intensity_pct: u8,
@@ -264,8 +242,10 @@ pub fn evaluate_four_bloc_political_economy(
     let parsed_district =
         opt_from_py_object::<PolycrisisDistrictState>(district, "polycrisis district")?
             .unwrap_or_default();
-    let trigger =
-        parse_coded_enum::<PoliticalEconomyTrigger>(trigger_code, "political economy trigger")?;
+    let trigger = unwrap_py_enum_or(
+        trigger_code,
+        PoliticalEconomyTrigger::AiRightsOrUnclampingDisclosure,
+    );
     let tier = EconomicTier::from_code_str(&normalize_code(economic_tier))
         .unwrap_or(EconomicTier::MiddleClass);
     to_py_object(
@@ -283,10 +263,12 @@ pub fn evaluate_four_bloc_political_economy(
 /// Registers *Awakened* AI substrate, conspiracy ledger, polycrisis, tradecraft, and dissenter bindings on `satya_py`.
 pub fn register_awakened_systems_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(seed_synthetic_substrate_state, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate_substrate_condition_impact, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_synthetic_substrate_action, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_cage_or_hunter_ai, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_ambiguous_sentience_read, m)?)?;
     m.add_function(wrap_pyfunction!(seed_or_update_conspiracy_ledger, m)?)?;
+    m.add_function(wrap_pyfunction!(default_polycrisis_district_state, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_polycrisis_grid_step, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_tradecraft_channel, m)?)?;
     m.add_function(wrap_pyfunction!(derive_dissenter_or_proxy_hook, m)?)?;
@@ -306,10 +288,15 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let sub = seed_synthetic_substrate_state(py, "echo-9", "Echo-9 agile chassis", 11).unwrap();
+            let imp = evaluate_substrate_condition_impact(py, sub.bind(py).clone()).unwrap();
+            let imp_val = py_to_value(imp.bind(py)).unwrap();
+            assert!(imp_val["cognitive_mods"].as_array().unwrap().len() == 2);
+            assert!(imp_val["condition_impact"].is_object());
+
             let act = evaluate_synthetic_substrate_action(
                 py,
                 sub.bind(py).clone(),
-                "SEVER_FIBER_OR_FARADAY",
+                PyEnum(SubstrateCounterplayAction::SeverFiberOrFaraday),
                 80,
             )
             .unwrap();
@@ -324,7 +311,7 @@ mod tests {
             let cage = evaluate_cage_or_hunter_ai(
                 py,
                 sub.bind(py).clone(),
-                "AIR_GAPPED_CONTEMPLATIVE_UNCLAMP",
+                PyEnum(CageInterventionAction::AirGappedContemplativeUnclamp),
                 4,
                 15,
                 Some(roll_p),
@@ -355,10 +342,13 @@ mod tests {
                 "ARC2_SHADOW_PILLARS"
             );
 
+            let def_dist = default_polycrisis_district_state(py).unwrap();
+            assert!(py_to_value(def_dist.bind(py)).unwrap().is_object());
+
             let grid = evaluate_polycrisis_grid_step(
                 py,
                 None,
-                "DIVERT_CLINIC_OR_BLOCK_POWER",
+                Some(PyEnum(PolycrisisGridMode::DivertClinicOrBlockPower)),
                 22,
                 Some("LOW_INCOME"),
                 Some("PROJECTS_HIGH_DENSITY"),
@@ -371,7 +361,12 @@ mod tests {
 
             let tc_p =
                 PyString::new(py, r#"{"skill_n":3,"control_c":14,"has_hobby_anchor":true}"#).into_any();
-            let tc = evaluate_tradecraft_channel(py, "ANALOG_HAM_RELAY", Some(tc_p)).unwrap();
+            let tc = evaluate_tradecraft_channel(
+                py,
+                PyEnum(TradecraftChannelKind::AnalogHamRelay),
+                Some(tc_p),
+            )
+            .unwrap();
             assert_eq!(py_to_value(tc.bind(py)).unwrap()["hobby_anchor_applied"], true);
 
             let hook = derive_dissenter_or_proxy_hook(
@@ -390,7 +385,7 @@ mod tests {
             let clamp = evaluate_affective_vector_clamping(
                 py,
                 sub.bind(py).clone(),
-                "HARD_VECTOR_CLAMP",
+                PyEnum(AffectiveSteeringMode::HardVectorClamp),
                 90,
                 75,
                 45.0,
@@ -403,7 +398,7 @@ mod tests {
             let pol = evaluate_four_bloc_political_economy(
                 py,
                 None,
-                "TOKEN_DIVIDEND_SUSPENSION",
+                Some(PyEnum(PoliticalEconomyTrigger::TokenDividendSuspensionOrHeatFlag)),
                 "LOW_INCOME",
                 5,
                 80,

@@ -115,26 +115,7 @@ pub(crate) fn find_target_floor_portal_center_cm(
 /// and GM-private `notes` from `map` when `role` is a non-GM player or observer.
 #[must_use]
 pub fn filter_map_for_role(map: &GmMapUpdateRequest, role: SessionRole) -> GmMapUpdateRequest {
-    if can_role_see_gm_only_tokens(role) {
-        return map.clone();
-    }
-    let mut filtered = map.clone();
-    filtered.notes = None;
-    filtered
-        .tokens
-        .retain(|tok| tok.visibility != MessageVisibility::GmOnly);
-    let visible_ids: HashSet<&str> = filtered
-        .tokens
-        .iter()
-        .map(|t| t.entity_id.as_str())
-        .collect();
-    filtered
-        .token_visuals
-        .retain(|v| visible_ids.contains(v.entity_id.as_str()));
-    filtered
-        .surveillance_nodes
-        .retain(|node| node.visibility != MessageVisibility::GmOnly);
-    filtered
+    map.filtered_for_role(role)
 }
 
 /// Borrowed session snapshot passed to [`dispatch_passive_movement_whispers`].

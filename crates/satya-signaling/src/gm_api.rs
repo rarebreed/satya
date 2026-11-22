@@ -17,14 +17,12 @@ use satya_engine::{
     evaluate_technique_with_triad,
 };
 use satya_schema::{
-    AiGmOperatingMode, AiGmProviderConfig, AiGmTrajectoryEvent, AiGmTurnStatus,
-    AiGmTurnTriggerRequest, CanvasEventType, ChannelContext, ChatMessageEvent, CombatStance,
-    GmChatRequest, GmMapUpdateRequest, GmRollRequest, LogLevel, McpToolInvocationRecord,
-    MechanicEventType, MessageVisibility, Participant, ParticipantKind, ServerWsPacket,
-    SessionLogEvent, SessionMode, SessionRole, TabletopCanvasEvent, TtrpgMechanicsEvent,
-    UpdateCombatTrackerRequest, WgpuDiceSpec, subjects,
+    AiGmOperatingMode, AiGmProviderConfig, AiGmTrajectoryEvent, AiGmTurnTriggerRequest,
+    CanvasEventType, ChannelContext, ChatMessageEvent, CombatStance, GmChatRequest,
+    GmMapUpdateRequest, GmRollRequest, LogLevel, MechanicEventType, MessageVisibility,
+    Participant, ParticipantKind, ServerWsPacket, SessionLogEvent, SessionMode, SessionRole,
+    TabletopCanvasEvent, TtrpgMechanicsEvent, UpdateCombatTrackerRequest, WgpuDiceSpec, subjects,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -746,83 +744,7 @@ pub async fn gm_session_map_handler(
     (StatusCode::OK, Json(canvas_ev)).into_response()
 }
 
-/// Single turn-scoped log entry piggybacked onto [`GmTrajectoryReportRequest`] for batch ingestion into `system-logs` (Topic 9).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GmSessionLogEntry {
-    /// Log severity level (`INFO`, `WARN`, `ERROR`, etc.).
-    pub level: LogLevel,
-    /// Optional 16-character hex W3C `span_id`.
-    #[serde(default)]
-    pub span_id: Option<String>,
-    /// Optional 16-character hex caller `parent_span_id`.
-    #[serde(default)]
-    pub parent_span_id: Option<String>,
-    /// Optional data artifact lineage ID produced or inspected at this step.
-    #[serde(default)]
-    pub lineage_id: Option<String>,
-    /// Upstream data artifact lineage IDs consumed at this step.
-    #[serde(default)]
-    pub parent_lineage_ids: Vec<String>,
-    /// Complete formatted plain-text log line prefixed with `[session=...] [trace=... span=...<-...] [lineage=...<-...]`.
-    pub log_line: String,
-}
-
-/// Request payload for `POST /api/gm/sessions/:session_id/trajectory`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GmTrajectoryReportRequest {
-    /// Unique UUIDv7 identifier for the completed LangGraph turn.
-    pub turn_id: String,
-    /// 32-character hex W3C `trace_id`.
-    pub trace_id: String,
-    /// Operating mode (`AUTONOMOUS` or `CO_PILOT`).
-    pub operating_mode: AiGmOperatingMode,
-    /// Triggering participant.
-    pub trigger_actor: Participant,
-    /// `event_id` or `message_id` that triggered the turn.
-    pub trigger_event_id: String,
-    /// Summary of the triggering action.
-    pub trigger_summary: String,
-    /// LLM provider identifier.
-    pub llm_provider: String,
-    /// Reasoning model ID.
-    pub reasoning_model_id: String,
-    /// Optional vision model ID.
-    #[serde(default)]
-    pub vision_model_id: Option<String>,
-    /// Ruleset engine ID (e.g. `"satya-d20"`).
-    #[serde(default = "default_ruleset_id")]
-    pub ruleset_engine_id: String,
-    /// Ordered tool invocations executed during the turn.
-    #[serde(default)]
-    pub tool_invocations: Vec<McpToolInvocationRecord>,
-    /// RAG/lore sources consulted.
-    #[serde(default)]
-    pub rag_sources_used: Vec<String>,
-    /// Emitted event IDs.
-    #[serde(default)]
-    pub emitted_event_ids: Vec<String>,
-    /// Prompt token count.
-    #[serde(default)]
-    pub prompt_tokens: i32,
-    /// Completion token count.
-    #[serde(default)]
-    pub completion_tokens: i32,
-    /// Cached token count.
-    #[serde(default)]
-    pub cached_tokens: i32,
-    /// Total turn latency in milliseconds.
-    #[serde(default)]
-    pub total_turn_latency_ms: i64,
-    /// Completion status of the turn.
-    pub turn_status: AiGmTurnStatus,
-    /// Bounded batch of turn-scoped `INFO`/`WARN`/`ERROR` log entries to persist to `system-logs` (Topic 9).
-    #[serde(default)]
-    pub turn_logs: Vec<GmSessionLogEntry>,
-}
-
-fn default_ruleset_id() -> String {
-    "satya-d20".to_string()
-}
+pub use satya_schema::{GmSessionLogEntry, GmTrajectoryReportRequest};
 
 /// Persists a completed LangGraph AI GM turn trajectory to `ai-gm-trajectories` at `POST /api/gm/sessions/:session_id/trajectory`.
 pub async fn gm_session_trajectory_handler(

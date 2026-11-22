@@ -198,36 +198,36 @@ pub struct WebRtcTelemetryEvent {
     pub video_muted: bool,
 }
 
-/// Delivery audience and access control scope for a [`ChatMessageEvent`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum MessageVisibility {
-    /// Broadcast to all participants in the session.
-    Public,
-    /// Whispered privately only to explicitly selected recipient `user_id`s.
-    Private,
-    /// Visible only to the human GM and/or autonomous AI GM (plus the sender).
-    GmOnly,
-    /// Visible only to the Meeting Host (plus the sender).
-    HostOnly,
+crate::define_wire_enum! {
+    /// Delivery audience and access control scope for a [`ChatMessageEvent`].
+    pub enum MessageVisibility [count = 4] {
+        /// Broadcast to all participants in the session.
+        Public => ("PUBLIC", "Public"),
+        /// Whispered privately only to explicitly selected recipient `user_id`s.
+        Private => ("PRIVATE", "Private"),
+        /// Visible only to the human GM and/or autonomous AI GM (plus the sender).
+        GmOnly => ("GM_ONLY", "GM Only"),
+        /// Visible only to the Meeting Host (plus the sender).
+        HostOnly => ("HOST_ONLY", "Host Only"),
+    }
 }
 
-/// Semantic channel classification for a chat message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ChannelContext {
-    /// Spoken or acted in-character within the TTRPG world.
-    InCharacter,
-    /// Table-level out-of-character discussion among players.
-    OutOfCharacter,
-    /// World description or adjudication narrated by a human GM or AI GM.
-    GmNarration,
-    /// Public discussion channel in a Meeting session.
-    MeetingPublic,
-    /// Side-channel or private backchannel in a Meeting session.
-    MeetingBackchannel,
-    /// Automated platform or simulation system notice.
-    SystemNotice,
+crate::define_wire_enum! {
+    /// Semantic channel classification for a chat message.
+    pub enum ChannelContext [count = 6] {
+        /// Spoken or acted in-character within the TTRPG world.
+        InCharacter => ("IN_CHARACTER", "In Character"),
+        /// Table-level out-of-character discussion among players.
+        OutOfCharacter => ("OUT_OF_CHARACTER", "Out of Character"),
+        /// World description or adjudication narrated by a human GM or AI GM.
+        GmNarration => ("GM_NARRATION", "GM Narration"),
+        /// Public discussion channel in a Meeting session.
+        MeetingPublic => ("MEETING_PUBLIC", "Meeting Public"),
+        /// Side-channel or private backchannel in a Meeting session.
+        MeetingBackchannel => ("MEETING_BACKCHANNEL", "Meeting Backchannel"),
+        /// Automated platform or simulation system notice.
+        SystemNotice => ("SYSTEM_NOTICE", "System Notice"),
+    }
 }
 
 /// Event (`v1`) emitted to the `chat-messages` topic for public and private targeted chat messages.
@@ -347,36 +347,36 @@ pub enum MechanicEventType {
     AiGmDecision,
 }
 
-/// Degree of success or failure produced by a Satya d20 pool evaluation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum OutcomeTier {
-    /// Zero successes with at least one natural 20 rolled.
-    CriticalFailure,
-    /// Fewer successes than required by the difficulty rating.
-    Failure,
-    /// At least one success and within 1 success of the difficulty rating.
-    PartialSuccess,
-    /// Met the required difficulty rating.
-    Success,
-    /// Exceeded the difficulty rating by 2+ successes or rolled multiple natural 1s.
-    ExtraordinarySuccess,
+crate::define_wire_enum! {
+    /// Degree of success or failure produced by a Satya d20 pool evaluation.
+    pub enum OutcomeTier [count = 5] {
+        /// Zero successes with at least one natural 20 rolled.
+        CriticalFailure => ("CRITICAL_FAILURE", "Critical Failure"),
+        /// Fewer successes than required by the difficulty rating.
+        Failure => ("FAILURE", "Failure"),
+        /// At least one success and within 1 success of the difficulty rating.
+        PartialSuccess => ("PARTIAL_SUCCESS", "Partial Success"),
+        /// Met the required difficulty rating.
+        Success => ("SUCCESS", "Success"),
+        /// Exceeded the difficulty rating by 2+ successes or rolled multiple natural 1s.
+        ExtraordinarySuccess => ("EXTRAORDINARY_SUCCESS", "Extraordinary Success"),
+    }
 }
 
-/// Melee or ranged tactical stance chosen for a Satya combat action.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum CombatStance {
-    /// Heavy melee commitment prioritizing impact force (`TC 14`, increases fatigue).
-    Power,
-    /// Agile melee commitment prioritizing positioning and defense (`TC 11`, increases fatigue).
-    Maneuver,
-    /// Grounded melee stance conserving balance and endurance (`TC 9`).
-    Stability,
-    /// Deliberate aimed ranged fire (`TC 12`).
-    RangedAimed,
-    /// Quick reactive ranged snap shot (`TC 7`).
-    RangedSnap,
+crate::define_wire_enum! {
+    /// Melee or ranged tactical stance chosen for a Satya combat action.
+    pub enum CombatStance [count = 5] {
+        /// Heavy melee commitment prioritizing impact force (`TC 14`, increases fatigue).
+        Power => ("POWER", "Power", aliases: ["AGGRESSIVE"]),
+        /// Agile melee commitment prioritizing positioning and defense (`TC 11`, increases fatigue).
+        Maneuver => ("MANEUVER", "Maneuver"),
+        /// Grounded melee stance conserving balance and endurance (`TC 9`).
+        Stability => ("STABILITY", "Stability", aliases: ["NEUTRAL", "DEFENSIVE"]),
+        /// Deliberate aimed ranged fire (`TC 12`).
+        RangedAimed => ("RANGED_AIMED", "Ranged Aimed", aliases: ["AIMED"]),
+        /// Quick reactive ranged snap shot (`TC 7`).
+        RangedSnap => ("RANGED_SNAP", "Ranged Snap", aliases: ["SNAP"]),
+    }
 }
 
 /// Event emitted to the `ttrpg-mechanics` topic capturing Satya d20 pool rolls and count-up combat economy metrics.
@@ -576,29 +576,31 @@ pub struct TabletopCanvasEvent {
     pub terrain_notes: Option<String>,
 }
 
-/// Operating mode of the AI Game Master within a TTRPG session.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum AiGmOperatingMode {
-    /// Solo AI Game Master mode (`TTRPG_AI_GM`: AI GM + Players, no human GM).
-    #[default]
-    Autonomous,
-    /// Co-Pilot Assistant mode (`TTRPG_GM_AI`: Human GM + AI Assistant + Players).
-    CoPilot,
+crate::define_wire_enum! {
+    /// Operating mode of the AI Game Master within a TTRPG session.
+    #[derive(Default)]
+    pub enum AiGmOperatingMode [count = 2] {
+        /// Solo AI Game Master mode (`TTRPG_AI_GM`: AI GM + Players, no human GM).
+        #[default]
+        Autonomous => ("AUTONOMOUS", "Autonomous", aliases: ["autonomous"]),
+        /// Co-Pilot Assistant mode (`TTRPG_GM_AI`: Human GM + AI Assistant + Players).
+        CoPilot => ("CO_PILOT", "Co-Pilot", aliases: ["co_pilot", "copilot"]),
+    }
 }
 
-/// Architectural tier of an MCP tool server invoked by the AI Game Master.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum McpServerTier {
-    /// Tier 1: Core Satya tabletop primitives (chat, whispers, map grid, 3D `wgpu` dice, session history).
-    #[serde(rename = "TIER_1_SATYA_CORE")]
-    Tier1SatyaCore,
-    /// Tier 2: Pluggable game engine ruleset (e.g. `satya-d20`, `dnd5e`, `fitd`).
-    #[serde(rename = "TIER_2_RULESET_ENGINE")]
-    Tier2RulesetEngine,
-    /// Tier 3: Campaign lore, NPC sheets, and world state (local Markdown/PyLance or Google Workspace).
-    #[serde(rename = "TIER_3_LORE_PROVIDER")]
-    Tier3LoreProvider,
+crate::define_wire_enum! {
+    /// Architectural tier of an MCP tool server invoked by the AI Game Master.
+    pub enum McpServerTier [count = 3] {
+        /// Tier 1: Core Satya tabletop primitives (chat, whispers, map grid, 3D `wgpu` dice, session history).
+        #[serde(rename = "TIER_1_SATYA_CORE")]
+        Tier1SatyaCore => ("TIER_1_SATYA_CORE", "Tier 1: Satya Core"),
+        /// Tier 2: Pluggable game engine ruleset (e.g. `satya-d20`, `dnd5e`, `fitd`).
+        #[serde(rename = "TIER_2_RULESET_ENGINE")]
+        Tier2RulesetEngine => ("TIER_2_RULESET_ENGINE", "Tier 2: Ruleset Engine"),
+        /// Tier 3: Campaign lore, NPC sheets, and world state (local Markdown/PyLance or Google Workspace).
+        #[serde(rename = "TIER_3_LORE_PROVIDER")]
+        Tier3LoreProvider => ("TIER_3_LORE_PROVIDER", "Tier 3: Lore Provider"),
+    }
 }
 
 /// Audit record of a single MCP `@tool` invocation within an [`AiGmTrajectoryEvent`].
@@ -624,18 +626,18 @@ pub struct McpToolInvocationRecord {
     pub duration_ms: i64,
 }
 
-/// Completion status of a LangGraph AI Game Master turn recorded in [`AiGmTrajectoryEvent`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum AiGmTurnStatus {
-    /// Turn completed normally and emitted its response.
-    Completed,
-    /// Turn completed with one or more recoverable tool errors.
-    PartialError,
-    /// Turn was cancelled or overridden by a human GM.
-    AbortedByGm,
-    /// Turn failed due to an upstream LLM provider error or unreachable endpoint.
-    ProviderError,
+crate::define_wire_enum! {
+    /// Completion status of a LangGraph AI Game Master turn recorded in [`AiGmTrajectoryEvent`].
+    pub enum AiGmTurnStatus [count = 4] {
+        /// Turn completed normally and emitted its response.
+        Completed => ("COMPLETED", "Completed"),
+        /// Turn completed with one or more recoverable tool errors.
+        PartialError => ("PARTIAL_ERROR", "Partial Error"),
+        /// Turn was cancelled or overridden by a human GM.
+        AbortedByGm => ("ABORTED_BY_GM", "Aborted by GM"),
+        /// Turn failed due to an upstream LLM provider error or unreachable endpoint.
+        ProviderError => ("PROVIDER_ERROR", "Provider Error"),
+    }
 }
 
 /// Event (`v1`, `schema_id = 9`) emitted to the `ai-gm-trajectories` topic once per completed
@@ -688,22 +690,22 @@ pub struct AiGmTrajectoryEvent {
     pub turn_status: AiGmTurnStatus,
 }
 
-/// Severity level for a [`SessionLogEvent`] in the `system-logs` topic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum LogLevel {
-    /// Fine-grained trace diagnostics.
-    Trace,
-    /// Debug diagnostics.
-    Debug,
-    /// Informational operational milestone.
-    Info,
-    /// Non-fatal warning condition.
-    Warn,
-    /// Operational or request error.
-    Error,
-    /// Critical unrecoverable failure.
-    Fatal,
+crate::define_wire_enum! {
+    /// Severity level for a [`SessionLogEvent`] in the `system-logs` topic.
+    pub enum LogLevel [count = 6] {
+        /// Fine-grained trace diagnostics.
+        Trace => ("TRACE", "Trace"),
+        /// Debug diagnostics.
+        Debug => ("DEBUG", "Debug"),
+        /// Informational operational milestone.
+        Info => ("INFO", "Info"),
+        /// Non-fatal warning condition.
+        Warn => ("WARN", "Warn", aliases: ["WARNING"]),
+        /// Operational or request error.
+        Error => ("ERROR", "Error"),
+        /// Critical unrecoverable failure.
+        Fatal => ("FATAL", "Fatal", aliases: ["CRITICAL"]),
+    }
 }
 
 /// Event (`v1`, `schema_id = 10`) emitted to the `system-logs` topic storing embedding-ready

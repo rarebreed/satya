@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
 from satya_py import campaign as _campaign
+from satya_py.enums import CombatStance, normalize_combat_stance
 
 _CAMPAIGN_PACK_OVERRIDE: str | None = None
 
@@ -209,7 +210,10 @@ def get_pack_starter_npcs(pack_override: str | None = None) -> dict[str, dict[st
             continue
         npc_copy = copy.deepcopy(entry)
         npc_copy["npc_id"] = npc_id
-        npc_copy.setdefault("combat_stance", "NEUTRAL")
+        npc_copy["combat_stance"] = normalize_combat_stance(
+            npc_copy.get("combat_stance"),
+            default=CombatStance.STABILITY,
+        ).value
         npc_copy.setdefault("fatigue", 0)
         npc_copy.setdefault("wound_shock", 0)
         npc_copy.setdefault("disposition", "neutral")

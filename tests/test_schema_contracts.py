@@ -236,7 +236,7 @@ def test_outgoing_python_http_dtos_validate_against_rust_satya_schema() -> None:
                 "tick_delta": 2,
                 "combat_active": True,
                 "entity_id": "pc-1",
-                "active_stance": "NEUTRAL",
+                "active_stance": "STABILITY",
                 "next_action_tick": 6,
                 "grid_x": 4,
                 "grid_y": 5,
@@ -338,3 +338,137 @@ def test_native_ffi_accepts_partial_character_dicts_without_python_prenormalizat
     sector = _native.generate_procedural_sector("contract-sec", "hospital", "Clinic", seed=17)
     whispers = _native.evaluate_passive_perceptions(sector, "pc-0", [partial_char], None)
     assert isinstance(whispers, list)
+
+
+def test_python_strenums_match_rust_wire_enum_registry() -> None:
+    from satya_py import enums
+
+    assert {m.value for m in enums.WireEnumName} == set(schema.list_wire_enum_names())
+    assert {m.value for m in enums.SchemaDtoName} == set(schema.list_schema_dto_names())
+
+    for rust_enum_name, py_enum_cls in enums.RUST_ENUM_PARITY_MAP.items():
+        rust_codes = schema.list_wire_enum_codes(rust_enum_name)
+        py_codes = [member.value for member in py_enum_cls]
+        assert py_codes == rust_codes, (
+            f"Enum drift for {rust_enum_name}: py={py_codes} vs rust={rust_codes}"
+        )
+
+
+def test_telemetry_trajectory_and_offline_combat_dtos_validate_against_rust(
+    monkeypatch: Any,
+) -> None:
+    from satya_ml.ai_gm.telemetry import (
+        build_tool_invocation_record,
+        build_trajectory_report_payload,
+    )
+    from satya_ml.ai_gm.tools import advance_combat_tracker, reset_session_npcs
+    from satya_py.enums import LogLevel, SchemaDtoName
+
+    tool_rec = build_tool_invocation_record(
+        {
+            "mcp_tier": "TIER_1_SATYA_CORE",
+            "server_id": "satya-core",
+            "tool_name": "advance_combat_tracker",
+            "arguments_json": '{"tick_delta": 1}',
+            "result_summary_json": '{"tick": 2}',
+            "is_error": False,
+            "duration_ms": 4,
+        },
+        step_index=0,
+    )
+    schema.validate_schema_dto(SchemaDtoName.MCP_TOOL_INVOCATION_RECORD, tool_rec)
+
+    log_entry = {
+        "level": LogLevel.INFO.value,
+        "span_id": "0123456789abcdef",
+        "parent_span_id": None,
+        "lineage_id": "lin-contract-1",
+        "parent_lineage_ids": [],
+        "log_line": "[session=contract] telemetry contract verified",
+    }
+    schema.validate_schema_dto(SchemaDtoName.GM_SESSION_LOG_ENTRY, log_entry)
+
+    traj = build_trajectory_report_payload(
+        operating_mode="autonomous",
+        trigger_actor={
+            "user_id": "u-contract",
+            "username": "contract",
+            "display_name": "Contract Tester",
+            "participant_kind": "HUMAN",
+            "role": "PLAYER",
+            "character_id": None,
+            "ai_agent_info": None,
+        },
+        trigger_event_id="ev-contract-1",
+        trigger_summary="Contract test turn",
+        llm_provider="ollama",
+        reasoning_model_id="gemma4:12b",
+        vision_model_id="gemma4:12b",
+        tool_invocations=[tool_rec],
+        rag_tool_names={"query_satya_rules"},
+        emitted_event_ids=["ev-out-1"],
+        total_turn_latency_ms=12,
+        turn_logs=[log_entry],
+    )
+    schema.validate_schema_dto(SchemaDtoName.GM_TRAJECTORY_REPORT_REQUEST, traj)
+
+    move_req = {
+        "entity_id": "pc-1",
+        "label": "Mateo",
+        "to_x": 4,
+        "to_y": 5,
+        "to_x_cm": 450,
+        "to_y_cm": 550,
+    }
+    schema.validate_schema_dto(SchemaDtoName.MOVE_MAP_TOKEN_REQUEST, move_req)
+
+    sid = f"combat-contract-{uuid.uuid4().hex[:8]}"
+    monkeypatch.setattr("satya_ml.ai_gm.tools._signaling_base_url", lambda: "")
+    try:
+        tracker = advance_combat_tracker.invoke(
+            {"tick_delta": 1, "entity_id": "npc-contract", "session_id": sid}
+        )
+        validated_tracker = schema.validate_schema_dto(
+            SchemaDtoName.COMBAT_TRACKER_STATE, tracker
+        )
+        assert any(c["entity_id"] == "npc-contract" for c in validated_tracker["combatants"])
+        assert all(c["active_stance"] == "STABILITY" for c in validated_tracker["combatants"])
+    finally:
+        reset_session_npcs(sid)
+
+
+def test_build_rules_book_triad_evaluator_matches_rust_native() -> None:
+    from satya_ml.build_rules_book import evaluate_tactical_triad_python
+    from satya_py import combat
+
+    env_obj = combat.compute_tactical_pool(
+        skill_c=14, skill_n=4, morale_state="steady", ana=13, cre=12, foc=12
+    )
+    native_eval = env_obj.evaluate_triad(base_weapon_tc=8, tempo=7, control=6, force=5)
+    py_eval = evaluate_tactical_triad_python(
+        env_obj.to_dict(), base_weapon_tc=8, tempo=7, control=6, force=5
+    )
+
+    assert py_eval["valid"] == native_eval.valid
+    assert py_eval["effective_tc"] == native_eval.effective_tc
+    assert py_eval["strike_impact"] == native_eval.strike_impact
+    assert py_eval["effective_root"] == native_eval.effective_root
+    assert py_eval["exertion_marks_gained"] == native_eval.exertion_marks_gained
+    assert py_eval["archetype_label"] == native_eval.archetype_label
+
+
+def test_battlemap_2d_texture_catalog_matches_rust_wasm_registry() -> None:
+    import re
+    from pathlib import Path
+    from satya_ml.texture_gen.catalog import BATTLEMAP_2D_TEXTURE_CATALOG
+
+    repo_root = Path(__file__).resolve().parent.parent
+    rust_src = (
+        repo_root / "crates" / "satya-web" / "src" / "wasm_client" / "map_2d_art_textures.rs"
+    ).read_text(encoding="utf-8")
+    rust_files = re.findall(r'asset_file:\s*"([^"]+)"', rust_src)
+    py_files = [spec.filename for spec in BATTLEMAP_2D_TEXTURE_CATALOG]
+
+    assert len(py_files) == 50
+    assert len(rust_files) == 50
+    assert set(py_files) == set(rust_files)

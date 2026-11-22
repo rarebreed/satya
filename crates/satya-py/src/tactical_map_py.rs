@@ -3,7 +3,6 @@
 //! [`satya_maps`].
 
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use satya_engine::ballistics::lookup_firearm_preset;
 use satya_engine::environment_vehicles::CombatMovementGait;
 use satya_engine::explosives_and_arsenal::ExplosiveOrdnanceId;
@@ -13,36 +12,27 @@ use satya_maps::map_narrative_manifest::{
     SpatialSensoryPin, evaluate_passive_movement_perceptions, extract_sector_narrative_manifest,
 };
 use satya_maps::tactical_map::{
-    GaitReachQuery, SectorPreset, TacticalSceneView, build_procedural_map_request_with_options,
-    compute_reachable_continuous, continue_procedural_map_with_preset, evaluate_los_continuous,
+    GaitReachQuery, SectorPreset, TacticalLosEvaluation, TacticalSceneView,
+    build_procedural_map_request_with_options, compute_reachable_continuous,
+    continue_procedural_map_with_preset, evaluate_los_continuous,
 };
 use satya_maps::tactical_map_geom::{
     circle_collides_obstacles, place_prop_on_map, remove_prop_at_point,
     resolve_token_destination_cm,
 };
-use satya_maps::tactical_map_inspect::{MapHoverCategory, inspect_map_point};
+use satya_maps::tactical_map_inspect::inspect_map_point;
 use satya_schema::{
-    CodedEnum, EconomicTier, EdgeSide, GmMapUpdateRequest, MapContinuationDir, MapScalePreset,
-    MapWallEdge, MaterialClass, PropKind, TokenVisualSpec, WallEdgeKind, ZoningContext,
+    EconomicTier, EdgeSide, GmMapUpdateRequest, MapContinuationDir, MapScalePreset, MapWallEdge,
+    MaterialClass, PropKind, SessionRole, TokenVisualSpec, WallEdgeKind, ZoningContext,
     default_floor_badge,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use super::py_bridge::{
-    PyJsonDict, PyJsonInput, PyJsonList, PyListInput, normalize_code, normalize_material_code,
-    parse_coded_enum, py_to_json_value, to_py_err, to_py_object,
+    PyEnum, PyJsonDict, PyJsonInput, PyJsonList, PyListInput, normalize_code,
+    normalize_material_code, parse_coded_enum, py_to_json_value, to_py_err, to_py_object,
 };
-
-fn hover_category_code(category: MapHoverCategory) -> &'static str {
-    match category {
-        MapHoverCategory::Token => "TOKEN",
-        MapHoverCategory::EdgeBarrier => "EDGE_BARRIER",
-        MapHoverCategory::SolidProp => "SOLID_PROP",
-        MapHoverCategory::SurfaceProp => "SURFACE_PROP",
-        MapHoverCategory::Ground => "GROUND",
-    }
-}
 
 fn normalize_wall_edges_and_props(container: &mut Map<String, Value>) {
     if let Some(edges_val) = container.get_mut("wall_edges").and_then(Value::as_array_mut) {
@@ -453,6 +443,13 @@ pub fn resolve_tactical_token_destination_cm(
         .map_err(to_py_err)
 }
 
+#[derive(Serialize)]
+struct TacticalLosEvalDict {
+    #[serde(flatten)]
+    eval: TacticalLosEvaluation,
+    cover_label: &'static str,
+}
+
 /// Evaluates continuous Line-of-Sight, cover grade, and recommended `Δ_ext` between two positions in meters.
 #[pyfunction]
 #[pyo3(signature = (map_state, x1_m, y1_m, x2_m, y2_m, floor_index=None))]
@@ -468,13 +465,8 @@ pub fn evaluate_tactical_los_and_cover(
     let map = map_for_floor(parse_flexible_map_obj(&map_state)?, floor_index)?;
     let scene = TacticalSceneView::from_map(&map);
     let eval = evaluate_los_continuous(&scene, (x1_m, y1_m), (x2_m, y2_m));
-    let d = PyDict::new(py);
-    d.set_item("distance_m", eval.distance_m)?;
-    d.set_item("has_los", eval.has_los)?;
-    d.set_item("cover_grade", eval.cover_grade.as_str())?;
-    d.set_item("cover_label", eval.cover_grade.label())?;
-    d.set_item("recommended_delta_ext", eval.recommended_delta_ext)?;
-    Ok(d.into_any().unbind())
+    let cover_label = eval.cover_grade.label();
+    to_py_object(py, &TacticalLosEvalDict { eval, cover_label })
 }
 
 /// Inspects any continuous `(x_m, y_m)` map coordinate (token, wall/door, prop, or ground surface).
@@ -492,24 +484,7 @@ pub fn inspect_tactical_map_point(
     let Some(info) = inspect_map_point(&map, theme_name, x_m, y_m) else {
         return Ok(None);
     };
-    let d = PyDict::new(py);
-    d.set_item("category", hover_category_code(info.category))?;
-    d.set_item("title", info.title)?;
-    d.set_item("subtitle", info.subtitle)?;
-    d.set_item("material_label", info.material_label)?;
-    d.set_item("cover_label", info.cover_label)?;
-    d.set_item("height_cm", info.height_cm)?;
-    d.set_item("elevation_cm", info.elevation_cm)?;
-    d.set_item("rotation_deg", info.rotation_deg)?;
-    d.set_item("world_x_m", info.world_x_m)?;
-    d.set_item("world_y_m", info.world_y_m)?;
-    d.set_item("target_ref", info.target_ref)?;
-    d.set_item("acoustic_surface", info.acoustic_surface.map(CodedEnum::code))?;
-    d.set_item("acoustic_stealth_delta_ext", info.acoustic_stealth_delta_ext)?;
-    d.set_item("traction_tier", info.traction_tier.map(CodedEnum::code))?;
-    d.set_item("in_faraday_zone", info.in_faraday_zone)?;
-    d.set_item("ambient_light_delta_ext", info.ambient_light_delta_ext)?;
-    Ok(Some(d.into_any().unbind()))
+    Ok(Some(to_py_object(py, &info)?))
 }
 
 /// Generates a procedural multi-floor tactical sector returned as a native Python dict.
@@ -552,13 +527,11 @@ pub fn generate_procedural_sector(
 pub fn continue_procedural_map(
     py: Python<'_>,
     map_state: PyJsonInput<'_>,
-    direction: &str,
+    direction: PyEnum<MapContinuationDir>,
     seed: Option<i64>,
     preset_override: Option<&str>,
 ) -> PyResult<PyJsonDict> {
     let map = parse_flexible_map_obj(&map_state)?;
-    let dir = MapContinuationDir::from_code_str(direction)
-        .ok_or_else(|| to_py_err(format!("Invalid continuation direction '{direction}'")))?;
     let override_preset = match preset_override.map(str::trim).filter(|s| !s.is_empty()) {
         Some(raw) => Some(
             SectorPreset::from_code_str(raw)
@@ -566,8 +539,8 @@ pub fn continue_procedural_map(
         ),
         None => None,
     };
-    let outcome =
-        continue_procedural_map_with_preset(&map, dir, seed, override_preset).map_err(to_py_err)?;
+    let outcome = continue_procedural_map_with_preset(&map, direction.0, seed, override_preset)
+        .map_err(to_py_err)?;
     to_py_object(py, &outcome.map)
 }
 
@@ -1060,6 +1033,25 @@ pub fn list_non_solid_prop_kinds() -> Vec<String> {
 }
 
 /// Registers tactical map spatial bindings on the `satya_py` Python module.
+/// Infers a canonical 3D token model preset from display label and hidden state.
+#[pyfunction]
+#[pyo3(signature = (label, is_hidden=false))]
+pub fn infer_token_model_preset(label: &str, is_hidden: bool) -> String {
+    infer_model_preset(label, is_hidden).to_string()
+}
+
+/// Sanitizes a tactical map state for `SessionRole::Player` (hiding GM-only tokens and hidden trap pins).
+#[pyfunction]
+#[pyo3(signature = (map_state))]
+pub fn sanitize_tactical_map_for_player(
+    py: Python<'_>,
+    map_state: PyJsonInput<'_>,
+) -> PyResult<PyJsonDict> {
+    let map = parse_flexible_map_obj(&map_state)?;
+    to_py_object(py, &map.filtered_for_role(SessionRole::Player))
+}
+
+/// Registers [`satya_maps`] tactical geometry, procedural generator, and Ballistic/AoE wrappers on `satya_py._native`.
 pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(check_tactical_token_collision, m)?)?;
     m.add_function(wrap_pyfunction!(resolve_tactical_token_destination_cm, m)?)?;
@@ -1075,6 +1067,8 @@ pub fn register_tactical_map_functions(m: &Bound<'_, PyModule>) -> PyResult<()> 
     m.add_function(wrap_pyfunction!(evaluate_spatial_blast_and_breach, m)?)?;
     m.add_function(wrap_pyfunction!(edit_map_feature, m)?)?;
     m.add_function(wrap_pyfunction!(list_non_solid_prop_kinds, m)?)?;
+    m.add_function(wrap_pyfunction!(infer_token_model_preset, m)?)?;
+    m.add_function(wrap_pyfunction!(sanitize_tactical_map_for_player, m)?)?;
     Ok(())
 }
 
@@ -1083,6 +1077,7 @@ mod tests {
     use super::*;
     use super::super::py_bridge::py_to_value;
     use pyo3::types::PyString;
+    use satya_maps::tactical_map_inspect::MapHoverCategory;
 
     fn parse_flexible_map_json(raw: &str) -> Result<GmMapUpdateRequest, String> {
         let val: Value =
@@ -1136,9 +1131,14 @@ mod tests {
             assert!(!parsed.wall_edges.is_empty());
             assert!(!parsed.props.is_empty());
 
-            let east =
-                continue_procedural_map(py, sector.bind(py).clone(), "EAST", Some(99), None)
-                    .unwrap();
+            let east = continue_procedural_map(
+                py,
+                sector.bind(py).clone(),
+                PyEnum(MapContinuationDir::East),
+                Some(99),
+                None,
+            )
+            .unwrap();
             let east_map = parse_flexible_map_obj(east.bind(py)).unwrap();
             assert_eq!(east_map.world_sectors.len(), 2);
             assert!(east_map.grid_width > 12);
@@ -1499,6 +1499,26 @@ mod tests {
                     .unwrap()
                     >= 1
             );
+
+            assert!(!infer_token_model_preset("Security Guard", false).is_empty());
+            let hidden_payload = PyString::new(
+                py,
+                &json!({
+                    "map_id": "map-filter",
+                    "tokens": [
+                        {"entity_id": "pc-1", "label": "Elena", "x": 1, "y": 1, "visibility": "PUBLIC"},
+                        {"entity_id": "trap-1", "label": "Hidden Snare", "x": 2, "y": 2, "visibility": "GM_ONLY"}
+                    ]
+                })
+                .to_string(),
+            )
+            .into_any();
+            let filtered = sanitize_tactical_map_for_player(py, hidden_payload).unwrap();
+            let filtered_tokens = py_to_value(filtered.bind(py)).unwrap()["tokens"]
+                .as_array()
+                .unwrap()
+                .len();
+            assert_eq!(filtered_tokens, 1);
         });
     }
 }

@@ -311,7 +311,7 @@ def test_ai_gm_tools_npc_rules_map_and_byok_config(space_opera_pack: Any) -> Non
         }
     )
     assert updated_vance["fatigue"] == 3
-    assert updated_vance["combat_stance"] == "AGGRESSIVE"
+    assert updated_vance["combat_stance"] == "POWER"
     assert updated_vance["disposition"] == "friendly"
 
     # Rules & lore retrieval

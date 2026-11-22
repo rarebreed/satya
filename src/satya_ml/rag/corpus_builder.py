@@ -11,6 +11,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from satya_py.enums import MessageVisibility
+
 CANONICAL_TTRPG_FILES: tuple[tuple[str, str], ...] = (
     ("02-core-mechanics/cascading_d20_and_tasks.md", "Ch. 4: 2d20xN Cascade Engine & Task Resolution"),
     ("02-core-mechanics/task_requirements_catalog.md", "Ch. 5: Master Task Requirements Catalog"),
@@ -298,7 +300,7 @@ def build_ttrpg_rules_chunks(repo_root: Path) -> list[dict[str, Any]]:
             vis = (
                 "GM_CONSPIRACY_SECRET"
                 if any(marker in combined_low for marker in _SECRET_BODY_MARKERS)
-                else "PUBLIC"
+                else MessageVisibility.PUBLIC.value
             )
             chunks.append(
                 {
@@ -348,7 +350,7 @@ def classify_rust_symbol_visibility(rel_posix: str, linked_doc: str, breadcrumb:
         return "GM_CONSPIRACY_SECRET"
     if linked_doc:
         linked_vis = classify_lore_visibility(linked_doc, breadcrumb, content)
-        if linked_vis != "PUBLIC":
+        if linked_vis != MessageVisibility.PUBLIC.value:
             return linked_vis
     combined_low = f"{breadcrumb}\n{content}".lower()
     if any(marker in combined_low for marker in _SECRET_BODY_MARKERS):
@@ -356,7 +358,7 @@ def classify_rust_symbol_visibility(rel_posix: str, linked_doc: str, breadcrumb:
     crumb_low = f"{breadcrumb}\n{linked_doc}".lower()
     if any(marker in crumb_low for marker in _SATYANG_ARC2_MARKERS):
         return "ARC2_SATYANG"
-    return "PUBLIC"
+    return MessageVisibility.PUBLIC.value
 
 
 def build_rust_engine_symbol_chunks(repo_root: Path) -> list[dict[str, Any]]:
@@ -538,7 +540,7 @@ def classify_lore_visibility(rel_posix: str, breadcrumb: str, content: str) -> s
     ):
         return "ARC2_SATYANG"
 
-    return "PUBLIC"
+    return MessageVisibility.PUBLIC.value
 
 
 def build_campaign_lore_chunks(repo_root: Path) -> list[dict[str, Any]]:
